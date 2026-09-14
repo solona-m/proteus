@@ -1348,6 +1348,29 @@ public sealed class ColorsStrings
       + "It cannot be detected for you. Real skin is never symmetric — freckles and moles differ\n"
       + "left to right — so only you can say whether a difference is the point or just detail.");
 
+    public readonly string ReinforcedToe = Loc.Localize("Colors.ReinforcedToe.Label",
+        "Reinforced toe");
+
+    public readonly string ReinforcedToeTip = Loc.Localize("Colors.ReinforcedToe.Tip",
+        "Make the capped toe denser than the rest of the stocking, the way real hosiery\n"
+      + "knits a heavier toe box — a darker panel with the toes still showing through it,\n"
+      + "fading out at the edge rather than stopping at a line.\n"
+      + "It can only take away transparency that is there. Where the stocking paints\n"
+      + "nothing it does nothing, so it will never put fabric on a bare toe, and on an\n"
+      + "already-opaque stocking you will see no change.\n"
+      + "With \"Sharp alpha\" on, every pixel is either solid or gone, so the soft edge\n"
+      + "becomes a hard one.");
+
+    public readonly string ToeDensity = Loc.Localize("Colors.ToeDensity.Label",
+        "Density");
+
+    public readonly string ToeDensityTip = Loc.Localize("Colors.ToeDensity.Tip",
+        "How much denser the toe is than the leg. 100% is completely solid; the usual\n"
+      + "reinforced toe sits well below that.");
+
+    public readonly string ReinforcedToeSavedNote = Loc.Localize("Colors.ReinforcedToe.SavedNote",
+        "Saved to the mod — presets and designs don't capture this.");
+
     public readonly string BustBridge = Loc.Localize("Colors.BustBridge.Label",
         "Span the cleavage");
 

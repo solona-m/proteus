@@ -531,6 +531,18 @@
     "message": "詳細設定でこのモードを固定したため、設定した機能には追従しなくなりました。\n「自動に戻す」をクリックすると再び適応します。",
     "description": ""
   },
+  "Colors.ReinforcedToe.Label": {
+    "message": "つま先補強",
+    "description": ""
+  },
+  "Colors.ReinforcedToe.SavedNote": {
+    "message": "MODに保存されます。プリセットやデザインには記録されません。",
+    "description": ""
+  },
+  "Colors.ReinforcedToe.Tip": {
+    "message": "キャップしたつま先をストッキングの他の部分より濃くします。実物のストッキングが\nつま先を厚く編むのと同じで、指が薄っすら透ける濃い面になり、縁ではっきり切れず\n徐々に薄れていきます。\n取り除けるのは既にある透明度だけです。ストッキングが何も描いていない場所では何も\n起きないため、素足のつま先に生地が乗ることはありません。元から不透明なストッキング\nでは見た目は変わりません。\n「シャープなアルファ」がオンだと各ピクセルは不透明か消えるかのどちらかになるため、\n柔らかい縁は硬い縁になります。",
+    "description": ""
+  },
   "Colors.RenderingAs": {
     "message": "描画モード:",
     "description": ""
@@ -665,6 +677,14 @@
   },
   "Colors.Tiling.Tip": {
     "message": "エフェクトが表面上で何回繰り返されるか。1 = 1回。",
+    "description": ""
+  },
+  "Colors.ToeDensity.Label": {
+    "message": "濃さ",
+    "description": ""
+  },
+  "Colors.ToeDensity.Tip": {
+    "message": "つま先が脚部よりどれだけ濃いか。100% で完全な不透明になります。一般的な補強つま先は\nそれよりかなり低い値です。",
     "description": ""
   },
   "Colors.TowardBottom.Btn": {

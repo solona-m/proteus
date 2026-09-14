@@ -2858,6 +2858,12 @@ public sealed class SecondSkinService
         // Only a shell whose bytes actually differ from what's on disk needs a full redraw.
         bool shellChanged = false;
 
+        // The reinforced toe, which spans the model writer: the normals it will reinforce are held back from
+        // WriteTextures, and the placed-cap footprints that say WHERE come back out of every host's writer.
+        // Keyed by the in-model material name, which is what the writer knows each layer by.
+        var pendingNormals = new List<(string Material, int Density, DeferredShellNormal Normal)>();
+        var toeReinforceMaps = new Dictionary<string, (byte[] Mask, int Size)>(StringComparer.Ordinal);
+
         // Layers assigned to each host, filled in order. Two letters per layer: the in-model MATERIAL INDEX
         // (host base + position within that host) so appended names don't collide with the host's own, and a
         // globally-unique DISK letter so two hosts never overwrite the same ss_<letter> file on disk (the
@@ -3301,9 +3307,30 @@ public sealed class SecondSkinService
             }
             if (template == null) { log.Error("[Proteus] second skin: missing template material for {0}", shader); continue; }
 
+            // A shell follows every body contour, so hosiery sleeves each toe unless the toe area is
+            // marked — then the writer cuts that region out and rebuilds it as one rounded cap.
+            // BODY SURFACES ONLY. The map is body UV and the cap is a foot; handing one to a face or a
+            // tail layer would cut its geometry against a mask painted for another atlas entirely, and
+            // the coverage gate below would be comparing body-UV texels to face-UV alpha.
+            //
+            // Resolved BEFORE the textures rather than after: whether this shell gets a cap decides whether its
+            // normal is held back for the reinforced toe.
+            var toeCap = layerSurf.Key.IsBody
+                ? ToeCapFor(ov.Descriptor, entry, srcType, dstType, sharedToeCap, alpha, texSize)
+                : null;
+
+            // A reinforced toe needs a cap to reinforce, and not a mask shell — that is a separate surface
+            // drawn over the fabric, so reinforcing both would apply it twice.
+            DeferredShellNormal? deferredNormal =
+                toeCap != null && !isMaskShell && ov.Descriptor.ToeCapDensity > 0 ? new DeferredShellNormal() : null;
+
             var texPaths = WriteTextures(entry, ov.Descriptor, shader, texPrefix, texturesDir, redirects, diskChar,
                 alpha, srcType, dstType, ov.ColorTableRows, effectsFolder, texSize, ref shellChanged, mergeMasks,
-                siblingReliefs, GearMaterialWriter.TextureNames(template));
+                siblingReliefs, GearMaterialWriter.TextureNames(template), deferredNormal);
+            // Registered even if the textures then failed: the normal's redirect is already published, so it
+            // must still get written. The "/" is how the model stores material names — see MaterialName below.
+            if (deferredNormal?.Norm != null)
+                pendingNormals.Add(("/" + matName, ov.Descriptor.ToeCapDensity, deferredNormal));
             if (texPaths == null) continue;
 
             var scroll = new ScrollSettings(
@@ -3353,14 +3380,6 @@ public sealed class SecondSkinService
                 shellMaterials[shellKey] = shellList = new List<string>();
             shellList.Add($"ss_{diskChar}.mtrl");
 
-            // A shell follows every body contour, so hosiery sleeves each toe unless the toe area is
-            // marked — then the writer cuts that region out and rebuilds it as one rounded cap.
-            // BODY SURFACES ONLY. The map is body UV and the cap is a foot; handing one to a face or a
-            // tail layer would cut its geometry against a mask painted for another atlas entirely, and
-            // the coverage gate below would be comparing body-UV texels to face-UV alpha.
-            var toeCap = layerSurf.Key.IsBody
-                ? ToeCapFor(ov.Descriptor, entry, srcType, dstType, sharedToeCap, alpha, texSize)
-                : null;
             if (BuildLightProfile(ov.ColorTableRows, isMaskShell, layerSurf.Key.Kind,
                     isScroll: string.Equals(shader, RenderModeInference.GlowShader,
                                             StringComparison.OrdinalIgnoreCase)) is { } lightProfile)
@@ -3377,6 +3396,9 @@ public sealed class SecondSkinService
                 ToeCapWidth = toeCap == null ? 0 : ToeCapSize,
                 ToeCapHeight = toeCap == null ? 0 : ToeCapSize,
                 ToeCapStrength = Math.Clamp(ov.Descriptor.ToeCapStrength ?? 1f, 0f, 1f),
+                // Only for a shell whose normal was held back for a reinforced toe, and at the sheet's size so
+                // the region matches that normal texel for texel.
+                ToeReinforceSize = deferredNormal?.Norm != null ? texSize : 0,
                 // BODY SURFACES ONLY, for the same reason the cap is: a face or a tail has no bust bones,
                 // so the pass would decline anyway — but saying so here keeps the gate where the reason
                 // for it is, instead of in a silent early return three files away.
@@ -3860,6 +3882,22 @@ public sealed class SecondSkinService
                 shell = SecondSkinWriter.Build(srcs, perHostLayers[h], host.BaseModel,
                     out stats, msg => log.Debug("[Proteus] second skin: {0}", msg), AuthoredCaps(), pushSweep);
                 DumpShellOutput(h, shell);
+
+                // This host's reinforced-toe regions, per material. Unioned across hosts: a texture sheet is
+                // shared by everything drawn with its material, so a cap placed through any host is part of
+                // the same toe box.
+                if (stats.ToeReinforceMaps is { } hostMaps)
+                    foreach (var (mat, rm) in hostMaps)
+                    {
+                        if (toeReinforceMaps.TryGetValue(mat, out var had) && had.Size == rm.Size)
+                        {
+                            var merged = (byte[])had.Mask.Clone();
+                            for (int i = 0; i < merged.Length && i < rm.Mask.Length; i++)
+                                if (rm.Mask[i] > merged[i]) merged[i] = rm.Mask[i];
+                            toeReinforceMaps[mat] = (merged, rm.Size);
+                        }
+                        else toeReinforceMaps[mat] = rm;
+                    }
                 if (pushSweep != null)
                     log.Information("[Proteus] second skin: push sweep, host {0}{1:D4}/{2}: {3}",
                         host.Prefix, host.SetId, host.Slot, pushSweep.TakeReport());
@@ -4092,6 +4130,12 @@ public sealed class SecondSkinService
             log.Information("[Proteus] second skin: host {0}{1:D4}/{2} <- {3} layer(s) -> {4} meshes, {5} KB (append={6})",
                 host.Prefix, host.SetId, host.Slot, perHostLayers[h].Count, stats.Meshes, shell.Length / 1024, host.BaseModel != null);
         }
+
+        // Now the caps are placed, write the normals held back for them. Before the early return below: their
+        // redirects went out with the materials, so they are owed a file whatever else happened.
+        if (pendingNormals.Count > 0)
+            WriteDeferredNormals(pendingNormals, toeReinforceMaps, redirects, ref shellChanged);
+
         if (hostModelPaths.Count == 0) return null;
 
         return new Result(redirects, manipulations, shellChanged, shellMaterials, modelChangedAny,
@@ -4419,6 +4463,78 @@ public sealed class SecondSkinService
         return mask;
     }
 
+
+    /// <summary>
+    /// A REINFORCED TOE: push the capped area toward opaque, so a sheer stocking gets the denser toe box
+    /// real hosiery is knitted with.
+    /// <para/>
+    /// Returns a new alpha plane; the input is not mutated. <paramref name="alpha"/> is the shell's
+    /// coverage at the sheet size, which becomes the normal map's BLUE channel — the gear transparency
+    /// gate — so raising it here is what makes the toe read denser.
+    /// <para/>
+    /// Three properties worth keeping true:
+    /// <list type="bullet">
+    /// <item>It cannot CREATE coverage. A texel the shell does not paint stays unpainted, so the
+    /// reinforcement can never appear on a bare toe — the same rule the per-row opacity pass follows.</item>
+    /// <item>The boost is the PRODUCT of the density and the (feathered) cap weight, so the rim fades
+    /// continuously instead of stepping, and a grey cap map is honoured rather than thresholded.</item>
+    /// <item>At 100 it reaches fully opaque, on the same curve a positive row Opacity uses, so the two
+    /// controls compose predictably.</item>
+    /// </list>
+    /// </summary>
+    internal static byte[] ReinforceToeCap(byte[] alpha, byte[] cap, int texSize, int capSize,
+                                           int density, int feather)
+    {
+        var dst = (byte[])alpha.Clone();
+        if (density <= 0 || texSize <= 0 || capSize <= 0) return dst;
+        if (cap.Length < capSize * capSize || alpha.Length < texSize * texSize) return dst;
+
+        // Feathered here rather than by the caller so every path gets the same rim, and so the blur runs on
+        // the small map (512²) instead of the sheet (up to 4K²).
+        //
+        // OUTWARD ONLY: the larger of the map and its blur. A plain blur softens both sides of the edge, so it
+        // also eats INTO the cap by the same amount — and the cap's footprint is the toe box itself, with the
+        // toe tips on its boundary. Measured in game at 100%: only "a slightly more opaque area", because the
+        // part of the toe anyone looks at was getting about half the weight. Keeping the whole footprint at
+        // full strength and letting the blur add a ramp only outside it is what a soft rim should mean.
+        byte[] soft;
+        if (feather > 0)
+        {
+            soft = CompositorService.BlurCoverage(cap, capSize, capSize, feather);
+            for (int i = 0; i < soft.Length && i < cap.Length; i++)
+                if (cap[i] > soft[i]) soft[i] = cap[i];
+        }
+        else soft = cap;
+
+        // The map is its own size and the sheet is the build's, so map proportionally rather than by an
+        // integer stride. A stride of texSize/capSize is only correct while the sheet is the LARGER of the
+        // two: a 256 sheet against the 512 map floors to 1 and reads the map's top-left quarter stretched
+        // over the whole atlas, which paints the reinforcement across the entire garment. Same arithmetic
+        // the glow-map downsample uses, and it is exact in both directions.
+        float amount = Math.Clamp(density, 0, 100) / 100f;
+
+        CompositorService.ParallelPixels(0, texSize * texSize, 1, (from, to) =>
+        {
+            for (int i = from; i < to; i++)
+            {
+                float a = dst[i] / 255f;
+                if (a <= 0f) continue;                      // no fabric here; nothing to reinforce
+
+                int cx = (int)((long)(i % texSize) * capSize / texSize);
+                int cy = (int)((long)(i / texSize) * capSize / texSize);
+                if (cx >= capSize || cy >= capSize) continue;
+
+                float w = soft[cy * capSize + cx] / 255f;
+                if (w <= 0f) continue;                      // outside the cap and its fade
+
+                float op = amount * w;
+                float newA = a + (1f - a) * op;             // the positive branch of the row-opacity curve
+                dst[i] = (byte)(Math.Clamp(newA, 0f, 1f) * 255f + 0.5f);
+            }
+        });
+        return dst;
+    }
+
     /// <summary>Box-downsample the coverage for triangle trimming; it only decides keep/drop.</summary>
     private static byte[]? Downsample(byte[]? src, int w, int h, int size)
     {
@@ -4473,7 +4589,10 @@ public sealed class SecondSkinService
         IReadOnlyList<byte[]>? siblingReliefs = null,   // each: a normal RGBA with coverage in its alpha lane
         // The template's own texture paths, in slot order. A slot the overlay doesn't supply and cannot be
         // sensibly fabricated inherits the one the surface it is copying actually wears.
-        IReadOnlyList<string>? templateTextures = null)
+        IReadOnlyList<string>? templateTextures = null,
+        // Non-null when this shell has a reinforced toe: the normal's bytes are handed back through it instead
+        // of written, because the region to reinforce only exists after the model writer has placed the cap.
+        DeferredShellNormal? deferNormal = null)
     {
         var sidecarRoot = entry.SidecarRoot;
         var outputRoot = Directory.GetParent(texturesDir)!.FullName;
@@ -4711,6 +4830,12 @@ public sealed class SecondSkinService
         // two uses of blue are mutually exclusive, so a skin shell keeps the overlay's authored value and
         // takes its coverage from the triangle trim instead: hard edges, and the wearer's tone.
         bool skinShell = string.Equals(shader, OverlayDescriptor.SkinShader, StringComparison.OrdinalIgnoreCase);
+
+        // The reinforced toe is NOT applied here. It used to read the toe-cap map as "where the toe is", and
+        // that map only switches the cap on — Solona's Stockings ships a featureless grey, which reinforced
+        // 100% of the stocking. It is applied to this normal after the model writer has placed the cap and
+        // measured its real footprint; see deferNormal in the slot loop below, and WriteDeferredNormals.
+
         var norm = normal != null ? (byte[])normal.Clone() : Solid(128, 128, 255, 255, texSize);
         if (!skinShell)
         {
@@ -4774,44 +4899,207 @@ public sealed class SecondSkinService
 
             var gamePath = texPrefix + slot + ".tex";
             var disk = Path.Combine(texturesDir, $"ss_{letter}_{slot}.tex");
-
-            // Compression (opt-in). The "id" (index) slot is NEVER compressed: its red/green encode discrete
-            // colour-table row selectors (red / 17 + 1), and any lossy error crosses a bucket boundary and
-            // picks the wrong row (wrong colour/glow, seams). The normal's BLUE channel is the gear
-            // transparency gate (see WriteTextures above), which BC5 (2-channel) drops — so it only uses BC5
-            // when its blue is uniformly opaque (255 ⇒ nothing to lose), else BC7 preserves the gate.
-            // Everything else (base/mask/catc) is continuous → BC7.
-            var encoding = TexEncoding.Uncompressed;
-            if (compress && !string.Equals(slot, "id", StringComparison.OrdinalIgnoreCase))
-                encoding = string.Equals(slot, "norm", StringComparison.OrdinalIgnoreCase)
-                    ? (IsBlueAllWhite(slots[slot]) ? TexEncoding.Bc5 : TexEncoding.Bc7)
-                    : TexEncoding.Bc7;
-
-            // Skip the write when the content AND its encoding match what we last wrote — otherwise every
-            // recomposite would look like a change and force a redraw. The encoding is folded into the hash
-            // so toggling compression forces a rewrite instead of a stale skip, and the sheet SIZE for the
-            // same reason: a build that grows the sheet must not be able to skip past the file it grew.
             var (sw, sh) = SizeOf(slot);
-            var hash = Hash(slots[slot])
-                     ^ ((ulong)((int)encoding + 1) * 0x9E3779B97F4A7C15ul)
-                     ^ ((ulong)sw * 0xBF58476D1CE4E5B9ul)
-                     ^ ((ulong)sh * 0x94D049BB133111EBul);
-            bool same = _texHashes.TryGetValue(disk, out var prev) && prev == hash && File.Exists(disk);
-            if (!same)
+
+            // The reinforced toe needs the NORMAL held back. Its blue channel is the transparency the toe box
+            // is made denser in, and the only reliable map of where that box is — the placed cap's footprint —
+            // does not exist until the model writer has run, long after this. The path and redirect are
+            // fixed per shell letter rather than derived from the content, so the material built from them
+            // right after this is already correct; only the bytes wait, and WriteDeferredNormals writes them
+            // once. Writing a plain copy now and a reinforced one later would change the file every composite
+            // and defeat the unchanged-skip below.
+            //
+            // Not on a skin shell, whose blue is skin-colour influence rather than transparency.
+            if (deferNormal != null && !skinShell && string.Equals(slot, "norm", StringComparison.OrdinalIgnoreCase))
             {
-                if (!textureLoader.WriteTex(slots[slot], sw, sh, disk, encoding))
-                {
-                    log.Error("[Proteus] second skin: failed to write {0}", disk);
-                    return null;
-                }
-                _texHashes[disk] = hash;
-                texturesChanged = true;
+                deferNormal.Norm = slots[slot];
+                deferNormal.GamePath = gamePath;
+                deferNormal.TexturesDir = texturesDir;
+                deferNormal.OutputRoot = outputRoot;
+                deferNormal.Letter = letter;
+                deferNormal.Size = sw;
+                // The GAME path goes into the material now, but no redirect yet: the file this normal is
+                // served from is content-addressed, so its name is not known until the reinforcement is in.
+                paths.Add(gamePath);
+                continue;
             }
+
+            if (!WriteShellSlot(slot, slots[slot], sw, sh, disk, compress, ref texturesChanged))
+                return null;
 
             redirects[gamePath] = Rel(outputRoot, disk);
             paths.Add(gamePath);
         }
         return paths;
+    }
+
+    /// <summary>
+    /// A shell normal whose write was held back for the reinforced toe — see WriteTextures. Filled in there;
+    /// written by <see cref="WriteDeferredNormals"/>.
+    /// </summary>
+    private sealed class DeferredShellNormal
+    {
+        public byte[]? Norm;
+        public string GamePath = "";
+        public string TexturesDir = "";
+        public string OutputRoot = "";
+        public char Letter;
+        public int Size;
+    }
+
+    /// <summary>
+    /// Write one shell texture slot, skipping it when nothing changed. Shared by WriteTextures and the
+    /// held-back normal, so the two can never disagree about compression or about what "unchanged" means.
+    /// </summary>
+    private bool WriteShellSlot(string slot, byte[] data, int w, int h, string disk, bool compress,
+                                ref bool texturesChanged)
+    {
+        // Compression (opt-in). The "id" (index) slot is NEVER compressed: its red/green encode discrete
+        // colour-table row selectors (red / 17 + 1), and any lossy error crosses a bucket boundary and
+        // picks the wrong row (wrong colour/glow, seams). The normal's BLUE channel is the gear
+        // transparency gate (see WriteTextures above), which BC5 (2-channel) drops — so it only uses BC5
+        // when its blue is uniformly opaque (255 ⇒ nothing to lose), else BC7 preserves the gate.
+        // Everything else (base/mask/catc) is continuous → BC7.
+        var encoding = TexEncoding.Uncompressed;
+        if (compress && !string.Equals(slot, "id", StringComparison.OrdinalIgnoreCase))
+            encoding = string.Equals(slot, "norm", StringComparison.OrdinalIgnoreCase)
+                ? (IsBlueAllWhite(data) ? TexEncoding.Bc5 : TexEncoding.Bc7)
+                : TexEncoding.Bc7;
+
+        // Skip the write when the content AND its encoding match what we last wrote — otherwise every
+        // recomposite would look like a change and force a redraw. The encoding is folded into the hash
+        // so toggling compression forces a rewrite instead of a stale skip, and the sheet SIZE for the
+        // same reason: a build that grows the sheet must not be able to skip past the file it grew.
+        var hash = Hash(data)
+                 ^ ((ulong)((int)encoding + 1) * 0x9E3779B97F4A7C15ul)
+                 ^ ((ulong)w * 0xBF58476D1CE4E5B9ul)
+                 ^ ((ulong)h * 0x94D049BB133111EBul);
+        bool same = _texHashes.TryGetValue(disk, out var prev) && prev == hash && File.Exists(disk);
+        if (!same)
+        {
+            if (!textureLoader.WriteTex(data, w, h, disk, encoding))
+            {
+                log.Error("[Proteus] second skin: failed to write {0}", disk);
+                return false;
+            }
+            _texHashes[disk] = hash;
+            texturesChanged = true;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Write every normal WriteTextures held back, reinforcing the toe over the cap's actual footprint where
+    /// the model writer placed one.
+    /// <para/>
+    /// EVERY pending normal is written, footprint or not. The shell's material already names the normal's
+    /// game path, so skipping one — a host that failed to build, a cap the binding declined — would leave
+    /// that path with nothing behind it.
+    /// <para/>
+    /// Published CONTENT-ADDRESSED (see <see cref="ShellTextureNames"/>): the density can change while nothing
+    /// else about the shell does, and the game caches a texture by the file it resolved to. Under a fixed
+    /// name the character kept the version it loaded first — a toe still solid at 1% while the file on disk
+    /// held no reinforcement at all.
+    /// </summary>
+    private void WriteDeferredNormals(
+        List<(string Material, int Density, DeferredShellNormal Normal)> pending,
+        Dictionary<string, (byte[] Mask, int Size)> regions, Dictionary<string, string> redirects,
+        ref bool texturesChanged)
+    {
+        bool compress = config.EnableCompression;
+        foreach (var (material, density, pn) in pending)
+        {
+            if (pn.Norm == null || pn.Size <= 0) continue;
+            var norm = pn.Norm;
+            int n = pn.Size * pn.Size;
+
+            if (regions.TryGetValue(material, out var fp) && norm.Length >= n * 4)
+            {
+                var plane = new byte[n];
+                for (int i = 0; i < n; i++) plane[i] = norm[i * 4 + 2];
+                // No feather: the region already carries its own soft band behind the line, measured in the
+                // foot's own units rather than in texels — see ToeLine.
+                var boosted = ReinforceToeCap(plane, fp.Mask, pn.Size, fp.Size, density, feather: 0);
+
+                // MEASURED, the same two numbers as before: how much of the sheet the region marks, and how
+                // much of the shell's painted area this moved. A toe box is a few per cent of a body atlas —
+                // if these ever read near 100 again, the region is wrong, not the density.
+                int lit = 0;
+                foreach (byte px in fp.Mask) if (px >= 128) lit++;
+                int painted = 0, moved = 0;
+                for (int i = 0; i < n; i++)
+                {
+                    if (plane[i] != 0)
+                    {
+                        painted++;
+                        if (boosted[i] != plane[i]) moved++;
+                    }
+                    norm[i * 4 + 2] = boosted[i];
+                }
+                log.Information("[Proteus] second skin: reinforced toe at {0}% up to the line across the cap's rim — "
+                              + "region is {1:P1} of the sheet, moved {2:P1} of this shell's painted texels ({3}/{4})",
+                    density, fp.Mask.Length == 0 ? 0f : (float)lit / fp.Mask.Length,
+                    painted == 0 ? 0f : (float)moved / painted, moved, painted);
+            }
+            else
+            {
+                log.Information("[Proteus] second skin: reinforced toe at {0}% found no placed cap on {1} — the cap "
+                              + "was not emitted for this shell, so its toe keeps the fabric's own density",
+                    density, material);
+            }
+
+            // The name moves with the bytes, and with the compression setting, since the same pixels encoded
+            // differently are a different file to the game.
+            ulong nameHash = Hash(norm) ^ (compress ? 0xC0FFEE_0000_C0DEul : 0ul);
+            var disk = Path.Combine(pn.TexturesDir, ShellTextureNames.ContentAddressedNormal(pn.Letter, nameHash));
+            if (WriteShellSlot("norm", norm, pn.Size, pn.Size, disk, compress, ref texturesChanged))
+            {
+                redirects[pn.GamePath] = Rel(pn.OutputRoot, disk);
+                continue;
+            }
+
+            // The write failed, and unlike every other slot this one cannot take the shell down with it: the
+            // model and its material were built and published against this normal's game path long before.
+            // Left without a redirect, the material asks for a texture nothing serves, and a missing resource
+            // under Proteus's own paths fails the whole material load. So serve the last normal this shell
+            // had — the wrong density for a composite, which the next one corrects, instead of no shell.
+            if (LastNormalFor(pn.TexturesDir, pn.Letter, except: disk) is { } previous)
+            {
+                redirects[pn.GamePath] = Rel(pn.OutputRoot, previous);
+                log.Error("[Proteus] second skin: could not write the reinforced-toe normal for {0} — serving the "
+                        + "last one written for it ({1}) until the next composite", material, Path.GetFileName(previous));
+            }
+            else
+            {
+                log.Error("[Proteus] second skin: could not write the reinforced-toe normal for {0}, and no earlier "
+                        + "one exists — this shell's material will fail to load until the next composite", material);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The newest normal already on disk for shell <paramref name="letter"/>, in either name form, or null.
+    /// Only for recovering from a failed write — see <see cref="WriteDeferredNormals"/>.
+    /// <para/>
+    /// <paramref name="except"/> is the file whose write just failed. It may exist as a partial write, and as
+    /// the newest file it would otherwise be the one chosen — serving exactly the broken texture this avoids.
+    /// </summary>
+    private static string? LastNormalFor(string texturesDir, char letter, string except)
+    {
+        try
+        {
+            var stem = $"ss_{letter}";
+            return Directory.EnumerateFiles(texturesDir, $"ss_{letter}_norm*.tex")
+                .Where(f => !string.Equals(Path.GetFullPath(f), Path.GetFullPath(except), StringComparison.OrdinalIgnoreCase))
+                .Where(f => ShellTextureNames.TryNormalStem(Path.GetFileName(f), out var s)
+                         && string.Equals(s, stem, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(File.GetLastWriteTimeUtc)
+                .FirstOrDefault();
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     /// <summary>

@@ -35,6 +35,14 @@ public sealed class SecondSkinLayer
     public float ToeCapStrength { get; init; } = 1f;
 
     /// <summary>
+    /// The texture-sheet size to draw this layer's reinforced-toe region at, or 0 when it has none (the
+    /// default, and every shell without a reinforced toe). Set to the sheet size so the region comes back
+    /// texel for texel with the normal it reinforces — no stretch, and so no stair-steps along its edge.
+    /// See <see cref="ToeLine"/> and <see cref="SecondSkinWriter.Stats.ToeReinforceMaps"/>.
+    /// </summary>
+    public int ToeReinforceSize { get; init; }
+
+    /// <summary>
     /// How far this layer's cloth relaxes across the cleavage instead of following the body into it
     /// (0 = off, which is the default and every existing shell's behaviour; 1 = a flat span).
     /// <para/>
@@ -228,11 +236,23 @@ public static class SecondSkinWriter
     /// seams. Counted separately from <paramref name="RedundantSubs"/> because it is a different question:
     /// that one asks whether a whole submesh is redundant, this one whether one triangle of it is.
     /// </param>
+    /// <param name="ToeReinforceMaps">
+    /// Each layer's reinforced-toe region on its texture sheet, keyed by the layer's material name: a square
+    /// body-UV weight map at the layer's <see cref="SecondSkinLayer.ToeReinforceSize"/>, 255 over the toes and
+    /// fading to 0 just behind a straight line across the foot (see <see cref="ToeLine"/>). Null when no layer
+    /// asked for one or no cap was placed.
+    /// <para/>
+    /// Measured from the PLACED cap, because nothing else knows where the toe box is. The toe-cap map cannot
+    /// say — it switches the cap on and trims it, and a flat field is a perfectly good one. And drawn at the
+    /// sheet's own size, from a plane through the cap's rim rather than the cap's UV outline, because the
+    /// outline both stair-stepped and wandered.
+    /// </param>
     public readonly record struct Stats(int Meshes, int Submeshes, int Bones, int TrianglesIn,
                                         int TrianglesOut, int VerticesOut, string? CapDeclined = null,
                                         string? CapUsed = null,
                                         int RedundantSubs = 0, int RedundantTris = 0,
-                                        int TrimmedTris = 0);
+                                        int TrimmedTris = 0,
+                                        IReadOnlyDictionary<string, (byte[] Mask, int Size)>? ToeReinforceMaps = null);
 
     /// <summary>
     /// A toe cap modelled for one body, with the binding that says where it sits on it.
@@ -3673,6 +3693,11 @@ public static class SecondSkinWriter
             }
         }
 
+        // Each layer's reinforced-toe region, for the caller — see Stats.ToeReinforceMaps. The body's skin
+        // triangles it is drawn over are read once per build, and only if some layer asks.
+        var toeReinforceMaps = new Dictionary<string, (byte[] Mask, int Size)>(StringComparer.Ordinal);
+        List<ToeLineTri>? toeLineBody = null;
+
         for (ushort layer = 0; layer < layers.Count; layer++)
         {
             var def = layers[layer];
@@ -3778,6 +3803,8 @@ public static class SecondSkinWriter
             byte[]? footprint = null;
             int footprintSize = def.ToeCapWidth > 0 && def.ToeCapWidth == def.ToeCapHeight
                 ? def.ToeCapWidth : CapFootprintSize;
+            // The reinforced-toe region, when this layer has one — drawn at the sheet's own size.
+            byte[]? reinforceMap = null;
             if (capSrc is { } cw && def.ToeCap != null)
             {
                 var segs = new List<RimSeg>();
@@ -3816,6 +3843,13 @@ public static class SecondSkinWriter
                         }
                     }
                     CapFootprintMask(pl, capDef, footprint, footprintSize);
+
+                    if (def.ToeReinforceSize > 0)
+                    {
+                        reinforceMap ??= new byte[def.ToeReinforceSize * def.ToeReinforceSize];
+                        toeLineBody ??= ToeLineBody(sourceModels);
+                        DrawToeLine(pl, toeLineBody, reinforceMap, def.ToeReinforceSize, diag);
+                    }
 
                     // The one place a cap rim vertex's final position is worked out. See weldRimPos.
                     Vec3 CapFinal(int i)
@@ -3892,6 +3926,27 @@ public static class SecondSkinWriter
             // triangle only goes if the mask covers it, and the mask stops exactly where the cap's
             // surface stops. The map's wider cut deliberately overshoots and the weld pulls the lip back
             // onto the rim, which is the mechanism that closes the join.
+            // Hand the reinforced-toe region to the caller. Unioned, since two layers of one material (a split
+            // shell) can each draw part of it.
+            if (reinforceMap != null)
+            {
+                bool anyLit = false;
+                foreach (byte px in reinforceMap) if (px != 0) { anyLit = true; break; }
+                if (anyLit)
+                {
+                    int rs = def.ToeReinforceSize;
+                    if (toeReinforceMaps.TryGetValue(def.MaterialName, out var had) && had.Size == rs)
+                    {
+                        for (int i = 0; i < had.Mask.Length; i++)
+                            if (reinforceMap[i] > had.Mask[i]) had.Mask[i] = reinforceMap[i];
+                    }
+                    else
+                    {
+                        toeReinforceMaps[def.MaterialName] = (reinforceMap, rs);
+                    }
+                }
+            }
+
             var cutDef = def;
             if (capSrc != null && def.ToeCap is { } paint && def.ToeCapWidth > 0 && def.ToeCapHeight > 0)
             {
@@ -4302,7 +4357,8 @@ public static class SecondSkinWriter
         // shell reports five times the triangles it actually cut.
         int shellLayers = layers.Count(l => l.Geometry.Count == 0);
         stats = new Stats(meshCount, subOut.Count, boneCount, triIn, triOut, vertOut, capDeclined, capUsed,
-                          redundantSubs, redundantTris, shellLayers > 0 ? trimmedOut / shellLayers : 0);
+                          redundantSubs, redundantTris, shellLayers > 0 ? trimmedOut / shellLayers : 0,
+                          toeReinforceMaps.Count > 0 ? toeReinforceMaps : null);
         return o;
     }
 
@@ -16114,6 +16170,144 @@ public static class SecondSkinWriter
     /// on THIS body, so the hole always matches the thing filling it, and the weld only has a texel of
     /// quantisation left to close.
     /// </summary>
+    /// <summary>
+    /// How far behind the reinforced toe's line the density fades out, in model units (metres): 3 mm.
+    /// Long enough to read as knitting rather than a cut-out, short enough that the line still reads as a
+    /// line. The line itself sits at the cap's rim — see <see cref="ToeLine.Weight"/>.
+    /// </summary>
+    private const float ToeReinforceBand = 0.003f;
+
+    /// <summary>One body skin triangle the reinforced-toe line is drawn over: its corners and their UVs.</summary>
+    private readonly record struct ToeLineTri(Vec3 A, Vec3 B, Vec3 C,
+                                              (float U, float V) Ua, (float U, float V) Ub, (float U, float V) Uc,
+                                              Vec3 Ctr);
+
+    /// <summary>
+    /// Every source body's LOD0 skin triangles, with UVs — the same geometry the cap's UVs were projected
+    /// from, so the line lands in the same UV space the cap does. Read once per build, and only when some
+    /// layer has a reinforced toe.
+    /// </summary>
+    private static List<ToeLineTri> ToeLineBody(IReadOnlyList<byte[]> bodies)
+    {
+        var list = new List<ToeLineTri>();
+        foreach (var body in bodies)
+        {
+            if (!TryReadLod0Geometry(body, out var bp, out var bu, out var bt, out _)) continue;
+            for (int t = 0; t + 2 < bt.Length; t += 3)
+            {
+                int a = bt[t], b = bt[t + 1], c = bt[t + 2];
+                if ((a + 1) * 3 > bp.Length || (b + 1) * 3 > bp.Length || (c + 1) * 3 > bp.Length) continue;
+                if ((a + 1) * 2 > bu.Length || (b + 1) * 2 > bu.Length || (c + 1) * 2 > bu.Length) continue;
+                var pa = new Vec3(bp[a * 3], bp[a * 3 + 1], bp[a * 3 + 2]);
+                var pb = new Vec3(bp[b * 3], bp[b * 3 + 1], bp[b * 3 + 2]);
+                var pc = new Vec3(bp[c * 3], bp[c * 3 + 1], bp[c * 3 + 2]);
+                list.Add(new ToeLineTri(pa, pb, pc,
+                    (bu[a * 2], bu[a * 2 + 1]), (bu[b * 2], bu[b * 2 + 1]), (bu[c * 2], bu[c * 2 + 1]),
+                    new Vec3((pa.X + pb.X + pc.X) / 3f, (pa.Y + pb.Y + pc.Y) / 3f, (pa.Z + pb.Z + pc.Z) / 3f)));
+            }
+        }
+        return list;
+    }
+
+    /// <summary>
+    /// Draw one placed cap's reinforced-toe region into <paramref name="map"/>: a plane through the cap's
+    /// outer rim, everything on the toe side of it at full weight, fading over <see cref="ToeReinforceBand"/>
+    /// behind it. See <see cref="ToeLine"/> for why a plane and not the cap's UV outline.
+    /// <para/>
+    /// Drawn over BOTH surfaces that sample the sheet there: the cap's own triangles, and the body skin the
+    /// shell is cut from, so the fade continues onto the foot behind the cap. Body triangles are limited to
+    /// the cap's neighbourhood — a plane is infinite, and without that bound anything forward of it, the other
+    /// foot included, would be reinforced too.
+    /// </summary>
+    private static void DrawToeLine(CapUvPlan pl, List<ToeLineTri> body, byte[] map, int size, Action<string>? diag)
+    {
+        int vc = pl.SrcPos.Length;
+        if (vc == 0) return;
+
+        // ONE LINE PER FOOT. The cap can arrive as a single mesh covering both, and one plane fitted to "the"
+        // rim took whichever foot's loop was longer — the other foot got only the slivers that happened to lie
+        // past the first foot's plane. So each connected piece gets its own rim, plane and neighbourhood.
+        var (label, pieces) = ToeLine.Components(pl.Tri, vc);
+        var planes = new List<(Vec3 Origin, Vec3 Normal, Vec3 Centre, float Reach)?>(pieces);
+
+        for (int k = 0; k < pieces; k++)
+        {
+            var pieceTri = new List<int>();
+            for (int t = 0; t + 2 < pl.Tri.Length; t += 3)
+                if (pl.Tri[t] < vc && label[pl.Tri[t]] == k)
+                    pieceTri.AddRange([pl.Tri[t], pl.Tri[t + 1], pl.Tri[t + 2]]);
+
+            double sx = 0, sy = 0, sz = 0;
+            int n = 0;
+            for (int i = 0; i < vc; i++)
+            {
+                if (label[i] != k) continue;
+                sx += pl.SrcPos[i].X; sy += pl.SrcPos[i].Y; sz += pl.SrcPos[i].Z; n++;
+            }
+            // A stray fragment is not a foot, and a handful of vertices cannot carry a meaningful rim.
+            if (n < ToeLineMinPieceVertices) { planes.Add(null); continue; }
+            var centre = new Vec3((float)(sx / n), (float)(sy / n), (float)(sz / n));
+            float radius = 0f;
+            for (int i = 0; i < vc; i++)
+                if (label[i] == k) radius = MathF.Max(radius, Dist(pl.SrcPos[i], centre));
+
+            var rim = ToeLine.OuterRim(pieceTri, pl.SrcPos);
+            var rimPts = new List<Vec3>(rim.Count);
+            foreach (int i in rim) if (i < vc) rimPts.Add(pl.SrcPos[i]);
+            if (!ToeLine.FitPlane(rimPts, centre, out var origin, out var normal))
+            {
+                diag?.Invoke($"reinforced toe: piece {k}'s rim ({rimPts.Count} vertices) does not define a plane — "
+                           + "no line drawn for it");
+                planes.Add(null);
+                continue;
+            }
+            planes.Add((origin, normal, centre, radius * 1.25f + ToeReinforceBand));
+            diag?.Invoke($"reinforced toe: piece {k} — line through {rimPts.Count} rim vertices, normal "
+                       + $"({normal.X:F2}, {normal.Y:F2}, {normal.Z:F2}), reach {radius * 1.25f:F3}");
+        }
+
+        // The cap, each triangle against its own piece's plane: on the toe side, so at full weight.
+        for (int f = 0; f + 2 < pl.Corner.Length; f += 3)
+        {
+            int c0 = pl.Corner[f], c1 = pl.Corner[f + 1], c2 = pl.Corner[f + 2];
+            if (c0 >= pl.Uv.Length || c1 >= pl.Uv.Length || c2 >= pl.Uv.Length) continue;
+            int s0 = pl.SourceOf[c0], s1 = pl.SourceOf[c1], s2 = pl.SourceOf[c2];
+            if (s0 >= vc || s1 >= vc || s2 >= vc || label[s0] < 0) continue;
+            if (planes[label[s0]] is not { } pp) continue;
+            ToeLine.Rasterize(map, size, pl.Uv[c0], pl.Uv[c1], pl.Uv[c2],
+                ToeLine.Distance(pl.SrcPos[s0], pp.Origin, pp.Normal),
+                ToeLine.Distance(pl.SrcPos[s1], pp.Origin, pp.Normal),
+                ToeLine.Distance(pl.SrcPos[s2], pp.Origin, pp.Normal), ToeReinforceBand);
+        }
+
+        // The foot behind each piece: a body triangle belongs to the NEAREST piece that reaches it, so a
+        // triangle can never be judged against the other foot's plane.
+        int drawn = 0;
+        foreach (var t in body)
+        {
+            int best = -1;
+            float bestDist = float.MaxValue;
+            for (int k = 0; k < planes.Count; k++)
+            {
+                if (planes[k] is not { } pp) continue;
+                float d = Dist(t.Ctr, pp.Centre);
+                if (d <= pp.Reach && d < bestDist) { best = k; bestDist = d; }
+            }
+            if (best < 0) continue;
+            var bp = planes[best]!.Value;
+            ToeLine.Rasterize(map, size, t.Ua, t.Ub, t.Uc,
+                ToeLine.Distance(t.A, bp.Origin, bp.Normal),
+                ToeLine.Distance(t.B, bp.Origin, bp.Normal),
+                ToeLine.Distance(t.C, bp.Origin, bp.Normal), ToeReinforceBand);
+            drawn++;
+        }
+        diag?.Invoke($"reinforced toe: {planes.Count(p => p != null)} of {pieces} cap piece(s) drawn, "
+                   + $"{drawn} body triangles");
+    }
+
+    /// <summary>The fewest vertices a connected piece of the cap needs to be treated as a foot's cap.</summary>
+    private const int ToeLineMinPieceVertices = 20;
+
     private static void CapFootprintMask(CapUvPlan plan, SecondSkinLayer? cov, byte[] mask, int size)
     {
         var uv = plan.Uv;

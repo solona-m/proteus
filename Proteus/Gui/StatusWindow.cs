@@ -5412,6 +5412,10 @@ public class StatusWindow : Window
             // Glow effect + Advanced live at the very bottom, below the rows.
             ImGui.Separator();
             bool resetSimple = false;
+            // Reinforced toe is the one footer control a preset does not capture, so it has to reach the
+            // sidecar even while a preset is in charge. Noted before the draw so an edit to it can be told
+            // apart from the preview-only edits that stay out of the base metadata.
+            int toeDensityBeforeSimple = simpleOverlays.FirstOrDefault()?.ToeCapDensity ?? 0;
             bool footerChangedSimple = ColorTableEditor.DrawGlowFooter(
                 entry.ModDirectory, entry.ModDirectory, simpleOverlays, gearOvrSimple, effects,
                 out var footerEditSimple,
@@ -5420,7 +5424,9 @@ public class StatusWindow : Window
                 drawExtraAdvanced: () => DrawBodiesAdvanced(entry),
                 drawBelowGlow: () => DrawGeometrySection(entry),
                 drawInEffects: () => DrawSkindent(entry),
-                overrideActive: overrideActive);
+                overrideActive: overrideActive,
+                toeCapActive: compositor.ToeCapWantedFor(entry.ModDirectory)
+                           && CanReinforceToe(gearSimple, shaderSimple));
 
             // A reset just restored the recorded values — they ARE the intended state, so skip the mode
             // re-inference and glow transition this frame. Both compare against pre-reset state and would
@@ -5451,6 +5457,11 @@ public class StatusWindow : Window
                 if (!overrideActive && !resetSimple)
                     entry.Metadata.ColorTableRows = rows;   // may be the list we created for an empty mod
                 if (!overrideActive || resetSimple) { discovery.SaveMetadata(entry); InvalidateDefaultsCache(entry); }
+                // Under a preset the line above saves nothing, which silently discarded the reinforced toe —
+                // an authoring decision no override carries. Saved ALONE: a full save here would also make
+                // permanent every preview edit the other footer controls made to the same descriptors.
+                else if ((simpleOverlays.FirstOrDefault()?.ToeCapDensity ?? 0) != toeDensityBeforeSimple)
+                    discovery.SaveToeCapDensity(entry, simpleOverlays);
                 // Discrete footer/mode changes recomposite promptly; colour-row drags use the debounce.
                 if (footerChangedSimple || modeChangedSimple) RecompositeForOverlay(entry, "mode-change");
                 // Rows only — hashed at the fingerprint's `mtrl:` block, so skin reuse may apply. A change
@@ -6052,6 +6063,8 @@ public class StatusWindow : Window
         // Glow effect + Advanced live at the very bottom, below the rows.
         ImGui.Separator();
         bool resetOpt = false;
+        // See the simple-mod path: the one footer control a preset does not capture.
+        int toeDensityBefore = activeOpt.Overlays.FirstOrDefault()?.ToeCapDensity ?? 0;
         bool footerChanged = ColorTableEditor.DrawGlowFooter(
             scope, entry.ModDirectory, activeOpt.Overlays, gearOvrOpt, effects, out var footerEdit,
             onReset: () => resetOpt = ResetToDefaults(entry, groupName, activeOpt),
@@ -6061,7 +6074,10 @@ public class StatusWindow : Window
             drawInEffects: () => DrawSkindent(entry),
             promotedToGear: promotedToGear,
             noShellReason: noShellReason,
-            overrideActive: overrideActive);
+            overrideActive: overrideActive,
+            // `gear` and `shader` here are what actually renders — promotion and demotion already applied
+            // above — which is the only reliable way to know the shell can carry a reinforced toe.
+            toeCapActive: compositor.ToeCapWantedFor(entry.ModDirectory) && CanReinforceToe(gear, shader));
 
         // A reset just restored the recorded values — they ARE the intended state, so skip the mode
         // re-inference and glow transition this frame (both would re-derive from pre-reset state).
@@ -6091,6 +6107,10 @@ public class StatusWindow : Window
             if (!overrideActive && !resetOpt)
                 activeOpt.ColorTableRows = editRows;
             if (!overrideActive || resetOpt) { discovery.SaveMetadata(entry); InvalidateDefaultsCache(entry); }
+            // See the simple-mod path: under a preset the reinforced toe still has to reach the sidecar, and on
+            // its own, so the preview edits beside it do not.
+            else if ((activeOpt.Overlays.FirstOrDefault()?.ToeCapDensity ?? 0) != toeDensityBefore)
+                discovery.SaveToeCapDensity(entry, activeOpt.Overlays);
             // Discrete footer/mode changes recomposite promptly; colour-row drags use the debounce.
             if (footerChanged || modeChanged) RecompositeForOverlay(entry, "mode-change");
             // Rows only — see the simple-mod path above.
@@ -6195,6 +6215,18 @@ public class StatusWindow : Window
     /// disclosure instead, which is the same position relative to Advanced; on the second of those it is
     /// the only place it can be reached.
     /// </summary>
+    /// <summary>
+    /// Whether an option that renders on this layer and shader can carry a reinforced toe at all.
+    /// <para/>
+    /// A shell, and not one on <c>skin.shpk</c>. The density lives in the shell normal's blue channel, and on
+    /// skin.shpk that channel is skin-colour influence instead, so the build skips the pass there. That case is
+    /// easy to miss because it still reads as Cloth: a skin overlay the toe cap promotes stays on skin.shpk
+    /// whenever its option has no colour rows (see <see cref="RenderModeInference.PromotedShader"/>), and the
+    /// control used to appear for it, save a density, and change nothing.
+    /// </summary>
+    private static bool CanReinforceToe(bool gear, string? shader)
+        => gear && !string.Equals(shader, OverlayDescriptor.SkinShader, StringComparison.OrdinalIgnoreCase);
+
     private void DrawGeometrySection(OverlayEntry entry)
     {
         // "###" so the localized word is not hashed into the id — a language switch would otherwise shut a
