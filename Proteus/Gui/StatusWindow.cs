@@ -777,7 +777,7 @@ public class StatusWindow : Window
         // slots and lays its tabs out in submission order, which is the order written below. The cost is
         // that the selected tab resets to the first one, once, for anyone who had the window open.
         using (ProteusStyle.TabAccent())
-        using (var tabs = ProteusStyle.HeaderTabBar("##proteusTabs2"))
+        using (var tabs = ProteusStyle.HeaderTabBar("##proteusTabs3"))   // 3: Studio moved to second
         {
             if (tabs)
             {
