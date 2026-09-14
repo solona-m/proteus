@@ -3808,6 +3808,10 @@ public sealed class SecondSkinService
             }
         }
 
+        // A height-banded push, for measuring how close a shell can sit. Off unless its file exists; see
+        // PushSweep. Loaded once per composite so every host of one look is measured on the same ladder.
+        var pushSweep = LoadPushSweep();
+
         // Build one shell model per host that got layers; fold each into the single Result.
         var hostModelPaths = new List<string>();
         var appendHostModelPaths = new List<string>();
@@ -3839,8 +3843,11 @@ public sealed class SecondSkinService
                     : surface.Sources;
                 DumpShellInputs(h, srcs, perHostLayers[h], host.BaseModel);
                 shell = SecondSkinWriter.Build(srcs, perHostLayers[h], host.BaseModel,
-                    out stats, msg => log.Debug("[Proteus] second skin: {0}", msg), AuthoredCaps());
+                    out stats, msg => log.Debug("[Proteus] second skin: {0}", msg), AuthoredCaps(), pushSweep);
                 DumpShellOutput(h, shell);
+                if (pushSweep != null)
+                    log.Information("[Proteus] second skin: push sweep, host {0}{1:D4}/{2}: {3}",
+                        host.Prefix, host.SetId, host.Slot, pushSweep.TakeReport());
             }
             catch (EmptyShellException ex) when (ex.ByToggle)
             {
@@ -4267,6 +4274,42 @@ public sealed class SecondSkinService
             log.Warning(ex, "[Proteus] second skin: could not dump build inputs");
         }
     }
+
+    /// <summary>
+    /// The push sweep ladder, when <c>%TEMP%\proteus-push-sweep.txt</c> exists. Said at Information and in
+    /// chat, because a sweep left switched on is a body full of stepped, clipping shells that looks exactly
+    /// like a regression.
+    /// </summary>
+    private PushSweep? LoadPushSweep()
+    {
+        try
+        {
+            var problems = new List<string>();
+            var sweep = PushSweep.LoadFromTemp(problems);
+            foreach (var p in problems)
+                log.Warning("[Proteus] second skin: push sweep {0}", p);
+            if (sweep == null) return null;
+
+            var ladder = sweep.DescribeLadder();
+            log.Information("[Proteus] second skin: PUSH SWEEP ON — {0}", ladder);
+            if (lastPushSweepLadder != ladder)
+            {
+                lastPushSweepLadder = ladder;
+                var msg = $"[Proteus] Push sweep is ON — {ladder}. Delete "
+                        + $"%TEMP%\\{PushSweep.FileName} to turn it off.";
+                _ = Plugin.Framework.RunOnFrameworkThread(
+                    () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 25).Build()));
+            }
+            return sweep;
+        }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "[Proteus] second skin: could not read the push sweep");
+            return null;
+        }
+    }
+
+    private string? lastPushSweepLadder;
 
     /// <summary>
     /// The finished shell, beside the inputs that produced it. Same opt-in as

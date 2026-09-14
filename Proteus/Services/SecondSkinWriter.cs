@@ -181,23 +181,29 @@ public sealed class EmptyShellException(string message, bool byToggle) : Invalid
 public static class SecondSkinWriter
 {
     /// <summary>
-    /// How far the FIRST shell sits off the skin. Much larger than <see cref="LayerSeparation"/>: the
-    /// skin underneath is what moves, and shells are offset in BIND POSE and only then skinned, so the
-    /// gap is not preserved once the body deforms.
-    ///
-    /// Note the gap also closes on the UPPER ARM, where vertices have ~1 bone influence and the shell
-    /// should therefore transform rigidly with the skin — so pure joint compression does not explain all
-    /// of it. Suspects: split/duplicated normals at UV seams pushing coincident vertices apart, or the
-    /// skin picking up deformation the shell does not. Until that is understood this value is empirical.
+    /// How far the FIRST shell sits off the skin: 0.05 mm.
+    /// <para/>
+    /// MEASURED, with <see cref="PushSweep"/> scaling this and <see cref="LayerSeparation"/> together:
+    /// a whole-body stocking with an opaque second layer over it, held through a range of poses that bend
+    /// every joint. ×0.10 held and ×0.05 held; ×0.01 was tried and not kept.
+    /// <para/>
+    /// It was 1 mm for a long time, with a note that the gap closed under skinning and on the upper arm.
+    /// That 1 mm predates cutting the shell from the body the character is actually drawing; a shell cut
+    /// from a different chest size is a different shape and clips at any offset, which reads exactly like
+    /// an offset that is too small. With the right source the offset can come down twentyfold.
+    /// <para/>
+    /// NOT measured on the feet: the sweep held them at the old 1 mm, because the toe cap stands off the
+    /// foot at its own authored height and the shell ramps up to meet it.
     /// </summary>
-    public const float BaseOffset = 1e-3f;
+    public const float BaseOffset = 5e-5f;
 
     /// <summary>
-    /// Separation between adjacent shells. Measured in-game: 2e-4 holds, below it they clip. This is NOT
-    /// a depth-precision limit (float32 depth at 1-3 units resolves far finer) — it's skinning.
+    /// Separation between adjacent shells: 0.01 mm. Measured together with <see cref="BaseOffset"/> — the
+    /// sweep scales the whole push, so the two kept their old 1:5 ratio at every step, and a second layer
+    /// over a first held at this value through the same poses.
     /// Layer k sits at BaseOffset + k * LayerSeparation.
     /// </summary>
-    public const float LayerSeparation = 2e-4f;
+    public const float LayerSeparation = 1e-5f;
 
     private const int DeclSize = 17 * 8;   // vertex declaration block, one per mesh
     private const int BBoxSize = 32;       // min Vec4 + max Vec4
@@ -827,7 +833,7 @@ public static class SecondSkinWriter
     /// </summary>
     public static byte[] Build(IReadOnlyList<SourceSpec> sources, IReadOnlyList<SecondSkinLayer> layers,
         byte[]? baseModel, out Stats stats, Action<string>? diag = null,
-        IReadOnlyList<AuthoredCapSet>? authoredCaps = null)
+        IReadOnlyList<AuthoredCapSet>? authoredCaps = null, PushSweep? pushSweep = null)
     {
         if (layers.Count == 0) throw new ArgumentException("need at least one layer", nameof(layers));
         // Sources are the character geometry a SHELL is cut from, so a build made entirely of content
@@ -1852,7 +1858,7 @@ public static class SecondSkinWriter
                 uvUnmapped += BuildVerbatim(s, src.Vb, 0x44 + m * DeclSize, vc, decl, vbo, bs, push,
                     out outStreams, out outStrides, out declBlock, out uv, out uvPre, src.UvConv,
                     out capSrcPos, out capOutPos, out capPlan, sides, cov, capTris, diag,
-                    buildCapGeometry: capSrc == null, bridge: bridge);
+                    buildCapGeometry: capSrc == null, bridge: bridge, pushSweep: pushSweep);
                 if (src.UvConv != null) uvMoved += vc;
 
                 // The tile normalization above shifts a mesh by the integer floor of its MINIMUM uv, which
@@ -3093,7 +3099,7 @@ public static class SecondSkinWriter
                     if (holesShut > 0)
                         diag?.Invoke($"authored cap: closed {holesShut} small hole(s) left along the join");
                     // ── RAISE ANYTHING THE SKIN POKES THROUGH ────────────────────────────────────
-                    // The shell is pushed 1 mm off the body, but the weld drags a lip vertex onto the
+                    // The shell is pushed off the body, but the weld drags a lip vertex onto the
                     // cap's RIM and the cap sits wherever its binding places it on a body it was not
                     // modelled against. Either can leave the surface BETWEEN two clear vertices cutting
                     // under the body's own curve, and skin a hair proud of a shell is a bright patch of
@@ -3104,7 +3110,7 @@ public static class SecondSkinWriter
                     // the nearest skin point reports everything clear, because the vertices ARE clear;
                     // what shows through is the body bulging past the flat triangle between them.
                     //
-                    // Only the strays: MinSkinClearance is well under the push, so anything already
+                    // Only the strays: MinSkinClearanceOfPush keeps the floor under the push, so anything already
                     // standing off is untouched, and MaxSkinLift stops this reshaping a surface that is
                     // low for a reason rather than by accident.
                     // RELAX THE SHELL AROUND THE TOES, OUTWARD ONLY. The cap's own repairs cannot reach
@@ -3351,8 +3357,9 @@ public static class SecondSkinWriter
                             lz = MathF.Min(lz, q0.Z); hz = MathF.Max(hz, q0.Z);
                         }
                         const float pad = 0.01f;
+                        float minClearance = MinSkinClearanceOfPush * push;
                         // Tested against the shell's TRIANGLES, not its nearest vertex. Every vertex
-                        // around the toes stands a clean 1 mm off the body and a vertex-to-vertex test
+                        // around the toes stands a clean push off the body and a vertex-to-vertex test
                         // duly reports the whole surface clear; what shows through is the body's curve
                         // rising past the flat triangle spanning them, which is why this reads in a
                         // modelling package as "these faces need raising the slightest amount" and why
@@ -3427,7 +3434,7 @@ public static class SecondSkinWriter
 
                                     // How far the triangle's plane stands above this body vertex.
                                     float h = (a.X - bp.X) * fn.X + (a.Y - bp.Y) * fn.Y + (a.Z - bp.Z) * fn.Z;
-                                    if (h >= MinSkinClearance || h < -MaxSkinLift) continue;
+                                    if (h >= minClearance || h < -MaxSkinLift) continue;
 
                                     // Only if the body vertex is actually UNDER this triangle: the plane
                                     // of a triangle elsewhere on the foot says nothing about this spot.
@@ -3445,7 +3452,7 @@ public static class SecondSkinWriter
                                     if (!inside) continue;
 
                                     // Lift the whole face — one corner is not what the skin came through.
-                                    float need = MathF.Min(MinSkinClearance - h, MaxSkinLift);
+                                    float need = MathF.Min(minClearance - h, MaxSkinLift);
                                     lift[ia] = MathF.Max(lift[ia], need);
                                     lift[ib] = MathF.Max(lift[ib], need);
                                     lift[ic] = MathF.Max(lift[ic], need);
@@ -5117,8 +5124,8 @@ public static class SecondSkinWriter
     /// <summary>
     /// How close a vertex has to sit to other geometry to count as already drawn by it.
     /// <para/>
-    /// 5 mm, in a model space where one unit is a metre (see <see cref="BaseOffset"/>, documented as
-    /// 1.00 mm). It has to sit above the distance a connector is authored PROUD of the skin — that is what
+    /// 5 mm, in a model space where one unit is a metre. It has to sit above the distance a connector is
+    /// authored PROUD of the skin — that is what
     /// a connector is for, so a duplicate is never exactly coincident — and below a body's vertex spacing,
     /// or a merely adjacent surface starts scoring. Neolithe's second calf is 2184 triangles over
     /// y 0.14–0.41, a patch of roughly 0.076 m², which puts its edges at about 8.9 mm on a DENSE body;
@@ -6435,7 +6442,8 @@ public static class SecondSkinWriter
         sbyte[]? sides = null,
         SecondSkinLayer? cap = null, ushort[]? capTris = null, Action<string>? capLog = null,
         bool buildCapGeometry = true,
-        Func<Vec3[], Vec3[], ushort[], (float U, float V)[], BustBridgePlan?>? bridge = null)
+        Func<Vec3[], Vec3[], ushort[], (float U, float V)[], BustBridgePlan?>? bridge = null,
+        PushSweep? pushSweep = null)
     {
         int uvUnmapped = 0;
         uvsPreConv = null;
@@ -6593,7 +6601,10 @@ public static class SecondSkinWriter
                     p = new Vec3(p.X + bd.X, p.Y + bd.Y, p.Z + bd.Z);
                 }
 
-                var final = new Vec3(p.X + n.X * push, p.Y + n.Y * push, p.Z + n.Z * push);
+                // Banded by the vertex's height BEFORE the cap or bridge moved it, so a displacement cannot
+                // carry a vertex across a band edge and step the surface somewhere the ladder did not put one.
+                float pushHere = pushSweep is null ? push : push * pushSweep.Take(basePos[i].Y);
+                var final = new Vec3(p.X + n.X * pushHere, p.Y + n.Y * pushHere, p.Z + n.Z * pushHere);
                 WriteXYZ(outStreams[pw.Stream], i * stride + pw.Offset, pw.Type, final.X, final.Y, final.Z);
                 if (outPos is not null) outPos[i] = final;
 
@@ -9321,8 +9332,8 @@ public static class SecondSkinWriter
     private const int MinBustBridgeNodes = 24;
 
     /// <summary>
-    /// Movement below which a bust-bridge node counts as untouched, in model units — a thousandth of the
-    /// shell's own <see cref="BaseOffset"/>, so comfortably under anything that could be seen. It decides
+    /// Movement below which a bust-bridge node counts as untouched, in model units — a tenth of
+    /// <see cref="LayerSeparation"/>, so comfortably under anything that could be seen. It decides
     /// which nodes are reported as moved and which keep their original normal bytes.
     /// </summary>
     private const float BustBridgeEpsilon = 1e-6f;
@@ -13745,19 +13756,23 @@ public static class SecondSkinWriter
     private const int SmallHoleEdges = 8;
 
     /// <summary>
-    /// How far a shell or cap vertex must stand off the body's skin around the toes. The shell is pushed
-    /// 1 mm, but the weld drags lip vertices onto the cap's rim and the cap sits where its binding puts
-    /// it, so a few end up level with the skin or just under it — and skin a hair proud of a shell reads
-    /// in game as a bright patch of bare foot. Well under the push, so this only rescues the strays.
-    /// </summary>
-    /// <summary>
     /// How close to the skin a non-skin triangle must sit before the clearance pass treats it as part of
     /// the body. A toenail lies on the flesh; a sandal strap stands well off it, and the shell is meant
     /// to pass under the strap rather than balloon around it.
     /// </summary>
     private const float NailHugsSkin = 0.003f;
 
-    private const float MinSkinClearance = 0.0006f;
+    /// <summary>
+    /// How far a shell or cap vertex must stand off the body's skin around the toes, as a fraction of the
+    /// layer's own push. The weld drags lip vertices onto the cap's rim and the cap sits where its binding
+    /// puts it, so a few end up level with the skin or just under it — and skin a hair proud of a shell
+    /// reads in game as a bright patch of bare foot. Under the push, so this only rescues the strays.
+    /// <para/>
+    /// A FRACTION, not a distance. It was 0.6 mm against a 1 mm push, and when the push came down to
+    /// 0.05 mm an absolute floor would have sat twelve times above the shell: every face around the toes
+    /// "needed" lifting, and the rescue would have put the whole region back where the push used to be.
+    /// </summary>
+    private const float MinSkinClearanceOfPush = 0.6f;
 
     /// <summary>Most a vertex may be lifted to reach that clearance. Past this it is not a straggler and
     /// moving it would distort the surface rather than repair it.</summary>
