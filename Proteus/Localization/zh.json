@@ -243,14 +243,6 @@
     "message": "这一行的图像如何与皮肤上已有的内容合成。\n\n“绘制”只是把它盖在上面，也就是以往所有图层的做法。\n选择其它模式会让这一行变成印花：它为同一模组其它图层所绘制的布料上色，\n并被裁剪成布料的形状——所以彩虹印在渔网袜上只会染上丝线，\n网眼仍然是皮肤。\n\n印花只能触及本模组自己的图层，绝不会影响其它模组的服装。\n在裸露的皮肤上它什么也不画，因此单独选中印花不会显示任何东西。\n这是刻意如此：那里根本没有可供印刷的底子。\n\n正片叠底只能变暗，因此在很深色的布料上几乎看不出来——这时请改用滤色。\n这一行的颜色仍会为图像着色，其不透明度就是印花的强度。",
     "description": ""
   },
-  "Colors.Bodies.All": {
-    "message": "所有身体",
-    "description": ""
-  },
-  "Colors.Bodies.BiboGen3": {
-    "message": "bibo+gen3",
-    "description": ""
-  },
   "Colors.Bodies.GlobalNote": {
     "message": "全局保存——绑定不会记录此项。",
     "description": ""
@@ -259,17 +251,13 @@
     "message": "\n全局设置——它不属于你正在编辑的绑定。",
     "description": ""
   },
-  "Colors.Bodies.Label": {
-    "message": "身体",
-    "description": ""
+  "Colors.Bodies.Vanilla.Label": {
+    "message": "叠加到 gen2/原版",
+    "description": "Checkbox label in the colour-table editor window's Advanced section. \"gen2\" is a body-mod name - never translated. Ticked = this mod is also painted onto vanilla skin."
   },
-  "Colors.Bodies.Off": {
-    "message": "关闭",
-    "description": ""
-  },
-  "Colors.Bodies.Tip": {
-    "message": "将此模组烘焙到哪些身体类型：\n所有身体 = 同系身体（bibo↔gen3/Eve）＋原版（gen2）\nbibo+gen3 = 仅烘焙到同系身体（默认）\n关闭 = 不进行合成\n\n作用于整个模组，而不仅是此选项。",
-    "description": ""
+  "Colors.Bodies.Vanilla.Tip": {
+    "message": "同时将此模组绘制到角色身上穿着的原版（gen2）皮肤上——\n通常是某件装备自带的皮肤。\n只有角色身上确实出现原版皮肤时才会绘制，\n因此没有时不会产生任何开销。\n\nbibo 和 gen3/Eve 始终会被绘制；此项只影响原版。\n作用于整个模组，而不仅是此选项。",
+    "description": "Tooltip for the checkbox above. \"gen2\", \"bibo\", \"gen3\" and \"Eve\" are body-mod names - never translated. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Colors.BustBridge.Label": {
     "message": "布料横跨乳沟",
@@ -1092,8 +1080,8 @@
     "description": ""
   },
   "Create.WholeSkin.Tip": {
-    "message": "当你转换的是一整套皮肤 Mod、而不是画在皮肤上的东西时，请勾选此项。\n贴图看起来像皮肤时 Proteus 会替你勾上；你自己的选择始终优先。\n由此有三个结果。法线贴图会替换材质上已有的那一张，而不是叠加上去——否则它会叠在下面\n同一张贴图上，每个毛孔和褶皱都被应用两次，身体相对脸部显得平板，脖子接缝处出现一条明显的线。\n其次是肤色抑制会关闭，让穿戴者的肤色透出来：抑制的用途是避免布料被重新染色，\n而这套贴图本身就是皮肤。\n第三是「身体」会设为「所有身体」，让这套皮肤也能应用到原版身体上。",
-    "description": ""
+    "message": "当你转换的是一整套皮肤 Mod、而不是画在皮肤上的东西时，请勾选此项。\n贴图看起来像皮肤时 Proteus 会替你勾上；你自己的选择始终优先。\n由此有两个结果。法线贴图会替换材质上已有的那一张，而不是叠加上去——否则它会叠在下面\n同一张贴图上，每个毛孔和褶皱都被应用两次，身体相对脸部显得平板，脖子接缝处出现一条明显的线。\n其次是肤色抑制会关闭，让穿戴者的肤色透出来：抑制的用途是避免布料被重新染色，\n而这套贴图本身就是皮肤。",
+    "description": "Tooltip for the checkbox above. \"normal\" is the normal map (a texture). Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Emissive.Aliases.Fmt": {
     "message": "{0} 个路径",
@@ -1437,10 +1425,6 @@
   },
   "Import.Author.Label": {
     "message": "作者",
-    "description": ""
-  },
-  "Import.BodyFit.NeedsAllBodies.Fmt": {
-    "message": "此包没有为你的原版身体绘制任何内容——将改用“{0}”。烘焙到原版身体默认是关闭的，因此 Proteus 会在导入时将此模组的“身体”设为“所有身体”（颜色 → 高级）；否则它将什么都不会绘制。",
     "description": ""
   },
   "Import.BodyFit.NotDrawn.Fmt": {
@@ -1825,10 +1809,6 @@
   },
   "Import.NothingUsable": {
     "message": "此包中没有可导入的层。",
-    "description": ""
-  },
-  "Import.Result.AllBodies.Fmt": {
-    "message": "已导入“{0}”——层数：{1}{2}。此包没有为原版身体绘制任何内容，因此 Proteus 已将此模组的“身体”设为“所有身体”（颜色 → 高级）以便烘焙——若将其关闭，它将不再绘制。",
     "description": ""
   },
   "Import.Result.NoLayout.Fmt": {

@@ -521,12 +521,12 @@ public sealed class ModCreationService
     /// user-facing result; nothing is written when validation fails.
     /// </summary>
     /// <param name="wholeSkin">
-    /// The textures ARE the skin, not something painted onto it. Three consequences: the normal replaces the
-    /// one already on the material instead of stacking onto it (see <see cref="NormalMode.Replace"/>);
-    /// skin-tint suppression is off, so the wearer's tone reaches the art the way it reaches their face; and
-    /// the mod's sibling mode is raised to <see cref="SiblingSynthesisMode.AllBodies"/> so the bake reaches
-    /// a vanilla body too. The first two are sidecar fields written by <see cref="WriteMod"/>; the third is
-    /// plugin config, keyed by mod directory, so it is set here once the directory name is settled.
+    /// The textures ARE the skin, not something painted onto it. Two consequences, both sidecar fields written
+    /// by <see cref="WriteMod"/>: the normal replaces the one already on the material instead of stacking onto
+    /// it (see <see cref="NormalMode.Replace"/>); and skin-tint suppression is off, so the wearer's tone
+    /// reaches the art the way it reaches their face. Reaching a vanilla body needs nothing extra — every mod
+    /// is overlaid onto vanilla skin the character wears unless unticked (see
+    /// <see cref="Configuration.OverlaysVanillaFor"/>).
     /// </param>
     /// <param name="faceSplit">
     /// The picked face texture is a DOUBLED sheet, the two sides of the head in the two halves of the image.
@@ -645,20 +645,6 @@ public sealed class ModCreationService
             try { Directory.Delete(root, true); } catch { /* best effort */ }
             return new(false, string.Format(Loc.Localize("Service.RegisterFailed.Fmt",
                 "Wrote the mod, but Penumbra couldn't register it ({0}). Rescan mods in Penumbra."), ec));
-        }
-
-        // A whole skin has to reach every body the wearer might be on, and sibling synthesis defaults to
-        // bibo+gen3 deliberately — baking every mod onto every vanilla body loaded nearby is expensive, so
-        // vanilla (gen2) is opt-in per mod. That default is right for a tattoo and wrong for a skin, which
-        // would otherwise be silently inert on a vanilla body. Raise it for THIS mod only, and log it: the
-        // control lives in another panel (Advanced → Bodies), so a silent write there is a setting the user
-        // finds already moved with nothing to say why. Same reasoning and shape as OnionImportService.
-        if (wholeSkin)
-        {
-            config.SiblingSynthesis[dirName] = SiblingSynthesisMode.AllBodies;
-            config.Save();
-            log.Information("[Proteus] created {0} as a whole skin — set its sibling mode to AllBodies so "
-                          + "the bake reaches vanilla (gen2) as well as bibo and gen3", dirName);
         }
 
         // Enabling is left to Pump, across frames. AddMod is ASYNCHRONOUS: a settings write that lands

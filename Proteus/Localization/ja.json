@@ -243,14 +243,6 @@
     "message": "この行の画像を、すでに肌にあるものとどう合成するかを決めます。\n\n「描画」は上に重ねるだけで、これまでのレイヤーと同じ動作です。\nそれ以外を選ぶとこの行は「プリント」になります。同じMODの他のレイヤーが\n塗った布地を着色し、その形に切り抜かれます。網タイツに虹をかければ、糸だけが\n染まり、網目は肌のまま残ります。\n\nプリントが届くのは同じMOD内のレイヤーだけで、他のMODの衣装には決して触れません。\n素肌の上には何も描かないため、プリントだけを選んでも何も表示されません。\nこれは仕様です。プリントする下地がそこにないからです。\n\n乗算は暗くすることしかできないため、非常に暗い布地ではほとんど見えません。\nその場合はスクリーンを使ってください。この行の色は引き続き画像を着色し、\n不透明度がプリントの強さになります。",
     "description": ""
   },
-  "Colors.Bodies.All": {
-    "message": "すべてのボディ",
-    "description": ""
-  },
-  "Colors.Bodies.BiboGen3": {
-    "message": "bibo+gen3",
-    "description": ""
-  },
   "Colors.Bodies.GlobalNote": {
     "message": "グローバルに保存されます。紐付けはこれを記録しません。",
     "description": ""
@@ -259,17 +251,13 @@
     "message": "\nグローバル設定です。編集中の紐付けには含まれません。",
     "description": ""
   },
-  "Colors.Bodies.Label": {
-    "message": "ボディ",
-    "description": ""
+  "Colors.Bodies.Vanilla.Label": {
+    "message": "gen2/バニラに重ねる",
+    "description": "Checkbox label in the colour-table editor window's Advanced section. \"gen2\" is a body-mod name - never translated. Ticked = this mod is also painted onto vanilla skin."
   },
-  "Colors.Bodies.Off": {
-    "message": "オフ",
-    "description": ""
-  },
-  "Colors.Bodies.Tip": {
-    "message": "このMODをどのボディタイプに焼き込むか：\nすべてのボディ = 姉妹ボディ（bibo↔gen3/Eve）＋バニラ（gen2）\nbibo+gen3 = 姉妹ボディのみに焼き込む（既定）\nオフ = 合成しない\n\nこのオプションだけでなく、MOD全体に適用されます。",
-    "description": ""
+  "Colors.Bodies.Vanilla.Tip": {
+    "message": "キャラクターが身につけているバニラ（gen2）の肌にもこのMODを描きます —\n通常は装備に付属する肌です。\n実際にバニラの肌がキャラクターに表示されている間だけ描かれるため、\n表示されていないときは負荷がかかりません。\n\nbiboとgen3/Eveには常に描かれます。これはバニラにだけ影響します。\nこのオプションだけでなく、MOD全体に適用されます。",
+    "description": "Tooltip for the checkbox above. \"gen2\", \"bibo\", \"gen3\" and \"Eve\" are body-mod names - never translated. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Colors.BustBridge.Label": {
     "message": "谷間を布で渡す",
@@ -1092,8 +1080,8 @@
     "description": ""
   },
   "Create.WholeSkin.Tip": {
-    "message": "肌に何かを描くのではなく、肌全体のModを変換する場合にチェックしてください。\nテクスチャがそれらしければProteusが自動でチェックします。あなた自身の指定が常に優先されます。\n結果は三つあります。ノーマルマップがマテリアル上の既存のものに重ねられるのではなく置き換わります。\nそうしないと同じマップの上に重なり、毛穴やしわが二重にかかって、体だけが顔に比べて平坦に見え、\n首の継ぎ目にはっきりした線が出ます。\n二つめは肌色の抑制がオフになることです。着ている人の肌色が乗るようになります。抑制は布地が\n染め直されるのを防ぐためのもので、このテクスチャは肌そのものだからです。\n三つめは「ボディ」が「すべてのボディ」に設定され、バニラボディにも適用されるようになることです。",
-    "description": ""
+    "message": "肌に何かを描くのではなく、肌全体のModを変換する場合にチェックしてください。\nテクスチャがそれらしければProteusが自動でチェックします。あなた自身の指定が常に優先されます。\n結果は二つあります。ノーマルマップがマテリアル上の既存のものに重ねられるのではなく置き換わります。\nそうしないと同じマップの上に重なり、毛穴やしわが二重にかかって、体だけが顔に比べて平坦に見え、\n首の継ぎ目にはっきりした線が出ます。\n二つめは肌色の抑制がオフになることです。着ている人の肌色が乗るようになります。抑制は布地が\n染め直されるのを防ぐためのもので、このテクスチャは肌そのものだからです。",
+    "description": "Tooltip for the checkbox above. \"normal\" is the normal map (a texture). Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Emissive.Aliases.Fmt": {
     "message": "{0} パス",
@@ -1437,10 +1425,6 @@
   },
   "Import.Author.Label": {
     "message": "作者",
-    "description": ""
-  },
-  "Import.BodyFit.NeedsAllBodies.Fmt": {
-    "message": "このパックにはバニラボディ用に描かれたものがないため、代わりに「{0}」が使われます。バニラボディへの焼き込みは既定でオフなので、Proteusはインポート時にこのMODの「ボディ」を「すべてのボディ」に設定します（カラー→詳細設定）。そうしないと何も描画されません。",
     "description": ""
   },
   "Import.BodyFit.NotDrawn.Fmt": {
@@ -1825,10 +1809,6 @@
   },
   "Import.NothingUsable": {
     "message": "このパックにインポートできるレイヤーはありません。",
-    "description": ""
-  },
-  "Import.Result.AllBodies.Fmt": {
-    "message": "「{0}」をインポートしました — レイヤー数: {1}{2}。このパックにはバニラボディ用に描かれたものがないため、Proteusはこの MODの「ボディ」を「すべてのボディ」に設定して焼き込みました（カラー→詳細設定）。オフにすると描画されなくなります。",
     "description": ""
   },
   "Import.Result.NoLayout.Fmt": {
