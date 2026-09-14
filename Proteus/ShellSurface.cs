@@ -72,12 +72,12 @@ public readonly record struct ShellSurfaceKey(ShellSurfaceKind Kind, string Id)
     /// How far off the source surface a shell on this one sits, as a multiple of
     /// <c>SecondSkinWriter.BaseOffset</c>.
     /// <para/>
-    /// That offset is an empirical millimetre tuned against a torso, where it is invisible. An eye is a few
-    /// millimetres across, so the same push is a large fraction of the iris radius — enough to stand the
-    /// shell off the cornea or through the eyelid. Everything else keeps the tuned value; only the surface
-    /// whose scale is an order of magnitude smaller asks for less.
+    /// 1 everywhere, the iris included. The iris used to ask for a tenth: the offset was a millimetre, and
+    /// against an eye a few millimetres across that stood the shell off the cornea or through the eyelid.
+    /// The offset is now 0.05 mm, measured, so a tenth of it would be 0.005 mm — under the smallest step
+    /// the measurement tried and did not keep. The hook stays for a surface that turns out to need one.
     /// </summary>
-    public float PushScale => Kind == ShellSurfaceKind.Iris ? 0.1f : 1f;
+    public float PushScale => 1f;
 
     public override string ToString() => Id.Length == 0 ? Kind.ToString() : $"{Kind}:{Id}";
 }
