@@ -531,6 +531,18 @@
     "message": "You pinned this mode in Advanced — it no longer follows the features you set.\nClick \"Back to auto\" to let it adapt again.",
     "description": "Tooltip. Appears in the colour-table editor window. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
+  "Colors.ReinforcedToe.Label": {
+    "message": "Reinforced toe",
+    "description": "Checkbox label in the colour-table editor's Advanced section. \"Reinforced toe\" is the hosiery term for the heavier-knit toe box of a stocking - use your language's term for it if there is one."
+  },
+  "Colors.ReinforcedToe.SavedNote": {
+    "message": "Saved to the mod — presets and designs don't capture this.",
+    "description": "Small grey note under the Reinforced toe controls, shown while a preset or Glamourer design is driving the mod. Unlike the colour settings around it, this one is written to the mod itself."
+  },
+  "Colors.ReinforcedToe.Tip": {
+    "message": "Make the capped toe denser than the rest of the stocking, the way real hosiery\nknits a heavier toe box — a darker panel with the toes still showing through it,\nfading out at the edge rather than stopping at a line.\nIt can only take away transparency that is there. Where the stocking paints\nnothing it does nothing, so it will never put fabric on a bare toe, and on an\nalready-opaque stocking you will see no change.\nWith \"Sharp alpha\" on, every pixel is either solid or gone, so the soft edge\nbecomes a hard one.",
+    "description": "Tooltip on the Reinforced toe checkbox. \"Sharp alpha\" is another Proteus setting - translate it the same way as Settings.SharpAlpha.Label. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "Colors.RenderingAs": {
     "message": "Rendering as:",
     "description": "Appears in the colour-table editor window."
@@ -666,6 +678,14 @@
   "Colors.Tiling.Tip": {
     "message": "How many times the effect repeats across the surface. 1 = once.",
     "description": "Tooltip. Appears in the colour-table editor window."
+  },
+  "Colors.ToeDensity.Label": {
+    "message": "Density",
+    "description": "Slider label under the Reinforced toe checkbox, in the colour-table editor's Advanced section. How much denser the stocking's toe is than its leg."
+  },
+  "Colors.ToeDensity.Tip": {
+    "message": "How much denser the toe is than the leg. 100% is completely solid; the usual\nreinforced toe sits well below that.",
+    "description": "Tooltip on the Density slider. Contains a deliberate line break - keep it, moving it where your language needs."
   },
   "Colors.TowardBottom.Btn": {
     "message": "Toward bottom",

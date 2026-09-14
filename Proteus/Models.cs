@@ -531,6 +531,25 @@ public class OverlayDescriptor
     public float? ToeCapStrength { get; set; }
 
     /// <summary>
+    /// How much denser than the rest of the stocking the capped toe renders, 0–100. Zero (the default) is
+    /// off and leaves the build byte-identical.
+    /// <para/>
+    /// A REINFORCED TOE. Real hosiery knits the toe box heavier than the leg, so it reads as a darker
+    /// panel with the toes still faintly visible through it; a shell renders the cap at exactly the
+    /// fabric's own density, so a sheer stocking has a sheer toe. This pushes the cap's texels toward
+    /// opaque on the same curve a colour row's positive <see cref="ColorTableSubRowPreset.Opacity"/> uses,
+    /// weighted by the cap map, and feathered so the density fades out at the rim rather than stepping.
+    /// <para/>
+    /// DENSITY, not strength: <see cref="ToeCapStrength"/> is geometry — how far the toe region inflates
+    /// toward its envelope — and the two have nothing to do with each other.
+    /// <para/>
+    /// It can only remove transparency that is there: where the shell paints nothing this does nothing, so
+    /// it can never put fabric on a bare toe, and on an already-opaque stocking it has no visible effect.
+    /// </summary>
+    [JsonPropertyName("ToeCapDensity")]
+    public int ToeCapDensity { get; set; }
+
+    /// <summary>
     /// UV space the overlay PNGs were painted for: "bibo", "gen3", or "gen2".
     /// When set and different from the target material's body type (inferred from the
     /// material path suffix), Proteus remaps overlay pixels before compositing.

@@ -1041,6 +1041,89 @@ public class SidecarDiscoveryService
     }
 
     /// <summary>
+    /// Persist the reinforced-toe density of <paramref name="edited"/> — and NOTHING else — to the mod's
+    /// sidecar. Returns false, with a warning, when it could not.
+    /// <para/>
+    /// For edits made while a preset or design is in charge. <see cref="SaveMetadata"/> writes the whole of
+    /// <c>entry.Metadata</c>, and under an override the editor mutates that object for PREVIEW: with no
+    /// editable gear override, the glow effect, scroll, mode pin and render mode all land straight in the
+    /// base descriptors and stay out of the sidecar only because the save is skipped. A full save to record
+    /// the density would make every one of those previews permanent. So the file is read back from disk and
+    /// only this field is copied onto it.
+    /// <para/>
+    /// Each edited descriptor is found by REFERENCE in the in-memory metadata and its twin taken at the same
+    /// position in the copy just read — options are chosen by selection rather than stored names, so a
+    /// position is the only stable address. An option whose name disagrees at that position means the file no
+    /// longer has the shape the editor was drawn from, and the descriptor is skipped rather than guessed at.
+    /// </summary>
+    public bool SaveToeCapDensity(OverlayEntry entry, IReadOnlyList<OverlayDescriptor> edited)
+    {
+        try
+        {
+            var path = Path.Combine(entry.SidecarRoot, MetadataFile);
+            var onDisk = File.Exists(path) ? TryParseMetadata(path) : null;
+            if (onDisk == null)
+            {
+                log.Warning("[Proteus] reinforced toe not saved for {0}: its metadata could not be read back",
+                    entry.ModDirectory);
+                return false;
+            }
+
+            int applied = 0;
+            foreach (var mem in edited)
+            {
+                if (TwinOnDisk(entry.Metadata, onDisk, mem) is not { } twin) continue;
+                twin.ToeCapDensity = mem.ToeCapDensity;
+                applied++;
+            }
+            if (applied == 0)
+            {
+                log.Warning("[Proteus] reinforced toe not saved for {0}: the edited option is no longer where "
+                          + "the editor found it in the metadata", entry.ModDirectory);
+                return false;
+            }
+
+            SnapshotDefaults(entry, path);
+            var json = JsonSerializer.Serialize(onDisk, ProteusJson.MetadataWrite);
+            PenumbraModMeta.AtomicWrite(path, json, maxRetries: 2);   // same budget and reason as SaveMetadata
+            return true;
+        }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "Failed to save the reinforced toe for {0}", entry.ModDirectory);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The descriptor in <paramref name="onDisk"/> at the position <paramref name="d"/> occupies in
+    /// <paramref name="inMemory"/>, found by reference. See <see cref="SaveToeCapDensity"/>.
+    /// </summary>
+    internal static OverlayDescriptor? TwinOnDisk(ProteusMetadata inMemory, ProteusMetadata onDisk, OverlayDescriptor d)
+    {
+        if (inMemory.Overlays is { } memTop)
+        {
+            int i = memTop.FindIndex(x => ReferenceEquals(x, d));
+            if (i >= 0) return onDisk.Overlays is { } diskTop && i < diskTop.Count ? diskTop[i] : null;
+        }
+
+        if (inMemory.OptionGroups is not { } memGroups || onDisk.OptionGroups is not { } diskGroups) return null;
+        for (int g = 0; g < memGroups.Count; g++)
+            for (int o = 0; o < memGroups[g].Options.Count; o++)
+            {
+                var memOpt = memGroups[g].Options[o];
+                int i = memOpt.Overlays.FindIndex(x => ReferenceEquals(x, d));
+                if (i < 0) continue;
+
+                if (g >= diskGroups.Count || o >= diskGroups[g].Options.Count) return null;
+                var diskOpt = diskGroups[g].Options[o];
+                if (!string.Equals(memOpt.Name, diskOpt.Name, StringComparison.OrdinalIgnoreCase)) return null;
+                return i < diskOpt.Overlays.Count ? diskOpt.Overlays[i] : null;
+            }
+        return null;
+    }
+
+    /// <summary>
     /// Preserve the mod's settings as they were BEFORE Proteus ever wrote to them, so the editor's "Reset
     /// to defaults" has something to restore. The editor mutates <c>entry.Metadata</c> in memory and only
     /// then calls <see cref="SaveMetadata"/>, so at this moment the file on disk is still the original —

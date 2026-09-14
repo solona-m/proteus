@@ -531,6 +531,18 @@
     "message": "Du hast diesen Modus unter „Erweitert“ angeheftet — er folgt den gesetzten Merkmalen nicht mehr.\nKlicke auf „Zurück zu automatisch“, damit er sich wieder anpasst.",
     "description": ""
   },
+  "Colors.ReinforcedToe.Label": {
+    "message": "Verstärkte Spitze",
+    "description": ""
+  },
+  "Colors.ReinforcedToe.SavedNote": {
+    "message": "Im Mod gespeichert – Presets und Designs erfassen das nicht.",
+    "description": ""
+  },
+  "Colors.ReinforcedToe.Tip": {
+    "message": "Die überkappte Fußspitze dichter machen als den Rest des Strumpfes – so, wie echte\nStrumpfware eine schwerere Spitze strickt: ein dunkleres Feld, durch das die Zehen\nnoch schimmern, das am Rand ausläuft statt an einer Kante abzubrechen.\nEs kann nur Transparenz wegnehmen, die vorhanden ist. Wo der Strumpf nichts malt,\npassiert nichts – auf eine nackte Zehe kommt also nie Stoff, und bei einem bereits\nblickdichten Strumpf siehst du keinen Unterschied.\nMit „Harte Transparenz“ ist jedes Pixel entweder voll da oder ganz weg, dann wird\naus dem weichen Rand ein harter.",
+    "description": ""
+  },
   "Colors.RenderingAs": {
     "message": "Dargestellt als:",
     "description": ""
@@ -665,6 +677,14 @@
   },
   "Colors.Tiling.Tip": {
     "message": "Wie oft sich der Effekt über die Oberfläche wiederholt. 1 = einmal.",
+    "description": ""
+  },
+  "Colors.ToeDensity.Label": {
+    "message": "Dichte",
+    "description": ""
+  },
+  "Colors.ToeDensity.Tip": {
+    "message": "Wie viel dichter die Spitze ist als das Bein. 100 % ist völlig blickdicht; die\nübliche verstärkte Spitze liegt deutlich darunter.",
     "description": ""
   },
   "Colors.TowardBottom.Btn": {

@@ -531,6 +531,18 @@
     "message": "你在“高级”中固定了此模式——它不再跟随你设置的功能。\n点击“恢复自动”可让它重新自适应。",
     "description": ""
   },
+  "Colors.ReinforcedToe.Label": {
+    "message": "加固趾部",
+    "description": ""
+  },
+  "Colors.ReinforcedToe.SavedNote": {
+    "message": "保存在模组中——预设和设计不会记录此项。",
+    "description": ""
+  },
+  "Colors.ReinforcedToe.Tip": {
+    "message": "让包住的趾部比丝袜其余部分更密实，就像真实丝袜把趾尖织得更厚一样：一块更深的\n区域，脚趾仍隐约可见，边缘逐渐淡出而不是戛然而止。\n它只能去掉已经存在的透明度。丝袜没有绘制的地方不会有任何变化，所以绝不会在裸露的\n脚趾上凭空生出布料；在本来就不透明的丝袜上你也看不出区别。\n开启“锐利透明”后，每个像素要么完全实心要么完全消失，柔和的边缘就会变成硬边。",
+    "description": ""
+  },
   "Colors.RenderingAs": {
     "message": "渲染为：",
     "description": ""
@@ -665,6 +677,14 @@
   },
   "Colors.Tiling.Tip": {
     "message": "效果在表面上重复的次数。1 = 一次。",
+    "description": ""
+  },
+  "Colors.ToeDensity.Label": {
+    "message": "密度",
+    "description": ""
+  },
+  "Colors.ToeDensity.Tip": {
+    "message": "趾部比腿部密实多少。100% 为完全不透明；常见的加固趾部远低于此。",
     "description": ""
   },
   "Colors.TowardBottom.Btn": {

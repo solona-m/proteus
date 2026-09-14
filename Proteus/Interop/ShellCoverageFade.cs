@@ -195,7 +195,10 @@ public sealed unsafe class ShellCoverageFade : IDisposable
     private Faded GetOrBuild(string path, int step, ShellLightProfile profile)
     {
         long stamp = FileStamp(path);
-        var key = Normalize(path);
+        // Keyed by the SHELL, not the file: a content-addressed normal gets a new name for every revision,
+        // and a key on the name would add a full-resolution entry per revision with nothing ever replacing
+        // it. The stamp below is still read off the actual file, so a new revision is still a rebuild.
+        var key = Normalize(Services.ShellTextureNames.ShellKey(path));
         // Reuse only while BOTH the step and the file are unchanged — a recomposite rewrites
         // ss_{letter}_norm.tex in place, and a stamp-only cache would then serve coverage from the previous
         // build. A changed step REPLACES the entry rather than joining it, which is what keeps this to one
@@ -228,8 +231,10 @@ public sealed unsafe class ShellCoverageFade : IDisposable
             if (decNorm == null) { log.Warning("[ProteusLight] could not decode shell normal {0}", normalPath); return; }
             var (norm, w, h) = decNorm.Value;
 
-            // The index sits beside the normal, written by the same pass: ss_{letter}_norm.tex → _id.tex.
-            var idPath = normalPath[..^"_norm.tex".Length] + "_id.tex";
+            // The index sits beside the normal, written by the same pass: ss_{letter}_norm.tex → _id.tex. Through
+            // ShellTextureNames, because a reinforced-toe normal is content-addressed and a literal strip of
+            // "_norm.tex" would name an index that does not exist.
+            var idPath = Services.ShellTextureNames.IndexBeside(normalPath);
             var decId = textures.LoadTexAsRgba(idPath);
             byte[]? id = null;
             int idW = 0, idH = 0;
@@ -281,7 +286,7 @@ public sealed unsafe class ShellCoverageFade : IDisposable
     /// <summary>The material leaf a shell texture belongs to: <c>ss_0_norm.tex</c> → <c>ss_0.mtrl</c>, which
     /// is the key the compositor publishes light profiles under.</summary>
     private static string MaterialLeaf(string textureLeaf)
-        => textureLeaf[..^"_norm.tex".Length] + ".mtrl";
+        => Services.ShellTextureNames.MaterialLeaf(textureLeaf);
 
     // Walk the character's materials → normal textures that are OUR shell layers. Same shape as
     // ShellNormalGhost.ForEachShellNormal; returns false if the character isn't drawable this frame.
@@ -315,8 +320,8 @@ public sealed unsafe class ShellCoverageFade : IDisposable
 
                     var path = name.Trim().Trim('"');
                     var leaf = Path.GetFileName(path);
-                    if (!leaf.StartsWith("ss_", StringComparison.OrdinalIgnoreCase)
-                     || !leaf.EndsWith("_norm.tex", StringComparison.OrdinalIgnoreCase))
+                    // Either form of a shell normal's name — see ShellTextureNames.
+                    if (!Services.ShellTextureNames.TryNormalStem(leaf, out _))
                         continue;
 
                     visit((nint)(&handle->Texture), path, leaf);

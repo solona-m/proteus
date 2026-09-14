@@ -531,6 +531,18 @@
     "message": "Has fijado este modo en Avanzado: ya no sigue las funciones que configures.\nHaz clic en «Volver a automático» para que vuelva a adaptarse.",
     "description": ""
   },
+  "Colors.ReinforcedToe.Label": {
+    "message": "Puntera reforzada",
+    "description": ""
+  },
+  "Colors.ReinforcedToe.SavedNote": {
+    "message": "Se guarda en el mod: los preajustes y diseños no lo capturan.",
+    "description": ""
+  },
+  "Colors.ReinforcedToe.Tip": {
+    "message": "Hace la puntera cubierta más densa que el resto de la media, como teje una\npuntera reforzada la lencería real: un panel más oscuro a través del cual\nlos dedos aún se adivinan, que se difumina en el borde en vez de cortarse.\nSolo puede quitar la transparencia que ya existe. Donde la media no pinta\nnada no hace nada, así que nunca pondrá tela sobre un dedo desnudo, y en una\nmedia ya opaca no verás ningún cambio.\nCon «Alfa nítido» cada píxel está entero o no está, así que el borde suave\nse vuelve duro.",
+    "description": ""
+  },
   "Colors.RenderingAs": {
     "message": "Se representa como:",
     "description": ""
@@ -665,6 +677,14 @@
   },
   "Colors.Tiling.Tip": {
     "message": "Cuántas veces se repite el efecto sobre la superficie. 1 = una vez.",
+    "description": ""
+  },
+  "Colors.ToeDensity.Label": {
+    "message": "Densidad",
+    "description": ""
+  },
+  "Colors.ToeDensity.Tip": {
+    "message": "Cuánto más densa es la puntera que la pierna. 100 % es completamente opaca;\nuna puntera reforzada normal queda bastante por debajo.",
     "description": ""
   },
   "Colors.TowardBottom.Btn": {

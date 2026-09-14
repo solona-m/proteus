@@ -29,6 +29,16 @@ public static class ColorTableEditor
     /// worth showing.</summary>
     private const float SkinTintEpsilon = 0.0005f;
 
+    /// <summary>
+    /// Where the reinforced-toe slider starts when the box is first ticked.
+    /// <para/>
+    /// Deliberately well short of the maximum. The slider reaches fully opaque because some styles want
+    /// that, but the ordinary reinforced toe is only a few times denser than the leg — dark enough to read
+    /// as a panel, sheer enough that the toes still show through it. Ticking the box should land on the
+    /// common answer, not on the extreme.
+    /// </summary>
+    private const int ReinforcedToeDefault = 45;
+
     private static readonly string[] GearShaders = ["character.shpk", "characterscroll.shpk"];
 
     /// <summary>What an unset glow colour looks like in the swatch, made explicit when the user raises Glow
@@ -129,7 +139,14 @@ public static class ColorTableEditor
         // entry for this mod, while `overrideActive` tests its COLOUR dictionary. A binding that has never
         // recorded gear settings — the ordinary case — has a live colour override and a null gear override
         // at the same time, so the inference is false exactly when it matters.
-        bool overrideActive = false)
+        bool overrideActive = false,
+        // True when the reinforced-toe control can do anything: a toe cap is active in this mod's look AND
+        // this option renders on a shell that can carry one (not skin.shpk — see StatusWindow.CanReinforceToe).
+        // Passed in because nothing about the descriptors says either: the cap is usually the reserved "Toe
+        // Cap" entry in the mod's Masks group, ticked in Penumbra, and whether a promoted overlay lands on
+        // skin.shpk is decided by the caller. Hidden rather than disabled — a setting that cannot take effect
+        // is noise, and there is no toe-cap picker here to explain it.
+        bool toeCapActive = false)
     {
         edited = FeatureEdit.Neutral;
         if (overlays.Count == 0)
@@ -388,6 +405,52 @@ public static class ColorTableEditor
                 }
                 if (ImGui.IsItemHovered())
                     ImGui.SetTooltip(cs.AsymmetricTip);
+            }
+
+            // Reinforced toe. Real hosiery knits the toe box heavier than the leg, so it reads as a darker
+            // panel with the toes still faintly showing; a shell renders the cap at the fabric's own
+            // density, so a sheer stocking comes out with a sheer toe.
+            //
+            // The opposite gate to the controls above: this is a SHELL setting. Density is the shell
+            // normal's blue channel, which on skin.shpk is skin-colour influence instead — so on the skin
+            // layer there is nothing for it to move. Hidden without a cap for the same reason, since it can
+            // only reach texels the cap map marks.
+            //
+            // NOT hidden while a preset or design is in charge, unlike its neighbours. It was, and that is
+            // the ordinary state for a mod that ships presets, so the control simply never appeared. It can
+            // stay live because nothing an override carries touches it: the composite clones the mod's own
+            // descriptor and applies only the override's gear settings on top, and those have no density.
+            // So it is saved to the mod directly — the caller does that, the way the Geometry ticks do — and
+            // the note below says so, since every other edit made under a preset is only a preview.
+            if (toeCapActive && mode != RenderMode.Skin)
+            {
+                bool reinforced = first.ToeCapDensity > 0;
+                if (ImGui.Checkbox($"{cs.ReinforcedToe}##reinftoe_{idScope}", ref reinforced))
+                {
+                    foreach (var d in overlays)
+                        d.ToeCapDensity = reinforced ? ReinforcedToeDefault : 0;
+                    // Not a FeatureEdit: how dense the toe is says nothing about skin-vs-shell, and this is
+                    // only reachable on a shell in the first place.
+                    changed = true;
+                }
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip(cs.ReinforcedToeTip);
+
+                if (reinforced)
+                {
+                    int density = Math.Clamp(first.ToeCapDensity, 1, 100);
+                    ImGui.SetNextItemWidth(140);
+                    if (ImGui.SliderInt($"{cs.ToeDensity}##reinfamt_{idScope}", ref density, 1, 100, "%d%%"))
+                    {
+                        foreach (var d in overlays) d.ToeCapDensity = Math.Clamp(density, 1, 100);
+                        changed = true;
+                    }
+                    if (ImGui.IsItemHovered())
+                        ImGui.SetTooltip(cs.ToeDensityTip);
+                }
+
+                if (overrideActive)
+                    ImGui.TextDisabled(cs.ReinforcedToeSavedNote);
             }
 
             // Whole-mod settings the caller owns (currently which bodies to bake onto — the geometry passes

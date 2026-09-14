@@ -531,6 +531,18 @@
     "message": "고급에서 이 모드를 고정했으므로, 설정한 기능을 더 이상 따르지 않습니다.\n\"자동으로 되돌리기\"를 클릭하면 다시 적응합니다.",
     "description": ""
   },
+  "Colors.ReinforcedToe.Label": {
+    "message": "발끝 보강",
+    "description": ""
+  },
+  "Colors.ReinforcedToe.SavedNote": {
+    "message": "모드에 저장됩니다. 프리셋과 디자인에는 기록되지 않습니다.",
+    "description": ""
+  },
+  "Colors.ReinforcedToe.Tip": {
+    "message": "덮인 발끝을 스타킹의 나머지 부분보다 촘촘하게 만듭니다. 실제 스타킹이 발끝을\n두껍게 짜는 것과 같아서, 발가락이 희미하게 비치는 어두운 면이 되고 가장자리에서\n뚝 끊기지 않고 서서히 옅어집니다.\n이미 있는 투명도만 없앨 수 있습니다. 스타킹이 아무것도 칠하지 않은 곳에서는\n아무 일도 일어나지 않으므로 맨 발가락에 천이 생기지 않으며, 이미 불투명한\n스타킹에서는 변화가 보이지 않습니다.\n\"선명한 알파\"가 켜져 있으면 모든 픽셀이 불투명하거나 사라지거나 둘 중 하나라서\n부드러운 가장자리가 딱딱해집니다.",
+    "description": ""
+  },
   "Colors.RenderingAs": {
     "message": "렌더링 방식:",
     "description": ""
@@ -665,6 +677,14 @@
   },
   "Colors.Tiling.Tip": {
     "message": "효과가 표면에서 반복되는 횟수. 1 = 한 번.",
+    "description": ""
+  },
+  "Colors.ToeDensity.Label": {
+    "message": "밀도",
+    "description": ""
+  },
+  "Colors.ToeDensity.Tip": {
+    "message": "발끝이 다리보다 얼마나 촘촘한지. 100%는 완전히 불투명하며, 보통의 보강 발끝은\n그보다 훨씬 낮습니다.",
     "description": ""
   },
   "Colors.TowardBottom.Btn": {

@@ -531,6 +531,18 @@
     "message": "Vous avez épinglé ce mode dans Avancé — il ne suit plus les fonctionnalités que vous réglez.\nCliquez sur « Revenir à auto » pour qu'il s'adapte de nouveau.",
     "description": ""
   },
+  "Colors.ReinforcedToe.Label": {
+    "message": "Pointe renforcée",
+    "description": ""
+  },
+  "Colors.ReinforcedToe.SavedNote": {
+    "message": "Enregistré dans le mod — les préréglages et les designs ne le capturent pas.",
+    "description": ""
+  },
+  "Colors.ReinforcedToe.Tip": {
+    "message": "Rend la pointe coiffée plus dense que le reste du bas, comme un vrai bas tricote\nune pointe renforcée : un panneau plus sombre à travers lequel les orteils se\ndevinent encore, qui s'estompe au bord au lieu de s'arrêter net.\nCela ne peut retirer que de la transparence déjà présente. Là où le bas ne peint\nrien, il ne se passe rien : jamais de tissu sur un orteil nu, et sur un bas déjà\nopaque vous ne verrez aucun changement.\nAvec « Alpha net », chaque pixel est soit plein soit absent, et le bord doux\ndevient net.",
+    "description": ""
+  },
   "Colors.RenderingAs": {
     "message": "Rendu en :",
     "description": ""
@@ -665,6 +677,14 @@
   },
   "Colors.Tiling.Tip": {
     "message": "Nombre de répétitions de l'effet sur la surface. 1 = une fois.",
+    "description": ""
+  },
+  "Colors.ToeDensity.Label": {
+    "message": "Densité",
+    "description": ""
+  },
+  "Colors.ToeDensity.Tip": {
+    "message": "À quel point la pointe est plus dense que la jambe. 100 % est totalement opaque ;\nune pointe renforcée ordinaire reste bien en dessous.",
     "description": ""
   },
   "Colors.TowardBottom.Btn": {
