@@ -107,8 +107,8 @@ public sealed class OnionImportService
     /// </summary>
     /// <param name="WearerBodyType">
     /// The UV body type the character is actually wearing ("bibo"/"gen3"/"gen2"), or null when they aren't
-    /// drawn yet. Kept because what happens to a layout the pack DOESN'T carry depends on it: bibo↔gen3 is
-    /// remapped automatically, but a vanilla body needs the mod's sibling mode raised to AllBodies.
+    /// drawn yet. Kept because the Import tab says what happens to a layout the pack DOESN'T carry — it is
+    /// remapped onto the worn body — and naming that body is the useful half of the sentence.
     /// </param>
     /// <param name="DefaultLayoutMatchedBody">
     /// Whether <paramref name="DefaultLayout"/> was chosen because it matches the body the character is
@@ -129,15 +129,6 @@ public sealed class OnionImportService
         string? WearerBodyType,
         bool DefaultLayoutMatchedBody)
     {
-        /// <summary>
-        /// The import will land on a body the pack wasn't painted for, and Proteus only crosses into
-        /// VANILLA UV space when the mod's sibling mode is AllBodies (the default is bibo+gen3 only, see
-        /// <c>Configuration.SiblingModeFor</c>). Without that raised, such an import paints nothing at all.
-        /// </summary>
-        public bool NeedsAllBodies
-            => !DefaultLayoutMatchedBody
-            && string.Equals(WearerBodyType, "gen2", StringComparison.OrdinalIgnoreCase);
-
         /// <summary>The distinct UV layouts that will be imported, in paint order.</summary>
         public IReadOnlyList<string> Layouts => Layers.Where(l => l.Import)
             .Select(l => l.LayoutToken).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -411,19 +402,6 @@ public sealed class OnionImportService
         // reach the user rather than hide behind a green "imported".
         var selectionFailed = false;
 
-        // The pack has nothing for a VANILLA wearer, so the overlay only reaches them through a cross-UV
-        // bake into gen2 — and that is opt-in per mod (Configuration.SiblingModeFor defaults to bibo+gen3,
-        // deliberately, because baking every mod onto every vanilla body loaded nearby is expensive).
-        // Leaving it at the default here would import a mod that is inert for the person importing it, so
-        // raise it for THIS mod only and say so in the result rather than doing it silently.
-        if (preview.NeedsAllBodies)
-        {
-            config.SiblingSynthesis[dirName] = SiblingSynthesisMode.AllBodies;
-            config.Save();
-            log.Information("[Proteus] imported {0}: wearer is on a vanilla body and the pack has no vanilla " +
-                "layout — set this mod's sibling mode to AllBodies so the bake reaches gen2", dirName);
-        }
-
         var collId = penumbra.GetPlayerCollectionId();
         if (collId.HasValue)
         {
@@ -468,12 +446,6 @@ public sealed class OnionImportService
                 "Imported \"{0}\" — layers: {1}{2}, but Proteus couldn't pick a body layout for you. " +
                 "Choose one under \"{3}\" in Penumbra, or nothing will paint."),
                 dirName, prepared.Imported, tail, LayoutGroupName));
-        if (preview.NeedsAllBodies)
-            return new(true, true, string.Format(Loc.Localize("Import.Result.AllBodies.Fmt",
-                "Imported \"{0}\" — layers: {1}{2}. The pack has nothing painted for a vanilla body, so " +
-                "Proteus set this mod's \"Bodies\" to \"All bodies\" (Colors → Advanced) to bake it across " +
-                "— turn that off and it will stop painting."),
-                dirName, prepared.Imported, tail));
         return new(true, false, string.Format(Loc.Localize("Import.Result.Ok.Fmt",
             "Imported \"{0}\" — layers: {1}{2}. Enabled it and opened it in Penumbra."),
             dirName, prepared.Imported, tail));
