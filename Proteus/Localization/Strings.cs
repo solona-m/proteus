@@ -350,12 +350,11 @@ public sealed class CreateStrings
     public readonly string WholeSkinTip = Loc.Localize("Create.WholeSkin.Tip",
         "Tick this when you're converting a full skin mod, not painting something onto skin.\n" +
         "Proteus ticks it for you when the textures look like one; your own answer always wins.\n" +
-        "Three things follow. The normal REPLACES the one already on the material instead of\n" +
+        "Two things follow. The normal REPLACES the one already on the material instead of\n" +
         "stacking onto it — otherwise it lands on top of the same map underneath, every pore\n" +
         "and crease is applied twice, and the body reads flat against the face with a hard line\n" +
-        "at the neck seam. Skin-tint suppression goes off, so the wearer's skin tone comes\n" +
-        "through: it is there to stop fabric being re-tinted, and this art IS the skin. And\n" +
-        "\"Bodies\" is set to \"All bodies\", so the skin reaches a vanilla body as well.");
+        "at the neck seam. And skin-tint suppression goes off, so the wearer's skin tone comes\n" +
+        "through: it is there to stop fabric being re-tinted, and this art IS the skin.");
 
     public readonly string FaceAsymmetric = Loc.Localize("Create.FaceAsymmetric.Label",
         "This face texture is asymmetric") + "###createFaceAsymmetric";
@@ -827,11 +826,6 @@ public sealed class ImportStrings
     public readonly string NotDrawnFmt = Loc.Localize("Import.BodyFit.NotDrawn.Fmt",
         "Your character isn't drawn yet, so Proteus picked \"{0}\" by preference rather than by your " +
         "body. Check the result once you're in game.");
-
-    public readonly string NeedsAllBodiesFmt = Loc.Localize("Import.BodyFit.NeedsAllBodies.Fmt",
-        "This pack has nothing painted for your vanilla body — \"{0}\" will be used instead. Baking onto " +
-        "a vanilla body is off by default, so Proteus will set this mod's \"Bodies\" to \"All bodies\" on " +
-        "import (Colors → Advanced); without that it would paint nothing.");
 
     public readonly string RemappedFmt = Loc.Localize("Import.BodyFit.Remapped.Fmt",
         "This pack has nothing for your {0} body, so \"{1}\" will be remapped onto it automatically.");
@@ -1476,18 +1470,15 @@ public sealed class ColorPanelStrings
         "Reorder how this mod's overlays stack on your body, across groups.\n" +
         "Leftmost tab = top of the stack (composites last, on top).");
 
-    // Bodies. "bibo", "gen3", "Eve" and "gen2" are body-mod names and are never translated; the option
-    // labels are therefore mostly proper nouns with one English word each.
-    public readonly string Bodies      = Loc.Localize("Colors.Bodies.Label", "Bodies");
-    public readonly string BodiesOff   = Loc.Localize("Colors.Bodies.Off", "Off");
-    public readonly string BodiesSibling = Loc.Localize("Colors.Bodies.BiboGen3", "bibo+gen3");
-    public readonly string BodiesAll   = Loc.Localize("Colors.Bodies.All", "All bodies");
+    // Vanilla overlay. "gen2", "bibo", "gen3" and "Eve" are body-mod names and are never translated.
+    public readonly string OverlayVanilla = Loc.Localize("Colors.Bodies.Vanilla.Label", "Overlay gen2/vanilla");
 
-    public readonly string BodiesTip = Loc.Localize("Colors.Bodies.Tip",
-        "Which body types to bake this mod onto:\n" +
-        "All bodies = sibling body (bibo↔gen3/Eve) + vanilla (gen2)\n" +
-        "bibo+gen3 = bake to the sibling body only (default)\n" +
-        "Off = no synthesis\n\n" +
+    public readonly string BodiesTip = Loc.Localize("Colors.Bodies.Vanilla.Tip",
+        "Also paint this mod onto vanilla (gen2) skin your character is wearing —\n" +
+        "usually skin that comes with a piece of gear.\n" +
+        "It is only painted while vanilla skin is actually on your character,\n" +
+        "so this costs nothing when there is none.\n\n" +
+        "bibo and gen3/Eve are always painted; this only affects vanilla.\n" +
         "Applies to the whole mod, not just this option.");
 
     public readonly string BodiesGlobalSuffix = Loc.Localize("Colors.Bodies.GlobalSuffix",

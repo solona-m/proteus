@@ -61,17 +61,6 @@ public class StatusWindow : Window
     // rewrites — caching it in a static readonly field would freeze it at whatever the style was on load.
     private static Vector4 ImportWarnColour => ProteusStyle.Warn;
 
-    // Indexed by (int)SiblingSynthesisMode: Off=0, BiboGen3Only=1, AllBodies=2.
-    // A METHOD, not the static readonly array this used to be: a static field captures its value once at
-    // type-init, so the labels would have frozen in whatever language was active when the window first
-    // drew and never followed a language change.
-    private static string SiblingModeLabel(int mode) => mode switch
-    {
-        0 => Strings.ColorPanel.BodiesOff,
-        1 => Strings.ColorPanel.BodiesSibling,
-        _ => Strings.ColorPanel.BodiesAll,
-    };
-
     // Set by the plugin-installer gear icon (UiBuilder.OpenConfigUi) so the window opens on Settings.
     // One-shot: consumed by the next Draw so the user can move off the tab freely afterwards.
     private bool _forceSettingsTab;
@@ -2559,7 +2548,6 @@ public class StatusWindow : Window
          && onion.AnyImportable
          && onion.Warnings.Count == 0
          && onion.Layers.All(l => l.Import)
-         && !onion.NeedsAllBodies
          // Only a warning when there IS a material list to be wrong about; an unresolved one prints nothing.
          && (_importMaterials is null or { Count: 0 } || _importMaterialsFromGameData))
             StartImport(onion);
@@ -4441,10 +4429,9 @@ public class StatusWindow : Window
     /// What happens when the pack has nothing painted for the body the user is actually wearing.
     /// <para/>
     /// Drawn for EVERY pack, not just multi-layout ones: a single-layout bibo pack landing on a vanilla
-    /// body is the case that most needs saying, and it has no option group to hang the note off. And the
-    /// three outcomes genuinely differ — bibo↔gen3 is remapped with no action, gen2 needs the mod's
-    /// sibling mode raised, and an undrawn character means Proteus simply doesn't know yet. Saying
-    /// "Proteus will remap it" for all three would be wrong for two of them.
+    /// body is the case that most needs saying, and it has no option group to hang the note off. The two
+    /// outcomes differ — a drawn body (vanilla included) is remapped with no action, and an undrawn
+    /// character means Proteus simply doesn't know yet — so "Proteus will remap it" can't be said for both.
     /// </summary>
     private static void DrawImportBodyFit(OnionImportService.ImportPreview preview)
     {
@@ -4456,13 +4443,6 @@ public class StatusWindow : Window
         if (preview.WearerBodyType == null)
         {
             ImGui.TextDisabled(string.Format(ims.NotDrawnFmt, preview.DefaultLayout));
-        }
-        else if (preview.NeedsAllBodies)
-        {
-            // The one case that needs an action, and the one Proteus takes for the user on import.
-            ImGui.PushTextWrapPos(0);
-            ImGui.TextColored(ImportWarnColour, string.Format(ims.NeedsAllBodiesFmt, preview.DefaultLayout));
-            ImGui.PopTextWrapPos();
         }
         else
         {
@@ -6120,8 +6100,14 @@ public class StatusWindow : Window
     }
 
     /// <summary>
-    /// The mod's sibling-synthesis mode — which body types its overlays get baked onto — drawn inside the
-    /// colour panel's Advanced disclosure.
+    /// Whether the mod's overlays are baked onto vanilla (gen2) skin the character is wearing, drawn inside
+    /// the colour panel's Advanced disclosure.
+    /// <para/>
+    /// A checkbox, not the three-way combo it replaced ("All bodies" / "bibo+gen3" / "Off"). The middle value
+    /// existed to keep vanilla out, but a vanilla body is only ever baked when vanilla skin is on the
+    /// character — so the choice people were being asked to make was "should the art show on the skin I'm
+    /// visibly wearing", which nobody wants answered no by default. bibo↔gen3/Eve is not offered at all: it
+    /// always bakes, and "Off" for it was a way to make an overlay silently vanish from a body you had on.
     /// <para/>
     /// It lives here rather than in the Mods table because it is not a property of the mod so much as of
     /// how its overlay renders, which is what the colour panel is for; and because getting it wrong looks
@@ -6133,22 +6119,17 @@ public class StatusWindow : Window
     /// </summary>
     private void DrawBodiesAdvanced(OverlayEntry entry)
     {
-        var mode = config.SiblingModeFor(entry.ModDirectory);
+        bool vanilla = config.OverlaysVanillaFor(entry.ModDirectory);
 
-        ImGui.SetNextItemWidth(120);
         var cp = Strings.ColorPanel;
-        if (ImGui.BeginCombo($"{cp.Bodies}##bodies_{entry.ModDirectory}", SiblingModeLabel((int)mode)))
+        if (ImGui.Checkbox($"{cp.OverlayVanilla}##bodies_{entry.ModDirectory}", ref vanilla))
         {
-            foreach (var opt in new[] { SiblingSynthesisMode.AllBodies, SiblingSynthesisMode.BiboGen3Only, SiblingSynthesisMode.Off })
-            {
-                if (ImGui.Selectable(SiblingModeLabel((int)opt), opt == mode) && opt != mode)
-                {
-                    config.SiblingSynthesis[entry.ModDirectory] = opt;
-                    config.Save();
-                    RecompositeForOverlay(entry, "sibling-mode");
-                }
-            }
-            ImGui.EndCombo();
+            // On is the absent default, so ticking REMOVES the entry rather than writing a value: a legacy
+            // "bibo+gen3" left behind would mean the same today, but only "Off" is a choice worth storing.
+            if (vanilla) config.SiblingSynthesis.Remove(entry.ModDirectory);
+            else config.SiblingSynthesis[entry.ModDirectory] = SiblingSynthesisMode.Off;
+            config.Save();
+            RecompositeForOverlay(entry, "sibling-mode");
         }
         // The router, not the binding service: Bodies is global config that NEITHER a binding nor a preset
         // captures, so the warning belongs wherever the rest of the panel is previewing rather than saving.

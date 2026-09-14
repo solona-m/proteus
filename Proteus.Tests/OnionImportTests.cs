@@ -202,21 +202,16 @@ public class OnionImportTests
             var vanilla = Preview(omp, "gen2");
             Assert.Equal("vanilla", vanilla.DefaultLayout);
             Assert.True(vanilla.DefaultLayoutMatchedBody);
-
-            // Only the gen2 fallback needs the mod's sibling mode raised — bibo↔gen3 is baked by default.
-            Assert.False(blind.NeedsAllBodies);      // body unknown: can't say, so don't
-            Assert.False(gen3.NeedsAllBodies);       // bibo -> gen3 remaps with no action
-            Assert.False(vanilla.NeedsAllBodies);    // matched outright
         });
     }
 
     [Fact]
-    public void A_vanilla_wearer_with_no_vanilla_layout_is_flagged_as_needing_all_bodies()
+    public void A_vanilla_wearer_with_no_vanilla_layout_falls_back_to_a_remapped_layout()
     {
         With(dir =>
         {
-            // Proteus only bakes into gen2 UV space when a mod's sibling mode is AllBodies, and the default
-            // is bibo+gen3 — so without this flag the import would be inert for the person making it.
+            // Baking onto a vanilla body needs no per-mod setting any more, so this is the ordinary
+            // "remapped onto the body you're wearing" case — the preview only has to name that body.
             var omp = MakePack(dir,
             [
                 new Layer("layers/bibo.png", "bibo", "base", Order: 0),
@@ -227,7 +222,6 @@ public class OnionImportTests
             Assert.Equal("bibo", preview.DefaultLayout);
             Assert.False(preview.DefaultLayoutMatchedBody);
             Assert.Equal("gen2", preview.WearerBodyType);
-            Assert.True(preview.NeedsAllBodies);
         });
     }
 
@@ -242,7 +236,7 @@ public class OnionImportTests
             var preview = Preview(omp, "gen2");
             Assert.Single(preview.Layouts);
             Assert.False(preview.DefaultLayoutMatchedBody);
-            Assert.True(preview.NeedsAllBodies);
+            Assert.Equal("gen2", preview.WearerBodyType);
         });
     }
 

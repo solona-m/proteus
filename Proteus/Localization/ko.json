@@ -243,14 +243,6 @@
     "message": "이 행의 이미지를 이미 피부에 있는 것과 어떻게 합성할지 정합니다.\n\n\"페인트\"는 그 위에 얹기만 하며, 지금까지 모든 레이어가 해온 방식입니다.\n그 외를 고르면 이 행은 프린트가 됩니다. 같은 모드의 다른 레이어가 칠한\n천을 물들이고 그 모양대로 잘리므로, 망사에 무지개를 올리면 실만 물들고\n구멍은 피부로 남습니다.\n\n프린트는 자기 모드의 레이어에만 닿으며, 다른 모드의 옷은 절대 건드리지 않습니다.\n맨살 위에는 아무것도 칠하지 않으므로 프린트만 선택하면 아무것도 보이지 않습니다.\n의도된 동작입니다. 그 위에 찍을 바탕이 없기 때문입니다.\n\n곱하기는 어둡게만 할 수 있어 아주 어두운 천에서는 거의 보이지 않습니다.\n그럴 때는 스크린을 쓰세요. 이 행의 색은 여전히 이미지를 물들이며,\n불투명도가 프린트의 세기입니다.",
     "description": ""
   },
-  "Colors.Bodies.All": {
-    "message": "모든 바디",
-    "description": ""
-  },
-  "Colors.Bodies.BiboGen3": {
-    "message": "bibo+gen3",
-    "description": ""
-  },
   "Colors.Bodies.GlobalNote": {
     "message": "전역으로 저장됩니다 — 연결은 이 항목을 기록하지 않습니다.",
     "description": ""
@@ -259,17 +251,13 @@
     "message": "\n전역 설정입니다 — 편집 중인 연결에는 포함되지 않습니다.",
     "description": ""
   },
-  "Colors.Bodies.Label": {
-    "message": "바디",
-    "description": ""
+  "Colors.Bodies.Vanilla.Label": {
+    "message": "gen2/바닐라에 오버레이",
+    "description": "Checkbox label in the colour-table editor window's Advanced section. \"gen2\" is a body-mod name - never translated. Ticked = this mod is also painted onto vanilla skin."
   },
-  "Colors.Bodies.Off": {
-    "message": "끔",
-    "description": ""
-  },
-  "Colors.Bodies.Tip": {
-    "message": "이 모드를 어떤 바디 유형에 구울지:\n모든 바디 = 자매 바디(bibo↔gen3/Eve) + 기본(gen2)\nbibo+gen3 = 자매 바디에만 굽기(기본값)\n끔 = 합성하지 않음\n\n이 옵션뿐 아니라 모드 전체에 적용됩니다.",
-    "description": ""
+  "Colors.Bodies.Vanilla.Tip": {
+    "message": "캐릭터가 착용 중인 바닐라(gen2) 피부에도 이 모드를 칠합니다 —\n보통 장비에 딸린 피부입니다.\n캐릭터에 실제로 바닐라 피부가 있을 때만 칠해지므로,\n없을 때는 비용이 들지 않습니다.\n\nbibo와 gen3/Eve에는 항상 칠해지며, 이 설정은 바닐라에만 영향을 줍니다.\n이 옵션뿐 아니라 모드 전체에 적용됩니다.",
+    "description": "Tooltip for the checkbox above. \"gen2\", \"bibo\", \"gen3\" and \"Eve\" are body-mod names - never translated. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Colors.BustBridge.Label": {
     "message": "가슴 사이를 천으로 잇기",
@@ -1092,8 +1080,8 @@
     "description": ""
   },
   "Create.WholeSkin.Tip": {
-    "message": "피부 위에 무언가를 덧그리는 것이 아니라 전체 피부 모드를 변환할 때 체크하세요.\n텍스처가 그렇게 보이면 Proteus가 대신 체크합니다. 직접 정한 값이 항상 우선합니다.\n세 가지가 따라옵니다. 노멀 맵이 머티리얼에 이미 있는 것 위에 더해지지 않고 교체합니다.\n그러지 않으면 아래의 같은 맵 위에 겹쳐져 모공과 주름이 두 번 적용되고, 몸이 얼굴에 비해\n평평해 보이며 목 이음새에 뚜렷한 선이 생깁니다.\n둘째로 피부색 억제가 꺼집니다. 착용자의 피부색이 그대로 반영됩니다. 억제는 천이 다시 물드는\n것을 막기 위한 것이고, 이 텍스처는 피부 그 자체이기 때문입니다.\n셋째로 \"바디\"가 \"모든 바디\"로 설정되어 바닐라 바디에도 적용됩니다.",
-    "description": ""
+    "message": "피부 위에 무언가를 덧그리는 것이 아니라 전체 피부 모드를 변환할 때 체크하세요.\n텍스처가 그렇게 보이면 Proteus가 대신 체크합니다. 직접 정한 값이 항상 우선합니다.\n두 가지가 따라옵니다. 노멀 맵이 머티리얼에 이미 있는 것 위에 더해지지 않고 교체합니다.\n그러지 않으면 아래의 같은 맵 위에 겹쳐져 모공과 주름이 두 번 적용되고, 몸이 얼굴에 비해\n평평해 보이며 목 이음새에 뚜렷한 선이 생깁니다.\n둘째로 피부색 억제가 꺼집니다. 착용자의 피부색이 그대로 반영됩니다. 억제는 천이 다시 물드는\n것을 막기 위한 것이고, 이 텍스처는 피부 그 자체이기 때문입니다.",
+    "description": "Tooltip for the checkbox above. \"normal\" is the normal map (a texture). Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Emissive.Aliases.Fmt": {
     "message": "경로 {0}개",
@@ -1437,10 +1425,6 @@
   },
   "Import.Author.Label": {
     "message": "제작자",
-    "description": ""
-  },
-  "Import.BodyFit.NeedsAllBodies.Fmt": {
-    "message": "이 팩에는 기본 바디용으로 그려진 것이 없어 대신 \"{0}\"이(가) 사용됩니다. 기본 바디로 굽는 기능은 기본적으로 꺼져 있으므로, Proteus가 가져올 때 이 모드의 \"바디\"를 \"모든 바디\"로 설정합니다(색상 → 고급). 그러지 않으면 아무것도 그리지 않습니다.",
     "description": ""
   },
   "Import.BodyFit.NotDrawn.Fmt": {
@@ -1825,10 +1809,6 @@
   },
   "Import.NothingUsable": {
     "message": "이 팩에서 가져올 수 있는 레이어가 없습니다.",
-    "description": ""
-  },
-  "Import.Result.AllBodies.Fmt": {
-    "message": "\"{0}\"을(를) 가져왔습니다 — 레이어: {1}{2}. 이 팩에는 기본 바디용으로 그려진 것이 없어, Proteus가 이 모드의 \"바디\"를 \"모든 바디\"로 설정해 구웠습니다(색상 → 고급). 이를 끄면 더 이상 그리지 않습니다.",
     "description": ""
   },
   "Import.Result.NoLayout.Fmt": {

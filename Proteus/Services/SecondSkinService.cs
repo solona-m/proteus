@@ -1429,14 +1429,24 @@ public sealed class SecondSkinService
         // The shell is a COPY of the body geometry, so it must be cut from the models the character is
         // actually drawing. A shell built from any other body/size is a different shape and the body
         // pokes through it at any push distance. Resolve them live, every time.
-        // gen2 (vanilla) is opt-in per the gear mode, exactly like the skin layer's gen2 sibling — but the
-        // gate is per-PART, not per-character: a bibo torso plus a vanilla skirt's exposed legs is ONE
-        // shell, and only the vanilla legs must be withheld unless a gear overlay opted into "All bodies".
+        // gen2 (vanilla) follows each gear mod's "Overlay gen2/vanilla" checkbox, exactly like the skin
+        // layer's gen2 sibling — but the gate is per-PART, not per-character: a bibo torso plus a vanilla
+        // skirt's exposed legs is ONE shell, and only the vanilla legs are withheld when every gear mod has it
+        // unticked.
         // Content packs are in the "allowed" set unconditionally: they paint nothing onto the body, and the
         // body is resolved here only to derive the cut code and the hosts. Gating them out would leave a
         // vanilla-bodied wearer with no resolved parts at all and drop a pack that never touched her skin.
         bool anyGen2Allowed = gen2Allowed == null || contentIn > 0
                            || gearOverlays.Any(g => gen2Allowed(g.Entry.ModDirectory));
+
+        // Whether the character is drawing vanilla skin and NO other body type. A part cut from a live model
+        // names its own UV space honestly, so the per-part gate needs nothing more; the whole-body fallback
+        // below does not — it reads vanilla bytes even for a modded body — so it also needs this. Unknown
+        // (no material list, or one naming no body) is not "only vanilla".
+        var wornBodyTypes = (activeMaterials ?? (IEnumerable<string>)Array.Empty<string>())
+            .Select(UVRemapService.InferBodyType).Where(t => t != null)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        bool wearsOnlyGen2 = wornBodyTypes.Count == 1 && wornBodyTypes.Contains("gen2");
 
         // FFXIV keys EQUIPMENT to a model race, not the character's race. Viera and Hrothgar wear Midlander
         // models, race-deformed onto their own skeleton, so a c1801 character's gear, accessories AND e0000
@@ -1740,13 +1750,13 @@ public sealed class SecondSkinService
             }
 
             // The part's UV space names itself in its skin material's suffix. A vanilla (gen2) part gets
-            // no shell unless a gear overlay is set to All bodies — otherwise the overlay would wear on
-            // vanilla whether or not the author opted in. Ambiguity (a vanilla _a material alongside a
+            // no shell when every gear mod has "Overlay gen2/vanilla" unticked — otherwise the overlay would
+            // wear on vanilla after the user said not to. Ambiguity (a vanilla _a material alongside a
             // gen3 body) is avoided by reading THIS part's own model rather than the loaded-material soup.
             var partType = SkinBodyType(bytes);
             if (string.Equals(partType, "gen2", StringComparison.OrdinalIgnoreCase) && !anyGen2Allowed)
             {
-                log.Information("[Proteus] second skin: {0} is vanilla (gen2) — no gear overlay opted into All bodies, skipping part", bodyGamePath);
+                log.Information("[Proteus] second skin: {0} is vanilla (gen2) — every gear mod has Overlay gen2/vanilla unticked, skipping part", bodyGamePath);
                 continue;
             }
             // Each part's own UV space, resolved path and size — the shell takes ONE uv space (the first
@@ -1806,8 +1816,9 @@ public sealed class SecondSkinService
         // Its weakness is UV space, not shape: a body mod replaces the e0000 EQUIPMENT models (Bibo+ ships
         // c0201e0000_top/dwn/glv/sho and nothing under obj/body/…/model/), so this reads VANILLA bytes in
         // vanilla UV even for a modded character. SkinBodyType then reports gen2 and the gate below drops it
-        // unless a gear overlay opted into All bodies — which is the honest outcome: a vanilla-UV shell over
-        // a Bibo+ body is art in the wrong place, not a rescue. Don't "fix" that by loosening the gate.
+        // unless the character is drawing vanilla skin and nothing else — which is the honest outcome: a
+        // vanilla-UV shell over a Bibo+ body is art in the wrong place, not a rescue. The per-mod switch alone
+        // is NOT enough here (it is on by default); don't "fix" a short shell by loosening the gate to it.
         //
         // It is the WHOLE body and cannot be split per slot, so it REPLACES everything cut above rather
         // than stacking a second shell over skin it already covers (coincident geometry that z-fights and
@@ -1848,16 +1859,20 @@ public sealed class SecondSkinService
             if (pick is { } whole)
             {
                 var wholeType = SkinBodyType(whole.Bytes);
-                if (string.Equals(wholeType, "gen2", StringComparison.OrdinalIgnoreCase) && !anyGen2Allowed)
+                if (string.Equals(wholeType, "gen2", StringComparison.OrdinalIgnoreCase)
+                    && !(anyGen2Allowed && wearsOnlyGen2))
                 {
                     // Warning, not Information: this is the normal outcome for a modded body (no body mod
                     // replaces the human body model, so it always reads vanilla), and it means the shell
                     // ships SHORT — with 0 parts cut above, not at all. Whoever reads the log after "my
                     // glow didn't appear" needs to see it at the level they actually run at.
-                    log.Warning("[Proteus] second skin: whole-body fallback {0} is vanilla (gen2) — no gear "
-                              + "overlay opted into All bodies, leaving the {1} part(s) cut above as-is. The "
-                              + "live bare-body models were unavailable this composite; a redraw usually fixes it",
-                              whole.Path, bodies.Count);
+                    log.Warning("[Proteus] second skin: whole-body fallback {0} is vanilla (gen2) but the "
+                              + "character draws [{1}]{2}, leaving the {3} part(s) cut above as-is. The live "
+                              + "bare-body models were unavailable this composite; a redraw usually fixes it",
+                              whole.Path,
+                              wornBodyTypes.Count == 0 ? "unknown" : string.Join("+", wornBodyTypes.OrderBy(t => t, StringComparer.Ordinal)),
+                              anyGen2Allowed ? "" : " and every gear mod has Overlay gen2/vanilla unticked",
+                              bodies.Count);
                 }
                 else
                 {

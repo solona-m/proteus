@@ -243,14 +243,6 @@
     "message": "Wie die Grafik dieser Zeile mit dem kombiniert wird, was bereits auf der Haut liegt.\n\n\"Auftragen\" legt sie darüber – das, was jede Ebene bisher getan hat.\nAlles andere macht diese Zeile zu einem AUFDRUCK: Sie färbt den Stoff, den die\nanderen Ebenen dieses Mods aufgetragen haben, und wird auf deren Form beschnitten –\nein Regenbogen auf einem Netzstoff färbt so die Fäden und lässt die Löcher als Haut.\n\nEin Aufdruck erreicht nur die Ebenen des EIGENEN Mods; fremde Kleidung berührt er nie.\nAuf bloßer Haut trägt er gar nichts auf – ein allein ausgewählter Aufdruck zeigt also\nnichts. Dort ist schlicht nichts, worauf sich drucken ließe.\n\nMultiplizieren kann nur abdunkeln und wirkt auf sehr dunklem Stoff daher kaum – nimm\ndort stattdessen Negativ multiplizieren. Die Farbe dieser Zeile tönt die Grafik weiterhin,\nund ihre Deckkraft ist die Stärke des Aufdrucks.",
     "description": ""
   },
-  "Colors.Bodies.All": {
-    "message": "Alle Körper",
-    "description": ""
-  },
-  "Colors.Bodies.BiboGen3": {
-    "message": "bibo+gen3",
-    "description": ""
-  },
   "Colors.Bodies.GlobalNote": {
     "message": "Global gespeichert — Bindungen erfassen das nicht.",
     "description": ""
@@ -259,17 +251,13 @@
     "message": "\nGlobal — dies ist NICHT Teil der Bindung, die du gerade bearbeitest.",
     "description": ""
   },
-  "Colors.Bodies.Label": {
-    "message": "Körper",
-    "description": ""
+  "Colors.Bodies.Vanilla.Label": {
+    "message": "Auf gen2/Vanilla überlagern",
+    "description": "Checkbox label in the colour-table editor window's Advanced section. \"gen2\" is a body-mod name - never translated. Ticked = this mod is also painted onto vanilla skin."
   },
-  "Colors.Bodies.Off": {
-    "message": "Aus",
-    "description": ""
-  },
-  "Colors.Bodies.Tip": {
-    "message": "Auf welche Körpertypen dieser Mod gebacken wird:\nAlle Körper = Geschwisterkörper (bibo↔gen3/Eve) + Standard (gen2)\nbibo+gen3 = nur auf den Geschwisterkörper backen (Standard)\nAus = keine Synthese\n\nGilt für den ganzen Mod, nicht nur für diese Option.",
-    "description": ""
+  "Colors.Bodies.Vanilla.Tip": {
+    "message": "Malt diesen Mod auch auf Vanilla-Haut (gen2), die dein Charakter trägt —\nmeist Haut, die zu einem Ausrüstungsteil gehört.\nSie wird nur bemalt, solange wirklich Vanilla-Haut an deinem Charakter ist,\ndaher kostet das nichts, wenn keine da ist.\n\nbibo und gen3/Eve werden immer bemalt; dies betrifft nur Vanilla.\nGilt für den ganzen Mod, nicht nur für diese Option.",
+    "description": "Tooltip for the checkbox above. \"gen2\", \"bibo\", \"gen3\" and \"Eve\" are body-mod names - never translated. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Colors.BustBridge.Label": {
     "message": "Dekolleté überspannen",
@@ -1092,8 +1080,8 @@
     "description": ""
   },
   "Create.WholeSkin.Tip": {
-    "message": "Aktiviere dies, wenn du eine vollständige Haut-Mod umwandelst und nicht etwas auf die Haut malst.\nProteus setzt den Haken selbst, wenn die Texturen danach aussehen; deine eigene Antwort gewinnt immer.\nDreierlei folgt daraus. Die Normal Map ERSETZT die bereits im Material vorhandene, statt sich\ndarauf zu legen — sonst landet sie über derselben Map darunter, jede Pore und Falte wirkt doppelt,\nund der Körper wirkt flach gegenüber dem Gesicht, mit einer harten Linie an der Halsnaht.\nDie Hautton-Unterdrückung wird abgeschaltet, damit der Hautton der Trägerin durchkommt: sie ist\ndafür da, Stoff nicht umfärben zu lassen, und diese Textur IST die Haut. Und \"Körper\" wird auf\n\"Alle Körper\" gesetzt, damit die Haut auch einen Vanilla-Körper erreicht.",
-    "description": ""
+    "message": "Aktiviere dies, wenn du eine vollständige Haut-Mod umwandelst und nicht etwas auf die Haut malst.\nProteus setzt den Haken selbst, wenn die Texturen danach aussehen; deine eigene Antwort gewinnt immer.\nZweierlei folgt daraus. Die Normal Map ERSETZT die bereits im Material vorhandene, statt sich\ndarauf zu legen — sonst landet sie über derselben Map darunter, jede Pore und Falte wirkt doppelt,\nund der Körper wirkt flach gegenüber dem Gesicht, mit einer harten Linie an der Halsnaht.\nUnd die Hautton-Unterdrückung wird abgeschaltet, damit der Hautton der Trägerin durchkommt: sie ist\ndafür da, Stoff nicht umfärben zu lassen, und diese Textur IST die Haut.",
+    "description": "Tooltip for the checkbox above. \"normal\" is the normal map (a texture). Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Emissive.Aliases.Fmt": {
     "message": "{0} Pfade",
@@ -1437,10 +1425,6 @@
   },
   "Import.Author.Label": {
     "message": "Autor",
-    "description": ""
-  },
-  "Import.BodyFit.NeedsAllBodies.Fmt": {
-    "message": "Dieses Paket hat nichts für deinen Standardkörper gemalt — stattdessen wird „{0}“ verwendet. Das Backen auf einen Standardkörper ist standardmäßig aus, daher setzt Proteus beim Import „Körper“ dieses Mods auf „Alle Körper“ (Farben → Erweitert); ohne das würde er nichts malen.",
     "description": ""
   },
   "Import.BodyFit.NotDrawn.Fmt": {
@@ -1825,10 +1809,6 @@
   },
   "Import.NothingUsable": {
     "message": "Keine Ebene in diesem Paket kann importiert werden.",
-    "description": ""
-  },
-  "Import.Result.AllBodies.Fmt": {
-    "message": "„{0}“ importiert — Ebenen: {1}{2}. Das Paket hat nichts für einen Standardkörper gemalt, daher hat Proteus „Körper“ dieses Mods auf „Alle Körper“ gesetzt (Farben → Erweitert), um ihn darüber zu backen — schaltest du das ab, malt er nicht mehr.",
     "description": ""
   },
   "Import.Result.NoLayout.Fmt": {
