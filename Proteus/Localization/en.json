@@ -243,14 +243,6 @@
     "message": "How this row's art combines with what is already on the skin.\n\n\"Paint\" lays it on top, which is what every layer has always done.\nAnything else makes this row a PRINT: it colours the fabric this mod's\nother layers painted, and is clipped to their shape — so a rainbow on a\nfishnet colours the threads and leaves the holes as skin.\n\nA print only reaches its OWN mod's layers; it never touches another mod's\nclothing. On bare skin it paints nothing at all, so a print selected on its\nown shows nothing — there is nothing there to print on.\n\nMultiply can only darken, so it reads faintly on very dark fabric — use\nScreen there instead. This row's colour still tints the art, and its\nOpacity is the print's strength.",
     "description": "Tooltip on the Blend dropdown. \"Paint\", \"Multiply\" and \"Screen\" are mode names - translate them the same way as the Colors.Blend.* entries above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
-  "Colors.Bodies.All": {
-    "message": "All bodies",
-    "description": "Appears in the colour-table editor window."
-  },
-  "Colors.Bodies.BiboGen3": {
-    "message": "bibo+gen3",
-    "description": "\"bibo\" and \"gen3\" are body-mod names. Leave exactly as-is."
-  },
   "Colors.Bodies.GlobalNote": {
     "message": "Saved globally — bindings don't capture this.",
     "description": "Appears in the colour-table editor window."
@@ -259,17 +251,13 @@
     "message": "\nGlobal — this one is NOT part of the binding you're editing.",
     "description": "Appears in the colour-table editor window. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
-  "Colors.Bodies.Label": {
-    "message": "Bodies",
-    "description": "Control label. Appears in the colour-table editor window."
+  "Colors.Bodies.Vanilla.Label": {
+    "message": "Overlay gen2/vanilla",
+    "description": "Checkbox label in the colour-table editor window's Advanced section. \"gen2\" is a body-mod name - never translated. Ticked = this mod is also painted onto vanilla skin."
   },
-  "Colors.Bodies.Off": {
-    "message": "Off",
-    "description": "Appears in the colour-table editor window."
-  },
-  "Colors.Bodies.Tip": {
-    "message": "Which body types to bake this mod onto:\nAll bodies = sibling body (bibo↔gen3/Eve) + vanilla (gen2)\nbibo+gen3 = bake to the sibling body only (default)\nOff = no synthesis\n\nApplies to the whole mod, not just this option.",
-    "description": "Mentions the body mods bibo, gen3, Eve and gen2 - all names, never translated. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  "Colors.Bodies.Vanilla.Tip": {
+    "message": "Also paint this mod onto vanilla (gen2) skin your character is wearing —\nusually skin that comes with a piece of gear.\nIt is only painted while vanilla skin is actually on your character,\nso this costs nothing when there is none.\n\nbibo and gen3/Eve are always painted; this only affects vanilla.\nApplies to the whole mod, not just this option.",
+    "description": "Tooltip for the checkbox above. \"gen2\", \"bibo\", \"gen3\" and \"Eve\" are body-mod names - never translated. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Colors.BustBridge.Label": {
     "message": "Span the cleavage",
@@ -1092,8 +1080,8 @@
     "description": "Checkbox in the Create tab. Keep the \"###createWholeSkin\" suffix out of the translation - it is not part of this string."
   },
   "Create.WholeSkin.Tip": {
-    "message": "Tick this when you're converting a full skin mod, not painting something onto skin.\nProteus ticks it for you when the textures look like one; your own answer always wins.\nThree things follow. The normal REPLACES the one already on the material instead of\nstacking onto it — otherwise it lands on top of the same map underneath, every pore\nand crease is applied twice, and the body reads flat against the face with a hard line\nat the neck seam. Skin-tint suppression goes off, so the wearer's skin tone comes\nthrough: it is there to stop fabric being re-tinted, and this art IS the skin. And\n\"Bodies\" is set to \"All bodies\", so the skin reaches a vanilla body as well.",
-    "description": "Tooltip for the checkbox above. \"normal\" is the normal map (a texture). The two quoted names are UI labels - use exactly your translations of Colors.Bodies.Label and Colors.Bodies.All so the tooltip names the control the user sees. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+    "message": "Tick this when you're converting a full skin mod, not painting something onto skin.\nProteus ticks it for you when the textures look like one; your own answer always wins.\nTwo things follow. The normal REPLACES the one already on the material instead of\nstacking onto it — otherwise it lands on top of the same map underneath, every pore\nand crease is applied twice, and the body reads flat against the face with a hard line\nat the neck seam. And skin-tint suppression goes off, so the wearer's skin tone comes\nthrough: it is there to stop fabric being re-tinted, and this art IS the skin.",
+    "description": "Tooltip for the checkbox above. \"normal\" is the normal map (a texture). Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Emissive.Aliases.Fmt": {
     "message": "{0} paths",
@@ -1438,10 +1426,6 @@
   "Import.Author.Label": {
     "message": "Author",
     "description": "Control label. Appears in the Import tab."
-  },
-  "Import.BodyFit.NeedsAllBodies.Fmt": {
-    "message": "This pack has nothing painted for your vanilla body — \"{0}\" will be used instead. Baking onto a vanilla body is off by default, so Proteus will set this mod's \"Bodies\" to \"All bodies\" on import (Colors → Advanced); without that it would paint nothing.",
-    "description": "{0} is a layout name. Names the Bodies control and its \"All bodies\" value - keep both in step with the Colors.Bodies.* keys."
   },
   "Import.BodyFit.NotDrawn.Fmt": {
     "message": "Your character isn't drawn yet, so Proteus picked \"{0}\" by preference rather than by your body. Check the result once you're in game.",
@@ -1826,10 +1810,6 @@
   "Import.NothingUsable": {
     "message": "No layer in this pack can be imported.",
     "description": "Appears in the Import tab."
-  },
-  "Import.Result.AllBodies.Fmt": {
-    "message": "Imported \"{0}\" — layers: {1}{2}. The pack has nothing painted for a vanilla body, so Proteus set this mod's \"Bodies\" to \"All bodies\" (Colors → Advanced) to bake it across — turn that off and it will stop painting.",
-    "description": "{0} mod folder, {1} layer count, {2} the skipped-tail fragment. Names the Bodies control - keep it in step with Colors.Bodies.Label."
   },
   "Import.Result.NoLayout.Fmt": {
     "message": "Imported \"{0}\" — layers: {1}{2}, but Proteus couldn't pick a body layout for you. Choose one under \"{3}\" in Penumbra, or nothing will paint.",

@@ -243,14 +243,6 @@
     "message": "Cómo se combina la imagen de esta fila con lo que ya hay sobre la piel.\n\n«Pintar» la coloca encima, que es lo que toda capa ha hecho siempre.\nCualquier otro modo convierte esta fila en un ESTAMPADO: colorea la tela que han\npintado las demás capas de este mod y se recorta a su forma, así que un arcoíris\nsobre una malla colorea los hilos y deja los huecos como piel.\n\nUn estampado solo alcanza las capas de SU PROPIO mod; nunca toca la ropa de otro.\nSobre la piel desnuda no pinta nada, de modo que un estampado seleccionado por sí\nsolo no muestra nada. Es deliberado: ahí no hay nada sobre lo que estampar.\n\nMultiplicar solo puede oscurecer, así que apenas se ve sobre tela muy oscura; usa\nTrama en ese caso. El color de esta fila sigue tiñendo la imagen, y su Opacidad\nes la intensidad del estampado.",
     "description": ""
   },
-  "Colors.Bodies.All": {
-    "message": "Todos los cuerpos",
-    "description": ""
-  },
-  "Colors.Bodies.BiboGen3": {
-    "message": "bibo+gen3",
-    "description": ""
-  },
   "Colors.Bodies.GlobalNote": {
     "message": "Se guarda globalmente: los vínculos no lo capturan.",
     "description": ""
@@ -259,17 +251,13 @@
     "message": "\nGlobal: esto NO forma parte del vínculo que estás editando.",
     "description": ""
   },
-  "Colors.Bodies.Label": {
-    "message": "Cuerpos",
-    "description": ""
+  "Colors.Bodies.Vanilla.Label": {
+    "message": "Superponer en gen2/vanilla",
+    "description": "Checkbox label in the colour-table editor window's Advanced section. \"gen2\" is a body-mod name - never translated. Ticked = this mod is also painted onto vanilla skin."
   },
-  "Colors.Bodies.Off": {
-    "message": "Ninguno",
-    "description": ""
-  },
-  "Colors.Bodies.Tip": {
-    "message": "En qué tipos de cuerpo grabar este mod:\nTodos los cuerpos = cuerpo hermano (bibo↔gen3/Eve) + original (gen2)\nbibo+gen3 = grabar solo en el cuerpo hermano (predeterminado)\nNinguno = sin síntesis\n\nSe aplica a todo el mod, no solo a esta opción.",
-    "description": ""
+  "Colors.Bodies.Vanilla.Tip": {
+    "message": "Pinta también este mod sobre la piel vanilla (gen2) que lleva tu personaje:\nnormalmente piel que viene con alguna pieza de equipo.\nSolo se pinta mientras haya piel vanilla de verdad en tu personaje,\nasí que no cuesta nada cuando no la hay.\n\nbibo y gen3/Eve se pintan siempre; esto solo afecta a vanilla.\nSe aplica a todo el mod, no solo a esta opción.",
+    "description": "Tooltip for the checkbox above. \"gen2\", \"bibo\", \"gen3\" and \"Eve\" are body-mod names - never translated. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Colors.BustBridge.Label": {
     "message": "Tensar la tela sobre el escote",
@@ -1092,8 +1080,8 @@
     "description": ""
   },
   "Create.WholeSkin.Tip": {
-    "message": "Márcalo cuando estés convirtiendo un mod de piel completa, no pintando algo sobre la piel.\nProteus lo marca por ti cuando las texturas lo parecen; tu propia respuesta siempre manda.\nDe ahí se siguen tres cosas. El normal SUSTITUYE al que ya tiene el material en vez de sumarse\na él: si no, se aplica sobre el mismo mapa que hay debajo, cada poro y pliegue cuenta dos veces,\ny el cuerpo se ve plano frente a la cara, con una línea dura en la costura del cuello.\nSe desactiva la supresión del tono de piel, para que el tono de quien lo lleva se vea: está para\nevitar que la tela se retiña, y esta textura ES la piel. Y \"Cuerpos\" pasa a \"Todos los cuerpos\",\npara que la piel llegue también a un cuerpo vanilla.",
-    "description": ""
+    "message": "Márcalo cuando estés convirtiendo un mod de piel completa, no pintando algo sobre la piel.\nProteus lo marca por ti cuando las texturas lo parecen; tu propia respuesta siempre manda.\nDe ahí se siguen dos cosas. El normal SUSTITUYE al que ya tiene el material en vez de sumarse\na él: si no, se aplica sobre el mismo mapa que hay debajo, cada poro y pliegue cuenta dos veces,\ny el cuerpo se ve plano frente a la cara, con una línea dura en la costura del cuello.\nY se desactiva la supresión del tono de piel, para que el tono de quien lo lleva se vea: está para\nevitar que la tela se retiña, y esta textura ES la piel.",
+    "description": "Tooltip for the checkbox above. \"normal\" is the normal map (a texture). Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Emissive.Aliases.Fmt": {
     "message": "{0} rutas",
@@ -1437,10 +1425,6 @@
   },
   "Import.Author.Label": {
     "message": "Autor",
-    "description": ""
-  },
-  "Import.BodyFit.NeedsAllBodies.Fmt": {
-    "message": "Este paquete no tiene nada pintado para tu cuerpo original: se usará «{0}» en su lugar. Grabar sobre un cuerpo original está desactivado por defecto, así que Proteus pondrá «Cuerpos» de este mod en «Todos los cuerpos» al importarlo (Colores → Avanzado); sin eso no pintaría nada.",
     "description": ""
   },
   "Import.BodyFit.NotDrawn.Fmt": {
@@ -1825,10 +1809,6 @@
   },
   "Import.NothingUsable": {
     "message": "Ninguna capa de este paquete se puede importar.",
-    "description": ""
-  },
-  "Import.Result.AllBodies.Fmt": {
-    "message": "«{0}» importado — capas: {1}{2}. El paquete no tiene nada pintado para un cuerpo original, así que Proteus ha puesto «Cuerpos» de este mod en «Todos los cuerpos» (Colores → Avanzado) para grabarlo; si lo desactivas, dejará de pintar.",
     "description": ""
   },
   "Import.Result.NoLayout.Fmt": {

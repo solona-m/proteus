@@ -243,14 +243,6 @@
     "message": "Comment l'image de cette ligne se combine avec ce qui se trouve déjà sur la peau.\n\n« Peindre » la pose par-dessus, ce que chaque calque a toujours fait.\nTout autre mode fait de cette ligne un IMPRIMÉ : il colore le tissu peint par les\nautres calques de ce mod et se découpe à leur forme — un arc-en-ciel sur une résille\nen colore ainsi les fils et laisse les trous en peau.\n\nUn imprimé n'atteint que les calques de SON PROPRE mod ; il ne touche jamais les\nvêtements d'un autre. Sur la peau nue il ne peint rien du tout : un imprimé\nsélectionné seul n'affiche rien, faute de support sur lequel imprimer.\n\nMultiplier ne peut qu'assombrir et rend donc à peine sur un tissu très sombre —\nutilisez plutôt Écran. La couleur de cette ligne teinte toujours l'image, et son\nOpacité règle la force de l'imprimé.",
     "description": ""
   },
-  "Colors.Bodies.All": {
-    "message": "Tous les corps",
-    "description": ""
-  },
-  "Colors.Bodies.BiboGen3": {
-    "message": "bibo+gen3",
-    "description": ""
-  },
   "Colors.Bodies.GlobalNote": {
     "message": "Enregistré globalement — les liaisons ne le capturent pas.",
     "description": ""
@@ -259,17 +251,13 @@
     "message": "\nGlobal — ceci ne fait PAS partie de la liaison que vous modifiez.",
     "description": ""
   },
-  "Colors.Bodies.Label": {
-    "message": "Corps",
-    "description": ""
+  "Colors.Bodies.Vanilla.Label": {
+    "message": "Superposer sur gen2/vanilla",
+    "description": "Checkbox label in the colour-table editor window's Advanced section. \"gen2\" is a body-mod name - never translated. Ticked = this mod is also painted onto vanilla skin."
   },
-  "Colors.Bodies.Off": {
-    "message": "Aucun",
-    "description": ""
-  },
-  "Colors.Bodies.Tip": {
-    "message": "Sur quels types de corps cuire ce mod :\nTous les corps = corps frère (bibo↔gen3/Eve) + d'origine (gen2)\nbibo+gen3 = cuire uniquement sur le corps frère (par défaut)\nAucun = pas de synthèse\n\nS'applique à tout le mod, pas seulement à cette option.",
-    "description": ""
+  "Colors.Bodies.Vanilla.Tip": {
+    "message": "Peint aussi ce mod sur la peau vanilla (gen2) que porte votre personnage —\ngénéralement une peau fournie avec un équipement.\nElle n'est peinte que lorsqu'une peau vanilla est réellement présente,\ndonc cela ne coûte rien quand il n'y en a pas.\n\nbibo et gen3/Eve sont toujours peints ; ceci ne concerne que la vanilla.\nS'applique à tout le mod, pas seulement à cette option.",
+    "description": "Tooltip for the checkbox above. \"gen2\", \"bibo\", \"gen3\" and \"Eve\" are body-mod names - never translated. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Colors.BustBridge.Label": {
     "message": "Tendre le tissu sur le décolleté",
@@ -1092,8 +1080,8 @@
     "description": ""
   },
   "Create.WholeSkin.Tip": {
-    "message": "Cochez ceci lorsque vous convertissez un mod de peau complète, et non quelque chose posé sur la peau.\nProteus le coche pour vous quand les textures y ressemblent ; votre propre réponse l'emporte toujours.\nTrois conséquences. La normal map REMPLACE celle déjà présente sur le matériau au lieu de s'y\najouter — sinon elle se pose sur la même carte en dessous, chaque pore et pli est appliqué deux\nfois, et le corps paraît plat face au visage, avec une ligne nette à la couture du cou.\nLa suppression de teinte de peau est désactivée, pour que le teint du porteur ressorte : elle\nexiste pour empêcher le tissu d'être reteinté, et cette texture EST la peau. Et « Corps » passe\nà « Tous les corps », pour que la peau atteigne aussi un corps vanilla.",
-    "description": ""
+    "message": "Cochez ceci lorsque vous convertissez un mod de peau complète, et non quelque chose posé sur la peau.\nProteus le coche pour vous quand les textures y ressemblent ; votre propre réponse l'emporte toujours.\nDeux conséquences. La normal map REMPLACE celle déjà présente sur le matériau au lieu de s'y\najouter — sinon elle se pose sur la même carte en dessous, chaque pore et pli est appliqué deux\nfois, et le corps paraît plat face au visage, avec une ligne nette à la couture du cou.\nEt la suppression de teinte de peau est désactivée, pour que le teint du porteur ressorte : elle\nexiste pour empêcher le tissu d'être reteinté, et cette texture EST la peau.",
+    "description": "Tooltip for the checkbox above. \"normal\" is the normal map (a texture). Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Emissive.Aliases.Fmt": {
     "message": "{0} chemins",
@@ -1437,10 +1425,6 @@
   },
   "Import.Author.Label": {
     "message": "Auteur",
-    "description": ""
-  },
-  "Import.BodyFit.NeedsAllBodies.Fmt": {
-    "message": "Ce pack n'a rien de peint pour votre corps d'origine — « {0} » sera utilisé à la place. La cuisson sur un corps d'origine est désactivée par défaut, donc Proteus réglera le « Corps » de ce mod sur « Tous les corps » à l'import (Couleurs → Avancé) ; sans cela il ne peindrait rien.",
     "description": ""
   },
   "Import.BodyFit.NotDrawn.Fmt": {
@@ -1825,10 +1809,6 @@
   },
   "Import.NothingUsable": {
     "message": "Aucune couche de ce pack ne peut être importée.",
-    "description": ""
-  },
-  "Import.Result.AllBodies.Fmt": {
-    "message": "« {0} » importé — couches : {1}{2}. Le pack n'a rien de peint pour un corps d'origine, donc Proteus a réglé le « Corps » de ce mod sur « Tous les corps » (Couleurs → Avancé) pour l'y cuire — désactivez-le et il cessera de peindre.",
     "description": ""
   },
   "Import.Result.NoLayout.Fmt": {

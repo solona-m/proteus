@@ -3989,7 +3989,7 @@ public class CompositorService : IDisposable
             bool wearingMirroredBody = HasMirroredBodySurface(activeBodyTypes);
 
             // Mods with an overlay that needs an un-mirrored shell. Those are the ones allowed past the gen2
-            // opt-in below — the character is wearing vanilla, so the shell isn't being synthesized onto some
+            // gate below even with "Overlay gen2/vanilla" unticked — the character is wearing vanilla, so the shell isn't being synthesized onto some
             // other body, it is the only way that mod's art can render at all.
             var unmirrorMods = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -4349,9 +4349,11 @@ public class CompositorService : IDisposable
             // direct overlay entries. This handles the common case — overlays are authored for one
             // UV space (e.g. bibo), but the character equips a different body (gen3, Eve, vanilla).
             // No metadata.json change required; UV remap fires automatically from the descriptor's
-            // source body type. The cross-UV bake (bibo↔gen3/Eve) runs for any mode except Off;
-            // vanilla (gen2) is opt-in per mod (All bodies only). gen2 is never a source (vanilla
-            // is a terminal target and has no outbound transfer maps).
+            // source body type. Every loaded body type is a target: bibo↔gen3/Eve always, and vanilla
+            // (gen2) unless the user unticked the mod's "Overlay gen2/vanilla". The loaded-material check
+            // below IS the detection: vanilla is baked exactly when the character is showing vanilla skin
+            // (typically gear that ships its own), and costs nothing otherwise. gen2 is never a source
+            // (vanilla is a terminal target and has no outbound transfer maps).
             if (activeMtrl != null)
             {
                 var siblings = new Dictionary<string, List<(OverlayEntry, ResolvedOverlay)>>(StringComparer.OrdinalIgnoreCase);
@@ -4385,20 +4387,19 @@ public class CompositorService : IDisposable
                         }
 
                         bool vanilla = bodyType == "gen2";
-                        var dstPairs = pairs.Where(p => vanilla
-                            ? config.SiblingModeFor(p.Entry.ModDirectory) == SiblingSynthesisMode.AllBodies
-                            : config.SiblingModeFor(p.Entry.ModDirectory) != SiblingSynthesisMode.Off).ToList();
+                        var dstPairs = vanilla
+                            ? pairs.Where(p => config.OverlaysVanillaFor(p.Entry.ModDirectory)).ToList()
+                            : pairs.ToList();
                         if (dstPairs.Count == 0) continue;
 
-                        // Name the mod/option(s) driving this sibling — and their sibling mode — so any
-                        // "why is it baking to <body> when I have <X> equipped/nothing equipped?" can be
-                        // traced to the exact mod whose mode to change. The destination body type is
-                        // always tagged (gen3/eve/gen2), so a gen3 item pulling in a gen3 sibling is as
-                        // legible as the vanilla case (vanilla only fires for mods set to All bodies).
+                        // Name the mod/option(s) driving this sibling so any "why is it baking to <body>
+                        // when I have <X> equipped/nothing equipped?" can be traced to the exact mod. The
+                        // destination body type is always tagged (gen3/eve/gen2) — for vanilla the answer is
+                        // usually a worn item that ships vanilla skin, and the mod's checkbox to untick.
                         var contributors = string.Join(", ", dstPairs
                             .Select(p => p.Overlay.Option != null
-                                ? $"\"{p.Entry.ModName}\"/{p.Overlay.OptionGroup}:{p.Overlay.Option} [{config.SiblingModeFor(p.Entry.ModDirectory)}]"
-                                : $"\"{p.Entry.ModName}\" [{config.SiblingModeFor(p.Entry.ModDirectory)}]")
+                                ? $"\"{p.Entry.ModName}\"/{p.Overlay.OptionGroup}:{p.Overlay.Option}"
+                                : $"\"{p.Entry.ModName}\"")
                             .Distinct());
                         log.Debug("[Proteus] Sibling synthesis ({0}): {1} → {2} (from {3})",
                             vanilla ? "gen2/vanilla" : bodyType, srcPath, dstPath, contributors);
@@ -4520,12 +4521,10 @@ public class CompositorService : IDisposable
                         if (dstType == null || byMaterial.ContainsKey(m)) continue;
 
                         // A caster's OWN body always qualifies. Any OTHER loaded body is a sibling, and
-                        // touching it is the user's call — the same gate sibling synthesis applies above, so
-                        // a mod set to Off doesn't get its shadow baked onto a body the user excluded.
+                        // follows the same gate sibling synthesis applies above: bibo↔gen3/Eve always, vanilla
+                        // only if the mod still overlays it — so unticking doesn't leave its shadow behind.
                         bool vanilla = string.Equals(dstType, "gen2", StringComparison.OrdinalIgnoreCase);
-                        if (!casters.Any(c => c.Types.Contains(dstType)
-                                || (vanilla ? config.SiblingModeFor(c.Mod) == SiblingSynthesisMode.AllBodies
-                                            : config.SiblingModeFor(c.Mod) != SiblingSynthesisMode.Off)))
+                        if (!casters.Any(c => c.Types.Contains(dstType) || !vanilla || config.OverlaysVanillaFor(c.Mod)))
                             continue;
 
                         byMaterial[m] = new();
@@ -7386,15 +7385,14 @@ public class CompositorService : IDisposable
                                 ex.GetType().Name);
                         }
 
-                        // gen2 (vanilla) shells are opt-in per mod, same as the skin-layer gen2 sibling —
-                        // EXCEPT for a mod whose art has to be un-mirrored. That opt-in asks "may Proteus
-                        // paint this onto a body besides the one you have on"; here vanilla IS the body being
-                        // worn, and the shell is not an extra rendering of the art but the only one that can
-                        // show both of its sides.
+                        // gen2 (vanilla) shell parts follow the same per-mod checkbox as the skin-layer gen2
+                        // sibling — EXCEPT for a mod whose art has to be un-mirrored. The checkbox asks "may
+                        // Proteus paint this onto vanilla skin as well"; here vanilla IS the body being worn,
+                        // and the shell is not an extra rendering of the art but the only one that can show
+                        // both of its sides.
                         var shells = secondSkin.Build(charCode, gearOverlays, managedModDir, bodyType,
                             discovery.EffectsLibraryPath(), equippedModels, equippedAccessories,
-                            modDir => unmirrorMods.Contains(modDir)
-                                   || config.SiblingModeFor(modDir) == SiblingSynthesisMode.AllBodies,
+                            modDir => unmirrorMods.Contains(modDir) || config.OverlaysVanillaFor(modDir),
                             invisibleGlassesSet, metModels, bodyShapes, maskShellMods, bareBodyModels,
                             _drawnRaceCode, hostMtrl,
                             InvisibleRing.Resolve(Plugin.DataManager, log)?.Variant,
