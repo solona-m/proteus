@@ -3937,15 +3937,10 @@ public sealed class SecondSkinService
                 log.Warning("[Proteus] second skin: toe cap declined — {0}", declined);
             }
 
-            // Which cap this shell actually got. Said out loud because the alternative is reading the
-            // Dalamud log, which is size-capped and quietly stops writing — "is the cap I just authored
-            // being used?" should not need forensics. Only on a change, so it is not chat spam.
+            // Which cap this shell actually got. Only on a change, so it is not log spam.
             if (stats.CapUsed is { } capUsed && lastCapUsed != capUsed)
             {
                 lastCapUsed = capUsed;
-                _ = Plugin.Framework.RunOnFrameworkThread(
-                    () => Plugin.ChatGui.Print(new SeStringBuilder()
-                        .AddUiForeground($"[Proteus] Toe cap: {capUsed}", 25).Build()));
                 log.Information("[Proteus] second skin: toe cap {0}", capUsed);
             }
 
@@ -4352,16 +4347,8 @@ public sealed class SecondSkinService
                 log.Warning("[Proteus] second skin: push sweep {0}", p);
             if (sweep == null) return null;
 
-            var ladder = sweep.DescribeLadder();
-            log.Information("[Proteus] second skin: PUSH SWEEP ON — {0}", ladder);
-            if (lastPushSweepLadder != ladder)
-            {
-                lastPushSweepLadder = ladder;
-                var msg = $"[Proteus] Push sweep is ON — {ladder}. Delete "
-                        + $"%TEMP%\\{PushSweep.FileName} to turn it off.";
-                _ = Plugin.Framework.RunOnFrameworkThread(
-                    () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 25).Build()));
-            }
+            log.Information("[Proteus] second skin: PUSH SWEEP ON — {0}. Delete %TEMP%\\{1} to turn it off.",
+                sweep.DescribeLadder(), PushSweep.FileName);
             return sweep;
         }
         catch (Exception ex)
@@ -4371,7 +4358,6 @@ public sealed class SecondSkinService
         }
     }
 
-    private string? lastPushSweepLadder;
 
     /// <summary>
     /// The finished shell, beside the inputs that produced it. Same opt-in as

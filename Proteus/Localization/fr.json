@@ -123,10 +123,6 @@
     "message": "[Proteus] {0} pièce(s) de maillage de vos mods n'ont pas pu être placées — vos accessoires n'ont plus d'emplacements de matériau. Équipez une autre bague / un bracelet / un collier, ou désactivez une couche.",
     "description": ""
   },
-  "Chat.GlowPromoted.Fmt": {
-    "message": "[Proteus] « {0} » applique une lueur sur un calque de peau. La peau ne peut plus briller, donc cette option est désormais rendue comme un calque de tissu — elle a besoin d'un accessoire libre, et sa surface aura un aspect légèrement différent.",
-    "description": ""
-  },
   "Chat.HatCompat": {
     "message": "[Proteus] Proteus a rendu cette coiffure compatible avec les chapeaux. Vous pouvez annuler cela, ou désactiver la fonction, dans /proteus > Paramètres > Chapeaux.",
     "description": "Chat line shown once ever, the first time Proteus makes a hairstyle fit under hats by itself. Do NOT translate \"Proteus\" or the command \"/proteus\". \"Settings\" and \"Hats\" name a tab and a section in Proteus' own window - use the same words you used for \"Tab.Settings\" and \"Settings.Section.HatCompat\"."

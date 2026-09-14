@@ -123,10 +123,6 @@
     "message": "[Proteus] 모드의 메시 파츠 {0}개를 배치하지 못했습니다 — 장신구의 머티리얼 슬롯이 부족합니다. 반지 / 팔찌 / 목걸이를 하나 더 착용하거나 레이어를 끄세요.",
     "description": ""
   },
-  "Chat.GlowPromoted.Fmt": {
-    "message": "[Proteus] \"{0}\"이(가) 피부 레이어에 발광을 설정했습니다. 피부는 더 이상 발광할 수 없으므로 이 옵션은 이제 천 레이어로 렌더링됩니다. 비어 있는 장신구 칸이 필요하며, 표면도 조금 다르게 보입니다.",
-    "description": ""
-  },
   "Chat.HatCompat": {
     "message": "[Proteus] Proteus가 이 헤어스타일을 모자에 맞게 수정했습니다. /proteus > 설정 > 모자 에서 되돌리거나 이 기능을 끌 수 있습니다.",
     "description": "Chat line shown once ever, the first time Proteus makes a hairstyle fit under hats by itself. Do NOT translate \"Proteus\" or the command \"/proteus\". \"Settings\" and \"Hats\" name a tab and a section in Proteus' own window - use the same words you used for \"Tab.Settings\" and \"Settings.Section.HatCompat\"."
