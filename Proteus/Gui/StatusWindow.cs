@@ -4938,7 +4938,8 @@ public class StatusWindow : Window
             ImGui.TableSetupColumn("Mod",    ImGuiTableColumnFlags.WidthStretch);
             ImGui.TableSetupColumn("Pri",    ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(78f));
             ImGui.TableSetupColumn("Preset", ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(120f));
-            ImGui.TableSetupColumn("Colors", ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(78f));
+            // Wider than the header needs: the button carries an icon ahead of the translated label.
+            ImGui.TableSetupColumn("Colors", ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(100f));
 
             // Clickable sort headers for Enabled / Mod / Priority (the rest are plain). Clicking the active
             // column flips direction; switching column picks a sensible default direction — Name ascending,
@@ -5054,9 +5055,12 @@ public class StatusWindow : Window
                 // click outside it. Tinted when a design binding is driving this mod's colours.
                 ImGui.TableNextColumn();
                 bool bindingDriven = designBindings.IsOverrideActiveFor(entry.ModDirectory);
+                // IconButtonWithText derives its id from the label, so the per-mod scope is pushed instead —
+                // without it every row's button would share one id and only the first would respond.
+                using (ImRaii.PushId($"colors_{entry.ModDirectory}"))
                 using (ImRaii.PushColor(ImGuiCol.Button, ImGui.GetColorU32(BindingAccent with { W = 0.45f }), bindingDriven))
                 {
-                    if (ImGui.Button($"{ms.ColorsBtn}##colors_{entry.ModDirectory}"))
+                    if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.Palette, ms.ColorsBtn))
                         _colorWindowMod = _colorWindowMod == entry.ModDirectory ? null : entry.ModDirectory;
                 }
                 if (bindingDriven && ImGui.IsItemHovered())
