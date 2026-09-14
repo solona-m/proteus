@@ -3,12 +3,16 @@
     "message": "Alles an ein Design binden",
     "description": ""
   },
+  "Band.Cap.Link.Tip": {
+    "message": "Mehr dazu in der Anleitung",
+    "description": ""
+  },
   "Band.Cap.Overlay": {
     "message": "Alles überlagern & umfärben",
     "description": ""
   },
-  "Band.Cap.Toggle": {
-    "message": "Alles abschaltbar",
+  "Band.Cap.Reshape": {
+    "message": "Jedes Modell umformen",
     "description": ""
   },
   "Band.Cap.Wear": {
@@ -16,7 +20,7 @@
     "description": ""
   },
   "Band.Caption": {
-    "message": "überlagern · schmücken · schalten · binden",
+    "message": "überlagern · schmücken · umformen · binden",
     "description": ""
   },
   "Band.Pill.Disabled": {

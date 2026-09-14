@@ -3,12 +3,16 @@
     "message": "Привязать к дизайну",
     "description": ""
   },
+  "Band.Cap.Link.Tip": {
+    "message": "Подробнее в руководстве",
+    "description": ""
+  },
   "Band.Cap.Overlay": {
     "message": "Наложить и перекрасить",
     "description": ""
   },
-  "Band.Cap.Toggle": {
-    "message": "Отключить что угодно",
+  "Band.Cap.Reshape": {
+    "message": "Лепить любую модель",
     "description": ""
   },
   "Band.Cap.Wear": {
@@ -16,7 +20,7 @@
     "description": ""
   },
   "Band.Caption": {
-    "message": "наложить · украсить · переключить · привязать",
+    "message": "наложить · украсить · лепить · привязать",
     "description": ""
   },
   "Band.Pill.Disabled": {

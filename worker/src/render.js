@@ -108,6 +108,25 @@ export function resolveHref(href, docPath = 'README.md') {
   return BLOB + encodeURI(repoPath) + suffix;
 }
 
+/**
+ * The id GitHub gives a heading: lower-cased, everything but letters, marks, digits, connector
+ * punctuation, spaces and hyphens dropped, then spaces turned into hyphens — github-slugger's rule.
+ *
+ * Matching GitHub exactly is the point. The plugin's header band links to README sections here by
+ * these ids, the READMEs link to their own sections the same way (`#part-switches`), and both have to
+ * work on GitHub and on this mirror alike. ReadmeLinksTests implements the same rule on the C# side.
+ */
+export function githubSlug(text) {
+  return text.toLowerCase().replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu, '').replace(/ /g, '-');
+}
+
+/** A heading's visible text, from its rendered inline HTML: tags dropped, the entities marked emits decoded. */
+const headingText = (html) => html
+  .replace(/<[^>]*>/g, '')
+  .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+  .replace(/&amp;/g, '&')
+  .trim();
+
 const CSS = `
 :root{color-scheme:light dark;
   --accent:${ACCENT};
@@ -202,6 +221,22 @@ export function renderMarkdown(md, fallbackTitle = 'Proteus', opts = {}) {
   // on a phone.
   const baseTable = renderer.table.bind(renderer);
   renderer.table = (token) => `<div class="tw">${baseTable(token)}</div>`;
+
+  // marked gives headings no ids at all, so without this every `#section` link — the plugin's and the
+  // READMEs' own — opened the page at the top. A repeated heading takes -1, -2, … as on GitHub; the map
+  // is per document, so one page's headings never shift another's.
+  //
+  // A `function`, not an arrow: marked calls this with the renderer as `this`, and `this.parser` is the
+  // only way to render the heading's inline tokens.
+  const seenIds = new Map();
+  renderer.heading = function ({ tokens, depth }) {
+    const inner = this.parser.parseInline(tokens);
+    const base = githubSlug(headingText(inner));
+    const n = seenIds.get(base) ?? 0;
+    seenIds.set(base, n + 1);
+    const id = n === 0 ? base : `${base}-${n}`;
+    return `<h${depth} id="${escapeHtml(id)}">${inner}</h${depth}>\n`;
+  };
 
   const title = firstHeading(md) ?? fallbackTitle;
   const source = md.replace(NAV_RX, '');

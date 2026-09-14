@@ -3,12 +3,16 @@
     "message": "Vincúlalo a un diseño",
     "description": ""
   },
+  "Band.Cap.Link.Tip": {
+    "message": "Más información en la guía",
+    "description": ""
+  },
   "Band.Cap.Overlay": {
     "message": "Superpón y recolorea todo",
     "description": ""
   },
-  "Band.Cap.Toggle": {
-    "message": "Desactiva lo que sea",
+  "Band.Cap.Reshape": {
+    "message": "Remodela cualquier modelo",
     "description": ""
   },
   "Band.Cap.Wear": {
@@ -16,7 +20,7 @@
     "description": ""
   },
   "Band.Caption": {
-    "message": "superponer · adornar · alternar · vincular",
+    "message": "superponer · adornar · remodelar · vincular",
     "description": ""
   },
   "Band.Pill.Disabled": {

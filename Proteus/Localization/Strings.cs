@@ -1524,15 +1524,18 @@ public sealed class BandStrings
 
     // Shown only when the capability row below has had to drop its labels and nothing is hovered, so this
     // is the narrow-window fallback rather than the usual second line.
-    public readonly string Caption = Loc.Localize("Band.Caption", "overlay · accessorize · toggle · bind");
+    public readonly string Caption = Loc.Localize("Band.Caption", "overlay · accessorize · reshape · bind");
 
     // The four capabilities named across the band's second line. Length is not cosmetic here: the row is
     // measured every frame and hides ALL FOUR labels the moment they stop fitting, so a translation much
     // longer than the English costs the whole row at window sizes where the English still shows.
     public readonly string CapOverlay = Loc.Localize("Band.Cap.Overlay", "Overlay & recolour anything");
     public readonly string CapWear    = Loc.Localize("Band.Cap.Wear",    "Wear anything, no slot");
-    public readonly string CapToggle  = Loc.Localize("Band.Cap.Toggle",  "Toggle anything off");
+    public readonly string CapReshape = Loc.Localize("Band.Cap.Reshape", "Reshape any model");
     public readonly string CapBind    = Loc.Localize("Band.Cap.Bind",    "Bind it all to a design");
+
+    // Tooltip on any of the four capabilities, each of which opens the README at the section about it.
+    public readonly string CapLinkTip = Loc.Localize("Band.Cap.Link.Tip", "Read about this in the guide");
 
     public readonly string SettingsTip    = Loc.Localize("Band.Settings.Tip", "Settings");
     public readonly string RecompositeTip = Loc.Localize("Band.Recomposite.Tip", "Recomposite now");

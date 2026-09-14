@@ -3,12 +3,16 @@
     "message": "デザインに紐付け",
     "description": ""
   },
+  "Band.Cap.Link.Tip": {
+    "message": "ガイドで詳しく読む",
+    "description": ""
+  },
   "Band.Cap.Overlay": {
     "message": "何でも重ねて色替え",
     "description": ""
   },
-  "Band.Cap.Toggle": {
-    "message": "何でもオフに切替",
+  "Band.Cap.Reshape": {
+    "message": "どのモデルも変形",
     "description": ""
   },
   "Band.Cap.Wear": {
@@ -16,7 +20,7 @@
     "description": ""
   },
   "Band.Caption": {
-    "message": "重ねる · 飾る · 切替 · 紐付け",
+    "message": "重ねる · 飾る · 変形 · 紐付け",
     "description": ""
   },
   "Band.Pill.Disabled": {
