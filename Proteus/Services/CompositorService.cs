@@ -736,6 +736,14 @@ public class CompositorService : IDisposable
         if (playerColl == null || collId != playerColl.Value)
             return;
 
+        // The live brush reloading the mod it just saved a garment into — see ExpectOwnModEdit.
+        if (change == ModSettingChange.Edited && _ownModEditUntil.TryGetValue(modDir, out long ownUntil)
+            && Environment.TickCount64 < ownUntil)
+        {
+            log.Debug("[Proteus] ModSettingChanged:Edited:{0} is the live brush's own save — no recomposite", modDir);
+            return;
+        }
+
         // Option groups, priority and in-place edits cannot turn a mod ON or OFF — only EnableState,
         // Inheritance and the temporary kinds can. So for these three, a live reading of "disabled" is not
         // merely the current state, it is also the state the change happened IN: the mod contributed nothing
@@ -1527,7 +1535,7 @@ public class CompositorService : IDisposable
         // StateChanged(Reapply), which lands here. Ignore events within a short window of our call.
         var msSinceReapply = unchecked(Environment.TickCount64 - Interlocked.Read(ref _lastOwnReapplyTick));
         if (msSinceReapply >= 0 && msSinceReapply < 250) return;
-        if (Environment.TickCount64 < Interlocked.Read(ref _glamourerEchoUntil)) return;   // see ExpectGlamourerGearReload
+        if (Environment.TickCount64 < Interlocked.Read(ref _glamourerEchoUntil)) return;   // see ReloadGearInPlace
 
         // (Invisible-glasses re-assert needs no bookkeeping here: a design that reverts our ApplyFlag.Once
         // glasses just empties the slot, and the recomposite this triggers re-injects. Ownership is derived
@@ -9761,25 +9769,39 @@ public class CompositorService : IDisposable
              + $"hair='{hair ?? "(none)"}' resolved='{file ?? "(null)"}'";
     }
 
+    /// <summary>Until this tick, per mod, an Edited event is the live brush's own reload of that mod.</summary>
+    private readonly ConcurrentDictionary<string, long> _ownModEditUntil = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The live brush is about to reload <paramref name="modDir"/> after saving a garment into it, while the character
+    /// already shows the saved state through its preview. Penumbra reports the reload as an edit, and the preview
+    /// has the garment's path resolving to a new temporary file, so left alone it reads as "a base moved": a full
+    /// second-skin recomposite and a redraw after EVERY stroke. Marks the coming edit as our own for a moment.
+    /// </summary>
+    public void ExpectOwnModEdit(string modDir) => _ownModEditUntil[modDir] = Environment.TickCount64 + 2000;
+
     /// <summary>Until this tick, Glamourer state changes are the echo of a reload Proteus caused.</summary>
     private long _glamourerEchoUntil;
 
     /// <summary>
-    /// A Penumbra temporary mod was just changed in the player's collection, and Glamourer — when it is running —
-    /// reloads the player's gear in place by itself a few frames later: it reapplies every actor in a collection
-    /// whose temporary mods change. So the live brush does NOT reapply as well; that reloaded the gear twice per
-    /// preview. This only marks the coming reapply as our own echo, so neither the compositor nor design binding
-    /// takes it for the player applying something.
+    /// Reload the player's gear in place through Glamourer — the live brush's preview, just redirected by a Penumbra
+    /// temporary mod — and mark the state change it raises as our own, so neither the compositor nor design binding
+    /// takes it for the player applying something. Framework thread only (ReapplyState touches game objects).
+    /// <para/>
+    /// Called, not left to Glamourer. Its source queues a reapply of every actor in a collection whose temporary
+    /// mods change, but in game that reapply never arrives — measured: no reapply follows any preview. What showed
+    /// previews for a while was the recomposite each save used to trigger, which ends in this same ReapplyState;
+    /// once the brush's own saves stopped recompositing, previews stopped showing.
     /// </summary>
-    /// <returns>False when Glamourer is not available to do the reload.</returns>
-    public bool ExpectGlamourerGearReload()
+    /// <returns>False when Glamourer is unavailable or refused, so the caller falls back to a redraw.</returns>
+    public bool ReloadGearInPlace()
     {
         if (!glamourer.IsAvailable) return false;
-        // A second, not the usual 250 ms: Glamourer waits five FRAMES, which at a low frame rate is well past that.
         long until = Environment.TickCount64 + 1000;
         Interlocked.Exchange(ref _glamourerEchoUntil, until);
         glamourer.ExpectOwnReapplyUntil(until);
-        return true;
+        Interlocked.Exchange(ref _lastOwnReapplyTick, Environment.TickCount64);
+        return glamourer.ReapplyPlayerState();
     }
 
     /// <summary>

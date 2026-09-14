@@ -4555,6 +4555,18 @@ public static class SecondSkinWriter
         for (int i = 0; i < map.Length; i++) map[i] = U16(p + i * 2);
         p += (int)mapBytes;
 
+        // Two tables only FACE models carry, between the submesh bone map and the padding: the neck morph table
+        // (Patch 7.1; count at header +43, 32 bytes each — position adjust, u32, normal adjust, four bone-table
+        // bytes) and a table of 16-byte records added in Patch 7.2 (count, u16, at header +48). Walked past
+        // unread. Skipping neither put every later read — the padding byte, the bounding boxes — 300-odd bytes
+        // early on any Dawntrail face, and a writer growing the extents would have written them into the wrong
+        // bytes. Layout per xivModdingFramework's Mdl.cs and MdlModelData.cs.
+        if (isV6)
+        {
+            int neckMorphs = s[mh + 43], patch72 = U16(mh + 48);
+            p += neckMorphs * 32 + patch72 * 16;
+        }
+
         byte padding = s[p]; p += 1 + padding;
 
         int modelBBAt = p;

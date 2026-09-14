@@ -2179,6 +2179,22 @@
     "message": "此模型的第一个顶点颜色不是白色，而风效果需要白色。Proteus 会保持作者原样。",
     "description": ""
   },
+  "Parts.Wind.Materials.Set.Fmt": {
+    "message": "已设置 {0} 个材质文件，让风可以吹动这件装备。",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Missing.Fmt": {
+    "message": "{0} 个材质文件没有可修改的风动设置，因此可能不会摆动。",
+    "description": ""
+  },
+  "Parts.Wind.Materials.NotInMod.Fmt": {
+    "message": "这件装备使用的 {0} 个材质来自游戏而非此模组，因此无法设置其风动。",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Failed.Fmt": {
+    "message": "无法为风设置装备的材质：{0}",
+    "description": ""
+  },
   "Parts.Wind.Refused.Fmt": {
     "message": "无法为 {0} 个网格添加风：那里没有空间再放一个顶点属性。",
     "description": ""
@@ -2271,6 +2287,30 @@
     "message": "将修改写入模组自己的模型文件，因此关掉 Proteus 也仍然有效，\n并且导出模组时会一起带走。原文件会先被复制到模组内的\nProteus/meshvolume-backup/，随时可以撤销。",
     "description": ""
   },
+  "Parts.Brush.Save.Nothing.Tip": {
+    "message": "所有内容均已保存。停止涂抹片刻后，更改会自动保存。",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes": {
+    "message": "应用到其他尺码",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Tip": {
+    "message": "将此模型上涂抹的更改复制到模组中同一模型的其他尺码，按其在装备上的位置对应。\n每个尺码会先备份，“撤销已保存的修改”可将其恢复。",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Running": {
+    "message": "正在应用到其他尺码…",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Done.Fmt": {
+    "message": "已应用到其他 {0} 个尺码。",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Problem.Fmt": {
+    "message": "{0}：{1}",
+    "description": ""
+  },
   "Parts.Brush.Saved.Fmt": {
     "message": "已保存。表面最多移动了 {0:F2} mm。",
     "description": ""
@@ -2289,6 +2329,42 @@
   },
   "Parts.Brush.Reverted.Fmt": {
     "message": "已将 {0} 个模型恢复为作者制作时的样子。",
+    "description": ""
+  },
+  "Parts.Brush.Revert.Arm.Tip": {
+    "message": "按住 Ctrl 或 Shift 并点击。",
+    "description": ""
+  },
+  "Parts.Brush.Size.Keys.Tip": {
+    "message": "[ 和 ] 可调整大小；按住 Shift 可微调。",
+    "description": ""
+  },
+  "Parts.Brush.Mirror": {
+    "message": "左右镜像",
+    "description": ""
+  },
+  "Parts.Brush.Mirror.Tip": {
+    "message": "以身体中心为轴，同时镜像涂抹两侧。",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Hint": {
+    "message": "Shift+点击部件可将其锁定。",
+    "description": ""
+  },
+  "Parts.Brush.Lock.ListTip": {
+    "message": "取消勾选部件即可锁定：任何笔刷都不会移动它。在模型或角色上 Shift+点击部件效果相同。",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Count.Fmt": {
+    "message": "已锁定 {0} 个部件",
+    "description": ""
+  },
+  "Parts.Brush.Lock.UnlockAll": {
+    "message": "全部解锁",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Skin.Tip": {
+    "message": "皮肤永远不会移动。",
     "description": ""
   },
   "MeshVolume.Apply.Nothing": {

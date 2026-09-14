@@ -2179,6 +2179,22 @@
     "message": "Die erste Vertexfarbe dieses Modells ist nicht weiß, was der Windeffekt erwartet. Proteus lässt sie, wie der Autor sie gemacht hat.",
     "description": ""
   },
+  "Parts.Wind.Materials.Set.Fmt": {
+    "message": "{0} Materialdatei(en) eingestellt, damit der Wind dieses Kleidungsstück bewegen kann.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Missing.Fmt": {
+    "message": "{0} Materialdatei(en) haben keine Windbewegungs-Einstellungen, die sich ändern ließen; sie bewegen sich womöglich nicht.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.NotInMod.Fmt": {
+    "message": "{0} Material(ien) dieses Kleidungsstücks stammen aus dem Spiel, nicht aus diesem Mod, daher lässt sich ihre Windbewegung nicht einstellen.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Failed.Fmt": {
+    "message": "Die Materialien des Kleidungsstücks konnten nicht für Wind eingestellt werden: {0}",
+    "description": ""
+  },
   "Parts.Wind.Refused.Fmt": {
     "message": "Wind konnte {0} Mesh(es) nicht hinzugefügt werden: Dort ist kein Platz für ein weiteres Vertexattribut.",
     "description": ""
@@ -2271,6 +2287,30 @@
     "message": "Schreibt die Änderung in die Modelldatei des Mods, sodass sie auch bei\nabgeschaltetem Proteus wirkt und beim Exportieren erhalten bleibt. Das\nOriginal wird vorher nach Proteus/meshvolume-backup/ im Mod kopiert und\nlässt sich zurücknehmen.",
     "description": ""
   },
+  "Parts.Brush.Save.Nothing.Tip": {
+    "message": "Alles ist bereits gespeichert. Änderungen speichern sich kurz nach dem Malen von selbst.",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes": {
+    "message": "Auf andere Größen anwenden",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Tip": {
+    "message": "Überträgt die auf diesem Modell gemalten Änderungen auf die anderen Größen\ndesselben Modells im Mod, zugeordnet nach ihrer Lage am Kleidungsstück. Jede\nGröße wird vorher gesichert, und „Gespeichertes zurücknehmen“ stellt sie wieder her.",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Running": {
+    "message": "Wird auf andere Größen angewendet…",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Done.Fmt": {
+    "message": "Auf {0} andere Größe(n) angewendet.",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Problem.Fmt": {
+    "message": "{0}: {1}",
+    "description": ""
+  },
   "Parts.Brush.Saved.Fmt": {
     "message": "Gespeichert. Die Oberfläche wurde um bis zu {0:F2} mm bewegt.",
     "description": ""
@@ -2289,6 +2329,42 @@
   },
   "Parts.Brush.Reverted.Fmt": {
     "message": "{0} Modell(e) wiederhergestellt, wie der Autor sie gemacht hat.",
+    "description": ""
+  },
+  "Parts.Brush.Revert.Arm.Tip": {
+    "message": "Halte Strg oder Shift gedrückt und klicke.",
+    "description": ""
+  },
+  "Parts.Brush.Size.Keys.Tip": {
+    "message": "[ und ] ändern sie; halte Shift für feine Schritte.",
+    "description": ""
+  },
+  "Parts.Brush.Mirror": {
+    "message": "Links/rechts spiegeln",
+    "description": ""
+  },
+  "Parts.Brush.Mirror.Tip": {
+    "message": "Malt beide Seiten zugleich, gespiegelt an der Körpermitte.",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Hint": {
+    "message": "Shift-Klick auf ein Teil sperrt es.",
+    "description": ""
+  },
+  "Parts.Brush.Lock.ListTip": {
+    "message": "Entferne den Haken bei einem Teil, um es zu sperren: Kein Pinsel bewegt es dann. Ein Shift-Klick auf ein Teil am Modell oder an deinem Charakter tut dasselbe.",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Count.Fmt": {
+    "message": "{0} Teil(e) gesperrt",
+    "description": ""
+  },
+  "Parts.Brush.Lock.UnlockAll": {
+    "message": "Alle entsperren",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Skin.Tip": {
+    "message": "Haut bewegt sich nie.",
     "description": ""
   },
   "MeshVolume.Apply.Nothing": {

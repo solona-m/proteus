@@ -2179,6 +2179,22 @@
     "message": "이 모델의 첫 번째 버텍스 컬러가 흰색이 아닙니다. 바람 효과는 흰색을 기대합니다. Proteus는 제작자가 만든 그대로 둡니다.",
     "description": ""
   },
+  "Parts.Wind.Materials.Set.Fmt": {
+    "message": "바람이 이 장비를 움직일 수 있도록 재질 파일 {0}개를 설정했습니다.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Missing.Fmt": {
+    "message": "재질 파일 {0}개에는 바꿀 수 있는 바람 움직임 설정이 없어 흔들리지 않을 수 있습니다.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.NotInMod.Fmt": {
+    "message": "이 장비가 쓰는 재질 {0}개는 이 모드가 아닌 게임의 것이라 바람 움직임을 설정할 수 없습니다.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Failed.Fmt": {
+    "message": "장비의 재질을 바람용으로 설정하지 못했습니다: {0}",
+    "description": ""
+  },
   "Parts.Wind.Refused.Fmt": {
     "message": "{0}개 메시에 바람을 추가하지 못했습니다: 버텍스 속성을 더 넣을 공간이 없습니다.",
     "description": ""
@@ -2271,6 +2287,30 @@
     "message": "변경을 모드 자신의 모델 파일에 기록하므로 Proteus를 꺼도 유지되고,\n모드를 내보내면 함께 따라갑니다. 원본은 먼저 모드 안의\nProteus/meshvolume-backup/ 에 복사되며, 언제든 되돌릴 수 있습니다.",
     "description": ""
   },
+  "Parts.Brush.Save.Nothing.Tip": {
+    "message": "모두 저장되었습니다. 변경 사항은 칠하기를 멈추고 잠시 후 자동으로 저장됩니다.",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes": {
+    "message": "다른 사이즈에 적용",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Tip": {
+    "message": "이 모델에 칠한 변경을 모드 안 같은 모델의 다른 사이즈에, 장비에서의 위치로\n맞춰 복사합니다. 각 사이즈는 먼저 백업되며 '저장된 변경 되돌리기'로 되돌릴 수 있습니다.",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Running": {
+    "message": "다른 사이즈에 적용하는 중…",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Done.Fmt": {
+    "message": "다른 사이즈 {0}개에 적용했습니다.",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Problem.Fmt": {
+    "message": "{0}: {1}",
+    "description": ""
+  },
   "Parts.Brush.Saved.Fmt": {
     "message": "저장했습니다. 표면이 억대 {0:F2} mm 움직였습니다.",
     "description": ""
@@ -2289,6 +2329,42 @@
   },
   "Parts.Brush.Reverted.Fmt": {
     "message": "모델 {0}개를 제작자가 만들었던 상태로 되돌렸습니다.",
+    "description": ""
+  },
+  "Parts.Brush.Revert.Arm.Tip": {
+    "message": "Ctrl 또는 Shift를 누른 채 클릭하세요.",
+    "description": ""
+  },
+  "Parts.Brush.Size.Keys.Tip": {
+    "message": "[ 와 ] 로 바꿀 수 있고, Shift를 누르면 세밀하게 바뀝니다.",
+    "description": ""
+  },
+  "Parts.Brush.Mirror": {
+    "message": "좌우 대칭",
+    "description": ""
+  },
+  "Parts.Brush.Mirror.Tip": {
+    "message": "몸의 중심을 기준으로 양쪽을 동시에 대칭으로 칠합니다.",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Hint": {
+    "message": "Shift+클릭으로 부위를 잠급니다.",
+    "description": ""
+  },
+  "Parts.Brush.Lock.ListTip": {
+    "message": "부위의 체크를 해제하면 잠기며, 어떤 브러시도 움직이지 않습니다. 모델이나 캐릭터의 부위를 Shift+클릭해도 같습니다.",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Count.Fmt": {
+    "message": "부위 {0}개 잠김",
+    "description": ""
+  },
+  "Parts.Brush.Lock.UnlockAll": {
+    "message": "모두 잠금 해제",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Skin.Tip": {
+    "message": "피부는 움직이지 않습니다.",
     "description": ""
   },
   "MeshVolume.Apply.Nothing": {

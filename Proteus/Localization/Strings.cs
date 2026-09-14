@@ -1654,6 +1654,22 @@ public sealed class PartsStrings
     public readonly string WindFirstColorNotWhite = Loc.Localize("Parts.Wind.FirstColorNotWhite",
         "This model's first vertex colour isn't white, which the wind effect expects. Proteus leaves it as the author made it.");
 
+    /// <summary>{0} is how many material files were changed.</summary>
+    public readonly string WindMaterialsSetFmt = Loc.Localize("Parts.Wind.Materials.Set.Fmt",
+        "Set {0} material file(s) so the wind can move this garment.");
+
+    /// <summary>{0} is how many material files lack the vertex movement settings.</summary>
+    public readonly string WindMaterialsMissingFmt = Loc.Localize("Parts.Wind.Materials.Missing.Fmt",
+        "{0} material file(s) have no wind movement settings to change, so they may not sway.");
+
+    /// <summary>{0} is how many materials the mod does not ship.</summary>
+    public readonly string WindMaterialsNotInModFmt = Loc.Localize("Parts.Wind.Materials.NotInMod.Fmt",
+        "{0} material(s) this garment uses come from the game, not this mod, so their wind movement can't be set.");
+
+    /// <summary>{0} is the error.</summary>
+    public readonly string WindMaterialsFailedFmt = Loc.Localize("Parts.Wind.Materials.Failed.Fmt",
+        "The garment's materials couldn't be set for wind: {0}");
+
     public readonly string WindRefusedFmt = Loc.Localize("Parts.Wind.Refused.Fmt",
         "Wind couldn't be added to {0} mesh(es): there's no room there for another vertex attribute.");
 
@@ -1759,6 +1775,61 @@ public sealed class PartsStrings
     public readonly string BrushRevertTip = Loc.Localize("Parts.Brush.Revert.Tip",
         "Puts every model the brush has changed in this mod back exactly as its\n"
       + "author made it.");
+
+    public readonly string BrushApplySizes = Loc.Localize("Parts.Brush.ApplySizes", "Apply to other sizes")
+                                           + "###partsBrushApplySizes";
+
+    public readonly string BrushApplySizesTip = Loc.Localize("Parts.Brush.ApplySizes.Tip",
+        "Copies the changes brushed on this model onto the mod's other sizes of it,\n"
+      + "matched by where they sit on the garment. Each size is backed up first,\n"
+      + "and Undo saved changes puts it back.");
+
+    public readonly string BrushApplySizesRunning = Loc.Localize("Parts.Brush.ApplySizes.Running",
+        "Applying to other sizes…");
+
+    /// <summary>{0} is how many other sizes were written.</summary>
+    public readonly string BrushAppliedSizesFmt = Loc.Localize("Parts.Brush.ApplySizes.Done.Fmt",
+        "Applied to {0} other size(s).");
+
+    /// <summary>{0} is the size's label, {1} what went wrong.</summary>
+    public readonly string BrushApplySizesProblemFmt = Loc.Localize("Parts.Brush.ApplySizes.Problem.Fmt",
+        "{0}: {1}");
+
+    /// <summary>The Save button with nothing waiting to save.</summary>
+    public readonly string BrushSaveNothingTip = Loc.Localize("Parts.Brush.Save.Nothing.Tip",
+        "Everything is already saved. Changes save on their own a moment after you stop painting.");
+
+    /// <summary>Added under <see cref="BrushRevertTip"/>: the button is armed only while a modifier is held.</summary>
+    public readonly string BrushRevertArmTip = Loc.Localize("Parts.Brush.Revert.Arm.Tip",
+        "Hold Ctrl or Shift and click.");
+
+    /// <summary>Added under <see cref="BrushSizeTip"/>.</summary>
+    public readonly string BrushSizeKeysTip = Loc.Localize("Parts.Brush.Size.Keys.Tip",
+        "[ and ] change it; hold Shift for fine steps.");
+
+    public readonly string BrushMirror = Loc.Localize("Parts.Brush.Mirror", "Mirror left/right")
+                                       + "###partsBrushMirror";
+
+    public readonly string BrushMirrorTip = Loc.Localize("Parts.Brush.Mirror.Tip",
+        "Paint both sides at once, mirrored across the body's centre.");
+
+    /// <summary>Added under every brush tool's tooltip.</summary>
+    public readonly string BrushLockHint = Loc.Localize("Parts.Brush.Lock.Hint",
+        "Shift-click a part to lock it.");
+
+    public readonly string BrushLockListTip = Loc.Localize("Parts.Brush.Lock.ListTip",
+        "Untick a part to lock it: no brush moves it. Shift-clicking a part on the model or on your character "
+      + "does the same.");
+
+    /// <summary>{0} is how many parts are locked.</summary>
+    public readonly string BrushLockCountFmt = Loc.Localize("Parts.Brush.Lock.Count.Fmt",
+        "{0} part(s) locked");
+
+    public readonly string BrushUnlockAll = Loc.Localize("Parts.Brush.Lock.UnlockAll", "Unlock all")
+                                          + "###partsBrushUnlockAll";
+
+    public readonly string BrushLockSkinTip = Loc.Localize("Parts.Brush.Lock.Skin.Tip",
+        "Skin never moves.");
 
     /// <summary>{0} is how many model files were put back.</summary>
     public readonly string BrushRevertedFmt = Loc.Localize("Parts.Brush.Reverted.Fmt",

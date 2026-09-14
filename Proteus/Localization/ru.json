@@ -2179,6 +2179,22 @@
     "message": "Первый цвет вершин этой модели не белый, а эффект ветра ожидает белый. Proteus оставляет его таким, как сделал автор.",
     "description": ""
   },
+  "Parts.Wind.Materials.Set.Fmt": {
+    "message": "Настроено файлов материалов: {0}, чтобы ветер мог двигать эту одежду.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Missing.Fmt": {
+    "message": "Файлов материалов без настроек движения от ветра: {0} — они могут не колыхаться.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.NotInMod.Fmt": {
+    "message": "Материалов этой одежды из игры, а не из этого мода: {0} — их движение от ветра настроить нельзя.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Failed.Fmt": {
+    "message": "Не удалось настроить материалы одежды для ветра: {0}",
+    "description": ""
+  },
   "Parts.Wind.Refused.Fmt": {
     "message": "Не удалось добавить ветер в {0} меш(а): нет места для ещё одного атрибута вершин.",
     "description": ""
@@ -2271,6 +2287,30 @@
     "message": "Записывает изменение в собственный файл модели мода, так что оно\nработает и с выключенным Proteus и уезжает вместе с модом.\nОригинал сначала копируется в Proteus/meshvolume-backup/ внутри\nмода, и всё можно отменить.",
     "description": ""
   },
+  "Parts.Brush.Save.Nothing.Tip": {
+    "message": "Всё уже сохранено. Изменения сохраняются сами вскоре после того, как вы перестанете рисовать.",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes": {
+    "message": "Применить к другим размерам",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Tip": {
+    "message": "Переносит изменения, нарисованные на этой модели, на другие размеры той же\nмодели в моде, сопоставляя их по месту на одежде. Каждый размер сначала\nсохраняется в резервную копию, и «Отменить сохранённое» его восстановит.",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Running": {
+    "message": "Применяется к другим размерам…",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Done.Fmt": {
+    "message": "Применено к другим размерам: {0}.",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Problem.Fmt": {
+    "message": "{0}: {1}",
+    "description": ""
+  },
   "Parts.Brush.Saved.Fmt": {
     "message": "Сохранено. Поверхность смещена на {0:F2} мм.",
     "description": ""
@@ -2289,6 +2329,42 @@
   },
   "Parts.Brush.Reverted.Fmt": {
     "message": "Моделей возвращено в авторский вид: {0}.",
+    "description": ""
+  },
+  "Parts.Brush.Revert.Arm.Tip": {
+    "message": "Удерживайте Ctrl или Shift и щёлкните.",
+    "description": ""
+  },
+  "Parts.Brush.Size.Keys.Tip": {
+    "message": "[ и ] меняют его; удерживайте Shift для мелких шагов.",
+    "description": ""
+  },
+  "Parts.Brush.Mirror": {
+    "message": "Зеркально слева/справа",
+    "description": ""
+  },
+  "Parts.Brush.Mirror.Tip": {
+    "message": "Рисует обе стороны сразу, зеркально относительно центра тела.",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Hint": {
+    "message": "Shift-щелчок по части блокирует её.",
+    "description": ""
+  },
+  "Parts.Brush.Lock.ListTip": {
+    "message": "Снимите флажок у части, чтобы заблокировать её: ни одна кисть её не сдвинет. Shift-щелчок по части на модели или на персонаже делает то же самое.",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Count.Fmt": {
+    "message": "Заблокировано частей: {0}",
+    "description": ""
+  },
+  "Parts.Brush.Lock.UnlockAll": {
+    "message": "Разблокировать всё",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Skin.Tip": {
+    "message": "Кожа никогда не двигается.",
     "description": ""
   },
   "MeshVolume.Apply.Nothing": {

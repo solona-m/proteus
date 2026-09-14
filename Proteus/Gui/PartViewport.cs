@@ -153,6 +153,16 @@ public sealed class PartViewport : IDisposable, IBrushSurface
     /// <summary>Parts the user has ticked, by label — drawn in the accent colour.</summary>
     public IReadOnlySet<string> Selected { get; set; } = new HashSet<string>();
 
+    /// <summary>
+    /// Parts locked against the brush, by label (a submesh's label covers its islands) — drawn dark, and left
+    /// out of the brush blob and the wind wash, so what is tinted is what will move. Call <see cref="Recolour"/>
+    /// after it changes.
+    /// </summary>
+    public IReadOnlySet<string> Locked { get; set; } = new HashSet<string>();
+
+    /// <summary>The brush also paints its mirror image across X = 0: tint both discs.</summary>
+    public bool MirrorBrush { get; set; }
+
     /// <summary>The part under the cursor, or null. Set by <see cref="Draw"/>, and also settable from the
     /// list beside it so hovering a row lights the model up.</summary>
     public string? Hovered { get; set; }
@@ -383,10 +393,11 @@ public sealed class PartViewport : IDisposable, IBrushSurface
             var label = under >= 0 && under < pickable.Count ? pickable[under].Label : null;
             if (label != Hovered) { Hovered = label; coloursDirty = true; }
 
-            // In Brush mode the hand cursor would promise a click that picks a part, which it no longer
-            // does. A crosshair says "this acts where it is pointing".
+            // In Brush mode the hand cursor would promise a click that picks a part, which it only does with
+            // Shift held — a Shift-click locks the part. A crosshair otherwise says "this acts where it is pointing".
             ImGui.SetMouseCursor(Mode == ViewportMode.Brush
-                ? (Cursor != null ? ImGuiMouseCursor.ResizeAll : ImGuiMouseCursor.Arrow)
+                ? (ImGui.GetIO().KeyShift && label != null ? ImGuiMouseCursor.Hand
+                   : Cursor != null ? ImGuiMouseCursor.ResizeAll : ImGuiMouseCursor.Arrow)
                 : (label != null ? ImGuiMouseCursor.Hand : ImGuiMouseCursor.Arrow));
 
             if (ImGui.GetIO().MouseWheel != 0)
@@ -612,6 +623,8 @@ public sealed class PartViewport : IDisposable, IBrushSurface
         // Precomputed per part so the pixel loop is a lookup: models run to tens of thousands of triangles
         // but only a few dozen parts.
         var tint = new (int R, int G, int B)[pickable.Count];
+        var canBrush = new bool[pickable.Count];
+        bool brushMode = Mode == ViewportMode.Brush;
         for (int i = 0; i < pickable.Count; i++)
         {
             // An island answers to its own label AND to its submesh's — see parentOf. Ticking the whole
@@ -619,16 +632,22 @@ public sealed class PartViewport : IDisposable, IBrushSurface
             var parent = i < parentOf.Count ? parentOf[i] : null;
             bool on = Selected.Contains(pickable[i].Label) || (parent != null && Selected.Contains(parent));
             bool hot = Hovered == pickable[i].Label || (parent != null && Hovered == parent);
-            tint[i] = on && hot ? (255, 220, 170)
-                    : on        ? (ar, ag, ab)
-                    : hot       ? (150, 170, 200)
-                    :             (128, 128, 132);
+            bool locked = brushMode && (Locked.Contains(pickable[i].Label) || (parent != null && Locked.Contains(parent)));
+            canBrush[i] = i < brushable.Length && brushable[i] && !locked;
+            tint[i] = locked      ? (hot ? (100, 110, 130) : (70, 70, 76))
+                    : on && hot   ? (255, 220, 170)
+                    : on          ? (ar, ag, ab)
+                    : hot         ? (150, 170, 200)
+                    :               (128, 128, 132);
         }
 
         // The brush's reach, as the falloff the stroke will actually apply — so what the user sees shaded is
         // what will move, and by how much. Squared radius so the pixel loop compares without a square root.
-        bool brushing = Mode == ViewportMode.Brush && BrushRadius > 0f && Cursor is not null;
+        // Mirrored, the stronger of the two discs, as the solve weighs them.
+        bool brushing = brushMode && BrushRadius > 0f && Cursor is not null;
         var centre = Cursor ?? Vector3.Zero;
+        var mirrorCentre = new Vector3(-centre.X, centre.Y, centre.Z);
+        bool mirrored = MirrorBrush && MathF.Abs(centre.X) > 1e-4f;
         float r2 = BrushRadius * BrushRadius;
 
 
@@ -645,7 +664,7 @@ public sealed class PartViewport : IDisposable, IBrushSurface
             int s = shade[i];
 
             // The wind wash, under the brush blob: red by how much the painted amount is.
-            if (VertexScalar != null && scalar[i] > 0f && part < brushable.Length && brushable[part])
+            if (VertexScalar != null && scalar[i] > 0f && canBrush[part])
             {
                 float k = MathF.Min(scalar[i], 1f) * 0.75f;
                 r = (int)(r + (235 - r) * k);
@@ -653,9 +672,10 @@ public sealed class PartViewport : IDisposable, IBrushSurface
                 b = (int)(b + (40 - b) * k);
             }
 
-            if (brushing && part < brushable.Length && brushable[part])
+            if (brushing && canBrush[part])
             {
                 float d2 = (hit[i] - centre).LengthSquared();
+                if (mirrored) d2 = MathF.Min(d2, (hit[i] - mirrorCentre).LengthSquared());
                 if (d2 < r2)
                 {
                     // Blend toward the hot colour by the very falloff the edit uses, so the blob reads as a

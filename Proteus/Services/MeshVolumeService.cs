@@ -42,6 +42,16 @@ internal static class MeshVolumeService
     public const string RecordFile = "meshvolume.json";
     public const string BackupSubdir = "meshvolume-backup";
 
+    /// <summary>
+    /// Held around every backup, write and record update. Apply to other sizes saves from a worker thread while the
+    /// framework thread goes on saving the open model, and the record is read, changed and written back: unguarded,
+    /// one save's rewrite drops the other's entry — and an entry missing from the record is a file Undo saved changes
+    /// never restores, whose backup it then deletes with the folder. Two backups of one shared material racing is the
+    /// same story: the loser can copy the file the winner has already patched and keep that as "the original".
+    /// Only the writing is held, never the edit's computation, so the framework thread waits at most one file's write.
+    /// </summary>
+    private static readonly object WriteLock = new();
+
     /// <param name="UnmappedSpares">Shape-key replacement vertices whose base vertex could not be found, so
     /// they keep the author's position. Enabling that shape reverts the edit on the slots it rewires, which
     /// looks exactly like the brush having missed a patch — hence a count rather than silence.</param>
@@ -90,14 +100,17 @@ internal static class MeshVolumeService
         // ── from here on the mod is being changed ───────────────────────────
         try
         {
-            Backup(modRoot, rel);
-            PenumbraModMeta.AtomicWrite(Path.Combine(modRoot, Native(rel)), written.Model);
+            lock (WriteLock)
+            {
+                Backup(modRoot, rel);
+                PenumbraModMeta.AtomicWrite(Path.Combine(modRoot, Native(rel)), written.Model);
 
-            var record = ReadRecord(modRoot) ?? new MeshVolumeRecord();
-            if (!record.Files.Contains(rel, StringComparer.OrdinalIgnoreCase)) record.Files.Add(rel);
-            record.Versions[rel] = MeshVolumeSolve.Version;
-            record.Worst[rel] = solve.Worst;
-            WriteRecord(modRoot, record);
+                var record = ReadRecord(modRoot) ?? new MeshVolumeRecord();
+                if (!record.Files.Contains(rel, StringComparer.OrdinalIgnoreCase)) record.Files.Add(rel);
+                record.Versions[rel] = MeshVolumeSolve.Version;
+                record.Worst[rel] = solve.Worst;
+                WriteRecord(modRoot, record);
+            }
         }
         catch (Exception ex)
         {
@@ -122,13 +135,10 @@ internal static class MeshVolumeService
                 $"this model could not be read ({ex.Message})");
         }
 
-        // A neck morph carries its own copy of the positions along the neck seam. Moving the vertices
-        // underneath it would leave the two describing different surfaces, and the seam opens whenever the
-        // morph is active. Refused rather than guessed at — and a model carrying one is a head, which is not
-        // what a garment brush is for.
-        if (mdl[src.Mh + 43] != 0)
-            throw new ModelAttributeWriter.ModelEditException(
-                "this model carries neck morph data, whose own copy of the surface this cannot keep in step");
+        // A face's neck morph table is NOT refused. It is a handful of per-bone adjustments (position, normal,
+        // bone indices), not a copy of the vertices, so moving vertices does not put it out of step; every write
+        // here is in place or in the vertex buffer, and Parse now walks past it and the Patch 7.2 face table to
+        // find the bounding boxes. Faces are sculpted with small brushes.
 
         if (src.ModelBBoxAt <= 0 || src.ModelBBoxAt + 4 * BBoxSize > mdl.Length)
             throw new ModelAttributeWriter.ModelEditException(
@@ -399,6 +409,78 @@ internal static class MeshVolumeService
         }
     }
 
+    // ── wind: the garment's materials ───────────────────────────────────────
+
+    /// <summary>character.shpk's <c>g_VertexMovementScale</c>: how far the wind moves a vertex, times its wind.</summary>
+    public const uint VertexMovementScaleId = 0x641E0F22;
+
+    /// <summary>character.shpk's <c>g_VertexMovementMaxLength</c>: the furthest the wind may move a vertex.</summary>
+    public const uint VertexMovementMaxLengthId = 0xD26FF0AE;
+
+    public const float WindMovementScale = 100f, WindMovementMaxLength = 1f;
+
+    /// <param name="Changed">Material files rewritten.</param>
+    /// <param name="Missing">Material files that do not carry the movement constants at all, left unchanged.</param>
+    /// <param name="NotInMod">Materials the model uses that this mod does not ship, which only the game has.</param>
+    public sealed record MaterialOutcome(int Changed, int Missing, int NotInMod);
+
+    /// <summary>
+    /// Set the vertex movement constants on every material the painted wind is drawn with: the wind channel alone
+    /// moves nothing where a material holds the movement at 0, which is how many mods ship their gear materials.
+    /// <para/>
+    /// Found by NAME among the mod's own redirects — every variant and option that ships it — because the model
+    /// only names <c>/mt_….mtrl</c> and the variant folder is the IMC's to choose. Each file is backed up and
+    /// recorded like the models, so Undo saved changes puts it back too. Only constants the material already
+    /// declares are changed: adding one means rebuilding the file's layout, and one that is absent falls back to the
+    /// shader's own default rather than 0.
+    /// </summary>
+    /// <param name="materialNames">The cloth materials the brushed model uses, as the model names them.</param>
+    public static MaterialOutcome ApplyWindMaterials(string modRoot, IEnumerable<string> materialNames,
+                                                     IReadOnlyList<PenumbraModMeta.Redirect> redirects)
+    {
+        lock (WriteLock) return ApplyWindMaterialsLocked(modRoot, materialNames, redirects);
+    }
+
+    private static MaterialOutcome ApplyWindMaterialsLocked(string modRoot, IEnumerable<string> materialNames,
+                                                            IReadOnlyList<PenumbraModMeta.Redirect> redirects)
+    {
+        int changed = 0, missing = 0, notInMod = 0;
+        MeshVolumeRecord? record = null;
+
+        foreach (var name in materialNames.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var file = "/" + name.TrimStart('/');
+            var rels = redirects
+                .Where(r => r.GamePath.EndsWith(file, StringComparison.OrdinalIgnoreCase)
+                         && r.File.EndsWith(".mtrl", StringComparison.OrdinalIgnoreCase))
+                .Select(r => Rel(r.File))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (rels.Count == 0) { notInMod++; continue; }
+
+            foreach (var rel in rels)
+            {
+                var path = Path.Combine(modRoot, Native(rel));
+                if (!File.Exists(path)) continue;
+                var before = File.ReadAllBytes(path);
+                var (withScale, hasScale) = TextureLoader.PatchConstantValues(before, VertexMovementScaleId, WindMovementScale);
+                var (after, hasMax) = TextureLoader.PatchConstantValues(withScale, VertexMovementMaxLengthId, WindMovementMaxLength);
+                if (!hasScale || !hasMax) missing++;
+                if (after.AsSpan().SequenceEqual(before)) continue;
+
+                Backup(modRoot, rel);
+                PenumbraModMeta.AtomicWrite(path, after);
+                record ??= ReadRecord(modRoot) ?? new MeshVolumeRecord();
+                if (!record.Files.Contains(rel, StringComparer.OrdinalIgnoreCase)) record.Files.Add(rel);
+                record.Versions[rel] = MeshVolumeSolve.Version;
+                changed++;
+            }
+        }
+
+        if (record != null) WriteRecord(modRoot, record);
+        return new MaterialOutcome(changed, missing, notInMod);
+    }
+
     // ── the record, the backup and the way back ─────────────────────────────
 
     public static int PatchedCount(string modRoot) => ReadRecord(modRoot)?.Files.Count ?? 0;
@@ -416,6 +498,11 @@ internal static class MeshVolumeService
     /// left pointing at an attribute the restore removed, which silently does nothing.
     /// </summary>
     public static Outcome Revert(string modRoot)
+    {
+        lock (WriteLock) return RevertLocked(modRoot);
+    }
+
+    private static Outcome RevertLocked(string modRoot)
     {
         var record = ReadRecord(modRoot);
         if (record == null || record.Files.Count == 0)

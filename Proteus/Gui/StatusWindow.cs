@@ -786,18 +786,7 @@ public class StatusWindow : Window
                 using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Mods, "mods"))
                     if (t) { _tabDrawn = "mods"; DrawModsTab(); }
 
-                using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Bindings, "bindings"))
-                    if (t) { _tabDrawn = "bindings"; DrawBindingsTab(); }
-
-                using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Create, "create"))
-                    if (t) { _tabDrawn = "create"; DrawCreateTab(); }
-
-                using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Import, "import"))
-                    if (t) { _tabDrawn = "import"; DrawImportTab(); }
-
-                using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Export, "export"))
-                    if (t) { _tabDrawn = "export"; DrawExportTab(); }
-
+                // The Studio second, right after the mods it works on.
                 using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Parts, "toggles"))
                     if (t)
                     {
@@ -822,6 +811,18 @@ public class StatusWindow : Window
                         if (parts.ShowingModel && !_modelWasShowing) _growForModel = true;
                         _modelWasShowing = parts.ShowingModel;
                     }
+
+                using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Bindings, "bindings"))
+                    if (t) { _tabDrawn = "bindings"; DrawBindingsTab(); }
+
+                using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Create, "create"))
+                    if (t) { _tabDrawn = "create"; DrawCreateTab(); }
+
+                using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Import, "import"))
+                    if (t) { _tabDrawn = "import"; DrawImportTab(); }
+
+                using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Export, "export"))
+                    if (t) { _tabDrawn = "export"; DrawExportTab(); }
 
                 using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Settings, "settings",
                            _forceSettingsTab ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None))

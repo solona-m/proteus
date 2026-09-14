@@ -131,6 +131,13 @@ internal sealed class MeshVolumeSolve
     /// </summary>
     private readonly bool[] skin;
 
+    /// <summary>
+    /// Nodes the user has LOCKED — a belt on a pair of trousers, a buckle — which no brush moves. Skipped exactly
+    /// where skin is, so a locked node never enters a stroke; what earlier strokes gave it stays, and it holds
+    /// still as an anchor the cloth around it relaxes and smooths into. See <see cref="SetLocked"/>.
+    /// </summary>
+    private readonly bool[] locked;
+
     private Vec3[] nodeDelta;
 
     /// <summary>
@@ -221,6 +228,7 @@ internal sealed class MeshVolumeSolve
         // sleeve ends are open edges too, and pinning them made the brush refuse to pull cloth away anywhere
         // near one: the slope limit then held every node a few triangles in to a few millimetres. A torn seam
         // is visible and undoable per stroke; a brush that will not pull a hem out has no workaround.
+        locked = new bool[nodeCount];
         skin = new bool[nodeCount];
         foreach (var part in model.Parts)
         {
@@ -429,6 +437,61 @@ internal sealed class MeshVolumeSolve
 
     public IReadOnlyList<MeshSpan> Spans { get; }
 
+    /// <summary>
+    /// Lock exactly these vertices (indexed like <see cref="ModelParts.Positions"/>) against every brush, and
+    /// unlock the rest. A node is locked when ANY of its welded vertices is: where a belt is welded to the
+    /// trousers, the seam holds, and the trousers taper into it instead of tearing away from the belt.
+    /// <para/>
+    /// Moves nothing and touches neither undo nor <see cref="Dirty"/> — a lock is a rule for the next stroke.
+    /// </summary>
+    public void SetLocked(IEnumerable<int> vertices)
+    {
+        Array.Clear(locked);
+        foreach (int v in vertices)
+            if (v >= 0 && v < nodeOf.Length) locked[nodeOf[v]] = true;
+        LockVersion++;
+    }
+
+    /// <summary>Bumped by every <see cref="SetLocked"/>, so a view can tell when to rebuild what it greys out.</summary>
+    public int LockVersion { get; private set; }
+
+    /// <summary>Whether the node at vertex <paramref name="vertex"/> is locked.</summary>
+    public bool IsLocked(int vertex) => vertex >= 0 && vertex < nodeOf.Length && locked[nodeOf[vertex]];
+
+    /// <summary>
+    /// A dab's weight at node <paramref name="n"/>: the falloff from <paramref name="c"/>, or — when
+    /// <paramref name="mirror"/> — the STRONGER of that and the falloff from the mirrored centre
+    /// <c>(−x, y, z)</c>. The max, not the sum: near the midline the two discs overlap, and a sum would paint
+    /// the centre line twice as hard as either side. 0 outside both.
+    /// </summary>
+    /// <param name="mirrored">The mirrored disc gave the weight.</param>
+    private float DabWeight(int n, Vec3 c, float radius, bool mirror, out bool mirrored)
+    {
+        mirrored = false;
+        float r2 = radius * radius;
+        float dy = nodeAt[n].Y - c.Y, dz = nodeAt[n].Z - c.Z;
+        float yz = dy * dy + dz * dz;
+        if (yz >= r2) return 0f;
+
+        float dx = nodeAt[n].X - c.X;
+        float d2 = dx * dx + yz;
+        float w = d2 < r2 ? Falloff(MathF.Sqrt(d2) / radius) : 0f;
+        if (!mirror) return w;
+
+        float mx = nodeAt[n].X + c.X;
+        float m2 = mx * mx + yz;
+        if (m2 >= r2) return w;
+        float wm = Falloff(MathF.Sqrt(m2) / radius);
+        if (wm > w) { mirrored = true; return wm; }
+        return w;
+    }
+
+    /// <summary>
+    /// Whether a dab at <paramref name="centre"/> should also paint its mirror: asked for, and not already ON
+    /// the midline — a dab there is its own mirror.
+    /// </summary>
+    private bool MirrorAt(Vector3 centre, bool mirror) => mirror && MathF.Abs(centre.X) >= MathF.Max(MeanEdge, 1e-4f);
+
     /// <summary>The mesh's own resolution, so a radius can be judged against what it will actually reach.</summary>
     public float MeanEdge { get; }
 
@@ -461,23 +524,22 @@ internal sealed class MeshVolumeSolve
     /// </summary>
     /// <param name="target">0..1: the amount being painted; 0 erases.</param>
     /// <param name="rate">0..1: how much of the remaining difference each dab closes at the middle of the brush.</param>
+    /// <param name="mirror">Also paint the mirror image across the body's midline — see <see cref="DabWeight"/>.</param>
     /// <returns>How many nodes changed.</returns>
-    public int PaintWind(Vector3 centre, float radius, float target, float rate)
+    public int PaintWind(Vector3 centre, float radius, float target, float rate, bool mirror = false)
     {
         if (radius <= 0f || rate <= 0f) return 0;
         stroke ??= [];
         target = Math.Clamp(target, 0f, 1f);
         rate = Math.Clamp(rate, 0f, 1f);
 
-        float r2 = radius * radius;
+        var c = new Vec3(centre.X, centre.Y, centre.Z);
+        mirror = MirrorAt(centre, mirror);
         int changed = 0;
         for (int n = 0; n < nodeCount; n++)
         {
-            if (skin[n]) continue;
-            float dx = nodeAt[n].X - centre.X, dy = nodeAt[n].Y - centre.Y, dz = nodeAt[n].Z - centre.Z;
-            float d2 = dx * dx + dy * dy + dz * dz;
-            if (d2 >= r2) continue;
-            float w = Falloff(MathF.Sqrt(d2) / radius);
+            if (skin[n] || locked[n]) continue;
+            float w = DabWeight(n, c, radius, mirror, out _);
             if (w <= 0f) continue;
 
             float next = Math.Clamp(nodeWind[n] + (target - nodeWind[n]) * rate * w, 0f, 1f);
@@ -532,30 +594,30 @@ internal sealed class MeshVolumeSolve
     /// with no skin in the model to push away from either, that node has nothing to move along. Measured on a
     /// real hairstyle: 22,876 of 22,896 nodes. Out is then toward the camera and in is away from it, which is
     /// what pushing on the side being looked at means. Zero leaves such nodes where they are.</param>
+    /// <param name="mirror">Also paint the mirror image across the body's midline — see <see cref="DabWeight"/>.
+    /// The pulls need no mirroring (each node's is its own, aimed from skin); only the viewer fallback is
+    /// reflected for the nodes the mirrored disc reaches.</param>
     /// <returns>How many nodes moved, so a stroke that is reaching nothing can say so.</returns>
-    public int Paint(Vector3 centre, float radius, float strength, Vector3 toViewer = default)
+    public int Paint(Vector3 centre, float radius, float strength, Vector3 toViewer = default, bool mirror = false)
     {
         if (radius <= 0f || strength == 0f) return 0;
         stroke ??= [];
         var viewer = Unit(new Vec3(toViewer.X, toViewer.Y, toViewer.Z));
+        var viewerMirrored = new Vec3(-viewer.X, viewer.Y, viewer.Z);
 
         var c = new Vec3(centre.X, centre.Y, centre.Z);
-        float r2 = radius * radius;
+        mirror = MirrorAt(centre, mirror);
         int moved = 0;
 
         for (int n = 0; n < nodeCount; n++)
         {
-            if (skin[n]) continue;
+            if (skin[n] || locked[n]) continue;
 
-            float dx = nodeAt[n].X - c.X, dy = nodeAt[n].Y - c.Y, dz = nodeAt[n].Z - c.Z;
-            float d2 = dx * dx + dy * dy + dz * dz;
-            if (d2 >= r2) continue;
-
-            float w = Falloff(MathF.Sqrt(d2) / radius);
+            float w = DabWeight(n, c, radius, mirror, out bool mirrored);
             if (w <= 0f) continue;
 
             var dir = pullDir[n];
-            if (dir.X == 0f && dir.Y == 0f && dir.Z == 0f) dir = viewer;   // double-sided: see toViewer
+            if (dir.X == 0f && dir.Y == 0f && dir.Z == 0f) dir = mirrored ? viewerMirrored : viewer;   // double-sided: see toViewer
             if (dir.X == 0f && dir.Y == 0f && dir.Z == 0f) continue;
 
             // Recorded before the first change of this stroke, not on every dab: a stroke drags over the
@@ -621,14 +683,15 @@ internal sealed class MeshVolumeSolve
     /// brush first: the stroke is the stopping rule.
     /// </summary>
     /// <param name="rate">0..1: how far each dab moves toward the average, at the middle of the brush.</param>
+    /// <param name="mirror">Also relax the mirror image across the body's midline — see <see cref="DabWeight"/>.</param>
     /// <returns>How many nodes moved.</returns>
-    public int Relax(Vector3 centre, float radius, float rate)
+    public int Relax(Vector3 centre, float radius, float rate, bool mirror = false)
     {
         if (radius <= 0f || rate <= 0f) return 0;
         stroke ??= [];
 
         var c = new Vec3(centre.X, centre.Y, centre.Z);
-        float r2 = radius * radius;
+        mirror = MirrorAt(centre, mirror);
 
         var nodes = brushNodes;
         var weights = brushWeights;
@@ -636,11 +699,8 @@ internal sealed class MeshVolumeSolve
         weights.Clear();
         for (int n = 0; n < nodeCount; n++)
         {
-            if (skin[n] || adj[n].Count == 0) continue;
-            float dx = nodeAt[n].X - c.X, dy = nodeAt[n].Y - c.Y, dz = nodeAt[n].Z - c.Z;
-            float d2 = dx * dx + dy * dy + dz * dz;
-            if (d2 >= r2) continue;
-            float w = Falloff(MathF.Sqrt(d2) / radius);
+            if (skin[n] || locked[n] || adj[n].Count == 0) continue;
+            float w = DabWeight(n, c, radius, mirror, out _);
             if (w <= 0f) continue;
             nodes.Add(n);
             weights.Add(w);
@@ -755,13 +815,48 @@ internal sealed class MeshVolumeSolve
     /// </summary>
     /// <param name="rate">0..1: how much of the remaining gap each dab closes, at the middle of the brush.</param>
     /// <param name="toViewer">Unit direction from the model toward the camera.</param>
+    /// <param name="mirror">Also bridge the mirror image across the body's midline: the same construction run a
+    /// second time at the mirrored centre, along the mirrored held axis. Where the two discs overlap, a node the
+    /// first already lifted this dab is not lifted again by the second, so the seam does not rise twice.</param>
     /// <returns>How many nodes moved.</returns>
-    public int Bridge(Vector3 centre, float radius, float rate, Vector3 toViewer)
+    public int Bridge(Vector3 centre, float radius, float rate, Vector3 toViewer, bool mirror = false)
     {
         if (radius <= 0f || rate <= 0f) return 0;
         stroke ??= [];
 
         var c = new Vec3(centre.X, centre.Y, centre.Z);
+        bool both = MirrorAt(centre, mirror);
+        bridgeLifted.Clear();
+        int moved = BridgeDab(c, radius, rate, toViewer, ref bridgeAxis, both ? bridgeLifted : null, null);
+        if (both)
+        {
+            // The mirrored side holds the mirror of the first side's axis, so the two lift symmetrically.
+            if (bridgeMirrorAxis == null && bridgeAxis is { } held) bridgeMirrorAxis = new Vec3(-held.X, held.Y, held.Z);
+            moved += BridgeDab(new Vec3(-c.X, c.Y, c.Z), radius, rate, new Vector3(-toViewer.X, toViewer.Y, toViewer.Z),
+                               ref bridgeMirrorAxis, null, bridgeLifted);
+        }
+
+        if (moved > 0)
+        {
+            Dirty = true;
+            Spread();
+        }
+        return moved;
+    }
+
+    /// <summary>The mirrored half of a mirrored bridge stroke's held axis; null between strokes.</summary>
+    private Vec3? bridgeMirrorAxis;
+
+    /// <summary>Nodes the first disc of a mirrored bridge dab lifted, which the second leaves alone.</summary>
+    private readonly HashSet<int> bridgeLifted = [];
+
+    /// <summary>One disc of <see cref="Bridge"/>.</summary>
+    /// <param name="heldAxis">The stroke's held outward axis for this disc: read, or set on its first dab.</param>
+    /// <param name="lifted">Receives every node this disc moves; null for none.</param>
+    /// <param name="skip">Nodes this disc must not move; null for none.</param>
+    private int BridgeDab(Vec3 c, float radius, float rate, Vector3 toViewer, ref Vec3? heldAxis,
+                          HashSet<int>? lifted, HashSet<int>? skip)
+    {
         float r2 = radius * radius;
 
         var nodes = brushNodes;
@@ -771,7 +866,7 @@ internal sealed class MeshVolumeSolve
         float ax = 0f, ay = 0f, az = 0f, wsum = 0f;
         for (int n = 0; n < nodeCount; n++)
         {
-            if (skin[n]) continue;
+            if (skin[n] || locked[n]) continue;
             float dx = nodeAt[n].X - c.X, dy = nodeAt[n].Y - c.Y, dz = nodeAt[n].Z - c.Z;
             float d2 = dx * dx + dy * dy + dz * dz;
             if (d2 >= r2) continue;
@@ -788,14 +883,14 @@ internal sealed class MeshVolumeSolve
         // first dab and HELD for the rest of it. Re-read per dab it swings as the brush crosses from one cheek
         // to the other, and points lifted along several directions can turn a triangle over, where lifting
         // along one cannot (see EndStroke).
-        if (bridgeAxis is not { } axis)
+        if (heldAxis is not { } axis)
         {
             float alen = MathF.Sqrt(ax * ax + ay * ay + az * az);
             axis = alen >= 0.5f * wsum
                 ? new Vec3(ax / alen, ay / alen, az / alen)
                 : Unit(new Vec3(toViewer.X, toViewer.Y, toViewer.Z));
             if (axis.X == 0f && axis.Y == 0f && axis.Z == 0f) return 0;
-            bridgeAxis = axis;
+            heldAxis = axis;
         }
 
         // Two directions across the axis, so each point has a place on the brush's face and a height along it.
@@ -969,8 +1064,10 @@ internal sealed class MeshVolumeSolve
             float step = lift[i] * rate * weights[i];
             if (step <= 1e-7f) continue;
             int n = nodes[i];
+            if (skip != null && skip.Contains(n)) continue;
+            lifted?.Add(n);
 
-            stroke.TryAdd(n, (nodeDelta[n], nodeWeight[n], nodeWind[n]));   // before the first change — see Paint
+            stroke!.TryAdd(n, (nodeDelta[n], nodeWeight[n], nodeWind[n]));   // before the first change — see Paint
 
             var next = new Vec3(nodeDelta[n].X + axis.X * step,
                                 nodeDelta[n].Y + axis.Y * step,
@@ -986,11 +1083,6 @@ internal sealed class MeshVolumeSolve
             moved++;
         }
 
-        if (moved > 0)
-        {
-            Dirty = true;
-            Spread();
-        }
         return moved;
     }
 
@@ -1009,7 +1101,7 @@ internal sealed class MeshVolumeSolve
     {
         var touched = stroke;
         stroke = null;
-        bridgeAxis = null;
+        bridgeAxis = bridgeMirrorAxis = null;
         if (wind)
         {
             if (touched is { Count: > 0 }) undo.Add(touched);
@@ -1114,7 +1206,7 @@ internal sealed class MeshVolumeSolve
         Array.Copy(initialPull, pullDir, nodeCount);
         undo.Clear();
         stroke = null;
-        bridgeAxis = null;
+        bridgeAxis = bridgeMirrorAxis = null;
         Dirty = false;
         Settle(null);
     }
@@ -1246,6 +1338,57 @@ internal sealed class MeshVolumeSolve
 
     /// <summary>Per-vertex displacement, indexed as <see cref="ModelParts.Positions"/> is.</summary>
     public Vec3 DeltaAt(int vertex) => vertDelta[vertex];
+
+    /// <summary>Per-vertex normal-blend weight — see <see cref="nodeWeight"/>.</summary>
+    public float WeightAt(int vertex) => nodeWeight[nodeOf[vertex]];
+
+    /// <summary>
+    /// Take an edit made elsewhere — another size of this garment, see <see cref="BrushTransfer"/> — as this model's
+    /// whole edit: each node gets the average displacement of its vertices' samples (capped at
+    /// <see cref="MaxDisplacement"/>), the strongest weight, and, when <paramref name="wind"/>, the strongest wind.
+    /// Skin is left alone. Settled like a finished stroke, with no undo history: it is a starting point, not a stroke.
+    /// </summary>
+    /// <param name="samples">Per vertex; null where the vertex has no counterpart and keeps nothing.</param>
+    /// <param name="wind">Carry wind too. Off when the source's wind was never painted, so a size keeps its author's.</param>
+    public void ImportEdit(IReadOnlyList<(Vector3 Delta, float Weight, float Wind)?> samples, bool wind)
+    {
+        var sum = new Vec3[nodeCount];
+        var count = new int[nodeCount];
+        var weight = new float[nodeCount];
+        var windMax = new float[nodeCount];
+        var windSeen = new bool[nodeCount];
+        for (int v = 0; v < samples.Count && v < nodeOf.Length; v++)
+        {
+            if (samples[v] is not { } s) continue;
+            int n = nodeOf[v];
+            sum[n] = new Vec3(sum[n].X + s.Delta.X, sum[n].Y + s.Delta.Y, sum[n].Z + s.Delta.Z);
+            count[n]++;
+            weight[n] = MathF.Max(weight[n], s.Weight);
+            windMax[n] = windSeen[n] ? MathF.Max(windMax[n], s.Wind) : s.Wind;
+            windSeen[n] = true;
+        }
+
+        undo.Clear();
+        stroke = null;
+        for (int n = 0; n < nodeCount; n++)
+        {
+            if (skin[n] || count[n] == 0) continue;
+            var d = new Vec3(sum[n].X / count[n], sum[n].Y / count[n], sum[n].Z / count[n]);
+            float len = MathF.Sqrt(d.X * d.X + d.Y * d.Y + d.Z * d.Z);
+            if (len > MaxDisplacement)
+            {
+                float k = MaxDisplacement / len;
+                d = new Vec3(d.X * k, d.Y * k, d.Z * k);
+            }
+            nodeDelta[n] = d;
+            nodeWeight[n] = Math.Clamp(weight[n], 0f, 1f);
+            if (wind && windSeen[n]) nodeWind[n] = Math.Clamp(MathF.Round(windMax[n] * 255f) / 255f, 0f, 1f);
+        }
+
+        WindVersion++;
+        Dirty = nodeDelta.Any(x => x.X != 0f || x.Y != 0f || x.Z != 0f) || WindEdited;
+        Settle(null);
+    }
 
     /// <summary>Per-vertex normal after the edit, indexed as <see cref="ModelParts.Positions"/> is.</summary>
     public Vec3 NormalAt(int vertex) => vertNrm[vertex];
