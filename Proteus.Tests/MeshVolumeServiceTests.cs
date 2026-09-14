@@ -142,6 +142,29 @@ public class MeshVolumeServiceTests
     }
 
     /// <summary>
+    /// A moved part is written as far as it was moved — past the brushes' ceiling — and the extents grow by all of it.
+    /// </summary>
+    [Fact]
+    public void WritesAMovedPartBeyondTheBrushCap()
+    {
+        var (mdl, solve, model) = Setup();
+
+        Assert.True(solve.BeginMove(model.Parts[0].Triangles, adjacent: false, falloffRadius: 0f) > 0);
+        solve.MoveTo(new Vector3(0f, 0.3f, 0f));
+        solve.EndMove();
+        Assert.Equal(0.3f, solve.Worst, 1e-6f);
+
+        var before = SecondSkinWriter.Parse(mdl);
+        BitConverter.GetBytes(2f).CopyTo(mdl, before.Mh);   // Radius, so there is something to grow
+
+        var written = MeshVolumeService.Inflate(mdl, solve).Model;
+        Assert.Equal(mdl.Length, written.Length);
+        for (int v = 0; v < 6; v++)
+            Assert.Equal(PositionY(mdl, v) + 0.3f, PositionY(written, v), 1e-5f);
+        Assert.Equal(2.3f, BitConverter.ToSingle(written, SecondSkinWriter.Parse(written).Mh), 1e-5f);
+    }
+
+    /// <summary>
     /// The stored extents grow with the geometry.
     /// <para/>
     /// Nothing in this project ever recomputed a bounding box, and an inflate is the edit that makes it

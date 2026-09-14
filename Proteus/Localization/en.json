@@ -2159,6 +2159,74 @@
     "message": "Paint where the wind moves this garment; red shows how much.\nIt is written into the model's second vertex colour.",
     "description": "Tooltip for the button. Keep the line breaks; the tooltip is not wrapped."
   },
+  "Parts.Tool.Move": {
+    "message": "Move",
+    "description": "Tool button in the Studio side panel."
+  },
+  "Parts.Tool.Move.Tip": {
+    "message": "Pick a part and drag it with the arrows: one arrow moves it along\nthat axis, a square moves it across that plane.",
+    "description": "Tooltip for the button. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "Parts.Move.Help": {
+    "message": "Click a part to choose it, then drag an arrow or a square. Drag anywhere else to turn the model, shift-drag to move the view, scroll to zoom.",
+    "description": "Help above the Move tool's controls, in the model view."
+  },
+  "Parts.Move.LiveHint": {
+    "message": "Click a part on your character, then drag an arrow or a square. Hold Alt to move the camera. Each move is saved when you let go.",
+    "description": "Help above the Move tool's controls, when working on the character in the game world."
+  },
+  "Parts.Move.Part.Fmt": {
+    "message": "Moving part {0}",
+    "description": "{0} is the part's label, such as 1.2 or 1.2b."
+  },
+  "Parts.Move.NoPart": {
+    "message": "Click a part to choose what to move.",
+    "description": "Shown when the Move tool has no part chosen."
+  },
+  "Parts.Move.ListTip": {
+    "message": "Choose the part to move here, or click it on the model or on your character.",
+    "description": "Above the part list under the Move tool."
+  },
+  "Parts.Move.Adjacent": {
+    "message": "Move adjacent parts",
+    "description": "Checkbox label."
+  },
+  "Parts.Move.Adjacent.Tip": {
+    "message": "Cloth near the part follows it, joined to it or not, less the further away it is.\nOff, only the part moves. Points it shares exactly with a neighbour still move, so the seam stays closed.",
+    "description": "Tooltip for the checkbox."
+  },
+  "Parts.Move.Falloff": {
+    "message": "Falloff",
+    "description": "Slider label: how far the joined cloth follows a moved part."
+  },
+  "Parts.Move.Falloff.Tip": {
+    "message": "How far from the part nearby cloth still follows it.",
+    "description": "Tooltip for the slider."
+  },
+  "Parts.Move.BonesNote": {
+    "message": "A moved part still follows the bones it was made for, so a part moved far from them can bend oddly in poses.",
+    "description": "Note under the Move tool's controls."
+  },
+  "Parts.Move.SkinTip": {
+    "message": "Skin can't be moved.",
+    "description": "Tooltip on a skin part in the list under the Move tool."
+  },
+  "Parts.Move.LockedTip": {
+    "message": "This part is locked. Unlock it under a brush to move it.",
+    "description": "Tooltip on a locked part in the list under the Move tool."
+  },
+  "Parts.Move.NothingFree": {
+    "message": "Nothing in this part can move: it is skin or locked.",
+    "description": "Status line when a move finds nothing it may move."
+  },
+  "Parts.Move.Moved.Fmt": {
+    "message": "Furthest moved: {0:F1} mm.",
+    "description": "{0} is the furthest any point has moved, in millimetres."
+  },
+  "Parts.Move.Undo": {
+    "message": "Undo move",
+    "description": "Button: take back the last move."
+  },
   "Parts.Brush.WindAmount": {
     "message": "Amount",
     "description": "Slider label: how much wind the brush paints."

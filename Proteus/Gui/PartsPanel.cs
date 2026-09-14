@@ -120,9 +120,27 @@ public sealed class PartsPanel
 
         /// <summary>Paint how much the wind sways the garment — the red of its second vertex colour.</summary>
         Wind,
+
+        /// <summary>Pick one part and drag it through space with a gizmo, the way Blender and 3ds Max move a selection.</summary>
+        Move,
     }
 
     private Tool tool = Tool.Navigate;
+
+    /// <summary>The handle the Move tool drags, shared by the model view and the character.</summary>
+    private readonly TranslateGizmo moveGizmo = new();
+
+    /// <summary>The part the Move tool has chosen, by label; null for none. Cleared with the model or the tool.</summary>
+    private string? movePart;
+
+    /// <summary>
+    /// Move carries the cloth joined to the part along, fading out over <see cref="moveFalloffMm"/> — on by default,
+    /// because a sleeve moved without the shoulder it is sewn to stretches one row of triangles into a sliver.
+    /// </summary>
+    private bool moveAdjacent = true;
+
+    /// <summary>How far along the surface the joined cloth follows a move, in millimetres.</summary>
+    private float moveFalloffMm = 50f;
 
     /// <summary>
     /// The editable geometry of the model on screen, or null before one is picked. Rebuilt only when the
@@ -228,6 +246,9 @@ public sealed class PartsPanel
         lockClickedFn = LockClickedOnCharacter;
         tickClickedFn = TickClickedOnCharacter;
         partTickedFn = PartTicked;
+        moveClickedFn = MoveClickedOnCharacter;
+        moveTickedFn = MoveTicked;
+        gizmoCaptureFn = () => moveGizmo.Capturing;
         this.textureLoader = textureLoader;
         this.log = log;
     }
@@ -342,7 +363,9 @@ public sealed class PartsPanel
 
                 DrawToolPicker();
                 ImGui.Separator();
-                if (tool == Tool.Navigate) DrawStaging(); else DrawBrush();
+                if (tool == Tool.Navigate) DrawStaging();
+                else if (tool == Tool.Move) DrawMove();
+                else DrawBrush();
 
                 // Window-local, so it already counts any scroll; plus the panel's bottom padding and border.
                 sidePanelContent = ImGui.GetCursorPosY() + ImGui.GetStyle().WindowPadding.Y + 2f;
@@ -364,14 +387,20 @@ public sealed class PartsPanel
             // Under Toggle Parts too, where nothing paints: a click on the open garment ticks the part under it, as a
             // click on the model view does — and a click on any other worn garment still opens that one.
             bool pickParts = tool == Tool.Navigate;
+            bool moving = tool == Tool.Move;
             if (volume != null && brushBase != null && ModRoot() is { } root)
                 liveBrush.ArmBrush(Path.Combine(root, models[modelIndex].File.Replace('/', Path.DirectorySeparatorChar)),
                                    brushBase, volume, ActiveRadiusMm / 1000f, showWind: tool == Tool.Wind,
                                    mirror: mirrorBrush, partOf: partOfVertexFn,
-                                   lockClicked: pickParts ? tickClickedFn : lockClickedFn,
-                                   pickParts: pickParts, partTicked: partTickedFn, tickedVersion: TickedVersion());
+                                   lockClicked: moving ? moveClickedFn : pickParts ? tickClickedFn : lockClickedFn,
+                                   pickParts: pickParts,
+                                   partTicked: moving ? moveTickedFn : partTickedFn,
+                                   tickedVersion: moving ? MoveVersion() : TickedVersion(),
+                                   moveGizmo: moving ? moveGizmo : null,
+                                   movePivot: moving ? MovePivot() : null);
         }
 
+        PumpMove();
         PumpBrush();
         TickLivePreview();
     }
@@ -391,7 +420,7 @@ public sealed class PartsPanel
         // so the redraw loads the saved file and not the last preview that did not land.
         if (preview.UnsupportedFor(customizePart))
         {
-            if (Surface.Painting) return;
+            if (Editing) return;
             previewDirty = false;
             if (preview.Active) preview.End(redraw: true);
             else compositor.RedrawForChangedModel();
@@ -399,7 +428,7 @@ public sealed class PartsPanel
         }
 
         long now = Environment.TickCount64;
-        if (Surface.Painting && now - lastPreviewAt < PreviewIntervalMs) return;
+        if (Editing && now - lastPreviewAt < PreviewIntervalMs) return;
 
         byte[] bytes;
         try { bytes = MeshVolumeService.Inflate(brushBase, volume).Model; }
@@ -425,6 +454,9 @@ public sealed class PartsPanel
         }
     }
 
+    /// <summary>A brush stroke or a move drag is under way — the edit is still changing under the user's hand.</summary>
+    private bool Editing => Surface.Painting || volume is { Moving: true };
+
     /// <summary>The model being edited is hair, face, ears or tail rather than gear — reloaded a different way.</summary>
     private bool TargetIsCustomizePart
         => modelIndex >= 0 && modelIndex < models.Count && LiveBrushPreview.IsCustomizePart(models[modelIndex].GamePath);
@@ -445,6 +477,7 @@ public sealed class PartsPanel
     /// <param name="refreshGame">False on teardown, when nothing should be poked beyond landing the file.</param>
     public void Leave(bool refreshGame = true)
     {
+        FinishMove();   // a drag cut off by leaving still counts, and still undoes
         FlushPending(refreshGame);
         EndLivePreview(refreshGame);
         autoPicked = false;   // the next visit may find different gear on
@@ -572,7 +605,7 @@ public sealed class PartsPanel
     private void HandleUndoShortcut()
     {
         bool pressed = undoKey.Poll();   // every frame — see HeldKey
-        if (!pressed || tool == Tool.Navigate || volume is not { CanUndo: true } vol || Surface.Painting) return;
+        if (!pressed || tool == Tool.Navigate || volume is not { CanUndo: true } vol || Editing) return;
         var io = ImGui.GetIO();
         if (!io.KeyCtrl || !ShortcutsHaveTheKeyboard()) return;
 
@@ -610,7 +643,7 @@ public sealed class PartsPanel
     {
         bool grow = growKey.Poll(), shrink = shrinkKey.Poll();   // every frame — see HeldKey
         if (!grow && !shrink) return;
-        if (tool == Tool.Navigate || volume == null) return;
+        if (tool is Tool.Navigate or Tool.Move || volume == null) return;
         var io = ImGui.GetIO();
         if (io.KeyCtrl || !ShortcutsHaveTheKeyboard()) return;
 
@@ -745,9 +778,12 @@ public sealed class PartsPanel
 
     private void SelectMod(string dir)
     {
+        FinishMove();
         FlushPending();   // before modDir changes, which the save needs to find the file
         EndLivePreview(refreshGame: true);
         brushChangedAt = -1;
+        movePart = null;
+        moveGizmo.Release();
         modDir = dir;
         modelIndex = -1;
         parts = null;
@@ -868,10 +904,13 @@ public sealed class PartsPanel
         // A pending edit belongs to the model being replaced. If its save fails it cannot follow onto the next
         // one — its bytes and its undo history go with the old model — so the waiting flag is dropped either
         // way; the failure is already on the status line.
+        FinishMove();
         FlushPending();
         EndLivePreview(refreshGame: true);
         brushChangedAt = -1;
         brushBase = null;
+        movePart = null;
+        moveGizmo.Release();
         // A new solve starts from the file as it is now, so the other sizes must too. Replaced, not cleared — see sizeBases.
         sizeBases = new ConcurrentDictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
         modelIndex = index;
@@ -1037,6 +1076,161 @@ public sealed class PartsPanel
         return h;
     }
 
+    // ── move ────────────────────────────────────────────────────────────────
+
+    private readonly Action<int> moveClickedFn;
+    private readonly Func<int, bool> moveTickedFn;
+    private readonly Func<bool> gizmoCaptureFn;
+
+    /// <summary>The part the Move tool has chosen, or null.</summary>
+    private ModelPart? MovePart()
+        => movePart == null ? null : parts?.Parts.FirstOrDefault(p => p.Label == movePart);
+
+    /// <summary>Choose the part to move, from the model, the list or the character. Skin and locked parts cannot be.</summary>
+    private void SelectMovePart(string label)
+    {
+        if (volume is { Moving: true }) return;
+        if (parts?.Parts.FirstOrDefault(p => p.Label == label) is not { } part || IsSkin(part) || IsLocked(part)) return;
+        movePart = label;
+        viewport.Recolour();
+    }
+
+    private void MoveClickedOnCharacter(int vertex)
+    {
+        if (parts == null || vertex < 0 || vertex >= partOfVertex.Length || partOfVertex[vertex] < 0) return;
+        SelectMovePart(parts.Parts[partOfVertex[vertex]].Label);
+    }
+
+    /// <summary>Whether part <paramref name="index"/> is the one being moved — itself, or an island of it.</summary>
+    private bool MoveTicked(int index)
+    {
+        if (parts == null || movePart == null || index < 0 || index >= parts.Parts.Count) return false;
+        var part = parts.Parts[index];
+        return part.Label == movePart || (ParentOf(part) is { } parent && parent.Label == movePart);
+    }
+
+    /// <summary>The live tint's cache key for the chosen part — salted, so it never matches a ticked set's.</summary>
+    private int MoveVersion() => StringComparer.Ordinal.GetHashCode(movePart ?? "") ^ 0x5BD1E995;
+
+    private IReadOnlySet<string> MoveSelection()
+    {
+        moveSelectionSet.Clear();
+        if (movePart != null) moveSelectionSet.Add(movePart);
+        return moveSelectionSet;
+    }
+
+    private readonly HashSet<string> moveSelectionSet = new(StringComparer.Ordinal);
+
+    /// <summary>The middle of the chosen part's bounds as it now stands — where the gizmo sits. Null with no part.</summary>
+    private Vector3? MovePivot()
+    {
+        if (volume == null || MovePart() is not { } part || part.Triangles.Length == 0) return null;
+        var p = volume.Positions();
+        var min = new Vector3(float.MaxValue);
+        var max = new Vector3(float.MinValue);
+        foreach (int v in part.Triangles)
+        {
+            if (v < 0 || v * 3 + 2 >= p.Length) continue;
+            var at = new Vector3(p[v * 3], p[v * 3 + 1], p[v * 3 + 2]);
+            min = Vector3.Min(min, at);
+            max = Vector3.Max(max, at);
+        }
+        return min.X <= max.X ? (min + max) * 0.5f : null;
+    }
+
+    /// <summary>
+    /// Turn the gizmo's drag into a move of the chosen part — the Move tool's <see cref="PumpBrush"/>. The gizmo was
+    /// driven earlier this frame by whichever surface shows it: the model view as it drew, the character before any
+    /// window did.
+    /// </summary>
+    private void PumpMove()
+    {
+        if (volume == null || tool != Tool.Move || moveGizmo.Frame != ImGui.GetFrameCount()) return;
+
+        if (moveGizmo.Started && MovePart() is { } part)
+        {
+            if (volume.BeginMove(part.Triangles, moveAdjacent, moveFalloffMm / 1000f) == 0)
+            {
+                status = Strings.Parts.MoveNothingFree;
+                statusIsError = true;
+            }
+        }
+
+        if (!volume.Moving) return;
+
+        volume.MoveTo(moveGizmo.Offset);
+        viewport.PositionOverride = volume.Positions();
+        viewport.GeometryChanged();
+        previewDirty = !showModelView;
+
+        if (moveGizmo.Ended) FinishMove();
+    }
+
+    /// <summary>End a move drag if one is under way: record it, and save — at once on the character, which shows
+    /// nothing until saved, or on the viewer's usual debounce.</summary>
+    private void FinishMove()
+    {
+        if (volume is not { Moving: true }) return;
+        volume.EndMove();
+        viewport.PositionOverride = volume.Positions();
+        viewport.GeometryChanged();
+        brushChangedAt = Environment.TickCount64;
+        if (!showModelView) SaveBrush();
+    }
+
+    private void DrawMove()
+    {
+        var ps = Strings.Parts;
+
+        ImGui.Spacing();
+        ImGui.PushTextWrapPos(0);
+        if (showModelView) ImGui.TextDisabled(ps.MoveHelp);
+        else if (liveBrush.Problem is { } problem) ImGui.TextColored(ProteusStyle.Warn, problem);
+        else ImGui.TextDisabled(ps.MoveLiveHint);
+        ImGui.PopTextWrapPos();
+        ImGui.Spacing();
+
+        if (MovePart() is { } part)
+        {
+            ImGui.TextUnformatted(string.Format(ps.MovePartFmt, part.Label));
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextDisabled(Path.GetFileName(part.Material.TrimStart('/')));
+            ImGui.PopTextWrapPos();
+        }
+        else
+        {
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextColored(ProteusStyle.Warn, ps.MoveNoPart);
+            ImGui.PopTextWrapPos();
+        }
+
+        ImGui.Spacing();
+        ImGui.Checkbox(ps.MoveAdjacent, ref moveAdjacent);
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.MoveAdjacentTip);
+
+        using (ImRaii.Disabled(!moveAdjacent))
+        {
+            ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X * 0.55f);
+            ImGui.SliderFloat(ps.MoveFalloff, ref moveFalloffMm, MinBrushMm, MaxBrushMm,
+                              moveFalloffMm < 10f ? "%.1f mm" : "%.0f mm", ImGuiSliderFlags.Logarithmic);
+        }
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(ps.MoveFalloffTip);
+
+        ImGui.Spacing();
+        ImGui.PushTextWrapPos(0);
+        ImGui.TextDisabled(ps.MoveBonesNote);
+        ImGui.PopTextWrapPos();
+
+        if (parts != null && Locks.Count > 0)
+        {
+            ImGui.TextDisabled(string.Format(ps.BrushLockCountFmt, Locks.Count));
+            ImGui.SameLine();
+            if (ImGui.SmallButton(ps.BrushUnlockAll)) UnlockAll();
+        }
+
+        DrawEditActions();
+    }
+
     private string ViewportKey => modDir + "|" + (modelIndex >= 0 ? models[modelIndex].File : "");
 
     private string? ModRoot()
@@ -1062,14 +1256,18 @@ public sealed class PartsPanel
         var model = parts!;
 
         viewport.Show(ViewportKey, model);
-        viewport.Selected = ticked;
+        viewport.Selected = tool == Tool.Move ? MoveSelection() : ticked;
 
         // Told every frame rather than on change: the mode also resets when a model is picked, and one place
         // that always states the truth is cheaper to reason about than several that update it.
-        viewport.Mode = tool == Tool.Navigate
-            ? PartViewport.ViewportMode.Navigate
-            : PartViewport.ViewportMode.Brush;
-        viewport.BrushRadius = tool == Tool.Navigate ? 0f : ActiveRadiusMm / 1000f;
+        viewport.Mode = tool switch
+        {
+            Tool.Navigate => PartViewport.ViewportMode.Navigate,
+            Tool.Move     => PartViewport.ViewportMode.Move,
+            _             => PartViewport.ViewportMode.Brush,
+        };
+        viewport.GizmoCapture = gizmoCaptureFn;
+        viewport.BrushRadius = tool is Tool.Navigate or Tool.Move ? 0f : ActiveRadiusMm / 1000f;
         viewport.VertexScalar = tool == Tool.Wind ? windAt : null;
         viewport.MirrorBrush = mirrorBrush;
 
@@ -1082,19 +1280,29 @@ public sealed class PartsPanel
         // reads fine because SameLine tops them out together.
         // Under a brush the part list stays beside the model too: there its boxes lock parts against the brush, and
         // a click on the model — which paints — only reaches a part with Shift held (a Shift-drag still pans).
-        bool brushing = tool != Tool.Navigate;
+        bool brushing = tool is not (Tool.Navigate or Tool.Move);
         float width = MathF.Min(height * PartViewport.DefaultAspect, ImGui.GetContentRegionAvail().X * 0.55f);
         if (viewport.Draw(model, new Vector2(width, height)) is { } clicked)
         {
-            if (brushing) ToggleLock(clicked);
+            if (tool == Tool.Move) SelectMovePart(clicked);
+            else if (brushing) ToggleLock(clicked);
             else Toggle(clicked);
+        }
+
+        // Right after the image, so the gizmo is drawn over it, in the same window's draw list.
+        if (tool == Tool.Move && MovePivot() is { } pivot)
+        {
+            moveGizmo.Update(pivot, viewport.ModelToScreen, viewport.ScreenRay, ImGui.GetMousePos(),
+                             mouseAllowed: viewport.PointerOverModel, pressed: viewport.Pressed, down: viewport.Held,
+                             background: false);
+            if (moveGizmo.Capturing) ImGui.SetMouseCursor(ImGuiMouseCursor.ResizeAll);
         }
 
         // Two different things to say, and only one of them is an apology. A part the author already
         // switches takes the click normally — the tooltip is there to explain that the new switch will
         // stack rather than replace. A part with an unreadable tag is the one the model still lights up,
         // hand-cursors and then quietly absorbs, so without this it says nothing at all.
-        if (!brushing && viewport.PointerOverModel && viewport.Hovered is { } hot
+        if (tool == Tool.Navigate && viewport.PointerOverModel && viewport.Hovered is { } hot
             && model.Parts.FirstOrDefault(p => p.Label == hot) is { } hovered)
         {
             if (!hovered.Toggleable)          ImGui.SetTooltip(ps.UnreadableTagTip);
@@ -1130,7 +1338,12 @@ public sealed class PartsPanel
                     ProteusStyle.S(80f));
 
                 ImGui.PushTextWrapPos(wrapAt);
-                ImGui.TextDisabled(tool == Tool.Navigate ? ps.ClickTip : ps.BrushLockListTip);
+                ImGui.TextDisabled(tool switch
+                {
+                    Tool.Navigate => ps.ClickTip,
+                    Tool.Move     => ps.MoveListTip,
+                    _             => ps.BrushLockListTip,
+                });
                 ImGui.PopTextWrapPos();
 
                 foreach (var (label, count) in model.ShatteredSubmeshes)
@@ -1161,7 +1374,9 @@ public sealed class PartsPanel
 
         // Under a brush the same rows lock parts instead: TICKED means the brush moves it, unticking locks it.
         // Everything about a switch — what may take one, what the author already switches — is beside the point.
-        bool brushing = tool != Tool.Navigate;
+        // Under Move each row chooses the part to move, one at a time.
+        bool moving = tool == Tool.Move;
+        bool brushing = tool != Tool.Navigate && !moving;
 
         // Islands per submesh, so a submesh row can say how many it has and whether to draw them.
         var islands = model.Parts.Where(p => p.Island >= 0)
@@ -1175,11 +1390,21 @@ public sealed class PartsPanel
 
             // A locked island always has a row under a brush, as a ticked one does for a switch — otherwise a
             // Shift-click on a strap would lock something the list did not admit existed.
-            bool listed = brushing ? Locks.Contains(part.Label) : ticked.Contains(part.Label);
+            bool listed = moving ? movePart == part.Label
+                        : brushing ? Locks.Contains(part.Label) : ticked.Contains(part.Label);
             if (isIsland && !expanded.Contains(owner) && !listed) continue;
             if (isIsland) ImGui.Indent(ProteusStyle.S(12f));
 
-            if (brushing)
+            if (moving)
+            {
+                bool movable = !IsSkin(part) && !IsLocked(part);
+                using (ImRaii.Disabled(!movable))
+                    if (ImGui.RadioButton($"{part.Label}##mv_{part.Label}", movePart == part.Label))
+                        SelectMovePart(part.Label);
+                if (!movable && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+                    ImGui.SetTooltip(IsSkin(part) ? ps.MoveSkinTip : ps.MoveLockedTip);
+            }
+            else if (brushing)
             {
                 bool skin = IsSkin(part);
                 bool moves = skin || !IsLocked(part);
@@ -1206,7 +1431,7 @@ public sealed class PartsPanel
             // Marked on the row, not left to the tooltip. The stacking changes what ticking this box means
             // — the part will need the author's switch on as well — and that is worth knowing while
             // choosing, not only after hovering the one row you already suspected.
-            if (part.AuthorSwitched && !brushing)
+            if (part.AuthorSwitched && !brushing && !moving)
             {
                 ImGui.SameLine();
                 ImGui.TextDisabled(ps.AuthorSwitchedTag);
@@ -1227,7 +1452,7 @@ public sealed class PartsPanel
 
             if (isIsland) ImGui.Unindent(ProteusStyle.S(12f));
 
-            if (hoveredRow == part.Label && !brushing)
+            if (hoveredRow == part.Label && !brushing && !moving)
             {
                 if (!part.Toggleable)          ImGui.SetTooltip(ps.UnreadableTagTip);
                 else if (part.AuthorSwitched)  ImGui.SetTooltip(ps.StacksWithAuthorTip);
@@ -1267,12 +1492,13 @@ public sealed class PartsPanel
 
         foreach (var (value, icon, label, tip) in new[]
                  {
-                     (Tool.Navigate, FontAwesomeIcon.MousePointer,      ps.ToolNavigate, ps.ToolNavigateTip),
+                     (Tool.Move,     FontAwesomeIcon.ArrowsAlt,         ps.ToolMove,     ps.ToolMoveTip),
                      (Tool.Inflate,  FontAwesomeIcon.ExpandArrowsAlt,   ps.ToolInflate,  ps.ToolInflateTip),
                      (Tool.Deflate,  FontAwesomeIcon.CompressArrowsAlt, ps.ToolDeflate,  ps.ToolDeflateTip),
                      (Tool.Relax,    FontAwesomeIcon.Feather,           ps.ToolRelax,    ps.ToolRelaxTip),
                      (Tool.Bridge,   FontAwesomeIcon.Archway,           ps.ToolBridge,   ps.ToolBridgeTip),
                      (Tool.Wind,     FontAwesomeIcon.Wind,              ps.ToolWind,     ps.ToolWindTip),
+                     (Tool.Navigate, FontAwesomeIcon.MousePointer,      ps.ToolNavigate, ps.ToolNavigateTip),
                  })
         {
             // Stacked, one per row: the panel is a narrow column, and four buttons side by side do not fit it.
@@ -1289,15 +1515,18 @@ public sealed class PartsPanel
             {
                 // Before leaving the brush, so a pending edit cannot land on top of a switch written in the
                 // meantime — a save rewrites the whole model from the bytes the brush was opened on.
+                FinishMove();
                 FlushPending();
                 tool = value;
                 // Staged parts are a Pick-parts thing; the brush hides the list, so a selection carried into it
                 // would sit there invisibly and reappear half-forgotten on the way back.
                 ticked.Clear();
+                movePart = null;
+                moveGizmo.Release();
                 viewport.Recolour();
                 viewport.GeometryChanged();   // the wind wash comes and goes with the wind tool
             }
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip(value == Tool.Navigate ? tip : tip + "\n\n" + ps.BrushLockHint);
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(value is Tool.Navigate or Tool.Move ? tip : tip + "\n\n" + ps.BrushLockHint);
         }
         ImGui.Spacing();
     }
@@ -1311,7 +1540,7 @@ public sealed class PartsPanel
     /// </summary>
     private void PumpBrush()
     {
-        if (volume == null || tool == Tool.Navigate) return;
+        if (volume == null || tool is Tool.Navigate or Tool.Move) return;
         var surface = Surface;
 
         if (surface.Painting && surface.Cursor is { } at)
@@ -1364,7 +1593,7 @@ public sealed class PartsPanel
     /// </summary>
     private void TickAutosave()
     {
-        if (brushChangedAt < 0 || Surface.Painting) return;
+        if (brushChangedAt < 0 || Editing) return;
         if (Environment.TickCount64 - brushChangedAt < AutosaveMs) return;
         SaveBrush();
     }
@@ -1467,12 +1696,22 @@ public sealed class PartsPanel
             if (ImGui.SmallButton(ps.BrushUnlockAll)) UnlockAll();
         }
 
+        DrawEditActions();
+    }
+
+    /// <summary>
+    /// What the brushes and Move share under their own controls: how far the edit has gone, carry to other sizes,
+    /// undo, start over, save and undo saved changes. One edit underneath both, so one set of actions over it.
+    /// </summary>
+    private void DrawEditActions()
+    {
+        var ps = Strings.Parts;
         if (volume is { } vol)
         {
             ImGui.Spacing();
-            ImGui.TextDisabled(vol.Dirty
-                ? string.Format(ps.BrushMovedFmt, vol.Worst * 1000f, vol.MaxDisplacement * 1000f)
-                : ps.BrushUntouched);
+            ImGui.TextDisabled(!vol.Dirty ? ps.BrushUntouched
+                : tool == Tool.Move ? string.Format(ps.MoveMovedFmt, vol.Worst * 1000f)
+                : string.Format(ps.BrushMovedFmt, vol.Worst * 1000f, vol.MaxDisplacement * 1000f));
 
             // Undo and start-over save and redraw AT ONCE rather than on the debounce. The debounce exists to
             // batch a run of strokes into one save; an undo is a single deliberate click whose whole point is
@@ -1491,10 +1730,11 @@ public sealed class PartsPanel
                 if (applying) ImGui.TextDisabled(ps.BrushApplySizesRunning);
             }
 
-            using (ImRaii.Disabled(!vol.CanUndo))
-                if (ImGui.Button(ps.BrushUndo, FullWidth())) { vol.Undo(); AfterBrushEdit(); SaveBrush(); }
+            using (ImRaii.Disabled(!vol.CanUndo || vol.Moving))
+                if (ImGui.Button(tool == Tool.Move ? ps.MoveUndo : ps.BrushUndo, FullWidth()))
+                { vol.Undo(); AfterBrushEdit(); SaveBrush(); }
 
-            using (ImRaii.Disabled(!vol.Dirty))
+            using (ImRaii.Disabled(!vol.Dirty || vol.Moving))
                 if (ImGui.Button(ps.BrushReset, FullWidth())) { vol.Reset(); AfterBrushEdit(); SaveBrush(); }
 
             // Saving happens on its own: a moment after the last change in the viewer, and the moment a stroke is let

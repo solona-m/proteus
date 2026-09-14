@@ -2159,6 +2159,74 @@
     "message": "この装備を風が揺らす場所を塗ります。赤の濃さが揺れの強さです。\nモデルの2番目の頂点カラーに書き込まれます。",
     "description": ""
   },
+  "Parts.Tool.Move": {
+    "message": "移動",
+    "description": ""
+  },
+  "Parts.Tool.Move.Tip": {
+    "message": "パーツを選び、矢印をドラッグします。矢印はその軸に沿って、\n四角はその平面上で動かします。",
+    "description": ""
+  },
+  "Parts.Move.Help": {
+    "message": "パーツをクリックして選び、矢印か四角をドラッグします。それ以外の場所をドラッグするとモデルが回転し、Shift+ドラッグで視点を移動、スクロールでズームします。",
+    "description": ""
+  },
+  "Parts.Move.LiveHint": {
+    "message": "キャラクターのパーツをクリックし、矢印か四角をドラッグします。Altを押している間はカメラを動かせます。移動は離したときに保存されます。",
+    "description": ""
+  },
+  "Parts.Move.Part.Fmt": {
+    "message": "移動中のパーツ：{0}",
+    "description": ""
+  },
+  "Parts.Move.NoPart": {
+    "message": "移動するパーツをクリックして選んでください。",
+    "description": ""
+  },
+  "Parts.Move.ListTip": {
+    "message": "ここで移動するパーツを選ぶか、モデルかキャラクター上でクリックしてください。",
+    "description": ""
+  },
+  "Parts.Move.Adjacent": {
+    "message": "隣接パーツも移動",
+    "description": ""
+  },
+  "Parts.Move.Adjacent.Tip": {
+    "message": "パーツの近くにある布は、つながっていてもいなくても、離れるほど少なくなりながら一緒に動きます。\nオフにするとパーツだけが動きます。隣と完全に共有している点は動くので、縫い目は開きません。",
+    "description": ""
+  },
+  "Parts.Move.Falloff": {
+    "message": "減衰距離",
+    "description": ""
+  },
+  "Parts.Move.Falloff.Tip": {
+    "message": "パーツからどこまで離れた布がついてくるか。",
+    "description": ""
+  },
+  "Parts.Move.BonesNote": {
+    "message": "移動したパーツは元のボーンに従うため、ボーンから大きく離すとポーズによって不自然に曲がることがあります。",
+    "description": ""
+  },
+  "Parts.Move.SkinTip": {
+    "message": "肌は移動できません。",
+    "description": ""
+  },
+  "Parts.Move.LockedTip": {
+    "message": "このパーツはロックされています。ブラシでロックを解除すると移動できます。",
+    "description": ""
+  },
+  "Parts.Move.NothingFree": {
+    "message": "このパーツには動かせる部分がありません（肌かロック済み）。",
+    "description": ""
+  },
+  "Parts.Move.Moved.Fmt": {
+    "message": "最大移動量：{0:F1} mm",
+    "description": ""
+  },
+  "Parts.Move.Undo": {
+    "message": "移動を元に戻す",
+    "description": ""
+  },
   "Parts.Brush.WindAmount": {
     "message": "量",
     "description": ""

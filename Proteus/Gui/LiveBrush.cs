@@ -104,11 +104,18 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     /// <param name="partTicked">With <paramref name="pickParts"/>: whether a part (by <paramref name="partOf"/>'s id) is
     /// ticked, for the tint over the ticked parts.</param>
     /// <param name="tickedVersion">Changes whenever the ticked set does, so the tint is rebuilt only then.</param>
+    /// <param name="moveGizmo">The Move tool: nothing paints. The part <paramref name="partTicked"/> names is tinted, a
+    /// click on the garment goes to <paramref name="lockClicked"/> to choose the part, and this gizmo is drawn at
+    /// <paramref name="movePivot"/> on the posed character and driven by the mouse. Null for every other tool.</param>
+    /// <param name="movePivot">The gizmo's centre in the model's space; null when no part is chosen yet.</param>
     internal void ArmBrush(string modelFile, byte[] modelBytes, MeshVolumeSolve solve, float brushRadius,
                            bool showWind = false, bool mirror = false, Func<int, int>? partOf = null,
                            Action<int>? lockClicked = null, bool pickParts = false,
-                           Func<int, bool>? partTicked = null, int tickedVersion = 0)
+                           Func<int, bool>? partTicked = null, int tickedVersion = 0,
+                           TranslateGizmo? moveGizmo = null, Vector3? movePivot = null)
     {
+        this.moveGizmo = moveGizmo;
+        this.movePivot = movePivot;
         brushArmedFrame = ImGui.GetFrameCount();
         targetKey = BodyShapeReader.PathKey(modelFile);
         targetBytes = modelBytes;
@@ -126,6 +133,17 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     private bool mirror;
     private Func<int, int>? partOf;
     private Action<int>? lockClicked;
+
+    // ── the Move tool ──
+    private TranslateGizmo? moveGizmo;
+    private Vector3? movePivot;
+
+    /// <summary>
+    /// The pose the gizmo is carried into the world by: the skinning of the chosen part's vertex nearest the pivot.
+    /// Re-read every frame between drags so the gizmo follows the character, and HELD for a drag, so an idle sway
+    /// does not shift the handle under the mouse while it is being dragged.
+    /// </summary>
+    private Matrix4x4 moveSkin = Matrix4x4.Identity, moveUnskin = Matrix4x4.Identity;
 
     // ── Toggle Parts on the character ──
     private bool pickParts;
@@ -195,6 +213,8 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
             Painting = false;
             Cursor = null;
             Problem = null;
+            moveGizmo?.Release();
+            moveGizmo = null;
         }
         if (!brushArmed && !pickArmed) return;
 
@@ -230,6 +250,12 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
         FillEdited(m);
         if (!pbdTried) { pbdTried = true; pbd = LiveCharacter.LoadPbd(penumbra, data, log); }
         poser.Pose(m, pose, pbd, world, 0, edited);
+
+        if (moveGizmo != null)
+        {
+            UpdateMove(projection, m, moveGizmo);
+            return;
+        }
 
         // The washes first, so the ring lies on top of them, and whether or not the mouse is over the garment.
         if (pickParts) DrawTickedWash(projection, m);
@@ -293,9 +319,97 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     /// <summary>A stroke cannot continue on a garment that is no longer there to paint on.</summary>
     private void EndIfPainting()
     {
+        if (moveGizmo is { Active: not TranslateGizmo.Handle.None }) moveGizmo.Release();
         if (!Painting) return;
         Painting = false;
         StrokeEnded = true;
+    }
+
+    /// <summary>
+    /// The Move tool on the character: the chosen part tinted, the gizmo at its pivot, and a click elsewhere on the
+    /// garment choosing another part.
+    /// <para/>
+    /// The gizmo works in the model's own space, the way the solve does, and is carried into the world through ONE
+    /// vertex's skinning — the chosen part's vertex nearest the pivot. A part is skinned by more than one bone, so
+    /// that is exact only at that vertex; it is also exactly what the eye reads the handle against, and every axis
+    /// the gizmo shows is the model's axis as the pose has turned it there, so dragging along an arrow moves the part
+    /// along that arrow on screen.
+    /// </summary>
+    private void UpdateMove(ScreenProjection projection, SkinnedMesh m, TranslateGizmo gizmo)
+    {
+        DrawTickedWash(projection, m);
+        DrawLockedWash(projection, m);
+
+        var io = ImGui.GetIO();
+        var hit = MouseHit(projection, world, m.Triangles, skinTriangle, out bool overUi);
+        var origin = ImGui.GetMainViewport().Pos;
+
+        if (movePivot is { } pivot)
+        {
+            if (gizmo.Active == TranslateGizmo.Handle.None && AnchorVertex(m, pivot) is var anchor and >= 0)
+            {
+                var skin = poser.SkinAt(m, anchor, pose.Root);
+                if (Matrix4x4.Invert(skin, out var unskin)) { moveSkin = skin; moveUnskin = unskin; }
+            }
+
+            var toWorld = moveSkin;
+            var toModel = moveUnskin;
+            gizmo.Update(
+                pivot,
+                p => projection.WorldToScreen(Vector3.Transform(p, toWorld), out var s) ? s + origin : null,
+                s => ScreenProjection.TryScreenRay(s - origin, out var o, out var d)
+                    ? (Vector3.Transform(o, toModel), Vector3.TransformNormal(d, toModel))
+                    : null,
+                io.MousePos, mouseAllowed: !overUi && !io.KeyAlt,
+                pressed: ImGui.IsMouseClicked(ImGuiMouseButton.Left), down: ImGui.IsMouseDown(ImGuiMouseButton.Left),
+                background: true);
+        }
+
+        if (gizmo.Capturing)
+        {
+            ImGui.SetNextFrameWantCaptureMouse(true);
+            Hovering = true;
+            return;
+        }
+
+        if (hit is not { } h || overUi || io.KeyAlt) return;
+        Hovering = true;
+        ImGui.SetNextFrameWantCaptureMouse(true);
+        DrawHotPart(projection, m, h.Triangle);
+        if (ImGui.IsMouseClicked(ImGuiMouseButton.Left)) lockClicked?.Invoke(m.BaseTriangles[h.Triangle * 3]);
+    }
+
+    // The anchor found for this pivot, selection and mesh — a scan of every vertex, so not repeated per frame.
+    private int anchorVertex = -1;
+    private Vector3 anchorPivot;
+    private int anchorVersion = int.MinValue;
+    private SkinnedMesh? anchorMesh;
+
+    /// <summary>The chosen part's unshaped vertex nearest <paramref name="pivot"/>; -1 when the part has none here.</summary>
+    private int AnchorVertex(SkinnedMesh m, Vector3 pivot)
+    {
+        if (anchorPivot == pivot && anchorVersion == tickedVersion && ReferenceEquals(anchorMesh, m)) return anchorVertex;
+        anchorPivot = pivot;
+        anchorVersion = tickedVersion;
+        anchorMesh = m;
+        anchorVertex = FindAnchor(m, pivot);
+        return anchorVertex;
+    }
+
+    private int FindAnchor(SkinnedMesh m, Vector3 pivot)
+    {
+        if (partOf == null || partTicked == null) return -1;
+        int best = -1;
+        float bestD = float.MaxValue;
+        for (int v = 0; v < m.VertexCount; v++)
+        {
+            if (spareBase[v] >= 0) continue;
+            int part = partOf(v);
+            if (part < 0 || !partTicked(part)) continue;
+            float d = Vector3.DistanceSquared(edited[v], pivot);
+            if (d < bestD) { bestD = d; best = v; }
+        }
+        return best;
     }
 
     /// <summary>Find the edited model on the character and (re)build its posing data when it changes.</summary>
