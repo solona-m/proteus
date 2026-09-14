@@ -43,11 +43,11 @@
          into the description text. -->
     <Name>Proteus</Name>
     <Author>Solona</Author>
-    <Punchline>Overlay compositor and second-skin renderer for Penumbra mods</Punchline>
-    <Description>• Lets you use overlays — skin-tight gear, tattoos, scales and the like — as a regular Penumbra mod you can toggle on and off, bind to designs and collections, and more.&#xA;&#xA;• Overlays render two ways. Painted into your skin, except now your overlays are dyeable. Or as a second skin, which lets you use sphere maps, metalness and animated glow that skin materials can't do.&#xA;&#xA;• Cloth overlays can enable skindenting with one click.&#xA;&#xA;• Supports Penumbra .pmp and Onion .omp packs.&#xA;&#xA;• Imports Atramentum Luminis glow tattoos (.ttmp2). Their glow becomes a Proteus overlay you can recolour and dim, with no shader mod needed.&#xA;&#xA;• Import regular old mods and equip them without using a gear slot.&#xA;&#xA;• Add toggles to any mod.&#xA;&#xA;Automatically make all hairs hat-compatible.&#xA;&#xA;Type /proteus to manage your Proteus mods.</Description>
+    <Punchline>Overlays, off-slot gear and model editing for Penumbra mods</Punchline>
+    <Description>• Lets you use overlays — skin-tight gear, tattoos, scales and the like — as a regular Penumbra mod you can toggle on and off, recolour, bind to Glamourer designs and collections, and more.&#xA;&#xA;• Overlays render two ways. Painted into your skin, except now your overlays are dyeable. Or as a second skin, which lets you use sphere maps, metalness and animated glow that skin materials can't do.&#xA;&#xA;• Reshape any mod's models. Paint on your character to pull clothing clear of your body, push it in, smooth it, stretch it across a hollow, or paint where the wind sways it. Hair works too. Edits save into the mod and can be undone.&#xA;&#xA;• Add on/off switches to any part of any mod.&#xA;&#xA;• Make modded hair fit under hats, and undo it any time.&#xA;&#xA;• Import regular old mods and equip them without using a gear slot.&#xA;&#xA;• Save a mod's look as a preset you can wear, share and swap.&#xA;&#xA;• Imports Penumbra .pmp, Onion .omp and Atramentum Luminis .ttmp2 glow tattoos, with no shader mod needed.&#xA;&#xA;• Cloth overlays can enable skindenting with one click.&#xA;&#xA;Type /proteus to manage your Proteus mods.</Description>
     <ApplicableVersion>any</ApplicableVersion>
     <DalamudApiLevel>15</DalamudApiLevel>
-    <Tags>texture;overlay;compositor;penumbra;glamourer;skin;gear;glamour;color;mod</Tags>
+    <Tags>texture;overlay;compositor;penumbra;glamourer;skin;gear;glamour;color;mod;model;hair;hat</Tags>
     <CategoryTags>utility</CategoryTags>
     <!-- The icon shown in /xlplugins. Dalamud only reads the on-disk images\icon.png for DEV
          plugins; for anyone who installed from the plugin repo it fetches this URL instead, so

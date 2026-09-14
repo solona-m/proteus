@@ -3,12 +3,16 @@
     "message": "Liez le tout à un design",
     "description": ""
   },
+  "Band.Cap.Link.Tip": {
+    "message": "En savoir plus dans le guide",
+    "description": ""
+  },
   "Band.Cap.Overlay": {
     "message": "Superposez et recolorez tout",
     "description": ""
   },
-  "Band.Cap.Toggle": {
-    "message": "Désactivez n’importe quoi",
+  "Band.Cap.Reshape": {
+    "message": "Remodelez n’importe quel modèle",
     "description": ""
   },
   "Band.Cap.Wear": {
@@ -16,7 +20,7 @@
     "description": ""
   },
   "Band.Caption": {
-    "message": "superposer · accessoiriser · activer · lier",
+    "message": "superposer · accessoiriser · remodeler · lier",
     "description": ""
   },
   "Band.Pill.Disabled": {

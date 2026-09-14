@@ -3,20 +3,24 @@
     "message": "Bind it all to a design",
     "description": "Glamourer design bindings. Capability label in the header band, shown beside an icon. All four of these labels are hidden together the moment they stop fitting the window width, so a short translation is what keeps them on screen."
   },
+  "Band.Cap.Link.Tip": {
+    "message": "Read about this in the guide",
+    "description": "Tooltip on each capability label in the header band. Clicking the label opens the README, in the reader's language, at the section about that capability."
+  },
   "Band.Cap.Overlay": {
     "message": "Overlay & recolour anything",
     "description": "Compositing overlays and editing their colours. Capability label in the header band, shown beside an icon. All four of these labels are hidden together the moment they stop fitting the window width, so a short translation is what keeps them on screen."
   },
-  "Band.Cap.Toggle": {
-    "message": "Toggle anything off",
-    "description": "Adding on/off switches to any mod's geometry. Capability label in the header band, shown beside an icon. All four of these labels are hidden together the moment they stop fitting the window width, so a short translation is what keeps them on screen."
+  "Band.Cap.Reshape": {
+    "message": "Reshape any model",
+    "description": "Editing any mod's models in the Studio tab: part switches, brushes that reshape clothing, and fitting hair under hats. Capability label in the header band, shown beside an icon. All four of these labels are hidden together the moment they stop fitting the window width, so a short translation is what keeps them on screen."
   },
   "Band.Cap.Wear": {
     "message": "Wear anything, no slot",
     "description": "Wearing part of a mod without spending a gear slot. Capability label in the header band, shown beside an icon. All four of these labels are hidden together the moment they stop fitting the window width, so a short translation is what keeps them on screen."
   },
   "Band.Caption": {
-    "message": "overlay · accessorize · toggle · bind",
+    "message": "overlay · accessorize · reshape · bind",
     "description": "Fallback text in the header band, shown only when the capability labels have been hidden for width and nothing is hovered. Very tight space - it is ellipsised if it does not fit."
   },
   "Band.Pill.Disabled": {

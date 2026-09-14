@@ -3,12 +3,16 @@
     "message": "绑定到设计",
     "description": ""
   },
+  "Band.Cap.Link.Tip": {
+    "message": "在指南中了解详情",
+    "description": ""
+  },
   "Band.Cap.Overlay": {
     "message": "叠加与改色",
     "description": ""
   },
-  "Band.Cap.Toggle": {
-    "message": "任意部件开关",
+  "Band.Cap.Reshape": {
+    "message": "任意模型塑形",
     "description": ""
   },
   "Band.Cap.Wear": {
@@ -16,7 +20,7 @@
     "description": ""
   },
   "Band.Caption": {
-    "message": "叠加 · 配饰 · 开关 · 绑定",
+    "message": "叠加 · 配饰 · 塑形 · 绑定",
     "description": ""
   },
   "Band.Pill.Disabled": {

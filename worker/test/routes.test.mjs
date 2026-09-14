@@ -9,6 +9,7 @@
  * Run with `npm test` from worker/. No network, no wrangler, no account needed.
  */
 import worker, { pickLanguage } from '../src/index.js';
+import { renderMarkdown } from '../src/render.js';
 
 let fetched = [];
 let fetchOpts = [];
@@ -605,6 +606,28 @@ console.log('caching:');
     { headers: { Range: 'bytes=0-1' } }), {}, ctx);
   if (fetched.length === 0) { pass++; console.log('  ok   ranged request reuses the cached object'); }
   else { fail++; console.log(`  FAIL ranged request re-fetched origin: ${fetched[0]}`); }
+}
+
+// Heading ids. The plugin's header band links into README sections by these ids, in every language, so
+// they must be exactly what GitHub generates — and marked, left alone, generates none.
+console.log('heading ids:');
+{
+  const html = renderMarkdown(
+    '# Proteus\n\n#### Color Editor\n\n##### Part switches\n\n#### スタジオ\n\n##### Éditeur de couleurs\n\n' +
+    '#### 색상 편집기\n\n### Rows\n\n### Rows\n\n#### `Proteus/x` & **bold**\n');
+  for (const [label, needle] of [
+    ['plain', '<h4 id="color-editor">'],
+    ['spaces to hyphens', '<h5 id="part-switches">'],
+    ['CJK kept', '<h4 id="スタジオ">'],
+    ['accented, lower-cased', '<h5 id="éditeur-de-couleurs">'],
+    ['Hangul with a space', '<h4 id="색상-편집기">'],
+    ['first duplicate unsuffixed', '<h3 id="rows">'],
+    ['second duplicate suffixed', '<h3 id="rows-1">'],
+    ['markup and punctuation dropped', '<h4 id="proteusx--bold">'],
+  ]) {
+    if (html.includes(needle)) { pass++; console.log(`  ok   heading id ${label}`); }
+    else { fail++; console.log(`  FAIL heading id ${label}: expected ${needle}`); }
+  }
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

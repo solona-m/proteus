@@ -5217,6 +5217,16 @@ public class StatusWindow : Window
         };
         var shown = ordered.ThenBy(Label, StringComparer.OrdinalIgnoreCase).ToList();
 
+        // The active binding always leads, whatever the sort: it is the one driving the character and the only
+        // one Update can write to. The rest keep the chosen order beneath it. A search that filters it out
+        // leaves it out — the "Active:" line above still names it.
+        if (activeId is { } active && shown.FindIndex(x => x.DesignId == active) is > 0 and var at)
+        {
+            var lead = shown[at];
+            shown.RemoveAt(at);
+            shown.Insert(0, lead);
+        }
+
         Guid? toApply = null, toRemove = null;
         bool toUpdate = false;
         foreach (var b in shown)

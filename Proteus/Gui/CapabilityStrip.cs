@@ -9,12 +9,15 @@ namespace Proteus.Gui;
 /// <summary>
 /// The band's second line: four icon-and-label pairs naming what the plugin actually does. Replaces a
 /// caption that read "overlay compositor", which was true at launch and now describes about a quarter of
-/// the plugin — it said nothing about wearing mods off-slot, adding toggles to someone else's mod, or
-/// binding the whole look to a Glamourer design.
+/// the plugin — it said nothing about wearing mods off-slot, reshaping someone else's models in the Studio
+/// tab (part switches, brushes, hat fitting), or binding the whole look to a Glamourer design.
 /// <para/>
 /// Four labels do not fit at every window size (see <see cref="Draw"/>), so the row degrades to icons alone
 /// and lets the caller show the hovered one's label instead. That is the whole reason this reports a result
 /// rather than just painting.
+/// <para/>
+/// Each item is also a link: clicking it opens the README at the section that explains it, in the reader's
+/// own language (<see cref="ReadmeLinks"/>).
 /// </summary>
 /// <remarks>
 /// Everything here goes through the DRAW LIST, never through ImGui's layout. The status window is
@@ -29,12 +32,12 @@ internal static class CapabilityStrip
     /// The labels are <c>Func</c>s and not strings because <c>Strings.Reload()</c> rebuilds every holder on
     /// a language change. A captured value would pin the row to whatever language the game booted in.
     /// </summary>
-    private static readonly (FontAwesomeIcon Icon, Func<string> Label)[] Items =
+    private static readonly (FontAwesomeIcon Icon, Func<string> Label, ReadmeSection Section)[] Items =
     {
-        (FontAwesomeIcon.LayerGroup, () => Strings.Band.CapOverlay),
-        (FontAwesomeIcon.Tshirt,     () => Strings.Band.CapWear),
-        (FontAwesomeIcon.ToggleOn,   () => Strings.Band.CapToggle),
-        (FontAwesomeIcon.Link,       () => Strings.Band.CapBind),
+        (FontAwesomeIcon.LayerGroup, () => Strings.Band.CapOverlay, ReadmeSection.ColorEditor),
+        (FontAwesomeIcon.Tshirt,     () => Strings.Band.CapWear,    ReadmeSection.Import),
+        (FontAwesomeIcon.PaintBrush, () => Strings.Band.CapReshape, ReadmeSection.Studio),
+        (FontAwesomeIcon.Link,       () => Strings.Band.CapBind,    ReadmeSection.Bindings),
     };
 
     // Scratch, reused every frame. The band draws on the UI thread and nowhere else, so static buffers are
@@ -111,6 +114,21 @@ internal static class CapabilityStrip
                     hovered = i;
                     break;
                 }
+            }
+        }
+
+        // The link. Read straight off the mouse rather than through an InvisibleButton, which would be an
+        // item submitted at this width — exactly what the remarks above rule out. The language is asked for
+        // at click time, not cached, so it follows a change of Dalamud's UI language like the labels do.
+        if (hovered >= 0)
+        {
+            ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
+            ImGui.SetTooltip(Strings.Band.CapLinkTip);
+            if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+            {
+                var url = ReadmeLinks.Url(Plugin.PluginInterface.UiLanguage, Items[hovered].Section);
+                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); }
+                catch { /* opening a browser is best-effort */ }
             }
         }
 
