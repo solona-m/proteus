@@ -379,6 +379,10 @@
     "message": "지오메트리",
     "description": ""
   },
+  "Colors.Effects.Section": {
+    "message": "효과",
+    "description": ""
+  },
   "Colors.GlowAmount.Label": {
     "message": "발광",
     "description": ""

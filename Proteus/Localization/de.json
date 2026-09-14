@@ -379,6 +379,10 @@
     "message": "Geometrie",
     "description": ""
   },
+  "Colors.Effects.Section": {
+    "message": "Effekte",
+    "description": ""
+  },
   "Colors.GlowAmount.Label": {
     "message": "Leuchten",
     "description": ""

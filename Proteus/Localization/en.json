@@ -379,6 +379,10 @@
     "message": "Geometry",
     "description": "Heading for a collapsible section in the colour-table editor window, holding the settings that reshape the body mesh (spanning the cleavage, smoothing the nipple, and so on) rather than colouring it."
   },
+  "Colors.Effects.Section": {
+    "message": "Effects",
+    "description": "Heading for a collapsible section in the colour-table editor window, holding the animated glow effect picker and the Skindent (ambient occlusion + normal indent) setting."
+  },
   "Colors.GlowAmount.Label": {
     "message": "Glow",
     "description": "Control label. Appears in the colour-table editor window."

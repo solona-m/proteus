@@ -203,11 +203,14 @@ public sealed class ModsStrings
     public readonly string ColMod      = Loc.Localize("Mods.Col.Mod", "Mod");
     public readonly string ColPriority = Loc.Localize("Mods.Col.Priority", "Pri");
 
-    // These two are drawn with a bare ImGui.TableHeader, which takes the label as its id — hence the
-    // fused "###". Done here rather than at the call site so the concatenation happens once per language
-    // instead of once per frame.
+    // Drawn with a bare ImGui.TableHeader, which takes the label as its id — hence the fused "###". Done
+    // here rather than at the call site so the concatenation happens once per language instead of once
+    // per frame.
     public readonly string ColColors   = Loc.Localize("Mods.Col.Colors", "Colors") + "###modColors";
-    public readonly string ColSkindent = Loc.Localize("Mods.Col.Skindent", "Skindent") + "###modSkindent";
+
+    // The per-mod AO/Skindent combo's label in the colour panel. Keeps the key it had as a Mods column
+    // header so the existing translations carry over.
+    public readonly string Skindent = Loc.Localize("Mods.Col.Skindent", "Skindent");
 
     public readonly string ColorsBtn = Loc.Localize("Mods.Colors.Btn", "Colors");
 
@@ -1104,6 +1107,9 @@ public sealed class ColorsStrings
     /// "Geometry" rather than "Body" because what these change is the shape of the mesh, not which body
     /// the art is baked onto — that is Bodies, which stays per-tab in Advanced.</summary>
     public readonly string GeometrySection = Loc.Localize("Colors.Geometry.Section", "Geometry");
+
+    /// <summary>Heading for the glow effect and Skindent, the section above Geometry.</summary>
+    public readonly string EffectsSection = Loc.Localize("Colors.Effects.Section", "Effects");
 
     public readonly string Pinned = Loc.Localize("Colors.Pinned", "(pinned)");
     public readonly string Auto   = Loc.Localize("Colors.Auto", "(auto)");

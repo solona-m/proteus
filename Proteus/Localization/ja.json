@@ -379,6 +379,10 @@
     "message": "ジオメトリ",
     "description": ""
   },
+  "Colors.Effects.Section": {
+    "message": "エフェクト",
+    "description": ""
+  },
   "Colors.GlowAmount.Label": {
     "message": "グロー",
     "description": ""

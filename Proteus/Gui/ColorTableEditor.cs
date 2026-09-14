@@ -69,6 +69,16 @@ public static class ColorTableEditor
     /// the advanced controls", not "…on this one tab", and keying it per option collapsed the section
     /// every time the user clicked to a neighbouring tab to compare.
     /// </param>
+    /// <summary>
+    /// The "Effects" disclosure: the glow effect and Skindent. Shared so the footer and the two panel paths
+    /// that have no footer open and close the same header. Keyed per MOD, like Advanced, so the state holds
+    /// when the user flips between option tabs; "###" so a language switch doesn't reset it. Open by default:
+    /// the glow picker was always on screen before it had a section, and hiding it would bury it.
+    /// </summary>
+    public static bool EffectsHeader(string modScope)
+        => ImGui.CollapsingHeader($"{Strings.Colors.EffectsSection}###effects_{modScope}",
+            ImGuiTreeNodeFlags.DefaultOpen);
+
     public static bool DrawGlowFooter(
         string idScope,
         string advancedScope,
@@ -82,6 +92,9 @@ public static class ColorTableEditor
         // Mod-wide sections drawn between the glow controls and Advanced. Like drawExtraAdvanced this
         // commits for itself; unlike it, callers pass null on tabs that should not show it at all.
         Action? drawBelowGlow = null,
+        // Mod-wide controls drawn INSIDE the Effects section, after the glow effect. Commits for itself, like
+        // drawBelowGlow.
+        Action? drawInEffects = null,
         // Non-null when this option's render mode is decided for it rather than inferred or pinned. A SHORT
         // marker — "(forced)" — shown beside the "Rendering as" badge in place of the (auto)/(pinned)
         // suffix, which would otherwise credit the inference with a decision taken elsewhere. It also
@@ -119,7 +132,16 @@ public static class ColorTableEditor
         bool overrideActive = false)
     {
         edited = FeatureEdit.Neutral;
-        if (overlays.Count == 0) return false;
+        if (overlays.Count == 0)
+        {
+            // Nothing for the glow controls or Advanced to edit, but the mod-wide sections are the mod's, not
+            // this option's: returning before them left Skindent and Geometry unreachable whenever the only
+            // active option carried no overlay art (a content-only option in a mixed pack).
+            if (EffectsHeader(advancedScope))
+                drawInEffects?.Invoke();
+            drawBelowGlow?.Invoke();
+            return false;
+        }
 
         bool changed = false;
         var first = overlays[0];
@@ -151,52 +173,59 @@ public static class ColorTableEditor
             foreach (var d in overlays) d.SkinToneMask = stored;
         }
 
-        // ── Glow effect: a thumbnail picker (like the sphere-map picker) — picking one switches to Animated glow ──
-        using (ImRaii.Disabled(noShellReason != null))
-        {
-            DrawEffectPicker(idScope, effects, curScroll, out bool effChanged, out string? newScroll);
-            if (effChanged)
-            {
-                SetScroll(newScroll);
-                edited = FeatureEdit.Glow;
-                changed = true;
-            }
-        }
-        // Only reachable when the picker is ENABLED — ImGui reports no hover for a disabled item — so this
-        // deliberately does not try to carry noShellReason. That is printed below instead.
         var cs = Strings.Colors;
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(cs.GlowEffectTip);
-        if (noShellReason != null)
-            ImGui.TextDisabled(noShellReason);
-        else if (effects.Count == 0)
-            // Names the Settings button verbatim: this is the exact moment someone needs that folder, so
-            // the message has to point at a control they can actually find on screen.
-            ImGui.TextDisabled(cs.NoEffects);
 
-        // Scroll speed / tiling — only meaningful once glowing.
-        if (mode == RenderMode.Glow)
+        // ── Effects: the glow effect (+ its scroll speed/tiling) and whatever the caller adds after it ──
+        if (EffectsHeader(advancedScope))
         {
-            var speed = new Vector2(curSpeedX ?? ScrollSettings.Default.SpeedX, curSpeedY ?? ScrollSettings.Default.SpeedY);
-            var tile  = new Vector2(curTileX ?? ScrollSettings.Default.TilingX, curTileY ?? ScrollSettings.Default.TilingY);
-
-            ImGui.SetNextItemWidth(150);
-            if (ImGui.DragFloat2($"{cs.ScrollSpeed}##{idScope}", ref speed, 0.002f, -1f, 1f, "%.3f"))
+            // ── Glow effect: a thumbnail picker (like the sphere-map picker) — picking one switches to Animated glow ──
+            using (ImRaii.Disabled(noShellReason != null))
             {
-                SetSpeed(speed.X, speed.Y);
-                changed = true;
+                DrawEffectPicker(idScope, effects, curScroll, out bool effChanged, out string? newScroll);
+                if (effChanged)
+                {
+                    SetScroll(newScroll);
+                    edited = FeatureEdit.Glow;
+                    changed = true;
+                }
             }
+            // Only reachable when the picker is ENABLED — ImGui reports no hover for a disabled item — so this
+            // deliberately does not try to carry noShellReason. That is printed below instead.
             if (ImGui.IsItemHovered())
-                ImGui.SetTooltip(cs.ScrollSpeedTip);
+                ImGui.SetTooltip(cs.GlowEffectTip);
+            if (noShellReason != null)
+                ImGui.TextDisabled(noShellReason);
+            else if (effects.Count == 0)
+                // Names the Settings button verbatim: this is the exact moment someone needs that folder, so
+                // the message has to point at a control they can actually find on screen.
+                ImGui.TextDisabled(cs.NoEffects);
 
-            ImGui.SetNextItemWidth(150);
-            if (ImGui.DragFloat2($"{cs.Tiling}##{idScope}", ref tile, 0.05f, 0.1f, 20f, "%.2f"))
+            // Scroll speed / tiling — only meaningful once glowing.
+            if (mode == RenderMode.Glow)
             {
-                SetTile(tile.X, tile.Y);
-                changed = true;
+                var speed = new Vector2(curSpeedX ?? ScrollSettings.Default.SpeedX, curSpeedY ?? ScrollSettings.Default.SpeedY);
+                var tile  = new Vector2(curTileX ?? ScrollSettings.Default.TilingX, curTileY ?? ScrollSettings.Default.TilingY);
+
+                ImGui.SetNextItemWidth(150);
+                if (ImGui.DragFloat2($"{cs.ScrollSpeed}##{idScope}", ref speed, 0.002f, -1f, 1f, "%.3f"))
+                {
+                    SetSpeed(speed.X, speed.Y);
+                    changed = true;
+                }
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip(cs.ScrollSpeedTip);
+
+                ImGui.SetNextItemWidth(150);
+                if (ImGui.DragFloat2($"{cs.Tiling}##{idScope}", ref tile, 0.05f, 0.1f, 20f, "%.2f"))
+                {
+                    SetTile(tile.X, tile.Y);
+                    changed = true;
+                }
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip(cs.TilingTip);
             }
-            if (ImGui.IsItemHovered())
-                ImGui.SetTooltip(cs.TilingTip);
+
+            drawInEffects?.Invoke();
         }
 
         // Mod-wide sections that belong below the glow controls but above Advanced. Between the two because

@@ -379,6 +379,10 @@
     "message": "Géométrie",
     "description": ""
   },
+  "Colors.Effects.Section": {
+    "message": "Effets",
+    "description": ""
+  },
   "Colors.GlowAmount.Label": {
     "message": "Lueur",
     "description": ""

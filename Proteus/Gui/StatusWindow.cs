@@ -4921,10 +4921,11 @@ public class StatusWindow : Window
             // trips an ImGui assertion in debug and corrupts table state in release.
             // Bodies is NOT here: it moved into the colour panel's Advanced disclosure, beside the other
             // per-mod knob that decides how the overlay renders rather than what it is.
-            // "##mods2", not "##mods": ImGui keys per-column widths and sort state off the table id, and a
-            // saved 5-column layout applied to this 6-column one mis-sizes every column until the game is
+            // Skindent is not here either: it moved into the colour panel, directly below the glow effect.
+            // "##mods3", not "##mods2": ImGui keys per-column widths and sort state off the table id, and a
+            // saved 6-column layout applied to this 5-column one mis-sizes every column until the game is
             // restarted. A new id starts clean.
-            if (!ImGui.BeginTable("##mods2", 6,
+            if (!ImGui.BeginTable("##mods3", 5,
                     ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.RowBg))
                 return;
             // Widths are scaled: the table's text is, so unscaled columns clip their own headers at 1.5x.
@@ -4938,7 +4939,6 @@ public class StatusWindow : Window
             ImGui.TableSetupColumn("Pri",    ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(78f));
             ImGui.TableSetupColumn("Preset", ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(120f));
             ImGui.TableSetupColumn("Colors", ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(78f));
-            ImGui.TableSetupColumn("Skindent", ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(96f));
 
             // Clickable sort headers for Enabled / Mod / Priority (the rest are plain). Clicking the active
             // column flips direction; switching column picks a sensible default direction — Name ascending,
@@ -4950,7 +4950,6 @@ public class StatusWindow : Window
             ProteusStyle.SortableHeader(ms.ColPriority, "modPri",  ModSort.Priority, ref _modSort, ref _modSortDesc, defaultDesc: true);
             ImGui.TableNextColumn(); ImGui.TableHeader(Strings.Presets.ColumnHeader);
             ImGui.TableNextColumn(); ImGui.TableHeader(ms.ColColors);
-            ImGui.TableNextColumn(); ImGui.TableHeader(ms.ColSkindent);
 
             // Enable/priority controls write straight through to Penumbra (Proteus keeps no
             // override state of its own); both reflect the mod's live Penumbra values.
@@ -5062,38 +5061,6 @@ public class StatusWindow : Window
                 }
                 if (bindingDriven && ImGui.IsItemHovered())
                     ImGui.SetTooltip(ms.ColorsBindingDrivenTip);
-
-                // Ambient occlusion + Skindenting for this mod (OFF unless the pack asks). THREE states —
-                // "the pack decides", "forced on", "forced off" — so this is a combo and not a checkbox: a
-                // checkbox can't show the difference between "ticked because the pack asked" and "ticked
-                // because you said so", and offers nowhere to put the third state except a hidden modifier
-                // gesture.
-                ImGui.TableNextColumn();
-                bool? aoDeclared = entry.Metadata?.AmbientOcclusion;
-                // The user's stored opinion: the new override, else a legacy opt-out, else none.
-                bool? aoChoice = config.AmbientOcclusionOverrides.TryGetValue(entry.ModDirectory, out var aoUser)
-                    ? aoUser
-                    : config.AmbientOcclusionDisabledMods.Contains(entry.ModDirectory) ? false : null;
-                string aoPackLabel = string.Format(ms.AoPackFmt, aoDeclared == true ? ms.AoOn : ms.AoOff);
-                ImGui.SetNextItemWidth(ProteusStyle.S(90f));
-                if (ImGui.BeginCombo($"##ao_{entry.ModDirectory}",
-                        aoChoice == null ? aoPackLabel : aoChoice.Value ? ms.AoOn : ms.AoOff))
-                {
-                    foreach (var (label, choice) in new[] { (aoPackLabel, (bool?)null), (ms.AoOn, true), (ms.AoOff, false) })
-                    {
-                        if (!ImGui.Selectable(label, choice == aoChoice) || choice == aoChoice) continue;
-                        if (choice == null) config.AmbientOcclusionOverrides.Remove(entry.ModDirectory);
-                        else                config.AmbientOcclusionOverrides[entry.ModDirectory] = choice.Value;
-                        // The legacy opt-out set is read-only now, and any of these three choices replaces
-                        // it — leaving it would let it contradict the selection the user just made.
-                        config.AmbientOcclusionDisabledMods.Remove(entry.ModDirectory);
-                        config.Save();
-                        RecompositeForOverlay(entry, "ambient-occlusion-mod");
-                    }
-                    ImGui.EndCombo();
-                }
-                if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip(string.Format(ms.AoTipFmt, aoPackLabel));
             }
 
             ImGui.EndTable();
@@ -5386,7 +5353,10 @@ public class StatusWindow : Window
             {
                 ImGui.Separator();
                 // No glow footer on this path, so the geometry section takes the same place relative to
-                // Advanced that it does there: directly above it.
+                // Advanced that it does there: directly above it. Effects holds only Skindent here — there is
+                // no overlay for a glow effect to go on.
+                if (ColorTableEditor.EffectsHeader(entry.ModDirectory))
+                    DrawSkindent(entry);
                 DrawGeometrySection(entry);
                 // Framed, to match the Presets bar and the other two Advanced disclosures. "###" so the
                 // localized word isn't hashed into the id and a language switch doesn't shut it.
@@ -5465,6 +5435,7 @@ public class StatusWindow : Window
                 resetDisabledReason: ResetBlockedReason(entry),
                 drawExtraAdvanced: () => DrawBodiesAdvanced(entry),
                 drawBelowGlow: () => DrawGeometrySection(entry),
+                drawInEffects: () => DrawSkindent(entry),
                 overrideActive: overrideActive);
 
             // A reset just restored the recorded values — they ARE the intended state, so skip the mode
@@ -5578,6 +5549,8 @@ public class StatusWindow : Window
                 ProteusStyle.DisabledWrapped(Strings.ColorPanel.NoActiveOptions);
             // Same placement as the content path above, and the reason this one matters: a mod with no
             // active option has no tab, so this is the ONLY place the geometry features can be reached.
+            if (ColorTableEditor.EffectsHeader(entry.ModDirectory))
+                DrawSkindent(entry);
             DrawGeometrySection(entry);
             if (ImGui.CollapsingHeader($"{Strings.Colors.Advanced}###noopt_{entry.ModDirectory}"))
                 DrawBodiesAdvanced(entry);
@@ -5921,6 +5894,7 @@ public class StatusWindow : Window
                     out var maskFooterEdit, onReset: null,
                     drawExtraAdvanced: null,
                     drawBelowGlow: () => DrawGeometrySection(entry),
+                    drawInEffects: () => DrawSkindent(entry),
                     modeForced: modHasGear ? Strings.ColorPanel.Forced : null,
                     modeForcedTip: modHasGear ? Strings.ColorPanel.ForcedTip : null,
                     // Shows the badge as Cloth without persisting it, which is what "forced" means here.
@@ -6100,6 +6074,7 @@ public class StatusWindow : Window
             resetDisabledReason: ResetBlockedReason(entry),
             drawExtraAdvanced: () => DrawBodiesAdvanced(entry),
             drawBelowGlow: () => DrawGeometrySection(entry),
+            drawInEffects: () => DrawSkindent(entry),
             promotedToGear: promotedToGear,
             noShellReason: noShellReason,
             overrideActive: overrideActive);
@@ -6181,6 +6156,44 @@ public class StatusWindow : Window
         // so a control that quietly writes global config instead has to break that expectation out loud.
         if (binding)
             ImGui.TextDisabled(cp.BodiesGlobalNote);
+    }
+
+    /// <summary>
+    /// Ambient occlusion + Skindenting for this mod (OFF unless the pack asks), drawn in the Effects section
+    /// below the glow effect. Mod-wide and global config like Bodies, so it commits and recomposites for itself.
+    /// <para/>
+    /// THREE states — "the pack decides", "forced on", "forced off" — so this is a combo and not a checkbox:
+    /// a checkbox can't show the difference between "ticked because the pack asked" and "ticked because you
+    /// said so", and offers nowhere to put the third state except a hidden modifier gesture.
+    /// </summary>
+    private void DrawSkindent(OverlayEntry entry)
+    {
+        var ms = Strings.Mods;
+        bool? aoDeclared = entry.Metadata?.AmbientOcclusion;
+        // The user's stored opinion: the new override, else a legacy opt-out, else none.
+        bool? aoChoice = config.AmbientOcclusionOverrides.TryGetValue(entry.ModDirectory, out var aoUser)
+            ? aoUser
+            : config.AmbientOcclusionDisabledMods.Contains(entry.ModDirectory) ? false : null;
+        string aoPackLabel = string.Format(ms.AoPackFmt, aoDeclared == true ? ms.AoOn : ms.AoOff);
+        ImGui.SetNextItemWidth(ProteusStyle.S(120f));
+        if (ImGui.BeginCombo($"{ms.Skindent}###ao_{entry.ModDirectory}",
+                aoChoice == null ? aoPackLabel : aoChoice.Value ? ms.AoOn : ms.AoOff))
+        {
+            foreach (var (label, choice) in new[] { (aoPackLabel, (bool?)null), (ms.AoOn, true), (ms.AoOff, false) })
+            {
+                if (!ImGui.Selectable(label, choice == aoChoice) || choice == aoChoice) continue;
+                if (choice == null) config.AmbientOcclusionOverrides.Remove(entry.ModDirectory);
+                else                config.AmbientOcclusionOverrides[entry.ModDirectory] = choice.Value;
+                // The legacy opt-out set is read-only now, and any of these three choices replaces
+                // it — leaving it would let it contradict the selection the user just made.
+                config.AmbientOcclusionDisabledMods.Remove(entry.ModDirectory);
+                config.Save();
+                RecompositeForOverlay(entry, "ambient-occlusion-mod");
+            }
+            ImGui.EndCombo();
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(string.Format(ms.AoTipFmt, aoPackLabel));
     }
 
     /// <summary>
