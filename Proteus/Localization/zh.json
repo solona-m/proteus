@@ -123,10 +123,6 @@
     "message": "[Proteus] 有 {0} 个模组网格部件无法放置——你的饰品已没有材质槽位。请再装备一件戒指 / 手镯 / 项链，或关闭一个图层。",
     "description": ""
   },
-  "Chat.GlowPromoted.Fmt": {
-    "message": "[Proteus]“{0}”在皮肤层上设置了发光。皮肤已无法发光，因此该选项现在按布料层渲染——它需要一个空闲的饰品栏位，表面效果也会略有不同。",
-    "description": ""
-  },
   "Chat.HatCompat": {
     "message": "[Proteus] Proteus 已让这个发型能戴在帽子下面。你可以在 /proteus > 设置 > 帽子 中撤销此更改，或关闭该功能。",
     "description": "Chat line shown once ever, the first time Proteus makes a hairstyle fit under hats by itself. Do NOT translate \"Proteus\" or the command \"/proteus\". \"Settings\" and \"Hats\" name a tab and a section in Proteus' own window - use the same words you used for \"Tab.Settings\" and \"Settings.Section.HatCompat\"."

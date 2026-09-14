@@ -12191,12 +12191,9 @@ public class CompositorService : IDisposable
     {
         if (!HasEmissiveRow(rows) || !_glowPromotedMods.TryAdd(entry.ModDirectory, 0)) return;
 
-        var msg = string.Format(Loc.Localize("Chat.GlowPromoted.Fmt",
-            "[Proteus] \"{0}\" sets Glow on a skin layer. Skin can no longer glow, so that option now "
-            + "renders as a cloth layer — it needs a free accessory to sit on, and its surface will look "
-            + "slightly different."), entry.ModName);
-        _ = Plugin.Framework.RunOnFrameworkThread(
-            () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 25).Build()));
+        // Log only: in chat this fired on every session for mods that ship a skin glow on purpose.
+        log.Information("[Proteus] \"{0}\" sets Glow on a skin layer; rendering that option as a cloth layer",
+            entry.ModName);
     }
 
     /// <summary>

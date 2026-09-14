@@ -123,10 +123,6 @@
     "message": "[Proteus] Не удалось разместить деталей меша из ваших модов: {0} — у аксессуаров кончились слоты материалов. Наденьте ещё одно кольцо / браслет / ожерелье или отключите слой.",
     "description": ""
   },
-  "Chat.GlowPromoted.Fmt": {
-    "message": "[Proteus] «{0}» задаёт свечение на слое кожи. Кожа больше не может светиться, поэтому этот параметр теперь отрисовывается как тканевый слой — ему нужен свободный аксессуар, и поверхность будет выглядеть немного иначе.",
-    "description": ""
-  },
   "Chat.HatCompat": {
     "message": "[Proteus] Proteus подогнал эту причёску под шляпы. Отменить это или отключить функцию можно в /proteus > Настройки > Шляпы.",
     "description": "Chat line shown once ever, the first time Proteus makes a hairstyle fit under hats by itself. Do NOT translate \"Proteus\" or the command \"/proteus\". \"Settings\" and \"Hats\" name a tab and a section in Proteus' own window - use the same words you used for \"Tab.Settings\" and \"Settings.Section.HatCompat\"."

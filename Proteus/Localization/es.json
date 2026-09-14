@@ -123,10 +123,6 @@
     "message": "[Proteus] No se pudieron colocar {0} pieza(s) de malla de tus mods — tus accesorios se han quedado sin espacios de material. Equipa otro anillo / brazalete / collar, o desactiva una capa.",
     "description": ""
   },
-  "Chat.GlowPromoted.Fmt": {
-    "message": "[Proteus] «{0}» aplica brillo en una capa de piel. La piel ya no puede brillar, así que esa opción se representa ahora como capa de tela: necesita un accesorio libre y su superficie se verá algo distinta.",
-    "description": ""
-  },
   "Chat.HatCompat": {
     "message": "[Proteus] Proteus ha hecho que este peinado quepa bajo los sombreros. Puedes deshacerlo, o desactivar la función, en /proteus > Ajustes > Sombreros.",
     "description": "Chat line shown once ever, the first time Proteus makes a hairstyle fit under hats by itself. Do NOT translate \"Proteus\" or the command \"/proteus\". \"Settings\" and \"Hats\" name a tab and a section in Proteus' own window - use the same words you used for \"Tab.Settings\" and \"Settings.Section.HatCompat\"."

@@ -123,10 +123,6 @@
     "message": "[Proteus] {0} mesh piece(s) from your mods could not be placed — your accessories are out of material slots. Equip another ring / bracelet / necklace, or turn off a layer.",
     "description": "Chat notice when an accessory ran out of material slots for an imported pack's meshes. {0} is a count. \"Proteus\" is a plugin name - never translate it."
   },
-  "Chat.GlowPromoted.Fmt": {
-    "message": "[Proteus] \"{0}\" sets Glow on a skin layer. Skin can no longer glow, so that option now renders as a cloth layer — it needs a free accessory to sit on, and its surface will look slightly different.",
-    "description": "Appears in an in-game chat notice from Proteus. Takes arguments - keep every {0}, {1} ... exactly once; you may reorder them."
-  },
   "Chat.HatCompat": {
     "message": "[Proteus] Proteus has made this hairstyle fit under hats. You can undo that, or turn the feature off, under /proteus > Settings > Hats.",
     "description": "Chat line shown once ever, the first time Proteus makes a hairstyle fit under hats by itself. Do NOT translate \"Proteus\" or the command \"/proteus\". \"Settings\" and \"Hats\" name a tab and a section in Proteus' own window - use the same words you used for \"Tab.Settings\" and \"Settings.Section.HatCompat\"."

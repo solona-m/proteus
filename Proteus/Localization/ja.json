@@ -123,10 +123,6 @@
     "message": "[Proteus] MODのメッシュパーツ{0}個を配置できませんでした — アクセサリのマテリアル枠が不足しています。指輪・ブレスレット・ネックレスをもう一つ装備するか、レイヤーをオフにしてください。",
     "description": ""
   },
-  "Chat.GlowPromoted.Fmt": {
-    "message": "[Proteus]「{0}」は肌レイヤーにグローを設定しています。肌はもう発光できないため、このオプションは布レイヤーとして描画されます。空いているアクセサリが必要になり、表面の見え方も少し変わります。",
-    "description": ""
-  },
   "Chat.HatCompat": {
     "message": "[Proteus] Proteus がこの髪型を帽子に対応させました。元に戻す、またはこの機能をオフにするには /proteus > 設定 > 帽子 を開いてください。",
     "description": "Chat line shown once ever, the first time Proteus makes a hairstyle fit under hats by itself. Do NOT translate \"Proteus\" or the command \"/proteus\". \"Settings\" and \"Hats\" name a tab and a section in Proteus' own window - use the same words you used for \"Tab.Settings\" and \"Settings.Section.HatCompat\"."
