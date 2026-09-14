@@ -94,8 +94,20 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     /// <param name="modelBytes">Its bytes as the brush opened it — the file the edit's vertex order belongs to.</param>
     /// <param name="brushRadius">In the model's units (metres).</param>
     /// <param name="showWind">Draw the painted wind over the garment — while the wind brush is the tool.</param>
+    /// <param name="mirror">The brush also paints the mirror image across the midline: draw a second ring there.</param>
+    /// <param name="partOf">Which part a vertex (ModelPartReader order) belongs to, as any stable id — lets Shift
+    /// light up the whole part under the mouse; null for no part locking.</param>
+    /// <param name="lockClicked">A Shift-click on the garment — or with <paramref name="pickParts"/>, any click — with a
+    /// vertex of the triangle it landed on.</param>
+    /// <param name="pickParts">Toggle Parts on the character: nothing paints; the part under the mouse lights up and a
+    /// click on it goes to <paramref name="lockClicked"/>, the way a click on the model view ticks a part.</param>
+    /// <param name="partTicked">With <paramref name="pickParts"/>: whether a part (by <paramref name="partOf"/>'s id) is
+    /// ticked, for the tint over the ticked parts.</param>
+    /// <param name="tickedVersion">Changes whenever the ticked set does, so the tint is rebuilt only then.</param>
     internal void ArmBrush(string modelFile, byte[] modelBytes, MeshVolumeSolve solve, float brushRadius,
-                           bool showWind = false)
+                           bool showWind = false, bool mirror = false, Func<int, int>? partOf = null,
+                           Action<int>? lockClicked = null, bool pickParts = false,
+                           Func<int, bool>? partTicked = null, int tickedVersion = 0)
     {
         brushArmedFrame = ImGui.GetFrameCount();
         targetKey = BodyShapeReader.PathKey(modelFile);
@@ -103,7 +115,48 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
         volume = solve;
         radius = brushRadius;
         this.showWind = showWind;
+        this.mirror = mirror;
+        this.partOf = partOf;
+        this.lockClicked = lockClicked;
+        this.pickParts = pickParts;
+        this.partTicked = partTicked;
+        this.tickedVersion = tickedVersion;
     }
+
+    private bool mirror;
+    private Func<int, int>? partOf;
+    private Action<int>? lockClicked;
+
+    // ── Toggle Parts on the character ──
+    private bool pickParts;
+    private Func<int, bool>? partTicked;
+    private int tickedVersion;
+    private readonly List<int> tickedTriangles = [];
+    private int tickedTrianglesVersion = int.MinValue;
+    private SkinnedMesh? tickedTrianglesMesh;
+
+    /// <summary>Opacity of the tint over ticked parts: plain to see, like the model view's accent.</summary>
+    private const float TickedOpacity = 0.4f;
+
+    // ── the locked-part wash ──
+    private readonly List<int> lockedTriangles = [];
+    private int lockedTrianglesVersion = -1;
+    private SkinnedMesh? lockedTrianglesMesh;
+    private MeshVolumeSolve? lockedTrianglesSolve;
+
+    /// <summary>Opacity of the grey over a locked part: enough to tell it apart, faint like the rest of the overlay.</summary>
+    private const float LockedOpacity = 0.3f;
+
+    // ── the part under the mouse while Shift is held ──
+    private readonly List<int> hotTriangles = [];
+    private int hotPart = int.MinValue;
+    private SkinnedMesh? hotMesh;
+
+    /// <summary>Smallest the brush ring is drawn, in pixels, so a millimetre brush on a distant character still shows.</summary>
+    private const float MinRingPixels = 4f;
+
+    /// <summary>Below this ring size, in pixels, the falloff dots are left out — they would be one smudge.</summary>
+    private const float DotsMinRingPixels = 12f;
 
     // ── the wind wash ──
     private bool showWind;
@@ -178,11 +231,19 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
         if (!pbdTried) { pbdTried = true; pbd = LiveCharacter.LoadPbd(penumbra, data, log); }
         poser.Pose(m, pose, pbd, world, 0, edited);
 
-        // The wash first, so the ring lies on top of it, and whether or not the mouse is over the garment.
-        if (showWind) DrawWindWash(projection, m);
+        // The washes first, so the ring lies on top of them, and whether or not the mouse is over the garment.
+        if (pickParts) DrawTickedWash(projection, m);
+        else
+        {
+            if (showWind) DrawWindWash(projection, m);
+            DrawLockedWash(projection, m);
+        }
 
         var io = ImGui.GetIO();
         var hit = MouseHit(projection, world, m.Triangles, skinTriangle, out bool overUi);
+
+        // Picking a part instead of painting: every click under Toggle Parts, and a Shift-click under a brush (a lock).
+        bool locking = lockClicked != null && (pickParts || io.KeyShift);
 
         // A stroke in progress owns the mouse until the button comes up, wherever the cursor wanders.
         if (Painting)
@@ -197,11 +258,21 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
         else if (hit != null && !overUi && !io.KeyAlt)
         {
             ImGui.SetNextFrameWantCaptureMouse(true);
-            if (ImGui.IsMouseClicked(ImGuiMouseButton.Left)) Painting = true;
+            if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+            {
+                if (locking) lockClicked!(m.BaseTriangles[hit.Value.Triangle * 3]);
+                else Painting = true;
+            }
         }
 
         if (hit is not { } h || (overUi && !Painting)) return;
         Hovering = true;
+
+        if (locking && !Painting)
+        {
+            DrawHotPart(projection, m, h.Triangle);
+            return;
+        }
 
         // Back into the model through the triangle's UNSHAPED corners, which are the vertices the solve edits.
         int o = h.Triangle * 3;
@@ -329,9 +400,72 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
         // Ring radius in the world: the model-space radius scaled by the pose at the hit.
         float scale = new Vector3(skin.M11, skin.M12, skin.M13).Length();
         float r = radius * (scale > 1e-6f ? scale : 1f);
-        var n = hit.Normal;
+        uint ringColour = Painting ? 0xC0FFFFFFu : 0x80FFFFFFu;
+        float pixels = DrawRing(projection, hit.World, hit.Normal, r, ringColour);
+
+        // The mirrored ring, fainter: at the garment's vertex nearest the mirrored centre, facing the camera. The
+        // mirror is taken in the model's space, so it lands on the matching spot even though the pose is not
+        // symmetric.
+        if (Cursor is not { } c) return;
+        var mc = new Vector3(-c.X, c.Y, c.Z);
+        bool mirrored = mirror && MathF.Abs(c.X) >= radius * 0.05f;
+        if (mirrored)
+        {
+            int nearest = -1;
+            float best = radius * radius;
+            for (int v = 0; v < m.VertexCount; v++)
+            {
+                if (spareBase[v] >= 0) continue;
+                float d2 = Vector3.DistanceSquared(edited[v], mc);
+                if (d2 < best) { best = d2; nearest = v; }
+            }
+            if (nearest >= 0)
+            {
+                var toCamera = projection.CameraPosition - world[nearest];
+                if (toCamera.LengthSquared() > 1e-12f)
+                    DrawRing(projection, world[nearest], Vector3.Normalize(toCamera), r, Painting ? 0x80FFFFFFu : 0x50FFFFFFu);
+            }
+        }
+
+        // Faint dots where the brush reaches, stronger toward the middle — both discs when mirrored, the stronger
+        // of the two per point, as the solve weighs them. Left out when the ring is too small to hold them.
+        if (pixels < DotsMinRingPixels) return;
+        float r2 = radius * radius;
+        int drawn = 0;
+        for (int v = 0; v < m.VertexCount && drawn < 6000; v++)
+        {
+            if (spareBase[v] >= 0) continue;
+            float d2 = Vector3.DistanceSquared(edited[v], c);
+            if (mirrored) d2 = MathF.Min(d2, Vector3.DistanceSquared(edited[v], mc));
+            if (d2 >= r2) continue;
+            float w = MeshVolumeSolve.Falloff(MathF.Sqrt(d2) / radius);
+            if (w <= 0f || !projection.WorldToScreen(world[v], out var s)) continue;
+            dl.AddCircleFilled(s + origin, 1.5f, ((uint)(w * 0x38) << 24) | 0x5A5AFFu);
+            drawn++;
+        }
+    }
+
+    /// <summary>
+    /// A ring of world radius <paramref name="r"/> lying in the plane across <paramref name="normal"/>, drawn no
+    /// smaller than <see cref="MinRingPixels"/> on screen.
+    /// </summary>
+    /// <returns>The ring's true radius on screen, in pixels, before that floor; 0 when it could not be drawn.</returns>
+    private static float DrawRing(ScreenProjection projection, Vector3 centre, Vector3 normal, float r, uint colour)
+    {
+        var dl = ImGui.GetBackgroundDrawList();
+        var origin = ImGui.GetMainViewport().Pos;
+        var n = normal;
         var t1 = Vector3.Normalize(Vector3.Cross(n, MathF.Abs(n.Y) < 0.9f ? Vector3.UnitY : Vector3.UnitX));
         var t2 = Vector3.Cross(n, t1);
+
+        // How big the ring comes out on screen, measured along the tangent that shows it widest.
+        float pixels = 0f;
+        if (projection.WorldToScreen(centre, out var sc))
+        {
+            if (projection.WorldToScreen(centre + t1 * r, out var s1)) pixels = MathF.Max(pixels, Vector2.Distance(sc, s1));
+            if (projection.WorldToScreen(centre + t2 * r, out var s2)) pixels = MathF.Max(pixels, Vector2.Distance(sc, s2));
+        }
+        float drawn = pixels > 0f && pixels < MinRingPixels ? r * MinRingPixels / pixels : r;
 
         const int Segments = 48;
         Span<Vector2> ring = stackalloc Vector2[Segments];
@@ -339,25 +473,99 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
         for (int i = 0; i < Segments; i++)
         {
             float a = i * MathF.Tau / Segments;
-            var p = hit.World + n * 0.002f + (t1 * MathF.Cos(a) + t2 * MathF.Sin(a)) * r;
+            var p = centre + n * 0.002f + (t1 * MathF.Cos(a) + t2 * MathF.Sin(a)) * drawn;
             if (!projection.WorldToScreen(p, out var s)) { count = 0; break; }
             ring[count++] = s + origin;
         }
-        uint ringColour = Painting ? 0xC0FFFFFFu : 0x80FFFFFFu;
-        for (int i = 0; i < count; i++) dl.AddLine(ring[i], ring[(i + 1) % count], ringColour, 1.5f);
+        for (int i = 0; i < count; i++) dl.AddLine(ring[i], ring[(i + 1) % count], colour, 1.5f);
+        return count > 0 ? pixels : 0f;
+    }
 
-        // Faint dots where the brush reaches, stronger toward the middle.
-        if (Cursor is not { } c) return;
-        float r2 = radius * radius;
-        int drawn = 0;
-        for (int v = 0; v < m.VertexCount && drawn < 6000; v++)
+    /// <summary>
+    /// Locked parts as a faint grey over the garment, whenever the brush is armed. A triangle is locked when all
+    /// three of its corners are — a seam point welded to a locked part is locked too, but the unlocked cloth
+    /// beside it is not greyed for sharing it.
+    /// </summary>
+    private void DrawLockedWash(ScreenProjection projection, SkinnedMesh m)
+    {
+        if (volume == null) return;
+        var solve = volume;
+
+        // The solve too: a model re-opened builds a new one, whose version count starts again.
+        if (lockedTrianglesVersion != solve.LockVersion || !ReferenceEquals(lockedTrianglesMesh, m)
+            || !ReferenceEquals(lockedTrianglesSolve, solve))
         {
-            float d2 = Vector3.DistanceSquared(edited[v], c);
-            if (d2 >= r2 || spareBase[v] >= 0) continue;
-            float w = MeshVolumeSolve.Falloff(MathF.Sqrt(d2) / radius);
-            if (w <= 0f || !projection.WorldToScreen(world[v], out var s)) continue;
-            dl.AddCircleFilled(s + origin, 1.5f, ((uint)(w * 0x38) << 24) | 0x5A5AFFu);
-            drawn++;
+            lockedTrianglesSolve = solve;
+            lockedTriangles.Clear();
+            var baseTris = m.BaseTriangles;
+            for (int t = 0; t < m.TriangleCount; t++)
+            {
+                if (t < skinTriangle.Length && skinTriangle[t]) continue;
+                int o = t * 3;
+                if (solve.IsLocked(baseTris[o]) && solve.IsLocked(baseTris[o + 1]) && solve.IsLocked(baseTris[o + 2]))
+                    lockedTriangles.Add(t);
+            }
+            lockedTrianglesVersion = solve.LockVersion;
+            lockedTrianglesMesh = m;
+        }
+        FillTriangles(projection, m, lockedTriangles, ((uint)(LockedOpacity * 255f) << 24) | 0x00303030u);
+    }
+
+    /// <summary>Ticked parts, tinted, under Toggle Parts — rebuilt only when the ticked set or the garment changes.</summary>
+    private void DrawTickedWash(ScreenProjection projection, SkinnedMesh m)
+    {
+        if (partOf == null || partTicked == null) return;
+        if (tickedTrianglesVersion != tickedVersion || !ReferenceEquals(tickedTrianglesMesh, m))
+        {
+            tickedTriangles.Clear();
+            var baseTris = m.BaseTriangles;
+            for (int t = 0; t < m.TriangleCount; t++)
+            {
+                if (t < skinTriangle.Length && skinTriangle[t]) continue;
+                int part = partOf(baseTris[t * 3]);
+                if (part >= 0 && partTicked(part)) tickedTriangles.Add(t);
+            }
+            tickedTrianglesVersion = tickedVersion;
+            tickedTrianglesMesh = m;
+        }
+        FillTriangles(projection, m, tickedTriangles, ((uint)(TickedOpacity * 255f) << 24) | 0x0040A0FFu);   // ABGR: amber
+    }
+
+    /// <summary>The part under the mouse, lit up while Shift is held — what a click would lock or unlock.</summary>
+    private void DrawHotPart(ScreenProjection projection, SkinnedMesh m, int triangle)
+    {
+        if (partOf == null) return;
+        var baseTris = m.BaseTriangles;
+        int part = partOf(baseTris[triangle * 3]);
+        if (part != hotPart || !ReferenceEquals(hotMesh, m))
+        {
+            hotTriangles.Clear();
+            for (int t = 0; t < m.TriangleCount; t++)
+            {
+                if (t < skinTriangle.Length && skinTriangle[t]) continue;
+                if (partOf(baseTris[t * 3]) == part) hotTriangles.Add(t);
+            }
+            hotPart = part;
+            hotMesh = m;
+        }
+        FillTriangles(projection, m, hotTriangles, 0x40FFE0B0u);   // ABGR: a pale blue
+    }
+
+    /// <summary>Fill <paramref name="triangles"/> on the posed garment, thinned past <see cref="MaxWashTriangles"/>.</summary>
+    private void FillTriangles(ScreenProjection projection, SkinnedMesh m, List<int> triangles, uint colour)
+    {
+        if (triangles.Count == 0) return;
+        var dl = ImGui.GetBackgroundDrawList();
+        var origin = ImGui.GetMainViewport().Pos;
+        var tris = m.Triangles;
+        int stride = Math.Max(1, triangles.Count / MaxWashTriangles);
+        for (int i = 0; i < triangles.Count; i += stride)
+        {
+            int o = triangles[i] * 3;
+            if (!projection.WorldToScreen(world[tris[o]], out var a)) continue;
+            if (!projection.WorldToScreen(world[tris[o + 1]], out var b)) continue;
+            if (!projection.WorldToScreen(world[tris[o + 2]], out var c)) continue;
+            dl.AddTriangleFilled(a + origin, b + origin, c + origin, colour);
         }
     }
 

@@ -934,4 +934,300 @@ public class MeshVolumeSolveTests
         // And the mesh's own resolution is reported, so the panel can compare a radius against it.
         Assert.Equal(Spacing, solve.MeanEdge, Spacing * 0.5f);
     }
+
+    // ── mirror ───────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// An n×n sheet (n odd) centred on X = 0 — the body's midline — shaped by <paramref name="height"/>, normals
+    /// +Y. Columns are placed at (i − middle) × spacing, so column i and its mirror are exact negations.
+    /// Vertex i·n + j is column i, row j.
+    /// <para/>
+    /// The diagonals mirror too: one way left of the middle, the other way right of it. With every cell cut the same
+    /// way the mirror of a cell is cut along its OTHER diagonal, the two sides have different neighbours, and
+    /// anything that averages over neighbours — relax, the stroke-end smoothing — is honestly asymmetric.
+    /// </summary>
+    private static ModelParts Centred(int n, Func<int, int, float> height)
+    {
+        var pos = new List<float>();
+        var nrm = new List<float>();
+        var tris = new List<int>();
+        int mid = n / 2;
+        for (int i = 0; i < n; i++)
+        for (int j = 0; j < n; j++)
+        {
+            pos.AddRange([(i - mid) * Spacing, height(i, j), j * Spacing]);
+            nrm.AddRange([0f, 1f, 0f]);
+        }
+        for (int i = 0; i + 1 < n; i++)
+        for (int j = 0; j + 1 < n; j++)
+        {
+            int a = i * n + j, b = (i + 1) * n + j, c = i * n + j + 1, d = (i + 1) * n + j + 1;
+            if (i < mid) tris.AddRange([a, b, d, a, d, c]);
+            else tris.AddRange([a, b, c, b, d, c]);
+        }
+        return Assemble(pos, nrm, tris);
+    }
+
+    private static void AssertSymmetric(float[] positions, int n, float tolerance, string what)
+    {
+        for (int i = 0; i < n; i++)
+        for (int j = 0; j < n; j++)
+        {
+            var p = At(positions, i * n + j);
+            var q = At(positions, (n - 1 - i) * n + j);
+            Assert.True(MathF.Abs(p.Y - q.Y) <= tolerance && MathF.Abs(p.X + q.X) <= tolerance,
+                        $"{what}: column {i} row {j} at {p} does not mirror {q}");
+        }
+    }
+
+    /// <summary>A mirrored pull on one side moves the other side by the same amount.</summary>
+    [Fact]
+    public void MirroredPaintMovesBothSidesAlike()
+    {
+        const int n = 21;
+        var model = Centred(n, (_, _) => 0f);
+        var solve = new MeshVolumeSolve(model);
+
+        int right = 14 * n + 10, left = 6 * n + 10;
+        Assert.True(solve.Paint(At(model.Positions, right), 0.03f, 0.001f, mirror: true) > 0);
+
+        var after = solve.Positions();
+        Assert.Equal(0.001f, At(after, right).Y, 1e-6f);
+        Assert.Equal(0.001f, At(after, left).Y, 1e-6f);
+        AssertSymmetric(after, n, 1e-7f, "before release");
+
+        solve.EndStroke();
+        // Slack for the stroke-end passes; the dab itself is exact (above).
+        AssertSymmetric(solve.Positions(), n, 2e-4f, "after release");
+    }
+
+    /// <summary>
+    /// Where the two discs overlap, the centre line is painted as hard as either side reaches it — the stronger
+    /// falloff, not the sum — and a dab on the midline itself is exactly the unmirrored dab.
+    /// </summary>
+    [Fact]
+    public void MirroredPaintDoesNotPaintTheMidlineTwice()
+    {
+        const int n = 21;
+        var model = Centred(n, (_, _) => 0f);
+        const float radius = 0.04f, strength = 0.001f;
+
+        var solve = new MeshVolumeSolve(model);
+        solve.Paint(At(model.Positions, 12 * n + 10), radius, strength, mirror: true);   // 20 mm right of centre
+        Assert.Equal(strength * MeshVolumeSolve.Falloff(0.5f), At(solve.Positions(), 10 * n + 10).Y, 1e-6f);
+
+        var mirrored = new MeshVolumeSolve(model);
+        var plain = new MeshVolumeSolve(model);
+        mirrored.Paint(At(model.Positions, 10 * n + 10), radius, strength, mirror: true);
+        plain.Paint(At(model.Positions, 10 * n + 10), radius, strength);
+        Assert.Equal(plain.Positions(), mirrored.Positions());
+    }
+
+    /// <summary>A mirrored relax and a mirrored wind stroke leave a symmetric model symmetric, and one undo takes back both sides.</summary>
+    [Fact]
+    public void MirroredRelaxAndWindAreSymmetricAndUndoneTogether()
+    {
+        const int n = 21;
+        var model = Centred(n, (i, j) => (i == 6 || i == 14) && j == 10 ? 0.01f : 0f);
+        var solve = new MeshVolumeSolve(model);
+        int right = 14 * n + 10, left = 6 * n + 10;
+
+        for (int d = 0; d < 10; d++) solve.Relax(At(model.Positions, right), 0.04f, 1f, mirror: true);
+        AssertSymmetric(solve.Positions(), n, 1e-5f, "relax dabs");
+        solve.EndStroke();
+        var after = solve.Positions();
+        Assert.True(At(after, right).Y < 0.009f, $"right bump not relaxed: {At(after, right).Y}");
+        Assert.True(At(after, left).Y < 0.009f, $"left bump not relaxed: {At(after, left).Y}");
+        AssertSymmetric(after, n, 1e-3f, "relax released");   // slack for the stroke-end passes
+
+        solve.PaintWind(At(model.Positions, right), 0.04f, 1f, 1f, mirror: true);
+        solve.EndStroke(wind: true);
+        Assert.True(solve.WindAt(left) > 0.9f);
+        for (int i = 0; i < n; i++)
+        for (int j = 0; j < n; j++)
+            Assert.Equal(solve.WindAt(i * n + j), solve.WindAt((n - 1 - i) * n + j), 1e-6f);
+
+        solve.Undo();
+        for (int v = 0; v < n * n; v++) Assert.Equal(0f, solve.WindAt(v));
+        solve.Undo();
+        var back = solve.Positions();
+        for (int v = 0; v < n * n; v++) Assert.Equal(At(model.Positions, v), At(back, v));
+    }
+
+    /// <summary>A mirrored bridge spans the groove it was painted on AND the matching groove on the other side.</summary>
+    [Fact]
+    public void MirroredBridgeSpansBothGrooves()
+    {
+        const int n = 21;
+        static float Grooves(int i, int j) => -0.008f * MathF.Max(0f, 1f - MathF.Min(MathF.Abs(i - 4), MathF.Abs(i - 16)) / 3f);
+        var model = Centred(n, Grooves);
+        var solve = new MeshVolumeSolve(model);
+        int right = 16 * n + 10, left = 4 * n + 10;
+
+        for (int d = 0; d < 30; d++) solve.Bridge(At(model.Positions, right), 0.05f, 1f, Vector3.UnitY, mirror: true);
+        solve.EndStroke(bridge: true);
+
+        var after = solve.Positions();
+        Assert.True(At(after, right).Y > -0.002f, $"right groove not spanned: {At(after, right).Y * 1000f:F2} mm");
+        Assert.True(At(after, left).Y > -0.002f, $"left groove not spanned: {At(after, left).Y * 1000f:F2} mm");
+        Assert.Equal(At(after, right).Y, At(after, left).Y, 1e-4f);
+    }
+
+    /// <summary>
+    /// A mirrored bridge whose two discs overlap across a groove on the midline does not lift the seam twice:
+    /// nothing rises above the flat cloth either side.
+    /// </summary>
+    [Fact]
+    public void MirroredBridgeDoesNotLiftTheSeamTwice()
+    {
+        const int n = 21;
+        static float Middle(int i, int j) => -0.008f * MathF.Max(0f, 1f - MathF.Abs(i - 10) / 4f);
+        var model = Centred(n, Middle);
+        var solve = new MeshVolumeSolve(model);
+
+        for (int d = 0; d < 30; d++) solve.Bridge(At(model.Positions, 12 * n + 10), 0.15f, 1f, Vector3.UnitY, mirror: true);
+        solve.EndStroke(bridge: true);
+
+        var after = solve.Positions();
+        for (int v = 0; v < n * n; v++)
+            Assert.True(At(after, v).Y <= 1e-4f, $"vertex {v} lifted above the cloth: {At(after, v).Y * 1000f:F3} mm");
+        Assert.True(At(after, 10 * n + 10).Y > -0.002f, "the midline groove was not spanned");
+    }
+
+    // ── other sizes ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// A pull carried onto another size lands on the matching spot, even though that size is a different mesh —
+    /// scaled up, and with its vertices in the opposite order — and painted wind goes with it.
+    /// </summary>
+    [Fact]
+    public void TransfersAnEditOntoAnotherSizeByPlace()
+    {
+        const int n = 21;
+        var source = Centred(n, (_, _) => 0f);
+
+        // The other size: 10 % larger about the middle, vertices listed back to front.
+        var pos = new List<float>();
+        var nrm = new List<float>();
+        int count = n * n;
+        for (int v = count - 1; v >= 0; v--)
+        {
+            var p = At(source.Positions, v);
+            pos.AddRange([p.X * 1.1f, p.Y, 0.1f + (p.Z - 0.1f) * 1.1f]);
+            nrm.AddRange([0f, 1f, 0f]);
+        }
+        var tris = source.Parts[0].Triangles.Select(v => count - 1 - v).ToList();
+        var larger = Assemble(pos, nrm, tris);
+
+        var solve = new MeshVolumeSolve(source);
+        int middle = 10 * n + 10;
+        solve.Paint(At(source.Positions, middle), 0.05f, 0.002f);
+        solve.EndStroke();
+        solve.PaintWind(At(source.Positions, middle), 0.05f, 1f, 1f);
+        solve.EndStroke(wind: true);
+
+        var carried = BrushTransfer.Transfer(solve, source, larger);
+
+        int largerMiddle = count - 1 - middle;
+        Assert.Equal(solve.DeltaAt(middle).Y, carried.DeltaAt(largerMiddle).Y, 1e-5f);
+        Assert.Equal(solve.WindAt(middle), carried.WindAt(largerMiddle), 0.01f);
+        Assert.Equal(0f, carried.DeltaAt(count - 1).Y, 1e-6f);   // a corner, far outside the brush
+        Assert.True(carried.Dirty);
+        Assert.True(carried.WindEdited);
+    }
+
+    /// <summary>Wind the source never painted is not carried: the other size keeps its author's.</summary>
+    [Fact]
+    public void TransferLeavesWindAloneWhenNoneWasPainted()
+    {
+        var (model, index) = Grid(11);
+        var solve = new MeshVolumeSolve(model);
+        solve.Paint(At(model.Positions, index[5, 5]), 0.04f, 0.001f);
+        solve.EndStroke();
+
+        var carried = BrushTransfer.Transfer(solve, model, model);
+        Assert.False(carried.WindEdited);
+        Assert.Equal(solve.DeltaAt(index[5, 5]).Y, carried.DeltaAt(index[5, 5]).Y, 1e-6f);
+    }
+
+    // ── locked parts ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Two flat 11×11 sheets side by side, sharing one column of positions (x = 100 mm) where they weld — trousers
+    /// and a belt sewn to them. Part 1.1 is the first sheet, 1.2 the second.
+    /// </summary>
+    private static (ModelParts Model, int N, int SecondStart) TwoParts()
+    {
+        const int n = 11;
+        var (pos, nrm, tris, _) = Sheet(n, (_, _) => 0f, 1f);
+        int firstTris = tris.Count;
+        var (_, _, _, start) = Sheet(n, (_, _) => 0f, 1f, pos, nrm, tris);
+        for (int v = start; v < start + n * n; v++) pos[v * 3] += (n - 1) * Spacing;
+
+        var second = tris.Skip(firstTris).ToArray();
+        tris.RemoveRange(firstTris, tris.Count - firstTris);
+        return (Assemble(pos, nrm, tris, second), n, start);
+    }
+
+    /// <summary>
+    /// A locked part is left out of pull, push, relax and wind — the seam it shares with the unlocked part holds
+    /// too — while the unlocked part beside it moves.
+    /// </summary>
+    [Fact]
+    public void LockedPartsAreLeftOutOfEveryBrush()
+    {
+        var (model, n, second) = TwoParts();
+        var solve = new MeshVolumeSolve(model);
+        solve.SetLocked(Enumerable.Range(second, n * n));
+
+        var seam = At(model.Positions, second + 5);                        // on the shared column
+        var firstNear = 7 * n + 5;                                         // 30 mm into the first sheet
+
+        Assert.True(solve.Paint(seam, 0.05f, 0.001f) > 0);
+        solve.PaintWind(seam, 0.05f, 1f, 1f);
+        solve.EndStroke();
+
+        var after = solve.Positions();
+        for (int v = second; v < second + n * n; v++)
+        {
+            Assert.Equal(At(model.Positions, v), At(after, v));
+            Assert.Equal(0f, solve.WindAt(v));
+        }
+        Assert.Equal(0f, At(after, (n - 1) * n + 5).Y);                    // the first sheet's copy of the seam
+        Assert.True(At(after, firstNear).Y > 0f, "the unlocked part did not move");
+        Assert.True(solve.WindAt(firstNear) > 0f, "the unlocked part took no wind");
+        Assert.True(solve.IsLocked((n - 1) * n + 5), "a node welded to the locked part is not locked");
+
+        // Relax over the seam, where the pull left a slope down to the locked side: the locked side still does not move.
+        for (int d = 0; d < 10; d++) solve.Relax(seam, 0.05f, 1f);
+        solve.EndStroke();
+        for (int v = second; v < second + n * n; v++) Assert.Equal(At(model.Positions, v), At(solve.Positions(), v));
+    }
+
+    /// <summary>
+    /// Locking after a stroke keeps what the stroke did, and undo still takes it back; unlocking lets the brush
+    /// reach the part again.
+    /// </summary>
+    [Fact]
+    public void LockingKeepsEarlierStrokesAndUndoStillWorks()
+    {
+        var (model, n, second) = TwoParts();
+        var solve = new MeshVolumeSolve(model);
+        int middle = second + 5 * n + 5;
+
+        solve.Paint(At(model.Positions, middle), 0.03f, 0.001f);
+        solve.EndStroke();
+        float pulled = At(solve.Positions(), middle).Y;
+        Assert.True(pulled > 0f);
+
+        solve.SetLocked(Enumerable.Range(second, n * n));
+        Assert.Equal(pulled, At(solve.Positions(), middle).Y);
+        Assert.Equal(0, solve.Paint(At(model.Positions, middle), 0.03f, 0.001f));
+
+        solve.Undo();
+        Assert.Equal(0f, At(solve.Positions(), middle).Y);
+
+        solve.SetLocked([]);
+        Assert.True(solve.Paint(At(model.Positions, middle), 0.03f, 0.001f) > 0);
+    }
 }

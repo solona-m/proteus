@@ -2179,6 +2179,22 @@
     "message": "La première couleur de sommet de ce modèle n'est pas blanche, ce qu'attend l'effet de vent. Proteus la laisse telle que l'auteur l'a faite.",
     "description": ""
   },
+  "Parts.Wind.Materials.Set.Fmt": {
+    "message": "{0} fichier(s) de matériau réglé(s) pour que le vent puisse faire bouger ce vêtement.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Missing.Fmt": {
+    "message": "{0} fichier(s) de matériau n'ont aucun réglage de mouvement au vent à modifier ; ils risquent de ne pas bouger.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.NotInMod.Fmt": {
+    "message": "{0} matériau(x) de ce vêtement viennent du jeu et non de ce mod ; leur mouvement au vent ne peut pas être réglé.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Failed.Fmt": {
+    "message": "Les matériaux du vêtement n'ont pas pu être réglés pour le vent : {0}",
+    "description": ""
+  },
   "Parts.Wind.Refused.Fmt": {
     "message": "Le vent n'a pas pu être ajouté à {0} maillage(s) : il n'y a plus de place pour un autre attribut de sommet.",
     "description": ""
@@ -2271,6 +2287,30 @@
     "message": "Écrit la modification dans le fichier de modèle du mod, elle continue donc\nde fonctionner avec Proteus désactivé et suit le mod si vous l'exportez.\nL'original est d'abord copié dans Proteus/meshvolume-backup/ à l'intérieur\ndu mod, et cela peut être annulé.",
     "description": ""
   },
+  "Parts.Brush.Save.Nothing.Tip": {
+    "message": "Tout est déjà enregistré. Les modifications s'enregistrent d'elles-mêmes peu après que vous arrêtez de peindre.",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes": {
+    "message": "Appliquer aux autres tailles",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Tip": {
+    "message": "Copie les modifications peintes sur ce modèle vers les autres tailles de ce\nmodèle dans le mod, en les faisant correspondre selon leur place sur le vêtement.\nChaque taille est sauvegardée d'abord, et « Annuler les modifications » la restaure.",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Running": {
+    "message": "Application aux autres tailles…",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Done.Fmt": {
+    "message": "Appliqué à {0} autre(s) taille(s).",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Problem.Fmt": {
+    "message": "{0} : {1}",
+    "description": ""
+  },
   "Parts.Brush.Saved.Fmt": {
     "message": "Enregistré. La surface a été déplacée de {0:F2} mm au maximum.",
     "description": ""
@@ -2289,6 +2329,42 @@
   },
   "Parts.Brush.Reverted.Fmt": {
     "message": "{0} modèle(s) remis comme l'auteur les avait faits.",
+    "description": ""
+  },
+  "Parts.Brush.Revert.Arm.Tip": {
+    "message": "Maintenez Ctrl ou Maj et cliquez.",
+    "description": ""
+  },
+  "Parts.Brush.Size.Keys.Tip": {
+    "message": "[ et ] la modifient ; maintenez Maj pour des pas fins.",
+    "description": ""
+  },
+  "Parts.Brush.Mirror": {
+    "message": "Miroir gauche/droite",
+    "description": ""
+  },
+  "Parts.Brush.Mirror.Tip": {
+    "message": "Peint les deux côtés à la fois, en miroir par rapport au centre du corps.",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Hint": {
+    "message": "Maj-clic sur une pièce pour la verrouiller.",
+    "description": ""
+  },
+  "Parts.Brush.Lock.ListTip": {
+    "message": "Décochez une pièce pour la verrouiller : aucun pinceau ne la déplace. Un maj-clic sur une pièce du modèle ou de votre personnage fait de même.",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Count.Fmt": {
+    "message": "{0} pièce(s) verrouillée(s)",
+    "description": ""
+  },
+  "Parts.Brush.Lock.UnlockAll": {
+    "message": "Tout déverrouiller",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Skin.Tip": {
+    "message": "La peau ne bouge jamais.",
     "description": ""
   },
   "MeshVolume.Apply.Nothing": {

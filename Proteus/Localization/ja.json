@@ -2179,6 +2179,22 @@
     "message": "このモデルの1番目の頂点カラーが白ではありません。風の効果は白を想定しています。Proteus は作者のままにします。",
     "description": ""
   },
+  "Parts.Wind.Materials.Set.Fmt": {
+    "message": "風でこの装備が動くよう、{0} 個のマテリアルファイルを設定しました。",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Missing.Fmt": {
+    "message": "{0} 個のマテリアルファイルには変更できる風の動きの設定がないため、揺れない可能性があります。",
+    "description": ""
+  },
+  "Parts.Wind.Materials.NotInMod.Fmt": {
+    "message": "この装備が使う {0} 個のマテリアルはこの Mod ではなくゲームのものなので、風の動きを設定できません。",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Failed.Fmt": {
+    "message": "装備のマテリアルを風用に設定できませんでした: {0}",
+    "description": ""
+  },
   "Parts.Wind.Refused.Fmt": {
     "message": "{0} 個のメッシュに風を追加できませんでした：頂点属性を追加する余地がありません。",
     "description": ""
@@ -2271,6 +2287,30 @@
     "message": "変更を MOD 自身のモデルファイルに書き込みます。Proteus を切っても有効で、\nMOD を書き出しても付いていきます。元のファイルは先に MOD 内の\nProteus/meshvolume-backup/ にコピーされ、いつでも元に戻せます。",
     "description": ""
   },
+  "Parts.Brush.Save.Nothing.Tip": {
+    "message": "すべて保存済みです。変更は塗り終えた少し後に自動で保存されます。",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes": {
+    "message": "他のサイズにも適用",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Tip": {
+    "message": "このモデルで塗った変更を、Mod 内の同じモデルの他のサイズに、装備上の位置で\n対応させてコピーします。各サイズは先にバックアップされ、「保存内容を元に戻す」で元に戻せます。",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Running": {
+    "message": "他のサイズに適用中…",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Done.Fmt": {
+    "message": "他の {0} サイズに適用しました。",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Problem.Fmt": {
+    "message": "{0}: {1}",
+    "description": ""
+  },
   "Parts.Brush.Saved.Fmt": {
     "message": "保存しました。表面は最大 {0:F2} mm 動きました。",
     "description": ""
@@ -2289,6 +2329,42 @@
   },
   "Parts.Brush.Reverted.Fmt": {
     "message": "{0} 件のモデルを作者の状態に戻しました。",
+    "description": ""
+  },
+  "Parts.Brush.Revert.Arm.Tip": {
+    "message": "Ctrl または Shift を押しながらクリックします。",
+    "description": ""
+  },
+  "Parts.Brush.Size.Keys.Tip": {
+    "message": "[ と ] で変更できます。Shift を押すと細かく変わります。",
+    "description": ""
+  },
+  "Parts.Brush.Mirror": {
+    "message": "左右対称",
+    "description": ""
+  },
+  "Parts.Brush.Mirror.Tip": {
+    "message": "体の中心を軸に、左右を同時に鏡映しで塗ります。",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Hint": {
+    "message": "Shift+クリックでパーツをロックします。",
+    "description": ""
+  },
+  "Parts.Brush.Lock.ListTip": {
+    "message": "パーツのチェックを外すとロックされ、どのブラシでも動かなくなります。モデルやキャラクター上のパーツを Shift+クリックしても同じです。",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Count.Fmt": {
+    "message": "{0} 個のパーツをロック中",
+    "description": ""
+  },
+  "Parts.Brush.Lock.UnlockAll": {
+    "message": "すべてロック解除",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Skin.Tip": {
+    "message": "肌は動きません。",
     "description": ""
   },
   "MeshVolume.Apply.Nothing": {

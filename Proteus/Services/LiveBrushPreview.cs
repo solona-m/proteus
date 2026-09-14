@@ -91,8 +91,8 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
                     if (!penumbra.SetPlayerTemporaryMod(Tag, map, Priority)) return false;
                     Active = true;
 
-                    // Glamourer reloads the gear itself on the temporary-mod change — see ExpectGlamourerGearReload.
-                    if (!compositor.ExpectGlamourerGearReload())
+                    // The gear reloads in place to pick the new file up — see ReloadGearInPlace.
+                    if (!compositor.ReloadGearInPlace())
                     {
                         if (!Unsupported) log.Warning("[Proteus] live brush: Glamourer cannot reload gear in place; previews fall back to redraws");
                         Unsupported = true;

@@ -46,8 +46,11 @@ internal static class VertexColorWriter
     }
 
     /// <summary>
-    /// Some mesh's first colour is not white. The wind guide asks for white, and a first colour the author tinted
-    /// is theirs to keep — so this is only ever reported, never changed.
+    /// Some CLOTH mesh's first colour is not white. The wind guide asks for white, and a first colour the author
+    /// tinted is theirs to keep — so this is only ever reported, never changed.
+    /// <para/>
+    /// Skin meshes are left out: the body a garment carries routinely has a tinted first colour (skin.shpk reads
+    /// it), and skin never sways, so warning about it sent the user looking in the wrong place.
     /// </summary>
     public static bool FirstColorNotWhite(byte[] mdl) => FirstColorNotWhite(SecondSkinWriter.Parse(mdl));
 
@@ -60,6 +63,8 @@ internal static class VertexColorWriter
             var el = src.Decls[m].FirstOrDefault(e => e.Usage == UseColor && e.UsageIndex == 0);
             if (el.Usage != UseColor || el.Type is not (NByte4 or 5)) continue;
             int mo = src.MeshStart + m * 36;
+            ushort material = BitConverter.ToUInt16(s, mo + 8);
+            if (material < src.MatNames.Count && SecondSkinWriter.IsBodySkinMaterial(src.MatNames[material])) continue;
             ushort vc = BitConverter.ToUInt16(s, mo);
             uint vbo = BitConverter.ToUInt32(s, mo + 20 + el.Stream * 4);
             byte stride = s[mo + 32 + el.Stream];

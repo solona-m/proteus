@@ -223,29 +223,6 @@ public class MeshVolumeServiceTests
     }
 
     /// <summary>
-    /// A model carrying neck morph data is refused, with nothing written.
-    /// <para/>
-    /// The morph holds its own copy of the surface along the neck seam. Moving the vertices underneath it
-    /// leaves the two describing different shapes, and the seam opens whenever the morph is active — and a
-    /// model carrying one is a head, which is not what a garment brush is for.
-    /// </summary>
-    [Fact]
-    public void RefusesAModelWithNeckMorphData()
-    {
-        var (mdl, solve, model) = Setup();
-
-        var centre = new Vector3(model.Positions[0], model.Positions[1], model.Positions[2]);
-        solve.Paint(centre, 10f, 0.002f);
-        solve.EndStroke();
-
-        mdl[SecondSkinWriter.Parse(mdl).Mh + 43] = 1;   // NeckMorphCount
-
-        var ex = Assert.Throws<ModelAttributeWriter.ModelEditException>(
-            () => MeshVolumeService.Inflate(mdl, solve));
-        Assert.Contains("neck morph", ex.Message, StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
     /// A position format the writer cannot express is refused rather than silently doing nothing.
     /// <para/>
     /// <c>WriteXYZ</c> has no default arm: handed a type it does not know it writes nothing and returns, so

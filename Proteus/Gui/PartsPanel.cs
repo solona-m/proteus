@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Numerics;
+using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Components;
@@ -77,6 +79,20 @@ public sealed class PartsPanel
     private readonly HashSet<string> ticked = new(StringComparer.Ordinal);
     /// <summary>Submeshes whose islands are listed out. See <see cref="DrawPartRows"/>.</summary>
     private readonly HashSet<(int Mesh, int Submesh)> expanded = [];
+
+    /// <summary>
+    /// Parts locked against the brush, by label, per model (keyed like <see cref="ViewportKey"/>). A submesh's
+    /// label covers all its islands. Kept for the session across tools, saves and switching models, since a lock
+    /// is about the garment — the belt on these trousers — and never written into the mod.
+    /// </summary>
+    private readonly Dictionary<string, HashSet<string>> lockedParts = [];
+
+    /// <summary>For each vertex of <see cref="parts"/>, the index in its part list of the most specific part it
+    /// belongs to (its island where the submesh lists islands, else the submesh); -1 for none.</summary>
+    private int[] partOfVertex = [];
+
+    /// <summary>The brush also paints its mirror image across the body's midline.</summary>
+    private bool mirrorBrush;
     private string toggleName = string.Empty;
     private readonly List<(string Name, List<string> Parts)> pending = [];
 
@@ -116,7 +132,7 @@ public sealed class PartsPanel
 
     /// <summary>Brush radius and per-dab strength, both in millimetres because that is how the problem is
     /// described: "the hip pokes through by about a millimetre".</summary>
-    private float brushRadiusMm = 200f, brushStrengthMm = 0.05f;
+    private float brushRadiusMm = 200f, brushStrengthMm = 0.4f;
 
     /// <summary>
     /// The bridge brush's own size, smaller than the others'. A bridge spans the hollow under the brush, so a
@@ -134,16 +150,16 @@ public sealed class PartsPanel
     private Func<int, float>? windAt;
 
     /// <summary>The wind brush's own size — see <see cref="windAmountPercent"/>.</summary>
-    private float windRadiusMm = 150f;
+    private float windRadiusMm = 15f;
 
     /// <summary>
     /// The wind being painted, as a percentage of full sway: each dab moves the surface toward it. Its own field,
     /// like each brush's strength, so switching tools never reinterprets another brush's number.
     /// </summary>
-    private float windAmountPercent = 50f;
+    private float windAmountPercent = 5f;
 
     /// <summary>How much of the way to <see cref="windAmountPercent"/> each moment of painting goes.</summary>
-    private float windRatePercent = 20f;
+    private float windRatePercent = 15f;
 
     /// <summary>
     /// The relax brush's strength, as a percentage — how far each moment of painting moves the surface toward
@@ -208,6 +224,10 @@ public sealed class PartsPanel
         this.liveBrush = liveBrush;
         preview = new LiveBrushPreview(penumbra, compositor, log);
         LiveBrushPreview.CleanUp();
+        partOfVertexFn = PartOfVertex;
+        lockClickedFn = LockClickedOnCharacter;
+        tickClickedFn = TickClickedOnCharacter;
+        partTickedFn = PartTicked;
         this.textureLoader = textureLoader;
         this.log = log;
     }
@@ -231,6 +251,7 @@ public sealed class PartsPanel
         var ps = Strings.Parts;
         ShowingModel = false;
         TickAutosave();
+        ConsumeApplySizes();
 
         ImGui.Spacing();
         ImGui.PushTextWrapPos(0);
@@ -300,6 +321,7 @@ public sealed class PartsPanel
         // The window grows for the viewer only; controls alone fit the size it already is.
         ShowingModel = showModelView;
         HandleUndoShortcut();
+        HandleBrushSizeKeys();
 
         // The tools and their controls down the LEFT, beside the model rather than under it. Under it, every
         // slider and button cost the model its height, and a model you paint on wants all the height there is.
@@ -332,16 +354,22 @@ public sealed class PartsPanel
             ImGui.SameLine();
             DrawParts(height);
         }
-        else if (tool == Tool.Navigate)
+        else
         {
-            // Without the viewer, picking parts for a switch is done from the list alone.
+            // Without the viewer, picking parts for a switch is done from the list alone — and under a brush the
+            // same list locks parts against it.
             ImGui.SameLine();
             DrawPartList(parts, height);
-        }
-        else if (volume != null && brushBase != null && ModRoot() is { } root)
-        {
-            liveBrush.ArmBrush(Path.Combine(root, models[modelIndex].File.Replace('/', Path.DirectorySeparatorChar)),
-                               brushBase, volume, ActiveRadiusMm / 1000f, showWind: tool == Tool.Wind);
+
+            // Under Toggle Parts too, where nothing paints: a click on the open garment ticks the part under it, as a
+            // click on the model view does — and a click on any other worn garment still opens that one.
+            bool pickParts = tool == Tool.Navigate;
+            if (volume != null && brushBase != null && ModRoot() is { } root)
+                liveBrush.ArmBrush(Path.Combine(root, models[modelIndex].File.Replace('/', Path.DirectorySeparatorChar)),
+                                   brushBase, volume, ActiveRadiusMm / 1000f, showWind: tool == Tool.Wind,
+                                   mirror: mirrorBrush, partOf: partOfVertexFn,
+                                   lockClicked: pickParts ? tickClickedFn : lockClickedFn,
+                                   pickParts: pickParts, partTicked: partTickedFn, tickedVersion: TickedVersion());
         }
 
         PumpBrush();
@@ -423,17 +451,19 @@ public sealed class PartsPanel
     }
 
     /// <summary>
-    /// Choosing a garment by clicking it on the character — always on while painting on the character, with a
-    /// line above the mod picker saying so.
+    /// Choosing a garment by clicking it on the character — on while painting on the character with Toggle Parts
+    /// selected or nothing open to brush yet, with a line above the mod picker saying so.
     /// <para/>
-    /// Always on, not behind a button, because it replaces the pickers: finding the right mod among hundreds,
-    /// then the right model among its sizes, is the slowest part of fixing a clip, and the character already
-    /// knows the answer. It does not fight the brush: a click on the garment being brushed paints, and only a
-    /// click on a DIFFERENT worn garment switches to it (see LiveBrush.Update).
+    /// Not behind a button, because it replaces the pickers: finding the right mod among hundreds, then the right
+    /// model among its sizes, is the slowest part of fixing a clip, and the character already knows the answer.
+    /// But OFF under a brush with a model open: a stroke that starts a hair off the edge of the garment, or a click
+    /// meant for the garment that lands on the one beside it, used to swap the model out from under the brush.
+    /// Switching garments is a Toggle Parts job, or the pickers'.
     /// </summary>
     private void DrawLivePick()
     {
         if (showModelView || penumbra.GetModDirectory() is not { } modsRoot) return;
+        if (tool != Tool.Navigate && volume != null) return;
         liveBrush.ArmPick(modsRoot, OnLivePicked);
         ImGui.TextDisabled(Strings.Parts.LivePickTip);
         ImGui.Spacing();
@@ -541,18 +571,58 @@ public sealed class PartsPanel
     /// </summary>
     private void HandleUndoShortcut()
     {
-        if (tool == Tool.Navigate || volume is not { CanUndo: true } vol || Surface.Painting) return;
-        // Painting on the character clicks into the game world, which takes focus away from every window —
-        // so there, "no window has focus" counts too. Ctrl+Z means nothing to the game itself.
-        bool focused = ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows)
-                    || (!showModelView && !ImGui.IsWindowFocused(ImGuiFocusedFlags.AnyWindow));
-        if (!focused) return;
+        bool pressed = undoKey.Poll();   // every frame — see HeldKey
+        if (!pressed || tool == Tool.Navigate || volume is not { CanUndo: true } vol || Surface.Painting) return;
         var io = ImGui.GetIO();
-        if (io.WantTextInput || !io.KeyCtrl || !ImGui.IsKeyPressed(ImGuiKey.Z, false)) return;
+        if (!io.KeyCtrl || !ShortcutsHaveTheKeyboard()) return;
 
         vol.Undo();
         AfterBrushEdit();
         SaveBrush();
+    }
+
+    private readonly HeldKey undoKey = new(KeyPoll.VkZ, repeat: false);
+    private readonly HeldKey growKey = new(KeyPoll.VkRightBracket, repeat: true);
+    private readonly HeldKey shrinkKey = new(KeyPoll.VkLeftBracket, repeat: true);
+
+    /// <summary>
+    /// Whether a key pressed now is meant for this tab: the game is the foreground window, no text box has the
+    /// keyboard, and this window is focused or under the mouse — or, painting on the character, which clicks into
+    /// the game world and so takes focus from every window, no window is focused at all.
+    /// </summary>
+    private bool ShortcutsHaveTheKeyboard()
+    {
+        if (ImGui.GetIO().WantTextInput || !KeyPoll.GameHasFocus()) return false;
+        return ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows)
+            || ImGui.IsWindowHovered(ImGuiHoveredFlags.RootAndChildWindows)
+            || (!showModelView && !ImGui.IsWindowFocused(ImGuiFocusedFlags.AnyWindow));
+    }
+
+    /// <summary>The brush size slider's range, in millimetres — down to a millimetre for sculpting a face.</summary>
+    private const float MinBrushMm = 1f, MaxBrushMm = 300f;
+
+    /// <summary>
+    /// <c>[</c> and <c>]</c> shrink and grow the current tool's brush — the Photoshop and Krita keys. By a PROPORTION
+    /// rather than a fixed step, so a press means the same at 3 mm as at 250 mm; Shift for fine steps. Held, they
+    /// repeat. Gated like <see cref="HandleUndoShortcut"/> — see <see cref="ShortcutsHaveTheKeyboard"/>.
+    /// </summary>
+    private void HandleBrushSizeKeys()
+    {
+        bool grow = growKey.Poll(), shrink = shrinkKey.Poll();   // every frame — see HeldKey
+        if (!grow && !shrink) return;
+        if (tool == Tool.Navigate || volume == null) return;
+        var io = ImGui.GetIO();
+        if (io.KeyCtrl || !ShortcutsHaveTheKeyboard()) return;
+
+        float step = io.KeyShift ? 1.03f : 1.15f;
+        float size = ActiveRadiusMm;
+        if (grow) size *= step;
+        if (shrink) size /= step;
+        size = Math.Clamp(size, MinBrushMm, MaxBrushMm);
+        if (size == ActiveRadiusMm) return;
+
+        ActiveRadiusMm = size;
+        viewport.Recolour();
     }
 
     /// <summary>A button size spanning the rest of the current row at the normal button height.</summary>
@@ -802,6 +872,8 @@ public sealed class PartsPanel
         EndLivePreview(refreshGame: true);
         brushChangedAt = -1;
         brushBase = null;
+        // A new solve starts from the file as it is now, so the other sizes must too. Replaced, not cleared — see sizeBases.
+        sizeBases = new ConcurrentDictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
         modelIndex = index;
         ticked.Clear();
         expanded.Clear();
@@ -837,9 +909,132 @@ public sealed class PartsPanel
         volume = parts != null ? new MeshVolumeSolve(parts) : null;
         windAt = volume != null ? volume.WindAt : null;
         viewport.PositionOverride = null;
+        partOfVertex = parts != null ? BuildPartOfVertex(parts) : [];
+        ApplyLocks();
 
         if (parts != null) viewport.Show(ViewportKey, parts);
         else viewport.Clear();
+    }
+
+    // ── locked parts ────────────────────────────────────────────────────────
+
+    /// <summary>The open model's locked labels, created on first use.</summary>
+    private HashSet<string> Locks
+    {
+        get
+        {
+            if (!lockedParts.TryGetValue(ViewportKey, out var set))
+                lockedParts[ViewportKey] = set = new HashSet<string>(StringComparer.Ordinal);
+            return set;
+        }
+    }
+
+    private static int[] BuildPartOfVertex(ModelParts model)
+    {
+        var result = new int[model.Positions.Length / 3];
+        Array.Fill(result, -1);
+        // Submeshes first, then islands over them: the finer part wins, as it does for a click in the viewer.
+        foreach (bool islands in new[] { false, true })
+            for (int p = 0; p < model.Parts.Count; p++)
+            {
+                if (model.Parts[p].Island >= 0 != islands) continue;
+                foreach (int v in model.Parts[p].Triangles)
+                    if (v >= 0 && v < result.Length) result[v] = p;
+            }
+        return result;
+    }
+
+    /// <summary>The submesh row an island belongs to, or null for a submesh (or an island without one).</summary>
+    private ModelPart? ParentOf(ModelPart part)
+        => part.Island < 0 ? null
+         : parts?.Parts.FirstOrDefault(p => p.Island < 0 && p.Mesh == part.Mesh && p.Submesh == part.Submesh);
+
+    private bool IsLocked(ModelPart part)
+        => Locks.Contains(part.Label) || (ParentOf(part) is { } parent && Locks.Contains(parent.Label));
+
+    private static bool IsSkin(ModelPart part) => SecondSkinWriter.IsBodySkinMaterial(part.Material);
+
+    /// <summary>Lock or unlock one part, from the list, a Shift-click on the model or one on the character.</summary>
+    private void ToggleLock(string label)
+    {
+        if (parts is not { } model || model.Parts.FirstOrDefault(p => p.Label == label) is not { } part || IsSkin(part))
+            return;
+        var locks = Locks;
+
+        if (!IsLocked(part))
+        {
+            locks.Add(label);
+            // A whole submesh locked covers its islands; their own entries would only linger after it is unlocked.
+            if (part.Island < 0)
+                foreach (var island in model.Parts.Where(p => p.Island >= 0 && p.Mesh == part.Mesh && p.Submesh == part.Submesh))
+                    locks.Remove(island.Label);
+        }
+        else if (!locks.Remove(label) && ParentOf(part) is { } parent)
+        {
+            // Unlocking one island of a locked submesh: the submesh gives way to every other island of it.
+            locks.Remove(parent.Label);
+            foreach (var sibling in model.Parts.Where(p => p.Island >= 0 && p.Mesh == part.Mesh
+                                                        && p.Submesh == part.Submesh && p.Label != label))
+                locks.Add(sibling.Label);
+        }
+
+        ApplyLocks();
+    }
+
+    private void UnlockAll()
+    {
+        Locks.Clear();
+        ApplyLocks();
+    }
+
+    /// <summary>Hand the locks to the solve and the viewer.</summary>
+    private void ApplyLocks()
+    {
+        if (parts == null) return;
+        var locks = Locks;
+        viewport.Locked = locks;
+        viewport.Recolour();
+        if (volume == null) return;
+        // A submesh's triangles already include every island of it, so the labels alone are enough.
+        volume.SetLocked(parts.Parts.Where(p => locks.Contains(p.Label)).SelectMany(p => p.Triangles));
+    }
+
+    /// <summary>A Shift-click on the character, with a vertex of the triangle it landed on.</summary>
+    private void LockClickedOnCharacter(int vertex)
+    {
+        if (parts == null || vertex < 0 || vertex >= partOfVertex.Length || partOfVertex[vertex] < 0) return;
+        ToggleLock(parts.Parts[partOfVertex[vertex]].Label);
+    }
+
+    private int PartOfVertex(int vertex) => vertex >= 0 && vertex < partOfVertex.Length ? partOfVertex[vertex] : -1;
+
+    // Made once and handed to the live brush every frame, rather than a new delegate per frame per method group.
+    private readonly Func<int, int> partOfVertexFn;
+    private readonly Action<int> lockClickedFn;
+    private readonly Action<int> tickClickedFn;
+    private readonly Func<int, bool> partTickedFn;
+
+    /// <summary>A click on the character under Toggle Parts, with a vertex of the triangle it landed on.</summary>
+    private void TickClickedOnCharacter(int vertex)
+    {
+        if (parts == null || vertex < 0 || vertex >= partOfVertex.Length || partOfVertex[vertex] < 0) return;
+        Toggle(parts.Parts[partOfVertex[vertex]].Label);
+    }
+
+    /// <summary>Whether part <paramref name="index"/> is ticked — itself, or through its whole submesh.</summary>
+    private bool PartTicked(int index)
+    {
+        if (parts == null || index < 0 || index >= parts.Parts.Count) return false;
+        var part = parts.Parts[index];
+        return ticked.Contains(part.Label) || (ParentOf(part) is { } parent && ticked.Contains(parent.Label));
+    }
+
+    /// <summary>A value that changes whenever the ticked set does, for the live tint's cache.</summary>
+    private int TickedVersion()
+    {
+        int h = ticked.Count;
+        foreach (var label in ticked) h ^= StringComparer.Ordinal.GetHashCode(label) * 16777619;
+        return h;
     }
 
     private string ViewportKey => modDir + "|" + (modelIndex >= 0 ? models[modelIndex].File : "");
@@ -876,6 +1071,7 @@ public sealed class PartsPanel
             : PartViewport.ViewportMode.Brush;
         viewport.BrushRadius = tool == Tool.Navigate ? 0f : ActiveRadiusMm / 1000f;
         viewport.VertexScalar = tool == Tool.Wind ? windAt : null;
+        viewport.MirrorBrush = mirrorBrush;
 
         // The share cap is on the image's WIDTH, not on the row's height, and that is load-bearing. Capping
         // the height by the available WIDTH would couple the row to avail.X — which shrinks by the scrollbar
@@ -884,20 +1080,21 @@ public sealed class PartsPanel
         // where the content just barely fits. Capping only the image leaves the row's height a function of
         // avail.Y alone; a wide-and-short model is simply letterboxed shorter than the list beside it, which
         // reads fine because SameLine tops them out together.
-        // Under a brush the part list is hidden and the model takes the whole row: the list is for choosing
-        // parts to switch, and while painting it is only in the way of the thing being painted.
+        // Under a brush the part list stays beside the model too: there its boxes lock parts against the brush, and
+        // a click on the model — which paints — only reaches a part with Shift held (a Shift-drag still pans).
         bool brushing = tool != Tool.Navigate;
-        float width = brushing
-            ? ImGui.GetContentRegionAvail().X
-            : MathF.Min(height * PartViewport.DefaultAspect, ImGui.GetContentRegionAvail().X * 0.55f);
-        if (viewport.Draw(model, new Vector2(width, height)) is { } clicked) Toggle(clicked);
-        if (brushing) return;
+        float width = MathF.Min(height * PartViewport.DefaultAspect, ImGui.GetContentRegionAvail().X * 0.55f);
+        if (viewport.Draw(model, new Vector2(width, height)) is { } clicked)
+        {
+            if (brushing) ToggleLock(clicked);
+            else Toggle(clicked);
+        }
 
         // Two different things to say, and only one of them is an apology. A part the author already
         // switches takes the click normally — the tooltip is there to explain that the new switch will
         // stack rather than replace. A part with an unreadable tag is the one the model still lights up,
         // hand-cursors and then quietly absorbs, so without this it says nothing at all.
-        if (viewport.PointerOverModel && viewport.Hovered is { } hot
+        if (!brushing && viewport.PointerOverModel && viewport.Hovered is { } hot
             && model.Parts.FirstOrDefault(p => p.Label == hot) is { } hovered)
         {
             if (!hovered.Toggleable)          ImGui.SetTooltip(ps.UnreadableTagTip);
@@ -933,7 +1130,7 @@ public sealed class PartsPanel
                     ProteusStyle.S(80f));
 
                 ImGui.PushTextWrapPos(wrapAt);
-                ImGui.TextDisabled(ps.ClickTip);
+                ImGui.TextDisabled(tool == Tool.Navigate ? ps.ClickTip : ps.BrushLockListTip);
                 ImGui.PopTextWrapPos();
 
                 foreach (var (label, count) in model.ShatteredSubmeshes)
@@ -962,6 +1159,10 @@ public sealed class PartsPanel
         var ps = Strings.Parts;
         string? hoveredRow = null;
 
+        // Under a brush the same rows lock parts instead: TICKED means the brush moves it, unticking locks it.
+        // Everything about a switch — what may take one, what the author already switches — is beside the point.
+        bool brushing = tool != Tool.Navigate;
+
         // Islands per submesh, so a submesh row can say how many it has and whether to draw them.
         var islands = model.Parts.Where(p => p.Island >= 0)
             .GroupBy(p => (p.Mesh, p.Submesh))
@@ -972,13 +1173,28 @@ public sealed class PartsPanel
             bool isIsland = part.Island >= 0;
             var owner = (part.Mesh, part.Submesh);
 
-            if (isIsland && !expanded.Contains(owner) && !ticked.Contains(part.Label)) continue;
+            // A locked island always has a row under a brush, as a ticked one does for a switch — otherwise a
+            // Shift-click on a strap would lock something the list did not admit existed.
+            bool listed = brushing ? Locks.Contains(part.Label) : ticked.Contains(part.Label);
+            if (isIsland && !expanded.Contains(owner) && !listed) continue;
             if (isIsland) ImGui.Indent(ProteusStyle.S(12f));
 
-            bool on = ticked.Contains(part.Label);
-            using (ImRaii.Disabled(!part.Toggleable))
-                if (ImGui.Checkbox($"{part.Label}##p_{part.Label}", ref on))
-                    Toggle(part.Label);
+            if (brushing)
+            {
+                bool skin = IsSkin(part);
+                bool moves = skin || !IsLocked(part);
+                using (ImRaii.Disabled(skin))
+                    if (ImGui.Checkbox($"{part.Label}##l_{part.Label}", ref moves))
+                        ToggleLock(part.Label);
+                if (skin && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(ps.BrushLockSkinTip);
+            }
+            else
+            {
+                bool on = ticked.Contains(part.Label);
+                using (ImRaii.Disabled(!part.Toggleable))
+                    if (ImGui.Checkbox($"{part.Label}##p_{part.Label}", ref on))
+                        Toggle(part.Label);
+            }
 
             if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) hoveredRow = part.Label;
 
@@ -990,7 +1206,7 @@ public sealed class PartsPanel
             // Marked on the row, not left to the tooltip. The stacking changes what ticking this box means
             // — the part will need the author's switch on as well — and that is worth knowing while
             // choosing, not only after hovering the one row you already suspected.
-            if (part.AuthorSwitched)
+            if (part.AuthorSwitched && !brushing)
             {
                 ImGui.SameLine();
                 ImGui.TextDisabled(ps.AuthorSwitchedTag);
@@ -1011,7 +1227,7 @@ public sealed class PartsPanel
 
             if (isIsland) ImGui.Unindent(ProteusStyle.S(12f));
 
-            if (hoveredRow == part.Label)
+            if (hoveredRow == part.Label && !brushing)
             {
                 if (!part.Toggleable)          ImGui.SetTooltip(ps.UnreadableTagTip);
                 else if (part.AuthorSwitched)  ImGui.SetTooltip(ps.StacksWithAuthorTip);
@@ -1081,7 +1297,7 @@ public sealed class PartsPanel
                 viewport.Recolour();
                 viewport.GeometryChanged();   // the wind wash comes and goes with the wind tool
             }
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip(tip);
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(value == Tool.Navigate ? tip : tip + "\n\n" + ps.BrushLockHint);
         }
         ImGui.Spacing();
     }
@@ -1103,20 +1319,22 @@ public sealed class PartsPanel
             float radius = ActiveRadiusMm / 1000f;
             int moved = tool switch
             {
-                Tool.Relax  => volume.Relax(at, radius, relaxRatePercent / 100f),
-                Tool.Bridge => volume.Bridge(at, radius, bridgeRatePercent / 100f, surface.ToViewer),
+                Tool.Relax  => volume.Relax(at, radius, relaxRatePercent / 100f, mirrorBrush),
+                Tool.Bridge => volume.Bridge(at, radius, bridgeRatePercent / 100f, surface.ToViewer, mirrorBrush),
                 // Ctrl held paints toward none: the eraser, without a second tool or reaching for the slider.
                 Tool.Wind   => volume.PaintWind(at, radius, ImGui.GetIO().KeyCtrl ? 0f : windAmountPercent / 100f,
-                                                windRatePercent / 100f),
+                                                windRatePercent / 100f, mirrorBrush),
                 _           => volume.Paint(at, radius,
                                             brushStrengthMm / 1000f * (tool == Tool.Deflate ? -1f : 1f),
-                                            surface.ToViewer),
+                                            surface.ToViewer, mirrorBrush),
             };
             if (moved > 0)
             {
                 viewport.PositionOverride = volume.Positions();
                 viewport.GeometryChanged();
-                previewDirty = !showModelView;
+                // Not for wind: the in-place preview does not show it (see SaveBrush), so pushing one per dab is
+                // only cost.
+                previewDirty = !showModelView && tool != Tool.Wind;
             }
         }
 
@@ -1182,9 +1400,12 @@ public sealed class PartsPanel
         // still fits inside the column instead of being clipped by it.
         float w = ImGui.GetContentRegionAvail().X * 0.55f;
         ImGui.SetNextItemWidth(w);
-        if (ImGui.SliderFloat(ps.BrushSize, ref ActiveRadiusMm, 20f, 300f, "%.0f mm"))
+        // Logarithmic, down to a millimetre: a face feature is a few millimetres across and a skirt's swell a few
+        // hundred, and on a linear slider the whole of the small end would be its first few pixels.
+        if (ImGui.SliderFloat(ps.BrushSize, ref ActiveRadiusMm, MinBrushMm, MaxBrushMm,
+                              ActiveRadiusMm < 10f ? "%.1f mm" : "%.0f mm", ImGuiSliderFlags.Logarithmic))
             viewport.Recolour();
-        if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushSizeTip);
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushSizeTip + "\n\n" + ps.BrushSizeKeysTip);
 
         // One Strength slider, meaning a distance for the pull and push brushes and a rate for relax. Separate
         // values underneath, so neither is misread when the tool changes.
@@ -1227,8 +1448,24 @@ public sealed class PartsPanel
         // looks from the outside exactly like the brush not working. Said against the mesh's OWN resolution,
         // because "20 mm" means something different on a 2,000-triangle skirt and a 60,000-triangle coat.
         if (volume is { MeanEdge: > 0f } v && ActiveRadiusMm / 1000f < v.MeanEdge * 1.5f)
+        {
+            ImGui.PushTextWrapPos(0);
             ImGui.TextColored(ProteusStyle.Warn,
                               string.Format(ps.BrushTooSmallFmt, v.MeanEdge * 1000f));
+            ImGui.PopTextWrapPos();
+        }
+
+        ImGui.Spacing();
+        if (ImGui.Checkbox(ps.BrushMirror, ref mirrorBrush)) viewport.Recolour();
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushMirrorTip);
+
+        // Locks are made on the model, the character or the part list; this only says how many, and lets them all go.
+        if (parts != null && Locks.Count > 0)
+        {
+            ImGui.TextDisabled(string.Format(ps.BrushLockCountFmt, Locks.Count));
+            ImGui.SameLine();
+            if (ImGui.SmallButton(ps.BrushUnlockAll)) UnlockAll();
+        }
 
         if (volume is { } vol)
         {
@@ -1244,25 +1481,47 @@ public sealed class PartsPanel
             //
             // Every button full width, one per row, so the column reads as a stack of actions rather than a
             // ragged edge of differently-sized labels.
+            // Offered only where the mod has other sizes of this model to carry the edit to.
+            if (OtherSizes().Count > 0)
+            {
+                bool applying = applySizesTask != null;
+                using (ImRaii.Disabled(!vol.Dirty || applying))
+                    if (ImGui.Button(ps.BrushApplySizes, FullWidth())) ApplyToOtherSizes();
+                ProteusStyle.ReasonTooltip(ps.BrushApplySizesTip);
+                if (applying) ImGui.TextDisabled(ps.BrushApplySizesRunning);
+            }
+
             using (ImRaii.Disabled(!vol.CanUndo))
                 if (ImGui.Button(ps.BrushUndo, FullWidth())) { vol.Undo(); AfterBrushEdit(); SaveBrush(); }
 
             using (ImRaii.Disabled(!vol.Dirty))
                 if (ImGui.Button(ps.BrushReset, FullWidth())) { vol.Reset(); AfterBrushEdit(); SaveBrush(); }
 
-            // Saving happens on its own a few seconds after the last change. The button is for not waiting.
-            ImGui.Spacing();
-            using (ImRaii.Disabled(brushChangedAt < 0))
-                if (ImGui.Button(ps.BrushSave, FullWidth())) SaveBrush();
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushSaveTip);
+            // Saving happens on its own: a moment after the last change in the viewer, and the moment a stroke is let
+            // go on the character. The button is for not waiting — so on the character, where there is never a wait,
+            // it shows only while a save is still owed (one that failed and is being retried), and a disabled one
+            // says why rather than looking broken.
+            if (showModelView || brushChangedAt >= 0)
+            {
+                ImGui.Spacing();
+                using (ImRaii.Disabled(brushChangedAt < 0))
+                    if (ImGui.Button(ps.BrushSave, FullWidth())) SaveBrush();
+                ProteusStyle.ReasonTooltip(brushChangedAt < 0 ? ps.BrushSaveNothingTip : ps.BrushSaveTip);
+            }
 
             if (brushChangedAt >= 0) ImGui.TextColored(ProteusStyle.Warn, ps.BrushNotSavedYet);
 
+            // Ctrl- or Shift-armed: it throws away every saved brush edit in the mod. The house style for anything
+            // destructive (see PresetBar's delete) — there are no confirmation modals in this plugin.
             if (brushSaved > 0)
             {
                 ImGui.Spacing();
-                if (ImGui.Button(ps.BrushRevert, FullWidth())) RevertBrush();
-                if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushRevertTip);
+                var io = ImGui.GetIO();
+                bool armed = io.KeyCtrl || io.KeyShift;
+                using (ImRaii.PushStyle(ImGuiStyleVar.Alpha, armed ? 1f : 0.5f))
+                using (ImRaii.Disabled(!armed))
+                    if (ImGui.Button(ps.BrushRevert, FullWidth())) RevertBrush();
+                ProteusStyle.ReasonTooltip(ps.BrushRevertTip + "\n\n" + ps.BrushRevertArmTip);
             }
         }
     }
@@ -1322,6 +1581,26 @@ public sealed class PartsPanel
             log.Warning("[Proteus] brush: {0} shape values could not be carried in {1}",
                         result.UnmappedSpares, rel);
         }
+        // Painted wind sways nothing where the garment's materials hold vertex movement at 0, so they are set with it.
+        int materialsChanged = 0;
+        if (volume.WindEdited && parts != null)
+        {
+            try
+            {
+                var mats = MeshVolumeService.ApplyWindMaterials(
+                    root, parts.Parts.Where(p => !IsSkin(p)).Select(p => p.Material), redirects);
+                materialsChanged = mats.Changed;
+                if (mats.Changed > 0) status += "\n" + string.Format(Strings.Parts.WindMaterialsSetFmt, mats.Changed);
+                if (mats.Missing > 0) status += "\n" + string.Format(Strings.Parts.WindMaterialsMissingFmt, mats.Missing);
+                if (mats.NotInMod > 0) status += "\n" + string.Format(Strings.Parts.WindMaterialsNotInModFmt, mats.NotInMod);
+            }
+            catch (Exception ex)
+            {
+                log.Warning(ex, "[Proteus] brush: could not set wind movement on the materials of {0}", rel);
+                status += "\n" + string.Format(Strings.Parts.WindMaterialsFailedFmt, ex.Message);
+            }
+        }
+
         brushSaved = MeshVolumeService.PatchedCount(root);
 
         // NOT AfterModChange. That re-reads the model and rebuilds everything from it, which would throw
@@ -1332,12 +1611,21 @@ public sealed class PartsPanel
         // Reload BEFORE the redraw, in that order: a redraw alone re-resolves the path and is handed back the
         // bytes Penumbra still has in memory — see HatCompatWatcher, which learned it the hard way.
         if (!refreshGame) return;
-        penumbra.ReloadModDirectory(modDir);
 
         // On the character, the preview shows the saved state: a new file, reloaded in place, no redraw. The
         // mod's own file cannot be shown that way — the game hands back the model it has cached under that
-        // path — so everywhere else, and wherever Glamourer cannot reload in place, it is a full redraw.
-        if (!showModelView && !preview.UnsupportedFor(TargetIsCustomizePart)) previewDirty = true;
+        // path — so everywhere else, and wherever Glamourer cannot reload in place (hair, a face), it is a full
+        // redraw. Previewed, the mod's reload is marked as our own, or the compositor takes it for a changed base
+        // and recomposites and redraws the character after every stroke. A material just rewritten for wind is
+        // cached by the game like the model is, and the preview replaces only the model — so that save redraws once.
+        // Wind always redraws: the in-place reload shows a moved surface but not new wind, measured in game. Its reload
+        // is still our own — wind moves no geometry, so nothing the second skin is cut from has changed.
+        bool wind = tool == Tool.Wind;
+        bool previewed = !showModelView && !preview.UnsupportedFor(TargetIsCustomizePart) && materialsChanged == 0 && !wind;
+        if (previewed || (wind && !showModelView)) compositor.ExpectOwnModEdit(modDir);
+        penumbra.ReloadModDirectory(modDir);
+
+        if (previewed) previewDirty = true;
         else if (preview.Active) EndLivePreview(refreshGame: true);
         else compositor.RedrawForChangedModel();
     }
@@ -1360,6 +1648,159 @@ public sealed class PartsPanel
         // character would keep the brushed model it has cached until something else redrew it. Same pairing
         // as a save: reload (done above), then redraw.
         if (result.Ok) compositor.RedrawForChangedModel();
+    }
+
+    // ── other sizes ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Each other size's bytes as they were the first time the brush was applied to it since this model was opened.
+    /// Every apply is those bytes plus the WHOLE current edit, the way every save of the model itself is
+    /// <see cref="brushBase"/> plus the whole edit — so pressing the button again after more strokes replaces what
+    /// the last press wrote instead of stacking on it.
+    /// <para/>
+    /// Written from the apply's worker thread, hence concurrent — and REPLACED, never cleared, when another model is
+    /// opened, so an apply still running for the last model fills the old instance rather than the new one.
+    /// </summary>
+    private ConcurrentDictionary<string, byte[]> sizeBases = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The apply running on a worker thread, or null; its result is taken up by <see cref="ConsumeApplySizes"/>.</summary>
+    private Task<ApplySizesResult>? applySizesTask;
+
+    /// <param name="Root">The mod root the task wrote into.</param>
+    /// <param name="ModDir">The mod's Penumbra directory name, to reload.</param>
+    private sealed record ApplySizesResult(string Root, string ModDir, int Applied, List<string> Problems, bool WornChanged);
+
+    /// <summary>One size the apply writes: the file, its picker label, and whether the character is wearing it.</summary>
+    private readonly record struct SizeTarget(string Rel, string Label, bool Worn);
+
+    /// <summary><see cref="OtherSizes"/>' answer, and the model list and index it was worked out for.</summary>
+    private List<int> otherSizesCache = [];
+    private List<PenumbraModMeta.Redirect>? otherSizesModels;
+    private int otherSizesIndex = -2;
+
+    /// <summary>
+    /// The mod's other files for the open model's game path — its other sizes — one row per file. Asked every frame
+    /// the brush panel draws, so worked out once per model list and model.
+    /// </summary>
+    private List<int> OtherSizes()
+    {
+        if (ReferenceEquals(otherSizesModels, models) && otherSizesIndex == modelIndex) return otherSizesCache;
+        otherSizesModels = models;
+        otherSizesIndex = modelIndex;
+        var result = otherSizesCache = [];
+        if (modelIndex < 0 || modelIndex >= models.Count) return result;
+        var current = models[modelIndex];
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { MeshVolumeService.Rel(current.File) };
+        for (int i = 0; i < models.Count; i++)
+            if (string.Equals(models[i].GamePath, current.GamePath, StringComparison.OrdinalIgnoreCase)
+                && seen.Add(MeshVolumeService.Rel(models[i].File)))
+                result.Add(i);
+        return result;
+    }
+
+    /// <summary>
+    /// Carry the open model's brush edit onto every other size of it in the mod — see <see cref="BrushTransfer"/> —
+    /// and save each through the brush's own backup and record, so Undo saved changes takes them back as well.
+    /// <para/>
+    /// ON A WORKER THREAD. Per size it is a file read, a parse, a nearest-point search per vertex and a rewrite,
+    /// which on a garment with several sizes froze the game for seconds when it ran inside the click. Everything
+    /// the work needs is gathered here first — the edit itself SNAPSHOTTED, since the user can go on painting the
+    /// live solve meanwhile — and what must happen on the framework thread (Penumbra, the status line, a redraw) is
+    /// done by <see cref="ConsumeApplySizes"/> once it finishes.
+    /// </summary>
+    private void ApplyToOtherSizes()
+    {
+        if (applySizesTask != null) return;
+        if (volume == null || parts == null || modDir == null || ModRoot() is not { } root) return;
+        FlushPending();   // the open model is saved first, so every size in the mod agrees
+
+        var worn = WornFiles()
+            .Where(w => string.Equals(w.Mod, modDir, StringComparison.OrdinalIgnoreCase))
+            .Select(w => w.Rel)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var targets = OtherSizes()
+            .Select(i => new SizeTarget(MeshVolumeService.Rel(models[i].File), modelLabels[i],
+                                        worn.Contains(MeshVolumeService.Rel(models[i].File))))
+            .ToList();
+        if (targets.Count == 0) return;
+
+        var edit = BrushTransfer.Edit.From(volume, parts.Positions.Length / 3);
+        var source = parts;
+        var modRedirects = redirects;
+        var bases = sizeBases;
+        var dir = modDir;
+        var ps = Strings.Parts;
+
+        applySizesTask = Task.Run(() =>
+        {
+            int applied = 0;
+            bool wornChanged = false;
+            var problems = new List<string>();
+            foreach (var t in targets)
+            {
+                try
+                {
+                    var bytes = bases.GetOrAdd(t.Rel, rel => File.ReadAllBytes(
+                        Path.Combine(root, rel.Replace('/', Path.DirectorySeparatorChar))));
+                    if (ModelPartReader.Read(bytes) is not { } targetParts)
+                    {
+                        problems.Add(string.Format(ps.BrushApplySizesProblemFmt, t.Label, ps.Unreadable));
+                        continue;
+                    }
+
+                    var target = BrushTransfer.Transfer(edit, source, targetParts);
+                    var result = MeshVolumeService.Apply(root, t.Rel, bytes, target, writeUntouched: true);
+                    if (!result.Ok)
+                    {
+                        problems.Add(string.Format(ps.BrushApplySizesProblemFmt, t.Label, result.Message));
+                        continue;
+                    }
+                    if (target.WindEdited)
+                        MeshVolumeService.ApplyWindMaterials(
+                            root, targetParts.Parts.Where(p => !IsSkin(p)).Select(p => p.Material), modRedirects);
+                    applied++;
+                    wornChanged |= t.Worn;
+                }
+                catch (Exception ex)
+                {
+                    log.Warning(ex, "[Proteus] brush: could not apply to {0}", t.Rel);
+                    problems.Add(string.Format(ps.BrushApplySizesProblemFmt, t.Label, ex.Message));
+                }
+            }
+            return new ApplySizesResult(root, dir, applied, problems, wornChanged);
+        });
+    }
+
+    /// <summary>
+    /// Take up a finished <see cref="ApplyToOtherSizes"/> on the framework thread: say what happened, and tell
+    /// Penumbra and the game. Called every frame the tab draws.
+    /// </summary>
+    private void ConsumeApplySizes()
+    {
+        if (applySizesTask is not { IsCompleted: true } task) return;
+        applySizesTask = null;
+
+        if (task.IsFaulted || task.IsCanceled)
+        {
+            log.Warning(task.Exception, "[Proteus] brush: applying to other sizes failed");
+            statusIsError = true;
+            status = task.Exception?.GetBaseException().Message ?? "";
+            return;
+        }
+
+        var r = task.Result;
+        statusIsError = r.Applied == 0 && r.Problems.Count > 0;
+        status = string.Join("\n", new[] { string.Format(Strings.Parts.BrushAppliedSizesFmt, r.Applied) }.Concat(r.Problems));
+        if (string.Equals(ModRoot(), r.Root, StringComparison.OrdinalIgnoreCase))
+            brushSaved = MeshVolumeService.PatchedCount(r.Root);
+
+        if (r.Applied == 0) return;
+        // Sizes nobody is wearing need only Penumbra told; one the character IS wearing has to be redrawn to show.
+        if (!r.WornChanged) compositor.ExpectOwnModEdit(r.ModDir);
+        penumbra.ReloadModDirectory(r.ModDir);
+        if (!r.WornChanged) return;
+        if (preview.Active) EndLivePreview(refreshGame: true);
+        else compositor.RedrawForChangedModel();
     }
 
     private void AfterBrushEdit()

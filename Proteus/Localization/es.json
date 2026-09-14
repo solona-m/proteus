@@ -2179,6 +2179,22 @@
     "message": "El primer color de vértice de este modelo no es blanco, que es lo que espera el efecto de viento. Proteus lo deja como lo hizo el autor.",
     "description": ""
   },
+  "Parts.Wind.Materials.Set.Fmt": {
+    "message": "Se ajustaron {0} archivo(s) de material para que el viento pueda mover esta prenda.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Missing.Fmt": {
+    "message": "{0} archivo(s) de material no tienen ajustes de movimiento por viento que cambiar, así que puede que no se muevan.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.NotInMod.Fmt": {
+    "message": "{0} material(es) de esta prenda vienen del juego, no de este mod, así que su movimiento por viento no se puede ajustar.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Failed.Fmt": {
+    "message": "No se pudieron ajustar los materiales de la prenda para el viento: {0}",
+    "description": ""
+  },
   "Parts.Wind.Refused.Fmt": {
     "message": "No se pudo añadir viento a {0} malla(s): no hay espacio para otro atributo de vértice.",
     "description": ""
@@ -2271,6 +2287,30 @@
     "message": "Escribe el cambio en el archivo de modelo del propio mod, así que sigue\nfuncionando con Proteus apagado y viaja con el mod si lo exportas. El\noriginal se copia antes a Proteus/meshvolume-backup/ dentro del mod, y\nesto se puede deshacer.",
     "description": ""
   },
+  "Parts.Brush.Save.Nothing.Tip": {
+    "message": "Todo está guardado ya. Los cambios se guardan solos un momento después de dejar de pintar.",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes": {
+    "message": "Aplicar a otras tallas",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Tip": {
+    "message": "Copia los cambios pintados en este modelo a las demás tallas del mismo modelo\nen el mod, emparejados según dónde quedan en la prenda. Cada talla se respalda\nprimero, y «Deshacer lo guardado» la restaura.",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Running": {
+    "message": "Aplicando a otras tallas…",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Done.Fmt": {
+    "message": "Aplicado a {0} talla(s) más.",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Problem.Fmt": {
+    "message": "{0}: {1}",
+    "description": ""
+  },
   "Parts.Brush.Saved.Fmt": {
     "message": "Guardado. La superficie se movió hasta {0:F2} mm.",
     "description": ""
@@ -2289,6 +2329,42 @@
   },
   "Parts.Brush.Reverted.Fmt": {
     "message": "{0} modelo(s) devueltos tal como los hizo el autor.",
+    "description": ""
+  },
+  "Parts.Brush.Revert.Arm.Tip": {
+    "message": "Mantén Ctrl o Mayús y haz clic.",
+    "description": ""
+  },
+  "Parts.Brush.Size.Keys.Tip": {
+    "message": "[ y ] lo cambian; mantén Mayús para pasos finos.",
+    "description": ""
+  },
+  "Parts.Brush.Mirror": {
+    "message": "Espejo izquierda/derecha",
+    "description": ""
+  },
+  "Parts.Brush.Mirror.Tip": {
+    "message": "Pinta ambos lados a la vez, reflejados respecto al centro del cuerpo.",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Hint": {
+    "message": "Mayús-clic en una pieza para bloquearla.",
+    "description": ""
+  },
+  "Parts.Brush.Lock.ListTip": {
+    "message": "Desmarca una pieza para bloquearla: ningún pincel la mueve. Hacer mayús-clic en una pieza del modelo o de tu personaje hace lo mismo.",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Count.Fmt": {
+    "message": "{0} pieza(s) bloqueada(s)",
+    "description": ""
+  },
+  "Parts.Brush.Lock.UnlockAll": {
+    "message": "Desbloquear todo",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Skin.Tip": {
+    "message": "La piel nunca se mueve.",
     "description": ""
   },
   "MeshVolume.Apply.Nothing": {

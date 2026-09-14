@@ -2179,6 +2179,22 @@
     "message": "This model's first vertex colour isn't white, which the wind effect expects. Proteus leaves it as the author made it.",
     "description": "Warning under the wind sliders."
   },
+  "Parts.Wind.Materials.Set.Fmt": {
+    "message": "Set {0} material file(s) so the wind can move this garment.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Missing.Fmt": {
+    "message": "{0} material file(s) have no wind movement settings to change, so they may not sway.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.NotInMod.Fmt": {
+    "message": "{0} material(s) this garment uses come from the game, not this mod, so their wind movement can't be set.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Failed.Fmt": {
+    "message": "The garment's materials couldn't be set for wind: {0}",
+    "description": ""
+  },
   "Parts.Wind.Refused.Fmt": {
     "message": "Wind couldn't be added to {0} mesh(es): there's no room there for another vertex attribute.",
     "description": "{0} is a number of meshes."
@@ -2271,6 +2287,30 @@
     "message": "Writes the change into the mod's own model file, so it keeps working with\nProteus turned off and travels with the mod if you export it. The original\nis copied to Proteus/meshvolume-backup/ inside the mod first, and this can\nbe undone.",
     "description": "Tooltip for the button. Keep the line breaks; the tooltip is not wrapped."
   },
+  "Parts.Brush.Save.Nothing.Tip": {
+    "message": "Everything is already saved. Changes save on their own a moment after you stop painting.",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes": {
+    "message": "Apply to other sizes",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Tip": {
+    "message": "Copies the changes brushed on this model onto the mod's other sizes of it,\nmatched by where they sit on the garment. Each size is backed up first,\nand Undo saved changes puts it back.",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Running": {
+    "message": "Applying to other sizes…",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Done.Fmt": {
+    "message": "Applied to {0} other size(s).",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Problem.Fmt": {
+    "message": "{0}: {1}",
+    "description": ""
+  },
   "Parts.Brush.Saved.Fmt": {
     "message": "Saved. The surface was moved by up to {0:F2} mm.",
     "description": "Shown after a successful save. {0} is a distance in millimetres."
@@ -2290,6 +2330,42 @@
   "Parts.Brush.Reverted.Fmt": {
     "message": "{0} model(s) put back as the author made them.",
     "description": "Shown after undoing saved brush changes. {0} is a count of model files."
+  },
+  "Parts.Brush.Revert.Arm.Tip": {
+    "message": "Hold Ctrl or Shift and click.",
+    "description": ""
+  },
+  "Parts.Brush.Size.Keys.Tip": {
+    "message": "[ and ] change it; hold Shift for fine steps.",
+    "description": ""
+  },
+  "Parts.Brush.Mirror": {
+    "message": "Mirror left/right",
+    "description": ""
+  },
+  "Parts.Brush.Mirror.Tip": {
+    "message": "Paint both sides at once, mirrored across the body's centre.",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Hint": {
+    "message": "Shift-click a part to lock it.",
+    "description": ""
+  },
+  "Parts.Brush.Lock.ListTip": {
+    "message": "Untick a part to lock it: no brush moves it. Shift-clicking a part on the model or on your character does the same.",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Count.Fmt": {
+    "message": "{0} part(s) locked",
+    "description": ""
+  },
+  "Parts.Brush.Lock.UnlockAll": {
+    "message": "Unlock all",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Skin.Tip": {
+    "message": "Skin never moves.",
+    "description": ""
   },
   "MeshVolume.Apply.Nothing": {
     "message": "Nothing has been painted, so there is nothing to save.",
