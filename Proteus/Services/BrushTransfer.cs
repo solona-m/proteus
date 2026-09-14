@@ -29,22 +29,27 @@ internal static class BrushTransfer
     /// </summary>
     /// <param name="Delta">Per vertex, indexed like <see cref="ModelParts.Positions"/>.</param>
     /// <param name="WindPainted">Wind was edited, so it is carried; otherwise each size keeps its author's.</param>
-    public sealed record Edit(Vector3[] Delta, float[] Weight, float[] Wind, bool WindPainted, float MeanEdge)
+    /// <param name="Moved">The share of <paramref name="Delta"/> the Move tool put there, which the other size must
+    /// not cap the way it caps a brush's.</param>
+    public sealed record Edit(Vector3[] Delta, float[] Weight, float[] Wind, bool WindPainted, float MeanEdge, Vector3[] Moved)
     {
         /// <summary>Snapshot <paramref name="solve"/>, built over a model of <paramref name="vertexCount"/> vertices.</summary>
         public static Edit From(MeshVolumeSolve solve, int vertexCount)
         {
             var delta = new Vector3[vertexCount];
+            var moved = new Vector3[vertexCount];
             var weight = new float[vertexCount];
             var wind = new float[vertexCount];
             for (int v = 0; v < vertexCount; v++)
             {
                 var d = solve.DeltaAt(v);
                 delta[v] = new Vector3(d.X, d.Y, d.Z);
+                var m = solve.MovedAt(v);
+                moved[v] = new Vector3(m.X, m.Y, m.Z);
                 weight[v] = solve.WeightAt(v);
                 wind[v] = solve.WindAt(v);
             }
-            return new Edit(delta, weight, wind, solve.WindEdited, solve.MeanEdge);
+            return new Edit(delta, weight, wind, solve.WindEdited, solve.MeanEdge, moved);
         }
     }
 
@@ -72,7 +77,7 @@ internal static class BrushTransfer
                 if (v >= 0 && v < vc) materialOf[v] = part.Material;
         }
 
-        var samples = new (Vector3 Delta, float Weight, float Wind)?[vc];
+        var samples = new (Vector3 Delta, float Weight, float Wind, Vector3 Moved)?[vc];
         for (int v = 0; v < vc; v++)
         {
             var p = new Vector3(target.Positions[v * 3], target.Positions[v * 3 + 1], target.Positions[v * 3 + 2]);
@@ -82,7 +87,8 @@ internal static class BrushTransfer
             var delta = edit.Delta[a] * u + edit.Delta[b] * w1 + edit.Delta[c] * w2;
             float weight = edit.Weight[a] * u + edit.Weight[b] * w1 + edit.Weight[c] * w2;
             float windAt = edit.Wind[a] * u + edit.Wind[b] * w1 + edit.Wind[c] * w2;
-            samples[v] = (delta, weight, windAt);
+            var moved = edit.Moved[a] * u + edit.Moved[b] * w1 + edit.Moved[c] * w2;
+            samples[v] = (delta, weight, windAt, moved);
         }
 
         solve.ImportEdit(samples, edit.WindPainted);

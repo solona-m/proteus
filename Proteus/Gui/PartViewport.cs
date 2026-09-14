@@ -187,9 +187,65 @@ public sealed class PartViewport : IDisposable, IBrushSurface
         /// the drag starts is unambiguous, needs no key, and is what sculpting tools already do.
         /// </summary>
         Brush,
+
+        /// <summary>
+        /// Navigate, except that a press on the Move gizmo drags the gizmo instead — see <see cref="GizmoCapture"/>.
+        /// A click still picks the part to move, and a drag anywhere else still turns the model.
+        /// </summary>
+        Move,
     }
 
     public ViewportMode Mode { get; set; } = ViewportMode.Navigate;
+
+    /// <summary>
+    /// In <see cref="ViewportMode.Move"/>: whether the gizmo has the mouse, asked when a press lands. True gives the
+    /// whole drag to the gizmo — no orbit, no pan, no pick on release.
+    /// </summary>
+    public Func<bool>? GizmoCapture { get; set; }
+
+    /// <summary>The viewport's surface was pressed this frame (its own button, so a press elsewhere is not it).</summary>
+    public bool Pressed { get; private set; }
+
+    /// <summary>The press that began on the viewport's surface is still held, wherever the mouse has gone since.</summary>
+    public bool Held { get; private set; }
+
+    // The projection the image on screen was rasterised with, for the gizmo: model space to screen and back.
+    private Matrix4x4 viewProj;
+    private Vector2 rasterPan;
+    private bool haveProjection;
+    private Vector2 imageOrigin, imageSize;
+
+    /// <summary>A model-space point on the image as it is drawn, in absolute screen pixels; null behind the eye or
+    /// before anything has been drawn.</summary>
+    public Vector2? ModelToScreen(Vector3 p)
+    {
+        if (!haveProjection || imageSize.X <= 0f || imageSize.Y <= 0f) return null;
+        var clip = Vector4.Transform(new Vector4(p, 1f), viewProj);
+        if (clip.W <= 1e-6f) return null;
+        float nx = clip.X / clip.W, ny = clip.Y / clip.W;
+        // The same mapping Rasterize uses, as a fraction of the buffer and so of the image.
+        var f = new Vector2((nx + rasterPan.X + 1f) * 0.5f, (1f - (ny + rasterPan.Y)) * 0.5f);
+        return imageOrigin + f * imageSize;
+    }
+
+    /// <summary>The model-space ray under an absolute screen pixel of the image; null before anything has been drawn.</summary>
+    public (Vector3 Origin, Vector3 Dir)? ScreenRay(Vector2 screen)
+    {
+        if (!haveProjection || imageSize.X <= 0f || imageSize.Y <= 0f) return null;
+        if (!Matrix4x4.Invert(viewProj, out var inverse)) return null;
+        var f = (screen - imageOrigin) / imageSize;
+        float nx = f.X * 2f - 1f - rasterPan.X;
+        float ny = 1f - f.Y * 2f - rasterPan.Y;
+        var near = Vector4.Transform(new Vector4(nx, ny, 0f, 1f), inverse);
+        var far = Vector4.Transform(new Vector4(nx, ny, 1f, 1f), inverse);
+        if (MathF.Abs(near.W) < 1e-12f || MathF.Abs(far.W) < 1e-12f) return null;
+        var a = new Vector3(near.X, near.Y, near.Z) / near.W;
+        var b = new Vector3(far.X, far.Y, far.Z) / far.W;
+        return (a, b - a);
+    }
+
+    /// <summary>The drag under way belongs to the gizmo, decided when it was pressed.</summary>
+    private bool gizmoDrag;
 
     /// <summary>
     /// Brush radius in object units, which for a character model is metres. Drives the falloff tint only —
@@ -351,6 +407,7 @@ public sealed class PartViewport : IDisposable, IBrushSurface
     /// </summary>
     public string? Draw(ModelParts model, Vector2 box)
     {
+        Pressed = Held = false;
         if (renderedKey == null) return null;
 
         // Before the dirty checks, so a reallocation is rasterised and uploaded in this same call rather
@@ -373,6 +430,10 @@ public sealed class PartViewport : IDisposable, IBrushSurface
         // window instead. A button is clickable, claims the press, and the window stays put.
         ImGui.InvisibleButton("##viewportSurface", size);
         ImGui.GetWindowDrawList().AddImage(wrap.Handle, origin, origin + size);
+        imageOrigin = origin;
+        imageSize = size;
+        Pressed = ImGui.IsItemActivated();
+        Held = ImGui.IsItemActive();
 
         string? clicked = null;
         StrokeEnded = false;
@@ -425,6 +486,7 @@ public sealed class PartViewport : IDisposable, IBrushSurface
             // painting when it comes back rather than turning the model out from under itself, and a camera
             // drag that happens to pass over the mesh must not start painting.
             Painting = Mode == ViewportMode.Brush && Cursor != null && !ImGui.GetIO().KeyShift;
+            gizmoDrag = Mode == ViewportMode.Move && GizmoCapture?.Invoke() == true;
         }
 
         if (dragging)
@@ -436,8 +498,9 @@ public sealed class PartViewport : IDisposable, IBrushSurface
             if (ImGui.IsItemActive())
             {
                 // A stroke consumes the drag. The panel reads Painting and Cursor each frame and does the
-                // work; nothing here moves the camera, so the model holds still under the brush.
-                if (Painting)
+                // work; nothing here moves the camera, so the model holds still under the brush. A gizmo drag
+                // the same: the panel moves the part, and the camera must not turn out from under the handle.
+                if (Painting || gizmoDrag)
                 {
                     dragFrom = now;
                 }
@@ -460,9 +523,10 @@ public sealed class PartViewport : IDisposable, IBrushSurface
             {
                 // A click still picks a part, but only when the drag was not a stroke — in Brush mode a tap
                 // on the model is the smallest possible dab of paint, not a selection.
-                if (!dragMoved && !Painting) clicked = Hovered;
+                if (!dragMoved && !Painting && !gizmoDrag) clicked = Hovered;
                 if (Painting) { Painting = false; StrokeEnded = true; }
                 dragging = false;
+                gizmoDrag = false;
             }
         }
         return clicked;
@@ -494,6 +558,9 @@ public sealed class PartViewport : IDisposable, IBrushSurface
         var proj = Matrix4x4.CreatePerspectiveFieldOfView(
             0.7f, (float)bufW / bufH, MathF.Max(radius * 0.01f, 1e-4f), dist + radius * 4f);
         var vp = view * proj;
+        viewProj = vp;
+        rasterPan = pan;
+        haveProjection = true;
 
         // Screen-space positions, plus a w to reject anything behind the eye. Done for the whole vertex
         // array in one pass: a vertex is shared by every triangle that touches it, and by every part.
@@ -625,6 +692,7 @@ public sealed class PartViewport : IDisposable, IBrushSurface
         var tint = new (int R, int G, int B)[pickable.Count];
         var canBrush = new bool[pickable.Count];
         bool brushMode = Mode == ViewportMode.Brush;
+        bool lockMode = Mode != ViewportMode.Navigate;   // a move honours locks as the brushes do
         for (int i = 0; i < pickable.Count; i++)
         {
             // An island answers to its own label AND to its submesh's — see parentOf. Ticking the whole
@@ -632,7 +700,7 @@ public sealed class PartViewport : IDisposable, IBrushSurface
             var parent = i < parentOf.Count ? parentOf[i] : null;
             bool on = Selected.Contains(pickable[i].Label) || (parent != null && Selected.Contains(parent));
             bool hot = Hovered == pickable[i].Label || (parent != null && Hovered == parent);
-            bool locked = brushMode && (Locked.Contains(pickable[i].Label) || (parent != null && Locked.Contains(parent)));
+            bool locked = lockMode && (Locked.Contains(pickable[i].Label) || (parent != null && Locked.Contains(parent)));
             canBrush[i] = i < brushable.Length && brushable[i] && !locked;
             tint[i] = locked      ? (hot ? (100, 110, 130) : (70, 70, 76))
                     : on && hot   ? (255, 220, 170)

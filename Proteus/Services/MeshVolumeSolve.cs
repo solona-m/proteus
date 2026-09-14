@@ -163,8 +163,21 @@ internal sealed class MeshVolumeSolve
     /// <summary>The wind the model arrived with, for Start over and for telling whether wind was edited.</summary>
     private readonly float[] initialWind;
 
-    private readonly List<Dictionary<int, (Vec3 Delta, float Weight, float Wind)>> undo = [];
-    private Dictionary<int, (Vec3 Delta, float Weight, float Wind)>? stroke;
+    /// <summary>
+    /// The share of each node's displacement that the Move tool put there — already included in
+    /// <see cref="nodeDelta"/>, kept apart only so the brushes' <see cref="MaxDisplacement"/> caps the brushes'
+    /// own share and not the move. Without it the first dab on a part moved thirty centimetres would clamp the
+    /// whole thing back to ten.
+    /// </summary>
+    private Vec3[] nodeMoved;
+
+    /// <summary>A node's values before a stroke first changed it: what undo restores.</summary>
+    private readonly record struct Was(Vec3 Delta, float Weight, float Wind, Vec3 Moved);
+
+    private readonly List<Dictionary<int, Was>> undo = [];
+    private Dictionary<int, Was>? stroke;
+
+    private Was Snapshot(int n) => new(nodeDelta[n], nodeWeight[n], nodeWind[n], nodeMoved[n]);
 
 
     public MeshVolumeSolve(ModelParts model)
@@ -276,6 +289,7 @@ internal sealed class MeshVolumeSolve
         initialPull = (Vec3[])pullDir.Clone();
 
         nodeDelta = new Vec3[nodeCount];
+        nodeMoved = new Vec3[nodeCount];
         nodeWeight = new float[nodeCount];
         vertDelta = new Vec3[vc];
         vertNrm = (Vec3[])baseNrm.Clone();
@@ -469,21 +483,45 @@ internal sealed class MeshVolumeSolve
     {
         mirrored = false;
         float r2 = radius * radius;
-        float dy = nodeAt[n].Y - c.Y, dz = nodeAt[n].Z - c.Z;
+        var at = Reach(n);
+        float dy = at.Y - c.Y, dz = at.Z - c.Z;
         float yz = dy * dy + dz * dz;
         if (yz >= r2) return 0f;
 
-        float dx = nodeAt[n].X - c.X;
+        float dx = at.X - c.X;
         float d2 = dx * dx + yz;
         float w = d2 < r2 ? Falloff(MathF.Sqrt(d2) / radius) : 0f;
         if (!mirror) return w;
 
-        float mx = nodeAt[n].X + c.X;
+        float mx = at.X + c.X;
         float m2 = mx * mx + yz;
         if (m2 >= r2) return w;
         float wm = Falloff(MathF.Sqrt(m2) / radius);
         if (wm > w) { mirrored = true; return wm; }
         return w;
+    }
+
+    /// <summary>
+    /// Where a brush finds node <paramref name="n"/>: the author's position plus any MOVE, but not what brushes
+    /// did. A brush has always measured its reach from the authored surface, which is steady under a stroke that
+    /// is itself pushing the surface about; a part moved thirty centimetres, though, has to be reached where it
+    /// now is, or a brush on it would paint the empty space it came from.
+    /// </summary>
+    private Vec3 Reach(int n)
+        => new(nodeAt[n].X + nodeMoved[n].X, nodeAt[n].Y + nodeMoved[n].Y, nodeAt[n].Z + nodeMoved[n].Z);
+
+    /// <summary>
+    /// A brush's proposed displacement for node <paramref name="n"/>, with the BRUSHES' share — everything but
+    /// the move — held within <see cref="MaxDisplacement"/>. See <see cref="nodeMoved"/>.
+    /// </summary>
+    private Vec3 CapBrush(int n, Vec3 next)
+    {
+        var m = nodeMoved[n];
+        var own = new Vec3(next.X - m.X, next.Y - m.Y, next.Z - m.Z);
+        float len = MathF.Sqrt(own.X * own.X + own.Y * own.Y + own.Z * own.Z);
+        if (len <= MaxDisplacement) return next;
+        float k = MaxDisplacement / len;
+        return new Vec3(m.X + own.X * k, m.Y + own.Y * k, m.Z + own.Z * k);
     }
 
     /// <summary>
@@ -548,7 +586,7 @@ internal sealed class MeshVolumeSolve
             if (MathF.Abs(next - target) < 0.5f / 255f) next = target;
             if (next == nodeWind[n]) continue;
 
-            stroke.TryAdd(n, (nodeDelta[n], nodeWeight[n], nodeWind[n]));   // before the first change — see Paint
+            stroke.TryAdd(n, Snapshot(n));   // before the first change — see Paint
             nodeWind[n] = next;
             changed++;
         }
@@ -622,7 +660,7 @@ internal sealed class MeshVolumeSolve
 
             // Recorded before the first change of this stroke, not on every dab: a stroke drags over the
             // same node many times and undo has to return it to where the stroke FOUND it.
-            stroke.TryAdd(n, (nodeDelta[n], nodeWeight[n], nodeWind[n]));
+            stroke.TryAdd(n, Snapshot(n));
 
             float step = strength * w;
             var next = new Vec3(nodeDelta[n].X + dir.X * step,
@@ -631,14 +669,7 @@ internal sealed class MeshVolumeSolve
 
             // Clamped by TOTAL magnitude, so holding the button cannot walk a vertex away indefinitely and
             // deflating back through zero is still free.
-            float len = MathF.Sqrt(next.X * next.X + next.Y * next.Y + next.Z * next.Z);
-            if (len > MaxDisplacement)
-            {
-                float k = MaxDisplacement / len;
-                next = new Vec3(next.X * k, next.Y * k, next.Z * k);
-            }
-
-            nodeDelta[n] = next;
+            nodeDelta[n] = CapBrush(n, next);
             nodeWeight[n] = MathF.Max(nodeWeight[n], w);
             moved++;
         }
@@ -708,7 +739,7 @@ internal sealed class MeshVolumeSolve
         if (nodes.Count == 0) return 0;
 
         // Recorded before the first change of this stroke — see Paint.
-        foreach (int n in nodes) stroke.TryAdd(n, (nodeDelta[n], nodeWeight[n], nodeWind[n]));
+        foreach (int n in nodes) stroke.TryAdd(n, Snapshot(n));
 
         var next = Scratch(ref relaxNext, nodes.Count);
         for (int i = 0; i < nodes.Count; i++)
@@ -736,13 +767,7 @@ internal sealed class MeshVolumeSolve
         for (int i = 0; i < nodes.Count; i++)
         {
             int n = nodes[i];
-            var d = nodeDelta[n];
-            float len = MathF.Sqrt(d.X * d.X + d.Y * d.Y + d.Z * d.Z);
-            if (len > MaxDisplacement)
-            {
-                float k = MaxDisplacement / len;
-                nodeDelta[n] = new Vec3(d.X * k, d.Y * k, d.Z * k);
-            }
+            nodeDelta[n] = CapBrush(n, nodeDelta[n]);
             nodeWeight[n] = MathF.Max(nodeWeight[n], weights[i]);
         }
 
@@ -867,7 +892,8 @@ internal sealed class MeshVolumeSolve
         for (int n = 0; n < nodeCount; n++)
         {
             if (skin[n] || locked[n]) continue;
-            float dx = nodeAt[n].X - c.X, dy = nodeAt[n].Y - c.Y, dz = nodeAt[n].Z - c.Z;
+            var at = Reach(n);
+            float dx = at.X - c.X, dy = at.Y - c.Y, dz = at.Z - c.Z;
             float d2 = dx * dx + dy * dy + dz * dz;
             if (d2 >= r2) continue;
             float w = Falloff(MathF.Sqrt(d2) / radius);
@@ -1067,18 +1093,12 @@ internal sealed class MeshVolumeSolve
             if (skip != null && skip.Contains(n)) continue;
             lifted?.Add(n);
 
-            stroke!.TryAdd(n, (nodeDelta[n], nodeWeight[n], nodeWind[n]));   // before the first change — see Paint
+            stroke!.TryAdd(n, Snapshot(n));   // before the first change — see Paint
 
             var next = new Vec3(nodeDelta[n].X + axis.X * step,
                                 nodeDelta[n].Y + axis.Y * step,
                                 nodeDelta[n].Z + axis.Z * step);
-            float len = MathF.Sqrt(next.X * next.X + next.Y * next.Y + next.Z * next.Z);
-            if (len > MaxDisplacement)
-            {
-                float k = MaxDisplacement / len;
-                next = new Vec3(next.X * k, next.Y * k, next.Z * k);
-            }
-            nodeDelta[n] = next;
+            nodeDelta[n] = CapBrush(n, next);
             nodeWeight[n] = MathF.Max(nodeWeight[n], weights[i]);
             moved++;
         }
@@ -1143,7 +1163,7 @@ internal sealed class MeshVolumeSolve
     /// stroke did not move add nothing, so the stroke's rim blends out to zero, and undo — which restores
     /// exactly the stroke's nodes — stays exact. Skin is never written.
     /// </summary>
-    private void SmoothStroke(Dictionary<int, (Vec3 Delta, float Weight, float Wind)> strokeStart)
+    private void SmoothStroke(Dictionary<int, Was> strokeStart)
     {
         var nodes = strokeStart.Keys.Where(n => !skin[n] && adj[n].Count > 0).ToArray();
         if (nodes.Length == 0) return;
@@ -1187,6 +1207,7 @@ internal sealed class MeshVolumeSolve
         {
             moved |= nodeDelta[n] != was.Delta;
             nodeDelta[n] = was.Delta;
+            nodeMoved[n] = was.Moved;
             nodeWeight[n] = was.Weight;
             nodeWind[n] = was.Wind;
         }
@@ -1200,6 +1221,7 @@ internal sealed class MeshVolumeSolve
     public void Reset()
     {
         Array.Clear(nodeDelta);
+        Array.Clear(nodeMoved);
         Array.Clear(nodeWeight);
         Array.Copy(initialWind, nodeWind, nodeCount);
         WindVersion++;
@@ -1211,10 +1233,181 @@ internal sealed class MeshVolumeSolve
         Settle(null);
     }
 
+    // ── move ────────────────────────────────────────────────────────────────
+
+    /// <summary>Each node a move drag carries, with how much of the offset it takes; empty between drags.</summary>
+    private readonly Dictionary<int, float> moveWeights = [];
+
+    /// <summary>A move drag is under way: <see cref="BeginMove"/> was called and <see cref="EndMove"/> not yet.</summary>
+    public bool Moving { get; private set; }
+
+    /// <summary>
+    /// Start dragging one part: its own nodes take the whole offset, and — with <paramref name="adjacent"/> — every
+    /// other node within <paramref name="falloffRadius"/> of it takes a share that fades to nothing at that distance.
+    /// <para/>
+    /// THROUGH SPACE, not along the surface, and joined or not. A garment's pieces are routinely separate elements
+    /// that only lie against one another — a cuff over a sleeve, a strap on a bodice — and moving the part out from
+    /// under them would leave them floating where it was. Distance is to the nearest point of the part, as Blender's
+    /// proportional editing measures it with "connected only" off.
+    /// <para/>
+    /// Skin and locked nodes never move, the part's included. A node of the part welded onto a neighbour is the
+    /// neighbour's too, so with <paramref name="adjacent"/> off the neighbour's seam row still follows — the two
+    /// are one point, and moving one copy would tear it.
+    /// </summary>
+    /// <param name="partVertices">The part's triangle corners, indexed like <see cref="ModelParts.Positions"/>.</param>
+    /// <returns>How many nodes the drag will move; 0 when there is nothing it may.</returns>
+    public int BeginMove(IEnumerable<int> partVertices, bool adjacent, float falloffRadius)
+    {
+        if (Moving) EndMove();
+        moveWeights.Clear();
+
+        var seeds = new HashSet<int>();
+        foreach (int v in partVertices)
+            if (v >= 0 && v < nodeOf.Length && !skin[nodeOf[v]] && !locked[nodeOf[v]]) seeds.Add(nodeOf[v]);
+        if (seeds.Count == 0) return 0;
+
+        foreach (int n in seeds) moveWeights[n] = 1f;
+
+        if (adjacent && falloffRadius > 0f)
+            foreach (var (n, d) in NearPart(seeds, falloffRadius))
+            {
+                float w = Falloff(d / falloffRadius);
+                if (w > 0f) moveWeights[n] = w;
+            }
+
+        stroke = [];
+        foreach (int n in moveWeights.Keys) stroke[n] = Snapshot(n);
+        Moving = true;
+        return moveWeights.Count;
+    }
+
+    /// <summary>
+    /// Every movable node outside <paramref name="seeds"/> lying within <paramref name="radius"/> of one of them, with
+    /// its distance to the nearest — measured between the surfaces as they now stand.
+    /// <para/>
+    /// Bucketed, because the obvious pairwise test is part × model: a 20,000-point bodice against a 60,000-point
+    /// garment. The seeds go into a grid a fraction of the radius across; only nodes inside the part's bounds grown
+    /// by the radius are asked at all, and each searches outward ring by ring, stopping once no nearer ring can beat
+    /// what it has found.
+    /// </summary>
+    private List<(int Node, float Distance)> NearPart(HashSet<int> seeds, float radius)
+    {
+        var found = new List<(int, float)>();
+        float cell = Math.Clamp(MathF.Max(MeanEdge * 2f, radius / 4f), 1e-4f, radius);
+        int reach = (int)MathF.Ceiling(radius / cell);
+
+        var grid = new Dictionary<(int, int, int), List<Vec3>>();
+        var lo = new Vec3(float.MaxValue, float.MaxValue, float.MaxValue);
+        var hi = new Vec3(float.MinValue, float.MinValue, float.MinValue);
+        (int, int, int) CellOf(Vec3 p)
+            => ((int)MathF.Floor(p.X / cell), (int)MathF.Floor(p.Y / cell), (int)MathF.Floor(p.Z / cell));
+
+        foreach (int s in seeds)
+        {
+            var p = Here(s);
+            var key = CellOf(p);
+            if (!grid.TryGetValue(key, out var list)) grid[key] = list = [];
+            list.Add(p);
+            lo = new Vec3(MathF.Min(lo.X, p.X), MathF.Min(lo.Y, p.Y), MathF.Min(lo.Z, p.Z));
+            hi = new Vec3(MathF.Max(hi.X, p.X), MathF.Max(hi.Y, p.Y), MathF.Max(hi.Z, p.Z));
+        }
+
+        float r2 = radius * radius;
+        for (int n = 0; n < nodeCount; n++)
+        {
+            if (seeds.Contains(n) || skin[n] || locked[n]) continue;
+            var p = Here(n);
+            if (p.X < lo.X - radius || p.Y < lo.Y - radius || p.Z < lo.Z - radius
+                || p.X > hi.X + radius || p.Y > hi.Y + radius || p.Z > hi.Z + radius)
+                continue;
+
+            var (cx, cy, cz) = CellOf(p);
+            float best = r2;
+            bool any = false;
+            for (int ring = 0; ring <= reach; ring++)
+            {
+                for (int x = -ring; x <= ring; x++)
+                for (int y = -ring; y <= ring; y++)
+                for (int z = -ring; z <= ring; z++)
+                {
+                    if (Math.Max(Math.Abs(x), Math.Max(Math.Abs(y), Math.Abs(z))) != ring) continue;   // this shell only
+                    if (!grid.TryGetValue((cx + x, cy + y, cz + z), out var near)) continue;
+                    foreach (var q in near)
+                    {
+                        float dx = q.X - p.X, dy = q.Y - p.Y, dz = q.Z - p.Z;
+                        float d2 = dx * dx + dy * dy + dz * dz;
+                        if (d2 < best) { best = d2; any = true; }
+                    }
+                }
+                // Every cell of the next ring is at least `ring` cells away, so nothing there can be nearer.
+                float shell = ring * cell;
+                if (any && best <= shell * shell) break;
+            }
+            if (any) found.Add((n, MathF.Sqrt(best)));
+        }
+        return found;
+    }
+
+    /// <summary>
+    /// Place the dragged part at <paramref name="offset"/> from where the drag found it. Absolute, not a per-frame
+    /// step: the gizmo measures the whole drag from where it started, and summing frame-to-frame differences would
+    /// let rounding walk the part off the mouse.
+    /// <para/>
+    /// NOT CAPPED. The brushes' ceiling guards against a held button ballooning a garment dab by dab; a move goes
+    /// exactly as far as the user drags it and no further, and undo takes it back.
+    /// </summary>
+    public void MoveTo(Vector3 offset)
+    {
+        if (!Moving || stroke == null) return;
+        foreach (var (n, w) in moveWeights)
+        {
+            var was = stroke[n];
+            var step = new Vec3(offset.X * w, offset.Y * w, offset.Z * w);
+            nodeDelta[n] = new Vec3(was.Delta.X + step.X, was.Delta.Y + step.Y, was.Delta.Z + step.Z);
+            nodeMoved[n] = new Vec3(was.Moved.X + step.X, was.Moved.Y + step.Y, was.Moved.Z + step.Z);
+        }
+        Dirty = true;
+        Spread();
+    }
+
+    /// <summary>
+    /// Finish a move drag: record it for undo and re-light the cloth it stretched.
+    /// <para/>
+    /// No smoothing and no unfold. Both exist to tidy what a brush does by accident, and both would take back
+    /// part of what a move does on purpose — the snap-back the bridge brush already had to be spared. The part
+    /// itself keeps its authored normals, which a translation leaves exactly right; only the stretched neighbours,
+    /// whose shape really changed, take a share of recomputed ones.
+    /// </summary>
+    public void EndMove()
+    {
+        if (!Moving) return;
+        Moving = false;
+        var touched = stroke;
+        stroke = null;
+
+        bool moved = false;
+        if (touched != null)
+            foreach (var (n, was) in touched)
+                if (nodeDelta[n] != was.Delta) { moved = true; break; }
+
+        if (moved)
+        {
+            undo.Add(touched!);
+            foreach (var (n, w) in moveWeights)
+                if (w < 1f) nodeWeight[n] = MathF.Max(nodeWeight[n], w);
+        }
+        moveWeights.Clear();
+        Settle(null);
+    }
+
+    /// <summary>A node's position as it now stands: the author's plus every edit.</summary>
+    private Vec3 Here(int n)
+        => new(nodeAt[n].X + nodeDelta[n].X, nodeAt[n].Y + nodeDelta[n].Y, nodeAt[n].Z + nodeDelta[n].Z);
+
     /// <param name="strokeStart">The stroke just ending — each node it moved, with the displacement it had
     /// before — whose own movement gets the fold check; null for none.</param>
     /// <param name="allowCollapse">The stroke was a bridge — see <see cref="UnfoldStroke"/>.</param>
-    private void Settle(Dictionary<int, (Vec3 Delta, float Weight, float Wind)>? strokeStart, bool allowCollapse = false)
+    private void Settle(Dictionary<int, Was>? strokeStart, bool allowCollapse = false)
     {
         // NO SLOPE LIMIT. It used to run here, and it is what made a pull snap back on release: it evens out
         // neighbours by pulling the larger displacement toward the smaller, and on a hem or a thin double-sided
@@ -1225,7 +1418,7 @@ internal sealed class MeshVolumeSolve
 
         // Skin again, after the unfold, which knows nothing about it.
         for (int n = 0; n < nodeCount; n++)
-            if (skin[n]) { nodeDelta[n] = default; nodeWeight[n] = 0f; }
+            if (skin[n]) { nodeDelta[n] = default; nodeMoved[n] = default; nodeWeight[n] = 0f; }
 
         Spread();
 
@@ -1267,7 +1460,7 @@ internal sealed class MeshVolumeSolve
     /// nothing, and nothing can turn over as seen from outside. A steep wall's footprint is only a sliver,
     /// though, and a wall tipped past upright would be a real overhang — which is what this still catches.
     /// </summary>
-    private void UnfoldStroke(Dictionary<int, (Vec3 Delta, float Weight, float Wind)> strokeStart, bool allowCollapse)
+    private void UnfoldStroke(Dictionary<int, Was> strokeStart, bool allowCollapse)
     {
         var around = new List<int>();
         for (int t = 0; t + 2 < nodeTris.Length; t += 3)
@@ -1339,20 +1532,26 @@ internal sealed class MeshVolumeSolve
     /// <summary>Per-vertex displacement, indexed as <see cref="ModelParts.Positions"/> is.</summary>
     public Vec3 DeltaAt(int vertex) => vertDelta[vertex];
 
+    /// <summary>The share of <see cref="DeltaAt"/> the Move tool put there — see <see cref="nodeMoved"/>.</summary>
+    public Vec3 MovedAt(int vertex) => nodeMoved[nodeOf[vertex]];
+
     /// <summary>Per-vertex normal-blend weight — see <see cref="nodeWeight"/>.</summary>
     public float WeightAt(int vertex) => nodeWeight[nodeOf[vertex]];
 
     /// <summary>
     /// Take an edit made elsewhere — another size of this garment, see <see cref="BrushTransfer"/> — as this model's
-    /// whole edit: each node gets the average displacement of its vertices' samples (capped at
-    /// <see cref="MaxDisplacement"/>), the strongest weight, and, when <paramref name="wind"/>, the strongest wind.
-    /// Skin is left alone. Settled like a finished stroke, with no undo history: it is a starting point, not a stroke.
+    /// whole edit: each node gets the average displacement of its vertices' samples (the brushes' share capped at
+    /// <see cref="MaxDisplacement"/>, the move's not), the strongest weight, and, when <paramref name="wind"/>, the
+    /// strongest wind. Skin is left alone. Settled like a finished stroke, with no undo history: it is a starting
+    /// point, not a stroke.
     /// </summary>
-    /// <param name="samples">Per vertex; null where the vertex has no counterpart and keeps nothing.</param>
+    /// <param name="samples">Per vertex; null where the vertex has no counterpart and keeps nothing. Moved is the
+    /// share of Delta that came from the Move tool.</param>
     /// <param name="wind">Carry wind too. Off when the source's wind was never painted, so a size keeps its author's.</param>
-    public void ImportEdit(IReadOnlyList<(Vector3 Delta, float Weight, float Wind)?> samples, bool wind)
+    public void ImportEdit(IReadOnlyList<(Vector3 Delta, float Weight, float Wind, Vector3 Moved)?> samples, bool wind)
     {
         var sum = new Vec3[nodeCount];
+        var movedSum = new Vec3[nodeCount];
         var count = new int[nodeCount];
         var weight = new float[nodeCount];
         var windMax = new float[nodeCount];
@@ -1362,6 +1561,7 @@ internal sealed class MeshVolumeSolve
             if (samples[v] is not { } s) continue;
             int n = nodeOf[v];
             sum[n] = new Vec3(sum[n].X + s.Delta.X, sum[n].Y + s.Delta.Y, sum[n].Z + s.Delta.Z);
+            movedSum[n] = new Vec3(movedSum[n].X + s.Moved.X, movedSum[n].Y + s.Moved.Y, movedSum[n].Z + s.Moved.Z);
             count[n]++;
             weight[n] = MathF.Max(weight[n], s.Weight);
             windMax[n] = windSeen[n] ? MathF.Max(windMax[n], s.Wind) : s.Wind;
@@ -1374,13 +1574,8 @@ internal sealed class MeshVolumeSolve
         {
             if (skin[n] || count[n] == 0) continue;
             var d = new Vec3(sum[n].X / count[n], sum[n].Y / count[n], sum[n].Z / count[n]);
-            float len = MathF.Sqrt(d.X * d.X + d.Y * d.Y + d.Z * d.Z);
-            if (len > MaxDisplacement)
-            {
-                float k = MaxDisplacement / len;
-                d = new Vec3(d.X * k, d.Y * k, d.Z * k);
-            }
-            nodeDelta[n] = d;
+            nodeMoved[n] = new Vec3(movedSum[n].X / count[n], movedSum[n].Y / count[n], movedSum[n].Z / count[n]);
+            nodeDelta[n] = CapBrush(n, d);
             nodeWeight[n] = Math.Clamp(weight[n], 0f, 1f);
             if (wind && windSeen[n]) nodeWind[n] = Math.Clamp(MathF.Round(windMax[n] * 255f) / 255f, 0f, 1f);
         }

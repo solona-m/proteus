@@ -2159,6 +2159,74 @@
     "message": "Male, wo der Wind dieses Kleidungsstück bewegt; Rot zeigt, wie stark.\nEs wird in die zweite Vertexfarbe des Modells geschrieben.",
     "description": ""
   },
+  "Parts.Tool.Move": {
+    "message": "Verschieben",
+    "description": ""
+  },
+  "Parts.Tool.Move.Tip": {
+    "message": "Wähle ein Teil und ziehe an den Pfeilen: ein Pfeil verschiebt es entlang\ndieser Achse, ein Quadrat über diese Ebene.",
+    "description": ""
+  },
+  "Parts.Move.Help": {
+    "message": "Klicke ein Teil an, um es zu wählen, und ziehe dann einen Pfeil oder ein Quadrat. Ziehen anderswo dreht das Modell, Umschalt-Ziehen verschiebt die Ansicht, Scrollen zoomt.",
+    "description": ""
+  },
+  "Parts.Move.LiveHint": {
+    "message": "Klicke ein Teil an deinem Charakter an und ziehe dann einen Pfeil oder ein Quadrat. Halte Alt, um die Kamera zu bewegen. Jede Verschiebung wird beim Loslassen gespeichert.",
+    "description": ""
+  },
+  "Parts.Move.Part.Fmt": {
+    "message": "Verschiebe Teil {0}",
+    "description": ""
+  },
+  "Parts.Move.NoPart": {
+    "message": "Klicke ein Teil an, um zu wählen, was verschoben wird.",
+    "description": ""
+  },
+  "Parts.Move.ListTip": {
+    "message": "Wähle hier das zu verschiebende Teil oder klicke es am Modell oder an deinem Charakter an.",
+    "description": ""
+  },
+  "Parts.Move.Adjacent": {
+    "message": "Angrenzende Teile mitbewegen",
+    "description": ""
+  },
+  "Parts.Move.Adjacent.Tip": {
+    "message": "Stoff in der Nähe des Teils folgt ihm, ob mit ihm verbunden oder nicht, je weiter entfernt desto weniger.\nAus bewegt sich nur das Teil. Punkte, die es genau mit einem Nachbarn teilt, bewegen sich trotzdem, damit die Naht geschlossen bleibt.",
+    "description": ""
+  },
+  "Parts.Move.Falloff": {
+    "message": "Abfall",
+    "description": ""
+  },
+  "Parts.Move.Falloff.Tip": {
+    "message": "Wie weit vom Teil entfernt Stoff ihm noch folgt.",
+    "description": ""
+  },
+  "Parts.Move.BonesNote": {
+    "message": "Ein verschobenes Teil folgt weiter den Knochen, für die es gemacht wurde; weit davon entfernt kann es sich in Posen seltsam biegen.",
+    "description": ""
+  },
+  "Parts.Move.SkinTip": {
+    "message": "Haut kann nicht verschoben werden.",
+    "description": ""
+  },
+  "Parts.Move.LockedTip": {
+    "message": "Dieses Teil ist gesperrt. Entsperre es unter einem Pinsel, um es zu verschieben.",
+    "description": ""
+  },
+  "Parts.Move.NothingFree": {
+    "message": "In diesem Teil kann sich nichts bewegen: Es ist Haut oder gesperrt.",
+    "description": ""
+  },
+  "Parts.Move.Moved.Fmt": {
+    "message": "Am weitesten verschoben: {0:F1} mm.",
+    "description": ""
+  },
+  "Parts.Move.Undo": {
+    "message": "Verschieben rückgängig",
+    "description": ""
+  },
   "Parts.Brush.WindAmount": {
     "message": "Menge",
     "description": ""

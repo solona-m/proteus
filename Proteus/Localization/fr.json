@@ -2159,6 +2159,74 @@
     "message": "Peignez là où le vent fait bouger ce vêtement ; le rouge indique l'intensité.\nC'est écrit dans la deuxième couleur de sommet du modèle.",
     "description": ""
   },
+  "Parts.Tool.Move": {
+    "message": "Déplacer",
+    "description": ""
+  },
+  "Parts.Tool.Move.Tip": {
+    "message": "Choisissez une pièce et faites glisser les flèches : une flèche la déplace sur\ncet axe, un carré la déplace dans ce plan.",
+    "description": ""
+  },
+  "Parts.Move.Help": {
+    "message": "Cliquez sur une pièce pour la choisir, puis faites glisser une flèche ou un carré. Faites glisser ailleurs pour tourner le modèle, Maj+glisser pour déplacer la vue, molette pour zoomer.",
+    "description": ""
+  },
+  "Parts.Move.LiveHint": {
+    "message": "Cliquez sur une pièce de votre personnage, puis faites glisser une flèche ou un carré. Maintenez Alt pour bouger la caméra. Chaque déplacement est enregistré au relâchement.",
+    "description": ""
+  },
+  "Parts.Move.Part.Fmt": {
+    "message": "Déplacement de la pièce {0}",
+    "description": ""
+  },
+  "Parts.Move.NoPart": {
+    "message": "Cliquez sur une pièce pour choisir quoi déplacer.",
+    "description": ""
+  },
+  "Parts.Move.ListTip": {
+    "message": "Choisissez ici la pièce à déplacer, ou cliquez dessus sur le modèle ou sur votre personnage.",
+    "description": ""
+  },
+  "Parts.Move.Adjacent": {
+    "message": "Déplacer les pièces adjacentes",
+    "description": ""
+  },
+  "Parts.Move.Adjacent.Tip": {
+    "message": "Le tissu proche de la pièce la suit, qu'il y soit relié ou non, d'autant moins qu'il est loin.\nDésactivé, seule la pièce bouge. Les points qu'elle partage exactement avec une voisine bougent quand même, pour que la couture reste fermée.",
+    "description": ""
+  },
+  "Parts.Move.Falloff": {
+    "message": "Atténuation",
+    "description": ""
+  },
+  "Parts.Move.Falloff.Tip": {
+    "message": "Jusqu'à quelle distance de la pièce le tissu voisin la suit encore.",
+    "description": ""
+  },
+  "Parts.Move.BonesNote": {
+    "message": "Une pièce déplacée suit toujours les os pour lesquels elle a été faite ; trop loin d'eux, elle peut se plier bizarrement dans certaines poses.",
+    "description": ""
+  },
+  "Parts.Move.SkinTip": {
+    "message": "La peau ne peut pas être déplacée.",
+    "description": ""
+  },
+  "Parts.Move.LockedTip": {
+    "message": "Cette pièce est verrouillée. Déverrouillez-la sous un pinceau pour la déplacer.",
+    "description": ""
+  },
+  "Parts.Move.NothingFree": {
+    "message": "Rien dans cette pièce ne peut bouger : c'est de la peau ou elle est verrouillée.",
+    "description": ""
+  },
+  "Parts.Move.Moved.Fmt": {
+    "message": "Déplacement maximal : {0:F1} mm.",
+    "description": ""
+  },
+  "Parts.Move.Undo": {
+    "message": "Annuler le déplacement",
+    "description": ""
+  },
   "Parts.Brush.WindAmount": {
     "message": "Quantité",
     "description": ""

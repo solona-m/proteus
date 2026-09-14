@@ -1661,6 +1661,57 @@ public sealed class PartsStrings
         "Paint where the wind moves this garment; red shows how much.\n" +
         "It is written into the model's second vertex colour.");
 
+    public readonly string ToolMove = Loc.Localize("Parts.Tool.Move", "Move")
+                                    + "###partsToolMove";
+
+    public readonly string ToolMoveTip = Loc.Localize("Parts.Tool.Move.Tip",
+        "Pick a part and drag it with the arrows: one arrow moves it along\n" +
+        "that axis, a square moves it across that plane.");
+
+    public readonly string MoveHelp = Loc.Localize("Parts.Move.Help",
+        "Click a part to choose it, then drag an arrow or a square. Drag anywhere else to turn the model, "
+      + "shift-drag to move the view, scroll to zoom.");
+
+    public readonly string MoveLiveHint = Loc.Localize("Parts.Move.LiveHint",
+        "Click a part on your character, then drag an arrow or a square. Hold Alt to move the camera. "
+      + "Each move is saved when you let go.");
+
+    /// <summary>{0} is the part's label.</summary>
+    public readonly string MovePartFmt = Loc.Localize("Parts.Move.Part.Fmt", "Moving part {0}");
+
+    public readonly string MoveNoPart = Loc.Localize("Parts.Move.NoPart", "Click a part to choose what to move.");
+
+    public readonly string MoveListTip = Loc.Localize("Parts.Move.ListTip",
+        "Choose the part to move here, or click it on the model or on your character.");
+
+    public readonly string MoveAdjacent = Loc.Localize("Parts.Move.Adjacent", "Move adjacent parts");
+
+    public readonly string MoveAdjacentTip = Loc.Localize("Parts.Move.Adjacent.Tip",
+        "Cloth near the part follows it, joined to it or not, less the further away it is.\n" +
+        "Off, only the part moves. Points it shares exactly with a neighbour still move, so the seam stays closed.");
+
+    public readonly string MoveFalloff = Loc.Localize("Parts.Move.Falloff", "Falloff");
+
+    public readonly string MoveFalloffTip = Loc.Localize("Parts.Move.Falloff.Tip",
+        "How far from the part nearby cloth still follows it.");
+
+    public readonly string MoveBonesNote = Loc.Localize("Parts.Move.BonesNote",
+        "A moved part still follows the bones it was made for, so a part moved far from them can bend oddly in poses.");
+
+    public readonly string MoveSkinTip = Loc.Localize("Parts.Move.SkinTip", "Skin can't be moved.");
+
+    public readonly string MoveLockedTip = Loc.Localize("Parts.Move.LockedTip",
+        "This part is locked. Unlock it under a brush to move it.");
+
+    public readonly string MoveNothingFree = Loc.Localize("Parts.Move.NothingFree",
+        "Nothing in this part can move: it is skin or locked.");
+
+    /// <summary>{0} is the furthest any point has moved, in millimetres.</summary>
+    public readonly string MoveMovedFmt = Loc.Localize("Parts.Move.Moved.Fmt", "Furthest moved: {0:F1} mm.");
+
+    public readonly string MoveUndo = Loc.Localize("Parts.Move.Undo", "Undo move")
+                                    + "###partsBrushUndo";
+
     public readonly string BrushWindAmount = Loc.Localize("Parts.Brush.WindAmount", "Amount");
 
     public readonly string BrushWindAmountTip = Loc.Localize("Parts.Brush.WindAmount.Tip",

@@ -1230,4 +1230,214 @@ public class MeshVolumeSolveTests
         solve.SetLocked([]);
         Assert.True(solve.Paint(At(model.Positions, middle), 0.03f, 0.001f) > 0);
     }
+
+    // ── move ─────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// <see cref="TwoParts"/>, plus a third sheet in the first part's submesh lying 20 mm beyond the second sheet
+    /// in Z and joined to nothing — a strap near the part but not sewn to it.
+    /// </summary>
+    private static (ModelParts Model, int N, int SecondStart, int LooseStart) TwoPartsAndALooseStrap()
+    {
+        const int n = 11;
+        var (pos, nrm, tris, _) = Sheet(n, (_, _) => 0f, 1f);
+        int firstTris = tris.Count;
+        var (_, _, _, second) = Sheet(n, (_, _) => 0f, 1f, pos, nrm, tris);
+        for (int v = second; v < second + n * n; v++) pos[v * 3] += (n - 1) * Spacing;
+        var secondTris = tris.Skip(firstTris).ToArray();
+        tris.RemoveRange(firstTris, tris.Count - firstTris);
+
+        var (_, _, _, loose) = Sheet(n, (_, _) => 0f, 1f, pos, nrm, tris);
+        for (int v = loose; v < loose + n * n; v++)
+        {
+            pos[v * 3] += (n - 1) * Spacing;
+            pos[v * 3 + 2] += (n - 1) * Spacing + 0.02f;
+        }
+        return (Assemble(pos, nrm, tris, secondTris), n, second, loose);
+    }
+
+    /// <summary>A part moves rigidly, by exactly the offset, and cloth not joined to it stays put.</summary>
+    [Fact]
+    public void MoveTranslatesThePartRigidly()
+    {
+        var (model, n, second) = TwoParts();
+        var solve = new MeshVolumeSolve(model);
+        var offset = new Vector3(0.004f, 0.03f, -0.012f);
+
+        Assert.True(solve.BeginMove(model.Parts[1].Triangles, adjacent: false, falloffRadius: 0f) > 0);
+        solve.MoveTo(offset * 0.5f);   // part way through the drag, which the end must not add to
+        solve.MoveTo(offset);
+        solve.EndMove();
+
+        var after = solve.Positions();
+        for (int v = second; v < second + n * n; v++)
+            Assert.True(Vector3.Distance(At(model.Positions, v) + offset, At(after, v)) < 1e-6f, $"vertex {v} did not move rigidly");
+
+        // The far edge of the first sheet is untouched; its copy of the seam goes with the part.
+        Assert.Equal(At(model.Positions, 5), At(after, 5));
+        Assert.True(Vector3.Distance(At(model.Positions, (n - 1) * n + 5) + offset, At(after, (n - 1) * n + 5)) < 1e-6f);
+        Assert.True(solve.Dirty);
+        Assert.False(solve.Moving);
+    }
+
+    /// <summary>A move is not held to the brushes' ceiling — half a metre stays half a metre.</summary>
+    [Fact]
+    public void MoveIsNotCapped()
+    {
+        var (model, n, second) = TwoParts();
+        var solve = new MeshVolumeSolve(model);
+
+        solve.BeginMove(model.Parts[1].Triangles, adjacent: false, falloffRadius: 0f);
+        solve.MoveTo(new Vector3(0f, 0.5f, 0f));
+        solve.EndMove();
+
+        Assert.Equal(0.5f, At(solve.Positions(), second + 5 * n + 5).Y, 1e-5f);
+        Assert.Equal(0.5f, solve.Worst, 1e-5f);
+    }
+
+    /// <summary>
+    /// A brush on a moved part works where the part now is, and caps only its own share: the first dab on a part
+    /// moved half a metre adds to the move rather than clamping the part back to ten centimetres.
+    /// </summary>
+    [Fact]
+    public void BrushAfterMoveDoesNotSnapItBack()
+    {
+        var (model, n, second) = TwoParts();
+        var solve = new MeshVolumeSolve(model);
+        int middle = second + 5 * n + 5;
+
+        solve.BeginMove(model.Parts[1].Triangles, adjacent: false, falloffRadius: 0f);
+        solve.MoveTo(new Vector3(0f, 0.5f, 0f));
+        solve.EndMove();
+
+        var movedCentre = At(solve.Positions(), middle);
+        Assert.True(solve.Paint(movedCentre, 0.03f, 0.001f) > 0, "the brush did not find the part where it was moved to");
+        solve.EndStroke();
+        Assert.True(At(solve.Positions(), middle).Y > 0.5f, "the brush clamped the move back");
+
+        // The brushes' own share is still capped, on top of the move.
+        for (int i = 0; i < 500; i++) solve.Paint(movedCentre, 0.03f, 0.001f);
+        Assert.Equal(0.5f + solve.MaxDisplacement, At(solve.Positions(), middle).Y, 1e-4f);
+    }
+
+    /// <summary>
+    /// With adjacent parts on, cloth near the part follows by the falloff of its distance to it — the seam all the
+    /// way, a point one cell in by the smoothstep, nothing past the radius — and that holds for a strap lying close
+    /// but not joined as much as for cloth sewn to the part.
+    /// </summary>
+    [Fact]
+    public void AdjacentFalloffReachesNearbyCloth()
+    {
+        var (model, n, second, loose) = TwoPartsAndALooseStrap();
+        var solve = new MeshVolumeSolve(model);
+        const float radius = 0.05f;
+        var offset = new Vector3(0f, 0.01f, 0f);
+
+        solve.BeginMove(model.Parts[1].Triangles, adjacent: true, falloffRadius: radius);
+        solve.MoveTo(offset);
+
+        var after = solve.Positions();
+        float Lift(int v) => At(after, v).Y - At(model.Positions, v).Y;
+
+        Assert.Equal(0.01f, Lift((n - 1) * n + 5), 1e-6f);                                          // the seam
+        Assert.Equal(0.01f * MeshVolumeSolve.Falloff(0.01f / radius), Lift((n - 2) * n + 5), 1e-6f); // 10 mm in
+        Assert.Equal(0.01f * MeshVolumeSolve.Falloff(0.03f / radius), Lift((n - 4) * n + 5), 1e-6f); // 30 mm in
+        Assert.Equal(0f, Lift((n - 6) * n + 5), 1e-9f);                                              // 50 mm: the rim
+        Assert.Equal(0f, Lift(5));
+
+        // The strap is 20 mm from the part at its near edge and 50 mm at its fourth row — joined to nothing.
+        Assert.Equal(0.01f * MeshVolumeSolve.Falloff(0.02f / radius), Lift(loose + 5 * n), 1e-6f);
+        Assert.Equal(0.01f * MeshVolumeSolve.Falloff(0.03f / radius), Lift(loose + 5 * n + 1), 1e-6f);
+        Assert.Equal(0f, Lift(loose + 5 * n + 3), 1e-9f);
+        Assert.Equal(0f, Lift(loose + 5 * n + 8));
+        solve.EndMove();
+    }
+
+    /// <summary>With adjacent parts off, only the seam — the points the part shares — follows the part.</summary>
+    [Fact]
+    public void AdjacentOffMovesOnlyThePart()
+    {
+        var (model, n, _) = TwoParts();
+        var solve = new MeshVolumeSolve(model);
+
+        solve.BeginMove(model.Parts[1].Triangles, adjacent: false, falloffRadius: 0.05f);
+        solve.MoveTo(new Vector3(0f, 0.01f, 0f));
+        solve.EndMove();
+
+        var after = solve.Positions();
+        Assert.Equal(0.01f, At(after, (n - 1) * n + 5).Y, 1e-6f);
+        Assert.Equal(0f, At(after, (n - 2) * n + 5).Y);
+    }
+
+    /// <summary>Undo takes a move back exactly, falloff and all, and the model is clean again.</summary>
+    [Fact]
+    public void UndoRestoresAMove()
+    {
+        var (model, _, _) = TwoParts();
+        var solve = new MeshVolumeSolve(model);
+
+        solve.BeginMove(model.Parts[1].Triangles, adjacent: true, falloffRadius: 0.05f);
+        solve.MoveTo(new Vector3(0.02f, 0.3f, 0f));
+        solve.EndMove();
+        Assert.True(solve.CanUndo);
+
+        solve.Undo();
+        var back = solve.Positions();
+        for (int v = 0; v < model.Positions.Length / 3; v++) Assert.Equal(At(model.Positions, v), At(back, v));
+        Assert.False(solve.Dirty);
+
+        // And a brush afterwards is capped as if the move had never been: nothing of it lingers.
+        for (int i = 0; i < 500; i++) solve.Paint(At(model.Positions, 60), 0.03f, 0.001f);
+        Assert.True(solve.Worst <= solve.MaxDisplacement + 1e-6f);
+    }
+
+    /// <summary>
+    /// A locked part cannot be moved, and cloth locked beside a moved part does not follow it — the seam it shares
+    /// holds too, since a node welded to a locked part is locked.
+    /// </summary>
+    [Fact]
+    public void LockedNeverMoves()
+    {
+        var (model, n, second) = TwoParts();
+        var solve = new MeshVolumeSolve(model);
+
+        solve.SetLocked(Enumerable.Range(second, n * n));
+        Assert.Equal(0, solve.BeginMove(model.Parts[1].Triangles, adjacent: true, falloffRadius: 0.05f));
+        Assert.False(solve.Moving);
+
+        solve.SetLocked(Enumerable.Range(0, n * n));
+        Assert.True(solve.BeginMove(model.Parts[1].Triangles, adjacent: true, falloffRadius: 0.05f) > 0);
+        solve.MoveTo(new Vector3(0f, 0.02f, 0f));
+        solve.EndMove();
+
+        var after = solve.Positions();
+        for (int v = 0; v < n * n; v++) Assert.Equal(At(model.Positions, v), At(after, v));
+        Assert.Equal(0.02f, At(after, second + 5 * n + 5).Y, 1e-6f);
+    }
+
+    /// <summary>Skin never moves, even when it is the part asked for.</summary>
+    [Fact]
+    public void SkinNeverMoves()
+    {
+        var (grid, _) = Grid(11);
+        var model = Assemble([.. grid.Positions], [.. grid.Normals], [], [.. grid.Parts[0].Triangles],
+                             "/mt_c0201b0001_b.mtrl");
+        var solve = new MeshVolumeSolve(model);
+        Assert.Equal(0, solve.BeginMove(model.Parts[1].Triangles, adjacent: true, falloffRadius: 0.05f));
+    }
+
+    /// <summary>A move carried onto another size is not capped there either.</summary>
+    [Fact]
+    public void TransferCarriesAMoveUncapped()
+    {
+        var (model, n, second) = TwoParts();
+        var solve = new MeshVolumeSolve(model);
+        solve.BeginMove(model.Parts[1].Triangles, adjacent: false, falloffRadius: 0f);
+        solve.MoveTo(new Vector3(0f, 0.3f, 0f));
+        solve.EndMove();
+
+        var carried = BrushTransfer.Transfer(solve, model, model);
+        Assert.Equal(0.3f, carried.DeltaAt(second + 5 * n + 5).Y, 1e-5f);
+        Assert.Equal(0.3f, carried.MovedAt(second + 5 * n + 5).Y, 1e-5f);
+    }
 }

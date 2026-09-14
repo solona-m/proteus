@@ -2159,6 +2159,74 @@
     "message": "바람이 이 장비를 흔드는 곳을 칠합니다. 빨간색이 흔들림의 정도입니다.\n모델의 두 번째 버텍스 컬러에 기록됩니다.",
     "description": ""
   },
+  "Parts.Tool.Move": {
+    "message": "이동",
+    "description": ""
+  },
+  "Parts.Tool.Move.Tip": {
+    "message": "파츠를 고르고 화살표를 드래그합니다. 화살표는 그 축을 따라,\n사각형은 그 평면 위에서 움직입니다.",
+    "description": ""
+  },
+  "Parts.Move.Help": {
+    "message": "파츠를 클릭해 선택한 뒤 화살표나 사각형을 드래그합니다. 다른 곳을 드래그하면 모델이 회전하고, Shift+드래그로 시점을 옮기며, 스크롤로 확대/축소합니다.",
+    "description": ""
+  },
+  "Parts.Move.LiveHint": {
+    "message": "캐릭터의 파츠를 클릭한 뒤 화살표나 사각형을 드래그합니다. Alt를 누르고 있으면 카메라를 움직일 수 있습니다. 이동은 버튼을 놓을 때 저장됩니다.",
+    "description": ""
+  },
+  "Parts.Move.Part.Fmt": {
+    "message": "파츠 {0} 이동 중",
+    "description": ""
+  },
+  "Parts.Move.NoPart": {
+    "message": "이동할 파츠를 클릭해 선택하세요.",
+    "description": ""
+  },
+  "Parts.Move.ListTip": {
+    "message": "여기서 이동할 파츠를 고르거나, 모델이나 캐릭터에서 클릭하세요.",
+    "description": ""
+  },
+  "Parts.Move.Adjacent": {
+    "message": "인접 파츠도 이동",
+    "description": ""
+  },
+  "Parts.Move.Adjacent.Tip": {
+    "message": "파츠 근처의 옷감은 이어져 있든 아니든 멀어질수록 덜 따라옵니다.\n끄면 파츠만 움직입니다. 이웃과 정확히 공유하는 점은 그래도 움직이므로 솔기가 벌어지지 않습니다.",
+    "description": ""
+  },
+  "Parts.Move.Falloff": {
+    "message": "감쇠 거리",
+    "description": ""
+  },
+  "Parts.Move.Falloff.Tip": {
+    "message": "파츠에서 얼마나 떨어진 옷감까지 따라오는지.",
+    "description": ""
+  },
+  "Parts.Move.BonesNote": {
+    "message": "이동한 파츠는 원래 본을 계속 따르므로, 본에서 멀리 옮기면 포즈에 따라 이상하게 휠 수 있습니다.",
+    "description": ""
+  },
+  "Parts.Move.SkinTip": {
+    "message": "피부는 이동할 수 없습니다.",
+    "description": ""
+  },
+  "Parts.Move.LockedTip": {
+    "message": "이 파츠는 잠겨 있습니다. 브러시에서 잠금을 풀면 이동할 수 있습니다.",
+    "description": ""
+  },
+  "Parts.Move.NothingFree": {
+    "message": "이 파츠에는 움직일 수 있는 부분이 없습니다: 피부이거나 잠겨 있습니다.",
+    "description": ""
+  },
+  "Parts.Move.Moved.Fmt": {
+    "message": "최대 이동: {0:F1} mm.",
+    "description": ""
+  },
+  "Parts.Move.Undo": {
+    "message": "이동 되돌리기",
+    "description": ""
+  },
   "Parts.Brush.WindAmount": {
     "message": "양",
     "description": ""

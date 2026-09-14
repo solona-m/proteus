@@ -2159,6 +2159,74 @@
     "message": "Pinta dónde el viento mueve esta prenda; el rojo indica cuánto.\nSe escribe en el segundo color de vértice del modelo.",
     "description": ""
   },
+  "Parts.Tool.Move": {
+    "message": "Mover",
+    "description": ""
+  },
+  "Parts.Tool.Move.Tip": {
+    "message": "Elige una pieza y arrastra las flechas: una flecha la mueve por\nese eje, un cuadrado la mueve por ese plano.",
+    "description": ""
+  },
+  "Parts.Move.Help": {
+    "message": "Haz clic en una pieza para elegirla y arrastra una flecha o un cuadrado. Arrastra en cualquier otro sitio para girar el modelo, Mayús+arrastrar para mover la vista y la rueda para hacer zoom.",
+    "description": ""
+  },
+  "Parts.Move.LiveHint": {
+    "message": "Haz clic en una pieza de tu personaje y arrastra una flecha o un cuadrado. Mantén Alt para mover la cámara. Cada movimiento se guarda al soltar.",
+    "description": ""
+  },
+  "Parts.Move.Part.Fmt": {
+    "message": "Moviendo la pieza {0}",
+    "description": ""
+  },
+  "Parts.Move.NoPart": {
+    "message": "Haz clic en una pieza para elegir qué mover.",
+    "description": ""
+  },
+  "Parts.Move.ListTip": {
+    "message": "Elige aquí la pieza que quieres mover, o haz clic en ella en el modelo o en tu personaje.",
+    "description": ""
+  },
+  "Parts.Move.Adjacent": {
+    "message": "Mover piezas adyacentes",
+    "description": ""
+  },
+  "Parts.Move.Adjacent.Tip": {
+    "message": "La tela cercana a la pieza la sigue, esté unida a ella o no, menos cuanto más lejos está.\nDesactivado, solo se mueve la pieza. Los puntos que comparte exactamente con una vecina se siguen moviendo, para que la costura no se abra.",
+    "description": ""
+  },
+  "Parts.Move.Falloff": {
+    "message": "Atenuación",
+    "description": ""
+  },
+  "Parts.Move.Falloff.Tip": {
+    "message": "Hasta qué distancia de la pieza la tela cercana la sigue.",
+    "description": ""
+  },
+  "Parts.Move.BonesNote": {
+    "message": "Una pieza movida sigue los huesos para los que se hizo, así que si la alejas mucho de ellos puede doblarse de forma extraña en algunas poses.",
+    "description": ""
+  },
+  "Parts.Move.SkinTip": {
+    "message": "La piel no se puede mover.",
+    "description": ""
+  },
+  "Parts.Move.LockedTip": {
+    "message": "Esta pieza está bloqueada. Desbloquéala con un pincel para moverla.",
+    "description": ""
+  },
+  "Parts.Move.NothingFree": {
+    "message": "Nada de esta pieza puede moverse: es piel o está bloqueada.",
+    "description": ""
+  },
+  "Parts.Move.Moved.Fmt": {
+    "message": "Desplazamiento máximo: {0:F1} mm.",
+    "description": ""
+  },
+  "Parts.Move.Undo": {
+    "message": "Deshacer movimiento",
+    "description": ""
+  },
   "Parts.Brush.WindAmount": {
     "message": "Cantidad",
     "description": ""

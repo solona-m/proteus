@@ -2159,6 +2159,74 @@
     "message": "绘制风吹动这件服装的位置；红色越深摆动越强。\n写入模型的第二个顶点颜色。",
     "description": ""
   },
+  "Parts.Tool.Move": {
+    "message": "移动",
+    "description": ""
+  },
+  "Parts.Tool.Move.Tip": {
+    "message": "选择一个部件并拖动箭头：箭头沿该轴移动，\n方块在该平面内移动。",
+    "description": ""
+  },
+  "Parts.Move.Help": {
+    "message": "点击部件以选中它，然后拖动箭头或方块。在其他地方拖动可旋转模型，Shift+拖动平移视图，滚轮缩放。",
+    "description": ""
+  },
+  "Parts.Move.LiveHint": {
+    "message": "在角色身上点击一个部件，然后拖动箭头或方块。按住 Alt 可移动镜头。每次移动在松开时保存。",
+    "description": ""
+  },
+  "Parts.Move.Part.Fmt": {
+    "message": "正在移动部件 {0}",
+    "description": ""
+  },
+  "Parts.Move.NoPart": {
+    "message": "点击一个部件以选择要移动的内容。",
+    "description": ""
+  },
+  "Parts.Move.ListTip": {
+    "message": "在此选择要移动的部件，或在模型或角色上点击它。",
+    "description": ""
+  },
+  "Parts.Move.Adjacent": {
+    "message": "移动相邻部件",
+    "description": ""
+  },
+  "Parts.Move.Adjacent.Tip": {
+    "message": "部件附近的布料会跟随移动，无论是否与其相连，越远跟随越少。\n关闭时只移动该部件。与相邻部件完全共用的点仍会移动，接缝保持闭合。",
+    "description": ""
+  },
+  "Parts.Move.Falloff": {
+    "message": "衰减",
+    "description": ""
+  },
+  "Parts.Move.Falloff.Tip": {
+    "message": "距离部件多远的布料仍会跟随它。",
+    "description": ""
+  },
+  "Parts.Move.BonesNote": {
+    "message": "移动后的部件仍跟随原本的骨骼，离骨骼太远时在某些姿势下可能会弯曲异常。",
+    "description": ""
+  },
+  "Parts.Move.SkinTip": {
+    "message": "皮肤无法移动。",
+    "description": ""
+  },
+  "Parts.Move.LockedTip": {
+    "message": "该部件已锁定。请在笔刷下解锁后再移动。",
+    "description": ""
+  },
+  "Parts.Move.NothingFree": {
+    "message": "该部件中没有可以移动的内容：它是皮肤或已锁定。",
+    "description": ""
+  },
+  "Parts.Move.Moved.Fmt": {
+    "message": "最大移动：{0:F1} mm。",
+    "description": ""
+  },
+  "Parts.Move.Undo": {
+    "message": "撤销移动",
+    "description": ""
+  },
   "Parts.Brush.WindAmount": {
     "message": "强度",
     "description": ""
