@@ -146,6 +146,194 @@ public class ToeCapDiagTests
         }
     }
 
+    /// <summary>
+    /// SCRATCH: for every foot skin vertex of the dumped bodies, how far the game-built shell's triangle
+    /// above it stands off, per layer material, and whether that triangle's corners are skinned to other
+    /// bones than the body vertex. Locates where the 0.05 mm push leaves the skin nearest the surface.
+    /// </summary>
+    [Fact]
+    public void FootClearanceFromGameShell()
+    {
+        var dump = Path.Combine(Path.GetTempPath(), "proteus-shell-dump");
+        var shellPath = Path.Combine(dump, "host0_shell.mdl");
+        if (!File.Exists(shellPath)) return;
+        var sb = new StringBuilder();
+        void W(string l) { o.WriteLine(l); sb.AppendLine(l); }
+
+        var bp = new List<SecondSkinWriter.Vec3>();
+        var bn = new List<SecondSkinWriter.Vec3>();
+        var bw = new List<string>();
+        for (int i = 0; File.Exists(Path.Combine(dump, $"host0_body{i}.mdl")); i++)
+        {
+            if (!SecondSkinWriter.TryReadLod0Geometry(File.ReadAllBytes(Path.Combine(dump, $"host0_body{i}.mdl")),
+                    out var p, out _, out _, out var w, out var n)) continue;
+            for (int v = 0; v < p.Length / 3; v++)
+            {
+                if (p[v * 3 + 1] > 0.15f) continue;
+                bp.Add(new(p[v * 3], p[v * 3 + 1], p[v * 3 + 2]));
+                bn.Add(new(n[v * 3], n[v * 3 + 1], n[v * 3 + 2]));
+                bw.Add(v < w.Length && w[v].Length > 0 ? w[v].MaxBy(x => x.W).Bone : "?");
+            }
+        }
+        W($"{bp.Count} foot skin vertices");
+
+        W("##### GAME SHELL");
+        Measure(File.ReadAllBytes(shellPath));
+
+        // The same build replayed from the dump, so a fix can be measured without the game.
+        var text = File.ReadAllLines(Path.Combine(dump, "host0_inputs.txt"));
+        var specs = new List<SecondSkinWriter.SourceSpec>();
+        for (int i = 0; File.Exists(Path.Combine(dump, $"host0_body{i}.mdl")); i++)
+        {
+            var line = text.First(l => l.StartsWith($"source[{i}] "));
+            var ha = System.Text.RegularExpressions.Regex.Match(line, @"hiddenAttrs=(\S*)").Groups[1].Value;
+            specs.Add(new SecondSkinWriter.SourceSpec(File.ReadAllBytes(Path.Combine(dump, $"host0_body{i}.mdl")),
+                DropConnectors: line.Contains("dropRedundant=True"),
+                HiddenAttributes: ha.Length == 0 ? null : ha.Split(',').ToHashSet()));
+        }
+        var layers = new List<SecondSkinLayer>();
+        for (int i = 0; text.FirstOrDefault(l => l.StartsWith($"layer[{i}] ")) is { } line; i++)
+        {
+            var capP = Path.Combine(dump, $"host0_layer{i}_toecap.raw");
+            var covP = Path.Combine(dump, $"host0_layer{i}_coverage.raw");
+            byte[]? cap = !line.Contains("toeCap=none") && File.Exists(capP) ? File.ReadAllBytes(capP) : null;
+            byte[]? cov = !line.Contains("coverage=none") && File.Exists(covP) ? File.ReadAllBytes(covP) : null;
+            int cs = cap == null ? 0 : (int)Math.Round(Math.Sqrt(cap.Length));
+            int vs = cov == null ? 0 : (int)Math.Round(Math.Sqrt(cov.Length));
+            float F(string k) => float.Parse(System.Text.RegularExpressions.Regex.Match(line, k + @"=(\S+)").Groups[1].Value,
+                                             CultureInfo.InvariantCulture);
+            layers.Add(new SecondSkinLayer
+            {
+                MaterialName = System.Text.RegularExpressions.Regex.Match(line, @"material=(\S+)").Groups[1].Value,
+                Coverage = cov, CoverageWidth = vs, CoverageHeight = vs,
+                ToeCap = cap, ToeCapWidth = cs, ToeCapHeight = cs,
+                ToeCapStrength = F("strength"), BustBridgeStrength = F("bustBridge"),
+                NippleSmoothStrength = F("nippleSmooth"), CleftBridgeStrength = F("cleftBridge"),
+                FoldSmoothStrength = F("smoothFold"),
+            });
+        }
+        // The dump records whether this build had a base; an older dump without the line falls back to the
+        // file being there, which can be a leftover from an earlier build.
+        var basePath = Path.Combine(dump, "host0_base.mdl");
+        var baseLine = text.FirstOrDefault(l => l.StartsWith("base="));
+        bool hasBase = baseLine != null ? baseLine == "base=yes" : File.Exists(basePath);
+        if (baseLine == null && hasBase) W("inputs.txt does not say whether this build had a base; using host0_base.mdl");
+        if (hasBase && !File.Exists(basePath)) { W("inputs.txt names a base but host0_base.mdl is missing"); return; }
+        var diag = new List<string>();
+        var replay = SecondSkinWriter.Build(specs, layers, hasBase ? File.ReadAllBytes(basePath) : null,
+            out _, diag.Add, CapSets());
+        foreach (var l in diag.Where(l => l.Contains("raised") || l.Contains("clearance")))
+            W("  diag: " + l);
+        W("##### REPLAY");
+        Measure(replay);
+
+        // Beside the dump, which exists by now, rather than in any one session's scratch folder.
+        File.WriteAllText(Path.Combine(Path.GetTempPath(), "proteus-foot-clearance.txt"), sb.ToString());
+
+        void Measure(byte[] shell) {
+        foreach (var mat in new[] { "ril_c", "ril_d", "ril_e", "ril_f" })
+        {
+            if (!SecondSkinWriter.TryReadLod0Geometry(shell, out var p, out _, out var t, out var w, out _,
+                    keepMaterial: m => m.Contains(mat))) continue;
+            SecondSkinWriter.Vec3 P(int i) => new(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]);
+            string Dom(int i) => i < w.Length && w[i].Length > 0 ? w[i].MaxBy(x => x.W).Bone : "?";
+            const float cell = 0.004f;
+            (int, int, int) C(float x, float y, float z) =>
+                ((int)MathF.Floor(x / cell), (int)MathF.Floor(y / cell), (int)MathF.Floor(z / cell));
+            var hash = new Dictionary<(int, int, int), List<int>>();
+            for (int k = 0; k + 2 < t.Length; k += 3)
+            {
+                var a = P(t[k]); var b = P(t[k + 1]); var c = P(t[k + 2]);
+                if (MathF.Min(a.Y, MathF.Min(b.Y, c.Y)) > 0.16f) continue;
+                var lo = C(MathF.Min(a.X, MathF.Min(b.X, c.X)), MathF.Min(a.Y, MathF.Min(b.Y, c.Y)), MathF.Min(a.Z, MathF.Min(b.Z, c.Z)));
+                var hi = C(MathF.Max(a.X, MathF.Max(b.X, c.X)), MathF.Max(a.Y, MathF.Max(b.Y, c.Y)), MathF.Max(a.Z, MathF.Max(b.Z, c.Z)));
+                for (int x = lo.Item1; x <= hi.Item1; x++)
+                for (int y = lo.Item2; y <= hi.Item2; y++)
+                for (int z = lo.Item3; z <= hi.Item3; z++)
+                    (hash.TryGetValue((x, y, z), out var l) ? l : hash[(x, y, z)] = []).Add(k);
+            }
+
+            var hits = new List<(float H, SecondSkinWriter.Vec3 At, float Edge, bool Foreign, string Bones)>();
+            for (int v = 0; v < bp.Count; v++)
+            {
+                var q = bp[v];
+                if (!hash.TryGetValue(C(q.X, q.Y, q.Z), out var near)) continue;
+                float best = float.MaxValue; (float H, SecondSkinWriter.Vec3 At, float Edge, bool Foreign, string Bones) bestHit = default;
+                foreach (int k in near)
+                {
+                    var a = P(t[k]); var b = P(t[k + 1]); var c = P(t[k + 2]);
+                    var e1 = new SecondSkinWriter.Vec3(b.X - a.X, b.Y - a.Y, b.Z - a.Z);
+                    var e2 = new SecondSkinWriter.Vec3(c.X - a.X, c.Y - a.Y, c.Z - a.Z);
+                    var fn = new SecondSkinWriter.Vec3(e1.Y * e2.Z - e1.Z * e2.Y, e1.Z * e2.X - e1.X * e2.Z, e1.X * e2.Y - e1.Y * e2.X);
+                    float len = MathF.Sqrt(fn.X * fn.X + fn.Y * fn.Y + fn.Z * fn.Z);
+                    if (len < 1e-12f) continue;
+                    fn = new(fn.X / len, fn.Y / len, fn.Z / len);
+                    if (fn.X * bn[v].X + fn.Y * bn[v].Y + fn.Z * bn[v].Z < 0) fn = new(-fn.X, -fn.Y, -fn.Z);
+                    float h = (a.X - q.X) * fn.X + (a.Y - q.Y) * fn.Y + (a.Z - q.Z) * fn.Z;
+                    if (h < -0.003f || h > 0.003f) continue;
+                    var pq = new SecondSkinWriter.Vec3(q.X + fn.X * h, q.Y + fn.Y * h, q.Z + fn.Z * h);
+                    bool inside = true;
+                    foreach (var (u, uu) in new[] { (a, b), (b, c), (c, a) })
+                    {
+                        var ev = new SecondSkinWriter.Vec3(uu.X - u.X, uu.Y - u.Y, uu.Z - u.Z);
+                        var qv = new SecondSkinWriter.Vec3(pq.X - u.X, pq.Y - u.Y, pq.Z - u.Z);
+                        if ((ev.Y * qv.Z - ev.Z * qv.Y) * fn.X + (ev.Z * qv.X - ev.X * qv.Z) * fn.Y
+                            + (ev.X * qv.Y - ev.Y * qv.X) * fn.Z < -1e-9f) { inside = false; break; }
+                    }
+                    if (!inside || MathF.Abs(h) >= best) continue;
+                    best = MathF.Abs(h);
+                    float edge = MathF.Max(Dist(a, b), MathF.Max(Dist(b, c), Dist(c, a)));
+                    var doms = new[] { Dom(t[k]), Dom(t[k + 1]), Dom(t[k + 2]) };
+                    bestHit = (h, q, edge, doms.Any(d => d != bw[v]), $"body {bw[v]} / tri {string.Join(",", doms)}");
+                }
+                if (best < float.MaxValue) hits.Add(bestHit);
+            }
+
+            // Cracks: foot vertices that nearly coincide without being the same point — a seam pair pulled
+            // apart. Bucketed at 0.5 mm, compared against the neighbouring buckets.
+            const float crackCell = 0.0005f;
+            var buckets = new Dictionary<(int, int, int), List<SecondSkinWriter.Vec3>>();
+            for (int i = 0; i < p.Length / 3; i++)
+            {
+                var q = P(i);
+                if (q.Y > 0.15f) continue;
+                var key = ((int)MathF.Floor(q.X / crackCell), (int)MathF.Floor(q.Y / crackCell), (int)MathF.Floor(q.Z / crackCell));
+                (buckets.TryGetValue(key, out var l) ? l : buckets[key] = []).Add(q);
+            }
+            int cracks = 0; float worstCrack = 0f;
+            foreach (var (key, list) in buckets)
+                for (int dx = -1; dx <= 1; dx++)
+                for (int dy = -1; dy <= 1; dy++)
+                for (int dz = -1; dz <= 1; dz++)
+                {
+                    if (!buckets.TryGetValue((key.Item1 + dx, key.Item2 + dy, key.Item3 + dz), out var other)) continue;
+                    foreach (var a in list)
+                    foreach (var b in other)
+                    {
+                        float d = Dist(a, b);
+                        if (d <= 1e-6f || d > crackCell) continue;
+                        cracks++; worstCrack = MathF.Max(worstCrack, d);
+                    }
+                }
+            W($"=== {mat}: near-coincident foot vertex pairs (1e-6..0.5 mm apart): {cracks / 2}, widest {worstCrack * 1000:0.000} mm");
+            W($"=== {mat}: {hits.Count} foot vertices under a triangle");
+            float[] edges = [float.NegativeInfinity, 0f, 2e-5f, 4e-5f, 6e-5f, 2e-4f, 1e-3f, float.PositiveInfinity];
+            for (int e = 0; e + 1 < edges.Length; e++)
+            {
+                var inBin = hits.Where(x => x.H >= edges[e] && x.H < edges[e + 1]).ToList();
+                W($"  h {edges[e] * 1000,8:0.###}..{edges[e + 1] * 1000,-8:0.###} mm: {inBin.Count,6}  "
+                  + $"(foreign skinning {inBin.Count(x => x.Foreign)}, median edge {(inBin.Count == 0 ? 0 : inBin.OrderBy(x => x.Edge).ElementAt(inBin.Count / 2).Edge * 1000):0.0} mm)");
+            }
+            foreach (var x in hits.OrderBy(x => x.H).Take(10))
+                W($"  h {x.H * 1000,7:0.000} mm at ({x.At.X,7:0.0000} {x.At.Y,7:0.0000} {x.At.Z,7:0.0000}) "
+                  + $"edge {x.Edge * 1000,5:0.0} mm {(x.Foreign ? "FOREIGN" : "       ")} {x.Bones}");
+        }
+        }
+
+        static float Dist(SecondSkinWriter.Vec3 a, SecondSkinWriter.Vec3 b)
+            => MathF.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y) + (a.Z - b.Z) * (a.Z - b.Z));
+    }
+
     /// <summary>Pairs of vertices at the same position whose stored normals differ, bucketed by height and
     /// reported with the worst disagreement in each band.</summary>
     private static IEnumerable<string> NormalSplits(byte[] m)
