@@ -379,6 +379,10 @@
     "message": "几何",
     "description": ""
   },
+  "Colors.Effects.Section": {
+    "message": "效果",
+    "description": ""
+  },
   "Colors.GlowAmount.Label": {
     "message": "发光",
     "description": ""
