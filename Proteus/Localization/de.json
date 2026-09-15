@@ -2307,6 +2307,18 @@
     "message": "Dieses Modell ist gerade nicht an deinem Charakter. Zieh es an oder schalte die Modellansicht ein.",
     "description": ""
   },
+  "Parts.Content.Hint": {
+    "message": "Dieses Kleidungsstück wurde nach Proteus importiert, das es für dich trägt. Male wie gewohnt — jeder Strich erscheint ein paar Sekunden nach dem Speichern an deinem Charakter, sobald das Kleidungsstück neu gebaut ist.",
+    "description": ""
+  },
+  "Parts.Content.NoSwitches": {
+    "message": "Zu einem importierten Kleidungsstück lassen sich keine Schalter hinzufügen: Proteus trägt es an einem anderen Gegenstand, dessen eigene Schalter es steuern. Die Pinsel oben funktionieren weiterhin.",
+    "description": ""
+  },
+  "Parts.Live.PickedShell": {
+    "message": "Das ist das Kleidungsstück, das Proteus für dich zeichnet; es wird bei jeder Änderung neu gebaut. Wähle den Mod, aus dem es stammt, um es zu bearbeiten.",
+    "description": ""
+  },
   "Parts.Live.Unreadable": {
     "message": "Dieses Modell passt nicht zu dem an deinem Charakter. Schalte die Modellansicht ein, um es hier zu bemalen.",
     "description": ""

@@ -323,7 +323,11 @@ public sealed class SecondSkinService
         // Shell material disk leaf (ss_{letter}.mtrl) → what its rows want from the scene light. Only the
         // materials that ask for something appear, so a character with no light-sensitive glow publishes an
         // empty map and the runtime applier's per-frame path stays exactly what it was.
-        Dictionary<string, ShellLightProfile> ShellLight);
+        Dictionary<string, ShellLightProfile> ShellLight,
+        // Per mod, the content MODEL files (relative to the mod root, forward slashes) whose meshes went into
+        // this build. The character draws them only as part of our shell, so this is the only record that says
+        // an imported garment is on screen — which is what tells the Studio tab it is being worn.
+        Dictionary<string, HashSet<string>> ContentModels);
 
     /// <summary>
     /// One surface, resolved: the geometry a shell for it is cut from, and the two spaces that geometry
@@ -1436,6 +1440,8 @@ public sealed class SecondSkinService
         // Per mod, the content materials backing a drawn mesh — see Result.ContentMaterials for why the
         // declared set is not good enough, and why this is not the hosted set either.
         var contentMaterials = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        // Per mod, the model files those meshes were cut from — see Result.ContentModels.
+        var contentModels = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
 
         var modelsDir = Path.Combine(outputRoot, "models");
         var materialsDir = Path.Combine(outputRoot, "materials");
@@ -2769,6 +2775,14 @@ public sealed class SecondSkinService
                     contentMaterials[cEntry.ModDirectory] =
                         modMats = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 modMats.Add(rel);
+
+                // And the model this mesh came from, on the same terms. The Studio tab has no other way to
+                // know a content piece is being worn: the character draws it inside our shell, so nothing of
+                // the mod's own is loaded and the "which mods is the character wearing" walk never sees it.
+                if (!contentModels.TryGetValue(cEntry.ModDirectory, out var modModels))
+                    contentModels[cEntry.ModDirectory] =
+                        modModels = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                modModels.Add(modelRel.Replace('\\', '/'));
 
                 // Same mesh of the same model twice — an option listing a piece it already lists, or two
                 // options sharing one file — is still drawn once.
@@ -4203,7 +4217,7 @@ public sealed class SecondSkinService
         if (hostModelPaths.Count == 0) return null;
 
         return new Result(redirects, manipulations, shellChanged, shellMaterials, modelChangedAny,
-                          hostModelPaths, appendHostModelPaths, contentMaterials, shellLight);
+                          hostModelPaths, appendHostModelPaths, contentMaterials, shellLight, contentModels);
     }
 
     private static string Rel(string root, string full) => Path.GetRelativePath(root, full).Replace('/', '\\');

@@ -1779,6 +1779,21 @@ public sealed class PartsStrings
     public readonly string LiveNotWorn = Loc.Localize("Parts.Live.NotWorn",
         "This model is not on your character right now. Wear it, or turn on Show model view.");
 
+    /// <summary>Under the brush controls for an imported piece: painting works, the result takes a moment.</summary>
+    public readonly string ContentHint = Loc.Localize("Parts.Content.Hint",
+        "This garment was imported into Proteus, which wears it for you. Paint it as usual — each stroke "
+      + "appears on your character a few seconds after it saves, once the garment is rebuilt.");
+
+    /// <summary>Replaces the switch controls for an imported piece — see <c>DrawStaging</c>.</summary>
+    public readonly string ContentNoSwitches = Loc.Localize("Parts.Content.NoSwitches",
+        "Switches can't be added to an imported garment: Proteus wears it on another item, and that item's "
+      + "own switches control it. The brushes above still work.");
+
+    /// <summary>Clicking a Proteus shell on the character — see <c>OnLivePicked</c>.</summary>
+    public readonly string LivePickedShell = Loc.Localize("Parts.Live.PickedShell",
+        "That is the garment Proteus draws for you, which is rebuilt every time something changes. Pick the "
+      + "mod it came from to edit it.");
+
     public readonly string LiveUnreadable = Loc.Localize("Parts.Live.Unreadable",
         "This model could not be matched to the one on your character. Turn on Show model view to paint it here.");
 

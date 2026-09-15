@@ -108,14 +108,22 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     /// click on the garment goes to <paramref name="lockClicked"/> to choose the part, and this gizmo is drawn at
     /// <paramref name="movePivot"/> on the posed character and driven by the mouse. Null for every other tool.</param>
     /// <param name="movePivot">The gizmo's centre in the model's space; null when no part is chosen yet.</param>
+    /// <param name="graftedGamePath">
+    /// Set for a model the character wears through Proteus rather than as a file of its own — an imported
+    /// content piece, whose geometry the game only ever draws copied into a Proteus shell. The file is then
+    /// posed on the character's skeleton without being found among the drawn models, and this is the path its
+    /// race is read from. Null for an ordinary model, which must be drawn to be painted.
+    /// </param>
     internal void ArmBrush(string modelFile, byte[] modelBytes, MeshVolumeSolve solve, float brushRadius,
                            bool showWind = false, bool mirror = false, Func<int, int>? partOf = null,
                            Action<int>? lockClicked = null, bool pickParts = false,
                            Func<int, bool>? partTicked = null, int tickedVersion = 0,
-                           TranslateGizmo? moveGizmo = null, Vector3? movePivot = null)
+                           TranslateGizmo? moveGizmo = null, Vector3? movePivot = null,
+                           string? graftedGamePath = null)
     {
         this.moveGizmo = moveGizmo;
         this.movePivot = movePivot;
+        this.graftedGamePath = graftedGamePath;
         brushArmedFrame = ImGui.GetFrameCount();
         targetKey = BodyShapeReader.PathKey(modelFile);
         targetBytes = modelBytes;
@@ -131,6 +139,8 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     }
 
     private bool mirror;
+    /// <summary>See <see cref="ArmBrush"/>: the game path of a model worn through a Proteus shell, or null.</summary>
+    private string? graftedGamePath;
     private Func<int, int>? partOf;
     private Action<int>? lockClicked;
 
@@ -439,8 +449,30 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
             if (volume!.Positions().Length != mesh.VertexCount * 3) { Problem = Strings.Parts.LiveUnreadable; return false; }
             return true;
         }
+
+        // Worn through a Proteus shell: the game never loads this file, so there is nothing in the draw
+        // object to match it against. Pose it on the character's skeleton anyway — the shell carries this
+        // geometry verbatim, bone names and all, so the posed copy lands exactly where the shell draws it.
+        // No shape keys: a shell declares none, so the surface drawn is this file unshaped.
+        if (graftedGamePath != null) return EnsureGrafted();
+
         Problem = Strings.Parts.LiveNotWorn;
         return false;
+    }
+
+    /// <summary>The target as <see cref="EnsureTarget"/> builds it, for a model no drawn file corresponds to.</summary>
+    private bool EnsureGrafted()
+    {
+        var key = targetKey + "|grafted";
+        if (key != meshKey)
+        {
+            meshKey = key;
+            mesh = ModelSkinReader.Read(targetBytes!, null, graftedGamePath);
+            if (mesh != null) Prepare(mesh);
+        }
+        if (mesh == null) { Problem = Strings.Parts.LiveUnreadable; return false; }
+        if (volume!.Positions().Length != mesh.VertexCount * 3) { Problem = Strings.Parts.LiveUnreadable; return false; }
+        return true;
     }
 
     private static HashSet<string> EnabledShapes(Model* model, ModelResourceHandle* handle)

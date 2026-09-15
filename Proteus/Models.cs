@@ -727,6 +727,22 @@ public class ContentPiece
         => Models is { Count: > 0 } ? Models.Keys : [];
 
     /// <summary>
+    /// Every model file this piece can be worn as, whichever race the wearer turns out to be — the per-race
+    /// variants, or the single model a pack ships for everyone. For listing a mod's geometry, where one row per
+    /// file is the point; picking the one a character wears is <see cref="ModelFor"/>'s job.
+    /// </summary>
+    public IEnumerable<string> ModelFiles()
+    {
+        if (Models is { Count: > 0 })
+        {
+            foreach (var path in Models.Values)
+                if (!string.IsNullOrWhiteSpace(path)) yield return path;
+            yield break;
+        }
+        if (!string.IsNullOrWhiteSpace(Model)) yield return Model;
+    }
+
+    /// <summary>
     /// Which of the PACK'S own options reveal each of this piece's materials, when the pack switches its
     /// pieces on and off by model attribute rather than by shipping separate models.
     /// <para/>

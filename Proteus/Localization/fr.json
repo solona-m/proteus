@@ -2307,6 +2307,18 @@
     "message": "Ce modèle n'est pas porté par votre personnage. Portez-le ou activez Afficher le modèle.",
     "description": ""
   },
+  "Parts.Content.Hint": {
+    "message": "Ce vêtement a été importé dans Proteus, qui le porte pour vous. Peignez-le normalement — chaque trait apparaît sur votre personnage quelques secondes après sa sauvegarde, une fois le vêtement reconstruit.",
+    "description": ""
+  },
+  "Parts.Content.NoSwitches": {
+    "message": "Impossible d'ajouter des interrupteurs à un vêtement importé : Proteus le porte sur un autre objet, et ce sont les interrupteurs de cet objet qui le commandent. Les pinceaux ci-dessus fonctionnent toujours.",
+    "description": ""
+  },
+  "Parts.Live.PickedShell": {
+    "message": "C'est le vêtement que Proteus dessine pour vous, reconstruit à chaque changement. Choisissez le mod dont il provient pour le modifier.",
+    "description": ""
+  },
   "Parts.Live.Unreadable": {
     "message": "Ce modèle ne correspond pas à celui de votre personnage. Activez Afficher le modèle pour le peindre ici.",
     "description": ""

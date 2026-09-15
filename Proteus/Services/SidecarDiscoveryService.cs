@@ -1173,4 +1173,22 @@ public class SidecarDiscoveryService
             return null;
         }
     }
+
+    /// <summary>
+    /// One mod's sidecar metadata, read straight from its folder — null when it has none or it will not parse.
+    /// <para/>
+    /// For callers that hold a mod ROOT and no discovery: <see cref="DiscoverEnabled"/> answers only for mods
+    /// enabled in the player's collection, and the Studio tab lists every installed mod.
+    /// </summary>
+    public static ProteusMetadata? TryReadMetadata(string modRoot)
+    {
+        try
+        {
+            var path = Path.Combine(modRoot, SidecarSubdir, MetadataFile);
+            return File.Exists(path)
+                ? JsonSerializer.Deserialize<ProteusMetadata>(File.ReadAllText(path), ProteusJson.MetadataRead)
+                : null;
+        }
+        catch { return null; }
+    }
 }
