@@ -6683,6 +6683,9 @@ public static class SecondSkinWriter
             int normalsWritten = 0, uvsWritten = 0;
             bool encoderMissing = false;
             var outPos = plan is null ? null : new Vec3[vc];
+            var bridgeExtra = bridgePlan is not null && capTris is not null
+                ? BridgedClearance(bridgePlan, capTris)
+                : null;
 
             for (int i = 0; i < vc; i++)
             {
@@ -6698,6 +6701,11 @@ public static class SecondSkinWriter
                 // Banded by the vertex's height BEFORE the cap or bridge moved it, so a displacement cannot
                 // carry a vertex across a band edge and step the surface somewhere the ladder did not put one.
                 float pushHere = pushSweep is null ? push : push * pushSweep.Take(basePos[i].Y);
+                // Clearance given back where the bridge moved the surface — see BridgedClearance. ADDED, not a
+                // floor: every layer of the host shares this one plan, so the same extra on each keeps stacked
+                // layers exactly LayerSeparation apart in the span.
+                if (bridgeExtra is not null)
+                    pushHere += bridgeExtra[i];
                 var final = new Vec3(p.X + n.X * pushHere, p.Y + n.Y * pushHere, p.Z + n.Z * pushHere);
                 WriteXYZ(outStreams[pw.Stream], i * stride + pw.Offset, pw.Type, final.X, final.Y, final.Z);
                 if (outPos is not null) outPos[i] = final;
@@ -6736,6 +6744,16 @@ public static class SecondSkinWriter
                     WriteUv1(uv1Plan, u0w, outStreams, outStrides, i, cu, cv);
                     uvsWritten++;
                 }
+            }
+
+            // A vertex the bridge slid across the skin takes the skinning of the skin it now sits over — see
+            // ReskinBridged. After the position loop, which never reads weights, and before anything copies
+            // these streams on.
+            if (bridgePlan is not null && capTris is not null)
+            {
+                int reskinned = ReskinBridged(basePos, bridgePlan, capTris, decl, outStreams, outStrides);
+                if (reskinned > 0)
+                    capLog?.Invoke($"bust bridge: reskinned {reskinned} moved vertex/vertices from the skin they now sit over");
             }
 
             if (plan is not null)
@@ -9500,6 +9518,185 @@ public static class SecondSkinWriter
     private const float BustMaxSlope = 0.8f;
 
     /// <summary>
+    /// How far short of the skin a lift that would have ended inside the body is stopped. See
+    /// <see cref="KeepLiftsOutside"/>.
+    /// </summary>
+    private const float BridgeInsideMargin = 0.001f;
+
+    /// <summary>
+    /// Cuts back every lift that would END inside the body.
+    /// <para/>
+    /// The chord construction lifts along one axis and assumes the chest is a height field along it — every
+    /// node has open air in front of it up to its chord. Breasts that press together break that. Measured on
+    /// YAB medium (<c>BustClearanceFromGameShell</c>): the axis tilts upward, the front chord between the apexes
+    /// runs through breast volume, and 86 positions deep in the cleavage were lifted 30–42 mm to end up to 36 mm
+    /// INSIDE the breasts — the fabric under the cups dragged up into them, which read in game as bare crescents
+    /// under both breasts. Neolithe's shallower version was the sliver.
+    /// <para/>
+    /// A path that passes through a surface and comes out again is the span doing its job across touching
+    /// breasts, and is left alone. Only where the lift ENDS is judged: by the generalized winding number of the
+    /// end point (see <see cref="BodyWinding"/>), and when that is inside, the lift is walked back in
+    /// <see cref="BridgeInsideStep"/> steps to the furthest point that is outside, less
+    /// <see cref="BridgeInsideMargin"/>.
+    /// <para/>
+    /// NOT by counting crossings. Two versions of that were tried and both left lifts inside, because a node
+    /// sits ON the surface and whether its path starts inside or outside cannot be read off a count: the entry
+    /// happens at the node itself, through faces that have to be skipped, and inferring the start side from the
+    /// node's normal decided wrongly on the steep underside of a breast. After each, 50 and then 40 positions
+    /// under the breasts still ended 10–20 mm inside. A winding number at the end point needs no start.
+    /// </summary>
+    /// <returns>How many lifts were cut.</returns>
+    /// <param name="checkedAt">Per node, the lift last found outside; a node whose lift still equals it is skipped.</param>
+    private static int KeepLiftsOutside(float[] scale, Vec3[] start, Vec3 ax, BodyWinding body, float[] checkedAt,
+                                        int nodeCount)
+    {
+        int cut = 0;
+        for (int n = 0; n < nodeCount; n++)
+        {
+            float lift = scale[n];
+            if (lift <= BridgeInsideMargin || lift == checkedAt[n]) continue;
+            var s0 = start[n];
+            Vec3 At(float d) => new(s0.X + ax.X * d, s0.Y + ax.Y * d, s0.Z + ax.Z * d);
+            if (!body.Inside(At(lift))) { checkedAt[n] = lift; continue; }
+
+            float keep = 0f;
+            for (float d = lift - BridgeInsideStep; d > 0f; d -= BridgeInsideStep)
+            {
+                if (body.Inside(At(d))) continue;
+                // The margin is taken back toward the start, which can land inside again when the stretch of open
+                // air here is thinner than the margin — and a value cached below is never re-tested. So the margin
+                // is only kept when that point is outside too; otherwise the point just found, which is.
+                float withMargin = MathF.Max(0f, d - BridgeInsideMargin);
+                keep = withMargin > 0f && body.Inside(At(withMargin)) ? d : withMargin;
+                break;
+            }
+            scale[n] = keep;
+            checkedAt[n] = keep;
+            cut++;
+        }
+        return cut;
+    }
+
+    /// <summary>Most rounds of cut-then-slope-limit before the span is taken as settled. See the call site.</summary>
+    private const int BridgeInsideRounds = 8;
+
+    /// <summary>Step a lift that ended inside the body is walked back by, looking for open air.</summary>
+    private const float BridgeInsideStep = 0.001f;
+
+    /// <summary>
+    /// Inside-or-outside for a point against a body mesh that is not closed, by generalized winding number:
+    /// the solid angle every triangle subtends at the point, summed and divided by 4π. Near 1 inside a volume,
+    /// near 0 outside, whatever direction anything was approached from — which is what a crossing count cannot
+    /// promise for a point that starts on the surface.
+    /// <para/>
+    /// Over the WHOLE mesh, not the triangles near the point. A breast's front surface on its own is an open
+    /// patch that reads about a half on either side of it; what makes the inside read as inside is the rest of
+    /// the torso closing the volume behind, fifteen centimetres or more away. The torso's own openings — neck,
+    /// arms, waist — pull an inside point down from 1, but not to a half. Sign-agnostic (the magnitude is
+    /// compared), so it does not depend on which way the mesh winds.
+    /// </summary>
+    /// <remarks>
+    /// Summed exactly only for triangles in the cells around the point. Every farther cell counts as one
+    /// oriented patch — its area-weighted normal at its area-weighted centre, whose solid angle is the dipole
+    /// term A·d/|d|³ — which is accurate where the triangles are small against their distance and turns a sum
+    /// over the whole torso into a few thousand terms. The answer only has to tell 0 from 1.
+    /// </remarks>
+    internal sealed class BodyWinding
+    {
+        private const float CellSize = 0.02f;
+        private const int NearCells = 1;
+
+        private readonly Vec3[] pos;
+        private readonly int[] tri;   // node triples
+        private readonly Dictionary<(int, int, int), List<int>> cellTris = new();
+        private readonly List<((int, int, int) Key, Vec3 Area, Vec3 Centre)> cells = new();
+
+        public BodyWinding(Vec3[] nodePos, int[] tris, int[] nodeOf)
+        {
+            pos = nodePos;
+            var t3 = new List<int>(tris.Length);
+            var area = new Dictionary<(int, int, int), (double X, double Y, double Z)>();
+            var centre = new Dictionary<(int, int, int), (double X, double Y, double Z, double W)>();
+            for (int t = 0; t + 2 < tris.Length; t += 3)
+            {
+                if (tris[t] >= nodeOf.Length || tris[t + 1] >= nodeOf.Length || tris[t + 2] >= nodeOf.Length) continue;
+                int a = nodeOf[tris[t]], b = nodeOf[tris[t + 1]], c = nodeOf[tris[t + 2]];
+                if (a == b || b == c || a == c) continue;
+                int id = t3.Count / 3;
+                t3.Add(a); t3.Add(b); t3.Add(c);
+
+                Vec3 pa = pos[a], pb = pos[b], pc = pos[c];
+                var ctr = new Vec3((pa.X + pb.X + pc.X) / 3f, (pa.Y + pb.Y + pc.Y) / 3f, (pa.Z + pb.Z + pc.Z) / 3f);
+                var key = Key(ctr);
+                (cellTris.TryGetValue(key, out var l) ? l : cellTris[key] = []).Add(id);
+
+                // Half the cross product: the triangle's area along its normal, wound the way the exact formula
+                // below is.
+                double ux = pb.X - pa.X, uy = pb.Y - pa.Y, uz = pb.Z - pa.Z;
+                double vx = pc.X - pa.X, vy = pc.Y - pa.Y, vz = pc.Z - pa.Z;
+                double nx = 0.5 * (uy * vz - uz * vy), ny = 0.5 * (uz * vx - ux * vz), nz = 0.5 * (ux * vy - uy * vx);
+                var s = area.GetValueOrDefault(key);
+                area[key] = (s.X + nx, s.Y + ny, s.Z + nz);
+                double w = Math.Sqrt(nx * nx + ny * ny + nz * nz);
+                var cs = centre.GetValueOrDefault(key);
+                centre[key] = (cs.X + ctr.X * w, cs.Y + ctr.Y * w, cs.Z + ctr.Z * w, cs.W + w);
+            }
+            tri = t3.ToArray();
+            foreach (var (key, s) in area)
+            {
+                var cs = centre[key];
+                var at = cs.W > 0 ? new Vec3((float)(cs.X / cs.W), (float)(cs.Y / cs.W), (float)(cs.Z / cs.W))
+                                  : new Vec3((key.Item1 + 0.5f) * CellSize, (key.Item2 + 0.5f) * CellSize,
+                                             (key.Item3 + 0.5f) * CellSize);
+                cells.Add((key, new Vec3((float)s.X, (float)s.Y, (float)s.Z), at));
+            }
+        }
+
+        private static (int, int, int) Key(Vec3 q) =>
+            ((int)MathF.Floor(q.X / CellSize), (int)MathF.Floor(q.Y / CellSize), (int)MathF.Floor(q.Z / CellSize));
+
+        public float Winding(Vec3 p)
+        {
+            var k = Key(p);
+            double sum = 0;
+            foreach (var (key, a, c) in cells)
+            {
+                bool near = Math.Abs(key.Item1 - k.Item1) <= NearCells && Math.Abs(key.Item2 - k.Item2) <= NearCells
+                         && Math.Abs(key.Item3 - k.Item3) <= NearCells;
+                if (near)
+                {
+                    foreach (int id in cellTris[key]) sum += Exact(id, p);
+                    continue;
+                }
+                double dx = c.X - p.X, dy = c.Y - p.Y, dz = c.Z - p.Z;
+                double d2 = dx * dx + dy * dy + dz * dz;
+                sum += (a.X * dx + a.Y * dy + a.Z * dz) / (d2 * Math.Sqrt(d2));
+            }
+            return (float)Math.Abs(sum / (4.0 * Math.PI));
+        }
+
+        /// <summary>The solid angle triangle <paramref name="id"/> subtends at <paramref name="p"/>.</summary>
+        private double Exact(int id, Vec3 p)
+        {
+            Vec3 a = pos[tri[id * 3]], b = pos[tri[id * 3 + 1]], c = pos[tri[id * 3 + 2]];
+            double ax = a.X - p.X, ay = a.Y - p.Y, az = a.Z - p.Z;
+            double bx = b.X - p.X, by = b.Y - p.Y, bz = b.Z - p.Z;
+            double cx = c.X - p.X, cy = c.Y - p.Y, cz = c.Z - p.Z;
+            double la = Math.Sqrt(ax * ax + ay * ay + az * az);
+            double lb = Math.Sqrt(bx * bx + by * by + bz * bz);
+            double lc = Math.Sqrt(cx * cx + cy * cy + cz * cz);
+            // Van Oosterom–Strackee: tan(Ω/2) = a·(b×c) / (|a||b||c| + (a·b)|c| + (a·c)|b| + (b·c)|a|)
+            double det = ax * (by * cz - bz * cy) + ay * (bz * cx - bx * cz) + az * (bx * cy - by * cx);
+            double den = la * lb * lc + (ax * bx + ay * by + az * bz) * lc
+                       + (ax * cx + ay * cy + az * cz) * lb + (bx * cx + by * cy + bz * cz) * la;
+            // For a far triangle det ≈ 2 A·d and den ≈ 4|d|³, so this tends to the A·d/|d|³ used for far cells.
+            return 2.0 * Math.Atan2(det, den);
+        }
+
+        public bool Inside(Vec3 p) => Winding(p) > 0.5f;
+    }
+
+    /// <summary>
     /// How many times the slope limit is swept before giving up. One pass propagates one edge, and a
     /// region is tens of edges across; it normally settles long before this and stops early when it does.
     /// </summary>
@@ -9540,10 +9737,14 @@ public static class SecondSkinWriter
     /// chord, taken directly rather than converged toward. <see cref="ChordTarget"/> holds the construction
     /// and the record of the three relaxations that were tried before it and why each failed.
     /// <para/>
-    /// Because a node is only ever lifted, never lowered, no vertex can move into the body; because the
-    /// chord's endpoints are the apexes themselves, the breasts keep their shape exactly. Not clipping the
-    /// breasts and spanning between them flat are the same construction, not two constraints traded off
-    /// against each other.
+    /// Because a node is only ever lifted, never lowered, no vertex moves into the body where the chest is a
+    /// height field along that axis; because the chord's endpoints are the apexes themselves, the breasts keep
+    /// their shape exactly. Not clipping the breasts and spanning between them flat are the same construction,
+    /// not two constraints traded off against each other.
+    /// <para/>
+    /// NOT a guarantee under an overhang. Beneath a large breast the skin faces down, square to the axis, so a
+    /// lift slides the vertex along the surface and its faces cut under the curve — measured through the
+    /// shell by up to 0.45 mm. <see cref="BridgedSkinClearance"/> gives those vertices their clearance back.
     /// <para/>
     /// Vertices are WELDED by position first, for the reason the cap welds: a body mesh splits vertices at
     /// UV seams and the sternum carries one, so two coincident copies relaxing on their own neighbour sets
@@ -9969,6 +10170,7 @@ public static class SecondSkinWriter
             rampedMax = MathF.Max(rampedMax, MathF.Abs(scale[n]));
         }
 
+
         // SLOPE LIMIT — the guarantee that the shell cannot tear, whatever shape the region came out.
         //
         // Everything above decides how far each vertex should travel; nothing above bounds how much that
@@ -10021,6 +10223,37 @@ public static class SecondSkinWriter
             }
         }
         LimitSlope(scale);
+
+        // KEEP EVERY LIFT OUTSIDE THE BODY, alternating with the slope limit until neither changes anything.
+        //
+        // Alternating, because each undoes the other's guarantee. A cut leaves a node lower than its neighbours
+        // and the limit then lowers them to meet it; but lowering a lift moves its END back along its path, and a
+        // path that went through a breast and out into the open in front comes back inside it. Checked once,
+        // before the limit, 22 lifts were cut on YAB medium and 90 still ended inside after the limit shortened
+        // them. Both only ever lower, so this settles; the cap is a backstop, and lifts already checked and not
+        // changed since are not tested again.
+        if (strength > 0f)
+        {
+            var body = new BodyWinding(start, tris, nodeOf);
+            var checkedAt = new float[nodeCount];
+            Array.Fill(checkedAt, float.NaN);
+            int rounds = 0, totalCut = 0;
+            bool settled = false;
+            while (rounds < BridgeInsideRounds)
+            {
+                rounds++;
+                int cutNow = KeepLiftsOutside(scale, start, ax, body, checkedAt, nodeCount);
+                totalCut += cutNow;
+                if (cutNow == 0) { settled = true; break; }
+                LimitSlope(scale);
+            }
+            // Out of rounds: the last limit may have pulled ends back in, so check once more without it. A node cut
+            // here can stand below its neighbours by more than the slope limit allows, which is the lesser fault.
+            if (!settled) totalCut += KeepLiftsOutside(scale, start, ax, body, checkedAt, nodeCount);
+            if (totalCut > 0)
+                log?.Invoke($"bust bridge: {totalCut} lift cut(s) to keep the span outside the body, over {rounds} "
+                          + $"round(s){(settled ? "" : " — did not settle")}");
+        }
 
         // THE NIPPLE RELAX, on the surface the span left behind, so a garment doing both gets a spanned
         // chest that is then smoothed rather than two constructions arguing over the same vertices.
@@ -13880,6 +14113,238 @@ public static class SecondSkinWriter
     /// bend under a triangle that cannot.
     /// </summary>
     private const float WeldedSkinClearance = 0.0006f;
+
+    /// <summary>
+    /// Most extra push a vertex the bust or cleft bridge moved can get: 0.95 mm, so a fully moved vertex sits
+    /// where every shell did at the old 1 mm push — the configuration that held in game with the span on.
+    /// <para/>
+    /// The bridge lifts along ONE axis, and under a large breast the skin faces down, square to it. There the
+    /// lift slides a vertex across the surface rather than away from it, and its faces cut under the curve.
+    /// Measured on the game's own shell at the 0.05 mm push (<c>BustClearanceFromGameShell</c>): six chest-wall
+    /// vertices under the breasts came through, up to 0.45 mm, every one under a face the bridge had moved
+    /// 3.7–10 mm, with the skin normal at |n·axis| 0.00–0.33. With the bridge off, none.
+    /// <para/>
+    /// Scaled by the vertex's own movement rather than applied to "anything moved": the displacement dies to
+    /// zero at the region's edge, so the extra clearance does too, with no step where moved meets unmoved.
+    /// </summary>
+    private const float BridgedSkinClearance = 0.00095f;
+
+    /// <summary>
+    /// Rings past a moved vertex its extra clearance reaches, each at <see cref="BridgedSpreadDecay"/> of
+    /// the ring inside it.
+    /// <para/>
+    /// Per-vertex alone was not enough, and in game it showed as a sliver of skin under the breast with the
+    /// character standing still. A face along the edge of the moved area has one corner the bridge moved and
+    /// others it did not, so the face tilts up from an unmoved corner that keeps only the base push — and
+    /// those corners sit on the crease. Measured on that shell: 0.036 mm over the skin under a face whose
+    /// other corner had moved 2.9 mm, below the 0.05 mm everywhere untouched.
+    /// </summary>
+    private const int BridgedSpreadRings = 3;
+
+    /// <summary>Fraction of a ring's extra clearance the next ring out keeps. See <see cref="BridgedSpreadRings"/>.</summary>
+    private const float BridgedSpreadDecay = 0.5f;
+
+    /// <summary>
+    /// Per-vertex extra push for a bridged mesh: each node's own movement capped at
+    /// <see cref="BridgedSkinClearance"/>, then spread <see cref="BridgedSpreadRings"/> rings outward with
+    /// <see cref="BridgedSpreadDecay"/> per ring, never reducing a node's own value.
+    /// <para/>
+    /// Over WELDED nodes, like the bridge itself, so the copies a UV seam splits get one answer and are pushed
+    /// the same distance. Jacobi, so the result does not depend on vertex order. Zero wherever no moved node
+    /// is within reach, so the rest of the shell is byte-identical.
+    /// </summary>
+    internal static float[] BridgedClearance(BustBridgePlan plan, ushort[] tris)
+    {
+        int vc = plan.Delta.Length, nodes = plan.NodeWeight.Length;
+        var e = new float[nodes];
+        for (int i = 0; i < vc; i++)
+        {
+            int n = plan.NodeOf[i];
+            e[n] = MathF.Max(e[n], MathF.Min(Len(plan.Delta[i]), BridgedSkinClearance));
+        }
+
+        var nbr = new List<int>?[nodes];
+        void Link(int a, int b)
+        {
+            if (a == b) return;
+            (nbr[a] ??= []).Add(b);
+            (nbr[b] ??= []).Add(a);
+        }
+        for (int t = 0; t + 2 < tris.Length; t += 3)
+        {
+            if (tris[t] >= vc || tris[t + 1] >= vc || tris[t + 2] >= vc) continue;
+            int a = plan.NodeOf[tris[t]], b = plan.NodeOf[tris[t + 1]], c = plan.NodeOf[tris[t + 2]];
+            Link(a, b); Link(b, c); Link(c, a);
+        }
+
+        for (int ring = 0; ring < BridgedSpreadRings; ring++)
+        {
+            var next = (float[])e.Clone();
+            for (int n = 0; n < nodes; n++)
+            {
+                if (nbr[n] is not { } ns) continue;
+                foreach (int k in ns)
+                    next[n] = MathF.Max(next[n], e[k] * BridgedSpreadDecay);
+            }
+            e = next;
+        }
+
+        var extra = new float[vc];
+        for (int i = 0; i < vc; i++) extra[i] = e[plan.NodeOf[i]];
+        return extra;
+    }
+
+    /// <summary>
+    /// How close to the skin a vertex the bridge moved has to land before it takes that skin's weights — fully
+    /// at zero distance, fading to its own weights by this far.
+    /// <para/>
+    /// The clearance alone could not hold the sliver under the breast, because the gap there does not close in
+    /// bind pose: it closes when the breast moves. A vertex the bridge slid 9–19 mm keeps the skinning of the
+    /// chest wall it was copied from, and lands 0.2–0.5 mm under skin that follows the breast bones — measured
+    /// at up to 0.175 more j_mune weight than the face above it (none at all with the bridge off). Breathing or
+    /// breast physics moving the bone a few millimetres moves the skin 17% of that and the shell not at all.
+    /// <para/>
+    /// Out past this the vertex keeps its weights: the span across the cleavage stands centimetres off the
+    /// sternum, and reskinning it to whatever skin happens to be nearest would make it swing with a breast.
+    /// </summary>
+    private const float BridgedReskinReach = 0.003f;
+
+    /// <summary>
+    /// Rewrites the blend weights of every vertex the bridge moved to within <see cref="BridgedReskinReach"/>
+    /// of this mesh's own skin: blended toward the skinning at the nearest point on that skin, interpolated
+    /// across the triangle there, by how close it landed. Returns how many vertices changed.
+    /// <para/>
+    /// THIS MESH'S OWN skin and bone table, which is what keeps it simple: the weights borrowed are already
+    /// indices into the table this vertex addresses, so nothing is remapped and no bone is added. Every value
+    /// is read from a snapshot taken first, so one rewritten vertex never feeds into its neighbour's answer.
+    /// Seam copies share a position and a displacement, so they get the same answer.
+    /// </summary>
+    internal static int ReskinBridged(Vec3[] basePos, BustBridgePlan plan, ushort[] tris, VElem[] decl,
+                                      byte[][] outStreams, byte[] outStrides)
+    {
+        VElem? wEl = null, iEl = null;
+        foreach (var el in decl)
+        {
+            if (el.Usage == UseBlendWeight) wEl ??= el;
+            else if (el.Usage == UseBlendIndices) iEl ??= el;
+        }
+        if (wEl is not { } we || iEl is not { } ie) return 0;
+
+        int vc = basePos.Length;
+        int nInf = Math.Min(BlendCount(we.Type), BlendCount(ie.Type));
+        var ow = new byte[vc * nInf];
+        var oi = new byte[vc * nInf];
+        for (int i = 0; i < vc; i++)
+        {
+            Buffer.BlockCopy(outStreams[we.Stream], i * outStrides[we.Stream] + we.Offset, ow, i * nInf, nInf);
+            Buffer.BlockCopy(outStreams[ie.Stream], i * outStrides[ie.Stream] + ie.Offset, oi, i * nInf, nInf);
+        }
+
+        const float cell = 0.01f;
+        (int, int, int) Cell(Vec3 q) => ((int)MathF.Floor(q.X / cell), (int)MathF.Floor(q.Y / cell),
+                                         (int)MathF.Floor(q.Z / cell));
+        var hash = new Dictionary<(int, int, int), List<int>>();
+        for (int t = 0; t + 2 < tris.Length; t += 3)
+        {
+            if (tris[t] >= vc || tris[t + 1] >= vc || tris[t + 2] >= vc) continue;
+            Vec3 a = basePos[tris[t]], b = basePos[tris[t + 1]], c = basePos[tris[t + 2]];
+            var lo = Cell(new Vec3(MathF.Min(a.X, MathF.Min(b.X, c.X)) - BridgedReskinReach,
+                                   MathF.Min(a.Y, MathF.Min(b.Y, c.Y)) - BridgedReskinReach,
+                                   MathF.Min(a.Z, MathF.Min(b.Z, c.Z)) - BridgedReskinReach));
+            var hi = Cell(new Vec3(MathF.Max(a.X, MathF.Max(b.X, c.X)) + BridgedReskinReach,
+                                   MathF.Max(a.Y, MathF.Max(b.Y, c.Y)) + BridgedReskinReach,
+                                   MathF.Max(a.Z, MathF.Max(b.Z, c.Z)) + BridgedReskinReach));
+            for (int x = lo.Item1; x <= hi.Item1; x++)
+            for (int y = lo.Item2; y <= hi.Item2; y++)
+            for (int z = lo.Item3; z <= hi.Item3; z++)
+                (hash.TryGetValue((x, y, z), out var l) ? l : hash[(x, y, z)] = []).Add(t);
+        }
+
+        static float Area(Vec3 x, Vec3 y, Vec3 z)
+        {
+            float ux = y.X - x.X, uy = y.Y - x.Y, uz = y.Z - x.Z;
+            float vx = z.X - x.X, vy = z.Y - x.Y, vz = z.Z - x.Z;
+            float cx = uy * vz - uz * vy, cy = uz * vx - ux * vz, cz = ux * vy - uy * vx;
+            return MathF.Sqrt(cx * cx + cy * cy + cz * cz);
+        }
+
+        int changed = 0;
+        var mix = new Dictionary<byte, float>();
+        Span<byte> wb = stackalloc byte[8], ib = stackalloc byte[8];
+        for (int i = 0; i < vc; i++)
+        {
+            var d = plan.Delta[i];
+            if (Len(d) <= BustBridgeEpsilon) continue;
+            var q = new Vec3(basePos[i].X + d.X, basePos[i].Y + d.Y, basePos[i].Z + d.Z);
+            if (!hash.TryGetValue(Cell(q), out var near)) continue;
+
+            float best = float.MaxValue;
+            int bestT = -1;
+            Vec3 bestP = default;
+            foreach (int t in near)
+            {
+                var cp = ClosestOnTriangle(q, basePos[tris[t]], basePos[tris[t + 1]], basePos[tris[t + 2]]);
+                float dist = Dist(q, cp);
+                if (dist < best) { best = dist; bestT = t; bestP = cp; }
+            }
+            if (bestT < 0 || best >= BridgedReskinReach) continue;
+            float toSkin = 1f - Smoothstep(best / BridgedReskinReach);
+            if (toSkin <= 0f) continue;
+
+            Vec3 ta = basePos[tris[bestT]], tb = basePos[tris[bestT + 1]], tc = basePos[tris[bestT + 2]];
+            float total = Area(ta, tb, tc);
+            if (total < 1e-12f) continue;
+            float fa = Area(bestP, tb, tc) / total, fb = Area(ta, bestP, tc) / total;
+            float fc = MathF.Max(0f, 1f - fa - fb);
+
+            mix.Clear();
+            void Add(int v, float f)
+            {
+                if (f <= 0f) return;
+                for (int k = 0; k < nInf; k++)
+                {
+                    byte w = ow[v * nInf + k];
+                    if (w == 0) continue;
+                    byte bone = oi[v * nInf + k];
+                    mix[bone] = mix.GetValueOrDefault(bone) + f * (w / 255f);
+                }
+            }
+            Add(i, 1f - toSkin);
+            Add(tris[bestT], toSkin * fa);
+            Add(tris[bestT + 1], toSkin * fb);
+            Add(tris[bestT + 2], toSkin * fc);
+
+            // Strongest influences first, as many as the element holds, renormalised to exactly 255 — bytes that
+            // do not sum to 255 shrink the vertex toward the origin.
+            var top = mix.OrderByDescending(kv => kv.Value).Take(nInf).ToList();
+            float sum = top.Sum(kv => kv.Value);
+            if (sum <= 0f) continue;
+            wb.Clear(); ib.Clear();
+            int used = 0, bytes = 0;
+            foreach (var (bone, f) in top)
+            {
+                byte qb = (byte)Math.Clamp((int)MathF.Round(f / sum * 255f), 0, 255);
+                if (qb == 0) continue;
+                ib[used] = bone; wb[used] = qb; bytes += qb; used++;
+            }
+            if (used == 0) continue;
+            wb[0] = (byte)Math.Clamp(wb[0] + (255 - bytes), 0, 255);
+
+            bool differs = false;
+            for (int k = 0; k < nInf; k++)
+                if (wb[k] != ow[i * nInf + k] || (wb[k] != 0 && ib[k] != oi[i * nInf + k])) { differs = true; break; }
+            if (!differs) continue;
+
+            int wo = i * outStrides[we.Stream] + we.Offset, io = i * outStrides[ie.Stream] + ie.Offset;
+            for (int k = 0; k < nInf; k++)
+            {
+                outStreams[we.Stream][wo + k] = wb[k];
+                outStreams[ie.Stream][io + k] = ib[k];
+            }
+            changed++;
+        }
+        return changed;
+    }
 
     /// <summary>Most a vertex may be lifted to reach that clearance. Past this it is not a straggler and
     /// moving it would distort the surface rather than repair it.</summary>
