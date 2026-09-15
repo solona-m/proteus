@@ -40,6 +40,13 @@ public sealed class SecondSkinService
     private readonly Func<string, string?>? resolveUpstream;
 
     /// <summary>
+    /// The upstream the compositor's prime SETTLED for a path this composite, or null — see
+    /// CompositorService.SettledUpstream. Used for body models only, where our own smoothing redirect masks
+    /// the body the user has currently selected.
+    /// </summary>
+    private readonly Func<string, string?>? settledUpstream;
+
+    /// <summary>
     /// The smallest sheet a shell is ever baked at, and what it stays at unless the art asks for more.
     /// Everything shipped before shells could grow was written at exactly this, so a 1K- or 2K-authored
     /// overlay produces byte-identical output to before.
@@ -208,7 +215,7 @@ public sealed class SecondSkinService
     public SecondSkinService(
         PenumbraBridge penumbra, TextureLoader textureLoader, SidecarDiscoveryService discovery,
         UVRemapService uvRemap, Configuration config, IPluginLog log,
-        Func<string, string?>? resolveUpstream = null)
+        Func<string, string?>? resolveUpstream = null, Func<string, string?>? settledUpstream = null)
     {
         this.penumbra = penumbra;
         this.textureLoader = textureLoader;
@@ -217,6 +224,7 @@ public sealed class SecondSkinService
         this.config = config;
         this.log = log;
         this.resolveUpstream = resolveUpstream;
+        this.settledUpstream = settledUpstream;
     }
 
     /// <summary>
@@ -1631,7 +1639,8 @@ public sealed class SecondSkinService
             // ResolvePlayer only yields a real file for MODDED models; a vanilla piece resolves to the
             // game path unchanged, so read from the game data in that case. The transcoder reads each
             // model's own vertex declaration, so vanilla and modded models both skin correctly.
-            // A PLAIN RESOLVE, deliberately, and NOT through resolveUpstream the way the append host does.
+            // A PLAIN RESOLVE, deliberately, and NOT through resolveUpstream the way the append host does. (Where
+            // our own republished body masks the path, the prime's SETTLED answer is used below instead.)
             //
             // Routing this through the shared upstream resolver looks obviously right — it exists to see
             // past our own redirect — and it published someone else's body. The resolver remembers the
@@ -1695,8 +1704,34 @@ public sealed class SecondSkinService
             var upstreamDir = Path.Combine(modelsDir, "upstream");
             var upstreamDisk = Path.Combine(upstreamDir, CompositorService.SanitizeName(bodyGamePath) + ".mdl");
 
+            // A SETTLED upstream outranks both remembered copies. Those are taken the moment the path is seen
+            // unmasked and never again while our redirect stands — so on their own they froze the body at
+            // whatever it was before the first publish: a new chest size, or a different body mod entirely,
+            // was detected and recomposited and then cut from the old one every time. The prime drops our
+            // redirect for republished bodies and waits for the answer to stop moving, so its answer is the
+            // body the user has selected NOW, without the mid-rebuild race a live resolve has.
+            var settledDisk = bodyIsOurs ? settledUpstream?.Invoke(bodyGamePath) : null;
+            var settledBytes = settledDisk != null ? textureLoader.LoadRawFile(settledDisk, bodyGamePath) : null;
+
             byte[]? bytes;
-            if (bodyIsOurs && _upstreamBodies.TryGetValue(bodyGamePath, out var remembered))
+            if (settledBytes != null)
+            {
+                bytes = settledBytes;
+                bool changed = !_upstreamBodies.TryGetValue(bodyGamePath, out var had)
+                            || !had.AsSpan().SequenceEqual(settledBytes);
+                _upstreamBodies[bodyGamePath] = settledBytes;
+                try
+                {
+                    Directory.CreateDirectory(upstreamDir);
+                    WriteIfChanged(upstreamDisk, settledBytes);
+                }
+                catch (Exception ex)
+                { log.Warning(ex, "[Proteus] second skin: could not keep the upstream {0}", bodyGamePath); }
+                if (changed)
+                    log.Information("[Proteus] second skin: {0} is behind our own output — using the body the "
+                                  + "collection now provides, {1}", bodyGamePath, settledDisk!);
+            }
+            else if (bodyIsOurs && _upstreamBodies.TryGetValue(bodyGamePath, out var remembered))
             {
                 bytes = remembered;
             }

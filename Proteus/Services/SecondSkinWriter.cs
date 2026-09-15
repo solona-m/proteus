@@ -793,6 +793,11 @@ public static class SecondSkinWriter
         // See PlanJoinCut.
         public Dictionary<int, HashSet<ushort>>? JoinFlaps;
 
+        // Positions, bucketed at JoinWeld, of this source's vertices that coincide with another source's — the
+        // rings it is stitched to its neighbours on. A displacement pass must not move these: the part on the
+        // other side of the ring is solved on its own and will not follow. Null = not measured.
+        public Dictionary<(long, long, long), List<Vec3>>? JoinRing;
+
         // Attributes the game is not drawing on this source — see SourceSpec.HiddenAttributes.
         public IReadOnlySet<string>? HiddenAttrs;
 
@@ -934,6 +939,7 @@ public static class SecondSkinWriter
         }
 
         int redundantSubs = 0, redundantTris = 0;
+        ConnectorProfile?[]? measuredParts = null;
         if (sources.Any(s => s.DropConnectors))
         {
             // EVERY source measured, not only the ones running the submesh pass. The overlap trim below is
@@ -1001,6 +1007,17 @@ public static class SecondSkinWriter
             // doubled line it set out to remove.
             var flaps = PlanJoinCut(joinInput, CoincidenceEps, diag, out _);
             for (int i = 0; i < sources.Count; i++) parsed[i].JoinFlaps = flaps[i];
+            measuredParts = joinInput;
+        }
+
+        // The rings between parts, for the cleft span — which moves the legs part's waist while the torso part
+        // on the other side of that ring, solved on its own, stays put. Only when a layer spans the buttocks
+        // and there is more than one part to be joined to.
+        if (sources.Count > 1 && layers.Any(l => l.CleftBridgeStrength > 0f))
+        {
+            measuredParts ??= sources.Select((s, i) => (ConnectorProfile?)ReadConnectorProfile(s.Model, parsed[i].Keep))
+                                     .ToArray();
+            MarkJoinRings(measuredParts, parsed);
         }
 
         Source? baseSrc = baseModel != null ? Parse(baseModel) : null;
@@ -1796,7 +1813,7 @@ public static class SecondSkinWriter
                 {
                     if (!bridgeWeights.TryGetValue((src, m), out bustWeights))
                         bridgeWeights[(src, m)] = bustWeights =
-                            MeshRegionWeights(src, m, vc, decl, vbo, bs, [BustBoneL, BustBoneR]);
+                            MeshRegionWeights(src, m, vc, decl, vbo, bs, BustBones);
                 }
                 // The cleft is its own seed on its own mesh: the bust rides the torso and this rides the
                 // legs part, so on a real body the two never even reach the same call.
@@ -1809,6 +1826,16 @@ public static class SecondSkinWriter
                 var capTris = wantCap || bustWeights != null || cleftWeights != null
                     ? MeshTriangles(src, srcSubIdx, srcSubCount)
                     : null;
+                // The spans solve on the surface the game DRAWS, which is the shape-baked one: the bake below
+                // points triangles at a body shape's morphed vertices, and in the unshaped list those vertices
+                // have no triangles at all. Measured on Rue+ (shpx_yam_softbutt, shpx_rue_hip): the cleft's
+                // drawn vertices were lifted flat with no neighbours for the slope limit to read and no faces
+                // to reshade from, so they kept the cleft's normals exactly — a flat surface shaded as a deep
+                // cleft, identical in game ticked or not. The toe cap keeps the list it was built against.
+                var spanTris = capTris is not null && (bustWeights != null || cleftWeights != null) && !preserve
+                    && ShapeReplacements(src, U32(mo + 16), vc) is { } spanShape
+                        ? ShapedTriangles(src, srcSubIdx, srcSubCount, U32(mo + 16), spanShape)
+                        : capTris;
 
                 // The solve itself, deferred until BuildVerbatim has normalised the mesh's UVs onto the
                 // tile the coverage map is indexed over — it cannot run before that and must not run twice.
@@ -1829,7 +1856,8 @@ public static class SecondSkinWriter
                         // coverages are resolved separately even though one mesh carries both.
                         var plan = bw == null || bDef == null ? null
                             : BustBridgeSolve(bPos, bNrm, bTris, bw, bridgeStrength, diag,
-                                              CoveredVertices(bUv, bDef, bPos.Length), smoothStrength);
+                                              CoveredVertices(bUv, bDef, bPos.Length), smoothStrength,
+                                              openSlope: BustOpenSlope);
 
                         if (cw != null && cDef != null)
                         {
@@ -1837,7 +1865,7 @@ public static class SecondSkinWriter
                             // every layer of the host, so gating in place would have the second layer read
                             // a seed the first had already cut down.
                             var backOnly = (float[])cw.Clone();
-                            GateToBackFacing(backOnly, bNrm);
+                            GateToBackFacing(backOnly, bNrm, bPos);
                             // The seed doubles as the RAMP. BustRegionWeights reads it as a boolean and
                             // builds its own one-ring fade, which is right against a coverage edge — cloth
                             // that must not move at all — and wrong at this region's own two boundaries,
@@ -1850,7 +1878,9 @@ public static class SecondSkinWriter
                                 BustBridgeSolve(bPos, bNrm, bTris, backOnly, cleftStrength, diag,
                                                 CoveredVertices(bUv, cDef, bPos.Length),
                                                 smoothStrength: 0f, fillGap: false,
-                                                ramp: backOnly));
+                                                ramp: backOnly, minDepthShare: CleftMinDepthShare,
+                                                joinPin: JoinPins(bPos, src.JoinRing), rampFull: CleftRampFull,
+                                                maxSlope: CleftMaxSlope));
                         }
 
                         bridgePlans[key] = plan;
@@ -1878,7 +1908,7 @@ public static class SecondSkinWriter
                 uvUnmapped += BuildVerbatim(s, src.Vb, 0x44 + m * DeclSize, vc, decl, vbo, bs, push,
                     out outStreams, out outStrides, out declBlock, out uv, out uvPre, src.UvConv,
                     out capSrcPos, out capOutPos, out capPlan, sides, cov, capTris, diag,
-                    buildCapGeometry: capSrc == null, bridge: bridge, pushSweep: pushSweep);
+                    buildCapGeometry: capSrc == null, bridge: bridge, pushSweep: pushSweep, spanTris: spanTris);
                 if (src.UvConv != null) uvMoved += vc;
 
                 // The tile normalization above shifts a mesh by the integer floor of its MINIMUM uv, which
@@ -1915,21 +1945,7 @@ public static class SecondSkinWriter
             // lookup below subtracts the mesh's absolute StartIndex from each triangle's position. (Only when
             // StartIndex == 0 do absolute and relative coincide — that was the one tested case.)
             uint meshStartIndex = U32(mo + 16);
-            Dictionary<int, ushort>? shapeReplace = null;
-            if (!preserve && src.EnabledShapes is { Count: > 0 })
-            {
-                foreach (var shapeName in src.EnabledShapes)
-                {
-                    if (!src.Shapes.TryGetValue(shapeName, out var entries)) continue;
-                    foreach (var e in entries)
-                    {
-                        if (e.MeshIndexOffset != meshStartIndex) continue;
-                        foreach (var (bIdx, rep) in e.Values)
-                            if (rep < vc)
-                                (shapeReplace ??= new Dictionary<int, ushort>())[bIdx] = rep;   // key = mesh-relative
-                    }
-                }
-            }
+            var shapeReplace = preserve ? null : ShapeReplacements(src, meshStartIndex, vc);
 
             // Keep a triangle if ANY texel under its UV footprint is visible (cov null = keep all).
             var keptPerSub = new List<ushort[]>();
@@ -5514,6 +5530,82 @@ public static class SecondSkinWriter
     /// least one corner inside the flap and goes; a bulk triangle against the same ring has its other
     /// corners in the bulk and stays.
     /// </summary>
+    /// <summary>
+    /// Fill each source's <see cref="Source.JoinRing"/>: the positions of its drawn vertices that coincide, to
+    /// <see cref="JoinWeld"/>, with a drawn vertex of ANOTHER source. The same rings <see cref="PlanJoinCut"/>
+    /// cuts at, kept by position so a pass working on one mesh's own vertex order can look them up.
+    /// </summary>
+    private static void MarkJoinRings(IReadOnlyList<ConnectorProfile?> profiles, IReadOnlyList<Source> parsed)
+    {
+        (long, long, long) Cell(Vec3 p) => ((long)MathF.Floor(p.X / JoinWeld), (long)MathF.Floor(p.Y / JoinWeld),
+                                            (long)MathF.Floor(p.Z / JoinWeld));
+        var grid = new Dictionary<(long, long, long), List<(int Src, Vec3 P)>>();
+        void Each(int src, Action<Vec3> act)
+        {
+            if (profiles[src] is not { } p) return;
+            foreach (var mesh in p.Meshes)
+            {
+                var used = new bool[mesh.Pos.Length / 3];
+                foreach (ushort u in mesh.Tris) if (u < used.Length) used[u] = true;
+                for (int v = 0; v < used.Length; v++)
+                    if (used[v]) act(new Vec3(mesh.Pos[v * 3], mesh.Pos[v * 3 + 1], mesh.Pos[v * 3 + 2]));
+            }
+        }
+        for (int i = 0; i < profiles.Count; i++)
+        {
+            int src = i;
+            Each(src, q => (grid.TryGetValue(Cell(q), out var l) ? l : grid[Cell(q)] = []).Add((src, q)));
+        }
+        for (int i = 0; i < profiles.Count && i < parsed.Count; i++)
+        {
+            int src = i;
+            var ring = new Dictionary<(long, long, long), List<Vec3>>();
+            Each(src, q =>
+            {
+                var (cx, cy, cz) = Cell(q);
+                for (long dx = -1; dx <= 1; dx++)
+                for (long dy = -1; dy <= 1; dy++)
+                for (long dz = -1; dz <= 1; dz++)
+                {
+                    if (!grid.TryGetValue((cx + dx, cy + dy, cz + dz), out var others)) continue;
+                    foreach (var (os, op) in others)
+                        if (os != src && Dist(q, op) <= JoinWeld)
+                        {
+                            (ring.TryGetValue(Cell(q), out var l) ? l : ring[Cell(q)] = []).Add(q);
+                            return;
+                        }
+                }
+            });
+            parsed[i].JoinRing = ring.Count > 0 ? ring : null;
+        }
+    }
+
+    /// <summary>
+    /// Per vertex of <paramref name="pos"/>, whether it sits on one of <paramref name="ring"/>'s join-ring
+    /// positions (to <see cref="JoinWeld"/>). Null when no vertex does.
+    /// </summary>
+    private static bool[]? JoinPins(Vec3[] pos, Dictionary<(long, long, long), List<Vec3>>? ring)
+    {
+        if (ring == null) return null;
+        bool[]? pins = null;
+        for (int i = 0; i < pos.Length; i++)
+        {
+            var q = pos[i];
+            long cx = (long)MathF.Floor(q.X / JoinWeld), cy = (long)MathF.Floor(q.Y / JoinWeld),
+                 cz = (long)MathF.Floor(q.Z / JoinWeld);
+            for (long dx = -1; dx <= 1; dx++)
+            for (long dy = -1; dy <= 1; dy++)
+            for (long dz = -1; dz <= 1; dz++)
+            {
+                if (!ring.TryGetValue((cx + dx, cy + dy, cz + dz), out var list)) continue;
+                foreach (var r in list)
+                    if (Dist(q, r) <= JoinWeld) { (pins ??= new bool[pos.Length])[i] = true; goto next; }
+            }
+            next:;
+        }
+        return pins;
+    }
+
     internal static Dictionary<int, HashSet<ushort>>[] PlanJoinCut(
         IReadOnlyList<ConnectorProfile?> profiles, float coverEps, Action<string>? diag,
         out int flapVerts)
@@ -6595,10 +6687,12 @@ public static class SecondSkinWriter
         SecondSkinLayer? cap = null, ushort[]? capTris = null, Action<string>? capLog = null,
         bool buildCapGeometry = true,
         Func<Vec3[], Vec3[], ushort[], (float U, float V)[], BustBridgePlan?>? bridge = null,
-        PushSweep? pushSweep = null)
+        PushSweep? pushSweep = null, ushort[]? spanTris = null)
     {
         int uvUnmapped = 0;
         uvsPreConv = null;
+        // The spans' topology: the shape-baked triangle list when the caller has one, else the mesh's own.
+        spanTris ??= capTris;
         capPlan = null;
         VElem? pos = null, norm = null, uv0 = null, uv1El = null, col = null;
         foreach (var el in decl)
@@ -6721,8 +6815,8 @@ public static class SecondSkinWriter
             // has. Resolved through the caller's own memo rather than solved here, so every layer of a host
             // shares one answer and the stack keeps its order; it can only run at this point because the
             // region is gated on coverage and uvs[] is only now on the tile that map is indexed over.
-            var bridgePlan = bridge is not null && capTris is not null
-                ? bridge(basePos, baseNrm, capTris, uvs)
+            var bridgePlan = bridge is not null && spanTris is not null
+                ? bridge(basePos, baseNrm, spanTris, uvs)
                 : null;
 
             // Normals recomputed from the REBUILT surface — the source triangles minus the ones the cut
@@ -6734,15 +6828,15 @@ public static class SecondSkinWriter
                 ? CapNormals(basePos, baseNrm, plan, CappedTopology(plan, capTris!))
                 : bridgePlan is not null
                     ? RelaxedNormals(basePos, baseNrm, bridgePlan.Delta, bridgePlan.NodeOf, bridgePlan.NodeWeight,
-                                     bridgePlan.NodeNormal, capTris!)
+                                     bridgePlan.NodeNormal, spanTris!)
                     : baseNrm;
 
             int stride = outStrides[pw.Stream];
             int normalsWritten = 0, uvsWritten = 0;
             bool encoderMissing = false;
             var outPos = plan is null ? null : new Vec3[vc];
-            var bridgeExtra = bridgePlan is not null && capTris is not null
-                ? BridgedClearance(bridgePlan, capTris)
+            var bridgeExtra = bridgePlan is not null && spanTris is not null
+                ? BridgedClearance(bridgePlan, spanTris)
                 : null;
 
             for (int i = 0; i < vc; i++)
@@ -6807,9 +6901,9 @@ public static class SecondSkinWriter
             // A vertex the bridge slid across the skin takes the skinning of the skin it now sits over — see
             // ReskinBridged. After the position loop, which never reads weights, and before anything copies
             // these streams on.
-            if (bridgePlan is not null && capTris is not null)
+            if (bridgePlan is not null && spanTris is not null)
             {
-                int reskinned = ReskinBridged(basePos, bridgePlan, capTris, decl, outStreams, outStrides);
+                int reskinned = ReskinBridged(basePos, bridgePlan, spanTris, decl, outStreams, outStrides);
                 if (reskinned > 0)
                     capLog?.Invoke($"bust bridge: reskinned {reskinned} moved vertex/vertices from the skin they now sit over");
             }
@@ -7524,6 +7618,52 @@ public static class SecondSkinWriter
     /// </summary>
     private static ushort[] MeshTriangles(Source src, ushort subIdx, ushort subCount)
         => MeshTrianglesAt(src, src.Ib, subIdx, subCount);
+
+    /// <summary>
+    /// The body shape keys this source has enabled, for one mesh, as mesh-relative index position → the
+    /// morphed vertex that replaces it. Null when none apply. A replacement past the mesh's vertex count is
+    /// skipped, so a wrong assumption degrades to "morph not applied", never an out-of-range index.
+    /// </summary>
+    private static Dictionary<int, ushort>? ShapeReplacements(Source src, uint meshStartIndex, ushort vc)
+    {
+        if (src.EnabledShapes is not { Count: > 0 }) return null;
+        Dictionary<int, ushort>? replace = null;
+        foreach (var shapeName in src.EnabledShapes)
+        {
+            if (!src.Shapes.TryGetValue(shapeName, out var entries)) continue;
+            foreach (var e in entries)
+            {
+                if (e.MeshIndexOffset != meshStartIndex) continue;
+                foreach (var (bIdx, rep) in e.Values)
+                    if (rep < vc)
+                        (replace ??= new Dictionary<int, ushort>())[bIdx] = rep;   // key = mesh-relative
+            }
+        }
+        return replace;
+    }
+
+    /// <summary><see cref="MeshTriangles"/> with the enabled shape keys baked in — the triangles the shell draws.</summary>
+    private static ushort[] ShapedTriangles(Source src, ushort subIdx, ushort subCount, uint meshStartIndex,
+                                            Dictionary<int, ushort> replace)
+    {
+        var s = src.S;
+        var tris = new List<ushort>();
+        for (int su = 0; su < subCount; su++)
+        {
+            int ss = src.SubmeshStart + (subIdx + su) * 16;
+            if (ss + 8 > s.Length) break;
+            uint so = BitConverter.ToUInt32(s, ss), sc = BitConverter.ToUInt32(s, ss + 4);
+            for (uint t = 0; t + 2 < sc; t += 3)
+            {
+                int p = src.Ib + (int)(so + t) * 2;
+                if (p < 0 || p + 6 > s.Length) break;
+                int rel = (int)(so + t - meshStartIndex);
+                for (int c = 0; c < 3; c++)
+                    tris.Add(replace.TryGetValue(rel + c, out var r) ? r : BitConverter.ToUInt16(s, p + c * 2));
+            }
+        }
+        return tris.ToArray();
+    }
 
     /// <inheritdoc cref="MeshTriangles"/>
     /// <param name="indexBase">
@@ -9378,11 +9518,20 @@ public static class SecondSkinWriter
     // ── bust bridge ───────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// The two base-skeleton breast bones. Present on every body a shell can be cut from — vanilla,
-    /// Bibo+, gen3 and their descendants all rig to the game's own skeleton — which is what lets the bust
-    /// region be found with no painted map and no per-body table.
+    /// The breast bones, under both names a body rigs them to. Vanilla, Bibo+, gen3 and their descendants use
+    /// the game's own <c>j_mune_l/r</c>; bodies built on the IVCS skeleton use <c>iv_c_mune_l/r</c> instead and
+    /// carry no <c>j_mune</c> at all. Rue+ is one: its torso names only the IVCS pair, so with the base names
+    /// alone the chest region came back empty and the span and nipple smoothing silently did nothing on it.
+    /// Either pair finds the region with no painted map and no per-body table.
     /// </summary>
-    private const string BustBoneL = "j_mune_l", BustBoneR = "j_mune_r";
+    private static readonly string[] BustBones = ["j_mune_l", "j_mune_r", "iv_c_mune_l", "iv_c_mune_r"];
+
+    private static bool IsBustBone(string bone)
+    {
+        foreach (var b in BustBones)
+            if (bone.Equals(b, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
 
     /// <summary>
     /// The base-skeleton hip bone. One bone, on the midline, and its influence covers the buttocks, the
@@ -9442,9 +9591,16 @@ public static class SecondSkinWriter
         var weight = new float[a.NodeWeight.Length];
         for (int n = 0; n < weight.Length; n++) weight[n] = MathF.Max(a.NodeWeight[n], b.NodeWeight[n]);
 
+        // A node either pass pinned stays pinned.
+        bool[]? pinned = null;
+        foreach (var src in new[] { a.NodePinned, b.NodePinned })
+            if (src != null)
+                for (int n = 0; n < src.Length && n < weight.Length; n++)
+                    if (src[n]) (pinned ??= new bool[weight.Length])[n] = true;
+
         return new BustBridgePlan
         {
-            Delta = delta, NodeOf = a.NodeOf, NodeWeight = weight, NodeNormal = a.NodeNormal,
+            Delta = delta, NodeOf = a.NodeOf, NodeWeight = weight, NodeNormal = a.NodeNormal, NodePinned = pinned,
         };
     }
 
@@ -9461,7 +9617,7 @@ public static class SecondSkinWriter
     /// Back only, because that is the only direction anything asks for. A front-facing twin belongs with
     /// the pass that needs it rather than here in advance of one.
     /// </summary>
-    private static void GateToBackFacing(float[] w, Vec3[] nrm)
+    private static void GateToBackFacing(float[] w, Vec3[] nrm, Vec3[] pos)
     {
         // A band around edge-on is dropped rather than assigned to a side: a vertex on the hip's flank
         // belongs to neither feature, and handing it to one makes that region's boundary run through a
@@ -9472,13 +9628,36 @@ public static class SecondSkinWriter
         // nothing on its neighbour, which the slope limit can only soften to BustMaxSlope — a 39° kink,
         // and a kink in a garment reads as a seam. Same defect as the crotch fold's, whose region ended
         // at a hard ceiling and drew a line straight across the front.
+        //
+        // The cleft's own WALLS are let through as well. A deep cleft's walls face each other, not
+        // backwards: measured on Rue+, 57-82mm deep between the cheeks, the lower cleft's walls sat edge-on
+        // to +Z, the gate dropped them, the seed shattered into 931 lobes, and the span closed only the
+        // shallow top of the cleft — in game, identical ticked or not. A wall is told from the flank by
+        // which way it turns: the flank faces away from the midline, a wall faces toward it. Kept behind
+        // the body (faded in over CleftWallDepth below z = 0) so the inner thighs at the crotch, which
+        // also face the midline, stay the crotch fold's.
         const float Edge = 0.15f;
         for (int i = 0; i < w.Length && i < nrm.Length; i++)
         {
             if (w[i] <= 0f) continue;
-            w[i] *= Smoothstep(Math.Clamp((-nrm[i].Z - Edge) / Edge, 0f, 1f));
+            float back = Smoothstep(Math.Clamp((-nrm[i].Z - Edge) / Edge, 0f, 1f));
+            if (back < 1f && i < pos.Length && nrm[i].Z <= 0f)
+            {
+                float inward = -MathF.Sign(pos[i].X) * nrm[i].X;
+                float wall = Smoothstep(Math.Clamp((inward - Edge) / Edge, 0f, 1f))
+                           * Smoothstep(Math.Clamp(-pos[i].Z / CleftWallDepth, 0f, 1f));
+                back = MathF.Max(back, wall);
+            }
+            w[i] *= back;
         }
     }
+
+    /// <summary>
+    /// How far behind z = 0 a midline-facing wall has to sit before <see cref="GateToBackFacing"/> takes it
+    /// in full. The crotch sits at z &gt; 0 and the cleft's floor at the perineum, its shallowest, about 20mm
+    /// behind it on a real body; fading in over that distance keeps the inner thighs out and the whole cleft in.
+    /// </summary>
+    private const float CleftWallDepth = 0.02f;
 
     /// <summary>
     /// How many bands past the last one with a cleft of its own a borrowed chord survives, fading to
@@ -9518,6 +9697,52 @@ public static class SecondSkinWriter
     /// across the middle rather than the whole cleavage.
     /// </summary>
     private const int BustGapSlack = 8;
+
+    /// <summary>
+    /// How far down a node's normal has to face (its -Y component) to count as a breast's underside when the
+    /// region grows past the breast bones. About 12° below level: the underside of any breast with a crease
+    /// is far steeper, and the ribcage just under the crease faces forward or up.
+    /// </summary>
+    private const float BustLowerPoleFacing = 0.2f;
+
+    /// <summary>
+    /// The cleft's ramp value at which the span reaches full strength. Half the hip weight: the waist and flank
+    /// still fade over the smoothed taper below it, and the buttocks themselves (0.8-0.97) are not scaled down.
+    /// </summary>
+    private const float CleftRampFull = 0.5f;
+
+    /// <summary>
+    /// The cleft's own slope limit, steeper than <see cref="BustMaxSlope"/>. The cleft's floor runs down into the
+    /// crotch, where nothing lifts, and at the bust's 0.8 each floor node could rise only 0.8 of an edge past the
+    /// one below: a 39° ramp that on Rue+ left the whole lower cleft as a notch 25mm deep and 9mm wide between
+    /// two cheeks already spanned flat. Cloth drops from the cheeks into the crotch far more steeply than that.
+    /// </summary>
+    private const float CleftMaxSlope = 3f;
+
+    /// <summary>
+    /// The chest span's slope limit away from a hem — see the nearHem note in <c>BustBridgeSolve</c>. Within
+    /// <see cref="BustHemRings"/> of uncovered cloth the tuned <see cref="BustMaxSlope"/> still holds.
+    /// </summary>
+    private const float BustOpenSlope = 2.5f;
+
+    /// <summary>How far a span node may stand above both its neighbours across the chest before it counts as a
+    /// ridge — half a millimetre, under what shading shows, over the float noise of a flat chord.</summary>
+    private const float BridgeRidgeSlack = 0.0005f;
+
+    /// <summary>How many rings out from a garment's cut edge the tuned chest slope limit still applies.</summary>
+    private const int BustHemRings = 3;
+
+    /// <summary>Diagnostics only: when set, every span solve logs each node it matches, stage by stage.</summary>
+    internal static Func<Vec3, bool>? TraceSpanNode;
+
+    /// <summary>The smallest chord lift counted in the per-stage share report — 2mm, below which nothing reads.</summary>
+    private const float BridgeShareFloor = 0.002f;
+
+    /// <summary>
+    /// How far below the breast bones' lowest node the underside may grow, as a share of the seeded lobes'
+    /// own height. A backstop only — the crease stops it first on every body it was measured on.
+    /// </summary>
+    private const float BustLowerPoleReach = 0.5f;
 
     /// <summary>
     /// Ceiling on how far the gap search will walk from a lobe. Bounds the breadth-first sweep on a mesh
@@ -9634,6 +9859,351 @@ public static class SecondSkinWriter
         }
         return cut;
     }
+
+    /// <summary>
+    /// The same guarantee for the span's STEEP EDGES, which the node check cannot give. An edge steeper than
+    /// <paramref name="gentle"/> joins a lifted node to one the body held back, and on a breast's underside that
+    /// edge — and the faces along it — cuts under the curve while both its ends sit outside: measured on Rue+
+    /// once the chest was allowed past the tuned limit, 22 body vertices stood up to 0.4mm through 18mm faces
+    /// whose corners were all clear. Sampled along the lifted edge; where a sample is inside, the higher end is
+    /// walked down until the edge clears or is no steeper than <paramref name="gentle"/>, which held before.
+    /// </summary>
+    private static int KeepEdgesOutside(float[] scale, Vec3[] start, Vec3 ax, BodyWinding body, List<int>[] adj,
+                                        int nodeCount, float gentle)
+    {
+        int cut = 0;
+        for (int n = 0; n < nodeCount; n++)
+        {
+            if (scale[n] <= BridgeInsideMargin) continue;
+            foreach (int k in adj[n])
+            {
+                float dx = start[k].X - start[n].X, dy = start[k].Y - start[n].Y, dz = start[k].Z - start[n].Z;
+                float floor = scale[k] + gentle * MathF.Sqrt(dx * dx + dy * dy + dz * dz);
+                if (scale[n] <= floor) continue;
+                bool lowered = false;
+                while (scale[n] > floor && EdgeInside(n, k)) { scale[n] = MathF.Max(floor, scale[n] - BridgeInsideStep); lowered = true; }
+                if (lowered) cut++;
+            }
+        }
+        return cut;
+
+        bool EdgeInside(int a, int b)
+        {
+            var pa = new Vec3(start[a].X + ax.X * scale[a], start[a].Y + ax.Y * scale[a], start[a].Z + ax.Z * scale[a]);
+            var pb = new Vec3(start[b].X + ax.X * scale[b], start[b].Y + ax.Y * scale[b], start[b].Z + ax.Z * scale[b]);
+            for (int s = 1; s < EdgeInsideSamples; s++)
+            {
+                float t = s / (float)EdgeInsideSamples;
+                if (body.Inside(new Vec3(pa.X + (pb.X - pa.X) * t, pa.Y + (pb.Y - pa.Y) * t, pa.Z + (pb.Z - pa.Z) * t)))
+                    return true;
+            }
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The bridge DOWN from each breast to the ribs: a per-node 3-D move, in the plane of the chest's outward axis
+    /// and its vertical, that lays the skin tucked under a breast onto the straight line from the breast's lowest
+    /// front point to where the ribs come forward to meet it. Null when nothing moves.
+    /// <para/>
+    /// Why the span across could not do this. Under an overhanging breast the skin between the breast's inner
+    /// edge and the sternum cannot move forward — forward is into the breast — so the inside check held it back,
+    /// and the span across bridged between those held nodes and the lifted midline: on Rue+ a W, dips 25-35mm out
+    /// and a lump between them. Cloth does not do that; it runs from the breast straight down, and the skin in the
+    /// crease is simply behind it. Moved onto that line, the nodes are out in open air in front of the crease.
+    /// <para/>
+    /// Built per thin slice across the chest, from a CONVEX HULL of the slice's front profile — (height, forward)
+    /// points, the hull's forward side — which is the tightest string pulled down the front of the body. Only
+    /// hull edges that bridge a real gap, start on the breast and run below the slice's own most-forward point
+    /// are used, so the breast front, the upper chest and the ribs below the contact stay where they are. The
+    /// hull is taken over the slice and its two neighbours so adjacent slices agree.
+    /// </summary>
+    private static Vec3[]? UnderBustSling(Vec3[] start, Vec3[] nNorm, float[] h0, float[] lat, float[] ver,
+                                          bool[] seed, bool[] cut, List<int>[] adj, int nodeCount, Vec3 ax,
+                                          Vec3 vertical, BodyWinding body, Action<string>? log,
+                                          out float[] weight, out float[] between)
+    {
+        weight = new float[nodeCount];
+        between = new float[nodeCount];
+        // Up the body along `vertical`, whichever way its PCA sign came out.
+        float up = vertical.Y >= 0f ? 1f : -1f;
+
+        var seedV = new List<float>();
+        float latLo = float.MaxValue, latHi = float.MinValue, edgeSum = 0f, meanH = 0f;
+        int edgeN = 0;
+        for (int n = 0; n < nodeCount; n++)
+        {
+            meanH += h0[n];
+            if (!seed[n]) continue;
+            seedV.Add(ver[n] * up);
+            latLo = MathF.Min(latLo, lat[n]); latHi = MathF.Max(latHi, lat[n]);
+            foreach (int k in adj[n]) { edgeSum += Dist(start[n], start[k]); edgeN++; }
+        }
+        meanH /= Math.Max(1, nodeCount);
+        if (seedV.Count < MinBustBridgeNodes || edgeN == 0 || latHi <= latLo) return null;
+        seedV.Sort();
+        float seedLo = seedV[seedV.Count / 50], seedHi = seedV[seedV.Count - 1 - seedV.Count / 50];
+        float reach = (seedHi - seedLo) * SlingReachDown;
+        float bottom = seedLo - reach;
+        float edge = edgeSum / edgeN;
+        float binW = edge;
+        int bins = Math.Clamp((int)MathF.Ceiling((latHi - latLo) / binW), 1, 1024);
+
+        // Hem fade: nothing moves on uncovered cloth, and it comes back over a few rings.
+        var ring = new int[nodeCount];
+        Array.Fill(ring, int.MaxValue);
+        var q = new Queue<int>();
+        for (int n = 0; n < nodeCount; n++) if (cut[n]) { ring[n] = 0; q.Enqueue(n); }
+        while (q.Count > 0)
+        {
+            int c = q.Dequeue();
+            if (ring[c] >= BustHemRings) continue;
+            foreach (int k in adj[c]) if (ring[k] > ring[c] + 1) { ring[k] = ring[c] + 1; q.Enqueue(k); }
+        }
+
+        // The front profile of each slice: nodes on the front half of the body (not the back, whose points would
+        // sit inside every hull and be dragged to the front), facing anything but backwards.
+        var inBin = new List<int>[bins];
+        for (int b = 0; b < bins; b++) inBin[b] = new List<int>();
+        for (int n = 0; n < nodeCount; n++)
+        {
+            float v = ver[n] * up;
+            if (lat[n] < latLo || lat[n] > latHi || v < bottom || v > seedHi) continue;
+            if (h0[n] < meanH || Dot(nNorm[n], ax) < -0.5f) continue;
+            inBin[Math.Clamp((int)((lat[n] - latLo) / binW), 0, bins - 1)].Add(n);
+        }
+
+        var moveD = new Vec3[nodeCount];
+        int moved = 0, heldInside = 0;
+        float most = 0f;
+        var pts = new List<(float V, float U, int N)>();
+        var hull = new List<(float V, float U, int N)>();
+        for (int b = 0; b < bins; b++)
+        {
+            if (inBin[b].Count == 0) continue;
+            pts.Clear();
+            for (int w = Math.Max(0, b - 1); w <= Math.Min(bins - 1, b + 1); w++)
+                foreach (int n in inBin[w]) pts.Add((ver[n] * up, h0[n], n));
+            if (pts.Count < 3) continue;
+            pts.Sort((a, c) => a.V != c.V ? a.V.CompareTo(c.V) : a.U.CompareTo(c.U));
+
+            // The forward side of the hull, bottom to top (monotone chain; a right turn keeps the chain convex
+            // toward +U).
+            hull.Clear();
+            foreach (var p in pts)
+            {
+                while (hull.Count >= 2)
+                {
+                    var o = hull[^2]; var a = hull[^1];
+                    float cross = (a.V - o.V) * (p.U - o.U) - (a.U - o.U) * (p.V - o.V);
+                    if (cross < 0f) break;
+                    hull.RemoveAt(hull.Count - 1);
+                }
+                hull.Add(p);
+            }
+            int apex = 0;
+            for (int i = 1; i < hull.Count; i++) if (hull[i].U > hull[apex].U) apex = i;
+
+            // THE ONE SEGMENT that is the sling: from the lowest hull point still ON the breast down to the next hull
+            // point, where the line first touches the body below. Any other hull edge is left alone — edges on the
+            // breast front trace its curve, and edges further down bridge ribs and waist, which is not this feature.
+            // Measured with every bridging edge allowed, the lower half of each breast went flat and the ribs came
+            // out lumpy.
+            int top = -1;
+            for (int i = 1; i <= apex; i++)
+                if (seed[hull[i].N] && !seed[hull[i - 1].N]) { top = i; break; }
+            if (top < 1) continue;
+            var sa = hull[top - 1]; var sc = hull[top];
+            float segV = sc.V - sa.V, segU = sc.U - sa.U, segLen2 = segV * segV + segU * segU;
+            if (segLen2 < (SlingMinSpan * edge) * (SlingMinSpan * edge)) continue;
+
+            // Lateral fade toward the outer ends of the bust, where "forward" stops being the way off the body.
+            float t = ((b + 0.5f) * binW) / (latHi - latLo);
+            float latW = Smoothstep(Math.Clamp(MathF.Min(t, 1f - t) / SlingSideFade, 0f, 1f));
+            if (latW <= 0f) continue;
+
+            foreach (int n in inBin[b])
+            {
+                float pv = ver[n] * up, pu = h0[n];
+                if (pv >= sc.V || pv <= sa.V) continue;
+                float s = Math.Clamp(((pv - sa.V) * segV + (pu - sa.U) * segU) / segLen2, 0f, 1f);
+                float qv = sa.V + segV * s, qu = sa.U + segU * s;
+                float dist = MathF.Sqrt((qv - pv) * (qv - pv) + (qu - pu) * (qu - pu));
+                if (dist < SlingMinMove || dist > SlingMaxMove || qu < pu) continue;
+
+                // Fades back onto the skin below the breast, so the sling meets the body in a curve rather than
+                // ending wherever the slice stops. Left as the raw hull, it ran on to the bottom of the slice and
+                // stood 30mm off the ribs there.
+                float below = sc.V - pv;
+                float wt = latW * (1f - Smoothstep(Math.Clamp((below - SlingFullLength * (seedHi - seedLo))
+                                                              / (SlingFadeLength * (seedHi - seedLo)), 0f, 1f)));
+                if (cut[n]) wt = 0f;
+                else if (ring[n] < BustHemRings) wt *= Smoothstep(ring[n] / (float)BustHemRings);
+                if (wt <= 0f) continue;
+
+                float dv = (qv - pv) * up * wt, du = (qu - pu) * wt;
+                var d = new Vec3(ax.X * du + vertical.X * dv, ax.Y * du + vertical.Y * dv, ax.Z * du + vertical.Z * dv);
+                // The line is in front of the skin in this slice, but a neighbouring slice's breast can still be in
+                // the way; back off toward the start until the end is clear.
+                float keep = 1f;
+                while (keep > 0f && body.Inside(new Vec3(start[n].X + d.X * keep, start[n].Y + d.Y * keep, start[n].Z + d.Z * keep)))
+                    keep -= 0.25f;
+                if (keep < 1f) heldInside++;
+                if (keep <= 0f) continue;
+                moveD[n] = new Vec3(d.X * keep, d.Y * keep, d.Z * keep);
+                weight[n] = wt * keep;
+                most = MathF.Max(most, Len(moveD[n]));
+                moved++;
+            }
+        }
+        if (moved == 0) return null;
+
+        // SMOOTHED among the nodes it moved, reading unmoved neighbours as zero, so no node stands far out past the
+        // ones around it. Each slice solves alone, and on a YAB-shaped body one slice laid a node 41mm out beside
+        // neighbours its own slices had not moved: faces 40mm across, cutting straight through the breast's inner
+        // edge — 1008 skin vertices through the shell where there had been 22.
+        var next = new Vec3[nodeCount];
+        for (int pass = 0; pass < SlingSmoothPasses; pass++)
+        {
+            for (int n = 0; n < nodeCount; n++)
+            {
+                if (weight[n] <= 0f || adj[n].Count == 0) { next[n] = moveD[n]; continue; }
+                float sx = 0f, sy = 0f, sz = 0f;
+                foreach (int k in adj[n]) { sx += moveD[k].X; sy += moveD[k].Y; sz += moveD[k].Z; }
+                float inv = 1f / adj[n].Count;
+                next[n] = new Vec3((moveD[n].X + sx * inv) * 0.5f, (moveD[n].Y + sy * inv) * 0.5f, (moveD[n].Z + sz * inv) * 0.5f);
+            }
+            (moveD, next) = (next, moveD);
+        }
+
+        // Then the faces, not just the nodes: every edge with a moved end is sampled against the body, and the
+        // further-moved end is drawn back until the edge clears.
+        for (int round = 0; round < SlingEdgeRounds; round++)
+        {
+            int backed = 0;
+            for (int n = 0; n < nodeCount; n++)
+            {
+                if (weight[n] <= 0f) continue;
+                var pn = new Vec3(start[n].X + moveD[n].X, start[n].Y + moveD[n].Y, start[n].Z + moveD[n].Z);
+                bool bad = body.Inside(pn);
+                if (!bad)
+                    foreach (int k in adj[n])
+                    {
+                        if (Len(moveD[k]) > Len(moveD[n])) continue;   // the further-moved end answers for the edge
+                        var pk = new Vec3(start[k].X + moveD[k].X, start[k].Y + moveD[k].Y, start[k].Z + moveD[k].Z);
+                        for (int s = 1; s < EdgeInsideSamples && !bad; s++)
+                        {
+                            float f = s / (float)EdgeInsideSamples;
+                            bad = body.Inside(new Vec3(pn.X + (pk.X - pn.X) * f, pn.Y + (pk.Y - pn.Y) * f, pn.Z + (pk.Z - pn.Z) * f));
+                        }
+                        if (bad) break;
+                    }
+                if (!bad) continue;
+                moveD[n] = new Vec3(moveD[n].X * 0.7f, moveD[n].Y * 0.7f, moveD[n].Z * 0.7f);
+                backed++;
+            }
+            if (backed == 0) break;
+            heldInside += backed;
+        }
+        most = 0f;
+        for (int n = 0; n < nodeCount; n++)
+        {
+            if (Len(moveD[n]) < SlingMinMove * 0.2f) { moveD[n] = default; weight[n] = 0f; }
+            most = MathF.Max(most, Len(moveD[n]));
+        }
+
+        // BETWEEN THE TWO SLINGS. Each sling hangs under its own breast, and the sternum between them has no breast
+        // to hang one from, so on its own the pair leaves a groove down the midline below the bust (15mm on Rue+).
+        // Every front node lying between the innermost slung node on either side, in the same band, is handed to
+        // the span across; the chord then runs between the slings the way it runs between the breasts.
+        float midLat = (latLo + latHi) * 0.5f;
+        float vLo = float.MaxValue, vHi = float.MinValue;
+        for (int n = 0; n < nodeCount; n++)
+            if (weight[n] > 0f) { vLo = MathF.Min(vLo, ver[n] * up); vHi = MathF.Max(vHi, ver[n] * up); }
+        int vBands = Math.Clamp((int)MathF.Ceiling((vHi - vLo) / edge) + 1, 1, 1024);
+        var innerL = new float[vBands]; var innerR = new float[vBands];
+        var wL = new float[vBands]; var wR = new float[vBands];
+        var wBand = new float[vBands];
+        Array.Fill(innerL, float.MinValue); Array.Fill(innerR, float.MaxValue);
+        for (int n = 0; n < nodeCount; n++)
+        {
+            if (weight[n] > 0f)
+            {
+                int wb = Math.Clamp((int)((ver[n] * up - vLo) / edge), 0, vBands - 1);
+                wBand[wb] = MathF.Max(wBand[wb], weight[n]);
+            }
+            // Only a node the sling holds FIRMLY marks where a sling is. Toward the midline the lowest breast point
+            // in a slice sits high up, so the sling there is long and mostly faded, and those faint nodes are the
+            // groove this exists to fill, not its edges.
+            if (weight[n] < SlingSolid) continue;
+            int vb = Math.Clamp((int)((ver[n] * up - vLo) / edge), 0, vBands - 1);
+            if (lat[n] < midLat) { if (lat[n] > innerL[vb]) { innerL[vb] = lat[n]; wL[vb] = weight[n]; } }
+            else if (lat[n] < innerR[vb]) { innerR[vb] = lat[n]; wR[vb] = weight[n]; }
+        }
+        int bridged = 0;
+        for (int n = 0; n < nodeCount; n++)
+        {
+            if (weight[n] >= SlingSolid || cut[n] || h0[n] < meanH) continue;
+            float v = ver[n] * up;
+            if (v < vLo || v > vHi) continue;
+            // A band either way: the slung nodes each side sit on their own rows, which need not share the midline's.
+            int vb = Math.Clamp((int)((v - vLo) / edge), 0, vBands - 1);
+            float il = float.MinValue, ir = float.MaxValue, wb = 0f;
+            for (int k = Math.Max(0, vb - 1); k <= Math.Min(vBands - 1, vb + 1); k++)
+            {
+                il = MathF.Max(il, innerL[k]);
+                ir = MathF.Min(ir, innerR[k]);
+                wb = MathF.Max(wb, wBand[k]);
+            }
+            if (il == float.MinValue || ir == float.MaxValue) continue;
+            if (lat[n] <= il || lat[n] >= ir) continue;
+            // Full weight wherever the slings are, fading with them where they fade. Not their weight itself: the
+            // chord between them rides on their already-faded surface, and scaling it by that weight again faded it
+            // twice — the midline kept a fifth of its lift. At full weight all the way down, though, it stopped dead
+            // where the slings did and drew a ledge across the stomach.
+            between[n] = MathF.Min(1f, 2f * wb);
+            bridged++;
+        }
+        log?.Invoke($"under-bust sling: {bridged} node(s) between the two slings handed to the span across");
+        log?.Invoke($"under-bust sling: {moved} node(s) laid onto the line from each breast down to the ribs, "
+                  + $"up to {most * 1000:0.#}mm{(heldInside > 0 ? $" ({heldInside} shortened to stay outside the body)" : "")}");
+        return moveD;
+
+        static float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
+    }
+
+    /// <summary>How far below the breasts' lowest seeded node the sling's slices reach, as a share of the breasts' height.</summary>
+    private const float SlingReachDown = 0.8f;
+
+    /// <summary>Jacobi passes smoothing the sling's displacement among the nodes it moved.</summary>
+    private const int SlingSmoothPasses = 6;
+
+    /// <summary>Most rounds of drawing back sling edges that pass through the body.</summary>
+    private const int SlingEdgeRounds = 12;
+
+    /// <summary>Sling weight at which a node counts as part of a sling when finding the skin between the two.</summary>
+    private const float SlingSolid = 0.5f;
+
+    /// <summary>How far below the breast the sling holds its full line, as a share of the breasts' height.</summary>
+    private const float SlingFullLength = 0.3f;
+
+    /// <summary>Over how much further, as a share of the breasts' height, the sling fades back onto the skin.</summary>
+    private const float SlingFadeLength = 0.4f;
+
+    /// <summary>Shortest hull edge, in mesh edges, that counts as bridging a gap rather than tracing the surface.</summary>
+    private const float SlingMinSpan = 2f;
+
+    /// <summary>Smallest move worth making — below this the node already lies on the line.</summary>
+    private const float SlingMinMove = 0.0005f;
+
+    /// <summary>Largest move allowed; past it something other than a crease is between the node and the line.</summary>
+    private const float SlingMaxMove = 0.045f;
+
+    /// <summary>Share of the bust's width over which the sling fades out at each outer side.</summary>
+    private const float SlingSideFade = 0.2f;
+
+    /// <summary>Segments a steep span edge is split into for <see cref="KeepEdgesOutside"/>.</summary>
+    private const int EdgeInsideSamples = 4;
 
     /// <summary>Most rounds of cut-then-slope-limit before the span is taken as settled. See the call site.</summary>
     private const int BridgeInsideRounds = 8;
@@ -9779,6 +10349,12 @@ public static class SecondSkinWriter
 
         /// <summary>Per-node normalized average of the members' source normals.</summary>
         public required Vec3[] NodeNormal { get; init; }
+
+        /// <summary>
+        /// Nodes on a ring shared with another part, which nothing may move — not the span, and not the extra
+        /// clearance <see cref="BridgedClearance"/> spreads from moved neighbours. Null when there are none.
+        /// </summary>
+        public bool[]? NodePinned { get; init; }
     }
 
     /// <summary>
@@ -9837,9 +10413,11 @@ public static class SecondSkinWriter
         Vec3[] pos, Vec3[] nrm, ushort[] tris, float[] bust, float strength,
         Action<string>? log = null, bool[]? covered = null, float smoothStrength = 0f,
         bool fillGap = true, Vec3? outward = null, bool envelope = false,
-        float[]? ramp = null, float[]? relaxSeed = null, bool pinBoundary = false)
+        float[]? ramp = null, float[]? relaxSeed = null, bool pinBoundary = false, float minDepthShare = 0f,
+        bool[]? joinPin = null, float rampFull = 1f, float maxSlope = BustMaxSlope, float openSlope = 0f)
         => BustBridgeSolve(pos, nrm, Array.ConvertAll(tris, t => (int)t), bust, strength, log, covered,
-                           smoothStrength, fillGap, outward, envelope, ramp, relaxSeed, pinBoundary);
+                           smoothStrength, fillGap, outward, envelope, ramp, relaxSeed, pinBoundary, minDepthShare,
+                           joinPin, rampFull, maxSlope, openSlope);
 
     /// <inheritdoc cref="BustBridgeSolve(Vec3[], Vec3[], ushort[], float[], float, Action{string}, bool[])"/>
     /// <remarks>
@@ -9860,11 +10438,22 @@ public static class SecondSkinWriter
     /// shell's hem is already held by <paramref name="covered"/>, which is the right tool for it, because
     /// a hem is pinned where it LIES ON the body rather than because it is an edge.
     /// </param>
+    /// <param name="minDepthShare">
+    /// When above zero, skip the solve unless the chord reaches at least this share of the apex gap — see
+    /// <see cref="CleftMinDepthShare"/>. Zero for the chest, whose shallow spans are real.
+    /// </param>
+    /// <param name="joinPin">
+    /// Per vertex, whether it sits on a ring this part shares with another part (see
+    /// <see cref="Source.JoinRing"/>). Those are held in place like <paramref name="pinBoundary"/>'s rim, and the
+    /// span itself fades to them over <see cref="JoinPinFade"/> rings. Unlike <paramref name="pinBoundary"/> this
+    /// is safe on a SHELL: it pins only the join, never the garment's hem.
+    /// </param>
     internal static BustBridgePlan? BustBridgeSolve(
         Vec3[] pos, Vec3[] nrm, int[] tris, float[] bust, float strength,
         Action<string>? log = null, bool[]? covered = null, float smoothStrength = 0f,
         bool fillGap = true, Vec3? outward = null, bool envelope = false,
-        float[]? ramp = null, float[]? relaxSeed = null, bool pinBoundary = false)
+        float[]? ramp = null, float[]? relaxSeed = null, bool pinBoundary = false, float minDepthShare = 0f,
+        bool[]? joinPin = null, float rampFull = 1f, float maxSlope = BustMaxSlope, float openSlope = 0f)
     {
         int vc = pos.Length;
         if (vc == 0 || (strength <= 0f && smoothStrength <= 0f) || bust.Length < vc) return null;
@@ -9921,6 +10510,17 @@ public static class SecondSkinWriter
                 use[k] = use.TryGetValue(k, out int c) ? c + 1 : 1;
             }
         }
+
+        // A ring shared with ANOTHER PART is pinned the same way — see joinPin. Kept apart as well, because
+        // the span needs its own skirt from it below, not just the relax.
+        bool[]? joinNode = null;
+        if (joinPin != null)
+            for (int i = 0; i < vc && i < joinPin.Length; i++)
+            {
+                if (!joinPin[i]) continue;
+                (joinNode ??= new bool[nodeCount])[nodeOf[i]] = true;
+                (rimNode ??= new bool[nodeCount])[nodeOf[i]] = true;
+            }
 
         var start = new Vec3[nodeCount];
         var nNorm = new Vec3[nodeCount];
@@ -9985,6 +10585,51 @@ public static class SecondSkinWriter
         }
         for (int n = 0; n < nodeCount; n++) adj[n] ??= new List<int>();
 
+        // THE LOWER POLE, where the bones stop short of it. A body whose breast bones weight the whole breast
+        // seeds all of it; one that hands the underside to the spine does not. Measured on Rue+ (IVCS), the
+        // iv_c_mune weights end at y 1.19 while the breasts run on down to a crease at 1.165: the region
+        // stopped there, and the span closed the cleavage above it and left the bottom third 26-33mm deep —
+        // "ok on top, but doesn't go far enough down". The underside is found from its shape instead: grown
+        // out of each lobe across skin that faces DOWN, which a breast's underside does and the ribcage below
+        // the crease does not, so the growth stops at the crease on its own. The underside faces forward too
+        // (model +Z, as GateToBackFacing assumes): without that, measured, it followed the flanks round the
+        // torso and merged both breasts into one lobe 694mm wide. Capped at half the lobes' own
+        // height below them, for a torso with no crease to stop at, where it would otherwise run on down
+        // the lower ribs.
+        if (fillGap && strength > 0f)
+        {
+            // Heights from percentiles, so a stray breast-weighted vertex far from the breasts cannot stretch
+            // the cap. Growth stays below the breasts' middle as well: the armpit and the underside of the
+            // arm face down and forward too, and without that bound the region climbed out round the outer
+            // edge of each breast and ran down the arm.
+            var seedY = new List<float>();
+            for (int n = 0; n < nodeCount; n++) if (seed[n]) seedY.Add(start[n].Y);
+            seedY.Sort();
+            float seedLo = seedY[seedY.Count / 50], seedHi = seedY[seedY.Count - 1 - seedY.Count / 50];
+            float midY = seedY[seedY.Count / 2];
+            float floorY = seedLo - (seedHi - seedLo) * BustLowerPoleReach;
+            var grow = new Queue<int>();
+            for (int n = 0; n < nodeCount; n++) if (seed[n]) grow.Enqueue(n);
+            int grown = 0;
+            while (grow.Count > 0)
+            {
+                int q = grow.Dequeue();
+                foreach (int k in adj[q])
+                {
+                    if (seed[k] || cut[k] || start[k].Y < floorY || start[k].Y > midY
+                        || nNorm[k].Y > -BustLowerPoleFacing) continue;
+                    // Forward as well as down, or it follows the flank round to the back; and never across the
+                    // midline, which would merge the two lobes the gap fill needs to find apart.
+                    if (nNorm[k].Z < BustLowerPoleFacing || start[k].X * start[q].X <= 0f) continue;
+                    seed[k] = true;
+                    grown++;
+                    grow.Enqueue(k);
+                }
+            }
+            if (grown > 0)
+                log?.Invoke($"bust bridge: {grown} node(s) of the breasts' underside grown into the region below the bones' reach");
+        }
+
         // The gap between the lobes is where the whole feature happens, and the bones do not reach it.
         // Cloth the layer does not paint is excluded from the region OUTRIGHT — handed in, not subtracted
         // afterwards. Subtracting it afterwards is what tore the shell in game: the fade ramp had already
@@ -10041,8 +10686,11 @@ public static class SecondSkinWriter
                 }
             }
 
+            // Saturated at rampFull: the ramp is there to fade the region's EDGES, and multiplied in raw it also
+            // scaled the whole interior by the bone weight — the cleft's hip weight runs 0.8-0.97, and after the
+            // smoothing that kept 57% of the lift.
             if (ramp != null)
-                for (int n = 0; n < nodeCount; n++) nW[n] *= rampN[n];
+                for (int n = 0; n < nodeCount; n++) nW[n] *= MathF.Min(1f, rampN[n] / rampFull);
         }
 
         // The rim again, on the OTHER channel. Pinning it out of the seed above is not enough: the relax
@@ -10084,6 +10732,35 @@ public static class SecondSkinWriter
                 if (ring[n] < 0) continue;                       // beyond the skirt, untouched
                 relaxW[n] *= Smoothstep(ring[n] / (float)RimPinFade);
             }
+        }
+
+        // THE SPAN'S OWN SKIRT FROM A PART JOIN. Excluding the ring from the seed stops the region there, but
+        // the span on the far side of a join is the one thing that must come to rest on it, over a distance a
+        // body can hide — the torso part meets these vertices and does not move. Measured on Rue+ with only the
+        // seed pinned: the cleft still lifted the legs part's waist 3–5mm at its top edge against a torso that
+        // stayed put, and the step between them was a line across the small of the back.
+        if (joinNode != null)
+        {
+            var ring = new int[nodeCount];
+            Array.Fill(ring, -1);
+            var q0 = new Queue<int>();
+            for (int n = 0; n < nodeCount; n++) if (joinNode[n]) { ring[n] = 0; q0.Enqueue(n); }
+            while (q0.Count > 0)
+            {
+                int q = q0.Dequeue();
+                if (ring[q] >= JoinPinFade || adj[q] == null) continue;
+                foreach (int k in adj[q])
+                    if (ring[k] < 0) { ring[k] = ring[q] + 1; q0.Enqueue(k); }
+            }
+            int faded = 0;
+            for (int n = 0; n < nodeCount; n++)
+            {
+                if (ring[n] < 0 || nW[n] <= 0f) continue;
+                nW[n] *= Smoothstep(ring[n] / (float)JoinPinFade);
+                faded++;
+            }
+            if (faded > 0)
+                log?.Invoke($"bust bridge: {faded} region node(s) within {JoinPinFade} rings of a part join faded toward it");
         }
 
         int region = 0;
@@ -10206,6 +10883,34 @@ public static class SecondSkinWriter
             ver[n] = p.X * vertical.X + p.Y * vertical.Y + p.Z * vertical.Z;
         }
 
+        // The skin as it is, before the sling below reshapes the surface the span is solved on — what every
+        // inside-the-body test measures against.
+        var skin = (Vec3[])start.Clone();
+        BodyWinding? skinBody = null;
+        BodyWinding SkinBody() => skinBody ??= new BodyWinding(skin, tris, nodeOf);
+
+        // THE UNDER-BUST SLING, before the span: the bridge DOWN from each breast to the ribs. See UnderBustSling.
+        // Solved first and folded into the surface the chord then works on, so the nodes tucked under the breast
+        // are already out on the sling when the span looks for its lowest points, and the cleavage bridges from
+        // them instead of diving down to where they were.
+        Vec3[]? sling = null;
+        if (fillGap && strength > 0f && openSlope > maxSlope)
+        {
+            sling = UnderBustSling(start, nNorm, h0, lat, ver, seed, cut, adj, nodeCount, ax, vertical, SkinBody(), log,
+                                   out var slingWeight, out var slingBetween);
+            if (sling != null)
+                for (int n = 0; n < nodeCount; n++)
+                {
+                    // The slings and the skin between them join the region the span across works on.
+                    nW[n] = MathF.Max(nW[n], MathF.Max(slingWeight[n], slingBetween[n]));
+                    var d = sling[n];
+                    if (d.X == 0f && d.Y == 0f && d.Z == 0f) continue;
+                    start[n] = new Vec3(start[n].X + d.X, start[n].Y + d.Y, start[n].Z + d.Z);
+                    h0[n] += d.X * ax.X + d.Y * ax.Y + d.Z * ax.Z;
+                    ver[n] += d.X * vertical.X + d.Y * vertical.Y + d.Z * vertical.Z;
+                }
+        }
+
         var h = strength <= 0f ? h0
               : envelope ? EnvelopeTarget(h0, lat, ver, nW, nodeCount, adj, start, log)
                          : ChordTarget(h0, lat, ver, nW, nodeCount, adj, start, log);
@@ -10228,6 +10933,17 @@ public static class SecondSkinWriter
             rampedMax = MathF.Max(rampedMax, MathF.Abs(scale[n]));
         }
 
+        // A VALLEY, OR A RIDGE? See CleftMinDepthShare. Asked before anything moves, so a rejected solve
+        // leaves the mesh byte-identical rather than merely scaled down.
+        if (minDepthShare > 0f && strength > 0f
+            && ApexGap(start, h0, nW, nodeCount, ax, lateral) is var gap and > 0f
+            && wantedMax < gap * minDepthShare)
+        {
+            log?.Invoke($"bust bridge: SKIPPED, the chord asks {wantedMax * 1000:0.#}mm across apexes "
+                      + $"{gap * 1000:0.#}mm apart (share {wantedMax / gap:0.##}, needs {minDepthShare:0.##}) — "
+                      + "a shallow ridge, not a cleft between two lobes");
+            return null;
+        }
 
         // SLOPE LIMIT — the guarantee that the shell cannot tear, whatever shape the region came out.
         //
@@ -10249,6 +10965,84 @@ public static class SecondSkinWriter
         // to meet a displaced one, which invents displacement where the region deliberately has none,
         // unpins the boundary, and tears the shell. Measured that way at a slope of 3.45 on a ragged
         // coverage edge, against a limit of 0.8.
+        // Near a HEM the tuned limit holds; away from one the span may drop more steeply. BustMaxSlope was
+        // measured against folds along a garment's cut edge, and applied everywhere it also decided the shape
+        // of the span's own open bottom: under Rue+'s breasts the cleavage asked 33mm and the limit let it
+        // keep 20, a 39° ramp down to the crease where cloth drops nearly straight.
+        bool[]? nearHem = null;
+        if (openSlope > maxSlope)
+        {
+            nearHem = new bool[nodeCount];
+            var ringQ = new Queue<(int, int)>();
+            for (int n = 0; n < nodeCount; n++) if (cut[n]) { nearHem[n] = true; ringQ.Enqueue((n, 0)); }
+            while (ringQ.Count > 0)
+            {
+                var (q, d) = ringQ.Dequeue();
+                if (d >= BustHemRings) continue;
+                foreach (int k in adj[q])
+                    if (!nearHem[k]) { nearHem[k] = true; ringQ.Enqueue((k, d + 1)); }
+            }
+        }
+
+        // NO RIDGE ACROSS THE SPAN. A bridge's cross-section runs flat or dips between its two sides; it never
+        // peaks in the middle. The chord alone cannot peak, but once the inside check holds back the nodes under
+        // each breast's inner edge, the slope limit lets the lift climb toward the midline from them — on Rue+ the
+        // lower cleavage came out a W, the midline 8-12mm proud of the columns beside it. Any lifted node higher
+        // than its neighbours on BOTH sides across the chest is lowered to the higher of them, until none is.
+        // Only ever lowers, so every guarantee above still holds.
+        //
+        // Per band across the chest, over every node the chord asked to move (the held-back ones included, since
+        // they ARE the dips): walking in from either side the surface may only fall, then only rise — a valley.
+        // A node is capped at the higher of the lowest point between it and the left end and the lowest point
+        // between it and the right end. A single-node rule was tried first and left both the W and a ridge two
+        // nodes wide running down the sternum below the breasts, which a node-and-its-neighbours test cannot see.
+        List<int>[]? spanBands = null;
+        void ShaveAcrossPeaks(float[] v)
+        {
+            if (spanBands == null)
+            {
+                float loV = float.MaxValue, hiV = float.MinValue, edgeSum = 0f;
+                int edgeN = 0;
+                for (int n = 0; n < nodeCount; n++)
+                {
+                    if (h[n] - h0[n] <= BridgeInsideMargin) continue;
+                    loV = MathF.Min(loV, ver[n]); hiV = MathF.Max(hiV, ver[n]);
+                    foreach (int k in adj[n]) { edgeSum += Dist(start[n], start[k]); edgeN++; }
+                }
+                float bandH = edgeN > 0 ? edgeSum / edgeN : 0f;
+                int bandCount = bandH > 1e-6f && hiV > loV ? Math.Clamp((int)MathF.Ceiling((hiV - loV) / bandH), 1, 512) : 0;
+                spanBands = new List<int>[bandCount];
+                for (int b = 0; b < bandCount; b++) spanBands[b] = new List<int>();
+                for (int n = 0; n < nodeCount && bandCount > 0; n++)
+                    if (h[n] - h0[n] > BridgeInsideMargin)
+                        spanBands[Math.Clamp((int)((ver[n] - loV) / bandH), 0, bandCount - 1)].Add(n);
+                foreach (var band in spanBands) band.Sort((a, b) => lat[a].CompareTo(lat[b]));
+            }
+            foreach (var band in spanBands)
+            {
+                int m = band.Count;
+                if (m < 3) continue;
+                var fromLeft = new float[m];
+                var fromRight = new float[m];
+                for (int i = 0; i < m; i++)
+                {
+                    float hf = h0[band[i]] + v[band[i]];
+                    fromLeft[i] = i == 0 ? hf : MathF.Min(fromLeft[i - 1], hf);
+                }
+                for (int i = m - 1; i >= 0; i--)
+                {
+                    float hf = h0[band[i]] + v[band[i]];
+                    fromRight[i] = i == m - 1 ? hf : MathF.Min(fromRight[i + 1], hf);
+                }
+                for (int i = 1; i < m - 1; i++)
+                {
+                    int n = band[i];
+                    float cap = MathF.Max(fromLeft[i - 1], fromRight[i + 1]) + BridgeRidgeSlack;
+                    if (h0[n] + v[n] > cap) v[n] = MathF.Max(0f, cap - h0[n]);
+                }
+            }
+        }
+
         void LimitSlope(float[] v)
         {
             for (int pass = 0; pass < BustSlopePasses; pass++)
@@ -10260,17 +11054,37 @@ public static class SecondSkinWriter
                     foreach (int k in adj[n])
                     {
                         float dx = start[k].X - start[n].X, dy = start[k].Y - start[n].Y, dz = start[k].Z - start[n].Z;
-                        float room = BustMaxSlope * MathF.Sqrt(dx * dx + dy * dy + dz * dz);
+                        float len = MathF.Sqrt(dx * dx + dy * dy + dz * dz);
+                        float slope = maxSlope;
+                        if (nearHem is not null && !nearHem[n] && !nearHem[k] && len > 1e-9f)
+                        {
+                            // Steep only ALONG the body, never ACROSS it. The open drop the span needs runs down,
+                            // from the cleavage to the crease; across the chest a steep limit let the midline stand
+                            // far proud of the nodes each breast's overhang holds back beside it, and on Rue+ the
+                            // lower cleavage came out a W — dips 25-35mm out, a lump between them — where the tuned
+                            // limit had kept it a smooth U.
+                            float across = MathF.Abs(dx * lateral.X + dy * lateral.Y + dz * lateral.Z) / len;
+                            slope = openSlope + (maxSlope - openSlope) * Smoothstep(Math.Clamp(across / 0.7f, 0f, 1f));
+                        }
+                        float room = slope * len;
+                        // A node that starts DEEPER than its neighbour may rise to meet it, however far that is.
+                        // What tears a shell is a lift that differs between two nodes at the same height; a
+                        // node closing the depth between them flattens the surface instead. Without this a
+                        // steep wall could never be spanned: on Rue+'s cleft, whose walls run nearly along the
+                        // lift axis, the limit took the span from 57% of the chord to 29%, and in game the
+                        // cleft looked the same ticked or not. Only up to LEVEL — never past it, which would
+                        // turn the wall over.
+                        float gap = h0[k] - h0[n];
                         if (v[n] > 0f)
                         {
-                            float cap = MathF.Max(0f, v[k] + room);
+                            float cap = MathF.Max(0f, v[k] + MathF.Max(room, gap));
                             if (cap >= v[n]) continue;
                             worst = MathF.Max(worst, v[n] - cap);
                             v[n] = cap;
                         }
                         else
                         {
-                            float flo = MathF.Min(0f, v[k] - room);
+                            float flo = MathF.Min(0f, v[k] - MathF.Max(room, -gap));
                             if (flo <= v[n]) continue;
                             worst = MathF.Max(worst, flo - v[n]);
                             v[n] = flo;
@@ -10280,7 +11094,23 @@ public static class SecondSkinWriter
                 if (worst <= BustBridgeEpsilon) break;
             }
         }
+        // Where the lift goes, as SHARES over every node the chord asked to move a real distance: the maxima in
+        // the summary line say which stage capped the single deepest node, which is not where a span comes out
+        // visibly short.
+        double askSum = 0, rampSum = 0, slopeSum = 0;
+        int askNodes = 0;
+        var asked = new bool[nodeCount];
+        for (int n = 0; n < nodeCount; n++)
+        {
+            if (h[n] - h0[n] < BridgeShareFloor) continue;
+            asked[n] = true; askNodes++;
+            askSum += (h[n] - h0[n]) * strength;
+            rampSum += scale[n];
+        }
+        var traceRamp = TraceSpanNode != null ? (float[])scale.Clone() : null;
         LimitSlope(scale);
+        for (int n = 0; n < nodeCount; n++) if (asked[n]) slopeSum += scale[n];
+        var traceSlope = TraceSpanNode != null ? (float[])scale.Clone() : null;
 
         // KEEP EVERY LIFT OUTSIDE THE BODY, alternating with the slope limit until neither changes anything.
         //
@@ -10292,7 +11122,7 @@ public static class SecondSkinWriter
         // changed since are not tested again.
         if (strength > 0f)
         {
-            var body = new BodyWinding(start, tris, nodeOf);
+            var body = SkinBody();
             var checkedAt = new float[nodeCount];
             Array.Fill(checkedAt, float.NaN);
             int rounds = 0, totalCut = 0;
@@ -10301,6 +11131,8 @@ public static class SecondSkinWriter
             {
                 rounds++;
                 int cutNow = KeepLiftsOutside(scale, start, ax, body, checkedAt, nodeCount);
+                if (nearHem != null) cutNow += KeepEdgesOutside(scale, start, ax, body, adj, nodeCount, maxSlope);
+                if (nearHem != null) ShaveAcrossPeaks(scale);
                 totalCut += cutNow;
                 if (cutNow == 0) { settled = true; break; }
                 LimitSlope(scale);
@@ -10311,6 +11143,21 @@ public static class SecondSkinWriter
             if (totalCut > 0)
                 log?.Invoke($"bust bridge: {totalCut} lift cut(s) to keep the span outside the body, over {rounds} "
                           + $"round(s){(settled ? "" : " — did not settle")}");
+        }
+        if (TraceSpanNode is { } trace && traceRamp != null && traceSlope != null)
+            foreach (int n in Enumerable.Range(0, nodeCount).Where(n => trace(start[n]))
+                                        .OrderBy(n => MathF.Round(start[n].Y, 2)).ThenBy(n => start[n].X))
+                log?.Invoke($"TRACE ({start[n].X * 1000:0.0},{start[n].Y:0.000},{start[n].Z * 1000:0.0}) "
+                          + $"n({nNorm[n].X:0.00},{nNorm[n].Y:0.00},{nNorm[n].Z:0.00}) nW {nW[n]:0.00} "
+                          + $"asked {(h[n] - h0[n]) * 1000:0.0} ramp {traceRamp[n] * 1000:0.0} "
+                          + $"slope {traceSlope[n] * 1000:0.0} final {scale[n] * 1000:0.0}");
+        if (askNodes > 0 && askSum > 0)
+        {
+            double finalSum = 0;
+            for (int n = 0; n < nodeCount; n++) if (asked[n]) finalSum += scale[n];
+            log?.Invoke($"bust bridge: {askNodes} node(s) asked {askSum / askNodes * 1000:0.#}mm on average; the ramp "
+                      + $"kept {rampSum / askSum:P0}, the slope limit {slopeSum / askSum:P0}, the inside check "
+                      + $"{finalSum / askSum:P0}");
         }
 
         // THE NIPPLE RELAX, on the surface the span left behind, so a garment doing both gets a spanned
@@ -10333,8 +11180,10 @@ public static class SecondSkinWriter
                                       start[n].Z + ax.Z * scale[n]);
                 spannedH[n] = h0[n] + scale[n];
             }
-            nipple = NippleSmoothTarget(spanned, spannedH, lat, ver, nW, seed, nodeCount, adj, ax,
-                                        smoothStrength, log);
+            // onBust, not seed: where the nipple is is a fact about the body, and the seed is gated on what
+            // this garment covers (see NippleSmoothTarget's onBust note) — passing it was a regression.
+            nipple = NippleSmoothTarget(spanned, spannedH, lat, ver, nW, onBust, nodeCount, adj, ax,
+                                        smoothStrength, log, nNorm);
             if (nipple != null)
             {
                 var comp = new float[nodeCount];
@@ -10444,6 +11293,7 @@ public static class SecondSkinWriter
         float NodeMove(int n)
         {
             float s = MathF.Abs(scale[n]);
+            if (sling != null) s += Len(sling[n]);
             return nipple is null ? s : s + Len(nipple[n]);
         }
         for (int i = 0; i < vc; i++)
@@ -10452,6 +11302,7 @@ public static class SecondSkinWriter
             float d = scale[n];
             var v = new Vec3(ax.X * d, ax.Y * d, ax.Z * d);
             if (nipple is { } np) v = new Vec3(v.X + np[n].X, v.Y + np[n].Y, v.Z + np[n].Z);
+            if (sling != null) v = new Vec3(v.X + sling[n].X, v.Y + sling[n].Y, v.Z + sling[n].Z);
             float mag = Len(v);
             if (mag <= BustBridgeEpsilon) continue;
             delta[i] = v;
@@ -10467,6 +11318,8 @@ public static class SecondSkinWriter
         //
         // The tearing it exists for was measured in one place: the crotch, where the span's axis lies
         // along the surface and slides neighbours past each other. That is the pass that needs it.
+        // The sling moves nodes down as well as out, compressing the underside of each breast onto a line, so
+        // it can fold a face where the fold can; the chest has no nipple pass on the shell for it to cascade in.
         if (relaxSeed != null)
             UnfoldTriangles(pos, delta, tris, log);
 
@@ -10536,8 +11389,29 @@ public static class SecondSkinWriter
         // as they were and an untouched shell stays byte-identical. It has to count the relax as well as
         // the span: a node the relax alone moved would otherwise be written at its new position and
         // reshaded from its old one.
+        // The sling moves nodes the region never reached; they need their normals rebuilt like any other.
+        if (sling != null)
+            for (int n = 0; n < nodeCount; n++)
+                if (Len(sling[n]) > BustBridgeEpsilon) nW[n] = 1f;
+
         for (int n = 0; n < nodeCount; n++)
             if (NodeMove(n) <= BustBridgeEpsilon) nW[n] = 0f;
+
+        // The span's reshade follows the span's MOVEMENT too, for the reason the relax's does above: nW is the
+        // region ramp, which reaches full weight on nodes the chord barely lifted, and there a normal rebuilt
+        // from the faces replaces the artist's without the surface having changed. Where that happened along
+        // the ragged edge of the lifted band it drew a jagged light-and-dark border round the whole span —
+        // seen on Rue+'s cleft once its drawn surface was reshaded at all.
+        if (relaxSeed == null)
+            for (int n = 0; n < nodeCount; n++)
+            {
+                if (nW[n] <= 0f || adj[n].Count == 0) continue;
+                float edge = 0f;
+                foreach (int k in adj[n]) edge += Dist(skin[k], skin[n]);   // the skin's own spacing, not the sling's
+                edge /= adj[n].Count;
+                if (edge > 1e-9f)
+                    nW[n] = MathF.Min(nW[n], Smoothstep(Math.Clamp(NodeMove(n) / (edge * NormalReshadeSpan), 0f, 1f)));
+            }
 
         log?.Invoke($"bust bridge: axis ({ax.X:0.###},{ax.Y:0.###},{ax.Z:0.###}), {region} region node(s), "
                   + $"{moved} moved, max {maxMove:0.#####} "
@@ -10546,7 +11420,7 @@ public static class SecondSkinWriter
 
         return new BustBridgePlan
         {
-            Delta = delta, NodeOf = nodeOf, NodeWeight = nW, NodeNormal = nNorm,
+            Delta = delta, NodeOf = nodeOf, NodeWeight = nW, NodeNormal = nNorm, NodePinned = joinNode,
         };
     }
 
@@ -10779,8 +11653,7 @@ public static class SecondSkinWriter
             {
                 float acc = 0f;
                 foreach (var (bone, bw) in fW[i])
-                    if (bone.Equals(BustBoneL, StringComparison.OrdinalIgnoreCase)
-                     || bone.Equals(BustBoneR, StringComparison.OrdinalIgnoreCase))
+                    if (IsBustBone(bone))
                         acc += bw;
                 if (acc <= 0f) continue;
                 bust[i] = MathF.Min(1f, acc);
@@ -11655,6 +12528,13 @@ public static class SecondSkinWriter
     private const int RimPinFade = 3;
 
     /// <summary>
+    /// Rings over which a span fades to zero at a join with another part. Wider than <see cref="RimPinFade"/>
+    /// because it tapers the SPAN, which can be centimetres, rather than a relax of a millimetre or two: the
+    /// slope limit would otherwise do the tapering alone, as a crease.
+    /// </summary>
+    private const int JoinPinFade = 6;
+
+    /// <summary>
     /// How wide the envelope's lateral low-pass is, as a distance on the body — the number that decides
     /// where "the body's shape" ends and "the fold" begins.
     /// <para/>
@@ -12045,7 +12925,7 @@ public static class SecondSkinWriter
             // LEGS part rather than the torso, so on a real body the two never meet; asking for both here
             // costs one more walk over the same names and keeps one traversal and one rewrite.
             var bust = nippleStrength > 0f
-                ? MeshRegionWeights(src, m, vc, decl, vbo, bs, [BustBoneL, BustBoneR])
+                ? MeshRegionWeights(src, m, vc, decl, vbo, bs, BustBones)
                 : null;
             var fold = foldStrength > 0f
                 ? MeshRegionWeights(src, m, vc, decl, vbo, bs, [HipBone], [ThighBoneL, ThighBoneR])
@@ -12481,7 +13361,7 @@ public static class SecondSkinWriter
     /// </param>
     private static Vec3[]? NippleSmoothTarget(Vec3[] pos, float[] h, float[] lat, float[] ver, float[] w,
                                               bool[] onBust, int count, List<int>[] adj, Vec3 ax,
-                                              float strength, Action<string>? log)
+                                              float strength, Action<string>? log, Vec3[]? nrm = null)
     {
         var measure = new List<int>();
         var region = new List<int>();
@@ -12517,16 +13397,30 @@ public static class SecondSkinWriter
         foreach (int n in measure)
         {
             float sum = 0f;
-            int ring = 0;
+            int ring = 0, sides = 0;
+            // Height above the ring along the node's OWN normal where there is one, not along the chest axis.
+            // On a large breast the lower slope falls away from that axis steeply, so a node low on it stands
+            // tens of millimetres "above" a ring hanging below it: measured on Rue+ the axis reading put the
+            // nipple 47mm under the real one at 23mm prominence, where the normal reading finds it within 7mm
+            // at 6mm. Along the normal, a smooth breast reads the same few millimetres everywhere and only a
+            // bump on it stands out.
+            // The ring by distance ON the body, too, not across the chest plane: where the surface is steep in
+            // that plane a flat ring reaches skin far behind the node and reads the slope as prominence.
+            var nn = nrm != null && n < nrm.Length ? nrm[n] : ax;
             foreach (int k in measure)
             {
-                float r = Across(n, k);
+                float r = nrm != null ? Dist(pos[n], pos[k]) : Across(n, k);
                 if (r < ringIn || r > ringOut) continue;
-                sum += h[k];
+                sum += (pos[n].X - pos[k].X) * nn.X + (pos[n].Y - pos[k].Y) * nn.Y + (pos[n].Z - pos[k].Z) * nn.Z;
                 ring++;
+                sides |= (lat[k] >= lat[n] ? 1 : 2) | (ver[k] >= ver[n] ? 4 : 8);
             }
-            if (ring < 4) continue;
-            float prom = h[n] - sum / ring;
+            // The ring has to SURROUND the node. At the edge of the breast-weighted skin it only lies on one
+            // side, and a node there with the whole breast curving away behind its ring reads as proud as a
+            // nipple: measured on Rue+, whose breast bones stop just under the nipple, the locator took a
+            // node on that edge at 27mm "prominence", and smoothing it made the breast rougher, not smoother.
+            if (ring < 4 || sides != 15) continue;
+            float prom = sum / ring;
             if (lat[n] < midLat) { if (prom > promL) { promL = prom; nipL = n; } }
             else                 { if (prom > promR) { promR = prom; nipR = n; } }
         }
@@ -12957,6 +13851,57 @@ public static class SecondSkinWriter
     /// Lobes are separated along <paramref name="lateral"/> — the same direction the relax spans, so the
     /// report cannot disagree with the solve about which way the cleavage runs.
     /// </summary>
+    /// <summary>
+    /// The distance between the region's two apexes — the node standing furthest out along
+    /// <paramref name="ax"/> on each side of its lateral midpoint — measured across the axis. The same apexes
+    /// <see cref="ChordReport"/> reports. Zero when the region has no node on one side.
+    /// </summary>
+    private static float ApexGap(Vec3[] start, float[] h0, float[] w, int count, Vec3 ax, Vec3 lateral)
+    {
+        var mid = default(Vec3);
+        float wsum = 0f;
+        for (int n = 0; n < count; n++)
+        {
+            if (w[n] <= 0f) continue;
+            mid = new Vec3(mid.X + start[n].X, mid.Y + start[n].Y, mid.Z + start[n].Z);
+            wsum++;
+        }
+        if (wsum < 2f) return 0f;
+        mid = new Vec3(mid.X / wsum, mid.Y / wsum, mid.Z / wsum);
+
+        int apexL = -1, apexR = -1;
+        float bestL = float.MinValue, bestR = float.MinValue;
+        for (int n = 0; n < count; n++)
+        {
+            if (w[n] <= 0f) continue;
+            float l = (start[n].X - mid.X) * lateral.X + (start[n].Y - mid.Y) * lateral.Y + (start[n].Z - mid.Z) * lateral.Z;
+            if (l >= 0f) { if (h0[n] > bestR) { bestR = h0[n]; apexR = n; } }
+            else         { if (h0[n] > bestL) { bestL = h0[n]; apexL = n; } }
+        }
+        if (apexL < 0 || apexR < 0) return 0f;
+
+        var d = new Vec3(start[apexR].X - start[apexL].X, start[apexR].Y - start[apexL].Y, start[apexR].Z - start[apexL].Z);
+        float along = d.X * ax.X + d.Y * ax.Y + d.Z * ax.Z;
+        var across = new Vec3(d.X - ax.X * along, d.Y - ax.Y * along, d.Z - ax.Z * along);
+        return MathF.Sqrt(across.X * across.X + across.Y * across.Y + across.Z * across.Z);
+    }
+
+    /// <summary>
+    /// How deep the chord has to reach, as a share of the apex gap, before a cleft solve is taken as a real
+    /// cleft. Below it the solve is skipped.
+    /// <para/>
+    /// The solve runs once per source mesh, and the hip bone reaches the bottom of the TORSO mesh too, where
+    /// the back-facing surface seeds a region of its own. That second solve spans a shallow ridge at the waist,
+    /// moves the torso's lower edge a few millimetres while the legs mesh beside it does not move there, and
+    /// the step between them is a line across the small of the back. Measured on replays of the game's shells:
+    /// <list type="bullet">
+    /// <item>Rue+: waist solve asks 7.0mm across apexes 60mm apart (0.12); the real cleft 162mm across 146mm (1.11)</item>
+    /// <item>AB Body: waist 6.6mm across 51mm (0.13); real 134mm across 129mm (1.04)</item>
+    /// </list>
+    /// The width share this was first planned on did not separate them (0.30 against 0.44 on Rue+).
+    /// </summary>
+    private const float CleftMinDepthShare = 0.4f;
+
     private static string ChordReport(Vec3[] start, float[] h0, float[] h, float[] w, int count,
                                       Vec3 ax, Vec3 lateral)
     {
@@ -13027,8 +13972,19 @@ public static class SecondSkinWriter
             wasSum += a; nowSum += b;
             sampled++;
         }
+        // How far apart the two apexes sit as a share of the region's own width across — a real cleavage or
+        // cleft keeps its lobes a good fraction of the region apart; a solve on a narrow ridge does not.
+        float latMin = float.MaxValue, latMax = float.MinValue;
+        for (int n = 0; n < count; n++)
+        {
+            if (w[n] <= 0f) continue;
+            float l = start[n].X * lateral.X + start[n].Y * lateral.Y + start[n].Z * lateral.Z;
+            latMin = MathF.Min(latMin, l); latMax = MathF.Max(latMax, l);
+        }
+        float width = latMax - latMin;
         string where = $", apexes ({pl.X:0.###},{pl.Y:0.###},{pl.Z:0.###})-({pr.X:0.###},{pr.Y:0.###},{pr.Z:0.###})"
-                     + $" gap {MathF.Sqrt(span):0.####}";
+                     + $" gap {MathF.Sqrt(span):0.####} of a region {width:0.####} wide"
+                     + (width > 0f ? $" (share {MathF.Sqrt(span) / width:0.##})" : "");
         if (sampled == 0) return where + ", nothing on the chord to measure";
         return where + $", dish mean {wasSum / sampled:0.#####} -> {nowSum / sampled:0.#####}"
                      + $", worst {wasMax:0.#####} -> {nowMax:0.#####}, over {sampled} node(s)";
@@ -14240,7 +15196,8 @@ public static class SecondSkinWriter
             var next = (float[])e.Clone();
             for (int n = 0; n < nodes; n++)
             {
-                if (nbr[n] is not { } ns) continue;
+                // A part join stays exactly where the part across it is: no clearance spreads onto it.
+                if (nbr[n] is not { } ns || (plan.NodePinned is { } pin && n < pin.Length && pin[n])) continue;
                 foreach (int k in ns)
                     next[n] = MathF.Max(next[n], e[k] * BridgedSpreadDecay);
             }
