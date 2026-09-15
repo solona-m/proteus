@@ -224,6 +224,9 @@ public class StatusWindow : Window
     // the other kind's preview would offer to import it under the wrong rules.
     private ContentImportService.ImportPreview? _contentPreview;
     private volatile ContentImportService.PreparedImport? _contentPrepared;
+    // A registration still writing a v3 pack's piece group on the pool. Pumped every frame until it answers;
+    // the import button stays inert meanwhile. See ContentImportService.Pump.
+    private ContentImportService.PreparedImport? _contentAwaited;
 
     // ── Atramentum Luminis (.ttmp2) import state ──
     // A third set of fields for the same three-phase handoff, and kept apart from the other two for the
@@ -2045,14 +2048,38 @@ public class StatusWindow : Window
     /// </summary>
     private void TickContentImport(bool unloading)
     {
+        if (_contentAwaited is { } awaited)
+        {
+            // Teardown: no frames left to pump into. Finished quietly if the write already landed, else left.
+            if (unloading) { contentImport.FinishPendingOnUnload(); return; }
+
+            if (contentImport.Pump() is not { } pumped) return;   // still writing — next frame
+            _contentAwaited = null;
+            FinishContentImport(pumped, awaited);
+            return;
+        }
+
         var done = _contentPrepared;
         if (done == null) return;
         _contentPrepared = null;
-        _importBusy = false;
 
         var r = contentImport.Register(done, quiet: unloading);
         if (unloading) return;
 
+        if (r == null)
+        {
+            // The piece group is being written on the pool. Hold the busy flag and keep pumping.
+            _contentAwaited = done;
+            return;
+        }
+
+        FinishContentImport(r.Value, done);
+    }
+
+    private void FinishContentImport(
+        ContentImportService.ImportResult r, ContentImportService.PreparedImport done)
+    {
+        _importBusy = false;
         _importStatus = r.Message;
         _importStatusOk = r.Ok;
         _importStatusWarn = r.Warning;

@@ -807,7 +807,8 @@ public sealed class PartsPanel
         // A pre-v4 folder is read-only to Proteus, so there is nothing useful to offer: every model would
         // be listed, clickable and staged, only for the write to refuse at the end. Answered before the
         // list is built instead — the message says how to fix it, and Penumbra does the fixing.
-        modIsLegacy = PenumbraModMeta.IsLegacyFolder(root);
+        // No wait: this runs on the draw thread and only decides what to show. A write still checks properly.
+        modIsLegacy = PenumbraModMeta.IsLegacyFolder(root, waitIfHeld: false);
         if (modIsLegacy) return;
 
         // Models the mod PUBLISHES, not files lying in its folder. That is the list that matters: a model
