@@ -477,7 +477,7 @@ public class ToeCapDiagTests
         byte[]? baseModel = text.Contains("base=yes") ? File.ReadAllBytes(F0("base.mdl")) : null;
         var diagOn = new List<string>();
         var clock = System.Diagnostics.Stopwatch.StartNew();
-        SecondSkinWriter.TraceSpanNode = p => p.Z > 0.09f && MathF.Abs(p.X) < 0.03f && p.Y > 1.125f && p.Y < 1.155f;
+        SecondSkinWriter.TraceSpanNode = p => p.Z > 0.09f && p.X > -0.001f && p.X < 0.03f && p.Y > 1.176f && p.Y < 1.196f;
         var on = SecondSkinWriter.Build(specs, Layers(true), baseModel, out var onStats, diagOn.Add, CapSets());
         SecondSkinWriter.TraceSpanNode = null;
         File.WriteAllLines(Path.Combine(Path.GetTempPath(), Path.ChangeExtension(report, ".diag.txt")),
@@ -876,6 +876,67 @@ public class ToeCapDiagTests
             sb.AppendLine($"{y:0.00}    | {a.apex * 1000,8:0.0} {a.mid * 1000,9:0.0} {(a.apex - a.mid) * 1000,6:0.0} | {b.apex * 1000,8:0.0} {b.mid * 1000,9:0.0} {(b.apex - b.mid) * 1000,6:0.0}");
         }
 
+        // THE SIDE PROFILE under the breast: front-most z per 5mm of height, over the whole width and in columns, ON vs
+        // OFF, with the second difference of ON (negative = convex, a lump; positive = concave).
+        sb.AppendLine();
+        sb.AppendLine("SIDE PROFILE (front-most z mm per 5mm of y) — all | x 0-30 | x 30-60 | x 60-90 | x 90-120 ;  ON d2 all");
+        {
+            var rowsOn = new List<float>();
+            string Row(float[] p, float yy, float lo, float hi)
+            {
+                float m = float.NaN;
+                for (int v = 0; v < p.Length / 3; v++)
+                {
+                    float ax = MathF.Abs(p[v * 3]);
+                    if (MathF.Abs(p[v * 3 + 1] - yy) > 0.0025f || ax < lo || ax >= hi) continue;
+                    if (float.IsNaN(m) || p[v * 3 + 2] > m) m = p[v * 3 + 2];
+                }
+                return float.IsNaN(m) ? "    -  " : $"{m * 1000,7:0.0}";
+            }
+            float Max(float[] p, float yy)
+            {
+                float m = float.MinValue;
+                for (int v = 0; v < p.Length / 3; v++)
+                    if (MathF.Abs(p[v * 3 + 1] - yy) <= 0.0025f) m = MathF.Max(m, p[v * 3 + 2]);
+                return m;
+            }
+            var ys = Enumerable.Range(0, 37).Select(i => 1.25f - i * 0.005f).ToList();
+            var onAll = ys.Select(yy => Max(pOn, yy)).ToList();
+            for (int i = 0; i < ys.Count; i++)
+            {
+                float yy = ys[i];
+                string d2 = i > 0 && i < ys.Count - 1 ? $"{(onAll[i - 1] + onAll[i + 1] - 2 * onAll[i]) * 1000,6:0.0}" : "     ";
+                sb.AppendLine($"  y {yy:0.000} OFF {Row(pOff, yy, 0f, 1f)} {Row(pOff, yy, 0f, .03f)} {Row(pOff, yy, .03f, .06f)} {Row(pOff, yy, .06f, .09f)} {Row(pOff, yy, .09f, .12f)}"
+                            + $" | ON {Row(pOn, yy, 0f, 1f)} {Row(pOn, yy, 0f, .03f)} {Row(pOn, yy, .03f, .06f)} {Row(pOn, yy, .06f, .09f)} {Row(pOn, yy, .09f, .12f)}  d2 {d2}");
+            }
+        }
+
+        // Down the breast face at a few columns out from the midline: how far each drawn vertex moved (ON vs OFF,
+        // index-aligned) — which band of the breast the passes are touching.
+        {
+            SecondSkinWriter.TryReadLod0Geometry(File.ReadAllBytes(off), out var fo, out _, out var ft, out _, out _,
+                keepMaterial: m => m.Contains("ril_"));
+            SecondSkinWriter.TryReadLod0Geometry(File.ReadAllBytes(on), out var fn, out _, out _, out _, out _,
+                keepMaterial: m => m.Contains("ril_"));
+            var usedF = new bool[fo.Length / 3];
+            foreach (int i in ft) usedF[i] = true;
+            sb.AppendLine();
+            sb.AppendLine("BREAST FACE MOVES (mm) — rows y, columns |x| 40..110mm, front vertices; max move in each cell");
+            for (float yy = 1.26f; yy >= 1.12f; yy -= 0.01f)
+            {
+                var cells = new float[8];
+                for (int v = 0; v < usedF.Length && v * 3 + 2 < fn.Length; v++)
+                {
+                    if (!usedF[v] || MathF.Abs(fo[v * 3 + 1] - yy) > 0.005f || fo[v * 3 + 2] < 0.08f) continue;
+                    int c = (int)((MathF.Abs(fo[v * 3]) - 0.04f) / 0.01f);
+                    if (c < 0 || c >= cells.Length) continue;
+                    float dx = fn[v * 3] - fo[v * 3], dy = fn[v * 3 + 1] - fo[v * 3 + 1], dz = fn[v * 3 + 2] - fo[v * 3 + 2];
+                    cells[c] = MathF.Max(cells[c], MathF.Sqrt(dx * dx + dy * dy + dz * dz) * 1000f);
+                }
+                sb.AppendLine($"  y {yy:0.00}: " + string.Join(" ", cells.Select(c => $"{c,5:0.0}")));
+            }
+        }
+
         // Across the lower cleavage: the front-most z in 5mm columns from the midline out, ON vs OFF. A W shows as
         // z dropping and rising again between the midline and the breast.
         sb.AppendLine();
@@ -934,11 +995,16 @@ public class ToeCapDiagTests
         ShadedBackRenderAt(-0.2f, 0.2f, 0.78f, 1.10f, "proteus-shaded-back.rgb");
         ShadedBackRenderAt(-0.12f, 0.12f, 1.08f, 1.32f, "proteus-shaded-chest.rgb", front: true);
         ShadedBackRenderAt(-0.06f, 0.06f, 1.12f, 1.24f, "proteus-shaded-chest-zoom.rgb", front: true);
+        ShadedBackRenderAt(-0.16f, 0.16f, 1.02f, 1.30f, "proteus-shaded-chest-top.rgb", front: true, lightAbove: true);
+        ShadedBackRenderAt(-0.16f, 0.16f, 1.06f, 1.32f, "proteus-shaded-chest-left.rgb", front: true, yaw: 0.9f);
+        ShadedBackRenderAt(-0.16f, 0.16f, 1.06f, 1.32f, "proteus-shaded-chest-right.rgb", front: true, yaw: -0.9f);
     }
 
-    private void ShadedBackRenderAt(float x0, float x1, float y0, float y1, string outName, bool front = false)
+    private void ShadedBackRenderAt(float x0, float x1, float y0, float y1, string outName, bool front = false,
+                                    float yaw = 0f, bool lightAbove = false)
     {
         float flip = front ? 1f : -1f;
+        float cy = MathF.Cos(yaw), sy = MathF.Sin(yaw);
         var dump = Path.Combine(Path.GetTempPath(), "proteus-gen3-dump");
         var off = Path.Combine(Path.GetTempPath(), "proteus-fold-clearance.replay-off.mdl");
         if (!File.Exists(Path.Combine(dump, "host0_shell.mdl")) || !File.Exists(off)) return;
@@ -955,17 +1021,24 @@ public class ToeCapDiagTests
             // Light from behind the body (model -Z), a little above and to the side.
             // As a model-space direction toward the light: from behind, above and to one side; from the front, a
             // raking light from the side, which is what shows a ridge.
-            float lx = front ? 0.75f : -0.3f, ly = front ? 0.25f : 0.5f, lz = front ? 0.61f : -0.81f;
+            float lvx = front ? 0.75f : -0.3f, ly = front ? 0.25f : 0.5f, lvz = front ? 0.61f : -0.81f;
+            // Overhead and a little in front, the way the game lit the screenshot of the lumps under the breasts.
+            if (lightAbove) { lvx = 0.1f; ly = 0.85f; lvz = 0.52f; }
+            // The light turns with the camera, so a turned view is lit the same way as the straight one.
+            float lx = lvx * cy - lvz * sy, lz = lvx * sy + lvz * cy;
             for (int k = 0; k + 2 < t.Length; k += 3)
             {
                 int a = t[k], b = t[k + 1], c = t[k + 2];
                 // From behind: flip x and z.
-                float ax = flip * p[a * 3], ay = p[a * 3 + 1], az = flip * p[a * 3 + 2];
-                float bx = flip * p[b * 3], by = p[b * 3 + 1], bz = flip * p[b * 3 + 2];
-                float cx = flip * p[c * 3], cy = p[c * 3 + 1], cz = flip * p[c * 3 + 2];
+                // Turned about the vertical by yaw first, then viewed from the front or back.
+                float RX(int i) => flip * (p[i * 3] * cy + p[i * 3 + 2] * sy);
+                float RZ(int i) => flip * (-p[i * 3] * sy + p[i * 3 + 2] * cy);
+                float ax = RX(a), ay = p[a * 3 + 1], az = RZ(a);
+                float bx = RX(b), by = p[b * 3 + 1], bz = RZ(b);
+                float cx = RX(c), cyy = p[c * 3 + 1], cz = RZ(c);
                 float Px(float x) => (x - x0) / (x1 - x0) * (W - 1);
                 float Py(float y) => (y1 - y) / (y1 - y0) * (H - 1);
-                float pax = Px(ax), pay = Py(ay), pbx = Px(bx), pby = Py(by), pcx = Px(cx), pcy = Py(cy);
+                float pax = Px(ax), pay = Py(ay), pbx = Px(bx), pby = Py(by), pcx = Px(cx), pcy = Py(cyy);
                 float area = (pbx - pax) * (pcy - pay) - (pcx - pax) * (pby - pay);
                 if (MathF.Abs(area) < 1e-9f) continue;
                 int minX = Math.Max(0, (int)MathF.Floor(MathF.Min(pax, MathF.Min(pbx, pcx))));

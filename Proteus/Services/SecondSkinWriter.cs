@@ -9920,7 +9920,7 @@ public static class SecondSkinWriter
     /// </summary>
     private static Vec3[]? UnderBustSling(Vec3[] start, Vec3[] nNorm, float[] h0, float[] lat, float[] ver,
                                           bool[] seed, bool[] cut, List<int>[] adj, int nodeCount, Vec3 ax,
-                                          Vec3 vertical, BodyWinding body, Action<string>? log,
+                                          Vec3 lateral, Vec3 vertical, BodyWinding body, Action<string>? log,
                                           out float[] weight, out float[] between)
     {
         weight = new float[nodeCount];
@@ -9947,6 +9947,26 @@ public static class SecondSkinWriter
         float bottom = seedLo - reach;
         float edge = edgeSum / edgeN;
         float binW = edge;
+
+        // ROUND THE OUTER CORNER. The slices reach a little past the breasts' own width, fading out only over that
+        // extra stretch, and each slice past the middle of a breast turns its "out" toward the flank. With every slice
+        // lifting along the chest's one forward axis and faded over the outer fifth of the bust, the outer lower
+        // corner of each breast — where the crease wraps round toward the side — was left sucked back into the skin.
+        float cLat = 0f, cH = 0f, seedR = 0f;
+        int cN = 0;
+        for (int n = 0; n < nodeCount; n++)
+        {
+            float v = ver[n] * up;
+            if (v < bottom || v > seedHi) continue;
+            cLat += lat[n]; cH += h0[n]; cN++;
+        }
+        if (cN == 0) return null;
+        cLat /= cN; cH /= cN;
+        for (int n = 0; n < nodeCount; n++)
+            if (seed[n]) seedR = MathF.Max(seedR, MathF.Abs(lat[n] - cLat));
+        if (seedR <= 1e-6f) return null;
+        float latExt = (latHi - latLo) * SlingSideExtend;
+        latLo -= latExt; latHi += latExt;
         int bins = Math.Clamp((int)MathF.Ceiling((latHi - latLo) / binW), 1, 1024);
 
         // Hem fade: nothing moves on uncovered cloth, and it comes back over a few rings.
@@ -9981,9 +10001,22 @@ public static class SecondSkinWriter
         for (int b = 0; b < bins; b++)
         {
             if (inBin[b].Count == 0) continue;
+            // This slice's "out": forward across the front, turning toward the flank past the middle of the breast —
+            // the angle of the slice round a torso as wide as the breasts reach.
+            float latB = latLo + (b + 0.5f) * binW;
+            float angB = FrameAngle(MathF.Asin(Math.Clamp((latB - cLat) / (seedR * SlingTorsoWidth), -1f, 1f)));
+            float cosB = MathF.Cos(angB), sinB = MathF.Sin(angB);
+            float U(int n) => (h0[n] - cH) * cosB + (lat[n] - cLat) * sinB;
+            // Nothing further out than the breast itself: past the flank an arm hanging beside the torso stands out
+            // further than anything, and a hull taking it would run the sling from the breast to the arm.
+            float maxSeedU = float.MinValue;
+            for (int w = Math.Max(0, b - 1); w <= Math.Min(bins - 1, b + 1); w++)
+                foreach (int n in inBin[w]) if (seed[n]) maxSeedU = MathF.Max(maxSeedU, U(n));
             pts.Clear();
             for (int w = Math.Max(0, b - 1); w <= Math.Min(bins - 1, b + 1); w++)
-                foreach (int n in inBin[w]) pts.Add((ver[n] * up, h0[n], n));
+                foreach (int n in inBin[w])
+                    if (seed[n] || maxSeedU == float.MinValue || U(n) <= maxSeedU + SlingArmMargin)
+                        pts.Add((ver[n] * up, U(n), n));
             if (pts.Count < 3) continue;
             pts.Sort((a, c) => a.V != c.V ? a.V.CompareTo(c.V) : a.U.CompareTo(c.U));
 
@@ -10013,36 +10046,80 @@ public static class SecondSkinWriter
             for (int i = 1; i <= apex; i++)
                 if (seed[hull[i].N] && !seed[hull[i - 1].N]) { top = i; break; }
             if (top < 1) continue;
-            var sa = hull[top - 1]; var sc = hull[top];
+            var sc = hull[top];
+
+            // THE LINE ENDS ON THE SKIN. The hull is taken again over only the profile from a fixed distance under the
+            // breast upward, so the segment below the breast runs straight to the skin at that depth — or to the ribs,
+            // wherever they come forward first — and meets it at a slight inward angle. It used to run on to the bottom
+            // of the slice and be faded back onto the skin by weight, and fading a straight line back toward a hollow
+            // bows it OUT: on Rue+ the side profile fell 1.8mm per 5mm under the breast, then 4.2, then flattened — a
+            // lump, where cloth runs straight.
+            // One landing height for every slice, under the lowest of the breast, so the sling's lower edge is one even
+            // line across the body. Measured from each slice's own breast bottom it came out ragged — the lumps seen
+            // under the breasts in game, lit from above.
+            float vCut = seedLo - SlingLength * (seedHi - seedLo);
+            pts.RemoveAll(p => p.V < vCut);
+            hull.Clear();
+            foreach (var p in pts)
+            {
+                while (hull.Count >= 2)
+                {
+                    var o = hull[^2]; var a = hull[^1];
+                    float cross = (a.V - o.V) * (p.U - o.U) - (a.U - o.U) * (p.V - o.V);
+                    if (cross < 0f) break;
+                    hull.RemoveAt(hull.Count - 1);
+                }
+                hull.Add(p);
+            }
+            // The segment is the LONGEST hull edge from the bottom up to the slice's most-forward point — the jump over
+            // the crease. Not simply the edge under the first breast-weighted point: on Rue+ the breast bones stop
+            // partway down the breast, the lower curve below them is hull too once the profile is cut short, and the
+            // edge under the weighted point then spanned nothing.
+            int apexCut = 0;
+            for (int i = 1; i < hull.Count; i++) if (hull[i].U > hull[apexCut].U) apexCut = i;
+            int topCut = -1;
+            float longest = 0f;
+            for (int i = 1; i <= apexCut; i++)
+            {
+                float lv = hull[i].V - hull[i - 1].V, lu = hull[i].U - hull[i - 1].U, l2 = lv * lv + lu * lu;
+                if (l2 > longest) { longest = l2; topCut = i; }
+            }
+            if (topCut < 1) continue;
+            var sa = hull[topCut - 1];
+            sc = hull[topCut];
             float segV = sc.V - sa.V, segU = sc.U - sa.U, segLen2 = segV * segV + segU * segU;
             if (segLen2 < (SlingMinSpan * edge) * (SlingMinSpan * edge)) continue;
 
-            // Lateral fade toward the outer ends of the bust, where "forward" stops being the way off the body.
+            // Lateral fade over the stretch the slices reach past the bust — not over the bust itself any more.
             float t = ((b + 0.5f) * binW) / (latHi - latLo);
             float latW = Smoothstep(Math.Clamp(MathF.Min(t, 1f - t) / SlingSideFade, 0f, 1f));
             if (latW <= 0f) continue;
+            var outB = new Vec3(ax.X * cosB + lateral.X * sinB, ax.Y * cosB + lateral.Y * sinB, ax.Z * cosB + lateral.Z * sinB);
 
             foreach (int n in inBin[b])
             {
-                float pv = ver[n] * up, pu = h0[n];
+                float pv = ver[n] * up, pu = U(n);
+                if (maxSeedU != float.MinValue && !seed[n] && pu > maxSeedU + SlingArmMargin) continue;
                 if (pv >= sc.V || pv <= sa.V) continue;
                 float s = Math.Clamp(((pv - sa.V) * segV + (pu - sa.U) * segU) / segLen2, 0f, 1f);
                 float qv = sa.V + segV * s, qu = sa.U + segU * s;
+                // A LIGHT CONCAVE CURVE, not the straight line: sagged in toward the body, nothing at either end and
+                // most in the middle. Straight, the sling still read as two lumps under the breasts in game; cloth
+                // stretched from a breast down to the ribs dips a little between them.
+                float segLen = MathF.Sqrt(segLen2);
+                float sag = SlingSag * segLen * 4f * s * (1f - s);
+                qv += segU / segLen * sag;
+                qu -= segV / segLen * sag;
                 float dist = MathF.Sqrt((qv - pv) * (qv - pv) + (qu - pu) * (qu - pu));
                 if (dist < SlingMinMove || dist > SlingMaxMove || qu < pu) continue;
 
-                // Fades back onto the skin below the breast, so the sling meets the body in a curve rather than
-                // ending wherever the slice stops. Left as the raw hull, it ran on to the bottom of the slice and
-                // stood 30mm off the ribs there.
-                float below = sc.V - pv;
-                float wt = latW * (1f - Smoothstep(Math.Clamp((below - SlingFullLength * (seedHi - seedLo))
-                                                              / (SlingFadeLength * (seedHi - seedLo)), 0f, 1f)));
+                float wt = latW;
                 if (cut[n]) wt = 0f;
                 else if (ring[n] < BustHemRings) wt *= Smoothstep(ring[n] / (float)BustHemRings);
                 if (wt <= 0f) continue;
 
                 float dv = (qv - pv) * up * wt, du = (qu - pu) * wt;
-                var d = new Vec3(ax.X * du + vertical.X * dv, ax.Y * du + vertical.Y * dv, ax.Z * du + vertical.Z * dv);
+                var d = new Vec3(outB.X * du + vertical.X * dv, outB.Y * du + vertical.Y * dv, outB.Z * du + vertical.Z * dv);
                 // The line is in front of the skin in this slice, but a neighbouring slice's breast can still be in
                 // the way; back off toward the start until the end is clear.
                 float keep = 1f;
@@ -10170,13 +10247,22 @@ public static class SecondSkinWriter
         return moveD;
 
         static float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
+
+        // Forward across the front, turning to the true angle only past the middle of each breast: turned all the way
+        // in, the inner underside of each breast slid sideways away from the midline and shaded in dark smudges.
+        static float FrameAngle(float a)
+        {
+            float m = MathF.Abs(a);
+            float f = Smoothstep(Math.Clamp((m - SlingFrontAngle) / (SlingRadialAngle - SlingFrontAngle), 0f, 1f));
+            return MathF.Sign(a) * m * f;
+        }
     }
 
     /// <summary>How far below the breasts' lowest seeded node the sling's slices reach, as a share of the breasts' height.</summary>
     private const float SlingReachDown = 0.8f;
 
     /// <summary>Jacobi passes smoothing the sling's displacement among the nodes it moved.</summary>
-    private const int SlingSmoothPasses = 6;
+    private const int SlingSmoothPasses = 10;
 
     /// <summary>Most rounds of drawing back sling edges that pass through the body.</summary>
     private const int SlingEdgeRounds = 12;
@@ -10184,11 +10270,12 @@ public static class SecondSkinWriter
     /// <summary>Sling weight at which a node counts as part of a sling when finding the skin between the two.</summary>
     private const float SlingSolid = 0.5f;
 
-    /// <summary>How far below the breast the sling holds its full line, as a share of the breasts' height.</summary>
-    private const float SlingFullLength = 0.3f;
+    /// <summary>How far below the breast the sling's line may run before it has to be back on the skin, as a share of
+    /// the breasts' height. The line ends on the skin at this depth unless the ribs come forward to meet it sooner.</summary>
+    private const float SlingLength = 0.6f;
 
-    /// <summary>Over how much further, as a share of the breasts' height, the sling fades back onto the skin.</summary>
-    private const float SlingFadeLength = 0.4f;
+    /// <summary>How far the sling's curve dips in from the straight line at its middle, as a share of its length.</summary>
+    private const float SlingSag = 0.08f;
 
     /// <summary>Shortest hull edge, in mesh edges, that counts as bridging a gap rather than tracing the surface.</summary>
     private const float SlingMinSpan = 2f;
@@ -10200,7 +10287,24 @@ public static class SecondSkinWriter
     private const float SlingMaxMove = 0.045f;
 
     /// <summary>Share of the bust's width over which the sling fades out at each outer side.</summary>
-    private const float SlingSideFade = 0.2f;
+    private const float SlingSideFade = 0.12f;
+
+    /// <summary>How far past the breasts' own width the slices reach, as a share of it: the crease runs on round the
+    /// outer corner a little past the breast bones.</summary>
+    private const float SlingSideExtend = 0.15f;
+
+    /// <summary>The torso's half-width at the bust, as a multiple of the breasts' own reach from the midline — sets
+    /// the angle a slice turns to.</summary>
+    private const float SlingTorsoWidth = 1.25f;
+
+    /// <summary>Slice angle, in radians, inside which the sling moves along the chest's forward axis.</summary>
+    private const float SlingFrontAngle = 0.45f;
+
+    /// <summary>Slice angle past which the sling moves along the slice's true outward direction; blended between.</summary>
+    private const float SlingRadialAngle = 0.85f;
+
+    /// <summary>How much further out than the breast in the same slice a point may stand and still be body, not arm.</summary>
+    private const float SlingArmMargin = 0.004f;
 
     /// <summary>Segments a steep span edge is split into for <see cref="KeepEdgesOutside"/>.</summary>
     private const int EdgeInsideSamples = 4;
@@ -10896,7 +11000,7 @@ public static class SecondSkinWriter
         Vec3[]? sling = null;
         if (fillGap && strength > 0f && openSlope > maxSlope)
         {
-            sling = UnderBustSling(start, nNorm, h0, lat, ver, seed, cut, adj, nodeCount, ax, vertical, SkinBody(), log,
+            sling = UnderBustSling(start, nNorm, h0, lat, ver, seed, cut, adj, nodeCount, ax, lateral, vertical, SkinBody(), log,
                                    out var slingWeight, out var slingBetween);
             if (sling != null)
                 for (int n = 0; n < nodeCount; n++)
