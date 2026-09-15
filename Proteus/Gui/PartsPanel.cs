@@ -548,15 +548,18 @@ public sealed class PartsPanel
 
         string? best = null;
         int bestRank = int.MaxValue;
+        Dictionary<string, string>? known = gamePaths;
         foreach (var file in files)
         {
             if (!gamePaths.TryGetValue(BodyShapeReader.PathKey(file), out var gamePath)) continue;
             int rank = Array.FindIndex(AutoPickSlots, s => gamePath.EndsWith(s, StringComparison.OrdinalIgnoreCase));
             if (rank < 0 || rank >= bestRank) continue;
-            if (!HatCompatService.InMods(file, root, out var modRoot, out _)) continue;
+            // A smoothed chest piece is drawn from our folder; open the garment's own file behind it.
+            var source = Unmasked(file, root, ref known);
+            if (!HatCompatService.InMods(source, root, out var modRoot, out _)) continue;
             if (string.Equals(Path.GetFileName(modRoot), SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase))
                 continue;
-            best = file;
+            best = source;
             bestRank = rank;
         }
         if (best != null) OnLivePicked(best);
@@ -565,8 +568,11 @@ public sealed class PartsPanel
     /// <summary>A garment was clicked on the character (or chosen for them on entry): open its mod and model.</summary>
     private void OnLivePicked(string file)
     {
-        if (penumbra.GetModDirectory() is not { } modsRoot
-            || !HatCompatService.InMods(file, modsRoot, out var modRoot, out var rel))
+        if (penumbra.GetModDirectory() is not { } modsRoot) return;
+        // Clicking a smoothed chest piece names our copy — see Unmasked.
+        Dictionary<string, string>? gamePaths = null;
+        file = Unmasked(file, modsRoot, ref gamePaths);
+        if (!HatCompatService.InMods(file, modsRoot, out var modRoot, out var rel))
             return;
 
         var dir = Path.GetFileName(modRoot);
@@ -770,10 +776,37 @@ public sealed class PartsPanel
         if (penumbra.GetModDirectory() is not { } root || penumbra.GetActivePlayerModelFiles() is not { } files)
             return found;
 
+        Dictionary<string, string>? gamePaths = null;
         foreach (var file in files)
-            if (HatCompatService.InMods(file, root, out var modRoot, out var rel))
+            if (HatCompatService.InMods(Unmasked(file, root, ref gamePaths), root, out var modRoot, out var rel))
                 found.Add((Path.GetFileName(modRoot), rel));
         return found;
+    }
+
+    /// <summary>
+    /// The mod file behind <paramref name="file"/> when it is one of Proteus's own republished copies, else
+    /// <paramref name="file"/> itself.
+    /// <para/>
+    /// Nipple, span and fold smoothing publish the chest piece under its own game path, so from then on the
+    /// character draws it from <c>Proteus/models/smoothed_…</c> — a file in OUR folder, which matched no row of
+    /// the garment's mod and left a worn chest piece uncoloured beside a bracelet from the same option that was
+    /// not. The compositor remembers what it read before masking the path, and that is the garment's file.
+    /// <para/>
+    /// <paramref name="gamePaths"/> is fetched on first need and shared across a loop: it is the same IPC walk
+    /// as the file list, and most characters wear nothing smoothed.
+    /// </summary>
+    private string Unmasked(string file, string modsRoot, ref Dictionary<string, string>? gamePaths)
+    {
+        if (!HatCompatService.InMods(file, modsRoot, out var modRoot, out _)
+            || !string.Equals(Path.GetFileName(modRoot), SidecarDiscoveryService.ManagedModDir,
+                              StringComparison.OrdinalIgnoreCase))
+            return file;
+        gamePaths ??= penumbra.GetActivePlayerModelGamePaths();
+        return gamePaths != null
+            && gamePaths.TryGetValue(BodyShapeReader.PathKey(file), out var gamePath)
+            && compositor.RememberedUpstream(gamePath) is { } upstream
+                ? upstream
+                : file;
     }
 
     private void SelectMod(string dir)
