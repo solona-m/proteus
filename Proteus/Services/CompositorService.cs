@@ -8752,19 +8752,6 @@ public class CompositorService : IDisposable
             : null;
 
     /// <summary>
-    /// The mod file last seen behind a path our own output now masks, or null when none is remembered — so the
-    /// Studio can name the garment a smoothed chest piece really comes from instead of the Proteus mod.
-    /// <para/>
-    /// For DISPLAY, not for reading a base: unlike <see cref="SettledUpstream"/> a remembered value that no settle
-    /// confirmed is good enough here, since the worst a stale one does is colour the wrong row until the next
-    /// composite primes it again.
-    /// </summary>
-    public string? RememberedUpstream(string gamePath)
-        => _upstreamByGamePath.TryGetValue(gamePath, out var disk) && !IsOwnOutput(disk) && File.Exists(disk)
-            ? disk
-            : null;
-
-    /// <summary>
     /// Resolve <paramref name="gamePath"/> to the mod file a composite should read as its BASE, never to
     /// our own previous output. Every call site that loads a base texture or material goes through this
     /// rather than <c>penumbra.ResolvePlayer</c> directly. Returns null only when there is no known
