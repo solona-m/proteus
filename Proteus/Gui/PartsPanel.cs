@@ -125,7 +125,8 @@ public sealed class PartsPanel
         Move,
     }
 
-    private Tool tool = Tool.Navigate;
+    /// <summary>Pull out to start with: clearing a body poking through a garment is what the tab is opened for most.</summary>
+    private Tool tool = Tool.Inflate;
 
     /// <summary>The handle the Move tool drags, shared by the model view and the character.</summary>
     private readonly TranslateGizmo moveGizmo = new();
