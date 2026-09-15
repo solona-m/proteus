@@ -728,7 +728,18 @@ public sealed class SecondSkinService
     /// and re-reads for exactly this reason — its <c>IsReadableBase</c> filter excludes equipment paths
     /// and would have to admit these.
     /// </summary>
-    private readonly Dictionary<string, byte[]> _upstreamBodies = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, byte[]> _upstreamBodies = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The mod file each of <see cref="_upstreamBodies"/> was read from, by game path — so a part cut from
+    /// remembered bytes still knows whose garment it is, which decides whether smoothing may touch it.
+    /// Concurrent, like <see cref="_upstreamBodies"/>, because composites overlap.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, string> _upstreamBodyDisks = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Garments already reported as left unsmoothed, so a recomposite doesn't repeat the line.
+    /// A set, kept as a concurrent dictionary's keys for the same reason.</summary>
+    private readonly ConcurrentDictionary<string, byte> _smoothSkippedLogged = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Each body part measured for the redundancy pass, against the exact bytes it was measured from.
@@ -1609,6 +1620,9 @@ public sealed class SecondSkinService
         // them normally; the smoothing pass must hold what it has rather than run again. See the block
         // that fills this.
         var bodySettled = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // Body paths smoothing may republish: the bare body, whatever body mod supplies it, and garments from
+        // Proteus mods. A regular mod's garment is someone else's file — see the smoothing pass.
+        var smoothable = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         string? modelType = null;   // UV space of the first kept part, from its own skin material
         // Bare-body slots attempted vs. missing — the whole-body fallback below fires only when EVERY one
         // of them came back missing (see there for why "any one missing" is the wrong trigger).
@@ -1714,12 +1728,17 @@ public sealed class SecondSkinService
             var settledBytes = settledDisk != null ? textureLoader.LoadRawFile(settledDisk, bodyGamePath) : null;
 
             byte[]? bytes;
+            // The mod file this part really comes from, when it is known; null for game data or when only a
+            // copy of the bytes survives.
+            string? sourceDisk = null;
             if (settledBytes != null)
             {
                 bytes = settledBytes;
+                sourceDisk = settledDisk;
                 bool changed = !_upstreamBodies.TryGetValue(bodyGamePath, out var had)
                             || !had.AsSpan().SequenceEqual(settledBytes);
                 _upstreamBodies[bodyGamePath] = settledBytes;
+                _upstreamBodyDisks[bodyGamePath] = settledDisk!;
                 try
                 {
                     Directory.CreateDirectory(upstreamDir);
@@ -1734,6 +1753,7 @@ public sealed class SecondSkinService
             else if (bodyIsOurs && _upstreamBodies.TryGetValue(bodyGamePath, out var remembered))
             {
                 bytes = remembered;
+                sourceDisk = _upstreamBodyDisks.GetValueOrDefault(bodyGamePath);
             }
             else if (bodyIsOurs && File.Exists(upstreamDisk))
             {
@@ -1757,9 +1777,12 @@ public sealed class SecondSkinService
             else
             {
                 bytes = textureLoader.LoadRawFile(bodyDisk, bodyGamePath);
+                sourceDisk = bodyDisk;
                 if (bytes != null)
                 {
                     _upstreamBodies[bodyGamePath] = bytes;
+                    if (bodyDisk != null) _upstreamBodyDisks[bodyGamePath] = bodyDisk;
+                    else _upstreamBodyDisks.TryRemove(bodyGamePath, out _);
                     try
                     {
                         Directory.CreateDirectory(upstreamDir);
@@ -1835,6 +1858,7 @@ public sealed class SecondSkinService
             var partShapes = LiveModelState(enabledBodyShapes, bodyGamePath, bodyDisk);
 
             bodies.Add((bytes, partShapes, bodyGamePath, partType));
+            if (isBarePart || IsProteusModFile(sourceDisk, outputRoot)) smoothable.Add(bodyGamePath);
         }
 
         // ── whole-body fallback ──────────────────────────────────────────────
@@ -1932,6 +1956,7 @@ public sealed class SecondSkinService
                                   charCode, whole.Path, bodies.Count);
                     bodies.Clear();
                     bodies.Add((whole.Bytes, wholeShapes, whole.Path, wholeType));
+                    smoothable.Add(whole.Path);   // the body itself, not a garment
                     modelType = wholeType;
                 }
             }
@@ -3825,6 +3850,19 @@ public sealed class SecondSkinService
             var smoothedBody = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
             foreach (var (bBytes, _, bPath, _) in bodies)
             {
+                // NEVER a regular mod's garment. The worn chest piece is in this list because the shell is cut
+                // from it, but it is someone else's file: republishing it put our copy on the character in its
+                // place, so Studio no longer saw the garment as worn and the brush found nothing to paint.
+                // Only the bare body and Proteus mods' own garments are ours to relax. Checked before the hold
+                // below, so a copy published by an older build is dropped rather than kept.
+                if (!smoothable.Contains(bPath))
+                {
+                    if (_smoothSkippedLogged.TryAdd(bPath, 0))
+                        log.Information("[Proteus] second skin: not smoothing {0} — the garment is not from a "
+                                      + "Proteus mod", bPath);
+                    continue;
+                }
+
                 // Already ours: these bytes ARE the body we published last time. Re-running the passes on
                 // them is the compounding bug, and dropping the redirect instead would put the untouched
                 // body back on screen — the nipple popping out again every other composite. So keep the
@@ -3958,14 +3996,21 @@ public sealed class SecondSkinService
             if (stats.CapDeclined is { } declined && lastCapDeclined != declined)
             {
                 lastCapDeclined = declined;
+                lastCapUsed = null;   // the cap placed again later is news, the same way a new decline is
                 log.Warning("[Proteus] second skin: toe cap declined — {0}", declined);
             }
 
             // Which cap this shell actually got. Only on a change, so it is not log spam.
-            if (stats.CapUsed is { } capUsed && lastCapUsed != capUsed)
+            if (stats.CapUsed is { } capUsed)
             {
-                lastCapUsed = capUsed;
-                log.Information("[Proteus] second skin: toe cap {0}", capUsed);
+                // A placed cap re-arms the decline line, so declining again later — back on a body with no
+                // binding — is logged rather than swallowed as a repeat of the earlier one.
+                lastCapDeclined = null;
+                if (lastCapUsed != capUsed)
+                {
+                    lastCapUsed = capUsed;
+                    log.Information("[Proteus] second skin: toe cap {0}", capUsed);
+                }
             }
 
             // What the redundancy pass took out. At INFORMATION, unlike the per-drop lines the writer
@@ -6176,6 +6221,23 @@ public sealed class SecondSkinService
                 || full.StartsWith(root + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
         }
         catch { return false; }   // unparseable path — treat as external, the old behaviour
+    }
+
+    /// <summary>
+    /// A model file from a Proteus mod: a folder under the Penumbra mods root carrying Proteus/metadata.json, and
+    /// not our own output mod. Anything else — a regular gear mod, game data, an unknown source — is someone
+    /// else's garment. The same rule <see cref="SidecarDiscoveryService"/> discovers Proteus mods by.
+    /// </summary>
+    private static bool IsProteusModFile(string? disk, string outputRoot)
+    {
+        if (string.IsNullOrEmpty(disk)) return false;
+        string? modsRoot;
+        try { modsRoot = Path.GetDirectoryName(Path.GetFullPath(outputRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)); }
+        catch { return false; }
+        return modsRoot != null
+            && HatCompatService.InMods(disk, modsRoot, out var modRoot, out _)
+            && !string.Equals(Path.GetFileName(modRoot), SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase)
+            && File.Exists(Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, SidecarDiscoveryService.MetadataFile));
     }
 
     private static IEnumerable<string> OrderMetCandidates(IReadOnlyList<string>? metModels, int? invisibleGlassesSet)

@@ -149,7 +149,7 @@ public class SidecarDiscoveryService
     // Public so PenumbraModMeta.CleanLegacyFiles can sweep this folder too — metadata.json is written
     // through AtomicWrite and strands its temp file here, one level below the mod root.
     public const string SidecarSubdir = "Proteus";
-    private const string MetadataFile  = "metadata.json";
+    internal const string MetadataFile = "metadata.json";
     // The mod's settings as Proteus first found them, copied aside just before our first write so the
     // editor's "Reset to defaults" can restore them. Discovery only ever looks for MetadataFile by exact
     // name, so this sits inertly beside it.
