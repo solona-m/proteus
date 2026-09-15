@@ -9703,24 +9703,30 @@ public class CompositorService : IDisposable
         => HatCompatService.EquippedHairKey(_humanPartModels, penumbra.ResolvePlayer, modsRoot);
 
     /// <summary>
-    /// Walk the character NOW and report both the hairstyle's identity and the model list it came from.
-    /// FRAMEWORK THREAD ONLY — it calls the draw-object IPC directly.
+    /// Walk the character NOW and report the model list it is drawing. FRAMEWORK THREAD ONLY — it reads the
+    /// draw object through Penumbra's IPC.
     /// <para/>
     /// Live rather than from <c>_humanPartModels</c>, and that is the whole reason it exists. That cache is
     /// refreshed by a redraw or a composite, and a hairstyle can change without either: Glamourer applies a
     /// customise change in place, so the cache goes on naming the hair that was on a moment ago and every
     /// question asked of it is answered about the wrong hairstyle. Reading the draw object cannot be stale.
     /// <para/>
+    /// Returns the list and NOTHING derived from it, on purpose. Turning it into a hairstyle identity means a
+    /// Penumbra path resolve and a file stat, and neither belongs on the framework thread: this used to do
+    /// both here, once a second, and a slow disk or a Penumbra lock turned that into stalls of up to 1.4 s on
+    /// the game's own thread. The caller hands the list to a worker, which does the resolving.
+    /// <para/>
+    /// Not cheap even so — Penumbra reports every resource on the character, not only models — which is why
+    /// it is called once per actual change rather than on a timer.
+    /// <para/>
     /// Deliberately does NOT publish into the caches the way the redraw hook does. Those feed the shell
-    /// builder, and quietly rewriting them once a second from a different call site would make any bug in
-    /// them impossible to attribute.
+    /// builder, and quietly rewriting them from a different call site would make any bug in them impossible
+    /// to attribute.
     /// </summary>
-    internal (string? Key, IReadOnlyList<string>? Parts) HatCompatWalkLive()
+    internal IReadOnlyList<string>? HatCompatLiveParts()
     {
         var paths = penumbra.GetActivePlayerModelPaths();
-        if (paths is not { Count: > 0 }) return (null, null);
-        var parts = HumanPartModelsFromModels(paths);
-        return (HatCompatService.EquippedHairKey(parts, penumbra.ResolvePlayer, modsRoot), parts);
+        return paths is { Count: > 0 } ? HumanPartModelsFromModels(paths) : null;
     }
 
     /// <summary>The hair named by a model list the caller already has, resolved through Penumbra.</summary>
@@ -9740,25 +9746,6 @@ public class CompositorService : IDisposable
     /// <summary>That same list's hairstyle identity, without reading the model.</summary>
     internal string? HatCompatKeyFor(IReadOnlyList<string>? parts)
         => HatCompatService.EquippedHairKey(parts, penumbra.ResolvePlayer, modsRoot);
-
-    /// <summary>
-    /// Every input the hat-compat lookup depends on, as one line for the log.
-    /// <para/>
-    /// Exists because "nothing happened" is the same observation for half a dozen different causes — no
-    /// model walk yet, Penumbra's mod directory not known, the hairstyle resolving to the game's own files,
-    /// or resolving to a folder that is not a mod. Each needs a different fix and none of them can be told
-    /// apart from the outside.
-    /// </summary>
-    internal string HatCompatDiag()
-    {
-        var hair = _humanPartModels?.FirstOrDefault(
-            p => p.Contains("/obj/hair/", StringComparison.OrdinalIgnoreCase));
-        string? file = null;
-        if (hair != null)
-            try { file = penumbra.ResolvePlayer(hair); } catch { file = "(resolve threw)"; }
-        return $"modsRoot='{modsRoot}' humanParts={_humanPartModels?.Count ?? -1} "
-             + $"hair='{hair ?? "(none)"}' resolved='{file ?? "(null)"}'";
-    }
 
     /// <summary>
     /// Redraw the player so the game re-reads a model file that changed on disk, and do nothing else.

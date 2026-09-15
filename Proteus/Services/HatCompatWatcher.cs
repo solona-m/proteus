@@ -33,16 +33,25 @@ public sealed class HatCompatWatcher : IDisposable
     private const int PenumbraSettleMs = 400;
 
     /// <summary>
-    /// How often the poll asks what hairstyle is on, in milliseconds.
+    /// How long a burst of signals must go quiet before the draw object is walked, in milliseconds.
     /// <para/>
-    /// The question costs one Penumbra path resolve and one file stat, so a second is generous. It is the
-    /// backstop rather than the primary signal — the events fire first when they fire at all — so this
-    /// only has to be quick enough that nobody is left wondering whether it noticed.
+    /// Glamourer reports every customize value separately, and dragging a colour slider sends a stream of
+    /// them; applying a design sends a burst. Each one resets this, so a burst costs one walk at its end
+    /// rather than one per signal. Short enough that a hairstyle change still looks immediate.
     /// </summary>
-    private const int PollMs = 1000;
+    private const int WalkDebounceMs = 250;
+
+    /// <summary>
+    /// How long to wait before walking again after a walk found no hair, in milliseconds.
+    /// <para/>
+    /// Most walks follow a redraw, often our own, and for a frame or two while the character rebuilds the
+    /// draw object carries no hair at all. That is not the hair coming off; see <see cref="BlanksBeforeNone"/>.
+    /// </summary>
+    private const int BlankRetryMs = 500;
 
     private readonly CompositorService compositor;
     private readonly PenumbraBridge penumbra;
+    private readonly GlamourerBridge glamourer;
     private readonly Configuration config;
     private readonly IPluginLog log;
 
@@ -52,31 +61,35 @@ public sealed class HatCompatWatcher : IDisposable
     /// <summary>What the last examination was of, so an event that changes nothing costs nothing.</summary>
     private volatile string? lastKey;
 
-    /// <summary>When the poll may next ask, as a tick count.</summary>
-    private long nextPoll;
+    /// <summary>
+    /// When the next walk of the draw object is due, as a tick count — or zero for none requested.
+    /// <para/>
+    /// Set by the signals and cleared by the walk. The framework thread reads a long and returns on every
+    /// frame nothing has asked for, which is essentially every frame.
+    /// </summary>
+    private long walkDueAt;
+
+    /// <summary>Whether the feature was on at the last frame, to notice it being switched on.</summary>
+    private bool wasEnabled;
 
     /// <summary>
-    /// How many polls an unchanged reading goes between heartbeat log lines — see
-    /// <see cref="OnFrameworkUpdate"/>. A changed reading reports on the next poll regardless.
+    /// How many consecutive walks may find no hair before believing it is really gone.
+    /// <para/>
+    /// A blank walk is almost always a character mid-rebuild, and taken at face value it clears the
+    /// comparison — so the ordinary reading that follows looks like a brand-new hairstyle and is fitted all
+    /// over again. Undo was the visible casualty: it restored the file, its redraw blanked the walk, and the
+    /// automatic path put the patch straight back. A few retries ride out the rebuild; genuinely taking the
+    /// hair off still registers a couple of seconds later.
     /// </summary>
-    private const int HeartbeatPolls = 300;
+    private const int BlanksBeforeNone = 4;
 
-    /// <summary>Polls remaining before the next heartbeat. Starts at 1 so the first poll reports.</summary>
-    private int beats = 1;
-
-    /// <summary>The reading the last heartbeat reported, so a repeat of it can stay quiet.</summary>
-    private string? beatKey;
-
-    /// <summary>How many consecutive empty readings it takes to believe the hair really is gone.</summary>
-    private const int BlanksBeforeNone = 2;
-
-    /// <summary>Consecutive polls that found no hair — see <see cref="OnFrameworkUpdate"/>.</summary>
+    /// <summary>Consecutive walks that found no hair.</summary>
     private int blanks;
 
     /// <summary>
     /// The hairstyle the user undid, which the automatic path must not put straight back.
     /// <para/>
-    /// Held as mod root and file, not as the poll's key, because the key includes the file's timestamp and
+    /// Held as mod root and file, not as the examination's key, because the key includes the file's timestamp and
     /// an undo is precisely the thing that changes it. Cleared as soon as a DIFFERENT hairstyle is worn, so
     /// undo means "leave this one alone" rather than "stop fitting anything".
     /// </summary>
@@ -85,8 +98,9 @@ public sealed class HatCompatWatcher : IDisposable
     /// <summary>
     /// The model list the last live walk saw, for the examination to work from.
     /// <para/>
-    /// Null when the examination was triggered by an event rather than the poll, in which case there is no
-    /// live walk to use and the compositor's own cache is the best available answer.
+    /// Null until the first walk, in which case the compositor's own cache is the best available answer. A
+    /// Penumbra settings change deliberately reuses the last walk rather than taking a new one: it swaps the
+    /// FILE behind a game path, never the path itself, so the list is still right.
     /// </summary>
     private volatile IReadOnlyList<string>? livePartsCache;
 
@@ -120,31 +134,43 @@ public sealed class HatCompatWatcher : IDisposable
     private volatile int patchedInMod;
     public int PatchedInMod => patchedInMod;
 
-    public HatCompatWatcher(CompositorService compositor, PenumbraBridge penumbra, Configuration config,
-                            IPluginLog log)
+    public HatCompatWatcher(CompositorService compositor, PenumbraBridge penumbra, GlamourerBridge glamourer,
+                            Configuration config, IPluginLog log)
     {
         this.compositor = compositor;
         this.penumbra = penumbra;
+        this.glamourer = glamourer;
         this.config = config;
         this.log = log;
 
-        // Three ways the hairstyle in front of you can become a different one, and they are genuinely
-        // different events. Glamourer changes WHICH hairstyle, which redraws — that is HairChanged.
-        // Penumbra changes WHICH FILE serves the one you already have on, and redraws nothing this can
-        // see. A collection switch can do either. Subscribing to the redraw alone is why right-clicking a
-        // hair mod in Penumbra left the panel describing the mod that had just been switched away from.
-        compositor.HairChanged += OnHairChanged;
+        // Two genuinely different ways the hairstyle in front of you can change, and they need different
+        // responses.
+        //
+        // WHICH HAIRSTYLE — a new game path on the draw object. Glamourer does this, sometimes with a redraw
+        // and sometimes entirely in place, and only a walk of the draw object can say what is on now. These
+        // request a walk.
+        glamourer.LocalPlayerCustomizeChanged += RequestWalk;
+        glamourer.LocalPlayerCustomizationChanged += RequestWalk;
+        glamourer.LocalPlayerStateChanged += RequestWalk;
+        compositor.HairChanged += RequestWalk;
+        penumbra.LocalPlayerRedrawn += RequestWalk;
+
+        // WHICH FILE serves the hairstyle already on — Penumbra swapping the mod behind the same game path.
+        // The path list does not change, so no walk: the last one is still right, and only the resolution
+        // needs asking again, which happens off this thread.
         penumbra.ModSettingChanged += OnModSettingChanged;
         penumbra.PlayerCollectionChanged += OnCollectionChanged;
-        penumbra.LocalPlayerRedrawn += OnRedrawn;
 
-        // And a POLL behind all of them, which is what actually makes this reliable. Two rounds of
-        // subscribing to the event that ought to fire both missed the case that prompted them — swapping
-        // which mod serves a hairstyle from Penumbra's own list — and the events above are a guess about
-        // somebody else's plumbing that will go on being a guess as that plumbing changes. Asking the
-        // question directly cannot miss: resolve one path, stat one file, compare a string. That is cheap
-        // enough to do every second forever, and it also covers a file edited on disk by hand, which no
-        // event will ever report.
+        // NOT a poll. There used to be one here, walking the draw object every second on the framework thread
+        // on the reasoning that asking directly cannot miss. It could not miss, and it also stalled the game
+        // for up to 1.4 s at a time: the walk asks Penumbra for every resource on the character, and it then
+        // resolved a path and stat'ed a file on that same thread. It ran for every user whether or not they
+        // had ever turned the feature on. The case it was really covering — a hairstyle changed in place,
+        // with no redraw — now has its own signal above, which is why it can go. What it genuinely covered
+        // that nothing else does is a hair model edited by hand on disk while being worn; that is left to
+        // the next hairstyle change to notice.
+        //
+        // The frame handler below does nothing until a signal has asked it to.
         Plugin.Framework.Update += OnFrameworkUpdate;
     }
 
@@ -152,60 +178,78 @@ public sealed class HatCompatWatcher : IDisposable
     {
         disposed = true;
         Plugin.Framework.Update -= OnFrameworkUpdate;
-        compositor.HairChanged -= OnHairChanged;
+        glamourer.LocalPlayerCustomizeChanged -= RequestWalk;
+        glamourer.LocalPlayerCustomizationChanged -= RequestWalk;
+        glamourer.LocalPlayerStateChanged -= RequestWalk;
+        compositor.HairChanged -= RequestWalk;
+        penumbra.LocalPlayerRedrawn -= RequestWalk;
         penumbra.ModSettingChanged -= OnModSettingChanged;
         penumbra.PlayerCollectionChanged -= OnCollectionChanged;
-        penumbra.LocalPlayerRedrawn -= OnRedrawn;
+    }
+
+    /// <summary>Whether hat compat is doing anything at all right now.</summary>
+    private bool Enabled => config.PluginEnabled && config.AutoHatCompat;
+
+    /// <summary>
+    /// Ask for the draw object to be walked once things go quiet — see <see cref="WalkDebounceMs"/>.
+    /// <para/>
+    /// Safe from any thread: it only moves a timestamp. Each call pushes the walk back, so a burst of
+    /// signals costs one walk. Does nothing while the feature is off, which is how the default config
+    /// ends up paying nothing.
+    /// </summary>
+    private void RequestWalk() => RequestWalkIn(WalkDebounceMs);
+
+    private void RequestWalkIn(int ms)
+    {
+        if (disposed || !Enabled) return;
+        Interlocked.Exchange(ref walkDueAt, Environment.TickCount64 + ms);
     }
 
     /// <summary>
-    /// The poll. Runs on the framework thread, where resolving a path through Penumbra is safe, and does
-    /// nothing at all unless the answer has changed.
+    /// The one walk a signal asked for, on the framework thread because the draw object may only be read
+    /// there. On every other frame — which is nearly all of them — it reads a flag and a long and returns.
+    /// <para/>
+    /// Only the walk happens here. Turning its model list into a hairstyle identity means a Penumbra resolve
+    /// and a file stat, and both happen in the examination on a worker, which already compares against the
+    /// last identity and does nothing if it has not changed.
     /// </summary>
     private void OnFrameworkUpdate(IFramework framework)
     {
-        // Proteus switched off means Proteus does nothing, and this had been reading that as "nothing except
-        // keep editing people's mod folders once a second". A patched hairstyle still works with the plugin
-        // off — that is the point of writing into the mod rather than into a redirect — but continuing to
-        // WRITE while switched off is not the same promise at all.
-        if (disposed || !config.PluginEnabled || Volatile.Read(ref busy) != 0) return;
-        var now = Environment.TickCount64;
-        if (now < nextPoll) return;
-        nextPoll = now + PollMs;
+        if (disposed) return;
 
-        string? key;
+        // Proteus switched off, or the feature off — which is the default — means nothing runs. Switching it
+        // ON is itself a reason to look, since whatever is being worn has never been examined.
+        bool enabled = Enabled;
+        if (enabled && !wasEnabled) RequestWalk();
+        wasEnabled = enabled;
+        if (!enabled) return;
+
+        long due = Interlocked.Read(ref walkDueAt);
+        if (due == 0 || Environment.TickCount64 < due) return;
+
+        // An examination is running; leave the request standing and look on a later frame, rather than
+        // walking now and having the result thrown away because Refresh refuses to overlap.
+        if (Volatile.Read(ref busy) != 0) return;
+
+        // Claim THIS request only. A signal that arrived while we were deciding moved the timestamp, and the
+        // compare leaves that newer request in place rather than wiping it.
+        Interlocked.CompareExchange(ref walkDueAt, 0, due);
+
         IReadOnlyList<string>? parts;
-        try { (key, parts) = compositor.HatCompatWalkLive(); }
-        catch (Exception ex) { log.Error(ex, "hat compat: polling the equipped hairstyle failed"); return; }
+        try { parts = compositor.HatCompatLiveParts(); }
+        catch (Exception ex) { log.Error(ex, "hat compat: walking the equipped hairstyle failed"); return; }
 
-        // A heartbeat, so that "nothing happened" can be told apart from "nothing is running". Without it
-        // a silent poll and a poll that finds no hair look identical in the log, and they were confused
-        // for each other once already. Only a changed reading reports straight away; an unchanged one
-        // reports every few minutes, which proves the poll is alive without repeating itself all session.
-        if (--beats <= 0 || key != beatKey)
+        bool hasHair = parts?.Any(p => p.Contains("/obj/hair/", StringComparison.OrdinalIgnoreCase)) == true;
+        if (!hasHair)
         {
-            beats = HeartbeatPolls;
-            beatKey = key;
-            log.Debug("hat compat: watching — key={0}  {1}", key ?? "(null)", compositor.HatCompatDiag());
+            // Most likely mid-rebuild — see BlanksBeforeNone. Look again shortly instead of believing it.
+            if (++blanks < BlanksBeforeNone) { RequestWalkIn(BlankRetryMs); return; }
         }
+        else blanks = 0;
 
-        // A BLANK READING IS ALMOST ALWAYS A REDRAW, not the hair coming off — and the redraw is usually
-        // ours, since writing a patch forces one. For the frame or two the character is being rebuilt the
-        // draw object carries no hair, so the walk answers nothing. Taken at face value that clears the
-        // comparison, and the perfectly ordinary reading that follows then looks like a brand-new hairstyle
-        // and is fitted all over again. Undo was the visible casualty: it restored the file, the redraw it
-        // triggered blanked the reading, and the automatic path put the patch straight back.
-        //
-        // Two in a row, so genuinely taking the hair off still registers a second later.
-        if (key == null && ++blanks < BlanksBeforeNone) return;
-        if (key != null) blanks = 0;
-
-        if (key == lastKey) return;
-
-        log.Information("hat compat: hairstyle changed ({0} -> {1})", lastKey ?? "(none)", key ?? "(none)");
-        // Hand the walk itself across. The examination runs on a worker, where the draw object must not be
-        // read, so it cannot go and fetch this for itself — and re-reading the cache there would put back
-        // exactly the staleness this poll exists to get around.
+        // Hand the walk across. The examination runs on a worker, where the draw object must not be read, so
+        // it cannot fetch this for itself — and re-reading the compositor's cache there would put back
+        // exactly the staleness the walk exists to get around.
         livePartsCache = parts;
         Refresh(mayApply: true);
     }
@@ -248,15 +292,19 @@ public sealed class HatCompatWatcher : IDisposable
         });
     }
 
-    private void OnHairChanged() => Refresh(mayApply: true);
-
+    // Gated like everything else. These are off the framework thread, so they never hitched, but each one
+    // reads a multi-megabyte model and runs the solve — on every Penumbra settings change, for every user,
+    // including the ones who have never switched the feature on.
     private void OnModSettingChanged(Penumbra.Api.Enums.ModSettingChange change, Guid collection,
                                      string modDirectory, bool inherited)
-        => Refresh(mayApply: true, delayMs: PenumbraSettleMs);
+    {
+        if (Enabled) Refresh(mayApply: true, delayMs: PenumbraSettleMs);
+    }
 
-    private void OnCollectionChanged() => Refresh(mayApply: true, delayMs: PenumbraSettleMs);
-
-    private void OnRedrawn() => Refresh(mayApply: true, delayMs: PenumbraSettleMs);
+    private void OnCollectionChanged()
+    {
+        if (Enabled) Refresh(mayApply: true, delayMs: PenumbraSettleMs);
+    }
 
     private void Examine(bool mayApply)
     {
@@ -340,8 +388,9 @@ public sealed class HatCompatWatcher : IDisposable
         // the file looks unfitted, and the next examination fits it again within the second.
         if (undone == Identity(target)) return;
 
-        // PluginEnabled as well as the setting: the events this also listens to reach it whether or not the
-        // poll is running, so gating the poll alone would still let a Penumbra change trigger a write.
+        // Checked again here, not only where the signals arrive: a button press reaches this through Refresh
+        // without passing any of those gates, and the setting may have changed while a delayed examination
+        // was waiting.
         if (mayApply && config.PluginEnabled && config.AutoHatCompat && !proposal.AlreadyCompatible)
             Write(target, proposal, automatic: true);
     }
