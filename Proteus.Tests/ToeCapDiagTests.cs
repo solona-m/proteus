@@ -349,11 +349,28 @@ public class ToeCapDiagTests
     public void BustClearanceFromGameShell()
     {
         var frozen = Path.Combine(Path.GetTempPath(), "proteus-bust-dump");
-        var dump = Directory.Exists(frozen) ? frozen : Path.Combine(Path.GetTempPath(), "proteus-shell-dump");
+        ClearanceFromGameShell(Directory.Exists(frozen) ? frozen : Path.Combine(Path.GetTempPath(), "proteus-shell-dump"),
+                               1.0f, 1.5f, "proteus-bust-clearance.txt");
+    }
+
+    /// <summary>
+    /// SCRATCH: the same measurement over the hips and crotch, on <c>%TEMP%\proteus-gen3-dump</c> — where the
+    /// fold and cleft passes move the legs part. The "bridge off" replay turns those off too.
+    /// </summary>
+    [Fact]
+    public void FoldClearanceFromGameShell()
+    {
+        var dump = Path.Combine(Path.GetTempPath(), "proteus-gen3-dump");
+        if (Directory.Exists(dump)) ClearanceFromGameShell(dump, 0.8f, 1.1f, "proteus-fold-clearance.txt");
+    }
+
+    private void ClearanceFromGameShell(string dump, float yLo, float yHi, string report)
+    {
         int host = -1;
         for (int h = 0; File.Exists(Path.Combine(dump, $"host{h}_inputs.txt")); h++)
             if (File.ReadAllLines(Path.Combine(dump, $"host{h}_inputs.txt"))
-                    .Any(l => l.StartsWith("layer[") && !l.Contains("bustBridge=0 ")))
+                    .Any(l => l.StartsWith("layer[") && (!l.Contains("bustBridge=0 ") || !l.Contains("cleftBridge=0 ")
+                                                         || !l.Contains("smoothFold=0"))))
             { host = h; break; }
         if (host < 0) return;
         string F0(string name) => Path.Combine(dump, $"host{host}_{name}");
@@ -379,7 +396,7 @@ public class ToeCapDiagTests
             for (int k = 0; k + 2 < bt.Length; k += 3)
             {
                 int ia = bt[k], ib = bt[k + 1], ic = bt[k + 2];
-                if (p[ia * 3 + 1] < 1.0f || p[ia * 3 + 1] > 1.5f) continue;
+                if (p[ia * 3 + 1] < yLo || p[ia * 3 + 1] > yHi) continue;
                 for (int s = 0; s <= Sub; s++)
                 for (int r = 0; r <= Sub - s; r++)
                 {
@@ -407,7 +424,7 @@ public class ToeCapDiagTests
                 }
             }
         }
-        W($"{bp.Count} chest skin sample points (y 1.0..1.5, {Sub} per edge)");
+        W($"{bp.Count} skin sample points (y {yLo:0.00}..{yHi:0.00}, {Sub} per edge)");
 
         var text = File.ReadAllLines(F0("inputs.txt"));
         var specs = new List<SecondSkinWriter.SourceSpec>();
@@ -442,8 +459,9 @@ public class ToeCapDiagTests
                     Coverage = cov, CoverageWidth = vs, CoverageHeight = vs,
                     ToeCap = cap, ToeCapWidth = cs, ToeCapHeight = cs,
                     ToeCapStrength = F("strength"), BustBridgeStrength = bridge ? F("bustBridge") : 0f,
-                    NippleSmoothStrength = F("nippleSmooth"), CleftBridgeStrength = F("cleftBridge"),
-                    FoldSmoothStrength = F("smoothFold"),
+                    NippleSmoothStrength = F("nippleSmooth"),
+                    CleftBridgeStrength = bridge ? F("cleftBridge") : 0f,
+                    FoldSmoothStrength = bridge ? F("smoothFold") : 0f,
                 });
             }
             return layers;
@@ -451,7 +469,10 @@ public class ToeCapDiagTests
         byte[]? baseModel = text.Contains("base=yes") ? File.ReadAllBytes(F0("base.mdl")) : null;
         var diagOn = new List<string>();
         var clock = System.Diagnostics.Stopwatch.StartNew();
-        var on = SecondSkinWriter.Build(specs, Layers(true), baseModel, out _, diagOn.Add, CapSets());
+        var on = SecondSkinWriter.Build(specs, Layers(true), baseModel, out var onStats, diagOn.Add, CapSets());
+        File.WriteAllLines(Path.Combine(Path.GetTempPath(), Path.ChangeExtension(report, ".diag.txt")),
+            diagOn.Prepend($"stats: {onStats}"));
+        File.WriteAllBytes(Path.Combine(Path.GetTempPath(), Path.ChangeExtension(report, ".replay.mdl")), on);
         long onMs = clock.ElapsedMilliseconds;
         clock.Restart();
         var off = SecondSkinWriter.Build(specs, Layers(false), baseModel, out _, _ => { }, CapSets());
@@ -585,7 +606,7 @@ public class ToeCapDiagTests
         W("##### REPLAY, bridge off");
         Measure(off, null);
 
-        File.WriteAllText(Path.Combine(Path.GetTempPath(), "proteus-bust-clearance.txt"), sb.ToString());
+        File.WriteAllText(Path.Combine(Path.GetTempPath(), report), sb.ToString());
 
         void Measure(byte[] shell, byte[]? unmoved)
         {
@@ -609,7 +630,7 @@ public class ToeCapDiagTests
                 for (int k = 0; k + 2 < t.Length; k += 3)
                 {
                     var a = P(t[k]); var b = P(t[k + 1]); var c = P(t[k + 2]);
-                    if (MathF.Max(a.Y, MathF.Max(b.Y, c.Y)) < 0.99f || MathF.Min(a.Y, MathF.Min(b.Y, c.Y)) > 1.51f) continue;
+                    if (MathF.Max(a.Y, MathF.Max(b.Y, c.Y)) < yLo - 0.01f || MathF.Min(a.Y, MathF.Min(b.Y, c.Y)) > yHi + 0.01f) continue;
                     var lo = C(MathF.Min(a.X, MathF.Min(b.X, c.X)), MathF.Min(a.Y, MathF.Min(b.Y, c.Y)), MathF.Min(a.Z, MathF.Min(b.Z, c.Z)));
                     var hi = C(MathF.Max(a.X, MathF.Max(b.X, c.X)), MathF.Max(a.Y, MathF.Max(b.Y, c.Y)), MathF.Max(a.Z, MathF.Max(b.Z, c.Z)));
                     for (int x = lo.Item1; x <= hi.Item1; x++)
@@ -724,6 +745,234 @@ public class ToeCapDiagTests
 
         static float Dist(SecondSkinWriter.Vec3 a, SecondSkinWriter.Vec3 b)
             => MathF.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y) + (a.Z - b.Z) * (a.Z - b.Z));
+    }
+
+    /// <summary>
+    /// SCRATCH: which vertices of a gen3 part the gen3 → bibo conversion cannot place, and where they are on the
+    /// body. Those keep their authored gen3 UV inside a bibo shell, so they read the coverage and the art from the
+    /// wrong place. Reads <c>%TEMP%\proteus-gen3-dump</c>; does nothing without it.
+    /// </summary>
+    [Fact]
+    public void Gen3PartsUnplacedInBibo()
+    {
+        var dump = Path.Combine(Path.GetTempPath(), "proteus-gen3-dump");
+        if (!File.Exists(Path.Combine(dump, "host0_inputs.txt"))) return;
+        var sb = new StringBuilder();
+        void W(string l) { o.WriteLine(l); sb.AppendLine(l); }
+
+        // The maps ship in the plugin project, not beside the test binaries.
+        var pluginDir = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "Proteus"));
+        var conv = new UVRemapService(NSubstitute.Substitute.For<Dalamud.Plugin.Services.IPluginLog>(), pluginDir)
+            .UvConverter("gen3", "bibo");
+        W($"maps from {pluginDir}");
+        if (conv == null) { W("no gen3 -> bibo converter (maps missing?)"); File.WriteAllText(Path.Combine(Path.GetTempPath(), "proteus-gen3-unplaced.txt"), sb.ToString()); return; }
+
+        var text = File.ReadAllLines(Path.Combine(dump, "host0_inputs.txt"));
+        for (int i = 0; File.Exists(Path.Combine(dump, $"host0_body{i}.mdl")); i++)
+        {
+            var line = text.First(l => l.StartsWith($"source[{i}] "));
+            if (!line.Contains("uvConv=yes")) continue;
+            var bytes = File.ReadAllBytes(Path.Combine(dump, $"host0_body{i}.mdl"));
+            foreach (var mat in SecondSkinWriter.DrawnMaterialNames(bytes))
+            {
+                if (!SecondSkinWriter.TryReadLod0Geometry(bytes, out var p, out var uv, out var t, out _, out _,
+                        keepMaterial: m => m == mat) || t.Length == 0) continue;
+                var used = new HashSet<int>(t);
+                int n = p.Length / 3;
+                // The writer shifts a mesh onto the [0,1] tile by the floor of its minimum UV before converting.
+                float minU = float.MaxValue, minV = float.MaxValue;
+                foreach (int v in used) { minU = MathF.Min(minU, uv[v * 2]); minV = MathF.Min(minV, uv[v * 2 + 1]); }
+                float uOff = MathF.Floor(minU), vOff = MathF.Floor(minV);
+
+                var misses = new List<(float X, float Y, float Z, float U, float V)>();
+                foreach (int v in used)
+                {
+                    float u = uv[v * 2] - uOff, vv = uv[v * 2 + 1] - vOff;
+                    if (conv(u, vv, p[v * 3] >= 0 ? 1 : -1) == null)
+                        misses.Add((p[v * 3], p[v * 3 + 1], p[v * 3 + 2], u, vv));
+                }
+                W($"body{i} {mat}: {used.Count} used vertices, {misses.Count} unplaced");
+                if (misses.Count == 0) continue;
+                foreach (var g in misses.GroupBy(m => (int)MathF.Floor(m.Y * 20)).OrderBy(g => g.Key))
+                    W($"  y {g.Key / 20f:0.00}..{(g.Key + 1) / 20f:0.00}: {g.Count(),5}  x {g.Min(m => m.X):0.000}..{g.Max(m => m.X):0.000}"
+                      + $"  z {g.Min(m => m.Z):0.000}..{g.Max(m => m.Z):0.000}"
+                      + $"  uv u {g.Min(m => m.U):0.000}..{g.Max(m => m.U):0.000} v {g.Min(m => m.V):0.000}..{g.Max(m => m.V):0.000}");
+            }
+        }
+        // IS THE SHELL THERE AT ALL? For every skin triangle of every source, whether the game's shell has a
+        // triangle within 3 mm straight out from its centre — binned by height, so a band of body with no shell
+        // over it shows as a band of misses.
+        if (SecondSkinWriter.TryReadLod0Geometry(File.ReadAllBytes(Path.Combine(dump, "host0_shell.mdl")),
+                out var sp, out _, out var st, out _, out _, keepMaterial: m => m.Contains("ril_")))
+        {
+            SecondSkinWriter.Vec3 S(int k) => new(sp[k * 3], sp[k * 3 + 1], sp[k * 3 + 2]);
+            const float cell = 0.004f;
+            (int, int, int) C(float x, float y, float z) =>
+                ((int)MathF.Floor(x / cell), (int)MathF.Floor(y / cell), (int)MathF.Floor(z / cell));
+            var hash = new Dictionary<(int, int, int), List<int>>();
+            for (int k = 0; k + 2 < st.Length; k += 3)
+            {
+                var a = S(st[k]); var b = S(st[k + 1]); var c = S(st[k + 2]);
+                var lo = C(MathF.Min(a.X, MathF.Min(b.X, c.X)), MathF.Min(a.Y, MathF.Min(b.Y, c.Y)), MathF.Min(a.Z, MathF.Min(b.Z, c.Z)));
+                var hi = C(MathF.Max(a.X, MathF.Max(b.X, c.X)), MathF.Max(a.Y, MathF.Max(b.Y, c.Y)), MathF.Max(a.Z, MathF.Max(b.Z, c.Z)));
+                for (int x = lo.Item1; x <= hi.Item1; x++)
+                for (int y = lo.Item2; y <= hi.Item2; y++)
+                for (int z = lo.Item3; z <= hi.Item3; z++)
+                    (hash.TryGetValue((x, y, z), out var l) ? l : hash[(x, y, z)] = []).Add(k);
+            }
+            for (int i = 0; File.Exists(Path.Combine(dump, $"host0_body{i}.mdl")); i++)
+            {
+                if (!SecondSkinWriter.TryReadLod0Geometry(File.ReadAllBytes(Path.Combine(dump, $"host0_body{i}.mdl")),
+                        out var bp, out _, out var bt, out _, out _)) continue;   // skin materials only
+                var bands = new SortedDictionary<int, (int Tris, int Covered, float MinX, float MaxX)>();
+                for (int k = 0; k + 2 < bt.Length; k += 3)
+                {
+                    float cx = (bp[bt[k] * 3] + bp[bt[k + 1] * 3] + bp[bt[k + 2] * 3]) / 3f;
+                    float cy = (bp[bt[k] * 3 + 1] + bp[bt[k + 1] * 3 + 1] + bp[bt[k + 2] * 3 + 1]) / 3f;
+                    float cz = (bp[bt[k] * 3 + 2] + bp[bt[k + 1] * 3 + 2] + bp[bt[k + 2] * 3 + 2]) / 3f;
+                    bool covered = false;
+                    for (int dx = -1; dx <= 1 && !covered; dx++)
+                    for (int dy = -1; dy <= 1 && !covered; dy++)
+                    for (int dz = -1; dz <= 1 && !covered; dz++)
+                    {
+                        var key = C(cx, cy, cz);
+                        if (!hash.TryGetValue((key.Item1 + dx, key.Item2 + dy, key.Item3 + dz), out var list)) continue;
+                        foreach (int s in list)
+                        {
+                            var a = S(st[s]); var b = S(st[s + 1]); var c = S(st[s + 2]);
+                            var q = new SecondSkinWriter.Vec3(cx, cy, cz);
+                            float ex = MathF.Max(Dist(a, b), MathF.Max(Dist(b, c), Dist(c, a)));
+                            // Near enough to the shell triangle's own neighbourhood: within 3 mm of a corner, or
+                            // of the centre when the triangle is large.
+                            var ctr = new SecondSkinWriter.Vec3((a.X + b.X + c.X) / 3, (a.Y + b.Y + c.Y) / 3, (a.Z + b.Z + c.Z) / 3);
+                            if (Dist(q, ctr) < MathF.Max(0.003f, ex * 0.6f)) { covered = true; break; }
+                        }
+                    }
+                    int band = (int)MathF.Floor(cy * 20);
+                    (int Tris, int Covered, float MinX, float MaxX) bb =
+                        bands.TryGetValue(band, out var had) ? had : (0, 0, float.MaxValue, float.MinValue);
+                    bands[band] = (bb.Tris + 1, bb.Covered + (covered ? 1 : 0),
+                                   covered ? bb.MinX : MathF.Min(bb.MinX, cx), covered ? bb.MaxX : MathF.Max(bb.MaxX, cx));
+                }
+                W($"body{i}: skin triangles with the shell over them, by height");
+                foreach (var (band, v) in bands)
+                    W($"  y {band / 20f:0.00}..{(band + 1) / 20f:0.00}: {v.Covered,5}/{v.Tris,-5}"
+                      + (v.Covered < v.Tris ? $"  uncovered x {v.MinX:0.000}..{v.MaxX:0.000}" : ""));
+            }
+        }
+        File.WriteAllText(Path.Combine(Path.GetTempPath(), "proteus-gen3-unplaced.txt"), sb.ToString());
+
+        static float Dist(SecondSkinWriter.Vec3 a, SecondSkinWriter.Vec3 b)
+            => MathF.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y) + (a.Z - b.Z) * (a.Z - b.Z));
+    }
+
+    /// <summary>
+    /// SCRATCH: a front orthographic render of the dumped body parts with the game's shell over them, depth
+    /// tested, as raw RGB (<c>%TEMP%\proteus-gen3-front.rgb</c>, width and height in the file name's sibling
+    /// .txt). Skin colour = the body wins that pixel (shell missing or behind it); grey = the shell wins; the
+    /// shell alone in the second half of the image. Bind pose, so it shows geometry, not skinning.
+    /// </summary>
+    [Fact]
+    public void Gen3FrontRender()
+    {
+        var dump = Path.Combine(Path.GetTempPath(), "proteus-gen3-dump");
+        if (!File.Exists(Path.Combine(dump, "host0_shell.mdl"))) return;
+        const int W = 400, H = 400;
+        const float x0 = -0.25f, x1 = 0.25f, y0 = 0.70f, y1 = 1.20f;
+        var depthBody = new float[W * H];
+        var depthShell = new float[W * H];
+        var shade = new byte[W * H];
+        Array.Fill(depthBody, float.NegativeInfinity);
+        Array.Fill(depthShell, float.NegativeInfinity);
+
+        void Raster(float[] p, int[] t, float[] depth, bool keepShade)
+        {
+            for (int k = 0; k + 2 < t.Length; k += 3)
+            {
+                float ax = p[t[k] * 3], ay = p[t[k] * 3 + 1], az = p[t[k] * 3 + 2];
+                float bx = p[t[k + 1] * 3], by = p[t[k + 1] * 3 + 1], bz = p[t[k + 1] * 3 + 2];
+                float cx = p[t[k + 2] * 3], cy = p[t[k + 2] * 3 + 1], cz = p[t[k + 2] * 3 + 2];
+                float Px(float x) => (x - x0) / (x1 - x0) * (W - 1);
+                float Py(float y) => (y1 - y) / (y1 - y0) * (H - 1);
+                float pax = Px(ax), pay = Py(ay), pbx = Px(bx), pby = Py(by), pcx = Px(cx), pcy = Py(cy);
+                int minX = Math.Max(0, (int)MathF.Floor(MathF.Min(pax, MathF.Min(pbx, pcx))));
+                int maxX = Math.Min(W - 1, (int)MathF.Ceiling(MathF.Max(pax, MathF.Max(pbx, pcx))));
+                int minY = Math.Max(0, (int)MathF.Floor(MathF.Min(pay, MathF.Min(pby, pcy))));
+                int maxY = Math.Min(H - 1, (int)MathF.Ceiling(MathF.Max(pay, MathF.Max(pby, pcy))));
+                float area = (pbx - pax) * (pcy - pay) - (pcx - pax) * (pby - pay);
+                if (MathF.Abs(area) < 1e-9f) continue;
+                // Lambert-ish shade from the face normal's z, for the shell layer only.
+                float ux = bx - ax, uy = by - ay, uz = bz - az, vx = cx - ax, vy = cy - ay, vz = cz - az;
+                float nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+                float nl = MathF.Sqrt(nx * nx + ny * ny + nz * nz);
+                byte s = (byte)(90 + 165 * MathF.Abs(nl > 0 ? nz / nl : 0));
+                for (int y = minY; y <= maxY; y++)
+                for (int x = minX; x <= maxX; x++)
+                {
+                    float w0 = ((pbx - x) * (pcy - y) - (pcx - x) * (pby - y)) / area;
+                    float w1 = ((pcx - x) * (pay - y) - (pax - x) * (pcy - y)) / area;
+                    float w2 = 1 - w0 - w1;
+                    if (w0 < 0 || w1 < 0 || w2 < 0) continue;
+                    float z = w0 * az + w1 * bz + w2 * cz;
+                    int i = y * W + x;
+                    if (z <= depth[i]) continue;
+                    depth[i] = z;
+                    if (keepShade) shade[i] = s;
+                }
+            }
+        }
+
+        for (int i = 0; File.Exists(Path.Combine(dump, $"host0_body{i}.mdl")); i++)
+            if (SecondSkinWriter.TryReadLod0Geometry(File.ReadAllBytes(Path.Combine(dump, $"host0_body{i}.mdl")),
+                    out var bp, out _, out var bt, out _, out _))
+                Raster(bp, bt, depthBody, false);
+        // The latest replay of this dump when one exists (FoldClearanceFromGameShell writes it), so a fix can be
+        // looked at before the game rebuilds; otherwise the game's own shell.
+        var replay = Path.Combine(Path.GetTempPath(), "proteus-fold-clearance.replay.mdl");
+        var shellBytes = File.ReadAllBytes(File.Exists(replay) ? replay : Path.Combine(dump, "host0_shell.mdl"));
+        if (!SecondSkinWriter.TryReadLod0Geometry(shellBytes,
+                out var sp, out _, out var st, out _, out _, keepMaterial: m => m.Contains("ril_"))) return;
+        Raster(sp, st, depthShell, true);
+
+        // Left: shell over body. Right: shell alone.
+        var rgb = new byte[W * 2 * H * 3];
+        for (int y = 0; y < H; y++)
+        for (int x = 0; x < W; x++)
+        {
+            int i = y * W + x;
+            int l = (y * W * 2 + x) * 3, r = (y * W * 2 + W + x) * 3;
+            bool body = !float.IsNegativeInfinity(depthBody[i]), shell = !float.IsNegativeInfinity(depthShell[i]);
+            (byte R, byte G, byte B) left = shell && (!body || depthShell[i] >= depthBody[i] - 1e-5f)
+                ? (shade[i], shade[i], shade[i])
+                : body ? ((byte)214, (byte)150, (byte)110) : ((byte)20, (byte)20, (byte)40);
+            rgb[l] = left.R; rgb[l + 1] = left.G; rgb[l + 2] = left.B;
+            (byte R, byte G, byte B) right = shell ? (shade[i], shade[i], shade[i]) : ((byte)20, (byte)20, (byte)40);
+            rgb[r] = right.R; rgb[r + 1] = right.G; rgb[r + 2] = right.B;
+        }
+        File.WriteAllBytes(Path.Combine(Path.GetTempPath(), "proteus-gen3-front.rgb"), rgb);
+
+        // Each body source on its own, shaded, side by side — which part owns the skin in front of the shell.
+        var parts = new List<byte[]>();
+        for (int i = 0; File.Exists(Path.Combine(dump, $"host0_body{i}.mdl")); i++)
+        {
+            Array.Fill(depthShell, float.NegativeInfinity);
+            Array.Clear(shade);
+            if (SecondSkinWriter.TryReadLod0Geometry(File.ReadAllBytes(Path.Combine(dump, $"host0_body{i}.mdl")),
+                    out var bp, out _, out var bt, out _, out _))
+                Raster(bp, bt, depthShell, true);
+            var img = new byte[W * H * 3];
+            for (int k = 0; k < W * H; k++)
+            {
+                byte s = float.IsNegativeInfinity(depthShell[k]) ? (byte)20 : shade[k];
+                img[k * 3] = s; img[k * 3 + 1] = s; img[k * 3 + 2] = float.IsNegativeInfinity(depthShell[k]) ? (byte)40 : s;
+            }
+            parts.Add(img);
+        }
+        var strip = new byte[W * parts.Count * H * 3];
+        for (int p2 = 0; p2 < parts.Count; p2++)
+            for (int y = 0; y < H; y++)
+                Buffer.BlockCopy(parts[p2], y * W * 3, strip, (y * W * parts.Count + p2 * W) * 3, W * 3);
+        File.WriteAllBytes(Path.Combine(Path.GetTempPath(), $"proteus-gen3-parts-{parts.Count}.rgb"), strip);
     }
 
     /// <summary>Pairs of vertices at the same position whose stored normals differ, bucketed by height and

@@ -5795,7 +5795,8 @@ public static class SecondSkinWriter
                     // index — so of any such pair exactly one survives.
                     bool isFlap;
                     if (onPartRing)
-                        isFlap = members[i].Count < rival * FlapShare;
+                        isFlap = members[i].Count < rival * FlapShare
+                              && InsideJoinedParts(mesh, verts[i], ring, src) >= tested * FlapInJoinedPart;
                     else if (byOwn >= tested * FlapCovered && ownBy >= 0
                              && (members[i].Count < members[ownBy].Count
                                  || (members[i].Count == members[ownBy].Count && i > ownBy)))
@@ -5831,7 +5832,64 @@ public static class SecondSkinWriter
         }
 
         return del;
+
+        // How many of a component's non-ring vertices lie within the extent of a part it is JOINED to — one it
+        // shares ring vertices with — widened by FlapTuckReach. Only joined parts: at hip height the hands'
+        // extent spans the whole width between them, so asking about every other part would put anything at
+        // the hips "inside" something.
+        int InsideJoinedParts(ConnectorProfile.MeshProfile mesh, HashSet<ushort> comp, bool[] ringOf, int src)
+        {
+            var joined = new HashSet<int>();
+            foreach (ushort v in comp)
+            {
+                if (!ringOf[v]) continue;
+                var q = new Vec3(mesh.Pos[v * 3], mesh.Pos[v * 3 + 1], mesh.Pos[v * 3 + 2]);
+                var (cx, cy, cz) = VCell(q);
+                for (long dx = -1; dx <= 1; dx++)
+                for (long dy = -1; dy <= 1; dy++)
+                for (long dz = -1; dz <= 1; dz++)
+                    if (vgrid.TryGetValue((cx + dx, cy + dy, cz + dz), out var others))
+                        foreach (var (osrc, op) in others)
+                            if (osrc != src && Dist(q, op) <= JoinWeld) joined.Add(osrc);
+            }
+            int inside = 0;
+            foreach (ushort v in comp)
+            {
+                if (ringOf[v]) continue;
+                float x = mesh.Pos[v * 3], y = mesh.Pos[v * 3 + 1], z = mesh.Pos[v * 3 + 2];
+                foreach (int j in joined)
+                {
+                    if (profiles[j]?.PartBox is not { Empty: false } b) continue;
+                    if (x >= b.MinX - FlapTuckReach && x <= b.MaxX + FlapTuckReach
+                        && y >= b.MinY - FlapTuckReach && y <= b.MaxY + FlapTuckReach
+                        && z >= b.MinZ - FlapTuckReach && z <= b.MaxZ + FlapTuckReach)
+                    { inside++; break; }
+                }
+            }
+            return inside;
+        }
     }
+
+    /// <summary>
+    /// What fraction of a part-join component's vertices must lie within the extent of the part it is joined
+    /// to before its size alone can mark it as that join's margin.
+    /// <para/>
+    /// A margin is geometry a part carries PAST its ring, into its neighbour: at the waist the top's hangs down
+    /// into the legs and the legs' reaches up into the top. Size was the whole test, and on [Cry] AB Body it
+    /// deleted a 60-triangle patch over the pelvis — a smallclothes-shaped surface the legs model draws in front
+    /// of its skin, bounded by the waist ring above. It is small against the 1305-triangle surface across the
+    /// ring, so it read as a margin; but it runs from y 1.030 down to 0.892 while the torso it would have to tuck
+    /// into stops at 0.995. With it cut the shell fell back to the low-poly skin behind it, and the body came
+    /// through in a band the shape of briefs. A margin that is really inside its neighbour clears this
+    /// trivially; that patch does not come close.
+    /// </summary>
+    private const float FlapInJoinedPart = 0.8f;
+
+    /// <summary>
+    /// How far outside a joined part's extent a margin may reach and still count as inside it — the depth a
+    /// lap tucks under its neighbour's surface, with room to spare. See <see cref="FlapInJoinedPart"/>.
+    /// </summary>
+    private const float FlapTuckReach = 0.01f;
 
     /// <summary>
     /// Where two parts are stitched to each other: vertices one part shares with another, at the same
