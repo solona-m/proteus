@@ -730,6 +730,9 @@ public sealed class ContentImportService
     /// <summary>
     /// Unpack the archive, strip the model redirects from the manifests and write the Proteus sidecar.
     /// Pure filesystem work, no IPC, so it can be exercised offline against a temp directory.
+    /// <para/>
+    /// A v3 pack's piece group is the one thing left out: it can only be written once Penumbra has upgraded
+    /// the folder, which <see cref="Register"/> arranges.
     /// </summary>
     internal static void WriteMod(
         string root, string modName, string author, ImportPreview preview, IPluginLog? log = null)
@@ -789,9 +792,13 @@ public sealed class ContentImportService
         // The group that makes individual pieces pickable, written with EVERY option off. An imported
         // outfit therefore contributes nothing until the user asks for a piece, which is also what keeps it
         // off the host accessory's ten-material budget until then.
-        if (preview.PieceGroupName is { } gate && preview.GateOptions.Count > 0)
+        //
+        // Not here for a v3 pack. Proteus writes no v3 group files, and the copied folder is still v3 until
+        // Penumbra loads it — Penumbra migrates a pre-v4 mod as it adds it, groups and all. So Register adds
+        // the folder first and writes this group once the manifest is v4. See WritePieceGroupAfterUpgrade.
+        if (NeedsPieceGroup(preview) && preview.Pack.FileVersion >= PenumbraModMeta.SingleFileVersion)
             PenumbraModMeta.WriteMultiSelectGroup(
-                root, preview.Pack.Groups.Count, gate, preview.GateOptions, defaultSettings: 0);
+                root, preview.Pack.Groups.Count, preview.PieceGroupName!, preview.GateOptions, defaultSettings: 0);
 
         var metadata = BuildSidecar(preview, modName, author);
         var metaJson = JsonSerializer.Serialize(metadata, ProteusJson.MetadataWrite);
@@ -1366,6 +1373,56 @@ public sealed class ContentImportService
 
     // ── register ─────────────────────────────────────────────────────────────
 
+    /// <summary>The import adds a group of its own so the pack's pieces can be picked one at a time.</summary>
+    private static bool NeedsPieceGroup(ImportPreview preview)
+        => !preview.InstallOnly && preview.PieceGroupName != null && preview.GateOptions.Count > 0;
+
+    /// <summary>
+    /// Write a v3 pack's piece group, now that Penumbra has added — and so upgraded — its folder. Null when that
+    /// worked or there was nothing to write; otherwise the result to hand back, the mod already registered.
+    /// <para/>
+    /// Penumbra, not Proteus, does the upgrade. It migrates a pre-v4 mod as it loads it, and it is the one that
+    /// knows the format properly — groups, ids and all. A reload is asked for once in case the add did not load
+    /// the folder yet. A folder STILL v3 after that is reported rather than written: the refusal in
+    /// <see cref="PenumbraModMeta"/> exists so a v3 folder is never edited under Penumbra's feet.
+    /// </summary>
+    private ImportResult? WritePieceGroupAfterUpgrade(ImportPreview preview, string dirName)
+    {
+        if (!NeedsPieceGroup(preview) || preview.Pack.FileVersion >= PenumbraModMeta.SingleFileVersion)
+            return null;
+        if (penumbra.GetModDirectory() is not { Length: > 0 } modsRoot)
+            return new(false, false, Loc.Localize("ContentImport.Fail.NoModDir", "Penumbra's mod directory isn't available."));
+
+        var root = Path.Combine(modsRoot, dirName);
+        if (PenumbraModMeta.IsLegacyFolder(root))
+            penumbra.ReloadModDirectory(dirName);
+        if (PenumbraModMeta.IsLegacyFolder(root))
+        {
+            log.Warning("[Proteus] imported {0}: Penumbra added the mod but left it in the pre-v4 layout, so its "
+                      + "piece group could not be written", dirName);
+            return new(false, false, string.Format(Loc.Localize("ContentImport.Fail.NotUpgraded.Fmt",
+                "Penumbra added \"{0}\" but did not upgrade it from its older format, so its pieces can't be "
+                + "switched yet. Delete it in Penumbra and import the pack again."), dirName));
+        }
+
+        try
+        {
+            PenumbraModMeta.WriteMultiSelectGroup(
+                root, preview.Pack.Groups.Count, preview.PieceGroupName!, preview.GateOptions, defaultSettings: 0);
+        }
+        catch (Exception ex)
+        {
+            log.Error(ex, "[Proteus] imported {0}: could not write its piece group after Penumbra upgraded it",
+                      dirName);
+            return new(false, false, string.Format(Loc.Localize("ContentImport.Fail.Write.Fmt",
+                "Failed to write the mod: {0}"), ex.Message));
+        }
+
+        penumbra.ReloadModDirectory(dirName);
+        log.Information("[Proteus] imported {0}: Penumbra upgraded the v3 pack, piece group added", dirName);
+        return null;
+    }
+
     /// <summary>The outcome of a registration. Warning is a success that still needs the user to act.</summary>
     public readonly record struct ImportResult(bool Ok, bool Warning, string Message);
 
@@ -1395,6 +1452,9 @@ public sealed class ContentImportService
             return new(false, false, string.Format(Loc.Localize("Service.RegisterFailed.Fmt",
                 "Wrote the mod, but Penumbra couldn't register it ({0}). Rescan mods in Penumbra."), ec));
         }
+
+        if (WritePieceGroupAfterUpgrade(prepared.Preview, dirName) is { } upgradeFailure)
+            return upgradeFailure;
 
         var collId = penumbra.GetPlayerCollectionId();
         if (collId.HasValue)

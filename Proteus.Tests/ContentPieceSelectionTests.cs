@@ -48,7 +48,9 @@ public class ContentPieceSelectionTests
     /// Cerise's shape: several models, no option groups at all, and most of them race variants of one
     /// garment. Eight files, three garments.
     /// </summary>
-    private static string CerisePack(string dir, byte[] model, byte[] mtrl, string leaf)
+    /// <param name="legacy">Lay the pack out as Penumbra's pre-v4 format: <c>default_mod.json</c> beside a
+    /// <c>FileVersion</c> 3 manifest.</param>
+    private static string CerisePack(string dir, byte[] model, byte[] mtrl, string leaf, bool legacy = false)
     {
         // Every model declares the same material leaf, because they all came from the one real model. Real
         // packs name theirs per race; that difference is exercised by the binding, not by the collapsing.
@@ -67,9 +69,11 @@ public class ContentPieceSelectionTests
         foreach (var r in new[] { "0101", "0201", "0301", "0901", "1101" })
             Model(r, "e6025", "top");                                   // five races
 
-        var manifest = "{\n  \"FileVersion\": 4,\n  \"Name\": \"Cerise\",\n  \"Author\": \"Solona\",\n"
-                     + "  \"DefaultData\": { \"Files\": {\n    " + string.Join(",\n    ", redirects) + "\n  } },\n"
-                     + "  \"Groups\": []\n}";
+        var filesJson = "{ \"Files\": {\n    " + string.Join(",\n    ", redirects) + "\n  } }";
+        var manifest = legacy
+            ? "{\n  \"FileVersion\": 3,\n  \"Name\": \"Cerise\",\n  \"Author\": \"Solona\"\n}"
+            : "{\n  \"FileVersion\": 4,\n  \"Name\": \"Cerise\",\n  \"Author\": \"Solona\",\n"
+            + "  \"DefaultData\": " + filesJson + ",\n  \"Groups\": []\n}";
 
         var path = Path.Combine(dir, "cerise.pmp");
         using var zip = new ZipArchive(File.Create(path), ZipArchiveMode.Create);
@@ -79,6 +83,7 @@ public class ContentPieceSelectionTests
             s.Write(data, 0, data.Length);
         }
         Add("meta.json", Encoding.UTF8.GetBytes(manifest));
+        if (legacy) Add("default_mod.json", Encoding.UTF8.GetBytes(filesJson));
         foreach (var (n, d) in files) Add(n, d);
         return path;
     }
@@ -248,6 +253,54 @@ public class ContentPieceSelectionTests
             Assert.Equal(new[] { "0101", "0201", "0301", "0901", "1101" },
                 shirt.Models!.Keys.OrderBy(x => x, StringComparer.Ordinal).ToArray());
             Assert.Equal("Body", shirt.Slot);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    /// <summary>
+    /// A v3 pack is written without the piece group, and without refusing — the group waits for Penumbra.
+    /// <para/>
+    /// The write used to end in <see cref="PenumbraModMeta.LegacyFolderException"/>: the copied folder is still
+    /// v3, and the piece group goes through the writer that refuses one. Penumbra upgrades the folder as
+    /// Register adds it, and only then is the group written. Everything else the import does lands here, in
+    /// the pack's own v3 layout, and nothing v3 is authored.
+    /// </summary>
+    [Fact]
+    public void A_v3_pack_is_written_with_its_piece_group_left_for_Penumbra_to_upgrade()
+    {
+        var model = SampleModel();
+        if (model == null) return;
+
+        var dir = TempDir();
+        try
+        {
+            var leaf = SecondSkinService
+                .UsedMaterialNames(model, SecondSkinWriter.MaterialNames(model))[0].TrimStart('/');
+            var preview = ContentImportService.Inspect(CerisePack(dir, model, new byte[64], leaf, legacy: true));
+            Assert.Equal(3, preview.Pack.FileVersion);
+            Assert.Equal(ContentImportService.PieceGroup, preview.PieceGroupName);
+
+            var root = Path.Combine(dir, "mod");
+            ContentImportService.WriteMod(root, "Cerise (Proteus)", "Solona", preview);
+
+            // Still the pack's own v3 layout, renamed — no Groups array and no group file of ours.
+            var manifest = (JsonObject)JsonNode.Parse(File.ReadAllText(Path.Combine(root, "meta.json")))!;
+            Assert.Equal(3, (int?)manifest["FileVersion"]);
+            Assert.Equal("Cerise (Proteus)", (string?)manifest["Name"]);
+            Assert.Null(manifest["Groups"]);
+            Assert.Empty(Directory.EnumerateFiles(root, "group_*.json"));
+
+            // The models Proteus takes over are stripped from default_mod.json; the material stays.
+            var defaults = (JsonObject)((JsonObject)JsonNode.Parse(
+                File.ReadAllText(Path.Combine(root, "default_mod.json")))!)["Files"]!;
+            Assert.DoesNotContain(defaults, p => p.Key.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase));
+            Assert.Single(defaults);
+
+            // And the sidecar already names the group Register will add.
+            var meta = JsonSerializer.Deserialize<ProteusMetadata>(
+                File.ReadAllText(Path.Combine(root, "Proteus", "metadata.json")), ProteusJson.MetadataRead)!;
+            Assert.Equal(ContentImportService.PieceGroup, meta.PieceGroupName);
+            Assert.Equal(3, meta.Content!.Count);
         }
         finally { Directory.Delete(dir, true); }
     }
