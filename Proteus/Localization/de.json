@@ -843,8 +843,16 @@
     "message": "Penumbras Mod-Verzeichnis ist nicht verfügbar.",
     "description": ""
   },
+  "ContentImport.Fail.NotUpgraded.Fmt": {
+    "message": "Penumbra hat \"{0}\" nicht aus dem älteren Format umgewandelt, daher konnten die Teile nicht schaltbar gemacht werden. Der Import wurde rückgängig gemacht; importiere das Paket erneut.",
+    "description": ""
+  },
   "ContentImport.Fail.NothingUsable": {
     "message": "Aus diesem Paket kann nichts importiert werden.",
+    "description": ""
+  },
+  "ContentImport.Fail.PieceGroup.Fmt": {
+    "message": "Die Schalter für die Teile konnten nicht zu \"{0}\" hinzugefügt werden: {1} Der Import wurde rückgängig gemacht; importiere das Paket erneut.",
     "description": ""
   },
   "ContentImport.Fail.Reserved": {

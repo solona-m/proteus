@@ -843,9 +843,17 @@
     "message": "Penumbra's mod directory isn't available.",
     "description": "Import refused: Penumbra could not be asked where its mods live. \"Penumbra\" is a plugin name - never translate it."
   },
+  "ContentImport.Fail.NotUpgraded.Fmt": {
+    "message": "Penumbra did not upgrade \"{0}\" from its older format, so its pieces could not be made switchable. The import was undone; try importing the pack again.",
+    "description": "Import failed after registering an older-format (pre-v4) pack: Penumbra left it unconverted, so the piece checkboxes could not be added and the mod was removed again. {0} is the mod folder name. \"Penumbra\" is a plugin name - never translate it."
+  },
   "ContentImport.Fail.NothingUsable": {
     "message": "Nothing in this pack can be imported.",
     "description": "Import refused: the pack has no geometry Proteus can use."
+  },
+  "ContentImport.Fail.PieceGroup.Fmt": {
+    "message": "Could not add the piece switches to \"{0}\": {1} The import was undone; try importing the pack again.",
+    "description": "Import failed while adding the checkbox group that switches individual pieces on, so the mod was removed again. {0} is the mod folder name; {1} is the error message, which ends in its own full stop."
   },
   "ContentImport.Fail.Reserved": {
     "message": "\"Proteus\" is reserved — choose a different mod name.",

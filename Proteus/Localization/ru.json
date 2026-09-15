@@ -843,8 +843,16 @@
     "message": "Каталог модов Penumbra недоступен.",
     "description": ""
   },
+  "ContentImport.Fail.NotUpgraded.Fmt": {
+    "message": "Penumbra не обновила «{0}» из старого формата, поэтому детали не удалось сделать переключаемыми. Импорт отменён — попробуйте импортировать пакет снова.",
+    "description": ""
+  },
   "ContentImport.Fail.NothingUsable": {
     "message": "В этом пакете нечего импортировать.",
+    "description": ""
+  },
+  "ContentImport.Fail.PieceGroup.Fmt": {
+    "message": "Не удалось добавить переключатели деталей в «{0}»: {1} Импорт отменён — попробуйте импортировать пакет снова.",
     "description": ""
   },
   "ContentImport.Fail.Reserved": {

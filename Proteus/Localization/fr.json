@@ -843,8 +843,16 @@
     "message": "Le dossier de mods de Penumbra n'est pas disponible.",
     "description": ""
   },
+  "ContentImport.Fail.NotUpgraded.Fmt": {
+    "message": "Penumbra n'a pas converti « {0} » depuis son ancien format, ses pièces n'ont donc pas pu être rendues activables. L'importation a été annulée ; réessayez d'importer le pack.",
+    "description": ""
+  },
   "ContentImport.Fail.NothingUsable": {
     "message": "Rien dans ce pack ne peut être importé.",
+    "description": ""
+  },
+  "ContentImport.Fail.PieceGroup.Fmt": {
+    "message": "Impossible d'ajouter les interrupteurs de pièces à « {0} » : {1} L'importation a été annulée ; réessayez d'importer le pack.",
     "description": ""
   },
   "ContentImport.Fail.Reserved": {

@@ -843,8 +843,16 @@
     "message": "El directorio de mods de Penumbra no está disponible.",
     "description": ""
   },
+  "ContentImport.Fail.NotUpgraded.Fmt": {
+    "message": "Penumbra no convirtió «{0}» desde su formato antiguo, así que sus piezas no se pudieron hacer activables. Se deshizo la importación; intenta importar el paquete de nuevo.",
+    "description": ""
+  },
   "ContentImport.Fail.NothingUsable": {
     "message": "No hay nada en este paquete que se pueda importar.",
+    "description": ""
+  },
+  "ContentImport.Fail.PieceGroup.Fmt": {
+    "message": "No se pudieron añadir los interruptores de piezas a «{0}»: {1} Se deshizo la importación; intenta importar el paquete de nuevo.",
     "description": ""
   },
   "ContentImport.Fail.Reserved": {
