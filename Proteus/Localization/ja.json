@@ -843,8 +843,16 @@
     "message": "PenumbraのMODディレクトリを利用できません。",
     "description": ""
   },
+  "ContentImport.Fail.NotUpgraded.Fmt": {
+    "message": "Penumbraが「{0}」を旧形式から変換しなかったため、パーツを切り替え可能にできませんでした。インポートは取り消されました。もう一度パックをインポートしてください。",
+    "description": ""
+  },
   "ContentImport.Fail.NothingUsable": {
     "message": "このパックにはインポートできるものがありません。",
+    "description": ""
+  },
+  "ContentImport.Fail.PieceGroup.Fmt": {
+    "message": "「{0}」にパーツのスイッチを追加できませんでした：{1} インポートは取り消されました。もう一度パックをインポートしてください。",
     "description": ""
   },
   "ContentImport.Fail.Reserved": {

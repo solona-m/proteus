@@ -843,8 +843,16 @@
     "message": "无法访问 Penumbra 的模组目录。",
     "description": ""
   },
+  "ContentImport.Fail.NotUpgraded.Fmt": {
+    "message": "Penumbra 未将“{0}”从旧格式升级，因此无法使其部件可切换。导入已撤销，请重新导入该包。",
+    "description": ""
+  },
   "ContentImport.Fail.NothingUsable": {
     "message": "此包中没有可导入的内容。",
+    "description": ""
+  },
+  "ContentImport.Fail.PieceGroup.Fmt": {
+    "message": "无法为“{0}”添加部件开关：{1} 导入已撤销，请重新导入该包。",
     "description": ""
   },
   "ContentImport.Fail.Reserved": {

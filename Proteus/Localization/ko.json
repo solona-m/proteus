@@ -843,8 +843,16 @@
     "message": "Penumbra의 모드 디렉터리를 사용할 수 없습니다.",
     "description": ""
   },
+  "ContentImport.Fail.NotUpgraded.Fmt": {
+    "message": "Penumbra가 \"{0}\"을(를) 이전 형식에서 변환하지 않아 파츠를 켜고 끌 수 있게 만들지 못했습니다. 가져오기가 취소되었습니다. 팩을 다시 가져와 보세요.",
+    "description": ""
+  },
   "ContentImport.Fail.NothingUsable": {
     "message": "이 팩에서 가져올 수 있는 것이 없습니다.",
+    "description": ""
+  },
+  "ContentImport.Fail.PieceGroup.Fmt": {
+    "message": "\"{0}\"에 파츠 스위치를 추가하지 못했습니다: {1} 가져오기가 취소되었습니다. 팩을 다시 가져와 보세요.",
     "description": ""
   },
   "ContentImport.Fail.Reserved": {
