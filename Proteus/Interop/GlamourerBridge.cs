@@ -61,6 +61,20 @@ public class GlamourerBridge : IDisposable
     public event Action? LocalPlayerCustomizationChanged;
 
     /// <summary>
+    /// Fired when ONE customize value changes on the local player — a hairstyle, an eye colour, a lipstick —
+    /// as opposed to <see cref="LocalPlayerCustomizationChanged"/>, which is the whole set at once.
+    /// <para/>
+    /// Glamourer applies these in place, with no redraw, so nothing else Proteus listens to notices them.
+    /// That silence is what the hat-compat watcher was working around by polling the draw object every
+    /// second on the framework thread, which hitched the game for up to 1.4 s at a time. A hairstyle change
+    /// is exactly this signal; forwarding it lets that consumer look once per change instead of forever.
+    /// <para/>
+    /// Fires for every customize value, not just hair, and a dragged slider produces a stream of them —
+    /// consumers are expected to debounce and to ignore changes that turn out not to matter to them.
+    /// </summary>
+    public event Action? LocalPlayerCustomizeChanged;
+
+    /// <summary>
     /// Fired when Glamourer changes an equipped item or bonus item (glasses) on the local player.
     /// <para/>
     /// Exists because an equipment change had NO route to the compositor. It changes no mod settings, so
@@ -442,6 +456,15 @@ public class GlamourerBridge : IDisposable
             if (WithinOwnReapplyEcho()) return;
 
             LocalPlayerEquipmentChanged?.Invoke();
+            return;
+        }
+
+        // A single customize value changed in place — no redraw, no mod change. Nothing downstream of the
+        // composite cares, but the hat-compat watcher does: a hairstyle change arrives exactly this way and
+        // arrived nowhere else.
+        if (changeType is StateChangeType.Customize)
+        {
+            LocalPlayerCustomizeChanged?.Invoke();
             return;
         }
 
