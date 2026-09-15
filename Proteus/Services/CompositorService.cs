@@ -567,7 +567,7 @@ public class CompositorService : IDisposable
         // where our own redirect masks the path. Safe as a method group here even though managedModDir is
         // assigned below — the delegate is only invoked during a composite, long after this returns.
         this.secondSkin = new SecondSkinService(penumbra, textureLoader, discovery, uvRemap, config, log,
-                                                ResolveUpstream);
+                                                ResolveUpstream, SettledUpstream);
         this.seamMaps  = new UvSeamMapService(log);
         this.faceUv    = new FaceUvDoublingService(log, textureLoader, uvRemap);
 
@@ -2025,6 +2025,17 @@ public class CompositorService : IDisposable
     /// case where a texture edit isn't reflected because the file kept the same timestamp and byte length —
     /// something the decode cache's key can't see. Returns the number of cache entries dropped.
     /// </summary>
+    /// <summary>
+    /// The Refresh button: re-derive which file every base path resolves to, then recomposite. Without the
+    /// re-derive it rebuilt from the same remembered upstreams, so the thing a user reaches for it over — a
+    /// body or skin change that did not show up — was the one thing it could not pick up.
+    /// </summary>
+    public void RefreshAndRecomposite()
+    {
+        InvalidateUpstreamCache("manual");
+        TriggerRecomposite("manual");
+    }
+
     public int ClearTextureCacheAndRecomposite()
     {
         int dropped = textureLoader.ClearCache();
@@ -8736,6 +8747,23 @@ public class CompositorService : IDisposable
     /// in the counter as well, but the counter is reset per run and printed before the shell phase, so the
     /// only non-blend contribution is setup — measured at ~30 ms, and reported separately.
     /// </summary>
+    /// <summary>
+    /// The upstream <see cref="PrimeUpstreamCache"/> settled for a path this composite, or null when there is
+    /// none — never a live resolve, never a remembered value that was not confirmed by a settle.
+    /// <para/>
+    /// For the body models smoothing republishes. SecondSkinService deliberately does not read those through
+    /// <see cref="ResolveUpstream"/>: a body path is contested, and a live answer caught mid-rebuild once
+    /// swapped the character's whole body. A settled answer is the opposite case — the prime dropped our
+    /// redirect and waited for Penumbra to stop changing its mind — so it is the one way to see the body the
+    /// user has now selected under a redirect of our own.
+    /// </summary>
+    private string? SettledUpstream(string gamePath)
+        => _upstreamSettled.ContainsKey(gamePath)
+           && _upstreamByGamePath.TryGetValue(gamePath, out var disk)
+           && !IsOwnOutput(disk) && File.Exists(disk)
+            ? disk
+            : null;
+
     private string? ResolveUpstream(string gamePath)
     {
         var t0 = PhaseCounter.Begin();
@@ -9369,12 +9397,20 @@ public class CompositorService : IDisposable
         // Paths under OwnedTextureRoot are write-only too, and worse to admit: Proteus invented them, so no mod
         // is behind them and the prime could never settle one — it would narrow the manifest on every
         // composite waiting for an upstream that does not exist.
+        //
+        // REPUBLISHED BODIES are admitted too. Nipple, span and fold smoothing publish the body model itself
+        // under its own game path, so from then on that path resolves to our file and the second skin cannot
+        // see past it. Excluding chara/equipment left it working from a copy of the body taken before the first
+        // publish, forever: changing the chest size or the whole body mod was detected ("a base moved") and
+        // recomposited, and every composite read the old body again. A body path is contested — two body mods
+        // can both provide it — which is exactly what the settle below is for.
         var appendHosts = _appendHostModelPaths;
+        var republishedBodies = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         bool IsReadableBase(string p)
             => !p.StartsWith(OwnedTextureRoot, StringComparison.OrdinalIgnoreCase)
             && ((!p.StartsWith("chara/equipment/", StringComparison.OrdinalIgnoreCase)
               && !p.StartsWith("chara/accessory/", StringComparison.OrdinalIgnoreCase))
-             || appendHosts.Contains(p));
+             || appendHosts.Contains(p) || republishedBodies.Contains(p));
 
         List<string> baseKeys;
 
@@ -9392,8 +9428,15 @@ public class CompositorService : IDisposable
             var keys = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var p in materialPaths) keys.Add(p);
             if (live is { } l)
+            {
+                // Recognised by the published file, which smoothing always names smoothed_{path}_{hash}.mdl.
+                foreach (var (p, file) in l.Files)
+                    if (p.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase)
+                        && Path.GetFileName(file).StartsWith("smoothed_", StringComparison.OrdinalIgnoreCase))
+                        republishedBodies.Add(p);
                 foreach (var p in l.Files.Keys)
                     if (IsReadableBase(p)) keys.Add(p);
+            }
             baseKeys = [.. keys];
 
             // A path only needs the narrow-and-restore dance if OUR OWN manifest currently masks it. Anything

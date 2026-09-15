@@ -906,7 +906,7 @@ public class StatusWindow : Window
 
         if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.SyncAlt, "Refresh"))
         {
-            compositor.TriggerRecomposite("manual");
+            compositor.RefreshAndRecomposite();
             // The Parts tab lists every mod Penumbra knows, not the sidecar ones a composite discovers, so
             // a recomposite alone would leave a mod installed since the window opened out of its picker.
             parts.Refresh();
