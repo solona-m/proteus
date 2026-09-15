@@ -334,6 +334,398 @@ public class ToeCapDiagTests
             => MathF.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y) + (a.Z - b.Z) * (a.Z - b.Z));
     }
 
+    /// <summary>
+    /// SCRATCH: where "span the cleavage" leaves the chest nearest the skin at the 0.05 mm push. For every
+    /// chest skin vertex of a dumped body, the height of the shell triangle above it — measured on the game's
+    /// own shell, on a replay of it, and on a replay with the bridge switched off. For the replay, each hit
+    /// also carries how far the bridge moved that triangle's corners (bridge-on against bridge-off, same
+    /// indices) and how squarely the skin faces the bridge's axis: a lift along an axis the skin runs parallel
+    /// to slides the vertex across the surface instead of away from it.
+    /// <para/>
+    /// Reads <c>%TEMP%\proteus-bust-dump</c> when it exists — a frozen copy, because <c>dotnet test</c> rebuilds
+    /// into the game's load path and the game rewrites the live dump mid-session — else the live dump.
+    /// </summary>
+    [Fact]
+    public void BustClearanceFromGameShell()
+    {
+        var frozen = Path.Combine(Path.GetTempPath(), "proteus-bust-dump");
+        var dump = Directory.Exists(frozen) ? frozen : Path.Combine(Path.GetTempPath(), "proteus-shell-dump");
+        int host = -1;
+        for (int h = 0; File.Exists(Path.Combine(dump, $"host{h}_inputs.txt")); h++)
+            if (File.ReadAllLines(Path.Combine(dump, $"host{h}_inputs.txt"))
+                    .Any(l => l.StartsWith("layer[") && !l.Contains("bustBridge=0 ")))
+            { host = h; break; }
+        if (host < 0) return;
+        string F0(string name) => Path.Combine(dump, $"host{host}_{name}");
+        var sb = new StringBuilder();
+        void W(string l) { o.WriteLine(l); sb.AppendLine(l); }
+        W($"dump {dump}, host {host}");
+
+        // Chest skin of the bodies the shell was cut from.
+        var bp = new List<SecondSkinWriter.Vec3>();
+        var bn = new List<SecondSkinWriter.Vec3>();
+        var bw = new List<string>();
+        var bwt = new List<Dictionary<string, float>>();   // the sample's full skinning, interpolated
+        // Sampled ACROSS each skin triangle, not only at its corners. A shell face the bridge slid no longer
+        // sits over the body vertices it was copied from, and a long flat face over a curved crease can pass
+        // under the skin between vertices while clearing every one of them.
+        const int Sub = 6;
+        for (int i = 0; File.Exists(F0($"body{i}.mdl")); i++)
+        {
+            if (!SecondSkinWriter.TryReadLod0Geometry(File.ReadAllBytes(F0($"body{i}.mdl")),
+                    out var p, out _, out var bt, out var w, out var n)) continue;
+            string BDom(int v) => v < w.Length && w[v].Length > 0 ? w[v].MaxBy(x => x.W).Bone : "?";
+            var seen = new HashSet<(int, int, int)>();
+            for (int k = 0; k + 2 < bt.Length; k += 3)
+            {
+                int ia = bt[k], ib = bt[k + 1], ic = bt[k + 2];
+                if (p[ia * 3 + 1] < 1.0f || p[ia * 3 + 1] > 1.5f) continue;
+                for (int s = 0; s <= Sub; s++)
+                for (int r = 0; r <= Sub - s; r++)
+                {
+                    float wb = s / (float)Sub, wc = r / (float)Sub, wa = 1f - wb - wc;
+                    float x = wa * p[ia * 3] + wb * p[ib * 3] + wc * p[ic * 3];
+                    float y = wa * p[ia * 3 + 1] + wb * p[ib * 3 + 1] + wc * p[ic * 3 + 1];
+                    float z = wa * p[ia * 3 + 2] + wb * p[ib * 3 + 2] + wc * p[ic * 3 + 2];
+                    // Shared edges and corners are sampled by every triangle that owns them; count each once.
+                    if (!seen.Add(((int)MathF.Round(x * 1e5f), (int)MathF.Round(y * 1e5f), (int)MathF.Round(z * 1e5f))))
+                        continue;
+                    var nn = new SecondSkinWriter.Vec3(
+                        wa * n[ia * 3] + wb * n[ib * 3] + wc * n[ic * 3],
+                        wa * n[ia * 3 + 1] + wb * n[ib * 3 + 1] + wc * n[ic * 3 + 1],
+                        wa * n[ia * 3 + 2] + wb * n[ib * 3 + 2] + wc * n[ic * 3 + 2]);
+                    float nl = MathF.Sqrt(nn.X * nn.X + nn.Y * nn.Y + nn.Z * nn.Z);
+                    if (nl < 1e-6f) continue;
+                    bp.Add(new(x, y, z));
+                    bn.Add(new(nn.X / nl, nn.Y / nl, nn.Z / nl));
+                    bw.Add(wa >= wb && wa >= wc ? BDom(ia) : wb >= wc ? BDom(ib) : BDom(ic));
+                    var mix = new Dictionary<string, float>();
+                    foreach (var (vi, f) in new[] { (ia, wa), (ib, wb), (ic, wc) })
+                        if (f > 0f && vi < w.Length)
+                            foreach (var (bone, bwv) in w[vi]) mix[bone] = mix.GetValueOrDefault(bone) + f * bwv;
+                    bwt.Add(mix);
+                }
+            }
+        }
+        W($"{bp.Count} chest skin sample points (y 1.0..1.5, {Sub} per edge)");
+
+        var text = File.ReadAllLines(F0("inputs.txt"));
+        var specs = new List<SecondSkinWriter.SourceSpec>();
+        for (int i = 0; File.Exists(F0($"body{i}.mdl")); i++)
+        {
+            var line = text.First(l => l.StartsWith($"source[{i}] "));
+            var ha = System.Text.RegularExpressions.Regex.Match(line, @"hiddenAttrs=(\S*)").Groups[1].Value;
+            // Shape keys the game baked into this source — a YAB torso carries its size in them, and a replay
+            // without them is a different body.
+            var sh = System.Text.RegularExpressions.Regex.Match(line, @"shapes=(\S*)").Groups[1].Value;
+            specs.Add(new SecondSkinWriter.SourceSpec(File.ReadAllBytes(F0($"body{i}.mdl")),
+                EnabledShapes: sh.Length == 0 ? null : sh.Split(',').ToHashSet(),
+                DropConnectors: line.Contains("dropRedundant=True"),
+                HiddenAttributes: ha.Length == 0 ? null : ha.Split(',').ToHashSet()));
+        }
+        List<SecondSkinLayer> Layers(bool bridge, bool trim = true)
+        {
+            var layers = new List<SecondSkinLayer>();
+            for (int i = 0; text.FirstOrDefault(l => l.StartsWith($"layer[{i}] ")) is { } line; i++)
+            {
+                var capP = F0($"layer{i}_toecap.raw");
+                var covP = F0($"layer{i}_coverage.raw");
+                byte[]? cap = !line.Contains("toeCap=none") && File.Exists(capP) ? File.ReadAllBytes(capP) : null;
+                byte[]? cov = trim && !line.Contains("coverage=none") && File.Exists(covP) ? File.ReadAllBytes(covP) : null;
+                int cs = cap == null ? 0 : (int)Math.Round(Math.Sqrt(cap.Length));
+                int vs = cov == null ? 0 : (int)Math.Round(Math.Sqrt(cov.Length));
+                float F(string k) => float.Parse(System.Text.RegularExpressions.Regex.Match(line, k + @"=(\S+)").Groups[1].Value,
+                                                 CultureInfo.InvariantCulture);
+                layers.Add(new SecondSkinLayer
+                {
+                    MaterialName = System.Text.RegularExpressions.Regex.Match(line, @"material=(\S+)").Groups[1].Value,
+                    Coverage = cov, CoverageWidth = vs, CoverageHeight = vs,
+                    ToeCap = cap, ToeCapWidth = cs, ToeCapHeight = cs,
+                    ToeCapStrength = F("strength"), BustBridgeStrength = bridge ? F("bustBridge") : 0f,
+                    NippleSmoothStrength = F("nippleSmooth"), CleftBridgeStrength = F("cleftBridge"),
+                    FoldSmoothStrength = F("smoothFold"),
+                });
+            }
+            return layers;
+        }
+        byte[]? baseModel = text.Contains("base=yes") ? File.ReadAllBytes(F0("base.mdl")) : null;
+        var diagOn = new List<string>();
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var on = SecondSkinWriter.Build(specs, Layers(true), baseModel, out _, diagOn.Add, CapSets());
+        long onMs = clock.ElapsedMilliseconds;
+        clock.Restart();
+        var off = SecondSkinWriter.Build(specs, Layers(false), baseModel, out _, _ => { }, CapSets());
+        W($"build time: bridge on {onMs} ms, bridge off {clock.ElapsedMilliseconds} ms");
+        foreach (var l in diagOn.Where(l => l.StartsWith("bust bridge: axis") || l.Contains("outside the body")))
+            W("  diag: " + l);
+        var axisM = diagOn.Select(l => System.Text.RegularExpressions.Regex.Match(l,
+                        @"axis \(([-\d.]+),([-\d.]+),([-\d.]+)\)")).FirstOrDefault(m => m.Success);
+        var ax = axisM == null ? new SecondSkinWriter.Vec3(0, 0, 1)
+            : new SecondSkinWriter.Vec3(float.Parse(axisM.Groups[1].Value, CultureInfo.InvariantCulture),
+                                        float.Parse(axisM.Groups[2].Value, CultureInfo.InvariantCulture),
+                                        float.Parse(axisM.Groups[3].Value, CultureInfo.InvariantCulture));
+
+        var materials = text.Where(l => l.StartsWith("layer["))
+            .Select(l => System.Text.RegularExpressions.Regex.Match(l, @"material=/mt_\w+?_(\w+)\.mtrl").Groups[1].Value)
+            .Where(s => s.Length > 0).ToList();
+
+        // The replay must BE the game's shell before any of its numbers mean anything.
+        foreach (var mat in materials)
+        {
+            if (!SecondSkinWriter.TryReadLod0Geometry(File.ReadAllBytes(F0("shell.mdl")), out var pg, out _, out _,
+                    out _, out _, keepMaterial: m => m.Contains(mat)) ||
+                !SecondSkinWriter.TryReadLod0Geometry(on, out var pr, out _, out _, out _, out _,
+                    keepMaterial: m => m.Contains(mat))) continue;
+            float worst = 0f;
+            if (pg.Length == pr.Length)
+                for (int i = 0; i < pg.Length; i++) worst = MathF.Max(worst, MathF.Abs(pg[i] - pr[i]));
+            W($"{mat}: game shell {pg.Length / 3} vertices, replay {pr.Length / 3}"
+              + (pg.Length == pr.Length ? $", worst coordinate difference {worst * 1000:0.0000} mm" : " — DIFFERENT COUNTS"));
+        }
+
+        // DID THE BRIDGE CARRY A VERTEX THROUGH THE SURFACE? The path from each vertex's bridge-off position to
+        // its bridge-on one, tested against the bridge-off shell's own triangles. Both shells have every shape
+        // key and body pass baked in, so this cannot be fooled the way sampling a raw body model can. A path
+        // that crosses a face that isn't its own is a lift into the body — under a breast, into its underside.
+        // The surface is an UNTRIMMED bridge-off shell: every face of the shaped body, not just the ones this
+        // garment covers. A coverage-trimmed shell is missing faces — inside a cleavage the cups leave bare —
+        // and a path through a missing face counts one crossing short, so "ends inside" comes out backwards.
+        var full = SecondSkinWriter.Build(specs, Layers(false, trim: false), baseModel, out _, _ => { }, CapSets());
+        foreach (var mat in materials)
+        {
+            if (!SecondSkinWriter.TryReadLod0Geometry(off, out var po, out _, out _, out _, out _,
+                    keepMaterial: m => m.Contains(mat)) ||
+                !SecondSkinWriter.TryReadLod0Geometry(on, out var pn, out _, out _, out _, out _,
+                    keepMaterial: m => m.Contains(mat)) || po.Length != pn.Length ||
+                !SecondSkinWriter.TryReadLod0Geometry(full, out var pf, out _, out var to, out _, out _,
+                    keepMaterial: m => m.Contains(mat))) continue;
+            SecondSkinWriter.Vec3 O(int i) => new(po[i * 3], po[i * 3 + 1], po[i * 3 + 2]);
+            SecondSkinWriter.Vec3 N(int i) => new(pn[i * 3], pn[i * 3 + 1], pn[i * 3 + 2]);
+            SecondSkinWriter.Vec3 Fp(int i) => new(pf[i * 3], pf[i * 3 + 1], pf[i * 3 + 2]);
+            // The writer's own inside test, so the two cannot disagree about what "inside" means.
+            var body = new SecondSkinWriter.BodyWinding(
+                Enumerable.Range(0, pf.Length / 3).Select(Fp).ToArray(), to, Enumerable.Range(0, pf.Length / 3).ToArray());
+            // Does the measure itself read this body correctly? The chest centre is inside; a point well in front
+            // of the apexes, and one far off to the side, are not.
+            W($"{mat}: winding sanity — chest centre (0,1.22,0.02) {body.Winding(new(0f, 1.22f, 0.02f)):0.00}, "
+              + $"in front (0,1.22,0.30) {body.Winding(new(0f, 1.22f, 0.30f)):0.00}, "
+              + $"off to the side (0.6,1.22,0) {body.Winding(new(0.6f, 1.22f, 0f)):0.00}");
+
+            // Same-position copies (UV seams) share a path; count each position once.
+            var seenPos = new HashSet<(int, int, int)>();
+            var inside = new List<(float W, float Travel, SecondSkinWriter.Vec3 At, SecondSkinWriter.Vec3 End)>();
+            int movedPaths = 0;
+            for (int i = 0; i < po.Length / 3; i++)
+            {
+                var s0 = O(i); var s1 = N(i);
+                float travel = Dist(s0, s1);
+                if (travel < 0.002f) continue;   // 2 mm: well past the clearance changes, into real displacement
+                if (!seenPos.Add(((int)MathF.Round(s0.X * 1e5f), (int)MathF.Round(s0.Y * 1e5f), (int)MathF.Round(s0.Z * 1e5f)))) continue;
+                movedPaths++;
+                float w = body.Winding(s1);
+                if (w > 0.5f) inside.Add((w, travel, s0, s1));
+            }
+            W($"{mat}: {movedPaths} position(s) the bridge moved 2 mm or more; {inside.Count} of them END inside "
+              + $"the body (winding > 0.5)");
+
+            // Are the vertices that end inside ordinary vertices of the torso, or shape-key vertices? A shape key
+            // redirects triangles to extra vertices appended to the mesh; if these are those, the solve saw them
+            // with no triangles attached.
+            if (SecondSkinWriter.TryReadLod0Geometry(File.ReadAllBytes(F0("body0.mdl")), out var rawP, out _, out var rawT,
+                    out _, out _))
+            {
+                var referenced = new HashSet<(int, int, int)>();
+                foreach (int vi in rawT)
+                    referenced.Add(((int)MathF.Round(rawP[vi * 3] * 1e4f), (int)MathF.Round(rawP[vi * 3 + 1] * 1e4f),
+                                    (int)MathF.Round(rawP[vi * 3 + 2] * 1e4f)));
+                int onRaw = 0;
+                foreach (var c in inside)
+                {
+                    // The shell vertex is the skin pushed 0.05 mm, so match at 0.1 mm.
+                    var q = c.At;
+                    bool hit = false;
+                    for (int dx = -1; dx <= 1 && !hit; dx++)
+                    for (int dy = -1; dy <= 1 && !hit; dy++)
+                    for (int dz = -1; dz <= 1 && !hit; dz++)
+                        hit = referenced.Contains(((int)MathF.Round(q.X * 1e4f) + dx, (int)MathF.Round(q.Y * 1e4f) + dy,
+                                                   (int)MathF.Round(q.Z * 1e4f) + dz));
+                    if (hit) onRaw++;
+                }
+                W($"  of the {inside.Count} ending inside, {onRaw} start on a vertex the UNSHAPED torso's triangles use");
+            }
+
+            // The same end points against each dumped BODY source on its own, mesh by mesh — the solve runs per
+            // mesh, so a breast in a different mesh from the chest wall it lifts is invisible to it.
+            for (int bi = 0; File.Exists(F0($"body{bi}.mdl")); bi++)
+            {
+                var bytes = File.ReadAllBytes(F0($"body{bi}.mdl"));
+                var names = SecondSkinWriter.DrawnMaterialNames(bytes);
+                foreach (var name in names)
+                {
+                    if (!SecondSkinWriter.TryReadLod0Geometry(bytes, out var bpp, out _, out var btt, out _, out _,
+                            keepMaterial: m => m == name) || btt.Length == 0) continue;
+                    var bodyOnly = new SecondSkinWriter.BodyWinding(
+                        Enumerable.Range(0, bpp.Length / 3).Select(k => new SecondSkinWriter.Vec3(bpp[k * 3], bpp[k * 3 + 1], bpp[k * 3 + 2])).ToArray(),
+                        btt, Enumerable.Range(0, bpp.Length / 3).ToArray());
+                    var sample = inside.Take(6).Select(c => bodyOnly.Winding(c.End)).ToList();
+                    if (sample.Count == 0) continue;
+                    W($"  body{bi} {name}: {btt.Length / 3} tris, winding at the first ends "
+                      + string.Join(" ", sample.Select(s => s.ToString("0.00"))));
+                }
+            }
+            foreach (var c in inside.OrderByDescending(c => c.Travel).Take(15))
+                W($"  winding {c.W:0.00} after {c.Travel * 1000,5:0.0} mm, from ({c.At.X,7:0.0000} {c.At.Y,7:0.0000} {c.At.Z,7:0.0000}) "
+                  + $"to ({c.End.X,7:0.0000} {c.End.Y,7:0.0000} {c.End.Z,7:0.0000})");
+        }
+
+        W("##### GAME SHELL");
+        Measure(File.ReadAllBytes(F0("shell.mdl")), off);
+        W("##### REPLAY, bridge on");
+        Measure(on, off);
+        W("##### REPLAY, bridge off");
+        Measure(off, null);
+
+        File.WriteAllText(Path.Combine(Path.GetTempPath(), "proteus-bust-clearance.txt"), sb.ToString());
+
+        void Measure(byte[] shell, byte[]? unmoved)
+        {
+            foreach (var mat in materials)
+            {
+                if (!SecondSkinWriter.TryReadLod0Geometry(shell, out var p, out _, out var t, out var sw, out _,
+                        keepMaterial: m => m.Contains(mat))) continue;
+                string Dom(int i) => i < sw.Length && sw[i].Length > 0 ? sw[i].MaxBy(x => x.W).Bone : "?";
+                float[]? q0 = null;
+                if (unmoved != null && SecondSkinWriter.TryReadLod0Geometry(unmoved, out var pu, out _, out _,
+                        out _, out _, keepMaterial: m => m.Contains(mat)) && pu.Length == p.Length) q0 = pu;
+                SecondSkinWriter.Vec3 P(int i) => new(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]);
+                float Moved(int i) => q0 == null ? float.NaN
+                    : MathF.Sqrt((p[i * 3] - q0[i * 3]) * (p[i * 3] - q0[i * 3])
+                               + (p[i * 3 + 1] - q0[i * 3 + 1]) * (p[i * 3 + 1] - q0[i * 3 + 1])
+                               + (p[i * 3 + 2] - q0[i * 3 + 2]) * (p[i * 3 + 2] - q0[i * 3 + 2]));
+                const float cell = 0.004f;
+                (int, int, int) C(float x, float y, float z) =>
+                    ((int)MathF.Floor(x / cell), (int)MathF.Floor(y / cell), (int)MathF.Floor(z / cell));
+                var hash = new Dictionary<(int, int, int), List<int>>();
+                for (int k = 0; k + 2 < t.Length; k += 3)
+                {
+                    var a = P(t[k]); var b = P(t[k + 1]); var c = P(t[k + 2]);
+                    if (MathF.Max(a.Y, MathF.Max(b.Y, c.Y)) < 0.99f || MathF.Min(a.Y, MathF.Min(b.Y, c.Y)) > 1.51f) continue;
+                    var lo = C(MathF.Min(a.X, MathF.Min(b.X, c.X)), MathF.Min(a.Y, MathF.Min(b.Y, c.Y)), MathF.Min(a.Z, MathF.Min(b.Z, c.Z)));
+                    var hi = C(MathF.Max(a.X, MathF.Max(b.X, c.X)), MathF.Max(a.Y, MathF.Max(b.Y, c.Y)), MathF.Max(a.Z, MathF.Max(b.Z, c.Z)));
+                    for (int x = lo.Item1; x <= hi.Item1; x++)
+                    for (int y = lo.Item2; y <= hi.Item2; y++)
+                    for (int z = lo.Item3; z <= hi.Item3; z++)
+                        (hash.TryGetValue((x, y, z), out var l) ? l : hash[(x, y, z)] = []).Add(k);
+                }
+
+                // How differently the skin and the shell above it are skinned: half the summed absolute weight
+                // difference over every bone (0 = identical, 1 = no bone in common), and the difference in weight
+                // on the breast bones alone. A bone translation T moves the two apart by roughly that much of T.
+                (float Tv, float Mune) Mismatch(int v, int k, SecondSkinWriter.Vec3 at)
+                {
+                    var a = P(t[k]); var b = P(t[k + 1]); var c = P(t[k + 2]);
+                    float Area(SecondSkinWriter.Vec3 x, SecondSkinWriter.Vec3 y, SecondSkinWriter.Vec3 z)
+                    {
+                        var u = new SecondSkinWriter.Vec3(y.X - x.X, y.Y - x.Y, y.Z - x.Z);
+                        var s = new SecondSkinWriter.Vec3(z.X - x.X, z.Y - x.Y, z.Z - x.Z);
+                        var cr = new SecondSkinWriter.Vec3(u.Y * s.Z - u.Z * s.Y, u.Z * s.X - u.X * s.Z, u.X * s.Y - u.Y * s.X);
+                        return MathF.Sqrt(cr.X * cr.X + cr.Y * cr.Y + cr.Z * cr.Z);
+                    }
+                    float total = Area(a, b, c);
+                    if (total < 1e-12f) return (float.NaN, float.NaN);
+                    float fa = Area(at, b, c) / total, fb = Area(a, at, c) / total, fc = 1f - fa - fb;
+                    var shellMix = new Dictionary<string, float>();
+                    foreach (var (vi, f) in new[] { (t[k], fa), (t[k + 1], fb), (t[k + 2], fc) })
+                        if (vi < sw.Length)
+                            foreach (var (bone, bwv) in sw[vi]) shellMix[bone] = shellMix.GetValueOrDefault(bone) + f * bwv;
+                    float tv = 0f, mune = 0f;
+                    foreach (var bone in bwt[v].Keys.Union(shellMix.Keys))
+                    {
+                        float d = bwt[v].GetValueOrDefault(bone) - shellMix.GetValueOrDefault(bone);
+                        tv += MathF.Abs(d);
+                        if (bone.StartsWith("j_mune")) mune += d;
+                    }
+                    return (tv * 0.5f, mune);
+                }
+
+                var hits = new List<(float H, int V, float Move, float Edge, string Tri, float Tv, float Mune)>();
+                for (int v = 0; v < bp.Count; v++)
+                {
+                    var q = bp[v];
+                    if (!hash.TryGetValue(C(q.X, q.Y, q.Z), out var near)) continue;
+                    float best = float.MaxValue; (float H, int V, float Move, float Edge, string Tri, float Tv, float Mune) bestHit = default;
+                    foreach (int k in near)
+                    {
+                        var a = P(t[k]); var b = P(t[k + 1]); var c = P(t[k + 2]);
+                        var e1 = new SecondSkinWriter.Vec3(b.X - a.X, b.Y - a.Y, b.Z - a.Z);
+                        var e2 = new SecondSkinWriter.Vec3(c.X - a.X, c.Y - a.Y, c.Z - a.Z);
+                        var fn = new SecondSkinWriter.Vec3(e1.Y * e2.Z - e1.Z * e2.Y, e1.Z * e2.X - e1.X * e2.Z, e1.X * e2.Y - e1.Y * e2.X);
+                        float len = MathF.Sqrt(fn.X * fn.X + fn.Y * fn.Y + fn.Z * fn.Z);
+                        if (len < 1e-12f) continue;
+                        fn = new(fn.X / len, fn.Y / len, fn.Z / len);
+                        if (fn.X * bn[v].X + fn.Y * bn[v].Y + fn.Z * bn[v].Z < 0) fn = new(-fn.X, -fn.Y, -fn.Z);
+                        float h = (a.X - q.X) * fn.X + (a.Y - q.Y) * fn.Y + (a.Z - q.Z) * fn.Z;
+                        if (h < -0.003f || h > 0.003f) continue;
+                        var pq = new SecondSkinWriter.Vec3(q.X + fn.X * h, q.Y + fn.Y * h, q.Z + fn.Z * h);
+                        bool inside = true;
+                        foreach (var (u, uu) in new[] { (a, b), (b, c), (c, a) })
+                        {
+                            var ev = new SecondSkinWriter.Vec3(uu.X - u.X, uu.Y - u.Y, uu.Z - u.Z);
+                            var qv = new SecondSkinWriter.Vec3(pq.X - u.X, pq.Y - u.Y, pq.Z - u.Z);
+                            if ((ev.Y * qv.Z - ev.Z * qv.Y) * fn.X + (ev.Z * qv.X - ev.X * qv.Z) * fn.Y
+                                + (ev.X * qv.Y - ev.Y * qv.X) * fn.Z < -1e-9f) { inside = false; break; }
+                        }
+                        if (!inside || MathF.Abs(h) >= best) continue;
+                        best = MathF.Abs(h);
+                        float edge = MathF.Max(Dist(a, b), MathF.Max(Dist(b, c), Dist(c, a)));
+                        float move = MathF.Max(Moved(t[k]), MathF.Max(Moved(t[k + 1]), Moved(t[k + 2])));
+                        var (tv, mune) = Mismatch(v, k, pq);
+                        bestHit = (h, v, move, edge, $"{Dom(t[k])},{Dom(t[k + 1])},{Dom(t[k + 2])}", tv, mune);
+                    }
+                    if (best < float.MaxValue) hits.Add(bestHit);
+                }
+
+                W($"=== {mat}: {hits.Count} chest vertices under a triangle");
+                float[] edges = [float.NegativeInfinity, 0f, 2e-5f, 4e-5f, 6e-5f, 2e-4f, 1e-3f, float.PositiveInfinity];
+                for (int e = 0; e + 1 < edges.Length; e++)
+                {
+                    var inBin = hits.Where(x => x.H >= edges[e] && x.H < edges[e + 1]).ToList();
+                    string moved = q0 == null || inBin.Count == 0 ? ""
+                        : $", under a bridge-moved face (>0.01 mm) {inBin.Count(x => x.Move > 1e-5f)}";
+                    W($"  h {edges[e] * 1000,8:0.###}..{edges[e + 1] * 1000,-8:0.###} mm: {inBin.Count,6}{moved}");
+                }
+                // Skinning mismatch between the skin and the shell right above it, within 1 mm. A copied shell
+                // matches its own skin exactly; a face the bridge slid carries the weights of where it came from.
+                var close = hits.Where(x => x.H < 1e-3f && !float.IsNaN(x.Tv)).ToList();
+                float[] tvEdges = [0f, 0.02f, 0.05f, 0.1f, 0.2f, 0.4f, 1.01f];
+                W($"  skinning mismatch (half summed |dw|) for the {close.Count} within 1 mm:");
+                for (int e = 0; e + 1 < tvEdges.Length; e++)
+                {
+                    var inBin = close.Where(x => x.Tv >= tvEdges[e] && x.Tv < tvEdges[e + 1]).ToList();
+                    W($"    {tvEdges[e],4:0.00}..{tvEdges[e + 1],-4:0.00}: {inBin.Count,6}"
+                      + (inBin.Count == 0 ? "" : $", worst breast-bone difference {inBin.Max(x => MathF.Abs(x.Mune)):0.000}"));
+                }
+
+                // Through the shell, or the closest with a real skinning mismatch — a positive bind-pose clearance
+                // closes once the bones move under a face that does not follow them.
+                foreach (var x in close.Where(x => x.H < 2e-5f || x.Tv >= 0.05f)
+                                       .OrderByDescending(x => x.Tv / MathF.Max(x.H, 1e-5f)).Take(30))
+                {
+                    var q = bp[x.V]; var n = bn[x.V];
+                    float facing = MathF.Abs(n.X * ax.X + n.Y * ax.Y + n.Z * ax.Z);
+                    W($"  h {x.H * 1000,7:0.000} mm at ({q.X,7:0.0000} {q.Y,7:0.0000} {q.Z,7:0.0000}) "
+                      + $"|n.axis| {facing:0.00} edge {x.Edge * 1000,5:0.0} mm"
+                      + (q0 == null ? "" : $" face moved {x.Move * 1000,6:0.000} mm")
+                      + $" mismatch {x.Tv:0.000} breast {x.Mune,6:0.000}"
+                      + $" body {bw[x.V]} / tri {x.Tri}");
+                }
+            }
+        }
+
+        static float Dist(SecondSkinWriter.Vec3 a, SecondSkinWriter.Vec3 b)
+            => MathF.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y) + (a.Z - b.Z) * (a.Z - b.Z));
+    }
+
     /// <summary>Pairs of vertices at the same position whose stored normals differ, bucketed by height and
     /// reported with the worst disagreement in each band.</summary>
     private static IEnumerable<string> NormalSplits(byte[] m)
