@@ -91,11 +91,13 @@ internal static class PenumbraModMeta
     /// collapses "no manifest" and "unreadable manifest" into <see cref="LegacyFileVersion"/>, so without it
     /// every folder an importer is part-way through creating would refuse its own first write.
     /// </summary>
-    public static bool IsLegacyFolder(string modRoot)
+    /// <param name="waitIfHeld">Wait out a manifest someone else holds open, as the writers do, so it is not
+    /// answered as "not legacy" for want of a moment. False for a caller on the draw or framework thread that
+    /// only uses the answer for display — the sleep would be frozen frames, and any write it leads to still
+    /// waits and refuses on its own.</param>
+    public static bool IsLegacyFolder(string modRoot, bool waitIfHeld = true)
     {
-        // One read, with the held-file retry the writers get, so a manifest Penumbra is busy with is not
-        // answered as "not legacy" for want of a moment's wait.
-        var manifest = ReadManifest(modRoot, out bool readable, waitIfHeld: true);
+        var manifest = ReadManifest(modRoot, out bool readable, waitIfHeld: waitIfHeld);
         return readable && FileVersionOf(manifest) < SingleFileVersion;
     }
 
