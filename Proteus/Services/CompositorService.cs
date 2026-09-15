@@ -2021,11 +2021,6 @@ public class CompositorService : IDisposable
     public Proteus.Interop.ColorTableHighlighter? Highlighter { get; set; }
 
     /// <summary>
-    /// Manual escape hatch: drop every cached decoded texture, then recomposite immediately. For the rare
-    /// case where a texture edit isn't reflected because the file kept the same timestamp and byte length —
-    /// something the decode cache's key can't see. Returns the number of cache entries dropped.
-    /// </summary>
-    /// <summary>
     /// The Refresh button: re-derive which file every base path resolves to, then recomposite. Without the
     /// re-derive it rebuilt from the same remembered upstreams, so the thing a user reaches for it over — a
     /// body or skin change that did not show up — was the one thing it could not pick up.
@@ -2036,6 +2031,11 @@ public class CompositorService : IDisposable
         TriggerRecomposite("manual");
     }
 
+    /// <summary>
+    /// Manual escape hatch: drop every cached decoded texture, then recomposite immediately. For the rare
+    /// case where a texture edit isn't reflected because the file kept the same timestamp and byte length —
+    /// something the decode cache's key can't see. Returns the number of cache entries dropped.
+    /// </summary>
     public int ClearTextureCacheAndRecomposite()
     {
         int dropped = textureLoader.ClearCache();
@@ -8735,19 +8735,6 @@ public class CompositorService : IDisposable
     }
 
     /// <summary>
-    /// Resolve <paramref name="gamePath"/> to the mod file a composite should read as its BASE, never to
-    /// our own previous output. Every call site that loads a base texture or material goes through this
-    /// rather than <c>penumbra.ResolvePlayer</c> directly. Returns null only when there is no known
-    /// upstream, which lets the loader fall through to game data as before.
-    /// </summary>
-    /// <summary>
-    /// Timing shim — see the blend sub-phase counters. Body unchanged, in <c>…Core</c>.
-    /// <para/>
-    /// This is called from outside the blend too (PrimeUpstreamCache, the shell's source walk). Those land
-    /// in the counter as well, but the counter is reset per run and printed before the shell phase, so the
-    /// only non-blend contribution is setup — measured at ~30 ms, and reported separately.
-    /// </summary>
-    /// <summary>
     /// The upstream <see cref="PrimeUpstreamCache"/> settled for a path this composite, or null when there is
     /// none — never a live resolve, never a remembered value that was not confirmed by a settle.
     /// <para/>
@@ -8764,6 +8751,19 @@ public class CompositorService : IDisposable
             ? disk
             : null;
 
+    /// <summary>
+    /// Resolve <paramref name="gamePath"/> to the mod file a composite should read as its BASE, never to
+    /// our own previous output. Every call site that loads a base texture or material goes through this
+    /// rather than <c>penumbra.ResolvePlayer</c> directly. Returns null only when there is no known
+    /// upstream, which lets the loader fall through to game data as before.
+    /// </summary>
+    /// <summary>
+    /// Timing shim — see the blend sub-phase counters. Body unchanged, in <c>…Core</c>.
+    /// <para/>
+    /// This is called from outside the blend too (PrimeUpstreamCache, the shell's source walk). Those land
+    /// in the counter as well, but the counter is reset per run and printed before the shell phase, so the
+    /// only non-blend contribution is setup — measured at ~30 ms, and reported separately.
+    /// </summary>
     private string? ResolveUpstream(string gamePath)
     {
         var t0 = PhaseCounter.Begin();

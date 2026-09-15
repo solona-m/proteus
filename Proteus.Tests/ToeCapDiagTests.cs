@@ -477,7 +477,7 @@ public class ToeCapDiagTests
         byte[]? baseModel = text.Contains("base=yes") ? File.ReadAllBytes(F0("base.mdl")) : null;
         var diagOn = new List<string>();
         var clock = System.Diagnostics.Stopwatch.StartNew();
-        SecondSkinWriter.TraceSpanNode = p => p.Z > 0.09f && p.X > -0.001f && p.X < 0.03f && p.Y > 1.176f && p.Y < 1.196f;
+        SecondSkinWriter.TraceSpanNode = p => p.Z > 0.010f && p.Z < 0.014f && MathF.Abs(p.X) < 0.003f && p.Y > 0.850f && p.Y < 0.875f;
         var on = SecondSkinWriter.Build(specs, Layers(true), baseModel, out var onStats, diagOn.Add, CapSets());
         SecondSkinWriter.TraceSpanNode = null;
         File.WriteAllLines(Path.Combine(Path.GetTempPath(), Path.ChangeExtension(report, ".diag.txt")),
@@ -876,6 +876,26 @@ public class ToeCapDiagTests
             sb.AppendLine($"{y:0.00}    | {a.apex * 1000,8:0.0} {a.mid * 1000,9:0.0} {(a.apex - a.mid) * 1000,6:0.0} | {b.apex * 1000,8:0.0} {b.mid * 1000,9:0.0} {(b.apex - b.mid) * 1000,6:0.0}");
         }
 
+        // THE CROTCH FROM BELOW: in 2mm slices front to back, the LOWEST shell y (mm above 0.84) in 1mm columns across
+        // the midline. A notch rising into the labia shows as the middle columns sitting higher than their neighbours.
+        sb.AppendLine();
+        sb.AppendLine("CROTCH UNDERSIDE (lowest shell y, mm above 0.840, per 1mm column of x from -8 to +8)");
+        foreach (var (label, pp) in new[] { ("OFF", pOff), ("ON ", pOn) })
+            for (float zz = -0.004f; zz <= 0.016f; zz += 0.002f)
+            {
+                var cols = new float[17];
+                Array.Fill(cols, float.NaN);
+                for (int v = 0; v < pp.Length / 3; v++)
+                {
+                    float x = pp[v * 3], y = pp[v * 3 + 1], z = pp[v * 3 + 2];
+                    if (MathF.Abs(z - zz) > 0.001f || y < 0.835f || y > 0.885f) continue;
+                    int c = (int)MathF.Round(x * 1000f) + 8;
+                    if (c < 0 || c >= cols.Length) continue;
+                    if (float.IsNaN(cols[c]) || y < cols[c]) cols[c] = y;
+                }
+                sb.AppendLine($"  {label} z {zz * 1000,5:0}: " + string.Join(" ", cols.Select(y => float.IsNaN(y) ? "  -  " : $"{(y - 0.84f) * 1000,5:0.0}")));
+            }
+
         // THE SIDE PROFILE under the breast: front-most z per 5mm of height, over the whole width and in columns, ON vs
         // OFF, with the second difference of ON (negative = convex, a lump; positive = concave).
         sb.AppendLine();
@@ -996,15 +1016,29 @@ public class ToeCapDiagTests
         ShadedBackRenderAt(-0.12f, 0.12f, 1.08f, 1.32f, "proteus-shaded-chest.rgb", front: true);
         ShadedBackRenderAt(-0.06f, 0.06f, 1.12f, 1.24f, "proteus-shaded-chest-zoom.rgb", front: true);
         ShadedBackRenderAt(-0.16f, 0.16f, 1.02f, 1.30f, "proteus-shaded-chest-top.rgb", front: true, lightAbove: true);
+        {
+            // The crotch from the front and a little below, the angle of the in-game screenshots.
+            const float pitch = 0.7f;
+            float yc = 0.86f * MathF.Cos(pitch) + 0.03f * MathF.Sin(pitch);
+            ShadedBackRenderAt(-0.05f, 0.05f, yc - 0.05f, yc + 0.05f, "proteus-shaded-crotch.rgb", front: true, pitch: pitch,
+                               lightBelow: true);
+            // Straight up from below, closer, by FACE: grey faces one winding, red the other — folded faces show red.
+            const float under = 1.35f;
+            float yu = 0.86f * MathF.Cos(under) + 0.03f * MathF.Sin(under);
+            ShadedBackRenderAt(-0.025f, 0.025f, yu - 0.025f, yu + 0.025f, "proteus-faces-crotch.rgb", front: true, pitch: under,
+                               lightBelow: true, byFace: true);
+        }
         ShadedBackRenderAt(-0.16f, 0.16f, 1.06f, 1.32f, "proteus-shaded-chest-left.rgb", front: true, yaw: 0.9f);
         ShadedBackRenderAt(-0.16f, 0.16f, 1.06f, 1.32f, "proteus-shaded-chest-right.rgb", front: true, yaw: -0.9f);
     }
 
     private void ShadedBackRenderAt(float x0, float x1, float y0, float y1, string outName, bool front = false,
-                                    float yaw = 0f, bool lightAbove = false)
+                                    float yaw = 0f, bool lightAbove = false, float pitch = 0f, bool lightBelow = false,
+                                    bool byFace = false)
     {
         float flip = front ? 1f : -1f;
         float cy = MathF.Cos(yaw), sy = MathF.Sin(yaw);
+        float cp = MathF.Cos(pitch), sp = MathF.Sin(pitch);
         var dump = Path.Combine(Path.GetTempPath(), "proteus-gen3-dump");
         var off = Path.Combine(Path.GetTempPath(), "proteus-fold-clearance.replay-off.mdl");
         if (!File.Exists(Path.Combine(dump, "host0_shell.mdl")) || !File.Exists(off)) return;
@@ -1024,6 +1058,8 @@ public class ToeCapDiagTests
             float lvx = front ? 0.75f : -0.3f, ly = front ? 0.25f : 0.5f, lvz = front ? 0.61f : -0.81f;
             // Overhead and a little in front, the way the game lit the screenshot of the lumps under the breasts.
             if (lightAbove) { lvx = 0.1f; ly = 0.85f; lvz = 0.52f; }
+            // From below and in front, and a little to the side, for faces that look down.
+            if (lightBelow) { lvx = 0.35f; ly = -0.75f; lvz = 0.56f; }
             // The light turns with the camera, so a turned view is lit the same way as the straight one.
             float lx = lvx * cy - lvz * sy, lz = lvx * sy + lvz * cy;
             for (int k = 0; k + 2 < t.Length; k += 3)
@@ -1032,10 +1068,13 @@ public class ToeCapDiagTests
                 // From behind: flip x and z.
                 // Turned about the vertical by yaw first, then viewed from the front or back.
                 float RX(int i) => flip * (p[i * 3] * cy + p[i * 3 + 2] * sy);
-                float RZ(int i) => flip * (-p[i * 3] * sy + p[i * 3 + 2] * cy);
-                float ax = RX(a), ay = p[a * 3 + 1], az = RZ(a);
-                float bx = RX(b), by = p[b * 3 + 1], bz = RZ(b);
-                float cx = RX(c), cyy = p[c * 3 + 1], cz = RZ(c);
+                float RZ0(int i) => flip * (-p[i * 3] * sy + p[i * 3 + 2] * cy);
+                // Pitched: the camera below and looking up, so lower points come nearer.
+                float RY(int i) => p[i * 3 + 1] * cp + RZ0(i) * sp;
+                float RZ(int i) => RZ0(i) * cp - p[i * 3 + 1] * sp;
+                float ax = RX(a), ay = RY(a), az = RZ(a);
+                float bx = RX(b), by = RY(b), bz = RZ(b);
+                float cx = RX(c), cyy = RY(c), cz = RZ(c);
                 float Px(float x) => (x - x0) / (x1 - x0) * (W - 1);
                 float Py(float y) => (y1 - y) / (y1 - y0) * (H - 1);
                 float pax = Px(ax), pay = Py(ay), pbx = Px(bx), pby = Py(by), pcx = Px(cx), pcy = Py(cyy);
@@ -1061,9 +1100,19 @@ public class ToeCapDiagTests
                     float nz = w0 * nr[a * 3 + 2] + w1 * nr[b * 3 + 2] + w2 * nr[c * 3 + 2];
                     float nl = MathF.Sqrt(nx * nx + ny * ny + nz * nz);
                     float lam = nl > 0 ? MathF.Max(0f, (nx * lx + ny * ly + nz * lz) / nl) : 0f;
+                    bool flipped = false;
+                    if (byFace)
+                    {
+                        float ux = p[b * 3] - p[a * 3], uy = p[b * 3 + 1] - p[a * 3 + 1], uz = p[b * 3 + 2] - p[a * 3 + 2];
+                        float vx = p[c * 3] - p[a * 3], vy = p[c * 3 + 1] - p[a * 3 + 1], vz = p[c * 3 + 2] - p[a * 3 + 2];
+                        float fx = uy * vz - uz * vy, fy = uz * vx - ux * vz, fz = ux * vy - uy * vx;
+                        float fl = MathF.Sqrt(fx * fx + fy * fy + fz * fz);
+                        lam = fl > 0 ? MathF.Abs(fx * lx + fy * ly + fz * lz) / fl : 0f;
+                        flipped = area * flip > 0;
+                    }
                     byte s = (byte)(30 + 225 * lam);
                     int o = (y * W * 2 + col * W + x) * 3;
-                    rgb[o] = s; rgb[o + 1] = s; rgb[o + 2] = s;
+                    rgb[o] = flipped ? (byte)255 : s; rgb[o + 1] = s; rgb[o + 2] = flipped ? (byte)(s / 3) : s;
                 }
             }
             col++;
@@ -1087,6 +1136,290 @@ public class ToeCapDiagTests
             }
         }
         File.WriteAllText(Path.Combine(Path.GetTempPath(), "proteus-cleft-normals.txt"), sb.ToString());
+    }
+
+    /// <summary>
+    /// SCRATCH: the body fold pass on the dumped legs part, and where the NON-skin meshes (the genital mesh) sit
+    /// against the skin before and after it — how many of their vertices stand outside the skin surface by more
+    /// than the shell's push, which is what shows through a garment.
+    /// </summary>
+    [Fact]
+    public void FoldGenitalClearance()
+    {
+        var dump = Path.Combine(Path.GetTempPath(), "proteus-gen3-dump");
+        var f = Path.Combine(dump, "host0_body1.mdl");
+        var covP = Path.Combine(dump, "host0_layer0_coverage.raw");
+        if (!File.Exists(f) || !File.Exists(covP)) return;
+        var cov = File.ReadAllBytes(covP);
+        int vs = (int)Math.Round(Math.Sqrt(cov.Length));
+        var gate = new SecondSkinLayer { MaterialName = "gate", Coverage = cov, CoverageWidth = vs, CoverageHeight = vs };
+        var input = File.ReadAllBytes(f);
+        var log = new List<string>();
+        var output = SecondSkinWriter.SmoothBodyNipples(input, gate, 0f, log.Add, foldStrength: 1f);
+        var sb = new System.Text.StringBuilder();
+        foreach (var l in log) sb.AppendLine(l);
+
+        foreach (var (label, bytes) in new[] { ("BEFORE", input), ("AFTER", output ?? input) })
+        {
+            if (!SecondSkinWriter.TryReadLod0Geometry(bytes, out var sp, out _, out var st, out _, out _,
+                    keepMaterial: SecondSkinWriter.IsBodySkinMaterial)) continue;
+            // The front view across the crotch: front-most skin z (mm) in 3mm columns of x, per row of height. A notch
+            // rising into the labia shows as the middle columns sitting back from their neighbours.
+            sb.AppendLine($"{label} front-most skin z across the crotch (x -18..+18mm in 3mm columns):");
+            for (float yy = 0.880f; yy >= 0.842f; yy -= 0.004f)
+            {
+                var cols = new float[12];
+                Array.Fill(cols, float.NaN);
+                for (int v = 0; v < sp.Length / 3; v++)
+                {
+                    if (MathF.Abs(sp[v * 3 + 1] - yy) > 0.002f || sp[v * 3 + 2] < -0.01f) continue;
+                    int c = (int)MathF.Floor((sp[v * 3] + 0.018f) / 0.003f);
+                    if (c < 0 || c >= cols.Length) continue;
+                    if (float.IsNaN(cols[c]) || sp[v * 3 + 2] > cols[c]) cols[c] = sp[v * 3 + 2];
+                }
+                sb.AppendLine($"  y {yy:0.000}: " + string.Join(" ", cols.Select(z => float.IsNaN(z) ? "   -  " : $"{z * 1000,6:0.0}")));
+            }
+            if (!SecondSkinWriter.TryReadLod0Geometry(bytes, out var gp, out _, out var gt, out _, out _,
+                    keepMaterial: m => !SecondSkinWriter.IsBodySkinMaterial(m))) continue;
+            var nodes = new SecondSkinWriter.Vec3[sp.Length / 3];
+            for (int i = 0; i < nodes.Length; i++) nodes[i] = new SecondSkinWriter.Vec3(sp[i * 3], sp[i * 3 + 1], sp[i * 3 + 2]);
+            var winding = new SecondSkinWriter.BodyWinding(nodes, st, Enumerable.Range(0, nodes.Length).ToArray());
+            var used = new bool[gp.Length / 3];
+            foreach (int i in gt) used[i] = true;
+            // Signed distance to the skin SURFACE: nearest point on a skin triangle, positive on the side the
+            // triangle's (winding-derived, outward-by-majority) normal faces. Past the shell's push = shows through.
+            var crotchTris = new List<int>();
+            for (int k = 0; k + 2 < st.Length; k += 3)
+            {
+                var a = nodes[st[k]];
+                if (a.Y > 0.76f && a.Y < 0.97f && MathF.Abs(a.X) < 0.08f) crotchTris.Add(k);
+            }
+            int crotch = 0, proud = 0;
+            var worst = new List<(float d, SecondSkinWriter.Vec3 p)>();
+            for (int v = 0; v < used.Length; v++)
+            {
+                if (!used[v]) continue;
+                var p = new SecondSkinWriter.Vec3(gp[v * 3], gp[v * 3 + 1], gp[v * 3 + 2]);
+                if (p.Y < 0.78f || p.Y > 0.95f || MathF.Abs(p.X) > 0.05f) continue;
+                crotch++;
+                float best = float.MaxValue, signed = 0f;
+                foreach (int k in crotchTris)
+                {
+                    var (q, nrmT) = ClosestOnTri(p, nodes[st[k]], nodes[st[k + 1]], nodes[st[k + 2]]);
+                    float dx = p.X - q.X, dy = p.Y - q.Y, dz = p.Z - q.Z;
+                    float d2 = dx * dx + dy * dy + dz * dz;
+                    if (d2 >= best) continue;
+                    best = d2;
+                    signed = MathF.Sign(dx * nrmT.X + dy * nrmT.Y + dz * nrmT.Z) * MathF.Sqrt(d2);
+                }
+                if (signed > 0.00005f) { proud++; worst.Add((signed, p)); }
+            }
+            sb.AppendLine($"{label}: {crotch} non-skin vertices at the crotch, {proud} standing more than 0.05mm in front of the skin surface"
+                          + $" — {worst.Count(w => w.p.Y < 0.88f)} of them below y 0.88 (the fold), worst there "
+                          + $"{(worst.Any(w => w.p.Y < 0.88f) ? worst.Where(w => w.p.Y < 0.88f).Max(w => w.d) * 1000 : 0):0.00}mm");
+            foreach (var w in worst.Where(w => w.p.Y < 0.88f).OrderByDescending(w => w.d).Take(12))
+                sb.AppendLine($"   {w.d * 1000,6:0.00}mm in front at ({w.p.X:0.0000},{w.p.Y:0.0000},{w.p.Z:0.0000})");
+        }
+        File.WriteAllText(Path.Combine(Path.GetTempPath(), "proteus-fold-genital.txt"), sb.ToString());
+
+        static (SecondSkinWriter.Vec3 q, SecondSkinWriter.Vec3 n) ClosestOnTri(SecondSkinWriter.Vec3 p,
+            SecondSkinWriter.Vec3 a, SecondSkinWriter.Vec3 b, SecondSkinWriter.Vec3 c)
+        {
+            SecondSkinWriter.Vec3 Sub(SecondSkinWriter.Vec3 x, SecondSkinWriter.Vec3 y) => new(x.X - y.X, x.Y - y.Y, x.Z - y.Z);
+            float Dot(SecondSkinWriter.Vec3 x, SecondSkinWriter.Vec3 y) => x.X * y.X + x.Y * y.Y + x.Z * y.Z;
+            SecondSkinWriter.Vec3 At(SecondSkinWriter.Vec3 o, SecondSkinWriter.Vec3 d, float t) => new(o.X + d.X * t, o.Y + d.Y * t, o.Z + d.Z * t);
+            var ab = Sub(b, a); var ac = Sub(c, a); var ap = Sub(p, a);
+            var n = new SecondSkinWriter.Vec3(ab.Y * ac.Z - ab.Z * ac.Y, ab.Z * ac.X - ab.X * ac.Z, ab.X * ac.Y - ab.Y * ac.X);
+            float d1 = Dot(ab, ap), d2 = Dot(ac, ap);
+            if (d1 <= 0 && d2 <= 0) return (a, n);
+            var bp = Sub(p, b); float d3 = Dot(ab, bp), d4 = Dot(ac, bp);
+            if (d3 >= 0 && d4 <= d3) return (b, n);
+            float vc = d1 * d4 - d3 * d2;
+            if (vc <= 0 && d1 >= 0 && d3 <= 0) return (At(a, ab, d1 / (d1 - d3)), n);
+            var cp = Sub(p, c); float d5 = Dot(ab, cp), d6 = Dot(ac, cp);
+            if (d6 >= 0 && d5 <= d6) return (c, n);
+            float vb = d5 * d2 - d1 * d6;
+            if (vb <= 0 && d2 >= 0 && d6 <= 0) return (At(a, ac, d2 / (d2 - d6)), n);
+            float va = d3 * d6 - d5 * d4;
+            if (va <= 0 && (d4 - d3) >= 0 && (d5 - d6) >= 0)
+                return (At(b, Sub(c, b), (d4 - d3) / ((d4 - d3) + (d5 - d6))), n);
+            float den = 1f / (va + vb + vc);
+            float v2 = vb * den, w2 = vc * den;
+            return (new SecondSkinWriter.Vec3(a.X + ab.X * v2 + ac.X * w2, a.Y + ab.Y * v2 + ac.Y * w2, a.Z + ab.Z * v2 + ac.Z * w2), n);
+        }
+    }
+
+    /// <summary>
+    /// SCRATCH: faces at the crotch the spans turned over — same-index triangles of the replay shell against the spans-off
+    /// replay whose face normals disagree, per 5mm of z.
+    /// </summary>
+    [Fact]
+    public void CrotchFlippedFaces()
+    {
+        var on = Path.Combine(Path.GetTempPath(), "proteus-fold-clearance.replay.mdl");
+        var off = Path.Combine(Path.GetTempPath(), "proteus-fold-clearance.replay-off.mdl");
+        if (!File.Exists(on) || !File.Exists(off)) return;
+        var sb = new System.Text.StringBuilder();
+        foreach (var (label, file) in new[] { ("ON", on), ("OFF", off) })
+        {
+            SecondSkinWriter.TryReadLod0Geometry(File.ReadAllBytes(file), out var p, out _, out var t, out _, out var nr,
+                keepMaterial: m => m.Contains("ril_"));
+            // A face whose winding disagrees with the normals stored at its corners: shaded from the wrong side.
+            var bins = new SortedDictionary<int, (int flipped, int total, float area)>();
+            for (int k = 0; k + 2 < t.Length; k += 3)
+            {
+                int a = t[k], b = t[k + 1], c = t[k + 2];
+                float x = p[a * 3], y = p[a * 3 + 1], z = p[a * 3 + 2];
+                if (MathF.Abs(x) > 0.02f || y < 0.83f || y > 0.9f || z < -0.06f || z > 0.09f) continue;
+                float ux = p[b * 3] - p[a * 3], uy = p[b * 3 + 1] - p[a * 3 + 1], uz = p[b * 3 + 2] - p[a * 3 + 2];
+                float vx = p[c * 3] - p[a * 3], vy = p[c * 3 + 1] - p[a * 3 + 1], vz = p[c * 3 + 2] - p[a * 3 + 2];
+                float fx = uy * vz - uz * vy, fy = uz * vx - ux * vz, fz = ux * vy - uy * vx;
+                float ax = nr[a * 3] + nr[b * 3] + nr[c * 3], ay = nr[a * 3 + 1] + nr[b * 3 + 1] + nr[c * 3 + 1];
+                float az = nr[a * 3 + 2] + nr[b * 3 + 2] + nr[c * 3 + 2];
+                int bin = (int)MathF.Floor(z * 200f) * 5;
+                var e = bins.GetValueOrDefault(bin);
+                e.total++;
+                float fl = MathF.Sqrt(fx * fx + fy * fy + fz * fz), al = MathF.Sqrt(ax * ax + ay * ay + az * az);
+                if (fl > 0 && al > 0 && (fx * ax + fy * ay + fz * az) / (fl * al) < -0.2f)
+                {
+                    e.flipped++;
+                    e.area += fl * 0.5f * 1e6f;
+                }
+                bins[bin] = e;
+            }
+            sb.AppendLine($"== {label}");
+            foreach (var (bin, e) in bins)
+                if (e.flipped > 0) sb.AppendLine($"  z {bin,4}mm: {e.flipped,3} of {e.total,4} against their normals, {e.area:0.00}mm²");
+            sb.AppendLine($"  total {bins.Values.Sum(e => e.flipped)}, {bins.Values.Sum(e => e.area):0.00}mm²");
+        }
+        File.WriteAllText(Path.Combine(Path.GetTempPath(), "proteus-crotch-flipped.txt"), sb.ToString());
+    }
+
+    /// <summary>
+    /// SCRATCH: the crotch seen from BELOW — the dumped body parts and the game's shell, depth tested. Grey = shell
+    /// wins; tan = skin wins (shell missing or behind it); orange = a non-skin body mesh wins (the genital mesh).
+    /// Left: everything. Right: the shell alone, with its open boundary edges drawn red.
+    /// </summary>
+    [Fact]
+    public void CrotchFromBelowRender()
+    {
+        var dump = Path.Combine(Path.GetTempPath(), "proteus-gen3-dump");
+        var replayF = Path.Combine(Path.GetTempPath(), "proteus-fold-clearance.replay.mdl");
+        var shellF = File.Exists(replayF) ? replayF : Path.Combine(dump, "host0_shell.mdl");
+        if (!File.Exists(shellF)) return;
+        const int W = 400, H = 400;
+        float x0 = -0.05f, x1 = 0.05f, z0 = -0.05f, z1 = 0.05f;
+        var depth = new float[W * H];
+        var kind = new byte[W * H];
+        Array.Fill(depth, float.NegativeInfinity);
+        var shellDepth = new float[W * H];
+        var shellShade = new byte[W * H];
+        Array.Fill(shellDepth, float.NegativeInfinity);
+
+        void Raster(float[] p, int[] t, byte k, float[] dep, byte[]? kindOut, byte[]? shadeOut)
+        {
+            for (int q = 0; q + 2 < t.Length; q += 3)
+            {
+                int a = t[q], b = t[q + 1], c = t[q + 2];
+                if (p[a * 3 + 1] > 0.92f || p[a * 3 + 1] < 0.78f) continue;
+                float Px(float x) => (x - x0) / (x1 - x0) * (W - 1);
+                float Pz(float z) => (z1 - z) / (z1 - z0) * (H - 1);
+                float pax = Px(p[a * 3]), pay = Pz(p[a * 3 + 2]), pbx = Px(p[b * 3]), pby = Pz(p[b * 3 + 2]);
+                float pcx = Px(p[c * 3]), pcy = Pz(p[c * 3 + 2]);
+                // From below: nearer = LOWER y.
+                float da = -p[a * 3 + 1], db = -p[b * 3 + 1], dc = -p[c * 3 + 1];
+                float area = (pbx - pax) * (pcy - pay) - (pcx - pax) * (pby - pay);
+                if (MathF.Abs(area) < 1e-9f) continue;
+                float ux = p[b * 3] - p[a * 3], uy = p[b * 3 + 1] - p[a * 3 + 1], uz = p[b * 3 + 2] - p[a * 3 + 2];
+                float vx = p[c * 3] - p[a * 3], vy = p[c * 3 + 1] - p[a * 3 + 1], vz = p[c * 3 + 2] - p[a * 3 + 2];
+                float nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+                float nl = MathF.Sqrt(nx * nx + ny * ny + nz * nz);
+                byte shade = (byte)(90 + 165 * MathF.Abs(nl > 0 ? ny / nl : 0));
+                int minX = Math.Max(0, (int)MathF.Floor(MathF.Min(pax, MathF.Min(pbx, pcx))));
+                int maxX = Math.Min(W - 1, (int)MathF.Ceiling(MathF.Max(pax, MathF.Max(pbx, pcx))));
+                int minY = Math.Max(0, (int)MathF.Floor(MathF.Min(pay, MathF.Min(pby, pcy))));
+                int maxY = Math.Min(H - 1, (int)MathF.Ceiling(MathF.Max(pay, MathF.Max(pby, pcy))));
+                for (int y = minY; y <= maxY; y++)
+                for (int x = minX; x <= maxX; x++)
+                {
+                    float w0 = ((pbx - x) * (pcy - y) - (pcx - x) * (pby - y)) / area;
+                    float w1 = ((pcx - x) * (pay - y) - (pax - x) * (pcy - y)) / area;
+                    float w2 = 1 - w0 - w1;
+                    if (w0 < 0 || w1 < 0 || w2 < 0) continue;
+                    float d = w0 * da + w1 * db + w2 * dc;
+                    int i = y * W + x;
+                    if (d <= dep[i]) continue;
+                    dep[i] = d;
+                    if (kindOut != null) kindOut[i] = k;
+                    if (shadeOut != null) shadeOut[i] = shade;
+                }
+            }
+        }
+
+        var sb = new System.Text.StringBuilder();
+        for (int part = 0; File.Exists(Path.Combine(dump, $"host0_body{part}.mdl")); part++)
+        {
+            var bytes = File.ReadAllBytes(Path.Combine(dump, $"host0_body{part}.mdl"));
+            if (SecondSkinWriter.TryReadLod0Geometry(bytes, out var sp, out _, out var st, out _, out _,
+                    keepMaterial: SecondSkinWriter.IsBodySkinMaterial))
+                Raster(sp, st, 1, depth, kind, null);
+            if (SecondSkinWriter.TryReadLod0Geometry(bytes, out var gp, out _, out var gt, out _, out _,
+                    keepMaterial: m => !SecondSkinWriter.IsBodySkinMaterial(m)))
+                Raster(gp, gt, 2, depth, kind, null);
+        }
+        if (!SecondSkinWriter.TryReadLod0Geometry(File.ReadAllBytes(shellF), out var hp, out _, out var ht, out _, out _,
+                keepMaterial: m => m.Contains("ril_"))) return;
+        // The shell sits 0.05mm off the skin; nudge it toward the camera by that much so coincident skin does not win.
+        var hpn = (float[])hp.Clone();
+        Raster(hpn, ht, 3, depth, kind, null);
+        Raster(hpn, ht, 3, shellDepth, null, shellShade);
+
+        // Open boundary edges of the shell near the crotch.
+        var edgeUse = new Dictionary<(long, long), int>();
+        (long, long, long) Q(int v) => ((long)MathF.Round(hp[v * 3] / 1e-5f), (long)MathF.Round(hp[v * 3 + 1] / 1e-5f), (long)MathF.Round(hp[v * 3 + 2] / 1e-5f));
+        var weldId = new Dictionary<(long, long, long), long>();
+        long Id(int v) { var k = Q(v); if (!weldId.TryGetValue(k, out var id)) weldId[k] = id = weldId.Count; return id; }
+        for (int q = 0; q + 2 < ht.Length; q += 3)
+            for (int e = 0; e < 3; e++)
+            {
+                long ia = Id(ht[q + e]), ib = Id(ht[q + (e + 1) % 3]);
+                var key = ia < ib ? (ia, ib) : (ib, ia);
+                edgeUse[key] = edgeUse.GetValueOrDefault(key) + 1;
+            }
+        var pos = new Dictionary<long, (float X, float Y, float Z)>();
+        for (int v = 0; v < hp.Length / 3; v++) pos[Id(v)] = (hp[v * 3], hp[v * 3 + 1], hp[v * 3 + 2]);
+        var rgb = new byte[W * 2 * H * 3];
+        for (int i = 0; i < W * H; i++)
+        {
+            (byte R, byte G, byte B) c = kind[i] switch { 1 => (214, 150, 110), 2 => (240, 110, 20), 3 => (170, 170, 170), _ => (20, 20, 40) };
+            rgb[i / W * W * 2 * 3 + (i % W) * 3] = c.R; rgb[i / W * W * 2 * 3 + (i % W) * 3 + 1] = c.G; rgb[i / W * W * 2 * 3 + (i % W) * 3 + 2] = c.B;
+            byte s = float.IsNegativeInfinity(shellDepth[i]) ? (byte)20 : shellShade[i];
+            int o = (i / W * W * 2 + W + i % W) * 3;
+            rgb[o] = s; rgb[o + 1] = s; rgb[o + 2] = s;
+        }
+        int open = 0;
+        foreach (var (e, n) in edgeUse)
+        {
+            if (n != 1) continue;
+            var a = pos[e.Item1]; var b = pos[e.Item2];
+            if (a.Y > 0.92f || a.Y < 0.78f || MathF.Abs(a.X) > 0.05f || MathF.Abs(a.Z) > 0.05f) continue;
+            open++;
+            sb.AppendLine($"open edge ({a.X * 1000:0.0},{a.Y:0.000},{a.Z * 1000:0.0})-({b.X * 1000:0.0},{b.Y:0.000},{b.Z * 1000:0.0})");
+            for (int s = 0; s <= 20; s++)
+            {
+                float f = s / 20f;
+                float x = a.X + (b.X - a.X) * f, z = a.Z + (b.Z - a.Z) * f;
+                int px = (int)((x - x0) / (x1 - x0) * (W - 1)), py = (int)((z1 - z) / (z1 - z0) * (H - 1));
+                if (px < 0 || py < 0 || px >= W || py >= H) continue;
+                int o = (py * W * 2 + W + px) * 3;
+                rgb[o] = 255; rgb[o + 1] = 0; rgb[o + 2] = 0;
+            }
+        }
+        sb.Insert(0, $"{open} open shell edge(s) at the crotch\n");
+        int orange = kind.Count(k => k == 2), tan = kind.Count(k => k == 1);
+        sb.Insert(0, $"pixels from below: genital mesh wins {orange}, skin wins {tan}\n");
+        File.WriteAllBytes(Path.Combine(Path.GetTempPath(), "proteus-crotch-below.rgb"), rgb);
+        File.WriteAllText(Path.Combine(Path.GetTempPath(), "proteus-crotch-below.txt"), sb.ToString());
     }
 
     /// <summary>SCRATCH: the nipple pass's own report on every frozen torso dump there is, for comparing bodies.</summary>
