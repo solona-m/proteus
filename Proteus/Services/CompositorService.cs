@@ -241,6 +241,20 @@ public class CompositorService : IDisposable
     public IReadOnlySet<string>? GetLiveContentMaterials(string modDir)
         => _contentMaterials.TryGetValue(modDir, out var mats) ? mats : null;
 
+    // Mod directory → the content MODEL files of that mod that went into the last composite's shell, relative
+    // to the mod root with forward slashes. Published on the same terms as _contentMaterials beside it.
+    private volatile Dictionary<string, HashSet<string>> _contentModels = new();
+
+    /// <summary>
+    /// The imported models of <paramref name="modDir"/> that the character is wearing through our shell, or
+    /// null when none are — which a mod that has not been composited yet also looks like.
+    /// <para/>
+    /// The Studio tab's answer to "is this worn": geometry we graft is drawn from our own output mod, so the
+    /// walk over the character's loaded files — which is how every other mod is judged — never names it.
+    /// </summary>
+    public IReadOnlySet<string>? GetLiveContentModels(string modDir)
+        => _contentModels.TryGetValue(modDir, out var models) ? models : null;
+
     /// <summary>
     /// Why none of <paramref name="modDir"/>'s content pieces can be worn by this character, or null when
     /// they can. Read straight off the shell builder, which records it even on the runs that host nothing —
@@ -334,6 +348,7 @@ public class CompositorService : IDisposable
     {
         _shellMaterials   = new();
         _contentMaterials = new(StringComparer.OrdinalIgnoreCase);
+        _contentModels    = new(StringComparer.OrdinalIgnoreCase);
         _shellLight       = new(StringComparer.OrdinalIgnoreCase);
         _shellDrawnCheck  = null;
         // The shell is gone, so the next one to be drawn is news even if it lands on the same materials.
@@ -7136,6 +7151,7 @@ public class CompositorService : IDisposable
             Dictionary<(string ModDir, string? Group, string? Option), List<string>>? nextShellMaterials = null;
             Dictionary<string, ShellLightProfile>? nextShellLight = null;
             Dictionary<string, HashSet<string>>? nextContentMaterials = null;
+            Dictionary<string, HashSet<string>>? nextContentModels = null;
             ShellDrawnProbe? nextShellDrawnCheck = null;
             bool shellBuilt = false;   // a gear shell was produced this composite (drives glasses reconcile)
             // The shell was built for invisible glasses we have not equipped YET (ChooseHost's pending
@@ -7524,6 +7540,7 @@ public class CompositorService : IDisposable
                                 log.Debug("[Proteus] second skin material/textures changed — in-place reload");
                             nextShellMaterials = shells.ShellMaterials;
                             nextContentMaterials = shells.ContentMaterials;
+                            nextContentModels = shells.ContentModels;
                             nextShellLight = shells.ShellLight;
 
                             // Materials to test, models to anchor the test against — see ShellDrawnProbe.
@@ -7635,6 +7652,7 @@ public class CompositorService : IDisposable
             // ClearShellLocators instead.
             _shellMaterials   = nextShellMaterials ?? new();
             _contentMaterials = nextContentMaterials ?? new(StringComparer.OrdinalIgnoreCase);
+            _contentModels    = nextContentModels ?? new(StringComparer.OrdinalIgnoreCase);
             _shellLight       = nextShellLight ?? new(StringComparer.OrdinalIgnoreCase);
             _shellDrawnCheck  = nextShellDrawnCheck;
 

@@ -2307,6 +2307,18 @@
     "message": "你的角色当前没有穿着此模型。请穿上它，或打开显示模型视图。",
     "description": ""
   },
+  "Parts.Content.Hint": {
+    "message": "这件服装已导入 Proteus，由 Proteus 为你穿上。照常绘制即可——每一笔保存后，服装会重新生成，几秒后便会显示在角色上。",
+    "description": ""
+  },
+  "Parts.Content.NoSwitches": {
+    "message": "无法为导入的服装添加开关：Proteus 将它挂在另一件物品上，由那件物品自身的开关控制。上方的笔刷仍可使用。",
+    "description": ""
+  },
+  "Parts.Live.PickedShell": {
+    "message": "这是 Proteus 为你绘制的服装，每次有变动都会重新生成。请选择它来源的模组来编辑。",
+    "description": ""
+  },
   "Parts.Live.Unreadable": {
     "message": "此模型与角色身上的模型不匹配。打开显示模型视图即可在此绘制。",
     "description": ""

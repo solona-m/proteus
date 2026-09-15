@@ -259,6 +259,16 @@ public sealed class PartsPanel
     public void Refresh() => mods = null;
 
     /// <summary>
+    /// Every mod Penumbra knows, by folder → display name, less Proteus's own output mod — see the picker for
+    /// why that one is left out.
+    /// </summary>
+    private Dictionary<string, string> LoadMods()
+        => (penumbra.GetAllMods() ?? [])
+            .Where(m => !string.Equals(m.Key, SidecarDiscoveryService.ManagedModDir,
+                                       StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(m => m.Key, m => m.Value);
+
+    /// <summary>
     /// Whether the last <see cref="Draw"/> drew the model viewer. The window reads the moment this turns on
     /// to grow itself, since the viewer is what the room is for and the size that suits a mod picker is far
     /// too small to paint on.
@@ -398,7 +408,8 @@ public sealed class PartsPanel
                                    partTicked: moving ? moveTickedFn : partTickedFn,
                                    tickedVersion: moving ? MoveVersion() : TickedVersion(),
                                    moveGizmo: moving ? moveGizmo : null,
-                                   movePivot: moving ? MovePivot() : null);
+                                   movePivot: moving ? MovePivot() : null,
+                                   graftedGamePath: GraftedGamePath());
         }
 
         PumpMove();
@@ -415,6 +426,10 @@ public sealed class PartsPanel
         if (showModelView || !previewDirty || preview.Busy) return;
         if (volume == null || brushBase == null || modelIndex < 0) { previewDirty = false; return; }
         bool customizePart = TargetIsCustomizePart;
+        // An imported piece is drawn as part of a Proteus shell, so there is no game path of its own to put a
+        // preview in front of: redirecting the one its file name names would land on nothing. The stroke shows
+        // when the save rebuilds the shell — see SaveBrush.
+        if (TargetIsContent) { previewDirty = false; return; }
 
         // This kind of part turned out not to reload in place (found out after a push, once the save had already
         // counted on it): show the finished stroke the old way, once the brush is up — preview taken down first,
@@ -571,6 +586,15 @@ public sealed class PartsPanel
             return;
 
         var dir = Path.GetFileName(modRoot);
+        // Our own output mod is rebuilt from scratch on every composite, so opening it offers edits the next
+        // composite throws away — the picker leaves it out for that reason, and a click must not get round it.
+        // What the user clicked on is a shell; the garment inside it is edited in the mod it was imported from.
+        if (string.Equals(dir, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase))
+        {
+            status = Strings.Parts.LivePickedShell;
+            statusIsError = false;
+            return;
+        }
         if (!string.Equals(dir, modDir, StringComparison.OrdinalIgnoreCase)) SelectMod(dir);
 
         var wanted = rel.Replace('\\', '/');
@@ -670,10 +694,7 @@ public sealed class PartsPanel
         // Proteus's own output mod is left out. It is rebuilt from scratch on every composite, so a switch or a
         // brush edit written into it lasts until the next one — and because the character is always drawing
         // it, it would otherwise head the worn list above the garments someone actually came here to fix.
-        mods ??= (penumbra.GetAllMods() ?? [])
-            .Where(m => !string.Equals(m.Key, SidecarDiscoveryService.ManagedModDir,
-                                       StringComparison.OrdinalIgnoreCase))
-            .ToDictionary(m => m.Key, m => m.Value);
+        mods ??= LoadMods();
 
         var width = ProteusStyle.S(340f);
         ImGui.SetNextItemWidth(width);
@@ -696,6 +717,10 @@ public sealed class PartsPanel
             // Asked once per open, not per frame: it is an IPC round trip over every resource the character
             // has loaded, and what is worn does not change while someone is reading a list.
             equippedMods = EquippedModDirectories();
+            // The mod list too, for the same cost and the same reason. Cached for the life of the tab, it
+            // missed every mod installed since it was first drawn — importing a pack and coming straight here
+            // to edit it, which is the obvious thing to do, listed everything except the mod just imported.
+            mods = LoadMods();
         }
         ImGui.SetNextItemWidth(-1);
         if (appearing) ImGui.SetKeyboardFocusHere();
@@ -754,7 +779,16 @@ public sealed class PartsPanel
     /// simply falls back to alphabetical.
     /// </summary>
     private HashSet<string> EquippedModDirectories()
-        => WornFiles().Select(w => w.Mod).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    {
+        var worn = WornFiles().Select(w => w.Mod).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // An imported garment is drawn out of OUR output mod, so the walk above never names the mod it came
+        // from — the one mod whose geometry is definitely on the character was the one row that could not go
+        // green. The composite records which mods it cut content from; that is what says so here.
+        foreach (var dir in (IEnumerable<string>?)mods?.Keys ?? [])
+            if (compositor.GetLiveContentModels(dir) is { Count: > 0 })
+                worn.Add(dir);
+        return worn;
+    }
 
     /// <summary>Files inside this mod that the character is drawing, relative to the mod root with forward
     /// slashes — the spelling <see cref="PenumbraModMeta.Redirect.File"/> is compared in. Refreshed each
@@ -774,6 +808,13 @@ public sealed class PartsPanel
         foreach (var file in files)
             if (HatCompatService.InMods(file, root, out var modRoot, out var rel))
                 found.Add((Path.GetFileName(modRoot), rel));
+
+        // The imported models the character is wearing through our shell. They are worn by every meaning the
+        // user has — visible, on the character, editable here — and the walk above cannot see them, because
+        // the file the game loaded is ours, not the mod's. See CompositorService.GetLiveContentModels.
+        if (modDir != null && compositor.GetLiveContentModels(modDir) is { } content)
+            foreach (var rel in content)
+                found.Add((modDir, rel));
         return found;
     }
 
@@ -826,7 +867,86 @@ public sealed class PartsPanel
             .Where(r => r.GamePath.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase))
             .OrderBy(r => r.GamePath, StringComparer.OrdinalIgnoreCase)
             .ToList();
+
+        // An imported pack's garments publish nothing: the import takes their model redirects off Penumbra so
+        // Proteus can graft the geometry instead, which left a mod whose every model was invisible here ("this
+        // mod publishes no models"). They are listed from the sidecar, after the published ones.
+        models.AddRange(ContentModels(root, contentFiles));
         modelLabels = ModelLabels(models);
+    }
+
+    /// <summary>
+    /// Files this mod's models come from that Penumbra does not publish — an imported pack's content pieces,
+    /// which Proteus grafts onto a host item instead. <paramref name="files"/> is filled with them, so the rest
+    /// of the tab can tell one from an ordinary model.
+    /// <para/>
+    /// The game path is derived from the file's own name rather than stored: the importer keeps the pack's
+    /// archive entry, and a model's leaf carries the race, kind and set the game would ask for it under. It is
+    /// what labels the row, what the brush reads the race from, and what groups a garment's sizes together —
+    /// never anything Penumbra is asked to resolve.
+    /// </summary>
+    private static List<PenumbraModMeta.Redirect> ContentModels(string root, HashSet<string> files)
+    {
+        files.Clear();
+        var rows = new List<PenumbraModMeta.Redirect>();
+        if (SidecarDiscoveryService.TryReadMetadata(root) is not { } meta) return rows;
+
+        void Add(ContentPiece piece, string source)
+        {
+            foreach (var rel in piece.ModelFiles())
+            {
+                if (!files.Add(rel)) continue;   // one piece shipped under several options
+                if (ContentGamePath(rel) is not { } gamePath) continue;
+                rows.Add(new PenumbraModMeta.Redirect(gamePath, rel.Replace('\\', '/'), source));
+            }
+        }
+
+        foreach (var piece in meta.Content ?? []) Add(piece, "");
+        foreach (var group in meta.ContentGroups ?? [])
+            foreach (var option in group.Options)
+                foreach (var piece in option.Pieces)
+                    Add(piece, $"{group.PenumbraGroupName} / {option.Name}");
+        return rows;
+    }
+
+    /// <summary>
+    /// The game path a content model's file name names — <c>chara/equipment/e0041/model/c0201e0041_top.mdl</c>
+    /// — or null when the name is not one the game could ask for.
+    /// </summary>
+    internal static string? ContentGamePath(string modelFile)
+    {
+        var leaf = Path.GetFileName(modelFile.Replace('\\', '/'));
+        if (ContentSlot.Parse(leaf) is not { } p || p.SetTag.Length < 2) return null;
+        var tree = p.SetTag[0] == 'a' ? "accessory" : "equipment";
+        return $"chara/{tree}/{p.SetTag}/model/{leaf}";
+    }
+
+    /// <summary>Model files of this mod that Proteus grafts rather than Penumbra publishing them.</summary>
+    private readonly HashSet<string> contentFiles = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The open model is an imported piece — worn through a Proteus shell, not as a file of its own.</summary>
+    private bool TargetIsContent
+        => modelIndex >= 0 && modelIndex < models.Count
+        && contentFiles.Contains(models[modelIndex].File);
+
+    /// <summary>
+    /// The path to pose the open model at when the character is wearing it through a Proteus shell — the brush
+    /// then paints it without finding it among the drawn models. Null for an ordinary model, and for an imported
+    /// one the character is NOT wearing.
+    /// <para/>
+    /// That second case is the point of asking the composite rather than the sidecar. A pack ships a garment in
+    /// four sizes and several races, and only the one variant resolved for this character is in the shell. Posing
+    /// any of the others would paint a surface nobody is wearing — into a file the composite does not read, so
+    /// the stroke would never appear — and a variant authored for another race would be posed through that race's
+    /// deform, making it look plausible while being wrong. Those get the ordinary "not on your character" notice.
+    /// </summary>
+    private string? GraftedGamePath()
+    {
+        if (!TargetIsContent || modDir == null) return null;
+        var file = models[modelIndex].File.Replace('\\', '/');
+        return compositor.GetLiveContentModels(modDir) is { } live && live.Contains(file)
+            ? models[modelIndex].GamePath
+            : null;
     }
 
     private void DrawModelPicker()
@@ -1624,6 +1744,9 @@ public sealed class PartsPanel
         if (showModelView) ImGui.TextDisabled(ps.BrushHelp);
         else if (liveBrush.Problem is { } problem) ImGui.TextColored(ProteusStyle.Warn, problem);
         else ImGui.TextDisabled(ps.LiveHint);
+        // Why a stroke on an imported garment does not appear the instant it is painted, said where the waiting
+        // happens rather than left to look like a brush that missed.
+        if (TargetIsContent && !showModelView) ImGui.TextDisabled(ps.ContentHint);
         ImGui.PopTextWrapPos();
         ImGui.Spacing();
 
@@ -1863,7 +1986,10 @@ public sealed class PartsPanel
         // Wind always redraws: the in-place reload shows a moved surface but not new wind, measured in game. Its reload
         // is still our own — wind moves no geometry, so nothing the second skin is cut from has changed.
         bool wind = tool == Tool.Wind;
-        bool previewed = !showModelView && !preview.UnsupportedFor(TargetIsCustomizePart) && materialsChanged == 0 && !wind;
+        // An imported piece is never previewed: the character draws it only inside a Proteus shell, so the edit
+        // shows when the reload below makes the composite rebuild that shell from the file just written.
+        bool previewed = !showModelView && !preview.UnsupportedFor(TargetIsCustomizePart) && !TargetIsContent
+                      && materialsChanged == 0 && !wind;
         if (previewed || (wind && !showModelView)) compositor.ExpectOwnModEdit(modDir);
         penumbra.ReloadModDirectory(modDir);
 
@@ -2058,6 +2184,18 @@ public sealed class PartsPanel
     private void DrawStaging()
     {
         var ps = Strings.Parts;
+
+        // A switch is written as an IMC edit on the item the model belongs to. An imported piece is worn on a
+        // host item of Proteus's choosing instead, whose own switches govern it — so one written here would sit
+        // in the mod doing nothing. Said rather than silently missing; the brush tools above still work.
+        if (TargetIsContent)
+        {
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextDisabled(ps.ContentNoSwitches);
+            ImGui.PopTextWrapPos();
+            return;
+        }
+
         int free = freeLetters;
 
         ImGui.TextDisabled(string.Format(ps.SelectedFmt, ticked.Count));
