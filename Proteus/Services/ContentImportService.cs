@@ -402,7 +402,8 @@ public sealed class ContentImportService
         // How many distinct garments each of the author's options ships. One means their own option already
         // selects it and we add nothing; more means the option bundles an outfit, and its pieces are gated
         // by SLOT — the identity that stays stable as the user switches between that group's options, where
-        // the set id would not.
+        // the set id would not. A one-garment option still gets a slot switch when its group is SINGLE and
+        // the pack has other garments too — see the gate below.
         var unitsPerOption = unitOrder.GroupBy(k => (k.Item1, k.Item2))
             .ToDictionary(g => g.Key, g => g.Count());
 
@@ -452,6 +453,13 @@ public sealed class ContentImportService
             if (key.Item1 == null && !PackControls(key))
                 garmentGate.TryAdd(GarmentKey(key.Item3, key.Item4), GateLabel(key));
 
+        // Whether the pack offers more than one garment, so wanting one of them does not mean wanting all.
+        // Every unit counts, imported or not: the question is what the pack ships, keyed the way garmentGate is.
+        bool severalGarments = unitOrder
+            .Select(k => GarmentKey(k.Item3, k.Item4))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Skip(1).Any();
+
         var units = new List<PieceUnit>();
         bool selfDriven = false;   // at least one model the pack's own checkboxes already drive
         foreach (var key in unitOrder)
@@ -467,6 +475,12 @@ public sealed class ContentImportService
                 // Shares the garment with an unconditional copy: one checkbox, already named, governs both.
                 : garmentGate.TryGetValue(GarmentKey(key.Item3, setTag), out var shared) ? shared
                 : unitsPerOption[(group, option)] > 1 ? slot.Label   // one slot of a bundle
+                // A Single group cannot be switched off — Penumbra always has one of its options selected — so
+                // in a pack offering other garments too, this one would be worn whenever the mod is enabled with
+                // nothing to take it off: Scarlet's tights and boots came along with the purse. One switch per
+                // slot, shared by all of the group's sizes, like a bundle's. A pack that is only this garment
+                // needs none; enabling it already says the garment is wanted.
+                : severalGarments && singleGroups.Contains(group) ? slot.Label
                 : null;                                             // its own option selects it
 
             units.Add(new PieceUnit(group, option, slot, name, gate, byUnit[key]));
@@ -1385,6 +1399,10 @@ public sealed class ContentImportService
     /// knows the format properly — groups, ids and all. A reload is asked for once in case the add did not load
     /// the folder yet. A folder STILL v3 after that is reported rather than written: the refusal in
     /// <see cref="PenumbraModMeta"/> exists so a v3 folder is never edited under Penumbra's feet.
+    /// <para/>
+    /// Either failure UNDOES the registration. Left in place, the mod was worse than absent: its sidecar gates
+    /// every piece on a group that was never written, so nothing it imported could ever be worn — and importing
+    /// again was refused because its folder already existed.
     /// </summary>
     private ImportResult? WritePieceGroupAfterUpgrade(ImportPreview preview, string dirName)
     {
@@ -1399,10 +1417,11 @@ public sealed class ContentImportService
         if (PenumbraModMeta.IsLegacyFolder(root))
         {
             log.Warning("[Proteus] imported {0}: Penumbra added the mod but left it in the pre-v4 layout, so its "
-                      + "piece group could not be written", dirName);
+                      + "piece group could not be written — removing it again", dirName);
+            UndoRegistration(root, dirName);
             return new(false, false, string.Format(Loc.Localize("ContentImport.Fail.NotUpgraded.Fmt",
-                "Penumbra added \"{0}\" but did not upgrade it from its older format, so its pieces can't be "
-                + "switched yet. Delete it in Penumbra and import the pack again."), dirName));
+                "Penumbra did not upgrade \"{0}\" from its older format, so its pieces could not be made "
+                + "switchable. The import was undone; try importing the pack again."), dirName));
         }
 
         try
@@ -1412,15 +1431,31 @@ public sealed class ContentImportService
         }
         catch (Exception ex)
         {
-            log.Error(ex, "[Proteus] imported {0}: could not write its piece group after Penumbra upgraded it",
-                      dirName);
-            return new(false, false, string.Format(Loc.Localize("ContentImport.Fail.Write.Fmt",
-                "Failed to write the mod: {0}"), ex.Message));
+            log.Error(ex, "[Proteus] imported {0}: could not write its piece group after Penumbra upgraded it — "
+                        + "removing it again", dirName);
+            UndoRegistration(root, dirName);
+            return new(false, false, string.Format(Loc.Localize("ContentImport.Fail.PieceGroup.Fmt",
+                "Could not add the piece switches to \"{0}\": {1} The import was undone; try importing the "
+                + "pack again."), dirName, ex.Message));
         }
 
         penumbra.ReloadModDirectory(dirName);
         log.Information("[Proteus] imported {0}: Penumbra upgraded the v3 pack, piece group added", dirName);
         return null;
+    }
+
+    /// <summary>
+    /// Take a mod this import registered back out: Penumbra forgets it and deletes the folder, so the next import
+    /// finds the name free. The folder is deleted here too if Penumbra's call leaves it behind — its success only
+    /// means the call went through.
+    /// </summary>
+    private void UndoRegistration(string root, string dirName)
+    {
+        var ec = penumbra.DeleteModDirectory(dirName);
+        if (ec != PenumbraApiEc.Success)
+            log.Warning("[Proteus] DeleteMod({0}) -> {1}", dirName, ec);
+        try { if (Directory.Exists(root)) Directory.Delete(root, true); }
+        catch (Exception ex) { log.Warning(ex, "[Proteus] could not delete {0}; remove it in Penumbra", root); }
     }
 
     /// <summary>The outcome of a registration. Warning is a success that still needs the user to act.</summary>

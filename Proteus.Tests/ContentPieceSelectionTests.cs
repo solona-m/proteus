@@ -533,6 +533,71 @@ public class ContentPieceSelectionTests
         finally { Directory.Delete(dir, true); }
     }
 
+    /// <summary>
+    /// Scarlet's shape: a Single size group per garment, in a pack offering several garments.
+    /// <para/>
+    /// A Single group always has an option selected, so a garment one of them ships is worn whenever the mod is
+    /// enabled — the tights and boots came along with the one piece that was wanted. So in a pack with other
+    /// garments each gets a switch per slot, shared by the group's sizes. The one-garment pack above keeps none.
+    /// </summary>
+    [Fact]
+    public void A_single_group_garment_gets_a_slot_switch_when_the_pack_ships_other_garments()
+    {
+        var model = SampleModel();
+        if (model == null) return;
+
+        var dir = TempDir();
+        try
+        {
+            var leaf = SecondSkinService
+                .UsedMaterialNames(model, SecondSkinWriter.MaterialNames(model))[0].TrimStart('/');
+
+            var files = new List<(string, byte[])> { ("common/outfit.mtrl", new byte[64]) };
+            string Option(string name, string gamePath, string entry)
+            {
+                files.Add((entry, model));
+                return "{ \"Name\": \"" + name + "\", \"Files\": { \"" + gamePath + "\": \""
+                     + entry.Replace("/", "\\\\") + "\" } }";
+            }
+
+            const string Legs = "chara/equipment/e6058/model/c0201e6058_dwn.mdl";
+            const string Feet = "chara/equipment/e6058/model/c0201e6058_sho.mdl";
+            var pants = new[] { Option("S", Legs, "pant size/s/model.mdl"), Option("M", Legs, "pant size/m/model.mdl") };
+            var boots = Option("Boots", Feet, "boots/model.mdl");
+
+            var manifest = "{\n  \"FileVersion\": 4,\n  \"Name\": \"Outfit\",\n"
+                         + "  \"DefaultData\": { \"Files\": { \"chara/x/" + leaf + "\": \"common\\\\outfit.mtrl\" } },\n"
+                         + "  \"Groups\": [\n"
+                         + "    { \"Name\": \"Pant Size\", \"Type\": \"Single\", \"Options\": [ " + string.Join(", ", pants) + " ] },\n"
+                         + "    { \"Name\": \"Boots\", \"Type\": \"Single\", \"Options\": [ " + boots + " ] }\n"
+                         + "  ]\n}";
+
+            var path = Path.Combine(dir, "outfit.pmp");
+            using (var zip = new ZipArchive(File.Create(path), ZipArchiveMode.Create))
+            {
+                void Add(string name, byte[] data)
+                {
+                    using var s = zip.CreateEntry(name).Open();
+                    s.Write(data, 0, data.Length);
+                }
+                Add("meta.json", Encoding.UTF8.GetBytes(manifest));
+                foreach (var (n, d) in files) Add(n, d);
+            }
+
+            var preview = ContentImportService.Inspect(path);
+            Assert.Equal(3, preview.ImportableUnits);
+            Assert.Equal(ContentImportService.PieceGroup, preview.PieceGroupName);
+            Assert.All(preview.Units, u => Assert.NotNull(u.GateOption));
+
+            // One switch for the pants whichever size is chosen, and a different one for the boots.
+            var pantGate = Assert.Single(preview.Units.Where(u => u.Group == "Pant Size").Select(u => u.GateOption).Distinct());
+            var bootGate = Assert.Single(preview.Units, u => u.Group == "Boots").GateOption;
+            Assert.NotEqual(pantGate, bootGate);
+            Assert.Equal(2, preview.GateOptions.Count);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
     // ── the runtime gate ─────────────────────────────────────────────────────
 
     [Fact]

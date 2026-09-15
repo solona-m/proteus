@@ -22,6 +22,7 @@ public class PenumbraBridge : IDisposable
     private readonly ResolvePlayerPath resolvePlayerPath;
     private readonly AddMod addMod;
     private readonly ReloadMod reloadMod;
+    private readonly DeleteMod deleteMod;
     private readonly TrySetMod trySetMod;
     private readonly TrySetModPriority trySetModPriority;
     private readonly TrySetModSetting trySetModSetting;
@@ -71,6 +72,7 @@ public class PenumbraBridge : IDisposable
         resolvePlayerPath = new ResolvePlayerPath(pluginInterface);
         addMod = new AddMod(pluginInterface);
         reloadMod = new ReloadMod(pluginInterface);
+        deleteMod = new DeleteMod(pluginInterface);
         trySetMod = new TrySetMod(pluginInterface);
         trySetModPriority = new TrySetModPriority(pluginInterface);
         trySetModSetting = new TrySetModSetting(pluginInterface);
@@ -358,6 +360,15 @@ public class PenumbraBridge : IDisposable
         if (!IsAvailable) return PenumbraApiEc.SystemDisposed;
         try { return addMod.Invoke(modDirectory); }
         catch (Exception ex) { log.Error(ex, "AddMod failed"); return PenumbraApiEc.UnknownError; }
+    }
+
+    /// <summary>Remove a mod from Penumbra and delete its folder. Success means the call went through, not that
+    /// the folder is gone — Penumbra's own caveat.</summary>
+    public PenumbraApiEc DeleteModDirectory(string modDirectory)
+    {
+        if (!IsAvailable) return PenumbraApiEc.SystemDisposed;
+        try { return deleteMod.Invoke(modDirectory); }
+        catch (Exception ex) { log.Error(ex, "DeleteMod failed"); return PenumbraApiEc.UnknownError; }
     }
 
     /// <summary>Tell Penumbra to reload a mod from disk.</summary>
