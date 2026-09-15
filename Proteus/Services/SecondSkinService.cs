@@ -270,7 +270,7 @@ public sealed class SecondSkinService
         return authoredCaps;
     }
 
-    /// <summary>Last cap messages told to the wearer, so a recomposite doesn't repeat them.</summary>
+    /// <summary>Last cap lines logged, so a recomposite doesn't repeat them.</summary>
     private string? lastCapDeclined, lastCapUsed;
 
     /// <summary>
@@ -3952,23 +3952,12 @@ public sealed class SecondSkinService
                 continue;   // this host fails; the others still build
             }
 
-            // The toe cap was wanted but no binding described this body, so none was emitted. Say so —
-            // the toes just quietly lose their cap otherwise, and there is a concrete thing the wearer
-            // can do about it (bake a binding against this body). Deduped: the shell rebuilds often.
-            if (stats.CapDeclined is { } declined)
+            // The toe cap was wanted but no binding described this body, so none was emitted. Logged, not
+            // printed to chat: the wearer can do nothing about a body no cap has been measured against, so
+            // telling them in chat was only noise. Deduped: the shell rebuilds often.
+            if (stats.CapDeclined is { } declined && lastCapDeclined != declined)
             {
-                if (lastCapDeclined != declined)
-                {
-                    lastCapDeclined = declined;
-                    var capMsg = $"[Proteus] Toe cap skipped: {declined}. The cap is fitted by a binding "
-                               + "measured against each supported body; this one has none, so the toes are "
-                               + "left uncapped rather than torn.";
-                    // Marshalled for the same reason as the messages above: this runs off the framework
-                    // thread and ChatGui's queue is not safe to enqueue into concurrently with the tick
-                    // that drains it.
-                    _ = Plugin.Framework.RunOnFrameworkThread(
-                        () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(capMsg, 25).Build()));
-                }
+                lastCapDeclined = declined;
                 log.Warning("[Proteus] second skin: toe cap declined — {0}", declined);
             }
 
@@ -3984,7 +3973,7 @@ public sealed class SecondSkinService
             // this setting is on by default now — so the one summary that would explain a missing patch of
             // skin has to survive at the level people actually run at, and has to name the switch.
             //
-            // Deduped on the tally, exactly as the two cap messages above are deduped, and for their
+            // Deduped on the tally, exactly as the two cap lines above are deduped, and for their
             // reason: the shell rebuilds often and an unchanged answer is not worth a line. Keyed by host
             // as well as by the numbers, so two hosts dropping different things both get said once.
             if (stats.RedundantSubs > 0)
