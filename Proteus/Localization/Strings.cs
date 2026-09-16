@@ -191,7 +191,7 @@ public sealed class TabStrings
     public readonly string Bindings = Loc.Localize("Tab.Bindings", "Bindings");
     public readonly string Create   = Loc.Localize("Tab.Create", "Create");
     public readonly string Import   = Loc.Localize("Tab.Import", "Import");
-    public readonly string Parts    = Loc.Localize("Tab.Parts", "Toggles");
+    public readonly string Parts    = Loc.Localize("Tab.Parts", "Studio");
     public readonly string Export   = Loc.Localize("Tab.Export", "Export");
     public readonly string Settings = Loc.Localize("Tab.Settings", "Settings");
 }
@@ -203,11 +203,14 @@ public sealed class ModsStrings
     public readonly string ColMod      = Loc.Localize("Mods.Col.Mod", "Mod");
     public readonly string ColPriority = Loc.Localize("Mods.Col.Priority", "Pri");
 
-    // These two are drawn with a bare ImGui.TableHeader, which takes the label as its id — hence the
-    // fused "###". Done here rather than at the call site so the concatenation happens once per language
-    // instead of once per frame.
+    // Drawn with a bare ImGui.TableHeader, which takes the label as its id — hence the fused "###". Done
+    // here rather than at the call site so the concatenation happens once per language instead of once
+    // per frame.
     public readonly string ColColors   = Loc.Localize("Mods.Col.Colors", "Colors") + "###modColors";
-    public readonly string ColSkindent = Loc.Localize("Mods.Col.Skindent", "Skindent") + "###modSkindent";
+
+    // The per-mod AO/Skindent combo's label in the colour panel. Keeps the key it had as a Mods column
+    // header so the existing translations carry over.
+    public readonly string Skindent = Loc.Localize("Mods.Col.Skindent", "Skindent");
 
     public readonly string ColorsBtn = Loc.Localize("Mods.Colors.Btn", "Colors");
 
@@ -347,12 +350,11 @@ public sealed class CreateStrings
     public readonly string WholeSkinTip = Loc.Localize("Create.WholeSkin.Tip",
         "Tick this when you're converting a full skin mod, not painting something onto skin.\n" +
         "Proteus ticks it for you when the textures look like one; your own answer always wins.\n" +
-        "Three things follow. The normal REPLACES the one already on the material instead of\n" +
+        "Two things follow. The normal REPLACES the one already on the material instead of\n" +
         "stacking onto it — otherwise it lands on top of the same map underneath, every pore\n" +
         "and crease is applied twice, and the body reads flat against the face with a hard line\n" +
-        "at the neck seam. Skin-tint suppression goes off, so the wearer's skin tone comes\n" +
-        "through: it is there to stop fabric being re-tinted, and this art IS the skin. And\n" +
-        "\"Bodies\" is set to \"All bodies\", so the skin reaches a vanilla body as well.");
+        "at the neck seam. And skin-tint suppression goes off, so the wearer's skin tone comes\n" +
+        "through: it is there to stop fabric being re-tinted, and this art IS the skin.");
 
     public readonly string FaceAsymmetric = Loc.Localize("Create.FaceAsymmetric.Label",
         "This face texture is asymmetric") + "###createFaceAsymmetric";
@@ -825,11 +827,6 @@ public sealed class ImportStrings
         "Your character isn't drawn yet, so Proteus picked \"{0}\" by preference rather than by your " +
         "body. Check the result once you're in game.");
 
-    public readonly string NeedsAllBodiesFmt = Loc.Localize("Import.BodyFit.NeedsAllBodies.Fmt",
-        "This pack has nothing painted for your vanilla body — \"{0}\" will be used instead. Baking onto " +
-        "a vanilla body is off by default, so Proteus will set this mod's \"Bodies\" to \"All bodies\" on " +
-        "import (Colors → Advanced); without that it would paint nothing.");
-
     public readonly string RemappedFmt = Loc.Localize("Import.BodyFit.Remapped.Fmt",
         "This pack has nothing for your {0} body, so \"{1}\" will be remapped onto it automatically.");
 
@@ -1105,6 +1102,9 @@ public sealed class ColorsStrings
     /// the art is baked onto — that is Bodies, which stays per-tab in Advanced.</summary>
     public readonly string GeometrySection = Loc.Localize("Colors.Geometry.Section", "Geometry");
 
+    /// <summary>Heading for the glow effect and Skindent, the section above Geometry.</summary>
+    public readonly string EffectsSection = Loc.Localize("Colors.Effects.Section", "Effects");
+
     public readonly string Pinned = Loc.Localize("Colors.Pinned", "(pinned)");
     public readonly string Auto   = Loc.Localize("Colors.Auto", "(auto)");
 
@@ -1348,6 +1348,29 @@ public sealed class ColorsStrings
       + "It cannot be detected for you. Real skin is never symmetric — freckles and moles differ\n"
       + "left to right — so only you can say whether a difference is the point or just detail.");
 
+    public readonly string ReinforcedToe = Loc.Localize("Colors.ReinforcedToe.Label",
+        "Reinforced toe");
+
+    public readonly string ReinforcedToeTip = Loc.Localize("Colors.ReinforcedToe.Tip",
+        "Make the capped toe denser than the rest of the stocking, the way real hosiery\n"
+      + "knits a heavier toe box — a darker panel with the toes still showing through it,\n"
+      + "fading out at the edge rather than stopping at a line.\n"
+      + "It can only take away transparency that is there. Where the stocking paints\n"
+      + "nothing it does nothing, so it will never put fabric on a bare toe, and on an\n"
+      + "already-opaque stocking you will see no change.\n"
+      + "With \"Sharp alpha\" on, every pixel is either solid or gone, so the soft edge\n"
+      + "becomes a hard one.");
+
+    public readonly string ToeDensity = Loc.Localize("Colors.ToeDensity.Label",
+        "Density");
+
+    public readonly string ToeDensityTip = Loc.Localize("Colors.ToeDensity.Tip",
+        "How much denser the toe is than the leg. 100% is completely solid; the usual\n"
+      + "reinforced toe sits well below that.");
+
+    public readonly string ReinforcedToeSavedNote = Loc.Localize("Colors.ReinforcedToe.SavedNote",
+        "Saved to the mod — presets and designs don't capture this.");
+
     public readonly string BustBridge = Loc.Localize("Colors.BustBridge.Label",
         "Span the cleavage");
 
@@ -1470,18 +1493,15 @@ public sealed class ColorPanelStrings
         "Reorder how this mod's overlays stack on your body, across groups.\n" +
         "Leftmost tab = top of the stack (composites last, on top).");
 
-    // Bodies. "bibo", "gen3", "Eve" and "gen2" are body-mod names and are never translated; the option
-    // labels are therefore mostly proper nouns with one English word each.
-    public readonly string Bodies      = Loc.Localize("Colors.Bodies.Label", "Bodies");
-    public readonly string BodiesOff   = Loc.Localize("Colors.Bodies.Off", "Off");
-    public readonly string BodiesSibling = Loc.Localize("Colors.Bodies.BiboGen3", "bibo+gen3");
-    public readonly string BodiesAll   = Loc.Localize("Colors.Bodies.All", "All bodies");
+    // Vanilla overlay. "gen2", "bibo", "gen3" and "Eve" are body-mod names and are never translated.
+    public readonly string OverlayVanilla = Loc.Localize("Colors.Bodies.Vanilla.Label", "Overlay gen2/vanilla");
 
-    public readonly string BodiesTip = Loc.Localize("Colors.Bodies.Tip",
-        "Which body types to bake this mod onto:\n" +
-        "All bodies = sibling body (bibo↔gen3/Eve) + vanilla (gen2)\n" +
-        "bibo+gen3 = bake to the sibling body only (default)\n" +
-        "Off = no synthesis\n\n" +
+    public readonly string BodiesTip = Loc.Localize("Colors.Bodies.Vanilla.Tip",
+        "Also paint this mod onto vanilla (gen2) skin your character is wearing —\n" +
+        "usually skin that comes with a piece of gear.\n" +
+        "It is only painted while vanilla skin is actually on your character,\n" +
+        "so this costs nothing when there is none.\n\n" +
+        "bibo and gen3/Eve are always painted; this only affects vanilla.\n" +
         "Applies to the whole mod, not just this option.");
 
     public readonly string BodiesGlobalSuffix = Loc.Localize("Colors.Bodies.GlobalSuffix",
@@ -1524,15 +1544,18 @@ public sealed class BandStrings
 
     // Shown only when the capability row below has had to drop its labels and nothing is hovered, so this
     // is the narrow-window fallback rather than the usual second line.
-    public readonly string Caption = Loc.Localize("Band.Caption", "overlay · accessorize · toggle · bind");
+    public readonly string Caption = Loc.Localize("Band.Caption", "overlay · accessorize · reshape · bind");
 
     // The four capabilities named across the band's second line. Length is not cosmetic here: the row is
     // measured every frame and hides ALL FOUR labels the moment they stop fitting, so a translation much
     // longer than the English costs the whole row at window sizes where the English still shows.
     public readonly string CapOverlay = Loc.Localize("Band.Cap.Overlay", "Overlay & recolour anything");
     public readonly string CapWear    = Loc.Localize("Band.Cap.Wear",    "Wear anything, no slot");
-    public readonly string CapToggle  = Loc.Localize("Band.Cap.Toggle",  "Toggle anything off");
+    public readonly string CapReshape = Loc.Localize("Band.Cap.Reshape", "Reshape any model");
     public readonly string CapBind    = Loc.Localize("Band.Cap.Bind",    "Bind it all to a design");
+
+    // Tooltip on any of the four capabilities, each of which opens the README at the section about it.
+    public readonly string CapLinkTip = Loc.Localize("Band.Cap.Link.Tip", "Read about this in the guide");
 
     public readonly string SettingsTip    = Loc.Localize("Band.Settings.Tip", "Settings");
     public readonly string RecompositeTip = Loc.Localize("Band.Recomposite.Tip", "Recomposite now");
@@ -1596,6 +1619,310 @@ public sealed class PartsStrings
 
     /// <summary>Material and size beside a part's checkbox. {0} is a file name, {1} a triangle count.</summary>
     public readonly string RowFmt = Loc.Localize("Parts.Row.Fmt", "{0} · {1:N0} tris");
+
+    // ── tools ───────────────────────────────────────────────────────────────
+
+    public readonly string ToolNavigate = Loc.Localize("Parts.Tool.Navigate", "Toggle Parts")
+                                        + "###partsToolNavigate";
+
+    public readonly string ToolNavigateTip = Loc.Localize("Parts.Tool.Navigate.Tip",
+        "Click pieces of the model to choose them, then give them an on/off switch.");
+
+    public readonly string ToolInflate = Loc.Localize("Parts.Tool.Inflate", "Pull out")
+                                       + "###partsToolInflate";
+
+    public readonly string ToolInflateTip = Loc.Localize("Parts.Tool.Inflate.Tip",
+        "Paint on the model to push the surface outwards, so a body that pokes\n" +
+        "through a piece of clothing is covered again.");
+
+    public readonly string ToolDeflate = Loc.Localize("Parts.Tool.Deflate", "Push in")
+                                       + "###partsToolDeflate";
+
+    public readonly string ToolRelax = Loc.Localize("Parts.Tool.Relax", "Relax")
+                                     + "###partsToolRelax";
+
+    public readonly string ToolRelaxTip = Loc.Localize("Parts.Tool.Relax.Tip",
+        "Paint on the model to smooth the surface — lumps the clothing came with, or a\n" +
+        "pull that came out rough. Like 3ds Max's relax it shrinks: curves flatten and\n" +
+        "cloth can sink toward the body.");
+
+    public readonly string ToolBridge = Loc.Localize("Parts.Tool.Bridge", "Bridge")
+                                      + "###partsToolBridge";
+
+    public readonly string ToolBridgeTip = Loc.Localize("Parts.Tool.Bridge.Tip",
+        "Paint across a hollow — the cleft between cheeks, a crease — to stretch the\n" +
+        "cloth straight over it instead of following the body down into it. It only\n" +
+        "ever lifts, and leaves rounded areas their own shape.");
+
+    public readonly string ToolWind = Loc.Localize("Parts.Tool.Wind", "Wind")
+                                    + "###partsToolWind";
+
+    public readonly string ToolWindTip = Loc.Localize("Parts.Tool.Wind.Tip",
+        "Paint where the wind moves this garment; red shows how much.\n" +
+        "It is written into the model's second vertex colour.");
+
+    public readonly string ToolMove = Loc.Localize("Parts.Tool.Move", "Move")
+                                    + "###partsToolMove";
+
+    public readonly string ToolMoveTip = Loc.Localize("Parts.Tool.Move.Tip",
+        "Pick a part and drag it with the arrows: one arrow moves it along\n" +
+        "that axis, a square moves it across that plane.");
+
+    public readonly string MoveHelp = Loc.Localize("Parts.Move.Help",
+        "Click a part to choose it, then drag an arrow or a square. Drag anywhere else to turn the model, "
+      + "shift-drag to move the view, scroll to zoom.");
+
+    public readonly string MoveLiveHint = Loc.Localize("Parts.Move.LiveHint",
+        "Click a part on your character, then drag an arrow or a square. Hold Alt to move the camera. "
+      + "Each move is saved when you let go.");
+
+    /// <summary>{0} is the part's label.</summary>
+    public readonly string MovePartFmt = Loc.Localize("Parts.Move.Part.Fmt", "Moving part {0}");
+
+    public readonly string MoveNoPart = Loc.Localize("Parts.Move.NoPart", "Click a part to choose what to move.");
+
+    public readonly string MoveListTip = Loc.Localize("Parts.Move.ListTip",
+        "Choose the part to move here, or click it on the model or on your character.");
+
+    public readonly string MoveAdjacent = Loc.Localize("Parts.Move.Adjacent", "Move adjacent parts");
+
+    public readonly string MoveAdjacentTip = Loc.Localize("Parts.Move.Adjacent.Tip",
+        "Cloth near the part follows it, joined to it or not, less the further away it is.\n" +
+        "Off, only the part moves. Points it shares exactly with a neighbour still move, so the seam stays closed.");
+
+    public readonly string MoveFalloff = Loc.Localize("Parts.Move.Falloff", "Falloff");
+
+    public readonly string MoveFalloffTip = Loc.Localize("Parts.Move.Falloff.Tip",
+        "How far from the part nearby cloth still follows it.");
+
+    public readonly string MoveBonesNote = Loc.Localize("Parts.Move.BonesNote",
+        "A moved part still follows the bones it was made for, so a part moved far from them can bend oddly in poses.");
+
+    public readonly string MoveSkinTip = Loc.Localize("Parts.Move.SkinTip", "Skin can't be moved.");
+
+    public readonly string MoveLockedTip = Loc.Localize("Parts.Move.LockedTip",
+        "This part is locked. Unlock it under a brush to move it.");
+
+    public readonly string MoveNothingFree = Loc.Localize("Parts.Move.NothingFree",
+        "Nothing in this part can move: it is skin or locked.");
+
+    /// <summary>{0} is the furthest any point has moved, in millimetres.</summary>
+    public readonly string MoveMovedFmt = Loc.Localize("Parts.Move.Moved.Fmt", "Furthest moved: {0:F1} mm.");
+
+    public readonly string MoveUndo = Loc.Localize("Parts.Move.Undo", "Undo move")
+                                    + "###partsBrushUndo";
+
+    public readonly string BrushWindAmount = Loc.Localize("Parts.Brush.WindAmount", "Amount");
+
+    public readonly string BrushWindAmountTip = Loc.Localize("Parts.Brush.WindAmount.Tip",
+        "How much wind to paint. 0% erases it, and so does holding Ctrl while painting.");
+
+    public readonly string BrushWindRate = Loc.Localize("Parts.Brush.WindRate", "Rate");
+
+    public readonly string BrushWindRateTip = Loc.Localize("Parts.Brush.WindRate.Tip",
+        "How quickly the painted wind reaches the amount while you paint.");
+
+    public readonly string WindAddsChannel = Loc.Localize("Parts.Wind.AddsChannel",
+        "This model has no wind channel yet. One is added when the first stroke saves.");
+
+    public readonly string WindFirstColorNotWhite = Loc.Localize("Parts.Wind.FirstColorNotWhite",
+        "This model's first vertex colour isn't white, which the wind effect expects. Proteus leaves it as the author made it.");
+
+    /// <summary>{0} is how many material files were changed.</summary>
+    public readonly string WindMaterialsSetFmt = Loc.Localize("Parts.Wind.Materials.Set.Fmt",
+        "Set {0} material file(s) so the wind can move this garment.");
+
+    /// <summary>{0} is how many material files lack the vertex movement settings.</summary>
+    public readonly string WindMaterialsMissingFmt = Loc.Localize("Parts.Wind.Materials.Missing.Fmt",
+        "{0} material file(s) have no wind movement settings to change, so they may not sway.");
+
+    /// <summary>{0} is how many materials the mod does not ship.</summary>
+    public readonly string WindMaterialsNotInModFmt = Loc.Localize("Parts.Wind.Materials.NotInMod.Fmt",
+        "{0} material(s) this garment uses come from the game, not this mod, so their wind movement can't be set.");
+
+    /// <summary>{0} is the error.</summary>
+    public readonly string WindMaterialsFailedFmt = Loc.Localize("Parts.Wind.Materials.Failed.Fmt",
+        "The garment's materials couldn't be set for wind: {0}");
+
+    public readonly string WindRefusedFmt = Loc.Localize("Parts.Wind.Refused.Fmt",
+        "Wind couldn't be added to {0} mesh(es): there's no room there for another vertex attribute.");
+
+    public readonly string BrushBridgeRateTip = Loc.Localize("Parts.Brush.BridgeRate.Tip",
+        "How quickly the cloth rises to span the hollow while you paint. Low is gentle\n" +
+        "and easy to control; high closes the gap almost at once.");
+
+    public readonly string BrushRelaxRateTip = Loc.Localize("Parts.Brush.RelaxRate.Tip",
+        "How quickly the surface smooths while you paint. Low is gentle and easy to\n" +
+        "control; high smooths almost at once.\n\n" +
+        "Near an open edge, like a hem, relaxing draws the edge slightly inward.");
+
+    public readonly string ToolDeflateTip = Loc.Localize("Parts.Tool.Deflate.Tip",
+        "The same brush in reverse, for clothing that stands too far off the body.");
+
+    // ── the brush ───────────────────────────────────────────────────────────
+
+    public readonly string BrushHelp = Loc.Localize("Parts.Brush.Help",
+        "Drag on the model to paint. Drag from the background to turn it, shift-drag to move it, scroll to "
+      + "zoom.");
+
+    public readonly string ShowModelView = Loc.Localize("Parts.ShowModelView", "Show model view");
+
+    public readonly string ShowModelViewTip = Loc.Localize("Parts.ShowModelView.Tip",
+        "Paint on the model in this window instead of on your character.");
+
+    public readonly string LivePickTip = Loc.Localize("Parts.Live.Pick.Tip",
+        "Click a garment on your character to open its mod and model here.");
+
+    public readonly string LiveHint = Loc.Localize("Parts.Live.Hint",
+        "Paint on your character. Hold Alt to move the camera. Each stroke is saved when you let go.");
+
+    public readonly string LiveNotWorn = Loc.Localize("Parts.Live.NotWorn",
+        "This model is not on your character right now. Wear it, or turn on Show model view.");
+
+    /// <summary>Under the brush controls for an imported piece: painting works, the result takes a moment.</summary>
+    public readonly string ContentHint = Loc.Localize("Parts.Content.Hint",
+        "This garment was imported into Proteus, which wears it for you. Paint it as usual — each stroke "
+      + "appears on your character a few seconds after it saves, once the garment is rebuilt.");
+
+    /// <summary>Replaces the switch controls for an imported piece — see <c>DrawStaging</c>.</summary>
+    public readonly string ContentNoSwitches = Loc.Localize("Parts.Content.NoSwitches",
+        "Switches can't be added to an imported garment: Proteus wears it on another item, and that item's "
+      + "own switches control it. The brushes above still work.");
+
+    /// <summary>Clicking a Proteus shell on the character — see <c>OnLivePicked</c>.</summary>
+    public readonly string LivePickedShell = Loc.Localize("Parts.Live.PickedShell",
+        "That is the garment Proteus draws for you, which is rebuilt every time something changes. Pick the "
+      + "mod it came from to edit it.");
+
+    public readonly string LiveUnreadable = Loc.Localize("Parts.Live.Unreadable",
+        "This model could not be matched to the one on your character. Turn on Show model view to paint it here.");
+
+    public readonly string LiveNoCharacter = Loc.Localize("Parts.Live.NoCharacter",
+        "Your character is not available to paint on right now.");
+
+    public readonly string LivePickedNotListedFmt = Loc.Localize("Parts.Live.PickedNotListed.Fmt",
+        "{0} is not one of the models this mod publishes.");
+
+    public readonly string BrushSize = Loc.Localize("Parts.Brush.Size", "Brush size")
+                                     + "###partsBrushSize";
+
+    public readonly string BrushSizeTip = Loc.Localize("Parts.Brush.Size.Tip",
+        "How far the brush reaches. The effect is strongest in the middle and fades\n" +
+        "to nothing at the edge, so a wide brush moves a broad swell and a narrow\n" +
+        "one moves a small bump.");
+
+    public readonly string BrushStrength = Loc.Localize("Parts.Brush.Strength", "Strength")
+                                         + "###partsBrushStrength";
+
+    public readonly string BrushStrengthTip = Loc.Localize("Parts.Brush.Strength.Tip",
+        "How far the surface moves per moment of painting. Small is usually right:\n" +
+        "clothing only has to clear the body by a fraction of a millimetre, and you\n" +
+        "can always paint over the same place again.");
+
+    /// <summary>The brush is finer than the mesh. {0} is the model's average edge length in millimetres.</summary>
+    public readonly string BrushTooSmallFmt = Loc.Localize("Parts.Brush.TooSmall.Fmt",
+        "The brush is smaller than this model's triangles (about {0:F1} mm across), so it will pull single "
+      + "points into spikes instead of moving the surface. Make it larger.");
+
+    /// <summary>{0} is the furthest anything has moved, {1} the limit, both in millimetres.</summary>
+    public readonly string BrushMovedFmt = Loc.Localize("Parts.Brush.Moved.Fmt",
+        "Furthest moved: {0:F2} mm of {1:F1} mm.");
+
+    public readonly string BrushUntouched = Loc.Localize("Parts.Brush.Untouched",
+        "Nothing has been moved yet.");
+
+    public readonly string BrushUndo = Loc.Localize("Parts.Brush.Undo", "Undo stroke")
+                                     + "###partsBrushUndo";
+
+    public readonly string BrushReset = Loc.Localize("Parts.Brush.Reset", "Start over")
+                                      + "###partsBrushReset";
+
+    public readonly string BrushNotSavedYet = Loc.Localize("Parts.Brush.NotSavedYet",
+        "not saved yet");
+
+    public readonly string BrushSave = Loc.Localize("Parts.Brush.Save", "Save into the mod")
+                                     + "###partsBrushSave";
+
+    public readonly string BrushSaveTip = Loc.Localize("Parts.Brush.Save.Tip",
+        "Writes the change into the mod's own model file, so it keeps working with\n"
+      + "Proteus turned off and travels with the mod if you export it. The original\n"
+      + "is copied to Proteus/meshvolume-backup/ inside the mod first, and this can\n"
+      + "be undone.");
+
+    /// <summary>{0} is the furthest anything moved, in millimetres.</summary>
+    public readonly string BrushSavedFmt = Loc.Localize("Parts.Brush.Saved.Fmt",
+        "Saved. The surface was moved by up to {0:F2} mm.");
+
+    /// <summary>{0} is a count of shape values that could not be carried.</summary>
+    public readonly string BrushSparesFmt = Loc.Localize("Parts.Brush.Spares.Fmt",
+        "{0} points belonging to this model's body sliders could not be moved with it, so turning one of "
+      + "those sliders on may bring the clipping back in places.");
+
+    public readonly string BrushRevert = Loc.Localize("Parts.Brush.Revert", "Undo saved changes")
+                                       + "###partsBrushRevert";
+
+    public readonly string BrushRevertTip = Loc.Localize("Parts.Brush.Revert.Tip",
+        "Puts every model the brush has changed in this mod back exactly as its\n"
+      + "author made it.");
+
+    public readonly string BrushApplySizes = Loc.Localize("Parts.Brush.ApplySizes", "Apply to other sizes")
+                                           + "###partsBrushApplySizes";
+
+    public readonly string BrushApplySizesTip = Loc.Localize("Parts.Brush.ApplySizes.Tip",
+        "Copies the changes brushed on this model onto the mod's other sizes of it,\n"
+      + "matched by where they sit on the garment. Each size is backed up first,\n"
+      + "and Undo saved changes puts it back.");
+
+    public readonly string BrushApplySizesRunning = Loc.Localize("Parts.Brush.ApplySizes.Running",
+        "Applying to other sizes…");
+
+    /// <summary>{0} is how many other sizes were written.</summary>
+    public readonly string BrushAppliedSizesFmt = Loc.Localize("Parts.Brush.ApplySizes.Done.Fmt",
+        "Applied to {0} other size(s).");
+
+    /// <summary>{0} is the size's label, {1} what went wrong.</summary>
+    public readonly string BrushApplySizesProblemFmt = Loc.Localize("Parts.Brush.ApplySizes.Problem.Fmt",
+        "{0}: {1}");
+
+    /// <summary>The Save button with nothing waiting to save.</summary>
+    public readonly string BrushSaveNothingTip = Loc.Localize("Parts.Brush.Save.Nothing.Tip",
+        "Everything is already saved. Changes save on their own a moment after you stop painting.");
+
+    /// <summary>Added under <see cref="BrushRevertTip"/>: the button is armed only while a modifier is held.</summary>
+    public readonly string BrushRevertArmTip = Loc.Localize("Parts.Brush.Revert.Arm.Tip",
+        "Hold Ctrl or Shift and click.");
+
+    /// <summary>Added under <see cref="BrushSizeTip"/>.</summary>
+    public readonly string BrushSizeKeysTip = Loc.Localize("Parts.Brush.Size.Keys.Tip",
+        "[ and ] change it; hold Shift for fine steps.");
+
+    public readonly string BrushMirror = Loc.Localize("Parts.Brush.Mirror", "Mirror left/right")
+                                       + "###partsBrushMirror";
+
+    public readonly string BrushMirrorTip = Loc.Localize("Parts.Brush.Mirror.Tip",
+        "Paint both sides at once, mirrored across the body's centre.");
+
+    /// <summary>Added under every brush tool's tooltip.</summary>
+    public readonly string BrushLockHint = Loc.Localize("Parts.Brush.Lock.Hint",
+        "Shift-click a part to lock it.");
+
+    public readonly string BrushLockListTip = Loc.Localize("Parts.Brush.Lock.ListTip",
+        "Untick a part to lock it: no brush moves it. Shift-clicking a part on the model or on your character "
+      + "does the same.");
+
+    /// <summary>{0} is how many parts are locked.</summary>
+    public readonly string BrushLockCountFmt = Loc.Localize("Parts.Brush.Lock.Count.Fmt",
+        "{0} part(s) locked");
+
+    public readonly string BrushUnlockAll = Loc.Localize("Parts.Brush.Lock.UnlockAll", "Unlock all")
+                                          + "###partsBrushUnlockAll";
+
+    public readonly string BrushLockSkinTip = Loc.Localize("Parts.Brush.Lock.Skin.Tip",
+        "Skin never moves.");
+
+    /// <summary>{0} is how many model files were put back.</summary>
+    public readonly string BrushRevertedFmt = Loc.Localize("Parts.Brush.Reverted.Fmt",
+        "{0} model(s) put back as the author made them.");
 
     public readonly string ShatteredFmt = Loc.Localize("Parts.Shattered.Fmt",
         "Part {0} falls into {1} separate pieces, which is more than can be listed. Click the model to pick " +

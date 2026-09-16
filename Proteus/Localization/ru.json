@@ -3,12 +3,16 @@
     "message": "Привязать к дизайну",
     "description": ""
   },
+  "Band.Cap.Link.Tip": {
+    "message": "Подробнее в руководстве",
+    "description": ""
+  },
   "Band.Cap.Overlay": {
     "message": "Наложить и перекрасить",
     "description": ""
   },
-  "Band.Cap.Toggle": {
-    "message": "Отключить что угодно",
+  "Band.Cap.Reshape": {
+    "message": "Лепить любую модель",
     "description": ""
   },
   "Band.Cap.Wear": {
@@ -16,7 +20,7 @@
     "description": ""
   },
   "Band.Caption": {
-    "message": "наложить · украсить · переключить · привязать",
+    "message": "наложить · украсить · лепить · привязать",
     "description": ""
   },
   "Band.Pill.Disabled": {
@@ -117,10 +121,6 @@
   },
   "Chat.ContentUnplaced.Fmt": {
     "message": "[Proteus] Не удалось разместить деталей меша из ваших модов: {0} — у аксессуаров кончились слоты материалов. Наденьте ещё одно кольцо / браслет / ожерелье или отключите слой.",
-    "description": ""
-  },
-  "Chat.GlowPromoted.Fmt": {
-    "message": "[Proteus] «{0}» задаёт свечение на слое кожи. Кожа больше не может светиться, поэтому этот параметр теперь отрисовывается как тканевый слой — ему нужен свободный аксессуар, и поверхность будет выглядеть немного иначе.",
     "description": ""
   },
   "Chat.HatCompat": {
@@ -239,14 +239,6 @@
     "message": "Как изображение этой строки соединяется с тем, что уже лежит на коже.\n\n«Рисование» кладёт его сверху — так вели себя все слои до сих пор.\nЛюбой другой режим превращает строку в ПЕЧАТЬ: она красит ткань, которую нанесли\nдругие слои этого мода, и обрезается по их форме — радуга на сетке окрасит нити\nи оставит ячейки кожей.\n\nПечать достаёт только до слоёв СВОЕГО мода и никогда не трогает чужую одежду.\nНа голой коже она не рисует ничего, поэтому выбранная в одиночку печать не покажет\nничего. Так и задумано: печатать там попросту не на чем.\n\nУмножение умеет только затемнять, поэтому на очень тёмной ткани почти не читается —\nвозьмите там Осветление. Цвет этой строки по-прежнему тонирует изображение,\nа её непрозрачность задаёт силу печати.",
     "description": ""
   },
-  "Colors.Bodies.All": {
-    "message": "Все тела",
-    "description": ""
-  },
-  "Colors.Bodies.BiboGen3": {
-    "message": "bibo+gen3",
-    "description": ""
-  },
   "Colors.Bodies.GlobalNote": {
     "message": "Сохраняется глобально — привязки этого не записывают.",
     "description": ""
@@ -255,17 +247,13 @@
     "message": "\nГлобальная настройка — она НЕ входит в привязку, которую вы редактируете.",
     "description": ""
   },
-  "Colors.Bodies.Label": {
-    "message": "Тела",
-    "description": ""
+  "Colors.Bodies.Vanilla.Label": {
+    "message": "Накладывать на gen2/ваниль",
+    "description": "Checkbox label in the colour-table editor window's Advanced section. \"gen2\" is a body-mod name - never translated. Ticked = this mod is also painted onto vanilla skin."
   },
-  "Colors.Bodies.Off": {
-    "message": "Выкл.",
-    "description": ""
-  },
-  "Colors.Bodies.Tip": {
-    "message": "На какие типы тел запекать этот мод:\nВсе тела = родственное тело (bibo↔gen3/Eve) + стандартное (gen2)\nbibo+gen3 = запекать только на родственное тело (по умолчанию)\nВыкл. = без синтеза\n\nПрименяется ко всему моду, а не только к этому параметру.",
-    "description": ""
+  "Colors.Bodies.Vanilla.Tip": {
+    "message": "Также рисовать этот мод на ванильной коже (gen2), которую носит ваш персонаж —\nобычно это кожа, идущая с предметом снаряжения.\nОна рисуется, только пока ванильная кожа действительно есть на персонаже,\nпоэтому это ничего не стоит, когда её нет.\n\nНа bibo и gen3/Eve мод рисуется всегда; это касается только ванили.\nПрименяется ко всему моду, а не только к этому параметру.",
+    "description": "Tooltip for the checkbox above. \"gen2\", \"bibo\", \"gen3\" and \"Eve\" are body-mod names - never translated. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Colors.BustBridge.Label": {
     "message": "Перекрыть ложбинку тканью",
@@ -373,6 +361,10 @@
   },
   "Colors.Geometry.Section": {
     "message": "Геометрия",
+    "description": ""
+  },
+  "Colors.Effects.Section": {
+    "message": "Эффекты",
     "description": ""
   },
   "Colors.GlowAmount.Label": {
@@ -535,6 +527,18 @@
     "message": "Вы закрепили этот режим в разделе «Дополнительно» — он больше не следует за настройками.\nНажмите «Вернуть авто», чтобы он снова подстраивался.",
     "description": ""
   },
+  "Colors.ReinforcedToe.Label": {
+    "message": "Усиленный мысок",
+    "description": ""
+  },
+  "Colors.ReinforcedToe.SavedNote": {
+    "message": "Сохраняется в мод — пресеты и дизайны это не запоминают.",
+    "description": ""
+  },
+  "Colors.ReinforcedToe.Tip": {
+    "message": "Делает закрытый мысок плотнее остального чулка — так, как вяжут усиленный мысок\nнастоящие чулки: более тёмная зона, сквозь которую пальцы всё ещё просвечивают,\nплавно сходящая на нет по краю, а не обрывающаяся линией.\nУбрать можно только ту прозрачность, которая есть. Там, где чулок ничего не рисует,\nне произойдёт ничего: ткань никогда не появится на голом пальце, а на уже\nнепрозрачном чулке разницы не будет видно.\nПри включённой «Чёткой прозрачности» каждый пиксель либо есть целиком, либо его нет,\nи мягкий край становится резким.",
+    "description": ""
+  },
   "Colors.RenderingAs": {
     "message": "Отрисовка как:",
     "description": ""
@@ -669,6 +673,14 @@
   },
   "Colors.Tiling.Tip": {
     "message": "Сколько раз эффект повторяется по поверхности. 1 = один раз.",
+    "description": ""
+  },
+  "Colors.ToeDensity.Label": {
+    "message": "Плотность",
+    "description": ""
+  },
+  "Colors.ToeDensity.Tip": {
+    "message": "Насколько мысок плотнее ноги. 100 % — полностью непрозрачный; обычный усиленный\nмысок заметно ниже.",
     "description": ""
   },
   "Colors.TowardBottom.Btn": {
@@ -831,8 +843,16 @@
     "message": "Каталог модов Penumbra недоступен.",
     "description": ""
   },
+  "ContentImport.Fail.NotUpgraded.Fmt": {
+    "message": "Penumbra не обновила «{0}» из старого формата, поэтому детали не удалось сделать переключаемыми. Импорт отменён — попробуйте импортировать пакет снова.",
+    "description": ""
+  },
   "ContentImport.Fail.NothingUsable": {
     "message": "В этом пакете нечего импортировать.",
+    "description": ""
+  },
+  "ContentImport.Fail.PieceGroup.Fmt": {
+    "message": "Не удалось добавить переключатели деталей в «{0}»: {1} Импорт отменён — попробуйте импортировать пакет снова.",
     "description": ""
   },
   "ContentImport.Fail.Reserved": {
@@ -1084,8 +1104,8 @@
     "description": ""
   },
   "Create.WholeSkin.Tip": {
-    "message": "Отметьте, если вы конвертируете мод полной кожи, а не рисуете что-то поверх кожи.\nProteus ставит галочку сам, когда текстуры на неё похожи; ваш собственный выбор всегда важнее.\nОтсюда следуют три вещи. Карта нормалей ЗАМЕНИТ ту, что уже есть на материале, вместо наложения\nна неё: иначе она ложится поверх той же карты снизу, каждая пора и складка накладывается дважды,\nи тело выглядит плоским рядом с лицом, с резкой линией на шве шеи.\nПодавление тона кожи выключается, чтобы тон носителя проступал: оно нужно, чтобы ткань не\nперекрашивалась, а эта текстура И ЕСТЬ кожа. И «Тела» переключается на «Все тела», чтобы кожа\nдоходила и до ванильного тела.",
-    "description": ""
+    "message": "Отметьте, если вы конвертируете мод полной кожи, а не рисуете что-то поверх кожи.\nProteus ставит галочку сам, когда текстуры на неё похожи; ваш собственный выбор всегда важнее.\nОтсюда следуют две вещи. Карта нормалей ЗАМЕНИТ ту, что уже есть на материале, вместо наложения\nна неё: иначе она ложится поверх той же карты снизу, каждая пора и складка накладывается дважды,\nи тело выглядит плоским рядом с лицом, с резкой линией на шве шеи.\nИ подавление тона кожи выключается, чтобы тон носителя проступал: оно нужно, чтобы ткань не\nперекрашивалась, а эта текстура И ЕСТЬ кожа.",
+    "description": "Tooltip for the checkbox above. \"normal\" is the normal map (a texture). Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Emissive.Aliases.Fmt": {
     "message": "путей: {0}",
@@ -1429,10 +1449,6 @@
   },
   "Import.Author.Label": {
     "message": "Автор",
-    "description": ""
-  },
-  "Import.BodyFit.NeedsAllBodies.Fmt": {
-    "message": "В этом пакете ничего не нарисовано для вашего стандартного тела — вместо него будет использовано «{0}». Запекание на стандартное тело по умолчанию отключено, поэтому при импорте Proteus установит «Тела» этого мода в «Все тела» (Цвета → Дополнительно); без этого он ничего не нарисует.",
     "description": ""
   },
   "Import.BodyFit.NotDrawn.Fmt": {
@@ -1819,10 +1835,6 @@
     "message": "Ни один слой из этого пакета нельзя импортировать.",
     "description": ""
   },
-  "Import.Result.AllBodies.Fmt": {
-    "message": "«{0}» импортирован — слоёв: {1}{2}. В пакете ничего не нарисовано для стандартного тела, поэтому Proteus установил «Тела» этого мода в «Все тела» (Цвета → Дополнительно), чтобы запечь его — если это отключить, он перестанет рисовать.",
-    "description": ""
-  },
   "Import.Result.NoLayout.Fmt": {
     "message": "«{0}» импортирован — слоёв: {1}{2}, но Proteus не смог выбрать за вас раскладку тела. Выберите одну в разделе «{3}» в Penumbra, иначе ничего не будет нарисовано.",
     "description": ""
@@ -2101,6 +2113,390 @@
   },
   "Parts.Row.Fmt": {
     "message": "{0} · {1:N0} тр.",
+    "description": ""
+  },
+  "Parts.Tool.Navigate": {
+    "message": "Переключение частей",
+    "description": ""
+  },
+  "Parts.Tool.Navigate.Tip": {
+    "message": "Нажимайте на части модели, чтобы выбрать их и дать им переключатель.",
+    "description": ""
+  },
+  "Parts.Tool.Inflate": {
+    "message": "Вытянуть",
+    "description": ""
+  },
+  "Parts.Tool.Inflate.Tip": {
+    "message": "Рисуйте по модели, чтобы вытолкнуть поверхность наружу, и тело,\nторчащее сквозь одежду, снова окажется закрыто.",
+    "description": ""
+  },
+  "Parts.Tool.Deflate": {
+    "message": "Вдавить",
+    "description": ""
+  },
+  "Parts.Tool.Deflate.Tip": {
+    "message": "Та же кисть наоборот — для одежды, слишком отстающей от тела.",
+    "description": ""
+  },
+  "Parts.Tool.Relax": {
+    "message": "Сгладить",
+    "description": ""
+  },
+  "Parts.Tool.Relax.Tip": {
+    "message": "Рисуйте по модели, чтобы сгладить поверхность — бугры самой\nодежды или неровную вытяжку. Как relax в 3ds Max, сжимает: изгибы уплощаются, и ткань может осесть к телу.",
+    "description": ""
+  },
+  "Parts.Brush.RelaxRate.Tip": {
+    "message": "Как быстро сглаживается поверхность при рисовании. Низкое —\nмягко и послушно; высокое сглаживает почти сразу.\n\nУ открытого края, например подола, сглаживание слегка втягивает край.",
+    "description": ""
+  },
+  "Parts.Tool.Bridge": {
+    "message": "Мост",
+    "description": ""
+  },
+  "Parts.Tool.Bridge.Tip": {
+    "message": "Проведите поперёк впадины — ложбинки между ягодицами, складки —\nчтобы ткань натянулась прямо над ней, а не уходила вслед за телом.\nТолько поднимает и оставляет округлым местам их форму.",
+    "description": ""
+  },
+  "Parts.Tool.Wind": {
+    "message": "Ветер",
+    "description": ""
+  },
+  "Parts.Tool.Wind.Tip": {
+    "message": "Рисуйте, где ветер колышет эту одежду; красный показывает силу.\nЗаписывается во второй цвет вершин модели.",
+    "description": ""
+  },
+  "Parts.Tool.Move": {
+    "message": "Перемещение",
+    "description": ""
+  },
+  "Parts.Tool.Move.Tip": {
+    "message": "Выберите часть и тяните за стрелки: стрелка двигает её вдоль\nсвоей оси, квадрат — в своей плоскости.",
+    "description": ""
+  },
+  "Parts.Move.Help": {
+    "message": "Щёлкните часть, чтобы выбрать её, затем тяните стрелку или квадрат. Перетаскивание в другом месте вращает модель, Shift+перетаскивание сдвигает вид, колесо — масштаб.",
+    "description": ""
+  },
+  "Parts.Move.LiveHint": {
+    "message": "Щёлкните часть на персонаже, затем тяните стрелку или квадрат. Удерживайте Alt, чтобы двигать камеру. Каждое перемещение сохраняется, когда вы отпускаете кнопку.",
+    "description": ""
+  },
+  "Parts.Move.Part.Fmt": {
+    "message": "Перемещается часть {0}",
+    "description": ""
+  },
+  "Parts.Move.NoPart": {
+    "message": "Щёлкните часть, чтобы выбрать, что перемещать.",
+    "description": ""
+  },
+  "Parts.Move.ListTip": {
+    "message": "Выберите здесь часть для перемещения или щёлкните её на модели или на персонаже.",
+    "description": ""
+  },
+  "Parts.Move.Adjacent": {
+    "message": "Двигать соседние части",
+    "description": ""
+  },
+  "Parts.Move.Adjacent.Tip": {
+    "message": "Ткань рядом с частью следует за ней — соединена она с ней или нет, — тем меньше, чем дальше.\nЕсли выключено, двигается только часть. Точки, полностью общие с соседней частью, всё равно двигаются, чтобы шов не разошёлся.",
+    "description": ""
+  },
+  "Parts.Move.Falloff": {
+    "message": "Затухание",
+    "description": ""
+  },
+  "Parts.Move.Falloff.Tip": {
+    "message": "На каком расстоянии от части ткань ещё следует за ней.",
+    "description": ""
+  },
+  "Parts.Move.BonesNote": {
+    "message": "Перемещённая часть по-прежнему следует за своими костями, поэтому, отодвинутая далеко от них, она может странно изгибаться в позах.",
+    "description": ""
+  },
+  "Parts.Move.SkinTip": {
+    "message": "Кожу нельзя перемещать.",
+    "description": ""
+  },
+  "Parts.Move.LockedTip": {
+    "message": "Эта часть заблокирована. Разблокируйте её под кистью, чтобы переместить.",
+    "description": ""
+  },
+  "Parts.Move.NothingFree": {
+    "message": "В этой части нечего двигать: это кожа или она заблокирована.",
+    "description": ""
+  },
+  "Parts.Move.Moved.Fmt": {
+    "message": "Наибольшее смещение: {0:F1} мм.",
+    "description": ""
+  },
+  "Parts.Move.Undo": {
+    "message": "Отменить перемещение",
+    "description": ""
+  },
+  "Parts.Brush.WindAmount": {
+    "message": "Сила",
+    "description": ""
+  },
+  "Parts.Brush.WindAmount.Tip": {
+    "message": "Сколько ветра рисовать. 0 % стирает его, как и удерживание Ctrl при рисовании.",
+    "description": ""
+  },
+  "Parts.Brush.WindRate": {
+    "message": "Скорость",
+    "description": ""
+  },
+  "Parts.Brush.WindRate.Tip": {
+    "message": "Как быстро нарисованный ветер достигает заданной силы, пока вы рисуете.",
+    "description": ""
+  },
+  "Parts.Wind.AddsChannel": {
+    "message": "У этой модели ещё нет канала ветра. Он добавится при сохранении первого мазка.",
+    "description": ""
+  },
+  "Parts.Wind.FirstColorNotWhite": {
+    "message": "Первый цвет вершин этой модели не белый, а эффект ветра ожидает белый. Proteus оставляет его таким, как сделал автор.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Set.Fmt": {
+    "message": "Настроено файлов материалов: {0}, чтобы ветер мог двигать эту одежду.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Missing.Fmt": {
+    "message": "Файлов материалов без настроек движения от ветра: {0} — они могут не колыхаться.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.NotInMod.Fmt": {
+    "message": "Материалов этой одежды из игры, а не из этого мода: {0} — их движение от ветра настроить нельзя.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Failed.Fmt": {
+    "message": "Не удалось настроить материалы одежды для ветра: {0}",
+    "description": ""
+  },
+  "Parts.Wind.Refused.Fmt": {
+    "message": "Не удалось добавить ветер в {0} меш(а): нет места для ещё одного атрибута вершин.",
+    "description": ""
+  },
+  "Parts.Brush.BridgeRate.Tip": {
+    "message": "Как быстро ткань поднимается над впадиной при рисовании. Низкое —\nмягко и послушно; высокое закрывает зазор почти сразу.",
+    "description": ""
+  },
+  "Parts.Brush.Help": {
+    "message": "Тяните по модели, чтобы рисовать. Протяжка с фона поворачивает, Shift — смещает, колесо — масштаб.",
+    "description": ""
+  },
+  "Parts.ShowModelView": {
+    "message": "Показать модель",
+    "description": ""
+  },
+  "Parts.ShowModelView.Tip": {
+    "message": "Рисовать на модели в этом окне, а не на персонаже.",
+    "description": ""
+  },
+  "Parts.Live.Pick.Tip": {
+    "message": "Щёлкните по одежде персонажа, чтобы открыть здесь её мод и модель.",
+    "description": ""
+  },
+  "Parts.Live.Hint": {
+    "message": "Рисуйте прямо на персонаже. Удерживайте Alt, чтобы двигать камеру. Каждый мазок сохраняется, когда отпускаете кнопку.",
+    "description": ""
+  },
+  "Parts.Live.NotWorn": {
+    "message": "Эта модель сейчас не надета на персонажа. Наденьте её или включите «Показать модель».",
+    "description": ""
+  },
+  "Parts.Content.Hint": {
+    "message": "Эта одежда импортирована в Proteus, который и надевает её на вас. Рисуйте как обычно — каждый штрих появится на персонаже через несколько секунд после сохранения, когда одежда будет пересобрана.",
+    "description": ""
+  },
+  "Parts.Content.NoSwitches": {
+    "message": "К импортированной одежде нельзя добавить переключатели: Proteus носит её на другом предмете, и управляют ею переключатели этого предмета. Кисти выше по-прежнему работают.",
+    "description": ""
+  },
+  "Parts.Live.PickedShell": {
+    "message": "Это одежда, которую рисует Proteus; она пересобирается при каждом изменении. Чтобы её изменить, выберите мод, из которого она пришла.",
+    "description": ""
+  },
+  "Parts.Live.Unreadable": {
+    "message": "Эта модель не совпадает с моделью на персонаже. Включите «Показать модель», чтобы рисовать здесь.",
+    "description": ""
+  },
+  "Parts.Live.NoCharacter": {
+    "message": "Сейчас на персонаже рисовать нельзя.",
+    "description": ""
+  },
+  "Parts.Live.PickedNotListed.Fmt": {
+    "message": "{0} не входит в модели, которые публикует этот мод.",
+    "description": ""
+  },
+  "Parts.Brush.Size": {
+    "message": "Размер кисти",
+    "description": ""
+  },
+  "Parts.Brush.Size.Tip": {
+    "message": "Как далеко достаёт кисть. Сильнее всего в центре и сходит на нет\nу края: широкая двигает большой изгиб, узкая — маленький бугор.",
+    "description": ""
+  },
+  "Parts.Brush.Strength": {
+    "message": "Сила",
+    "description": ""
+  },
+  "Parts.Brush.Strength.Tip": {
+    "message": "Насколько поверхность смещается за мгновение рисования. Обычно лучше\nменьше: одежде достаточно отойти от тела на долю миллиметра, а одно\nи то же место всегда можно пройти ещё раз.",
+    "description": ""
+  },
+  "Parts.Brush.TooSmall.Fmt": {
+    "message": "Кисть мельче треугольников этой модели (около {0:F1} мм), поэтому она будет вытягивать отдельные точки в шипы, а не двигать поверхность. Сделайте её больше.",
+    "description": ""
+  },
+  "Parts.Brush.Moved.Fmt": {
+    "message": "Наибольшее смещение: {0:F2} мм из {1:F1} мм.",
+    "description": ""
+  },
+  "Parts.Brush.Untouched": {
+    "message": "Пока ничего не сдвинуто.",
+    "description": ""
+  },
+  "Parts.Brush.Undo": {
+    "message": "Отменить мазок",
+    "description": ""
+  },
+  "Parts.Brush.Reset": {
+    "message": "Начать заново",
+    "description": ""
+  },
+  "Parts.Brush.NotSavedYet": {
+    "message": "не сохранено",
+    "description": ""
+  },
+  "Parts.Brush.Save": {
+    "message": "Сохранить в мод",
+    "description": ""
+  },
+  "Parts.Brush.Save.Tip": {
+    "message": "Записывает изменение в собственный файл модели мода, так что оно\nработает и с выключенным Proteus и уезжает вместе с модом.\nОригинал сначала копируется в Proteus/meshvolume-backup/ внутри\nмода, и всё можно отменить.",
+    "description": ""
+  },
+  "Parts.Brush.Save.Nothing.Tip": {
+    "message": "Всё уже сохранено. Изменения сохраняются сами вскоре после того, как вы перестанете рисовать.",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes": {
+    "message": "Применить к другим размерам",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Tip": {
+    "message": "Переносит изменения, нарисованные на этой модели, на другие размеры той же\nмодели в моде, сопоставляя их по месту на одежде. Каждый размер сначала\nсохраняется в резервную копию, и «Отменить сохранённое» его восстановит.",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Running": {
+    "message": "Применяется к другим размерам…",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Done.Fmt": {
+    "message": "Применено к другим размерам: {0}.",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Problem.Fmt": {
+    "message": "{0}: {1}",
+    "description": ""
+  },
+  "Parts.Brush.Saved.Fmt": {
+    "message": "Сохранено. Поверхность смещена на {0:F2} мм.",
+    "description": ""
+  },
+  "Parts.Brush.Spares.Fmt": {
+    "message": "{0} точек, принадлежащих ползункам тела этой модели, не удалось сдвинуть вместе с ней — если включить такой ползунок, местами проникновение может вернуться.",
+    "description": ""
+  },
+  "Parts.Brush.Revert": {
+    "message": "Отменить сохранённое",
+    "description": ""
+  },
+  "Parts.Brush.Revert.Tip": {
+    "message": "Возвращает каждую модель, изменённую кистью в этом моде, ровно\nв том виде, в каком её сделал автор.",
+    "description": ""
+  },
+  "Parts.Brush.Reverted.Fmt": {
+    "message": "Моделей возвращено в авторский вид: {0}.",
+    "description": ""
+  },
+  "Parts.Brush.Revert.Arm.Tip": {
+    "message": "Удерживайте Ctrl или Shift и щёлкните.",
+    "description": ""
+  },
+  "Parts.Brush.Size.Keys.Tip": {
+    "message": "[ и ] меняют его; удерживайте Shift для мелких шагов.",
+    "description": ""
+  },
+  "Parts.Brush.Mirror": {
+    "message": "Зеркально слева/справа",
+    "description": ""
+  },
+  "Parts.Brush.Mirror.Tip": {
+    "message": "Рисует обе стороны сразу, зеркально относительно центра тела.",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Hint": {
+    "message": "Shift-щелчок по части блокирует её.",
+    "description": ""
+  },
+  "Parts.Brush.Lock.ListTip": {
+    "message": "Снимите флажок у части, чтобы заблокировать её: ни одна кисть её не сдвинет. Shift-щелчок по части на модели или на персонаже делает то же самое.",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Count.Fmt": {
+    "message": "Заблокировано частей: {0}",
+    "description": ""
+  },
+  "Parts.Brush.Lock.UnlockAll": {
+    "message": "Разблокировать всё",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Skin.Tip": {
+    "message": "Кожа никогда не двигается.",
+    "description": ""
+  },
+  "MeshVolume.Apply.Nothing": {
+    "message": "Ничего не нарисовано — сохранять нечего.",
+    "description": ""
+  },
+  "MeshVolume.Apply.EditFailed.Fmt": {
+    "message": "Не удалось изменить {0}: {1}. Ничего не записано.",
+    "description": ""
+  },
+  "MeshVolume.Apply.Failed.Fmt": {
+    "message": "Запись не удалась: {0}",
+    "description": ""
+  },
+  "MeshVolume.Revert.Nothing": {
+    "message": "Кисть ничего не меняла в этом моде.",
+    "description": ""
+  },
+  "MeshVolume.Revert.Blocked.Fmt": {
+    "message": "Сначала отмените {0}: это было применено к той же модели после кисти, и возврат кисти сейчас отменит и его.",
+    "description": ""
+  },
+  "MeshVolume.Revert.NoBackups": {
+    "message": "Ни одной исходной модели для восстановления не нашлось.",
+    "description": ""
+  },
+  "MeshVolume.Feature.Toggles": {
+    "message": "переключатели частей",
+    "description": ""
+  },
+  "MeshVolume.Feature.HatCompat": {
+    "message": "подгонку под шляпы",
+    "description": ""
+  },
+  "MeshVolume.Feature.Brush": {
+    "message": "кисть",
+    "description": ""
+  },
+  "ModelBackups.Blocked.Fmt": {
+    "message": "Сначала отмените {0}: оно изменило ту же модель позже, и отмена сейчас отменит и его.",
     "description": ""
   },
   "Parts.Selected.Fmt": {
@@ -2452,7 +2848,7 @@
     "description": ""
   },
   "Tab.Parts": {
-    "message": "Переключатели",
+    "message": "Студия",
     "description": ""
   },
   "Tab.Settings": {

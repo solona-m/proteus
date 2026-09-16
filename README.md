@@ -4,12 +4,14 @@
 **English** · [日本語](docs/README.ja.md) · [Deutsch](docs/README.de.md) · [Français](docs/README.fr.md) · [简体中文](docs/README.zh.md) · [한국어](docs/README.ko.md) · [Español](docs/README.es.md) · [Русский](docs/README.ru.md)
 <!--/i18n-->
 
-Proteus is a Dalamud plugin for FFXIV that composites overlay textures onto your character's skin and equipment at runtime. Mod authors ship small PNG overlays alongside their Penumbra mods; Proteus blends them onto the base textures every time you change options, without touching the original mod files. Proteus can import Proteus-enabled pmp files, onion overlay omp files, and Atramentum Luminis glow tattoos.
+Proteus is a Dalamud plugin for FFXIV that composites overlay textures onto your character's skin and equipment at runtime. Mod authors ship small PNG overlays alongside their Penumbra mods; Proteus blends them onto the base textures every time you change options, without touching the original mod files. Proteus can import Proteus-enabled pmp files, onion overlay omp files, and Atramentum Luminis glow tattoos. It can also edit the models of any mod you have installed, Proteus or not: reshape clothing, paint wind sway, add part switches and fit hair under hats.
 
 Overlays can render two ways: painted into your skin, or as a **second skin** — a copy of your body's mesh drawn as gear, so an overlay can use sphere maps, metalness and animated glow that skin materials can't do.
 
 - **Wear mods without giving up a gear slot.** A second skin has to be drawn as an item, but Proteus hides it on something you aren't using — invisible glasses, or a ring you don't have on, or appends it to your equipped accessories — so your actual glamour is untouched. There's nothing to set up; it picks a host on its own and never takes an item you're wearing.
-- **Add toggles to any part of any mod, not just Proteus ones.** When a mod welds a bow, a collar or a strap into geometry its author never made optional, the **Toggles** tab can split that piece out and give it a real switch.
+- **Reshape any mod's clothing, right on your character.** In the **Studio** tab, paint on a garment you're wearing to pull it clear of your body where skin pokes through, push it in, smooth it, stretch it across a crease, or paint where the wind sways it. Every edit saves into the mod and can be undone.
+- **Add toggles to any part of any mod, not just Proteus ones.** When a mod welds a bow, a collar or a strap into geometry its author never made optional, the **Studio** tab can split that piece out and give it a real switch.
+- **Make modded hair fit under hats.** Proteus presses the hair a hat would cover flat against your head, so a hat stops going straight through it.
 
 
 If you need help, please look at this [Troubleshooting Guide](TROUBLESHOOTING.md).
@@ -49,6 +51,57 @@ Lists every Penumbra mod that contains a Proteus sidecar. Click any column heade
 | Skindent | Ambient-occlusion shadow and normal indent for this mod's strap edges. "Pack" follows what the mod asked for; On/Off overrides it. |
 
 Click **Refresh** to force a re-composite manually. Proteus also re-composites automatically whenever you change a Penumbra option or mod setting, change gear, or change race/body.
+
+#### Studio
+
+Edits the models of **any** mod you have installed, not just Proteus ones. You can reshape clothing so your body stops poking through it, paint where the wind sways it, or split a piece out behind its own on/off switch. Every change is written into the mod's own files, so it **keeps working with Proteus turned off** and travels with the mod if you export it.
+
+Pick a mod, then one of its models. The tab opens on the chest piece you're wearing (or your legs if there's none), and mods and models you're wearing are listed first, in green. Clicking a garment on your character opens its mod and model.
+
+The tools sit in a panel on the left:
+
+| Tool | What it does |
+|------|-------------|
+| Toggle Parts | Picks pieces of the model and gives them an on/off switch. See [Part switches](#part-switches) below. |
+| Pull out | Pushes the surface outwards, so a body that pokes through a piece of clothing is covered again. Cloth moves straight away from the skin beneath it. |
+| Push in | The same brush in reverse, for clothing that stands too far off the body. |
+| Relax | Smooths the surface: lumps the clothing came with, or a pull that came out rough. Like 3ds Max's relax it shrinks, so curves flatten and cloth can sink toward the body. |
+| Bridge | Paint across a hollow, like the cleft between cheeks or a crease, to stretch the cloth straight over it instead of following the body down into it. It only ever lifts. |
+| Wind | Paints how much the game's wind sways the garment, shown in red. Hold Ctrl, or set **Amount** to 0%, to erase. |
+
+##### Brushing
+
+- **You paint straight onto your character**, and a garment shows each stroke as you paint it. Hold **Alt** to move the camera. Tick **Show model view** to paint on the model in the window instead: drag from the background to turn it, shift-drag to move it, scroll to zoom.
+- **Brush size** goes down to 1 mm. `[` and `]` change it, and Shift gives finer steps. The effect is strongest in the middle and fades to nothing at the edge. **Strength** is how far the surface moves per moment of painting. Small is usually right: clothing only has to clear the body by a fraction of a millimetre, and you can always paint the same place again.
+- **Mirror left/right** paints both sides at once.
+- **Skin never moves.** To keep a brush off anything else, lock it: Shift-click the part on your character or the model, or untick it in the part list. Seams welded to a locked part hold too.
+- **Hair works too.** Hair, face, ears and tail redraw when you let go, rather than showing the stroke as you paint.
+- **Apply to other sizes** copies the edit onto the mod's other files for the same garment, matched by where they sit on it.
+
+##### Saving and undo
+
+- Each stroke saves into the mod a moment after you let go. The first save copies the original model to `Proteus/meshvolume-backup/` inside the mod.
+- **Undo stroke** (or Ctrl+Z) takes back the last stroke. **Start over** discards every stroke on this model.
+- **Undo saved changes** (hold Ctrl or Shift and click) puts every model the brush changed in this mod back exactly as its author made it.
+- Part switches, hat fitting and the brush each keep their own backup. If more than one has changed the same model, undo the most recent first. Proteus tells you if you try another order.
+- A model's body sliders can't always follow an edit. When some points couldn't move with it, Proteus says how many, and turning that slider on may bring the clipping back in places.
+- Most modded meshes have no wind channel. The first wind stroke to save adds one, and sets the garment's materials so the wind can move it. Materials that come from the game rather than the mod can't be set.
+
+##### Part switches
+
+**Toggle Parts** takes a piece of geometry out of a mod's model and puts it behind an on/off switch: a bow, a collar, a strap that the author welded into an always-on mesh.
+
+The switch is written into the mod itself as an ordinary Penumbra option, so it shows up in that mod's own settings.
+
+The parts of the model are listed with their triangle counts. Click a piece on your character or in the model view to tick it. Tick the parts one switch should hide, give it a name, and press **Make a switch from the ticked parts**. Queue up as many as you want, then press **Write the switches into the mod**.
+
+Things worth knowing:
+
+- **Ten switches per item.** That's the game's limit, not Proteus's. If an author has already used them all, the tab says so and won't let you add more.
+- **Equipment and accessories only.** There's nothing to attach a switch to on other model types.
+- **A part the author already switches can take yours too.** The two stack: the part shows only when both are on.
+- **It's reversible.** The original models are kept, so **Undo — restore the original models** puts the mod back exactly as it was and removes the option group.
+- If an item has several model files whose parts are arranged differently, Proteus edits only the ones the switch lands on correctly and tells you which it left alone, rather than guessing and hitting the wrong geometry.
 
 #### Bindings
 
@@ -108,43 +161,39 @@ Saves one of your Proteus mods as a Penumbra mod pack (`.pmp`) to share. Pick th
 
 The pack is a straight copy of the mod folder, so nothing is lost: options, colour tables, masks, glow effects and gear layers all come along, and the recipient's Proteus picks it up as soon as Penumbra installs it. Disabled mods can be exported too.
 
-#### Toggles
-
-Takes a piece of geometry out of a mod's model and puts it behind an on/off switch — a bow, a collar, a strap that the author welded into an always-on mesh. This works on **any** mod you have installed, not just Proteus ones.
-
-The switch is written into the mod itself as an ordinary Penumbra option, so it shows up in that mod's own settings and **keeps working with Proteus turned off**.
-
-Pick a mod, then one of its models. The parts of that model are listed with their triangle counts, and shown in a viewport beside them — click a piece to switch it on or off, drag to turn the model, shift-drag to move it, scroll to zoom. Tick the parts one switch should hide, give it a name, and press **Make a switch from the ticked parts**. Queue up as many as you want, then **Write the switches into the mod**.
-
-Things worth knowing:
-
-- **Ten switches per item.** That's the game's limit, not Proteus's. If an author has already used them all, the tab says so and won't let you add more.
-- **Equipment and accessories only.** There's nothing to attach a switch to on other model types.
-- **Parts the author already made optional can't take a second switch**, and the tab marks them.
-- **It's reversible.** The original models are kept, so **Undo — restore the original models** puts the mod back exactly as it was and removes the option group.
-- If an item has several model files whose parts are arranged differently, Proteus edits only the ones the switch lands on correctly and tells you which it left alone, rather than guessing and hitting the wrong geometry.
-
 #### Settings
 
 | Setting | What it does |
 |---------|-------------|
 | Enabled | Master switch. Off clears Proteus's output and redraws you without it. |
-| Disable auto redraw | Stop Proteus refreshing your character after a composite. |
+| Auto redraw | Lets Proteus keep up on its own: it recomposites after zoning, gear changes and redraws, then reloads your character so you see the result. Off makes Proteus mostly manual. Your look stays on, but an edit won't show until something redraws you. |
+| Auto-raise mod priority | When another mod is confirmed to be overriding a skin texture Proteus composites into, raises Proteus's Penumbra priority above it and says so in chat. |
 | In-place reload | Refresh textures through Glamourer instead of a full redraw, avoiding the despawn/respawn flicker. On by default. |
 | Enable Compression | Block-compress baked textures, cutting them to about a quarter of their size on disk and in VRAM. On by default. |
 | Sharp alpha | Experimental. Keeps sphere maps and metalness working in gpose, at the cost of harder edges on sheer fabrics. |
-| Host on invisible glasses | Lets the second skin ride the facewear slot so your rings stay free. |
-| Host on the Emperor's New Ring | Fallback host when nothing you're wearing can carry the second skin. Never takes a ring you're already wearing. |
-| Skin-tint suppression | How strongly overlays resist being tinted by your skin tone. |
-| Ambient occlusion / Shadow softness / Skindenting | Global strength of the contact shadow and normal indent around strap edges. |
 | Texture cache (MB) | How much decoded texture data to keep in memory between composites. |
 | Hide redundant body meshes | Skips skin the second skin would otherwise draw twice — joint reinforcement rings a neighbouring part already covers, and spare copies of a region. On by default, safe on any body. |
+| Host on invisible glasses | Lets the second skin ride the facewear slot so your rings stay free. |
+| Skin-tint suppression | How strongly overlays resist being tinted by your skin tone. |
+| Ambient occlusion / Shadow softness / Skindenting | Global strength of the contact shadow and normal indent around strap edges. |
+| React to the scene's light | Lets colour rows marked **Fades in light** dim as the light on you rises. Off, every glow burns at full brightness everywhere. |
+| Set the light level by hand / Light level | Ignores the scene and uses the slider instead. It's the quickest way to see a dark-only glow without waiting for dusk, and the right setting for gpose. |
 
 Three buttons here are worth knowing about:
 
 - **Restore changed accessory** — forces a full redraw if a second skin ever gets stuck on a ring or bracelet after disabling or swapping.
 - **Clear texture cache** — use when a texture edit isn't showing up, e.g. you re-exported an overlay at the same size.
 - **Glow Effect Textures** — opens the folder Proteus reads animated-glow scroll maps from. Drop images in it and they appear in every gear overlay's Effect dropdown. Hover the button to see the full path.
+
+##### Hats
+
+Most modded hair has no hat support, so a hat worn over it goes straight through. The **Hats** section presses the hair a hat would cover flat against your head. Like the Studio, it edits the hair mod's own files, so the fit keeps working with Proteus turned off and travels with the mod if you export it.
+
+- **Make hairstyles fit under hats** is off by default. Turn it on and Proteus checks each hairstyle as you put it on and fits it, telling you in chat the first time.
+- Or fit the hairstyle you're wearing yourself. The section says how many points would be pressed and by how far, and **Make it fit** writes the change.
+- **Undo** puts back the hairstyle you're wearing. A hair mod usually ships one model per race, so **Undo all** puts back every hairstyle Proteus changed in that mod. The originals are kept in `Proteus/hatcompat-backup/` inside the mod.
+- Hair whose author already added hat support is left alone, and hair that came with the game already works. The exception is hat support that hides far more hair than a hat covers, usually carried over from the hairstyle it was built from. Proteus offers to measure that again and replace it.
+- Some hairstyles are welded into pieces too large for the game's shape format to address. Those points keep their shape, so a hat may still clip there.
 
 ### Presets
 

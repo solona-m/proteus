@@ -5,6 +5,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Threading.Tasks;
 using CheapLoc;
 using Dalamud.Plugin.Services;
 using Penumbra.Api.Enums;
@@ -402,7 +403,8 @@ public sealed class ContentImportService
         // How many distinct garments each of the author's options ships. One means their own option already
         // selects it and we add nothing; more means the option bundles an outfit, and its pieces are gated
         // by SLOT — the identity that stays stable as the user switches between that group's options, where
-        // the set id would not.
+        // the set id would not. A one-garment option still gets a slot switch when its group is SINGLE and
+        // the pack has other garments too — see the gate below.
         var unitsPerOption = unitOrder.GroupBy(k => (k.Item1, k.Item2))
             .ToDictionary(g => g.Key, g => g.Count());
 
@@ -452,6 +454,13 @@ public sealed class ContentImportService
             if (key.Item1 == null && !PackControls(key))
                 garmentGate.TryAdd(GarmentKey(key.Item3, key.Item4), GateLabel(key));
 
+        // Whether the pack offers more than one garment, so wanting one of them does not mean wanting all.
+        // Every unit counts, imported or not: the question is what the pack ships, keyed the way garmentGate is.
+        bool severalGarments = unitOrder
+            .Select(k => GarmentKey(k.Item3, k.Item4))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Skip(1).Any();
+
         var units = new List<PieceUnit>();
         bool selfDriven = false;   // at least one model the pack's own checkboxes already drive
         foreach (var key in unitOrder)
@@ -467,6 +476,12 @@ public sealed class ContentImportService
                 // Shares the garment with an unconditional copy: one checkbox, already named, governs both.
                 : garmentGate.TryGetValue(GarmentKey(key.Item3, setTag), out var shared) ? shared
                 : unitsPerOption[(group, option)] > 1 ? slot.Label   // one slot of a bundle
+                // A Single group cannot be switched off — Penumbra always has one of its options selected — so
+                // in a pack offering other garments too, this one would be worn whenever the mod is enabled with
+                // nothing to take it off: Scarlet's tights and boots came along with the purse. One switch per
+                // slot, shared by all of the group's sizes, like a bundle's. A pack that is only this garment
+                // needs none; enabling it already says the garment is wanted.
+                : severalGarments && singleGroups.Contains(group) ? slot.Label
                 : null;                                             // its own option selects it
 
             units.Add(new PieceUnit(group, option, slot, name, gate, byUnit[key]));
@@ -730,6 +745,9 @@ public sealed class ContentImportService
     /// <summary>
     /// Unpack the archive, strip the model redirects from the manifests and write the Proteus sidecar.
     /// Pure filesystem work, no IPC, so it can be exercised offline against a temp directory.
+    /// <para/>
+    /// A v3 pack's piece group is the one thing left out: it can only be written once Penumbra has upgraded
+    /// the folder, which <see cref="Register"/> arranges.
     /// </summary>
     internal static void WriteMod(
         string root, string modName, string author, ImportPreview preview, IPluginLog? log = null)
@@ -789,9 +807,13 @@ public sealed class ContentImportService
         // The group that makes individual pieces pickable, written with EVERY option off. An imported
         // outfit therefore contributes nothing until the user asks for a piece, which is also what keeps it
         // off the host accessory's ten-material budget until then.
-        if (preview.PieceGroupName is { } gate && preview.GateOptions.Count > 0)
+        //
+        // Not here for a v3 pack. Proteus writes no v3 group files, and the copied folder is still v3 until
+        // Penumbra loads it — Penumbra migrates a pre-v4 mod as it adds it, groups and all. So Register adds
+        // the folder first and writes this group once the manifest is v4. See WritePieceGroupAfterUpgrade.
+        if (NeedsPieceGroup(preview) && preview.Pack.FileVersion >= PenumbraModMeta.SingleFileVersion)
             PenumbraModMeta.WriteMultiSelectGroup(
-                root, preview.Pack.Groups.Count, gate, preview.GateOptions, defaultSettings: 0);
+                root, preview.Pack.Groups.Count, preview.PieceGroupName!, preview.GateOptions, defaultSettings: 0);
 
         var metadata = BuildSidecar(preview, modName, author);
         var metaJson = JsonSerializer.Serialize(metadata, ProteusJson.MetadataWrite);
@@ -1366,19 +1388,118 @@ public sealed class ContentImportService
 
     // ── register ─────────────────────────────────────────────────────────────
 
+    /// <summary>The import adds a group of its own so the pack's pieces can be picked one at a time.</summary>
+    private static bool NeedsPieceGroup(ImportPreview preview)
+        => !preview.InstallOnly && preview.PieceGroupName != null && preview.GateOptions.Count > 0;
+
+    /// <summary>
+    /// Write a v3 pack's piece group, now that Penumbra has added — and so upgraded — its folder. Null when that
+    /// worked or there was nothing to write; otherwise the result to hand back, the mod already registered.
+    /// <para/>
+    /// Penumbra, not Proteus, does the upgrade. It migrates a pre-v4 mod as it loads it, and it is the one that
+    /// knows the format properly — groups, ids and all. A reload is asked for once in case the add did not load
+    /// the folder yet. A folder STILL v3 after that is reported rather than written: the refusal in
+    /// <see cref="PenumbraModMeta"/> exists so a v3 folder is never edited under Penumbra's feet.
+    /// <para/>
+    /// Either failure UNDOES the registration. Left in place, the mod was worse than absent: its sidecar gates
+    /// every piece on a group that was never written, so nothing it imported could ever be worn — and importing
+    /// again was refused because its folder already existed.
+    /// <para/>
+    /// Off the framework thread, only the manifest reads and the write run here. Every Penumbra call goes back
+    /// to the framework thread, because Penumbra does none of that itself: a reload or delete runs on whatever
+    /// thread asks, and raises its events there — including <c>ModSettingChanged</c>, which Penumbra builds by
+    /// reading the player's game object, and which lands in <c>CompositorService.OnModSettingChanged</c> and
+    /// <c>HatCompatWatcher</c> reading it again. Penumbra's own player-dependent APIs hop threads first for the
+    /// same reason (<c>ResolveApi</c>, <c>MetaApi</c>).
+    /// </summary>
+    /// <param name="onPool">Running on the pool, so Penumbra calls are marshalled. False for the inline teardown
+    /// path, which is already where Penumbra calls belong.</param>
+    private ImportResult? WritePieceGroupAfterUpgrade(ImportPreview preview, string dirName, bool onPool)
+    {
+        if (!NeedsPieceGroup(preview) || preview.Pack.FileVersion >= PenumbraModMeta.SingleFileVersion)
+            return null;
+        if (OnFramework(onPool, penumbra.GetModDirectory) is not { Length: > 0 } modsRoot)
+            return new(false, false, Loc.Localize("ContentImport.Fail.NoModDir", "Penumbra's mod directory isn't available."));
+
+        var root = Path.Combine(modsRoot, dirName);
+        if (PenumbraModMeta.IsLegacyFolder(root))
+            OnFramework(onPool, () => penumbra.ReloadModDirectory(dirName));
+        if (PenumbraModMeta.IsLegacyFolder(root))
+        {
+            log.Warning("[Proteus] imported {0}: Penumbra added the mod but left it in the pre-v4 layout, so its "
+                      + "piece group could not be written — removing it again", dirName);
+            UndoRegistration(root, dirName, onPool);
+            return new(false, false, string.Format(Loc.Localize("ContentImport.Fail.NotUpgraded.Fmt",
+                "Penumbra did not upgrade \"{0}\" from its older format, so its pieces could not be made "
+                + "switchable. The import was undone; try importing the pack again."), dirName));
+        }
+
+        try
+        {
+            PenumbraModMeta.WriteMultiSelectGroup(
+                root, preview.Pack.Groups.Count, preview.PieceGroupName!, preview.GateOptions, defaultSettings: 0);
+        }
+        catch (Exception ex)
+        {
+            log.Error(ex, "[Proteus] imported {0}: could not write its piece group after Penumbra upgraded it — "
+                        + "removing it again", dirName);
+            UndoRegistration(root, dirName, onPool);
+            return new(false, false, string.Format(Loc.Localize("ContentImport.Fail.PieceGroup.Fmt",
+                "Could not add the piece switches to \"{0}\": {1} The import was undone; try importing the "
+                + "pack again."), dirName, ex.Message));
+        }
+
+        OnFramework(onPool, () => penumbra.ReloadModDirectory(dirName));
+        log.Information("[Proteus] imported {0}: Penumbra upgraded the v3 pack, piece group added", dirName);
+        return null;
+    }
+
+    /// <summary>
+    /// A Penumbra call, on the framework thread: marshalled there and waited for when <paramref name="onPool"/>,
+    /// made directly otherwise. Blocking with GetResult rather than awaiting, for the reason
+    /// <c>CompositorService</c>'s settle loop gives: an await continuation would resume ON the framework thread.
+    /// </summary>
+    private static T OnFramework<T>(bool onPool, Func<T> call)
+        => onPool ? Plugin.Framework.RunOnFrameworkThread(call).GetAwaiter().GetResult() : call();
+
+    /// <summary>
+    /// Take a mod this import registered back out: Penumbra forgets it and deletes the folder, so the next import
+    /// finds the name free. The folder is deleted here too if Penumbra's call leaves it behind — its success only
+    /// means the call went through.
+    /// </summary>
+    private void UndoRegistration(string root, string dirName, bool onPool)
+    {
+        var ec = OnFramework(onPool, () => penumbra.DeleteModDirectory(dirName));
+        if (ec != PenumbraApiEc.Success)
+            log.Warning("[Proteus] DeleteMod({0}) -> {1}", dirName, ec);
+        try { if (Directory.Exists(root)) Directory.Delete(root, true); }
+        catch (Exception ex) { log.Warning(ex, "[Proteus] could not delete {0}; remove it in Penumbra", root); }
+    }
+
     /// <summary>The outcome of a registration. Warning is a success that still needs the user to act.</summary>
     public readonly record struct ImportResult(bool Ok, bool Warning, string Message);
+
+    /// <summary>A v3 pack's piece group being written on the pool, and the import waiting on it.</summary>
+    private sealed record PendingUpgrade(PreparedImport Prepared, Task<ImportResult?> Write);
+
+    private PendingUpgrade? pendingUpgrade;
 
     /// <summary>
     /// Register a <see cref="Prepare"/>d mod with Penumbra, enable it, open Penumbra to it and recomposite.
     /// Must run on the framework thread.
+    /// <para/>
+    /// Returns null when a v3 pack's piece group is still being written, in which case the caller calls
+    /// <see cref="Pump"/> on later frames until it answers. That write waits out Penumbra holding the manifest
+    /// — up to a second and a half per read, several reads in all — and doing it here froze the game for that
+    /// long. So only the add happens on this thread; the upgrade check and the write go to the pool.
     /// </summary>
     /// <param name="quiet">
     /// Register and nothing else — no Penumbra window, no recomposite. For the teardown path, where the
     /// point is only that a folder already written into Penumbra's directory isn't orphaned; a recomposite
     /// there would wake into half-disposed services. Same reasoning as <see cref="OnionImportService"/>.
+    /// The piece group is written inline then: no frames are coming, so there is nothing to freeze.
     /// </param>
-    public ImportResult Register(PreparedImport prepared, bool quiet = false)
+    public ImportResult? Register(PreparedImport prepared, bool quiet = false)
     {
         if (!prepared.Ok || prepared.DirName == null || prepared.Preview == null)
             return new(false, false, prepared.Message);
@@ -1396,6 +1517,68 @@ public sealed class ContentImportService
                 "Wrote the mod, but Penumbra couldn't register it ({0}). Rescan mods in Penumbra."), ec));
         }
 
+        if (NeedsUpgradeWrite(prepared.Preview))
+        {
+            if (quiet)
+            {
+                if (WritePieceGroupAfterUpgrade(prepared.Preview, dirName, onPool: false) is { } failure) return failure;
+            }
+            else
+            {
+                var preview = prepared.Preview;
+                pendingUpgrade = new(prepared, Task.Run(() => WritePieceGroupAfterUpgrade(preview, dirName, onPool: true)));
+                return null;
+            }
+        }
+
+        return Finish(prepared, quiet);
+    }
+
+    /// <summary>
+    /// Continue a registration <see cref="Register"/> left pending. Null while the piece group is still being
+    /// written; the import's result once it is. Harmless to call with nothing pending. Framework thread.
+    /// </summary>
+    public ImportResult? Pump()
+    {
+        if (pendingUpgrade is not { } p || !p.Write.IsCompleted) return null;
+        pendingUpgrade = null;
+        return Completed(p, quiet: false);
+    }
+
+    /// <summary>
+    /// Teardown's answer to a registration still pending: finish it quietly if its write is already done, and
+    /// otherwise leave it. NOT waited for — the write sends its Penumbra calls to the framework thread, which is
+    /// the thread that would be blocked waiting, so a wait here could only ever run out.
+    /// </summary>
+    public void FinishPendingOnUnload()
+    {
+        if (pendingUpgrade is not { } p) return;
+        pendingUpgrade = null;
+        if (p.Write.IsCompleted) Completed(p, quiet: true);
+    }
+
+    private ImportResult Completed(PendingUpgrade p, bool quiet)
+    {
+        if (p.Write.IsFaulted)
+        {
+            var ex = p.Write.Exception!.GetBaseException();
+            log.Error(ex, "[Proteus] imported {0}: writing its piece group failed", p.Prepared.DirName!);
+            return new(false, false, string.Format(Loc.Localize("ContentImport.Fail.PieceGroup.Fmt",
+                "Could not add the piece switches to \"{0}\": {1} The import was undone; try importing the "
+                + "pack again."), p.Prepared.DirName!, ex.Message));
+        }
+        return p.Write.Result ?? Finish(p.Prepared, quiet);
+    }
+
+    /// <summary>A v3 pack whose piece group has to wait for Penumbra's upgrade — see WritePieceGroupAfterUpgrade.</summary>
+    private static bool NeedsUpgradeWrite(ImportPreview preview)
+        => NeedsPieceGroup(preview) && preview.Pack.FileVersion < PenumbraModMeta.SingleFileVersion;
+
+    /// <summary>Everything after the add and the piece group: enable, open Penumbra, recomposite, report.</summary>
+    private ImportResult Finish(PreparedImport prepared, bool quiet)
+    {
+        var dirName = prepared.DirName!;
+        var preview = prepared.Preview!;
         var collId = penumbra.GetPlayerCollectionId();
         if (collId.HasValue)
             penumbra.SetModEnabled(collId.Value, dirName, true);
@@ -1409,7 +1592,7 @@ public sealed class ContentImportService
         }
 
         log.Information("[Proteus] imported content pack {0} -> {1} ({2} piece(s), {3} skipped){4}",
-            Path.GetFileName(prepared.Preview.SourcePath), dirName, prepared.Pieces, prepared.Skipped,
+            Path.GetFileName(preview.SourcePath), dirName, prepared.Pieces, prepared.Skipped,
             quiet ? " [quiet: plugin unloading]" : "");
 
         var tail = prepared.Skipped > 0
@@ -1427,17 +1610,17 @@ public sealed class ContentImportService
         // What is left to warn about is a piece that came out WRONG — see ImportPreview.FaultyUnits. Not the
         // skipped count: that includes the body meshes Proteus drops on purpose, so warning on it would just
         // move the cried-wolf amber from every gated pack to every outfit pack.
-        var warn = prepared.Preview.FaultyUnits > 0;
+        var warn = preview.FaultyUnits > 0;
 
         // Installed rather than converted, so none of the sentences below apply: there are no pieces to
         // count and nothing arrives switched off. See ImportPreview.InstallOnly.
-        if (prepared.Preview.InstallOnly)
+        if (preview.InstallOnly)
             return new(true, false, string.Format(Loc.Localize("ContentImport.Result.Installed.Fmt",
                 "Installed \"{0}\". It was already a Proteus mod, so it went in exactly as its author "
               + "built it — enabled and opened in Penumbra, where its options are chosen."),
                 dirName));
 
-        if (prepared.Preview.PieceGroupName is { } gate)
+        if (preview.PieceGroupName is { } gate)
             return new(true, warn, string.Format(Loc.Localize("ContentImport.Result.Pieces.Fmt",
                 "Imported \"{0}\" — pieces: {1}{2}. They arrive switched OFF: tick the ones you want "
               + "under \"{3}\" in Penumbra, which is now open on this mod."),

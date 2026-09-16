@@ -6,14 +6,25 @@ using Dalamud.Plugin;
 
 namespace Proteus;
 
-/// <summary>Which sibling body materials Proteus synthesizes for a mod's overlays.</summary>
+/// <summary>
+/// Whether Proteus overlays a mod onto a vanilla (gen2) body the character is wearing. Stored per mod; see
+/// <see cref="Configuration.OverlaysVanillaFor"/>, which is the only question asked of it now. bibo↔gen3/Eve
+/// is not a setting at all — it always bakes.
+/// </summary>
+/// <remarks>
+/// Once three states: all bodies, bibo+gen3 (the default, no vanilla), and off. The vanilla opt-in was
+/// redundant with the check the compositor already makes — a body is only ever baked when its material is
+/// loaded on the character — so it guarded nothing but a cost the user wanted paid, and read as a setting
+/// nobody could explain. It is on/off for vanilla now. The members are kept, with their values, so a config
+/// written by an older build still deserializes: <see cref="Off"/> reads as "no vanilla", the other two as on.
+/// </remarks>
 public enum SiblingSynthesisMode
 {
-    /// <summary>No sibling synthesis at all (neither gen3 nor vanilla).</summary>
+    /// <summary>No vanilla (gen2). LEGACY meaning: no sibling synthesis at all.</summary>
     Off = 0,
-    /// <summary>gen3 (_b.mtrl) and bibo (_bibo) bake only — the legacy default; no vanilla.</summary>
+    /// <summary>LEGACY: once "bibo+gen3, no vanilla". Now identical to <see cref="AllBodies"/>.</summary>
     BiboGen3Only = 1,
-    /// <summary>gen3 (_b.mtrl), bibo (_bibo.mtrl) bake plus vanilla (gen2 _a.mtrl) generation.</summary>
+    /// <summary>Vanilla (gen2) is overlaid whenever the character is wearing it.</summary>
     AllBodies = 2,
 }
 
@@ -356,8 +367,15 @@ public class Configuration : IPluginConfiguration
     public string? GlamourerDesignDirOverride { get; set; } = null;
 
     /// <summary>
-    /// Size the user dragged the window to on the Toggles tab, which is the only tab that is resizable —
-    /// every other one is AlwaysAutoResize and has no size of its own to remember.
+    /// The user has dragged the status window to a size of their own. Until they do, it fits itself to each
+    /// tab's controls when the tab changes; from then on it keeps <see cref="TogglesWindowWidth"/> ×
+    /// <see cref="TogglesWindowHeight"/>.
+    /// </summary>
+    public bool WindowUserSized { get; set; } = false;
+
+    /// <summary>
+    /// Size the user dragged the status window to — named for the Toggles tab, which was once the only
+    /// resizable one; it is now the window's size on every tab once <see cref="WindowUserSized"/> is set.
     /// <para/>
     /// UNSCALED, like <c>StatusWindow.SizeConstraints</c>: Dalamud's window host multiplies both by the
     /// global UI scale itself, so storing a scaled size would compound the scale on every restore. Clamped
@@ -374,8 +392,8 @@ public class Configuration : IPluginConfiguration
     /// </summary>
     public string? LastExportDirectory { get; set; } = null;
 
-    /// <summary>Per-mod sibling-synthesis mode, keyed by Penumbra mod directory.
-    /// Absent = BiboGen3Only (default, = legacy behavior: gen3 bake, no vanilla).</summary>
+    /// <summary>Per-mod sibling-synthesis mode, keyed by Penumbra mod directory. Absent = vanilla on; only
+    /// <see cref="SiblingSynthesisMode.Off"/> is ever written now (see <see cref="OverlaysVanillaFor"/>).</summary>
     public Dictionary<string, SiblingSynthesisMode> SiblingSynthesis { get; set; } = new();
 
     /// <summary>
@@ -439,9 +457,15 @@ public class Configuration : IPluginConfiguration
         => AmbientOcclusionOverrides.TryGetValue(modDir, out var user) ? user
          : !AmbientOcclusionDisabledMods.Contains(modDir) && (packDeclared ?? false);
 
-    /// <summary>Sibling-synthesis mode for a mod, applying the absent-default.</summary>
-    public SiblingSynthesisMode SiblingModeFor(string modDir) =>
-        SiblingSynthesis.TryGetValue(modDir, out var m) ? m : SiblingSynthesisMode.BiboGen3Only;
+    /// <summary>
+    /// Whether a mod's overlays are baked onto a vanilla (gen2) body the character is wearing. On unless the
+    /// user switched it off for this mod. bibo↔gen3/Eve has no switch — it always bakes.
+    /// <para/>
+    /// This is permission, not detection: the compositor still bakes a body only when its material is loaded
+    /// on the character, so "on" costs nothing while no vanilla skin is showing.
+    /// </summary>
+    public bool OverlaysVanillaFor(string modDir) =>
+        !SiblingSynthesis.TryGetValue(modDir, out var m) || m != SiblingSynthesisMode.Off;
 
     /// <summary>Per-mod cache of whether it ships obj/body/ material redirects, keyed by mod
     /// directory. Invalidated by Fingerprint (file size + mtime summed over the mod's own

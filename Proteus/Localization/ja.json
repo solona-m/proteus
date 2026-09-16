@@ -3,12 +3,16 @@
     "message": "デザインに紐付け",
     "description": ""
   },
+  "Band.Cap.Link.Tip": {
+    "message": "ガイドで詳しく読む",
+    "description": ""
+  },
   "Band.Cap.Overlay": {
     "message": "何でも重ねて色替え",
     "description": ""
   },
-  "Band.Cap.Toggle": {
-    "message": "何でもオフに切替",
+  "Band.Cap.Reshape": {
+    "message": "どのモデルも変形",
     "description": ""
   },
   "Band.Cap.Wear": {
@@ -16,7 +20,7 @@
     "description": ""
   },
   "Band.Caption": {
-    "message": "重ねる · 飾る · 切替 · 紐付け",
+    "message": "重ねる · 飾る · 変形 · 紐付け",
     "description": ""
   },
   "Band.Pill.Disabled": {
@@ -117,10 +121,6 @@
   },
   "Chat.ContentUnplaced.Fmt": {
     "message": "[Proteus] MODのメッシュパーツ{0}個を配置できませんでした — アクセサリのマテリアル枠が不足しています。指輪・ブレスレット・ネックレスをもう一つ装備するか、レイヤーをオフにしてください。",
-    "description": ""
-  },
-  "Chat.GlowPromoted.Fmt": {
-    "message": "[Proteus]「{0}」は肌レイヤーにグローを設定しています。肌はもう発光できないため、このオプションは布レイヤーとして描画されます。空いているアクセサリが必要になり、表面の見え方も少し変わります。",
     "description": ""
   },
   "Chat.HatCompat": {
@@ -239,14 +239,6 @@
     "message": "この行の画像を、すでに肌にあるものとどう合成するかを決めます。\n\n「描画」は上に重ねるだけで、これまでのレイヤーと同じ動作です。\nそれ以外を選ぶとこの行は「プリント」になります。同じMODの他のレイヤーが\n塗った布地を着色し、その形に切り抜かれます。網タイツに虹をかければ、糸だけが\n染まり、網目は肌のまま残ります。\n\nプリントが届くのは同じMOD内のレイヤーだけで、他のMODの衣装には決して触れません。\n素肌の上には何も描かないため、プリントだけを選んでも何も表示されません。\nこれは仕様です。プリントする下地がそこにないからです。\n\n乗算は暗くすることしかできないため、非常に暗い布地ではほとんど見えません。\nその場合はスクリーンを使ってください。この行の色は引き続き画像を着色し、\n不透明度がプリントの強さになります。",
     "description": ""
   },
-  "Colors.Bodies.All": {
-    "message": "すべてのボディ",
-    "description": ""
-  },
-  "Colors.Bodies.BiboGen3": {
-    "message": "bibo+gen3",
-    "description": ""
-  },
   "Colors.Bodies.GlobalNote": {
     "message": "グローバルに保存されます。紐付けはこれを記録しません。",
     "description": ""
@@ -255,17 +247,13 @@
     "message": "\nグローバル設定です。編集中の紐付けには含まれません。",
     "description": ""
   },
-  "Colors.Bodies.Label": {
-    "message": "ボディ",
-    "description": ""
+  "Colors.Bodies.Vanilla.Label": {
+    "message": "gen2/バニラに重ねる",
+    "description": "Checkbox label in the colour-table editor window's Advanced section. \"gen2\" is a body-mod name - never translated. Ticked = this mod is also painted onto vanilla skin."
   },
-  "Colors.Bodies.Off": {
-    "message": "オフ",
-    "description": ""
-  },
-  "Colors.Bodies.Tip": {
-    "message": "このMODをどのボディタイプに焼き込むか：\nすべてのボディ = 姉妹ボディ（bibo↔gen3/Eve）＋バニラ（gen2）\nbibo+gen3 = 姉妹ボディのみに焼き込む（既定）\nオフ = 合成しない\n\nこのオプションだけでなく、MOD全体に適用されます。",
-    "description": ""
+  "Colors.Bodies.Vanilla.Tip": {
+    "message": "キャラクターが身につけているバニラ（gen2）の肌にもこのMODを描きます —\n通常は装備に付属する肌です。\n実際にバニラの肌がキャラクターに表示されている間だけ描かれるため、\n表示されていないときは負荷がかかりません。\n\nbiboとgen3/Eveには常に描かれます。これはバニラにだけ影響します。\nこのオプションだけでなく、MOD全体に適用されます。",
+    "description": "Tooltip for the checkbox above. \"gen2\", \"bibo\", \"gen3\" and \"Eve\" are body-mod names - never translated. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Colors.BustBridge.Label": {
     "message": "谷間を布で渡す",
@@ -373,6 +361,10 @@
   },
   "Colors.Geometry.Section": {
     "message": "ジオメトリ",
+    "description": ""
+  },
+  "Colors.Effects.Section": {
+    "message": "エフェクト",
     "description": ""
   },
   "Colors.GlowAmount.Label": {
@@ -535,6 +527,18 @@
     "message": "詳細設定でこのモードを固定したため、設定した機能には追従しなくなりました。\n「自動に戻す」をクリックすると再び適応します。",
     "description": ""
   },
+  "Colors.ReinforcedToe.Label": {
+    "message": "つま先補強",
+    "description": ""
+  },
+  "Colors.ReinforcedToe.SavedNote": {
+    "message": "MODに保存されます。プリセットやデザインには記録されません。",
+    "description": ""
+  },
+  "Colors.ReinforcedToe.Tip": {
+    "message": "キャップしたつま先をストッキングの他の部分より濃くします。実物のストッキングが\nつま先を厚く編むのと同じで、指が薄っすら透ける濃い面になり、縁ではっきり切れず\n徐々に薄れていきます。\n取り除けるのは既にある透明度だけです。ストッキングが何も描いていない場所では何も\n起きないため、素足のつま先に生地が乗ることはありません。元から不透明なストッキング\nでは見た目は変わりません。\n「シャープなアルファ」がオンだと各ピクセルは不透明か消えるかのどちらかになるため、\n柔らかい縁は硬い縁になります。",
+    "description": ""
+  },
   "Colors.RenderingAs": {
     "message": "描画モード:",
     "description": ""
@@ -669,6 +673,14 @@
   },
   "Colors.Tiling.Tip": {
     "message": "エフェクトが表面上で何回繰り返されるか。1 = 1回。",
+    "description": ""
+  },
+  "Colors.ToeDensity.Label": {
+    "message": "濃さ",
+    "description": ""
+  },
+  "Colors.ToeDensity.Tip": {
+    "message": "つま先が脚部よりどれだけ濃いか。100% で完全な不透明になります。一般的な補強つま先は\nそれよりかなり低い値です。",
     "description": ""
   },
   "Colors.TowardBottom.Btn": {
@@ -831,8 +843,16 @@
     "message": "PenumbraのMODディレクトリを利用できません。",
     "description": ""
   },
+  "ContentImport.Fail.NotUpgraded.Fmt": {
+    "message": "Penumbraが「{0}」を旧形式から変換しなかったため、パーツを切り替え可能にできませんでした。インポートは取り消されました。もう一度パックをインポートしてください。",
+    "description": ""
+  },
   "ContentImport.Fail.NothingUsable": {
     "message": "このパックにはインポートできるものがありません。",
+    "description": ""
+  },
+  "ContentImport.Fail.PieceGroup.Fmt": {
+    "message": "「{0}」にパーツのスイッチを追加できませんでした：{1} インポートは取り消されました。もう一度パックをインポートしてください。",
     "description": ""
   },
   "ContentImport.Fail.Reserved": {
@@ -1084,8 +1104,8 @@
     "description": ""
   },
   "Create.WholeSkin.Tip": {
-    "message": "肌に何かを描くのではなく、肌全体のModを変換する場合にチェックしてください。\nテクスチャがそれらしければProteusが自動でチェックします。あなた自身の指定が常に優先されます。\n結果は三つあります。ノーマルマップがマテリアル上の既存のものに重ねられるのではなく置き換わります。\nそうしないと同じマップの上に重なり、毛穴やしわが二重にかかって、体だけが顔に比べて平坦に見え、\n首の継ぎ目にはっきりした線が出ます。\n二つめは肌色の抑制がオフになることです。着ている人の肌色が乗るようになります。抑制は布地が\n染め直されるのを防ぐためのもので、このテクスチャは肌そのものだからです。\n三つめは「ボディ」が「すべてのボディ」に設定され、バニラボディにも適用されるようになることです。",
-    "description": ""
+    "message": "肌に何かを描くのではなく、肌全体のModを変換する場合にチェックしてください。\nテクスチャがそれらしければProteusが自動でチェックします。あなた自身の指定が常に優先されます。\n結果は二つあります。ノーマルマップがマテリアル上の既存のものに重ねられるのではなく置き換わります。\nそうしないと同じマップの上に重なり、毛穴やしわが二重にかかって、体だけが顔に比べて平坦に見え、\n首の継ぎ目にはっきりした線が出ます。\n二つめは肌色の抑制がオフになることです。着ている人の肌色が乗るようになります。抑制は布地が\n染め直されるのを防ぐためのもので、このテクスチャは肌そのものだからです。",
+    "description": "Tooltip for the checkbox above. \"normal\" is the normal map (a texture). Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Emissive.Aliases.Fmt": {
     "message": "{0} パス",
@@ -1429,10 +1449,6 @@
   },
   "Import.Author.Label": {
     "message": "作者",
-    "description": ""
-  },
-  "Import.BodyFit.NeedsAllBodies.Fmt": {
-    "message": "このパックにはバニラボディ用に描かれたものがないため、代わりに「{0}」が使われます。バニラボディへの焼き込みは既定でオフなので、Proteusはインポート時にこのMODの「ボディ」を「すべてのボディ」に設定します（カラー→詳細設定）。そうしないと何も描画されません。",
     "description": ""
   },
   "Import.BodyFit.NotDrawn.Fmt": {
@@ -1819,10 +1835,6 @@
     "message": "このパックにインポートできるレイヤーはありません。",
     "description": ""
   },
-  "Import.Result.AllBodies.Fmt": {
-    "message": "「{0}」をインポートしました — レイヤー数: {1}{2}。このパックにはバニラボディ用に描かれたものがないため、Proteusはこの MODの「ボディ」を「すべてのボディ」に設定して焼き込みました（カラー→詳細設定）。オフにすると描画されなくなります。",
-    "description": ""
-  },
   "Import.Result.NoLayout.Fmt": {
     "message": "「{0}」をインポートしました — レイヤー数: {1}{2}。ただしProteusはボディレイアウトを選べませんでした。Penumbraの「{3}」から1つ選んでください。選ばないと何も描画されません。",
     "description": ""
@@ -2101,6 +2113,390 @@
   },
   "Parts.Row.Fmt": {
     "message": "{0} · {1:N0}三角形",
+    "description": ""
+  },
+  "Parts.Tool.Navigate": {
+    "message": "パーツの切り替え",
+    "description": ""
+  },
+  "Parts.Tool.Navigate.Tip": {
+    "message": "モデルのパーツをクリックして選び、スイッチを付けます。",
+    "description": ""
+  },
+  "Parts.Tool.Inflate": {
+    "message": "外に引く",
+    "description": ""
+  },
+  "Parts.Tool.Inflate.Tip": {
+    "message": "モデル上をなぞると表面が外側に押し出され、服から突き出た体が\nまた覚い隠れます。",
+    "description": ""
+  },
+  "Parts.Tool.Deflate": {
+    "message": "内に押す",
+    "description": ""
+  },
+  "Parts.Tool.Deflate.Tip": {
+    "message": "同じブラシの逆方向。体から離れすぎている服に使います。",
+    "description": ""
+  },
+  "Parts.Tool.Relax": {
+    "message": "ならす",
+    "description": ""
+  },
+  "Parts.Tool.Relax.Tip": {
+    "message": "モデルをなぞると表面がなめらかになります — 服にもともとある凸凹や、\nでこぼこになった引き出しに。3ds Max のリラックスと同じく縮みます：曲面は平らになり、布は体の方へ沈むことがあります。",
+    "description": ""
+  },
+  "Parts.Brush.RelaxRate.Tip": {
+    "message": "塗っている間に表面がなめらかになる速さ。低いと穏やかで扱いやすく、\n高いとほぼすぐになめらかになります。\n\n裾のような開いた縁の近くでは、縁が少し内側へ寄ります。",
+    "description": ""
+  },
+  "Parts.Tool.Bridge": {
+    "message": "橋渡し",
+    "description": ""
+  },
+  "Parts.Tool.Bridge.Tip": {
+    "message": "くぼみ（お尻の割れ目やしわ）を横切るように塗ると、布が体に沿って\n沈み込まず、まっすぐ張り渡されます。持ち上げるだけで、丸みのある\n部分の形はそのままです。",
+    "description": ""
+  },
+  "Parts.Tool.Wind": {
+    "message": "風",
+    "description": ""
+  },
+  "Parts.Tool.Wind.Tip": {
+    "message": "この装備を風が揺らす場所を塗ります。赤の濃さが揺れの強さです。\nモデルの2番目の頂点カラーに書き込まれます。",
+    "description": ""
+  },
+  "Parts.Tool.Move": {
+    "message": "移動",
+    "description": ""
+  },
+  "Parts.Tool.Move.Tip": {
+    "message": "パーツを選び、矢印をドラッグします。矢印はその軸に沿って、\n四角はその平面上で動かします。",
+    "description": ""
+  },
+  "Parts.Move.Help": {
+    "message": "パーツをクリックして選び、矢印か四角をドラッグします。それ以外の場所をドラッグするとモデルが回転し、Shift+ドラッグで視点を移動、スクロールでズームします。",
+    "description": ""
+  },
+  "Parts.Move.LiveHint": {
+    "message": "キャラクターのパーツをクリックし、矢印か四角をドラッグします。Altを押している間はカメラを動かせます。移動は離したときに保存されます。",
+    "description": ""
+  },
+  "Parts.Move.Part.Fmt": {
+    "message": "移動中のパーツ：{0}",
+    "description": ""
+  },
+  "Parts.Move.NoPart": {
+    "message": "移動するパーツをクリックして選んでください。",
+    "description": ""
+  },
+  "Parts.Move.ListTip": {
+    "message": "ここで移動するパーツを選ぶか、モデルかキャラクター上でクリックしてください。",
+    "description": ""
+  },
+  "Parts.Move.Adjacent": {
+    "message": "隣接パーツも移動",
+    "description": ""
+  },
+  "Parts.Move.Adjacent.Tip": {
+    "message": "パーツの近くにある布は、つながっていてもいなくても、離れるほど少なくなりながら一緒に動きます。\nオフにするとパーツだけが動きます。隣と完全に共有している点は動くので、縫い目は開きません。",
+    "description": ""
+  },
+  "Parts.Move.Falloff": {
+    "message": "減衰距離",
+    "description": ""
+  },
+  "Parts.Move.Falloff.Tip": {
+    "message": "パーツからどこまで離れた布がついてくるか。",
+    "description": ""
+  },
+  "Parts.Move.BonesNote": {
+    "message": "移動したパーツは元のボーンに従うため、ボーンから大きく離すとポーズによって不自然に曲がることがあります。",
+    "description": ""
+  },
+  "Parts.Move.SkinTip": {
+    "message": "肌は移動できません。",
+    "description": ""
+  },
+  "Parts.Move.LockedTip": {
+    "message": "このパーツはロックされています。ブラシでロックを解除すると移動できます。",
+    "description": ""
+  },
+  "Parts.Move.NothingFree": {
+    "message": "このパーツには動かせる部分がありません（肌かロック済み）。",
+    "description": ""
+  },
+  "Parts.Move.Moved.Fmt": {
+    "message": "最大移動量：{0:F1} mm",
+    "description": ""
+  },
+  "Parts.Move.Undo": {
+    "message": "移動を元に戻す",
+    "description": ""
+  },
+  "Parts.Brush.WindAmount": {
+    "message": "量",
+    "description": ""
+  },
+  "Parts.Brush.WindAmount.Tip": {
+    "message": "塗る風の量。0% で消去します。塗りながら Ctrl を押しても消去できます。",
+    "description": ""
+  },
+  "Parts.Brush.WindRate": {
+    "message": "速さ",
+    "description": ""
+  },
+  "Parts.Brush.WindRate.Tip": {
+    "message": "塗っている間に風が設定量に達する速さ。",
+    "description": ""
+  },
+  "Parts.Wind.AddsChannel": {
+    "message": "このモデルにはまだ風チャンネルがありません。最初のストロークの保存時に追加されます。",
+    "description": ""
+  },
+  "Parts.Wind.FirstColorNotWhite": {
+    "message": "このモデルの1番目の頂点カラーが白ではありません。風の効果は白を想定しています。Proteus は作者のままにします。",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Set.Fmt": {
+    "message": "風でこの装備が動くよう、{0} 個のマテリアルファイルを設定しました。",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Missing.Fmt": {
+    "message": "{0} 個のマテリアルファイルには変更できる風の動きの設定がないため、揺れない可能性があります。",
+    "description": ""
+  },
+  "Parts.Wind.Materials.NotInMod.Fmt": {
+    "message": "この装備が使う {0} 個のマテリアルはこの Mod ではなくゲームのものなので、風の動きを設定できません。",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Failed.Fmt": {
+    "message": "装備のマテリアルを風用に設定できませんでした: {0}",
+    "description": ""
+  },
+  "Parts.Wind.Refused.Fmt": {
+    "message": "{0} 個のメッシュに風を追加できませんでした：頂点属性を追加する余地がありません。",
+    "description": ""
+  },
+  "Parts.Brush.BridgeRate.Tip": {
+    "message": "塗っている間に布がくぼみを張り渡す速さ。低いと穏やかで扱いやすく、\n高いとほぼすぐに隙間が埋まります。",
+    "description": ""
+  },
+  "Parts.Brush.Help": {
+    "message": "モデル上をドラッグすると塗れます。背景からドラッグすると回転、Shift+ドラッグで移動、スクロールで拡大縮小。",
+    "description": ""
+  },
+  "Parts.ShowModelView": {
+    "message": "モデル表示",
+    "description": ""
+  },
+  "Parts.ShowModelView.Tip": {
+    "message": "キャラクターではなく、このウィンドウのモデル上で塗ります。",
+    "description": ""
+  },
+  "Parts.Live.Pick.Tip": {
+    "message": "キャラクターの装備をクリックすると、そのModとモデルをここで開きます。",
+    "description": ""
+  },
+  "Parts.Live.Hint": {
+    "message": "キャラクターの上で塗ります。Altを押しながらでカメラを動かせます。ストロークは離したときに保存されます。",
+    "description": ""
+  },
+  "Parts.Live.NotWorn": {
+    "message": "このモデルは今キャラクターに表示されていません。装備するか、モデル表示をオンにしてください。",
+    "description": ""
+  },
+  "Parts.Content.Hint": {
+    "message": "この衣装はProteusにインポートされ、Proteusが着せています。いつもどおり塗れます。各ストロークは保存後、衣装が再構築されて数秒でキャラクターに反映されます。",
+    "description": ""
+  },
+  "Parts.Content.NoSwitches": {
+    "message": "インポートした衣装にはスイッチを追加できません。Proteusは別のアイテムに載せて着せており、そのアイテム自身のスイッチが制御します。上のブラシは使えます。",
+    "description": ""
+  },
+  "Parts.Live.PickedShell": {
+    "message": "これはProteusが描いている衣装で、何かが変わるたびに作り直されます。編集するには、元になったMODを選んでください。",
+    "description": ""
+  },
+  "Parts.Live.Unreadable": {
+    "message": "このモデルはキャラクター上のものと一致しません。ここで塗るにはモデル表示をオンにしてください。",
+    "description": ""
+  },
+  "Parts.Live.NoCharacter": {
+    "message": "今はキャラクターに塗ることができません。",
+    "description": ""
+  },
+  "Parts.Live.PickedNotListed.Fmt": {
+    "message": "{0} はこのModが公開しているモデルではありません。",
+    "description": ""
+  },
+  "Parts.Brush.Size": {
+    "message": "ブラシの大きさ",
+    "description": ""
+  },
+  "Parts.Brush.Size.Tip": {
+    "message": "ブラシが届く範囲。効きは中心が最も強く、端でゼロになります。大きければ\n広いうねりが、小さければ小さな膨らみが動きます。",
+    "description": ""
+  },
+  "Parts.Brush.Strength": {
+    "message": "強さ",
+    "description": ""
+  },
+  "Parts.Brush.Strength.Tip": {
+    "message": "塗っている間に表面が動く量。通常は小さめが適切です：服は体からわずか\n数分の一ミリ離れれば十分で、同じ場所を何度でも重ねて塗れます。",
+    "description": ""
+  },
+  "Parts.Brush.TooSmall.Fmt": {
+    "message": "ブラシがこのモデルのポリゴン（約 {0:F1} mm）より小さいため、表面でなく頂点をトゲ状に引っ張ります。大きくしてください。",
+    "description": ""
+  },
+  "Parts.Brush.Moved.Fmt": {
+    "message": "最大移動量：{1:F1} mm 中 {0:F2} mm。",
+    "description": ""
+  },
+  "Parts.Brush.Untouched": {
+    "message": "まだ何も動いていません。",
+    "description": ""
+  },
+  "Parts.Brush.Undo": {
+    "message": "一筆分戻す",
+    "description": ""
+  },
+  "Parts.Brush.Reset": {
+    "message": "やり直す",
+    "description": ""
+  },
+  "Parts.Brush.NotSavedYet": {
+    "message": "未保存",
+    "description": ""
+  },
+  "Parts.Brush.Save": {
+    "message": "MOD に保存",
+    "description": ""
+  },
+  "Parts.Brush.Save.Tip": {
+    "message": "変更を MOD 自身のモデルファイルに書き込みます。Proteus を切っても有効で、\nMOD を書き出しても付いていきます。元のファイルは先に MOD 内の\nProteus/meshvolume-backup/ にコピーされ、いつでも元に戻せます。",
+    "description": ""
+  },
+  "Parts.Brush.Save.Nothing.Tip": {
+    "message": "すべて保存済みです。変更は塗り終えた少し後に自動で保存されます。",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes": {
+    "message": "他のサイズにも適用",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Tip": {
+    "message": "このモデルで塗った変更を、Mod 内の同じモデルの他のサイズに、装備上の位置で\n対応させてコピーします。各サイズは先にバックアップされ、「保存内容を元に戻す」で元に戻せます。",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Running": {
+    "message": "他のサイズに適用中…",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Done.Fmt": {
+    "message": "他の {0} サイズに適用しました。",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Problem.Fmt": {
+    "message": "{0}: {1}",
+    "description": ""
+  },
+  "Parts.Brush.Saved.Fmt": {
+    "message": "保存しました。表面は最大 {0:F2} mm 動きました。",
+    "description": ""
+  },
+  "Parts.Brush.Spares.Fmt": {
+    "message": "このモデルの体型スライダーに属する {0} 点を一緒に動かせませんでした。そのスライダーを有効にすると、一部で貫通が戻ることがあります。",
+    "description": ""
+  },
+  "Parts.Brush.Revert": {
+    "message": "保存内容を元に戻す",
+    "description": ""
+  },
+  "Parts.Brush.Revert.Tip": {
+    "message": "この MOD でブラシが変更したすべてのモデルを、作者が作ったときの状態に\n正確に戻します。",
+    "description": ""
+  },
+  "Parts.Brush.Reverted.Fmt": {
+    "message": "{0} 件のモデルを作者の状態に戻しました。",
+    "description": ""
+  },
+  "Parts.Brush.Revert.Arm.Tip": {
+    "message": "Ctrl または Shift を押しながらクリックします。",
+    "description": ""
+  },
+  "Parts.Brush.Size.Keys.Tip": {
+    "message": "[ と ] で変更できます。Shift を押すと細かく変わります。",
+    "description": ""
+  },
+  "Parts.Brush.Mirror": {
+    "message": "左右対称",
+    "description": ""
+  },
+  "Parts.Brush.Mirror.Tip": {
+    "message": "体の中心を軸に、左右を同時に鏡映しで塗ります。",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Hint": {
+    "message": "Shift+クリックでパーツをロックします。",
+    "description": ""
+  },
+  "Parts.Brush.Lock.ListTip": {
+    "message": "パーツのチェックを外すとロックされ、どのブラシでも動かなくなります。モデルやキャラクター上のパーツを Shift+クリックしても同じです。",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Count.Fmt": {
+    "message": "{0} 個のパーツをロック中",
+    "description": ""
+  },
+  "Parts.Brush.Lock.UnlockAll": {
+    "message": "すべてロック解除",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Skin.Tip": {
+    "message": "肌は動きません。",
+    "description": ""
+  },
+  "MeshVolume.Apply.Nothing": {
+    "message": "何も塗っていないので、保存するものがありません。",
+    "description": ""
+  },
+  "MeshVolume.Apply.EditFailed.Fmt": {
+    "message": "{0} を編集できませんでした：{1}。何も書き込まれていません。",
+    "description": ""
+  },
+  "MeshVolume.Apply.Failed.Fmt": {
+    "message": "書き込みに失敗しました：{0}",
+    "description": ""
+  },
+  "MeshVolume.Revert.Nothing": {
+    "message": "この MOD でブラシは何も変更していません。",
+    "description": ""
+  },
+  "MeshVolume.Revert.Blocked.Fmt": {
+    "message": "先に{0}を元に戻してください。ブラシの後に同じモデルに適用されているため、ここでブラシを戻すとそれも消えてしまいます。",
+    "description": ""
+  },
+  "MeshVolume.Revert.NoBackups": {
+    "message": "復元する元のモデルが見つかりません。",
+    "description": ""
+  },
+  "MeshVolume.Feature.Toggles": {
+    "message": "パーツのスイッチ",
+    "description": ""
+  },
+  "MeshVolume.Feature.HatCompat": {
+    "message": "帽子対応",
+    "description": ""
+  },
+  "MeshVolume.Feature.Brush": {
+    "message": "ブラシ",
+    "description": ""
+  },
+  "ModelBackups.Blocked.Fmt": {
+    "message": "先に{0}を元に戻してください。その後に同じモデルを変更しているため、今これを戻すとそれも消えてしまいます。",
     "description": ""
   },
   "Parts.Selected.Fmt": {
@@ -2452,7 +2848,7 @@
     "description": ""
   },
   "Tab.Parts": {
-    "message": "トグル",
+    "message": "スタジオ",
     "description": ""
   },
   "Tab.Settings": {

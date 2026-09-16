@@ -116,12 +116,61 @@ public sealed class ModelPart
 }
 
 /// <summary>Everything one model offers, read once.</summary>
+/// <summary>
+/// One mesh's run inside the concatenated vertex arrays: vertex <c>BaseVertex + k</c> of
+/// <see cref="ModelParts.Positions"/> is vertex <c>k</c> of model mesh <see cref="Mesh"/>.
+/// </summary>
+/// <param name="Mesh">Index in the model's own mesh table, the number every writer addresses a mesh
+/// by — NOT the LOD0 ordinal shown to the user, which skips emptied meshes.</param>
+public readonly record struct MeshSpan(int Mesh, int BaseVertex, int Count);
+
 public sealed class ModelParts
 {
     /// <summary>Object-space xyz per vertex, every LOD0 mesh concatenated with its indices rebased — the
     /// same arrangement <see cref="SecondSkinWriter.TryReadLod0Geometry"/> returns, and for the same reason:
     /// the caller wants to draw the model, not its meshes.</summary>
     public required float[] Positions { get; init; }
+
+    /// <summary>
+    /// Unit normals, one per vertex of <see cref="Positions"/> and in the same order, so index <c>i</c>
+    /// names the same vertex in both.
+    /// <para/>
+    /// Here so an editing pass has a direction to move a vertex ALONG without reading the model a second
+    /// time and risking a different answer about which meshes decoded. A mesh that declares no normal
+    /// element, or whose normal element cannot be read, contributes zeroes rather than being skipped —
+    /// dropping it would put this array out of step with <see cref="Positions"/>, which is the one thing
+    /// that must never happen. A zero normal is a vertex nothing can be inflated along, and the caller is
+    /// expected to notice that rather than be told a lie about which way is out.
+    /// </summary>
+    public required float[] Normals { get; init; }
+
+    /// <summary>
+    /// Which model mesh each run of <see cref="Positions"/> came from, in order.
+    /// <para/>
+    /// THE ONLY WAY BACK TO THE FILE. Positions are concatenated across LOD0 meshes with their indices
+    /// rebased, which is what lets a caller draw the model without knowing about meshes — and it is
+    /// exactly what makes the array useless for WRITING, because a rebased index addresses a different
+    /// vertex than the mesh's own buffer does. <c>HatCompatSolve.ReadLod0Meshes</c> exists as a separate
+    /// reader for that reason.
+    /// <para/>
+    /// It cannot be reconstructed afterwards either. <see cref="ModelPartReader.Read"/> skips a mesh for
+    /// four unrelated reasons — no vertices, no position element, a stream the mesh does not use, and a
+    /// buffer that runs past the end of the file — so the mapping is only knowable while reading. Hence
+    /// this, recorded as it goes.
+    /// </summary>
+    public required IReadOnlyList<MeshSpan> MeshSpans { get; init; }
+
+    /// <summary>
+    /// Each vertex's wind — the red of its second vertex colour, 0..1 — in the same order as
+    /// <see cref="Positions"/>; 0 where the mesh has no second colour. Empty when not read.
+    /// </summary>
+    public float[] Wind { get; init; } = [];
+
+    /// <summary>Every mesh already carries the second vertex colour, so painting wind adds nothing to the file.</summary>
+    public bool HasWindChannel { get; init; }
+
+    /// <summary>Some mesh's first vertex colour is not white, which the wind effect expects.</summary>
+    public bool FirstColorNotWhite { get; init; }
 
     public required IReadOnlyList<ModelPart> Parts { get; init; }
 
@@ -210,6 +259,8 @@ public static class ModelPartReader
 
         var s = src.S;
         var pos = new List<float>();
+        var nrm = new List<float>();
+        var spans = new List<MeshSpan>();
         var parts = new List<ModelPart>();
         var shattered = new Dictionary<string, int>(StringComparer.Ordinal);
         Span<float> tmp = stackalloc float[4];
@@ -231,9 +282,12 @@ public static class ModelPartReader
             var material = matIdx < src.MatNames.Count ? src.MatNames[matIdx] : "?";
 
             var decl = m < src.Decls.Length ? src.Decls[m] : [];
-            SecondSkinWriter.VElem? posEl = null;
+            SecondSkinWriter.VElem? posEl = null, nrmEl = null;
             foreach (var el in decl)
-                if (el.Usage == SecondSkinWriter.UsePosition) { posEl = el; break; }
+            {
+                if (el.Usage == SecondSkinWriter.UsePosition) posEl = el;
+                else if (el.Usage == SecondSkinWriter.UseNormal) nrmEl = el;
+            }
             if (posEl is not { } pe) continue;
 
             uint[] vbo =
@@ -253,11 +307,41 @@ public static class ModelPartReader
                 if (pa < 0 || pa + 16 > s.Length) { ok = false; break; }
                 SecondSkinWriter.ReadTyped(s, pa, pe.Type, tmp);
                 pos.Add(tmp[0]); pos.Add(tmp[1]); pos.Add(tmp[2]);
+
+                // Appended for EVERY vertex, whatever the normal turns out to be. The two arrays are
+                // indexed by the same number, so a skip here would shift every later normal onto the wrong
+                // vertex — silently, and in a way that shows up as geometry inflating sideways.
+                float nx = 0f, ny = 0f, nz = 0f;
+                if (nrmEl is { } ne && ne.Stream <= 2 && bs[ne.Stream] != 0)
+                {
+                    int na = (int)(src.Vb + vbo[ne.Stream]) + k * bs[ne.Stream] + ne.Offset;
+                    if (na >= 0 && na + 16 <= s.Length)
+                    {
+                        SecondSkinWriter.ReadTyped(s, na, ne.Type, tmp);
+                        nx = tmp[0]; ny = tmp[1]; nz = tmp[2];
+                        // Ubyte4n stores a normal biased into 0..1, so it has to be unbiased before it
+                        // means a direction. Every other reader in the project does this by hand too.
+                        if (ne.Type == 8) { nx = nx * 2f - 1f; ny = ny * 2f - 1f; nz = nz * 2f - 1f; }
+                        float nl = MathF.Sqrt(nx * nx + ny * ny + nz * nz);
+                        if (nl > 1e-6f) { nx /= nl; ny /= nl; nz /= nl; }
+                        else { nx = 0f; ny = 0f; nz = 0f; }
+                    }
+                }
+                nrm.Add(nx); nrm.Add(ny); nrm.Add(nz);
             }
             // A truncated buffer costs this mesh and nothing else. Rewinding matters: a half-decoded mesh
             // left in the array would put garbage vertices under the NEXT mesh's rebased indices.
-            if (!ok) { pos.RemoveRange(baseVertex * 3, pos.Count - baseVertex * 3); continue; }
+            //
+            // Normals rewind with them, and no span is recorded — a span naming a run that was rolled back
+            // would hand a writer the wrong vertices of the wrong mesh.
+            if (!ok)
+            {
+                pos.RemoveRange(baseVertex * 3, pos.Count - baseVertex * 3);
+                nrm.RemoveRange(baseVertex * 3, nrm.Count - baseVertex * 3);
+                continue;
+            }
 
+            spans.Add(new MeshSpan(m, baseVertex, vc));
             ordinal++;
             ushort subIdx = BitConverter.ToUInt16(s, mo + 10), subCount = BitConverter.ToUInt16(s, mo + 12);
             for (int su = 0; su < subCount; su++)
@@ -327,10 +411,20 @@ public static class ModelPartReader
 
         if (parts.Count == 0) return null;
 
+        // Wind per vertex, by span, so it lines up with Positions however many meshes were skipped above.
+        var wind = new float[pos.Count / 3];
+        foreach (var span in spans)
+            VertexColorWriter.ReadWind(s, src, span.Mesh, span.Count, wind, span.BaseVertex);
+
         var (min, max) = Bounds(pos, null);
         return new ModelParts
         {
             Positions = pos.ToArray(),
+            Normals = nrm.ToArray(),
+            Wind = wind,
+            HasWindChannel = spans.All(sp => src.Decls[sp.Mesh].Any(VertexColorWriter.IsSecondColor)),
+            FirstColorNotWhite = VertexColorWriter.FirstColorNotWhite(src),
+            MeshSpans = spans,
             Parts = parts,
             AttributeNames = src.AttrNames,
             Min = min,

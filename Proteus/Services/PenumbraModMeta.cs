@@ -91,8 +91,15 @@ internal static class PenumbraModMeta
     /// collapses "no manifest" and "unreadable manifest" into <see cref="LegacyFileVersion"/>, so without it
     /// every folder an importer is part-way through creating would refuse its own first write.
     /// </summary>
-    public static bool IsLegacyFolder(string modRoot)
-        => HasReadableManifest(modRoot) && ReadFileVersion(modRoot) < SingleFileVersion;
+    /// <param name="waitIfHeld">Wait out a manifest someone else holds open, as the writers do, so it is not
+    /// answered as "not legacy" for want of a moment. False for a caller on the draw or framework thread that
+    /// only uses the answer for display — the sleep would be frozen frames, and any write it leads to still
+    /// waits and refuses on its own.</param>
+    public static bool IsLegacyFolder(string modRoot, bool waitIfHeld = true)
+    {
+        var manifest = ReadManifest(modRoot, out bool readable, waitIfHeld: waitIfHeld);
+        return readable && FileVersionOf(manifest) < SingleFileVersion;
+    }
 
     /// <summary>
     /// Read the manifest, and throw <see cref="LegacyFolderException"/> if the folder is one Proteus will not
@@ -110,7 +117,9 @@ internal static class PenumbraModMeta
     /// </summary>
     private static Dictionary<string, JsonElement> ReadManifestForWrite(string modRoot)
     {
-        var manifest = ReadManifest(modRoot, out bool readable);
+        // throwIfHeld: a manifest that is THERE but held open must not read as absent — the write below would
+        // then replace it with one holding nothing but its own change. See ManifestInUseException.
+        var manifest = ReadManifest(modRoot, out bool readable, waitIfHeld: true, throwIfHeld: true);
         // Readable FIRST, for the reason IsLegacyFolder documents: FileVersionOf reports a manifest that is
         // missing and one that declares no version as the same thing, and a folder an importer is part-way
         // through creating has no manifest at all.
@@ -141,7 +150,9 @@ internal static class PenumbraModMeta
     {
         if (!IsLegacyFolder(modRoot)) return;
 
-        var manifest = ReadManifest(modRoot);
+        // As a writer reads: this rewrites the whole manifest from what it read, so one held open must not
+        // read as empty. See ManifestInUseException.
+        var manifest = ReadManifest(modRoot, out _, waitIfHeld: true, throwIfHeld: true);
         var (files, manips) = TryReadDefaultData(modRoot)
                            ?? (new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), []);
 
@@ -462,23 +473,87 @@ internal static class PenumbraModMeta
     /// <see cref="HasReadableManifest"/> answers, returned alongside the contents so a caller that needs
     /// both does not read the file twice. An empty dictionary alone cannot say: a folder with no manifest
     /// and one holding <c>{}</c> both produce one, and only the second is a mod Proteus must refuse.</param>
-    private static Dictionary<string, JsonElement> ReadManifest(string modRoot, out bool readable)
+    /// <param name="waitIfHeld">Retry for a moment while the manifest is held open by someone else. Off for the
+    /// plain readers, which answer "unknown" at once as they always have; on where the answer decides a write.</param>
+    /// <param name="throwIfHeld">Throw <see cref="ManifestInUseException"/> when the manifest exists but stays
+    /// held open, instead of answering "no manifest". Every writer passes it — see
+    /// <see cref="ReadManifestForWrite"/>.</param>
+    private static Dictionary<string, JsonElement> ReadManifest(
+        string modRoot, out bool readable, bool waitIfHeld = false, bool throwIfHeld = false)
     {
         readable = false;
         var preserved = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+        var path = Path.Combine(modRoot, MetaFile);
+
+        string text;
         try
         {
-            var path = Path.Combine(modRoot, MetaFile);
             if (!File.Exists(path)) return preserved;
-            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            text = ReadSharedText(path, waitIfHeld ? ReadRetries : 0);
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return preserved;   // gone between the check and the read: genuinely no manifest
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            if (throwIfHeld) throw new ManifestInUseException(path, ex);
+            return preserved;
+        }
+        catch { return preserved; }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(text);
             if (doc.RootElement.ValueKind != JsonValueKind.Object) return preserved;
 
             readable = true;
             foreach (var p in doc.RootElement.EnumerateObject())
                 preserved[p.Name] = p.Value.Clone();
         }
-        catch { /* unreadable — caller falls back to the older, universally-legible format */ }
+        // Read but unparseable — a zero-filled file after a crash, say. Treated as no manifest, so the managed
+        // mod's next write rebuilds it rather than failing every composite from then on.
+        catch { }
         return preserved;
+    }
+
+    /// <summary>
+    /// Thrown when a writer finds <c>meta.json</c> present but held open past every retry.
+    /// <para/>
+    /// An unreadable manifest used to read as NO manifest, and the writer then built a fresh one: FileVersion, a
+    /// new Identifier and the one thing it was writing — and put that over the real file. Penumbra holds the
+    /// manifest for a moment while it compacts a newly added mod, and an import's piece group landed in that
+    /// moment: the mod lost its name, groups and redirects, and Penumbra dropped it ("Either no or empty mod
+    /// name provided"). Refusing costs one write; overwriting cost the mod.
+    /// </summary>
+    public sealed class ManifestInUseException(string path, Exception inner)
+        : IOException($"{path} is in use by another program and could not be read, so it was not rewritten.", inner);
+
+    /// <summary>How many times a held manifest is re-read, backing off from 50 ms — about 1.5 s in all, the same
+    /// budget <see cref="AtomicWrite"/> gives Penumbra to let go of a file.</summary>
+    private const int ReadRetries = 5;
+
+    /// <summary>
+    /// The file's text, retrying while another program holds it. Shared read and write/delete, so Penumbra's
+    /// own saves and a replace can proceed while this reads.
+    /// </summary>
+    private static string ReadSharedText(string path, int retries)
+    {
+        for (int i = 0; ; i++)
+        {
+            try
+            {
+                using var fs = new FileStream(path, FileMode.Open, FileAccess.Read,
+                                              FileShare.ReadWrite | FileShare.Delete);
+                using var reader = new StreamReader(fs);
+                return reader.ReadToEnd();
+            }
+            catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException) { throw; }
+            catch (Exception ex) when ((ex is IOException or UnauthorizedAccessException) && i < retries)
+            {
+                Thread.Sleep(50 << i);
+            }
+        }
     }
 
     /// <summary>The <c>FileVersion</c> in an already-read manifest, defaulting to <see cref="LegacyFileVersion"/>.</summary>

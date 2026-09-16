@@ -228,6 +228,52 @@ public class PenumbraModMetaTests
     }
 
     /// <summary>
+    /// A manifest someone else holds open is not "no manifest".
+    /// <para/>
+    /// It used to be: the read failed, the writer took that as a folder with no manifest and wrote a fresh one
+    /// holding only its own change over the real file. Penumbra holds meta.json while it compacts a newly added
+    /// mod, a content import's piece group landed in that window, and the mod lost its name and every group.
+    /// </summary>
+    [Fact]
+    public void A_manifest_held_open_is_refused_rather_than_replaced()
+    {
+        using var tmp = new TempDir();
+        var meta = """{"FileVersion":4,"Identifier":"abc-123","Name":"Scarlet","Groups":[{"Name":"Items","Type":"Multi"}]}""";
+        File.WriteAllText(tmp.File("meta.json"), meta);
+
+        using (new FileStream(tmp.File("meta.json"), FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            Assert.Throws<PenumbraModMeta.ManifestInUseException>(
+                () => PenumbraModMeta.WriteMultiSelectGroup(tmp.Path, 1, "Pieces (Proteus)", ["Body"]));
+            Assert.Throws<PenumbraModMeta.ManifestInUseException>(
+                () => PenumbraModMeta.WriteRedirects(tmp.Path, "Scarlet", OneRedirect));
+        }
+
+        Assert.Equal(meta, File.ReadAllText(tmp.File("meta.json")));
+    }
+
+    /// <summary>A hold that ends within the retry budget costs a moment, not the write — and the write keeps
+    /// everything the manifest already had.</summary>
+    [Fact]
+    public void A_manifest_released_while_retrying_is_written_with_everything_it_had()
+    {
+        using var tmp = new TempDir();
+        File.WriteAllText(tmp.File("meta.json"),
+            """{"FileVersion":4,"Identifier":"abc-123","Name":"Scarlet","Groups":[{"Name":"Items","Type":"Multi"}]}""");
+
+        var hold = new FileStream(tmp.File("meta.json"), FileMode.Open, FileAccess.Read, FileShare.None);
+        using var release = new System.Threading.Timer(_ => hold.Dispose(), null, 150, System.Threading.Timeout.Infinite);
+
+        PenumbraModMeta.WriteMultiSelectGroup(tmp.Path, 1, "Pieces (Proteus)", ["Body"]);
+
+        var written = JsonDocument.Parse(File.ReadAllText(tmp.File("meta.json"))).RootElement;
+        Assert.Equal("Scarlet", written.GetProperty("Name").GetString());
+        Assert.Equal("abc-123", written.GetProperty("Identifier").GetString());
+        Assert.Equal(["Items", "Pieces (Proteus)"],
+            written.GetProperty("Groups").EnumerateArray().Select(g => g.GetProperty("Name").GetString()));
+    }
+
+    /// <summary>
     /// Reading the pre-v4 layout is still supported even though writing it is not — a <c>.pmp</c> from a
     /// mod site is frequently v3 inside, and a composite has to know what such a folder publishes.
     /// </summary>

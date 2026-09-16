@@ -241,6 +241,20 @@ public class CompositorService : IDisposable
     public IReadOnlySet<string>? GetLiveContentMaterials(string modDir)
         => _contentMaterials.TryGetValue(modDir, out var mats) ? mats : null;
 
+    // Mod directory → the content MODEL files of that mod that went into the last composite's shell, relative
+    // to the mod root with forward slashes. Published on the same terms as _contentMaterials beside it.
+    private volatile Dictionary<string, HashSet<string>> _contentModels = new();
+
+    /// <summary>
+    /// The imported models of <paramref name="modDir"/> that the character is wearing through our shell, or
+    /// null when none are — which a mod that has not been composited yet also looks like.
+    /// <para/>
+    /// The Studio tab's answer to "is this worn": geometry we graft is drawn from our own output mod, so the
+    /// walk over the character's loaded files — which is how every other mod is judged — never names it.
+    /// </summary>
+    public IReadOnlySet<string>? GetLiveContentModels(string modDir)
+        => _contentModels.TryGetValue(modDir, out var models) ? models : null;
+
     /// <summary>
     /// Why none of <paramref name="modDir"/>'s content pieces can be worn by this character, or null when
     /// they can. Read straight off the shell builder, which records it even on the runs that host nothing —
@@ -334,6 +348,7 @@ public class CompositorService : IDisposable
     {
         _shellMaterials   = new();
         _contentMaterials = new(StringComparer.OrdinalIgnoreCase);
+        _contentModels    = new(StringComparer.OrdinalIgnoreCase);
         _shellLight       = new(StringComparer.OrdinalIgnoreCase);
         _shellDrawnCheck  = null;
         // The shell is gone, so the next one to be drawn is news even if it lands on the same materials.
@@ -567,7 +582,7 @@ public class CompositorService : IDisposable
         // where our own redirect masks the path. Safe as a method group here even though managedModDir is
         // assigned below — the delegate is only invoked during a composite, long after this returns.
         this.secondSkin = new SecondSkinService(penumbra, textureLoader, discovery, uvRemap, config, log,
-                                                ResolveUpstream);
+                                                ResolveUpstream, SettledUpstream);
         this.seamMaps  = new UvSeamMapService(log);
         this.faceUv    = new FaceUvDoublingService(log, textureLoader, uvRemap);
 
@@ -735,6 +750,14 @@ public class CompositorService : IDisposable
         var playerColl = penumbra.GetPlayerCollectionId();
         if (playerColl == null || collId != playerColl.Value)
             return;
+
+        // The live brush reloading the mod it just saved a garment into — see ExpectOwnModEdit.
+        if (change == ModSettingChange.Edited && _ownModEditUntil.TryGetValue(modDir, out long ownUntil)
+            && Environment.TickCount64 < ownUntil)
+        {
+            log.Debug("[Proteus] ModSettingChanged:Edited:{0} is the live brush's own save — no recomposite", modDir);
+            return;
+        }
 
         // Option groups, priority and in-place edits cannot turn a mod ON or OFF — only EnableState,
         // Inheritance and the temporary kinds can. So for these three, a live reading of "disabled" is not
@@ -1527,6 +1550,7 @@ public class CompositorService : IDisposable
         // StateChanged(Reapply), which lands here. Ignore events within a short window of our call.
         var msSinceReapply = unchecked(Environment.TickCount64 - Interlocked.Read(ref _lastOwnReapplyTick));
         if (msSinceReapply >= 0 && msSinceReapply < 250) return;
+        if (Environment.TickCount64 < Interlocked.Read(ref _glamourerEchoUntil)) return;   // see ReloadGearInPlace
 
         // (Invisible-glasses re-assert needs no bookkeeping here: a design that reverts our ApplyFlag.Once
         // glasses just empties the slot, and the recomposite this triggers re-injects. Ownership is derived
@@ -2010,6 +2034,17 @@ public class CompositorService : IDisposable
 
     /// <summary>Colorset "glow" highlighter, cleared on recomposite (the shell may rebuild with a new letter).</summary>
     public Proteus.Interop.ColorTableHighlighter? Highlighter { get; set; }
+
+    /// <summary>
+    /// The Refresh button: re-derive which file every base path resolves to, then recomposite. Without the
+    /// re-derive it rebuilt from the same remembered upstreams, so the thing a user reaches for it over — a
+    /// body or skin change that did not show up — was the one thing it could not pick up.
+    /// </summary>
+    public void RefreshAndRecomposite()
+    {
+        InvalidateUpstreamCache("manual");
+        TriggerRecomposite("manual");
+    }
 
     /// <summary>
     /// Manual escape hatch: drop every cached decoded texture, then recomposite immediately. For the rare
@@ -3980,7 +4015,7 @@ public class CompositorService : IDisposable
             bool wearingMirroredBody = HasMirroredBodySurface(activeBodyTypes);
 
             // Mods with an overlay that needs an un-mirrored shell. Those are the ones allowed past the gen2
-            // opt-in below — the character is wearing vanilla, so the shell isn't being synthesized onto some
+            // gate below even with "Overlay gen2/vanilla" unticked — the character is wearing vanilla, so the shell isn't being synthesized onto some
             // other body, it is the only way that mod's art can render at all.
             var unmirrorMods = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -4340,9 +4375,11 @@ public class CompositorService : IDisposable
             // direct overlay entries. This handles the common case — overlays are authored for one
             // UV space (e.g. bibo), but the character equips a different body (gen3, Eve, vanilla).
             // No metadata.json change required; UV remap fires automatically from the descriptor's
-            // source body type. The cross-UV bake (bibo↔gen3/Eve) runs for any mode except Off;
-            // vanilla (gen2) is opt-in per mod (All bodies only). gen2 is never a source (vanilla
-            // is a terminal target and has no outbound transfer maps).
+            // source body type. Every loaded body type is a target: bibo↔gen3/Eve always, and vanilla
+            // (gen2) unless the user unticked the mod's "Overlay gen2/vanilla". The loaded-material check
+            // below IS the detection: vanilla is baked exactly when the character is showing vanilla skin
+            // (typically gear that ships its own), and costs nothing otherwise. gen2 is never a source
+            // (vanilla is a terminal target and has no outbound transfer maps).
             if (activeMtrl != null)
             {
                 var siblings = new Dictionary<string, List<(OverlayEntry, ResolvedOverlay)>>(StringComparer.OrdinalIgnoreCase);
@@ -4376,20 +4413,19 @@ public class CompositorService : IDisposable
                         }
 
                         bool vanilla = bodyType == "gen2";
-                        var dstPairs = pairs.Where(p => vanilla
-                            ? config.SiblingModeFor(p.Entry.ModDirectory) == SiblingSynthesisMode.AllBodies
-                            : config.SiblingModeFor(p.Entry.ModDirectory) != SiblingSynthesisMode.Off).ToList();
+                        var dstPairs = vanilla
+                            ? pairs.Where(p => config.OverlaysVanillaFor(p.Entry.ModDirectory)).ToList()
+                            : pairs.ToList();
                         if (dstPairs.Count == 0) continue;
 
-                        // Name the mod/option(s) driving this sibling — and their sibling mode — so any
-                        // "why is it baking to <body> when I have <X> equipped/nothing equipped?" can be
-                        // traced to the exact mod whose mode to change. The destination body type is
-                        // always tagged (gen3/eve/gen2), so a gen3 item pulling in a gen3 sibling is as
-                        // legible as the vanilla case (vanilla only fires for mods set to All bodies).
+                        // Name the mod/option(s) driving this sibling so any "why is it baking to <body>
+                        // when I have <X> equipped/nothing equipped?" can be traced to the exact mod. The
+                        // destination body type is always tagged (gen3/eve/gen2) — for vanilla the answer is
+                        // usually a worn item that ships vanilla skin, and the mod's checkbox to untick.
                         var contributors = string.Join(", ", dstPairs
                             .Select(p => p.Overlay.Option != null
-                                ? $"\"{p.Entry.ModName}\"/{p.Overlay.OptionGroup}:{p.Overlay.Option} [{config.SiblingModeFor(p.Entry.ModDirectory)}]"
-                                : $"\"{p.Entry.ModName}\" [{config.SiblingModeFor(p.Entry.ModDirectory)}]")
+                                ? $"\"{p.Entry.ModName}\"/{p.Overlay.OptionGroup}:{p.Overlay.Option}"
+                                : $"\"{p.Entry.ModName}\"")
                             .Distinct());
                         log.Debug("[Proteus] Sibling synthesis ({0}): {1} → {2} (from {3})",
                             vanilla ? "gen2/vanilla" : bodyType, srcPath, dstPath, contributors);
@@ -4511,12 +4547,10 @@ public class CompositorService : IDisposable
                         if (dstType == null || byMaterial.ContainsKey(m)) continue;
 
                         // A caster's OWN body always qualifies. Any OTHER loaded body is a sibling, and
-                        // touching it is the user's call — the same gate sibling synthesis applies above, so
-                        // a mod set to Off doesn't get its shadow baked onto a body the user excluded.
+                        // follows the same gate sibling synthesis applies above: bibo↔gen3/Eve always, vanilla
+                        // only if the mod still overlays it — so unticking doesn't leave its shadow behind.
                         bool vanilla = string.Equals(dstType, "gen2", StringComparison.OrdinalIgnoreCase);
-                        if (!casters.Any(c => c.Types.Contains(dstType)
-                                || (vanilla ? config.SiblingModeFor(c.Mod) == SiblingSynthesisMode.AllBodies
-                                            : config.SiblingModeFor(c.Mod) != SiblingSynthesisMode.Off)))
+                        if (!casters.Any(c => c.Types.Contains(dstType) || !vanilla || config.OverlaysVanillaFor(c.Mod)))
                             continue;
 
                         byMaterial[m] = new();
@@ -7117,6 +7151,7 @@ public class CompositorService : IDisposable
             Dictionary<(string ModDir, string? Group, string? Option), List<string>>? nextShellMaterials = null;
             Dictionary<string, ShellLightProfile>? nextShellLight = null;
             Dictionary<string, HashSet<string>>? nextContentMaterials = null;
+            Dictionary<string, HashSet<string>>? nextContentModels = null;
             ShellDrawnProbe? nextShellDrawnCheck = null;
             bool shellBuilt = false;   // a gear shell was produced this composite (drives glasses reconcile)
             // The shell was built for invisible glasses we have not equipped YET (ChooseHost's pending
@@ -7377,15 +7412,14 @@ public class CompositorService : IDisposable
                                 ex.GetType().Name);
                         }
 
-                        // gen2 (vanilla) shells are opt-in per mod, same as the skin-layer gen2 sibling —
-                        // EXCEPT for a mod whose art has to be un-mirrored. That opt-in asks "may Proteus
-                        // paint this onto a body besides the one you have on"; here vanilla IS the body being
-                        // worn, and the shell is not an extra rendering of the art but the only one that can
-                        // show both of its sides.
+                        // gen2 (vanilla) shell parts follow the same per-mod checkbox as the skin-layer gen2
+                        // sibling — EXCEPT for a mod whose art has to be un-mirrored. The checkbox asks "may
+                        // Proteus paint this onto vanilla skin as well"; here vanilla IS the body being worn,
+                        // and the shell is not an extra rendering of the art but the only one that can show
+                        // both of its sides.
                         var shells = secondSkin.Build(charCode, gearOverlays, managedModDir, bodyType,
                             discovery.EffectsLibraryPath(), equippedModels, equippedAccessories,
-                            modDir => unmirrorMods.Contains(modDir)
-                                   || config.SiblingModeFor(modDir) == SiblingSynthesisMode.AllBodies,
+                            modDir => unmirrorMods.Contains(modDir) || config.OverlaysVanillaFor(modDir),
                             invisibleGlassesSet, metModels, bodyShapes, maskShellMods, bareBodyModels,
                             _drawnRaceCode, hostMtrl,
                             InvisibleRing.Resolve(Plugin.DataManager, log)?.Variant,
@@ -7506,6 +7540,7 @@ public class CompositorService : IDisposable
                                 log.Debug("[Proteus] second skin material/textures changed — in-place reload");
                             nextShellMaterials = shells.ShellMaterials;
                             nextContentMaterials = shells.ContentMaterials;
+                            nextContentModels = shells.ContentModels;
                             nextShellLight = shells.ShellLight;
 
                             // Materials to test, models to anchor the test against — see ShellDrawnProbe.
@@ -7617,6 +7652,7 @@ public class CompositorService : IDisposable
             // ClearShellLocators instead.
             _shellMaterials   = nextShellMaterials ?? new();
             _contentMaterials = nextContentMaterials ?? new(StringComparer.OrdinalIgnoreCase);
+            _contentModels    = nextContentModels ?? new(StringComparer.OrdinalIgnoreCase);
             _shellLight       = nextShellLight ?? new(StringComparer.OrdinalIgnoreCase);
             _shellDrawnCheck  = nextShellDrawnCheck;
 
@@ -8717,6 +8753,23 @@ public class CompositorService : IDisposable
     }
 
     /// <summary>
+    /// The upstream <see cref="PrimeUpstreamCache"/> settled for a path this composite, or null when there is
+    /// none — never a live resolve, never a remembered value that was not confirmed by a settle.
+    /// <para/>
+    /// For the body models smoothing republishes. SecondSkinService deliberately does not read those through
+    /// <see cref="ResolveUpstream"/>: a body path is contested, and a live answer caught mid-rebuild once
+    /// swapped the character's whole body. A settled answer is the opposite case — the prime dropped our
+    /// redirect and waited for Penumbra to stop changing its mind — so it is the one way to see the body the
+    /// user has now selected under a redirect of our own.
+    /// </summary>
+    private string? SettledUpstream(string gamePath)
+        => _upstreamSettled.ContainsKey(gamePath)
+           && _upstreamByGamePath.TryGetValue(gamePath, out var disk)
+           && !IsOwnOutput(disk) && File.Exists(disk)
+            ? disk
+            : null;
+
+    /// <summary>
     /// Resolve <paramref name="gamePath"/> to the mod file a composite should read as its BASE, never to
     /// our own previous output. Every call site that loads a base texture or material goes through this
     /// rather than <c>penumbra.ResolvePlayer</c> directly. Returns null only when there is no known
@@ -9362,12 +9415,20 @@ public class CompositorService : IDisposable
         // Paths under OwnedTextureRoot are write-only too, and worse to admit: Proteus invented them, so no mod
         // is behind them and the prime could never settle one — it would narrow the manifest on every
         // composite waiting for an upstream that does not exist.
+        //
+        // REPUBLISHED BODIES are admitted too. Nipple, span and fold smoothing publish the body model itself
+        // under its own game path, so from then on that path resolves to our file and the second skin cannot
+        // see past it. Excluding chara/equipment left it working from a copy of the body taken before the first
+        // publish, forever: changing the chest size or the whole body mod was detected ("a base moved") and
+        // recomposited, and every composite read the old body again. A body path is contested — two body mods
+        // can both provide it — which is exactly what the settle below is for.
         var appendHosts = _appendHostModelPaths;
+        var republishedBodies = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         bool IsReadableBase(string p)
             => !p.StartsWith(OwnedTextureRoot, StringComparison.OrdinalIgnoreCase)
             && ((!p.StartsWith("chara/equipment/", StringComparison.OrdinalIgnoreCase)
               && !p.StartsWith("chara/accessory/", StringComparison.OrdinalIgnoreCase))
-             || appendHosts.Contains(p));
+             || appendHosts.Contains(p) || republishedBodies.Contains(p));
 
         List<string> baseKeys;
 
@@ -9385,8 +9446,15 @@ public class CompositorService : IDisposable
             var keys = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var p in materialPaths) keys.Add(p);
             if (live is { } l)
+            {
+                // Recognised by the published file, which smoothing always names smoothed_{path}_{hash}.mdl.
+                foreach (var (p, file) in l.Files)
+                    if (p.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase)
+                        && Path.GetFileName(file).StartsWith("smoothed_", StringComparison.OrdinalIgnoreCase))
+                        republishedBodies.Add(p);
                 foreach (var p in l.Files.Keys)
                     if (IsReadableBase(p)) keys.Add(p);
+            }
             baseKeys = [.. keys];
 
             // A path only needs the narrow-and-restore dance if OUR OWN manifest currently masks it. Anything
@@ -9746,6 +9814,41 @@ public class CompositorService : IDisposable
     /// <summary>That same list's hairstyle identity, without reading the model.</summary>
     internal string? HatCompatKeyFor(IReadOnlyList<string>? parts)
         => HatCompatService.EquippedHairKey(parts, penumbra.ResolvePlayer, modsRoot);
+
+    /// <summary>Until this tick, per mod, an Edited event is the live brush's own reload of that mod.</summary>
+    private readonly ConcurrentDictionary<string, long> _ownModEditUntil = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The live brush is about to reload <paramref name="modDir"/> after saving a garment into it, while the character
+    /// already shows the saved state through its preview. Penumbra reports the reload as an edit, and the preview
+    /// has the garment's path resolving to a new temporary file, so left alone it reads as "a base moved": a full
+    /// second-skin recomposite and a redraw after EVERY stroke. Marks the coming edit as our own for a moment.
+    /// </summary>
+    public void ExpectOwnModEdit(string modDir) => _ownModEditUntil[modDir] = Environment.TickCount64 + 2000;
+
+    /// <summary>Until this tick, Glamourer state changes are the echo of a reload Proteus caused.</summary>
+    private long _glamourerEchoUntil;
+
+    /// <summary>
+    /// Reload the player's gear in place through Glamourer — the live brush's preview, just redirected by a Penumbra
+    /// temporary mod — and mark the state change it raises as our own, so neither the compositor nor design binding
+    /// takes it for the player applying something. Framework thread only (ReapplyState touches game objects).
+    /// <para/>
+    /// Called, not left to Glamourer. Its source queues a reapply of every actor in a collection whose temporary
+    /// mods change, but in game that reapply never arrives — measured: no reapply follows any preview. What showed
+    /// previews for a while was the recomposite each save used to trigger, which ends in this same ReapplyState;
+    /// once the brush's own saves stopped recompositing, previews stopped showing.
+    /// </summary>
+    /// <returns>False when Glamourer is unavailable or refused, so the caller falls back to a redraw.</returns>
+    public bool ReloadGearInPlace()
+    {
+        if (!glamourer.IsAvailable) return false;
+        long until = Environment.TickCount64 + 1000;
+        Interlocked.Exchange(ref _glamourerEchoUntil, until);
+        glamourer.ExpectOwnReapplyUntil(until);
+        Interlocked.Exchange(ref _lastOwnReapplyTick, Environment.TickCount64);
+        return glamourer.ReapplyPlayerState();
+    }
 
     /// <summary>
     /// Redraw the player so the game re-reads a model file that changed on disk, and do nothing else.
@@ -12136,12 +12239,9 @@ public class CompositorService : IDisposable
     {
         if (!HasEmissiveRow(rows) || !_glowPromotedMods.TryAdd(entry.ModDirectory, 0)) return;
 
-        var msg = string.Format(Loc.Localize("Chat.GlowPromoted.Fmt",
-            "[Proteus] \"{0}\" sets Glow on a skin layer. Skin can no longer glow, so that option now "
-            + "renders as a cloth layer — it needs a free accessory to sit on, and its surface will look "
-            + "slightly different."), entry.ModName);
-        _ = Plugin.Framework.RunOnFrameworkThread(
-            () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 25).Build()));
+        // Log only: in chat this fired on every session for mods that ship a skin glow on purpose.
+        log.Information("[Proteus] \"{0}\" sets Glow on a skin layer; rendering that option as a cloth layer",
+            entry.ModName);
     }
 
     /// <summary>
