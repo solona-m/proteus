@@ -35,6 +35,10 @@
     "message": "立即重新合成",
     "description": ""
   },
+  "Band.Recomposite.Full.Tip": {
+    "message": "Shift+点击可从头重新生成全部内容",
+    "description": ""
+  },
   "Band.Retry.Btn": {
     "message": "重试",
     "description": ""

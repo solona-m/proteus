@@ -35,6 +35,10 @@
     "message": "今すぐ再合成",
     "description": ""
   },
+  "Band.Recomposite.Full.Tip": {
+    "message": "Shift+クリックですべてを最初から再構築",
+    "description": ""
+  },
   "Band.Retry.Btn": {
     "message": "再試行",
     "description": ""

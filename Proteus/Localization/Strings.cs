@@ -1600,6 +1600,8 @@ public sealed class BandStrings
 
     public readonly string SettingsTip    = Loc.Localize("Band.Settings.Tip", "Settings");
     public readonly string RecompositeTip = Loc.Localize("Band.Recomposite.Tip", "Recomposite now");
+    public readonly string RecompositeFullTip = Loc.Localize("Band.Recomposite.Full.Tip",
+        "Shift-click to rebuild everything from scratch");
 
     public readonly string PillDisabled   = Loc.Localize("Band.Pill.Disabled", "disabled");
     public readonly string PillNoPenumbra = Loc.Localize("Band.Pill.NoPenumbra", "no Penumbra");

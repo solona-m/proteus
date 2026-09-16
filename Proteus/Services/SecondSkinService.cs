@@ -1289,7 +1289,11 @@ public sealed class SecondSkinService
               .Append("|shapes=").Append(Set(s.EnabledShapes)).Append("|hidden=").Append(Set(s.HiddenAttributes))
               .Append("|drop=").Append(s.DropConnectors).Append("|unmirror=").Append(s.UnmirrorSides)
               .Append("|profile=").Append(s.Profile != null).Append('\n');
-            if (s.Profile != null) return null;   // measured elsewhere; not describable here
+            // A profile is not an extra input: ConnectorProfileFor derives it from the model bytes alone (and
+            // caches it by their hash), and the writer re-measures one that disagrees with its filter. Both are
+            // functions of what is already in the key. Refusing here — as this did at first — made every body
+            // source with redundancy dropping on uncacheable, i.e. the main host on every look: "1 reused" was
+            // always the Emperor's ring alone.
         }
         foreach (var l in layers)
         {

@@ -35,6 +35,10 @@
     "message": "Jetzt neu komponieren",
     "description": ""
   },
+  "Band.Recomposite.Full.Tip": {
+    "message": "Umschalt-Klick, um alles von Grund auf neu zu erstellen",
+    "description": ""
+  },
   "Band.Retry.Btn": {
     "message": "Wiederholen",
     "description": ""

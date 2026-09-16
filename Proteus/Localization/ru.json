@@ -35,6 +35,10 @@
     "message": "Пересобрать сейчас",
     "description": ""
   },
+  "Band.Recomposite.Full.Tip": {
+    "message": "Shift+клик — пересобрать всё с нуля",
+    "description": ""
+  },
   "Band.Retry.Btn": {
     "message": "Повторить",
     "description": ""

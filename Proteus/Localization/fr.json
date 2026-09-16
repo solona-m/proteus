@@ -35,6 +35,10 @@
     "message": "Recomposer maintenant",
     "description": ""
   },
+  "Band.Recomposite.Full.Tip": {
+    "message": "Maj+clic pour tout reconstruire depuis le début",
+    "description": ""
+  },
   "Band.Retry.Btn": {
     "message": "Réessayer",
     "description": ""
