@@ -509,7 +509,6 @@ public class DesignBindingTests
                     Options = new() { ["Colour"] = ["Red"] },
                 },
             ],
-            CharacterGamePaths = ["chara/equipment/e6255/model/c0201e6255_top.mdl"],
         };
 
         var back = JsonSerializer.Deserialize<DesignBindingStore>(JsonSerializer.Serialize(store, JsonOpts), JsonOpts)!;
@@ -520,7 +519,6 @@ public class DesignBindingTests
         Assert.Equal("A Dress", b.CharacterMods[0].ModName);
         Assert.Equal(12, b.CharacterMods[0].Priority);
         Assert.Equal(["Red"], b.CharacterMods[0].Options["Colour"]);
-        Assert.Equal(["chara/equipment/e6255/model/c0201e6255_top.mdl"], b.CharacterGamePaths);
     }
 
     [Fact]
@@ -535,8 +533,22 @@ public class DesignBindingTests
 
         var b = back.Bindings[id];
         Assert.False(b.HasCharacterSnapshot);
-        Assert.Empty(b.CharacterGamePaths);
         Assert.Equal("Overlay", b.Mods[0].ModDirectory);
+    }
+
+    [Fact]
+    public void BindingStore_IgnoresTheRetiredGamePathList()
+    {
+        var id = Guid.NewGuid();
+        var json = $$"""
+            { "Version": 2, "Bindings": { "{{id}}": { "DesignId": "{{id}}",
+              "CharacterMods": [ { "ModDirectory": "Dress", "Enabled": true } ],
+              "CharacterGamePaths": [ "chara/equipment/e6255/model/c0201e6255_top.mdl" ] } } }
+            """;
+
+        var back = JsonSerializer.Deserialize<DesignBindingStore>(json, JsonOpts)!;
+
+        Assert.Equal("Dress", back.Bindings[id].CharacterMods[0].ModDirectory);
     }
 
     // ── Character snapshot: capture selection ────────────────────────────────────
@@ -549,58 +561,56 @@ public class DesignBindingTests
     private static PenumbraBridge.ModSettingsSnapshot Off(int priority = 0)
         => new(false, priority, new(), false, false);
 
-    private static ModActivePaths.Contribution Writes(params string[] paths)
-    {
-        var c = ModActivePaths.Contribution.Empty();
-        foreach (var p in paths) c.GamePaths.Add(p);
-        return c;
-    }
-
-    private static Func<string, IReadOnlyDictionary<string, List<string>>?, ModActivePaths.Contribution?> Contributions(
-        Dictionary<string, ModActivePaths.Contribution?> byMod)
-        => (dir, _) => byMod.TryGetValue(dir, out var c) ? c : ModActivePaths.Contribution.Empty();
-
     private const string Top  = "chara/equipment/e6255/model/c0201e6255_top.mdl";
     private const string Body = "chara/human/c0201/obj/body/b0001/model/c0201b0001_top.mdl";
 
     [Fact]
-    public void SelectCharacterMods_TakesDrawnOwners_ConflictLosers_AndProteusMods()
+    public void SelectCharacterMods_TakesDrawnOwners_AndEveryProteusMod()
     {
-        var resources = new Dictionary<string, HashSet<string>>
-        {
-            [@"C:\Penumbra\Dress\files\top.mdl"]  = [Top],
-            [@"C:\Penumbra\Proteus\out\body.mtrl"] = ["chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_a.mtrl"],
-            [@"C:\Game\sqpack\body.mdl"]           = [Body],
-        };
+        string[] drawn =
+        [
+            @"C:\Penumbra\Dress\files\top.mdl",
+            @"C:\Penumbra\Proteus\out\body.mtrl",   // the managed output mod — never recorded
+            @"C:\Game\sqpack\body.mdl",
+        ];
         var permanent = new Dictionary<string, PenumbraBridge.ModSettingsSnapshot>
         {
-            ["Dress"]       = On(10, new() { ["Colour"] = ["Red"] }),
-            ["OtherDress"]  = On(5),      // loses the top to Dress, but reaches it
-            ["Hat"]         = On(50),     // reaches nothing drawn
-            ["Overlay"]     = Off(3),     // a Proteus mod, off — still recorded
+            ["Dress"]      = On(10, new() { ["Colour"] = ["Red"] }),
+            ["OtherDress"] = On(5),    // enabled, but nothing drawn comes from it
+            ["Overlay"]    = Off(3),   // a Proteus mod, off — still recorded
         };
         var installed = new Dictionary<string, string>
         {
-            ["Dress"] = "A Dress", ["OtherDress"] = "Other", ["Hat"] = "Hat", ["Overlay"] = "Overlay", ["Proteus"] = "Proteus",
+            ["Dress"] = "A Dress", ["OtherDress"] = "Other", ["Overlay"] = "Overlay", ["Proteus"] = "Proteus",
         };
-        var contributions = Contributions(new()
+
+        var mods = DesignBindingService.SelectCharacterMods(
+            ModsRoot, drawn, permanent, new Dictionary<string, PenumbraModSetting>(), installed, new HashSet<string> { "Overlay" });
+
+        Assert.Equal(["Dress", "Overlay"], mods.ConvertAll(m => m.ModDirectory));
+        Assert.Equal("A Dress", mods[0].ModName);
+        Assert.True(mods[0].Enabled);
+        Assert.Equal(10, mods[0].Priority);
+        Assert.Equal(["Red"], mods[0].Options["Colour"]);
+        Assert.False(mods[1].Enabled);
+    }
+
+    [Fact]
+    public void SelectCharacterMods_RecordsAHeldModAsHeld_NotAsTheCollectionHasIt()
+    {
+        // The collection has the dress off at 3; a restore is holding it on, recorded at 10 (drawn at a raised 60).
+        var permanent = new Dictionary<string, PenumbraBridge.ModSettingsSnapshot> { ["Dress"] = Off(3) };
+        var held = new Dictionary<string, PenumbraModSetting>
         {
-            ["OtherDress"] = Writes(Top),
-            ["Hat"]        = Writes("chara/equipment/e0100/model/c0201e0100_met.mdl"),
-        });
+            ["Dress"] = new() { ModDirectory = "Dress", Enabled = true, Priority = 10, Options = new() { ["Colour"] = ["Red"] } },
+        };
 
-        var (mods, paths) = DesignBindingService.SelectCharacterMods(
-            ModsRoot, resources, permanent, installed, new HashSet<string> { "Overlay" }, contributions);
+        var mods = DesignBindingService.SelectCharacterMods(ModsRoot, [@"C:\Penumbra\Dress\top.mdl"], permanent, held,
+            new Dictionary<string, string> { ["Dress"] = "A Dress" }, new HashSet<string>());
 
-        Assert.Equal(["Dress", "OtherDress", "Overlay"], mods.ConvertAll(m => m.ModDirectory));
-        var dress = mods[0];
-        Assert.Equal("A Dress", dress.ModName);
-        Assert.True(dress.Enabled);
-        Assert.Equal(10, dress.Priority);
-        Assert.Equal(["Red"], dress.Options["Colour"]);
-        Assert.False(mods[2].Enabled);
-        Assert.Contains(Top, paths);
-        Assert.Contains(Body, paths);
+        Assert.True(mods[0].Enabled);
+        Assert.Equal(10, mods[0].Priority);   // the recorded priority, never the raise
+        Assert.Equal(["Red"], mods[0].Options["Colour"]);
     }
 
     [Theory]
@@ -615,37 +625,21 @@ public class DesignBindingTests
     // ── Character snapshot: priority offset ──────────────────────────────────────
 
     [Fact]
-    public void PriorityOffset_IsZero_WhenNothingContests()
-    {
-        var offset = DesignBindingService.ComputePriorityOffset(
-            [(10, Writes(Top))],
-            [(99, Writes(Body))]);
-
-        Assert.Equal(0, offset);
-    }
+    public void PriorityOffset_IsZero_WhenBoundModsAlreadyOutrankEverything()
+        => Assert.Equal(0, DesignBindingService.ComputePriorityOffset([50, 60], [10, 49]));
 
     [Fact]
-    public void PriorityOffset_LiftsJustAboveTheHighestRival()
-    {
-        var offset = DesignBindingService.ComputePriorityOffset(
-            [(10, Writes(Top)), (20, Writes(Body))],
-            [(30, Writes(Top)), (15, Writes(Body))]);
-
-        // Top needs 31 (from 10 → +21); Body needs 16 (already 20). One shared offset, keeping 10 < 20.
-        Assert.Equal(21, offset);
-    }
+    public void PriorityOffset_LiftsTheLowestBoundModJustAboveTheHighestOther()
+        // Lowest bound 10 must pass 30 → +21, applied to both, so 10 < 20 stays 31 < 41.
+        => Assert.Equal(21, DesignBindingService.ComputePriorityOffset([10, 20], [30, 15]));
 
     [Fact]
     public void PriorityOffset_EqualPriorityStillNeedsOne()
-    {
-        Assert.Equal(1, DesignBindingService.ComputePriorityOffset([(10, Writes(Top))], [(10, Writes(Top))]));
-    }
+        => Assert.Equal(1, DesignBindingService.ComputePriorityOffset([10], [10]));
 
     [Fact]
-    public void PriorityOffset_IgnoresUnreadableMods()
-    {
-        Assert.Equal(0, DesignBindingService.ComputePriorityOffset([(10, Writes(Top))], [(500, null)]));
-    }
+    public void PriorityOffset_NothingElseOn()
+        => Assert.Equal(0, DesignBindingService.ComputePriorityOffset([10], []));
 
     // ── Character snapshot: restore plan ─────────────────────────────────────────
 
@@ -655,76 +649,114 @@ public class DesignBindingTests
     private static HashSet<string> Set(params string[] items) => new(items, StringComparer.OrdinalIgnoreCase);
 
     [Fact]
-    public void PlanRestore_SwitchesOffUnboundModsOnTheCharacter_LeavesTheRestAlone()
+    public void PlanRestore_HoldsOtherMods_RaisedAboveEveryOtherEnabledMod()
     {
-        var permanent = new Dictionary<string, PenumbraBridge.ModSettingsSnapshot>
-        {
-            ["Dress"]    = On(10),
-            ["Intruder"] = On(50),   // installed since capture, same top
-            ["UiMod"]    = On(0),    // reaches nothing the design drew
-        };
-
-        var plan = DesignBindingService.PlanRestore(
-            [Bound("Dress", true, 10)], [Top],
-            Set("Dress", "Intruder", "UiMod"),
-            permanent, permanent, Set(), Set(),
-            Contributions(new() { ["Dress"] = Writes(Top), ["Intruder"] = Writes(Top), ["UiMod"] = Writes("ui/uld/foo.tex") }));
-
-        Assert.Equal(["Intruder"], plan.Disable);
-        Assert.Equal(0, plan.PriorityOffset);
-        Assert.Equal(0, plan.WriteCount - plan.Disable.Count);  // Dress already as recorded: no writes
-    }
-
-    [Fact]
-    public void PlanRestore_RaisesBoundModsAboveARivalThatStaysOn()
-    {
-        // The rival reaches the dress's paths but not the design's (it only fights over an undrawn variant).
         var permanent = new Dictionary<string, PenumbraBridge.ModSettingsSnapshot>
         {
             ["Dress"] = On(10),
             ["Rival"] = On(40),
+            ["UiMod"] = On(2),
         };
-        const string variant = "chara/equipment/e6255/model/c0101e6255_top.mdl";
 
         var plan = DesignBindingService.PlanRestore(
-            [Bound("Dress", true, 10), Bound("Body", true, 5)], [Top],
-            Set("Dress", "Body", "Rival"),
-            permanent, permanent, Set(), Set(),
-            Contributions(new() { ["Dress"] = Writes(Top, variant), ["Rival"] = Writes(variant), ["Body"] = Writes(Body) }));
+            [Bound("Dress", true, 10, new() { ["Colour"] = ["Red"] }), Bound("Body", true, 5), Bound("OffMod", false, 7)],
+            Set("Dress", "Body", "OffMod", "Rival", "UiMod"),
+            permanent, permanent, Set(), Set());
 
+        Assert.Equal(36, plan.PriorityOffset);   // lowest enabled bound 5 → 41, strictly above Rival's 40
+        var holds = plan.Hold.ToDictionary(h => h.Recorded.ModDirectory);
+        Assert.Equal(46, holds["Dress"].Priority);
+        Assert.Equal(41, holds["Body"].Priority);                     // same offset, order kept
+        Assert.Equal(7, holds["OffMod"].Priority);                    // held off, not raised
+        Assert.False(holds["OffMod"].Recorded.Enabled);
+        Assert.Equal(10, holds["Dress"].Recorded.Priority);           // the recording itself is never raised
+        Assert.Equal(["Red"], holds["Dress"].Recorded.Options["Colour"]);
+
+        // Nothing written to the collection for mods that aren't Proteus mods.
         Assert.Empty(plan.Disable);
-        Assert.Equal(31, plan.PriorityOffset);
-        Assert.Contains(("Dress", 41), plan.SetPriority);
-        Assert.Contains(("Body", 36), plan.SetPriority);   // same offset, order kept
-        Assert.Contains(("Body", true), plan.SetEnabled);  // wasn't configured → turned on
+        Assert.Empty(plan.SetOptions);
+        Assert.Empty(plan.SetPriority);
+        Assert.Empty(plan.SetEnabled);
     }
 
     [Fact]
-    public void PlanRestore_ClearsTemporarySettings_AndWritesOnlyWhatDiffers()
+    public void PlanRestore_NeverRaisesAHeldModToOrPastTheProteusOutputMod()
     {
-        var permanent = new Dictionary<string, PenumbraBridge.ModSettingsSnapshot>
-        {
-            ["Dress"] = On(10, new() { ["Colour"] = ["Blue"], ["Size"] = ["M"] }),
-            ["Temp"]  = Off(),
-        };
         var effective = new Dictionary<string, PenumbraBridge.ModSettingsSnapshot>
         {
-            ["Dress"] = On(10, new() { ["Colour"] = ["Blue"] }, temporary: true),
-            ["Temp"]  = On(90, temporary: true),   // Glamourer switched it on; it reaches the top
+            ["Proteus"]  = On(900),
+            ["Rival"]    = On(880),
+            ["AboveAll"] = On(5000),   // put above Proteus by the player: not a rival, and not beaten
+            ["Dress"]    = On(10),
+            ["Shoes"]    = On(30),
         };
 
         var plan = DesignBindingService.PlanRestore(
-            [Bound("Dress", true, 10, new() { ["Colour"] = ["Red"], ["Size"] = ["M"] })], [Top],
-            Set("Dress", "Temp"),
-            permanent, effective, Set(), Set(),
-            Contributions(new() { ["Dress"] = Writes(Top), ["Temp"] = Writes(Top) }));
+            [Bound("Dress", true, 10), Bound("Shoes", true, 30)],
+            Set("Proteus", "Rival", "AboveAll", "Dress", "Shoes"),
+            effective, effective, Set(), Set());
 
-        Assert.Equal(Set("Dress", "Temp"), plan.ClearTemporary.ToHashSet(StringComparer.OrdinalIgnoreCase));
-        Assert.Empty(plan.Disable);                    // only on through the temporary setting
-        Assert.Equal([("Dress", "Colour", new List<string> { "Red" })],
+        Assert.Equal(871, plan.PriorityOffset);   // lowest held 10 → 881, just above Rival's 880
+        var holds = plan.Hold.ToDictionary(h => h.Recorded.ModDirectory);
+        Assert.Equal(881, holds["Dress"].Priority);
+        Assert.Equal(899, holds["Shoes"].Priority);   // 901 would pass Proteus; squeezed under it
+        Assert.All(plan.Hold, h => Assert.True(h.Priority < 900));
+    }
+
+    [Fact]
+    public void PlanRestore_ProteusMods_AreWrittenPermanently_AtTheirRecordedPriority()
+    {
+        var permanent = new Dictionary<string, PenumbraBridge.ModSettingsSnapshot>
+        {
+            ["Overlay"] = On(3, new() { ["Style"] = ["A"] }),
+            ["Rival"]   = On(40),
+        };
+
+        var plan = DesignBindingService.PlanRestore(
+            [Bound("Overlay", true, 8, new() { ["Style"] = ["B"] })],
+            Set("Overlay", "Rival"), permanent, permanent, proteusDirs: Set("Overlay"), heldProteus: Set());
+
+        Assert.Empty(plan.Hold);
+        Assert.Contains(("Overlay", 8), plan.SetPriority);   // exact, no raise
+        Assert.Equal([("Overlay", "Style", new List<string> { "B" })],
             plan.SetOptions.ConvertAll(o => (o.ModDirectory, o.Group, o.Options)), new OptionWriteComparer());
-        Assert.Empty(plan.SetPriority);
-        Assert.Empty(plan.SetEnabled);
+    }
+
+    [Fact]
+    public void PlanRestore_ProteusModAlreadyAsRecorded_WritesNothing()
+    {
+        var permanent = new Dictionary<string, PenumbraBridge.ModSettingsSnapshot>
+        {
+            ["Overlay"] = On(50, new() { ["Colour"] = ["Red"] }),
+        };
+
+        var plan = DesignBindingService.PlanRestore(
+            [Bound("Overlay", true, 50, new() { ["Colour"] = ["Red"] })],
+            Set("Overlay"), permanent, permanent, proteusDirs: Set("Overlay"), heldProteus: Set());
+
+        Assert.Equal(0, plan.WriteCount);
+    }
+
+    [Fact]
+    public void PlanRestore_ClearsGlamourerTemporarySettings_OnProteusModsOnly()
+    {
+        var permanent = new Dictionary<string, PenumbraBridge.ModSettingsSnapshot>
+        {
+            ["Overlay"] = On(10),
+            ["Dress"]   = Off(),
+        };
+        var effective = new Dictionary<string, PenumbraBridge.ModSettingsSnapshot>
+        {
+            ["Overlay"] = On(10, temporary: true),
+            ["Dress"]   = On(90, temporary: true),   // a hold replaces this one; no clear needed
+        };
+
+        var plan = DesignBindingService.PlanRestore(
+            [Bound("Overlay", true, 10), Bound("Dress", true, 5)],
+            Set("Overlay", "Dress"), permanent, effective, proteusDirs: Set("Overlay"), heldProteus: Set());
+
+        Assert.Equal(["Overlay"], plan.ClearTemporary);
+        Assert.Single(plan.Hold);
     }
 
     [Fact]
@@ -737,16 +769,36 @@ public class DesignBindingTests
         };
 
         var plan = DesignBindingService.PlanRestore(
-            [Bound("Gone", true, 3)], [Top],
+            [Bound("Gone", true, 3)],
             Set("OldOverlay", "ContentPack"),
             permanent, permanent,
             proteusDirs: Set("OldOverlay", "ContentPack"),
-            heldProteus: Set("ContentPack"),
-            Contributions(new()));
+            heldProteus: Set("ContentPack"));
 
         Assert.Equal(["Gone"], plan.Missing);
         Assert.Equal(["OldOverlay"], plan.Disable);
-        Assert.Empty(plan.SetEnabled);
+        Assert.Empty(plan.Hold);
+    }
+
+    // ── Character snapshot: post-load sweep ──────────────────────────────────────
+
+    [Fact]
+    public void StrayDrawnMods_NamesUnboundOwners_ButNotWeaponsProteusOrBound()
+    {
+        var tree = new Dictionary<string, HashSet<string>>
+        {
+            [@"C:\Penumbra\Dress\top.mdl"]         = [Top],
+            [@"C:\Penumbra\OldBoots\boots_d.tex"]  = ["chara/equipment/e0100/texture/v01_c0201e0100_sho_d.tex"],
+            [@"C:\Penumbra\NewHair\hair.mdl"]      = ["chara/human/c0201/obj/hair/h0104/model/c0201h0104_hir.mdl"],
+            [@"C:\Penumbra\Sword\sword.mdl"]       = ["chara/weapon/w0201/obj/body/b0001/model/w0201b0001.mdl"],
+            [@"C:\Penumbra\Pack\tex.tex"]          = ["chara/equipment/e0053/texture/v01_c0201e0053_rir_d.tex"],
+            [@"C:\Penumbra\Proteus\out\body.mtrl"] = [Body],
+            [@"C:\Game\sqpack\body.mdl"]           = [Body],
+        };
+
+        var strays = DesignBindingService.StrayDrawnMods(ModsRoot, tree, Set("Dress"), Set("Pack"));
+
+        Assert.Equal(["NewHair", "OldBoots"], strays);
     }
 
     // ── Unequip what the design leaves unset ─────────────────────────────────────

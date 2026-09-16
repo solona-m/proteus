@@ -52,6 +52,10 @@
     "description": ""
   },
   "Bindings.Apply.Tip": {
+    "message": "立即恢复此设计的 Proteus 状态，无需经过 Glamourer——\n包括它记录的每个模组的启用状态、优先级、选项与颜色。\n\n不在该绑定中的 Proteus 模组会被关闭，因此这是替换当前外观，\n而不是在其之上叠加。",
+    "description": ""
+  },
+  "Bindings.ApplyCharacter.Tip": {
     "message": "立即恢复此设计的外观，无需经过 Glamourer——包括它记录的每个模组的\n启用状态、优先级、选项，以及 Proteus 颜色。\n\n角色身上不在该绑定中的模组会被关闭，绑定的模组会被提升到高于所有与之冲突的\n模组，因此这是替换当前外观。",
     "description": ""
   },
@@ -68,7 +72,7 @@
     "description": ""
   },
   "Bindings.Enable.Tip": {
-    "message": "开启后，保存 Glamourer 设计时会记录角色身上的每个模组以及\n当前的 Proteus 颜色。之后应用该设计即可恢复（装备尽可能匹配）。",
+    "message": "开启后，保存 Glamourer 设计时会记录当前的 Proteus 状态。\n之后应用该设计即可恢复（装备尽可能匹配）。",
     "description": ""
   },
   "Bindings.FollowAutomation.Label": {
@@ -125,6 +129,14 @@
   },
   "Bindings.ProteusOnly.Tip": {
     "message": "此绑定创建于绑定开始记录整个角色之前，应用时只会恢复\nProteus 模组。请先应用此设计，再点击“更新”。",
+    "description": ""
+  },
+  "Bindings.RestoreCharacter.Label": {
+    "message": "恢复角色身上的所有模组",
+    "description": ""
+  },
+  "Bindings.RestoreCharacter.Tip": {
+    "message": "开启后，应用已绑定的设计时，还会恢复保存时角色身上的每个模组（启用／优先级／选项），\n关闭角色身上不在其中的模组，\n并把设计的模组提升到高于所有与之冲突的模组。\n\n非 Proteus 模组只通过 Penumbra 临时设置保持该状态：\n你的合集不会被修改，还原或应用未绑定的设计会让它们恢复原状。\n\n关闭时只恢复 Proteus 模组。两种情况下都会记录，因此\n在关闭期间保存的设计，开启后同样生效。",
     "description": ""
   },
   "Bindings.SecondsAgo.Fmt": {

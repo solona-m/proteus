@@ -52,6 +52,10 @@
     "description": ""
   },
   "Bindings.Apply.Tip": {
+    "message": "Glamourerを介さずに、このデザインのProteus状態を今すぐ復元します。\n記録されたすべてのMODの有効/優先度/オプション/カラーが対象です。\n\n紐付けに含まれていないProteus MODはオフになります。つまり現在の見た目に\n追加するのではなく、置き換えます。",
+    "description": ""
+  },
+  "Bindings.ApplyCharacter.Tip": {
     "message": "Glamourerを介さずに、このデザインの見た目を今すぐ復元します。記録されたすべてのMODの\n有効/優先度/オプションと、Proteusカラーが対象です。\n\n紐付けに含まれていないキャラクター上のMODはオフになり、紐付けられたMODは競合する\nMODより高い優先度になります。つまり現在の見た目を置き換えます。",
     "description": ""
   },
@@ -68,7 +72,7 @@
     "description": ""
   },
   "Bindings.Enable.Tip": {
-    "message": "オンにすると、Glamourerデザインの保存時にキャラクターに適用中のすべてのMODと\n現在のProteusカラーを記録します。後でそのデザインを適用すると復元されます（装備は可能な範囲で一致させます）。",
+    "message": "オンにすると、Glamourerデザインの保存時に現在のProteus状態を記録します。\n後でそのデザインを適用すると復元されます（装備は可能な範囲で一致させます）。",
     "description": ""
   },
   "Bindings.FollowAutomation.Label": {
@@ -125,6 +129,14 @@
   },
   "Bindings.ProteusOnly.Tip": {
     "message": "紐付けがキャラクター全体を記録するようになる前に作成されたため、適用しても\nProteus MODしか復元されません。このデザインを適用してから「更新」を押してください。",
+    "description": ""
+  },
+  "Bindings.RestoreCharacter.Label": {
+    "message": "キャラクターのすべてのMODを復元",
+    "description": ""
+  },
+  "Bindings.RestoreCharacter.Tip": {
+    "message": "オンにすると、紐付けられたデザインの適用時に、保存時キャラクターに適用されていた\nすべてのMOD（有効／優先度／オプション）も復元し、含まれていなかったキャラクター上のMODを\nオフにし、デザインのMODを競合するMODより高い優先度にします。\n\nProteus MOD以外のMODは、Penumbraの一時設定でその状態を保つだけです。\nコレクションは変更されず、元に戻すか紐付けのないデザインを適用すると元どおりになります。\n\nオフのときはProteus MODのみ復元します。記録はどちらの場合も行われるため、\nオフの間に保存したデザインでもオンにすればそのまま使えます。",
     "description": ""
   },
   "Bindings.SecondsAgo.Fmt": {

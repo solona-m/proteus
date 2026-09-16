@@ -263,7 +263,16 @@ public class Configuration : IPluginConfiguration
     /// previous look's pieces don't carry over. Explicit applies only — automation layers several designs, so a
     /// slot one leaves unset is usually another's. Requires <see cref="DesignBindingEnabled"/>.
     /// </summary>
-    public bool DesignBindingUnequipUnsetSlots { get; set; } = true;
+    public bool DesignBindingUnequipUnsetSlots { get; set; } = false;
+
+    /// <summary>
+    /// When a bound design is restored, also restore every mod on the character it captured — enable, priority
+    /// and options — switch off the unbound mods still drawn, and raise its mods above everything else. Mods that
+    /// aren't Proteus mods are held with locked Penumbra temporary settings, released when the look ends.
+    /// Off: a restore touches Proteus mods only, as bindings always did. The snapshot is captured either way, so
+    /// turning this on works for designs saved while it was off. Requires <see cref="DesignBindingEnabled"/>.
+    /// </summary>
+    public bool DesignBindingRestoresCharacterMods { get; set; } = false;
 
     /// <summary>
     /// When true and no real glasses are worn, Proteus has Glamourer equip an (invisible-rendered) glasses

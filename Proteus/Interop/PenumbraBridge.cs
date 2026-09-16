@@ -21,6 +21,8 @@ public class PenumbraBridge : IDisposable
     private readonly GetCurrentModSettingsWithTemp getCurrentModSettings;
     private readonly GetAllModSettings getAllModSettings;
     private readonly RemoveTemporaryModSettings removeTemporaryModSettings;
+    private readonly SetTemporaryModSettings setTemporaryModSettings;
+    private readonly RemoveAllTemporaryModSettings removeAllTemporaryModSettings;
     private readonly ResolvePlayerPath resolvePlayerPath;
     private readonly AddMod addMod;
     private readonly ReloadMod reloadMod;
@@ -73,6 +75,8 @@ public class PenumbraBridge : IDisposable
         getCurrentModSettings = new GetCurrentModSettingsWithTemp(pluginInterface);
         getAllModSettings = new GetAllModSettings(pluginInterface);
         removeTemporaryModSettings = new RemoveTemporaryModSettings(pluginInterface);
+        setTemporaryModSettings = new SetTemporaryModSettings(pluginInterface);
+        removeAllTemporaryModSettings = new RemoveAllTemporaryModSettings(pluginInterface);
         resolvePlayerPath = new ResolvePlayerPath(pluginInterface);
         addMod = new AddMod(pluginInterface);
         reloadMod = new ReloadMod(pluginInterface);
@@ -226,12 +230,15 @@ public class PenumbraBridge : IDisposable
     /// </summary>
     /// <param name="ignoreTemporary">True to read the collection's own settings underneath any temporary
     /// ones, which is what a snapshot meant to be written back permanently wants.</param>
-    public Dictionary<string, ModSettingsSnapshot>? GetCollectionModSettings(Guid collectionId, bool ignoreTemporary)
+    /// <param name="key">The lock whose temporary settings to see. Penumbra hides a temporary setting locked with a
+    /// POSITIVE key from every reader but that key's owner, so a caller that locks its own must pass its key to
+    /// read them back.</param>
+    public Dictionary<string, ModSettingsSnapshot>? GetCollectionModSettings(Guid collectionId, bool ignoreTemporary, int key = 0)
     {
         if (!IsAvailable) return null;
         try
         {
-            var (ec, all) = getAllModSettings.Invoke(collectionId, ignoreInheritance: false, ignoreTemporary: ignoreTemporary);
+            var (ec, all) = getAllModSettings.Invoke(collectionId, ignoreInheritance: false, ignoreTemporary: ignoreTemporary, key: key);
             if (ec != PenumbraApiEc.Success || all == null) return null;
             var result = new Dictionary<string, ModSettingsSnapshot>(all.Count, StringComparer.OrdinalIgnoreCase);
             foreach (var (dir, (enabled, priority, options, inherited, temporary)) in all)
@@ -251,6 +258,35 @@ public class PenumbraBridge : IDisposable
         if (!IsAvailable) return PenumbraApiEc.SystemDisposed;
         try { return removeTemporaryModSettings.Invoke(collectionId, modDirectory); }
         catch (Exception ex) { log.Error(ex, "RemoveTemporaryModSettings failed for {0}", modDirectory); return PenumbraApiEc.UnknownError; }
+    }
+
+    /// <summary>
+    /// Hold a mod in a temporary state — on/off, priority and options together, since a temporary setting replaces
+    /// the whole of it (a group missing from <paramref name="options"/> falls back to its default). The collection's
+    /// own settings are untouched and show again when it is removed, and Penumbra forgets it on restart.
+    /// <para/>
+    /// A positive <paramref name="key"/> locks it: no one else can overwrite or remove it (Glamourer's associated
+    /// mods included), and only a reader passing that key sees it.
+    /// </summary>
+    public PenumbraApiEc SetTemporaryModSettings(Guid collectionId, string modDirectory, bool enabled, int priority,
+        IReadOnlyDictionary<string, List<string>> options, string source, int key)
+    {
+        if (!IsAvailable) return PenumbraApiEc.SystemDisposed;
+        try
+        {
+            var settings = new Dictionary<string, IReadOnlyList<string>>(options.Count);
+            foreach (var (group, selected) in options) settings[group] = selected;
+            return setTemporaryModSettings.Invoke(collectionId, modDirectory, inherit: false, enabled, priority, settings, source, key);
+        }
+        catch (Exception ex) { log.Error(ex, "SetTemporaryModSettings failed for {0}", modDirectory); return PenumbraApiEc.UnknownError; }
+    }
+
+    /// <summary>Drop every temporary setting in a collection locked with <paramref name="key"/> — and only those.</summary>
+    public PenumbraApiEc RemoveAllTemporaryModSettings(Guid collectionId, int key)
+    {
+        if (!IsAvailable) return PenumbraApiEc.SystemDisposed;
+        try { return removeAllTemporaryModSettings.Invoke(collectionId, key); }
+        catch (Exception ex) { log.Error(ex, "RemoveAllTemporaryModSettings failed"); return PenumbraApiEc.UnknownError; }
     }
 
     /// <summary>
