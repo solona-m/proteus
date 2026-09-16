@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
+using System.Threading.Tasks;
 using CheapLoc;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Plugin.Services;
@@ -1002,6 +1003,43 @@ public sealed class SecondSkinService
         return h;
     }
 
+    /// <summary>
+    /// Change detection for a texture buffer held in memory — NEVER a file name (that is <see cref="Hash"/>, whose
+    /// values are on disk and must not move).
+    /// <para/>
+    /// <see cref="Hash"/> is a byte-at-a-time FNV loop, and every shell slot went through it: five 64 MB buffers
+    /// per layer at a 4K sheet, serially, just to find out nothing had changed. This takes eight bytes per round
+    /// with an xxHash64-style mix, over fixed 4 MB chunks hashed in parallel and folded in order — the chunk size,
+    /// not the thread count, decides the answer, so it is stable within a process.
+    /// </summary>
+    internal static ulong SlotHash(byte[] data)
+    {
+        const int Chunk = 4 << 20;
+        const ulong P1 = 0x9E3779B185EBCA87ul, P2 = 0xC2B2AE3D27D4EB4Ful, P3 = 0x165667B19E3779F9ul;
+        int chunks = Math.Max(1, (data.Length + Chunk - 1) / Chunk);
+        var parts = new ulong[chunks];
+        Parallel.For(0, chunks, c =>
+        {
+            int from = c * Chunk, len = Math.Min(Chunk, data.Length - from);
+            var span = data.AsSpan(from, Math.Max(0, len));
+            ulong h = P3 ^ (ulong)c;
+            var words = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, ulong>(span);
+            foreach (var w in words)
+                h = System.Numerics.BitOperations.RotateLeft(h ^ (w * P2), 31) * P1;
+            for (int i = words.Length * 8; i < span.Length; i++)
+                h = System.Numerics.BitOperations.RotateLeft(h ^ (span[i] * P3), 11) * P1;
+            parts[c] = h;
+        });
+        ulong acc = (ulong)data.Length * P1;
+        foreach (var p in parts)
+        {
+            acc ^= p;
+            acc = System.Numerics.BitOperations.RotateLeft(acc, 27) * P1 + P2;
+        }
+        acc ^= acc >> 33; acc *= P2; acc ^= acc >> 29;
+        return acc;
+    }
+
     /// <summary>True when the blue channel (byte 2 of each RGBA quad) is 255 across the whole buffer — i.e.
     /// the normal carries no transparency gate, so BC5 (which drops blue) is lossless for it.</summary>
     private static bool IsBlueAllWhite(byte[] rgba)
@@ -1181,6 +1219,103 @@ public sealed class SecondSkinService
         return uvRemap.Remap(png, w, h, srcType, dstType);
     }
 
+    // ── Build instrumentation ──────────────────────────────────────────────────────────────────────────
+    // Where the shell build's time goes. The compositor's "second skin" figure was one number for what is now
+    // most of a refresh (6.6 s of 10.3 s on a seven-layer look), with a 2.6 s stretch inside it that logged
+    // nothing at all. Reset at the top of Build and read back by the compositor, so one run is one line.
+    private readonly PhaseCounter statsCoverage       = new();   // coverage + sibling relief pre-pass
+    private readonly PhaseCounter statsLayerTextures  = new();   // per layer: WriteTextures
+    private readonly PhaseCounter statsLayerMaterial  = new();   // per layer: material build + write
+    private readonly PhaseCounter statsBodySmooth     = new();   // body relax republish
+    private readonly PhaseCounter statsWriter         = new();   // per host: SecondSkinWriter.Build
+    private readonly PhaseCounter statsDump           = new();   // per host: the opt-in shell dumps
+    private readonly PhaseCounter statsModelWrite     = new();   // per host: write + read-back
+    private readonly PhaseCounter statsDeferredNormals = new();
+    private readonly SecondSkinWriter.BuildTimings writerTimings = new();
+    private readonly PhaseCounter statsWriterReused = new();   // hosts whose shell came from _shellMemo
+
+    // ── Built shell memo ───────────────────────────────────────────────────────────────────────────────
+    // The last shell built per host index, with the key of everything it was built from. A colour edit changes
+    // a material and nothing a mesh is made of, yet every composite re-ran the whole writer — every bridge,
+    // cleft and crotch solve, every emit. Measured at 635-877 ms of a four-layer build.
+    //
+    // Keyed by host INDEX because that is what names the file (secondskin_{h}.mdl); the key includes every
+    // layer's material name, so a host list that reshuffles simply misses.
+    private readonly Dictionary<int, (string Key, byte[] Shell, SecondSkinWriter.Stats Stats)> _shellMemo = new();
+
+    /// <summary>
+    /// Everything <see cref="SecondSkinWriter.Build"/> reads, as one comparable string — or null when some input
+    /// cannot be described (a source whose delegates carry no <see cref="SecondSkinWriter.SourceSpec.DelegateKey"/>,
+    /// or a layer bringing imported geometry), in which case the build is simply not cached.
+    /// <para/>
+    /// The authored caps are left out on purpose: <see cref="AuthoredCaps"/> loads them once per session, so they
+    /// cannot differ between two builds this memo compares. The writer has no other state — its only mutable
+    /// statics are test hooks.
+    /// </summary>
+    internal static string? ShellGeometryKey(IReadOnlyList<SecondSkinWriter.SourceSpec> sources,
+                                             IReadOnlyList<SecondSkinLayer> layers, byte[]? baseModel)
+    {
+        var sb = new System.Text.StringBuilder();
+        static string Set(IEnumerable<string>? s)
+            => s == null ? "-" : string.Join(",", s.OrderBy(x => x, StringComparer.Ordinal));
+        static string Bytes(byte[]? b) => b == null ? "-" : $"{b.Length}:{SlotHash(b):x16}";
+
+        sb.Append("base=").Append(Bytes(baseModel)).Append('\n');
+        foreach (var s in sources)
+        {
+            if (s.DelegateKey == null) return null;
+            // The key must describe the delegates actually present, in both directions — a filter the key calls
+            // absent (or the reverse) means the text and the function have drifted apart, so trust neither.
+            bool keyHasKeep = !s.DelegateKey.StartsWith("keep:-|", StringComparison.Ordinal);
+            bool keyHasUv   = !s.DelegateKey.EndsWith("|uv:-", StringComparison.Ordinal);
+            if (keyHasKeep != (s.KeepMaterial != null) || keyHasUv != (s.UvConv != null)) return null;
+            sb.Append("src=").Append(Bytes(s.Model)).Append('|').Append(s.DelegateKey)
+              .Append("|shapes=").Append(Set(s.EnabledShapes)).Append("|hidden=").Append(Set(s.HiddenAttributes))
+              .Append("|drop=").Append(s.DropConnectors).Append("|unmirror=").Append(s.UnmirrorSides)
+              .Append("|profile=").Append(s.Profile != null).Append('\n');
+            if (s.Profile != null) return null;   // measured elsewhere; not describable here
+        }
+        foreach (var l in layers)
+        {
+            if (l.Geometry.Count > 0) return null;
+            sb.Append("layer=").Append(l.MaterialName)
+              .Append("|cov=").Append(l.CoverageWidth).Append('x').Append(l.CoverageHeight).Append(':').Append(Bytes(l.Coverage))
+              .Append("|cap=").Append(l.ToeCapWidth).Append('x').Append(l.ToeCapHeight).Append(':').Append(Bytes(l.ToeCap))
+              .Append("|capS=").Append(l.ToeCapStrength.ToString("R"))
+              .Append("|reinforce=").Append(l.ToeReinforceSize)
+              .Append("|bust=").Append(l.BustBridgeStrength.ToString("R"))
+              .Append("|nipple=").Append(l.NippleSmoothStrength.ToString("R"))
+              .Append("|cleft=").Append(l.CleftBridgeStrength.ToString("R"))
+              .Append("|fold=").Append(l.FoldSmoothStrength.ToString("R"))
+              .Append("|push=").Append(l.PushScale.ToString("R")).Append('\n');
+        }
+        return sb.ToString();
+    }
+
+    private void ResetBuildStats()
+    {
+        statsCoverage.Reset(); statsLayerTextures.Reset(); statsLayerMaterial.Reset(); statsBodySmooth.Reset();
+        statsWriter.Reset(); statsDump.Reset(); statsModelWrite.Reset(); statsDeferredNormals.Reset();
+        statsWriterReused.Reset();
+        writerTimings.Reset();
+    }
+
+    /// <summary>
+    /// "coverage 0/6 | textures 3150/7 | …" for the last <see cref="Build"/>. "rest" is the build's total less
+    /// everything measured — host choice, surface resolution, the model loads and the content pass.
+    /// </summary>
+    internal string DescribeBuildStats(double totalMs)
+    {
+        double measured = statsCoverage.Ms + statsLayerTextures.Ms + statsLayerMaterial.Ms + statsBodySmooth.Ms
+                        + statsWriter.Ms + statsDump.Ms + statsModelWrite.Ms + statsDeferredNormals.Ms;
+        static string C(PhaseCounter c) => $"{c.Ms:F0}/{c.Calls}";
+        return $"coverage {C(statsCoverage)} | textures {C(statsLayerTextures)} | material {C(statsLayerMaterial)} | "
+             + $"body smooth {C(statsBodySmooth)} | writer {C(statsWriter)}, {statsWriterReused.Calls} reused "
+             + $"[{writerTimings.Describe()}] | "
+             + $"dump {C(statsDump)} | model write {C(statsModelWrite)} | deferred normals {C(statsDeferredNormals)} | "
+             + $"rest {Math.Max(0, totalMs - measured):F0}";
+    }
+
     public Result? Build(
         string charCode,
         IReadOnlyList<(OverlayEntry Entry, ResolvedOverlay Overlay)> gearOverlays,
@@ -1254,6 +1389,7 @@ public sealed class SecondSkinService
         // VariantFolderFor.
         IReadOnlyList<Interop.EquippedSlotVariants.Slot>? equippedSlotVariants = null)
     {
+        ResetBuildStats();
         int contentIn = contentLayers?.Count ?? 0;
 
         // Per-build, not per-session: a remapped buffer is a 4K-derived array and holding a run's worth of
@@ -2235,6 +2371,8 @@ public sealed class SecondSkinService
                 // judging what is redundant, it is copying what the game draws.
                 HiddenAttributes: Interop.BodyShapeReader.Split(b.Shapes).HiddenAttributes,
                 UvConv: i < uvConverters.Count ? uvConverters[i] : null,
+                DelegateKey: "keep:-|uv:" + (i < uvConverters.Count && uvConverters[i] != null
+                    ? $"{b.Uv}>{bodyType}:{unmirror}" : "-"),
                 DropConnectors: dropRedundant,
                 // Decided per part above: a gen2 part whose UV genuinely reads as mirrored AND fits one
                 // integer cell. A part already in the shell's asymmetric space converts (or doesn't) exactly
@@ -2436,6 +2574,8 @@ public sealed class SecondSkinService
                     // Null for ordinary face art, which is authored in the face's own layout. Non-null only
                     // for a doubled sheet, where the geometry — not the art — is what moves.
                     UvConv: faceConv,
+                    DelegateKey: "keep:" + string.Join(",", targetLeaves.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+                               + "|uv:" + (faceConv != null ? "face>facesplit:unmirror" : "-"),
                     DropConnectors: false,    // the connector heuristic is body-tuned; it eats real geometry here
                     UnmirrorSides: faceConv != null)],
                 [pick],
@@ -3181,16 +3321,18 @@ public sealed class SecondSkinService
             var rd = rOv.Descriptor;
             if (rd.IsMaskShell) continue;   // mask coverage/relief is handled by BuildMaskCoverage
             if (layerSurface[i] < 0) continue;   // surface unresolved — the layer is not being built
+            var tCov = PhaseCounter.Begin();
             var (rSrc, rDst) = UvFor(i, rd);
             var rAlpha = BuildAlpha(rd, rEntry, rSrc, rDst, texSize, texSize, MaskAdds(rEntry, rOv));
             alphaByLayer[i] = rAlpha;
-            if (rd.Normal == null || rAlpha == null) continue;
+            if (rd.Normal == null || rAlpha == null) { statsCoverage.Stop(tCov); continue; }
             var rNormal = LoadRemapped(rd.Normal, rEntry.SidecarRoot, rSrc, rDst, texSize, texSize);
-            if (rNormal == null) continue;
+            if (rNormal == null) { statsCoverage.Stop(tCov); continue; }
             rNormal = (byte[])rNormal.Clone();   // LoadRemapped may hand back a shared cached buffer
             int nn = Math.Min(rAlpha.Length, rNormal.Length / 4);
             for (int p = 0; p < nn; p++) rNormal[p * 4 + 3] = rAlpha[p];   // coverage → alpha lane (the gate)
             reliefContribs.Add((rEntry.ModDirectory, i, rNormal));
+            statsCoverage.Stop(tCov);
         }
 
         // A toe cap belongs to the FOOT, not to the mod that happens to ship the map. One mod paints it
@@ -3290,6 +3432,141 @@ public sealed class SecondSkinService
             if (bridgeByMod.ContainsKey(gearOverlays[wi].Entry.ModDirectory))
                 topSpanningModOnHost[wh] = gearOverlays[wi].Entry.ModDirectory;   // work is in stack order
 
+        // Most specific first, and a FACE never falls back to a body: the Midlander face at the same id is still
+        // the right kind of material (no shader keys, its own alpha threshold and mask), while the body is the
+        // mismatch this whole chain exists to avoid. The body template is only the last resort for a body surface.
+        //
+        // The skin template follows the SURFACE and the wearer's race. A body material carries the skin-type
+        // shader key (Hrothgar's differs from every other body's); a FACE is skin.shpk too but a different
+        // material again — no shader keys at all, a different alpha threshold and its own mask — so cloning the
+        // body onto face geometry lights it down the wrong path.
+        byte[]? LoadTemplate(ResolvedSurface layerSurf, string shader, bool report)
+        {
+            var faceId = layerSurf.Key.Kind == ShellSurfaceKind.Face ? layerSurf.Key.Id : null;
+            var candidates = new List<string> { GearMaterialWriter.TemplateFor(shader, layerSurf.CutCode, faceId) };
+            if (faceId != null) candidates.Add(GearMaterialWriter.SkinTemplate(null, faceId));
+            candidates.Add(GearMaterialWriter.TemplateFor(shader));
+            foreach (var cand in candidates.Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                var t = textureLoader.LoadRawMtrl(null, cand);
+                if (t == null) continue;
+                if (report && !string.Equals(cand, candidates[0], StringComparison.OrdinalIgnoreCase))
+                    log.Information("[Proteus] second skin: no {0} template at {1} — using {2}",
+                        shader, candidates[0], cand);
+                return t;
+            }
+            return null;
+        }
+
+        // ── Shell textures, built in parallel ahead of the slot loop ──────────────────────────────────────
+        // Measured as the largest part of the shell build — 1.45-2.67 s of 2.5-4.7 s on a four-layer look —
+        // and every layer's was built one after another, although no layer's pixels depend on another's.
+        //
+        // What DOES depend on the other layers is the disk letter: it advances only when a layer fully
+        // succeeds, so a layer's file names are not known until every layer before it has been placed. So
+        // each layer is built here under the letter it WILL get if the layers before it succeed — which is
+        // every ordinary composite — and the slot loop takes that result only when the letter it actually
+        // assigns agrees. A disagreement (a layer ahead of it failed) simply rebuilds serially, exactly as
+        // before. Content-hashed skip detection keeps a mismatched speculative write harmless: the real owner
+        // of that letter sees a different hash and rewrites the file.
+        //
+        // Left to the serial loop: a shell whose normal is held back for a reinforced toe, since that needs the
+        // cap the model writer has not placed yet.
+        //
+        // Everything that talks to Penumbra (mask assets, which read mod settings) or logs per layer (the mask
+        // coverage, the template fallback) runs serially here first; only the pixel work fans out.
+        var maskAlphaByLayer = new Dictionary<int, byte[]?>();
+        var specTextures = new Dictionary<int, (char Disk, string Prefix, Dictionary<string, string> Redirects,
+                                                bool Changed, List<string>? Paths)>();
+        {
+            var specJobs = new List<(int I, char Disk, string Prefix, byte[]? Alpha, byte[] Template, bool MergeMasks,
+                                     List<byte[]>? Siblings,
+                                     List<(string MaskPath, string? NormalPath, string? IndexPath)>? Masks,
+                                     string? Src, string? Dst)>();
+            var masksByMod = new Dictionary<string, List<(string MaskPath, string? NormalPath, string? IndexPath)>>(
+                StringComparer.OrdinalIgnoreCase);
+            int specLetter = diskLetter;
+            foreach (var (i, hIdx) in work)
+            {
+                var (entry, ov) = gearOverlays[i];
+                var d = ov.Descriptor;
+                var (srcType, dstType) = UvFor(i, d);
+                byte[]? alpha;
+                if (d.IsMaskShell)
+                {
+                    var tMask = PhaseCounter.Begin();
+                    alpha = maskAlphaByLayer[i] = BuildMaskCoverage(entry, srcType, dstType, texSize, texSize);
+                    statsCoverage.Stop(tMask);
+                }
+                else alpha = alphaByLayer[i];
+                if (alpha == null) continue;   // the loop drops it without spending a letter
+
+                // In the slot loop's own order, because each drop has to agree with it about whether a letter is
+                // spent: no coverage and no template drop the layer for free; a reinforced toe is built there, but
+                // it still takes its letter, so the prediction has to take it too.
+                var host = hosts[hIdx];
+                var layerSurf = surfaces[layerSurface[i] >= 0 ? layerSurface[i] : 0];
+                var template = LoadTemplate(layerSurf, d.ShaderPackage, report: false);
+                if (template == null) continue;
+
+                char disk = DiskId(specLetter++);
+                if (!d.IsMaskShell && d.ToeCapDensity > 0) continue;   // reinforced toe: serial, see above
+
+                bool mergeMasks = d.IsMaskShell || !(maskShellMods?.Contains(entry.ModDirectory) ?? false);
+                List<(string MaskPath, string? NormalPath, string? IndexPath)>? masks = null;
+                if (mergeMasks && !masksByMod.TryGetValue(entry.ModDirectory, out masks))
+                    masksByMod[entry.ModDirectory] = masks = discovery.ResolveActiveMaskAssets(entry);
+
+                var siblings = d.IsMaskShell
+                    ? null
+                    : reliefContribs.Where(c => c.LayerIdx != i
+                            && layerSurface[c.LayerIdx] == layerSurface[i]
+                            && string.Equals(c.ModDir, entry.ModDirectory, StringComparison.OrdinalIgnoreCase))
+                        .Select(c => c.Normal).ToList();
+                specJobs.Add((i, disk, $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/texture/ss_{disk}_",
+                              alpha, template, mergeMasks, siblings, masks, srcType, dstType));
+            }
+
+            if (specJobs.Count > 1)
+            {
+                var tSpec = PhaseCounter.Begin();
+                var results = new (Dictionary<string, string> Redirects, bool Changed, List<string>? Paths)[specJobs.Count];
+                // Bounded: each layer holds several 4K buffers at once, and the pixel kernels inside are
+                // already parallel — this spreads the serial parts (hashing, clones, fills, file writes).
+                Parallel.For(0, specJobs.Count,
+                    new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount / 4, 2, 4) },
+                    j =>
+                    {
+                        var job = specJobs[j];
+                        var (entry, ov) = gearOverlays[job.I];
+                        var local = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                        bool changed = false;
+                        List<string>? paths = null;
+                        try
+                        {
+                            paths = WriteTextures(entry, ov.Descriptor, ov.Descriptor.ShaderPackage, job.Prefix,
+                                texturesDir, local, job.Disk, job.Alpha, job.Src, job.Dst, ov.ColorTableRows,
+                                effectsFolder, texSize, ref changed, job.MergeMasks, job.Siblings,
+                                GearMaterialWriter.TextureNames(job.Template), deferNormal: null,
+                                maskAssets: job.Masks);
+                        }
+                        catch (Exception ex)
+                        {
+                            // Not fatal: no result means the slot loop builds this layer itself.
+                            log.Debug("[Proteus] second skin: parallel texture build for layer {0} failed ({1}) — "
+                                    + "the slot loop will build it", job.I, ex.Message);
+                            return;
+                        }
+                        results[j] = (local, changed, paths);
+                    });
+                for (int j = 0; j < specJobs.Count; j++)
+                    if (results[j].Redirects != null)
+                        specTextures[specJobs[j].I] = (specJobs[j].Disk, specJobs[j].Prefix, results[j].Redirects,
+                                                       results[j].Changed, results[j].Paths);
+                statsLayerTextures.Stop(tSpec);
+            }
+        }
+
         var inHost = new int[hosts.Count];
         foreach (var (i, hIdx) in work)
         {
@@ -3330,7 +3607,8 @@ public sealed class SecondSkinService
             // The mask shell's coverage IS the mask; other shells' coverage is the overlay's art shaped by masks.
             bool mergeMasks = isMaskShell || !(maskShellMods?.Contains(entry.ModDirectory) ?? false);
             var alpha = isMaskShell
-                ? BuildMaskCoverage(entry, srcType, dstType, texSize, texSize)
+                ? maskAlphaByLayer.TryGetValue(i, out var builtMask) ? builtMask   // the parallel pre-pass built it
+                    : BuildMaskCoverage(entry, srcType, dstType, texSize, texSize)
                 : alphaByLayer[i];   // computed once in the sibling-relief pre-pass above
 
             // Error-drops (below) don't consume a host slot — inHost/diskLetter only advance on a full success.
@@ -3360,25 +3638,7 @@ public sealed class SecondSkinService
             // a different material again — no shader keys at all, a different alpha threshold and its own
             // mask — so cloning the body onto face geometry lights it down the wrong path. Falls back to the
             // Midlander body for anything that ships no such material, which beats dropping the layer.
-            var faceId = layerSurf.Key.Kind == ShellSurfaceKind.Face ? layerSurf.Key.Id : null;
-            // Most specific first, and a FACE never falls back to a body: the Midlander face at the same id
-            // is still the right kind of material (no shader keys, its own alpha threshold and mask), while
-            // the body is the mismatch this whole chain exists to avoid. The body template is only the last
-            // resort for a body surface.
-            var candidates = new List<string> { GearMaterialWriter.TemplateFor(shader, layerSurf.CutCode, faceId) };
-            if (faceId != null) candidates.Add(GearMaterialWriter.SkinTemplate(null, faceId));
-            candidates.Add(GearMaterialWriter.TemplateFor(shader));
-
-            byte[]? template = null;
-            foreach (var cand in candidates.Distinct(StringComparer.OrdinalIgnoreCase))
-            {
-                template = textureLoader.LoadRawMtrl(null, cand);
-                if (template == null) continue;
-                if (!string.Equals(cand, candidates[0], StringComparison.OrdinalIgnoreCase))
-                    log.Information("[Proteus] second skin: no {0} template at {1} — using {2}",
-                        shader, candidates[0], cand);
-                break;
-            }
+            var template = LoadTemplate(layerSurf, shader, report: true);
             if (template == null) { log.Error("[Proteus] second skin: missing template material for {0}", shader); continue; }
 
             // A shell follows every body contour, so hosiery sleeves each toe unless the toe area is
@@ -3398,9 +3658,23 @@ public sealed class SecondSkinService
             DeferredShellNormal? deferredNormal =
                 toeCap != null && !isMaskShell && ov.Descriptor.ToeCapDensity > 0 ? new DeferredShellNormal() : null;
 
-            var texPaths = WriteTextures(entry, ov.Descriptor, shader, texPrefix, texturesDir, redirects, diskChar,
-                alpha, srcType, dstType, ov.ColorTableRows, effectsFolder, texSize, ref shellChanged, mergeMasks,
-                siblingReliefs, GearMaterialWriter.TextureNames(template), deferredNormal);
+            List<string>? texPaths;
+            if (deferredNormal == null && specTextures.TryGetValue(i, out var spec)
+                && spec.Disk == diskChar && string.Equals(spec.Prefix, texPrefix, StringComparison.Ordinal))
+            {
+                // Built by the parallel pre-pass under the letter this layer did get.
+                foreach (var (gp, rel) in spec.Redirects) redirects[gp] = rel;
+                shellChanged |= spec.Changed;
+                texPaths = spec.Paths;
+            }
+            else
+            {
+                var tTex = PhaseCounter.Begin();
+                texPaths = WriteTextures(entry, ov.Descriptor, shader, texPrefix, texturesDir, redirects, diskChar,
+                    alpha, srcType, dstType, ov.ColorTableRows, effectsFolder, texSize, ref shellChanged, mergeMasks,
+                    siblingReliefs, GearMaterialWriter.TextureNames(template), deferredNormal);
+                statsLayerTextures.Stop(tTex);
+            }
             // Registered even if the textures then failed: the normal's redirect is already published, so it
             // must still get written. The "/" is how the model stores material names — see MaterialName below.
             if (deferredNormal?.Norm != null)
@@ -3443,11 +3717,13 @@ public sealed class SecondSkinService
             // MOD, and only those — see topSpanningModOnHost for the two narrower rules that failed.
             bool spanning = topSpanningModOnHost.TryGetValue(hIdx, out var topMod)
                          && string.Equals(topMod, entry.ModDirectory, StringComparison.OrdinalIgnoreCase);
+            var tMat = PhaseCounter.Begin();
             try { mtrl = GearMaterialWriter.Build(template, texPaths, BuildRows(ov.ColorTableRows, isMaskShell: isMaskShell, neutralWhenEmpty: true), scroll, config.GearCutoutAlpha, linearizeDiffuse: isMaskShell, showBackfaces: spanning); }
             catch (Exception ex) { log.Error(ex, "[Proteus] second skin: material build failed for {0}", shader); continue; }
 
             var matDisk = Path.Combine(materialsDir, $"ss_{diskChar}.mtrl");
             shellChanged |= WriteIfChanged(matDisk, mtrl);
+            statsLayerMaterial.Stop(tMat);
             redirects[matGamePath] = Rel(outputRoot, matDisk);
             var shellKey = (entry.ModDirectory, ov.OptionGroup, ov.Option);
             if (!shellMaterials.TryGetValue(shellKey, out var shellList))
@@ -3893,6 +4169,7 @@ public sealed class SecondSkinService
                 }
 
                 byte[]? smoothed;
+                var tSmooth = PhaseCounter.Begin();
                 try
                 {
                     smoothed = SecondSkinWriter.SmoothBodyNipples(bBytes, gate, smoothMax,
@@ -3900,13 +4177,15 @@ public sealed class SecondSkinService
                 }
                 catch (Exception ex)
                 {
+                    statsBodySmooth.Stop(tSmooth);
                     log.Warning(ex, "[Proteus] second skin: could not smooth {0}", bPath);
                     continue;
                 }
-                if (smoothed == null) continue;   // no bust bones, or nothing covered — most parts
+                if (smoothed == null) { statsBodySmooth.Stop(tSmooth); continue; }   // no bust bones, or nothing covered — most parts
 
                 var disk = SmoothedBodyPath(modelsDir, bPath, smoothed);
                 bool changed = WriteIfChanged(disk, smoothed);
+                statsBodySmooth.Stop(tSmooth);
                 redirects[bPath] = Rel(outputRoot, disk);
                 modelChangedAny |= changed;
                 smoothedBody[bPath] = smoothed;
@@ -3965,10 +4244,40 @@ public sealed class SecondSkinService
                 var srcs = perHostLayers[h].All(l => l.Geometry.Count > 0)
                     ? []
                     : surface.Sources;
+                var tDump = PhaseCounter.Begin();
                 DumpShellInputs(h, srcs, perHostLayers[h], host.BaseModel);
-                shell = SecondSkinWriter.Build(srcs, perHostLayers[h], host.BaseModel,
-                    out stats, msg => log.Debug("[Proteus] second skin: {0}", msg), AuthoredCaps(), pushSweep);
+                statsDump.Stop(tDump);
+                var tWriter = PhaseCounter.Begin();
+                try
+                {
+                    var geometryKey = pushSweep == null ? ShellGeometryKey(srcs, perHostLayers[h], host.BaseModel) : null;
+                    (string Key, byte[] Shell, SecondSkinWriter.Stats Stats) memo = default;
+                    bool hit;
+                    // Locked: a superseded composite can still be inside Build while its replacement starts one.
+                    lock (_shellMemo)
+                        hit = geometryKey != null && _shellMemo.TryGetValue(h, out memo)
+                           && string.Equals(memo.Key, geometryKey, StringComparison.Ordinal);
+                    if (hit)
+                    {
+                        shell = memo.Shell!;   // hit implies the entry was found
+                        stats = memo.Stats;
+                        statsWriterReused.Count();
+                        log.Debug("[Proteus] second skin: host {0}{1:D4}/{2} geometry unchanged — reusing the built shell",
+                            host.Prefix, host.SetId, host.Slot);
+                    }
+                    else
+                    {
+                        lock (_shellMemo) _shellMemo.Remove(h);
+                        shell = SecondSkinWriter.Build(srcs, perHostLayers[h], host.BaseModel,
+                            out stats, msg => log.Debug("[Proteus] second skin: {0}", msg), AuthoredCaps(), pushSweep,
+                            writerTimings);
+                        if (geometryKey != null) lock (_shellMemo) _shellMemo[h] = (geometryKey, shell, stats);
+                    }
+                }
+                finally { statsWriter.Stop(tWriter); }
+                tDump = PhaseCounter.Begin();
                 DumpShellOutput(h, shell);
+                statsDump.Stop(tDump);
 
                 // This host's reinforced-toe regions, per material. Unioned across hosts: a texture sheet is
                 // shared by everything drawn with its material, so a cap placed through any host is part of
@@ -4075,6 +4384,7 @@ public sealed class SecondSkinService
             var mdlGamePath = host.ModelPath
                 ?? $"chara/{host.Tree}/{host.Prefix}{host.SetId:D4}/model/c{publishCode}{host.Prefix}{host.SetId:D4}_{host.Slot}.mdl";
             var mdlDisk = Path.Combine(modelsDir, $"secondskin_{h}.mdl");
+            var tModelWrite = PhaseCounter.Begin();
             var modelChanged = WriteIfChanged(mdlDisk, shell);
 
             // What the model ON DISK asks the game for — read back from the FILE, not from the bytes we just
@@ -4121,6 +4431,7 @@ public sealed class SecondSkinService
             {
                 log.Warning("[Proteus] could not read back the shell model's material names: {0}", ex.Message);
             }
+            statsModelWrite.Stop(tModelWrite);
             shellChanged   |= modelChanged;
             modelChangedAny |= modelChanged;
             redirects[mdlGamePath] = Rel(outputRoot, mdlDisk);
@@ -4212,7 +4523,11 @@ public sealed class SecondSkinService
         // Now the caps are placed, write the normals held back for them. Before the early return below: their
         // redirects went out with the materials, so they are owed a file whatever else happened.
         if (pendingNormals.Count > 0)
+        {
+            var tNormals = PhaseCounter.Begin();
             WriteDeferredNormals(pendingNormals, toeReinforceMaps, redirects, ref shellChanged);
+            statsDeferredNormals.Stop(tNormals);
+        }
 
         if (hostModelPaths.Count == 0) return null;
 
@@ -4661,7 +4976,10 @@ public sealed class SecondSkinService
         IReadOnlyList<string>? templateTextures = null,
         // Non-null when this shell has a reinforced toe: the normal's bytes are handed back through it instead
         // of written, because the region to reinforce only exists after the model writer has placed the cap.
-        DeferredShellNormal? deferNormal = null)
+        DeferredShellNormal? deferNormal = null,
+        // The mod's active mask assets, when the caller already resolved them. Resolving asks Penumbra for the
+        // mod's settings, and the parallel texture build must not make that call from several threads at once.
+        List<(string MaskPath, string? NormalPath, string? IndexPath)>? maskAssets = null)
     {
         var sidecarRoot = entry.SidecarRoot;
         var outputRoot = Directory.GetParent(texturesDir)!.FullName;
@@ -4725,7 +5043,7 @@ public sealed class SecondSkinService
         // brought real _id art, where every texel is authored by definition.
         bool[]? idAuthored = null;
         var mergeTopFirst = mergeMasks
-            ? discovery.ResolveActiveMaskAssets(entry)
+            ? maskAssets ?? discovery.ResolveActiveMaskAssets(entry)
             : new List<(string MaskPath, string? NormalPath, string? IndexPath)>();
         foreach (var (maskPath, maskNormalPath, maskIndexPath) in Enumerable.Reverse(mergeTopFirst))
         {
@@ -5039,11 +5357,15 @@ public sealed class SecondSkinService
         // recomposite would look like a change and force a redraw. The encoding is folded into the hash
         // so toggling compression forces a rewrite instead of a stale skip, and the sheet SIZE for the
         // same reason: a build that grows the sheet must not be able to skip past the file it grew.
-        var hash = Hash(data)
+        // SlotHash, not Hash: this memo lives in memory only, and the byte-wise FNV was a measurable share of
+        // every shell layer. Locked because the shell layers now build in parallel (see Build).
+        var hash = SlotHash(data)
                  ^ ((ulong)((int)encoding + 1) * 0x9E3779B97F4A7C15ul)
                  ^ ((ulong)w * 0xBF58476D1CE4E5B9ul)
                  ^ ((ulong)h * 0x94D049BB133111EBul);
-        bool same = _texHashes.TryGetValue(disk, out var prev) && prev == hash && File.Exists(disk);
+        bool same;
+        lock (_texHashes) same = _texHashes.TryGetValue(disk, out var prev) && prev == hash;
+        same = same && File.Exists(disk);
         if (!same)
         {
             if (!textureLoader.WriteTex(data, w, h, disk, encoding))
@@ -5051,7 +5373,7 @@ public sealed class SecondSkinService
                 log.Error("[Proteus] second skin: failed to write {0}", disk);
                 return false;
             }
-            _texHashes[disk] = hash;
+            lock (_texHashes) _texHashes[disk] = hash;
             texturesChanged = true;
         }
         return true;
