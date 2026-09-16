@@ -90,6 +90,12 @@ public class GlamourerBridge : IDisposable
     /// </summary>
     public event Action? LocalPlayerEquipmentChanged;
 
+    /// <summary>
+    /// Every per-field state change on the local player, unfiltered. Raised synchronously inside Glamourer's
+    /// operation, so a design apply's burst arrives BEFORE its <see cref="LocalPlayerStateFinalized"/>.
+    /// </summary>
+    public event Action<StateChangeType>? LocalPlayerStateChangedAny;
+
     public GlamourerBridge(IDalamudPluginInterface pluginInterface, IObjectTable objectTable, IPluginLog log)
     {
         this.log             = log;
@@ -320,6 +326,36 @@ public class GlamourerBridge : IDisposable
         => SetAccessory(itemId, leftHand ? "ril" : "rir");
 
     /// <summary>
+    /// Unequip one gear slot on the local player, by its Glamourer design name ("Head" … "LFinger"). Item 0 is
+    /// Glamourer's "Nothing" for the slot. <see cref="ApplyFlag.Once"/> and unlocked, as <see cref="SetAccessory"/>:
+    /// the next design or revert decides the slot again. Framework thread only.
+    /// </summary>
+    public bool UnequipSlot(string slotName)
+    {
+        if (!IsAvailable || objectTable.LocalPlayer == null) return false;
+        if (!Enum.TryParse<ApiEquipSlot>(slotName, out var slot) || slot is ApiEquipSlot.Unknown or ApiEquipSlot.MainHand or ApiEquipSlot.OffHand)
+        {
+            log.Warning("[Proteus] UnequipSlot: not an unequippable slot \"{0}\"", slotName);
+            return false;
+        }
+        try
+        {
+            var ec = setItem.Invoke(0, slot, 0, NoStains, key: 0, ApplyFlag.Once);   // NoStains: see there
+            if (ec != GlamourerApiEc.Success)
+            {
+                log.Debug("[Proteus] UnequipSlot({0}) -> {1}", slot, ec);
+                return false;
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "[Proteus] UnequipSlot({0}) failed", slot);   // see SetAccessory on logging the object
+            return false;
+        }
+    }
+
+    /// <summary>
     /// As <see cref="SetRing"/>, for any accessory slot a carrier can ride: "rir", "ril", "wrs", "nek".
     /// Same contract in every respect — the slot must match the one the shell was published for, because its
     /// path and EQDP entry name that slot (c….a0053_wrs.mdl) and the game only loads the one it asked for.
@@ -448,6 +484,10 @@ public class GlamourerBridge : IDisposable
         // composites. See DesignBindingService.IsInferredAutomationApply.
         if (changeType is StateChangeType.Reapply && !WithinOwnReapplyEcho())
             Interlocked.Exchange(ref lastForeignReapplyTick, Environment.TickCount64);
+
+        // Every change, unfiltered and before the echo suppression below — design binding keeps its own copy of
+        // the state and must hear about all of them, ours included.
+        LocalPlayerStateChangedAny?.Invoke(changeType);
 
         // Model/EntireCustomize can change race/body without touching mod settings.
         // Fire the customization event so the compositor recomposites unconditionally.

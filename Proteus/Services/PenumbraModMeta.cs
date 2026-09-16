@@ -465,7 +465,7 @@ internal static class PenumbraModMeta
     /// or it can't be read. Read once per write and threaded through, so a single recomposite doesn't
     /// parse meta.json twice.
     /// </summary>
-    private static Dictionary<string, JsonElement> ReadManifest(string modRoot)
+    internal static Dictionary<string, JsonElement> ReadManifest(string modRoot)
         => ReadManifest(modRoot, out _);
 
     /// <inheritdoc cref="ReadManifest(string)"/>
@@ -557,7 +557,7 @@ internal static class PenumbraModMeta
     }
 
     /// <summary>The <c>FileVersion</c> in an already-read manifest, defaulting to <see cref="LegacyFileVersion"/>.</summary>
-    private static int FileVersionOf(Dictionary<string, JsonElement> manifest)
+    internal static int FileVersionOf(Dictionary<string, JsonElement> manifest)
         => manifest.TryGetValue("FileVersion", out var v) && v.ValueKind == JsonValueKind.Number
         && v.TryGetInt32(out var n) ? n : LegacyFileVersion;
 

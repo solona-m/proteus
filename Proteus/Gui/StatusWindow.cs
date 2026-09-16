@@ -5125,6 +5125,15 @@ public class StatusWindow : Window
             // greyed out because the parent toggle is off, with nothing to explain why.
             if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
                 ImGui.SetTooltip(bs.FollowAutomationTip);
+
+            bool unequipUnset = config.DesignBindingUnequipUnsetSlots;
+            if (ImGui.Checkbox(bs.UnequipUnset, ref unequipUnset))
+            {
+                config.DesignBindingUnequipUnsetSlots = unequipUnset;
+                config.Save();
+            }
+            if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+                ImGui.SetTooltip(bs.UnequipUnsetTip);
         }
         ImGui.Unindent();
 
@@ -5227,6 +5236,22 @@ public class StatusWindow : Window
             else
                 ImGui.TextUnformatted(label);
 
+            // What Apply will do to Penumbra, at a glance: how many mods it restores, or that it is an older
+            // binding that only knows Proteus mods and needs one Update to cover the whole character.
+            ImGui.SameLine();
+            if (b.HasCharacterSnapshot)
+            {
+                ImGui.TextDisabled(string.Format(bs.ModCountFmt, b.CharacterMods.Count));
+                if (ImGui.IsItemHovered())
+                    DrawBindingModsTooltip(b);
+            }
+            else
+            {
+                ImGui.TextDisabled(bs.ProteusOnly);
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip(bs.ProteusOnlyTip);
+            }
+
             ImGui.TableNextColumn();
             var ago = DateTime.UtcNow - b.CapturedUtc;
             ImGui.TextDisabled(
@@ -5272,6 +5297,42 @@ public class StatusWindow : Window
             designBindings.Restore(toApply.Value);
         if (toRemove.HasValue)
             designBindings.RemoveBinding(toRemove.Value);
+    }
+
+    // Enough to recognise a look without the tooltip outgrowing the screen; a body-and-outfit design is
+    // typically a dozen or two.
+    private const int BindingModsTooltipRows = 30;
+
+    /// <summary>The mods a binding restores, enabled ones first. Only drawn while hovered, which is also the
+    /// only time it asks Penumbra which mods are still installed.</summary>
+    private void DrawBindingModsTooltip(DesignBinding b)
+    {
+        var bs        = Strings.Bindings;
+        var installed = penumbra.GetAllMods();
+
+        using var tip = ImRaii.Tooltip();
+        ImGui.TextUnformatted(bs.ModListHeader);
+
+        var rows = b.CharacterMods
+            .OrderByDescending(m => m.Enabled)
+            .ThenByDescending(m => m.Priority)
+            .ThenBy(m => m.ModName ?? m.ModDirectory, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (var m in rows.Take(BindingModsTooltipRows))
+        {
+            var name    = installed?.GetValueOrDefault(m.ModDirectory) ?? m.ModName ?? m.ModDirectory;
+            var missing = installed != null && !installed.ContainsKey(m.ModDirectory);
+            var detail  = missing   ? bs.ModListMissing
+                        : m.Enabled ? string.Format(bs.ModListPriorityFmt, m.Priority)
+                        :             bs.ModListOff;
+
+            if (missing || !m.Enabled) ImGui.TextDisabled($"{name}  ({detail})");
+            else                       ImGui.TextUnformatted($"{name}  ({detail})");
+        }
+
+        if (rows.Count > BindingModsTooltipRows)
+            ImGui.TextDisabled(string.Format(bs.ModListMoreFmt, rows.Count - BindingModsTooltipRows));
     }
 
     private void DrawColorEditor(OverlayEntry entry)

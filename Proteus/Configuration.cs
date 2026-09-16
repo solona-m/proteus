@@ -258,6 +258,14 @@ public class Configuration : IPluginConfiguration
     public bool DesignBindingFollowsAutomation { get; set; } = true;
 
     /// <summary>
+    /// When a bound design is applied, unequip every gear and glasses slot the design leaves unset, and switch
+    /// off imported Proteus packs its binding didn't capture (their pieces ride a carrier, not a slot), so the
+    /// previous look's pieces don't carry over. Explicit applies only — automation layers several designs, so a
+    /// slot one leaves unset is usually another's. Requires <see cref="DesignBindingEnabled"/>.
+    /// </summary>
+    public bool DesignBindingUnequipUnsetSlots { get; set; } = true;
+
+    /// <summary>
     /// When true and no real glasses are worn, Proteus has Glamourer equip an (invisible-rendered) glasses
     /// item so the second-skin shell can ride the facewear slot instead of a ring/accessory. On by default;
     /// note it writes a (hidden) bonus item to the player's Glamourer state (see <c>CompositorService</c>

@@ -438,6 +438,40 @@ public class CompositorService : IDisposable
     private readonly ConcurrentDictionary<string, byte> _knownDisabled =
         new(StringComparer.OrdinalIgnoreCase);
 
+    // Depth of SuppressModSettingEvents scopes. Framework thread only, like the handler it gates.
+    private int _modSettingEventSuppression;
+
+    /// <summary>
+    /// Swallow Penumbra's ModSettingChanged events for the life of the returned scope, and settle up once when
+    /// it closes. For a caller about to write many mods in one go — a design restore can touch dozens — where
+    /// every write would otherwise re-enter <see cref="OnModSettingChanged"/>, cost its IPC reads, flush the
+    /// upstream cache and schedule a composite of its own.
+    /// <para/>
+    /// Penumbra raises these on the thread that made the write, so the scope only covers writes made on the
+    /// framework thread inside it. Closing it invalidates the upstream cache (any of those mods may have moved
+    /// a base) and forgets the disabled-mod verdicts they may have made stale; the caller still owns the
+    /// recomposite, with its own reason.
+    /// </summary>
+    public IDisposable SuppressModSettingEvents()
+    {
+        _modSettingEventSuppression++;
+        return new ModSettingSuppression(this);
+    }
+
+    private sealed class ModSettingSuppression(CompositorService owner) : IDisposable
+    {
+        private bool disposed;
+
+        public void Dispose()
+        {
+            if (disposed) return;
+            disposed = true;
+            if (--owner._modSettingEventSuppression > 0) return;
+            owner._knownDisabled.Clear();
+            owner.InvalidateUpstreamCache("mod-setting batch");
+        }
+    }
+
     /// <summary>
     /// Save the plugin config under the same lock the off-thread body-mod classifier uses. Callers on
     /// the framework thread need this too: <c>Save()</c> serializes the WHOLE Configuration, so a bare
@@ -746,6 +780,9 @@ public class CompositorService : IDisposable
     private void OnModSettingChanged(ModSettingChange change, Guid collId, string modDir, bool inherited)
     {
         if (string.Equals(modDir, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase))
+            return;
+        // Inside a batch write — the scope settles up when it closes. See SuppressModSettingEvents.
+        if (_modSettingEventSuppression > 0)
             return;
         var playerColl = penumbra.GetPlayerCollectionId();
         if (playerColl == null || collId != playerColl.Value)
