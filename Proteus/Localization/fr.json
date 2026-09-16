@@ -52,7 +52,7 @@
     "description": ""
   },
   "Bindings.Apply.Tip": {
-    "message": "Restaure immédiatement l'état Proteus de ce design, sans passer par Glamourer —\nactivation / priorité / options / couleurs pour chaque mod qu'il a capturé.\n\nLes mods Proteus qui NE sont PAS dans la liaison sont désactivés : cela remplace le\nlook actuel au lieu de s'y ajouter.",
+    "message": "Restaure immédiatement le look de ce design, sans passer par Glamourer : activation / priorité /\noptions de chaque mod capturé, plus les couleurs Proteus.\n\nLes mods du personnage qui NE sont PAS dans la liaison sont désactivés, et les mods liés passent\nau-dessus de tout ce avec quoi ils entrent en conflit : cela remplace le look actuel.",
     "description": ""
   },
   "Bindings.Col.Captured": {
@@ -68,7 +68,7 @@
     "description": ""
   },
   "Bindings.Enable.Tip": {
-    "message": "Quand c'est activé, enregistrer un design Glamourer capture l'état actuel de Proteus.\nAppliquer ce design plus tard le restaure (correspondance d'équipement au mieux).",
+    "message": "Quand c'est activé, enregistrer un design Glamourer capture chaque mod du personnage et les\ncouleurs Proteus actuelles. Appliquer ce design plus tard les restaure (correspondance d'équipement au mieux).",
     "description": ""
   },
   "Bindings.FollowAutomation.Label": {
@@ -87,12 +87,44 @@
     "message": "il y a {0} min",
     "description": ""
   },
+  "Bindings.ModCount.Fmt": {
+    "message": "{0} mods",
+    "description": ""
+  },
+  "Bindings.ModList.Header": {
+    "message": "Mods restaurés par ce design :",
+    "description": ""
+  },
+  "Bindings.ModList.Missing": {
+    "message": "non installé",
+    "description": ""
+  },
+  "Bindings.ModList.More.Fmt": {
+    "message": "…et {0} de plus",
+    "description": ""
+  },
+  "Bindings.ModList.Off": {
+    "message": "désactivé",
+    "description": ""
+  },
+  "Bindings.ModList.Priority.Fmt": {
+    "message": "priorité {0}",
+    "description": ""
+  },
   "Bindings.None": {
     "message": "Aucun design lié pour l'instant.",
     "description": ""
   },
   "Bindings.Pill.Active": {
     "message": "actif",
+    "description": ""
+  },
+  "Bindings.ProteusOnly": {
+    "message": "Mods Proteus uniquement",
+    "description": ""
+  },
+  "Bindings.ProteusOnly.Tip": {
+    "message": "Capturée avant que les liaisons n'enregistrent tout le personnage : l'appliquer ne\nrestaure que les mods Proteus. Appliquez ce design, puis cliquez sur Mettre à jour.",
     "description": ""
   },
   "Bindings.SecondsAgo.Fmt": {
@@ -107,6 +139,14 @@
     "message": "Oublie cette liaison. Le design Glamourer lui-même n'est pas touché.",
     "description": ""
   },
+  "Bindings.UnequipUnset.Label": {
+    "message": "Vider les emplacements que le design ne définit pas",
+    "description": ""
+  },
+  "Bindings.UnequipUnset.Tip": {
+    "message": "Quand vous appliquez un design lié, chaque emplacement d'équipement et de lunettes que le design\nne définit pas est vidé, et les packs Proteus importés qu'il n'a pas capturés sont désactivés,\npour que les pièces du look précédent ne restent pas.\n\nPas lors de l'automatisation, qui superpose plusieurs designs. Les armes et les emplacements\nqu'utilise Proteus pour une couche ne sont pas touchés.",
+    "description": ""
+  },
   "Bindings.Update.Btn": {
     "message": "Mettre à jour",
     "description": ""
@@ -116,7 +156,7 @@
     "description": ""
   },
   "Bindings.Update.Tip": {
-    "message": "Capture l'état actuel de Proteus (activation / priorité / options / couleurs)\ndans cette liaison. Les modifications manuelles ne persistent que si vous cliquez ici.",
+    "message": "Capture chaque mod du personnage (activation / priorité / options) et les couleurs Proteus\nactuelles dans cette liaison. Les modifications manuelles ne persistent que si vous cliquez ici.",
     "description": ""
   },
   "Chat.ContentUnplaced.Fmt": {

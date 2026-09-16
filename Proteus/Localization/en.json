@@ -52,7 +52,7 @@
     "description": "Button caption. Appears in the Bindings tab."
   },
   "Bindings.Apply.Tip": {
-    "message": "Restore this design's Proteus state now, without going through Glamourer —\nenable / priority / options / colours for every mod it captured.\n\nProteus mods NOT in the binding are switched off, so this replaces the current\nlook rather than adding to it.",
+    "message": "Restore this design's look now, without going through Glamourer: enable / priority /\noptions for every mod it captured, plus Proteus colours.\n\nMods on the character that are NOT in the binding are switched off, and bound mods are\nraised above anything they conflict with, so this replaces the current look.",
     "description": "Tooltip. Appears in the Bindings tab. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Bindings.Col.Captured": {
@@ -68,7 +68,7 @@
     "description": "Control label. Appears in the Bindings tab."
   },
   "Bindings.Enable.Tip": {
-    "message": "When on, saving a Glamourer design snapshots the current Proteus state.\nApplying that design later restores it (best-effort gear match).",
+    "message": "When on, saving a Glamourer design snapshots every mod on the character and the\ncurrent Proteus colours. Applying that design later restores it (best-effort gear match).",
     "description": "Tooltip. Appears in the Bindings tab. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Bindings.FollowAutomation.Label": {
@@ -87,6 +87,30 @@
     "message": "{0}m ago",
     "description": "Appears in the Bindings tab. Takes arguments - keep every {0}, {1} ... exactly once; you may reorder them."
   },
+  "Bindings.ModCount.Fmt": {
+    "message": "{0} mods",
+    "description": "Appears after a design's name in the Bindings tab. {0} is the number of mods the binding captured."
+  },
+  "Bindings.ModList.Header": {
+    "message": "Mods this design restores:",
+    "description": "Tooltip heading in the Bindings tab, above a list of mod names."
+  },
+  "Bindings.ModList.Missing": {
+    "message": "not installed",
+    "description": "Tooltip in the Bindings tab: marks a mod the design captured that is no longer installed. Keep it short."
+  },
+  "Bindings.ModList.More.Fmt": {
+    "message": "…and {0} more",
+    "description": "Last line of a long mod list tooltip in the Bindings tab. {0} is a number."
+  },
+  "Bindings.ModList.Off": {
+    "message": "off",
+    "description": "Tooltip in the Bindings tab: marks a mod the design keeps switched off. Keep it short."
+  },
+  "Bindings.ModList.Priority.Fmt": {
+    "message": "priority {0}",
+    "description": "Tooltip in the Bindings tab, after a mod name. {0} is the Penumbra priority number."
+  },
   "Bindings.None": {
     "message": "No bound designs yet.",
     "description": "Appears in the Bindings tab."
@@ -94,6 +118,14 @@
   "Bindings.Pill.Active": {
     "message": "active",
     "description": "Appears in the Bindings tab."
+  },
+  "Bindings.ProteusOnly": {
+    "message": "Proteus mods only",
+    "description": "Appears after a design's name in the Bindings tab, for a binding captured by an older version."
+  },
+  "Bindings.ProteusOnly.Tip": {
+    "message": "Captured before bindings recorded the whole character, so applying it only\nrestores Proteus mods. Apply this design, then press Update.",
+    "description": "Tooltip. Appears in the Bindings tab. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Bindings.SecondsAgo.Fmt": {
     "message": "{0}s ago",
@@ -107,6 +139,14 @@
     "message": "Forget this binding. The Glamourer design itself is untouched.",
     "description": "Tooltip. Appears in the Bindings tab."
   },
+  "Bindings.UnequipUnset.Label": {
+    "message": "Unequip slots the design leaves unset",
+    "description": "Checkbox label in the Bindings tab."
+  },
+  "Bindings.UnequipUnset.Tip": {
+    "message": "When you apply a bound design, every gear and glasses slot the design doesn't set\nis emptied, and imported Proteus packs it didn't capture are switched off, so pieces\nfrom the previous look don't carry over.\n\nNot on automation applies, which stack several designs. Weapons and the slots\nProteus is using for a shell are left alone.",
+    "description": "Tooltip. Appears in the Bindings tab. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "Bindings.Update.Btn": {
     "message": "Update",
     "description": "Button caption. Appears in the Bindings tab."
@@ -116,7 +156,7 @@
     "description": "Tooltip. Appears in the Bindings tab. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Bindings.Update.Tip": {
-    "message": "Snapshot the current Proteus state (enable / priority / options / colors)\ninto this binding. Manual edits only persist when you click this.",
+    "message": "Snapshot every mod on the character (enable / priority / options) and the current\nProteus colours into this binding. Manual edits only persist when you click this.",
     "description": "Tooltip. Appears in the Bindings tab. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Chat.ContentUnplaced.Fmt": {

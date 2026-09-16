@@ -52,7 +52,7 @@
     "description": ""
   },
   "Bindings.Apply.Tip": {
-    "message": "Glamourerを介さずに、このデザインのProteus状態を今すぐ復元します。\n記録されたすべてのMODの有効/優先度/オプション/カラーが対象です。\n\n紐付けに含まれていないProteus MODはオフになります。つまり現在の見た目に\n追加するのではなく、置き換えます。",
+    "message": "Glamourerを介さずに、このデザインの見た目を今すぐ復元します。記録されたすべてのMODの\n有効/優先度/オプションと、Proteusカラーが対象です。\n\n紐付けに含まれていないキャラクター上のMODはオフになり、紐付けられたMODは競合する\nMODより高い優先度になります。つまり現在の見た目を置き換えます。",
     "description": ""
   },
   "Bindings.Col.Captured": {
@@ -68,7 +68,7 @@
     "description": ""
   },
   "Bindings.Enable.Tip": {
-    "message": "オンにすると、Glamourerデザインの保存時に現在のProteus状態を記録します。\n後でそのデザインを適用すると復元されます（装備は可能な範囲で一致させます）。",
+    "message": "オンにすると、Glamourerデザインの保存時にキャラクターに適用中のすべてのMODと\n現在のProteusカラーを記録します。後でそのデザインを適用すると復元されます（装備は可能な範囲で一致させます）。",
     "description": ""
   },
   "Bindings.FollowAutomation.Label": {
@@ -87,12 +87,44 @@
     "message": "{0}分前",
     "description": ""
   },
+  "Bindings.ModCount.Fmt": {
+    "message": "{0}個のMOD",
+    "description": ""
+  },
+  "Bindings.ModList.Header": {
+    "message": "このデザインが復元するMOD:",
+    "description": ""
+  },
+  "Bindings.ModList.Missing": {
+    "message": "未インストール",
+    "description": ""
+  },
+  "Bindings.ModList.More.Fmt": {
+    "message": "…ほか{0}個",
+    "description": ""
+  },
+  "Bindings.ModList.Off": {
+    "message": "オフ",
+    "description": ""
+  },
+  "Bindings.ModList.Priority.Fmt": {
+    "message": "優先度 {0}",
+    "description": ""
+  },
   "Bindings.None": {
     "message": "紐付けられたデザインはまだありません。",
     "description": ""
   },
   "Bindings.Pill.Active": {
     "message": "適用中",
+    "description": ""
+  },
+  "Bindings.ProteusOnly": {
+    "message": "Proteus MODのみ",
+    "description": ""
+  },
+  "Bindings.ProteusOnly.Tip": {
+    "message": "紐付けがキャラクター全体を記録するようになる前に作成されたため、適用しても\nProteus MODしか復元されません。このデザインを適用してから「更新」を押してください。",
     "description": ""
   },
   "Bindings.SecondsAgo.Fmt": {
@@ -107,6 +139,14 @@
     "message": "この紐付けを破棄します。Glamourerのデザイン自体はそのままです。",
     "description": ""
   },
+  "Bindings.UnequipUnset.Label": {
+    "message": "デザインで未設定のスロットを外す",
+    "description": ""
+  },
+  "Bindings.UnequipUnset.Tip": {
+    "message": "紐付けられたデザインを適用すると、デザインで設定されていない装備・メガネのスロットを\n空にし、記録されていないインポート済みProteusパックをオフにして、\n前の見た目の装備が残らないようにします。\n\n複数のデザインを重ねるオートメーションでは行いません。武器と、Proteusがシェルに\n使っているスロットはそのままです。",
+    "description": ""
+  },
   "Bindings.Update.Btn": {
     "message": "更新",
     "description": ""
@@ -116,7 +156,7 @@
     "description": ""
   },
   "Bindings.Update.Tip": {
-    "message": "現在のProteus状態（有効／優先度／オプション／カラー）をこの紐付けに\n記録します。手動での変更は、ここをクリックしたときだけ保存されます。",
+    "message": "キャラクターに適用中のすべてのMOD（有効／優先度／オプション）と現在のProteusカラーを\nこの紐付けに記録します。手動での変更は、ここをクリックしたときだけ保存されます。",
     "description": ""
   },
   "Chat.ContentUnplaced.Fmt": {

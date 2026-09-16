@@ -52,7 +52,7 @@
     "description": ""
   },
   "Bindings.Apply.Tip": {
-    "message": "Glamourer를 거치지 않고 이 디자인의 Proteus 상태를 지금 복원합니다.\n기록된 모든 모드의 사용 여부 / 우선도 / 옵션 / 색상이 대상입니다.\n\n연결에 포함되지 않은 Proteus 모드는 꺼집니다. 즉 현재 모습에 더하는 것이\n아니라 대체합니다.",
+    "message": "Glamourer를 거치지 않고 이 디자인의 모습을 지금 복원합니다. 기록된 모든 모드의\n사용 여부 / 우선도 / 옵션과 Proteus 색상이 대상입니다.\n\n연결에 포함되지 않은 캐릭터의 모드는 꺼지고, 연결된 모드는 충돌하는 모든 모드보다\n우선도가 높아집니다. 즉 현재 모습을 대체합니다.",
     "description": ""
   },
   "Bindings.Col.Captured": {
@@ -68,7 +68,7 @@
     "description": ""
   },
   "Bindings.Enable.Tip": {
-    "message": "켜면 Glamourer 디자인을 저장할 때 현재 Proteus 상태를 함께 기록합니다.\n나중에 그 디자인을 적용하면 복원됩니다(장비는 가능한 범위에서 일치시킵니다).",
+    "message": "켜면 Glamourer 디자인을 저장할 때 캐릭터에 적용된 모든 모드와 현재 Proteus 색상을\n함께 기록합니다. 나중에 그 디자인을 적용하면 복원됩니다(장비는 가능한 범위에서 일치시킵니다).",
     "description": ""
   },
   "Bindings.FollowAutomation.Label": {
@@ -87,12 +87,44 @@
     "message": "{0}분 전",
     "description": ""
   },
+  "Bindings.ModCount.Fmt": {
+    "message": "모드 {0}개",
+    "description": ""
+  },
+  "Bindings.ModList.Header": {
+    "message": "이 디자인이 복원하는 모드:",
+    "description": ""
+  },
+  "Bindings.ModList.Missing": {
+    "message": "설치되지 않음",
+    "description": ""
+  },
+  "Bindings.ModList.More.Fmt": {
+    "message": "…외 {0}개",
+    "description": ""
+  },
+  "Bindings.ModList.Off": {
+    "message": "꺼짐",
+    "description": ""
+  },
+  "Bindings.ModList.Priority.Fmt": {
+    "message": "우선도 {0}",
+    "description": ""
+  },
   "Bindings.None": {
     "message": "아직 연결된 디자인이 없습니다.",
     "description": ""
   },
   "Bindings.Pill.Active": {
     "message": "적용 중",
+    "description": ""
+  },
+  "Bindings.ProteusOnly": {
+    "message": "Proteus 모드만",
+    "description": ""
+  },
+  "Bindings.ProteusOnly.Tip": {
+    "message": "연결이 캐릭터 전체를 기록하기 전에 만들어져서, 적용해도 Proteus 모드만\n복원됩니다. 이 디자인을 적용한 뒤 업데이트를 누르세요.",
     "description": ""
   },
   "Bindings.SecondsAgo.Fmt": {
@@ -107,6 +139,14 @@
     "message": "이 연결을 버립니다. Glamourer 디자인 자체는 그대로 유지됩니다.",
     "description": ""
   },
+  "Bindings.UnequipUnset.Label": {
+    "message": "디자인이 지정하지 않은 슬롯 해제",
+    "description": ""
+  },
+  "Bindings.UnequipUnset.Tip": {
+    "message": "연결된 디자인을 적용하면 디자인이 지정하지 않은 장비·안경 슬롯을 비우고,\n기록되지 않은 가져온 Proteus 팩을 꺼서\n이전 모습의 장비가 남지 않게 합니다.\n\n여러 디자인을 겹치는 자동화에서는 하지 않습니다. 무기와 Proteus가 셸에\n사용하는 슬롯은 그대로 둡니다.",
+    "description": ""
+  },
   "Bindings.Update.Btn": {
     "message": "업데이트",
     "description": ""
@@ -116,7 +156,7 @@
     "description": ""
   },
   "Bindings.Update.Tip": {
-    "message": "현재 Proteus 상태(사용 여부 / 우선도 / 옵션 / 색상)를 이 연결에 기록합니다.\n수동 편집은 여기를 클릭해야만 유지됩니다.",
+    "message": "캐릭터에 적용된 모든 모드(사용 여부 / 우선도 / 옵션)와 현재 Proteus 색상을\n이 연결에 기록합니다. 수동 편집은 여기를 클릭해야만 유지됩니다.",
     "description": ""
   },
   "Chat.ContentUnplaced.Fmt": {

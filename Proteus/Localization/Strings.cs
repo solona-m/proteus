@@ -281,8 +281,8 @@ public sealed class BindingsStrings
         Loc.Localize("Bindings.Enable.Label", "Bind Proteus state to Glamourer designs") + "###bindEnable";
 
     public readonly string EnableTip = Loc.Localize("Bindings.Enable.Tip",
-        "When on, saving a Glamourer design snapshots the current Proteus state.\n" +
-        "Applying that design later restores it (best-effort gear match).");
+        "When on, saving a Glamourer design snapshots every mod on the character and the\n" +
+        "current Proteus colours. Applying that design later restores it (best-effort gear match).");
 
     public readonly string FollowAutomation = Loc.Localize(
         "Bindings.FollowAutomation.Label", "Follow Glamourer automation (gearset / job changes)") + "###bindAutomation";
@@ -294,6 +294,16 @@ public sealed class BindingsStrings
         "The one redraw Proteus itself causes is discounted, so its own work\n" +
         "can't be mistaken for an automation apply.\n\n" +
         "Needs \"Bind Proteus state to Glamourer designs\" above.");
+
+    public readonly string UnequipUnset = Loc.Localize(
+        "Bindings.UnequipUnset.Label", "Unequip slots the design leaves unset") + "###bindUnequipUnset";
+
+    public readonly string UnequipUnsetTip = Loc.Localize("Bindings.UnequipUnset.Tip",
+        "When you apply a bound design, every gear and glasses slot the design doesn't set\n" +
+        "is emptied, and imported Proteus packs it didn't capture are switched off, so pieces\n" +
+        "from the previous look don't carry over.\n\n" +
+        "Not on automation applies, which stack several designs. Weapons and the slots\n" +
+        "Proteus is using for a shell are left alone.");
 
     public readonly string ActiveFmt = Loc.Localize("Bindings.Active.Fmt", "Active: {0}");
     public readonly string NoBindings = Loc.Localize("Bindings.None", "No bound designs yet.");
@@ -308,14 +318,27 @@ public sealed class BindingsStrings
     public readonly string Unbind = Loc.Localize("Bindings.Unbind.Btn", "Unbind");
 
     public readonly string ApplyTip = Loc.Localize("Bindings.Apply.Tip",
-        "Restore this design's Proteus state now, without going through Glamourer —\n" +
-        "enable / priority / options / colours for every mod it captured.\n\n" +
-        "Proteus mods NOT in the binding are switched off, so this replaces the current\n" +
-        "look rather than adding to it.");
+        "Restore this design's look now, without going through Glamourer: enable / priority /\n" +
+        "options for every mod it captured, plus Proteus colours.\n\n" +
+        "Mods on the character that are NOT in the binding are switched off, and bound mods are\n" +
+        "raised above anything they conflict with, so this replaces the current look.");
 
     public readonly string UpdateTip = Loc.Localize("Bindings.Update.Tip",
-        "Snapshot the current Proteus state (enable / priority / options / colors)\n" +
-        "into this binding. Manual edits only persist when you click this.");
+        "Snapshot every mod on the character (enable / priority / options) and the current\n" +
+        "Proteus colours into this binding. Manual edits only persist when you click this.");
+
+    public readonly string ModCountFmt = Loc.Localize("Bindings.ModCount.Fmt", "{0} mods");
+    public readonly string ProteusOnly = Loc.Localize("Bindings.ProteusOnly", "Proteus mods only");
+
+    public readonly string ProteusOnlyTip = Loc.Localize("Bindings.ProteusOnly.Tip",
+        "Captured before bindings recorded the whole character, so applying it only\n" +
+        "restores Proteus mods. Apply this design, then press Update.");
+
+    public readonly string ModListHeader      = Loc.Localize("Bindings.ModList.Header", "Mods this design restores:");
+    public readonly string ModListOff         = Loc.Localize("Bindings.ModList.Off", "off");
+    public readonly string ModListMissing     = Loc.Localize("Bindings.ModList.Missing", "not installed");
+    public readonly string ModListPriorityFmt = Loc.Localize("Bindings.ModList.Priority.Fmt", "priority {0}");
+    public readonly string ModListMoreFmt     = Loc.Localize("Bindings.ModList.More.Fmt", "…and {0} more");
 
     public readonly string UpdateInactiveTip = Loc.Localize("Bindings.Update.Inactive.Tip",
         "Only the active binding can be updated from the current state.\n" +

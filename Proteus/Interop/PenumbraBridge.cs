@@ -19,6 +19,8 @@ public class PenumbraBridge : IDisposable
     private readonly GetModDirectory getModDirectory;
     private readonly GetCollectionForObject getCollectionForObject;
     private readonly GetCurrentModSettingsWithTemp getCurrentModSettings;
+    private readonly GetAllModSettings getAllModSettings;
+    private readonly RemoveTemporaryModSettings removeTemporaryModSettings;
     private readonly ResolvePlayerPath resolvePlayerPath;
     private readonly AddMod addMod;
     private readonly ReloadMod reloadMod;
@@ -69,6 +71,8 @@ public class PenumbraBridge : IDisposable
         getModDirectory = new GetModDirectory(pluginInterface);
         getCollectionForObject = new GetCollectionForObject(pluginInterface);
         getCurrentModSettings = new GetCurrentModSettingsWithTemp(pluginInterface);
+        getAllModSettings = new GetAllModSettings(pluginInterface);
+        removeTemporaryModSettings = new RemoveTemporaryModSettings(pluginInterface);
         resolvePlayerPath = new ResolvePlayerPath(pluginInterface);
         addMod = new AddMod(pluginInterface);
         reloadMod = new ReloadMod(pluginInterface);
@@ -206,6 +210,67 @@ public class PenumbraBridge : IDisposable
             return (enabled, priority, options);
         }
         catch (Exception ex) { log.Error(ex, "GetCurrentModSettingsWithTemp failed for {0}", modDirectory); return null; }
+    }
+
+    /// <summary>
+    /// One mod's settings as <see cref="GetCollectionModSettings"/> reports them. <paramref name="Temporary"/> is
+    /// whether a temporary setting (Glamourer's, typically) is what produced them.
+    /// </summary>
+    public readonly record struct ModSettingsSnapshot(
+        bool Enabled, int Priority, Dictionary<string, List<string>> Options, bool Inherited, bool Temporary);
+
+    /// <summary>
+    /// Every configured mod's settings in a collection, in ONE call — keyed by mod directory. Mods the
+    /// collection has never configured are absent (they are off). Null when Penumbra is unavailable or the
+    /// collection is gone.
+    /// </summary>
+    /// <param name="ignoreTemporary">True to read the collection's own settings underneath any temporary
+    /// ones, which is what a snapshot meant to be written back permanently wants.</param>
+    public Dictionary<string, ModSettingsSnapshot>? GetCollectionModSettings(Guid collectionId, bool ignoreTemporary)
+    {
+        if (!IsAvailable) return null;
+        try
+        {
+            var (ec, all) = getAllModSettings.Invoke(collectionId, ignoreInheritance: false, ignoreTemporary: ignoreTemporary);
+            if (ec != PenumbraApiEc.Success || all == null) return null;
+            var result = new Dictionary<string, ModSettingsSnapshot>(all.Count, StringComparer.OrdinalIgnoreCase);
+            foreach (var (dir, (enabled, priority, options, inherited, temporary)) in all)
+                result[dir] = new ModSettingsSnapshot(enabled, priority, options, inherited, temporary);
+            return result;
+        }
+        catch (Exception ex) { log.Error(ex, "GetAllModSettings failed"); return null; }
+    }
+
+    /// <summary>
+    /// Drop whatever temporary setting holds a mod in a collection, so its permanent settings show again.
+    /// Key 0: Penumbra only refuses a removal when the lock is POSITIVE and not ours, and Glamourer's locks
+    /// are negative.
+    /// </summary>
+    public PenumbraApiEc ClearTemporaryModSettings(Guid collectionId, string modDirectory)
+    {
+        if (!IsAvailable) return PenumbraApiEc.SystemDisposed;
+        try { return removeTemporaryModSettings.Invoke(collectionId, modDirectory); }
+        catch (Exception ex) { log.Error(ex, "RemoveTemporaryModSettings failed for {0}", modDirectory); return PenumbraApiEc.UnknownError; }
+    }
+
+    /// <summary>
+    /// The local player's whole resource tree as resolved file → the game paths it stands in for, or null
+    /// when unavailable. Every file type — the design binding needs skeletons and textures as much as models.
+    /// </summary>
+    public Dictionary<string, HashSet<string>>? GetActivePlayerResourceMap()
+    {
+        if (!IsAvailable) return null;
+        try
+        {
+            var results = getGameObjectResourcePaths.Invoke(0);
+            var dict = results[0];
+            if (dict == null || dict.Count == 0) return null;
+            var map = new Dictionary<string, HashSet<string>>(dict.Count, StringComparer.OrdinalIgnoreCase);
+            foreach (var (resolved, gamePaths) in dict)
+                map[resolved] = new HashSet<string>(gamePaths, StringComparer.OrdinalIgnoreCase);
+            return map;
+        }
+        catch (Exception ex) { log.Warning(ex, "GetGameObjectResourcePaths failed (resource map)"); return null; }
     }
 
     /// <summary>Resolve a game path to the player's current on-disk file (respects all active mods).</summary>
