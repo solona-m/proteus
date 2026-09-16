@@ -4,12 +4,14 @@
 [English](../README.md) · [日本語](README.ja.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [简体中文](README.zh.md) · [한국어](README.ko.md) · **Español** · [Русский](README.ru.md)
 <!--/i18n-->
 
-Proteus es un plugin de Dalamud para FFXIV que compone texturas de superposición sobre la piel y el equipo de tu personaje en tiempo real. Los autores de mods distribuyen pequeñas superposiciones PNG junto a sus mods de Penumbra; Proteus las mezcla con las texturas base cada vez que cambias de opción, sin tocar los archivos originales del mod. Proteus puede importar archivos pmp compatibles con Proteus, archivos omp de superposiciones de Onion y tatuajes luminosos de Atramentum Luminis.
+Proteus es un plugin de Dalamud para FFXIV que compone texturas de superposición sobre la piel y el equipo de tu personaje en tiempo real. Los autores de mods distribuyen pequeñas superposiciones PNG junto a sus mods de Penumbra; Proteus las mezcla con las texturas base cada vez que cambias de opción, sin tocar los archivos originales del mod. Proteus puede importar archivos pmp compatibles con Proteus, archivos omp de superposiciones de Onion y tatuajes luminosos de Atramentum Luminis. También puede editar los modelos de cualquier mod que tengas instalado, sea de Proteus o no: remodelar la ropa, pintar el balanceo con el viento, añadir interruptores de piezas y adaptar el pelo bajo los sombreros.
 
 Las superposiciones pueden representarse de dos maneras: pintadas en tu piel, o como una **segunda piel** — una copia de la malla de tu cuerpo dibujada como equipo, de modo que una superposición puede usar sphere maps, metalicidad y brillo animado, cosas que los materiales de piel no permiten.
 
 - **Lleva mods sin renunciar a una ranura de equipo.** Una segunda piel tiene que dibujarse como un objeto, pero Proteus la esconde en algo que no estás usando — unas gafas invisibles, un anillo que no llevas puesto, o añadiéndola a los accesorios que sí llevas — así que tu glamour real queda intacto. No hay nada que configurar: elige el alojamiento por su cuenta y nunca te quita un objeto que llevas puesto.
-- **Añade interruptores a cualquier pieza de cualquier mod, no solo a los de Proteus.** Cuando un mod suelda un lazo, un collar o una correa dentro de una geometría que su autor nunca hizo opcional, la pestaña **Interruptores** puede separar esa pieza y darle un interruptor de verdad.
+- **Remodela la ropa de cualquier mod, directamente sobre tu personaje.** En la pestaña **Estudio**, pinta sobre una prenda que llevas puesta para apartarla de tu cuerpo donde asoma la piel, empujarla hacia dentro, suavizarla, estirarla sobre un pliegue o pintar dónde la mece el viento. Cada edición se guarda en el mod y se puede deshacer.
+- **Añade interruptores a cualquier pieza de cualquier mod, no solo a los de Proteus.** Cuando un mod suelda un lazo, un collar o una correa dentro de una geometría que su autor nunca hizo opcional, la pestaña **Estudio** puede separar esa pieza y darle un interruptor de verdad.
+- **Haz que el pelo con mods quepa bajo los sombreros.** Proteus aplasta contra tu cabeza el pelo que cubriría un sombrero, para que el sombrero deje de atravesarlo.
 
 
 Si necesitas ayuda, consulta primero esta [guía de resolución de problemas](../TROUBLESHOOTING.md).
@@ -50,6 +52,57 @@ Lista todos los mods de Penumbra que contienen un archivo Proteus. Haz clic en u
 | Skindent | Sombra de oclusión ambiental y hendidura de normales en los bordes de las correas de este mod. «Paquete» sigue lo que pidió el mod; Sí/No lo sobrescribe. |
 
 Pulsa **Recomponer ahora** para forzar una recomposición manual. Proteus también recompone automáticamente cada vez que cambias una opción o un ajuste de Penumbra, cambias de equipo, o cambias de raza o de cuerpo.
+
+#### Estudio
+
+Edita los modelos de **cualquier** mod que tengas instalado, no solo los de Proteus. Puedes remodelar la ropa para que tu cuerpo deje de asomar a través de ella, pintar dónde la mece el viento, o separar una pieza tras su propio interruptor. Cada cambio se escribe en los archivos del propio mod, así que **sigue funcionando con Proteus apagado** y viaja con el mod si lo exportas.
+
+Elige un mod y luego uno de sus modelos. La pestaña se abre en la pieza de torso que llevas puesta (o en las piernas si no hay ninguna), y los mods y modelos que llevas puestos aparecen primero, en verde. Hacer clic en una prenda de tu personaje abre su mod y su modelo.
+
+Las herramientas están en un panel a la izquierda:
+
+| Herramienta | Qué hace |
+|------|-------------|
+| Alternar piezas | Elige piezas del modelo y les da un interruptor. Consulta [Interruptores de piezas](#interruptores-de-piezas) más abajo. |
+| Tirar afuera | Empuja la superficie hacia fuera, de modo que un cuerpo que asoma a través de una prenda vuelve a quedar cubierto. La tela se aleja en línea recta de la piel que tiene debajo. |
+| Empujar adentro | El mismo pincel a la inversa, para ropa que queda demasiado separada del cuerpo. |
+| Suavizar | Alisa la superficie: bultos que la ropa ya traía, o un tirón que quedó áspero. Como el relax de 3ds Max, encoge, así que las curvas se aplanan y la tela puede hundirse hacia el cuerpo. |
+| Puente | Pinta sobre un hueco, como la hendidura entre los glúteos o un pliegue, para estirar la tela recta por encima en lugar de que siga al cuerpo hacia dentro. Solo levanta. |
+| Viento | Pinta cuánto mece el viento del juego la prenda, mostrado en rojo. Mantén Ctrl, o pon **Cantidad** a 0 %, para borrar. |
+
+##### Uso del pincel
+
+- **Pintas directamente sobre tu personaje**, y una prenda muestra cada trazo mientras lo pintas. Mantén **Alt** para mover la cámara. Marca **Mostrar modelo** para pintar en cambio sobre el modelo en la ventana: arrastra desde el fondo para girarlo, Mayús+arrastrar para moverlo, rueda para acercar.
+- **Tamaño del pincel** baja hasta 1 mm. `[` y `]` lo cambian, y Mayús da pasos más finos. El efecto es más fuerte en el centro y se desvanece hasta nada en el borde. **Fuerza** es cuánto se mueve la superficie por cada instante de pintura. Lo normal es que baste con poco: la ropa solo tiene que separarse del cuerpo una fracción de milímetro, y siempre puedes volver a pintar el mismo sitio.
+- **Espejo izquierda/derecha** pinta los dos lados a la vez.
+- **La piel nunca se mueve.** Para que un pincel no toque ninguna otra cosa, bloquéala: Mayús+clic en la pieza sobre tu personaje o el modelo, o desmárcala en la lista de piezas. Las costuras soldadas a una pieza bloqueada también se mantienen.
+- **También funciona con el pelo.** El pelo, la cara, las orejas y la cola se redibujan al soltar, en lugar de mostrar el trazo mientras pintas.
+- **Aplicar a otras tallas** copia la edición a los demás archivos del mod para la misma prenda, emparejados según dónde quedan sobre ella.
+
+##### Guardado y deshacer
+
+- Cada trazo se guarda en el mod un momento después de soltar. El primer guardado copia el modelo original en `Proteus/meshvolume-backup/` dentro del mod.
+- **Deshacer trazo** (o Ctrl+Z) retira el último trazo. **Empezar de nuevo** descarta todos los trazos de este modelo.
+- **Deshacer lo guardado** (mantén Ctrl o Mayús y haz clic) devuelve cada modelo que el pincel cambió en este mod exactamente a como lo hizo su autor.
+- Los interruptores de piezas, el ajuste a sombreros y el pincel guardan cada uno su propia copia de seguridad. Si más de uno ha cambiado el mismo modelo, deshaz primero el más reciente. Proteus te avisa si lo intentas en otro orden.
+- Los deslizadores de cuerpo de un modelo no siempre pueden seguir una edición. Cuando algunos puntos no pudieron moverse con ella, Proteus dice cuántos, y activar ese deslizador puede hacer que la ropa vuelva a atravesarse en algunos sitios.
+- La mayoría de las mallas con mods no tienen canal de viento. El primer trazo de viento que se guarda añade uno, y ajusta los materiales de la prenda para que el viento pueda moverla. Los materiales que vienen del juego y no del mod no se pueden ajustar.
+
+##### Interruptores de piezas
+
+**Alternar piezas** saca una pieza de geometría del modelo de un mod y la pone tras un interruptor: un lazo, un collar, una correa que el autor soldó a una malla siempre visible.
+
+El interruptor se escribe dentro del propio mod como una opción normal de Penumbra, así que aparece en los ajustes de ese mod.
+
+Las piezas del modelo se listan con su número de triángulos. Haz clic en una pieza sobre tu personaje o en la vista del modelo para marcarla. Marca las piezas que debe ocultar un interruptor, dale un nombre y pulsa **Crear un interruptor con las piezas marcadas**. Prepara todos los que quieras y luego pulsa **Escribir los interruptores en el mod**.
+
+Cosas que conviene saber:
+
+- **Diez interruptores por objeto.** Es el límite del juego, no de Proteus. Si un autor ya los ha gastado todos, la pestaña lo indica y no te deja añadir más.
+- **Solo equipo y accesorios.** En los demás tipos de modelo no hay nada a lo que enganchar un interruptor.
+- **Una pieza que el autor ya hace opcional también admite el tuyo.** Los dos se acumulan: la pieza solo se muestra cuando ambos están activados.
+- **Es reversible.** Se conservan los modelos originales, así que **Deshacer: restaurar los modelos originales** deja el mod exactamente como estaba y elimina el grupo de opciones.
+- Si un objeto tiene varios archivos de modelo con las piezas dispuestas de forma distinta, Proteus edita solo aquellos en los que el interruptor encaja correctamente y te dice cuáles dejó en paz, en vez de adivinar y tocar la geometría equivocada.
 
 #### Vínculos
 
@@ -102,43 +155,39 @@ Guarda uno de tus mods de Proteus como paquete de mod de Penumbra (`.pmp`) para 
 
 El paquete es una copia directa de la carpeta del mod, así que no se pierde nada: opciones, tablas de colores, máscaras, efectos de brillo y capas de equipo vienen todos, y el Proteus de quien lo reciba los detecta en cuanto Penumbra los instale. También se pueden exportar mods desactivados.
 
-#### Interruptores
-
-Saca una pieza de geometría del modelo de un mod y la pone tras un interruptor: un lazo, un collar, una correa que el autor soldó a una malla siempre visible. Esto funciona con **cualquier** mod que tengas instalado, no solo con los de Proteus.
-
-El interruptor se escribe dentro del propio mod como una opción normal de Penumbra, así que aparece en los ajustes de ese mod y **sigue funcionando con Proteus apagado**.
-
-Elige un mod y luego uno de sus modelos. Las piezas de ese modelo se listan con su número de triángulos y se muestran en un visor al lado: haz clic en una pieza para activarla o desactivarla, arrastra para girar el modelo, Mayús+arrastrar para moverlo, rueda para acercar. Marca las piezas que debe ocultar un interruptor, dale un nombre y pulsa **Crear un interruptor con las piezas marcadas**. Prepara todos los que quieras y luego pulsa **Escribir los interruptores en el mod**.
-
-Cosas que conviene saber:
-
-- **Diez interruptores por objeto.** Es el límite del juego, no de Proteus. Si un autor ya los ha gastado todos, la pestaña lo indica y no te deja añadir más.
-- **Solo equipo y accesorios.** En los demás tipos de modelo no hay nada a lo que enganchar un interruptor.
-- **Las piezas que el autor ya hizo opcionales no admiten un segundo interruptor**, y la pestaña las marca.
-- **Es reversible.** Se conservan los modelos originales, así que **Deshacer: restaurar los modelos originales** deja el mod exactamente como estaba y elimina el grupo de opciones.
-- Si un objeto tiene varios archivos de modelo con las piezas dispuestas de forma distinta, Proteus edita solo aquellos en los que el interruptor encaja correctamente y te dice cuáles dejó en paz, en vez de adivinar y tocar la geometría equivocada.
-
 #### Ajustes
 
 | Ajuste | Qué hace |
 |---------|-------------|
 | Activado | Interruptor maestro. Al apagarlo, Proteus borra su salida y te redibuja sin ella. |
-| Desactivar redibujado automático | Impide que Proteus refresque tu personaje después de una composición. |
+| Redibujado automático | Deja que Proteus se mantenga al día por su cuenta: recompone tras cambiar de zona, cambiar de equipo y los redibujados, y luego recarga tu personaje para que veas el resultado. Al apagarlo, Proteus pasa a ser casi del todo manual. Tu aspecto se mantiene, pero una edición no se verá hasta que algo te redibuje. |
+| Subir prioridad del mod automáticamente | Cuando se confirma que otro mod está sobrescribiendo una textura de piel en la que Proteus compone, sube la prioridad de Proteus en Penumbra por encima de ese mod y lo indica en el chat. |
 | Recarga in situ | Refresca las texturas a través de Glamourer en lugar de un redibujado completo, evitando el parpadeo de desaparecer y reaparecer. Activado por defecto. |
 | Activar compresión | Comprime por bloques las texturas horneadas, reduciéndolas a cerca de un cuarto de su tamaño en disco y en VRAM. Activado por defecto. |
 | Alfa nítido | Experimental. Mantiene funcionando las sphere maps y la metalicidad en pose de grupo, a cambio de bordes más duros en las telas transparentes. |
-| Alojar en gafas invisibles | Deja que la segunda piel viaje en la ranura de accesorio facial para que tus anillos sigan libres. |
-| Alojar en el Emperor's New Ring | Alojamiento de reserva cuando nada de lo que llevas puede cargar con la segunda piel. Nunca toma un anillo que ya llevas puesto. |
-| Atenuación del tono de piel | Con cuánta fuerza resisten las superposiciones ser teñidas por tu tono de piel. |
-| Oclusión ambiental / Suavidad de la sombra / Skindenting | Intensidad global de la sombra de contacto y de la hendidura de normales alrededor de los bordes de las correas. |
 | Caché de texturas (MB) | Cuántos datos de textura decodificados mantener en memoria entre composiciones. |
 | Ocultar mallas de cuerpo redundantes | Omite la piel que la segunda piel dibujaría dos veces: anillos de refuerzo de articulaciones que la parte vecina ya cubre, y copias sobrantes de una región. Activado por defecto, seguro en cualquier cuerpo. |
+| Alojar en gafas invisibles | Deja que la segunda piel viaje en la ranura de accesorio facial para que tus anillos sigan libres. |
+| Atenuación del tono de piel | Con cuánta fuerza resisten las superposiciones ser teñidas por tu tono de piel. |
+| Oclusión ambiental / Suavidad de la sombra / Skindenting | Intensidad global de la sombra de contacto y de la hendidura de normales alrededor de los bordes de las correas. |
+| Reaccionar a la luz de la escena | Deja que las filas de color marcadas con **Se desvanece con luz** se atenúen a medida que aumenta la luz sobre ti. Al apagarlo, todos los brillos arden a pleno en todas partes. |
+| Fijar el nivel de luz a mano / Nivel de luz | Ignora la escena y usa el deslizador en su lugar. Es la forma más rápida de ver un brillo solo nocturno sin esperar al anochecer, y el ajuste adecuado para la pose de grupo. |
 
 Tres botones de aquí merecen mención:
 
 - **Restaurar accesorio modificado** — fuerza un redibujado completo si alguna vez una segunda piel se queda atascada en un anillo o una pulsera tras desactivarla o cambiarla.
 - **Vaciar caché de texturas** — úsalo cuando una edición de textura no aparece, por ejemplo si has vuelto a exportar una superposición con el mismo tamaño.
 - **Texturas de efecto de brillo** — abre la carpeta de la que Proteus lee los mapas de desplazamiento del brillo animado. Deja imágenes ahí y aparecerán en la lista Efecto de cada superposición de equipo. Pasa el ratón por el botón para ver la ruta completa.
+
+##### Sombreros
+
+La mayoría del pelo con mods no tiene soporte para sombreros, así que un sombrero puesto encima lo atraviesa. La sección **Sombreros** aplasta contra tu cabeza el pelo que cubriría un sombrero. Igual que el Estudio, edita los archivos del propio mod de pelo, así que el ajuste sigue funcionando con Proteus apagado y viaja con el mod si lo exportas.
+
+- **Adaptar los peinados a los sombreros** está desactivado por defecto. Actívalo y Proteus revisa cada peinado cuando te lo pones y lo adapta, avisándote en el chat la primera vez.
+- O adapta tú mismo el peinado que llevas puesto. La sección dice cuántos puntos se aplastarían y cuánto, y **Adaptar** escribe el cambio.
+- **Deshacer** devuelve el peinado que llevas puesto. Un mod de pelo suele traer un modelo por raza, así que **Deshacer los peinados de este mod** devuelve todos los peinados que Proteus cambió en ese mod. Los originales se guardan en `Proteus/hatcompat-backup/` dentro del mod.
+- El pelo cuyo autor ya añadió soporte para sombreros se deja en paz, y el pelo que viene con el juego ya funciona. La excepción es un soporte para sombreros que oculta mucho más pelo del que cubre un sombrero, normalmente heredado del peinado a partir del cual se construyó. Proteus se ofrece a medirlo de nuevo y reemplazarlo.
+- Algunos peinados están soldados en piezas demasiado grandes para que el formato de formas del juego pueda abarcarlas. Esos puntos conservan su forma, así que un sombrero puede seguir atravesándolos ahí.
 
 ### Preajustes
 

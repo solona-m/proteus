@@ -502,7 +502,7 @@ public static class ModelAttributeWriter
     /// shape is then structurally perfect and moves the hair nowhere, which is the worst kind of bug to go
     /// looking for. Half2 is excluded deliberately even though it is a case there — it has no z.
     /// </summary>
-    private static readonly byte[] PositionTypes = [2, 3, 14];   // Float3, Float4, Half4
+    internal static readonly byte[] PositionTypes = [2, 3, 14];   // Float3, Float4, Half4
 
     /// <summary>
     /// Add a shape key (a morph target) named <paramref name="shapeName"/>, moving the named vertices of the
@@ -885,7 +885,7 @@ public static class ModelAttributeWriter
     /// Insert byte runs at the given ORIGINAL offsets, lowest first. The offsets all address the input, so a
     /// caller never has to think about how one insert moves another.
     /// </summary>
-    private static byte[] Splice(byte[] src, (int At, byte[] Bytes)[] inserts)
+    internal static byte[] Splice(byte[] src, (int At, byte[] Bytes)[] inserts)
     {
         var ordered = inserts.OrderBy(i => i.At).ToArray();
         var o = new byte[src.Length + ordered.Sum(i => i.Bytes.Length)];
@@ -938,7 +938,7 @@ public static class ModelAttributeWriter
     /// <see cref="Shift"/> means no caller can include it by accident.
     /// </summary>
     /// <param name="past">Only offsets strictly greater than this move; -1 moves all of them.</param>
-    private static void ShiftOffsets(byte[] o, int lodStart, int delta, long past)
+    internal static void ShiftOffsets(byte[] o, int lodStart, int delta, long past)
     {
         for (int i = 0; i < 3; i++)
         {

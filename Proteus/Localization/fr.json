@@ -3,12 +3,16 @@
     "message": "Liez le tout à un design",
     "description": ""
   },
+  "Band.Cap.Link.Tip": {
+    "message": "En savoir plus dans le guide",
+    "description": ""
+  },
   "Band.Cap.Overlay": {
     "message": "Superposez et recolorez tout",
     "description": ""
   },
-  "Band.Cap.Toggle": {
-    "message": "Désactivez n’importe quoi",
+  "Band.Cap.Reshape": {
+    "message": "Remodelez n’importe quel modèle",
     "description": ""
   },
   "Band.Cap.Wear": {
@@ -16,7 +20,7 @@
     "description": ""
   },
   "Band.Caption": {
-    "message": "superposer · accessoiriser · activer · lier",
+    "message": "superposer · accessoiriser · remodeler · lier",
     "description": ""
   },
   "Band.Pill.Disabled": {
@@ -117,10 +121,6 @@
   },
   "Chat.ContentUnplaced.Fmt": {
     "message": "[Proteus] {0} pièce(s) de maillage de vos mods n'ont pas pu être placées — vos accessoires n'ont plus d'emplacements de matériau. Équipez une autre bague / un bracelet / un collier, ou désactivez une couche.",
-    "description": ""
-  },
-  "Chat.GlowPromoted.Fmt": {
-    "message": "[Proteus] « {0} » applique une lueur sur un calque de peau. La peau ne peut plus briller, donc cette option est désormais rendue comme un calque de tissu — elle a besoin d'un accessoire libre, et sa surface aura un aspect légèrement différent.",
     "description": ""
   },
   "Chat.HatCompat": {
@@ -239,14 +239,6 @@
     "message": "Comment l'image de cette ligne se combine avec ce qui se trouve déjà sur la peau.\n\n« Peindre » la pose par-dessus, ce que chaque calque a toujours fait.\nTout autre mode fait de cette ligne un IMPRIMÉ : il colore le tissu peint par les\nautres calques de ce mod et se découpe à leur forme — un arc-en-ciel sur une résille\nen colore ainsi les fils et laisse les trous en peau.\n\nUn imprimé n'atteint que les calques de SON PROPRE mod ; il ne touche jamais les\nvêtements d'un autre. Sur la peau nue il ne peint rien du tout : un imprimé\nsélectionné seul n'affiche rien, faute de support sur lequel imprimer.\n\nMultiplier ne peut qu'assombrir et rend donc à peine sur un tissu très sombre —\nutilisez plutôt Écran. La couleur de cette ligne teinte toujours l'image, et son\nOpacité règle la force de l'imprimé.",
     "description": ""
   },
-  "Colors.Bodies.All": {
-    "message": "Tous les corps",
-    "description": ""
-  },
-  "Colors.Bodies.BiboGen3": {
-    "message": "bibo+gen3",
-    "description": ""
-  },
   "Colors.Bodies.GlobalNote": {
     "message": "Enregistré globalement — les liaisons ne le capturent pas.",
     "description": ""
@@ -255,17 +247,13 @@
     "message": "\nGlobal — ceci ne fait PAS partie de la liaison que vous modifiez.",
     "description": ""
   },
-  "Colors.Bodies.Label": {
-    "message": "Corps",
-    "description": ""
+  "Colors.Bodies.Vanilla.Label": {
+    "message": "Superposer sur gen2/vanilla",
+    "description": "Checkbox label in the colour-table editor window's Advanced section. \"gen2\" is a body-mod name - never translated. Ticked = this mod is also painted onto vanilla skin."
   },
-  "Colors.Bodies.Off": {
-    "message": "Aucun",
-    "description": ""
-  },
-  "Colors.Bodies.Tip": {
-    "message": "Sur quels types de corps cuire ce mod :\nTous les corps = corps frère (bibo↔gen3/Eve) + d'origine (gen2)\nbibo+gen3 = cuire uniquement sur le corps frère (par défaut)\nAucun = pas de synthèse\n\nS'applique à tout le mod, pas seulement à cette option.",
-    "description": ""
+  "Colors.Bodies.Vanilla.Tip": {
+    "message": "Peint aussi ce mod sur la peau vanilla (gen2) que porte votre personnage —\ngénéralement une peau fournie avec un équipement.\nElle n'est peinte que lorsqu'une peau vanilla est réellement présente,\ndonc cela ne coûte rien quand il n'y en a pas.\n\nbibo et gen3/Eve sont toujours peints ; ceci ne concerne que la vanilla.\nS'applique à tout le mod, pas seulement à cette option.",
+    "description": "Tooltip for the checkbox above. \"gen2\", \"bibo\", \"gen3\" and \"Eve\" are body-mod names - never translated. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Colors.BustBridge.Label": {
     "message": "Tendre le tissu sur le décolleté",
@@ -373,6 +361,10 @@
   },
   "Colors.Geometry.Section": {
     "message": "Géométrie",
+    "description": ""
+  },
+  "Colors.Effects.Section": {
+    "message": "Effets",
     "description": ""
   },
   "Colors.GlowAmount.Label": {
@@ -535,6 +527,18 @@
     "message": "Vous avez épinglé ce mode dans Avancé — il ne suit plus les fonctionnalités que vous réglez.\nCliquez sur « Revenir à auto » pour qu'il s'adapte de nouveau.",
     "description": ""
   },
+  "Colors.ReinforcedToe.Label": {
+    "message": "Pointe renforcée",
+    "description": ""
+  },
+  "Colors.ReinforcedToe.SavedNote": {
+    "message": "Enregistré dans le mod — les préréglages et les designs ne le capturent pas.",
+    "description": ""
+  },
+  "Colors.ReinforcedToe.Tip": {
+    "message": "Rend la pointe coiffée plus dense que le reste du bas, comme un vrai bas tricote\nune pointe renforcée : un panneau plus sombre à travers lequel les orteils se\ndevinent encore, qui s'estompe au bord au lieu de s'arrêter net.\nCela ne peut retirer que de la transparence déjà présente. Là où le bas ne peint\nrien, il ne se passe rien : jamais de tissu sur un orteil nu, et sur un bas déjà\nopaque vous ne verrez aucun changement.\nAvec « Alpha net », chaque pixel est soit plein soit absent, et le bord doux\ndevient net.",
+    "description": ""
+  },
   "Colors.RenderingAs": {
     "message": "Rendu en :",
     "description": ""
@@ -669,6 +673,14 @@
   },
   "Colors.Tiling.Tip": {
     "message": "Nombre de répétitions de l'effet sur la surface. 1 = une fois.",
+    "description": ""
+  },
+  "Colors.ToeDensity.Label": {
+    "message": "Densité",
+    "description": ""
+  },
+  "Colors.ToeDensity.Tip": {
+    "message": "À quel point la pointe est plus dense que la jambe. 100 % est totalement opaque ;\nune pointe renforcée ordinaire reste bien en dessous.",
     "description": ""
   },
   "Colors.TowardBottom.Btn": {
@@ -831,8 +843,16 @@
     "message": "Le dossier de mods de Penumbra n'est pas disponible.",
     "description": ""
   },
+  "ContentImport.Fail.NotUpgraded.Fmt": {
+    "message": "Penumbra n'a pas converti « {0} » depuis son ancien format, ses pièces n'ont donc pas pu être rendues activables. L'importation a été annulée ; réessayez d'importer le pack.",
+    "description": ""
+  },
   "ContentImport.Fail.NothingUsable": {
     "message": "Rien dans ce pack ne peut être importé.",
+    "description": ""
+  },
+  "ContentImport.Fail.PieceGroup.Fmt": {
+    "message": "Impossible d'ajouter les interrupteurs de pièces à « {0} » : {1} L'importation a été annulée ; réessayez d'importer le pack.",
     "description": ""
   },
   "ContentImport.Fail.Reserved": {
@@ -1084,8 +1104,8 @@
     "description": ""
   },
   "Create.WholeSkin.Tip": {
-    "message": "Cochez ceci lorsque vous convertissez un mod de peau complète, et non quelque chose posé sur la peau.\nProteus le coche pour vous quand les textures y ressemblent ; votre propre réponse l'emporte toujours.\nTrois conséquences. La normal map REMPLACE celle déjà présente sur le matériau au lieu de s'y\najouter — sinon elle se pose sur la même carte en dessous, chaque pore et pli est appliqué deux\nfois, et le corps paraît plat face au visage, avec une ligne nette à la couture du cou.\nLa suppression de teinte de peau est désactivée, pour que le teint du porteur ressorte : elle\nexiste pour empêcher le tissu d'être reteinté, et cette texture EST la peau. Et « Corps » passe\nà « Tous les corps », pour que la peau atteigne aussi un corps vanilla.",
-    "description": ""
+    "message": "Cochez ceci lorsque vous convertissez un mod de peau complète, et non quelque chose posé sur la peau.\nProteus le coche pour vous quand les textures y ressemblent ; votre propre réponse l'emporte toujours.\nDeux conséquences. La normal map REMPLACE celle déjà présente sur le matériau au lieu de s'y\najouter — sinon elle se pose sur la même carte en dessous, chaque pore et pli est appliqué deux\nfois, et le corps paraît plat face au visage, avec une ligne nette à la couture du cou.\nEt la suppression de teinte de peau est désactivée, pour que le teint du porteur ressorte : elle\nexiste pour empêcher le tissu d'être reteinté, et cette texture EST la peau.",
+    "description": "Tooltip for the checkbox above. \"normal\" is the normal map (a texture). Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Emissive.Aliases.Fmt": {
     "message": "{0} chemins",
@@ -1429,10 +1449,6 @@
   },
   "Import.Author.Label": {
     "message": "Auteur",
-    "description": ""
-  },
-  "Import.BodyFit.NeedsAllBodies.Fmt": {
-    "message": "Ce pack n'a rien de peint pour votre corps d'origine — « {0} » sera utilisé à la place. La cuisson sur un corps d'origine est désactivée par défaut, donc Proteus réglera le « Corps » de ce mod sur « Tous les corps » à l'import (Couleurs → Avancé) ; sans cela il ne peindrait rien.",
     "description": ""
   },
   "Import.BodyFit.NotDrawn.Fmt": {
@@ -1819,10 +1835,6 @@
     "message": "Aucune couche de ce pack ne peut être importée.",
     "description": ""
   },
-  "Import.Result.AllBodies.Fmt": {
-    "message": "« {0} » importé — couches : {1}{2}. Le pack n'a rien de peint pour un corps d'origine, donc Proteus a réglé le « Corps » de ce mod sur « Tous les corps » (Couleurs → Avancé) pour l'y cuire — désactivez-le et il cessera de peindre.",
-    "description": ""
-  },
   "Import.Result.NoLayout.Fmt": {
     "message": "« {0} » importé — couches : {1}{2}, mais Proteus n'a pas pu choisir de disposition de corps pour vous. Choisissez-en une sous « {3} » dans Penumbra, sinon rien ne sera peint.",
     "description": ""
@@ -2101,6 +2113,390 @@
   },
   "Parts.Row.Fmt": {
     "message": "{0} · {1:N0} tris",
+    "description": ""
+  },
+  "Parts.Tool.Navigate": {
+    "message": "Basculer des pièces",
+    "description": ""
+  },
+  "Parts.Tool.Navigate.Tip": {
+    "message": "Cliquez sur des pièces du modèle pour les choisir, puis donnez-leur un interrupteur.",
+    "description": ""
+  },
+  "Parts.Tool.Inflate": {
+    "message": "Tirer dehors",
+    "description": ""
+  },
+  "Parts.Tool.Inflate.Tip": {
+    "message": "Peignez sur le modèle pour pousser la surface vers l'extérieur, afin qu'un\ncorps qui traverse un vêtement soit de nouveau couvert.",
+    "description": ""
+  },
+  "Parts.Tool.Deflate": {
+    "message": "Pousser dedans",
+    "description": ""
+  },
+  "Parts.Tool.Deflate.Tip": {
+    "message": "Le même pinceau à l'envers, pour un vêtement qui s'écarte trop du corps.",
+    "description": ""
+  },
+  "Parts.Tool.Relax": {
+    "message": "Lisser",
+    "description": ""
+  },
+  "Parts.Tool.Relax.Tip": {
+    "message": "Peignez sur le modèle pour lisser la surface — bosses d'origine du vêtement\nou traction restée irrégulière. Comme le relax de 3ds Max, il rétracte : les courbes s'aplatissent et le tissu peut s'enfoncer vers le corps.",
+    "description": ""
+  },
+  "Parts.Brush.RelaxRate.Tip": {
+    "message": "La vitesse à laquelle la surface se lisse pendant que vous peignez. Faible est\ndoux et facile à maîtriser ; élevé lisse presque aussitôt.\n\nPrès d'un bord ouvert, comme un ourlet, le lissage ramène légèrement le bord vers l'intérieur.",
+    "description": ""
+  },
+  "Parts.Tool.Bridge": {
+    "message": "Pont",
+    "description": ""
+  },
+  "Parts.Tool.Bridge.Tip": {
+    "message": "Peignez en travers d'un creux — le sillon entre les fesses, un pli — pour\ntendre le tissu droit par-dessus au lieu de suivre le corps dedans. Il ne fait\nque soulever et laisse aux zones arrondies leur forme.",
+    "description": ""
+  },
+  "Parts.Tool.Wind": {
+    "message": "Vent",
+    "description": ""
+  },
+  "Parts.Tool.Wind.Tip": {
+    "message": "Peignez là où le vent fait bouger ce vêtement ; le rouge indique l'intensité.\nC'est écrit dans la deuxième couleur de sommet du modèle.",
+    "description": ""
+  },
+  "Parts.Tool.Move": {
+    "message": "Déplacer",
+    "description": ""
+  },
+  "Parts.Tool.Move.Tip": {
+    "message": "Choisissez une pièce et faites glisser les flèches : une flèche la déplace sur\ncet axe, un carré la déplace dans ce plan.",
+    "description": ""
+  },
+  "Parts.Move.Help": {
+    "message": "Cliquez sur une pièce pour la choisir, puis faites glisser une flèche ou un carré. Faites glisser ailleurs pour tourner le modèle, Maj+glisser pour déplacer la vue, molette pour zoomer.",
+    "description": ""
+  },
+  "Parts.Move.LiveHint": {
+    "message": "Cliquez sur une pièce de votre personnage, puis faites glisser une flèche ou un carré. Maintenez Alt pour bouger la caméra. Chaque déplacement est enregistré au relâchement.",
+    "description": ""
+  },
+  "Parts.Move.Part.Fmt": {
+    "message": "Déplacement de la pièce {0}",
+    "description": ""
+  },
+  "Parts.Move.NoPart": {
+    "message": "Cliquez sur une pièce pour choisir quoi déplacer.",
+    "description": ""
+  },
+  "Parts.Move.ListTip": {
+    "message": "Choisissez ici la pièce à déplacer, ou cliquez dessus sur le modèle ou sur votre personnage.",
+    "description": ""
+  },
+  "Parts.Move.Adjacent": {
+    "message": "Déplacer les pièces adjacentes",
+    "description": ""
+  },
+  "Parts.Move.Adjacent.Tip": {
+    "message": "Le tissu proche de la pièce la suit, qu'il y soit relié ou non, d'autant moins qu'il est loin.\nDésactivé, seule la pièce bouge. Les points qu'elle partage exactement avec une voisine bougent quand même, pour que la couture reste fermée.",
+    "description": ""
+  },
+  "Parts.Move.Falloff": {
+    "message": "Atténuation",
+    "description": ""
+  },
+  "Parts.Move.Falloff.Tip": {
+    "message": "Jusqu'à quelle distance de la pièce le tissu voisin la suit encore.",
+    "description": ""
+  },
+  "Parts.Move.BonesNote": {
+    "message": "Une pièce déplacée suit toujours les os pour lesquels elle a été faite ; trop loin d'eux, elle peut se plier bizarrement dans certaines poses.",
+    "description": ""
+  },
+  "Parts.Move.SkinTip": {
+    "message": "La peau ne peut pas être déplacée.",
+    "description": ""
+  },
+  "Parts.Move.LockedTip": {
+    "message": "Cette pièce est verrouillée. Déverrouillez-la sous un pinceau pour la déplacer.",
+    "description": ""
+  },
+  "Parts.Move.NothingFree": {
+    "message": "Rien dans cette pièce ne peut bouger : c'est de la peau ou elle est verrouillée.",
+    "description": ""
+  },
+  "Parts.Move.Moved.Fmt": {
+    "message": "Déplacement maximal : {0:F1} mm.",
+    "description": ""
+  },
+  "Parts.Move.Undo": {
+    "message": "Annuler le déplacement",
+    "description": ""
+  },
+  "Parts.Brush.WindAmount": {
+    "message": "Quantité",
+    "description": ""
+  },
+  "Parts.Brush.WindAmount.Tip": {
+    "message": "Quantité de vent à peindre. 0 % l'efface, tout comme maintenir Ctrl en peignant.",
+    "description": ""
+  },
+  "Parts.Brush.WindRate": {
+    "message": "Vitesse",
+    "description": ""
+  },
+  "Parts.Brush.WindRate.Tip": {
+    "message": "À quelle vitesse le vent peint atteint la quantité pendant que vous peignez.",
+    "description": ""
+  },
+  "Parts.Wind.AddsChannel": {
+    "message": "Ce modèle n'a pas encore de canal de vent. Il est ajouté à l'enregistrement du premier trait.",
+    "description": ""
+  },
+  "Parts.Wind.FirstColorNotWhite": {
+    "message": "La première couleur de sommet de ce modèle n'est pas blanche, ce qu'attend l'effet de vent. Proteus la laisse telle que l'auteur l'a faite.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Set.Fmt": {
+    "message": "{0} fichier(s) de matériau réglé(s) pour que le vent puisse faire bouger ce vêtement.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Missing.Fmt": {
+    "message": "{0} fichier(s) de matériau n'ont aucun réglage de mouvement au vent à modifier ; ils risquent de ne pas bouger.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.NotInMod.Fmt": {
+    "message": "{0} matériau(x) de ce vêtement viennent du jeu et non de ce mod ; leur mouvement au vent ne peut pas être réglé.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Failed.Fmt": {
+    "message": "Les matériaux du vêtement n'ont pas pu être réglés pour le vent : {0}",
+    "description": ""
+  },
+  "Parts.Wind.Refused.Fmt": {
+    "message": "Le vent n'a pas pu être ajouté à {0} maillage(s) : il n'y a plus de place pour un autre attribut de sommet.",
+    "description": ""
+  },
+  "Parts.Brush.BridgeRate.Tip": {
+    "message": "La vitesse à laquelle le tissu monte pour enjamber le creux pendant que vous\npeignez. Faible est doux et facile à maîtriser ; élevé comble l'écart presque aussitôt.",
+    "description": ""
+  },
+  "Parts.Brush.Help": {
+    "message": "Faites glisser sur le modèle pour peindre. Glissez depuis le fond pour le tourner, maj-glisser pour le déplacer, molette pour zoomer.",
+    "description": ""
+  },
+  "Parts.ShowModelView": {
+    "message": "Afficher le modèle",
+    "description": ""
+  },
+  "Parts.ShowModelView.Tip": {
+    "message": "Peindre sur le modèle dans cette fenêtre plutôt que sur votre personnage.",
+    "description": ""
+  },
+  "Parts.Live.Pick.Tip": {
+    "message": "Cliquez sur un vêtement de votre personnage pour ouvrir ici son mod et son modèle.",
+    "description": ""
+  },
+  "Parts.Live.Hint": {
+    "message": "Peignez sur votre personnage. Maintenez Alt pour déplacer la caméra. Chaque trait est enregistré au relâchement.",
+    "description": ""
+  },
+  "Parts.Live.NotWorn": {
+    "message": "Ce modèle n'est pas porté par votre personnage. Portez-le ou activez Afficher le modèle.",
+    "description": ""
+  },
+  "Parts.Content.Hint": {
+    "message": "Ce vêtement a été importé dans Proteus, qui le porte pour vous. Peignez-le normalement — chaque trait apparaît sur votre personnage quelques secondes après sa sauvegarde, une fois le vêtement reconstruit.",
+    "description": ""
+  },
+  "Parts.Content.NoSwitches": {
+    "message": "Impossible d'ajouter des interrupteurs à un vêtement importé : Proteus le porte sur un autre objet, et ce sont les interrupteurs de cet objet qui le commandent. Les pinceaux ci-dessus fonctionnent toujours.",
+    "description": ""
+  },
+  "Parts.Live.PickedShell": {
+    "message": "C'est le vêtement que Proteus dessine pour vous, reconstruit à chaque changement. Choisissez le mod dont il provient pour le modifier.",
+    "description": ""
+  },
+  "Parts.Live.Unreadable": {
+    "message": "Ce modèle ne correspond pas à celui de votre personnage. Activez Afficher le modèle pour le peindre ici.",
+    "description": ""
+  },
+  "Parts.Live.NoCharacter": {
+    "message": "Votre personnage n'est pas disponible pour peindre pour le moment.",
+    "description": ""
+  },
+  "Parts.Live.PickedNotListed.Fmt": {
+    "message": "{0} ne fait pas partie des modèles publiés par ce mod.",
+    "description": ""
+  },
+  "Parts.Brush.Size": {
+    "message": "Taille du pinceau",
+    "description": ""
+  },
+  "Parts.Brush.Size.Tip": {
+    "message": "Jusqu'où porte le pinceau. L'effet est le plus fort au centre et s'annule\nau bord : un pinceau large déplace un galbe étendu, un pinceau étroit une\npetite bosse.",
+    "description": ""
+  },
+  "Parts.Brush.Strength": {
+    "message": "Force",
+    "description": ""
+  },
+  "Parts.Brush.Strength.Tip": {
+    "message": "De combien la surface bouge à chaque instant de peinture. Petit convient\ngénéralement : un vêtement n'a qu'à dégager le corps d'une fraction de\nmillimètre, et vous pouvez toujours repasser au même endroit.",
+    "description": ""
+  },
+  "Parts.Brush.TooSmall.Fmt": {
+    "message": "Le pinceau est plus petit que les triangles de ce modèle (environ {0:F1} mm), il tirera donc des points isolés en pointes au lieu de déplacer la surface. Agrandissez-le.",
+    "description": ""
+  },
+  "Parts.Brush.Moved.Fmt": {
+    "message": "Déplacement maximal : {0:F2} mm sur {1:F1} mm.",
+    "description": ""
+  },
+  "Parts.Brush.Untouched": {
+    "message": "Rien n'a encore été déplacé.",
+    "description": ""
+  },
+  "Parts.Brush.Undo": {
+    "message": "Annuler le trait",
+    "description": ""
+  },
+  "Parts.Brush.Reset": {
+    "message": "Tout reprendre",
+    "description": ""
+  },
+  "Parts.Brush.NotSavedYet": {
+    "message": "non enregistré",
+    "description": ""
+  },
+  "Parts.Brush.Save": {
+    "message": "Enregistrer dans le mod",
+    "description": ""
+  },
+  "Parts.Brush.Save.Tip": {
+    "message": "Écrit la modification dans le fichier de modèle du mod, elle continue donc\nde fonctionner avec Proteus désactivé et suit le mod si vous l'exportez.\nL'original est d'abord copié dans Proteus/meshvolume-backup/ à l'intérieur\ndu mod, et cela peut être annulé.",
+    "description": ""
+  },
+  "Parts.Brush.Save.Nothing.Tip": {
+    "message": "Tout est déjà enregistré. Les modifications s'enregistrent d'elles-mêmes peu après que vous arrêtez de peindre.",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes": {
+    "message": "Appliquer aux autres tailles",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Tip": {
+    "message": "Copie les modifications peintes sur ce modèle vers les autres tailles de ce\nmodèle dans le mod, en les faisant correspondre selon leur place sur le vêtement.\nChaque taille est sauvegardée d'abord, et « Annuler les modifications » la restaure.",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Running": {
+    "message": "Application aux autres tailles…",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Done.Fmt": {
+    "message": "Appliqué à {0} autre(s) taille(s).",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Problem.Fmt": {
+    "message": "{0} : {1}",
+    "description": ""
+  },
+  "Parts.Brush.Saved.Fmt": {
+    "message": "Enregistré. La surface a été déplacée de {0:F2} mm au maximum.",
+    "description": ""
+  },
+  "Parts.Brush.Spares.Fmt": {
+    "message": "{0} points appartenant aux curseurs de corps de ce modèle n'ont pas pu être déplacés avec lui ; activer l'un de ces curseurs peut donc faire revenir le problème par endroits.",
+    "description": ""
+  },
+  "Parts.Brush.Revert": {
+    "message": "Annuler les modifications",
+    "description": ""
+  },
+  "Parts.Brush.Revert.Tip": {
+    "message": "Remet chaque modèle que le pinceau a modifié dans ce mod exactement comme\nson auteur l'avait fait.",
+    "description": ""
+  },
+  "Parts.Brush.Reverted.Fmt": {
+    "message": "{0} modèle(s) remis comme l'auteur les avait faits.",
+    "description": ""
+  },
+  "Parts.Brush.Revert.Arm.Tip": {
+    "message": "Maintenez Ctrl ou Maj et cliquez.",
+    "description": ""
+  },
+  "Parts.Brush.Size.Keys.Tip": {
+    "message": "[ et ] la modifient ; maintenez Maj pour des pas fins.",
+    "description": ""
+  },
+  "Parts.Brush.Mirror": {
+    "message": "Miroir gauche/droite",
+    "description": ""
+  },
+  "Parts.Brush.Mirror.Tip": {
+    "message": "Peint les deux côtés à la fois, en miroir par rapport au centre du corps.",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Hint": {
+    "message": "Maj-clic sur une pièce pour la verrouiller.",
+    "description": ""
+  },
+  "Parts.Brush.Lock.ListTip": {
+    "message": "Décochez une pièce pour la verrouiller : aucun pinceau ne la déplace. Un maj-clic sur une pièce du modèle ou de votre personnage fait de même.",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Count.Fmt": {
+    "message": "{0} pièce(s) verrouillée(s)",
+    "description": ""
+  },
+  "Parts.Brush.Lock.UnlockAll": {
+    "message": "Tout déverrouiller",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Skin.Tip": {
+    "message": "La peau ne bouge jamais.",
+    "description": ""
+  },
+  "MeshVolume.Apply.Nothing": {
+    "message": "Rien n'a été peint, il n'y a donc rien à enregistrer.",
+    "description": ""
+  },
+  "MeshVolume.Apply.EditFailed.Fmt": {
+    "message": "{0} n'a pas pu être modifié : {1}. Rien n'a été écrit.",
+    "description": ""
+  },
+  "MeshVolume.Apply.Failed.Fmt": {
+    "message": "Échec de l'écriture : {0}",
+    "description": ""
+  },
+  "MeshVolume.Revert.Nothing": {
+    "message": "Le pinceau n'a rien modifié dans ce mod.",
+    "description": ""
+  },
+  "MeshVolume.Revert.Blocked.Fmt": {
+    "message": "Annulez d'abord {0} : appliqué au même modèle après le pinceau, remettre le pinceau maintenant l'annulerait aussi.",
+    "description": ""
+  },
+  "MeshVolume.Revert.NoBackups": {
+    "message": "Aucun des modèles d'origine n'a pu être retrouvé pour être restauré.",
+    "description": ""
+  },
+  "MeshVolume.Feature.Toggles": {
+    "message": "les interrupteurs de pièces",
+    "description": ""
+  },
+  "MeshVolume.Feature.HatCompat": {
+    "message": "l'ajustement des chapeaux",
+    "description": ""
+  },
+  "MeshVolume.Feature.Brush": {
+    "message": "le pinceau",
+    "description": ""
+  },
+  "ModelBackups.Blocked.Fmt": {
+    "message": "Annulez d'abord {0} : il a modifié le même modèle après, donc annuler ceci maintenant l'annulerait aussi.",
     "description": ""
   },
   "Parts.Selected.Fmt": {
@@ -2452,7 +2848,7 @@
     "description": ""
   },
   "Tab.Parts": {
-    "message": "Interrupteurs",
+    "message": "Studio",
     "description": ""
   },
   "Tab.Settings": {

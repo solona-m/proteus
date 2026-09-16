@@ -3,20 +3,24 @@
     "message": "Bind it all to a design",
     "description": "Glamourer design bindings. Capability label in the header band, shown beside an icon. All four of these labels are hidden together the moment they stop fitting the window width, so a short translation is what keeps them on screen."
   },
+  "Band.Cap.Link.Tip": {
+    "message": "Read about this in the guide",
+    "description": "Tooltip on each capability label in the header band. Clicking the label opens the README, in the reader's language, at the section about that capability."
+  },
   "Band.Cap.Overlay": {
     "message": "Overlay & recolour anything",
     "description": "Compositing overlays and editing their colours. Capability label in the header band, shown beside an icon. All four of these labels are hidden together the moment they stop fitting the window width, so a short translation is what keeps them on screen."
   },
-  "Band.Cap.Toggle": {
-    "message": "Toggle anything off",
-    "description": "Adding on/off switches to any mod's geometry. Capability label in the header band, shown beside an icon. All four of these labels are hidden together the moment they stop fitting the window width, so a short translation is what keeps them on screen."
+  "Band.Cap.Reshape": {
+    "message": "Reshape any model",
+    "description": "Editing any mod's models in the Studio tab: part switches, brushes that reshape clothing, and fitting hair under hats. Capability label in the header band, shown beside an icon. All four of these labels are hidden together the moment they stop fitting the window width, so a short translation is what keeps them on screen."
   },
   "Band.Cap.Wear": {
     "message": "Wear anything, no slot",
     "description": "Wearing part of a mod without spending a gear slot. Capability label in the header band, shown beside an icon. All four of these labels are hidden together the moment they stop fitting the window width, so a short translation is what keeps them on screen."
   },
   "Band.Caption": {
-    "message": "overlay · accessorize · toggle · bind",
+    "message": "overlay · accessorize · reshape · bind",
     "description": "Fallback text in the header band, shown only when the capability labels have been hidden for width and nothing is hovered. Very tight space - it is ellipsised if it does not fit."
   },
   "Band.Pill.Disabled": {
@@ -118,10 +122,6 @@
   "Chat.ContentUnplaced.Fmt": {
     "message": "[Proteus] {0} mesh piece(s) from your mods could not be placed — your accessories are out of material slots. Equip another ring / bracelet / necklace, or turn off a layer.",
     "description": "Chat notice when an accessory ran out of material slots for an imported pack's meshes. {0} is a count. \"Proteus\" is a plugin name - never translate it."
-  },
-  "Chat.GlowPromoted.Fmt": {
-    "message": "[Proteus] \"{0}\" sets Glow on a skin layer. Skin can no longer glow, so that option now renders as a cloth layer — it needs a free accessory to sit on, and its surface will look slightly different.",
-    "description": "Appears in an in-game chat notice from Proteus. Takes arguments - keep every {0}, {1} ... exactly once; you may reorder them."
   },
   "Chat.HatCompat": {
     "message": "[Proteus] Proteus has made this hairstyle fit under hats. You can undo that, or turn the feature off, under /proteus > Settings > Hats.",
@@ -239,14 +239,6 @@
     "message": "How this row's art combines with what is already on the skin.\n\n\"Paint\" lays it on top, which is what every layer has always done.\nAnything else makes this row a PRINT: it colours the fabric this mod's\nother layers painted, and is clipped to their shape — so a rainbow on a\nfishnet colours the threads and leaves the holes as skin.\n\nA print only reaches its OWN mod's layers; it never touches another mod's\nclothing. On bare skin it paints nothing at all, so a print selected on its\nown shows nothing — there is nothing there to print on.\n\nMultiply can only darken, so it reads faintly on very dark fabric — use\nScreen there instead. This row's colour still tints the art, and its\nOpacity is the print's strength.",
     "description": "Tooltip on the Blend dropdown. \"Paint\", \"Multiply\" and \"Screen\" are mode names - translate them the same way as the Colors.Blend.* entries above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
-  "Colors.Bodies.All": {
-    "message": "All bodies",
-    "description": "Appears in the colour-table editor window."
-  },
-  "Colors.Bodies.BiboGen3": {
-    "message": "bibo+gen3",
-    "description": "\"bibo\" and \"gen3\" are body-mod names. Leave exactly as-is."
-  },
   "Colors.Bodies.GlobalNote": {
     "message": "Saved globally — bindings don't capture this.",
     "description": "Appears in the colour-table editor window."
@@ -255,17 +247,13 @@
     "message": "\nGlobal — this one is NOT part of the binding you're editing.",
     "description": "Appears in the colour-table editor window. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
-  "Colors.Bodies.Label": {
-    "message": "Bodies",
-    "description": "Control label. Appears in the colour-table editor window."
+  "Colors.Bodies.Vanilla.Label": {
+    "message": "Overlay gen2/vanilla",
+    "description": "Checkbox label in the colour-table editor window's Advanced section. \"gen2\" is a body-mod name - never translated. Ticked = this mod is also painted onto vanilla skin."
   },
-  "Colors.Bodies.Off": {
-    "message": "Off",
-    "description": "Appears in the colour-table editor window."
-  },
-  "Colors.Bodies.Tip": {
-    "message": "Which body types to bake this mod onto:\nAll bodies = sibling body (bibo↔gen3/Eve) + vanilla (gen2)\nbibo+gen3 = bake to the sibling body only (default)\nOff = no synthesis\n\nApplies to the whole mod, not just this option.",
-    "description": "Mentions the body mods bibo, gen3, Eve and gen2 - all names, never translated. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  "Colors.Bodies.Vanilla.Tip": {
+    "message": "Also paint this mod onto vanilla (gen2) skin your character is wearing —\nusually skin that comes with a piece of gear.\nIt is only painted while vanilla skin is actually on your character,\nso this costs nothing when there is none.\n\nbibo and gen3/Eve are always painted; this only affects vanilla.\nApplies to the whole mod, not just this option.",
+    "description": "Tooltip for the checkbox above. \"gen2\", \"bibo\", \"gen3\" and \"Eve\" are body-mod names - never translated. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Colors.BustBridge.Label": {
     "message": "Span the cleavage",
@@ -374,6 +362,10 @@
   "Colors.Geometry.Section": {
     "message": "Geometry",
     "description": "Heading for a collapsible section in the colour-table editor window, holding the settings that reshape the body mesh (spanning the cleavage, smoothing the nipple, and so on) rather than colouring it."
+  },
+  "Colors.Effects.Section": {
+    "message": "Effects",
+    "description": "Heading for a collapsible section in the colour-table editor window, holding the animated glow effect picker and the Skindent (ambient occlusion + normal indent) setting."
   },
   "Colors.GlowAmount.Label": {
     "message": "Glow",
@@ -535,6 +527,18 @@
     "message": "You pinned this mode in Advanced — it no longer follows the features you set.\nClick \"Back to auto\" to let it adapt again.",
     "description": "Tooltip. Appears in the colour-table editor window. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
+  "Colors.ReinforcedToe.Label": {
+    "message": "Reinforced toe",
+    "description": "Checkbox label in the colour-table editor's Advanced section. \"Reinforced toe\" is the hosiery term for the heavier-knit toe box of a stocking - use your language's term for it if there is one."
+  },
+  "Colors.ReinforcedToe.SavedNote": {
+    "message": "Saved to the mod — presets and designs don't capture this.",
+    "description": "Small grey note under the Reinforced toe controls, shown while a preset or Glamourer design is driving the mod. Unlike the colour settings around it, this one is written to the mod itself."
+  },
+  "Colors.ReinforcedToe.Tip": {
+    "message": "Make the capped toe denser than the rest of the stocking, the way real hosiery\nknits a heavier toe box — a darker panel with the toes still showing through it,\nfading out at the edge rather than stopping at a line.\nIt can only take away transparency that is there. Where the stocking paints\nnothing it does nothing, so it will never put fabric on a bare toe, and on an\nalready-opaque stocking you will see no change.\nWith \"Sharp alpha\" on, every pixel is either solid or gone, so the soft edge\nbecomes a hard one.",
+    "description": "Tooltip on the Reinforced toe checkbox. \"Sharp alpha\" is another Proteus setting - translate it the same way as Settings.SharpAlpha.Label. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "Colors.RenderingAs": {
     "message": "Rendering as:",
     "description": "Appears in the colour-table editor window."
@@ -670,6 +674,14 @@
   "Colors.Tiling.Tip": {
     "message": "How many times the effect repeats across the surface. 1 = once.",
     "description": "Tooltip. Appears in the colour-table editor window."
+  },
+  "Colors.ToeDensity.Label": {
+    "message": "Density",
+    "description": "Slider label under the Reinforced toe checkbox, in the colour-table editor's Advanced section. How much denser the stocking's toe is than its leg."
+  },
+  "Colors.ToeDensity.Tip": {
+    "message": "How much denser the toe is than the leg. 100% is completely solid; the usual\nreinforced toe sits well below that.",
+    "description": "Tooltip on the Density slider. Contains a deliberate line break - keep it, moving it where your language needs."
   },
   "Colors.TowardBottom.Btn": {
     "message": "Toward bottom",
@@ -831,9 +843,17 @@
     "message": "Penumbra's mod directory isn't available.",
     "description": "Import refused: Penumbra could not be asked where its mods live. \"Penumbra\" is a plugin name - never translate it."
   },
+  "ContentImport.Fail.NotUpgraded.Fmt": {
+    "message": "Penumbra did not upgrade \"{0}\" from its older format, so its pieces could not be made switchable. The import was undone; try importing the pack again.",
+    "description": "Import failed after registering an older-format (pre-v4) pack: Penumbra left it unconverted, so the piece checkboxes could not be added and the mod was removed again. {0} is the mod folder name. \"Penumbra\" is a plugin name - never translate it."
+  },
   "ContentImport.Fail.NothingUsable": {
     "message": "Nothing in this pack can be imported.",
     "description": "Import refused: the pack has no geometry Proteus can use."
+  },
+  "ContentImport.Fail.PieceGroup.Fmt": {
+    "message": "Could not add the piece switches to \"{0}\": {1} The import was undone; try importing the pack again.",
+    "description": "Import failed while adding the checkbox group that switches individual pieces on, so the mod was removed again. {0} is the mod folder name; {1} is the error message, which ends in its own full stop."
   },
   "ContentImport.Fail.Reserved": {
     "message": "\"Proteus\" is reserved — choose a different mod name.",
@@ -1084,8 +1104,8 @@
     "description": "Checkbox in the Create tab. Keep the \"###createWholeSkin\" suffix out of the translation - it is not part of this string."
   },
   "Create.WholeSkin.Tip": {
-    "message": "Tick this when you're converting a full skin mod, not painting something onto skin.\nProteus ticks it for you when the textures look like one; your own answer always wins.\nThree things follow. The normal REPLACES the one already on the material instead of\nstacking onto it — otherwise it lands on top of the same map underneath, every pore\nand crease is applied twice, and the body reads flat against the face with a hard line\nat the neck seam. Skin-tint suppression goes off, so the wearer's skin tone comes\nthrough: it is there to stop fabric being re-tinted, and this art IS the skin. And\n\"Bodies\" is set to \"All bodies\", so the skin reaches a vanilla body as well.",
-    "description": "Tooltip for the checkbox above. \"normal\" is the normal map (a texture). The two quoted names are UI labels - use exactly your translations of Colors.Bodies.Label and Colors.Bodies.All so the tooltip names the control the user sees. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+    "message": "Tick this when you're converting a full skin mod, not painting something onto skin.\nProteus ticks it for you when the textures look like one; your own answer always wins.\nTwo things follow. The normal REPLACES the one already on the material instead of\nstacking onto it — otherwise it lands on top of the same map underneath, every pore\nand crease is applied twice, and the body reads flat against the face with a hard line\nat the neck seam. And skin-tint suppression goes off, so the wearer's skin tone comes\nthrough: it is there to stop fabric being re-tinted, and this art IS the skin.",
+    "description": "Tooltip for the checkbox above. \"normal\" is the normal map (a texture). Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Emissive.Aliases.Fmt": {
     "message": "{0} paths",
@@ -1430,10 +1450,6 @@
   "Import.Author.Label": {
     "message": "Author",
     "description": "Control label. Appears in the Import tab."
-  },
-  "Import.BodyFit.NeedsAllBodies.Fmt": {
-    "message": "This pack has nothing painted for your vanilla body — \"{0}\" will be used instead. Baking onto a vanilla body is off by default, so Proteus will set this mod's \"Bodies\" to \"All bodies\" on import (Colors → Advanced); without that it would paint nothing.",
-    "description": "{0} is a layout name. Names the Bodies control and its \"All bodies\" value - keep both in step with the Colors.Bodies.* keys."
   },
   "Import.BodyFit.NotDrawn.Fmt": {
     "message": "Your character isn't drawn yet, so Proteus picked \"{0}\" by preference rather than by your body. Check the result once you're in game.",
@@ -1819,10 +1835,6 @@
     "message": "No layer in this pack can be imported.",
     "description": "Appears in the Import tab."
   },
-  "Import.Result.AllBodies.Fmt": {
-    "message": "Imported \"{0}\" — layers: {1}{2}. The pack has nothing painted for a vanilla body, so Proteus set this mod's \"Bodies\" to \"All bodies\" (Colors → Advanced) to bake it across — turn that off and it will stop painting.",
-    "description": "{0} mod folder, {1} layer count, {2} the skipped-tail fragment. Names the Bodies control - keep it in step with Colors.Bodies.Label."
-  },
   "Import.Result.NoLayout.Fmt": {
     "message": "Imported \"{0}\" — layers: {1}{2}, but Proteus couldn't pick a body layout for you. Choose one under \"{3}\" in Penumbra, or nothing will paint.",
     "description": "{0} mod folder, {1} layer count, {2} the skipped-tail fragment, {3} the Penumbra option-group name."
@@ -2102,6 +2114,390 @@
   "Parts.Row.Fmt": {
     "message": "{0} · {1:N0} tris",
     "description": "Material and size beside a part's checkbox. {0} is a .mtrl file name, {1} a triangle count - keep the :N0 exactly as it is. \"tris\" is the usual 3D-modelling short form for triangles."
+  },
+  "Parts.Tool.Navigate": {
+    "message": "Toggle Parts",
+    "description": "Tool button in the side panel of the Studio tab."
+  },
+  "Parts.Tool.Navigate.Tip": {
+    "message": "Click pieces of the model to choose them, then give them an on/off switch.",
+    "description": "Tooltip for the radio button."
+  },
+  "Parts.Tool.Inflate": {
+    "message": "Pull out",
+    "description": "Radio button above the model; selects the brush that pushes the surface outwards."
+  },
+  "Parts.Tool.Inflate.Tip": {
+    "message": "Paint on the model to push the surface outwards, so a body that pokes\nthrough a piece of clothing is covered again.",
+    "description": "Tooltip for the radio button. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "Parts.Tool.Deflate": {
+    "message": "Push in",
+    "description": "Radio button above the model; the same brush in reverse."
+  },
+  "Parts.Tool.Deflate.Tip": {
+    "message": "The same brush in reverse, for clothing that stands too far off the body.",
+    "description": "Tooltip for the radio button."
+  },
+  "Parts.Tool.Relax": {
+    "message": "Relax",
+    "description": "Icon button above the model; selects the brush that smooths the surface."
+  },
+  "Parts.Tool.Relax.Tip": {
+    "message": "Paint on the model to smooth the surface — lumps the clothing came with, or a\npull that came out rough. Like 3ds Max's relax it shrinks: curves flatten and\ncloth can sink toward the body.",
+    "description": "Tooltip for the button. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "Parts.Brush.RelaxRate.Tip": {
+    "message": "How quickly the surface smooths while you paint. Low is gentle and easy to\ncontrol; high smooths almost at once.\n\nNear an open edge, like a hem, relaxing draws the edge slightly inward.",
+    "description": "Tooltip for the Strength slider while Relax is selected. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "Parts.Tool.Bridge": {
+    "message": "Bridge",
+    "description": "Icon button in the brush panel; selects the brush that stretches cloth across a hollow."
+  },
+  "Parts.Tool.Bridge.Tip": {
+    "message": "Paint across a hollow — the cleft between cheeks, a crease — to stretch the\ncloth straight over it instead of following the body down into it. It only\never lifts, and leaves rounded areas their own shape.",
+    "description": "Tooltip for the button. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "Parts.Tool.Wind": {
+    "message": "Wind",
+    "description": "Tool button in the Studio side panel."
+  },
+  "Parts.Tool.Wind.Tip": {
+    "message": "Paint where the wind moves this garment; red shows how much.\nIt is written into the model's second vertex colour.",
+    "description": "Tooltip for the button. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "Parts.Tool.Move": {
+    "message": "Move",
+    "description": "Tool button in the Studio side panel."
+  },
+  "Parts.Tool.Move.Tip": {
+    "message": "Pick a part and drag it with the arrows: one arrow moves it along\nthat axis, a square moves it across that plane.",
+    "description": "Tooltip for the button. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "Parts.Move.Help": {
+    "message": "Click a part to choose it, then drag an arrow or a square. Drag anywhere else to turn the model, shift-drag to move the view, scroll to zoom.",
+    "description": "Help above the Move tool's controls, in the model view."
+  },
+  "Parts.Move.LiveHint": {
+    "message": "Click a part on your character, then drag an arrow or a square. Hold Alt to move the camera. Each move is saved when you let go.",
+    "description": "Help above the Move tool's controls, when working on the character in the game world."
+  },
+  "Parts.Move.Part.Fmt": {
+    "message": "Moving part {0}",
+    "description": "{0} is the part's label, such as 1.2 or 1.2b."
+  },
+  "Parts.Move.NoPart": {
+    "message": "Click a part to choose what to move.",
+    "description": "Shown when the Move tool has no part chosen."
+  },
+  "Parts.Move.ListTip": {
+    "message": "Choose the part to move here, or click it on the model or on your character.",
+    "description": "Above the part list under the Move tool."
+  },
+  "Parts.Move.Adjacent": {
+    "message": "Move adjacent parts",
+    "description": "Checkbox label."
+  },
+  "Parts.Move.Adjacent.Tip": {
+    "message": "Cloth near the part follows it, joined to it or not, less the further away it is.\nOff, only the part moves. Points it shares exactly with a neighbour still move, so the seam stays closed.",
+    "description": "Tooltip for the checkbox."
+  },
+  "Parts.Move.Falloff": {
+    "message": "Falloff",
+    "description": "Slider label: how far the joined cloth follows a moved part."
+  },
+  "Parts.Move.Falloff.Tip": {
+    "message": "How far from the part nearby cloth still follows it.",
+    "description": "Tooltip for the slider."
+  },
+  "Parts.Move.BonesNote": {
+    "message": "A moved part still follows the bones it was made for, so a part moved far from them can bend oddly in poses.",
+    "description": "Note under the Move tool's controls."
+  },
+  "Parts.Move.SkinTip": {
+    "message": "Skin can't be moved.",
+    "description": "Tooltip on a skin part in the list under the Move tool."
+  },
+  "Parts.Move.LockedTip": {
+    "message": "This part is locked. Unlock it under a brush to move it.",
+    "description": "Tooltip on a locked part in the list under the Move tool."
+  },
+  "Parts.Move.NothingFree": {
+    "message": "Nothing in this part can move: it is skin or locked.",
+    "description": "Status line when a move finds nothing it may move."
+  },
+  "Parts.Move.Moved.Fmt": {
+    "message": "Furthest moved: {0:F1} mm.",
+    "description": "{0} is the furthest any point has moved, in millimetres."
+  },
+  "Parts.Move.Undo": {
+    "message": "Undo move",
+    "description": "Button: take back the last move."
+  },
+  "Parts.Brush.WindAmount": {
+    "message": "Amount",
+    "description": "Slider label: how much wind the brush paints."
+  },
+  "Parts.Brush.WindAmount.Tip": {
+    "message": "How much wind to paint. 0% erases it, and so does holding Ctrl while painting.",
+    "description": "Tooltip for the amount slider."
+  },
+  "Parts.Brush.WindRate": {
+    "message": "Rate",
+    "description": "Slider label: how fast painting reaches the amount."
+  },
+  "Parts.Brush.WindRate.Tip": {
+    "message": "How quickly the painted wind reaches the amount while you paint.",
+    "description": "Tooltip for the rate slider."
+  },
+  "Parts.Wind.AddsChannel": {
+    "message": "This model has no wind channel yet. One is added when the first stroke saves.",
+    "description": "Note under the wind sliders when the model has no second vertex colour yet."
+  },
+  "Parts.Wind.FirstColorNotWhite": {
+    "message": "This model's first vertex colour isn't white, which the wind effect expects. Proteus leaves it as the author made it.",
+    "description": "Warning under the wind sliders."
+  },
+  "Parts.Wind.Materials.Set.Fmt": {
+    "message": "Set {0} material file(s) so the wind can move this garment.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Missing.Fmt": {
+    "message": "{0} material file(s) have no wind movement settings to change, so they may not sway.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.NotInMod.Fmt": {
+    "message": "{0} material(s) this garment uses come from the game, not this mod, so their wind movement can't be set.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Failed.Fmt": {
+    "message": "The garment's materials couldn't be set for wind: {0}",
+    "description": ""
+  },
+  "Parts.Wind.Refused.Fmt": {
+    "message": "Wind couldn't be added to {0} mesh(es): there's no room there for another vertex attribute.",
+    "description": "{0} is a number of meshes."
+  },
+  "Parts.Brush.BridgeRate.Tip": {
+    "message": "How quickly the cloth rises to span the hollow while you paint. Low is gentle\nand easy to control; high closes the gap almost at once.",
+    "description": "Tooltip for the Strength slider while Bridge is selected. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "Parts.Brush.Help": {
+    "message": "Drag on the model to paint. Drag from the background to turn it, shift-drag to move it, scroll to zoom.",
+    "description": "Explains the brush gestures, shown under the model while a brush is selected."
+  },
+  "Parts.ShowModelView": {
+    "message": "Show model view",
+    "description": "Checkbox in the Studio tab's side panel."
+  },
+  "Parts.ShowModelView.Tip": {
+    "message": "Paint on the model in this window instead of on your character.",
+    "description": "Tooltip for the checkbox. Keep the line break; the tooltip is not wrapped."
+  },
+  "Parts.Live.Pick.Tip": {
+    "message": "Click a garment on your character to open its mod and model here.",
+    "description": "Tooltip for the pick button."
+  },
+  "Parts.Live.Hint": {
+    "message": "Paint on your character. Hold Alt to move the camera. Each stroke is saved when you let go.",
+    "description": "Shown above the brush controls when painting on the character."
+  },
+  "Parts.Live.NotWorn": {
+    "message": "This model is not on your character right now. Wear it, or turn on Show model view.",
+    "description": "Warning when the chosen model is not being drawn on the character."
+  },
+  "Parts.Content.Hint": {
+    "message": "This garment was imported into Proteus, which wears it for you. Paint it as usual — each stroke appears on your character a few seconds after it saves, once the garment is rebuilt.",
+    "description": "Note under the brush controls for a garment imported into Proteus, whose geometry the character wears through a Proteus-built model rather than from the mod's own file. \"Proteus\" is a plugin name - never translate it."
+  },
+  "Parts.Content.NoSwitches": {
+    "message": "Switches can't be added to an imported garment: Proteus wears it on another item, and that item's own switches control it. The brushes above still work.",
+    "description": "Replaces the on/off switch controls for an imported garment. \"Proteus\" is a plugin name - never translate it."
+  },
+  "Parts.Live.PickedShell": {
+    "message": "That is the garment Proteus draws for you, which is rebuilt every time something changes. Pick the mod it came from to edit it.",
+    "description": "Shown when the user clicks Proteus's own generated garment on their character instead of a mod's model. \"Proteus\" is a plugin name - never translate it."
+  },
+  "Parts.Live.Unreadable": {
+    "message": "This model could not be matched to the one on your character. Turn on Show model view to paint it here.",
+    "description": "Warning when the model on the character does not match the file."
+  },
+  "Parts.Live.NoCharacter": {
+    "message": "Your character is not available to paint on right now.",
+    "description": "Warning when there is no character to paint on (loading, cutscene)."
+  },
+  "Parts.Live.PickedNotListed.Fmt": {
+    "message": "{0} is not one of the models this mod publishes.",
+    "description": "{0} is a file name."
+  },
+  "Parts.Brush.Size": {
+    "message": "Brush size",
+    "description": "Slider label. The value is shown in millimetres."
+  },
+  "Parts.Brush.Size.Tip": {
+    "message": "How far the brush reaches. The effect is strongest in the middle and fades\nto nothing at the edge, so a wide brush moves a broad swell and a narrow\none moves a small bump.",
+    "description": "Tooltip for the slider above. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "Parts.Brush.Strength": {
+    "message": "Strength",
+    "description": "Slider label. The value is shown in millimetres."
+  },
+  "Parts.Brush.Strength.Tip": {
+    "message": "How far the surface moves per moment of painting. Small is usually right:\nclothing only has to clear the body by a fraction of a millimetre, and you\ncan always paint over the same place again.",
+    "description": "Tooltip for the slider above. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "Parts.Brush.TooSmall.Fmt": {
+    "message": "The brush is smaller than this model's triangles (about {0:F1} mm across), so it will pull single points into spikes instead of moving the surface. Make it larger.",
+    "description": "Warning when the brush is finer than the model's triangles. {0} is a length in millimetres."
+  },
+  "Parts.Brush.Moved.Fmt": {
+    "message": "Furthest moved: {0:F2} mm of {1:F1} mm.",
+    "description": "Readout under the brush sliders. {0} is how far the furthest point has moved, {1} the limit, both in millimetres."
+  },
+  "Parts.Brush.Untouched": {
+    "message": "Nothing has been moved yet.",
+    "description": "Readout under the brush sliders before anything has been painted."
+  },
+  "Parts.Brush.Undo": {
+    "message": "Undo stroke",
+    "description": "Button that takes back the last brush stroke."
+  },
+  "Parts.Brush.Reset": {
+    "message": "Start over",
+    "description": "Button that discards every brush stroke on this model."
+  },
+  "Parts.Brush.NotSavedYet": {
+    "message": "not saved yet",
+    "description": "Warning that the brush is preview-only in this build."
+  },
+  "Parts.Brush.Save": {
+    "message": "Save into the mod",
+    "description": "Button that writes the brush edit into the mod's model file."
+  },
+  "Parts.Brush.Save.Tip": {
+    "message": "Writes the change into the mod's own model file, so it keeps working with\nProteus turned off and travels with the mod if you export it. The original\nis copied to Proteus/meshvolume-backup/ inside the mod first, and this can\nbe undone.",
+    "description": "Tooltip for the button. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "Parts.Brush.Save.Nothing.Tip": {
+    "message": "Everything is already saved. Changes save on their own a moment after you stop painting.",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes": {
+    "message": "Apply to other sizes",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Tip": {
+    "message": "Copies the changes brushed on this model onto the mod's other sizes of it,\nmatched by where they sit on the garment. Each size is backed up first,\nand Undo saved changes puts it back.",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Running": {
+    "message": "Applying to other sizes…",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Done.Fmt": {
+    "message": "Applied to {0} other size(s).",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Problem.Fmt": {
+    "message": "{0}: {1}",
+    "description": ""
+  },
+  "Parts.Brush.Saved.Fmt": {
+    "message": "Saved. The surface was moved by up to {0:F2} mm.",
+    "description": "Shown after a successful save. {0} is a distance in millimetres."
+  },
+  "Parts.Brush.Spares.Fmt": {
+    "message": "{0} points belonging to this model's body sliders could not be moved with it, so turning one of those sliders on may bring the clipping back in places.",
+    "description": "Shown after a save that could not carry every body-slider point. {0} is a count."
+  },
+  "Parts.Brush.Revert": {
+    "message": "Undo saved changes",
+    "description": "Button that puts every brushed model in the mod back."
+  },
+  "Parts.Brush.Revert.Tip": {
+    "message": "Puts every model the brush has changed in this mod back exactly as its\nauthor made it.",
+    "description": "Tooltip for the button. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "Parts.Brush.Reverted.Fmt": {
+    "message": "{0} model(s) put back as the author made them.",
+    "description": "Shown after undoing saved brush changes. {0} is a count of model files."
+  },
+  "Parts.Brush.Revert.Arm.Tip": {
+    "message": "Hold Ctrl or Shift and click.",
+    "description": ""
+  },
+  "Parts.Brush.Size.Keys.Tip": {
+    "message": "[ and ] change it; hold Shift for fine steps.",
+    "description": ""
+  },
+  "Parts.Brush.Mirror": {
+    "message": "Mirror left/right",
+    "description": ""
+  },
+  "Parts.Brush.Mirror.Tip": {
+    "message": "Paint both sides at once, mirrored across the body's centre.",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Hint": {
+    "message": "Shift-click a part to lock it.",
+    "description": ""
+  },
+  "Parts.Brush.Lock.ListTip": {
+    "message": "Untick a part to lock it: no brush moves it. Shift-clicking a part on the model or on your character does the same.",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Count.Fmt": {
+    "message": "{0} part(s) locked",
+    "description": ""
+  },
+  "Parts.Brush.Lock.UnlockAll": {
+    "message": "Unlock all",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Skin.Tip": {
+    "message": "Skin never moves.",
+    "description": ""
+  },
+  "MeshVolume.Apply.Nothing": {
+    "message": "Nothing has been painted, so there is nothing to save.",
+    "description": "Refusal when Save is pressed with nothing painted."
+  },
+  "MeshVolume.Apply.EditFailed.Fmt": {
+    "message": "{0} could not be edited: {1}. Nothing has been written.",
+    "description": "The model could not be edited. {0} is a file path, {1} the reason."
+  },
+  "MeshVolume.Apply.Failed.Fmt": {
+    "message": "Writing failed: {0}",
+    "description": "Writing to disk failed. {0} is the reason."
+  },
+  "MeshVolume.Revert.Nothing": {
+    "message": "The brush has not changed anything in this mod.",
+    "description": "Refusal when there is nothing of the brush's to undo."
+  },
+  "MeshVolume.Revert.Blocked.Fmt": {
+    "message": "Undo {0} first: it was applied to the same model after the brush was, so putting the brush back now would also undo it.",
+    "description": "Refusal when another feature edited the same model afterwards. {0} names that feature."
+  },
+  "MeshVolume.Revert.NoBackups": {
+    "message": "None of the original models could be found to restore.",
+    "description": "Refusal when the original models cannot be found."
+  },
+  "MeshVolume.Feature.Toggles": {
+    "message": "part switches",
+    "description": "Names the part-switch feature inside MeshVolume.Revert.Blocked.Fmt."
+  },
+  "MeshVolume.Feature.HatCompat": {
+    "message": "hat fitting",
+    "description": "Names the hat-fitting feature inside MeshVolume.Revert.Blocked.Fmt."
+  },
+  "MeshVolume.Feature.Brush": {
+    "message": "the brush",
+    "description": "Names the brush inside a 'undo X first' refusal."
+  },
+  "ModelBackups.Blocked.Fmt": {
+    "message": "Undo {0} first: it changed the same model after this did, so undoing this now would also undo it.",
+    "description": "Refusal when undoing a model edit while a later edit to the same model still stands. {0} names the later feature."
   },
   "Parts.Selected.Fmt": {
     "message": "{0} part(s) ticked",
@@ -2452,7 +2848,7 @@
     "description": "Main tab: the list of Penumbra mods Proteus composites."
   },
   "Tab.Parts": {
-    "message": "Toggles",
+    "message": "Studio",
     "description": "Tab label. Very tight space - one short word."
   },
   "Tab.Settings": {

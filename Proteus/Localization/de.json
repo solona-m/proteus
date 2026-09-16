@@ -3,12 +3,16 @@
     "message": "Alles an ein Design binden",
     "description": ""
   },
+  "Band.Cap.Link.Tip": {
+    "message": "Mehr dazu in der Anleitung",
+    "description": ""
+  },
   "Band.Cap.Overlay": {
     "message": "Alles überlagern & umfärben",
     "description": ""
   },
-  "Band.Cap.Toggle": {
-    "message": "Alles abschaltbar",
+  "Band.Cap.Reshape": {
+    "message": "Jedes Modell umformen",
     "description": ""
   },
   "Band.Cap.Wear": {
@@ -16,7 +20,7 @@
     "description": ""
   },
   "Band.Caption": {
-    "message": "überlagern · schmücken · schalten · binden",
+    "message": "überlagern · schmücken · umformen · binden",
     "description": ""
   },
   "Band.Pill.Disabled": {
@@ -117,10 +121,6 @@
   },
   "Chat.ContentUnplaced.Fmt": {
     "message": "[Proteus] {0} Mesh-Teil(e) aus deinen Mods konnten nicht platziert werden — deinen Accessoires fehlen Materialplätze. Leg einen weiteren Ring / ein Armband / eine Halskette an oder schalte eine Ebene ab.",
-    "description": ""
-  },
-  "Chat.GlowPromoted.Fmt": {
-    "message": "[Proteus] „{0}“ setzt Leuchten auf einer Hautebene. Haut kann nicht mehr leuchten, daher wird diese Option jetzt als Stoffebene dargestellt — sie braucht ein freies Accessoire und ihre Oberfläche sieht etwas anders aus.",
     "description": ""
   },
   "Chat.HatCompat": {
@@ -239,14 +239,6 @@
     "message": "Wie die Grafik dieser Zeile mit dem kombiniert wird, was bereits auf der Haut liegt.\n\n\"Auftragen\" legt sie darüber – das, was jede Ebene bisher getan hat.\nAlles andere macht diese Zeile zu einem AUFDRUCK: Sie färbt den Stoff, den die\nanderen Ebenen dieses Mods aufgetragen haben, und wird auf deren Form beschnitten –\nein Regenbogen auf einem Netzstoff färbt so die Fäden und lässt die Löcher als Haut.\n\nEin Aufdruck erreicht nur die Ebenen des EIGENEN Mods; fremde Kleidung berührt er nie.\nAuf bloßer Haut trägt er gar nichts auf – ein allein ausgewählter Aufdruck zeigt also\nnichts. Dort ist schlicht nichts, worauf sich drucken ließe.\n\nMultiplizieren kann nur abdunkeln und wirkt auf sehr dunklem Stoff daher kaum – nimm\ndort stattdessen Negativ multiplizieren. Die Farbe dieser Zeile tönt die Grafik weiterhin,\nund ihre Deckkraft ist die Stärke des Aufdrucks.",
     "description": ""
   },
-  "Colors.Bodies.All": {
-    "message": "Alle Körper",
-    "description": ""
-  },
-  "Colors.Bodies.BiboGen3": {
-    "message": "bibo+gen3",
-    "description": ""
-  },
   "Colors.Bodies.GlobalNote": {
     "message": "Global gespeichert — Bindungen erfassen das nicht.",
     "description": ""
@@ -255,17 +247,13 @@
     "message": "\nGlobal — dies ist NICHT Teil der Bindung, die du gerade bearbeitest.",
     "description": ""
   },
-  "Colors.Bodies.Label": {
-    "message": "Körper",
-    "description": ""
+  "Colors.Bodies.Vanilla.Label": {
+    "message": "Auf gen2/Vanilla überlagern",
+    "description": "Checkbox label in the colour-table editor window's Advanced section. \"gen2\" is a body-mod name - never translated. Ticked = this mod is also painted onto vanilla skin."
   },
-  "Colors.Bodies.Off": {
-    "message": "Aus",
-    "description": ""
-  },
-  "Colors.Bodies.Tip": {
-    "message": "Auf welche Körpertypen dieser Mod gebacken wird:\nAlle Körper = Geschwisterkörper (bibo↔gen3/Eve) + Standard (gen2)\nbibo+gen3 = nur auf den Geschwisterkörper backen (Standard)\nAus = keine Synthese\n\nGilt für den ganzen Mod, nicht nur für diese Option.",
-    "description": ""
+  "Colors.Bodies.Vanilla.Tip": {
+    "message": "Malt diesen Mod auch auf Vanilla-Haut (gen2), die dein Charakter trägt —\nmeist Haut, die zu einem Ausrüstungsteil gehört.\nSie wird nur bemalt, solange wirklich Vanilla-Haut an deinem Charakter ist,\ndaher kostet das nichts, wenn keine da ist.\n\nbibo und gen3/Eve werden immer bemalt; dies betrifft nur Vanilla.\nGilt für den ganzen Mod, nicht nur für diese Option.",
+    "description": "Tooltip for the checkbox above. \"gen2\", \"bibo\", \"gen3\" and \"Eve\" are body-mod names - never translated. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Colors.BustBridge.Label": {
     "message": "Dekolleté überspannen",
@@ -373,6 +361,10 @@
   },
   "Colors.Geometry.Section": {
     "message": "Geometrie",
+    "description": ""
+  },
+  "Colors.Effects.Section": {
+    "message": "Effekte",
     "description": ""
   },
   "Colors.GlowAmount.Label": {
@@ -535,6 +527,18 @@
     "message": "Du hast diesen Modus unter „Erweitert“ angeheftet — er folgt den gesetzten Merkmalen nicht mehr.\nKlicke auf „Zurück zu automatisch“, damit er sich wieder anpasst.",
     "description": ""
   },
+  "Colors.ReinforcedToe.Label": {
+    "message": "Verstärkte Spitze",
+    "description": ""
+  },
+  "Colors.ReinforcedToe.SavedNote": {
+    "message": "Im Mod gespeichert – Presets und Designs erfassen das nicht.",
+    "description": ""
+  },
+  "Colors.ReinforcedToe.Tip": {
+    "message": "Die überkappte Fußspitze dichter machen als den Rest des Strumpfes – so, wie echte\nStrumpfware eine schwerere Spitze strickt: ein dunkleres Feld, durch das die Zehen\nnoch schimmern, das am Rand ausläuft statt an einer Kante abzubrechen.\nEs kann nur Transparenz wegnehmen, die vorhanden ist. Wo der Strumpf nichts malt,\npassiert nichts – auf eine nackte Zehe kommt also nie Stoff, und bei einem bereits\nblickdichten Strumpf siehst du keinen Unterschied.\nMit „Harte Transparenz“ ist jedes Pixel entweder voll da oder ganz weg, dann wird\naus dem weichen Rand ein harter.",
+    "description": ""
+  },
   "Colors.RenderingAs": {
     "message": "Dargestellt als:",
     "description": ""
@@ -669,6 +673,14 @@
   },
   "Colors.Tiling.Tip": {
     "message": "Wie oft sich der Effekt über die Oberfläche wiederholt. 1 = einmal.",
+    "description": ""
+  },
+  "Colors.ToeDensity.Label": {
+    "message": "Dichte",
+    "description": ""
+  },
+  "Colors.ToeDensity.Tip": {
+    "message": "Wie viel dichter die Spitze ist als das Bein. 100 % ist völlig blickdicht; die\nübliche verstärkte Spitze liegt deutlich darunter.",
     "description": ""
   },
   "Colors.TowardBottom.Btn": {
@@ -831,8 +843,16 @@
     "message": "Penumbras Mod-Verzeichnis ist nicht verfügbar.",
     "description": ""
   },
+  "ContentImport.Fail.NotUpgraded.Fmt": {
+    "message": "Penumbra hat \"{0}\" nicht aus dem älteren Format umgewandelt, daher konnten die Teile nicht schaltbar gemacht werden. Der Import wurde rückgängig gemacht; importiere das Paket erneut.",
+    "description": ""
+  },
   "ContentImport.Fail.NothingUsable": {
     "message": "Aus diesem Paket kann nichts importiert werden.",
+    "description": ""
+  },
+  "ContentImport.Fail.PieceGroup.Fmt": {
+    "message": "Die Schalter für die Teile konnten nicht zu \"{0}\" hinzugefügt werden: {1} Der Import wurde rückgängig gemacht; importiere das Paket erneut.",
     "description": ""
   },
   "ContentImport.Fail.Reserved": {
@@ -1084,8 +1104,8 @@
     "description": ""
   },
   "Create.WholeSkin.Tip": {
-    "message": "Aktiviere dies, wenn du eine vollständige Haut-Mod umwandelst und nicht etwas auf die Haut malst.\nProteus setzt den Haken selbst, wenn die Texturen danach aussehen; deine eigene Antwort gewinnt immer.\nDreierlei folgt daraus. Die Normal Map ERSETZT die bereits im Material vorhandene, statt sich\ndarauf zu legen — sonst landet sie über derselben Map darunter, jede Pore und Falte wirkt doppelt,\nund der Körper wirkt flach gegenüber dem Gesicht, mit einer harten Linie an der Halsnaht.\nDie Hautton-Unterdrückung wird abgeschaltet, damit der Hautton der Trägerin durchkommt: sie ist\ndafür da, Stoff nicht umfärben zu lassen, und diese Textur IST die Haut. Und \"Körper\" wird auf\n\"Alle Körper\" gesetzt, damit die Haut auch einen Vanilla-Körper erreicht.",
-    "description": ""
+    "message": "Aktiviere dies, wenn du eine vollständige Haut-Mod umwandelst und nicht etwas auf die Haut malst.\nProteus setzt den Haken selbst, wenn die Texturen danach aussehen; deine eigene Antwort gewinnt immer.\nZweierlei folgt daraus. Die Normal Map ERSETZT die bereits im Material vorhandene, statt sich\ndarauf zu legen — sonst landet sie über derselben Map darunter, jede Pore und Falte wirkt doppelt,\nund der Körper wirkt flach gegenüber dem Gesicht, mit einer harten Linie an der Halsnaht.\nUnd die Hautton-Unterdrückung wird abgeschaltet, damit der Hautton der Trägerin durchkommt: sie ist\ndafür da, Stoff nicht umfärben zu lassen, und diese Textur IST die Haut.",
+    "description": "Tooltip for the checkbox above. \"normal\" is the normal map (a texture). Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Emissive.Aliases.Fmt": {
     "message": "{0} Pfade",
@@ -1429,10 +1449,6 @@
   },
   "Import.Author.Label": {
     "message": "Autor",
-    "description": ""
-  },
-  "Import.BodyFit.NeedsAllBodies.Fmt": {
-    "message": "Dieses Paket hat nichts für deinen Standardkörper gemalt — stattdessen wird „{0}“ verwendet. Das Backen auf einen Standardkörper ist standardmäßig aus, daher setzt Proteus beim Import „Körper“ dieses Mods auf „Alle Körper“ (Farben → Erweitert); ohne das würde er nichts malen.",
     "description": ""
   },
   "Import.BodyFit.NotDrawn.Fmt": {
@@ -1819,10 +1835,6 @@
     "message": "Keine Ebene in diesem Paket kann importiert werden.",
     "description": ""
   },
-  "Import.Result.AllBodies.Fmt": {
-    "message": "„{0}“ importiert — Ebenen: {1}{2}. Das Paket hat nichts für einen Standardkörper gemalt, daher hat Proteus „Körper“ dieses Mods auf „Alle Körper“ gesetzt (Farben → Erweitert), um ihn darüber zu backen — schaltest du das ab, malt er nicht mehr.",
-    "description": ""
-  },
   "Import.Result.NoLayout.Fmt": {
     "message": "„{0}“ importiert — Ebenen: {1}{2}, aber Proteus konnte kein Körper-Layout für dich wählen. Wähle eines unter „{3}“ in Penumbra, sonst wird nichts gemalt.",
     "description": ""
@@ -2101,6 +2113,390 @@
   },
   "Parts.Row.Fmt": {
     "message": "{0} · {1:N0} Tris",
+    "description": ""
+  },
+  "Parts.Tool.Navigate": {
+    "message": "Teile umschalten",
+    "description": ""
+  },
+  "Parts.Tool.Navigate.Tip": {
+    "message": "Klicke Teile des Modells an, um sie zu wählen, und gib ihnen einen Schalter.",
+    "description": ""
+  },
+  "Parts.Tool.Inflate": {
+    "message": "Herausziehen",
+    "description": ""
+  },
+  "Parts.Tool.Inflate.Tip": {
+    "message": "Malen auf dem Modell drückt die Oberfläche nach außen, sodass ein Körper,\nder durch ein Kleidungsstück ragt, wieder bedeckt ist.",
+    "description": ""
+  },
+  "Parts.Tool.Deflate": {
+    "message": "Hineindrücken",
+    "description": ""
+  },
+  "Parts.Tool.Deflate.Tip": {
+    "message": "Derselbe Pinsel umgekehrt, für Kleidung, die zu weit absteht.",
+    "description": ""
+  },
+  "Parts.Tool.Relax": {
+    "message": "Glätten",
+    "description": ""
+  },
+  "Parts.Tool.Relax.Tip": {
+    "message": "Malen auf dem Modell glättet die Oberfläche — Beulen, die die Kleidung\nmitbringt, oder ein unsauberer Zug. Wie Relax in 3ds Max schrumpft es: Kurven flachen ab, und der Stoff kann zum Körper hin einsinken.",
+    "description": ""
+  },
+  "Parts.Brush.RelaxRate.Tip": {
+    "message": "Wie schnell die Oberfläche beim Malen glatt wird. Niedrig ist sanft und gut\nzu steuern; hoch glättet fast sofort.\n\nAn einer offenen Kante wie einem Saum zieht das Glätten die Kante leicht nach innen.",
+    "description": ""
+  },
+  "Parts.Tool.Bridge": {
+    "message": "Überbrücken",
+    "description": ""
+  },
+  "Parts.Tool.Bridge.Tip": {
+    "message": "Male quer über eine Vertiefung — die Falte zwischen den Backen, eine Kerbe —,\num den Stoff gerade darüber zu spannen, statt ihn dem Körper hinein folgen zu\nlassen. Es hebt nur an und lässt gerundete Stellen in ihrer Form.",
+    "description": ""
+  },
+  "Parts.Tool.Wind": {
+    "message": "Wind",
+    "description": ""
+  },
+  "Parts.Tool.Wind.Tip": {
+    "message": "Male, wo der Wind dieses Kleidungsstück bewegt; Rot zeigt, wie stark.\nEs wird in die zweite Vertexfarbe des Modells geschrieben.",
+    "description": ""
+  },
+  "Parts.Tool.Move": {
+    "message": "Verschieben",
+    "description": ""
+  },
+  "Parts.Tool.Move.Tip": {
+    "message": "Wähle ein Teil und ziehe an den Pfeilen: ein Pfeil verschiebt es entlang\ndieser Achse, ein Quadrat über diese Ebene.",
+    "description": ""
+  },
+  "Parts.Move.Help": {
+    "message": "Klicke ein Teil an, um es zu wählen, und ziehe dann einen Pfeil oder ein Quadrat. Ziehen anderswo dreht das Modell, Umschalt-Ziehen verschiebt die Ansicht, Scrollen zoomt.",
+    "description": ""
+  },
+  "Parts.Move.LiveHint": {
+    "message": "Klicke ein Teil an deinem Charakter an und ziehe dann einen Pfeil oder ein Quadrat. Halte Alt, um die Kamera zu bewegen. Jede Verschiebung wird beim Loslassen gespeichert.",
+    "description": ""
+  },
+  "Parts.Move.Part.Fmt": {
+    "message": "Verschiebe Teil {0}",
+    "description": ""
+  },
+  "Parts.Move.NoPart": {
+    "message": "Klicke ein Teil an, um zu wählen, was verschoben wird.",
+    "description": ""
+  },
+  "Parts.Move.ListTip": {
+    "message": "Wähle hier das zu verschiebende Teil oder klicke es am Modell oder an deinem Charakter an.",
+    "description": ""
+  },
+  "Parts.Move.Adjacent": {
+    "message": "Angrenzende Teile mitbewegen",
+    "description": ""
+  },
+  "Parts.Move.Adjacent.Tip": {
+    "message": "Stoff in der Nähe des Teils folgt ihm, ob mit ihm verbunden oder nicht, je weiter entfernt desto weniger.\nAus bewegt sich nur das Teil. Punkte, die es genau mit einem Nachbarn teilt, bewegen sich trotzdem, damit die Naht geschlossen bleibt.",
+    "description": ""
+  },
+  "Parts.Move.Falloff": {
+    "message": "Abfall",
+    "description": ""
+  },
+  "Parts.Move.Falloff.Tip": {
+    "message": "Wie weit vom Teil entfernt Stoff ihm noch folgt.",
+    "description": ""
+  },
+  "Parts.Move.BonesNote": {
+    "message": "Ein verschobenes Teil folgt weiter den Knochen, für die es gemacht wurde; weit davon entfernt kann es sich in Posen seltsam biegen.",
+    "description": ""
+  },
+  "Parts.Move.SkinTip": {
+    "message": "Haut kann nicht verschoben werden.",
+    "description": ""
+  },
+  "Parts.Move.LockedTip": {
+    "message": "Dieses Teil ist gesperrt. Entsperre es unter einem Pinsel, um es zu verschieben.",
+    "description": ""
+  },
+  "Parts.Move.NothingFree": {
+    "message": "In diesem Teil kann sich nichts bewegen: Es ist Haut oder gesperrt.",
+    "description": ""
+  },
+  "Parts.Move.Moved.Fmt": {
+    "message": "Am weitesten verschoben: {0:F1} mm.",
+    "description": ""
+  },
+  "Parts.Move.Undo": {
+    "message": "Verschieben rückgängig",
+    "description": ""
+  },
+  "Parts.Brush.WindAmount": {
+    "message": "Menge",
+    "description": ""
+  },
+  "Parts.Brush.WindAmount.Tip": {
+    "message": "Wie viel Wind gemalt wird. 0 % entfernt ihn, ebenso Strg gedrückt halten beim Malen.",
+    "description": ""
+  },
+  "Parts.Brush.WindRate": {
+    "message": "Rate",
+    "description": ""
+  },
+  "Parts.Brush.WindRate.Tip": {
+    "message": "Wie schnell der gemalte Wind beim Malen die Menge erreicht.",
+    "description": ""
+  },
+  "Parts.Wind.AddsChannel": {
+    "message": "Dieses Modell hat noch keinen Windkanal. Er wird beim Speichern des ersten Strichs hinzugefügt.",
+    "description": ""
+  },
+  "Parts.Wind.FirstColorNotWhite": {
+    "message": "Die erste Vertexfarbe dieses Modells ist nicht weiß, was der Windeffekt erwartet. Proteus lässt sie, wie der Autor sie gemacht hat.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Set.Fmt": {
+    "message": "{0} Materialdatei(en) eingestellt, damit der Wind dieses Kleidungsstück bewegen kann.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Missing.Fmt": {
+    "message": "{0} Materialdatei(en) haben keine Windbewegungs-Einstellungen, die sich ändern ließen; sie bewegen sich womöglich nicht.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.NotInMod.Fmt": {
+    "message": "{0} Material(ien) dieses Kleidungsstücks stammen aus dem Spiel, nicht aus diesem Mod, daher lässt sich ihre Windbewegung nicht einstellen.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Failed.Fmt": {
+    "message": "Die Materialien des Kleidungsstücks konnten nicht für Wind eingestellt werden: {0}",
+    "description": ""
+  },
+  "Parts.Wind.Refused.Fmt": {
+    "message": "Wind konnte {0} Mesh(es) nicht hinzugefügt werden: Dort ist kein Platz für ein weiteres Vertexattribut.",
+    "description": ""
+  },
+  "Parts.Brush.BridgeRate.Tip": {
+    "message": "Wie schnell sich der Stoff beim Malen über die Vertiefung hebt. Niedrig ist\nsanft und gut zu steuern; hoch schließt die Lücke fast sofort.",
+    "description": ""
+  },
+  "Parts.Brush.Help": {
+    "message": "Zieh auf dem Modell, um zu malen. Zieh vom Hintergrund aus, um es zu drehen, Shift-Ziehen verschiebt es, Scrollen zoomt.",
+    "description": ""
+  },
+  "Parts.ShowModelView": {
+    "message": "Modellansicht zeigen",
+    "description": ""
+  },
+  "Parts.ShowModelView.Tip": {
+    "message": "Auf dem Modell in diesem Fenster malen statt auf deinem Charakter.",
+    "description": ""
+  },
+  "Parts.Live.Pick.Tip": {
+    "message": "Klicke ein Kleidungsstück an deinem Charakter an, um seine Mod und sein Modell hier zu öffnen.",
+    "description": ""
+  },
+  "Parts.Live.Hint": {
+    "message": "Male auf deinem Charakter. Halte Alt, um die Kamera zu bewegen. Jeder Strich wird beim Loslassen gespeichert.",
+    "description": ""
+  },
+  "Parts.Live.NotWorn": {
+    "message": "Dieses Modell ist gerade nicht an deinem Charakter. Zieh es an oder schalte die Modellansicht ein.",
+    "description": ""
+  },
+  "Parts.Content.Hint": {
+    "message": "Dieses Kleidungsstück wurde nach Proteus importiert, das es für dich trägt. Male wie gewohnt — jeder Strich erscheint ein paar Sekunden nach dem Speichern an deinem Charakter, sobald das Kleidungsstück neu gebaut ist.",
+    "description": ""
+  },
+  "Parts.Content.NoSwitches": {
+    "message": "Zu einem importierten Kleidungsstück lassen sich keine Schalter hinzufügen: Proteus trägt es an einem anderen Gegenstand, dessen eigene Schalter es steuern. Die Pinsel oben funktionieren weiterhin.",
+    "description": ""
+  },
+  "Parts.Live.PickedShell": {
+    "message": "Das ist das Kleidungsstück, das Proteus für dich zeichnet; es wird bei jeder Änderung neu gebaut. Wähle den Mod, aus dem es stammt, um es zu bearbeiten.",
+    "description": ""
+  },
+  "Parts.Live.Unreadable": {
+    "message": "Dieses Modell passt nicht zu dem an deinem Charakter. Schalte die Modellansicht ein, um es hier zu bemalen.",
+    "description": ""
+  },
+  "Parts.Live.NoCharacter": {
+    "message": "Dein Charakter ist gerade nicht zum Bemalen verfügbar.",
+    "description": ""
+  },
+  "Parts.Live.PickedNotListed.Fmt": {
+    "message": "{0} ist keines der Modelle, die diese Mod bereitstellt.",
+    "description": ""
+  },
+  "Parts.Brush.Size": {
+    "message": "Pinselgröße",
+    "description": ""
+  },
+  "Parts.Brush.Size.Tip": {
+    "message": "Wie weit der Pinsel reicht. Die Wirkung ist in der Mitte am stärksten und\nläuft am Rand auf null aus — ein breiter Pinsel bewegt eine weite Wölbung,\nein schmaler eine kleine Beule.",
+    "description": ""
+  },
+  "Parts.Brush.Strength": {
+    "message": "Stärke",
+    "description": ""
+  },
+  "Parts.Brush.Strength.Tip": {
+    "message": "Wie weit sich die Oberfläche pro Malmoment bewegt. Klein ist meist richtig:\nKleidung muss den Körper nur um Bruchteile eines Millimeters freihalten, und\ndu kannst dieselbe Stelle jederzeit erneut übermalen.",
+    "description": ""
+  },
+  "Parts.Brush.TooSmall.Fmt": {
+    "message": "Der Pinsel ist kleiner als die Dreiecke dieses Modells (etwa {0:F1} mm), er zieht also einzelne Punkte zu Spitzen, statt die Oberfläche zu bewegen. Mach ihn größer.",
+    "description": ""
+  },
+  "Parts.Brush.Moved.Fmt": {
+    "message": "Weiteste Bewegung: {0:F2} mm von {1:F1} mm.",
+    "description": ""
+  },
+  "Parts.Brush.Untouched": {
+    "message": "Noch wurde nichts bewegt.",
+    "description": ""
+  },
+  "Parts.Brush.Undo": {
+    "message": "Strich zurücknehmen",
+    "description": ""
+  },
+  "Parts.Brush.Reset": {
+    "message": "Neu anfangen",
+    "description": ""
+  },
+  "Parts.Brush.NotSavedYet": {
+    "message": "noch nicht gespeichert",
+    "description": ""
+  },
+  "Parts.Brush.Save": {
+    "message": "In den Mod speichern",
+    "description": ""
+  },
+  "Parts.Brush.Save.Tip": {
+    "message": "Schreibt die Änderung in die Modelldatei des Mods, sodass sie auch bei\nabgeschaltetem Proteus wirkt und beim Exportieren erhalten bleibt. Das\nOriginal wird vorher nach Proteus/meshvolume-backup/ im Mod kopiert und\nlässt sich zurücknehmen.",
+    "description": ""
+  },
+  "Parts.Brush.Save.Nothing.Tip": {
+    "message": "Alles ist bereits gespeichert. Änderungen speichern sich kurz nach dem Malen von selbst.",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes": {
+    "message": "Auf andere Größen anwenden",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Tip": {
+    "message": "Überträgt die auf diesem Modell gemalten Änderungen auf die anderen Größen\ndesselben Modells im Mod, zugeordnet nach ihrer Lage am Kleidungsstück. Jede\nGröße wird vorher gesichert, und „Gespeichertes zurücknehmen“ stellt sie wieder her.",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Running": {
+    "message": "Wird auf andere Größen angewendet…",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Done.Fmt": {
+    "message": "Auf {0} andere Größe(n) angewendet.",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Problem.Fmt": {
+    "message": "{0}: {1}",
+    "description": ""
+  },
+  "Parts.Brush.Saved.Fmt": {
+    "message": "Gespeichert. Die Oberfläche wurde um bis zu {0:F2} mm bewegt.",
+    "description": ""
+  },
+  "Parts.Brush.Spares.Fmt": {
+    "message": "{0} Punkte, die zu den Körper-Reglern dieses Modells gehören, ließen sich nicht mitbewegen — wird einer dieser Regler aktiviert, kann das Durchdringen stellenweise zurückkommen.",
+    "description": ""
+  },
+  "Parts.Brush.Revert": {
+    "message": "Gespeichertes zurücknehmen",
+    "description": ""
+  },
+  "Parts.Brush.Revert.Tip": {
+    "message": "Stellt jedes Modell, das der Pinsel in diesem Mod verändert hat, genau so\nwieder her, wie sein Autor es gemacht hat.",
+    "description": ""
+  },
+  "Parts.Brush.Reverted.Fmt": {
+    "message": "{0} Modell(e) wiederhergestellt, wie der Autor sie gemacht hat.",
+    "description": ""
+  },
+  "Parts.Brush.Revert.Arm.Tip": {
+    "message": "Halte Strg oder Shift gedrückt und klicke.",
+    "description": ""
+  },
+  "Parts.Brush.Size.Keys.Tip": {
+    "message": "[ und ] ändern sie; halte Shift für feine Schritte.",
+    "description": ""
+  },
+  "Parts.Brush.Mirror": {
+    "message": "Links/rechts spiegeln",
+    "description": ""
+  },
+  "Parts.Brush.Mirror.Tip": {
+    "message": "Malt beide Seiten zugleich, gespiegelt an der Körpermitte.",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Hint": {
+    "message": "Shift-Klick auf ein Teil sperrt es.",
+    "description": ""
+  },
+  "Parts.Brush.Lock.ListTip": {
+    "message": "Entferne den Haken bei einem Teil, um es zu sperren: Kein Pinsel bewegt es dann. Ein Shift-Klick auf ein Teil am Modell oder an deinem Charakter tut dasselbe.",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Count.Fmt": {
+    "message": "{0} Teil(e) gesperrt",
+    "description": ""
+  },
+  "Parts.Brush.Lock.UnlockAll": {
+    "message": "Alle entsperren",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Skin.Tip": {
+    "message": "Haut bewegt sich nie.",
+    "description": ""
+  },
+  "MeshVolume.Apply.Nothing": {
+    "message": "Es wurde nichts gemalt, also gibt es nichts zu speichern.",
+    "description": ""
+  },
+  "MeshVolume.Apply.EditFailed.Fmt": {
+    "message": "{0} konnte nicht bearbeitet werden: {1}. Es wurde nichts geschrieben.",
+    "description": ""
+  },
+  "MeshVolume.Apply.Failed.Fmt": {
+    "message": "Schreiben fehlgeschlagen: {0}",
+    "description": ""
+  },
+  "MeshVolume.Revert.Nothing": {
+    "message": "Der Pinsel hat in diesem Mod nichts verändert.",
+    "description": ""
+  },
+  "MeshVolume.Revert.Blocked.Fmt": {
+    "message": "Nimm zuerst {0} zurück: es wurde nach dem Pinsel auf dasselbe Modell angewendet, also würde das Zurücknehmen des Pinsels es mit aufheben.",
+    "description": ""
+  },
+  "MeshVolume.Revert.NoBackups": {
+    "message": "Keines der Originalmodelle war zum Wiederherstellen zu finden.",
+    "description": ""
+  },
+  "MeshVolume.Feature.Toggles": {
+    "message": "die Teil-Schalter",
+    "description": ""
+  },
+  "MeshVolume.Feature.HatCompat": {
+    "message": "die Hut-Anpassung",
+    "description": ""
+  },
+  "MeshVolume.Feature.Brush": {
+    "message": "den Pinsel",
+    "description": ""
+  },
+  "ModelBackups.Blocked.Fmt": {
+    "message": "Nimm zuerst {0} zurück: es hat dasselbe Modell danach verändert, also würde das Zurücknehmen jetzt es mit aufheben.",
     "description": ""
   },
   "Parts.Selected.Fmt": {
@@ -2452,7 +2848,7 @@
     "description": ""
   },
   "Tab.Parts": {
-    "message": "Schalter",
+    "message": "Studio",
     "description": ""
   },
   "Tab.Settings": {

@@ -3,12 +3,16 @@
     "message": "绑定到设计",
     "description": ""
   },
+  "Band.Cap.Link.Tip": {
+    "message": "在指南中了解详情",
+    "description": ""
+  },
   "Band.Cap.Overlay": {
     "message": "叠加与改色",
     "description": ""
   },
-  "Band.Cap.Toggle": {
-    "message": "任意部件开关",
+  "Band.Cap.Reshape": {
+    "message": "任意模型塑形",
     "description": ""
   },
   "Band.Cap.Wear": {
@@ -16,7 +20,7 @@
     "description": ""
   },
   "Band.Caption": {
-    "message": "叠加 · 配饰 · 开关 · 绑定",
+    "message": "叠加 · 配饰 · 塑形 · 绑定",
     "description": ""
   },
   "Band.Pill.Disabled": {
@@ -117,10 +121,6 @@
   },
   "Chat.ContentUnplaced.Fmt": {
     "message": "[Proteus] 有 {0} 个模组网格部件无法放置——你的饰品已没有材质槽位。请再装备一件戒指 / 手镯 / 项链，或关闭一个图层。",
-    "description": ""
-  },
-  "Chat.GlowPromoted.Fmt": {
-    "message": "[Proteus]“{0}”在皮肤层上设置了发光。皮肤已无法发光，因此该选项现在按布料层渲染——它需要一个空闲的饰品栏位，表面效果也会略有不同。",
     "description": ""
   },
   "Chat.HatCompat": {
@@ -239,14 +239,6 @@
     "message": "这一行的图像如何与皮肤上已有的内容合成。\n\n“绘制”只是把它盖在上面，也就是以往所有图层的做法。\n选择其它模式会让这一行变成印花：它为同一模组其它图层所绘制的布料上色，\n并被裁剪成布料的形状——所以彩虹印在渔网袜上只会染上丝线，\n网眼仍然是皮肤。\n\n印花只能触及本模组自己的图层，绝不会影响其它模组的服装。\n在裸露的皮肤上它什么也不画，因此单独选中印花不会显示任何东西。\n这是刻意如此：那里根本没有可供印刷的底子。\n\n正片叠底只能变暗，因此在很深色的布料上几乎看不出来——这时请改用滤色。\n这一行的颜色仍会为图像着色，其不透明度就是印花的强度。",
     "description": ""
   },
-  "Colors.Bodies.All": {
-    "message": "所有身体",
-    "description": ""
-  },
-  "Colors.Bodies.BiboGen3": {
-    "message": "bibo+gen3",
-    "description": ""
-  },
   "Colors.Bodies.GlobalNote": {
     "message": "全局保存——绑定不会记录此项。",
     "description": ""
@@ -255,17 +247,13 @@
     "message": "\n全局设置——它不属于你正在编辑的绑定。",
     "description": ""
   },
-  "Colors.Bodies.Label": {
-    "message": "身体",
-    "description": ""
+  "Colors.Bodies.Vanilla.Label": {
+    "message": "叠加到 gen2/原版",
+    "description": "Checkbox label in the colour-table editor window's Advanced section. \"gen2\" is a body-mod name - never translated. Ticked = this mod is also painted onto vanilla skin."
   },
-  "Colors.Bodies.Off": {
-    "message": "关闭",
-    "description": ""
-  },
-  "Colors.Bodies.Tip": {
-    "message": "将此模组烘焙到哪些身体类型：\n所有身体 = 同系身体（bibo↔gen3/Eve）＋原版（gen2）\nbibo+gen3 = 仅烘焙到同系身体（默认）\n关闭 = 不进行合成\n\n作用于整个模组，而不仅是此选项。",
-    "description": ""
+  "Colors.Bodies.Vanilla.Tip": {
+    "message": "同时将此模组绘制到角色身上穿着的原版（gen2）皮肤上——\n通常是某件装备自带的皮肤。\n只有角色身上确实出现原版皮肤时才会绘制，\n因此没有时不会产生任何开销。\n\nbibo 和 gen3/Eve 始终会被绘制；此项只影响原版。\n作用于整个模组，而不仅是此选项。",
+    "description": "Tooltip for the checkbox above. \"gen2\", \"bibo\", \"gen3\" and \"Eve\" are body-mod names - never translated. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Colors.BustBridge.Label": {
     "message": "布料横跨乳沟",
@@ -373,6 +361,10 @@
   },
   "Colors.Geometry.Section": {
     "message": "几何",
+    "description": ""
+  },
+  "Colors.Effects.Section": {
+    "message": "效果",
     "description": ""
   },
   "Colors.GlowAmount.Label": {
@@ -535,6 +527,18 @@
     "message": "你在“高级”中固定了此模式——它不再跟随你设置的功能。\n点击“恢复自动”可让它重新自适应。",
     "description": ""
   },
+  "Colors.ReinforcedToe.Label": {
+    "message": "加固趾部",
+    "description": ""
+  },
+  "Colors.ReinforcedToe.SavedNote": {
+    "message": "保存在模组中——预设和设计不会记录此项。",
+    "description": ""
+  },
+  "Colors.ReinforcedToe.Tip": {
+    "message": "让包住的趾部比丝袜其余部分更密实，就像真实丝袜把趾尖织得更厚一样：一块更深的\n区域，脚趾仍隐约可见，边缘逐渐淡出而不是戛然而止。\n它只能去掉已经存在的透明度。丝袜没有绘制的地方不会有任何变化，所以绝不会在裸露的\n脚趾上凭空生出布料；在本来就不透明的丝袜上你也看不出区别。\n开启“锐利透明”后，每个像素要么完全实心要么完全消失，柔和的边缘就会变成硬边。",
+    "description": ""
+  },
   "Colors.RenderingAs": {
     "message": "渲染为：",
     "description": ""
@@ -669,6 +673,14 @@
   },
   "Colors.Tiling.Tip": {
     "message": "效果在表面上重复的次数。1 = 一次。",
+    "description": ""
+  },
+  "Colors.ToeDensity.Label": {
+    "message": "密度",
+    "description": ""
+  },
+  "Colors.ToeDensity.Tip": {
+    "message": "趾部比腿部密实多少。100% 为完全不透明；常见的加固趾部远低于此。",
     "description": ""
   },
   "Colors.TowardBottom.Btn": {
@@ -831,8 +843,16 @@
     "message": "无法访问 Penumbra 的模组目录。",
     "description": ""
   },
+  "ContentImport.Fail.NotUpgraded.Fmt": {
+    "message": "Penumbra 未将“{0}”从旧格式升级，因此无法使其部件可切换。导入已撤销，请重新导入该包。",
+    "description": ""
+  },
   "ContentImport.Fail.NothingUsable": {
     "message": "此包中没有可导入的内容。",
+    "description": ""
+  },
+  "ContentImport.Fail.PieceGroup.Fmt": {
+    "message": "无法为“{0}”添加部件开关：{1} 导入已撤销，请重新导入该包。",
     "description": ""
   },
   "ContentImport.Fail.Reserved": {
@@ -1084,8 +1104,8 @@
     "description": ""
   },
   "Create.WholeSkin.Tip": {
-    "message": "当你转换的是一整套皮肤 Mod、而不是画在皮肤上的东西时，请勾选此项。\n贴图看起来像皮肤时 Proteus 会替你勾上；你自己的选择始终优先。\n由此有三个结果。法线贴图会替换材质上已有的那一张，而不是叠加上去——否则它会叠在下面\n同一张贴图上，每个毛孔和褶皱都被应用两次，身体相对脸部显得平板，脖子接缝处出现一条明显的线。\n其次是肤色抑制会关闭，让穿戴者的肤色透出来：抑制的用途是避免布料被重新染色，\n而这套贴图本身就是皮肤。\n第三是「身体」会设为「所有身体」，让这套皮肤也能应用到原版身体上。",
-    "description": ""
+    "message": "当你转换的是一整套皮肤 Mod、而不是画在皮肤上的东西时，请勾选此项。\n贴图看起来像皮肤时 Proteus 会替你勾上；你自己的选择始终优先。\n由此有两个结果。法线贴图会替换材质上已有的那一张，而不是叠加上去——否则它会叠在下面\n同一张贴图上，每个毛孔和褶皱都被应用两次，身体相对脸部显得平板，脖子接缝处出现一条明显的线。\n其次是肤色抑制会关闭，让穿戴者的肤色透出来：抑制的用途是避免布料被重新染色，\n而这套贴图本身就是皮肤。",
+    "description": "Tooltip for the checkbox above. \"normal\" is the normal map (a texture). Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Emissive.Aliases.Fmt": {
     "message": "{0} 个路径",
@@ -1429,10 +1449,6 @@
   },
   "Import.Author.Label": {
     "message": "作者",
-    "description": ""
-  },
-  "Import.BodyFit.NeedsAllBodies.Fmt": {
-    "message": "此包没有为你的原版身体绘制任何内容——将改用“{0}”。烘焙到原版身体默认是关闭的，因此 Proteus 会在导入时将此模组的“身体”设为“所有身体”（颜色 → 高级）；否则它将什么都不会绘制。",
     "description": ""
   },
   "Import.BodyFit.NotDrawn.Fmt": {
@@ -1819,10 +1835,6 @@
     "message": "此包中没有可导入的层。",
     "description": ""
   },
-  "Import.Result.AllBodies.Fmt": {
-    "message": "已导入“{0}”——层数：{1}{2}。此包没有为原版身体绘制任何内容，因此 Proteus 已将此模组的“身体”设为“所有身体”（颜色 → 高级）以便烘焙——若将其关闭，它将不再绘制。",
-    "description": ""
-  },
   "Import.Result.NoLayout.Fmt": {
     "message": "已导入“{0}”——层数：{1}{2}，但 Proteus 无法为你选择身体布局。请在 Penumbra 的“{3}”下选择一个，否则不会绘制任何内容。",
     "description": ""
@@ -2101,6 +2113,390 @@
   },
   "Parts.Row.Fmt": {
     "message": "{0} · {1:N0} 三角面",
+    "description": ""
+  },
+  "Parts.Tool.Navigate": {
+    "message": "切换部位",
+    "description": ""
+  },
+  "Parts.Tool.Navigate.Tip": {
+    "message": "点击模型的部位来选中它们，再为其添加开关。",
+    "description": ""
+  },
+  "Parts.Tool.Inflate": {
+    "message": "向外拉",
+    "description": ""
+  },
+  "Parts.Tool.Inflate.Tip": {
+    "message": "在模型上涂抹，把表面向外推出，让穿过衣物的身体重新被遮住。",
+    "description": ""
+  },
+  "Parts.Tool.Deflate": {
+    "message": "向内推",
+    "description": ""
+  },
+  "Parts.Tool.Deflate.Tip": {
+    "message": "同一把笔反向使用，适用于离身体太远的衣物。",
+    "description": ""
+  },
+  "Parts.Tool.Relax": {
+    "message": "平滑",
+    "description": ""
+  },
+  "Parts.Tool.Relax.Tip": {
+    "message": "在模型上涂抹即可平滑表面 — 衣物自带的凹凸，或拉得不平的地方。\n与 3ds Max 的松弛一样会收缩：曲面会变平，布料可能向身体下沉。",
+    "description": ""
+  },
+  "Parts.Brush.RelaxRate.Tip": {
+    "message": "涂抹时表面变平滑的速度。低则柔和易控，高则几乎立刻平滑。\n\n靠近开放边缘（如下摆）时，平滑会把边缘稍微向内收。",
+    "description": ""
+  },
+  "Parts.Tool.Bridge": {
+    "message": "搭桥",
+    "description": ""
+  },
+  "Parts.Tool.Bridge.Tip": {
+    "message": "横跨凹陷处（臀沟、褶皱）涂抹，让布料笔直地绷过去，而不是顺着\n身体陷进去。它只会抬升，并保留圆润部位原有的形状。",
+    "description": ""
+  },
+  "Parts.Tool.Wind": {
+    "message": "风",
+    "description": ""
+  },
+  "Parts.Tool.Wind.Tip": {
+    "message": "绘制风吹动这件服装的位置；红色越深摆动越强。\n写入模型的第二个顶点颜色。",
+    "description": ""
+  },
+  "Parts.Tool.Move": {
+    "message": "移动",
+    "description": ""
+  },
+  "Parts.Tool.Move.Tip": {
+    "message": "选择一个部件并拖动箭头：箭头沿该轴移动，\n方块在该平面内移动。",
+    "description": ""
+  },
+  "Parts.Move.Help": {
+    "message": "点击部件以选中它，然后拖动箭头或方块。在其他地方拖动可旋转模型，Shift+拖动平移视图，滚轮缩放。",
+    "description": ""
+  },
+  "Parts.Move.LiveHint": {
+    "message": "在角色身上点击一个部件，然后拖动箭头或方块。按住 Alt 可移动镜头。每次移动在松开时保存。",
+    "description": ""
+  },
+  "Parts.Move.Part.Fmt": {
+    "message": "正在移动部件 {0}",
+    "description": ""
+  },
+  "Parts.Move.NoPart": {
+    "message": "点击一个部件以选择要移动的内容。",
+    "description": ""
+  },
+  "Parts.Move.ListTip": {
+    "message": "在此选择要移动的部件，或在模型或角色上点击它。",
+    "description": ""
+  },
+  "Parts.Move.Adjacent": {
+    "message": "移动相邻部件",
+    "description": ""
+  },
+  "Parts.Move.Adjacent.Tip": {
+    "message": "部件附近的布料会跟随移动，无论是否与其相连，越远跟随越少。\n关闭时只移动该部件。与相邻部件完全共用的点仍会移动，接缝保持闭合。",
+    "description": ""
+  },
+  "Parts.Move.Falloff": {
+    "message": "衰减",
+    "description": ""
+  },
+  "Parts.Move.Falloff.Tip": {
+    "message": "距离部件多远的布料仍会跟随它。",
+    "description": ""
+  },
+  "Parts.Move.BonesNote": {
+    "message": "移动后的部件仍跟随原本的骨骼，离骨骼太远时在某些姿势下可能会弯曲异常。",
+    "description": ""
+  },
+  "Parts.Move.SkinTip": {
+    "message": "皮肤无法移动。",
+    "description": ""
+  },
+  "Parts.Move.LockedTip": {
+    "message": "该部件已锁定。请在笔刷下解锁后再移动。",
+    "description": ""
+  },
+  "Parts.Move.NothingFree": {
+    "message": "该部件中没有可以移动的内容：它是皮肤或已锁定。",
+    "description": ""
+  },
+  "Parts.Move.Moved.Fmt": {
+    "message": "最大移动：{0:F1} mm。",
+    "description": ""
+  },
+  "Parts.Move.Undo": {
+    "message": "撤销移动",
+    "description": ""
+  },
+  "Parts.Brush.WindAmount": {
+    "message": "强度",
+    "description": ""
+  },
+  "Parts.Brush.WindAmount.Tip": {
+    "message": "要绘制的风量。0% 会擦除，绘制时按住 Ctrl 也会擦除。",
+    "description": ""
+  },
+  "Parts.Brush.WindRate": {
+    "message": "速度",
+    "description": ""
+  },
+  "Parts.Brush.WindRate.Tip": {
+    "message": "绘制时风量达到设定值的速度。",
+    "description": ""
+  },
+  "Parts.Wind.AddsChannel": {
+    "message": "此模型还没有风通道。保存第一笔时会添加。",
+    "description": ""
+  },
+  "Parts.Wind.FirstColorNotWhite": {
+    "message": "此模型的第一个顶点颜色不是白色，而风效果需要白色。Proteus 会保持作者原样。",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Set.Fmt": {
+    "message": "已设置 {0} 个材质文件，让风可以吹动这件装备。",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Missing.Fmt": {
+    "message": "{0} 个材质文件没有可修改的风动设置，因此可能不会摆动。",
+    "description": ""
+  },
+  "Parts.Wind.Materials.NotInMod.Fmt": {
+    "message": "这件装备使用的 {0} 个材质来自游戏而非此模组，因此无法设置其风动。",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Failed.Fmt": {
+    "message": "无法为风设置装备的材质：{0}",
+    "description": ""
+  },
+  "Parts.Wind.Refused.Fmt": {
+    "message": "无法为 {0} 个网格添加风：那里没有空间再放一个顶点属性。",
+    "description": ""
+  },
+  "Parts.Brush.BridgeRate.Tip": {
+    "message": "涂抹时布料升起横跨凹陷的速度。低则柔和易控，高则几乎立刻填平空隙。",
+    "description": ""
+  },
+  "Parts.Brush.Help": {
+    "message": "在模型上拖动即可涂抹。从背景拖动可旋转，Shift+拖动平移，滚轮缩放。",
+    "description": ""
+  },
+  "Parts.ShowModelView": {
+    "message": "显示模型视图",
+    "description": ""
+  },
+  "Parts.ShowModelView.Tip": {
+    "message": "在此窗口的模型上绘制，而不是在你的角色上。",
+    "description": ""
+  },
+  "Parts.Live.Pick.Tip": {
+    "message": "点击角色身上的服装，在此打开它的模组和模型。",
+    "description": ""
+  },
+  "Parts.Live.Hint": {
+    "message": "直接在角色上绘制。按住 Alt 可移动镜头。每一笔在松开时保存。",
+    "description": ""
+  },
+  "Parts.Live.NotWorn": {
+    "message": "你的角色当前没有穿着此模型。请穿上它，或打开显示模型视图。",
+    "description": ""
+  },
+  "Parts.Content.Hint": {
+    "message": "这件服装已导入 Proteus，由 Proteus 为你穿上。照常绘制即可——每一笔保存后，服装会重新生成，几秒后便会显示在角色上。",
+    "description": ""
+  },
+  "Parts.Content.NoSwitches": {
+    "message": "无法为导入的服装添加开关：Proteus 将它挂在另一件物品上，由那件物品自身的开关控制。上方的笔刷仍可使用。",
+    "description": ""
+  },
+  "Parts.Live.PickedShell": {
+    "message": "这是 Proteus 为你绘制的服装，每次有变动都会重新生成。请选择它来源的模组来编辑。",
+    "description": ""
+  },
+  "Parts.Live.Unreadable": {
+    "message": "此模型与角色身上的模型不匹配。打开显示模型视图即可在此绘制。",
+    "description": ""
+  },
+  "Parts.Live.NoCharacter": {
+    "message": "当前无法在角色上绘制。",
+    "description": ""
+  },
+  "Parts.Live.PickedNotListed.Fmt": {
+    "message": "{0} 不是此模组发布的模型。",
+    "description": ""
+  },
+  "Parts.Brush.Size": {
+    "message": "笔刷大小",
+    "description": ""
+  },
+  "Parts.Brush.Size.Tip": {
+    "message": "笔刷的作用范围。中心最强，到边缘递减为零；笔刷大则推动大片起伏，\n笔刷小则只动一个小鼓包。",
+    "description": ""
+  },
+  "Parts.Brush.Strength": {
+    "message": "强度",
+    "description": ""
+  },
+  "Parts.Brush.Strength.Tip": {
+    "message": "每一瞬涂抹中表面移动的距离。通常宜小：衣物只需离身体不到一毫米即可，\n而且同一处可以反复涂抹。",
+    "description": ""
+  },
+  "Parts.Brush.TooSmall.Fmt": {
+    "message": "笔刷比这个模型的三角面（约 {0:F1} mm）还小，会把单个顶点拉成尖刺而不是推动表面。请调大一些。",
+    "description": ""
+  },
+  "Parts.Brush.Moved.Fmt": {
+    "message": "最大位移：{0:F2} mm / {1:F1} mm。",
+    "description": ""
+  },
+  "Parts.Brush.Untouched": {
+    "message": "尚未移动任何部分。",
+    "description": ""
+  },
+  "Parts.Brush.Undo": {
+    "message": "撤销一笔",
+    "description": ""
+  },
+  "Parts.Brush.Reset": {
+    "message": "重新开始",
+    "description": ""
+  },
+  "Parts.Brush.NotSavedYet": {
+    "message": "尚未保存",
+    "description": ""
+  },
+  "Parts.Brush.Save": {
+    "message": "保存到模组",
+    "description": ""
+  },
+  "Parts.Brush.Save.Tip": {
+    "message": "将修改写入模组自己的模型文件，因此关掉 Proteus 也仍然有效，\n并且导出模组时会一起带走。原文件会先被复制到模组内的\nProteus/meshvolume-backup/，随时可以撤销。",
+    "description": ""
+  },
+  "Parts.Brush.Save.Nothing.Tip": {
+    "message": "所有内容均已保存。停止涂抹片刻后，更改会自动保存。",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes": {
+    "message": "应用到其他尺码",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Tip": {
+    "message": "将此模型上涂抹的更改复制到模组中同一模型的其他尺码，按其在装备上的位置对应。\n每个尺码会先备份，“撤销已保存的修改”可将其恢复。",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Running": {
+    "message": "正在应用到其他尺码…",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Done.Fmt": {
+    "message": "已应用到其他 {0} 个尺码。",
+    "description": ""
+  },
+  "Parts.Brush.ApplySizes.Problem.Fmt": {
+    "message": "{0}：{1}",
+    "description": ""
+  },
+  "Parts.Brush.Saved.Fmt": {
+    "message": "已保存。表面最多移动了 {0:F2} mm。",
+    "description": ""
+  },
+  "Parts.Brush.Spares.Fmt": {
+    "message": "有 {0} 个属于这个模型身材滑块的顶点无法随之移动，因此开启该滑块时，部分位置的穿模可能会重现。",
+    "description": ""
+  },
+  "Parts.Brush.Revert": {
+    "message": "撤销已保存的修改",
+    "description": ""
+  },
+  "Parts.Brush.Revert.Tip": {
+    "message": "把笔刷在这个模组中修改过的每个模型，完全恢复为作者制作时的样子。",
+    "description": ""
+  },
+  "Parts.Brush.Reverted.Fmt": {
+    "message": "已将 {0} 个模型恢复为作者制作时的样子。",
+    "description": ""
+  },
+  "Parts.Brush.Revert.Arm.Tip": {
+    "message": "按住 Ctrl 或 Shift 并点击。",
+    "description": ""
+  },
+  "Parts.Brush.Size.Keys.Tip": {
+    "message": "[ 和 ] 可调整大小；按住 Shift 可微调。",
+    "description": ""
+  },
+  "Parts.Brush.Mirror": {
+    "message": "左右镜像",
+    "description": ""
+  },
+  "Parts.Brush.Mirror.Tip": {
+    "message": "以身体中心为轴，同时镜像涂抹两侧。",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Hint": {
+    "message": "Shift+点击部件可将其锁定。",
+    "description": ""
+  },
+  "Parts.Brush.Lock.ListTip": {
+    "message": "取消勾选部件即可锁定：任何笔刷都不会移动它。在模型或角色上 Shift+点击部件效果相同。",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Count.Fmt": {
+    "message": "已锁定 {0} 个部件",
+    "description": ""
+  },
+  "Parts.Brush.Lock.UnlockAll": {
+    "message": "全部解锁",
+    "description": ""
+  },
+  "Parts.Brush.Lock.Skin.Tip": {
+    "message": "皮肤永远不会移动。",
+    "description": ""
+  },
+  "MeshVolume.Apply.Nothing": {
+    "message": "尚未涂抹任何内容，没有可保存的东西。",
+    "description": ""
+  },
+  "MeshVolume.Apply.EditFailed.Fmt": {
+    "message": "无法编辑 {0}：{1}。未写入任何内容。",
+    "description": ""
+  },
+  "MeshVolume.Apply.Failed.Fmt": {
+    "message": "写入失败：{0}",
+    "description": ""
+  },
+  "MeshVolume.Revert.Nothing": {
+    "message": "笔刷没有修改过这个模组的任何内容。",
+    "description": ""
+  },
+  "MeshVolume.Revert.Blocked.Fmt": {
+    "message": "请先撤销{0}：它是在笔刷之后应用到同一个模型上的，现在撤销笔刷会连带把它一起撤销。",
+    "description": ""
+  },
+  "MeshVolume.Revert.NoBackups": {
+    "message": "找不到任何可供恢复的原始模型。",
+    "description": ""
+  },
+  "MeshVolume.Feature.Toggles": {
+    "message": "部位开关",
+    "description": ""
+  },
+  "MeshVolume.Feature.HatCompat": {
+    "message": "帽子适配",
+    "description": ""
+  },
+  "MeshVolume.Feature.Brush": {
+    "message": "笔刷",
+    "description": ""
+  },
+  "ModelBackups.Blocked.Fmt": {
+    "message": "请先撤销{0}：它在此之后修改了同一个模型，现在撤销这个会连带把它一起撤销。",
     "description": ""
   },
   "Parts.Selected.Fmt": {
@@ -2452,7 +2848,7 @@
     "description": ""
   },
   "Tab.Parts": {
-    "message": "开关",
+    "message": "工作室",
     "description": ""
   },
   "Tab.Settings": {

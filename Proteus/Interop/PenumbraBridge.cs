@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using Penumbra.Api.Enums;
@@ -21,6 +22,7 @@ public class PenumbraBridge : IDisposable
     private readonly ResolvePlayerPath resolvePlayerPath;
     private readonly AddMod addMod;
     private readonly ReloadMod reloadMod;
+    private readonly DeleteMod deleteMod;
     private readonly TrySetMod trySetMod;
     private readonly TrySetModPriority trySetModPriority;
     private readonly TrySetModSetting trySetModSetting;
@@ -28,6 +30,11 @@ public class PenumbraBridge : IDisposable
     private readonly RedrawObject redrawObject;
     private readonly OpenMainWindow openMainWindow;
     private readonly GetGameObjectResourcePaths getGameObjectResourcePaths;
+    private readonly AddTemporaryMod addTemporaryMod;
+    private readonly RemoveTemporaryMod removeTemporaryMod;
+
+    /// <summary>When this bridge last changed a temporary mod, so Penumbra's echo of it can be dropped.</summary>
+    private long lastOwnTemporaryModTick;
 
     private readonly EventSubscriber<ModSettingChange, Guid, string, bool> modSettingChangedSub;
     private readonly EventSubscriber<string> modAddedSub;
@@ -65,6 +72,7 @@ public class PenumbraBridge : IDisposable
         resolvePlayerPath = new ResolvePlayerPath(pluginInterface);
         addMod = new AddMod(pluginInterface);
         reloadMod = new ReloadMod(pluginInterface);
+        deleteMod = new DeleteMod(pluginInterface);
         trySetMod = new TrySetMod(pluginInterface);
         trySetModPriority = new TrySetModPriority(pluginInterface);
         trySetModSetting = new TrySetModSetting(pluginInterface);
@@ -72,9 +80,20 @@ public class PenumbraBridge : IDisposable
         redrawObject = new RedrawObject(pluginInterface);
         openMainWindow = new OpenMainWindow(pluginInterface);
         getGameObjectResourcePaths = new GetGameObjectResourcePaths(pluginInterface);
+        addTemporaryMod = new AddTemporaryMod(pluginInterface);
+        removeTemporaryMod = new RemoveTemporaryMod(pluginInterface);
 
         modSettingChangedSub = Penumbra.Api.IpcSubscribers.ModSettingChanged.Subscriber(pluginInterface,
-            (change, collId, modDir, inherited) => ModSettingChanged?.Invoke(change, collId, modDir, inherited));
+            (change, collId, modDir, inherited) =>
+            {
+                // Our own temporary-mod change coming back. The live brush swaps its preview several times a
+                // second, and every listener here — the compositor, the hat watcher — would otherwise treat each
+                // swap as the player's mod setup changing. Penumbra reports a temporary mod with no directory.
+                if (change == ModSettingChange.TemporaryMod && string.IsNullOrEmpty(modDir)
+                    && unchecked(Environment.TickCount64 - Interlocked.Read(ref lastOwnTemporaryModTick)) < 1000)
+                    return;
+                ModSettingChanged?.Invoke(change, collId, modDir, inherited);
+            });
         modAddedSub = Penumbra.Api.IpcSubscribers.ModAdded.Subscriber(pluginInterface,
             modDir => ModAdded?.Invoke(modDir));
         modDeletedSub = Penumbra.Api.IpcSubscribers.ModDeleted.Subscriber(pluginInterface,
@@ -248,6 +267,58 @@ public class PenumbraBridge : IDisposable
     }
 
     /// <summary>
+    /// The FILES the local player's models are actually loaded from, or null when unavailable — the
+    /// resolved side of the same map the getters above read the game-path side of.
+    /// <para/>
+    /// A file under Penumbra's mods folder names the mod supplying it, which is how the Toggles tab knows
+    /// which mods are being worn right now. Resolved paths rather than game paths because a game path says
+    /// what is drawn, not who provides it: the same <c>e6116_met.mdl</c> comes from the game or from any one
+    /// of several mods depending on the collection.
+    /// </summary>
+    public HashSet<string>? GetActivePlayerModelFiles()
+    {
+        if (!IsAvailable) return null;
+        try
+        {
+            var results = getGameObjectResourcePaths.Invoke(0);
+            var dict = results[0];
+            if (dict == null) return null;
+            var files = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (resolved, gamePaths) in dict)
+                foreach (var p in gamePaths)
+                    if (p.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase)) { files.Add(resolved); break; }
+            return files;
+        }
+        catch (Exception ex) { log.Warning(ex, "GetGameObjectResourcePaths failed (model files)"); return null; }
+    }
+
+    /// <summary>
+    /// Each file the local player's models are loaded from, keyed by <see cref="BodyShapeReader.PathKey"/>, with
+    /// the model game path it stands in for — or null when unavailable. A modded file's own name need not say
+    /// which race the model was authored for; the game path it replaces always does.
+    /// </summary>
+    public Dictionary<string, string>? GetActivePlayerModelGamePaths()
+    {
+        if (!IsAvailable) return null;
+        try
+        {
+            var results = getGameObjectResourcePaths.Invoke(0);
+            var dict = results[0];
+            if (dict == null) return null;
+            var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (resolved, gamePaths) in dict)
+                foreach (var p in gamePaths)
+                    if (p.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase))
+                    {
+                        map.TryAdd(BodyShapeReader.PathKey(resolved), p);
+                        break;
+                    }
+            return map;
+        }
+        catch (Exception ex) { log.Warning(ex, "GetGameObjectResourcePaths failed (model game paths)"); return null; }
+    }
+
+    /// <summary>
     /// Both path sets from ONE GetGameObjectResourcePaths call.
     /// <para/>
     /// The two getters above make the same IPC call and differ only in which extension they keep, so asking
@@ -289,6 +360,15 @@ public class PenumbraBridge : IDisposable
         if (!IsAvailable) return PenumbraApiEc.SystemDisposed;
         try { return addMod.Invoke(modDirectory); }
         catch (Exception ex) { log.Error(ex, "AddMod failed"); return PenumbraApiEc.UnknownError; }
+    }
+
+    /// <summary>Remove a mod from Penumbra and delete its folder. Success means the call went through, not that
+    /// the folder is gone — Penumbra's own caveat.</summary>
+    public PenumbraApiEc DeleteModDirectory(string modDirectory)
+    {
+        if (!IsAvailable) return PenumbraApiEc.SystemDisposed;
+        try { return deleteMod.Invoke(modDirectory); }
+        catch (Exception ex) { log.Error(ex, "DeleteMod failed"); return PenumbraApiEc.UnknownError; }
     }
 
     /// <summary>Tell Penumbra to reload a mod from disk.</summary>
@@ -336,6 +416,38 @@ public class PenumbraBridge : IDisposable
     /// Penumbra absent, or the IPC threw — which callers need in order to know whether to expect the
     /// redraw's downstream echoes (see <c>CompositorService.StampOwnRedraw</c>).
     /// </summary>
+    /// <summary>
+    /// Add or replace a temporary mod in the local player's collection: <paramref name="paths"/> maps game paths
+    /// to files on disk. Re-adding the same tag and priority swaps its redirects in place. Nothing is written to
+    /// any mod, and Penumbra forgets it on its own restart.
+    /// </summary>
+    public bool SetPlayerTemporaryMod(string tag, Dictionary<string, string> paths, int priority)
+    {
+        if (!IsAvailable || GetPlayerCollectionId() is not { } collection) return false;
+        try
+        {
+            Interlocked.Exchange(ref lastOwnTemporaryModTick, Environment.TickCount64);   // before: the echo can be synchronous
+            var ec = addTemporaryMod.Invoke(tag, collection, paths, string.Empty, priority);
+            if (ec == PenumbraApiEc.Success) return true;
+            log.Warning("[Proteus] AddTemporaryMod {0} -> {1}", tag, ec);
+            return false;
+        }
+        catch (Exception ex) { log.Error(ex, "AddTemporaryMod failed"); return false; }
+    }
+
+    /// <summary>Remove a temporary mod added by <see cref="SetPlayerTemporaryMod"/>.</summary>
+    public bool RemovePlayerTemporaryMod(string tag, int priority)
+    {
+        if (!IsAvailable || GetPlayerCollectionId() is not { } collection) return false;
+        try
+        {
+            Interlocked.Exchange(ref lastOwnTemporaryModTick, Environment.TickCount64);
+            var ec = removeTemporaryMod.Invoke(tag, collection, priority);
+            return ec is PenumbraApiEc.Success or PenumbraApiEc.NothingChanged;
+        }
+        catch (Exception ex) { log.Error(ex, "RemoveTemporaryMod failed"); return false; }
+    }
+
     public bool RedrawPlayer()
     {
         if (!IsAvailable) return false;

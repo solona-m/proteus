@@ -61,44 +61,47 @@ public class StatusWindow : Window
     // rewrites — caching it in a static readonly field would freeze it at whatever the style was on load.
     private static Vector4 ImportWarnColour => ProteusStyle.Warn;
 
-    // Indexed by (int)SiblingSynthesisMode: Off=0, BiboGen3Only=1, AllBodies=2.
-    // A METHOD, not the static readonly array this used to be: a static field captures its value once at
-    // type-init, so the labels would have frozen in whatever language was active when the window first
-    // drew and never followed a language change.
-    private static string SiblingModeLabel(int mode) => mode switch
-    {
-        0 => Strings.ColorPanel.BodiesOff,
-        1 => Strings.ColorPanel.BodiesSibling,
-        _ => Strings.ColorPanel.BodiesAll,
-    };
-
     // Set by the plugin-installer gear icon (UiBuilder.OpenConfigUi) so the window opens on Settings.
     // One-shot: consumed by the next Draw so the user can move off the tab freely afterwards.
     private bool _forceSettingsTab;
 
-    // ── the Toggles tab's resizable mode ────────────────────────────────────────────────────────────────
-    // Which tab drew last frame. It cannot be anything but last frame's: a tab's selection is only known
-    // once BeginTabItem has run, which is inside Draw, which is after Begin has already read Flags. So the
-    // mode is applied one frame late — a single frame of auto-fit on the way in, which reads as a window
-    // opening at a remembered size rather than as a glitch.
-    private bool _togglesTabActive;
-    // What PreDraw actually did last frame, which is what tells an ENTRY apart from a frame already in the
-    // mode. Driven off this rather than off a tab click because ImGui remembers the selected tab in its ini:
-    // the very first frame after a game restart is an entry too, with no click anywhere.
-    private bool _resizableActive;
-    private bool _restoreSize;
-    private bool _restoreAutoFit;
-    // Live window size in the resizable mode, UNSCALED — the host multiplies Size by the global scale, so a
-    // scaled value stored here would compound the scale on every restore.
+    // ── sizing ─────────────────────────────────────────────────────────────────────────────────────────
+    // The window is always resizable. Until the user drags it, it fits itself to each tab's controls when
+    // the tab changes (a few frames of AlwaysAutoResize, then the grip back); once they have, it keeps their
+    // size. See PreDraw.
+    //
+    // Whether the Studio tab drew last frame — the edge that means it was left.
+    private bool _studioDrawn;
+    // Which tab drew last frame and this frame, so a change can be seen. A tab's selection is only known once
+    // BeginTabItem has run inside Draw, so the fit it triggers starts the frame after.
+    private string? _lastTab, _tabDrawn;
+    // Frames left in the current auto-fit; 0 when not fitting.
+    private int _fitFrames;
+    // The Studio controls' height the window was last fitted to; reset when the tab changes.
+    private float _studioFitHeight;
+    // The first frame of a fit, which also resets the width — see PreDraw.
+    private bool _fitStarting;
+    // Put the user's remembered size back on the next PreDraw (first open).
+    private bool _restoreSize = true;
+    // Frames during which a size change is the plugin's own doing (a restore, a fit, growing for the viewer)
+    // and not the user dragging.
+    private int _ownResizeFrames;
+    // Live window size, UNSCALED — the host multiplies Size by the global scale, so a scaled value stored
+    // here would compound the scale on every restore.
     private Vector2 _togglesSize;
     private bool _sizeDirty;
     private long _sizeChangedAt;
-    // The size the AUTO-FITTING tabs last settled at, unscaled — handed back on the way out of the Toggles
-    // tab. Null until an auto-fitting tab has drawn once, which a config opening straight onto Toggles can
-    // put off indefinitely.
-    private Vector2? _autoFitSize;
     // Height DrawLastResult took last frame, so the Toggles tab knows how much to leave under itself.
     private float _footerReserve;
+
+    // Whether the Toggles tab's model viewer was on screen last frame, so its APPEARANCE can be told apart
+    // from it simply still being there. Only updated while that tab draws: leaving the tab and coming back to
+    // a model already open is not the viewer loading, and must not undo a size the user chose since.
+    private bool _modelWasShowing;
+    // One-shot: grow the window next PreDraw, because the model viewer just appeared.
+    private bool _growForModel;
+    // One-shot: once the grown size has landed, pull the window back on screen if it now hangs off an edge.
+    private bool _keepOnScreen;
 
     // Key: absolute index-texture path → 1-based row numbers that appear in it.
     // Cleared per-entry on each popup open so option switches are reflected.
@@ -221,6 +224,9 @@ public class StatusWindow : Window
     // the other kind's preview would offer to import it under the wrong rules.
     private ContentImportService.ImportPreview? _contentPreview;
     private volatile ContentImportService.PreparedImport? _contentPrepared;
+    // A registration still writing a v3 pack's piece group on the pool. Pumped every frame until it answers;
+    // the import button stays inert meanwhile. See ContentImportService.Pump.
+    private ContentImportService.PreparedImport? _contentAwaited;
 
     // ── Atramentum Luminis (.ttmp2) import state ──
     // A third set of fields for the same three-phase handoff, and kept apart from the other two for the
@@ -438,112 +444,147 @@ public class StatusWindow : Window
     };
 
     /// <summary>
-    /// What the window is on the Toggles tab, which is the one tab worth resizing: it is a model you click
-    /// parts on beside a list of them, and both are better bigger.
+    /// What the window is whenever it is not in the middle of fitting itself: resizable by the user.
     /// </summary>
     /// <remarks>
-    /// 560 wide rather than the 520 above because this tab spends 55% of its width on the model — at 520 the
-    /// list beside it is left with about 200px, which is not a list anyone can read. It stays ≥ 520 so
-    /// <see cref="BrandHeader"/>'s width floor, which is fed from <see cref="AutoFitConstraints"/>'s minimum,
-    /// means the same thing in both modes. 560 tall is the tab summed at its own minimum row height, so the
-    /// vertical scrollbar is a genuine edge case rather than the normal state.
+    /// The same 520 floor as <see cref="AutoFitConstraints"/>, so <see cref="BrandHeader"/>'s width floor means
+    /// the same thing either way; short, because a sparse tab fitted to its controls should not be padded out.
     /// <para/>
     /// A finite maximum rather than <c>float.MaxValue</c>: the host multiplies it by the global scale, and
     /// an infinity is harder to reason about later than a number no monitor reaches.
     /// </remarks>
     private static readonly WindowSizeConstraints ResizableConstraints = new()
     {
-        MinimumSize = new Vector2(560, 560),
+        MinimumSize = new Vector2(520, 160),
         MaximumSize = new Vector2(4000, 3000),
     };
 
+    /// <summary>Frames of auto-fit per fit — see <see cref="PreDraw"/>.</summary>
+    private const int FitFrameCount = 4;
+
+    /// <summary>Fit the window to the current tab, unless the user has given it a size of their own.</summary>
+    private void StartFit()
+    {
+        if (config.WindowUserSized) return;
+        _fitFrames = FitFrameCount;
+        _fitStarting = true;
+    }
+
     /// <summary>
-    /// Pick the window's mode for this frame: auto-fitting everywhere, resizable on the Toggles tab.
+    /// Size the window for this frame. It is always resizable; until the user drags it, it fits itself to the
+    /// current tab's controls whenever the tab changes, and once they have, it keeps their size.
     /// </summary>
     /// <remarks>
     /// This is the hook that can do it. Dalamud's window host runs <c>PreDraw</c>, then applies
     /// <see cref="Window.Size"/> / <see cref="Window.SizeConstraints"/>, then reads <see cref="Window.Flags"/>
     /// and calls <c>Begin</c> — so all three land in the same frame from here.
     /// <para/>
-    /// <see cref="Window.Flags"/> is assigned in BOTH branches every frame, not cleared once on the way in:
-    /// it is a plain property, and clearing the bit only on the transition would mean auto-fit never came
-    /// back. <see cref="Window.Size"/> is released here rather than at the end of <see cref="Draw"/> because
-    /// Draw does not run on a collapsed window — releasing it there would leave a window collapsed on the
-    /// Toggles tab pinned to <c>ImGuiCond.Always</c> forever, unresizable.
+    /// A fit is a few frames of <c>AlwaysAutoResize</c> (which has no grip) and then the flag comes off again, so
+    /// the window is left at its fitted size with the grip back. Several frames, not one: auto-fit measures the
+    /// content drawn the frame before, so the first frame only starts the measurement.
+    /// <para/>
+    /// <see cref="Window.Flags"/> is assigned every frame, not only on transitions: it is a plain property, and
+    /// clearing the bit only once would leave a missed frame stuck auto-fitting. <see cref="Window.Size"/> is
+    /// released here rather than at the end of <see cref="Draw"/> because Draw does not run on a collapsed
+    /// window — releasing it there would leave a collapsed window pinned to <c>ImGuiCond.Always</c> for good.
     /// <para/>
     /// One thing this cannot beat: Dalamud's own title-bar "pin" ORs in <c>NoResize</c>, so a pinned window
-    /// has no grip here either. That is the pin working, not this failing.
+    /// has no grip either. That is the pin working, not this failing.
     /// <para/>
-    /// LEAVING the tab needs an explicit size for a reason that is not symmetric with entering it. An
-    /// auto-fitting window measures the content it drew, and roughly twenty <c>PushTextWrapPos(0)</c> calls
-    /// across the other tabs wrap at the CONTENT EDGE — so a wrapped paragraph is exactly as wide as the
-    /// window already is, and the measured width equals the current width at any width. That is a fixed
-    /// point the window can climb but never fall from. It is a different thing from the width floor in
-    /// <see cref="AutoFitConstraints"/>, which decides how narrow the window may START; this decides that it
-    /// never comes back down. Harmless while nothing could widen the window past its own fit;
-    /// now the Toggles tab can, and every other tab would keep the dragged width (up to MaximumSize) for the
-    /// rest of the session. Handing back the size the auto-fitting tabs last settled at re-measures the
-    /// wrapping against that width instead, which lands exactly where they were before.
+    /// THE RATCHET. An auto-fitting window measures the content it drew, and roughly twenty
+    /// <c>PushTextWrapPos(0)</c> calls across the tabs wrap at the CONTENT EDGE — so a wrapped paragraph is
+    /// exactly as wide as the window already is, and the measured width equals the current width at any width.
+    /// Fitting from a wide window therefore keeps it wide. Each fit starts by putting the width back to
+    /// <see cref="AutoFitConstraints"/>'s floor, so the paragraphs are measured from there.
     /// </remarks>
     public override void PreDraw()
     {
         FlushPendingSize();
+        if (_ownResizeFrames > 0) _ownResizeFrames--;
 
-        if (_togglesTabActive)
+        // Released by default, so the grip moves the edge instead of being overwritten each frame.
+        Size = null;
+
+        if (_restoreSize)
         {
-            if (!_resizableActive) _restoreSize = true;
-            _resizableActive = true;
-
-            Flags &= ~ImGuiWindowFlags.AlwaysAutoResize;
-            SizeConstraints = ResizableConstraints;
-
-            if (_restoreSize)
+            _restoreSize = false;
+            if (config.WindowUserSized)
             {
-                _restoreSize = false;
-                _togglesSize = ClampToResizable(
-                    new Vector2(config.TogglesWindowWidth, config.TogglesWindowHeight));
+                _togglesSize = ClampToResizable(new Vector2(config.TogglesWindowWidth, config.TogglesWindowHeight));
                 Size = _togglesSize;
                 SizeCondition = ImGuiCond.Always;
+                _ownResizeFrames = 3;
             }
             else
             {
-                // Released, so the grip actually moves the edge instead of being overwritten each frame.
-                Size = null;
+                StartFit();
+            }
+        }
+
+        if (_fitFrames > 0)
+        {
+            _fitFrames--;
+            Flags |= ImGuiWindowFlags.AlwaysAutoResize;
+            SizeConstraints = AutoFitConstraints;
+            _ownResizeFrames = Math.Max(_ownResizeFrames, 3);
+
+            // The first frame puts the width back to the floor before fitting — see the remarks on the ratchet:
+            // wrapped paragraphs measure as wide as the window already is, so fitting from a wide window would
+            // keep it wide. The height is left as it is; auto-fit settles it.
+            if (_fitStarting)
+            {
+                _fitStarting = false;
+                Size = new Vector2(AutoFitConstraints.MinimumSize.X, MathF.Max(_togglesSize.Y, AutoFitConstraints.MinimumSize.Y));
+                SizeCondition = ImGuiCond.Always;
             }
         }
         else
         {
-            // Leaving the tab, which needs a size of its own even though what we are going back to fits
-            // itself — see the remarks on the ratchet.
-            if (_resizableActive) _restoreAutoFit = true;
-            _resizableActive = false;
-
-            Flags |= ImGuiWindowFlags.AlwaysAutoResize;
-            SizeConstraints = AutoFitConstraints;
-
-            if (_restoreAutoFit)
-            {
-                _restoreAutoFit = false;
-                // Width is the axis that ratchets, so it is the one being put back. The fallback resets it
-                // to the floor, which costs one narrow frame and is still better than staying stuck at
-                // whatever the user dragged to.
-                var fit = _autoFitSize ?? new Vector2(AutoFitConstraints.MinimumSize.X, _togglesSize.Y);
-
-                // The height is pinned to whichever is TALLER, and that is not cosmetic. The remembered fit
-                // belongs to the tab we left from, which may be sparser than the one we are landing on — and
-                // a pinned frame too short for its content raises a vertical scrollbar, whose width comes off
-                // the wrap edge. The paragraphs would then measure a scrollbar narrower, and since the fixed
-                // point below never climbs back down, the window would keep those pixels for good and lose
-                // another set on the next round trip. Too tall costs one frame that auto-fit immediately
-                // corrects; too short is permanent. The constraints clamp this back to MaximumSize anyway.
-                Size = new Vector2(fit.X, MathF.Max(fit.Y, _togglesSize.Y));
-                SizeCondition = ImGuiCond.Always;
-            }
-            else
-            {
-                Size = null;
-            }
+            Flags &= ~ImGuiWindowFlags.AlwaysAutoResize;
+            SizeConstraints = ResizableConstraints;
         }
+
+        if (_growForModel)
+        {
+            _growForModel = false;
+            GrowForModel();
+        }
+    }
+
+    /// <summary>
+    /// Grow the window to at least half the screen's width and height — a quarter of its area — because the
+    /// model viewer has just appeared and painting on a model wants room.
+    /// </summary>
+    /// <remarks>
+    /// GROW ONLY, per axis. A window the user has already dragged larger than this keeps its size, and so
+    /// does whichever axis already exceeds the target; the point is to rescue a window too small to use, not
+    /// to impose a size on one someone chose.
+    /// <para/>
+    /// Fires once per appearance of the viewer rather than every time a model is picked, so resizing the
+    /// window smaller and then switching models is not fought — see <see cref="_modelWasShowing"/>.
+    /// <para/>
+    /// Through <see cref="_togglesSize"/>, so the grown size is also what gets remembered: the next time the
+    /// tab opens it comes back at the size the viewer was given rather than shrinking to the old one.
+    /// </remarks>
+    private void GrowForModel()
+    {
+        float scale = ImGuiHelpers.GlobalScale;
+        var screen = ImGuiHelpers.MainViewport.Size / scale;     // unscaled, like every size stored here
+        var target = ClampToResizable(screen * 0.5f);
+
+        var grown = new Vector2(MathF.Max(_togglesSize.X, target.X), MathF.Max(_togglesSize.Y, target.Y));
+        if (grown == _togglesSize) return;
+
+        _togglesSize = grown;
+        if (config.WindowUserSized)
+        {
+            _sizeDirty = true;
+            _sizeChangedAt = Environment.TickCount64;
+        }
+        Size = grown;
+        SizeCondition = ImGuiCond.Always;
+        _ownResizeFrames = Math.Max(_ownResizeFrames, 3);
+        _keepOnScreen = true;
     }
 
     private static Vector2 ClampToResizable(Vector2 size)
@@ -579,7 +620,20 @@ public class StatusWindow : Window
         config.Save();
     }
 
-    public override void OnClose() => FlushPendingSize();
+    public override void OnClose()
+    {
+        FlushPendingSize();
+        // The brush's autosave timer only runs while the Toggles tab draws, so a stroke made in the last
+        // moments before closing would otherwise wait, unsaved, until the window next opens — or be lost for
+        // good if the game closes first. The live preview comes down with it.
+        parts.Leave();
+    }
+
+    /// <summary>
+    /// Write any brush edit still waiting to save, without reloading the mod or redrawing — for the plugin's
+    /// own teardown, where the file must land but nothing else should be touched.
+    /// </summary>
+    public void FlushPendingBrush() => parts.Leave(refreshGame: false);
 
     /// <summary>Open the window with the Settings tab selected (the plugin-installer gear icon).</summary>
     public void OpenToSettings()
@@ -631,30 +685,46 @@ public class StatusWindow : Window
         // release it or the user could never collapse the window again.
         Collapsed = null;
 
-        // Which tab is selected is answered below, by the tab that draws. Clearing it first means a frame in
-        // which no tab draws at all — an empty tab bar, a tab removed by a future edit — falls back to
-        // auto-fit rather than leaving the window stuck resizable with nothing in it.
-        _togglesTabActive = false;
+        // Which tab is selected is answered below, by the tab that draws.
+        _tabDrawn = null;
+        bool studioWasDrawn = _studioDrawn;
+        _studioDrawn = false;
 
         // The dragged size, read back where ImGui has already applied this frame's grip movement. Stored
         // unscaled, since PreDraw hands it back to a host that scales it. The threshold is only there to
         // keep sub-pixel jitter from marking the config dirty forever.
-        if (_resizableActive)
+        // A window grown in place from near the right or bottom edge would hang half off the screen. Done here
+        // rather than in PreDraw because this is the first moment the new size has actually been applied, so
+        // position and size are read together and in the same pixels.
+        if (_keepOnScreen)
+        {
+            _keepOnScreen = false;
+            var vp = ImGuiHelpers.MainViewport;
+            var pos = ImGui.GetWindowPos();
+            var size = ImGui.GetWindowSize();
+            var fit = new Vector2(
+                Math.Clamp(pos.X, vp.Pos.X, MathF.Max(vp.Pos.X, vp.Pos.X + vp.Size.X - size.X)),
+                Math.Clamp(pos.Y, vp.Pos.Y, MathF.Max(vp.Pos.Y, vp.Pos.Y + vp.Size.Y - size.Y)));
+            if (fit != pos) ImGui.SetWindowPos(fit);
+        }
+
         {
             var live = ImGui.GetWindowSize() / ImGuiHelpers.GlobalScale;
             if (MathF.Abs(live.X - _togglesSize.X) > 0.5f || MathF.Abs(live.Y - _togglesSize.Y) > 0.5f)
             {
-                _togglesSize   = live;
-                _sizeDirty     = true;
-                _sizeChangedAt = Environment.TickCount64;
+                _togglesSize = live;
+
+                // A change nobody here asked for, made with the mouse held, is the user dragging the grip: from
+                // now on the window keeps their size and stops fitting itself to each tab.
+                if (_fitFrames == 0 && _ownResizeFrames == 0 && ImGui.IsMouseDown(ImGuiMouseButton.Left))
+                    config.WindowUserSized = true;
+
+                if (config.WindowUserSized)
+                {
+                    _sizeDirty     = true;
+                    _sizeChangedAt = Environment.TickCount64;
+                }
             }
-        }
-        else
-        {
-            // What the auto-fitting tabs settled at, so leaving the Toggles tab can put it back. Read every
-            // frame rather than once on the way in: the fit legitimately moves as content changes, and the
-            // value wanted is the last one, not the one from whenever the user first opened Toggles.
-            _autoFitSize = ImGui.GetWindowSize() / ImGuiHelpers.GlobalScale;
         }
 
         // A deferred UV transfer map finished loading, so index scans taken without the island mask counted
@@ -699,43 +769,72 @@ public class StatusWindow : Window
         // slots and lays its tabs out in submission order, which is the order written below. The cost is
         // that the selected tab resets to the first one, once, for anyone who had the window open.
         using (ProteusStyle.TabAccent())
-        using (var tabs = ProteusStyle.HeaderTabBar("##proteusTabs2"))
+        using (var tabs = ProteusStyle.HeaderTabBar("##proteusTabs3"))   // 3: Studio moved to second
         {
             if (tabs)
             {
                 DrawTabBarRefresh(barTop);
 
                 using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Mods, "mods"))
-                    if (t) DrawModsTab();
+                    if (t) { _tabDrawn = "mods"; DrawModsTab(); }
 
-                using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Bindings, "bindings"))
-                    if (t) DrawBindingsTab();
-
-                using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Create, "create"))
-                    if (t) DrawCreateTab();
-
-                using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Import, "import"))
-                    if (t) DrawImportTab();
-
-                using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Export, "export"))
-                    if (t) DrawExportTab();
-
+                // The Studio second, right after the mods it works on.
                 using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Parts, "toggles"))
                     if (t)
                     {
-                        // The one tab that asks for a resizable window; PreDraw grants it next frame.
-                        _togglesTabActive = true;
-                        parts.Draw(fillHeight: _resizableActive, reserveBelow: _footerReserve);
+                        _tabDrawn = "toggles";
+                        _studioDrawn = true;
+                        // The model row may take all the height left only while the window is NOT auto-fitting:
+                        // under AlwaysAutoResize, a row sized from the window's height grows the window, which
+                        // grows the row, without bound.
+                        parts.Draw(fillHeight: _fitFrames == 0, reserveBelow: _footerReserve);
+
+                        // The controls grew past what the window was fitted to — a garment opened on entry, a
+                        // brush tool with more controls picked — so fit again, or the new buttons sit below the
+                        // bottom edge. Grow only; a shorter panel keeps the room it had.
+                        if (_fitFrames == 0 && parts.ControlsHeight > _studioFitHeight + 1f)
+                        {
+                            _studioFitHeight = parts.ControlsHeight;
+                            StartFit();
+                        }
+
+                        // The viewer appearing is the moment the window is too small, not the tab opening:
+                        // a mod picker fits in the remembered size, a model you paint on does not.
+                        if (parts.ShowingModel && !_modelWasShowing) _growForModel = true;
+                        _modelWasShowing = parts.ShowingModel;
                     }
+
+                using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Bindings, "bindings"))
+                    if (t) { _tabDrawn = "bindings"; DrawBindingsTab(); }
+
+                using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Create, "create"))
+                    if (t) { _tabDrawn = "create"; DrawCreateTab(); }
+
+                using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Import, "import"))
+                    if (t) { _tabDrawn = "import"; DrawImportTab(); }
+
+                using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Export, "export"))
+                    if (t) { _tabDrawn = "export"; DrawExportTab(); }
 
                 using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Settings, "settings",
                            _forceSettingsTab ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None))
                 {
                     _forceSettingsTab = false;
-                    if (t) DrawSettingsTab();
+                    if (t) { _tabDrawn = "settings"; DrawSettingsTab(); }
                 }
             }
         }
+
+        // A different tab than last frame: fit to its controls, unless the user has sized the window.
+        if (_tabDrawn != null && _tabDrawn != _lastTab)
+        {
+            if (_lastTab != null) StartFit();
+            _lastTab = _tabDrawn;
+            _studioFitHeight = 0f;
+        }
+
+        // Left the Studio tab this frame: save anything waiting and take the live preview down.
+        if (studioWasDrawn && !_studioDrawn) parts.Leave();
 
         // Measured, not guessed, so the Toggles tab knows how much of the window is still spoken for below
         // it. It over-reads by one ItemSpacing.Y, which is the safe direction: the tab leaves a few pixels
@@ -810,7 +909,7 @@ public class StatusWindow : Window
 
         if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.SyncAlt, "Refresh"))
         {
-            compositor.TriggerRecomposite("manual");
+            compositor.RefreshAndRecomposite();
             // The Parts tab lists every mod Penumbra knows, not the sidecar ones a composite discovers, so
             // a recomposite alone would leave a mod installed since the window opened out of its picker.
             parts.Refresh();
@@ -1949,14 +2048,38 @@ public class StatusWindow : Window
     /// </summary>
     private void TickContentImport(bool unloading)
     {
+        if (_contentAwaited is { } awaited)
+        {
+            // Teardown: no frames left to pump into. Finished quietly if the write already landed, else left.
+            if (unloading) { contentImport.FinishPendingOnUnload(); return; }
+
+            if (contentImport.Pump() is not { } pumped) return;   // still writing — next frame
+            _contentAwaited = null;
+            FinishContentImport(pumped, awaited);
+            return;
+        }
+
         var done = _contentPrepared;
         if (done == null) return;
         _contentPrepared = null;
-        _importBusy = false;
 
         var r = contentImport.Register(done, quiet: unloading);
         if (unloading) return;
 
+        if (r == null)
+        {
+            // The piece group is being written on the pool. Hold the busy flag and keep pumping.
+            _contentAwaited = done;
+            return;
+        }
+
+        FinishContentImport(r.Value, done);
+    }
+
+    private void FinishContentImport(
+        ContentImportService.ImportResult r, ContentImportService.PreparedImport done)
+    {
+        _importBusy = false;
         _importStatus = r.Message;
         _importStatusOk = r.Ok;
         _importStatusWarn = r.Warning;
@@ -2452,7 +2575,6 @@ public class StatusWindow : Window
          && onion.AnyImportable
          && onion.Warnings.Count == 0
          && onion.Layers.All(l => l.Import)
-         && !onion.NeedsAllBodies
          // Only a warning when there IS a material list to be wrong about; an unresolved one prints nothing.
          && (_importMaterials is null or { Count: 0 } || _importMaterialsFromGameData))
             StartImport(onion);
@@ -4334,10 +4456,9 @@ public class StatusWindow : Window
     /// What happens when the pack has nothing painted for the body the user is actually wearing.
     /// <para/>
     /// Drawn for EVERY pack, not just multi-layout ones: a single-layout bibo pack landing on a vanilla
-    /// body is the case that most needs saying, and it has no option group to hang the note off. And the
-    /// three outcomes genuinely differ — bibo↔gen3 is remapped with no action, gen2 needs the mod's
-    /// sibling mode raised, and an undrawn character means Proteus simply doesn't know yet. Saying
-    /// "Proteus will remap it" for all three would be wrong for two of them.
+    /// body is the case that most needs saying, and it has no option group to hang the note off. The two
+    /// outcomes differ — a drawn body (vanilla included) is remapped with no action, and an undrawn
+    /// character means Proteus simply doesn't know yet — so "Proteus will remap it" can't be said for both.
     /// </summary>
     private static void DrawImportBodyFit(OnionImportService.ImportPreview preview)
     {
@@ -4349,13 +4470,6 @@ public class StatusWindow : Window
         if (preview.WearerBodyType == null)
         {
             ImGui.TextDisabled(string.Format(ims.NotDrawnFmt, preview.DefaultLayout));
-        }
-        else if (preview.NeedsAllBodies)
-        {
-            // The one case that needs an action, and the one Proteus takes for the user on import.
-            ImGui.PushTextWrapPos(0);
-            ImGui.TextColored(ImportWarnColour, string.Format(ims.NeedsAllBodiesFmt, preview.DefaultLayout));
-            ImGui.PopTextWrapPos();
         }
         else
         {
@@ -4814,10 +4928,11 @@ public class StatusWindow : Window
             // trips an ImGui assertion in debug and corrupts table state in release.
             // Bodies is NOT here: it moved into the colour panel's Advanced disclosure, beside the other
             // per-mod knob that decides how the overlay renders rather than what it is.
-            // "##mods2", not "##mods": ImGui keys per-column widths and sort state off the table id, and a
-            // saved 5-column layout applied to this 6-column one mis-sizes every column until the game is
+            // Skindent is not here either: it moved into the colour panel, directly below the glow effect.
+            // "##mods3", not "##mods2": ImGui keys per-column widths and sort state off the table id, and a
+            // saved 6-column layout applied to this 5-column one mis-sizes every column until the game is
             // restarted. A new id starts clean.
-            if (!ImGui.BeginTable("##mods2", 6,
+            if (!ImGui.BeginTable("##mods3", 5,
                     ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.RowBg))
                 return;
             // Widths are scaled: the table's text is, so unscaled columns clip their own headers at 1.5x.
@@ -4830,8 +4945,8 @@ public class StatusWindow : Window
             ImGui.TableSetupColumn("Mod",    ImGuiTableColumnFlags.WidthStretch);
             ImGui.TableSetupColumn("Pri",    ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(78f));
             ImGui.TableSetupColumn("Preset", ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(120f));
-            ImGui.TableSetupColumn("Colors", ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(78f));
-            ImGui.TableSetupColumn("Skindent", ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(96f));
+            // Wider than the header needs: the button carries an icon ahead of the translated label.
+            ImGui.TableSetupColumn("Colors", ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(100f));
 
             // Clickable sort headers for Enabled / Mod / Priority (the rest are plain). Clicking the active
             // column flips direction; switching column picks a sensible default direction — Name ascending,
@@ -4843,7 +4958,6 @@ public class StatusWindow : Window
             ProteusStyle.SortableHeader(ms.ColPriority, "modPri",  ModSort.Priority, ref _modSort, ref _modSortDesc, defaultDesc: true);
             ImGui.TableNextColumn(); ImGui.TableHeader(Strings.Presets.ColumnHeader);
             ImGui.TableNextColumn(); ImGui.TableHeader(ms.ColColors);
-            ImGui.TableNextColumn(); ImGui.TableHeader(ms.ColSkindent);
 
             // Enable/priority controls write straight through to Penumbra (Proteus keeps no
             // override state of its own); both reflect the mod's live Penumbra values.
@@ -4948,45 +5062,16 @@ public class StatusWindow : Window
                 // click outside it. Tinted when a design binding is driving this mod's colours.
                 ImGui.TableNextColumn();
                 bool bindingDriven = designBindings.IsOverrideActiveFor(entry.ModDirectory);
+                // IconButtonWithText derives its id from the label, so the per-mod scope is pushed instead —
+                // without it every row's button would share one id and only the first would respond.
+                using (ImRaii.PushId($"colors_{entry.ModDirectory}"))
                 using (ImRaii.PushColor(ImGuiCol.Button, ImGui.GetColorU32(BindingAccent with { W = 0.45f }), bindingDriven))
                 {
-                    if (ImGui.Button($"{ms.ColorsBtn}##colors_{entry.ModDirectory}"))
+                    if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.Palette, ms.ColorsBtn))
                         _colorWindowMod = _colorWindowMod == entry.ModDirectory ? null : entry.ModDirectory;
                 }
                 if (bindingDriven && ImGui.IsItemHovered())
                     ImGui.SetTooltip(ms.ColorsBindingDrivenTip);
-
-                // Ambient occlusion + Skindenting for this mod (OFF unless the pack asks). THREE states —
-                // "the pack decides", "forced on", "forced off" — so this is a combo and not a checkbox: a
-                // checkbox can't show the difference between "ticked because the pack asked" and "ticked
-                // because you said so", and offers nowhere to put the third state except a hidden modifier
-                // gesture.
-                ImGui.TableNextColumn();
-                bool? aoDeclared = entry.Metadata?.AmbientOcclusion;
-                // The user's stored opinion: the new override, else a legacy opt-out, else none.
-                bool? aoChoice = config.AmbientOcclusionOverrides.TryGetValue(entry.ModDirectory, out var aoUser)
-                    ? aoUser
-                    : config.AmbientOcclusionDisabledMods.Contains(entry.ModDirectory) ? false : null;
-                string aoPackLabel = string.Format(ms.AoPackFmt, aoDeclared == true ? ms.AoOn : ms.AoOff);
-                ImGui.SetNextItemWidth(ProteusStyle.S(90f));
-                if (ImGui.BeginCombo($"##ao_{entry.ModDirectory}",
-                        aoChoice == null ? aoPackLabel : aoChoice.Value ? ms.AoOn : ms.AoOff))
-                {
-                    foreach (var (label, choice) in new[] { (aoPackLabel, (bool?)null), (ms.AoOn, true), (ms.AoOff, false) })
-                    {
-                        if (!ImGui.Selectable(label, choice == aoChoice) || choice == aoChoice) continue;
-                        if (choice == null) config.AmbientOcclusionOverrides.Remove(entry.ModDirectory);
-                        else                config.AmbientOcclusionOverrides[entry.ModDirectory] = choice.Value;
-                        // The legacy opt-out set is read-only now, and any of these three choices replaces
-                        // it — leaving it would let it contradict the selection the user just made.
-                        config.AmbientOcclusionDisabledMods.Remove(entry.ModDirectory);
-                        config.Save();
-                        RecompositeForOverlay(entry, "ambient-occlusion-mod");
-                    }
-                    ImGui.EndCombo();
-                }
-                if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip(string.Format(ms.AoTipFmt, aoPackLabel));
             }
 
             ImGui.EndTable();
@@ -5109,6 +5194,16 @@ public class StatusWindow : Window
                 : visible.OrderBy(x => x.CapturedUtc),
         };
         var shown = ordered.ThenBy(Label, StringComparer.OrdinalIgnoreCase).ToList();
+
+        // The active binding always leads, whatever the sort: it is the one driving the character and the only
+        // one Update can write to. The rest keep the chosen order beneath it. A search that filters it out
+        // leaves it out — the "Active:" line above still names it.
+        if (activeId is { } active && shown.FindIndex(x => x.DesignId == active) is > 0 and var at)
+        {
+            var lead = shown[at];
+            shown.RemoveAt(at);
+            shown.Insert(0, lead);
+        }
 
         Guid? toApply = null, toRemove = null;
         bool toUpdate = false;
@@ -5269,7 +5364,10 @@ public class StatusWindow : Window
             {
                 ImGui.Separator();
                 // No glow footer on this path, so the geometry section takes the same place relative to
-                // Advanced that it does there: directly above it.
+                // Advanced that it does there: directly above it. Effects holds only Skindent here — there is
+                // no overlay for a glow effect to go on.
+                if (ColorTableEditor.EffectsHeader(entry.ModDirectory))
+                    DrawSkindent(entry);
                 DrawGeometrySection(entry);
                 // Framed, to match the Presets bar and the other two Advanced disclosures. "###" so the
                 // localized word isn't hashed into the id and a language switch doesn't shut it.
@@ -5341,6 +5439,10 @@ public class StatusWindow : Window
             // Glow effect + Advanced live at the very bottom, below the rows.
             ImGui.Separator();
             bool resetSimple = false;
+            // Reinforced toe is the one footer control a preset does not capture, so it has to reach the
+            // sidecar even while a preset is in charge. Noted before the draw so an edit to it can be told
+            // apart from the preview-only edits that stay out of the base metadata.
+            int toeDensityBeforeSimple = simpleOverlays.FirstOrDefault()?.ToeCapDensity ?? 0;
             bool footerChangedSimple = ColorTableEditor.DrawGlowFooter(
                 entry.ModDirectory, entry.ModDirectory, simpleOverlays, gearOvrSimple, effects,
                 out var footerEditSimple,
@@ -5348,7 +5450,10 @@ public class StatusWindow : Window
                 resetDisabledReason: ResetBlockedReason(entry),
                 drawExtraAdvanced: () => DrawBodiesAdvanced(entry),
                 drawBelowGlow: () => DrawGeometrySection(entry),
-                overrideActive: overrideActive);
+                drawInEffects: () => DrawSkindent(entry),
+                overrideActive: overrideActive,
+                toeCapActive: compositor.ToeCapWantedFor(entry.ModDirectory)
+                           && CanReinforceToe(gearSimple, shaderSimple));
 
             // A reset just restored the recorded values — they ARE the intended state, so skip the mode
             // re-inference and glow transition this frame. Both compare against pre-reset state and would
@@ -5379,6 +5484,11 @@ public class StatusWindow : Window
                 if (!overrideActive && !resetSimple)
                     entry.Metadata.ColorTableRows = rows;   // may be the list we created for an empty mod
                 if (!overrideActive || resetSimple) { discovery.SaveMetadata(entry); InvalidateDefaultsCache(entry); }
+                // Under a preset the line above saves nothing, which silently discarded the reinforced toe —
+                // an authoring decision no override carries. Saved ALONE: a full save here would also make
+                // permanent every preview edit the other footer controls made to the same descriptors.
+                else if ((simpleOverlays.FirstOrDefault()?.ToeCapDensity ?? 0) != toeDensityBeforeSimple)
+                    discovery.SaveToeCapDensity(entry, simpleOverlays);
                 // Discrete footer/mode changes recomposite promptly; colour-row drags use the debounce.
                 if (footerChangedSimple || modeChangedSimple) RecompositeForOverlay(entry, "mode-change");
                 // Rows only — hashed at the fingerprint's `mtrl:` block, so skin reuse may apply. A change
@@ -5461,6 +5571,8 @@ public class StatusWindow : Window
                 ProteusStyle.DisabledWrapped(Strings.ColorPanel.NoActiveOptions);
             // Same placement as the content path above, and the reason this one matters: a mod with no
             // active option has no tab, so this is the ONLY place the geometry features can be reached.
+            if (ColorTableEditor.EffectsHeader(entry.ModDirectory))
+                DrawSkindent(entry);
             DrawGeometrySection(entry);
             if (ImGui.CollapsingHeader($"{Strings.Colors.Advanced}###noopt_{entry.ModDirectory}"))
                 DrawBodiesAdvanced(entry);
@@ -5804,6 +5916,7 @@ public class StatusWindow : Window
                     out var maskFooterEdit, onReset: null,
                     drawExtraAdvanced: null,
                     drawBelowGlow: () => DrawGeometrySection(entry),
+                    drawInEffects: () => DrawSkindent(entry),
                     modeForced: modHasGear ? Strings.ColorPanel.Forced : null,
                     modeForcedTip: modHasGear ? Strings.ColorPanel.ForcedTip : null,
                     // Shows the badge as Cloth without persisting it, which is what "forced" means here.
@@ -5977,15 +6090,21 @@ public class StatusWindow : Window
         // Glow effect + Advanced live at the very bottom, below the rows.
         ImGui.Separator();
         bool resetOpt = false;
+        // See the simple-mod path: the one footer control a preset does not capture.
+        int toeDensityBefore = activeOpt.Overlays.FirstOrDefault()?.ToeCapDensity ?? 0;
         bool footerChanged = ColorTableEditor.DrawGlowFooter(
             scope, entry.ModDirectory, activeOpt.Overlays, gearOvrOpt, effects, out var footerEdit,
             onReset: () => resetOpt = ResetToDefaults(entry, groupName, activeOpt),
             resetDisabledReason: ResetBlockedReason(entry),
             drawExtraAdvanced: () => DrawBodiesAdvanced(entry),
             drawBelowGlow: () => DrawGeometrySection(entry),
+            drawInEffects: () => DrawSkindent(entry),
             promotedToGear: promotedToGear,
             noShellReason: noShellReason,
-            overrideActive: overrideActive);
+            overrideActive: overrideActive,
+            // `gear` and `shader` here are what actually renders — promotion and demotion already applied
+            // above — which is the only reliable way to know the shell can carry a reinforced toe.
+            toeCapActive: compositor.ToeCapWantedFor(entry.ModDirectory) && CanReinforceToe(gear, shader));
 
         // A reset just restored the recorded values — they ARE the intended state, so skip the mode
         // re-inference and glow transition this frame (both would re-derive from pre-reset state).
@@ -6015,6 +6134,10 @@ public class StatusWindow : Window
             if (!overrideActive && !resetOpt)
                 activeOpt.ColorTableRows = editRows;
             if (!overrideActive || resetOpt) { discovery.SaveMetadata(entry); InvalidateDefaultsCache(entry); }
+            // See the simple-mod path: under a preset the reinforced toe still has to reach the sidecar, and on
+            // its own, so the preview edits beside it do not.
+            else if ((activeOpt.Overlays.FirstOrDefault()?.ToeCapDensity ?? 0) != toeDensityBefore)
+                discovery.SaveToeCapDensity(entry, activeOpt.Overlays);
             // Discrete footer/mode changes recomposite promptly; colour-row drags use the debounce.
             if (footerChanged || modeChanged) RecompositeForOverlay(entry, "mode-change");
             // Rows only — see the simple-mod path above.
@@ -6024,8 +6147,14 @@ public class StatusWindow : Window
     }
 
     /// <summary>
-    /// The mod's sibling-synthesis mode — which body types its overlays get baked onto — drawn inside the
-    /// colour panel's Advanced disclosure.
+    /// Whether the mod's overlays are baked onto vanilla (gen2) skin the character is wearing, drawn inside
+    /// the colour panel's Advanced disclosure.
+    /// <para/>
+    /// A checkbox, not the three-way combo it replaced ("All bodies" / "bibo+gen3" / "Off"). The middle value
+    /// existed to keep vanilla out, but a vanilla body is only ever baked when vanilla skin is on the
+    /// character — so the choice people were being asked to make was "should the art show on the skin I'm
+    /// visibly wearing", which nobody wants answered no by default. bibo↔gen3/Eve is not offered at all: it
+    /// always bakes, and "Off" for it was a way to make an overlay silently vanish from a body you had on.
     /// <para/>
     /// It lives here rather than in the Mods table because it is not a property of the mod so much as of
     /// how its overlay renders, which is what the colour panel is for; and because getting it wrong looks
@@ -6037,22 +6166,17 @@ public class StatusWindow : Window
     /// </summary>
     private void DrawBodiesAdvanced(OverlayEntry entry)
     {
-        var mode = config.SiblingModeFor(entry.ModDirectory);
+        bool vanilla = config.OverlaysVanillaFor(entry.ModDirectory);
 
-        ImGui.SetNextItemWidth(120);
         var cp = Strings.ColorPanel;
-        if (ImGui.BeginCombo($"{cp.Bodies}##bodies_{entry.ModDirectory}", SiblingModeLabel((int)mode)))
+        if (ImGui.Checkbox($"{cp.OverlayVanilla}##bodies_{entry.ModDirectory}", ref vanilla))
         {
-            foreach (var opt in new[] { SiblingSynthesisMode.AllBodies, SiblingSynthesisMode.BiboGen3Only, SiblingSynthesisMode.Off })
-            {
-                if (ImGui.Selectable(SiblingModeLabel((int)opt), opt == mode) && opt != mode)
-                {
-                    config.SiblingSynthesis[entry.ModDirectory] = opt;
-                    config.Save();
-                    RecompositeForOverlay(entry, "sibling-mode");
-                }
-            }
-            ImGui.EndCombo();
+            // On is the absent default, so ticking REMOVES the entry rather than writing a value: a legacy
+            // "bibo+gen3" left behind would mean the same today, but only "Off" is a choice worth storing.
+            if (vanilla) config.SiblingSynthesis.Remove(entry.ModDirectory);
+            else config.SiblingSynthesis[entry.ModDirectory] = SiblingSynthesisMode.Off;
+            config.Save();
+            RecompositeForOverlay(entry, "sibling-mode");
         }
         // The router, not the binding service: Bodies is global config that NEITHER a binding nor a preset
         // captures, so the warning belongs wherever the rest of the panel is previewing rather than saving.
@@ -6064,6 +6188,44 @@ public class StatusWindow : Window
         // so a control that quietly writes global config instead has to break that expectation out loud.
         if (binding)
             ImGui.TextDisabled(cp.BodiesGlobalNote);
+    }
+
+    /// <summary>
+    /// Ambient occlusion + Skindenting for this mod (OFF unless the pack asks), drawn in the Effects section
+    /// below the glow effect. Mod-wide and global config like Bodies, so it commits and recomposites for itself.
+    /// <para/>
+    /// THREE states — "the pack decides", "forced on", "forced off" — so this is a combo and not a checkbox:
+    /// a checkbox can't show the difference between "ticked because the pack asked" and "ticked because you
+    /// said so", and offers nowhere to put the third state except a hidden modifier gesture.
+    /// </summary>
+    private void DrawSkindent(OverlayEntry entry)
+    {
+        var ms = Strings.Mods;
+        bool? aoDeclared = entry.Metadata?.AmbientOcclusion;
+        // The user's stored opinion: the new override, else a legacy opt-out, else none.
+        bool? aoChoice = config.AmbientOcclusionOverrides.TryGetValue(entry.ModDirectory, out var aoUser)
+            ? aoUser
+            : config.AmbientOcclusionDisabledMods.Contains(entry.ModDirectory) ? false : null;
+        string aoPackLabel = string.Format(ms.AoPackFmt, aoDeclared == true ? ms.AoOn : ms.AoOff);
+        ImGui.SetNextItemWidth(ProteusStyle.S(120f));
+        if (ImGui.BeginCombo($"{ms.Skindent}###ao_{entry.ModDirectory}",
+                aoChoice == null ? aoPackLabel : aoChoice.Value ? ms.AoOn : ms.AoOff))
+        {
+            foreach (var (label, choice) in new[] { (aoPackLabel, (bool?)null), (ms.AoOn, true), (ms.AoOff, false) })
+            {
+                if (!ImGui.Selectable(label, choice == aoChoice) || choice == aoChoice) continue;
+                if (choice == null) config.AmbientOcclusionOverrides.Remove(entry.ModDirectory);
+                else                config.AmbientOcclusionOverrides[entry.ModDirectory] = choice.Value;
+                // The legacy opt-out set is read-only now, and any of these three choices replaces
+                // it — leaving it would let it contradict the selection the user just made.
+                config.AmbientOcclusionDisabledMods.Remove(entry.ModDirectory);
+                config.Save();
+                RecompositeForOverlay(entry, "ambient-occlusion-mod");
+            }
+            ImGui.EndCombo();
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(string.Format(ms.AoTipFmt, aoPackLabel));
     }
 
     /// <summary>
@@ -6080,6 +6242,18 @@ public class StatusWindow : Window
     /// disclosure instead, which is the same position relative to Advanced; on the second of those it is
     /// the only place it can be reached.
     /// </summary>
+    /// <summary>
+    /// Whether an option that renders on this layer and shader can carry a reinforced toe at all.
+    /// <para/>
+    /// A shell, and not one on <c>skin.shpk</c>. The density lives in the shell normal's blue channel, and on
+    /// skin.shpk that channel is skin-colour influence instead, so the build skips the pass there. That case is
+    /// easy to miss because it still reads as Cloth: a skin overlay the toe cap promotes stays on skin.shpk
+    /// whenever its option has no colour rows (see <see cref="RenderModeInference.PromotedShader"/>), and the
+    /// control used to appear for it, save a density, and change nothing.
+    /// </summary>
+    private static bool CanReinforceToe(bool gear, string? shader)
+        => gear && !string.Equals(shader, OverlayDescriptor.SkinShader, StringComparison.OrdinalIgnoreCase);
+
     private void DrawGeometrySection(OverlayEntry entry)
     {
         // "###" so the localized word is not hashed into the id — a language switch would otherwise shut a

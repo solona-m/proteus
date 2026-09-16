@@ -46,17 +46,16 @@ public class ShellSurfaceTests
             ShellSurface.KeyFor("chara/human/c0201/obj/face/f0001/material/mt_c0201f0001_etc_a.mtrl"));
 
     /// <summary>
-    /// An eye is millimetres across and the shell push is a millimetre tuned against a torso, so the iris
-    /// asks for a fraction of it. Everything else keeps the tuned value.
+    /// The iris used to take a tenth of a millimetre push. At the measured 0.05 mm a tenth would fall under
+    /// the smallest step that was tried and not kept, so every surface now takes the full push.
     /// </summary>
     [Fact]
-    public void Iris_asks_for_a_smaller_push_than_every_other_surface()
+    public void Every_surface_takes_the_full_push()
     {
-        var iris = new ShellSurfaceKey(ShellSurfaceKind.Iris, "f0001");
-        Assert.True(iris.PushScale < 1f && iris.PushScale > 0f, $"iris push scale was {iris.PushScale}");
-        foreach (var kind in new[] { ShellSurfaceKind.Body, ShellSurfaceKind.Face, ShellSurfaceKind.Hair,
-                                     ShellSurfaceKind.Tail, ShellSurfaceKind.Ear, ShellSurfaceKind.Native })
-            Assert.Equal(1f, new ShellSurfaceKey(kind, "").PushScale);
+        foreach (var kind in new[] { ShellSurfaceKind.Body, ShellSurfaceKind.Face, ShellSurfaceKind.Iris,
+                                     ShellSurfaceKind.Hair, ShellSurfaceKind.Tail, ShellSurfaceKind.Ear,
+                                     ShellSurfaceKind.Native })
+            Assert.Equal(1f, new ShellSurfaceKey(kind, "f0001").PushScale);
     }
 
     [Fact]

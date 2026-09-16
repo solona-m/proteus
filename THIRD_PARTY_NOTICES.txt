@@ -88,3 +88,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 -------------------------------------------------------------------------------
+
+Meddle — racial bone deformer reader (XivLiveMesh/PbdFile.cs)
+https://github.com/PassiveModding/Meddle
+
+Copyright (c) Meddle contributors. Licensed under the GNU Affero General Public
+License v3.0, the same license as Proteus; see LICENSE for the full text.
+
+-------------------------------------------------------------------------------

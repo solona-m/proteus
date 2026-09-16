@@ -48,7 +48,9 @@ public class ContentPieceSelectionTests
     /// Cerise's shape: several models, no option groups at all, and most of them race variants of one
     /// garment. Eight files, three garments.
     /// </summary>
-    private static string CerisePack(string dir, byte[] model, byte[] mtrl, string leaf)
+    /// <param name="legacy">Lay the pack out as Penumbra's pre-v4 format: <c>default_mod.json</c> beside a
+    /// <c>FileVersion</c> 3 manifest.</param>
+    private static string CerisePack(string dir, byte[] model, byte[] mtrl, string leaf, bool legacy = false)
     {
         // Every model declares the same material leaf, because they all came from the one real model. Real
         // packs name theirs per race; that difference is exercised by the binding, not by the collapsing.
@@ -67,9 +69,11 @@ public class ContentPieceSelectionTests
         foreach (var r in new[] { "0101", "0201", "0301", "0901", "1101" })
             Model(r, "e6025", "top");                                   // five races
 
-        var manifest = "{\n  \"FileVersion\": 4,\n  \"Name\": \"Cerise\",\n  \"Author\": \"Solona\",\n"
-                     + "  \"DefaultData\": { \"Files\": {\n    " + string.Join(",\n    ", redirects) + "\n  } },\n"
-                     + "  \"Groups\": []\n}";
+        var filesJson = "{ \"Files\": {\n    " + string.Join(",\n    ", redirects) + "\n  } }";
+        var manifest = legacy
+            ? "{\n  \"FileVersion\": 3,\n  \"Name\": \"Cerise\",\n  \"Author\": \"Solona\"\n}"
+            : "{\n  \"FileVersion\": 4,\n  \"Name\": \"Cerise\",\n  \"Author\": \"Solona\",\n"
+            + "  \"DefaultData\": " + filesJson + ",\n  \"Groups\": []\n}";
 
         var path = Path.Combine(dir, "cerise.pmp");
         using var zip = new ZipArchive(File.Create(path), ZipArchiveMode.Create);
@@ -79,6 +83,7 @@ public class ContentPieceSelectionTests
             s.Write(data, 0, data.Length);
         }
         Add("meta.json", Encoding.UTF8.GetBytes(manifest));
+        if (legacy) Add("default_mod.json", Encoding.UTF8.GetBytes(filesJson));
         foreach (var (n, d) in files) Add(n, d);
         return path;
     }
@@ -248,6 +253,54 @@ public class ContentPieceSelectionTests
             Assert.Equal(new[] { "0101", "0201", "0301", "0901", "1101" },
                 shirt.Models!.Keys.OrderBy(x => x, StringComparer.Ordinal).ToArray());
             Assert.Equal("Body", shirt.Slot);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    /// <summary>
+    /// A v3 pack is written without the piece group, and without refusing — the group waits for Penumbra.
+    /// <para/>
+    /// The write used to end in <see cref="PenumbraModMeta.LegacyFolderException"/>: the copied folder is still
+    /// v3, and the piece group goes through the writer that refuses one. Penumbra upgrades the folder as
+    /// Register adds it, and only then is the group written. Everything else the import does lands here, in
+    /// the pack's own v3 layout, and nothing v3 is authored.
+    /// </summary>
+    [Fact]
+    public void A_v3_pack_is_written_with_its_piece_group_left_for_Penumbra_to_upgrade()
+    {
+        var model = SampleModel();
+        if (model == null) return;
+
+        var dir = TempDir();
+        try
+        {
+            var leaf = SecondSkinService
+                .UsedMaterialNames(model, SecondSkinWriter.MaterialNames(model))[0].TrimStart('/');
+            var preview = ContentImportService.Inspect(CerisePack(dir, model, new byte[64], leaf, legacy: true));
+            Assert.Equal(3, preview.Pack.FileVersion);
+            Assert.Equal(ContentImportService.PieceGroup, preview.PieceGroupName);
+
+            var root = Path.Combine(dir, "mod");
+            ContentImportService.WriteMod(root, "Cerise (Proteus)", "Solona", preview);
+
+            // Still the pack's own v3 layout, renamed — no Groups array and no group file of ours.
+            var manifest = (JsonObject)JsonNode.Parse(File.ReadAllText(Path.Combine(root, "meta.json")))!;
+            Assert.Equal(3, (int?)manifest["FileVersion"]);
+            Assert.Equal("Cerise (Proteus)", (string?)manifest["Name"]);
+            Assert.Null(manifest["Groups"]);
+            Assert.Empty(Directory.EnumerateFiles(root, "group_*.json"));
+
+            // The models Proteus takes over are stripped from default_mod.json; the material stays.
+            var defaults = (JsonObject)((JsonObject)JsonNode.Parse(
+                File.ReadAllText(Path.Combine(root, "default_mod.json")))!)["Files"]!;
+            Assert.DoesNotContain(defaults, p => p.Key.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase));
+            Assert.Single(defaults);
+
+            // And the sidecar already names the group Register will add.
+            var meta = JsonSerializer.Deserialize<ProteusMetadata>(
+                File.ReadAllText(Path.Combine(root, "Proteus", "metadata.json")), ProteusJson.MetadataRead)!;
+            Assert.Equal(ContentImportService.PieceGroup, meta.PieceGroupName);
+            Assert.Equal(3, meta.Content!.Count);
         }
         finally { Directory.Delete(dir, true); }
     }
@@ -476,6 +529,71 @@ public class ContentPieceSelectionTests
             Assert.Equal(2, preview.ImportableUnits);
             Assert.All(preview.Units, u => Assert.Null(u.GateOption));
             Assert.Null(preview.PieceGroupName);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    /// <summary>
+    /// Scarlet's shape: a Single size group per garment, in a pack offering several garments.
+    /// <para/>
+    /// A Single group always has an option selected, so a garment one of them ships is worn whenever the mod is
+    /// enabled — the tights and boots came along with the one piece that was wanted. So in a pack with other
+    /// garments each gets a switch per slot, shared by the group's sizes. The one-garment pack above keeps none.
+    /// </summary>
+    [Fact]
+    public void A_single_group_garment_gets_a_slot_switch_when_the_pack_ships_other_garments()
+    {
+        var model = SampleModel();
+        if (model == null) return;
+
+        var dir = TempDir();
+        try
+        {
+            var leaf = SecondSkinService
+                .UsedMaterialNames(model, SecondSkinWriter.MaterialNames(model))[0].TrimStart('/');
+
+            var files = new List<(string, byte[])> { ("common/outfit.mtrl", new byte[64]) };
+            string Option(string name, string gamePath, string entry)
+            {
+                files.Add((entry, model));
+                return "{ \"Name\": \"" + name + "\", \"Files\": { \"" + gamePath + "\": \""
+                     + entry.Replace("/", "\\\\") + "\" } }";
+            }
+
+            const string Legs = "chara/equipment/e6058/model/c0201e6058_dwn.mdl";
+            const string Feet = "chara/equipment/e6058/model/c0201e6058_sho.mdl";
+            var pants = new[] { Option("S", Legs, "pant size/s/model.mdl"), Option("M", Legs, "pant size/m/model.mdl") };
+            var boots = Option("Boots", Feet, "boots/model.mdl");
+
+            var manifest = "{\n  \"FileVersion\": 4,\n  \"Name\": \"Outfit\",\n"
+                         + "  \"DefaultData\": { \"Files\": { \"chara/x/" + leaf + "\": \"common\\\\outfit.mtrl\" } },\n"
+                         + "  \"Groups\": [\n"
+                         + "    { \"Name\": \"Pant Size\", \"Type\": \"Single\", \"Options\": [ " + string.Join(", ", pants) + " ] },\n"
+                         + "    { \"Name\": \"Boots\", \"Type\": \"Single\", \"Options\": [ " + boots + " ] }\n"
+                         + "  ]\n}";
+
+            var path = Path.Combine(dir, "outfit.pmp");
+            using (var zip = new ZipArchive(File.Create(path), ZipArchiveMode.Create))
+            {
+                void Add(string name, byte[] data)
+                {
+                    using var s = zip.CreateEntry(name).Open();
+                    s.Write(data, 0, data.Length);
+                }
+                Add("meta.json", Encoding.UTF8.GetBytes(manifest));
+                foreach (var (n, d) in files) Add(n, d);
+            }
+
+            var preview = ContentImportService.Inspect(path);
+            Assert.Equal(3, preview.ImportableUnits);
+            Assert.Equal(ContentImportService.PieceGroup, preview.PieceGroupName);
+            Assert.All(preview.Units, u => Assert.NotNull(u.GateOption));
+
+            // One switch for the pants whichever size is chosen, and a different one for the boots.
+            var pantGate = Assert.Single(preview.Units.Where(u => u.Group == "Pant Size").Select(u => u.GateOption).Distinct());
+            var bootGate = Assert.Single(preview.Units, u => u.Group == "Boots").GateOption;
+            Assert.NotEqual(pantGate, bootGate);
+            Assert.Equal(2, preview.GateOptions.Count);
         }
         finally { Directory.Delete(dir, true); }
     }

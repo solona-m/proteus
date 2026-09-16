@@ -133,7 +133,9 @@ public sealed unsafe class ShellNormalGhost : IDisposable
 
     private Ghosted GetOrBuild(string diskName)
     {
-        var key  = Normalize(diskName);
+        // Keyed by the SHELL rather than the file, so a content-addressed normal — a new name per revision —
+        // still replaces its entry instead of piling up a full-resolution buffer per revision.
+        var key  = Normalize(Services.ShellTextureNames.ShellKey(diskName));
         var path = diskName.Trim().Trim('"');   // the live name is the resolved disk path
         long stamp = FileStamp(path);
         // Reuse only while the file is unchanged; a recomposite rewrites it in place. A stale-stamp entry is
@@ -206,12 +208,12 @@ public sealed unsafe class ShellNormalGhost : IDisposable
                         name.IndexOf("\\Proteus\\textures\\", StringComparison.OrdinalIgnoreCase) >= 0;
                     if (!underProteus) continue;
 
-                    // Shell layer normal: basename "ss_{letter}_norm.tex". Letter encodes stack order.
+                    // Shell layer normal: basename "ss_{letter}_norm.tex", or its content-addressed form for a
+                    // reinforced toe — see ShellTextureNames. Letter encodes stack order.
                     var baseName = Path.GetFileName(name.Trim().Trim('"'));
-                    if (baseName.Length < 9 || !baseName.StartsWith("ss_", StringComparison.OrdinalIgnoreCase)
-                        || !baseName.EndsWith("_norm.tex", StringComparison.OrdinalIgnoreCase))
+                    if (!Services.ShellTextureNames.TryNormalStem(baseName, out var stem))
                         continue;
-                    char letter = char.ToLowerInvariant(baseName[3]);
+                    char letter = char.ToLowerInvariant(stem[3]);
                     if (!((letter >= '0' && letter <= '9') || (letter >= 'a' && letter <= 'z'))) continue;   // base-36 disk id
 
                     visit((nint)(&handle->Texture), name, letter);
