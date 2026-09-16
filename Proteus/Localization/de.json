@@ -52,6 +52,10 @@
     "description": ""
   },
   "Bindings.Apply.Tip": {
+    "message": "Stellt den Proteus-Zustand dieses Designs sofort wieder her, ohne den Umweg über\nGlamourer — Aktivierung / Priorität / Optionen / Farben für jeden erfassten Mod.\n\nProteus-Mods, die NICHT in der Bindung stehen, werden abgeschaltet: das ersetzt den\naktuellen Look, statt ihn zu ergänzen.",
+    "description": ""
+  },
+  "Bindings.ApplyCharacter.Tip": {
     "message": "Stellt den Look dieses Designs sofort wieder her, ohne den Umweg über Glamourer:\nAktivierung / Priorität / Optionen für jeden erfassten Mod, dazu die Proteus-Farben.\n\nMods am Charakter, die NICHT in der Bindung stehen, werden abgeschaltet, und gebundene Mods\nwerden über alles gehoben, womit sie kollidieren – das ersetzt den aktuellen Look.",
     "description": ""
   },
@@ -68,7 +72,7 @@
     "description": ""
   },
   "Bindings.Enable.Tip": {
-    "message": "Wenn aktiv, hält das Speichern eines Glamourer-Designs jeden Mod am Charakter und die\naktuellen Proteus-Farben fest. Wird das Design später angewendet, stellt es sie wieder her (bestmögliche Ausrüstungszuordnung).",
+    "message": "Wenn aktiv, hält das Speichern eines Glamourer-Designs den aktuellen Proteus-Zustand fest.\nWird dieses Design später angewendet, stellt es ihn wieder her (bestmögliche Ausrüstungszuordnung).",
     "description": ""
   },
   "Bindings.FollowAutomation.Label": {
@@ -125,6 +129,14 @@
   },
   "Bindings.ProteusOnly.Tip": {
     "message": "Erfasst, bevor Bindungen den ganzen Charakter festhielten – beim Anwenden werden nur\nProteus-Mods wiederhergestellt. Wende das Design an und klicke dann auf „Aktualisieren“.",
+    "description": ""
+  },
+  "Bindings.RestoreCharacter.Label": {
+    "message": "Jeden Mod am Charakter wiederherstellen",
+    "description": ""
+  },
+  "Bindings.RestoreCharacter.Tip": {
+    "message": "Wenn aktiv, stellt das Anwenden eines gebundenen Designs auch jeden Mod wieder her, der beim\nSpeichern am Charakter war (Aktivierung / Priorität / Optionen), schaltet Mods am Charakter ab,\ndie nicht dabei waren, und hebt die Mods des Designs über alles, womit sie kollidieren.\n\nMods, die keine Proteus-Mods sind, werden nur über temporäre Penumbra-Einstellungen so gehalten:\ndeine Sammlung bleibt unverändert, und Zurücksetzen oder ein ungebundenes Design stellt sie wieder her.\n\nWenn aus, werden nur Proteus-Mods wiederhergestellt. Erfasst wird in beiden Fällen, daher\nfunktioniert das Einschalten auch für Designs, die gespeichert wurden, während es aus war.",
     "description": ""
   },
   "Bindings.SecondsAgo.Fmt": {

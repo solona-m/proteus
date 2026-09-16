@@ -5126,6 +5126,16 @@ public class StatusWindow : Window
             if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
                 ImGui.SetTooltip(bs.FollowAutomationTip);
 
+            bool restoreCharacter = config.DesignBindingRestoresCharacterMods;
+            if (ImGui.Checkbox(bs.RestoreCharacter, ref restoreCharacter))
+            {
+                config.DesignBindingRestoresCharacterMods = restoreCharacter;
+                config.Save();
+                designBindings.OnRestoreCharacterModsToggled(restoreCharacter);
+            }
+            if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+                ImGui.SetTooltip(bs.RestoreCharacterTip);
+
             bool unequipUnset = config.DesignBindingUnequipUnsetSlots;
             if (ImGui.Checkbox(bs.UnequipUnset, ref unequipUnset))
             {
@@ -5237,19 +5247,24 @@ public class StatusWindow : Window
                 ImGui.TextUnformatted(label);
 
             // What Apply will do to Penumbra, at a glance: how many mods it restores, or that it is an older
-            // binding that only knows Proteus mods and needs one Update to cover the whole character.
-            ImGui.SameLine();
-            if (b.HasCharacterSnapshot)
+            // binding that only knows Proteus mods and needs one Update to cover the whole character. Only while
+            // whole-character restore is on — with it off every binding is Proteus-only, and saying so per row
+            // would be noise.
+            if (config.DesignBindingRestoresCharacterMods)
             {
-                ImGui.TextDisabled(string.Format(bs.ModCountFmt, b.CharacterMods.Count));
-                if (ImGui.IsItemHovered())
-                    DrawBindingModsTooltip(b);
-            }
-            else
-            {
-                ImGui.TextDisabled(bs.ProteusOnly);
-                if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip(bs.ProteusOnlyTip);
+                ImGui.SameLine();
+                if (b.HasCharacterSnapshot)
+                {
+                    ImGui.TextDisabled(string.Format(bs.ModCountFmt, b.CharacterMods.Count));
+                    if (ImGui.IsItemHovered())
+                        DrawBindingModsTooltip(b);
+                }
+                else
+                {
+                    ImGui.TextDisabled(bs.ProteusOnly);
+                    if (ImGui.IsItemHovered())
+                        ImGui.SetTooltip(bs.ProteusOnlyTip);
+                }
             }
 
             ImGui.TableNextColumn();
@@ -5268,7 +5283,7 @@ public class StatusWindow : Window
                 if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.PlayCircle, bs.Apply))
                     toApply = b.DesignId;
                 if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip(bs.ApplyTip);
+                    ImGui.SetTooltip(config.DesignBindingRestoresCharacterMods ? bs.ApplyCharacterTip : bs.ApplyTip);
                 ImGui.SameLine();
                 // Only the active binding can be re-captured — the snapshot comes from the live state, so
                 // writing it into a binding that isn't driving that state would overwrite it with a look

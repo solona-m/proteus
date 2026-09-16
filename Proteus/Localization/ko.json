@@ -52,6 +52,10 @@
     "description": ""
   },
   "Bindings.Apply.Tip": {
+    "message": "Glamourer를 거치지 않고 이 디자인의 Proteus 상태를 지금 복원합니다.\n기록된 모든 모드의 사용 여부 / 우선도 / 옵션 / 색상이 대상입니다.\n\n연결에 포함되지 않은 Proteus 모드는 꺼집니다. 즉 현재 모습에 더하는 것이\n아니라 대체합니다.",
+    "description": ""
+  },
+  "Bindings.ApplyCharacter.Tip": {
     "message": "Glamourer를 거치지 않고 이 디자인의 모습을 지금 복원합니다. 기록된 모든 모드의\n사용 여부 / 우선도 / 옵션과 Proteus 색상이 대상입니다.\n\n연결에 포함되지 않은 캐릭터의 모드는 꺼지고, 연결된 모드는 충돌하는 모든 모드보다\n우선도가 높아집니다. 즉 현재 모습을 대체합니다.",
     "description": ""
   },
@@ -68,7 +72,7 @@
     "description": ""
   },
   "Bindings.Enable.Tip": {
-    "message": "켜면 Glamourer 디자인을 저장할 때 캐릭터에 적용된 모든 모드와 현재 Proteus 색상을\n함께 기록합니다. 나중에 그 디자인을 적용하면 복원됩니다(장비는 가능한 범위에서 일치시킵니다).",
+    "message": "켜면 Glamourer 디자인을 저장할 때 현재 Proteus 상태를 함께 기록합니다.\n나중에 그 디자인을 적용하면 복원됩니다(장비는 가능한 범위에서 일치시킵니다).",
     "description": ""
   },
   "Bindings.FollowAutomation.Label": {
@@ -125,6 +129,14 @@
   },
   "Bindings.ProteusOnly.Tip": {
     "message": "연결이 캐릭터 전체를 기록하기 전에 만들어져서, 적용해도 Proteus 모드만\n복원됩니다. 이 디자인을 적용한 뒤 업데이트를 누르세요.",
+    "description": ""
+  },
+  "Bindings.RestoreCharacter.Label": {
+    "message": "캐릭터의 모든 모드 복원",
+    "description": ""
+  },
+  "Bindings.RestoreCharacter.Tip": {
+    "message": "켜면 연결된 디자인을 적용할 때 저장 당시 캐릭터에 적용된 모든 모드(사용 여부 / 우선도 /\n옵션)도 복원하고, 포함되지 않은 캐릭터의 모드는 끄고,\n디자인의 모드를 충돌하는 모든 모드보다 높은 우선도로 올립니다.\n\nProteus 모드가 아닌 모드는 Penumbra 임시 설정으로만 그 상태를 유지합니다.\n컬렉션은 바뀌지 않으며, 되돌리거나 연결되지 않은 디자인을 적용하면 원래대로 돌아갑니다.\n\n끄면 Proteus 모드만 복원합니다. 기록은 어느 쪽이든 이루어지므로,\n꺼져 있을 때 저장한 디자인도 켜면 바로 적용됩니다.",
     "description": ""
   },
   "Bindings.SecondsAgo.Fmt": {

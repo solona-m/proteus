@@ -52,6 +52,10 @@
     "description": ""
   },
   "Bindings.Apply.Tip": {
+    "message": "Restaura ahora el estado de Proteus de este diseño, sin pasar por Glamourer:\nactivación / prioridad / opciones / colores de cada mod que capturó.\n\nLos mods de Proteus que NO están en el vínculo se apagan, así que esto sustituye\nel aspecto actual en lugar de añadirse a él.",
+    "description": ""
+  },
+  "Bindings.ApplyCharacter.Tip": {
     "message": "Restaura ahora el aspecto de este diseño, sin pasar por Glamourer: activación / prioridad /\nopciones de cada mod que capturó, más los colores de Proteus.\n\nLos mods del personaje que NO están en el vínculo se apagan, y los mods vinculados suben\npor encima de todo aquello con lo que entran en conflicto, así que esto sustituye el aspecto actual.",
     "description": ""
   },
@@ -68,7 +72,7 @@
     "description": ""
   },
   "Bindings.Enable.Tip": {
-    "message": "Cuando está activo, guardar un diseño de Glamourer captura cada mod del personaje y los\ncolores actuales de Proteus. Aplicar ese diseño más tarde lo restaura (con la mejor correspondencia de equipo posible).",
+    "message": "Cuando está activo, guardar un diseño de Glamourer captura el estado actual de Proteus.\nAplicar ese diseño más tarde lo restaura (con la mejor correspondencia de equipo posible).",
     "description": ""
   },
   "Bindings.FollowAutomation.Label": {
@@ -125,6 +129,14 @@
   },
   "Bindings.ProteusOnly.Tip": {
     "message": "Capturado antes de que los vínculos registraran todo el personaje: al aplicarlo solo\nse restauran los mods de Proteus. Aplica este diseño y pulsa Actualizar.",
+    "description": ""
+  },
+  "Bindings.RestoreCharacter.Label": {
+    "message": "Restaurar todos los mods del personaje",
+    "description": ""
+  },
+  "Bindings.RestoreCharacter.Tip": {
+    "message": "Si está activo, aplicar un diseño vinculado también restaura cada mod que había en el personaje\nal guardarlo (activación / prioridad / opciones), apaga los mods del personaje que no estaban\ny sube los mods del diseño por encima de todo aquello con lo que entran en conflicto.\n\nLos mods que no son de Proteus solo se mantienen así con ajustes temporales de Penumbra:\ntu colección no cambia, y revertir o aplicar un diseño sin vínculo los devuelve a su estado.\n\nSi está apagado, solo se restauran los mods de Proteus. Los diseños se capturan igualmente, así\nque activarlo funciona con diseños guardados mientras estaba apagado.",
     "description": ""
   },
   "Bindings.SecondsAgo.Fmt": {

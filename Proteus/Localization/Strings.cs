@@ -281,8 +281,20 @@ public sealed class BindingsStrings
         Loc.Localize("Bindings.Enable.Label", "Bind Proteus state to Glamourer designs") + "###bindEnable";
 
     public readonly string EnableTip = Loc.Localize("Bindings.Enable.Tip",
-        "When on, saving a Glamourer design snapshots every mod on the character and the\n" +
-        "current Proteus colours. Applying that design later restores it (best-effort gear match).");
+        "When on, saving a Glamourer design snapshots the current Proteus state.\n" +
+        "Applying that design later restores it (best-effort gear match).");
+
+    public readonly string RestoreCharacter = Loc.Localize(
+        "Bindings.RestoreCharacter.Label", "Restore every mod on the character") + "###bindRestoreCharacter";
+
+    public readonly string RestoreCharacterTip = Loc.Localize("Bindings.RestoreCharacter.Tip",
+        "When on, applying a bound design also restores every mod that was on the character\n" +
+        "when it was saved (enable / priority / options), switches off mods on the character\n" +
+        "that weren't, and raises the design's mods above anything they conflict with.\n\n" +
+        "Mods that aren't Proteus mods are only held that way with Penumbra temporary settings:\n" +
+        "your collection isn't changed, and reverting or applying an unbound design puts them back.\n\n" +
+        "When off, only Proteus mods are restored. Designs are captured either way, so\n" +
+        "turning this on works for designs saved while it was off.");
 
     public readonly string FollowAutomation = Loc.Localize(
         "Bindings.FollowAutomation.Label", "Follow Glamourer automation (gearset / job changes)") + "###bindAutomation";
@@ -318,6 +330,12 @@ public sealed class BindingsStrings
     public readonly string Unbind = Loc.Localize("Bindings.Unbind.Btn", "Unbind");
 
     public readonly string ApplyTip = Loc.Localize("Bindings.Apply.Tip",
+        "Restore this design's Proteus state now, without going through Glamourer —\n" +
+        "enable / priority / options / colours for every mod it captured.\n\n" +
+        "Proteus mods NOT in the binding are switched off, so this replaces the current\n" +
+        "look rather than adding to it.");
+
+    public readonly string ApplyCharacterTip = Loc.Localize("Bindings.ApplyCharacter.Tip",
         "Restore this design's look now, without going through Glamourer: enable / priority /\n" +
         "options for every mod it captured, plus Proteus colours.\n\n" +
         "Mods on the character that are NOT in the binding are switched off, and bound mods are\n" +
