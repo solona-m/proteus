@@ -1243,6 +1243,22 @@ public sealed class SecondSkinService
     // layer's material name, so a host list that reshuffles simply misses.
     private readonly Dictionary<int, (string Key, byte[] Shell, SecondSkinWriter.Stats Stats)> _shellMemo = new();
 
+    /// <summary>The first line of two <see cref="ShellGeometryKey"/>s that differs, old and new, each cut short.</summary>
+    internal static string FirstKeyDifference(string was, string now)
+    {
+        var a = was.Split('\n');
+        var b = now.Split('\n');
+        static string Cut(string s) => s.Length <= 200 ? s : s[..200] + "…";
+        for (int i = 0; i < Math.Max(a.Length, b.Length); i++)
+        {
+            var la = i < a.Length ? a[i] : "(none)";
+            var lb = i < b.Length ? b[i] : "(none)";
+            if (!string.Equals(la, lb, StringComparison.Ordinal))
+                return $"line {i}: was [{Cut(la)}] now [{Cut(lb)}]";
+        }
+        return "keys identical";
+    }
+
     /// <summary>
     /// Everything <see cref="SecondSkinWriter.Build"/> reads, as one comparable string — or null when some input
     /// cannot be described (a source whose delegates carry no <see cref="SecondSkinWriter.SourceSpec.DelegateKey"/>,
@@ -4267,6 +4283,11 @@ public sealed class SecondSkinService
                     }
                     else
                     {
+                        // Say WHICH input moved when there was a previous build to compare against — a miss on a
+                        // composite that changed nothing is a cost with no visible cause otherwise.
+                        if (geometryKey != null && memo.Key != null)
+                            log.Debug("[Proteus] second skin: host {0}{1:D4}/{2} shell rebuilt — {3}",
+                                host.Prefix, host.SetId, host.Slot, FirstKeyDifference(memo.Key, geometryKey));
                         lock (_shellMemo) _shellMemo.Remove(h);
                         shell = SecondSkinWriter.Build(srcs, perHostLayers[h], host.BaseModel,
                             out stats, msg => log.Debug("[Proteus] second skin: {0}", msg), AuthoredCaps(), pushSweep,

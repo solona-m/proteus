@@ -1448,7 +1448,13 @@ public class CompositorService : IDisposable
             // Empty is the same failure as null — see the composite-side walk. Testing only for null here
             // meant the paragraph above described the right hazard and then let it through: an empty set
             // wipes all five maps and reports a full unequip that never happened.
-            if (modelPaths is { Count: > 0 })
+            // A walk with no body part in it is the same hazard for the MAPS: face and hair loaded, the body not
+            // yet — see HasBodySlotModel. This hook fires when the draw object is recreated, which is exactly
+            // when that is the state. But it IS a draw object we read, so the carrier reconcile below still runs
+            // off it: that reconcile reads the worn items itself, and it is the only thing that puts back the
+            // carriers this redraw just took off. Gating it on the body being loaded left the shell with no host.
+            if (modelPaths is { Count: > 0 }) modelWalkOk = true;
+            if (modelPaths is { Count: > 0 } && HasBodySlotModel(modelPaths))
             {
                 var equipped = EquippedPartModelsFromModels(modelPaths);
                 var accessories = EquippedAccessoryModelsFromModels(modelPaths);
@@ -1466,7 +1472,6 @@ public class CompositorService : IDisposable
                 var sig = EquipSignature(equipped, accessories, metModels, bare, humanParts);
                 equipChanged = _lastEquipSignature != null && !string.Equals(_lastEquipSignature, sig, StringComparison.Ordinal);
                 _lastEquipSignature = sig;
-                modelWalkOk = true;
             }
         }
 
@@ -2161,7 +2166,8 @@ public class CompositorService : IDisposable
         // the Emperor-ring fallback, and the invisible glasses were injected — all reported as a
         // perfectly successful build, because from here it looks exactly like a naked character.
         // The redraw hook has always documented this hazard; it just tested the wrong condition.
-        if (equipped is { Count: > 0 })
+        // …and a walk with no body part in it is the same teardown one step later — see HasBodySlotModel.
+        if (equipped is { Count: > 0 } && HasBodySlotModel(equipped))
         {
             _equippedPartModels = EquippedPartModelsFromModels(equipped);
             _equippedAccessoryModels = EquippedAccessoryModelsFromModels(equipped);
@@ -2260,6 +2266,20 @@ public class CompositorService : IDisposable
             try { await Task.Delay(delayMs, token).ConfigureAwait(false); }
             catch (OperationCanceledException) { return; }
             var tDebounced = PhaseCounter.Begin();
+
+            // The Glamourer char code is otherwise read only by the redraw hook and Glamourer's own events, and
+            // on a fresh plugin load neither has fired by the first composite. It then hashed as empty, so the
+            // composite our OWN redraw triggers next read "c0201", its fingerprint moved, and it could neither
+            // skip nor reuse the skin: a 4.7 s rebuild of identical output after every load. Read it here when it
+            // is still unknown, on the framework thread like every other caller. A failure leaves it null, which
+            // is what it already was.
+            if (_glamourerCharCode == null)
+            {
+                try { Plugin.Framework.RunOnFrameworkThread(RefreshGlamourerCharCode).GetAwaiter().GetResult(); }
+                catch (OperationCanceledException) { return; }
+                catch (Exception ex) when (_disposed || IsLoadContextUnloading(ex)) { return; }
+                catch (Exception ex) { log.Debug("[Proteus] early Glamourer char code read failed: {0}", ex.Message); }
+            }
 
             // FIRST, before anything below reads the draw object. Everything this lambda gathers — equipped
             // models, the drawn race code, enabled shape keys, the material snapshot — has to describe the
@@ -2528,7 +2548,7 @@ public class CompositorService : IDisposable
     {
         /// <summary>Null or empty is a teardown / loading-screen walk, not a character wearing nothing —
         /// the same rule every other consumer of these walks applies.</summary>
-        public bool IsUsable => Models is { Count: > 0 } && Materials is { Count: > 0 };
+        public bool IsUsable => Models is { Count: > 0 } && Materials is { Count: > 0 } && HasBodySlotModel(Models);
     }
 
     private const int SettlePollMs        = 100;
@@ -3116,6 +3136,20 @@ public class CompositorService : IDisposable
         parts.Sort(StringComparer.OrdinalIgnoreCase);   // stable order, same reason as the met list
         return parts;
     }
+
+    /// <summary>
+    /// Whether a walk caught a character with a body at all: at least one top/dwn/glv/sho model, equipped or bare.
+    /// <para/>
+    /// Non-empty is not enough, and trusting it cost two extra full redraws after every plugin load. Mid-redraw the
+    /// draw object has its face and hair loaded but not one body part, and it stays that way across two 100 ms
+    /// polls — so the settle loop called that state settled, the composite published EMPTY equipment maps, and
+    /// the shell was cut from the default bare body onto the Emperor's ring. The model changed, which forced a
+    /// full redraw; the next composite saw the real outfit, changed it back, and redrew again. A drawn character
+    /// always has at least one of these slots (a full-body piece is still a top), so a walk with none of them is
+    /// a teardown, exactly like an empty one.
+    /// </summary>
+    private static bool HasBodySlotModel(HashSet<string>? modelPaths)
+        => modelPaths != null && modelPaths.Any(p => EquipModelRe.IsMatch(p));
 
     private static Dictionary<string, string> EquippedPartModelsFromModels(HashSet<string>? modelPaths)
     {
@@ -5281,23 +5315,40 @@ public class CompositorService : IDisposable
                     if (string.Equals(dstBodyType, "gen2", StringComparison.OrdinalIgnoreCase))
                     {
                         if (overlayPath == null) return png;
-                        var native = textureLoader.LoadPngAsRgba(overlayPath, 4096, 4096, filter);
-                        if (native == null) return png;
-                        byte[] biboSpace;
-                        if (string.Equals(srcType, "bibo", StringComparison.OrdinalIgnoreCase))
+                        // CACHED, and it has to be. A vanilla sibling (mt_…_a beside mt_…_bibo) takes every
+                        // overlay, mask and index through here: a 4K bibo buffer cropped to its right half (a
+                        // 32 MB copy) and resampled back up to 4K (64 MB, bilinear) — per slot, per composite,
+                        // for art that had not changed. Measured as the gap between the two body materials: the
+                        // bibo one reached its AO pass 0.8 s into the blend and its vanilla sibling 2.4 s in.
+                        // Keyed on the overlay FILE plus everything else the result depends on; the source
+                        // space is in the key because a different declared space is a different conversion.
+                        var tGen2 = PhaseCounter.Begin();
+                        try
                         {
-                            biboSpace = native;
+                            var srcSpace = srcType;
+                            return textureLoader.GetOrDerive(overlayPath,
+                                $"gen2<{srcSpace}|{(filter == ResampleFilter.Nearest ? "n" : "a")}", w, h, () =>
+                                {
+                                    var native = textureLoader.LoadPngAsRgba(overlayPath, 4096, 4096, filter);
+                                    if (native == null) return null;
+                                    byte[] biboSpace;
+                                    if (string.Equals(srcSpace, "bibo", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        biboSpace = native;
+                                    }
+                                    else
+                                    {
+                                        var converted = uvRemap.Remap(native, 4096, 4096, srcSpace, "bibo");
+                                        if (ReferenceEquals(converted, native)) return null; // map not found — skip
+                                        biboSpace = converted;
+                                    }
+                                    var rightHalf = UVRemapService.CropRightHalf(biboSpace, 4096, 4096);
+                                    // Honour the caller's filter on the tail: this used to be bilinear whatever the
+                                    // texture meant, which interpolated the row selectors of any cross-UV index map.
+                                    return TextureLoader.Resample(rightHalf, 2048, 4096, w, h, filter);
+                                }) ?? png;
                         }
-                        else
-                        {
-                            var converted = uvRemap.Remap(native, 4096, 4096, srcType, "bibo");
-                            if (ReferenceEquals(converted, native)) return png; // map not found — skip
-                            biboSpace = converted;
-                        }
-                        var rightHalf = UVRemapService.CropRightHalf(biboSpace, 4096, 4096);
-                        // Honour the caller's filter on the tail: this used to be bilinear whatever the
-                        // texture meant, which interpolated the row selectors of any cross-UV index map.
-                        return TextureLoader.Resample(rightHalf, 2048, 4096, w, h, filter);
+                        finally { blendGen2Stats.Stop(tGen2); }
                     }
                     // Transfer-map paths operate at 4096×4096. If the overlay was loaded at a
                     // smaller size (e.g. base texture is 2048), reload at full res, remap, resize.
@@ -8084,6 +8135,7 @@ public class CompositorService : IDisposable
     // double-count against `load`. Its loads land in `load` and its plane build stays in `glue`; it is
     // memoised per (mod, w, h) anyway, so it runs a handful of times per composite.
     private readonly PhaseCounter blendLoadStats     = new();   // LoadPng + RemapIfNeeded
+    private readonly PhaseCounter blendGen2Stats     = new();   //   of which: the vanilla-sibling crop, cached or not
     private readonly PhaseCounter blendBaseLoadStats = new();   // LoadBaseTexture
     private readonly PhaseCounter blendResolveStats  = new();   // ResolveUpstream
     private readonly PhaseCounter blendSuppressStats = new();   // Suppress: clone + SERIAL full-buffer pass
@@ -8105,6 +8157,7 @@ public class CompositorService : IDisposable
         blendIdxMergeStats.Reset();
         blendSeamDropStats.Reset();
         blendLoadStats.Reset();
+        blendGen2Stats.Reset();
         blendBaseLoadStats.Reset();
         blendResolveStats.Reset();
         blendSuppressStats.Reset();
@@ -8304,7 +8357,7 @@ public class CompositorService : IDisposable
             "prefetch {5:F0}ms bg (decode work {6:F0}ms, {7} native of {8}) | remap {9:F0}ms ({10}) | " +
             "blend {11:F0}ms (islands {12:F0} | seam {13:F0}/{14} | ao {15:F0} [sil {16:F0}/{17} + blur {18:F0}/{19} " +
             "+ apply {20:F0}] | tag {21:F0}/{22} | overlays {23:F0} [cov {24:F0}/{25} + idxmerge {26:F0}/{27} " +
-            "+ diffuse {28:F0}/{29} + normal {30:F0}/{31} + seamdrop {32:F0}/{33} + load {34:F0}/{35} " +
+            "+ diffuse {28:F0}/{29} + normal {30:F0}/{31} + seamdrop {32:F0}/{33} + load {34:F0}/{35} (gen2 {57:F0}/{58}) " +
             "+ baseload {36:F0}/{37} + resolve {38:F0}/{39} + suppress {40:F0}/{41} + glue {42:F0}] | " +
             "maskrelief {43:F0} | maskdiffuse {44:F0} | rest {45:F0}) | " +
             "swizzle {46:F0}ms | write {47:F0}ms ({48} files, {49:F0} MB) | composite {50:F0}ms | total {51:F0}ms | " +
@@ -8325,7 +8378,8 @@ public class CompositorService : IDisposable
             swizzle.Ms, write.Ms, write.Calls, write.Bytes / (1024.0 * 1024.0),
             compositeMs, totalMs, materialCount,
             cacheEntries, cacheBytes / (1024.0 * 1024.0), textureLoader.Evictions,
-            textureLoader.DecodeCacheBudgetBytes / (1024.0 * 1024.0));
+            textureLoader.DecodeCacheBudgetBytes / (1024.0 * 1024.0),
+            blendGen2Stats.Ms, blendGen2Stats.Calls);
     }
 
     // ── Managed mod helpers ──────────────────────────────────────────────────
@@ -10409,6 +10463,10 @@ public class CompositorService : IDisposable
                 // shell, and if everything after it is a loading screen or a host still mid-reload, reusing its
                 // `missing` would warn — in chat — about a shell nothing ever got to judge.
                 bool lastJudged = false;
+                // When the reads started finding every material in place, uninterrupted. The confirmation waits
+                // for ShellCheckMinConfirmMs, but the shell was there from this read on — so the timeline is
+                // stamped here, not at the confirming read, or the floor would be reported as load time.
+                long presentSince = 0;
                 HashSet<string>? hostMaterials = null;
                 for (int attempt = 0; attempt < ShellCheckAttempts; attempt++)
                 {
@@ -10428,7 +10486,8 @@ public class CompositorService : IDisposable
                     // Not in game / IPC down — or, now that the first read lands 200 ms after the publish, the
                     // draw object caught mid-redraw. Only the first is "no answer", so wait the window out
                     // before concluding it.
-                    if (materials == null || models == null) { lastJudged = false; continue; }
+                    var readAt = PhaseCounter.Begin();
+                    if (materials == null || models == null) { lastJudged = false; presentSince = 0; continue; }
                     anyRead = true;
 
                     // THE ANCHOR. The composite that scheduled this usually forced a full redraw, and a
@@ -10444,7 +10503,7 @@ public class CompositorService : IDisposable
                     // "never appeared" against a host that was no longer on the character at all. A material
                     // is judged only while its own host is drawn; one whose host cannot be told from its path
                     // is judged on the whole shell, as before.
-                    if (!expected.Models.Any(models.Contains)) { lastJudged = false; continue; }
+                    if (!expected.Models.Any(models.Contains)) { lastJudged = false; presentSince = 0; continue; }
                     hostEverDrawn = true;
 
                     bool OwnHostDrawn(string mtrl)
@@ -10455,6 +10514,8 @@ public class CompositorService : IDisposable
                     hostGone = expected.Materials.Where(p => !OwnHostDrawn(p)).ToList();
                     missing  = expected.Materials.Where(p => OwnHostDrawn(p) && !materials.Contains(p)).ToList();
                     lastJudged = true;
+                    if (missing.Count == 0 && hostGone.Count == 0) { if (presentSince == 0) presentSince = readAt; }
+                    else presentSince = 0;
                     if (missing.Count == 0 && hostGone.Count > 0) continue;   // not a verdict either way yet
                     // Too early to tell this shell from the previous one — see ShellCheckMinConfirmMs.
                     if (missing.Count == 0 && (attempt + 1) * ShellCheckPollMs < ShellCheckMinConfirmMs) continue;
@@ -10465,7 +10526,9 @@ public class CompositorService : IDisposable
                         _shellConfirmedDrawnKey = ShellProbeKey(expected);
                         if (timeline != null)
                             log.Information("[Proteus] refresh drawn: {0:F0}ms from first trigger to the shell on the "
-                                          + "character (to within {1}ms)", timeline.TotalMs, ShellCheckPollMs);
+                                          + "character (to within {1}ms)",
+                                (presentSince - timeline.Start) * 1000.0 / System.Diagnostics.Stopwatch.Frequency,
+                                ShellCheckPollMs);
                         // INFORMATION, not Debug. This is the one line that separates "the shell is on the
                         // character and something about the RENDER is wrong" from "it never loaded", and the
                         // file log a user sends is INF+ — so at Debug the answer was never in the evidence,
