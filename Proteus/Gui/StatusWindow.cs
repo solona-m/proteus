@@ -133,10 +133,11 @@ public class StatusWindow : Window
     private readonly HashSet<string> _glowWarmedMods = new(StringComparer.OrdinalIgnoreCase);
     // Key: editor scope → which color table row (1–16) is open in the editor.
     private readonly Dictionary<string, int> _rowSelection = new();
-    // Colour edits arrive one per frame while a slider/swatch is dragged; a recomposite is multi-second,
-    // so wait this long after the LAST change before recompositing (TriggerRecomposite restarts the
-    // timer on each call). The on-screen editor swatches update live regardless — only the bake waits.
-    private const int ColorEditDebounceMs = 1000;
+    // Colour edits arrive one per frame while a slider/swatch is dragged, so wait this long after the LAST
+    // change before recompositing (TriggerRecomposite restarts the timer on each call). The on-screen editor
+    // swatches update live regardless — only the bake waits. Was 1000 ms when a bake cost 5–10 s and had to
+    // be protected from a second drag; a colour edit is now ~1 s of work, so the wait was most of the delay.
+    private const int ColorEditDebounceMs = 400;
     // Mod whose colour editor window is open, or null. A window rather than a popup: colour work means
     // clicking back and forth with the game, and a popup closes on any click outside it.
     private string? _colorWindowMod;
@@ -909,13 +910,14 @@ public class StatusWindow : Window
 
         if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.SyncAlt, "Refresh"))
         {
-            compositor.RefreshAndRecomposite();
+            // Shift: rebuild everything, forgetting what was published. See RefreshAndRecomposite.
+            compositor.RefreshAndRecomposite(full: ImGui.GetIO().KeyShift);
             // The Parts tab lists every mod Penumbra knows, not the sidecar ones a composite discovers, so
             // a recomposite alone would leave a mod installed since the window opened out of its picker.
             parts.Refresh();
         }
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(Strings.Band.RecompositeTip);
+            ImGui.SetTooltip(Strings.Band.RecompositeTip + "\n" + Strings.Band.RecompositeFullTip);
 
         ImGui.SetCursorPos(resume);
     }
@@ -6674,8 +6676,9 @@ public class StatusWindow : Window
                                        bool skinFingerprintAuthoritative = false)
     {
         if (!entry.Enabled) return;
+        // drawStateStable: every trigger through here is an edit in this window, not the character moving.
         compositor.TriggerRecomposite(reason, delayMs,
-            skinFingerprintAuthoritative: skinFingerprintAuthoritative);
+            skinFingerprintAuthoritative: skinFingerprintAuthoritative, drawStateStable: true);
     }
 
     /// <summary>Why "Reset to defaults" can't run right now, or null when it can.</summary>

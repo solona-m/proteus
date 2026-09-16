@@ -2082,10 +2082,31 @@ public class CompositorService : IDisposable
     /// re-derive it rebuilt from the same remembered upstreams, so the thing a user reaches for it over — a
     /// body or skin change that did not show up — was the one thing it could not pick up.
     /// </summary>
-    public void RefreshAndRecomposite()
+    /// <summary>
+    /// The Refresh button. Re-resolves every base path and composites at once — no debounce, it is one click.
+    /// <para/>
+    /// The skin may be REUSED: the button's whole job is to catch what nothing else noticed, and every one of
+    /// those things is in the skin fingerprint — a base texture swapped underneath its path is its
+    /// <c>base:</c> entry (path, size, mtime) moving, which the upstream invalidation here makes it re-read;
+    /// the overlays, masks and colour rows are hashed whole. So a refresh whose inputs hash the same as the
+    /// published skin has nothing to re-blend, and re-blending anyway was 2–3 s of identical output on every
+    /// press. Config knobs are the one thing the fingerprint does not carry, and each of those triggers its
+    /// own forced composite when it changes.
+    /// <para/>
+    /// <paramref name="full"/> is the escape hatch for the case that is not in the list — a texture edited in
+    /// place with its timestamp and size preserved, or a doubt about the cache itself: forget the published
+    /// fingerprint so everything rebuilds. Shift-click in the UI.
+    /// </summary>
+    public void RefreshAndRecomposite(bool full = false)
     {
-        InvalidateUpstreamCache("manual");
-        TriggerRecomposite("manual");
+        InvalidateUpstreamCache(full ? "manual-full" : "manual");
+        if (full)
+        {
+            _lastCompositeFingerprint = null;
+            TriggerRecomposite("manual-full", 0);
+        }
+        else
+            TriggerRecomposite("manual", 0, skinFingerprintAuthoritative: true, drawStateStable: true);
     }
 
     /// <summary>
@@ -2096,6 +2117,7 @@ public class CompositorService : IDisposable
     public int ClearTextureCacheAndRecomposite()
     {
         int dropped = textureLoader.ClearCache();
+        dropped += aoBlurCache.Clear();
         log.Information("[Proteus] Texture cache cleared manually ({0} entries) — recompositing.", dropped);
         // This exists for the case where a file changed in a way nothing can see; the fingerprint is one of
         // the things that can't see it, so drop it too. (The trigger below is forced anyway — belt and braces
@@ -2205,8 +2227,15 @@ public class CompositorService : IDisposable
     /// starts still reaches RefreshPlayerTextures, which stays gated, so the promise the setting makes —
     /// we do not reload your character — is kept either way.
     /// </param>
+    /// <param name="drawStateStable">
+    /// Nothing about the CHARACTER is expected to be moving: the trigger came from Proteus's own UI — a colour
+    /// edit, the Refresh button — not from the world. The settle wait may then accept a first reading that
+    /// matches the state the last composite settled on, instead of holding for a second agreeing poll. Never
+    /// set for a trigger that follows an equipment change, a design apply or a redraw: there the first reading
+    /// is precisely the one that may still describe the OLD outfit, and waiting for the second is the point.
+    /// </param>
     public void TriggerRecomposite(string reason, int delayMs = 200, bool force = true,
-        bool skinFingerprintAuthoritative = false, bool autoRedrawExempt = false)
+        bool skinFingerprintAuthoritative = false, bool autoRedrawExempt = false, bool drawStateStable = false)
     {
         if (_disposed || !config.PluginEnabled || !penumbra.IsAvailable) return;
 
@@ -2305,7 +2334,7 @@ public class CompositorService : IDisposable
             // Its final sample replaces the three separate draw-object reads that used to live here — the
             // equipped-model walk, the body-shape read and the material walk — so this is cheaper than what
             // it displaces, not dearer, and all three now describe the same frame.
-            var settled = await WaitForDrawStateToSettle(token).ConfigureAwait(false);
+            var settled = await WaitForDrawStateToSettle(token, drawStateStable).ConfigureAwait(false);
             if (settled is not { } state) return;
             var tDrawSettled = PhaseCounter.Begin();
 
@@ -2621,7 +2650,11 @@ public class CompositorService : IDisposable
     /// </summary>
     /// <returns>The settled sample, or null when cancelled or torn down — the caller must not composite
     /// on a dead token.</returns>
-    private async Task<DrawSample?> WaitForDrawStateToSettle(CancellationToken token)
+    /// <summary>The reading the last composite settled on, so a trigger that expects nothing to have moved can
+    /// accept a first reading that matches it — see TriggerRecomposite's drawStateStable.</summary>
+    private string? _lastSettledDrawSig, _lastSettledDrawOwner;
+
+    private async Task<DrawSample?> WaitForDrawStateToSettle(CancellationToken token, bool expectStable = false)
     {
         var started = Environment.TickCount64;
         DrawSample sample = default;
@@ -2658,8 +2691,16 @@ public class CompositorService : IDisposable
                 agreements = sameOwner && string.Equals(sig, prevSig, StringComparison.Ordinal) ? agreements + 1 : 1;
                 prevSig = sig;
                 prevOwner = sample.Owner;
+                // A UI-driven trigger whose first reading is the state the last composite settled on: the
+                // second poll would only confirm what two composites have now agreed about, at 100 ms a time.
+                if (expectStable && polls == 1
+                    && string.Equals(sig, _lastSettledDrawSig, StringComparison.Ordinal)
+                    && string.Equals(sample.Owner, _lastSettledDrawOwner, StringComparison.Ordinal))
+                    return sample;
                 if (agreements >= SettleStableSamples)
                 {
+                    _lastSettledDrawSig = sig;
+                    _lastSettledDrawOwner = sample.Owner;
                     // Only worth a line when something actually was in flight — otherwise every colour
                     // slider drag logs a settle that had nothing to settle.
                     if (polls > SettleStableSamples)
@@ -6761,6 +6802,8 @@ public class CompositorService : IDisposable
                     // Reused by every mod's AO pass on THIS material (see IslandBlurCache). Per material,
                     // because materials composite in parallel while the mod loop below is sequential.
                     var islandBlurCache = new IslandBlurCache();
+                    // Same lifetime and reason as islandBlurCache — see HalfResIslandPlanes.
+                    var halfPlanes = new HalfResIslandPlanes();
                     var tIslands = PhaseCounter.Begin();
                     if (dstBodyType != null && baseD is { Length: > 0 })
                     {
@@ -6946,12 +6989,8 @@ public class CompositorService : IDisposable
                                 // and not from padding or from the island across the gutter. The silhouette
                                 // itself is left exactly as authored — it is also the gate, and on-model
                                 // texels are the same either way. See BlurCoverageWithinIslands.
-                                var tBlurD = PhaseCounter.Begin();
-                                blurredD = insidePlane != null && islandLabels != null && islandOwner != null
-                                    ? BlurCoverageWithinIslands(strapD, islandLabels, islandOwner, islandCount, insidePlane,
-                                                                bodyMdls == null ? null : TimedSeamSource(bodyMdls, wD, hD, SeamReach(radiusD)), wD, hD, radiusD, islandBlurCache)
-                                    : BlurCoverage(strapD, wD, hD, radiusD);
-                                blendBlurStats.Stop(tBlurD);
+                                blurredD = BlurSilhouette(strapD, wD, hD, radiusD, dstBodyType, insidePlane,
+                                    islandLabels, islandOwner, islandCount, bodyMdls, islandBlurCache, halfPlanes);
                                 SnapshotBaseDiffuse();
                                 ApplyAmbientOcclusion(baseD, strapD, blurredD, wD, hD, aoStrength, coveredAbove,
                                     BustStandoff(modDir, bodyMdls, strapD, wD, hD, radiusD));
@@ -6994,13 +7033,11 @@ public class CompositorService : IDisposable
                                     // Island-restricted only when the normal shares the diffuse's size —
                                     // insidePlane and the labels are built at wD/hD, the same guard
                                     // coveredAbove uses. Otherwise a plain blur, as before.
-                                    var tBlurN = PhaseCounter.Begin();
+                                    bool sameSize = wN == wD && hN == hD;
                                     blurredN = strapN == null ? null
-                                        : insidePlane != null && islandLabels != null && islandOwner != null && wN == wD && hN == hD
-                                            ? BlurCoverageWithinIslands(strapN, islandLabels, islandOwner, islandCount, insidePlane,
-                                                                        bodyMdls == null ? null : TimedSeamSource(bodyMdls, wN, hN, SeamReach(radiusN)), wN, hN, radiusN, islandBlurCache)
-                                            : BlurCoverage(strapN, wN, hN, radiusN);
-                                    blendBlurStats.Stop(tBlurN);
+                                        : BlurSilhouette(strapN, wN, hN, radiusN, dstBodyType,
+                                            sameSize ? insidePlane : null, sameSize ? islandLabels : null,
+                                            sameSize ? islandOwner : null, islandCount, bodyMdls, islandBlurCache, halfPlanes);
                                 }
                                 // Gate by covered-above only when the normal shares the diffuse res it was built
                                 // at (the common case — skin diffuse and normal are usually equal); else ungated.
@@ -8091,6 +8128,7 @@ public class CompositorService : IDisposable
     // per mod with no cache, and the island-restricted blur does its per-island cropping serially.
     private readonly PhaseCounter blendSilhouetteStats = new();
     private readonly PhaseCounter blendBlurStats       = new();
+    private readonly PhaseCounter blendBlurCacheHits   = new();   // of blur's calls, those served by aoBlurCache
 
     // Splitting what was left. With AO measured at only 346ms of a 1549ms blend, `rest` held 1151ms across
     // three unbounded regions and there was no way to tell which. These three are mutually exclusive and
@@ -8158,6 +8196,7 @@ public class CompositorService : IDisposable
         blendSeamDropStats.Reset();
         blendLoadStats.Reset();
         blendGen2Stats.Reset();
+        blendBlurCacheHits.Reset();
         blendBaseLoadStats.Reset();
         blendResolveStats.Reset();
         blendSuppressStats.Reset();
@@ -8246,6 +8285,74 @@ public class CompositorService : IDisposable
     private const float BustStandoffFull = 0.0015f;
 
     private readonly Dictionary<string, byte[]?> _bustStandoff = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Blur the AO silhouette at half resolution and interpolate back. The halo is ~20 texels wide at 4K and
+    /// carries nothing at texel scale, so this is invisible and a quarter of the work. A constant rather than a
+    /// setting: it changes the output bytes once, and after that there is nothing for a user to choose between.
+    /// </summary>
+    private const bool AoBlurHalfRes = true;
+
+    private readonly AoBlurCache aoBlurCache = new();
+
+    /// <summary>
+    /// The blurred silhouette a garment casts its contact shadow from — from <see cref="aoBlurCache"/> when the
+    /// same silhouette was blurred over the same islands before, else blurred now (at half resolution when
+    /// <see cref="AoBlurHalfRes"/>) and remembered. Both blur call sites go through here, so the key and the
+    /// resolution policy cannot drift between the diffuse and the normal.
+    /// <para/>
+    /// The islands are passed as null when the caller has none at the plane's size, which selects the plain
+    /// blur exactly as before.
+    /// </summary>
+    private byte[] BlurSilhouette(byte[] strap, int w, int h, int radius, string? dstBodyType,
+                                  byte[]? insidePlane, int[]? islandLabels, int[]? islandOwner, int islandCount,
+                                  IReadOnlyList<UvSeamMapService.SeamModel>? bodyMdls,
+                                  IslandBlurCache islandBlurCache, HalfResIslandPlanes halfPlanes)
+    {
+        var t = PhaseCounter.Begin();
+        try
+        {
+            bool islands = insidePlane != null && islandLabels != null && islandOwner != null;
+            bool half = AoBlurHalfRes && w % 2 == 0 && h % 2 == 0 && radius >= 4;
+            // Everything the result depends on: the silhouette's content, the islands (a function of the body
+            // type at this size), the seam map (a function of the body models and the radius' reach), the
+            // radius, and which of the two resolutions it was blurred at.
+            var key = $"{dstBodyType ?? "-"}|{w}x{h}|r{radius}|{(islands ? "i" : "p")}|h{(half ? 1 : 0)}|"
+                    + (islands && bodyMdls != null ? string.Join(",", bodyMdls.Select(m => m.Id)) : "-")
+                    + $"|{SecondSkinService.SlotHash(strap):x16}";
+            if (aoBlurCache.TryGet(key) is { } hit) { blendBlurCacheHits.Count(); return hit; }
+
+            byte[] result;
+            if (!islands)
+            {
+                result = half
+                    ? HalfResIslandPlanes.UpsampleBilinear(
+                          BlurCoverage(HalfResIslandPlanes.DownsampleAverage(strap, w, h), w / 2, h / 2, Math.Max(1, radius / 2)),
+                          w / 2, h / 2, w, h)
+                    : BlurCoverage(strap, w, h, radius);
+            }
+            else
+            {
+                var seam = bodyMdls == null ? null : TimedSeamSource(bodyMdls, w, h, SeamReach(radius));
+                if (half)
+                {
+                    halfPlanes.EnsureIslands(islandLabels!, islandOwner!, insidePlane!, w, h);
+                    halfPlanes.EnsureSeam(seam, w, h);
+                    var blurredH = BlurCoverageWithinIslands(
+                        HalfResIslandPlanes.DownsampleAverage(strap, w, h), halfPlanes.Labels!, halfPlanes.Owner!,
+                        islandCount, halfPlanes.Inside!, halfPlanes.Seam, w / 2, h / 2, Math.Max(1, radius / 2),
+                        islandBlurCache);
+                    result = HalfResIslandPlanes.UpsampleBilinear(blurredH, w / 2, h / 2, w, h);
+                }
+                else
+                    result = BlurCoverageWithinIslands(strap, islandLabels!, islandOwner!, islandCount, insidePlane!,
+                                                       seam, w, h, radius, islandBlurCache);
+            }
+            aoBlurCache.Put(key, result);
+            return result;
+        }
+        finally { blendBlurStats.Stop(t); }
+    }
 
     private int[]? TimedSeamSource(IReadOnlyList<UvSeamMapService.SeamModel> models, int w, int h, int reach)
     {
@@ -8355,7 +8462,7 @@ public class CompositorService : IDisposable
         log.Information(
             "[Proteus] recomposite phases: setup {0:F0}ms | decode-wait {1:F0}ms ({2} miss, {3} hit, {4} blocked) | " +
             "prefetch {5:F0}ms bg (decode work {6:F0}ms, {7} native of {8}) | remap {9:F0}ms ({10}) | " +
-            "blend {11:F0}ms (islands {12:F0} | seam {13:F0}/{14} | ao {15:F0} [sil {16:F0}/{17} + blur {18:F0}/{19} " +
+            "blend {11:F0}ms (islands {12:F0} | seam {13:F0}/{14} | ao {15:F0} [sil {16:F0}/{17} + blur {18:F0}/{19} ({59} cached) " +
             "+ apply {20:F0}] | tag {21:F0}/{22} | overlays {23:F0} [cov {24:F0}/{25} + idxmerge {26:F0}/{27} " +
             "+ diffuse {28:F0}/{29} + normal {30:F0}/{31} + seamdrop {32:F0}/{33} + load {34:F0}/{35} (gen2 {57:F0}/{58}) " +
             "+ baseload {36:F0}/{37} + resolve {38:F0}/{39} + suppress {40:F0}/{41} + glue {42:F0}] | " +
@@ -8379,7 +8486,7 @@ public class CompositorService : IDisposable
             compositeMs, totalMs, materialCount,
             cacheEntries, cacheBytes / (1024.0 * 1024.0), textureLoader.Evictions,
             textureLoader.DecodeCacheBudgetBytes / (1024.0 * 1024.0),
-            blendGen2Stats.Ms, blendGen2Stats.Calls);
+            blendGen2Stats.Ms, blendGen2Stats.Calls, blendBlurCacheHits.Calls);
     }
 
     // ── Managed mod helpers ──────────────────────────────────────────────────

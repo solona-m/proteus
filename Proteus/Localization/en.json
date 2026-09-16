@@ -35,6 +35,10 @@
     "message": "Recomposite now",
     "description": "Tooltip. Appears in the header band at the top of the status window."
   },
+  "Band.Recomposite.Full.Tip": {
+    "message": "Shift-click to rebuild everything from scratch",
+    "description": "Tooltip, second line under Band.Recomposite.Tip. Shift-clicking the Refresh button forgets the published result and recomposites everything."
+  },
   "Band.Retry.Btn": {
     "message": "Retry",
     "description": "Retries the UV-map download. Small button in the header band - keep it short."

@@ -35,6 +35,10 @@
     "message": "지금 다시 합성",
     "description": ""
   },
+  "Band.Recomposite.Full.Tip": {
+    "message": "Shift+클릭하면 모든 것을 처음부터 다시 생성합니다",
+    "description": ""
+  },
   "Band.Retry.Btn": {
     "message": "다시 시도",
     "description": ""
