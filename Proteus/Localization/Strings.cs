@@ -794,6 +794,11 @@ public sealed class ContentStrings
         "This material carries no colour table, so it has no rows to edit — nothing you change below will "
       + "reach the piece. Its colours come from its textures alone.");
 
+    public readonly string FollowsHairColor = Loc.Localize("Content.FollowsHairColor",
+        "This material uses the hair shader, so the piece takes your character's hair colour and highlights "
+      + "and carries no colour table — nothing you change below will reach it. Change your hair colour to "
+      + "recolour it.");
+
     public readonly string IndexCompressedFmt = Loc.Localize("Content.IndexCompressed.Fmt",
         "Its index texture reads row {0}, column {1} — but that texture is compressed, so it could be a row "
       + "or two out. The dimmed rows are still clickable: if a colour doesn't take, try one either side.");

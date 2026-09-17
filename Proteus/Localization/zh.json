@@ -787,6 +787,10 @@
     "message": "A 和 B",
     "description": ""
   },
+  "Content.FollowsHairColor": {
+    "message": "此材质使用头发着色器，因此该部件会跟随角色的发色与挑染颜色，并且没有颜色表——您在下方做的任何修改都不会影响它。要重新上色，请更改发色。",
+    "description": ""
+  },
   "Content.Geometry.Fmt": {
     "message": "网格 {0}，顶点 {1}",
     "description": ""

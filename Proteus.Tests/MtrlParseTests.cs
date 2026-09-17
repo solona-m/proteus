@@ -281,6 +281,27 @@ public class MtrlParseTests
     }
 
     /// <summary>
+    /// The colour panel tells a hair-shader piece (ears, a tail) from any other material with no colour table by
+    /// the shader name, and words its warning differently: the colour comes from the character's hair, not from
+    /// the textures. The name sits behind the texture, UV-set and colour-set tables, so vary those.
+    /// </summary>
+    [Fact]
+    public void TheShaderNameIsReadWhateverTablesPrecedeIt()
+    {
+        (uint, string)[] two = [(Normal, "chara/x/tex/n.tex"), (Mask, "chara/x/tex/m.tex")];
+
+        Assert.Equal("hair.shpk", TextureLoader.GetMtrlInfo(BuildMtrl(two, shaderPackage: "hair.shpk")).shader);
+        Assert.Equal("hair.shpk", TextureLoader.GetMtrlInfo(BuildMtrl([], shaderPackage: "hair.shpk")).shader);
+        Assert.Equal("character.shpk", TextureLoader.GetMtrlInfo(
+            BuildMtrl(two, dataSetSize: 2048, colorSetCount: 1)).shader);
+
+        // A hair material is exactly the case the caption exists for: parsed, and no colour table.
+        var hair = TextureLoader.ParseMtrlBytes(BuildMtrl(two, shaderPackage: "hair.shpk"));
+        Assert.True(hair.Parsed);
+        Assert.False(hair.HasColorTable);
+    }
+
+    /// <summary>
     /// Fuzz: no input may throw. The bounds checks are the only thing between a corrupt or truncated .mtrl
     /// and an exception on the ImGui draw thread or mid-composite, so this exercises them across many
     /// shapes rather than one sample.

@@ -787,6 +787,10 @@
     "message": "A und B",
     "description": ""
   },
+  "Content.FollowsHairColor": {
+    "message": "Dieses Material nutzt den Haar-Shader: Das Teil übernimmt Haarfarbe und Strähnchen deines Charakters und hat deshalb keine Farbtabelle — nichts, was du unten änderst, erreicht es. Ändere deine Haarfarbe, um es umzufärben.",
+    "description": ""
+  },
   "Content.Geometry.Fmt": {
     "message": "{0} Mesh, {1} Vertices",
     "description": ""

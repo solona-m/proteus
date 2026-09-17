@@ -787,6 +787,10 @@
     "message": "A と B",
     "description": ""
   },
+  "Content.FollowsHairColor": {
+    "message": "このマテリアルは髪シェーダーを使っているため、パーツはキャラクターの髪色とメッシュの色に従い、カラーテーブルを持ちません。下で何を変えてもパーツには届きません。色を変えるには髪色を変更してください。",
+    "description": ""
+  },
   "Content.Geometry.Fmt": {
     "message": "メッシュ{0}、頂点{1}",
     "description": ""

@@ -787,6 +787,10 @@
     "message": "A y B",
     "description": ""
   },
+  "Content.FollowsHairColor": {
+    "message": "Este material usa el shader de pelo, así que la pieza toma el color de pelo y las mechas de tu personaje y no lleva tabla de colores: nada de lo que cambies abajo llegará a ella. Cambia tu color de pelo para recolorearla.",
+    "description": ""
+  },
   "Content.Geometry.Fmt": {
     "message": "{0} malla, {1} vértices",
     "description": ""
