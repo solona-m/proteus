@@ -438,6 +438,40 @@ public class CompositorService : IDisposable
     private readonly ConcurrentDictionary<string, byte> _knownDisabled =
         new(StringComparer.OrdinalIgnoreCase);
 
+    // Depth of SuppressModSettingEvents scopes. Framework thread only, like the handler it gates.
+    private int _modSettingEventSuppression;
+
+    /// <summary>
+    /// Swallow Penumbra's ModSettingChanged events for the life of the returned scope, and settle up once when
+    /// it closes. For a caller about to write many mods in one go — a design restore can touch dozens — where
+    /// every write would otherwise re-enter <see cref="OnModSettingChanged"/>, cost its IPC reads, flush the
+    /// upstream cache and schedule a composite of its own.
+    /// <para/>
+    /// Penumbra raises these on the thread that made the write, so the scope only covers writes made on the
+    /// framework thread inside it. Closing it invalidates the upstream cache (any of those mods may have moved
+    /// a base) and forgets the disabled-mod verdicts they may have made stale; the caller still owns the
+    /// recomposite, with its own reason.
+    /// </summary>
+    public IDisposable SuppressModSettingEvents()
+    {
+        _modSettingEventSuppression++;
+        return new ModSettingSuppression(this);
+    }
+
+    private sealed class ModSettingSuppression(CompositorService owner) : IDisposable
+    {
+        private bool disposed;
+
+        public void Dispose()
+        {
+            if (disposed) return;
+            disposed = true;
+            if (--owner._modSettingEventSuppression > 0) return;
+            owner._knownDisabled.Clear();
+            owner.InvalidateUpstreamCache("mod-setting batch");
+        }
+    }
+
     /// <summary>
     /// Save the plugin config under the same lock the off-thread body-mod classifier uses. Callers on
     /// the framework thread need this too: <c>Save()</c> serializes the WHOLE Configuration, so a bare
@@ -746,6 +780,9 @@ public class CompositorService : IDisposable
     private void OnModSettingChanged(ModSettingChange change, Guid collId, string modDir, bool inherited)
     {
         if (string.Equals(modDir, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase))
+            return;
+        // Inside a batch write — the scope settles up when it closes. See SuppressModSettingEvents.
+        if (_modSettingEventSuppression > 0)
             return;
         var playerColl = penumbra.GetPlayerCollectionId();
         if (playerColl == null || collId != playerColl.Value)
@@ -1411,7 +1448,13 @@ public class CompositorService : IDisposable
             // Empty is the same failure as null — see the composite-side walk. Testing only for null here
             // meant the paragraph above described the right hazard and then let it through: an empty set
             // wipes all five maps and reports a full unequip that never happened.
-            if (modelPaths is { Count: > 0 })
+            // A walk with no body part in it is the same hazard for the MAPS: face and hair loaded, the body not
+            // yet — see HasBodySlotModel. This hook fires when the draw object is recreated, which is exactly
+            // when that is the state. But it IS a draw object we read, so the carrier reconcile below still runs
+            // off it: that reconcile reads the worn items itself, and it is the only thing that puts back the
+            // carriers this redraw just took off. Gating it on the body being loaded left the shell with no host.
+            if (modelPaths is { Count: > 0 }) modelWalkOk = true;
+            if (modelPaths is { Count: > 0 } && HasBodySlotModel(modelPaths))
             {
                 var equipped = EquippedPartModelsFromModels(modelPaths);
                 var accessories = EquippedAccessoryModelsFromModels(modelPaths);
@@ -1429,7 +1472,6 @@ public class CompositorService : IDisposable
                 var sig = EquipSignature(equipped, accessories, metModels, bare, humanParts);
                 equipChanged = _lastEquipSignature != null && !string.Equals(_lastEquipSignature, sig, StringComparison.Ordinal);
                 _lastEquipSignature = sig;
-                modelWalkOk = true;
             }
         }
 
@@ -2040,10 +2082,31 @@ public class CompositorService : IDisposable
     /// re-derive it rebuilt from the same remembered upstreams, so the thing a user reaches for it over — a
     /// body or skin change that did not show up — was the one thing it could not pick up.
     /// </summary>
-    public void RefreshAndRecomposite()
+    /// <summary>
+    /// The Refresh button. Re-resolves every base path and composites at once — no debounce, it is one click.
+    /// <para/>
+    /// The skin may be REUSED: the button's whole job is to catch what nothing else noticed, and every one of
+    /// those things is in the skin fingerprint — a base texture swapped underneath its path is its
+    /// <c>base:</c> entry (path, size, mtime) moving, which the upstream invalidation here makes it re-read;
+    /// the overlays, masks and colour rows are hashed whole. So a refresh whose inputs hash the same as the
+    /// published skin has nothing to re-blend, and re-blending anyway was 2–3 s of identical output on every
+    /// press. Config knobs are the one thing the fingerprint does not carry, and each of those triggers its
+    /// own forced composite when it changes.
+    /// <para/>
+    /// <paramref name="full"/> is the escape hatch for the case that is not in the list — a texture edited in
+    /// place with its timestamp and size preserved, or a doubt about the cache itself: forget the published
+    /// fingerprint so everything rebuilds. Shift-click in the UI.
+    /// </summary>
+    public void RefreshAndRecomposite(bool full = false)
     {
-        InvalidateUpstreamCache("manual");
-        TriggerRecomposite("manual");
+        InvalidateUpstreamCache(full ? "manual-full" : "manual");
+        if (full)
+        {
+            _lastCompositeFingerprint = null;
+            TriggerRecomposite("manual-full", 0);
+        }
+        else
+            TriggerRecomposite("manual", 0, skinFingerprintAuthoritative: true, drawStateStable: true);
     }
 
     /// <summary>
@@ -2054,6 +2117,7 @@ public class CompositorService : IDisposable
     public int ClearTextureCacheAndRecomposite()
     {
         int dropped = textureLoader.ClearCache();
+        dropped += aoBlurCache.Clear();
         log.Information("[Proteus] Texture cache cleared manually ({0} entries) — recompositing.", dropped);
         // This exists for the case where a file changed in a way nothing can see; the fingerprint is one of
         // the things that can't see it, so drop it too. (The trigger below is forced anyway — belt and braces
@@ -2124,7 +2188,8 @@ public class CompositorService : IDisposable
         // the Emperor-ring fallback, and the invisible glasses were injected — all reported as a
         // perfectly successful build, because from here it looks exactly like a naked character.
         // The redraw hook has always documented this hazard; it just tested the wrong condition.
-        if (equipped is { Count: > 0 })
+        // …and a walk with no body part in it is the same teardown one step later — see HasBodySlotModel.
+        if (equipped is { Count: > 0 } && HasBodySlotModel(equipped))
         {
             _equippedPartModels = EquippedPartModelsFromModels(equipped);
             _equippedAccessoryModels = EquippedAccessoryModelsFromModels(equipped);
@@ -2162,8 +2227,15 @@ public class CompositorService : IDisposable
     /// starts still reaches RefreshPlayerTextures, which stays gated, so the promise the setting makes —
     /// we do not reload your character — is kept either way.
     /// </param>
+    /// <param name="drawStateStable">
+    /// Nothing about the CHARACTER is expected to be moving: the trigger came from Proteus's own UI — a colour
+    /// edit, the Refresh button — not from the world. The settle wait may then accept a first reading that
+    /// matches the state the last composite settled on, instead of holding for a second agreeing poll. Never
+    /// set for a trigger that follows an equipment change, a design apply or a redraw: there the first reading
+    /// is precisely the one that may still describe the OLD outfit, and waiting for the second is the point.
+    /// </param>
     public void TriggerRecomposite(string reason, int delayMs = 200, bool force = true,
-        bool skinFingerprintAuthoritative = false, bool autoRedrawExempt = false)
+        bool skinFingerprintAuthoritative = false, bool autoRedrawExempt = false, bool drawStateStable = false)
     {
         if (_disposed || !config.PluginEnabled || !penumbra.IsAvailable) return;
 
@@ -2216,10 +2288,27 @@ public class CompositorService : IDisposable
         var token = recompositeGate.Next();
 
         log.Debug("[Proteus] Recomposite triggered: {0} (delay {1}ms)", reason, delayMs);
+        NoteRefreshTrigger(reason);
+        var tTriggered = PhaseCounter.Begin();
         Task.Run(async () =>
         {
             try { await Task.Delay(delayMs, token).ConfigureAwait(false); }
             catch (OperationCanceledException) { return; }
+            var tDebounced = PhaseCounter.Begin();
+
+            // The Glamourer char code is otherwise read only by the redraw hook and Glamourer's own events, and
+            // on a fresh plugin load neither has fired by the first composite. It then hashed as empty, so the
+            // composite our OWN redraw triggers next read "c0201", its fingerprint moved, and it could neither
+            // skip nor reuse the skin: a 4.7 s rebuild of identical output after every load. Read it here when it
+            // is still unknown, on the framework thread like every other caller. A failure leaves it null, which
+            // is what it already was.
+            if (_glamourerCharCode == null)
+            {
+                try { Plugin.Framework.RunOnFrameworkThread(RefreshGlamourerCharCode).GetAwaiter().GetResult(); }
+                catch (OperationCanceledException) { return; }
+                catch (Exception ex) when (_disposed || IsLoadContextUnloading(ex)) { return; }
+                catch (Exception ex) { log.Debug("[Proteus] early Glamourer char code read failed: {0}", ex.Message); }
+            }
 
             // FIRST, before anything below reads the draw object. Everything this lambda gathers — equipped
             // models, the drawn race code, enabled shape keys, the material snapshot — has to describe the
@@ -2234,6 +2323,7 @@ public class CompositorService : IDisposable
             // onto a frame with it. This task can only complete on a pool thread: its awaits are all
             // Task.Delay, and it blocks on GetResult() for the framework calls exactly as this lambda does.
             if (!await WaitForRaceToSettle(token).ConfigureAwait(false)) return;
+            var tRaceSettled = PhaseCounter.Begin();
 
             // ...and then for the DRAW OBJECT AS A WHOLE to stop moving. WaitForRaceToSettle above asks
             // "has the race the game is moving to arrived"; this asks the broader, blinder question "has
@@ -2244,8 +2334,9 @@ public class CompositorService : IDisposable
             // Its final sample replaces the three separate draw-object reads that used to live here — the
             // equipped-model walk, the body-shape read and the material walk — so this is cheaper than what
             // it displaces, not dearer, and all three now describe the same frame.
-            var settled = await WaitForDrawStateToSettle(token).ConfigureAwait(false);
+            var settled = await WaitForDrawStateToSettle(token, drawStateStable).ConfigureAwait(false);
             if (settled is not { } state) return;
+            var tDrawSettled = PhaseCounter.Begin();
 
             // Publish the equipped gear models the second skin sources its shells from, EVERY composite.
             // Unlike the material snapshot this can't be gated on cold/dirty: equipping an item fires no
@@ -2356,7 +2447,8 @@ public class CompositorService : IDisposable
                     }
                 }
             }
-            Recomposite(token, force, skinFingerprintAuthoritative);
+            Recomposite(token, force, skinFingerprintAuthoritative,
+                new RefreshPreamble(tTriggered, tDebounced, tRaceSettled, tDrawSettled, PhaseCounter.Begin()));
         });
     }
 
@@ -2485,7 +2577,7 @@ public class CompositorService : IDisposable
     {
         /// <summary>Null or empty is a teardown / loading-screen walk, not a character wearing nothing —
         /// the same rule every other consumer of these walks applies.</summary>
-        public bool IsUsable => Models is { Count: > 0 } && Materials is { Count: > 0 };
+        public bool IsUsable => Models is { Count: > 0 } && Materials is { Count: > 0 } && HasBodySlotModel(Models);
     }
 
     private const int SettlePollMs        = 100;
@@ -2558,7 +2650,11 @@ public class CompositorService : IDisposable
     /// </summary>
     /// <returns>The settled sample, or null when cancelled or torn down — the caller must not composite
     /// on a dead token.</returns>
-    private async Task<DrawSample?> WaitForDrawStateToSettle(CancellationToken token)
+    /// <summary>The reading the last composite settled on, so a trigger that expects nothing to have moved can
+    /// accept a first reading that matches it — see TriggerRecomposite's drawStateStable.</summary>
+    private string? _lastSettledDrawSig, _lastSettledDrawOwner;
+
+    private async Task<DrawSample?> WaitForDrawStateToSettle(CancellationToken token, bool expectStable = false)
     {
         var started = Environment.TickCount64;
         DrawSample sample = default;
@@ -2595,8 +2691,16 @@ public class CompositorService : IDisposable
                 agreements = sameOwner && string.Equals(sig, prevSig, StringComparison.Ordinal) ? agreements + 1 : 1;
                 prevSig = sig;
                 prevOwner = sample.Owner;
+                // A UI-driven trigger whose first reading is the state the last composite settled on: the
+                // second poll would only confirm what two composites have now agreed about, at 100 ms a time.
+                if (expectStable && polls == 1
+                    && string.Equals(sig, _lastSettledDrawSig, StringComparison.Ordinal)
+                    && string.Equals(sample.Owner, _lastSettledDrawOwner, StringComparison.Ordinal))
+                    return sample;
                 if (agreements >= SettleStableSamples)
                 {
+                    _lastSettledDrawSig = sig;
+                    _lastSettledDrawOwner = sample.Owner;
                     // Only worth a line when something actually was in flight — otherwise every colour
                     // slider drag logs a settle that had nothing to settle.
                     if (polls > SettleStableSamples)
@@ -2618,6 +2722,81 @@ public class CompositorService : IDisposable
             catch (Exception ex) when (_disposed || IsLoadContextUnloading(ex)) { return null; }
         }
     }
+
+    // ── Refresh timeline (instrumentation) ─────────────────────────────────────────────────────────────
+    // The triggers no composite has answered yet: when the first of them arrived, how many there were, and
+    // what they were. A run claims the lot when it enters Recomposite and hands them back if it ends without
+    // an outcome, so a cancelled or superseded run's wait is charged to the run that replaces it — which is
+    // how long the user actually waited.
+    private readonly object _refreshBurstLock = new();
+    private long _refreshBurstStart;   // Stopwatch timestamp; 0 = nothing pending
+    private int _refreshBurstTriggers;
+    private readonly List<string> _refreshBurstReasons = [];
+
+    /// <summary>A trigger nothing ever claimed (dropped in a settle wait, torn down) must not stretch the next
+    /// refresh's total. Nothing legitimate waits this long before compositing.</summary>
+    private const double RefreshBurstStaleMs = 60_000;
+
+    private void NoteRefreshTrigger(string reason)
+    {
+        lock (_refreshBurstLock)
+        {
+            if (_refreshBurstStart == 0 || PhaseCounter.MsSince(_refreshBurstStart) > RefreshBurstStaleMs)
+            {
+                _refreshBurstStart = PhaseCounter.Begin();
+                _refreshBurstTriggers = 0;
+                _refreshBurstReasons.Clear();
+            }
+            _refreshBurstTriggers++;
+            // Distinct and bounded: a colour drag fires dozens of identical triggers.
+            var shortReason = reason.Split(':')[0];
+            if (!_refreshBurstReasons.Contains(shortReason) && _refreshBurstReasons.Count < 4)
+                _refreshBurstReasons.Add(shortReason);
+        }
+    }
+
+    /// <summary>The run that most recently claimed the pending triggers — the one a superseded run's wait is
+    /// handed to if it is still in flight.</summary>
+    private RefreshTimeline? _latestRefresh;
+
+    private RefreshTimeline ClaimRefresh()
+    {
+        lock (_refreshBurstLock)
+        {
+            // Nothing pending: every trigger was already claimed by the run this one supersedes, which hands
+            // its start over when it unwinds (see ReturnRefresh).
+            var start = _refreshBurstStart != 0 ? _refreshBurstStart : PhaseCounter.Begin();
+            var tl = new RefreshTimeline(start, _refreshBurstTriggers, string.Join(",", _refreshBurstReasons));
+            _refreshBurstStart = 0;
+            _refreshBurstTriggers = 0;
+            _refreshBurstReasons.Clear();
+            _latestRefresh = tl;
+            return tl;
+        }
+    }
+
+    private void ReturnRefresh(RefreshTimeline tl)
+    {
+        lock (_refreshBurstLock)
+        {
+            // Superseded, not cancelled: the run that replaced it has already entered Recomposite and claimed
+            // the pending set, so putting the start back there would bill it to whatever refresh comes NEXT.
+            if (_latestRefresh is { Completed: false } newer && !ReferenceEquals(newer, tl))
+            {
+                newer.Absorb(tl);
+                return;
+            }
+            if (_refreshBurstStart == 0 || tl.Start < _refreshBurstStart) _refreshBurstStart = tl.Start;
+            _refreshBurstTriggers += tl.Triggers;
+            foreach (var r in tl.Reasons.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                if (!_refreshBurstReasons.Contains(r) && _refreshBurstReasons.Count < 4) _refreshBurstReasons.Add(r);
+        }
+    }
+
+    /// <summary>What happened between a trigger firing and <see cref="Recomposite"/> starting, as timestamps
+    /// so the timeline can place them after it claims the burst.</summary>
+    private readonly record struct RefreshPreamble(long Triggered, long Debounced, long RaceSettled,
+                                                   long DrawSettled, long SnapshotReady);
 
     /// <summary>
     /// Set by any forced <see cref="TriggerRecomposite"/>, cleared only once a composite publishes. While
@@ -2765,8 +2944,29 @@ public class CompositorService : IDisposable
             sb.Append("}\n");
         }
 
+        // Under skinOnly a gear overlay's rows are reduced to the one thing the skin reads from them: each
+        // sub-row's BLEND. The skin sees a gear overlay only through GarmentSilhouette, where a print row cuts
+        // the ambient-occlusion silhouette (PaintCoverage) — colour, emissive and opacity paint the shell's
+        // material and never a skin texel. Hashing them whole re-blended the skin on every cloth colour edit,
+        // 1.3 s that wrote nothing because the content hashes came out identical.
+        //
+        // Promotion is still covered: which rows promote an overlay decides its Layer, and the descriptor
+        // (with that Layer) stays in, as does its move between the `mtrl:` blocks and this one.
         sb.Append("gear:");
-        foreach (var (e, o) in gearOverlays) Pair(sb, e, o);
+        foreach (var (e, o) in gearOverlays)
+        {
+            if (!skinOnly) { Pair(sb, e, o); continue; }
+            sb.Append(e.ModDirectory).Append('#').Append(e.Priority).Append('#')
+              .Append(o.OptionGroup).Append('/').Append(o.Option).Append('#').Append(o.GroupOrder).Append('#')
+              .Append(JsonSerializer.Serialize(o.Descriptor)).Append('#');
+            if (o.ColorTableRows == null) sb.Append('-');
+            else
+                foreach (var p in o.ColorTableRows)
+                    sb.Append(p.Row).Append(':')
+                      .Append((int)(p.SubRowA?.Blend ?? RowBlend.Paint)).Append('/')
+                      .Append((int)(p.SubRowB?.Blend ?? RowBlend.Paint)).Append(',');
+            sb.Append(';');
+        }
         sb.Append('\n');
 
         // Imported geometry, in the order it will be placed. Without this a change of selection in a
@@ -2977,6 +3177,20 @@ public class CompositorService : IDisposable
         parts.Sort(StringComparer.OrdinalIgnoreCase);   // stable order, same reason as the met list
         return parts;
     }
+
+    /// <summary>
+    /// Whether a walk caught a character with a body at all: at least one top/dwn/glv/sho model, equipped or bare.
+    /// <para/>
+    /// Non-empty is not enough, and trusting it cost two extra full redraws after every plugin load. Mid-redraw the
+    /// draw object has its face and hair loaded but not one body part, and it stays that way across two 100 ms
+    /// polls — so the settle loop called that state settled, the composite published EMPTY equipment maps, and
+    /// the shell was cut from the default bare body onto the Emperor's ring. The model changed, which forced a
+    /// full redraw; the next composite saw the real outfit, changed it back, and redrew again. A drawn character
+    /// always has at least one of these slots (a full-body piece is still a top), so a walk with none of them is
+    /// a teardown, exactly like an empty one.
+    /// </summary>
+    private static bool HasBodySlotModel(HashSet<string>? modelPaths)
+        => modelPaths != null && modelPaths.Any(p => EquipModelRe.IsMatch(p));
 
     private static Dictionary<string, string> EquippedPartModelsFromModels(HashSet<string>? modelPaths)
     {
@@ -3750,7 +3964,8 @@ public class CompositorService : IDisposable
 
     // Neither bool is defaulted, deliberately: `force` never was, and defaulting only its companion would
     // let a future caller opt into skin reuse by omission. They are one decision, so they are passed together.
-    private void Recomposite(CancellationToken ct, bool force, bool skinFingerprintAuthoritative)
+    private void Recomposite(CancellationToken ct, bool force, bool skinFingerprintAuthoritative,
+                             RefreshPreamble preamble)
     {
         // Stamped HERE and not in TriggerRecomposite, and the distinction is load-bearing. Stamping at
         // trigger time would let a trigger that never composites — dropped in a settle wait, or during
@@ -3759,18 +3974,27 @@ public class CompositorService : IDisposable
         // FRESHER draw state than the run it supersedes, which is the definition the checks below want.
         var epoch = Interlocked.Increment(ref _recompositeEpoch);
         Interlocked.Increment(ref _compositesInFlight);
+        var timeline = ClaimRefresh();
+        // "burst" is the first trigger to the one this run answers — a colour drag's own length, not work.
+        timeline.MarkAt("burst", preamble.Triggered);
+        timeline.MarkAt("debounce", preamble.Debounced);
+        timeline.MarkAt("race-settle", preamble.RaceSettled);
+        timeline.MarkAt("draw-settle", preamble.DrawSettled);
+        timeline.MarkAt("snapshot", preamble.SnapshotReady);
+        timeline.Mark("queue");
         try
         {
-            RecompositeBody(ct, epoch, force, skinFingerprintAuthoritative);
+            RecompositeBody(ct, epoch, force, skinFingerprintAuthoritative, timeline);
         }
         finally
         {
             Interlocked.Decrement(ref _compositesInFlight);
+            if (!timeline.Completed) ReturnRefresh(timeline);
         }
     }
 
     private void RecompositeBody(CancellationToken ct, long epoch, bool force,
-                                 bool skinFingerprintAuthoritative)
+                                 bool skinFingerprintAuthoritative, RefreshTimeline timeline)
     {
         try
         {
@@ -3898,6 +4122,8 @@ public class CompositorService : IDisposable
                 // last overlay mod off. So the flag never overrides the setting on a run the user didn't ask
                 // for.
                 ReloadAndRedraw(userRequested: true);
+                timeline.Mark("publish+reload");
+                LogRefreshTimeline(timeline, "no enabled mods");
                 LastResult = new CompositorResult { Success = true, TexturesPatched = 0, OverlayModsUsed = 0 };
                 ResultChanged?.Invoke();
                 return;
@@ -4745,6 +4971,8 @@ public class CompositorService : IDisposable
                 // real composite.
                 log.Information("[Proteus] recomposite skipped — inputs unchanged ({0:F0}ms)",
                     PhaseCounter.MsSince(tRunStart));
+                timeline.Mark("setup");
+                LogRefreshTimeline(timeline, "skipped, inputs unchanged");
                 return;
             }
 
@@ -4781,6 +5009,20 @@ public class CompositorService : IDisposable
                 foreach (var kv in lastSkin!.Redirects) redirects[kv.Key] = kv.Value;
                 log.Information("[Proteus] skin unchanged — reusing {0} published texture(s), "
                               + "compositing the shell only", lastSkin.Redirects.Count);
+            }
+            else
+            {
+                // Which condition declined it. A re-blend that writes nothing is 1.3-1.7 s of a colour edit, and
+                // the fingerprint mismatch and the latch look identical from the outside.
+                log.Debug("[Proteus] skin reuse declined: {0}",
+                    force && !skinFingerprintAuthoritative ? "forced trigger whose skin effect is not hashed"
+                    : Volatile.Read(ref _skinForcePending) != 0 ? "an earlier forced skin change is still owed"
+                    : _lastCompositeFingerprint == null ? "no published composite fingerprint"
+                    : lastSkin == null ? "no remembered skin publish"
+                    : skinFingerprint != lastSkin.Fingerprint
+                        ? "skin fingerprint changed at " + FirstDifferingBlock(lastSkin.Fingerprint, skinFingerprint)
+                    : lastSkin.Redirects.Count == 0 ? "last publish had no skin redirects"
+                    : "published skin output missing on disk");
             }
 
             // ── Inherited mask colorsets ─────────────────────────────────────
@@ -4907,6 +5149,7 @@ public class CompositorService : IDisposable
                 }
 
             var tSetupEnd = PhaseCounter.Begin();
+            timeline.MarkAt("setup", tSetupEnd);
 
             // Drop the previous run's answers BEFORE producing this run's. Every cancellation check below sits
             // between here and the assignment after the loop, so without this a cancelled composite would
@@ -5113,23 +5356,40 @@ public class CompositorService : IDisposable
                     if (string.Equals(dstBodyType, "gen2", StringComparison.OrdinalIgnoreCase))
                     {
                         if (overlayPath == null) return png;
-                        var native = textureLoader.LoadPngAsRgba(overlayPath, 4096, 4096, filter);
-                        if (native == null) return png;
-                        byte[] biboSpace;
-                        if (string.Equals(srcType, "bibo", StringComparison.OrdinalIgnoreCase))
+                        // CACHED, and it has to be. A vanilla sibling (mt_…_a beside mt_…_bibo) takes every
+                        // overlay, mask and index through here: a 4K bibo buffer cropped to its right half (a
+                        // 32 MB copy) and resampled back up to 4K (64 MB, bilinear) — per slot, per composite,
+                        // for art that had not changed. Measured as the gap between the two body materials: the
+                        // bibo one reached its AO pass 0.8 s into the blend and its vanilla sibling 2.4 s in.
+                        // Keyed on the overlay FILE plus everything else the result depends on; the source
+                        // space is in the key because a different declared space is a different conversion.
+                        var tGen2 = PhaseCounter.Begin();
+                        try
                         {
-                            biboSpace = native;
+                            var srcSpace = srcType;
+                            return textureLoader.GetOrDerive(overlayPath,
+                                $"gen2<{srcSpace}|{(filter == ResampleFilter.Nearest ? "n" : "a")}", w, h, () =>
+                                {
+                                    var native = textureLoader.LoadPngAsRgba(overlayPath, 4096, 4096, filter);
+                                    if (native == null) return null;
+                                    byte[] biboSpace;
+                                    if (string.Equals(srcSpace, "bibo", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        biboSpace = native;
+                                    }
+                                    else
+                                    {
+                                        var converted = uvRemap.Remap(native, 4096, 4096, srcSpace, "bibo");
+                                        if (ReferenceEquals(converted, native)) return null; // map not found — skip
+                                        biboSpace = converted;
+                                    }
+                                    var rightHalf = UVRemapService.CropRightHalf(biboSpace, 4096, 4096);
+                                    // Honour the caller's filter on the tail: this used to be bilinear whatever the
+                                    // texture meant, which interpolated the row selectors of any cross-UV index map.
+                                    return TextureLoader.Resample(rightHalf, 2048, 4096, w, h, filter);
+                                }) ?? png;
                         }
-                        else
-                        {
-                            var converted = uvRemap.Remap(native, 4096, 4096, srcType, "bibo");
-                            if (ReferenceEquals(converted, native)) return png; // map not found — skip
-                            biboSpace = converted;
-                        }
-                        var rightHalf = UVRemapService.CropRightHalf(biboSpace, 4096, 4096);
-                        // Honour the caller's filter on the tail: this used to be bilinear whatever the
-                        // texture meant, which interpolated the row selectors of any cross-UV index map.
-                        return TextureLoader.Resample(rightHalf, 2048, 4096, w, h, filter);
+                        finally { blendGen2Stats.Stop(tGen2); }
                     }
                     // Transfer-map paths operate at 4096×4096. If the overlay was loaded at a
                     // smaller size (e.g. base texture is 2048), reload at full res, remap, resize.
@@ -6542,6 +6802,8 @@ public class CompositorService : IDisposable
                     // Reused by every mod's AO pass on THIS material (see IslandBlurCache). Per material,
                     // because materials composite in parallel while the mod loop below is sequential.
                     var islandBlurCache = new IslandBlurCache();
+                    // Same lifetime and reason as islandBlurCache — see HalfResIslandPlanes.
+                    var halfPlanes = new HalfResIslandPlanes();
                     var tIslands = PhaseCounter.Begin();
                     if (dstBodyType != null && baseD is { Length: > 0 })
                     {
@@ -6727,12 +6989,8 @@ public class CompositorService : IDisposable
                                 // and not from padding or from the island across the gutter. The silhouette
                                 // itself is left exactly as authored — it is also the gate, and on-model
                                 // texels are the same either way. See BlurCoverageWithinIslands.
-                                var tBlurD = PhaseCounter.Begin();
-                                blurredD = insidePlane != null && islandLabels != null && islandOwner != null
-                                    ? BlurCoverageWithinIslands(strapD, islandLabels, islandOwner, islandCount, insidePlane,
-                                                                bodyMdls == null ? null : TimedSeamSource(bodyMdls, wD, hD, SeamReach(radiusD)), wD, hD, radiusD, islandBlurCache)
-                                    : BlurCoverage(strapD, wD, hD, radiusD);
-                                blendBlurStats.Stop(tBlurD);
+                                blurredD = BlurSilhouette(strapD, wD, hD, radiusD, dstBodyType, insidePlane,
+                                    islandLabels, islandOwner, islandCount, bodyMdls, islandBlurCache, halfPlanes);
                                 SnapshotBaseDiffuse();
                                 ApplyAmbientOcclusion(baseD, strapD, blurredD, wD, hD, aoStrength, coveredAbove,
                                     BustStandoff(modDir, bodyMdls, strapD, wD, hD, radiusD));
@@ -6775,13 +7033,11 @@ public class CompositorService : IDisposable
                                     // Island-restricted only when the normal shares the diffuse's size —
                                     // insidePlane and the labels are built at wD/hD, the same guard
                                     // coveredAbove uses. Otherwise a plain blur, as before.
-                                    var tBlurN = PhaseCounter.Begin();
+                                    bool sameSize = wN == wD && hN == hD;
                                     blurredN = strapN == null ? null
-                                        : insidePlane != null && islandLabels != null && islandOwner != null && wN == wD && hN == hD
-                                            ? BlurCoverageWithinIslands(strapN, islandLabels, islandOwner, islandCount, insidePlane,
-                                                                        bodyMdls == null ? null : TimedSeamSource(bodyMdls, wN, hN, SeamReach(radiusN)), wN, hN, radiusN, islandBlurCache)
-                                            : BlurCoverage(strapN, wN, hN, radiusN);
-                                    blendBlurStats.Stop(tBlurN);
+                                        : BlurSilhouette(strapN, wN, hN, radiusN, dstBodyType,
+                                            sameSize ? insidePlane : null, sameSize ? islandLabels : null,
+                                            sameSize ? islandOwner : null, islandCount, bodyMdls, islandBlurCache, halfPlanes);
                                 }
                                 // Gate by covered-above only when the normal shares the diffuse res it was built
                                 // at (the common case — skin diffuse and normal are usually equal); else ungated.
@@ -7076,6 +7332,7 @@ public class CompositorService : IDisposable
                     .ToList();
 
             LogPhaseBreakdown(tRunStart, tSetupEnd, skinReused ? 0 : byMaterial.Count);
+            timeline.Mark(skinReused ? "skin (reused)" : "skin");
 
             // The glow recipes gathered above (empty dict if no indexed skin overlays).
             var nextSkinGlowTargets = skinReused
@@ -7678,16 +7935,24 @@ public class CompositorService : IDisposable
 
             // Runs entirely after the composite, so it adds to the user-visible delay one-for-one.
             if (gearOverlays.Count > 0 || contentLayers.Count > 0)
+            {
+                var gearMs = PhaseCounter.MsSince(tGear);
                 log.Information("[Proteus] recomposite phases: second skin {0:F0}ms ({1} gear layer(s), "
-                              + "{2} content piece(s))",
-                    PhaseCounter.MsSince(tGear), gearOverlays.Count, contentLayers.Count);
+                              + "{2} content piece(s)) — {3}",
+                    gearMs, gearOverlays.Count, contentLayers.Count, secondSkin.DescribeBuildStats(gearMs));
+            }
+            timeline.Mark("second skin");
 
             WriteManagedModJson(redirects, manipulations);
+
+            // Read before the reload: ReloadAndRedraw consumes the flag.
+            var reloadKind = !config.AutoRedraw ? "withheld" : _needFullRedraw ? "full redraw" : "in-place";
 
             // Publish only. Nothing is deleted in this composite: whatever this map supersedes is collected
             // at the top of the NEXT one, by which point the reload below has long since landed. See
             // PruneSupersededOutput for why an immediate prune could not be made safe.
             bool manifestConfirmedLive = ReloadAndRedrawWhenReady(redirects, RecordPublish(redirects));
+            timeline.Mark("publish+reload");
 
             // Published: from here the manifest on disk is the output of exactly these inputs, so an ambient
             // trigger that hashes to the same thing has nothing to do. Set only on this path — a cancelled or
@@ -7746,6 +8011,7 @@ public class CompositorService : IDisposable
                                  shellBuilt ? shellCarrierSlots : []);
             ReconcileInvisibleGlasses(hostWanted, shellBuilt, shellOnFacewear, glassesPreHosted);
             ReconcileEmperorRing(hostWanted, shellBuilt, shellBuilt ? shellCarrierSlots : []);
+            timeline.Mark("carriers");
 
             // Every path, not just the shell's. The shell paths were verified from the start because a worn
             // accessory is obviously contested; the skin textures were not, on the unexamined assumption that
@@ -7762,12 +8028,13 @@ public class CompositorService : IDisposable
             // our resolves against a superseded expectation would manufacture exactly the false accusation
             // this check is hardened against, so a cancelled token means stand down and say nothing.
             VerifyRedirectsLive(redirects, manifestConfirmedLive, ct);
+            timeline.Mark("verify");
 
             // And one step further out than that check can see: winning the path is not the same as the game
             // having drawn what is behind it. Fires its own delayed task — the redraw is still in flight here.
             // Withheld only when the shell NEEDED the reload. With auto redraw off and a shell that did not
             // change, missing materials are a real failure a redraw would not fix, and belong to the warning.
-            SchedulePostRedrawShellCheck(reloadWithheld: !config.AutoRedraw && shellNeedsReload);
+            SchedulePostRedrawShellCheck(reloadWithheld: !config.AutoRedraw && shellNeedsReload, timeline);
 
             LastResult = new CompositorResult
             {
@@ -7785,6 +8052,7 @@ public class CompositorService : IDisposable
             // its redraw-readiness wait. Each phase line above covers one stage and none of them sum to
             // this, so without it the real cost has to be reconstructed from log timestamps.
             log.Information("[Proteus] recomposite DONE — {0:F0}ms total", PhaseCounter.MsSince(tRunStart));
+            LogRefreshTimeline(timeline, reloadKind);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) when (_disposed || IsLoadContextUnloading(ex))
@@ -7802,6 +8070,8 @@ public class CompositorService : IDisposable
         catch (Exception ex)
         {
             log.Error(ex, "[Proteus] Recomposite failed");
+            timeline.Mark("failed");
+            LogRefreshTimeline(timeline, "FAILED");
             LastResult = new CompositorResult { Success = false, ErrorMessage = ex.Message };
             ResultChanged?.Invoke();
             // What is published no longer corresponds to any known set of inputs, so the next ambient
@@ -7821,11 +8091,21 @@ public class CompositorService : IDisposable
 
     // Order-independent signature of the enabled body shapes (model stem → shape names), for change
     // detection. Empty string when none, so toggling the last shape off also registers as a change.
+    /// <remarks>
+    /// The shape SETS only, not the model stems they are keyed by. The stem is whatever file the game drew, and
+    /// Proteus itself changes that file: the second skin republishes a relaxed body as
+    /// <c>smoothed_&lt;part&gt;_&lt;content hash&gt;.mdl</c>, so the first relax renames "nsfw almond xs" and every
+    /// later one that moves a vertex renames it again. Keyed by stem, that rename read as a shape change the
+    /// moment our own redraw landed, and the post-redraw backstop fired a full corrective composite for it —
+    /// "bodyType unchanged, charCode unchanged, shapesChanged=true" after nearly every design restore, 1.7 to
+    /// 10 s each. Which model is drawn is already hashed where it matters (the fingerprint's equip and base
+    /// blocks); this signature's job is only to notice a shape being switched on or off.
+    /// </remarks>
     private static string BodyShapeSignature(IReadOnlyDictionary<string, HashSet<string>>? shapes)
     {
         if (shapes == null || shapes.Count == 0) return "";
-        return string.Join("|", shapes
-            .Select(kv => $"{kv.Key}:{string.Join(",", kv.Value.OrderBy(x => x, StringComparer.Ordinal))}")
+        return string.Join("|", shapes.Values
+            .Select(v => string.Join(",", v.OrderBy(x => x, StringComparer.Ordinal)))
             .OrderBy(x => x, StringComparer.Ordinal));
     }
 
@@ -7848,6 +8128,7 @@ public class CompositorService : IDisposable
     // per mod with no cache, and the island-restricted blur does its per-island cropping serially.
     private readonly PhaseCounter blendSilhouetteStats = new();
     private readonly PhaseCounter blendBlurStats       = new();
+    private readonly PhaseCounter blendBlurCacheHits   = new();   // of blur's calls, those served by aoBlurCache
 
     // Splitting what was left. With AO measured at only 346ms of a 1549ms blend, `rest` held 1151ms across
     // three unbounded regions and there was no way to tell which. These three are mutually exclusive and
@@ -7892,6 +8173,7 @@ public class CompositorService : IDisposable
     // double-count against `load`. Its loads land in `load` and its plane build stays in `glue`; it is
     // memoised per (mod, w, h) anyway, so it runs a handful of times per composite.
     private readonly PhaseCounter blendLoadStats     = new();   // LoadPng + RemapIfNeeded
+    private readonly PhaseCounter blendGen2Stats     = new();   //   of which: the vanilla-sibling crop, cached or not
     private readonly PhaseCounter blendBaseLoadStats = new();   // LoadBaseTexture
     private readonly PhaseCounter blendResolveStats  = new();   // ResolveUpstream
     private readonly PhaseCounter blendSuppressStats = new();   // Suppress: clone + SERIAL full-buffer pass
@@ -7913,6 +8195,8 @@ public class CompositorService : IDisposable
         blendIdxMergeStats.Reset();
         blendSeamDropStats.Reset();
         blendLoadStats.Reset();
+        blendGen2Stats.Reset();
+        blendBlurCacheHits.Reset();
         blendBaseLoadStats.Reset();
         blendResolveStats.Reset();
         blendSuppressStats.Reset();
@@ -8002,6 +8286,74 @@ public class CompositorService : IDisposable
 
     private readonly Dictionary<string, byte[]?> _bustStandoff = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Blur the AO silhouette at half resolution and interpolate back. The halo is ~20 texels wide at 4K and
+    /// carries nothing at texel scale, so this is invisible and a quarter of the work. A constant rather than a
+    /// setting: it changes the output bytes once, and after that there is nothing for a user to choose between.
+    /// </summary>
+    private const bool AoBlurHalfRes = true;
+
+    private readonly AoBlurCache aoBlurCache = new();
+
+    /// <summary>
+    /// The blurred silhouette a garment casts its contact shadow from — from <see cref="aoBlurCache"/> when the
+    /// same silhouette was blurred over the same islands before, else blurred now (at half resolution when
+    /// <see cref="AoBlurHalfRes"/>) and remembered. Both blur call sites go through here, so the key and the
+    /// resolution policy cannot drift between the diffuse and the normal.
+    /// <para/>
+    /// The islands are passed as null when the caller has none at the plane's size, which selects the plain
+    /// blur exactly as before.
+    /// </summary>
+    private byte[] BlurSilhouette(byte[] strap, int w, int h, int radius, string? dstBodyType,
+                                  byte[]? insidePlane, int[]? islandLabels, int[]? islandOwner, int islandCount,
+                                  IReadOnlyList<UvSeamMapService.SeamModel>? bodyMdls,
+                                  IslandBlurCache islandBlurCache, HalfResIslandPlanes halfPlanes)
+    {
+        var t = PhaseCounter.Begin();
+        try
+        {
+            bool islands = insidePlane != null && islandLabels != null && islandOwner != null;
+            bool half = AoBlurHalfRes && w % 2 == 0 && h % 2 == 0 && radius >= 4;
+            // Everything the result depends on: the silhouette's content, the islands (a function of the body
+            // type at this size), the seam map (a function of the body models and the radius' reach), the
+            // radius, and which of the two resolutions it was blurred at.
+            var key = $"{dstBodyType ?? "-"}|{w}x{h}|r{radius}|{(islands ? "i" : "p")}|h{(half ? 1 : 0)}|"
+                    + (islands && bodyMdls != null ? string.Join(",", bodyMdls.Select(m => m.Id)) : "-")
+                    + $"|{SecondSkinService.SlotHash(strap):x16}";
+            if (aoBlurCache.TryGet(key) is { } hit) { blendBlurCacheHits.Count(); return hit; }
+
+            byte[] result;
+            if (!islands)
+            {
+                result = half
+                    ? HalfResIslandPlanes.UpsampleBilinear(
+                          BlurCoverage(HalfResIslandPlanes.DownsampleAverage(strap, w, h), w / 2, h / 2, Math.Max(1, radius / 2)),
+                          w / 2, h / 2, w, h)
+                    : BlurCoverage(strap, w, h, radius);
+            }
+            else
+            {
+                var seam = bodyMdls == null ? null : TimedSeamSource(bodyMdls, w, h, SeamReach(radius));
+                if (half)
+                {
+                    halfPlanes.EnsureIslands(islandLabels!, islandOwner!, insidePlane!, w, h);
+                    halfPlanes.EnsureSeam(seam, w, h);
+                    var blurredH = BlurCoverageWithinIslands(
+                        HalfResIslandPlanes.DownsampleAverage(strap, w, h), halfPlanes.Labels!, halfPlanes.Owner!,
+                        islandCount, halfPlanes.Inside!, halfPlanes.Seam, w / 2, h / 2, Math.Max(1, radius / 2),
+                        islandBlurCache);
+                    result = HalfResIslandPlanes.UpsampleBilinear(blurredH, w / 2, h / 2, w, h);
+                }
+                else
+                    result = BlurCoverageWithinIslands(strap, islandLabels!, islandOwner!, islandCount, insidePlane!,
+                                                       seam, w, h, radius, islandBlurCache);
+            }
+            aoBlurCache.Put(key, result);
+            return result;
+        }
+        finally { blendBlurStats.Stop(t); }
+    }
+
     private int[]? TimedSeamSource(IReadOnlyList<UvSeamMapService.SeamModel> models, int w, int h, int reach)
     {
         var t = PhaseCounter.Begin();
@@ -8016,6 +8368,40 @@ public class CompositorService : IDisposable
         var t = PhaseCounter.Begin();
         try { return ContentTag(data, salt); }
         finally { blendTagStats.Stop(t); }
+    }
+
+    /// <summary>
+    /// The end-to-end line: first trigger to the composite's outcome, attributed span by span. Marks the run
+    /// completed, so its triggers are not handed on to the next one.
+    /// </summary>
+    /// <remarks>
+    /// When a shell was published, <see cref="SchedulePostRedrawShellCheck"/> adds a "refresh drawn" line once
+    /// the game has the shell's materials on the character — the reload is asynchronous, so this line is the
+    /// point Proteus stopped working, not the point the look changed.
+    /// </remarks>
+    private void LogRefreshTimeline(RefreshTimeline tl, string outcome)
+    {
+        tl.Completed = true;
+        log.Information("[Proteus] refresh timeline: {0:F0}ms from first trigger to {1} ({2} trigger(s): {3}) — {4}",
+            tl.TotalMs, outcome, tl.Triggers, tl.Reasons.Length == 0 ? "?" : tl.Reasons, tl.Describe());
+    }
+
+    /// <summary>The name of the first fingerprint block (one per line, "mtrl:…{", "gear:", …) that differs,
+    /// cut short — enough to say WHAT moved without logging a colour table.</summary>
+    private static string FirstDifferingBlock(string was, string now)
+    {
+        var a = was.Split('\n');
+        var b = now.Split('\n');
+        for (int i = 0; i < Math.Max(a.Length, b.Length); i++)
+        {
+            var la = i < a.Length ? a[i] : "";
+            var lb = i < b.Length ? b[i] : "";
+            if (la == lb) continue;
+            var head = lb.Length > 0 ? lb : la;
+            int cut = head.IndexOfAny(['{', '#']);
+            return cut > 0 && cut < 160 ? head[..cut] : head[..Math.Min(head.Length, 80)];
+        }
+        return "(identical?)";
     }
 
     private void LogPhaseBreakdown(long runStart, long setupEnd, int materialCount)
@@ -8076,9 +8462,9 @@ public class CompositorService : IDisposable
         log.Information(
             "[Proteus] recomposite phases: setup {0:F0}ms | decode-wait {1:F0}ms ({2} miss, {3} hit, {4} blocked) | " +
             "prefetch {5:F0}ms bg (decode work {6:F0}ms, {7} native of {8}) | remap {9:F0}ms ({10}) | " +
-            "blend {11:F0}ms (islands {12:F0} | seam {13:F0}/{14} | ao {15:F0} [sil {16:F0}/{17} + blur {18:F0}/{19} " +
+            "blend {11:F0}ms (islands {12:F0} | seam {13:F0}/{14} | ao {15:F0} [sil {16:F0}/{17} + blur {18:F0}/{19} ({59} cached) " +
             "+ apply {20:F0}] | tag {21:F0}/{22} | overlays {23:F0} [cov {24:F0}/{25} + idxmerge {26:F0}/{27} " +
-            "+ diffuse {28:F0}/{29} + normal {30:F0}/{31} + seamdrop {32:F0}/{33} + load {34:F0}/{35} " +
+            "+ diffuse {28:F0}/{29} + normal {30:F0}/{31} + seamdrop {32:F0}/{33} + load {34:F0}/{35} (gen2 {57:F0}/{58}) " +
             "+ baseload {36:F0}/{37} + resolve {38:F0}/{39} + suppress {40:F0}/{41} + glue {42:F0}] | " +
             "maskrelief {43:F0} | maskdiffuse {44:F0} | rest {45:F0}) | " +
             "swizzle {46:F0}ms | write {47:F0}ms ({48} files, {49:F0} MB) | composite {50:F0}ms | total {51:F0}ms | " +
@@ -8099,7 +8485,8 @@ public class CompositorService : IDisposable
             swizzle.Ms, write.Ms, write.Calls, write.Bytes / (1024.0 * 1024.0),
             compositeMs, totalMs, materialCount,
             cacheEntries, cacheBytes / (1024.0 * 1024.0), textureLoader.Evictions,
-            textureLoader.DecodeCacheBudgetBytes / (1024.0 * 1024.0));
+            textureLoader.DecodeCacheBudgetBytes / (1024.0 * 1024.0),
+            blendGen2Stats.Ms, blendGen2Stats.Calls, blendBlurCacheHits.Calls);
     }
 
     // ── Managed mod helpers ──────────────────────────────────────────────────
@@ -10153,7 +10540,18 @@ public class CompositorService : IDisposable
     /// accessory warning used to fire on exactly this and send people to re-equip a ring that was fine.
     /// Set only when the shell NEEDED that reload; any other miss is a real failure and gets the warning.
     /// </param>
-    private void SchedulePostRedrawShellCheck(bool reloadWithheld)
+    // Same 2.4 s window the check always had, sampled finer. It used to read three times at 800 ms, which made
+    // the moment a shell was confirmed drawn — the end of the refresh timeline — only knowable to within 800 ms.
+    private const int ShellCheckPollMs   = 200;
+    private const int ShellCheckAttempts = 12;
+
+    // The earliest a read may CONFIRM the shell drawn, which is where the old first sample landed. Shell material
+    // paths are the same composite to composite (per host and letter), so a read that lands before the reload does
+    // sees the PREVIOUS shell under exactly the paths it expects and cannot tell it apart. Confirming there set
+    // _shellConfirmedDrawnKey for a shell that might never load, which is what vetoes the unstick redraw.
+    private const int ShellCheckMinConfirmMs = 800;
+
+    private void SchedulePostRedrawShellCheck(bool reloadWithheld, RefreshTimeline? timeline = null)
     {
         var expected = _shellDrawnCheck;
         if (expected == null || expected.Materials.Count == 0) return;
@@ -10166,10 +10564,20 @@ public class CompositorService : IDisposable
                 // Materials whose own host was not drawn on the last read — not judged, see the anchor below.
                 List<string> hostGone = [];
                 bool hostEverDrawn = false;
+                bool anyRead = false;
+                // Whether the LAST read is the one `missing` describes. A verdict has to come from the final state
+                // of the window: with reads every 200 ms the first can land before the reload and see the old
+                // shell, and if everything after it is a loading screen or a host still mid-reload, reusing its
+                // `missing` would warn — in chat — about a shell nothing ever got to judge.
+                bool lastJudged = false;
+                // When the reads started finding every material in place, uninterrupted. The confirmation waits
+                // for ShellCheckMinConfirmMs, but the shell was there from this read on — so the timeline is
+                // stamped here, not at the confirming read, or the floor would be reported as load time.
+                long presentSince = 0;
                 HashSet<string>? hostMaterials = null;
-                for (int attempt = 0; attempt < 3; attempt++)
+                for (int attempt = 0; attempt < ShellCheckAttempts; attempt++)
                 {
-                    await Task.Delay(800).ConfigureAwait(false);
+                    await Task.Delay(ShellCheckPollMs).ConfigureAwait(false);
                     if (_disposed) return;
 
                     // Superseded by a newer build — that composite runs its own check.
@@ -10182,7 +10590,12 @@ public class CompositorService : IDisposable
                         models    = Plugin.Framework.RunOnFrameworkThread(penumbra.GetActivePlayerModelPaths).GetAwaiter().GetResult();
                     }
                     catch (OperationCanceledException) { return; }
-                    if (materials == null || models == null) return;   // not in game / IPC down — no answer
+                    // Not in game / IPC down — or, now that the first read lands 200 ms after the publish, the
+                    // draw object caught mid-redraw. Only the first is "no answer", so wait the window out
+                    // before concluding it.
+                    var readAt = PhaseCounter.Begin();
+                    if (materials == null || models == null) { lastJudged = false; presentSince = 0; continue; }
+                    anyRead = true;
 
                     // THE ANCHOR. The composite that scheduled this usually forced a full redraw, and a
                     // despawn-and-reload of the character plus a multi-megabyte accessory model is not
@@ -10197,7 +10610,7 @@ public class CompositorService : IDisposable
                     // "never appeared" against a host that was no longer on the character at all. A material
                     // is judged only while its own host is drawn; one whose host cannot be told from its path
                     // is judged on the whole shell, as before.
-                    if (!expected.Models.Any(models.Contains)) continue;
+                    if (!expected.Models.Any(models.Contains)) { lastJudged = false; presentSince = 0; continue; }
                     hostEverDrawn = true;
 
                     bool OwnHostDrawn(string mtrl)
@@ -10207,12 +10620,22 @@ public class CompositorService : IDisposable
                     }
                     hostGone = expected.Materials.Where(p => !OwnHostDrawn(p)).ToList();
                     missing  = expected.Materials.Where(p => OwnHostDrawn(p) && !materials.Contains(p)).ToList();
+                    lastJudged = true;
+                    if (missing.Count == 0 && hostGone.Count == 0) { if (presentSince == 0) presentSince = readAt; }
+                    else presentSince = 0;
                     if (missing.Count == 0 && hostGone.Count > 0) continue;   // not a verdict either way yet
+                    // Too early to tell this shell from the previous one — see ShellCheckMinConfirmMs.
+                    if (missing.Count == 0 && (attempt + 1) * ShellCheckPollMs < ShellCheckMinConfirmMs) continue;
                     if (missing.Count == 0)
                     {
                         // The one place this is set. Everything below is a failure, an inconclusive read or
                         // a deferral, and none of those may claim a shell is drawn.
                         _shellConfirmedDrawnKey = ShellProbeKey(expected);
+                        if (timeline != null)
+                            log.Information("[Proteus] refresh drawn: {0:F0}ms from first trigger to the shell on the "
+                                          + "character (to within {1}ms)",
+                                (presentSince - timeline.Start) * 1000.0 / System.Diagnostics.Stopwatch.Frequency,
+                                ShellCheckPollMs);
                         // INFORMATION, not Debug. This is the one line that separates "the shell is on the
                         // character and something about the RENDER is wrong" from "it never loaded", and the
                         // file log a user sends is INF+ — so at Debug the answer was never in the evidence,
@@ -10233,6 +10656,18 @@ public class CompositorService : IDisposable
                         return;
                     }
                     hostMaterials = materials;
+                }
+
+                if (!anyRead) return;   // never got an answer at all — not in game / IPC down
+
+                // The host was seen at some point, but the window ended on a read that could not judge it: the
+                // character not drawable (a loading screen, a redraw still in progress) or its host not back yet.
+                // Whatever an earlier read found is stale by definition, so no verdict either way.
+                if (hostEverDrawn && !lastJudged)
+                {
+                    log.Information("[Proteus] second skin drawn check inconclusive — the character was not "
+                            + "drawable, or its host not back, on the last read of the sampling window (not a failure)");
+                    return;
                 }
 
                 if (!hostEverDrawn)

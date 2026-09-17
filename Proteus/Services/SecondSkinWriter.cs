@@ -651,7 +651,11 @@ public static class SecondSkinWriter
         bool DropConnectors = false,
         bool UnmirrorSides = false,
         ConnectorProfile? Profile = null,
-        IReadOnlySet<string>? HiddenAttributes = null);
+        IReadOnlySet<string>? HiddenAttributes = null,
+        // What KeepMaterial and UvConv ARE, as text, written where they are made. Delegates cannot be compared,
+        // so without this nothing can tell whether two builds would produce the same shell; null means "unknown"
+        // and makes a build uncacheable. See SecondSkinService.ShellGeometryKey.
+        string? DelegateKey = null);
 
     /// <summary>
     /// One entry of a mesh's vertex declaration: where and in what format a given attribute (Usage) sits
@@ -856,10 +860,37 @@ public static class SecondSkinWriter
     /// Build the merged shell from fully-described sources. Every layer is applied to every source, so all
     /// sources here must share one UV space and one race space — that is what makes them one surface.
     /// </summary>
+    /// <summary>
+    /// Where one or more <see cref="Build"/> calls spent their time — instrumentation only, summed across calls
+    /// (one per host). The spans nest: "layers" contains the three solves, which run lazily inside the emit loop.
+    /// </summary>
+    public sealed class BuildTimings
+    {
+        public readonly PhaseCounter Prepare   = new();   // parse, redundancy planning, cap selection, bone/attr unions
+        public readonly PhaseCounter CapSelect = new();   //   of which: choosing and placing the authored toe cap
+        public readonly PhaseCounter Layers    = new();   // host pre-pass + every layer's emit
+        public readonly PhaseCounter Bust      = new();   //   of which: bust bridge solves
+        public readonly PhaseCounter Cleft     = new();   //   of which: cleft solves
+        public readonly PhaseCounter Crotch    = new();   //   of which: crotch flat solves
+        public readonly PhaseCounter Serialize = new();   // string block, headers, buffers
+
+        public void Reset()
+        {
+            Prepare.Reset(); CapSelect.Reset(); Layers.Reset(); Bust.Reset(); Cleft.Reset(); Crotch.Reset();
+            Serialize.Reset();
+        }
+
+        public string Describe()
+            => $"prepare {Prepare.Ms:F0} (caps {CapSelect.Ms:F0}) | layers {Layers.Ms:F0} (bust {Bust.Ms:F0}/{Bust.Calls}"
+             + $" + cleft {Cleft.Ms:F0}/{Cleft.Calls} + crotch flat {Crotch.Ms:F0}/{Crotch.Calls}) | serialize {Serialize.Ms:F0}";
+    }
+
     public static byte[] Build(IReadOnlyList<SourceSpec> sources, IReadOnlyList<SecondSkinLayer> layers,
         byte[]? baseModel, out Stats stats, Action<string>? diag = null,
-        IReadOnlyList<AuthoredCapSet>? authoredCaps = null, PushSweep? pushSweep = null)
+        IReadOnlyList<AuthoredCapSet>? authoredCaps = null, PushSweep? pushSweep = null,
+        BuildTimings? timings = null)
     {
+        var tPrepare = PhaseCounter.Begin();
         if (layers.Count == 0) throw new ArgumentException("need at least one layer", nameof(layers));
         // Sources are the character geometry a SHELL is cut from, so a build made entirely of content
         // layers — an imported pack that brings its own meshes — legitimately has none. Anything else
@@ -1150,6 +1181,7 @@ public static class SecondSkinWriter
         var bridgePlans = new Dictionary<(Source, int, bool, bool, bool), BustBridgePlan?>();
         var bridgeWeights = new Dictionary<(Source, int), float[]?>();
         var cleftWeightCache = new Dictionary<(Source, int), float[]?>();
+        var tCapSelect = PhaseCounter.Begin();
         if (authoredCaps is { Count: > 0 } && anyLayerWantsCap)
         {
             // WHICH BONES THE BODY HAS, before asking where anything lands. Position alone cannot tell
@@ -1266,6 +1298,7 @@ public static class SecondSkinWriter
                 diag?.Invoke($"authored cap: DECLINED — {capDeclined}; the toes keep the plain shell");
             }
         }
+        timings?.CapSelect.Stop(tCapSelect);
 
         // Imported content models, parsed ONCE each: several layers of one pack commonly bind different
         // materials of the same .mdl, and re-parsing it per layer would cost the whole header walk again
@@ -1864,13 +1897,16 @@ public static class SecondSkinWriter
 
                         // Each pass is gated by the union of the layers that asked for IT, so the two
                         // coverages are resolved separately even though one mesh carries both.
+                        var tSolve = PhaseCounter.Begin();
                         var plan = bw == null || bDef == null ? null
                             : BustBridgeSolve(bPos, bNrm, bTris, bw, bridgeStrength, diag,
                                               CoveredVertices(bUv, bDef, bPos.Length), smoothStrength,
                                               openSlope: BustOpenSlope);
+                        if (bw != null && bDef != null) timings?.Bust.Stop(tSolve);
 
                         if (cw != null && cDef != null)
                         {
+                            tSolve = PhaseCounter.Begin();
                             // Facing is gated on a COPY: the weights are memoised per mesh and shared by
                             // every layer of the host, so gating in place would have the second layer read
                             // a seed the first had already cut down.
@@ -1891,6 +1927,7 @@ public static class SecondSkinWriter
                                                 ramp: backOnly, minDepthShare: CleftMinDepthShare,
                                                 joinPin: JoinPins(bPos, src.JoinRing), rampFull: CleftRampFull,
                                                 maxSlope: CleftMaxSlope));
+                            timings?.Cleft.Stop(tSolve);
                         }
 
                         // FLAT ACROSS THE CROTCH, on the garment. The body's fold smooths the skin but cannot
@@ -1900,9 +1937,13 @@ public static class SecondSkinWriter
                         // between the labia, the slit closed into a seam: the garment lies flat across, and the body
                         // behind it is left alone. See CrotchFlatAcross.
                         if (fw != null && fDef != null)
+                        {
+                            tSolve = PhaseCounter.Begin();
                             plan = MergePlans(plan,
                                 CrotchFlatAcross(bPos, bNrm, bTris, fw, CoveredVertices(bUv, fDef, bPos.Length),
                                                  foldStrength, diag));
+                            timings?.Crotch.Stop(tSolve);
+                        }
 
                         bridgePlans[key] = plan;
                         return plan;
@@ -3740,6 +3781,9 @@ public static class SecondSkinWriter
             subCursor += keptSubs;
         }
 
+        timings?.Prepare.Stop(tPrepare);
+        var tLayers = PhaseCounter.Begin();
+
         // Host pre-pass: the ring/bracelet's own LOD0 meshes, verbatim and unfiltered, at their authored
         // material indices (0..baseMatCount-1) — so the accessory still renders under the appended shell.
         if (baseSrc != null)
@@ -4201,6 +4245,9 @@ public static class SecondSkinWriter
             }
         }
 
+        timings?.Layers.Stop(tLayers);
+        var tSerialize = PhaseCounter.Begin();
+
         // Nothing to write. WHICH filter emptied it decides how the caller reports this: coverage trimming
         // going this far is a fault worth an error in the log, while a pack's own hide toggles emptying a
         // host is the user getting exactly what they asked for. Both used to arrive as "no geometry
@@ -4421,6 +4468,7 @@ public static class SecondSkinWriter
         stats = new Stats(meshCount, subOut.Count, boneCount, triIn, triOut, vertOut, capDeclined, capUsed,
                           redundantSubs, redundantTris, shellLayers > 0 ? trimmedOut / shellLayers : 0,
                           toeReinforceMaps.Count > 0 ? toeReinforceMaps : null);
+        timings?.Serialize.Stop(tSerialize);
         return o;
     }
 

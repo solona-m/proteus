@@ -1131,6 +1131,24 @@ public class TextureLoader
     }
 
     /// <summary>
+    /// Cache a buffer DERIVED from one source file — an overlay cut into another UV layout, say — in the same
+    /// cache, under the same file identity (path, mtime, length) its decode uses. So it is budgeted and evicted
+    /// with everything else, <see cref="EvictMod"/> drops it with its mod, and an edited source misses.
+    /// <para/>
+    /// <paramref name="derivation"/> must name EVERYTHING besides the file that decides the result (source
+    /// space, output size, filter). A null from <paramref name="derive"/> is not cached, exactly as a failed
+    /// decode is not, so a transfer map that turns up later is still used. The returned array is shared —
+    /// read-only for callers, like every other cache entry.
+    /// </summary>
+    public byte[]? GetOrDerive(string sourcePath, string derivation, int w, int h, Func<byte[]?> derive)
+    {
+        var key = DiskKey("DERIVED", sourcePath);
+        if (key == null) return derive();
+        return GetOrDecode(key + "|" + derivation + "|" + w + "x" + h,
+                           () => derive() is { } d ? (d, w, h) : null)?.Rgba;
+    }
+
+    /// <summary>
     /// Load an overlay image from disk as RGBA8, scaled to (targetW × targetH) if needed.
     /// Accepts <c>.png</c> (StbImageSharp), <c>.tex</c> (Lumina) and <c>.dds</c> (parsed here). The
     /// two GPU-texture containers decompress any format — including BC7 — to RGBA via Lumina's
