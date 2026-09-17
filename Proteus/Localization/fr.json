@@ -215,6 +215,10 @@
     "message": "[Proteus] Votre seconde peau a été construite mais le jeu ne la dessine pas. L'accessoire qui la porte est équipé, pourtant le personnage ne charge pas la version de Proteus. Déséquipez puis rééquipez cet accessoire, ou choisissez-en un autre.",
     "description": ""
   },
+  "Chat.ShellMaterialFailed": {
+    "message": "[Proteus] Une partie de votre seconde peau n'est pas dessinée. Le reste est bien sur votre personnage : soit une texture dont cette pièce a besoin est manquante, soit le jeu conserve encore la version précédente. Essayez d'abord « Recomposer maintenant », puis déséquipez et rééquipez l'accessoire qui la porte.",
+    "description": ""
+  },
   "Chat.ShellNeedsRedraw": {
     "message": "[Proteus] Votre seconde peau a changé, mais le redessin automatique est désactivé : votre personnage porte donc encore la version précédente. Changez de zone ou utilisez le bouton Redraw de Penumbra pour la voir.",
     "description": ""
