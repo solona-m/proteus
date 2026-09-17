@@ -212,6 +212,20 @@ public class TextureLoader
     {
         if (Interlocked.Exchange(ref _nativeProbed, 1) == 1) return;
 
+        // The shim is built /arch:AVX2 with no runtime dispatch, so MSVC emits AVX/AVX2/FMA/BMI/LZCNT everywhere,
+        // including scalar code. LoadLibrary succeeds on any CPU; the first call then dies of
+        // STATUS_ILLEGAL_INSTRUCTION, which no catch can see — the CLR fail-fasts the game. Pentium/Celeron parts
+        // lacked AVX entirely until Alder Lake, so this has to be decided before the DLL is ever called.
+        // IsSupported also covers the OS not enabling YMM state.
+        if (!(System.Runtime.Intrinsics.X86.Avx2.IsSupported && System.Runtime.Intrinsics.X86.Fma.IsSupported
+           && System.Runtime.Intrinsics.X86.Bmi1.IsSupported && System.Runtime.Intrinsics.X86.Bmi2.IsSupported
+           && System.Runtime.Intrinsics.X86.Lzcnt.IsSupported))
+        {
+            _nativeAvailable = false;
+            log.Warning("[Proteus] native block compressor skipped: this CPU lacks AVX2/FMA/BMI — using managed BCnEncoder and Lumina");
+            return;
+        }
+
         // The plugin's real on-disk folder. PluginInterface.AssemblyLocation is Dalamud's authoritative path
         // (Assembly.Location can be empty under the plugin load context); fall back to it only if needed.
         string? dir = null;
