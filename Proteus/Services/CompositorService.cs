@@ -388,6 +388,7 @@ public partial class CompositorService : IDisposable
     /// Withholds the boot composite while <c>DesignBindingService</c> decides whether a bound design is still
     /// worn, so the first composite already sees its overrides. Defaults to true because that service is
     /// constructed after this one; every release path in DesignBindingService.FinishBootRestore is unconditional.
+    /// Set again at each logout (DesignBindingService.RearmForNextLogin), for the next login's composite.
     /// </summary>
     public volatile bool BootCompositeHold = true;
     private volatile bool _disposed;  // set in Dispose so an in-flight probe task bails
