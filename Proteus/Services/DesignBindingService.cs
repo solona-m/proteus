@@ -121,6 +121,9 @@ public class DesignBindingService : IDisposable
 
     // All of the below are touched only on the framework thread (watcher callbacks marshal first).
     private Guid? activeDesignId;
+    // The design that was active at logout, until the next login resolves. Its overrides stay published meanwhile,
+    // so re-adopting it keeps unsaved edits and pinned presets; anything else must replace or clear them.
+    private Guid? suspendedDesignId;
     private long suppressUntilTick;
     private readonly Dictionary<Guid, JObject?> designCache = new();
 
@@ -136,7 +139,10 @@ public class DesignBindingService : IDisposable
     private long bootSettleUntilTick;
     private long lastBootRestorePollTick;
     private bool bootStep1Reported;         // the deterministic step-1 reasons are logged once, not per poll
-    private int  bootRestoreDone = 1;       // 1 = resolved or never armed; the ctor sets 0 when arming
+    private bool bootAtLogin;               // the poll waited for a player, so this is a login, not a reload
+    private bool bootAwaitingDeparture;     // armed at logout: the leaving character must go before the poll may resolve
+    private long bootDepartureDeadlineTick; // when that wait gives up, in case the logout never completes
+    private int  bootRestoreDone = 1;       // 1 = resolved or never armed; the ctor and each logout set 0 when arming
 
     public DesignBindingService(
         PenumbraBridge penumbra, GlamourerBridge glamourer, SidecarDiscoveryService discovery,
@@ -162,24 +168,29 @@ public class DesignBindingService : IDisposable
         penumbra.ModSettingChanged += OnPenumbraModSettingChanged;
         penumbra.LocalPlayerRedrawn += OnLocalPlayerRedrawn;
 
-        // Adopt the binding the character is already wearing, once: Glamourer fires no apply signal on a
-        // plugin reload. Armed only when a design was active AND Glamourer can verify it.
-        if (config.DesignBindingEnabled && glamourer.IsAvailable && config.LastActiveDesignId is { } lastId)
+        Plugin.ClientState.Logout += OnLogout;
+
+        // Pick up the binding the character is already wearing: Glamourer fires no apply signal on a plugin
+        // reload, nor for the automation that dresses the character at login. Armed here and again at each
+        // logout (RearmForNextLogin).
+        if (ShouldArmBootRestore())
         {
             Volatile.Write(ref bootRestoreDone, 0);
             framework.Update += OnBootRestoreTick;
-            log.Information("[Proteus] design-binding: boot restore armed (last active {0}); boot composite held.", lastId);
+            log.Information("[Proteus] design-binding: boot restore armed (last active {0}, {1} binding(s)); boot composite held.",
+                config.LastActiveDesignId?.ToString() ?? "(none)", store.Bindings.Count);
         }
         else
         {
-            log.Debug("[Proteus] design-binding: no boot restore (enabled={0}, glamourer={1}, lastActive={2}).",
+            log.Debug("[Proteus] design-binding: no boot restore (enabled={0}, glamourer={1}, lastActive={2}, bindings={3}).",
                 config.DesignBindingEnabled, glamourer.IsAvailable,
-                config.LastActiveDesignId?.ToString() ?? "(none)");
+                config.LastActiveDesignId?.ToString() ?? "(none)", store.Bindings.Count);
         }
     }
 
     public void Dispose()
     {
+        Plugin.ClientState.Logout -= OnLogout;
         glamourer.LocalPlayerStateFinalized -= OnGlamourerStateFinalized;
         glamourer.LocalPlayerStateChangedAny -= OnGlamourerStateChangedAny;
         penumbra.ModSettingChanged -= OnPenumbraModSettingChanged;
@@ -481,8 +492,10 @@ public class DesignBindingService : IDisposable
         bool hadDesign;
         lock (gate)
         {
-            hadDesign      = activeDesignId != null;
-            activeDesignId = null;
+            // A design suspended across a logout still has its overrides published, so it counts.
+            hadDesign         = activeDesignId != null || suspendedDesignId != null;
+            activeDesignId    = null;
+            suspendedDesignId = null;
         }
 
         // Run even when nothing was active: the persisted pointer can be stale, and a revert mid-boot must
@@ -847,8 +860,8 @@ public class DesignBindingService : IDisposable
     /// write its Proteus mods and sweep unbound ones inside one suppression scope; then, after the redraw, the
     /// post-load sweep holds off anything still drawn from a mod the design lacks.
     /// </summary>
-    /// <param name="writeProteusMods">False at boot: re-hold what Penumbra forgot, but don't re-impose permanent
-    /// settings the player may have changed.</param>
+    /// <param name="writeProteusMods">False when the boot restore re-adopts the remembered design: re-hold what
+    /// Penumbra forgot, but don't re-impose permanent settings the player may have changed.</param>
     private void RestoreCharacter(DesignBinding b, Guid designId, bool stripImported, bool writeProteusMods = true)
     {
         if (writeProteusMods) AdoptOverrides(b, designId, suppressEcho: true);
@@ -1752,9 +1765,66 @@ public class DesignBindingService : IDisposable
 
     // ── Boot restore (framework thread) ─────────────────────────────────────────
 
+    /// <summary>Whether there is anything for a boot restore to find, and a Glamourer to verify it against. Not
+    /// only when a design was active: the last session may have ended on a revert.</summary>
+    private bool ShouldArmBootRestore()
+    {
+        if (!config.DesignBindingEnabled || !glamourer.IsAvailable) return false;
+        lock (gate) return config.LastActiveDesignId != null || store.Bindings.Count > 0;
+    }
+
+    // The Logout event, not a missing local player: that also happens on every zone change.
+    private void OnLogout(int type, int code) => framework.RunOnFrameworkThread(RearmForNextLogin);
+
     /// <summary>
-    /// Waits for the local player and a readable Glamourer state, then resolves the boot restore once. A poll
-    /// because a plugin reload while logged in fires no login event.
+    /// Arm the boot restore again for the next login, which may be another character or the same one dressed by an
+    /// automation: either way Glamourer signals nothing. The active design is suspended rather than cleared (see
+    /// <see cref="suspendedDesignId"/>) and stays persisted, so the login verifies it as step 1 like any boot.
+    /// </summary>
+    private void RearmForNextLogin()
+    {
+        if (!ShouldArmBootRestore()) return;
+
+        lock (gate)
+        {
+            if (activeDesignId != null) suspendedDesignId = activeDesignId;
+            activeDesignId = null;
+        }
+
+        // Work queued for the character that just left.
+        DisarmTemporaryGuard();
+        characterWorkGeneration++;
+
+        bootDeadlineTick  = 0;
+        bootStep1Reported = false;
+        bootAtLogin       = true;
+        bootAwaitingDeparture     = true;
+        bootDepartureDeadlineTick = Environment.TickCount64 + BootRestoreTimeoutMs;
+        compositor.BootCompositeHold = true;
+        if (Interlocked.Exchange(ref bootRestoreDone, 0) == 1)
+            framework.Update += OnBootRestoreTick;
+        log.Information("[Proteus] design-binding: logged out — boot restore armed for the next login; boot composite held.");
+    }
+
+    /// <summary>
+    /// Make the remembered design active. After a relogin its overrides are still published, so it is only marked
+    /// active again; on a fresh boot they are adopted from the stored binding.
+    /// </summary>
+    private void AdoptRemembered(DesignBinding b, Guid designId)
+    {
+        bool stillPublished;
+        lock (gate)
+        {
+            stillPublished    = suspendedDesignId == designId;
+            suspendedDesignId = null;
+            if (stillPublished) activeDesignId = designId;
+        }
+        if (!stillPublished) AdoptOverrides(b, designId, suppressEcho: false);
+    }
+
+    /// <summary>
+    /// Waits for the local player and a readable Glamourer and Penumbra, then resolves the boot restore, once per
+    /// arming. A poll because a plugin reload while logged in fires no login event.
     /// </summary>
     private void OnBootRestoreTick(IFramework fw)
     {
@@ -1765,7 +1835,25 @@ public class DesignBindingService : IDisposable
         lastBootRestorePollTick = now;
 
         // No player, nothing to verify against. The deadline is not started here: the plugin can sit at the title screen.
-        if ((Plugin.ObjectTable.LocalPlayer?.Address ?? 0) == 0) return;
+        if ((Plugin.ObjectTable.LocalPlayer?.Address ?? 0) == 0)
+        {
+            bootAtLogin = true;
+            // The departure a re-arm waits for; and whoever arrives next gets a deadline and settle window of their own.
+            bootAwaitingDeparture = false;
+            bootDeadlineTick      = 0;
+            return;
+        }
+
+        // Logout fires while the leaving character is still drawn, still wearing the suspended design: judging it
+        // would resolve the poll before the login it was armed for. Bounded, since a logout can fail and the hold
+        // would otherwise never release.
+        if (bootAwaitingDeparture)
+        {
+            if (now < bootDepartureDeadlineTick) return;
+            bootAwaitingDeparture = false;
+            log.Information("[Proteus] design-binding: the character never left after the logout signal — resolving against it.");
+        }
+
         if (bootDeadlineTick == 0)
         {
             bootDeadlineTick    = now + BootRestoreTimeoutMs;
@@ -1786,6 +1874,15 @@ public class DesignBindingService : IDisposable
             return;                     // not ready yet; try again next interval
         }
 
+        // Penumbra can answer later than Glamourer when everything loads mid-session, and a restore that can't
+        // read it marks the design active with nothing written, which no later re-apply repairs.
+        if (penumbra.GetPlayerCollectionId() == null || penumbra.GetModDirectory() == null)
+        {
+            if (now >= bootDeadlineTick)
+                FinishBootRestore($"Penumbra unreadable after {BootRestoreTimeoutMs / 1000}s — abstaining");
+            return;
+        }
+
         // The state is readable well before it is settled, so an early mismatch means "not yet": retry until the
         // settle window lapses.
         var final = now >= bootSettleUntilTick;
@@ -1793,8 +1890,10 @@ public class DesignBindingService : IDisposable
     }
 
     /// <summary>
-    /// Adopt the binding the character is already wearing, with no Penumbra writes: never clears an override,
-    /// disables a mod or re-asserts settings, which would undo changes made while Proteus was unloaded.
+    /// Pick the binding the character is already wearing. The remembered design is adopted with no Penumbra
+    /// writes: never clears an override, disables a mod or re-asserts settings, which would undo changes made
+    /// while Proteus was unloaded. Any other match is a look Proteus never restored, so it is restored in full
+    /// where <see cref="BootMatchMayRestore"/> allows.
     /// </summary>
     /// <param name="final">False while the settle window is open: a non-match is retried rather than resolved.</param>
     private void TryBootRestore(JObject state, bool final)
@@ -1808,8 +1907,8 @@ public class DesignBindingService : IDisposable
             DesignBinding? b;
             lock (gate) store.Bindings.TryGetValue(lastId, out b);
 
-            // Missing binding and deleted design are deterministic, so they fall through to step 2 without
-            // waiting; reported once, since the fall-through repeats every poll.
+            // Missing binding and deleted design are deterministic, so they fall through to step 2; reported
+            // once, since the fall-through repeats every poll.
             if (b == null)
             {
                 ReportStep1Once($"last active design {lastId} has no binding any more");
@@ -1824,7 +1923,7 @@ public class DesignBindingService : IDisposable
                 string? why = null;
                 if (BootIdStillApplies(design, state, r => why ??= r))
                 {
-                    AdoptOverrides(b, lastId, suppressEcho: false);
+                    AdoptRemembered(b, lastId);
                     FinishBootRestore($"adopted last active design {b.DesignName ?? lastId.ToString()} ({b.Mods.Count} mods)");
                     Rehold(b, lastId);
                     return;
@@ -1842,10 +1941,11 @@ public class DesignBindingService : IDisposable
             }
         }
 
-        // 2. The same match the live apply path runs (the store is not per-character).
+        // 2. The same match the live apply path runs (the store is not per-character). Its restore writes Penumbra
+        // settings, so it waits for the settled state even when step 1 fell through at once.
+        if (!final) return;
         if (MatchBinding(state, carriers) is not { } pick)
         {
-            if (!final) return;
             FinishBootRestore("no binding matched the character — leaving overrides unset");
             return;
         }
@@ -1854,10 +1954,29 @@ public class DesignBindingService : IDisposable
         lock (gate) store.Bindings.TryGetValue(pick, out picked);
         if (picked == null) { FinishBootRestore("matched binding vanished underfoot"); return; }
 
-        AdoptOverrides(picked, pick, suppressEcho: false);
-        FinishBootRestore($"adopted matched design {picked.DesignName ?? pick.ToString()}");
-        Rehold(picked, pick);
+        if (!BootMatchMayRestore(bootAtLogin, config.DesignBindingFollowsAutomation))
+        {
+            FinishBootRestore($"{picked.DesignName ?? pick.ToString()} matched at login, but following Glamourer's "
+                            + "automation is off — leaving Proteus as it is");
+            return;
+        }
+
+        // Never the remembered design (step 1 just rejected it): an automation applied this look at login, or the
+        // design changed while Proteus was unloaded. The Proteus mods still carry the previous look's Penumbra
+        // settings, so adopting alone would put this look's colours on that look's mods. Restore in full, as the
+        // live apply path would have. Before FinishBootRestore, which releases the holds when nothing is active.
+        Restore(pick);
+        FinishBootRestore($"restored matched design {picked.DesignName ?? pick.ToString()}");
     }
+
+    /// <summary>
+    /// Whether a boot match other than the remembered design may be restored, which writes Penumbra settings. At a
+    /// login that look is the automation's (or the character's own gear), so it answers to
+    /// <see cref="Configuration.DesignBindingFollowsAutomation"/> as the live path's inferred apply does. On a plugin
+    /// reload it is a design applied while Proteus was unloaded, and is always restored.
+    /// </summary>
+    internal static bool BootMatchMayRestore(bool atLogin, bool followsAutomation)
+        => !atLogin || followsAutomation;
 
     /// <summary>
     /// Hold the adopted design's mods again, since Penumbra forgets temporary settings on restart. Holds and sweep
@@ -1895,8 +2014,20 @@ public class DesignBindingService : IDisposable
         compositor.BootCompositeHold = false;
         log.Information("[Proteus] design-binding boot restore: {0} — boot composite released.", outcome);
 
+        bool adopted, stale;
+        lock (gate)
+        {
+            adopted = activeDesignId != null;
+            stale   = !adopted && suspendedDesignId != null;
+            suspendedDesignId = null;
+        }
+        if (adopted) return;
+
         // Nothing adopted: release whatever a previous instance was holding (by key, so nothing else is touched).
-        if (ActiveDesignId == null) ReleaseHeldMods();
+        ReleaseHeldMods();
+        // A relogin that adopted nothing: the look from before the logout is still published, and this character
+        // isn't wearing it. The boot composite released above picks the change up.
+        if (stale) overrides.Clear();
     }
 
     internal static Guid PickMostRecent(IReadOnlyList<Guid> ids, IReadOnlyDictionary<Guid, DesignBinding> bindings)
