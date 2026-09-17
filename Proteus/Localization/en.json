@@ -787,6 +787,10 @@
     "message": "A and B",
     "description": "Stands in for the column letter when an index texture uses both columns. Used inside Content.IndexCompressed.Fmt."
   },
+  "Content.FollowsHairColor": {
+    "message": "This material uses the hair shader, so the piece takes your character's hair colour and highlights and carries no colour table — nothing you change below will reach it. Change your hair colour to recolour it.",
+    "description": "Warning above a content pack's colour grid when its material runs on hair.shpk (ears, tails): it has no colour table because the game tints it with the character's hair colour."
+  },
   "Content.Geometry.Fmt": {
     "message": "{0} mesh, {1} verts",
     "description": "A table cell. {0} is a mesh count, {1} a vertex count. Very tight space - keep it short."

@@ -914,6 +914,13 @@ public class StatusWindow : Window
                 ImGui.PopTextWrapPos();
                 break;
 
+            case ContentIndexState.FollowsHairColor:
+                // Amber for the same reason, but the colour has a source worth naming: the character, not the textures.
+                ImGui.PushTextWrapPos(0);
+                ImGui.TextColored(ProteusStyle.Warn, Strings.Content.FollowsHairColor);
+                ImGui.PopTextWrapPos();
+                break;
+
             case ContentIndexState.Scanned when idx.Rows is { Count: 1 } && idx.SubRow != null:
                 ProteusStyle.DisabledWrapped(
                     string.Format(Strings.Content.SamplesFmt, idx.Rows.First(), idx.SubRow));
@@ -975,7 +982,7 @@ public class StatusWindow : Window
         // ── animated glow ────────────────────────────────────────────────────
         // Hidden without a colour table: a row's emissive is what arms the effect.
         bool glowChanged = false;
-        if (idx.State != ContentIndexState.NoColorTable)
+        if (idx.State is not (ContentIndexState.NoColorTable or ContentIndexState.FollowsHairColor))
         {
             ImGui.Separator();
             // Warn before the picker: characterscroll has no base-texture slot, so the pack's diffuse painting is lost.
@@ -1073,6 +1080,8 @@ public class StatusWindow : Window
         NoSampler,
         /// <summary>The material parsed and has no colour table, so nothing the grid writes survives.</summary>
         NoColorTable,
+        /// <summary><see cref="NoColorTable"/> on <c>hair.shpk</c>: the piece is tinted by the character's hair colour, which is why it has no table.</summary>
+        FollowsHairColor,
         /// <summary>The index texture was read and every texel is transparent, so it selects no row.</summary>
         SelectsNothing,
         /// <summary>Read and names a cell, but the texture is compressed so the reading may be a row out: filter on it and say the caveat.</summary>
@@ -1093,6 +1102,9 @@ public class StatusWindow : Window
     /// <summary>The colour-table row a material with no index texture falls back to: with no <c>_id</c> the shader takes the last row.
     /// Shared with shells, whose fabricated index targets the same row.</summary>
     private const int DefaultContentRow = GlowShell.Row;
+
+    /// <summary>The shader ears and tails are authored on so they match the character's hair; it declares no colour table.</summary>
+    private const string HairShader = "hair.shpk";
 
     /// <summary>
     /// Read a content material's index texture and work out which colour rows it selects, so the grid can dim the rest.
@@ -1134,8 +1146,13 @@ public class StatusWindow : Window
                         Plugin.Log.Warning("[Proteus] content: could not read material {0} of {1} — its colour "
                                          + "rows cannot be narrowed", mtrlRel, entry.ModDirectory);
                     else if (!slots.HasColorTable)
-                        // No rows exist, and PatchColorTable discards whatever the grid writes.
-                        result = new ContentIndex(null, null, ContentIndexState.NoColorTable);
+                        // No rows exist, and PatchColorTable discards whatever the grid writes. The material is published
+                        // byte-for-byte, so a hair-shader piece keeps its shader and goes on following the character's hair.
+                        result = new ContentIndex(null, null,
+                            string.Equals(TextureLoader.GetMtrlInfo(mtrlBytes).shader, HairShader,
+                                          StringComparison.OrdinalIgnoreCase)
+                                ? ContentIndexState.FollowsHairColor
+                                : ContentIndexState.NoColorTable);
                     else if (string.IsNullOrEmpty(slots.Index))
                         result = new ContentIndex([DefaultContentRow], "A", ContentIndexState.NoSampler);
                     else

@@ -787,6 +787,10 @@
     "message": "A와 B",
     "description": ""
   },
+  "Content.FollowsHairColor": {
+    "message": "이 머티리얼은 헤어 셰이더를 사용하므로 부품이 캐릭터의 머리색과 브리지 색을 따르며 색상 테이블이 없습니다. 아래에서 무엇을 바꿔도 부품에 전달되지 않습니다. 색을 바꾸려면 머리색을 변경하세요.",
+    "description": ""
+  },
   "Content.Geometry.Fmt": {
     "message": "메시 {0}, 정점 {1}",
     "description": ""

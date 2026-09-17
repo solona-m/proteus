@@ -787,6 +787,10 @@
     "message": "A et B",
     "description": ""
   },
+  "Content.FollowsHairColor": {
+    "message": "Ce matériau utilise le shader des cheveux : la pièce prend la couleur de cheveux et les mèches de votre personnage et ne comporte donc aucune table de couleurs — rien de ce que vous changez ci-dessous ne l'atteindra. Changez votre couleur de cheveux pour la recolorer.",
+    "description": ""
+  },
   "Content.Geometry.Fmt": {
     "message": "{0} maillage, {1} sommets",
     "description": ""
