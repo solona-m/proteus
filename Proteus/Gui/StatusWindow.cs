@@ -133,10 +133,11 @@ public class StatusWindow : Window
     private readonly HashSet<string> _glowWarmedMods = new(StringComparer.OrdinalIgnoreCase);
     // Key: editor scope → which color table row (1–16) is open in the editor.
     private readonly Dictionary<string, int> _rowSelection = new();
-    // Colour edits arrive one per frame while a slider/swatch is dragged; a recomposite is multi-second,
-    // so wait this long after the LAST change before recompositing (TriggerRecomposite restarts the
-    // timer on each call). The on-screen editor swatches update live regardless — only the bake waits.
-    private const int ColorEditDebounceMs = 1000;
+    // Colour edits arrive one per frame while a slider/swatch is dragged, so wait this long after the LAST
+    // change before recompositing (TriggerRecomposite restarts the timer on each call). The on-screen editor
+    // swatches update live regardless — only the bake waits. Was 1000 ms when a bake cost 5–10 s and had to
+    // be protected from a second drag; a colour edit is now ~1 s of work, so the wait was most of the delay.
+    private const int ColorEditDebounceMs = 400;
     // Mod whose colour editor window is open, or null. A window rather than a popup: colour work means
     // clicking back and forth with the game, and a popup closes on any click outside it.
     private string? _colorWindowMod;
@@ -909,13 +910,14 @@ public class StatusWindow : Window
 
         if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.SyncAlt, "Refresh"))
         {
-            compositor.RefreshAndRecomposite();
+            // Shift: rebuild everything, forgetting what was published. See RefreshAndRecomposite.
+            compositor.RefreshAndRecomposite(full: ImGui.GetIO().KeyShift);
             // The Parts tab lists every mod Penumbra knows, not the sidecar ones a composite discovers, so
             // a recomposite alone would leave a mod installed since the window opened out of its picker.
             parts.Refresh();
         }
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(Strings.Band.RecompositeTip);
+            ImGui.SetTooltip(Strings.Band.RecompositeTip + "\n" + Strings.Band.RecompositeFullTip);
 
         ImGui.SetCursorPos(resume);
     }
@@ -5125,6 +5127,25 @@ public class StatusWindow : Window
             // greyed out because the parent toggle is off, with nothing to explain why.
             if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
                 ImGui.SetTooltip(bs.FollowAutomationTip);
+
+            bool restoreCharacter = config.DesignBindingRestoresCharacterMods;
+            if (ImGui.Checkbox(bs.RestoreCharacter, ref restoreCharacter))
+            {
+                config.DesignBindingRestoresCharacterMods = restoreCharacter;
+                config.Save();
+                designBindings.OnRestoreCharacterModsToggled(restoreCharacter);
+            }
+            if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+                ImGui.SetTooltip(bs.RestoreCharacterTip);
+
+            bool unequipUnset = config.DesignBindingUnequipUnsetSlots;
+            if (ImGui.Checkbox(bs.UnequipUnset, ref unequipUnset))
+            {
+                config.DesignBindingUnequipUnsetSlots = unequipUnset;
+                config.Save();
+            }
+            if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+                ImGui.SetTooltip(bs.UnequipUnsetTip);
         }
         ImGui.Unindent();
 
@@ -5227,6 +5248,27 @@ public class StatusWindow : Window
             else
                 ImGui.TextUnformatted(label);
 
+            // What Apply will do to Penumbra, at a glance: how many mods it restores, or that it is an older
+            // binding that only knows Proteus mods and needs one Update to cover the whole character. Only while
+            // whole-character restore is on — with it off every binding is Proteus-only, and saying so per row
+            // would be noise.
+            if (config.DesignBindingRestoresCharacterMods)
+            {
+                ImGui.SameLine();
+                if (b.HasCharacterSnapshot)
+                {
+                    ImGui.TextDisabled(string.Format(bs.ModCountFmt, b.CharacterMods.Count));
+                    if (ImGui.IsItemHovered())
+                        DrawBindingModsTooltip(b);
+                }
+                else
+                {
+                    ImGui.TextDisabled(bs.ProteusOnly);
+                    if (ImGui.IsItemHovered())
+                        ImGui.SetTooltip(bs.ProteusOnlyTip);
+                }
+            }
+
             ImGui.TableNextColumn();
             var ago = DateTime.UtcNow - b.CapturedUtc;
             ImGui.TextDisabled(
@@ -5243,7 +5285,7 @@ public class StatusWindow : Window
                 if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.PlayCircle, bs.Apply))
                     toApply = b.DesignId;
                 if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip(bs.ApplyTip);
+                    ImGui.SetTooltip(config.DesignBindingRestoresCharacterMods ? bs.ApplyCharacterTip : bs.ApplyTip);
                 ImGui.SameLine();
                 // Only the active binding can be re-captured — the snapshot comes from the live state, so
                 // writing it into a binding that isn't driving that state would overwrite it with a look
@@ -5272,6 +5314,42 @@ public class StatusWindow : Window
             designBindings.Restore(toApply.Value);
         if (toRemove.HasValue)
             designBindings.RemoveBinding(toRemove.Value);
+    }
+
+    // Enough to recognise a look without the tooltip outgrowing the screen; a body-and-outfit design is
+    // typically a dozen or two.
+    private const int BindingModsTooltipRows = 30;
+
+    /// <summary>The mods a binding restores, enabled ones first. Only drawn while hovered, which is also the
+    /// only time it asks Penumbra which mods are still installed.</summary>
+    private void DrawBindingModsTooltip(DesignBinding b)
+    {
+        var bs        = Strings.Bindings;
+        var installed = penumbra.GetAllMods();
+
+        using var tip = ImRaii.Tooltip();
+        ImGui.TextUnformatted(bs.ModListHeader);
+
+        var rows = b.CharacterMods
+            .OrderByDescending(m => m.Enabled)
+            .ThenByDescending(m => m.Priority)
+            .ThenBy(m => m.ModName ?? m.ModDirectory, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (var m in rows.Take(BindingModsTooltipRows))
+        {
+            var name    = installed?.GetValueOrDefault(m.ModDirectory) ?? m.ModName ?? m.ModDirectory;
+            var missing = installed != null && !installed.ContainsKey(m.ModDirectory);
+            var detail  = missing   ? bs.ModListMissing
+                        : m.Enabled ? string.Format(bs.ModListPriorityFmt, m.Priority)
+                        :             bs.ModListOff;
+
+            if (missing || !m.Enabled) ImGui.TextDisabled($"{name}  ({detail})");
+            else                       ImGui.TextUnformatted($"{name}  ({detail})");
+        }
+
+        if (rows.Count > BindingModsTooltipRows)
+            ImGui.TextDisabled(string.Format(bs.ModListMoreFmt, rows.Count - BindingModsTooltipRows));
     }
 
     private void DrawColorEditor(OverlayEntry entry)
@@ -6598,8 +6676,9 @@ public class StatusWindow : Window
                                        bool skinFingerprintAuthoritative = false)
     {
         if (!entry.Enabled) return;
+        // drawStateStable: every trigger through here is an edit in this window, not the character moving.
         compositor.TriggerRecomposite(reason, delayMs,
-            skinFingerprintAuthoritative: skinFingerprintAuthoritative);
+            skinFingerprintAuthoritative: skinFingerprintAuthoritative, drawStateStable: true);
     }
 
     /// <summary>Why "Reset to defaults" can't run right now, or null when it can.</summary>

@@ -9,6 +9,7 @@ using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using Glamourer.Api.Enums;
 using Newtonsoft.Json.Linq;
+using Penumbra.Api.Enums;
 using Proteus.Interop;
 
 namespace Proteus.Services;
@@ -17,7 +18,9 @@ namespace Proteus.Services;
 
 public class DesignBindingStore
 {
-    public int Version { get; set; } = 1;
+    /// <summary>2 added <see cref="DesignBinding.CharacterMods"/>. A version-1 store loads unchanged; its
+    /// bindings simply have no character snapshot until they are next captured.</summary>
+    public int Version { get; set; } = 2;
     public Dictionary<Guid, DesignBinding> Bindings { get; set; } = new();
 }
 
@@ -27,6 +30,32 @@ public class DesignBinding
     public string? DesignName { get; set; }
     public DateTime CapturedUtc { get; set; }
     public List<ProteusModBinding> Mods { get; set; } = new();
+
+    /// <summary>
+    /// The Penumbra settings of every mod on the character when the design was saved — whatever it drew
+    /// from, plus every Proteus mod. Read underneath any temporary settings, because a restore writes them
+    /// back permanently.
+    /// <para/>
+    /// Empty on a binding captured before this existed. Such a binding restores the way it always did —
+    /// Proteus mods only — until it is captured again.
+    /// </summary>
+    public List<PenumbraModSetting> CharacterMods { get; set; } = new();
+
+    /// <summary>Whether this binding carries a whole-character snapshot rather than Proteus mods alone.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool HasCharacterSnapshot => CharacterMods.Count > 0;
+}
+
+/// <summary>One mod's permanent Penumbra settings, as a design binding recorded them.</summary>
+public class PenumbraModSetting
+{
+    public string ModDirectory { get; set; } = string.Empty;
+    public string? ModName { get; set; }
+    public bool Enabled { get; set; }
+    public int Priority { get; set; }
+
+    /// <summary>Penumbra option group → selected option names.</summary>
+    public Dictionary<string, List<string>> Options { get; set; } = new();
 }
 
 /// <summary>Captured state of one Proteus overlay mod at the moment a design was saved.</summary>
@@ -159,6 +188,9 @@ public class DesignBindingService : IDisposable
         Load();
 
         glamourer.LocalPlayerStateFinalized += OnGlamourerStateFinalized;
+        glamourer.LocalPlayerStateChangedAny += OnGlamourerStateChangedAny;
+        penumbra.ModSettingChanged += OnPenumbraModSettingChanged;
+        penumbra.LocalPlayerRedrawn += OnLocalPlayerRedrawn;
 
         // Adopt whatever binding the character is already wearing, once, at load. Glamourer fires no
         // apply signal on a plugin reload — the design is already applied — so without this the
@@ -186,6 +218,9 @@ public class DesignBindingService : IDisposable
     public void Dispose()
     {
         glamourer.LocalPlayerStateFinalized -= OnGlamourerStateFinalized;
+        glamourer.LocalPlayerStateChangedAny -= OnGlamourerStateChangedAny;
+        penumbra.ModSettingChanged -= OnPenumbraModSettingChanged;
+        penumbra.LocalPlayerRedrawn -= OnLocalPlayerRedrawn;
         Volatile.Write(ref bootRestoreDone, 1);
         framework.Update -= OnBootRestoreTick;   // idempotent; safe when it was never subscribed
     }
@@ -263,6 +298,28 @@ public class DesignBindingService : IDisposable
                 return;
             }
 
+            // Only a design the character is actually WEARING may be captured. Glamourer rewrites a design's
+            // file on every edit — a rename, a folder move, a tweak to a design nobody has on — and capturing on
+            // each of those wrote the current look into an unrelated design's binding, which that design's next
+            // apply then restored instead of its own. Judged exactly as an apply is (carriers retired, the same
+            // StateMatches), so anything this captures is something the apply path can recognise again.
+            lock (gate) designCache.Remove(designId);   // the file just changed; never judge a stale copy
+            var design = GetDesignCached(designId);
+            var state  = glamourer.GetObjectState(0);
+            if (design == null || state == null)
+            {
+                log.Debug("[Proteus] Skipping design capture for {0}: {1} unreadable, so it can't be checked against the character.",
+                    designId, design == null ? "design" : "Glamourer state");
+                return;
+            }
+            string? mismatch = null;
+            if (!StateMatches(StripCarriers(design, LiveCarriers()), state, out _, r => mismatch ??= r))
+            {
+                log.Debug("[Proteus] Skipping design capture for {0}: the character isn't wearing it ({1}).",
+                    designId, mismatch ?? "no reason reported");
+                return;
+            }
+
             var name = glamourer.GetDesigns().TryGetValue(designId, out var n) ? n : null;
             var mods = BuildModBindings(collId.Value);
 
@@ -274,10 +331,14 @@ public class DesignBindingService : IDisposable
                 Mods        = mods,
             };
 
+            var characterMods = ReadCharacterMods(collId.Value);
+
             lock (gate)
             {
+                // Unreadable (not drawn): keep the snapshot it had rather than wiping it.
+                binding.CharacterMods = characterMods
+                    ?? (store.Bindings.TryGetValue(designId, out var previous) ? previous.CharacterMods : new());
                 store.Bindings[designId] = binding;
-                designCache.Remove(designId); // design content changed → drop cached gear
                 Save();
             }
 
@@ -473,15 +534,24 @@ public class DesignBindingService : IDisposable
     /// the reasoning that a design should show only what it captured. That was the wrong trade: a mod the
     /// user has switched on is a mod they expect to see, and one that had been imported since the design
     /// was saved went quietly missing with only a tooltip to explain it. Enabled means composited.
+    /// <para/>
+    /// The exception is <paramref name="stripImported"/>: an imported pack (<see cref="ProteusMetadata.HasContent"/>)
+    /// is NOT held then. Its pieces are drawn through Proteus on a carrier accessory rather than a gear slot, so
+    /// unequipping the slots a design leaves unset can't take them off — switching the pack off is the only way
+    /// they leave with the previous look. Its remaining Penumbra files only serve those pieces, so nothing else
+    /// goes with them.
     /// </summary>
-    private HashSet<string> UnboundContentMods(DesignBinding b, IReadOnlyList<OverlayEntry> discovered)
+    private static HashSet<string> UnboundContentMods(DesignBinding b, IReadOnlyList<OverlayEntry> discovered, bool stripImported)
+        => UnboundContentMods(b.Mods.Select(m => m.ModDirectory).ToHashSet(StringComparer.OrdinalIgnoreCase), discovered, stripImported);
+
+    private static HashSet<string> UnboundContentMods(HashSet<string> bound, IReadOnlyList<OverlayEntry> discovered, bool stripImported)
     {
-        var bound = b.Mods.Select(m => m.ModDirectory).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var held  = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var e in discovered)
         {
             if (bound.Contains(e.ModDirectory)) continue;
+            if (stripImported && e.Metadata.HasContent) continue;
             // SidecarRoot is the Proteus/ subfolder; the manifest lives one level up. Trimmed first,
             // exactly as SidecarDiscoveryService does at its three sibling conversions: a trailing
             // separator would make GetDirectoryName return the sidecar folder itself, and
@@ -517,10 +587,18 @@ public class DesignBindingService : IDisposable
         // FinishBootRestore is a one-shot, so neither costs anything on the ambient zone-in path.
         PersistActiveDesignId(null);
         if (BootRestoreArmed) FinishBootRestore("superseded by an explicit clear");
+        // Nothing is being restored any more, so a temporary setting landing now is the player's (or
+        // Glamourer's, for whatever replaced the design) and must be left alone.
+        DisarmTemporaryGuard();
+        // A character restore's post-load sweep is for a look that is no longer wanted, and the mods it held go
+        // back to how the collection has them. No-op (and no Penumbra events) when nothing is held.
+        characterWorkGeneration++;
+        var released = ReleaseHeldMods();
 
         // Ordered so the return value keeps its old meaning: "anything was active" is true when either
-        // the design pointer or the override bag held something. Clear() un-publishes on its own.
-        return overrides.Clear() | hadDesign;
+        // the design pointer or the override bag held something — or, now, when held mods were let go, which
+        // changes the look as much as a cleared override does. Clear() un-publishes on its own.
+        return overrides.Clear() | hadDesign | released;
     }
 
     /// <summary>
@@ -537,11 +615,29 @@ public class DesignBindingService : IDisposable
         log.Debug("[Proteus] design-binding: persisted active design = {0}", id?.ToString() ?? "(none)");
     }
 
-    public void Restore(Guid designId)
+    /// <param name="stripImported">Also switch off imported Proteus packs the binding didn't capture — see
+    /// <see cref="UnboundContentMods(HashSet{string}, IReadOnlyList{OverlayEntry}, bool)"/>. Set on the same
+    /// applies that unequip the slots a design leaves unset.</param>
+    public void Restore(Guid designId, bool stripImported = false)
     {
         DesignBinding? b;
         lock (gate) store.Bindings.TryGetValue(designId, out b);
         if (b == null) return;
+
+        if (b.HasCharacterSnapshot && config.DesignBindingRestoresCharacterMods) RestoreCharacter(b, designId, stripImported);
+        else                                                                   RestoreProteusOnly(b, designId, stripImported);
+    }
+
+    /// <summary>
+    /// The Proteus-only restore: for a binding captured before character snapshots, and for every binding while
+    /// <see cref="Configuration.DesignBindingRestoresCharacterMods"/> is off. Kept exactly as it was.
+    /// </summary>
+    private void RestoreProteusOnly(DesignBinding b, Guid designId, bool stripImported)
+    {
+        // Supersedes any character restore — its post-load sweep stands down, and whatever it held is let go, since
+        // this restore describes the look with Proteus mods alone.
+        characterWorkGeneration++;
+        ReleaseHeldMods();
 
         var allMods = discovery.DiscoverAll();
         var present = allMods
@@ -556,7 +652,7 @@ public class DesignBindingService : IDisposable
 
         // Exempt from the disable sweep below, and nothing more — they stay enabled AND they still
         // composite. See UnboundContentMods.
-        var held = UnboundContentMods(b, allMods);
+        var held = UnboundContentMods(b, allMods, stripImported);
         if (held.Count > 0)
             log.Debug("[Proteus] design-binding: leaving {0} unbound mod(s) enabled — they ship their own "
                     + "Penumbra content, which a disable would take with it: {1}",
@@ -592,6 +688,562 @@ public class DesignBindingService : IDisposable
         compositor.TriggerRecomposite($"design-restore:{designId}");
         log.Information("[Proteus] Restored Proteus state for design {0}.", b.DesignName ?? designId.ToString());
     }
+
+    // ── Character snapshot (capture) ────────────────────────────────────────────
+
+    // Bumped by everything that supersedes a character restore — another restore of either kind, or a clear
+    // (unbound design, revert, unbind) — so the post-load sweep a restore armed stands down instead of acting
+    // on a look that is no longer wanted. Framework thread only.
+    private int characterWorkGeneration;
+
+    /// <summary>
+    /// The settings of every mod on the character right now, or null when there is nothing to read them from
+    /// (not drawn, Penumbra gone) — the caller then keeps the snapshot it had rather than wiping it.
+    /// </summary>
+    private List<PenumbraModSetting>? ReadCharacterMods(Guid collId)
+    {
+        var modsRoot  = penumbra.GetModDirectory();
+        var resources = penumbra.GetActivePlayerResourceMap();
+        var permanent = penumbra.GetCollectionModSettings(collId, ignoreTemporary: true);
+        var names     = penumbra.GetAllMods();
+        if (modsRoot == null || resources == null || permanent == null || names == null)
+        {
+            log.Information("[Proteus] design-binding: character snapshot skipped — Penumbra state unreadable (root={0}, tree={1}, settings={2}).",
+                modsRoot != null, resources != null, permanent != null);
+            return null;
+        }
+
+        var proteusDirs = discovery.DiscoverAll().Select(e => e.ModDirectory).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var mods = SelectCharacterMods(modsRoot, resources.Keys, permanent, heldTemporary, names, proteusDirs);
+        log.Information("[Proteus] design-binding: captured {0} mod(s) on the character.", mods.Count);
+        return mods;
+    }
+
+    /// <summary>
+    /// Which mods make up the character: every mod a drawn file resolves into, read straight off the resource
+    /// tree, plus every Proteus mod whatever its state — Proteus output is drawn through the managed mod, so the
+    /// tree never names the mod it came from.
+    /// <para/>
+    /// Settings are what the look really is. For a mod a restore is holding (<paramref name="held"/>), that is
+    /// the design's state as recorded — its un-raised priority, so a save never bakes the raise in. For any other
+    /// mod it is the PERMANENT setting: a mod on only because Glamourer's temporary setting switched it on is
+    /// recorded with the off state underneath, since a restore replaces that temporary setting with its own.
+    /// </summary>
+    internal static List<PenumbraModSetting> SelectCharacterMods(
+        string modsRoot,
+        IEnumerable<string> drawnFiles,
+        IReadOnlyDictionary<string, PenumbraBridge.ModSettingsSnapshot> permanent,
+        IReadOnlyDictionary<string, PenumbraModSetting> held,
+        IReadOnlyDictionary<string, string> installed,
+        IReadOnlySet<string> proteusDirs)
+    {
+        var chosen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var file in drawnFiles)
+            if (OwningMod(modsRoot, file) is { } owner && installed.ContainsKey(owner))
+                chosen.Add(owner);
+
+        foreach (var dir in proteusDirs)
+            if (installed.ContainsKey(dir))
+                chosen.Add(dir);
+
+        chosen.Remove(SidecarDiscoveryService.ManagedModDir);
+
+        return chosen
+            .OrderBy(d => d, StringComparer.OrdinalIgnoreCase)
+            .Select(dir =>
+            {
+                var name = installed.TryGetValue(dir, out var n) ? n : null;
+                if (held.TryGetValue(dir, out var h))
+                    return new PenumbraModSetting
+                    {
+                        ModDirectory = dir, ModName = name, Enabled = h.Enabled, Priority = h.Priority,
+                        Options = h.Options.ToDictionary(kv => kv.Key, kv => new List<string>(kv.Value)),
+                    };
+
+                permanent.TryGetValue(dir, out var s);
+                return new PenumbraModSetting
+                {
+                    ModDirectory = dir,
+                    ModName      = name,
+                    Enabled      = s.Options != null && s.Enabled,
+                    Priority     = s.Options != null ? s.Priority : 0,
+                    Options      = s.Options?.ToDictionary(kv => kv.Key, kv => new List<string>(kv.Value))
+                                   ?? new Dictionary<string, List<string>>(),
+                };
+            })
+            .ToList();
+    }
+
+    /// <summary>The mod directory a resolved file lives in, or null when it is not under the mods folder (game
+    /// data, or a temporary mod's file somewhere else).</summary>
+    internal static string? OwningMod(string modsRoot, string resolvedPath)
+    {
+        var root = modsRoot.Replace('\\', '/').TrimEnd('/') + "/";
+        var file = resolvedPath.Replace('\\', '/');
+        if (!file.StartsWith(root, StringComparison.OrdinalIgnoreCase)) return null;
+        var rest  = file.AsSpan(root.Length);
+        var slash = rest.IndexOf('/');
+        return slash > 0 ? rest[..slash].ToString() : null;
+    }
+
+    // ── Character snapshot: holding mods temporarily ────────────────────────────
+    //
+    // A restore never edits the collection for a mod that isn't a Proteus mod. It holds it in the design's state
+    // with a Penumbra temporary setting, locked with Proteus's key, and lets go of every one of those when the
+    // look ends — a revert, an unbound design, another restore, the option switched off. The collection is then
+    // exactly as the player left it: nothing to put back, and no priorities creeping upward switch after switch.
+    //
+    // Proteus mods keep permanent writes. Proteus's own editors change their options permanently, and a temporary
+    // setting on top would make those edits appear to do nothing.
+    //
+    // The lock is positive on purpose. Penumbra refuses to let anyone else replace or remove a positively locked
+    // temporary setting, so Glamourer's associated mods can't re-assert themselves over a held mod — and hides it
+    // from readers that don't pass the key, which is why every read here that must see it passes TemporaryKey.
+    // Penumbra forgets all of them on restart; the boot restore holds them again.
+
+    internal const int    TemporaryKey    = 0x50524F54;   // "PROT"
+    internal const string TemporarySource = "Proteus";
+
+    // What each held mod is being held AS, with its recorded (un-raised) priority — what a save reads back instead
+    // of the permanent setting. Framework thread only.
+    private readonly Dictionary<string, PenumbraModSetting> heldTemporary = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Let go of every mod Proteus is holding in the player's collection. Returns whether anything was released.
+    /// Removes by key, not by the in-memory list: after a plugin reload the list is empty while Penumbra still
+    /// holds what the previous instance set.
+    /// </summary>
+    private bool ReleaseHeldMods()
+    {
+        if (penumbra.GetPlayerCollectionId() is not { } collId) return false;
+        var had = heldTemporary.Count > 0;
+        heldTemporary.Clear();
+        // No suppression scope: NothingChanged raises no events, so the ambient zone-in path stays free, and a
+        // real release is a real change the compositor should see.
+        var ec = penumbra.RemoveAllTemporaryModSettings(collId, TemporaryKey);
+        if (ec == PenumbraApiEc.Success)
+            log.Information("[Proteus] design-binding: released the mods Proteus was holding for the previous look.");
+        return had || ec == PenumbraApiEc.Success;
+    }
+
+    /// <summary>
+    /// "Restore every mod on the character" was switched. Off: let go of everything held, so the collection shows
+    /// as the player left it. On: restore the active design's whole look straight away, rather than waiting for
+    /// its next apply.
+    /// </summary>
+    public void OnRestoreCharacterModsToggled(bool on)
+    {
+        characterWorkGeneration++;
+        if (!on)
+        {
+            if (ReleaseHeldMods()) compositor.TriggerRecomposite("design-binding-release");
+            return;
+        }
+        if (ActiveDesignId is { } active) Restore(active);
+    }
+
+    // ── Character snapshot (restore) ────────────────────────────────────────────
+
+    /// <summary>One mod held in its recorded state by a temporary setting.</summary>
+    internal readonly record struct TemporaryHold(PenumbraModSetting Recorded, int Priority);
+
+    /// <summary>Every Penumbra write the first step of a character restore makes, in the order it makes them.</summary>
+    internal sealed record RestorePlan(
+        List<string> ClearTemporary,
+        List<string> Disable,
+        List<(string ModDirectory, string Group, List<string> Options)> SetOptions,
+        List<(string ModDirectory, int Priority)> SetPriority,
+        List<(string ModDirectory, bool Enabled)> SetEnabled,
+        List<TemporaryHold> Hold,
+        List<string> Missing,
+        int PriorityOffset)
+    {
+        internal int WriteCount => ClearTemporary.Count + Disable.Count + SetOptions.Count + SetPriority.Count
+                                 + SetEnabled.Count + Hold.Count;
+    }
+
+    /// <summary>
+    /// Work out the first step of a character restore without touching anything. <paramref name="effective"/> must
+    /// be read after Proteus's own holds were released, so what it sees is the player's collection and Glamourer.
+    /// <list type="bullet">
+    /// <item>Bound mods that aren't Proteus mods are HELD in their recorded state (see "holding mods temporarily").
+    /// The enabled ones are raised together, above every other enabled mod — see
+    /// <see cref="ComputePriorityOffset"/>. No conflict analysis: a mod that outranks everything wins every
+    /// conflict it has, and where it has none the priority changes nothing.</item>
+    /// <item>Bound Proteus mods get their recorded enable state, options and priority written permanently,
+    /// skipped where Penumbra already holds that value — exactly as bindings always did.</item>
+    /// <item>Unbound Proteus mods are switched off, except the ones that ship their own content
+    /// (<paramref name="heldProteus"/>). Glamourer's temporary settings go from every Proteus mod written or
+    /// switched off, or they would mask the write.</item>
+    /// <item>Bound mods no longer installed are reported, not written.</item>
+    /// </list>
+    /// Unbound mods that aren't Proteus mods are left to the post-load sweep (<see cref="StrayDrawnMods"/>): which
+    /// of them the design shows can only be read off the character once its gear has loaded.
+    /// </summary>
+    internal static RestorePlan PlanRestore(
+        IReadOnlyList<PenumbraModSetting> bound,
+        IReadOnlySet<string> installed,
+        IReadOnlyDictionary<string, PenumbraBridge.ModSettingsSnapshot> permanent,
+        IReadOnlyDictionary<string, PenumbraBridge.ModSettingsSnapshot> effective,
+        IReadOnlySet<string> proteusDirs,
+        IReadOnlySet<string> heldProteus)
+    {
+        var boundDirs = bound.Select(m => m.ModDirectory).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var present   = bound.Where(m => installed.Contains(m.ModDirectory)).ToList();
+        var missing   = bound.Where(m => !installed.Contains(m.ModDirectory)).Select(m => m.ModDirectory).ToList();
+        var proteus   = present.Where(m => proteusDirs.Contains(m.ModDirectory)).ToList();
+        var others    = present.Where(m => !proteusDirs.Contains(m.ModDirectory)).ToList();
+
+        var disable = proteusDirs
+            .Where(dir => !boundDirs.Contains(dir) && !heldProteus.Contains(dir) && (IsOn(permanent, dir) || IsOn(effective, dir)))
+            .OrderBy(d => d, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var disabling = disable.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var clearTemporary = proteus.Select(m => m.ModDirectory).Concat(disable)
+            .Where(dir => effective.TryGetValue(dir, out var s) && s.Temporary)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        // A disable only needs a permanent write if the permanent setting is on; one that was only on through a
+        // temporary setting is already off once that is cleared.
+        var disableWrites = disable.Where(dir => IsOn(permanent, dir)).ToList();
+
+        // ── Held mods, raised above everything else that stays on — but never to or past the Proteus output mod ──
+        //
+        // The managed mod is where Proteus publishes what it composites. A held mod outranking it would override
+        // Proteus's own output, so its priority is a CEILING: nothing is raised to it or past it. A rival the
+        // player has already put at or above it is left to win — beating it would mean passing Proteus.
+        int? ceiling = effective.TryGetValue(SidecarDiscoveryService.ManagedModDir, out var managed) && managed.Enabled
+            ? managed.Priority : null;
+
+        var rivals = effective
+            .Where(kv => kv.Value.Enabled && !boundDirs.Contains(kv.Key) && !disabling.Contains(kv.Key)
+                      && !string.Equals(kv.Key, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase)
+                      && (ceiling == null || kv.Value.Priority < ceiling))
+            .Select(kv => kv.Value.Priority)
+            .ToList();
+        var offset = ComputePriorityOffset(others.Where(m => m.Enabled).Select(m => m.Priority).ToList(), rivals);
+
+        // A mod the design keeps off draws nothing, so its priority isn't raised.
+        var hold = others
+            .Select(m => new TemporaryHold(m, m.Enabled ? HeldPriority(m.Priority, offset, ceiling) : m.Priority))
+            .ToList();
+
+        // ── Proteus mods, written permanently, diffed against the collection ──
+        var setOptions  = new List<(string, string, List<string>)>();
+        var setPriority = new List<(string, int)>();
+        var setEnabled  = new List<(string, bool)>();
+        foreach (var m in proteus)
+        {
+            permanent.TryGetValue(m.ModDirectory, out var cur);
+            var curKnown = cur.Options != null;
+
+            foreach (var (group, sel) in m.Options)
+                if (!curKnown || !cur.Options!.TryGetValue(group, out var curSel) || !SameSelection(curSel, sel))
+                    setOptions.Add((m.ModDirectory, group, sel));
+
+            if (!curKnown || cur.Priority != m.Priority)
+                setPriority.Add((m.ModDirectory, m.Priority));
+
+            if ((curKnown && cur.Enabled) != m.Enabled)
+                setEnabled.Add((m.ModDirectory, m.Enabled));
+        }
+
+        return new RestorePlan(clearTemporary, disableWrites, setOptions, setPriority, setEnabled, hold, missing, offset);
+    }
+
+    private static bool IsOn(IReadOnlyDictionary<string, PenumbraBridge.ModSettingsSnapshot> settings, string dir)
+        => settings.TryGetValue(dir, out var s) && s.Enabled;
+
+    private static bool SameSelection(List<string> a, List<string> b)
+        => a.Count == b.Count && a.ToHashSet(StringComparer.Ordinal).SetEquals(b);
+
+    /// <summary>
+    /// How far every enabled held mod's recorded priority must rise so the LOWEST of them sits strictly above the
+    /// highest other enabled mod. One offset for all of them, so their order among themselves — part of the look —
+    /// is kept exactly; zero when they already outrank everything.
+    /// <para/>
+    /// Strictly above, never equal: at equal priority Penumbra keeps whichever mod it happened to load first, and
+    /// that order changes between sessions.
+    /// </summary>
+    /// <summary>
+    /// A held mod's priority: recorded plus the shared offset, kept strictly below the Proteus output mod. When the
+    /// raise doesn't fit under it, the top of the design's mods is squeezed against the ceiling — they still beat
+    /// every rival below Proteus, but may tie each other there, which is the one ordering this can't keep.
+    /// </summary>
+    internal static int HeldPriority(int recorded, int offset, int? ceiling)
+    {
+        var raised = (long)recorded + offset;
+        if (ceiling is { } c) raised = Math.Min(raised, (long)c - 1);
+        return (int)Math.Clamp(raised, int.MinValue, int.MaxValue);
+    }
+
+    internal static int ComputePriorityOffset(IReadOnlyList<int> bound, IReadOnlyList<int> rivals)
+    {
+        if (bound.Count == 0 || rivals.Count == 0) return 0;
+        var offset = (long)rivals.Max() + 1 - bound.Min();
+        return (int)Math.Clamp(offset, 0, int.MaxValue / 2);
+    }
+
+    /// <summary>
+    /// Restore a whole-character binding, in two steps. Now: release whatever the previous look held, then hold
+    /// this design's mods, write its Proteus mods and sweep unbound Proteus mods — all inside one compositor
+    /// suppression scope, so dozens of Penumbra events cost one recomposite. Then, once the character has redrawn
+    /// in the new look: the post-load sweep holds off whatever it is still drawing from a mod the design lacks.
+    /// </summary>
+    /// <param name="writeProteusMods">False at boot, which re-holds the look Penumbra forgot on restart but must
+    /// not re-impose permanent settings the player may have changed while Proteus was unloaded.</param>
+    private void RestoreCharacter(DesignBinding b, Guid designId, bool stripImported, bool writeProteusMods = true)
+    {
+        if (writeProteusMods) AdoptOverrides(b, designId, suppressEcho: true);
+        characterWorkGeneration++;
+
+        var collId = penumbra.GetPlayerCollectionId();
+        var names  = penumbra.GetAllMods();
+        if (collId == null || names == null)
+        {
+            log.Warning("[Proteus] design-restore: Penumbra state unreadable — overrides applied, mod settings left as they are.");
+            compositor.TriggerRecomposite($"design-restore:{designId}");
+            return;
+        }
+
+        var discovered  = discovery.DiscoverAll();
+        var proteusDirs = discovered.Select(e => e.ModDirectory).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var boundDirs   = b.CharacterMods.Select(m => m.ModDirectory)
+                              .Concat(b.Mods.Select(m => m.ModDirectory))
+                              .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        RestorePlan? plan = null;
+        var held = 0;
+        using (compositor.SuppressModSettingEvents())
+        {
+            heldTemporary.Clear();
+            penumbra.RemoveAllTemporaryModSettings(collId.Value, TemporaryKey);
+
+            var permanent = penumbra.GetCollectionModSettings(collId.Value, ignoreTemporary: true);
+            var effective = penumbra.GetCollectionModSettings(collId.Value, ignoreTemporary: false);
+            if (permanent != null && effective != null)
+            {
+                plan = PlanRestore(b.CharacterMods, names.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase),
+                    permanent, effective, proteusDirs, UnboundContentMods(boundDirs, discovered, stripImported));
+
+                if (writeProteusMods)
+                {
+                    foreach (var dir in plan.ClearTemporary)
+                        penumbra.ClearTemporaryModSettings(collId.Value, dir);
+                    foreach (var dir in plan.Disable)
+                        penumbra.SetModEnabled(collId.Value, dir, false);
+                    foreach (var (dir, group, options) in plan.SetOptions)
+                        penumbra.SetModOption(collId.Value, dir, group, options);
+                    foreach (var (dir, priority) in plan.SetPriority)
+                        penumbra.SetModPriority(collId.Value, dir, priority);
+                    foreach (var (dir, enabled) in plan.SetEnabled)
+                        penumbra.SetModEnabled(collId.Value, dir, enabled);
+                }
+
+                foreach (var (recorded, priority) in plan.Hold)
+                {
+                    var ec = penumbra.SetTemporaryModSettings(collId.Value, recorded.ModDirectory, recorded.Enabled,
+                        priority, recorded.Options, TemporarySource, TemporaryKey);
+                    if (ec == PenumbraApiEc.Success)
+                    {
+                        heldTemporary[recorded.ModDirectory] = recorded;
+                        held++;
+                    }
+                    else
+                    {
+                        // TemporarySettingDisallowed: another plugin holds this mod under its own lock.
+                        log.Warning("[Proteus] design-restore: couldn't hold {0} ({1}) — it shows as the collection has it.",
+                            recorded.ModDirectory, ec);
+                    }
+                }
+            }
+        }
+
+        if (plan == null)
+        {
+            log.Warning("[Proteus] design-restore: mod settings unreadable — overrides applied, mods left as they are.");
+            compositor.TriggerRecomposite($"design-restore:{designId}");
+            return;
+        }
+
+        if (writeProteusMods)
+            ArmTemporaryGuard(collId.Value,
+                plan.ClearTemporary.Concat(b.CharacterMods.Select(m => m.ModDirectory).Where(proteusDirs.Contains)).Concat(plan.Disable));
+        ArmPostLoadSweep(designId, collId.Value, boundDirs, proteusDirs);
+
+        compositor.TriggerRecomposite($"design-restore:{designId}");
+        log.Information(
+            "[Proteus] design-restore: {0} — holding {1} mod(s) (offset +{2}); Proteus mods: {3} temporary cleared, {4} switched off, {5} option group(s), {6} priorit(ies), {7} enable change(s){8}.",
+            b.DesignName ?? designId.ToString(), held, plan.PriorityOffset, plan.ClearTemporary.Count, plan.Disable.Count,
+            plan.SetOptions.Count, plan.SetPriority.Count, plan.SetEnabled.Count,
+            plan.Missing.Count > 0 ? $"; not installed: {string.Join(", ", plan.Missing)}" : "");
+    }
+
+    // ── Post-load sweep ─────────────────────────────────────────────────────────
+    //
+    // The second step of a character restore. A mod the design doesn't have can still show — left on by the
+    // previous look, or installed since — wherever the design has nothing of its own to outrank it: a retexture
+    // of an item the design wears unmodded, a hair or skin mod. Raising the design's mods can't reach those,
+    // since there is no conflict to win. The only way to see them is to look at what the character draws once
+    // the new look has loaded, so for a while after a restore every redraw is followed by a look at the resource
+    // tree, and any mod still drawn that the design doesn't have is held off — temporarily, like the rest.
+
+    private const int PostLoadSweepWindowMs = 20000;
+    private const int PostLoadSweepSettleMs = 1500;
+
+    private long postLoadSweepUntil;
+    private Guid postLoadSweepDesign;
+    private Guid postLoadSweepCollection;
+    private int postLoadSweepGeneration;
+    private int postLoadSweepToken;
+    private HashSet<string> postLoadSweepBound = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> postLoadSweepProteus = new(StringComparer.OrdinalIgnoreCase);
+
+    private void ArmPostLoadSweep(Guid designId, Guid collId, HashSet<string> bound, HashSet<string> proteusDirs)
+    {
+        postLoadSweepDesign     = designId;
+        postLoadSweepCollection = collId;
+        postLoadSweepGeneration = characterWorkGeneration;
+        postLoadSweepBound      = bound;
+        postLoadSweepProteus    = proteusDirs;
+        postLoadSweepUntil      = Environment.TickCount64 + PostLoadSweepWindowMs;
+        // The restore's own recomposite will redraw, but a restore that changed nothing Proteus composites may not,
+        // and Penumbra doesn't always redraw for a setting change either — so one sweep is queued regardless.
+        QueuePostLoadSweep();
+    }
+
+    private void OnLocalPlayerRedrawn()
+    {
+        if (Environment.TickCount64 < postLoadSweepUntil) QueuePostLoadSweep();
+    }
+
+    /// <summary>Sweep once the draw object has been quiet for <see cref="PostLoadSweepSettleMs"/>: each call
+    /// supersedes the one before, so a burst of redraws produces one look, at the end.</summary>
+    private void QueuePostLoadSweep()
+    {
+        var token = ++postLoadSweepToken;
+        framework.RunOnTick(() =>
+        {
+            if (token != postLoadSweepToken) return;
+            RunPostLoadSweep();
+        }, TimeSpan.FromMilliseconds(PostLoadSweepSettleMs));
+    }
+
+    private void RunPostLoadSweep()
+    {
+        if (Environment.TickCount64 >= postLoadSweepUntil) return;
+        if (postLoadSweepGeneration != characterWorkGeneration || ActiveDesignId != postLoadSweepDesign) return;
+
+        var modsRoot = penumbra.GetModDirectory();
+        var tree     = penumbra.GetActivePlayerResourceMap();
+        if (modsRoot == null || tree == null) return;
+
+        var strays = StrayDrawnMods(modsRoot, tree, postLoadSweepBound, postLoadSweepProteus);
+        if (strays.Count == 0) return;
+
+        var collId = postLoadSweepCollection;
+        var off    = new List<string>(strays.Count);
+        using (compositor.SuppressModSettingEvents())
+        {
+            foreach (var dir in strays)
+            {
+                var ec = penumbra.SetTemporaryModSettings(collId, dir, enabled: false, priority: 0,
+                    new Dictionary<string, List<string>>(), TemporarySource, TemporaryKey);
+                if (ec != PenumbraApiEc.Success)
+                {
+                    log.Warning("[Proteus] design-restore: couldn't hold {0} off ({1}).", dir, ec);
+                    continue;
+                }
+                heldTemporary[dir] = new PenumbraModSetting { ModDirectory = dir, Enabled = false };
+                off.Add(dir);
+            }
+        }
+        if (off.Count == 0) return;
+
+        compositor.TriggerRecomposite($"design-restore-sweep:{postLoadSweepDesign}");
+        log.Information("[Proteus] design-restore: holding off mod(s) the design doesn't have that were still drawn: {0}",
+            string.Join(", ", off));
+    }
+
+    /// <summary>
+    /// The mods a character is drawing from that a design doesn't have: every mods-folder owner of a drawn file,
+    /// minus the bound mods, the managed output mod and Proteus mods (the restore's first step already decided
+    /// those, and an imported pack deliberately left on still serves textures from its own folder).
+    /// <para/>
+    /// Files drawn only for WEAPONS are ignored. The weapon follows the job, not the design, so a job change
+    /// inside the sweep window would otherwise switch off the new job's weapon mod.
+    /// </summary>
+    internal static List<string> StrayDrawnMods(
+        string modsRoot, IReadOnlyDictionary<string, HashSet<string>> tree,
+        IReadOnlySet<string> bound, IReadOnlySet<string> proteusDirs)
+    {
+        var strays = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (file, gamePaths) in tree)
+        {
+            if (gamePaths.Count > 0 && gamePaths.All(p => p.StartsWith("chara/weapon/", StringComparison.OrdinalIgnoreCase)))
+                continue;
+            if (OwningMod(modsRoot, file) is not { } owner) continue;
+            if (bound.Contains(owner) || proteusDirs.Contains(owner)) continue;
+            if (string.Equals(owner, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase)) continue;
+            strays.Add(owner);
+        }
+        return strays.ToList();
+    }
+
+    // ── Temporary-setting guard ─────────────────────────────────────────────────
+    //
+    // Glamourer re-asserts a design's associated mods as temporary settings — on the apply itself, and again
+    // when automation reapplies after a redraw, which our own recomposite causes. Clearing them once would
+    // lose to that. So for a short while after a restore, a temporary setting landing on a mod the restore
+    // governs is cleared again — a bounded number of times, so two plugins can never fight forever.
+
+    private const int TemporaryGuardMs       = 15000;
+    private const int TemporaryGuardMaxClear = 3;
+
+    private Guid temporaryGuardCollection;
+    private long temporaryGuardUntil;
+    private HashSet<string> temporaryGuardMods = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, int> temporaryGuardClears = new(StringComparer.OrdinalIgnoreCase);
+
+    private void ArmTemporaryGuard(Guid collId, IEnumerable<string> mods)
+    {
+        temporaryGuardCollection = collId;
+        temporaryGuardMods       = mods.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        temporaryGuardClears.Clear();
+        Volatile.Write(ref temporaryGuardUntil, Environment.TickCount64 + TemporaryGuardMs);
+    }
+
+    private void OnPenumbraModSettingChanged(ModSettingChange change, Guid collId, string modDir, bool inherited)
+    {
+        if (change != ModSettingChange.TemporarySetting) return;
+        if (Environment.TickCount64 >= Volatile.Read(ref temporaryGuardUntil)) return;
+
+        // Next tick, never inline: this runs inside Penumbra's own event dispatch, and editing the collection
+        // from there would re-enter the edit that raised it.
+        framework.RunOnTick(() =>
+        {
+            if (Environment.TickCount64 >= temporaryGuardUntil) return;
+            if (collId != temporaryGuardCollection || !temporaryGuardMods.Contains(modDir)) return;
+
+            var n = temporaryGuardClears.GetValueOrDefault(modDir);
+            if (n >= TemporaryGuardMaxClear) return;
+
+            // NothingChanged when the event was our own clear, or the setting was a removal — both harmless,
+            // and neither raises another event, so this never feeds itself.
+            var ec = penumbra.ClearTemporaryModSettings(collId, modDir);
+            if (ec == PenumbraApiEc.Success)
+            {
+                temporaryGuardClears[modDir] = n + 1;
+                log.Debug("[Proteus] design-restore: cleared a re-asserted temporary setting on {0} ({1}/{2}).",
+                    modDir, n + 1, TemporaryGuardMaxClear);
+            }
+        }, delayTicks: 1);
+    }
+
+    private void DisarmTemporaryGuard() => Volatile.Write(ref temporaryGuardUntil, 0);
 
     /// <summary>Drop the active color override (revert to metadata colors) and recomposite.</summary>
     public void ClearColorOverride()
@@ -791,15 +1443,19 @@ public class DesignBindingService : IDisposable
         var mods = BuildModBindings(collId.Value);
         name ??= glamourer.GetDesigns().TryGetValue(id, out var n) ? n : null;
 
+        var characterMods = ReadCharacterMods(collId.Value);
+
         lock (gate)
         {
             if (activeDesignId != id) return false; // active binding changed underfoot
             store.Bindings[id] = new DesignBinding
             {
-                DesignId    = id,
-                DesignName  = name,
-                CapturedUtc = DateTime.UtcNow,
-                Mods        = mods,
+                DesignId      = id,
+                DesignName    = name,
+                CapturedUtc   = DateTime.UtcNow,
+                Mods          = mods,
+                CharacterMods = characterMods
+                    ?? (store.Bindings.TryGetValue(id, out var previous) ? previous.CharacterMods : new()),
             };
             Save();
         }
@@ -903,7 +1559,37 @@ public class DesignBindingService : IDisposable
         && !isOwnRedrawEcho
         && msSinceForeignReapply < AutomationPairWindowMs;
 
+    // ── The state from before the current apply ─────────────────────────────────
+    //
+    // Refreshed a tick after anything changes the character, so when a finalization arrives it still holds the
+    // state from BEFORE that operation: Glamourer raises an apply's per-field changes and its finalization inside
+    // one call, and the refresh they queue runs on the next tick. See AppliedInsteadOfActive for what reads it.
+    // Framework thread only; null until the first refresh.
+
+    private JObject? preApplyState;
+    private int preApplyRefreshQueued;
+
+    private void OnGlamourerStateChangedAny(StateChangeType _) => QueuePreApplyRefresh();
+
+    private void QueuePreApplyRefresh()
+    {
+        if (Interlocked.Exchange(ref preApplyRefreshQueued, 1) == 1) return;
+        framework.RunOnTick(() =>
+        {
+            Volatile.Write(ref preApplyRefreshQueued, 0);
+            preApplyState = glamourer.GetObjectState(0);
+        }, delayTicks: 1);
+    }
+
     private void OnGlamourerStateFinalized(StateFinalizationType type)
+    {
+        // Read before anything below changes the character, and refreshed after whatever this operation did.
+        var preApply = preApplyState;
+        try { HandleStateFinalized(type, preApply); }
+        finally { QueuePreApplyRefresh(); }
+    }
+
+    private void HandleStateFinalized(StateFinalizationType type, JObject? preApply)
     {
         // A revert leaves no design applied: drop the override so colours fall back to metadata. This is
         // NOT the unbound-design case (nothing failed to match), it just has the same effect.
@@ -955,7 +1641,126 @@ public class DesignBindingService : IDisposable
                 Elapsed(sinceReapply));
         }
 
-        EvaluateAppliedDesign(allowUnbind: !inferred);
+        // Only a design the player applied themselves may strip slots. Automation merges several designs, so a
+        // slot this one leaves unset is routinely filled by another — and inferred applies are guesses anyway.
+        EvaluateAppliedDesign(allowUnbind: !inferred,
+            unequipUnset: type is StateFinalizationType.DesignApplied && config.DesignBindingUnequipUnsetSlots,
+            preApply: type is StateFinalizationType.DesignApplied ? preApply : null);
+    }
+
+    // ── Unequip what the design leaves unset ────────────────────────────────────
+
+    /// <summary>The gear slots a design can leave unset, by their Glamourer design names. Weapons are not
+    /// here: a character always holds its job's weapon, and "Nothing" is not a valid main hand.</summary>
+    internal static readonly string[] UnequippableSlots =
+        ["Head", "Body", "Hands", "Legs", "Feet", "Ears", "Neck", "Wrists", "RFinger", "LFinger"];
+
+    internal const string GlassesSlot = "Glasses";
+
+    // Glamourer's "Nothing" item for an equipment slot is uint.MaxValue - 128 - slot index (ItemManager.NothingId).
+    // A small window rather than the exact per-slot value, so the slot-index mapping never has to be copied here.
+    private const ulong NothingIdHigh = uint.MaxValue - 128UL;
+    private const ulong NothingIdLow  = NothingIdHigh - 31UL;
+
+    /// <summary>
+    /// The slots to unequip so the character wears only what <paramref name="design"/> puts on it: every slot the
+    /// design does not apply, that the character currently has something in, and that Proteus isn't borrowing.
+    /// <para/>
+    /// A slot missing from the design counts as unset. A slot already holding Glamourer's Nothing is skipped, so
+    /// re-applying the same design asks for nothing. Takes the design UNSTRIPPED: a carrier slot is judged by the
+    /// live <paramref name="carriers"/>, not by the design having captured it.
+    /// </summary>
+    internal static List<string> UnsetSlots(JObject design, JObject state, Carriers carriers)
+    {
+        var result = new List<string>();
+        var dEquip = design["Equipment"] as JObject;
+        var sEquip = state["Equipment"] as JObject;
+
+        if (sEquip != null)
+            foreach (var slot in UnequippableSlots)
+            {
+                if (dEquip?[slot] is JObject d && d["Apply"]?.ToObject<bool>() == true) continue;
+                if (sEquip[slot] is not JObject s || s["ItemId"] is not { } idToken) continue;
+                var id = idToken.ToObject<ulong>();
+                if (id == 0 || id is >= NothingIdLow and <= NothingIdHigh) continue;       // already empty
+                if (carriers.OwnedSlots?.Contains(slot, StringComparer.Ordinal) == true) continue;
+                if (carriers.AccessoryItems?.Contains(id) == true) continue;                 // our carrier item
+                result.Add(slot);
+            }
+
+        if (state["Bonus"]?[GlassesSlot] is JObject sGlasses
+            && !(design["Bonus"]?[GlassesSlot] is JObject dGlasses && dGlasses["Apply"]?.ToObject<bool>() == true)
+            && sGlasses["BonusId"] is { } bonusToken)
+        {
+            var row = bonusToken.ToObject<ulong>() & BonusIdRowMask;
+            var ours = carriers.GlassesSlotOwned || (carriers.GlassesRow is { } g && row == g);
+            if (row != 0 && !ours)
+                result.Add(GlassesSlot);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Switch off the imported Proteus packs a design's binding didn't capture — the re-apply counterpart of
+    /// <see cref="Restore"/>'s <c>stripImported</c>, for when the design is already active and no restore runs.
+    /// Their pieces ride a carrier accessory rather than a gear slot, so unequipping can't reach them.
+    /// </summary>
+    private void DisableUnboundImportedPacks(Guid designId)
+    {
+        DesignBinding? b;
+        lock (gate) store.Bindings.TryGetValue(designId, out b);
+        if (b == null || penumbra.GetPlayerCollectionId() is not { } collId) return;
+
+        var bound = b.CharacterMods.Select(m => m.ModDirectory)
+            .Concat(b.Mods.Select(m => m.ModDirectory))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var packs = discovery.DiscoverAll()
+            .Where(e => e.Enabled && e.Metadata.HasContent && !bound.Contains(e.ModDirectory))
+            .Select(e => e.ModDirectory)
+            .ToList();
+        if (packs.Count == 0) return;
+
+        lock (gate) suppressUntilTick = Environment.TickCount64 + RestoreSuppressMs;
+        using (compositor.SuppressModSettingEvents())
+        {
+            foreach (var dir in packs)
+            {
+                // A temporary setting would keep it on over the permanent write; NothingChanged when there is none.
+                penumbra.ClearTemporaryModSettings(collId, dir);
+                penumbra.SetModEnabled(collId, dir, false);
+            }
+        }
+
+        compositor.TriggerRecomposite($"design-unbound-packs:{designId}");
+        log.Information("[Proteus] design-binding: switched off imported pack(s) the design didn't capture: {0}",
+            string.Join(", ", packs));
+    }
+
+    /// <summary>
+    /// Unequip what the applied design leaves unset. Deferred a tick: this is reached from inside Glamourer's own
+    /// finalization event, and editing its state from there would re-enter the apply that raised it.
+    /// </summary>
+    private void UnequipUnsetSlots(Guid designId, Carriers carriers)
+    {
+        if (GetDesignCached(designId) is not { } design) return;
+
+        framework.RunOnTick(() =>
+        {
+            if (glamourer.GetObjectState(0) is not { } state) return;
+            var slots = UnsetSlots(design, state, carriers);
+            if (slots.Count == 0) return;
+
+            var done = new List<string>(slots.Count);
+            foreach (var slot in slots)
+            {
+                var ok = slot == GlassesSlot ? glamourer.SetGlasses(0) : glamourer.UnequipSlot(slot);
+                if (ok) done.Add(slot);
+            }
+            log.Information("[Proteus] design-binding: unequipped slot(s) the design leaves unset: {0}{1}",
+                string.Join(", ", done),
+                done.Count < slots.Count ? $" (failed: {string.Join(", ", slots.Except(done))})" : "");
+        }, delayTicks: 1);
     }
 
     /// <summary>An elapsed-ms reading for the log, where "never happened" is a sentinel that would
@@ -973,7 +1778,12 @@ public class DesignBindingService : IDisposable
     /// Gearset finalization is the GAME finishing its equipment load, which is not ordered against
     /// Glamourer finishing its design apply, so the state read here can legitimately be half-applied.
     /// </summary>
-    private void EvaluateAppliedDesign(bool allowUnbind)
+    /// <param name="unequipUnset">Also clear the gear slots the matched design leaves unset — see
+    /// <see cref="UnsetSlots"/>. Only for an explicit design apply.</param>
+    /// <param name="preApply">The state from before this apply, for explicit applies only — see
+    /// <see cref="AppliedInsteadOfActive"/>. Automation stacks designs, so "the active design's extra fields
+    /// didn't change" says nothing about which one it applied.</param>
+    private void EvaluateAppliedDesign(bool allowUnbind, bool unequipUnset = false, JObject? preApply = null)
     {
         bool anyBindings;
         lock (gate) anyBindings = store.Bindings.Count > 0;
@@ -991,7 +1801,7 @@ public class DesignBindingService : IDisposable
         // would be disabled. The boot restore has always done this; the live path compared designs as
         // saved, so a design saved while the shell was hosted demanded our carrier ring for ever after.
         var carriers = LiveCarriers();
-        var pick = MatchBinding(state, carriers);
+        var pick = MatchBinding(state, carriers, preApply);
 
         if (pick == null)
         {
@@ -1015,8 +1825,18 @@ public class DesignBindingService : IDisposable
             return;
         }
 
-        if (activeDesignId == pick) return; // already applied
-        Restore(pick.Value);
+        // Before the already-applied return: re-applying the same design after changing a piece by hand should
+        // still take that piece back off.
+        if (unequipUnset) UnequipUnsetSlots(pick.Value, carriers);
+
+        if (activeDesignId == pick)
+        {
+            // Already applied, so no restore runs — but a pack switched on since still has to come off, just as
+            // a piece of gear put on since did above.
+            if (unequipUnset) DisableUnboundImportedPacks(pick.Value);
+            return;
+        }
+        Restore(pick.Value, stripImported: unequipUnset);
     }
 
     /// <summary>
@@ -1035,7 +1855,9 @@ public class DesignBindingService : IDisposable
     /// What Proteus has on the player, so each candidate design can have those slots retired before it is
     /// compared — see <see cref="StripCarriers"/> and <see cref="BestMatches"/>.
     /// </param>
-    private Guid? MatchBinding(JObject state, Carriers carriers)
+    /// <param name="preApply">The state from just before this apply, on the live path; null at boot, where there
+    /// was no apply. See <see cref="AppliedInsteadOfActive"/>.</param>
+    private Guid? MatchBinding(JObject state, Carriers carriers, JObject? preApply = null)
     {
         Guid[] candidateIds;
         lock (gate) candidateIds = store.Bindings.Keys.ToArray();
@@ -1047,8 +1869,122 @@ public class DesignBindingService : IDisposable
 
         var top = BestMatches(candidates, state, carriers);
         if (top.Count == 0) return null;
-        if (top.Count == 1) return top[0];
-        lock (gate) return PickMostRecent(top, store.Bindings);
+
+        Guid pick;
+        lock (gate) pick = top.Count == 1 ? top[0] : PickMostRecent(top, store.Bindings);
+
+        if (preApply != null && ActiveDesignId == pick)
+        {
+            var instead = AppliedInsteadOfActive(pick, candidates, preApply, state, carriers);
+            if (instead.Count > 0)
+            {
+                Guid other;
+                lock (gate) other = instead.Count == 1 ? instead[0] : PickMostRecent(instead, store.Bindings);
+                log.Information("[Proteus] design-binding: {0} matches only because its extra fields were left over from it — "
+                              + "taking {1}, which sets a subset of it and explains everything that changed.", pick, other);
+                return other;
+            }
+        }
+        return pick;
+    }
+
+    /// <summary>
+    /// The designs that were really applied when the best match is the design ALREADY active.
+    /// <para/>
+    /// Matching reads the state after the apply, and a design only sets the fields it applies, so whatever it
+    /// leaves unset keeps the previous look's value. Wearing A (an outfit plus a hat) and applying B (the same
+    /// outfit, no hat) leaves the hat on — and A, matching one more field, outranks B. Stripping what B leaves
+    /// unset then never happens, because the design it would be judged by is A.
+    /// <para/>
+    /// The state from just before the apply separates the two. Another candidate qualifies when it matches, sets
+    /// a strict subset of the active design's fields, and NONE of the fields only the active design sets changed
+    /// during this apply. Had the active design been re-applied over a hand edit, one of those would have
+    /// changed back; an unchanged one is only a leftover.
+    /// <para/>
+    /// That leaves one case the state cannot decide: re-applying the active design with nothing touched since
+    /// looks exactly like applying the subset design. It resolves to the subset, because moving to a different
+    /// design is the more common action — and applying the active design again then brings its fields back,
+    /// which does register as a change.
+    /// <para/>
+    /// Returns the qualifying candidates at the highest specificity (ties go to recency); empty when none.
+    /// </summary>
+    internal static List<Guid> AppliedInsteadOfActive(
+        Guid active, IReadOnlyList<(Guid Id, JObject Design)> candidates, JObject preApply, JObject state, Carriers carriers)
+    {
+        var activeDesign = candidates.FirstOrDefault(c => c.Id == active).Design;
+        if (activeDesign == null) return [];
+        var activeFields = AppliedFieldKeys(StripCarriers(activeDesign, carriers));
+
+        var found = new List<(Guid Id, int Count)>();
+        foreach (var (id, design) in candidates)
+        {
+            if (id == active) continue;
+            var stripped = StripCarriers(design, carriers);
+            if (!StateMatches(stripped, state, out _)) continue;
+
+            var fields = AppliedFieldKeys(stripped);
+            if (!fields.IsProperSubsetOf(activeFields)) continue;
+
+            var extraChanged = activeFields.Except(fields).Any(k => FieldChanged(preApply, state, k));
+            if (!extraChanged) found.Add((id, fields.Count));
+        }
+
+        if (found.Count == 0) return [];
+        var best = found.Max(f => f.Count);
+        return found.Where(f => f.Count == best).Select(f => f.Id).ToList();
+    }
+
+    /// <summary>
+    /// The fields a design applies, as <c>Container/Name/Part</c> keys — the same fields, under the same rules,
+    /// that <see cref="StateMatches"/> compares, so "sets a subset" means exactly "is judged on a subset".
+    /// </summary>
+    internal static HashSet<string> AppliedFieldKeys(JObject design)
+    {
+        var keys = new HashSet<string>(StringComparer.Ordinal);
+
+        if (design["Equipment"] is JObject equip)
+            foreach (var p in equip.Properties())
+            {
+                if (NonMatchedSlots.Contains(p.Name) || p.Value is not JObject slot) continue;
+                if (slot["ItemId"] != null && slot["Apply"]?.ToObject<bool>() == true) keys.Add($"Equipment/{p.Name}/Item");
+                if (slot["ApplyStain"]?.ToObject<bool>() == true)                        keys.Add($"Equipment/{p.Name}/Stain");
+            }
+
+        if (design["Bonus"] is JObject bonus)
+            foreach (var p in bonus.Properties())
+                if (p.Value is JObject b && b["Apply"]?.ToObject<bool>() == true)
+                    keys.Add($"Bonus/{p.Name}/Item");
+
+        if (design["Customize"] is JObject cust)
+            foreach (var p in cust.Properties())
+                if (p.Name != "Wetness" && p.Value is JObject c && c["Apply"]?.ToObject<bool>() == true && c["Value"] != null)
+                    keys.Add($"Customize/{p.Name}/Value");
+
+        if (design["Parameters"] is JObject pars)
+            foreach (var p in pars.Properties())
+                if (p.Value is JObject c && c["Apply"]?.ToObject<bool>() == true)
+                    keys.Add($"Parameters/{p.Name}/Value");
+
+        return keys;
+    }
+
+    /// <summary>Whether the field an <see cref="AppliedFieldKeys"/> key names differs between two states.</summary>
+    internal static bool FieldChanged(JObject before, JObject after, string key)
+    {
+        var parts = key.Split('/');
+        if (parts.Length != 3) return true;
+        var a = before[parts[0]]?[parts[1]] as JObject;
+        var b = after[parts[0]]?[parts[1]] as JObject;
+        if (a == null || b == null) return a != b;
+
+        return parts[0] switch
+        {
+            "Equipment" when parts[2] == "Item"  => !JToken.DeepEquals(a["ItemId"], b["ItemId"]),
+            "Equipment"                          => !JToken.DeepEquals(a["Stain"], b["Stain"]) || !JToken.DeepEquals(a["Stain2"], b["Stain2"]),
+            "Bonus"                              => !JToken.DeepEquals(a["BonusId"], b["BonusId"]),
+            "Customize"                          => !JToken.DeepEquals(a["Value"], b["Value"]),
+            _                                    => !ParameterEquals(a, b),
+        };
     }
 
     /// <summary>
@@ -1241,6 +2177,7 @@ public class DesignBindingService : IDisposable
                 {
                     AdoptOverrides(b, lastId, suppressEcho: false);
                     FinishBootRestore($"adopted last active design {b.DesignName ?? lastId.ToString()} ({b.Mods.Count} mods)");
+                    Rehold(b, lastId);
                     return;
                 }
 
@@ -1272,6 +2209,19 @@ public class DesignBindingService : IDisposable
 
         AdoptOverrides(picked, pick, suppressEcho: false);
         FinishBootRestore($"adopted matched design {picked.DesignName ?? pick.ToString()}");
+        Rehold(picked, pick);
+    }
+
+    /// <summary>
+    /// Hold the adopted design's mods again. Penumbra forgets temporary settings when it restarts, so after a game
+    /// restart the look they made is gone; after a plugin reload they are still there, and holding them again is
+    /// harmless. Only the holds and the sweep — never the Proteus mods' permanent settings, which the boot restore
+    /// deliberately leaves as the player has them.
+    /// </summary>
+    private void Rehold(DesignBinding b, Guid designId)
+    {
+        if (config.DesignBindingRestoresCharacterMods && b.HasCharacterSnapshot)
+            RestoreCharacter(b, designId, stripImported: false, writeProteusMods: false);
     }
 
     /// <summary>Log a step-1 fall-through reason the first time only: the deterministic branches retry
@@ -1302,6 +2252,10 @@ public class DesignBindingService : IDisposable
         framework.Update -= OnBootRestoreTick;
         compositor.BootCompositeHold = false;
         log.Information("[Proteus] design-binding boot restore: {0} — boot composite released.", outcome);
+
+        // Nothing adopted: whatever a previous instance was holding (a plugin reload keeps Penumbra's temporary
+        // settings) is for a look this one isn't restoring, so let it go. Held by key, so nothing else is touched.
+        if (ActiveDesignId == null) ReleaseHeldMods();
     }
 
     internal static Guid PickMostRecent(IReadOnlyList<Guid> ids, IReadOnlyDictionary<Guid, DesignBinding> bindings)

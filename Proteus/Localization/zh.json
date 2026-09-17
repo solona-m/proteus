@@ -35,6 +35,10 @@
     "message": "立即重新合成",
     "description": ""
   },
+  "Band.Recomposite.Full.Tip": {
+    "message": "Shift+点击可从头重新生成全部内容",
+    "description": ""
+  },
   "Band.Retry.Btn": {
     "message": "重试",
     "description": ""
@@ -53,6 +57,10 @@
   },
   "Bindings.Apply.Tip": {
     "message": "立即恢复此设计的 Proteus 状态，无需经过 Glamourer——\n包括它记录的每个模组的启用状态、优先级、选项与颜色。\n\n不在该绑定中的 Proteus 模组会被关闭，因此这是替换当前外观，\n而不是在其之上叠加。",
+    "description": ""
+  },
+  "Bindings.ApplyCharacter.Tip": {
+    "message": "立即恢复此设计的外观，无需经过 Glamourer——包括它记录的每个模组的\n启用状态、优先级、选项，以及 Proteus 颜色。\n\n角色身上不在该绑定中的模组会被关闭，绑定的模组会被提升到高于所有与之冲突的\n模组，因此这是替换当前外观。",
     "description": ""
   },
   "Bindings.Col.Captured": {
@@ -87,12 +95,52 @@
     "message": "{0} 分钟前",
     "description": ""
   },
+  "Bindings.ModCount.Fmt": {
+    "message": "{0} 个模组",
+    "description": ""
+  },
+  "Bindings.ModList.Header": {
+    "message": "此设计会恢复的模组：",
+    "description": ""
+  },
+  "Bindings.ModList.Missing": {
+    "message": "未安装",
+    "description": ""
+  },
+  "Bindings.ModList.More.Fmt": {
+    "message": "……以及另外 {0} 个",
+    "description": ""
+  },
+  "Bindings.ModList.Off": {
+    "message": "关闭",
+    "description": ""
+  },
+  "Bindings.ModList.Priority.Fmt": {
+    "message": "优先级 {0}",
+    "description": ""
+  },
   "Bindings.None": {
     "message": "尚无已绑定的设计。",
     "description": ""
   },
   "Bindings.Pill.Active": {
     "message": "生效中",
+    "description": ""
+  },
+  "Bindings.ProteusOnly": {
+    "message": "仅 Proteus 模组",
+    "description": ""
+  },
+  "Bindings.ProteusOnly.Tip": {
+    "message": "此绑定创建于绑定开始记录整个角色之前，应用时只会恢复\nProteus 模组。请先应用此设计，再点击“更新”。",
+    "description": ""
+  },
+  "Bindings.RestoreCharacter.Label": {
+    "message": "恢复角色身上的所有模组",
+    "description": ""
+  },
+  "Bindings.RestoreCharacter.Tip": {
+    "message": "开启后，应用已绑定的设计时，还会恢复保存时角色身上的每个模组（启用／优先级／选项），\n关闭角色身上不在其中的模组，\n并把设计的模组提升到高于所有与之冲突的模组。\n\n非 Proteus 模组只通过 Penumbra 临时设置保持该状态：\n你的合集不会被修改，还原或应用未绑定的设计会让它们恢复原状。\n\n关闭时只恢复 Proteus 模组。两种情况下都会记录，因此\n在关闭期间保存的设计，开启后同样生效。",
     "description": ""
   },
   "Bindings.SecondsAgo.Fmt": {
@@ -107,6 +155,14 @@
     "message": "丢弃此绑定。Glamourer 设计本身不受影响。",
     "description": ""
   },
+  "Bindings.UnequipUnset.Label": {
+    "message": "卸下设计未设置的栏位",
+    "description": ""
+  },
+  "Bindings.UnequipUnset.Tip": {
+    "message": "应用已绑定的设计时，设计未设置的每个装备与眼镜栏位都会被清空，\n未记录的已导入 Proteus 包也会被关闭，\n以免上一个外观的装备残留。\n\n自动化会叠加多个设计，因此不会生效。武器以及 Proteus 用于外壳的\n栏位不受影响。",
+    "description": ""
+  },
   "Bindings.Update.Btn": {
     "message": "更新",
     "description": ""
@@ -116,7 +172,7 @@
     "description": ""
   },
   "Bindings.Update.Tip": {
-    "message": "将当前 Proteus 状态（启用／优先级／选项／颜色）记录到此绑定中。\n手动修改只有在点击此处后才会保留。",
+    "message": "将角色身上的每个模组（启用／优先级／选项）与当前 Proteus 颜色\n记录到此绑定中。手动修改只有在点击此处后才会保留。",
     "description": ""
   },
   "Chat.ContentUnplaced.Fmt": {

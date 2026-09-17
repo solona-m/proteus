@@ -258,6 +258,23 @@ public class Configuration : IPluginConfiguration
     public bool DesignBindingFollowsAutomation { get; set; } = true;
 
     /// <summary>
+    /// When a bound design is applied, unequip every gear and glasses slot the design leaves unset, and switch
+    /// off imported Proteus packs its binding didn't capture (their pieces ride a carrier, not a slot), so the
+    /// previous look's pieces don't carry over. Explicit applies only — automation layers several designs, so a
+    /// slot one leaves unset is usually another's. Requires <see cref="DesignBindingEnabled"/>.
+    /// </summary>
+    public bool DesignBindingUnequipUnsetSlots { get; set; } = false;
+
+    /// <summary>
+    /// When a bound design is restored, also restore every mod on the character it captured — enable, priority
+    /// and options — switch off the unbound mods still drawn, and raise its mods above everything else. Mods that
+    /// aren't Proteus mods are held with locked Penumbra temporary settings, released when the look ends.
+    /// Off: a restore touches Proteus mods only, as bindings always did. The snapshot is captured either way, so
+    /// turning this on works for designs saved while it was off. Requires <see cref="DesignBindingEnabled"/>.
+    /// </summary>
+    public bool DesignBindingRestoresCharacterMods { get; set; } = false;
+
+    /// <summary>
     /// When true and no real glasses are worn, Proteus has Glamourer equip an (invisible-rendered) glasses
     /// item so the second-skin shell can ride the facewear slot instead of a ring/accessory. On by default;
     /// note it writes a (hidden) bonus item to the player's Glamourer state (see <c>CompositorService</c>
