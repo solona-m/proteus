@@ -29,8 +29,28 @@ absolute row offsets from the block-row index.
 ## Rebuild (Windows, MSVC)
 
 ```
-src\build.bat        # locates VS via vswhere, then: cl /LD /O2 /MT /arch:AVX2 proteus_bcn.cpp bc7enc.c bc7decomp.cpp
+src\build.bat        # locates VS via vswhere, then: cl /LD /O2 /MT proteus_bcn.cpp bc7enc.c bc7decomp.cpp
 ```
+
+### Do not add `/arch:AVX2`
+
+It was there once, and it crashed a user's game. These sources contain no SIMD intrinsics, so the flag
+only permits autovectorisation — but MSVC has no runtime dispatch, so it also emits AVX/FMA/BMI/LZCNT
+through ordinary scalar code. The DLL still *loads* on any CPU and then dies of
+`STATUS_ILLEGAL_INSTRUCTION` on the first call, which no `catch` can see: the CLR fail-fasts the whole
+game. Pentium and Celeron parts had no AVX at all until Alder Lake.
+
+Measured, 2048², single-threaded, AVX2 build vs baseline: BC7 encode 1.05x, BC7 decode 1.18x, BC5
+either way within noise — and the two builds' output is **byte-identical** on every size and input
+tried, which matters because each baked texture is named by a hash of its content. A few percent does
+not justify a binary that cannot run on the machines it ships to.
+
+If you ever do want the flag back, it needs two builds and a runtime `Avx2.IsSupported` pick between
+them — not a check that disables the shim, because the managed fallback is ~30x slower (26s to BC7 a
+2048² surface, against 0.9s native) and a composite that slow never outruns the triggers that restart
+it. To verify a build is baseline-safe: `dumpbin /disasm:nobytes proteus_bcn.dll` must contain no
+BMI/LZCNT mnemonics and no VEX (`v*`) ones outside the static CRT's `memcpy`, whose AVX path sits
+behind a `cmp dword ptr [__isa_available],3` dispatch.
 
 Then copy the resulting `proteus_bcn.dll` up to this folder (`native\`). The csproj ships it next to
 `Proteus.dll` via a `<Content>` copy. Third-party licenses are in `THIRD_PARTY_NOTICES.txt`.
