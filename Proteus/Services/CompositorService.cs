@@ -8054,7 +8054,15 @@ public class CompositorService : IDisposable
             log.Information("[Proteus] recomposite DONE — {0:F0}ms total", PhaseCounter.MsSince(tRunStart));
             LogRefreshTimeline(timeline, reloadKind);
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException)
+        {
+            // Say so. This is the ordinary "a newer trigger arrived" path, but swallowing it silently left a
+            // "Recomposite START" in the log with no ending of any kind, which reads like a hang — and on a slow
+            // machine, where triggers can out-pace a composite indefinitely, a run of these IS the fault. Counting
+            // STARTs against endings is the cheapest way to see that, so every exit now leaves a line.
+            // No elapsed time: tRunStart is a local inside the try and does not reach here.
+            log.Debug("[Proteus] recomposite cancelled — a newer trigger superseded it");
+        }
         catch (Exception ex) when (_disposed || IsLoadContextUnloading(ex))
         {
             // The plugin is being torn down with this composite still in flight. Every managed thing it
