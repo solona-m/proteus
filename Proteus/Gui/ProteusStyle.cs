@@ -10,18 +10,9 @@ using Dalamud.Interface.Utility.Raii;
 namespace Proteus.Gui;
 
 /// <summary>
-/// The plugin's palette and shared widgets. Three kinds of colour live here, and the distinction is the
-/// whole point of the file:
-/// <list type="bullet">
-/// <item>STRUCTURE (borders, frames, row backgrounds, disabled text) is never named here — read it from
-/// <c>ImGui.GetColorU32(ImGuiCol.X)</c> at the call site so it follows whatever Dalamud style the user
-/// picked.</item>
-/// <item>SEMANTIC status is <see cref="Ok"/>/<see cref="Warn"/>/<see cref="Bad"/>, forwarding to
-/// <see cref="ImGuiColors"/>. Those are mutable statics that DalamudColors.Apply() rewrites per entry
-/// when a style defines them, so they follow the theme too — which is why they are properties and not
-/// readonly fields. Caching one in a field would freeze it at whatever the style was on first use.</item>
-/// <item>BRAND is <see cref="Accent"/> and its derived states — ours, fixed, theme-independent.</item>
-/// </list>
+/// The plugin's palette and shared widgets. STRUCTURE colours are never named here (read <c>ImGui.GetColorU32</c>
+/// at the call site); SEMANTIC status (<see cref="Ok"/>/<see cref="Warn"/>/<see cref="Bad"/>) forwards to the mutable
+/// <see cref="ImGuiColors"/> via properties so it follows the theme; BRAND (<see cref="Accent"/>) is fixed.
 /// </summary>
 public static class ProteusStyle
 {
@@ -30,37 +21,23 @@ public static class ProteusStyle
     public static ProteusFonts? Fonts { get; set; }
 
     /// <summary>
-    /// Whether the display face (Jupiter) can set the language currently in effect. Maintained by
-    /// <c>LocSetup</c> on every language change.
-    /// <para/>
-    /// Jupiter carries Latin only — <c>GameFontFamily.Jupiter</c> is documented as "Contains Latin
-    /// characters", and the game uses it for job names, nothing longer. Under Japanese, Chinese, Korean or
-    /// Russian every glyph it is asked for is missing, so the tab bar and the section headings — the two
-    /// places that push it — would render as boxes. Falling back to the default font there is not a
-    /// downgrade worth avoiding: Dalamud has already stocked that atlas with the right glyph ranges for
-    /// whatever language it is set to, which is exactly the coverage Jupiter lacks.
+    /// Whether the display face (Jupiter, Latin only) can set the language currently in effect; otherwise headings
+    /// fall back to the default font. Maintained by <c>LocSetup</c> on every language change.
     /// </summary>
     public static bool DisplayFontUsable { get; set; } = true;
 
     // ---- brand -------------------------------------------------------------------------------------
 
     /// <summary>
-    /// Sampled from the real logo art (images/icon.png): #F27712, the centre pixel where the yellow→red
-    /// sweep crosses, and within a hair of the mid-band average (#DF7717). Deliberately NOT the #F4C430
-    /// gold at ColorTableEditor.DrawRenderingAsBadge — that gold already means "Animated glow", and a
-    /// brand colour that reads as a state is worse than having no brand colour.
+    /// #F27712, sampled from the logo art. Deliberately NOT the #F4C430 gold, which already means "Animated glow".
     /// </summary>
     public static readonly Vector4 Accent = new(0.949f, 0.467f, 0.071f, 1f);
 
-    // Value is already 0.95, so Lighten() has no headroom to brighten into: desaturating toward white is
-    // what reads as "lighter" here. Both go through ColorHelpers so the hue stays exactly the logo's.
+    // Value is already 0.95, so lighter means desaturated toward white; ColorHelpers keeps the logo's hue.
     public static readonly Vector4 AccentHover  = Accent.Desaturate(0.20f);
     public static readonly Vector4 AccentActive = Accent.Darken(0.18f);
 
-    // Fills sit BEHIND text, so they are alpha'd down to let the theme's own frame colour through —
-    // full-strength orange behind label text is illegible under a light Dalamud style. Note this uses
-    // WithAlpha and not ColorHelpers.Fade: Fade SUBTRACTS from alpha (hsv.A -= amount) rather than
-    // setting it, so Fade(c, 0.55f) would give 0.45 alpha, not 0.55.
+    // Fills sit behind text, so they are alpha'd down. WithAlpha, not ColorHelpers.Fade: Fade SUBTRACTS from alpha.
     public static readonly Vector4 AccentFill       = Accent.WithAlpha(0.45f);
     public static readonly Vector4 AccentFillHover  = AccentHover.WithAlpha(0.60f);
     public static readonly Vector4 AccentFillActive = AccentActive.WithAlpha(0.75f);
@@ -68,25 +45,17 @@ public static class ProteusStyle
     /// <summary>Row tints and pill backgrounds — present, but never competing with text.</summary>
     public static readonly Vector4 AccentSoft = Accent.WithAlpha(0.18f);
 
-    /// <summary>
-    /// "A Glamourer design owns this." A different axis from the brand, so it stays blue and stays
-    /// maximally distant from the warm accent — resist the urge to make everything orange.
-    /// </summary>
+    /// <summary>"A Glamourer design owns this." Blue, a different axis from the warm brand accent.</summary>
     public static readonly Vector4 Binding = new(0.45f, 0.75f, 1f, 1f);
 
     // ---- semantic ----------------------------------------------------------------------------------
 
     public static Vector4 Ok => ImGuiColors.HealerGreen;
 
-    /// <summary>"This worked, but read it." Unifies the (1,0.8,0.2) and (1,0.6,0.2) ambers that were
-    /// spelled differently in different tabs.</summary>
+    /// <summary>"This worked, but read it."</summary>
     public static Vector4 Warn => ImGuiColors.DalamudOrange;
 
-    /// <summary>
-    /// Unifies the three separate spellings of "red" that were in use — (1,0.4,0.4), (1,0.35,0.35) and
-    /// (1,0.3,0.3). Kept as the existing salmon rather than ImGuiColors.DalamudRed, which is pure
-    /// (1,0,0) and markedly less legible on a dark background.
-    /// </summary>
+    /// <summary>Salmon rather than ImGuiColors.DalamudRed, whose pure red is less legible on a dark background.</summary>
     public static readonly Vector4 Bad = new(1f, 0.4f, 0.4f, 1f);
 
     // ---- scale -------------------------------------------------------------------------------------
@@ -102,20 +71,16 @@ public static class ProteusStyle
     // ---- widgets -----------------------------------------------------------------------------------
 
     /// <summary>
-    /// A heading in the game's Jupiter face with a short accent rule beneath it that fades out to the
-    /// right, so it reads as an underline rather than as a full-width Separator.
+    /// A heading in the game's Jupiter face with a short accent rule beneath it that fades out to the right.
     /// </summary>
     /// <param name="text">The heading.</param>
-    /// <param name="display">False for text the user supplied (a mod name). Jupiter is a display face
-    /// with narrow coverage, so anything that might carry CJK or accents stays on the default font.</param>
+    /// <param name="display">False for text the user supplied (a mod name), which stays on the default font.</param>
     public static void SectionHeader(string text, bool display = true)
     {
         using (var font = display && DisplayFontUsable ? Fonts?.PushHeader() : null)
             ImGui.TextUnformatted(text);
 
-        // Measured from the item rect rather than from a predicted text size, so the rule tracks whatever
-        // font actually rendered. That is what makes the font atlas arriving a frame or two late a
-        // non-event: the heading grows and the rule grows with it.
+        // Measured from the item rect, so the rule tracks whatever font actually rendered.
         var min  = ImGui.GetItemRectMin();
         var max  = ImGui.GetItemRectMax();
         var draw = ImGui.GetWindowDrawList();
@@ -131,44 +96,16 @@ public static class ProteusStyle
     }
 
     /// <summary>
-    /// A minor heading inside a panel: the label in the brand accent, then a hairline rule from the end of
-    /// the text to the right edge of the content region, centred on the label's middle.
-    /// <para/>
-    /// Deliberately NOT <see cref="SectionHeader"/>. That one is a Jupiter display heading over a fat
-    /// accent underline, which is right ONCE at the top of a panel and is noise five times down a table
-    /// column — and Jupiter is a Latin-only display face, so a heading that repeats this often has no
-    /// business on it. Same brand colour, a fraction of the weight.
-    /// <para/>
-    /// The right edge comes from <c>GetContentRegionAvail</c> and not from the window width, because the
-    /// caller draws inside a table cell: the A/B sub-row editor is a two-column table, and a window-width
-    /// rule would cross the column border and run out the far side of the other column. ImGui special-cases
-    /// a live table there and hands back the CELL's work rect, which is exactly what is wanted.
-    /// <para/>
-    /// Label and rule both end up multiplied by <c>style.Alpha</c> exactly ONCE, which is what lets a
-    /// heading inside an <c>ImRaii.PushStyle(ImGuiStyleVar.Alpha, …)</c> block fade with the controls it
-    /// names instead of staying bright over a dimmed section — the same trick <see cref="SectionHeader"/>
-    /// relies on. They get there by opposite routes, and mixing the two is the trap: the rule is drawn
-    /// straight to the draw list, so it has to be resolved here with <c>GetColorU32</c>, while the label is
-    /// pushed as a raw <c>Vector4</c> and left for ImGui to resolve when it draws the text. Pre-resolving
-    /// the pushed colour would apply the alpha a second time at draw, and a heading over a dimmed block
-    /// would come out at <c>α²</c> — half its intended opacity, barely brighter than its own rule.
+    /// A minor heading inside a panel: the label in the brand accent, then a hairline rule to the right edge of the
+    /// content region (the CELL inside a table). Fades with a surrounding Alpha push, applied exactly once.
     /// </summary>
-    /// <param name="suffix">An optional dimmed qualifier drawn after the label ("Physical — Cloth"). Part
-    /// of the heading, so the rule starts after IT rather than being drawn through it.</param>
+    /// <param name="suffix">An optional dimmed qualifier drawn after the label; the rule starts after it.</param>
     public static void SubHeader(string text, string? suffix = null)
     {
-        // Air above, so the heading belongs to what follows rather than floating between two controls.
-        // Spacing rather than a Dummy: it costs exactly one ItemSpacing.Y, is already style-scaled, and
-        // submits no zero-width item for the GetItemRect* below to pick up instead of the label.
+        // Spacing rather than a Dummy: a Dummy would be picked up by the GetItemRect* calls below.
         ImGui.Spacing();
 
-        // Not full-strength Accent: at the logo's own chroma, five of these down a column — times the two
-        // columns of the A/B table — reads as ten warnings rather than as structure.
-        //
-        // Pushed as a Vector4 and NOT as ImGui.GetColorU32(...): PushStyleColor stores whatever it is given
-        // and ImGui multiplies by style.Alpha when it resolves ImGuiCol.Text at draw time, so resolving it
-        // here too would apply the alpha twice. See the remark on the summary above — this is the one line
-        // in the helper where that distinction bites.
+        // Pushed as a Vector4, NOT GetColorU32: ImGui applies style.Alpha when it resolves the colour, so resolving here doubles it.
         using (ImRaii.PushColor(ImGuiCol.Text, Accent.WithAlpha(0.85f)))
             ImGui.TextUnformatted(text);
 
@@ -178,21 +115,17 @@ public static class ProteusStyle
             ImGui.TextDisabled(suffix);
         }
 
-        // Measured off the item rect rather than a predicted CalcTextSize, for the same reason SectionHeader
-        // measures: the rule then tracks whatever font actually rendered, so a font atlas arriving a frame
-        // or two late is a non-event. With a suffix this is the SUFFIX's rect, which is what puts the rule
-        // after the whole heading instead of through it.
+        // Measured off the item rect (the suffix's, when there is one), so the rule tracks the rendered font.
         var min = ImGui.GetItemRectMin();
         var max = ImGui.GetItemRectMax();
 
-        // GetContentRegionAvail is measured from the CURRENT cursor, which is back at the start of the next
-        // line by now — so cursor.x + avail.x is the right edge of the cell (or of the window, outside one).
+        // The cursor is back at the start of the next line, so cursor.x + avail.x is the cell's right edge.
         var x0    = max.X + S(6f);
         var x1    = ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X;
         var y     = MathF.Round((min.Y + max.Y) * 0.5f);   // whole pixel, or a 1px rule straddles two rows
         var thick = MathF.Max(1f, S(1f));
 
-        // A long heading in a narrow column can leave no room, and a three-pixel stub is worse than nothing.
+        // No room left: a three-pixel stub is worse than nothing.
         if (x1 > x0 + S(8f))
             ImGui.GetWindowDrawList().AddRectFilled(
                 new Vector2(x0, y), new Vector2(x1, y + thick),
@@ -210,10 +143,8 @@ public static class ProteusStyle
     public static float PillTextBudget(float pillWidth) => pillWidth - (PillPad.X * 2f);
 
     /// <summary>
-    /// <paramref name="text"/> shortened with an ellipsis until it fits <paramref name="maxWidth"/>.
-    /// Returns the input unchanged when it already fits, so a caller can compare the result against what
-    /// it passed in to decide whether the full text still needs to be reachable in a tooltip. Returns an
-    /// empty string when not even the ellipsis fits, so the result is NEVER wider than asked for.
+    /// <paramref name="text"/> shortened with an ellipsis until it fits <paramref name="maxWidth"/>. Returns the input
+    /// unchanged when it fits, and empty when not even the ellipsis fits, so the result is never wider than asked.
     /// </summary>
     public static string Ellipsize(string text, float maxWidth)
     {
@@ -225,8 +156,7 @@ public static class ProteusStyle
         if (maxWidth <= ellipsisWidth)
             return string.Empty;
 
-        // Binary search the longest prefix that fits, measuring SPANS rather than substrings: this runs on
-        // every frame the band is visible, and slicing the string would allocate once per search step.
+        // Binary search measuring SPANS rather than substrings, so a search allocates nothing per frame.
         var lo = 0;
         var hi = text.Length;
         while (lo < hi)
@@ -246,22 +176,14 @@ public static class ProteusStyle
     }
 
     /// <summary>
-    /// A rounded status badge. Generalises the "Rendering as:" badge that was the codebase's only
-    /// designed component. Advances the cursor by the pill's full size, so SameLine and IsItemHovered
-    /// behave as they would for any ordinary item.
+    /// A rounded status badge. Advances the cursor by its full size, so SameLine and IsItemHovered behave normally.
     /// </summary>
     /// <remarks>
-    /// Do NOT position one of these against the right edge of a WidthStretch table column. It submits a
-    /// real item, so the column's required width becomes its own current width plus cell padding, the
-    /// table asks for more room every frame, and an AlwaysAutoResize window creeps wider until it hits its
-    /// maximum size. Draw straight to the draw list if the alignment has to depend on column geometry.
+    /// Do NOT right-align one against a WidthStretch table column: the real item makes an AlwaysAutoResize window creep wider.
     /// </remarks>
-    /// <param name="baselineOffset">How far ImGui will push TEXT down on this line so it shares a baseline
-    /// with a taller framed item beside it (<c>DC.CurrLineTextBaseOffset</c>) — zero on an ordinary line.
-    /// The label goes through <c>TextColored</c> and picks this up by itself; the lozenge is painted
-    /// straight to the draw list and does not, so beside a framed item the badge would sit above its own
-    /// text with the descenders hanging out the bottom. The public API cannot read the value, so the caller
-    /// measures it — see <c>ColorTableEditor.DrawRenderingAsBadge</c>.</param>
+    /// <param name="baselineOffset">How far ImGui pushes text down on this line (<c>DC.CurrLineTextBaseOffset</c>);
+    /// the lozenge is drawn straight to the draw list and needs it. The caller measures it, see
+    /// <c>ColorTableEditor.DrawRenderingAsBadge</c>.</param>
     public static void Pill(string text, Vector4 colour, float baselineOffset = 0f)
     {
         var pad  = PillPad;
@@ -273,11 +195,8 @@ public static class ProteusStyle
         draw.AddRectFilled(screen, screen + pill, ImGui.GetColorU32(colour.WithAlpha(0.16f)), round);
         draw.AddRect(screen, screen + pill, ImGui.GetColorU32(colour.WithAlpha(0.55f)), round);
 
-        // Submit the label inset into the badge, then rewind and reserve the badge itself, so the LAST
-        // item is the pill and not the text. Same rewind idiom as the right-aligned header button.
-        //
-        // The label is NOT offset here — ImGui applies baselineOffset to it for us — while the reservation
-        // IS, so the item rect keeps covering what was actually painted.
+        // Submit the label inset, then rewind and reserve the badge, so the LAST item is the pill. The label is not
+        // offset (ImGui applies baselineOffset to it); the reservation is.
         var local = ImGui.GetCursorPos();
         ImGui.SetCursorPos(local + pad);
         ImGui.TextColored(colour, text);
@@ -286,54 +205,24 @@ public static class ProteusStyle
     }
 
     /// <summary>
-    /// <c>BeginTabBar</c> in the display face, so a tab strip reads as part of the same design language
-    /// as <see cref="SectionHeader"/> rather than as stock ImGui.
+    /// <c>BeginTabBar</c> in the display face.
     /// </summary>
     /// <remarks>
-    /// The font is pushed for the <c>Begin</c> CALL and popped before the scope is handed back — which is
-    /// the whole point of the helper existing. The returned scope spans the tab's CONTENT, and content
-    /// must stay on the default font: Jupiter is a display face with narrow coverage (see
-    /// <see cref="ProteusFonts"/>), so a mod name with an accent or any CJK inside a tab would render as
-    /// boxes. <c>using (…) return x;</c> disposes after the return expression is evaluated, so the push
-    /// covers exactly the one call and nothing else.
-    /// <para/>
-    /// <c>BeginTabBar</c> needs the push as much as the items do, and it is the load-bearing one: ImGui
-    /// sizes the bar rect as <c>g.FontSize + FramePadding.y * 2</c> at Begin time, and that single height
-    /// then fixes the separator's y, the origin of every tab shape, the space reserved in the window, and
-    /// where content resumes. Sized for the default font while the labels drew in Jupiter, the tabs would
-    /// hang below their own bar and overdraw the separator.
-    /// <para/>
-    /// <c>EndTabBar</c> does NOT need it. The bar's deferred width layout runs at the top of the FIRST
-    /// <c>BeginTabItem</c> of the frame, not at the end — the End path is a fallback for when no tab item
-    /// was submitted at all. That fallback is unreachable only because the call site submits all six items
-    /// unconditionally; if any of them ever becomes conditional, either keep one unconditional or wrap the
-    /// End as well. That first-item layout also re-measures every tab from the names stored last frame,
-    /// which is why the widths self-correct one frame after the font atlas finishes building.
-    /// <para/>
-    /// Returns the concrete <c>ImRaii.TabBarDisposable</c> rather than an interface deliberately: it is a
-    /// ref struct, so widening it to <c>IDisposable</c> is not merely wasteful but illegal — and it would
-    /// throw away the implicit bool conversion the <c>if (tabs)</c> at the call site depends on.
+    /// The font covers only the Begin call: the bar is sized from the font at Begin time, while tab content must stay
+    /// on the default font. EndTabBar needs no push only while at least one tab item is submitted unconditionally.
+    /// Returns the concrete ref struct, which cannot be widened to <c>IDisposable</c>.
     /// </remarks>
     public static ImRaii.TabBarDisposable HeaderTabBar(string id)
     {
-        // Gated on the same latch as HeaderTabItem, and it has to be: the bar sizes itself from the font
-        // active during BeginTabBar. Pushing Jupiter here while the items fell back to the default face
-        // would lay the bar out to one font's metrics and draw the labels in another's.
+        // Gated on the same latch as HeaderTabItem: the bar and its labels must use one font's metrics.
         using (DisplayFontUsable ? Fonts?.PushHeader() : null)
             return ImRaii.TabBar(id);
     }
 
-    /// <summary><c>BeginTabItem</c> in the display face. See <see cref="HeaderTabBar"/> for why the font
-    /// is popped before the scope is returned.</summary>
-    /// <remarks>Every item needs the push, not just the first: ImGui measures each label with
-    /// <c>CalcTextSize</c> and draws its glyphs inside <c>TabItemEx</c>. The first call additionally runs
-    /// the whole bar's layout, which wrapping each call covers at no extra cost.</remarks>
+    /// <summary><c>BeginTabItem</c> in the display face; the font is popped before the scope is returned.</summary>
     /// <param name="label">The visible text. Localized, so it changes with the UI language.</param>
-    /// <param name="id">A stable ASCII token, never translated. ImGui derives a widget's identity from its
-    /// label, so without this the six tabs would become six DIFFERENT tabs the moment the language changed
-    /// — losing the selection — and two labels that happened to translate alike would collide into one
-    /// item. <c>###</c> replaces the identity outright rather than appending to it, so only this token
-    /// counts.</param>
+    /// <param name="id">A stable ASCII token, never translated: <c>###</c> makes it the ImGui id, so a language change
+    /// keeps the selection.</param>
     public static ImRaii.TabItemDisposable HeaderTabItem(
         string label, string id, ImGuiTabItemFlags flags = ImGuiTabItemFlags.None)
     {
@@ -342,43 +231,26 @@ public static class ProteusStyle
     }
 
     /// <summary>
-    /// The brand tint for a tab bar. Unlike a font push this is safe to wrap the whole
-    /// BeginTabBar/EndTabBar scope: <c>ImGuiCol.Tab*</c> is read in exactly two places, both inside
-    /// <c>BeginTabBar</c>/<c>BeginTabItem</c>, so it cannot leak into tab content — whereas <c>g.Font</c>
-    /// is read by every text draw there is. Do not "tidy" the two into one helper; that asymmetry is the
-    /// whole reason they are scoped differently. One push per frame rather than one per item because
-    /// <c>ImRaii.ColorDisposable</c> is a class, not a struct.
-    /// <para/>
-    /// Tinting <see cref="ImGuiCol.TabActive"/> also recolours the rule ImGui draws under the whole bar,
-    /// which lands close to the accent rule <see cref="SectionHeader"/> hand-draws — for free, and at full
-    /// window width. Uses the alpha'd <see cref="AccentFill"/> family rather than the solid
-    /// <see cref="Accent"/> for the same reason <see cref="Selected"/> does: these sit behind label text,
-    /// and full-strength orange behind text is illegible under a light Dalamud style.
+    /// The brand tint for a tab bar. Safe to wrap the whole BeginTabBar/EndTabBar scope, unlike the font push:
+    /// <c>ImGuiCol.Tab*</c> is only read inside BeginTabBar/BeginTabItem. Alpha'd fills, since they sit behind text.
     /// </summary>
     public static ImRaii.ColorDisposable TabAccent() =>
         ImRaii.PushColor(ImGuiCol.Tab,          ImGui.GetColorU32(AccentSoft))
               .Push(ImGuiCol.TabHovered,        ImGui.GetColorU32(AccentFillHover))
               .Push(ImGuiCol.TabActive,         ImGui.GetColorU32(AccentFill))
-              // Unfocused = the window doesn't have focus. Same hierarchy, pulled back so an inactive
-              // window's tabs don't compete with the focused one's.
+              // Unfocused = the window doesn't have focus; pulled back so it does not compete with the focused one.
               .Push(ImGuiCol.TabUnfocused,       ImGui.GetColorU32(AccentSoft.WithAlpha(0.10f)))
               .Push(ImGuiCol.TabUnfocusedActive, ImGui.GetColorU32(AccentFill.WithAlpha(0.25f)));
 
-    /// <summary>The "this button is the current selection" idiom, previously copy-pasted four times.</summary>
+    /// <summary>The "this button is the current selection" idiom.</summary>
     public static ImRaii.ColorDisposable Selected(bool on) =>
         ImRaii.PushColor(ImGuiCol.Button,        ImGui.GetColorU32(AccentFill),       on)
               .Push(ImGuiCol.ButtonHovered,      ImGui.GetColorU32(AccentFillHover),  on)
               .Push(ImGuiCol.ButtonActive,       ImGui.GetColorU32(AccentFillActive), on);
 
-    /// <summary>
-    /// One sortable table-column header. Replaces the two near-identical local functions in the Mods and
-    /// Bindings tabs, which differed only by enum.
-    /// </summary>
+    /// <summary>One sortable table-column header.</summary>
     /// <param name="label">The visible text. Localized.</param>
-    /// <param name="id">A stable ASCII token, never translated. This used to be <paramref name="label"/>
-    /// itself, which was fine while the label was a hardcoded English constant; once it is translated the
-    /// id would move with the UI language and the header would again "silently become a different item",
-    /// which is the exact bug the <c>###</c> was added to fix.</param>
+    /// <param name="id">A stable ASCII token, never translated, so the ImGui id does not move with the UI language.</param>
     public static void SortableHeader<T>(
         string label, string id, T column, ref T current, ref bool desc, bool defaultDesc)
         where T : struct, Enum
@@ -387,8 +259,7 @@ public static class ProteusStyle
         var active = EqualityComparer<T>.Default.Equals(current, column);
         var arrow  = active ? (desc ? " ▼" : " ▲") : string.Empty;
 
-        // "###id" keeps the ImGui id stable across a direction flip — previously the arrow was part of
-        // the id, so the header silently became a different item every time it was clicked.
+        // "###id" keeps the ImGui id stable across a direction flip.
         using (ImRaii.PushColor(ImGuiCol.Text, ImGui.GetColorU32(Accent), active))
             ImGui.TableHeader($"{label}{arrow}###{id}");
 
@@ -402,13 +273,8 @@ public static class ProteusStyle
     }
 
     /// <summary>
-    /// Dimmed explanatory text that wraps to the window instead of running off the right edge.
-    /// <para/>
-    /// <c>ImGui.TextDisabled</c> draws a single unwrapped line and lets the window clip whatever does not
-    /// fit, which is silent and looks fine right up until the text gets longer — so every full-sentence
-    /// notice goes through this rather than through TextDisabled directly. Localization is what made that
-    /// stop being hypothetical: German and Russian run about a third longer than the English these lines
-    /// were laid out against.
+    /// Dimmed explanatory text that wraps to the window: ImGui.TextDisabled does not wrap, so every full-sentence
+    /// notice goes through this.
     /// </summary>
     public static void DisabledWrapped(string text)
     {
@@ -416,11 +282,7 @@ public static class ProteusStyle
             ImGui.TextWrapped(text);
     }
 
-    /// <summary>
-    /// <see cref="DisabledWrapped"/> in <see cref="Warn"/> amber — for a notice that explains why
-    /// something the user expected to happen did not. Dimmed text is the wrong weight for that: it reads
-    /// as "nothing to see here", which is the opposite of what these lines are for.
-    /// </summary>
+    /// <summary><see cref="DisabledWrapped"/> in <see cref="Warn"/> amber, for why something expected did not happen.</summary>
     public static void WarnWrapped(string text)
     {
         using (ImRaii.PushColor(ImGuiCol.Text, Warn))
@@ -428,9 +290,8 @@ public static class ProteusStyle
     }
 
     /// <summary>
-    /// Tooltip for an item that may be disabled. A disabled item reports no hover under the default
-    /// flags, so the "why is this off" explanation is unreachable at exactly the moment it is wanted —
-    /// this always asks with AllowWhenDisabled. A null reason draws nothing.
+    /// Tooltip for an item that may be disabled: asks with AllowWhenDisabled, since a disabled item reports no hover.
+    /// A null reason draws nothing.
     /// </summary>
     public static void ReasonTooltip(string? reason)
     {
@@ -442,11 +303,8 @@ public static class ProteusStyle
     /// A bordered panel with an accent bar down its left edge, painted around a group of widgets.
     /// </summary>
     /// <remarks>
-    /// Deliberately a group and not a child region: the status window is AlwaysAutoResize, and a
-    /// BeginChild with zero size does not auto-size to its content — it collapses to a fixed box and
-    /// clips. Deliberately border-only with no fill, too: the frame is painted after the group closes,
-    /// so a fill would cover the widgets, and the obvious fix (an ImDrawListSplitter) cannot be nested
-    /// around an ImGui table, which splits the window draw list itself.
+    /// A group, not a child: a zero-size BeginChild does not auto-size. Border-only: the frame is painted after the
+    /// group closes, so a fill would cover the widgets.
     /// </remarks>
     public static CardScope Card(Vector4? barColour = null) => new(barColour);
 
@@ -471,10 +329,7 @@ public static class ProteusStyle
             var min = ImGui.GetItemRectMin() - new Vector2(inset, S(3f));
             var max = ImGui.GetItemRectMax() + new Vector2(S(6f), S(3f));
 
-            // Clamp the right edge to the content region. A card whose widest item already spans the full
-            // width — the collapsing headers in Diagnostics do — would otherwise push its border outside
-            // the window, where it is clipped away or drawn under the scrollbar once the tab is tall
-            // enough to have one.
+            // Clamp the right edge to the content region, or a full-width item pushes the border outside the window.
             var edge = ImGui.GetWindowPos().X + ImGui.GetWindowContentRegionMax().X;
             if (max.X > edge)
                 max.X = edge;

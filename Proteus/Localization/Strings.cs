@@ -235,9 +235,9 @@ public sealed class ModsStrings
         "(The global strength sliders are in Settings.)");
 
     // ── "this mod is on and painting nothing" ────────────────────────────────────────────────────────
-    // The faces of CompositorService.InertReason. The LOG says the same things in English literals, on
+    // The faces of InertModDiagnosis.InertReason. The LOG says the same things in English literals, on
     // purpose — a log is evidence, and evidence that changes language cannot be searched or compared.
-    // See CompositorService.EnglishInert, which must be kept saying the same facts as these.
+    // See InertModDiagnosis.EnglishInert, which must be kept saying the same facts as these.
     //
     // Unlike the rest of this class these are wrapped tooltip and panel text, not column labels: they are
     // allowed to be sentences.

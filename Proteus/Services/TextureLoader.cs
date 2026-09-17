@@ -23,14 +23,9 @@ namespace Proteus.Services;
 public enum TexEncoding { Uncompressed, Bc5, Bc7 }
 
 /// <summary>
-/// How an overlay is resampled when its art is not already at the size the caller asked for.
-/// <para/>
-/// <see cref="Auto"/> filters — area-average down, bilinear up — and is right for every CONTINUOUS
-/// channel: diffuse, normal, mask, coverage alpha. <see cref="Nearest"/> point-samples, and is the
-/// only correct choice for an INDEX (<c>_id</c>) texture, whose red/green encode discrete colour-table
-/// row selectors (<c>red / 17 + 1</c>). Averaging row 3 with row 5 does not produce a soft edge, it
-/// produces row 4 — a colour nobody assigned. Same reason the index is exempt from block compression;
-/// see Configuration.EnableCompression.
+/// How an overlay is resampled when its art is not at the requested size. <see cref="Auto"/> filters and suits
+/// continuous channels; <see cref="Nearest"/> is the only correct choice for an index (<c>_id</c>) texture, whose
+/// red/green are discrete colour-table row selectors that averaging would corrupt.
 /// </summary>
 public enum ResampleFilter { Auto, Nearest }
 
@@ -48,8 +43,7 @@ public class TextureLoader
     private const uint SamplerIdColorMap0  = 0x115306BEu; // Bibo+ / custom body shaders
     private const uint SamplerIdNormal     = 0x0C5EC1F1u;
     private const uint SamplerIdMask       = 0x8A4E82B6u;
-    // The material's own colour-table row selector (_id). Gear and accessories declare one almost always;
-    // body and face skin materials never do.
+    // The material's own colour-table row selector (_id); body and face skin materials never declare one.
     private const uint SamplerIdIndex      = 0x565F8FD8u;
     /// <summary>Bytes per entry in a material's sampler table: id, flags, texture index, padding.</summary>
     private const int SamplerStride = 12;
@@ -63,37 +57,25 @@ public class TextureLoader
     }
 
     /// <summary>
-    /// Resolve StbImageSharp NOW, while the plugin's AssemblyLoadContext is certainly alive.
-    /// <para/>
-    /// PNG decoding is the first thing that touches this assembly, and it happens deep inside a
-    /// background <c>Parallel.ForEach</c> in the compositor. Reloading the plugin while a composite is
-    /// still running therefore hit the lazy resolve after Dalamud had begun tearing the ALC down, and the
-    /// run died with "AssemblyLoadContext is unloading or was already unloaded" — an alarming red stack
-    /// trace for what is really just a cancelled run on a dying instance. Loading it up front means the
-    /// type is already resolved and no composite can trigger an assembly load at an unsafe moment.
+    /// Resolve StbImageSharp now, while the plugin's AssemblyLoadContext is certainly alive, so a composite running
+    /// during a plugin reload can't trigger an assembly load after the ALC starts unloading.
     /// </summary>
     private static void PreloadImageCodec(IPluginLog log)
     {
         try
         {
-            // Decoding a 1x1 PNG forces the assembly load AND the JIT of the decode path itself.
-            // Smallest valid PNG: 8-byte signature, IHDR, a single-pixel IDAT, IEND.
+            // Decoding a 1x1 PNG forces the assembly load and the JIT of the decode path.
             ImageResult.FromMemory(OnePixelPng, StbImageSharp.ColorComponents.RedGreenBlueAlpha);
         }
         catch (Exception ex)
         {
-            // Never fatal: worst case we are back to the lazy load we had before. Warning, not Debug —
-            // if this fails the ALC-unload crash comes back, and a Debug line nobody sees would make the
-            // fix look installed when it isn't.
-            // Pass ex, not ex.Message: an assembly-load failure carries its real cause one level down
-            // (FileLoadException -> "AssemblyLoadContext is unloading"), and the message alone drops it.
+            // Never fatal. Warning, not Debug, so a failed preload is visible; pass ex to keep the inner cause.
             log.Warning(ex, "[Proteus] image codec preload FAILED, plugin-reload crashes may return");
         }
     }
 
-    /// <summary>A 1x1 RGBA PNG: signature, IHDR, one zlib-deflated scanline, IEND. Generated rather than
-    /// hand-written — the first attempt had a bad IDAT CRC, which the preload's catch would have swallowed,
-    /// leaving the fix inert while looking installed. Covered by ImageCodecPreloadTests.</summary>
+    /// <summary>A 1x1 RGBA PNG: signature, IHDR, one zlib-deflated scanline, IEND. Covered by
+    /// ImageCodecPreloadTests, since a bad CRC would be swallowed silently by the preload.</summary>
     internal static readonly byte[] OnePixelPng =
     [
         0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
@@ -108,20 +90,15 @@ public class TextureLoader
     ];
 
     // ── Native SIMD block compressor (proteus_bcn.dll = bc7enc + rgbcx) ─────────────
-    // BC7/BC5 encoding in managed BCnEncoder.Net is scalar C# and painfully slow (a compressed composite
-    // could take a minute). The native shim does the same encode with fast, multi-threadable native code
-    // (bc7enc modes 1/6, rgbcx BC5). Each call encodes a range of 4x4 block-rows, so we fan out across
-    // cores. Falls back to the managed encoder if the DLL is missing or a call ever throws.
+    // BC7/BC5 encoding (and BC decoding) in native code, fanned out across cores by 4x4 block-row range.
+    // Falls back to the managed encoder if the DLL is missing or a call throws.
     private const string NativeLib = "proteus_bcn";
     private static int _nativeProbed;
     private static volatile bool _nativeAvailable;
 
     /// <summary>
-    /// Which block-compression backend a call would use right now: <c>true</c> native shim, <c>false</c>
-    /// managed BCnEncoder. The two encode the same pixels to DIFFERENT bytes, so this belongs in the
-    /// content tag that names an output file — otherwise a session that fell back to managed reuses (and
-    /// keeps serving) a file the native encoder produced, under a name that claims to describe its bytes.
-    /// Both outputs are valid BC7, so this is about keeping the name honest, not about visible corruption.
+    /// Which block-compression backend a call would use: <c>true</c> native shim, <c>false</c> managed BCnEncoder.
+    /// The two produce different bytes, so this belongs in the content tag that names an output file.
     /// </summary>
     public static bool NativeEncoderAvailable => _nativeAvailable;
 
@@ -134,9 +111,8 @@ public class TextureLoader
     [DllImport(NativeLib, CallingConvention = CallingConvention.Cdecl)]
     private static extern int proteus_decode_bcn(int format, IntPtr blocks, int width, int blockRowStart, int blockRowCount, IntPtr rgbaOut);
 
-    /// <summary>Compressed bytes per 4×4 block, or 0 for a format the shim doesn't handle. Asked of the
-    /// NATIVE side rather than duplicated here, so the stride the caller slices with and the stride the
-    /// decoder walks with cannot drift apart.</summary>
+    /// <summary>Compressed bytes per 4×4 block, or 0 for a format the shim doesn't handle. Asked of the native side
+    /// so the caller's stride and the decoder's cannot drift.</summary>
     [DllImport(NativeLib, CallingConvention = CallingConvention.Cdecl)]
     private static extern int proteus_bcn_block_bytes(int format);
 
@@ -145,23 +121,9 @@ public class TextureLoader
     private enum NativeBcFormat { Bc1 = 1, Bc3 = 3, Bc5 = 5, Bc7 = 7 }
 
     /// <summary>
-    /// Copy the native DLL somewhere private and return that path, so the build output is never the file
-    /// Windows memory-maps.
-    /// <para/>
-    /// A loaded native library is locked for as long as it is mapped, and the runtime holds the handle the
-    /// DllImport resolver returned for the life of the load context. Unloading the plugin is SUPPOSED to
-    /// release it, but a plugin load context only unloads once nothing references it — a straggling task,
-    /// timer or event subscription keeps it alive — so in practice the lock survives an unload and the next
-    /// <c>dotnet build</c> fails with "used by another process: FINAL FANTASY XIV". Measured, not theorised.
-    /// <para/>
-    /// This became load-bearing when native DECODE arrived: compression is off by default, so the encoder
-    /// was never actually called on most setups and the DLL was never mapped at all. Decode runs on every
-    /// composite, so without this the file is locked from the first texture onward and every native change
-    /// costs a game restart.
-    /// <para/>
-    /// The copy is named by the source's length and write time, so a rebuilt DLL lands on a fresh path
-    /// while an unchanged one is reused. Returns the original path if anything goes wrong — a locked build
-    /// output is an annoyance, no shadow copy at all would be a missing feature.
+    /// Copy the native DLL to a private path and return it, so the build output is never the file Windows maps
+    /// (the lock outlives a plugin unload). Named by the source's length and write time, so a rebuilt DLL gets a
+    /// fresh path. Returns the original path if anything goes wrong.
     /// </summary>
     private static string ShadowCopyNative(string dll, IPluginLog log)
     {
@@ -178,16 +140,14 @@ public class TextureLoader
             if (!File.Exists(shadow) || new FileInfo(shadow).Length != fi.Length)
             {
                 Directory.CreateDirectory(dir);
-                // Copy to a unique name and move into place, so two instances starting together can't read
-                // a half-written DLL. Losing the race is fine — the winner's file is byte-identical.
+                // Copy to a unique name and move into place, so concurrent instances never read a half-written DLL.
                 var tmp = shadow + "." + Path.GetRandomFileName() + ".tmp";
                 File.Copy(dll, tmp, overwrite: true);
                 try { File.Move(tmp, shadow, overwrite: true); }
                 catch (IOException) when (File.Exists(shadow)) { try { File.Delete(tmp); } catch { } }
             }
 
-            // Best-effort sweep of copies from older builds. Anything still mapped by a running instance
-            // refuses to delete, which is the correct outcome and needs no handling beyond skipping it.
+            // Best-effort sweep of copies from older builds; ones still mapped refuse to delete and are skipped.
             try
             {
                 foreach (var old in Directory.GetDirectories(root))
@@ -206,14 +166,13 @@ public class TextureLoader
         }
     }
 
-    // Load proteus_bcn.dll from the plugin's own directory — Dalamud's assembly load context doesn't add
-    // it to the native search path, so a plain DllImport("proteus_bcn") wouldn't find it. Runs once.
+    // Load proteus_bcn.dll from the plugin's own directory, which Dalamud's load context doesn't put on the
+    // native search path. Runs once.
     private static void EnsureNativeCompressor(IPluginLog log)
     {
         if (Interlocked.Exchange(ref _nativeProbed, 1) == 1) return;
 
-        // The plugin's real on-disk folder. PluginInterface.AssemblyLocation is Dalamud's authoritative path
-        // (Assembly.Location can be empty under the plugin load context); fall back to it only if needed.
+        // PluginInterface.AssemblyLocation is authoritative (Assembly.Location can be empty under the load context).
         string? dir = null;
         try { dir = Plugin.PluginInterface.AssemblyLocation.DirectoryName; } catch { }
         if (string.IsNullOrEmpty(dir))
@@ -227,8 +186,7 @@ public class TextureLoader
             (string.Equals(name, NativeLib, StringComparison.OrdinalIgnoreCase) && dll != null
                 && File.Exists(dll) && NativeLibrary.TryLoad(dll, out var h)) ? h : IntPtr.Zero);
 
-        // Probe once with the DETAILED loader (NativeLibrary.Load throws with the real reason — missing file
-        // vs missing dependency — so a failure is diagnosable in the log instead of a silent fallback).
+        // Probe once with NativeLibrary.Load, which throws with the real reason, so a failure is diagnosable.
         try
         {
             if (dll == null || !File.Exists(dll))
@@ -251,14 +209,12 @@ public class TextureLoader
     // ── Recomposite instrumentation ────────────────────────────────────────────
     // Reset and read by CompositorService around one run; see PhaseCounter.
 
-    // Decode now happens on background prefetch threads as well as the composite thread, so a single
-    // summed timer would over-count (it adds concurrent work together) and make every stage derived
-    // from it wrong. Split by who is calling: only the composite thread's time is on the critical path.
+    // Decode runs on prefetch threads as well as the composite thread; time is split by caller, since only the
+    // composite thread's time is on the critical path.
     [ThreadStatic] private static bool bgPrefetch;
 
     /// <summary>
-    /// Marks the calling thread's decodes as background prefetch. Set inside a prefetch task so its
-    /// decode time is reported separately from time the composite actually waited on.
+    /// Marks the calling thread's decodes as background prefetch, reported separately from composite wait time.
     /// </summary>
     public static bool BackgroundPrefetch
     {
@@ -267,8 +223,8 @@ public class TextureLoader
     }
 
     /// <summary>
-    /// Elapsed time the COMPOSITE thread spent inside the decode path — decoding, blocking on a decode
-    /// a prefetch thread already started, or hitting the cache. This is the real critical-path cost.
+    /// Time the composite thread spent inside the decode path (decoding, blocking on a prefetch, or cache hits):
+    /// the critical-path cost.
     /// </summary>
     public readonly PhaseCounter DecodeWaitStats = new();
 
@@ -280,17 +236,12 @@ public class TextureLoader
     /// <summary>Calls served from an ALREADY-MATERIALIZED cache entry — a true hit, near free.</summary>
     public readonly PhaseCounter DecodeHitStats = new();
     /// <summary>
-    /// Calls that found an entry in the cache but had to BLOCK on another thread finishing its decode —
-    /// nearly always a prefetch the blend loop caught up with. Counted apart from a true hit because the
-    /// two cost wildly different amounts and the phases line was reporting them as one number, which made
-    /// a saturated prefetch pipeline look like a warm cache.
+    /// Calls that found a cache entry but blocked on another thread finishing its decode (usually a prefetch).
+    /// Counted apart from true hits.
     /// </summary>
     public readonly PhaseCounter DecodeBlockedStats = new();
     /// <summary>
-    /// Decodes served by the native shim rather than Lumina. Counted because "is the native decoder
-    /// actually being used" was otherwise unanswerable from a log: it can be off because the DLL failed
-    /// to load, because the format isn't block-compressed, or because a mismatch rejected that format —
-    /// and all three look identical, i.e. like nothing at all.
+    /// Decodes served by the native shim rather than Lumina.
     /// </summary>
     public readonly PhaseCounter DecodeNativeStats = new();
 
@@ -301,8 +252,7 @@ public class TextureLoader
 
     public void ResetStats()
     {
-        // One recomposite = one generation. Everything the run in flight touches is stamped with this and
-        // is thereby protected from the trim until the next run starts — see runGeneration.
+        // One recomposite = one generation; entries it touches are protected from the trim — see runGeneration.
         Interlocked.Increment(ref runGeneration);
         DecodeStats.Reset();
         DecodeHitStats.Reset();
@@ -316,17 +266,11 @@ public class TextureLoader
     }
 
     // ── Decode cache ───────────────────────────────────────────────────────────
-    // A recomposite re-runs on every colour/design/enable change, but the underlying
-    // .tex/.png files almost never change between those triggers — so identical bytes
-    // were being BC-decompressed (skin .tex) and PNG-decoded (4K overlays) every run.
-    // Cache the decoded RGBA keyed by path + last-write-time + length so each file is
-    // decoded once and reused until it actually changes on disk. Bounded by a byte
-    // budget with LRU eviction. The Lazy wrapper guarantees a single decode even when
-    // several parallel composite tasks request the same file simultaneously.
+    // Decoded RGBA keyed by path + last-write-time + length, so each file is decoded once until it changes on disk.
+    // Byte-budgeted with generation-aware LRU eviction; the Lazy guarantees one decode under concurrent requests.
     //
-    // Mutation contract: base textures are composited in place, so LoadBaseTexture
-    // hands back a CLONE on a hit; overlay PNGs are treated read-only by every caller
-    // (each mutating consumer clones first), so LoadPngAsRgba shares the cached array.
+    // Mutation contract: LoadBaseTexture returns a CLONE on a hit (bases are composited in place); LoadPngAsRgba
+    // shares the cached array, and every mutating consumer clones first.
     private sealed class DecodedTex
     {
         public byte[] Rgba = Array.Empty<byte>();
@@ -341,34 +285,17 @@ public class TextureLoader
     private long accessClock;
 
     /// <summary>
-    /// Bumped by <see cref="ResetStats"/>, i.e. once per recomposite. Entries stamped with the CURRENT
-    /// generation are exempt from eviction while anything older is still evictable.
-    /// <para/>
-    /// Plain LRU is the wrong policy for this cache and the numbers said so: the compositor prefetches
-    /// several files ahead of the blend loop, so the entry least-recently accessed is very often one that
-    /// was decoded FOR THIS RUN and has not been consumed yet. Evicting it throws away completed prefetch
-    /// work and makes the blend re-decode it on the critical path — a run was measured evicting 54 entries
-    /// while holding 32. Generation-aware trimming makes that specific mistake impossible: a file
-    /// prefetched for this run can never be evicted before this run consumes it.
+    /// Bumped by <see cref="ResetStats"/>, once per recomposite. Entries stamped with the current generation are
+    /// evicted only as a last resort, so a file prefetched for this run is not evicted before the run consumes it.
     /// </summary>
     private long runGeneration;
     private long lastTouchTick = Environment.TickCount64;
     private int evictions;
 
     /// <summary>
-    /// Ceiling on decoded bytes held. One 4K RGBA entry is 64 MB, so this is really a count: 2 GB ≈ 30
-    /// textures.
-    /// <para/>
-    /// It has to exceed the composite's whole working set or it buys nothing. The access pattern is a
-    /// cyclic scan — the same files in the same order every composite — which is the pathological case for
-    /// LRU: whatever the next run asks for first was the first evicted. Measured at 1 GB against an 18-file
-    /// (~1.2 GB) run, that produced 18 misses on EVERY composite rather than 18 once, and 1420 ms of a
-    /// 3244 ms composite. Settable (see Configuration.DecodeCacheBudgetMb) because the right number is a
-    /// property of the user's outfit and their RAM, not something to hard-code.
-    /// <para/>
-    /// LOWERING it reclaims immediately. The trim otherwise only runs off the back of a decode, so someone
-    /// who drops the budget because the game is paging would get nothing back until they next composited —
-    /// precisely the moment they can least afford to wait for it.
+    /// Ceiling on decoded bytes held (one 4K RGBA entry is 64 MB). Must exceed a composite's whole working set,
+    /// since the cyclic access pattern defeats LRU. Set from Configuration.DecodeCacheBudgetMb; lowering it
+    /// reclaims immediately.
     /// </summary>
     public long DecodeCacheBudgetBytes
     {
@@ -380,12 +307,10 @@ public class TextureLoader
         }
     }
 
-    // Only the floor until Plugin's constructor pushes the configured value in — kept deliberately modest
-    // so a loader constructed outside the plugin (tests, tooling) doesn't reserve gigabytes by default.
+    // Default until Plugin's constructor pushes the configured value; modest so tests and tooling don't reserve gigabytes.
     private long decodeCacheBudgetBytes = 2048L * 1024 * 1024;
 
-    /// <summary>Entries currently materialized, and the bytes they hold. For the phases log — the number
-    /// that says whether the budget actually covers the working set.</summary>
+    /// <summary>Entries currently materialized, and the bytes they hold, for the phases log.</summary>
     public (int Entries, long Bytes) CacheState()
     {
         int n = 0; long b = 0;
@@ -398,18 +323,8 @@ public class TextureLoader
     public int Evictions => Volatile.Read(ref evictions);
 
     /// <summary>
-    /// Drop everything if nothing has touched the cache for <paramref name="idle"/>. Returns the number of
-    /// entries released, 0 when still warm.
-    /// <para/>
-    /// Without this the plugin holds the full budget for its entire lifetime — the cache is only trimmed
-    /// when it EXCEEDS the budget, so it never shrinks on its own. The trade is that the first composite
-    /// after a gap pays the decode again; that's the right side of it, because the cache exists for the
-    /// burst of recomposites while editing, not for holding gigabytes overnight.
-    /// <para/>
-    /// Note this makes the arrays collectable, not necessarily returned to the OS: they are Large Object
-    /// Heap allocations and the CLR neither compacts nor releases LOH segments by default, so the process's
-    /// working set may not drop straight away. Forcing that needs LOH compaction plus a blocking collect,
-    /// which is a multi-hundred-millisecond stall and deliberately not done here.
+    /// Drop everything if nothing has touched the cache for <paramref name="idle"/>. Returns the number of entries
+    /// released, 0 when still warm. The arrays become collectable; LOH memory is not necessarily returned to the OS.
     /// </summary>
     public int ReleaseIfIdle(TimeSpan idle)
     {
@@ -420,8 +335,8 @@ public class TextureLoader
         return n;
     }
 
-    // Cache key for an on-disk file: prefix + path + write-time + length. Returns null
-    // (→ bypass the cache) if the file is missing or its metadata can't be read.
+    // Cache key for an on-disk file: prefix + path + write-time + length. Null (bypass the cache) if the file is
+    // missing or unreadable.
     private static string? DiskKey(string prefix, string path)
     {
         try
@@ -436,8 +351,7 @@ public class TextureLoader
 
     private DecodedTex? GetOrDecode(string key, Func<(byte[] rgba, int width, int height)?> decode)
     {
-        // Charge the whole call to whoever made it: on the composite thread that covers decoding, blocking
-        // on a decode a prefetch thread got to first, and cache lookups — everything the composite waits on.
+        // Charge the whole call to its caller: decoding, blocking on a prefetch, and cache lookups.
         var tCall = PhaseCounter.Begin();
         var background = bgPrefetch;
         try
@@ -452,8 +366,7 @@ public class TextureLoader
 
     private DecodedTex? GetOrDecodeCore(string key, Func<(byte[] rgba, int width, int height)?> decode)
     {
-        // Instrumentation: the factory runs only on a miss, so this flag separates real decode cost
-        // from cache hits without timing the (near-free) hit path.
+        // The factory runs only on a miss, so this flag separates decode cost from cache hits.
         var decoded = false;
         var lazy = decodeCache.GetOrAdd(key, _ => new Lazy<DecodedTex?>(() =>
         {
@@ -466,12 +379,8 @@ public class TextureLoader
                 : new DecodedTex { Rgba = r.Value.rgba, Width = r.Value.width, Height = r.Value.height };
         }, LazyThreadSafetyMode.ExecutionAndPublication));
 
-        // Read BEFORE blocking on lazy.Value. If the value is not materialized yet and this call is not
-        // the one producing it, the wait below is a BLOCK on another thread's decode — most likely a
-        // prefetch that hasn't finished. That is not a cache hit in any sense a reader of the log would
-        // recognise, but it was counted as one: the local `decoded` stays false, so every "hit" figure
-        // silently included time spent stalled on the prefetch pipeline. Told apart, the phases line can
-        // finally distinguish a warm cache from a saturated one.
+        // Read before blocking on lazy.Value: an unmaterialized value we aren't producing means this call blocks
+        // on another thread's decode, which is counted separately from a hit.
         var wasMaterialized = lazy.IsValueCreated;
 
         DecodedTex? entry;
@@ -499,18 +408,13 @@ public class TextureLoader
     }
 
     /// <summary>
-    /// Drop every cached decode whose source file lives under the given mod directory. The cache keys
-    /// files by path + last-write-time + length; a mod reinstall or edit that preserves the timestamp
-    /// or keeps the same byte length (common with archive-preserving extractors and same-size re-exports)
-    /// would otherwise keep serving the STALE decode until a plugin restart. Called when a mod's enable
-    /// state or files change so the next composite re-reads that mod's textures. Returns the count removed.
+    /// Drop every cached decode whose source file lives under the given mod directory, since a reinstall can keep
+    /// the timestamp and length the key relies on. Returns the count removed.
     /// </summary>
     public int EvictMod(string modDir)
     {
         if (string.IsNullOrEmpty(modDir)) return 0;
-        // Disk paths are "<modsRoot>\<modDir>\..." (SidecarRoot and Penumbra-resolved alike), so the mod
-        // folder always appears as a bounded path segment. Match with separators on both sides so a mod
-        // named "Bone" can't evict "Boney"'s entries.
+        // Disk paths are "<modsRoot>\<modDir>\...", so match with separators on both sides ("Bone" never evicts "Boney").
         var needle = string.Concat(Path.DirectorySeparatorChar, modDir, Path.DirectorySeparatorChar);
         int removed = 0;
         foreach (var key in decodeCache.Keys)   // Keys is a snapshot; safe to remove while iterating
@@ -521,9 +425,7 @@ public class TextureLoader
     }
 
     /// <summary>
-    /// Drop the entire decode cache — a manual escape hatch for when a texture edit isn't reflected
-    /// (e.g. a same-size, timestamp-preserving overwrite the mtime+length key can't distinguish).
-    /// Returns the count removed.
+    /// Drop the entire decode cache, for edits the mtime+length key can't detect. Returns the count removed.
     /// </summary>
     public int ClearCache()
     {
@@ -532,14 +434,8 @@ public class TextureLoader
         return n;
     }
 
-    // Evict materialized entries until under the byte budget: oldest GENERATION first, least-recently
-    // accessed within a generation. O(n) over the cache, but n is small (tens of entries) so this stays
-    // cheap.
-    //
-    // The generation ordering is the point — see runGeneration. Entries decoded for the run in flight sort
-    // last, so they go only when nothing from an earlier run is left to take. Evicting one is still allowed
-    // (the alternative is unbounded growth when a single run's working set exceeds the budget outright),
-    // it is simply the last resort rather than the first choice LRU alone made it.
+    // Evict materialized entries until under the byte budget: oldest generation first, least-recently accessed
+    // within a generation. The current run's entries go only as a last resort — see runGeneration.
     private void TrimCache()
     {
         long total = 0;
@@ -568,15 +464,9 @@ public class TextureLoader
     }
 
     /// <summary>
-    /// Texture game paths from a material's RAW bytes — mod redirect first, else the game's own data (see
-    /// <see cref="LoadRawFile"/>, which handles that fallback).
-    /// <para/>
-    /// This is the ONLY way to read a material's texture paths. Two Lumina-typed wrappers used to sit here
-    /// (one for disk, one for SqPack) and both were deleted rather than left as a shorter-named trap:
-    /// Lumina reports zero samplers for real Dawntrail materials even when it reads their texture table
-    /// correctly, so they returned all-null on vanilla materials. That looks exactly like "this material has
-    /// no textures", and it silently stopped overlays targeting vanilla materials from compositing at all.
-    /// Walking the bytes ourselves sidesteps the typed reader entirely.
+    /// Texture game paths from a material's raw bytes — mod redirect first, else game data (see
+    /// <see cref="LoadRawFile"/>). The only way to read a material's texture paths: Lumina reports zero samplers
+    /// for real Dawntrail materials.
     /// </summary>
     public MtrlTexturePaths ResolveMtrlTexturesRaw(string? diskPath, string gamePath)
     {
@@ -593,12 +483,8 @@ public class TextureLoader
     }
 
     /// <summary>
-    /// Walk a .mtrl's header → sampler table by hand. Layout (v1.3): header, texture offsets, UV-set and
-    /// colour-set offsets, string table, additional data, the data set, then the shader block whose tail is
-    /// the sampler array. Each sampler names a texture by index into the offset table.
-    /// <para/>
-    /// Every step is bounds-checked and bails to "nothing found" rather than throwing — a truncated or
-    /// unexpected file must degrade to the caller's fail-open path, not take down the draw loop.
+    /// Walk a .mtrl's header → sampler table by hand (v1.3 layout). Every step is bounds-checked and bails to
+    /// "nothing found" rather than throwing.
     /// </summary>
     internal static MtrlTexturePaths ParseMtrlBytes(byte[] b)
     {
@@ -645,11 +531,8 @@ public class TextureLoader
             while (end < stringsAt + stringTableSize && b[end] != 0) end++;
             var path = Encoding.UTF8.GetString(b, at, end - at);
             if (path.Length == 0) continue;
-            // Strips the marker only when it leads the whole string. In practice it almost never does —
-            // real files carry it on the FILE NAME instead (chara/.../texture/--c1401b0001_c_n.tex), and
-            // those are left verbatim ON PURPOSE: these paths become the compositor's redirect keys, so
-            // rewriting them would change which resource Penumbra is asked to replace. Don't "fix" this to
-            // strip mid-path without first confirming in game which form the game actually requests.
+            // Strips the marker only when it leads the whole string. A marker on the file name is left verbatim on
+            // purpose: these paths are the compositor's redirect keys. Confirm in game before changing this.
             if (path.StartsWith("--", StringComparison.Ordinal)) path = path[2..];
 
             if      (samplerId is SamplerIdDiffuse or SamplerIdColorMap0) diffuse = path;
@@ -657,34 +540,17 @@ public class TextureLoader
             else if (samplerId == SamplerIdMask)                          mask    = path;
             else if (samplerId == SamplerIdIndex)                         index   = path;
         }
-        // Parsed: true only HERE, at the one exit that walked the whole file. Every bail above returns the
-        // default false, so a caller can tell "this material names no index texture" from "this material
-        // could not be read" — two states that look identical in the paths alone and mean opposite things
-        // to anything deciding what a colour row does.
-        //
-        // The colour-table test is LITERALLY the one PatchColorTable refuses on, called rather than
-        // restated. Restating it drifted: this asked whether the header DECLARED a big enough data set,
-        // while the writer resolves the table's offset and checks it against the actual buffer. A material
-        // promising a full table in a file too short to hold one passed here and failed there — so the grid
-        // drew live, took a colour, and the write returned the material byte-for-byte unchanged, which is
-        // exactly the "controls with nothing behind them" case the warning above exists to prevent.
+        // Parsed is true only at this exit, so callers can tell "no index texture" from "unreadable".
+        // HasColorTable uses the very test PatchColorTable refuses on, so the two cannot disagree.
         bool hasColorTable = GearMaterialWriter.ColorTableStart(b) >= 0;
         return new MtrlTexturePaths(diffuse, normal, mask, index, Parsed: true, HasColorTable: hasColorTable);
     }
 
     /// <summary>
-    /// A copy of a material whose texture table names different files: every texture whose path is a key
-    /// of <paramref name="retarget"/> is pointed at that key's value. Null when nothing matched or the file
-    /// could not be walked — the caller must then leave the material alone.
-    /// <para/>
-    /// Keys are compared the way <see cref="ParseMtrlBytes"/> reports paths (a leading <c>--</c> stripped),
-    /// so a path read out of that parser can be passed straight back in.
-    /// <para/>
-    /// The new strings are APPENDED to the string table rather than spliced over the old ones. Splicing
-    /// would move every string after it, and the UV-set names, colour-set names and shader package name all
-    /// hold offsets into that table. Appending moves none of them: only the retargeted texture entries get
-    /// a new offset, and the orphaned old string costs a few bytes. Everything after the table is addressed
-    /// relative to its own block, so it shifts along intact.
+    /// A copy of a material whose texture table names different files: every texture path that is a key of
+    /// <paramref name="retarget"/> (compared as <see cref="ParseMtrlBytes"/> reports paths) points at its value.
+    /// Null when nothing matched or the file could not be walked. New strings are appended to the string table,
+    /// so no existing string offset moves.
     /// </summary>
     internal static byte[]? RetargetTexturePaths(byte[] b, IReadOnlyDictionary<string, string> retarget)
     {
@@ -727,8 +593,7 @@ public class TextureLoader
 
         // Padded on its own account, so the table keeps whatever alignment it had.
         while (appended.Count % 4 != 0) appended.Add(0);
-        // Every size and offset involved is a u16 (each new offset is below the new table size); a material
-        // this large does not exist, but a wrapped offset would name garbage rather than fail.
+        // Every size and offset is a u16; a wrapped offset would name garbage rather than fail.
         if (stringTableSize + appended.Count > ushort.MaxValue || fileSize + appended.Count > ushort.MaxValue)
             return null;
 
@@ -746,12 +611,8 @@ public class TextureLoader
     }
 
     /// <summary>
-    /// Whether an on-disk <c>.tex</c> stores its pixels uncompressed, or null when the file cannot be read.
-    /// <para/>
-    /// Asked before trusting a texture whose VALUES carry meaning rather than colour. An <c>_id</c> texture's
-    /// red and green are discrete colour-table row selectors — <c>red / 17</c> picks a row pair — so a lossy
-    /// codec moves a value across a bucket boundary and the number read back names a different row than the
-    /// author wrote. It is the same reason this loader's own writer never compresses that slot.
+    /// Whether an on-disk <c>.tex</c> stores its pixels uncompressed, or null when unreadable. Asked before trusting
+    /// a texture whose values are data (an <c>_id</c> map's row selectors), which a lossy codec would corrupt.
     /// </summary>
     public static bool? IsUncompressed(string diskPath)
     {
@@ -783,12 +644,8 @@ public class TextureLoader
     }
 
     /// <summary>
-    /// Load a <c>.tex</c> already in memory as RGBA8. Returns null on failure.
-    /// <para/>
-    /// The bytes overload exists for a texture that has no file: a <c>.ttmp2</c> keeps its textures inside
-    /// one SqPack blob, and <see cref="TexToolsPackage"/> reassembles them into <c>.tex</c> form without
-    /// ever putting them on disk. Writing a temp file just to read it back would be the same work twice
-    /// and a 22 MB round trip per texture.
+    /// Load a <c>.tex</c> already in memory as RGBA8 (e.g. reassembled from a <c>.ttmp2</c> by
+    /// <see cref="TexToolsPackage"/>). Returns null on failure.
     /// </summary>
     /// <param name="what">What these bytes are, for the log line when they will not decode.</param>
     public (byte[] rgba, int width, int height)? LoadTexBytesAsRgba(byte[] bytes, string what)
@@ -808,10 +665,8 @@ public class TextureLoader
     }
 
     /// <summary>
-    /// Load a .dds file as RGBA8. BC-compressed payloads (BC1/2/3/5/7) are wrapped as an in-memory
-    /// single-mip .tex and handed to Lumina's decoder — the same path base skin textures use — so no
-    /// standalone BC7 decoder is needed. Uncompressed 32-bpp payloads are reordered directly via the
-    /// pixel-format channel masks. Returns null on failure or an unsupported format.
+    /// Load a .dds file as RGBA8. BC payloads are wrapped as a single-mip .tex for Lumina's decoder; uncompressed
+    /// 32-bpp payloads are reordered via the channel masks. Returns null on failure or an unsupported format.
     /// </summary>
     public (byte[] rgba, int width, int height)? LoadDdsAsRgba(string diskPath)
     {
@@ -898,17 +753,12 @@ public class TextureLoader
         long mip0 = Mip0ByteSize(luminaFmt, width, height);
         if (mip0 <= 0 || dataOffset + mip0 > dds.Length) return null;
 
-        // Native decode straight off the DDS payload — no synthetic .tex wrap, no copy, no BGRA round-trip.
-        // Trusted only once this format has been checked against Lumina; the first .dds of an unverified
-        // format falls through and is compared below, exactly as the .tex path does. The block data here is
-        // located by this function's own header parse rather than by an offset table a mod tool wrote, but
-        // the STRIDE and channel conventions are the shim's, and those are what get a format wrong.
+        // Native decode straight off the DDS payload, trusted only once this format has been verified against Lumina.
         var fast = TryDecodeNative(luminaFmt, dds, dataOffset, width, height);
         if (fast != null && _nativeDecodeVerified.ContainsKey(luminaFmt))
             return (fast, width, height);
 
-        // Wrap mip 0 as a minimal single-surface .tex (80-byte header + block data) so Lumina's
-        // format decoder — which already handles every BC format the game ships — does the work.
+        // Wrap mip 0 as a minimal single-surface .tex (80-byte header + block data) for Lumina's decoder.
         var tex = new byte[80 + mip0];
         BitConverter.TryWriteBytes(tex.AsSpan(0),  0x00800000u);   // attribute
         BitConverter.TryWriteBytes(tex.AsSpan(4),  luminaFmt);     // format
@@ -923,8 +773,8 @@ public class TextureLoader
         if (texFile == null) return null;
         var reference = ConvertTex(texFile);
 
-        // First .dds of this format: the native result is in hand and so is Lumina's, so compare them and
-        // record the verdict for both paths. BC decode is exact, so a mismatch is a shim bug, not rounding.
+        // First .dds of this format: compare native against Lumina and record the verdict. BC decode is exact,
+        // so a mismatch is a shim bug.
         if (fast != null)
         {
             if (!fast.AsSpan().SequenceEqual(reference.rgba))
@@ -942,9 +792,8 @@ public class TextureLoader
         return reference;
     }
 
-    // Reorders an uncompressed 32-bpp DDS surface to RGBA8 using per-channel bit masks. Assumes each
-    // mask selects a contiguous 8-bit byte (true for all standard 32-bpp DDS layouts). aMask == 0
-    // means no alpha channel → opaque.
+    // Reorders an uncompressed 32-bpp DDS surface to RGBA8 via per-channel masks, each assumed to select a whole
+    // byte. aMask == 0 means opaque.
     private static (byte[] rgba, int width, int height)? DecodeUncompressedDds(
         byte[] dds, int offset, int width, int height, uint rMask, uint gMask, uint bMask, uint aMask)
     {
@@ -974,35 +823,20 @@ public class TextureLoader
     }
 
     /// <summary>
-    /// Load a base texture as RGBA8, trying a Penumbra-resolved disk path first,
-    /// then falling back to the game's SqPack for vanilla (unmodded) textures.
+    /// Load a base texture as RGBA8, trying a Penumbra-resolved disk path first, then the game's SqPack.
     /// </summary>
-    // The composite runs at the base skin's native resolution and writes the final textures back at
-    // that size, so the base texture dimensions determine the output resolution. To guarantee 4K
-    // output, every base texture below 4096 is upscaled (bilinear) to 4096×4096; textures already at
-    // 4096+ are left untouched. The cache stays native — upscaling happens on the returned buffer.
+    // The base texture's size sets the output resolution, so every base below this is upscaled (bilinear) to it.
     public const int BaseTargetSize = 4096;
 
-    // Clone (for in-place compositing) when already ≥4K, otherwise upscale to 4K. Upscaling produces a
-    // fresh buffer, so no separate clone is needed on that path.
+    // Clone (for in-place compositing) when already ≥4K, otherwise upscale, which yields a fresh buffer.
     private static (byte[] rgba, int width, int height) CloneOrUpscaleBase(byte[] rgba, int width, int height)
         => width >= BaseTargetSize && height >= BaseTargetSize
             ? ((byte[])rgba.Clone(), width, height)
             : (UVRemapService.ResizeBilinear(rgba, width, height, BaseTargetSize, BaseTargetSize), BaseTargetSize, BaseTargetSize);
 
     /// <summary>
-    /// Bring a freshly decoded base texture up to <see cref="BaseTargetSize"/> BEFORE it enters the cache,
-    /// so the upscale is paid once per file instead of once per composite.
-    /// <para/>
-    /// The cache used to stay native, with <see cref="CloneOrUpscaleBase"/> upscaling the returned buffer
-    /// every time. That put a fully serial <c>ResizeBilinear</c> — 16.7M output pixels, four channels each —
-    /// on the blend's critical path on every recomposite, for textures that had not changed. Measured at
-    /// 1466 ms across 10 calls, 79% of the whole blend: this skin's base diffuse and mask are 2048² while
-    /// its normal is already 4096², so two of the three were re-upscaled from a cache HIT every run.
-    /// <para/>
-    /// Byte-identical: <c>ResizeBilinear</c> is deterministic, so caching its output rather than recomputing
-    /// it produces the same pixels. It costs cache budget — a 2048² entry grows 16.7 MB → 67 MB — which the
-    /// existing byte budget and LRU already account for.
+    /// Bring a freshly decoded base texture up to <see cref="BaseTargetSize"/> before it enters the cache, so the
+    /// upscale is paid once per file instead of once per composite.
     /// </summary>
     private static (byte[] rgba, int width, int height)? UpscaleForCache((byte[] rgba, int width, int height)? decoded)
         => decoded is not { } v ? null
@@ -1010,19 +844,12 @@ public class TextureLoader
          : (UVRemapService.ResizeBilinear(v.rgba, v.width, v.height, BaseTargetSize, BaseTargetSize),
             BaseTargetSize, BaseTargetSize);
 
-    /// <summary>Memo for <see cref="BaseNativeSize"/>'s game-data branch. Vanilla game data is immutable for
-    /// the session, which is the same reason <see cref="LoadBaseTexture"/> keys its own cache on the game
-    /// path alone.</summary>
+    /// <summary>Memo for <see cref="BaseNativeSize"/>'s game-data branch; vanilla game data is immutable for the session.</summary>
     private readonly ConcurrentDictionary<string, (int W, int H)?> nativeSizes = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// A base texture's NATIVE dimensions — what the file actually holds, before
-    /// <see cref="LoadBaseTexture"/> upscales it to <see cref="BaseTargetSize"/>.
-    /// <para/>
-    /// The upscale is why this is needed: it squares every base off at 4096, so a caller that has to know
-    /// the sheet's real ASPECT cannot get it from the loaded buffer. The doubled face layout is exactly such
-    /// a caller — a race whose face sheet is square (Au Ra, 2048²) doubles to 2:1, while every other race's
-    /// 1024×2048 doubles to square, and publishing both at 4096² would stretch one of them.
+    /// A base texture's native dimensions, before <see cref="LoadBaseTexture"/> upscales it to
+    /// <see cref="BaseTargetSize"/>, for callers that need the sheet's real aspect.
     /// </summary>
     public (int Width, int Height)? BaseNativeSize(string? diskPath, string gamePath)
     {
@@ -1087,9 +914,8 @@ public class TextureLoader
         int h = tex.Header.Height;
         var bgra = tex.TextureBuffer.Filter(mip: 0, z: 0, format: TexFile.TextureFormat.B8G8R8A8).RawData;
         var rgba = new byte[bgra.Length];
-        // 64 MB of byte-at-a-time channel swapping at 4K, on the thread the blend loop is waiting on.
         // Per-pixel with no carried state, so ParallelPixels partitions it without changing a byte.
-        CompositorService.ParallelPixels(0, bgra.Length, 4, (from, to) =>
+        OverlayBlend.ParallelPixels(0, bgra.Length, 4, (from, to) =>
         {
             for (int i = from; i < to; i += 4)
             {
@@ -1103,14 +929,8 @@ public class TextureLoader
     }
 
     /// <summary>
-    /// Load any image the Create tab's picker accepts as RGBA8 at its OWN size — <c>.tex</c> and
-    /// <c>.dds</c> through the same decoders as everything else, everything Stb reads (png, jpg, bmp, tga)
-    /// through Stb.
-    /// <para/>
-    /// Distinct from <see cref="LoadPngAsRgba"/>, which exists to serve a fixed target size and scales to
-    /// reach it. A derived texture written back out beside the source — a glow's scroll map — has to keep
-    /// the source's dimensions, and the caller does not know them in advance. Uncached: this is used once
-    /// per mod creation, not per composite.
+    /// Load any image the Create tab's picker accepts (.tex, .dds, and whatever Stb reads) as RGBA8 at its own size.
+    /// Unlike <see cref="LoadPngAsRgba"/>, never scales. Uncached.
     /// </summary>
     public (byte[] rgba, int width, int height)? LoadImageAsRgba(string path)
     {
@@ -1131,14 +951,10 @@ public class TextureLoader
     }
 
     /// <summary>
-    /// Cache a buffer DERIVED from one source file — an overlay cut into another UV layout, say — in the same
-    /// cache, under the same file identity (path, mtime, length) its decode uses. So it is budgeted and evicted
-    /// with everything else, <see cref="EvictMod"/> drops it with its mod, and an edited source misses.
-    /// <para/>
-    /// <paramref name="derivation"/> must name EVERYTHING besides the file that decides the result (source
-    /// space, output size, filter). A null from <paramref name="derive"/> is not cached, exactly as a failed
-    /// decode is not, so a transfer map that turns up later is still used. The returned array is shared —
-    /// read-only for callers, like every other cache entry.
+    /// Cache a buffer derived from one source file under that file's identity, so it is budgeted, evicted with its
+    /// mod (<see cref="EvictMod"/>), and missed when the source changes. <paramref name="derivation"/> must name
+    /// everything besides the file that decides the result. A null from <paramref name="derive"/> is not cached.
+    /// The returned array is shared and read-only.
     /// </summary>
     public byte[]? GetOrDerive(string sourcePath, string derivation, int w, int h, Func<byte[]?> derive)
     {
@@ -1149,24 +965,14 @@ public class TextureLoader
     }
 
     /// <summary>
-    /// Load an overlay image from disk as RGBA8, scaled to (targetW × targetH) if needed.
-    /// Accepts <c>.png</c> (StbImageSharp), <c>.tex</c> (Lumina) and <c>.dds</c> (parsed here). The
-    /// two GPU-texture containers decompress any format — including BC7 — to RGBA via Lumina's
-    /// decoder, the same path the base skin textures use. Dispatch is by extension because Proteus
-    /// mods reference each overlay by its exact file path, so a BC7-packaged mod names its overlays
-    /// <c>*.dds</c> (or <c>*.tex</c>). Returns null on failure.
-    /// <para/>
-    /// <paramref name="filter"/> decides how a size mismatch is resolved — see <see cref="ResampleFilter"/>.
-    /// It defaults to <see cref="ResampleFilter.Auto"/>, so only the index-texture callers have to say
-    /// anything; getting that wrong on an <c>_id</c> map is a wrong COLOUR, not a soft edge.
+    /// Load an overlay image (<c>.png</c>, <c>.tex</c> or <c>.dds</c>, by extension) as RGBA8, scaled to
+    /// (targetW × targetH) if needed. Returns null on failure. <paramref name="filter"/> decides the resample —
+    /// see <see cref="ResampleFilter"/>; index-texture callers must pass Nearest.
     /// </summary>
     public byte[]? LoadPngAsRgba(string path, int targetW, int targetH,
                                  ResampleFilter filter = ResampleFilter.Auto)
     {
-        // Extension tolerance: a mod may ship diffuse.png while its metadata references diffuse.dds (or vice
-        // versa). If the exact file is absent, resolve a sibling extension (.png/.dds/.tex) — the same fallback
-        // masks already use. Central here so every consumer (skin overlays, gear shells, effects) benefits and
-        // a wrong extension can't silently fail to load. Only a miss pays the extra lookups.
+        // Extension tolerance: if the exact file is absent, resolve a sibling .png/.dds/.tex.
         if (!File.Exists(path))
         {
             var dir = Path.GetDirectoryName(path) ?? string.Empty;
@@ -1187,8 +993,7 @@ public class TextureLoader
             {
                 if (isTex || isDds)
                 {
-                    // Decompress the native format (BC7/BC5/uncompressed) to RGBA at its stored size;
-                    // scale to the requested target to match the PNG path's contract.
+                    // Decompress to RGBA at stored size, then scale to the requested target.
                     var full = isTex ? LoadTexAsRgba(path) : LoadDdsAsRgba(path);
                     if (full == null) return null;
                     var (rgba, sw, sh) = full.Value;
@@ -1212,15 +1017,11 @@ public class TextureLoader
             }
         }
 
-        // Key includes the target size — the same source is cached separately per scale. Distinct
-        // prefixes keep a .tex/.dds/.png that happen to share a stem from colliding in the cache.
+        // Key includes the target size; distinct prefixes keep same-stem .tex/.dds/.png apart.
         var key = DiskKey(isTex ? "TEXO" : isDds ? "DDSO" : "PNG", path);
         if (key == null) return Decode()?.rgba;
 
-        // ...and the FILTER, because the same file at the same size decodes to different pixels under
-        // each one. An index map and a mask can be the same image (a mod's _id doubling as coverage);
-        // without this the first caller's choice would be served to the second, which is how a nearest
-        // request quietly gets bilinear-blended rows back.
+        // ...and the filter, since the same file at the same size decodes differently under each.
         var fkey = filter == ResampleFilter.Nearest ? "|n" : "|a";
 
         // Read-only for callers, so the cached array is shared (no clone).
@@ -1228,37 +1029,20 @@ public class TextureLoader
     }
 
     /// <summary>
-    /// Whether <paramref name="path"/> holds a COMPLETE .tex written by <see cref="WriteTex"/> — its
-    /// length is exactly what its own header describes. False for anything missing, truncated, or written
-    /// in a format this never emits.
-    /// <para/>
-    /// The header is self-describing (format at +4, dimensions at +8/+10), so no caller has to know how
-    /// many bytes the encode produced. Both block formats are 16 bytes per 4×4 block, and compression is
-    /// only ever chosen for 4-aligned dimensions, so the payload is w·h for either of them.
-    /// <para/>
-    /// Exists because a write interrupted partway — a crash, a full disk, antivirus — leaves a file whose
-    /// NAME promises content it does not have. Output names carry a content hash, so an existence check
-    /// alone re-approves that file on every composite afterwards: the damage is permanent, silent, and
-    /// only clearable by deleting the file by hand. Wrong answers here are cheap in one direction only
-    /// (a needless re-encode) and expensive in the other, so anything unrecognised reads as incomplete.
+    /// Whether <paramref name="path"/> holds a complete .tex written by <see cref="WriteTex"/>: its length is exactly
+    /// what its own header describes. Anything missing, truncated or unrecognised reads as incomplete, since output
+    /// names carry a content hash and an interrupted write would otherwise be reused forever.
     /// </summary>
     public static bool IsCompleteTex(string path)
     {
-        // The FileInfo construction is inside the try, not an expression-bodied hand-off: it throws on an
-        // empty or malformed path, and this returns false for "anything missing" — a caller asking about a
-        // junk path wants that answer, not an exception from what reads like a predicate.
+        // FileInfo is constructed inside the try: it throws on a malformed path, which should read as false.
         try { return IsCompleteTex(new FileInfo(path)); }
         catch { return false; }
     }
 
     /// <inheritdoc cref="IsCompleteTex(string)"/>
     /// <remarks>
-    /// Takes the <see cref="FileInfo"/> so a caller that has already stat'd the file doesn't pay for a
-    /// second one — <see cref="FileInfo.Exists"/> and <see cref="FileInfo.Length"/> are served from the
-    /// snapshot taken on first access. The header read cannot be avoided in the same way: the only other
-    /// route to an expected length is re-deriving it from the source buffer, which means repeating
-    /// <see cref="IsSolidColor"/>'s scan over the whole image to find the flat-colour shrink — far more
-    /// expensive than reading 16 bytes.
+    /// Takes the <see cref="FileInfo"/> so a caller that has already stat'd the file doesn't stat it again.
     /// </remarks>
     public static bool IsCompleteTex(FileInfo fi)
     {
@@ -1295,9 +1079,7 @@ public class TextureLoader
     }
 
     /// <summary>
-    /// Write an RGBA8 buffer as an uncompressed B8G8R8A8 .tex file.
-    /// The game and Penumbra accept this format natively without any conversion.
-    /// Returns true on success.
+    /// Write an RGBA8 buffer as an uncompressed B8G8R8A8 .tex file. Returns true on success.
     /// </summary>
     public bool WriteTex(byte[] rgba, int width, int height, string outputPath)
         => WriteTex(rgba, width, height, outputPath, TexEncoding.Uncompressed);
@@ -1337,12 +1119,10 @@ public class TextureLoader
             uint formatCode;
             if (encoding == TexEncoding.Uncompressed)
             {
-                // Convert RGBA → BGRA. Per-pixel with no carried state, so partitioning cannot change the
-                // bytes written; at 4K this is 16.7M iterations over a fresh 64 MB buffer, and with
-                // compression off (the default) it runs for every channel of every material.
+                // Convert RGBA → BGRA. Per-pixel with no carried state, so partitioning cannot change the bytes.
                 var tSwizzle = PhaseCounter.Begin();
                 var dst = new byte[rgba.Length];
-                CompositorService.ParallelPixels(0, rgba.Length, 4, (from, to) =>
+                OverlayBlend.ParallelPixels(0, rgba.Length, 4, (from, to) =>
                 {
                     for (int i = from; i < to; i += 4)
                     {
@@ -1421,9 +1201,8 @@ public class TextureLoader
     /// <summary>Native encode via proteus_bcn.dll, fanned out across cores by 4x4 block-rows.</summary>
     private static byte[] EncodeBlockCompressedNative(byte[] rgba, int width, int height, TexEncoding encoding)
     {
-        // The native code reads width*height*4 bytes of pinned memory with no managed bounds check — an
-        // undersized buffer would be an AccessViolation (uncatchable, crashes the game), not the graceful
-        // managed fallback. Guard with a MANAGED throw before pinning so the caller's catch absorbs it.
+        // The native code reads unchecked pinned memory, so an undersized buffer would be an uncatchable
+        // AccessViolation. Throw a managed exception first so the caller's fallback absorbs it.
         if ((long)rgba.Length < (long)width * height * 4)
             throw new ArgumentException($"rgba buffer too small: {rgba.Length} < {(long)width * height * 4} for {width}x{height}");
 
@@ -1469,15 +1248,8 @@ public class TextureLoader
     };
 
     /// <summary>
-    /// Native block decode via proteus_bcn.dll, fanned out across cores by 4x4 block-rows — the mirror of
-    /// <see cref="EncodeBlockCompressedNative"/>, and the answer to the single largest cost in a cold
-    /// composite: Lumina's decoder is scalar, single-threaded managed code, and a run was measured spending
-    /// 16s of decode work on 38 textures.
-    /// <para/>
-    /// Emits RGBA directly, so the serial BGRA→RGBA pass the managed path needed disappears with it.
-    /// <para/>
-    /// Returns null when the format isn't one we decode, the payload is short, or the native call reports
-    /// failure — every one of which means "use the managed path", never "produce wrong pixels".
+    /// Native block decode via proteus_bcn.dll, fanned out across cores by 4x4 block-rows, emitting RGBA directly.
+    /// Returns null (use the managed path) when the format isn't handled, the payload is short, or the call fails.
     /// </summary>
     private static byte[]? DecodeBlockCompressedNative(uint luminaFormat, byte[] blocks, int blockOffset, int width, int height)
     {
@@ -1486,20 +1258,15 @@ public class TextureLoader
         if (NativeFormatFor(luminaFormat) is not { } fmt) return null;
         if (width <= 0 || height <= 0 || width % 4 != 0 || height % 4 != 0) return null;
 
-        // Bytes per block is FORMAT-DEPENDENT: BC1 packs a block into 8, everything else into 16 (the same
-        // split Mip0ByteSize encodes). Assuming 16 for all of them made BC1 read every other block and
-        // decode a scrambled image — and it did so SILENTLY, because the over-large size below still fits
-        // inside any file that carries a mip chain after mip 0, so the bounds guard let it through.
-        // Asked of the native side so the slicing stride here can never disagree with the walking stride
-        // there.
+        // Bytes per block is format-dependent (BC1 is 8, the rest 16); asked of the native side so the slicing
+        // stride here can never disagree with the walking stride there.
         int stride = proteus_bcn_block_bytes((int)fmt);
         if (stride <= 0) return null;
 
         int bw = width / 4, bh = height / 4;
         long need = (long)bw * bh * stride;
-        // The native code reads `need` bytes and writes width*height*4 with no managed bounds check — a
-        // short buffer would be an AccessViolation (uncatchable, takes the game with it), not a fallback.
-        // Checked here, before anything is pinned.
+        // The native code reads and writes with no bounds check, so a short buffer would be an uncatchable
+        // AccessViolation. Checked before anything is pinned.
         if (blockOffset < 0 || blockOffset + need > blocks.Length) return null;
 
         var rgba = new byte[(long)width * height * 4];
@@ -1518,8 +1285,8 @@ public class TextureLoader
                 int start = ci * chunkRows;
                 int count = Math.Min(chunkRows, bh - start);
                 if (count <= 0) return;
-                // Blocks are this worker's slice; the output pointer is the WHOLE image, because the native
-                // scatter computes absolute row offsets from the block-row index.
+                // Blocks are this worker's slice; the output pointer is the whole image, since the native scatter
+                // computes absolute row offsets.
                 var blockP = new IntPtr(inPtr + (long)start * bw * stride);
                 if (proteus_decode_bcn((int)fmt, blockP, width, start, count, new IntPtr(outPtr)) == 0)
                     Interlocked.Exchange(ref ok, 0);
@@ -1530,8 +1297,8 @@ public class TextureLoader
     }
 
     /// <summary>
-    /// <see cref="DecodeBlockCompressedNative"/> with the same one-shot fallback discipline the encoder
-    /// uses: any throw latches the native path off for the session and everything reverts to Lumina.
+    /// <see cref="DecodeBlockCompressedNative"/> with the encoder's fallback discipline: any throw latches the native
+    /// path off for the session.
     /// </summary>
     private byte[]? TryDecodeNative(uint luminaFormat, byte[] blocks, int blockOffset, int width, int height)
     {
@@ -1551,42 +1318,27 @@ public class TextureLoader
     }
 
     /// <summary>
-    /// Texture formats whose native decode has been checked against Lumina and agreed, this session.
-    /// <para/>
-    /// Keyed BY FORMAT, not a single flag. A session-wide flag verifies whichever format happens to be
-    /// decoded first — in practice the skin's BC7 — and then waves every other format through untested.
-    /// That is a safety net exactly one format wide, and it is how a BC1 block-stride bug survived both a
-    /// round-trip test suite and this check.
+    /// Texture formats whose native decode has been checked against Lumina and agreed this session. Per format, so
+    /// verifying one format never waves another through.
     /// </summary>
     private static readonly ConcurrentDictionary<uint, byte> _nativeDecodeVerified = new();
 
     /// <summary>
-    /// Formats whose native decode disagreed with Lumina. Those fall back for the rest of the session;
-    /// every other format carries on natively.
-    /// <para/>
-    /// Per-format, because the decoders can legitimately differ on ONE format and agree on the others:
-    /// BC4/BC5's interpolation is a division by 7, and truncating versus rounding it shifts a channel by
-    /// one. Disabling the whole native path over that would surrender BC7 — which is the bulk of the
-    /// decode cost and provably identical — to fix a format that is a small share of it.
+    /// Formats whose native decode disagreed with Lumina; those fall back for the rest of the session while every
+    /// other format stays native.
     /// </summary>
     private static readonly ConcurrentDictionary<uint, byte> _nativeDecodeRejected = new();
 
     /// <summary>
-    /// Decode a sanitized .tex through the native shim, falling back to Lumina for anything it cannot do.
-    /// <para/>
-    /// The first native decode OF EACH FORMAT is checked against Lumina's, byte for byte, and the native
-    /// path is latched off for good if they disagree. BC decode is exact — unlike encode, there is no
-    /// legitimate reason for two decoders to differ — so any mismatch is a bug in the block offset, stride
-    /// or format mapping, and the failure mode without this check is silently wrong pixels in a baked
-    /// texture rather than an error anyone would see. One extra managed decode per format buys that away.
+    /// Decode a sanitized .tex through the native shim, falling back to Lumina for anything it cannot do. The first
+    /// native decode of each format is checked byte for byte against Lumina (BC decode is exact).
     /// </summary>
     private (byte[] rgba, int width, int height) DecodeTexSurface(byte[] sanitized, TexFile tex)
     {
         int w = tex.Header.Width, h = tex.Header.Height;
         if (sanitized.Length < 80) return ConvertTex(tex);
 
-        // Format and mip-0 location straight out of the header Lumina itself just read, so the two decoders
-        // are looking at the same bytes. SanitizeTexBytes has already normalised the offset table.
+        // Format and mip-0 offset from the header Lumina just read, so both decoders see the same bytes.
         uint fmt = BitConverter.ToUInt32(sanitized, 4);
         long off = BitConverter.ToUInt32(sanitized, 28);
         if (off <= 0 || off > int.MaxValue) return ConvertTex(tex);
@@ -1647,13 +1399,10 @@ public class TextureLoader
         }
     }
 
-    // Replicates GameData.GetFileFromDisk<T>() but without needing a GameData instance.
-    // Data and Reader have internal setters, so we use reflection to set them.
+    // Replicates GameData.GetFileFromDisk<T>() without a GameData instance; Data and Reader have internal setters.
     private static readonly PropertyInfo PropData   = typeof(FileResource).GetProperty("Data",   BindingFlags.Public | BindingFlags.Instance)!;
     private static readonly PropertyInfo PropReader = typeof(FileResource).GetProperty("Reader", BindingFlags.Public | BindingFlags.Instance)!;
 
-    // The disk-path variant went with the Lumina-typed mtrl wrappers — nothing loads a typed file straight
-    // off disk any more. Callers that want raw bytes use LoadRawFile.
     internal static T? LoadLuminaFileFromBytes<T>(byte[] bytes) where T : FileResource
     {
         var file = Activator.CreateInstance<T>();
@@ -1663,10 +1412,8 @@ public class TextureLoader
         return file;
     }
 
-    // Some mod tools write .tex files with MipCount > 1 but leave the extra OffsetToSurface slots
-    // at zero. Lumina computes negative mipmap allocations from those zeroed offsets and passes a
-    // negative count to Buffer.BlockCopy, which throws ArgumentException. Pre-patch the header so
-    // MipCount only reflects the offsets that are actually populated.
+    // Some mod tools write MipCount > 1 with zeroed OffsetToSurface slots, which makes Lumina throw. Pre-patch
+    // MipCount to the offsets actually populated.
     internal static byte[] SanitizeTexBytes(byte[] bytes)
     {
         if (bytes.Length < 80) return bytes;
@@ -1681,13 +1428,8 @@ public class TextureLoader
             return p;
         }
 
-        // Some TexTools exports write a full MipCount but a bogus OffsetToSurface table whose
-        // values are tiny yet still monotonic and in-bounds — e.g. surf0=80, surf1=343 for a
-        // 2048×2048 BC7 whose mip 0 alone occupies 4 MB. The monotonic/in-bounds loop below
-        // accepts those, so Lumina then reads mip 0 from a 263-byte slice and decodes solid
-        // magenta. Guard against it: if the second surface starts before mip 0 could possibly
-        // end, the table is unusable — collapse to a single mip so Lumina reads mip 0 from the
-        // contiguous block right after the header (verified to decode correctly).
+        // Some TexTools exports write a bogus but monotonic offset table. If the second surface starts before mip 0
+        // could end, collapse to a single mip so Lumina reads mip 0 right after the header.
         uint fmt = BitConverter.ToUInt32(bytes, 4);
         int w    = BitConverter.ToUInt16(bytes, 8);
         int h    = BitConverter.ToUInt16(bytes, 10);
@@ -1704,10 +1446,7 @@ public class TextureLoader
         for (int i = 1; i < Math.Min(mipCount, 13); i++)
         {
             uint cur = BitConverter.ToUInt32(bytes, 28 + i * 4);
-            // Reject zero, non-monotonic, OR out-of-bounds offsets.
-            // Some mod tools write OffsetToSurface as if the texture were uncompressed
-            // (4 bytes/pixel) even for BC formats, making offsets 4× too large and
-            // pointing past the end of the compressed file.
+            // Reject zero, non-monotonic, or out-of-bounds offsets (some tools write uncompressed-size offsets for BC).
             if (cur == 0 || cur <= prev || cur >= (uint)bytes.Length) break;
             prev = cur;
             validMips = i + 1;
@@ -1719,9 +1458,8 @@ public class TextureLoader
         return patched;
     }
 
-    // Byte size of mip level 0 for a .tex pixel format at the given dimensions.
-    // Returns 0 for formats we don't recognise so callers skip the consistency check
-    // rather than risk a false positive. Format codes are Lumina TexFile.TextureFormat values.
+    // Byte size of mip level 0 for a .tex pixel format (Lumina TexFile.TextureFormat codes). 0 for unknown formats,
+    // so callers skip the consistency check.
     internal static long Mip0ByteSize(uint format, int w, int h)
     {
         if (w <= 0 || h <= 0) return 0;
@@ -1753,12 +1491,9 @@ public class TextureLoader
     public byte[]? LoadRawMtrl(string? diskPath, string gamePath) => LoadRawFile(diskPath, gamePath);
 
     /// <summary>
-    /// Raw bytes of any game file (e.g. a .mdl or .mtrl), from the mod redirect if present else the game's
-    /// own data. <paramref name="diskPath"/> is Penumbra's resolved path — for an UNMODDED file that is the
-    /// game path unchanged, not a real file — so a missing/relative disk path falls through to the game
-    /// data. Lets the second skin cut a shell from vanilla (unmodded) body/gear models, which never
-    /// resolve to an on-disk file. Reads the raw FileResource — no Lumina parse, so a Dawntrail file whose
-    /// typed layout Lumina misreads still comes back byte-exact.
+    /// Raw bytes of any game file, from the mod redirect if present else the game's own data. For an unmodded file
+    /// <paramref name="diskPath"/> is the game path, not a real file, so it falls through. No Lumina parse, so the
+    /// bytes come back exact.
     /// </summary>
     public byte[]? LoadRawFile(string? diskPath, string gamePath)
     {
@@ -1789,8 +1524,7 @@ public class TextureLoader
         return (result, false);
     }
 
-    // Patches the key in-place if found; otherwise inserts a new ShaderKey entry and updates
-    // ShaderKeyCount and FileSize in the MaterialFileHeader.
+    // Patches the key in place if found; otherwise inserts a ShaderKey entry and updates ShaderKeyCount and FileSize.
     // MaterialHeader layout (12 bytes): ShaderValueListSize(2) ShaderKeyCount(2) ConstantCount(2)
     //   SamplerCount(2) Unknown1(2) Unknown2(2) — followed by ShaderKeys[ShaderKeyCount] (8 bytes each).
     public static byte[] EnsureShaderKey(byte[] mtrl, uint category, uint value)
@@ -1914,10 +1648,8 @@ public class TextureLoader
         return ((byte[])mtrl.Clone(), false);
     }
 
-    // Writes to a uniquely-named .tmp file in the same directory, then atomically moves it to
-    // the final path. Mare Synchronos watches .tex/.mtrl extensions and will hash-lock them
-    // immediately on creation; writing to a .tmp first means the final path appears fully-written
-    // or not at all, eliminating the file-lock retries that previously added seconds per run.
+    // Writes a unique .tmp in the same directory, then atomically moves it into place, so file watchers (Mare
+    // Synchronos) only ever see a fully written file.
     private static void WriteWithRetry(string path, Action<FileStream> write, int attempts = 5, int delayMs = 40)
     {
         var tmp = path + "." + Path.GetRandomFileName() + ".tmp";
@@ -1935,21 +1667,14 @@ public class TextureLoader
     }
 
     /// <summary>Nearest-neighbour resize of an RGBA8 buffer.</summary>
-    // Deliberately still nearest, and deliberately NOT routed through Resample: its callers ask for
-    // point sampling by name, and changing what this returns would change them silently.
+    // Deliberately nearest and not routed through Resample: callers ask for point sampling by name.
     public byte[] ScaleRgba(byte[] src, int sw, int sh, int dw, int dh)
         => ScaleNearest(src, sw, sh, dw, dh);
 
     /// <summary>
-    /// Resize an RGBA8 buffer under a <see cref="ResampleFilter"/>. <see cref="ResampleFilter.Auto"/>
-    /// picks by DIRECTION — area-average when an axis actually shrinks, bilinear otherwise — because the
-    /// two failures are different: shrinking badly aliases (it throws detail away), growing badly
-    /// blocks up (it repeats texels). Nearest is passed through verbatim for index maps.
-    /// <para/>
-    /// STRICTLY smaller, not "smaller or equal". A gen2 remap hands this a 2048x4096 half sheet to bring
-    /// up to a square one: nothing shrinks there, and treating the equal axis as a reduction would send
-    /// it to the box filter, whose span collapses to a single texel on the axis that grows — i.e. point
-    /// sampling, the very thing this exists to stop.
+    /// Resize an RGBA8 buffer under a <see cref="ResampleFilter"/>. <see cref="ResampleFilter.Auto"/> uses area-average
+    /// when an axis strictly shrinks, bilinear otherwise (an equal axis must not reach the box filter, which would
+    /// point-sample the growing axis). Nearest is passed through for index maps.
     /// </summary>
     internal static byte[] Resample(byte[] src, int sw, int sh, int dw, int dh, ResampleFilter filter)
     {
@@ -1961,16 +1686,9 @@ public class TextureLoader
     }
 
     /// <summary>
-    /// The stored dimensions of an image, read from its HEADER — no decode, no cache entry. Returns
-    /// null for anything missing or unrecognised.
-    /// <para/>
-    /// Exists so the shell can size its sheet to the art the author actually supplied before committing
-    /// to decoding any of it. Decoding first would mean holding a 64 MB buffer per overlay just to ask
-    /// how big it is.
-    /// <para/>
-    /// Carries the same sibling-extension tolerance as <see cref="LoadPngAsRgba"/>, so it measures the
-    /// file that will actually be loaded when a mod's metadata says <c>.dds</c> and the folder holds
-    /// <c>.png</c> — otherwise the size decision and the load would disagree about which file they mean.
+    /// The stored dimensions of an image, read from its header without decoding. Null for anything missing or
+    /// unrecognised. Uses the same sibling-extension tolerance as <see cref="LoadPngAsRgba"/>, so it measures the
+    /// file that will be loaded.
     /// </summary>
     public static (int Width, int Height)? ProbeSize(string path)
     {
@@ -2001,8 +1719,7 @@ public class TextureLoader
                 if (got < 32) return null;
             }
 
-            // PNG: 8-byte signature, then the IHDR chunk — length+type at 8..15, width/height at 16..23,
-            // both big-endian. The spec requires IHDR to come first, so the offsets are fixed.
+            // PNG: IHDR comes first, so width/height are fixed at 16..23, big-endian.
             if (head[0] == 0x89 && head[1] == 'P' && head[2] == 'N' && head[3] == 'G')
             {
                 int w = (head[16] << 24) | (head[17] << 16) | (head[18] << 8) | head[19];
@@ -2018,8 +1735,7 @@ public class TextureLoader
                 return w > 0 && h > 0 ? (w, h) : null;
             }
 
-            // .tex has no magic; it is identified by extension everywhere else in this file, so do the
-            // same here. Width at 0x08, height at 0x0A, u16 little-endian — the layout WriteTex emits.
+            // .tex has no magic, so identify by extension. Width at 0x08, height at 0x0A, u16 little-endian.
             if (path.EndsWith(".tex", StringComparison.OrdinalIgnoreCase))
             {
                 int w = BitConverter.ToUInt16(head[8..10]);
@@ -2031,18 +1747,12 @@ public class TextureLoader
         }
         catch
         {
-            // A probe is an optimisation of the size CHOICE, never a load. Anything unreadable simply
-            // does not get a vote; the caller falls back to its floor and the real load reports the error.
+            // A probe only informs the size choice; the caller falls back and the real load reports the error.
             return null;
         }
     }
 
-    // Nearest-neighbour scale — prevents crashes if overlay PNG dimensions don't exactly match.
-    //
-    // Rows are independent and each writes only its own slice of dst, so this partitions by row with no
-    // change to the output. Worth doing: every overlay whose art is not already at the base resolution
-    // comes through here, at 4096x4096 that is 16.7M pixels, and it ran on one thread inside the decode
-    // the blend loop was waiting on.
+    // Nearest-neighbour scale. Rows are independent, so partitioning by row doesn't change the output.
     private static byte[] ScaleNearest(byte[] src, int sw, int sh, int dw, int dh)
     {
         var dst = new byte[dw * dh * 4];
@@ -2061,9 +1771,7 @@ public class TextureLoader
             }
         }
 
-        // Partitioned by ROW rather than through ParallelPixels: that helper's small-image guard counts
-        // steps, so a 4096-row span reads as 4096 items and falls back to serial. Rows are the right unit
-        // here anyway — sy is hoisted out of the inner loop, so a worker has to own whole rows.
+        // Partitioned by row, not ParallelPixels: that helper's small-image guard counts steps and would run serial.
         if (dh * dw < 256 * 256 || Environment.ProcessorCount < 2)
             for (int dy = 0; dy < dh; dy++) Row(dy);
         else

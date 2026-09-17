@@ -11,20 +11,11 @@ using Proteus.Interop;
 namespace Proteus.Services;
 
 /// <summary>
-/// Turns a plain <c>.zip</c> of loose eye textures into a Penumbra mod whose irises can carry an ANIMATED
-/// glow — the Import tab's engine for the fourth pack format.
-/// <para/>
-/// Eye mods ship three textures that replace the game's shared eye maps, and Penumbra alone handles that
-/// part perfectly well. What it cannot do is animate: the vanilla path gives a static glow through the
-/// limbal-ring customize parameter, whose intensity is one number per eye over a region the shader already
-/// decides. This adds the other kind — a <c>characterscroll</c> pattern flowing inside the shape the pack's
-/// own mask marks out, on a shell cut from the wearer's iris.
-/// <para/>
-/// So the textures go in as ordinary redirects and Proteus adds exactly one thing on top. That split is
-/// deliberate: it means nothing here depends on whether <c>iris.shpk</c>'s texture samplers are ones
-/// Proteus recognises, which is unverified and would silently drop art if it guessed wrong.
+/// Turns a plain <c>.zip</c> of loose eye textures into a Penumbra mod whose irises can carry an ANIMATED glow:
+/// the textures go in as ordinary redirects, and Proteus adds only a <c>characterscroll</c> shell cut from the
+/// wearer's iris to the pack mask's shape, so nothing depends on <c>iris.shpk</c>'s samplers.
 /// </summary>
-public sealed class EyeImportService
+public sealed partial class EyeImportService
 {
     private readonly PenumbraBridge penumbra;
     private readonly CompositorService compositor;
@@ -49,22 +40,14 @@ public sealed class EyeImportService
     // ── the glow's shape and tuning ──────────────────────────────────────────
 
     /// <summary>
-    /// Which channel of the mask marks the region that glows.
-    /// <para/>
-    /// RED, measured rather than assumed: the vanilla eye mask's red channel is a ring around the iris —
-    /// the limbal ring — and the one-file mods that make eyes glow work by painting into exactly that
-    /// channel. On the pack this was written against it traces the artwork instead of a ring, which is the
-    /// same thing said about a different shape.
+    /// Which channel of the mask marks the region that glows: RED, the limbal-ring channel glowing eye mods
+    /// paint into.
     /// </summary>
     private const int GlowChannel = 0;
 
     /// <summary>
-    /// Scroll speed and tiling for an eye, which are NOT the body's.
-    /// <para/>
-    /// <c>ScrollSettings.Default</c> is (0.15, 0.15, 5, 5) — five repeats of the pattern moving at fifteen
-    /// times the ~0.01 the format's own notes call usual. Across a torso that reads as motion; across an
-    /// iris a few millimetres wide it is a high-frequency shimmer with nothing legible in it. One slow
-    /// copy of the pattern is what actually reads as animation at this scale.
+    /// Scroll speed and tiling for an eye, which are NOT the body's <c>ScrollSettings.Default</c>: across an
+    /// iris that is a shimmer, and one slow copy of the pattern is what reads as animation.
     /// </summary>
     private const float ScrollSpeed = 0.02f;
     private const float ScrollTiling = 1f;
@@ -74,16 +57,8 @@ public sealed class EyeImportService
     private const string GlowSurfaceColour = "#000000";
 
     /// <summary>
-    /// The row emissive: 75%. Measured in game, and deliberately half of
-    /// <see cref="RenderModeInference.GlowEmissive"/>.
-    /// <para/>
-    /// This multiplies the scroll map, and the result is tonemapped — so above a certain point every
-    /// pixel bright enough clips to the same white and the mask's gradient stops being visible at all.
-    /// On an eye that matters more than anywhere else: the default cutout keeps the artist's falloff
-    /// precisely so the glow fades out through it, and at 150% the falloff washed flat and the whole iris
-    /// read as one colour. Lower is what makes the gradient legible.
-    /// <para/>
-    /// The Glow dial in Colors moves it afterwards; this is only where a fresh import starts.
+    /// The row emissive a fresh import starts at: half of <see cref="RenderModeInference.GlowEmissive"/>,
+    /// because the tonemapped result clips to white and washes out the mask's falloff.
     /// </summary>
     private const float GlowEmissive = 0.75f;
 
@@ -92,27 +67,23 @@ public sealed class EyeImportService
     private const int GlowRow = 16;
 
     /// <summary>
-    /// Below this fraction of lit pixels the mask marks out nothing worth cutting a shell for, and the
-    /// import says so rather than producing an invisible layer. A tenth of a percent of the sheet.
+    /// Below this fraction of lit pixels the mask marks out nothing worth cutting a shell for.
     /// </summary>
     private const float MinGlowFraction = 0.001f;
 
     /// <summary>
-    /// How much of the mask's glow channel the shell is cut to. A taste decision, not a correctness one —
-    /// the same pack reads well both ways and it depends on the artwork — so it is the user's, made before
-    /// the art is baked.
+    /// How much of the mask's glow channel the shell is cut to. A taste decision the user makes before the art
+    /// is baked.
     /// </summary>
     public enum EyeCutout
     {
         /// <summary>
-        /// Everything the channel marks, at an opacity proportional to it. The glow keeps the artist's own
-        /// falloff: bright where they drew the shape, fading out through whatever surrounds it.
+        /// Everything the channel marks, at an opacity proportional to it, keeping the artist's falloff.
         /// </summary>
         Falloff,
 
         /// <summary>
-        /// Only the shape itself — the top of the channel's range, rescaled to full. Use when the falloff
-        /// reads as the glow escaping rather than as part of it.
+        /// Only the shape itself: the top of the channel's range, rescaled to full.
         /// </summary>
         Artwork,
     }
@@ -121,24 +92,14 @@ public sealed class EyeImportService
     internal static float FloorFor(EyeCutout cutout) => cutout == EyeCutout.Artwork ? CutoutFloor : 0f;
 
     /// <summary>
-    /// Where the <see cref="EyeCutout.Artwork"/> cutout starts, as a fraction of the mask's own peak.
-    /// <para/>
-    /// The glow channel is NOT a silhouette of the artwork — it is the artist's whole glow gradient. On the
-    /// pack this was written against, 92% of the sheet is near-zero and the rest is a smooth tail from 16
-    /// to 239 (a radial fan filling the entire iris) with a separate spike at 240-255 (the butterfly).
-    /// Taking any lit pixel therefore covered 10% of the sheet — the whole iris disc — and the animation
-    /// escaped the shape it was supposed to be confined to.
-    /// <para/>
-    /// Relative rather than an absolute level, because a pack authored darker would lose everything to a
-    /// fixed threshold. "The top 30% of this mask's range" holds for a soft gradient and for a clean
-    /// binary silhouette alike: the latter has nothing between 0 and its peak, so the floor changes
-    /// nothing.
+    /// Where the <see cref="EyeCutout.Artwork"/> cutout starts, as a fraction of the mask's own peak. The glow
+    /// channel is the artist's whole gradient, not a silhouette; relative so a darker-authored pack still works.
     /// </summary>
     private const float CutoutFloor = 0.7f;
 
     /// <summary>
-    /// How much of the sheet has to reach a level before it counts as the mask's peak. Guards against one
-    /// stray bright texel setting the range for everything else; 0.05% of a 2048² sheet is ~2,000 pixels.
+    /// How much of the sheet has to reach a level before it counts as the mask's peak, so one stray bright
+    /// texel does not set the range.
     /// </summary>
     private const float PeakFraction = 0.0005f;
 
@@ -158,16 +119,10 @@ public sealed class EyeImportService
     /// <summary>Everything the Import tab renders after Browse, and everything <see cref="Prepare"/>
     /// needs.</summary>
     /// <param name="Fractions">How much of the sheet each cutout covers, or null when there is no mask to
-    /// read. Both measured up front so <see cref="Cutout"/> can be changed without re-decoding.</param>
+    /// read. Both measured up front so <see cref="Cutout"/> can change without re-decoding.</param>
     /// <param name="FaceId">
-    /// The face the glow is cut for — every race's iris material at that id, and no other.
-    /// <para/>
-    /// One face id, not all of them, because a shell is resolved once per SURFACE and an iris surface is
-    /// keyed by face (<c>Iris:f0001</c>). An overlay naming several surfaces has only its FIRST cut —
-    /// <c>SecondSkinService.SurfaceKeyOf</c> takes <c>keys[0]</c> and warns, because the split is not
-    /// built — so listing every face the way a body overlay lists every race would leave anyone not on
-    /// f0001 with nothing, and log about it on every composite. Races DO collapse: c0201f0001 and
-    /// c1801f0001 are one surface, so this still follows you across races.
+    /// The face the glow is cut for: every race's iris material at that id. One face only, because an iris
+    /// surface is keyed by face and <c>SecondSkinService.SurfaceKeyOf</c> cuts only an overlay's first surface.
     /// </param>
     public sealed record ImportPreview(
         string SourcePath,
@@ -180,8 +135,7 @@ public sealed class EyeImportService
         IReadOnlyList<string> Warnings)
     {
         /// <summary>
-        /// How much of the mask to cut the shell to. Mutable because it is the one thing on this preview
-        /// the user chooses while looking at it, and every derived number below follows from it.
+        /// How much of the mask to cut the shell to; the one thing the user changes on this preview.
         /// </summary>
         public EyeCutout Cutout { get; set; } = EyeCutout.Falloff;
 
@@ -200,8 +154,8 @@ public sealed class EyeImportService
             && IrisMaterials.Count > 0
             && Files.Any(f => f.Import && f.Slot == EyeSlot.Mask);
 
-        /// <summary>What the panel shows for the cutout currently selected in it. The WRITE must not use
-        /// these — it takes the cutout as an argument, so a change made while it runs cannot reach it.</summary>
+        /// <summary>What the panel shows for the currently selected cutout. The WRITE must not use these; it
+        /// takes the cutout as an argument.</summary>
         public float? GlowFraction => GlowFractionFor(Cutout);
 
         public bool CanGlow => CanGlowWith(Cutout);
@@ -209,11 +163,7 @@ public sealed class EyeImportService
 
     /// <summary>
     /// Read the pack and work out what it carries. Throws <see cref="InvalidDataException"/> when the file
-    /// isn't a readable archive — the caller turns that into a message.
-    /// <para/>
-    /// Decodes the MASK only, and only to measure it. That is one image on the frame that picked the file,
-    /// where the Atramentum Luminis importer has to decode every texture in its pack; the other two here
-    /// are copied through without ever being looked at.
+    /// isn't a readable archive. Decodes the MASK only, to measure it.
     /// </summary>
     public ImportPreview Inspect(string zipPath)
     {
@@ -248,11 +198,8 @@ public sealed class EyeImportService
     internal const string DefaultFaceId = "f0001";
 
     /// <summary>
-    /// How much of the sheet each cutout would cover, or null when the mask will not decode. The same
-    /// computation the write performs, so the number the preview reports is the shape that gets cut.
-    /// <para/>
-    /// BOTH are measured from the one decode, so switching the cutout in the panel is instant rather than
-    /// re-reading and re-decoding a 2048² sheet on the frame the combo changes.
+    /// How much of the sheet each cutout would cover, or null when the mask will not decode. The write's own
+    /// computation, both from one decode.
     /// </summary>
     private (float Falloff, float Artwork)? Measure(EyePackage.PackFile file, string zipPath)
     {
@@ -262,11 +209,8 @@ public sealed class EyeImportService
     }
 
     /// <summary>
-    /// The shell's coverage, from the mask's glow channel: everything at or below
-    /// <see cref="CutoutFloor"/> of the mask's peak is dropped and the rest is rescaled to full, so the
-    /// animation is confined to what the artist actually drew rather than to their whole glow gradient.
-    /// <para/>
-    /// Returns the per-pixel coverage and how much of the sheet it covers.
+    /// The shell's coverage from the mask's glow channel: everything at or below <see cref="FloorFor"/> of the
+    /// mask's peak is dropped and the rest rescaled to full. Returns the per-pixel coverage and its sheet fraction.
     /// </summary>
     internal static (byte[] Coverage, float Fraction) Cutout(byte[] rgba, EyeCutout mode)
     {
@@ -343,8 +287,7 @@ public sealed class EyeImportService
 
         var mask = plans.FirstOrDefault(p => p.Import && p.Slot == EyeSlot.Mask);
         var fractions = mask == null ? null : measure(mask.File, pack.Path);
-        // The default cutout's coverage, for the "is there anything here" checks below. Falloff is the
-        // most permissive, so a pack that fails this fails on either setting.
+        // Falloff is the most permissive cutout, so a pack failing these checks fails on either setting.
         float? glow = fractions?.Falloff;
 
         if (!plans.Any(p => p.Import))
@@ -369,9 +312,7 @@ public sealed class EyeImportService
                 "Proteus couldn't read the game's face list, so it has no iris material to put the glow "
               + "on. The eye textures are still imported; only the glow is left out."));
 
-        // The face is a choice this import bakes in, so it has to be said. A shell is cut per surface and
-        // an iris surface is one FACE, so the glow lands on the face named here and not on the others —
-        // change face and it stops until the pack is imported again.
+        // The face is baked in (a shell is cut per face), so a guessed one has to be said.
         if (!faceFromWearer && plans.Any(p => p.Import) && irisMaterials.Count > 0)
             warnings.Add(string.Format(Loc.Localize("Import.Eye.Warn.FaceGuessed.Fmt",
                 "Your character isn't drawn, so the glow is being cut for face {0}. If you wear a "
@@ -392,9 +333,7 @@ public sealed class EyeImportService
             if (name.EndsWith(".tex", StringComparison.OrdinalIgnoreCase))
                 return loader.LoadTexBytesAsRgba(bytes, name) is { } t ? (t.rgba, t.width, t.height) : null;
 
-            // DDS has no in-memory reader — LoadDdsAsRgba takes a path — so it goes through a temp file.
-            // Accepting the extension and then handing it to a PNG decoder would have let a DDS pack
-            // preview as fully importable and fail every file on the write.
+            // DDS has no in-memory reader (LoadDdsAsRgba takes a path), so it goes through a temp file.
             if (name.EndsWith(".dds", StringComparison.OrdinalIgnoreCase))
             {
                 var tmp = Path.Combine(Path.GetTempPath(), "proteus-eye-" + Guid.NewGuid().ToString("N") + ".dds");
@@ -420,8 +359,7 @@ public sealed class EyeImportService
 
     // ── Import ───────────────────────────────────────────────────────────────
 
-    /// <summary>Whether the iris catalogue answered from the game data rather than its hardcoded pair.
-    /// Surfaced because a fallback list looks legitimate while reaching almost nobody.</summary>
+    /// <summary>Whether the iris catalogue answered from the game data rather than its hardcoded pair.</summary>
     public bool IrisesFromGameData => irises.FromGameData;
 
     /// <summary>A mod written to disk by <see cref="Prepare"/> and waiting for <see cref="Register"/>, or
@@ -434,10 +372,8 @@ public sealed class EyeImportService
     /// fails. The result must be handed to <see cref="Register"/> to become a live Penumbra mod.
     /// </summary>
     /// <param name="cutout">
-    /// Snapshotted by the caller before the write starts, not read off the preview here.
-    /// <see cref="ImportPreview.Cutout"/> is mutable and its combo stays on screen, so reading it from a
-    /// pool thread would let a click mid-write bake a shape nobody previewed — or drop the glow layer
-    /// entirely, if the other cutout leaves too little of the mask.
+    /// Snapshotted by the caller before the write starts: <see cref="ImportPreview.Cutout"/> is mutable and
+    /// must not change mid-write on a pool thread.
     /// </param>
     public PreparedImport Prepare(ImportPreview preview, string modName, string author, EyeCutout cutout)
     {
@@ -499,10 +435,9 @@ public sealed class EyeImportService
     }
 
     /// <summary>
-    /// Write the mod under <paramref name="root"/>: the eye textures as Penumbra redirects, and — when the
-    /// mask marks a region out — the Proteus sidecar carrying the animated-glow overlay. Pure filesystem
-    /// work, no IPC, so it can be exercised offline. Returns how many textures landed and whether a glow
-    /// layer was written.
+    /// Write the mod under <paramref name="root"/>: the eye textures as Penumbra redirects and, when the mask
+    /// marks a region, the Proteus sidecar with the animated-glow overlay. Filesystem only. Returns how many
+    /// textures landed and whether a glow layer was written.
     /// </summary>
     /// <param name="encoder">Writes the <c>.tex</c> files. Null writes nothing and reports zero.</param>
     /// <param name="decode">Image bytes and a name → RGBA8. Passed in so the write can run offline.</param>
@@ -512,171 +447,10 @@ public sealed class EyeImportService
         Func<byte[], string, (byte[] Rgba, int Width, int Height)?> decode,
         IPluginLog? log = null)
     {
-        Directory.CreateDirectory(root);
-
-        var redirects = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        (byte[] Rgba, int Width, int Height)? maskPixels = null;
-        (byte[] Rgba, int Width, int Height)? basePixels = null;
-        int written = 0;
-
-        foreach (var plan in preview.Importable)
-        {
-            if (plan.Slot is not { } slot || plan.GamePath is not { } gamePath) continue;
-
-            var bytes = EyePackage.ReadEntry(preview.SourcePath, plan.File.Entry);
-            if (decode(bytes, plan.Name) is not { } img)
-            {
-                log?.Warning("[Proteus] eye import: {0} could not be decoded — skipped", plan.Name);
-                continue;
-            }
-            if (slot == EyeSlot.Mask) maskPixels = img;
-            if (slot == EyeSlot.Base) basePixels = img;
-
-            // Written as .tex rather than copied through. The redirect target has to be a texture the game
-            // can read, and these packs ship PNGs; converting here is the difference between a mod that
-            // works and one whose eyes go missing.
-            var dest = Path.Combine(root, gamePath.Replace('/', Path.DirectorySeparatorChar));
-            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
-            if (encoder == null
-             || !(encoder.WriteTex(img.Rgba, img.Width, img.Height, dest, TexEncoding.Bc7)
-               || encoder.WriteTex(img.Rgba, img.Width, img.Height, dest, TexEncoding.Uncompressed)))
-            {
-                log?.Warning("[Proteus] eye import: {0} could not be written as .tex — skipped", plan.Name);
-                continue;
-            }
-
-            redirects[gamePath] = gamePath.Replace('/', Path.DirectorySeparatorChar);
-            written++;
-        }
-
-        // ── the glow layer ──
-        bool glow = false;
-        if (preview.CanGlowWith(cutout) && maskPixels is { } mask)
-        {
-            var overlaysDir = Path.Combine(root, SidecarDiscoveryService.SidecarSubdir, "overlays");
-            var effectsDir = Path.Combine(root, SidecarDiscoveryService.SidecarSubdir,
-                                          SidecarDiscoveryService.EffectsSubdir);
-            Directory.CreateDirectory(overlaysDir);
-            Directory.CreateDirectory(effectsDir);
-
-            // Coverage is the CUTOUT of the mask's glow channel — see Cutout for why it is not the channel
-            // itself. The shell is trimmed to exactly that shape, so the animation plays inside the artwork
-            // and the rest of the eye is left alone. RGB carries the same value so the file reads as the
-            // picture it is; characterscroll has no base texture, so nothing samples it.
-            var (cut, _) = Cutout(mask.Rgba, cutout);
-            var art = new byte[mask.Rgba.Length];
-            for (int p = 0; p < cut.Length; p++)
-            {
-                byte v = cut[p];
-                art[p * 4] = art[p * 4 + 1] = art[p * 4 + 2] = v;
-                art[p * 4 + 3] = v;
-            }
-
-            const string stem = "eye_glow";
-            var artFile = Materialize(art, mask.Width, mask.Height, overlaysDir, stem, encoder);
-
-            // THE SCROLL MAP, written into the mod's own Effects folder.
-            //
-            // Without one, characterscroll samples a fabricated black `catc` and the emissive scales
-            // nothing: the cutout renders as an opaque black patch over the iris and never moves. Declaring
-            // the shader and the speeds is not enough — the map is what is being scrolled.
-            //
-            // Shipped with the mod rather than named out of the shared effects library, because that
-            // library is downloaded once per machine and a mod that depends on a file the user may not
-            // have is a mod that silently doesn't glow. The pack's own base texture is the natural
-            // choice: it is the artwork's own palette, so the colours moving inside the shape belong to
-            // it. Any library effect can be swapped in from the Colors tab afterwards.
-            var scrollPixels = basePixels ?? mask;
-            var scrollFile = Materialize(
-                Opaque(scrollPixels.Rgba), scrollPixels.Width, scrollPixels.Height,
-                effectsDir, stem, encoder);
-
-            var descriptor = new OverlayDescriptor
-            {
-                // Layer AND Shader, both stated. Promotion alone moves the layer and leaves the shader at
-                // plain character.shpk, which has no scroll map at all — the effect is then silently
-                // dropped and no amount of tuning the emissive brings it back.
-                Layer = OverlayLayer.Gear,
-                Shader = RenderModeInference.GlowShader,
-                MaterialGamePaths = [.. preview.IrisMaterials],
-                Diffuse = "overlays/" + artFile,
-                // A bare file name, which SidecarDiscoveryService.ResolveEffectPath looks up in the mod's
-                // own Effects folder before the shared library — so this always resolves.
-                Scroll = scrollFile,
-                // No SourceBodyType: a human part is painted in its own layout and the shell builder forces
-                // the UV conversion to native at both ends. A stray value here would be ignored, but it
-                // would still be a lie about the art.
-                ScrollSpeedX = ScrollSpeed,
-                ScrollSpeedY = ScrollSpeed,
-                ScrollTilingX = ScrollTiling,
-                ScrollTilingY = ScrollTiling,
-            };
-
-            var metadata = new ProteusMetadata
-            {
-                FormatVersion = 1,
-                Name = modName,
-                Author = author,
-                OptionGroups =
-                [
-                    new OverlayOptionGroup
-                    {
-                        PenumbraGroupName = GroupName,
-                        Options =
-                        [
-                            new OverlayOption
-                            {
-                                Name = Loc.Localize("Import.Eye.Option.Glow", "Animated glow"),
-                                Overlays = [descriptor],
-                                // On the option, never at the top level: top-level rows are inherited by
-                                // every option that declares none, and any emissive makes HasCloth true.
-                                ColorTableRows =
-                                [
-                                    new ColorTableRowPreset
-                                    {
-                                        Row = GlowRow,
-                                        SubRowA = new ColorTableSubRowPreset
-                                        {
-                                            Emissive = GlowEmissive,
-                                            EmissiveColor = RenderModeInference.GlowEmissiveColour,
-                                            Diffuse = GlowSurfaceColour,
-                                        },
-                                    },
-                                ],
-                            },
-                        ],
-                    },
-                ],
-            };
-
-            PenumbraModMeta.AtomicWrite(
-                Path.Combine(root, SidecarDiscoveryService.SidecarSubdir, "metadata.json"),
-                JsonSerializer.Serialize(metadata, ProteusJson.MetadataWrite));
-            glow = true;
-        }
-
-        var description = string.Format(Loc.Localize("Import.Eye.Description.Fmt",
-            "Imported from the eye texture pack \"{0}\"."), Path.GetFileName(preview.SourcePath));
-        PenumbraModMeta.AtomicWrite(
-            Path.Combine(root, PenumbraModMeta.MetaFile),
-            PenumbraModMeta.NewMetaJson(modName, author, description));
-
-        // Unlike the overlay importers this mod DOES redirect real game files, so there is nothing to fake:
-        // the textures are its default data. The dummy self-swap those need exists only for a mod that
-        // redirects nothing.
-        PenumbraModMeta.WriteRedirects(root, modName, redirects);
-
-        if (glow)
-            PenumbraModMeta.WriteMultiSelectGroup(
-                root, 0, GroupName,
-                [Loc.Localize("Import.Eye.Option.Glow", "Animated glow")],
-                defaultSettings: 1);
-
-        return (written, glow);
+        return new EyeModWrite(root, modName, author, preview, cutout, encoder, decode, log).Run();
     }
 
-    /// <summary>A copy with every pixel opaque — a scroll map's alpha means nothing to the shader, and a
-    /// transparent one would only confuse anyone who opened the file.</summary>
+    /// <summary>A copy with every pixel opaque; a scroll map's alpha means nothing to the shader.</summary>
     private static byte[] Opaque(byte[] rgba)
     {
         var copy = (byte[])rgba.Clone();
@@ -700,20 +474,13 @@ public sealed class EyeImportService
 
     // ── Register ─────────────────────────────────────────────────────────────
 
-    /// <summary>The outcome of a registration. Three states, not two: an import can succeed and still need
-    /// the user to do something.</summary>
+    /// <summary>The outcome of a registration. An import can succeed and still need the user to act.</summary>
     public readonly record struct ImportResult(bool Ok, bool Warning, string Message);
 
     /// <summary>
-    /// Register a <see cref="Prepare"/>d mod with Penumbra. Must run on the framework thread.
-    /// <para/>
-    /// Enabling is asserted and then READ BACK, and retried until Penumbra agrees, for the reason
-    /// <see cref="LuminisImportService.Pump"/> documents at length: a settings write that lands while
-    /// Penumbra is still building a freshly added mod reports Success and is then discarded, leaving the
-    /// mod switched off with its group defaults applied and nothing saying so.
-    /// <para/>
-    /// Returns null while that is still settling, in which case the caller must keep calling
-    /// <see cref="Pump"/> each frame until it answers.
+    /// Register a <see cref="Prepare"/>d mod with Penumbra. Must run on the framework thread. Enabling is READ
+    /// BACK and retried (see <see cref="LuminisImportService.Pump"/>); returns null while that settles, and the
+    /// caller then calls <see cref="Pump"/> each frame.
     /// </summary>
     /// <param name="quiet">Register and nothing else — no Penumbra window, no recomposite, and no waiting,
     /// since no further frames are coming. Teardown path.</param>

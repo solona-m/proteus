@@ -5,25 +5,13 @@ namespace Proteus.Services;
 
 /// <summary>
 /// Every iris material path in the game — what an imported eye overlay lists in its
-/// <c>MaterialGamePath</c> so it follows the wearer across races and faces.
-/// <para/>
-/// The same shape as <see cref="BodyMaterialCatalog"/>, and for the same reason: the list is DISCOVERED by
-/// probing the game data rather than maintained by hand, so nobody has to keep a table of which races have
-/// which faces (there isn't one anywhere else in Proteus, and Dawntrail added more).
-/// <para/>
-/// Why a catalogue at all, when the eye TEXTURES are shared across every character
-/// (<c>chara/common/texture/eye/eye01_*.tex</c>)? Because the shared thing is the texture and the
-/// per-character thing is the material that names it. Proteus matches an overlay to a material by exact
-/// path, so an import pinned to whichever face was worn at the time would stop painting the moment the
-/// wearer changed face — or never paint at all for anyone else. A superset costs nothing: the compositor
-/// drops materials the character does not have loaded.
+/// <c>MaterialGamePath</c> so it follows the wearer across races and faces. Discovered by probing, like
+/// <see cref="BodyMaterialCatalog"/>; overlays match materials by exact path, so every iris material is listed.
 /// </summary>
 public sealed class IrisMaterialCatalog(Func<string, bool> gameFileExists)
 {
     /// <summary>
-    /// Race codes to probe — every human code the game defines, as
-    /// <see cref="BodyMaterialCatalog"/> uses. Unlike bodies, faces are NOT shared between races: each
-    /// race draws its own, so the ones that answer no probe simply drop out.
+    /// Race codes to probe — every human code the game defines; each race draws its own faces.
     /// </summary>
     private static readonly string[] RaceCodes =
     [
@@ -32,10 +20,7 @@ public sealed class IrisMaterialCatalog(Func<string, bool> gameFileExists)
     ];
 
     /// <summary>
-    /// Face ids to probe per race. Faces run f0001 upward, and several races carry a second bank at f0101
-    /// (Au Ra's scaled faces, the Hrothgar and Viera variants). Probing settles which each race has;
-    /// the range is deliberately wider than any race uses, because an id that does not exist costs one
-    /// failed lookup and an id that is missed costs the wearer their overlay.
+    /// Face ids to probe per race (f0001 up, plus the f0101 bank), deliberately wider than any race uses.
     /// </summary>
     private static readonly string[] FaceIds =
     [
@@ -44,12 +29,8 @@ public sealed class IrisMaterialCatalog(Func<string, bool> gameFileExists)
     ];
 
     /// <summary>
-    /// Used when the probe finds nothing at all — the game data unreadable, or Lumina not up. Midlander
-    /// female and male at face 1, which is what most characters are on and is better than an empty list
-    /// (which would write a mod that can never apply).
-    /// <para/>
-    /// Deliberately NOT cached as a probe result, for the reason <see cref="BodyMaterialCatalog"/> gives:
-    /// one bad moment would otherwise become permanent for the session.
+    /// Used when the probe finds nothing at all (game data unreadable): Midlander female and male at face 1.
+    /// Never cached as a probe result.
     /// </summary>
     private static readonly string[] FallbackPaths =
     [
@@ -67,8 +48,7 @@ public sealed class IrisMaterialCatalog(Func<string, bool> gameFileExists)
     /// <summary>How many the probe found, for the import report.</summary>
     public int Count => Paths().Count;
 
-    /// <summary>Whether the last call answered from the game data rather than <see cref="FallbackPaths"/>.
-    /// False means the list is the hardcoded pair and an import made from it reaches almost nobody.</summary>
+    /// <summary>Whether the last call answered from the game data rather than <see cref="FallbackPaths"/>.</summary>
     public bool FromGameData { get { lock (gate) return paths != null; } }
 
     private IReadOnlyList<string> Paths()

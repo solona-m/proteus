@@ -7,23 +7,15 @@ using System.Text.RegularExpressions;
 namespace Proteus.Services;
 
 /// <summary>
-/// Reads a model's game path as "which slot is this, and which item set does it belong to" — the two facts a
-/// content pack's pieces have to be named and grouped by.
-/// <para/>
-/// Both matter for the same reason. A pack that ships a whole outfit gives the user a list to pick from, and
-/// a list of file paths is not one; a pack that ships the same garment for five races must show ONE entry,
-/// not five, which means recognising that those five paths differ only in their race code.
+/// Reads a model's game path as "which slot is this, and which item set does it belong to" — what a content
+/// pack's pieces are named and grouped by (paths differing only in race code are one piece).
 /// </summary>
 public static class ContentSlot
 {
     /// <summary>
     /// One equipment or accessory slot: the suffix a model path ends with, the label a person reads, and the
-    /// <c>EquipSlotCategory</c> row that names it in the game's <c>Item</c> sheet.
-    /// <para/>
-    /// The category ids are the game's own. Neck 10, Wrists 11 and RFinger 12 are not guesses — they are the
-    /// values <see cref="InvisibleRing.CarrierSlots"/> already resolves real items with, which is what pins
-    /// the rest of the numbering. Rings are filed under RFinger whichever hand they are worn on, so both ring
-    /// suffixes share 12.
+    /// <c>EquipSlotCategory</c> row that names it in the game's <c>Item</c> sheet. Both ring suffixes share 12
+    /// (RFinger), matching <see cref="InvisibleRing.CarrierSlots"/>.
     /// </summary>
     public readonly record struct Slot(string Suffix, string Label, int Category);
 
@@ -39,8 +31,7 @@ public static class ContentSlot
         new("wrs", "Bracelets", 11),
         new("rir", "Right ring",12),
         new("ril", "Left ring", 12),
-        // Character parts. These have no Item row at all — nobody equips a face — so their category is 0 and
-        // they always fall back to naming themselves by id.
+        // Character parts have no Item row, so category 0: they name themselves by id.
         new("hir", "Hair", 0),
         new("fac", "Face", 0),
         new("til", "Tail", 0),
@@ -54,8 +45,7 @@ public static class ContentSlot
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     /// <summary>
-    /// What a model path says about itself. Null when it isn't a character model path at all — a pack can
-    /// redirect anything, and something we cannot place has to stay unplaced rather than be guessed at.
+    /// What a model path says about itself. Null when it isn't a character model path; never guessed.
     /// </summary>
     /// <param name="Label">"Head", "Body", … or the raw suffix when it is one we don't know.</param>
     /// <param name="SetTag">"e6085" — the kind letter and set number, as modders write it.</param>
@@ -72,8 +62,7 @@ public static class ContentSlot
         var suffix = m.Groups["suffix"].Value.ToLowerInvariant();
         var known = Slots.FirstOrDefault(s => s.Suffix == suffix);
         return new Parsed(
-            // An unrecognised suffix labels itself. Better a row reading "kao" than an unlabelled one, and it
-            // still groups and gates correctly — only the item lookup is unavailable.
+            // An unrecognised suffix labels itself; it still groups and gates, only the item lookup is lost.
             known.Label ?? suffix,
             m.Groups["kind"].Value.ToLowerInvariant() + m.Groups["set"].Value,
             m.Groups["race"].Value,
@@ -82,12 +71,7 @@ public static class ContentSlot
 
     /// <summary>
     /// Penumbra's <c>EquipSlot</c> name as this table's <see cref="Slot.Label"/>, or null for a name it does
-    /// not know.
-    /// <para/>
-    /// The five body slots are already spelled the same on both sides; the accessories are not, and a
-    /// manipulation naming "RFinger" has to find the row this table calls "Right ring". Needed because a
-    /// pack can carry several IMC groups that differ ONLY by slot — deadrose ships three on set 43, one each
-    /// for Body, Legs and Feet — so without the slot they all match every one of its models.
+    /// not know. Needed because a pack's IMC groups can differ only by slot.
     /// </summary>
     public static string? LabelForEquipSlot(string equipSlot) => equipSlot.ToLowerInvariant() switch
     {
@@ -110,21 +94,14 @@ public static class ContentSlot
 
     /// <summary>
     /// How a piece is labelled: its slot, then the vanilla item that occupies that model set if the game
-    /// knows one, else the set id.
-    /// <para/>
-    /// The item name is the item the pack REPLACES, which is not always a description of what it looks like —
-    /// a jacket hosted on a head slot is named after whatever hat lives at that set. It is still the right
-    /// label: it is the string Penumbra and TexTools both show, and it says which slot the mod occupies.
+    /// knows one (the item the pack replaces, as Penumbra shows it), else the set id.
     /// </summary>
     public static string Label(Parsed p, string? itemName)
         => string.IsNullOrWhiteSpace(itemName) ? $"{p.Label} — {p.SetTag}" : $"{p.Label} — {itemName}";
 
     /// <summary>
-    /// Names items by (EquipSlotCategory, model set) out of the game's <c>Item</c> sheet.
-    /// <para/>
-    /// Built in ONE pass and handed to the importer as a delegate. One pass because
-    /// <see cref="InvisibleRing"/> already learned that repeatedly scanning this sheet is a real cost, and a
-    /// delegate because the importer is unit-tested and must not need game data to run.
+    /// Names items by (EquipSlotCategory, model set) out of the game's <c>Item</c> sheet, built in one pass.
+    /// A delegate so the importer can be unit-tested without game data.
     /// </summary>
     /// <param name="rows">Item rows as (RowId, EquipSlotCategory, ModelMain).</param>
     public static Func<int, int, string?> NameLookup(IEnumerable<(uint RowId, uint Category, ulong ModelMain)> rows,
@@ -134,8 +111,7 @@ public static class ContentSlot
         foreach (var (rowId, category, modelMain) in rows)
         {
             var key = ((int)category, (int)(modelMain & 0xFFFF));
-            // Dyes and variants share a model set, so several items answer to one key. Lowest RowId wins so
-            // the label is the same every run rather than whichever the sheet enumerated first.
+            // Variants share a model set; lowest RowId wins so the label is stable.
             if (best.TryGetValue(key, out var have) && have.RowId <= rowId) continue;
             var name = nameOf(rowId);
             if (string.IsNullOrWhiteSpace(name)) continue;

@@ -11,37 +11,12 @@ using Proteus.Interop;
 namespace Proteus.Services;
 
 /// <summary>
-/// Turns an emissive-skin <c>.pmp</c> — a glowing tattoo built for one of the community skin shaders — into
-/// a Penumbra mod carrying a Proteus sidecar. The Import tab's engine for the fifth pack format, and the
-/// second one that ends in a glowing second skin.
-/// <para/>
-/// These packs are the Penumbra-native cousins of an Atramentum Luminis modpack, and they are recognised the
-/// same way: their art is addressed to VIRTUAL paths under <c>chara/&lt;body&gt;/</c> that no vanilla shader
-/// ever asks for. What they redirect for real is the BODY MATERIALS — one <c>.mtrl</c> per race, rewired to
-/// name an extra emissive sampler — and that is the half Proteus cannot use, because those materials only
-/// mean anything to a replaced <c>skin.shpk</c> the user has to have installed separately. Without it the
-/// pack renders nothing; with it, it owns the body material Proteus also wants.
-/// <para/>
-/// So the materials are ignored and only the art is taken:
-/// <list type="bullet">
-/// <item>the emissive map's ALPHA is the mask — the right way up, unlike Atramentum Luminis, where 255 is
-/// ordinary skin — and becomes the overlay's own alpha, which is what the shell builder reads as coverage.
-/// The glowing pixels, and only those, get a second-skin shell cut for them.</item>
-/// <item>its RGB scaled by that mask becomes a characterscroll scroll map at speed zero, so a coloured
-/// emissive keeps its own hue per pixel. The colour-table row's emissive is only the gate that switches it
-/// on.</item>
-/// </list>
-/// There is no author's-skin option to import, which is the visible difference from
-/// <see cref="LuminisImportService"/>: these packs ship no body diffuse of their own — they point the
-/// materials they rewrite at somebody else's Bibo+ or Gen3 skin — so the glow is the whole of what is here.
-/// The other difference is the light: an Atramentum Luminis tattoo was dark-only and is imported that way,
-/// while an emissive sampler burns at noon as well, so these rows are written as an unconditional glow.
-/// Both are a dial in Colors afterwards.
-/// <para/>
-/// Nothing is guessed at silently. A path that is not virtual, a texture with a flat alpha, a sheet too
-/// small to be body art — each is SKIPPED with a reason the tab shows.
+/// Turns an emissive-skin <c>.pmp</c> (a glowing tattoo for a community skin shader) into a Penumbra mod carrying
+/// a Proteus sidecar. Its art sits on VIRTUAL paths; its rewritten body materials need a replaced skin.shpk and
+/// are ignored. The emissive's ALPHA (right way up, unlike Luminis) becomes coverage and its mask-scaled RGB a
+/// characterscroll scroll map at speed zero. Rows glow unconditionally. Unusable textures are SKIPPED with a reason.
 /// </summary>
-public sealed class EmissiveSkinImportService
+public sealed partial class EmissiveSkinImportService
 {
     private readonly PenumbraBridge penumbra;
     private readonly CompositorService compositor;
@@ -51,9 +26,8 @@ public sealed class EmissiveSkinImportService
     private readonly IPluginLog log;
 
     /// <summary>
-    /// The Penumbra group an imported pack gets. One multi-select group holding every option, for the reason
-    /// <see cref="LuminisImportService.GroupName"/> gives: <c>SidecarDiscoveryService.ResolveActiveOverlays</c>
-    /// reads a mod's top-level <c>Overlays</c> OR its <c>OptionGroups</c> and never both.
+    /// The Penumbra group an imported pack gets: one multi-select group for every option, for the reason
+    /// <see cref="LuminisImportService.GroupName"/> gives.
     /// </summary>
     public const string GroupName = "Skin glow";
 
@@ -72,13 +46,8 @@ public sealed class EmissiveSkinImportService
     // ── Format mapping ───────────────────────────────────────────────────────
 
     /// <summary>
-    /// How much of a texture must carry a mask before it counts as one. A tattoo can be small — the pack
-    /// this was written against paints 0.07% of an 8192² sheet — so this is a hundredth of a percent, low
-    /// enough to pass a pair of hip tattoos and high enough to reject a sheet whose alpha is flat.
-    /// <para/>
-    /// Lower than <c>LuminisImportService</c>'s tenth of a percent, and deliberately: an Atramentum Luminis
-    /// sheet is a whole body diffuse with a tattoo inside it, while this is a mask and nothing else, so
-    /// there is no reason to expect the art to fill any particular share of it.
+    /// Fraction of a texture that must carry a mask before it counts as one. Lower than Luminis's: this sheet is
+    /// a mask alone, not a body diffuse with a tattoo in it.
     /// </summary>
     private const float MinGlowFraction = 0.00001f;
 
@@ -91,37 +60,20 @@ public sealed class EmissiveSkinImportService
     private const int LitAlpha = 8;
 
     /// <summary>
-    /// Below this on either side, a texture is not body art.
-    /// <para/>
-    /// These packs ship a second virtual texture beside the emissive — an "effect" map, 32² in the pack this
-    /// was written against, and blank there because the author left the effect off. It is on the same
-    /// virtual path shape as the art and would be classified as art. Usually its alpha is empty and the glow
-    /// test rejects it anyway; this is what stops one that ISN'T empty from being stretched across a whole
-    /// body as though it were a tattoo.
+    /// Below this on either side, a texture is not body art: it keeps a pack's small "effect" map, on the same
+    /// virtual path shape, from being stretched across the body.
     /// </summary>
     private const int MinArtSize = 64;
 
     /// <summary>
-    /// The largest sheet the import will keep, per side.
-    /// <para/>
-    /// Not a limitation — it is where the pipeline ends anyway. The composite runs at
-    /// <see cref="TextureLoader.BaseTargetSize"/> and writes back at that size, so an 8192² mask (which the
-    /// pack this was written against ships) is resampled down the moment it is used. Doing it once, here,
-    /// costs the import one bilinear pass and saves the mod 4× its size on disk and 4× the memory on every
-    /// composite that reads it back.
+    /// The largest sheet the import will keep, per side: the composite runs at
+    /// <see cref="TextureLoader.BaseTargetSize"/> anyway, so larger masks are resampled once, here.
     /// </summary>
     private const int MaxArtSize = TextureLoader.BaseTargetSize;
 
     /// <summary>
-    /// Whether this pack is one for THIS importer rather than for <see cref="ContentImportService"/>.
-    /// Answered from the manifest alone — no archive entry is decompressed and no pixel is decoded — because
-    /// it runs on the frame a file was picked, purely to choose a reader.
-    /// <para/>
-    /// Two clauses, and the first is the one that decides the split. A pack that redirects a MODEL ships
-    /// geometry, which is the content importer's whole subject and something this one cannot place at all;
-    /// that a pack with geometry might also carry a virtual texture is not a reason to send it here and lose
-    /// the meshes. What is left over — no geometry, but art on a path the game will never ask for — is a
-    /// pack Penumbra alone can do nothing useful with.
+    /// Whether this pack is one for THIS importer rather than <see cref="ContentImportService"/>, from the
+    /// manifest alone. Any MODEL redirect sends it to the content importer; otherwise it needs a virtual texture.
     /// </summary>
     public static bool Claims(PenumbraPackage.Contents pack)
     {
@@ -134,8 +86,8 @@ public sealed class EmissiveSkinImportService
         return art;
     }
 
-    /// <summary>A texture on a path the game can never ask for — see
-    /// <see cref="LuminisImportService.TokenOf"/>, which is where that shape is defined.</summary>
+    /// <summary>A texture on a path the game can never ask for; the shape is defined by
+    /// <see cref="LuminisImportService.TokenOf"/>.</summary>
     private static bool IsVirtualTexture(string gamePath)
         => gamePath.EndsWith(".tex", StringComparison.OrdinalIgnoreCase)
         && LuminisImportService.TokenOf(PenumbraPackage.Normalize(gamePath)) != null;
@@ -144,15 +96,12 @@ public sealed class EmissiveSkinImportService
 
     /// <summary>One texture the pack ships, and what the import decided to do with it.</summary>
     /// <param name="Entry">
-    /// The archive entry backing it. The identity of a file in this format: a pack may point several game
-    /// paths at one entry, and importing one picture twice would write two shells over each other.
+    /// The archive entry backing it: the identity of a file here, since several game paths may name one entry.
     /// </param>
     /// <param name="Paths">Every manifest path backed by that entry.</param>
     /// <param name="Stem">Filename-safe name for the written files.</param>
     /// <param name="FromWearer">
-    /// The body was resolved from the character rather than from the token table. Surfaced because the two
-    /// are not equally trustworthy: a known token says what the ARTIST painted, the fallback says what the
-    /// wearer happens to have on.
+    /// The body was resolved from the character rather than from the token table, which is less trustworthy.
     /// </param>
     /// <param name="SkipReason">Null when the texture will be imported; otherwise why it won't be.</param>
     public sealed record TexturePlan(
@@ -195,8 +144,7 @@ public sealed class EmissiveSkinImportService
 
         private IReadOnlyList<TexturePlan>? importable;
 
-        /// <summary>Textures that will be imported, in manifest order. Cached, because the Import panel asks
-        /// for it every frame the preview is on screen.</summary>
+        /// <summary>Textures that will be imported, in manifest order. Cached: the panel asks every frame.</summary>
         public IReadOnlyList<TexturePlan> Importable
             => importable ??= [.. Textures.Where(t => t.Import)];
 
@@ -207,48 +155,30 @@ public sealed class EmissiveSkinImportService
     }
 
     /// <summary>
-    /// The body the character is actually wearing, for the tokens the body table has never heard of.
-    /// <para/>
-    /// <b>Framework thread only</b> — it asks Penumbra which materials are loaded. Split out from
-    /// <see cref="Inspect"/> for exactly that reason: the inspection itself is a second of texture decoding
-    /// and belongs on the pool, and this one call is the only part of it that does not.
+    /// The body the character is actually wearing, for tokens the body table does not know.
+    /// <b>Framework thread only</b> (it asks Penumbra), which is why it is split from <see cref="Inspect"/>.
     /// </summary>
     public string? DetectWearerBody()
         => modCreation.DetectBodyMaterial() ?? modCreation.CachedBodyMaterial();
 
     /// <summary>
-    /// Read the pack and work out what it carries.
-    /// <para/>
-    /// <b>Safe on the thread pool, and belongs there.</b> This DECODES every candidate texture, and here
-    /// that is not cheap: these masks are authored at the body's full resolution, and the 8192² sheet the
-    /// pack this was written against ships costs a measured 1.06 seconds and a quarter of a gigabyte of
-    /// RGBA to look at one channel of. On the frame that picked the file — which is where the other
-    /// importers do their reading, and where this used to — that is a visible freeze rather than a hitch.
-    /// <para/>
-    /// The decode cannot be avoided, only moved: whether a modpack carries a glow mask at all is a question
-    /// about its pixels, and it is the question the user opened the preview to have answered. What CAN be
-    /// avoided is decoding a sheet that is going to be rejected on its dimensions — see the header read in
-    /// <see cref="Measure"/>. Only the MEASUREMENTS are kept; the pixels are dropped, and the write pass
-    /// decodes again.
+    /// Read the pack and work out what it carries. <b>Safe on the thread pool, and belongs there:</b> it decodes
+    /// every candidate texture at full resolution. Sheets rejected on their header size are not decoded; only
+    /// the measurements are kept.
     /// </summary>
     /// <param name="pack">
-    /// The already-parsed manifest. The Import tab reads it to CHOOSE this reader (see
-    /// <see cref="Claims"/>) and passing it back is what keeps a pick to one archive open rather than two.
+    /// The already-parsed manifest the Import tab used to choose this reader (see <see cref="Claims"/>).
     /// </param>
     /// <param name="wearerBody">
-    /// What <see cref="DetectWearerBody"/> answered, resolved by the caller before it left the framework
-    /// thread.
+    /// What <see cref="DetectWearerBody"/> answered, resolved on the framework thread.
     /// </param>
     public ImportPreview Inspect(string pmpPath, PenumbraPackage.Contents pack, string? wearerBody)
         => BuildPreview(pmpPath, pack, wearerBody, Measure);
 
     /// <summary>
-    /// How big one candidate is and how much of it glows, or null when its bytes will not decode.
-    /// <para/>
-    /// The size comes from the <c>.tex</c> HEADER, and a sheet too small to be body art is answered from
-    /// that alone — with a glow of zero, which is never read, because <see cref="BuildPreview"/> tests the
-    /// dimensions before it tests the glow. That is what stops a shader's palette map from being inflated
-    /// to RGBA purely to be told it is 32 pixels across.
+    /// How big one candidate is and how much of it glows, or null when its bytes will not decode. A sheet too
+    /// small to be body art is answered from the <c>.tex</c> header with glow zero, which
+    /// <see cref="BuildPreview"/> never reads because it tests dimensions first.
     /// </summary>
     private (int Width, int Height, float Glow)? Measure(byte[] tex, string what)
     {
@@ -266,13 +196,8 @@ public sealed class EmissiveSkinImportService
     }
 
     /// <summary>
-    /// A <c>.tex</c>'s dimensions, read off its header without decoding a pixel. Null when the bytes are too
-    /// short to hold one or the header says nothing.
-    /// <para/>
-    /// Width and height are two <c>ushort</c>s at bytes 8 and 10 of the 80-byte header, ahead of everything
-    /// the format does that is worth being careful about. Deliberately NOT a general reader: it answers one
-    /// question, and a wrong answer costs a texture the size check it would have passed anyway once the
-    /// decoder gets to it.
+    /// A <c>.tex</c>'s dimensions from its header (two <c>ushort</c>s at bytes 8 and 10), without decoding.
+    /// Null when the bytes are too short or the header says nothing. Not a general reader.
     /// </summary>
     internal static (int Width, int Height)? TexSize(byte[] tex)
     {
@@ -302,9 +227,7 @@ public sealed class EmissiveSkinImportService
         var wearerSuffix = LuminisImportService.SuffixOf(wearerBody);
         var wearerType = wearerBody == null ? null : UVRemapService.InferBodyType(wearerBody);
 
-        // One record per archive ENTRY, carrying every game path that names it. A pack aliasing one picture
-        // to several paths is describing one tattoo, and importing it once per path would stack a shell on
-        // top of itself.
+        // One record per archive ENTRY with every game path naming it, so an aliased picture is imported once.
         var byEntry = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
         var order = new List<string>();
         foreach (var (gamePath, entry) in pack.AllFiles)
@@ -322,8 +245,7 @@ public sealed class EmissiveSkinImportService
         // <see cref="PenumbraPackage.ReadEntries"/> exists for.
         var payloads = PenumbraPackage.ReadEntries(pack.Path, order);
 
-        // Stems name the written files, so two payloads may not share one — a pack shipping
-        // chara/bibo/emissive.tex beside chara/gen3/emissive.tex would otherwise write both over one file.
+        // Stems name the written files, so two payloads may not share one.
         var stems = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         var plans = new List<TexturePlan>();
@@ -394,8 +316,7 @@ public sealed class EmissiveSkinImportService
             warnings.Add(Loc.Localize("Import.Emissive.Warn.NothingImportable",
                 "Nothing in this pack can be imported — see the reasons above."));
 
-        // Said once, not per texture: the fallback is a guess about which body the art was painted for, and
-        // a guess repeated four times reads as four problems.
+        // Said once, not per texture.
         if (plans.Any(p => p.Import && p.FromWearer))
             warnings.Add(string.Format(Loc.Localize("Import.Emissive.Warn.FromWearer.Fmt",
                 "Proteus doesn't know this pack's body layout, so it will paint the art onto the body "
@@ -424,12 +345,8 @@ public sealed class EmissiveSkinImportService
     }
 
     /// <summary>
-    /// A filename-safe name for one payload: its body token in front of its own leaf.
-    /// <para/>
-    /// Qualified by the token FIRST, where <c>LuminisImportService</c> qualifies only on a collision. These
-    /// packs name their sheets for what they are rather than for what is on them — <c>emissive.tex</c>,
-    /// every time — so a pack shipping the art for two bodies collides on every file, and "emissive" and
-    /// "emissive_2" name nothing anybody could tell apart afterwards.
+    /// A filename-safe name for one payload: its body token in front of its own leaf. Always qualified, since
+    /// these packs name every sheet alike (<c>emissive.tex</c>).
     /// </summary>
     internal static string StemFor(string? token, string gamePath)
     {
@@ -440,9 +357,7 @@ public sealed class EmissiveSkinImportService
     // ── Option names ─────────────────────────────────────────────────────────
 
     /// <summary>
-    /// The option that puts the glow on. Unqualified when the pack ships one picture, because "Glow tattoo"
-    /// is what it is; named for the BODY when it ships several, because a pack shipping several is shipping
-    /// one tattoo per body layout and which of them fits you is the whole choice.
+    /// The option that puts the glow on; named for the BODY when the pack ships one tattoo per body layout.
     /// </summary>
     internal static string GlowOptionName(TexturePlan plan, bool qualified)
         => qualified
@@ -453,8 +368,7 @@ public sealed class EmissiveSkinImportService
     // ── Import ───────────────────────────────────────────────────────────────
 
     /// <summary>Whether <see cref="BodyMaterialCatalog"/> answered from the game data rather than its
-    /// hardcoded female-only fallback. Surfaced because a fallback list looks entirely legitimate in the
-    /// preview while naming no male body at all.</summary>
+    /// hardcoded female-only fallback.</summary>
     public bool BodiesFromGameData => bodies.FromGameData;
 
     /// <summary>The material paths an import will claim, for the preview to show before anything is
@@ -464,9 +378,7 @@ public sealed class EmissiveSkinImportService
 
     /// <summary>
     /// A mod written to disk by <see cref="Prepare"/> and waiting for <see cref="Register"/>, or the reason
-    /// nothing was written. Split in two like every other importer here: writing means decoding and
-    /// re-encoding several 4K textures, far too long for a draw call, while the Penumbra registration that
-    /// follows belongs on the framework thread.
+    /// nothing was written. Writing is too slow for a draw call; registration belongs on the framework thread.
     /// </summary>
     public sealed record PreparedImport(
         bool Ok, string Message, string? DirName, ImportPreview? Preview,
@@ -484,8 +396,7 @@ public sealed class EmissiveSkinImportService
     /// it fails. The result must be handed to <see cref="Register"/> to become a live Penumbra mod.
     /// </summary>
     /// <param name="suffixOverride">
-    /// Aim every overlay at this material suffix instead of the one the pack's token implies — the Import
-    /// tab's body-target combo. Null takes the resolved default.
+    /// Aim every overlay at this material suffix instead of the resolved one. Null takes the default.
     /// </param>
     public PreparedImport Prepare(
         ImportPreview preview, string modName, string author, bool asTex, string? suffixOverride = null)
@@ -538,9 +449,7 @@ public sealed class EmissiveSkinImportService
                 "Failed to write the mod: {0}"), ex.Message));
         }
 
-        // Counted from what WriteMod actually wrote, not from what the preview hoped for: a payload that
-        // decoded during Inspect and failed on the write pass is dropped there, and reporting the preview's
-        // number would count it anyway — including in the case where EVERY one failed.
+        // Counted from what WriteMod actually wrote: a payload can fail on the write pass after decoding in Inspect.
         int imported = written.Options.Count;
         if (imported == 0)
         {
@@ -553,15 +462,13 @@ public sealed class EmissiveSkinImportService
     }
 
     /// <summary>
-    /// Write the mod files under <paramref name="root"/>: the overlay images, the scroll maps, the Proteus
-    /// sidecar, Penumbra's manifest and the option group. Pure filesystem work, no IPC, so it can be
-    /// exercised offline against a temp directory.
+    /// Write the mod files under <paramref name="root"/>: overlay images, scroll maps, the Proteus sidecar,
+    /// Penumbra's manifest and the option group. Filesystem only, so it can run offline.
     /// </summary>
     /// <param name="encodeTo">Non-null to write BC7 <c>.tex</c> instead of PNG.</param>
     /// <param name="decode">
-    /// A candidate's <c>.tex</c> bytes and a name for the log → its pixels as RGBA8. A delegate rather than
-    /// the loader itself, for the same reason <see cref="BuildPreview"/> takes one: it is the only part of
-    /// this that needs a live game.
+    /// A candidate's <c>.tex</c> bytes and a name for the log → its pixels as RGBA8; a delegate so the write
+    /// needs no live game.
     /// </param>
     internal static WrittenOptions WriteMod(
         string root, string modName, string author,
@@ -570,209 +477,7 @@ public sealed class EmissiveSkinImportService
         Func<byte[], string, (byte[] Rgba, int Width, int Height)?> decode,
         IPluginLog? log = null)
     {
-        var overlaysDir = Path.Combine(root, SidecarDiscoveryService.SidecarSubdir, "overlays");
-        var effectsDir = Path.Combine(root, SidecarDiscoveryService.SidecarSubdir,
-                                      SidecarDiscoveryService.EffectsSubdir);
-        Directory.CreateDirectory(overlaysDir);
-        Directory.CreateDirectory(effectsDir);
-
-        var importable = preview.Importable;
-        bool qualified = importable.Count > 1;
-
-        // An override only overrides when the user actually RETARGETED — measured against the value the
-        // Import tab seeded its combo with, not against each plan's own suffix. See the same guard in
-        // LuminisImportService.WriteMod for what testing it per plan silently broke.
-        bool retargeted = suffixOverride != null
-                       && !string.Equals(suffixOverride, preview.DefaultSuffix, StringComparison.OrdinalIgnoreCase);
-
-        // The UV space the art is being aimed AT, which is what decides the default option below: of several
-        // sheets of one tattoo, the one already in the destination's space is the one that needs no
-        // resampling, so it is the one to arrive switched on.
-        var destinationType = UVRemapService.InferBodyType(materials.FirstOrDefault() ?? "");
-
-        // Re-decoded rather than carried on the preview: holding an 8192² sheet as RGBA for as long as the
-        // preview is on screen costs a quarter of a gigabyte, and this pass runs off the framework thread
-        // where the second decode costs nobody anything.
-        var payloads = PenumbraPackage.ReadEntries(
-            preview.SourcePath, importable.Select(t => t.Entry));
-
-        var options = new List<OverlayOption>();
-        var wearsBodyType = new List<string?>();   // parallel to options; see the default-selection below
-
-        foreach (var plan in importable)
-        {
-            if (!payloads.TryGetValue(plan.Entry, out var bytes))
-            {
-                log?.Warning("[Proteus] emissive import: {0} was in the archive on preview and not on write "
-                           + "— skipped", plan.Label);
-                continue;
-            }
-
-            if (decode(bytes, plan.Label) is not { } src)
-            {
-                log?.Warning("[Proteus] emissive import: {0} could not be decoded — skipped", plan.Label);
-                continue;
-            }
-
-            var (rgba, w, h) = Fit(src.Rgba, src.Width, src.Height);
-            string bodyType = retargeted
-                ? destinationType ?? plan.BodyType ?? ""
-                : plan.BodyType ?? "";
-
-            // ── the art ──
-            // Coverage is the mask AS IT STANDS. Nothing is inverted and nothing is gained: an emissive
-            // map's alpha already says "there is paint here", opaque across the artwork and ramping only at
-            // its outline. That is the one place this format differs from Atramentum Luminis, whose alpha is
-            // an inverted INTENSITY and needs both (see LuminisImportService.CoverageGain).
-            //
-            // The RGB rides along untouched — it is the shell's own art, and the colour the author chose.
-            var art = new byte[rgba.Length];
-            Buffer.BlockCopy(rgba, 0, art, 0, rgba.Length);
-
-            // The scroll map carries the COLOUR and the INTENSITY: a coloured emissive glows in its own hue
-            // per pixel, scaled here by how strongly the mask said that pixel should emit. Black where
-            // nothing glows at all, so the shell's unlit surface shows through as the row's own black.
-            var scroll = new byte[rgba.Length];
-            for (int i = 0; i < rgba.Length; i += 4)
-            {
-                int lit = rgba[i + 3];
-                scroll[i] = (byte)((rgba[i] * lit + 127) / 255);
-                scroll[i + 1] = (byte)((rgba[i + 1] * lit + 127) / 255);
-                scroll[i + 2] = (byte)((rgba[i + 2] * lit + 127) / 255);
-                scroll[i + 3] = 255;
-            }
-
-            var artFile = Materialize(art, w, h, overlaysDir, plan.Stem, encodeTo);
-            var scrollFile = Materialize(scroll, w, h, effectsDir, plan.Stem, encodeTo);
-
-            var descriptor = new OverlayDescriptor
-            {
-                // Layer AND Shader, stated outright — the pair ColorTableEditor.ApplyMode writes for
-                // RenderMode.Glow, which is the mode this is. Leaving them to ShouldPromoteToGear moves the
-                // LAYER only: the shader then falls through to plain character.shpk, which has no scroll map
-                // at all, and the effect is silently dropped.
-                Layer = OverlayLayer.Gear,
-                Shader = RenderModeInference.GlowShader,
-                SourceBodyType = string.IsNullOrEmpty(bodyType) ? null : bodyType,
-                MaterialGamePaths = [.. materials],
-                Diffuse = "overlays/" + artFile,
-                Scroll = scrollFile,
-                // Zero, explicitly. The material constants ship at zero and an unset speed would take
-                // GearMaterialWriter's own default instead, sliding a tattoo across the skin it is drawn on.
-                ScrollSpeedX = 0f,
-                ScrollSpeedY = 0f,
-                // One-to-one: the scroll map IS the body sheet, so tiling it would repeat the tattoo.
-                ScrollTilingX = 1f,
-                ScrollTilingY = 1f,
-            };
-
-            // One row per plateau, so each region of the tattoo can later be given its own colour, its own
-            // brightness and its own light response. Every row is written IDENTICALLY here on purpose: the
-            // regions differ in what they let the user do, not in how the import looks, and the per-pixel
-            // intensity that actually separates them is already baked into the scroll map above.
-            var intensity = Alpha(rgba);
-            var bands = GlowShell.Bands(intensity);
-            int rowCount = Math.Max(1, bands.Count);
-            if (bands.Count > 1)
-            {
-                // PNG, not the .tex path Materialize would otherwise take: an index texture is a lookup, and
-                // BC7 is lossy enough to move a texel's red across a row boundary — which is why
-                // SecondSkinService refuses to compress the id slot either.
-                descriptor.Index = "overlays/" + Materialize(
-                    GlowShell.Index(intensity, bands), w, h, overlaysDir, plan.Stem + "_id", encodeTo: null);
-                log?.Information("[Proteus] emissive import: {0} — {1} glow region(s), rows 1–{1}",
-                    plan.Label, bands.Count);
-            }
-
-            var rows = new List<ColorTableRowPreset>();
-            for (int r = 1; r <= rowCount; r++)
-                rows.Add(new ColorTableRowPreset
-                {
-                    // With an index the rows start at 1 and count up with the plateaus; without one the
-                    // shell samples the fabricated (255,255,0), which is row 16.
-                    Row = bands.Count > 1 ? r : GlowShell.Row,
-                    SubRowA = new ColorTableSubRowPreset
-                    {
-                        Emissive = GlowShell.Emissive,
-                        // Neutral: the scroll map carries its own hue, and a tinted emissive would only push
-                        // everything toward that tint.
-                        EmissiveColor = RenderModeInference.GlowEmissiveColour,
-                        Diffuse = GlowShell.SurfaceColour,
-                        // No LightResponse and no HideInLight, which is where this parts company with the
-                        // Atramentum Luminis import. That mod's tattoos were dark-only by design; an
-                        // emissive sampler on skin.shpk simply adds light, at noon as much as at midnight,
-                        // so an unconditional glow is what parity means here. The Colors tab turns it into a
-                        // dark-only one in two clicks for anyone who wants that instead.
-                    },
-                });
-
-            options.Add(new OverlayOption
-            {
-                Name = GlowOptionName(plan, qualified),
-                Overlays = [descriptor],
-                // On the OPTION, never at the top level. Top-level rows are inherited by every option that
-                // declares none, so these would reach the pack's other body layouts as well.
-                ColorTableRows = rows,
-            });
-            wearsBodyType.Add(plan.BodyType);
-        }
-
-        var metadata = new ProteusMetadata
-        {
-            FormatVersion = 1,
-            Name = modName,
-            Author = author,
-            OptionGroups =
-            [
-                new OverlayOptionGroup { PenumbraGroupName = GroupName, Options = options },
-            ],
-        };
-
-        PenumbraModMeta.AtomicWrite(
-            Path.Combine(root, SidecarDiscoveryService.SidecarSubdir, "metadata.json"),
-            JsonSerializer.Serialize(metadata, ProteusJson.MetadataWrite));
-
-        var imported = string.Format(Loc.Localize("Import.Emissive.Description.Fmt",
-            "Imported from the emissive skin pack \"{0}\"."), Path.GetFileName(preview.SourcePath));
-        var description = string.IsNullOrWhiteSpace(preview.Description)
-            ? imported
-            : preview.Description + "\n\n" + imported;
-
-        PenumbraModMeta.AtomicWrite(
-            Path.Combine(root, PenumbraModMeta.MetaFile),
-            PenumbraModMeta.NewMetaJson(modName, author, description, preview.Version, preview.Website));
-
-        // Proteus does the real texture redirection itself at composite time, so the default option would be
-        // empty — which Penumbra flags as "changes nothing". Same harmless self-swap the Create tab uses.
-        //
-        // The pack's OWN redirects are deliberately not carried over: they are body materials rewired to
-        // name an emissive sampler that only a replaced skin.shpk has, and republishing them would put this
-        // mod into a fight with Proteus over the very material it is compositing into.
-        PenumbraModMeta.WriteRedirects(
-            root, modName,
-            files: new Dictionary<string, string>(),
-            swaps: new Dictionary<string, string>
-                { [ModCreationService.DummySwapPath] = ModCreationService.DummySwapPath });
-
-        // Exactly ONE option on, where the Atramentum Luminis import turns on a pair. Several options here
-        // are several UV layouts of the SAME tattoo, all aimed at the one body the user picked, so wearing
-        // two would stack a shell on its own copy. The one already in the destination's space is the one
-        // that needs no resampling; failing that, the first.
-        var defaultOn = new List<string>();
-        ulong defaults = 0;
-        if (options.Count > 0)
-        {
-            int pick = wearsBodyType.FindIndex(
-                t => t != null && string.Equals(t, destinationType, StringComparison.OrdinalIgnoreCase));
-            if (pick < 0) pick = 0;
-            defaultOn.Add(options[pick].Name);
-            defaults |= 1UL << pick;
-        }
-
-        PenumbraModMeta.WriteMultiSelectGroup(
-            root, 0, GroupName, [.. options.Select(o => o.Name)], defaults);
-
-        return new([.. options.Select(o => o.Name)], defaultOn);
+        return new EmissiveModWrite(root, modName, author, preview, materials, suffixOverride, encodeTo, decode, log).Run();
     }
 
     /// <summary>One byte per pixel: the mask, read straight off the alpha channel. What
@@ -812,8 +517,7 @@ public sealed class EmissiveSkinImportService
 
     // ── Register ─────────────────────────────────────────────────────────────
 
-    /// <summary>The outcome of a registration. Three states, not two: an import can succeed and still need
-    /// the user to do something.</summary>
+    /// <summary>The outcome of a registration. An import can succeed and still need the user to act.</summary>
     public readonly record struct ImportResult(bool Ok, bool Warning, string Message);
 
     /// <summary>A registration whose mod Penumbra is still loading.</summary>
@@ -823,24 +527,17 @@ public sealed class EmissiveSkinImportService
     private long nextAttempt;
 
     /// <summary>
-    /// How long to keep asking Penumbra to enable a mod it has not finished loading. Generous because the
-    /// wait scales with the mod, and this one is big: a 4K mask and its scroll map is tens of megabytes for
-    /// Penumbra's loader to walk before it will admit the mod exists. Nothing blocks while this runs.
+    /// How long to keep asking Penumbra to enable a mod it has not finished loading; large mods take a while.
     /// </summary>
     private const long ActivateTimeoutMs = 15_000;
 
-    /// <summary>How often to re-ask while waiting. Penumbra IPC is milliseconds a hop and this would
-    /// otherwise make two of them every frame for as long as the wait lasts.</summary>
+    /// <summary>How often to re-ask while waiting, so the wait does not make IPC calls every frame.</summary>
     private const long AttemptIntervalMs = 250;
 
     /// <summary>
-    /// Register a <see cref="Prepare"/>d mod with Penumbra: add it, enable it in the player's collection,
-    /// tick the default option, open Penumbra to it and recomposite. Must run on the framework thread.
-    /// <para/>
-    /// Returns null while Penumbra has ACCEPTED the mod but not finished loading it, in which case the
-    /// caller must keep calling <see cref="Pump"/> each frame until it answers — see
-    /// <see cref="LuminisImportService.Pump"/>, which documents at length why a settings write that lands
-    /// mid-load reports success and is then thrown away.
+    /// Register a <see cref="Prepare"/>d mod with Penumbra: add it, enable it in the player's collection, tick
+    /// the default option, open Penumbra to it and recomposite. Must run on the framework thread. Returns null
+    /// while Penumbra is still loading the mod; the caller then calls <see cref="Pump"/> each frame.
     /// </summary>
     /// <param name="quiet">Register and nothing else — no Penumbra window, no recomposite, and no waiting,
     /// since no further frames are coming. Teardown path.</param>
@@ -867,9 +564,7 @@ public sealed class EmissiveSkinImportService
         pending = new Pending(prepared, Environment.TickCount64 + ActivateTimeoutMs, quiet);
         nextAttempt = 0;
 
-        // Teardown takes its single attempt HERE. Finish does not enable anything — only Pump does — so
-        // handing it straight to Finish would leave the mod added and switched off while the result said the
-        // glow was on.
+        // Teardown: no more frames to retry on, so take the single enable attempt here (Finish enables nothing).
         return quiet ? Finish(TryEnable(dirName)) : Pump();
     }
 
@@ -928,13 +623,10 @@ public sealed class EmissiveSkinImportService
         var wanted = prepared.DefaultOptions;
         if (enabled && collId.HasValue && wanted.Count > 0)
         {
-            // The group's DefaultSettings only reaches a collection that has never seen this mod, and a
-            // re-import into one that has is exactly the case it does not cover.
+            // DefaultSettings only reach a collection new to this mod, so assert the selection.
             penumbra.SetModOption(collId.Value, dirName, GroupName, wanted);
 
-            // Read back, like the enable above. The return code is ambiguous anyway: NothingChanged is the
-            // COMMON answer, since Penumbra applies the group's DefaultSettings when it loads the mod and
-            // the options are already what we are asking for.
+            // Read back rather than trusting the return code: NothingChanged is the common, successful answer.
             var live = penumbra.GetModSettings(collId.Value, dirName);
             var selected = live is { } s && s.Options.TryGetValue(GroupName, out var sel)
                 ? sel : (IReadOnlyList<string>)[];

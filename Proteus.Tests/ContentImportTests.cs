@@ -224,7 +224,7 @@ public class ContentImportTests
 
         // End to end: the recorded group resolves against the model's own attribute table to the name whose
         // submeshes the writer then drops.
-        Assert.Equal(["atr_dv_a"], SecondSkinService.HiddenAttributes(
+        Assert.Equal(["atr_dv_a"], ContentPieceResolver.HiddenAttributes(
             sidecar.ContentAttributes,
             "chara/equipment/e6058/model/c0101e6058_dwn.mdl",
             ["atr_dv_a", "atr_dv_b"],
@@ -284,19 +284,19 @@ public class ContentImportTests
         string[] humanParts = ["chara/human/c0201/obj/hair/h0101/model/c0201h0101_hir.mdl"];
 
         // Body -> the worn chest piece. This is the number the whole feature turns on.
-        Assert.Equal(233, SecondSkinService.EstSetId("Body", worn, bare, humanParts));
-        Assert.Equal(6112, SecondSkinService.EstSetId("Head", worn, bare, humanParts));
-        Assert.Equal(101, SecondSkinService.EstSetId("Hair", worn, bare, humanParts));
+        Assert.Equal(233, PenumbraManipulations.EstSetId("Body", worn, bare, humanParts));
+        Assert.Equal(6112, PenumbraManipulations.EstSetId("Head", worn, bare, humanParts));
+        Assert.Equal(101, PenumbraManipulations.EstSetId("Hair", worn, bare, humanParts));
 
         // Bare chest: e0000 is filtered out of the equipment walk, so without the bare-body fallback this
         // would be null and a naked character's ex bones would silently not load.
-        Assert.Equal(0, SecondSkinService.EstSetId("Body", null, bare, humanParts));
+        Assert.Equal(0, PenumbraManipulations.EstSetId("Body", null, bare, humanParts));
 
         // Nothing drawn there, and a slot name we don't know: null rather than a guess. The entry is written
         // onto someone else's item, so guessing moves a skeleton the user never asked about.
-        Assert.Null(SecondSkinService.EstSetId("Face", worn, bare, humanParts));
-        Assert.Null(SecondSkinService.EstSetId("Body", null, null, null));
-        Assert.Null(SecondSkinService.EstSetId("Elbow", worn, bare, humanParts));
+        Assert.Null(PenumbraManipulations.EstSetId("Face", worn, bare, humanParts));
+        Assert.Null(PenumbraManipulations.EstSetId("Body", null, null, null));
+        Assert.Null(PenumbraManipulations.EstSetId("Elbow", worn, bare, humanParts));
     }
 
     /// <summary>
@@ -311,7 +311,7 @@ public class ContentImportTests
     {
         // c0201 = Midlander female. Set 233 worn on the chest, loading extra skeleton 6085.
         var json = JsonSerializer.Serialize(
-            SecondSkinService.EstManipulation("0201", "Body", 233, 6085));
+            PenumbraManipulations.EstManipulation("0201", "Body", 233, 6085));
         var m = JsonNode.Parse(json)!;
 
         Assert.Equal("Est", (string?)m["Type"]);
@@ -328,7 +328,7 @@ public class ContentImportTests
 
         // The race half comes from the character's code, not the pack's.
         var male = JsonNode.Parse(JsonSerializer.Serialize(
-            SecondSkinService.EstManipulation("0101", "Head", 1, 2)))!["Manipulation"]!;
+            PenumbraManipulations.EstManipulation("0101", "Head", 1, 2)))!["Manipulation"]!;
         Assert.Equal("Male", (string?)male["Gender"]);
         Assert.Equal("Midlander", (string?)male["Race"]);
     }
@@ -808,15 +808,15 @@ public class ContentImportTests
             var on = new Dictionary<string, List<string>> { ["Print"] = ["Escape", "Climb", "Fine"] };
 
             // Rooted: Path.Combine returns the second argument verbatim, so nothing about modRoot survives.
-            Assert.Null(SecondSkinService.SelectedMaterialFile(modRoot,
+            Assert.Null(ContentPieceResolver.SelectedMaterialFile(modRoot,
                 [new() { Group = "Print", Option = "Escape", File = outside.Replace('\\', '/') }], on));
 
             // Climbing out with .. — the same escape by a different spelling.
-            Assert.Null(SecondSkinService.SelectedMaterialFile(modRoot,
+            Assert.Null(ContentPieceResolver.SelectedMaterialFile(modRoot,
                 [new() { Group = "Print", Option = "Climb", File = "../secret.key" }], on));
 
             // A refused source does not poison the ones after it: the honest file still publishes.
-            Assert.Equal("ok.mtrl", Path.GetFileName(SecondSkinService.SelectedMaterialFile(modRoot,
+            Assert.Equal("ok.mtrl", Path.GetFileName(ContentPieceResolver.SelectedMaterialFile(modRoot,
                 [
                     new() { Group = "Print", Option = "Escape", File = outside.Replace('\\', '/') },
                     new() { Group = "Print", Option = "Fine",   File = "print/ok.mtrl" },
@@ -1066,7 +1066,7 @@ public class ContentImportTests
             var mtrl = Mtrl(diffuse, normal);
 
             Dictionary<string, string> Pick(Dictionary<string, List<string>>? on)
-                => SecondSkinService.SelectedTextureFiles(dir, piece, mtrl, on);
+                => ContentPieceResolver.SelectedTextureFiles(dir, piece, mtrl, on);
 
             var rose = Pick(new() { ["Print"] = ["Blue Rose"] });
             Assert.Equal("rose_d.tex", Path.GetFileName(Assert.Single(rose).Value));
@@ -1110,7 +1110,7 @@ public class ContentImportTests
             ];
 
             string Pick(Dictionary<string, List<string>>? on)
-                => Path.GetFileName(SecondSkinService.SelectedMaterialFile(dir, sources, on) ?? "");
+                => Path.GetFileName(ContentPieceResolver.SelectedMaterialFile(dir, sources, on) ?? "");
 
             // The selected print wins over the one declared first…
             Assert.Equal("rose.mtrl", Pick(new() { ["Print"] = ["Blue Rose"] }));
@@ -1130,7 +1130,7 @@ public class ContentImportTests
 
             // And with no default data to fall back on, null — so ContentMaterialFile and the baked path
             // still get their turn.
-            Assert.Null(SecondSkinService.SelectedMaterialFile(dir,
+            Assert.Null(ContentPieceResolver.SelectedMaterialFile(dir,
                 [new() { Group = "Print", Option = "Blue Rose", File = "print/rose.mtrl" }],
                 new Dictionary<string, List<string>> { ["Print"] = ["Blue Rose"] }));
         }
@@ -1163,7 +1163,7 @@ public class ContentImportTests
             ];
 
             string Pick(Dictionary<string, List<string>> on)
-                => Path.GetFileName(SecondSkinService.SelectedMaterialFile(dir, sources, on) ?? "");
+                => Path.GetFileName(ContentPieceResolver.SelectedMaterialFile(dir, sources, on) ?? "");
 
             var install = new List<string> { "install" };
 
@@ -1182,7 +1182,7 @@ public class ContentImportTests
                 new() { Group = "eyebrow", Option = "both", File = "common/both.tex" },
                 new() { File = "common/base.tex" },
             ];
-            Assert.Equal("both.tex", Path.GetFileName(SecondSkinService.SelectedMaterialFile(dir, withDefault,
+            Assert.Equal("both.tex", Path.GetFileName(ContentPieceResolver.SelectedMaterialFile(dir, withDefault,
                 new Dictionary<string, List<string>> { ["eyebrow"] = ["both"] }) ?? ""));
         }
         finally { Directory.Delete(dir, true); }
@@ -1539,7 +1539,7 @@ public class ContentImportTests
         try
         {
             // The pack ships the very material the model's drawn mesh names, so both mesh options bind.
-            var leaf = SecondSkinService
+            var leaf = ContentPieceResolver
                 .UsedMaterialNames(model, SecondSkinWriter.MaterialNames(model))[0].TrimStart('/');
             var pmp = V4Pack(dir, model, new byte[64], leaf);
 
@@ -1660,7 +1660,7 @@ public class ContentImportTests
         var dir = TempDir();
         try
         {
-            var leaf = SecondSkinService
+            var leaf = ContentPieceResolver
                 .UsedMaterialNames(model, SecondSkinWriter.MaterialNames(model))[0].TrimStart('/');
             var pmp = V4Pack(dir, model, new byte[64], leaf);
             var preview = ContentImportService.Inspect(pmp);

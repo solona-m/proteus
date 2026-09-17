@@ -4,19 +4,9 @@ namespace Proteus.Services;
 
 /// <summary>
 /// The file names a second-skin shell's normal map is published under, and the one place that reads them
-/// back.
-/// <para/>
-/// A shell normal is normally <c>ss_{letter}_norm.tex</c>. A normal carrying a REINFORCED TOE is published
-/// content-addressed instead, as <c>ss_{letter}_norm_{16 hex}.tex</c>, because its bytes change without
-/// anything else about the shell changing — and the game caches a texture by the disk file it resolved to.
-/// Rewritten under the same name, the character keeps drawing whichever version it loaded first: measured
-/// as a toe still solid at a density of 1%, while the file on disk held no reinforcement at all. A name that
-/// moves with the content is a cache miss, which the in-place reload then picks up. Superseded copies are
-/// removed by the compositor's ordinary prune, which keeps anything a recent manifest still names.
-/// <para/>
-/// Everything that recognises a shell normal, or derives its index texture or material from it, has to go
-/// through here. Each of those used to strip a literal <c>_norm.tex</c>, and a hashed name fails that test
-/// silently: the shell simply drops out of light-sensitive glow and ghosting.
+/// back. A shell normal is <c>ss_{letter}_norm.tex</c>, or content-addressed as
+/// <c>ss_{letter}_norm_{16 hex}.tex</c> when it carries a reinforced toe (the game caches textures by path).
+/// Everything that recognises a shell normal, or derives its index or material from it, must go through here.
 /// </summary>
 internal static class ShellTextureNames
 {
@@ -60,14 +50,11 @@ internal static class ShellTextureNames
 
     /// <summary>
     /// <paramref name="path"/> with a shell normal's file name replaced by its stem, so that every revision of
-    /// one shell's normal shares a key. Callers that cache a decoded buffer per shell need this: keyed on the
-    /// full name, each content-addressed revision would add a full-resolution entry and none would ever be
-    /// replaced. Anything that is not a shell normal comes back unchanged.
+    /// one shell's normal shares a key. Anything that is not a shell normal comes back unchanged.
     /// </summary>
     public static string ShellKey(string path)
     {
-        // Sliced on the TRIMMED path, since that is what the leaf's length was measured on — resource names
-        // arrive quoted and padded, and cutting the raw string by that length would cut in the wrong place.
+        // Sliced on the trimmed path, which the leaf's length was measured on.
         var p = path.Trim().Trim('"');
         var leaf = LeafOf(p);
         return TryNormalStem(leaf, out var stem) ? p[..^leaf.Length] + stem : path;
@@ -85,8 +72,7 @@ internal static class ShellTextureNames
     public static string MaterialLeaf(string normalLeaf)
         => TryNormalStem(normalLeaf, out var stem) ? stem + ".mtrl" : normalLeaf;
 
-    /// <summary>The file name at the end of a path written with either separator — game resource names use
-    /// forward slashes, disk paths back slashes, and both reach the callers.</summary>
+    /// <summary>The file name at the end of a path written with either separator.</summary>
     private static string LeafOf(string path)
     {
         var trimmed = path.Trim().Trim('"');

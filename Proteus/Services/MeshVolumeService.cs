@@ -30,7 +30,7 @@ internal sealed class MeshVolumeRecord
 /// The edit is positions and normals IN PLACE. Nothing changes the file's length, so no offset in the header
 /// moves and none of <see cref="ModelAttributeWriter"/>'s splice-and-shift machinery is needed — the bytes
 /// are copied and overwritten where they sit. That is the same property
-/// <c>SecondSkinWriter.SmoothBodyNipples</c> relies on, and it is what makes this safe to do to somebody
+/// <c>BodyBridge.SmoothBodyNipples</c> relies on, and it is what makes this safe to do to somebody
 /// else's mod.
 /// <para/>
 /// Arranged the way the other two writers in this project are: the model is patched in memory and only

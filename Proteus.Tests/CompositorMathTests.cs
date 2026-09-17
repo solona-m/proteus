@@ -29,7 +29,7 @@ public class CompositorMathTests
     public void ParseHex_VariousFormats_ReturnsCorrectFloats(
         string hex, float expectedR, float expectedG, float expectedB)
     {
-        var (r, g, b) = CompositorService.ParseHex(hex);
+        var (r, g, b) = OverlayBlend.ParseHex(hex);
         Assert.Equal(expectedR, r, precision: 3);
         Assert.Equal(expectedG, g, precision: 3);
         Assert.Equal(expectedB, b, precision: 3);
@@ -39,7 +39,7 @@ public class CompositorMathTests
     public void ParseHex_MixedHex_CorrectComponents()
     {
         // #AABBCC → R=0xAA/255, G=0xBB/255, B=0xCC/255
-        var (r, g, b) = CompositorService.ParseHex("#AABBCC");
+        var (r, g, b) = OverlayBlend.ParseHex("#AABBCC");
         Assert.Equal(0xAA / 255f, r, precision: 4);
         Assert.Equal(0xBB / 255f, g, precision: 4);
         Assert.Equal(0xCC / 255f, b, precision: 4);
@@ -54,7 +54,7 @@ public class CompositorMathTests
         var overlay  = RGBA(0,   0, 255, 255);       // blue, full alpha
         var row      = Row(1f, 1f, 1f);              // white tint (no tint)
 
-        CompositorService.ApplyFlatOverlay(baseTex, overlay, row, 1, 1);
+        OverlayBlend.ApplyFlatOverlay(baseTex, overlay, row, 1, 1);
 
         Assert.Equal(0,   baseTex[0]); // R → 0
         Assert.Equal(0,   baseTex[1]); // G → 0
@@ -68,7 +68,7 @@ public class CompositorMathTests
         var overlay  = RGBA(255, 255, 255, 0);       // fully transparent
         var original = (byte[])baseTex.Clone();
 
-        CompositorService.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f), 1, 1);
+        OverlayBlend.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f), 1, 1);
 
         Assert.Equal(original, baseTex);
     }
@@ -80,7 +80,7 @@ public class CompositorMathTests
         var baseTex = RGBA(200, 0, 0, 255);
         var overlay  = RGBA(0, 200, 0, 128);         // green at 50% alpha
 
-        CompositorService.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f), 1, 1);
+        OverlayBlend.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f), 1, 1);
 
         Assert.InRange(baseTex[0], 94, 106);  // ≈100 (red fades)
         Assert.InRange(baseTex[1], 94, 106);  // ≈100 (green appears)
@@ -93,7 +93,7 @@ public class CompositorMathTests
         var overlay  = RGBA(255, 255, 255, 255);     // white, full alpha
         var row      = Row(1f, 0f, 0f);              // red tint only
 
-        CompositorService.ApplyFlatOverlay(baseTex, overlay, row, 1, 1);
+        OverlayBlend.ApplyFlatOverlay(baseTex, overlay, row, 1, 1);
 
         Assert.Equal(255, baseTex[0]); // R = full (white * red tint)
         Assert.Equal(0,   baseTex[1]); // G = 0
@@ -108,7 +108,7 @@ public class CompositorMathTests
         var overlay  = new byte[] { 0,   0, 0, 255,  0, 0,   0, 0   }; // black opaque | transparent
         var row      = Row(1f, 1f, 1f);
 
-        CompositorService.ApplyFlatOverlay(baseTex, overlay, row, 2, 1);
+        OverlayBlend.ApplyFlatOverlay(baseTex, overlay, row, 2, 1);
 
         // First pixel: fully replaced by black overlay
         Assert.Equal(0, baseTex[0]);
@@ -133,7 +133,7 @@ public class CompositorMathTests
         var overlay  = RGBA(255, 0, 0, 255);          // fully opaque red print
         var original = (byte[])baseTex.Clone();
 
-        CompositorService.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f, blend: RowBlend.Multiply),
+        OverlayBlend.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f, blend: RowBlend.Multiply),
                                            1, 1, painted: null);
 
         Assert.Equal(original, baseTex);
@@ -146,7 +146,7 @@ public class CompositorMathTests
         var overlay  = RGBA(255, 255, 255, 255);      // white multiplies to nothing
         var original = (byte[])baseTex.Clone();
 
-        CompositorService.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f, blend: RowBlend.Multiply),
+        OverlayBlend.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f, blend: RowBlend.Multiply),
                                            1, 1, painted: [255]);
 
         Assert.Equal(original, baseTex);
@@ -159,7 +159,7 @@ public class CompositorMathTests
         var baseTex = RGBA(200, 200, 200, 255);
         var overlay = RGBA(128, 128, 128, 255);
 
-        CompositorService.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f, blend: RowBlend.Multiply),
+        OverlayBlend.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f, blend: RowBlend.Multiply),
                                            1, 1, painted: [255]);
 
         Assert.InRange(baseTex[0], 95, 105);
@@ -172,7 +172,7 @@ public class CompositorMathTests
         var baseTex = RGBA(100, 100, 100, 255);
         var overlay = RGBA(128, 128, 128, 255);
 
-        CompositorService.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f, blend: RowBlend.Screen),
+        OverlayBlend.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f, blend: RowBlend.Screen),
                                            1, 1, painted: [255]);
 
         Assert.InRange(baseTex[0], 173, 183);
@@ -186,7 +186,7 @@ public class CompositorMathTests
         var overlay  = RGBA(0, 0, 0, 255);
         var original = (byte[])baseTex.Clone();
 
-        CompositorService.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f, blend: RowBlend.Screen),
+        OverlayBlend.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f, blend: RowBlend.Screen),
                                            1, 1, painted: [255]);
 
         Assert.Equal(original, baseTex);
@@ -198,7 +198,7 @@ public class CompositorMathTests
         var baseTex = RGBA(200, 200, 200, 255);
         var overlay = RGBA(200, 200, 200, 255);       // 0.784 + 0.784 clamps to 1
 
-        CompositorService.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f, blend: RowBlend.Add),
+        OverlayBlend.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f, blend: RowBlend.Add),
                                            1, 1, painted: [255]);
 
         Assert.Equal(255, baseTex[0]);
@@ -210,7 +210,7 @@ public class CompositorMathTests
         var baseTex = RGBA(200, 200, 200, 255);
         var overlay = RGBA(50, 60, 70, 255);
 
-        CompositorService.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f, blend: RowBlend.Replace),
+        OverlayBlend.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f, blend: RowBlend.Replace),
                                            1, 1, painted: [255]);
 
         Assert.InRange(baseTex[0], 48, 52);
@@ -229,7 +229,7 @@ public class CompositorMathTests
         var baseTex = RGBA(200, 200, 200, 255);
         var overlay = RGBA(0, 0, 0, 255);             // multiplying by black → 0 at full strength
 
-        CompositorService.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f, blend: RowBlend.Multiply),
+        OverlayBlend.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f, blend: RowBlend.Multiply),
                                            1, 1, painted: [128]);
 
         Assert.InRange(baseTex[0], 95, 105);          // ≈100, halfway from 200 to 0
@@ -241,7 +241,7 @@ public class CompositorMathTests
         var baseTex = RGBA(255, 255, 255, 255);
         var overlay = RGBA(255, 255, 255, 255);
 
-        CompositorService.ApplyFlatOverlay(baseTex, overlay, Row(1f, 0f, 0f, blend: RowBlend.Multiply),
+        OverlayBlend.ApplyFlatOverlay(baseTex, overlay, Row(1f, 0f, 0f, blend: RowBlend.Multiply),
                                            1, 1, painted: [255]);
 
         Assert.Equal(255, baseTex[0]);
@@ -256,7 +256,7 @@ public class CompositorMathTests
         var overlay  = RGBA(0, 0, 0, 0);
         var original = (byte[])baseTex.Clone();
 
-        CompositorService.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f, blend: RowBlend.Multiply),
+        OverlayBlend.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f, blend: RowBlend.Multiply),
                                            1, 1, painted: [255]);
 
         Assert.Equal(original, baseTex);
@@ -268,7 +268,7 @@ public class CompositorMathTests
         var baseTex = RGBA(200, 200, 200, 77);
         var overlay = RGBA(0, 0, 0, 255);
 
-        CompositorService.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f, blend: RowBlend.Multiply),
+        OverlayBlend.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f, blend: RowBlend.Multiply),
                                            1, 1, painted: [255]);
 
         Assert.Equal(77, baseTex[3]);
@@ -291,8 +291,8 @@ public class CompositorMathTests
         var withClip    = RGBA(200, 100, 50, 255);
         var overlay     = RGBA(180, 180, 180, 200);
 
-        CompositorService.ApplyIndexedOverlay(withoutClip, overlay, idx, rows, false, 1, 1, null);
-        CompositorService.ApplyIndexedOverlay(withClip,    overlay, idx, rows, false, 1, 1, [0]);
+        OverlayBlend.ApplyIndexedOverlay(withoutClip, overlay, idx, rows, false, 1, 1, null);
+        OverlayBlend.ApplyIndexedOverlay(withClip,    overlay, idx, rows, false, 1, 1, [0]);
 
         Assert.Equal(withoutClip, withClip);
     }
@@ -315,8 +315,8 @@ public class CompositorMathTests
         var viaFlat    = RGBA(200, 160, 120, 255);
         var overlay    = RGBA(128, 200, 64, 255);
 
-        CompositorService.ApplyIndexedOverlay(viaIndexed, overlay, idx, rows, false, 1, 1, [255]);
-        CompositorService.ApplyFlatOverlay(viaFlat, overlay, row16A, 1, 1, [255]);
+        OverlayBlend.ApplyIndexedOverlay(viaIndexed, overlay, idx, rows, false, 1, 1, [255]);
+        OverlayBlend.ApplyFlatOverlay(viaFlat, overlay, row16A, 1, 1, [255]);
 
         Assert.Equal(viaFlat, viaIndexed);
     }
@@ -345,9 +345,9 @@ public class CompositorMathTests
         var pureB = RGBA(200, 200, 200, 255);
         var mixed = RGBA(200, 200, 200, 255);
 
-        CompositorService.ApplyIndexedOverlay(pureA, overlay, RGBA(255, 255, 0, 255), rows, false, 1, 1, [64]);
-        CompositorService.ApplyIndexedOverlay(pureB, overlay, RGBA(255, 0,   0, 255), rows, false, 1, 1, [64]);
-        CompositorService.ApplyIndexedOverlay(mixed, overlay, RGBA(255, 128, 0, 255), rows, false, 1, 1, [64]);
+        OverlayBlend.ApplyIndexedOverlay(pureA, overlay, RGBA(255, 255, 0, 255), rows, false, 1, 1, [64]);
+        OverlayBlend.ApplyIndexedOverlay(pureB, overlay, RGBA(255, 0,   0, 255), rows, false, 1, 1, [64]);
+        OverlayBlend.ApplyIndexedOverlay(mixed, overlay, RGBA(255, 128, 0, 255), rows, false, 1, 1, [64]);
 
         // A prints weakly (clip 64/255) and B paints outright, so the two differ; halfway must sit between.
         Assert.True(pureA[0] > pureB[0], "a weak print should darken less than an opaque paint");
@@ -362,7 +362,7 @@ public class CompositorMathTests
         var cov  = RGBA(10, 20, 30, 200);
         var rows = new Dictionary<int, ColorTableRowOverride> { [15] = new() { A = Row(1f, 1f, 1f) } };
 
-        var got = CompositorService.PaintCoverage(cov, null, rows, 1, 1);
+        var got = OverlayBlend.PaintCoverage(cov, null, rows, 1, 1);
 
         Assert.Same(cov, got);   // no allocation on the ordinary path
     }
@@ -376,7 +376,7 @@ public class CompositorMathTests
             [15] = new() { A = Row(1f, 1f, 1f, blend: RowBlend.Multiply) },
         };
 
-        var got = CompositorService.PaintCoverage(cov, null, rows, 1, 1);
+        var got = OverlayBlend.PaintCoverage(cov, null, rows, 1, 1);
 
         Assert.Equal(0, got[3]);
     }
@@ -394,7 +394,7 @@ public class CompositorMathTests
                           B = Row(1f, 1f, 1f, blend: RowBlend.Multiply) },
         };
 
-        Assert.False(CompositorService.AllRowsPrint(rows, hasIndex: true));
+        Assert.False(OverlayBlend.AllRowsPrint(rows, hasIndex: true));
     }
 
     [Fact]
@@ -405,7 +405,7 @@ public class CompositorMathTests
             [15] = new() { A = Row(1f, 1f, 1f, blend: RowBlend.Screen) },
         };
 
-        Assert.True(CompositorService.AllRowsPrint(rows, hasIndex: false));
+        Assert.True(OverlayBlend.AllRowsPrint(rows, hasIndex: false));
     }
 
     /// <summary>
@@ -422,7 +422,7 @@ public class CompositorMathTests
             [15] = new() { A = Row(1f, 1f, 1f, blend: RowBlend.Multiply) },
         };
 
-        var got = CompositorService.PaintCoverage(cov, null, rows, 1, 1, hasIndex: true);
+        var got = OverlayBlend.PaintCoverage(cov, null, rows, 1, 1, hasIndex: true);
 
         Assert.Same(cov, got);
     }
@@ -437,7 +437,7 @@ public class CompositorMathTests
             [15] = new() { A = Row(1f, 1f, 1f, blend: RowBlend.Multiply) },
         };
 
-        var got = CompositorService.PaintCoverage(cov, null, rows, 1, 1, hasIndex: false);
+        var got = OverlayBlend.PaintCoverage(cov, null, rows, 1, 1, hasIndex: false);
 
         Assert.Equal(0, got[3]);
     }
@@ -454,22 +454,22 @@ public class CompositorMathTests
             [0] = new() { A = Row(1f, 1f, 1f, blend: RowBlend.Multiply) },
         };
 
-        var ex = Record.Exception(() => CompositorService.PaintCoverage(cov, idx, rows, 2, 1));
+        var ex = Record.Exception(() => OverlayBlend.PaintCoverage(cov, idx, rows, 2, 1));
 
         Assert.Null(ex);
     }
 
     [Fact]
     public void AnyCoverage_AllZeroAlpha_IsFalse()
-        => Assert.False(CompositorService.AnyCoverage(new byte[] { 9, 9, 9, 0, 9, 9, 9, 0 }));
+        => Assert.False(OverlayBlend.AnyCoverage(new byte[] { 9, 9, 9, 0, 9, 9, 9, 0 }));
 
     [Fact]
     public void AnyCoverage_OneCoveredTexel_IsTrue()
-        => Assert.True(CompositorService.AnyCoverage(new byte[] { 0, 0, 0, 0, 0, 0, 0, 1 }));
+        => Assert.True(OverlayBlend.AnyCoverage(new byte[] { 0, 0, 0, 0, 0, 0, 0, 1 }));
 
     [Fact]
     public void AnyCoverage_Null_IsFalse()
-        => Assert.False(CompositorService.AnyCoverage(null));
+        => Assert.False(OverlayBlend.AnyCoverage(null));
 
     /// <summary>
     /// Giving one row a blend mode must not move any OTHER row's output. The print path rounds where the
@@ -504,8 +504,8 @@ public class CompositorMathTests
         var viaPlain    = RGBA(203, 101, 47, 255);
         var overlay     = RGBA(181, 77, 233, 199);
 
-        CompositorService.ApplyIndexedOverlay(viaPrinting, overlay, idx, printing, false, 1, 1, [255]);
-        CompositorService.ApplyIndexedOverlay(viaPlain,    overlay, idx, plain,    false, 1, 1, [255]);
+        OverlayBlend.ApplyIndexedOverlay(viaPrinting, overlay, idx, printing, false, 1, 1, [255]);
+        OverlayBlend.ApplyIndexedOverlay(viaPlain,    overlay, idx, plain,    false, 1, 1, [255]);
 
         Assert.Equal(viaPlain, viaPrinting);
     }
@@ -523,7 +523,7 @@ public class CompositorMathTests
         for (int i = 0; i < expected.Length; i++)
             expected[i] = (byte)(expected[i] + (255 - expected[i]) * rgba[i * 4 + 3] / 255);
 
-        CompositorService.UnionAlphaInto(acc, rgba);
+        OverlayBlend.UnionAlphaInto(acc, rgba);
 
         Assert.Equal(expected, acc);
     }
@@ -536,7 +536,7 @@ public class CompositorMathTests
         var dst = RGBA(255, 0, 0, 255);  // red
         var src = RGBA(0,   0, 255, 255); // blue, full alpha
 
-        CompositorService.AlphaComposite(dst, src, 1, 1);
+        OverlayBlend.AlphaComposite(dst, src, 1, 1);
 
         Assert.Equal(0,   dst[0]);
         Assert.Equal(0,   dst[1]);
@@ -549,7 +549,7 @@ public class CompositorMathTests
         var dst      = RGBA(100, 150, 200, 255);
         var original = (byte[])dst.Clone();
 
-        CompositorService.AlphaComposite(dst, RGBA(255, 0, 0, 0), 1, 1);
+        OverlayBlend.AlphaComposite(dst, RGBA(255, 0, 0, 0), 1, 1);
 
         Assert.Equal(original, dst);
     }
@@ -560,7 +560,7 @@ public class CompositorMathTests
         var dst = RGBA(200, 200, 200, 255);
         var src = RGBA(0,   0,   0,   128); // black at 50%
 
-        CompositorService.AlphaComposite(dst, src, 1, 1);
+        OverlayBlend.AlphaComposite(dst, src, 1, 1);
 
         // ≈ 0*(128/255) + 200*(1-128/255) ≈ 100
         Assert.InRange(dst[0], 94, 106);
@@ -575,7 +575,7 @@ public class CompositorMathTests
         var src  = RGBA(255, 255, 255, 255); // fully opaque white
         var mask = RGBA(0, 0, 0, 0);         // mask blocks everything
 
-        CompositorService.AlphaComposite(dst, src, 1, 1, mask);
+        OverlayBlend.AlphaComposite(dst, src, 1, 1, mask);
 
         // dst should be unchanged (mask blocked the composite)
         Assert.Equal(0, dst[0]);
@@ -590,7 +590,7 @@ public class CompositorMathTests
         var src  = RGBA(255, 255, 255, 255); // full alpha
         var mask = RGBA(0,   0,   0,   128); // half alpha — limits effective alpha
 
-        CompositorService.AlphaComposite(dst, src, 1, 1, mask);
+        OverlayBlend.AlphaComposite(dst, src, 1, 1, mask);
 
         // effective alpha = min(1, 0.5) = 0.5 → ≈128 for white on black
         Assert.InRange(dst[0], 120, 136);
@@ -600,7 +600,7 @@ public class CompositorMathTests
     public void AlphaComposite_DstAlphaNotModified()
     {
         var dst = RGBA(0, 0, 0, 255);
-        CompositorService.AlphaComposite(dst, RGBA(255, 255, 255, 128), 1, 1);
+        OverlayBlend.AlphaComposite(dst, RGBA(255, 255, 255, 128), 1, 1);
         Assert.Equal(255, dst[3]); // dst alpha is never touched
     }
 
@@ -614,7 +614,7 @@ public class CompositorMathTests
         // Overlay: same tilt, fully opaque
         byte[] src = [160, 128, 180, 255];
 
-        CompositorService.CompoundNormal(dst, src, 1, 1);
+        OverlayBlend.CompoundNormal(dst, src, 1, 1);
 
         // XY compounds: result X must exceed either input alone
         Assert.True(dst[0] > 160);
@@ -628,7 +628,7 @@ public class CompositorMathTests
     {
         // Flat overlay (128,128) = zero deviation — adding zero changes nothing
         byte[] dst = [180, 90, 200, 0];
-        CompositorService.CompoundNormal(dst, [128, 128, 255, 255], 1, 1);
+        OverlayBlend.CompoundNormal(dst, [128, 128, 255, 255], 1, 1);
         Assert.Equal(180, dst[0]);
         Assert.Equal(90,  dst[1]);
     }
@@ -638,7 +638,7 @@ public class CompositorMathTests
     {
         byte[] dst      = [160, 128, 200, 0];
         byte[] original = (byte[])dst.Clone();
-        CompositorService.CompoundNormal(dst, [255, 0, 180, 0], 1, 1);
+        OverlayBlend.CompoundNormal(dst, [255, 0, 180, 0], 1, 1);
         Assert.Equal(original, dst);
     }
 
@@ -656,13 +656,13 @@ public class CompositorMathTests
         byte[] skin = [160, 108, 250, 255];
 
         byte[] compounded = (byte[])skin.Clone();
-        CompositorService.CompoundNormal(compounded, skin, 1, 1);
+        OverlayBlend.CompoundNormal(compounded, skin, 1, 1);
         Assert.Equal(192, compounded[0]);   // 128 + 32 + 32
         Assert.Equal(88,  compounded[1]);   // 128 − 20 − 20
 
         // Replace mode hands back the map the author painted, exactly.
         byte[] replaced = [200, 60, 180, 255];
-        CompositorService.AlphaComposite(replaced, skin, 1, 1);
+        OverlayBlend.AlphaComposite(replaced, skin, 1, 1);
         Assert.Equal(skin[0], replaced[0]);
         Assert.Equal(skin[1], replaced[1]);
         // And the BLUE channel comes across too — skin.shpk reads it as skin-colour influence, and
@@ -678,7 +678,7 @@ public class CompositorMathTests
         byte[] src  = [200, 200, 180, 255];
         byte[] mask = [0,   0,   0,   0];
         byte[] orig = (byte[])dst.Clone();
-        CompositorService.CompoundNormal(dst, src, 1, 1, mask);
+        OverlayBlend.CompoundNormal(dst, src, 1, 1, mask);
         Assert.Equal(orig, dst);
     }
 
@@ -687,20 +687,20 @@ public class CompositorMathTests
     [Fact]
     public void BuildRowDict_Null_ReturnsEmptyDict()
     {
-        Assert.Empty(CompositorService.BuildRowDict(null));
+        Assert.Empty(OverlayBlend.BuildRowDict(null));
     }
 
     [Fact]
     public void BuildRowDict_EmptyList_ReturnsEmptyDict()
     {
-        Assert.Empty(CompositorService.BuildRowDict([]));
+        Assert.Empty(OverlayBlend.BuildRowDict([]));
     }
 
     [Fact]
     public void BuildRowDict_Row1_MapsToIndex0()
     {
         var presets = Presets(row: 1, diffuseA: "#FF0000");
-        var dict    = CompositorService.BuildRowDict(presets);
+        var dict    = OverlayBlend.BuildRowDict(presets);
 
         Assert.True(dict.ContainsKey(0));  // 1-based → 0-based
         Assert.Equal(1f, dict[0].A.DiffuseR, precision: 3);
@@ -712,7 +712,7 @@ public class CompositorMathTests
     public void BuildRowDict_Row16_MapsToIndex15()
     {
         var presets = Presets(row: 16, diffuseA: "#0000FF");
-        var dict    = CompositorService.BuildRowDict(presets);
+        var dict    = OverlayBlend.BuildRowDict(presets);
 
         Assert.True(dict.ContainsKey(15));
         Assert.Equal(1f, dict[15].A.DiffuseB, precision: 3);
@@ -725,7 +725,7 @@ public class CompositorMathTests
         {
             new() { Row = 1, SubRowA = new() { Diffuse = null, Emissive = 0.5f } }
         };
-        var dict = CompositorService.BuildRowDict(presets);
+        var dict = OverlayBlend.BuildRowDict(presets);
 
         Assert.Equal(1f, dict[0].A.DiffuseR, precision: 3);
         Assert.Equal(1f, dict[0].A.DiffuseG, precision: 3);
@@ -745,7 +745,7 @@ public class CompositorMathTests
                 SubRowB = new() { Diffuse = "#0000FF", Emissive = 0.2f, Opacity = -5 }
             }
         };
-        var dict = CompositorService.BuildRowDict(presets);
+        var dict = OverlayBlend.BuildRowDict(presets);
         var row  = dict[0];
 
         Assert.Equal(1f,   row.A.DiffuseR, precision: 3);
@@ -764,7 +764,7 @@ public class CompositorMathTests
             new() { Row = 1,  SubRowA = new() { Diffuse = "#FF0000" } },
             new() { Row = 16, SubRowA = new() { Diffuse = "#0000FF" } }
         };
-        var dict = CompositorService.BuildRowDict(presets);
+        var dict = OverlayBlend.BuildRowDict(presets);
 
         Assert.Equal(2, dict.Count);
         Assert.True(dict.ContainsKey(0));
@@ -777,7 +777,7 @@ public class CompositorMathTests
     public void ScaleOverlayAlpha_ZeroOpacity_ReturnsSameAlphas()
     {
         var src    = new byte[] { 255, 255, 255, 128, 255, 255, 255, 200 };
-        var result = CompositorService.ScaleOverlayAlpha(src, 0);
+        var result = OverlayBlend.ScaleOverlayAlpha(src, 0);
         Assert.Equal(128, result[3]);
         Assert.Equal(200, result[7]);
     }
@@ -786,7 +786,7 @@ public class CompositorMathTests
     public void ScaleOverlayAlpha_PositiveOpacity_IncreasesAlpha()
     {
         // alpha=128, opacity=+50: newA = 128 + (255-128)*50/100 = 128+63 = 191
-        var result = CompositorService.ScaleOverlayAlpha(RGBA(255, 255, 255, 128), 50);
+        var result = OverlayBlend.ScaleOverlayAlpha(RGBA(255, 255, 255, 128), 50);
         Assert.Equal(191, result[3]);
     }
 
@@ -794,7 +794,7 @@ public class CompositorMathTests
     public void ScaleOverlayAlpha_NegativeOpacity_DecreasesAlpha()
     {
         // alpha=200, opacity=-50: newA = 200 * 50/100 = 100
-        var result = CompositorService.ScaleOverlayAlpha(RGBA(255, 255, 255, 200), -50);
+        var result = OverlayBlend.ScaleOverlayAlpha(RGBA(255, 255, 255, 200), -50);
         Assert.Equal(100, result[3]);
     }
 
@@ -802,14 +802,14 @@ public class CompositorMathTests
     public void ScaleOverlayAlpha_PositiveOpacity_ZeroAlphaPixelStaysZero()
     {
         // fully-transparent pixel stays transparent even with positive opacity
-        var result = CompositorService.ScaleOverlayAlpha(RGBA(255, 255, 255, 0), 100);
+        var result = OverlayBlend.ScaleOverlayAlpha(RGBA(255, 255, 255, 0), 100);
         Assert.Equal(0, result[3]);
     }
 
     [Fact]
     public void ScaleOverlayAlpha_NegativeOpacity_ZeroAlphaStaysZero()
     {
-        var result = CompositorService.ScaleOverlayAlpha(RGBA(255, 255, 255, 0), -50);
+        var result = OverlayBlend.ScaleOverlayAlpha(RGBA(255, 255, 255, 0), -50);
         Assert.Equal(0, result[3]);
     }
 
@@ -817,7 +817,7 @@ public class CompositorMathTests
     public void ScaleOverlayAlpha_FullPositive_ClampsAt255()
     {
         // alpha=200, opacity=+100: newA = 200 + (255-200)*100/100 = 200+55 = 255
-        var result = CompositorService.ScaleOverlayAlpha(RGBA(255, 255, 255, 200), 100);
+        var result = OverlayBlend.ScaleOverlayAlpha(RGBA(255, 255, 255, 200), 100);
         Assert.Equal(255, result[3]);
     }
 
@@ -825,7 +825,7 @@ public class CompositorMathTests
     public void ScaleOverlayAlpha_DoesNotMutateSrc()
     {
         var src = RGBA(255, 255, 255, 128);
-        CompositorService.ScaleOverlayAlpha(src, 50);
+        OverlayBlend.ScaleOverlayAlpha(src, 50);
         Assert.Equal(128, src[3]);
     }
 
@@ -841,7 +841,7 @@ public class CompositorMathTests
     public void ApplyCoverageMask_NullMap_ReturnsSameReference()
     {
         var cov = RGBA(255, 255, 255, 200);
-        Assert.Same(cov, CompositorService.ApplyCoverageMask(cov, null, null));
+        Assert.Same(cov, OverlayBlend.ApplyCoverageMask(cov, null, null));
     }
 
     [Fact]
@@ -851,7 +851,7 @@ public class CompositorMathTests
         // when the mask is fully applied white (W=0, T=255). A mask can boost a sheer area to opaque
         // but can NEVER create coverage where the overlay is absent.
         var cov    = RGBA(255, 255, 255, 0);
-        var result = CompositorService.ApplyCoverageMask(cov, new byte[] { 0 }, new byte[] { 255 });
+        var result = OverlayBlend.ApplyCoverageMask(cov, new byte[] { 0 }, new byte[] { 255 });
         Assert.Equal(0, result[3]);
     }
 
@@ -861,7 +861,7 @@ public class CompositorMathTests
         // Additive over a SHEER base: alpha=40 (visible but sheer), mask white (W=0, T=255) → forced
         // to 255. This is what paints the opaque bands at the bottom of a sheer stocking.
         var cov    = RGBA(255, 255, 255, 40);
-        var result = CompositorService.ApplyCoverageMask(cov, new byte[] { 0 }, new byte[] { 255 });
+        var result = OverlayBlend.ApplyCoverageMask(cov, new byte[] { 0 }, new byte[] { 255 });
         Assert.Equal(255, result[3]);
     }
 
@@ -870,7 +870,7 @@ public class CompositorMathTests
     {
         // alpha=0 → W=255, T=0 → keep=255 → cov' = cov (mask does nothing)
         var cov    = RGBA(255, 255, 255, 200);
-        var result = CompositorService.ApplyCoverageMask(cov, new byte[] { 255 }, new byte[] { 0 });
+        var result = OverlayBlend.ApplyCoverageMask(cov, new byte[] { 255 }, new byte[] { 0 });
         Assert.Equal(200, result[3]);
     }
 
@@ -879,7 +879,7 @@ public class CompositorMathTests
     {
         // alpha=255, gray=0 → W=0, T=0 → keep=0 → cov' = 0 (rip / hole)
         var cov    = RGBA(255, 255, 255, 200);
-        var result = CompositorService.ApplyCoverageMask(cov, new byte[] { 0 }, new byte[] { 0 });
+        var result = OverlayBlend.ApplyCoverageMask(cov, new byte[] { 0 }, new byte[] { 0 });
         Assert.Equal(0, result[3]);
     }
 
@@ -888,7 +888,7 @@ public class CompositorMathTests
     {
         // alpha=255, gray=255 → W=0, T=255 → cov' = 255 (forced opaque, above the sheer base of 40)
         var cov    = RGBA(255, 255, 255, 40);
-        var result = CompositorService.ApplyCoverageMask(cov, new byte[] { 0 }, new byte[] { 255 });
+        var result = OverlayBlend.ApplyCoverageMask(cov, new byte[] { 0 }, new byte[] { 255 });
         Assert.Equal(255, result[3]);
     }
 
@@ -897,7 +897,7 @@ public class CompositorMathTests
     {
         // alpha=255, gray=128 → W=0, T=128 → cov' = 128 (set to the gray target, regardless of base)
         var cov    = RGBA(255, 255, 255, 200);
-        var result = CompositorService.ApplyCoverageMask(cov, new byte[] { 0 }, new byte[] { 128 });
+        var result = OverlayBlend.ApplyCoverageMask(cov, new byte[] { 0 }, new byte[] { 128 });
         Assert.Equal(128, result[3]);
     }
 
@@ -906,7 +906,7 @@ public class CompositorMathTests
     {
         // a=128 → W=127, T=0 → keep=127 → cov' = 200*127/255 ≈ 99
         var cov    = RGBA(255, 255, 255, 200);
-        var result = CompositorService.ApplyCoverageMask(cov, new byte[] { 127 }, new byte[] { 0 });
+        var result = OverlayBlend.ApplyCoverageMask(cov, new byte[] { 127 }, new byte[] { 0 });
         Assert.Equal(200 * 127 / 255, result[3]);
     }
 
@@ -914,7 +914,7 @@ public class CompositorMathTests
     public void ApplyCoverageMask_OnlyTouchesAlpha_NotColor()
     {
         var cov    = RGBA(10, 20, 30, 200);
-        var result = CompositorService.ApplyCoverageMask(cov, new byte[] { 0 }, new byte[] { 0 });
+        var result = OverlayBlend.ApplyCoverageMask(cov, new byte[] { 0 }, new byte[] { 0 });
         Assert.Equal(10, result[0]);
         Assert.Equal(20, result[1]);
         Assert.Equal(30, result[2]);
@@ -924,7 +924,7 @@ public class CompositorMathTests
     public void ApplyCoverageMask_DoesNotMutateSource()
     {
         var cov = RGBA(255, 255, 255, 200);
-        CompositorService.ApplyCoverageMask(cov, new byte[] { 0 }, new byte[] { 0 });
+        OverlayBlend.ApplyCoverageMask(cov, new byte[] { 0 }, new byte[] { 0 });
         Assert.Equal(200, cov[3]); // original untouched (clone returned)
     }
 
@@ -933,7 +933,7 @@ public class CompositorMathTests
     {
         // pixel 0: alpha black (keep=255) → unchanged; pixel 1: alpha white gray black (keep=0) → 0
         var cov    = new byte[] { 255, 0, 0, 255,  0, 255, 0, 255 };
-        var result = CompositorService.ApplyCoverageMask(cov, new byte[] { 255, 0 }, new byte[] { 0, 0 });
+        var result = OverlayBlend.ApplyCoverageMask(cov, new byte[] { 255, 0 }, new byte[] { 0, 0 });
         Assert.Equal(255, result[3]);
         Assert.Equal(0,   result[7]);
     }
@@ -947,7 +947,7 @@ public class CompositorMathTests
         var idx  = RGBA(0,   255, 0,   255); // R=0→pair0, G=255→100% A row
         var rows = RowDict(pairIdx: 0, opA: 50, opB: 0);
 
-        var result = CompositorService.ApplyIndexedOpacity(src, idx, rows);
+        var result = OverlayBlend.ApplyIndexedOpacity(src, idx, rows);
 
         float a    = 128f / 255f;
         float newA = a + (1f - a) * 50f / 100f;
@@ -961,7 +961,7 @@ public class CompositorMathTests
         var idx  = RGBA(0,   255, 0,   255);
         var rows = RowDict(pairIdx: 0, opA: -50, opB: 0);
 
-        var result = CompositorService.ApplyIndexedOpacity(src, idx, rows);
+        var result = OverlayBlend.ApplyIndexedOpacity(src, idx, rows);
 
         float a    = 200f / 255f;
         float newA = a * (100f - 50f) / 100f;
@@ -975,7 +975,7 @@ public class CompositorMathTests
         var idx  = RGBA(0,   255, 0,   255);
         var rows = RowDict(pairIdx: 0, opA: 50, opB: 0);
 
-        var result = CompositorService.ApplyIndexedOpacity(src, idx, rows);
+        var result = OverlayBlend.ApplyIndexedOpacity(src, idx, rows);
         Assert.Equal(0, result[3]);
     }
 
@@ -987,7 +987,7 @@ public class CompositorMathTests
         var idx  = RGBA(85,  255, 0,   255);
         var rows = RowDict(pairIdx: 0, opA: 100, opB: 0); // only pair 0 exists
 
-        var result = CompositorService.ApplyIndexedOpacity(src, idx, rows);
+        var result = OverlayBlend.ApplyIndexedOpacity(src, idx, rows);
         Assert.Equal(200, result[3]); // unchanged
     }
 
@@ -1002,7 +1002,7 @@ public class CompositorMathTests
             [0] = new() { A = new() { Opacity = 100 }, B = new() { Opacity = -50 } }
         };
 
-        var result = CompositorService.ApplyIndexedOpacity(src, idx, rows);
+        var result = OverlayBlend.ApplyIndexedOpacity(src, idx, rows);
 
         // blendA = 0 → op = B.Opacity = -50 → newA = (200/255)*(50/100)
         float a    = 200f / 255f;
@@ -1015,7 +1015,7 @@ public class CompositorMathTests
     {
         var src  = RGBA(255, 255, 255, 200);
         var orig = (byte[])src.Clone();
-        CompositorService.ApplyIndexedOpacity(src, RGBA(0, 255, 0, 255), RowDict(0, 50, 0));
+        OverlayBlend.ApplyIndexedOpacity(src, RGBA(0, 255, 0, 255), RowDict(0, 50, 0));
         Assert.Equal(orig, src);
     }
 
@@ -1037,7 +1037,7 @@ public class CompositorMathTests
             }
         };
 
-        CompositorService.ApplyIndexedOverlay(baseTex, ov, idx, rows, isNormal: false, 1, 1);
+        OverlayBlend.ApplyIndexedOverlay(baseTex, ov, idx, rows, isNormal: false, 1, 1);
 
         Assert.Equal(255, baseTex[0]); // R = full (red row A)
         Assert.Equal(0,   baseTex[1]); // G = 0
@@ -1060,7 +1060,7 @@ public class CompositorMathTests
             }
         };
 
-        CompositorService.ApplyIndexedOverlay(baseTex, ov, idx, rows, isNormal: false, 1, 1);
+        OverlayBlend.ApplyIndexedOverlay(baseTex, ov, idx, rows, isNormal: false, 1, 1);
 
         // blendA ≈ 0.5 → R ≈ 0.5, B ≈ 0.5 → ~127 each
         Assert.InRange(baseTex[0], 120, 135);
@@ -1079,7 +1079,7 @@ public class CompositorMathTests
             [0] = new() { A = new() { DiffuseR = 1f, DiffuseG = 0f, DiffuseB = 0f } }
         };
 
-        CompositorService.ApplyIndexedOverlay(baseTex, ov, idx, rows, isNormal: false, 1, 1);
+        OverlayBlend.ApplyIndexedOverlay(baseTex, ov, idx, rows, isNormal: false, 1, 1);
 
         // Default ColorTableRowOverride has white (1,1,1) sub-rows
         Assert.Equal(255, baseTex[0]);
@@ -1099,7 +1099,7 @@ public class CompositorMathTests
             [0] = new() { A = new() { DiffuseR = 0f, DiffuseG = 0f, DiffuseB = 0f } }
         };
 
-        CompositorService.ApplyIndexedOverlay(baseTex, ov, idx, rows, isNormal: false, 1, 1);
+        OverlayBlend.ApplyIndexedOverlay(baseTex, ov, idx, rows, isNormal: false, 1, 1);
 
         Assert.Equal(original, baseTex);
     }
@@ -1169,7 +1169,7 @@ public class CompositorMathTests
         var src = new byte[w * h];
         Array.Fill(src, (byte)200);
 
-        var blurred = CompositorService.BlurCoverage(src, w, h, radius: 4);
+        var blurred = OverlayBlend.BlurCoverage(src, w, h, radius: 4);
 
         Assert.All(blurred, v => Assert.Equal(200, v));
     }
@@ -1185,7 +1185,7 @@ public class CompositorMathTests
             for (int x = 28; x < 36; x++)
                 src[y * w + x] = 255;
 
-        var blurred = CompositorService.BlurCoverage(src, w, h, radius: 4);
+        var blurred = OverlayBlend.BlurCoverage(src, w, h, radius: 4);
 
         Assert.True(blurred[27 * w + 30] > 0, "pixel just outside the square should receive bled coverage");
         Assert.True(blurred[30 * w + 27] > 0, "pixel just left of the square should receive bled coverage");
@@ -1210,7 +1210,7 @@ public class CompositorMathTests
         var strap   = new byte[] { 255, 0,   0   };  // p0 is the strap; p1/p2 are skin
         var blurred = new byte[] { 255, 200, 0   };  // spread reaches p1 but not p2
 
-        CompositorService.ApplyAmbientOcclusion(baseD, strap, blurred, w, h, strength: 0.5f);
+        OverlayBlend.ApplyAmbientOcclusion(baseD, strap, blurred, w, h, strength: 0.5f);
 
         Assert.Equal(200, baseD[0]);   // under strap (s=1 → halo 0): unchanged
         Assert.True(baseD[4] < 200);   // outside, in halo: darkened
@@ -1227,7 +1227,7 @@ public class CompositorMathTests
         var strap   = new byte[] { 0 };
         var blurred = new byte[] { 255 };
 
-        CompositorService.ApplyAmbientOcclusion(baseD, strap, blurred, 1, 1, strength: 0f);
+        OverlayBlend.ApplyAmbientOcclusion(baseD, strap, blurred, 1, 1, strength: 0f);
 
         Assert.Equal(new byte[] { 200, 150, 100, 255 }, baseD);
     }
@@ -1256,7 +1256,7 @@ public class CompositorMathTests
         // p1 is in the halo AND fully lifted; p2 is in neither.
         var lifted  = new byte[] { 0,   255, 0 };
 
-        CompositorService.ApplyAmbientOcclusion(baseD, strap, blurred, w, h, strength: 0.5f,
+        OverlayBlend.ApplyAmbientOcclusion(baseD, strap, blurred, w, h, strength: 0.5f,
                                                 coveredAbove: null, liftedOff: lifted);
 
         Assert.Equal(200, baseD[4]);   // lifted clear: no contact, so no shadow
@@ -1264,10 +1264,10 @@ public class CompositorMathTests
         // ...and half-lifted shades half as much, so the suppression is a fade and not a switch — which is
         // what lets the compositor feather it and get a gradient rather than a seam.
         var half = new byte[] { 200, 200, 200, 255, 200, 200, 200, 255, 200, 200, 200, 255 };
-        CompositorService.ApplyAmbientOcclusion(half, strap, blurred, w, h, strength: 0.5f,
+        OverlayBlend.ApplyAmbientOcclusion(half, strap, blurred, w, h, strength: 0.5f,
                                                 coveredAbove: null, liftedOff: new byte[] { 0, 128, 0 });
         var none = new byte[] { 200, 200, 200, 255, 200, 200, 200, 255, 200, 200, 200, 255 };
-        CompositorService.ApplyAmbientOcclusion(none, strap, blurred, w, h, strength: 0.5f);
+        OverlayBlend.ApplyAmbientOcclusion(none, strap, blurred, w, h, strength: 0.5f);
         Assert.True(half[4] > none[4] && half[4] < 200,
             $"half-lifted should shade between none ({none[4]}) and full (200), got {half[4]}");
     }
@@ -1293,7 +1293,7 @@ public class CompositorMathTests
         var rng = new Random(1234 + radius);
         for (int i = 0; i < src.Length; i++) src[i] = (byte)rng.Next(256);
 
-        var got = CompositorService.MaxFilter(src, w, h, radius);
+        var got = OverlayBlend.MaxFilter(src, w, h, radius);
 
         for (int y = 0; y < h; y++)
             for (int x = 0; x < w; x++)
@@ -1321,7 +1321,7 @@ public class CompositorMathTests
         var src = new byte[w * h];
         src[20 * w + 20] = 255;
 
-        var got = CompositorService.MaxFilter(src, w, h, r);
+        var got = OverlayBlend.MaxFilter(src, w, h, r);
 
         Assert.Equal(255, got[20 * w + 20]);
         Assert.Equal(255, got[20 * w + (20 + r)]);       // exactly at the radius, still covered
@@ -1336,7 +1336,7 @@ public class CompositorMathTests
     /// The failure this pins is specific and was visible in game — the halo immediately beside the cloth
     /// suppressed and its outer part left standing, so the skin showed a band of shadow with clean skin
     /// between it and the garment casting it. It comes from growing the lift mask by less than the halo
-    /// actually reaches, which is <see cref="CompositorService.BlurCoveragePasses"/> box passes of the
+    /// actually reaches, which is <see cref="OverlayBlend.BlurCoveragePasses"/> box passes of the
     /// radius, not one.
     /// </summary>
     [Fact]
@@ -1350,17 +1350,17 @@ public class CompositorMathTests
         var lift = new byte[w * h];
         for (int x = 0; x < 40; x++) lift[x] = 255;
 
-        var blurred = CompositorService.BlurCoverage(strap, w, h, radius);
+        var blurred = OverlayBlend.BlurCoverage(strap, w, h, radius);
         // Exactly what BustStandoff does: grow past the halo's reach by the feather's own bite, then
         // feather. Growing by less leaves a ring — by 2r it is 12 texels of faint shadow standing off the
         // cloth, which is what this was written against.
-        var grown = CompositorService.BlurCoverage(
-            CompositorService.MaxFilter(lift, w, h, radius * (CompositorService.BlurCoveragePasses + 1)),
+        var grown = OverlayBlend.BlurCoverage(
+            OverlayBlend.MaxFilter(lift, w, h, radius * (OverlayBlend.BlurCoveragePasses + 1)),
             w, h, radius, iterations: 1);
 
         var baseD = new byte[w * h * 4];
         for (int p = 0; p < w * h; p++) { baseD[p * 4] = baseD[p * 4 + 1] = baseD[p * 4 + 2] = 200; baseD[p * 4 + 3] = 255; }
-        CompositorService.ApplyAmbientOcclusion(baseD, strap, blurred, w, h, 1f, null, grown);
+        OverlayBlend.ApplyAmbientOcclusion(baseD, strap, blurred, w, h, 1f, null, grown);
 
         // Nothing anywhere may be shaded: every texel the halo reaches is within the lifted cloth's reach.
         int shaded = 0, worstX = -1, worst = 255;
@@ -1373,7 +1373,7 @@ public class CompositorMathTests
         // unrelated reason cannot make this test vacuous.
         var control = new byte[w * h * 4];
         for (int p = 0; p < w * h; p++) { control[p * 4] = control[p * 4 + 1] = control[p * 4 + 2] = 200; control[p * 4 + 3] = 255; }
-        CompositorService.ApplyAmbientOcclusion(control, strap, blurred, w, h, 1f);
+        OverlayBlend.ApplyAmbientOcclusion(control, strap, blurred, w, h, 1f);
         Assert.True(control.Where((_, i) => i % 4 == 0).Any(v => v < 200),
             "the control shades nothing — this fixture proves nothing");
     }
@@ -1397,7 +1397,7 @@ public class CompositorMathTests
         var strap   = new byte[] { 255, 255, 0, 0 };
         var blurred = new byte[] { 255, 192, 64, 0 };
 
-        CompositorService.ApplyNormalIndent(baseN, blurred, strap, w, h, strength: 0.5f);
+        OverlayBlend.ApplyNormalIndent(baseN, blurred, strap, w, h, strength: 0.5f);
 
         Assert.Equal(128, baseN[0]);        // x0: under strap, untouched
         Assert.Equal(128, baseN[4]);        // x1: under strap, untouched
@@ -1429,7 +1429,7 @@ public class CompositorMathTests
         var blurred = new byte[] { 255, 192, 64, 0 };
 
         var lifted = Fresh();
-        CompositorService.ApplyNormalIndent(lifted, blurred, strap, w, h, strength: 0.5f,
+        OverlayBlend.ApplyNormalIndent(lifted, blurred, strap, w, h, strength: 0.5f,
             coveredAbove: null, radius: 6, inside: null,
             liftedOff: new byte[] { 0, 0, 255, 255 });
         Assert.Equal(128, lifted[8]);    // x2: lifted clear, so no groove
@@ -1437,11 +1437,11 @@ public class CompositorMathTests
 
         // Half-lifted leans half as far — a fade, not a switch, so the map can be feathered.
         var partial = Fresh();
-        CompositorService.ApplyNormalIndent(partial, blurred, strap, w, h, strength: 0.5f,
+        OverlayBlend.ApplyNormalIndent(partial, blurred, strap, w, h, strength: 0.5f,
             coveredAbove: null, radius: 6, inside: null,
             liftedOff: new byte[] { 0, 0, 128, 128 });
         var full = Fresh();
-        CompositorService.ApplyNormalIndent(full, blurred, strap, w, h, strength: 0.5f);
+        OverlayBlend.ApplyNormalIndent(full, blurred, strap, w, h, strength: 0.5f);
         Assert.True(partial[8] > full[8] && partial[8] < 128,
             $"half-lifted should lean between full ({full[8]}) and none (128), got {partial[8]}");
     }
@@ -1458,7 +1458,7 @@ public class CompositorMathTests
         var blurred = new byte[w * h];
         Array.Fill(blurred, (byte)128);              // flat
 
-        CompositorService.ApplyNormalIndent(baseN, blurred, strap, w, h, strength: 1f);
+        OverlayBlend.ApplyNormalIndent(baseN, blurred, strap, w, h, strength: 1f);
 
         Assert.Equal(expected, baseN);
     }
@@ -1470,7 +1470,7 @@ public class CompositorMathTests
         var strap   = new byte[] { 0 };
         var blurred = new byte[] { 200 };
 
-        CompositorService.ApplyNormalIndent(baseN, blurred, strap, 1, 1, strength: 0f);
+        OverlayBlend.ApplyNormalIndent(baseN, blurred, strap, 1, 1, strength: 0f);
 
         Assert.Equal(new byte[] { 128, 128, 255, 128 }, baseN);
     }
@@ -1624,7 +1624,7 @@ public class CompositorMathTests
     {
         // red 255 → pair 16 (defined), red 0 → pair 1 (not defined) → dilated over from the left.
         var index = IndexOf(255, 0, 0);
-        CompositorService.SnapIndexRowsToDefined(index, 3, 1, new[] { 16 });
+        OverlayBlend.SnapIndexRowsToDefined(index, 3, 1, new[] { 16 });
         Assert.Equal(255, index[4]);
         Assert.Equal(255, index[8]);
     }
@@ -1634,7 +1634,7 @@ public class CompositorMathTests
     {
         // Both pairs are configured, so the boundary between them is a real one — not a repair target.
         var index = IndexOf(255, 0, 0);
-        CompositorService.SnapIndexRowsToDefined(index, 3, 1, new[] { 1, 16 });
+        OverlayBlend.SnapIndexRowsToDefined(index, 3, 1, new[] { 1, 16 });
         Assert.Equal(0, index[4]);
         Assert.Equal(0, index[8]);
     }
@@ -1648,7 +1648,7 @@ public class CompositorMathTests
         // survives — as white, when the seeded pair's other sub-row was never set.
         var index = IndexOf(255, 0, 0);
         var authored = new[] { true, false, false };
-        CompositorService.SnapIndexRowsToDefined(index, 3, 1, new[] { 1, 16 }, authored: authored);
+        OverlayBlend.SnapIndexRowsToDefined(index, 3, 1, new[] { 1, 16 }, authored: authored);
         Assert.Equal(255, index[4]);
         Assert.Equal(255, index[8]);
     }
@@ -1658,8 +1658,8 @@ public class CompositorMathTests
     {
         var withNull = IndexOf(255, 0, 0);
         var withAllTrue = IndexOf(255, 0, 0);
-        CompositorService.SnapIndexRowsToDefined(withNull, 3, 1, new[] { 1, 16 });
-        CompositorService.SnapIndexRowsToDefined(withAllTrue, 3, 1, new[] { 1, 16 },
+        OverlayBlend.SnapIndexRowsToDefined(withNull, 3, 1, new[] { 1, 16 });
+        OverlayBlend.SnapIndexRowsToDefined(withAllTrue, 3, 1, new[] { 1, 16 },
             authored: new[] { true, true, true });
         Assert.Equal(withAllTrue, withNull);
     }
@@ -1668,7 +1668,7 @@ public class CompositorMathTests
     public void SnapIndexRows_ShortAuthored_Ignored()   // a mismatched array must not throw or half-apply
     {
         var index = IndexOf(255, 0, 0);
-        CompositorService.SnapIndexRowsToDefined(index, 3, 1, new[] { 1, 16 }, authored: new[] { false });
+        OverlayBlend.SnapIndexRowsToDefined(index, 3, 1, new[] { 1, 16 }, authored: new[] { false });
         Assert.Equal(0, index[4]);
     }
 
@@ -1676,7 +1676,7 @@ public class CompositorMathTests
     public void SnapIndexRows_DilateBudget_StopsSpreading()
     {
         var index = IndexOf(255, 0, 0, 0, 0);
-        CompositorService.SnapIndexRowsToDefined(index, 5, 1, new[] { 16 }, dilate: 2);
+        OverlayBlend.SnapIndexRowsToDefined(index, 5, 1, new[] { 16 }, dilate: 2);
         Assert.Equal(255, index[4]);
         Assert.Equal(255, index[8]);
         Assert.Equal(0, index[12]);    // past the budget — left unmapped, and never drawn
@@ -1762,7 +1762,7 @@ public class CompositorMathTests
 
             var mine = (byte[])index.Clone();
             var reference = (byte[])index.Clone();
-            CompositorService.SnapIndexRowsToDefined(mine, w, h, defined, dilate, authored);
+            OverlayBlend.SnapIndexRowsToDefined(mine, w, h, defined, dilate, authored);
             NaiveSnap(reference, w, h, defined, dilate, authored);
 
             Assert.True(reference.AsSpan().SequenceEqual(mine),
@@ -1778,7 +1778,7 @@ public class CompositorMathTests
         // sub-row the author never set.
         var index = IndexOf(255, 0);
         index[1] = 40;                 // the valid texel leans toward sub-row B
-        CompositorService.SnapIndexRowsToDefined(index, 2, 1, new[] { 16 });
+        OverlayBlend.SnapIndexRowsToDefined(index, 2, 1, new[] { 16 });
         Assert.Equal(255, index[4]);
         Assert.Equal(40, index[5]);
     }

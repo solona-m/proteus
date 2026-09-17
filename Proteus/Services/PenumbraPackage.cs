@@ -9,17 +9,8 @@ using System.Text.Json.Nodes;
 namespace Proteus.Services;
 
 /// <summary>
-/// Reader for Penumbra's <c>.pmp</c> mod packs — a plain ZIP holding the same manifest files a mod folder
-/// does, at the archive root.
-/// <para/>
-/// Two layouts exist and both are read, exactly as <see cref="PenumbraModMeta"/> reads them on disk:
-/// FileVersion 4 and above put everything in <c>meta.json</c> (a <c>Groups</c> array and a
-/// <c>DefaultData</c> object), while older packs ship <c>default_mod.json</c> plus one
-/// <c>group_NNN_name.json</c> per group. What the caller gets back is the same normalised view either way,
-/// so nothing downstream has to know which it was.
-/// <para/>
-/// Nothing here writes or extracts. <see cref="ContentImportService"/> decides what to copy and what the
-/// resulting Proteus sidecar says.
+/// Read-only parser for Penumbra's <c>.pmp</c> mod packs (a ZIP of the mod folder's manifest files). Both the
+/// v4 single <c>meta.json</c> and the older per-group JSON layouts normalise to the same view.
 /// </summary>
 public static class PenumbraPackage
 {
@@ -31,16 +22,11 @@ public static class PenumbraPackage
     /// <summary>One option of one group.</summary>
     /// <param name="Files">Game path → the ARCHIVE ENTRY backing it, normalised to forward slashes.</param>
     /// <param name="Attributes">
-    /// Model attributes this option switches on, if any. A pack whose pieces live in one model toggles them
-    /// by name rather than redirecting files, so an option with no <paramref name="Files"/> and a non-empty
-    /// list here is still a real selector — see <see cref="ReadAttributes"/>.
+    /// Model attributes this option switches on; an option with no <paramref name="Files"/> and a non-empty
+    /// list here is still a real selector.
     /// </param>
     /// <param name="AttributeMask">
-    /// For an option of an <c>Imc</c> group: the attribute bits this option turns OFF when it is selected.
-    /// Zero everywhere else. See <see cref="PackGroup.DefaultAttributeMask"/>.
-    /// </param>
-    /// <param name="Est">
-    /// Extra-skeleton entries this option declares — see <see cref="PackEst"/>.
+    /// For an option of an <c>Imc</c> group: the attribute bits this option turns off when selected; zero elsewhere.
     /// </param>
     public sealed record PackOption(
         string Name, string? Description, IReadOnlyDictionary<string, string> Files,
@@ -53,40 +39,23 @@ public static class PenumbraPackage
 
     /// <summary>
     /// One <c>Est</c> manipulation: "wearing <paramref name="SetId"/> on <paramref name="Slot"/> loads extra
-    /// skeleton <paramref name="Entry"/>".
-    /// <para/>
-    /// This is what makes a garment's <c>j_ex_*</c> bones exist. They are not in the model — they live in an
-    /// extra skeleton the game loads only when the EST table points at it, keyed by race, gender, slot and
-    /// SET. A jacket riding the <c>met</c> slot whose bones are top-space therefore depends on the entry for
-    /// the wearer's CHEST piece, not on its own.
-    /// <para/>
-    /// <paramref name="Entry"/> of 0 means "no extra skeleton" and is the common case — a mod clearing the
-    /// set it replaces. Only a non-zero entry enables anything.
+    /// skeleton <paramref name="Entry"/>". This is what makes a garment's <c>j_ex_*</c> bones exist; an
+    /// <paramref name="Entry"/> of 0 means "no extra skeleton".
     /// </summary>
     public sealed record PackEst(string Slot, int SetId, int Entry);
 
     /// <summary>
-    /// One option group. <paramref name="Index"/> is Penumbra's own ordinal — the position in the v4
-    /// <c>Groups</c> array, or the number in a v3 <c>group_NNN_*.json</c> filename — and lower means higher
-    /// priority, which is the order <c>SidecarDiscoveryService.ReadGroupOrder</c> reads back once the pack
-    /// is on disk.
+    /// One option group. <paramref name="Index"/> is Penumbra's own ordinal (v4 array position or v3 filename
+    /// number); lower means higher priority.
     /// </summary>
     /// <param name="Entry">The archive entry this group came from, or null when it was inline in meta.json.</param>
     /// <param name="ImcSetId">
-    /// For an <c>Imc</c> group: the equipment set its entry belongs to (the manifest's <c>PrimaryId</c>),
-    /// or -1 for every other kind of group.
-    /// <para/>
-    /// An Imc group hides and shows parts of a model without redirecting a single file. It edits the IMC
-    /// entry's ATTRIBUTE MASK — ten bits, one per entry in the model's own attribute name table, by
-    /// position — and the game culls a submesh whose attributes are all switched off. Denim Shorts does its
-    /// "Panty Strap Hide" this way. It is a different mechanism entirely from the <c>Atr</c> manipulation
-    /// <see cref="ReadAttributes"/> reads, which names attributes rather than numbering them.
+    /// For an <c>Imc</c> group: the equipment set its entry belongs to (<c>PrimaryId</c>), or -1 otherwise.
+    /// An Imc group edits the IMC attribute mask (ten bits, by position in the model's attribute table).
     /// </param>
-    /// <param name="ImcSlot">For an <c>Imc</c> group: the equipment slot its entry belongs to ("Legs").</param>
     /// <param name="DefaultAttributeMask">
-    /// For an <c>Imc</c> group: the attribute bits set when no option is selected. Each SELECTED option
-    /// clears its own bits from this — that is why the options read as "hide": Denim Shorts defaults to 3
-    /// (both bits on) with options carrying 1 and 2.
+    /// For an <c>Imc</c> group: the attribute bits set when no option is selected; each selected option clears
+    /// its own bits.
     /// </param>
     public sealed record PackGroup(
         string Name, string Type, int Index, IReadOnlyList<PackOption> Options, string? Entry,
@@ -118,8 +87,7 @@ public static class PenumbraPackage
 
     /// <summary>
     /// Parse the manifest(s) and entry table of <paramref name="pmpPath"/>. Throws
-    /// <see cref="InvalidDataException"/> when the file isn't a readable pack — the caller turns that into
-    /// a user-facing message.
+    /// <see cref="InvalidDataException"/> when the file isn't a readable pack.
     /// </summary>
     public static Contents Read(string pmpPath)
     {
@@ -130,9 +98,7 @@ public static class PenumbraPackage
         {
             if (e.FullName.EndsWith('/')) continue;   // directory marker
             var name = Normalize(e.FullName);
-            // This importer DOES extract by entry name — a pack's own folder layout is preserved in the mod
-            // folder, because its manifest refers to files by that layout. So a traversal entry could
-            // genuinely escape, and the whole pack is rejected rather than half-imported.
+            // Entries are extracted by name, so a traversal entry rejects the whole pack.
             if (System.IO.Path.IsPathRooted(name) || name.Split('/').Any(IsTraversal))
                 throw new InvalidDataException($"The pack contains an unsafe entry path: {e.FullName}");
             entries[name] = e.Length;
@@ -165,8 +131,7 @@ public static class PenumbraPackage
                 ReadEst(legacy, defaultEst);
             }
 
-            // v3 group files, ordered by the number in their name — that number IS the group's priority,
-            // and a zip's entry order is not guaranteed to follow it.
+            // v3 group files, ordered by the number in their name: that number is the group's priority.
             foreach (var entry in entries.Keys.Where(IsLegacyGroupFile)
                          .OrderBy(k => k, StringComparer.OrdinalIgnoreCase))
             {
@@ -191,9 +156,7 @@ public static class PenumbraPackage
     }
 
     /// <summary>
-    /// Several entries in ONE pass over the archive. Opening a zip per file is fine for a handful; a pack
-    /// with dozens of mesh options is read entirely on the frame the user picked it, and there each open
-    /// re-reads the central directory. Entries the archive doesn't carry are simply absent from the result.
+    /// Several entries in one pass over the archive. Entries the archive doesn't carry are absent from the result.
     /// </summary>
     public static Dictionary<string, byte[]> ReadEntries(string pmpPath, IEnumerable<string> entryNames)
     {
@@ -248,9 +211,7 @@ public static class PenumbraPackage
         if (entry == null) return null;
         try
         {
-            // Through a StreamReader rather than straight off the stream: Penumbra writes these with a
-            // UTF-8 BOM often enough that a raw parse fails on the very first character, and the reader
-            // strips it. The files are kilobytes, so materialising them costs nothing.
+            // Through a StreamReader so a UTF-8 BOM is stripped before parsing.
             using var src = entry.Open();
             using var rd = new StreamReader(src, System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
             return JsonNode.Parse(rd.ReadToEnd());
@@ -262,10 +223,8 @@ public static class PenumbraPackage
     {
         var options = new List<PackOption>();
 
-        // A "Combining" group keeps its redirects in a parallel Containers array rather than on the
-        // options, which are bare flag labels there. Nothing in this importer can place those — a container
-        // describes one COMBINATION of flags, not a selectable option — so its options are read for their
-        // names and come back with no files, which reports as "nothing importable" rather than a wrong guess.
+        // A "Combining" group keeps its redirects in a Containers array, which this importer cannot place; its
+        // options come back with no files.
         if (g["Options"] is JsonArray opts)
             foreach (var o in opts)
             {
@@ -281,9 +240,7 @@ public static class PenumbraPackage
                     Mask(oo, "AttributeMask"), est));
             }
 
-        // An Imc group's edit lives on the GROUP — an identifier, a default entry, and per-option masks —
-        // rather than on the options as files or manipulations. Read only for that kind, so nothing else
-        // picks up an "AttributeMask" that happens to share the name.
+        // An Imc group's edit lives on the group; read only for that kind.
         bool imc = string.Equals(Str(g, "Type"), "Imc", StringComparison.OrdinalIgnoreCase);
         int setId = -1;
         string? slot = null;
@@ -314,15 +271,8 @@ public static class PenumbraPackage
         => (ushort)((Int(owner, key) ?? 0) & 0x3FF);
 
     /// <summary>
-    /// The extra-skeleton entries an owner declares — Penumbra's <c>Est</c> manipulation. See
-    /// <see cref="PackEst"/> for what one means.
-    /// <para/>
-    /// A pack repeats the same entry once per race it supports, so the races are deliberately NOT kept: a
-    /// composite dresses one character, and the race it needs is that character's, not whichever the pack
-    /// happened to list. What survives is slot, set and entry, deduplicated.
-    /// <para/>
-    /// Entries of 0 are kept here and dropped by the importer. This reader's job is to say what the pack
-    /// declares; deciding that "no skeleton" is not worth carrying belongs where the sidecar is written.
+    /// The extra-skeleton entries an owner declares (<c>Est</c> manipulations), deduplicated by slot, set and
+    /// entry with race dropped. Entries of 0 are kept; the importer drops them.
     /// </summary>
     private static void ReadEst(JsonObject owner, List<PackEst> into)
     {
@@ -349,15 +299,8 @@ public static class PenumbraPackage
     }
 
     /// <summary>
-    /// The model attributes an option switches ON — Penumbra's <c>Atr</c> manipulation, by name.
-    /// <para/>
-    /// This is how a pack ships one model holding a dozen accessories and a checkbox for each: every piece's
-    /// submeshes are tagged with an attribute, the pack's default turns them all off, and each option turns
-    /// one back on. Such an option redirects no FILES at all, so a reader that only looks at <c>Files</c>
-    /// sees an empty option and concludes the pack selects nothing.
-    /// <para/>
-    /// Only entries turning an attribute ON are collected. An option that switches one off is not what makes
-    /// the piece selectable.
+    /// The model attributes an option switches on — Penumbra's <c>Atr</c> manipulation, by name. Entries
+    /// switching an attribute off are not collected.
     /// </summary>
     private static void ReadAttributes(JsonObject owner, List<string> into)
     {

@@ -6,14 +6,8 @@ using System.Numerics;
 namespace Proteus.Services;
 
 /// <summary>
-/// One piece of a model the user can put behind a toggle.
-/// <para/>
-/// Two granularities, and the second is the one that makes this feature work at all. A SUBMESH is what the
-/// author left behind — "mesh 1.2" — and where a mod is already split into parts, that is the whole answer.
-/// But the mods this exists for are precisely the ones that are NOT split: a bow, a collar and a skirt
-/// welded into one submesh, which offers exactly one row and nothing to toggle. So a submesh is also broken
-/// into ISLANDS — runs of triangles connected through shared geometry — and those are separate shells far
-/// more often than not.
+/// One piece of a model the user can put behind a toggle: a whole submesh, or one island of it (a run of triangles
+/// connected through shared geometry), since the mods this is for weld several objects into one submesh.
 /// </summary>
 public sealed class ModelPart
 {
@@ -39,21 +33,15 @@ public sealed class ModelPart
     public required int[] Triangles { get; init; }
 
     /// <summary>
-    /// Where each of those triangles sits in the submesh's own index range, by ordinal (0 = the submesh's
-    /// first triangle). One entry per triangle, so <c>Ordinals[k]</c> describes <c>Triangles[3k..3k+3]</c>.
-    /// <para/>
-    /// Carried rather than recomputed, and that is load-bearing. <see cref="Triangles"/> is rebased across
-    /// meshes for drawing, which makes it useless for editing — two meshes can present the same corner
-    /// triple after rebasing, and the rebase itself skips meshes the reader could not decode. Any writer
-    /// that walked the model a second time to recover these would have to reproduce that skip exactly, and
-    /// a drift of one mesh silently edits the wrong geometry.
+    /// Where each triangle sits in the submesh's own index range, by ordinal: <c>Ordinals[k]</c> describes
+    /// <c>Triangles[3k..3k+3]</c>. Carried, not recomputed: <see cref="Triangles"/> is rebased and skips undecodable
+    /// meshes, so a writer re-walking the model could edit the wrong geometry.
     /// </summary>
     public required int[] Ordinals { get; init; }
 
     /// <summary>
-    /// The submesh's attribute mask as authored. Non-zero does NOT mean the author switches this geometry —
-    /// most of it is the game's own body suppression — so what may take a toggle is decided by
-    /// <see cref="Toggleable"/>, which reads the names behind the bits.
+    /// The submesh's attribute mask as authored. Non-zero does not mean the author switches this geometry; see
+    /// <see cref="Toggleable"/>.
     /// </summary>
     public required uint AttributeMask { get; init; }
 
@@ -63,100 +51,44 @@ public sealed class ModelPart
     public int TriangleCount => Triangles.Length / 3;
 
     /// <summary>
-    /// Whether a toggle may claim this part. Almost always true — the one refusal left is a mask bit with
-    /// no name behind it.
-    /// <para/>
-    /// A submesh draws only when ALL of its attributes are enabled, so adding one is purely additive: the
-    /// geometry keeps every condition it had and gains "…and this switch is on". That was worth settling
-    /// rather than assuming, because the rule used to be the far stricter "untagged only", which refused
-    /// every part of a body model — the knee and shin of a pair of trousers carry <c>atr_hiz</c> and
-    /// <c>atr_sne</c> as a matter of course, and the panel told the user their author had switched them,
-    /// which was untrue and left nothing on the model tickable.
-    /// <para/>
-    /// The evidence for AND is in the mods themselves: across 3,000 installed models, 1,164 of 10,567 tagged
-    /// submeshes carry two or more attributes, and the commonest pairings put an IMC part attribute beside a
-    /// body one — <c>atr_dv_a + atr_sne</c> 122 times, <c>atr_hij + atr_tv_a</c> 28. Under "draw if ANY is
-    /// enabled" every one of those would defeat its own author's part switch, which is not something 122
-    /// submeshes are doing by accident. <c>atr_gv_a + atr_gv_e</c> settles it from the other side: two part
-    /// switches on one submesh is a sentence only AND can finish.
-    /// <para/>
-    /// That evidence is load-bearing now rather than a footnote. A part the author already switches used to
-    /// be refused here — not because it would break anything, but because the result needs two checkboxes
-    /// to appear and the mod already offered one of them. Two checkboxes turns out to be exactly what is
-    /// wanted: the case this feature exists for is a bow welded into a skirt the author DOES switch, and
-    /// refusing it left the one piece a user most wants to separate as the one piece they could not. See
-    /// <see cref="AuthorSwitched"/>, which now carries that fact as information rather than a veto.
-    /// <para/>
-    /// A bit past the end of the attribute-name table is still refused, and for a sharper reason than "we
-    /// cannot read it". <see cref="ModelPartReader.FreeLetters"/> derives the ten-letter budget from the
-    /// names the model DECLARES, so a set bit no name backs is a letter the budget cannot see — and the
-    /// letter handed out for a new switch could be one the author's IMC group is already driving. Two
-    /// options on one bit flip each other, which is the failure
-    /// <c>Write_DoesNotReuseALetterTheItemAlreadyClaimed</c> exists to prevent.
+    /// Whether a toggle may claim this part. A submesh draws only when all its attributes are enabled, so adding one
+    /// is purely additive. Refused only for a mask bit with no name behind it: <see cref="ModelPartReader.FreeLetters"/>
+    /// cannot see that letter, and a new switch could reuse a bit the author's IMC group drives.
     /// </summary>
     public required bool Toggleable { get; init; }
 
     /// <summary>
-    /// At least one of this part's attributes is an IMC part switch — a name ending <c>_a</c>..<c>_j</c>,
-    /// see <c>SecondSkinService.PartAttributeBit</c> — so the mod's author already has a checkbox over this
-    /// geometry. Informational: a switch added here stacks on top, under the AND rule above.
-    /// <para/>
-    /// Body-suppression attributes (<c>atr_hiz</c>, <c>atr_sne</c>, <c>atr_hij</c>, <c>atr_ude</c>,
-    /// <c>atr_nek</c>) and the rest answer to no IMC bit, so they do not count — telling a user their author
-    /// had switched the shin of their trousers was the untrue message this distinction exists to avoid.
-    /// <para/>
-    /// An island inherits this from its submesh verbatim, which is correct rather than approximate: the
-    /// island really is behind the author's switch, and <c>ModelAttributeWriter.SplitSubmesh</c> copies the
-    /// original mask onto every record it cuts, so it still is after the split.
-    /// <para/>
-    /// Not <c>required</c>, so callers that synthesize a part for their own purposes — see
-    /// <c>HatCompatSolve</c> — keep the right default without restating it.
+    /// At least one of this part's attributes is an IMC part switch (a name ending <c>_a</c>..<c>_j</c>, see
+    /// <c>ContentPieceResolver.PartAttributeBit</c>), so the author already has a checkbox over it. Informational: a
+    /// switch added here stacks on top. Body-suppression attributes do not count. An island inherits its submesh's.
     /// </summary>
     public bool AuthorSwitched { get; init; }
 }
 
-/// <summary>Everything one model offers, read once.</summary>
 /// <summary>
 /// One mesh's run inside the concatenated vertex arrays: vertex <c>BaseVertex + k</c> of
 /// <see cref="ModelParts.Positions"/> is vertex <c>k</c> of model mesh <see cref="Mesh"/>.
 /// </summary>
-/// <param name="Mesh">Index in the model's own mesh table, the number every writer addresses a mesh
-/// by — NOT the LOD0 ordinal shown to the user, which skips emptied meshes.</param>
+/// <param name="Mesh">Index in the model's own mesh table, the number every writer addresses a mesh by — not the
+/// LOD0 ordinal shown to the user.</param>
 public readonly record struct MeshSpan(int Mesh, int BaseVertex, int Count);
 
 public sealed class ModelParts
 {
-    /// <summary>Object-space xyz per vertex, every LOD0 mesh concatenated with its indices rebased — the
-    /// same arrangement <see cref="SecondSkinWriter.TryReadLod0Geometry"/> returns, and for the same reason:
-    /// the caller wants to draw the model, not its meshes.</summary>
+    /// <summary>Object-space xyz per vertex, every LOD0 mesh concatenated with its indices rebased, as
+    /// <see cref="SecondSkinWriter.TryReadLod0Geometry"/> returns.</summary>
     public required float[] Positions { get; init; }
 
     /// <summary>
-    /// Unit normals, one per vertex of <see cref="Positions"/> and in the same order, so index <c>i</c>
-    /// names the same vertex in both.
-    /// <para/>
-    /// Here so an editing pass has a direction to move a vertex ALONG without reading the model a second
-    /// time and risking a different answer about which meshes decoded. A mesh that declares no normal
-    /// element, or whose normal element cannot be read, contributes zeroes rather than being skipped —
-    /// dropping it would put this array out of step with <see cref="Positions"/>, which is the one thing
-    /// that must never happen. A zero normal is a vertex nothing can be inflated along, and the caller is
-    /// expected to notice that rather than be told a lie about which way is out.
+    /// Unit normals, one per vertex of <see cref="Positions"/> in the same order. A mesh with no readable normal
+    /// contributes zeroes rather than being skipped, so the arrays never fall out of step.
     /// </summary>
     public required float[] Normals { get; init; }
 
     /// <summary>
-    /// Which model mesh each run of <see cref="Positions"/> came from, in order.
-    /// <para/>
-    /// THE ONLY WAY BACK TO THE FILE. Positions are concatenated across LOD0 meshes with their indices
-    /// rebased, which is what lets a caller draw the model without knowing about meshes — and it is
-    /// exactly what makes the array useless for WRITING, because a rebased index addresses a different
-    /// vertex than the mesh's own buffer does. <c>HatCompatSolve.ReadLod0Meshes</c> exists as a separate
-    /// reader for that reason.
-    /// <para/>
-    /// It cannot be reconstructed afterwards either. <see cref="ModelPartReader.Read"/> skips a mesh for
-    /// four unrelated reasons — no vertices, no position element, a stream the mesh does not use, and a
-    /// buffer that runs past the end of the file — so the mapping is only knowable while reading. Hence
-    /// this, recorded as it goes.
+    /// Which model mesh each run of <see cref="Positions"/> came from, in order: the only way from a rebased index
+    /// back to the file. Recorded while reading, since <see cref="ModelPartReader.Read"/>'s mesh skips cannot be
+    /// reconstructed afterwards.
     /// </summary>
     public required IReadOnlyList<MeshSpan> MeshSpans { get; init; }
 
@@ -178,67 +110,40 @@ public sealed class ModelParts
     /// <see cref="ModelPartReader.FreeLetters"/>.</summary>
     public required IReadOnlyList<string> AttributeNames { get; init; }
 
-    /// <summary>Bounds over every LOD0 vertex, so each part's thumbnail is drawn to the SAME frame and the
-    /// silhouettes line up when read down a list.</summary>
+    /// <summary>Bounds over every LOD0 vertex, so every part's thumbnail is drawn to the same frame.</summary>
     public required Vector3 Min { get; init; }
     public required Vector3 Max { get; init; }
 
-    /// <summary>Submeshes whose islands were suppressed for being too many, by label — so the panel can say
-    /// why a mesh it cannot break up offers only one row.</summary>
+    /// <summary>Submeshes whose islands were suppressed for being too many, by label, with the island count.</summary>
     public required IReadOnlyDictionary<string, int> ShatteredSubmeshes { get; init; }
 }
 
 /// <summary>
-/// Reads a .mdl's toggleable pieces. Read-only and offline: nothing here touches the game, a mod, or a
-/// published file.
-/// <para/>
-/// The parse itself is <see cref="SecondSkinWriter.Parse"/> rather than a second walk of the format. Every
-/// offset needed is already computed there and has been proven against real mod models for as long as the
-/// shell builder has existed.
+/// Reads a .mdl's toggleable pieces. Read-only and offline. The parse is <see cref="SecondSkinWriter.Parse"/>.
 /// </summary>
-public static class ModelPartReader
+public static partial class ModelPartReader
 {
     /// <summary>
-    /// A safety bound on how finely one submesh is broken up, not a judgement about what is useful.
-    /// <para/>
-    /// It used to be 64, on the reasoning that a submesh shattering into hundreds of pieces is chainmail
-    /// rather than a garment with parts, and that a list of four hundred unnamed rows is worse than the one
-    /// row it replaces. Both halves of that were wrong. A pair of trousers with 78 belt straps in one
-    /// submesh is exactly the case this feature exists for, and it was the ONLY case the cap ever fired on —
-    /// it suppressed every island and handed back the whole 53,000-triangle piece, which is the opposite of
-    /// what was wanted. And the list stopped being the interface the moment the model became clickable:
-    /// picking a strap does not care how many other straps there are.
-    /// <para/>
-    /// So this is now only high enough to stop a degenerate model — one whose every triangle is its own
-    /// island — from building a part list the same size as its geometry.
+    /// A safety bound on how many islands one submesh is broken into, only to stop a degenerate model building a part
+    /// list the size of its geometry.
     /// </summary>
     public const int MaxIslands = 2048;
 
     /// <summary>
-    /// How close two vertices must be to count as the same point when islands are found.
-    /// <para/>
-    /// Islands are welded by POSITION, never by vertex index, and that is the whole difficulty. A model
-    /// duplicates vertices along every UV seam and every hard normal crease, so two triangles that share an
-    /// edge on the surface frequently share no index at all. Splitting on indices cuts a bow into its UV
-    /// islands — three or four pieces of one object, none of them a thing the user would name.
-    /// <para/>
-    /// Character models are authored at roughly 1 unit ≈ 1 metre, so this is a tenth of a millimetre: far
-    /// below any real gap, far above the drift between two copies of one vertex.
+    /// How close (model units ≈ metres, so 0.1 mm) two vertices must be to count as one point when islands are found.
+    /// Islands are welded by position, never by index, since UV seams and hard creases duplicate vertices.
     /// </summary>
     private const float WeldEpsilon = 1e-4f;
 
     /// <summary>
-    /// The IMC attribute letters this model does NOT already use, in order.
-    /// <para/>
-    /// Ten bits exist and the letter in the name IS the bit — see
-    /// <c>SecondSkinService.PartAttributeBit</c>. So the budget for new toggles is whatever letters the
-    /// author left, and a mod already using <c>atr_tv_a</c> and <c>atr_tv_b</c> has eight.
+    /// The IMC attribute letters this model does not already use, in order. Ten bits exist and the letter is the bit
+    /// (see <c>ContentPieceResolver.PartAttributeBit</c>).
     /// </summary>
     public static List<char> FreeLetters(IEnumerable<string> attributeNames)
     {
         var used = new HashSet<char>();
         foreach (var name in attributeNames)
-            if (SecondSkinService.PartAttributeBit(name) is { } bit)
+            if (ContentPieceResolver.PartAttributeBit(name) is { } bit)
                 used.Add((char)('a' + bit));
 
         return Enumerable.Range(0, 10).Select(i => (char)('a' + i)).Where(c => !used.Contains(c)).ToList();
@@ -246,191 +151,11 @@ public static class ModelPartReader
 
     /// <summary>
     /// Read a model's parts, or null when it cannot be read at all.
-    /// <para/>
-    /// Null rather than an exception for the same reason <see cref="SecondSkinWriter.TryReadLod0Geometry"/>
-    /// returns false: this runs against whatever .mdl files a mod happens to ship, including ones no tool
-    /// wrote, and the panel's answer to an unreadable model is a row saying so — not a crash in a draw loop.
+    /// ModelSkinReader relies on this vertex order, index for index: keep its mesh skips in step with these.
     /// </summary>
     public static ModelParts? Read(byte[] mdl)
     {
-        SecondSkinWriter.Source src;
-        try { src = SecondSkinWriter.Parse(mdl); }
-        catch { return null; }
-
-        var s = src.S;
-        var pos = new List<float>();
-        var nrm = new List<float>();
-        var spans = new List<MeshSpan>();
-        var parts = new List<ModelPart>();
-        var shattered = new Dictionary<string, int>(StringComparer.Ordinal);
-        Span<float> tmp = stackalloc float[4];
-
-        int end = Math.Min(src.Lod0MeshIndex + src.Lod0MeshCount, src.MeshCount);
-        int ordinal = 0;
-        for (int m = src.Lod0MeshIndex; m < end; m++)
-        {
-            int mo = src.MeshStart + m * 36;
-            if (mo + 36 > s.Length) break;
-
-            ushort vc = BitConverter.ToUInt16(s, mo);
-            // An emptied mesh is the norm in a mod: an author starts from a stock model, deletes the vanilla
-            // geometry and adds their own. It draws nothing, so it is not a part and does not take an
-            // ordinal — numbering it would put a gap in the list the user is asked to read.
-            if (vc == 0) continue;
-
-            ushort matIdx = BitConverter.ToUInt16(s, mo + 8);
-            var material = matIdx < src.MatNames.Count ? src.MatNames[matIdx] : "?";
-
-            var decl = m < src.Decls.Length ? src.Decls[m] : [];
-            SecondSkinWriter.VElem? posEl = null, nrmEl = null;
-            foreach (var el in decl)
-            {
-                if (el.Usage == SecondSkinWriter.UsePosition) posEl = el;
-                else if (el.Usage == SecondSkinWriter.UseNormal) nrmEl = el;
-            }
-            if (posEl is not { } pe) continue;
-
-            uint[] vbo =
-            {
-                BitConverter.ToUInt32(s, mo + 20), BitConverter.ToUInt32(s, mo + 24),
-                BitConverter.ToUInt32(s, mo + 28),
-            };
-            byte[] bs = { s[mo + 32], s[mo + 33], s[mo + 34] };
-            if (pe.Stream > 2 || bs[pe.Stream] == 0) continue;
-
-            int baseVertex = pos.Count / 3;
-            bool ok = true;
-            for (int k = 0; k < vc; k++)
-            {
-                int pa = (int)(src.Vb + vbo[pe.Stream]) + k * bs[pe.Stream] + pe.Offset;
-                // 16 bytes is the widest element ReadTyped touches (Float4).
-                if (pa < 0 || pa + 16 > s.Length) { ok = false; break; }
-                SecondSkinWriter.ReadTyped(s, pa, pe.Type, tmp);
-                pos.Add(tmp[0]); pos.Add(tmp[1]); pos.Add(tmp[2]);
-
-                // Appended for EVERY vertex, whatever the normal turns out to be. The two arrays are
-                // indexed by the same number, so a skip here would shift every later normal onto the wrong
-                // vertex — silently, and in a way that shows up as geometry inflating sideways.
-                float nx = 0f, ny = 0f, nz = 0f;
-                if (nrmEl is { } ne && ne.Stream <= 2 && bs[ne.Stream] != 0)
-                {
-                    int na = (int)(src.Vb + vbo[ne.Stream]) + k * bs[ne.Stream] + ne.Offset;
-                    if (na >= 0 && na + 16 <= s.Length)
-                    {
-                        SecondSkinWriter.ReadTyped(s, na, ne.Type, tmp);
-                        nx = tmp[0]; ny = tmp[1]; nz = tmp[2];
-                        // Ubyte4n stores a normal biased into 0..1, so it has to be unbiased before it
-                        // means a direction. Every other reader in the project does this by hand too.
-                        if (ne.Type == 8) { nx = nx * 2f - 1f; ny = ny * 2f - 1f; nz = nz * 2f - 1f; }
-                        float nl = MathF.Sqrt(nx * nx + ny * ny + nz * nz);
-                        if (nl > 1e-6f) { nx /= nl; ny /= nl; nz /= nl; }
-                        else { nx = 0f; ny = 0f; nz = 0f; }
-                    }
-                }
-                nrm.Add(nx); nrm.Add(ny); nrm.Add(nz);
-            }
-            // A truncated buffer costs this mesh and nothing else. Rewinding matters: a half-decoded mesh
-            // left in the array would put garbage vertices under the NEXT mesh's rebased indices.
-            //
-            // Normals rewind with them, and no span is recorded — a span naming a run that was rolled back
-            // would hand a writer the wrong vertices of the wrong mesh.
-            if (!ok)
-            {
-                pos.RemoveRange(baseVertex * 3, pos.Count - baseVertex * 3);
-                nrm.RemoveRange(baseVertex * 3, nrm.Count - baseVertex * 3);
-                continue;
-            }
-
-            spans.Add(new MeshSpan(m, baseVertex, vc));
-            ordinal++;
-            ushort subIdx = BitConverter.ToUInt16(s, mo + 10), subCount = BitConverter.ToUInt16(s, mo + 12);
-            for (int su = 0; su < subCount; su++)
-            {
-                int ss = src.SubmeshStart + (subIdx + su) * 16;
-                if (ss + 16 > s.Length) break;
-                uint so = BitConverter.ToUInt32(s, ss), sc = BitConverter.ToUInt32(s, ss + 4);
-                uint mask = BitConverter.ToUInt32(s, ss + 8);
-
-                // Two different questions off one walk of the mask — see ModelPart.Toggleable and
-                // ModelPart.AuthorSwitched. An IMC switch the author already has over this geometry is
-                // reported; a bit with no name behind it is refused. No short-circuit: both answers are
-                // wanted, so every set bit has to be looked at.
-                bool authorSwitched = false, unnamed = false;
-                for (int b = 0; b < 32; b++)
-                {
-                    if ((mask & (1u << b)) == 0) continue;
-                    if (b >= src.AttrNames.Length) unnamed = true;
-                    else if (SecondSkinService.PartAttributeBit(src.AttrNames[b]) != null) authorSwitched = true;
-                }
-                bool toggleable = !unnamed;
-
-                var tris = new List<int>((int)sc);
-                var ordinals = new List<int>((int)sc / 3);
-                for (uint t = 0; t + 2 < sc; t += 3)
-                {
-                    int ia = (int)(src.Ib + (so + t) * 2);
-                    if (ia < 0 || ia + 6 > s.Length) break;
-                    int a = BitConverter.ToUInt16(s, ia),
-                        b = BitConverter.ToUInt16(s, ia + 2),
-                        c = BitConverter.ToUInt16(s, ia + 4);
-                    // A stale index must never reach another mesh's vertices through the rebase. Skipping it
-                    // is also why the ordinal is recorded rather than inferred from position in the list.
-                    if (a >= vc || b >= vc || c >= vc) continue;
-                    tris.Add(baseVertex + a); tris.Add(baseVertex + b); tris.Add(baseVertex + c);
-                    ordinals.Add((int)(t / 3));
-                }
-                if (tris.Count == 0) continue;
-
-                var label = $"{ordinal}.{su + 1}";
-                var triArr = tris.ToArray();
-                var ordArr = ordinals.ToArray();
-                parts.Add(Make(m, su, -1, label, material, triArr, ordArr, mask, toggleable, authorSwitched, pos));
-
-                // Islands are offered only when they say something the submesh row does not. One island IS
-                // the submesh, and a shattered submesh is reported rather than listed — see MaxIslands.
-                var islands = SplitIslands(triArr, pos);
-                if (islands.Count <= 1) continue;
-                if (islands.Count > MaxIslands) { shattered[label] = islands.Count; continue; }
-
-                // Largest first: on a garment the big island is the garment and the small ones are its
-                // trimmings, which is the order someone hunting for "the bow" wants to read.
-                //
-                // Numbered, not lettered. Letters read well for the two or three islands a tidy submesh has
-                // and then fall off a cliff: a real pair of trousers turned out to hold 78 straps in one
-                // submesh, where "a + 78" is not a letter at all but '{'.
-                int i = 0;
-                foreach (var island in islands.OrderByDescending(x => x.Count))
-                {
-                    parts.Add(Make(m, su, i, $"{label}.{i + 1}", material,
-                        [.. island.SelectMany(k => new[] { triArr[k * 3], triArr[k * 3 + 1], triArr[k * 3 + 2] })],
-                        [.. island.Select(k => ordArr[k])], mask, toggleable, authorSwitched, pos));
-                    i++;
-                }
-            }
-        }
-
-        if (parts.Count == 0) return null;
-
-        // Wind per vertex, by span, so it lines up with Positions however many meshes were skipped above.
-        var wind = new float[pos.Count / 3];
-        foreach (var span in spans)
-            VertexColorWriter.ReadWind(s, src, span.Mesh, span.Count, wind, span.BaseVertex);
-
-        var (min, max) = Bounds(pos, null);
-        return new ModelParts
-        {
-            Positions = pos.ToArray(),
-            Normals = nrm.ToArray(),
-            Wind = wind,
-            HasWindChannel = spans.All(sp => src.Decls[sp.Mesh].Any(VertexColorWriter.IsSecondColor)),
-            FirstColorNotWhite = VertexColorWriter.FirstColorNotWhite(src),
-            MeshSpans = spans,
-            Parts = parts,
-            AttributeNames = src.AttrNames,
-            Min = min,
-            Max = max,
-            ShatteredSubmeshes = shattered,
-        };
+        return new PartRead(mdl).Run();
     }
 
     private static ModelPart Make(
@@ -478,14 +203,8 @@ public static class ModelPartReader
     }
 
     /// <summary>
-    /// Split a submesh's triangles into connected runs, welding by position so a UV seam does not read as a
-    /// gap — see <see cref="WeldEpsilon"/>.
-    /// <para/>
-    /// Union-find over TRIANGLES rather than vertices: what comes out has to be a set of triangles, and
-    /// unioning vertices then gathering triangles back out of them is the same work with an extra pass.
-    /// <para/>
-    /// Returns SLOTS into <paramref name="triangles"/> — triangle k is <c>triangles[3k..3k+3]</c> — so the
-    /// caller can index its parallel ordinal list with the same number.
+    /// Split a submesh's triangles into connected runs, welding by position (<see cref="WeldEpsilon"/>). Union-find
+    /// over triangles. Returns slots into <paramref name="triangles"/> (triangle k is <c>triangles[3k..3k+3]</c>).
     /// </summary>
     private static List<List<int>> SplitIslands(int[] triangles, List<float> pos)
     {

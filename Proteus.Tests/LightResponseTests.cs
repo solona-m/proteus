@@ -212,7 +212,7 @@ public sealed class LightResponseTests
     {
         // Row 3 sub-row A is game row 4 — (3−1)×2. Landing it anywhere else would dim a region the user
         // never marked and leave the one they did at full brightness.
-        var profile = SecondSkinService.BuildLightProfile(
+        var profile = ShellColorRows.BuildLightProfile(
             Rows(Row(3, 1f, response: 1f)), isMaskShell: false, ShellSurfaceKind.Body);
 
         Assert.NotNull(profile);
@@ -225,9 +225,9 @@ public sealed class LightResponseTests
     {
         // The runtime's fast path is "this material has no profile". A profile of all zeroes would cost a
         // lookup and a 2 KB table copy on every redraw to change nothing.
-        Assert.Null(SecondSkinService.BuildLightProfile(
+        Assert.Null(ShellColorRows.BuildLightProfile(
             Rows(Row(1, 1f)), isMaskShell: false, ShellSurfaceKind.Body));
-        Assert.Null(SecondSkinService.BuildLightProfile(null, isMaskShell: false, ShellSurfaceKind.Body));
+        Assert.Null(ShellColorRows.BuildLightProfile(null, isMaskShell: false, ShellSurfaceKind.Body));
     }
 
     [Fact]
@@ -235,7 +235,7 @@ public sealed class LightResponseTests
     {
         // BuildRows mirrors a half-authored pair on a mask shell, carrying the emissive across with it. The
         // response has to travel the same way or half of a mask would fade while the other half stayed lit.
-        var profile = SecondSkinService.BuildLightProfile(
+        var profile = ShellColorRows.BuildLightProfile(
             Rows(Row(2, 1f, response: 1f)), isMaskShell: true, ShellSurfaceKind.Body);
 
         Assert.NotNull(profile);
@@ -249,7 +249,7 @@ public sealed class LightResponseTests
         // The point of doing this on the COVERAGE rather than on the material's alpha constants: opacity is
         // per texel here, so one region of a tattoo can vanish in daylight while the region beside it — on
         // the same shell, the same material — carries on glowing and stays solid.
-        var profile = SecondSkinService.BuildLightProfile(
+        var profile = ShellColorRows.BuildLightProfile(
             Rows(Row(1, 1f, response: 1f, hide: true), Row(2, 1f, response: 1f)),
             isMaskShell: false, ShellSurfaceKind.Body);
 
@@ -267,7 +267,7 @@ public sealed class LightResponseTests
     {
         // "Hide when the light does nothing" is not a setting anyone can mean, so a bare Hide reads as a
         // full follow rather than as a fade of zero — which would silently do nothing.
-        var profile = SecondSkinService.BuildLightProfile(
+        var profile = ShellColorRows.BuildLightProfile(
             Rows(Row(1, 1f, hide: true)), isMaskShell: false, ShellSurfaceKind.Body);
 
         Assert.NotNull(profile);
@@ -279,7 +279,7 @@ public sealed class LightResponseTests
     {
         // Opacity follows the glow, so a row that only half-fades must only half-vanish. Taking the surface
         // all the way out from under a glow that is still burning would look like a hole.
-        var profile = SecondSkinService.BuildLightProfile(
+        var profile = ShellColorRows.BuildLightProfile(
             Rows(Row(1, 1f, response: 0.5f, hide: true)), isMaskShell: false, ShellSurfaceKind.Body);
 
         Assert.NotNull(profile);
@@ -289,9 +289,9 @@ public sealed class LightResponseTests
     [Fact]
     public void AScrollShellIsMarkedAsOneSoHalf21MeansWhatTheApplierThinks()
     {
-        var scroll = SecondSkinService.BuildLightProfile(
+        var scroll = ShellColorRows.BuildLightProfile(
             Rows(Row(1, 1f, response: 1f)), isMaskShell: false, ShellSurfaceKind.Body, isScroll: true);
-        var cloth = SecondSkinService.BuildLightProfile(
+        var cloth = ShellColorRows.BuildLightProfile(
             Rows(Row(1, 1f, response: 1f)), isMaskShell: false, ShellSurfaceKind.Body, isScroll: false);
 
         Assert.True(scroll!.IsScroll);
@@ -301,9 +301,9 @@ public sealed class LightResponseTests
     [Fact]
     public void FaceArtIsProbedNearTheFaceAndBodyArtNearTheBody()
     {
-        var face = SecondSkinService.BuildLightProfile(
+        var face = ShellColorRows.BuildLightProfile(
             Rows(Row(1, 1f, response: 1f)), isMaskShell: false, ShellSurfaceKind.Face);
-        var body = SecondSkinService.BuildLightProfile(
+        var body = ShellColorRows.BuildLightProfile(
             Rows(Row(1, 1f, response: 1f)), isMaskShell: false, ShellSurfaceKind.Body);
 
         Assert.True(face!.ProbeHeight > body!.ProbeHeight,
