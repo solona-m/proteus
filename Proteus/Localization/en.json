@@ -2231,6 +2231,38 @@
     "message": "Pick a part and drag it with the arrows: one arrow moves it along\nthat axis, a square moves it across that plane.",
     "description": "Tooltip for the button. Keep the line breaks; the tooltip is not wrapped."
   },
+  "Parts.Tool.Rotate": {
+    "message": "Rotate",
+    "description": ""
+  },
+  "Parts.Tool.Rotate.Tip": {
+    "message": "Pick a part, then drag one of the rings to turn it about its centre:\na coloured ring turns it about that axis, the outer one about your view.",
+    "description": ""
+  },
+  "Parts.Tool.Scale": {
+    "message": "Scale",
+    "description": ""
+  },
+  "Parts.Tool.Scale.Tip": {
+    "message": "Pick a part, then press on it and drag right to grow it or left\nto shrink it about its centre.",
+    "description": ""
+  },
+  "Parts.Rotate.Help": {
+    "message": "Click a part to choose it, then drag one of the rings at its centre. Drag anywhere else to turn the model, shift-drag to move the view, scroll to zoom.",
+    "description": ""
+  },
+  "Parts.Rotate.LiveHint": {
+    "message": "Click a part on your character, then drag one of the rings at its centre. Hold Alt to move the camera. Each turn is saved when you let go.",
+    "description": ""
+  },
+  "Parts.Scale.Help": {
+    "message": "Click a part to choose it, then press on it and drag right to grow it or left to shrink it. Drag anywhere else to turn the model, shift-drag to move the view, scroll to zoom.",
+    "description": ""
+  },
+  "Parts.Scale.LiveHint": {
+    "message": "Click a part on your character, then press on it and drag right to grow it or left to shrink it. Hold Alt to move the camera. Each change is saved when you let go.",
+    "description": ""
+  },
   "Parts.Move.Help": {
     "message": "Click a part to choose it, then drag an arrow or a square. Drag anywhere else to turn the model, shift-drag to move the view, scroll to zoom.",
     "description": "Help above the Move tool's controls, in the model view."

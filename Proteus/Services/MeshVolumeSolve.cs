@@ -1165,6 +1165,31 @@ internal sealed class MeshVolumeSolve
     }
 
     /// <summary>
+    /// Turn or scale the dragged part by <paramref name="transform"/> — a model-space matrix about the part's pivot —
+    /// from where the drag found it. The part's nodes take the whole transform; each nearby node carried by
+    /// <see cref="BeginMove"/> takes its share of the way there. Absolute and not capped, like <see cref="MoveTo"/>.
+    /// </summary>
+    public void TransformTo(Matrix4x4 transform)
+    {
+        if (!Moving || stroke == null) return;
+        foreach (var (n, w) in moveWeights)
+        {
+            var was = stroke[n];
+            var start = new Vector3(nodeAt[n].X + was.Delta.X, nodeAt[n].Y + was.Delta.Y, nodeAt[n].Z + was.Delta.Z);
+            var goal = Vector3.Transform(start, transform);
+            var step = new Vec3((goal.X - start.X) * w, (goal.Y - start.Y) * w, (goal.Z - start.Z) * w);
+            nodeDelta[n] = new Vec3(was.Delta.X + step.X, was.Delta.Y + step.Y, was.Delta.Z + step.Z);
+            nodeMoved[n] = new Vec3(was.Moved.X + step.X, was.Moved.Y + step.Y, was.Moved.Z + step.Z);
+            // Unlike a move, a turn changes which way the surface faces: the normal rebuild at release has to reach
+            // these nodes (a translation leaves the part's own nodes at weight 0 and its normals as they were).
+            // The undo snapshot taken by BeginMove restores the weight with everything else.
+            nodeWeight[n] = MathF.Max(nodeWeight[n], w);
+        }
+        Dirty = true;
+        Spread();
+    }
+
+    /// <summary>
     /// Finish a move drag: record it for undo and re-light the neighbours it stretched. No smoothing or unfold, which
     /// would take back part of the move.
     /// </summary>

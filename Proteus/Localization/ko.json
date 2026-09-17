@@ -2231,6 +2231,38 @@
     "message": "파츠를 고르고 화살표를 드래그합니다. 화살표는 그 축을 따라,\n사각형은 그 평면 위에서 움직입니다.",
     "description": ""
   },
+  "Parts.Tool.Rotate": {
+    "message": "회전",
+    "description": ""
+  },
+  "Parts.Tool.Rotate.Tip": {
+    "message": "파츠를 선택한 뒤 링 하나를 드래그하면 중심을 기준으로 회전합니다.\n색이 있는 링은 그 축을 기준으로, 바깥쪽 링은 보는 방향을 기준으로 돌립니다.",
+    "description": ""
+  },
+  "Parts.Tool.Scale": {
+    "message": "크기 조절",
+    "description": ""
+  },
+  "Parts.Tool.Scale.Tip": {
+    "message": "파츠를 선택한 뒤 그 위를 누르고 오른쪽으로 드래그하면 커지고,\n왼쪽으로 드래그하면 중심을 기준으로 작아집니다.",
+    "description": ""
+  },
+  "Parts.Rotate.Help": {
+    "message": "파츠를 클릭해 선택한 뒤 중심의 링 하나를 드래그합니다. 다른 곳을 드래그하면 모델이 회전하고, Shift+드래그로 시점을 옮기며, 스크롤로 확대/축소합니다.",
+    "description": ""
+  },
+  "Parts.Rotate.LiveHint": {
+    "message": "캐릭터의 파츠를 클릭한 뒤 중심의 링 하나를 드래그합니다. Alt를 누르면 카메라를 움직일 수 있습니다. 회전은 손을 뗄 때 저장됩니다.",
+    "description": ""
+  },
+  "Parts.Scale.Help": {
+    "message": "파츠를 클릭해 선택한 뒤 그 위를 누르고 오른쪽으로 드래그하면 커지고 왼쪽으로 드래그하면 작아집니다. 다른 곳을 드래그하면 모델이 회전하고, Shift+드래그로 시점을 옮기며, 스크롤로 확대/축소합니다.",
+    "description": ""
+  },
+  "Parts.Scale.LiveHint": {
+    "message": "캐릭터의 파츠를 클릭한 뒤 그 위를 누르고 오른쪽으로 드래그하면 커지고 왼쪽으로 드래그하면 작아집니다. Alt를 누르면 카메라를 움직일 수 있습니다. 변경은 손을 뗄 때 저장됩니다.",
+    "description": ""
+  },
   "Parts.Move.Help": {
     "message": "파츠를 클릭해 선택한 뒤 화살표나 사각형을 드래그합니다. 다른 곳을 드래그하면 모델이 회전하고, Shift+드래그로 시점을 옮기며, 스크롤로 확대/축소합니다.",
     "description": ""

@@ -1711,6 +1711,36 @@ public sealed class PartsStrings
         "Pick a part and drag it with the arrows: one arrow moves it along\n" +
         "that axis, a square moves it across that plane.");
 
+    public readonly string ToolRotate = Loc.Localize("Parts.Tool.Rotate", "Rotate")
+                                      + "###partsToolRotate";
+
+    public readonly string ToolRotateTip = Loc.Localize("Parts.Tool.Rotate.Tip",
+        "Pick a part, then drag one of the rings to turn it about its centre:\n" +
+        "a coloured ring turns it about that axis, the outer one about your view.");
+
+    public readonly string ToolScale = Loc.Localize("Parts.Tool.Scale", "Scale")
+                                     + "###partsToolScale";
+
+    public readonly string ToolScaleTip = Loc.Localize("Parts.Tool.Scale.Tip",
+        "Pick a part, then press on it and drag right to grow it or left\n" +
+        "to shrink it about its centre.");
+
+    public readonly string RotateHelp = Loc.Localize("Parts.Rotate.Help",
+        "Click a part to choose it, then drag one of the rings at its centre. Drag anywhere else to turn the model, "
+      + "shift-drag to move the view, scroll to zoom.");
+
+    public readonly string RotateLiveHint = Loc.Localize("Parts.Rotate.LiveHint",
+        "Click a part on your character, then drag one of the rings at its centre. Hold Alt to move the camera. "
+      + "Each turn is saved when you let go.");
+
+    public readonly string ScaleHelp = Loc.Localize("Parts.Scale.Help",
+        "Click a part to choose it, then press on it and drag right to grow it or left to shrink it. Drag anywhere "
+      + "else to turn the model, shift-drag to move the view, scroll to zoom.");
+
+    public readonly string ScaleLiveHint = Loc.Localize("Parts.Scale.LiveHint",
+        "Click a part on your character, then press on it and drag right to grow it or left to shrink it. Hold Alt "
+      + "to move the camera. Each change is saved when you let go.");
+
     public readonly string MoveHelp = Loc.Localize("Parts.Move.Help",
         "Click a part to choose it, then drag an arrow or a square. Drag anywhere else to turn the model, "
       + "shift-drag to move the view, scroll to zoom.");
