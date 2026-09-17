@@ -1094,6 +1094,9 @@ public sealed partial class SecondSkinService
             // Host naming, variant folder and material letter follow the shells' convention; a content unit is one more
             // material on the accessory. The .mtrl is the PACK'S, published byte-for-byte (colour rows aside).
             contentPlaced = 0;
+            // Texture game path → the pack file already published there. Units are told apart by SOURCE: each copies to a
+            // name of its own, so two that share one texture would never compare equal by destination.
+            var texSource = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (var (u, hIdx) in contentWork)
             {
                 var unit = contentUnits[u];
@@ -1131,7 +1134,7 @@ public sealed partial class SecondSkinService
 
                 // ── the pack's own textures, republished ──────────────────────────────
                 // The material keeps its texture paths, but Proteus serves them from the files the selection chose, copied (a
-                // Penumbra redirect cannot reach into another mod's folder). Only textures a SELECTED option supplies (see
+                // Penumbra redirect cannot reach into another mod's folder). Only textures the pack ships (see
                 // SelectedTextureFiles). Skipped for a material the glow builder rebuilt, which names paths it published itself.
                 int texIdx = 0;
                 var republish = glowBuilt
@@ -1139,7 +1142,13 @@ public sealed partial class SecondSkinService
                     : unit.TexFiles.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase);
                 foreach (var (texGamePath, srcDisk) in republish)
                 {
+                    // The number is spent either way, so a shared texture does not rename the ones after it.
                     var dstDisk = Path.Combine(texturesDir, $"ct_{diskChar}_{texIdx++}.tex");
+
+                    // An earlier unit already serves this path from this very file: nothing to copy, nothing to say.
+                    bool claimed = texSource.TryGetValue(texGamePath, out var from);
+                    if (claimed && string.Equals(from, srcDisk, StringComparison.OrdinalIgnoreCase)) continue;
+
                     try { shellChanged |= service.CopyPackFile(srcDisk, dstDisk); }
                     catch (Exception ex)
                     {
@@ -1151,14 +1160,13 @@ public sealed partial class SecondSkinService
                     }
 
                     // Two units claiming one texture path with DIFFERENT files cannot both win; say so rather than let the last win silently.
-                    var relTex = Rel(outputRoot, dstDisk);
-                    if (redirects.TryGetValue(texGamePath, out var already)
-                     && !string.Equals(already, relTex, StringComparison.OrdinalIgnoreCase))
+                    if (claimed)
                         service.log.Warning("[Proteus] content: {0} — two materials want different files at {1}; the "
                                   + "later one wins and the earlier piece may show the wrong texture",
                             unit.Entry.ModDirectory, texGamePath);
 
-                    redirects[texGamePath] = relTex;
+                    texSource[texGamePath] = srcDisk;
+                    redirects[texGamePath] = Rel(outputRoot, dstDisk);
                 }
 
                 // Same "ss_" naming as a shell: ShellColorsetApplier and ColorTableHighlighter key on that prefix and disk char.

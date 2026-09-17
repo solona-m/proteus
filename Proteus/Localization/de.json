@@ -215,6 +215,10 @@
     "message": "[Proteus] Deine zweite Haut wurde gebaut, aber das Spiel zeichnet sie nicht. Das Accessoire, auf dem sie sitzt, ist angelegt, doch der Charakter lädt Proteus' Version nicht. Lege das Accessoire ab und wieder an oder wähle ein anderes.",
     "description": ""
   },
+  "Chat.ShellMaterialFailed": {
+    "message": "[Proteus] Ein Teil deiner zweiten Haut wird nicht gezeichnet. Der Rest ist auf deinem Charakter, also fehlt entweder eine Textur, die dieses Teil braucht, oder das Spiel hält noch die vorherige Version. Versuche zuerst „Jetzt neu komponieren“, dann lege das Accessoire, auf dem sie sitzt, ab und wieder an.",
+    "description": ""
+  },
   "Chat.ShellNeedsRedraw": {
     "message": "[Proteus] Deine zweite Haut hat sich geändert, aber das automatische Neuzeichnen ist aus, deshalb trägt dein Charakter noch die vorherige Version. Wechsle das Gebiet oder nutze Penumbras Redraw-Schaltfläche, um sie zu sehen.",
     "description": ""

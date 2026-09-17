@@ -251,14 +251,26 @@ internal static class ContentPieceResolver
 
     /// <summary>
     /// The texture files this pack's selection supplies for a material, keyed by game path, by the same rule as
-    /// <see cref="SelectedMaterialFile"/>. A path no option supplies is absent, so a vanilla texture stays vanilla.
+    /// <see cref="SelectedMaterialFile"/>. A path the pack does not ship is absent, so a vanilla texture stays vanilla.
     /// </summary>
+    /// <param name="shippedFor">
+    /// Every file the pack's manifest puts behind a game path, whatever option holds it. A piece's gate is not the option
+    /// that carries its textures, so a piece can be worn with that option unticked: its material is then the importer's
+    /// frozen file, and its textures must come from the pack the same way or the material fails to load outright.
+    /// </param>
+    /// <param name="gameHasFile">
+    /// Whether the game's own data holds a file at a path. An unticked texture is only taken over where it does not: a
+    /// texture is published at the path the material names, for the whole collection, so taking over a vanilla path would
+    /// repaint the real item the user left that option off to keep. There the game's file loads and so does the material.
+    /// </param>
     internal static Dictionary<string, string> SelectedTextureFiles(
         string modRoot, ContentPiece piece, byte[] mtrl,
-        IReadOnlyDictionary<string, List<string>>? selected)
+        IReadOnlyDictionary<string, List<string>>? selected,
+        Func<string, IReadOnlyList<string>>? shippedFor = null,
+        Func<string, bool>? gameHasFile = null)
     {
         var picked = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        if (piece.TextureOptions is not { Count: > 0 }) return picked;
+        if (piece.TextureOptions is not { Count: > 0 } && shippedFor == null) return picked;
 
         MtrlTexturePaths slots;
         try { slots = TextureLoader.ParseMtrlBytes(mtrl); }
@@ -269,8 +281,20 @@ internal static class ContentPieceResolver
         {
             if (tex is not { Length: > 0 }) continue;
             var sources = piece.TextureSourcesFor(tex);
-            if (sources.Count == 0) continue;
-            if (SelectedMaterialFile(modRoot, sources, selected) is { } disk) picked[tex] = disk;
+            if (sources.Count > 0 && SelectedMaterialFile(modRoot, sources, selected) is { } disk)
+            {
+                picked[tex] = disk;
+                continue;
+            }
+
+            // Nothing ticked supplies it: the pack's own file, recorded sources first, then the manifest's. Only for a path
+            // the pack invented (see gameHasFile).
+            if (gameHasFile?.Invoke(tex) == true) continue;
+            var unselected = sources.Select(s => s.File).Concat(shippedFor?.Invoke(tex) ?? [])
+                .Where(f => f.Length > 0)
+                .Select(f => Path.Combine(modRoot, f.Replace('/', Path.DirectorySeparatorChar)))
+                .FirstOrDefault(f => IsUnder(modRoot, f) && File.Exists(f));
+            if (unselected != null) picked[tex] = unselected;
         }
         return picked;
     }

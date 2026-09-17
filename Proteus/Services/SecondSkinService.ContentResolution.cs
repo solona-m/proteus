@@ -20,6 +20,7 @@ public sealed partial class SecondSkinService
             private HashSet<string> unitGeometry = null!;
             private Dictionary<string, (byte[]? Model, List<string> Used, List<string> Attrs)> modelCache = null!;
             private Dictionary<string, string?> mtrlFileCache = null!;
+            private Dictionary<string, ILookup<string, string>> shippedCache = null!;
             private Dictionary<string, string> unwearable = null!;
             private List<(string ModDir, string Group, string Option, string Reason)> refusals = null!;
             private Dictionary<string, IReadOnlyDictionary<string, List<string>>?> selectionCache = null!;
@@ -56,6 +57,9 @@ public sealed partial class SecondSkinService
 
                 // Game path → the pack file Penumbra resolves it to, for this build only (see ContentMaterialFile).
                 mtrlFileCache = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+
+                // Mod root → game path → every file its manifest puts behind it, read on first need (see ShippedFiles).
+                shippedCache = new Dictionary<string, ILookup<string, string>>(StringComparer.OrdinalIgnoreCase);
 
                 // Extra-skeleton claims noted while resolving content, written only for options that reached a host: the entry
                 // lands on an item that is not the pack's.
@@ -222,7 +226,8 @@ public sealed partial class SecondSkinService
 
                     // The textures the selection puts behind this material; in the unit key, since sharing a material but not its
                     // textures is two materials to publish.
-                    var texFiles = SelectedTextureFiles(modRoot, piece, mtrl, ModSelection(cEntry.ModDirectory));
+                    var texFiles = SelectedTextureFiles(modRoot, piece, mtrl, ModSelection(cEntry.ModDirectory),
+                        tex => ShippedFiles(modRoot, tex), Plugin.DataManager.FileExists);
 
                     var key = ContentUnitKey(cEntry.ModDirectory, pieceSurface, rel,
                         rows == null ? null : JsonSerializer.Serialize(rowPresets), glow?.GlowKey(),
@@ -297,6 +302,19 @@ public sealed partial class SecondSkinService
             {
                 if (!unwearable.ContainsKey(modDir)) unwearable[modDir] = reason;
                 refusals.Add((modDir, group ?? "", option ?? "", reason));
+            }
+
+            /// <summary>
+            /// Every file the pack's manifest puts behind <paramref name="gamePath"/>, in declaration order. The manifest is
+            /// read once per mod per build, and only when a texture has no ticked supplier.
+            /// </summary>
+            private IReadOnlyList<string> ShippedFiles(string modRoot, string gamePath)
+            {
+                if (!shippedCache.TryGetValue(modRoot, out var shipped))
+                    shippedCache[modRoot] = shipped = PenumbraModMeta.ReadAllRedirects(modRoot)
+                        .ToLookup(r => PenumbraPackage.Normalize(r.GamePath), r => r.File,
+                                  StringComparer.OrdinalIgnoreCase);
+                return [.. shipped[PenumbraPackage.Normalize(gamePath)]];
             }
 
             private IReadOnlyDictionary<string, List<string>>? ModSelection(string modDir)

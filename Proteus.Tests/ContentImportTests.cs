@@ -1078,10 +1078,66 @@ public class ContentImportTests
             // The normal map is never claimed — the pack does not ship it, so it stays vanilla.
             Assert.DoesNotContain(normal, rose.Keys);
 
-            // Nothing selected and no default data behind the path: Proteus republishes nothing and the
-            // texture goes back to Penumbra, which is where every pack without a print group leaves it.
-            Assert.Empty(Pick(null));
-            Assert.Empty(Pick(new() { ["Piece"] = ["Jacket"] }));
+            // A TICKED option wins even at a path the game holds: Penumbra is making that same override already.
+            Assert.Equal("rose_d.tex", Path.GetFileName(Assert.Single(ContentPieceResolver.SelectedTextureFiles(
+                dir, piece, mtrl, new Dictionary<string, List<string>> { ["Print"] = ["Blue Rose"] },
+                gameHasFile: _ => true)).Value));
+
+            // Nothing selected: the pack's own file all the same, first supplier first. Penumbra serves a texture
+            // only while its option is ticked, and a material whose texture is missing does not load at all.
+            Assert.Equal("rose_d.tex", Path.GetFileName(Assert.Single(Pick(null)).Value));
+            Assert.Equal("rose_d.tex",
+                Path.GetFileName(Assert.Single(Pick(new() { ["Piece"] = ["Jacket"] })).Value));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    /// <summary>
+    /// A piece is worn through its gate, not through the option that carries its textures, so that option can be
+    /// unticked while the piece is on. The importer records only textures the pack VARIES, so a single-file texture
+    /// is known from the manifest alone — and must still be republished, or the material fails with
+    /// FailedSubResource and the piece is not drawn ("Scarlet": bracelets on, "Items / Handsaint's Bracelets" off).
+    /// </summary>
+    [Fact]
+    public void A_texture_only_the_manifest_knows_is_republished_when_its_option_is_unticked()
+    {
+        var dir = TempDir();
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(dir, "items"));
+            File.WriteAllBytes(Path.Combine(dir, "items", "wrs_base.tex"), new byte[16]);
+
+            const string diffuse = "chara/accessory/a0095/texture/v05_c0201a0095_wrs_base.tex";
+            const string normal  = "chara/accessory/a0095/texture/v05_c0201a0095_wrs_norm.tex";
+            var mtrl = Mtrl(diffuse, normal);
+
+            // A manifest value is never traversal-checked, so one that climbs out of the mod must lose even though
+            // the file is really there and is named FIRST.
+            var outside = Path.Combine(Path.GetDirectoryName(dir)!, Path.GetFileName(dir) + "_outside.tex");
+            File.WriteAllBytes(outside, new byte[16]);
+
+            try
+            {
+                // Nothing recorded at import: one file behind the path is not a choice.
+                var piece = new ContentPiece();
+                IReadOnlyList<string> Shipped(string tex)
+                    => tex == diffuse ? ["..\\" + Path.GetFileName(outside), "items\\wrs_base.tex"] : [];
+                var noneTicked = new Dictionary<string, List<string>> { ["Items"] = [] };
+
+                var picked = ContentPieceResolver.SelectedTextureFiles(dir, piece, mtrl, noneTicked, Shipped);
+
+                Assert.Equal("wrs_base.tex", Path.GetFileName(Assert.Single(picked).Value));
+                Assert.Equal(diffuse, picked.Keys.Single());
+
+                // A path the game itself holds is left alone: the redirect is collection-wide, so taking it over would
+                // repaint the real item the user left the option off to keep. Vanilla loads, and so does the material.
+                Assert.Empty(ContentPieceResolver.SelectedTextureFiles(
+                    dir, piece, mtrl, noneTicked, Shipped, gameHasFile: tex => tex == diffuse));
+
+                // Without the manifest there is nothing to go on, as before.
+                Assert.Empty(ContentPieceResolver.SelectedTextureFiles(dir, piece, mtrl, null));
+            }
+            finally { File.Delete(outside); }
         }
         finally { Directory.Delete(dir, true); }
     }

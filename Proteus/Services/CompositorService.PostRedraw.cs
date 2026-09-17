@@ -200,6 +200,32 @@ public partial class CompositorService
                 return;
             }
 
+            // A shell material drawn on the same host means a shell of ours is loaded there (nothing else declares it). Then a
+            // missing neighbour either failed on its own (a material does not load when one of its textures does not) or
+            // belongs to a newer shell than the one drawn. The two look alike from here; Penumbra's log tells them apart.
+            var failedAlone = hostMaterials == null ? [] : missing
+                .Where(p => expected.Models.Where(m => SameShellHost(p, m)).ToList() is { Count: > 0 } own
+                         && expected.Materials.Any(q => hostMaterials.Contains(q) && own.Any(m => SameShellHost(q, m))))
+                .ToList();
+            if (failedAlone.Count == missing.Count)
+            {
+                log.Warning("[Proteus] second skin is PARTLY drawn — {0} of {1} shell material(s) never appeared on the "
+                          + "character: {2}. Other shell materials on the same host did, so a shell of ours is loaded "
+                          + "there. Either these materials failed to load on their own (look just above for Penumbra's "
+                          + "\"Failed to … load resource … FailedSubResource\" naming them, and the texture lines "
+                          + "before it), or the game is still drawing the previous shell model",
+                    missing.Count, expected.Materials.Count, string.Join(", ", missing));
+
+                var failed = Loc.Localize("Chat.ShellMaterialFailed",
+                    "[Proteus] Part of your second skin isn't being drawn. The rest of it is on your character, so "
+                    + "either a texture that piece needs is missing, or the game is still holding the previous "
+                    + "version. Try \"Recomposite now\" first, then unequipping and re-equipping the accessory it "
+                    + "rides on.");
+                _ = Plugin.Framework.RunOnFrameworkThread(
+                    () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(failed, 17).Build()));
+                return;
+            }
+
             log.Warning("[Proteus] second skin built and published but is NOT being drawn — {0} of {1} "
                       + "shell material(s) never appeared on the character: {2}. The host accessory it "
                       + "was appended into is drawn, but not our copy of it. The host's OWN materials in "

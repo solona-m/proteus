@@ -215,6 +215,10 @@
     "message": "[Proteus] Your second skin was built but the game isn't drawing it. The accessory it rides on is equipped, yet the character isn't loading Proteus' version. Try unequipping and re-equipping that accessory, or pick a different one.",
     "description": "Appears in an in-game chat notice from Proteus."
   },
+  "Chat.ShellMaterialFailed": {
+    "message": "[Proteus] Part of your second skin isn't being drawn. The rest of it is on your character, so either a texture that piece needs is missing, or the game is still holding the previous version. Try \"Recomposite now\" first, then unequipping and re-equipping the accessory it rides on.",
+    "description": "Appears in an in-game chat notice from Proteus. \"Recomposite now\" is the button Band.Recomposite.Tip - use the same words."
+  },
   "Chat.ShellNeedsRedraw": {
     "message": "[Proteus] Your second skin changed, but auto redraw is off, so your character is still wearing the previous version. Zone or use Penumbra's Redraw button to see it.",
     "description": "Appears in an in-game chat notice from Proteus. \"Auto redraw\" is the checkbox Settings.General.AutoRedraw.Label; \"Redraw\" is a button in Penumbra - use the name Penumbra shows in your language."

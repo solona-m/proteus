@@ -215,6 +215,10 @@
     "message": "[Proteus] 第二层皮肤已构建，但游戏没有绘制它。承载它的饰品已装备，可角色并未加载 Proteus 的版本。请脱下该饰品再重新装备，或换用另一件。",
     "description": ""
   },
+  "Chat.ShellMaterialFailed": {
+    "message": "[Proteus] 第二层皮肤有一部分没有被绘制。其余部分已在角色身上，所以要么是该部件所需的纹理缺失，要么是游戏仍保留着之前的版本。请先尝试“立即重新合成”，然后再脱下并重新装备承载它的饰品。",
+    "description": ""
+  },
   "Chat.ShellNeedsRedraw": {
     "message": "[Proteus] 第二层皮肤已更改，但自动重绘已关闭，所以角色仍穿着之前的版本。切换区域或使用 Penumbra 的 Redraw 按钮即可看到。",
     "description": ""
