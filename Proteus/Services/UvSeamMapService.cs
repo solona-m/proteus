@@ -5,28 +5,15 @@ using Dalamud.Plugin.Services;
 namespace Proteus.Services;
 
 /// <summary>
-/// Where a UV island's edge continues on the BODY rather than in the texture.
-///
-/// A body atlas splits the mesh into islands, and the texture space between them is padding the game never
-/// samples. That is a problem for anything that blurs — an ambient-occlusion halo reaches ~2×radius texels,
-/// so a strap near an island edge casts a shadow that simply stops at the border. Measured on the bibo
-/// layout the torso and leg islands are 62px apart against a 24px reach, so the shadow could never cross
-/// that seam: it stops dead at the hip. What used to disguise it was the dilated ink art tools leave in the
-/// gutter, which both sides picked up — the same ink that produced the visible seam line.
-///
-/// The correspondence is not in the texture and can't be inferred from it; it's in the mesh. Two triangles
-/// that share an EDGE IN 3D but not in UV are the two sides of a seam, and their UV segments are the two
-/// places in texture space that are actually touching on the body. This service rasterises that: for each
-/// texel of gutter just outside an island edge, the texel on the far side of the seam that the surface
-/// really continues into. A blur can then read across a seam correctly instead of guessing.
+/// Where a UV island's edge continues on the body rather than in the texture, so a blur can read across a seam.
+/// Two triangles sharing an edge in 3D but not in UV are the two sides of a seam; for each gutter texel just
+/// outside an island edge this rasterises the texel on the far side that the surface continues into.
 /// </summary>
 public sealed class UvSeamMapService(IPluginLog log)
 {
     /// <summary>
-    /// Cached maps, newest last. An entry is an <c>int[w*h]</c> — 67 MB at 4096² — so this is capped rather
-    /// than left to grow: the reach is derived from the softness setting, which is a continuous slider, and
-    /// an unbounded dictionary would keep one full map per distinct radius the user ever tried (17 of them
-    /// across the slider's range, ≈1.1 GB). Two is enough to keep a body and its normal-map resolution hot.
+    /// Cached maps, newest last. Capped because each is a full <c>int[w*h]</c> and the reach follows a
+    /// continuous slider.
     /// </summary>
     private readonly List<((string Id, int W, int H, int Reach) Key, int[]? Map)> cache = new();
     private const int MaxCachedMaps = 2;
@@ -40,15 +27,10 @@ public sealed class UvSeamMapService(IPluginLog log)
     /// <summary>
     /// For every texel, the texel its surface continues into across a UV seam, or -1 where there is none
     /// (the texel is on-island, too far from a seam, or the far side falls outside the map). Null when the
-    /// models carry no usable geometry, which callers treat as "no seam data" and fall back.
+    /// models carry no usable geometry.
     /// <para/>
-    /// Takes ALL the body's part models together, not one: a body is shipped as separate top / dwn / glv /
-    /// sho models, and the most conspicuous seam of the lot — torso to leg at the hip — lies BETWEEN two of
-    /// those files. Welding them into one topology first is the only way that seam is visible at all.
-    /// <para/>
-    /// Identity rather than content: the previous version hashed the bytes, which meant the caller had to
-    /// read all four models (4.6 MB, ~1.1s measured) before it could discover the answer was already cached.
-    /// A path plus size and mtime settles that without opening anything, so a hit costs nothing.
+    /// Takes all the body's part models together: seams such as torso-to-leg lie between two part files.
+    /// Cached by identity, so a hit reads no model bytes.
     /// </summary>
     public int[]? SeamSource(IReadOnlyList<SeamModel> models, int w, int h, int reach)
     {
@@ -64,16 +46,11 @@ public sealed class UvSeamMapService(IPluginLog log)
                 if (cache[i].Key == key) return cache[i].Map;
         }
 
-        // Only now are the bytes worth reading.
         var loaded = new List<byte[]?>(models.Count);
         foreach (var m in models) loaded.Add(m.Load());
 
-        // Built outside the lock: it takes a few hundred ms, and holding the lock would stall an unrelated
-        // material's composite behind it. A concurrent duplicate build is wasted work, never a wrong answer.
-        //
-        // A body whose parts are all unreadable yields null — and that null is CACHED below like any other
-        // answer. Returning early instead would re-read every part on every composite, which is the exact
-        // cost this identity-keyed cache exists to avoid.
+        // Built outside the lock; a concurrent duplicate build is wasted work, never a wrong answer.
+        // A null result is cached too, so unreadable parts are not re-read every composite.
         var map = loaded.TrueForAll(b => b == null || b.Length < 0x44)
             ? null
             : Build(loaded, w, h, reach);
@@ -88,14 +65,8 @@ public sealed class UvSeamMapService(IPluginLog log)
     }
 
     /// <summary>
-    /// Shift a part's UVs by whole tiles so they lie in [0,1), preserving every edge exactly. Applied per
-    /// part and per axis, from that part's own minimum — the shift has to be uniform across the part or a
-    /// seam's two sides would land a tile apart and the correspondence would be nonsense.
-    /// <para/>
-    /// An axis whose extent already exceeds one tile can't be normalised this way: shifting by the minimum
-    /// would push the far end past 1.0, and those triangles would then silently fall outside the map. Such
-    /// an axis is left alone and reported, so a body that genuinely tiles is a logged limitation rather than
-    /// a quietly half-empty seam map.
+    /// Shift a part's UVs by whole tiles so they lie in [0,1), uniformly across the part and per axis. An axis
+    /// spanning more than one tile is left alone and false is returned.
     /// </summary>
     private static bool ShiftIntoUnitTile(float[] uv)
     {
@@ -125,12 +96,7 @@ public sealed class UvSeamMapService(IPluginLog log)
             if (mdl == null || !SecondSkinWriter.TryReadLod0Geometry(mdl, out var p, out var u, out var t))
                 continue;
 
-            // UV periodicity: a .mdl may store the texture coordinate shifted by a whole tile, and the body
-            // parts genuinely disagree — measured on Bibo+, _top and _dwn carry v in -0.999..-0.008 while
-            // _glv and _sho carry it in 0.007..0.996. Taking those at face value puts the torso and the legs
-            // off the map entirely, which is exactly the seam that matters. Shift each part by whole tiles so
-            // it lands in [0,1); an integer shift is what the sampler does anyway (the rest of the codebase
-            // spells it ((y % h) + h) % h) and it leaves every edge's geometry untouched.
+            // Body parts may store UVs shifted by whole tiles and disagree with each other; normalise each to [0,1).
             if (!ShiftIntoUnitTile(u))
                 log.Warning("[Proteus] seam map: a body part's UVs span more than one tile on some axis — "
                           + "it can't be normalised, so seams involving it may be missing");
@@ -147,10 +113,8 @@ public sealed class UvSeamMapService(IPluginLog log)
         var pos = posL.ToArray(); var uv = uvL.ToArray(); var tri = triL.ToArray();
 
         // ── 1. Weld vertices by POSITION ────────────────────────────────────
-        // A seam is exactly a place where one 3D vertex carries two UVs, so the mesh's own vertex indices
-        // can't see it — the two sides are separate vertices. Welding on quantised position recovers the
-        // shared 3D topology. The grid is fine enough to keep distinct anatomy apart and coarse enough to
-        // absorb the half-float rounding a .mdl stores positions with.
+        // A seam's two sides are separate vertices; welding on quantised position recovers the 3D topology.
+        // The grid absorbs half-float rounding while keeping distinct anatomy apart.
         const float Quant = 4096f;
         var weld = new Dictionary<(int, int, int), int>(pos.Length / 3);
         var posId = new int[pos.Length / 3];
@@ -176,8 +140,7 @@ public sealed class UvSeamMapService(IPluginLog log)
             {
                 int pa = posId[a], pb = posId[b];
                 if (pa == pb) return;                       // degenerate
-                // Order the key by 3D identity so both sides of a seam agree on which end is which —
-                // that alignment is what lets the two UV segments be matched parameter-for-parameter.
+                // Order by 3D identity so both sides of a seam agree on which end is which.
                 var key = pa < pb ? (pa, pb) : (pb, pa);
                 var side = pa < pb ? (a, b, c) : (b, a, c);
                 if (!edges.TryGetValue(key, out var list)) edges[key] = list = new List<(int, int, int)>(2);
@@ -243,19 +206,12 @@ public sealed class UvSeamMapService(IPluginLog log)
             if (!Outward(d0x, d0y, d1x, d1y, dcx, dcy, out float dnx, out float dny)) return;
             if (!Outward(s0x, s0y, s1x, s1y, scx, scy, out float snx, out float sny)) return;
 
-            // The two sides of a seam are rarely packed at the same texel density — a torso island and a leg
-            // island can differ by a lot. Stepping k texels inward on the source therefore covers a different
-            // distance ON THE BODY than stepping k texels outward on the destination, so the halo arrives at
-            // the seam decaying at two different rates and leaves a faint cutoff. The two UV edges are the
-            // same 3D edge, so their length ratio IS the local density ratio. Clamped because a sliver
-            // triangle can produce a meaningless ratio.
+            // The two UV edges are one 3D edge, so their length ratio is the local texel-density ratio; clamped
+            // against sliver triangles.
             float densityScale = Math.Clamp(sLen / dLen, 0.25f, 4f);
 
-            // Sweep the destination texels within reach of the SEGMENT rather than stepping along it and
-            // walking out perpendicular. Perpendicular strips leave wedge-shaped holes wherever two seam
-            // edges meet at an angle, and those holes were ~40% of each island's gutter — enough that the
-            // halo fell back to extrapolation over much of the seam. Projecting each texel onto the segment
-            // and CLAMPING the parameter to [0,1] fills those wedges from the nearest endpoint for free.
+            // Sweep texels within reach of the segment, clamping the projection to [0,1] so the wedges where
+            // two seam edges meet fill from the nearest endpoint.
             float ex = d1x - d0x, ey = d1y - d0y;
             float e2 = ex * ex + ey * ey;
             int x0 = (int)MathF.Floor(MathF.Min(d0x, d1x)) - reach, x1 = (int)MathF.Ceiling(MathF.Max(d0x, d1x)) + reach;
@@ -277,8 +233,7 @@ public sealed class UvSeamMapService(IPluginLog log)
                 int p = py * w + px;
                 if (k >= depth[p]) continue;                // a nearer seam already owns this texel
 
-                // The mirrored distance INWARD from the source edge: that is the surface which continues
-                // past the seam, walked at the source island's own texel density.
+                // The mirrored distance inward from the source edge, at the source island's texel density.
                 float sd = dist * densityScale;
                 int qx = (int)MathF.Floor(s0x + (s1x - s0x) * t - snx * sd);
                 int qy = (int)MathF.Floor(s0y + (s1y - s0y) * t - sny * sd);

@@ -4,19 +4,9 @@ using System.Collections.Generic;
 namespace Proteus;
 
 /// <summary>
-/// Reads left/right structure off a mesh: which side of the character each vertex is on, and whether the
-/// mesh's UV layout is MIRRORED — both sides sampling the same texels.
-/// <para/>
-/// A mirrored layout is what makes asymmetric art impossible on a surface: one sheet describes both sides,
-/// so a mark painted on one side appears on both and there is nowhere to put a mark that belongs to only
-/// one. Vanilla is like this and Bibo+/gen3 are not, which is the whole reason art ported to vanilla loses
-/// a side. Measured on the vanilla c0201 e0000 parts, 89-97% of mirror-partner vertex pairs share a UV
-/// (<c>u' = u</c>) and essentially none are reflections of one another; on a Bibo+ body the numbers are the
-/// other way round. The vanilla FACE reads the same way as the body (89%), so the fold is not a body-only
-/// property — which is why this asks the geometry rather than consulting a table of body types.
-/// <para/>
-/// Deliberately not a body-type lookup: a mod is free to ship a body that calls itself vanilla and unwraps
-/// it differently, and the model in hand is the only thing that actually knows.
+/// Reads left/right structure off a mesh: which side each vertex is on, and whether the UV layout is MIRRORED
+/// (both sides sampling the same texels, so asymmetric art is impossible). Asks the geometry rather than a
+/// body-type table, since only the model in hand knows how it is unwrapped.
 /// </summary>
 public static class SurfaceMirror
 {
@@ -27,22 +17,12 @@ public static class SurfaceMirror
     public const float Midline = 1e-4f;
 
     /// <summary>
-    /// Which side of the body each vertex belongs to: <c>+1</c> for +X, <c>-1</c> for -X, <c>0</c> for one
-    /// that can't be placed.
-    /// <para/>
-    /// Decided per TRIANGLE and inherited by its vertices, not read off each vertex's own X. The midline is
-    /// where a mirrored layout puts its UV seam, so it carries a band of vertices sitting at x ~ 0 whose own
-    /// coordinate is pure noise — 54 of them on the vanilla e0000 top, 359 on the face. Their side comes
-    /// from the triangles that use them, and getting one wrong is not a subtle error: under un-mirroring the
-    /// two halves of the sheet are a long way apart, so a single misplaced vertex stretches its triangle
-    /// across the texture.
-    /// <para/>
-    /// <paramref name="conflicts"/> counts vertices claimed by triangles on BOTH sides — those get 0 and
-    /// keep their authored UV, because there is no one answer for them. <paramref name="straddling"/> counts
-    /// triangles with vertices on both sides, which a mirrored layout should not have (its UV seam forces
-    /// the split): measured zero on every vanilla e0000 part and on the face, and 3 conflicted vertices on
-    /// the face out of 5990. Both are reported rather than assumed away.
+    /// Which side of the body each vertex belongs to: <c>+1</c> for +X, <c>-1</c> for -X, <c>0</c> for one that
+    /// can't be placed. Decided per TRIANGLE and inherited by its vertices, since midline vertices' own X is noise
+    /// and one misplaced vertex stretches its triangle across the sheet.
     /// </summary>
+    /// <param name="conflicts">Vertices claimed by triangles on BOTH sides; they get 0.</param>
+    /// <param name="straddling">Triangles with vertices on both sides, which a mirrored layout should not have.</param>
     /// <param name="x">Model-space X of each vertex, one entry per vertex.</param>
     /// <param name="triangles">Flat triangle list indexing <paramref name="x"/>.</param>
     public static sbyte[] AssignSides(float[] x, IReadOnlyList<ushort> triangles,
@@ -81,13 +61,8 @@ public static class SurfaceMirror
     }
 
     /// <summary>
-    /// Whether this mesh's UV layout is mirrored — a vertex and the vertex at its reflection across x = 0
-    /// share a UV rather than being reflections in UV too.
-    /// <para/>
-    /// Sampled, not exhaustive: enough pairs to be decisive and cheap enough to run per body part per
-    /// composite. Returns false when too few mirror partners were found to judge (an asymmetric mesh, or one
-    /// that isn't laterally symmetric at all), which is the safe answer — it leaves the caller on the
-    /// behaviour it already had.
+    /// Whether this mesh's UV layout is mirrored: a vertex and its reflection across x = 0 share a UV. Sampled.
+    /// Returns false when too few mirror partners were found to judge, leaving the caller's behaviour unchanged.
     /// </summary>
     public static bool LooksMirrored(float[] positions, float[] uvs, int samples = 3000)
     {
@@ -144,7 +119,7 @@ public static class SurfaceMirror
             else if (MathF.Abs(uj - (1f - ui)) + dv < 0.01f) reflected++;
         }
 
-        // Decisive in practice: vanilla scores 89-97% "same" against ~0% "reflected", Bibo+ the reverse.
+        // Vanilla scores mostly "same" and almost no "reflected"; an unmirrored layout the reverse.
         return paired >= 64 && same > paired / 2 && same > reflected;
     }
 }

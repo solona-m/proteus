@@ -18,12 +18,8 @@ public record OverlayEntry(
 )
 {
     /// <summary>
-    /// The Penumbra mod folder this entry lives in — the parent of its <c>Proteus/</c> sidecar, and what
-    /// every path a content pack stores (models, materials, textures) is relative to.
-    /// <para/>
-    /// One place rather than four: this convention was open-coded in the compositor and three times over in
-    /// the status window, and a mod folder that failed to derive in one of them but not the others is the
-    /// kind of drift nothing would catch. Null only for a sidecar path with no parent at all.
+    /// The Penumbra mod folder this entry lives in: the parent of its <c>Proteus/</c> sidecar, and what every path a
+    /// content pack stores is relative to. Null only for a sidecar path with no parent.
     /// </summary>
     public string? ModRoot => Path.GetDirectoryName(
         SidecarRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
@@ -66,11 +62,8 @@ public record ResolvedContent(
 );
 
 /// <summary>
-/// Whether Penumbra was asked which of a mod's options are on, and what came back. Three states rather
-/// than a bool because "we asked and Penumbra had nothing to say" and "we never needed to ask" are not
-/// the same fact, and only the first is a reason to distrust everything else in a
-/// <see cref="ResolutionDiagnostic"/>. A bool made the resolvers that short-circuit before the IPC hop —
-/// a flat overlay list, a pack with no groups — claim an answer they never went and got.
+/// Whether Penumbra was asked which of a mod's options are on, and what came back. Three states because "never
+/// needed to ask" is not "asked and got nothing", and only the latter makes a <see cref="ResolutionDiagnostic"/> untrustworthy.
 /// </summary>
 public enum SettingsRead
 {
@@ -86,47 +79,31 @@ public enum SettingsRead
 /// <summary>
 /// Why <see cref="SidecarDiscoveryService.ResolveActiveOverlays(OverlayEntry, out ResolutionDiagnostic)"/>
 /// or <see cref="SidecarDiscoveryService.ResolveActiveContent(OverlayEntry, out ResolutionDiagnostic)"/>
-/// resolved what it did. Every field here was already computed on the way to the answer and then thrown
-/// away, which is how a mod that resolves to NOTHING used to leave no trace at all: the resolvers return
-/// an empty list for four unrelated reasons and the caller could not tell them apart.
-/// <para/>
-/// One type for both halves of a pack. Overlays and content are selected the same way out of the same
-/// Penumbra groups, and a pack can ship both — so the caller <see cref="Merge"/>s the two and asks its
-/// questions once, rather than growing a second ladder that would have to agree with the first.
-/// <para/>
-/// Carried out rather than logged here on purpose. Whether an empty resolve matters depends on what the
-/// rest of the composite did — a mod with no overlays may still contribute masks or content — so only
-/// <see cref="CompositorService"/> can decide, and it needs the facts to say WHICH of the four it was.
+/// resolved what it did. One type for overlays and content, which callers <see cref="Merge"/>; carried out rather
+/// than logged, since only <see cref="CompositorService"/> knows whether an empty resolve matters.
 /// </summary>
 public readonly record struct ResolutionDiagnostic(
     /// <summary>Whether the selection could be read at all. See <see cref="SettingsRead"/>.</summary>
     SettingsRead Settings,
-    /// <summary>Groups in metadata.json that declare at least one option — the denominator the two lists
-    /// below are counted against.</summary>
+    /// <summary>Groups in metadata.json that declare at least one option.</summary>
     int GroupCount,
-    /// <summary>Groups Penumbra knows about where the user has ticked nothing. The ordinary "you haven't
-    /// chosen anything yet" case.</summary>
+    /// <summary>Groups Penumbra knows about where the user has ticked nothing.</summary>
     IReadOnlyList<string> EmptyGroups,
-    /// <summary>Groups named in metadata.json that Penumbra's copy of the mod has no group for — renamed
-    /// or dropped when the pack was re-exported. Nothing in them can EVER be selected, so this one is an
-    /// authoring error rather than a user choice.</summary>
+    /// <summary>Groups named in metadata.json that Penumbra's copy of the mod has no group for: an authoring
+    /// error, since nothing in them can ever be selected.</summary>
     IReadOnlyList<string> MissingGroups,
-    /// <summary>The mod declares pieces or overlays that no option gates, so an empty result cannot be
-    /// the user's doing and "tick something" is never the advice.</summary>
+    /// <summary>The mod declares pieces or overlays that no option gates, so "tick something" is never the advice.</summary>
     bool Unconditional,
-    /// <summary>Every group name in Penumbra's own copy of the mod, as read from its meta.json on the way
-    /// to ordering the groups. Empty when the manifest was never read. Kept so a caller that needs to ask
-    /// whether some OTHER group exists — the convention-based "Masks" one, say — can answer it from a
-    /// parse that already happened instead of going back to disk.</summary>
+    /// <summary>Every group name in Penumbra's own copy of the mod, from its meta.json; empty when the manifest was
+    /// never read. Lets a caller check for another group without re-parsing.</summary>
     IReadOnlyCollection<string> PenumbraGroups)
 {
     /// <summary>The all-clear: what a resolve that had nothing to explain returns.</summary>
     public static ResolutionDiagnostic None => new(SettingsRead.NotAsked, 0, [], [], false, []);
 
     /// <summary>
-    /// The two halves of one pack as a single picture — overlays merged with content. Counts and lists
-    /// add; <see cref="Unconditional"/> is true if either half has ungated pieces; the worst
-    /// <see cref="Settings"/> wins, because one unreadable half makes the whole answer untrustworthy.
+    /// The two halves of one pack as a single picture. Counts and lists add; <see cref="Unconditional"/> is true if
+    /// either half is; the worst <see cref="Settings"/> wins.
     /// </summary>
     public ResolutionDiagnostic Merge(ResolutionDiagnostic other) => new(
         Settings  == SettingsRead.Unavailable || other.Settings == SettingsRead.Unavailable
@@ -146,52 +123,38 @@ public class SidecarDiscoveryService
     private readonly PenumbraBridge penumbra;
     private readonly IPluginLog log;
 
-    // Public so PenumbraModMeta.CleanLegacyFiles can sweep this folder too — metadata.json is written
-    // through AtomicWrite and strands its temp file here, one level below the mod root.
+    // Public so PenumbraModMeta.CleanLegacyFiles can sweep AtomicWrite's temp files from this folder too.
     public const string SidecarSubdir = "Proteus";
     internal const string MetadataFile = "metadata.json";
-    // The mod's settings as Proteus first found them, copied aside just before our first write so the
-    // editor's "Reset to defaults" can restore them. Discovery only ever looks for MetadataFile by exact
-    // name, so this sits inertly beside it.
+    // The mod's settings as Proteus first found them, copied aside before our first write for "Reset to defaults".
     private const string DefaultsFile  = "metadata.default.json";
     public  const string ManagedModDir = "Proteus";  // directory name of the managed output mod
 
-    // Convention-based "Masks" feature: a Penumbra multi-select group named exactly "Masks"
-    // whose selected options each correspond to a grayscale PNG in the Proteus/Masks/ subfolder
-    // (Masks/<OptionName>.png). These masks reduce the coverage of every other overlay in the
-    // same mod. No metadata.json entry is required — selections are read straight from Penumbra.
+    // Convention-based "Masks": a Penumbra multi-select group named exactly "Masks" whose selected options each map
+    // to Proteus/Masks/<OptionName>.png, reducing the coverage of every other overlay in the mod.
     public  const string MaskGroupName = "Masks";
     private const string MaskSubdir    = "Masks";
 
     /// <summary>
-    /// Where the starter scroll-effect library is cached. Set once at startup to
-    /// <see cref="DefaultEffectsDownloadService.EffectsDir"/> — the config directory, not the assembly
-    /// directory, because the art is fetched once per machine instead of riding along in every plugin
-    /// update. Null until then, which <see cref="SeedDefaultEffects"/> treats as "nothing to seed yet".
+    /// Where the starter scroll-effect library is cached (<see cref="DefaultEffectsDownloadService.EffectsDir"/>, set
+    /// at startup). Null until then, which <see cref="SeedDefaultEffects"/> treats as nothing to seed.
     /// </summary>
     public string? DefaultEffectsDir { get; set; }
 
     /// <summary>
-    /// Plugin assembly directory. Distinct from <see cref="DefaultEffectsDir"/>, which is the per-machine
-    /// cache the starter effects are downloaded into: this is where files that genuinely ride along with
-    /// the build live, and the only one of those is the authored toe caps under <c>Meshes</c>.
+    /// Plugin assembly directory, for files that ship with the build (the authored toe caps under <c>Meshes</c>).
     /// </summary>
     public string? AssemblyDir { get; set; }
 
     /// <summary>
-    /// Reserved option name inside the <see cref="MaskGroupName"/> group. <c>Masks/Toe Cap.png</c> is not
-    /// a transparency mask: it marks where the second-skin shell should web into one rounded cap instead
-    /// of following the body contour (the toes, so hosiery doesn't read as a toe sock). It therefore paints
-    /// nothing and carves no coverage — it is filtered out of every mask consumer here and routed to the
-    /// shell writer instead. Authored, selected and toggled exactly like any other mask.
+    /// Reserved option name inside the <see cref="MaskGroupName"/> group. <c>Masks/Toe Cap.png</c> is not a
+    /// transparency mask: it marks where the second-skin shell webs into a toe cap, so every mask consumer skips it.
     /// </summary>
     public const string ToeCapOptionName = "Toe Cap";
 
     /// <summary>
-    /// Is this the reserved toe-cap option? Matched on letters and digits only, so "ToeCap", "Toe Cap",
-    /// "toe-cap" and "TOE_CAP" are all the same option. Getting this wrong is expensive — an unmatched
-    /// name silently falls through as an ordinary mask, which carves the garment away and paints a shell
-    /// in the mask colour — so the comparison is deliberately forgiving about how the author typed it.
+    /// Is this the reserved toe-cap option? Matched on letters and digits only, case-insensitively: an unmatched
+    /// name would silently fall through as an ordinary mask.
     /// </summary>
     private static bool IsToeCapOption(string? option) =>
         option != null && Squash(option) == Squash(ToeCapOptionName);
@@ -206,10 +169,8 @@ public class SidecarDiscoveryService
     }
 
     /// <summary>
-    /// Discover all Penumbra mods that contain a Proteus/ sidecar, carrying each mod's current
-    /// enabled state and priority from the player's collection. Ordered by priority ascending
-    /// (lowest priority = bottom of composite stack). The managed Proteus mod is excluded.
-    /// Used by the UI so disabled mods stay listed (and can be re-enabled).
+    /// Discover all Penumbra mods with a Proteus/ sidecar, with each mod's enabled state and priority from the
+    /// player's collection, ordered by priority ascending. The managed Proteus mod is excluded.
     /// </summary>
     public List<OverlayEntry> DiscoverAll() => Discover(enabledOnly: false);
 
@@ -237,9 +198,7 @@ public class SidecarDiscoveryService
             if (string.Equals(modDir, ManagedModDir, StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            // Check for sidecar before calling GetModSettings: a local File.Exists costs ~0.1 ms
-            // while a Penumbra IPC call costs ~2–5 ms per hop through the framework thread.
-            // Users with 500+ enabled mods would otherwise spend 1–2 s on IPC alone per discovery.
+            // Check for the sidecar before GetModSettings: File.Exists is far cheaper than an IPC hop.
             var sidecarDir = Path.Combine(modsRoot, modDir, SidecarSubdir);
             var metaPath   = Path.Combine(sidecarDir, MetadataFile);
             if (!File.Exists(metaPath)) continue;
@@ -260,20 +219,15 @@ public class SidecarDiscoveryService
     }
 
     /// <summary>
-    /// Resolve the active overlays for an entry, paired with their applicable color table rows.
-    /// Simple mods (top-level Overlays): all overlays are active, using top-level ColorTableRows.
-    /// Option-group mods: all currently-selected options contribute their overlays, supporting
-    /// both single-select and multi-select Penumbra groups. Each option's ColorTableRows overrides
-    /// the top-level rows; falls back to top-level if the option has none.
+    /// Resolve the active overlays for an entry, paired with their colour table rows. Top-level Overlays are all
+    /// active; otherwise every selected option contributes, its ColorTableRows overriding the top-level rows.
     /// </summary>
     public List<ResolvedOverlay> ResolveActiveOverlays(OverlayEntry entry)
         => ResolveActiveOverlays(entry, out _);
 
     /// <summary>
-    /// <see cref="ResolveActiveOverlays(OverlayEntry)"/>, also reporting WHY it resolved what it did — see
-    /// <see cref="ResolutionDiagnostic"/>. Every fact in the diagnostic is a by-product of the walk below,
-    /// so this costs nothing the one-argument form did not already pay; the overload exists only so the
-    /// handful of callers that just want the overlays are not made to carry an <c>out</c> they ignore.
+    /// <see cref="ResolveActiveOverlays(OverlayEntry)"/>, also reporting why it resolved what it did — see
+    /// <see cref="ResolutionDiagnostic"/>.
     /// </summary>
     public List<ResolvedOverlay> ResolveActiveOverlays(OverlayEntry entry, out ResolutionDiagnostic diag)
     {
@@ -294,15 +248,13 @@ public class SidecarDiscoveryService
         var collId   = penumbra.GetPlayerCollectionId();
         var settings = collId.HasValue ? penumbra.GetModSettings(collId.Value, entry.ModDirectory) : null;
 
-        // Priority comes from Penumbra's group numbering, not the order the groups happen to sit in
-        // metadata.json — the author controls it by ordering the groups, which is what they expect.
+        // Priority comes from Penumbra's group numbering, not the order of groups in metadata.json.
         var modRoot = Path.GetDirectoryName(
             entry.SidecarRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
         var groupOrder = modRoot != null ? ReadGroupOrder(modRoot) : [];
 
-        // The two halves of "resolved nothing". A group Penumbra HAS but nothing is ticked in is the
-        // user's doing and they can fix it; a group Penumbra has never heard of cannot be ticked at all
-        // and only the pack's author can fix it. Telling them apart is the whole point of the diagnostic.
+        // A group Penumbra has with nothing ticked is the user's to fix; one Penumbra has never heard of is the
+        // author's.
         var emptyGroups   = new List<string>();
         var missingGroups = new List<string>();
         int groupCount    = 0;
@@ -316,9 +268,7 @@ public class SidecarDiscoveryService
             bool known = groupOrder.TryGetValue(group.PenumbraGroupName, out var n);
             int order  = known ? n : int.MaxValue;
 
-            // Only meaningful when the group order was actually read: ReadGroupOrder returns empty both
-            // for a mod whose meta.json could not be read and for one with no groups, and calling every
-            // group "missing" because the file was locked would send the author after a phantom.
+            // Only meaningful when the group order was read: an unreadable meta.json must not make every group "missing".
             if (!known && groupOrder.Count > 0) missingGroups.Add(group.PenumbraGroupName);
 
             List<string>? selected = null;
@@ -354,13 +304,8 @@ public class SidecarDiscoveryService
     }
 
     /// <summary>
-    /// Say once, per mod and group, that metadata.json names an option group Penumbra's copy of the mod
-    /// has not got. Nothing in such a group can ever be selected, so the pack is permanently short of
-    /// whatever lives there — and until now that was completely silent, because the resolver's answer for
-    /// "renamed on re-export" and for "you ticked nothing" was the same empty list.
-    /// <para/>
-    /// Announce-then-Debug, for the same reason <see cref="_toeCapAnnounced"/> is: this runs for every mod
-    /// on every composite, so an unguarded line would bury its own message in repetition.
+    /// Warn once per mod and group that metadata.json names an option group Penumbra's copy of the mod lacks; Debug
+    /// after that, since this runs for every mod on every composite.
     /// </summary>
     private void AnnounceGroupMismatch(OverlayEntry entry, List<string> missing, IEnumerable<string> penumbraGroups)
     {
@@ -379,31 +324,21 @@ public class SidecarDiscoveryService
     }
 
     /// <summary>
-    /// Which (mod, group) pairs have already had their name mismatch announced at Warning this session.
-    /// Concurrent for the same reason <see cref="_toeCapAnnounced"/> is — composites resolve off the
-    /// framework thread and two can overlap.
+    /// Which (mod, group) pairs have had their mismatch announced this session. Concurrent: composites can overlap.
     /// </summary>
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _groupNameMismatch =
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Resolve the geometry an imported content pack currently contributes: its unconditional
-    /// <see cref="ProteusMetadata.Content"/> pieces, or the pieces of whichever options are selected in
-    /// Penumbra. The selection read is identical to <see cref="ResolveActiveOverlays"/>'s — Penumbra owns
-    /// which options are on, and Proteus only mirrors it.
+    /// <see cref="ProteusMetadata.Content"/> pieces plus the pieces of whichever options are selected in Penumbra.
     /// </summary>
     public List<ResolvedContent> ResolveActiveContent(OverlayEntry entry)
         => ResolveActiveContent(entry, out _);
 
     /// <summary>
-    /// <see cref="ResolveActiveContent(OverlayEntry)"/>, also reporting WHY it resolved what it did — the
-    /// content-side twin of <see cref="ResolveActiveOverlays(OverlayEntry, out ResolutionDiagnostic)"/>,
-    /// filling the same <see cref="ResolutionDiagnostic"/> so a caller can merge the two.
-    /// <para/>
-    /// Without this an imported content pack was the one thing the "contributes nothing" explanation could
-    /// not explain: a geometry pack has no <see cref="ProteusMetadata.OptionGroups"/> at all, so the
-    /// overlay diagnostic described an empty pack that had nothing to say, and a freshly installed pack
-    /// with nothing ticked came out as the ladder's shrug rather than as the one-line answer it has.
+    /// <see cref="ResolveActiveContent(OverlayEntry)"/>, also reporting why it resolved what it did — the content-side
+    /// twin of <see cref="ResolveActiveOverlays(OverlayEntry, out ResolutionDiagnostic)"/>, so a caller can merge them.
     /// </summary>
     public List<ResolvedContent> ResolveActiveContent(OverlayEntry entry, out ResolutionDiagnostic diag)
     {
@@ -414,17 +349,12 @@ public class SidecarDiscoveryService
             return [];
         }
 
-        // Groups that could be selected in, and the two ways they end up contributing nothing. Counted
-        // from metadata rather than from the walk below, because that walk is skipped wholesale when the
-        // selection cannot be read — and a diagnostic that reported "no groups" there would say the pack
-        // was empty when the truth is that we never got to look.
+        // Counted from metadata rather than the walk below, which is skipped when the selection cannot be read.
         int groupCount = meta.ContentGroups?.Count(g => g.Options.Count > 0) ?? 0;
         var emptyGroups   = new List<string>();
         var missingGroups = new List<string>();
 
-        // Ask Penumbra only when there is something to ask about. A pack whose pieces are all unconditional
-        // and ungated resolves without a single IPC hop, which is the same rule the sidecar pre-filter in
-        // Discover follows and the reason this stays cheap for the common case.
+        // Ask Penumbra only when something is gated, so an all-unconditional pack costs no IPC hop.
         bool needsSettings = meta.PieceGroupName is { Length: > 0 } || meta.ContentGroups is { Count: > 0 };
         (bool Enabled, int Priority, Dictionary<string, List<string>> Options)? settings = null;
         if (needsSettings)
@@ -438,24 +368,19 @@ public class SidecarDiscoveryService
                 .FirstOrDefault(kv => string.Equals(kv.Key, group, StringComparison.OrdinalIgnoreCase))
                 .Value;
 
-        // The synthesized piece group, if the importer added one. A gated piece whose option is not ticked
-        // is not worn — and when the selection cannot be read at all, nothing gated is worn either: the
-        // safe direction is to leave off something the user never asked for.
+        // The synthesized piece group, if the importer added one. An unreadable selection wears nothing gated.
         var gateOn = meta.PieceGroupName is { Length: > 0 } gateGroup ? Selection(gateGroup) : null;
 
         bool Ungated(ContentPiece p) => PieceIsOn(p, gateOn);
 
         var resolved = new List<ResolvedContent>();
 
-        // Unconditional pieces. Additive with the groups below rather than an either/or: one pack can
-        // legitimately ship both, and returning early on the first would silently drop the rest.
+        // Unconditional pieces, additive with the groups below.
         foreach (var piece in meta.Content ?? [])
             if (Ungated(piece))
                 resolved.Add(new ResolvedContent(piece, meta.ColorTableRows, null, null, Glow: meta.ContentGlow));
 
-        // How the read went, for both early returns below and for the full walk. Unconditional pieces are
-        // recorded whatever happens: a pack that ships ungated geometry can never be fixed by ticking
-        // something, so the ladder must never tell its wearer to go and tick something.
+        // How the read went. Unconditional pieces are recorded regardless: ticking something cannot fix them.
         var settingsRead = !needsSettings ? SettingsRead.NotAsked
                          : settings.HasValue ? SettingsRead.Ok
                          : SettingsRead.Unavailable;
@@ -478,8 +403,7 @@ public class SidecarDiscoveryService
             bool known = groupOrder.TryGetValue(group.PenumbraGroupName, out var n);
             int order  = known ? n : int.MaxValue;
 
-            // Same rule as the overlay resolver: a manifest that could not be read at all makes every
-            // group look renamed, which would send the author hunting a phantom.
+            // Same rule as the overlay resolver: an unreadable manifest must not make every group look renamed.
             if (!known && groupOrder.Count > 0) missingGroups.Add(group.PenumbraGroupName);
 
             var selected = Selection(group.PenumbraGroupName);
@@ -493,8 +417,7 @@ public class SidecarDiscoveryService
                          string.Equals(o.Name, sel, StringComparison.OrdinalIgnoreCase))))
             {
                 var rows = opt.ColorTableRows ?? meta.ColorTableRows;
-                // Same option-then-mod fallback the rows take, so a pack-wide glow reaches an option that
-                // never set one of its own.
+                // Same option-then-mod fallback the rows take.
                 var glow = opt.Glow ?? meta.ContentGlow;
                 foreach (var piece in opt.Pieces)
                     if (Ungated(piece))
@@ -511,12 +434,8 @@ public class SidecarDiscoveryService
     }
 
     /// <summary>
-    /// Whether a piece's gate is open: it has none, or the option that switches it on is among
-    /// <paramref name="selection"/>.
-    /// <para/>
-    /// A null selection means the gate group's state could not be read at all, and everything gated stays
-    /// OFF. That is the safe direction — the alternative is wearing something the user never ticked — and it
-    /// is why this is a decision worth naming rather than an inline condition.
+    /// Whether a piece's gate is open: it has none, or its option is among <paramref name="selection"/>. A null
+    /// selection (unreadable) keeps everything gated off.
     /// </summary>
     internal static bool PieceIsOn(ContentPiece piece, IReadOnlyList<string>? selection)
         => piece.GateOption == null
@@ -524,12 +443,9 @@ public class SidecarDiscoveryService
             && selection.Any(sel => string.Equals(sel, piece.GateOption, StringComparison.OrdinalIgnoreCase)));
 
     /// <summary>
-    /// Resolve the grayscale transparency-mask images currently selected for an entry. These come
-    /// from a Penumbra multi-select group named <see cref="MaskGroupName"/> (no metadata.json entry
-    /// needed); each selected option <c>Foo</c> maps to <c>Proteus/Masks/Foo.png</c>. Returns the
-    /// absolute paths of the mask files that exist on disk, ordered by the group's option order so
-    /// that masks higher in the Penumbra list take priority where they overlap (highest first).
-    /// Empty when none are selected.
+    /// Resolve the transparency-mask images currently selected in the <see cref="MaskGroupName"/> group: each
+    /// selected option <c>Foo</c> maps to <c>Proteus/Masks/Foo.png</c>. Returns existing files' absolute paths in the
+    /// group's option order (highest priority first); empty when none are selected.
     /// </summary>
     public List<string> ResolveActiveMasks(OverlayEntry entry)
     {
@@ -544,8 +460,7 @@ public class SidecarDiscoveryService
             .Value;
         if (selected is not { Count: > 0 }) return [];
 
-        // Penumbra hands us the selected option names as a set; the authoritative top-to-bottom
-        // order lives in the mod's group JSON. The mod root is the parent of the Proteus sidecar.
+        // Penumbra gives the selection as a set; the top-to-bottom order lives in the mod's group JSON.
         var modRoot = Path.GetDirectoryName(
             entry.SidecarRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
         var order   = modRoot != null ? ReadMaskGroupOptionOrder(modRoot) : [];
@@ -554,10 +469,8 @@ public class SidecarDiscoveryService
     }
 
     /// <summary>
-    /// Like <see cref="ResolveActiveMasks"/>, but also resolves each mask's optional companion
-    /// relief normal (<c>Masks/&lt;Option&gt;_n.png</c>) and color-row index
-    /// (<c>Masks/&lt;Option&gt;_id.png</c>) — present only for mask layers exported with bump
-    /// detail or their own row assignment (see the Substance export packager). Null when absent.
+    /// Like <see cref="ResolveActiveMasks"/>, but also resolves each mask's optional relief normal
+    /// (<c>Masks/&lt;Option&gt;_n.png</c>) and colour-row index (<c>Masks/&lt;Option&gt;_id.png</c>). Null when absent.
     /// </summary>
     public List<(string MaskPath, string? NormalPath, string? IndexPath)> ResolveActiveMaskAssets(OverlayEntry entry)
     {
@@ -592,22 +505,13 @@ public class SidecarDiscoveryService
     }
 
     /// <summary>
-    /// How the <see cref="MaskGroupName"/> group stands for this mod: whether the pack ships one at all,
-    /// and how many of its options are ticked (the reserved toe cap excluded, since it is not a mask).
-    /// <para/>
-    /// The two answers have to be separable. "This pack has no masks" is a fact about the pack; "you have
-    /// ticked none of its masks" is a fact about the user's Penumbra selection and is the single most
-    /// common reason a mask-shell pack renders nothing. <see cref="ResolveActiveMaskAssets"/> collapses
-    /// both to an empty list, which is right for its own job and useless for explaining a silent mod.
-    /// <para/>
-    /// <c>GroupPresent</c> is read from the mod's own meta.json rather than from Penumbra's settings,
-    /// because a group with nothing ticked need not appear in the settings dictionary at all — asking the
-    /// manifest cannot confuse "absent" with "empty".
+    /// How the <see cref="MaskGroupName"/> group stands for this mod: whether the pack ships one, and how many of its
+    /// options are ticked (toe cap excluded). Kept separable: "no masks" is the pack, "none ticked" is the user.
+    /// Presence is read from the manifest, since an untouched group may be absent from Penumbra's settings.
     /// </summary>
     /// <param name="penumbraGroups">
-    /// The mod's group names if the caller already has them — <see cref="ResolutionDiagnostic.PenumbraGroups"/>
-    /// from a resolve earlier in the same composite. Supplying them answers <c>GroupPresent</c> outright and
-    /// skips a second parse of the very meta.json that produced them; null or empty falls back to reading it.
+    /// The mod's group names if the caller already has them (<see cref="ResolutionDiagnostic.PenumbraGroups"/>),
+    /// skipping a re-parse; null or empty reads the manifest.
     /// </param>
     public (bool GroupPresent, int Selected) MaskSelectionState(
         OverlayEntry entry, Guid collId, IReadOnlyCollection<string>? penumbraGroups = null)
@@ -634,9 +538,8 @@ public class SidecarDiscoveryService
     }
 
     /// <summary>
-    /// Path of this mod's toe-cap map when the reserved <see cref="ToeCapOptionName"/> option is selected
-    /// in the <see cref="MaskGroupName"/> group and its file exists — otherwise null. Resolves the file
-    /// under the option's own name, like every other mask, so the two never drift apart.
+    /// Path of this mod's toe-cap map when the reserved <see cref="ToeCapOptionName"/> option is selected in the
+    /// <see cref="MaskGroupName"/> group and its file exists; otherwise null.
     /// </summary>
     public string? ResolveActiveToeCap(OverlayEntry entry)
     {
@@ -646,8 +549,6 @@ public class SidecarDiscoveryService
 
     /// <summary>
     /// <see cref="ResolveActiveToeCap(OverlayEntry)"/> against a collection id the caller already has.
-    /// A caller asking about every mod in the look would otherwise re-fetch the player's collection once
-    /// per mod, and the answer cannot change between two entries of the same composite.
     /// </summary>
     public string? ResolveActiveToeCap(OverlayEntry entry, Guid collId)
     {
@@ -665,13 +566,8 @@ public class SidecarDiscoveryService
         if (path == null)
             log.Warning("[Proteus] toe cap \"{0}\" is selected but {1}\\{2}\\{0}.png is missing — no cap",
                 option, entry.SidecarRoot, MaskSubdir);
-        // Said out loud ONCE per mod and option, then dropped to Debug. The cap is the one option in this
-        // group that appears nowhere else — ResolveMaskPaths and ResolveActiveMaskAssets both strip it, so
-        // it is absent from the "masks=N [...]" lines and from the editor's mask list — and that silence is
-        // how a cap nobody selected went unnoticed while it promoted a whole look to cloth. But this method
-        // runs for every mod on every composite, so announcing it every time would turn the anomaly's own
-        // message into steady noise for the many people who ticked the cap deliberately. Announce, then be
-        // quiet; the Masks tab carries the same explanation for anyone who comes looking later.
+        // Announced once per mod and option, then Debug: the cap is absent from every mask list, so it needs
+        // saying, but this runs for every mod on every composite.
         else if (_toeCapAnnounced.TryAdd($"{entry.ModDirectory}\0{option}", 0))
             log.Information("[Proteus] toe cap \"{0}\" is selected in \"{1}\" — if you did not tick it, the "
                           + "mod's option ORDER changed since the selection was saved (Penumbra stores it by "
@@ -690,9 +586,8 @@ public class SidecarDiscoveryService
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Pure mapping from selected mask-option names to existing <c>Masks/&lt;name&gt;.png</c> files
-    /// under <paramref name="sidecarRoot"/>, preserving the input order. Skips options whose file is
-    /// missing; dedupes case-insensitively. Factored out so it can be unit-tested without IPC.
+    /// Pure mapping from selected mask-option names to existing <c>Masks/&lt;name&gt;.png</c> files under
+    /// <paramref name="sidecarRoot"/>, in input order, deduped case-insensitively.
     /// </summary>
     internal static List<string> ResolveMaskPaths(string sidecarRoot, IEnumerable<string>? selectedOptions)
     {
@@ -711,9 +606,7 @@ public class SidecarDiscoveryService
         return result;
     }
 
-    // Resolve a Masks/ asset given its path without extension, preferring .png but falling back to
-    // the BC7-capable containers (.dds then .tex) so a mod packaged entirely in BC7 (masks included)
-    // still resolves. Null if none exist.
+    // Resolve a Masks/ asset given its path without extension: .png, then .dds, then .tex. Null if none exist.
     internal static string? ResolveMaskAsset(string basePathNoExt)
     {
         foreach (var ext in MaskAssetExtensions)
@@ -728,23 +621,19 @@ public class SidecarDiscoveryService
 
     // ── Effects (characterscroll `_o` / `catc` scroll maps) ──────────────────
 
-    /// <summary>Where a mod keeps its own scroll maps. Internal because an importer writing one has to
-    /// land it in the folder <see cref="ResolveEffectPath"/> looks in, and two spellings of "Effects"
-    /// would leave the written effect invisible to the dropdown that is supposed to list it.</summary>
+    /// <summary>Where a mod keeps its own scroll maps. Importers must write here, where
+    /// <see cref="ResolveEffectPath"/> looks.</summary>
     internal const string EffectsSubdir = "Effects";
 
     /// <summary>
-    /// Image types an effect can be. .tex and .dds get the game-format decoders; everything else goes
-    /// through StbImageSharp, which reads all of these — so the list is just what we're willing to
-    /// enumerate, not a decoding constraint.
+    /// Image types listed as effects. Not a decoding constraint: StbImageSharp reads all of these.
     /// </summary>
     private static readonly string[] EffectExtensions =
         [".png", ".dds", ".tex", ".jpg", ".jpeg", ".bmp", ".tga", ".psd", ".gif"];
 
     /// <summary>
-    /// The global effects library: <c>&lt;penumbra mods&gt;\Proteus\Effects\</c>, i.e. inside Proteus's own
-    /// managed mod folder. Self-locating, so there's nothing for the user to configure — drop scroll maps
-    /// in there and they show up in every gear overlay's Effect dropdown. Created on demand.
+    /// The global effects library, <c>&lt;penumbra mods&gt;\Proteus\Effects\</c>, inside the managed mod folder.
+    /// Created on demand.
     /// </summary>
     public string? EffectsLibraryPath()
     {
@@ -757,10 +646,8 @@ public class SidecarDiscoveryService
     }
 
     /// <summary>
-    /// Copy the plugin's bundled starter effects (shipped in <c>&lt;assembly&gt;\DefaultEffects\</c>) into the
-    /// user's global effects library, skipping any file already there. Runs once on startup; a file the
-    /// user has since deleted stays deleted (we only fill gaps, and only for names that aren't present).
-    /// Never overwrites — a user's edited copy of a bundled effect is left alone.
+    /// Copy the starter effects from <see cref="DefaultEffectsDir"/> into the global effects library, skipping any
+    /// file already there. Never overwrites a user's copy.
     /// </summary>
     public void SeedDefaultEffects()
     {
@@ -783,9 +670,8 @@ public class SidecarDiscoveryService
     }
 
     /// <summary>
-    /// The scroll maps an overlay can choose from: the mod's own <c>Proteus/Effects/</c> first, then the
-    /// user's global library folder. A mod that ships its own effects stays portable; the global folder
-    /// is a personal library. Deduped by file name — the mod's copy wins.
+    /// The scroll maps an overlay can choose from: the mod's own <c>Proteus/Effects/</c> first, then the global
+    /// library. Deduped by file name; the mod's copy wins.
     /// </summary>
     public List<(string Name, string Path, bool FromMod)> ResolveAvailableEffects(
         OverlayEntry entry, string? globalFolder)
@@ -812,9 +698,8 @@ public class SidecarDiscoveryService
     }
 
     /// <summary>
-    /// Resolve an overlay's stored <c>Scroll</c> value to a file on disk: a bare file name is looked up
-    /// in the mod's Effects/ then the global folder; a relative path is taken as sidecar-relative (what
-    /// hand-written metadata does today). Null when nothing matches.
+    /// Resolve an overlay's stored <c>Scroll</c> value to a file: a bare file name is looked up in the mod's Effects/
+    /// then the global folder; a relative path is sidecar-relative. Null when nothing matches.
     /// </summary>
     public static string? ResolveEffectPath(OverlayEntry entry, string? globalFolder, string scroll)
     {
@@ -840,10 +725,8 @@ public class SidecarDiscoveryService
     }
 
     /// <summary>
-    /// Reads the option-name order of the Penumbra group named <see cref="MaskGroupName"/> from the mod's
-    /// manifest in <paramref name="modRoot"/> — <c>meta.json</c>'s <c>Groups</c> array (Penumbra v4),
-    /// falling back to the legacy <c>group_*.json</c> files. Returns the names top-to-bottom as shown in
-    /// Penumbra, or an empty list if no such group is found or it can't be parsed.
+    /// Reads the option-name order of the <see cref="MaskGroupName"/> group from the manifest in
+    /// <paramref name="modRoot"/> (v4 <c>meta.json</c>, else legacy <c>group_*.json</c>), top to bottom; empty if absent.
     /// </summary>
     internal static List<string> ReadMaskGroupOptionOrder(string modRoot)
     {
@@ -883,10 +766,8 @@ public class SidecarDiscoveryService
     }
 
     /// <summary>
-    /// Penumbra group name → its ordinal: the index in <c>meta.json</c>'s <c>Groups</c> array (Penumbra
-    /// v4), or the legacy filename number (<c>group_002_fabric.json</c> → 2) for unmigrated folders.
-    /// LOWER is higher priority. This — not the order groups happen to appear in metadata.json — is what
-    /// decides which group wins where two of them overlay the same skin.
+    /// Penumbra group name → its ordinal: the index in <c>meta.json</c>'s <c>Groups</c> array, or the legacy filename
+    /// number (<c>group_002_fabric.json</c> → 2). Lower is higher priority, and this decides which group wins.
     /// </summary>
     internal static Dictionary<string, int> ReadGroupOrder(string modRoot)
     {
@@ -923,9 +804,8 @@ public class SidecarDiscoveryService
     }
 
     /// <summary>
-    /// Orders <paramref name="selected"/> option names by their index in <paramref name="order"/>
-    /// (the group's display order, highest priority first). Names not present in <paramref name="order"/>
-    /// keep their relative position after all known ones. Stable.
+    /// Orders <paramref name="selected"/> option names by their index in <paramref name="order"/>. Unknown names
+    /// follow all known ones. Stable.
     /// </summary>
     internal static List<string> OrderByGroup(IEnumerable<string> selected, List<string> order)
         => selected
@@ -970,9 +850,8 @@ public class SidecarDiscoveryService
     }
 
     /// <summary>
-    /// Returns the ColorTableRows list of the highest-priority active option (last group in the
-    /// array) — the edit target for the color picker. Writes to this list take effect over any
-    /// rows set by earlier groups. Creates an empty list in the right place if absent.
+    /// The ColorTableRows list of the highest-priority active option (last group): the colour picker's edit target.
+    /// Creates an empty list in the right place if absent.
     /// </summary>
     public List<ColorTableRowPreset> GetEditableColorRows(OverlayEntry entry)
     {
@@ -1018,20 +897,9 @@ public class SidecarDiscoveryService
             SnapshotDefaults(entry, path);
 
             var json = JsonSerializer.Serialize(entry.Metadata, ProteusJson.MetadataWrite);
-            // AtomicWrite, not File.WriteAllText: this is the authored overlay — material paths, body
-            // type, shader, colour rows — and nothing can rebuild it. Truncating it in place to refill
-            // it means a crash mid-save loses the mod's whole descriptor, and the editor saves often.
-            //
-            // Interactive retry budget, NOT the default: every caller of this reaches it from a thread the
-            // user can feel — the editor saves from the ImGui draw path, and IpcProvider from whichever
-            // thread a peer plugin called on. The full ~1.55 s backoff would show up as a hung colour
-            // slider. 150 ms still beats the File.WriteAllText this replaced (which got one attempt and no
-            // retry at all), and a save that still loses is rewritten by the next edit.
-            //
-            // Synchronous on purpose. Deferring it to a background task would be the obvious way to spend
-            // nothing here, but Discover re-reads this file from disk (see the metaPath parse above) and
-            // the editor recomposites as soon as it returns — so a write still in flight means the
-            // composite picks up the PREVIOUS metadata and the edit looks like it did nothing.
+            // AtomicWrite: this is the authored descriptor and nothing can rebuild it. Interactive retry budget, since
+            // callers run on threads the user feels. Synchronous: the editor recomposites straight after and
+            // Discover re-reads this file.
             PenumbraModMeta.AtomicWrite(path, json, maxRetries: 2);
         }
         catch (Exception ex)
@@ -1041,20 +909,9 @@ public class SidecarDiscoveryService
     }
 
     /// <summary>
-    /// Persist the reinforced-toe density of <paramref name="edited"/> — and NOTHING else — to the mod's
-    /// sidecar. Returns false, with a warning, when it could not.
-    /// <para/>
-    /// For edits made while a preset or design is in charge. <see cref="SaveMetadata"/> writes the whole of
-    /// <c>entry.Metadata</c>, and under an override the editor mutates that object for PREVIEW: with no
-    /// editable gear override, the glow effect, scroll, mode pin and render mode all land straight in the
-    /// base descriptors and stay out of the sidecar only because the save is skipped. A full save to record
-    /// the density would make every one of those previews permanent. So the file is read back from disk and
-    /// only this field is copied onto it.
-    /// <para/>
-    /// Each edited descriptor is found by REFERENCE in the in-memory metadata and its twin taken at the same
-    /// position in the copy just read — options are chosen by selection rather than stored names, so a
-    /// position is the only stable address. An option whose name disagrees at that position means the file no
-    /// longer has the shape the editor was drawn from, and the descriptor is skipped rather than guessed at.
+    /// Persist the reinforced-toe density of <paramref name="edited"/>, and nothing else, to the mod's sidecar;
+    /// false, with a warning, when it could not. For edits under a preset or design, where the in-memory metadata
+    /// holds previews: the file is read back and only this field is copied onto it.
     /// </summary>
     public bool SaveToeCapDensity(OverlayEntry entry, IReadOnlyList<OverlayDescriptor> edited)
     {
@@ -1124,11 +981,8 @@ public class SidecarDiscoveryService
     }
 
     /// <summary>
-    /// Preserve the mod's settings as they were BEFORE Proteus ever wrote to them, so the editor's "Reset
-    /// to defaults" has something to restore. The editor mutates <c>entry.Metadata</c> in memory and only
-    /// then calls <see cref="SaveMetadata"/>, so at this moment the file on disk is still the original —
-    /// copying it here (once, before the first overwrite) captures the author's values. Best-effort: a
-    /// failed snapshot must never stop the save.
+    /// Preserve the mod's settings as they were before Proteus first wrote to them, for "Reset to defaults". Called
+    /// before the save overwrites the file. Best-effort: a failed snapshot never stops the save.
     /// </summary>
     private void SnapshotDefaults(OverlayEntry entry, string metaPath)
     {
@@ -1175,10 +1029,8 @@ public class SidecarDiscoveryService
     }
 
     /// <summary>
-    /// One mod's sidecar metadata, read straight from its folder — null when it has none or it will not parse.
-    /// <para/>
-    /// For callers that hold a mod ROOT and no discovery: <see cref="DiscoverEnabled"/> answers only for mods
-    /// enabled in the player's collection, and the Studio tab lists every installed mod.
+    /// One mod's sidecar metadata, read straight from its folder; null when it has none or it will not parse. For
+    /// callers holding a mod root rather than a discovered entry.
     /// </summary>
     public static ProteusMetadata? TryReadMetadata(string modRoot)
     {

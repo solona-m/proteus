@@ -6,8 +6,8 @@ namespace Proteus.Tests;
 
 /// <summary>
 /// Tests for the UV-island-restricted blur that keeps AO coming from the mask rather than from the UV
-/// layout: <see cref="CompositorService.LabelIslands"/> and
-/// <see cref="CompositorService.BlurCoverageWithinIslands"/>.
+/// layout: <see cref="IslandBlur.LabelIslands"/> and
+/// <see cref="IslandBlur.BlurCoverageWithinIslands"/>.
 /// </summary>
 public class IslandBlurTests
 {
@@ -30,7 +30,7 @@ public class IslandBlurTests
         const int w = 16, h = 8;
         // two 4x4 blobs with a 4px gutter between them
         var inside = Plane(w, h, 255, (1, 1, 4, 4), (9, 1, 12, 4));
-        var labels = CompositorService.LabelIslands(inside, w, h, out int count);
+        var labels = IslandBlur.LabelIslands(inside, w, h, out int count);
 
         Assert.Equal(2, count);
         Assert.Equal(0, labels[0]);                        // padding stays 0
@@ -51,7 +51,7 @@ public class IslandBlurTests
         // passes if the union-find actually merges provisional labels rather than just propagating them.
         const int w = 9, h = 6;
         var inside = Plane(w, h, 255, (1, 0, 2, 5), (6, 0, 7, 5), (1, 4, 7, 5));
-        var labels = CompositorService.LabelIslands(inside, w, h, out int count);
+        var labels = IslandBlur.LabelIslands(inside, w, h, out int count);
 
         Assert.Equal(1, count);
         Assert.Equal(labels[0 * w + 1], labels[0 * w + 6]);   // top of each arm, same island
@@ -61,7 +61,7 @@ public class IslandBlurTests
     [Fact]
     public void LabelIslands_EmptyMask_HasNoIslands()
     {
-        var labels = CompositorService.LabelIslands(new byte[64], 8, 8, out int count);
+        var labels = IslandBlur.LabelIslands(new byte[64], 8, 8, out int count);
         Assert.Equal(0, count);
         Assert.All(labels, l => Assert.Equal(0, l));
     }
@@ -75,13 +75,13 @@ public class IslandBlurTests
         // by a gutter far narrower than the blur radius. A plain blur reaches across; this must not.
         const int w = 64, h = 16, radius = 8;
         var inside = Plane(w, h, 255, (0, 0, 27, 15), (32, 0, 63, 15));   // 4px gutter at x=28..31
-        var labels = CompositorService.LabelIslands(inside, w, h, out int count);
-        var owner = CompositorService.NearestIslandOwner(labels, w, h);
+        var labels = IslandBlur.LabelIslands(inside, w, h, out int count);
+        var owner = IslandBlur.NearestIslandOwner(labels, w, h);
         Assert.Equal(2, count);
 
         var cover = Plane(w, h, 255, (0, 0, 27, 15));                     // left island fully covered
-        var plain = CompositorService.BlurCoverage(cover, w, h, radius);
-        var within = CompositorService.BlurCoverageWithinIslands(cover, labels, owner, count, inside, null, w, h, radius);
+        var plain = OverlayBlend.BlurCoverage(cover, w, h, radius);
+        var within = IslandBlur.BlurCoverageWithinIslands(cover, labels, owner, count, inside, null, w, h, radius);
 
         // A plain blur pulls the left island's coverage well into the right one.
         Assert.True(plain[8 * w + 33] > 40, $"expected bleed from a plain blur, got {plain[8 * w + 33]}");
@@ -97,12 +97,12 @@ public class IslandBlurTests
         // More than a blur reach from any border the window is entirely same-island, so the two must agree.
         const int w = 96, h = 96, radius = 6;
         var inside = Plane(w, h, 255, (0, 0, 95, 95));                    // one island, whole plane
-        var labels = CompositorService.LabelIslands(inside, w, h, out int count);
-        var owner = CompositorService.NearestIslandOwner(labels, w, h);
+        var labels = IslandBlur.LabelIslands(inside, w, h, out int count);
+        var owner = IslandBlur.NearestIslandOwner(labels, w, h);
         var cover = Plane(w, h, 255, (30, 30, 65, 65));
 
-        var plain = CompositorService.BlurCoverage(cover, w, h, radius);
-        var within = CompositorService.BlurCoverageWithinIslands(cover, labels, owner, count, inside, null, w, h, radius);
+        var plain = OverlayBlend.BlurCoverage(cover, w, h, radius);
+        var within = IslandBlur.BlurCoverageWithinIslands(cover, labels, owner, count, inside, null, w, h, radius);
 
         for (int y = 4 * radius; y < h - 4 * radius; y++)
             for (int x = 4 * radius; x < w - 4 * radius; x++)
@@ -116,8 +116,8 @@ public class IslandBlurTests
         // read its own dilation without ever reading the one across the gutter.
         const int w = 16, h = 4;
         var inside = Plane(w, h, 255, (0, 0, 5, 3), (10, 0, 15, 3));   // gutter at x = 6..9
-        var labels = CompositorService.LabelIslands(inside, w, h, out int count);
-        var owner = CompositorService.NearestIslandOwner(labels, w, h);
+        var labels = IslandBlur.LabelIslands(inside, w, h, out int count);
+        var owner = IslandBlur.NearestIslandOwner(labels, w, h);
         Assert.Equal(2, count);
 
         int left = labels[0], right = labels[10];
@@ -136,10 +136,10 @@ public class IslandBlurTests
         // border rather than dipping — while the island across the gutter still sees none of it.
         const int w = 64, h = 16, radius = 8;
         var inside = Plane(w, h, 255, (0, 0, 27, 15), (32, 0, 63, 15));
-        var labels = CompositorService.LabelIslands(inside, w, h, out int count);
-        var owner = CompositorService.NearestIslandOwner(labels, w, h);
+        var labels = IslandBlur.LabelIslands(inside, w, h, out int count);
+        var owner = IslandBlur.NearestIslandOwner(labels, w, h);
         var cover = Plane(w, h, 255, (0, 0, 27, 15));
-        var within = CompositorService.BlurCoverageWithinIslands(cover, labels, owner, count, inside, null, w, h, radius);
+        var within = IslandBlur.BlurCoverageWithinIslands(cover, labels, owner, count, inside, null, w, h, radius);
 
         for (int y = 0; y < h; y++)
         {
@@ -157,8 +157,8 @@ public class IslandBlurTests
         // amount of texture-space reasoning could ever produce, since nothing near the right island is lit.
         const int w = 64, h = 16, radius = 8;
         var inside = Plane(w, h, 255, (0, 0, 27, 15), (32, 0, 63, 15));
-        var labels = CompositorService.LabelIslands(inside, w, h, out int count);
-        var owner = CompositorService.NearestIslandOwner(labels, w, h);
+        var labels = IslandBlur.LabelIslands(inside, w, h, out int count);
+        var owner = IslandBlur.NearestIslandOwner(labels, w, h);
         var cover = Plane(w, h, 255, (0, 0, 27, 15));       // only the LEFT island is covered
 
         // The right island's own gutter (x = 30, 31) continues onto the left island's edge, mirrored.
@@ -170,8 +170,8 @@ public class IslandBlurTests
             seam[y * w + 31] = y * w + 26;
         }
 
-        var blind = CompositorService.BlurCoverageWithinIslands(cover, labels, owner, count, inside, null, w, h, radius);
-        var seamed = CompositorService.BlurCoverageWithinIslands(cover, labels, owner, count, inside, seam, w, h, radius);
+        var blind = IslandBlur.BlurCoverageWithinIslands(cover, labels, owner, count, inside, null, w, h, radius);
+        var seamed = IslandBlur.BlurCoverageWithinIslands(cover, labels, owner, count, inside, seam, w, h, radius);
 
         for (int y = 0; y < h; y++)
         {
@@ -204,8 +204,8 @@ public class IslandBlurTests
 
         var blind = Flat();
         var aware = Flat();
-        CompositorService.ApplyNormalIndent(blind, blurred, strap, w, h, 1f, null, 6, null);
-        CompositorService.ApplyNormalIndent(aware, blurred, strap, w, h, 1f, null, 6, inside);
+        OverlayBlend.ApplyNormalIndent(blind, blurred, strap, w, h, 1f, null, 6, null);
+        OverlayBlend.ApplyNormalIndent(aware, blurred, strap, w, h, 1f, null, 6, inside);
 
         // One step inside the border both agree — the interior is untouched.
         Assert.Equal(blind[(8 * w + 14) * 4], aware[(8 * w + 14) * 4]);
@@ -226,8 +226,8 @@ public class IslandBlurTests
         // keep out — so an off-island target must be refused and the extrapolation used instead.
         const int w = 64, h = 16, radius = 8;
         var inside = Plane(w, h, 255, (0, 0, 27, 15), (32, 0, 63, 15));
-        var labels = CompositorService.LabelIslands(inside, w, h, out int count);
-        var owner = CompositorService.NearestIslandOwner(labels, w, h);
+        var labels = IslandBlur.LabelIslands(inside, w, h, out int count);
+        var owner = IslandBlur.NearestIslandOwner(labels, w, h);
         var cover = Plane(w, h, 255, (0, 0, 27, 15));
 
         // Poison the gutter with "dilated ink" and point the right island's own padding straight at it.
@@ -242,8 +242,8 @@ public class IslandBlurTests
             seam[y * w + 31] = y * w + 28;      // ditto
         }
 
-        var got = CompositorService.BlurCoverageWithinIslands(cover, labels, owner, count, inside, seam, w, h, radius);
-        var noSeam = CompositorService.BlurCoverageWithinIslands(cover, labels, owner, count, inside, null, w, h, radius);
+        var got = IslandBlur.BlurCoverageWithinIslands(cover, labels, owner, count, inside, seam, w, h, radius);
+        var noSeam = IslandBlur.BlurCoverageWithinIslands(cover, labels, owner, count, inside, null, w, h, radius);
 
         for (int y = 0; y < h; y++)
             for (int x = 32; x < w; x++)
@@ -266,8 +266,8 @@ public class IslandBlurTests
         byte[] Flat() { var n = new byte[w * h * 4]; for (int i = 0; i < w * h; i++) { n[i * 4] = 128; n[i * 4 + 1] = 128; } return n; }
         var before = Flat();
         var after = Flat();
-        CompositorService.ApplyNormalIndent(before, blurred, strap, w, h, 1f, null, 6, null);
-        CompositorService.ApplyNormalIndent(after, blurred, strap, w, h, 1f, null, 6, inside);
+        OverlayBlend.ApplyNormalIndent(before, blurred, strap, w, h, 1f, null, 6, null);
+        OverlayBlend.ApplyNormalIndent(after, blurred, strap, w, h, 1f, null, 6, inside);
 
         Assert.Equal(before, after);     // identical everywhere, outer edge included
     }
@@ -280,8 +280,8 @@ public class IslandBlurTests
         // give exactly what an uncached call would. That's the whole contract.
         const int w = 64, h = 32, radius = 6;
         var inside = Plane(w, h, 255, (0, 0, 27, 31), (32, 0, 63, 31));
-        var labels = CompositorService.LabelIslands(inside, w, h, out int count);
-        var owner = CompositorService.NearestIslandOwner(labels, w, h);
+        var labels = IslandBlur.LabelIslands(inside, w, h, out int count);
+        var owner = IslandBlur.NearestIslandOwner(labels, w, h);
         var seam = new int[w * h];
         System.Array.Fill(seam, -1);
         for (int y = 0; y < h; y++) { seam[y * w + 30] = y * w + 27; seam[y * w + 31] = y * w + 26; }
@@ -290,13 +290,13 @@ public class IslandBlurTests
         var planeA = Plane(w, h, 255, (2, 2, 20, 20));
         var planeB = Plane(w, h, 255, (36, 6, 60, 26), (4, 24, 10, 30));
 
-        var wantA = CompositorService.BlurCoverageWithinIslands(planeA, labels, owner, count, inside, seam, w, h, radius);
-        var wantB = CompositorService.BlurCoverageWithinIslands(planeB, labels, owner, count, inside, seam, w, h, radius);
+        var wantA = IslandBlur.BlurCoverageWithinIslands(planeA, labels, owner, count, inside, seam, w, h, radius);
+        var wantB = IslandBlur.BlurCoverageWithinIslands(planeB, labels, owner, count, inside, seam, w, h, radius);
 
-        var cache = new CompositorService.IslandBlurCache();
-        var gotA = CompositorService.BlurCoverageWithinIslands(planeA, labels, owner, count, inside, seam, w, h, radius, cache);
-        var gotB = CompositorService.BlurCoverageWithinIslands(planeB, labels, owner, count, inside, seam, w, h, radius, cache);
-        var gotA2 = CompositorService.BlurCoverageWithinIslands(planeA, labels, owner, count, inside, seam, w, h, radius, cache);
+        var cache = new IslandBlur.IslandBlurCache();
+        var gotA = IslandBlur.BlurCoverageWithinIslands(planeA, labels, owner, count, inside, seam, w, h, radius, cache);
+        var gotB = IslandBlur.BlurCoverageWithinIslands(planeB, labels, owner, count, inside, seam, w, h, radius, cache);
+        var gotA2 = IslandBlur.BlurCoverageWithinIslands(planeA, labels, owner, count, inside, seam, w, h, radius, cache);
 
         Assert.Equal(wantA, gotA);    // first call populates
         Assert.Equal(wantB, gotB);    // second reuses the masks with a different plane
@@ -310,16 +310,16 @@ public class IslandBlurTests
         // blur to a radius-3 pass would silently widen the halo, so the key must include it.
         const int w = 48, h = 24;
         var inside = Plane(w, h, 255, (0, 0, 47, 23));
-        var labels = CompositorService.LabelIslands(inside, w, h, out int count);
-        var owner = CompositorService.NearestIslandOwner(labels, w, h);
+        var labels = IslandBlur.LabelIslands(inside, w, h, out int count);
+        var owner = IslandBlur.NearestIslandOwner(labels, w, h);
         var plane = Plane(w, h, 255, (10, 6, 30, 18));
 
-        var cache = new CompositorService.IslandBlurCache();
-        var r6 = CompositorService.BlurCoverageWithinIslands(plane, labels, owner, count, inside, null, w, h, 6, cache);
-        var r3 = CompositorService.BlurCoverageWithinIslands(plane, labels, owner, count, inside, null, w, h, 3, cache);
+        var cache = new IslandBlur.IslandBlurCache();
+        var r6 = IslandBlur.BlurCoverageWithinIslands(plane, labels, owner, count, inside, null, w, h, 6, cache);
+        var r3 = IslandBlur.BlurCoverageWithinIslands(plane, labels, owner, count, inside, null, w, h, 3, cache);
 
-        Assert.Equal(CompositorService.BlurCoverageWithinIslands(plane, labels, owner, count, inside, null, w, h, 6), r6);
-        Assert.Equal(CompositorService.BlurCoverageWithinIslands(plane, labels, owner, count, inside, null, w, h, 3), r3);
+        Assert.Equal(IslandBlur.BlurCoverageWithinIslands(plane, labels, owner, count, inside, null, w, h, 6), r6);
+        Assert.Equal(IslandBlur.BlurCoverageWithinIslands(plane, labels, owner, count, inside, null, w, h, 3), r3);
         Assert.NotEqual(r6, r3);
     }
 
@@ -335,19 +335,19 @@ public class IslandBlurTests
         var plane = Plane(w, h, 255, (4, 4, 18, 18));
 
         // Populate the cache against insideA by running the real path.
-        var labels = CompositorService.LabelIslands(insideA, w, h, out int count);
-        var owner = CompositorService.NearestIslandOwner(labels, w, h);
-        var cache = new CompositorService.IslandBlurCache();
-        CompositorService.BlurCoverageWithinIslands(plane, labels, owner, count, insideA, null, w, h, radius, cache);
+        var labels = IslandBlur.LabelIslands(insideA, w, h, out int count);
+        var owner = IslandBlur.NearestIslandOwner(labels, w, h);
+        var cache = new IslandBlur.IslandBlurCache();
+        IslandBlur.BlurCoverageWithinIslands(plane, labels, owner, count, insideA, null, w, h, radius, cache);
 
         // Now hand that cache to a call for a DIFFERENT mask. It must not reuse insideA's denominator.
-        var want = CompositorService.ExtendIntoPadding(plane, insideB, w, h, radius);
-        var got = CompositorService.ExtendIntoPadding(plane, insideB, w, h, radius, cache);
+        var want = IslandBlur.ExtendIntoPadding(plane, insideB, w, h, radius);
+        var got = IslandBlur.ExtendIntoPadding(plane, insideB, w, h, radius, cache);
         Assert.Equal(want, got);
 
         // ...and the legitimate reuse still works.
-        var wantA = CompositorService.ExtendIntoPadding(plane, insideA, w, h, radius);
-        Assert.Equal(wantA, CompositorService.ExtendIntoPadding(plane, insideA, w, h, radius, cache));
+        var wantA = IslandBlur.ExtendIntoPadding(plane, insideA, w, h, radius);
+        Assert.Equal(wantA, IslandBlur.ExtendIntoPadding(plane, insideA, w, h, radius, cache));
     }
 
     [Fact]
@@ -358,10 +358,10 @@ public class IslandBlurTests
         // null. So a half-built entry — bounding boxes present, blurs absent — must NOT match.
         const int w = 32, h = 16, radius = 4;
         var inside = Plane(w, h, 255, (0, 0, 31, 15));
-        var labels = CompositorService.LabelIslands(inside, w, h, out int count);
-        var owner = CompositorService.NearestIslandOwner(labels, w, h);
+        var labels = IslandBlur.LabelIslands(inside, w, h, out int count);
+        var owner = IslandBlur.NearestIslandOwner(labels, w, h);
 
-        var cache = new CompositorService.IslandBlurCache();
+        var cache = new IslandBlur.IslandBlurCache();
         cache.Reset(labels, owner, inside, null, radius, count);
         Assert.False(cache.Matches(labels, owner, inside, null, radius, count), "fresh Reset must not match");
 
@@ -373,7 +373,7 @@ public class IslandBlurTests
 
         // A real, completed pass publishes it.
         var plane = Plane(w, h, 255, (6, 4, 20, 12));
-        CompositorService.BlurCoverageWithinIslands(plane, labels, owner, count, inside, null, w, h, radius, cache);
+        IslandBlur.BlurCoverageWithinIslands(plane, labels, owner, count, inside, null, w, h, radius, cache);
         Assert.True(cache.Matches(labels, owner, inside, null, radius, count));
     }
 
@@ -383,8 +383,8 @@ public class IslandBlurTests
         // gen2 has no transfer map to derive islands from; the silhouette must still blur as it always did.
         const int w = 32, h = 32, radius = 4;
         var cover = Plane(w, h, 255, (8, 8, 23, 23));
-        var expected = CompositorService.BlurCoverage(cover, w, h, radius);
-        var actual = CompositorService.BlurCoverageWithinIslands(cover, new int[w * h], new int[w * h], 0, new byte[w * h], null, w, h, radius);
+        var expected = OverlayBlend.BlurCoverage(cover, w, h, radius);
+        var actual = IslandBlur.BlurCoverageWithinIslands(cover, new int[w * h], new int[w * h], 0, new byte[w * h], null, w, h, radius);
         Assert.Equal(expected, actual);
     }
 
@@ -419,22 +419,22 @@ public class IslandBlurTests
             }
 
         var inside = Plane(w, h, 255, rects.ToArray());
-        var labels = CompositorService.LabelIslands(inside, w, h, out int count);
-        var owner = CompositorService.NearestIslandOwner(labels, w, h);
+        var labels = IslandBlur.LabelIslands(inside, w, h, out int count);
+        var owner = IslandBlur.NearestIslandOwner(labels, w, h);
         Assert.Equal(36, count);
 
         var cover = Plane(w, h, 255, covRects.ToArray());
 
-        var first = CompositorService.BlurCoverageWithinIslands(cover, labels, owner, count, inside, null, w, h, radius);
+        var first = IslandBlur.BlurCoverageWithinIslands(cover, labels, owner, count, inside, null, w, h, radius);
         for (int i = 0; i < 24; i++)
         {
-            var again = CompositorService.BlurCoverageWithinIslands(cover, labels, owner, count, inside, null, w, h, radius);
+            var again = IslandBlur.BlurCoverageWithinIslands(cover, labels, owner, count, inside, null, w, h, radius);
             Assert.Equal(first, again);
         }
     }
 
     /// <summary>
-    /// The same, with the shared <see cref="CompositorService.IslandBlurCache"/> in play — the parallel
+    /// The same, with the shared <see cref="IslandBlur.IslandBlurCache"/> in play — the parallel
     /// loop fills Bd/Cd at its own index per island, and the SECOND call reads them back. A cache filled
     /// out of order must produce exactly what an uncached pass does.
     /// </summary>
@@ -452,16 +452,16 @@ public class IslandBlurTests
             }
 
         var inside = Plane(w, h, 255, rects.ToArray());
-        var labels = CompositorService.LabelIslands(inside, w, h, out int count);
-        var owner = CompositorService.NearestIslandOwner(labels, w, h);
+        var labels = IslandBlur.LabelIslands(inside, w, h, out int count);
+        var owner = IslandBlur.NearestIslandOwner(labels, w, h);
         var cover = Plane(w, h, 255, (20, 20, 170, 170));
 
-        var uncached = CompositorService.BlurCoverageWithinIslands(cover, labels, owner, count, inside, null, w, h, radius);
+        var uncached = IslandBlur.BlurCoverageWithinIslands(cover, labels, owner, count, inside, null, w, h, radius);
 
-        var cache = new CompositorService.IslandBlurCache();
-        var fill = CompositorService.BlurCoverageWithinIslands(cover, labels, owner, count, inside, null, w, h, radius, cache);
+        var cache = new IslandBlur.IslandBlurCache();
+        var fill = IslandBlur.BlurCoverageWithinIslands(cover, labels, owner, count, inside, null, w, h, radius, cache);
         Assert.True(cache.Matches(labels, owner, inside, null, radius, count));
-        var read = CompositorService.BlurCoverageWithinIslands(cover, labels, owner, count, inside, null, w, h, radius, cache);
+        var read = IslandBlur.BlurCoverageWithinIslands(cover, labels, owner, count, inside, null, w, h, radius, cache);
 
         Assert.Equal(uncached, fill);
         Assert.Equal(uncached, read);

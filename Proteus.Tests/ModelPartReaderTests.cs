@@ -244,7 +244,7 @@ public class ModelPartReaderTests
     }
 
     /// <summary>
-    /// Body-suppression attributes answer to no IMC bit — see <c>SecondSkinService.PartAttributeBit</c> — so
+    /// Body-suppression attributes answer to no IMC bit — see <c>ContentPieceResolver.PartAttributeBit</c> — so
     /// they cost nothing from a budget that is only ten wide.
     /// </summary>
     [Fact]

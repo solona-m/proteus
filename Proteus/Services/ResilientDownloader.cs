@@ -29,12 +29,8 @@ public readonly record struct FetchResult(
 
 /// <summary>
 /// Downloads one pinned file, resiliently: several mirrors, retries with backoff, HTTP range resume
-/// across sessions, a per-read stall timeout, and a SHA-256 check before the file is promoted.
-/// <para/>
-/// The failure this exists for is a THROTTLED transfer. GitHub rate-limits anonymous release-asset
-/// downloads, and a throttled response is not an error — it is a short body with a 200 on it. Without
-/// the checksum a truncated map got promoted and every composite afterwards read garbage; without the
-/// range resume, a user on a slow link who lost the connection at 120 MB started again from zero.
+/// across sessions, a per-read stall timeout, and a SHA-256 check before the file is promoted (a throttled
+/// transfer can be a short body with a 200 on it).
 /// </summary>
 public sealed class ResilientDownloader(IPluginLog log, HttpMessageHandler? handler = null) : IDisposable
 {
@@ -42,32 +38,19 @@ public sealed class ResilientDownloader(IPluginLog log, HttpMessageHandler? hand
     private const int MaxAttempts = 5;
 
     /// <summary>
-    /// How long a single read may stall before the attempt is abandoned. <see cref="HttpClient.Timeout"/>
-    /// stops applying once the response headers are in, so without this a connection throttled to zero
-    /// bytes/sec hangs forever with the progress figure frozen mid-count.
+    /// How long a single read may stall before the attempt is abandoned; <see cref="HttpClient.Timeout"/>
+    /// stops applying once the response headers are in.
     /// </summary>
     private static readonly TimeSpan ReadTimeout = TimeSpan.FromSeconds(60);
 
     /// <summary>
-    /// One client per downloader, owned and disposed with it — deliberately NOT a static shared instance.
-    /// <para/>
-    /// A Dalamud plugin lives in a collectible AssemblyLoadContext, and that context only unloads once
-    /// nothing roots it. <c>SocketsHttpHandler</c> keeps a connection pool with cleanup timers, and the
-    /// runtime's timer queue is rooted OUTSIDE the plugin's context — so a client that outlives the
-    /// plugin can pin the whole context, which keeps its native libraries mapped and its file handles
-    /// open. That is not hypothetical here: it is why <c>proteus_bcn.dll</c> stayed locked by the game
-    /// after the plugin had been unloaded, and why a rebuild needed a full client restart.
-    /// <para/>
-    /// Timeout is infinite because these are 100 MB+ bodies over slow links and <see cref="ReadTimeout"/>
-    /// is the real stall detector; the default 100 s would abort a perfectly healthy slow download.
+    /// One client per downloader, disposed with it — never a static shared instance, whose pool timers would
+    /// root the plugin's collectible AssemblyLoadContext past unload.
+    /// Timeout is infinite; <see cref="ReadTimeout"/> is the stall detector.
     /// </summary>
     private readonly HttpClient http = CreateClient(handler);
 
-    /// <param name="handler">
-    /// Test seam only; null in the plugin. The resume, range-validation and retry paths fire only under
-    /// network conditions that cannot be reproduced against a live host — a truncated body, a 206 from
-    /// the wrong offset — and those are exactly the paths whose failure is silent and expensive.
-    /// </param>
+    /// <param name="handler">Test seam only; null in the plugin.</param>
     private static HttpClient CreateClient(HttpMessageHandler? handler)
     {
         var c = handler == null ? new HttpClient() : new HttpClient(handler, disposeHandler: true);
@@ -80,13 +63,8 @@ public sealed class ResilientDownloader(IPluginLog log, HttpMessageHandler? hand
 
     /// <param name="baseUrls">Tried in order. A source is abandoned only once its retries are spent.</param>
     /// <param name="onProgress">
-    /// Called with the total bytes of THIS file now on disk — an absolute figure, not a delta.
-    /// <para/>
-    /// Deltas were wrong here: an attempt that restarts from zero (a checksum mismatch, or a server that
-    /// ignored a Range request) re-reports bytes the caller has already counted, so a single retry made
-    /// the caller's running total exceed the real size and the progress line read "248 MB / 128 MB".
-    /// An absolute figure per file resets naturally on a restart and already accounts for a resumed
-    /// prefix, so a resuming download opens at the byte it actually reached rather than at zero.
+    /// Called with the total bytes of this file now on disk — an absolute figure, not a delta, so restarts
+    /// and resumes report correctly.
     /// </param>
     public async Task<FetchResult> FetchAsync(
         string[] baseUrls, string fileName, long expectedBytes, string expectedSha,
@@ -96,10 +74,7 @@ public sealed class ResilientDownloader(IPluginLog log, HttpMessageHandler? hand
         var rng = new Random();
         var last = new FetchResult(false, FetchFailure.Transport, 0, 0, "no sources configured");
 
-        // Waiting after the LAST attempt delays the failure by up to the cap and buys nothing — the loop
-        // is about to exit either way. With two sources and a server that keeps answering 503 with a
-        // Retry-After, that dead time was minutes of a frozen progress pill before the user was told
-        // anything had gone wrong.
+        // No wait after the last attempt: it would only delay the failure.
         async Task MaybeBackoff(int attempt, System.Net.Http.Headers.RetryConditionHeaderValue? retryAfter)
         {
             if (attempt < MaxAttempts) await Backoff(attempt, retryAfter, rng, ct);
@@ -113,9 +88,7 @@ public sealed class ResilientDownloader(IPluginLog log, HttpMessageHandler? hand
             {
                 ct.ThrowIfCancellationRequested();
 
-                // Re-hash whatever survived a previous attempt or session. This is what makes resuming
-                // safe: appending to an unverified prefix yields a file of the right LENGTH and the
-                // wrong CONTENT — the one failure mode a size check cannot see.
+                // Re-hash whatever survived a previous attempt or session, so a resume appends to verified bytes.
                 var (haveBytes, h) = await RehashPartial(tmp, expectedBytes, ct);
                 using var hasher = h;
 
@@ -145,8 +118,7 @@ public sealed class ResilientDownloader(IPluginLog log, HttpMessageHandler? hand
 
                     if (!alreadyComplete)
                     {
-                        // A server that ignores Range answers 200 with the WHOLE file. Appending that to
-                        // a partial would corrupt it, so start over.
+                        // A server that ignores Range answers 200 with the whole file, so start over.
                         if (haveBytes > 0 && response.StatusCode != HttpStatusCode.PartialContent)
                         {
                             log.Information("[Proteus] {0}: range ignored, restarting from zero", fileName);
@@ -156,12 +128,7 @@ public sealed class ResilientDownloader(IPluginLog log, HttpMessageHandler? hand
                         }
                         else if (response.StatusCode == HttpStatusCode.PartialContent)
                         {
-                            // Trusting the STATUS alone is not enough: a proxy may answer a range request
-                            // from an offset of its own choosing, and appending that body would build a
-                            // file of exactly the right length out of the wrong bytes. The checksum would
-                            // still catch it, but only after a full transfer, and it would report a
-                            // "checksum mismatch" that sends the reader hunting a corrupt origin instead
-                            // of a misbehaving intermediary. Discard and restart, naming the real cause.
+                            // A 206 may start at an offset other than the one requested; discard and restart.
                             var from = response.Content.Headers.ContentRange?.From;
                             if (from != haveBytes)
                             {
@@ -181,9 +148,7 @@ public sealed class ResilientDownloader(IPluginLog log, HttpMessageHandler? hand
 
                     var got = new FileInfo(tmp).Length;
 
-                    // Kept ahead of the checksum as its own case: a Git LFS pointer is a few hundred
-                    // bytes of text arriving with a perfectly good 200, and saying so names the actual
-                    // mistake where "checksum mismatch" would send someone hunting a network fault.
+                    // Checked before the checksum so a Git LFS pointer is reported as such.
                     if (expectedBytes > 1024 * 1024 && got < expectedBytes / 2)
                     {
                         TryDelete(tmp);
@@ -236,14 +201,12 @@ public sealed class ResilientDownloader(IPluginLog log, HttpMessageHandler? hand
         var buf = new byte[1024 * 1024];   // 1 MB
         long fileBytes = haveBytes;
 
-        // Report the starting point before any read, so a resumed file shows its real position
-        // immediately instead of counting up from zero, and so a restarted attempt visibly rewinds.
+        // Report the starting point before any read, so a resume or restart shows its real position.
         onProgress?.Invoke(fileBytes);
 
         while (true)
         {
-            // A fresh linked token per read: cancels on teardown OR when this one read has stalled past
-            // ReadTimeout, which is exactly the window HttpClient.Timeout no longer covers.
+            // A fresh linked token per read: cancels on teardown or when this read stalls past ReadTimeout.
             using var stall = CancellationTokenSource.CreateLinkedTokenSource(ct);
             stall.CancelAfter(ReadTimeout);
 
@@ -292,9 +255,8 @@ public sealed class ResilientDownloader(IPluginLog log, HttpMessageHandler? hand
     }
 
     /// <summary>
-    /// 429 and 503 are the throttle asking us to come back; 408 and 5xx are transient. A 403 from a
-    /// release-asset host is usually a rate limit rather than a real permission problem, so it earns
-    /// one backoff before we fall through to the next source.
+    /// 429 and 503 are the throttle; 408 and 5xx are transient; a 403 from a release-asset host is usually a
+    /// rate limit.
     /// </summary>
     private static bool IsRetryable(HttpStatusCode code) =>
         code is HttpStatusCode.RequestTimeout or HttpStatusCode.TooManyRequests
@@ -306,8 +268,7 @@ public sealed class ResilientDownloader(IPluginLog log, HttpMessageHandler? hand
         int attempt, System.Net.Http.Headers.RetryConditionHeaderValue? retryAfter,
         Random rng, CancellationToken ct)
     {
-        // Honour the server's own number when it gives one — guessing shorter is what turns a throttle
-        // into a block — but cap it so a hostile value cannot wedge the download for an hour.
+        // Honour the server's Retry-After, capped so a hostile value cannot wedge the download.
         var wait = retryAfter?.Delta
                    ?? (retryAfter?.Date is { } d ? d - DateTimeOffset.UtcNow : (TimeSpan?)null)
                    ?? TimeSpan.FromSeconds(Math.Pow(2, attempt) + rng.NextDouble() * 2);

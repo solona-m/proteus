@@ -73,7 +73,7 @@ public class BustBridgeDiagTests
 
         var log = new List<string>();
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        var plan = SecondSkinWriter.BustBridgeSolve(p3, n3, tris, bust, 1f, log.Add);
+        var plan = BodyBridge.BustBridgeSolve(p3, n3, tris, bust, 1f, log.Add);
         sw.Stop();
         foreach (var line in log) o.WriteLine(line);
         o.WriteLine($"solve took {sw.ElapsedMilliseconds} ms");
@@ -147,7 +147,7 @@ public class BustBridgeDiagTests
 
         const int size = 512;
         const float fullAt = 0.0015f;
-        var map = SecondSkinWriter.BustStandoffMap(
+        var map = BodyBridge.BustStandoffMap(
             new[] { File.ReadAllBytes(Torso) }, null, 0, 0, 1f, size, fullAt);
         Assert.NotNull(map);
 
@@ -194,7 +194,7 @@ public class BustBridgeDiagTests
         if (!File.Exists(Torso)) { o.WriteLine($"skipped — no model at {Torso}"); return; }
 
         const int size = 1024;
-        var map = SecondSkinWriter.BustStandoffMap(
+        var map = BodyBridge.BustStandoffMap(
             new[] { File.ReadAllBytes(Torso) }, null, 0, 0, 1f, size, 0.0015f);
         Assert.NotNull(map);
 
@@ -220,7 +220,7 @@ public class BustBridgeDiagTests
         // ...and after the feather the compositor applies, which is the map that actually gates the
         // indent, nothing should step at all. This is the end-to-end version of the same measurement.
         int radius = Math.Max(1, (int)(size * 0.003f));   // the default AO softness
-        var soft = CompositorService.BlurCoverage(map!, size, size, radius);
+        var soft = OverlayBlend.BlurCoverage(map!, size, size, radius);
         int softHarsh = 0, softWorst = 0;
         for (int y = 0; y < size; y++)
             for (int x = 0; x + 1 < size; x++)
@@ -271,7 +271,7 @@ public class BustBridgeDiagTests
             n3[i] = new SecondSkinWriter.Vec3(nrm[i * 3], nrm[i * 3 + 1], nrm[i * 3 + 2]);
         }
 
-        var plan = SecondSkinWriter.BustBridgeSolve(p3, n3, tri, bust, 1f);
+        var plan = BodyBridge.BustBridgeSolve(p3, n3, tri, bust, 1f);
         Assert.NotNull(plan);
 
         static float Mag(SecondSkinWriter.Vec3 d) => MathF.Sqrt(d.X * d.X + d.Y * d.Y + d.Z * d.Z);
@@ -312,7 +312,7 @@ public class BustBridgeDiagTests
 
         var before = File.ReadAllBytes(Torso);
         var gate = new SecondSkinLayer { MaterialName = "/probe.mtrl" };   // no coverage map = covers all
-        var after = SecondSkinWriter.SmoothBodyNipples(before, gate, 1f, o.WriteLine);
+        var after = BodyBridge.SmoothBodyNipples(before, gate, 1f, o.WriteLine);
         Assert.NotNull(after);
 
         // Positions are overwritten in place, so nothing in the header can have moved.

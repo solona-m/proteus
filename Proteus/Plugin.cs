@@ -23,18 +23,12 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static IChatGui ChatGui { get; private set; } = null!;
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
 
-    /// <summary>Bumped when there's something worth calling out. NOT a reliable "did my rebuild load?"
-    /// signal on its own — it is hand-maintained, and it sat at 254 across dozens of builds because
-    /// bumping it is easy to forget. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 898;
+    /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
+    public const int BuildNumber = 903;
 
     /// <summary>
-    /// When this assembly was compiled, as MM-dd HH:mm:ss. Baked in by the csproj (an AssemblyMetadata
-    /// attribute) rather than read from the file, because Dalamud loads plugins from a stream — so
-    /// <c>Assembly.Location</c> is empty and there is no DLL path to stat at runtime.
-    /// <para/>
-    /// This is the value to trust when asking "did my rebuild actually load?": it moves on every compile
-    /// whether or not anyone remembered to touch <see cref="BuildNumber"/>.
+    /// When this assembly was compiled, as MM-dd HH:mm:ss, baked in by the csproj: Dalamud loads plugins from a stream,
+    /// so there is no DLL path to stat. The value to trust for "did my rebuild load?".
     /// </summary>
     public static string BuildStamp { get; } =
         System.Reflection.Assembly.GetExecutingAssembly()
@@ -83,10 +77,7 @@ public sealed class Plugin : IDalamudPlugin
         IPluginLog log,
         IFramework framework)
     {
-        // FIRST, before anything that can put a string on screen or in chat. Loc.Localize falls back to the
-        // English text baked into each call site until the table is loaded, so an early call would not
-        // crash — it would just quietly render English once and cache nothing, which is a far more annoying
-        // bug to notice than a hard failure.
+        // FIRST, before anything that can put a string on screen or in chat: an early call silently renders English.
         loc = new Localization.LocSetup(pluginInterface);
 
         config = pluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
@@ -98,11 +89,8 @@ public sealed class Plugin : IDalamudPlugin
         {
             DecodeCacheBudgetBytes = Math.Max(256, config.DecodeCacheBudgetMb) * 1024L * 1024,
         };
-        // Neither the UV maps nor the starter effects live next to the DLL any more. Dalamud installs
-        // each plugin version into its own folder, so anything stored there is re-downloaded on every
-        // update — which for the 128 MB maps meant ~48k downloads against ~1.4k installs, and is what
-        // got the release assets throttled. ConfigDirectory survives updates; the assembly directory is
-        // passed along only so an older install's copies can be reclaimed instead of re-fetched.
+        // Data lives in ConfigDirectory, which survives updates (the assembly folder is per version); the assembly
+        // directory is passed only so an older install's copies can be reclaimed.
         var dataDir     = pluginInterface.ConfigDirectory.FullName;
         var assemblyDir = pluginInterface.AssemblyLocation.DirectoryName;
 
@@ -112,10 +100,8 @@ public sealed class Plugin : IDalamudPlugin
             DefaultEffectsDir = effectsDl.EffectsDir,
             AssemblyDir       = assemblyDir,
         };
-        // Fill the global effects library with the starter set (skips names already there). Safe to call
-        // before Penumbra is up — it no-ops until the mod directory is resolvable, and OnPenumbraReady
-        // calls it again once it is. Called once more after each starter effect lands, so a library that
-        // is still downloading fills in rather than appearing empty.
+        // Seed the global effects library with the starter set. No-ops until Penumbra's mod directory resolves;
+        // OnPenumbraReady and each finished starter download call it again.
         discovery.SeedDefaultEffects();
         effectsDl.EnsureAsync(onProgress: () => { if (!_disposed) discovery.SeedDefaultEffects(); });
         uvRemap = new UVRemapService(log, dataDir);
@@ -131,15 +117,11 @@ public sealed class Plugin : IDalamudPlugin
             });
         }
         designBindings = new DesignBindingService(penumbra, glamourer, discovery, compositor, config, pluginInterface, framework, log);
-        // Told to the bridge rather than only to the watcher: GetDesign's on-disk fallback reads from the
-        // same folder, and the two pointing at different places would break the fallback for precisely the
-        // users who set an override.
+        // Told to the bridge too: GetDesign's on-disk fallback must read the same folder as the watcher.
         glamourer.DesignsDirectoryOverride = config.GlamourerDesignDirOverride;
         designWatcher = new GlamourerDesignWatcher(designBindings, glamourer.EffectiveDesignsDirectory, log);
 
-        // After the bindings, which presets capture through (CaptureMod) so the two agree on what "the
-        // current look" is. The event back the other way keeps that one-directional: a design taking over
-        // drops the preset pins, and a direct call would have made the pair a construction cycle.
+        // After the bindings, which presets capture through (CaptureMod); the reverse link is an event to avoid a construction cycle.
         presets = new PresetService(penumbra, discovery, compositor, designBindings, pluginInterface, log);
         designBindings.PresetsSuperseded += presets.ClearAllApplied;
         editRouter = new OverlayEditRouter(presets, designBindings);
@@ -152,16 +134,14 @@ public sealed class Plugin : IDalamudPlugin
         tilePreview = new TilePreview(TextureProvider, log);
         Gui.ColorTableEditor.Tiles = tilePreview;
 
-        // Display typography (the game's Jupiter) for section headings and the header band. The atlas
-        // builds asynchronously; drawing before it lands falls back to the default font on its own.
+        // Display typography (the game's Jupiter); the atlas builds asynchronously and falls back to the default font.
         fonts = new Gui.ProteusFonts(pluginInterface);
         Gui.ProteusStyle.Fonts = fonts;
 
         // Glow-effect thumbnails (loaded per-file, cached by Dalamud's texture provider).
         Gui.ColorTableEditor.EffectThumbs = new Gui.EffectPreview(TextureProvider);
 
-        // Ghosts the gear shells stacked above a highlighted layer so an occluded colorset Glow shows
-        // through them (semi-transparent). Driven by both highlighters below.
+        // Ghosts the gear shells stacked above a highlighted layer so an occluded colorset Glow shows through; driven by both highlighters below.
         shellGhost = new ShellNormalGhost(Framework, ObjectTable, textureLoader, Log);
 
         // Live colorset "glow / target" highlighter (framework-thread material editing).
@@ -173,54 +153,41 @@ public sealed class Plugin : IDalamudPlugin
         skinGlow = new SkinDiffuseGlow(Framework, ObjectTable, textureLoader, Log) { Ghost = shellGhost };
         Gui.ColorTableEditor.SkinGlow = skinGlow;
 
-        // How lit the wearer actually is, for light-sensitive glow. Reads the zone's placed lights (so
-        // indoors means something) plus a sky term outdoors; costs nothing while the level holds still.
+        // How lit the wearer actually is, for light-sensitive glow: the zone's placed lights plus a sky term outdoors.
         sceneLight = new SceneLightService(Framework, ObjectTable, config, Log);
         Gui.StatusWindow.SceneLight = sceneLight;
 
-        // Re-asserts each shell's colorset onto the live material after the game rebuilds it (redraw), so a
-        // dyed cloth shell shows its colour — the game's load-time colour-table cook drops the diffuse tint.
-        // Takes the highlighter so it leaves a glow-highlighted shell's slot alone instead of fighting it.
-        // Also the one place a light-sensitive row's emissive is scaled down, since the table it re-asserts
-        // every redraw is the same buffer that carries the glow.
+        // Re-asserts each shell's colorset onto the live material after the game rebuilds it, and scales a light-sensitive
+        // row's emissive. Takes the highlighter so it leaves a glow-highlighted slot alone.
         shellColorset = new ShellColorsetApplier(Framework, ObjectTable, highlighter, sceneLight, config)
         {
-            // Read through the compositor rather than handed a snapshot: it republishes the map on every
-            // composite, and a stale snapshot would go on dimming rows a rebuild had already changed.
+            // Read through the compositor rather than a snapshot, which would go stale on the next composite.
             LightFor = compositor.GetShellLight,
         };
 
-        // The other half of a dark-only glow: a hiding row's opacity follows its glow, by scaling the shell
-        // normal's blue (its coverage), so the art vanishes into the skin in daylight rather than leaving a
-        // dark patch behind.
+        // A dark-only glow's hiding row fades its coverage (the shell normal's blue) with its glow.
         shellCoverageFade = new ShellCoverageFade(Framework, ObjectTable, sceneLight, textureLoader, config, Log)
         {
             LightFor = compositor.GetShellLight,
             // Skips the whole per-frame character walk when nothing asks for a fade.
             AnyLight = () => compositor.AnyShellLight,
-            // Both swap the shell normal's Texture** slot, so the fade stands aside while the locator holds
-            // one — two owners of a texture is how one gets freed while the other still has it published.
+            // Both swap the shell normal's Texture** slot, so the fade stands aside while the ghost holds one.
             Ghost = shellGhost,
         };
 
         var modCreation = new ModCreationService(penumbra, compositor, config, textureLoader, log);
-        // Body catalogue for imports: probes the game data for the human bodies that exist, so an imported
-        // overlay can name every race's material without anyone maintaining a race table.
+        // Body catalogue for imports: probes the game data for the human bodies that exist.
         var bodyCatalog = new BodyMaterialCatalog(DataManager.FileExists);
         var onionImport = new OnionImportService(
             penumbra, compositor, modCreation, textureLoader, bodyCatalog, config, log);
         var contentImport = new ContentImportService(penumbra, compositor, log);
-        // Atramentum Luminis .ttmp2 glow-tattoo packs: the same three-phase import, over a format whose
-        // textures live in one SqPack blob rather than as archive entries.
+        // Atramentum Luminis .ttmp2 glow-tattoo packs.
         var luminisImport = new LuminisImportService(
             penumbra, compositor, modCreation, textureLoader, bodyCatalog, log);
-        // Emissive-skin .pmp packs: the Penumbra-native cousin of the above, whose glow arrives as an
-        // emissive map's alpha instead of an inverted diffuse's. Shares the body catalogue for the same
-        // reason — both land art on whichever body material the wearer has on.
+        // Emissive-skin .pmp packs; shares the body catalogue.
         var emissiveImport = new EmissiveSkinImportService(
             penumbra, compositor, modCreation, textureLoader, bodyCatalog, log);
-        // Loose eye-texture zips. Its own catalogue because faces are not shared between races the way
-        // bodies are, so the body probe can never answer for an iris.
+        // Loose eye-texture zips. Its own catalogue: faces are not shared between races the way bodies are.
         var irisCatalog = new IrisMaterialCatalog(DataManager.FileExists);
         var eyeImport = new EyeImportService(penumbra, compositor, textureLoader, irisCatalog, log);
         var modExport = new ModExportService(penumbra, log);
@@ -230,8 +197,7 @@ public sealed class Plugin : IDalamudPlugin
         liveBrush = new Gui.LiveBrush(ObjectTable, DataManager, penumbra, log);
         partsPanel = new Gui.PartsPanel(penumbra, compositor, partViewport, liveBrush, textureLoader, log);
 
-        // Subscribes to the hairstyle change on construction, so it works with the window shut — which is
-        // the whole point of it being a service and not part of the panel that draws its findings.
+        // A service, not part of the panel: it subscribes to the hairstyle change so it works with the window shut.
         hatCompat = new HatCompatWatcher(compositor, penumbra, glamourer, config, log);
 
         statusWindow = new StatusWindow(compositor, discovery, penumbra, config, designBindings,
@@ -251,26 +217,17 @@ public sealed class Plugin : IDalamudPlugin
 
         commandManager.AddHandler(CommandName, new Dalamud.Game.Command.CommandInfo(OnCommand)
         {
-            // Read once, at registration: Dalamud caches the help line in its command list and offers no
-            // way to refresh it, so this one string keeps whatever language was active at load until the
-            // next reload. Everything drawn by the plugin itself re-reads per frame and switches live.
+            // Read once, at registration: Dalamud caches the help line, so it keeps the load-time language.
             HelpMessage = Loc.Localize("Command.Help",
                 "Toggle the Proteus overlay compositor status window. \"/proteus config\" opens it on Settings."),
         });
 
-        // The boot composite is held from CompositorService's construction (see BootCompositeHold) so
-        // the design-binding boot restore can publish its overrides before the first composite reads
-        // them. Nothing armed a restore → nothing to wait for, release it now.
+        // The boot composite is held (see BootCompositeHold) for the design-binding restore; with nothing armed, release it now.
         if (!designBindings.BootRestoreArmed)
             compositor.BootCompositeHold = false;
 
-        // Recomposite on startup only if Penumbra's mod list is already readable, and only when nothing
-        // holds the boot composite — a composite that ran before the overrides landed would paint
-        // metadata colours and have to be redone, i.e. two multi-second pipelines and two redraws per
-        // load. At early load GetPlayerCollectionId() returns null and discovery returns empty, which
-        // would wipe the existing output. OnPenumbraReady handles the normal boot path; this covers
-        // plugin-reload where PenumbraReady won't fire again (and OnBootPoll covers the held case,
-        // once FinishBootRestore releases it).
+        // Recomposite on startup (plugin reload) only if Penumbra's mod list is readable and nothing holds the boot
+        // composite; an early discovery returns empty and would wipe the output. OnPenumbraReady covers the normal boot.
         if (config.PluginEnabled && penumbra.IsAvailable && !compositor.BootCompositeHold
             && discovery.DiscoverEnabled().Count > 0)
             compositor.TriggerRecomposite("startup");
@@ -288,25 +245,14 @@ public sealed class Plugin : IDalamudPlugin
     private const string LegacyRepoHost = "raw.githubusercontent.com/solona-m/plugins";
 
     /// <summary>
-    /// Nudges anyone still installed from the raw.githubusercontent.com manifest towards the mirrored
-    /// one, at most <see cref="MirrorNoticeLimit"/> times ever.
-    /// <para/>
-    /// Dalamud re-fetches the plugin manifest on every client launch and every list refresh, per user,
-    /// forever — far more requests than the plugin's own downloads, which happen once per install. Since
-    /// GitHub throttles on request count rather than bytes, that manifest is the single largest remaining
-    /// source of throttling, and it is the one thing this side cannot fix alone: the repo URL lives in
-    /// each user's own Dalamud config.
-    /// <para/>
-    /// Matched POSITIVELY against the legacy host, so anything unexpected stays silent. A dev-loaded
-    /// plugin has no source repository, and someone already on the mirror must never see this.
+    /// Nudges anyone still installed from the raw.githubusercontent.com manifest towards the mirrored one, at most
+    /// <see cref="MirrorNoticeLimit"/> times ever. Matched positively against the legacy host, so anything else stays silent.
     /// </summary>
     private void SuggestMirrorRepo(IDalamudPluginInterface pluginInterface)
     {
         var source = pluginInterface.SourceRepository;
 
-        // Logged unconditionally, and before the early-outs: a dev-loaded plugin has no source
-        // repository, so this notice cannot be triggered on the machine that writes it. Without the
-        // value in the log there is no way to tell "correctly silent" from "quietly broken".
+        // Logged unconditionally, before the early-outs: a dev-loaded plugin can never trigger the notice.
         Log.Information("[Proteus] SourceRepository={0} (mirror notice shown {1}/{2})",
                         string.IsNullOrEmpty(source) ? "<none, dev install>" : source,
                         config.MirrorNoticeShown, MirrorNoticeLimit);
@@ -319,9 +265,7 @@ public sealed class Plugin : IDalamudPlugin
         config.MirrorNoticeShown++;
         config.Save();
 
-        // No count of remaining reminders: it would need a {0} that reads "1 more reminders" at the end,
-        // and plural agreement is a real cost across eight machine-translated locales for a line nobody
-        // needs. Saying it stops on its own carries the same reassurance with no arguments at all.
+        // No count of remaining reminders: plural agreement across machine-translated locales is not worth it.
         ChatGui.Print(new Dalamud.Game.Text.SeStringHandling.SeStringBuilder()
             .AddUiForeground(
                 Loc.Localize("Chat.MirrorRepo",
@@ -334,13 +278,10 @@ public sealed class Plugin : IDalamudPlugin
 
     private void DrawUi()
     {
-        // Before the window system, and unconditionally: an .omp import writes its mod on the thread pool,
-        // and Dalamud stops calling a CLOSED window's Draw — so pumping this from the window itself would
-        // strand a mod that finished copying after the user closed Proteus. See StatusWindow.TickImport.
+        // Before the window system, and unconditionally: Dalamud stops calling a CLOSED window's Draw, which would strand an import.
         statusWindow.TickImport();
         liveMesh.Draw();
-        // Before the windows: the Studio tab reads this frame's stroke from it, and "is the mouse over a
-        // window" has to be asked outside of any one window.
+        // Before the windows: the Studio tab reads this frame's stroke from it.
         liveBrush.Update();
         windowSystem.Draw();
     }
@@ -352,9 +293,7 @@ public sealed class Plugin : IDalamudPlugin
 
     private void OnCommand(string command, string args)
     {
-        // "/proteus models [filter]" — what the RENDERER loaded, not what we wrote. Everything else in
-        // this plugin's diagnostics reads the .mdl on disk, which cannot tell a stale or redirected
-        // resource from a correct one.
+        // "/proteus models [filter]": what the RENDERER loaded, not what we wrote.
         var a = args.Trim();
 
         // "/proteus livemesh [filter|off|nodeform|deform]" — draw a worn model posed on the CPU over the character.
@@ -380,8 +319,7 @@ public sealed class Plugin : IDalamudPlugin
             return;
         }
 
-        // "/proteus config" is a request to see the settings, so it opens rather than toggles — typing it
-        // while the window is already up would otherwise close it, the opposite of what was asked.
+        // "/proteus config" opens rather than toggles.
         switch (a)
         {
             case "config":
@@ -401,19 +339,13 @@ public sealed class Plugin : IDalamudPlugin
     {
         _disposed = true;
 
-        // Last chance for an import whose disk work landed after the final frame: the mod is already
-        // written into Penumbra's directory, and unloading without registering it would leave a folder
-        // Penumbra never adds — enabled by nobody, with no layout selected, painting nothing. "unloading"
-        // keeps it to the registration: no window, and above all no recomposite, which would still pass
-        // CompositorService's disposal guard (that runs further down) and wake into a torn-down plugin.
+        // Last chance for an import whose disk work landed after the final frame, registration only: no window, no recomposite.
         try { statusWindow.TickImport(unloading: true); } catch { /* tearing down — never block the unload */ }
 
-        // Same idea, much smaller: a window resize inside the save debounce is still a resize the user made,
-        // and an unload is the one thing that frame will never come back from.
+        // A window resize still inside the save debounce.
         try { statusWindow.FlushPendingSize(); } catch { /* tearing down — never block the unload */ }
 
-        // And a brush stroke still inside its autosave debounce: written, but without the mod reload and
-        // character redraw a normal save does, since nothing should be poked from a plugin on its way out.
+        // A brush stroke still inside its autosave debounce: written, without the reload and redraw.
         try { statusWindow.FlushPendingBrush(); } catch { /* tearing down — never block the unload */ }
 
         CommandManager.RemoveHandler(CommandName);

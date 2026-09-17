@@ -10,18 +10,9 @@ namespace Proteus.Services;
 
 /// <summary>
 /// Shows a brush edit on the character while it is being painted, without redrawing the character.
-/// <para/>
-/// The mod's own file cannot do this. The game caches a model by the path it resolved to, so reloading a slot
-/// whose file was rewritten under the same name hands back the old mesh — which is why an in-place reload
-/// after a save showed nothing, and the save had to redraw the whole character instead.
-/// <para/>
-/// So each preview is written to a NEW file and put in front of the player with a Penumbra temporary mod
-/// redirecting the model's game paths to it, then Glamourer reloads the gear in place. A new path is a new
-/// resource: the game loads it, and the slot swaps without the character despawning. The same idea as the
-/// second skin's content-addressed shells.
-/// <para/>
-/// One preview at a time: a push that arrives while the last is still being written and applied is refused, and
-/// the caller simply tries again next frame with the edit as it is by then.
+/// Each preview is written to a new file (the game caches models by resolved path) and redirected with a
+/// Penumbra temporary mod, then Glamourer reloads the gear in place. One preview at a time; a push while one
+/// is in flight is refused.
 /// </summary>
 internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorService compositor, IPluginLog log)
 {
@@ -30,8 +21,7 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
     /// <summary>Above every regular mod, so the preview wins the game path whatever else redirects it.</summary>
     private const int Priority = int.MaxValue;
 
-    /// <summary>Preview files kept after they are replaced. The game loads a model asynchronously, so the file a
-    /// reload was just pointed at can still be being read when the next preview lands.</summary>
+    /// <summary>Preview files kept after they are replaced, since the game may still be reading one asynchronously.</summary>
     private const int KeepFiles = 4;
 
     private static readonly string Dir = Path.Combine(Path.GetTempPath(), "proteus-live-brush");
@@ -53,10 +43,8 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
     public bool Unsupported { get; private set; }
 
     /// <summary>
-    /// Whether previews can reach this kind of part in place. Never for hair, face, ears or tail: they are the
-    /// character's customization, not gear, and Glamourer's gear reload does not touch them. Re-running the game's
-    /// appearance update (<c>Human.UpdateDrawData</c>, which Glamourer hooks) to reload them was tried and CHANGED
-    /// THE PLAYER'S HAIRSTYLE (162 → 2) in game — so those parts are shown with one redraw when the brush lifts.
+    /// Whether previews can reach this kind of part in place. Never for hair, face, ears or tail: Glamourer's gear
+    /// reload does not touch customization, and forcing <c>Human.UpdateDrawData</c> changes the hairstyle.
     /// </summary>
     public bool UnsupportedFor(bool customizePart) => customizePart || Unsupported;
 
@@ -119,12 +107,10 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
     /// <summary>
     /// Take the preview down, so the character draws the mod's own file again.
     /// </summary>
-    /// <param name="redraw">Redraw afterwards. The mod's file was last loaded before the painting started, and the
-    /// game may still hold that copy under its path; only a redraw is sure to replace it. False on teardown.</param>
+    /// <param name="redraw">Redraw afterwards, the only sure way to replace the game's cached copy. False on teardown.</param>
     public void End(bool redraw)
     {
-        // Not waited on: a push in flight finishes on this same (framework) thread, so waiting here would stall
-        // it. The generation mark makes it stand down instead.
+        // Not waited on (the push finishes on this framework thread); the generation mark makes it stand down.
         endedAt = generation;
         if (!Active) return;
         Active = false;

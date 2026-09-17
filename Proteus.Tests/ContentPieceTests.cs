@@ -43,7 +43,7 @@ public class ContentPieceTests
         Assert.Equal(2, declared.Count);
         Assert.Contains("/mt_c0201e0000_top_a.mtrl", declared);   // the emptied vanilla smallclothes mesh
 
-        var used = SecondSkinService.UsedMaterialNames(model, declared);
+        var used = ContentPieceResolver.UsedMaterialNames(model, declared);
         var only = Assert.Single(used);
         Assert.Contains(only, declared);
         Assert.NotEqual("/mt_c0201e0000_top_a.mtrl", only);

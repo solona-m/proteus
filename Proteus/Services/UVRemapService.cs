@@ -26,13 +26,11 @@ public class UVRemapService
         public readonly ushort[] Y = y;
         public readonly bool[]   Valid = valid;
         public readonly int      W = w, H = h;
-        // Dest pixels with moderate round-trip error (UV-seam region). Dropped by ApplyRemap
-        // only where the local neighbourhood is sparse, so stranded seam coverage goes but
-        // genuine garment edges (which read as ~half covered) are left intact.
+        // Dest pixels with round-trip error (UV-seam region); ApplyRemap drops them only where the
+        // neighbourhood is sparse, so genuine garment edges survive.
         public byte[]? DropLevel;
-        // Valid dest pixels within BorderReach px of a UV-island border (a valid↔invalid edge).
-        // The seam-drop is confined to these, so interior fine detail (e.g. a fishnet's net lines,
-        // which read as stranded slivers between holes) is never touched.
+        // Valid dest pixels within BorderReach px of a UV-island border; the seam-drop is confined to these so
+        // interior fine detail is never touched.
         public bool[]? NearBorder;
     }
 
@@ -50,8 +48,7 @@ public class UVRemapService
     {
         if (mtrlGamePath.EndsWith("_bibo.mtrl", StringComparison.OrdinalIgnoreCase)) return "bibo";
         if (mtrlGamePath.EndsWith("_eve.mtrl",  StringComparison.OrdinalIgnoreCase)) return "gen3";
-        // _a/_b only mean body UV types when under /obj/body/ — equipment paths also end in _a/_b.
-        // _a = vanilla (gen2 UV), _b = gen3 UV (used by body mods like AB Body, SPS gen3, etc.)
+        // _a/_b mean body UV types only under /obj/body/: _a = vanilla (gen2), _b = gen3.
         if (mtrlGamePath.Contains("/obj/body/", StringComparison.OrdinalIgnoreCase))
         {
             if (mtrlGamePath.EndsWith("_b.mtrl", StringComparison.OrdinalIgnoreCase)) return "gen3";
@@ -70,7 +67,7 @@ public class UVRemapService
         var map = GetMap(from, to);
         if (map == null) return srcRgba;
         var result = ApplyRemap(srcRgba, srcW, srcH, map);
-        // Timed from the top so a first-call transfer-map load is attributed to remap, not to blend.
+        // Timed from the top so a first-call transfer-map load counts as remap.
         RemapStats.Stop(t0);
         return result;
     }
@@ -82,56 +79,33 @@ public class UVRemapService
     public readonly PhaseCounter RemapStats = new();
 
     /// <summary>
-    /// Which side of the character a vertex is on, as <see cref="UvConversion"/> receives it:
-    /// <c>+1</c> = the +X side, <c>-1</c> = the -X side, <c>0</c> = not known (a vertex on the midline whose
-    /// triangles disagreed, or a caller that doesn't track sides). Unknown behaves as +1, which is the
-    /// behaviour every caller had before sides existed.
+    /// Which side of the character a vertex is on: <c>+1</c> = +X, <c>-1</c> = -X, <c>0</c> = unknown, which behaves
+    /// as +1.
     /// </summary>
     public delegate (float U, float V)? UvConversion(float u, float v, int side);
 
     /// <summary>
-    /// Reflect a U coordinate onto the other half of an asymmetric body sheet.
-    /// <para/>
-    /// MEASURED, not assumed. bibo and gen3 both lay the character's two sides out as mirror images about
-    /// u = 0.5: scoring the bibo island mask (the Valid mask of the shipped gen3_to_bibo transfer map)
-    /// against its own right half gives IoU 0.998 for <c>u -> 1-u</c> and 0.681 for a plain <c>u -> u-0.5</c>
-    /// translate, with the mirror peaking exactly at zero offset. Reading a Bibo+ body model agrees from the
-    /// geometry side: of 3696 mirror-partner vertex pairs, 3478 satisfy <c>u' = 1-u</c> within 0.01 and NONE
-    /// satisfy <c>u' = u</c>. The two halves also hold the same island area to within 0.02%.
-    /// <para/>
-    /// The same measurement fixes which half is which side: on that model every one of the 1950 vertices at
-    /// x &gt; 0 has u &gt; 0.5 and every one of the 1950 at x &lt; 0 has u &lt; 0.5, with no exceptions. So the
-    /// RIGHT half — the half vanilla space is a crop of (see <see cref="CropRightHalf"/>) — is the +X side,
-    /// and no separate side constant is needed: it follows from the crop this file already assumes.
+    /// Reflect a U coordinate onto the other half of an asymmetric body sheet. bibo and gen3 lay the two sides out as
+    /// mirror images about u = 0.5, and the right half (the one vanilla space is a crop of, see
+    /// <see cref="CropRightHalf"/>) is the +X side.
     /// </summary>
     public static float MirrorU(float u) => 1f - u;
 
     /// <summary>
-    /// The vanilla FACE layout. Mirrored in exactly the sense gen2 is: both sides of the face sample the same
-    /// texels. Measured on c0201f0001_fac — 89.4% of mirror-partner vertices share a UV against 1.3% that
-    /// reflect, and both sides show the same u distribution, so the two cheeks read the same pixels.
+    /// The vanilla face layout. Mirrored like gen2: both sides of the face sample the same texels.
     /// </summary>
     public const string FaceSpace = "face";
 
     /// <summary>
-    /// A DOUBLED face sheet: the character's two sides in the two halves of one texture, the right half
-    /// holding the +X side exactly as <see cref="FaceSpace"/> lays it out and the left holding its mirror.
-    /// <para/>
-    /// It exists because the vanilla face layout cannot express a one-sided mark at all — paint a texel and
-    /// it IS both cheeks, so the second side's art has nowhere to live. That is the same problem vanilla
-    /// BODIES have, and bibo is the answer there; faces had no equivalent, so this is it. Art declares it
-    /// through <see cref="OverlayDescriptor.SourceBodyType"/>, and the conversion into it is the same affine
-    /// gen2 → bibo uses, because it is the same shape of problem.
+    /// A doubled face sheet: the right half holds the +X side as <see cref="FaceSpace"/> lays it out, the left its
+    /// mirror, so one-sided face art has somewhere to live. Declared through
+    /// <see cref="OverlayDescriptor.SourceBodyType"/>; converted by the same affine as gen2 → bibo.
     /// </summary>
     public const string FaceSplitSpace = "facelr";
 
     /// <summary>
-    /// The asymmetric space a MIRRORED one is one half of, or null when the space is not mirrored.
-    /// <para/>
-    /// This is the pairing the whole un-mirroring feature turns on: a mirrored layout describes both sides of
-    /// the character with one set of texels, and its partner gives each side its own half. gen2's partner is
-    /// bibo (gen2 IS bibo's right half — see <see cref="CropRightHalf"/>); the face's is the doubled sheet
-    /// above. Both convert by the same affine, which is why they share one code path rather than two.
+    /// The asymmetric space a mirrored one is one half of (gen2 → bibo, face → facelr), or null when the space is not
+    /// mirrored. Both pairs convert by the same affine.
     /// </summary>
     public static string? DoubledSpaceOf(string? space)
         => string.Equals(space, "gen2", StringComparison.OrdinalIgnoreCase) ? "bibo"
@@ -139,35 +113,20 @@ public class UVRemapService
          : null;
 
     /// <summary>
-    /// A per-VERTEX UV converter — the geometry counterpart of <see cref="Remap"/>, which moves pixels.
-    /// Takes a UV authored in <paramref name="from"/> space and answers where that same point on the body
-    /// sits in <paramref name="to"/> space, or null for a point the maps have no correspondence for.
-    /// Returns null outright when the pair needs no conversion or no transfer map covers it, in which case
-    /// the caller must leave its UVs alone.
-    /// <para/>
-    /// The map that converts a UV OUT of space S is the one whose DESTINATION is S — the reverse of the
-    /// one <see cref="Remap"/> uses to move art INTO S — because a transfer map is indexed by its
-    /// destination pixel and stores the source coordinate. gen2 is not a transfer-map space at all: it is
-    /// the right half of bibo (see <see cref="CropRightHalf"/>), so it enters and leaves by halving U.
-    /// <para/>
-    /// <paramref name="unmirror"/> is what lets asymmetric art survive a vanilla body. gen2 UV is MIRRORED —
-    /// both sides of the body sample the same texels (measured on the vanilla e0000 parts: of the sampled
-    /// mirror-partner vertex pairs, 89-97% satisfy <c>u' = u</c> and ~0% satisfy <c>u' = 1-u</c>) — so the
-    /// plain affine below sends BOTH sides to bibo's right half, painting the +X side's art onto the whole
-    /// body and discarding everything in the left half. With it set, a -X vertex is sent to the mirrored
-    /// half instead, so the shell reads the sheet the way an asymmetric body would. It only has meaning
-    /// coming OUT of gen2: the destination halves already correspond (bibo's left half maps to gen3's left
-    /// half), so nothing downstream needs to know.
+    /// A per-vertex UV converter, the geometry counterpart of <see cref="Remap"/>: maps a UV in <paramref name="from"/>
+    /// space to <paramref name="to"/> space, or null where the maps have no correspondence. Returns null outright when
+    /// no conversion is needed or no map covers the pair; the caller then leaves its UVs alone.
+    /// Converting out of space S uses the map whose destination is S. Mirrored spaces enter and leave by halving U.
+    /// <paramref name="unmirror"/> sends a -X vertex coming out of a mirrored space to the mirrored half, so asymmetric
+    /// art survives a vanilla body.
     /// </summary>
     public UvConversion? UvConverter(string? from, string? to, bool unmirror = false)
     {
         if (from == null || to == null) return null;
         if (string.Equals(from, to, StringComparison.OrdinalIgnoreCase)) return null;
 
-        // A MIRRORED space (gen2, or the vanilla face) enters and leaves by the affine below, which lands it
-        // in its doubled counterpart — so from the transfer maps' point of view it already IS that space.
-        // Generalised from an explicit gen2 test so faces take the same path: the two differ only in which
-        // doubled space they pair with, never in the arithmetic.
+        // A mirrored space enters and leaves by the affine below, landing in its doubled counterpart, so to the
+        // transfer maps it already is that space.
         var fromDoubled = DoubledSpaceOf(from);
         var toDoubled   = DoubledSpaceOf(to);
         bool fromMirrored = fromDoubled != null;
@@ -175,8 +134,7 @@ public class UVRemapService
         var srcSpace  = fromDoubled ?? from;
         var dstSpace  = toDoubled ?? to;
 
-        // Null when both ends land in the same doubled space (gen2↔bibo, face↔facelr) — then the affine IS
-        // the whole conversion.
+        // Null when both ends land in the same doubled space; then the affine is the whole conversion.
         TransferMap? map = null;
         if (!string.Equals(srcSpace, dstSpace, StringComparison.OrdinalIgnoreCase))
         {
@@ -184,32 +142,19 @@ public class UVRemapService
             if (map == null) return null;
         }
 
-        // The writer rebuilds the same source's vertices once per layer per host, and a miss walks up to
-        // UvLookupReach rings — so memoize. Keyed on the exact UV, which repeats bit-for-bit across those
-        // rebuilds, giving a full hit rate after the first pass. Concurrent because the converter outlives
-        // one Build call and composites parallelise elsewhere.
-        //
-        // The SIDE is part of the key. Un-mirroring is precisely a case where one UV has two answers — the
-        // mirrored vanilla sheet gives a vertex and its opposite number the same (u,v) and they must land on
-        // opposite halves — so keying on the UV alone would hand the second one the first one's result and
-        // silently re-fold the body.
+        // Memoized: the same UVs repeat bit-for-bit across per-layer rebuilds, and a miss walks up to
+        // UvLookupReach rings. The side is part of the key, since un-mirroring gives one UV two answers.
         var memo = new System.Collections.Concurrent.ConcurrentDictionary<(float U, float V, int Side), (float U, float V)?>();
         return (u, v, side) => memo.GetOrAdd((u, v, unmirror ? side : 0), static (key, s) =>
         {
             var (u, v, side) = key;
-            // A -X vertex reads the other half of the sheet. Unknown (0) takes the +X branch, which is what
-            // every vertex got before sides existed.
+            // A -X vertex reads the other half of the sheet; unknown (0) takes the +X branch.
             if (s.FromMirrored) u = s.Unmirror && side < 0 ? MirrorU(0.5f + u * 0.5f) : 0.5f + u * 0.5f;
             if (s.Map != null && !TryLookupUv(s.Map, u, v, out u, out v)) return null;
             if (s.ToMirrored)
             {
-                // A mirrored space is only the RIGHT half of its doubled counterpart; the left half is that
-                // sheet's other side and has no mirrored home at all. Without this guard the affine hands
-                // such a point a
-                // NEGATIVE u, which the sampler wraps to the far edge of the sheet — so the triangle spans
-                // the whole texture, survives the coverage trim (its box trips AnyVisible's bail-out) and
-                // renders as a smeared band. Report it unmapped instead: the vertex then keeps its
-                // authored UV like any other point the maps can't place.
+                // A mirrored space is only the right half of its doubled counterpart; a left-half point would get a
+                // negative u that wraps and smears, so report it unmapped.
                 if (u < 0.5f) return null;
                 u = (u - 0.5f) * 2f;
             }
@@ -218,10 +163,8 @@ public class UVRemapService
     }
 
     /// <summary>
-    /// How far <see cref="TryLookupUv"/> widens its search, in map pixels (~1.2% of a 4096 map). Vertices
-    /// sit ON island borders at least as often as inside them, and a border pixel's own cell is often
-    /// outside every island, so an exact hit is not enough. Bounded because past this the body really is
-    /// unmapped there, and snapping a vertex across that gap would smear its triangles over the texture.
+    /// How far <see cref="TryLookupUv"/> widens its search, in map pixels. Vertices often sit on island borders whose
+    /// own cell is outside every island; bounded so a vertex never snaps across a truly unmapped gap.
     /// </summary>
     private const int UvLookupReach = 48;
 
@@ -237,8 +180,7 @@ public class UVRemapService
             {
                 int y = y0 + dy;
                 if (y < 0 || y >= map.H) continue;
-                // Interior rows contribute only their two edge columns — the rest were covered by
-                // a smaller r, so each ring visits its perimeter and nothing else.
+                // Interior rows contribute only their two edge columns, so each ring visits its perimeter only.
                 int step = Math.Abs(dy) == r ? 1 : Math.Max(1, 2 * r);
                 for (int dx = -r; dx <= r; dx += step)
                 {
@@ -246,9 +188,7 @@ public class UVRemapService
                     if (x < 0 || x >= map.W) continue;
                     int i = y * map.W + x;
                     if (!map.Valid[i]) continue;
-                    // A grossly mismapped pixel (level 2) points a third of the texture away. Art can
-                    // absorb that as one stray texel; a VERTEX drags its whole triangle there, so the
-                    // search steps over those rather than snapping to one.
+                    // Skip grossly mismapped pixels (level 2): a vertex would drag its whole triangle there.
                     if (map.DropLevel != null && map.DropLevel[i] >= 2) continue;
                     su = (float)map.X[i] / 65535f;
                     sv = (float)map.Y[i] / 65535f;
@@ -273,16 +213,8 @@ public class UVRemapService
     }
 
     /// <summary>
-    /// Expands a gen2 (vanilla) sheet back over a full asymmetric sheet — the inverse of
-    /// <see cref="CropRightHalf"/>. The art goes into the right half and its mirror into the left, because
-    /// vanilla art describes BOTH sides of the body with one layout, so both halves of the asymmetric sheet
-    /// are entitled to it.
-    /// <para/>
-    /// Needed because a shell can now be in bibo space while its geometry is vanilla. Any other layer on
-    /// that shell whose art is gen2-native has no <c>gen2_to_*</c> transfer map to travel by — and
-    /// <see cref="Remap"/> answers a missing map by handing back its input unchanged, so without this the
-    /// art would be sampled at bibo coordinates as if it were bibo art, which lands it somewhere else on the
-    /// body entirely.
+    /// Expands a gen2 (vanilla) sheet over a full asymmetric sheet, the inverse of <see cref="CropRightHalf"/>: the art
+    /// goes into the right half and its mirror into the left. Needed because there are no <c>gen2_to_*</c> transfer maps.
     /// </summary>
     public static byte[] ExpandMirrored(byte[] src, int srcW, int srcH, int dstW, int dstH)
     {
@@ -314,11 +246,9 @@ public class UVRemapService
 
     // ── Asymmetry detection ──────────────────────────────────────────────────
 
-    /// <summary>Sampling stride, in source pixels. A mark small enough to slip through this is too small to
-    /// be worth a whole extra shell.</summary>
+    /// <summary>Sampling stride, in source pixels.</summary>
     private const int AsymStride = 4;
-    /// <summary>Per-channel difference (of 255) that counts a texel as differing. Above blocky compression
-    /// noise, well below any mark a person would notice was missing.</summary>
+    /// <summary>Per-channel difference (of 255) that counts a texel as differing; above compression noise.</summary>
     private const int AsymChannelDelta = 24;
     /// <summary>Fraction of compared texels that must differ before the sheet counts as asymmetric.</summary>
     private const float AsymFraction = 0.001f;
@@ -326,27 +256,13 @@ public class UVRemapService
     private const int AsymMinTexels = 64;
 
     /// <summary>
-    /// Whether art painted for <paramref name="space"/> actually differs between the character's two sides.
-    /// <para/>
-    /// bibo and gen3 lay the two sides out as mirror images about u = 0.5 (see <see cref="MirrorU"/>), so
-    /// this compares each texel in the right half against its mirror partner in the left. Symmetric art —
-    /// the overwhelming majority, since it is normally painted once and mirrored — matches and gets to keep
-    /// the cheap vanilla path, which folds the sheet in half and loses nothing. Art that genuinely differs
-    /// cannot survive that fold and needs an un-mirrored shell instead.
-    /// <para/>
-    /// Restricted to texels inside a UV island where a mask is available: art tools bleed colour into the
-    /// padding around islands, and that bleed is an artefact of the export rather than anything the game
-    /// samples, so letting it vote would call symmetric art asymmetric.
-    /// <para/>
-    /// RGB is weighted by the pair's alpha so a fully transparent region's leftover colour doesn't count,
-    /// while alpha itself always counts — a one-sided mark on an otherwise transparent sheet differs in
-    /// alpha first.
+    /// Whether art painted for <paramref name="space"/> differs between the character's two sides, comparing each
+    /// right-half texel with its mirror partner (see <see cref="MirrorU"/>). Restricted to UV islands where a mask is
+    /// available, since padding bleed is an export artefact. RGB is weighted by the pair's alpha; alpha always counts.
     /// </summary>
     public bool IsArtAsymmetric(byte[] rgba, int w, int h, string? space)
     {
-        // A MIRRORED space is the one sheet both sides share, so the question is meaningless there — gen2 and
-        // the vanilla face layout alike. A space we can't name gets the conservative answer, which is the
-        // existing behaviour.
+        // A mirrored space is one sheet both sides share, so the question is meaningless; an unknown space answers false.
         if (space == null || DoubledSpaceOf(space) != null) return false;
         if (w < 8 || h < 8 || rgba.Length < w * h * 4) return false;
 
@@ -379,26 +295,16 @@ public class UVRemapService
     // ── Map cache ────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Which pixels of a body's texture actually lie inside a UV island, at the transfer map's
-    /// resolution. Everything outside is padding — and art tools bleed/dilate colour into that padding,
-    /// so anything read from there is an artefact of the export, not something the game ever samples.
-    ///
-    /// Derived from a transfer map whose DESTINATION is this body type (its Valid mask is exactly the
-    /// islands). Returns null for body types we ship no map for, in which case callers should assume
-    /// every pixel counts.
+    /// Which pixels of a body's texture lie inside a UV island, at the transfer map's resolution, derived from a map
+    /// whose destination is this body type. Null for body types we ship no map for (treat every pixel as inside).
     /// </summary>
     /// <param name="loadIfMissing">
-    /// When false, only an ALREADY-loaded transfer map is used; a cache miss returns null instead of
-    /// loading the ~4K map from disk. The colour-set editor passes false so merely opening it (to scan an
-    /// index texture) doesn't pay the load — the maps are loaded lazily when sibling synthesis actually
-    /// remaps. Callers that get null simply treat every pixel as inside an island.
+    /// When false, only an already-loaded map is used and a cache miss returns null instead of loading from disk.
     /// </param>
     public bool[]? IslandMask(string bodyType, out int w, out int h, bool loadIfMissing = true)
     {
         w = h = 0;
-        // gen2 (vanilla) is a right-half crop of bibo space, not a transfer-map destination —
-        // we ship no *_to_gen2 map, so there's no island mask to derive. Bail before GetMap
-        // logs a spurious "transfer map not found".
+        // gen2 is a crop of bibo space with no *_to_gen2 map; bail before GetMap logs "transfer map not found".
         if (string.Equals(bodyType, "gen2", StringComparison.OrdinalIgnoreCase)) return null;
         foreach (var from in new[] { "bibo", "gen3" })
         {
@@ -412,8 +318,7 @@ public class UVRemapService
         return null;
     }
 
-    // Latched when the LibTiff codec itself can't be loaded, so the failure is reported once rather
-    // than per material per composite. Written under cacheLock, like the cache beside it.
+    // Latched when the LibTiff codec can't be loaded, so the failure is reported once. Written under cacheLock.
     private bool tiffUnavailable;
 
     private TransferMap? GetMap(string from, string to, bool loadIfMissing = true)
@@ -432,13 +337,8 @@ public class UVRemapService
             }
             catch (Exception ex) when (IsTiffCodecMissing(ex))
             {
-                // This is the ONLY place the codec's absence can be caught. The CLR resolves
-                // BitMiracle.LibTiff.NET when it JITs LoadMapRaw — i.e. on ENTRY, before that method's
-                // own try block is in scope — which is why a report of this lands on its first line
-                // rather than on Tiff.Open. Left uncaught it escapes IslandMask into RecompositeBody's
-                // Parallel.ForEach and takes the whole composite down, turning one missing file into a
-                // plugin that does nothing. A null map is already an expected outcome (see IslandMask):
-                // every caller treats it as "no island mask", so compositing continues.
+                // The only place the codec's absence can be caught: the CLR resolves LibTiff when it JITs LoadMapRaw.
+                // Uncaught it would take down the whole composite; a null map already means "no island mask".
                 tiffUnavailable = true;
                 log.Error(ex, "[Proteus] TIFF codec unavailable — UV transfer maps are disabled for this " +
                               "session. BitMiracle.LibTiff.NET.dll is missing from the plugin folder, which " +
@@ -453,12 +353,8 @@ public class UVRemapService
     }
 
     /// <summary>
-    /// True when <paramref name="ex"/> is the CLR failing to load the LibTiff ASSEMBLY, as opposed to a
-    /// problem with a map file. Matched on the name because the two arrive as the same exception types.
-    /// <para/>
-    /// A file problem cannot actually reach here today — <see cref="LoadMapRaw"/> ends in a catch-all that
-    /// logs and returns null — so this is a guard against that catch ever being narrowed, not against the
-    /// current code. Without it, one unreadable .tif could latch the codec off for the whole session.
+    /// True when <paramref name="ex"/> is the CLR failing to load the LibTiff assembly, not a problem with a map file
+    /// (matched by name, since both arrive as the same exception types). Guards against one bad .tif latching the codec off.
     /// </summary>
     private static bool IsTiffCodecMissing(Exception ex)
     {
@@ -477,14 +373,8 @@ public class UVRemapService
         return false;
     }
 
-    // Loads the forward map (from→to) and, when the reverse map (to→from) is available,
-    // invalidates destination pixels whose forward→reverse round trip doesn't return near
-    // the start. Those pixels are where the transfer map is unreliable (typically UV-island
-    // seams like the shoulder): the forward map points them at a source location whose true
-    // destination is elsewhere, so they pull in coverage that doesn't belong, producing a
-    // dyed seam after compositing. Dropping only the inconsistent pixels leaves accurate
-    // continuous coverage intact (unlike a blanket boundary erosion, which would gap-seam
-    // garments that legitimately span two islands).
+    // Loads the forward map (from→to) and, when the reverse map is available, flags destination pixels whose
+    // forward→reverse round trip doesn't return near the start: those are unreliable UV-island seams.
     private TransferMap? LoadMap(string from, string to)
     {
         var fwd = LoadMapRaw(from, to);
@@ -493,10 +383,7 @@ public class UVRemapService
         var rev = LoadMapRaw(to, from);
         if (rev != null)
         {
-            // Flag round-trip-inconsistent pixels by severity, but DON'T invalidate them here —
-            // the drop decision is made later against the actual coverage so the garment interior
-            // is spared. A gross (≥512px) mismap buried inside the garment (an internal seam) must
-            // be kept; only one adjacent to bare skin (the shoulder bleed) is dropped.
+            // Flag round-trip-inconsistent pixels by severity; the drop decision is made later against actual coverage.
             //   level 1 — moderate (softThresh..ultraThresh)
             //   level 2 — gross    (≥ ultraThresh): nothing legitimate maps 1/8 of the texture away
             float softThresh  = Math.Max(16f, fwd.W / 128f);  // ~32px  @4096
@@ -507,14 +394,11 @@ public class UVRemapService
             for (int i = 0; i < fwd.Valid.Length; i++)
             {
                 if (!fwd.Valid[i]) continue;
-                // Forward: this dest pixel (in to-space) → source coord in from-space,
-                // which is the index space of the reverse map.
+                // Forward: this dest pixel → source coord in from-space, the reverse map's index space.
                 int sx = (int)((float)fwd.X[i] / 65535f * (rev.W - 1) + 0.5f);
                 int sy = (int)((float)fwd.Y[i] / 65535f * (rev.H - 1) + 0.5f);
                 int qi = sy * rev.W + sx;
-                // Source lands where the reverse map has no correspondence (a gutter near an
-                // island edge). Can't measure the round trip — keep it, so legitimate garment
-                // edges aren't carved away.
+                // No reverse correspondence (a gutter): the round trip can't be measured, so keep it.
                 if (!rev.Valid[qi]) continue;
                 // Reverse: that from-space pixel → coord back in to-space (this map's index space).
                 float bx = (float)rev.X[qi] / 65535f * (fwd.W - 1);
@@ -527,14 +411,11 @@ public class UVRemapService
             }
             fwd.DropLevel = (moderate + gross) > 0 ? dropLevel : null;
 
-            // Mark valid pixels within BorderReach of a UV-island border, so the seam-drop only
-            // operates near borders and leaves interior detail alone. Check BOTH UVs: a pixel is
-            // near a border if it's near a DESTINATION (this map's) island edge OR its mapped
-            // SOURCE location is near a source island edge — seams originate from either side.
+            // Mark valid pixels within BorderReach of a UV-island border in either the destination or the mapped
+            // source space, since seams originate from either side.
             const int BorderReach = 150;
 
-            // Near-border mask for a validity grid: valid pixels within `reach` of an invalid one.
-            // Uses a summed-area table of the INVALID mask so each box query is O(1).
+            // Valid pixels within `reach` of an invalid one, via a summed-area table of the invalid mask.
             static bool[] NearBorderMask(bool[] valid, int w, int h, int reach)
             {
                 int sw = w + 1;
@@ -679,15 +560,10 @@ public class UVRemapService
         return dst;
     }
 
-    // Computes which flagged seam pixels to drop, from the FINAL composited (post-mask) coverage.
-    // For each flagged (moderate round-trip error) pixel it looks across the boundary:
-    //   • both opposing sides totally transparent  → the bleed is stranded in bare skin
-    //     (the shoulder seam) → SHOULDER scenario, dropped readily (ShoulderMaxCover).
-    //   • coverage present on a side               → the garment continues across the boundary
-    //     (an internal seam) → INTERNAL scenario, kept unless nearly isolated (InternalMaxCover).
-    // Returns a per-pixel drop mask (true = remove) so the caller can apply it to every coverage
-    // buffer consistently, or null when nothing is flagged. `decision` is the post-mask coverage;
-    // analysing it (not the raw remap) means masked-out regions read as the bare skin they are.
+    // Computes which seam pixels to drop, from the final post-mask coverage `decision`:
+    //   • both opposing sides transparent → a sliver stranded in bare skin → SHOULDER, dropped readily.
+    //   • coverage on a side → the garment continues across → INTERNAL, kept unless nearly isolated.
+    // Returns a per-pixel drop mask (true = remove), or null when nothing is flagged.
     private const int   EmptyRadius      = 8;     // dest neighbourhood half-size, dest pixels
     private const int   SideReach        = 10;    // how far across the boundary to test, dest px
     private const int   SideThick        = 3;     // perpendicular half-thickness of a side block
@@ -708,10 +584,7 @@ public class UVRemapService
         var a0 = new byte[n];
         for (int i = 0; i < n; i++) a0[i] = decision[i * 4 + 3];
 
-        // Summed-area table of binary coverage (alpha>16), zero-padded, so every box query — the
-        // side tests and the local-coverage test — is O(1). Lets us classify EVERY covered pixel,
-        // not only round-trip-flagged ones: the shoulder bleed maps cleanly (low error, unflagged)
-        // yet sits stranded in bare skin, so it must be reachable by the both-sides-bare test.
+        // Summed-area table of binary coverage (alpha>16), so every box query is O(1).
         int sw = w + 1;
         var sat = new int[sw * (h + 1)];
         for (int y = 0; y < h; y++)
@@ -744,24 +617,20 @@ public class UVRemapService
             if (a0[idx] == 0) continue;
             int cx = idx % w, cy = idx / w;
 
-            // Confine the cleanup to within ~10px of a UV-island border. Away from borders there
-            // are no seam artefacts, only genuine detail (e.g. fishnet net lines), which must be
-            // left intact.
+            // Confine the cleanup to near UV-island borders; elsewhere there is only genuine detail.
             int mx = mw == w ? cx : cx * mw / w;
             int my = mh == h ? cy : cy * mh / h;
             int mi = my * mw + mx;
             if (!nearBorder[mi]) continue;
 
-            // Both opposing sides bare → a sliver stranded in bare skin → SHOULDER. This is tested
-            // on every covered pixel because the shoulder bleed is usually NOT round-trip-flagged.
+            // Both opposing sides bare → SHOULDER. Tested on every covered pixel: the shoulder bleed is often unflagged.
             bool left  = Transparent(cx - SideReach, cx - SideOffset, cy - SideThick, cy + SideThick);
             bool right = Transparent(cx + SideOffset, cx + SideReach, cy - SideThick, cy + SideThick);
             bool up    = Transparent(cx - SideThick, cx + SideThick, cy - SideReach, cy - SideOffset);
             bool down  = Transparent(cx - SideThick, cx + SideThick, cy + SideOffset, cy + SideReach);
             bool shoulder = (left && right) || (up && down);
 
-            // Non-shoulder pixels are only candidates for the gentle internal-seam drop when they
-            // are round-trip-flagged (a UV-island boundary); otherwise they're plain garment, kept.
+            // Non-shoulder pixels are candidates only when round-trip-flagged.
             bool flagged = lvl[mi] != 0;
             if (!shoulder && !flagged) continue;
 
@@ -777,37 +646,20 @@ public class UVRemapService
     }
 
     /// <summary>
-    /// Area-average ("box") reduction of an RGBA8 buffer: every destination texel is the mean of the
-    /// whole source rectangle it covers.
-    /// <para/>
-    /// This is the RIGHT filter for shrinking, and bilinear is not. Bilinear takes four taps whatever
-    /// the ratio, so a 2:1-or-worse reduction still skips most of the source and still aliases — and
-    /// nearest-neighbour, which is what this path used to do, skips ALL but one. On fine line art (a
-    /// tattoo's filigree, thin script) that decimation reads as blocky, speckled, stair-stepped edges
-    /// that everyone reports as "compression artifacts", even with compression off.
-    /// <para/>
-    /// UNWEIGHTED — the four channels are averaged independently, alpha included, with no premultiply.
-    /// Premultiplying would suit a diffuse (it stops a transparent neighbour's RGB bleeding into an
-    /// edge) but it is WRONG for the other things that come through here: a normal map's RGB is a
-    /// direction, not a colour, so weighting it by the coverage lane in alpha would drag texels near
-    /// any edge toward (0,0,0), which is not a flat normal — it would carve a dark seam into the relief
-    /// exactly where coverage falls off. One channel-agnostic rule beats a per-caller guess.
+    /// Area-average ("box") reduction of an RGBA8 buffer: each destination texel is the mean of the source rectangle it
+    /// covers, which avoids the aliasing bilinear and nearest give when shrinking. Unweighted (no premultiply), since a
+    /// normal map's RGB is a direction that alpha weighting would corrupt.
     /// </summary>
     public static byte[] ResizeBox(byte[] src, int srcW, int srcH, int dstW, int dstH)
     {
         if (srcW == dstW && srcH == dstH) return src;
         var dst = new byte[Math.Max(0, dstW) * Math.Max(0, dstH) * 4];
-        // A zero-dimension SOURCE would leave the per-texel span empty, and the average below divides by the
-        // number of texels it summed — an integer divide, so that is a hard DivideByZeroException rather
-        // than a NaN. Nothing upstream should produce one (ProbeSize requires both dimensions positive, and
-        // the decoders throw on a corrupt file), which is exactly why it would be a confusing way to fail.
+        // A zero-dimension source would divide by zero below.
         if (srcW <= 0 || srcH <= 0 || dstW <= 0 || dstH <= 0) return dst;
 
         void Row(int dy)
         {
-            // Half-open source span for this destination row, never empty: a destination axis LARGER
-            // than the source collapses the span to one texel, which degrades this axis to point
-            // sampling rather than reading out of bounds.
+            // Half-open source span, never empty: an axis larger than the source degrades to point sampling.
             int y0 = (int)((long)dy * srcH / dstH);
             int y1 = (int)(((long)dy + 1) * srcH / dstH);
             if (y1 <= y0) y1 = y0 + 1;
@@ -843,8 +695,7 @@ public class UVRemapService
             }
         }
 
-        // Same row partition (and same small-image guard) as TextureLoader's nearest scale — rows are
-        // independent and each writes only its own slice, so this is byte-identical to the serial form.
+        // Rows are independent, so partitioning by row is byte-identical to the serial form.
         if (dstH * dstW < 256 * 256 || Environment.ProcessorCount < 2)
             for (int dy = 0; dy < dstH; dy++) Row(dy);
         else
@@ -884,9 +735,7 @@ public class UVRemapService
             }
         }
 
-        // Parallelised for the same reason ResizeBox is: this is no longer only a once-per-file base
-        // upscale, it is now on the composite's critical path whenever an overlay is smaller than the
-        // sheet it lands on. 16.7M pixels x 4 channels is not something to run on one thread there.
+        // Parallelised: this runs on the composite's critical path whenever an overlay is smaller than its sheet.
         if (dstH * dstW < 256 * 256 || Environment.ProcessorCount < 2)
             for (int dy = 0; dy < dstH; dy++) Row(dy);
         else

@@ -477,9 +477,9 @@ public class ToeCapDiagTests
         byte[]? baseModel = text.Contains("base=yes") ? File.ReadAllBytes(F0("base.mdl")) : null;
         var diagOn = new List<string>();
         var clock = System.Diagnostics.Stopwatch.StartNew();
-        SecondSkinWriter.TraceSpanNode = p => p.Z > 0.010f && p.Z < 0.014f && MathF.Abs(p.X) < 0.003f && p.Y > 0.850f && p.Y < 0.875f;
+        BodyBridge.TraceSpanNode = p => p.Z > 0.010f && p.Z < 0.014f && MathF.Abs(p.X) < 0.003f && p.Y > 0.850f && p.Y < 0.875f;
         var on = SecondSkinWriter.Build(specs, Layers(true), baseModel, out var onStats, diagOn.Add, CapSets());
-        SecondSkinWriter.TraceSpanNode = null;
+        BodyBridge.TraceSpanNode = null;
         File.WriteAllLines(Path.Combine(Path.GetTempPath(), Path.ChangeExtension(report, ".diag.txt")),
             diagOn.Prepend($"stats: {onStats}"));
         File.WriteAllBytes(Path.Combine(Path.GetTempPath(), Path.ChangeExtension(report, ".replay.mdl")), on);
@@ -535,7 +535,7 @@ public class ToeCapDiagTests
             SecondSkinWriter.Vec3 N(int i) => new(pn[i * 3], pn[i * 3 + 1], pn[i * 3 + 2]);
             SecondSkinWriter.Vec3 Fp(int i) => new(pf[i * 3], pf[i * 3 + 1], pf[i * 3 + 2]);
             // The writer's own inside test, so the two cannot disagree about what "inside" means.
-            var body = new SecondSkinWriter.BodyWinding(
+            var body = new BodyBridge.BodyWinding(
                 Enumerable.Range(0, pf.Length / 3).Select(Fp).ToArray(), to, Enumerable.Range(0, pf.Length / 3).ToArray());
             // Does the measure itself read this body correctly? The chest centre is inside; a point well in front
             // of the apexes, and one far off to the side, are not.
@@ -637,7 +637,7 @@ public class ToeCapDiagTests
                 {
                     if (!SecondSkinWriter.TryReadLod0Geometry(bytes, out var bpp, out _, out var btt, out _, out _,
                             keepMaterial: m => m == name) || btt.Length == 0) continue;
-                    var bodyOnly = new SecondSkinWriter.BodyWinding(
+                    var bodyOnly = new BodyBridge.BodyWinding(
                         Enumerable.Range(0, bpp.Length / 3).Select(k => new SecondSkinWriter.Vec3(bpp[k * 3], bpp[k * 3 + 1], bpp[k * 3 + 2])).ToArray(),
                         btt, Enumerable.Range(0, bpp.Length / 3).ToArray());
                     var sample = inside.Take(6).Select(c => bodyOnly.Winding(c.End)).ToList();
@@ -1155,7 +1155,7 @@ public class ToeCapDiagTests
         var gate = new SecondSkinLayer { MaterialName = "gate", Coverage = cov, CoverageWidth = vs, CoverageHeight = vs };
         var input = File.ReadAllBytes(f);
         var log = new List<string>();
-        var output = SecondSkinWriter.SmoothBodyNipples(input, gate, 0f, log.Add, foldStrength: 1f);
+        var output = BodyBridge.SmoothBodyNipples(input, gate, 0f, log.Add, foldStrength: 1f);
         var sb = new System.Text.StringBuilder();
         foreach (var l in log) sb.AppendLine(l);
 
@@ -1183,7 +1183,7 @@ public class ToeCapDiagTests
                     keepMaterial: m => !SecondSkinWriter.IsBodySkinMaterial(m))) continue;
             var nodes = new SecondSkinWriter.Vec3[sp.Length / 3];
             for (int i = 0; i < nodes.Length; i++) nodes[i] = new SecondSkinWriter.Vec3(sp[i * 3], sp[i * 3 + 1], sp[i * 3 + 2]);
-            var winding = new SecondSkinWriter.BodyWinding(nodes, st, Enumerable.Range(0, nodes.Length).ToArray());
+            var winding = new BodyBridge.BodyWinding(nodes, st, Enumerable.Range(0, nodes.Length).ToArray());
             var used = new bool[gp.Length / 3];
             foreach (int i in gt) used[i] = true;
             // Signed distance to the skin SURFACE: nearest point on a skin triangle, positive on the side the
@@ -1450,7 +1450,7 @@ public class ToeCapDiagTests
                 }
                 if (bust.Count(b => b > 0f) < 100) continue;
                 var log = new List<string>();
-                SecondSkinWriter.BustBridgeSolve(p3, n3, tri, bust, 0f, log.Add, null, 1f);
+                BodyBridge.BustBridgeSolve(p3, n3, tri, bust, 0f, log.Add, null, 1f);
                 sb.AppendLine($"== {Path.GetFileName(dir)} host{host} body{part}");
                 foreach (var l in log.Where(l => l.Contains("nipple"))) sb.AppendLine("  " + l);
                 break;
@@ -1481,8 +1481,8 @@ public class ToeCapDiagTests
         }
         var log = new List<string>();
         var nipLog = new List<string>();
-        SecondSkinWriter.BustBridgeSolve(p3, n3, tri, bust, 0f, nipLog.Add, null, 1f);
-        var plan = SecondSkinWriter.BustBridgeSolve(p3, n3, tri, bust, 1f, log.Add);
+        BodyBridge.BustBridgeSolve(p3, n3, tri, bust, 0f, nipLog.Add, null, 1f);
+        var plan = BodyBridge.BustBridgeSolve(p3, n3, tri, bust, 1f, log.Add);
         var sb = new System.Text.StringBuilder();
         foreach (var l in nipLog) sb.AppendLine("NIPPLE PASS: " + l);
         // Small-scale bumps: z above the mean of a 3-6mm ring (in x,y), over the front of the breasts.
@@ -2976,7 +2976,7 @@ public class ToeCapDiagTests
     }
 
     /// <summary>Every authored cap the plugin would ship, paired with its binding — same rule as the service.</summary>
-    private static List<SecondSkinWriter.AuthoredCapSet> CapSets()
+    internal static List<SecondSkinWriter.AuthoredCapSet> CapSets()
     {
         foreach (var d in new[] { Path.Combine(AppContext.BaseDirectory, "Meshes"),
                                   @"E:\repos\Proteus\Proteus\Meshes" })

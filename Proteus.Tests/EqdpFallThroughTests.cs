@@ -22,7 +22,7 @@ public class EqdpFallThroughTests
     [InlineData("1501", "0901")]  // Hrothgar male   -> Roegadyn male
     [InlineData("1501", "0101")]  // Hrothgar male   -> Roegadyn male -> Midlander male
     public void ReachableSameGender_IsAllowed(string from, string to)
-        => Assert.True(SecondSkinService.CanFallThrough(from, to));
+        => Assert.True(PenumbraManipulations.CanFallThrough(from, to));
 
     [Theory]
     // The reported bug: a Midlander female emptied onto Midlander male. The hop is real in the game's
@@ -37,7 +37,7 @@ public class EqdpFallThroughTests
     [InlineData("0101", "0201")]
     [InlineData("0101", "0901")]
     public void UnreachableOrCrossGender_IsRejected(string from, string to)
-        => Assert.False(SecondSkinService.CanFallThrough(from, to));
+        => Assert.False(PenumbraManipulations.CanFallThrough(from, to));
 
     [Theory]
     [InlineData(null, "0201")]
@@ -52,5 +52,5 @@ public class EqdpFallThroughTests
     [InlineData("9201", "0201")]  // unknown female NPC
     [InlineData("1901", "0101")]  // one past Viera female
     public void MalformedCodes_AreRejectedNotThrown(string? from, string? to)
-        => Assert.False(SecondSkinService.CanFallThrough(from, to));
+        => Assert.False(PenumbraManipulations.CanFallThrough(from, to));
 }
