@@ -2231,6 +2231,38 @@
     "message": "Choisissez une pièce et faites glisser les flèches : une flèche la déplace sur\ncet axe, un carré la déplace dans ce plan.",
     "description": ""
   },
+  "Parts.Tool.Rotate": {
+    "message": "Pivoter",
+    "description": ""
+  },
+  "Parts.Tool.Rotate.Tip": {
+    "message": "Choisissez une pièce, puis faites glisser un des anneaux pour la faire tourner\nautour de son centre : un anneau coloré la tourne autour de cet axe, l'anneau extérieur autour de votre vue.",
+    "description": ""
+  },
+  "Parts.Tool.Scale": {
+    "message": "Échelle",
+    "description": ""
+  },
+  "Parts.Tool.Scale.Tip": {
+    "message": "Choisissez une pièce, puis appuyez dessus et glissez à droite pour\nl'agrandir ou à gauche pour la rétrécir autour de son centre.",
+    "description": ""
+  },
+  "Parts.Rotate.Help": {
+    "message": "Cliquez sur une pièce pour la choisir, puis faites glisser un des anneaux à son centre. Faites glisser ailleurs pour tourner le modèle, Maj+glisser pour déplacer la vue, molette pour zoomer.",
+    "description": ""
+  },
+  "Parts.Rotate.LiveHint": {
+    "message": "Cliquez sur une pièce de votre personnage, puis faites glisser un des anneaux à son centre. Maintenez Alt pour déplacer la caméra. Chaque rotation est enregistrée quand vous relâchez.",
+    "description": ""
+  },
+  "Parts.Scale.Help": {
+    "message": "Cliquez sur une pièce pour la choisir, puis appuyez dessus et glissez à droite pour l'agrandir ou à gauche pour la rétrécir. Faites glisser ailleurs pour tourner le modèle, Maj+glisser pour déplacer la vue, molette pour zoomer.",
+    "description": ""
+  },
+  "Parts.Scale.LiveHint": {
+    "message": "Cliquez sur une pièce de votre personnage, puis appuyez dessus et glissez à droite pour l'agrandir ou à gauche pour la rétrécir. Maintenez Alt pour déplacer la caméra. Chaque changement est enregistré quand vous relâchez.",
+    "description": ""
+  },
   "Parts.Move.Help": {
     "message": "Cliquez sur une pièce pour la choisir, puis faites glisser une flèche ou un carré. Faites glisser ailleurs pour tourner le modèle, Maj+glisser pour déplacer la vue, molette pour zoomer.",
     "description": ""

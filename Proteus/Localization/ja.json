@@ -2231,6 +2231,38 @@
     "message": "パーツを選び、矢印をドラッグします。矢印はその軸に沿って、\n四角はその平面上で動かします。",
     "description": ""
   },
+  "Parts.Tool.Rotate": {
+    "message": "回転",
+    "description": ""
+  },
+  "Parts.Tool.Rotate.Tip": {
+    "message": "パーツを選び、いずれかのリングをドラッグすると中心を軸に回転します。\n色付きのリングはその軸まわり、外側のリングは視線まわりに回します。",
+    "description": ""
+  },
+  "Parts.Tool.Scale": {
+    "message": "拡大縮小",
+    "description": ""
+  },
+  "Parts.Tool.Scale.Tip": {
+    "message": "パーツを選び、その上を押して右にドラッグすると拡大、\n左にドラッグすると中心を基準に縮小します。",
+    "description": ""
+  },
+  "Parts.Rotate.Help": {
+    "message": "パーツをクリックして選び、中心のリングのいずれかをドラッグします。それ以外の場所をドラッグするとモデルが回転し、Shift+ドラッグで視点を移動、スクロールでズームします。",
+    "description": ""
+  },
+  "Parts.Rotate.LiveHint": {
+    "message": "キャラクターのパーツをクリックし、中心のリングのいずれかをドラッグします。Alt を押すとカメラを動かせます。回転は離したときに保存されます。",
+    "description": ""
+  },
+  "Parts.Scale.Help": {
+    "message": "パーツをクリックして選び、その上を押して右にドラッグすると拡大、左で縮小します。それ以外の場所をドラッグするとモデルが回転し、Shift+ドラッグで視点を移動、スクロールでズームします。",
+    "description": ""
+  },
+  "Parts.Scale.LiveHint": {
+    "message": "キャラクターのパーツをクリックし、その上を押して右にドラッグすると拡大、左で縮小します。Alt を押すとカメラを動かせます。変更は離したときに保存されます。",
+    "description": ""
+  },
   "Parts.Move.Help": {
     "message": "パーツをクリックして選び、矢印か四角をドラッグします。それ以外の場所をドラッグするとモデルが回転し、Shift+ドラッグで視点を移動、スクロールでズームします。",
     "description": ""

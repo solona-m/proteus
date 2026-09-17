@@ -2231,6 +2231,38 @@
     "message": "Wähle ein Teil und ziehe an den Pfeilen: ein Pfeil verschiebt es entlang\ndieser Achse, ein Quadrat über diese Ebene.",
     "description": ""
   },
+  "Parts.Tool.Rotate": {
+    "message": "Drehen",
+    "description": ""
+  },
+  "Parts.Tool.Rotate.Tip": {
+    "message": "Wähle ein Teil und ziehe dann an einem der Ringe, um es um seine Mitte zu drehen:\nein farbiger Ring dreht es um diese Achse, der äußere um deine Blickrichtung.",
+    "description": ""
+  },
+  "Parts.Tool.Scale": {
+    "message": "Skalieren",
+    "description": ""
+  },
+  "Parts.Tool.Scale.Tip": {
+    "message": "Wähle ein Teil, drücke darauf und ziehe nach rechts, um es um\nseine Mitte zu vergrößern, oder nach links, um es zu verkleinern.",
+    "description": ""
+  },
+  "Parts.Rotate.Help": {
+    "message": "Klicke ein Teil an, um es zu wählen, und ziehe dann an einem der Ringe in seiner Mitte. Ziehen anderswo dreht das Modell, Umschalt-Ziehen verschiebt die Ansicht, Scrollen zoomt.",
+    "description": ""
+  },
+  "Parts.Rotate.LiveHint": {
+    "message": "Klicke ein Teil an deinem Charakter an und ziehe dann an einem der Ringe in seiner Mitte. Halte Alt, um die Kamera zu bewegen. Jede Drehung wird beim Loslassen gespeichert.",
+    "description": ""
+  },
+  "Parts.Scale.Help": {
+    "message": "Klicke ein Teil an, um es zu wählen, drücke dann darauf und ziehe nach rechts zum Vergrößern oder nach links zum Verkleinern. Ziehen anderswo dreht das Modell, Umschalt-Ziehen verschiebt die Ansicht, Scrollen zoomt.",
+    "description": ""
+  },
+  "Parts.Scale.LiveHint": {
+    "message": "Klicke ein Teil an deinem Charakter an, drücke dann darauf und ziehe nach rechts zum Vergrößern oder nach links zum Verkleinern. Halte Alt, um die Kamera zu bewegen. Jede Änderung wird beim Loslassen gespeichert.",
+    "description": ""
+  },
   "Parts.Move.Help": {
     "message": "Klicke ein Teil an, um es zu wählen, und ziehe dann einen Pfeil oder ein Quadrat. Ziehen anderswo dreht das Modell, Umschalt-Ziehen verschiebt die Ansicht, Scrollen zoomt.",
     "description": ""

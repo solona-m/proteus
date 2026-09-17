@@ -2231,6 +2231,38 @@
     "message": "选择一个部件并拖动箭头：箭头沿该轴移动，\n方块在该平面内移动。",
     "description": ""
   },
+  "Parts.Tool.Rotate": {
+    "message": "旋转",
+    "description": ""
+  },
+  "Parts.Tool.Rotate.Tip": {
+    "message": "选中部件后，拖动其中一个圆环即可绕其中心旋转：\n彩色圆环绕对应轴旋转，外侧圆环绕视线方向旋转。",
+    "description": ""
+  },
+  "Parts.Tool.Scale": {
+    "message": "缩放",
+    "description": ""
+  },
+  "Parts.Tool.Scale.Tip": {
+    "message": "选中部件后，按住它并向右拖动放大，\n向左拖动则绕其中心缩小。",
+    "description": ""
+  },
+  "Parts.Rotate.Help": {
+    "message": "点击部件以选中它，然后拖动其中心的某个圆环。在其他地方拖动可旋转模型，Shift+拖动平移视图，滚轮缩放。",
+    "description": ""
+  },
+  "Parts.Rotate.LiveHint": {
+    "message": "点击角色身上的部件，然后拖动其中心的某个圆环。按住 Alt 可移动镜头。每次旋转在松开时保存。",
+    "description": ""
+  },
+  "Parts.Scale.Help": {
+    "message": "点击部件以选中它，然后按住它向右拖动放大、向左拖动缩小。在其他地方拖动可旋转模型，Shift+拖动平移视图，滚轮缩放。",
+    "description": ""
+  },
+  "Parts.Scale.LiveHint": {
+    "message": "点击角色身上的部件，然后按住它向右拖动放大、向左拖动缩小。按住 Alt 可移动镜头。每次更改在松开时保存。",
+    "description": ""
+  },
   "Parts.Move.Help": {
     "message": "点击部件以选中它，然后拖动箭头或方块。在其他地方拖动可旋转模型，Shift+拖动平移视图，滚轮缩放。",
     "description": ""
