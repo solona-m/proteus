@@ -126,7 +126,15 @@ public partial class CompositorService
                 Publish();
                 ReconcileAndVerify();
             }
-            catch (OperationCanceledException) { }
+            catch (OperationCanceledException)
+            {
+                // Say so. This is the ordinary "a newer trigger arrived" path, but swallowing it silently left a
+                // "Recomposite START" in the log with no ending of any kind, which reads like a hang — and on a slow
+                // machine, where triggers can out-pace a composite indefinitely, a run of these IS the fault. Counting
+                // STARTs against endings is the cheapest way to see that, so every exit from Run() now leaves a line.
+                compositor.log.Debug("[Proteus] recomposite cancelled — a newer trigger superseded it ({0:F0}ms in)",
+                    PhaseCounter.MsSince(tRunStart));
+            }
             catch (Exception ex) when (compositor._disposed || IsLoadContextUnloading(ex))
             {
                 // Plugin torn down mid-composite: the AssemblyLoadContext is unloading, nothing is recoverable, and a fresh

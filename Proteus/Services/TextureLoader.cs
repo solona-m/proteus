@@ -172,19 +172,13 @@ public class TextureLoader
     {
         if (Interlocked.Exchange(ref _nativeProbed, 1) == 1) return;
 
-        // The shim is built /arch:AVX2 with no runtime dispatch, so MSVC emits AVX/AVX2/FMA/BMI/LZCNT everywhere,
-        // including scalar code. LoadLibrary succeeds on any CPU; the first call then dies of
-        // STATUS_ILLEGAL_INSTRUCTION, which no catch can see — the CLR fail-fasts the game. Pentium/Celeron parts
-        // lacked AVX entirely until Alder Lake, so this has to be decided before the DLL is ever called.
-        // IsSupported also covers the OS not enabling YMM state.
-        if (!(System.Runtime.Intrinsics.X86.Avx2.IsSupported && System.Runtime.Intrinsics.X86.Fma.IsSupported
-           && System.Runtime.Intrinsics.X86.Bmi1.IsSupported && System.Runtime.Intrinsics.X86.Bmi2.IsSupported
-           && System.Runtime.Intrinsics.X86.Lzcnt.IsSupported))
-        {
-            _nativeAvailable = false;
-            log.Warning("[Proteus] native block compressor skipped: this CPU lacks AVX2/FMA/BMI — using managed BCnEncoder and Lumina");
-            return;
-        }
+        // No CPU-feature check here, deliberately: the shim is built for the plain x64 baseline (see
+        // native\src\build.bat), so SSE2 is all it needs and every x64 CPU has that. It was briefly built
+        // /arch:AVX2, which made it fail-fast the game on CPUs without AVX2; the fix for that was to gate
+        // the DLL off on those CPUs, and the gate turned out to be the worse half of the bug. Falling back
+        // costs far more than the flag ever bought — the managed encoder is ~30x slower (26s to BC7 a
+        // 2048² surface here, against 0.9s native), and a composite that slow never outruns the ambient
+        // triggers that restart it, so it is not "slower" so much as "never finishes".
 
         // PluginInterface.AssemblyLocation is authoritative (Assembly.Location can be empty under the load context).
         string? dir = null;
