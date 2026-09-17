@@ -233,6 +233,32 @@ public class ContentMaterialSettings
     public GearSettingsPreset? Glow { get; set; }
 }
 
+/// <summary>
+/// Where an imported pack's colours and glow come from, in one place, because the colour panel and the composite
+/// must agree: a MATERIAL entry wins over the option's, and at the material level a live override (a design
+/// binding or a pinned preset) wins over the mod's own.
+/// <para/>
+/// The level matters: the panel writes content edits per material (<see cref="ContentMaterialSettings"/>), so an
+/// override that could only answer per option would sit underneath the mod's own material entry and change
+/// nothing at all — a bound mod whose colours refuse to move.
+/// </summary>
+public static class ContentSettingLevels
+{
+    /// <summary>The rows to stamp into one material: the override's, else the mod's, else the option's.</summary>
+    public static List<ColorTableRowPreset>? RowsFor(
+        List<ColorTableRowPreset>? overrideMaterial,
+        ContentMaterialSettings? modMaterial,
+        List<ColorTableRowPreset>? option)
+        => overrideMaterial ?? modMaterial?.ColorTableRows ?? option;
+
+    /// <summary>The glow for one material, resolved the same way.</summary>
+    public static GearSettingsPreset? GlowFor(
+        GearSettingsPreset? overrideMaterial,
+        ContentMaterialSettings? modMaterial,
+        GearSettingsPreset? option)
+        => overrideMaterial ?? modMaterial?.Glow ?? option;
+}
+
 /// <summary>One of the pack's options that reveals one of its materials; stored because computing it reads the .mdl.</summary>
 public class ContentMaterialGate
 {

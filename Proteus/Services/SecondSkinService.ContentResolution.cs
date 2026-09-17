@@ -215,13 +215,18 @@ public sealed partial class SecondSkinService
                         continue;
                     }
 
-                    // Per-material settings win over the option's (the colour panel writes per material); the option's are the fallback.
+                    // Per-material settings win over the option's (the colour panel writes per material), and a live
+                    // override's material entry wins over the mod's own — see ContentSettingLevels.
                     var matSettings = cEntry.Metadata.PeekMaterialSettings(rel);
-                    var rowPresets = matSettings?.ColorTableRows ?? rc.ColorTableRows;
+                    var rowPresets = ContentSettingLevels.RowsFor(
+                        rc.MaterialRows != null && rc.MaterialRows.TryGetValue(rel, out var ovrRows) ? ovrRows : null,
+                        matSettings, rc.ColorTableRows);
                     var rows = BuildSparseRows(rowPresets);
 
                     // Only a glow that names an effect counts; a preset with numbers but no scroll map would split a slot for nothing.
-                    var glowSource = matSettings?.Glow ?? rc.Glow;
+                    var glowSource = ContentSettingLevels.GlowFor(
+                        rc.MaterialGlow != null && rc.MaterialGlow.TryGetValue(rel, out var ovrGlow) ? ovrGlow : null,
+                        matSettings, rc.Glow);
                     var glow = glowSource?.GlowKey() != null ? glowSource : null;
 
                     // The textures the selection puts behind this material; in the unit key, since sharing a material but not its

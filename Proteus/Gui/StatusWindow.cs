@@ -943,13 +943,13 @@ public class StatusWindow : Window
         // While a binding is edited, work on a copy and install it only on change, so opening the panel never creates an override.
         var stored  = StoredContentRows(entry, leadGroup, leadOption, mtrl);
         var ovrRows = overrideActive
-            ? editRouter.PeekOverrideRows(entry.ModDirectory, leadGroup, leadOption) : null;
+            ? EffectiveOverrideContentRows(entry, leadGroup, leadOption, mtrl) : null;
         var rows = overrideActive ? DesignBindingService.CopyRows(ovrRows ?? stored) : stored;
 
         // The glow, on the same copy-while-binding rule as the rows above.
         var storedGlow = StoredContentGlow(entry, leadGroup, leadOption, mtrl);
         var ovrGlow = overrideActive
-            ? editRouter.PeekContentGearOverride(entry.ModDirectory, leadGroup, leadOption) : null;
+            ? EffectiveOverrideContentGlow(entry, leadGroup, leadOption, mtrl) : null;
         var glow = (ovrGlow ?? storedGlow).Clone();
         bool glowing = glow.GlowKey() != null;
 
@@ -1031,16 +1031,15 @@ public class StatusWindow : Window
             return;
         }
 
-        // A design binding keys on the option. Each owner gets its own copy, or the lists would alias in memory.
-        foreach (var (group, option, _) in owners)
-        {
-            if (changed)
-                editRouter.SetOverrideRows(
-                    entry.ModDirectory, group, option, DesignBindingService.CopyRows(rows));
-            if (glowChanged)
-                editRouter.GetEditableContentGearOverride(entry.ModDirectory, group, option, glow)
-                    ?.ApplyScrollFrom(glow);
-        }
+        // Keyed by MATERIAL, like the metadata write above: an option-keyed override would sit under the mod's own
+        // per-material rows and never reach the character, and two materials sharing an option would overwrite each
+        // other. One key covers every owner, since they all publish this same material.
+        if (changed)
+            editRouter.SetContentMaterialRows(
+                entry.ModDirectory, mtrl, DesignBindingService.CopyRows(rows));
+        if (glowChanged)
+            editRouter.GetEditableContentMaterialGearOverride(entry.ModDirectory, mtrl, glow)
+                ?.ApplyScrollFrom(glow);
 
         RecompositeForOverlay(entry, "content-colors-change", ColorEditDebounceMs,
             skinFingerprintAuthoritative: true);   // see above
@@ -1272,6 +1271,30 @@ public class StatusWindow : Window
 
     private static void StoreContentRows(OverlayEntry entry, string materialRel, List<ColorTableRowPreset> rows)
         => entry.Metadata.MaterialSettings(materialRel).ColorTableRows = rows;
+
+    /// <summary>
+    /// What a design binding or pinned preset says this material's rows are, at the precedence the composite
+    /// applies (<see cref="ContentSettingLevels"/>): its material entry outranks everything, while its option
+    /// entry reaches the panel only when the mod has no material entry of its own. Null ⇒ show the mod's own.
+    /// </summary>
+    private List<ColorTableRowPreset>? EffectiveOverrideContentRows(
+        OverlayEntry entry, string? group, string? option, string materialRel)
+    {
+        if (editRouter.PeekContentMaterialRows(entry.ModDirectory, materialRel) is { } perMaterial)
+            return perMaterial;
+        if (entry.Metadata.PeekMaterialSettings(materialRel)?.ColorTableRows != null) return null;
+        return editRouter.PeekOverrideRows(entry.ModDirectory, group, option);
+    }
+
+    /// <inheritdoc cref="EffectiveOverrideContentRows"/>
+    private GearSettingsPreset? EffectiveOverrideContentGlow(
+        OverlayEntry entry, string? group, string? option, string materialRel)
+    {
+        if (editRouter.PeekContentMaterialGearOverride(entry.ModDirectory, materialRel) is { } perMaterial)
+            return perMaterial;
+        if (entry.Metadata.PeekMaterialSettings(materialRel)?.Glow != null) return null;
+        return editRouter.PeekContentGearOverride(entry.ModDirectory, group, option);
+    }
 
     /// <summary>The sidecar's content option for a (group, option) pair, or null for an unconditional piece
     /// — or for a name pair the sidecar no longer carries.</summary>

@@ -308,14 +308,24 @@ public partial class CompositorService
                 {
                     var content = compositor.discovery.ResolveActiveContent(entry, out contentDiag);
                     // A design binding overrides the pack's colours in memory; metadata.json is never written.
+                    // Per material as well as per option: the colour panel edits a pack one material at a time, and
+                    // the mod's own per-material rows would otherwise shadow the binding (ContentSettingLevels).
                     if (colorOverride != null && colorOverride.TryGetValue(entry.ModDirectory, out var cOvr))
                         content = content
-                            .Select(c => c with { ColorTableRows = cOvr.Resolve(c.OptionGroup, c.Option) ?? c.ColorTableRows })
+                            .Select(c => c with
+                            {
+                                ColorTableRows = cOvr.Resolve(c.OptionGroup, c.Option) ?? c.ColorTableRows,
+                                MaterialRows   = cOvr.Materials,
+                            })
                             .ToList();
                     // And its animated glow, resolved the same way, or edits saved to the binding would do nothing.
                     if (gearOverride != null && gearOverride.TryGetValue(entry.ModDirectory, out var cGear))
                         content = content
-                            .Select(c => c with { Glow = cGear.ResolveContent(c.OptionGroup, c.Option) ?? c.Glow })
+                            .Select(c => c with
+                            {
+                                Glow         = cGear.ResolveContent(c.OptionGroup, c.Option) ?? c.Glow,
+                                MaterialGlow = cGear.Materials,
+                            })
                             .ToList();
                     foreach (var c in content) contentLayers.Add((entry, c));
                 }

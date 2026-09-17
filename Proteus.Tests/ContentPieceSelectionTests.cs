@@ -1209,6 +1209,68 @@ public class ContentPieceSelectionTests
             ContentPieceResolver.ContentUnitKey("mod", body, ShinLaces, null, "geometric.jpeg 0.15 0.15 5 5"));
     }
 
+    /// <summary>
+    /// A material path is compared case-insensitively wherever one is looked up (<see cref="ContentPiece.MaterialFor"/>),
+    /// and that has to hold for a metadata.json straight off disk too — not only after the first edit rebuilt the map.
+    /// </summary>
+    [Fact]
+    public void Content_material_settings_are_found_case_insensitively_when_loaded_from_disk()
+    {
+        const string Json = """
+            {"ContentMaterials":{"Common/2/MT_c0801e5505_met_a.mtrl":{"Glow":{"Scroll":"geometric.jpeg"}}}}
+            """;
+
+        var meta = JsonSerializer.Deserialize<ProteusMetadata>(Json)!;
+
+        // The spelling the model binds, which need not match the one the panel stored.
+        Assert.Equal("geometric.jpeg",
+            meta.PeekMaterialSettings("common/2/mt_c0801e5505_met_a.mtrl")!.Glow!.Scroll);
+
+        // The copy-and-swap on first write still hands back the same entry rather than a second one.
+        meta.MaterialSettings("common/2/mt_c0801e5505_met_a.mtrl").ColorTableRows = [];
+        Assert.Single(meta.ContentMaterials!);
+    }
+
+    /// <summary>
+    /// The four levels an imported pack's colours can come from, in the one order the panel and the composite both
+    /// use. A live override (a design binding or a pinned preset) must be able to answer at the MATERIAL level:
+    /// keyed only per option it lost to the mod's own material entry, which is why a pack bound to a design could
+    /// not be recoloured at all.
+    /// </summary>
+    [Fact]
+    public void Content_settings_resolve_material_first_and_an_override_outranks_the_mods_own()
+    {
+        List<ColorTableRowPreset> Rows(string diffuse) =>
+            [new ColorTableRowPreset { Row = 16, SubRowA = new ColorTableSubRowPreset { Diffuse = diffuse } }];
+
+        var ovr    = Rows("#OVERRIDE");
+        var option = Rows("#OPTION");
+        var mod    = new ContentMaterialSettings { ColorTableRows = Rows("#MOD") };
+
+        // The binding wins over the mod's material entry, which wins over the option's rows.
+        Assert.Same(ovr, ContentSettingLevels.RowsFor(ovr, mod, option));
+        Assert.Same(mod.ColorTableRows, ContentSettingLevels.RowsFor(null, mod, option));
+        Assert.Same(option, ContentSettingLevels.RowsFor(null, null, option));
+        Assert.Null(ContentSettingLevels.RowsFor(null, null, null));
+
+        // A material entry with nothing in that field falls through rather than blanking the option's value:
+        // ContentMaterialSettings holds colours and glow independently.
+        Assert.Same(option, ContentSettingLevels.RowsFor(null, new ContentMaterialSettings(), option));
+
+        // The glow takes the same four levels.
+        var ovrGlow    = new GearSettingsPreset { Scroll = "flames.jpeg" };
+        var optionGlow = new GearSettingsPreset { Scroll = "geometric.jpeg" };
+        var modGlow    = new ContentMaterialSettings { Glow = new GearSettingsPreset { Scroll = "stars.jpeg" } };
+
+        Assert.Same(ovrGlow, ContentSettingLevels.GlowFor(ovrGlow, modGlow, optionGlow));
+        Assert.Same(modGlow.Glow, ContentSettingLevels.GlowFor(null, modGlow, optionGlow));
+        Assert.Same(optionGlow, ContentSettingLevels.GlowFor(null, null, optionGlow));
+
+        // An emptied material entry still answers: "cleared here" is not "never set here" (see the test above).
+        var cleared = new ContentMaterialSettings { Glow = new GearSettingsPreset() };
+        Assert.Null(ContentSettingLevels.GlowFor(null, cleared, optionGlow)!.GlowKey());
+    }
+
     [Fact]
     public void The_row_decode_rounds_to_the_nearest_pair_rather_than_truncating()
     {

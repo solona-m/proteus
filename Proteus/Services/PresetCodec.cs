@@ -143,8 +143,10 @@ public static class PresetCodec
         var hasSomething = preset.Options.Count > 0
                         || preset.StackOrder.Count > 0
                         || preset.Colors.Top != null || preset.Colors.Mask != null || preset.Colors.Options != null
+                        || preset.Colors.Materials != null
                         || preset.Gear.Top != null || preset.Gear.Mask != null
-                        || preset.Gear.Content != null || preset.Gear.Options != null;
+                        || preset.Gear.Content != null || preset.Gear.Options != null
+                        || preset.Gear.Materials != null;
         if (!hasSomething) return PresetDecodeResult.Fail("That preset is empty.");
 
         preset.Id     = Guid.NewGuid();

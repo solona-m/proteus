@@ -49,6 +49,16 @@ public class OverlayEditRouter
             ? bag.SetRows(modDir, group, option, rows)
             : bindings.SetOverrideRows(modDir, group, option, rows);
 
+    public List<ColorTableRowPreset>? PeekContentMaterialRows(string modDir, string materialRel)
+        => BagFor(modDir) is { } bag
+            ? bag.PeekContentMaterialRows(modDir, materialRel)
+            : bindings.PeekContentMaterialRows(modDir, materialRel);
+
+    public bool SetContentMaterialRows(string modDir, string materialRel, List<ColorTableRowPreset> rows)
+        => BagFor(modDir) is { } bag
+            ? bag.SetContentMaterialRows(modDir, materialRel, rows)
+            : bindings.SetContentMaterialRows(modDir, materialRel, rows);
+
     public List<ColorTableRowPreset>? PeekMaskRows(string modDir)
         => BagFor(modDir) is { } bag ? bag.PeekMaskRows(modDir) : bindings.PeekMaskRows(modDir);
 
@@ -68,6 +78,17 @@ public class OverlayEditRouter
         => BagFor(modDir) is { } bag
             ? bag.GetEditableContentGear(modDir, group, option, seed)
             : bindings.GetEditableContentGearOverride(modDir, group, option, seed);
+
+    public GearSettingsPreset? GetEditableContentMaterialGearOverride(
+        string modDir, string materialRel, GearSettingsPreset seed)
+        => BagFor(modDir) is { } bag
+            ? bag.GetEditableContentMaterialGear(modDir, materialRel, seed)
+            : bindings.GetEditableContentMaterialGearOverride(modDir, materialRel, seed);
+
+    public GearSettingsPreset? PeekContentMaterialGearOverride(string modDir, string materialRel)
+        => BagFor(modDir) is { } bag
+            ? bag.PeekContentMaterialGear(modDir, materialRel)
+            : bindings.PeekContentMaterialGearOverride(modDir, materialRel);
 
     public GearSettingsPreset? GetEditableMaskGearOverride(string modDir, OverlayDescriptor seed)
         => BagFor(modDir) is { } bag
