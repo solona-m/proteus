@@ -379,7 +379,36 @@ public class DesignBindingService : IDisposable
             if (opts.Count > 0) result.Options = opts;
         }
 
+        // And per material, which is the level the colour panel edits a pack at: capturing only the options
+        // would record a look the composite never shows (ContentSettingLevels).
+        result.Materials = CaptureMaterials(
+            e.Metadata.ContentMaterials, active?.Materials, m => CloneRows(m.ColorTableRows),
+            r => CloneRows(r)!);
+
         return result;
+    }
+
+    /// <summary>
+    /// One content pack's per-material settings for a binding: the live override's entry where there is one, else
+    /// the mod's own, over the union of both key sets. Cloned on both paths, so previewing an edit never moves
+    /// what is stored. Null when neither side has anything.
+    /// </summary>
+    private static Dictionary<string, T>? CaptureMaterials<T>(
+        Dictionary<string, ContentMaterialSettings>? stored,
+        IReadOnlyDictionary<string, T>? active,
+        Func<ContentMaterialSettings, T?> fromStored,
+        Func<T, T> clone) where T : class
+    {
+        var result = new Dictionary<string, T>(StringComparer.OrdinalIgnoreCase);
+
+        if (stored != null)
+            foreach (var (rel, settings) in stored)
+                if (fromStored(settings) is { } value) result[rel] = value;
+
+        if (active != null)
+            foreach (var (rel, value) in active) result[rel] = clone(value);
+
+        return result.Count > 0 ? result : null;
     }
 
     /// <summary>
@@ -1160,6 +1189,14 @@ public class DesignBindingService : IDisposable
     public bool SetOverrideRows(string modDir, string? group, string? option, List<ColorTableRowPreset> rows)
         => overrides.SetRows(modDir, group, option, rows);
 
+    /// <inheritdoc cref="OverlayOverrideBag.PeekContentMaterialRows"/>
+    public List<ColorTableRowPreset>? PeekContentMaterialRows(string modDir, string materialRel)
+        => overrides.PeekContentMaterialRows(modDir, materialRel);
+
+    /// <inheritdoc cref="OverlayOverrideBag.SetContentMaterialRows"/>
+    public bool SetContentMaterialRows(string modDir, string materialRel, List<ColorTableRowPreset> rows)
+        => overrides.SetContentMaterialRows(modDir, materialRel, rows);
+
     /// <summary>
     /// The active binding's mod-wide tab order (<see cref="Configuration.ModStackEntry"/> keys, top-first), or null
     /// when no binding overrides it and the global stack config applies.
@@ -1186,6 +1223,15 @@ public class DesignBindingService : IDisposable
     /// <inheritdoc cref="OverlayOverrideBag.PeekContentGear"/>
     public GearSettingsPreset? PeekContentGearOverride(string modDir, string? group, string? option)
         => overrides.PeekContentGear(modDir, group, option);
+
+    /// <inheritdoc cref="OverlayOverrideBag.GetEditableContentMaterialGear"/>
+    public GearSettingsPreset? GetEditableContentMaterialGearOverride(
+        string modDir, string materialRel, GearSettingsPreset seed)
+        => overrides.GetEditableContentMaterialGear(modDir, materialRel, seed);
+
+    /// <inheritdoc cref="OverlayOverrideBag.PeekContentMaterialGear"/>
+    public GearSettingsPreset? PeekContentMaterialGearOverride(string modDir, string materialRel)
+        => overrides.PeekContentMaterialGear(modDir, materialRel);
 
     /// <inheritdoc cref="OverlayOverrideBag.PeekGear"/>
     /// <remarks>Overlays only; a content pack's glow reads <see cref="PeekContentGearOverride"/>
@@ -2348,6 +2394,12 @@ public class DesignBindingService : IDisposable
             }
             if (opts.Count > 0) result.Options = opts;
         }
+
+        // The glow the panel edits per material, captured like the colours beside it.
+        result.Materials = CaptureMaterials(
+            e.Metadata.ContentMaterials, active?.Materials,
+            m => m.Glow == null ? null : CloneGearPreset(m.Glow), CloneGearPreset);
+
         return result;
     }
 

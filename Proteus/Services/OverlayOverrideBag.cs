@@ -202,6 +202,36 @@ public sealed class OverlayOverrideBag
         }
     }
 
+    /// <summary>This channel's rows for one of an imported pack's materials, or null. NEVER creates one.</summary>
+    public List<ColorTableRowPreset>? PeekContentMaterialRows(string modDir, string materialRel)
+    {
+        lock (gate)
+            return colors != null && colors.TryGetValue(modDir, out var ovr)
+                ? ovr.ResolveMaterial(materialRel) : null;
+    }
+
+    /// <summary>
+    /// Install one content material's rows as the live override, on an actual edit. False when this channel does
+    /// not govern the mod, so the caller persists to the metadata instead. Per material, not per option: that is
+    /// the level the colour panel edits at, and the level the composite reads first
+    /// (<see cref="ContentSettingLevels"/>).
+    /// </summary>
+    public bool SetContentMaterialRows(string modDir, string materialRel, List<ColorTableRowPreset> rows)
+    {
+        lock (gate)
+        {
+            if (colors == null || !colors.TryGetValue(modDir, out var ovr)) return false;
+            // Copy-and-swap, like ProteusMetadata.MaterialSettings: the composite reads this map from another
+            // thread, and it is handed to the run whole (ResolvedContent.MaterialRows).
+            var next = ovr.Materials == null
+                ? new Dictionary<string, List<ColorTableRowPreset>>(StringComparer.OrdinalIgnoreCase)
+                : new Dictionary<string, List<ColorTableRowPreset>>(ovr.Materials, StringComparer.OrdinalIgnoreCase);
+            next[materialRel] = rows;
+            ovr.Materials = next;
+            return true;
+        }
+    }
+
     /// <summary>The mod's stored mask rows — the single shared Masks tab's colorset — or null. NEVER
     /// creates one.</summary>
     public List<ColorTableRowPreset>? PeekMaskRows(string modDir)
@@ -265,6 +295,37 @@ public sealed class OverlayOverrideBag
             }
             return ovr.Content ??= seed.Clone();
         }
+    }
+
+    /// <summary>
+    /// The mutable glow the content colour panel binds to for one MATERIAL, seeded from what is on screen when
+    /// this channel has nothing stored for it yet. Null when the channel does not govern the mod.
+    /// </summary>
+    public GearSettingsPreset? GetEditableContentMaterialGear(
+        string modDir, string materialRel, GearSettingsPreset seed)
+    {
+        lock (gate)
+        {
+            if (gear == null || !gear.TryGetValue(modDir, out var ovr)) return null;
+            if (ovr.ResolveMaterial(materialRel) is { } have) return have;
+
+            // Copy-and-swap for the same reason as SetContentMaterialRows.
+            var made = seed.Clone();
+            var next = ovr.Materials == null
+                ? new Dictionary<string, GearSettingsPreset>(StringComparer.OrdinalIgnoreCase)
+                : new Dictionary<string, GearSettingsPreset>(ovr.Materials, StringComparer.OrdinalIgnoreCase);
+            next[materialRel] = made;
+            ovr.Materials = next;
+            return made;
+        }
+    }
+
+    /// <summary>Read-only peek at one content material's glow in this channel; null when it stores none.</summary>
+    public GearSettingsPreset? PeekContentMaterialGear(string modDir, string materialRel)
+    {
+        lock (gate)
+            return gear != null && gear.TryGetValue(modDir, out var ovr)
+                ? ovr.ResolveMaterial(materialRel) : null;
     }
 
     /// <summary>The mutable gear settings the Masks tab binds to, seeded from the descriptor.</summary>

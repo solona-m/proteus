@@ -203,7 +203,12 @@ public partial class CompositorService
                 sb.Append(e.ModDirectory).Append('#').Append(e.Priority).Append('#')
                   .Append(c.OptionGroup).Append('/').Append(c.Option).Append('#').Append(c.GroupOrder).Append('#')
                   .Append(JsonSerializer.Serialize(c.Piece)).Append('#')
-                  .Append(c.ColorTableRows == null ? "-" : JsonSerializer.Serialize(c.ColorTableRows)).Append(';');
+                  .Append(c.ColorTableRows == null ? "-" : JsonSerializer.Serialize(c.ColorTableRows)).Append('#')
+                  // A binding's per-material colours and glow: swapping to a design that differs only there must
+                  // not hash the same. The mod's OWN per-material settings stay out, as they always have — every
+                  // edit to them triggers with force.
+                  .Append(c.MaterialRows == null ? "-" : JsonSerializer.Serialize(c.MaterialRows)).Append('#')
+                  .Append(c.MaterialGlow == null ? "-" : JsonSerializer.Serialize(c.MaterialGlow)).Append(';');
             sb.Append('\n');
         }
 

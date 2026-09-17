@@ -108,8 +108,20 @@ public class ProteusMetadata
     /// Per-material colours and glow, keyed by path relative to the mod root (<c>ContentPieceResolver.ContentUnitKey</c>).
     /// A field present here wins over the per-option values, even when empty.
     /// </summary>
+    /// <remarks>
+    /// Case-insensitive on the way in, for the reason given on <see cref="MaterialMap"/>: freshly loaded from
+    /// metadata.json this map carries System.Text.Json's ordinal comparer, so until the first write through
+    /// <see cref="MaterialSettings"/> rebuilt it, <see cref="PeekMaterialSettings"/> answered case-sensitively
+    /// while every other reader of a material path did not.
+    /// </remarks>
     [JsonPropertyName("ContentMaterials")]
-    public Dictionary<string, ContentMaterialSettings>? ContentMaterials { get; set; }
+    public Dictionary<string, ContentMaterialSettings>? ContentMaterials
+    {
+        get => contentMaterials;
+        set => contentMaterials = MaterialMap.CaseInsensitive(value);
+    }
+
+    private Dictionary<string, ContentMaterialSettings>? contentMaterials;
 
     /// <summary>The pack's own IMC show/hide toggles (<see cref="ContentAttributeGroup"/>); null for none.</summary>
     [JsonPropertyName("ContentAttributes")]

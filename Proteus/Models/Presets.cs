@@ -94,6 +94,8 @@ public class ModPreset
         Options = o.Options?.ToDictionary(
             g => g.Key,
             g => g.Value.ToDictionary(x => x.Key, x => x.Value.Select(r => r.Clone()).ToList())),
+        Materials = o.Materials?.ToDictionary(
+            m => m.Key, m => m.Value.Select(r => r.Clone()).ToList(), StringComparer.OrdinalIgnoreCase),
     };
 
     private static OverlayGearOverride CloneGear(OverlayGearOverride o) => new()
@@ -104,7 +106,28 @@ public class ModPreset
         Options = o.Options?.ToDictionary(
             g => g.Key,
             g => g.Value.ToDictionary(x => x.Key, x => x.Value.Clone())),
+        Materials = o.Materials?.ToDictionary(
+            m => m.Key, m => m.Value.Clone(), StringComparer.OrdinalIgnoreCase),
     };
+}
+
+/// <summary>
+/// Keeps an override's per-material map keyed the way material paths are compared everywhere else
+/// (<see cref="ProteusMetadata.ContentMaterials"/>, <see cref="ContentPiece.MaterialFor"/>): case-insensitively.
+/// </summary>
+/// <remarks>
+/// It lives in the property setter because the map does not reach the compositor the way it was built: every
+/// adopt round-trips it through <c>design_bindings.json</c> (and a preset through its share code), and
+/// System.Text.Json hands back a dictionary with the DEFAULT ordinal comparer. A pack whose metadata spells a
+/// material path in different case from the model's binding would then miss here and hit in the metadata — the
+/// override silently shadowed again, which is the whole defect this map exists to fix.
+/// </remarks>
+internal static class MaterialMap
+{
+    public static Dictionary<string, T>? CaseInsensitive<T>(Dictionary<string, T>? map)
+        => map == null || ReferenceEquals(map.Comparer, StringComparer.OrdinalIgnoreCase)
+            ? map
+            : new Dictionary<string, T>(map, StringComparer.OrdinalIgnoreCase);
 }
 
 /// <summary>
@@ -126,6 +149,26 @@ public class OverlayColorOverride
     /// </summary>
     [JsonPropertyName("Mask")]
     public List<ColorTableRowPreset>? Mask { get; set; }
+
+    /// <summary>
+    /// An imported pack's rows per MATERIAL, keyed exactly like <see cref="ProteusMetadata.ContentMaterials"/>.
+    /// The colour panel edits a content pack one material at a time, so a binding that could only answer per
+    /// option would be shadowed by the mod's own per-material rows and change nothing — see
+    /// <see cref="ContentSettingLevels"/>.
+    /// </summary>
+    [JsonPropertyName("Materials")]
+    public Dictionary<string, List<ColorTableRowPreset>>? Materials
+    {
+        get => materials;
+        set => materials = MaterialMap.CaseInsensitive(value);
+    }
+
+    private Dictionary<string, List<ColorTableRowPreset>>? materials;
+
+    /// <summary>This override's rows for one content material, or null when it stores none.</summary>
+    public List<ColorTableRowPreset>? ResolveMaterial(string? materialRel)
+        => materialRel != null && materials != null && materials.TryGetValue(materialRel, out var rows)
+            ? rows : null;
 
     /// <summary>The option's rows, else the top-level rows; null when nothing is stored.</summary>
     public List<ColorTableRowPreset>? Resolve(string? group, string? option)
@@ -279,6 +322,23 @@ public class OverlayGearOverride
     /// </summary>
     [JsonPropertyName("Content")]
     public GearSettingsPreset? Content { get; set; }
+
+    /// <summary>
+    /// An imported pack's glow per MATERIAL, the gear twin of <see cref="OverlayColorOverride.Materials"/> and
+    /// keyed the same way.
+    /// </summary>
+    [JsonPropertyName("Materials")]
+    public Dictionary<string, GearSettingsPreset>? Materials
+    {
+        get => materials;
+        set => materials = MaterialMap.CaseInsensitive(value);
+    }
+
+    private Dictionary<string, GearSettingsPreset>? materials;
+
+    /// <summary>This override's glow for one content material, or null when it stores none.</summary>
+    public GearSettingsPreset? ResolveMaterial(string? materialRel)
+        => materialRel != null && materials != null && materials.TryGetValue(materialRel, out var g) ? g : null;
 
     public GearSettingsPreset? Resolve(string? group, string? option)
         => ResolveOption(group, option) ?? Top;

@@ -58,7 +58,15 @@ public record ResolvedContent(
     /// The animated glow this piece's material takes, resolved with the same option-then-mod fallback the
     /// colour rows use. Null — the usual case — publishes the pack's own material untouched.
     /// </summary>
-    GearSettingsPreset? Glow = null
+    GearSettingsPreset? Glow = null,
+    /// <summary>
+    /// A live override's rows per material (<see cref="OverlayColorOverride.Materials"/>), filled by the composite
+    /// when a design binding or pinned preset governs the mod. They outrank both the mod's own per-material rows
+    /// and <see cref="ColorTableRows"/> — see <see cref="ContentSettingLevels"/>.
+    /// </summary>
+    IReadOnlyDictionary<string, List<ColorTableRowPreset>>? MaterialRows = null,
+    /// <summary>The same for the animated glow (<see cref="OverlayGearOverride.Materials"/>).</summary>
+    IReadOnlyDictionary<string, GearSettingsPreset>? MaterialGlow = null
 );
 
 /// <summary>
