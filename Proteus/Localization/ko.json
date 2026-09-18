@@ -2835,6 +2835,10 @@
     "message": "압축 사용",
     "description": ""
   },
+  "Settings.Output.CompressionRefused.Fmt": {
+    "message": "사용 안 함: 이 PC는 압축이 너무 느려서(메가픽셀당 {0:F0}ms), 압축을 하면 시간이\n너무 오래 걸려 외형이 그려지지 않게 됩니다. 대신 텍스처를 압축하지 않고\n구워 냅니다. 이 안내를 숨기려면 체크를 해제하세요.",
+    "description": "Shown in orange under the Enable Compression checkbox when the box is ticked but the machine was measured too slow to honour it. {0} is a measured number - keep the placeholder and its format. Contains deliberate line breaks."
+  },
   "Settings.Output.Compression.Tip": {
     "message": "구운 텍스처를 블록 압축(BC7)하여 디스크와 VRAM에서 각각 비압축 크기의 약\n4분의 1로 줄입니다. 인덱스 텍스처는 정확한 행 값을 유지하기 위해 비압축\n상태로 남습니다. 끄면 = 비압축(이전과 바이트 단위로 동일).",
     "description": ""

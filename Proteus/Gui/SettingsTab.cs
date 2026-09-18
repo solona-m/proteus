@@ -147,6 +147,12 @@ internal sealed class SettingsTab
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip(s.CompressionTip);
 
+        // Said out loud, not just in the log: the setting is ticked but not in effect, and a silent override is
+        // indistinguishable from the setting doing nothing.
+        if (config.EnableCompression && TextureLoader.CompressionRefused)
+            ImGui.TextColored(new Vector4(1f, 0.6f, 0.2f, 1f),
+                string.Format(s.CompressionRefusedFmt, TextureLoader.EncodeMsPerMegapixel));
+
         var cutoutAlpha = config.GearCutoutAlpha;
         if (ImGui.Checkbox(s.SharpAlpha, ref cutoutAlpha))
         {

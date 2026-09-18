@@ -240,11 +240,14 @@ public partial class CompositorService
         var prefetch = textureLoader.PrefetchWaitStats;
         var swizzle  = textureLoader.SwizzleStats;
         var write    = textureLoader.WriteStats;
+        var encode   = textureLoader.EncodeStats;
         var remap    = uvRemap.RemapStats;
 
         // Blend = composite minus stages measured on the composite thread only (decode also runs on prefetch threads).
         // Foreground counters sum across workers, so the split is exact only for one material.
-        var blendMs = compositeMs - (wait.Ms + remap.Ms + swizzle.Ms + write.Ms);
+        // `encode` belongs here for the same reason swizzle does: it is the OTHER branch of the same write, and with
+        // EnableCompression on it dwarfs everything else. Leaving it out charged every BC7 second to the blender.
+        var blendMs = compositeMs - (wait.Ms + remap.Ms + swizzle.Ms + write.Ms + encode.Ms);
 
         // Cache state beside the miss count shows how far the budget is under the working set.
         var (cacheEntries, cacheBytes) = textureLoader.CacheState();
@@ -273,7 +276,8 @@ public partial class CompositorService
             "+ diffuse {28:F0}/{29} + normal {30:F0}/{31} + seamdrop {32:F0}/{33} + load {34:F0}/{35} (gen2 {57:F0}/{58}) " +
             "+ baseload {36:F0}/{37} + resolve {38:F0}/{39} + suppress {40:F0}/{41} + glue {42:F0}] | " +
             "maskrelief {43:F0} | maskdiffuse {44:F0} | rest {45:F0}) | " +
-            "swizzle {46:F0}ms | write {47:F0}ms ({48} files, {49:F0} MB) | composite {50:F0}ms | total {51:F0}ms | " +
+            "swizzle {46:F0}ms | encode {60:F0}ms ({61} surface(s)) | " +
+            "write {47:F0}ms ({48} files, {49:F0} MB) | composite {50:F0}ms | total {51:F0}ms | " +
             "{52} material(s) | cache {53} entries, {54:F0} MB, {55} evicted (budget {56:F0} MB)",
             setupMs, wait.Ms, decode.Calls, hits.Calls, blocked.Calls,
             prefetch.Ms, decode.Ms, nativeD.Calls, decode.Calls, remap.Ms, remap.Calls,
@@ -292,6 +296,7 @@ public partial class CompositorService
             compositeMs, totalMs, materialCount,
             cacheEntries, cacheBytes / (1024.0 * 1024.0), textureLoader.Evictions,
             textureLoader.DecodeCacheBudgetBytes / (1024.0 * 1024.0),
-            blendGen2Stats.Ms, blendGen2Stats.Calls, blendBlurCacheHits.Calls);
+            blendGen2Stats.Ms, blendGen2Stats.Calls, blendBlurCacheHits.Calls,
+            encode.Ms, encode.Calls);
     }
 }

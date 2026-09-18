@@ -1221,7 +1221,7 @@ public sealed partial class SecondSkinService
         Dictionary<string, (byte[] Mask, int Size)> regions, Dictionary<string, string> redirects,
         ref bool texturesChanged)
     {
-        bool compress = config.EnableCompression;
+        bool compress = config.EnableCompression && textureLoader.CompressionAffordable();
         foreach (var (material, density, pn) in pending)
         {
             if (pn.Norm == null || pn.Size <= 0) continue;
@@ -1360,7 +1360,8 @@ public sealed partial class SecondSkinService
             var gamePath = texPrefix + slot + ".tex";
             var disk = Path.Combine(texturesDir, $"ss_{letter}_{slot}.tex");
             // Same rules as the shell path: never compress "id", BC7 for the continuous slots.
-            var encoding = config.EnableCompression && !string.Equals(slot, "id", StringComparison.OrdinalIgnoreCase)
+            var encoding = config.EnableCompression && textureLoader.CompressionAffordable()
+                        && !string.Equals(slot, "id", StringComparison.OrdinalIgnoreCase)
                 ? TexEncoding.Bc7
                 : TexEncoding.Uncompressed;
 

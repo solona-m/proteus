@@ -2835,6 +2835,10 @@
     "message": "Включить сжатие",
     "description": ""
   },
+  "Settings.Output.CompressionRefused.Fmt": {
+    "message": "Не используется: этот компьютер сжимает слишком медленно ({0:F0} мс на мегапиксель),\nи сжатие заняло бы столько времени, что ваш облик перестал бы отрисовываться. Вместо\nэтого текстуры собираются без сжатия. Снимите флажок, чтобы скрыть это.",
+    "description": "Shown in orange under the Enable Compression checkbox when the box is ticked but the machine was measured too slow to honour it. {0} is a measured number - keep the placeholder and its format. Contains deliberate line breaks."
+  },
   "Settings.Output.Compression.Tip": {
     "message": "Поблочно сжимает собранные текстуры (BC7), уменьшая каждую примерно до четверти её\nнесжатого размера на диске и в видеопамяти. Индексная текстура остаётся несжатой,\nчтобы сохранить точные значения строк.\nВыключено = без сжатия (побайтово как раньше).",
     "description": ""

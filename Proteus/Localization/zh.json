@@ -2835,6 +2835,10 @@
     "message": "启用压缩",
     "description": ""
   },
+  "Settings.Output.CompressionRefused.Fmt": {
+    "message": "未启用：此电脑的压缩速度过慢（每百万像素 {0:F0} 毫秒），若执行压缩会耗时过长，\n导致你的外观完全无法绘制。现改为烘焙未压缩的贴图。取消勾选该选项可隐藏此提示。",
+    "description": "Shown in orange under the Enable Compression checkbox when the box is ticked but the machine was measured too slow to honour it. {0} is a measured number - keep the placeholder and its format. Contains deliberate line breaks."
+  },
   "Settings.Output.Compression.Tip": {
     "message": "对烘焙后的贴图进行块压缩（BC7），使每张贴图在硬盘和显存中的占用降至\n未压缩时的约四分之一。索引贴图保持未压缩，以保留其精确的行数值。\n关闭 = 不压缩（与之前逐字节相同）。",
     "description": ""

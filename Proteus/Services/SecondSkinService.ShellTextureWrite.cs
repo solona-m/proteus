@@ -299,7 +299,7 @@ public sealed partial class SecondSkinService
 
             var order = GearMaterialWriter.TextureOrder(shader);
             var paths = new List<string>(order.Count);
-            bool compress = service.config.EnableCompression;
+            bool compress = service.config.EnableCompression && service.textureLoader.CompressionAffordable();
             for (int slotIdx = 0; slotIdx < order.Count; slotIdx++)
             {
                 var slot = order[slotIdx];

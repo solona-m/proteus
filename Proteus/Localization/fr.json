@@ -2835,6 +2835,10 @@
     "message": "Activer la compression",
     "description": ""
   },
+  "Settings.Output.CompressionRefused.Fmt": {
+    "message": "Inactif : ce PC compresse trop lentement ({0:F0} ms par mégapixel), et le faire prendrait\nassez de temps pour que votre apparence cesse d'être affichée. Les textures sont générées\nnon compressées à la place. Décochez la case pour masquer ceci.",
+    "description": "Shown in orange under the Enable Compression checkbox when the box is ticked but the machine was measured too slow to honour it. {0} is a measured number - keep the placeholder and its format. Contains deliberate line breaks."
+  },
   "Settings.Output.Compression.Tip": {
     "message": "Compresse par blocs les textures générées (BC7), réduisant chacune à environ un quart\nde sa taille non compressée sur le disque et en VRAM. La texture d'index reste non\ncompressée afin de conserver ses valeurs de ligne exactes.\nDésactivé = non compressé (identique octet pour octet à avant).",
     "description": ""

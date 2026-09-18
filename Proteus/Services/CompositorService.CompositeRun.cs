@@ -960,7 +960,9 @@ public partial class CompositorService
             compositor._channelContributions = [];
 
             // Compression (opt-in): BC7 for every skin channel; the skin normal uses B/A, so BC5 would corrupt it.
-            bool compress = compositor.config.EnableCompression;
+            // The machine gets a vote: on hardware too slow to encode, compressing costs more refresh time than the
+            // gap between the triggers that restart a composite, so honouring the setting would publish nothing at all.
+            bool compress = compositor.config.EnableCompression && compositor.textureLoader.CompressionAffordable();
 
             // Salted with dimensions and encoding (0 = uncompressed, 1 = native BC7, 2 = managed BC7; the encoders differ
             // byte-for-byte), since both change the file without changing the RGBA. Loop-invariant: the base diffuse is

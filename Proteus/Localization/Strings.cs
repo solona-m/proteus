@@ -585,7 +585,17 @@ public sealed class SettingsStrings
     public readonly string CompressionTip = Loc.Localize("Settings.Output.Compression.Tip",
         "Block-compress the baked textures (BC7), cutting each to about a quarter of its\n" +
         "uncompressed size on disk and in VRAM. The index texture stays uncompressed to keep\n" +
-        "its exact row values. Off = uncompressed (byte-identical to before).");
+        "its exact row values. Off = uncompressed (byte-identical to before).\n\n" +
+        "Costs processor time on EVERY refresh, and it is the slowest thing Proteus does.\n" +
+        "On an older or low-core PC it can add a minute or more per change, which is long\n" +
+        "enough that a new change restarts the work before it finishes and your look stops\n" +
+        "appearing at all. Leave this off unless you are short of video memory, and turn it\n" +
+        "off first if nothing is being drawn.");
+
+    public readonly string CompressionRefusedFmt = Loc.Localize("Settings.Output.CompressionRefused.Fmt",
+        "Not in use: this PC compresses too slowly ({0:F0} ms per megapixel), and doing it would\n" +
+        "take long enough that your look would stop being drawn. Textures are being baked\n" +
+        "uncompressed instead. Untick the box to hide this.");
 
     public readonly string SharpAlpha =
         Loc.Localize("Settings.Output.SharpAlpha.Label", "Sharp alpha (gpose sphere/metal)") + "###sharpAlpha";
