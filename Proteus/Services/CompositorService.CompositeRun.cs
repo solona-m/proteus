@@ -146,7 +146,7 @@ public partial class CompositorService
                 compositor.log.Error(ex, "[Proteus] Recomposite failed");
                 timeline.Mark("failed");
                 compositor.LogRefreshTimeline(timeline, "FAILED");
-                compositor.LastResult = new CompositorResult { Success = false, ErrorMessage = ex.Message };
+                compositor.LastResult = new CompositorResult { Success = false, ErrorMessage = ex.Message, Epoch = epoch };
                 compositor.ResultChanged?.Invoke();
                 // Published output no longer matches any known inputs, so the next ambient trigger must composite.
                 compositor._lastCompositeFingerprint = null;
@@ -225,7 +225,7 @@ public partial class CompositorService
                 compositor.ReloadAndRedraw(userRequested: true);
                 timeline.Mark("publish+reload");
                 compositor.LogRefreshTimeline(timeline, "no enabled mods");
-                compositor.LastResult = new CompositorResult { Success = true, TexturesPatched = 0, OverlayModsUsed = 0 };
+                compositor.LastResult = new CompositorResult { Success = true, TexturesPatched = 0, OverlayModsUsed = 0, Epoch = epoch };
                 compositor.ResultChanged?.Invoke();
                 return false;
             }
@@ -1160,6 +1160,7 @@ public partial class CompositorService
                 // On skin reuse the redirects were carried forward: report what the manifest carries.
                 TexturesPatched = skinReused ? skinRedirectsThisRun.Count : texturesPatched,
                 OverlayModsUsed = entries.Count,
+                Epoch = epoch,
             };
             compositor.ResultChanged?.Invoke();
 

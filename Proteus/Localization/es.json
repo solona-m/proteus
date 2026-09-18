@@ -2731,6 +2731,34 @@
     "message": "Descarta todas las texturas decodificadas en caché y recompone ahora. Úsalo si una\nmodificación de textura no aparece — por ejemplo, si reexportaste una superposición\ncon el mismo tamaño y el cambio no se vería sin reiniciar el plugin.\n\nTambién vuelve a deducir de qué mod procede cada textura de piel base: úsalo si\n«Piel base», más abajo, nombra el mod equivocado.",
     "description": ""
   },
+  "Settings.Diag.CopyLogs.Btn": {
+    "message": "Copiar registros",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Busy": {
+    "message": "Actualizando y capturando…",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Failed.Fmt": {
+    "message": "No se pudo guardar el registro: {0}",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.OpenTip": {
+    "message": "Haz clic para abrir el archivo.",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Saved": {
+    "message": "Guardado:",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.ShowInFolder": {
+    "message": "Mostrar en la carpeta",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Tip": {
+    "message": "Ejecuta una actualización completa y guarda todo lo que Proteus registra mientras tanto\nen un archivo de texto en tu escritorio. Adjúntalo cuando informes de un problema.",
+    "description": ""
+  },
   "Settings.Diag.Reach.EffectsOnly.Fmt": {
     "message": "{0} — solo efectos (sin arte de superposición)",
     "description": ""

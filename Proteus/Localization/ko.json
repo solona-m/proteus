@@ -2731,6 +2731,34 @@
     "message": "캐시된 디코딩 텍스처를 모두 버리고 지금 다시 합성합니다. 텍스처 수정이\n반영되지 않을 때 사용하세요. 예를 들어 오버레이를 같은 크기로 다시 내보낸\n경우, 플러그인을 재시작하지 않으면 변경이 나타나지 않습니다.\n\n각 기본 피부 텍스처가 어느 모드에서 오는지도 다시 판별합니다. 아래의\n\"기본 피부\"가 잘못된 모드를 표시할 때 사용하세요.",
     "description": ""
   },
+  "Settings.Diag.CopyLogs.Btn": {
+    "message": "로그 복사",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Busy": {
+    "message": "새로 고치고 기록하는 중…",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Failed.Fmt": {
+    "message": "로그를 저장하지 못했습니다: {0}",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.OpenTip": {
+    "message": "클릭하면 파일을 엽니다.",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Saved": {
+    "message": "저장됨:",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.ShowInFolder": {
+    "message": "폴더에서 보기",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Tip": {
+    "message": "전체 새로 고침을 실행하고, 그동안 Proteus가 남긴 로그를 모두\n바탕 화면의 텍스트 파일로 저장합니다. 문제를 제보할 때 이 파일을 첨부하세요.",
+    "description": ""
+  },
   "Settings.Diag.Reach.EffectsOnly.Fmt": {
     "message": "{0} — 효과만 (오버레이 이미지 없음)",
     "description": ""

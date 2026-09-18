@@ -2731,6 +2731,34 @@
     "message": "Supprime toutes les textures décodées en cache et recompose immédiatement. À utiliser\nsi une modification de texture n'apparaît pas — par exemple si vous avez réexporté un\ncalque à la même taille et que le changement n'apparaîtrait qu'après un redémarrage\ndu plugin.\n\nRedétermine aussi de quel mod provient chaque texture de peau de base — utilisez ceci\nsi « Peau de base » ci-dessous nomme le mauvais mod.",
     "description": ""
   },
+  "Settings.Diag.CopyLogs.Btn": {
+    "message": "Copier les journaux",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Busy": {
+    "message": "Actualisation et capture…",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Failed.Fmt": {
+    "message": "Impossible d'enregistrer le journal : {0}",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.OpenTip": {
+    "message": "Cliquez pour ouvrir le fichier.",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Saved": {
+    "message": "Enregistré :",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.ShowInFolder": {
+    "message": "Afficher dans le dossier",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Tip": {
+    "message": "Lance une actualisation complète et enregistre tout ce que Proteus journalise pendant ce temps\ndans un fichier texte sur votre bureau. Joignez ce fichier lorsque vous signalez un problème.",
+    "description": ""
+  },
   "Settings.Diag.Reach.EffectsOnly.Fmt": {
     "message": "{0} — effets seulement (aucun graphisme de calque)",
     "description": ""

@@ -2731,6 +2731,34 @@
     "message": "Drop all cached decoded textures and recomposite now. Use if a texture edit\nisn't showing up — e.g. you re-exported an overlay at the same size and the\nchange won't appear without restarting the plugin.\n\nAlso re-derives which mod each base skin texture comes from — use this if the\nBase skin below names the wrong mod.",
     "description": "Tooltip. Keep the blank line; \\n breaks are deliberate, move them as your language needs. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
+  "Settings.Diag.CopyLogs.Btn": {
+    "message": "Copy Logs",
+    "description": "Button in Diagnostics."
+  },
+  "Settings.Diag.CopyLogs.Busy": {
+    "message": "Refreshing and capturing…",
+    "description": "Replaces the Copy Logs button label while it runs."
+  },
+  "Settings.Diag.CopyLogs.Failed.Fmt": {
+    "message": "Could not save the log: {0}",
+    "description": "{0} is the error message."
+  },
+  "Settings.Diag.CopyLogs.OpenTip": {
+    "message": "Click to open the file.",
+    "description": "Tooltip on the saved file's path."
+  },
+  "Settings.Diag.CopyLogs.Saved": {
+    "message": "Saved:",
+    "description": "Label before the saved log file's path."
+  },
+  "Settings.Diag.CopyLogs.ShowInFolder": {
+    "message": "Show in folder",
+    "description": "Button that opens the folder holding the saved log."
+  },
+  "Settings.Diag.CopyLogs.Tip": {
+    "message": "Run a full refresh and save everything Proteus logs while it runs to a text\nfile on your desktop. Attach that file when you report a problem.",
+    "description": "Tooltip. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "Settings.Diag.Reach.EffectsOnly.Fmt": {
     "message": "{0} — effects only (no overlay art)",
     "description": "Overlay reach row. {0} is a material name. This material was touched only by ambient occlusion or skin-tint suppression."

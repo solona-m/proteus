@@ -142,7 +142,8 @@ public class StatusWindow : Window
         ModExportService modExport,
         TextureLoader textureLoader,
         PartsPanel parts,
-        HatCompatWatcher hatCompatWatcher)
+        HatCompatWatcher hatCompatWatcher,
+        LogExportService logExport)
         // "###ProteusStatus" is the stable window id; the title shows the assembly version, not the dev BuildNumber.
         : base($"Proteus  v{typeof(Plugin).Assembly.GetName().Version}###ProteusStatus", ImGuiWindowFlags.AlwaysAutoResize)
     {
@@ -173,7 +174,7 @@ public class StatusWindow : Window
         modsTab = new ModsTab(penumbra, compositor, this, presets, designBindings, config);
         bindingsTab = new BindingsTab(config, designBindings, penumbra);
         hatCompat = new HatCompatPanel(hatCompatWatcher, config);
-        settingsTab = new SettingsTab(config, compositor, discovery, hatCompat);
+        settingsTab = new SettingsTab(config, compositor, discovery, hatCompat, logExport);
 
         SizeConstraints = AutoFitConstraints;
 
