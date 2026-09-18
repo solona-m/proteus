@@ -17,7 +17,7 @@ public sealed class DefaultEffectsDownloadService : IDisposable
     /// Immutable by contract, like the UV map tag: bump it whenever <see cref="Effects"/> changes, and
     /// never re-upload assets under an existing tag, or a mirror will keep serving the old bytes.
     /// </summary>
-    private const string EffectsTag = "effects-v1";
+    private const string EffectsTag = "effects-v2";
 
     /// <summary>Shipped loose rather than zipped: zip bytes are not reproducible, so a pinned checksum would break.</summary>
     private static readonly (string Name, long Bytes, string Sha256)[] Effects =
@@ -31,6 +31,7 @@ public sealed class DefaultEffectsDownloadService : IDisposable
         ("rgb.jpeg", 276412L, "0adef290f65ae5161eabbdb0c3d013370d5d86b7c948f2b8fdd5fc0cfd1b2664"),
         ("sky.jpeg", 1237346L, "b216dab955e9bcb93d94d830053efb930b5422dc9e7c36c98155cd5d1a0a5147"),
         ("starfield.jpeg", 154196L, "6a8f414c7b56aed528400d462d84c33656d8651e8424645620c58bef0bce938a"),
+        ("starseeker.jpeg", 1232427L, "c1db5c1d68f087985d052254ca6d5a83a367c1fd7b1ccbae6c09e11e793249da"),
         ("unicorns.png", 687411L, "17e258044e40e13855d24255eae00b83d3093e343276a406f8c0801218251b36"),
         ("wildflowers and butterflies.png", 4594896L, "ac5bc9791c9934b01fcf63cca510452f9120d6dadd613aa7f6990b85a1ac535b"),
     ];
