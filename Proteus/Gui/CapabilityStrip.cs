@@ -7,30 +7,17 @@ using Proteus.Localization;
 namespace Proteus.Gui;
 
 /// <summary>
-/// The band's second line: four icon-and-label pairs naming what the plugin actually does. Replaces a
-/// caption that read "overlay compositor", which was true at launch and now describes about a quarter of
-/// the plugin — it said nothing about wearing mods off-slot, reshaping someone else's models in the Studio
-/// tab (part switches, brushes, hat fitting), or binding the whole look to a Glamourer design.
-/// <para/>
-/// Four labels do not fit at every window size (see <see cref="Draw"/>), so the row degrades to icons alone
-/// and lets the caller show the hovered one's label instead. That is the whole reason this reports a result
-/// rather than just painting.
-/// <para/>
-/// Each item is also a link: clicking it opens the README at the section that explains it, in the reader's
-/// own language (<see cref="ReadmeLinks"/>).
+/// The band's second line: four icon-and-label pairs naming what the plugin does, each a link to its README
+/// section (<see cref="ReadmeLinks"/>). When the labels do not fit it collapses to icons and reports so.
 /// </summary>
 /// <remarks>
-/// Everything here goes through the DRAW LIST, never through ImGui's layout. The status window is
-/// AlwaysAutoResize on every tab but Toggles, so an item submitted at this width would feed straight back
-/// into the window's fit — which is the same trap <see cref="BrandHeader"/> documents at length and the
-/// reason the band contributes zero width. This strip rides the band, so it draws on every tab and keeps the
-/// rule regardless of which mode the window is in.
+/// Everything goes through the DRAW LIST, never ImGui's layout, so the strip contributes no width to an
+/// AlwaysAutoResize window (see <see cref="BrandHeader"/>).
 /// </remarks>
 internal static class CapabilityStrip
 {
     /// <summary>
-    /// The labels are <c>Func</c>s and not strings because <c>Strings.Reload()</c> rebuilds every holder on
-    /// a language change. A captured value would pin the row to whatever language the game booted in.
+    /// The labels are <c>Func</c>s because <c>Strings.Reload()</c> rebuilds every holder on a language change.
     /// </summary>
     private static readonly (FontAwesomeIcon Icon, Func<string> Label, ReadmeSection Section)[] Items =
     {
@@ -40,16 +27,14 @@ internal static class CapabilityStrip
         (FontAwesomeIcon.Link,       () => Strings.Band.CapBind,    ReadmeSection.Bindings),
     };
 
-    // Scratch, reused every frame. The band draws on the UI thread and nowhere else, so static buffers are
-    // safe and keep a per-frame path off the allocator — the same reason ProteusStyle.Ellipsize measures
-    // spans instead of slicing. Declared after Items because static initialisers run in declaration order.
+    // Scratch reused every frame, safe because the band draws only on the UI thread. Declared after Items because
+    // static initialisers run in declaration order.
     private static readonly string[] Labels = new string[Items.Length];
     private static readonly float[]  LabelW = new float[Items.Length];
     private static readonly float[]  Xs     = new float[Items.Length];
 
     /// <summary>What <see cref="Draw"/> did, so the caller can lay the rest of the line out against it.</summary>
-    /// <param name="Collapsed">True when the labels did not fit and only icons were drawn. The caller owes
-    /// the user a readout in that case — the icons alone are not self-explanatory.</param>
+    /// <param name="Collapsed">True when the labels did not fit and only icons were drawn; the caller should show a readout.</param>
     /// <param name="Right">Screen X the row ends at, trailing gap excluded.</param>
     /// <param name="Hovered">Label of the item under the mouse, or null.</param>
     internal readonly record struct Result(bool Collapsed, float Right, string? Hovered);
@@ -65,9 +50,7 @@ internal static class CapabilityStrip
         var itemGap  = ProteusStyle.S(16f);   // labelled item → next item
         var tightGap = ProteusStyle.S(10f);   // icon → next icon, once the labels are gone
 
-        // Measured in two separate font scopes, and it has to be that way: the icons come from Dalamud's
-        // fixed-width FontAwesome atlas and the labels from whatever body font the user has configured.
-        // Measuring a label inside the icon scope would size it in glyphs that font does not carry.
+        // Measured in two separate font scopes: icons come from the FontAwesome atlas, labels from the body font.
         var labelH = 0f;
         for (var i = 0; i < Items.Length; i++)
         {
@@ -101,8 +84,7 @@ internal static class CapabilityStrip
         }
         var right = x - (collapsed ? tightGap : itemGap);
 
-        // Plain IsWindowHovered, deliberately unflagged: it reports false while another window sits over
-        // this point, so a file dialog parked on the band does not light the icons underneath it.
+        // Plain IsWindowHovered, unflagged, so a window over the band does not light the icons underneath.
         var hovered = -1;
         if (ImGui.IsWindowHovered())
         {
@@ -117,9 +99,7 @@ internal static class CapabilityStrip
             }
         }
 
-        // The link. Read straight off the mouse rather than through an InvisibleButton, which would be an
-        // item submitted at this width — exactly what the remarks above rule out. The language is asked for
-        // at click time, not cached, so it follows a change of Dalamud's UI language like the labels do.
+        // The link, read straight off the mouse: an InvisibleButton would submit an item. Language asked at click time.
         if (hovered >= 0)
         {
             ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
@@ -136,8 +116,7 @@ internal static class CapabilityStrip
         var dim  = ImGui.GetColorU32(ProteusStyle.Accent.WithAlpha(0.55f));
         var lit  = ImGui.GetColorU32(ProteusStyle.Accent);
 
-        // Icons in one font scope, labels in the other, rather than pushing and popping per item. Each text
-        // is centred on the row's own height because the two faces need not share a line height.
+        // One font scope each for icons and labels; each text centred on the row since the faces' line heights differ.
         using (Plugin.PluginInterface.UiBuilder.IconFontFixedWidthHandle.Push())
         {
             var y = at.Y + ((rowH - iconH) * 0.5f);
@@ -147,8 +126,7 @@ internal static class CapabilityStrip
 
         if (!collapsed)
         {
-            // Structure colour read at the call site so the labels follow the user's Dalamud style, per the
-            // rule ProteusStyle's header comment sets out. Only the hovered one takes the brand colour.
+            // Structure colour read at the call site so the labels follow the Dalamud style; only the hovered one is brand.
             var text = ImGui.GetColorU32(ImGuiCol.TextDisabled);
             var y    = at.Y + ((rowH - labelH) * 0.5f);
             for (var i = 0; i < Items.Length; i++)

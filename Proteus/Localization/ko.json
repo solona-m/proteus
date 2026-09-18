@@ -215,6 +215,10 @@
     "message": "[Proteus] 세컨드 스킨은 만들어졌지만 게임이 그리지 않고 있습니다. 그것을 얹은 장신구는 착용되어 있는데도 캐릭터가 Proteus 버전을 불러오지 않습니다. 해당 장신구를 벗었다가 다시 착용하거나 다른 것을 선택해 보세요.",
     "description": ""
   },
+  "Chat.ShellMaterialFailed": {
+    "message": "[Proteus] 세컨드 스킨의 일부가 그려지지 않고 있습니다. 나머지는 캐릭터에 표시되어 있으므로, 해당 부분에 필요한 텍스처가 없거나 게임이 아직 이전 버전을 붙들고 있는 것입니다. 먼저 \"지금 다시 합성\"을 눌러 보고, 그래도 안 되면 그것을 얹은 장신구를 벗었다가 다시 착용하세요.",
+    "description": ""
+  },
   "Chat.ShellNeedsRedraw": {
     "message": "[Proteus] 세컨드 스킨이 변경되었지만 자동 다시 그리기가 꺼져 있어 캐릭터가 아직 이전 버전을 착용하고 있습니다. 지역을 이동하거나 Penumbra의 Redraw 버튼을 눌러 확인하세요.",
     "description": ""
@@ -781,6 +785,10 @@
   },
   "Content.EitherColumn": {
     "message": "A와 B",
+    "description": ""
+  },
+  "Content.FollowsHairColor": {
+    "message": "이 머티리얼은 헤어 셰이더를 사용하므로 부품이 캐릭터의 머리색과 브리지 색을 따르며 색상 테이블이 없습니다. 아래에서 무엇을 바꿔도 부품에 전달되지 않습니다. 색을 바꾸려면 머리색을 변경하세요.",
     "description": ""
   },
   "Content.Geometry.Fmt": {
@@ -2231,6 +2239,38 @@
     "message": "파츠를 고르고 화살표를 드래그합니다. 화살표는 그 축을 따라,\n사각형은 그 평면 위에서 움직입니다.",
     "description": ""
   },
+  "Parts.Tool.Rotate": {
+    "message": "회전",
+    "description": ""
+  },
+  "Parts.Tool.Rotate.Tip": {
+    "message": "파츠를 선택한 뒤 링 하나를 드래그하면 중심을 기준으로 회전합니다.\n색이 있는 링은 그 축을 기준으로, 바깥쪽 링은 보는 방향을 기준으로 돌립니다.",
+    "description": ""
+  },
+  "Parts.Tool.Scale": {
+    "message": "크기 조절",
+    "description": ""
+  },
+  "Parts.Tool.Scale.Tip": {
+    "message": "파츠를 선택한 뒤 그 위를 누르고 오른쪽으로 드래그하면 커지고,\n왼쪽으로 드래그하면 중심을 기준으로 작아집니다.",
+    "description": ""
+  },
+  "Parts.Rotate.Help": {
+    "message": "파츠를 클릭해 선택한 뒤 중심의 링 하나를 드래그합니다. 다른 곳을 드래그하면 모델이 회전하고, Shift+드래그로 시점을 옮기며, 스크롤로 확대/축소합니다.",
+    "description": ""
+  },
+  "Parts.Rotate.LiveHint": {
+    "message": "캐릭터의 파츠를 클릭한 뒤 중심의 링 하나를 드래그합니다. Alt를 누르면 카메라를 움직일 수 있습니다. 회전은 손을 뗄 때 저장됩니다.",
+    "description": ""
+  },
+  "Parts.Scale.Help": {
+    "message": "파츠를 클릭해 선택한 뒤 그 위를 누르고 오른쪽으로 드래그하면 커지고 왼쪽으로 드래그하면 작아집니다. 다른 곳을 드래그하면 모델이 회전하고, Shift+드래그로 시점을 옮기며, 스크롤로 확대/축소합니다.",
+    "description": ""
+  },
+  "Parts.Scale.LiveHint": {
+    "message": "캐릭터의 파츠를 클릭한 뒤 그 위를 누르고 오른쪽으로 드래그하면 커지고 왼쪽으로 드래그하면 작아집니다. Alt를 누르면 카메라를 움직일 수 있습니다. 변경은 손을 뗄 때 저장됩니다.",
+    "description": ""
+  },
   "Parts.Move.Help": {
     "message": "파츠를 클릭해 선택한 뒤 화살표나 사각형을 드래그합니다. 다른 곳을 드래그하면 모델이 회전하고, Shift+드래그로 시점을 옮기며, 스크롤로 확대/축소합니다.",
     "description": ""
@@ -2794,6 +2834,10 @@
   "Settings.Output.Compression.Label": {
     "message": "압축 사용",
     "description": ""
+  },
+  "Settings.Output.CompressionRefused.Fmt": {
+    "message": "사용 안 함: 이 PC는 압축이 너무 느려서(메가픽셀당 {0:F0}ms), 압축을 하면 시간이\n너무 오래 걸려 외형이 그려지지 않게 됩니다. 대신 텍스처를 압축하지 않고\n구워 냅니다. 이 안내를 숨기려면 체크를 해제하세요.",
+    "description": "Shown in orange under the Enable Compression checkbox when the box is ticked but the machine was measured too slow to honour it. {0} is a measured number - keep the placeholder and its format. Contains deliberate line breaks."
   },
   "Settings.Output.Compression.Tip": {
     "message": "구운 텍스처를 블록 압축(BC7)하여 디스크와 VRAM에서 각각 비압축 크기의 약\n4분의 1로 줄입니다. 인덱스 텍스처는 정확한 행 값을 유지하기 위해 비압축\n상태로 남습니다. 끄면 = 비압축(이전과 바이트 단위로 동일).",

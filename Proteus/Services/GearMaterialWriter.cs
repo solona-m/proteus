@@ -8,11 +8,7 @@ namespace Proteus.Services;
 /// <summary>
 /// One color table row for a gear overlay. Null fields keep the template's value.
 /// </summary>
-// A record rather than a class purely so callers can say `row with { … }`. SecondSkinService.BuildRows
-// merges an authored row over the neutral baseline, and doing that by listing every field means the next
-// field added here is silently dropped from every authored row — which is exactly what happened when the
-// weave (TileIndex and friends) arrived. `with` copies what it is not told to change, so the failure mode
-// for a new field is "behaves as it did before the merge existed" rather than "vanishes".
+// A record so callers can merge with `row with { … }`, which copies any field added later instead of dropping it.
 public sealed record GearColorRow
 {
     public (float R, float G, float B)? Diffuse { get; init; }
@@ -20,11 +16,8 @@ public sealed record GearColorRow
     public (float R, float G, float B)? Specular { get; init; }
 
     /// <summary>
-    /// The Glow dial as the user set it, before it was multiplied into <see cref="Emissive"/>.
-    /// <para/>
-    /// Kept separately because characterscroll needs the NUMBER, not the colour it produced: there the dial
-    /// is the scrolling effect's strength and the emissive is only a gate, so the composed colour cannot
-    /// stand in for it. Null on a row whose glow was never set.
+    /// The Glow dial as the user set it, before it was multiplied into <see cref="Emissive"/>. characterscroll
+    /// needs the number itself (the effect's strength). Null on a row whose glow was never set.
     /// </summary>
     public float? EmissiveStrength { get; init; }
 
@@ -41,22 +34,17 @@ public sealed record GearColorRow
     public float? Metalness { get; init; }
 
     /// <summary>
-    /// Slice of the shared array chara/common/texture/tile_norm_array.tex (0–63) — the fabric weave tiled
-    /// over this row. Needs no material texture.
-    /// <para/>
-    /// Null leaves the material's own value, which on a shell is the zeroed weave <see cref="Build"/>
-    /// writes, and on an imported pack's material is whatever its author chose.
+    /// Slice of the shared array chara/common/texture/tile_norm_array.tex (0–63): the fabric weave tiled over
+    /// this row. Null leaves the material's own value.
     /// </summary>
     public int? TileIndex { get; init; }
 
-    /// <summary>How strongly the weave shows. Null means full strength. Like <see cref="TileScaleU"/>, it is
-    /// ignored entirely without a <see cref="TileIndex"/> — see the writer for why the three only travel
-    /// together.</summary>
+    /// <summary>How strongly the weave shows. Null means full strength. Ignored without a
+    /// <see cref="TileIndex"/>.</summary>
     public float? TileStrength { get; init; }
 
-    /// <summary>Weave repeats per UV axis — the tile transform's diagonal. Either one present writes the
-    /// whole 2x2 matrix with zero skew, the missing axis falling back to the game default of 16. Ignored
-    /// without a <see cref="TileIndex"/>.</summary>
+    /// <summary>Weave repeats per UV axis (the tile transform's diagonal). Either present writes the whole
+    /// matrix with zero skew, a missing axis defaulting to 16. Ignored without a <see cref="TileIndex"/>.</summary>
     public float? TileScaleU { get; init; }
 
     /// <inheritdoc cref="TileScaleU"/>
@@ -73,59 +61,25 @@ public sealed record ScrollSettings(float SpeedX, float SpeedY, float TilingX, f
 }
 
 /// <summary>
-/// Writes the .mtrl for a second-skin shell by cloning a known-good vanilla material of the target
-/// shader, repointing its texture table at our own paths, and patching its color table.
-///
-/// We clone rather than synthesise because a material's shader keys, constants and sampler table must
-/// agree with its .shpk, and Lumina misreads the Dawntrail shader section — so the tail is copied
-/// verbatim and only the parts we understand are rewritten.
+/// Writes the .mtrl for a second-skin shell by cloning a vanilla material of the target shader, repointing its
+/// texture table and patching its color table. Cloned, not synthesised: keys, constants and samplers must agree
+/// with the .shpk, so the tail is copied verbatim.
 /// </summary>
 public static class GearMaterialWriter
 {
     /// <summary>
-    /// Game path of the VANILLA material used as a template.
-    ///
-    /// Non-nullable: the switch has a catch-all arm returning a real path, so there is no shader for
-    /// which this yields nothing. It was declared string? for a "we ship our own template" case that was
-    /// never built, and that lie cost the only caller a nullable warning it could not act on.
-    ///
-    /// character.shpk clones a real shipping item (e0041), so it needs nothing installed.
-    ///
-    /// characterscroll clones vanilla e6257. Its rows carry a non-zero emissive, but we always write the
-    /// emissive explicitly (see Build), so that no longer leaks through as a flat white glow.
-    /// <para/>
-    /// skin.shpk clones a vanilla BODY material, and it is deliberately narrow: it is for a Skin-mode
-    /// overlay auto-promoted to a shell, which should still look like skin. That shader is not a general
-    /// shell target, because it declares only THREE samplers — g_SamplerDiffuse, g_SamplerNormal,
-    /// g_SamplerMask — and no <c>g_SamplerIndex</c>. The <c>_id</c> row selector every other shell is built
-    /// on has nowhere to bind, so the colour table cannot be addressed per texel: no row presets, no
-    /// per-row opacity, no mask rows. An overlay that needs any of those must stay on character.shpk (see
-    /// <see cref="RenderModeInference.IsClothSub"/> and the caller's choice).
-    /// <para/>
-    /// What it buys is the thing character.shpk cannot do at all: the wearer's SKIN TONE. skin.shpk reads
-    /// the normal map's blue channel as skin-colour influence, which is exactly the channel a gear shell
-    /// spends on its per-pixel alpha gate — so the two are mutually exclusive by construction, and a whole
-    /// skin (opaque, tinted) wants the tone while a tattoo (sheer, decal) wants the gate.
-    /// <para/>
-    /// Measured on the shipping materials (mt_c0201b0001_a, c0101, c1401, c1501, f0002_fac) rather than
-    /// assumed: 3 textures in base/norm/mask order, one colour set, and CategorySkinType keyed to Body.
-    /// <c>g_AlphaThreshold</c> is declared on every one of them (the Hrothgar body and the face ship it
-    /// non-zero at 0.5), so it has an alpha path too — but coverage here is triangle-trim, which is what a
-    /// near-opaque whole skin needs anyway.
+    /// Game path of the VANILLA material used as a template. character.shpk clones e0041, characterscroll e6257,
+    /// and skin.shpk a vanilla body/face material. skin.shpk declares no <c>g_SamplerIndex</c>, so it has no
+    /// per-texel row selection; it is only for skin-mode overlays promoted to a shell, which want the skin tone
+    /// (normal blue = skin-colour influence, the channel gear spends on its alpha gate).
     /// </summary>
     /// <param name="charCode">
-    /// The wearer's own race code ("0201", "1501", …), for the skin arm only. Skin is keyed to the REAL race
-    /// — a body material carries a CategorySkinType telling the shader which skin path to take, and Hrothgar
-    /// (c1501) ships a different value from every other body. Cloning c0201's onto a Hrothgar would light the
-    /// shell down the non-fur path while the body beside it takes the other. Null keeps the Midlander
-    /// default, and so does a race whose material can't be loaded — see the caller's fallback.
+    /// The wearer's race code ("0201", …), for the skin arm only: body materials carry a race-specific
+    /// CategorySkinType. Null keeps the Midlander default.
     /// </param>
     /// <param name="faceId">
-    /// The face this shell was cut from ("f0001", …), for the skin arm only. A face is skin.shpk like the
-    /// body but NOT the same material: the body declares <c>CategorySkinType = Body</c> and ships
-    /// <c>g_AlphaThreshold</c> at 0, while a face material declares no shader keys at all and ships the
-    /// threshold at 0.5 — so cloning the body onto face geometry renders it down the body's skin path with
-    /// the wrong cutoff. It also names a different mask. Null means the body.
+    /// The face this shell was cut from ("f0001", …), for the skin arm only: a face material differs from the
+    /// body's (shader keys, alpha threshold, mask). Null means the body.
     /// </param>
     public static string TemplateFor(string shaderPackage, string? charCode = null, string? faceId = null)
         => shaderPackage switch
@@ -146,9 +100,7 @@ public static class GearMaterialWriter
     }
 
     /// <summary>
-    /// The texture game paths a material names, in slot order. Used to inherit a slot the overlay does not
-    /// supply — a skin shell with no mask of its own wants the one the surface it is copying actually wears,
-    /// which differs between the body (a shared skin mask) and a face (its own).
+    /// The texture game paths a material names, in slot order, for inheriting a slot the overlay does not supply.
     /// </summary>
     public static IReadOnlyList<string> TextureNames(byte[] m)
     {
@@ -169,18 +121,11 @@ public static class GearMaterialWriter
     }
 
     /// <summary>
-    /// Texture slot order the shader's template expects — the sets differ, so this drives the table:
+    /// Texture slot order the shader's template expects:
     ///   character.shpk       4: base, norm, mask, id
     ///   characterscroll.shpk 4: norm, mask, id, catc   — NO base texture.
-    ///
-    /// "catc" is the scrolling map that drives the animated emissive (mods name it "_o"); it is the
-    /// glow itself — colour, pattern and animation.
-    ///
-    /// characterscroll having NO base is load-bearing, not an oversight. When a base texture is present
-    /// (Solona's modded 5-texture variant), it DRIVES the diffuse and the colour table's diffuse is
-    /// ignored — so the surface is stuck at whatever the overlay's art is, and a glow on white art can
-    /// never read. Vanilla scrolling materials take their surface from the colour table instead, which
-    /// is how they pair a near-black diffuse with a bright emissive and get a vivid effect.
+    /// "catc" is the scroll map (mods' "_o"). No base is load-bearing: a base texture overrides the colour
+    /// table's diffuse, and the glow needs the table's surface colour.
     /// </summary>
     public static IReadOnlyList<string> TextureOrder(string shaderPackage) => shaderPackage switch
     {
@@ -191,46 +136,33 @@ public static class GearMaterialWriter
     };
 
     /// <summary>
-    /// Material shader flags (the "Enable Transparency" / "Hide Backfaces" toggles in a material editor).
-    ///
-    /// TRANSPARENCY IS NOT ON BY DEFAULT: the vanilla character.shpk template ships flags 0x0D — no
-    /// 0x10 — so the normal map's blue channel (the gear alpha gate) is simply IGNORED and the shell
-    /// renders fully opaque. A second skin is always a transparent surface, so we force both bits on.
+    /// Material shader flags ("Enable Transparency" / "Hide Backfaces"). The vanilla template lacks 0x10, which
+    /// makes the normal-blue alpha gate ignored, so transparency is forced on.
     /// </summary>
     private const uint FlagHideBackfaces = 0x01;
     private const uint FlagTransparency = 0x10;
 
     /// <summary>
-    /// g_AlphaThreshold. The vanilla templates ship this at 0, which makes the shader treat the normal
-    /// map's blue channel as a binary cutout — every pixel is either fully opaque or discarded, so a
-    /// sheer overlay renders solid. Setting it to 1 turns on real alpha blending, which is what a second
-    /// skin always wants.
+    /// g_AlphaThreshold. At 0 (vanilla) the normal-blue alpha is a binary cutout; 1 turns on real alpha blending.
     /// </summary>
     private const uint ConstAlphaThreshold = 0x29AC0223;
 
     /// <summary>
-    /// g_AlphaOffset (CRC of the name under the game's reflected CRC-32). "Enhanced Nylon" raises it to 1
-    /// on character.shpk for a sheerer alpha falloff; we push to 1.5 for a sheerer edge still. Gear
-    /// non-scroll only.
+    /// g_AlphaOffset (CRC of the name under the game's reflected CRC-32). Raised to 1.5 for a sheerer alpha
+    /// falloff; gear non-scroll only.
     /// </summary>
     private const uint ConstAlphaOffset = 0xD07A6A65;
 
     /// <summary>
-    /// GetDecalColor = GetDecalColorRGBA.
-    ///
-    /// This is what makes the scroll map's COLOUR reach the glow. Without it the shader defaults to
-    /// GetDecalColorOff and takes only intensity from the map, tinting it with the row's emissive — so a
-    /// vivid rainbow effect renders as a flat white glow no matter what the texture holds. Vanilla e6257
-    /// doesn't set it; every scrolling-effect mod does.
+    /// GetDecalColor = GetDecalColorRGBA: lets the scroll map's COLOUR reach the glow. Without it the shader
+    /// takes only intensity from the map and tints it with the row's emissive.
     /// </summary>
     private const uint KeyGetDecalColor = 0xD2777173;
     private const uint ValDecalColorRGBA = 0xF35F5131;
 
     /// <summary>
-    /// characterscroll needs TWO UV sets declared — "map1" and "map2". The scroll map is sampled with
-    /// uv1 (map2); with only map1 declared the shader falls back to uv0 and the effect renders as a
-    /// flat, colourless wash however the colour table is set. Vanilla e6257 declares only map1; every
-    /// mod with a working scrolling effect declares both.
+    /// characterscroll samples its scroll map with uv1, which needs a second UV set ("map2") declared; without
+    /// it the shader falls back to uv0.
     /// </summary>
     private const string SecondUvSet = "map2";
     private const ushort SecondUvSetFlags = 0x0001;
@@ -241,11 +173,8 @@ public static class GearMaterialWriter
     private const int HSphereMask = 21, HSphereIndex = 27;
     private const int HTileIndex = 25, HTileAlpha = 26;
     /// <summary>
-    /// The tile transform: a 2x2 UV matrix (UU, UV, VU, VV) whose diagonal is how many times the weave
-    /// repeats per axis and whose off-diagonal is skew. Vanilla ships ScaledIdentity(16) — repeat 16 both
-    /// ways, no skew. Proteus writes the diagonal from the editor's Scale controls and pins skew to zero:
-    /// on a 64px weave skew and rotation are invisible, and composing them would mean porting
-    /// Penumbra.GameData's HalfMatrix2x2 (a project Proteus does not reference) for a control nobody moves.
+    /// The tile transform: a 2x2 UV matrix (UU, UV, VU, VV); the diagonal is repeats per axis, the off-diagonal
+    /// skew. Proteus writes the diagonal and pins skew to zero.
     /// </summary>
     private const int HTileXfUU = 28, HTileXfUV = 29, HTileXfVU = 30, HTileXfVV = 31;
     private const int RowCount = 32, RowBytes = 64;
@@ -258,38 +187,30 @@ public static class GearMaterialWriter
     internal const float DefaultTileScale = 16f;
 
     /// <summary>
-    /// What actually switches the scrolling effect ON — per Bacara's characterscroll guide, and confirmed
-    /// against every working effect mod:
-    ///
-    ///   [23] "Effect Unknown A"  — must be 1 (or 2). REQUIRED, even with the shader keys set. Zero here
-    ///                              and the effect never renders, no matter what else is right.
-    ///   [21] Sphere Map Opacity  — doubles as the effect's VISIBILITY on this shader (can be negative).
-    ///
-    /// A row with no emissive isn't a glow row, so we only arm the rows that have one.
+    /// What switches the scrolling effect ON:
+    ///   [23] "Effect Unknown A"  — must be 1 (or 2), or the effect never renders.
+    ///   [21] Sphere Map Opacity  — doubles as the effect's VISIBILITY on this shader.
+    /// Only rows with an emissive are armed.
     /// </summary>
     private const int HEffectEnable = 23;
 
     /// <summary>
-    /// Scroll speed and tiling live in material constants. Vanilla e6257 ships the speeds at ZERO — so
-    /// even a correctly-armed material sits still. Names from the guide; ~0.01 is the usual speed range
-    /// and tiling defaults to 1.
+    /// Scroll speed and tiling material constants. Vanilla e6257 ships the speeds at zero.
     /// </summary>
     private const uint ConstTranslateSpeedX = 0x738A241C;
     private const uint ConstTranslateSpeedY = 0x71CC9A45;
     private const uint ConstTilingX = 0x43345395;
     private const uint ConstTilingY = 0x4172EDCC;
 
+    // sRGB → linear. The color table's diffuse is consumed as LINEAR, so an sRGB-authored colour must be converted.
+    private static float SrgbToLinear(float c)
+        => c <= 0.04045f ? c / 12.92f : MathF.Pow((c + 0.055f) / 1.055f, 2.4f);
+
     /// <summary>
     /// Clone <paramref name="template"/>, point it at <paramref name="texturePaths"/> (which must be in
     /// the shader's slot order — see <see cref="TextureOrder"/>), and apply <paramref name="rows"/>
     /// (keyed by 0-based color table row; absent rows keep the template's values).
     /// </summary>
-    // sRGB → linear (the standard curve the game applies to an sRGB diffuse TEXTURE). The color table's
-    // diffuse half-floats are consumed as LINEAR, so a colour authored in sRGB (as the editor shows it,
-    // and as the skin path bakes it into an sRGB texture) must be converted or it renders too bright.
-    private static float SrgbToLinear(float c)
-        => c <= 0.04045f ? c / 12.92f : MathF.Pow((c + 0.055f) / 1.055f, 2.4f);
-
     public static byte[] Build(
         byte[] template,
         IReadOnlyList<string> texturePaths,
@@ -328,12 +249,8 @@ public static class GearMaterialWriter
 
         // characterscroll samples its scroll map with uv1, which only exists if map2 is declared.
         bool isScroll = string.Equals(shpkName, "characterscroll.shpk", StringComparison.OrdinalIgnoreCase);
-        // A SKIN shell keeps the vanilla body material exactly as shipped apart from its texture table.
-        // Every rewrite below is a gear-shader fix and none of them means anything here: the transparency
-        // flag and g_AlphaThreshold drive an alpha gate skin.shpk reads out of a different channel (its blue
-        // is skin-colour influence — the whole reason to use this shader), g_AlphaOffset isn't declared, and
-        // the colour table is the SKIN colorset, not a gear one, so both the tile-weave clear and the row
-        // patch would be writing gear offsets over skin data.
+        // A SKIN shell keeps the vanilla body material as shipped apart from its texture table: every rewrite
+        // below is a gear-shader fix, and the colour table is a skin colorset.
         bool isSkin = string.Equals(shpkName, "skin.shpk", StringComparison.OrdinalIgnoreCase);
         if (isScroll && uvSets.Count < 2)
             uvSets.Add((SecondUvSet, SecondUvSetFlags));
@@ -383,8 +300,7 @@ public static class GearMaterialWriter
 
         // Shader section sits right after the data set. Its layout is
         // { u16 valueListSize, u16 keyCount, u16 constCount, u16 samplerCount, u32 flags }.
-        // Everything from here to the return is gear-shader work. A skin shell wants the vanilla body
-        // material verbatim behind its new textures, so it takes none of it.
+        // Everything below is gear-shader work, which a skin shell skips.
         if (isSkin) return r;
 
         int shaderStart = 16 + texCount * 4 + uvSets.Count * 4 + colorSetCount * 4 + strings.Length
@@ -392,19 +308,16 @@ public static class GearMaterialWriter
         if (shaderStart + 12 <= r.Length)
         {
             uint flags = BitConverter.ToUInt32(r, shaderStart + 8) | FlagTransparency;
-            // Backfaces are hidden by default because a shell hugs the body: nothing can see its inside,
-            // and drawing it doubles the transparent surfaces the sheer blend has to sort. A shell that
-            // SPANS lifts off the body, and then the inside of the span faces the viewer wherever they
-            // look up under it — hidden, that reads as a hole straight through the garment.
+            // Backfaces hidden by default (a hugging shell's inside is never seen); a spanning shell lifts off
+            // the body, and then a hidden inside reads as a hole.
             if (showBackfaces) flags &= ~FlagHideBackfaces;
             else               flags |= FlagHideBackfaces;
 
             BitConverter.GetBytes(flags).CopyTo(r, shaderStart + 8);
         }
 
-        // g_AlphaThreshold 1 turns on real alpha blending (smooth sheer transparency). Left at the template's
-        // 0 it's a hard alpha-test cutout — which renders more like opaque geometry, letting sphere/metal
-        // survive gpose's transparent pass, at the cost of aliased sheer edges. Opt-in via cutoutAlpha.
+        // g_AlphaThreshold 1 = real alpha blending. Left at 0 it's a hard cutout, which keeps sphere/metal
+        // through gpose's transparent pass at the cost of aliased edges. Opt-in via cutoutAlpha.
         if (!cutoutAlpha)
         {
             var (withAlpha, found) = TextureLoader.PatchConstantValues(r, ConstAlphaThreshold, 1f);
@@ -425,19 +338,12 @@ public static class GearMaterialWriter
         }
         else
         {
-            // Sheer edge: always raise g_AlphaOffset so character.shpk's alpha falloff reads sheerer — a
-            // second skin should never be a hard cutout. Not applicable to characterscroll (handled above);
-            // no-ops safely if the template lacks the constant.
+            // Sheer edge: raise g_AlphaOffset; no-ops if the template lacks the constant.
             r = TextureLoader.PatchConstantValues(r, ConstAlphaOffset, 1.5f).data;
         }
 
-        // Gear materials layer a tiling fabric weave over the surface (the colour table's Tile fields),
-        // and the templates ship it at full strength. A second skin is SKIN — that weave shows up as a
-        // rough, grainy texture the real skin doesn't have. Switch it off on every row.
-        //
-        // A BASELINE, not a verdict: PatchColorTable runs immediately below and re-writes half 26 on any row
-        // whose preset asked for a weave, so an authored tile survives and every other row stays smooth.
-        // Keep this BEFORE the patch — swapping the two makes the editor's Tile picker a silent no-op.
+        // Switch the templates' fabric weave off on every row: a second skin is skin. A baseline only;
+        // PatchColorTable below re-writes authored tiles, so keep this BEFORE it.
         {
             int cs = 16 + texCount * 4 + uvSets.Count * 4 + colorSetCount * 4 + strings.Length + addDataSize;
             for (int row = 0; row < RowCount; row++)
@@ -452,45 +358,8 @@ public static class GearMaterialWriter
     }
 
     /// <summary>
-    /// Overwrite colour table rows in an EXISTING material, in place and nothing else — no texture table,
-    /// no string block, no shader section. <paramref name="rows"/> is keyed by 0-based row; absent rows and
-    /// null fields keep whatever the material already holds.
-    /// <para/>
-    /// This is how an imported content pack's own .mtrl is coloured: it already names its own textures and
-    /// shader, and rebuilding it through <see cref="Build"/> would demand a template with a matching texture
-    /// count and throw away everything the author set. It is also the row writer <see cref="Build"/> itself
-    /// uses, so shells and content packs can never drift apart on what a row means.
-    /// <para/>
-    /// The colour table's position is read from the material's OWN header, which is why this works on any
-    /// material rather than only on a freshly built one. No-ops (returning the input unchanged) when the
-    /// material declares no colour set, or when its data set is too small to hold a Dawntrail 32×64 table —
-    /// a legacy 16-row material would otherwise be shredded by rows written at Dawntrail offsets.
-    /// </summary>
-    /// <summary>
-    /// Copy <paramref name="src"/>'s whole 32×64 colour table into <paramref name="dst"/>, each table
-    /// located from its OWN header — the same computation <see cref="PatchColorTable"/> does, which is why
-    /// this works between two materials of different shaders and different texture counts.
-    /// <para/>
-    /// This is what lets an imported content pack keep its look when Proteus rebuilds its material onto
-    /// <c>characterscroll.shpk</c> for an animated glow. <see cref="Build"/> clones a VANILLA template, so
-    /// without this a glowing piercing would silently take e6257's colour table: the author's silver, its
-    /// metalness and its roughness gone, and e6257's own non-zero emissives inherited in their place.
-    /// <para/>
-    /// Grafted AFTER Build deliberately, so the author's tile alpha survives too — Build zeroes it because
-    /// a second skin is skin and the weave shows, and a content piece is not skin.
-    /// <para/>
-    /// Returns the input unchanged when either material lacks a Dawntrail table, on the same reasoning as
-    /// <see cref="PatchColorTable"/>: a legacy 16-row layout read at these offsets is shredded, not copied.
-    /// </summary>
-    /// <summary>
-    /// The roughness and metalness already in a material's colour table, one entry per sub-row (0–31), or
-    /// null when it carries no Dawntrail table.
-    /// <para/>
-    /// For the editor, so a panel over an imported pack's OWN material shows the values that material
-    /// actually holds. Its grid otherwise falls back to 0 and 0.5 for anything the sidecar has not
-    /// overridden — honest for a shell, whose material Proteus builds from a neutral template, and a lie
-    /// for a content pack: the piercings arrive at metalness 1.0 while the panel reads 0, so the surface
-    /// renders metallic and the control that should fix it looks like it already is.
+    /// The roughness and metalness already in a material's colour table, one entry per sub-row (0–31), or null
+    /// when it carries no Dawntrail table. For the editor to show a pack material's real values.
     /// </summary>
     public static IReadOnlyList<(float Roughness, float Metalness)>? ReadPhysical(byte[] mtrl)
     {
@@ -507,6 +376,11 @@ public static class GearMaterialWriter
         return rows;
     }
 
+    /// <summary>
+    /// Copy <paramref name="src"/>'s whole 32×64 colour table into <paramref name="dst"/>, each located from its
+    /// OWN header, so a pack rebuilt onto characterscroll keeps its look. Graft AFTER Build. No-op without a
+    /// Dawntrail table on either side.
+    /// </summary>
     public static byte[] CopyColorTable(byte[] dst, byte[] src)
     {
         int dstAt = ColorTableStart(dst), srcAt = ColorTableStart(src);
@@ -518,19 +392,8 @@ public static class GearMaterialWriter
     }
 
     /// <summary>
-    /// Byte offset of a material's Dawntrail colour table, or -1 when it has none the writer may touch.
-    /// <para/>
-    /// The offset is read from the material's own header rather than assumed, which is the whole reason the
-    /// row writer works on a pack's authored material as well as on a freshly built one.
-    /// </summary>
-    /// <summary>
-    /// Byte offset of the colour table, or -1 when this material has none that can be written.
-    /// <para/>
-    /// Internal rather than private because the colour PANEL has to ask the same question, and asking it a
-    /// second way was a bug: it tested the DECLARED data-set size out of the header while this tests the
-    /// offset against the actual buffer. A material whose header promises a full table but whose file is
-    /// short passed there and fails here, so the grid drew live, took edits, and
-    /// <see cref="PatchColorTable"/> returned the material untouched with nothing on screen saying why.
+    /// Byte offset of a material's Dawntrail colour table from its own header, or -1 when it has none that can
+    /// be written. The colour panel must ask this same question, not re-derive it from the header.
     /// </summary>
     internal static int ColorTableStart(byte[] mtrl)
     {
@@ -543,6 +406,11 @@ public static class GearMaterialWriter
         return at < 0 || at + RowCount * RowBytes > mtrl.Length ? -1 : at;
     }
 
+    /// <summary>
+    /// Overwrite colour table rows in an EXISTING material in place, nothing else; absent rows and null fields
+    /// keep the material's values. Used for imported packs' own materials and by <see cref="Build"/>. No-op
+    /// without a Dawntrail 32×64 table.
+    /// </summary>
     public static byte[] PatchColorTable(
         byte[] mtrl, IReadOnlyDictionary<int, GearColorRow>? rows,
         bool linearizeDiffuse = false, bool isScroll = false)
@@ -574,37 +442,18 @@ public static class GearMaterialWriter
             if (def.Metalness is { } me) WH(HMetalness, me);
 
             // ── the fabric weave ─────────────────────────────────────────────
-            // Never on a scrolling material. characterscroll demonstrably reassigns halves in this
-            // neighbourhood — 21 is the effect's visibility and 23 its master switch, neither of which means
-            // that on character.shpk — so there is no basis for assuming 25/26/28-31 survive it either. A
-            // value reaching one of those there would be stale rather than chosen, since the editor hides
-            // the Tile block on a glow material for the same reason it hides the sphere.
-            //
-            // EVERY tile write hangs off the index, strength and scale included. On their own they are not a
-            // weaker version of the same request, they are a different one, and both ways of making it are
-            // wrong:
-            //   - strength alone revives whatever weave the row ALREADY names. On a shell that is the vanilla
-            //     template's, which Build only silenced (it zeroes half 26 and leaves half 25 alone), so the
-            //     body comes back wearing a pattern nobody picked.
-            //   - scale alone re-tiles a weave the user never chose and clears its skew — on an imported pack
-            //     that is the author's own material, edited in place, with no second copy to restore from.
-            // The editor can reach both: its Strength and Scale controls are dimmed while no pattern is set,
-            // and dimmed in this codebase means inert-looking but still draggable. Keeping the trio together
-            // here is what makes that safe, and it also protects hand-authored metadata, which no UI guards.
+            // Never on a scrolling material: characterscroll reassigns halves in this neighbourhood.
+            // Every tile write hangs off the index: strength or scale alone would revive or re-tile a weave
+            // nobody picked.
             if (!isScroll && def.TileIndex is { } ti)
             {
-                // The index is NOT stored as a number: the shader reads (half * 64), so the row carries
-                // (index + 0.5) / 64. The half-step centres the value in its bucket so the truncating read
-                // cannot land a slice off — 63 encodes as 0.9921875, where Half's step is a thirtieth of the
-                // bucket width, so every slice round-trips exactly.
+                // Stored as (index + 0.5) / 64: the shader reads (half * 64) and truncates.
                 WH(HTileIndex, (Math.Clamp(ti, 0, TileCount - 1) + 0.5f) / 64f);
 
-                // Build zeroed half 26 on every row, so an index with no strength would be an invisible
-                // tile — the same silent no-op as a sphere index with a zero mask. Full unless told.
+                // Build zeroed half 26, so an index with no strength would be invisible. Full unless told.
                 WH(HTileAlpha, def.TileStrength ?? 1f);
 
-                // Either axis writes the whole matrix: the off-diagonal has to be pinned to zero explicitly
-                // or a content pack's authored skew would survive under a scale the user thinks is plain.
+                // Either axis writes the whole matrix, pinning skew to zero.
                 if (def.TileScaleU is not null || def.TileScaleV is not null)
                 {
                     WH(HTileXfUU, def.TileScaleU ?? DefaultTileScale);
@@ -615,20 +464,9 @@ public static class GearMaterialWriter
             }
 
             // ── the scrolling effect ─────────────────────────────────────────
-            // Arm it on rows that actually glow. Field 23 is the master switch — without it nothing renders
-            // however right the rest is — and sphere-map opacity doubles as the effect's visibility.
-            // SphereIntensity is a Cloth concept with no meaning on a glow row, so only a POSITIVE value
-            // overrides; null OR 0 means "fully visible" (else a stray 0 silently kills the glow).
-            //
-            // The row EMISSIVE is left exactly as written above, because on this shader it is what the
-            // effect's brightness scales with. That was measured, not assumed, and the wrong guess cost two
-            // rounds: pinning the emissive to a small gate and sending the dial to field 21 instead left the
-            // effect barely visible with visibility already at 1.0, which is what proves field 21 is not the
-            // brightness. A dial at full does not add white either — a saturated orange scroll map simply
-            // blows out to white at that intensity, so the fix for "it looks white" is a lower dial.
-            //
-            // The DIAL is the condition rather than the composed colour: a glow whose colour is genuinely
-            // black is still a glow the user asked for, and the two differ once a colour is picked.
+            // Arm it on rows the user set to glow (by the DIAL, not the colour). Field 23 is the master switch and
+            // sphere-map opacity the visibility: only a POSITIVE value overrides, else fully visible. The row
+            // emissive stays as written: on this shader it sets the effect's brightness.
             if (isScroll && def.EmissiveStrength is { } strength && strength > 0f)
             {
                 WH(HEffectEnable, 1f);

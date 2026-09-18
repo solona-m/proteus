@@ -8,15 +8,8 @@ using Dalamud.Plugin.Services;
 namespace Proteus.Services;
 
 /// <summary>
-/// Fetches the starter scroll-effect library into the config directory on first run.
-/// <para/>
-/// These used to ship inside the plugin zip, where they were 29 of its 31 MB — re-downloaded by every
-/// user on every update purely to seed a folder that is seeded once. They are pinned release assets
-/// now, so the plugin zip is small and the art is fetched once per machine.
-/// <para/>
-/// Deliberately quiet: unlike the UV maps, nothing depends on these. A failure is a log line and a
-/// smaller Effect dropdown, never a red pill — so this class has no state for the UI to read and needs
-/// no localized strings. It retries on the next plugin load.
+/// Fetches the starter scroll-effect library (pinned release assets) into the config directory on first run.
+/// Deliberately quiet: a failure is a log line, no UI state, and a retry on the next plugin load.
 /// </summary>
 public sealed class DefaultEffectsDownloadService : IDisposable
 {
@@ -26,11 +19,7 @@ public sealed class DefaultEffectsDownloadService : IDisposable
     /// </summary>
     private const string EffectsTag = "effects-v1";
 
-    /// <summary>
-    /// Shipped loose rather than as one zip on purpose: a zip's bytes are not reproducible across
-    /// zip implementations, so a pinned checksum would break the moment CI's zipper disagreed with
-    /// whoever generated the hash. Loose files are uploaded verbatim and hash exactly.
-    /// </summary>
+    /// <summary>Shipped loose rather than zipped: zip bytes are not reproducible, so a pinned checksum would break.</summary>
     private static readonly (string Name, long Bytes, string Sha256)[] Effects =
     [
         ("Moon and Stars.jpeg", 1621608L, "c6c7655f1d374334c1b81acbe9975a535bf4a064bf4e731567e3a4becaa44cf6"),
@@ -47,13 +36,9 @@ public sealed class DefaultEffectsDownloadService : IDisposable
     ];
 
     /// <summary>
-    /// The asset name to ask for, which is NOT the name the file is saved under.
-    /// <para/>
-    /// GitHub rewrites spaces in a release asset's name, so "hello kitty.png" cannot be requested by
-    /// that name at all. Rather than depend on exactly how it rewrites them, upload-effects.yml renames
-    /// its uploads with this same substitution — the two sides agree by construction. The local name,
-    /// spaces and all, is what the user sees in the Effect dropdown and what a sidecar's <c>Scroll</c>
-    /// value refers to, so it must not change.
+    /// The asset name to ask for, which is not the name the file is saved under: GitHub rewrites spaces, and
+    /// upload-effects.yml renames its uploads with this same substitution. The local name is what a sidecar's
+    /// <c>Scroll</c> refers to, so it must not change.
     /// </summary>
     private static string RemoteName(string localName) => localName.Replace(' ', '.');
 
@@ -77,8 +62,7 @@ public sealed class DefaultEffectsDownloadService : IDisposable
 
     /// <summary>
     /// Fetches anything missing, in the background. <paramref name="onProgress"/> fires after each file
-    /// lands so the caller can re-seed incrementally — a user who opens the Effect dropdown mid-download
-    /// sees the library fill in rather than nothing at all.
+    /// lands so the caller can re-seed incrementally.
     /// </summary>
     public void EnsureAsync(Action? onProgress = null)
     {
@@ -99,11 +83,7 @@ public sealed class DefaultEffectsDownloadService : IDisposable
                 cts.Token.ThrowIfCancellationRequested();
 
                 var dest = Path.Combine(effectsDir, name);
-                // Non-empty is enough to skip — NOT a match against the pinned size. A file only gets
-                // here two ways: FetchAsync promoted it after a checksum, or it was reclaimed from an
-                // older install. The first is right by construction; the second is an earlier revision
-                // that works fine, and re-fetching it is the wasted traffic this class exists to avoid.
-                // Comparing to `bytes` meant one missing effect re-downloaded all eleven.
+                // Non-empty is enough to skip, not a match against the pinned size: a reclaimed older revision works.
                 if (File.Exists(dest) && new FileInfo(dest).Length > 0) continue;
 
                 var r = await downloader.FetchAsync(
@@ -124,19 +104,8 @@ public sealed class DefaultEffectsDownloadService : IDisposable
 
     /// <summary>
     /// Uses the copy an older build left next to the DLL instead of downloading. Returns true when every
-    /// effect in <see cref="Effects"/> is now present locally, so a user updating from a version that
-    /// bundled the art pays nothing.
-    /// <para/>
-    /// Sizes are NOT checked against <see cref="Effects"/>: the pre-519 art is a different (larger)
-    /// revision and is perfectly good, and re-fetching 11 MB to replace working files would be exactly
-    /// the wasted traffic this whole change exists to stop.
-    /// <para/>
-    /// Completeness is decided by NAME, never by counting what was moved. The old folder is a
-    /// user-visible library, so it can hold files of their own — counting made two extra files cover for
-    /// a missing effect, which then never downloaded and was silently absent from the dropdown forever,
-    /// because this service is deliberately quiet. Counting also failed the other way: one effect the
-    /// user had deleted dropped the count below the threshold and re-downloaded all eleven, including the
-    /// ten perfectly good ones just reclaimed.
+    /// effect in <see cref="Effects"/> is now present locally. Sizes are not checked, and completeness is
+    /// decided by name, never by counting what was moved (the folder may hold the user's own files).
     /// </summary>
     private bool ReclaimFromAssemblyDir()
     {
@@ -173,13 +142,8 @@ public sealed class DefaultEffectsDownloadService : IDisposable
     }
 
     /// <summary>
-    /// Runs the caller's "a file landed" callback, absorbing anything it throws.
-    /// <para/>
-    /// The callback is <c>SidecarDiscoveryService.SeedDefaultEffects</c>, which copies into the user's
-    /// library — and it now runs on this background thread while the constructor's own seed call and
-    /// OnPenumbraReady's may also be in flight. Two overlapping seeds can collide on a file and raise
-    /// IOException. Unguarded, that unwound out of the download loop and cancelled every remaining
-    /// effect, under a log line blaming the download. A seeding hiccup is not a download failure.
+    /// Runs the caller's "a file landed" callback, absorbing anything it throws: overlapping seeds can
+    /// collide on a file, and that must not cancel the remaining downloads.
     /// </summary>
     private void Notify(Action? onProgress)
     {
@@ -187,8 +151,7 @@ public sealed class DefaultEffectsDownloadService : IDisposable
         catch (Exception ex) { log.Warning(ex, "[Proteus] Re-seeding the effect library failed"); }
     }
 
-    /// <summary>Whether every name in <see cref="Effects"/> exists locally and is non-empty. Length is
-    /// not compared against the pinned size — an older revision on disk is still a usable effect.</summary>
+    /// <summary>Whether every name in <see cref="Effects"/> exists locally and is non-empty.</summary>
     private bool HaveEveryEffect()
     {
         foreach (var (name, _, _) in Effects)
@@ -205,8 +168,7 @@ public sealed class DefaultEffectsDownloadService : IDisposable
     }
 
     /// <summary>
-    /// Cancels any in-flight fetch and releases the HTTP client. Disposing the downloader matters for
-    /// load-context unloadability, not just tidiness — see UVMapDownloadService.Dispose.
+    /// Cancels any in-flight fetch and releases the HTTP client, which load-context unloadability requires.
     /// </summary>
     public void Dispose()
     {

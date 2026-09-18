@@ -11,13 +11,8 @@ namespace Proteus.Services;
 
 /// <summary>
 /// Packs a Proteus mod folder as a Penumbra <c>.pmp</c> — the Export tab's engine, and the inverse of
-/// <see cref="OnionImportService"/>.
-/// <para/>
-/// A <c>.pmp</c> is nothing more than a zip of the mod ROOT (see "For Creators.md", Distributing Your
-/// Mod): <c>meta.json</c> at the top level, the redirect manifest beside it, and the whole
-/// <c>Proteus/</c> sidecar underneath. Because the folder is copied verbatim rather than transformed,
-/// the export is lossless — colour tables, masks, glow effects, gear shells and option groups all
-/// survive, and the recipient's Proteus discovers the sidecar exactly as the author's did.
+/// <see cref="OnionImportService"/>. A <c>.pmp</c> is a zip of the mod root, copied verbatim, so the
+/// <c>Proteus/</c> sidecar survives losslessly.
 /// </summary>
 public sealed class ModExportService
 {
@@ -28,10 +23,8 @@ public sealed class ModExportService
     public const string Extension = ".pmp";
 
     /// <summary>
-    /// Files that must never ship. <c>*.tmp</c> is the important one: <see cref="PenumbraModMeta.AtomicWrite"/>
-    /// writes <c>meta.json.&lt;guid&gt;.tmp</c> siblings, and an interrupted write leaves one behind — shipping
-    /// it would put a half-written manifest in someone else's mod folder. The rest is OS noise that means
-    /// nothing on another machine.
+    /// Files that must never ship: <c>*.tmp</c> (half-written <see cref="PenumbraModMeta.AtomicWrite"/> siblings)
+    /// and OS noise.
     /// </summary>
     private static bool IsExcluded(string fileName)
         => fileName.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase)
@@ -44,16 +37,13 @@ public sealed class ModExportService
         this.log = log;
     }
 
-    /// <summary>
-    /// A reference type, unlike <see cref="ModCreationService.CreateResult"/>: the export runs on the
-    /// thread pool and the UI picks the result up through a <c>volatile</c> field, which a struct can't be.
-    /// </summary>
+    /// <summary>A reference type so the UI can pick it up through a <c>volatile</c> field.</summary>
     public sealed record ExportResult(bool Ok, string Message);
 
     /// <summary>
     /// The filename to pre-fill the save dialog with: the mod's display name, reduced to characters a
-    /// filesystem accepts, plus <c>.pmp</c>. Falls back to the mod's directory name when the display name
-    /// sanitises away to nothing (a mod called "★" would otherwise offer an empty filename).
+    /// filesystem accepts, plus <c>.pmp</c>. Falls back to the directory name when the display name
+    /// sanitises away to nothing.
     /// </summary>
     public static string SuggestedFileName(OverlayEntry entry)
         => (ModCreationService.Sanitize(entry.ModName) ?? ModCreationService.Sanitize(entry.ModDirectory)
@@ -61,16 +51,14 @@ public sealed class ModExportService
 
     /// <summary>
     /// Write <paramref name="entry"/>'s mod folder to <paramref name="targetPath"/> as a .pmp. Safe off the
-    /// framework thread — the one Penumbra call is the mod-root lookup, which discovery already makes from
-    /// a background thread. Returns a user-facing result; nothing is left behind when it fails.
+    /// framework thread. Returns a user-facing result; nothing is left behind when it fails.
     /// </summary>
     public ExportResult Export(OverlayEntry entry, string targetPath)
     {
         if (string.IsNullOrWhiteSpace(targetPath))
             return new(false, Loc.Localize("Export.Error.NoPath", "Pick somewhere to save the file."));
 
-        // The dialog's default extension only applies when the user leaves the name alone; someone who
-        // types "Ven" gets a file Penumbra won't offer to install.
+        // A typed name may lack the extension, which Penumbra needs.
         if (!targetPath.EndsWith(Extension, StringComparison.OrdinalIgnoreCase))
             targetPath += Extension;
 
@@ -93,9 +81,7 @@ public sealed class ModExportService
             var size = new FileInfo(targetPath).Length / 1024f / 1024f;
             log.Information("[Proteus] exported {0} -> {1} ({2} file(s), {3:0.#} MB)",
                 entry.ModDirectory, targetPath, count, size);
-            // "{1} files" rather than English's inline "file(s)": a count glued to a noun has no correct
-            // translation into Russian (three plural forms) or Japanese (none), so the count is labelled
-            // instead of inflected.
+            // The count is labelled ("files: {1}") rather than inflected, so it translates.
             return new(true, string.Format(
                 Loc.Localize("Export.Ok.Fmt", "Exported \"{0}\" — files: {1}, {2} MB.\n{3}"),
                 entry.ModName, count, size.ToString("0.#"), targetPath));
@@ -110,16 +96,8 @@ public sealed class ModExportService
 
     /// <summary>
     /// Zip <paramref name="modRoot"/>'s contents to <paramref name="targetPath"/> and return how many files
-    /// went in. Pure filesystem work, so it can be exercised offline against a temp directory.
-    /// <para/>
-    /// Hand-walked rather than <see cref="ZipFile.CreateFromDirectory(string,string)"/> because entries have
-    /// to be filtered (see <see cref="IsExcluded"/>) and because the names must be root-relative with
-    /// forward slashes — Penumbra expects <c>meta.json</c> at the archive root, not nested inside a folder
-    /// named after the mod.
-    /// <para/>
-    /// Writes to a <c>.tmp</c> sibling and moves it into place, so overwriting an existing pack can't
-    /// truncate it if the write fails partway. That suffix is also what makes exporting INTO the mod folder
-    /// harmless: the archive being written is excluded from its own walk.
+    /// went in. Entries are filtered and root-relative with forward slashes (<c>meta.json</c> at the root).
+    /// Writes to a <c>.tmp</c> sibling and moves it into place; the suffix also excludes it from its own walk.
     /// </summary>
     internal static int WritePmp(string modRoot, string targetPath)
     {

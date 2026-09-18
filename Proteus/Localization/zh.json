@@ -215,6 +215,10 @@
     "message": "[Proteus] 第二层皮肤已构建，但游戏没有绘制它。承载它的饰品已装备，可角色并未加载 Proteus 的版本。请脱下该饰品再重新装备，或换用另一件。",
     "description": ""
   },
+  "Chat.ShellMaterialFailed": {
+    "message": "[Proteus] 第二层皮肤有一部分没有被绘制。其余部分已在角色身上，所以要么是该部件所需的纹理缺失，要么是游戏仍保留着之前的版本。请先尝试“立即重新合成”，然后再脱下并重新装备承载它的饰品。",
+    "description": ""
+  },
   "Chat.ShellNeedsRedraw": {
     "message": "[Proteus] 第二层皮肤已更改，但自动重绘已关闭，所以角色仍穿着之前的版本。切换区域或使用 Penumbra 的 Redraw 按钮即可看到。",
     "description": ""
@@ -781,6 +785,10 @@
   },
   "Content.EitherColumn": {
     "message": "A 和 B",
+    "description": ""
+  },
+  "Content.FollowsHairColor": {
+    "message": "此材质使用头发着色器，因此该部件会跟随角色的发色与挑染颜色，并且没有颜色表——您在下方做的任何修改都不会影响它。要重新上色，请更改发色。",
     "description": ""
   },
   "Content.Geometry.Fmt": {
@@ -2231,6 +2239,38 @@
     "message": "选择一个部件并拖动箭头：箭头沿该轴移动，\n方块在该平面内移动。",
     "description": ""
   },
+  "Parts.Tool.Rotate": {
+    "message": "旋转",
+    "description": ""
+  },
+  "Parts.Tool.Rotate.Tip": {
+    "message": "选中部件后，拖动其中一个圆环即可绕其中心旋转：\n彩色圆环绕对应轴旋转，外侧圆环绕视线方向旋转。",
+    "description": ""
+  },
+  "Parts.Tool.Scale": {
+    "message": "缩放",
+    "description": ""
+  },
+  "Parts.Tool.Scale.Tip": {
+    "message": "选中部件后，按住它并向右拖动放大，\n向左拖动则绕其中心缩小。",
+    "description": ""
+  },
+  "Parts.Rotate.Help": {
+    "message": "点击部件以选中它，然后拖动其中心的某个圆环。在其他地方拖动可旋转模型，Shift+拖动平移视图，滚轮缩放。",
+    "description": ""
+  },
+  "Parts.Rotate.LiveHint": {
+    "message": "点击角色身上的部件，然后拖动其中心的某个圆环。按住 Alt 可移动镜头。每次旋转在松开时保存。",
+    "description": ""
+  },
+  "Parts.Scale.Help": {
+    "message": "点击部件以选中它，然后按住它向右拖动放大、向左拖动缩小。在其他地方拖动可旋转模型，Shift+拖动平移视图，滚轮缩放。",
+    "description": ""
+  },
+  "Parts.Scale.LiveHint": {
+    "message": "点击角色身上的部件，然后按住它向右拖动放大、向左拖动缩小。按住 Alt 可移动镜头。每次更改在松开时保存。",
+    "description": ""
+  },
   "Parts.Move.Help": {
     "message": "点击部件以选中它，然后拖动箭头或方块。在其他地方拖动可旋转模型，Shift+拖动平移视图，滚轮缩放。",
     "description": ""
@@ -2794,6 +2834,10 @@
   "Settings.Output.Compression.Label": {
     "message": "启用压缩",
     "description": ""
+  },
+  "Settings.Output.CompressionRefused.Fmt": {
+    "message": "未启用：此电脑的压缩速度过慢（每百万像素 {0:F0} 毫秒），若执行压缩会耗时过长，\n导致你的外观完全无法绘制。现改为烘焙未压缩的贴图。取消勾选该选项可隐藏此提示。",
+    "description": "Shown in orange under the Enable Compression checkbox when the box is ticked but the machine was measured too slow to honour it. {0} is a measured number - keep the placeholder and its format. Contains deliberate line breaks."
   },
   "Settings.Output.Compression.Tip": {
     "message": "对烘焙后的贴图进行块压缩（BC7），使每张贴图在硬盘和显存中的占用降至\n未压缩时的约四分之一。索引贴图保持未压缩，以保留其精确的行数值。\n关闭 = 不压缩（与之前逐字节相同）。",

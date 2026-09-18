@@ -673,6 +673,97 @@ public class PresetTests
         Assert.Equal(0.01f, seed.ScrollSpeedX);
     }
 
+    /// <summary>
+    /// An imported pack's colours are edited per MATERIAL, so an override has to be able to answer at that level.
+    /// <para/>
+    /// Keyed per option, a bound pack's colours could not be changed at all: the panel writes content edits into
+    /// <see cref="ContentMaterialSettings"/>, which the composite reads BEFORE the option's rows, so the override's
+    /// option entry sat underneath the mod's own material entry and never reached the character.
+    /// </summary>
+    [Fact]
+    public void Bag_ContentMaterialRows_AreStoredPerMaterial_SoABoundPacksColoursCanMove()
+    {
+        var bag = BagGoverning("mod");
+        const string EarRings  = "common/2/mt_c0801e5505_met_a.mtrl";
+        const string ShinLaces = "common/9/mt_c0801e5505_met_e.mtrl";
+
+        // Peek never creates, here as everywhere else.
+        Assert.Null(bag.PeekContentMaterialRows("mod", EarRings));
+        Assert.Null(bag.Colors!["mod"].Materials);
+
+        Assert.True(bag.SetContentMaterialRows("mod", EarRings, [Row(16, "#FF0000")]));
+        Assert.Equal("#FF0000", bag.PeekContentMaterialRows("mod", EarRings)![0].SubRowA!.Diffuse);
+
+        // The pack's other material keeps its own answer — one option, nine accessories, nine tabs.
+        Assert.Null(bag.PeekContentMaterialRows("mod", ShinLaces));
+        Assert.True(bag.SetContentMaterialRows("mod", ShinLaces, [Row(16, "#00FF00")]));
+        Assert.Equal("#FF0000", bag.PeekContentMaterialRows("mod", EarRings)![0].SubRowA!.Diffuse);
+        Assert.Equal("#00FF00", bag.PeekContentMaterialRows("mod", ShinLaces)![0].SubRowA!.Diffuse);
+
+        // And the option-keyed scope is untouched: the two levels are different questions.
+        Assert.Null(bag.PeekRows("mod", null, null));
+        Assert.False(bag.SetContentMaterialRows("other", EarRings, [Row(16, "#0000FF")]));
+    }
+
+    [Fact]
+    public void Bag_ContentMaterialGear_SeedsOnceAndKeepsEachMaterialsOwnGlow()
+    {
+        var bag = BagGoverning("mod");
+        const string EarRings  = "common/2/mt_c0801e5505_met_a.mtrl";
+        const string ShinLaces = "common/9/mt_c0801e5505_met_e.mtrl";
+        var seed = new GearSettingsPreset { Scroll = "geometric.jpeg", ScrollSpeedX = 0.01f };
+
+        Assert.Null(bag.PeekContentMaterialGear("mod", EarRings));
+
+        var editable = bag.GetEditableContentMaterialGear("mod", EarRings, seed)!;
+        Assert.NotSame(seed, editable);          // the sidecar's own settings are never written back to
+        editable.Scroll = "flames.jpeg";
+
+        Assert.Same(editable, bag.GetEditableContentMaterialGear("mod", EarRings, seed));
+        Assert.Equal("flames.jpeg", bag.PeekContentMaterialGear("mod", EarRings)!.Scroll);
+        Assert.Equal("geometric.jpeg", seed.Scroll);
+
+        // Switching on a glow for the ear rings must not light up the shin laces.
+        Assert.Null(bag.PeekContentMaterialGear("mod", ShinLaces));
+        Assert.Null(bag.Gear!["mod"].Content);
+        Assert.Null(bag.Gear!["mod"].Top);
+    }
+
+    /// <summary>
+    /// A material path is compared case-insensitively everywhere else, and the override's map has to survive the
+    /// trip through design_bindings.json (or a share code) still doing that: System.Text.Json rebuilds a
+    /// dictionary with the DEFAULT ordinal comparer, so without the guard an adopted binding would miss here,
+    /// hit in the mod's own metadata, and be shadowed exactly as it was before this map existed.
+    /// </summary>
+    [Fact]
+    public void ContentMaterialOverrides_StayCaseInsensitiveAcrossAJsonRoundTrip()
+    {
+        var colors = new OverlayColorOverride
+        {
+            Materials = new Dictionary<string, List<ColorTableRowPreset>> { ["Common/2/MT_Rings.mtrl"] = [Row(16, "#FF0000")] },
+        };
+        var gear = new OverlayGearOverride
+        {
+            Materials = new Dictionary<string, GearSettingsPreset> { ["Common/2/MT_Rings.mtrl"] = new() { Scroll = "flames.jpeg" } },
+        };
+
+        // Built with the default comparer above, and still found by the spelling the model binds.
+        Assert.NotNull(colors.ResolveMaterial("common/2/mt_rings.mtrl"));
+        Assert.NotNull(gear.ResolveMaterial("common/2/mt_rings.mtrl"));
+
+        // This is the trip every adopt makes: DesignBindingService.CloneOverride round-trips through JSON.
+        var colorsBack = JsonSerializer.Deserialize<OverlayColorOverride>(JsonSerializer.Serialize(colors))!;
+        var gearBack   = JsonSerializer.Deserialize<OverlayGearOverride>(JsonSerializer.Serialize(gear))!;
+
+        Assert.Equal("#FF0000", colorsBack.ResolveMaterial("common/2/mt_rings.mtrl")![0].SubRowA!.Diffuse);
+        Assert.Equal("flames.jpeg", gearBack.ResolveMaterial("common/2/mt_rings.mtrl")!.Scroll);
+
+        // And through a preset's deep clone, which the pin path takes instead.
+        var cloned = new ModPreset { Name = "p", Colors = colorsBack, Gear = gearBack }.Clone();
+        Assert.NotNull(cloned.Colors.ResolveMaterial("COMMON/2/MT_RINGS.MTRL"));
+        Assert.NotNull(cloned.Gear.ResolveMaterial("COMMON/2/MT_RINGS.MTRL"));
+    }
+
     [Fact]
     public void Bag_ContentGearUsesItsOwnSlot_NotTop()
     {

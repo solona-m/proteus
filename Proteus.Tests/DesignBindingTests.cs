@@ -1098,6 +1098,16 @@ public class DesignBindingTests
         Assert.False(DesignBindingService.BootIdStillApplies(design, state));
     }
 
+    // ── BootMatchMayRestore (boot restore, step 2) ─────────────────────────────
+
+    [Theory]
+    [InlineData(false, true,  true)]   // reload: a design applied while Proteus was unloaded
+    [InlineData(false, false, true)]   // reload: the automation toggle doesn't govern a manual apply
+    [InlineData(true,  true,  true)]   // login: the automation's look, and Proteus follows automation
+    [InlineData(true,  false, false)]  // login: the automation's look, but following it is off
+    public void BootMatchMayRestore_OnlyALoginAnswersToTheAutomationToggle(bool atLogin, bool follows, bool expected)
+        => Assert.Equal(expected, DesignBindingService.BootMatchMayRestore(atLogin, follows));
+
     // ── StripCarriers ─────────────────────────────────────────────────────────
 
     // Glamourer packs a bonus item as (type << 48) | row id; Glasses is type 2, so carrier row 1 is

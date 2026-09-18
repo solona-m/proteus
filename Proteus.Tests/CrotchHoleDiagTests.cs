@@ -248,7 +248,7 @@ public class CrotchHoleDiagTests
 
         var before = File.ReadAllBytes(target);
         var gate = new SecondSkinLayer { MaterialName = "/probe.mtrl" };   // no coverage map = covers all
-        var after = SecondSkinWriter.SmoothBodyNipples(before, gate, 1f, o.WriteLine, 1f);
+        var after = BodyBridge.SmoothBodyNipples(before, gate, 1f, o.WriteLine, 1f);
         if (after == null) { o.WriteLine("the pass declined this model (no region found)"); return; }
 
         var a = ReadMeshes(before, SecondSkinWriter.Parse(before)).Single(m => m.Skin);
@@ -405,7 +405,7 @@ public class CrotchHoleDiagTests
 
         var before = File.ReadAllBytes(target);
         var gate = new SecondSkinLayer { MaterialName = "/probe.mtrl" };
-        var after = SecondSkinWriter.SmoothBodyNipples(before, gate, 0f, o.WriteLine, 1f);
+        var after = BodyBridge.SmoothBodyNipples(before, gate, 0f, o.WriteLine, 1f);
         if (after == null) { o.WriteLine("the pass declined this model"); return; }
 
         var a = ReadMeshes(before, SecondSkinWriter.Parse(before)).Single(m => m.Skin);
@@ -457,7 +457,7 @@ public class CrotchHoleDiagTests
 
         var before = File.ReadAllBytes(target);
         var gate = new SecondSkinLayer { MaterialName = "/probe.mtrl" };
-        var after = SecondSkinWriter.SmoothBodyNipples(before, gate, 0f, o.WriteLine, 1f);
+        var after = BodyBridge.SmoothBodyNipples(before, gate, 0f, o.WriteLine, 1f);
         if (after == null) { o.WriteLine("the pass declined this model"); return; }
 
         var a = ReadMeshes(before, SecondSkinWriter.Parse(before)).Single(m => m.Skin);
@@ -513,7 +513,7 @@ public class CrotchHoleDiagTests
 
         var before = File.ReadAllBytes(target);
         var gate = new SecondSkinLayer { MaterialName = "/probe.mtrl" };
-        var after = SecondSkinWriter.SmoothBodyNipples(before, gate, 0f, o.WriteLine, 1f);
+        var after = BodyBridge.SmoothBodyNipples(before, gate, 0f, o.WriteLine, 1f);
         if (after == null) { o.WriteLine("the pass declined this model"); return; }
 
         var a = ReadMeshes(before, SecondSkinWriter.Parse(before)).Single(m => m.Skin);
@@ -693,7 +693,7 @@ public class CrotchHoleDiagTests
         if (File.Exists(origPath))
         {
             var raw = File.ReadAllBytes(origPath);
-            var smoothed = SecondSkinWriter.SmoothBodyNipples(raw, new SecondSkinLayer { MaterialName = "/probe.mtrl" },
+            var smoothed = BodyBridge.SmoothBodyNipples(raw, new SecondSkinLayer { MaterialName = "/probe.mtrl" },
                                                               0f, null, 1f);
             if (smoothed != null)
             {

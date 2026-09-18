@@ -216,7 +216,7 @@ public class GearMaterialWriterTests
         // is, and PatchColorTable only arms a row whose dial is above zero.
         const int subRowB = 1;
         int at = ColorSetStart(grafted);
-        var rows = SecondSkinService.BuildSparseRows(
+        var rows = ShellColorRows.BuildSparseRows(
             [new ColorTableRowPreset { Row = 1, SubRowB = new ColorTableSubRowPreset { Emissive = 1f } }]);
         var final = GearMaterialWriter.PatchColorTable(grafted, rows, isScroll: true);
 
@@ -255,7 +255,7 @@ public class GearMaterialWriterTests
     public void A_glow_with_no_colour_anywhere_stays_dark_however_high_the_dial()
     {
         Dictionary<int, GearColorRow> Rows(ColorTableSubRowPreset b)
-            => SecondSkinService.BuildSparseRows([new ColorTableRowPreset { Row = 1, SubRowB = b }])!;
+            => ShellColorRows.BuildSparseRows([new ColorTableRowPreset { Row = 1, SubRowB = b }])!;
 
         // Intensity alone, no colour: dark. Existing mods depend on this.
         var bare = Rows(new ColorTableSubRowPreset { Emissive = 1f })[1];
@@ -288,7 +288,7 @@ public class GearMaterialWriterTests
         // Which is why arming seeds a colour as well as an intensity — without it the piece stays dark.
         var seeded = new List<ColorTableRowPreset>();
         ContentGlowRow.Arm(seeded, 1, subRowA: false);
-        Assert.NotEqual((0f, 0f, 0f), SecondSkinService.BuildSparseRows(seeded)![1].Emissive);
+        Assert.NotEqual((0f, 0f, 0f), ShellColorRows.BuildSparseRows(seeded)![1].Emissive);
     }
 
     /// <summary>
@@ -310,7 +310,7 @@ public class GearMaterialWriterTests
 
         int at = ColorSetStart(mtrl), row = 1, rowAt = at + row * 64;
         byte[] Scroll(ColorTableSubRowPreset b) => GearMaterialWriter.PatchColorTable(
-            mtrl, SecondSkinService.BuildSparseRows([new ColorTableRowPreset { Row = 1, SubRowB = b }]),
+            mtrl, ShellColorRows.BuildSparseRows([new ColorTableRowPreset { Row = 1, SubRowB = b }]),
             isScroll: true);
 
         // The dial reaches the emissive untouched — that is the brightness — and the effect is armed.
@@ -345,7 +345,7 @@ public class GearMaterialWriterTests
 
         // And arming never happens on a plain gear material, where field 23 means something else.
         var cloth = GearMaterialWriter.PatchColorTable(
-            mtrl, SecondSkinService.BuildSparseRows(
+            mtrl, ShellColorRows.BuildSparseRows(
                 [new ColorTableRowPreset { Row = 1, SubRowB = new ColorTableSubRowPreset
                 { Emissive = 1f, EmissiveColor = ContentGlowRow.DefaultGlowColour } }]));
         Assert.Equal(1f, Half(cloth, rowAt + 8 * 2), 3);

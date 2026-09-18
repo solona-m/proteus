@@ -159,7 +159,7 @@ public class ContentPieceSelectionTests
         var dir = TempDir();
         try
         {
-            var leaf = SecondSkinService
+            var leaf = ContentPieceResolver
                 .UsedMaterialNames(model, SecondSkinWriter.MaterialNames(model))[0].TrimStart('/');
             var preview = ContentImportService.Inspect(CerisePack(dir, model, new byte[64], leaf));
 
@@ -187,7 +187,7 @@ public class ContentPieceSelectionTests
         var dir = TempDir();
         try
         {
-            var leaf = SecondSkinService
+            var leaf = ContentPieceResolver
                 .UsedMaterialNames(model, SecondSkinWriter.MaterialNames(model))[0].TrimStart('/');
             var pack = CerisePack(dir, model, new byte[64], leaf);
 
@@ -224,7 +224,7 @@ public class ContentPieceSelectionTests
         var dir = TempDir();
         try
         {
-            var leaf = SecondSkinService
+            var leaf = ContentPieceResolver
                 .UsedMaterialNames(model, SecondSkinWriter.MaterialNames(model))[0].TrimStart('/');
             var preview = ContentImportService.Inspect(CerisePack(dir, model, new byte[64], leaf));
 
@@ -274,7 +274,7 @@ public class ContentPieceSelectionTests
         var dir = TempDir();
         try
         {
-            var leaf = SecondSkinService
+            var leaf = ContentPieceResolver
                 .UsedMaterialNames(model, SecondSkinWriter.MaterialNames(model))[0].TrimStart('/');
             var preview = ContentImportService.Inspect(CerisePack(dir, model, new byte[64], leaf, legacy: true));
             Assert.Equal(3, preview.Pack.FileVersion);
@@ -341,7 +341,7 @@ public class ContentPieceSelectionTests
         var dir = TempDir();
         try
         {
-            var leaf = SecondSkinService
+            var leaf = ContentPieceResolver
                 .UsedMaterialNames(model, SecondSkinWriter.MaterialNames(model))[0].TrimStart('/');
             var preview = ContentImportService.Inspect(SizeGroupPack(dir, model, new byte[64], leaf));
 
@@ -368,7 +368,7 @@ public class ContentPieceSelectionTests
         var dir = TempDir();
         try
         {
-            var leaf = SecondSkinService
+            var leaf = ContentPieceResolver
                 .UsedMaterialNames(model, SecondSkinWriter.MaterialNames(model))[0].TrimStart('/');
             var preview = ContentImportService.Inspect(
                 SizeGroupPack(dir, model, new byte[64], leaf, groupType: "Multi"));
@@ -393,7 +393,7 @@ public class ContentPieceSelectionTests
         var dir = TempDir();
         try
         {
-            var leaf = SecondSkinService
+            var leaf = ContentPieceResolver
                 .UsedMaterialNames(model, SecondSkinWriter.MaterialNames(model))[0].TrimStart('/');
             var preview = ContentImportService.Inspect(
                 SizeGroupPack(dir, model, new byte[64], leaf, breakOneOption: true));
@@ -419,7 +419,7 @@ public class ContentPieceSelectionTests
         var dir = TempDir();
         try
         {
-            var leaf = SecondSkinService
+            var leaf = ContentPieceResolver
                 .UsedMaterialNames(model, SecondSkinWriter.MaterialNames(model))[0].TrimStart('/');
             var preview = ContentImportService.Inspect(SizeGroupPack(dir, model, new byte[64], leaf));
 
@@ -460,7 +460,7 @@ public class ContentPieceSelectionTests
         var dir = TempDir();
         try
         {
-            var leaf = SecondSkinService
+            var leaf = ContentPieceResolver
                 .UsedMaterialNames(model, SecondSkinWriter.MaterialNames(model))[0].TrimStart('/');
             var preview = ContentImportService.Inspect(SizeGroupPack(dir, model, new byte[64], leaf));
 
@@ -493,7 +493,7 @@ public class ContentPieceSelectionTests
         var dir = TempDir();
         try
         {
-            var leaf = SecondSkinService
+            var leaf = ContentPieceResolver
                 .UsedMaterialNames(model, SecondSkinWriter.MaterialNames(model))[0].TrimStart('/');
 
             // Same pack minus the default-data models: the author's own option already selects the garment,
@@ -549,7 +549,7 @@ public class ContentPieceSelectionTests
         var dir = TempDir();
         try
         {
-            var leaf = SecondSkinService
+            var leaf = ContentPieceResolver
                 .UsedMaterialNames(model, SecondSkinWriter.MaterialNames(model))[0].TrimStart('/');
 
             var files = new List<(string, byte[])> { ("common/outfit.mtrl", new byte[64]) };
@@ -643,8 +643,8 @@ public class ContentPieceSelectionTests
         const string Leaf = "/mt_c0201b0001_neolithe_piercings.mtrl";
         var body = new ShellSurfaceKey(ShellSurfaceKind.Body, string.Empty);
 
-        var belly = SecondSkinService.ContentUnitKey("mod", body, Mtrl, null);
-        var hip   = SecondSkinService.ContentUnitKey("mod", body, Mtrl, null);
+        var belly = ContentPieceResolver.ContentUnitKey("mod", body, Mtrl, null);
+        var hip   = ContentPieceResolver.ContentUnitKey("mod", body, Mtrl, null);
         Assert.Equal(belly, hip);
 
         // …but they are still two MESHES inside it, which is what the earlier regression got wrong: keying
@@ -655,12 +655,12 @@ public class ContentPieceSelectionTests
         Assert.Equal("top/heart/model.mdl", imported.ModelFor("0201"));
 
         Assert.NotEqual(
-            SecondSkinService.ContentGeometryKey("top/heart/model.mdl", Leaf),
-            SecondSkinService.ContentGeometryKey("bottom/hip/model.mdl", Leaf));
+            ContentPieceResolver.ContentGeometryKey("top/heart/model.mdl", Leaf),
+            ContentPieceResolver.ContentGeometryKey("bottom/hip/model.mdl", Leaf));
         // The same mesh named twice really is one mesh.
         Assert.Equal(
-            SecondSkinService.ContentGeometryKey("top/heart/model.mdl", Leaf),
-            SecondSkinService.ContentGeometryKey("top/heart/model.mdl", Leaf));
+            ContentPieceResolver.ContentGeometryKey("top/heart/model.mdl", Leaf),
+            ContentPieceResolver.ContentGeometryKey("top/heart/model.mdl", Leaf));
     }
 
     [Fact]
@@ -668,22 +668,22 @@ public class ContentPieceSelectionTests
     {
         const string Mtrl = "common/1/piercings.mtrl";
         var body = new ShellSurfaceKey(ShellSurfaceKind.Body, string.Empty);
-        var baseline = SecondSkinService.ContentUnitKey("mod", body, Mtrl, null);
+        var baseline = ContentPieceResolver.ContentUnitKey("mod", body, Mtrl, null);
 
         // Different colours really are a different material, and legitimately cost two slots.
-        Assert.NotEqual(baseline, SecondSkinService.ContentUnitKey("mod", body, Mtrl, "[{\"Row\":1}]"));
+        Assert.NotEqual(baseline, ContentPieceResolver.ContentUnitKey("mod", body, Mtrl, "[{\"Row\":1}]"));
 
         // A different .mtrl is a different material.
-        Assert.NotEqual(baseline, SecondSkinService.ContentUnitKey("mod", body, "common/1/other.mtrl", null));
+        Assert.NotEqual(baseline, ContentPieceResolver.ContentUnitKey("mod", body, "common/1/other.mtrl", null));
 
         // Another mod's identical file is still its own — a shared slot across mods would make one mod's
         // colour edit reach into another's.
-        Assert.NotEqual(baseline, SecondSkinService.ContentUnitKey("other", body, Mtrl, null));
+        Assert.NotEqual(baseline, ContentPieceResolver.ContentUnitKey("other", body, Mtrl, null));
 
         // And a face piece cannot share with a body piece however identical the material: they are allocated
         // to different hosts, because a natively-authored face must not be race-deformed.
         Assert.NotEqual(baseline,
-            SecondSkinService.ContentUnitKey("mod", new ShellSurfaceKey(ShellSurfaceKind.Face, "f0001"), Mtrl, null));
+            ContentPieceResolver.ContentUnitKey("mod", new ShellSurfaceKey(ShellSurfaceKind.Face, "f0001"), Mtrl, null));
     }
 
     [Fact]
@@ -691,7 +691,7 @@ public class ContentPieceSelectionTests
     {
         const string Mtrl = "common/1/piercings.mtrl";
         var body = new ShellSurfaceKey(ShellSurfaceKind.Body, string.Empty);
-        var plain = SecondSkinService.ContentUnitKey("mod", body, Mtrl, null);
+        var plain = ContentPieceResolver.ContentUnitKey("mod", body, Mtrl, null);
 
         GearSettingsPreset Glow(string scroll, float? speedX = null, float? tileX = null) => new()
         {
@@ -699,21 +699,21 @@ public class ContentPieceSelectionTests
         };
 
         // A glow rebuilds the material onto characterscroll — a different file, so a different slot.
-        var glowing = SecondSkinService.ContentUnitKey("mod", body, Mtrl, null, Glow("rainbow.png").GlowKey());
+        var glowing = ContentPieceResolver.ContentUnitKey("mod", body, Mtrl, null, Glow("rainbow.png").GlowKey());
         Assert.NotEqual(plain, glowing);
 
         // Two options that agree on the effect AND every number still share one.
         Assert.Equal(glowing,
-            SecondSkinService.ContentUnitKey("mod", body, Mtrl, null, Glow("rainbow.png").GlowKey()));
+            ContentPieceResolver.ContentUnitKey("mod", body, Mtrl, null, Glow("rainbow.png").GlowKey()));
 
         // Differing on any of them does not. Merging on the effect name alone would silently hand one
         // option the other's speed, because only one material gets published.
         Assert.NotEqual(glowing,
-            SecondSkinService.ContentUnitKey("mod", body, Mtrl, null, Glow("stars.png").GlowKey()));
+            ContentPieceResolver.ContentUnitKey("mod", body, Mtrl, null, Glow("stars.png").GlowKey()));
         Assert.NotEqual(glowing,
-            SecondSkinService.ContentUnitKey("mod", body, Mtrl, null, Glow("rainbow.png", speedX: 0.4f).GlowKey()));
+            ContentPieceResolver.ContentUnitKey("mod", body, Mtrl, null, Glow("rainbow.png", speedX: 0.4f).GlowKey()));
         Assert.NotEqual(glowing,
-            SecondSkinService.ContentUnitKey("mod", body, Mtrl, null, Glow("rainbow.png", tileX: 8f).GlowKey()));
+            ContentPieceResolver.ContentUnitKey("mod", body, Mtrl, null, Glow("rainbow.png", tileX: 8f).GlowKey()));
 
         // A preset carrying numbers but NO effect is not a glow, and must not split a slot for nothing.
         Assert.Null(new GearSettingsPreset { ScrollSpeedX = 0.4f, ScrollTilingX = 8f }.GlowKey());
@@ -818,7 +818,7 @@ public class ContentPieceSelectionTests
     /// <para/>
     /// They are allowed to differ, and must: <c>RowOf</c> ROUNDS, for a pack's index where the number states
     /// its author's intent, while <c>ReadOverlay</c> TRUNCATES, for an overlay's own <c>_id</c>, because
-    /// that is how <c>CompositorService.ApplyIndexedOverlay</c> bins the very same file. Tidying either into
+    /// that is how <c>OverlayBlend.ApplyIndexedOverlay</c> bins the very same file. Tidying either into
     /// the other is a one-character edit that this has to catch — the editor DIMS the rows a scan does not
     /// name, so a binning one row out does not merely mislabel a row, it puts the working one behind a
     /// dimmed button.
@@ -1056,35 +1056,35 @@ public class ContentPieceSelectionTests
         // The ordinary pack: built in the shared shape, worn by the Midlander F it was cut for. Stays Body,
         // which is what lets it ride an appended ring instead of demanding a carrier — and all three codes
         // agreeing here is exactly why cut space has to be tested BEFORE "matches the wearer".
-        Assert.Equal(body, SecondSkinService.ContentSurface(body, "0201", "0201", "0201"));
+        Assert.Equal(body, ContentPieceResolver.ContentSurface(body, "0201", "0201", "0201"));
 
         // Same pack on a Miqo'te: still cut space, still deformed onto her by the game.
-        Assert.Equal(body, SecondSkinService.ContentSurface(body, "0201", "0801", "0201"));
+        Assert.Equal(body, ContentPieceResolver.ContentSurface(body, "0201", "0801", "0201"));
 
         // A Miqo'te-authored pack on a Miqo'te: native, at her own race, and the race rides in the surface
         // id so two races' pieces can never share a host or a published material.
         Assert.Equal(new ShellSurfaceKey(ShellSurfaceKind.Native, "0801"),
-            SecondSkinService.ContentSurface(body, "0801", "0801", "0201"));
+            ContentPieceResolver.ContentSurface(body, "0801", "0801", "0201"));
 
         // A model for neither: a Hrothgar reaching a Roegadyn model down the fall-through chain would need a
         // deform between two races Proteus does not do. Refused rather than shown at the wrong size.
-        Assert.Null(SecondSkinService.ContentSurface(body, "0901", "1501", "0101"));
-        Assert.Null(SecondSkinService.ContentSurface(body, "0801", "0201", "0201"));
+        Assert.Null(ContentPieceResolver.ContentSurface(body, "0901", "1501", "0101"));
+        Assert.Null(ContentPieceResolver.ContentSurface(body, "0801", "0201", "0201"));
 
         // The shared shape is decided on the CODE, not by matching this character's cut code. Those are
         // different questions and conflating them refused packs that work: the cut code is voted off the
         // paths the body was cut from, and a character whose skin comes from a WHOLE-BODY model votes their
         // own race. An Au Ra F in an ordinary c0201 pack then matched neither arm and lost every piece.
-        Assert.Equal(body, SecondSkinService.ContentSurface(body, "0201", "1401", "1401"));
-        Assert.Equal(body, SecondSkinService.ContentSurface(body, "0101", "1501", "1501"));
+        Assert.Equal(body, ContentPieceResolver.ContentSurface(body, "0201", "1401", "1401"));
+        Assert.Equal(body, ContentPieceResolver.ContentSurface(body, "0101", "1501", "1501"));
 
         // A pack that ships ONE model for everyone names no race at all, so there is none to disagree with.
         // It reports a null code precisely so it is never judged against a code it did not claim.
-        Assert.Equal(body, SecondSkinService.ContentSurface(body, null, "1401", "1401"));
+        Assert.Equal(body, ContentPieceResolver.ContentSurface(body, null, "1401", "1401"));
 
         // A sidecar that names a surface by hand means it; this only decides for the default.
         var face = new ShellSurfaceKey(ShellSurfaceKind.Face, "f0001");
-        Assert.Equal(face, SecondSkinService.ContentSurface(face, "0801", "0201", "0201"));
+        Assert.Equal(face, ContentPieceResolver.ContentSurface(face, "0801", "0201", "0201"));
     }
 
     [Fact]
@@ -1094,14 +1094,14 @@ public class ContentPieceSelectionTests
         // piece. Reporting the code it was asked about would attribute a race the pack never named, and the
         // surface decision would then refuse it on a character whose cut code differs from their gear's.
         var universal = new ContentPiece { Model = "models/thing.mdl" };
-        Assert.Equal((null, "models/thing.mdl"), SecondSkinService.ResolveVariantForTest(universal, "0201"));
-        Assert.Equal((null, "models/thing.mdl"), SecondSkinService.ResolveVariantForTest(universal, "1401"));
-        Assert.Equal((null, "models/thing.mdl"), SecondSkinService.ResolveVariantForTest(universal, null));
+        Assert.Equal((null, "models/thing.mdl"), ContentPieceResolver.ResolveVariantForTest(universal, "0201"));
+        Assert.Equal((null, "models/thing.mdl"), ContentPieceResolver.ResolveVariantForTest(universal, "1401"));
+        Assert.Equal((null, "models/thing.mdl"), ContentPieceResolver.ResolveVariantForTest(universal, null));
 
         // A keyed piece still reports the code that matched, which is the whole point of returning one.
         var keyed = new ContentPiece { Models = new() { ["0801"] = "models/miqo.mdl" } };
-        Assert.Equal(("0801", "models/miqo.mdl"), SecondSkinService.ResolveVariantForTest(keyed, "0801"));
-        Assert.Null(SecondSkinService.ResolveVariantForTest(keyed, "0201"));
+        Assert.Equal(("0801", "models/miqo.mdl"), ContentPieceResolver.ResolveVariantForTest(keyed, "0801"));
+        Assert.Null(ContentPieceResolver.ResolveVariantForTest(keyed, "0201"));
     }
 
     [Fact]
@@ -1120,8 +1120,8 @@ public class ContentPieceSelectionTests
         // And two races never merge into one surface, so they can never share a published material.
         Assert.NotEqual(native, new ShellSurfaceKey(ShellSurfaceKind.Native, "1401"));
         Assert.NotEqual(
-            SecondSkinService.ContentUnitKey("mod", native, "m.mtrl", null),
-            SecondSkinService.ContentUnitKey("mod", new ShellSurfaceKey(ShellSurfaceKind.Native, "1401"),
+            ContentPieceResolver.ContentUnitKey("mod", native, "m.mtrl", null),
+            ContentPieceResolver.ContentUnitKey("mod", new ShellSurfaceKey(ShellSurfaceKind.Native, "1401"),
                 "m.mtrl", null));
     }
 
@@ -1205,8 +1205,70 @@ public class ContentPieceSelectionTests
         // a host slot — which is exactly why the settings must not be shared either.
         var body = new ShellSurfaceKey(ShellSurfaceKind.Body, string.Empty);
         Assert.NotEqual(
-            SecondSkinService.ContentUnitKey("mod", body, EarRings, null, "geometric.jpeg 0.15 0.15 5 5"),
-            SecondSkinService.ContentUnitKey("mod", body, ShinLaces, null, "geometric.jpeg 0.15 0.15 5 5"));
+            ContentPieceResolver.ContentUnitKey("mod", body, EarRings, null, "geometric.jpeg 0.15 0.15 5 5"),
+            ContentPieceResolver.ContentUnitKey("mod", body, ShinLaces, null, "geometric.jpeg 0.15 0.15 5 5"));
+    }
+
+    /// <summary>
+    /// A material path is compared case-insensitively wherever one is looked up (<see cref="ContentPiece.MaterialFor"/>),
+    /// and that has to hold for a metadata.json straight off disk too — not only after the first edit rebuilt the map.
+    /// </summary>
+    [Fact]
+    public void Content_material_settings_are_found_case_insensitively_when_loaded_from_disk()
+    {
+        const string Json = """
+            {"ContentMaterials":{"Common/2/MT_c0801e5505_met_a.mtrl":{"Glow":{"Scroll":"geometric.jpeg"}}}}
+            """;
+
+        var meta = JsonSerializer.Deserialize<ProteusMetadata>(Json)!;
+
+        // The spelling the model binds, which need not match the one the panel stored.
+        Assert.Equal("geometric.jpeg",
+            meta.PeekMaterialSettings("common/2/mt_c0801e5505_met_a.mtrl")!.Glow!.Scroll);
+
+        // The copy-and-swap on first write still hands back the same entry rather than a second one.
+        meta.MaterialSettings("common/2/mt_c0801e5505_met_a.mtrl").ColorTableRows = [];
+        Assert.Single(meta.ContentMaterials!);
+    }
+
+    /// <summary>
+    /// The four levels an imported pack's colours can come from, in the one order the panel and the composite both
+    /// use. A live override (a design binding or a pinned preset) must be able to answer at the MATERIAL level:
+    /// keyed only per option it lost to the mod's own material entry, which is why a pack bound to a design could
+    /// not be recoloured at all.
+    /// </summary>
+    [Fact]
+    public void Content_settings_resolve_material_first_and_an_override_outranks_the_mods_own()
+    {
+        List<ColorTableRowPreset> Rows(string diffuse) =>
+            [new ColorTableRowPreset { Row = 16, SubRowA = new ColorTableSubRowPreset { Diffuse = diffuse } }];
+
+        var ovr    = Rows("#OVERRIDE");
+        var option = Rows("#OPTION");
+        var mod    = new ContentMaterialSettings { ColorTableRows = Rows("#MOD") };
+
+        // The binding wins over the mod's material entry, which wins over the option's rows.
+        Assert.Same(ovr, ContentSettingLevels.RowsFor(ovr, mod, option));
+        Assert.Same(mod.ColorTableRows, ContentSettingLevels.RowsFor(null, mod, option));
+        Assert.Same(option, ContentSettingLevels.RowsFor(null, null, option));
+        Assert.Null(ContentSettingLevels.RowsFor(null, null, null));
+
+        // A material entry with nothing in that field falls through rather than blanking the option's value:
+        // ContentMaterialSettings holds colours and glow independently.
+        Assert.Same(option, ContentSettingLevels.RowsFor(null, new ContentMaterialSettings(), option));
+
+        // The glow takes the same four levels.
+        var ovrGlow    = new GearSettingsPreset { Scroll = "flames.jpeg" };
+        var optionGlow = new GearSettingsPreset { Scroll = "geometric.jpeg" };
+        var modGlow    = new ContentMaterialSettings { Glow = new GearSettingsPreset { Scroll = "stars.jpeg" } };
+
+        Assert.Same(ovrGlow, ContentSettingLevels.GlowFor(ovrGlow, modGlow, optionGlow));
+        Assert.Same(modGlow.Glow, ContentSettingLevels.GlowFor(null, modGlow, optionGlow));
+        Assert.Same(optionGlow, ContentSettingLevels.GlowFor(null, null, optionGlow));
+
+        // An emptied material entry still answers: "cleared here" is not "never set here" (see the test above).
+        var cleared = new ContentMaterialSettings { Glow = new GearSettingsPreset() };
+        Assert.Null(ContentSettingLevels.GlowFor(null, cleared, optionGlow)!.GlowKey());
     }
 
     [Fact]
@@ -1320,30 +1382,30 @@ public class ContentPieceSelectionTests
         var top     = new ContentPiece { Models = new() { ["0101"] = topMdl } };
 
         // Midlander female. The chain's first hop is 2 -> 1, which IS the game's own fallback.
-        Assert.Equal(("0101", lanternMdl), SecondSkinService.ResolveVariantForTest(lantern, "0201"));
-        Assert.Null(SecondSkinService.ResolveVariantForTest(top, "0201"));
+        Assert.Equal(("0101", lanternMdl), ContentPieceResolver.ResolveVariantForTest(lantern, "0201"));
+        Assert.Null(ContentPieceResolver.ResolveVariantForTest(top, "0201"));
 
         // Further out: Miqo'te female reaches c0101 as 8 -> 2 -> 1, so the hop is the last step rather than
         // the first, and an accessory still gets there.
-        Assert.Equal(("0101", lanternMdl), SecondSkinService.ResolveVariantForTest(lantern, "0801"));
-        Assert.Null(SecondSkinService.ResolveVariantForTest(top, "0801"));
+        Assert.Equal(("0101", lanternMdl), ContentPieceResolver.ResolveVariantForTest(lantern, "0801"));
+        Assert.Null(ContentPieceResolver.ResolveVariantForTest(top, "0801"));
 
         // An exact match never needed the chain, and a male character reaches c0101 without one either.
-        Assert.Equal(("0101", topMdl), SecondSkinService.ResolveVariantForTest(top, "0101"));
+        Assert.Equal(("0101", topMdl), ContentPieceResolver.ResolveVariantForTest(top, "0101"));
 
         // A pack that does NOT mirror the game path under its option folder — nothing forbids it, and the
         // folder-segment check this replaced would refuse this one and leave the lantern invisible.
         var flat = new ContentPiece { Models = new() { ["0101"] = "a0189/model/c0101a0189_wrs.mdl" } };
         Assert.Equal(("0101", "a0189/model/c0101a0189_wrs.mdl"),
-            SecondSkinService.ResolveVariantForTest(flat, "0201"));
+            ContentPieceResolver.ResolveVariantForTest(flat, "0201"));
 
         // Backslashes, which a manifest may well use, and a bare filename with no folder at all.
         var backslashed = new ContentPiece
         {
             Models = new() { ["0101"] = @"base install\chara\accessory\a0189\model\c0101a0189_wrs.mdl" },
         };
-        Assert.NotNull(SecondSkinService.ResolveVariantForTest(backslashed, "0201"));
-        Assert.NotNull(SecondSkinService.ResolveVariantForTest(
+        Assert.NotNull(ContentPieceResolver.ResolveVariantForTest(backslashed, "0201"));
+        Assert.NotNull(ContentPieceResolver.ResolveVariantForTest(
             new ContentPiece { Models = new() { ["0101"] = "c0101a0189_wrs.mdl" } }, "0201"));
 
         // A garment sitting under an "accessory" FOLDER is still a garment — the name decides, and the
@@ -1352,10 +1414,10 @@ public class ContentPieceSelectionTests
         {
             Models = new() { ["0101"] = "my accessory pack/chara/equipment/e0043/model/c0101e0043_top.mdl" },
         };
-        Assert.Null(SecondSkinService.ResolveVariantForTest(mislabelled, "0201"));
+        Assert.Null(ContentPieceResolver.ResolveVariantForTest(mislabelled, "0201"));
 
         // A name that is not the cNNNNxNNNN shape at all reads as unknown, and unknown takes the strict rule.
-        Assert.Null(SecondSkinService.ResolveVariantForTest(
+        Assert.Null(ContentPieceResolver.ResolveVariantForTest(
             new ContentPiece { Models = new() { ["0101"] = "models/lantern.mdl" } }, "0201"));
 
         // A piece mixing an accessory and a garment is judged as the garment — unknown or mixed means the
@@ -1368,12 +1430,12 @@ public class ContentPieceSelectionTests
                 ["0301"] = "undershirt/cropped tee/chara/equipment/e0043/model/c0301e0043_top.mdl",
             },
         };
-        Assert.Null(SecondSkinService.ResolveVariantForTest(mixed, "0201"));
+        Assert.Null(ContentPieceResolver.ResolveVariantForTest(mixed, "0201"));
 
         // And a c0101 accessory is still cut space, so it is deformed onto the wearer rather than
         // demanding a carrier of its own.
         var body = new ShellSurfaceKey(ShellSurfaceKind.Body, string.Empty);
-        Assert.Equal(body, SecondSkinService.ContentSurface(body, "0101", "0201", "0201"));
+        Assert.Equal(body, ContentPieceResolver.ContentSurface(body, "0101", "0201", "0201"));
     }
 
     /// <summary>
@@ -1457,12 +1519,12 @@ public class ContentPieceSelectionTests
 
         // Selecting a LEGS option shows its attribute on the legs model. The Body and Feet groups have
         // nothing to say about this model and must not reach it — they are the ones that used to hide it.
-        var onLegs = SecondSkinService.HiddenAttributes(groups, Legs, attrs, Sel("Legs toggles", "+ harness"));
+        var onLegs = ContentPieceResolver.HiddenAttributes(groups, Legs, attrs, Sel("Legs toggles", "+ harness"));
         Assert.DoesNotContain("atr_a", onLegs ?? new HashSet<string>());
 
         // And the same selection changes nothing on the TOP model, which the Legs group does not govern.
         // Body defaults to 16 — bit 4, past this three-name table — so every named attribute is off there.
-        var onTop = SecondSkinService.HiddenAttributes(groups, Top, attrs, Sel("Legs toggles", "+ harness"));
+        var onTop = ContentPieceResolver.HiddenAttributes(groups, Top, attrs, Sel("Legs toggles", "+ harness"));
         Assert.Equal(["atr_a", "atr_b", "atr_c"], onTop!.Order());
 
         // A group naming no slot still matches anything, so sidecars written before the slot was recorded
@@ -1470,7 +1532,7 @@ public class ContentPieceSelectionTests
         var legacy = G("Legs", 0, ("+ harness", 1));
         legacy.Slot = null;
         Assert.DoesNotContain("atr_a",
-            SecondSkinService.HiddenAttributes([legacy], Top, attrs, Sel("Legs toggles", "+ harness"))
+            ContentPieceResolver.HiddenAttributes([legacy], Top, attrs, Sel("Legs toggles", "+ harness"))
             ?? new HashSet<string>());
     }
 
@@ -1509,33 +1571,33 @@ public class ContentPieceSelectionTests
             { ["Toggles"] = [.. on] };
 
         // Nothing selected: the default has both bits, so nothing is hidden at all.
-        Assert.Null(SecondSkinService.HiddenAttributes(groups, Mid, forward, Sel()));
-        Assert.Null(SecondSkinService.HiddenAttributes(groups, Mid, forward, null));
+        Assert.Null(ContentPieceResolver.HiddenAttributes(groups, Mid, forward, Sel()));
+        Assert.Null(ContentPieceResolver.HiddenAttributes(groups, Mid, forward, null));
 
         // Bit 0 is whichever name ends in "a" — in either table order.
         Assert.Equal(["atr_dv_a"],
-            SecondSkinService.HiddenAttributes(groups, Mid, forward, Sel("Panty Strap Hide"))!.Order());
+            ContentPieceResolver.HiddenAttributes(groups, Mid, forward, Sel("Panty Strap Hide"))!.Order());
         Assert.Equal(["atr_dv_a"],
-            SecondSkinService.HiddenAttributes(groups, Mid, reversed, Sel("Panty Strap Hide"))!.Order());
+            ContentPieceResolver.HiddenAttributes(groups, Mid, reversed, Sel("Panty Strap Hide"))!.Order());
 
         // Both selected: the mask empties and every part attribute goes.
         Assert.Equal(["atr_dv_a", "atr_dv_b"],
-            SecondSkinService.HiddenAttributes(groups, Mid, forward,
+            ContentPieceResolver.HiddenAttributes(groups, Mid, forward,
                 Sel("Panty Strap Hide", "Pockets Hide"))!.Order());
 
         // A group for a different set leaves this model alone — a pack can ship several items.
-        Assert.Null(SecondSkinService.HiddenAttributes(groups,
+        Assert.Null(ContentPieceResolver.HiddenAttributes(groups,
             "items/chara/equipment/e9999/model/c0101e9999_dwn.mdl", forward, Sel("Panty Strap Hide")));
 
         // Names that are not part attributes are never touched. atr_hij, atr_nek, atr_ude, atr_hiz and
         // atr_sne suppress body geometry and the game drives them from EQP; reading them as parts is what
         // made deadrose's "+ arm belts" toggle atr_nek and therefore do nothing visible at all.
-        Assert.Null(SecondSkinService.HiddenAttributes(
+        Assert.Null(ContentPieceResolver.HiddenAttributes(
             [new ContentAttributeGroup { Group = "Toggles", SetId = 6058, DefaultMask = 0 }],
             Mid, ["atr_hij", "atr_nek", "atr_ude", "atr_hiz", "atr_sne"], null));
 
         // Part J is the last bit an IMC mask has; anything beyond it is not addressable and stays put.
-        Assert.Equal(["atr_tv_j"], SecondSkinService.HiddenAttributes(
+        Assert.Equal(["atr_tv_j"], ContentPieceResolver.HiddenAttributes(
             [new ContentAttributeGroup { Group = "Toggles", SetId = 6058, DefaultMask = 0x1FF }],
             Mid, ["atr_tv_j", "atr_tv_k"], null)!.Order());
     }
@@ -1547,24 +1609,24 @@ public class ContentPieceSelectionTests
     [Fact]
     public void A_part_attributes_bit_is_the_letter_it_ends_in()
     {
-        Assert.Equal(0, SecondSkinService.PartAttributeBit("atr_tv_a"));
-        Assert.Equal(1, SecondSkinService.PartAttributeBit("atr_tv_b"));
-        Assert.Equal(8, SecondSkinService.PartAttributeBit("atr_tv_i"));
-        Assert.Equal(9, SecondSkinService.PartAttributeBit("atr_tv_j"));
+        Assert.Equal(0, ContentPieceResolver.PartAttributeBit("atr_tv_a"));
+        Assert.Equal(1, ContentPieceResolver.PartAttributeBit("atr_tv_b"));
+        Assert.Equal(8, ContentPieceResolver.PartAttributeBit("atr_tv_i"));
+        Assert.Equal(9, ContentPieceResolver.PartAttributeBit("atr_tv_j"));
 
         // The prefix does not matter — bottoms and shoes name their parts the same way.
-        Assert.Equal(0, SecondSkinService.PartAttributeBit("atr_dv_a"));
-        Assert.Equal(1, SecondSkinService.PartAttributeBit("atr_sv_b"));
+        Assert.Equal(0, ContentPieceResolver.PartAttributeBit("atr_dv_a"));
+        Assert.Equal(1, ContentPieceResolver.PartAttributeBit("atr_sv_b"));
 
         // Body-suppression attributes: EQP's, not the mask's.
         foreach (var n in new[] { "atr_hij", "atr_nek", "atr_ude", "atr_hiz", "atr_sne", "atr_leg" })
-            Assert.Null(SecondSkinService.PartAttributeBit(n));
+            Assert.Null(ContentPieceResolver.PartAttributeBit(n));
 
         // A mask holds ten bits, so a letter past J answers to none of them.
-        Assert.Null(SecondSkinService.PartAttributeBit("atr_tv_k"));
+        Assert.Null(ContentPieceResolver.PartAttributeBit("atr_tv_k"));
 
         // And nothing shaped like a part attribute at all.
         foreach (var n in new[] { "a", "_a", "atr_", "heels_offset=0.0361", "" })
-            Assert.Null(SecondSkinService.PartAttributeBit(n));
+            Assert.Null(ContentPieceResolver.PartAttributeBit(n));
     }
 }

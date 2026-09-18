@@ -8,30 +8,11 @@ using System.Threading;
 namespace Proteus.Services;
 
 /// <summary>
-/// Reads and writes Penumbra's root <c>meta.json</c> mod manifest.
-///
-/// Penumbra's FileVersion 4 folded the whole mod layout into this one file: option groups moved out of
-/// per-group <c>group_NNN_name.json</c> files into a <c>Groups</c> array, and <c>default_mod.json</c>
-/// became the <c>DefaultData</c> object. Group ORDER is now the array index — the old filename number is
-/// gone — but the meaning is unchanged: lower = higher priority.
-///
-/// Reads are two-tier everywhere: v4 first, falling back to the v3 layout for folders an older Penumbra
-/// wrote and never migrated. That tier stays — a <c>.pmp</c> downloaded from a mod site is frequently v3
-/// inside, and it is not Proteus's to rewrite.
-///
-/// WRITES ARE v4 ONLY, and there are two halves to that:
-/// <list type="bullet">
-/// <item>Proteus never AUTHORS v3. <see cref="NewMetaJson"/> stamps <see cref="SingleFileVersion"/>, and
-/// the format-specific writers below have no legacy arm left to take.</item>
-/// <item>Proteus never EDITS a v3 folder. Every write entry point refuses one through
-/// <see cref="IsLegacyFolder"/> — see <see cref="LegacyFolderException"/> for why it throws rather than
-/// quietly doing nothing.</item>
-/// </list>
-/// Writes used to follow whatever format the folder was already in, on the reasoning that the two are not
-/// mutually legible and a Penumbra too old for <c>DefaultData</c> would silently apply no redirects at
-/// all. That Penumbra is gone. What remains true is the half that makes the refusal cheap for the user: a
-/// current Penumbra migrates a v3 folder up on load, so the fix for a folder Proteus declines is simply to
-/// let Penumbra see it once.
+/// Reads and writes Penumbra's root <c>meta.json</c> mod manifest. From FileVersion 4 it holds the <c>Groups</c>
+/// array (array order = priority, lower = higher) and the <c>DefaultData</c> object.
+/// Reads fall back to the v3 layout (per-group files, <c>default_mod.json</c>). Writes are v4 only: Proteus never
+/// authors v3 and never edits a v3 folder (see <see cref="IsLegacyFolder"/> and <see cref="LegacyFolderException"/>);
+/// a current Penumbra migrates such a folder on load.
 /// </summary>
 internal static class PenumbraModMeta
 {
@@ -41,24 +22,19 @@ internal static class PenumbraModMeta
     /// <summary>The version that moved groups and the default option into meta.json.</summary>
     public const int SingleFileVersion = 4;
     /// <summary>
-    /// The format Proteus reads but will not write. Also what <see cref="FileVersionOf"/> reports for a
-    /// manifest that declares no version at all, which is why <see cref="IsLegacyFolder"/> asks
-    /// <see cref="HasReadableManifest"/> first — "no manifest yet" is a folder being created, not an old one.
+    /// The format Proteus reads but will not write, and what <see cref="FileVersionOf"/> reports for a manifest with
+    /// no version; hence <see cref="IsLegacyFolder"/> asks <see cref="HasReadableManifest"/> first.
     /// </summary>
     public const int LegacyFileVersion = 3;
 
-    // Encoder: these are Penumbra's own files, and Penumbra writes non-ASCII names as themselves. Without
-    // it a rewrite here turns a mod's 正常 into "正常" in its manifest. See ProteusJson.
+    // Encoder: Penumbra writes non-ASCII names as themselves, so a rewrite here must not escape them. See ProteusJson.
     private static readonly JsonSerializerOptions WriteOptions =
         new() { WriteIndented = true, Encoder = ProteusJson.Encoder };
 
     /// <summary>
-    /// Whether the folder has a manifest that actually parses. False both when there is none and when
-    /// it is corrupt — a caller repairing a manifest needs those two separated from "readable", which
-    /// <see cref="ReadFileVersion"/> cannot give it: that collapses missing and unparseable into the
-    /// same <see cref="LegacyFileVersion"/>. The distinction matters because from
-    /// <see cref="SingleFileVersion"/> on, the manifest is also where the redirects live, so
-    /// overwriting a READABLE one throws away live published state.
+    /// Whether the folder has a manifest that actually parses; false when missing or corrupt. Unlike
+    /// <see cref="ReadFileVersion"/>, separates those from readable, which matters because from
+    /// <see cref="SingleFileVersion"/> on the manifest also holds the live redirects.
     /// </summary>
     public static bool HasReadableManifest(string modRoot)
     {
@@ -73,28 +49,19 @@ internal static class PenumbraModMeta
     }
 
     /// <summary>
-    /// Thrown when a write is asked for against a mod folder still in Penumbra's pre-v4 layout.
-    /// <para/>
-    /// An exception rather than a quiet no-op, and that is deliberate. This file's whole history is failures
-    /// that looked like success — a v4 manifest an old Penumbra read as empty, a stale <c>default_mod.json</c>
-    /// mistaken for the live set — where the log stayed clean and the user's mod simply did nothing. A write
-    /// that cannot happen has to say so loudly enough that a caller is forced to have an answer for it.
+    /// Thrown when a write is asked for against a mod folder still in Penumbra's pre-v4 layout. An exception rather
+    /// than a no-op, so a write that cannot happen is never mistaken for success.
     /// </summary>
     public sealed class LegacyFolderException(string modRoot)
         : InvalidOperationException(
             $"{modRoot} is a pre-v{SingleFileVersion} Penumbra mod folder, which Proteus does not write to.");
 
     /// <summary>
-    /// Whether this folder is one Proteus will read but not edit — see the type remarks.
-    /// <para/>
-    /// <see cref="HasReadableManifest"/> comes first and is load-bearing: <see cref="ReadFileVersion"/>
-    /// collapses "no manifest" and "unreadable manifest" into <see cref="LegacyFileVersion"/>, so without it
-    /// every folder an importer is part-way through creating would refuse its own first write.
+    /// Whether this folder is one Proteus will read but not edit. <see cref="HasReadableManifest"/> is checked
+    /// first, so a folder still being created (no manifest yet) doesn't refuse its own first write.
     /// </summary>
-    /// <param name="waitIfHeld">Wait out a manifest someone else holds open, as the writers do, so it is not
-    /// answered as "not legacy" for want of a moment. False for a caller on the draw or framework thread that
-    /// only uses the answer for display — the sleep would be frozen frames, and any write it leads to still
-    /// waits and refuses on its own.</param>
+    /// <param name="waitIfHeld">Wait out a manifest someone else holds open, as the writers do. False for display-only
+    /// callers on the draw or framework thread.</param>
     public static bool IsLegacyFolder(string modRoot, bool waitIfHeld = true)
     {
         var manifest = ReadManifest(modRoot, out bool readable, waitIfHeld: waitIfHeld);
@@ -102,62 +69,35 @@ internal static class PenumbraModMeta
     }
 
     /// <summary>
-    /// Read the manifest, and throw <see cref="LegacyFolderException"/> if the folder is one Proteus will not
-    /// write to. Every writer's way in — it hands back the manifest it read so the write can preserve the
-    /// keys it does not own without parsing the file again.
-    /// <para/>
-    /// One read, not three. <see cref="IsLegacyFolder"/> parses twice by itself — once to ask whether a
-    /// manifest is even there, once for its version — and the writers then parsed a third time to get the
-    /// keys. That is billed on every composite: the compositor rewrites the managed mod's redirects through
-    /// <see cref="WriteRedirects"/> on every run, and that manifest grows with the redirect set.
-    /// <para/>
-    /// Guards the point where a writer commits to a format, not the top of the method — a call that would
-    /// write nothing anyway (no options, no redirects) stays the no-op it always was rather than becoming
-    /// a throw.
+    /// Read the manifest in one parse, throwing <see cref="LegacyFolderException"/> if Proteus will not write to the
+    /// folder; the manifest is returned so the write can preserve keys it does not own. Call it where a writer commits
+    /// to a format, so a write of nothing stays a no-op.
     /// </summary>
     private static Dictionary<string, JsonElement> ReadManifestForWrite(string modRoot)
     {
-        // throwIfHeld: a manifest that is THERE but held open must not read as absent — the write below would
-        // then replace it with one holding nothing but its own change. See ManifestInUseException.
+        // throwIfHeld: a manifest held open must not read as absent, or the write would replace it. See ManifestInUseException.
         var manifest = ReadManifest(modRoot, out bool readable, waitIfHeld: true, throwIfHeld: true);
-        // Readable FIRST, for the reason IsLegacyFolder documents: FileVersionOf reports a manifest that is
-        // missing and one that declares no version as the same thing, and a folder an importer is part-way
-        // through creating has no manifest at all.
+        // Readable first: FileVersionOf reports missing and version-less manifests alike.
         if (readable && FileVersionOf(manifest) < SingleFileVersion)
             throw new LegacyFolderException(modRoot);
         return manifest;
     }
 
     /// <summary>
-    /// Bring a folder PROTEUS OWNS up to <see cref="SingleFileVersion"/>, folding its
-    /// <c>default_mod.json</c> into <c>DefaultData</c> and preserving every other key. A no-op on a folder
-    /// already at v4 or with no manifest at all.
-    /// <para/>
-    /// Only for folders Proteus created — the managed mod, and anything the importers or the Create tab
-    /// laid down. Every one of those was stamped v3 by a build older than this one, and the managed mod in
-    /// particular is rewritten on EVERY composite, so leaving them to <see cref="ReadManifestForWrite"/> would
-    /// break compositing outright for anyone whose Penumbra had not happened to migrate the folder first.
-    /// <para/>
-    /// Deliberately NOT used on a mod belonging to someone else. Refusing a stranger's folder is a choice
-    /// about not rewriting what we did not write; migrating it silently is the opposite of that, and
-    /// Penumbra does it properly — groups and all — the moment it loads the mod.
-    /// <para/>
-    /// Groups are not folded, because a folder Proteus owns has none in the v3 layout: every group writer
-    /// here has always gone through <see cref="WriteGroupIntoManifest"/> on a v4 folder or a legacy file on
-    /// a v3 one, and the mods that carry Proteus groups are v4 by construction.
+    /// Bring a folder Proteus owns up to <see cref="SingleFileVersion"/>, folding its <c>default_mod.json</c> into
+    /// <c>DefaultData</c> and preserving every other key. A no-op on a v4 folder or one with no manifest. Never used on
+    /// someone else's mod (Penumbra migrates those on load). Groups are not folded: Proteus-owned v3 folders have none.
     /// </summary>
     public static void MigrateToCurrent(string modRoot)
     {
         if (!IsLegacyFolder(modRoot)) return;
 
-        // As a writer reads: this rewrites the whole manifest from what it read, so one held open must not
-        // read as empty. See ManifestInUseException.
+        // Rewrites the whole manifest from what it read, so a held-open one must not read as empty.
         var manifest = ReadManifest(modRoot, out _, waitIfHeld: true, throwIfHeld: true);
         var (files, manips) = TryReadDefaultData(modRoot)
                            ?? (new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), []);
 
-        // Swaps, under its v3 name. WriteDefaultData writes it back as FileSwaps, which is the rename v4
-        // made — reading it here is the only place the old spelling still has to be understood.
+        // Swaps, under its v3 name; WriteDefaultData writes it back as FileSwaps.
         var swaps = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         try
         {
@@ -179,16 +119,14 @@ internal static class PenumbraModMeta
             ? n.GetString() ?? Path.GetFileName(modRoot)
             : Path.GetFileName(modRoot);
 
-        // WriteDefaultData stamps SingleFileVersion and preserves every key it does not own, so this is the
-        // migration in one call. CleanLegacyFiles then drops the default_mod.json it just absorbed.
+        // WriteDefaultData stamps SingleFileVersion and preserves unowned keys; CleanLegacyFiles drops default_mod.json.
         WriteDefaultData(modRoot, name, manifest, files, swaps, manips);
         CleanLegacyFiles(modRoot);
     }
 
     /// <summary>
-    /// The mod's option groups in <c>Groups</c> array order, as (name, raw element) pairs. Null — not an
-    /// empty list — when there is no v4 <c>Groups</c> array to read, which is the caller's signal to fall
-    /// back to the v3 <c>group_*.json</c> layout. An empty list means "v4, and it genuinely has no groups".
+    /// The mod's option groups in <c>Groups</c> array order, as (name, raw element) pairs. Null when there is no v4
+    /// <c>Groups</c> array (fall back to v3); empty means v4 with no groups.
     /// </summary>
     public static List<(string Name, JsonElement Group)>? TryReadGroups(string modRoot)
     {
@@ -213,14 +151,9 @@ internal static class PenumbraModMeta
     }
 
     /// <summary>
-    /// The mod's always-applied redirects and metadata edits as they are ON DISK right now — the inverse
-    /// of <see cref="WriteRedirects"/>, reading whichever format the folder is in. Null when there is no
-    /// manifest or it can't be parsed, which the caller must treat as "unknown", never as "empty".
-    ///
-    /// Manipulations come back as boxed <see cref="JsonElement"/>s rather than a typed model on purpose:
-    /// the only thing that consumes them is <see cref="WriteRedirects"/>, which serialises each entry by
-    /// its runtime type, and a JsonElement round-trips through that verbatim. So a read→write cycle
-    /// preserves EQDP rows (and any future manipulation kind) without this file having to understand them.
+    /// The mod's always-applied redirects and metadata edits as on disk, in either format — the inverse of
+    /// <see cref="WriteRedirects"/>. Null when missing or unparseable, which means "unknown", never "empty".
+    /// Manipulations are boxed <see cref="JsonElement"/>s so a read→write cycle preserves them verbatim.
     /// </summary>
     public static (Dictionary<string, string> Files, List<object> Manipulations)? TryReadDefaultData(string modRoot)
     {
@@ -262,22 +195,9 @@ internal static class PenumbraModMeta
     }
 
     /// <summary>
-    /// Whether the mod puts anything of its OWN into the game — a file redirect, a metadata manipulation,
-    /// an IMC group, or a file swap that actually goes somewhere — in its default data or in any option of
-    /// any group. Reads whichever format the folder is in.
-    ///
-    /// This separates the two kinds of folder a Proteus sidecar can sit in: a pure overlay pack, whose
-    /// entire visible effect is what Proteus composites for it, and a mod that ALSO ships gear, a body or
-    /// textures. Switching the first off in Penumbra costs nothing but its overlays; switching the second
-    /// off takes the author's actual mod down with them. <c>DesignBindingService.Restore</c> is the caller
-    /// that has to tell them apart.
-    ///
-    /// An identity swap (A -> A) does not count. Several overlay packs carry exactly one, purely so
-    /// Penumbra doesn't see an empty mod, and it redirects nothing.
-    ///
-    /// True — "has content", so leave it alone — when the manifest is missing or unreadable. The only
-    /// caller uses a false to justify DISABLING the mod, and a folder we couldn't read is not one to
-    /// disable on a guess.
+    /// Whether the mod puts anything of its own into the game (a redirect, manipulation, IMC group, or non-identity
+    /// file swap) in its default data or any option, in either format. Separates pure overlay packs from mods that
+    /// also ship content. True when the manifest is missing or unreadable, since false justifies disabling the mod.
     /// </summary>
     public static bool PublishesGameContent(string modRoot)
     {
@@ -315,10 +235,8 @@ internal static class PenumbraModMeta
     }
 
     /// <summary>
-    /// One group, in either format. Three shapes, because Penumbra's group kinds carry their redirects in
-    /// three different places: an <c>Imc</c> group edits the game by existing at all; a <c>Combining</c>
-    /// group's options are bare flag labels and every redirect sits in a parallel <c>Containers</c> array,
-    /// one per combination; every other kind carries them on the options themselves.
+    /// One group, in either format: an <c>Imc</c> group edits the game by existing; a <c>Combining</c> group keeps its
+    /// redirects in a parallel <c>Containers</c> array; every other kind keeps them on the options.
     /// </summary>
     private static bool GroupHasGameContent(JsonElement group)
     {
@@ -367,21 +285,12 @@ internal static class PenumbraModMeta
     /// One file the mod publishes: the game path it claims, the file backing it (relative to the mod root),
     /// and where in the mod that claim is made.
     /// </summary>
-    /// <param name="Source">"" for the mod's default data, else "Group" or "Group / Option" — display only,
-    /// so the user can tell two files claiming one game path apart.</param>
+    /// <param name="Source">"" for the mod's default data, else "Group" or "Group / Option"; display only.</param>
     public readonly record struct Redirect(string GamePath, string File, string Source);
 
     /// <summary>
-    /// Every file redirect in the mod, wherever it is declared — default data, and every option (or
-    /// Combining container) of every group — in whichever format the folder is in.
-    /// <para/>
-    /// Deliberately NOT deduplicated by game path. Two options claiming one path is the normal shape of a
-    /// mod with variants, and both files are equally real: which one wins is Penumbra's business at draw
-    /// time, while an edit that changes the geometry has to reach ALL of them or the toggle works on some
-    /// of the mod's options and not others.
-    /// <para/>
-    /// Empty rather than null on an unreadable manifest. The only callers list files for the user to pick
-    /// from, and "this mod publishes nothing we can read" is a list with no rows, not an error state.
+    /// Every file redirect in the mod — default data, every option and Combining container — in either format.
+    /// Not deduplicated by game path: an edit must reach every option's file. Empty (not null) when unreadable.
     /// </summary>
     public static List<Redirect> ReadAllRedirects(string modRoot)
     {
@@ -419,9 +328,7 @@ internal static class PenumbraModMeta
         if (group.ValueKind != JsonValueKind.Object) return;
         var name = group.TryGetProperty("Name", out var n) ? n.GetString() ?? "" : "";
 
-        // A Combining group's options are bare flag labels; its files hang off a parallel Containers array,
-        // one entry per COMBINATION of those flags. Named by ordinal because a container has no name of its
-        // own — see PenumbraPackage.ReadGroup, which refuses to import them for the same reason.
+        // A Combining group's files hang off a parallel Containers array, one per flag combination, named by ordinal.
         if (group.TryGetProperty("Containers", out var containers)
             && containers.ValueKind == JsonValueKind.Array)
         {
@@ -461,23 +368,18 @@ internal static class PenumbraModMeta
     }
 
     /// <summary>
-    /// The manifest's top-level keys, cloned so they outlive the parse. Empty when there is no manifest
-    /// or it can't be read. Read once per write and threaded through, so a single recomposite doesn't
-    /// parse meta.json twice.
+    /// The manifest's top-level keys, cloned so they outlive the parse. Empty when there is no manifest or it can't
+    /// be read.
     /// </summary>
     private static Dictionary<string, JsonElement> ReadManifest(string modRoot)
         => ReadManifest(modRoot, out _);
 
     /// <inheritdoc cref="ReadManifest(string)"/>
-    /// <param name="readable">Whether a manifest was actually there and parsed as an object — what
-    /// <see cref="HasReadableManifest"/> answers, returned alongside the contents so a caller that needs
-    /// both does not read the file twice. An empty dictionary alone cannot say: a folder with no manifest
-    /// and one holding <c>{}</c> both produce one, and only the second is a mod Proteus must refuse.</param>
-    /// <param name="waitIfHeld">Retry for a moment while the manifest is held open by someone else. Off for the
-    /// plain readers, which answer "unknown" at once as they always have; on where the answer decides a write.</param>
-    /// <param name="throwIfHeld">Throw <see cref="ManifestInUseException"/> when the manifest exists but stays
-    /// held open, instead of answering "no manifest". Every writer passes it — see
-    /// <see cref="ReadManifestForWrite"/>.</param>
+    /// <param name="readable">Whether a manifest was there and parsed as an object; an empty dictionary alone can't
+    /// tell no manifest from <c>{}</c>.</param>
+    /// <param name="waitIfHeld">Retry for a moment while the manifest is held open by someone else.</param>
+    /// <param name="throwIfHeld">Throw <see cref="ManifestInUseException"/> when the manifest exists but stays held
+    /// open, instead of answering "no manifest". Every writer passes it.</param>
     private static Dictionary<string, JsonElement> ReadManifest(
         string modRoot, out bool readable, bool waitIfHeld = false, bool throwIfHeld = false)
     {
@@ -511,26 +413,20 @@ internal static class PenumbraModMeta
             foreach (var p in doc.RootElement.EnumerateObject())
                 preserved[p.Name] = p.Value.Clone();
         }
-        // Read but unparseable — a zero-filled file after a crash, say. Treated as no manifest, so the managed
-        // mod's next write rebuilds it rather than failing every composite from then on.
+        // Read but unparseable: treated as no manifest, so the managed mod's next write rebuilds it.
         catch { }
         return preserved;
     }
 
     /// <summary>
-    /// Thrown when a writer finds <c>meta.json</c> present but held open past every retry.
-    /// <para/>
-    /// An unreadable manifest used to read as NO manifest, and the writer then built a fresh one: FileVersion, a
-    /// new Identifier and the one thing it was writing — and put that over the real file. Penumbra holds the
-    /// manifest for a moment while it compacts a newly added mod, and an import's piece group landed in that
-    /// moment: the mod lost its name, groups and redirects, and Penumbra dropped it ("Either no or empty mod
-    /// name provided"). Refusing costs one write; overwriting cost the mod.
+    /// Thrown when a writer finds <c>meta.json</c> present but held open past every retry. Refusing costs one write;
+    /// overwriting with a fresh manifest would lose the mod.
     /// </summary>
     public sealed class ManifestInUseException(string path, Exception inner)
         : IOException($"{path} is in use by another program and could not be read, so it was not rewritten.", inner);
 
-    /// <summary>How many times a held manifest is re-read, backing off from 50 ms — about 1.5 s in all, the same
-    /// budget <see cref="AtomicWrite"/> gives Penumbra to let go of a file.</summary>
+    /// <summary>How many times a held manifest is re-read, backing off from 50 ms (about 1.5 s, matching
+    /// <see cref="AtomicWrite"/>).</summary>
     private const int ReadRetries = 5;
 
     /// <summary>
@@ -562,20 +458,15 @@ internal static class PenumbraModMeta
         && v.TryGetInt32(out var n) ? n : LegacyFileVersion;
 
     /// <summary>
-    /// The folder's declared <c>FileVersion</c>, or <see cref="LegacyFileVersion"/> when there is no
-    /// manifest or it can't be read. Penumbra rewrites this field when it migrates a mod on load, so it
-    /// is a reliable statement of which format the INSTALLED Penumbra speaks — no version table needed.
+    /// The folder's declared <c>FileVersion</c>, or <see cref="LegacyFileVersion"/> when there is no manifest or it
+    /// can't be read. Penumbra rewrites this field when it migrates a mod on load.
     /// </summary>
     public static int ReadFileVersion(string modRoot)
         => FileVersionOf(ReadManifest(modRoot));
 
     /// <summary>
-    /// A fresh manifest, at <see cref="SingleFileVersion"/>. See the type remarks.
-    /// <para/>
-    /// This is the one every importer and <c>ModCreationService</c> writes before its first
-    /// <see cref="WriteRedirects"/>, so it is also what keeps those folders clear of
-    /// <see cref="IsLegacyFolder"/>: the manifest exists and already declares v4 by the time any writer
-    /// looks at it.
+    /// A fresh manifest at <see cref="SingleFileVersion"/>, written by every importer before its first
+    /// <see cref="WriteRedirects"/>, so those folders never read as <see cref="IsLegacyFolder"/>.
     /// </summary>
     /// <param name="version">The mod's own version string, when the source carries one (an imported pack).</param>
     /// <param name="website">The mod's home page, when the source carries one.</param>
@@ -593,24 +484,10 @@ internal static class PenumbraModMeta
         }, WriteOptions);
 
     /// <summary>
-    /// Writes one single-select option group, in whichever format the folder is already in — the group
-    /// counterpart to <see cref="WriteRedirects"/>, and the only group writer. Every option is empty of
-    /// redirects: the group exists purely so Penumbra shows a selector, and Proteus reads the SELECTION
-    /// back through <c>OverlayOptionGroup.PenumbraGroupName</c> to decide which overlays to composite.
-    /// <para/>
-    /// <paramref name="index"/> is the group's ordinal (0-based); LOWER means higher priority.
-    /// <c>SidecarDiscoveryService.ReadGroupOrder</c> reads it from the ARRAY POSITION in v4 and from the
-    /// <c>group_NNN_</c> FILENAME in v3, and the two formats can only honour it to different degrees:
-    /// <list type="bullet">
-    /// <item><b>v4</b> splices at exactly <paramref name="index"/>, shifting the groups after it. Past the
-    /// end appends.</item>
-    /// <item><b>v3</b> takes file number <c>index + 1</c> if it is free, else the next free number above
-    /// it. It CANNOT insert between two existing groups, because that would mean renumbering files this
-    /// mod's author owns and Proteus didn't write. So on a populated v3 folder a colliding ordinal lands
-    /// AFTER the group already holding it, not before.</item>
-    /// </list>
-    /// On a folder with no other groups — the importer's case, and the only one Proteus creates — both
-    /// formats give the same answer.
+    /// Writes one single-select option group whose options carry no redirects: it exists so Penumbra shows a
+    /// selector, which Proteus reads back through <c>OverlayOptionGroup.PenumbraGroupName</c>.
+    /// <paramref name="index"/> is the group's 0-based ordinal (lower = higher priority); it is spliced at exactly
+    /// that array position, and past the end appends. A same-named group is replaced.
     /// </summary>
     public static void WriteSingleSelectGroup(
         string modRoot, int index, string name, IReadOnlyList<string> optionNames, int defaultIndex)
@@ -621,13 +498,8 @@ internal static class PenumbraModMeta
     }
 
     /// <summary>
-    /// The multi-select counterpart: every option is independently on or off, and
-    /// <paramref name="defaultSettings"/> is a BITMASK over them rather than an index — bit 0 is the first
-    /// option. 0 leaves everything switched off.
-    /// <para/>
-    /// Used for the group the content importer synthesizes so individual pieces of a pack can be picked.
-    /// Everything <see cref="WriteSingleSelectGroup"/> documents about ordinals, v3/v4 and same-name
-    /// replacement applies here unchanged.
+    /// The multi-select counterpart: <paramref name="defaultSettings"/> is a bitmask over the options (bit 0 = first),
+    /// not an index. Ordinals and replacement work as in <see cref="WriteSingleSelectGroup"/>.
     /// </summary>
     public static void WriteMultiSelectGroup(
         string modRoot, int index, string name, IReadOnlyList<string> optionNames, ulong defaultSettings = 0)
@@ -637,28 +509,16 @@ internal static class PenumbraModMeta
     }
 
     /// <summary>
-    /// Writes an <c>Imc</c> group: a set of checkboxes over one item's ten attribute bits, which is how the
-    /// game itself switches parts of a model on and off.
-    /// <para/>
-    /// Unlike every other group Proteus writes, this one is not a selector Proteus reads back — it edits the
-    /// game directly, and keeps working with Proteus switched off entirely. That is the whole point of it.
-    /// <para/>
-    /// <paramref name="entry"/> must be the item's REAL entry (see <see cref="ImcEntrySource"/>) with the new
-    /// bits cleared. Penumbra replaces the whole entry, so every field of it that is not the attribute mask
-    /// has to arrive unchanged or the item's material variant, decal or sound changes with it.
-    /// <para/>
-    /// Each option carries a single bit that is NOT in <paramref name="entry"/>'s mask, and that constraint
-    /// is load-bearing: it makes the group's meaning the same whether Penumbra combines a selection with the
-    /// default by OR or by XOR. Bits placed inside the default mask behave differently under the two, and
-    /// nothing in this codebase is in a position to settle which one Penumbra does.
+    /// Writes an <c>Imc</c> group: checkboxes over one item's attribute bits, editing the game directly (it works with
+    /// Proteus off). <paramref name="entry"/> must be the item's real entry (see <see cref="ImcEntrySource"/>) with the
+    /// new bits cleared, since Penumbra replaces the whole entry. Each option's bit must lie outside the entry's mask,
+    /// so the meaning is the same whether Penumbra combines by OR or XOR.
     /// </summary>
-    /// <param name="defaultSettings">Bitmask over the options — bit 0 is the first. Ship this with every bit
-    /// set so a mod gains switches without changing how it looks until one is unticked.</param>
+    /// <param name="defaultSettings">Bitmask over the options (bit 0 = first). Ship with every bit set so the mod looks
+    /// unchanged until one is unticked.</param>
     /// <param name="priority">
-    /// Must beat any other <c>Imc</c> group in the mod that edits the SAME identifier. Penumbra keeps only
-    /// the first group it reaches for one identifier and orders them by descending priority, so a group that
-    /// loses that race is not merely overruled — it is never applied. See
-    /// <see cref="ImcEntrySource.MaxPriorityFor"/>.
+    /// Must beat any other <c>Imc</c> group in the mod for the same identifier: Penumbra applies only the highest.
+    /// See <see cref="ImcEntrySource.MaxPriorityFor"/>.
     /// </param>
     public static void WriteImcGroup(
         string modRoot, int index, string name, ImcIdentifier identifier, ImcEntry entry,
@@ -674,18 +534,9 @@ internal static class PenumbraModMeta
             ["Priority"] = priority,
             ["DefaultSettings"] = defaultSettings,
 
-            // Every variant of the item, attributes only.
-            //
-            // AllVariants because the variant an item is worn at cannot be known from a mod folder — it is
-            // read off a material path if the mod happens to publish one, and defaults to 1 otherwise. An
-            // edit pinned to the wrong variant produces a group whose checkboxes are present and inert,
-            // which is indistinguishable from the switch being broken.
-            //
-            // OnlyAttributes because that breadth would otherwise be dangerous: without it Penumbra writes
-            // this whole entry to every variant, so variant 2's material id would be replaced by variant
-            // 1's and the item would load the wrong textures. With it, Penumbra sources each variant's own
-            // entry and replaces nothing but the attribute mask — which is all a geometry switch wants.
-            // DefaultEntry below remains the fallback for a variant the game has no entry for.
+            // AllVariants: the worn variant can't be known from a mod folder. OnlyAttributes: Penumbra then sources
+            // each variant's own entry and replaces only the attribute mask. DefaultEntry is the fallback for a
+            // variant the game has no entry for.
             ["AllVariants"] = true,
             ["OnlyAttributes"] = true,
             ["Identifier"] = new Dictionary<string, object>
@@ -715,33 +566,20 @@ internal static class PenumbraModMeta
     }
 
     /// <summary>
-    /// Put <paramref name="ours"/> into an IMC group the mod ALREADY has, leaving everything else about the
-    /// group exactly as its author wrote it.
-    /// <para/>
-    /// The alternative — writing a second group at a higher priority — cannot work, and that is the whole
-    /// reason this exists. Penumbra keeps only one group per IMC identifier (see
-    /// <see cref="ImcEntrySource.AppliedGroupFor"/>), so outranking an author's group does not overrule it,
-    /// it deletes it: their switches stay listed in the mod's settings and stop doing anything, and every
-    /// bit they drove freezes at whatever the surviving group's default says.
-    /// <para/>
-    /// Every property the group has is carried over as its raw <see cref="JsonElement"/> —
-    /// <c>Priority</c>, <c>Identifier</c>, <c>AllVariants</c>, <c>OnlyAttributes</c>, <c>Description</c>,
-    /// <c>Image</c>, <c>Page</c>, and anything a future Penumbra adds that this file has never heard of.
-    /// Only <c>Options</c>, <c>DefaultSettings</c> and <c>DefaultEntry.AttributeMask</c> are rewritten.
+    /// Put <paramref name="ours"/> into an IMC group the mod already has, since Penumbra keeps only one group per IMC
+    /// identifier (see <see cref="ImcEntrySource.AppliedGroupFor"/>). Every property is carried over raw; only
+    /// <c>Options</c>, <c>DefaultSettings</c> and <c>DefaultEntry.AttributeMask</c> are rewritten.
     /// </summary>
     /// <param name="target">The group as read. Rewritten in place, at its own ordinal and under its own name.</param>
     /// <param name="ours">Our options, in the order they should appear, each carrying a single bit.</param>
-    /// <param name="ownedNames">Option names Proteus owns. Dropped BEFORE <paramref name="ours"/> is
-    /// appended, which is what makes writing twice replace our options rather than duplicate them — the
-    /// caller re-emits its whole set every time.</param>
+    /// <param name="ownedNames">Option names Proteus owns, dropped before <paramref name="ours"/> is appended, so a
+    /// rewrite replaces rather than duplicates.</param>
     /// <param name="entryMask">What <c>DefaultEntry</c>'s <c>AttributeMask</c> becomes: our bits cleared on
     /// a write, the author's original restored on a revert. Null leaves it as it is.</param>
-    /// <param name="entryIfAbsent">Used only when the group carries no <c>DefaultEntry</c> object at all,
-    /// which Penumbra's own serializer never produces. One has to exist for the invariant
-    /// <see cref="WriteImcGroup"/> documents: our bit must sit OUTSIDE the default mask, or the option's
-    /// meaning depends on whether Penumbra combines by OR or by XOR.</param>
-    /// <returns>False when the merge would leave the group with no options at all — nothing is written, and
-    /// the caller deletes the group instead.</returns>
+    /// <param name="entryIfAbsent">Used only when the group has no <c>DefaultEntry</c>; one must exist so our bit sits
+    /// outside the default mask (see <see cref="WriteImcGroup"/>).</param>
+    /// <returns>False when the merge would leave the group with no options; nothing is written and the caller deletes
+    /// the group.</returns>
     internal static bool MergeImcGroup(
         string modRoot, GroupRef target,
         IReadOnlyList<(string Name, ushort Mask)> ours,
@@ -749,9 +587,7 @@ internal static class PenumbraModMeta
         ushort? entryMask,
         ImcEntry entryIfAbsent)
     {
-        // Read — and refuse — up front, then hand the same manifest to the write below. The refusal has to
-        // come before any of the option work, so a folder this will not touch is turned away rather than
-        // rebuilt and then turned away; reusing the one read is what keeps that free.
+        // Read and refuse up front, before any option work, then reuse the same manifest for the write.
         var manifest = ReadManifestForWrite(modRoot);
 
         // Kept options, each with the index it USED to sit at, so DefaultSettings can follow them.
@@ -769,10 +605,8 @@ internal static class PenumbraModMeta
         }
         if (kept.Count == 0 && ours.Count == 0) return false;
 
-        // DefaultSettings is a bitmask over option INDEX, so removing an option shifts every bit above it.
-        // Rebuilt rather than masked: each survivor carries its old bit to its new position, and everything
-        // of ours ships ticked — the same rule WriteImcGroup applies, so adding switches to a mod changes
-        // nothing about how it looks until one is unticked.
+        // DefaultSettings is a bitmask over option index: rebuilt so each survivor keeps its bit at its new position,
+        // and every option of ours ships ticked.
         ulong oldDefaults = target.Group.TryGetProperty("DefaultSettings", out var ds)
                          && ds.ValueKind == JsonValueKind.Number && ds.TryGetUInt64(out var v) ? v : 0;
         ulong defaults = 0;
@@ -800,24 +634,18 @@ internal static class PenumbraModMeta
         if (MergedEntry(target.Group, entryMask, entryIfAbsent) is { } defaultEntry)
             merged["DefaultEntry"] = defaultEntry;
 
-        // Replaced by name and spliced at its own ordinal, which together are a no-op on position:
-        // WriteGroupIntoManifest drops the same-named group from the array first, so every group before
-        // this one keeps its index and inserting at that index puts it back exactly where it was.
+        // Replaced by name and spliced at its own ordinal, so the group keeps its position.
         WriteGroupIntoManifest(modRoot, manifest, target.Index, target.Name, _ => merged);
         return true;
     }
 
     /// <summary>
     /// The group's own <c>DefaultEntry</c> with its attribute mask replaced, or a fresh one from
-    /// <paramref name="fallback"/> when it has none. Every other field is carried over untouched: Penumbra
-    /// replaces the whole entry, so inventing a <c>MaterialId</c> would point the item at a different
-    /// material variant folder.
+    /// <paramref name="fallback"/> when it has none. Other fields are carried over untouched.
     /// </summary>
     private static object? MergedEntry(JsonElement group, ushort? mask, ImcEntry fallback)
     {
-        // No entry and nothing to put in one. Only a WRITE needs the invariant that our bit sits outside
-        // the default mask; a revert is taking options out, and synthesising an entry from a default-valued
-        // fallback would hand the item MaterialId 0 — pointing it at a material folder that does not exist.
+        // No entry and no mask (a revert): synthesising one would hand the item MaterialId 0.
         if (mask is null
             && (!group.TryGetProperty("DefaultEntry", out var none) || none.ValueKind != JsonValueKind.Object))
             return null;
@@ -846,12 +674,8 @@ internal static class PenumbraModMeta
     }
 
     /// <summary>
-    /// How many option groups the mod has — what a caller wanting to append one at the end should pass as
-    /// its ordinal.
-    /// <para/>
-    /// Zero covers both "no groups" and "no readable <c>Groups</c> array", which is the same answer for the
-    /// only thing this is used for: a folder with nothing to count appends at the front, and a folder that
-    /// is v3 never reaches a writer at all.
+    /// How many option groups the mod has: the ordinal that appends one at the end. Zero when there is no readable
+    /// <c>Groups</c> array.
     /// </summary>
     public static int GroupCount(string modRoot) => TryReadGroups(modRoot)?.Count ?? 0;
 
@@ -861,15 +685,12 @@ internal static class PenumbraModMeta
     /// <summary>
     /// One option group as it sits in the manifest, with what a rewrite needs to put it back where it was.
     /// </summary>
-    /// <param name="Index">Its position in the whole <c>Groups</c> array — not its position among groups of
-    /// its own kind, which is what a filtered enumeration would otherwise hand back.</param>
-    /// <param name="Group">The raw element. Carried whole so a rewrite can preserve every field it does not
-    /// itself own — see <see cref="MergeImcGroup"/>.</param>
+    /// <param name="Index">Its position in the whole <c>Groups</c> array, not among groups of its kind.</param>
+    /// <param name="Group">The raw element, so a rewrite can preserve fields it doesn't own — see <see cref="MergeImcGroup"/>.</param>
     public readonly record struct GroupRef(string Name, int Index, JsonElement Group);
 
     /// <summary>
-    /// Remove the group of this name. Used to undo a group Proteus wrote; a name that isn't there is not an
-    /// error, since the point is to end up without it.
+    /// Remove the group of this name; a missing name is not an error.
     /// </summary>
     public static void DeleteGroup(string modRoot, string name)
     {
@@ -910,8 +731,8 @@ internal static class PenumbraModMeta
     }
 
     /// <summary>
-    /// The shape a group has on disk. <c>DefaultSettings</c> is the selected option's INDEX for a Single
-    /// group (it is a bitmask only for Multi), and each option carries no redirects of its own.
+    /// The shape a group has on disk. <c>DefaultSettings</c> is the selected INDEX for Single and a bitmask for Multi;
+    /// options carry no redirects.
     /// </summary>
     private static object BuildGroup(
         int index, string name, IReadOnlyList<string> optionNames, string type, long defaultSettings)
@@ -936,18 +757,15 @@ internal static class PenumbraModMeta
         };
 
     /// <summary>
-    /// Splices the group into a v4 manifest's <c>Groups</c> array AT <paramref name="index"/>, replacing any
-    /// group of the same name and preserving every other key — the same care <see cref="WriteDefaultData"/>
-    /// takes, and for the same reason: <c>Identifier</c> is how Penumbra keys the mod.
+    /// Splices the group into a v4 manifest's <c>Groups</c> array at <paramref name="index"/>, replacing any group of
+    /// the same name and preserving every other key (<c>Identifier</c> is how Penumbra keys the mod).
     /// </summary>
-    /// <param name="build">See <see cref="WriteLegacyGroupFile"/>.</param>
+    /// <param name="build">Builds the group object from its final array slot.</param>
     private static void WriteGroupIntoManifest(
         string modRoot, Dictionary<string, JsonElement> preserved,
         int index, string name, Func<int, object> build)
     {
-        // The surviving groups in order. Any group of the same name is DROPPED rather than kept alongside
-        // the new one — a duplicate name is something Penumbra would have to disambiguate, and it would
-        // also make the ordinal this method promises ambiguous.
+        // Surviving groups in order; a same-named group is dropped, so names and ordinals stay unambiguous.
         var others = new List<JsonElement>();
         if (preserved.TryGetValue("Groups", out var groups) && groups.ValueKind == JsonValueKind.Array)
             foreach (var g in groups.EnumerateArray())
@@ -955,8 +773,7 @@ internal static class PenumbraModMeta
                       && string.Equals(n.GetString(), name, StringComparison.OrdinalIgnoreCase)))
                     others.Add(g);
 
-        // Clamped, not rejected: an index past the end is the ordinary "put it last" request, and a caller
-        // that removed a group since computing the index shouldn't fail over an off-by-one.
+        // Clamped, not rejected: past the end means "put it last".
         var slot = Math.Clamp(index, 0, others.Count);
 
         using var stream = new MemoryStream();
@@ -994,11 +811,8 @@ internal static class PenumbraModMeta
     }
 
     /// <summary>
-    /// Writes the mod's always-applied redirects into the manifest's <c>DefaultData</c> object.
-    ///
-    /// This is the ONLY entry point for writing redirects. <see cref="WriteDefaultData"/> is private on
-    /// purpose — calling it directly skips the legacy refusal, which is how a v3 folder would end up with
-    /// a <c>DefaultData</c> its own Penumbra has never heard of and silently ignores.
+    /// Writes the mod's always-applied redirects into the manifest's <c>DefaultData</c> object. The only entry point
+    /// for redirects: <see cref="WriteDefaultData"/> is private because it skips the legacy refusal.
     /// </summary>
     public static void WriteRedirects(
         string modRoot, string modName,
@@ -1007,16 +821,13 @@ internal static class PenumbraModMeta
         IReadOnlyList<object>? manipulations = null)
     {
         WriteDefaultData(modRoot, modName, ReadManifestForWrite(modRoot), files, swaps, manipulations);
-        // A folder Penumbra migrated keeps its old default_mod.json; drop it so a stale copy can't be
-        // mistaken for the live redirect set.
+        // A folder Penumbra migrated keeps its old default_mod.json; drop it so a stale copy isn't mistaken for live.
         CleanLegacyFiles(modRoot);
     }
 
     /// <summary>
-    /// Replaces the manifest's <c>DefaultData</c>, preserving every other key — critically
-    /// <c>Identifier</c>, which is how Penumbra keys the mod, and any <c>Groups</c>/<c>ModTags</c>/
-    /// <c>Image</c> the user set in Penumbra's UI. Creates the manifest if it is missing.
-    /// <paramref name="preserved"/> is the already-read manifest, so this doesn't re-parse it.
+    /// Replaces the manifest's <c>DefaultData</c>, preserving every other key (notably <c>Identifier</c>). Creates the
+    /// manifest if missing. <paramref name="preserved"/> is the already-read manifest.
     /// </summary>
     private static void WriteDefaultData(
         string modRoot, string modName,
@@ -1071,36 +882,19 @@ internal static class PenumbraModMeta
     }
 
     /// <summary>
-    /// Writes via a sibling temp file + atomic move, retrying with backoff: Penumbra's own file watcher
-    /// can hold the target open for a moment right after a reload.
-    /// <para/>
-    /// The temp file is flushed to the DEVICE before the move, not merely handed to the OS cache. A
-    /// rename is ordered, the data behind it is not: NTFS can commit the directory entry while the
-    /// file's blocks are still unwritten, so a crash or power loss in that window leaves a file of the
-    /// right length filled with zeros. Penumbra reports reading one as
-    /// <c>'0x00' is an invalid start of a value. LineNumber: 0 | BytePositionInLine: 0</c> and drops
-    /// the mod — after which Proteus publishes redirects into a mod Penumbra has never heard of, and
-    /// every path we own silently resolves elsewhere. Cheap insurance: these files are a few KB, and
-    /// they are written once per composite at most.
+    /// Writes via a sibling temp file + atomic move, retrying with backoff while Penumbra's watcher holds the target.
+    /// The temp file is flushed to the device before the move, or a crash can leave a zero-filled file.
     /// </summary>
     /// <param name="maxRetries">
-    /// How many times to re-attempt the MOVE, sleeping 50 ms and doubling between tries. The default
-    /// spends up to ~1.55 s outlasting Penumbra's watcher, which is the right trade for a background
-    /// write — nobody is waiting on it.
-    /// <para/>
-    /// A caller on the ImGui draw thread or the framework thread must pass a small budget instead: those
-    /// sleeps are frozen frames, and the editor provokes exactly the contention this loop waits out (it
-    /// saves and then immediately recomposites, so Penumbra reloads and grabs the file just as the next
-    /// edit lands). Losing that race costs one save that the next edit rewrites anyway; spending a second
-    /// and a half of someone's colour-slider drag to win it does not pay.
+    /// How many times to retry the move, sleeping from 50 ms and doubling (default ≈1.55 s). Callers on the draw or
+    /// framework thread must pass a small budget: those sleeps are frozen frames.
     /// </param>
     public static void AtomicWrite(string target, string contents, int maxRetries = 5)
         // UTF-8 without a BOM, matching what File.WriteAllText would have produced.
         => AtomicWrite(target, new System.Text.UTF8Encoding(false).GetBytes(contents), maxRetries);
 
     /// <summary>
-    /// The binary form, for the same reason the text one exists: a mod's own model file is rewritten in
-    /// place while Penumbra may be serving it, and a torn write there is a model that fails to load.
+    /// The binary form, for a mod's own files rewritten while Penumbra may be serving them.
     /// </summary>
     public static void AtomicWrite(string target, byte[] bytes, int maxRetries = 5)
     {
@@ -1116,7 +910,7 @@ internal static class PenumbraModMeta
         for (int i = 0; ; i++)
         {
             try { File.Move(tmp, target, overwrite: true); return; }
-            // Shift clamped at 5 so an oversized budget backs off to 1.6 s a try, never overflows into one.
+            // Shift clamped at 5 so an oversized budget never overflows.
             catch (Exception) when (i < maxRetries) { Thread.Sleep(50 << Math.Min(i, 5)); }
             catch { try { File.Delete(tmp); } catch { } throw; }      // don't leave the temp behind
         }
@@ -1139,9 +933,7 @@ internal static class PenumbraModMeta
         }
         catch { /* best effort — a locked legacy file must not skip the sweep below */ }
 
-        // EVERY AtomicWrite target, not just default_mod.json's: the sweep used to name that one file, so
-        // once meta.json and metadata.json started going through AtomicWrite their temps were stranded for
-        // good. meta.json sits in the mod root, metadata.json one level down in the sidecar folder.
+        // Every AtomicWrite target: meta.json in the mod root, metadata.json in the sidecar folder.
         SweepAtomicTemps(modRoot);
         SweepAtomicTemps(Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir));
     }

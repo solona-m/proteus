@@ -30,7 +30,7 @@ public class BustBridgeTests
     /// The profile is extruded unchanged, so every horizontal band has the same two apexes and the right
     /// answer is the same chord at every height — which keeps each assertion below about one thing.
     /// </summary>
-    private static (SecondSkinWriter.Vec3[] Pos, SecondSkinWriter.Vec3[] Nrm, ushort[] Tris, float[] Bust)
+    internal static (SecondSkinWriter.Vec3[] Pos, SecondSkinWriter.Vec3[] Nrm, ushort[] Tris, float[] Bust)
         Chest(int columns = 41, int rows = 25, float halfWidth = 0.20f, float height = 0.30f,
               float lobe = 0.10f, float centre = 0.10f, float spread = 0.06f,
               float nipple = 0f, float nippleSpread = 0.012f)
@@ -131,7 +131,7 @@ public class BustBridgeTests
         // Measured on a real body the surround ran -1.36/-1.46/-1.19mm dished before the dome floor
         // existed and -0.26/+0.15/-0.00mm after it.
         var (pos, nrm, tris, bust) = Chest(nipple: 0.012f);
-        var plan = SecondSkinWriter.BustBridgeSolve(pos, nrm, tris, bust, 0f, smoothStrength: 1f);
+        var plan = BodyBridge.BustBridgeSolve(pos, nrm, tris, bust, 0f, smoothStrength: 1f);
         Assert.NotNull(plan);
         var outp = Displaced(pos, plan!.Delta);
 
@@ -163,7 +163,7 @@ public class BustBridgeTests
     /// The same chest, with high-frequency noise laid over it — the small-scale variation a real body
     /// carries and a shell reproduces exactly. Deterministic, so a failure is reproducible.
     /// </summary>
-    private static (SecondSkinWriter.Vec3[] Pos, SecondSkinWriter.Vec3[] Nrm, ushort[] Tris, float[] Bust)
+    internal static (SecondSkinWriter.Vec3[] Pos, SecondSkinWriter.Vec3[] Nrm, ushort[] Tris, float[] Bust)
         NoisyChest(float amplitude = 0.002f)
     {
         var (pos, nrm, tris, bust) = Chest();
@@ -271,7 +271,7 @@ public class BustBridgeTests
         // What keeps this step separable from the geometry passes: it may only ever change SHADING, so
         // the nipple's displacement must be bit-for-bit what it was without it.
         var (pos, nrm, tris, bust) = NoisyChest();
-        var plan = SecondSkinWriter.BustBridgeSolve(pos, nrm, tris, bust, 0f, smoothStrength: 1f);
+        var plan = BodyBridge.BustBridgeSolve(pos, nrm, tris, bust, 0f, smoothStrength: 1f);
         Assert.NotNull(plan);
 
         var before = pos.ToArray();
@@ -291,7 +291,7 @@ public class BustBridgeTests
         // An untouched shell has to stay byte-identical, or every composite republishes a model that
         // did not change and the game redraws for nothing.
         var (pos, nrm, tris, bust) = NoisyChest();
-        var plan = SecondSkinWriter.BustBridgeSolve(pos, nrm, tris, bust, 0f, smoothStrength: 1f);
+        var plan = BodyBridge.BustBridgeSolve(pos, nrm, tris, bust, 0f, smoothStrength: 1f);
         Assert.NotNull(plan);
 
         var outN = SecondSkinWriter.RelaxedNormals(
@@ -317,7 +317,7 @@ public class BustBridgeTests
         int n = pos.Length;
         var dPos = pos.Concat(pos).ToArray();
         var dNrm = nrm.Concat(nrm).ToArray();
-        var plan = SecondSkinWriter.BustBridgeSolve(
+        var plan = BodyBridge.BustBridgeSolve(
             dPos, dNrm, tris, bust.Concat(bust).ToArray(), 0f, smoothStrength: 1f);
         Assert.NotNull(plan);
 
@@ -335,7 +335,7 @@ public class BustBridgeTests
     public void SpansTheValleyAsAStraightChord()
     {
         var (pos, nrm, tris, bust) = Chest();
-        var plan = SecondSkinWriter.BustBridgeSolve(pos, nrm, tris, bust, 1f);
+        var plan = BodyBridge.BustBridgeSolve(pos, nrm, tris, bust, 1f);
         Assert.NotNull(plan);
 
         var outp = Displaced(pos, plan!.Delta);
@@ -372,7 +372,7 @@ public class BustBridgeTests
     public void LeavesTheApexesWhereTheyWere()
     {
         var (pos, nrm, tris, bust) = Chest();
-        var plan = SecondSkinWriter.BustBridgeSolve(pos, nrm, tris, bust, 1f);
+        var plan = BodyBridge.BustBridgeSolve(pos, nrm, tris, bust, 1f);
         Assert.NotNull(plan);
 
         // The apexes ARE the chord's endpoints, so they cannot move — that is what keeps the breasts their
@@ -394,7 +394,7 @@ public class BustBridgeTests
     public void NeverMovesAVertexInward()
     {
         var (pos, nrm, tris, bust) = Chest();
-        var plan = SecondSkinWriter.BustBridgeSolve(pos, nrm, tris, bust, 1f);
+        var plan = BodyBridge.BustBridgeSolve(pos, nrm, tris, bust, 1f);
         Assert.NotNull(plan);
 
         // The no-clip guarantee, stated as the invariant it actually is: displacement along the outward
@@ -420,7 +420,7 @@ public class BustBridgeTests
         var bust2 = bust.Concat(bust).ToArray();
         // The duplicates are unreferenced by any triangle, exactly as a seam copy is on ONE side of the
         // seam: they must still move with their originals, purely by sharing a position.
-        var plan = SecondSkinWriter.BustBridgeSolve(pos2, nrm2, tris, bust2, 1f);
+        var plan = BodyBridge.BustBridgeSolve(pos2, nrm2, tris, bust2, 1f);
         Assert.NotNull(plan);
 
         for (int i = 0; i < n; i++)
@@ -435,8 +435,8 @@ public class BustBridgeTests
     public void StrengthScalesHowFarItSpans()
     {
         var (pos, nrm, tris, bust) = Chest();
-        var full = SecondSkinWriter.BustBridgeSolve(pos, nrm, tris, bust, 1f);
-        var half = SecondSkinWriter.BustBridgeSolve(pos, nrm, tris, bust, 0.25f);
+        var full = BodyBridge.BustBridgeSolve(pos, nrm, tris, bust, 1f);
+        var half = BodyBridge.BustBridgeSolve(pos, nrm, tris, bust, 0.25f);
         Assert.NotNull(full);
         Assert.NotNull(half);
 
@@ -453,10 +453,10 @@ public class BustBridgeTests
         var (pos, nrm, tris, _) = Chest();
         // Coverage has carved the cloth away between the cups — a low-cut neckline. Nothing to span, and
         // the caller must then write exactly the shell it would have written without this feature.
-        Assert.Null(SecondSkinWriter.BustBridgeSolve(pos, nrm, tris, new float[pos.Length], 1f));
+        Assert.Null(BodyBridge.BustBridgeSolve(pos, nrm, tris, new float[pos.Length], 1f));
         // ...and a strength of zero is off, not a no-op pass that still rewrites normals.
         var (_, _, _, bust) = Chest();
-        Assert.Null(SecondSkinWriter.BustBridgeSolve(pos, nrm, tris, bust, 0f));
+        Assert.Null(BodyBridge.BustBridgeSolve(pos, nrm, tris, bust, 0f));
     }
 
     [Fact]
@@ -479,7 +479,7 @@ public class BustBridgeTests
             covered[i] = ax > 0.06f && ax < 0.16f;
         }
 
-        var plan = SecondSkinWriter.BustBridgeSolve(pos, nrm, tris, bust, 1f, covered: covered);
+        var plan = BodyBridge.BustBridgeSolve(pos, nrm, tris, bust, 1f, covered: covered);
         Assert.NotNull(plan);
 
         float movedInGap = 0f, movedOnFlank = 0f;
@@ -511,7 +511,7 @@ public class BustBridgeTests
         for (int i = 0; i < pos.Length; i++)
             covered[i] = pos[i].X > -0.10f && (pos[i].X > -0.06f || (i % 2 == 0));
 
-        var plan = SecondSkinWriter.BustBridgeSolve(pos, nrm, tris, bust, 1f, covered: covered);
+        var plan = BodyBridge.BustBridgeSolve(pos, nrm, tris, bust, 1f, covered: covered);
         if (plan == null) return;
 
         // No two vertices sharing an edge may differ in displacement by more than the edge between them
@@ -571,12 +571,12 @@ public class BustBridgeTests
         var union = new bool[pos.Length];
         for (int i = 0; i < pos.Length; i++) union[i] = wide[i] || narrow[i];
 
-        var shared = SecondSkinWriter.BustBridgeSolve(pos, nrm, tris, bust, 1f, covered: union);
+        var shared = BodyBridge.BustBridgeSolve(pos, nrm, tris, bust, 1f, covered: union);
         Assert.NotNull(shared);
 
         // Per-layer solves must differ — otherwise this test proves nothing about sharing.
-        var perWide = SecondSkinWriter.BustBridgeSolve(pos, nrm, tris, bust, 1f, covered: wide);
-        var perNarrow = SecondSkinWriter.BustBridgeSolve(pos, nrm, tris, bust, 1f, covered: narrow);
+        var perWide = BodyBridge.BustBridgeSolve(pos, nrm, tris, bust, 1f, covered: wide);
+        var perNarrow = BodyBridge.BustBridgeSolve(pos, nrm, tris, bust, 1f, covered: narrow);
         Assert.NotNull(perWide);
         Assert.NotNull(perNarrow);
         float spread = 0f;
@@ -589,7 +589,7 @@ public class BustBridgeTests
         // fixing a crossing by flattening less is not a fix. Compared across the CLEAVAGE rather than per
         // vertex: the bands, and so the chords, are derived from the region, so a wider region shifts
         // individual vertices by a hair in both directions. What must not move is how far the span gets.
-        float Cleavage(SecondSkinWriter.BustBridgePlan p)
+        float Cleavage(BodyBridge.BustBridgePlan p)
         {
             float best = 0f;
             for (int i = 0; i < pos.Length; i++)
@@ -638,9 +638,9 @@ public class BustBridgeTests
         var (pos, nrm, tris, bust) = Chest(nipple: 0.012f);
         var (flat, fNrm, fTris, fBust) = Chest();
 
-        var smoothed = SecondSkinWriter.BustBridgeSolve(pos, nrm, tris, bust, 0f, smoothStrength: 1f);
+        var smoothed = BodyBridge.BustBridgeSolve(pos, nrm, tris, bust, 0f, smoothStrength: 1f);
         Assert.NotNull(smoothed);
-        var smoothedFlat = SecondSkinWriter.BustBridgeSolve(flat, fNrm, fTris, fBust, 0f, smoothStrength: 1f);
+        var smoothedFlat = BodyBridge.BustBridgeSolve(flat, fNrm, fTris, fBust, 0f, smoothStrength: 1f);
 
         var outp = Displaced(pos, smoothed!.Delta);
         var outFlat = smoothedFlat == null ? flat : Displaced(flat, smoothedFlat.Delta);
@@ -675,7 +675,7 @@ public class BustBridgeTests
         // everything this came out 456 in against 519 out while the tip was being shaved correctly, so the
         // wider count measures the other passes rather than this one.
         var (pos, nrm, tris, bust) = Chest(nipple: 0.012f);
-        var plan = SecondSkinWriter.BustBridgeSolve(pos, nrm, tris, bust, 0f, smoothStrength: 1f);
+        var plan = BodyBridge.BustBridgeSolve(pos, nrm, tris, bust, 0f, smoothStrength: 1f);
         Assert.NotNull(plan);
 
         const float centre = 0.10f, midY = 0.15f;
@@ -706,7 +706,7 @@ public class BustBridgeTests
         // must stay small.
         const float lobe = 0.10f;
         var (pos, nrm, tris, bust) = Chest();
-        var plan = SecondSkinWriter.BustBridgeSolve(pos, nrm, tris, bust, 0f, smoothStrength: 1f);
+        var plan = BodyBridge.BustBridgeSolve(pos, nrm, tris, bust, 0f, smoothStrength: 1f);
         if (plan == null) return;
 
         float mean = 0f;
@@ -728,14 +728,14 @@ public class BustBridgeTests
     public void SmoothingStrengthScalesAndZeroIsOff()
     {
         var (pos, nrm, tris, bust) = Chest(nipple: 0.012f);
-        Assert.Null(SecondSkinWriter.BustBridgeSolve(pos, nrm, tris, bust, 0f, smoothStrength: 0f));
+        Assert.Null(BodyBridge.BustBridgeSolve(pos, nrm, tris, bust, 0f, smoothStrength: 0f));
 
-        var full = SecondSkinWriter.BustBridgeSolve(pos, nrm, tris, bust, 0f, smoothStrength: 1f);
-        var quarter = SecondSkinWriter.BustBridgeSolve(pos, nrm, tris, bust, 0f, smoothStrength: 0.25f);
+        var full = BodyBridge.BustBridgeSolve(pos, nrm, tris, bust, 0f, smoothStrength: 1f);
+        var quarter = BodyBridge.BustBridgeSolve(pos, nrm, tris, bust, 0f, smoothStrength: 0.25f);
         Assert.NotNull(full);
         Assert.NotNull(quarter);
 
-        float Max(SecondSkinWriter.BustBridgePlan p) => p.Delta.Max(d => MathF.Abs(d.Z));
+        float Max(BodyBridge.BustBridgePlan p) => p.Delta.Max(d => MathF.Abs(d.Z));
         Assert.True(Max(quarter!) < Max(full!));
         Assert.True(Max(quarter) > 0f);
     }
@@ -745,7 +745,7 @@ public class BustBridgeTests
     {
         var (pos, nrm, tris, bust) = Chest(nipple: 0.012f);
         int n = pos.Length;
-        var plan = SecondSkinWriter.BustBridgeSolve(
+        var plan = BodyBridge.BustBridgeSolve(
             pos.Concat(pos).ToArray(), nrm.Concat(nrm).ToArray(), tris,
             bust.Concat(bust).ToArray(), 0f, smoothStrength: 1f);
         Assert.NotNull(plan);
@@ -782,7 +782,7 @@ public class BustBridgeTests
                 tris.AddRange(new[] { a, b2, a2 });
             }
 
-        var plan = SecondSkinWriter.BustBridgeSolve(pos.ToArray(), nrm.ToArray(), tris.ToArray(),
+        var plan = BodyBridge.BustBridgeSolve(pos.ToArray(), nrm.ToArray(), tris.ToArray(),
                                                     bust.ToArray(), 1f);
         Assert.Null(plan);
     }

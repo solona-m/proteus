@@ -3,22 +3,12 @@ using System.Collections.Generic;
 namespace Proteus.Services;
 
 /// <summary>
-/// Decides where a colour-editor edit lands, per mod. There are now three possible homes and the rule
-/// had been written out three times over in the editor, once per tab layout; this is that rule, once.
-/// <para/>
+/// Decides where a colour-editor edit lands, per mod; every editor path goes through here.
 /// <list type="number">
-///   <item>A preset is pinned on the mod → the preset's live override. The wearer is trying looks on;
-///         edits belong to the look, and drift from the saved preset is what raises the `●` marker.</item>
-///   <item>Else a design binding is active for the mod → the binding's live override, folded in only
-///         when the wearer presses "Update binding".</item>
-///   <item>Else nothing overrides it → the caller writes <c>metadata.json</c>, which is what
-///         <see cref="HasOverride"/> returning false means.</item>
+///   <item>A preset is pinned on the mod → the preset's live override.</item>
+///   <item>Else a design binding is active for the mod → the binding's live override.</item>
+///   <item>Else → the caller writes <c>metadata.json</c> (<see cref="HasOverride"/> is false).</item>
 /// </list>
-/// <para/>
-/// Getting this wrong is invisible rather than loud: an edit written to <c>metadata.json</c> while an
-/// override sits on top of it changes a file nobody is reading, so the editor shows the new value, the
-/// character keeps the old one, and nothing errors. That is why every editor path goes through here
-/// rather than choosing for itself.
 /// </summary>
 public class OverlayEditRouter
 {
@@ -38,8 +28,8 @@ public class OverlayEditRouter
         return null;
     }
 
-    /// <summary>True when something other than the mod's own metadata supplies its colours — so the
-    /// caller previews instead of persisting, and the editor can say whose look is on screen.</summary>
+    /// <summary>True when something other than the mod's own metadata supplies its colours, so the caller
+    /// previews instead of persisting.</summary>
     public bool HasOverride(string modDir)
         => presets.Overrides.Governs(modDir) || bindings.IsOverrideActiveFor(modDir);
 
@@ -58,6 +48,16 @@ public class OverlayEditRouter
         => BagFor(modDir) is { } bag
             ? bag.SetRows(modDir, group, option, rows)
             : bindings.SetOverrideRows(modDir, group, option, rows);
+
+    public List<ColorTableRowPreset>? PeekContentMaterialRows(string modDir, string materialRel)
+        => BagFor(modDir) is { } bag
+            ? bag.PeekContentMaterialRows(modDir, materialRel)
+            : bindings.PeekContentMaterialRows(modDir, materialRel);
+
+    public bool SetContentMaterialRows(string modDir, string materialRel, List<ColorTableRowPreset> rows)
+        => BagFor(modDir) is { } bag
+            ? bag.SetContentMaterialRows(modDir, materialRel, rows)
+            : bindings.SetContentMaterialRows(modDir, materialRel, rows);
 
     public List<ColorTableRowPreset>? PeekMaskRows(string modDir)
         => BagFor(modDir) is { } bag ? bag.PeekMaskRows(modDir) : bindings.PeekMaskRows(modDir);
@@ -78,6 +78,17 @@ public class OverlayEditRouter
         => BagFor(modDir) is { } bag
             ? bag.GetEditableContentGear(modDir, group, option, seed)
             : bindings.GetEditableContentGearOverride(modDir, group, option, seed);
+
+    public GearSettingsPreset? GetEditableContentMaterialGearOverride(
+        string modDir, string materialRel, GearSettingsPreset seed)
+        => BagFor(modDir) is { } bag
+            ? bag.GetEditableContentMaterialGear(modDir, materialRel, seed)
+            : bindings.GetEditableContentMaterialGearOverride(modDir, materialRel, seed);
+
+    public GearSettingsPreset? PeekContentMaterialGearOverride(string modDir, string materialRel)
+        => BagFor(modDir) is { } bag
+            ? bag.PeekContentMaterialGear(modDir, materialRel)
+            : bindings.PeekContentMaterialGearOverride(modDir, materialRel);
 
     public GearSettingsPreset? GetEditableMaskGearOverride(string modDir, OverlayDescriptor seed)
         => BagFor(modDir) is { } bag
@@ -107,10 +118,8 @@ public class OverlayEditRouter
     // ── Clearing one option ─────────────────────────────────────────────────────
 
     /// <summary>
-    /// "Reset to defaults" for one option. Against a pinned preset this drops the option from the live
-    /// override only — the saved preset keeps it, and the `●` marker appears, because a reset is an edit
-    /// like any other and the wearer decides whether it sticks. A design binding also forgets it in the
-    /// stored binding, since re-applying that design would otherwise bring it straight back.
+    /// "Reset to defaults" for one option. Against a pinned preset only the live override changes; a design
+    /// binding also forgets it in the stored binding.
     /// </summary>
     public bool ClearOptionOverride(string modDir, string? group, string? option)
         => BagFor(modDir) is { } bag

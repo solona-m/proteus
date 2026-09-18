@@ -16,7 +16,7 @@ namespace Proteus.Tests;
 /// </summary>
 public class SecondSkinWriterVerbatimTests(Xunit.Abstractions.ITestOutputHelper o)
 {
-    private const string NeoTop =
+    internal const string NeoTop =
         @"E:\Penumbradt\Neolithe [ALL IN ONE]\DEFAULT CHEST - SmallClothes\0201e0000_top.mdl";
     /// <summary>The other parts of the SAME body, so the redundancy pass can be measured against a layout a
     /// character actually wears rather than two tops stacked on each other.</summary>
@@ -25,9 +25,9 @@ public class SecondSkinWriterVerbatimTests(Xunit.Abstractions.ITestOutputHelper 
     private const string NeoHands =
         @"E:\Penumbradt\Neolithe [ALL IN ONE]\HANDS\Hands short.mdl";
 
-    private const string BiboTop =
+    internal const string BiboTop =
         @"E:\Penumbradt\Bibo+\Breasts - Small Clothes\Nude - Large\chara\equipment\e0000\model\c0201e0000_top.mdl";
-    private const string HostRing =
+    internal const string HostRing =
         @"E:\Penumbradt\classic gold\classic gold accessories\rings\chara\accessory\a0001\model\c0201a0001_rir.mdl";
 
     /// <summary>
@@ -35,7 +35,7 @@ public class SecondSkinWriterVerbatimTests(Xunit.Abstractions.ITestOutputHelper 
     /// against a LAYOUT — a seam ring is redundant because the neighbouring part draws it — so a body
     /// measured one part at a time is not being measured at all.
     /// </summary>
-    private static readonly (string Body, string[] Parts)[] Bodies =
+    internal static readonly (string Body, string[] Parts)[] Bodies =
     [
         ("Neolithe",
         [
@@ -139,7 +139,7 @@ public class SecondSkinWriterVerbatimTests(Xunit.Abstractions.ITestOutputHelper 
     /// rebind into a red test.
     /// </summary>
     private static string ContentMaterialOf(byte[] model)
-        => SecondSkinService.UsedMaterialNames(model, SecondSkinWriter.MaterialNames(model))[0];
+        => ContentPieceResolver.UsedMaterialNames(model, SecondSkinWriter.MaterialNames(model))[0];
 
     private static byte[]? ReadPackEntry(string entry)
     {

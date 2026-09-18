@@ -40,7 +40,7 @@ public class DrawnMaterialNamesTests
         foreach (var path in Directory.GetFiles(HeartBreakerSizes, "*.mdl", SearchOption.AllDirectories))
         {
             var model = File.ReadAllBytes(path);
-            Assert.Equal(SecondSkinService.UsedMaterialNames(model, SecondSkinWriter.MaterialNames(model)),
+            Assert.Equal(ContentPieceResolver.UsedMaterialNames(model, SecondSkinWriter.MaterialNames(model)),
                          SecondSkinWriter.DrawnMaterialNames(model));
         }
     }

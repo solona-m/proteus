@@ -10,7 +10,7 @@ using Xunit;
 namespace Proteus.Tests;
 
 /// <summary>
-/// <see cref="SecondSkinWriter.RewriteFaceUv0"/> — moving a FACE model's uv0 into the doubled sheet layout,
+/// <see cref="FaceUvRewriter.RewriteFaceUv0"/> — moving a FACE model's uv0 into the doubled sheet layout,
 /// in place, so the character's own face samples an un-mirrored texture and asymmetric makeup survives.
 /// <para/>
 /// The alternative it replaces is a second-skin shell, which cannot carry a face: a shell is emitted with
@@ -69,7 +69,7 @@ public class FaceUvRewriteTests
     public void The_two_sides_land_in_opposite_halves()
     {
         var mdl = MirroredFace();
-        var got = SecondSkinWriter.RewriteFaceUv0(mdl, KeepFace(), Convert(), out var stats);
+        var got = FaceUvRewriter.RewriteFaceUv0(mdl, KeepFace(), Convert(), out var stats);
 
         Assert.NotNull(got);
         Assert.Equal(6, stats.VerticesWritten);
@@ -97,7 +97,7 @@ public class FaceUvRewriteTests
     public void Only_uv0_bytes_move_and_the_length_is_unchanged()
     {
         var mdl = MirroredFace();
-        var got = SecondSkinWriter.RewriteFaceUv0(mdl, KeepFace(), Convert(), out _)!;
+        var got = FaceUvRewriter.RewriteFaceUv0(mdl, KeepFace(), Convert(), out _)!;
 
         Assert.Equal(mdl.Length, got.Length);
 
@@ -128,7 +128,7 @@ public class FaceUvRewriteTests
         for (int i = 0; i < 6; i++) SetUv(mdl, i, 0.4f, 0.2f);
 
         var leaves = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { FaceMat, OtherMat };
-        var got = SecondSkinWriter.RewriteFaceUv0(mdl, SecondSkinWriter.KeepByLeaf(leaves), Convert(),
+        var got = FaceUvRewriter.RewriteFaceUv0(mdl, SecondSkinWriter.KeepByLeaf(leaves), Convert(),
                                                   out var stats)!;
 
         Assert.Equal(2, stats.MeshesTouched);
@@ -146,7 +146,7 @@ public class FaceUvRewriteTests
             new SyntheticModel.Mesh(OtherMat, new SyntheticModel.Sub(0)));
         for (int i = 0; i < 6; i++) SetUv(mdl, i, 0.4f, 0.2f);
 
-        var got = SecondSkinWriter.RewriteFaceUv0(mdl, KeepFace(), Convert(), out var stats)!;
+        var got = FaceUvRewriter.RewriteFaceUv0(mdl, KeepFace(), Convert(), out var stats)!;
 
         Assert.Equal(1, stats.MeshesTouched);
         Assert.Equal(3, stats.VerticesWritten);
@@ -177,7 +177,7 @@ public class FaceUvRewriteTests
         Write32(mdl, 28 + 4, BitConverter.ToUInt32(mdl, 28));            // indexOffset[1]  = [0]
         Write32(mdl, 40 + 4, BitConverter.ToUInt32(mdl, 40));            // vertexBufferSize[1]
 
-        var got = SecondSkinWriter.RewriteFaceUv0(mdl, KeepFace(), Convert(), out var stats)!;
+        var got = FaceUvRewriter.RewriteFaceUv0(mdl, KeepFace(), Convert(), out var stats)!;
 
         Assert.Equal(2, stats.LodsTouched);
         Assert.Equal(2, stats.MeshesTouched);
@@ -191,7 +191,7 @@ public class FaceUvRewriteTests
     public void No_matching_mesh_returns_null()
     {
         var mdl = SyntheticModel.Build([], new SyntheticModel.Mesh(OtherMat, new SyntheticModel.Sub(0)));
-        Assert.Null(SecondSkinWriter.RewriteFaceUv0(mdl, KeepFace(), Convert(), out var stats));
+        Assert.Null(FaceUvRewriter.RewriteFaceUv0(mdl, KeepFace(), Convert(), out var stats));
         Assert.Equal(0, stats.VerticesWritten);
     }
 
@@ -207,7 +207,7 @@ public class FaceUvRewriteTests
         // Declaration slot 1 is uv0 (see SyntheticModel); byte 2 of an element is its type. 9 = Short2n,
         // which ReadTyped decodes and WriteUv0 will not write.
         mdl[0x44 + 1 * 8 + 2] = 9;
-        Assert.Null(SecondSkinWriter.RewriteFaceUv0(mdl, KeepFace(), Convert(), out _));
+        Assert.Null(FaceUvRewriter.RewriteFaceUv0(mdl, KeepFace(), Convert(), out _));
     }
 
     /// <summary>
@@ -219,12 +219,12 @@ public class FaceUvRewriteTests
     public void A_vertex_buffer_too_short_for_its_elements_refuses_the_model()
     {
         var whole = MirroredFace();
-        Assert.NotNull(SecondSkinWriter.RewriteFaceUv0(whole, KeepFace(), Convert(), out _));
+        Assert.NotNull(FaceUvRewriter.RewriteFaceUv0(whole, KeepFace(), Convert(), out _));
 
         var truncated = MirroredFace();
         // vertexBufferSize[0] at 0x28: one byte less than the last uv0 needs.
         Write32(truncated, 40, (uint)(VertexCount(truncated) * Stride - 1));
-        Assert.Null(SecondSkinWriter.RewriteFaceUv0(truncated, KeepFace(), Convert(), out _));
+        Assert.Null(FaceUvRewriter.RewriteFaceUv0(truncated, KeepFace(), Convert(), out _));
     }
 
     /// <summary>
@@ -237,7 +237,7 @@ public class FaceUvRewriteTests
     {
         var mdl = MirroredFace();
         SetUv(mdl, 2, 3.25f, 0.5f);
-        Assert.Null(SecondSkinWriter.RewriteFaceUv0(mdl, KeepFace(), Convert(), out _));
+        Assert.Null(FaceUvRewriter.RewriteFaceUv0(mdl, KeepFace(), Convert(), out _));
     }
 
     /// <summary>
@@ -255,7 +255,7 @@ public class FaceUvRewriteTests
         int ib = (int)BitConverter.ToUInt32(mdl, 28);
         Write16(mdl, ib + 5 * 2, 3);
 
-        var got = SecondSkinWriter.RewriteFaceUv0(mdl, KeepFace(), Convert(), out var stats)!;
+        var got = FaceUvRewriter.RewriteFaceUv0(mdl, KeepFace(), Convert(), out var stats)!;
 
         Assert.Equal(0, stats.Unsided);
         Assert.True(X(mdl, 5) < 0f);

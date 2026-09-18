@@ -1296,6 +1296,102 @@ public class MeshVolumeSolveTests
     }
 
     /// <summary>
+    /// Rotate turns the part rigidly about its pivot — every point lands where the matrix puts it, the seam point it
+    /// shares goes with it — and the far cloth stays put. One undo takes the whole turn back.
+    /// </summary>
+    [Fact]
+    public void RotateTurnsThePartRigidlyAboutItsPivot()
+    {
+        var (model, n, second) = TwoParts();
+        var solve = new MeshVolumeSolve(model);
+        var pivot = new Vector3(0.15f, 0f, 0.05f);
+
+        var turn = Proteus.Gui.RotateGizmo.About(pivot, Vector3.UnitY, MathF.PI / 2f);
+
+        Assert.True(solve.BeginMove(model.Parts[1].Triangles, adjacent: false, falloffRadius: 0f) > 0);
+        solve.TransformTo(Matrix4x4.Identity);   // part way through the drag, which the end must not add to
+        solve.TransformTo(turn);
+        solve.EndMove();
+
+        var after = solve.Positions();
+        for (int v = second; v < second + n * n; v++)
+        {
+            var expected = Vector3.Transform(At(model.Positions, v), turn);
+            Assert.True(Vector3.Distance(expected, At(after, v)) < 1e-5f, $"vertex {v} did not turn rigidly");
+        }
+        // A 90° turn about +Y through the pivot: the part's corner at (0.1, 0, 0) goes to (0.1, 0, 0.1).
+        Assert.True(Vector3.Distance(new Vector3(0.1f, 0f, 0.1f), At(after, second)) < 1e-5f);
+        Assert.Equal(At(model.Positions, 5), At(after, 5));
+
+        solve.Undo();
+        var back = solve.Positions();
+        for (int v = 0; v < model.Positions.Length / 3; v++)
+            Assert.True(Vector3.Distance(At(model.Positions, v), At(back, v)) < 1e-6f, $"vertex {v} not restored");
+    }
+
+    /// <summary>Scale grows the part about its pivot by exactly the drag's factor, and leaves the far cloth alone.</summary>
+    [Fact]
+    public void ScaleGrowsThePartAboutItsPivot()
+    {
+        var (model, n, second) = TwoParts();
+        var solve = new MeshVolumeSolve(model);
+        var pivot = new Vector3(0.15f, 0f, 0.05f);
+
+        float pixels = MathF.Log(2f) / Proteus.Gui.PartScaleDrag.ScalePerPixel;
+        Assert.Equal(2f, Proteus.Gui.PartScaleDrag.ScaleFor(pixels), 1e-4f);
+        var grow = Proteus.Gui.PartScaleDrag.Build(pivot, pixels);
+
+        solve.BeginMove(model.Parts[1].Triangles, adjacent: false, falloffRadius: 0f);
+        solve.TransformTo(grow);
+        solve.EndMove();
+
+        var after = solve.Positions();
+        for (int v = second; v < second + n * n; v++)
+        {
+            var expected = pivot + (At(model.Positions, v) - pivot) * 2f;
+            Assert.True(Vector3.Distance(expected, At(after, v)) < 1e-4f, $"vertex {v} did not scale about the pivot");
+        }
+        Assert.Equal(At(model.Positions, 5), At(after, 5));
+        Assert.True(solve.Dirty);
+    }
+
+    /// <summary>
+    /// The rotate rings and the turn they produce agree: a turn of α about a ring's axis carries the point at θ on that
+    /// ring to θ+α, which is what makes a point followed by the mouse stay under it.
+    /// </summary>
+    [Fact]
+    public void RotateGizmoRingsMatchTheTurnTheyMake()
+    {
+        var pivot = new Vector3(0.02f, 1.1f, -0.05f);
+        foreach (var axis in new[] { Vector3.UnitX, Vector3.UnitY, Vector3.UnitZ, Vector3.Normalize(new Vector3(1f, 2f, -3f)) })
+        {
+            var (u, v) = Proteus.Gui.RotateGizmo.Basis(axis);
+            Assert.Equal(0f, Vector3.Dot(u, axis), 1e-5f);
+            Assert.Equal(0f, Vector3.Dot(u, v), 1e-5f);
+            Assert.Equal(1f, v.Length(), 1e-5f);
+
+            const float theta = 0.7f, alpha = 0.4f;
+            var start = Proteus.Gui.RotateGizmo.RingPoint(pivot, axis, 0.08f, theta);
+            var expected = Proteus.Gui.RotateGizmo.RingPoint(pivot, axis, 0.08f, theta + alpha);
+            var turned = Vector3.Transform(start, Proteus.Gui.RotateGizmo.About(pivot, axis, alpha));
+            Assert.True(Vector3.Distance(expected, turned) < 1e-5f, $"about {axis}: {turned} is not {expected}");
+        }
+    }
+
+    /// <summary>A drag back to where it started is no transform at all, and a drag left shrinks by the inverse of the same drag right.</summary>
+    [Fact]
+    public void ScaleDragIsSymmetric()
+    {
+        var pivot = new Vector3(0.1f, 1.2f, -0.3f);
+        var still = Proteus.Gui.PartScaleDrag.Build(pivot, 0f);
+        Assert.True(Vector3.Distance(new Vector3(1f, 2f, 3f), Vector3.Transform(new Vector3(1f, 2f, 3f), still)) < 1e-5f);
+
+        float up = Proteus.Gui.PartScaleDrag.ScaleFor(60f), down = Proteus.Gui.PartScaleDrag.ScaleFor(-60f);
+        Assert.Equal(1f, up * down, 1e-5f);
+        Assert.True(up > 1f && down < 1f);
+    }
+
+    /// <summary>
     /// A brush on a moved part works where the part now is, and caps only its own share: the first dab on a part
     /// moved half a metre adds to the move rather than clamping the part back to ten centimetres.
     /// </summary>

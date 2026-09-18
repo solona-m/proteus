@@ -13,45 +13,23 @@ using Proteus.Services;
 namespace Proteus.Interop;
 
 /// <summary>
-/// Makes a dark-only region's OPACITY follow its glow, so where the light has taken the glow away there is
-/// nothing left but skin.
-///
-/// <para>Dimming the emissive alone is only half of "invisible in the light". A glowing shell still draws a
-/// surface, and on <c>characterscroll.shpk</c> that surface is the colour table's diffuse with no base
-/// texture beneath it — usually black, because that is what a coloured glow needs to read against. Fade the
-/// glow alone and a dark-only tattoo becomes a black silhouette at noon, which is exactly what Atramentum
-/// Luminis did not do.</para>
-///
-/// <para><b>What moves.</b> A shell layer's per-pixel transparency is its normal map's BLUE channel — the
-/// compositor writes the overlay's coverage there — so the light scales that blue, and nothing else. Same
-/// mechanism as <see cref="ShellNormalGhost"/>, which has been swapping these textures live since the
-/// colorset locator shipped; the same swap-then-DecRef and prune-don't-free rules apply for the same
-/// reasons, so read that file's comments before changing this one.</para>
-///
-/// <para><b>Per row, not per layer.</b> The index texture beside the normal says which texel belongs to
-/// which colour-table row, so only the rows that asked to hide are faded. That is the whole reason this
-/// works on the coverage rather than on the material's alpha constants, which are material-wide and would
-/// have forced every row on a layer to agree.</para>
-///
-/// <para>Quantised into a few steps with a dead band: rebuilding a 2048² texture is not something to do per
-/// frame, and a light level does not change fast. Between steps this costs one dictionary lookup.</para>
+/// Makes a dark-only region's opacity follow its glow, so where the light has taken the glow away only skin
+/// is left.
+/// <para>The light scales the shell normal's blue channel (its coverage), per colour-table row via the index
+/// texture. Same swap-then-DecRef and prune-don't-free rules as <see cref="ShellNormalGhost"/>.</para>
+/// <para>Quantised into a few steps with a dead band, since each step is a full texture rebuild.</para>
 /// </summary>
 public sealed unsafe class ShellCoverageFade : IDisposable
 {
     /// <summary>
-    /// How many steps the fade is cut into. Each one is a texture rebuild, so this trades smoothness for
-    /// work — and it can afford to be coarse because the colour-table glow fade is continuous and carries
-    /// the eye through the transition while the surface steps underneath it.
+    /// How many steps the fade is cut into; each is a texture rebuild. Coarse is fine because the glow fade
+    /// itself is continuous.
     /// </summary>
     private const int Steps = 8;
 
     /// <summary>
-    /// How far the light must move past the step it is already showing before the step changes.
-    /// <para/>
-    /// MUST be greater than 0.5, or it does nothing at all: the step comes from rounding, which already
-    /// snaps everything within half a step, so a band narrower than that can only ever agree with the
-    /// rounding it was meant to override. It shipped at 0.35 and was dead code — a level parked on a
-    /// boundary rebuilt a multi-megabyte texture back and forth for as long as it sat there.
+    /// How far (in steps) the light must move past the step it is showing before the step changes. Must be
+    /// greater than 0.5, or rounding already covers it and the band does nothing.
     /// </summary>
     private const float Hysteresis = 0.75f;
 
@@ -65,13 +43,11 @@ public sealed unsafe class ShellCoverageFade : IDisposable
     /// <summary>Shell material leaf → its light response. Supplied by the compositor's publish.</summary>
     public Func<string, ShellLightProfile?>? LightFor { get; set; }
 
-    /// <summary>Whether ANY live shell asks for a light response at all. Checked before the character is
-    /// walked, so a collection with no light-sensitive glow — almost every collection — pays nothing per
-    /// frame beyond this call.</summary>
+    /// <summary>Whether any live shell asks for a light response at all; checked before the character is walked.</summary>
     public Func<bool>? AnyLight { get; set; }
 
-    /// <summary>The locator ghost, which swaps these same slots. See <see cref="ShellNormalGhost.IsBusy"/>:
-    /// while it holds any of them, this stands aside completely.</summary>
+    /// <summary>The locator ghost, which swaps these same slots; while <see cref="ShellNormalGhost.IsBusy"/>,
+    /// this stands aside completely.</summary>
     public ShellNormalGhost? Ghost { get; set; }
 
     /// <summary>One shell's faded coverage, built off-thread and reused until the step or the file changes.</summary>
@@ -83,10 +59,7 @@ public sealed unsafe class ShellCoverageFade : IDisposable
         public int Step;
     }
 
-    // ONE entry per normal path, not one per (path, step). Each holds a full-resolution BGRA buffer — 16 MB
-    // for a 2048² normal — so keeping every step a shell had passed through parked well over a hundred
-    // megabytes per shell and never released it. Matching ShellNormalGhost's one-per-path rule costs a
-    // rebuild when the light steps back to where it was, which is off-thread and rare.
+    // One entry per shell, not per (shell, step): each holds a full-resolution BGRA buffer.
     private readonly Dictionary<string, Faded> _built = new();
 
     // Currently-swapped slots: our created texture, the original we displaced, and the step it shows.
@@ -108,14 +81,10 @@ public sealed unsafe class ShellCoverageFade : IDisposable
 
     private void Apply(nint addr)
     {
-        // The locator ghost swaps these same slots. Two owners of one Texture** is how a texture gets freed
-        // while the other still has it published, so while the ghost holds any of them this hands back
-        // everything it owns and does nothing else — the locator is a deliberate, momentary act by the user
-        // and outranks an ambient effect.
+        // Never two owners of one Texture**: while the ghost holds any slot, hand back everything we own.
         bool ghostBusy = Ghost?.IsBusy == true;
 
-        // Nothing anywhere asks for a coverage fade: skip the walk itself, which allocates a string per
-        // texture on the character. This is the state almost every collection is in.
+        // Nothing asks for a coverage fade: skip the walk, which allocates a string per texture.
         bool on = config.LightResponseEnabled && LightFor != null && !ghostBusy
                && (AnyLight?.Invoke() ?? true);
 
@@ -134,9 +103,7 @@ public sealed unsafe class ShellCoverageFade : IDisposable
             if (step > 0)
             {
                 bool haveApplied = _applied.TryGetValue(slot, out var ap);
-                // Cheapest exit first: already showing this step, so there is nothing to build and — the
-                // reason the order matters — no file to stat. GetOrBuild opens a FileInfo, and running it
-                // before this check cost a disk stat per faded shell on every single frame.
+                // Already showing this step: exit before GetOrBuild, which stats the file.
                 if (haveApplied && cur == ap.Ours && ap.Step == step) return;
 
                 var f = GetOrBuild(path, step, profile!);
@@ -146,9 +113,8 @@ public sealed unsafe class ShellCoverageFade : IDisposable
                 var tex = CreateTex(bgra, f.W, f.H);
                 if (tex == 0) return;
 
-                // Swap first, then release our PREVIOUS texture — and only when the slot still held
-                // something we recognise. If it held neither, the model was rebuilt and the game already
-                // freed ours; DecRef'ing would double-free. Exactly ShellNormalGhost's rule.
+                // Swap first, then release our previous texture only when the slot still held something we
+                // recognise; otherwise the game already freed it and a DecRef would double-free.
                 var old = Interlocked.Exchange(ref *(nint*)slot, tex);
                 if (haveApplied && (old == ap.Ours || old == ap.Original))
                     ((Texture*)ap.Ours)->DecRef();
@@ -161,9 +127,8 @@ public sealed unsafe class ShellCoverageFade : IDisposable
                     Interlocked.Exchange(ref *(nint*)slot, ap.Original);
                     ((Texture*)ap.Ours)->DecRef();
                 }
-                // Someone else's texture is in the slot — the ghost got there first and is holding ours as
-                // the original it will one day write back. Drop the tracking WITHOUT freeing: leaking one
-                // texture is recoverable, freeing one another owner still has published is not.
+                // Someone else's texture is in the slot: drop the tracking without freeing, since another
+                // owner may still publish ours.
                 _applied.Remove(slot);
             }
         });
@@ -175,10 +140,7 @@ public sealed unsafe class ShellCoverageFade : IDisposable
                 _applied.Remove(k);
     }
 
-    /// <summary>
-    /// Which fade step this shell is in, with a dead band so a light hovering on a boundary doesn't rebuild
-    /// a texture back and forth. Step 0 means "leave the shell alone".
-    /// </summary>
+    /// <summary>Which fade step this shell is in, with a dead band. Step 0 means "leave the shell alone".</summary>
     private int StepFor(nint slot, ShellLightProfile profile)
     {
         float level = Math.Clamp(light.Sample(profile.ProbeHeight), 0f, 1f);
@@ -195,14 +157,9 @@ public sealed unsafe class ShellCoverageFade : IDisposable
     private Faded GetOrBuild(string path, int step, ShellLightProfile profile)
     {
         long stamp = FileStamp(path);
-        // Keyed by the SHELL, not the file: a content-addressed normal gets a new name for every revision,
-        // and a key on the name would add a full-resolution entry per revision with nothing ever replacing
-        // it. The stamp below is still read off the actual file, so a new revision is still a rebuild.
+        // Keyed by the shell, not the file name: content-addressed normals get a new name per revision.
         var key = Normalize(Services.ShellTextureNames.ShellKey(path));
-        // Reuse only while BOTH the step and the file are unchanged — a recomposite rewrites
-        // ss_{letter}_norm.tex in place, and a stamp-only cache would then serve coverage from the previous
-        // build. A changed step REPLACES the entry rather than joining it, which is what keeps this to one
-        // full-resolution buffer per live shell.
+        // Reuse only while both the step and the file stamp are unchanged; a changed step replaces the entry.
         if (_built.TryGetValue(key, out var f) && f.Stamp == stamp && f.Step == step) return f;
 
         f = new Faded { Stamp = stamp, Step = step };
@@ -231,18 +188,14 @@ public sealed unsafe class ShellCoverageFade : IDisposable
             if (decNorm == null) { log.Warning("[ProteusLight] could not decode shell normal {0}", normalPath); return; }
             var (norm, w, h) = decNorm.Value;
 
-            // The index sits beside the normal, written by the same pass: ss_{letter}_norm.tex → _id.tex. Through
-            // ShellTextureNames, because a reinforced-toe normal is content-addressed and a literal strip of
-            // "_norm.tex" would name an index that does not exist.
+            // The index sits beside the normal; named through ShellTextureNames because names may be content-addressed.
             var idPath = Services.ShellTextureNames.IndexBeside(normalPath);
             var decId = textures.LoadTexAsRgba(idPath);
             byte[]? id = null;
             int idW = 0, idH = 0;
             if (decId is { } di) { (id, idW, idH) = di; }
             else
-                // No index means the shell samples the fabricated (255, 255, 0) everywhere — row 16 sub-row
-                // A — so the whole surface follows that one row. Common: it is what an overlay with no _id
-                // art gets, which includes every Atramentum Luminis import.
+                // No index: the shell samples the fabricated (255, 255, 0), so the whole surface follows row 16A.
                 log.Debug("[ProteusLight] {0} has no index; fading against row 16A", Path.GetFileName(normalPath));
 
             var bgra = new byte[w * h * 4];
@@ -252,9 +205,8 @@ public sealed unsafe class ShellCoverageFade : IDisposable
                 {
                     int p = (y * w + x) * 4;
 
-                    // Which colour-table row this texel reads, in the convention ContentIndexTexture decodes:
-                    // red picks the pair, green blends A→B. Sampled nearest, since the index can be a
-                    // different size from the normal and row regions are areas rather than detail.
+                    // The row this texel reads (ContentIndexTexture's convention: red picks the pair, green A→B),
+                    // sampled nearest since the index may differ in size.
                     int row = 30, sub = 0;   // the fabricated index's answer: row pair 16, sub-row A
                     if (id != null)
                     {
@@ -268,8 +220,7 @@ public sealed unsafe class ShellCoverageFade : IDisposable
                     int cell = Math.Clamp(row + sub, 0, ShellLightProfile.RowCount - 1);
                     float keep = rowHide[cell] > 0f ? 1f - rowHide[cell] * (1f - fade) : 1f;
 
-                    // Normal is RGBA here; blue (p+2) is the coverage gate. Scale it, keep RG (the actual
-                    // normal) and A, then swizzle RGBA→BGRA for upload.
+                    // Scale blue (the coverage gate), keep RG and A, and swizzle RGBA→BGRA for upload.
                     bgra[p]     = (byte)(norm[p + 2] * keep);
                     bgra[p + 1] = norm[p + 1];
                     bgra[p + 2] = norm[p];
@@ -288,8 +239,7 @@ public sealed unsafe class ShellCoverageFade : IDisposable
     private static string MaterialLeaf(string textureLeaf)
         => Services.ShellTextureNames.MaterialLeaf(textureLeaf);
 
-    // Walk the character's materials → normal textures that are OUR shell layers. Same shape as
-    // ShellNormalGhost.ForEachShellNormal; returns false if the character isn't drawable this frame.
+    // Walk the character's materials → normal textures of our shell layers; false if not drawable this frame.
     private bool ForEachShellNormal(nint addr, Action<nint /*Texture** slot*/, string /*path*/, string /*leaf*/> visit)
     {
         var chara = (Character*)addr;
