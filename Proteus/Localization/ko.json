@@ -2419,10 +2419,6 @@
     "message": "이 의상은 Proteus로 가져온 것이며 Proteus가 대신 입혀 줍니다. 평소처럼 칠하면 됩니다. 각 획은 저장된 뒤 의상이 다시 만들어지면서 몇 초 후 캐릭터에 나타납니다.",
     "description": ""
   },
-  "Parts.Content.NoSwitches": {
-    "message": "가져온 의상에는 스위치를 추가할 수 없습니다. Proteus가 다른 아이템에 얹어 입히며, 그 아이템의 스위치가 제어합니다. 위의 브러시는 계속 사용할 수 있습니다.",
-    "description": ""
-  },
   "Parts.Live.PickedShell": {
     "message": "이것은 Proteus가 그려 주는 의상으로, 무언가 바뀔 때마다 다시 만들어집니다. 편집하려면 가져온 원본 모드를 선택하세요.",
     "description": ""

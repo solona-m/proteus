@@ -2419,10 +2419,6 @@
     "message": "This garment was imported into Proteus, which wears it for you. Paint it as usual — each stroke appears on your character a few seconds after it saves, once the garment is rebuilt.",
     "description": "Note under the brush controls for a garment imported into Proteus, whose geometry the character wears through a Proteus-built model rather than from the mod's own file. \"Proteus\" is a plugin name - never translate it."
   },
-  "Parts.Content.NoSwitches": {
-    "message": "Switches can't be added to an imported garment: Proteus wears it on another item, and that item's own switches control it. The brushes above still work.",
-    "description": "Replaces the on/off switch controls for an imported garment. \"Proteus\" is a plugin name - never translate it."
-  },
   "Parts.Live.PickedShell": {
     "message": "That is the garment Proteus draws for you, which is rebuilt every time something changes. Pick the mod it came from to edit it.",
     "description": "Shown when the user clicks Proteus's own generated garment on their character instead of a mod's model. \"Proteus\" is a plugin name - never translate it."

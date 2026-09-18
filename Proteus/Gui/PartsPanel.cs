@@ -2008,15 +2008,8 @@ public sealed class PartsPanel
     {
         var ps = Strings.Parts;
 
-        // An imported piece is worn on a host item whose own switches govern it, so a switch written here does nothing.
-        if (TargetIsContent)
-        {
-            ImGui.PushTextWrapPos(0);
-            ImGui.TextDisabled(ps.ContentNoSwitches);
-            ImGui.PopTextWrapPos();
-            return;
-        }
-
+        // An imported piece takes switches too: it is worn on a host item, so Proteus hides its parts itself from the
+        // sidecar, which MeshToggleService.SyncContentAttributes keeps in step with the group written here.
         int free = freeLetters;
 
         ImGui.TextDisabled(string.Format(ps.SelectedFmt, ticked.Count));
@@ -2110,8 +2103,11 @@ public sealed class PartsPanel
             .Where(p => p.Parts.Count > 0)
             .ToList();
 
+        // An imported pack's pieces publish nothing, so its other copies at this game path (another size, say) are
+        // offered as siblings from the sidecar rows.
+        var siblings = redirects.Concat(models.Where(m => contentFiles.Contains(m.File))).ToList();
         var result = MeshToggleService.Write(
-            root, models[modelIndex], parts, plans, redirects,
+            root, models[modelIndex], parts, plans, siblings,
             gamePath => textureLoader.LoadRawFile(null, gamePath));
 
         statusIsError = !result.Ok;
