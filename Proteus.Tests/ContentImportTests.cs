@@ -224,7 +224,7 @@ public class ContentImportTests
 
         // End to end: the recorded group resolves against the model's own attribute table to the name whose
         // submeshes the writer then drops.
-        Assert.Equal(["atr_dv_a"], SecondSkinService.HiddenAttributes(
+        Assert.Equal(["atr_dv_a"], ContentPieceResolver.HiddenAttributes(
             sidecar.ContentAttributes,
             "chara/equipment/e6058/model/c0101e6058_dwn.mdl",
             ["atr_dv_a", "atr_dv_b"],
@@ -284,19 +284,19 @@ public class ContentImportTests
         string[] humanParts = ["chara/human/c0201/obj/hair/h0101/model/c0201h0101_hir.mdl"];
 
         // Body -> the worn chest piece. This is the number the whole feature turns on.
-        Assert.Equal(233, SecondSkinService.EstSetId("Body", worn, bare, humanParts));
-        Assert.Equal(6112, SecondSkinService.EstSetId("Head", worn, bare, humanParts));
-        Assert.Equal(101, SecondSkinService.EstSetId("Hair", worn, bare, humanParts));
+        Assert.Equal(233, PenumbraManipulations.EstSetId("Body", worn, bare, humanParts));
+        Assert.Equal(6112, PenumbraManipulations.EstSetId("Head", worn, bare, humanParts));
+        Assert.Equal(101, PenumbraManipulations.EstSetId("Hair", worn, bare, humanParts));
 
         // Bare chest: e0000 is filtered out of the equipment walk, so without the bare-body fallback this
         // would be null and a naked character's ex bones would silently not load.
-        Assert.Equal(0, SecondSkinService.EstSetId("Body", null, bare, humanParts));
+        Assert.Equal(0, PenumbraManipulations.EstSetId("Body", null, bare, humanParts));
 
         // Nothing drawn there, and a slot name we don't know: null rather than a guess. The entry is written
         // onto someone else's item, so guessing moves a skeleton the user never asked about.
-        Assert.Null(SecondSkinService.EstSetId("Face", worn, bare, humanParts));
-        Assert.Null(SecondSkinService.EstSetId("Body", null, null, null));
-        Assert.Null(SecondSkinService.EstSetId("Elbow", worn, bare, humanParts));
+        Assert.Null(PenumbraManipulations.EstSetId("Face", worn, bare, humanParts));
+        Assert.Null(PenumbraManipulations.EstSetId("Body", null, null, null));
+        Assert.Null(PenumbraManipulations.EstSetId("Elbow", worn, bare, humanParts));
     }
 
     /// <summary>
@@ -311,7 +311,7 @@ public class ContentImportTests
     {
         // c0201 = Midlander female. Set 233 worn on the chest, loading extra skeleton 6085.
         var json = JsonSerializer.Serialize(
-            SecondSkinService.EstManipulation("0201", "Body", 233, 6085));
+            PenumbraManipulations.EstManipulation("0201", "Body", 233, 6085));
         var m = JsonNode.Parse(json)!;
 
         Assert.Equal("Est", (string?)m["Type"]);
@@ -328,7 +328,7 @@ public class ContentImportTests
 
         // The race half comes from the character's code, not the pack's.
         var male = JsonNode.Parse(JsonSerializer.Serialize(
-            SecondSkinService.EstManipulation("0101", "Head", 1, 2)))!["Manipulation"]!;
+            PenumbraManipulations.EstManipulation("0101", "Head", 1, 2)))!["Manipulation"]!;
         Assert.Equal("Male", (string?)male["Gender"]);
         Assert.Equal("Midlander", (string?)male["Race"]);
     }
@@ -808,15 +808,15 @@ public class ContentImportTests
             var on = new Dictionary<string, List<string>> { ["Print"] = ["Escape", "Climb", "Fine"] };
 
             // Rooted: Path.Combine returns the second argument verbatim, so nothing about modRoot survives.
-            Assert.Null(SecondSkinService.SelectedMaterialFile(modRoot,
+            Assert.Null(ContentPieceResolver.SelectedMaterialFile(modRoot,
                 [new() { Group = "Print", Option = "Escape", File = outside.Replace('\\', '/') }], on));
 
             // Climbing out with .. — the same escape by a different spelling.
-            Assert.Null(SecondSkinService.SelectedMaterialFile(modRoot,
+            Assert.Null(ContentPieceResolver.SelectedMaterialFile(modRoot,
                 [new() { Group = "Print", Option = "Climb", File = "../secret.key" }], on));
 
             // A refused source does not poison the ones after it: the honest file still publishes.
-            Assert.Equal("ok.mtrl", Path.GetFileName(SecondSkinService.SelectedMaterialFile(modRoot,
+            Assert.Equal("ok.mtrl", Path.GetFileName(ContentPieceResolver.SelectedMaterialFile(modRoot,
                 [
                     new() { Group = "Print", Option = "Escape", File = outside.Replace('\\', '/') },
                     new() { Group = "Print", Option = "Fine",   File = "print/ok.mtrl" },
@@ -1066,7 +1066,7 @@ public class ContentImportTests
             var mtrl = Mtrl(diffuse, normal);
 
             Dictionary<string, string> Pick(Dictionary<string, List<string>>? on)
-                => SecondSkinService.SelectedTextureFiles(dir, piece, mtrl, on);
+                => ContentPieceResolver.SelectedTextureFiles(dir, piece, mtrl, on);
 
             var rose = Pick(new() { ["Print"] = ["Blue Rose"] });
             Assert.Equal("rose_d.tex", Path.GetFileName(Assert.Single(rose).Value));
@@ -1078,10 +1078,66 @@ public class ContentImportTests
             // The normal map is never claimed — the pack does not ship it, so it stays vanilla.
             Assert.DoesNotContain(normal, rose.Keys);
 
-            // Nothing selected and no default data behind the path: Proteus republishes nothing and the
-            // texture goes back to Penumbra, which is where every pack without a print group leaves it.
-            Assert.Empty(Pick(null));
-            Assert.Empty(Pick(new() { ["Piece"] = ["Jacket"] }));
+            // A TICKED option wins even at a path the game holds: Penumbra is making that same override already.
+            Assert.Equal("rose_d.tex", Path.GetFileName(Assert.Single(ContentPieceResolver.SelectedTextureFiles(
+                dir, piece, mtrl, new Dictionary<string, List<string>> { ["Print"] = ["Blue Rose"] },
+                gameHasFile: _ => true)).Value));
+
+            // Nothing selected: the pack's own file all the same, first supplier first. Penumbra serves a texture
+            // only while its option is ticked, and a material whose texture is missing does not load at all.
+            Assert.Equal("rose_d.tex", Path.GetFileName(Assert.Single(Pick(null)).Value));
+            Assert.Equal("rose_d.tex",
+                Path.GetFileName(Assert.Single(Pick(new() { ["Piece"] = ["Jacket"] })).Value));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    /// <summary>
+    /// A piece is worn through its gate, not through the option that carries its textures, so that option can be
+    /// unticked while the piece is on. The importer records only textures the pack VARIES, so a single-file texture
+    /// is known from the manifest alone — and must still be republished, or the material fails with
+    /// FailedSubResource and the piece is not drawn ("Scarlet": bracelets on, "Items / Handsaint's Bracelets" off).
+    /// </summary>
+    [Fact]
+    public void A_texture_only_the_manifest_knows_is_republished_when_its_option_is_unticked()
+    {
+        var dir = TempDir();
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(dir, "items"));
+            File.WriteAllBytes(Path.Combine(dir, "items", "wrs_base.tex"), new byte[16]);
+
+            const string diffuse = "chara/accessory/a0095/texture/v05_c0201a0095_wrs_base.tex";
+            const string normal  = "chara/accessory/a0095/texture/v05_c0201a0095_wrs_norm.tex";
+            var mtrl = Mtrl(diffuse, normal);
+
+            // A manifest value is never traversal-checked, so one that climbs out of the mod must lose even though
+            // the file is really there and is named FIRST.
+            var outside = Path.Combine(Path.GetDirectoryName(dir)!, Path.GetFileName(dir) + "_outside.tex");
+            File.WriteAllBytes(outside, new byte[16]);
+
+            try
+            {
+                // Nothing recorded at import: one file behind the path is not a choice.
+                var piece = new ContentPiece();
+                IReadOnlyList<string> Shipped(string tex)
+                    => tex == diffuse ? ["..\\" + Path.GetFileName(outside), "items\\wrs_base.tex"] : [];
+                var noneTicked = new Dictionary<string, List<string>> { ["Items"] = [] };
+
+                var picked = ContentPieceResolver.SelectedTextureFiles(dir, piece, mtrl, noneTicked, Shipped);
+
+                Assert.Equal("wrs_base.tex", Path.GetFileName(Assert.Single(picked).Value));
+                Assert.Equal(diffuse, picked.Keys.Single());
+
+                // A path the game itself holds is left alone: the redirect is collection-wide, so taking it over would
+                // repaint the real item the user left the option off to keep. Vanilla loads, and so does the material.
+                Assert.Empty(ContentPieceResolver.SelectedTextureFiles(
+                    dir, piece, mtrl, noneTicked, Shipped, gameHasFile: tex => tex == diffuse));
+
+                // Without the manifest there is nothing to go on, as before.
+                Assert.Empty(ContentPieceResolver.SelectedTextureFiles(dir, piece, mtrl, null));
+            }
+            finally { File.Delete(outside); }
         }
         finally { Directory.Delete(dir, true); }
     }
@@ -1110,7 +1166,7 @@ public class ContentImportTests
             ];
 
             string Pick(Dictionary<string, List<string>>? on)
-                => Path.GetFileName(SecondSkinService.SelectedMaterialFile(dir, sources, on) ?? "");
+                => Path.GetFileName(ContentPieceResolver.SelectedMaterialFile(dir, sources, on) ?? "");
 
             // The selected print wins over the one declared first…
             Assert.Equal("rose.mtrl", Pick(new() { ["Print"] = ["Blue Rose"] }));
@@ -1130,7 +1186,7 @@ public class ContentImportTests
 
             // And with no default data to fall back on, null — so ContentMaterialFile and the baked path
             // still get their turn.
-            Assert.Null(SecondSkinService.SelectedMaterialFile(dir,
+            Assert.Null(ContentPieceResolver.SelectedMaterialFile(dir,
                 [new() { Group = "Print", Option = "Blue Rose", File = "print/rose.mtrl" }],
                 new Dictionary<string, List<string>> { ["Print"] = ["Blue Rose"] }));
         }
@@ -1163,7 +1219,7 @@ public class ContentImportTests
             ];
 
             string Pick(Dictionary<string, List<string>> on)
-                => Path.GetFileName(SecondSkinService.SelectedMaterialFile(dir, sources, on) ?? "");
+                => Path.GetFileName(ContentPieceResolver.SelectedMaterialFile(dir, sources, on) ?? "");
 
             var install = new List<string> { "install" };
 
@@ -1182,7 +1238,7 @@ public class ContentImportTests
                 new() { Group = "eyebrow", Option = "both", File = "common/both.tex" },
                 new() { File = "common/base.tex" },
             ];
-            Assert.Equal("both.tex", Path.GetFileName(SecondSkinService.SelectedMaterialFile(dir, withDefault,
+            Assert.Equal("both.tex", Path.GetFileName(ContentPieceResolver.SelectedMaterialFile(dir, withDefault,
                 new Dictionary<string, List<string>> { ["eyebrow"] = ["both"] }) ?? ""));
         }
         finally { Directory.Delete(dir, true); }
@@ -1539,7 +1595,7 @@ public class ContentImportTests
         try
         {
             // The pack ships the very material the model's drawn mesh names, so both mesh options bind.
-            var leaf = SecondSkinService
+            var leaf = ContentPieceResolver
                 .UsedMaterialNames(model, SecondSkinWriter.MaterialNames(model))[0].TrimStart('/');
             var pmp = V4Pack(dir, model, new byte[64], leaf);
 
@@ -1660,7 +1716,7 @@ public class ContentImportTests
         var dir = TempDir();
         try
         {
-            var leaf = SecondSkinService
+            var leaf = ContentPieceResolver
                 .UsedMaterialNames(model, SecondSkinWriter.MaterialNames(model))[0].TrimStart('/');
             var pmp = V4Pack(dir, model, new byte[64], leaf);
             var preview = ContentImportService.Inspect(pmp);

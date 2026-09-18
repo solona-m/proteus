@@ -7,10 +7,7 @@ using System.Linq;
 namespace Proteus.Services;
 
 /// <summary>
-/// Which of the game's three shared eye textures a file replaces.
-/// <para/>
-/// The iris material (<c>iris.shpk</c>) names exactly these three and nothing else, so an eye pack is
-/// always some subset of them.
+/// Which of the game's three shared eye textures (all the iris material names) a file replaces.
 /// </summary>
 public enum EyeSlot
 {
@@ -20,22 +17,14 @@ public enum EyeSlot
 }
 
 /// <summary>
-/// Reader for a plain <c>.zip</c> of loose eye textures — the shape eye mods are distributed in, with no
-/// manifest of any kind.
-/// <para/>
-/// Every other pack Proteus reads announces itself: a <c>.pmp</c> has <c>meta.json</c>, an <c>.omp</c> has
-/// its own, a <c>.ttmp2</c> has <c>TTMPL.mpl</c>. This format has nothing, so the FILENAMES are the whole
-/// manifest — <c>SomeMod_eye_base.png</c>, <c>_eye_mask</c>, <c>_eye_norm</c> — and classification is
-/// therefore conservative: a zip only reads as an eye pack when its names actually say so, because
-/// guessing wrong here means writing redirects over the eye textures of every character the collection
-/// covers.
+/// Reader for a plain <c>.zip</c> of loose eye textures with no manifest: the file names are the manifest,
+/// and classification is conservative because a wrong guess redirects every character's eyes.
 /// </summary>
 public static class EyePackage
 {
     public const string Extension = ".zip";
 
-    /// <summary>Where the game keeps the shared eye maps. Not per-race: one set covers every character,
-    /// which is why the iris MATERIAL is what an overlay has to target instead.</summary>
+    /// <summary>Where the game keeps the shared eye maps; one set covers every character.</summary>
     public const string TextureFolder = "chara/common/texture/eye";
 
     /// <summary>The game path each slot replaces.</summary>
@@ -46,11 +35,7 @@ public static class EyePackage
         _            => $"{TextureFolder}/eye01_norm.tex",
     };
 
-    /// <summary>
-    /// Filename token → slot. The same vocabulary <see cref="OnionImportService"/> already maps, which is
-    /// itself the vocabulary the game's own file names use; kept as its own table because that one is
-    /// matched against a manifest FIELD and this one against the end of a file name.
-    /// </summary>
+    /// <summary>Filename token → slot; the same vocabulary <see cref="OnionImportService"/> maps.</summary>
     private static readonly Dictionary<string, EyeSlot> Slots = new(StringComparer.OrdinalIgnoreCase)
     {
         ["base"] = EyeSlot.Base, ["diffuse"] = EyeSlot.Base, ["d"] = EyeSlot.Base, ["basecolor"] = EyeSlot.Base,
@@ -58,8 +43,7 @@ public static class EyePackage
         ["norm"] = EyeSlot.Norm, ["normal"] = EyeSlot.Norm, ["n"] = EyeSlot.Norm,
     };
 
-    /// <summary>What the readers downstream can decode. Deliberately the same list the Create tab browses
-    /// for, so a file that can be picked by hand can also arrive in a zip.</summary>
+    /// <summary>What the readers downstream can decode; the same list the Create tab browses for.</summary>
     private static readonly string[] ImageExtensions =
         [".png", ".dds", ".tex", ".jpg", ".jpeg", ".bmp", ".tga"];
 
@@ -70,8 +54,7 @@ public static class EyePackage
         public string Name => System.IO.Path.GetFileName(Entry);
     }
 
-    /// <summary>A parsed pack. <paramref name="Name"/> is the pack's own folder name where it has one,
-    /// since that is what the author called it.</summary>
+    /// <summary>A parsed pack. <paramref name="Name"/> is the pack's own folder name where it has one.</summary>
     public sealed record Contents(string Path, string Name, IReadOnlyList<PackFile> Files)
     {
         /// <summary>The files that landed on a slot, one per slot — a later duplicate is ignored rather
@@ -87,7 +70,7 @@ public static class EyePackage
 
     /// <summary>
     /// Parse the archive. Throws <see cref="InvalidDataException"/> when it is not a readable zip or holds
-    /// nothing that looks like an eye pack — the caller turns that into a message.
+    /// no images.
     /// </summary>
     public static Contents Read(string zipPath)
     {
@@ -101,9 +84,7 @@ public static class EyePackage
             if (e.FullName.EndsWith('/')) continue;   // directory marker
             var name = Normalize(e.FullName);
 
-            // Rejected outright, as the other readers do: this importer generates its own destination
-            // names so a traversal entry cannot escape on its own, but a pack carrying one is either
-            // corrupt or hostile and neither should be half-imported.
+            // A traversal entry rejects the whole pack: it is corrupt or hostile.
             if (System.IO.Path.IsPathRooted(name) || name.Split('/').Any(s => s is ".." or "."))
                 throw new InvalidDataException($"The archive contains an unsafe entry path: {e.FullName}");
 
@@ -141,11 +122,8 @@ public static class EyePackage
     }
 
     /// <summary>
-    /// Whether a pack's names identify it as an EYE pack rather than some other loose texture set.
-    /// <para/>
-    /// Two ways to say so, because packs use both: an explicit <c>_eye_</c> in the name, or the game's own
-    /// <c>eye01_</c> prefix. A zip of body textures called <c>foo_base.png</c> satisfies neither and is
-    /// reported rather than pointed at somebody's irises.
+    /// Whether a pack's names identify it as an eye pack: an explicit <c>_eye</c> in the name, or the game's own
+    /// <c>eye0</c> prefix.
     /// </summary>
     public static bool LooksLikeEyes(Contents pack)
         => pack.Files.Any(f => f.Slot != null

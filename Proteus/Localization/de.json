@@ -215,6 +215,10 @@
     "message": "[Proteus] Deine zweite Haut wurde gebaut, aber das Spiel zeichnet sie nicht. Das Accessoire, auf dem sie sitzt, ist angelegt, doch der Charakter lädt Proteus' Version nicht. Lege das Accessoire ab und wieder an oder wähle ein anderes.",
     "description": ""
   },
+  "Chat.ShellMaterialFailed": {
+    "message": "[Proteus] Ein Teil deiner zweiten Haut wird nicht gezeichnet. Der Rest ist auf deinem Charakter, also fehlt entweder eine Textur, die dieses Teil braucht, oder das Spiel hält noch die vorherige Version. Versuche zuerst „Jetzt neu komponieren“, dann lege das Accessoire, auf dem sie sitzt, ab und wieder an.",
+    "description": ""
+  },
   "Chat.ShellNeedsRedraw": {
     "message": "[Proteus] Deine zweite Haut hat sich geändert, aber das automatische Neuzeichnen ist aus, deshalb trägt dein Charakter noch die vorherige Version. Wechsle das Gebiet oder nutze Penumbras Redraw-Schaltfläche, um sie zu sehen.",
     "description": ""
@@ -781,6 +785,10 @@
   },
   "Content.EitherColumn": {
     "message": "A und B",
+    "description": ""
+  },
+  "Content.FollowsHairColor": {
+    "message": "Dieses Material nutzt den Haar-Shader: Das Teil übernimmt Haarfarbe und Strähnchen deines Charakters und hat deshalb keine Farbtabelle — nichts, was du unten änderst, erreicht es. Ändere deine Haarfarbe, um es umzufärben.",
     "description": ""
   },
   "Content.Geometry.Fmt": {
@@ -2231,6 +2239,38 @@
     "message": "Wähle ein Teil und ziehe an den Pfeilen: ein Pfeil verschiebt es entlang\ndieser Achse, ein Quadrat über diese Ebene.",
     "description": ""
   },
+  "Parts.Tool.Rotate": {
+    "message": "Drehen",
+    "description": ""
+  },
+  "Parts.Tool.Rotate.Tip": {
+    "message": "Wähle ein Teil und ziehe dann an einem der Ringe, um es um seine Mitte zu drehen:\nein farbiger Ring dreht es um diese Achse, der äußere um deine Blickrichtung.",
+    "description": ""
+  },
+  "Parts.Tool.Scale": {
+    "message": "Skalieren",
+    "description": ""
+  },
+  "Parts.Tool.Scale.Tip": {
+    "message": "Wähle ein Teil, drücke darauf und ziehe nach rechts, um es um\nseine Mitte zu vergrößern, oder nach links, um es zu verkleinern.",
+    "description": ""
+  },
+  "Parts.Rotate.Help": {
+    "message": "Klicke ein Teil an, um es zu wählen, und ziehe dann an einem der Ringe in seiner Mitte. Ziehen anderswo dreht das Modell, Umschalt-Ziehen verschiebt die Ansicht, Scrollen zoomt.",
+    "description": ""
+  },
+  "Parts.Rotate.LiveHint": {
+    "message": "Klicke ein Teil an deinem Charakter an und ziehe dann an einem der Ringe in seiner Mitte. Halte Alt, um die Kamera zu bewegen. Jede Drehung wird beim Loslassen gespeichert.",
+    "description": ""
+  },
+  "Parts.Scale.Help": {
+    "message": "Klicke ein Teil an, um es zu wählen, drücke dann darauf und ziehe nach rechts zum Vergrößern oder nach links zum Verkleinern. Ziehen anderswo dreht das Modell, Umschalt-Ziehen verschiebt die Ansicht, Scrollen zoomt.",
+    "description": ""
+  },
+  "Parts.Scale.LiveHint": {
+    "message": "Klicke ein Teil an deinem Charakter an, drücke dann darauf und ziehe nach rechts zum Vergrößern oder nach links zum Verkleinern. Halte Alt, um die Kamera zu bewegen. Jede Änderung wird beim Loslassen gespeichert.",
+    "description": ""
+  },
   "Parts.Move.Help": {
     "message": "Klicke ein Teil an, um es zu wählen, und ziehe dann einen Pfeil oder ein Quadrat. Ziehen anderswo dreht das Modell, Umschalt-Ziehen verschiebt die Ansicht, Scrollen zoomt.",
     "description": ""
@@ -2794,6 +2834,10 @@
   "Settings.Output.Compression.Label": {
     "message": "Komprimierung aktivieren",
     "description": ""
+  },
+  "Settings.Output.CompressionRefused.Fmt": {
+    "message": "Nicht aktiv: Dieser PC komprimiert zu langsam ({0:F0} ms pro Megapixel), und es zu tun\nwürde so lange dauern, dass dein Aussehen gar nicht mehr gezeichnet würde. Texturen\nwerden stattdessen unkomprimiert gebacken. Entferne den Haken, um dies auszublenden.",
+    "description": "Shown in orange under the Enable Compression checkbox when the box is ticked but the machine was measured too slow to honour it. {0} is a measured number - keep the placeholder and its format. Contains deliberate line breaks."
   },
   "Settings.Output.Compression.Tip": {
     "message": "Komprimiert die gebackenen Texturen blockweise (BC7) und verkleinert jede auf etwa ein\nViertel ihrer unkomprimierten Größe auf der Festplatte und im VRAM. Die Index-Textur\nbleibt unkomprimiert, damit ihre exakten Zeilenwerte erhalten bleiben.\nAus = unkomprimiert (Byte-identisch wie zuvor).",

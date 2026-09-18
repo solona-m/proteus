@@ -108,6 +108,10 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     /// click on the garment goes to <paramref name="lockClicked"/> to choose the part, and this gizmo is drawn at
     /// <paramref name="movePivot"/> on the posed character and driven by the mouse. Null for every other tool.</param>
     /// <param name="movePivot">The gizmo's centre in the model's space; null when no part is chosen yet.</param>
+    /// <param name="scaleDrag">The Scale tool: as <paramref name="moveGizmo"/>, but the handle is the chosen part
+    /// itself — pressed and dragged sideways. Null for every other tool.</param>
+    /// <param name="rotateGizmo">The Rotate tool: as <paramref name="moveGizmo"/>, with rings instead of arrows. Null for
+    /// every other tool. At most one of the three handles is ever set.</param>
     /// <param name="graftedGamePath">
     /// Set for a model the character wears through Proteus rather than as a file of its own — an imported
     /// content piece, whose geometry the game only ever draws copied into a Proteus shell. The file is then
@@ -119,9 +123,12 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
                            Action<int>? lockClicked = null, bool pickParts = false,
                            Func<int, bool>? partTicked = null, int tickedVersion = 0,
                            TranslateGizmo? moveGizmo = null, Vector3? movePivot = null,
-                           string? graftedGamePath = null)
+                           string? graftedGamePath = null, PartScaleDrag? scaleDrag = null,
+                           RotateGizmo? rotateGizmo = null)
     {
         this.moveGizmo = moveGizmo;
+        this.scaleDrag = scaleDrag;
+        this.rotateGizmo = rotateGizmo;
         this.movePivot = movePivot;
         this.graftedGamePath = graftedGamePath;
         brushArmedFrame = ImGui.GetFrameCount();
@@ -144,8 +151,10 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     private Func<int, int>? partOf;
     private Action<int>? lockClicked;
 
-    // ── the Move tool ──
+    // ── the Move, Rotate and Scale tools ──
     private TranslateGizmo? moveGizmo;
+    private PartScaleDrag? scaleDrag;
+    private RotateGizmo? rotateGizmo;
     private Vector3? movePivot;
 
     /// <summary>
@@ -225,6 +234,10 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
             Problem = null;
             moveGizmo?.Release();
             moveGizmo = null;
+            scaleDrag?.Release();
+            scaleDrag = null;
+            rotateGizmo?.Release();
+            rotateGizmo = null;
         }
         if (!brushArmed && !pickArmed) return;
 
@@ -261,9 +274,9 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
         if (!pbdTried) { pbdTried = true; pbd = LiveCharacter.LoadPbd(penumbra, data, log); }
         poser.Pose(m, pose, pbd, world, 0, edited);
 
-        if (moveGizmo != null)
+        if (moveGizmo != null || scaleDrag != null || rotateGizmo != null)
         {
-            UpdateMove(projection, m, moveGizmo);
+            UpdateMove(projection, m);
             return;
         }
 
@@ -330,6 +343,8 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     private void EndIfPainting()
     {
         if (moveGizmo is { Active: not TranslateGizmo.Handle.None }) moveGizmo.Release();
+        if (scaleDrag is { Active: true }) scaleDrag.Release();
+        if (rotateGizmo is { Active: not RotateGizmo.Handle.None }) rotateGizmo.Release();
         if (!Painting) return;
         Painting = false;
         StrokeEnded = true;
@@ -345,7 +360,7 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     /// the gizmo shows is the model's axis as the pose has turned it there, so dragging along an arrow moves the part
     /// along that arrow on screen.
     /// </summary>
-    private void UpdateMove(ScreenProjection projection, SkinnedMesh m, TranslateGizmo gizmo)
+    private void UpdateMove(ScreenProjection projection, SkinnedMesh m)
     {
         DrawTickedWash(projection, m);
         DrawLockedWash(projection, m);
@@ -353,10 +368,12 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
         var io = ImGui.GetIO();
         var hit = MouseHit(projection, world, m.Triangles, skinTriangle, out bool overUi);
         var origin = ImGui.GetMainViewport().Pos;
+        bool dragging = moveGizmo is { Active: not TranslateGizmo.Handle.None } || scaleDrag is { Active: true }
+                        || rotateGizmo is { Active: not RotateGizmo.Handle.None };
 
         if (movePivot is { } pivot)
         {
-            if (gizmo.Active == TranslateGizmo.Handle.None && AnchorVertex(m, pivot) is var anchor and >= 0)
+            if (!dragging && AnchorVertex(m, pivot) is var anchor and >= 0)
             {
                 var skin = poser.SkinAt(m, anchor, pose.Root);
                 if (Matrix4x4.Invert(skin, out var unskin)) { moveSkin = skin; moveUnskin = unskin; }
@@ -364,18 +381,28 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
 
             var toWorld = moveSkin;
             var toModel = moveUnskin;
-            gizmo.Update(
-                pivot,
-                p => projection.WorldToScreen(Vector3.Transform(p, toWorld), out var s) ? s + origin : null,
+            Func<Vector3, Vector2?> toScreen =
+                p => projection.WorldToScreen(Vector3.Transform(p, toWorld), out var s) ? s + origin : null;
+            Func<Vector2, (Vector3, Vector3)?> screenRay =
                 s => ScreenProjection.TryScreenRay(s - origin, out var o, out var d)
                     ? (Vector3.Transform(o, toModel), Vector3.TransformNormal(d, toModel))
-                    : null,
-                io.MousePos, mouseAllowed: !overUi && !io.KeyAlt,
-                pressed: ImGui.IsMouseClicked(ImGuiMouseButton.Left), down: ImGui.IsMouseDown(ImGuiMouseButton.Left),
-                background: true);
+                    : null;
+            bool pressed = ImGui.IsMouseClicked(ImGuiMouseButton.Left), down = ImGui.IsMouseDown(ImGuiMouseButton.Left);
+            bool allowed = !overUi && !io.KeyAlt;
+
+            moveGizmo?.Update(pivot, toScreen, screenRay, io.MousePos, mouseAllowed: allowed,
+                              pressed: pressed, down: down, background: true);
+            rotateGizmo?.Update(pivot, toScreen, screenRay, io.MousePos, mouseAllowed: allowed,
+                                pressed: pressed, down: down, background: true);
+
+            // Scale: the handle is the chosen part itself.
+            bool overPart = hit is { } over && partOf != null && partTicked != null
+                            && partOf(m.BaseTriangles[over.Triangle * 3]) is var part and >= 0 && partTicked(part);
+            scaleDrag?.Update(pivot, toScreen, io.MousePos, overPart, mouseAllowed: allowed,
+                              pressed: pressed, down: down, background: true);
         }
 
-        if (gizmo.Capturing)
+        if (moveGizmo is { Capturing: true } || scaleDrag is { Capturing: true } || rotateGizmo is { Capturing: true })
         {
             ImGui.SetNextFrameWantCaptureMouse(true);
             Hovering = true;

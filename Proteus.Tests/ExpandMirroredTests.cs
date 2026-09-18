@@ -49,7 +49,7 @@ public class ExpandMirroredTests
     /// <summary>
     /// EXACT, byte for byte, in every channel and every row — and that is load-bearing rather than tidy.
     /// <para/>
-    /// It is the reason <see cref="SecondSkinWriter.RewriteFaceUv0"/> leaves tangents alone. The game shades
+    /// It is the reason <see cref="FaceUvRewriter.RewriteFaceUv0"/> leaves tangents alone. The game shades
     /// with the tangent frame stored in the model; a -X vertex's frame is already the mirror of its +X
     /// partner's and today both sample the same texel. After the rewrite that vertex reads the mirrored
     /// half instead — so as long as the mirrored half holds identical VALUES, it reads the same numbers

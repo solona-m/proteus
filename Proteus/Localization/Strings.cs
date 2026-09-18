@@ -235,9 +235,9 @@ public sealed class ModsStrings
         "(The global strength sliders are in Settings.)");
 
     // ── "this mod is on and painting nothing" ────────────────────────────────────────────────────────
-    // The faces of CompositorService.InertReason. The LOG says the same things in English literals, on
+    // The faces of InertModDiagnosis.InertReason. The LOG says the same things in English literals, on
     // purpose — a log is evidence, and evidence that changes language cannot be searched or compared.
-    // See CompositorService.EnglishInert, which must be kept saying the same facts as these.
+    // See InertModDiagnosis.EnglishInert, which must be kept saying the same facts as these.
     //
     // Unlike the rest of this class these are wrapped tooltip and panel text, not column labels: they are
     // allowed to be sentences.
@@ -585,7 +585,17 @@ public sealed class SettingsStrings
     public readonly string CompressionTip = Loc.Localize("Settings.Output.Compression.Tip",
         "Block-compress the baked textures (BC7), cutting each to about a quarter of its\n" +
         "uncompressed size on disk and in VRAM. The index texture stays uncompressed to keep\n" +
-        "its exact row values. Off = uncompressed (byte-identical to before).");
+        "its exact row values. Off = uncompressed (byte-identical to before).\n\n" +
+        "Costs processor time on EVERY refresh, and it is the slowest thing Proteus does.\n" +
+        "On an older or low-core PC it can add a minute or more per change, which is long\n" +
+        "enough that a new change restarts the work before it finishes and your look stops\n" +
+        "appearing at all. Leave this off unless you are short of video memory, and turn it\n" +
+        "off first if nothing is being drawn.");
+
+    public readonly string CompressionRefusedFmt = Loc.Localize("Settings.Output.CompressionRefused.Fmt",
+        "Not in use: this PC compresses too slowly ({0:F0} ms per megapixel), and doing it would\n" +
+        "take long enough that your look would stop being drawn. Textures are being baked\n" +
+        "uncompressed instead. Untick the box to hide this.");
 
     public readonly string SharpAlpha =
         Loc.Localize("Settings.Output.SharpAlpha.Label", "Sharp alpha (gpose sphere/metal)") + "###sharpAlpha";
@@ -793,6 +803,11 @@ public sealed class ContentStrings
     public readonly string NoColorTable = Loc.Localize("Content.NoColorTable",
         "This material carries no colour table, so it has no rows to edit — nothing you change below will "
       + "reach the piece. Its colours come from its textures alone.");
+
+    public readonly string FollowsHairColor = Loc.Localize("Content.FollowsHairColor",
+        "This material uses the hair shader, so the piece takes your character's hair colour and highlights "
+      + "and carries no colour table — nothing you change below will reach it. Change your hair colour to "
+      + "recolour it.");
 
     public readonly string IndexCompressedFmt = Loc.Localize("Content.IndexCompressed.Fmt",
         "Its index texture reads row {0}, column {1} — but that texture is compressed, so it could be a row "
@@ -1710,6 +1725,36 @@ public sealed class PartsStrings
     public readonly string ToolMoveTip = Loc.Localize("Parts.Tool.Move.Tip",
         "Pick a part and drag it with the arrows: one arrow moves it along\n" +
         "that axis, a square moves it across that plane.");
+
+    public readonly string ToolRotate = Loc.Localize("Parts.Tool.Rotate", "Rotate")
+                                      + "###partsToolRotate";
+
+    public readonly string ToolRotateTip = Loc.Localize("Parts.Tool.Rotate.Tip",
+        "Pick a part, then drag one of the rings to turn it about its centre:\n" +
+        "a coloured ring turns it about that axis, the outer one about your view.");
+
+    public readonly string ToolScale = Loc.Localize("Parts.Tool.Scale", "Scale")
+                                     + "###partsToolScale";
+
+    public readonly string ToolScaleTip = Loc.Localize("Parts.Tool.Scale.Tip",
+        "Pick a part, then press on it and drag right to grow it or left\n" +
+        "to shrink it about its centre.");
+
+    public readonly string RotateHelp = Loc.Localize("Parts.Rotate.Help",
+        "Click a part to choose it, then drag one of the rings at its centre. Drag anywhere else to turn the model, "
+      + "shift-drag to move the view, scroll to zoom.");
+
+    public readonly string RotateLiveHint = Loc.Localize("Parts.Rotate.LiveHint",
+        "Click a part on your character, then drag one of the rings at its centre. Hold Alt to move the camera. "
+      + "Each turn is saved when you let go.");
+
+    public readonly string ScaleHelp = Loc.Localize("Parts.Scale.Help",
+        "Click a part to choose it, then press on it and drag right to grow it or left to shrink it. Drag anywhere "
+      + "else to turn the model, shift-drag to move the view, scroll to zoom.");
+
+    public readonly string ScaleLiveHint = Loc.Localize("Parts.Scale.LiveHint",
+        "Click a part on your character, then press on it and drag right to grow it or left to shrink it. Hold Alt "
+      + "to move the camera. Each change is saved when you let go.");
 
     public readonly string MoveHelp = Loc.Localize("Parts.Move.Help",
         "Click a part to choose it, then drag an arrow or a square. Drag anywhere else to turn the model, "

@@ -7,41 +7,20 @@ using System.Text;
 namespace Proteus.Services;
 
 /// <summary>
-/// Edits a .mdl's STRUCTURE: splits a submesh, and adds an attribute to the table so the game can switch
-/// that submesh off. Together with an IMC group over the same attribute, this is what turns geometry an
-/// author welded on permanently into an ordinary Penumbra checkbox.
-/// <para/>
-/// Both edits grow the file, and everything hard about them is the consequence. The model format puts its
-/// tables one after another with no offsets between them — each is found by stepping over the last — so an
-/// insert relocates everything after it, and the handful of genuinely ABSOLUTE offsets have to be moved to
-/// match. There are exactly eight of those and <see cref="Shift"/> owns all of them; get one wrong and the
-/// model either fails to load or renders at the wrong LOD, which is why the shift is one function and not
-/// spread across the two edits.
-/// <para/>
-/// Nothing here reorders an index entry, and that is deliberate rather than incidental. A shape key
-/// (<c>ShapeValue.BaseIndicesIndex</c>) addresses a POSITION in the index buffer, so permuting the buffer
-/// silently breaks every body slider the garment supports. <see cref="SplitSubmesh"/> therefore cuts a
-/// submesh at the run boundaries it already has instead of gathering triangles together.
+/// Edits a .mdl's STRUCTURE: splits submeshes, adds attributes and shapes, so welded-on geometry can become a
+/// Penumbra checkbox. Inserts relocate everything after them; the few ABSOLUTE offsets are moved by
+/// <see cref="Shift"/> alone. A shape key addresses an index-buffer POSITION, so any reorder must remap shapes.
 /// </summary>
 public static class ModelAttributeWriter
 {
     /// <summary>
-    /// Attribute masks are 32 bits wide, so a model already carrying 32 attributes has nowhere to put
-    /// another. Well above the ten an IMC entry can actually drive — this is the format's limit, not the
-    /// budget the user sees.
+    /// Attribute masks are 32 bits wide. This is the format's limit, not the (smaller) IMC budget.
     /// </summary>
     public const int MaxAttributes = 32;
 
     /// <summary>
-    /// How many pieces one submesh may be cut into.
-    /// <para/>
-    /// A split makes one record per CONTIGUOUS RUN of triangles, and an island that interleaves with its
-    /// neighbours triangle by triangle would want one record each. That is legal but absurd, and a sign the
-    /// island split found something that is not really a separate object. Refused rather than written.
-    /// <para/>
-    /// Generous, because a record costs sixteen bytes and models routinely carry dozens of submeshes: the
-    /// bound is here to catch geometry that is pathologically interleaved, not to second-guess a garment
-    /// whose author happened to export its straps out of order.
+    /// How many pieces one submesh may be cut into (one record per contiguous run of triangles); more is
+    /// pathologically interleaved geometry and is refused.
     /// </summary>
     public const int MaxRuns = 256;
 
@@ -50,21 +29,9 @@ public static class ModelAttributeWriter
     // ── attributes ──────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Take <paramref name="attributeName"/> off LOD0's submeshes, leaving the name in the table. A no-op on
-    /// a model that never declared it.
-    /// <para/>
-    /// For an attribute Proteus decides the meaning of. <c>atr_kam</c> says "drop this under a hat", and a
-    /// hair mod that ships it without a hat shape is usually not making a considered claim — it inherited
-    /// the flag from the vanilla hair it was built on, along with whatever that hair tagged. Measured across
-    /// the models testers reported: one drops half its geometry that way, another all of it, reaching far
-    /// below anything a hat covers. Adding to that mask can only make a hairstyle vanish harder, so the cut
-    /// clears it first and states the whole answer itself.
-    /// <para/>
-    /// LOD0 ONLY, and that bound matters. The submesh array is model-wide, so walking it by the header's own
-    /// count reaches LOD1 and LOD2 as well — but the cut that replaces what is cleared is computed from
-    /// LOD0's geometry and can only name LOD0's submeshes. Clearing all three would leave the distant LODs
-    /// tagged with nothing at all, so hair that correctly vanishes under a hat up close would reappear
-    /// through it as soon as the game swapped LOD.
+    /// Take <paramref name="attributeName"/> off LOD0's submeshes, leaving the name in the table; a no-op on a
+    /// model that never declared it. For an attribute whose meaning Proteus decides (e.g. <c>atr_kam</c>
+    /// inherited from vanilla hair). LOD0 ONLY: the replacement cut can only name LOD0's submeshes.
     /// </summary>
     public static byte[] ClearAttribute(byte[] mdl, string attributeName)
     {
@@ -91,15 +58,10 @@ public static class ModelAttributeWriter
     }
 
     /// <summary>
-    /// Add <paramref name="attributeName"/> to the model's attribute table and tag every named submesh with
-    /// it. The submeshes then draw only while the attribute is enabled, which an IMC entry decides.
-    /// <para/>
-    /// The name goes at the END of the table and the bit is its position there, because a submesh's mask
-    /// indexes the table positionally. Which IMC bit ends up driving it is a different question with a
-    /// different answer — the trailing letter of the NAME, see <c>SecondSkinService.PartAttributeBit</c> —
-    /// so the two never have to agree and the caller picks the letter.
-    /// <para/>
-    /// A name the model ALREADY declares is tagged against the bit it already has — see below.
+    /// Add <paramref name="attributeName"/> to the model's attribute table and tag every named submesh with it.
+    /// The name goes at the END of the table (a mask indexes it positionally); the IMC bit comes from the
+    /// name's trailing letter, see <c>ContentPieceResolver.PartAttributeBit</c>. An already-declared name is
+    /// tagged against its existing bit.
     /// </summary>
     /// <param name="targets">(mesh index, submesh index within that mesh) pairs.</param>
     public static byte[] AddAttribute(
@@ -108,19 +70,8 @@ public static class ModelAttributeWriter
         var src = SecondSkinWriter.Parse(mdl);
         int attrCount = src.AttrNames.Length;
 
-        // ALREADY THERE — tag against the bit it already has, rather than refusing.
-        //
-        // Refusing was wrong, and expensively so. Hair mods ship atr_kam without a hat shape all the time —
-        // seven of nine reported broken by testers did — usually inherited from whatever vanilla hair they
-        // were built on. The model is not hat-compatible in any useful sense, since nothing presses the hair,
-        // but the attribute is present, so this threw and the whole patch was abandoned. The hairstyle then
-        // kept the author's tagging, which on one measured model drops 51% of the hair the moment a hat goes
-        // on, and Proteus could neither improve it nor explain it.
-        //
-        // Nothing is inserted on this path: the name is in the table and every offset stays where it is, so
-        // only the submesh masks change. It therefore needs no free slot, which is why it is tested BEFORE
-        // the table-full guard below — checking that first refused the one model shape this exists to
-        // rescue, a full table that already holds the very name being asked for.
+        // Already there: tag against the existing bit rather than refusing. Nothing is inserted, so this needs
+        // no free slot and must be tested BEFORE the table-full guard.
         int existing = Array.IndexOf(src.AttrNames, attributeName);
         if (existing >= 0)
         {
@@ -144,9 +95,7 @@ public static class ModelAttributeWriter
             throw new ModelEditException(
                 $"this model already declares {attrCount} attributes, which is all a submesh mask can hold");
 
-        // Padded to four bytes so every table after the string block keeps its alignment. The tables are
-        // read by byte offset and would parse either way, but a u32 array landing on an odd address is not
-        // something to hand the game to find out about.
+        // Padded to four bytes so every table after the string block keeps its alignment.
         var text = Encoding.ASCII.GetBytes(attributeName);
         int nameLen = text.Length + 1;
         int pad = (4 - nameLen % 4) % 4;
@@ -164,17 +113,14 @@ public static class ModelAttributeWriter
         int dStr = strBytes.Length, delta = dStr + 4;
 
         W32(o, src.DeclEnd + 4, src.StrSize + (uint)dStr);          // string block size
-        // The string COUNT, which the game ignores and every other reader does not: Penumbra and TexTools
-        // walk exactly this many NUL-terminated strings and then resolve a table's offset against the list
-        // they built (MdlFile.LoadStrings). Leave it stale and the new name is off the end of that list, so
-        // the attribute reads back nameless in both — while working perfectly in game.
+        // The string COUNT: the game ignores it, but Penumbra and TexTools walk exactly this many strings
+        // (MdlFile.LoadStrings), so a stale count leaves the new name unreadable there.
         W16(o, src.DeclEnd, (ushort)(BitConverter.ToUInt16(o, src.DeclEnd) + 1));
         W16(o, src.Mh + dStr + 6, (ushort)(attrCount + 1));         // attribute count
         Shift(o, src.LodStart + dStr, delta);
 
-        // The NEW file's coordinates, and the two tables did NOT move by the same amount. The mesh table sits
-        // BETWEEN the two inserts — the attribute offsets go in at its far end — so it follows only the
-        // string block's growth, while the submeshes are behind both and follow the full delta.
+        // The NEW file's coordinates. The mesh table sits between the two inserts, so it moves by the string
+        // growth only; the submeshes follow the full delta.
         int meshStart = src.MeshStart + dStr;
         int submeshStart = src.SubmeshStart + delta;
         uint bit = 1u << attrCount;
@@ -194,13 +140,8 @@ public static class ModelAttributeWriter
     // ── splitting ───────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Cut one submesh into several, so part of it can be tagged on its own.
-    /// <para/>
-    /// The cut follows the CONTIGUOUS RUNS of <paramref name="ordinals"/> within the submesh's own index
-    /// range: nothing is moved, only described differently. Every new record inherits the original's
-    /// attribute mask and its bone window, so a split on its own changes precisely nothing about how the
-    /// model draws — which is the property that makes it safe to do before knowing whether the user will
-    /// keep the toggle.
+    /// Cut one submesh into several at the CONTIGUOUS RUNS of <paramref name="ordinals"/>: nothing moves, and
+    /// every record inherits the original's mask and bone window, so a split alone changes nothing drawn.
     /// </summary>
     /// <param name="ordinals">Triangle ordinals within the submesh that belong to the piece being split
     /// out — <see cref="ModelPart.Ordinals"/>.</param>
@@ -213,12 +154,9 @@ public static class ModelAttributeWriter
     }
 
     /// <summary>
+    /// <summary>
     /// The general split: <paramref name="groupOf"/> labels each triangle ordinal, and the submesh is cut so
-    /// that no record mixes two labels.
-    /// <para/>
-    /// More than two labels is not hypothetical — two switches can each claim a different island of the same
-    /// submesh, and cutting for one at a time would have the second split re-cut records the first had just
-    /// made. Doing it in one pass keeps the record count to the runs that are genuinely there.
+    /// that no record mixes two labels. Several labels in one pass avoid re-cutting records.
     /// </summary>
     /// <returns>The new file, and, per label, the submesh indices now holding its triangles.</returns>
     public static (byte[] Model, Dictionary<int, List<int>> ByGroup) SplitSubmesh(
@@ -250,8 +188,7 @@ public static class ModelAttributeWriter
                 $"those triangles are interleaved with the rest of the part across {runs.Count} runs, which "
               + "is too fragmented to split cleanly");
 
-        // Already its own submesh — nothing to cut, and inserting a zero-length record would be worse than
-        // doing nothing.
+        // Already its own submesh: nothing to cut.
         if (runs.Count == 1)
             return (mdl, new Dictionary<int, List<int>> { [runs[0].Group] = [submesh] });
 
@@ -286,9 +223,8 @@ public static class ModelAttributeWriter
         W16(o, src.Mh + 8, (ushort)(BitConverter.ToUInt16(o, src.Mh + 8) + added));   // model submesh count
         W16(o, mo + 12, (ushort)(subCount + added));                                  // this mesh's count
 
-        // Every mesh whose submeshes sit after these now starts later in the table. Compared on the ORIGINAL
-        // submeshIndex, not on the mesh number: a model is not obliged to list its meshes in submesh order,
-        // and one that does not would otherwise have a mesh renumbered onto another's records.
+        // Every mesh whose submeshes sit after these now starts later. Compared on the ORIGINAL submeshIndex:
+        // meshes need not be listed in submesh order.
         for (int m = 0; m < src.MeshCount; m++)
         {
             if (m == mesh) continue;
@@ -303,24 +239,9 @@ public static class ModelAttributeWriter
 
     /// <summary>
     /// Cut a submesh by label like <see cref="SplitSubmesh(byte[], int, int, Func{int, int})"/>, but REORDER
-    /// its triangles first so that each label ends up contiguous.
-    /// <para/>
-    /// The plain split can only cut where the labels already change, because it describes the geometry
-    /// differently without moving any of it. That is the right contract for a mesh toggle, where the pieces
-    /// being separated are islands an author modelled as units and are laid out together. It is the wrong
-    /// one for a set chosen by GEOMETRY: "every triangle above the hat line" cuts across the author's layout
-    /// completely, and on a real hairstyle it came out as 264 interleaved runs — refused as too fragmented,
-    /// which is why hiding ponytails could not be applied at all.
-    /// <para/>
-    /// Reordering is safe because a submesh is drawn as a triangle LIST: each triple stands alone, so
-    /// permuting whole triples changes nothing about what is drawn. No vertex moves and no index value
-    /// changes — only the order the triples sit in. Relative order WITHIN a label is preserved, so a model
-    /// whose labels are already contiguous comes back byte-identical and this costs nothing.
-    /// <para/>
-    /// The one thing that does care about index ORDER is a shape: a <c>ShapeValue</c> names an index-buffer
-    /// slot. Existing shapes are remapped through the same permutation below, which is exact — but note that
-    /// this must run BEFORE <see cref="AddShape"/>, never after, since a shape written against the old order
-    /// would be silently rewired to the wrong corners.
+    /// its triangles first so each label is contiguous, for sets chosen by geometry. Safe because a triangle
+    /// list's triples stand alone; order within a label is kept. Existing shapes are remapped; must run BEFORE
+    /// <see cref="AddShape"/>, never after.
     /// </summary>
     /// <returns>The new file, and, per label, the submesh indices now holding its triangles.</returns>
     public static (byte[] Model, Dictionary<int, List<int>> ByGroup) RegroupSubmesh(
@@ -339,9 +260,7 @@ public static class ModelAttributeWriter
         if ((long)src.Ib + (so + sc) * 2 > mdl.Length)
             throw new ModelEditException($"mesh {mesh}'s index range runs past the end of the file");
 
-        // Labels in FIRST-APPEARANCE order, and original order kept within each. Stable on purpose: it is
-        // what makes an already-grouped submesh a no-op, and it keeps an author's own ordering intact
-        // inside each piece rather than shuffling geometry that had no reason to move.
+        // Labels in first-appearance order, original order kept within each, so a grouped submesh is a no-op.
         var labels = new int[tris];
         var seen = new List<int>();
         for (int t = 0; t < tris; t++)
@@ -380,15 +299,7 @@ public static class ModelAttributeWriter
 
     /// <summary>
     /// Follow every existing <c>ShapeValue</c> that names a slot inside <paramref name="so"/>..+<paramref
-    /// name="sc"/> through a triangle permutation, so shapes already on the model keep deforming the same
-    /// corners after <see cref="RegroupSubmesh"/> has moved the triples around.
-    /// <para/>
-    /// A value's slot is its record's <c>MeshIndexOffset</c> plus its own <c>BaseIndicesIndex</c>, and the
-    /// latter is a u16 — so a remap that would push a value past its window's 65536 slots cannot be
-    /// expressed without also re-cutting the <c>ShapeMesh</c> records. That is refused rather than written
-    /// wrong. It needs a hairstyle that both carries a shape already and is over 65k indices long, which is
-    /// not something the hat path ever reaches: it declines a model that already has a hat shape, and hair
-    /// with some OTHER shape is rare.
+    /// name="sc"/> through a triangle permutation. A remap past a value's u16 window is refused.
     /// </summary>
     private static void RemapShapeValues(byte[] o, SecondSkinWriter.Source src, uint so, uint sc, int[] newOf)
     {
@@ -428,21 +339,9 @@ public static class ModelAttributeWriter
     }
 
     /// <summary>
-    /// Cut <paramref name="parts"/> out of whatever submeshes they share with other geometry, so they can
-    /// be tagged without taking that geometry with them.
-    /// <para/>
-    /// The need is not hypothetical and not rare: a hairstyle routinely keeps its scalp cap and every one
-    /// of its ponytail strands in ONE submesh, and an attribute is carried by a submesh record. Tagging at
-    /// that granularity to hide the tails hides the scalp too, which in game is being bald.
-    /// <para/>
-    /// A part that already IS a whole submesh is passed through untouched — there is nothing to cut, and
-    /// splitting it would only add records.
-    /// <para/>
-    /// Cuts through <see cref="RegroupSubmesh"/>, so a part's triangles are gathered together first and this
-    /// DOES reorder them. That is what lets a part chosen by geometry be isolated at all, and it also bounds
-    /// the result at two records per submesh however scattered the part was. Read that method for why
-    /// reordering is safe and for the one ordering thing that is not — it must run before any shape is
-    /// written, never after.
+    /// Cut <paramref name="parts"/> out of whatever submeshes they share with other geometry, so they can be
+    /// tagged alone. A part that already IS a whole submesh passes through. Cuts through
+    /// <see cref="RegroupSubmesh"/>, so it reorders and must run before any shape is written.
     /// </summary>
     /// <returns>The new model, and the submeshes now holding exactly those parts.</returns>
     public static (byte[] Model, List<(int Mesh, int Submesh)> Targets) IsolateParts(
@@ -467,8 +366,7 @@ public static class ModelAttributeWriter
         var edited = mdl;
         foreach (var mesh in byOrdinal.Keys.Concat(whole).Select(k => k.Mesh).Distinct().OrderBy(m => m))
         {
-            // Ascending, with a running shift: a split inserts its extra records straight after the submesh
-            // it cut, so every submesh later in the same mesh has moved along by that many places.
+            // Ascending, with a running shift: a split inserts records after the submesh it cut.
             int shift = 0;
             var here = byOrdinal.Keys.Concat(whole).Where(k => k.Mesh == mesh)
                 .Select(k => k.Submesh).Distinct().OrderBy(s => s);
@@ -478,8 +376,7 @@ public static class ModelAttributeWriter
                 if (whole.Contains((mesh, submesh))) { targets.Add((mesh, submesh + shift)); continue; }
 
                 var claimed = byOrdinal[(mesh, submesh)];
-                // Regroup rather than split: the parts sent here are chosen by geometry, so their triangles
-                // are scattered through the author's layout and a describe-only split refuses them.
+                // Regroup rather than split: geometry-chosen parts are scattered through the author's layout.
                 var (next, groups) = RegroupSubmesh(
                     edited, mesh, submesh + shift, t => claimed.Contains(t) ? 0 : -1);
                 edited = next;
@@ -495,34 +392,20 @@ public static class ModelAttributeWriter
     // ── shapes ──────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Position element types <see cref="SecondSkinWriter.WriteXYZ"/> can actually encode a 3-vector into.
-    /// <para/>
-    /// Checked rather than assumed because that method has no <c>default</c> arm: handed a type it does not
-    /// know, it writes nothing and returns, leaving the duplicate vertex sitting exactly on its source. The
-    /// shape is then structurally perfect and moves the hair nowhere, which is the worst kind of bug to go
-    /// looking for. Half2 is excluded deliberately even though it is a case there — it has no z.
+    /// Position element types <see cref="SecondSkinWriter.WriteXYZ"/> can encode a 3-vector into; it silently
+    /// writes nothing for any other. Half2 has no z.
     /// </summary>
     internal static readonly byte[] PositionTypes = [2, 3, 14];   // Float3, Float4, Half4
 
     /// <summary>
-    /// Add a shape key (a morph target) named <paramref name="shapeName"/>, moving the named vertices of the
-    /// named LOD0 meshes to new positions.
-    /// <para/>
-    /// A shape does not store offsets. Each <c>ShapeValue</c> rewires ONE INDEX-BUFFER SLOT to a replacement
-    /// vertex that already lives in the same mesh's vertex buffer, so the deformation is expressed as whole
-    /// spare vertices the game swaps in while the shape is enabled. This appends those spares at the end of
-    /// each mesh's own block — which is what keeps every existing vertex index and byte address valid, and
-    /// therefore what lets an existing shape survive the edit untouched.
-    /// <para/>
-    /// LOD1 and LOD2 are left alone. Their geometry lives in different buffers and only their offsets move,
-    /// so a model shaped here simply stops deforming at distance rather than breaking.
+    /// Add a shape key named <paramref name="shapeName"/>, moving the named vertices of the named LOD0 meshes.
+    /// Each <c>ShapeValue</c> rewires one index-buffer slot to a spare vertex appended at the end of the mesh's
+    /// own block, so existing vertex indices and shapes stay valid. LOD1/LOD2 are not shaped.
     /// </summary>
-    /// <param name="moved">Per mesh index, the MESH-RELATIVE vertex indices to move and where to. Mesh
-    /// relative on both counts: a model's index buffer stores mesh-relative vertex numbers, and
-    /// <c>ModelPart.Triangles</c> does NOT — those are rebased across meshes for drawing and skip meshes the
-    /// reader could not decode, so they are the wrong thing to pass here.</param>
-    /// <param name="normals">Optional replacement normals, addressed the same way. Omitted, a spare keeps
-    /// its source's normal, which is a lighting approximation, not a correctness problem.</param>
+    /// <param name="moved">Per mesh index, the MESH-RELATIVE vertex indices to move and where to. Not
+    /// <c>ModelPart.Triangles</c> indices, which are rebased across meshes.</param>
+    /// <param name="normals">Optional replacement normals, addressed the same way; omitted, a spare keeps its
+    /// source's normal.</param>
     public static byte[] AddShape(
         byte[] mdl, string shapeName,
         IReadOnlyDictionary<int, IReadOnlyDictionary<int, Vector3>> moved,
@@ -530,10 +413,8 @@ public static class ModelAttributeWriter
         => AddShape(mdl, shapeName, moved, out _, normals);
 
     /// <inheritdoc cref="AddShape(byte[], string, IReadOnlyDictionary{int, IReadOnlyDictionary{int, Vector3}}, IReadOnlyDictionary{int, IReadOnlyDictionary{int, Vector3}})"/>
-    /// <param name="unaddressable">How many requested vertices were left where they are because every
-    /// triangle drawing them sits past index slot 65535, which a shape value cannot name. Zero for most
-    /// models; a large fraction means this hair is too heavily welded to shape and the caller should say so
-    /// rather than ship a shape that moves a third of what was asked.</param>
+    /// <param name="unaddressable">How many requested vertices were left in place because every triangle
+    /// drawing them sits past index slot 65535 of every window.</param>
     public static byte[] AddShape(
         byte[] mdl, string shapeName,
         IReadOnlyDictionary<int, IReadOnlyDictionary<int, Vector3>> moved,
@@ -555,11 +436,8 @@ public static class ModelAttributeWriter
         int shapeValBlock = shapeMeshBlock + shapeMeshCount * 12;
         int shapeValEnd = shapeValBlock + shapeValueCount * 4;
 
-        // The shape block sits after the bone tables, whose layout is the one thing that changed at
-        // Dawntrail — so its position is also the proof that the walk was right for this model's version.
-        // Reading the submesh bone map's length prefix is the cheapest way to ask: on a mis-walk it is
-        // arbitrary bytes and fails one of these. Without it, a v5 model read as v6 would splice the new
-        // tables into the middle of a bone table and produce a file the game cannot load, silently.
+        // The shape block's position proves the version-dependent bone-table walk was right: on a mis-walk the
+        // submesh bone map's length prefix is arbitrary bytes and fails these checks.
         if (shapeValEnd < 0 || shapeValEnd + 4 > mdl.Length)
             throw new ModelEditException("this model's shape block runs past the end of the file");
         uint boneMapBytes = BitConverter.ToUInt32(mdl, shapeValEnd);
@@ -570,8 +448,7 @@ public static class ModelAttributeWriter
         if (DeclaresShape(mdl, shapeName))
             throw new ModelEditException($"this model already declares a shape named {shapeName}");
 
-        // Nothing here accounts for a neck-morph array, and neither does the parse it relies on. Refuse
-        // rather than splice past a table whose size is unknown.
+        // Neck-morph arrays are not accounted for here or in the parse; refuse rather than splice past them.
         if (mdl[src.Mh + 43] != 0)
             throw new ModelEditException("this model carries neck morph data, which cannot be edited here");
 
@@ -589,9 +466,8 @@ public static class ModelAttributeWriter
                 $"this shape needs {totalValues} shape values, which overflows what the format counts");
 
         // ── the three table records ──────────────────────────────────────────
-        // Appended at the ends of their arrays, which is why NO existing record needs renumbering: a
-        // Shape's shapeMeshStart and a ShapeMesh's valueStart are GLOBAL indices into those arrays, so
-        // every range an existing shape names still names the same records afterwards.
+        // Appended at the ends of their arrays: shapeMeshStart and valueStart are GLOBAL indices, so no
+        // existing record needs renumbering.
         var shapeRec = new byte[16];
         W32(shapeRec, 0, src.StrSize);                     // name offset — the string goes at the block's end
         W16(shapeRec, 4, shapeMeshCount);                  // LOD0 start
@@ -623,9 +499,7 @@ public static class ModelAttributeWriter
         text.CopyTo(strBytes, 0);
 
         // ── splice ───────────────────────────────────────────────────────────
-        // On a model with NO shapes at all, inserts 2, 3 and 4 all address the same offset — every table is
-        // empty and starts where the block does. They land in the right order only because Splice sorts
-        // with a STABLE sort, so equal keys keep the order given here. Do not reorder these four.
+        // With no shapes, inserts 2-4 share an offset and rely on Splice's STABLE sort. Do not reorder these.
         var inserts = new List<(int At, byte[] Bytes)>
         {
             (src.StrBlock + (int)src.StrSize, strBytes),
@@ -644,8 +518,7 @@ public static class ModelAttributeWriter
         var o = Splice(mdl, inserts.ToArray());
 
         // ── the new file's coordinates ───────────────────────────────────────
-        // The LOD and mesh tables sit BETWEEN the string insert and the shape inserts, so they move by the
-        // string block's growth alone — the same trap AddAttribute documents, from the other side.
+        // The LOD and mesh tables sit between the string insert and the shape inserts: string growth only.
         int mhN = src.Mh + dStr, lodStartN = src.LodStart + dStr, meshStartN = src.MeshStart + dStr;
 
         W32(o, src.DeclEnd + 4, src.StrSize + (uint)dStr);                          // string block size
@@ -657,10 +530,8 @@ public static class ModelAttributeWriter
         foreach (var p in plans)
             W16(o, meshStartN + p.Mesh * 36, (ushort)(p.VertexCount + p.SrcVerts.Length));
 
-        // Every LOD0 mesh's per-stream offset moves past the inserts at or below it. At or below, not
-        // strictly below: Splice puts inserted bytes BEFORE the byte originally at that offset, so a block
-        // whose start coincides with an insertion point — mesh A's stream 1 beginning exactly where its
-        // stream 0 ended — does move, while the block that grew does not.
+        // Every LOD0 mesh's stream offset moves past the inserts at OR below it: Splice puts inserted bytes
+        // before the byte originally at that offset.
         var vInserts = plans.SelectMany(p => p.Inserts).ToArray();
         int lod0End = Math.Min(src.Lod0MeshIndex + src.Lod0MeshCount, src.MeshCount);
         for (int m = src.Lod0MeshIndex; m < lod0End; m++)
@@ -680,19 +551,16 @@ public static class ModelAttributeWriter
         W32(o, 40, BitConverter.ToUInt32(o, 40) + (uint)dV);                    // VertexBufferSize[0]
         W32(o, lodStartN + 44, BitConverter.ToUInt32(o, lodStartN + 44) + (uint)dV);
 
-        // Two phases, because the inserts straddle the vertex buffer. The metadata grew before all of it,
-        // so every absolute offset follows; the vertices grew INSIDE buffer 0, so only what comes after
-        // that buffer follows. RuntimeSize is the distance from the header to the START of vertex data,
-        // which the second phase does not move — and it stays in Shift precisely so no caller can include
-        // it by accident.
+        // Two phases: the metadata grew before everything, the vertices only inside buffer 0. RuntimeSize (in
+        // Shift) is the distance to the START of vertex data, so the second phase leaves it.
         Shift(o, lodStartN, dMeta);
         ShiftOffsets(o, lodStartN, dV, (long)src.Vb + dMeta);
         return o;
     }
 
     /// <summary>
-    /// How many index slots one <c>ShapeMesh</c> can address: <c>BaseIndicesIndex</c> is a u16, so a slot is
-    /// named as a number in 0..65535 added to that record's own <c>MeshIndexOffset</c>.
+    /// How many index slots one <c>ShapeMesh</c> can address: <c>BaseIndicesIndex</c> is a u16 added to the
+    /// record's <c>MeshIndexOffset</c>.
     /// </summary>
     private const int SlotWindow = ushort.MaxValue + 1;
 
@@ -705,13 +573,8 @@ public static class ModelAttributeWriter
         public required List<(int At, byte[] Bytes)> Inserts { get; init; }
 
         /// <summary>
-        /// The slots to rewire, split into <see cref="SlotWindow"/>-sized runs of the index buffer — one
-        /// <c>ShapeMesh</c> record each, at absolute base <c>Base</c>.
-        /// <para/>
-        /// A mesh usually needs exactly one window and it starts at the mesh's own <c>StartIndex</c>, which
-        /// is what every well-formed model on disk looks like. A mesh with more than 65535 index entries
-        /// needs more than one, and that case is the whole reason this is a list: hair welded into one big
-        /// mesh routinely runs to 150,000 slots, and a single window reaches less than half of it.
+        /// The slots to rewire, split into <see cref="SlotWindow"/>-sized runs of the index buffer: one
+        /// <c>ShapeMesh</c> record each, at absolute base <c>Base</c>. Meshes over 65535 indices need several.
         /// </summary>
         public required List<(uint Base, List<(ushort Slot, ushort Replace)> Values)> Windows { get; init; }
 
@@ -754,18 +617,11 @@ public static class ModelAttributeWriter
 
             var srcVerts = asked;
 
-            // Slot -> replacement, over this mesh's own index range only. ONE VALUE PER SLOT, not per
-            // vertex: a vertex shared by six triangles is named by six slots and every one of them has to
-            // be rewired, or the shape tears the mesh along the ones that were missed.
+            // One value per SLOT, not per vertex: every slot naming a vertex must be rewired or the shape tears.
             var newIndexOf = new Dictionary<int, ushort>(srcVerts.Length);
             for (int r = 0; r < srcVerts.Length; r++) newIndexOf[srcVerts[r]] = (ushort)(vc + r);
 
-            // Split into windows as we go. A slot is named RELATIVE to its record's own MeshIndexOffset, so
-            // a mesh longer than a u16 can count simply gets a second record based 65536 slots further in.
-            // Everything before this reached less than half of a big hairstyle: the unreachable tail was a
-            // contiguous REGION of the head — measured at head-centre height on the model that prompted
-            // this — so pressing everything except it stretched the geometry along the boundary. That was
-            // "the hair under the hat looked broken".
+            // Split into windows: a mesh longer than a u16 can count gets a record based 65536 slots further in.
             var windows = new List<(uint Base, List<(ushort, ushort)> Values)>();
             for (uint w = 0; w * SlotWindow < ic; w++)
             {
@@ -796,13 +652,8 @@ public static class ModelAttributeWriter
     }
 
     /// <summary>
-    /// The bytes of one mesh's spare vertices, per stream, positioned at the end of that stream's block.
-    /// <para/>
-    /// EVERY stream the mesh has is grown, not just the one holding position. A mesh routinely keeps
-    /// position in stream 0 and its blend weights, UV and tangent frame in stream 1, and the streams are
-    /// addressed independently by vertex number — so growing one alone leaves every later mesh reading its
-    /// second stream one stride out of register for every vertex. That miscompiles into nothing, crashes
-    /// nothing, and skins the model to the wrong bones.
+    /// The bytes of one mesh's spare vertices, per stream, positioned at the end of that stream's block. EVERY
+    /// stream is grown, or later meshes read their other streams one stride out of register.
     /// </summary>
     private static List<(int At, byte[] Bytes)> SpareVertices(
         byte[] mdl, SecondSkinWriter.Source src, int mesh, int mo, ushort vc,
@@ -832,8 +683,7 @@ public static class ModelAttributeWriter
             var bytes = new byte[srcVerts.Length * stride];
             for (int r = 0; r < srcVerts.Length; r++)
             {
-                // Verbatim, then overwrite. The spare has to keep its source's blend weights, blend
-                // indices, UV, tangent frame and colour or it skins and shades as a different vertex.
+                // Verbatim, then overwrite: the spare keeps its source's weights, UV, tangents and colour.
                 Array.Copy(mdl, blockStart + srcVerts[r] * stride, bytes, r * stride, stride);
                 if (pos.Stream == j)
                 {
@@ -849,12 +699,8 @@ public static class ModelAttributeWriter
     }
 
     /// <summary>
-    /// Whether the model declares a shape by this name.
-    /// <para/>
-    /// Reads the <c>Shape</c> records directly, NOT <see cref="SecondSkinWriter.Source.Shapes"/>: the parse
-    /// keeps only shapes with LOD0 entries and drops the rest, so a shape covering only the lower LODs is
-    /// absent from that dictionary. Asking it instead would report a hairstyle as having no hat shape and
-    /// invite a second one to be added beside the one it has.
+    /// Whether the model declares a shape by this name. Reads the <c>Shape</c> records directly:
+    /// <see cref="SecondSkinWriter.Source.Shapes"/> drops shapes without LOD0 entries.
     /// </summary>
     public static bool DeclaresShape(byte[] mdl, string shapeName)
     {
@@ -904,18 +750,9 @@ public static class ModelAttributeWriter
     }
 
     /// <summary>
-    /// Move every absolute file offset on by <paramref name="delta"/>. These eight fields are the entire
-    /// list, and the reason it is short: the mesh structs' own vertex offsets are relative to the vertex
-    /// BUFFER, the attribute and material offsets are relative to the string block, and the bone tables are
-    /// relative to themselves. Only the file header's two offset triples and each LOD's vertex/index data
-    /// pointers count from the start of the file.
-    /// <para/>
-    /// The LOD struct carries an edge-geometry offset too, which is deliberately NOT touched: Penumbra's own
-    /// model writer rebases vertex and index and nothing else (<c>MdlFile.Write</c>), so that field is not a
-    /// file offset.
-    /// <para/>
-    /// <c>RuntimeSize</c> comes along because it is defined as the distance from the end of the header to
-    /// the vertex data, so growing the metadata grows it one for one.
+    /// Move every absolute file offset on by <paramref name="delta"/>: the header's vertex/index offset triples,
+    /// each LOD's vertex/index data offsets, and <c>RuntimeSize</c>. Everything else is relative; the LOD
+    /// edge-geometry field is not a file offset (Penumbra's <c>MdlFile.Write</c> leaves it).
     /// </summary>
     /// <param name="lodStart">The first LOD struct's position IN THE OUTPUT.</param>
     private static void Shift(byte[] o, int lodStart, int delta)
@@ -925,17 +762,8 @@ public static class ModelAttributeWriter
     }
 
     /// <summary>
-    /// The eight offsets alone, moving only those past <paramref name="past"/>.
-    /// <para/>
-    /// Split out for the one edit whose inserts do not all land before the geometry: adding a shape appends
-    /// spare vertices INSIDE LOD0's vertex buffer, and the regions run V0, I0, V1, I1, V2, I2 — so that
-    /// growth moves everything except <c>VertexOffset[0]</c> and LOD0's <c>VertexDataOffset</c>, which name
-    /// where that buffer starts rather than anything inside it. A threshold says that in one line and keeps
-    /// the field list in one place; enumerating the survivors by hand is how the list drifts.
-    /// <para/>
-    /// <c>RuntimeSize</c> is deliberately NOT here. It measures the distance from the header to the START of
-    /// the vertex data, so growing the buffer's contents does not change it — and leaving it in
-    /// <see cref="Shift"/> means no caller can include it by accident.
+    /// The eight offsets alone, moving only those past <paramref name="past"/>, for inserts inside LOD0's
+    /// vertex buffer. <c>RuntimeSize</c> is deliberately not here.
     /// </summary>
     /// <param name="past">Only offsets strictly greater than this move; -1 moves all of them.</param>
     internal static void ShiftOffsets(byte[] o, int lodStart, int delta, long past)

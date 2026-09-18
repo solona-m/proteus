@@ -215,6 +215,10 @@
     "message": "[Proteus] Your second skin was built but the game isn't drawing it. The accessory it rides on is equipped, yet the character isn't loading Proteus' version. Try unequipping and re-equipping that accessory, or pick a different one.",
     "description": "Appears in an in-game chat notice from Proteus."
   },
+  "Chat.ShellMaterialFailed": {
+    "message": "[Proteus] Part of your second skin isn't being drawn. The rest of it is on your character, so either a texture that piece needs is missing, or the game is still holding the previous version. Try \"Recomposite now\" first, then unequipping and re-equipping the accessory it rides on.",
+    "description": "Appears in an in-game chat notice from Proteus. \"Recomposite now\" is the button Band.Recomposite.Tip - use the same words."
+  },
   "Chat.ShellNeedsRedraw": {
     "message": "[Proteus] Your second skin changed, but auto redraw is off, so your character is still wearing the previous version. Zone or use Penumbra's Redraw button to see it.",
     "description": "Appears in an in-game chat notice from Proteus. \"Auto redraw\" is the checkbox Settings.General.AutoRedraw.Label; \"Redraw\" is a button in Penumbra - use the name Penumbra shows in your language."
@@ -782,6 +786,10 @@
   "Content.EitherColumn": {
     "message": "A and B",
     "description": "Stands in for the column letter when an index texture uses both columns. Used inside Content.IndexCompressed.Fmt."
+  },
+  "Content.FollowsHairColor": {
+    "message": "This material uses the hair shader, so the piece takes your character's hair colour and highlights and carries no colour table — nothing you change below will reach it. Change your hair colour to recolour it.",
+    "description": "Warning above a content pack's colour grid when its material runs on hair.shpk (ears, tails): it has no colour table because the game tints it with the character's hair colour."
   },
   "Content.Geometry.Fmt": {
     "message": "{0} mesh, {1} verts",
@@ -2231,6 +2239,38 @@
     "message": "Pick a part and drag it with the arrows: one arrow moves it along\nthat axis, a square moves it across that plane.",
     "description": "Tooltip for the button. Keep the line breaks; the tooltip is not wrapped."
   },
+  "Parts.Tool.Rotate": {
+    "message": "Rotate",
+    "description": ""
+  },
+  "Parts.Tool.Rotate.Tip": {
+    "message": "Pick a part, then drag one of the rings to turn it about its centre:\na coloured ring turns it about that axis, the outer one about your view.",
+    "description": ""
+  },
+  "Parts.Tool.Scale": {
+    "message": "Scale",
+    "description": ""
+  },
+  "Parts.Tool.Scale.Tip": {
+    "message": "Pick a part, then press on it and drag right to grow it or left\nto shrink it about its centre.",
+    "description": ""
+  },
+  "Parts.Rotate.Help": {
+    "message": "Click a part to choose it, then drag one of the rings at its centre. Drag anywhere else to turn the model, shift-drag to move the view, scroll to zoom.",
+    "description": ""
+  },
+  "Parts.Rotate.LiveHint": {
+    "message": "Click a part on your character, then drag one of the rings at its centre. Hold Alt to move the camera. Each turn is saved when you let go.",
+    "description": ""
+  },
+  "Parts.Scale.Help": {
+    "message": "Click a part to choose it, then press on it and drag right to grow it or left to shrink it. Drag anywhere else to turn the model, shift-drag to move the view, scroll to zoom.",
+    "description": ""
+  },
+  "Parts.Scale.LiveHint": {
+    "message": "Click a part on your character, then press on it and drag right to grow it or left to shrink it. Hold Alt to move the camera. Each change is saved when you let go.",
+    "description": ""
+  },
   "Parts.Move.Help": {
     "message": "Click a part to choose it, then drag an arrow or a square. Drag anywhere else to turn the model, shift-drag to move the view, scroll to zoom.",
     "description": "Help above the Move tool's controls, in the model view."
@@ -2796,8 +2836,12 @@
     "description": "Checkbox in Settings > Output."
   },
   "Settings.Output.Compression.Tip": {
-    "message": "Block-compress the baked textures (BC7), cutting each to about a quarter of its\nuncompressed size on disk and in VRAM. The index texture stays uncompressed to keep\nits exact row values. Off = uncompressed (byte-identical to before).",
-    "description": "Tooltip. \"BC7\" and \"VRAM\" are technical terms - keep them. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+    "message": "Block-compress the baked textures (BC7), cutting each to about a quarter of its\nuncompressed size on disk and in VRAM. The index texture stays uncompressed to keep\nits exact row values. Off = uncompressed (byte-identical to before).\n\nCosts processor time on EVERY refresh, and it is the slowest thing Proteus does.\nOn an older or low-core PC it can add a minute or more per change, which is long\nenough that a new change restarts the work before it finishes and your look stops\nappearing at all. Leave this off unless you are short of video memory, and turn it\noff first if nothing is being drawn.",
+    "description": "Tooltip. \"BC7\" and \"VRAM\" are technical terms - keep them. Contains deliberate line breaks - keep the same number, moving them where your language needs. The second paragraph is a warning, not a footnote: on a slow PC this setting stops anything being drawn at all, so keep it as blunt as the English."
+  },
+  "Settings.Output.CompressionRefused.Fmt": {
+    "message": "Not in use: this PC compresses too slowly ({0:F0} ms per megapixel), and doing it would\ntake long enough that your look would stop being drawn. Textures are being baked\nuncompressed instead. Untick the box to hide this.",
+    "description": "Shown in orange under the Enable Compression checkbox when the box is ticked but the machine was measured too slow to honour it. {0} is a measured number - keep the placeholder and its format. Contains deliberate line breaks."
   },
   "Settings.Output.RedundantMeshes.Label": {
     "message": "Hide redundant body meshes",

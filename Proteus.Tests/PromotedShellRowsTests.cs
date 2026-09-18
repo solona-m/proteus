@@ -17,7 +17,7 @@ namespace Proteus.Tests;
 /// <para/>
 /// So every shell with no authored rows takes the neutral-white baseline instead, whether it was
 /// deliberately made cloth or auto-promoted from skin. An author who set even one row is unaffected —
-/// <see cref="SecondSkinService.BuildRows"/> already starts those from the same baseline.
+/// <see cref="ShellColorRows.BuildRows"/> already starts those from the same baseline.
 /// </summary>
 public class PromotedShellRowsTests
 {
@@ -28,7 +28,7 @@ public class PromotedShellRowsTests
     [Fact]
     public void The_neutral_baseline_is_white_on_every_row()
     {
-        var rows = SecondSkinService.NeutralRows();
+        var rows = ShellColorRows.NeutralRows();
         // 16 pairs = 32 sub-rows; every one of them must be a no-op multiply over the shell's own art.
         Assert.Equal(32, rows.Count);
         foreach (var (_, row) in rows)
@@ -51,7 +51,7 @@ public class PromotedShellRowsTests
     {
         foreach (var presets in new List<ColorTableRowPreset>?[] { null, [] })
         {
-            var rows = SecondSkinService.BuildRows(presets, isMaskShell: false, neutralWhenEmpty: true);
+            var rows = ShellColorRows.BuildRows(presets, isMaskShell: false, neutralWhenEmpty: true);
             Assert.NotNull(rows);
             Assert.Equal(32, rows!.Count);
             Assert.Equal((1f, 1f, 1f), rows[30].Diffuse);   // pair 16 sub-row A — near-black in the template
@@ -71,8 +71,8 @@ public class PromotedShellRowsTests
             new() { Row = 1, SubRowA = new ColorTableSubRowPreset { Diffuse = "#FF0000" } },
         };
 
-        var withFlag    = SecondSkinService.BuildRows(presets, isMaskShell: false, neutralWhenEmpty: true);
-        var withoutFlag = SecondSkinService.BuildRows(presets, isMaskShell: false, neutralWhenEmpty: false);
+        var withFlag    = ShellColorRows.BuildRows(presets, isMaskShell: false, neutralWhenEmpty: true);
+        var withoutFlag = ShellColorRows.BuildRows(presets, isMaskShell: false, neutralWhenEmpty: false);
 
         Assert.NotNull(withFlag);
         Assert.NotNull(withoutFlag);
@@ -92,7 +92,7 @@ public class PromotedShellRowsTests
     [Fact]
     public void The_baseline_neutralises_every_field_not_only_the_colour()
     {
-        var n = SecondSkinService.NeutralRow;
+        var n = ShellColorRows.NeutralRow;
         Assert.Equal((1f, 1f, 1f), n.Diffuse);
         Assert.Equal((0f, 0f, 0f), n.Emissive);
         Assert.Equal((1f, 1f, 1f), n.Specular);
@@ -116,7 +116,7 @@ public class PromotedShellRowsTests
             new() { Row = 16, SubRowA = new ColorTableSubRowPreset { Diffuse = "#804020" } },
         };
 
-        var rows = SecondSkinService.BuildRows(presets, isMaskShell: false, neutralWhenEmpty: true);
+        var rows = ShellColorRows.BuildRows(presets, isMaskShell: false, neutralWhenEmpty: true);
         var authored = rows![30];   // pair 16 sub-row A
 
         // The author's colour survives...
@@ -142,7 +142,7 @@ public class PromotedShellRowsTests
             },
         };
 
-        var rows = SecondSkinService.BuildRows(presets, isMaskShell: false, neutralWhenEmpty: true);
+        var rows = ShellColorRows.BuildRows(presets, isMaskShell: false, neutralWhenEmpty: true);
         var authored = rows![4];   // pair 3 sub-row A
 
         Assert.Equal(1f, authored.Metalness);
@@ -165,8 +165,8 @@ public class PromotedShellRowsTests
             new() { Row = 2, SubRowA = new ColorTableSubRowPreset { Diffuse = "#FF0000" } },
         };
 
-        var mask     = SecondSkinService.BuildRows(presets, isMaskShell: true);
-        var ordinary = SecondSkinService.BuildRows(presets, isMaskShell: false, neutralWhenEmpty: true);
+        var mask     = ShellColorRows.BuildRows(presets, isMaskShell: true);
+        var ordinary = ShellColorRows.BuildRows(presets, isMaskShell: false, neutralWhenEmpty: true);
 
         // Pair 2 = sub-rows 2 and 3. A is authored on both; B mirrors only on the mask shell.
         Assert.Equal(mask![2].Diffuse, mask[3].Diffuse);

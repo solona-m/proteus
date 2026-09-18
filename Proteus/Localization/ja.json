@@ -215,6 +215,10 @@
     "message": "[Proteus] セカンドスキンは作成されましたが、ゲームが描画していません。土台となるアクセサリは装備されているのに、キャラクターがProteus版を読み込んでいません。そのアクセサリを外して付け直すか、別のものを選んでください。",
     "description": ""
   },
+  "Chat.ShellMaterialFailed": {
+    "message": "[Proteus] セカンドスキンの一部が描画されていません。残りはキャラクターに表示されているため、そのパーツに必要なテクスチャが見つからないか、ゲームが以前のバージョンを保持したままです。まず「今すぐ再合成」を試し、それでも直らなければ土台のアクセサリを外して付け直してください。",
+    "description": ""
+  },
   "Chat.ShellNeedsRedraw": {
     "message": "[Proteus] セカンドスキンが変更されましたが、自動再描画がオフのため、キャラクターはまだ以前のバージョンを表示しています。エリアを移動するか、PenumbraのRedrawボタンで反映してください。",
     "description": ""
@@ -781,6 +785,10 @@
   },
   "Content.EitherColumn": {
     "message": "A と B",
+    "description": ""
+  },
+  "Content.FollowsHairColor": {
+    "message": "このマテリアルは髪シェーダーを使っているため、パーツはキャラクターの髪色とメッシュの色に従い、カラーテーブルを持ちません。下で何を変えてもパーツには届きません。色を変えるには髪色を変更してください。",
     "description": ""
   },
   "Content.Geometry.Fmt": {
@@ -2231,6 +2239,38 @@
     "message": "パーツを選び、矢印をドラッグします。矢印はその軸に沿って、\n四角はその平面上で動かします。",
     "description": ""
   },
+  "Parts.Tool.Rotate": {
+    "message": "回転",
+    "description": ""
+  },
+  "Parts.Tool.Rotate.Tip": {
+    "message": "パーツを選び、いずれかのリングをドラッグすると中心を軸に回転します。\n色付きのリングはその軸まわり、外側のリングは視線まわりに回します。",
+    "description": ""
+  },
+  "Parts.Tool.Scale": {
+    "message": "拡大縮小",
+    "description": ""
+  },
+  "Parts.Tool.Scale.Tip": {
+    "message": "パーツを選び、その上を押して右にドラッグすると拡大、\n左にドラッグすると中心を基準に縮小します。",
+    "description": ""
+  },
+  "Parts.Rotate.Help": {
+    "message": "パーツをクリックして選び、中心のリングのいずれかをドラッグします。それ以外の場所をドラッグするとモデルが回転し、Shift+ドラッグで視点を移動、スクロールでズームします。",
+    "description": ""
+  },
+  "Parts.Rotate.LiveHint": {
+    "message": "キャラクターのパーツをクリックし、中心のリングのいずれかをドラッグします。Alt を押すとカメラを動かせます。回転は離したときに保存されます。",
+    "description": ""
+  },
+  "Parts.Scale.Help": {
+    "message": "パーツをクリックして選び、その上を押して右にドラッグすると拡大、左で縮小します。それ以外の場所をドラッグするとモデルが回転し、Shift+ドラッグで視点を移動、スクロールでズームします。",
+    "description": ""
+  },
+  "Parts.Scale.LiveHint": {
+    "message": "キャラクターのパーツをクリックし、その上を押して右にドラッグすると拡大、左で縮小します。Alt を押すとカメラを動かせます。変更は離したときに保存されます。",
+    "description": ""
+  },
   "Parts.Move.Help": {
     "message": "パーツをクリックして選び、矢印か四角をドラッグします。それ以外の場所をドラッグするとモデルが回転し、Shift+ドラッグで視点を移動、スクロールでズームします。",
     "description": ""
@@ -2794,6 +2834,10 @@
   "Settings.Output.Compression.Label": {
     "message": "圧縮を有効にする",
     "description": ""
+  },
+  "Settings.Output.CompressionRefused.Fmt": {
+    "message": "未使用: このPCは圧縮が遅すぎるため（1メガピクセルあたり{0:F0}ミリ秒）、実行すると\n時間がかかりすぎて見た目が描画されなくなります。代わりにテクスチャは非圧縮で\n焼き込まれています。この表示を消すにはチェックを外してください。",
+    "description": "Shown in orange under the Enable Compression checkbox when the box is ticked but the machine was measured too slow to honour it. {0} is a measured number - keep the placeholder and its format. Contains deliberate line breaks."
   },
   "Settings.Output.Compression.Tip": {
     "message": "焼き込んだテクスチャをブロック圧縮（BC7）し、ディスクとVRAM上のサイズを\nそれぞれ非圧縮時の約4分の1に減らします。インデックステクスチャは正確な行の値を\n保つため非圧縮のままです。オフ＝非圧縮（従来とバイト単位で同一）。",

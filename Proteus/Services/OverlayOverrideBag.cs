@@ -5,25 +5,13 @@ using System.Linq;
 namespace Proteus.Services;
 
 /// <summary>
-/// One channel of live, non-destructive per-mod overrides: colour tables, gear/layer settings and the
-/// mod-wide overlay stack order, each keyed by Penumbra mod directory. Nothing here is ever written to
-/// a mod's <c>metadata.json</c> — the compositor consults the published dictionaries at composite time
-/// and the mod's own files stay as the author shipped them.
+/// One channel of live, non-destructive per-mod overrides (colour tables, gear settings, stack order), keyed
+/// by mod directory and never written to <c>metadata.json</c>. Held by design bindings and presets.
 /// <para/>
-/// Two owners hold one of these each and publish to their own compositor channel: a design binding
-/// (the whole look a Glamourer design captured) and a preset (one mod's saved look). They share this
-/// class rather than a copy apiece because the rules below are subtle enough that two implementations
-/// would drift.
+/// <b>Peek never creates; only an edit creates</b>: a snapshot created on read would shadow later metadata edits.
 /// <para/>
-/// <b>Peek never creates; only an edit creates.</b> Creating an entry on read is what once made an
-/// edit invisible: merely drawing a tab snapshotted the metadata into the live override, and from then
-/// on that snapshot shadowed the metadata — so the editor showed the value just typed while the
-/// composite kept using the snapshot. Looking at an override must not change it.
-/// <para/>
-/// <b>Nested mutation in place, structural change copy-on-write.</b> The compositor reads the published
-/// dictionary on its background thread. Editing a row list or a <see cref="GearSettingsPreset"/> the
-/// dictionary already points at is safe; adding or removing a mod key is not, so those paths publish a
-/// fresh dictionary instead.
+/// <b>Nested mutation in place, structural change copy-on-write</b>: the compositor reads the published
+/// dictionary on a background thread, so adding or removing a mod key publishes a fresh dictionary.
 /// </summary>
 public sealed class OverlayOverrideBag
 {
@@ -83,8 +71,7 @@ public sealed class OverlayOverrideBag
             stack  = newStack;
         }
 
-        // Published from the locals rather than a re-read of the fields: another thread's copy-on-write
-        // swap could otherwise land between the assignment and the read, publishing someone else's.
+        // Published from the locals: re-reading the fields could publish another thread's swap.
         publishColors(newColors);
         publishGear(newGear);
         publishStack(newStack);
@@ -110,12 +97,8 @@ public sealed class OverlayOverrideBag
     }
 
     /// <summary>
-    /// Add or replace ONE mod's entry, copy-on-write, and publish. This is the preset path: presets are
-    /// applied a mod at a time, where a design adopts every mod at once.
-    /// <para/>
-    /// A null <paramref name="stackOrder"/> means "this preset captured no restacking", which removes any
-    /// stack entry rather than storing an empty list — an empty list is a real order (no overlays) and
-    /// would silence the global config instead of deferring to it.
+    /// Add or replace one mod's entry, copy-on-write, and publish (the preset path). A null or empty
+    /// <paramref name="stackOrder"/> removes the stack entry so the global config applies.
     /// </summary>
     public void SetMod(string modDir, OverlayColorOverride modColors, OverlayGearOverride modGear,
         List<string>? stackOrder)
@@ -146,9 +129,8 @@ public sealed class OverlayOverrideBag
     }
 
     /// <summary>
-    /// Drop ONE mod's entry, copy-on-write, and publish. When that was the last one the channel goes
-    /// fully null rather than publishing three empty dictionaries — the compositor's null check is its
-    /// cheap path, and "no preset applied anywhere" should cost nothing per composite.
+    /// Drop one mod's entry, copy-on-write, and publish. When that was the last one the channel goes fully
+    /// null, the compositor's cheap path.
     /// </summary>
     public bool RemoveMod(string modDir)
     {
@@ -220,6 +202,36 @@ public sealed class OverlayOverrideBag
         }
     }
 
+    /// <summary>This channel's rows for one of an imported pack's materials, or null. NEVER creates one.</summary>
+    public List<ColorTableRowPreset>? PeekContentMaterialRows(string modDir, string materialRel)
+    {
+        lock (gate)
+            return colors != null && colors.TryGetValue(modDir, out var ovr)
+                ? ovr.ResolveMaterial(materialRel) : null;
+    }
+
+    /// <summary>
+    /// Install one content material's rows as the live override, on an actual edit. False when this channel does
+    /// not govern the mod, so the caller persists to the metadata instead. Per material, not per option: that is
+    /// the level the colour panel edits at, and the level the composite reads first
+    /// (<see cref="ContentSettingLevels"/>).
+    /// </summary>
+    public bool SetContentMaterialRows(string modDir, string materialRel, List<ColorTableRowPreset> rows)
+    {
+        lock (gate)
+        {
+            if (colors == null || !colors.TryGetValue(modDir, out var ovr)) return false;
+            // Copy-and-swap, like ProteusMetadata.MaterialSettings: the composite reads this map from another
+            // thread, and it is handed to the run whole (ResolvedContent.MaterialRows).
+            var next = ovr.Materials == null
+                ? new Dictionary<string, List<ColorTableRowPreset>>(StringComparer.OrdinalIgnoreCase)
+                : new Dictionary<string, List<ColorTableRowPreset>>(ovr.Materials, StringComparer.OrdinalIgnoreCase);
+            next[materialRel] = rows;
+            ovr.Materials = next;
+            return true;
+        }
+    }
+
     /// <summary>The mod's stored mask rows — the single shared Masks tab's colorset — or null. NEVER
     /// creates one.</summary>
     public List<ColorTableRowPreset>? PeekMaskRows(string modDir)
@@ -264,13 +276,9 @@ public sealed class OverlayOverrideBag
     }
 
     /// <summary>
-    /// The same, seeded from a preset rather than a descriptor — for a content pack's glow, which has no
-    /// overlay descriptor to snapshot. The seed is CLONED before it is stored, so starting from the
-    /// sidecar's own settings can never write back into them.
-    /// <para/>
-    /// An unconditional piece lands in <see cref="OverlayGearOverride.Content"/>, not
-    /// <see cref="OverlayGearOverride.Top"/>: Top is captured from the mod's first overlay descriptor, so
-    /// sharing it would let an overlay's scroll effect reach the pack's meshes and the reverse.
+    /// The same, seeded from a cloned preset rather than a descriptor — for a content pack's glow. An
+    /// unconditional piece lands in <see cref="OverlayGearOverride.Content"/>, never sharing
+    /// <see cref="OverlayGearOverride.Top"/> with the overlays.
     /// </summary>
     public GearSettingsPreset? GetEditableContentGear(string modDir, string? group, string? option,
         GearSettingsPreset seed)
@@ -289,6 +297,37 @@ public sealed class OverlayOverrideBag
         }
     }
 
+    /// <summary>
+    /// The mutable glow the content colour panel binds to for one MATERIAL, seeded from what is on screen when
+    /// this channel has nothing stored for it yet. Null when the channel does not govern the mod.
+    /// </summary>
+    public GearSettingsPreset? GetEditableContentMaterialGear(
+        string modDir, string materialRel, GearSettingsPreset seed)
+    {
+        lock (gate)
+        {
+            if (gear == null || !gear.TryGetValue(modDir, out var ovr)) return null;
+            if (ovr.ResolveMaterial(materialRel) is { } have) return have;
+
+            // Copy-and-swap for the same reason as SetContentMaterialRows.
+            var made = seed.Clone();
+            var next = ovr.Materials == null
+                ? new Dictionary<string, GearSettingsPreset>(StringComparer.OrdinalIgnoreCase)
+                : new Dictionary<string, GearSettingsPreset>(ovr.Materials, StringComparer.OrdinalIgnoreCase);
+            next[materialRel] = made;
+            ovr.Materials = next;
+            return made;
+        }
+    }
+
+    /// <summary>Read-only peek at one content material's glow in this channel; null when it stores none.</summary>
+    public GearSettingsPreset? PeekContentMaterialGear(string modDir, string materialRel)
+    {
+        lock (gate)
+            return gear != null && gear.TryGetValue(modDir, out var ovr)
+                ? ovr.ResolveMaterial(materialRel) : null;
+    }
+
     /// <summary>The mutable gear settings the Masks tab binds to, seeded from the descriptor.</summary>
     public GearSettingsPreset? GetEditableMaskGear(string modDir, OverlayDescriptor seed)
     {
@@ -300,12 +339,8 @@ public sealed class OverlayOverrideBag
     }
 
     /// <summary>
-    /// Read-only peek at one option's effective gear settings. Creates nothing, so callers can ask about
-    /// options the user hasn't opened. Resolution goes through <see cref="OverlayGearOverride.Resolve"/>
-    /// — the SAME call the compositor makes — so the per-option entry and its top-level fallback are
-    /// honoured identically. Looking only in <c>Options</c> would diverge for any active option this
-    /// channel never captured: the composite would apply <c>Top</c> while the editor read the raw
-    /// descriptor.
+    /// Read-only peek at one option's effective gear settings. Resolves through
+    /// <see cref="OverlayGearOverride.Resolve"/>, the same call the compositor makes, so the Top fallback matches.
     /// </summary>
     public GearSettingsPreset? PeekGear(string modDir, string group, string option)
     {
@@ -324,8 +359,7 @@ public sealed class OverlayOverrideBag
     // ── Stack order ─────────────────────────────────────────────────────────────
 
     /// <summary>This channel's mod-wide tab order (<see cref="Configuration.ModStackEntry"/> keys,
-    /// top-first), or null when it doesn't override this mod's — so the tab strip orders its buttons by
-    /// the same source the composite does. Callers fall back to the global stack config on null.</summary>
+    /// top-first), or null when it doesn't override this mod's; callers then fall back to the global config.</summary>
     public IReadOnlyList<string>? StackOrderFor(string modDir)
     {
         lock (gate)
@@ -340,8 +374,7 @@ public sealed class OverlayOverrideBag
         lock (gate)
         {
             if (stack == null) return false;
-            // Copy-on-write: adding a key in place would be a structural mutation racing the
-            // compositor's background read (the colour/gear overrides only mutate nested lists).
+            // Copy-on-write: adding a key in place would race the compositor's background read.
             var next = new Dictionary<string, List<string>>(stack, StringComparer.OrdinalIgnoreCase)
             {
                 [modDir] = topFirst.Select(x => Configuration.ModStackEntry(x.Group, x.Option)).ToList(),
@@ -356,10 +389,8 @@ public sealed class OverlayOverrideBag
     // ── Clearing one option ─────────────────────────────────────────────────────
 
     /// <summary>
-    /// Drop ONE option's colour + gear override from the live copies, so the preview falls back to the
-    /// mod's own metadata straight away. Republishes on success. The owner is responsible for whatever
-    /// it also persists — a design binding must additionally forget the option in its stored binding, or
-    /// re-applying that design would bring it back.
+    /// Drop one option's colour + gear override from the live copies and republish. The owner must also
+    /// forget the option in whatever it persists.
     /// </summary>
     public bool ClearOption(string modDir, string? group, string? option)
     {
@@ -387,11 +418,7 @@ public sealed class OverlayOverrideBag
 
     /// <summary>
     /// Clear the mod-wide gear scopes: the overlays' <see cref="OverlayGearOverride.Top"/> and an
-    /// imported pack's <see cref="OverlayGearOverride.Content"/>.
-    /// <para/>
-    /// Both, because "reset this option" with no option named means the mod-wide settings, and content
-    /// lives in its own slot precisely so it does NOT share Top. Clearing only one would leave a glow the
-    /// reset claimed to remove.
+    /// imported pack's <see cref="OverlayGearOverride.Content"/>. Both are mod-wide.
     /// </summary>
     public static bool ClearTopGear(OverlayGearOverride gear)
     {
@@ -403,8 +430,7 @@ public sealed class OverlayOverrideBag
 
     /// <summary>Remove one group/option entry from an override map (pruning the group when it empties),
     /// or clear the top-level entry when BOTH group and option are null. Returns whether anything was
-    /// there. A half-specified scope (one null, one not) is a caller bug: refuse it rather than fall
-    /// through to clearing Top, which would wipe the settings every option inherits.</summary>
+    /// there. A half-specified scope is refused rather than clearing Top.</summary>
     public static bool ClearScope<T>(Dictionary<string, Dictionary<string, T>>? options,
         string? group, string? option, Func<bool> clearTop)
     {

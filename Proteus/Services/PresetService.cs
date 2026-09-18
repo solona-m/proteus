@@ -16,11 +16,7 @@ namespace Proteus.Services;
 
 public class ModPresetStore
 {
-    /// <summary>
-    /// Read at load, not merely written. <c>design_bindings.json</c> stamps a version it never looks at,
-    /// which left every later field change to be absorbed one nullable at a time; this file does not
-    /// repeat that. An unknown (future) version is loaded as empty rather than half-understood.
-    /// </summary>
+    /// <summary>Checked at load: an unknown (future) version is loaded as empty rather than half-understood.</summary>
     public int Version { get; set; } = ModPresetStore.CurrentVersion;
 
     public const int CurrentVersion = 1;
@@ -31,20 +27,13 @@ public class ModPresetStore
     /// <summary>Penumbra mod directory → the preset currently pinned on it, if any.</summary>
     public Dictionary<string, Guid> Applied { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>
-    /// Rebuild both maps case-insensitively. Deserialization ignores a property initializer's comparer
-    /// and hands back an ordinal dictionary, so without this a mod whose Penumbra folder is looked up
-    /// with different casing than it was saved under would appear to have lost every preset — silently,
-    /// and only after a restart. Mod directories are matched case-insensitively everywhere else here.
-    /// </summary>
+    /// <summary>Rebuild both maps case-insensitively: deserialization discards an initializer's comparer.</summary>
     public ModPresetStore Normalized()
     {
         Presets = new Dictionary<string, List<ModPreset>>(Presets, StringComparer.OrdinalIgnoreCase);
         Applied = new Dictionary<string, Guid>(Applied, StringComparer.OrdinalIgnoreCase);
 
-        // A user preset without an id can only come from a hand-edited file, and leaving it empty would
-        // make every such preset the SAME preset as far as pinning is concerned. Minting here rather than
-        // in ModPreset's initializer is the whole point of that field having no default: see its remarks.
+        // A user preset without an id (a hand-edited file) gets one, or every such preset would pin as the same one.
         foreach (var mine in Presets.Values)
             foreach (var p in mine)
                 if (p.Id == Guid.Empty) p.Id = Guid.NewGuid();
@@ -68,18 +57,9 @@ public record PresetApplyReport(
 }
 
 /// <summary>
-/// Named looks for a single mod: save what is on screen, apply it back, share it.
-/// <para/>
-/// A preset is applied NON-DESTRUCTIVELY. Its option ticks go to Penumbra, because that is the only
-/// place option state exists — but its colours, layer settings and stack order ride in an
-/// <see cref="OverlayOverrideBag"/> published to the compositor's preset channel, exactly as a design
-/// binding's do on its own channel. The mod's <c>metadata.json</c> is never written, so trying five
-/// looks in a row costs nothing and "No preset" always gets the author's own colours back.
-/// <para/>
-/// Precedence, resolved per mod in <see cref="CompositorService.MergeByMod"/>: a pinned preset beats an
-/// active design binding beats the mod's metadata. Applying a design drops the pins
-/// (<see cref="DesignBindingService.PresetsSuperseded"/>) — a whole-look switch that visibly skipped one
-/// mod would read as a bug — but never deletes a saved preset.
+/// Named looks for a single mod. Option ticks go to Penumbra; colours, layer settings and stack order ride in an
+/// <see cref="OverlayOverrideBag"/> on the compositor's preset channel, so <c>metadata.json</c> is never written.
+/// Precedence (<see cref="CompositorService.MergeByMod"/>): pinned preset, then design binding, then metadata.
 /// </summary>
 public class PresetService : IDisposable
 {
@@ -89,8 +69,7 @@ public class PresetService : IDisposable
     private readonly DesignBindingService bindings;
     private readonly IPluginLog log;
 
-    // Write-only encoder, as with design bindings: preset and option names are user- and author-authored
-    // and often non-ASCII, and escaping them makes the file unreadable. See ProteusJson.
+    // Unescaped encoder: preset and option names are often non-ASCII. See ProteusJson.
     private static readonly JsonSerializerOptions JsonOpts =
         new() { WriteIndented = true, PropertyNameCaseInsensitive = true, Encoder = ProteusJson.Encoder };
 
@@ -124,20 +103,15 @@ public class PresetService : IDisposable
 
     public void Dispose() => penumbra.PenumbraReady -= OnPenumbraReady;
 
-    /// <summary>The bag the editor writes through while a preset is pinned. Exposed for
-    /// <see cref="OverlayEditRouter"/>, which is the only thing that should touch it.</summary>
+    /// <summary>The bag the editor writes through while a preset is pinned; only <see cref="OverlayEditRouter"/> uses it.</summary>
     internal OverlayOverrideBag Overrides => overrides;
 
     // ── Reading ─────────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Just enough of a preset to draw a chip or a combo row. The UI asks for this every frame, for every
-    /// preset of every mod on screen, so it must not deep-clone colour tables to answer — which is all
-    /// <see cref="PresetsFor"/> does that this does not.
-    /// </summary>
+    /// <summary>Just enough of a preset to draw a chip or combo row, without deep-cloning colour tables every frame.</summary>
     public record PresetInfo(Guid Id, string Name, string? Description, PresetSource Source, DateTime LastEditUtc);
 
-    /// <summary>The per-frame listing. See <see cref="PresetInfo"/> for why it is not just PresetsFor.</summary>
+    /// <summary>The per-frame listing (see <see cref="PresetInfo"/>).</summary>
     public List<PresetInfo> ListFor(OverlayEntry entry)
     {
         var result = new List<PresetInfo>();
@@ -155,15 +129,13 @@ public class PresetService : IDisposable
         return result;
     }
 
-    /// <summary>One preset by id, as an independent copy — for the paths that need its actual contents
-    /// (apply, fork, export, share code).</summary>
+    /// <summary>One preset by id, as an independent copy.</summary>
     public ModPreset? Get(OverlayEntry entry, Guid id)
         => PresetsFor(entry).FirstOrDefault(p => p.Id == id);
 
     /// <summary>
-    /// Every preset offered for this mod: the author's first, then the wearer's. Pack presets are read
-    /// fresh from the sidecar each call rather than cached, so a mod update takes effect immediately —
-    /// they are never persisted on our side, which is exactly why updating them is safe.
+    /// Every preset offered for this mod, as copies: the author's first (read fresh from the sidecar), then the
+    /// wearer's.
     /// </summary>
     public List<ModPreset> PresetsFor(OverlayEntry entry)
     {
@@ -192,27 +164,19 @@ public class PresetService : IDisposable
         lock (gate) return store.Applied.TryGetValue(modDir, out var id) ? id : null;
     }
 
-    /// <summary>The pinned preset's display name, or null when nothing is pinned (or the pin dangles —
-    /// a preset deleted from a pack by a mod update, say, which reads as "no preset" rather than as an
-    /// error the wearer can do anything about).</summary>
+    /// <summary>The pinned preset's display name, or null when nothing is pinned or the pin dangles.</summary>
     public string? AppliedNameFor(OverlayEntry entry)
     {
         if (AppliedIdFor(entry.ModDirectory) is not { } id) return null;
         return PresetsFor(entry).FirstOrDefault(p => p.Id == id)?.Name;
     }
 
-    // Drift is asked for once per chip per frame, and answering it honestly costs a Penumbra IPC call
-    // plus two full serializations — far too much at 60 fps for a one-character marker. Cached per mod
-    // and recomputed a few times a second, which is well inside the time it takes to notice a dot appear.
+    // Drift costs an IPC call and two serializations, so it is cached per mod for this long (ms).
     private const int DriftCacheMs = 250;
     private readonly Dictionary<string, (Guid Id, long Tick, bool Modified)> driftCache =
         new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>
-    /// Whether the live look has drifted from the pinned preset — the `●` on the chip. Compares a fresh
-    /// capture against what was saved, so it answers "would Update change anything", which is the only
-    /// question the marker is asked.
-    /// </summary>
+    /// <summary>Whether the live look has drifted from the pinned preset (the `●` on the chip): would Update change anything.</summary>
     public bool IsModified(OverlayEntry entry, Guid collId)
     {
         if (AppliedIdFor(entry.ModDirectory) is not { } id) return false;
@@ -230,29 +194,15 @@ public class PresetService : IDisposable
         return modified;
     }
 
-    /// <summary>Forget the cached drift answer for a mod, so the marker updates on the very next frame
-    /// rather than up to <see cref="DriftCacheMs"/> later. Called wherever we already know it changed.</summary>
+    /// <summary>Forget the cached drift answer for a mod, so the marker updates on the next frame.</summary>
     private void InvalidateDrift(string modDir)
     {
         lock (gate) driftCache.Remove(modDir);
     }
 
     /// <summary>
-    /// Whether the live look still matches what was saved — the question the <c>●</c> marker asks, which
-    /// is "did YOU change something", not "did anything change".
-    /// <para/>
-    /// Not symmetric, and deliberately so: <paramref name="saved"/> is the stored preset and
-    /// <paramref name="live"/> is a fresh capture. Options are compared only over the groups the preset
-    /// actually names AND the mod still offers. Both exclusions matter —
-    /// <list type="bullet">
-    ///   <item>a group the mod has GAINED since is not something the wearer did, and counting it marked
-    ///         every preset in a pack as edited the moment its author shipped an update;</item>
-    ///   <item>a group the mod has LOST is not something the wearer can put back, so flagging it only
-    ///         offers an Update that would quietly drop it from the preset.</item>
-    /// </list>
-    /// Colours, gear and stack order are compared whole, via their JSON — the same round-trip the rest of
-    /// this codebase uses for deep-cloning overrides, so it agrees by construction with what is stored.
-    /// Name, id and timestamps are never compared: renaming a preset is not drift.
+    /// Whether the live look still matches what was saved: "did YOU change something". Not symmetric: options are
+    /// compared only over groups the preset names AND the mod still offers; colours, gear and stack order whole.
     /// </summary>
     internal static bool SameLook(ModPreset saved, ModPreset live)
         => SameOptions(saved.Options, live.Options) && AppearanceJson(saved) == AppearanceJson(live);
@@ -264,8 +214,7 @@ public class PresetService : IDisposable
         {
             if (!live.TryGetValue(group, out var now)) continue;   // the mod dropped this group
 
-            // Order-insensitive: Penumbra hands back a multi-select group's ticks in its own order, and
-            // the same two options arriving the other way round is not an edit.
+            // Order-insensitive: Penumbra returns a multi-select group's ticks in its own order.
             if (wanted.Count != now.Count) return false;
             var a = wanted.OrderBy(v => v, StringComparer.OrdinalIgnoreCase);
             var b = now.OrderBy(v => v, StringComparer.OrdinalIgnoreCase);
@@ -279,11 +228,7 @@ public class PresetService : IDisposable
 
     // ── Capturing ───────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Snapshot what this mod looks like right now into a new preset. Goes through
-    /// <see cref="DesignBindingService.CaptureMod"/> so a preset and a design binding can never disagree
-    /// about what "the current look" means, then keeps only the portable fields.
-    /// </summary>
+    /// <summary>Snapshot this mod's current look into a new preset, via <see cref="DesignBindingService.CaptureMod"/>.</summary>
     public ModPreset Capture(OverlayEntry entry, Guid collId, string name)
     {
         var snapshot = bindings.CaptureMod(entry, collId);
@@ -300,9 +245,7 @@ public class PresetService : IDisposable
         };
     }
 
-    /// <summary>Save a new preset for this mod and pin it. Returns the STORED preset — which is not the
-    /// captured one: <see cref="Add"/> mints a fresh id and may disambiguate the name, and pinning the
-    /// pre-storage copy would leave the pin pointing at an id no preset has.</summary>
+    /// <summary>Save a new preset for this mod and pin it. Returns the STORED preset, whose id <see cref="Add"/> minted.</summary>
     public ModPreset Save(OverlayEntry entry, Guid collId, string name)
     {
         var stored = Add(entry.ModDirectory, Capture(entry, collId, name));
@@ -310,10 +253,7 @@ public class PresetService : IDisposable
         return stored;
     }
 
-    /// <summary>
-    /// Fold the current look back into an existing user preset — the "Update" button. A pack preset
-    /// cannot be updated in place; the UI forks it first.
-    /// </summary>
+    /// <summary>Fold the current look back into an existing user preset; a pack preset is forked first.</summary>
     public bool Update(OverlayEntry entry, Guid collId, Guid presetId)
     {
         var live = Capture(entry, collId, string.Empty);
@@ -337,13 +277,11 @@ public class PresetService : IDisposable
         return true;
     }
 
-    /// <summary>Store a preset against a mod without applying it — the import and fork paths. The
-    /// preset is cloned in, so the caller keeps no handle on what is now stored.</summary>
+    /// <summary>Store a clone of a preset against a mod without applying it.</summary>
     public ModPreset Add(string modDir, ModPreset preset)
     {
         var stored = preset.Clone();
-        // Whatever it claimed to be, anything entering this store is the wearer's own: a shared file
-        // must not be able to arrive read-only, and a fork of a pack preset is by definition editable.
+        // Anything entering this store is the wearer's own, whatever it claimed to be.
         stored.Source = PresetSource.User;
         stored.Id     = Guid.NewGuid();
 
@@ -395,8 +333,7 @@ public class PresetService : IDisposable
         return removed;
     }
 
-    /// <summary>"Sheer" beside an existing "Sheer" becomes "Sheer (2)". Silently deduplicating beats
-    /// refusing the save: the wearer is naming a look, not filling in a key.</summary>
+    /// <summary>"Sheer" beside an existing "Sheer" becomes "Sheer (2)".</summary>
     internal static string UniqueName(IEnumerable<ModPreset> existing, string wanted)
         => UniqueName(existing.Select(p => p.Name), wanted);
 
@@ -412,37 +349,20 @@ public class PresetService : IDisposable
     }
 
     /// <summary>
-    /// A pack preset's identity: the author's own id when they wrote one, else derived from the mod and
-    /// the preset's name. Both listings resolve it through here — <see cref="ListFor"/> for the picker and
-    /// <see cref="PresetsFor"/> for the contents — so the id a pin is written with is by construction the
-    /// id the picker looks the pin up by.
-    /// <para/>
-    /// Authored presets carry no id in practice (nothing writes one), which makes the derived branch the
-    /// normal path rather than the fallback it reads as.
+    /// A pack preset's identity: the author's id, else derived from the mod and name. Both listings resolve ids
+    /// through here, so a pin and the picker always agree.
     /// </summary>
     internal static Guid PackId(string modDir, ModPreset preset)
         => preset.Id == Guid.Empty ? StableId(modDir, preset.Name) : preset.Id;
 
-    /// <summary>A deterministic id for a pack preset the author gave none, so the pin survives a
-    /// restart. Guid.CreateVersion8 style would be nicer but this only has to be stable and collision-
-    /// free across one mod's own preset names.</summary>
+    /// <summary>A deterministic id for a pack preset the author gave none, so the pin survives a restart.</summary>
     private static Guid StableId(string modDir, string name)
         => StableIds.GetOrAdd((modDir, name), static key => Derive(key.ModDir, key.Name));
 
-    /// <summary>
-    /// Memo for <see cref="StableId"/>, because <see cref="ListFor"/> is called every frame for every mod
-    /// row on screen and authored presets carry no id of their own — so the derived branch is the one that
-    /// runs, and without this, drawing the Mods table means hashing every pack preset's name of every mod
-    /// sixty times a second for an answer that cannot change.
-    /// <para/>
-    /// Never invalidated, and it never needs to be: the value is a pure function of the key. Bounded by
-    /// the preset names across the mods installed, and keyed on the arguments as given — two spellings of
-    /// one mod directory derive the same id and would simply take an entry each.
-    /// </summary>
+    /// <summary>Memo for <see cref="StableId"/>, which <see cref="ListFor"/> hits every frame; never invalidated (pure function).</summary>
     private static readonly ConcurrentDictionary<(string ModDir, string Name), Guid> StableIds = new();
 
-    /// <summary>The hash itself, split out only so the memo can call it from a lambda that captures
-    /// nothing.</summary>
+    /// <summary>The hash itself, for the memo's non-capturing lambda.</summary>
     private static Guid Derive(string modDir, string name)
     {
         var bytes = System.Security.Cryptography.MD5.HashData(
@@ -453,15 +373,12 @@ public class PresetService : IDisposable
     // ── Applying ────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Put a preset on. Option ticks are written to Penumbra; colours, gear and stack order are
-    /// published as a live override. Anything the mod no longer has is reported rather than forced —
-    /// a renamed group is a mod update, not a reason to refuse the other nine.
+    /// Put a preset on: option ticks to Penumbra, colours, gear and stack order as a live override. Anything the mod
+    /// no longer has is reported rather than forced.
     /// </summary>
     public PresetApplyReport Apply(OverlayEntry entry, Guid collId, ModPreset preset)
     {
-        // The mod's real option catalogue, straight out of its Penumbra manifest. Reading the manifest
-        // rather than asking Penumbra keeps this honest about what the MOD offers rather than what the
-        // collection currently has selected, which is the thing a stale preset has to be checked against.
+        // Checked against what the mod's manifest offers, not what the collection has selected.
         var plan = PlanOptionWrites(preset.Options, ReadCatalogue(entry));
 
         foreach (var (group, selection) in plan.Writes)
@@ -471,8 +388,7 @@ public class PresetService : IDisposable
         var missingOptions = plan.MissingOptions;
         var applied        = plan.Writes.Count;
 
-        // A clone, so editing the live look through the colour editor never writes into the saved preset:
-        // that is what makes the `●` drift marker meaningful and Update a deliberate act.
+        // A clone, so editing the live look never writes into the saved preset.
         var live = preset.Clone();
         overrides.SetMod(entry.ModDirectory, live.Colors, live.Gear,
             live.StackOrder.Count > 0 ? live.StackOrder : null);
@@ -499,16 +415,10 @@ public class PresetService : IDisposable
         List<string> MissingGroups,
         List<(string Group, string Option)> MissingOptions);
 
-    /// <summary>
-    /// Work out which of a preset's option selections the mod can still honour. Pure, and separated from
-    /// <see cref="Apply"/> for that reason — it is the whole of "apply what matches, report the rest", and
-    /// the cases that matter (a renamed group, a dropped option, an unreadable manifest) are ones nobody
-    /// wants to reproduce by hand in a running game.
-    /// </summary>
+    /// <summary>Work out which of a preset's option selections the mod can still honour.</summary>
     /// <param name="catalogue">
-    /// Group → the options it offers, or NULL when the mod's manifest could not be read. Null is not "the
-    /// mod has no groups": it means we know nothing, so the preset is written verbatim rather than being
-    /// reported as entirely missing.
+    /// Group → the options it offers, or NULL when the manifest could not be read, in which case the preset is
+    /// written verbatim.
     /// </param>
     internal static OptionPlan PlanOptionWrites(
         Dictionary<string, List<string>> wantedByGroup, Dictionary<string, HashSet<string>>? catalogue)
@@ -538,9 +448,8 @@ public class PresetService : IDisposable
                 else missingOptions.Add((group, option));
             }
 
-            // Every option in this group is gone. Writing the empty list would CLEAR the group, which is a
-            // real and different instruction — "wear none of these" — that the preset never gave. Leave
-            // whatever is selected alone and say so.
+            // Every option in this group is gone: writing the empty list would CLEAR the group, which the preset
+            // never asked for.
             if (keep.Count == 0 && wanted.Count > 0) continue;
 
             writes.Add((group, keep));
@@ -549,9 +458,7 @@ public class PresetService : IDisposable
         return new OptionPlan(writes, missingGroups, missingOptions);
     }
 
-    /// <summary>Unpin whatever is on this mod. Colours fall straight back to the mod's own metadata;
-    /// the option ticks are deliberately left where they are, because unpinning a look is not a request
-    /// to undo the wearer's own toggling.</summary>
+    /// <summary>Unpin whatever is on this mod. Colours fall back to the metadata; option ticks are left as they are.</summary>
     public bool ClearApplied(string modDir)
     {
         bool had;
@@ -568,12 +475,8 @@ public class PresetService : IDisposable
     }
 
     /// <summary>
-    /// Drop every pin, without touching a single saved preset. Wired to
-    /// <see cref="DesignBindingService.PresetsSuperseded"/>: a design carries its own colours for every
-    /// mod it captured, so a preset left pinned on top would make that design look broken on one mod.
-    /// <para/>
-    /// Does not recomposite — the design restore that raised this is about to do it anyway, and doing it
-    /// here would only add a composite in the middle of one.
+    /// Drop every pin without touching saved presets, on <see cref="DesignBindingService.PresetsSuperseded"/>. Does not
+    /// recomposite: the design restore that raised this will.
     /// </summary>
     public void ClearAllApplied()
     {
@@ -594,17 +497,8 @@ public class PresetService : IDisposable
     private void OnPenumbraReady() => RepublishApplied(triggerComposite: true);
 
     /// <summary>
-    /// Republish the pinned presets' overrides, so a reload comes back looking the same.
-    /// <para/>
-    /// Deliberately writes NOTHING to Penumbra: those option ticks were written when the preset was
-    /// applied and have persisted in the collection ever since, and re-writing them here would race the
-    /// design binding's boot restore for the same settings.
-    /// <para/>
-    /// Tried from the constructor (which is the plugin-reload case, where Penumbra is already up and
-    /// <c>PenumbraReady</c> will never fire again) and again on <c>PenumbraReady</c> for a cold boot.
-    /// Before Penumbra answers, <see cref="SidecarDiscoveryService.DiscoverAll"/> returns an EMPTY list
-    /// rather than failing — so a pin that cannot be resolved here is never treated as dead. Pruning on
-    /// that signal would have deleted every pin on every launch that got here first.
+    /// Republish the pinned presets' overrides after a reload. Writes nothing to Penumbra (the ticks persisted), and
+    /// never prunes an unresolved pin: <see cref="SidecarDiscoveryService.DiscoverAll"/> is empty until Penumbra answers.
     /// </summary>
     private void RepublishApplied(bool triggerComposite)
     {
@@ -633,17 +527,11 @@ public class PresetService : IDisposable
         republished = true;
         log.Debug("[Proteus] preset: republished {0} of {1} pin(s)", done, pins.Count);
 
-        // On the cold-boot path the compositor's own PenumbraReady handler is subscribed ahead of ours
-        // (it is constructed first), so the first composite can already have been kicked off against
-        // metadata colours. Ask for another now that the overrides are up.
+        // On cold boot the compositor's PenumbraReady handler runs first, so its composite may predate the overrides.
         if (done > 0 && triggerComposite) compositor.TriggerRecomposite("preset-republish");
     }
 
-    /// <summary>
-    /// Group name → the option names that group actually offers, read from the mod's Penumbra manifest.
-    /// Null when the manifest cannot be read at all, which is the signal to apply the preset verbatim
-    /// rather than to report every group as missing — an unreadable manifest says nothing about the mod.
-    /// </summary>
+    /// <summary>Group name → the options it offers, from the mod's Penumbra manifest; null when it cannot be read.</summary>
     private Dictionary<string, HashSet<string>>? ReadCatalogue(OverlayEntry entry)
     {
         if (entry.ModRoot is not { } modRoot) return null;
@@ -695,9 +583,7 @@ public class PresetService : IDisposable
     private readonly object writeGate = new();
     private string? pendingJson;
 
-    /// <summary>Serialize now (the caller holds <c>gate</c>, so <c>store</c> is consistent) but write off
-    /// the calling thread — every caller here is an ImGui button on the framework thread. Whichever flush
-    /// runs first writes the newest snapshot; superseded ones find nothing and skip.</summary>
+    /// <summary>Serialize now (the caller holds <c>gate</c>) but write off the calling thread; the newest snapshot wins.</summary>
     private void SaveDeferred()
     {
         try { Interlocked.Exchange(ref pendingJson, JsonSerializer.Serialize(store, JsonOpts)); }

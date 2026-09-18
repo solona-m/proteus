@@ -12,16 +12,12 @@ using Proteus.Interop;
 namespace Proteus.Services;
 
 /// <summary>
-/// How a created overlay glows, if at all — the Create tab's "Make this art glow" checkbox and the choice
-/// under it.
-/// <para/>
-/// Skin cannot emit, so anything but <see cref="None"/> makes the overlay a gear shell. The two lit styles
-/// differ in which shader that shell runs, and that difference decides everything else: only
-/// <c>character.shpk</c> takes a base texture, so only it can show the art itself in daylight.
+/// How a created overlay glows, if at all. Skin cannot emit, so anything but <see cref="None"/> makes the overlay a
+/// gear shell; only <c>character.shpk</c> takes a base texture, so only it shows the art in daylight.
 /// </summary>
 public enum GlowStyle
 {
-    /// <summary>An ordinary overlay painted into the skin. What the Create tab has always made.</summary>
+    /// <summary>An ordinary overlay painted into the skin.</summary>
     None,
 
     /// <summary>
@@ -31,17 +27,15 @@ public enum GlowStyle
     Always,
 
     /// <summary>
-    /// Nothing in daylight, glowing in an unlit room — the Atramentum Luminis behaviour, on
-    /// <c>characterscroll.shpk</c> with a generated scroll map and a full light response.
+    /// Nothing in daylight, glowing in an unlit room: <c>characterscroll.shpk</c> with a generated scroll map and a
+    /// full light response.
     /// </summary>
     DarkOnly,
 }
 
 /// <summary>
-/// Builds a basic Proteus overlay mod from the Create tab: a Penumbra mod folder carrying a
-/// <c>Proteus/metadata.json</c> sidecar with one Skin-layer overlay, registered with Penumbra and opened
-/// in its UI. The heavy lifting (compositing) is done later by <see cref="CompositorService"/>; this only
-/// writes the source mod so the user can enable and tweak it.
+/// Builds a basic Proteus overlay mod from the Create tab: a Penumbra mod folder with a <c>Proteus/metadata.json</c>
+/// sidecar holding one overlay, registered with Penumbra and opened in its UI. Compositing happens later.
 /// </summary>
 public sealed class ModCreationService
 {
@@ -56,11 +50,8 @@ public sealed class ModCreationService
         "chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_bibo.mtrl";
 
     /// <summary>
-    /// A harmless self-swap so Penumbra registers the mod as having content (it otherwise flags a
-    /// redirect-free mod as "changes nothing"). A vanilla MONSTER body material the player never loads —
-    /// swapping it to itself is a guaranteed no-op that can't touch the character. Matches the community
-    /// "Panties for Proteus" template rather than self-swapping the target body material (which for bibo/
-    /// gen3 is a modded, non-vanilla path).
+    /// A harmless self-swap of a vanilla monster material the player never loads, so Penumbra does not flag the
+    /// redirect-free mod as "changes nothing".
     /// </summary>
     internal const string DummySwapPath =
         "chara/monster/m8030/obj/body/b0001/material/v0001/mt_m8030b0001_a.mtrl";
@@ -78,9 +69,7 @@ public sealed class ModCreationService
     public readonly record struct CreateResult(bool Ok, string Message);
 
     /// <summary>
-    /// The player's currently-loaded body skin material, or null when nothing is detected (player not
-    /// drawn yet). Used to pre-fill the Create tab's material target so a basic mod paints on the right
-    /// body without the user knowing the path.
+    /// The player's currently-loaded body skin material, or null when nothing is detected (player not drawn yet).
     /// </summary>
     public string? DetectBodyMaterial()
     {
@@ -90,22 +79,15 @@ public sealed class ModCreationService
         var bodyMats = RankBodyMaterials(loaded);
         var chosen = bodyMats.FirstOrDefault();
 
-        // Only when we actually resolve one — the Create tab polls this until the character is drawn, so
-        // logging the empty case every frame would flood the log.
+        // Only log a resolved one: the Create tab polls this every frame until the character is drawn.
         if (chosen != null)
             log.Information("[Proteus] create: body materials [{0}] -> {1}", string.Join(", ", bodyMats), chosen);
         return chosen;
     }
 
     /// <summary>
-    /// The body material from the LAST KNOWN snapshot — a placeholder for the Create tab while the
-    /// character isn't drawn, in place of the hardcoded <see cref="DefaultBodyMaterial"/> (a Bibo+
-    /// Midlander path that may be nothing like the user's body).
-    /// <para/>
-    /// Deliberately separate from <see cref="DetectBodyMaterial"/> rather than folded in as a fallback:
-    /// the Create tab treats a non-null detect as authoritative and stops polling, so answering from the
-    /// cache there would lock in a possibly-stale body and never pick up the real one. The caller must
-    /// keep polling after using this.
+    /// The body material from the last known snapshot, a placeholder while the character isn't drawn. Separate from
+    /// <see cref="DetectBodyMaterial"/> because a non-null detect stops polling; the caller must keep polling.
     /// </summary>
     public string? CachedBodyMaterial()
     {
@@ -114,11 +96,8 @@ public sealed class ModCreationService
     }
 
     /// <summary>
-    /// Body materials out of a set of loaded paths, best candidate first.
-    /// <para/>
-    /// A character usually has ONE real body, but a vanilla (gen2) skin material can ride along — gear that
-    /// exposes skin carries its own mt_…b….a.mtrl. If the wearer is on bibo/gen3, that vanilla one is NOT
-    /// the body they want the overlay on, so rank the modded bodies first.
+    /// Body materials out of a set of loaded paths, best candidate first: modded bodies rank above a vanilla (gen2)
+    /// skin material that gear can carry along.
     /// </summary>
     private static List<string> RankBodyMaterials(IEnumerable<string> loaded)
         => loaded
@@ -130,28 +109,19 @@ public sealed class ModCreationService
             .ToList();
 
     /// <summary>
-    /// Every material the player currently has loaded — the Create tab's picker lists these so the author
-    /// can select a target instead of typing a 60–100 character game path. Unfiltered on purpose: the
-    /// picker groups skin first but still offers gear, accessories, hair and weapon.
-    /// <para/>
-    /// <paramref name="fromCache"/> is true when the character wasn't drawable and this fell back to the
-    /// last known set, so the caller can say so rather than presenting stale data as current. Returns an
-    /// empty list when neither source has anything (fresh config at the title screen).
-    /// <para/>
-    /// The live query costs several ms and must run on the framework thread — call it on a user action
-    /// (opening the picker), never per frame. <see cref="DetectBodyMaterial"/> has the same constraints.
+    /// Every material the player currently has loaded, for the Create tab's picker. <paramref name="fromCache"/> is
+    /// true when this fell back to the last known set. The live query costs several ms on the framework thread:
+    /// call on a user action, never per frame.
     /// </summary>
     public IReadOnlyList<string> ListActiveMaterials(out bool fromCache)
     {
         var live = penumbra.GetActivePlayerMaterialPaths();
         fromCache = live == null;
 
-        // The cached list is reference-swapped from both the framework thread and background pool threads
-        // without a lock, so read it into a local ONCE and enumerate that.
+        // The cached list is reference-swapped across threads without a lock, so read it into a local once.
         IEnumerable<string> src = live ?? (IEnumerable<string>?)config.CachedActiveMaterialPaths ?? [];
 
-        // .mtrl filtering and de-duplication are redundant for the live set (already a filtered HashSet)
-        // but not for the cached List, which carries no set semantics.
+        // Filtering and de-duplication matter only for the cached List; the live set is already a filtered HashSet.
         return src
             .Where(p => p.EndsWith(".mtrl", StringComparison.OrdinalIgnoreCase))
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -159,45 +129,20 @@ public sealed class ModCreationService
     }
 
     /// <summary>
-    /// Which texture slots a material actually declares, so the Create tab can offer only the rows that
-    /// will be consumed. Penumbra-resolved disk file first, game SqPack second — the same two-step the
-    /// compositor uses, because a modded body's material only exists on disk.
-    /// <para/>
-    /// An all-null result means the material could NOT be read (path not installed, mod disabled, Penumbra
-    /// down) — NOT that it has no textures. Callers must fail open on that and offer everything; the
-    /// Create tab deliberately accepts hand-typed paths for bodies the player isn't wearing, and those
-    /// routinely don't resolve.
-    /// <para/>
-    /// <see cref="MtrlTexturePaths.Index"/> is the material's OWN <c>_id</c> sampler — gear and accessories
-    /// declare one almost universally. Body and face skin materials never do, so a caller wanting to offer
-    /// a Proteus index on skin has to decide that from the material's kind; the material won't say.
-    /// <para/>
-    /// Re-reads and re-parses the file on every call — cheap, but blocking I/O. Call it when the material
-    /// changes, never per frame.
+    /// Which texture slots a material declares: Penumbra-resolved disk file first, game SqPack second. An all-null
+    /// result means the material could not be read, not that it has no textures; callers must fail open.
+    /// Skin materials never declare <see cref="MtrlTexturePaths.Index"/>. Blocking I/O: never call per frame.
     /// </summary>
     public MtrlTexturePaths ResolveMaterialSlots(string materialGamePath)
     {
         if (string.IsNullOrWhiteSpace(materialGamePath)) return new MtrlTexturePaths(null, null, null);
-        // RAW parse, not the Lumina-typed one. Most materials the picker offers are VANILLA, and Lumina
-        // misreads some Dawntrail layouts — which surfaced as every non-skin material reporting "couldn't
-        // read", because a modded body/face (older TexTools layout) parsed while stock gear did not.
+        // Raw parse, not Lumina's: Lumina misreads some Dawntrail layouts.
         return textureLoader.ResolveMtrlTexturesRaw(penumbra.ResolvePlayer(materialGamePath), materialGamePath);
     }
 
     /// <summary>
-    /// Whether the picked art is a DOUBLED face sheet — the two sides of the head in the two halves of one
-    /// image — rather than a texture in the face's own layout.
-    /// <para/>
-    /// Judged by SHAPE, against the face the art targets. The pixels cannot answer it (the two halves of an
-    /// ordinary face texture are two regions of one face), but the proportions can, because a doubled sheet
-    /// is exactly twice as wide as the sheet it doubles. What that looks like depends on the race, which is
-    /// why this compares rather than testing a fixed aspect: an Au Ra face texture is 2048² — its horns
-    /// occupy the right half — so doubled it is 2:1, while every other race's is 1024×2048 and doubled it is
-    /// SQUARE. Resolution is irrelevant, since only the ratio is compared.
-    /// <para/>
-    /// Anything it cannot measure answers NO. A wrong "yes" sends the two halves of an ordinary face texture
-    /// to the two sides of the head, which is a mangled face; a wrong "no" is one tick the author can see
-    /// and set themselves.
+    /// Whether the picked art is a doubled face sheet (the two sides of the head in two halves), judged by its aspect
+    /// against the target face's native texture. Anything it cannot measure answers no: a wrong yes mangles the face.
     /// </summary>
     public bool LooksLikeDoubledFaceSheet(string materialTarget, string artPath)
     {
@@ -205,17 +150,13 @@ public sealed class ModCreationService
         {
             if (TextureLoader.ProbeSize(artPath) is not { } art) return false;
 
-            // The material's own texture, as the reference layout. Any slot will do — every texture on one
-            // face material shares its UV layout, so they share its proportions.
+            // The material's own texture as the reference layout; every slot on one face shares its proportions.
             var slots = ResolveMaterialSlots(materialTarget);
             var slot = slots.Diffuse ?? slots.Normal ?? slots.Mask;
             if (slot == null) return false;
 
-            // NEVER our own output. A face whose art is already rendered doubled has OUR sheet published at
-            // that path, and measuring against it reports the doubled shape as the face's native one — so
-            // the ratio comes out 1 and the box silently stops ticking. That is the second asymmetric face
-            // mod an author makes, which is exactly when they would least suspect the detect. Falling back
-            // to game data is right: the native layout is a property of the race, not of what is installed.
+            // Never measure our own output: a doubled sheet published there would read as the native shape.
+            // The native layout is a property of the race, so game data is the right fallback.
             var disk = penumbra.ResolvePlayer(slot);
             if (IsOwnOutput(disk)) disk = null;
             if (textureLoader.BaseNativeSize(disk, slot) is not { } native) return false;
@@ -230,13 +171,8 @@ public sealed class ModCreationService
     }
 
     /// <summary>
-    /// Whether a resolved disk path is a file Proteus itself published into the managed mod.
-    /// <para/>
-    /// The compositor has a far more careful version of this (it canonicalises, and answers "ours" when it
-    /// cannot tell, because compositing onto a previous composite is cumulative and silent). Here the stake
-    /// is one checkbox, so the cheap prefix test is enough — and it errs the other way on purpose: an
-    /// unanswerable path reads as NOT ours, which at worst measures a texture that is ours and leaves the
-    /// box unticked, the same outcome as any other failure to measure.
+    /// Whether a resolved disk path is a file Proteus itself published into the managed mod. A cheap prefix test;
+    /// an unanswerable path reads as not ours.
     /// </summary>
     private bool IsOwnOutput(string? diskPath)
     {
@@ -253,12 +189,8 @@ public sealed class ModCreationService
 
     /// <summary>
     /// Is <paramref name="artW"/>×<paramref name="artH"/> twice as wide as a <paramref name="nativeW"/>×
-    /// <paramref name="nativeH"/> sheet, proportionally?
-    /// <para/>
-    /// The window is wide because the two answers are far apart: art in the face's own layout scores 1 and a
-    /// doubled sheet scores 2, so anything between 1.5 and 2.5 is unambiguous. It also has to absorb an
-    /// author rounding a sheet to the nearest power of two — 4096×2048 against a 2048² face is exactly 2,
-    /// but 3072-wide art against the same face is 1.5 and still meant as doubled.
+    /// <paramref name="nativeH"/> sheet, proportionally? Native layout scores 1, doubled 2; the 1.5–2.5 window
+    /// absorbs power-of-two rounding.
     /// </summary>
     internal static bool IsDoubledAspect(int artW, int artH, int nativeW, int nativeH)
     {
@@ -267,9 +199,7 @@ public sealed class ModCreationService
         return ratio is >= 1.5 and <= 2.5;
     }
 
-    /// <summary>Alpha at or above this reads as opaque. Not 255: a whole-skin base exported through a lossy
-    /// step lands a few counts short — the mod this was measured against bottoms out at 251 — and demanding
-    /// the maximum would call it sheer.</summary>
+    /// <summary>Alpha at or above this reads as opaque. Not 255: lossy exports land a few counts short.</summary>
     private const byte OpaqueAlpha = 250;
 
     /// <summary>How much of the image must be opaque to count as full coverage. Not 1.0, so a stray
@@ -277,49 +207,22 @@ public sealed class ModCreationService
     private const float FullCoverageFraction = 0.99f;
 
     /// <summary>
-    /// Side length the probe samples at. The loader point-samples down to this, so a sparse overlay's holes
-    /// stay holes rather than averaging away, and the decode is cached separately from the full-resolution
-    /// one the compositor will want later.
+    /// Side length the probe samples at. Point-sampled, so a sparse overlay's holes stay holes.
     /// </summary>
     private const int CoverageProbeSize = 256;
 
     /// <summary>
-    /// Mean per-channel difference, 0–255, below which the picked art is judged to BE the material's skin
-    /// rather than something painted onto it.
-    /// <para/>
-    /// Calibrated by running the rule over 238 skin overlays: six real bibo skins scored 0.98–21.34 against
-    /// a seventh, and the nearest thing on the other side — a full-coverage tartan bodysuit — scored 34.42.
-    /// This sits between them with about six counts of room either way. Everything else was further off
-    /// (patterned stockings 36–69, a flat velvet mitt 110), and exactly one overlay in that library trips
-    /// the whole rule: the converted skin this was written for, at 4.58.
-    /// <para/>
-    /// Deliberately compared WITHOUT removing each image's mean. Mean-centring is the obvious way to make
-    /// this tolerant of a skin tone far from the base's, and it backfires: it drops a solid-colour fabric
-    /// to 6.65 — better than most real skins — because a flat field resembles anything once its level is
-    /// taken away. Raw difference keeps colour in the comparison, which is what tells fabric from flesh.
+    /// Mean per-channel difference, 0–255, below which the picked art is judged to be the material's skin rather
+    /// than something painted onto it. Compared without mean-centring, which would make flat fabric match anything.
     /// </summary>
-    /// <remarks>internal so the test asserts against THIS number rather than a copy of it — a duplicated
-    /// literal would keep passing while the shipped threshold moved out from under it.</remarks>
+    /// <remarks>internal so the test asserts against this number rather than a copy of it.</remarks>
     internal const float SkinLikenessMad = 28f;
 
     /// <summary>
-    /// Whether the picked textures look like a whole skin rather than something painted onto skin — the
-    /// Create tab's default for <see cref="OverlayDescriptor.NormalMode"/>. Decodes two images, so call it
-    /// off the frame thread.
-    /// <para/>
-    /// Three conditions, and the third is the one that does the work:
-    /// <list type="number">
-    /// <item>Both a colour map and a normal. The flag only decides how a normal blends, and a converted
-    /// skin always brings its base with it.</item>
-    /// <item>The colour map is opaque throughout. A skin has no holes; a tattoo or a decal is mostly
-    /// hole.</item>
-    /// <item>It resembles the diffuse already on the target material.</item>
-    /// </list>
-    /// Coverage alone is not enough, which is worth stating because it is the obvious test and it fails
-    /// quietly: a garment overlay's art is routinely opaque across the WHOLE map, its shape coming from the
-    /// mod's Masks group rather than from its own alpha. Measured on real mods, a pair of mitts and a set
-    /// of stockings are both alpha 255 end to end. Only the comparison against the material's own skin
-    /// separates them.
+    /// Whether the picked textures look like a whole skin rather than something painted onto skin — the Create tab's
+    /// default for <see cref="OverlayDescriptor.NormalMode"/>. Requires a colour map and a normal, full opacity, and
+    /// resemblance to the target's current diffuse (opacity alone is not enough: garment art is often fully opaque).
+    /// Decodes two images, so call it off the frame thread.
     /// </summary>
     public bool LooksLikeWholeSkin(string materialTarget, string? diffuseSrc, string? normalSrc)
     {
@@ -331,8 +234,7 @@ public sealed class ModCreationService
             var overlay = textureLoader.LoadPngAsRgba(diffuseSrc!, CoverageProbeSize, CoverageProbeSize);
             if (!IsFullCoverage(overlay, texels)) return false;
 
-            // The material's CURRENT diffuse — through the same resolve the slot rows use, so a hand-typed
-            // path for a body the player isn't wearing simply doesn't resolve and the answer stays "no".
+            // The material's current diffuse; an unresolvable hand-typed path answers "no".
             var slot = ResolveMaterialSlots(materialTarget).Diffuse;
             if (slot == null) return false;
             var loaded = textureLoader.LoadBaseTexture(penumbra.ResolvePlayer(slot), slot);
@@ -346,8 +248,7 @@ public sealed class ModCreationService
         }
         catch (Exception ex)
         {
-            // Runs on a thread-pool thread, where an escaping exception is a silent wrong answer — and the
-            // wrong answer here is "not a whole skin", which is also the safe default. Say so in the log.
+            // Runs on a pool thread; the safe default is "not a whole skin", so log it.
             log.Warning(ex, "[Proteus] whole-skin probe failed for {0} — assuming it isn't one", diffuseSrc);
             return false;
         }
@@ -356,45 +257,26 @@ public sealed class ModCreationService
     // ── glow ─────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// The colour-table row a glowing overlay writes. An overlay with no <c>_id</c> art gets a fabricated
-    /// index of (255, 255, 0) from the shell builder, and row pair 16 sub-row A is the only cell that
-    /// selects — a row written anywhere else would be invisible.
+    /// The colour-table row a glowing overlay writes. An overlay with no <c>_id</c> art gets a fabricated index of
+    /// (255, 255, 0), which selects only row pair 16 sub-row A.
     /// </summary>
     internal const int GlowRow = 16;
 
     /// <summary>
-    /// The surface under a dark-only glow: black. <c>characterscroll.shpk</c> declares no base texture, so
-    /// this row colour IS the whole unlit surface and it is lit by the scene like any other. Anything above
-    /// black reads as a lifted charcoal patch wherever light falls.
+    /// The surface under a dark-only glow: black. <c>characterscroll.shpk</c> has no base texture, so this colour is
+    /// the whole lit surface; anything above black reads as a charcoal patch.
     /// </summary>
     internal const string DarkOnlySurface = "#000000";
 
     /// <summary>
-    /// The emissive an ALWAYS-glow row carries.
-    /// <para/>
-    /// Very low, and measured against the failure rather than reasoned about. On <c>character.shpk</c> the
-    /// emissive is a flat ADDITIVE tint across the whole region, not a map — and the reasoning that put
-    /// this at a quarter was backwards. "A lit scene already swamps a small additive glow" is exactly
-    /// wrong: in daylight the add lands on an already-bright surface and clips into the highlights, so a
-    /// quarter of white bleached a pale watercolour to near-white. It is in the DARK that a small value
-    /// reads as a glow, because there is nothing else lit to compete with it.
-    /// <para/>
-    /// Anyone who wants more at night without the daytime wash wants the per-row "Fades in light" dial in
-    /// Colors, which is the control that can tell the two apart.
+    /// The emissive an always-glow row carries. Very low: on <c>character.shpk</c> it is a flat additive tint that
+    /// clips highlights in daylight and still reads as a glow in the dark.
     /// </summary>
     internal const float AlwaysGlowEmissive = 0.08f;
 
     /// <summary>
-    /// The art's own average colour, weighted by coverage, as <c>#RRGGBB</c> — or null when nothing is
-    /// covered.
-    /// <para/>
-    /// An always-glow row emits in this rather than in white. The emissive on <c>character.shpk</c> is one
-    /// flat colour for the whole region, so it cannot follow the picture per pixel the way a scroll map
-    /// does; what it CAN do is stop fighting it. White adds grey to every hue at once and desaturates
-    /// everything it touches, while the art's own average reinforces the colours already there.
-    /// <para/>
-    /// Weighted by alpha because the art sits on a transparent background: an unweighted mean is mostly the
-    /// background and comes out near-black, which would emit nothing at all.
+    /// The art's own alpha-weighted average colour as <c>#RRGGBB</c>, or null when nothing is covered. An always-glow
+    /// row emits in this rather than white, which would desaturate the art.
     /// </summary>
     internal static string? AverageArtColour(byte[] rgba)
     {
@@ -413,17 +295,8 @@ public sealed class ModCreationService
     }
 
     /// <summary>
-    /// Turn a decoded overlay into the scroll map a dark-only glow emits: the art's own colour multiplied
-    /// by its own coverage, laid on black and made fully opaque.
-    /// <para/>
-    /// The colour and the shape both come from the art, which is why the Create tab asks for no colour: on
-    /// <c>characterscroll.shpk</c> this map IS the light, per pixel. Black where the art is transparent, so
-    /// nothing outside it emits; opaque throughout, because this texture's alpha is not a coverage channel
-    /// and a transparent scroll map simply renders nothing.
-    /// <para/>
-    /// The same transform <see cref="LuminisImportService"/> performs on an Atramentum Luminis sheet — the
-    /// difference is only where the intensity comes from. There it is an inverted mask in the alpha; here
-    /// the art's alpha is ordinary coverage.
+    /// Turn a decoded overlay into the scroll map a dark-only glow emits: the art's colour multiplied by its coverage,
+    /// on black, fully opaque (a transparent scroll map renders nothing).
     /// </summary>
     internal static byte[] BuildScrollMap(byte[] rgba)
     {
@@ -440,15 +313,9 @@ public sealed class ModCreationService
     }
 
     /// <summary>
-    /// The colour-table row for a glow style, or null when the overlay doesn't glow.
-    /// <para/>
-    /// <see cref="GlowStyle.Always"/> carries NO light response, which is what makes its name true: it
-    /// emits the same in a lit street as in a cellar, and it goes on working with the light feature
-    /// switched off entirely. What keeps that from bleaching the art in daylight is not the scene — see
-    /// <see cref="AlwaysGlowEmissive"/>, where assuming the scene would handle it was the mistake — but the
-    /// pairing of a very small value with <see cref="AverageArtColour"/>. Anyone who wants a brighter night
-    /// glow without a daytime wash wants the per-row "Fades in light" dial in Colors, which is the only
-    /// control that can tell the two apart.
+    /// The colour-table row for a glow style, or null when the overlay doesn't glow. <see cref="GlowStyle.Always"/>
+    /// carries no light response; <see cref="AlwaysGlowEmissive"/> and <see cref="AverageArtColour"/> keep it from
+    /// bleaching the art.
     /// </summary>
     internal static ColorTableRowPreset? GlowRowFor(GlowStyle style, string? artColour = null) => style switch
     {
@@ -460,8 +327,7 @@ public sealed class ModCreationService
                 // White: the shell's base texture is the art, and this row multiplies it.
                 Diffuse       = "#FFFFFF",
                 Emissive      = AlwaysGlowEmissive,
-                // The art's own average, not white — see AverageArtColour. White falls back only when the
-                // art could not be read, where a colourless glow beats none.
+                // The art's own average (see AverageArtColour); white only when the art could not be read.
                 EmissiveColor = artColour ?? RenderModeInference.GlowEmissiveColour,
             },
         },
@@ -472,11 +338,9 @@ public sealed class ModCreationService
             {
                 Diffuse       = DarkOnlySurface,
                 Emissive      = RenderModeInference.GlowEmissive,
-                // Neutral: the scroll map carries the art's own hue, and a tinted emissive would only push
-                // everything toward that tint.
+                // Neutral: the scroll map carries the art's hue.
                 EmissiveColor = RenderModeInference.GlowEmissiveColour,
-                // Dark-only, both halves: the glow fades as the light rises and the surface goes with it,
-                // so the art vanishes into the skin instead of leaving a black silhouette.
+                // Dark-only, both halves: the surface fades with the glow, leaving no black silhouette.
                 LightResponse = 1f,
                 HideInLight   = true,
             },
@@ -521,24 +385,16 @@ public sealed class ModCreationService
     /// user-facing result; nothing is written when validation fails.
     /// </summary>
     /// <param name="wholeSkin">
-    /// The textures ARE the skin, not something painted onto it. Two consequences, both sidecar fields written
-    /// by <see cref="WriteMod"/>: the normal replaces the one already on the material instead of stacking onto
-    /// it (see <see cref="NormalMode.Replace"/>); and skin-tint suppression is off, so the wearer's tone
-    /// reaches the art the way it reaches their face. Reaching a vanilla body needs nothing extra — every mod
-    /// is overlaid onto vanilla skin the character wears unless unticked (see
-    /// <see cref="Configuration.OverlaysVanillaFor"/>).
+    /// The textures are the skin: the normal replaces the material's (<see cref="NormalMode.Replace"/>) and skin-tint
+    /// suppression is off, so the wearer's tone reaches the art.
     /// </param>
     /// <param name="faceSplit">
-    /// The picked face texture is a DOUBLED sheet, the two sides of the head in the two halves of the image.
-    /// Recorded as the overlay's source UV space, which is what lets the compositor un-mirror a face shell
-    /// onto it — the vanilla face layout has no room for side-specific art at all.
+    /// The picked face texture is a doubled sheet, recorded as the overlay's source UV space so the compositor can
+    /// un-mirror a face shell onto it.
     /// </param>
     /// <param name="glow">
-    /// Whether the art glows, and how. Anything but <see cref="GlowStyle.None"/> makes the overlay a gear
-    /// shell — skin cannot emit — and adds the colour-table row that lights it.
-    /// <see cref="GlowStyle.DarkOnly"/> also needs a scroll map, which is derived from the diffuse HERE
-    /// rather than in <see cref="WriteMod"/>: that one is deliberately service-free so the tests can drive
-    /// it against a temp directory, and decoding an image is not.
+    /// Whether the art glows, and how. <see cref="GlowStyle.DarkOnly"/>'s scroll map is derived from the diffuse here,
+    /// keeping <see cref="WriteMod"/> service-free.
     /// </param>
     public CreateResult Create(
         string modName, string author, string materialTarget,
@@ -549,17 +405,12 @@ public sealed class ModCreationService
         author = (author ?? "").Trim();
         materialTarget = (materialTarget ?? "").Trim();
 
-        // These run once per click on Create, not once per frame, so they read the string table directly
-        // rather than going through a cached holder — the message stays next to the branch that decides it.
         if (string.IsNullOrWhiteSpace(modName))
             return new(false, Loc.Localize("Create.Error.NoName", "Enter a mod name."));
         if (string.IsNullOrWhiteSpace(materialTarget))
             return new(false, Loc.Localize("Create.Error.NoMaterial", "Enter a material target."));
 
-        // Each slot carries BOTH names: the label is what the error message shows the user, and it is
-        // translated; there is no invariant token needed here because nothing downstream switches on it.
-        // Interpolating the English identifier instead would put a bare "diffuse" inside an otherwise
-        // fully translated Russian sentence.
+        // The label is translated, since it appears inside a translated message.
         var cs = Localization.Strings.Create;
         var sources = new (string label, string? src)[]
             { (cs.SlotDiffuse, diffuseSrc), (cs.SlotMask, maskSrc), (cs.SlotNormal, normalSrc), (cs.SlotIndex, indexSrc) };
@@ -571,8 +422,7 @@ public sealed class ModCreationService
                 return new(false, string.Format(
                     Loc.Localize("Create.Error.MissingFile.Fmt", "The {0} file no longer exists: {1}"), label, src));
 
-        // A glow's colour comes from the art, per pixel, so there has to be art. The tab dims the checkbox
-        // without a diffuse; this is the same rule where it can be enforced rather than merely shown.
+        // A glow's colour comes from the art, so there has to be art.
         if (glow != GlowStyle.None && string.IsNullOrWhiteSpace(diffuseSrc))
             return new(false, Loc.Localize("Create.Error.GlowNeedsDiffuse",
                 "A glowing overlay takes its colour from the art, so it needs a diffuse texture."));
@@ -594,14 +444,7 @@ public sealed class ModCreationService
             return new(false, string.Format(
                 Loc.Localize("Create.Error.FolderExists.Fmt", "A mod folder named \"{0}\" already exists."), dirName));
 
-        // Measure the art's left/right asymmetry from the SOURCE files, before they are copied in — the
-        // descriptor's own space comes from the material it targets, since the Create tab records no
-        // SourceBodyType of its own. Same slot priority the compositor uses: a tattoo lives in the diffuse,
-        // and a normal/mask-only overlay carries its shape in whichever it has.
-        // Both styles read the art HERE, so WriteMod stays service-free and testable: dark-only needs the
-        // scroll map built from it, and always-glow needs its average colour to emit in. A decode that
-        // fails is reported rather than swallowed — the alternative is a mod that writes fine, renders
-        // wrong, and says nothing about why.
+        // Both glow styles decode the art here so WriteMod stays service-free. A failed decode is reported.
         byte[]? scrollRgba = null;
         int scrollW = 0, scrollH = 0;
         string? artColour = null;
@@ -640,25 +483,14 @@ public sealed class ModCreationService
         if (ec != PenumbraApiEc.Success)
         {
             log.Warning("[Proteus] AddMod({0}) -> {1}", dirName, ec);
-            // Roll the folder back so the name is free to retry — a half-registered mod on disk would
-            // otherwise trip the "already exists" guard on the next attempt.
+            // Roll the folder back so the name is free to retry.
             try { Directory.Delete(root, true); } catch { /* best effort */ }
             return new(false, string.Format(Loc.Localize("Service.RegisterFailed.Fmt",
                 "Wrote the mod, but Penumbra couldn't register it ({0}). Rescan mods in Penumbra."), ec));
         }
 
-        // Enabling is left to Pump, across frames. AddMod is ASYNCHRONOUS: a settings write that lands
-        // while Penumbra is still building the mod returns Success and is then discarded, because the
-        // finished mod replaces the placeholder and comes up on its own defaults — disabled. Enabling on
-        // the next line therefore worked only because Create-tab mods were small, and this is exactly the
-        // failure LuminisImportService documents ("the bigger the mod the more reliably it happened, which
-        // is why the Create tab never showed it"). A dark-only glow writes a second full-size texture, so
-        // it is the case that surfaces it.
-        // Opened HERE rather than in Finish, and unconditionally, because Pump only runs while the Create
-        // tab is on screen. Someone who clicks Create and closes the window immediately would otherwise
-        // never have the mod opened at all — the one thing this did for certain before enabling moved
-        // across frames. Opening it also puts an un-enabled mod in front of the user on the page where
-        // switching it on is a single click, which is the best available outcome for an abandoned wait.
+        // Enabling is left to Pump, across frames: AddMod is asynchronous, and a settings write that lands while
+        // Penumbra is still building the mod is discarded. Opened here, since Pump only runs while the tab is shown.
         penumbra.OpenToMod(dirName);
 
         _pending = new Pending(dirName, modName, materialTarget, Environment.TickCount64 + ActivateTimeoutMs);
@@ -673,8 +505,7 @@ public sealed class ModCreationService
     private Pending? _pending;
     private long _nextAttempt;
 
-    /// <summary>How often to re-ask while waiting — Penumbra IPC is milliseconds a hop, and this would
-    /// otherwise make two of them every frame for as long as the wait lasts.</summary>
+    /// <summary>How often to re-ask while waiting, so Penumbra IPC is not called every frame.</summary>
     private const long AttemptIntervalMs = 250;
 
     /// <summary>How long to keep asking before giving up and saying so.</summary>
@@ -704,8 +535,7 @@ public sealed class ModCreationService
             return Finish(false);
         }
 
-        // Ask, then READ BACK — the return code is not enough on its own. A write discarded by the mod
-        // finishing its load still reports Success, so only the state Penumbra reports afterwards settles it.
+        // Ask, then read back: a discarded write still reports Success.
         penumbra.SetModEnabled(collId.Value, p.DirName, true);
         if (penumbra.GetModSettings(collId.Value, p.DirName) is { Enabled: true })
             return Finish(true);
@@ -718,13 +548,8 @@ public sealed class ModCreationService
     }
 
     /// <summary>
-    /// Recomposite and report. <paramref name="enabled"/> false means the mod is on disk and registered but
-    /// switched off — a warning, not a success, because a mod that renders nothing while the message says
-    /// it worked is the failure this whole path exists to avoid.
-    /// <para/>
-    /// The recomposite is gated on that flag while the OPEN is not (it happens in <see cref="Create"/>):
-    /// a mod Penumbra never switched on contributes nothing, so compositing for it would be work that
-    /// cannot change a pixel. When the enable does land later, this is what paints it.
+    /// Recomposite and report. <paramref name="enabled"/> false means the mod is registered but switched off — a
+    /// warning, not a success. The recomposite only runs when enabled.
     /// </summary>
     private CreateResult Finish(bool enabled)
     {
@@ -743,20 +568,15 @@ public sealed class ModCreationService
     }
 
     /// <summary>
-    /// Write the mod files under <paramref name="root"/>: the texture copies, the Proteus sidecar
-    /// (metadata.json), and Penumbra's meta.json/default_mod.json. Pure filesystem work, no IPC — split
-    /// out so it can be exercised offline against a temp directory.
+    /// Write the mod files under <paramref name="root"/>: the texture copies, the Proteus sidecar, and Penumbra's
+    /// manifests. Pure filesystem work, no IPC.
     /// </summary>
     /// <param name="faceSplit">
-    /// The picked face texture is a DOUBLED sheet — the two sides of the head in the two halves of the image
-    /// — so the overlay declares that layout and gets un-mirrored onto a face shell. Meaningless on any
-    /// non-face target, and wrong on an ordinary face texture.
+    /// The picked face texture is a doubled sheet, so the overlay declares that layout. Wrong on any other texture.
     /// </param>
     /// <param name="scrollRgba">
     /// The already-built scroll map for <see cref="GlowStyle.DarkOnly"/>, at <paramref name="scrollW"/> ×
-    /// <paramref name="scrollH"/>. Built by the caller because this method decodes nothing — it is
-    /// service-free on purpose so the tests can drive it against a temp directory. Null for every other
-    /// style, and a null one under DarkOnly simply leaves the effect unwritten rather than throwing.
+    /// <paramref name="scrollH"/>. Null for every other style; a null one under DarkOnly leaves the effect unwritten.
     /// </param>
     internal static void WriteMod(
         string root, string modName, string author, string materialTarget,
@@ -767,8 +587,7 @@ public sealed class ModCreationService
         var overlaysDir = Path.Combine(root, "Proteus", "overlays");
         Directory.CreateDirectory(overlaysDir);
 
-        // Copy each provided source into overlays/{slot}{ext}, keeping the original (lower-cased) extension
-        // so .png/.tex/.dds all load; record the sidecar-relative path for the descriptor.
+        // Copy each source into overlays/{slot}{ext}, keeping the lower-cased extension; returns the sidecar-relative path.
         string? Copy(string slot, string? src)
         {
             if (string.IsNullOrWhiteSpace(src)) return null;
@@ -778,9 +597,8 @@ public sealed class ModCreationService
             return "overlays/" + name;
         }
 
-        // A dark-only glow's light lives in a scroll map beside the art, named in the descriptor by its
-        // BARE file name — SidecarDiscoveryService.ResolveEffectPath looks it up in Proteus/Effects/ and in
-        // the shared library, not as a sidecar-relative path like the overlay slots above.
+        // A dark-only glow's scroll map is named in the descriptor by bare file name, which
+        // SidecarDiscoveryService.ResolveEffectPath looks up in Proteus/Effects/.
         string? scrollFile = null;
         if (glow == GlowStyle.DarkOnly && scrollRgba is { Length: > 0 } && scrollW > 0 && scrollH > 0)
         {
@@ -795,10 +613,8 @@ public sealed class ModCreationService
 
         var descriptor = new OverlayDescriptor
         {
-            // Skin cannot emit, so a glow is a gear shell. Layer AND Shader are both stated: promotion
-            // alone only moves the LAYER, and the shader would then fall through to plain character.shpk —
-            // which has no scroll map at all, so a dark-only overlay would render its art as an unlit
-            // surface with a flat tint on top and no amount of tuning would fix it.
+            // Skin cannot emit, so a glow is a gear shell. Shader is stated too: promotion alone moves only the
+            // layer, and plain character.shpk has no scroll map.
             Layer = glow == GlowStyle.None ? OverlayLayer.Skin : OverlayLayer.Gear,
             Shader = glow switch
             {
@@ -807,9 +623,7 @@ public sealed class ModCreationService
                 _                  => null,
             },
             Scroll = scrollFile,
-            // Zero and one, explicitly. The material constants ship the speeds at zero and an unset speed
-            // takes GearMaterialWriter's own default instead, sliding the tattoo across the skin it is
-            // drawn on; the map IS the body sheet, so tiling it would repeat the art.
+            // Zero speed and unit tiling, explicitly: the map is the body sheet, and the default speed would slide it.
             ScrollSpeedX  = scrollFile == null ? null : 0f,
             ScrollSpeedY  = scrollFile == null ? null : 0f,
             ScrollTilingX = scrollFile == null ? null : 1f,
@@ -820,22 +634,12 @@ public sealed class ModCreationService
             Normal = Copy("normal", normalSrc),
             Index = Copy("index", indexSrc),
             NormalMode = wholeSkin ? NormalMode.Replace : NormalMode.Compound,
-            // A face texture painted as two halves declares the doubled face layout, which is the only way
-            // side-specific face art can exist: the vanilla one gives both cheeks the same texels. Left null
-            // otherwise — an ordinary face texture IS in the vanilla layout, and saying so would send its two
-            // halves to the two sides of the head.
+            // Doubled face art declares the doubled face layout; an ordinary face texture must not.
             SourceBodyType = faceSplit ? UVRemapService.FaceSplitSpace : null,
-            // And the tick IS the declaration of one-sidedness. AsymmetricArt is otherwise only ever set by
-            // hand in the colour panel, and CompositorService.NeedsUnmirroredShell bails on its very first
-            // line without it — so a doubled sheet written here got NO face shell, fell through to the skin
-            // path, and was simply resampled onto the face's own texture: a 2:1 sheet squeezed into a square
-            // layout, which lands the OUTER edge of the sheet on the midline of the face. Nobody would tick
-            // "this texture is split left/right" about art that has one side.
+            // The tick is also the declaration of one-sidedness: without AsymmetricArt,
+            // CompositorService.NeedsUnmirroredShell gives a doubled sheet no face shell.
             AsymmetricArt = faceSplit ? true : null,
-            // Skin-tint suppression exists to keep FABRIC at its authored colour on any wearer. Art that is
-            // itself the skin wants the opposite — the wearer's tone multiplied onto it, the way the face's
-            // own material already does — so a whole skin ships with it off. Left null otherwise, which is
-            // the documented "full masking" default and keeps the line out of an ordinary sidecar.
+            // A whole skin wants the wearer's tone on it, so skin-tint suppression is off; null keeps the default.
             SkinToneMask = wholeSkin ? 0f : null,
         };
         var metadata = new ProteusMetadata
@@ -844,32 +648,22 @@ public sealed class ModCreationService
             Name = modName,
             Author = author,
             Overlays = [descriptor],
-            // Top level is safe HERE and nowhere else: top-level rows are inherited by every option that
-            // declares none, and any emissive makes RenderModeInference.HasCloth true — which is why the
-            // importers put theirs on the option instead, so an emissive can't reach a plain skin option
-            // and promote it to a shell. A Create-tab mod has exactly one overlay and no option groups,
-            // so there is nothing else for it to reach.
+            // Top-level rows are safe here only: they are inherited by every option, and a Create-tab mod has one
+            // overlay and no option groups for an emissive to promote.
             ColorTableRows = GlowRowFor(glow, artColour) is { } row ? [row] : null,
         };
 
         var metaJson = JsonSerializer.Serialize(metadata, ProteusJson.MetadataWrite);
-        // AtomicWrite for the same reason as the manifest below, and with more at stake: meta.json is
-        // regenerable boilerplate, whereas this descriptor is the authored overlay itself. A zero-filled
-        // one leaves a mod that loads in Penumbra and does nothing in Proteus.
+        // AtomicWrite: a zero-filled descriptor leaves a mod that does nothing in Proteus.
         PenumbraModMeta.AtomicWrite(Path.Combine(root, "Proteus", "metadata.json"), metaJson);
 
-        // Penumbra's manifest, matching CompositorService.EnsureManagedModExists. It goes down BEFORE the
-        // redirects below, and that order is load-bearing now rather than incidental: PenumbraModMeta
-        // refuses to write into a pre-v4 folder, and a folder with no manifest at all reads as pre-v4.
-        // Via AtomicWrite for durability — a manifest left truncated or zero-filled by a crash makes
-        // Penumbra drop the whole mod, with only a parse error in its Messages tab to say why.
+        // Penumbra's manifest, matching CompositorService.EnsureManagedModExists. Must precede the redirects:
+        // PenumbraModMeta refuses to write into a folder without one (it reads as pre-v4).
         PenumbraModMeta.AtomicWrite(
             Path.Combine(root, PenumbraModMeta.MetaFile),
             PenumbraModMeta.NewMetaJson(modName, author, "Created for Proteus."));
 
-        // Proteus does all the real texture redirection itself (via its managed mod) at composite time, so
-        // this default option would otherwise be empty — which Penumbra flags as "changes nothing". A
-        // no-op self-swap of a harmless vanilla path registers it as having content. See DummySwapPath.
+        // A no-op self-swap so Penumbra does not flag the empty default option as "changes nothing". See DummySwapPath.
         PenumbraModMeta.WriteRedirects(
             root, modName,
             files: new Dictionary<string, string>(),

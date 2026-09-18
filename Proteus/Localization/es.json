@@ -215,6 +215,10 @@
     "message": "[Proteus] Tu segunda piel se ha construido, pero el juego no la está dibujando. El accesorio que la sostiene está equipado y aun así el personaje no carga la versión de Proteus. Quítate ese accesorio y vuelve a ponértelo, o elige otro.",
     "description": ""
   },
+  "Chat.ShellMaterialFailed": {
+    "message": "[Proteus] Una parte de tu segunda piel no se está dibujando. El resto sí está en tu personaje, así que o falta una textura que esa pieza necesita, o el juego sigue conservando la versión anterior. Prueba primero «Recomponer ahora» y después quítate y vuelve a ponerte el accesorio que la sostiene.",
+    "description": ""
+  },
   "Chat.ShellNeedsRedraw": {
     "message": "[Proteus] Tu segunda piel ha cambiado, pero el redibujado automático está desactivado, así que tu personaje sigue llevando la versión anterior. Cambia de zona o usa el botón Redraw de Penumbra para verla.",
     "description": ""
@@ -781,6 +785,10 @@
   },
   "Content.EitherColumn": {
     "message": "A y B",
+    "description": ""
+  },
+  "Content.FollowsHairColor": {
+    "message": "Este material usa el shader de pelo, así que la pieza toma el color de pelo y las mechas de tu personaje y no lleva tabla de colores: nada de lo que cambies abajo llegará a ella. Cambia tu color de pelo para recolorearla.",
     "description": ""
   },
   "Content.Geometry.Fmt": {
@@ -2231,6 +2239,38 @@
     "message": "Elige una pieza y arrastra las flechas: una flecha la mueve por\nese eje, un cuadrado la mueve por ese plano.",
     "description": ""
   },
+  "Parts.Tool.Rotate": {
+    "message": "Rotar",
+    "description": ""
+  },
+  "Parts.Tool.Rotate.Tip": {
+    "message": "Elige una pieza y arrastra uno de los anillos para girarla sobre su centro:\nun anillo de color la gira sobre ese eje y el exterior sobre tu vista.",
+    "description": ""
+  },
+  "Parts.Tool.Scale": {
+    "message": "Escalar",
+    "description": ""
+  },
+  "Parts.Tool.Scale.Tip": {
+    "message": "Elige una pieza, pulsa sobre ella y arrastra a la derecha para agrandarla\no a la izquierda para encogerla sobre su centro.",
+    "description": ""
+  },
+  "Parts.Rotate.Help": {
+    "message": "Haz clic en una pieza para elegirla y arrastra uno de los anillos de su centro. Arrastra en cualquier otro sitio para girar el modelo, Mayús+arrastrar para mover la vista y la rueda para hacer zoom.",
+    "description": ""
+  },
+  "Parts.Rotate.LiveHint": {
+    "message": "Haz clic en una pieza de tu personaje y arrastra uno de los anillos de su centro. Mantén Alt para mover la cámara. Cada giro se guarda al soltar.",
+    "description": ""
+  },
+  "Parts.Scale.Help": {
+    "message": "Haz clic en una pieza para elegirla, pulsa sobre ella y arrastra a la derecha para agrandarla o a la izquierda para encogerla. Arrastra en cualquier otro sitio para girar el modelo, Mayús+arrastrar para mover la vista y la rueda para hacer zoom.",
+    "description": ""
+  },
+  "Parts.Scale.LiveHint": {
+    "message": "Haz clic en una pieza de tu personaje, pulsa sobre ella y arrastra a la derecha para agrandarla o a la izquierda para encogerla. Mantén Alt para mover la cámara. Cada cambio se guarda al soltar.",
+    "description": ""
+  },
   "Parts.Move.Help": {
     "message": "Haz clic en una pieza para elegirla y arrastra una flecha o un cuadrado. Arrastra en cualquier otro sitio para girar el modelo, Mayús+arrastrar para mover la vista y la rueda para hacer zoom.",
     "description": ""
@@ -2794,6 +2834,10 @@
   "Settings.Output.Compression.Label": {
     "message": "Activar compresión",
     "description": ""
+  },
+  "Settings.Output.CompressionRefused.Fmt": {
+    "message": "Sin usar: este PC comprime demasiado despacio ({0:F0} ms por megapíxel), y hacerlo\ntardaría tanto que tu aspecto dejaría de dibujarse. En su lugar, las texturas se\ngeneran sin comprimir. Desmarca la casilla para ocultar esto.",
+    "description": "Shown in orange under the Enable Compression checkbox when the box is ticked but the machine was measured too slow to honour it. {0} is a measured number - keep the placeholder and its format. Contains deliberate line breaks."
   },
   "Settings.Output.Compression.Tip": {
     "message": "Comprime por bloques las texturas generadas (BC7), reduciendo cada una a alrededor de\nun cuarto de su tamaño sin comprimir en disco y en VRAM. La textura de índice queda\nsin comprimir para conservar sus valores de fila exactos.\nDesactivado = sin comprimir (idéntico byte a byte al anterior).",

@@ -9,16 +9,8 @@ using System.Text.Json.Serialization;
 namespace Proteus.Services;
 
 /// <summary>
-/// Reader for Onion's <c>.omp</c> overlay packs — the format the competing overlay plugin ships.
-/// <para/>
-/// An <c>.omp</c> is a plain ZIP holding a <c>meta.json</c> manifest plus the layer images it names
-/// (<c>layers/*.png</c> in every pack seen so far). Nothing here writes: the reader hands back the parsed
-/// manifest and the archive's entry table, and <see cref="OnionImportService"/> decides what becomes a
-/// Proteus overlay.
-/// <para/>
-/// The format is not published, so every field is parsed defensively and unknown values are REPORTED
-/// rather than guessed at — see the Layout/Map/Mode mapping in <see cref="OnionImportService"/>. Only one
-/// FormatVersion (2) has been observed; a newer one is read anyway and flagged.
+/// Read-only parser for Onion's <c>.omp</c> overlay packs: a ZIP of a <c>meta.json</c> manifest plus the layer
+/// images it names. The format is unpublished, so fields are parsed defensively and unknown values reported.
 /// </summary>
 public static class OnionPackage
 {
@@ -33,8 +25,7 @@ public static class OnionPackage
     private static readonly JsonSerializerOptions ReadOptions = new()
     {
         PropertyNameCaseInsensitive = true,
-        // Onion writes numeric fields plainly, but a hand-edited pack with "Opacity": "1.0" shouldn't
-        // take down the whole import.
+        // Tolerate hand-edited numbers written as strings.
         NumberHandling = JsonNumberHandling.AllowReadingFromString,
     };
 
@@ -42,10 +33,8 @@ public static class OnionPackage
     public sealed record Contents(OnionManifest Manifest, IReadOnlyDictionary<string, long> Entries)
     {
         /// <summary>
-        /// The archive entry backing a layer's <c>File</c>, or null when the manifest names an image the
-        /// archive doesn't carry. Normalising the separators is this method's whole job — the case
-        /// insensitivity comes from <see cref="Entries"/>'s own comparer, since the manifest and the entry
-        /// table are written by different code paths and needn't agree on either.
+        /// The archive entry backing a layer's <c>File</c>, or null when the archive doesn't carry it. Case
+        /// insensitivity comes from <see cref="Entries"/>'s comparer.
         /// </summary>
         public string? ResolveEntry(string? file)
         {
@@ -57,8 +46,7 @@ public static class OnionPackage
 
     /// <summary>
     /// Parse the manifest and entry table of <paramref name="ompPath"/>. Throws
-    /// <see cref="InvalidDataException"/> when the file isn't a readable pack — the caller turns that into
-    /// a user-facing message.
+    /// <see cref="InvalidDataException"/> when the file isn't a readable pack.
     /// </summary>
     public static Contents Read(string ompPath)
     {
@@ -68,9 +56,7 @@ public static class OnionPackage
         foreach (var e in zip.Entries)
         {
             if (e.FullName.EndsWith('/')) continue;              // directory marker
-            // Nothing here extracts BY entry name — destination filenames are generated — so a traversal
-            // entry can't escape on its own. It's still rejected outright: a pack carrying one is either
-            // corrupt or hostile, and neither should be half-imported.
+            // A traversal entry rejects the whole pack: it is corrupt or hostile.
             var name = Normalize(e.FullName);
             if (Path.IsPathRooted(name) || name.Split('/').Any(s => s == ".."))
                 throw new InvalidDataException($"The pack contains an unsafe entry path: {e.FullName}");
@@ -123,10 +109,7 @@ public sealed class OnionManifest
 
     public List<OnionLayer>? Layers { get; set; }
 
-    /// <summary>
-    /// Onion's own option groups. Kept as raw JSON: the element shape is unpublished and no observed pack
-    /// has a non-empty one, so this exists to be counted and reported, never interpreted.
-    /// </summary>
+    /// <summary>Onion's own option groups, as raw JSON: counted and reported, never interpreted.</summary>
     public JsonElement? Groups { get; set; }
 
     public int TotalLayerCount { get; set; }
@@ -153,10 +136,7 @@ public sealed class OnionLayer
     /// <summary>0–1 layer opacity, baked into the image's alpha on import.</summary>
     public float Opacity { get; set; } = 1f;
 
-    /// <summary>
-    /// Race restriction; empty means every race. Raw JSON because the element type is unpublished — a
-    /// non-empty value is reported as unsupported rather than half-understood.
-    /// </summary>
+    /// <summary>Race restriction; empty means every race. Raw JSON; a non-empty value is reported as unsupported.</summary>
     public JsonElement? Races { get; set; }
 
     /// <summary>Set by Onion when it derived this layer from another layout rather than the artist doing so.</summary>

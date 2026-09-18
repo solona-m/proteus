@@ -17,17 +17,8 @@ using Proteus.Services;
 namespace Proteus.Gui;
 
 /// <summary>
-/// The Parts tab: pick geometry out of a mod's model and put it behind an on/off switch.
-/// <para/>
-/// It exists because a great many mods ship geometry nobody can turn off — a bow, a collar, a strap welded
-/// into an always-on mesh — and Penumbra can only offer what the author built. Rather than host a stripped
-/// copy, Proteus edits the mod so it carries a real switch of its own: an attribute on the geometry and an
-/// IMC group over it, which is the mechanism the author would have used. The switch then works with Proteus
-/// turned off, which is both the point and the acceptance test.
-/// <para/>
-/// Its own class rather than another method on <c>StatusWindow</c>, and its own tab rather than a button on
-/// the Mods list, for the same reason: that list is Proteus's sidecar mods, and this works on ANY installed
-/// mod — most of them will never have heard of Proteus.
+/// The Parts tab: pick geometry out of any installed mod's model and put it behind an on/off switch (an attribute
+/// plus an IMC group written into the mod itself, so it works with Proteus turned off), or reshape it with a brush.
 /// </summary>
 public sealed class PartsPanel
 {
@@ -43,32 +34,19 @@ public sealed class PartsPanel
 
     private string? modDir;
 
-    /// <summary>Every redirect the mod publishes. Kept UNFILTERED alongside <see cref="models"/> because the
-    /// writer needs the material paths to read the item's variant off — filtering to models before handing
-    /// the list over left it with nothing to find.</summary>
+    /// <summary>Every redirect the mod publishes, unfiltered: the writer reads the item's variant off the material paths.</summary>
     private List<PenumbraModMeta.Redirect> redirects = [];
 
     /// <summary>Just the models, for the picker.</summary>
     private List<PenumbraModMeta.Redirect> models = [];
 
-    /// <summary>
-    /// What the picker shows for each entry of <see cref="models"/>, resolved once when the list is built.
-    /// <para/>
-    /// Not per frame: naming a model runs <c>ContentSlot.Parse</c>, which is a compiled regex, and builds a
-    /// string — and the combo asks for the current label on every frame whether it is open or not. Same
-    /// reasoning as <see cref="Strings"/> resolving its text once per language.
-    /// </summary>
+    /// <summary>What the picker shows for each entry of <see cref="models"/>, resolved once when the list is built, not per frame.</summary>
     private List<string> modelLabels = [];
     private int modelIndex = -1;
 
     private ModelParts? parts;
 
-    /// <summary>
-    /// How many switch letters this model has left, resolved when the model is read rather than per frame.
-    /// <para/>
-    /// It only changes when the model does, and <c>FreeLetters</c> allocates a set and a list every call —
-    /// the same reason <see cref="Strings"/> resolves its text once per language instead of once per frame.
-    /// </summary>
+    /// <summary>How many switch letters this model has left, resolved when the model is read rather than per frame.</summary>
     private int freeLetters;
     private bool modelUnreadable;
 
@@ -81,9 +59,8 @@ public sealed class PartsPanel
     private readonly HashSet<(int Mesh, int Submesh)> expanded = [];
 
     /// <summary>
-    /// Parts locked against the brush, by label, per model (keyed like <see cref="ViewportKey"/>). A submesh's
-    /// label covers all its islands. Kept for the session across tools, saves and switching models, since a lock
-    /// is about the garment — the belt on these trousers — and never written into the mod.
+    /// Parts locked against the brush, by label, per model (keyed like <see cref="ViewportKey"/>). A submesh's label
+    /// covers all its islands. Kept for the session and never written into the mod.
     /// </summary>
     private readonly Dictionary<string, HashSet<string>> lockedParts = [];
 
@@ -123,7 +100,24 @@ public sealed class PartsPanel
 
         /// <summary>Pick one part and drag it through space with a gizmo, the way Blender and 3ds Max move a selection.</summary>
         Move,
+
+        /// <summary>Pick one part and turn it about its centre by dragging it sideways.</summary>
+        Rotate,
+
+        /// <summary>Pick one part and grow or shrink it about its centre by dragging it sideways.</summary>
+        Scale,
     }
+
+    /// <summary>The tools that work on one chosen part rather than painting: Move, Rotate and Scale share its choice.</summary>
+    private static bool IsPartTool(Tool t) => t is Tool.Move or Tool.Rotate or Tool.Scale;
+
+    private bool PartTool => IsPartTool(tool);
+
+    /// <summary>The handle Scale drags — the part itself — shared by the model view and the character.</summary>
+    private readonly PartScaleDrag scaleDrag = new();
+
+    /// <summary>The rings Rotate drags, shared by the model view and the character.</summary>
+    private readonly RotateGizmo rotateGizmo = new();
 
     /// <summary>Pull out to start with: clearing a body poking through a garment is what the tab is opened for most.</summary>
     private Tool tool = Tool.Inflate;
@@ -134,33 +128,24 @@ public sealed class PartsPanel
     /// <summary>The part the Move tool has chosen, by label; null for none. Cleared with the model or the tool.</summary>
     private string? movePart;
 
-    /// <summary>
-    /// Move carries the cloth joined to the part along, fading out over <see cref="moveFalloffMm"/> — on by default,
-    /// because a sleeve moved without the shoulder it is sewn to stretches one row of triangles into a sliver.
-    /// </summary>
+    /// <summary>Move carries the cloth joined to the part along, fading out over <see cref="moveFalloffMm"/>.</summary>
     private bool moveAdjacent = true;
 
     /// <summary>How far along the surface the joined cloth follows a move, in millimetres.</summary>
     private float moveFalloffMm = 50f;
 
     /// <summary>
-    /// The editable geometry of the model on screen, or null before one is picked. Rebuilt only when the
-    /// model changes — the weld and the boundary scan depend on topology, which a stroke never alters.
+    /// The editable geometry of the model on screen, or null before one is picked. Rebuilt only when the model changes.
     /// </summary>
     private MeshVolumeSolve? volume;
 
-    /// <summary>Brush radius and per-dab strength, both in millimetres because that is how the problem is
-    /// described: "the hip pokes through by about a millimetre".</summary>
+    /// <summary>Brush radius and per-dab strength, both in millimetres.</summary>
     private float brushRadiusMm = 200f, brushStrengthMm = 0.4f;
 
-    /// <summary>
-    /// The bridge brush's own size, smaller than the others'. A bridge spans the hollow under the brush, so a
-    /// brush far wider than the crack reaches past it onto the curves either side and bridges between those
-    /// too; starting it near the width of the thing it is for keeps the span where it was meant.
-    /// </summary>
+    /// <summary>The bridge brush's own size, smaller than the others': a wide bridge spans past the hollow onto the curves beside it.</summary>
     private float bridgeRadiusMm = 70f;
 
-    /// <summary>The size the current tool paints with — the bridge keeps its own, see above.</summary>
+    /// <summary>The size the current tool paints with; the bridge and wind brushes keep their own.</summary>
     private ref float ActiveRadiusMm
         => ref tool == Tool.Bridge ? ref bridgeRadiusMm
              : ref (tool == Tool.Wind ? ref windRadiusMm : ref brushRadiusMm);
@@ -172,8 +157,8 @@ public sealed class PartsPanel
     private float windRadiusMm = 15f;
 
     /// <summary>
-    /// The wind being painted, as a percentage of full sway: each dab moves the surface toward it. Its own field,
-    /// like each brush's strength, so switching tools never reinterprets another brush's number.
+    /// The wind being painted, as a percentage of full sway: each dab moves the surface toward it. Its own field so
+    /// switching tools never reinterprets another brush's number.
     /// </summary>
     private float windAmountPercent = 5f;
 
@@ -181,16 +166,14 @@ public sealed class PartsPanel
     private float windRatePercent = 15f;
 
     /// <summary>
-    /// The relax brush's strength, as a percentage — how far each moment of painting moves the surface toward
-    /// its neighbours. Its own field rather than <see cref="brushStrengthMm"/>, which is a distance: switching
-    /// tools must not reinterpret 0.05 mm as 0.05 %.
+    /// The relax brush's strength, as a percentage moved toward the neighbours per moment of painting. Its own field:
+    /// <see cref="brushStrengthMm"/> is a distance.
     /// </summary>
     private float relaxRatePercent = 30f;
 
     /// <summary>
-    /// The bridge brush's rate, as a percentage — how much of the remaining gap each moment of painting
-    /// closes. Its own field, and far lower than relax's: a bridge closes the gap it measures each dab, so a
-    /// high rate fills a crack before there is time to see how far it should go.
+    /// The bridge brush's rate, as a percentage of the remaining gap closed per moment of painting; far lower than
+    /// relax's, since a bridge re-measures the gap each dab.
     /// </summary>
     private float bridgeRatePercent = 5f;
 
@@ -199,8 +182,8 @@ public sealed class PartsPanel
     private int brushSaved;
 
     /// <summary>
-    /// The model's bytes as they were when the brush was opened on it. Every save is these plus the whole
-    /// edit so far — see <see cref="MeshVolumeService.Apply"/> — so saving repeatedly never stacks.
+    /// The model's bytes as they were when the brush was opened on it. Every save is these plus the whole edit so far
+    /// (see <see cref="MeshVolumeService.Apply"/>), so saving repeatedly never stacks.
     /// </summary>
     private byte[]? brushBase;
 
@@ -208,10 +191,7 @@ public sealed class PartsPanel
     private long brushChangedAt = -1;
 
     /// <summary>
-    /// Paint in the model viewer in this window rather than on the character in the game world. Off by default:
-    /// the character is what the edit is for, and painting it directly shows the result in its own lighting
-    /// and pose. The viewer stays for anything the character cannot show — a part hidden under another, a
-    /// garment not currently worn.
+    /// Paint in the model viewer in this window rather than on the character in the game world. Off by default.
     /// </summary>
     private bool showModelView;
 
@@ -227,9 +207,7 @@ public sealed class PartsPanel
     private long lastPreviewAt;
 
     /// <summary>
-    /// Least time between previews while the brush is down. Each is a model rebuild, a file write and a gear
-    /// reload; faster than this the reloads queue behind one another and the character lags further behind
-    /// the brush rather than closer.
+    /// Least time between previews while the brush is down; faster, the reloads queue and the character lags further behind.
     /// </summary>
     private const long PreviewIntervalMs = 150;
 
@@ -249,7 +227,12 @@ public sealed class PartsPanel
         partTickedFn = PartTicked;
         moveClickedFn = MoveClickedOnCharacter;
         moveTickedFn = MoveTicked;
-        gizmoCaptureFn = () => moveGizmo.Capturing;
+        gizmoCaptureFn = () => tool switch
+        {
+            Tool.Move   => moveGizmo.Capturing,
+            Tool.Rotate => rotateGizmo.Capturing,
+            _           => scaleDrag.Capturing,
+        };
         this.textureLoader = textureLoader;
         this.log = log;
     }
@@ -258,25 +241,18 @@ public sealed class PartsPanel
     /// <summary>Drop the mod list so the next frame re-reads it — wired to the window's Refresh.</summary>
     public void Refresh() => mods = null;
 
-    /// <summary>
-    /// Every mod Penumbra knows, by folder → display name, less Proteus's own output mod — see the picker for
-    /// why that one is left out.
-    /// </summary>
+    /// <summary>Every mod Penumbra knows, by folder → display name, less Proteus's own output mod.</summary>
     private Dictionary<string, string> LoadMods()
         => (penumbra.GetAllMods() ?? [])
             .Where(m => !string.Equals(m.Key, SidecarDiscoveryService.ManagedModDir,
                                        StringComparison.OrdinalIgnoreCase))
             .ToDictionary(m => m.Key, m => m.Value);
 
-    /// <summary>
-    /// Whether the last <see cref="Draw"/> drew the model viewer. The window reads the moment this turns on
-    /// to grow itself, since the viewer is what the room is for and the size that suits a mod picker is far
-    /// too small to paint on.
-    /// </summary>
+    /// <summary>Whether the last <see cref="Draw"/> drew the model viewer; the window grows itself when this turns on.</summary>
     public bool ShowingModel { get; private set; }
 
     /// <param name="fillHeight">Whether the model row may take all the height that is left. True only while
-    /// the window is user-resizable, which it is only on this tab — see the remarks on the computation.</param>
+    /// the window is user-resizable.</param>
     /// <param name="reserveBelow">Height the window itself still needs under the tab content (its footer).</param>
     public void Draw(bool fillHeight, float reserveBelow)
     {
@@ -308,10 +284,7 @@ public sealed class PartsPanel
             ImGui.TextColored(ProteusStyle.Warn, ps.LegacyMod);
             ImGui.PopTextWrapPos();
 
-            // Undo still offered. An older Proteus DID write into folders like this one, so a mod here may
-            // carry switches of ours — and hiding the button would leave the one person who needs it most
-            // with no way out. The models come back either way; only removing the option group can fail,
-            // and it says so.
+            // Undo still offered: a legacy folder may carry switches an older Proteus wrote.
             DrawExisting();
             DrawStatus();
             return;
@@ -331,20 +304,9 @@ public sealed class PartsPanel
 
         ImGui.Separator();
 
-        // ── why the fill branch is safe, and only here ──
-        // It reads back a height the layout itself produces, which is the shape of a feedback loop. It is
-        // stable ONLY because this branch runs while the window is NOT auto-resizing: avail.Y is then a
-        // function of the size the user dragged to and nothing else, so a taller row cannot make a taller
-        // window. Under AlwaysAutoResize — every other tab, and this one for the frame either side of a tab
-        // switch — the same expression grows without bound until it hits MaximumSize, which is why the fixed
-        // height has to remain the path for every non-fill frame rather than being replaced by it.
-        //
-        // Nothing is drawn below the row any more — the controls moved into the side panel — so there is no
-        // tail to measure and leave room for: the row takes all the height the window has.
-        // Not a fixed height when the window is fitting itself: the side panel's own content, measured last frame,
-        // so the fit leaves every control on screen instead of behind the panel's scrollbar.
-        // Plus the same 4 px the fill branch below takes off, so the row the window was fitted to is exactly the
-        // row fill mode hands back — and the panel is not left a sliver short, with a scrollbar, once it does.
+        // Fill mode is stable only while the window is NOT auto-resizing; under AlwaysAutoResize the same expression grows
+        // without bound, so non-fill frames keep a fixed height.
+        // Fitting: the side panel's content measured last frame, plus the 4 px the fill branch takes off.
         float height = MathF.Max(ProteusStyle.S(360f), sidePanelContent + ProteusStyle.S(4f));
         if (fillHeight)
             height = MathF.Max(ImGui.GetContentRegionAvail().Y - reserveBelow - ProteusStyle.S(4f),
@@ -355,10 +317,7 @@ public sealed class PartsPanel
         HandleUndoShortcut();
         HandleBrushSizeKeys();
 
-        // The tools and their controls down the LEFT, beside the model rather than under it. Under it, every
-        // slider and button cost the model its height, and a model you paint on wants all the height there is.
-        // One set of controls or the other, never both: staging a switch and brushing geometry are different
-        // jobs, and showing both invites writing a switch while thinking about a brush.
+        // The tools and their controls down the left, beside the model; one set of controls or the other, never both.
         using (var side = ImRaii.Child("##partsSide", new Vector2(ProteusStyle.S(SidePanelWidth), height), true))
         {
             if (side)
@@ -375,7 +334,7 @@ public sealed class PartsPanel
                 DrawToolPicker();
                 ImGui.Separator();
                 if (tool == Tool.Navigate) DrawStaging();
-                else if (tool == Tool.Move) DrawMove();
+                else if (PartTool) DrawMove();
                 else DrawBrush();
 
                 // Window-local, so it already counts any scroll; plus the panel's bottom padding and border.
@@ -390,15 +349,12 @@ public sealed class PartsPanel
         }
         else
         {
-            // Without the viewer, picking parts for a switch is done from the list alone — and under a brush the
-            // same list locks parts against it.
             ImGui.SameLine();
             DrawPartList(parts, height);
 
-            // Under Toggle Parts too, where nothing paints: a click on the open garment ticks the part under it, as a
-            // click on the model view does — and a click on any other worn garment still opens that one.
+            // Under Toggle Parts a click on the open garment ticks the part under it; a click on another worn garment opens that one.
             bool pickParts = tool == Tool.Navigate;
-            bool moving = tool == Tool.Move;
+            bool moving = PartTool;
             if (volume != null && brushBase != null && ModRoot() is { } root)
                 liveBrush.ArmBrush(Path.Combine(root, models[modelIndex].File.Replace('/', Path.DirectorySeparatorChar)),
                                    brushBase, volume, ActiveRadiusMm / 1000f, showWind: tool == Tool.Wind,
@@ -407,9 +363,11 @@ public sealed class PartsPanel
                                    pickParts: pickParts,
                                    partTicked: moving ? moveTickedFn : partTickedFn,
                                    tickedVersion: moving ? MoveVersion() : TickedVersion(),
-                                   moveGizmo: moving ? moveGizmo : null,
+                                   moveGizmo: tool == Tool.Move ? moveGizmo : null,
                                    movePivot: moving ? MovePivot() : null,
-                                   graftedGamePath: GraftedGamePath());
+                                   graftedGamePath: GraftedGamePath(),
+                                   scaleDrag: tool == Tool.Scale ? scaleDrag : null,
+                                   rotateGizmo: tool == Tool.Rotate ? rotateGizmo : null);
         }
 
         PumpMove();
@@ -426,14 +384,10 @@ public sealed class PartsPanel
         if (showModelView || !previewDirty || preview.Busy) return;
         if (volume == null || brushBase == null || modelIndex < 0) { previewDirty = false; return; }
         bool customizePart = TargetIsCustomizePart;
-        // An imported piece is drawn as part of a Proteus shell, so there is no game path of its own to put a
-        // preview in front of: redirecting the one its file name names would land on nothing. The stroke shows
-        // when the save rebuilds the shell — see SaveBrush.
+        // An imported piece is drawn inside a Proteus shell, so there is no game path to preview on; the save shows it.
         if (TargetIsContent) { previewDirty = false; return; }
 
-        // This kind of part turned out not to reload in place (found out after a push, once the save had already
-        // counted on it): show the finished stroke the old way, once the brush is up — preview taken down first,
-        // so the redraw loads the saved file and not the last preview that did not land.
+        // A part that does not reload in place: show the finished stroke once the brush is up, preview taken down first.
         if (preview.UnsupportedFor(customizePart))
         {
             if (Editing) return;
@@ -450,7 +404,6 @@ public sealed class PartsPanel
         try { bytes = MeshVolumeService.Inflate(brushBase, volume).Model; }
         catch (Exception ex)
         {
-            // The save will say the same thing properly; the preview just stops trying.
             log.Warning("[Proteus] live brush: preview could not build the model: {0}", ex.Message);
             previewDirty = false;
             return;
@@ -477,19 +430,14 @@ public sealed class PartsPanel
     private bool TargetIsCustomizePart
         => modelIndex >= 0 && modelIndex < models.Count && LiveBrushPreview.IsCustomizePart(models[modelIndex].GamePath);
 
-    /// <summary>
-    /// Take the preview off the character, so it draws the mod's own (saved) file again. Before anything that
-    /// changes which model or which file the preview stands in for.
-    /// </summary>
+    /// <summary>Take the preview off the character, so it draws the mod's own (saved) file again.</summary>
     private void EndLivePreview(bool refreshGame)
     {
         previewDirty = false;
         preview.End(redraw: refreshGame);
     }
 
-    /// <summary>
-    /// The tab is being left, closed or torn down: save anything waiting and take the preview down.
-    /// </summary>
+    /// <summary>The tab is being left, closed or torn down: save anything waiting and take the preview down.</summary>
     /// <param name="refreshGame">False on teardown, when nothing should be poked beyond landing the file.</param>
     public void Leave(bool refreshGame = true)
     {
@@ -500,14 +448,8 @@ public sealed class PartsPanel
     }
 
     /// <summary>
-    /// Choosing a garment by clicking it on the character — on while painting on the character with Toggle Parts
-    /// selected or nothing open to brush yet, with a line above the mod picker saying so.
-    /// <para/>
-    /// Not behind a button, because it replaces the pickers: finding the right mod among hundreds, then the right
-    /// model among its sizes, is the slowest part of fixing a clip, and the character already knows the answer.
-    /// But OFF under a brush with a model open: a stroke that starts a hair off the edge of the garment, or a click
-    /// meant for the garment that lands on the one beside it, used to swap the model out from under the brush.
-    /// Switching garments is a Toggle Parts job, or the pickers'.
+    /// Choosing a garment by clicking it on the character: on while painting on the character with Toggle Parts
+    /// selected or nothing open to brush yet. Off under a brush with a model open, so a stroke cannot swap the model.
     /// </summary>
     private void DrawLivePick()
     {
@@ -519,9 +461,7 @@ public sealed class PartsPanel
     }
 
     /// <summary>
-    /// Open the model of the chosen mod that the character is wearing — the row the model picker shows green —
-    /// so picking a mod lands on the size actually on screen instead of an empty model box. When several of the
-    /// mod's models are worn, the same slot order as <see cref="AutoPickWorn"/>: body, legs, hands, feet, head.
+    /// Open the model of the chosen mod that the character is wearing, in <see cref="AutoPickWorn"/>'s slot order.
     /// Nothing is chosen when the mod is not being worn.
     /// </summary>
     private void SelectWornModel()
@@ -551,9 +491,8 @@ public sealed class PartsPanel
     private static readonly string[] AutoPickSlots = ["_top.mdl", "_dwn.mdl", "_glv.mdl", "_sho.mdl", "_met.mdl"];
 
     /// <summary>
-    /// Open the garment most likely to be the one needing a fix, so the tab arrives ready to paint: the worn
-    /// chest piece if it comes from a mod, else the legs, then hands, feet and head — and the exact file the
-    /// character is wearing, which for a mod offering sizes is the size selected in Penumbra.
+    /// Open the garment most likely to need a fix: the worn chest piece if it comes from a mod, else legs, hands, feet
+    /// and head, at the exact file the character is wearing.
     /// </summary>
     private void AutoPickWorn()
     {
@@ -586,9 +525,8 @@ public sealed class PartsPanel
             return;
 
         var dir = Path.GetFileName(modRoot);
-        // Our own output mod is rebuilt from scratch on every composite, so opening it offers edits the next
-        // composite throws away — the picker leaves it out for that reason, and a click must not get round it.
-        // What the user clicked on is a shell; the garment inside it is edited in the mod it was imported from.
+        // Our own output mod is rebuilt on every composite, so edits there are thrown away; the clicked shell's garment is
+        // edited in the mod it was imported from.
         if (string.Equals(dir, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase))
         {
             status = Strings.Parts.LivePickedShell;
@@ -611,21 +549,15 @@ public sealed class PartsPanel
     /// <summary>Width of the tool panel left of the model, before UI scaling.</summary>
     private const float SidePanelWidth = 250f;
 
-    /// <summary>How tall the side panel's controls came out last frame, scaled — the height it asks for while the
-    /// window fits itself to the tab.</summary>
+    /// <summary>How tall the side panel's controls came out last frame, scaled.</summary>
     private float sidePanelContent;
 
     /// <summary>How tall the tab's controls need to be, so the window can fit itself again when they grow.</summary>
     public float ControlsHeight => sidePanelContent;
 
     /// <summary>
-    /// Ctrl+Z takes back the last brush stroke — the same as the Undo stroke button, saving and redrawing at
-    /// once.
-    /// <para/>
-    /// Only while this window has focus, so Ctrl+Z pressed in the game or in another plugin does nothing here;
-    /// never while a text box has the keyboard, where Ctrl+Z belongs to the text; and never mid-stroke, where
-    /// it would undo the stroke still being painted out from under the brush. Nor while picking parts, where
-    /// no brush controls are showing and Ctrl+Z would read as taking back a tick, not rewriting the model.
+    /// Ctrl+Z takes back the last brush stroke, saving and redrawing at once. Only while this tab has the keyboard
+    /// (see <see cref="ShortcutsHaveTheKeyboard"/>), never mid-stroke and never while picking parts.
     /// </summary>
     private void HandleUndoShortcut()
     {
@@ -644,9 +576,8 @@ public sealed class PartsPanel
     private readonly HeldKey shrinkKey = new(KeyPoll.VkLeftBracket, repeat: true);
 
     /// <summary>
-    /// Whether a key pressed now is meant for this tab: the game is the foreground window, no text box has the
-    /// keyboard, and this window is focused or under the mouse — or, painting on the character, which clicks into
-    /// the game world and so takes focus from every window, no window is focused at all.
+    /// Whether a key pressed now is meant for this tab: the game is foreground, no text box has the keyboard, and
+    /// this window is focused or hovered, or (painting on the character) no window is focused at all.
     /// </summary>
     private bool ShortcutsHaveTheKeyboard()
     {
@@ -660,15 +591,14 @@ public sealed class PartsPanel
     private const float MinBrushMm = 1f, MaxBrushMm = 300f;
 
     /// <summary>
-    /// <c>[</c> and <c>]</c> shrink and grow the current tool's brush — the Photoshop and Krita keys. By a PROPORTION
-    /// rather than a fixed step, so a press means the same at 3 mm as at 250 mm; Shift for fine steps. Held, they
-    /// repeat. Gated like <see cref="HandleUndoShortcut"/> — see <see cref="ShortcutsHaveTheKeyboard"/>.
+    /// <c>[</c> and <c>]</c> shrink and grow the current tool's brush by a proportion, Shift for fine steps; held,
+    /// they repeat. Gated by <see cref="ShortcutsHaveTheKeyboard"/>.
     /// </summary>
     private void HandleBrushSizeKeys()
     {
         bool grow = growKey.Poll(), shrink = shrinkKey.Poll();   // every frame — see HeldKey
         if (!grow && !shrink) return;
-        if (tool is Tool.Navigate or Tool.Move || volume == null) return;
+        if (tool == Tool.Navigate || PartTool || volume == null) return;
         var io = ImGui.GetIO();
         if (io.KeyCtrl || !ShortcutsHaveTheKeyboard()) return;
 
@@ -691,35 +621,27 @@ public sealed class PartsPanel
     private void DrawModPicker()
     {
         var ps = Strings.Parts;
-        // Proteus's own output mod is left out. It is rebuilt from scratch on every composite, so a switch or a
-        // brush edit written into it lasts until the next one — and because the character is always drawing
-        // it, it would otherwise head the worn list above the garments someone actually came here to fix.
+        // Proteus's own output mod is left out: it is rebuilt on every composite, so an edit written into it does not last.
         mods ??= LoadMods();
 
         var width = ProteusStyle.S(340f);
         ImGui.SetNextItemWidth(width);
 
-        // The height cap has to be explicit: BeginCombo applies its own row limit ONLY when the caller
-        // supplied no size constraint, so passing a width silently disables it and the popup would grow one
-        // row per mod — and this list is EVERY mod Penumbra knows, which is routinely several hundred.
+        // BeginCombo applies its own row limit only when no size constraint is given, so the height cap must be explicit.
         var popupMaxH = ImGui.GetTextLineHeightWithSpacing() * 18 + ImGui.GetStyle().WindowPadding.Y * 2;
         ImGui.SetNextWindowSizeConstraints(new Vector2(width, 0), new Vector2(width * 2.2f, popupMaxH));
 
         var current = modDir != null && mods.TryGetValue(modDir, out var name) ? name : ps.PickMod;
         if (!ImGui.BeginCombo(ps.Mod + "##partsMod", current)) return;
 
-        // Fresh filter each open, with the caret already in the box so the list can just be typed at.
         // SetKeyboardFocusHere targets the NEXT item submitted, so it has to sit immediately before it.
         bool appearing = ImGui.IsWindowAppearing();
         if (appearing)
         {
             modFilter = "";
-            // Asked once per open, not per frame: it is an IPC round trip over every resource the character
-            // has loaded, and what is worn does not change while someone is reading a list.
+            // Once per open, not per frame: an IPC round trip over every loaded resource.
             equippedMods = EquippedModDirectories();
-            // The mod list too, for the same cost and the same reason. Cached for the life of the tab, it
-            // missed every mod installed since it was first drawn — importing a pack and coming straight here
-            // to edit it, which is the obvious thing to do, listed everything except the mod just imported.
+            // The mod list too, so a mod installed since the tab was first drawn is listed.
             mods = LoadMods();
         }
         ImGui.SetNextItemWidth(-1);
@@ -727,17 +649,14 @@ public sealed class PartsPanel
         ImGui.InputTextWithHint("##partsFilter", Strings.Export.FilterHint, ref modFilter, 64);
         ImGui.Separator();
 
-        // Worn mods first, then everything else, each alphabetical. A garment that clips is almost always one
-        // being worn, and finding it among several hundred installed mods is the slowest part of fixing it.
+        // Worn mods first, then everything else, each alphabetical.
         int shown = 0;
         bool anyEquippedShown = false, separated = false;
         foreach (var (dir, label) in mods
                      .OrderBy(m => equippedMods.Contains(m.Key) ? 0 : 1)
                      .ThenBy(m => m.Value, StringComparer.OrdinalIgnoreCase))
         {
-            // Folder as well as name. The two routinely differ — Penumbra's folder is a sanitised form of
-            // the name, and either can be renamed — so filtering on the label alone hides mods someone is
-            // searching for by folder.
+            // Folder as well as name: the two routinely differ.
             if (modFilter.Length > 0
                 && label?.Contains(modFilter, StringComparison.OrdinalIgnoreCase) != true
                 && dir?.Contains(modFilter, StringComparison.OrdinalIgnoreCase) != true)
@@ -748,8 +667,7 @@ public sealed class PartsPanel
             else if (anyEquippedShown && !separated) { ImGui.Separator(); separated = true; }
 
             shown++;
-            // ##dir: two mods can share a display name, and duplicate ImGui ids would route the click to
-            // the wrong row.
+            // ##dir: two mods can share a display name, and duplicate ImGui ids would route the click to the wrong row.
             bool picked;
             using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Ok, worn))
                 picked = ImGui.Selectable($"{label}##{dir}", dir == modDir);
@@ -771,19 +689,13 @@ public sealed class PartsPanel
     private HashSet<string> equippedMods = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Which installed mods the character is wearing, by folder name: every mod that a currently loaded
-    /// model file is being read from.
-    /// <para/>
-    /// Models, not textures or materials, because this tab edits models — a mod that only recolours the gear
-    /// being worn has nothing here to pick. Empty rather than null when Penumbra cannot answer, so the list
-    /// simply falls back to alphabetical.
+    /// Which installed mods the character is wearing, by folder: every mod a loaded model file is read from.
+    /// Empty rather than null when Penumbra cannot answer.
     /// </summary>
     private HashSet<string> EquippedModDirectories()
     {
         var worn = WornFiles().Select(w => w.Mod).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        // An imported garment is drawn out of OUR output mod, so the walk above never names the mod it came
-        // from — the one mod whose geometry is definitely on the character was the one row that could not go
-        // green. The composite records which mods it cut content from; that is what says so here.
+        // An imported garment is drawn out of our output mod; the composite records which mods it cut content from.
         foreach (var dir in (IEnumerable<string>?)mods?.Keys ?? [])
             if (compositor.GetLiveContentModels(dir) is { Count: > 0 })
                 worn.Add(dir);
@@ -809,9 +721,7 @@ public sealed class PartsPanel
             if (HatCompatService.InMods(file, root, out var modRoot, out var rel))
                 found.Add((Path.GetFileName(modRoot), rel));
 
-        // The imported models the character is wearing through our shell. They are worn by every meaning the
-        // user has — visible, on the character, editable here — and the walk above cannot see them, because
-        // the file the game loaded is ours, not the mod's. See CompositorService.GetLiveContentModels.
+        // Imported models worn through our shell, which the walk above cannot see. See CompositorService.GetLiveContentModels.
         if (modDir != null && compositor.GetLiveContentModels(modDir) is { } content)
             foreach (var rel in content)
                 found.Add((modDir, rel));
@@ -825,7 +735,7 @@ public sealed class PartsPanel
         EndLivePreview(refreshGame: true);
         brushChangedAt = -1;
         movePart = null;
-        moveGizmo.Release();
+        ReleaseHandles();
         modDir = dir;
         modelIndex = -1;
         parts = null;
@@ -845,45 +755,27 @@ public sealed class PartsPanel
         existing = MeshToggleService.ReadRecord(root);
         brushSaved = MeshVolumeService.PatchedCount(root);
 
-        // A pre-v4 folder is read-only to Proteus, so there is nothing useful to offer: every model would
-        // be listed, clickable and staged, only for the write to refuse at the end. Answered before the
-        // list is built instead — the message says how to fix it, and Penumbra does the fixing.
-        // No wait: this runs on the draw thread and only decides what to show. A write still checks properly.
+        // A pre-v4 folder is read-only to Proteus, so nothing is listed. No wait on the draw thread; a write still checks.
         modIsLegacy = PenumbraModMeta.IsLegacyFolder(root, waitIfHeld: false);
         if (modIsLegacy) return;
 
-        // Models the mod PUBLISHES, not files lying in its folder. That is the list that matters: a model
-        // nothing redirects to is dead weight the author left behind, and — the part that decides the whole
-        // feature — a published model comes with the game path it claims, which is where the item's IMC
-        // identity is read from when the switch is finally written.
+        // Models the mod PUBLISHES: a published model carries the game path its item's IMC identity is read from.
         redirects = PenumbraModMeta.ReadAllRedirects(root);
 
-        // Grouped by item, but WITHIN an item left in the order the mod declares them, which is what the
-        // author's own group and option order is. That order is the whole point once a row is labelled by
-        // its option: sizes do not sort alphabetically into size order, and sorting on Source turned a
-        // small/medium/large list into large/medium/small. OrderBy is a stable sort, so dropping the
-        // secondary key is all it takes to keep the declaration order ReadAllRedirects already preserves.
+        // Grouped by item, but within an item kept in declaration order (the author's option order); OrderBy is stable.
         models = redirects
             .Where(r => r.GamePath.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase))
             .OrderBy(r => r.GamePath, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        // An imported pack's garments publish nothing: the import takes their model redirects off Penumbra so
-        // Proteus can graft the geometry instead, which left a mod whose every model was invisible here ("this
-        // mod publishes no models"). They are listed from the sidecar, after the published ones.
+        // An imported pack's garments publish nothing, so they are listed from the sidecar, after the published ones.
         models.AddRange(ContentModels(root, contentFiles));
         modelLabels = ModelLabels(models);
     }
 
     /// <summary>
-    /// Files this mod's models come from that Penumbra does not publish — an imported pack's content pieces,
-    /// which Proteus grafts onto a host item instead. <paramref name="files"/> is filled with them, so the rest
-    /// of the tab can tell one from an ordinary model.
-    /// <para/>
-    /// The game path is derived from the file's own name rather than stored: the importer keeps the pack's
-    /// archive entry, and a model's leaf carries the race, kind and set the game would ask for it under. It is
-    /// what labels the row, what the brush reads the race from, and what groups a garment's sizes together —
-    /// never anything Penumbra is asked to resolve.
+    /// Files this mod's models come from that Penumbra does not publish (an imported pack's content pieces);
+    /// <paramref name="files"/> is filled with them. The game path is derived from the file's own name.
     /// </summary>
     private static List<PenumbraModMeta.Redirect> ContentModels(string root, HashSet<string> files)
     {
@@ -930,15 +822,8 @@ public sealed class PartsPanel
         && contentFiles.Contains(models[modelIndex].File);
 
     /// <summary>
-    /// The path to pose the open model at when the character is wearing it through a Proteus shell — the brush
-    /// then paints it without finding it among the drawn models. Null for an ordinary model, and for an imported
-    /// one the character is NOT wearing.
-    /// <para/>
-    /// That second case is the point of asking the composite rather than the sidecar. A pack ships a garment in
-    /// four sizes and several races, and only the one variant resolved for this character is in the shell. Posing
-    /// any of the others would paint a surface nobody is wearing — into a file the composite does not read, so
-    /// the stroke would never appear — and a variant authored for another race would be posed through that race's
-    /// deform, making it look plausible while being wrong. Those get the ordinary "not on your character" notice.
+    /// The path to pose the open model at when the character is wearing it through a Proteus shell. Null for an ordinary
+    /// model, and for an imported variant the character is NOT wearing (posing it would paint a surface nobody wears).
     /// </summary>
     private string? GraftedGamePath()
     {
@@ -970,9 +855,7 @@ public sealed class PartsPanel
 
             for (int i = 0; i < models.Count; i++)
             {
-                // Green for the file the character is drawing right now — the option actually selected in
-                // Penumbra for what is being worn. A mod offering five sizes of one garment lists five rows
-                // that differ by one word, and the one that matters is the one on screen.
+                // Green for the file the character is drawing right now.
                 bool worn = wornModels.Contains(models[i].File.Replace('\\', '/'));
                 bool picked;
                 using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Ok, worn))
@@ -984,15 +867,8 @@ public sealed class PartsPanel
     }
 
     /// <summary>
-    /// What one model is called in the picker.
-    /// <para/>
-    /// The MOD'S OWN label leads — "Pant Size / Small" — because that is the choice being made. A mod
-    /// publishes one game path from several files precisely so the wearer can pick between them, and those
-    /// alternatives are almost always sizes; leading with the slot and set id put the one word that
-    /// distinguishes the rows ("Small") last, and a narrow combo cut it off.
-    /// <para/>
-    /// The slot is appended only to break a tie, since a mod with one garment in five sizes needs it on none
-    /// of them. See <see cref="ModelLabels"/>.
+    /// What one model is called in the picker: the mod's own option label leads; the slot is appended only to break
+    /// a tie (see <see cref="ModelLabels"/>).
     /// </summary>
     internal static string ModelLabel(PenumbraModMeta.Redirect r)
         => r.Source.Length > 0 ? r.Source : SlotOf(r);
@@ -1002,11 +878,7 @@ public sealed class PartsPanel
         => ContentSlot.Parse(r.GamePath) is { } p ? $"{p.Label} — {p.SetTag}" : Path.GetFileName(r.GamePath);
 
     /// <summary>
-    /// One label per model, disambiguated only where it has to be.
-    /// <para/>
-    /// Two entries can share an option name — a mod whose "Small" option supplies both a top and a pair of
-    /// trousers gives two rows reading "Sizes / Small" — and a picker with two identical rows is worse than
-    /// a verbose one. So the slot is appended to every member of a colliding set, and to nothing else.
+    /// One label per model; the slot is appended to every member of a set sharing a label, and to nothing else.
     /// </summary>
     internal static List<string> ModelLabels(IReadOnlyList<PenumbraModMeta.Redirect> models)
     {
@@ -1023,26 +895,21 @@ public sealed class PartsPanel
 
     private void SelectModel(int index)
     {
-        // A pending edit belongs to the model being replaced. If its save fails it cannot follow onto the next
-        // one — its bytes and its undo history go with the old model — so the waiting flag is dropped either
-        // way; the failure is already on the status line.
+        // A pending edit belongs to the model being replaced, so the waiting flag is dropped even if its save fails.
         FinishMove();
         FlushPending();
         EndLivePreview(refreshGame: true);
         brushChangedAt = -1;
         brushBase = null;
         movePart = null;
-        moveGizmo.Release();
+        ReleaseHandles();
         // A new solve starts from the file as it is now, so the other sizes must too. Replaced, not cleared — see sizeBases.
         sizeBases = new ConcurrentDictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
         modelIndex = index;
         ticked.Clear();
         expanded.Clear();
         freeLetters = 0;
-        // Staged switches name PARTS BY LABEL, and a label means something different on a different model —
-        // "1.1.3" is whatever the third island of that model's first submesh happens to be. Carrying them
-        // across would write one model's switch onto another's geometry, and any label the new model does
-        // not have would be dropped silently under a green "Done".
+        // Staged switches name parts by label, and a label means something different on another model.
         pending.Clear();
         parts = null;
         modelUnreadable = false;
@@ -1064,9 +931,7 @@ public sealed class PartsPanel
             log.Warning(ex, "[Proteus] parts: could not read {0}", models[index].File);
             modelUnreadable = true;
         }
-        // The brush state belongs to the model, so it goes when the model does. Not carried across for the
-        // same reason staged switches are not: a displacement is per vertex, and another model's vertices
-        // are not these.
+        // The brush state is per vertex, so it goes with the model.
         volume = parts != null ? new MeshVolumeSolve(parts) : null;
         windAt = volume != null ? volume.WindAt : null;
         viewport.PositionOverride = null;
@@ -1231,6 +1096,23 @@ public sealed class PartsPanel
         return part.Label == movePart || (ParentOf(part) is { } parent && parent.Label == movePart);
     }
 
+    /// <summary>Drop any drag under way on all three part handles — the model, mod or tool underneath has changed.</summary>
+    private void ReleaseHandles()
+    {
+        moveGizmo.Release();
+        rotateGizmo.Release();
+        scaleDrag.Release();
+    }
+
+    /// <summary>Whether the part labelled <paramref name="label"/> is the chosen one — itself, or an island of it.</summary>
+    private bool IsChosenPart(string label)
+    {
+        if (parts == null || movePart == null) return false;
+        for (int i = 0; i < parts.Parts.Count; i++)
+            if (parts.Parts[i].Label == label) return MoveTicked(i);
+        return false;
+    }
+
     /// <summary>The live tint's cache key for the chosen part — salted, so it never matches a ticked set's.</summary>
     private int MoveVersion() => StringComparer.Ordinal.GetHashCode(movePart ?? "") ^ 0x5BD1E995;
 
@@ -1261,15 +1143,32 @@ public sealed class PartsPanel
     }
 
     /// <summary>
-    /// Turn the gizmo's drag into a move of the chosen part — the Move tool's <see cref="PumpBrush"/>. The gizmo was
-    /// driven earlier this frame by whichever surface shows it: the model view as it drew, the character before any
-    /// window did.
+    /// Turn the gizmo's drag into a move of the chosen part: the Move tool's <see cref="PumpBrush"/>.
     /// </summary>
     private void PumpMove()
     {
-        if (volume == null || tool != Tool.Move || moveGizmo.Frame != ImGui.GetFrameCount()) return;
+        if (volume == null || !PartTool) return;
+        int frame = tool switch
+        {
+            Tool.Move   => moveGizmo.Frame,
+            Tool.Rotate => rotateGizmo.Frame,
+            _           => scaleDrag.Frame,
+        };
+        if (frame != ImGui.GetFrameCount()) return;
+        bool started = tool switch
+        {
+            Tool.Move   => moveGizmo.Started,
+            Tool.Rotate => rotateGizmo.Started,
+            _           => scaleDrag.Started,
+        };
+        bool ended = tool switch
+        {
+            Tool.Move   => moveGizmo.Ended,
+            Tool.Rotate => rotateGizmo.Ended,
+            _           => scaleDrag.Ended,
+        };
 
-        if (moveGizmo.Started && MovePart() is { } part)
+        if (started && MovePart() is { } part)
         {
             if (volume.BeginMove(part.Triangles, moveAdjacent, moveFalloffMm / 1000f) == 0)
             {
@@ -1280,12 +1179,13 @@ public sealed class PartsPanel
 
         if (!volume.Moving) return;
 
-        volume.MoveTo(moveGizmo.Offset);
+        if (tool == Tool.Move) volume.MoveTo(moveGizmo.Offset);
+        else volume.TransformTo(tool == Tool.Rotate ? rotateGizmo.Transform : scaleDrag.Transform);
         viewport.PositionOverride = volume.Positions();
         viewport.GeometryChanged();
         previewDirty = !showModelView;
 
-        if (moveGizmo.Ended) FinishMove();
+        if (ended) FinishMove();
     }
 
     /// <summary>End a move drag if one is under way: record it, and save — at once on the character, which shows
@@ -1306,9 +1206,16 @@ public sealed class PartsPanel
 
         ImGui.Spacing();
         ImGui.PushTextWrapPos(0);
-        if (showModelView) ImGui.TextDisabled(ps.MoveHelp);
-        else if (liveBrush.Problem is { } problem) ImGui.TextColored(ProteusStyle.Warn, problem);
-        else ImGui.TextDisabled(ps.MoveLiveHint);
+        if (!showModelView && liveBrush.Problem is { } problem) ImGui.TextColored(ProteusStyle.Warn, problem);
+        else ImGui.TextDisabled((tool, showModelView) switch
+        {
+            (Tool.Rotate, true)  => ps.RotateHelp,
+            (Tool.Rotate, false) => ps.RotateLiveHint,
+            (Tool.Scale, true)   => ps.ScaleHelp,
+            (Tool.Scale, false)  => ps.ScaleLiveHint,
+            (_, true)            => ps.MoveHelp,
+            _                    => ps.MoveLiveHint,
+        });
         ImGui.PopTextWrapPos();
         ImGui.Spacing();
 
@@ -1364,13 +1271,8 @@ public sealed class PartsPanel
     // ── the model, and the list beside it ───────────────────────────────────
 
     /// <summary>
-    /// The model on the left, the parts on the right, each driving the other: clicking the model ticks a
-    /// part, hovering a row lights that part up on the model.
-    /// <para/>
-    /// The list is still here, and not just as a fallback. It is the only place that can show a part which
-    /// is entirely hidden behind another, say what material a part draws with, or mark the parts that
-    /// already answer to a switch of the author's — where a switch added here stacks, and both have to be
-    /// on for the part to draw.
+    /// The model on the left, the parts on the right, each driving the other. The list also shows parts hidden
+    /// behind others, their materials, and parts the author already switches (a new switch stacks on those).
     /// </summary>
     private void DrawParts(float height)
     {
@@ -1378,35 +1280,25 @@ public sealed class PartsPanel
         var model = parts!;
 
         viewport.Show(ViewportKey, model);
-        viewport.Selected = tool == Tool.Move ? MoveSelection() : ticked;
+        viewport.Selected = PartTool ? MoveSelection() : ticked;
 
-        // Told every frame rather than on change: the mode also resets when a model is picked, and one place
-        // that always states the truth is cheaper to reason about than several that update it.
-        viewport.Mode = tool switch
-        {
-            Tool.Navigate => PartViewport.ViewportMode.Navigate,
-            Tool.Move     => PartViewport.ViewportMode.Move,
-            _             => PartViewport.ViewportMode.Brush,
-        };
+        // Told every frame rather than on change: the mode also resets when a model is picked.
+        viewport.Mode = tool == Tool.Navigate ? PartViewport.ViewportMode.Navigate
+                      : PartTool ? PartViewport.ViewportMode.Move
+                      : PartViewport.ViewportMode.Brush;
         viewport.GizmoCapture = gizmoCaptureFn;
-        viewport.BrushRadius = tool is Tool.Navigate or Tool.Move ? 0f : ActiveRadiusMm / 1000f;
+        viewport.BrushRadius = tool == Tool.Navigate || PartTool ? 0f : ActiveRadiusMm / 1000f;
         viewport.VertexScalar = tool == Tool.Wind ? windAt : null;
         viewport.MirrorBrush = mirrorBrush;
 
-        // The share cap is on the image's WIDTH, not on the row's height, and that is load-bearing. Capping
-        // the height by the available WIDTH would couple the row to avail.X — which shrinks by the scrollbar
-        // width the moment a scrollbar appears — and that closes a loop: scrollbar appears, row shortens,
-        // content fits, scrollbar goes, row grows, scrollbar appears. A per-frame flicker exactly at the size
-        // where the content just barely fits. Capping only the image leaves the row's height a function of
-        // avail.Y alone; a wide-and-short model is simply letterboxed shorter than the list beside it, which
-        // reads fine because SameLine tops them out together.
-        // Under a brush the part list stays beside the model too: there its boxes lock parts against the brush, and
-        // a click on the model — which paints — only reaches a part with Shift held (a Shift-drag still pans).
-        bool brushing = tool is not (Tool.Navigate or Tool.Move);
+        // The share cap is on the image's WIDTH, not the row's height: coupling the row to avail.X flickers as the
+        // scrollbar comes and goes.
+        // Under a brush a click on the model paints; it only reaches a part with Shift held.
+        bool brushing = tool != Tool.Navigate && !PartTool;
         float width = MathF.Min(height * PartViewport.DefaultAspect, ImGui.GetContentRegionAvail().X * 0.55f);
         if (viewport.Draw(model, new Vector2(width, height)) is { } clicked)
         {
-            if (tool == Tool.Move) SelectMovePart(clicked);
+            if (PartTool) SelectMovePart(clicked);
             else if (brushing) ToggleLock(clicked);
             else Toggle(clicked);
         }
@@ -1419,11 +1311,23 @@ public sealed class PartsPanel
                              background: false);
             if (moveGizmo.Capturing) ImGui.SetMouseCursor(ImGuiMouseCursor.ResizeAll);
         }
+        else if (tool == Tool.Rotate && MovePivot() is { } ringsAt)
+        {
+            rotateGizmo.Update(ringsAt, viewport.ModelToScreen, viewport.ScreenRay, ImGui.GetMousePos(),
+                               mouseAllowed: viewport.PointerOverModel, pressed: viewport.Pressed, down: viewport.Held,
+                               background: false);
+            if (rotateGizmo.Capturing) ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
+        }
+        else if (tool == Tool.Scale && MovePivot() is { } growAbout)
+        {
+            bool overPart = viewport.PointerOverModel && viewport.Hovered is { } under && IsChosenPart(under);
+            scaleDrag.Update(growAbout, viewport.ModelToScreen, ImGui.GetMousePos(), overPart,
+                             mouseAllowed: viewport.PointerOverModel, pressed: viewport.Pressed, down: viewport.Held,
+                             background: false);
+            if (scaleDrag.Capturing) ImGui.SetMouseCursor(ImGuiMouseCursor.ResizeAll);
+        }
 
-        // Two different things to say, and only one of them is an apology. A part the author already
-        // switches takes the click normally — the tooltip is there to explain that the new switch will
-        // stack rather than replace. A part with an unreadable tag is the one the model still lights up,
-        // hand-cursors and then quietly absorbs, so without this it says nothing at all.
+        // A part the author already switches: the new switch stacks. A part with an unreadable tag cannot take one.
         if (tool == Tool.Navigate && viewport.PointerOverModel && viewport.Hovered is { } hot
             && model.Parts.FirstOrDefault(p => p.Label == hot) is { } hovered)
         {
@@ -1439,22 +1343,15 @@ public sealed class PartsPanel
     {
         var ps = Strings.Parts;
 
-        // A horizontal scrollbar, because the width is no longer the window's to choose. A row is a checkbox
-        // with the part's label, its material's filename, a triangle count and sometimes an expander; the
-        // window used to simply widen (up to its maximum) until the longest one fitted. Dragged narrow it
-        // cannot, and a child clips silently — a scrollbar at least admits there is more to read.
+        // A child clips silently, so a horizontal scrollbar admits a row is wider than the list.
         float listWidth = ImGui.GetContentRegionAvail().X;
         using (var group = ImRaii.Child("##partList", new Vector2(listWidth, height), false,
                                         ImGuiWindowFlags.HorizontalScrollbar))
         {
             if (group)
             {
-                // Wrapped at the child's OWN visible width, not at PushTextWrapPos(0). Inside a horizontally
-                // scrolling window, wrap-pos 0 means "the content edge", which includes last frame's widest
-                // row — so the text would stop wrapping, become the widest row itself, and ratchet the scroll
-                // range wider every frame. An explicit position is immune to what the rows do.
-                // Floored, because a NEGATIVE wrap position means "do not wrap" to ImGui — the one value that
-                // would quietly reinstate the ratchet this is here to prevent.
+                // Wrapped at the child's own visible width: in a horizontally scrolling window wrap-pos 0 includes last frame's
+                // widest row and ratchets wider. Floored, because a negative wrap position means "do not wrap".
                 float wrapAt = MathF.Max(
                     listWidth - ImGui.GetStyle().WindowPadding.X * 2f - ImGui.GetStyle().ScrollbarSize,
                     ProteusStyle.S(80f));
@@ -1463,7 +1360,7 @@ public sealed class PartsPanel
                 ImGui.TextDisabled(tool switch
                 {
                     Tool.Navigate => ps.ClickTip,
-                    Tool.Move     => ps.MoveListTip,
+                    Tool.Move or Tool.Rotate or Tool.Scale => ps.MoveListTip,
                     _             => ps.BrushLockListTip,
                 });
                 ImGui.PopTextWrapPos();
@@ -1482,22 +1379,15 @@ public sealed class PartsPanel
     }
 
     /// <summary>
-    /// One row per part, with a submesh's islands folded away behind an expander.
-    /// <para/>
-    /// Folded because a submesh can hold a great many: a pair of trousers turned out to carry 78 straps in
-    /// one, and listing them all by default buries every other part of the garment under them. Ticked
-    /// islands are always shown whatever the expander says, so a piece clicked on the model always has a
-    /// row — otherwise clicking a strap would tick something the list did not admit existed.
+    /// One row per part, with a submesh's islands folded away behind an expander. Ticked islands always get a row.
     /// </summary>
     private void DrawPartRows(ModelParts model)
     {
         var ps = Strings.Parts;
         string? hoveredRow = null;
 
-        // Under a brush the same rows lock parts instead: TICKED means the brush moves it, unticking locks it.
-        // Everything about a switch — what may take one, what the author already switches — is beside the point.
-        // Under Move each row chooses the part to move, one at a time.
-        bool moving = tool == Tool.Move;
+        // Under a brush the rows lock parts instead: ticked means the brush moves it. Under Move each row chooses the part to move.
+        bool moving = PartTool;
         bool brushing = tool != Tool.Navigate && !moving;
 
         // Islands per submesh, so a submesh row can say how many it has and whether to draw them.
@@ -1510,8 +1400,7 @@ public sealed class PartsPanel
             bool isIsland = part.Island >= 0;
             var owner = (part.Mesh, part.Submesh);
 
-            // A locked island always has a row under a brush, as a ticked one does for a switch — otherwise a
-            // Shift-click on a strap would lock something the list did not admit existed.
+            // A locked island always has a row under a brush, as a ticked one does for a switch.
             bool listed = moving ? movePart == part.Label
                         : brushing ? Locks.Contains(part.Label) : ticked.Contains(part.Label);
             if (isIsland && !expanded.Contains(owner) && !listed) continue;
@@ -1550,9 +1439,7 @@ public sealed class PartsPanel
                 Path.GetFileName(part.Material.TrimStart('/')), part.TriangleCount));
             if (ImGui.IsItemHovered()) hoveredRow = part.Label;
 
-            // Marked on the row, not left to the tooltip. The stacking changes what ticking this box means
-            // — the part will need the author's switch on as well — and that is worth knowing while
-            // choosing, not only after hovering the one row you already suspected.
+            // Marked on the row: ticking a part the author already switches means both switches must be on.
             if (part.AuthorSwitched && !brushing && !moving)
             {
                 ImGui.SameLine();
@@ -1602,11 +1489,7 @@ public sealed class PartsPanel
     // ── the brush ───────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Which tool the drag belongs to, as three radio buttons above the model.
-    /// <para/>
-    /// An explicit mode rather than a modifier key. Turning the model and painting on it are both continuous
-    /// activities, so holding a key for one of them is miserable — and every modifier is already spoken for
-    /// anyway, shift on the pan.
+    /// Which tool the drag belongs to. An explicit mode rather than a modifier key: every modifier is already spoken for.
     /// </summary>
     private void DrawToolPicker()
     {
@@ -1615,6 +1498,8 @@ public sealed class PartsPanel
         foreach (var (value, icon, label, tip) in new[]
                  {
                      (Tool.Move,     FontAwesomeIcon.ArrowsAlt,         ps.ToolMove,     ps.ToolMoveTip),
+                     (Tool.Rotate,   FontAwesomeIcon.SyncAlt,           ps.ToolRotate,   ps.ToolRotateTip),
+                     (Tool.Scale,    FontAwesomeIcon.Expand,            ps.ToolScale,    ps.ToolScaleTip),
                      (Tool.Inflate,  FontAwesomeIcon.ExpandArrowsAlt,   ps.ToolInflate,  ps.ToolInflateTip),
                      (Tool.Deflate,  FontAwesomeIcon.CompressArrowsAlt, ps.ToolDeflate,  ps.ToolDeflateTip),
                      (Tool.Relax,    FontAwesomeIcon.Feather,           ps.ToolRelax,    ps.ToolRelaxTip),
@@ -1623,10 +1508,7 @@ public sealed class PartsPanel
                      (Tool.Navigate, FontAwesomeIcon.MousePointer,      ps.ToolNavigate, ps.ToolNavigateTip),
                  })
         {
-            // Stacked, one per row: the panel is a narrow column, and four buttons side by side do not fit it.
-            // An icon button per tool, highlighted when current — the project's "this is the selection" style.
-            // IconButtonWithText draws the text itself, so the ###id the label carries for ImGui is cut off
-            // and supplied as a pushed id instead; passed whole it would be printed.
+            // IconButtonWithText draws the text itself, so the ###id the label carries is cut off and pushed as an id instead.
             bool clicked;
             var text = label.Split("###")[0];
             using (ImRaii.PushId((int)value))
@@ -1635,34 +1517,30 @@ public sealed class PartsPanel
 
             if (clicked && tool != value)
             {
-                // Before leaving the brush, so a pending edit cannot land on top of a switch written in the
-                // meantime — a save rewrites the whole model from the bytes the brush was opened on.
+                // Before leaving the brush: a save rewrites the whole model, so a pending edit would land on top of a switch.
                 FinishMove();
                 FlushPending();
+                // The chosen part carries between Move, Rotate and Scale — they work on the same choice.
+                if (!(PartTool && IsPartTool(value))) movePart = null;
                 tool = value;
-                // Staged parts are a Pick-parts thing; the brush hides the list, so a selection carried into it
-                // would sit there invisibly and reappear half-forgotten on the way back.
+                // Staged parts are a Pick-parts thing; a selection carried into the brush would sit there invisibly.
                 ticked.Clear();
-                movePart = null;
-                moveGizmo.Release();
+                ReleaseHandles();
                 viewport.Recolour();
                 viewport.GeometryChanged();   // the wind wash comes and goes with the wind tool
             }
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip(value is Tool.Navigate or Tool.Move ? tip : tip + "\n\n" + ps.BrushLockHint);
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(value == Tool.Navigate || IsPartTool(value) ? tip : tip + "\n\n" + ps.BrushLockHint);
         }
         ImGui.Spacing();
     }
 
     /// <summary>
-    /// Turn what the viewport reports into strokes on the geometry.
-    /// <para/>
-    /// Polled rather than event-driven because ImGui is: the viewport says where the brush is and whether it
-    /// is down, and this decides what that means. Painting happens per frame while the button is held, and
-    /// the expensive passes run off the one frame the stroke ends.
+    /// Turn what the viewport reports into strokes on the geometry. Polled per frame while the button is held; the
+    /// expensive passes run on the frame the stroke ends.
     /// </summary>
     private void PumpBrush()
     {
-        if (volume == null || tool is Tool.Navigate or Tool.Move) return;
+        if (volume == null || tool == Tool.Navigate || PartTool) return;
         var surface = Surface;
 
         if (surface.Painting && surface.Cursor is { } at)
@@ -1683,8 +1561,7 @@ public sealed class PartsPanel
             {
                 viewport.PositionOverride = volume.Positions();
                 viewport.GeometryChanged();
-                // Not for wind: the in-place preview does not show it (see SaveBrush), so pushing one per dab is
-                // only cost.
+                // Not for wind: the in-place preview does not show it.
                 previewDirty = !showModelView && tool != Tool.Wind;
             }
         }
@@ -1696,8 +1573,7 @@ public sealed class PartsPanel
             viewport.GeometryChanged();
             brushChangedAt = Environment.TickCount64;
 
-            // On the character, the character IS the preview: save and reload the garment as soon as the
-            // stroke is done rather than after the viewer's debounce, or the pull would sit invisible.
+            // On the character, the character IS the preview: save as soon as the stroke is done.
             if (!showModelView) SaveBrush();
         }
     }
@@ -1706,12 +1582,8 @@ public sealed class PartsPanel
     private const long AutosaveMs = 1500;
 
     /// <summary>
-    /// Save the brush once it has been left alone for <see cref="AutosaveMs"/>, then have Penumbra reload the
-    /// mod and redraw the character so the edit is on screen in game, not just in the viewer.
-    /// <para/>
-    /// Debounced from the LAST change rather than timed from the first, so a run of strokes saves once at the
-    /// end instead of once per stroke — each save is a full rewrite of the model plus a redraw of the
-    /// character, which is far too heavy to do between dabs. Never while the brush is held down.
+    /// Save the brush once it has been left alone for <see cref="AutosaveMs"/>, then reload the mod and redraw the
+    /// character. Debounced from the LAST change; never while the brush is held down.
     /// </summary>
     private void TickAutosave()
     {
@@ -1721,14 +1593,13 @@ public sealed class PartsPanel
     }
 
     /// <summary>
-    /// Save now if anything is waiting. Called before anything that replaces the model on screen or writes to
-    /// the same file — a pending edit belongs to that model and those bytes — and by the window when the
-    /// Toggles tab stops being drawn, since the autosave timer only runs while it is.
+    /// Save now if anything is waiting. Called before anything that replaces the model on screen or writes to the
+    /// same file, and by the window when the tab stops being drawn.
     /// </summary>
     /// <param name="refreshGame">Reload the mod in Penumbra and redraw the character afterwards. False only
-    /// while the plugin is being torn down, when the file still has to land but nothing should be poked.</param>
-    /// <returns>True when nothing is left waiting — including when there was nothing to save. False means a
-    /// save was attempted and failed, and the caller must not go on to write the same file.</returns>
+    /// while the plugin is being torn down.</param>
+    /// <returns>True when nothing is left waiting. False means a save failed, and the caller must not go on to
+    /// write the same file.</returns>
     public bool FlushPending(bool refreshGame = true)
     {
         if (brushChangedAt >= 0) SaveBrush(refreshGame);
@@ -1744,28 +1615,23 @@ public sealed class PartsPanel
         if (showModelView) ImGui.TextDisabled(ps.BrushHelp);
         else if (liveBrush.Problem is { } problem) ImGui.TextColored(ProteusStyle.Warn, problem);
         else ImGui.TextDisabled(ps.LiveHint);
-        // Why a stroke on an imported garment does not appear the instant it is painted, said where the waiting
-        // happens rather than left to look like a brush that missed.
+        // Why a stroke on an imported garment does not appear the instant it is painted.
         if (TargetIsContent && !showModelView) ImGui.TextDisabled(ps.ContentHint);
         ImGui.PopTextWrapPos();
         ImGui.Spacing();
 
-        // A share of the side panel rather than a fixed width, so the label printed to the right of each slider
-        // still fits inside the column instead of being clipped by it.
+        // A share of the side panel rather than a fixed width, so the label right of each slider fits.
         float w = ImGui.GetContentRegionAvail().X * 0.55f;
         ImGui.SetNextItemWidth(w);
-        // Logarithmic, down to a millimetre: a face feature is a few millimetres across and a skirt's swell a few
-        // hundred, and on a linear slider the whole of the small end would be its first few pixels.
+        // Logarithmic, so the small end of the range is not squeezed into the first few pixels.
         if (ImGui.SliderFloat(ps.BrushSize, ref ActiveRadiusMm, MinBrushMm, MaxBrushMm,
                               ActiveRadiusMm < 10f ? "%.1f mm" : "%.0f mm", ImGuiSliderFlags.Logarithmic))
             viewport.Recolour();
         if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushSizeTip + "\n\n" + ps.BrushSizeKeysTip);
 
-        // One Strength slider, meaning a distance for the pull and push brushes and a rate for relax. Separate
-        // values underneath, so neither is misread when the tool changes.
+        // One Strength slider: a distance for pull and push, a rate for relax. Separate values underneath.
         ImGui.SetNextItemWidth(w);
-        // Relax and bridge are both a rate — part of a gap closed each moment — but each keeps its own value,
-        // since a comfortable relax rate fills a crack with the bridge almost instantly.
+        // Relax and bridge are both a rate, but each keeps its own value.
         if (tool == Tool.Relax)
         {
             ImGui.SliderFloat(ps.BrushStrength, ref relaxRatePercent, 5f, 100f, "%.0f%%");
@@ -1798,9 +1664,7 @@ public sealed class PartsPanel
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushStrengthTip);
         }
 
-        // A radius that reaches barely more than one vertex moves a spike rather than a surface, and it
-        // looks from the outside exactly like the brush not working. Said against the mesh's OWN resolution,
-        // because "20 mm" means something different on a 2,000-triangle skirt and a 60,000-triangle coat.
+        // A radius barely wider than one vertex moves a spike, not a surface; judged against the mesh's own resolution.
         if (volume is { MeanEdge: > 0f } v && ActiveRadiusMm / 1000f < v.MeanEdge * 1.5f)
         {
             ImGui.PushTextWrapPos(0);
@@ -1835,16 +1699,10 @@ public sealed class PartsPanel
         {
             ImGui.Spacing();
             ImGui.TextDisabled(!vol.Dirty ? ps.BrushUntouched
-                : tool == Tool.Move ? string.Format(ps.MoveMovedFmt, vol.Worst * 1000f)
+                : PartTool ? string.Format(ps.MoveMovedFmt, vol.Worst * 1000f)
                 : string.Format(ps.BrushMovedFmt, vol.Worst * 1000f, vol.MaxDisplacement * 1000f));
 
-            // Undo and start-over save and redraw AT ONCE rather than on the debounce. The debounce exists to
-            // batch a run of strokes into one save; an undo is a single deliberate click whose whole point is
-            // to see the character put back, and seconds of it still wearing the mistake reads as the
-            // button not working.
-            //
-            // Every button full width, one per row, so the column reads as a stack of actions rather than a
-            // ragged edge of differently-sized labels.
+            // Undo and start-over save and redraw at once rather than on the debounce.
             // Offered only where the mod has other sizes of this model to carry the edit to.
             if (OtherSizes().Count > 0)
             {
@@ -1856,16 +1714,13 @@ public sealed class PartsPanel
             }
 
             using (ImRaii.Disabled(!vol.CanUndo || vol.Moving))
-                if (ImGui.Button(tool == Tool.Move ? ps.MoveUndo : ps.BrushUndo, FullWidth()))
+                if (ImGui.Button(PartTool ? ps.MoveUndo : ps.BrushUndo, FullWidth()))
                 { vol.Undo(); AfterBrushEdit(); SaveBrush(); }
 
             using (ImRaii.Disabled(!vol.Dirty || vol.Moving))
                 if (ImGui.Button(ps.BrushReset, FullWidth())) { vol.Reset(); AfterBrushEdit(); SaveBrush(); }
 
-            // Saving happens on its own: a moment after the last change in the viewer, and the moment a stroke is let
-            // go on the character. The button is for not waiting — so on the character, where there is never a wait,
-            // it shows only while a save is still owed (one that failed and is being retried), and a disabled one
-            // says why rather than looking broken.
+            // Saving happens on its own; on the character the button shows only while a save is still owed.
             if (showModelView || brushChangedAt >= 0)
             {
                 ImGui.Spacing();
@@ -1876,8 +1731,7 @@ public sealed class PartsPanel
 
             if (brushChangedAt >= 0) ImGui.TextColored(ProteusStyle.Warn, ps.BrushNotSavedYet);
 
-            // Ctrl- or Shift-armed: it throws away every saved brush edit in the mod. The house style for anything
-            // destructive (see PresetBar's delete) — there are no confirmation modals in this plugin.
+            // Ctrl- or Shift-armed, the house style for anything destructive (see PresetBar's delete).
             if (brushSaved > 0)
             {
                 ImGui.Spacing();
@@ -1909,8 +1763,8 @@ public sealed class PartsPanel
             return;
         }
 
-        // From the bytes the brush was opened on, not the file on disk — see Apply. Written even when the
-        // edit is now empty, so undoing everything also takes the last save back out of the mod.
+        // From the bytes the brush was opened on, not the file on disk. Written even when the edit is now empty, so
+        // undoing everything also takes the last save back out of the mod.
         var result = MeshVolumeService.Apply(root, rel, brushBase, volume, writeUntouched: true);
         statusIsError = !result.Ok;
         if (!result.Ok)
@@ -1918,11 +1772,7 @@ public sealed class PartsPanel
             status = result.Message;
             log.Warning("[Proteus] brush: {0}", result.Message);
 
-            // STILL WAITING, re-armed for another full debounce rather than cleared. Clearing it here meant a
-            // save that failed — Penumbra holding the file past AtomicWrite's retries — was never tried again,
-            // and the "not saved yet" notice vanished, so the viewer went on showing an edit the mod did not
-            // have. Retried on the debounce rather than every frame, so a file that stays locked costs one
-            // attempt every few seconds instead of one per frame.
+            // Still waiting: re-armed for another full debounce so a failed save is retried, not every frame.
             brushChangedAt = Environment.TickCount64;
             return;
         }
@@ -1938,8 +1788,7 @@ public sealed class PartsPanel
                         result.WindMeshesRefused, rel);
         }
 
-        // Counted, not silent. A spare left behind means enabling that body slider puts the slots it
-        // rewires back where the author had them, which looks exactly like the brush having missed a patch.
+        // Counted, not silent: a spare left behind puts the author's slots back when that body slider is enabled.
         if (result.UnmappedSpares > 0)
         {
             status += "\n" + string.Format(Strings.Parts.BrushSparesFmt, result.UnmappedSpares);
@@ -1968,26 +1817,15 @@ public sealed class PartsPanel
 
         brushSaved = MeshVolumeService.PatchedCount(root);
 
-        // NOT AfterModChange. That re-reads the model and rebuilds everything from it, which would throw
-        // away the brush's undo history on every autosave and rebuild the solve on the just-saved bytes —
-        // so the next save would add the whole edit on top of itself. The solve, the viewer and the undo
-        // stack all stay; only the game needs telling.
-        //
-        // Reload BEFORE the redraw, in that order: a redraw alone re-resolves the path and is handed back the
-        // bytes Penumbra still has in memory — see HatCompatWatcher, which learned it the hard way.
+        // NOT AfterModChange: that rebuilds the solve on the just-saved bytes and loses the undo history.
+        // Reload BEFORE the redraw, or the redraw is handed the bytes Penumbra still has in memory.
         if (!refreshGame) return;
 
-        // On the character, the preview shows the saved state: a new file, reloaded in place, no redraw. The
-        // mod's own file cannot be shown that way — the game hands back the model it has cached under that
-        // path — so everywhere else, and wherever Glamourer cannot reload in place (hair, a face), it is a full
-        // redraw. Previewed, the mod's reload is marked as our own, or the compositor takes it for a changed base
-        // and recomposites and redraws the character after every stroke. A material just rewritten for wind is
-        // cached by the game like the model is, and the preview replaces only the model — so that save redraws once.
-        // Wind always redraws: the in-place reload shows a moved surface but not new wind, measured in game. Its reload
-        // is still our own — wind moves no geometry, so nothing the second skin is cut from has changed.
+        // On the character, the preview shows the saved state reloaded in place, no redraw; elsewhere, and where Glamourer
+        // cannot reload in place, a full redraw. A previewed reload is marked as our own so the compositor does not
+        // recomposite. A material rewritten for wind is cached by the game, so wind always redraws.
         bool wind = tool == Tool.Wind;
-        // An imported piece is never previewed: the character draws it only inside a Proteus shell, so the edit
-        // shows when the reload below makes the composite rebuild that shell from the file just written.
+        // An imported piece is never previewed: the composite rebuilds its shell from the file on reload.
         bool previewed = !showModelView && !preview.UnsupportedFor(TargetIsCustomizePart) && !TargetIsContent
                       && materialsChanged == 0 && !wind;
         if (previewed || (wind && !showModelView)) compositor.ExpectOwnModEdit(modDir);
@@ -2012,22 +1850,15 @@ public sealed class PartsPanel
 
         AfterModChange(root);
 
-        // AfterModChange reloads the mod and recomposites, but a recomposite is about skin, not gear — the
-        // character would keep the brushed model it has cached until something else redrew it. Same pairing
-        // as a save: reload (done above), then redraw.
+        // A recomposite does not redraw gear, so the character would keep the cached brushed model.
         if (result.Ok) compositor.RedrawForChangedModel();
     }
 
     // ── other sizes ─────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Each other size's bytes as they were the first time the brush was applied to it since this model was opened.
-    /// Every apply is those bytes plus the WHOLE current edit, the way every save of the model itself is
-    /// <see cref="brushBase"/> plus the whole edit — so pressing the button again after more strokes replaces what
-    /// the last press wrote instead of stacking on it.
-    /// <para/>
-    /// Written from the apply's worker thread, hence concurrent — and REPLACED, never cleared, when another model is
-    /// opened, so an apply still running for the last model fills the old instance rather than the new one.
+    /// Each other size's bytes as they were the first time the brush was applied to it for this model, so every apply
+    /// replaces the last. Written from a worker thread; replaced, never cleared, when another model is opened.
     /// </summary>
     private ConcurrentDictionary<string, byte[]> sizeBases = new(StringComparer.OrdinalIgnoreCase);
 
@@ -2046,10 +1877,7 @@ public sealed class PartsPanel
     private List<PenumbraModMeta.Redirect>? otherSizesModels;
     private int otherSizesIndex = -2;
 
-    /// <summary>
-    /// The mod's other files for the open model's game path — its other sizes — one row per file. Asked every frame
-    /// the brush panel draws, so worked out once per model list and model.
-    /// </summary>
+    /// <summary>The mod's other files for the open model's game path, cached per model list and model.</summary>
     private List<int> OtherSizes()
     {
         if (ReferenceEquals(otherSizesModels, models) && otherSizesIndex == modelIndex) return otherSizesCache;
@@ -2067,14 +1895,9 @@ public sealed class PartsPanel
     }
 
     /// <summary>
-    /// Carry the open model's brush edit onto every other size of it in the mod — see <see cref="BrushTransfer"/> —
-    /// and save each through the brush's own backup and record, so Undo saved changes takes them back as well.
-    /// <para/>
-    /// ON A WORKER THREAD. Per size it is a file read, a parse, a nearest-point search per vertex and a rewrite,
-    /// which on a garment with several sizes froze the game for seconds when it ran inside the click. Everything
-    /// the work needs is gathered here first — the edit itself SNAPSHOTTED, since the user can go on painting the
-    /// live solve meanwhile — and what must happen on the framework thread (Penumbra, the status line, a redraw) is
-    /// done by <see cref="ConsumeApplySizes"/> once it finishes.
+    /// Carry the open model's brush edit onto every other size of it in the mod (see <see cref="BrushTransfer"/>),
+    /// saving each through the brush's own backup. Runs on a worker thread with the edit snapshotted;
+    /// <see cref="ConsumeApplySizes"/> does the framework-thread half.
     /// </summary>
     private void ApplyToOtherSizes()
     {
@@ -2185,9 +2008,7 @@ public sealed class PartsPanel
     {
         var ps = Strings.Parts;
 
-        // A switch is written as an IMC edit on the item the model belongs to. An imported piece is worn on a
-        // host item of Proteus's choosing instead, whose own switches govern it — so one written here would sit
-        // in the mod doing nothing. Said rather than silently missing; the brush tools above still work.
+        // An imported piece is worn on a host item whose own switches govern it, so a switch written here does nothing.
         if (TargetIsContent)
         {
             ImGui.PushTextWrapPos(0);
@@ -2256,8 +2077,7 @@ public sealed class PartsPanel
         if (existing is not { Items.Count: > 0 } record) return;
 
         ProteusStyle.SectionHeader(ps.ExistingHeader);
-        // Listed per item, because that is how they are grouped in Penumbra: a mod with a top and a pair of
-        // trousers gets a group each, and "Bow, Belt" on one line would not say which garment either is on.
+        // Listed per item, because that is how they are grouped in Penumbra.
         foreach (var item in record.Items)
             ImGui.TextDisabled($"{item.GroupName}: {string.Join(", ", item.Toggles.Keys)}");
         if (ImGui.Button(ps.RevertBtn)) Revert();
@@ -2277,9 +2097,8 @@ public sealed class PartsPanel
 
     private void Commit()
     {
-        // The switch is written into the same file the brush saves, and a brush save rewrites the WHOLE model
-        // from the bytes the brush was opened on — so a brush edit still waiting would later land on top of
-        // the switch and erase it. Saved first, and if that save fails the switch is not written at all.
+        // A brush save rewrites the whole model from its opening bytes and would erase the switch, so save first;
+        // if that fails the switch is not written.
         if (!FlushPending()) return;
         var ps = Strings.Parts;
         if (parts == null || modelIndex < 0 || ModRoot() is not { } root) return;
@@ -2315,11 +2134,8 @@ public sealed class PartsPanel
     {
         if (ModRoot() is not { } root) return;
 
-        // Same reason as Commit, from the other side. Without this, a brush edit waiting to save was flushed
-        // by the model reload AFTER the restore — from bytes that still carried the switches — and put the
-        // split submeshes and their attributes straight back into a mod whose group had just been deleted.
-        // Saved first, so the restore order check sees the brush as the later edit and refuses to undo
-        // under it; and if the save fails, nothing is restored.
+        // Same reason as Commit: a pending brush edit flushed after the restore would put the switches back.
+        // If the save fails, nothing is restored.
         if (!FlushPending()) return;
 
         var result = MeshToggleService.Revert(root);
@@ -2332,11 +2148,7 @@ public sealed class PartsPanel
     }
 
     /// <summary>
-    /// Re-read everything the mod's files say, and make Penumbra do the same.
-    /// <para/>
-    /// The model on disk has changed, so the part list, the viewport and the record are all describing a
-    /// file that no longer exists in that form — and Penumbra is still serving the old one until it is told
-    /// otherwise. A split in particular renumbers parts, so a stale list would tick the wrong ones.
+    /// Re-read everything the mod's files say, and make Penumbra do the same; a split renumbers parts.
     /// </summary>
     private void AfterModChange(string root)
     {

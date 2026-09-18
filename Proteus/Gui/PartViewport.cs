@@ -11,40 +11,22 @@ using Proteus.Services;
 namespace Proteus.Gui;
 
 /// <summary>
-/// The model, drawn so the user can click the part they mean.
-/// <para/>
-/// This replaced a list of numbered rows with thumbnails, which asked someone who wants to remove a bow to
-/// work out which of "1.2c" and "1.2d" the bow is. Here they click the bow.
-/// <para/>
-/// Software-rendered, and deliberately. The obvious alternative is a Direct3D viewport — DragAndDropTexturing
-/// has a good one — but it costs three Vortice packages, a pair of HLSL shaders, and borrowing the game's own
-/// device context, which means saving and restoring render state the game is also using. None of that buys
-/// anything here: the model is a few tens of thousands of triangles drawn once per camera move, at a size
-/// smaller than a texture thumbnail.
-/// <para/>
-/// It also makes picking exact and free. Rasterizing writes a PART ID per pixel, so a click is an array
-/// lookup rather than a ray cast against a triangle soup — no bounding hierarchy, no epsilon, and it cannot
-/// disagree with what is on screen, because it IS what is on screen.
+/// The model, drawn so the user can click the part they mean. Software-rendered: the rasteriser writes a part id
+/// per pixel, so a click is an array lookup that cannot disagree with what is on screen.
 /// </summary>
 public sealed class PartViewport : IDisposable, IBrushSurface
 {
     /// <summary>
-    /// The shape the viewport had when it was a fixed size, and still the shape it starts at. Public because
-    /// the panel sizes the image from it: it wants the model's own proportions, not whatever the buffer has
-    /// been resized to this frame — deriving the width from the CURRENT buffer would feed the last resize
-    /// back into the next one.
+    /// The shape the viewport starts at. The panel sizes the image from it rather than from the current buffer,
+    /// which would feed the last resize back into the next one.
     /// </summary>
     public const float DefaultAspect = (float)DefaultWidth / DefaultHeight;
 
     private const int DefaultWidth = 460, DefaultHeight = 560;
 
     /// <summary>
-    /// Ceiling on the render buffer, as an AREA rather than a per-axis limit.
-    /// <para/>
-    /// Rasterising is O(pixels) and runs on the UI thread, so the cap is a time budget, not a memory one:
-    /// 900k pixels is ~3.5x the old 460x560, which on a 60,000-triangle hair model is the difference between
-    /// a re-render you do not notice and one you do. It still allows ~850x1050. Above it the viewport
-    /// upscales, which is exactly what it did at every size before it could resize at all.
+    /// Ceiling on the render buffer, as an AREA. Rasterising is O(pixels) on the UI thread, so this is a time budget;
+    /// above it the viewport upscales.
     /// </summary>
     private const int MaxPixels = 900_000;
 
@@ -52,11 +34,7 @@ public sealed class PartViewport : IDisposable, IBrushSurface
     private const int Snap = 64;
 
     /// <summary>
-    /// How much larger than the image the buffer is rendered. NOT 1.0, and the number is not arbitrary: the
-    /// old fixed 560px buffer was drawn into a 360px box, so the picture has always been downsampled by
-    /// about this much, and that downsample is the only antialiasing this rasteriser has. Rendering at
-    /// exactly the display size would make an enlarged viewport visibly rougher than the small one it
-    /// replaced — a resize that made the model look worse.
+    /// How much larger than the image the buffer is rendered. The downsample is the only antialiasing this rasteriser has.
     /// </summary>
     private const float Supersample = 1.5f;
 
@@ -66,30 +44,20 @@ public sealed class PartViewport : IDisposable, IBrushSurface
     private readonly ITextureProvider textures;
     private readonly IPluginLog log;
 
-    /// <summary>
-    /// Resolution of the render buffers. A field rather than a constant so a window the user has enlarged
-    /// gets a viewport rendered at its real size instead of a 460x560 image stretched over it.
-    /// </summary>
+    /// <summary>Resolution of the render buffers; a field so an enlarged window renders at its real size.</summary>
     private int bufW = DefaultWidth, bufH = DefaultHeight;
 
     // Per pixel: which pickable part is in front, and how lit its surface is. Split so a change of selection
-    // recolours without touching geometry — the camera is what makes a re-render necessary, not the colours.
+    // recolours without touching geometry.
     private int[] id = [];
     private byte[] shade = [];
     private float[] depth = [];
     private byte[] rgba = [];
 
     /// <summary>
-    /// The point on the model's surface each pixel is looking at, in object space — the same space
-    /// <see cref="ModelParts.Positions"/> is in. Meaningless where <see cref="id"/> is <see cref="Empty"/>.
-    /// <para/>
-    /// This is what makes a brush possible without a ray cast. The rasteriser already interpolates the
-    /// depth across a triangle from barycentrics it has in hand, so interpolating the world position beside
-    /// it is nearly free, exact, and needs no unprojection, no bounding hierarchy and no epsilon.
-    /// <para/>
-    /// Per PIXEL rather than per vertex on purpose: the falloff has to be recomputed every time the cursor
-    /// moves, and with the surface point already stored that is one pass over the image with no projection —
-    /// which is the whole reason <see cref="Recolourize"/> is separate from <see cref="Rasterize"/>.
+    /// The point on the model's surface each pixel is looking at, in object space (the space of
+    /// <see cref="ModelParts.Positions"/>). Meaningless where <see cref="id"/> is <see cref="Empty"/>.
+    /// Per pixel so the brush falloff is one pass in <see cref="Recolourize"/>, with no projection.
     /// </summary>
     private Vector3[] hit = [];
 
@@ -103,30 +71,19 @@ public sealed class PartViewport : IDisposable, IBrushSurface
     private bool geometryDirty = true, coloursDirty = true;
 
     /// <summary>
-    /// What a click can land on: the finest thing at each place on the model.
-    /// <para/>
-    /// An island where a submesh has them, the submesh where it does not — never both, because they occupy
-    /// the same pixels and the finer one is the useful answer. The list beside the viewport still offers the
-    /// whole submesh for someone who wants it.
+    /// What a click can land on: an island where a submesh has them, the submesh where it does not, never both.
     /// </summary>
     private List<ModelPart> pickable = [];
 
     /// <summary>
-    /// For each pickable part, the label of the SUBMESH it belongs to — null when it is that submesh itself.
-    /// <para/>
-    /// Colouring needs it because the list offers a row for the whole submesh while only its islands are
-    /// pickable, so a submesh ticked in the list matches no pickable label at all. Without this the model
-    /// stayed entirely grey with a 53,000-triangle part ticked, which read as the tick having failed.
+    /// For each pickable part, the label of the SUBMESH it belongs to, null when it is that submesh itself; a submesh
+    /// ticked in the list must colour its islands.
     /// </summary>
     private List<string?> parentOf = [];
 
     /// <summary>
-    /// For each pickable part, whether the brush may move it — false for skin, which the brush never moves
-    /// (see <c>MeshVolumeSolve</c>) and so is never tinted: a falloff blob across the body would promise an
-    /// edit that is not going to happen.
-    /// <para/>
-    /// Worked out once per model in <see cref="Show"/>. It used to be rebuilt inside the colouring pass, which
-    /// runs on every cursor move over the model, re-running a string test on every part's material each time.
+    /// For each pickable part, whether the brush may move it: false for skin, which is never tinted. Worked out once
+    /// per model in <see cref="Show"/>, not per colouring pass.
     /// </summary>
     private bool[] brushable = [];
 
@@ -154,9 +111,8 @@ public sealed class PartViewport : IDisposable, IBrushSurface
     public IReadOnlySet<string> Selected { get; set; } = new HashSet<string>();
 
     /// <summary>
-    /// Parts locked against the brush, by label (a submesh's label covers its islands) — drawn dark, and left
-    /// out of the brush blob and the wind wash, so what is tinted is what will move. Call <see cref="Recolour"/>
-    /// after it changes.
+    /// Parts locked against the brush, by label (a submesh's label covers its islands): drawn dark and left out of
+    /// the brush blob and wind wash. Call <see cref="Recolour"/> after it changes.
     /// </summary>
     public IReadOnlySet<string> Locked { get; set; } = new HashSet<string>();
 
@@ -168,24 +124,17 @@ public sealed class PartViewport : IDisposable, IBrushSurface
     public string? Hovered { get; set; }
 
     /// <summary>
-    /// Whether the cursor is over the model image this frame — as opposed to <see cref="Hovered"/> being set
-    /// by the list beside it. Lets the panel explain a click the model absorbs without acting on.
+    /// Whether the cursor is over the model image this frame, as opposed to <see cref="Hovered"/> being set by the list.
     /// </summary>
     public bool PointerOverModel { get; private set; }
 
     /// <summary>What a drag on the model means.</summary>
     public enum ViewportMode
     {
-        /// <summary>Drag turns the model; a click picks a part. The original behaviour.</summary>
+        /// <summary>Drag turns the model; a click picks a part.</summary>
         Navigate,
 
-        /// <summary>
-        /// A drag that STARTS ON THE MODEL paints; one that starts on the background still turns it.
-        /// <para/>
-        /// Chosen over a modifier because painting and turning are both continuous activities and holding a
-        /// key for one of them is miserable, and over a mode switch per rotation for the same reason. Where
-        /// the drag starts is unambiguous, needs no key, and is what sculpting tools already do.
-        /// </summary>
+        /// <summary>A drag that STARTS ON THE MODEL paints; one that starts on the background still turns it.</summary>
         Brush,
 
         /// <summary>
@@ -247,21 +196,15 @@ public sealed class PartViewport : IDisposable, IBrushSurface
     /// <summary>The drag under way belongs to the gizmo, decided when it was pressed.</summary>
     private bool gizmoDrag;
 
-    /// <summary>
-    /// Brush radius in object units, which for a character model is metres. Drives the falloff tint only —
-    /// the edit itself is the panel's business.
-    /// </summary>
+    /// <summary>Brush radius in object units (metres). Drives the falloff tint only.</summary>
     public float BrushRadius { get; set; }
 
-    /// <summary>
-    /// Where on the surface the cursor is, in object space, or null when it is off the model. The centre of
-    /// the brush, and the one thing a stroke needs from the viewport.
-    /// </summary>
+    /// <summary>Where on the surface the cursor is, in object space, or null when it is off the model.</summary>
     public Vector3? Cursor { get; private set; }
 
     /// <summary>
-    /// Unit direction from the model toward the camera — the side of the model being looked at, and so the
-    /// side being painted. The bridge brush falls back on it where the surface cannot say which way is out.
+    /// Unit direction from the model toward the camera. The bridge brush falls back on it where the surface cannot
+    /// say which way is out.
     /// </summary>
     public Vector3 ToViewer => Vector3.Normalize(new Vector3(
         MathF.Cos(pitch) * MathF.Sin(yaw), MathF.Sin(pitch), MathF.Cos(pitch) * MathF.Cos(yaw)));
@@ -269,36 +212,24 @@ public sealed class PartViewport : IDisposable, IBrushSurface
     /// <summary>The brush is down and being dragged across the model right now.</summary>
     public bool Painting { get; private set; }
 
-    /// <summary>
-    /// True for the single frame a stroke is released. The panel runs the passes that are too expensive to
-    /// run per frame — the slope limit, the unfold, the normal rebuild — off this edge.
-    /// </summary>
+    /// <summary>True for the single frame a stroke is released; the panel runs its expensive passes off this edge.</summary>
     public bool StrokeEnded { get; private set; }
 
     /// <summary>
-    /// The geometry changed underneath us, so the projection has to be redone. Unlike <see cref="Clear"/>
-    /// this keeps the pickable set and the camera, because a brush stroke changes where vertices ARE without
-    /// changing which parts exist or where the user is looking from.
+    /// The geometry changed underneath us, so the projection has to be redone. Unlike <see cref="Clear"/> this keeps
+    /// the pickable set and the camera.
     /// </summary>
     public void GeometryChanged() => geometryDirty = true;
 
     /// <summary>
-    /// Vertex positions to draw instead of the model's own, in the same layout as
-    /// <see cref="ModelParts.Positions"/>. Null draws the model as it is on disk.
-    /// <para/>
-    /// An override rather than a rebuilt <see cref="ModelParts"/> because the parts, the islands and the
-    /// pickable set are all unchanged by a stroke — only where the vertices are has changed, and rebuilding
-    /// the rest would re-run the weld and island split on every settle.
-    /// <para/>
-    /// The camera still frames the model's ORIGINAL bounds, deliberately: an inflate would otherwise nudge
-    /// the zoom every time the user let go of the brush.
+    /// Vertex positions to draw instead of the model's own, in the same layout as <see cref="ModelParts.Positions"/>.
+    /// Null draws the model as it is on disk. The camera still frames the ORIGINAL bounds, so a stroke never nudges the zoom.
     /// </summary>
     public float[]? PositionOverride { get; set; }
 
     /// <summary>
-    /// A 0..1 value per vertex (indexed like <see cref="ModelParts.Positions"/>) drawn as a red wash over the
-    /// model, or null for none — the wind brush's painted amount. Read when the geometry is projected, so set
-    /// <see cref="GeometryChanged"/> after the values change.
+    /// A 0..1 value per vertex (indexed like <see cref="ModelParts.Positions"/>) drawn as a red wash, or null for none.
+    /// Read when the geometry is projected, so call <see cref="GeometryChanged"/> after the values change.
     /// </summary>
     public Func<int, float>? VertexScalar { get; set; }
 
@@ -336,9 +267,8 @@ public sealed class PartViewport : IDisposable, IBrushSurface
     public void Recolour() => coloursDirty = true;
 
     /// <summary>
-    /// Forget the current model, so the next <see cref="Show"/> rebuilds even under the same key. Needed
-    /// after the file on disk is edited: a split renumbers parts, and a viewport still holding the old
-    /// pickable set would report labels that no longer mean the same geometry.
+    /// Forget the current model, so the next <see cref="Show"/> rebuilds even under the same key. Needed after the
+    /// file on disk is edited: a split renumbers parts.
     /// </summary>
     public void Clear()
     {
@@ -350,16 +280,8 @@ public sealed class PartViewport : IDisposable, IBrushSurface
     }
 
     /// <summary>
-    /// Match the render buffer to the rectangle the image is about to be drawn into, so an enlarged window
-    /// gets a viewport rendered at its real size rather than an upscale.
-    /// <para/>
-    /// Quantised AND deferred, because a reallocation is not free: it throws away the buffers and forces a
-    /// full re-rasterise, which runs on the UI thread and allocates three vertex-sized arrays of its own.
-    /// Deferring past any held mouse button means a window-edge drag costs nothing at all — the existing
-    /// buffer keeps being stretched into the new rect, which is what <c>AddImage</c> did before this
-    /// existed — and the snap then stops the small settling changes (a scrollbar appearing, a pixel of
-    /// rounding) from re-rendering at all. Not keyed on the drag itself: the size can also change from a UI
-    /// scale change or a restored window size, and those must converge too.
+    /// Match the render buffer to the rectangle the image is about to be drawn into. Quantised, and deferred past any
+    /// held mouse button, because a reallocation forces a full re-rasterise on the UI thread.
     /// </summary>
     private void RequestResolution(Vector2 box)
     {
@@ -381,9 +303,7 @@ public sealed class PartViewport : IDisposable, IBrushSurface
         float w = MathF.Max(box.X, 1f) * Supersample;
         float h = MathF.Max(box.Y, 1f) * Supersample;
 
-        // Over budget: scale both axes by the same factor, computed in one step rather than stepped down in
-        // a loop. The aspect is what makes the picture right, and it is also what the projection is built
-        // from — shrinking one axis alone would stretch the model.
+        // Over budget: scale both axes by the same factor, so the aspect the projection is built from is kept.
         float over = w * h / MaxPixels;
         if (over > 1f)
         {
@@ -391,8 +311,7 @@ public sealed class PartViewport : IDisposable, IBrushSurface
             w *= s; h *= s;
         }
 
-        // Snapping up can put the result a few percent back over MaxPixels. That is fine: it is a budget for
-        // how long a re-render may take, not a limit anything depends on.
+        // Snapping up can put the result a few percent over MaxPixels; it is a time budget, not a hard limit.
         return (Up(w), Up(h));
 
         static int Up(float v)
@@ -400,18 +319,15 @@ public sealed class PartViewport : IDisposable, IBrushSurface
     }
 
     /// <summary>
-    /// Draw the viewport into <paramref name="box"/>. Returns the part label the user clicked, or null.
-    /// <para/>
-    /// A click is a press and release without movement: the same button orbits, and treating a drag as a
-    /// click would select whatever the camera happened to stop over.
+    /// Draw the viewport into <paramref name="box"/>. Returns the part label the user clicked, or null. A click is a
+    /// press and release without movement.
     /// </summary>
     public string? Draw(ModelParts model, Vector2 box)
     {
         Pressed = Held = false;
         if (renderedKey == null) return null;
 
-        // Before the dirty checks, so a reallocation is rasterised and uploaded in this same call rather
-        // than leaving a frame with empty buffers behind it.
+        // Before the dirty checks, so a reallocation is rasterised in this same call.
         RequestResolution(box);
 
         if (geometryDirty) { Rasterize(model); geometryDirty = false; coloursDirty = true; }
@@ -422,12 +338,7 @@ public sealed class PartViewport : IDisposable, IBrushSurface
 
         var origin = ImGui.GetCursorScreenPos();
 
-        // An INVISIBLE BUTTON with the image painted into its rect, not a bare Image.
-        //
-        // ImGui moves a window when a drag begins on it and no item takes the press. An Image submits an
-        // item — so hovering and hit-testing work — but it is not clickable, never becomes the ACTIVE item,
-        // and so the press falls straight through to the window: turning the model dragged the whole Proteus
-        // window instead. A button is clickable, claims the press, and the window stays put.
+        // An INVISIBLE BUTTON, not a bare Image: an Image never becomes the active item, so ImGui would drag the window.
         ImGui.InvisibleButton("##viewportSurface", size);
         ImGui.GetWindowDrawList().AddImage(wrap.Handle, origin, origin + size);
         imageOrigin = origin;
@@ -447,15 +358,13 @@ public sealed class PartViewport : IDisposable, IBrushSurface
             bool inBuffer = px >= 0 && py >= 0 && px < bufW && py < bufH;
             var under = inBuffer ? id[py * bufW + px] : Empty;
 
-            // Only where something was drawn: hit[] is not cleared between rasterises, so off the model it
-            // holds whatever the last frame that DID cover this pixel left behind.
+            // Only where something was drawn: hit[] is not cleared between rasterises.
             if (under >= 0) Cursor = hit[py * bufW + px];
 
             var label = under >= 0 && under < pickable.Count ? pickable[under].Label : null;
             if (label != Hovered) { Hovered = label; coloursDirty = true; }
 
-            // In Brush mode the hand cursor would promise a click that picks a part, which it only does with
-            // Shift held — a Shift-click locks the part. A crosshair otherwise says "this acts where it is pointing".
+            // In Brush mode a click only picks a part with Shift held, so a crosshair rather than a hand.
             ImGui.SetMouseCursor(Mode == ViewportMode.Brush
                 ? (ImGui.GetIO().KeyShift && label != null ? ImGuiMouseCursor.Hand
                    : Cursor != null ? ImGuiMouseCursor.ResizeAll : ImGuiMouseCursor.Arrow)
@@ -469,22 +378,15 @@ public sealed class PartViewport : IDisposable, IBrushSurface
         }
         else if (Hovered != null) { Hovered = null; coloursDirty = true; }
 
-        // The falloff is painted from the cursor's surface point, so the tint is stale the moment it moves.
-        // Only in Brush mode, and only once the radius is real — otherwise every mouse move over the model
-        // would repaint the image for nothing.
+        // The falloff tint is stale once the cursor moves; only in Brush mode with a real radius.
         if (Mode == ViewportMode.Brush && BrushRadius > 0f && Cursor != wasCursor) coloursDirty = true;
 
-        // Driven by the BUTTON'S own state, not raw mouse buttons: a press that began somewhere else in the
-        // window — the part list, the tab bar — must not steer the camera, and IsItemActive is exactly the
-        // question "is this button the one being held".
+        // Driven by the BUTTON'S own state, so a press that began elsewhere in the window does not steer the camera.
         if (ImGui.IsItemActivated())
         {
             dragging = true; dragMoved = false; dragFrom = ImGui.GetMousePos();
 
-            // WHERE THE PRESS LANDED decides what the drag is for the whole of its life, and it is decided
-            // once here rather than re-asked per frame. A stroke that wanders off the silhouette must keep
-            // painting when it comes back rather than turning the model out from under itself, and a camera
-            // drag that happens to pass over the mesh must not start painting.
+            // Where the press landed decides what the drag is for the whole of its life.
             Painting = Mode == ViewportMode.Brush && Cursor != null && !ImGui.GetIO().KeyShift;
             gizmoDrag = Mode == ViewportMode.Move && GizmoCapture?.Invoke() == true;
         }
@@ -497,17 +399,14 @@ public sealed class PartViewport : IDisposable, IBrushSurface
 
             if (ImGui.IsItemActive())
             {
-                // A stroke consumes the drag. The panel reads Painting and Cursor each frame and does the
-                // work; nothing here moves the camera, so the model holds still under the brush. A gizmo drag
-                // the same: the panel moves the part, and the camera must not turn out from under the handle.
+                // A stroke or gizmo drag consumes the drag; the camera must not move under it.
                 if (Painting || gizmoDrag)
                 {
                     dragFrom = now;
                 }
                 else if (dragMoved)
                 {
-                    // Shift drags the model around the frame instead of turning it — the usual pairing, and
-                    // the only way to look at something the silhouette pushes off the edge when zoomed in.
+                    // Shift drags the model around the frame instead of turning it.
                     if (ImGui.GetIO().KeyShift)
                         pan += moved / size * new Vector2(2f, -2f);
                     else
@@ -521,8 +420,7 @@ public sealed class PartViewport : IDisposable, IBrushSurface
             }
             else
             {
-                // A click still picks a part, but only when the drag was not a stroke — in Brush mode a tap
-                // on the model is the smallest possible dab of paint, not a selection.
+                // A click still picks a part, but only when the drag was not a stroke.
                 if (!dragMoved && !Painting && !gizmoDrag) clicked = Hovered;
                 if (Painting) { Painting = false; StrokeEnded = true; }
                 dragging = false;
@@ -535,11 +433,8 @@ public sealed class PartViewport : IDisposable, IBrushSurface
     // ── rendering ───────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Project every vertex once, then fill triangles into the id/shade/depth buffers.
-    /// <para/>
-    /// No backface culling, on purpose. Model winding is not something this can assume — a mod's exporter
-    /// may have flipped it — and getting it wrong turns a garment inside out. The depth buffer already gives
-    /// the right answer; culling would only have saved fill.
+    /// Project every vertex once, then fill triangles into the id/shade/depth buffers. No backface culling: a mod's
+    /// winding cannot be trusted, and the depth buffer gives the right answer.
     /// </summary>
     private void Rasterize(ModelParts model)
     {
@@ -562,10 +457,8 @@ public sealed class PartViewport : IDisposable, IBrushSurface
         rasterPan = pan;
         haveProjection = true;
 
-        // Screen-space positions, plus a w to reject anything behind the eye. Done for the whole vertex
-        // array in one pass: a vertex is shared by every triangle that touches it, and by every part.
-        // The override only counts when it describes the same vertices; a stale array from a previous model
-        // would project the wrong geometry under this one's triangles.
+        // Screen-space positions, plus a w to reject anything behind the eye, for the whole vertex array in one pass.
+        // The override only counts when it describes the same vertices.
         var source = PositionOverride is { } ov && ov.Length == model.Positions.Length ? ov : model.Positions;
 
         int vertices = source.Length / 3;
@@ -599,13 +492,8 @@ public sealed class PartViewport : IDisposable, IBrushSurface
         // A light over the viewer's shoulder, so the shape reads without any material information.
         var light = Vector3.Normalize(new Vector3(-0.4f, 0.6f, 1f));
 
-        // Split the image into horizontal bands, one per worker, and let each band consider every triangle
-        // while writing only its own rows. A pixel therefore has exactly one owner and the depth buffer
-        // needs no locking — which the obvious alternative, parallelising over triangles, cannot say.
-        //
-        // The cost is that each band tests every triangle's bounds. That is a comparison against work that
-        // is dominated by fill, and it buys the difference between a viewport that turns smoothly on a
-        // 60,000-triangle hair model and one that does not.
+        // Horizontal bands, one per worker, each testing every triangle but writing only its own rows: a pixel has
+        // exactly one owner, so the depth buffer needs no locking.
         int bands = Math.Clamp(Environment.ProcessorCount, 1, 16);
         int rows = (bufH + bands - 1) / bands;
 
@@ -624,8 +512,7 @@ public sealed class PartViewport : IDisposable, IBrushSurface
 
                     var normal = Vector3.Cross(world[ib] - world[ia], world[ic] - world[ia]);
                     float len = normal.Length();
-                    // Two-sided: the sign of the facing tells us nothing reliable (see the remarks), so
-                    // light both faces the same.
+                    // Two-sided: winding cannot be trusted, so light both faces the same.
                     float lambert = len > 1e-12f ? MathF.Abs(Vector3.Dot(normal / len, light)) : 0.5f;
                     byte lit = (byte)(60 + 195 * MathF.Min(lambert, 1f));
 
@@ -660,8 +547,7 @@ public sealed class PartViewport : IDisposable, IBrushSurface
             float w2 = ((a.X - c.X) * (py - c.Y) - (a.Y - c.Y) * (px - c.X)) * inv;
             if (w0 < 0 || w1 < 0 || w2 < 0) continue;
 
-            // Barycentrics here are (w1, w2, w0) against (a, b, c) — the edge opposite a vertex carries that
-            // vertex's weight.
+            // Barycentrics here are (w1, w2, w0) against (a, b, c): the edge opposite a vertex carries that vertex's weight.
             float z = a.Z * w1 + b.Z * w2 + c.Z * w0;
             int at = y * bufW + x;
             if (z >= depth[at]) continue;
@@ -670,33 +556,26 @@ public sealed class PartViewport : IDisposable, IBrushSurface
             id[at] = part;
             shade[at] = lit;
 
-            // The same barycentrics, against the object-space corners. Screen-space interpolation is not
-            // perspective-correct, so this is a hair off where the true surface point is — by well under a
-            // pixel's worth of geometry at these depths, against a brush radius measured in millimetres.
+            // The same barycentrics against the object-space corners; not perspective-correct, but well under a pixel off.
             hit[at] = wa * w1 + wb * w2 + wc * w0;
             scalar[at] = sa * w1 + sb * w2 + sc * w0;
         }
     }
 
-    /// <summary>
-    /// Paint the id/shade buffers into pixels. Geometry is untouched, so ticking a part or moving the mouse
-    /// costs one pass over the image and no projection at all.
-    /// </summary>
+    /// <summary>Paint the id/shade buffers into pixels. Geometry is untouched, so this costs no projection.</summary>
     private void Recolourize()
     {
         var accent = ProteusStyle.Accent;
         var (ar, ag, ab) = ((int)(accent.X * 255), (int)(accent.Y * 255), (int)(accent.Z * 255));
 
-        // Precomputed per part so the pixel loop is a lookup: models run to tens of thousands of triangles
-        // but only a few dozen parts.
+        // Precomputed per part so the pixel loop is a lookup.
         var tint = new (int R, int G, int B)[pickable.Count];
         var canBrush = new bool[pickable.Count];
         bool brushMode = Mode == ViewportMode.Brush;
         bool lockMode = Mode != ViewportMode.Navigate;   // a move honours locks as the brushes do
         for (int i = 0; i < pickable.Count; i++)
         {
-            // An island answers to its own label AND to its submesh's — see parentOf. Ticking the whole
-            // part in the list has to light up every island of it, since the part itself draws no pixels.
+            // An island answers to its own label AND to its submesh's (see parentOf): the submesh itself draws no pixels.
             var parent = i < parentOf.Count ? parentOf[i] : null;
             bool on = Selected.Contains(pickable[i].Label) || (parent != null && Selected.Contains(parent));
             bool hot = Hovered == pickable[i].Label || (parent != null && Hovered == parent);
@@ -709,8 +588,7 @@ public sealed class PartViewport : IDisposable, IBrushSurface
                     :               (128, 128, 132);
         }
 
-        // The brush's reach, as the falloff the stroke will actually apply — so what the user sees shaded is
-        // what will move, and by how much. Squared radius so the pixel loop compares without a square root.
+        // The brush's reach, as the falloff the stroke will actually apply; squared radius avoids a square root.
         // Mirrored, the stronger of the two discs, as the solve weighs them.
         bool brushing = brushMode && BrushRadius > 0f && Cursor is not null;
         var centre = Cursor ?? Vector3.Zero;
@@ -746,8 +624,7 @@ public sealed class PartViewport : IDisposable, IBrushSurface
                 if (mirrored) d2 = MathF.Min(d2, (hit[i] - mirrorCentre).LengthSquared());
                 if (d2 < r2)
                 {
-                    // Blend toward the hot colour by the very falloff the edit uses, so the blob reads as a
-                    // gradient rather than a disc and the user can see the soft edge they are relying on.
+                    // Blend toward the hot colour by the same falloff the edit uses.
                     float w = MeshVolumeSolve.Falloff(MathF.Sqrt(d2) / BrushRadius);
                     r = (int)(r + (255 - r) * w);
                     g = (int)(g + (90 - g) * w);

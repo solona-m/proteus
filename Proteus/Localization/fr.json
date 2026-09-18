@@ -215,6 +215,10 @@
     "message": "[Proteus] Votre seconde peau a été construite mais le jeu ne la dessine pas. L'accessoire qui la porte est équipé, pourtant le personnage ne charge pas la version de Proteus. Déséquipez puis rééquipez cet accessoire, ou choisissez-en un autre.",
     "description": ""
   },
+  "Chat.ShellMaterialFailed": {
+    "message": "[Proteus] Une partie de votre seconde peau n'est pas dessinée. Le reste est bien sur votre personnage : soit une texture dont cette pièce a besoin est manquante, soit le jeu conserve encore la version précédente. Essayez d'abord « Recomposer maintenant », puis déséquipez et rééquipez l'accessoire qui la porte.",
+    "description": ""
+  },
   "Chat.ShellNeedsRedraw": {
     "message": "[Proteus] Votre seconde peau a changé, mais le redessin automatique est désactivé : votre personnage porte donc encore la version précédente. Changez de zone ou utilisez le bouton Redraw de Penumbra pour la voir.",
     "description": ""
@@ -781,6 +785,10 @@
   },
   "Content.EitherColumn": {
     "message": "A et B",
+    "description": ""
+  },
+  "Content.FollowsHairColor": {
+    "message": "Ce matériau utilise le shader des cheveux : la pièce prend la couleur de cheveux et les mèches de votre personnage et ne comporte donc aucune table de couleurs — rien de ce que vous changez ci-dessous ne l'atteindra. Changez votre couleur de cheveux pour la recolorer.",
     "description": ""
   },
   "Content.Geometry.Fmt": {
@@ -2231,6 +2239,38 @@
     "message": "Choisissez une pièce et faites glisser les flèches : une flèche la déplace sur\ncet axe, un carré la déplace dans ce plan.",
     "description": ""
   },
+  "Parts.Tool.Rotate": {
+    "message": "Pivoter",
+    "description": ""
+  },
+  "Parts.Tool.Rotate.Tip": {
+    "message": "Choisissez une pièce, puis faites glisser un des anneaux pour la faire tourner\nautour de son centre : un anneau coloré la tourne autour de cet axe, l'anneau extérieur autour de votre vue.",
+    "description": ""
+  },
+  "Parts.Tool.Scale": {
+    "message": "Échelle",
+    "description": ""
+  },
+  "Parts.Tool.Scale.Tip": {
+    "message": "Choisissez une pièce, puis appuyez dessus et glissez à droite pour\nl'agrandir ou à gauche pour la rétrécir autour de son centre.",
+    "description": ""
+  },
+  "Parts.Rotate.Help": {
+    "message": "Cliquez sur une pièce pour la choisir, puis faites glisser un des anneaux à son centre. Faites glisser ailleurs pour tourner le modèle, Maj+glisser pour déplacer la vue, molette pour zoomer.",
+    "description": ""
+  },
+  "Parts.Rotate.LiveHint": {
+    "message": "Cliquez sur une pièce de votre personnage, puis faites glisser un des anneaux à son centre. Maintenez Alt pour déplacer la caméra. Chaque rotation est enregistrée quand vous relâchez.",
+    "description": ""
+  },
+  "Parts.Scale.Help": {
+    "message": "Cliquez sur une pièce pour la choisir, puis appuyez dessus et glissez à droite pour l'agrandir ou à gauche pour la rétrécir. Faites glisser ailleurs pour tourner le modèle, Maj+glisser pour déplacer la vue, molette pour zoomer.",
+    "description": ""
+  },
+  "Parts.Scale.LiveHint": {
+    "message": "Cliquez sur une pièce de votre personnage, puis appuyez dessus et glissez à droite pour l'agrandir ou à gauche pour la rétrécir. Maintenez Alt pour déplacer la caméra. Chaque changement est enregistré quand vous relâchez.",
+    "description": ""
+  },
   "Parts.Move.Help": {
     "message": "Cliquez sur une pièce pour la choisir, puis faites glisser une flèche ou un carré. Faites glisser ailleurs pour tourner le modèle, Maj+glisser pour déplacer la vue, molette pour zoomer.",
     "description": ""
@@ -2794,6 +2834,10 @@
   "Settings.Output.Compression.Label": {
     "message": "Activer la compression",
     "description": ""
+  },
+  "Settings.Output.CompressionRefused.Fmt": {
+    "message": "Inactif : ce PC compresse trop lentement ({0:F0} ms par mégapixel), et le faire prendrait\nassez de temps pour que votre apparence cesse d'être affichée. Les textures sont générées\nnon compressées à la place. Décochez la case pour masquer ceci.",
+    "description": "Shown in orange under the Enable Compression checkbox when the box is ticked but the machine was measured too slow to honour it. {0} is a measured number - keep the placeholder and its format. Contains deliberate line breaks."
   },
   "Settings.Output.Compression.Tip": {
     "message": "Compresse par blocs les textures générées (BC7), réduisant chacune à environ un quart\nde sa taille non compressée sur le disque et en VRAM. La texture d'index reste non\ncompressée afin de conserver ses valeurs de ligne exactes.\nDésactivé = non compressé (identique octet pour octet à avant).",
