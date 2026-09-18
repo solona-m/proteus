@@ -258,6 +258,14 @@ public class TextureLoader
     /// <summary>The .tex disk write itself, with bytes written.</summary>
     public readonly PhaseCounter WriteStats = new();
 
+    /// <summary>
+    /// Block compression in <see cref="WriteTex"/> — the alternative to <see cref="SwizzleStats"/>, taken only when
+    /// EnableCompression is on. Counted because it is by far the most expensive thing a composite does in that mode
+    /// and was previously unmeasured: its time fell into the phase breakdown's "blend" remainder, which blamed the
+    /// blender for work the encoder did. On a low-core machine this one counter is the whole story.
+    /// </summary>
+    public readonly PhaseCounter EncodeStats = new();
+
     public void ResetStats()
     {
         // One recomposite = one generation; entries it touches are protected from the trim — see runGeneration.
@@ -270,6 +278,7 @@ public class TextureLoader
         PrefetchWaitStats.Reset();
         SwizzleStats.Reset();
         WriteStats.Reset();
+        EncodeStats.Reset();
         Volatile.Write(ref evictions, 0);
     }
 
@@ -1146,7 +1155,9 @@ public class TextureLoader
             }
             else
             {
+                var tEncode = PhaseCounter.Begin();
                 payload    = EncodeBlockCompressed(rgba, width, height, encoding);
+                EncodeStats.Stop(tEncode, payload.Length);
                 formatCode = encoding == TexEncoding.Bc5 ? 0x6230u : 0x6432u;
             }
 
@@ -1204,6 +1215,118 @@ public class TextureLoader
             }
         }
         return EncodeBlockCompressedManaged(rgba, width, height, encoding);
+    }
+
+    // ── Can this machine afford to compress? ───────────────────────────────────────────────────────
+    // BC7 encoding is the most expensive thing a composite does, and it is paid on EVERY refresh. Past a
+    // certain slowness it stops being "compression costs a bit" and becomes "nothing is ever drawn": the
+    // composite takes longer than the gap between the ambient triggers that cancel and restart it, so no
+    // run reaches the publish. That is not a hypothetical — it happened to a user on a low-core CPU, whose
+    // composite was still going after 52 seconds while three more piled up behind it.
+    //
+    // So the setting is treated as a request, not an instruction, and the machine gets a vote. Measured
+    // once per session with the real encoder over a real surface, so core count, the managed fallback and
+    // a missing shim are all folded into one number without having to reason about any of them.
+
+    /// <summary>
+    /// How many milliseconds per megapixel of BC7 this machine can be allowed to spend. A heavy look bakes
+    /// roughly 80 megapixels, so 200 ms/Mpx is about sixteen seconds added to every refresh. Deliberately
+    /// generous: the job is to catch machines where compressing is ruinous, not to second-guess anyone who
+    /// knowingly trades refresh time for VRAM. A 28-core box measures ~14 ms/Mpx warm, so it keeps better
+    /// than 10x headroom; the case this exists for is orders past the line, not near it.
+    /// </summary>
+    private const double EncodeBudgetMsPerMegapixel = 200.0;
+
+    /// <summary>Probe surface. Big enough that the parallel fan-out is representative, small enough that the
+    /// one-time cost is tolerable on the very machines this is meant to catch.</summary>
+    private const int EncodeProbeSize = 1024;
+
+    /// <summary>
+    /// Throwaway surface encoded before the timed one. Without it the measurement carries the JIT of the
+    /// encode path and the thread pool spinning up its workers — on a 28-core box that overhead was ~28ms
+    /// against ~14ms of actual work, i.e. it over-reported by 3x and would have refused capable hardware.
+    /// The error is a near-constant, so it hurts fast machines most.
+    /// </summary>
+    private const int EncodeWarmupSize = 256;
+
+    private static readonly object _encodeProbeLock = new();
+    private static volatile bool _encodeProbeDone;
+    private static volatile bool _encodeAffordable = true;
+    private static volatile bool _encodeRefused;
+    private static double _encodeMsPerMegapixel;
+
+    /// <summary>Measured BC7 cost in ms per megapixel, or 0 before the probe has run.</summary>
+    public static double EncodeMsPerMegapixel => Volatile.Read(ref _encodeMsPerMegapixel);
+
+    /// <summary>True once the probe has decided this machine may not compress; for the settings UI to say so.</summary>
+    public static bool CompressionRefused => _encodeRefused;
+
+    /// <summary>
+    /// Whether block compression should actually be used, given what this machine can do. Asked wherever
+    /// EnableCompression is read on the refresh path — NOT by one-off imports, where a slow encode is merely
+    /// slow and never restarts anything. Probes once per session; the verdict is never written to the config,
+    /// so better hardware (or a fixed shim) re-decides on the next load rather than inheriting a refusal.
+    /// </summary>
+    public bool CompressionAffordable()
+    {
+        if (_encodeProbeDone) return _encodeAffordable;
+
+        // Under a lock rather than a set-once flag: a composite calls this from several workers at once, and a
+        // racing caller reading the optimistic default would compress a whole run on a machine that cannot.
+        // Blocking them for the length of one probe is the cheaper mistake.
+        lock (_encodeProbeLock)
+        {
+            if (_encodeProbeDone) return _encodeAffordable;
+            try
+            {
+                // Varied content, because bc7enc is much faster on flat blocks than on real art and a
+                // uniform buffer would flatter the machine into a verdict it cannot live up to.
+                int n = EncodeProbeSize;
+                var probe = new byte[n * n * 4];
+                var rnd = new Random(1234);
+                for (int i = 0; i < probe.Length; i += 4)
+                {
+                    probe[i]     = (byte)rnd.Next(256);
+                    probe[i + 1] = (byte)rnd.Next(256);
+                    probe[i + 2] = (byte)rnd.Next(256);
+                    probe[i + 3] = 255;
+                }
+
+                // Warm the path first, untimed — see EncodeWarmupSize.
+                int w = EncodeWarmupSize;
+                EncodeBlockCompressed(new byte[w * w * 4], w, w, TexEncoding.Bc7);
+
+                var t0 = PhaseCounter.Begin();
+                EncodeBlockCompressed(probe, n, n, TexEncoding.Bc7);
+                var ms = PhaseCounter.MsSince(t0);
+
+                var perMpx = ms / (n * (double)n / (1024.0 * 1024.0));
+                Volatile.Write(ref _encodeMsPerMegapixel, perMpx);
+                _encodeAffordable = perMpx <= EncodeBudgetMsPerMegapixel;
+                _encodeRefused    = !_encodeAffordable;
+
+                if (_encodeAffordable)
+                    log.Debug("[Proteus] compression budget: {0:F0} ms/megapixel ({1} encoder) — within the "
+                            + "{2:F0} ms budget", perMpx, _nativeAvailable ? "native" : "managed",
+                              EncodeBudgetMsPerMegapixel);
+                else
+                    log.Warning("[Proteus] compression is switched on but this PC encodes at {0:F0} ms/megapixel "
+                              + "({1} encoder), against a {2:F0} ms budget — baking textures uncompressed instead. "
+                              + "Compressing would add roughly {3:F0}s to every refresh, which is long enough that "
+                              + "each change restarts the work before it finishes and nothing gets drawn. Untick "
+                              + "\"Enable Compression\" to silence this.",
+                                perMpx, _nativeAvailable ? "native" : "managed", EncodeBudgetMsPerMegapixel,
+                                perMpx * 80.0 / 1000.0);
+            }
+            catch (Exception ex)
+            {
+                // A probe that cannot run says nothing about the machine; let the setting stand.
+                _encodeAffordable = true;
+                log.Warning("[Proteus] compression budget probe failed ({0}) — honouring the setting as-is", ex.Message);
+            }
+            finally { _encodeProbeDone = true; }
+        }
+        return _encodeAffordable;
     }
 
     /// <summary>Native encode via proteus_bcn.dll, fanned out across cores by 4x4 block-rows.</summary>

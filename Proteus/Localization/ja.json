@@ -2835,6 +2835,10 @@
     "message": "圧縮を有効にする",
     "description": ""
   },
+  "Settings.Output.CompressionRefused.Fmt": {
+    "message": "未使用: このPCは圧縮が遅すぎるため（1メガピクセルあたり{0:F0}ミリ秒）、実行すると\n時間がかかりすぎて見た目が描画されなくなります。代わりにテクスチャは非圧縮で\n焼き込まれています。この表示を消すにはチェックを外してください。",
+    "description": "Shown in orange under the Enable Compression checkbox when the box is ticked but the machine was measured too slow to honour it. {0} is a measured number - keep the placeholder and its format. Contains deliberate line breaks."
+  },
   "Settings.Output.Compression.Tip": {
     "message": "焼き込んだテクスチャをブロック圧縮（BC7）し、ディスクとVRAM上のサイズを\nそれぞれ非圧縮時の約4分の1に減らします。インデックステクスチャは正確な行の値を\n保つため非圧縮のままです。オフ＝非圧縮（従来とバイト単位で同一）。",
     "description": ""

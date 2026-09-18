@@ -2835,6 +2835,10 @@
     "message": "Activar compresión",
     "description": ""
   },
+  "Settings.Output.CompressionRefused.Fmt": {
+    "message": "Sin usar: este PC comprime demasiado despacio ({0:F0} ms por megapíxel), y hacerlo\ntardaría tanto que tu aspecto dejaría de dibujarse. En su lugar, las texturas se\ngeneran sin comprimir. Desmarca la casilla para ocultar esto.",
+    "description": "Shown in orange under the Enable Compression checkbox when the box is ticked but the machine was measured too slow to honour it. {0} is a measured number - keep the placeholder and its format. Contains deliberate line breaks."
+  },
   "Settings.Output.Compression.Tip": {
     "message": "Comprime por bloques las texturas generadas (BC7), reduciendo cada una a alrededor de\nun cuarto de su tamaño sin comprimir en disco y en VRAM. La textura de índice queda\nsin comprimir para conservar sus valores de fila exactos.\nDesactivado = sin comprimir (idéntico byte a byte al anterior).",
     "description": ""

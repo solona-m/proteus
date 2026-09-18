@@ -2836,8 +2836,12 @@
     "description": "Checkbox in Settings > Output."
   },
   "Settings.Output.Compression.Tip": {
-    "message": "Block-compress the baked textures (BC7), cutting each to about a quarter of its\nuncompressed size on disk and in VRAM. The index texture stays uncompressed to keep\nits exact row values. Off = uncompressed (byte-identical to before).",
-    "description": "Tooltip. \"BC7\" and \"VRAM\" are technical terms - keep them. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+    "message": "Block-compress the baked textures (BC7), cutting each to about a quarter of its\nuncompressed size on disk and in VRAM. The index texture stays uncompressed to keep\nits exact row values. Off = uncompressed (byte-identical to before).\n\nCosts processor time on EVERY refresh, and it is the slowest thing Proteus does.\nOn an older or low-core PC it can add a minute or more per change, which is long\nenough that a new change restarts the work before it finishes and your look stops\nappearing at all. Leave this off unless you are short of video memory, and turn it\noff first if nothing is being drawn.",
+    "description": "Tooltip. \"BC7\" and \"VRAM\" are technical terms - keep them. Contains deliberate line breaks - keep the same number, moving them where your language needs. The second paragraph is a warning, not a footnote: on a slow PC this setting stops anything being drawn at all, so keep it as blunt as the English."
+  },
+  "Settings.Output.CompressionRefused.Fmt": {
+    "message": "Not in use: this PC compresses too slowly ({0:F0} ms per megapixel), and doing it would\ntake long enough that your look would stop being drawn. Textures are being baked\nuncompressed instead. Untick the box to hide this.",
+    "description": "Shown in orange under the Enable Compression checkbox when the box is ticked but the machine was measured too slow to honour it. {0} is a measured number - keep the placeholder and its format. Contains deliberate line breaks."
   },
   "Settings.Output.RedundantMeshes.Label": {
     "message": "Hide redundant body meshes",

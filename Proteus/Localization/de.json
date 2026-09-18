@@ -2835,6 +2835,10 @@
     "message": "Komprimierung aktivieren",
     "description": ""
   },
+  "Settings.Output.CompressionRefused.Fmt": {
+    "message": "Nicht aktiv: Dieser PC komprimiert zu langsam ({0:F0} ms pro Megapixel), und es zu tun\nwürde so lange dauern, dass dein Aussehen gar nicht mehr gezeichnet würde. Texturen\nwerden stattdessen unkomprimiert gebacken. Entferne den Haken, um dies auszublenden.",
+    "description": "Shown in orange under the Enable Compression checkbox when the box is ticked but the machine was measured too slow to honour it. {0} is a measured number - keep the placeholder and its format. Contains deliberate line breaks."
+  },
   "Settings.Output.Compression.Tip": {
     "message": "Komprimiert die gebackenen Texturen blockweise (BC7) und verkleinert jede auf etwa ein\nViertel ihrer unkomprimierten Größe auf der Festplatte und im VRAM. Die Index-Textur\nbleibt unkomprimiert, damit ihre exakten Zeilenwerte erhalten bleiben.\nAus = unkomprimiert (Byte-identisch wie zuvor).",
     "description": ""
