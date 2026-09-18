@@ -628,6 +628,33 @@ public sealed partial class ContentImportService
         PenumbraModMeta.AtomicWrite(path, root.ToJsonString(ProteusJson.MetadataWrite));
     }
 
+    /// <summary>
+    /// The pack's IMC show/hide toggles as the sidecar records them, or null when it has none. Recorded because the
+    /// composite moves the geometry onto a host accessory, whose IMC mask the game reads instead. Options with no bits
+    /// are skipped. Also re-run after the Parts tab writes a switch into an imported mod (see
+    /// <see cref="MeshToggleService"/>), so the sidecar keeps mirroring the manifest.
+    /// </summary>
+    internal static List<ContentAttributeGroup>? AttributeGroups(PenumbraPackage.Contents pack)
+    {
+        List<ContentAttributeGroup>? result = null;
+        foreach (var g in pack.Groups.Where(g =>
+                     string.Equals(g.Type, "Imc", StringComparison.OrdinalIgnoreCase)))
+        {
+            var opts = g.Options.Where(o => o.AttributeMask != 0)
+                .ToDictionary(o => o.Name, o => (int)o.AttributeMask, StringComparer.Ordinal);
+            if (opts.Count == 0 && g.DefaultAttributeMask == 0) continue;
+            (result ??= []).Add(new ContentAttributeGroup
+            {
+                Group       = g.Name,
+                SetId       = g.ImcSetId,
+                Slot        = g.ImcSlot,
+                DefaultMask = g.DefaultAttributeMask,
+                Options     = opts,
+            });
+        }
+        return result;
+    }
+
     /// <summary>The Proteus sidecar mirroring the pack's groups, with one piece per importable model.</summary>
     internal static ProteusMetadata BuildSidecar(ImportPreview preview, string modName, string author)
     {
@@ -651,23 +678,7 @@ public sealed partial class ContentImportService
 
         metadata.PieceGroupName = preview.PieceGroupName;
 
-        // The pack's own IMC show/hide toggles, recorded because the composite moves this geometry onto a host
-        // accessory. Options with no bits are skipped.
-        foreach (var g in preview.Pack.Groups.Where(g =>
-                     string.Equals(g.Type, "Imc", StringComparison.OrdinalIgnoreCase)))
-        {
-            var opts = g.Options.Where(o => o.AttributeMask != 0)
-                .ToDictionary(o => o.Name, o => (int)o.AttributeMask, StringComparer.Ordinal);
-            if (opts.Count == 0 && g.DefaultAttributeMask == 0) continue;
-            (metadata.ContentAttributes ??= []).Add(new ContentAttributeGroup
-            {
-                Group       = g.Name,
-                SetId       = g.ImcSetId,
-                Slot        = g.ImcSlot,
-                DefaultMask = g.DefaultAttributeMask,
-                Options     = opts,
-            });
-        }
+        metadata.ContentAttributes = AttributeGroups(preview.Pack);
 
         // The extra skeletons this pack's pieces need — see ContentSkeleton. Entries of 0 are dropped: writing one
         // would clear the skeleton of whatever body part the composite points it at.

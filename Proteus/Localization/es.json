@@ -2419,10 +2419,6 @@
     "message": "Esta prenda se importó a Proteus, que la lleva por ti. Píntala como siempre: cada trazo aparece en tu personaje unos segundos después de guardarse, cuando la prenda se reconstruye.",
     "description": ""
   },
-  "Parts.Content.NoSwitches": {
-    "message": "No se pueden añadir interruptores a una prenda importada: Proteus la lleva sobre otro objeto, y son los interruptores de ese objeto los que la controlan. Los pinceles de arriba siguen funcionando.",
-    "description": ""
-  },
   "Parts.Live.PickedShell": {
     "message": "Esa es la prenda que Proteus dibuja por ti, y se reconstruye cada vez que algo cambia. Elige el mod del que viene para editarla.",
     "description": ""

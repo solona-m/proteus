@@ -996,4 +996,162 @@ public class MeshToggleServiceTests
         Assert.Equal(1, result.FilesPatched);
         Assert.Equal([otherRel], result.Skipped);
     }
+
+    // ── imported mods ───────────────────────────────────────────────────────
+
+    private const string ContentRel = "content/c0201e0043_top.mdl";
+
+    /// <summary>
+    /// Turn <paramref name="mod"/> into what the content import leaves behind: a manifest that publishes no model,
+    /// and a sidecar naming the model as a piece. <paramref name="imcGroups"/> are the manifest's groups, and
+    /// <paramref name="attributes"/> the sidecar's ContentAttributes as the import would have mirrored them.
+    /// </summary>
+    private static void MakeImported(Mod mod, string imcGroups = "", string attributes = "null", params string[] files)
+    {
+        File.WriteAllText(Path.Combine(mod.Root, "meta.json"),
+            "{\"FileVersion\":4,\"Name\":\"Frock (Proteus)\",\"Groups\":[" + imcGroups + "],\"DefaultData\":{\"Files\":{}}}");
+        var models = string.Join(",", (files.Length == 0 ? [ContentRel] : files)
+            .Select((f, i) => $"{{\"Name\":\"Size {i}\",\"Pieces\":[{{\"Model\":\"\",\"Materials\":{{}},\"Models\":{{\"0201\":\"{f}\"}}}}]}}"));
+        Directory.CreateDirectory(Path.Combine(mod.Root, "Proteus"));
+        File.WriteAllText(Path.Combine(mod.Root, "Proteus", "metadata.json"),
+            "{\"FormatVersion\":1,\"Name\":\"Frock (Proteus)\",\"Unknown\":\"kept\",\"ContentAttributes\":" + attributes
+            + ",\"ContentGroups\":[{\"PenumbraGroupName\":\"Size\",\"Options\":[" + models + "]}]}");
+    }
+
+    private static List<ContentAttributeGroup>? SidecarAttributes(Mod mod)
+        => SidecarDiscoveryService.TryReadMetadata(mod.Root)!.ContentAttributes;
+
+    /// <summary>A content file as the Parts tab lists it: not published, its game path read off its own name.</summary>
+    private static PenumbraModMeta.Redirect ContentRow(string rel)
+        => new(GamePath, rel, "Size / Size 0");
+
+    private static MeshToggleService.Outcome WriteContent(
+        Mod mod, ModelParts parts, string rel, IReadOnlyList<PenumbraModMeta.Redirect> siblings,
+        params MeshToggleService.Plan[] toggles)
+        => MeshToggleService.Write(mod.Root, ContentRow(rel), parts, toggles, siblings,
+            path => path == "chara/equipment/e0043/e0043.imc" ? Imc() : null);
+
+    /// <summary>
+    /// A switch on an imported garment has to reach the sidecar. The piece is worn on a host accessory, so the game
+    /// never applies this item's IMC mask to it; Proteus hides the part itself, and only for the groups the sidecar
+    /// lists. Before this, the Parts tab refused imported garments outright.
+    /// </summary>
+    [Fact]
+    public void Write_OnAnImportedPiece_MirrorsTheGroupIntoTheSidecar()
+    {
+        using var mod = new Mod(SyntheticModel.Build([],
+            Mesh(new SyntheticModel.Sub(0), new SyntheticModel.Sub(0))), ContentRel);
+        MakeImported(mod);
+        var parts = ModelPartReader.Read(mod.Model(ContentRel))!;
+
+        var result = WriteContent(mod, parts, ContentRel, [ContentRow(ContentRel)],
+            new MeshToggleService.Plan("Bow", [parts.Parts[1]]));
+        Assert.True(result.Ok, result.Message);
+
+        var after = ModelPartReader.Read(mod.Model(ContentRel))!;
+        Assert.Equal(["atr_tv_a"], after.AttributeNames);
+        var groupName = MeshToggleService.GroupNameFor("Body");
+        Assert.Equal("Imc", mod.Group(groupName).GetProperty("Type").GetString());
+
+        var attr = Assert.Single(SidecarAttributes(mod)!);
+        Assert.Equal(groupName, attr.Group);
+        Assert.Equal(43, attr.SetId);
+        Assert.Equal("Body", attr.Slot);
+
+        // What the composite does with it: the bow is dropped while the switch is off, and kept while it is on.
+        var off = ContentPieceResolver.HiddenAttributes(SidecarAttributes(mod), ContentRel, after.AttributeNames,
+            new Dictionary<string, List<string>> { [groupName] = [] });
+        Assert.Equal(["atr_tv_a"], off!);
+        Assert.Null(ContentPieceResolver.HiddenAttributes(SidecarAttributes(mod), ContentRel, after.AttributeNames,
+            new Dictionary<string, List<string>> { [groupName] = ["Bow"] }));
+
+        // Edited in place: a field this build does not know is still there.
+        Assert.Contains("\"Unknown\"", File.ReadAllText(Path.Combine(mod.Root, "Proteus", "metadata.json")));
+    }
+
+    [Fact]
+    public void Revert_OnAnImportedPiece_TakesTheGroupBackOutOfTheSidecar()
+    {
+        using var mod = new Mod(SyntheticModel.Build([],
+            Mesh(new SyntheticModel.Sub(0), new SyntheticModel.Sub(0))), ContentRel);
+        MakeImported(mod);
+        var parts = ModelPartReader.Read(mod.Model(ContentRel))!;
+        Assert.True(WriteContent(mod, parts, ContentRel, [ContentRow(ContentRel)],
+            new MeshToggleService.Plan("Bow", [parts.Parts[1]])).Ok);
+
+        var result = MeshToggleService.Revert(mod.Root);
+
+        Assert.True(result.Ok, result.Message);
+        Assert.Null(SidecarAttributes(mod));
+    }
+
+    /// <summary>
+    /// When the pack already has a switch group for the item, the new switch merges into it, and the sidecar entry the
+    /// import wrote for that group has to follow: our bit cleared from its default, our option added. A stale entry
+    /// would keep our bit set and the bow could never be hidden.
+    /// </summary>
+    [Fact]
+    public void Write_IntoAnImportedPacksOwnGroup_UpdatesItsSidecarEntry()
+    {
+        using var mod = new Mod(SyntheticModel.Build([], Mesh(new SyntheticModel.Sub(0))), ContentRel);
+        const string straps =
+            "{\"Type\":\"Imc\",\"Name\":\"Straps\",\"AllVariants\":true,"
+          + "\"Identifier\":{\"ObjectType\":\"Equipment\",\"PrimaryId\":43,\"Variant\":1,\"EquipSlot\":\"Body\"},"
+          + "\"DefaultEntry\":{\"MaterialId\":1,\"AttributeMask\":1023},\"DefaultSettings\":1,"
+          + "\"Options\":[{\"Name\":\"Tight\",\"AttributeMask\":512}]}";
+        MakeImported(mod, straps,
+            "[{\"Group\":\"Straps\",\"SetId\":43,\"Slot\":\"Body\",\"DefaultMask\":1023,\"Options\":{\"Tight\":512}}]");
+        var parts = ModelPartReader.Read(mod.Model(ContentRel))!;
+
+        var result = WriteContent(mod, parts, ContentRel, [ContentRow(ContentRel)],
+            new MeshToggleService.Plan("Bow", [parts.Parts[0]]));
+        Assert.True(result.Ok, result.Message);
+        Assert.Equal("Straps", result.GroupName);
+
+        var attr = Assert.Single(SidecarAttributes(mod)!);
+        Assert.Equal("Straps", attr.Group);
+        int bow = attr.Options["Bow"];
+        Assert.Equal(0, attr.DefaultMask & bow);
+        Assert.Equal(512, attr.Options["Tight"]);
+    }
+
+    /// <summary>
+    /// An imported pack's copies of one garment at one game path (a size group, say) publish nothing, so they reach
+    /// the service as content rows, and take the switch exactly as sibling redirects do.
+    /// </summary>
+    [Fact]
+    public void Write_OnAnImportedPiece_PatchesItsOtherCopiesAtTheSameGamePath()
+    {
+        const string small = "content/small/c0201e0043_top.mdl";
+        const string large = "content/large/c0201e0043_top.mdl";
+        var model = SyntheticModel.Build([], Mesh(new SyntheticModel.Sub(0), new SyntheticModel.Sub(0)));
+        using var mod = new Mod(model, small);
+        var largePath = Path.Combine(mod.Root, large.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(largePath)!);
+        File.WriteAllBytes(largePath, model);
+        MakeImported(mod, files: [small, large]);
+        var parts = ModelPartReader.Read(mod.Model(small))!;
+
+        var result = WriteContent(mod, parts, small, [ContentRow(small), ContentRow(large)],
+            new MeshToggleService.Plan("Bow", [parts.Parts[1]]));
+
+        Assert.True(result.Ok, result.Message);
+        Assert.Equal(2, result.FilesPatched);
+        Assert.Equal(["atr_tv_a"], ModelPartReader.Read(mod.Model(large))!.AttributeNames);
+    }
+
+    /// <summary>An ordinary mod's sidecar, if it has one, is not the sync's business.</summary>
+    [Fact]
+    public void SyncContentAttributes_LeavesAModWithNoImportedPiecesAlone()
+    {
+        using var mod = new Mod(SyntheticModel.Build([], Mesh(new SyntheticModel.Sub(0))));
+        WriteAuthorImcGroup(mod);
+        Directory.CreateDirectory(Path.Combine(mod.Root, "Proteus"));
+        const string sidecar = "{\"FormatVersion\":1,\"Name\":\"Frock\"}";
+        File.WriteAllText(Path.Combine(mod.Root, "Proteus", "metadata.json"), sidecar);
+
+        MeshToggleService.SyncContentAttributes(mod.Root);
+
+        Assert.Equal(sidecar, File.ReadAllText(Path.Combine(mod.Root, "Proteus", "metadata.json")));
+    }
 }

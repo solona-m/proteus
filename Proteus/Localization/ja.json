@@ -2419,10 +2419,6 @@
     "message": "この衣装はProteusにインポートされ、Proteusが着せています。いつもどおり塗れます。各ストロークは保存後、衣装が再構築されて数秒でキャラクターに反映されます。",
     "description": ""
   },
-  "Parts.Content.NoSwitches": {
-    "message": "インポートした衣装にはスイッチを追加できません。Proteusは別のアイテムに載せて着せており、そのアイテム自身のスイッチが制御します。上のブラシは使えます。",
-    "description": ""
-  },
   "Parts.Live.PickedShell": {
     "message": "これはProteusが描いている衣装で、何かが変わるたびに作り直されます。編集するには、元になったMODを選んでください。",
     "description": ""
