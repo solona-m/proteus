@@ -25,7 +25,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 924;
+    public const int BuildNumber = 926;
 
     /// <summary>
     /// When this assembly was compiled, as MM-dd HH:mm:ss, baked in by the csproj: Dalamud loads plugins from a stream,
@@ -80,6 +80,11 @@ public sealed class Plugin : IDalamudPlugin
     {
         // FIRST, before anything that can put a string on screen or in chat: an early call silently renders English.
         loc = new Localization.LocSetup(pluginInterface);
+
+        // Every service logs through this, so Copy Logs can record all levels; Log is re-pointed for the static users.
+        var capture = new CapturingPluginLog(log);
+        log = capture;
+        Log = capture;
 
         config = pluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         config.Initialize(pluginInterface);
@@ -204,7 +209,8 @@ public sealed class Plugin : IDalamudPlugin
         statusWindow = new StatusWindow(compositor, discovery, penumbra, config, designBindings,
             presets, editRouter, uvMapDl, uvRemap,
             modCreation, onionImport, contentImport, luminisImport, emissiveImport, eyeImport, modExport,
-            textureLoader, partsPanel, hatCompat);
+            textureLoader, partsPanel, hatCompat,
+            new LogExportService(capture, compositor, penumbra, config, dataDir));
 
         liveMesh = new Gui.LiveMeshOverlay(ObjectTable, DataManager, penumbra, ChatGui, log);
 

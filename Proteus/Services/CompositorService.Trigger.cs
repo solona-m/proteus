@@ -34,6 +34,41 @@ public partial class CompositorService
     }
 
     /// <summary>
+    /// A shift-click Refresh the caller can await, for Copy Logs. Completes with the first result from a run that
+    /// started after the trigger, or a null result on timeout. A cancelled run posts nothing, so the one that
+    /// superseded it answers. <c>NotRun</c> says why no composite could start.
+    /// </summary>
+    public async Task<(CompositorResult? Result, string? NotRun)> FullRefreshAsync(TimeSpan timeout)
+    {
+        // The same early-outs as TriggerRecomposite, which would otherwise leave this waiting out the timeout.
+        if (_disposed) return (null, "plugin unloading");
+        if (!config.PluginEnabled) return (null, "Proteus is disabled");
+        if (!penumbra.IsAvailable) return (null, "Penumbra is not available");
+
+        // Any run already in Recomposite holds an epoch at or below this one; ours, and anything after it, is above.
+        var startEpoch = Volatile.Read(ref _recompositeEpoch);
+        var done = new TaskCompletionSource<CompositorResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnResult()
+        {
+            if (LastResult is { } r && r.Epoch > startEpoch) done.TrySetResult(r);
+        }
+        ResultChanged += OnResult;
+        // Cancelled on the way out, so a refresh that finishes early doesn't leave the timeout's timer running.
+        using var timeoutCts = new CancellationTokenSource();
+        try
+        {
+            RefreshAndRecomposite(full: true);
+            var finished = await Task.WhenAny(done.Task, Task.Delay(timeout, timeoutCts.Token)).ConfigureAwait(false);
+            return (finished == done.Task ? done.Task.Result : null, null);
+        }
+        finally
+        {
+            timeoutCts.Cancel();
+            ResultChanged -= OnResult;
+        }
+    }
+
+    /// <summary>
     /// Manual escape hatch: drop every cached decoded texture, then recomposite immediately, for an edit that kept
     /// timestamp and byte length. Returns the number of cache entries dropped.
     /// </summary>

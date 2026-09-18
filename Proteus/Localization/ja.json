@@ -2731,6 +2731,34 @@
     "message": "デコード済みテクスチャのキャッシュをすべて破棄し、その場で再合成します。\nテクスチャの変更が反映されないときに使ってください。たとえばオーバーレイを\n同じサイズで書き出し直した場合、プラグインを再起動しないと変化が現れません。\n\n各ベーススキンテクスチャがどのMOD由来かも再判定します。下の「ベーススキン」が\n誤ったMOD名を表示している場合にお使いください。",
     "description": ""
   },
+  "Settings.Diag.CopyLogs.Btn": {
+    "message": "ログをコピー",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Busy": {
+    "message": "更新してログを記録中…",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Failed.Fmt": {
+    "message": "ログを保存できませんでした: {0}",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.OpenTip": {
+    "message": "クリックでファイルを開きます。",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Saved": {
+    "message": "保存先:",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.ShowInFolder": {
+    "message": "フォルダーで表示",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Tip": {
+    "message": "完全な更新を実行し、その間にProteusが記録したログをすべて\nデスクトップのテキストファイルに保存します。問題を報告するときに添付してください。",
+    "description": ""
+  },
   "Settings.Diag.Reach.EffectsOnly.Fmt": {
     "message": "{0} — エフェクトのみ（オーバーレイ画像なし）",
     "description": ""

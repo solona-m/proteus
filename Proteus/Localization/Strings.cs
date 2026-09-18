@@ -635,6 +635,26 @@ public sealed class SettingsStrings
         "Also re-derives which mod each base skin texture comes from — use this if the\n" +
         "Base skin below names the wrong mod.");
 
+    public readonly string CopyLogs =
+        Loc.Localize("Settings.Diag.CopyLogs.Btn", "Copy Logs") + "###copyLogs";
+
+    public readonly string CopyLogsBusy =
+        Loc.Localize("Settings.Diag.CopyLogs.Busy", "Refreshing and capturing…") + "###copyLogs";
+
+    public readonly string CopyLogsTip = Loc.Localize("Settings.Diag.CopyLogs.Tip",
+        "Run a full refresh and save everything Proteus logs while it runs to a text\n" +
+        "file on your desktop. Attach that file when you report a problem.");
+
+    public readonly string CopyLogsSaved = Loc.Localize("Settings.Diag.CopyLogs.Saved", "Saved:");
+
+    public readonly string CopyLogsOpenTip = Loc.Localize("Settings.Diag.CopyLogs.OpenTip", "Click to open the file.");
+
+    public readonly string CopyLogsShowInFolder =
+        Loc.Localize("Settings.Diag.CopyLogs.ShowInFolder", "Show in folder") + "###copyLogsFolder";
+
+    public readonly string CopyLogsFailedFmt =
+        Loc.Localize("Settings.Diag.CopyLogs.Failed.Fmt", "Could not save the log: {0}");
+
     public readonly string BaseSkinHeaderFmt = Loc.Localize("Settings.Diag.BaseSkin.Header.Fmt", "Base skin ({0})");
 
     public readonly string BaseSkinUnconfirmedFmt =

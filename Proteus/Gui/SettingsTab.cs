@@ -1,5 +1,7 @@
 using System;
+using System.Diagnostics;
 using System.Numerics;
+using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Components;
 using Dalamud.Interface.Utility.Raii;
@@ -14,13 +16,21 @@ internal sealed class SettingsTab
     private readonly CompositorService compositor;
     private readonly SidecarDiscoveryService discovery;
     private readonly HatCompatPanel hatCompat;
+    private readonly LogExportService logExport;
 
-    public SettingsTab(Configuration config, CompositorService compositor, SidecarDiscoveryService discovery, HatCompatPanel hatCompat)
+    // Copy Logs: the running export, polled each frame, then the file it wrote or why it could not.
+    private Task<string>? _copyLogsTask;
+    private string? _copyLogsPath;
+    private string? _copyLogsError;
+
+    public SettingsTab(Configuration config, CompositorService compositor, SidecarDiscoveryService discovery, HatCompatPanel hatCompat,
+        LogExportService logExport)
     {
         this.config = config;
         this.compositor = compositor;
         this.discovery = discovery;
         this.hatCompat = hatCompat;
+        this.logExport = logExport;
     }
 
     /// <summary>The Settings tab, grouped into carded sections.</summary>
@@ -200,6 +210,8 @@ internal sealed class SettingsTab
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip(s.ClearCacheTip);
 
+        DrawCopyLogs();
+
         // Which skin the overlays are painted onto; a composite on the wrong body mod otherwise looks fine.
         var upstreams = compositor.BaseUpstreams();
         // "###baseSkin" pins the id, so the count or a language change doesn't collapse the header.
@@ -238,6 +250,55 @@ internal sealed class SettingsTab
                     ImGui.SetTooltip(c.Material);
             }
             ImGui.TextDisabled(s.ReachNote);
+        }
+    }
+
+    private void DrawCopyLogs()
+    {
+        var s = Strings.Settings;
+
+        if (_copyLogsTask is { IsCompleted: true } done)
+        {
+            if (done.IsCompletedSuccessfully) _copyLogsPath = done.Result;
+            else _copyLogsError = done.Exception?.GetBaseException().Message ?? "cancelled";
+            _copyLogsTask = null;
+        }
+
+        var busy = _copyLogsTask != null;
+        using (ImRaii.Disabled(busy))
+        {
+            if (ImGui.Button(busy ? s.CopyLogsBusy : s.CopyLogs))
+            {
+                _copyLogsPath = _copyLogsError = null;
+                _copyLogsTask = Task.Run(logExport.ExportAsync);
+            }
+        }
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(s.CopyLogsTip);
+
+        if (_copyLogsPath is { } path)
+        {
+            ImGui.AlignTextToFramePadding();
+            ImGui.TextDisabled(s.CopyLogsSaved);
+            ImGui.SameLine();
+            // The path is the link: click opens the file in the user's text editor.
+            ImGui.TextColored(ProteusStyle.Accent, path);
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
+                ImGui.SetTooltip(s.CopyLogsOpenTip);
+            }
+            if (ImGui.IsItemClicked())
+                try { Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }); }
+                catch { /* no handler for .txt — Show in folder still works */ }
+            ImGui.SameLine();
+            if (ImGui.SmallButton(s.CopyLogsShowInFolder))
+                try { Process.Start("explorer.exe", $"/select,\"{path}\""); }
+                catch { /* no shell */ }
+        }
+        else if (_copyLogsError is { } error)
+        {
+            ImGui.TextColored(ProteusStyle.Bad, string.Format(s.CopyLogsFailedFmt, error));
         }
     }
 

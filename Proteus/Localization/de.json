@@ -2731,6 +2731,34 @@
     "message": "Verwirft alle zwischengespeicherten dekodierten Texturen und komponiert sofort neu.\nNutze das, wenn eine Texturänderung nicht erscheint — etwa wenn du ein Overlay in\nderselben Größe neu exportiert hast und die Änderung sonst erst nach einem Neustart\ndes Plugins sichtbar würde.\n\nLeitet außerdem neu her, aus welchem Mod jede Basis-Hauttextur stammt — nutze das,\nwenn „Basis-Haut“ unten den falschen Mod nennt.",
     "description": ""
   },
+  "Settings.Diag.CopyLogs.Btn": {
+    "message": "Logs kopieren",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Busy": {
+    "message": "Aktualisiere und zeichne auf…",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Failed.Fmt": {
+    "message": "Log konnte nicht gespeichert werden: {0}",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.OpenTip": {
+    "message": "Klicken, um die Datei zu öffnen.",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Saved": {
+    "message": "Gespeichert:",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.ShowInFolder": {
+    "message": "Im Ordner anzeigen",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Tip": {
+    "message": "Führt eine vollständige Aktualisierung aus und speichert alles, was Proteus dabei\nprotokolliert, in einer Textdatei auf deinem Desktop. Hänge sie an, wenn du ein Problem meldest.",
+    "description": ""
+  },
   "Settings.Diag.Reach.EffectsOnly.Fmt": {
     "message": "{0} — nur Effekte (keine Overlay-Grafik)",
     "description": ""

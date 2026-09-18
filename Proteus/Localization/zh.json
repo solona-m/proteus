@@ -2731,6 +2731,34 @@
     "message": "丢弃所有已缓存的解码贴图并立即重新合成。当贴图修改没有生效时使用——\n例如你以相同尺寸重新导出了叠加层，不重启插件就看不到变化。\n\n同时会重新推断每张基础皮肤贴图来自哪个模组——如果下方的“基础皮肤”\n显示了错误的模组名，请使用此功能。",
     "description": ""
   },
+  "Settings.Diag.CopyLogs.Btn": {
+    "message": "复制日志",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Busy": {
+    "message": "正在刷新并记录…",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Failed.Fmt": {
+    "message": "无法保存日志：{0}",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.OpenTip": {
+    "message": "点击打开文件。",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Saved": {
+    "message": "已保存：",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.ShowInFolder": {
+    "message": "在文件夹中显示",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Tip": {
+    "message": "执行一次完整刷新，并把期间 Proteus 记录的所有日志保存到\n桌面上的文本文件中。报告问题时请附上该文件。",
+    "description": ""
+  },
   "Settings.Diag.Reach.EffectsOnly.Fmt": {
     "message": "{0} — 仅效果（无叠加层图像）",
     "description": ""
