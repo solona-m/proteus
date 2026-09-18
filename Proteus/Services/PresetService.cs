@@ -249,7 +249,8 @@ public class PresetService : IDisposable
     public ModPreset Save(OverlayEntry entry, Guid collId, string name)
     {
         var stored = Add(entry.ModDirectory, Capture(entry, collId, name));
-        Apply(entry, collId, stored);
+        ApplyCore(entry, collId, stored);
+        UsageStats.Count(UsageFeature.PresetSave);
         return stored;
     }
 
@@ -273,6 +274,7 @@ public class PresetService : IDisposable
         }
 
         InvalidateDrift(entry.ModDirectory);
+        UsageStats.Count(UsageFeature.PresetSave);
         log.Information("[Proteus] preset: updated {0} on {1} from the current look", presetId, entry.ModDirectory);
         return true;
     }
@@ -377,6 +379,13 @@ public class PresetService : IDisposable
     /// no longer has is reported rather than forced.
     /// </summary>
     public PresetApplyReport Apply(OverlayEntry entry, Guid collId, ModPreset preset)
+    {
+        UsageStats.Count(UsageFeature.PresetApply);
+        return ApplyCore(entry, collId, preset);
+    }
+
+    /// <summary><see cref="Apply"/> without the usage count, for <see cref="Save"/>'s own put-on of what it just saved.</summary>
+    private PresetApplyReport ApplyCore(OverlayEntry entry, Guid collId, ModPreset preset)
     {
         // Checked against what the mod's manifest offers, not what the collection has selected.
         var plan = PlanOptionWrites(preset.Options, ReadCatalogue(entry));

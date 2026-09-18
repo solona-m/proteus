@@ -3198,5 +3198,69 @@
   "Presets.AddedTo.Fmt": {
     "message": "Added \"{0}\" to {1}. Wear it from that mod's Presets section in Colors.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Settings.Section.Privacy": {
+    "message": "개인정보",
+    "description": ""
+  },
+  "Privacy.Consent.Title": {
+    "message": "Proteus 개선에 도움을 주시겠어요?",
+    "description": ""
+  },
+  "Privacy.Consent.Body": {
+    "message": "어떤 Proteus 기능을 사용하는지 공유하시겠어요? 다음에 무엇을 작업할지 정하는 데 도움이 됩니다. 동의하지 않으면 아무것도 공유되지 않으며, 설정 > 개인정보에서 언제든지 변경할 수 있습니다.",
+    "description": ""
+  },
+  "Privacy.Consent.SentHeader": {
+    "message": "하루에 한 번 보내는 내용:",
+    "description": ""
+  },
+  "Privacy.Consent.SentList": {
+    "message": "- 각 Proteus 기능을 사용한 횟수\n- Proteus 버전과 Dalamud 언어\n- 이 용도로만 만든 무작위 번호 (한 사람이 여러 명으로 집계되지 않도록)",
+    "description": ""
+  },
+  "Privacy.Consent.NeverHeader": {
+    "message": "절대 보내지 않는 내용:",
+    "description": ""
+  },
+  "Privacy.Consent.NeverList": {
+    "message": "- 캐릭터, 계정, 서버\n- 모드, 파일, 폴더 이름\n- 칠하거나 가져오거나 착용한 것",
+    "description": ""
+  },
+  "Privacy.Consent.Accept": {
+    "message": "사용 통계 공유",
+    "description": ""
+  },
+  "Privacy.Consent.Decline": {
+    "message": "괜찮습니다",
+    "description": ""
+  },
+  "Privacy.ReadNotice": {
+    "message": "개인정보 처리방침 읽기",
+    "description": ""
+  },
+  "Privacy.Share.Label": {
+    "message": "사용 통계 공유",
+    "description": ""
+  },
+  "Privacy.Share.Tip": {
+    "message": "하루에 한 번 각 Proteus 기능을 사용한 횟수를\nProteus 버전, Dalamud 언어, 이 용도로 만든 무작위 번호와 함께 보냅니다.\n캐릭터나 모드에 관한 정보는 포함되지 않습니다.\n\n체크를 해제하면 전송이 중지되고 이미 보낸 데이터도 모두 삭제됩니다.",
+    "description": ""
+  },
+  "Privacy.DeleteData.Btn": {
+    "message": "내 데이터 삭제",
+    "description": ""
+  },
+  "Privacy.DeleteData.Tip": {
+    "message": "공유를 중지하고 이 설치에서 보낸 모든 보고서를 삭제합니다.",
+    "description": ""
+  },
+  "Privacy.InstallId.Fmt": {
+    "message": "설치 ID: {0}",
+    "description": ""
+  },
+  "Privacy.DeletionPending": {
+    "message": "서버에서 데이터를 삭제하는 중입니다. 오프라인이면 Proteus가 로드될 때마다 다시 시도합니다.",
+    "description": ""
   }
 }

@@ -3198,5 +3198,69 @@
   "Presets.AddedTo.Fmt": {
     "message": "Added \"{0}\" to {1}. Wear it from that mod's Presets section in Colors.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Settings.Section.Privacy": {
+    "message": "Конфиденциальность",
+    "description": ""
+  },
+  "Privacy.Consent.Title": {
+    "message": "Помочь улучшить Proteus?",
+    "description": ""
+  },
+  "Privacy.Consent.Body": {
+    "message": "Хотите делиться тем, какими функциями Proteus вы пользуетесь? Это помогает решить, над чем работать дальше. Ничего не передаётся без вашего согласия, и вы можете передумать в любой момент в Настройки > Конфиденциальность.",
+    "description": ""
+  },
+  "Privacy.Consent.SentHeader": {
+    "message": "Что отправляется раз в день:",
+    "description": ""
+  },
+  "Privacy.Consent.SentList": {
+    "message": "- Сколько раз использовалась каждая функция Proteus\n- Версия Proteus и язык Dalamud\n- Случайный номер, созданный только для этого, чтобы одного человека не посчитали несколько раз",
+    "description": ""
+  },
+  "Privacy.Consent.NeverHeader": {
+    "message": "Никогда не отправляется:",
+    "description": ""
+  },
+  "Privacy.Consent.NeverList": {
+    "message": "- Ваш персонаж, аккаунт или мир\n- Названия ваших модов, файлов и папок\n- То, что вы рисуете, импортируете или носите",
+    "description": ""
+  },
+  "Privacy.Consent.Accept": {
+    "message": "Делиться статистикой",
+    "description": ""
+  },
+  "Privacy.Consent.Decline": {
+    "message": "Нет, спасибо",
+    "description": ""
+  },
+  "Privacy.ReadNotice": {
+    "message": "Прочитать уведомление о конфиденциальности",
+    "description": ""
+  },
+  "Privacy.Share.Label": {
+    "message": "Делиться статистикой использования",
+    "description": ""
+  },
+  "Privacy.Share.Tip": {
+    "message": "Раз в день отправляет, сколько раз использовалась каждая функция Proteus,\nвместе с версией Proteus, языком Dalamud и созданным для этого случайным номером.\nНичего о вашем персонаже или модах.\n\nЕсли снять флажок, отправка прекратится, а всё уже отправленное будет удалено.",
+    "description": ""
+  },
+  "Privacy.DeleteData.Btn": {
+    "message": "Удалить мои данные",
+    "description": ""
+  },
+  "Privacy.DeleteData.Tip": {
+    "message": "Прекращает отправку и стирает все отчёты, отправленные с этой установки.",
+    "description": ""
+  },
+  "Privacy.InstallId.Fmt": {
+    "message": "ID вашей установки: {0}",
+    "description": ""
+  },
+  "Privacy.DeletionPending": {
+    "message": "Ваши данные удаляются с сервера. Если вы не в сети, Proteus будет пытаться снова при каждой загрузке.",
+    "description": ""
   }
 }

@@ -3198,5 +3198,69 @@
   "Presets.AddedTo.Fmt": {
     "message": "Added \"{0}\" to {1}. Wear it from that mod's Presets section in Colors.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Settings.Section.Privacy": {
+    "message": "Privacy",
+    "description": "Settings > Privacy section: the usage statistics opt-in."
+  },
+  "Privacy.Consent.Title": {
+    "message": "Help improve Proteus?",
+    "description": "Usage statistics consent prompt: asked once, the first time the Proteus window is opened. Opt-in, off by default."
+  },
+  "Privacy.Consent.Body": {
+    "message": "Would you like to share which Proteus features you use? It shows what to work on next. Nothing is shared unless you say yes, and you can change your mind at any time in Settings > Privacy.",
+    "description": "Usage statistics consent prompt: asked once, the first time the Proteus window is opened. Opt-in, off by default."
+  },
+  "Privacy.Consent.SentHeader": {
+    "message": "What is sent, once a day:",
+    "description": "Usage statistics consent prompt: asked once, the first time the Proteus window is opened. Opt-in, off by default."
+  },
+  "Privacy.Consent.SentList": {
+    "message": "- How many times each Proteus feature was used\n- The Proteus version and your Dalamud language\n- A random number made just for this, so one person is not counted as many",
+    "description": "Usage statistics consent prompt: asked once, the first time the Proteus window is opened. Opt-in, off by default. One item per line, each starting with \"- \"."
+  },
+  "Privacy.Consent.NeverHeader": {
+    "message": "Never sent:",
+    "description": "Usage statistics consent prompt: asked once, the first time the Proteus window is opened. Opt-in, off by default."
+  },
+  "Privacy.Consent.NeverList": {
+    "message": "- Your character, account or world\n- The names of your mods, files or folders\n- Anything you paint, import or wear",
+    "description": "Usage statistics consent prompt: asked once, the first time the Proteus window is opened. Opt-in, off by default. One item per line, each starting with \"- \"."
+  },
+  "Privacy.Consent.Accept": {
+    "message": "Share usage stats",
+    "description": "Usage statistics consent prompt: asked once, the first time the Proteus window is opened. Opt-in, off by default. Button; same size as the decline button."
+  },
+  "Privacy.Consent.Decline": {
+    "message": "No thanks",
+    "description": "Usage statistics consent prompt: asked once, the first time the Proteus window is opened. Opt-in, off by default. Button; same size as the accept button."
+  },
+  "Privacy.ReadNotice": {
+    "message": "Read the privacy notice",
+    "description": "Button opening the privacy notice (an English web page) in the browser."
+  },
+  "Privacy.Share.Label": {
+    "message": "Share usage statistics",
+    "description": "Settings > Privacy section: the usage statistics opt-in. Checkbox."
+  },
+  "Privacy.Share.Tip": {
+    "message": "Once a day, send how many times each Proteus feature was used, with the\nProteus version, your Dalamud language and a random number made for this.\nNothing about your character or your mods.\n\nUnticking stops it and deletes everything already sent.",
+    "description": "Settings > Privacy section: the usage statistics opt-in. Tooltip of the checkbox."
+  },
+  "Privacy.DeleteData.Btn": {
+    "message": "Delete my data",
+    "description": "Settings > Privacy section: the usage statistics opt-in. Button."
+  },
+  "Privacy.DeleteData.Tip": {
+    "message": "Stops sharing and erases every report this install has sent.",
+    "description": "Settings > Privacy section: the usage statistics opt-in. Tooltip of the delete button."
+  },
+  "Privacy.InstallId.Fmt": {
+    "message": "Your install ID: {0}",
+    "description": "Settings > Privacy section: the usage statistics opt-in. {0} is a random GUID."
+  },
+  "Privacy.DeletionPending": {
+    "message": "Your data is being deleted from the server. If you are offline, Proteus keeps trying each time it loads.",
+    "description": "Settings > Privacy section: the usage statistics opt-in. Shown after withdrawing, until the server confirms the deletion."
   }
 }

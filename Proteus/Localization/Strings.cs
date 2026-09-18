@@ -52,6 +52,7 @@ public static class Strings
     public static PartsStrings      Parts      { get; private set; } = new();
     public static PresetsStrings    Presets    { get; private set; } = new();
     public static HatCompatStrings  HatCompat  { get; private set; } = new();
+    public static PrivacyStrings    Privacy    { get; private set; } = new();
 
     /// <summary>
     /// Rebuilds every holder against the language CheapLoc was just set up with. Called from
@@ -79,7 +80,59 @@ public static class Strings
         Parts      = new PartsStrings();
         Presets    = new PresetsStrings();
         HatCompat  = new HatCompatStrings();
+        Privacy    = new PrivacyStrings();
     }
+}
+
+/// <summary>
+/// The usage-statistics consent prompt and Settings → Privacy. What these promise must match PRIVACY.md and
+/// what <c>UsageStats.BuildReport</c> actually sends.
+/// </summary>
+public sealed class PrivacyStrings
+{
+    public readonly string ConsentTitle = Loc.Localize("Privacy.Consent.Title", "Help improve Proteus?");
+
+    public readonly string ConsentBody = Loc.Localize("Privacy.Consent.Body",
+        "Would you like to share which Proteus features you use? It shows what to work on next. "
+      + "Nothing is shared unless you say yes, and you can change your mind at any time in Settings > Privacy.");
+
+    public readonly string ConsentSentHeader = Loc.Localize("Privacy.Consent.SentHeader", "What is sent, once a day:");
+
+    public readonly string ConsentSentList = Loc.Localize("Privacy.Consent.SentList",
+        "- How many times each Proteus feature was used\n"
+      + "- The Proteus version and your Dalamud language\n"
+      + "- A random number made just for this, so one person is not counted as many");
+
+    public readonly string ConsentNeverHeader = Loc.Localize("Privacy.Consent.NeverHeader", "Never sent:");
+
+    public readonly string ConsentNeverList = Loc.Localize("Privacy.Consent.NeverList",
+        "- Your character, account or world\n"
+      + "- The names of your mods, files or folders\n"
+      + "- Anything you paint, import or wear");
+
+    public readonly string ConsentAccept = Loc.Localize("Privacy.Consent.Accept", "Share usage stats") + "###usageAccept";
+
+    public readonly string ConsentDecline = Loc.Localize("Privacy.Consent.Decline", "No thanks") + "###usageDecline";
+
+    public readonly string ReadNotice = Loc.Localize("Privacy.ReadNotice", "Read the privacy notice") + "###usageNotice";
+
+    public readonly string Share = Loc.Localize("Privacy.Share.Label", "Share usage statistics") + "###usageShare";
+
+    public readonly string ShareTip = Loc.Localize("Privacy.Share.Tip",
+        "Once a day, send how many times each Proteus feature was used, with the\n"
+      + "Proteus version, your Dalamud language and a random number made for this.\n"
+      + "Nothing about your character or your mods.\n\n"
+      + "Unticking stops it and deletes everything already sent.");
+
+    public readonly string DeleteData = Loc.Localize("Privacy.DeleteData.Btn", "Delete my data") + "###usageDelete";
+
+    public readonly string DeleteDataTip = Loc.Localize("Privacy.DeleteData.Tip",
+        "Stops sharing and erases every report this install has sent.");
+
+    public readonly string InstallIdFmt = Loc.Localize("Privacy.InstallId.Fmt", "Your install ID: {0}");
+
+    public readonly string DeletionPending = Loc.Localize("Privacy.DeletionPending",
+        "Your data is being deleted from the server. If you are offline, Proteus keeps trying each time it loads.");
 }
 
 /// <summary>The hat-compatibility panel.</summary>
@@ -523,6 +576,8 @@ public sealed class SettingsStrings
         "outdoor={0}  indoor={1}  envspace={2}  sky={3}");
 
     public readonly string SecDiagnostics = Loc.Localize("Settings.Section.Diagnostics", "Diagnostics");
+
+    public readonly string SecPrivacy = Loc.Localize("Settings.Section.Privacy", "Privacy");
 
     // ── general ─────────────────────────────────────────────────────────────────────────────────────
     public readonly string Enabled = Loc.Localize("Settings.General.Enabled.Label", "Enabled");

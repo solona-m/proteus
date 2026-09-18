@@ -3198,5 +3198,69 @@
   "Presets.AddedTo.Fmt": {
     "message": "Added \"{0}\" to {1}. Wear it from that mod's Presets section in Colors.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Settings.Section.Privacy": {
+    "message": "隐私",
+    "description": ""
+  },
+  "Privacy.Consent.Title": {
+    "message": "帮助改进 Proteus？",
+    "description": ""
+  },
+  "Privacy.Consent.Body": {
+    "message": "是否愿意分享你使用了哪些 Proteus 功能？这能帮助决定接下来的开发方向。除非你同意，否则不会分享任何内容，你也可以随时在“设置 > 隐私”中更改。",
+    "description": ""
+  },
+  "Privacy.Consent.SentHeader": {
+    "message": "每天发送一次的内容：",
+    "description": ""
+  },
+  "Privacy.Consent.SentList": {
+    "message": "- 每个 Proteus 功能的使用次数\n- Proteus 版本和你的 Dalamud 语言\n- 一个专为此生成的随机编号，避免同一个人被重复计数",
+    "description": ""
+  },
+  "Privacy.Consent.NeverHeader": {
+    "message": "绝不发送：",
+    "description": ""
+  },
+  "Privacy.Consent.NeverList": {
+    "message": "- 你的角色、账号或服务器\n- 你的模组、文件或文件夹名称\n- 你绘制、导入或穿戴的任何内容",
+    "description": ""
+  },
+  "Privacy.Consent.Accept": {
+    "message": "分享使用统计",
+    "description": ""
+  },
+  "Privacy.Consent.Decline": {
+    "message": "不用了",
+    "description": ""
+  },
+  "Privacy.ReadNotice": {
+    "message": "阅读隐私声明",
+    "description": ""
+  },
+  "Privacy.Share.Label": {
+    "message": "分享使用统计",
+    "description": ""
+  },
+  "Privacy.Share.Tip": {
+    "message": "每天发送一次各个 Proteus 功能的使用次数，\n附带 Proteus 版本、你的 Dalamud 语言和一个为此生成的随机编号。\n不包含任何关于你的角色或模组的信息。\n\n取消勾选会停止发送，并删除所有已发送的数据。",
+    "description": ""
+  },
+  "Privacy.DeleteData.Btn": {
+    "message": "删除我的数据",
+    "description": ""
+  },
+  "Privacy.DeleteData.Tip": {
+    "message": "停止分享，并清除此安装发送过的所有报告。",
+    "description": ""
+  },
+  "Privacy.InstallId.Fmt": {
+    "message": "你的安装 ID：{0}",
+    "description": ""
+  },
+  "Privacy.DeletionPending": {
+    "message": "正在从服务器删除你的数据。如果你处于离线状态，Proteus 会在每次加载时重试。",
+    "description": ""
   }
 }

@@ -151,6 +151,15 @@ const STATIC_PROXIES = {
     markdown: true,
     docPath: 'TROUBLESHOOTING.md',
   },
+  // What the opt-in usage statistics collect. The plugin's consent prompt and Settings link here, so it
+  // must render for someone who has never seen GitHub. English only, like the two above.
+  '/PRIVACY.md': {
+    origin: rawUrl('PRIVACY.md'),
+    type: 'text/markdown; charset=utf-8',
+    ttl: 900,
+    markdown: true,
+    docPath: 'PRIVACY.md',
+  },
   // Stored DECODED, because the lookup decodes the path — a browser sends "For%20Creators.md".
   '/For Creators.md': {
     origin: rawUrl('For Creators.md'),

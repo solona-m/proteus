@@ -272,6 +272,7 @@ public partial class CompositorService
                 if (shells != null)
                 {
                     run.shellBuilt = true;
+                    UsageStats.Count(UsageFeature.SecondSkin);
                     // Where the shell landed, read off its published paths: this decides which item must be equipped for it to render.
                     run.shellOnFacewear = shells.HostModelPaths.Any(
                         p => p.EndsWith("_met.mdl", StringComparison.OrdinalIgnoreCase));

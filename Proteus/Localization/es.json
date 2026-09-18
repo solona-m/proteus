@@ -3198,5 +3198,69 @@
   "Presets.AddedTo.Fmt": {
     "message": "Added \"{0}\" to {1}. Wear it from that mod's Presets section in Colors.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Settings.Section.Privacy": {
+    "message": "Privacidad",
+    "description": ""
+  },
+  "Privacy.Consent.Title": {
+    "message": "¿Quieres ayudar a mejorar Proteus?",
+    "description": ""
+  },
+  "Privacy.Consent.Body": {
+    "message": "¿Quieres compartir qué funciones de Proteus usas? Ayuda a decidir en qué trabajar a continuación. No se comparte nada a menos que digas que sí, y puedes cambiar de opinión en cualquier momento en Ajustes > Privacidad.",
+    "description": ""
+  },
+  "Privacy.Consent.SentHeader": {
+    "message": "Lo que se envía, una vez al día:",
+    "description": ""
+  },
+  "Privacy.Consent.SentList": {
+    "message": "- Cuántas veces se usó cada función de Proteus\n- La versión de Proteus y el idioma de Dalamud\n- Un número aleatorio creado solo para esto, para que una persona no se cuente como varias",
+    "description": ""
+  },
+  "Privacy.Consent.NeverHeader": {
+    "message": "Nunca se envía:",
+    "description": ""
+  },
+  "Privacy.Consent.NeverList": {
+    "message": "- Tu personaje, cuenta o mundo\n- Los nombres de tus mods, archivos o carpetas\n- Nada de lo que pintas, importas o llevas puesto",
+    "description": ""
+  },
+  "Privacy.Consent.Accept": {
+    "message": "Compartir estadísticas",
+    "description": ""
+  },
+  "Privacy.Consent.Decline": {
+    "message": "No, gracias",
+    "description": ""
+  },
+  "Privacy.ReadNotice": {
+    "message": "Leer el aviso de privacidad",
+    "description": ""
+  },
+  "Privacy.Share.Label": {
+    "message": "Compartir estadísticas de uso",
+    "description": ""
+  },
+  "Privacy.Share.Tip": {
+    "message": "Una vez al día, envía cuántas veces se usó cada función de Proteus, junto con\nla versión de Proteus, el idioma de Dalamud y un número aleatorio creado para esto.\nNada sobre tu personaje ni tus mods.\n\nDesmarcarlo detiene el envío y borra todo lo ya enviado.",
+    "description": ""
+  },
+  "Privacy.DeleteData.Btn": {
+    "message": "Borrar mis datos",
+    "description": ""
+  },
+  "Privacy.DeleteData.Tip": {
+    "message": "Deja de compartir y borra todos los informes que ha enviado esta instalación.",
+    "description": ""
+  },
+  "Privacy.InstallId.Fmt": {
+    "message": "Tu ID de instalación: {0}",
+    "description": ""
+  },
+  "Privacy.DeletionPending": {
+    "message": "Tus datos se están borrando del servidor. Si no tienes conexión, Proteus lo reintentará cada vez que se cargue.",
+    "description": ""
   }
 }

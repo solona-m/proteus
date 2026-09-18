@@ -1,0 +1,17 @@
+{
+  "name": "proteus-stats-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Worker that receives Proteus's opt-in feature usage counts.",
+  "scripts": {
+    "test": "node test/report.test.mjs",
+    "dev": "wrangler dev",
+    "migrate:local": "wrangler d1 migrations apply proteus-stats --local",
+    "migrate": "wrangler d1 migrations apply proteus-stats --remote",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}

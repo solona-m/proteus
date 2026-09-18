@@ -1162,6 +1162,7 @@ public partial class CompositorService
                 OverlayModsUsed = entries.Count,
             };
             compositor.ResultChanged?.Invoke();
+            UsageStats.Count(UsageFeature.Composite);
 
             // Wall clock from start to everything done, which no single phase line sums to.
             compositor.log.Information("[Proteus] recomposite DONE — {0:F0}ms total", PhaseCounter.MsSince(tRunStart));

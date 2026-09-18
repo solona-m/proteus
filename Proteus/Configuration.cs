@@ -198,6 +198,25 @@ public class Configuration : IPluginConfiguration
     /// </summary>
     public bool FaceUvInPlace { get; set; } = true;
 
+    /// <summary>
+    /// The user agreed to share usage statistics (see PRIVACY.md and <c>UsageStats</c>). Off by default and
+    /// only ever set by the user's own answer: consent, not a preference Proteus may choose for them.
+    /// </summary>
+    public bool UsageStatsConsent { get; set; }
+
+    /// <summary>
+    /// Which version of the usage-statistics question the user last answered (0 = never asked). Below
+    /// <c>UsageStats.ConsentVersion</c> the prompt shows again, so a change in what is collected is asked
+    /// about rather than inherited.
+    /// </summary>
+    public int UsageStatsConsentVersion { get; set; }
+
+    /// <summary>Random ID reports are sent under, created at opt-in and cleared on withdrawal. Never derived from anything.</summary>
+    public Guid? UsageStatsInstallId { get; set; }
+
+    /// <summary>A withdrawn install ID whose server-side erasure has not been confirmed yet; retried on every load.</summary>
+    public Guid? UsageStatsPendingDeletion { get; set; }
+
     // No "hat-compat notice shown" flag: the notice fires per hairstyle fitted, tracked by the patch record on disk.
 
     /// <summary>

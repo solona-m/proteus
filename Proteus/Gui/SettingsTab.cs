@@ -77,10 +77,51 @@ internal sealed class SettingsTab
         using (ProteusStyle.Card())
             DrawHostingSettings();
 
+        if (UsageStats.Current is { } stats)
+        {
+            ImGui.Spacing();
+            ProteusStyle.SectionHeader(s.SecPrivacy);
+            using (ProteusStyle.Card())
+                DrawPrivacySettings(stats);
+        }
+
         ImGui.Spacing();
         ProteusStyle.SectionHeader(s.SecDiagnostics);
         using (ProteusStyle.Card())
             DrawDiagnostics();
+    }
+
+    /// <summary>Usage-statistics consent. Unticking is withdrawal: it also erases what was sent (see UsageStats).</summary>
+    private static void DrawPrivacySettings(UsageStats stats)
+    {
+        var p = Strings.Privacy;
+
+        bool share = stats.Enabled;
+        if (ImGui.Checkbox(p.Share, ref share))
+        {
+            if (share) stats.OptIn();
+            else stats.WithdrawAndDelete();
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(p.ShareTip);
+
+        if (ImGui.Button(p.ReadNotice))
+            UsageConsentWindow.OpenNotice();
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(UsageStats.PrivacyUrl);
+
+        if (stats.Enabled)
+        {
+            ImGui.SameLine();
+            if (ImGui.Button(p.DeleteData))
+                stats.WithdrawAndDelete();
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip(p.DeleteDataTip);
+
+            ImGui.TextDisabled(string.Format(p.InstallIdFmt, stats.InstallId));
+        }
+        else if (stats.DeletionPending)
+            ImGui.TextDisabled(p.DeletionPending);
     }
 
     private void DrawGeneralToggles()

@@ -53,6 +53,7 @@ const MIRRORED = new Map([
   ['README.md', '/en/README.md'],
   ['TROUBLESHOOTING.md', '/TROUBLESHOOTING.md'],
   ['For Creators.md', '/For Creators.md'],
+  ['PRIVACY.md', '/PRIVACY.md'],
   ['mirror.md', '/mirror.md'],
   ...LANGS.filter((l) => l.code !== 'en').map((l) => [docPathFor(l.code), mirrorPathFor(l.code)]),
 ]);

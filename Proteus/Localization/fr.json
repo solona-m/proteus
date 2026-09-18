@@ -3198,5 +3198,69 @@
   "Presets.AddedTo.Fmt": {
     "message": "Added \"{0}\" to {1}. Wear it from that mod's Presets section in Colors.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Settings.Section.Privacy": {
+    "message": "Confidentialité",
+    "description": ""
+  },
+  "Privacy.Consent.Title": {
+    "message": "Aider à améliorer Proteus ?",
+    "description": ""
+  },
+  "Privacy.Consent.Body": {
+    "message": "Voulez-vous partager les fonctionnalités de Proteus que vous utilisez ? Cela montre sur quoi travailler ensuite. Rien n'est partagé sans votre accord, et vous pouvez changer d'avis à tout moment dans Paramètres > Confidentialité.",
+    "description": ""
+  },
+  "Privacy.Consent.SentHeader": {
+    "message": "Ce qui est envoyé, une fois par jour :",
+    "description": ""
+  },
+  "Privacy.Consent.SentList": {
+    "message": "- Le nombre d'utilisations de chaque fonctionnalité de Proteus\n- La version de Proteus et la langue de Dalamud\n- Un numéro aléatoire créé uniquement pour cela, afin qu'une personne ne soit pas comptée plusieurs fois",
+    "description": ""
+  },
+  "Privacy.Consent.NeverHeader": {
+    "message": "Jamais envoyé :",
+    "description": ""
+  },
+  "Privacy.Consent.NeverList": {
+    "message": "- Votre personnage, votre compte ou votre monde\n- Les noms de vos mods, fichiers ou dossiers\n- Ce que vous peignez, importez ou portez",
+    "description": ""
+  },
+  "Privacy.Consent.Accept": {
+    "message": "Partager les statistiques",
+    "description": ""
+  },
+  "Privacy.Consent.Decline": {
+    "message": "Non merci",
+    "description": ""
+  },
+  "Privacy.ReadNotice": {
+    "message": "Lire la politique de confidentialité",
+    "description": ""
+  },
+  "Privacy.Share.Label": {
+    "message": "Partager les statistiques d'utilisation",
+    "description": ""
+  },
+  "Privacy.Share.Tip": {
+    "message": "Une fois par jour, envoie le nombre d'utilisations de chaque fonctionnalité de Proteus,\navec la version de Proteus, la langue de Dalamud et un numéro aléatoire créé pour cela.\nRien sur votre personnage ni sur vos mods.\n\nDécocher arrête l'envoi et supprime tout ce qui a déjà été envoyé.",
+    "description": ""
+  },
+  "Privacy.DeleteData.Btn": {
+    "message": "Supprimer mes données",
+    "description": ""
+  },
+  "Privacy.DeleteData.Tip": {
+    "message": "Arrête le partage et efface tous les rapports envoyés par cette installation.",
+    "description": ""
+  },
+  "Privacy.InstallId.Fmt": {
+    "message": "Votre identifiant d'installation : {0}",
+    "description": ""
+  },
+  "Privacy.DeletionPending": {
+    "message": "Vos données sont en cours de suppression sur le serveur. Si vous êtes hors ligne, Proteus réessaie à chaque chargement.",
+    "description": ""
   }
 }

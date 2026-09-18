@@ -158,6 +158,7 @@ internal sealed class ImportTab
 
         var r = onionImport.Register(done, quiet: unloading);
         if (unloading) return;
+        if (r.Ok) UsageStats.Count(UsageFeature.ImportOnion);
 
         _importStatus = r.Message;
         _importStatusOk = r.Ok;
@@ -215,6 +216,7 @@ internal sealed class ImportTab
         _importStatus = r.Message;
         _importStatusOk = r.Ok;
         _importStatusWarn = r.Warning;
+        if (r.Ok) CountPackImport(done.Preview?.SourcePath, UsageFeature.ImportPmp);
 
         if (r.Ok && ReferenceEquals(_contentPreview, done.Preview))
             _contentPreview = null;
@@ -264,6 +266,7 @@ internal sealed class ImportTab
         _importStatus = r.Message;
         _importStatusOk = r.Ok;
         _importStatusWarn = r.Warning;
+        if (r.Ok) UsageStats.Count(UsageFeature.ImportTtmp2);
 
         // Guarded on identity because Browse stays live during an import: if the user has since picked a
         // different pack, that one is not the one that just finished and must not be thrown away.
@@ -315,6 +318,7 @@ internal sealed class ImportTab
         _importStatus = r.Message;
         _importStatusOk = r.Ok;
         _importStatusWarn = r.Warning;
+        if (r.Ok) CountPackImport(done?.Preview?.SourcePath, UsageFeature.ImportEmissive);
 
         // Guarded on identity because Browse stays live during an import: if the user has since picked a
         // different pack, that one is not the one that just finished and must not be thrown away.
@@ -364,6 +368,7 @@ internal sealed class ImportTab
         _importStatus = r.Message;
         _importStatusOk = r.Ok;
         _importStatusWarn = r.Warning;
+        if (r.Ok) UsageStats.Count(UsageFeature.ImportEye);
 
         if (r.Ok && done != null && ReferenceEquals(_eyePreview, done.Preview))
             _eyePreview = null;
@@ -551,6 +556,12 @@ internal sealed class ImportTab
     }
 
     private const string InstalledManifestExtension = ".json";
+
+    /// <summary>A Penumbra-format import: from an installed mod's folder, or from a pack file of the given kind.</summary>
+    private static void CountPackImport(string? sourcePath, UsageFeature fromFile)
+        => UsageStats.Count(sourcePath != null && PenumbraPackage.IsFolder(sourcePath)
+            ? UsageFeature.ImportInstalled
+            : fromFile);
 
     /// <summary>
     /// A mod already installed in Penumbra, picked by its <c>meta.json</c>. Its folder is read in place and imported
