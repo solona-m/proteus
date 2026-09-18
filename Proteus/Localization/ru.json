@@ -820,7 +820,7 @@
     "description": ""
   },
   "Content.Intro": {
-    "message": "Импортируйте обычный мод (.pmp). Носите его отдельные части, не занимая слот экипировки, и добавляйте расширенные возможности цветовой таблицы.",
+    "message": "Импортируйте обычный мод (.pmp или meta.json мода, уже установленного в Penumbra). Носите его отдельные части, не занимая слот экипировки, и добавляйте расширенные возможности цветовой таблицы.",
     "description": ""
   },
   "Content.Materials.Fmt": {
@@ -863,6 +863,10 @@
     "message": "Не удалось прочитать этот пакет: {0}",
     "description": ""
   },
+  "Content.NotAManifest": {
+    "message": "Чтобы импортировать мод, установленный в Penumbra, выберите meta.json в его папке.",
+    "description": ""
+  },
   "Content.Samples.Fmt": {
     "message": "Его текстура индекса читает строку {0}, столбец {1} — остальные строки приглушены, потому что их ничто не читает, а правка второго столбца этой строки тоже ничего не даст.",
     "description": ""
@@ -901,6 +905,14 @@
   },
   "ContentImport.Fail.Gone.Fmt": {
     "message": "Пакета больше нет: {0}",
+    "description": ""
+  },
+  "ContentImport.Fail.AlreadyProteus": {
+    "message": "Этот мод уже является модом Proteus — импортировать нечего.",
+    "description": ""
+  },
+  "ContentImport.Fail.ManagedMod": {
+    "message": "Это собственный управляемый мод Proteus — его нельзя импортировать.",
     "description": ""
   },
   "ContentImport.Fail.NoModDir": {

@@ -820,7 +820,7 @@
     "description": ""
   },
   "Content.Intro": {
-    "message": "通常の Mod (.pmp) をインポートします。装備枠を使わずに一部だけを着用でき、高度なカラーテーブル機能を追加できます。",
+    "message": "通常の Mod (.pmp、または Penumbra にインストール済みの Mod の meta.json) をインポートします。装備枠を使わずに一部だけを着用でき、高度なカラーテーブル機能を追加できます。",
     "description": ""
   },
   "Content.Materials.Fmt": {
@@ -863,6 +863,10 @@
     "message": "そのパックを読み込めませんでした：{0}",
     "description": ""
   },
+  "Content.NotAManifest": {
+    "message": "Penumbra にインストール済みの Mod をインポートするには、そのフォルダーにある meta.json を選んでください。",
+    "description": ""
+  },
   "Content.Samples.Fmt": {
     "message": "このマテリアルのインデックステクスチャは行{0}の列{1}を参照します。他の行は使われないため無効表示です。この行のもう一方の列を編集しても何も起きません。",
     "description": ""
@@ -901,6 +905,14 @@
   },
   "ContentImport.Fail.Gone.Fmt": {
     "message": "パックが見つかりません：{0}",
+    "description": ""
+  },
+  "ContentImport.Fail.AlreadyProteus": {
+    "message": "この Mod はすでに Proteus の Mod です。インポートするものはありません。",
+    "description": ""
+  },
+  "ContentImport.Fail.ManagedMod": {
+    "message": "これは Proteus 自身が管理する Mod のため、インポートできません。",
     "description": ""
   },
   "ContentImport.Fail.NoModDir": {

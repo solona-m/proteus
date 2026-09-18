@@ -820,7 +820,7 @@
     "description": ""
   },
   "Content.Intro": {
-    "message": "Importez un mod classique (.pmp). Portez-en certaines parties sans occuper d'emplacement d'équipement, et ajoutez des fonctions avancées de table de couleurs.",
+    "message": "Importez un mod classique (.pmp, ou le meta.json d'un mod déjà installé dans Penumbra). Portez-en certaines parties sans occuper d'emplacement d'équipement, et ajoutez des fonctions avancées de table de couleurs.",
     "description": ""
   },
   "Content.Materials.Fmt": {
@@ -863,6 +863,10 @@
     "message": "Impossible de lire ce pack : {0}",
     "description": ""
   },
+  "Content.NotAManifest": {
+    "message": "Pour importer un mod installé dans Penumbra, choisissez le meta.json de son dossier.",
+    "description": ""
+  },
   "Content.Samples.Fmt": {
     "message": "Sa texture d'index lit la ligne {0}, colonne {1} — les autres lignes sont grisées car rien ne les échantillonne, et modifier l'autre colonne de cette ligne ne fera rien non plus.",
     "description": ""
@@ -901,6 +905,14 @@
   },
   "ContentImport.Fail.Gone.Fmt": {
     "message": "Le pack n'est plus là : {0}",
+    "description": ""
+  },
+  "ContentImport.Fail.AlreadyProteus": {
+    "message": "Ce mod est déjà un mod Proteus — il n'y a rien à importer.",
+    "description": ""
+  },
+  "ContentImport.Fail.ManagedMod": {
+    "message": "C'est le mod géré par Proteus lui-même — il ne peut pas être importé.",
     "description": ""
   },
   "ContentImport.Fail.NoModDir": {

@@ -820,7 +820,7 @@
     "description": ""
   },
   "Content.Intro": {
-    "message": "일반 모드(.pmp)를 가져옵니다. 장비 칸을 쓰지 않고 일부만 착용할 수 있으며, 고급 컬러 테이블 기능을 추가할 수 있습니다.",
+    "message": "일반 모드(.pmp, 또는 Penumbra에 이미 설치된 모드의 meta.json)를 가져옵니다. 장비 칸을 쓰지 않고 일부만 착용할 수 있으며, 고급 컬러 테이블 기능을 추가할 수 있습니다.",
     "description": ""
   },
   "Content.Materials.Fmt": {
@@ -863,6 +863,10 @@
     "message": "해당 팩을 읽을 수 없습니다: {0}",
     "description": ""
   },
+  "Content.NotAManifest": {
+    "message": "Penumbra에 설치된 모드를 가져오려면 해당 폴더의 meta.json을 선택하세요.",
+    "description": ""
+  },
   "Content.Samples.Fmt": {
     "message": "이 머티리얼의 인덱스 텍스처는 {0}행 {1}열을 읽습니다. 다른 행은 샘플링되지 않아 흐리게 표시되며, 이 행의 반대쪽 열을 만져도 아무 일도 일어나지 않습니다.",
     "description": ""
@@ -901,6 +905,14 @@
   },
   "ContentImport.Fail.Gone.Fmt": {
     "message": "팩이 더 이상 존재하지 않습니다: {0}",
+    "description": ""
+  },
+  "ContentImport.Fail.AlreadyProteus": {
+    "message": "이 모드는 이미 Proteus 모드이므로 가져올 것이 없습니다.",
+    "description": ""
+  },
+  "ContentImport.Fail.ManagedMod": {
+    "message": "Proteus가 직접 관리하는 모드이므로 가져올 수 없습니다.",
     "description": ""
   },
   "ContentImport.Fail.NoModDir": {
