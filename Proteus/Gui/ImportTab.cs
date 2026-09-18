@@ -397,7 +397,9 @@ internal sealed class ImportTab
                     + "," + OnionPackage.Extension
                     + "," + TexToolsPackage.Extension
                     + "," + EyePackage.Extension
-                    + "," + PresetCodec.FileExtension + "}",
+                    + "," + PresetCodec.FileExtension
+                    // An installed mod is picked by its meta.json; LoadPack turns that into the folder.
+                    + "," + InstalledManifestExtension + "}",
                 (ok, paths) =>
                 {
                     if (!ok) return;
@@ -540,11 +542,48 @@ internal sealed class ImportTab
         // Cleared here for the same reason.
         _presetImport = null;
 
-        if (path.EndsWith(PresetCodec.FileExtension, StringComparison.OrdinalIgnoreCase)) LoadPresetFile(path);
+        if (path.EndsWith(InstalledManifestExtension, StringComparison.OrdinalIgnoreCase)) LoadInstalledMod(path);
+        else if (path.EndsWith(PresetCodec.FileExtension, StringComparison.OrdinalIgnoreCase)) LoadPresetFile(path);
         else if (path.EndsWith(OnionPackage.Extension, StringComparison.OrdinalIgnoreCase)) LoadOnionPack(path);
         else if (path.EndsWith(TexToolsPackage.Extension, StringComparison.OrdinalIgnoreCase)) LoadLuminisPack(path);
         else if (path.EndsWith(EyePackage.Extension, StringComparison.OrdinalIgnoreCase)) LoadEyePack(path);
         else LoadPenumbraPack(path);
+    }
+
+    private const string InstalledManifestExtension = ".json";
+
+    /// <summary>
+    /// A mod already installed in Penumbra, picked by its <c>meta.json</c>. Its folder is read in place and imported
+    /// as a copy, exactly like a <c>.pmp</c>; the original is never edited.
+    /// </summary>
+    private void LoadInstalledMod(string manifestPath)
+    {
+        var dir = Path.GetDirectoryName(manifestPath);
+        if (!string.Equals(Path.GetFileName(manifestPath), PenumbraModMeta.MetaFile, StringComparison.OrdinalIgnoreCase)
+         || string.IsNullOrEmpty(dir))
+        {
+            _importPath = manifestPath;
+            _importPreview = null;    // see LoadOnionPack
+            _contentPreview = null;
+            _luminisPreview = null;
+            _emissivePreview = null;
+            _eyePreview = null;
+            _importMaterials = null;
+            _importStatus = Strings.Content.NotAManifest;
+            _importStatusOk = false;
+            return;
+        }
+
+        LoadPenumbraPack(dir);
+
+        // Refused now rather than on Import: the preview would otherwise offer a copy that can't happen.
+        if (_contentPreview is { } preview && ContentImportService.RefuseInstalledSource(preview) is { } refused)
+        {
+            _contentPreview = null;
+            _importName = string.Empty;
+            _importStatus = refused;
+            _importStatusOk = false;
+        }
     }
 
     /// <summary>
@@ -631,7 +670,14 @@ internal sealed class ImportTab
     private void RememberImportDir(string packPath)
     {
         string? dir;
-        try { dir = Path.GetDirectoryName(packPath); }
+        try
+        {
+            dir = Path.GetDirectoryName(packPath);
+            // An installed mod's meta.json: the mods root, so the next pick doesn't open inside that one mod.
+            if (string.Equals(Path.GetFileName(packPath), PenumbraModMeta.MetaFile, StringComparison.OrdinalIgnoreCase)
+             && !string.IsNullOrEmpty(dir))
+                dir = Path.GetDirectoryName(dir);
+        }
         catch { return; }   // a path shape GetDirectoryName rejects is not one worth remembering
 
         if (string.IsNullOrEmpty(dir)

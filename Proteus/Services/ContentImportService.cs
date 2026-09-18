@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.IO.Compression;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -297,6 +296,25 @@ public sealed partial class ContentImportService
         bool Ok, string Message, string? DirName, ImportPreview? Preview, int Pieces, int Skipped);
 
     /// <summary>
+    /// Why an installed mod's folder cannot be imported, or null when it can (and always for a <c>.pmp</c>).
+    /// Proteus's own managed mod is rewritten every composite, and a mod that already carries a sidecar is
+    /// already slot-less: copying either would only give a second copy of the same thing.
+    /// </summary>
+    internal static string? RefuseInstalledSource(ImportPreview preview)
+    {
+        if (!PenumbraPackage.IsFolder(preview.SourcePath)) return null;
+
+        var dir = Path.GetFileName(Path.TrimEndingDirectorySeparator(preview.SourcePath));
+        if (string.Equals(dir, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase))
+            return Loc.Localize("ContentImport.Fail.ManagedMod",
+                "That is Proteus's own managed mod — it cannot be imported.");
+        if (preview.InstallOnly)
+            return Loc.Localize("ContentImport.Fail.AlreadyProteus",
+                "This mod is already a Proteus mod — there is nothing to import.");
+        return null;
+    }
+
+    /// <summary>
     /// Unpack the mod and write its manifests. Safe off the framework thread; nothing is left behind when
     /// it fails. The result must be handed to <see cref="Register"/> to become a live Penumbra mod.
     /// </summary>
@@ -312,9 +330,11 @@ public sealed partial class ContentImportService
         // CanImport, not AnyImportable: a ready-made Proteus mod has no units and is still importable.
         if (!preview.CanImport)
             return Fail(Loc.Localize("ContentImport.Fail.NothingUsable", "Nothing in this pack can be imported."));
-        if (!File.Exists(preview.SourcePath))
+        if (!PenumbraPackage.Exists(preview.SourcePath))
             return Fail(string.Format(Loc.Localize("ContentImport.Fail.Gone.Fmt",
                 "The pack is no longer there: {0}"), preview.SourcePath));
+        if (RefuseInstalledSource(preview) is { } refused)
+            return Fail(refused);
 
         var dirName = ModCreationService.Sanitize(modName);
         if (dirName == null)
@@ -358,16 +378,9 @@ public sealed partial class ContentImportService
     {
         Directory.CreateDirectory(root);
 
-        // The pack's own layout is preserved verbatim: its manifest and the sidecar both name files by it.
-        using (var zip = ZipFile.OpenRead(preview.SourcePath))
-            foreach (var e in zip.Entries)
-            {
-                if (e.FullName.EndsWith('/')) continue;
-                var rel = PenumbraPackage.Normalize(e.FullName).Replace('/', Path.DirectorySeparatorChar);
-                var dest = Path.Combine(root, rel);
-                Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
-                e.ExtractToFile(dest, overwrite: true);
-            }
+        // The pack's own layout is preserved verbatim: its manifest and the sidecar both name files by it. An
+        // installed mod is copied, so the original keeps its redirects.
+        PenumbraPackage.ExtractTo(preview.SourcePath, root);
 
         // A ready-made Proteus mod stops here: the copy is the whole import. Only the name is set, since
         // Penumbra's mod list reads it from this file.
@@ -395,7 +408,7 @@ public sealed partial class ContentImportService
           + "mod list",
             manifest => manifest["Name"] = modName);
 
-        ClearMultiSelectDefaults(root, preview.Pack, log);
+        ClearMultiSelectDefaults(root, preview, log);
 
         // The piece group, written with every option off. Not here for a v3 pack: Register writes it once
         // Penumbra has migrated the folder. See WritePieceGroupAfterUpgrade.
@@ -447,10 +460,14 @@ public sealed partial class ContentImportService
     /// what the user asks for. Single groups (which always have a selection), Imc and Combining groups are untouched.
     /// </summary>
     private static void ClearMultiSelectDefaults(
-        string root, PenumbraPackage.Contents pack, IPluginLog? log)
+        string root, ImportPreview preview, IPluginLog? log)
     {
         const string cost = "its multi-select groups arrive with the pack's own options already ticked, so "
                           + "the mod puts pieces on the character before anyone asks for them";
+
+        var pack = preview.Pack;
+        var keepOn = GatedGroupDefaults(preview);
+        void Clear(JsonObject group) => ClearGroupDefault(group, keepOn);
 
         if (pack.FileVersion >= PenumbraModMeta.SingleFileVersion)
         {
@@ -458,7 +475,7 @@ public sealed partial class ContentImportService
             {
                 if (manifest["Groups"] is JsonArray groups)
                     foreach (var g in groups)
-                        if (g is JsonObject go) ClearGroupDefault(go);
+                        if (g is JsonObject go) Clear(go);
             });
             return;
         }
@@ -466,11 +483,78 @@ public sealed partial class ContentImportService
         foreach (var group in pack.Groups)
             if (group.Entry != null)
                 EditJson(Path.Combine(root, group.Entry.Replace('/', Path.DirectorySeparatorChar)), log,
-                    cost, ClearGroupDefault);
+                    cost, Clear);
     }
 
-    /// <summary>Zero one group's default selection, if it is a multi-select.</summary>
-    private static void ClearGroupDefault(JsonObject group)
+    /// <summary>
+    /// Multi groups whose one piece-carrying option stays ticked, as group name → default bitmask. Every piece that
+    /// option carries is gated in the piece group, so the gate alone decides what is worn; clearing the option too
+    /// would make each piece take two switches, and drop the materials and textures it supplies.
+    /// <para/>
+    /// Only when nothing else in the option reaches the character (<see cref="OnlyItsOwnPieces"/>): a ticked option
+    /// applies all of it whatever the piece switches say.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, int> GatedGroupDefaults(ImportPreview preview)
+    {
+        var result = new Dictionary<string, int>(StringComparer.Ordinal);
+        if (!NeedsPieceGroup(preview)) return result;
+
+        foreach (var group in preview.Pack.Groups)
+        {
+            if (!string.Equals(group.Type, "Multi", StringComparison.OrdinalIgnoreCase)) continue;
+            var carrying = preview.Units.Where(u => u.Import && u.Group == group.Name).ToList();
+            if (carrying.Count == 0 || carrying.Any(u => u.GateOption == null)) continue;
+            var options = carrying.Select(u => u.Option).Distinct().ToList();
+            if (options.Count != 1) continue;
+
+            int index = group.Options.ToList().FindIndex(o => o.Name == options[0]);
+            if (index is >= 0 and < 32 && OnlyItsOwnPieces(group.Options[index], carrying))
+                result[group.Name] = 1 << index;
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Whether everything <paramref name="option"/> still does once imported belongs to the equipment sets of the
+    /// pieces it carries: no model redirect left behind (a refused or body-only piece would go on the character in
+    /// its gear slot), and every file, swap and manipulation inside those pieces' own sets. Those only touch the
+    /// vanilla item the pieces replace; anything else — a body texture, another item, racial scaling — would apply
+    /// to the character the moment the mod is imported, and stay applied with every piece switched off.
+    /// </summary>
+    internal static bool OnlyItsOwnPieces(PenumbraPackage.PackOption option, IReadOnlyList<PieceUnit> carrying)
+    {
+        var taken = carrying
+            .SelectMany(u => u.Variants.Where(v => v.Import).Select(v => RedirectKey(v.GamePath, v.Entry)))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        // Only equipment and accessory sets have a folder of their own to stay inside.
+        var folders = carrying.Select(u => u.Slot.SetTag.ToLowerInvariant())
+            .Select(tag => tag.StartsWith('e') ? $"chara/equipment/{tag}/"
+                         : tag.StartsWith('a') ? $"chara/accessory/{tag}/"
+                         : null)
+            .ToList();
+        if (folders.Any(f => f == null)) return false;
+        var sets = carrying.Select(u => ContentSlot.SetIdOf(u.Slot.SetTag)).ToHashSet();
+
+        bool Inside(string gamePath)
+        {
+            var p = PenumbraPackage.Normalize(gamePath);
+            return folders.Any(f => p.StartsWith(f!, StringComparison.OrdinalIgnoreCase));
+        }
+
+        foreach (var (gamePath, entry) in option.Files)
+        {
+            if (gamePath.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase)
+             && !taken.Contains(RedirectKey(gamePath, entry)))
+                return false;
+            if (!Inside(gamePath)) return false;
+        }
+        return option.Swaps.All(Inside)
+            && option.Manipulations.All(m => m.SetId is { } id && sets.Contains(id));
+    }
+
+    /// <summary>Zero one group's default selection, if it is a multi-select, unless <paramref name="keepOn"/> names it.</summary>
+    private static void ClearGroupDefault(JsonObject group, IReadOnlyDictionary<string, int> keepOn)
     {
         // Through TryGetValue: GetValue<string> throws on a non-string Type. An unreadable group is left as is.
         if (group["Type"] is not JsonValue tv
@@ -478,8 +562,9 @@ public sealed partial class ContentImportService
          || !string.Equals(type, "Multi", StringComparison.OrdinalIgnoreCase))
             return;
 
-        // Written even when absent: an explicit zero says what this import meant.
-        group["DefaultSettings"] = 0;
+        // Written even when absent: an explicit value says what this import meant.
+        var name = group["Name"] is JsonValue nv && nv.TryGetValue<string>(out var n) ? n : null;
+        group["DefaultSettings"] = name != null && keepOn.TryGetValue(name, out var mask) ? mask : 0;
     }
 
     private static void StripGroup(JsonObject group, IReadOnlySet<string> taken)
@@ -996,6 +1081,43 @@ public sealed partial class ContentImportService
     private static bool NeedsUpgradeWrite(ImportPreview preview)
         => NeedsPieceGroup(preview) && preview.Pack.FileVersion < PenumbraModMeta.SingleFileVersion;
 
+    /// <summary>
+    /// Every multi-select group's selection, as this import wrote its default. A collection keeps a removed mod's
+    /// settings by folder name and hands them to the next mod added under it, so re-importing into a name used before
+    /// would otherwise inherit the old import's ticks, not these defaults: gated options left off, so each piece
+    /// needed its author option ticked as well as its switch.
+    /// </summary>
+    internal static Dictionary<string, List<string>> ImportSelection(ImportPreview preview)
+    {
+        var result = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        if (preview.InstallOnly) return result;   // the author's own defaults, untouched
+
+        var keepOn = GatedGroupDefaults(preview);
+        foreach (var group in preview.Pack.Groups)
+        {
+            if (!string.Equals(group.Type, "Multi", StringComparison.OrdinalIgnoreCase)) continue;
+            result[group.Name] = keepOn.TryGetValue(group.Name, out var mask)
+                ? [.. group.Options.Where((_, i) => i < 32 && (mask & (1 << i)) != 0).Select(o => o.Name)]
+                : [];
+        }
+        if (NeedsPieceGroup(preview)) result[preview.PieceGroupName!] = [];
+        return result;
+    }
+
+    private void ApplyImportSelection(Guid collectionId, string dirName, ImportPreview preview)
+    {
+        // One batch: each write raises ModSettingChanged, which would otherwise force a recomposite per group, each
+        // cancelling the last. Finish triggers the one recomposite the import needs.
+        using var batch = compositor.SuppressModSettingEvents();
+        foreach (var (group, options) in ImportSelection(preview))
+        {
+            var ec = penumbra.SetModOption(collectionId, dirName, group, options);
+            if (ec is not (PenumbraApiEc.Success or PenumbraApiEc.NothingChanged))
+                log.Warning("[Proteus] imported {0}: could not set group \"{1}\" to [{2}] ({3})",
+                    dirName, group, string.Join(", ", options), ec);
+        }
+    }
+
     /// <summary>Everything after the add and the piece group: enable, open Penumbra, recomposite, report.</summary>
     private ImportResult Finish(PreparedImport prepared, bool quiet)
     {
@@ -1003,7 +1125,10 @@ public sealed partial class ContentImportService
         var preview = prepared.Preview!;
         var collId = penumbra.GetPlayerCollectionId();
         if (collId.HasValue)
+        {
             penumbra.SetModEnabled(collId.Value, dirName, true);
+            ApplyImportSelection(collId.Value, dirName, preview);
+        }
         else
             log.Warning("[Proteus] imported {0}: no player collection — enable it manually", dirName);
 

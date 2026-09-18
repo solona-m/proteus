@@ -28,14 +28,31 @@ public static class PenumbraPackage
     /// <param name="AttributeMask">
     /// For an option of an <c>Imc</c> group: the attribute bits this option turns off when selected; zero elsewhere.
     /// </param>
+    /// <param name="Swaps">The game paths this option's <c>FileSwaps</c> replace.</param>
+    /// <param name="Manipulations">Every metadata manipulation, of any type, reduced to what it touches.</param>
     public sealed record PackOption(
         string Name, string? Description, IReadOnlyDictionary<string, string> Files,
         IReadOnlyList<string> Attributes, ushort AttributeMask = 0,
-        IReadOnlyList<PackEst>? Est = null)
+        IReadOnlyList<PackEst>? Est = null,
+        IReadOnlyList<string>? Swaps = null,
+        IReadOnlyList<PackManipulation>? Manipulations = null)
     {
         /// <summary>Never null, so callers can enumerate without a guard.</summary>
         public IReadOnlyList<PackEst> Est { get; init; } = Est ?? [];
+
+        /// <summary>Never null.</summary>
+        public IReadOnlyList<string> Swaps { get; init; } = Swaps ?? [];
+
+        /// <summary>Never null.</summary>
+        public IReadOnlyList<PackManipulation> Manipulations { get; init; } = Manipulations ?? [];
     }
+
+    /// <summary>
+    /// One manipulation of any type, by the model set it edits: <c>SetId</c> (Eqdp, Eqp, Est, Gmp), <c>PrimaryId</c>
+    /// (Imc) or <c>Id</c> (Atr, Shp). Null for one that edits no single set — racial scaling, global EQP — and so
+    /// applies to every character.
+    /// </summary>
+    public sealed record PackManipulation(string Type, int? SetId);
 
     /// <summary>
     /// One <c>Est</c> manipulation: "wearing <paramref name="SetId"/> on <paramref name="Slot"/> loads extra
@@ -91,17 +108,16 @@ public static class PenumbraPackage
     /// </summary>
     public static Contents Read(string pmpPath)
     {
-        using var zip = ZipFile.OpenRead(pmpPath);
+        using var zip = OpenSource(pmpPath);
 
         var entries = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
-        foreach (var e in zip.Entries)
+        foreach (var (raw, length) in zip.List())
         {
-            if (e.FullName.EndsWith('/')) continue;   // directory marker
-            var name = Normalize(e.FullName);
+            var name = Normalize(raw);
             // Entries are extracted by name, so a traversal entry rejects the whole pack.
             if (System.IO.Path.IsPathRooted(name) || name.Split('/').Any(IsTraversal))
-                throw new InvalidDataException($"The pack contains an unsafe entry path: {e.FullName}");
-            entries[name] = e.Length;
+                throw new InvalidDataException($"The pack contains an unsafe entry path: {raw}");
+            entries[name] = length;
         }
 
         var manifestNode = ReadNode(zip, ManifestEntry)
@@ -144,7 +160,10 @@ public static class PenumbraPackage
         return new Contents(
             pmpPath,
             fileVersion,
-            Str(manifest, "Name") ?? System.IO.Path.GetFileNameWithoutExtension(pmpPath),
+            // A folder's name is the mod's, dots and all.
+            Str(manifest, "Name") ?? (zip is FolderSource
+                ? System.IO.Path.GetFileName(System.IO.Path.TrimEndingDirectorySeparator(pmpPath))
+                : System.IO.Path.GetFileNameWithoutExtension(pmpPath)),
             Str(manifest, "Author") ?? string.Empty,
             Str(manifest, "Description"),
             Str(manifest, "Version"),
@@ -164,11 +183,15 @@ public static class PenumbraPackage
         var result = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
         if (wanted.Count == 0) return result;
 
-        using var zip = ZipFile.OpenRead(pmpPath);
-        foreach (var e in zip.Entries)
+        using var zip = OpenSource(pmpPath);
+        foreach (var (raw, length) in zip.List())
         {
-            var name = Normalize(e.FullName);
-            if (wanted.Contains(name)) result[name] = ReadAll(e);
+            var name = Normalize(raw);
+            if (!wanted.Contains(name)) continue;
+            using var src = zip.Open(raw);
+            using var mem = new MemoryStream(length > 0 && length < int.MaxValue ? (int)length : 0);
+            src.CopyTo(mem);
+            result[name] = mem.ToArray();
         }
         return result;
     }
@@ -176,8 +199,34 @@ public static class PenumbraPackage
     /// <summary>One archive entry parsed as JSON, or null when it isn't there or isn't JSON.</summary>
     public static JsonNode? ReadJson(string pmpPath, string entryName)
     {
-        using var zip = ZipFile.OpenRead(pmpPath);
+        using var zip = OpenSource(pmpPath);
         return ReadNode(zip, entryName);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="packPath"/> is still there: a <c>.pmp</c> file, or an installed mod's folder.
+    /// </summary>
+    public static bool Exists(string packPath) => File.Exists(packPath) || Directory.Exists(packPath);
+
+    /// <summary>Whether <paramref name="packPath"/> names an installed mod's folder rather than a <c>.pmp</c>.</summary>
+    public static bool IsFolder(string packPath) => Directory.Exists(packPath);
+
+    /// <summary>
+    /// Every entry of the pack written under <paramref name="root"/> in the pack's own layout. An installed mod's
+    /// folder is copied, never moved or edited: the import is a new mod beside the original.
+    /// </summary>
+    public static void ExtractTo(string packPath, string root)
+    {
+        using var src = OpenSource(packPath);
+        foreach (var (raw, _) in src.List())
+        {
+            var rel = Normalize(raw);
+            if (System.IO.Path.IsPathRooted(rel) || rel.Split('/').Any(IsTraversal))
+                throw new InvalidDataException($"The pack contains an unsafe entry path: {raw}");
+            var dest = System.IO.Path.Combine(root, rel.Replace('/', System.IO.Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(System.IO.Path.GetDirectoryName(dest)!);
+            src.CopyTo(raw, dest);
+        }
     }
 
     /// <summary>Archive paths use forward slashes; a manifest's file values use backslashes.</summary>
@@ -192,27 +241,74 @@ public static class PenumbraPackage
         && entry.StartsWith("group_", StringComparison.OrdinalIgnoreCase)
         && entry.EndsWith(".json", StringComparison.OrdinalIgnoreCase);
 
-    private static ZipArchiveEntry? Find(ZipArchive zip, string entryName)
-        => zip.GetEntry(entryName)
-        ?? zip.Entries.FirstOrDefault(e =>
-               string.Equals(Normalize(e.FullName), Normalize(entryName), StringComparison.OrdinalIgnoreCase));
-
-    private static byte[] ReadAll(ZipArchiveEntry entry)
+    /// <summary>
+    /// Where a pack's entries come from: a <c>.pmp</c> archive, or an installed mod's folder read in place. Entry
+    /// names are as the source spells them; callers normalise.
+    /// </summary>
+    private abstract class Source : IDisposable
     {
-        using var src = entry.Open();
-        using var mem = new MemoryStream(entry.Length > 0 && entry.Length < int.MaxValue ? (int)entry.Length : 0);
-        src.CopyTo(mem);
-        return mem.ToArray();
+        public abstract IEnumerable<(string Name, long Length)> List();
+        public abstract Stream Open(string name);
+        public abstract void CopyTo(string name, string dest);
+        public virtual void Dispose() { }
+
+        /// <summary>The raw name of <paramref name="entryName"/>, matched case- and slash-insensitively.</summary>
+        public virtual string? Find(string entryName)
+        {
+            var want = Normalize(entryName);
+            foreach (var (name, _) in List())
+                if (string.Equals(Normalize(name), want, StringComparison.OrdinalIgnoreCase))
+                    return name;
+            return null;
+        }
     }
 
-    private static JsonNode? ReadNode(ZipArchive zip, string entryName)
+    private sealed class ZipSource(string path) : Source
     {
-        var entry = Find(zip, entryName);
+        private readonly ZipArchive zip = ZipFile.OpenRead(path);
+
+        public override IEnumerable<(string, long)> List()
+            => zip.Entries.Where(e => !e.FullName.EndsWith('/'))   // directory markers
+                          .Select(e => (e.FullName, e.Length));
+
+        public override string? Find(string entryName)
+            => zip.GetEntry(entryName) is { } e ? e.FullName : base.Find(entryName);
+
+        public override Stream Open(string name) => zip.GetEntry(name)!.Open();
+        public override void CopyTo(string name, string dest) => zip.GetEntry(name)!.ExtractToFile(dest, overwrite: true);
+        public override void Dispose() => zip.Dispose();
+    }
+
+    /// <summary>An installed mod's folder. Only ever read: an import copies it.</summary>
+    private sealed class FolderSource(string root) : Source
+    {
+        public override IEnumerable<(string, long)> List()
+            => Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
+                        .Select(f => (System.IO.Path.GetRelativePath(root, f), new FileInfo(f).Length));
+
+        // The filesystem answers directly, case-insensitively on Windows; no walk of a large mod per lookup.
+        public override string? Find(string entryName)
+        {
+            var rel = Normalize(entryName).Replace('/', System.IO.Path.DirectorySeparatorChar);
+            return File.Exists(System.IO.Path.Combine(root, rel)) ? rel : null;
+        }
+
+        public override Stream Open(string name) => File.OpenRead(System.IO.Path.Combine(root, name));
+        public override void CopyTo(string name, string dest)
+            => File.Copy(System.IO.Path.Combine(root, name), dest, overwrite: true);
+    }
+
+    private static Source OpenSource(string packPath)
+        => Directory.Exists(packPath) ? new FolderSource(packPath) : new ZipSource(packPath);
+
+    private static JsonNode? ReadNode(Source zip, string entryName)
+    {
+        var entry = zip.Find(entryName);
         if (entry == null) return null;
         try
         {
             // Through a StreamReader so a UTF-8 BOM is stripped before parsing.
-            using var src = entry.Open();
+            using var src = zip.Open(entry);
             using var rd = new StreamReader(src, System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
             return JsonNode.Parse(rd.ReadToEnd());
         }
@@ -237,7 +333,7 @@ public static class PenumbraPackage
                 ReadEst(oo, est);
                 options.Add(new PackOption(
                     Str(oo, "Name") ?? string.Empty, Str(oo, "Description"), files, attrs,
-                    Mask(oo, "AttributeMask"), est));
+                    Mask(oo, "AttributeMask"), est, ReadSwaps(oo), ReadManipulations(oo)));
             }
 
         // An Imc group's edit lives on the group; read only for that kind.
@@ -288,6 +384,25 @@ public static class PenumbraPackage
             if (rec.SetId < 0 || into.Contains(rec)) continue;
             into.Add(rec);
         }
+    }
+
+    private static List<string> ReadSwaps(JsonObject owner)
+        => owner["FileSwaps"] is JsonObject swaps ? [.. swaps.Select(p => Normalize(p.Key))] : [];
+
+    private static List<PackManipulation> ReadManipulations(JsonObject owner)
+    {
+        var result = new List<PackManipulation>();
+        if (owner["Manipulations"] is not JsonArray manips) return result;
+        foreach (var m in manips)
+        {
+            if (m is not JsonObject mo) continue;
+            var inner = mo["Manipulation"] as JsonObject;
+            // Imc names its set PrimaryId; Atr and Shp name it Id, and leave it null to mean every set.
+            int? set = inner == null ? null
+                : Int(inner, "SetId") ?? Int(inner, "PrimaryId") ?? Int(inner, "Id");
+            result.Add(new PackManipulation(Str(mo, "Type") ?? string.Empty, set));
+        }
+        return result;
     }
 
     private static void ReadFiles(JsonObject owner, Dictionary<string, string> into)

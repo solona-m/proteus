@@ -411,7 +411,7 @@ public sealed partial class EmissiveSkinImportService
         if (!preview.AnyImportable)
             return Fail(Loc.Localize("Import.Emissive.Fail.NothingUsable",
                 "Nothing in this pack can be imported."));
-        if (!File.Exists(preview.SourcePath))
+        if (!PenumbraPackage.Exists(preview.SourcePath))
             return Fail(string.Format(Loc.Localize("Import.Emissive.Fail.Gone.Fmt",
                 "The pack is no longer there: {0}"), preview.SourcePath));
 
