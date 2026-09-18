@@ -820,7 +820,7 @@
     "description": ""
   },
   "Content.Intro": {
-    "message": "Importiere eine gewöhnliche Mod (.pmp). Trage Teile davon, ohne einen Ausrüstungsplatz zu belegen, und füge erweiterte Farbtabellen-Funktionen hinzu.",
+    "message": "Importiere eine gewöhnliche Mod (.pmp oder die meta.json einer bereits in Penumbra installierten Mod). Trage Teile davon, ohne einen Ausrüstungsplatz zu belegen, und füge erweiterte Farbtabellen-Funktionen hinzu.",
     "description": ""
   },
   "Content.Materials.Fmt": {
@@ -863,6 +863,10 @@
     "message": "Dieses Paket konnte nicht gelesen werden: {0}",
     "description": ""
   },
+  "Content.NotAManifest": {
+    "message": "Um eine in Penumbra installierte Mod zu importieren, wähle die meta.json in ihrem Ordner.",
+    "description": ""
+  },
   "Content.Samples.Fmt": {
     "message": "Seine Index-Textur liest Zeile {0}, Spalte {1} — die übrigen Zeilen sind ausgegraut, weil nichts sie abtastet, und die andere Spalte dieser Zeile zu bearbeiten bewirkt ebenfalls nichts.",
     "description": ""
@@ -901,6 +905,14 @@
   },
   "ContentImport.Fail.Gone.Fmt": {
     "message": "Das Paket ist nicht mehr vorhanden: {0}",
+    "description": ""
+  },
+  "ContentImport.Fail.AlreadyProteus": {
+    "message": "Diese Mod ist bereits eine Proteus-Mod — es gibt nichts zu importieren.",
+    "description": ""
+  },
+  "ContentImport.Fail.ManagedMod": {
+    "message": "Das ist die von Proteus selbst verwaltete Mod — sie kann nicht importiert werden.",
     "description": ""
   },
   "ContentImport.Fail.NoModDir": {

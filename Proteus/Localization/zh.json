@@ -820,7 +820,7 @@
     "description": ""
   },
   "Content.Intro": {
-    "message": "导入普通模组（.pmp）。无需占用装备栏即可穿戴其中的部件，并添加进阶色表功能。",
+    "message": "导入普通模组（.pmp，或已安装在 Penumbra 中的模组的 meta.json）。无需占用装备栏即可穿戴其中的部件，并添加进阶色表功能。",
     "description": ""
   },
   "Content.Materials.Fmt": {
@@ -863,6 +863,10 @@
     "message": "无法读取该包：{0}",
     "description": ""
   },
+  "Content.NotAManifest": {
+    "message": "要导入已安装在 Penumbra 中的模组，请选择其文件夹中的 meta.json。",
+    "description": ""
+  },
   "Content.Samples.Fmt": {
     "message": "其索引贴图读取第 {0} 行、{1} 列——其余行因为无人采样而变灰，修改本行的另一列也同样不会生效。",
     "description": ""
@@ -901,6 +905,14 @@
   },
   "ContentImport.Fail.Gone.Fmt": {
     "message": "该包已不存在：{0}",
+    "description": ""
+  },
+  "ContentImport.Fail.AlreadyProteus": {
+    "message": "该模组已经是 Proteus 模组，没有可导入的内容。",
+    "description": ""
+  },
+  "ContentImport.Fail.ManagedMod": {
+    "message": "这是 Proteus 自身管理的模组，无法导入。",
     "description": ""
   },
   "ContentImport.Fail.NoModDir": {
