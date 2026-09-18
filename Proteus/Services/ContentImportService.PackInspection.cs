@@ -270,6 +270,7 @@ public sealed partial class ContentImportService
             gateGroup = units.Any(u => u.Import && u.GateOption != null)
                 ? UniqueGroupName(pack)
                 : null;
+            if (gateGroup != null) GateEveryGarment();
 
             if (units.Count == 0)
                 warnings.Add(Loc.Localize("ContentImport.Warn.NoModels",
@@ -303,6 +304,45 @@ public sealed partial class ContentImportService
         }
 
         // An unconditional model gets no switch of ours when the pack's own checkboxes toggle its attributes.
+        /// <summary>
+        /// Once the piece group exists, every garment gets a switch in it — not only the ones the author's options
+        /// cannot turn off. Otherwise some pieces are worn from the piece group and the rest from the author's
+        /// groups, and one garment split across groups by race (a shirt for most races, a tank top for 0201) has
+        /// two switches that each say nothing about the other. Copies of one garment share its switch; a model
+        /// the pack's own attribute checkboxes drive keeps those instead.
+        /// <para/>
+        /// Only for a group with ONE option carrying pieces (the "Everything" shape). Several options are the
+        /// author's choice between variants of a garment, and one shared switch would put them all on at once.
+        /// That option arrives ticked (see <see cref="GatedGroupDefaults"/>), so the switch is the only one to flip.
+        /// </summary>
+        private void GateEveryGarment()
+        {
+            var byGarment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var u in units)
+                if (u.GateOption != null)
+                    byGarment.TryAdd(GarmentKey(u.Slot.Label, u.Slot.SetTag), u.GateOption);
+
+            for (int i = 0; i < units.Count; i++)
+            {
+                var u = units[i];
+                if (u.GateOption != null) continue;
+                if (u.Group == null ? PackControls(unitOrder[i])
+                                    : units.Where(x => x.Group == u.Group).Select(x => x.Option).Distinct().Skip(1).Any())
+                    continue;
+
+                var garment = GarmentKey(u.Slot.Label, u.Slot.SetTag);
+                if (!byGarment.TryGetValue(garment, out var label))
+                {
+                    // The slot alone, unless another garment already answers to it: one switch must not wear two.
+                    label = byGarment.Values.Contains(u.Slot.Label, StringComparer.OrdinalIgnoreCase)
+                        ? ContentSlot.Label(u.Slot, u.ItemName)
+                        : u.Slot.Label;
+                    byGarment[garment] = label;
+                }
+                units[i] = u with { GateOption = label };
+            }
+        }
+
         private bool PackControls((string?, string?, string, string) key) => byUnit[key].Any(v =>
             v.MaterialAttributes is { } byMat
             && byMat.Values.Any(names => names.Any(packToggles.Contains)));

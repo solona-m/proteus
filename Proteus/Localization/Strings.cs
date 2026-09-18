@@ -721,11 +721,15 @@ public sealed class ContentStrings
     /// whether to press.
     /// </summary>
     public readonly string Intro = Loc.Localize("Content.Intro",
-        "Import a regular mod (.pmp). Wear parts of it without using a gear slot, and add advanced colour "
-      + "table features.");
+        "Import a regular mod (.pmp, or the meta.json of one already installed in Penumbra). Wear parts of it "
+      + "without using a gear slot, and add advanced colour table features.");
 
     public readonly string ReadFailedFmt = Loc.Localize("Content.ReadFailed.Fmt",
         "Couldn't read that pack: {0}");
+
+    /// <summary>A .json picked that isn't an installed mod's manifest: the filter can only match by extension.</summary>
+    public readonly string NotAManifest = Loc.Localize("Content.NotAManifest",
+        "To import a mod installed in Penumbra, pick the meta.json in its folder.");
 
     public readonly string PieceCountFmt = Loc.Localize("Content.PieceCount.Fmt",
         "Pieces: {0} of {1}");

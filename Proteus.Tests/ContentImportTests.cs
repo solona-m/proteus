@@ -1961,4 +1961,255 @@ public class ContentImportTests
         }
         finally { Directory.Delete(dir, true); }
     }
+
+    /// <summary>
+    /// The Brume Rat shape: one Multi group per item with a single "Everything" option, plus a Single size group
+    /// for one race's copy of the top. The size group forces a piece group into being, and then every garment has
+    /// to be in it — before, the bracelet was switched from its own group while the top was switched from "Body",
+    /// and the shirt's own option, which carries the top for the other races, had no switch in the piece group.
+    /// </summary>
+    [Fact]
+    public void Once_a_piece_group_exists_every_single_option_garment_gets_a_switch_in_it()
+    {
+        var dir = TempDir();
+        try
+        {
+            byte[] Model(string mtrl) => SyntheticModel.Build([], new SyntheticModel.Mesh("/" + mtrl, new SyntheticModel.Sub(0)));
+
+            var manifest = """
+            {
+              "FileVersion": 4, "Name": "Brume", "Author": "A",
+              "DefaultData": { "Files": {
+                "chara/accessory/a0103/material/v0001/mt_wrs.mtrl": "wrs.mtrl",
+                "chara/equipment/e6025/material/v0001/mt_top.mtrl": "top.mtrl",
+                "chara/accessory/a0200/material/v0001/mt_rir.mtrl": "rir.mtrl"
+              } },
+              "Groups": [
+                { "Name": "Bracelet", "Type": "Multi", "DefaultSettings": 0, "Options": [
+                  { "Name": "Everything", "Files": { "chara/accessory/a0103/model/c0201a0103_wrs.mdl": "wrs.mdl" },
+                    "Manipulations": [ { "Type": "Eqdp", "Manipulation": {
+                      "Gender": "Female", "Race": "Midlander", "SetId": 103, "Slot": "Wrists", "Entry": 48 } } ] } ] },
+                { "Name": "Inked", "Type": "Multi", "DefaultSettings": 1, "Options": [
+                  { "Name": "Everything", "Files": {
+                    "chara/equipment/e6030/model/c0201e6030_top.mdl": "inked.mdl",
+                    "chara/human/c0201/obj/body/b0001/texture/c0201b0001_b_d.tex": "tattoo.tex" } } ] },
+                { "Name": "Shirt", "Type": "Multi", "DefaultSettings": 1, "Options": [
+                  { "Name": "Everything", "Files": { "chara/equipment/e6025/model/c0101e6025_top.mdl": "top0101.mdl" } } ] },
+                { "Name": "Size", "Type": "Single", "Options": [
+                  { "Name": "Small", "Files": { "chara/equipment/e6025/model/c0201e6025_top.mdl": "small.mdl" } },
+                  { "Name": "Large", "Files": { "chara/equipment/e6025/model/c0201e6025_top.mdl": "large.mdl" } } ] },
+                { "Name": "Rings", "Type": "Multi", "DefaultSettings": 3, "Options": [
+                  { "Name": "Plain", "Files": { "chara/accessory/a0200/model/c0201a0200_rir.mdl": "plain.mdl" } },
+                  { "Name": "Gem",   "Files": { "chara/accessory/a0200/model/c0201a0200_rir.mdl": "gem.mdl" } } ] }
+              ]
+            }
+            """;
+            var pmp = WritePack(dir, manifest, new[]
+            {
+                ("wrs.mtrl", new byte[64]), ("top.mtrl", new byte[64]), ("rir.mtrl", new byte[64]),
+                ("wrs.mdl", Model("mt_wrs.mtrl")), ("top0101.mdl", Model("mt_top.mtrl")),
+                ("small.mdl", Model("mt_top.mtrl")), ("large.mdl", Model("mt_top.mtrl")),
+                ("plain.mdl", Model("mt_rir.mtrl")), ("gem.mdl", Model("mt_rir.mtrl")),
+                ("inked.mdl", Model("mt_top.mtrl")), ("tattoo.tex", new byte[4]),
+            });
+
+            var preview = ContentImportService.Inspect(pmp);
+            string? Gate(string group, string option)
+                => preview.Units.Single(u => u.Group == group && u.Option == option).GateOption;
+
+            // The top shares one switch whichever group carries it; the bracelet has its own.
+            Assert.Equal("Body", Gate("Size", "Small"));
+            Assert.Equal("Body", Gate("Size", "Large"));
+            Assert.Equal("Body", Gate("Shirt", "Everything"));
+            Assert.Equal("Bracelets", Gate("Bracelet", "Everything"));
+            // Another top: "Body" is taken, so it is told apart by its set.
+            Assert.Equal("Body — e6030", Gate("Inked", "Everything"));
+            // Two variants of one ring are the author's choice, not two copies behind one switch.
+            Assert.Null(Gate("Rings", "Plain"));
+            Assert.Null(Gate("Rings", "Gem"));
+
+            var root = Path.Combine(dir, "mod");
+            ContentImportService.WriteMod(root, "Brume (Proteus)", "A", preview);
+            var groups = JsonNode.Parse(File.ReadAllText(Path.Combine(root, "meta.json")))!["Groups"]!.AsArray();
+            int Default(string name) => (int)groups.First(g => (string?)g!["Name"] == name)!["DefaultSettings"]!;
+
+            // Gated options arrive ticked, so the piece switch is the only one to flip; the rest arrive off.
+            // The bracelet's Eqdp is for its own set, so it only touches the vanilla bracelet.
+            Assert.Equal(1, Default("Bracelet"));
+            Assert.Equal(1, Default("Shirt"));
+            Assert.Equal(0, Default("Rings"));
+            // Its option also repaints the body: ticked, that would apply on import with every piece switched off.
+            Assert.Equal(0, Default("Inked"));
+            var pieceOptions = groups.First(g => (string?)g!["Name"] == ContentImportService.PieceGroup)!["Options"]!
+                .AsArray().Select(o => (string?)o!["Name"]).ToHashSet();
+            Assert.Equal(new HashSet<string?> { "Body", "Bracelets", "Body — e6030" }, pieceOptions);
+            Assert.Equal(0, Default(ContentImportService.PieceGroup));
+
+            // And the same, applied to the collection after the add: a re-import under a folder name used before would
+            // otherwise inherit the old import's ticks rather than these defaults.
+            var selection = ContentImportService.ImportSelection(preview);
+            Assert.Equal(["Everything"], selection["Bracelet"]);
+            Assert.Equal(["Everything"], selection["Shirt"]);
+            Assert.Empty(selection["Rings"]);
+            Assert.Empty(selection["Inked"]);
+            Assert.Empty(selection[ContentImportService.PieceGroup]);
+            Assert.False(selection.ContainsKey("Size"));   // a Single group keeps its size
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    // ── installed mods (a Penumbra mod folder, picked by its meta.json) ───────
+
+    /// <summary>The folder Penumbra would have installed <paramref name="pmp"/> into.</summary>
+    private static string Installed(string pmp, string dir, string name = "Installed Mod")
+    {
+        var folder = Path.Combine(dir, name);
+        ZipFile.ExtractToDirectory(pmp, folder);
+        return folder;
+    }
+
+    /// <summary>Every file under <paramref name="root"/>, by forward-slash relative path.</summary>
+    private static Dictionary<string, byte[]> Tree(string root)
+        => Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
+                    .ToDictionary(f => Path.GetRelativePath(root, f).Replace('\\', '/'), File.ReadAllBytes,
+                                  StringComparer.OrdinalIgnoreCase);
+
+    private static void AssertSameTree(Dictionary<string, byte[]> expected, Dictionary<string, byte[]> actual)
+    {
+        Assert.Equal(expected.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase),
+                     actual.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase));
+        foreach (var (k, v) in expected) Assert.True(v.AsSpan().SequenceEqual(actual[k]), k);
+    }
+
+    [Fact]
+    public void An_installed_mod_folder_reads_the_same_as_its_pack()
+    {
+        var dir = TempDir();
+        try
+        {
+            var pmp = MixedPack(dir);
+            var folder = Installed(pmp, dir);
+
+            var fromZip = PenumbraPackage.Read(pmp);
+            var fromFolder = PenumbraPackage.Read(folder);
+
+            Assert.Equal(folder, fromFolder.Path);
+            Assert.Equal(fromZip.FileVersion, fromFolder.FileVersion);
+            Assert.Equal(fromZip.Name, fromFolder.Name);
+            Assert.Equal(fromZip.Author, fromFolder.Author);
+            Assert.Equal(fromZip.Entries.OrderBy(e => e.Key), fromFolder.Entries.OrderBy(e => e.Key));
+            Assert.Equal(fromZip.AllFiles.OrderBy(e => e.Key).ThenBy(e => e.Value),
+                         fromFolder.AllFiles.OrderBy(e => e.Key).ThenBy(e => e.Value));
+            Assert.Equal(fromZip.Groups.Select(g => (g.Name, g.Type, g.Index)),
+                         fromFolder.Groups.Select(g => (g.Name, g.Type, g.Index)));
+
+            var names = fromZip.Entries.Keys.ToList();
+            var a = PenumbraPackage.ReadEntries(pmp, names);
+            var b = PenumbraPackage.ReadEntries(folder, names);
+            AssertSameTree(a, b);
+
+            Assert.Equal(PenumbraPackage.ReadJson(pmp, "meta.json")!.ToJsonString(),
+                         PenumbraPackage.ReadJson(folder, "meta.json")!.ToJsonString());
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    /// <summary>Installed mods are on disk in the v3 layout, however they arrived: the group files are the manifest.</summary>
+    [Fact]
+    public void An_installed_v3_mod_folder_reads_its_group_files()
+    {
+        var dir = TempDir();
+        try
+        {
+            byte[] Utf8(string s) => System.Text.Encoding.UTF8.GetBytes(s);
+            var pmp = WritePack(Path.Combine(dir, "src"), """{ "FileVersion": 3, "Name": "Legacy", "Author": "A" }""", new[]
+            {
+                ("default_mod.json", Utf8("""{ "Files": { "chara/a.tex": "a.tex" } }""")),
+                ("group_002_second.json", Utf8("""
+                 { "Name": "Second", "Type": "Multi",
+                   "Options": [ { "Name": "B", "Files": { "chara/b.mdl": "sub\\b.mdl" } } ] }
+                 """)),
+                ("group_001_first.json", Utf8("""
+                 { "Name": "First", "Type": "Single",
+                   "Options": [ { "Name": "A", "Files": { "chara/c.mtrl": "c.mtrl" } } ] }
+                 """)),
+                ("a.tex", new byte[4]), ("sub/b.mdl", new byte[4]), ("c.mtrl", new byte[4]),
+            });
+
+            var pack = PenumbraPackage.Read(Installed(pmp, dir));
+
+            Assert.Equal(3, pack.FileVersion);
+            Assert.Single(pack.DefaultFiles);
+            Assert.Equal(new[] { "First", "Second" }, pack.Groups.Select(g => g.Name).ToArray());
+            Assert.Equal("group_001_first.json", pack.Groups[0].Entry);
+            // Nested entries are named with forward slashes, as the archive names them.
+            Assert.Contains("sub/b.mdl", pack.Entries.Keys);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    /// <summary>
+    /// The whole point of importing an installed mod as a copy: the new mod is exactly what the pack would have
+    /// given, and the original folder is not touched — its model redirects are still Penumbra's.
+    /// </summary>
+    [Fact]
+    public void Importing_an_installed_mod_writes_a_copy_and_leaves_the_original_alone()
+    {
+        var dir = TempDir();
+        try
+        {
+            var pmp = MixedPack(dir);
+            var folder = Installed(pmp, dir);
+            var before = Tree(folder);
+
+            var zipRoot = Path.Combine(dir, "from-zip");
+            ContentImportService.WriteMod(zipRoot, "Mixed (Proteus)", "Someone", ContentImportService.Inspect(pmp));
+
+            var folderPreview = ContentImportService.Inspect(folder);
+            Assert.Null(ContentImportService.RefuseInstalledSource(folderPreview));
+            var folderRoot = Path.Combine(dir, "from-folder");
+            ContentImportService.WriteMod(folderRoot, "Mixed (Proteus)", "Someone", folderPreview);
+
+            AssertSameTree(Tree(zipRoot), Tree(folderRoot));
+            AssertSameTree(before, Tree(folder));
+
+            // And the copy did change: the taken piece's redirect is gone there, still present in the original.
+            Assert.Contains("bound\\\\model.mdl", File.ReadAllText(Path.Combine(folder, "meta.json")));
+            Assert.DoesNotContain("bound\\\\model.mdl", File.ReadAllText(Path.Combine(folderRoot, "meta.json")));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void An_installed_mod_that_is_already_Proteus_is_refused_but_its_pack_is_not()
+    {
+        var dir = TempDir();
+        try
+        {
+            var pmp = WritePack(Path.Combine(dir, "src"), """{ "FileVersion": 4, "Name": "Hybrid", "Author": "A" }""", new[]
+            {
+                ("Proteus/metadata.json", System.Text.Encoding.UTF8.GetBytes("""{ "FormatVersion": 1, "Name": "Hybrid" }""")),
+            });
+
+            var packPreview = ContentImportService.Inspect(pmp);
+            Assert.True(packPreview.InstallOnly);
+            Assert.Null(ContentImportService.RefuseInstalledSource(packPreview));
+
+            Assert.NotNull(ContentImportService.RefuseInstalledSource(
+                ContentImportService.Inspect(Installed(pmp, dir))));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void Proteus_own_managed_mod_is_refused()
+    {
+        var dir = TempDir();
+        try
+        {
+            var folder = Installed(MixedPack(dir), dir, SidecarDiscoveryService.ManagedModDir);
+            Assert.NotNull(ContentImportService.RefuseInstalledSource(ContentImportService.Inspect(folder)));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
 }
