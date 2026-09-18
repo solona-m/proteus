@@ -1777,6 +1777,8 @@ public sealed class PartsPanel
             return;
         }
         brushChangedAt = -1;
+        // Once per session: this is a debounced autosave, so its count says how often the user paused, not how much they painted.
+        UsageStats.CountOncePerSession(UsageFeature.LiveBrush);
 
         status = string.Format(Strings.Parts.BrushSavedFmt, volume.Worst * 1000f);
 
@@ -2118,6 +2120,7 @@ public sealed class PartsPanel
             return;
         }
 
+        UsageStats.Count(UsageFeature.MeshToggle);
         status = string.Format(ps.WrittenFmt, plans.Count, result.GroupName);
         if (result.Skipped.Count > 0) status += "\n" + string.Format(ps.SkippedFmt, result.Skipped.Count);
 

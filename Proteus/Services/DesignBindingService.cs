@@ -313,6 +313,7 @@ public class DesignBindingService : IDisposable
             // re-pushed, hence no echo to suppress.
             AdoptOverrides(binding, designId, suppressEcho: false);
             compositor.TriggerRecomposite($"design-capture:{designId}");
+            UsageStats.Count(UsageFeature.DesignBindCapture);
 
             log.Information("[Proteus] Captured Proteus state for design {0} ({1} mods).", name ?? designId.ToString(), mods.Count);
         }
@@ -561,6 +562,7 @@ public class DesignBindingService : IDisposable
         DesignBinding? b;
         lock (gate) store.Bindings.TryGetValue(designId, out b);
         if (b == null) return;
+        UsageStats.Count(UsageFeature.DesignBindRestore);
 
         if (b.HasCharacterSnapshot && config.DesignBindingRestoresCharacterMods) RestoreCharacter(b, designId, stripImported);
         else                                                                   RestoreProteusOnly(b, designId, stripImported);

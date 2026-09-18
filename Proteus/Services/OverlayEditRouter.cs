@@ -45,9 +45,13 @@ public class OverlayEditRouter
             : bindings.PeekOverrideRows(modDir, group, option);
 
     public bool SetOverrideRows(string modDir, string? group, string? option, List<ColorTableRowPreset> rows)
-        => BagFor(modDir) is { } bag
+    {
+        // Once per session: an edit fires per slider step.
+        UsageStats.CountOncePerSession(UsageFeature.ColorsetEdit);
+        return BagFor(modDir) is { } bag
             ? bag.SetRows(modDir, group, option, rows)
             : bindings.SetOverrideRows(modDir, group, option, rows);
+    }
 
     public List<ColorTableRowPreset>? PeekContentMaterialRows(string modDir, string materialRel)
         => BagFor(modDir) is { } bag
@@ -55,15 +59,21 @@ public class OverlayEditRouter
             : bindings.PeekContentMaterialRows(modDir, materialRel);
 
     public bool SetContentMaterialRows(string modDir, string materialRel, List<ColorTableRowPreset> rows)
-        => BagFor(modDir) is { } bag
+    {
+        UsageStats.CountOncePerSession(UsageFeature.ColorsetEdit);
+        return BagFor(modDir) is { } bag
             ? bag.SetContentMaterialRows(modDir, materialRel, rows)
             : bindings.SetContentMaterialRows(modDir, materialRel, rows);
+    }
 
     public List<ColorTableRowPreset>? PeekMaskRows(string modDir)
         => BagFor(modDir) is { } bag ? bag.PeekMaskRows(modDir) : bindings.PeekMaskRows(modDir);
 
     public bool SetMaskRows(string modDir, List<ColorTableRowPreset> rows)
-        => BagFor(modDir) is { } bag ? bag.SetMaskRows(modDir, rows) : bindings.SetMaskRows(modDir, rows);
+    {
+        UsageStats.CountOncePerSession(UsageFeature.MasksEdit);
+        return BagFor(modDir) is { } bag ? bag.SetMaskRows(modDir, rows) : bindings.SetMaskRows(modDir, rows);
+    }
 
     // ── Gear / layer settings ───────────────────────────────────────────────────
 

@@ -81,6 +81,7 @@ public sealed class ModExportService
             var size = new FileInfo(targetPath).Length / 1024f / 1024f;
             log.Information("[Proteus] exported {0} -> {1} ({2} file(s), {3:0.#} MB)",
                 entry.ModDirectory, targetPath, count, size);
+            UsageStats.Count(UsageFeature.ModExport);
             // The count is labelled ("files: {1}") rather than inflected, so it translates.
             return new(true, string.Format(
                 Loc.Localize("Export.Ok.Fmt", "Exported \"{0}\" — files: {1}, {2} MB.\n{3}"),

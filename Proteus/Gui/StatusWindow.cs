@@ -454,6 +454,7 @@ public class StatusWindow : Window
                     {
                         _tabDrawn = "toggles";
                         _studioDrawn = true;
+                        UsageStats.CountOncePerSession(UsageFeature.StudioOpen);
                         // Fill the height only while not auto-fitting, or the row and the window grow each other without bound.
                         parts.Draw(fillHeight: _fitFrames == 0, reserveBelow: _footerReserve);
 

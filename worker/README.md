@@ -148,6 +148,7 @@ about.
 | `/` and `/README.md` | the project README, from `raw.githubusercontent.com` |
 | `/ja`, `/ja/`, `/ja/README.md` (and `en de fr zh ko es ru`) | that language's README — English is the repo root, the rest are `docs/README.<lang>.md` |
 | `/TROUBLESHOOTING.md`, `/For%20Creators.md` | the docs the README links to |
+| `/PRIVACY.md` | the usage-statistics privacy notice the plugin links to |
 | `/mirror.md` | this file |
 
 ### A second plugin

@@ -495,6 +495,8 @@ public sealed class ModCreationService
 
         _pending = new Pending(dirName, modName, materialTarget, Environment.TickCount64 + ActivateTimeoutMs);
         _nextAttempt = 0;
+        // Here, once the mod is on disk: registration can still fail afterwards, but the user made a mod.
+        UsageStats.Count(UsageFeature.ModCreate);
         return Pump() ?? new(true, string.Format(Loc.Localize("Create.Registering.Fmt",
             "Created \"{0}\" — waiting for Penumbra to finish loading it…"), modName));
     }

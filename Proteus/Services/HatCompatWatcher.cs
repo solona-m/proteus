@@ -344,6 +344,8 @@ public sealed class HatCompatWatcher : IDisposable
     /// itself in chat. See <see cref="Announce"/>.</param>
     private void Write(HatCompatService.Target target, HatCompatService.Proposal proposal, bool automatic)
     {
+        // Both the button and the automatic fit: either way a hairstyle was fitted.
+        UsageStats.Count(UsageFeature.HatCompat);
         // Log where it thinks the head is: every cut decision is measured from that centre.
         log.Information("hat compat: head centre y={0:F4} r={1:F4} ({2}), hat line y={3:F4}, "
                       + "press fades out by y={4:F4}",

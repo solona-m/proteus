@@ -320,6 +320,7 @@ console.log('markdown rendering + content negotiation:');
   for (const [path, upstream] of [
     ['/TROUBLESHOOTING.md', 'https://raw.githubusercontent.com/solona-m/proteus/main/TROUBLESHOOTING.md'],
     ['/For%20Creators.md', 'https://raw.githubusercontent.com/solona-m/proteus/main/For%20Creators.md'],
+    ['/PRIVACY.md', 'https://raw.githubusercontent.com/solona-m/proteus/main/PRIVACY.md'],
   ]) {
     store.clear();
     const { res } = await get(path, { Accept: '*/*' });

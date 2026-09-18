@@ -1,0 +1,25 @@
+name = "proteus-stats"
+main = "src/index.js"
+compatibility_date = "2026-08-01"
+
+# Its own hostname, separate from the asset mirror (dl.solona.info), which stores nothing.
+routes = [
+  { pattern = "stats.solona.info", custom_domain = true }
+]
+
+# The one binding. Create it once with `npx wrangler d1 create proteus-stats` and paste the
+# database_id it prints below (see README.md).
+[[d1_databases]]
+binding = "DB"
+database_name = "proteus-stats"
+database_id = "9c579b75-d890-428c-9fcd-12adf16efb1d"
+migrations_dir = "migrations"
+
+# PRIVACY.md promises no request logging. Workers Logs would record every request, including the
+# caller's IP, so it stays off. `wrangler tail` still works for live debugging and stores nothing.
+[observability]
+enabled = false
+
+# Daily retention sweep (src/index.js `scheduled`): deletes reports older than 13 months.
+[triggers]
+crons = ["17 3 * * *"]

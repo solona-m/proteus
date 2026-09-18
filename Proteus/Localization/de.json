@@ -3198,5 +3198,69 @@
   "Presets.AddedTo.Fmt": {
     "message": "Added \"{0}\" to {1}. Wear it from that mod's Presets section in Colors.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Settings.Section.Privacy": {
+    "message": "Datenschutz",
+    "description": ""
+  },
+  "Privacy.Consent.Title": {
+    "message": "Proteus verbessern helfen?",
+    "description": ""
+  },
+  "Privacy.Consent.Body": {
+    "message": "Möchtest du teilen, welche Proteus-Funktionen du nutzt? Das zeigt, woran als Nächstes gearbeitet werden sollte. Es wird nichts geteilt, solange du nicht zustimmst, und du kannst es jederzeit unter Einstellungen > Datenschutz ändern.",
+    "description": ""
+  },
+  "Privacy.Consent.SentHeader": {
+    "message": "Was einmal täglich gesendet wird:",
+    "description": ""
+  },
+  "Privacy.Consent.SentList": {
+    "message": "- Wie oft jede Proteus-Funktion genutzt wurde\n- Die Proteus-Version und deine Dalamud-Sprache\n- Eine nur dafür erzeugte Zufallsnummer, damit eine Person nicht als mehrere gezählt wird",
+    "description": ""
+  },
+  "Privacy.Consent.NeverHeader": {
+    "message": "Niemals gesendet:",
+    "description": ""
+  },
+  "Privacy.Consent.NeverList": {
+    "message": "- Dein Charakter, Konto oder deine Welt\n- Die Namen deiner Mods, Dateien oder Ordner\n- Was du malst, importierst oder trägst",
+    "description": ""
+  },
+  "Privacy.Consent.Accept": {
+    "message": "Nutzungsdaten teilen",
+    "description": ""
+  },
+  "Privacy.Consent.Decline": {
+    "message": "Nein danke",
+    "description": ""
+  },
+  "Privacy.ReadNotice": {
+    "message": "Datenschutzhinweis lesen",
+    "description": ""
+  },
+  "Privacy.Share.Label": {
+    "message": "Nutzungsstatistiken teilen",
+    "description": ""
+  },
+  "Privacy.Share.Tip": {
+    "message": "Sendet einmal täglich, wie oft jede Proteus-Funktion genutzt wurde, zusammen\nmit der Proteus-Version, deiner Dalamud-Sprache und einer dafür erzeugten Zufallsnummer.\nNichts über deinen Charakter oder deine Mods.\n\nAbwählen beendet das Senden und löscht alles bereits Gesendete.",
+    "description": ""
+  },
+  "Privacy.DeleteData.Btn": {
+    "message": "Meine Daten löschen",
+    "description": ""
+  },
+  "Privacy.DeleteData.Tip": {
+    "message": "Beendet das Teilen und löscht alle Berichte, die diese Installation gesendet hat.",
+    "description": ""
+  },
+  "Privacy.InstallId.Fmt": {
+    "message": "Deine Installations-ID: {0}",
+    "description": ""
+  },
+  "Privacy.DeletionPending": {
+    "message": "Deine Daten werden vom Server gelöscht. Bist du offline, versucht Proteus es bei jedem Laden erneut.",
+    "description": ""
   }
 }

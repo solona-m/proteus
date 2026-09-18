@@ -25,7 +25,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 923;
+    public const int BuildNumber = 924;
 
     /// <summary>
     /// When this assembly was compiled, as MM-dd HH:mm:ss, baked in by the csproj: Dalamud loads plugins from a stream,
@@ -71,6 +71,8 @@ public sealed class Plugin : IDalamudPlugin
     private readonly ShellCoverageFade shellCoverageFade;
     private readonly Gui.LiveMeshOverlay liveMesh;
     private readonly Gui.LiveBrush liveBrush;
+    private readonly UsageStats usageStats;
+    private readonly Gui.UsageConsentWindow consentWindow;
 
     public Plugin(
         IDalamudPluginInterface pluginInterface,
@@ -94,6 +96,12 @@ public sealed class Plugin : IDalamudPlugin
         // directory is passed only so an older install's copies can be reclaimed.
         var dataDir     = pluginInterface.ConfigDirectory.FullName;
         var assemblyDir = pluginInterface.AssemblyLocation.DirectoryName;
+
+        // Opt-in usage counts. Early, so every service below can count through UsageStats.Current; inert
+        // (no file, no request) unless the user has said yes.
+        usageStats = new UsageStats(config, config.Save, dataDir, log, () => loc.Current,
+            typeof(Plugin).Assembly.GetName().Version?.ToString() ?? "0", BuildNumber);
+        usageStats.Start();
 
         effectsDl = new DefaultEffectsDownloadService(log, dataDir, assemblyDir);
         discovery = new SidecarDiscoveryService(penumbra, log)
@@ -210,6 +218,8 @@ public sealed class Plugin : IDalamudPlugin
 
         windowSystem = new WindowSystem("Proteus");
         windowSystem.AddWindow(statusWindow);
+        consentWindow = new Gui.UsageConsentWindow(usageStats);
+        windowSystem.AddWindow(consentWindow);
 
         pluginInterface.UiBuilder.DisableGposeUiHide = true;
         pluginInterface.UiBuilder.Draw += DrawUi;
@@ -284,6 +294,9 @@ public sealed class Plugin : IDalamudPlugin
         liveMesh.Draw();
         // Before the windows: the Studio tab reads this frame's stroke from it.
         liveBrush.Update();
+        // The usage-stats question, asked once, and only once the user has opened Proteus themselves.
+        if (statusWindow.IsOpen && !consentWindow.IsOpen && usageStats.NeedsConsentPrompt)
+            consentWindow.IsOpen = true;
         windowSystem.Draw();
     }
 
@@ -301,6 +314,22 @@ public sealed class Plugin : IDalamudPlugin
         if (a.StartsWith("livemesh", StringComparison.OrdinalIgnoreCase))
         {
             ChatGui.Print($"[Proteus] {liveMesh.Command(a[8..])}");
+            return;
+        }
+
+        // "/proteus stats [send|sendtoday]" — what the usage tally holds, and a way to send it without waiting a day.
+        if (a.StartsWith("stats", StringComparison.OrdinalIgnoreCase))
+        {
+            var sub = a[5..].Trim().ToLowerInvariant();
+            if (sub is "send" or "sendtoday")
+            {
+                usageStats.SendNowAsync(includeToday: sub == "sendtoday").ContinueWith(t =>
+                    Framework.RunOnFrameworkThread(() => ChatGui.Print(t.IsCompletedSuccessfully
+                        ? $"[Proteus] usage stats: sent {t.Result} day(s); {usageStats.Describe()}"
+                        : "[Proteus] usage stats: send failed")));
+                return;
+            }
+            ChatGui.Print($"[Proteus] usage stats: {usageStats.Describe()}");
             return;
         }
 
@@ -380,6 +409,7 @@ public sealed class Plugin : IDalamudPlugin
         designBindings.Dispose();
         uvMapDl.Dispose();
         effectsDl.Dispose();
+        usageStats.Dispose();   // writes the day's tally; the window referencing it is already removed
         hatCompat.Dispose();   // before the compositor: it unsubscribes from that object's event
         compositor.Dispose();
         glamourer.Dispose();
