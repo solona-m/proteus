@@ -76,7 +76,8 @@ public sealed class LogExportService
 
         var dir = DesktopFolder.Path() ?? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
         var path = Path.Combine(dir, $"Proteus-log-{started:yyyyMMdd-HHmmss}.txt");
-        await File.WriteAllTextAsync(path, sb.ToString()).ConfigureAwait(false);
+        // The file is meant to be posted, so no Windows user name leaves the machine in it.
+        await File.WriteAllTextAsync(path, LogAnonymizer.Scrub(sb.ToString())).ConfigureAwait(false);
         return path;
     }
 
