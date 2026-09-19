@@ -191,11 +191,28 @@ public static partial class ColorTableEditor
                 ImGui.SetNextItemWidth(110);
                 if (ImGui.Combo($"{cs.Blend}##bl_{id}", ref bl, cs.BlendNames, cs.BlendNames.Length))
                 {
-                    Edit().Blend = (RowBlend)Math.Clamp(bl, 0, cs.BlendNames.Length - 1);
+                    var e = Edit();
+                    e.Blend = (RowBlend)Math.Clamp(bl, 0, cs.BlendNames.Length - 1);
+                    // A row becoming a print for the first time lands on everything beneath, like a Photoshop blend
+                    // layer. An unset target on a row saved earlier still reads as OwnPaint, so old prints do not move.
+                    if (e.Blend != RowBlend.Paint && e.PrintOnto == null) e.PrintOnto = PrintTarget.Beneath;
                     changed = true;
                 }
                 if (ImGui.IsItemHovered())
                     ImGui.SetTooltip(cs.BlendTip);
+
+                if (sub is { Blend: not RowBlend.Paint })
+                {
+                    int onto = (int)(sub.PrintOnto ?? PrintTarget.OwnPaint);
+                    ImGui.SetNextItemWidth(170);
+                    if (ImGui.Combo($"{cs.PrintOnto}##po_{id}", ref onto, cs.PrintOntoNames, cs.PrintOntoNames.Length))
+                    {
+                        Edit().PrintOnto = (PrintTarget)Math.Clamp(onto, 0, cs.PrintOntoNames.Length - 1);
+                        changed = true;
+                    }
+                    if (ImGui.IsItemHovered())
+                        ImGui.SetTooltip(cs.PrintOntoTip);
+                }
             }
         }
 
