@@ -511,6 +511,51 @@ public sealed partial class SecondSkinService
         return acc;
     }
 
+    /// <summary>The colour-table index slot, whose texels name rows rather than carrying colour.</summary>
+    private static bool IsIndexSlot(string slot) => string.Equals(slot, "id", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// How each index texture is published, keyed by the content hash of the buffer handed in. The verdict is needed on
+    /// every composite (it goes into the skip-check hash, which is read before the write is skipped), but the trial
+    /// encodes behind it are worth running only once per distinct index texture. The snapped BUFFER is not cached — it
+    /// is the size of the texture, and it is only needed on the composites that actually write.
+    /// </summary>
+    private readonly ConcurrentDictionary<ulong, TextureLoader.IndexPlan> _indexPlans = new();
+
+    /// <summary>
+    /// How an index texture is published: BC5 when a trial encode decodes back to the same row pair and sub-row side
+    /// for every texel, BC5 over a snapped buffer when that is what it takes (see
+    /// <see cref="TextureLoader.SnapIndexForBc5"/>), uncompressed when neither holds. BC5 is the vanilla index format
+    /// and quarters the file — which matters most for the sync plugins, whose own "compress uncompressed textures" pass
+    /// would otherwise make the same conversion unchecked, and who count what they transfer against a VRAM budget.
+    /// The plan is decided here and reported once; applying it (the snap) is the caller's, at write time.
+    /// </summary>
+    private TextureLoader.IndexPlan IndexPlanFor(ulong content, byte[] data, int w, int h, string disk)
+    {
+        if (!_indexPlans.TryGetValue(content, out var plan))
+        {
+            plan = textureLoader.PlanIndexBc5(data, w, h, out int flipped, out int snapped, out int snappedRows);
+            _indexPlans[content] = plan;
+            var name = Path.GetFileName(disk);
+            switch (plan)
+            {
+                case TextureLoader.IndexPlan.Bc5:
+                    log.Debug("[Proteus] index BC5: {0} verified lossless for row selection", name);
+                    break;
+                case TextureLoader.IndexPlan.Bc5AfterSnap:
+                    log.Information("[Proteus] index BC5: {0} snapped {1} texel(s) ({2} to another row) so its blocks "
+                                  + "encode exactly", name, snapped, snappedRows);
+                    break;
+                default:
+                    log.Information("[Proteus] index BC5: {0} still moves {1} texel(s) to another colour-table row "
+                                  + "after snapping — writing it uncompressed", name, flipped);
+                    break;
+            }
+        }
+
+        return plan;
+    }
+
     /// <summary>True when the blue channel (byte 2 of each RGBA quad) is 255 across the whole buffer — i.e.
     /// the normal carries no transparency gate, so BC5 (which drops blue) is lossless for it.</summary>
     private static bool IsBlueAllWhite(byte[] rgba)
@@ -1181,17 +1226,31 @@ public sealed partial class SecondSkinService
     private bool WriteShellSlot(string slot, byte[] data, int w, int h, string disk, bool compress,
                                 ref bool texturesChanged)
     {
-        // Compression (opt-in). "id" is NEVER compressed: lossy error picks the wrong row. The normal uses BC5 only when its
-        // blue (the transparency gate) is uniformly 255, else BC7. Everything else is BC7.
+        // Compression (opt-in). "id" is compressed only when the trial encode proves it keeps every texel's row
+        // (see IndexPlanFor): lossy error there picks the wrong row. The normal uses BC5 only when its blue (the
+        // transparency gate) is uniformly 255, else BC7. Everything else is BC7.
+        var content = SlotHash(data);
+        var plan = TextureLoader.IndexPlan.Uncompressed;
         var encoding = TexEncoding.Uncompressed;
-        if (compress && !string.Equals(slot, "id", StringComparison.OrdinalIgnoreCase))
-            encoding = string.Equals(slot, "norm", StringComparison.OrdinalIgnoreCase)
-                ? (IsBlueAllWhite(data) ? TexEncoding.Bc5 : TexEncoding.Bc7)
-                : TexEncoding.Bc7;
+        if (compress)
+        {
+            if (IsIndexSlot(slot))
+            {
+                plan = IndexPlanFor(content, data, w, h, disk);
+                encoding = plan == TextureLoader.IndexPlan.Uncompressed ? TexEncoding.Uncompressed : TexEncoding.Bc5;
+            }
+            else
+            {
+                encoding = string.Equals(slot, "norm", StringComparison.OrdinalIgnoreCase)
+                    ? (IsBlueAllWhite(data) ? TexEncoding.Bc5 : TexEncoding.Bc7)
+                    : TexEncoding.Bc7;
+            }
+        }
 
         // Skip the write when content, encoding and size all match what we last wrote, or every recomposite forces a
-        // redraw. SlotHash (memory only), locked because shell layers build in parallel.
-        var hash = SlotHash(data)
+        // redraw. SlotHash (memory only), locked because shell layers build in parallel. Hashed on the buffer handed
+        // in, before any snap: the snap is a function of it, so identical input still means identical output.
+        var hash = content
                  ^ ((ulong)((int)encoding + 1) * 0x9E3779B97F4A7C15ul)
                  ^ ((ulong)w * 0xBF58476D1CE4E5B9ul)
                  ^ ((ulong)h * 0x94D049BB133111EBul);
@@ -1200,6 +1259,10 @@ public sealed partial class SecondSkinService
         same = same && File.Exists(disk);
         if (!same)
         {
+            // Only now, on a real write: snapping is a pass over the whole sheet, and most composites skip.
+            if (plan == TextureLoader.IndexPlan.Bc5AfterSnap)
+                data = TextureLoader.SnapIndexForBc5(data, w, h, out _, out _);
+
             if (!textureLoader.WriteTex(data, w, h, disk, encoding))
             {
                 log.Error("[Proteus] second skin: failed to write {0}", disk);
@@ -1359,18 +1422,35 @@ public sealed partial class SecondSkinService
         {
             var gamePath = texPrefix + slot + ".tex";
             var disk = Path.Combine(texturesDir, $"ss_{letter}_{slot}.tex");
-            // Same rules as the shell path: never compress "id", BC7 for the continuous slots.
-            var encoding = config.EnableCompression && textureLoader.CompressionAffordable()
-                        && !string.Equals(slot, "id", StringComparison.OrdinalIgnoreCase)
-                ? TexEncoding.Bc7
-                : TexEncoding.Uncompressed;
+            // Same rules as the shell path: "id" only when the trial encode proves it, BC7 for the continuous slots.
+            var content = Hash(rgba);
+            var plan = TextureLoader.IndexPlan.Uncompressed;
+            var encoding = TexEncoding.Uncompressed;
+            if (config.EnableCompression && textureLoader.CompressionAffordable())
+            {
+                if (IsIndexSlot(slot))
+                {
+                    plan = IndexPlanFor(content, rgba, w, h, disk);
+                    encoding = plan == TextureLoader.IndexPlan.Uncompressed
+                        ? TexEncoding.Uncompressed
+                        : TexEncoding.Bc5;
+                }
+                else
+                {
+                    encoding = TexEncoding.Bc7;
+                }
+            }
 
-            var hash = Hash(rgba)
+            var hash = content
                      ^ ((ulong)((int)encoding + 1) * 0x9E3779B97F4A7C15ul)
                      ^ ((ulong)w * 0xBF58476D1CE4E5B9ul)
                      ^ ((ulong)h * 0x94D049BB133111EBul);
             if (!(_texHashes.TryGetValue(disk, out var prev) && prev == hash && File.Exists(disk)))
             {
+                // Only on a real write — see WriteShellSlot.
+                if (plan == TextureLoader.IndexPlan.Bc5AfterSnap)
+                    rgba = TextureLoader.SnapIndexForBc5(rgba, w, h, out _, out _);
+
                 if (!textureLoader.WriteTex(rgba, w, h, disk, encoding))
                 {
                     log.Error("[Proteus] content: failed to write {0}", disk);

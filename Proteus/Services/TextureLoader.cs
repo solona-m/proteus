@@ -1200,6 +1200,175 @@ public class TextureLoader
         return true;
     }
 
+    /// <summary>
+    /// Whether an index (<c>_id</c>) texture survives BC5. The buffer is trial-encoded and decoded back, and must make
+    /// the same colour-table decisions for every texel: the same row pair (<see cref="ContentIndexTexture.RowOf"/>,
+    /// which rounds, so an error under half of the 17-unit row step changes nothing) and the same side of green's
+    /// sub-row threshold. Blue and alpha are not compared — BC5 drops them, and an index texture carries nothing there.
+    /// <paramref name="flipped"/> counts the texels that would move, for the caller's log.
+    /// </summary>
+    public bool IndexSurvivesBc5(byte[] rgba, int width, int height, out int flipped)
+    {
+        flipped = 0;
+        // 4-alignment is the block grid; WriteTex falls back to uncompressed without it, so there is nothing to verify.
+        if (width <= 0 || height <= 0 || width % 4 != 0 || height % 4 != 0) return false;
+        if (rgba.Length < (long)width * height * 4) return false;
+
+        byte[] blocks;
+        try { blocks = EncodeBlockCompressed(rgba, width, height, TexEncoding.Bc5); }
+        catch (Exception ex)
+        {
+            log.Warning("[Proteus] index BC5 trial encode failed ({0}) — leaving it uncompressed", ex.Message);
+            return false;
+        }
+
+        int bw = width / 4, bh = height / 4;
+        if (blocks.Length < (long)bw * bh * 16) return false;
+
+        int bad = 0;
+        Parallel.For(0, bh, () => 0, (by, _, rowBad) =>
+        {
+            Span<byte> red = stackalloc byte[16];
+            Span<byte> green = stackalloc byte[16];
+            for (int bx = 0; bx < bw; bx++)
+            {
+                int at = (by * bw + bx) * 16;
+                DecodeBc4Block(blocks, at, red);
+                DecodeBc4Block(blocks, at + 8, green);
+                for (int t = 0; t < 16; t++)
+                {
+                    int p = ((by * 4 + (t >> 2)) * width + bx * 4 + (t & 3)) * 4;
+                    if (ContentIndexTexture.RowOf(rgba[p]) != ContentIndexTexture.RowOf(red[t])
+                     || (rgba[p + 1] > 127) != (green[t] > 127))
+                        rowBad++;
+                }
+            }
+            return rowBad;
+        }, rowBad => Interlocked.Add(ref bad, rowBad));
+
+        flipped = bad;
+        return bad == 0;
+    }
+
+    /// <summary>How an index texture may be published, once <see cref="PlanIndexBc5"/> has tried to compress it.</summary>
+    public enum IndexPlan { Uncompressed, Bc5, Bc5AfterSnap }
+
+    /// <summary>
+    /// Decide how an index texture is published. BC5 as it stands when the trial already passes; BC5 after
+    /// <see cref="SnapIndexForBc5"/> when snapping the few blocks BC4 cannot hold makes it pass; uncompressed
+    /// otherwise. The out counts are for the caller's log — they are the whole record of what was given up.
+    /// </summary>
+    public IndexPlan PlanIndexBc5(byte[] rgba, int width, int height,
+                                  out int flipped, out int snapped, out int snappedRows)
+    {
+        snapped = snappedRows = 0;
+        if (IndexSurvivesBc5(rgba, width, height, out flipped)) return IndexPlan.Bc5;
+        if (flipped == 0) return IndexPlan.Uncompressed;   // refused outright (unaligned, short, encoder threw)
+
+        var candidate = SnapIndexForBc5(rgba, width, height, out snapped, out snappedRows);
+        return IndexSurvivesBc5(candidate, width, height, out flipped)
+            ? IndexPlan.Bc5AfterSnap
+            : IndexPlan.Uncompressed;
+    }
+
+    /// <summary>
+    /// A copy of an index texture with at most two distinct red values per 4×4 block: the two most common are kept
+    /// and every other texel moves to whichever of them is nearer. Two values per block are BC4's own endpoints, so
+    /// the result encodes exactly, and no texel can read a row that was not already in its own block — which is the
+    /// guarantee an unsnapped lossy encode cannot make. In practice this nudges a region boundary by one texel.
+    /// <paramref name="rowMoved"/> counts the subset that changed colour-table row at all.
+    /// </summary>
+    public static byte[] SnapIndexForBc5(byte[] rgba, int width, int height, out int moved, out int rowMoved)
+    {
+        var snapped = (byte[])rgba.Clone();
+        int movedTotal = 0, rowTotal = 0;
+        int bh = height / 4, bw = width / 4;
+
+        Parallel.For(0, bh, () => (Moved: 0, Row: 0), (by, _, local) =>
+        {
+            Span<byte> values = stackalloc byte[16];
+            Span<int> counts = stackalloc int[16];
+            for (int bx = 0; bx < bw; bx++)
+            {
+                int distinct = 0;
+                for (int t = 0; t < 16; t++)
+                {
+                    byte red = snapped[((by * 4 + (t >> 2)) * width + bx * 4 + (t & 3)) * 4];
+                    int at = -1;
+                    for (int i = 0; i < distinct; i++)
+                        if (values[i] == red) { at = i; break; }
+                    if (at < 0) { values[distinct] = red; counts[distinct] = 1; distinct++; }
+                    else counts[at]++;
+                }
+
+                if (distinct <= 2) continue;
+
+                // The two most common, ties broken by the lower value so the result never depends on scan order.
+                int first = 0, second = -1;
+                for (int i = 1; i < distinct; i++)
+                    if (counts[i] > counts[first] || (counts[i] == counts[first] && values[i] < values[first]))
+                        first = i;
+                for (int i = 0; i < distinct; i++)
+                {
+                    if (i == first) continue;
+                    if (second < 0 || counts[i] > counts[second]
+                     || (counts[i] == counts[second] && values[i] < values[second]))
+                        second = i;
+                }
+
+                byte keepA = values[first], keepB = values[second];
+                for (int t = 0; t < 16; t++)
+                {
+                    int p = ((by * 4 + (t >> 2)) * width + bx * 4 + (t & 3)) * 4;
+                    byte red = snapped[p];
+                    if (red == keepA || red == keepB) continue;
+                    // Ties go to the more common value, so a boundary moves towards the block's majority region.
+                    byte to = Math.Abs(red - keepA) <= Math.Abs(red - keepB) ? keepA : keepB;
+                    snapped[p] = to;
+                    local.Moved++;
+                    if (ContentIndexTexture.RowOf(red) != ContentIndexTexture.RowOf(to)) local.Row++;
+                }
+            }
+
+            return local;
+        }, local =>
+        {
+            Interlocked.Add(ref movedTotal, local.Moved);
+            Interlocked.Add(ref rowTotal, local.Row);
+        });
+
+        moved = movedTotal;
+        rowMoved = rowTotal;
+        return snapped;
+    }
+
+    /// <summary>
+    /// Decode one BC4 block (8 bytes at <paramref name="at"/>) into its 16 texels, row-major within the 4×4 block.
+    /// The interpolated palette entries are the integer form of the D3D rule; they can sit one unit off what a GPU
+    /// produces, which is far inside the tolerance <see cref="IndexSurvivesBc5"/> measures against.
+    /// </summary>
+    private static void DecodeBc4Block(byte[] src, int at, Span<byte> dst)
+    {
+        int e0 = src[at], e1 = src[at + 1];
+        Span<byte> palette = stackalloc byte[8];
+        palette[0] = (byte)e0;
+        palette[1] = (byte)e1;
+        if (e0 > e1)
+        {
+            for (int i = 1; i < 7; i++) palette[i + 1] = (byte)(((7 - i) * e0 + i * e1) / 7);
+        }
+        else
+        {
+            for (int i = 1; i < 5; i++) palette[i + 1] = (byte)(((5 - i) * e0 + i * e1) / 5);
+            palette[6] = 0;
+            palette[7] = 255;
+        }
+
+        ulong bits = 0;
+        for (int i = 0; i < 6; i++) bits |= (ulong)src[at + 2 + i] << (8 * i);
+        for (int t = 0; t < 16; t++) dst[t] = palette[(int)((bits >> (3 * t)) & 7)];
+    }
+
     /// <summary>Encode an RGBA8 buffer to raw BC5/BC7 blocks (mip 0 only), linear block order — the layout
     /// FFXIV/Lumina expect on read-back. BC5 keeps only R,G; callers pick it only where B/A carry no data.
     /// Uses the native SIMD shim when available; falls back to managed BCnEncoder.Net otherwise.</summary>
