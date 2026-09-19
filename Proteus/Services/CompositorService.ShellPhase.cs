@@ -212,10 +212,11 @@ public partial class CompositorService
                 // Our injected invisible-glasses set, so the shell replaces its model rather than appending (see ChooseHost).
                 invisibleGlassesSet = run.compositor.config.AutoInvisibleGlasses
                     ? InvisibleGlasses.Resolve(Plugin.DataManager, run.compositor.log)?.ModelSet : null;
-                // The chooser knows our pair only by model set, which real spectacles share: hide the set when the worn pair is not our item.
+                // The chooser knows our pair only by model set, which real spectacles share: hide the set when the worn pair is
+                // not one we equipped. Our carrier item worn by the player's choice is theirs too, and is never rewritten.
                 if (invisibleGlassesSet is int ourSet && run.compositor.IsOurGlassesWorn(ourSet)
                     && InvisibleGlasses.Resolve(Plugin.DataManager, run.compositor.log) is { } ourGlasses
-                    && !run.compositor.IsOurGlassesItemWorn(ourGlasses))
+                    && !(run.compositor._injectedGlasses && run.compositor.IsOurGlassesItemWorn(ourGlasses)))
                     invisibleGlassesSet = null;
 
                 // Snapshot the volatile shape set once, so the bake and its signature see the same value.

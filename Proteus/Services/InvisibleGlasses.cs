@@ -6,11 +6,19 @@ namespace Proteus.Services;
 
 /// <summary>
 /// Resolves a concrete Glasses-slot item to use as the invisible facewear host: Glamourer needs a real row id,
-/// and the redirect needs its model set. The lowest row with a real model is picked, so the choice is stable
-/// across sessions (needed to detect and clean up our own injection).
+/// and the redirect needs its model set. Every row is a real item a player can wear, and while hosted the carrier's
+/// model is replaced, so a player's own pair of the same item vanishes: the carrier is an obscure pair,
+/// <see cref="PreferredModelSet"/>-<see cref="PreferredVariant"/>, not the lowest row (Oval Spectacles, widely worn).
+/// The choice is stable across sessions (needed to detect and clean up our own injection).
 /// </summary>
 public static class InvisibleGlasses
 {
+    /// <summary>Gold Eyepatch (Right), e5521 v0003.</summary>
+    public const int PreferredModelSet = 5521;
+
+    /// <inheritdoc cref="PreferredModelSet"/>
+    public const int PreferredVariant = 3;
+
     /// <param name="Variant">The item's material variant: the game asks for the shell's material under
     /// chara/equipment/e{set}/material/v{Variant}/.</param>
     public readonly record struct Identity(ulong ItemId, int ModelSet, int Variant);
@@ -65,16 +73,24 @@ public static class InvisibleGlasses
                     return null;
                 }
 
-                foreach (var row in sheet.OrderBy(r => r.RowId))
+                // The Model column packs set | variant<<16, like equipment ItemModelMain.
+                static (int Set, int Variant) Unpack(Glasses row)
+                    => ((int)row.Model & 0xFFFF, ((int)row.Model >> 16) & 0xFFFF);
+
+                // The preferred pair; the lowest row with a model only if a patch ever drops it.
+                var rows = sheet.OrderBy(r => r.RowId).ToList();
+                var pick = rows.FirstOrDefault(r => Unpack(r) == (PreferredModelSet, PreferredVariant));
+                bool preferred = pick.RowId != 0;
+                if (!preferred)
+                    pick = rows.FirstOrDefault(r => Unpack(r).Set > 0);
+
+                if (pick.RowId != 0)
                 {
-                    // The Model column packs set | variant<<16, like equipment ItemModelMain.
-                    int packed = (int)row.Model;
-                    int set = packed & 0xFFFF;
-                    if (set <= 0) continue;
-                    int variant = (packed >> 16) & 0xFFFF;
-                    cached = new Identity(row.RowId, set, variant);
-                    log.Information("[Proteus] invisible glasses: using item #{0} (packed {1} -> set e{2:D4}, variant v{3:D4})",
-                        row.RowId, packed, set, variant);
+                    var (set, variant) = Unpack(pick);
+                    cached = new Identity(pick.RowId, set, variant);
+                    log.Information("[Proteus] invisible glasses: using item #{0} (set e{1:D4}, variant v{2:D4}){3}",
+                        pick.RowId, set, variant,
+                        preferred ? "" : $" — e{PreferredModelSet:D4} v{PreferredVariant:D4} not found, fell back to the lowest row");
                     return cached;
                 }
                 WarnOnce(log, "no Glasses row with a model found");
