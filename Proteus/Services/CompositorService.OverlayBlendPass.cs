@@ -332,7 +332,9 @@ public partial class CompositorService
 
                         // The clip a print is multiplied through: everything this mod already painted on this material; null ⇒ print shows nothing.
                         material.paintedByMod.TryGetValue(entry.ModDirectory, out var clip);
-                        if (hasPrintRows && clip == null)
+                        if (hasPrintRows && clip == null
+                            && rows.Values.Any(r => (r.A.Blend != RowBlend.Paint && !r.A.OntoBeneath)
+                                                 || (r.B.Blend != RowBlend.Paint && !r.B.OntoBeneath)))
                             material.run.compositor.log.Debug("[Proteus] {0} ({1}) prints onto {2}, but this mod has painted nothing "
                                     + "here yet — a print colours its own mod's fabric, and on bare skin "
                                     + "there is nothing to print on", entry.ModDirectory, optLabel, material.mtrlGamePath);

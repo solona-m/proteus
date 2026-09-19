@@ -296,7 +296,7 @@
     "description": ""
   },
   "Colors.Blend.Tip": {
-    "message": "Cómo se combina la imagen de esta fila con lo que ya hay sobre la piel.\n\n«Pintar» la coloca encima, que es lo que toda capa ha hecho siempre.\nCualquier otro modo convierte esta fila en un ESTAMPADO: colorea la tela que han\npintado las demás capas de este mod y se recorta a su forma, así que un arcoíris\nsobre una malla colorea los hilos y deja los huecos como piel.\n\nUn estampado solo alcanza las capas de SU PROPIO mod; nunca toca la ropa de otro.\nSobre la piel desnuda no pinta nada, de modo que un estampado seleccionado por sí\nsolo no muestra nada. Es deliberado: ahí no hay nada sobre lo que estampar.\n\nMultiplicar solo puede oscurecer, así que apenas se ve sobre tela muy oscura; usa\nTrama en ese caso. El color de esta fila sigue tiñendo la imagen, y su Opacidad\nes la intensidad del estampado.",
+    "message": "Cómo se combina el arte de esta fila con lo que ya hay en la piel.\n\n\"Pintar\" lo coloca encima, que es lo que todas las capas han hecho siempre.\nCualquier otro modo convierte esta fila en una ESTAMPA, fundida como un modo\nde capa de Photoshop: Multiplicar elimina el blanco, Trama elimina el negro.\n\n\"Sobre\" elige con qué se funde la estampa: todo lo de debajo, piel\nincluida, o solo la tela que pintaron las otras capas de este mod.\n\nMultiplicar solo puede oscurecer, así que apenas se nota en telas muy oscuras;\nusa Trama en ese caso. El color de esta fila sigue tiñendo el arte, y su\nOpacidad es la intensidad de la estampa.",
     "description": ""
   },
   "Colors.Bodies.GlobalNote": {
@@ -3190,5 +3190,21 @@
   "Presets.AddedTo.Fmt": {
     "message": "Added \"{0}\" to {1}. Wear it from that mod's Presets section in Colors.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Colors.PrintOnto.Label": {
+    "message": "Sobre",
+    "description": ""
+  },
+  "Colors.PrintOnto.Tip": {
+    "message": "Con qué se funde esta estampa.\n\n\"Todo lo de debajo\" funciona como una capa de fusión de Photoshop: cae sobre\nla piel y sobre cada capa inferior, con la forma de su propio alfa.\n\n\"Solo la pintura de este mod\" la recorta a lo que pintaron las otras capas\nde este mod, así que un arcoíris sobre una rejilla colorea los hilos y deja los\nagujeros como piel. Sobre piel desnuda no muestra nada.",
+    "description": ""
+  },
+  "Colors.PrintOnto.OwnPaint": {
+    "message": "Solo la pintura de este mod",
+    "description": ""
+  },
+  "Colors.PrintOnto.Beneath": {
+    "message": "Todo lo de debajo",
+    "description": ""
   }
 }

@@ -29,8 +29,8 @@ public enum NormalMode
 }
 
 /// <summary>
-/// How one colour-table sub-row's art combines with what this mod already painted. Every mode but
-/// <see cref="Paint"/> is a print: clipped to the mod's other layers, so it paints nothing on bare skin.
+/// How one colour-table sub-row's art combines with what is beneath it. Every mode but <see cref="Paint"/> is a
+/// print, and its <see cref="PrintTarget"/> says whether it lands on everything beneath or only its own mod's paint.
 /// </summary>
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum RowBlend
@@ -52,6 +52,19 @@ public enum RowBlend
 
     /// <summary>Take this row's colour outright, keeping the fabric's alpha.</summary>
     Replace,
+}
+
+/// <summary>What a print (any <see cref="RowBlend"/> but <see cref="RowBlend.Paint"/>) combines with.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum PrintTarget
+{
+    /// <summary>Only what this mod's own layers painted on the material; bare skin is left alone. How every print
+    /// worked before the choice existed, so a row that does not say is this.</summary>
+    OwnPaint,
+
+    /// <summary>Everything beneath it on the material, skin included, clipped only by the art's own alpha: a
+    /// Photoshop blend layer.</summary>
+    Beneath,
 }
 
 /// <summary>Describes one set of overlay textures targeting one or more materials.</summary>

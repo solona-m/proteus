@@ -1323,17 +1323,34 @@ public sealed class ColorsStrings
         "How this row's art combines with what is already on the skin.\n" +
         "\n" +
         "\"Paint\" lays it on top, which is what every layer has always done.\n" +
-        "Anything else makes this row a PRINT: it colours the fabric this mod's\n" +
-        "other layers painted, and is clipped to their shape — so a rainbow on a\n" +
-        "fishnet colours the threads and leaves the holes as skin.\n" +
+        "Anything else makes this row a PRINT, blended like a Photoshop layer\n" +
+        "mode: Multiply drops white out, Screen drops black out.\n" +
         "\n" +
-        "A print only reaches its OWN mod's layers; it never touches another mod's\n" +
-        "clothing. On bare skin it paints nothing at all, so a print selected on its\n" +
-        "own shows nothing — there is nothing there to print on.\n" +
+        "\"Onto\" chooses what a print blends with: everything beneath it, skin\n" +
+        "included, or only the fabric this mod's other layers painted.\n" +
         "\n" +
         "Multiply can only darken, so it reads faintly on very dark fabric — use\n" +
         "Screen there instead. This row's colour still tints the art, and its\n" +
         "Opacity is the print's strength.");
+
+    public readonly string PrintOnto = Loc.Localize("Colors.PrintOnto.Label", "Onto");
+
+    public readonly string PrintOntoTip = Loc.Localize("Colors.PrintOnto.Tip",
+        "What this print blends with.\n" +
+        "\n" +
+        "\"Everything beneath\" works like a Photoshop blend layer: it lands on\n" +
+        "the skin and on every layer under it, shaped only by its own alpha.\n" +
+        "\n" +
+        "\"This mod's paint only\" clips it to what this mod's other layers\n" +
+        "painted, so a rainbow on a fishnet colours the threads and leaves the\n" +
+        "holes as skin. On bare skin it shows nothing.");
+
+    /// <summary>Display names for <see cref="PrintTarget"/>, in declaration order.</summary>
+    public readonly string[] PrintOntoNames =
+    [
+        Loc.Localize("Colors.PrintOnto.OwnPaint", "This mod's paint only"),
+        Loc.Localize("Colors.PrintOnto.Beneath",  "Everything beneath"),
+    ];
 
     /// <summary>Display names for <see cref="RowBlend"/>, in declaration order.</summary>
     public readonly string[] BlendNames =

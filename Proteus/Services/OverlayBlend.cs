@@ -105,15 +105,17 @@ internal static class OverlayBlend
             return;
         }
 
-        // A print with nothing beneath it paints nothing; a clip that does not cover the sheet cannot say what
-        // was painted, and guessing would put colour on bare skin.
-        if (painted == null || painted.Length < w * h) return;
+        // A print onto its own mod's paint with nothing painted paints nothing; a clip that does not cover the sheet
+        // cannot say what was painted, and guessing would put colour on bare skin. A print onto everything beneath
+        // needs no clip.
+        bool beneath = row.OntoBeneath;
+        if (!beneath && (painted == null || painted.Length < w * h)) return;
 
         ParallelPixels(0, w * h * 4, 4, (from, to) =>
         {
             for (int i = from; i < to; i += 4)
             {
-                float m = ClipStrength(ov[i + 3] / 255f, painted, i >> 2);
+                float m = beneath ? ov[i + 3] / 255f : ClipStrength(ov[i + 3] / 255f, painted, i >> 2);
                 if (m <= 0f) continue;
                 float im = 1f - m;
                 float d0 = baseTex[i] / 255f, d1 = baseTex[i + 1] / 255f, d2 = baseTex[i + 2] / 255f;
@@ -151,6 +153,8 @@ internal static class OverlayBlend
         float[] bR = new float[Pairs], bG = new float[Pairs], bB = new float[Pairs], bE = new float[Pairs];
         var aBl = new RowBlend[Pairs];
         var bBl = new RowBlend[Pairs];
+        var aUnder = new bool[Pairs];
+        var bUnder = new bool[Pairs];
         bool anyBlend = false;
         for (int p = 0; p < Pairs; p++)
         {
@@ -159,6 +163,7 @@ internal static class OverlayBlend
             aR[p] = pair.A.DiffuseR; aG[p] = pair.A.DiffuseG; aB[p] = pair.A.DiffuseB; aE[p] = pair.A.Emissive;
             bR[p] = pair.B.DiffuseR; bG[p] = pair.B.DiffuseG; bB[p] = pair.B.DiffuseB; bE[p] = pair.B.Emissive;
             aBl[p] = pair.A.Blend;   bBl[p] = pair.B.Blend;
+            aUnder[p] = pair.A.OntoBeneath; bUnder[p] = pair.B.OntoBeneath;
             if (aBl[p] != RowBlend.Paint || bBl[p] != RowBlend.Paint) anyBlend = true;
         }
 
@@ -201,16 +206,19 @@ internal static class OverlayBlend
                 }
 
                 // The two sub-rows may composite by different rules, and a rule cannot be interpolated: each is
-                // resolved to the value it would leave in the base ON ITS OWN, and THOSE are lerped by green.
+                // resolved to the value it would leave in the base ON ITS OWN, and THOSE are lerped by green. A print
+                // onto everything beneath is weighted by the art alone, not the clip.
                 float mBlend = ClipStrength(ovA, clip, i >> 2);
+                float mA = aUnder[pairIdx] ? ovA : mBlend;
+                float mB = bUnder[pairIdx] ? ovA : mBlend;
                 for (int c = 0; c < 3; c++)
                 {
                     float dst = baseTex[i + c] / 255f;
                     float art = ov[i + c] / 255f;
                     float ca  = c == 0 ? aR[pairIdx] : c == 1 ? aG[pairIdx] : aB[pairIdx];
                     float cb  = c == 0 ? bR[pairIdx] : c == 1 ? bG[pairIdx] : bB[pairIdx];
-                    float outA = SubRowResult(aBl[pairIdx], dst, art * ca, ovA, mBlend);
-                    float outB = SubRowResult(bBl[pairIdx], dst, art * cb, ovA, mBlend);
+                    float outA = SubRowResult(aBl[pairIdx], dst, art * ca, ovA, mA);
+                    float outB = SubRowResult(bBl[pairIdx], dst, art * cb, ovA, mB);
                     baseTex[i + c] = ToByte(outB + (outA - outB) * blendA);
                 }
             }
@@ -829,6 +837,7 @@ internal static class OverlayBlend
                 row.A.Emissive = a.Emissive;
                 row.A.Opacity  = a.Opacity;
                 row.A.Blend    = a.Blend;
+                row.A.OntoBeneath = a.PrintOnto == PrintTarget.Beneath;
             }
             if (p.SubRowB is { } b)
             {
@@ -836,6 +845,7 @@ internal static class OverlayBlend
                 row.B.Emissive = b.Emissive;
                 row.B.Opacity  = b.Opacity;
                 row.B.Blend    = b.Blend;
+                row.B.OntoBeneath = b.PrintOnto == PrintTarget.Beneath;
             }
             dict[p.Row - 1] = row; // 1-based JSON → 0-based internal
         }

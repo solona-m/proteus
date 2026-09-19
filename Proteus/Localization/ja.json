@@ -296,7 +296,7 @@
     "description": ""
   },
   "Colors.Blend.Tip": {
-    "message": "この行の画像を、すでに肌にあるものとどう合成するかを決めます。\n\n「描画」は上に重ねるだけで、これまでのレイヤーと同じ動作です。\nそれ以外を選ぶとこの行は「プリント」になります。同じMODの他のレイヤーが\n塗った布地を着色し、その形に切り抜かれます。網タイツに虹をかければ、糸だけが\n染まり、網目は肌のまま残ります。\n\nプリントが届くのは同じMOD内のレイヤーだけで、他のMODの衣装には決して触れません。\n素肌の上には何も描かないため、プリントだけを選んでも何も表示されません。\nこれは仕様です。プリントする下地がそこにないからです。\n\n乗算は暗くすることしかできないため、非常に暗い布地ではほとんど見えません。\nその場合はスクリーンを使ってください。この行の色は引き続き画像を着色し、\n不透明度がプリントの強さになります。",
+    "message": "この行のアートを、すでに肌にあるものとどう合成するか。\n\n「描画」は上に重ねます。これまでのすべてのレイヤーと同じ動作です。\nそれ以外はこの行を「プリント」にし、Photoshopのレイヤー描画モードのように\n合成します。乗算は白を、スクリーンは黒を消します。\n\n「適用先」でプリントの合成対象を選びます：肌を含む下にあるすべて、\nまたはこのModの他のレイヤーが描画した布だけ。\n\n乗算は暗くすることしかできないため、とても暗い布ではほとんど見えません。\nその場合はスクリーンを使ってください。この行の色は引き続きアートを染め、\n不透明度がプリントの強さになります。",
     "description": ""
   },
   "Colors.Bodies.GlobalNote": {
@@ -3190,5 +3190,21 @@
   "Presets.AddedTo.Fmt": {
     "message": "Added \"{0}\" to {1}. Wear it from that mod's Presets section in Colors.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Colors.PrintOnto.Label": {
+    "message": "適用先",
+    "description": ""
+  },
+  "Colors.PrintOnto.Tip": {
+    "message": "このプリントを何と合成するか。\n\n「下にあるすべて」はPhotoshopの描画モード付きレイヤーと同じです。\n肌とその下のすべてのレイヤーに乗り、形は自身のアルファだけで決まります。\n\n「このModの描画のみ」は、このModの他のレイヤーが描画した部分に\nクリップします。網タイツに虹を乗せると糸だけが色づき、\n網目は肌のまま残ります。素肌の上では何も表示されません。",
+    "description": ""
+  },
+  "Colors.PrintOnto.OwnPaint": {
+    "message": "このModの描画のみ",
+    "description": ""
+  },
+  "Colors.PrintOnto.Beneath": {
+    "message": "下にあるすべて",
+    "description": ""
   }
 }

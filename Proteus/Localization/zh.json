@@ -296,7 +296,7 @@
     "description": ""
   },
   "Colors.Blend.Tip": {
-    "message": "这一行的图像如何与皮肤上已有的内容合成。\n\n“绘制”只是把它盖在上面，也就是以往所有图层的做法。\n选择其它模式会让这一行变成印花：它为同一模组其它图层所绘制的布料上色，\n并被裁剪成布料的形状——所以彩虹印在渔网袜上只会染上丝线，\n网眼仍然是皮肤。\n\n印花只能触及本模组自己的图层，绝不会影响其它模组的服装。\n在裸露的皮肤上它什么也不画，因此单独选中印花不会显示任何东西。\n这是刻意如此：那里根本没有可供印刷的底子。\n\n正片叠底只能变暗，因此在很深色的布料上几乎看不出来——这时请改用滤色。\n这一行的颜色仍会为图像着色，其不透明度就是印花的强度。",
+    "message": "此行的图案如何与皮肤上已有的内容合成。\n\n“绘制”将其叠在上方，这是所有图层一直以来的做法。\n其他模式会让此行成为“印花”，像 Photoshop 的图层混合模式一样\n合成：正片叠底去掉白色，滤色去掉黑色。\n\n“作用于”选择印花与什么合成：包括皮肤在内的下方一切，\n或仅本模组其他图层绘制的布料。\n\n正片叠底只能变暗，因此在很深的布料上几乎看不出来——\n那种情况请改用滤色。此行的颜色仍会为图案着色，\n其不透明度即印花的强度。",
     "description": ""
   },
   "Colors.Bodies.GlobalNote": {
@@ -3190,5 +3190,21 @@
   "Presets.AddedTo.Fmt": {
     "message": "Added \"{0}\" to {1}. Wear it from that mod's Presets section in Colors.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Colors.PrintOnto.Label": {
+    "message": "作用于",
+    "description": ""
+  },
+  "Colors.PrintOnto.Tip": {
+    "message": "此印花与什么合成。\n\n“下方的一切”的效果如同 Photoshop 的混合图层：它落在\n皮肤和其下的每个图层上，形状只由自身的 Alpha 决定。\n\n“仅本模组的绘制”会将其裁剪到本模组其他图层绘制的区域，\n因此网袜上的彩虹只会给丝线上色，\n网眼仍是皮肤。在裸露的皮肤上它什么也不显示。",
+    "description": ""
+  },
+  "Colors.PrintOnto.OwnPaint": {
+    "message": "仅本模组的绘制",
+    "description": ""
+  },
+  "Colors.PrintOnto.Beneath": {
+    "message": "下方的一切",
+    "description": ""
   }
 }
