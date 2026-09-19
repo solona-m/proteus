@@ -11,8 +11,8 @@ namespace Proteus.Services;
 public partial class CompositorService
 {
     // ── Invisible auto-glasses (opt-in) ──────────────────────────────────────────
-    // Ownership is derived from state: the injected glasses are ours exactly when the "_met" slot holds our
-    // invisible item's model set (InvisibleGlasses.Resolve).
+    // Ownership is remembered, not inferred: the carrier is a real item players wear by choice, so the injected glasses
+    // are ours only when we recorded equipping them (Configuration.InjectedGlasses) and that item is still worn.
 
     // Don't re-equip the invisible pair within this window: a recomposite before the model loads would loop inject → recomposite.
     private const int GlassesInjectCooldownMs = 5000;
@@ -53,7 +53,20 @@ public partial class CompositorService
         _injectedCarrierSlots = _injectedCarrierSlots.Where(s => s != slot).ToList();
     }
 
-    private volatile bool _injectedGlasses;
+    // Persisted like the ring slots: removing the pair is only safe when we put it there, and that must survive a reload.
+    private bool _injectedGlasses
+    {
+        get => config.InjectedGlasses;
+        set
+        {
+            if (config.InjectedGlasses == value) return;
+            config.InjectedGlasses = value;
+            config.Save();
+        }
+    }
+
+    // Our carrier item worn with no record of equipping it; reported once per session.
+    private int _unclaimedGlassesLogged;
 
     // Ring slots holding an Emperor's ring we have no record of equipping; reported once per slot per session.
     private readonly ConcurrentDictionary<string, byte> _unclaimedRingSlots = new(StringComparer.OrdinalIgnoreCase);
@@ -125,27 +138,31 @@ public partial class CompositorService
     private bool IsOurGlassesWorn(int ourSet) => CurrentMetSets().Contains(ourSet);
 
     /// <summary>
-    /// Whether the pair on the player's face is our carrier item, not merely a pair drawing its model (e5501 is also a
-    /// real pair of spectacles). Checks Glamourer's state; falls back to remembering we equipped it. Any thread.
+    /// Whether the pair on the player's face is our carrier item, not merely a pair drawing its model (other variants
+    /// of the carrier's model set are real pairs). Checks Glamourer's state; falls back to remembering we equipped it. Any thread.
     /// </summary>
     private bool IsOurGlassesItemWorn(InvisibleGlasses.Identity g)
     {
         if (!IsOurGlassesWorn(g.ModelSet)) return false;
+        return WornGlassesRow() is { } row ? row == g.ItemId : _injectedGlasses;
+    }
 
-        ulong? bonusId = null;
+    /// <summary>The Glasses row Glamourer says is worn (0 = none), or null when its state could not be read.</summary>
+    private ulong? WornGlassesRow()
+    {
         try
         {
-            bonusId = Plugin.Framework.RunOnFrameworkThread(
+            var bonusId = Plugin.Framework.RunOnFrameworkThread(
                 () => glamourer.GetObjectState(0)?["Bonus"]?["Glasses"]?["BonusId"]?.ToObject<ulong?>())
                 .GetAwaiter().GetResult();
+            // Glamourer packs a bonus item as (type << 48) | row id.
+            return bonusId is { } id ? id & 0x0000_FFFF_FFFF_FFFFUL : null;
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             log.Debug("[Proteus] invisible glasses: Glamourer state read failed ({0})", ex.GetType().Name);
+            return null;
         }
-
-        // Glamourer packs a bonus item as (type << 48) | row id.
-        return bonusId is { } id ? (id & 0x0000_FFFF_FFFF_FFFFUL) == g.ItemId : _injectedGlasses;
     }
 
     /// <summary>
@@ -165,11 +182,28 @@ public partial class CompositorService
         if (InvisibleGlasses.Resolve(Plugin.DataManager, log) is not { } g) return;
         bool want = config.AutoInvisibleGlasses && shellBuilt && hostedOnFacewear;
 
+        // Glamourer says another pair (or none) is worn: ours is gone, so forget it, or a pair the player puts on later
+        // would be taken for it. Only on a positive reading; an unreadable state keeps the record.
+        if (_injectedGlasses && WornGlassesRow() is { } worn && worn != g.ItemId)
+        {
+            _injectedGlasses = false;
+            // A pair of the player's now draws our carrier's model, which the shell may still be redirected onto. The redraw
+            // that got us here already took its equip signature (which skipped this set while it was ours), so nothing else
+            // will recomposite: do it now, so the shell moves off their pair. Not on a plain revert (none worn): the want
+            // branch re-equips below without one.
+            if (worn != 0 && IsOurGlassesWorn(g.ModelSet))
+            {
+                log.Information("[Proteus] invisible glasses: item #{0} replaced our pair on the same model (e{1:D4}) — "
+                              + "recompositing to move the shell off it", worn, g.ModelSet);
+                TriggerRecomposite("invisible-glasses-released");
+            }
+        }
+
         if (want)
         {
-            // Adopt an invisible carrier already on the face, so teardown and design matching know it is ours across reloads.
-            if (IsOurGlassesItemWorn(g)) _injectedGlasses = true;
-
+            // No adopting a pair already on the face: the carrier is a real item, and a pair we did not equip is not ours
+            // to take off later. Nor does the shell host on it: ShellPhase hides the carrier set from the chooser unless the
+            // record says we equipped the worn pair, so a player's own carrier item keeps its real model.
             var sinceInject = unchecked(Environment.TickCount64 - _lastGlassesInjectTick);
             if (MetSnapshotKnown && !AnyMetWorn() && sinceInject <= GlassesInjectCooldownMs)
                 // Refused only by the cooldown: schedule a retry, since fast callers would otherwise leave the shell hostless.
@@ -203,6 +237,17 @@ public partial class CompositorService
         {
             // Remove when the feature is off, nothing is hosted, or the shell moved to another host (the carrier would render
             // its real frames). Not on a merely failed build, which is transient.
+            //
+            // Worn but not recorded as ours: the player's own pair of the same item, so leave it and say so once.
+            if (!_injectedGlasses)
+            {
+                if (Interlocked.Exchange(ref _unclaimedGlassesLogged, 1) == 0)
+                    log.Information("[Proteus] invisible glasses: item #{0} (e{1:D4}) is worn but Proteus has no record "
+                                  + "of equipping it — leaving it alone. If you did not put it on yourself (an older "
+                                  + "build could equip it and forget), take it off manually.", g.ItemId, g.ModelSet);
+                return;
+            }
+
             bool hostMoved = shellBuilt && !hostedOnFacewear;
             if (SetGlassesOnFramework(0))
             {
@@ -389,12 +434,13 @@ public partial class CompositorService
         }
     }
 
-    /// <summary>Remove our injected glasses immediately (plugin disable/unload), if the worn pair is ours
+    /// <summary>Remove our injected glasses immediately (plugin disable/unload), if we recorded equipping the worn pair
     /// (see <see cref="RemoveInjectedRing"/>). Best-effort, framework thread.</summary>
     public void RemoveInjectedGlasses()
     {
         if (InvisibleGlasses.Resolve(Plugin.DataManager, log) is not { } g) return;
-        bool ours = IsOurGlassesItemWorn(g) || (!MetSnapshotKnown && _injectedGlasses);
+        // Teardown takes back only what we equipped; the item is not ownership.
+        bool ours = _injectedGlasses && (IsOurGlassesItemWorn(g) || !MetSnapshotKnown);
         if (ours && SetGlassesOnFramework(0))
             _injectedGlasses = false;
     }
@@ -408,7 +454,9 @@ public partial class CompositorService
         // The character's own face/hair/tail/ear models: a shell can be cut from them, so a change must invalidate it.
         IReadOnlyList<string>? humanParts = null)
     {
-        var glassesSet = InvisibleGlasses.Resolve(Plugin.DataManager, log)?.ModelSet;
+        // Only while we equipped the pair: the carrier's model file is shared by every variant of its set, so a player's
+        // own pair of that set must count as a change, or the shell stays redirected onto it and it renders invisible.
+        var glassesSet = _injectedGlasses ? InvisibleGlasses.Resolve(Plugin.DataManager, log)?.ModelSet : null;
         bool IsOurCarrier(string modelPath)
             => modelPath.Contains($"a{InvisibleRing.EmperorSetId:D4}", StringComparison.OrdinalIgnoreCase)
             || (glassesSet is int gs && modelPath.Contains($"e{gs:D4}", StringComparison.OrdinalIgnoreCase));
