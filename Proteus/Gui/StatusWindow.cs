@@ -174,7 +174,7 @@ public class StatusWindow : Window
         modsTab = new ModsTab(penumbra, compositor, this, presets, designBindings, config);
         bindingsTab = new BindingsTab(config, designBindings, penumbra);
         hatCompat = new HatCompatPanel(hatCompatWatcher, config);
-        settingsTab = new SettingsTab(config, compositor, discovery, hatCompat, logExport);
+        settingsTab = new SettingsTab(config, compositor, discovery, designBindings, hatCompat, logExport);
 
         SizeConstraints = AutoFitConstraints;
 
@@ -454,30 +454,33 @@ public class StatusWindow : Window
                     if (t)
                     {
                         _tabDrawn = "toggles";
-                        _studioDrawn = true;
-                        // Fill the height only while not auto-fitting, or the row and the window grow each other without bound.
-                        parts.Draw(fillHeight: _fitFrames == 0, reserveBelow: _footerReserve);
-
-                        // The controls grew past the fitted height, so fit again; grow only.
-                        if (_fitFrames == 0 && parts.ControlsHeight > _studioFitHeight + 1f)
+                        if (!DrawnAsDisabled())
                         {
-                            _studioFitHeight = parts.ControlsHeight;
-                            StartFit();
-                        }
+                            _studioDrawn = true;
+                            // Fill the height only while not auto-fitting, or the row and the window grow each other without bound.
+                            parts.Draw(fillHeight: _fitFrames == 0, reserveBelow: _footerReserve);
 
-                        // Grow when the viewer appears, not when the tab opens.
-                        if (parts.ShowingModel && !_modelWasShowing) _growForModel = true;
-                        _modelWasShowing = parts.ShowingModel;
+                            // The controls grew past the fitted height, so fit again; grow only.
+                            if (_fitFrames == 0 && parts.ControlsHeight > _studioFitHeight + 1f)
+                            {
+                                _studioFitHeight = parts.ControlsHeight;
+                                StartFit();
+                            }
+
+                            // Grow when the viewer appears, not when the tab opens.
+                            if (parts.ShowingModel && !_modelWasShowing) _growForModel = true;
+                            _modelWasShowing = parts.ShowingModel;
+                        }
                     }
 
                 using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Bindings, "bindings"))
                     if (t) { _tabDrawn = "bindings"; bindingsTab.DrawBindingsTab(); }
 
                 using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Create, "create"))
-                    if (t) { _tabDrawn = "create"; createTab.DrawCreateTab(); }
+                    if (t) { _tabDrawn = "create"; if (!DrawnAsDisabled()) createTab.DrawCreateTab(); }
 
                 using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Import, "import"))
-                    if (t) { _tabDrawn = "import"; importTab.DrawImportTab(); }
+                    if (t) { _tabDrawn = "import"; if (!DrawnAsDisabled()) importTab.DrawImportTab(); }
 
                 using (var t = ProteusStyle.HeaderTabItem(Strings.Tab.Export, "export"))
                     if (t) { _tabDrawn = "export"; exportTab.DrawExportTab(); }
@@ -535,6 +538,19 @@ public class StatusWindow : Window
     }
 
     private const string DiscordUrl = "https://discord.gg/solona";
+
+    /// <summary>
+    /// The master switch governs every feature, so a tab whose controls would act on the game or on the
+    /// user's mods draws this notice in place of its body. True when the body must be skipped. The Mods
+    /// tab says the same thing inline, where it stands in for the "no mods" line.
+    /// </summary>
+    private bool DrawnAsDisabled()
+    {
+        if (config.PluginEnabled) return false;
+        ImGui.Spacing();
+        ImGui.TextColored(ProteusStyle.Warn, Strings.ModsList.Disabled);
+        return true;
+    }
 
     /// <summary>The recomposite control, right-aligned onto the tab bar's own line so it is reachable from every tab.</summary>
     /// <remarks>

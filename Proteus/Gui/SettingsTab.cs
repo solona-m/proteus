@@ -15,6 +15,7 @@ internal sealed class SettingsTab
     private readonly Configuration config;
     private readonly CompositorService compositor;
     private readonly SidecarDiscoveryService discovery;
+    private readonly DesignBindingService designBindings;
     private readonly HatCompatPanel hatCompat;
     private readonly LogExportService logExport;
 
@@ -23,12 +24,13 @@ internal sealed class SettingsTab
     private string? _copyLogsPath;
     private string? _copyLogsError;
 
-    public SettingsTab(Configuration config, CompositorService compositor, SidecarDiscoveryService discovery, HatCompatPanel hatCompat,
-        LogExportService logExport)
+    public SettingsTab(Configuration config, CompositorService compositor, SidecarDiscoveryService discovery,
+        DesignBindingService designBindings, HatCompatPanel hatCompat, LogExportService logExport)
     {
         this.config = config;
         this.compositor = compositor;
         this.discovery = discovery;
+        this.designBindings = designBindings;
         this.hatCompat = hatCompat;
         this.logExport = logExport;
     }
@@ -47,7 +49,12 @@ internal sealed class SettingsTab
             {
                 config.PluginEnabled = enabled;
                 config.Save();
-                compositor.SetEnabled(enabled);   // clears output, redraws, then toggles the Penumbra mod
+                // Ordered, not raced. Off: the mods bindings hold in the player's collection are let go, and
+                // only then does the compositor withdraw and redraw — the other way round, the released mods
+                // would come back with no redraw behind them. On: the boot restore is armed before the first
+                // composite. SetEnabled is started on a worker, never on the framework thread (see there).
+                designBindings.SetPluginEnabled(enabled,
+                    () => compositor.SetEnabled(enabled));   // clears output, redraws, then toggles the Penumbra mod
             }
             // Tooltip on both the switch and its label.
             if (ImGui.IsItemHovered())

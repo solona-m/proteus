@@ -94,7 +94,7 @@ public sealed unsafe class SceneLightService : IDisposable
     private void OnFramework(IFramework fw)
     {
         // Still runs while the level is pinned by hand (the pin applies in Sample), so the diagnostics stay live.
-        if (!config.LightResponseEnabled) return;
+        if (!config.PluginEnabled || !config.LightResponseEnabled) return;
 
         var now = DateTime.UtcNow;
         if ((now - _lastEvaluate).TotalSeconds < EvaluateIntervalSeconds) return;

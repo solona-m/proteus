@@ -205,7 +205,10 @@ public partial class CompositorService
                 log.Warning("[Proteus] Managed mod could not be enabled in the player collection ({0}) "
                           + "— composited textures will not apply", ec);
             else
+            {
                 penumbra.SetModPriority(collId.Value, SidecarDiscoveryService.ManagedModDir, WantedManagedModPriority);
+                log.Information("[Proteus] managed mod had no settings — re-enabled at priority {0}", WantedManagedModPriority);
+            }
             return;
         }
 

@@ -165,7 +165,20 @@ internal sealed class ModsTab
                 {
                     _priorityEdits.Remove(entry.ModDirectory);
                     if (collId.HasValue)
+                    {
+                        // Read live rather than trusting entry.Priority, which is a snapshot from the last
+                        // composite: if Penumbra has moved on, a stale "from" would both misreport the change
+                        // and silence the line for a drag that really did move the mod. One IPC hop, on a
+                        // gesture, not a frame.
+                        var before = penumbra.GetModSettings(collId.Value, entry.ModDirectory)?.Priority;
                         penumbra.SetModPriority(collId.Value, entry.ModDirectory, pri);
+                        // Logged like every other priority write: "what set this mod to N?" must be answerable
+                        // from dalamud.log alone, and this is the one that came from a drag. Unreadable settings
+                        // still log, since a write we cannot verify is the more interesting case, not the less.
+                        if (before != pri)
+                            Plugin.Log.Information("[Proteus] priority set by hand: {0} {1} -> {2}",
+                                entry.ModDirectory, before?.ToString() ?? "(unreadable)", pri);
+                    }
                     // Live edit only (see enable toggle above); folded into the binding via the button.
                     window.RecompositeForOverlay(entry, "penumbra-priority");
                 }

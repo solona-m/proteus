@@ -39,6 +39,16 @@ internal sealed class BindingsTab
     internal void DrawBindingsTab()
     {
         var bs = Strings.Bindings;
+
+        // The master switch governs every feature: with Proteus off nothing here would act, so say so
+        // rather than draw controls that silently do nothing. Same notice as the Mods and Export tabs.
+        if (!config.PluginEnabled)
+        {
+            ImGui.Spacing();
+            ImGui.TextColored(ProteusStyle.Warn, Strings.ModsList.Disabled);
+            return;
+        }
+
         DrawSettings(bs);
 
         var bindings = designBindings.Bindings;

@@ -85,7 +85,7 @@ public sealed unsafe class ShellCoverageFade : IDisposable
         bool ghostBusy = Ghost?.IsBusy == true;
 
         // Nothing asks for a coverage fade: skip the walk, which allocates a string per texture.
-        bool on = config.LightResponseEnabled && LightFor != null && !ghostBusy
+        bool on = config.PluginEnabled && config.LightResponseEnabled && LightFor != null && !ghostBusy
                && (AnyLight?.Invoke() ?? true);
 
         if (addr == 0) { _applied.Clear(); return; }

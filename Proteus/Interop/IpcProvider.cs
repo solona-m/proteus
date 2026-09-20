@@ -24,6 +24,7 @@ public class IpcProvider : IDisposable {
     private readonly IPluginLog _log;
     private readonly CompositorService _compositor;
     private readonly SidecarDiscoveryService _discovery;
+    private readonly Configuration _config;
 
     private readonly ICallGateProvider<List<IpcOverlayDetail>> _getOverlaysProvider;
     private readonly ICallGateProvider<List<IpcOverlayDetail>> _getActiveOverlaysProvider;
@@ -32,9 +33,11 @@ public class IpcProvider : IDisposable {
     private readonly ICallGateProvider<string, string?, string?, string> _getColorTableProvider;
     private readonly ICallGateProvider<string, string?, string?, string, bool> _setColorTableProvider;
     
-    public IpcProvider(IDalamudPluginInterface pluginInterface, CompositorService compositor, SidecarDiscoveryService discovery, IPluginLog log) {
+    public IpcProvider(IDalamudPluginInterface pluginInterface, CompositorService compositor, SidecarDiscoveryService discovery,
+                       Configuration config, IPluginLog log) {
         _compositor = compositor;
         _discovery = discovery;
+        _config = config;
         _log = log;
         
         _apiVersionProvider = pluginInterface.GetIpcProvider<(int, int)>($"{IpcNamespace}.ApiVersion");
@@ -109,6 +112,8 @@ public class IpcProvider : IDisposable {
     }
     
     private bool SetColorTable(string modDirectory, string? group, string? option, string colorTableJson) {
+        // Writes a mod's metadata to disk: refused while the master switch is off, as every feature is.
+        if (!_config.PluginEnabled) return false;
         try {
             var entry = _compositor.LastDiscovered.FirstOrDefault(s => s.ModDirectory.Equals(modDirectory, StringComparison.InvariantCultureIgnoreCase));
             if (entry == null) return false;
