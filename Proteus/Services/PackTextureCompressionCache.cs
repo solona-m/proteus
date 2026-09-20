@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.IO;
 using Dalamud.Plugin.Services;
@@ -22,6 +23,24 @@ internal static class PackTextureCompressionCache
 {
     /// <summary>Under the pack's own <c>Proteus/</c> sidecar, so it travels and is removed with the mod.</summary>
     internal const string Subdir = "compressed";
+
+    /// <summary>
+    /// Sources a conversion has already refused, keyed by the same stamp the copy would have been named after.
+    /// A refusal of this kind is a property of the bytes — art that will not decode, an index that cannot keep its
+    /// rows, a sheet the writer will only store uncompressed — so the answer cannot change until the file does, and
+    /// the stamp moves when it does. Without this the whole trial (two BC5 encodes and two decode-and-compare passes
+    /// over a 4K sheet) ran again on every composite, for ever, for one stubborn texture.
+    /// <para/>
+    /// Transient failures are deliberately NOT recorded: a locked file or a full disk has to be free to recover.
+    /// In memory only, because a restart is a cheap place to try again and the encoder can differ between sessions.
+    /// </summary>
+    private static readonly ConcurrentDictionary<ulong, byte> Refused = new();
+
+    /// <summary>How many distinct sources have been refused this session. For the tests, and for a log line.</summary>
+    internal static int RefusedCount => Refused.Count;
+
+    /// <summary>Forget every refusal, so they are judged again. For tests, which share the static above.</summary>
+    internal static void ClearRefusals() => Refused.Clear();
 
     /// <summary>
     /// The compressed copy of <paramref name="srcDisk"/>, built if it is not already there. False when there is
@@ -53,7 +72,17 @@ internal static class PackTextureCompressionCache
             return true;
         }
 
-        if (loader.LoadTexAsRgba(srcDisk) is not { } decoded) return false;
+        // Asked and answered: these same bytes were refused already, and nothing about them has changed.
+        if (Refused.ContainsKey(stamp)) return false;
+
+        if (loader.LoadTexAsRgba(srcDisk) is not { } decoded)
+        {
+            log?.Debug("[Proteus] pack textures: {0} could not be decoded — republishing the author's file",
+                       Path.GetFileName(srcDisk));
+            Refused[stamp] = 0;
+            return false;
+        }
+
         var (rgba, w, h) = decoded;
 
         var encoding = TexEncoding.Bc7;
@@ -67,6 +96,7 @@ internal static class PackTextureCompressionCache
                 log?.Information("[Proteus] pack textures: {0} still moves {1} texel(s) to another colour-table row "
                                + "after snapping — leaving the author's file uncompressed",
                                  Path.GetFileName(srcDisk), plan.Flipped);
+                Refused[stamp] = 0;
                 return false;
             }
 
@@ -105,6 +135,7 @@ internal static class PackTextureCompressionCache
         log?.Debug("[Proteus] pack textures: {0} came back uncompressed ({1}x{2}) — republishing the author's file",
                    Path.GetFileName(srcDisk), w, h);
         try { File.Delete(path); } catch { /* it is only a stale copy */ }
+        Refused[stamp] = 0;
         return false;
     }
 

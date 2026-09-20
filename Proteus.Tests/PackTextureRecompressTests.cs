@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using Proteus.Services;
 using Xunit;
 
@@ -199,6 +200,7 @@ public class PackTextureRecompressTests
     [Fact]
     public void OutputThatCameBackUncompressedIsRefused()
     {
+        PackTextureCompressionCache.ClearRefusals();
         var modRoot = Directory.CreateTempSubdirectory().FullName;
         try
         {
@@ -223,6 +225,85 @@ public class PackTextureRecompressTests
             Assert.True(!Directory.Exists(cacheDir) || Directory.GetFiles(cacheDir).Length == 0);
         }
         finally { Directory.Delete(modRoot, true); }
+    }
+
+    /// <summary>
+    /// A refusal is remembered, so the trial behind it does not run again on every composite — without this, one
+    /// stubborn texture cost two BC5 encodes and two decode-and-compare passes over the whole sheet, every time.
+    /// The log is the witness: doing the work again would report the refusal again.
+    /// </summary>
+    [Fact]
+    public void RefusalIsRememberedUntilTheSourceChanges()
+    {
+        PackTextureCompressionCache.ClearRefusals();
+        var modRoot = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            var texDir = Path.Combine(modRoot, "textures");
+            Directory.CreateDirectory(texDir);
+
+            // Solid colour: the writer collapses it to an uncompressed 16x16, so the copy buys nothing and the
+            // cache refuses it — a refusal decided by the bytes, which is exactly the kind worth remembering.
+            var solid = new byte[64 * 64 * 4];
+            for (int i = 0; i < solid.Length; i += 4)
+            {
+                solid[i] = 10; solid[i + 1] = 20; solid[i + 2] = 30; solid[i + 3] = 255;
+            }
+
+            var loader = Loader();
+            var src = Path.Combine(texDir, "solid_d.tex");
+            Assert.True(loader.WriteTex(solid, 64, 64, src, TexEncoding.Uncompressed));
+
+            var spy = new CountingLog();
+            Assert.False(PackTextureCompressionCache.TryEnsure(modRoot, src, false, loader, spy, out _));
+            Assert.Equal(1, PackTextureCompressionCache.RefusedCount);
+            Assert.Equal(1, spy.Count("came back uncompressed"));
+
+            // Asked again with nothing changed: answered from the memo, so the work is not repeated.
+            Assert.False(PackTextureCompressionCache.TryEnsure(modRoot, src, false, loader, spy, out _));
+            Assert.Equal(1, PackTextureCompressionCache.RefusedCount);
+            Assert.Equal(1, spy.Count("came back uncompressed"));
+
+            // Touch the source and the same bytes are judged afresh: a refusal must not outlive its source.
+            File.SetLastWriteTimeUtc(src, File.GetLastWriteTimeUtc(src).AddMinutes(1));
+            Assert.False(PackTextureCompressionCache.TryEnsure(modRoot, src, false, loader, spy, out _));
+            Assert.Equal(2, PackTextureCompressionCache.RefusedCount);
+            Assert.Equal(2, spy.Count("came back uncompressed"));
+        }
+        finally
+        {
+            PackTextureCompressionCache.ClearRefusals();
+            Directory.Delete(modRoot, true);
+        }
+    }
+
+    /// <summary>Records what the cache reported, so a test can tell a fresh decision from a remembered one.</summary>
+    private sealed class CountingLog : Dalamud.Plugin.Services.IPluginLog
+    {
+        private readonly System.Collections.Generic.List<string> _lines = [];
+
+        public int Count(string fragment)
+            => _lines.Count(l => l.Contains(fragment, StringComparison.Ordinal));
+
+        private void Record(string m) { lock (_lines) _lines.Add(m); }
+
+        public Serilog.Events.LogEventLevel MinimumLogLevel { get; set; }
+        public Serilog.ILogger Logger => Serilog.Core.Logger.None;
+        public void Debug(string m, params object[] v) => Record(m);
+        public void Debug(Exception? e, string m, params object[] v) => Record(m);
+        public void Error(string m, params object[] v) => Record(m);
+        public void Error(Exception? e, string m, params object[] v) => Record(m);
+        public void Fatal(string m, params object[] v) => Record(m);
+        public void Fatal(Exception? e, string m, params object[] v) => Record(m);
+        public void Info(string m, params object[] v) => Record(m);
+        public void Info(Exception? e, string m, params object[] v) => Record(m);
+        public void Information(string m, params object[] v) => Record(m);
+        public void Information(Exception? e, string m, params object[] v) => Record(m);
+        public void Verbose(string m, params object[] v) => Record(m);
+        public void Verbose(Exception? e, string m, params object[] v) => Record(m);
+        public void Warning(string m, params object[] v) => Record(m);
+        public void Warning(Exception? e, string m, params object[] v) => Record(m);
+        public void Write(Serilog.Events.LogEventLevel l, Exception? e, string m, params object[] v) => Record(m);
     }
 
     /// <summary>With no sidecar root there is nowhere to keep a copy, and the caller falls back to the bytes.</summary>
