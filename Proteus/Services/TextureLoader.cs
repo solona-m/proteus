@@ -1096,6 +1096,37 @@ public class TextureLoader
     }
 
     /// <summary>
+    /// The FFXIV format code in a <c>.tex</c> header, or null when the file cannot be read as one. Reads 8 bytes,
+    /// not the payload.
+    /// </summary>
+    public static uint? TexFormatOf(string path)
+    {
+        try
+        {
+            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            var header = new byte[8];
+            int read = 0;
+            while (read < header.Length)
+            {
+                int n = fs.Read(header, read, header.Length - read);
+                if (n <= 0) return null;
+                read += n;
+            }
+
+            return BitConverter.ToUInt32(header, 4);
+        }
+        catch { return null; }
+    }
+
+    /// <summary>
+    /// Whether a <c>.tex</c> is stored in one of the uncompressed layouts a sync plugin's "compress uncompressed
+    /// textures" pass converts on the viewer's machine (B8G8R8A8, B8G8R8X8, B4G4R4A4, B5G5R5A1). Anything already
+    /// block-compressed is left alone by those passes, so re-encoding it ourselves buys nothing and costs quality.
+    /// </summary>
+    public static bool IsSyncRecompressible(string path)
+        => TexFormatOf(path) is 0x1450u or 0x1451u or 0x1440u or 0x1441u;
+
+    /// <summary>
     /// Write an RGBA8 buffer as an uncompressed B8G8R8A8 .tex file. Returns true on success.
     /// </summary>
     public bool WriteTex(byte[] rgba, int width, int height, string outputPath)
@@ -1254,21 +1285,32 @@ public class TextureLoader
     public enum IndexPlan { Uncompressed, Bc5, Bc5AfterSnap }
 
     /// <summary>
-    /// Decide how an index texture is published. BC5 as it stands when the trial already passes; BC5 after
-    /// <see cref="SnapIndexForBc5"/> when snapping the few blocks BC4 cannot hold makes it pass; uncompressed
-    /// otherwise. The out counts are for the caller's log — they are the whole record of what was given up.
+    /// What <see cref="PlanIndexBc5"/> decided, and the bytes to write if it had to snap. The counts are the whole
+    /// record of what was given up, for the caller's log.
     /// </summary>
-    public IndexPlan PlanIndexBc5(byte[] rgba, int width, int height,
-                                  out int flipped, out int snapped, out int snappedRows)
-    {
-        snapped = snappedRows = 0;
-        if (IndexSurvivesBc5(rgba, width, height, out flipped)) return IndexPlan.Bc5;
-        if (flipped == 0) return IndexPlan.Uncompressed;   // refused outright (unaligned, short, encoder threw)
+    /// <param name="Snapped">
+    /// The buffer to write, already snapped — non-null only for <see cref="IndexPlan.Bc5AfterSnap"/>. Handed back
+    /// rather than rebuilt: the plan had to build it to verify it, and a second pass over a 4K sheet is not free.
+    /// </param>
+    public readonly record struct IndexEncodePlan(
+        IndexPlan Plan, byte[]? Snapped, int Flipped, int SnappedTexels, int SnappedRows);
 
-        var candidate = SnapIndexForBc5(rgba, width, height, out snapped, out snappedRows);
+    /// <summary>
+    /// Decide how an index texture is published. BC5 as it stands when the trial already passes; BC5 over a snapped
+    /// buffer when snapping the few blocks BC4 cannot hold makes it pass; uncompressed otherwise.
+    /// </summary>
+    public IndexEncodePlan PlanIndexBc5(byte[] rgba, int width, int height)
+    {
+        if (IndexSurvivesBc5(rgba, width, height, out var flipped))
+            return new(IndexPlan.Bc5, null, flipped, 0, 0);
+
+        // Refused outright (unaligned, short, encoder threw): there is nothing a snap could rescue.
+        if (flipped == 0) return new(IndexPlan.Uncompressed, null, 0, 0, 0);
+
+        var candidate = SnapIndexForBc5(rgba, width, height, out var snapped, out var snappedRows);
         return IndexSurvivesBc5(candidate, width, height, out flipped)
-            ? IndexPlan.Bc5AfterSnap
-            : IndexPlan.Uncompressed;
+            ? new(IndexPlan.Bc5AfterSnap, candidate, flipped, snapped, snappedRows)
+            : new(IndexPlan.Uncompressed, null, flipped, snapped, snappedRows);
     }
 
     /// <summary>

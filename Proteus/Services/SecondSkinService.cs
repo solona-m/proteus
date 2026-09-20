@@ -358,8 +358,11 @@ public sealed partial class SecondSkinService
 
     /// <summary>
     /// Content hash of each shell texture last written, to tell a real change from a rewrite of identical bytes.
+    /// Concurrent because shell layers bake in parallel (see the Parallel.For in ShellTextureBake) while the content
+    /// writers use the same memo: a plain Dictionary here was only safe as long as every caller agreed to lock it,
+    /// and they did not.
     /// </summary>
-    private readonly Dictionary<string, ulong> _texHashes = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, ulong> _texHashes = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Copy a pack file into the output, doing nothing when the same source is already there (memoised on a source
@@ -371,7 +374,7 @@ public sealed partial class SecondSkinService
         => CopyPackFile(_texHashes, srcDisk, dstDisk);
 
     /// <summary>The body of <see cref="CopyPackFile(string,string)"/> with its memo passed in, for testing.</summary>
-    internal static bool CopyPackFile(Dictionary<string, ulong> memo, string srcDisk, string dstDisk)
+    internal static bool CopyPackFile(IDictionary<string, ulong> memo, string srcDisk, string dstDisk)
     {
         ulong? stamp = null;
         try
@@ -528,32 +531,130 @@ public sealed partial class SecondSkinService
     /// <see cref="TextureLoader.SnapIndexForBc5"/>), uncompressed when neither holds. BC5 is the vanilla index format
     /// and quarters the file — which matters most for the sync plugins, whose own "compress uncompressed textures" pass
     /// would otherwise make the same conversion unchecked, and who count what they transfer against a VRAM budget.
-    /// The plan is decided here and reported once; applying it (the snap) is the caller's, at write time.
+    /// The plan is decided here and reported once. <paramref name="snapped"/> comes back non-null only on the pass
+    /// that computed it — a memo hit carries the verdict, not the buffer, which would be the size of the texture.
+    /// A caller that still has to write then snaps for itself, which only happens when the output went missing.
     /// </summary>
-    private TextureLoader.IndexPlan IndexPlanFor(ulong content, byte[] data, int w, int h, string disk)
+    private TextureLoader.IndexPlan IndexPlanFor(
+        ulong content, byte[] data, int w, int h, string disk, out byte[]? snapped)
     {
-        if (!_indexPlans.TryGetValue(content, out var plan))
+        snapped = null;
+        if (_indexPlans.TryGetValue(content, out var cached)) return cached;
+
+        var decided = textureLoader.PlanIndexBc5(data, w, h);
+        _indexPlans[content] = decided.Plan;
+        snapped = decided.Snapped;
+
+        var name = Path.GetFileName(disk);
+        switch (decided.Plan)
         {
-            plan = textureLoader.PlanIndexBc5(data, w, h, out int flipped, out int snapped, out int snappedRows);
-            _indexPlans[content] = plan;
-            var name = Path.GetFileName(disk);
-            switch (plan)
-            {
-                case TextureLoader.IndexPlan.Bc5:
-                    log.Debug("[Proteus] index BC5: {0} verified lossless for row selection", name);
-                    break;
-                case TextureLoader.IndexPlan.Bc5AfterSnap:
-                    log.Information("[Proteus] index BC5: {0} snapped {1} texel(s) ({2} to another row) so its blocks "
-                                  + "encode exactly", name, snapped, snappedRows);
-                    break;
-                default:
-                    log.Information("[Proteus] index BC5: {0} still moves {1} texel(s) to another colour-table row "
-                                  + "after snapping — writing it uncompressed", name, flipped);
-                    break;
-            }
+            case TextureLoader.IndexPlan.Bc5:
+                log.Debug("[Proteus] index BC5: {0} verified lossless for row selection", name);
+                break;
+            case TextureLoader.IndexPlan.Bc5AfterSnap:
+                log.Information("[Proteus] index BC5: {0} snapped {1} texel(s) ({2} to another row) so its blocks "
+                              + "encode exactly", name, decided.SnappedTexels, decided.SnappedRows);
+                break;
+            default:
+                log.Information("[Proteus] index BC5: {0} still moves {1} texel(s) to another colour-table row "
+                              + "after snapping — writing it uncompressed", name, decided.Flipped);
+                break;
         }
 
-        return plan;
+        return decided.Plan;
+    }
+
+    /// <summary>
+    /// Republish one of a content pack's own textures RE-ENCODED, for art the author shipped uncompressed. Index art
+    /// goes through the same verified BC5 path as our own (row selection has to survive, and an author's index is no
+    /// different from ours in that respect); every other slot takes BC7, as our own do.
+    /// <para/>
+    /// Returns null when the file cannot be converted — undecodable, or an index that fails the trial — and the caller
+    /// then republishes the author's bytes unchanged. Otherwise whether the output on disk changed.
+    /// Memoised on the SOURCE file's stamp in <see cref="_texHashes"/>, like <see cref="CopyPackFile(string,string)"/>,
+    /// with a marker folded in so toggling compression rewrites rather than reusing a byte copy.
+    /// </summary>
+    internal bool? RepublishCompressed(bool isIndex, string srcFile, string dstDisk)
+    {
+        ulong stamp;
+        try
+        {
+            var info = new FileInfo(srcFile);
+            if (!info.Exists) return null;
+            stamp = StampHash(srcFile, info.LastWriteTimeUtc.Ticks, info.Length) ^ 0x9E3779B97F4A7C15ul;
+        }
+        catch { return null; }
+
+        if (_texHashes.TryGetValue(dstDisk, out var prev) && prev == stamp && File.Exists(dstDisk))
+            return false;
+
+        if (textureLoader.LoadTexAsRgba(srcFile) is not { } decoded) return null;
+        var (rgba, w, h) = decoded;
+
+        var encoding = TexEncoding.Bc7;
+        if (isIndex)
+        {
+            var plan = IndexPlanFor(SlotHash(rgba), rgba, w, h, dstDisk, out var snapped);
+            // An index that cannot survive the trial stays exactly as the author wrote it: a wrong row is worse than
+            // a big file, and re-encoding it ourselves would only move the damage from their machine to ours.
+            if (plan == TextureLoader.IndexPlan.Uncompressed) return null;
+            if (plan == TextureLoader.IndexPlan.Bc5AfterSnap)
+                rgba = snapped ?? TextureLoader.SnapIndexForBc5(rgba, w, h, out _, out _);
+            encoding = TexEncoding.Bc5;
+        }
+
+        if (!textureLoader.WriteTex(rgba, w, h, dstDisk, encoding))
+        {
+            log.Warning("[Proteus] content: could not re-encode {0} — republishing the author's bytes",
+                        Path.GetFileName(srcFile));
+            return null;
+        }
+
+        _texHashes[dstDisk] = stamp;
+        log.Debug("[Proteus] content: re-encoded {0} as {1}", Path.GetFileName(srcFile), encoding);
+        return true;
+    }
+
+    /// <summary>
+    /// Whether a texture path names an index map. Deliberately the SAME token set a sync plugin's own classifier
+    /// uses (<c>_id.</c>, <c>_id_</c>, <c>_idx</c>, <c>_index</c>, <c>index_</c>), so anything one of them would
+    /// re-encode as an index goes through our verified path instead of taking an unchecked BC7.
+    /// </summary>
+    private static readonly string[] IndexPathTokens = ["_id.", "_id_", "_idx", "_index", "index_"];
+
+    internal static bool IsIndexTexturePath(string path)
+    {
+        var leaf = Path.GetFileName(path.Replace('\\', '/'));
+        if (string.IsNullOrEmpty(leaf)) return false;
+        foreach (var token in IndexPathTokens)
+            if (leaf.Contains(token, StringComparison.OrdinalIgnoreCase))
+                return true;
+        return false;
+    }
+
+    /// <summary>
+    /// Republish <paramref name="srcDisk"/> into <paramref name="dstDisk"/>, re-encoded when we are compressing and
+    /// the author left it in a format a viewer's sync client would convert on their machine. Falls back to copying
+    /// the bytes. Returns whether the file on disk changed. The one door every pack texture goes through.
+    /// </summary>
+    internal bool RepublishPackTexture(string? modRoot, string texGamePath, string srcDisk, string dstDisk)
+    {
+        if (config.EnableCompression && textureLoader.CompressionAffordable()
+         && TextureLoader.IsSyncRecompressible(srcDisk))
+        {
+            var isIndex = IsIndexTexturePath(texGamePath);
+
+            // The sidecar copy first: built at import, and built here when it is missing — which is the check on
+            // composition for a pack imported before compression was on, or one whose art has changed since.
+            if (PackTextureCompressionCache.TryEnsure(modRoot, srcDisk, isIndex, textureLoader, log, out var cached))
+                return CopyPackFile(cached, dstDisk);
+
+            // No sidecar to keep it in (a pack with no mod root): convert straight into the output instead.
+            if (RepublishCompressed(isIndex, srcDisk, dstDisk) is { } converted)
+                return converted;
+        }
+
+        return CopyPackFile(srcDisk, dstDisk);
     }
 
     /// <summary>True when the blue channel (byte 2 of each RGBA quad) is 255 across the whole buffer — i.e.
@@ -1231,12 +1332,13 @@ public sealed partial class SecondSkinService
         // transparency gate) is uniformly 255, else BC7. Everything else is BC7.
         var content = SlotHash(data);
         var plan = TextureLoader.IndexPlan.Uncompressed;
+        byte[]? snapped = null;
         var encoding = TexEncoding.Uncompressed;
         if (compress)
         {
             if (IsIndexSlot(slot))
             {
-                plan = IndexPlanFor(content, data, w, h, disk);
+                plan = IndexPlanFor(content, data, w, h, disk, out snapped);
                 encoding = plan == TextureLoader.IndexPlan.Uncompressed ? TexEncoding.Uncompressed : TexEncoding.Bc5;
             }
             else
@@ -1248,27 +1350,26 @@ public sealed partial class SecondSkinService
         }
 
         // Skip the write when content, encoding and size all match what we last wrote, or every recomposite forces a
-        // redraw. SlotHash (memory only), locked because shell layers build in parallel. Hashed on the buffer handed
-        // in, before any snap: the snap is a function of it, so identical input still means identical output.
+        // redraw. SlotHash (memory only). Hashed on the buffer handed in, before any snap: the snap is a function of
+        // it, so identical input still means identical output.
         var hash = content
                  ^ ((ulong)((int)encoding + 1) * 0x9E3779B97F4A7C15ul)
                  ^ ((ulong)w * 0xBF58476D1CE4E5B9ul)
                  ^ ((ulong)h * 0x94D049BB133111EBul);
-        bool same;
-        lock (_texHashes) same = _texHashes.TryGetValue(disk, out var prev) && prev == hash;
-        same = same && File.Exists(disk);
+        bool same = _texHashes.TryGetValue(disk, out var prev) && prev == hash && File.Exists(disk);
         if (!same)
         {
-            // Only now, on a real write: snapping is a pass over the whole sheet, and most composites skip.
+            // The plan already built the snapped buffer to verify it. Only a memo hit arrives here without one, and
+            // then the sheet has to be snapped again — which costs a pass, but only when the output went missing.
             if (plan == TextureLoader.IndexPlan.Bc5AfterSnap)
-                data = TextureLoader.SnapIndexForBc5(data, w, h, out _, out _);
+                data = snapped ?? TextureLoader.SnapIndexForBc5(data, w, h, out _, out _);
 
             if (!textureLoader.WriteTex(data, w, h, disk, encoding))
             {
                 log.Error("[Proteus] second skin: failed to write {0}", disk);
                 return false;
             }
-            lock (_texHashes) _texHashes[disk] = hash;
+            _texHashes[disk] = hash;
             texturesChanged = true;
         }
         return true;
@@ -1425,12 +1526,13 @@ public sealed partial class SecondSkinService
             // Same rules as the shell path: "id" only when the trial encode proves it, BC7 for the continuous slots.
             var content = Hash(rgba);
             var plan = TextureLoader.IndexPlan.Uncompressed;
+            byte[]? snapped = null;
             var encoding = TexEncoding.Uncompressed;
             if (config.EnableCompression && textureLoader.CompressionAffordable())
             {
                 if (IsIndexSlot(slot))
                 {
-                    plan = IndexPlanFor(content, rgba, w, h, disk);
+                    plan = IndexPlanFor(content, rgba, w, h, disk, out snapped);
                     encoding = plan == TextureLoader.IndexPlan.Uncompressed
                         ? TexEncoding.Uncompressed
                         : TexEncoding.Bc5;
@@ -1449,7 +1551,7 @@ public sealed partial class SecondSkinService
             {
                 // Only on a real write — see WriteShellSlot.
                 if (plan == TextureLoader.IndexPlan.Bc5AfterSnap)
-                    rgba = TextureLoader.SnapIndexForBc5(rgba, w, h, out _, out _);
+                    rgba = snapped ?? TextureLoader.SnapIndexForBc5(rgba, w, h, out _, out _);
 
                 if (!textureLoader.WriteTex(rgba, w, h, disk, encoding))
                 {
@@ -1482,9 +1584,10 @@ public sealed partial class SecondSkinService
             try
             {
                 var disk = Path.Combine(texturesDir, $"ss_{letter}_{slot}.tex");
-                // Through the memo, like the non-glow path: re-reading the pack's art is what dominates a composite.
-                if (CopyPackFile(file, disk)) wroteAnything = true;
                 var gamePath = texPrefix + slot + ".tex";
+                // Through the memo, like the non-glow path: re-reading the pack's art is what dominates a composite.
+                if (RepublishPackTexture(packRoot, gamePath, file, disk)) wroteAnything = true;
+
                 redirects[gamePath] = Rel(outputRoot, disk);
                 return gamePath;
             }

@@ -365,6 +365,11 @@ public sealed partial class ContentImportService
                 "Failed to write the mod: {0}"), ex.Message));
         }
 
+        // Compress this pack's own uncompressed art into its sidecar now, while the user is already waiting on an
+        // import, rather than during the first composite. The author's files are left exactly as they are, and a
+        // composite that finds no copy builds one itself. See CompositorService.PrewarmPackTextures.
+        compositor.PrewarmPackTextures(root);
+
         int pieces = preview.ImportableUnits;
         return new(true, "", dirName, preview, pieces, preview.TotalUnits - pieces);
     }

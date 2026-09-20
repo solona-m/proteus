@@ -130,10 +130,29 @@ public class IndexBc5Tests
     public void ManyRowsPerBlock_SurviveAfterSnapping()
     {
         var rgba = Index(64, static (x, y) => 1 + ((y % 4) * 4 + (x % 4)));
-        var plan = Loader().PlanIndexBc5(rgba, 64, 64, out _, out int snapped, out int snappedRows);
-        Assert.Equal(TextureLoader.IndexPlan.Bc5AfterSnap, plan);
-        o.WriteLine($"snapped {snapped} texel(s), {snappedRows} of them to another row");
-        Assert.True(snapped > 0);
+        var plan = Loader().PlanIndexBc5(rgba, 64, 64);
+        Assert.Equal(TextureLoader.IndexPlan.Bc5AfterSnap, plan.Plan);
+        o.WriteLine($"snapped {plan.SnappedTexels} texel(s), {plan.SnappedRows} of them to another row");
+        Assert.True(plan.SnappedTexels > 0);
+
+        // The plan hands back the very buffer it verified, so no caller has to snap the sheet a second time — and
+        // it must be the snapped bytes, not the caller's original.
+        Assert.NotNull(plan.Snapped);
+        Assert.NotEqual(rgba, plan.Snapped);
+        Assert.Equal(TextureLoader.SnapIndexForBc5(rgba, 64, 64, out _, out _), plan.Snapped);
+    }
+
+    /// <summary>A plan that needs no snap carries no buffer: the caller's own bytes are what goes out.</summary>
+    [Fact]
+    public void PlanCarriesNoBufferWhenNoSnapIsNeeded()
+    {
+        var clean = Loader().PlanIndexBc5(Index(64, static (_, _) => 7), 64, 64);
+        Assert.Equal(TextureLoader.IndexPlan.Bc5, clean.Plan);
+        Assert.Null(clean.Snapped);
+
+        var refused = Loader().PlanIndexBc5(Index(6, static (_, _) => 4), 6, 6);
+        Assert.Equal(TextureLoader.IndexPlan.Uncompressed, refused.Plan);
+        Assert.Null(refused.Snapped);
     }
 
     /// <summary>

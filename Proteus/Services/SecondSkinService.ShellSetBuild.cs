@@ -1149,7 +1149,9 @@ public sealed partial class SecondSkinService
                     bool claimed = texSource.TryGetValue(texGamePath, out var from);
                     if (claimed && string.Equals(from, srcDisk, StringComparison.OrdinalIgnoreCase)) continue;
 
-                    try { shellChanged |= service.CopyPackFile(srcDisk, dstDisk); }
+                    // Re-encoded rather than byte-copied when the author left it uncompressed and we are compressing,
+                    // so a viewer's sync client has nothing left to convert — see RepublishPackTexture.
+                    try { shellChanged |= service.RepublishPackTexture(unit.Entry.ModRoot, texGamePath, srcDisk, dstDisk); }
                     catch (Exception ex)
                     {
                         // Left to Penumbra: a texture that will not copy is not worth dropping the piece over.
