@@ -145,6 +145,19 @@ public partial class CompositorService
                 private void LoadNormalArt()
                 {
                     // ── Step 2: load normal overlay; synthesize coverage if needed ──
+                    // A pure print is excluded: PaintCoverage takes its relief away on purpose, so it can never bump
+                    // normalContributors and would otherwise make "nothing reached the normal" fire on every composite.
+                    // purePrint, not hasPrintRows — a partial print's painting rows still lay down relief.
+                    if (desc.Normal != null && !purePrint) material.normalWanted = true;
+
+                    if (desc.Normal != null && material.texPaths.Normal == null && !material.warnedNoNormalSampler)
+                    {
+                        material.warnedNoNormalSampler = true;
+                        material.run.compositor.log.Warning("[Proteus] Overlay declares a normal but the material has no normal "
+                                  + "sampler, so its relief cannot be applied: {0} (first seen on mod {1}, {2})",
+                            material.mtrlGamePath, entry.ModDirectory, optLabel);
+                    }
+
                     if (desc.Normal != null && material.texPaths.Normal != null)
                     {
                         material.baseN ??= material.LoadBaseNormalHere(material.texPaths.Normal, ref material.wN, ref material.hN);
@@ -152,6 +165,18 @@ public partial class CompositorService
                         {
                             var normPath = Path.Combine(entry.SidecarRoot, desc.Normal);
                             normalOv = material.LoadRemapped(normPath, material.wN, material.hN, srcBodyType);
+                            if (normalOv == null)
+                                // LoadRemapped returns null only for a null input, so this is a LoadPng failure (TextureLoader logs
+                                // the path alone; this line is the one that says whose it is). Deduped: a mod that names a normal
+                                // that is not there names it on every option, and it would say so on every composite for ever.
+                                ReportErasure("adds no relief", $"its normal {normPath} could not be loaded", warn: true);
+                        }
+                        else if (!material.warnedNoBaseNormal)
+                        {
+                            material.warnedNoBaseNormal = true;
+                            material.run.compositor.log.Warning("[Proteus] Base normal failed to load for {0} ({1}) — no overlay "
+                                      + "can add relief to this material (first seen on mod {2}, {3})",
+                                material.mtrlGamePath, material.texPaths.Normal, entry.ModDirectory, optLabel);
                         }
 
                         if (normalOv != null && covSrc == null)
@@ -234,7 +259,11 @@ public partial class CompositorService
                     }
 
                     // Phase A reads diffuseOv directly, so it needs the same fade from above; Suppress() clones, leaving covSrc raw.
-                    diffuseOv = material.Suppress(diffuseOv, entry, resolved, stackIdx, covW, covH);
+                    // Only when there IS a diffuse: for a normal-only overlay diffuseOv is the synthesized blue-channel buffer,
+                    // which nothing past this point reads, and since claims became channel-scoped this would build a whole
+                    // Diffuse suffix-union chain to throw away.
+                    if (desc.Diffuse != null)
+                        diffuseOv = material.Suppress(diffuseOv, entry, resolved, stackIdx, covW, covH, OverlayChannel.Diffuse);
                 }
 
                 private void ReportMissingArt()
@@ -262,19 +291,7 @@ public partial class CompositorService
                         }
                         else
                         {
-                            // Only overlays that actually contributed to the claim (not pure prints or failed loads). Recomputed, since this
-                            // runs only for an overlay already empty.
-                            var above = new List<string>();
-                            for (int j = stackIdx + 1; j < material.pairs.Count; j++)
-                            {
-                                var (e2, o2) = material.pairs[j];
-                                if (!string.Equals(e2.ModDirectory, entry.ModDirectory,
-                                                   StringComparison.OrdinalIgnoreCase)) continue;
-                                if (!AnyCoverage(material.CoverageOf(e2, o2, covW, covH))) continue;
-                                above.Add(o2.OptionGroup != null && o2.Option != null
-                                    ? $"{o2.OptionGroup}/{o2.Option}"
-                                    : o2.Option ?? o2.OptionGroup ?? "an overlay with no option group");
-                            }
+                            var above = CoveredAboveBy(OverlayChannel.Diffuse, covW, covH);
                             why = above.Count > 0
                                 ? $"it is fully covered by {string.Join(", ", above)} above it in the stack"
                                 : "it was suppressed by another overlay in the same mod";
@@ -287,6 +304,28 @@ public partial class CompositorService
                     }
                 }
 
+                /// <summary>
+                /// The same-mod overlays above this one that claim <paramref name="ch"/> and have the coverage to claim it with
+                /// — the ones a suppression can actually be blamed on. Pure prints and failed loads fall out on the coverage
+                /// test. Recomputed, since it runs only for an overlay already known to be empty.
+                /// </summary>
+                private List<string> CoveredAboveBy(OverlayChannel ch, int tw, int th)
+                {
+                    var above = new List<string>();
+                    for (int j = stackIdx + 1; j < material.pairs.Count; j++)
+                    {
+                        var (e2, o2) = material.pairs[j];
+                        if (!string.Equals(e2.ModDirectory, entry.ModDirectory,
+                                           StringComparison.OrdinalIgnoreCase)) continue;
+                        if (!Supplies(o2.Descriptor, ch)) continue;
+                        if (!AnyCoverage(material.CoverageOf(e2, o2, tw, th))) continue;
+                        above.Add(o2.OptionGroup != null && o2.Option != null
+                            ? $"{o2.OptionGroup}/{o2.Option}"
+                            : o2.Option ?? o2.OptionGroup ?? "an overlay with no option group");
+                    }
+                    return above;
+                }
+
                 private void RemoveSeamBleed()
                 {
                     // ── UV-seam bleed removal ─────────────────────────────────
@@ -296,7 +335,9 @@ public partial class CompositorService
                         && !string.Equals(srcBodyType, material.dstBodyType, StringComparison.OrdinalIgnoreCase)
                         && !string.Equals(material.dstBodyType, "gen2", StringComparison.OrdinalIgnoreCase))
                     {
-                        var decision = CovAt(covW, covH);
+                        // The drop is applied to covSrc, which feeds every channel, so it is decided on the overlay's own
+                        // silhouette channel rather than any one gated channel.
+                        var decision = CovAt(covW, covH, PrimaryChannel(desc) ?? OverlayChannel.Diffuse);
                         // Timed separately: ComputeSeamDropMask's summed-area table is not in uvRemap.RemapStats.
                         var tSeamDrop = PhaseCounter.Begin();
                         var dropMask = decision != null
@@ -402,7 +443,7 @@ public partial class CompositorService
                         // (and any mask) applied without altering the skin diffuse.
                         if (EnsureBaseDiffuse() is { } tintBaseD)
                         {
-                            var tint = CovAt(wD, hD);
+                            var tint = CovAt(wD, hD, OverlayChannel.Diffuse);
                             if (tint != null)
                             {
                                 SnapshotBaseDiffuse();
@@ -417,7 +458,23 @@ public partial class CompositorService
                     // PaintCovAt, not CovAt: a print has no relief of its own, and Suppress does not fade prints.
                     if (normalOv != null && material.baseN is { Length: > 0 })
                     {
-                        var nCov = PaintCovAt(material.wN, material.hN);
+                        var nCov = PaintCovAt(material.wN, material.hN, OverlayChannel.Normal);
+
+                        // Prints are exempt from the whole diagnostic, on the same test the blend below uses: PaintCoverage
+                        // strips a print's relief deliberately, so an empty nCov there is the design working, not a fault.
+                        if (!hasPrintRows)
+                        {
+                            // Both blend modes gate on the overlay's OWN alpha as well as the mask, so a normal PNG saved with
+                            // a zero alpha channel writes nothing however healthy its coverage is — a common trap when a .tex
+                            // normal (whose alpha is a wetness mask, not opacity) is converted to PNG. AnyCoverage
+                            // short-circuits on the first covered texel: instant for a full-sheet normal, and for a decal it
+                            // scans as far as the art, still small beside the decode and remap of the same PNG just above.
+                            if (!AnyCoverage(normalOv))
+                                ReportErasure("adds no relief", "its normal PNG is fully transparent — every texel has alpha 0, "
+                                    + "and both normal blend modes are gated by it");
+                            // Null coverage is "no mask" — full strength, healthy. Only a buffer that exists and covers nothing is a fault.
+                            else if (nCov != null && !AnyCoverage(nCov)) ReportEmptyNormal();
+                        }
                         if (!hasPrintRows || AnyCoverage(nCov))
                         {
                             // Replace mode is a plain alpha-over: at full coverage the base is gone (no doubled slopes), and RGB includes blue,
@@ -429,6 +486,45 @@ public partial class CompositorService
                             material.normalBlended = true; material.normalContributors++;
                         }
                     }
+                }
+
+                /// <summary>
+                /// The normal's half of <see cref="ReportMissingArt"/>: relief that loaded but reaches no texel. A normal-only
+                /// overlay never had a diffuse to trip that reporter, so without this the commonest way for a normal to vanish
+                /// — a higher group in the same mod claiming the channel — is completely silent.
+                /// </summary>
+                private void ReportEmptyNormal()
+                {
+                    // covSrc is the raw seed, before mask, opacity and suppression; AnyCoverage is a presence test, so its
+                    // resolution differing from the normal's does not matter.
+                    string why;
+                    if (!AnyCoverage(covSrc))
+                        why = desc.Diffuse == null
+                            // A normal-only overlay's coverage is synthesized from the normal's blue channel (LoadNormalArt).
+                            ? "its normal's blue channel is black, and that is what a normal-only overlay's coverage is made of"
+                            : "its own art has no opaque texel";
+                    else
+                    {
+                        var above = CoveredAboveBy(OverlayChannel.Normal, material.wN, material.hN);
+                        why = above.Count > 0
+                            ? $"its relief is fully covered by {string.Join(", ", above)} above it in the stack"
+                            : "a Masks-group mask or a colour-row opacity leaves none of it";
+                    }
+
+                    ReportErasure("adds no relief", why);
+                }
+
+                /// <summary>Say once per (overlay, material, fault, reason) per session that a channel came out empty, and why;
+                /// a new cause on the same overlay is still reported. <paramref name="warn"/> for a fault the author has to
+                /// fix (a file that is not there), as against art that loaded and was then covered.</summary>
+                private void ReportErasure(string what, string why, bool warn = false)
+                {
+                    if (!material.run.compositor._erasureReported.TryAdd(
+                            $"{entry.ModDirectory}\0{optLabel}\0{material.mtrlGamePath}\0{what}\0{why}", 0)) return;
+
+                    const string fmt = "[Proteus] {0} ({1}) {2} to {3}: {4}";
+                    if (warn) material.run.compositor.log.Warning(fmt, entry.ModDirectory, optLabel, what, material.mtrlGamePath, why);
+                    else      material.run.compositor.log.Information(fmt, entry.ModDirectory, optLabel, what, material.mtrlGamePath, why);
                 }
 
                 private void SuppressSkinColor()
@@ -443,8 +539,9 @@ public partial class CompositorService
                         material.baseN ??= material.LoadBaseNormalHere(material.texPaths.Normal, ref material.wN, ref material.hN);
                         if (material.baseN.Length > 0)
                         {
-                            // AnyCoverage, not a null check: most prints arrive here as a non-null all-zero mask.
-                            var scMask = PaintCovAt(material.wN, material.hN);
+                            // AnyCoverage, not a null check: most prints arrive here as a non-null all-zero mask. Diffuse, not
+                            // Normal: this asks where THIS overlay's colour is visible, and colour is hidden by a diffuse above.
+                            var scMask = PaintCovAt(material.wN, material.hN, OverlayChannel.Diffuse);
                             if (scMask != null && (!hasPrintRows || AnyCoverage(scMask)))
                             {
                                 // Weight by the composited overlay colour, so dark dyes keep skin tone and bright dyes are fully de-tinted.
@@ -470,7 +567,7 @@ public partial class CompositorService
                             var maskPathD = Path.Combine(entry.SidecarRoot, desc.Mask);
                             var ov = material.LoadRemapped(maskPathD, material.wM, material.hM, srcBodyType);
                             // PaintCovAt as in Phase B: gloss and specular describe a surface, which a print lacks.
-                            var mCov = ov != null ? PaintCovAt(material.wM, material.hM) : null;
+                            var mCov = ov != null ? PaintCovAt(material.wM, material.hM, OverlayChannel.Mask) : null;
                             if (ov != null && (!hasPrintRows || AnyCoverage(mCov)))
                             {
                                 AlphaComposite(material.baseM, ov, material.wM, material.hM, mCov);
@@ -482,7 +579,7 @@ public partial class CompositorService
                 }
 
                 // Returns coverage at (tw × th): mask first, then opacity (indexed or flat). covSrc is raw.
-                private byte[]? CovAt(int tw, int th)
+                private byte[]? CovAt(int tw, int th, OverlayChannel ch)
                 {
                     byte[]? cov;
                     if (tw == covW && th == covH)
@@ -517,16 +614,16 @@ public partial class CompositorService
                     else if (cov != null && desc.Index == null && row16A.Opacity != 0)
                         cov = ScaleOverlayAlpha(cov, row16A.Opacity);
 
-                    // Finally, fade by what this mod already claims above it in the stack.
-                    cov = material.Suppress(cov, entry, resolved, stackIdx, tw, th);
+                    // Finally, fade by what this mod already claims above it in the stack, in this channel only.
+                    cov = material.Suppress(cov, entry, resolved, stackIdx, tw, th, ch);
                     return cov;
                 }
 
                 // CovAt with print rows removed: the coverage that laid down a surface. Phase B2 and the AO silhouette read this,
                 // since a print must neither bleach skin tone nor cast a shadow.
-                private byte[]? PaintCovAt(int tw, int th)
+                private byte[]? PaintCovAt(int tw, int th, OverlayChannel ch)
                 {
-                    var cov = CovAt(tw, th);
+                    var cov = CovAt(tw, th, ch);
                     if (cov == null || !AnyBlendRow(rows)) return cov;
                     byte[]? pIdx = desc.Index != null
                         ? material.LoadIndexMerged(Path.Combine(entry.SidecarRoot, desc.Index), tw, th,

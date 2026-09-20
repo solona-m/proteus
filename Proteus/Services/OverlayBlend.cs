@@ -8,6 +8,15 @@ namespace Proteus.Services;
 
 using static Proteus.Services.CompositorService;
 
+/// <summary>One of the three texture channels an overlay can put art in. Claims are scoped to a channel:
+/// see <see cref="OverlayBlend.Supplies"/>.</summary>
+internal enum OverlayChannel
+{
+    Diffuse,
+    Normal,
+    Mask,
+}
+
 internal static class OverlayBlend
 {
     /// <summary>
@@ -711,6 +720,30 @@ internal static class OverlayBlend
     /// decide whether the promotion notice is about glow specifically.</summary>
     internal static bool HasEmissiveRow(List<ColorTableRowPreset>? rows)
         => rows?.Any(r => r.SubRowA?.Emissive > 0f || r.SubRowB?.Emissive > 0f) == true;
+
+    /// <summary>
+    /// Does this overlay put art in <paramref name="ch"/>? Only an overlay that does can claim that channel
+    /// from the overlays beneath it. An opaque diffuse supplies no relief, so it cannot take relief away: it
+    /// leaves whatever normal is under it, exactly as a decal painted onto skin leaves the skin's own normal.
+    /// Without this scoping a mod that ships a whole-body diffuse in one group and a whole-body normal in
+    /// another can never show both — whichever group sits on top erases the other.
+    /// </summary>
+    internal static bool Supplies(OverlayDescriptor d, OverlayChannel ch) => ch switch
+    {
+        OverlayChannel.Diffuse => d.Diffuse != null,
+        OverlayChannel.Normal  => d.Normal  != null,
+        OverlayChannel.Mask    => d.Mask    != null,
+        _                      => false,
+    };
+
+    /// <summary>The channel an overlay's silhouette is taken from, in the order <c>CoverageOf</c> picks it.
+    /// Used where a decision feeds every channel at once (the UV-seam drop) and no single channel is being
+    /// gated. Null when the overlay declares no art at all.</summary>
+    internal static OverlayChannel? PrimaryChannel(OverlayDescriptor d)
+        => d.Diffuse != null ? OverlayChannel.Diffuse
+         : d.Normal  != null ? OverlayChannel.Normal
+         : d.Mask    != null ? OverlayChannel.Mask
+         : null;
 
     /// <summary>Does any row here composite as a print rather than painting?</summary>
     internal static bool AnyBlendRow(Dictionary<int, ColorTableRowOverride> rows)

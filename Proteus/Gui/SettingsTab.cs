@@ -238,7 +238,7 @@ internal sealed class SettingsTab
             foreach (var c in contributions)
             {
                 var name = System.IO.Path.GetFileNameWithoutExtension(c.Material);
-                if (c.DiffuseWanted && c.Diffuse == 0)
+                if ((c.DiffuseWanted && c.Diffuse == 0) || (c.NormalWanted && c.Normal == 0))
                     ImGui.TextColored(new Vector4(1f, 0.35f, 0.35f, 1f),
                         string.Format(s.ReachFailedFmt, name, c.Diffuse, c.Normal, c.Mask));
                 else if (c.Diffuse + c.Normal + c.Mask == 0)

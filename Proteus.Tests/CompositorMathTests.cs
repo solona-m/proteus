@@ -382,6 +382,49 @@ public class CompositorMathTests
     }
 
     /// <summary>
+    /// The claim scoping that lets one mod ship a whole-body diffuse group and a whole-body normal group: an
+    /// overlay can only take a channel away from the overlays beneath it if it puts art in that channel. Before
+    /// this, whichever of the two groups sat on top erased the other, since both cover the entire body.
+    /// </summary>
+    [Theory]
+    // diffuse, normal, mask declared      →  claims diffuse, normal, mask
+    [InlineData(true,  false, false,           true,  false, false)]
+    [InlineData(false, true,  false,           false, true,  false)]
+    [InlineData(false, false, true,            false, false, true)]
+    [InlineData(true,  true,  true,            true,  true,  true)]
+    [InlineData(false, false, false,           false, false, false)]
+    public void Supplies_ScopesAClaimToTheChannelsTheOverlayActuallyDeclares(
+        bool diffuse, bool normal, bool mask, bool claimsD, bool claimsN, bool claimsM)
+    {
+        var d = new OverlayDescriptor
+        {
+            Diffuse = diffuse ? "d.png" : null,
+            Normal  = normal  ? "n.png" : null,
+            Mask    = mask    ? "m.png" : null,
+        };
+
+        Assert.Equal(claimsD, OverlayBlend.Supplies(d, OverlayChannel.Diffuse));
+        Assert.Equal(claimsN, OverlayBlend.Supplies(d, OverlayChannel.Normal));
+        Assert.Equal(claimsM, OverlayBlend.Supplies(d, OverlayChannel.Mask));
+    }
+
+    /// <summary>
+    /// The silhouette channel follows the order CoverageOf picks a source in, so a decision that feeds every
+    /// channel at once (the UV-seam drop) is gated by the same art the coverage was built from.
+    /// </summary>
+    [Fact]
+    public void PrimaryChannel_FollowsCoverageOfsOrderAndIsNullWithNoArt()
+    {
+        Assert.Equal(OverlayChannel.Diffuse, OverlayBlend.PrimaryChannel(
+            new OverlayDescriptor { Diffuse = "d.png", Normal = "n.png", Mask = "m.png" }));
+        Assert.Equal(OverlayChannel.Normal, OverlayBlend.PrimaryChannel(
+            new OverlayDescriptor { Normal = "n.png", Mask = "m.png" }));
+        Assert.Equal(OverlayChannel.Mask, OverlayBlend.PrimaryChannel(
+            new OverlayDescriptor { Mask = "m.png" }));
+        Assert.Null(OverlayBlend.PrimaryChannel(new OverlayDescriptor()));
+    }
+
+    /// <summary>
     /// An index cell nobody configured resolves to a default row, and a default row paints — so one
     /// unconfigured cell is enough to keep the overlay a surface. The safe direction.
     /// </summary>
