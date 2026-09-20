@@ -481,6 +481,70 @@ public class ContentImportTests
     }
 
     /// <summary>
+    /// …and the composite PUBLISHES that dressed one. Ranking the candidates is only half the job: the file
+    /// actually written comes from <c>SelectedMaterialFile</c>, which scans backwards so the last selected
+    /// group wins — and used to keep the first default it met on the way back, i.e. the worst-ranked one.
+    /// <para/>
+    /// [Glovsies] is the shape: a wrist accessory whose gloves ship at <c>v0002</c> (naming textures of its
+    /// own) beside an untouched vanilla material at <c>v0001</c>, both in default data, no option groups at
+    /// all. TexTools' "apply to all variants" is what leaves a pack looking like this. The gloves were
+    /// published with the vanilla material, so they drew the real bracelet's textures.
+    /// </summary>
+    [Fact]
+    public void The_dressed_variants_material_is_the_file_the_composite_publishes()
+    {
+        var dir = TempDir();
+        try
+        {
+            var model = SyntheticModel.Build([],
+                new SyntheticModel.Mesh("/mt_gloves.mtrl", new SyntheticModel.Sub(0)));
+
+            // v0001 is declared FIRST and is the vanilla material: it names textures the pack does not ship,
+            // so it ranks last. v0002 is the author's, naming two the pack does ship.
+            var manifest = """
+            {
+              "FileVersion": 4,
+              "Name": "Gloves",
+              "Author": "Someone",
+              "DefaultData": { "Files": {
+                "chara/accessory/a0001/model/c0201a0001_wrs.mdl":      "gloves/model.mdl",
+                "chara/accessory/a0001/material/v0001/mt_gloves.mtrl": "v1/mt_gloves.mtrl",
+                "chara/accessory/a0001/material/v0002/mt_gloves.mtrl": "v2/mt_gloves.mtrl",
+                "chara/accessory/a0001/texture/v02_norm.tex":          "v2/norm.tex",
+                "chara/accessory/a0001/texture/v02_mask.tex":          "v2/mask.tex"
+              } }
+            }
+            """;
+            var pmp = WritePack(dir, manifest, new[]
+            {
+                ("v1/mt_gloves.mtrl", Mtrl("chara/accessory/a0001/texture/v01_c0101a0001_wrs_n.tex",
+                                           "chara/accessory/a0001/texture/v01_c0101a0001_wrs_s.tex")),
+                ("v2/mt_gloves.mtrl", Mtrl("chara/accessory/a0001/texture/v02_norm.tex",
+                                           "chara/accessory/a0001/texture/v02_mask.tex")),
+                ("v2/norm.tex", new byte[16_000]),
+                ("v2/mask.tex", new byte[16_000]),
+                ("gloves/model.mdl", model),
+            });
+
+            var preview = ContentImportService.Inspect(pmp);
+            var piece = Assert.Single(
+                ContentImportService.BuildSidecar(preview, "Gloves", "Someone").Content!);
+
+            var root = Path.Combine(dir, "mod");
+            ContentImportService.WriteMod(root, "Gloves", "Someone", preview);
+
+            // Nothing is selected — an imported pack's groups all arrive off, and this one has none anyway.
+            var picked = ContentPieceResolver.SelectedMaterialFile(
+                root, piece.SourcesFor("mt_gloves.mtrl"), null);
+            Assert.NotNull(picked);
+            Assert.Equal(
+                Path.GetFullPath(Path.Combine(root, "v2", "mt_gloves.mtrl")),
+                Path.GetFullPath(picked!));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    /// <summary>
     /// Two variants naming the same NUMBER of textures are separated by how big those textures are.
     /// <para/>
     /// This is the case counting cannot see and the byte total exists for: a stub that references just as
