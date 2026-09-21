@@ -19,6 +19,111 @@ public class BodyRetargetTests
     private const string SkinMaterial = "/mt_c0201b0001_bibo.mtrl";
     private const string ClothMaterial = "/mt_c0201e6255_top_a.mtrl";
 
+    // ── swapping the garment's skin for the body's ──────────────────────────────────────────────────────
+
+    /// <summary>Triangles a model draws, per material, read back through the reader the Studio uses.</summary>
+    private static Dictionary<string, int> Drawn(byte[] mdl)
+    {
+        var drawn = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var part in ModelPartReader.Read(mdl)!.Parts.Where(p => p.Island < 0))
+            drawn[part.Material.TrimStart('/')] = drawn.GetValueOrDefault(part.Material.TrimStart('/'))
+                                                + part.Triangles.Length / 3;
+        return drawn;
+    }
+
+    /// <summary>A resized slot whose new body is <paramref name="body"/>. The swap reads only the target and its file.</summary>
+    private static BodyRetarget.SlotPair Resized(string slot, byte[] body)
+    {
+        var target = ModelPartReader.Read(body)!;
+        Assert.True(IdentityCorrespondence.TryBuild(target, target, slot, out var built, out string refusal), refusal);
+        return new BodyRetarget.SlotPair(slot, built!, target, body);
+    }
+
+    private const string HipSkin = "/mt_c0201b0001_b.mtrl";
+
+    [Fact]
+    public void The_skin_swap_replaces_the_resized_slot_s_skin_mesh_with_the_body_s_whole()
+    {
+        // The garment's chest skin mesh: two submeshes, most of it on the chest and one piece standing five metres off.
+        // The whole mesh goes, both of them — a mesh belongs to a slot by majority, and is never cut into.
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 2),
+                                                  new SyntheticModel.Sub(0, OffsetZ: 5f)),
+            new SyntheticModel.Mesh(ClothMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 4, OffsetZ: 0.001f)));
+        // The chest's new body skin, denser than the garment's copy.
+        var chest = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)));
+
+        var rebuilt = BodyRetarget.SwapSkin(garment, [Resized("_top", chest)], out var report);
+
+        Assert.NotNull(rebuilt);
+        Assert.Equal(3, report.Removed);
+        Assert.Equal(5, report.Added);
+        Assert.Equal(0, report.Kept);
+
+        // The cloth untouched; the only skin drawn is the body's five triangles.
+        var drawn = Drawn(rebuilt!);
+        Assert.Equal(4, drawn[ClothMaterial.TrimStart('/')]);
+        Assert.Equal(5, drawn.Where(d => SecondSkinWriter.IsBodySkinMaterial("/" + d.Key)).Sum(d => d.Value));
+    }
+
+    [Fact]
+    public void Skin_of_a_slot_nobody_is_resizing_stays_as_the_author_left_it()
+    {
+        // A long top: chest skin, and hip skin that belongs to the legs. Only the chest is being resized.
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 2)),
+            new SyntheticModel.Mesh(HipSkin, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetY: 50f)),
+            new SyntheticModel.Mesh(ClothMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 4, OffsetZ: 0.001f)));
+        var chest = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)));
+
+        var rebuilt = BodyRetarget.SwapSkin(garment, [Resized("_top", chest)], out var report);
+
+        Assert.NotNull(rebuilt);
+        Assert.Equal(2, report.Removed);
+        Assert.Equal(1, report.Kept);
+        var drawn = Drawn(rebuilt!);
+        Assert.Equal(3, drawn[HipSkin.TrimStart('/')]);                       // the hips, exactly as they were
+        Assert.Equal(5, drawn[SkinMaterial.TrimStart('/')]);                  // the chest, the body's
+    }
+
+    [Fact]
+    public void Each_resized_slot_takes_its_own_body_s_skin()
+    {
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 2)),
+            new SyntheticModel.Mesh(HipSkin, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetY: 50f)),
+            new SyntheticModel.Mesh(ClothMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 4, OffsetZ: 0.001f)));
+        var chest = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)));
+        var legs = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 7, OffsetY: 50f)));
+
+        var rebuilt = BodyRetarget.SwapSkin(garment, [Resized("_top", chest), Resized("_dwn", legs)], out var report);
+
+        Assert.NotNull(rebuilt);
+        Assert.Equal(2 + 3, report.Removed);
+        Assert.Equal(5 + 7, report.Added);
+        var drawn = Drawn(rebuilt!);
+        Assert.False(drawn.ContainsKey(HipSkin.TrimStart('/')));
+        Assert.Equal(12, drawn.Where(d => SecondSkinWriter.IsBodySkinMaterial("/" + d.Key)).Sum(d => d.Value));
+    }
+
+    [Fact]
+    public void Nothing_is_rebuilt_when_no_skin_mesh_belongs_to_a_resized_slot()
+    {
+        var clothOnly = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(ClothMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 2)));
+        var hipsOnly = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(HipSkin, new SyntheticModel.Sub(0, TrianglesPerIsland: 2, OffsetY: 50f)));
+        var chest = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 2)));
+
+        Assert.Null(BodyRetarget.SwapSkin(clothOnly, [Resized("_top", chest)], out _));
+        Assert.Null(BodyRetarget.SwapSkin(hipsOnly, [Resized("_top", chest)], out _));
+    }
+
     // ── which mods are bodies ───────────────────────────────────────────────────────────────────────────
 
     [Theory]

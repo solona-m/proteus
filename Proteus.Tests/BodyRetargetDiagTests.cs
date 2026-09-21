@@ -1228,6 +1228,7 @@ public class BodyRetargetDiagTests(ITestOutputHelper output)
         foreach (string name in new[] { "Medium", "Yiggle - Medium", "Small", "Yiggle - Small" })
             Clipping(name, garment, Body(name));
         Clipping("its own skin (what is drawn)", garment, garment);
+        SkinThroughCloth("author, skin through cloth", garment);
 
         var target = Body("Yiggle - Small");
         foreach (string from in new[] { "Medium", "Yiggle - Medium" })
@@ -1241,9 +1242,16 @@ public class BodyRetargetDiagTests(ITestOutputHelper output)
             output.WriteLine($"{from} -> Yiggle - Small, replace {replace} ({pairs[0].Correspondence.GetType().Name}): " +
                              $"moved up to {r.WorstMove * 1000:F1} mm, snapped {r.Snapped:N0}, laid {r.Laid:N0}, " +
                              $"pushed {r.Pushed:N0} (worst {r.WorstPush * 1000:F2} mm), missed {r.Missed:N0}");
+            if (r.Swap is { } sw)
+                output.WriteLine($"  swap: garment skin out ({sw.Removed:N0} triangles), body skin in ({sw.Added:N0}), meshes kept {sw.Kept}, shapes lost {sw.LostShapes}");
             var refit = ModelPartReader.Read(planned.Model)!;
             Clipping("refit on Yiggle - Small", refit, target);
+            if (replace && from == "Yiggle - Medium")
+                ToeCapDiagTests.WriteObj(planned.Model, Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                                                                     @"OneDrive\Desktop\Seaside Rue to Yiggle\swapped top (Yiggle Small).obj"));
             Clipping("refit on its own skin", refit, refit);
+            if (!replace) ClothSinking("cloth against the skin drawn", garment, refit, garment, target);
+            SkinThroughCloth("refit, skin through cloth", refit);
         }
 
         if (File.Exists(saved))
@@ -1252,6 +1260,7 @@ public class BodyRetargetDiagTests(ITestOutputHelper output)
             var savedModel = Read(saved);
             Clipping("the saved file on Yiggle - Small", savedModel, target);
             Clipping("the saved file on its own skin", savedModel, savedModel);
+            SkinThroughCloth("the saved file, skin through cloth", savedModel);
 
             // For the eye: the four in one folder, all in the same space, to load together.
             string desk = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
@@ -1299,6 +1308,212 @@ public class BodyRetargetDiagTests(ITestOutputHelper output)
         output.WriteLine($"  {label,-34} inside >0.5mm {total,5}, >2mm {deep,5}, deepest {worst * 1000:F1} mm   {string.Join("; ", perPart)}");
     }
 
+    /// <summary>
+    /// Which bones the breasts are weighted to, skin and cloth separately, in each model involved: the outfit as
+    /// shipped, the refit as saved, the Rue bodies, and the Neolithe body the character actually wears. Skin and cloth
+    /// weighted to different bones deform differently under anything that moves those bones — a bust slider, a scaling
+    /// profile — even standing still.
+    /// </summary>
+    [Fact]
+    public void Seaside_breast_weights()
+    {
+        string topPath = Path.Combine(Seaside, @"top size\rue med\chara\equipment\e0194\model\c0201e0194_top.mdl");
+        string saved = Path.Combine(Seaside, @"Body Retarget\[HS] Rue+ — None · Yiggle - Small\chara\equipment\e0194\model\c0201e0194_top.mdl");
+        if (!File.Exists(topPath) || !Directory.Exists(RueRoot) || !Directory.Exists(NeolitheRoot)) return;
+
+        var rue = BodySizeCatalog.Read(RueRoot);
+        var neo = BodySizeCatalog.Read(NeolitheRoot);
+        string RuePath(string name) => rue.PathOf(rue.For("_top").First(o => o.Name == name));
+        string NeoPath(string label) => neo.PathOf(neo.For("_top").First(o => o.Label == label));
+
+        void Report(string label, string path)
+        {
+            if (!File.Exists(path)) return;
+            var m = ModelSkinReader.Read(File.ReadAllBytes(path), null, null);
+            if (m == null) { output.WriteLine($"{label}: unreadable"); return; }
+
+            // Per vertex, skin or cloth by the material of any triangle using it.
+            var skin = new bool?[m.VertexCount];
+            for (int t = 0; t < m.TriangleCount; t++)
+            {
+                bool isSkin = SecondSkinWriter.IsBodySkinMaterial(m.MaterialNames[m.TriangleMaterials[t]]);
+                for (int c = 0; c < 3; c++) skin[m.Triangles[t * 3 + c]] ??= isSkin;
+            }
+
+            foreach (bool wantSkin in new[] { true, false })
+            {
+                var byBone = new Dictionary<string, float>(StringComparer.Ordinal);
+                int count = 0;
+                for (int v = 0; v < m.VertexCount; v++)
+                {
+                    if (skin[v] != wantSkin) continue;
+                    var p = m.Positions[v];
+                    if (p.Y < 1.12f || p.Y > 1.28f || MathF.Abs(p.X) < 0.03f || p.Z < 0.08f) continue;   // the breasts' fronts
+                    count++;
+                    for (int k = 0; k < XivLiveMesh.SkinnedMesh.MaxInfluences; k++)
+                    {
+                        float w = m.BoneWeights[v * XivLiveMesh.SkinnedMesh.MaxInfluences + k];
+                        if (w <= 0f) continue;
+                        string bone = m.BoneNames[m.BoneIndices[v * XivLiveMesh.SkinnedMesh.MaxInfluences + k]];
+                        byBone[bone] = byBone.GetValueOrDefault(bone) + w;
+                    }
+                }
+                if (count == 0) continue;
+                output.WriteLine($"{label,-28} {(wantSkin ? "skin " : "cloth")} {count,5} verts: " +
+                                 string.Join(", ", byBone.OrderByDescending(b => b.Value).Take(5)
+                                                         .Select(b => $"{b.Key} {b.Value / count:P0}")));
+            }
+        }
+
+        Report("Seaside Rue Med (shipped)", topPath);
+        Report("refit as saved", saved);
+        Report("Rue Medium body", RuePath("Medium"));
+        Report("Rue Small body", RuePath("Small"));
+        Report("Rue Yiggle - Small body", RuePath("Yiggle - Small"));
+        Report("Neolithe Almond XS (worn)", NeoPath("DEFAULT ALMOND · SFW Almond XS"));
+    }
+
+    /// <summary>
+    /// Per cloth vertex, how its distance off its own skin changed from the author's model to the refit — signed along
+    /// the skin normal, so NEGATIVE means the cloth moved in toward (or into) the skin. The two models share vertex
+    /// numbering (the refit only moves vertices), so the comparison is index for index. Bucketed, with the worst
+    /// vertices placed by part and height so they can be found on the model.
+    /// </summary>
+    private void ClothSinking(string label, ModelParts author, ModelParts refit, ModelParts authorSkin, ModelParts refitSkin)
+    {
+        var before = new BodySurface(authorSkin, 0.01f);
+        var after = new BodySurface(refitSkin, 0.01f);
+        var sinks = new List<(float Change, float Before, float After, string Part, Vector3 At)>();
+        foreach (var part in author.Parts)
+        {
+            if (part.Island >= 0 || SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+            foreach (int v in part.Triangles.Distinct())
+            {
+                var p0 = At(author, v);
+                var p1 = At(refit, v);
+                if (!before.Nearest(p0, 0.05f, out var h0) || !after.Nearest(p1, 0.05f, out var h1)) continue;
+                float d0 = Vector3.Dot(p0 - h0.Point, h0.Normal), d1 = Vector3.Dot(p1 - h1.Point, h1.Normal);
+                sinks.Add((d1 - d0, d0, d1, part.Label, p1));
+            }
+        }
+        int[] edges = [-10, -5, -2, -1, 1, 2, 5, 10];
+        var counts = new int[edges.Length + 1];
+        foreach (var s in sinks)
+        {
+            float mm = s.Change * 1000f;
+            int b = 0;
+            while (b < edges.Length && mm >= edges[b]) b++;
+            counts[b]++;
+        }
+        output.WriteLine($"  {label}: change in distance off the skin, mm (negative = moved IN), {sinks.Count} cloth vertices");
+        output.WriteLine("    <-10 " + counts[0] + " | -10..-5 " + counts[1] + " | -5..-2 " + counts[2] + " | -2..-1 " + counts[3]
+                       + " | within 1 " + counts[4] + " | 1..2 " + counts[5] + " | 2..5 " + counts[6] + " | 5..10 " + counts[7]
+                       + " | >10 " + counts[8]);
+        foreach (var group in sinks.GroupBy(s => s.Part))
+            foreach (var s in group.OrderBy(s => s.Change).Take(6))
+                output.WriteLine($"    part {s.Part}: {s.Before * 1000:F1} -> {s.After * 1000:F1} mm off the skin, at height {s.At.Y:F3} x {s.At.X:F3} z {s.At.Z:F3}");
+        // Where the cloth ends up, for the vertices that moved in: still clear of the skin, or behind it.
+        var movedIn = sinks.Where(s => s.Change < -0.001f).ToList();
+        output.WriteLine($"    of the {movedIn.Count} that moved in over 1 mm: {movedIn.Count(s => s.After < 0f)} now behind the skin "
+                       + $"({movedIn.Count(s => s.Before >= 0f && s.After < 0f)} were in front of it before), "
+                       + $"{movedIn.Count(s => s.After >= 0f && s.After < 0.002f)} within 2 mm of it");
+        // What holds a span over the cleavage up: the front of each breast. How far forward it sits before and after,
+        // against how far forward the span itself sits.
+        float Front(ModelParts m, bool left)
+            => m.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material))
+                      .SelectMany(p => p.Triangles).Distinct().Select(v => At(m, v))
+                      .Where(q => q.Y > 1.10f && q.Y < 1.30f && (left ? q.X > 0.02f : q.X < -0.02f))
+                      .Select(q => q.Z).DefaultIfEmpty(float.NaN).Max();
+        float SpanFront(ModelParts m) => author.Parts.Where(p => p.Label == "2.2").SelectMany(p => p.Triangles).Distinct()
+                                               .Select(v => At(m, v).Z).DefaultIfEmpty(float.NaN).Max();
+        output.WriteLine($"    breast fronts z: left {Front(authorSkin, true) * 1000:F1} -> {Front(refitSkin, true) * 1000:F1}, "
+                       + $"right {Front(authorSkin, false) * 1000:F1} -> {Front(refitSkin, false) * 1000:F1} mm; "
+                       + $"part 2.2's front {SpanFront(author) * 1000:F1} -> {SpanFront(refit) * 1000:F1} mm");
+        var byPart = sinks.Where(s => s.Change < -0.002f).GroupBy(s => s.Part)
+                          .Select(g => $"{g.Key} {g.Count()} (worst {g.Min(s => s.Change) * 1000:F1})");
+        output.WriteLine("    moved in more than 2 mm, by part: " + string.Join("; ", byPart));
+    }
+
+    /// <summary>
+    /// The other way round from <see cref="Clipping"/>: the garment's own skin poking out through its cloth. A skin
+    /// vertex can come through between cloth vertices, where no cloth vertex is behind anything, so this measures skin
+    /// vertices against the cloth SURFACE — nearest cloth triangle within 10 mm, signed along that triangle's face
+    /// normal (outward when the cloth is wound the usual way). Per cloth part, so the clip can be placed.
+    /// </summary>
+    private void SkinThroughCloth(string label, ModelParts m)
+    {
+        var clothTris = new List<(int A, int B, int C, string Part)>();
+        foreach (var part in m.Parts)
+        {
+            if (part.Island >= 0 || SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+            for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+                clothTris.Add((part.Triangles[t], part.Triangles[t + 1], part.Triangles[t + 2], part.Label));
+        }
+
+        // A coarse grid over cloth triangle centres; a triangle is filed in every cell its box touches.
+        const float cell = 0.01f;
+        var grid = new Dictionary<(int, int, int), List<int>>();
+        (int, int, int) Key(Vector3 p) => ((int)MathF.Floor(p.X / cell), (int)MathF.Floor(p.Y / cell), (int)MathF.Floor(p.Z / cell));
+        for (int i = 0; i < clothTris.Count; i++)
+        {
+            var (a, b, c, _) = clothTris[i];
+            var lo = Vector3.Min(At(m, a), Vector3.Min(At(m, b), At(m, c)));
+            var hi = Vector3.Max(At(m, a), Vector3.Max(At(m, b), At(m, c)));
+            var (x0, y0, z0) = Key(lo);
+            var (x1, y1, z1) = Key(hi);
+            for (int x = x0; x <= x1; x++)
+            for (int y = y0; y <= y1; y++)
+            for (int z = z0; z <= z1; z++)
+            {
+                if (!grid.TryGetValue((x, y, z), out var list)) grid[(x, y, z)] = list = [];
+                list.Add(i);
+            }
+        }
+
+        var skinVerts = m.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material))
+                               .SelectMany(p => p.Triangles).Distinct().ToList();
+        var byPart = new Dictionary<string, (int Count, float Worst)>();
+        int covered = 0, through = 0;
+        foreach (int v in skinVerts)
+        {
+            var p = At(m, v);
+            var (kx, ky, kz) = Key(p);
+            float best = 0.01f;
+            int bestTri = -1;
+            Vector3 bestAt = default;
+            for (int dx = -1; dx <= 1; dx++)
+            for (int dy = -1; dy <= 1; dy++)
+            for (int dz = -1; dz <= 1; dz++)
+            {
+                if (!grid.TryGetValue((kx + dx, ky + dy, kz + dz), out var list)) continue;
+                foreach (int i in list)
+                {
+                    var (a, b, c, _) = clothTris[i];
+                    var q = BrushTransfer.ClosestOnTriangle(p, At(m, a), At(m, b), At(m, c), out _, out _, out _);
+                    float d = Vector3.Distance(p, q);
+                    if (d >= best) continue;
+                    best = d;
+                    bestTri = i;
+                    bestAt = q;
+                }
+            }
+            if (bestTri < 0) continue;
+            covered++;
+
+            var (ta, tb, tc, partLabel) = clothTris[bestTri];
+            var n = Vector3.Cross(At(m, tb) - At(m, ta), At(m, tc) - At(m, ta));
+            if (n.LengthSquared() < 1e-20f) continue;
+            float signed = Vector3.Dot(p - bestAt, Vector3.Normalize(n));
+            if (signed <= 0.0002f) continue;
+            through++;
+            var (count, worst) = byPart.GetValueOrDefault(partLabel);
+            byPart[partLabel] = (count + 1, MathF.Max(worst, signed));
+        }
+
+        output.WriteLine($"  {label,-34} skin under cloth {covered,5}, in front of it >0.2mm {through,5}   " +
+                         string.Join("; ", byPart.OrderBy(k => k.Key).Select(k => $"{k.Key} {k.Value.Count} (to {k.Value.Worst * 1000:F1})")));
+    }
+
     private static void AddPair(List<BodyRetarget.SlotPair> pairs, string slot, string sourcePath, string targetPath)
     {
         if (!File.Exists(sourcePath) || !File.Exists(targetPath)) return;
@@ -1309,7 +1524,7 @@ public class BodyRetargetDiagTests(ITestOutputHelper output)
         if (!BodyCorrespondence.TryBuild(source, Uv(sourceBytes), target, Uv(targetBytes), slot,
                                          out var built, out string refusal))
             throw new InvalidOperationException(refusal);
-        pairs.Add(new BodyRetarget.SlotPair(slot, built!, target));
+        pairs.Add(new BodyRetarget.SlotPair(slot, built!, target, targetBytes));
     }
 
     private static ModelParts Read(string path)

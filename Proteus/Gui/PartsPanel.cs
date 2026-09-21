@@ -802,6 +802,41 @@ public sealed class PartsPanel
     }
 
     /// <summary>
+    /// Re-read the open mod's model list after something added or removed a model — a saved or undone body refit —
+    /// keeping the open model open. Unlike <see cref="SelectMod"/>, nothing else is reset: the model, its brush state
+    /// and its locks all stay, because the model itself did not change.
+    /// </summary>
+    private void RefreshModels()
+    {
+        if (ModRoot() is not { } root || modIsLegacy) return;
+        var open = modelIndex >= 0 && modelIndex < models.Count ? models[modelIndex] : (PenumbraModMeta.Redirect?)null;
+
+        redirects = PenumbraModMeta.ReadAllRedirects(root);
+        models = redirects
+            .Where(r => r.GamePath.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(r => r.GamePath, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        models.AddRange(ContentModels(root, contentFiles));
+        modelLabels = ModelLabels(models);
+
+        // The same row by file and game path; the list may have grown ahead of it. Gone (an undone refit that was
+        // open) falls back to nothing open, as opening the mod afresh would.
+        modelIndex = open is { } was
+            ? models.FindIndex(m => string.Equals(m.File, was.File, StringComparison.OrdinalIgnoreCase)
+                                    && string.Equals(m.GamePath, was.GamePath, StringComparison.OrdinalIgnoreCase)
+                                    && m.Source == was.Source)
+            : -1;
+        if (modelIndex < 0 && open != null)
+        {
+            EndLivePreview(refreshGame: true);
+            parts = null;
+            volume = null;
+            brushBase = null;
+            viewport.Clear();
+        }
+    }
+
+    /// <summary>
     /// Files this mod's models come from that Penumbra does not publish (an imported pack's content pieces);
     /// <paramref name="files"/> is filled with them. The game path is derived from the file's own name.
     /// </summary>
@@ -2111,6 +2146,8 @@ public sealed class PartsPanel
                 compositor.ExpectOwnModEdit(modDir);
                 penumbra.ReloadModDirectory(modDir);
                 compositor.RedrawForChangedModel();
+                // The save added a model (or an undo took one away): list it, so the new size can be opened here.
+                RefreshModels();
             },
             Held: RetargetHolds));
     }

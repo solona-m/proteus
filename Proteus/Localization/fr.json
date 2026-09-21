@@ -3423,10 +3423,6 @@
     "message": "Use the new body\u0027s skin",
     "description": ""
   },
-  "Parts.Retarget.ReplaceSkin.Tip": {
-    "message": "On: the garment\u0027s own body skin is laid exactly onto the new body, with the body\u0027s shading, so the seam\nwhere it meets the rest of your body disappears.\nOff: the skin the garment came with is resized instead, keeping any reshaping its author did \u2014 a top\nthat lifts or presses the chest keeps doing so at the new size.",
-    "description": ""
-  },
   "Parts.Retarget.SaveMany.Fmt": {
     "message": "Save {0} sizes as new options",
     "description": ""
@@ -3453,6 +3449,42 @@
   },
   "Parts.Retarget.SaveTo": {
     "message": "Save to group",
+    "description": ""
+  },
+  "Parts.Retarget.SwapShapes.Fmt": {
+    "message": "This garment had {0} shape key(s), which a skin swap does not carry over. Untick \u0022Use the new body\u0027s skin\u0022 to keep them.",
+    "description": ""
+  },
+  "Parts.Retarget.SwapSkin.Tip": {
+    "message": "On: the garment's skin for each part of the body being resized is removed and that part's new body\nskin put in its place, so the skin under and around the garment is exactly the body mod's.\nOff: the skin the garment came with is resized instead, keeping any reshaping its author did \u2014 a top\nthat lifts or presses the chest keeps doing so at the new size.",
+    "description": ""
+  },
+  "Parts.Retarget.SwapKeptMeshes.Fmt": {
+    "message": "{0} skin mesh(es) belong to a part of the body that is not being resized, and were left as they are.",
+    "description": ""
+  },
+  "Parts.Retarget.SwapSlots.Fmt": {
+    "message": "Skin swapped for the new body\u0027s where it is being resized: {0:N0} of the garment\u0027s skin triangles out, {1:N0} of the body\u0027s in.",
+    "description": ""
+  },
+  "Parts.Retarget.NeedFrom.Fmt": {
+    "message": "{0}: a size to refit onto is chosen, but not the size it was made for. Choose that, or click the chosen size again to untick it.",
+    "description": ""
+  },
+  "Parts.Retarget.NeedTo.Fmt": {
+    "message": "{0}: choose a size to refit onto.",
+    "description": ""
+  },
+  "Parts.Retarget.OtherParts": {
+    "message": "Other parts of the body (optional)",
+    "description": ""
+  },
+  "Parts.Retarget.OtherPartsInUse.Fmt": {
+    "message": "Other parts of the body \u2014 {0} being refitted",
+    "description": ""
+  },
+  "Parts.Retarget.RefusedHold": {
+    "message": "One of the chosen pairs cannot be refitted \u2014 see the message under it.",
     "description": ""
   }
 }

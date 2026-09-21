@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 using Vec3 = Proteus.Services.SecondSkinWriter.Vec3;
 
@@ -65,14 +66,19 @@ internal static partial class BodyRetarget
     internal const float PushSlope = 0.5f;
 
     /// <summary>One slot of the body: the correspondence that says where its skin went, and the target to land on.</summary>
-    internal readonly record struct SlotPair(string Slot, IBodyCorrespondence Correspondence, ModelParts Target);
+    /// <param name="TargetModel">The target body's file, which swapping the garment's skin copies the body's skin out
+    /// of (see <see cref="SwapSkin"/>). Null when only the geometry is wanted.</param>
+    internal readonly record struct SlotPair(string Slot, IBodyCorrespondence Correspondence, ModelParts Target,
+                                             byte[]? TargetModel = null);
 
     /// <summary>What happened, for the status line and the saved record.</summary>
     /// <param name="Held">Welded points the user held in place, by unticking their parts.</param>
     /// <param name="Laid">Skin points laid exactly onto the new body — see <see cref="LaySkin"/>.</param>
+    /// <param name="Swap">What swapping the garment's skin for the body's did; null when it did not run.</param>
     internal sealed record Report(
         int Nodes, int Snapped, int Transferred, int Missed, int Pushed,
-        float WorstMove, float WorstPush, int UnmappedSpares, bool HasOtherLods, int Held = 0, int Laid = 0)
+        float WorstMove, float WorstPush, int UnmappedSpares, bool HasOtherLods, int Held = 0, int Laid = 0,
+        SwapReport? Swap = null)
     {
         /// <summary>Share of moved nodes that landed on a body vertex exactly. Low means the author sculpted the
         /// garment's body mesh rather than copying it, and the seam may not come out perfect.</summary>
@@ -248,18 +254,28 @@ internal static partial class BodyRetarget
     /// <param name="pushOut">Whether to run the push-out pass after the transfer.</param>
     /// <param name="held">Vertices of the parts the user unticked, which stay exactly where the author put them — see
     /// <see cref="Sets.HeldCount"/>. Null for none.</param>
-    /// <param name="replaceSkin">Lay the garment's own body skin exactly onto the new body, with its normals, instead of
-    /// carrying the author's reshaping of it along — see <see cref="LaySkin"/>.</param>
+    /// <param name="replaceSkin">Replace the garment's own body skin with the new body's: laid onto the new body first
+    /// (see <see cref="LaySkin"/>) so the push-out measures against the right surface, then swapped for the body's own
+    /// skin, slot by slot, for every pair that carries its body's file (see <see cref="SwapSkin"/>).</param>
     public static Planned Plan(ModelParts garment, byte[] garmentBytes, IReadOnlyList<SlotPair> pairs,
                                string? garmentSlot = null, bool pushOut = true, IReadOnlySet<int>? held = null,
                                bool replaceSkin = false)
     {
         var solved = Solve(garment, pairs, garmentSlot, pushOut, held, replaceSkin);
         var written = MeshVolumeService.Inflate(garmentBytes, solved.Edit);
+        byte[] model = written.Model;
+
+        SwapReport? swap = null;
+        if (replaceSkin && SwapSkin(model, pairs, out var swapped) is { } rebuilt)
+        {
+            model = rebuilt;
+            swap = swapped;
+        }
+
         var report = new Report(garment.Positions.Length / 3, solved.Snapped, solved.Transferred, solved.Missed,
                                 solved.Pushed, solved.WorstMove, solved.WorstPush,
-                                written.UnmappedSpares, written.HasOtherLods, solved.Held, solved.Laid);
-        return new Planned(solved.Edit, written.Model, report);
+                                written.UnmappedSpares, written.HasOtherLods, solved.Held, solved.Laid, swap);
+        return new Planned(solved.Edit, model, report);
     }
 
     /// <inheritdoc cref="Plan"/>

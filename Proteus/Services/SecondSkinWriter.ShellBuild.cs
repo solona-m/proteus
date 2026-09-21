@@ -107,8 +107,13 @@ public static partial class SecondSkinWriter
         private byte[] strings = null!;
         private byte[] o = null!;
 
-        public ShellBuild(IReadOnlyList<SourceSpec> sources, IReadOnlyList<SecondSkinLayer> layers, byte[]? baseModel, Action<string>? diag, IReadOnlyList<AuthoredCapSet>? authoredCaps, PushSweep? pushSweep, BuildTimings? timings)
+        /// <summary>Host meshes left out whole, by their index in the host file — see <c>Build</c>'s
+        /// <c>dropHostMesh</c>.</summary>
+        private readonly Func<int, bool>? dropHostMesh;
+
+        public ShellBuild(IReadOnlyList<SourceSpec> sources, IReadOnlyList<SecondSkinLayer> layers, byte[]? baseModel, Action<string>? diag, IReadOnlyList<AuthoredCapSet>? authoredCaps, PushSweep? pushSweep, BuildTimings? timings, Func<int, bool>? dropHostMesh = null)
         {
+            this.dropHostMesh = dropHostMesh;
             this.sources = sources;
             this.layers = layers;
             this.baseModel = baseModel;
@@ -594,6 +599,8 @@ public static partial class SecondSkinWriter
                 {
                     int bmo = baseSrc.MeshStart + m * 36;
                     ushort srcMat = BitConverter.ToUInt16(baseSrc.S, bmo + 8);
+                    // A whole mesh left out when asked: a garment whose skin is being replaced loses that skin.
+                    if (dropHostMesh != null && dropHostMesh(m)) continue;
                     EmitMesh(baseSrc, m, srcMat, 0f, preserve: true, cov: null, mapBase, ref mapAppended);
                 }
             }

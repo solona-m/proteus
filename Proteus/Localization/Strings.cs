@@ -2032,6 +2032,25 @@ public sealed class PartsStrings
 
     public readonly string RetargetTo = Loc.Localize("Parts.Retarget.To", "Refit onto");
 
+    public readonly string RetargetOtherParts = Loc.Localize("Parts.Retarget.OtherParts",
+        "Other parts of the body (optional)");
+
+    /// <summary>{0} is how many of the other parts have a size chosen to refit onto.</summary>
+    public readonly string RetargetOtherPartsInUseFmt = Loc.Localize("Parts.Retarget.OtherPartsInUse.Fmt",
+        "Other parts of the body — {0} being refitted");
+
+    /// <summary>{0} is the slot's name ("Hands").</summary>
+    public readonly string RetargetNeedFromFmt = Loc.Localize("Parts.Retarget.NeedFrom.Fmt",
+        "{0}: a size to refit onto is chosen, but not the size it was made for. Choose that, or click the chosen "
+      + "size again to untick it.");
+
+    /// <summary>{0} is the slot's name ("Chest").</summary>
+    public readonly string RetargetNeedToFmt = Loc.Localize("Parts.Retarget.NeedTo.Fmt",
+        "{0}: choose a size to refit onto.");
+
+    public readonly string RetargetRefusedHold = Loc.Localize("Parts.Retarget.RefusedHold",
+        "One of the chosen pairs cannot be refitted — see the message under it.");
+
     public readonly string RetargetToMany = Loc.Localize("Parts.Retarget.ToMany",
         "Refit onto (tick as many sizes as you like)");
 
@@ -2164,11 +2183,25 @@ public sealed class PartsStrings
     public readonly string RetargetReplaceSkin = Loc.Localize("Parts.Retarget.ReplaceSkin", "Use the new body's skin")
                                                + "###partsRetargetReplaceSkin";
 
-    public readonly string RetargetReplaceSkinTip = Loc.Localize("Parts.Retarget.ReplaceSkin.Tip",
-        "On: the garment's own body skin is laid exactly onto the new body, with the body's shading, so the seam\n"
-      + "where it meets the rest of your body disappears.\n"
+    public readonly string RetargetReplaceSkinTip = Loc.Localize("Parts.Retarget.SwapSkin.Tip",
+        "On: the garment's skin for each part of the body being resized is removed and that part's new body\n"
+      + "skin put in its place, so the skin under and around the garment is exactly the body mod's.\n"
       + "Off: the skin the garment came with is resized instead, keeping any reshaping its author did — a top\n"
       + "that lifts or presses the chest keeps doing so at the new size.");
+
+    /// <summary>{0} is how many triangles the garment's swapped skin meshes had, {1} how many the body's have.</summary>
+    public readonly string RetargetSwappedFmt = Loc.Localize("Parts.Retarget.SwapSlots.Fmt",
+        "Skin swapped for the new body's where it is being resized: {0:N0} of the garment's skin triangles out, "
+      + "{1:N0} of the body's in.");
+
+    /// <summary>{0} is how many skin meshes were left because they belong to no slot being resized.</summary>
+    public readonly string RetargetSwapKeptFmt = Loc.Localize("Parts.Retarget.SwapKeptMeshes.Fmt",
+        "{0} skin mesh(es) belong to a part of the body that is not being resized, and were left as they are.");
+
+    /// <summary>{0} is how many shape keys the garment had.</summary>
+    public readonly string RetargetSwapShapesFmt = Loc.Localize("Parts.Retarget.SwapShapes.Fmt",
+        "This garment had {0} shape key(s), which a skin swap does not carry over. Untick \"Use the new body's skin\" "
+      + "to keep them.");
 
     /// <summary>{0} is how many skin points were laid onto the new body.</summary>
     public readonly string RetargetLaidFmt = Loc.Localize("Parts.Retarget.Laid.Fmt",
