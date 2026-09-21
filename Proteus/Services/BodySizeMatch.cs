@@ -223,7 +223,7 @@ internal static class BodySizeMatch
         // legs fill a top's hem with their belly, so they read tighter than the plain legs without being what the top
         // was made for. A hem cannot tell belly from no belly, so the family is not read from it at all — the plain,
         // first-listed family is taken, the size is read within it, and the other families follow for the user to
-        // choose. Once a target is chosen, BestCompatible re-picks within the target's family anyway.
+        // choose.
         string primary = evidence.OrderBy(r => IndexIn(options, r.Option)).First().Family;
         var scores = new List<Score>();
         Confidence confidence = Confidence.Ambiguous;
@@ -402,26 +402,6 @@ internal static class BodySizeMatch
         var thinned = new List<Vector3>(MaxProbes);
         for (int i = 0; i < all.Count; i += stride) thinned.Add(all[i]);
         return thinned;
-    }
-
-    /// <summary>
-    /// The highest-ranked candidate that can actually be paired with <paramref name="target"/> — the same mesh, so that
-    /// <see cref="IdentityCorrespondence"/> will accept the pair.
-    /// <para/>
-    /// The ranking is made before the user has chosen a target, and it answers "which body fits this garment best"
-    /// across every family the body mod offers. Once a target is chosen that question narrows: the source has to be the
-    /// same mesh as the target or there is no refit at all. Neolithe's Neobelly legs fit a top's hem a little more
-    /// snugly than the plain ones (the belly fills it), so the unconstrained best can sit in a different family from the
-    /// size the user wants — and then the best source that is POSSIBLE is the one to use.
-    /// </summary>
-    /// <returns>Null when nothing in the ranking shares the target's mesh.</returns>
-    public static Score? BestCompatible(Ranking ranking, BodyOption target, Func<BodyOption, string> pathOf)
-    {
-        if (Load(pathOf(target)) is not { } wanted) return null;
-        foreach (var score in ranking.Scores)
-            if (Load(pathOf(score.Option)) is { } body && body.TopologyKey == wanted.TopologyKey)
-                return score;
-        return null;
     }
 
     /// <param name="ContentKey">Identifies the MODEL rather than the file, so two copies of one body deduplicate.</param>

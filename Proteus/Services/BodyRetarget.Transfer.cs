@@ -97,11 +97,24 @@ internal static partial class BodyRetarget
             foreach (var (surface, field) in slots)
             {
                 if (!surface.Nearest(p, best, out var hit)) continue;
-                if (field[hit.A] is not { } fa || field[hit.B] is not { } fb || field[hit.C] is not { } fc) continue;
+
+                // Over the corners that have a landing, renormalised. A correspondence by texture coordinate leaves the
+                // odd vertex unplaced — a seam, an island the other body cuts differently — and dropping every triangle
+                // touching one would leave holes in the field around it. Most of the triangle's weight has to be
+                // present, though, or the answer is one corner's guess stretched over the whole face.
+                var sum = Vector3.Zero;
+                float weight = 0f;
+                int present = 0;
+                if (field[hit.A] is { } fa) { sum += fa * hit.U; weight += hit.U; present++; }
+                if (field[hit.B] is { } fb) { sum += fb * hit.V; weight += hit.V; present++; }
+                if (field[hit.C] is { } fc) { sum += fc * hit.W; weight += hit.W; present++; }
+                if (weight < 0.5f) continue;
 
                 best = hit.Distance;
                 distance = hit.Distance;
-                delta = fa * hit.U + fb * hit.V + fc * hit.W;
+                // All three present: the plain barycentric sum, undivided, so a complete field gives bit-for-bit the
+                // answer it always did (u + v + w is 0.99999994 as often as it is 1).
+                delta = present == 3 ? sum : sum / weight;
                 found = true;
             }
 

@@ -127,6 +127,11 @@ public class GoldenTests(ITestOutputHelper o)
         Retarget(cases, "legs/small-to-large", NeolitheLegs + @"\GEN B Medium.mdl",
                  "_dwn", NeolitheLegs + @"\SFW Small.mdl", NeolitheLegs + @"\SFW Large.mdl");
 
+        // Across meshes: plain legs onto a Gen family with a different vertex count, so the correspondence is by
+        // texture coordinate — the route every refit onto Rue+ will take.
+        Retarget(cases, "legs/sfw-to-gen-c", NeolitheLegs + @"\SFW Medium.mdl",
+                 "_dwn", NeolitheLegs + @"\SFW Medium.mdl", NeolitheLegs + @"\GEN C Large.mdl");
+
         cases.Compare("retarget");
     }
 
@@ -151,8 +156,8 @@ public class GoldenTests(ITestOutputHelper o)
             return;
         }
 
-        if (!IdentityCorrespondence.TryBuild(source, target, slot, out var built, out string refusal,
-                                             BodyRetargetDiagTests.Uv(sourceBytes), BodyRetargetDiagTests.Uv(targetBytes)))
+        if (!BodyCorrespondence.TryBuild(source, BodyRetargetDiagTests.Uv(sourceBytes), target,
+                                         BodyRetargetDiagTests.Uv(targetBytes), slot, out var built, out string refusal))
         {
             cases.Text(name + "/bytes", "refused: " + refusal);
             return;

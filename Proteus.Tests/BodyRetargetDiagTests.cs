@@ -79,22 +79,126 @@ public class BodyRetargetDiagTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void A_different_genital_family_is_refused_not_retargeted()
+    public void A_different_genital_family_is_mapped_by_texture_coordinate()
     {
-        // The legs axis is NOT one topology family: Gen A/B/C/Puffy each replace geometry, so they have their own
-        // vertex counts. The picker offers every option, so the guard is the only thing standing between the user and
-        // a silent nonsense result — this asserts it holds, and that the message says which way to go.
+        // The legs axis is NOT one mesh: Gen A/B/C/Puffy each replace geometry and have their own vertex counts, so
+        // vertex-for-vertex is impossible. They share the Bibo+ texture layout, though, so the pair is mapped by uv —
+        // the same route a refit onto Rue+ takes — rather than refused.
         if (!File.Exists(LegsFolder + @"\GEN B Medium.mdl") || !File.Exists(LegsFolder + @"\SFW Medium.mdl")) return;
 
         var sfwBytes = File.ReadAllBytes(LegsFolder + @"\SFW Medium.mdl");
         var genBytes = File.ReadAllBytes(LegsFolder + @"\GEN B Medium.mdl");
+        var sfw = ModelPartReader.Read(sfwBytes)!;
+        var gen = ModelPartReader.Read(genBytes)!;
 
-        bool ok = IdentityCorrespondence.TryBuild(ModelPartReader.Read(sfwBytes)!, ModelPartReader.Read(genBytes)!,
-                                                  "legs", out _, out string refusal, Uv(sfwBytes), Uv(genBytes));
+        Assert.False(IdentityCorrespondence.TryBuild(sfw, gen, "legs", out _, out _, Uv(sfwBytes), Uv(genBytes)));
+        bool ok = BodyCorrespondence.TryBuild(sfw, Uv(sfwBytes), gen, Uv(genBytes), "legs", out var built,
+                                              out string refusal);
+        Assert.True(ok, refusal);
+        Assert.IsType<UvAtlasCorrespondence>(built);
+        output.WriteLine(built!.Describe());
 
-        output.WriteLine(refusal);
-        Assert.False(ok);
-        Assert.Contains("different meshes", refusal);
+        // Both Medium, so wherever the genitals are not, the legs should barely move.
+        var moves = built.Field.Where(d => d.HasValue).Select(d => d!.Value.Length()).OrderBy(x => x).ToList();
+        float median = moves[moves.Count / 2];
+        output.WriteLine($"median move {median * 1000f:F2} mm, p95 {moves[(int)(moves.Count * 0.95f)] * 1000f:F2} mm");
+        Assert.True(median < 0.001f, $"two Medium legs should mostly coincide; median move {median * 1000f:F2} mm");
+    }
+
+    /// <summary>
+    /// Every chest option refitted from one source through the real correspondence choice, reporting the route taken.
+    /// The pair that first failed in game was a Pushup chest onto a Neobelly Almond NSFW one: same structure, 98.8% of
+    /// uvs in common, refused by a 99% bar. Nothing here may be refused.
+    /// </summary>
+    [Fact]
+    public void Every_chest_option_can_be_refitted_onto()
+    {
+        if (!Directory.Exists(NeolitheRoot)) return;
+        var catalog = BodySizeCatalog.Read(NeolitheRoot);
+        var chest = catalog.For("_top").Where(o => o.Group == "CHEST: SmallClothes").ToList();
+        var src = chest.First(o => o.Label == "DEFAULT PUSHUP · SFW Pushup M");
+        var srcBytes = File.ReadAllBytes(catalog.PathOf(src));
+        var source = ModelPartReader.Read(srcBytes)!;
+        var sourceUv = Uv(srcBytes);
+
+        int identity = 0, atlas = 0;
+        var refused = new List<string>();
+        foreach (var option in chest)
+        {
+            var bytes = File.ReadAllBytes(catalog.PathOf(option));
+            var target = ModelPartReader.Read(bytes)!;
+            if (!BodyCorrespondence.TryBuild(source, sourceUv, target, Uv(bytes), "chest", out var built, out string why))
+            {
+                refused.Add($"{option.Label}: {why}");
+                continue;
+            }
+            if (built is IdentityCorrespondence) identity++;
+            else
+            {
+                atlas++;
+                output.WriteLine($"by uv: {option.Label} — {built!.Describe()}");
+            }
+        }
+
+        output.WriteLine($"{chest.Count} options: {identity} vertex for vertex, {atlas} by texture coordinate, " +
+                         $"{refused.Count} refused");
+        foreach (var r in refused) output.WriteLine($"REFUSED {r}");
+        Assert.Empty(refused);
+    }
+
+    /// <summary>
+    /// How good the texture-coordinate route is, on a pair where the exact answer is known. Pushup M and L are the same
+    /// mesh, so vertex for vertex is exact; forcing the uv route on them measures its error directly, and refitting the
+    /// author's M both ways shows whether that error matters against the author's own L.
+    /// </summary>
+    [Fact]
+    public void The_texture_coordinate_route_matches_the_exact_one()
+    {
+        const string model = @"chara\equipment\e6255\model\c0201e6255_top.mdl";
+        string fromPath = Path.Combine(ThisOldThing, "neolithe m", model);
+        string toPath = Path.Combine(ThisOldThing, "neolithe l", model);
+        if (!File.Exists(fromPath) || !File.Exists(toPath)) return;
+
+        var srcBytes = File.ReadAllBytes(ExtraChestSmallClothes + @"\SFW Pushup M.mdl");
+        var dstBytes = File.ReadAllBytes(ExtraChestSmallClothes + @"\SFW Pushup L.mdl");
+        var source = ModelPartReader.Read(srcBytes)!;
+        var target = ModelPartReader.Read(dstBytes)!;
+
+        Assert.True(IdentityCorrespondence.TryBuild(source, target, "chest", out var exact, out _, Uv(srcBytes), Uv(dstBytes)));
+        Assert.True(UvAtlasCorrespondence.TryBuild(source, Uv(srcBytes), target, Uv(dstBytes), "chest", out var atlas,
+                                                   out string refusal), refusal);
+
+        var diff = new List<float>();
+        var uvS = Uv(srcBytes);
+        for (int v = 0; v < exact!.Field.Count; v++)
+        {
+            if (exact.Field[v] is not { } e || atlas!.Field[v] is not { } a) continue;
+            float d = Vector3.Distance(e, a);
+            diff.Add(d);
+            if (d > 0.001f)
+                output.WriteLine($"  v{v} at {At(source, v)} uv ({uvS[v * 2]:F5},{uvS[v * 2 + 1]:F5}): " +
+                                 $"exact lands {At(source, v) + e}, by uv {At(source, v) + a} ({d * 1000f:F1} mm)");
+        }
+        output.WriteLine($"field disagreement over {diff.Count:N0} skin vertices: {Stats(diff)} (mean/p95/max mm)");
+
+        var fromBytes = File.ReadAllBytes(fromPath);
+        var authorM = ModelPartReader.Read(fromBytes)!;
+        var authorL = ModelPartReader.Read(File.ReadAllBytes(toPath))!;
+        var legs = new List<BodyRetarget.SlotPair>();
+        AddPair(legs, "_dwn", LegsFolder + @"\SFW Medium.mdl", LegsFolder + @"\SFW Large.mdl");
+
+        foreach (var (label, corr) in new (string, IBodyCorrespondence)[] { ("exact", exact), ("by uv", atlas!) })
+        {
+            var pairs = new List<BodyRetarget.SlotPair> { new("_top", corr, target) };
+            pairs.AddRange(legs);
+            var refit = ModelPartReader.Read(BodyRetarget.Plan(authorM, fromBytes, pairs, "_top").Model)!;
+            output.WriteLine($"{label,-6} body mesh {Stats(Errors(refit, authorL, true, true))}   " +
+                             $"cloth {Stats(Errors(refit, authorL, false, true))}");
+        }
+
+        // The WORST vertex, not a percentile: one vertex landing 29 mm off is a spike in game however good the rest is.
+        // That is exactly what the neck opening's collapsed-uv triangles did before they were handled as segments.
+        Assert.True(diff.Max() < 0.0005f, $"the uv route should agree with the exact one to 0.5 mm; worst {diff.Max() * 1000f:F2} mm");
     }
 
     [Fact]
@@ -189,15 +293,7 @@ public class BodyRetargetDiagTests(ITestOutputHelper output)
             var rankTo = BodySizeMatch.Rank(authorTo, options, catalog.PathOf);
             output.WriteLine($"{slot} {fromSize}: {rankFrom.Confidence}, {Top(rankFrom)}");
             output.WriteLine($"{slot} {toSize}: {rankTo.Confidence}, {Top(rankTo)}");
-            if (rankFrom.Best is not { } src) continue;
-
-            // The user's choice of target, modelled: the size the author used for the other version, within the family
-            // the garment was detected on — the same mesh as the source, so the pair is possible at all.
-            if (BodySizeMatch.BestCompatible(rankTo, src.Option, catalog.PathOf) is not { } dst)
-            {
-                output.WriteLine($"{slot}: nothing in the target ranking shares {src.Option.FullLabel}'s mesh");
-                continue;
-            }
+            if (rankFrom.Best is not { } src || rankTo.Best is not { } dst) continue;
             output.WriteLine($"{slot} refit {src.Option.FullLabel} -> {dst.Option.FullLabel}");
             if (src.Option.Rel == dst.Option.Rel) continue;   // the same size both ways: nothing to change here
 
@@ -205,13 +301,14 @@ public class BodyRetargetDiagTests(ITestOutputHelper output)
             var targetBytes = File.ReadAllBytes(catalog.PathOf(dst.Option));
             var source = ModelPartReader.Read(sourceBytes)!;
             var target = ModelPartReader.Read(targetBytes)!;
-            if (!IdentityCorrespondence.TryBuild(source, target, slot, out var built, out string refusal,
-                                                 Uv(sourceBytes), Uv(targetBytes)))
+            if (!BodyCorrespondence.TryBuild(source, Uv(sourceBytes), target, Uv(targetBytes), slot,
+                                             out var built, out string refusal))
             {
                 output.WriteLine($"{slot}: {refusal}");
                 continue;
             }
-            pairs.Add(new BodyRetarget.SlotPair(slot, built!, target));
+            output.WriteLine($"{slot}: {built!.Describe()}");
+            pairs.Add(new BodyRetarget.SlotPair(slot, built, target));
         }
         if (pairs.Count == 0) return;
 
@@ -825,8 +922,8 @@ public class BodyRetargetDiagTests(ITestOutputHelper output)
         var targetBytes = File.ReadAllBytes(targetPath);
         var source = ModelPartReader.Read(sourceBytes)!;
         var target = ModelPartReader.Read(targetBytes)!;
-        if (!IdentityCorrespondence.TryBuild(source, target, slot, out var built, out string refusal,
-                                             Uv(sourceBytes), Uv(targetBytes)))
+        if (!BodyCorrespondence.TryBuild(source, Uv(sourceBytes), target, Uv(targetBytes), slot,
+                                         out var built, out string refusal))
             throw new InvalidOperationException(refusal);
         pairs.Add(new BodyRetarget.SlotPair(slot, built!, target));
     }

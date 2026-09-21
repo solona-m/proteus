@@ -6,8 +6,8 @@ using Vec3 = Proteus.Services.SecondSkinWriter.Vec3;
 namespace Proteus.Services;
 
 /// <summary>
-/// Refit a garment authored for one body onto another — a different size of the same body today, a different body
-/// once <see cref="IBodyCorrespondence"/> grows its second implementation.
+/// Refit a garment authored for one body onto another — another size of the same mesh, or any body sharing its texture
+/// layout (see <see cref="BodyCorrespondence"/> for which point of one body is which point of the other).
 /// <para/>
 /// Pure geometry: no files, no mods, no game. Everything is decided per WELDED NODE and spread to vertices at the very
 /// end, because moving one copy of a uv seam and not its twin opens a crack.

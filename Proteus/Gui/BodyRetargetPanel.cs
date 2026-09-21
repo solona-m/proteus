@@ -57,12 +57,6 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
     /// <summary>Per slot, what the detector made of the garment.</summary>
     private readonly Dictionary<string, BodySizeMatch.Ranking> detected = new(StringComparer.Ordinal);
 
-    /// <summary>
-    /// Slots whose source the detector chose rather than the user. Only these are re-picked when a target is chosen —
-    /// see <see cref="BodySizeMatch.BestCompatible"/>. A source the user picked by hand is never overridden.
-    /// </summary>
-    private readonly HashSet<string> autoFrom = new(StringComparer.Ordinal);
-
     /// <summary>The model the detector last ran for, so opening another model runs it again.</summary>
     private string? detectedFor;
 
@@ -104,7 +98,6 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
         to.Clear();
         refusals.Clear();
         detected.Clear();
-        autoFrom.Clear();
         validating.Clear();
         detectedFor = null;
         planned = null;
@@ -310,23 +303,8 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
 
             into[slot] = option;
             planned = null;
-            if (ReferenceEquals(into, from)) autoFrom.Remove(slot);   // the user's own choice from now on
-            else FitSourceToTarget(slot);
             StartValidate(slot);
         }
-    }
-
-    /// <summary>
-    /// With a target chosen, move a DETECTED source to the best-ranked candidate that can actually pair with it. The
-    /// unconstrained best can sit in another family — Neolithe's Neobelly legs read a top's hem more snugly than the
-    /// plain ones — and a source that cannot pair with the target is no source at all. Runs off the detector's cache,
-    /// which already holds every candidate, so there is no file read here.
-    /// </summary>
-    private void FitSourceToTarget(string slot)
-    {
-        if (!autoFrom.Contains(slot) || catalog is not { } snapshot) return;
-        if (!detected.TryGetValue(slot, out var ranking) || !to.TryGetValue(slot, out var target)) return;
-        if (BodySizeMatch.BestCompatible(ranking, target, snapshot.PathOf) is { } best) from[slot] = best.Option;
     }
 
     private void DrawConfidence(string slot)
@@ -547,11 +525,12 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
     }
 
     /// <summary>
-    /// Read a source and target body and prove they are two sizes of one mesh. Null on success; otherwise the reason,
-    /// worded for the user. Worker thread only.
+    /// Read a source and target body and work out which point of one is which point of the other — vertex for vertex
+    /// when they are the same mesh, by texture coordinate otherwise (see <see cref="BodyCorrespondence"/>). Null on
+    /// success; otherwise the reason, worded for the user. Worker thread only.
     /// </summary>
     private static string? Build(string sourcePath, string targetPath, string name,
-                                 out IdentityCorrespondence? correspondence, out ModelParts? target)
+                                 out IBodyCorrespondence? correspondence, out ModelParts? target)
     {
         correspondence = null;
         target = null;
@@ -562,8 +541,8 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
         target = ModelPartReader.Read(targetBytes);
         if (source == null || target == null) return string.Format(Strings.Parts.RetargetUnreadableFmt, name);
 
-        return IdentityCorrespondence.TryBuild(source, target, name, out correspondence, out string refusal,
-                                               Uv(sourceBytes), Uv(targetBytes))
+        return BodyCorrespondence.TryBuild(source, Uv(sourceBytes), target, Uv(targetBytes), name,
+                                           out correspondence, out string refusal)
                    ? null
                    : refusal;
     }
@@ -634,8 +613,6 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
                     if (ranking.Preselect && ranking.Best is { } best && !from.ContainsKey(slot))
                     {
                         from[slot] = best.Option;
-                        autoFrom.Add(slot);
-                        FitSourceToTarget(slot);   // a target chosen while detection ran narrows it at once
                         StartValidate(slot);
                     }
                 }

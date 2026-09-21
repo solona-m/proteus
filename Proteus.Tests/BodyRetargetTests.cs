@@ -401,6 +401,110 @@ public class BodyRetargetTests
         Assert.Contains("number their vertices the same way", refusal);
     }
 
+    // ── by texture coordinate: bodies that are not the same mesh ─────────────────────────────────────────
+
+    [Fact]
+    public void A_renumbered_body_is_mapped_by_texture_coordinate()
+    {
+        // Same texture layout, same shape family, but every vertex renumbered — which is what a different mesh of the
+        // same body looks like to the refit. Vertex for vertex is impossible; by uv, each point finds its twin exactly.
+        var source = Cube(0.20f, SkinMaterial);
+        var target = Scrambled(Cube(0.25f, SkinMaterial), out var targetUv);
+        var sourceUv = CubeUv(source);
+
+        Assert.False(IdentityCorrespondence.TryBuild(source, target, "chest", out _, out _, sourceUv, targetUv));
+        Assert.True(BodyCorrespondence.TryBuild(source, sourceUv, target, targetUv, "chest", out var built,
+                                                out string refusal), refusal);
+        Assert.IsType<UvAtlasCorrespondence>(built);
+
+        // The target is the source scaled by 1.25 about the origin, so every point should land at 1.25x itself.
+        for (int v = 0; v < source.Positions.Length / 3; v++)
+        {
+            var p = At(source, v);
+            Assert.True(built!.Field[v].HasValue, $"vertex {v} found no landing");
+            var landed = p + built.Field[v]!.Value;
+            Assert.True(Vector3.Distance(landed, p * 1.25f) < 1e-5f, $"vertex {v} landed at {landed}, wanted {p * 1.25f}");
+        }
+    }
+
+    [Fact]
+    public void A_refit_onto_a_renumbered_body_lands_the_skin_exactly()
+    {
+        // End to end through the solve: the garment's body mesh is a copy of the source, the target is a different mesh
+        // of the grown body, and the skin must still land on it.
+        var source = Cube(0.20f, SkinMaterial);
+        var target = Scrambled(Cube(0.25f, SkinMaterial), out var targetUv);
+        Assert.True(BodyCorrespondence.TryBuild(source, CubeUv(source), target, targetUv, "chest", out var built,
+                                                out string refusal), refusal);
+
+        var garment = Copy(source, SkinMaterial);
+        var solved = BodyRetarget.Solve(garment, [new BodyRetarget.SlotPair("_top", built!, target)]);
+
+        for (int v = 0; v < garment.Positions.Length / 3; v++)
+        {
+            var landed = At(garment, v) + Delta(solved, v);
+            Assert.True(Vector3.Distance(landed, At(garment, v) * 1.25f) < 1e-5f,
+                        $"vertex {v} landed at {landed}");
+        }
+    }
+
+    [Fact]
+    public void A_triangle_collapsed_in_uv_lands_its_own_vertex()
+    {
+        // Neolithe's neck opening is a ring of triangles with no area in uv: two corners share one coordinate. Vertex 3
+        // here shares vertex 2's uv, so the uv names two places on the body, and triangle 1-3-2 is a line in the
+        // texture. Treating it as "its first corner" once put a neck vertex 29 mm from home; it must land on itself.
+        float[] pos =
+        [
+            0f,    0f,    0f,
+            0.01f, 0f,    0f,
+            0f,    0.01f, 0f,
+            0.02f, 0.03f, 0f,
+        ];
+        float[] uv = [0f, 0f, 0.1f, 0f, 0f, 0.1f, 0f, 0.1f];
+        float[] nrm = [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1];
+        int[] tris = [0, 1, 2, 1, 3, 2];
+        var source = Build(pos, nrm, tris, SkinMaterial);
+        var target = Build(pos.Select(x => x * 1.1f).ToArray(), nrm, tris, SkinMaterial);
+
+        Assert.True(UvAtlasCorrespondence.TryBuild(source, uv, target, uv, "chest", out var built, out string refusal),
+                    refusal);
+        for (int v = 0; v < 4; v++)
+        {
+            var landed = At(source, v) + built!.Field[v]!.Value;
+            Assert.True(Vector3.Distance(landed, At(source, v) * 1.1f) < 1e-6f,
+                        $"vertex {v} landed at {landed}, wanted {At(source, v) * 1.1f}");
+        }
+    }
+
+    [Fact]
+    public void Bodies_with_different_texture_layouts_are_refused()
+    {
+        // Nothing lines up by uv, so there is no way to say which point is which: the one case still refused.
+        var source = Cube(0.20f, SkinMaterial);
+        var target = Scrambled(Cube(0.25f, SkinMaterial), out var targetUv);
+        for (int i = 0; i < targetUv.Length; i++) targetUv[i] += 10f;
+
+        Assert.False(BodyCorrespondence.TryBuild(source, CubeUv(source), target, targetUv, "chest", out _,
+                                                 out string refusal));
+        Assert.Contains("texture layout", refusal);
+    }
+
+    [Fact]
+    public void The_guard_accepts_a_variant_with_a_few_uvs_remapped()
+    {
+        // Neolithe's NSFW chests re-map about 1.2% of their uvs and are otherwise the same mesh vertex for vertex. That
+        // must stay a vertex-for-vertex pair, not be refused and not drop to the approximate route.
+        var a = Cube(0.20f, SkinMaterial);
+        var b = Cube(0.25f, SkinMaterial);
+        var uvA = Uv(a);
+        var uvB = Uv(a);
+        for (int i = 0; i < 2; i++) uvB[i] += 0.5f;   // one vertex of 54 re-mapped
+
+        Assert.True(BodyCorrespondence.TryBuild(a, uvA, b, uvB, "chest", out var built, out string refusal), refusal);
+        Assert.IsType<IdentityCorrespondence>(built);
+    }
+
     [Fact]
     public void The_guard_refuses_when_the_uvs_cannot_be_read()
     {
@@ -431,6 +535,46 @@ public class BodyRetargetTests
         Assert.True(IdentityCorrespondence.TryBuild(source, target, "chest", out var built, out string refusal),
                     refusal);
         return BodyRetarget.Solve(garment, [new BodyRetarget.SlotPair("_top", built!, target)]);
+    }
+
+    /// <summary>
+    /// A real texture layout for <see cref="Cube"/>: each face gets its own cell of a 3x2 atlas, so no two faces
+    /// overlap and a uv names exactly one point of the cube. Relies on Cube's vertex order (face, then 3x3 grid).
+    /// </summary>
+    private static float[] CubeUv(ModelParts cube)
+    {
+        int vc = cube.Positions.Length / 3;
+        var uv = new float[vc * 2];
+        for (int i = 0; i < vc; i++)
+        {
+            int face = i / 9, iu = i % 9 / 3, iv = i % 3;
+            uv[i * 2] = (face % 3 + 0.05f + 0.45f * iu) / 3f;
+            uv[i * 2 + 1] = (face / 3 + 0.05f + 0.45f * iv) / 2f;
+        }
+        return uv;
+    }
+
+    /// <summary>The same cube with every vertex renumbered (reversed), and its uvs carried along with them.</summary>
+    private static ModelParts Scrambled(ModelParts cube, out float[] uv)
+    {
+        int vc = cube.Positions.Length / 3;
+        var original = CubeUv(cube);
+        var pos = new float[vc * 3];
+        var nrm = new float[vc * 3];
+        uv = new float[vc * 2];
+        for (int n = 0; n < vc; n++)
+        {
+            int o = vc - 1 - n;   // new vertex n is old vertex o
+            for (int k = 0; k < 3; k++)
+            {
+                pos[n * 3 + k] = cube.Positions[o * 3 + k];
+                nrm[n * 3 + k] = cube.Normals[o * 3 + k];
+            }
+            uv[n * 2] = original[o * 2];
+            uv[n * 2 + 1] = original[o * 2 + 1];
+        }
+        var tris = cube.Parts[0].Triangles.Select(o => vc - 1 - o).ToArray();
+        return Build(pos, nrm, tris, cube.Parts[0].Material);
     }
 
     /// <summary>A distinct uv per vertex, so the guard's numbering proof has something real to compare.</summary>

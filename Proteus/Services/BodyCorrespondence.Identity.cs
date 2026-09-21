@@ -43,11 +43,13 @@ internal sealed class IdentityCorrespondence : IBodyCorrespondence
     public string Describe() => description;
 
     /// <summary>
-    /// The share of vertices whose uv must agree index for index before two models are accepted as two sizes of one
-    /// body. Not 100%: authors do nudge a few. Not much lower either — a genuinely different mesh with the same vertex
-    /// count would have to agree on 99 uvs in 100 by accident.
+    /// The share of vertices whose uv must agree index for index before two models are treated as the same mesh
+    /// (90%). A different numbering agrees on almost nothing by accident, so the bar only has to clear noise — while
+    /// authors DO re-map uvs on a variant without renumbering it: Neolithe's NSFW chests differ from their siblings on
+    /// 1.2% of uvs and are the same mesh vertex for vertex. It was 99% once, and that refused them. A pair below the
+    /// bar is not refused either: <see cref="BodyCorrespondence"/> maps it by texture coordinate instead.
     /// </summary>
-    private const float UvAgreement = 0.99f;
+    private const float UvAgreement = 0.90f;
 
     /// <summary>Two uvs this close count as the same, which absorbs a re-export through half-precision.</summary>
     private const float UvEpsilon = 1e-5f;
