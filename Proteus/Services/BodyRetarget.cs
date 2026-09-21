@@ -68,9 +68,10 @@ internal static partial class BodyRetarget
     internal readonly record struct SlotPair(string Slot, IBodyCorrespondence Correspondence, ModelParts Target);
 
     /// <summary>What happened, for the status line and the saved record.</summary>
+    /// <param name="Held">Welded points the user held in place, by unticking their parts.</param>
     internal sealed record Report(
         int Nodes, int Snapped, int Transferred, int Missed, int Pushed,
-        float WorstMove, float WorstPush, int UnmappedSpares, bool HasOtherLods)
+        float WorstMove, float WorstPush, int UnmappedSpares, bool HasOtherLods, int Held = 0)
     {
         /// <summary>Share of moved nodes that landed on a body vertex exactly. Low means the author sculpted the
         /// garment's body mesh rather than copying it, and the seam may not come out perfect.</summary>
@@ -86,7 +87,7 @@ internal static partial class BodyRetarget
     /// synthetic .mdl whose triangles are a metre across.
     /// </summary>
     internal sealed record Solved(RetargetEdit Edit, int Snapped, int Transferred, int Missed, int Pushed,
-                                  float WorstMove, float WorstPush);
+                                  float WorstMove, float WorstPush, int Held = 0);
 
     /// <summary>
     /// The garment split into the two sets the two passes act on.
@@ -124,13 +125,21 @@ internal static partial class BodyRetarget
         /// <summary>Every triangle of every whole submesh, as vertex indices.</summary>
         public required int[] Tris { get; init; }
 
-        /// <summary>The transfer's set: all of them.</summary>
+        /// <summary>The transfer's set: every node the user has not held.</summary>
         public required int[] AllNodes { get; init; }
 
-        /// <summary>The push-out's set: everything that is not the garment's own body mesh.</summary>
+        /// <summary>The push-out's set: every node that is neither the garment's own body mesh nor held.</summary>
         public required int[] ClothNodes { get; init; }
 
-        public static Sets From(ModelParts garment)
+        /// <summary>
+        /// Nodes the user has HELD — parts unticked in the Studio's list — which neither pass moves, and which are in
+        /// neither set above. Held per welded node, the brush's rule: a point shared by a held part and a moving one is
+        /// held, so the two cannot come apart where they meet.
+        /// </summary>
+        public required int HeldCount { get; init; }
+
+        /// <param name="held">Vertices of the parts the user has held; null or empty for none.</param>
+        public static Sets From(ModelParts garment, IReadOnlySet<int>? held = null)
         {
             int vc = garment.Positions.Length / 3;
             var vertAt = new Vec3[vc];
@@ -178,12 +187,23 @@ internal static partial class BodyRetarget
                 Link(adj, nodeOf[c], nodeOf[a]);
             }
 
-            var all = new int[nodeCount];
-            for (int n = 0; n < nodeCount; n++) all[n] = n;
+            var isHeld = new bool[nodeCount];
+            if (held != null)
+                foreach (int v in held)
+                    if (v >= 0 && v < vc) isHeld[nodeOf[v]] = true;
 
+            var every = new int[nodeCount];
+            for (int n = 0; n < nodeCount; n++) every[n] = n;
+
+            var all = new List<int>(nodeCount);
             var cloth = new List<int>(nodeCount);
+            int heldCount = 0;
             for (int n = 0; n < nodeCount; n++)
+            {
+                if (isHeld[n]) { heldCount++; continue; }
+                all.Add(n);
                 if (!isSkin[n]) cloth.Add(n);
+            }
 
             return new Sets
             {
@@ -192,10 +212,11 @@ internal static partial class BodyRetarget
                 NodeAt = nodeAt,
                 NodeNormal = nodeNormal,
                 Adj = adj,
-                MeanEdge = MeshMath.MeanEdgeLength(nodeAt, adj, new List<int>(all)),
+                MeanEdge = MeshMath.MeanEdgeLength(nodeAt, adj, new List<int>(every)),
                 Tris = triArray,
-                AllNodes = all,
+                AllNodes = all.ToArray(),
                 ClothNodes = cloth.ToArray(),
+                HeldCount = heldCount,
             };
         }
 
@@ -217,23 +238,25 @@ internal static partial class BodyRetarget
     /// <param name="garmentSlot">The slot the garment is worn in ("_top" for a top). Its body is excluded from the
     /// push-out, because the garment is drawn in its place — see <see cref="TargetBody"/>. Null keeps every body.</param>
     /// <param name="pushOut">Whether to run the push-out pass after the transfer.</param>
+    /// <param name="held">Vertices of the parts the user unticked, which stay exactly where the author put them — see
+    /// <see cref="Sets.HeldCount"/>. Null for none.</param>
     public static Planned Plan(ModelParts garment, byte[] garmentBytes, IReadOnlyList<SlotPair> pairs,
-                               string? garmentSlot = null, bool pushOut = true)
+                               string? garmentSlot = null, bool pushOut = true, IReadOnlySet<int>? held = null)
     {
-        var solved = Solve(garment, pairs, garmentSlot, pushOut);
+        var solved = Solve(garment, pairs, garmentSlot, pushOut, held);
         var written = MeshVolumeService.Inflate(garmentBytes, solved.Edit);
         var report = new Report(garment.Positions.Length / 3, solved.Snapped, solved.Transferred, solved.Missed,
                                 solved.Pushed, solved.WorstMove, solved.WorstPush,
-                                written.UnmappedSpares, written.HasOtherLods);
+                                written.UnmappedSpares, written.HasOtherLods, solved.Held);
         return new Planned(solved.Edit, written.Model, report);
     }
 
     /// <inheritdoc cref="Plan"/>
     /// <remarks>The geometry, without touching the file. See <see cref="Solved"/>.</remarks>
     internal static Solved Solve(ModelParts garment, IReadOnlyList<SlotPair> pairs, string? garmentSlot = null,
-                                 bool pushOut = true)
+                                 bool pushOut = true, IReadOnlySet<int>? held = null)
     {
-        var sets = Sets.From(garment);
+        var sets = Sets.From(garment, held);
         var source = SourceBody.Build(pairs);
 
         var nodeDelta = new Vec3[sets.NodeCount];
@@ -287,7 +310,7 @@ internal static partial class BodyRetarget
                                                       nodeWeight, sets.NodeNormal, sets.Tris);
 
         var edit = new RetargetEdit(garment.MeshSpans, vertDelta, vertNrm);
-        return new Solved(edit, CountTrue(snapped), transferred, missed, pushed, worstMove, worstPush);
+        return new Solved(edit, CountTrue(snapped), transferred, missed, pushed, worstMove, worstPush, sets.HeldCount);
     }
 
     private static int CountTrue(bool[] flags)

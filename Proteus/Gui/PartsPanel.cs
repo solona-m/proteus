@@ -969,6 +969,8 @@ public sealed class PartsPanel
 
     // ── locked parts ────────────────────────────────────────────────────────
 
+    private static readonly HashSet<string> NoSelection = [];
+
     /// <summary>The open model's locked labels, created on first use.</summary>
     private HashSet<string> Locks
     {
@@ -1008,8 +1010,9 @@ public sealed class PartsPanel
     /// <summary>Lock or unlock one part, from the list, a Shift-click on the model or one on the character.</summary>
     private void ToggleLock(string label)
     {
-        if (parts is not { } model || model.Parts.FirstOrDefault(p => p.Label == label) is not { } part || IsSkin(part))
-            return;
+        if (parts is not { } model || model.Parts.FirstOrDefault(p => p.Label == label) is not { } part) return;
+        // A skin lock means nothing to the brush, which never moves skin; only the refit, which does, offers one.
+        if (IsSkin(part) && tool != Tool.Retarget) return;
         var locks = Locks;
 
         if (!IsLocked(part))
@@ -1305,7 +1308,8 @@ public sealed class PartsPanel
         var model = parts!;
 
         viewport.Show(ViewportKey, model);
-        viewport.Selected = PartTool ? MoveSelection() : ticked;
+        // Under Body size nothing is being staged for a switch, so nothing shows as selected; the locks show as locks.
+        viewport.Selected = PartTool ? MoveSelection() : tool == Tool.Retarget ? NoSelection : ticked;
 
         // Told every frame rather than on change: the mode also resets when a model is picked.
         viewport.Mode = tool is Tool.Navigate or Tool.Retarget ? PartViewport.ViewportMode.Navigate
@@ -1323,8 +1327,10 @@ public sealed class PartsPanel
         float width = MathF.Min(height * PartViewport.DefaultAspect, ImGui.GetContentRegionAvail().X * 0.55f);
         if (viewport.Draw(model, new Vector2(width, height)) is { } clicked)
         {
+            // Body size has nothing to paint, so a plain click on a part holds or frees it — and must never stage a
+            // switch, which is what a click means only under Toggle Parts.
             if (PartTool) SelectMovePart(clicked);
-            else if (brushing) ToggleLock(clicked);
+            else if (brushing || tool == Tool.Retarget) ToggleLock(clicked);
             else Toggle(clicked);
         }
 
@@ -1386,6 +1392,7 @@ public sealed class PartsPanel
                 {
                     Tool.Navigate => ps.ClickTip,
                     Tool.Move or Tool.Rotate or Tool.Scale => ps.MoveListTip,
+                    Tool.Retarget => ps.RetargetLockListTip,
                     _             => ps.BrushLockListTip,
                 });
                 ImGui.PopTextWrapPos();
@@ -1412,8 +1419,11 @@ public sealed class PartsPanel
         string? hoveredRow = null;
 
         // Under a brush the rows lock parts instead: ticked means the brush moves it. Under Move each row chooses the part to move.
+        // Under Body size they are the same locks, and ticked means the refit moves it.
         bool moving = PartTool;
         bool brushing = PaintTool;
+        bool refitting = tool == Tool.Retarget;
+        bool locking = brushing || refitting;
 
         // Islands per submesh, so a submesh row can say how many it has and whether to draw them.
         var islands = model.Parts.Where(p => p.Island >= 0)
@@ -1427,7 +1437,7 @@ public sealed class PartsPanel
 
             // A locked island always has a row under a brush, as a ticked one does for a switch.
             bool listed = moving ? movePart == part.Label
-                        : brushing ? Locks.Contains(part.Label) : ticked.Contains(part.Label);
+                        : locking ? Locks.Contains(part.Label) : ticked.Contains(part.Label);
             if (isIsland && !expanded.Contains(owner) && !listed) continue;
             if (isIsland) ImGui.Indent(ProteusStyle.S(12f));
 
@@ -1440,14 +1450,20 @@ public sealed class PartsPanel
                 if (!movable && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
                     ImGui.SetTooltip(IsSkin(part) ? ps.MoveSkinTip : ps.MoveLockedTip);
             }
-            else if (brushing)
+            else if (locking)
             {
+                // The brush never moves skin, so its skin rows are fixed at ticked. The refit DOES move skin — the
+                // garment's own body mesh has to follow the body — so under Body size a skin row can be held too.
                 bool skin = IsSkin(part);
-                bool moves = skin || !IsLocked(part);
-                using (ImRaii.Disabled(skin))
+                bool fixedTicked = skin && brushing;
+                bool moves = fixedTicked || !IsLocked(part);
+                using (ImRaii.Disabled(fixedTicked))
                     if (ImGui.Checkbox($"{part.Label}##l_{part.Label}", ref moves))
                         ToggleLock(part.Label);
-                if (skin && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(ps.BrushLockSkinTip);
+                if (fixedTicked && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+                    ImGui.SetTooltip(ps.BrushLockSkinTip);
+                else if (refitting && skin && ImGui.IsItemHovered())
+                    ImGui.SetTooltip(ps.RetargetLockSkinTip);
             }
             else
             {
@@ -1465,7 +1481,7 @@ public sealed class PartsPanel
             if (ImGui.IsItemHovered()) hoveredRow = part.Label;
 
             // Marked on the row: ticking a part the author already switches means both switches must be on.
-            if (part.AuthorSwitched && !brushing && !moving)
+            if (part.AuthorSwitched && !locking && !moving)
             {
                 ImGui.SameLine();
                 ImGui.TextDisabled(ps.AuthorSwitchedTag);
@@ -2060,7 +2076,8 @@ public sealed class PartsPanel
                 compositor.ExpectOwnModEdit(modDir);
                 penumbra.ReloadModDirectory(modDir);
                 compositor.RedrawForChangedModel();
-            }));
+            },
+            Held: Locks));
     }
 
     /// <summary>

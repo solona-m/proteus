@@ -3406,5 +3406,17 @@
   "Parts.NoMatches": {
     "message": "Nothing matches.",
     "description": ""
+  },
+  "Parts.Retarget.Held.Fmt": {
+    "message": "{0:N0} held where the author put them.",
+    "description": ""
+  },
+  "Parts.Retarget.Lock.ListTip": {
+    "message": "Untick a part to hold it where its author put it: the refit leaves it exactly as it is. Useful for things that should not stretch with the body, like a buckle or a piece of jewellery. Clicking a part on the model does the same.",
+    "description": ""
+  },
+  "Parts.Retarget.Lock.SkinTip": {
+    "message": "This is the garment\u0027s own body skin. Holding it keeps it at the old size, so the new body can show through or gap at the edges.",
+    "description": ""
   }
 }

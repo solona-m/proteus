@@ -264,6 +264,94 @@ public class BodyRetargetTests
         Assert.Equal(0f, Delta(solved, 3).Length(), 6);
     }
 
+    // ── held parts: unticked in the Studio's list ───────────────────────────────────────────────────────
+
+    [Fact]
+    public void A_held_part_stays_exactly_where_the_author_put_it()
+    {
+        var source = Cube(0.20f, SkinMaterial);
+        var target = Cube(0.25f, SkinMaterial);
+        var garment = Patch(ClothMaterial, new Vector3(0f, 0f, 0.21f));
+
+        var free = Solve(garment, source, target);
+        Assert.True(Delta(free, 0).Length() > 0.01f, "unheld, this patch follows the growing body");
+
+        var held = SolveHeld(garment, source, target, [0, 1, 2]);
+        Assert.Equal(3, held.Held);
+        for (int v = 0; v < 3; v++) Assert.Equal(0f, Delta(held, v).Length());
+    }
+
+    [Fact]
+    public void A_held_skin_part_is_held_too()
+    {
+        // The brush never moves skin, so it offers no skin lock; the refit does move skin, so holding it has to work.
+        var source = Cube(0.20f, SkinMaterial);
+        var target = Cube(0.25f, SkinMaterial);
+        var garment = Copy(source, SkinMaterial);
+
+        var solved = SolveHeld(garment, source, target, Enumerable.Range(0, garment.Positions.Length / 3));
+
+        for (int v = 0; v < garment.Positions.Length / 3; v++) Assert.Equal(0f, Delta(solved, v).Length());
+    }
+
+    [Fact]
+    public void A_point_shared_by_a_held_part_and_a_moving_one_is_held()
+    {
+        // Held per welded node, as the brush holds: vertex 3 sits exactly on vertex 0 (a uv seam between two parts).
+        // If one copy moved and the other did not, the surface would crack open along the join.
+        var source = Cube(0.20f, SkinMaterial);
+        var target = Cube(0.25f, SkinMaterial);
+        var garment = Points(ClothMaterial,
+                             new Vector3(0f, 0f, 0.21f), new Vector3(0.01f, 0f, 0.21f), new Vector3(0f, 0.01f, 0.21f),
+                             new Vector3(0f, 0f, 0.21f));
+
+        var solved = SolveHeld(garment, source, target, [0]);
+
+        Assert.Equal(0f, Delta(solved, 0).Length());
+        Assert.Equal(0f, Delta(solved, 3).Length());
+        Assert.True(Delta(solved, 1).Length() > 0.01f, "the part that is not held still follows the body");
+    }
+
+    [Fact]
+    public void A_held_part_is_not_dragged_by_a_neighbouring_push()
+    {
+        // The push-out spreads each push to its neighbours so it has no step; a held part beside a genuine clip must
+        // not be lifted by that spread. The same scenario as the snapped and hidden-cloth tests, with vertex 3 held.
+        var (_, pairs) = CreatedClip(ClothMaterial);
+        var pos = new List<float>
+        {
+            0.228f, -0.002f, 0f,
+            0.232f, -0.002f, 0f,
+            0.230f,  0.002f, 0f,
+            0.205f,  0f,     0f,
+        };
+        var tris = new List<int> { 0, 1, 2, 0, 2, 3 };
+        for (int i = 0; i < 40; i++)
+        {
+            int b = pos.Count / 3;
+            float x = 5f + i * 0.01f;
+            pos.AddRange([x, 5f, 5f, x + 0.001f, 5f, 5f, x, 5.001f, 5f]);
+            tris.AddRange([b, b + 1, b + 2]);
+        }
+        var nrm = new float[pos.Count];
+        for (int i = 0; i < nrm.Length; i += 3) nrm[i + 2] = 1f;
+        var garment = Build(pos.ToArray(), nrm, tris.ToArray(), ClothMaterial);
+
+        var solved = BodyRetarget.Solve(garment, pairs, held: new HashSet<int> { 3 });
+
+        Assert.True(Delta(solved, 0).Length() > 0f, "the clip beside it should have been pushed, or this proves nothing");
+        Assert.Equal(0f, Delta(solved, 3).Length());
+    }
+
+    private static BodyRetarget.Solved SolveHeld(ModelParts garment, ModelParts source, ModelParts target,
+                                                 IEnumerable<int> held)
+    {
+        Assert.True(IdentityCorrespondence.TryBuild(source, target, "chest", out var built, out string refusal),
+                    refusal);
+        return BodyRetarget.Solve(garment, [new BodyRetarget.SlotPair("_top", built!, target)],
+                                  held: new HashSet<int>(held));
+    }
+
     // ── the transfer ────────────────────────────────────────────────────────────────────────────────────
 
     [Fact]

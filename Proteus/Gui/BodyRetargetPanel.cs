@@ -35,11 +35,13 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
     /// next frame"; true means pushed, or that this model can never be previewed and there is no point retrying.</param>
     /// <param name="SetStatus">Say something in the tab's status line.</param>
     /// <param name="AfterModChange">The mod's files changed on disk: reload it and redraw.</param>
+    /// <param name="Held">Labels of the parts unticked in the Studio's list, which the refit leaves exactly where the
+    /// author put them. The same locks the brush honours.</param>
     internal readonly record struct RetargetContext(
         string ModRoot, string ModDir, string ModelRel, string GamePath, string ModelLabel,
         ModelParts Garment, byte[] GarmentBytes, IReadOnlyList<PenumbraModMeta.Redirect> Redirects,
         Action FlushPending, Func<byte[], bool> PushPreview, Action EndPreview,
-        Action<string, bool> SetStatus, Action AfterModChange);
+        Action<string, bool> SetStatus, Action AfterModChange, IReadOnlyCollection<string> Held);
 
     // ── the body, and the pair chosen per slot ──────────────────────────────
 
@@ -64,6 +66,12 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
     private string? groupNameFor;
 
     private BodyRetarget.Planned? planned;
+
+    /// <summary>
+    /// What <see cref="planned"/> was made from. Ticking or unticking a part changes it, and a plan made with other
+    /// locks must not be saved: the preview is taken down and the refit has to be run again.
+    /// </summary>
+    private string plannedKey = "";
 
     /// <summary>A preview the live preview was too busy to take, retried each frame until it goes.</summary>
     private byte[]? pendingPreview;
@@ -134,6 +142,15 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
 
         // A different model opened under the same body: the old detection was about the old model.
         if (detectedFor != ctx.ModelRel && detectTask == null) StartDetect(ctx);
+
+        // A part ticked or unticked since the refit ran: that plan is not what the user now asks for, so it may not be
+        // saved. Taken down rather than kept, so the character does not show a refit the Save button would not write.
+        if (planned != null && plannedKey != Key(ctx))
+        {
+            planned = null;
+            pendingPreview = null;
+            ctx.EndPreview();
+        }
 
         ImGui.Separator();
         foreach (string slot in Slots(ctx))
@@ -452,6 +469,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
         if (r.Snapped > 0) lines.Add(string.Format(ps.RetargetSnappedFmt, r.Snapped, r.SnapRate));
         if (r.Pushed > 0) lines.Add(string.Format(ps.RetargetPushedFmt, r.Pushed, r.WorstPush * 1000f));
         if (r.Missed > 0) lines.Add(string.Format(ps.RetargetMissedFmt, r.Missed));
+        if (r.Held > 0) lines.Add(string.Format(ps.RetargetHeldFmt, r.Held));
         return string.Join("\n", lines);
     }
 
@@ -516,6 +534,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
                                               Name: SlotName(s))).ToList();
         var garment = ctx.Garment;
         var bytes = ctx.GarmentBytes;
+        var heldLabels = new HashSet<string>(ctx.Held, StringComparer.Ordinal);
         string key = Key(ctx);
 
         planTask = Task.Run(() =>
@@ -529,7 +548,15 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
                         return new PlanResult(key, null, refusal);
                     pairs.Add(new BodyRetarget.SlotPair(slot, built!, target!));
                 }
-                return new PlanResult(key, BodyRetarget.Plan(garment, bytes, pairs, garmentSlot), "");
+
+                // A submesh's triangles already include every island of it, so the labels alone are enough — the
+                // brush's own ApplyLocks reads them the same way.
+                var held = new HashSet<int>();
+                foreach (var part in garment.Parts)
+                    if (heldLabels.Contains(part.Label))
+                        held.UnionWith(part.Triangles);
+
+                return new PlanResult(key, BodyRetarget.Plan(garment, bytes, pairs, garmentSlot, held: held), "");
             }
             catch (Exception ex)
             {
@@ -603,8 +630,11 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
         return $"{body} — {string.Join(" + ", Chosen(ctx).Select(s => to[s].Label))}";
     }
 
+    /// <summary>What a plan was made from: the model, each chosen pair, and which parts were held. A plan whose key no
+    /// longer matches is stale — see <see cref="plannedKey"/>.</summary>
     private string Key(in RetargetContext ctx)
-        => ctx.ModelRel + "|" + string.Join("|", Chosen(ctx).Select(s => $"{s}:{from[s].Rel}>{to[s].Rel}"));
+        => ctx.ModelRel + "|" + string.Join("|", Chosen(ctx).Select(s => $"{s}:{from[s].Rel}>{to[s].Rel}"))
+         + "|held:" + string.Join(",", ctx.Held.OrderBy(h => h, StringComparer.Ordinal));
 
     /// <summary>The framework-thread half: take up whatever finished, and do the parts only this thread may.</summary>
     private void Consume(in RetargetContext ctx)
@@ -655,6 +685,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
             else if (pt.Result.Planned is { } done && pt.Result.Key == Key(ctx))
             {
                 planned = done;
+                plannedKey = pt.Result.Key;
                 if (!ctx.PushPreview(done.Model)) pendingPreview = done.Model;
                 ctx.SetStatus(Describe(done.Report).Replace('\n', ' '), false);
             }

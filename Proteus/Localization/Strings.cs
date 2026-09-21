@@ -2134,6 +2134,19 @@ public sealed class PartsStrings
     public readonly string RetargetUnreadableFmt = Loc.Localize("Parts.Retarget.Unreadable.Fmt",
         "The {0} body model could not be read.");
 
+    public readonly string RetargetLockListTip = Loc.Localize("Parts.Retarget.Lock.ListTip",
+        "Untick a part to hold it where its author put it: the refit leaves it exactly as it is. Useful for "
+      + "things that should not stretch with the body, like a buckle or a piece of jewellery. Clicking a part on "
+      + "the model does the same.");
+
+    public readonly string RetargetLockSkinTip = Loc.Localize("Parts.Retarget.Lock.SkinTip",
+        "This is the garment's own body skin. Holding it keeps it at the old size, so the new body can show "
+      + "through or gap at the edges.");
+
+    /// <summary>{0} is how many welded points were held.</summary>
+    public readonly string RetargetHeldFmt = Loc.Localize("Parts.Retarget.Held.Fmt",
+        "{0:N0} held where the author put them.");
+
     /// <summary>Shown in a dropdown when its search box matches nothing.</summary>
     public readonly string NoMatches = Loc.Localize("Parts.NoMatches", "Nothing matches.");
 
