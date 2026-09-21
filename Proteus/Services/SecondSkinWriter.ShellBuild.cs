@@ -18,6 +18,15 @@ public static partial class SecondSkinWriter
         private readonly IReadOnlyList<AuthoredCapSet>? authoredCaps;
         private readonly PushSweep? pushSweep;
         private readonly BuildTimings? timings;
+
+        /// <summary>
+        /// How much of the layer's push a vertex at <paramref name="y"/> gets: the sweep's ladder while it is on,
+        /// else the shipped foot band. The sweep REPLACES the band rather than compounding with it — it is a
+        /// measuring instrument, and the millimetres it announces have to be the millimetres it applied.
+        /// </summary>
+        /// <remarks>For passes that need the figure OUTSIDE the per-vertex loop, which takes the sweep's tally
+        /// through <see cref="PushSweep.Take"/> instead. This one does not count toward that tally.</remarks>
+        internal float PushBandAt(float y) => pushSweep?.MultiplierAt(y) ?? FootPushAt(y);
         private long tPrepare;
         private List<Source> parsed = null!;
         private List<byte[]> sourceModels = null!;

@@ -239,7 +239,9 @@ public static partial class SecondSkinWriter
 
                     // Banded by the vertex's height BEFORE the cap or bridge moved it, so a displacement cannot
                     // carry a vertex across a band edge and step the surface somewhere the ladder did not put one.
-                    float pushHere = pushSweep is null ? push : push * pushSweep.Take(basePos[i].Y);
+                    // The sweep REPLACES the shipped foot band rather than compounding with it: it is a measuring
+                    // instrument, and the millimetres it announces have to be the millimetres it applied.
+                    float pushHere = push * (pushSweep is null ? FootPushAt(basePos[i].Y) : pushSweep.Take(basePos[i].Y));
                     // Clearance given back where the bridge moved the surface — see BridgedClearance. ADDED, not a floor,
                     // so stacked layers stay LayerSeparation apart.
                     if (bridgeExtra is not null)

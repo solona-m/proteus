@@ -102,6 +102,11 @@ public static partial class SecondSkinWriter
                     Span<float> tmpW = stackalloc float[4];
                     Span<byte> wb3 = stackalloc byte[8], ib3 = stackalloc byte[8];
 
+                    // What the last round that actually ran was still unable to place. Declared out here because the
+                    // loop below can stop on any round, and it is the standing figure that is wanted, not a total
+                    // across attempts that each re-examine the same vertices.
+                    int missedStanding = 0;
+
                     // More than one round: dropping a collapsed triangle EXPOSES vertices that were interior when the
                     // boundary was found.
                     for (int round = 0; round < WeldRounds; round++)
@@ -121,6 +126,12 @@ public static partial class SecondSkinWriter
                             if (n == 1) { onBoundary[e.Item1] = true; onBoundary[e.Item2] = true; }
 
                         int movedThisRound = 0;
+                        // Assigned, not accumulated, and counted EVERY round: the loop breaks the moment a round moves
+                        // nothing (below), so a figure only tallied on the last round reported whatever the weld
+                        // happened to converge in — 0 when it took two rounds and the full standing count when it took
+                        // three, with no change at the join between them. What survives here is the last round's own
+                        // count, which is the standing one.
+                        int missedThisRound = 0;
                         for (int i = 0; i < emitter.vc; i++)
                         {
                             if (!emitter.used[i] || !onBoundary[i] || movedV[i]) continue;
@@ -134,7 +145,15 @@ public static partial class SecondSkinWriter
                             float reach = emitter.cutAway[i] ? WeldCutReach : WeldRadius;
                             if (!NearestOnRim(p, wr, reach, out var best, out var capN, out var capW,
                                               out float dist))
-                            { if (round == WeldRounds - 1) emitter.build.weldWorst++; continue; }
+                            {
+                                // Only a CUT vertex counts as a miss. The lip walked here is the shell's whole open
+                                // boundary "whatever made it", so it also holds edges that were never candidates —
+                                // measured at 15 mm and more from the toe rim against a 12 mm leash, on a body where
+                                // the join audit reports no fault at all. Counting those made the number a property of
+                                // the shell's other boundaries rather than of the weld.
+                                if (emitter.cutAway[i]) missedThisRound++;
+                                continue;
+                            }
                             WriteXYZ(emitter.outStreams[pw2.Stream], po, pw2.Type, best.X, best.Y, best.Z);
                             movedV[i] = true;
                             weldPos[i] = best;
@@ -219,6 +238,7 @@ public static partial class SecondSkinWriter
                             var avg = NormalizeOr(new Vec3(own.X + capN.X, own.Y + capN.Y, own.Z + capN.Z), own);
                             WriteNormal(emitter.outStreams[ne4.Stream], no, ne4.Type, avg.X, avg.Y, avg.Z);
                         }
+                        missedStanding = missedThisRound;
                         if (movedThisRound == 0) break;
 
                         var wp = new Vec3[emitter.vc];
@@ -259,6 +279,9 @@ public static partial class SecondSkinWriter
                                 emitter.build.diag?.Invoke($"authored cap: {dropped} collapsed triangle(s) dropped at the join");
                         }
                     }
+
+                    // Across MESHES this accumulates — each has its own lip — but never across rounds.
+                    emitter.build.weldWorst += missedStanding;
                 }
 
                 private void RampToCap(VElem? nEl2, VElem pw2)
@@ -906,7 +929,10 @@ public static partial class SecondSkinWriter
                             lz = MathF.Min(lz, q0.Z); hz = MathF.Max(hz, q0.Z);
                         }
                         const float pad = 0.01f;
-                        float minClearance = MinSkinClearanceOfPush * emitter.push;
+                        // Of the push AT THE TOES, which is the foot band's (see FootPushAt) — a floor taken from the
+                        // unbanded push would sit a twentieth of the shell's real height here and rescue nothing.
+                        float minClearance = MinSkinClearanceOfPush * emitter.push
+                                           * emitter.build.PushBandAt(ToeBandHeight);
                         // Tested against the shell's TRIANGLES, not its nearest vertex: what shows through is the body's curve
                         // rising past the flat triangle.
                         const float cell = 0.004f;
