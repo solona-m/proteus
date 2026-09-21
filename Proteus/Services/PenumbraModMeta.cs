@@ -730,6 +730,98 @@ internal static class PenumbraModMeta
             slot => BuildGroup(slot, name, optionNames, type, defaultSettings));
     }
 
+    /// <summary>One option of a group that publishes files.</summary>
+    /// <param name="Files">Game path to mod-root-relative file. Empty means "this option contributes nothing", which
+    /// is a useful thing for an option to do: it lets the group be switched off without deleting it.</param>
+    public readonly record struct FileOption(string Name, IReadOnlyDictionary<string, string> Files);
+
+    /// <summary>
+    /// Write one single-select group whose options CARRY redirects — which
+    /// <see cref="WriteSingleSelectGroup"/> deliberately does not do, its options existing only to make Penumbra show
+    /// a selector.
+    /// <para/>
+    /// The whole option list is passed every time: a caller adding one option reads the group back, appends to it and
+    /// rewrites. A same-named group is replaced, so that is also how an option is removed.
+    /// </summary>
+    /// <param name="priority">
+    /// Which group wins a game path two groups both claim. Passed rather than derived from
+    /// <paramref name="index"/>, because a group that has to beat the author's own needs to say so explicitly.
+    /// </param>
+    public static void WriteFileOptionGroup(string modRoot, int index, string name, int priority,
+                                            IReadOnlyList<FileOption> options, int defaultIndex)
+    {
+        if (options.Count == 0) return;
+        if (index < 0) index = 0;
+        if (defaultIndex < 0 || defaultIndex >= options.Count) defaultIndex = 0;
+
+        WriteGroupIntoManifest(modRoot, ReadManifestForWrite(modRoot), index, name,
+            _ => BuildFileGroup(name, priority, options, defaultIndex));
+    }
+
+    /// <inheritdoc cref="BuildGroup"/>
+    /// <remarks>The same shape, with files per option and an explicit priority.</remarks>
+    private static object BuildFileGroup(string name, int priority, IReadOnlyList<FileOption> options, int defaultIndex)
+        => new
+        {
+            Version         = 0,
+            Name            = name,
+            Description     = "",
+            Image           = "",
+            Page            = 0,
+            Priority        = priority,
+            Type            = "Single",
+            DefaultSettings = (long)defaultIndex,
+            Options         = options.Select(o => new
+            {
+                Name          = o.Name,
+                Description   = "",
+                Files         = o.Files.ToDictionary(p => p.Key, p => p.Value),
+                FileSwaps     = new Dictionary<string, string>(),
+                Manipulations = Array.Empty<object>(),
+            }).ToArray(),
+        };
+
+    /// <summary>
+    /// The highest <c>Priority</c> any of the mod's groups declares, or -1 when it has none. What a group has to beat
+    /// to win a game path the mod already claims elsewhere.
+    /// </summary>
+    public static int MaxGroupPriority(string modRoot)
+    {
+        int max = -1;
+        foreach (var (_, group) in TryReadGroups(modRoot) ?? [])
+            if (group.TryGetProperty("Priority", out var p) && p.ValueKind == JsonValueKind.Number
+                && p.TryGetInt32(out int value) && value > max)
+                max = value;
+        return max;
+    }
+
+    /// <summary>
+    /// The named group's options, each with the files it publishes, or null when there is no such group. What a caller
+    /// appending an option to its own group reads first.
+    /// </summary>
+    public static List<FileOption>? TryReadFileOptions(string modRoot, string name)
+    {
+        var group = (TryReadGroups(modRoot) ?? [])
+            .FirstOrDefault(g => string.Equals(g.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (group.Name == null) return null;
+        if (!group.Group.TryGetProperty("Options", out var options) || options.ValueKind != JsonValueKind.Array)
+            return null;
+
+        var result = new List<FileOption>();
+        foreach (var o in options.EnumerateArray())
+        {
+            if (o.ValueKind != JsonValueKind.Object) continue;
+            var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (o.TryGetProperty("Files", out var f) && f.ValueKind == JsonValueKind.Object)
+                foreach (var p in f.EnumerateObject())
+                    if (p.Value.ValueKind == JsonValueKind.String && p.Value.GetString() is { Length: > 0 } rel)
+                        files[p.Name] = rel;
+
+            result.Add(new FileOption(o.TryGetProperty("Name", out var n) ? n.GetString() ?? "" : "", files));
+        }
+        return result;
+    }
+
     /// <summary>
     /// The shape a group has on disk. <c>DefaultSettings</c> is the selected INDEX for Single and a bitmask for Multi;
     /// options carry no redirects.

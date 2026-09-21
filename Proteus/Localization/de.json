@@ -3226,5 +3226,161 @@
   "Presets.AddedTo.Fmt": {
     "message": "Added \"{0}\" to {1}. Wear it from that mod's Presets section in Colors.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Parts.Retarget.Ambiguous.Fmt": {
+    "message": "Several sizes fit this model equally well ({0}). Pick the one you know it was made for.",
+    "description": ""
+  },
+  "Parts.Retarget.Body": {
+    "message": "Body mod",
+    "description": ""
+  },
+  "Parts.Retarget.Checking": {
+    "message": "Working out which size this was made for\u2026",
+    "description": ""
+  },
+  "Parts.Retarget.Chest": {
+    "message": "Chest",
+    "description": ""
+  },
+  "Parts.Retarget.Choose": {
+    "message": "Choose\u2026",
+    "description": ""
+  },
+  "Parts.Retarget.Clash.Fmt": {
+    "message": "This mod already has a group (\u0022{0}\u0022) that replaces this model. The new group is set to win over it, so changing sizes there will not change this refit.",
+    "description": ""
+  },
+  "Parts.Retarget.ClearPreview": {
+    "message": "Clear the preview",
+    "description": ""
+  },
+  "Parts.Retarget.Exact.Fmt": {
+    "message": "This model\u0027s body mesh is exactly {0}.",
+    "description": ""
+  },
+  "Parts.Retarget.Feet": {
+    "message": "Feet",
+    "description": ""
+  },
+  "Parts.Retarget.From": {
+    "message": "Made for",
+    "description": ""
+  },
+  "Parts.Retarget.Group.Fmt": {
+    "message": "Body \u2014 {0}",
+    "description": ""
+  },
+  "Parts.Retarget.GroupName": {
+    "message": "Option group",
+    "description": ""
+  },
+  "Parts.Retarget.Guess.Fmt": {
+    "message": "Best guess: nothing matched exactly, but this one fits closest ({0:F2} mm average). Worth checking.",
+    "description": ""
+  },
+  "Parts.Retarget.Hands": {
+    "message": "Hands",
+    "description": ""
+  },
+  "Parts.Retarget.Legs": {
+    "message": "Legs",
+    "description": ""
+  },
+  "Parts.Retarget.Likely.Fmt": {
+    "message": "Very likely \u2014 {0:P0} of this model\u0027s body mesh matches.",
+    "description": ""
+  },
+  "Parts.Retarget.LowSnap": {
+    "message": "This model\u0027s body mesh does not match the size it was made for exactly, so the seam where skin meets cloth may not come out perfect.",
+    "description": ""
+  },
+  "Parts.Retarget.Missed.Fmt": {
+    "message": "{0:N0} were too far from the body to follow it, and stayed where they were.",
+    "description": ""
+  },
+  "Parts.Retarget.Moved.Fmt": {
+    "message": "Moved up to {0:F1} mm.",
+    "description": ""
+  },
+  "Parts.Retarget.NoBody": {
+    "message": "Pick one\u2026",
+    "description": ""
+  },
+  "Parts.Retarget.NoBodyMesh": {
+    "message": "This model carries no body mesh, so the size it was made for cannot be guessed. Pick it yourself.",
+    "description": ""
+  },
+  "Parts.Retarget.NoModel": {
+    "message": "Open a model above to refit it onto another body size.",
+    "description": ""
+  },
+  "Parts.Retarget.OpenInPenumbra": {
+    "message": "Open in Penumbra",
+    "description": ""
+  },
+  "Parts.Retarget.OtherLods": {
+    "message": "This model has lower detail levels, which are not refitted \u2014 it will look like the old size from a distance.",
+    "description": ""
+  },
+  "Parts.Retarget.PickBody": {
+    "message": "Pick the body mod this garment was made for. Only mods that offer a choice of body models are listed.",
+    "description": ""
+  },
+  "Parts.Retarget.Preview": {
+    "message": "Refit and preview",
+    "description": ""
+  },
+  "Parts.Retarget.Pushed.Fmt": {
+    "message": "{0:N0} pushed back out of the body, up to {1:F2} mm.",
+    "description": ""
+  },
+  "Parts.Retarget.Save": {
+    "message": "Save as a new option",
+    "description": ""
+  },
+  "Parts.Retarget.Saved.Fmt": {
+    "message": "{0} refit option(s) saved in \u0022{1}\u0022. Penumbra only picks a default for a mod it is adding for the first time, so choose the option there to wear it.",
+    "description": ""
+  },
+  "Parts.Retarget.Slot.Fmt": {
+    "message": "{0} \u2014 {1} options",
+    "description": ""
+  },
+  "Parts.Retarget.Slot.Optional.Fmt": {
+    "message": "{0} \u2014 optional",
+    "description": ""
+  },
+  "Parts.Retarget.Slot.Optional.Tip": {
+    "message": "Fill this in only if the garment reaches here \u2014 a long dress worn in the chest slot\nalso hangs over the legs. Leave it alone for a garment that does not.",
+    "description": ""
+  },
+  "Parts.Retarget.Snapped.Fmt": {
+    "message": "{0:N0} landed on the new body exactly ({1:P0}).",
+    "description": ""
+  },
+  "Parts.Retarget.To": {
+    "message": "Refit onto",
+    "description": ""
+  },
+  "Parts.Retarget.Undo": {
+    "message": "Remove the last refit",
+    "description": ""
+  },
+  "Parts.Retarget.Unreadable.Fmt": {
+    "message": "The {0} body model could not be read.",
+    "description": ""
+  },
+  "Parts.Retarget.Working": {
+    "message": "Refitting\u2026",
+    "description": ""
+  },
+  "Parts.Tool.Retarget": {
+    "message": "Body size",
+    "description": ""
+  },
+  "Parts.Tool.Retarget.Tip": {
+    "message": "Refit this model onto a different size of the body it was made for.\nThe body\u0027s own change in shape is carried onto the garment, so it keeps\nthe way it sits. Saved as a new option in this mod, leaving the author\u0027s\nown files alone.",
+    "description": ""
   }
 }

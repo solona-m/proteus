@@ -106,12 +106,22 @@ public sealed class PartsPanel
 
         /// <summary>Pick one part and grow or shrink it about its centre by dragging it sideways.</summary>
         Scale,
+
+        /// <summary>Refit the whole model onto another size of the body it was made for — see <see cref="BodyRetargetPanel"/>.</summary>
+        Retarget,
     }
 
     /// <summary>The tools that work on one chosen part rather than painting: Move, Rotate and Scale share its choice.</summary>
     private static bool IsPartTool(Tool t) => t is Tool.Move or Tool.Rotate or Tool.Scale;
 
     private bool PartTool => IsPartTool(tool);
+
+    /// <summary>
+    /// The tools a drag on the model paints with. Written as its own predicate rather than "not Navigate", because
+    /// Retarget is a third thing that is neither painting nor dragging, and every guard phrased as a single exclusion
+    /// silently starts feeding strokes to the next tool added.
+    /// </summary>
+    private bool PaintTool => tool is Tool.Inflate or Tool.Deflate or Tool.Relax or Tool.Bridge or Tool.Wind;
 
     /// <summary>The handle Scale drags — the part itself — shared by the model view and the character.</summary>
     private readonly PartScaleDrag scaleDrag = new();
@@ -201,6 +211,9 @@ public sealed class PartsPanel
     /// <summary>Puts the edit on the character while painting on it — see <see cref="LiveBrushPreview"/>.</summary>
     private readonly LiveBrushPreview preview;
 
+    /// <summary>The Body size tool's own half of the tab — see <see cref="BodyRetargetPanel"/>.</summary>
+    private readonly BodyRetargetPanel retarget;
+
     /// <summary>The solve has changed since the character last showed it.</summary>
     private bool previewDirty;
 
@@ -220,6 +233,7 @@ public sealed class PartsPanel
         this.viewport = viewport;
         this.liveBrush = liveBrush;
         preview = new LiveBrushPreview(penumbra, compositor, log);
+        retarget = new BodyRetargetPanel(penumbra, log);
         LiveBrushPreview.CleanUp();
         partOfVertexFn = PartOfVertex;
         lockClickedFn = LockClickedOnCharacter;
@@ -334,6 +348,7 @@ public sealed class PartsPanel
                 DrawToolPicker();
                 ImGui.Separator();
                 if (tool == Tool.Navigate) DrawStaging();
+                else if (tool == Tool.Retarget) DrawRetarget();
                 else if (PartTool) DrawMove();
                 else DrawBrush();
 
@@ -444,6 +459,7 @@ public sealed class PartsPanel
         FinishMove();   // a drag cut off by leaving still counts, and still undoes
         FlushPending(refreshGame);
         EndLivePreview(refreshGame);
+        retarget.Clear();     // its preview has just been taken down, so its plan no longer matches what is drawn
         autoPicked = false;   // the next visit may find different gear on
     }
 
@@ -454,7 +470,7 @@ public sealed class PartsPanel
     private void DrawLivePick()
     {
         if (showModelView || penumbra.GetModDirectory() is not { } modsRoot) return;
-        if (tool != Tool.Navigate && volume != null) return;
+        if (tool != Tool.Navigate && tool != Tool.Retarget && volume != null) return;
         liveBrush.ArmPick(modsRoot, OnLivePicked);
         ImGui.TextDisabled(Strings.Parts.LivePickTip);
         ImGui.Spacing();
@@ -562,7 +578,7 @@ public sealed class PartsPanel
     private void HandleUndoShortcut()
     {
         bool pressed = undoKey.Poll();   // every frame — see HeldKey
-        if (!pressed || tool == Tool.Navigate || volume is not { CanUndo: true } vol || Editing) return;
+        if (!pressed || !PaintTool || volume is not { CanUndo: true } vol || Editing) return;
         var io = ImGui.GetIO();
         if (!io.KeyCtrl || !ShortcutsHaveTheKeyboard()) return;
 
@@ -598,7 +614,7 @@ public sealed class PartsPanel
     {
         bool grow = growKey.Poll(), shrink = shrinkKey.Poll();   // every frame — see HeldKey
         if (!grow && !shrink) return;
-        if (tool == Tool.Navigate || PartTool || volume == null) return;
+        if (!PaintTool || volume == null) return;
         var io = ImGui.GetIO();
         if (io.KeyCtrl || !ShortcutsHaveTheKeyboard()) return;
 
@@ -736,6 +752,7 @@ public sealed class PartsPanel
         brushChangedAt = -1;
         movePart = null;
         ReleaseHandles();
+        retarget.Clear();
         modDir = dir;
         modelIndex = -1;
         parts = null;
@@ -903,6 +920,7 @@ public sealed class PartsPanel
         brushBase = null;
         movePart = null;
         ReleaseHandles();
+        retarget.Clear();
         // A new solve starts from the file as it is now, so the other sizes must too. Replaced, not cleared — see sizeBases.
         sizeBases = new ConcurrentDictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
         modelIndex = index;
@@ -1283,18 +1301,18 @@ public sealed class PartsPanel
         viewport.Selected = PartTool ? MoveSelection() : ticked;
 
         // Told every frame rather than on change: the mode also resets when a model is picked.
-        viewport.Mode = tool == Tool.Navigate ? PartViewport.ViewportMode.Navigate
+        viewport.Mode = tool is Tool.Navigate or Tool.Retarget ? PartViewport.ViewportMode.Navigate
                       : PartTool ? PartViewport.ViewportMode.Move
                       : PartViewport.ViewportMode.Brush;
         viewport.GizmoCapture = gizmoCaptureFn;
-        viewport.BrushRadius = tool == Tool.Navigate || PartTool ? 0f : ActiveRadiusMm / 1000f;
+        viewport.BrushRadius = !PaintTool ? 0f : ActiveRadiusMm / 1000f;
         viewport.VertexScalar = tool == Tool.Wind ? windAt : null;
         viewport.MirrorBrush = mirrorBrush;
 
         // The share cap is on the image's WIDTH, not the row's height: coupling the row to avail.X flickers as the
         // scrollbar comes and goes.
         // Under a brush a click on the model paints; it only reaches a part with Shift held.
-        bool brushing = tool != Tool.Navigate && !PartTool;
+        bool brushing = PaintTool;
         float width = MathF.Min(height * PartViewport.DefaultAspect, ImGui.GetContentRegionAvail().X * 0.55f);
         if (viewport.Draw(model, new Vector2(width, height)) is { } clicked)
         {
@@ -1388,7 +1406,7 @@ public sealed class PartsPanel
 
         // Under a brush the rows lock parts instead: ticked means the brush moves it. Under Move each row chooses the part to move.
         bool moving = PartTool;
-        bool brushing = tool != Tool.Navigate && !moving;
+        bool brushing = PaintTool;
 
         // Islands per submesh, so a submesh row can say how many it has and whether to draw them.
         var islands = model.Parts.Where(p => p.Island >= 0)
@@ -1505,6 +1523,7 @@ public sealed class PartsPanel
                      (Tool.Relax,    FontAwesomeIcon.Feather,           ps.ToolRelax,    ps.ToolRelaxTip),
                      (Tool.Bridge,   FontAwesomeIcon.Archway,           ps.ToolBridge,   ps.ToolBridgeTip),
                      (Tool.Wind,     FontAwesomeIcon.Wind,              ps.ToolWind,     ps.ToolWindTip),
+                     (Tool.Retarget, FontAwesomeIcon.PeopleArrows,      ps.ToolRetarget, ps.ToolRetargetTip),
                      (Tool.Navigate, FontAwesomeIcon.MousePointer,      ps.ToolNavigate, ps.ToolNavigateTip),
                  })
         {
@@ -1529,7 +1548,10 @@ public sealed class PartsPanel
                 viewport.Recolour();
                 viewport.GeometryChanged();   // the wind wash comes and goes with the wind tool
             }
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip(value == Tool.Navigate || IsPartTool(value) ? tip : tip + "\n\n" + ps.BrushLockHint);
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip(value is Tool.Navigate or Tool.Retarget || IsPartTool(value)
+                                     ? tip
+                                     : tip + "\n\n" + ps.BrushLockHint);
         }
         ImGui.Spacing();
     }
@@ -1540,7 +1562,7 @@ public sealed class PartsPanel
     /// </summary>
     private void PumpBrush()
     {
-        if (volume == null || tool == Tool.Navigate || PartTool) return;
+        if (volume == null || !PaintTool) return;
         var surface = Surface;
 
         if (surface.Painting && surface.Cursor is { } at)
@@ -2000,6 +2022,58 @@ public sealed class PartsPanel
         viewport.PositionOverride = volume.Positions();
         viewport.GeometryChanged();
         brushChangedAt = Environment.TickCount64;
+    }
+
+    // ── body retarget ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Hand the Body size tool everything it needs for this frame. The panel reaches nothing of this class directly:
+    /// what it may do arrives as a handful of callbacks, so the tab keeps sole ownership of the preview, the status
+    /// line and the pending save.
+    /// </summary>
+    private void DrawRetarget()
+    {
+        var ps = Strings.Parts;
+        if (ModRoot() is not { } root || modDir == null || parts == null || brushBase == null
+            || modelIndex < 0 || modelIndex >= models.Count)
+        {
+            ImGui.TextWrapped(ps.RetargetNoModel);
+            return;
+        }
+
+        retarget.Draw(new BodyRetargetPanel.RetargetContext(
+            root, modDir, MeshVolumeService.Rel(models[modelIndex].File), models[modelIndex].GamePath,
+            modelLabels[modelIndex], parts, brushBase,
+            FlushPending: () => FlushPending(),
+            PushPreview: PushRetargetPreview,
+            EndPreview: () => EndLivePreview(refreshGame: true),
+            SetStatus: (text, error) => { status = text; statusIsError = error; },
+            AfterModChange: () =>
+            {
+                compositor.ExpectOwnModEdit(modDir);
+                penumbra.ReloadModDirectory(modDir);
+                compositor.RedrawForChangedModel();
+            }));
+    }
+
+    /// <summary>
+    /// Put a refitted model on the character, through the same temporary redirect the brush previews with.
+    /// <para/>
+    /// The bytes are complete rather than an edit to tick towards, so this pushes once and does not set
+    /// <see cref="previewDirty"/>: there is no stroke behind it to throttle.
+    /// </summary>
+    private void PushRetargetPreview(byte[] bytes)
+    {
+        if (modelIndex < 0 || modelIndex >= models.Count) return;
+        if (preview.UnsupportedFor(TargetIsCustomizePart) || TargetIsContent) return;
+
+        var file = models[modelIndex].File.Replace('\\', '/');
+        var gamePaths = redirects
+            .Where(r => string.Equals(r.File.Replace('\\', '/'), file, StringComparison.OrdinalIgnoreCase))
+            .Select(r => r.GamePath)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        preview.Push(bytes, gamePaths, TargetIsCustomizePart);
     }
 
     // ── staging ─────────────────────────────────────────────────────────────
