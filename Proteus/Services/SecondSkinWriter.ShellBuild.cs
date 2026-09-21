@@ -91,6 +91,7 @@ public static partial class SecondSkinWriter
         private List<SkinTri>? bodySkin;
         private List<SkinTri>? bodySolid;
         private Dictionary<int, CapUvPlan?> capUvCache = null!;
+        private Dictionary<Source, Dictionary<int, NailBedPlan>>? nailBedCache;
         private List<Vec3> capAllVerts = null!;
         private float capPushNow;
         private SecondSkinLayer? capDefNow;
@@ -158,6 +159,7 @@ public static partial class SecondSkinWriter
                 parsed[i].UvConv = sources[i].UvConv;
                 parsed[i].UnmirrorSides = sources[i].UnmirrorSides;
                 parsed[i].Keep = sources[i].KeepMaterial ?? IsBodySkinMaterial;
+                parsed[i].CoverNails = sources[i].CoverNails;
                 parsed[i].HiddenAttrs = sources[i].HiddenAttributes is { Count: > 0 } ha ? ha : null;
                 if (parsed[i].HiddenAttrs != null)
                     diag?.Invoke($"source {i}: the game is not drawing [{string.Join(", ", parsed[i].HiddenAttrs!)}] "
@@ -230,7 +232,7 @@ public static partial class SecondSkinWriter
                     // No hidden-attribute filter here: hidden submeshes were already taken out of the measurement above.
                     parsed[i].DropSubmeshes = PlanConnectorDrops(
                         profile, others, isHidden: null, diag, $"source {i}", out int subs, out int tris,
-                        variantBits: VariantBits(parsed[i]));
+                        variantBits: VariantBits(parsed[i]), keepAddOns: parsed[i].CoverNails);
                     redundantSubs += subs;
                     redundantTris += tris;
                 }
@@ -249,6 +251,7 @@ public static partial class SecondSkinWriter
                 // See PlanJoinCut.
                 var flaps = PlanJoinCut(joinInput, CoincidenceEps, diag, out _);
                 for (int i = 0; i < sources.Count; i++) parsed[i].JoinFlaps = flaps[i];
+                SpareNailBeds();
                 measuredParts = joinInput;
             }
         }
@@ -837,6 +840,39 @@ public static partial class SecondSkinWriter
                       bool clearAttrs = false, CapUvPlan? capUv = null)
         {
             new MeshEmitter(this, src, m, materialIndex, push, preserve, cov, mapBase, mirrorUv1, hiddenAttrs, clearAttrs, capUv).Run(ref mapAppended);
+        }
+
+        /// <summary>
+        /// Take the hands' nail beds back out of the join cut: each is a small island bounded by the finger it lies
+        /// on, which the cut reads as a flap past an inner join that the finger already draws.
+        /// </summary>
+        private void SpareNailBeds()
+        {
+            foreach (var src in parsed)
+            {
+                if (!src.CoverNails || src.JoinFlaps is not { Count: > 0 } flaps) continue;
+                int spared = 0;
+                foreach (var (m, flap) in flaps)
+                {
+                    if (NailBedsOf(src, m) is not { } beds) continue;
+                    foreach (var verts in beds.VertsOf)
+                        foreach (int v in verts)
+                            if (flap.Remove((ushort)v)) spared++;
+                }
+                if (spared > 0)
+                    diag?.Invoke($"nail beds: {spared} vertex/vertices spared from the join cut");
+            }
+        }
+
+        /// <summary>A hand mesh's nail beds and the fingertip UV under each, found once per build — see NailBeds.
+        /// Null for every other mesh.</summary>
+        private NailBedPlan? NailBedsOf(Source src, int m)
+        {
+            if (!src.CoverNails) return null;
+            nailBedCache ??= new Dictionary<Source, Dictionary<int, NailBedPlan>>();
+            if (!nailBedCache.TryGetValue(src, out var plans))
+                nailBedCache[src] = plans = NailBeds(src, diag);
+            return plans.GetValueOrDefault(m);
         }
     }
 }

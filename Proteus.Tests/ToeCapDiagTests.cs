@@ -3029,7 +3029,7 @@ public class ToeCapDiagTests
     }
 
     /// <summary>Parse a built shell model and dump its LOD0 geometry as a wavefront OBJ.</summary>
-    private static void WriteObj(byte[] m, string path)
+    internal static void WriteObj(byte[] m, string path)
     {
         ushort U16(int x) => BitConverter.ToUInt16(m, x);
         uint U32(int x) => BitConverter.ToUInt32(m, x);

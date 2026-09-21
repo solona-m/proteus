@@ -758,6 +758,8 @@ public sealed partial class SecondSkinService
                     DropConnectors: dropRedundant,
                     // Decided per part above: a gen2 part whose UV reads as mirrored AND fits one integer cell.
                     UnmirrorSides: i < unmirrorPart.Length && unmirrorPart[i],
+                    // The hands' nail beds are their own UV islands, which glove art never paints; a glove has to cover them too.
+                    CoverNails: b.Path.EndsWith("_glv.mdl", StringComparison.OrdinalIgnoreCase),
                     Profile: dropRedundant ? service.ConnectorProfileFor(b.Path, b.Bytes) : null)).ToList(),
                 bodies.Select(b => b.Path).ToList(),
                 cutCode,
@@ -1368,7 +1370,29 @@ public sealed partial class SecondSkinService
             // Only ONE relax: the body is smoothed here and the shell is cut from the smoothed body, so a shell stays a displaced
             // copy of what is beneath it and cannot be pierced. Two independent relaxes leave the shell inside the body.
             // Only where a garment that asked for it COVERS, so an uncovered breast keeps its shape.
-            if (smoothByMod.Count > 0 || foldByMod.Count > 0)
+            // The nails come off the hands wherever a garment covers them — see BodyBridge.FlattenNails. Every shell
+            // layer is cloth, so the gate is their coverage; one with none covers everything.
+            byte[]? nailUnion = null;
+            int nw = 0, nh = 0;
+            bool nailsCoverAll = false, anyShellLayer = false;
+            foreach (var l in perHostLayers.SelectMany(x => x))
+            {
+                if (l.Geometry.Count > 0) continue;   // a pack's own mesh, not a garment cut from the body
+                anyShellLayer = true;
+                if (l.Coverage == null || l.CoverageWidth <= 0 || l.CoverageHeight <= 0) { nailsCoverAll = true; continue; }
+                if (nailUnion == null) { nw = l.CoverageWidth; nh = l.CoverageHeight; nailUnion = (byte[])l.Coverage.Clone(); }
+                else if (l.CoverageWidth == nw && l.CoverageHeight == nh && l.Coverage.Length >= nw * nh)
+                    for (int p = 0; p < nailUnion.Length; p++) if (l.Coverage[p] > nailUnion[p]) nailUnion[p] = l.Coverage[p];
+            }
+            var nailGate = !anyShellLayer ? null : new SecondSkinLayer
+            {
+                MaterialName = "/nails.mtrl",   // never emitted; carries the coverage only
+                Coverage = nailsCoverAll ? null : nailUnion,
+                CoverageWidth = nailsCoverAll || nailUnion == null ? 0 : nw,
+                CoverageHeight = nailsCoverAll || nailUnion == null ? 0 : nh,
+            };
+
+            if (smoothByMod.Count > 0 || foldByMod.Count > 0 || nailGate != null)
             {
                 float smoothMax = smoothByMod.Count == 0 ? 0f : smoothByMod.Values.Max();
                 float foldMax = foldByMod.Count == 0 ? 0f : foldByMod.Values.Max();
@@ -1394,6 +1418,12 @@ public sealed partial class SecondSkinService
                 var smoothedBody = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
                 foreach (var (bBytes, _, bPath, _) in bodies)
                 {
+                    // With no relax asked for, the nails are the only reason to be here, and they are on the HANDS. Any
+                    // other part skips the pass exactly as it did before the nails — above all the hold below, which
+                    // would otherwise keep a stale smoothed torso published after smoothing was turned off.
+                    if (smoothMax <= 0f && foldMax <= 0f && !bPath.EndsWith("_glv.mdl", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
                     // NEVER a regular mod's garment: it is someone else's file, and republishing it replaces it on the character.
                     // Only the bare body and Proteus mods' garments are ours to relax. Checked before the hold below.
                     if (!smoothable.Contains(bPath))
@@ -1421,8 +1451,17 @@ public sealed partial class SecondSkinService
                     var tSmooth = PhaseCounter.Begin();
                     try
                     {
-                        smoothed = BodyBridge.SmoothBodyNipples(bBytes, gate, smoothMax,
-                            msg => service.log.Debug("[Proteus] second skin: {0}", msg), foldMax);
+                        smoothed = smoothMax > 0f || foldMax > 0f
+                            ? BodyBridge.SmoothBodyNipples(bBytes, gate, smoothMax,
+                                msg => service.log.Debug("[Proteus] second skin: {0}", msg), foldMax)
+                            : null;
+                        // ...and the nails off the HANDS, on whatever the relax left. Feet are left alone: the
+                        // shell-side keep that stops the redundancy pass eating a nail bed is the hands' too, and
+                        // a flattened toe under a stocking that still has a hole over it is no better off.
+                        if (nailGate != null && bPath.EndsWith("_glv.mdl", StringComparison.OrdinalIgnoreCase)
+                            && BodyBridge.FlattenNails(smoothed ?? bBytes, nailGate,
+                                   msg => service.log.Debug("[Proteus] second skin: {0}", msg)) is { } noNails)
+                            smoothed = noNails;
                     }
                     catch (Exception ex)
                     {
@@ -1430,7 +1469,7 @@ public sealed partial class SecondSkinService
                         service.log.Warning(ex, "[Proteus] second skin: could not smooth {0}", bPath);
                         continue;
                     }
-                    if (smoothed == null) { service.statsBodySmooth.Stop(tSmooth); continue; }   // no bust bones, or nothing covered — most parts
+                    if (smoothed == null) { service.statsBodySmooth.Stop(tSmooth); continue; }   // no bust bones, no nails, or nothing covered — most parts
 
                     var disk = SmoothedBodyPath(modelsDir, bPath, smoothed);
                     bool changed = WriteIfChanged(disk, smoothed);

@@ -840,6 +840,7 @@ public sealed partial class SecondSkinService
             sb.Append("src=").Append(Bytes(s.Model)).Append('|').Append(s.DelegateKey)
               .Append("|shapes=").Append(Set(s.EnabledShapes)).Append("|hidden=").Append(Set(s.HiddenAttributes))
               .Append("|drop=").Append(s.DropConnectors).Append("|unmirror=").Append(s.UnmirrorSides)
+              .Append("|nails=").Append(s.CoverNails)
               .Append("|profile=").Append(s.Profile != null).Append('\n');
             // A profile is not an extra input: it is derived from the model bytes already in the key.
         }
@@ -1076,7 +1077,8 @@ public sealed partial class SecondSkinService
                 var sp = sources[i];
                 sb.AppendLine($"source[{i}] dropRedundant={sp.DropConnectors} uvConv={(sp.UvConv == null ? "none" : "yes")} "
                             + $"shapes={(sp.EnabledShapes is { } sk ? string.Join(',', sk) : "")} "
-                            + $"hiddenAttrs={(sp.HiddenAttributes is { } ha ? string.Join(',', ha) : "")}");
+                            + $"hiddenAttrs={(sp.HiddenAttributes is { } ha ? string.Join(',', ha) : "")} "
+                            + $"coverNails={sp.CoverNails}");
             }
             for (int i = 0; i < layers.Count; i++)
             {
