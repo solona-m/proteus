@@ -2119,7 +2119,12 @@ public sealed class PartsStrings
         "This model's body mesh does not match the size it was made for exactly, so the seam where skin meets cloth "
       + "may not come out perfect.");
 
-    public readonly string RetargetGroupName = Loc.Localize("Parts.Retarget.GroupName", "Option group");
+    public readonly string RetargetSaveTo = Loc.Localize("Parts.Retarget.SaveTo", "Save to group");
+
+    public readonly string RetargetNewGroup = Loc.Localize("Parts.Retarget.NewGroup", "A new group…");
+
+    /// <summary>Marks a group in the save list that an earlier refit made, rather than the author.</summary>
+    public readonly string RetargetMadeHere = Loc.Localize("Parts.Retarget.MadeHere", "(made by a refit)");
 
     /// <summary>{0} is the model's label.</summary>
     public readonly string RetargetGroupFmt = Loc.Localize("Parts.Retarget.Group.Fmt", "Body — {0}");

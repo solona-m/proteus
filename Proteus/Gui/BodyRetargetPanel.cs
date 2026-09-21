@@ -70,8 +70,18 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
     /// <summary>The model the detector last ran for, so opening another model runs it again.</summary>
     private string? detectedFor;
 
+    /// <summary>The name typed for a new group — used when <see cref="saveTo"/> is null.</summary>
     private string groupName = "";
     private string? groupNameFor;
+
+    /// <summary>
+    /// The existing group the refit is saved into, or null for a new one named <see cref="groupName"/>. Defaults to
+    /// the author's group that already switches this model, so a new size sits beside the sizes it joins.
+    /// </summary>
+    private string? saveTo;
+
+    /// <summary>The mod's single-choice groups, in the author's order, re-read with <see cref="record"/>.</summary>
+    private List<string> singleGroups = [];
 
     /// <summary>
     /// Lay the garment's own body skin exactly onto the new body instead of resizing the skin it came with. On by
@@ -147,17 +157,21 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
         var ps = Strings.Parts;
         Consume(ctx);
 
+        if (recordFor != ctx.ModRoot)
+        {
+            // One read per mod, not per frame, and again after a save or an undo changes what is there.
+            recordFor = ctx.ModRoot;
+            record = BodyRetargetWriter.ReadRecord(ctx.ModRoot);
+            singleGroups = (PenumbraModMeta.TryReadGroups(ctx.ModRoot) ?? [])
+                .Where(g => string.Equals(PenumbraModMeta.TypeOf(g.Group), "Single", StringComparison.OrdinalIgnoreCase))
+                .Select(g => g.Name).ToList();
+        }
+
         if (groupNameFor != ctx.ModelRel)
         {
             groupNameFor = ctx.ModelRel;
             groupName = string.Format(ps.RetargetGroupFmt, ctx.ModelLabel);
-        }
-
-        if (recordFor != ctx.ModRoot)
-        {
-            // One read per mod, not per frame; saves and undos hand back the fresh record themselves.
-            recordFor = ctx.ModRoot;
-            record = BodyRetargetWriter.ReadRecord(ctx.ModRoot);
+            saveTo = SwitchingGroup(ctx);
         }
 
         if (bodyDir == null && bodies != null) PickWornBody(ctx);
@@ -599,18 +613,71 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
         }
 
         ImGui.Spacing();
-        ImGui.TextUnformatted(ps.RetargetGroupName);
-        ImGui.SetNextItemWidth(-1);
-        ImGui.InputText("##retargetGroup", ref groupName, 128);
+        DrawSaveTo(ctx);
 
-        foreach (string clash in BodyRetargetWriter.ClashingGroups(ctx.Redirects, ctx.GamePath, groupName))
-            using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
-                ImGui.TextWrapped(string.Format(ps.RetargetClashFmt, clash));
-
-        using (ImRaii.Disabled(busy || groupName.Trim().Length == 0))
+        using (ImRaii.Disabled(busy || Destination().Length == 0))
             if (ImGui.Button(all.Count > 1 ? string.Format(ps.RetargetSaveManyFmt, all.Count) : ps.RetargetSave,
                              FullWidth()))
                 StartSave(ctx);
+    }
+
+    /// <summary>
+    /// Where the save goes: an existing single-choice group — the author's, or one an earlier save made — or a new
+    /// group. Multi-choice groups are not offered: two sizes of one model ticked together would fight over the file.
+    /// </summary>
+    private void DrawSaveTo(in RetargetContext ctx)
+    {
+        var ps = Strings.Parts;
+        var own = record?.OwnGroups.ToHashSet(StringComparer.OrdinalIgnoreCase)
+                  ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        ImGui.TextUnformatted(ps.RetargetSaveTo);
+        ImGui.SetNextItemWidth(-1);
+        using (var combo = ImRaii.Combo("##retargetSaveTo", saveTo ?? ps.RetargetNewGroup))
+            if (combo)
+            {
+                if (ImGui.Selectable(ps.RetargetNewGroup + "##new", saveTo == null)) saveTo = null;
+                foreach (string group in singleGroups)
+                    if (ImGui.Selectable((own.Contains(group) ? group + "  " + ps.RetargetMadeHere : group) + "##g_" + group,
+                                         saveTo == group))
+                        saveTo = group;
+            }
+
+        if (saveTo == null)
+        {
+            ImGui.SetNextItemWidth(-1);
+            ImGui.InputText("##retargetGroup", ref groupName, 128);
+        }
+
+        // Only a group of our own competes with the author's for the file. Added to the author's group, a size is one
+        // more choice beside the others, and there is nothing to outrank.
+        string destination = Destination();
+        if (saveTo == null || own.Contains(destination))
+            foreach (string clash in BodyRetargetWriter.ClashingGroups(ctx.Redirects, ctx.GamePath, destination))
+                using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
+                    ImGui.TextWrapped(string.Format(ps.RetargetClashFmt, clash));
+    }
+
+    /// <summary>The group the save writes to.</summary>
+    private string Destination() => saveTo ?? groupName.Trim();
+
+    /// <summary>
+    /// The author's single-choice group that already switches this model — the size group a new size belongs in — or
+    /// null when there is none and the refit gets a group of its own.
+    /// </summary>
+    private string? SwitchingGroup(in RetargetContext ctx)
+    {
+        var own = record?.OwnGroups.ToHashSet(StringComparer.OrdinalIgnoreCase)
+                  ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var r in ctx.Redirects)
+        {
+            if (!string.Equals(r.GamePath, ctx.GamePath, StringComparison.OrdinalIgnoreCase)) continue;
+            int split = r.Source.IndexOf(" / ", StringComparison.Ordinal);
+            if (split <= 0) continue;
+            string group = r.Source[..split];
+            if (!own.Contains(group) && singleGroups.Contains(group, StringComparer.OrdinalIgnoreCase)) return group;
+        }
+        return null;
     }
 
     /// <summary>What this mod already has saved, and the ways to see it in Penumbra or take the last one back.</summary>
@@ -620,7 +687,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
         var ps = Strings.Parts;
 
         ImGui.Spacing();
-        ImGui.TextWrapped(string.Format(ps.RetargetSavedFmt, saved.Options.Count, saved.Group));
+        ImGui.TextWrapped(string.Format(ps.RetargetSavedFmt, saved.Options.Count, saved.GroupOf(saved.Options[^1])));
         if (ImGui.Button(ps.RetargetOpenInPenumbra, FullWidth())) penumbra.OpenToMod(ctx.ModDir);
 
         // Armed by a held modifier, like every other destructive button in the tab.
@@ -799,7 +866,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
         if (saveTask != null || planned is not { Count: > 0 } all) return;
 
         string root = ctx.ModRoot;
-        string group = groupName.Trim();
+        string group = Destination();
         string path = ctx.GamePath;
         string body = bodyDir ?? "";
         var slots = Chosen(ctx);
@@ -823,7 +890,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
     {
         if (saveTask != null) return;
         string root = ctx.ModRoot;
-        string group = saved.Group;
+        string group = saved.GroupOf(saved.Options[^1]);
         string option = saved.Options[^1].Name;
         saveTask = Task.Run(() => new SaveResult(BodyRetargetWriter.Undo(root, group, option),
                                                  BodyRetargetWriter.ReadRecord(root)));
@@ -923,9 +990,8 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
             saveTask = null;
             if (Faulted(st, ctx)) return;
 
-            var (outcome, fresh) = st.Result;
-            record = fresh;
-            recordFor = ctx.ModRoot;
+            var (outcome, _) = st.Result;
+            recordFor = null;   // the record and the group list are both re-read next frame
             ctx.SetStatus(outcome.Message, !outcome.Ok);
             if (!outcome.Ok) return;
 

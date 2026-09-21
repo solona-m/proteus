@@ -1184,6 +1184,121 @@ public class BodyRetargetDiagTests(ITestOutputHelper output)
                          $"<30mm {buckets[4],6}  beyond {buckets[5],6}");
     }
 
+    private const string RueRoot = @"E:\Penumbradt\hs-Rue+-2.2.7-y0f";
+
+    /// <summary>
+    /// Reported in game: Seaside's Rue Med top refitted onto Yiggle - Small clips badly. Measures how deep the cloth
+    /// sits inside each body — the author's top on the sizes it might have been made for, then each refit on Yiggle -
+    /// Small, then the file the save actually wrote.
+    /// </summary>
+    [Fact]
+    public void Seaside_rue_medium_to_yiggle_small()
+    {
+        string topPath = Path.Combine(Seaside, @"top size\rue med\chara\equipment\e0194\model\c0201e0194_top.mdl");
+        string saved = Path.Combine(Seaside, @"Body Retarget\[HS] Rue+ — None · Yiggle - Small\chara\equipment\e0194\model\c0201e0194_top.mdl");
+        if (!File.Exists(topPath) || !Directory.Exists(RueRoot)) return;
+
+        var bytes = File.ReadAllBytes(topPath);
+        var garment = ModelPartReader.Read(bytes)!;
+        var catalog = BodySizeCatalog.Read(RueRoot);
+        var chest = catalog.For("_top");
+        output.WriteLine($"Rue chest options: {string.Join(", ", chest.Select(o => o.Label))}");
+
+        var rank = BodySizeMatch.Rank(garment, chest, catalog.PathOf);
+        output.WriteLine($"reads as {rank.Confidence} (cloth {rank.FromCloth}): " +
+                         string.Join(" | ", rank.Scores.Take(6).Select(s => $"{s.Option.Label} {s.Rms * 1000:F2}mm {s.HitRate:P0}")));
+
+        BodyOption Option(string name) => chest.First(o => o.Name == name);
+        ModelParts Body(string name) => Read(catalog.PathOf(Option(name)));
+
+        // The skeleton each is rigged to: a refit keeps the garment's weights, so bones the new body uses and the
+        // garment does not are motion the garment cannot follow.
+        string[] Bones(string path) => ModelSkinReader.Read(File.ReadAllBytes(path), null, null)?.BoneNames ?? [];
+        var garmentBones = Bones(topPath).ToHashSet();
+        foreach (string name in new[] { "Medium", "Yiggle - Medium", "Yiggle - Small" })
+        {
+            var bones = Bones(catalog.PathOf(Option(name))).ToHashSet();
+            output.WriteLine($"{name}: {bones.Count} bones; not in the garment: " +
+                             string.Join(", ", bones.Except(garmentBones).OrderBy(b => b)) +
+                             "; in the garment only: " + string.Join(", ", garmentBones.Except(bones).OrderBy(b => b)));
+        }
+
+        output.WriteLine("");
+        output.WriteLine("the author's top, cloth inside each body:");
+        foreach (string name in new[] { "Medium", "Yiggle - Medium", "Small", "Yiggle - Small" })
+            Clipping(name, garment, Body(name));
+        Clipping("its own skin (what is drawn)", garment, garment);
+
+        var target = Body("Yiggle - Small");
+        foreach (string from in new[] { "Medium", "Yiggle - Medium" })
+        foreach (bool replace in new[] { true, false })
+        {
+            var pairs = new List<BodyRetarget.SlotPair>();
+            AddPair(pairs, "_top", catalog.PathOf(Option(from)), catalog.PathOf(Option("Yiggle - Small")));
+            var planned = BodyRetarget.Plan(garment, bytes, pairs, "_top", replaceSkin: replace);
+            var r = planned.Report;
+            output.WriteLine("");
+            output.WriteLine($"{from} -> Yiggle - Small, replace {replace} ({pairs[0].Correspondence.GetType().Name}): " +
+                             $"moved up to {r.WorstMove * 1000:F1} mm, snapped {r.Snapped:N0}, laid {r.Laid:N0}, " +
+                             $"pushed {r.Pushed:N0} (worst {r.WorstPush * 1000:F2} mm), missed {r.Missed:N0}");
+            var refit = ModelPartReader.Read(planned.Model)!;
+            Clipping("refit on Yiggle - Small", refit, target);
+            Clipping("refit on its own skin", refit, refit);
+        }
+
+        if (File.Exists(saved))
+        {
+            output.WriteLine("");
+            var savedModel = Read(saved);
+            Clipping("the saved file on Yiggle - Small", savedModel, target);
+            Clipping("the saved file on its own skin", savedModel, savedModel);
+
+            // For the eye: the four in one folder, all in the same space, to load together.
+            string desk = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                                       @"OneDrive\Desktop\Seaside Rue to Yiggle");
+            Directory.CreateDirectory(desk);
+            ToeCapDiagTests.WriteObj(bytes, Path.Combine(desk, "author top (Rue Med).obj"));
+            ToeCapDiagTests.WriteObj(File.ReadAllBytes(saved), Path.Combine(desk, "refit top (Yiggle Small).obj"));
+            ToeCapDiagTests.WriteObj(File.ReadAllBytes(catalog.PathOf(Option("Yiggle - Medium"))),
+                                     Path.Combine(desk, "body Yiggle Medium.obj"));
+            ToeCapDiagTests.WriteObj(File.ReadAllBytes(catalog.PathOf(Option("Yiggle - Small"))),
+                                     Path.Combine(desk, "body Yiggle Small.obj"));
+            output.WriteLine($"wrote {desk}");
+        }
+    }
+
+    /// <summary>
+    /// Cloth vertices behind the body's surface, by depth: signed along the body normal at the nearest body point,
+    /// within 30 mm. Per part, so the clip can be placed.
+    /// </summary>
+    private void Clipping(string label, ModelParts cloth, ModelParts body)
+    {
+        var surface = new BodySurface(body, 0.01f);
+        var perPart = new List<string>();
+        int total = 0, deep = 0;
+        float worst = 0f;
+        foreach (var part in cloth.Parts)
+        {
+            if (part.Island >= 0 || SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+            int inside = 0;
+            float partWorst = 0f;
+            foreach (int v in part.Triangles.Distinct())
+            {
+                var p = At(cloth, v);
+                if (!surface.Nearest(p, 0.03f, out var hit)) continue;
+                float signed = Vector3.Dot(p - hit.Point, hit.Normal);
+                if (signed > -0.0005f) continue;
+                inside++;
+                if (signed < -0.002f) deep++;
+                partWorst = MathF.Max(partWorst, -signed);
+            }
+            total += inside;
+            worst = MathF.Max(worst, partWorst);
+            if (inside > 0) perPart.Add($"{part.Label} {inside} (to {partWorst * 1000:F1})");
+        }
+        output.WriteLine($"  {label,-34} inside >0.5mm {total,5}, >2mm {deep,5}, deepest {worst * 1000:F1} mm   {string.Join("; ", perPart)}");
+    }
+
     private static void AddPair(List<BodyRetarget.SlotPair> pairs, string slot, string sourcePath, string targetPath)
     {
         if (!File.Exists(sourcePath) || !File.Exists(targetPath)) return;

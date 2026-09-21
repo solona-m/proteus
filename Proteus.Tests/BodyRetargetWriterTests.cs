@@ -241,6 +241,136 @@ public class BodyRetargetWriterTests : IDisposable
         Assert.True(File.Exists(Path.Combine(root, option.Files[GamePath].Replace('/', Path.DirectorySeparatorChar))));
     }
 
+    // ── saving into the author's own size group ─────────────────────────────────────────────────────────
+
+    private const string TopSize = "Top Size";
+
+    /// <summary>
+    /// An author's size group as authors write them: a description, a priority, the second size selected, and options
+    /// carrying swaps and manipulations of their own — everything a rewrite could lose. Plus a group after it, whose
+    /// position must not move.
+    /// </summary>
+    private void WriteAuthorSizeGroup(string type = "Single", long defaultSettings = 1)
+    {
+        string json = $$"""
+        {
+          "FileVersion": 4,
+          "Name": "Test Outfit",
+          "Groups": [
+            {
+              "Version": 0, "Name": "{{TopSize}}", "Description": "Pick your body.", "Image": "", "Page": 0,
+              "Priority": 3, "Type": "{{type}}", "DefaultSettings": {{defaultSettings}},
+              "Options": [
+                { "Name": "Rue Med", "Description": "medium", "Files": { "{{GamePath}}": "top size/rue med/top.mdl" },
+                  "FileSwaps": { "a/b.tex": "c/d.tex" }, "Manipulations": [ { "Type": "Imc" } ] },
+                { "Name": "Rue Large", "Description": "", "Files": { "{{GamePath}}": "top size/rue large/top.mdl" },
+                  "FileSwaps": {}, "Manipulations": [] }
+              ]
+            },
+            { "Version": 0, "Name": "Items", "Priority": 0, "Type": "Multi", "DefaultSettings": 3, "Options": [] }
+          ]
+        }
+        """;
+        File.WriteAllText(Path.Combine(root, PenumbraModMeta.MetaFile), json);
+    }
+
+    [Fact]
+    public void A_size_saved_into_the_author_s_group_is_one_more_option_and_nothing_else_changes()
+    {
+        WriteAuthorSizeGroup();
+        var before = Read(TopSize);
+
+        Assert.True(BodyRetargetWriter.IsAuthorGroup(root, TopSize));
+        var outcome = BodyRetargetWriter.Save(root, TopSize, GamePath, "Rue+", "Yiggle - Medium",
+        [
+            new BodyRetargetWriter.Refit("Rue Yiggle Small", [5], "Yiggle - Small"),
+            new BodyRetargetWriter.Refit("Rue Yiggle Large", [6], "Yiggle - Large"),
+        ]);
+        Assert.True(outcome.Ok, outcome.Message);
+
+        // Appended, not inserted, and no Original option: the group is the author's, and it keeps its own default.
+        Assert.Equal([TopSize, "Items"], GroupNames());
+        var after = Read(TopSize);
+        var options = after.GetProperty("Options").EnumerateArray().ToList();
+        Assert.Equal(["Rue Med", "Rue Large", "Rue Yiggle Small", "Rue Yiggle Large"],
+                     options.Select(o => o.GetProperty("Name").GetString()));
+        foreach (string field in new[] { "Description", "Priority", "Type", "DefaultSettings" })
+            Assert.True(Same(before.GetProperty(field), after.GetProperty(field)), field);
+        Assert.True(Same(before.GetProperty("Options")[0], options[0]), "the author's option changed");
+
+        var saved = PenumbraModMeta.TryReadFileOptions(root, TopSize)!.Single(o => o.Name == "Rue Yiggle Small");
+        Assert.Equal([5], File.ReadAllBytes(Path.Combine(root, saved.Files[GamePath])));
+        Assert.All(BodyRetargetWriter.ReadRecord(root)!.Options, e => Assert.True(e.InAuthorGroup));
+    }
+
+    [Fact]
+    public void Undo_takes_only_its_own_option_out_of_the_author_s_group()
+    {
+        WriteAuthorSizeGroup();
+        var before = Read(TopSize);
+        BodyRetargetWriter.Save(root, TopSize, "Rue Yiggle Small", GamePath, [5], "Rue+", "Yiggle - Medium",
+                                "Yiggle - Small");
+        string rel = PenumbraModMeta.TryReadFileOptions(root, TopSize)!.Single(o => o.Name == "Rue Yiggle Small")
+                                    .Files[GamePath];
+
+        var outcome = BodyRetargetWriter.Undo(root, TopSize, "Rue Yiggle Small");
+        Assert.True(outcome.Ok, outcome.Message);
+
+        // The group is still there, byte for byte as the author left it; only our file and record are gone.
+        Assert.Equal([TopSize, "Items"], GroupNames());
+        Assert.True(Same(before, Read(TopSize)), "the author's group changed");
+        Assert.False(File.Exists(Path.Combine(root, rel)));
+        Assert.Null(BodyRetargetWriter.ReadRecord(root));
+    }
+
+    [Fact]
+    public void An_author_s_option_of_the_same_name_is_never_overwritten()
+    {
+        WriteAuthorSizeGroup();
+        var outcome = BodyRetargetWriter.Save(root, TopSize, "Rue Large", GamePath, [9], "Rue+", "Medium", "Large");
+
+        Assert.False(outcome.Ok);
+        var large = PenumbraModMeta.TryReadFileOptions(root, TopSize)!.Single(o => o.Name == "Rue Large");
+        Assert.Equal("top size/rue large/top.mdl", large.Files[GamePath]);
+    }
+
+    [Theory]
+    [InlineData("Single", 1L, 1L)]    // the second option selected stays selected
+    [InlineData("Multi", 0b11L, 0b11L)]
+    public void Removing_an_option_after_the_author_s_leaves_their_selection_alone(string type, long before, long after)
+    {
+        WriteAuthorSizeGroup(type, before);
+        BodyRetargetWriter.Save(root, TopSize, "Extra", GamePath, [1], "Rue+", "a", "b");
+        BodyRetargetWriter.Undo(root, TopSize, "Extra");
+        Assert.Equal(after, Read(TopSize).GetProperty("DefaultSettings").GetInt64());
+    }
+
+    [Theory]
+    [InlineData("Single", 1L, 0, 0L)]      // the selected option moves up a place with the rest
+    [InlineData("Single", 1L, 1, 0L)]      // the selected option itself removed: back to the first
+    [InlineData("Single", 2L, 0, 1L)]
+    [InlineData("Multi", 0b101L, 1, 0b11L)] // the middle bit goes, the one above it drops a place
+    public void Removing_an_option_corrects_the_default_for_the_ones_that_move_up(string type, long before, int remove,
+                                                                                  long after)
+    {
+        WriteAuthorSizeGroup(type, before);
+        // Three options, so there is one above the removed one.
+        BodyRetargetWriter.Save(root, TopSize, "Third", GamePath, [1], "Rue+", "a", "b");
+        string name = PenumbraModMeta.TryReadFileOptions(root, TopSize)![remove].Name;
+        Assert.NotNull(PenumbraModMeta.RemoveOption(root, TopSize, name));
+        Assert.Equal(after, Read(TopSize).GetProperty("DefaultSettings").GetInt64());
+    }
+
+    [Fact]
+    public void A_group_a_refit_made_is_not_mistaken_for_the_author_s()
+    {
+        WriteAuthorSizeGroup();
+        BodyRetargetWriter.Save(root, Group, "Neolithe SFW L", GamePath, [1], "Neolithe", "SFW M", "SFW L");
+        Assert.False(BodyRetargetWriter.IsAuthorGroup(root, Group));
+        Assert.True(BodyRetargetWriter.IsAuthorGroup(root, TopSize));
+        Assert.False(BodyRetargetWriter.IsAuthorGroup(root, "No Such Group"));
+    }
+
     /// <summary>
     /// Lay out author groups in this order, each a one-option group with nothing in it — except any group of ours
     /// already present, which is kept exactly as it is and simply placed where the list says.
@@ -262,6 +392,11 @@ public class BodyRetargetWriterTests : IDisposable
                 [new PenumbraModMeta.FileOption("A", new Dictionary<string, string>())], 0);
         }
     }
+
+    /// <summary>The same json, whatever the whitespace: the manifest writer re-indents everything it writes.</summary>
+    private static bool Same(JsonElement a, JsonElement b)
+        => System.Text.Json.Nodes.JsonNode.DeepEquals(System.Text.Json.Nodes.JsonNode.Parse(a.GetRawText()),
+                                                      System.Text.Json.Nodes.JsonNode.Parse(b.GetRawText()));
 
     private List<string> GroupNames() => (PenumbraModMeta.TryReadGroups(root) ?? []).Select(g => g.Name).ToList();
 

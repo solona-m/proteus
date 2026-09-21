@@ -3271,10 +3271,6 @@
     "message": "Body \u2014 {0}",
     "description": ""
   },
-  "Parts.Retarget.GroupName": {
-    "message": "Option group",
-    "description": ""
-  },
   "Parts.Retarget.Guess.Fmt": {
     "message": "Best guess: nothing matched exactly, but this one fits closest ({0:F2} mm average). Worth checking.",
     "description": ""
@@ -3445,6 +3441,18 @@
   },
   "Parts.Retarget.Working.Fmt": {
     "message": "Refitting {0} of {1}\u2026",
+    "description": ""
+  },
+  "Parts.Retarget.MadeHere": {
+    "message": "(made by a refit)",
+    "description": ""
+  },
+  "Parts.Retarget.NewGroup": {
+    "message": "A new group\u2026",
+    "description": ""
+  },
+  "Parts.Retarget.SaveTo": {
+    "message": "Save to group",
     "description": ""
   }
 }

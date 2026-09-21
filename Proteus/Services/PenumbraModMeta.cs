@@ -781,6 +781,107 @@ internal static class PenumbraModMeta
             }).ToArray(),
         };
 
+    /// <summary>A group's <c>Type</c> ("Single", "Multi", "Imc", …), or "" when it has none.</summary>
+    public static string TypeOf(JsonElement group)
+        => group.TryGetProperty("Type", out var t) && t.ValueKind == JsonValueKind.String ? t.GetString() ?? "" : "";
+
+    /// <summary>
+    /// Add options that carry files to a group somebody else wrote, or replace same-named ones, leaving every other
+    /// field of the group and every other option exactly as it was — its description, priority, default, and the
+    /// options' own swaps and manipulations. New options go at the END, so no option the author wrote changes index:
+    /// Penumbra keeps a Single group's selection as an index and a Multi group's as a bitmask, and either would
+    /// otherwise land on the wrong option.
+    /// </summary>
+    public static void AddFileOptions(string modRoot, string groupName, IReadOnlyList<FileOption> options)
+        => EditGroup(modRoot, groupName, (group, list) =>
+        {
+            foreach (var option in options)
+            {
+                var built = JsonSerializer.SerializeToNode(new
+                {
+                    Name          = option.Name,
+                    Description   = "",
+                    Files         = option.Files.ToDictionary(p => p.Key, p => p.Value),
+                    FileSwaps     = new Dictionary<string, string>(),
+                    Manipulations = Array.Empty<object>(),
+                });
+                int at = IndexOfOption(list, option.Name);
+                if (at >= 0) list[at] = built;
+                else list.Add(built);
+            }
+        });
+
+    /// <summary>
+    /// Take one option out of a group somebody else wrote, leaving the rest as it was. The group's default is
+    /// corrected for the options that move up a place. Returns the files the option published, or null when there was
+    /// no such option.
+    /// </summary>
+    public static Dictionary<string, string>? RemoveOption(string modRoot, string groupName, string optionName)
+    {
+        Dictionary<string, string>? removed = null;
+        EditGroup(modRoot, groupName, (group, list) =>
+        {
+            int at = IndexOfOption(list, optionName);
+            if (at < 0) return;
+
+            removed = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (list[at]?["Files"] is System.Text.Json.Nodes.JsonObject files)
+                foreach (var (path, rel) in files)
+                    if (rel?.GetValueKind() == JsonValueKind.String) removed[path] = rel.GetValue<string>();
+            list.RemoveAt(at);
+
+            long settings = group["DefaultSettings"]?.GetValueKind() == JsonValueKind.Number
+                                ? group["DefaultSettings"]!.GetValue<long>()
+                                : 0;
+            bool multi = string.Equals(group["Type"]?.GetValue<string>(), "Multi", StringComparison.OrdinalIgnoreCase);
+            settings = multi
+                ? (settings & ((1L << at) - 1)) | ((settings >> (at + 1)) << at)   // the bit goes, the higher ones drop
+                : settings > at ? settings - 1 : settings == at ? 0 : settings;
+            group["DefaultSettings"] = settings;
+        });
+        return removed;
+    }
+
+    private static int IndexOfOption(System.Text.Json.Nodes.JsonArray list, string name)
+    {
+        for (int i = 0; i < list.Count; i++)
+            if (list[i]?["Name"] is { } n && n.GetValueKind() == JsonValueKind.String
+                && string.Equals(n.GetValue<string>(), name, StringComparison.OrdinalIgnoreCase))
+                return i;
+        return -1;
+    }
+
+    /// <summary>Rewrite one existing group in place, keeping its position. Throws when there is no such group.</summary>
+    private static void EditGroup(string modRoot, string groupName,
+                                  Action<System.Text.Json.Nodes.JsonObject, System.Text.Json.Nodes.JsonArray> edit)
+    {
+        var manifest = ReadManifestForWrite(modRoot);
+        int index = -1, i = 0;
+        JsonElement found = default;
+        if (manifest.TryGetValue("Groups", out var groups) && groups.ValueKind == JsonValueKind.Array)
+            foreach (var g in groups.EnumerateArray())
+            {
+                if (g.TryGetProperty("Name", out var n) && n.ValueKind == JsonValueKind.String
+                    && string.Equals(n.GetString(), groupName, StringComparison.OrdinalIgnoreCase))
+                {
+                    index = i;
+                    found = g;
+                    break;
+                }
+                i++;
+            }
+        if (index < 0) throw new InvalidOperationException($"This mod has no group called \"{groupName}\".");
+
+        var group = System.Text.Json.Nodes.JsonNode.Parse(found.GetRawText())!.AsObject();
+        if (group["Options"] is not System.Text.Json.Nodes.JsonArray list)
+            group["Options"] = list = [];
+        edit(group, list);
+
+        // Written back under its own name, so the splice drops the old copy and puts this one in the same slot.
+        string name = group["Name"]?.GetValue<string>() ?? groupName;
+        WriteGroupIntoManifest(modRoot, manifest, index, name, _ => group);
+    }
+
     /// <summary>
     /// The highest <c>Priority</c> any of the mod's groups declares, or -1 when it has none. What a group has to beat
     /// to win a game path the mod already claims elsewhere.

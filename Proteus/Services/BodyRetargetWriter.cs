@@ -8,7 +8,8 @@ using System.Text.Json.Serialization;
 namespace Proteus.Services;
 
 /// <summary>
-/// Puts a finished retarget into the outfit's own mod, as a new option of a group Proteus owns.
+/// Puts a finished retarget into the outfit's own mod: as a new option of a group Proteus owns, or as one more option
+/// of a single-choice group the author wrote (their size group, where a new size naturally belongs).
 /// <para/>
 /// The author's own files are never touched, which is what makes this safe to do to somebody else's mod and is the one
 /// real advantage it has over the brush: there is no backup to keep, no ordering to negotiate with the other features
@@ -36,12 +37,33 @@ internal static class BodyRetargetWriter
 
     internal sealed class Record
     {
+        /// <summary>The group Proteus made most recently. Kept for records written before each entry named its own.</summary>
         public string Group { get; set; } = "";
         public List<Entry> Options { get; set; } = [];
+
+        /// <summary>The groups Proteus made itself — as opposed to the author's, which it only added options to.</summary>
+        public IEnumerable<string> OwnGroups
+            => Options.Where(e => !e.InAuthorGroup).Select(GroupOf)
+                      .Append(Group).Where(g => g.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>The group an entry went into; an entry from before entries named one was in <see cref="Group"/>.</summary>
+        public string GroupOf(Entry e) => e.Group.Length > 0 ? e.Group : Group;
+
+        /// <summary>The own groups still holding an entry, other than <paramref name="group"/>.</summary>
+        public IEnumerable<string> OwnGroupsExcept(string group)
+            => Options.Where(e => !e.InAuthorGroup).Select(GroupOf)
+                      .Where(g => g.Length > 0 && !string.Equals(g, group, StringComparison.OrdinalIgnoreCase))
+                      .Distinct(StringComparer.OrdinalIgnoreCase);
     }
 
     internal sealed class Entry
     {
+        /// <summary>The group this option was saved into.</summary>
+        public string Group { get; set; } = "";
+
+        /// <summary>Saved into a group of the author's, which undo must leave standing, rather than one Proteus made.</summary>
+        public bool InAuthorGroup { get; set; }
+
         public string Name { get; set; } = "";
         public string GamePath { get; set; } = "";
         public string File { get; set; } = "";
@@ -93,6 +115,18 @@ internal static class BodyRetargetWriter
         => Save(modRoot, groupName, gamePath, bodyMod, from, [new Refit(optionName, model, to)]);
 
     /// <summary>
+    /// Whether <paramref name="groupName"/> is a group of the author's that a save would add options to, rather than
+    /// one Proteus made (or would make) itself: it exists, and no save of ours created it.
+    /// </summary>
+    public static bool IsAuthorGroup(string modRoot, string groupName)
+    {
+        bool exists = (PenumbraModMeta.TryReadGroups(modRoot) ?? [])
+            .Any(g => string.Equals(g.Name, groupName, StringComparison.OrdinalIgnoreCase));
+        bool ours = ReadRecord(modRoot)?.OwnGroups.Contains(groupName, StringComparer.OrdinalIgnoreCase) ?? false;
+        return exists && !ours;
+    }
+
+    /// <summary>
     /// Write every refit into the mod as options of <paramref name="groupName"/> in one manifest write, adding the
     /// group if it is not there and replacing any option of the same name.
     /// <para/>
@@ -109,7 +143,25 @@ internal static class BodyRetargetWriter
             {
                 if (refits.Count == 0) return new Outcome(false, groupName, "", "Nothing to save.");
 
+                bool author = IsAuthorGroup(modRoot, groupName);
                 var options = PenumbraModMeta.TryReadFileOptions(modRoot, groupName) ?? [];
+
+                // An author's option is never overwritten: only one this tool put there earlier may be replaced.
+                if (author)
+                {
+                    var ours = ReadRecord(modRoot)?.Options
+                                   .Where(e => e.InAuthorGroup && string.Equals(e.Group, groupName,
+                                                                               StringComparison.OrdinalIgnoreCase))
+                                   .Select(e => e.Name).ToHashSet(StringComparer.OrdinalIgnoreCase)
+                               ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    var taken = refits.FirstOrDefault(r => !ours.Contains(r.Option)
+                                                           && options.Any(o => string.Equals(o.Name, r.Option,
+                                                                                             StringComparison.OrdinalIgnoreCase)));
+                    if (taken.Option != null)
+                        return new Outcome(false, groupName, names,
+                                           $"\"{groupName}\" already has an option called \"{taken.Option}\" of its own. " +
+                                           "Save the refit to another group.");
+                }
                 var written = new List<(Refit Refit, string Rel)>();
                 foreach (var refit in refits)
                 {
@@ -118,6 +170,20 @@ internal static class BodyRetargetWriter
                     Directory.CreateDirectory(Path.GetDirectoryName(full)!);
                     PenumbraModMeta.AtomicWrite(full, refit.Model);
                     written.Add((refit, rel));
+                }
+
+                if (author)
+                {
+                    PenumbraModMeta.AddFileOptions(modRoot, groupName, written.Select(w => new PenumbraModMeta.FileOption(
+                        w.Refit.Option,
+                        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            [gamePath] = w.Rel.Replace('\\', '/'),
+                        })).ToList());
+                    foreach (var (refit, rel) in written)
+                        WriteRecord(modRoot, groupName, true, refit.Option, gamePath, rel, bodyMod, from, refit.To);
+                    return new Outcome(true, groupName, names, Added(refits, groupName) +
+                                       "Choose it there in Penumbra to wear it.");
                 }
 
                 // Rebuilt from what is there, so saving more sizes grows the group instead of replacing it, and
@@ -159,13 +225,10 @@ internal static class BodyRetargetWriter
                                                      final.Count - 1);
 
                 foreach (var (refit, rel) in written)
-                    WriteRecord(modRoot, groupName, refit.Option, gamePath, rel, bodyMod, from, refit.To);
+                    WriteRecord(modRoot, groupName, false, refit.Option, gamePath, rel, bodyMod, from, refit.To);
 
-                string saved = refits.Count == 1
-                                   ? $"Saved as \"{refits[0].Option}\" in the \"{groupName}\" group. "
-                                   : $"Saved {refits.Count} sizes in the \"{groupName}\" group. ";
                 return new Outcome(true, groupName, names,
-                                   saved +
+                                   Added(refits, groupName) +
                                    "Penumbra only picks a default for a mod it is adding for the first time, so " +
                                    "choose the option there to see it.");
             }
@@ -182,13 +245,35 @@ internal static class BodyRetargetWriter
         }
     }
 
-    /// <summary>Remove one retargeted option, and the whole group once only <see cref="OriginalOption"/> is left.</summary>
+    private static string Added(IReadOnlyList<Refit> refits, string groupName)
+        => refits.Count == 1
+               ? $"Saved as \"{refits[0].Option}\" in the \"{groupName}\" group. "
+               : $"Saved {refits.Count} sizes in the \"{groupName}\" group. ";
+
+    /// <summary>
+    /// Remove one retargeted option. From a group Proteus made, the whole group goes once only
+    /// <see cref="OriginalOption"/> is left; from an author's group, only the option goes and the group stays.
+    /// </summary>
     public static Outcome Undo(string modRoot, string groupName, string optionName)
     {
         lock (WriteLock)
         {
             try
             {
+                bool author = ReadRecord(modRoot)?.Options.Any(e => e.InAuthorGroup
+                                  && string.Equals(e.Group, groupName, StringComparison.OrdinalIgnoreCase)
+                                  && string.Equals(e.Name, optionName, StringComparison.OrdinalIgnoreCase)) ?? false;
+                if (author)
+                {
+                    var removed = PenumbraModMeta.RemoveOption(modRoot, groupName, optionName);
+                    ForgetOption(modRoot, groupName, optionName);
+                    if (removed != null)
+                        foreach (var rel in removed.Values)
+                            DeleteQuietly(Path.Combine(modRoot, rel.Replace('/', Path.DirectorySeparatorChar)));
+                    PruneEmptyFolders(Path.Combine(modRoot, Subfolder));
+                    return new Outcome(true, groupName, optionName, $"Removed \"{optionName}\".");
+                }
+
                 var options = PenumbraModMeta.TryReadFileOptions(modRoot, groupName);
                 if (options == null)
                     return new Outcome(false, groupName, optionName, "There is no retarget group in this mod.");
@@ -202,7 +287,7 @@ internal static class BodyRetargetWriter
                 if (kept.Count == 0)
                 {
                     PenumbraModMeta.DeleteGroup(modRoot, groupName);
-                    DeleteRecord(modRoot);
+                    ForgetGroup(modRoot, groupName);
                 }
                 else
                 {
@@ -214,7 +299,7 @@ internal static class BodyRetargetWriter
                     int priority = Math.Max(PenumbraModMeta.MaxGroupPriority(modRoot), 1);
                     PenumbraModMeta.WriteFileOptionGroup(modRoot, Position(modRoot, groupName), groupName, priority,
                                                          final, 0);
-                    ForgetOption(modRoot, optionName);
+                    ForgetOption(modRoot, groupName, optionName);
                 }
 
                 // The files last, so a crash between the two leaves an unreferenced folder rather than a group
@@ -272,26 +357,44 @@ internal static class BodyRetargetWriter
         }
     }
 
-    private static void WriteRecord(string modRoot, string group, string option, string gamePath, string rel,
-                                    string bodyMod, string from, string to)
+    private static void WriteRecord(string modRoot, string group, bool inAuthorGroup, string option, string gamePath,
+                                    string rel, string bodyMod, string from, string to)
     {
         var record = ReadRecord(modRoot) ?? new Record();
-        record.Group = group;
-        record.Options.RemoveAll(e => string.Equals(e.Name, option, StringComparison.OrdinalIgnoreCase)
+        // Entries from before each named its own group take the old top-level one now, before it moves on.
+        foreach (var old in record.Options.Where(e => e.Group.Length == 0)) old.Group = record.Group;
+        if (!inAuthorGroup) record.Group = group;
+        record.Options.RemoveAll(e => string.Equals(e.Group, group, StringComparison.OrdinalIgnoreCase)
+                                   && string.Equals(e.Name, option, StringComparison.OrdinalIgnoreCase)
                                    && string.Equals(e.GamePath, gamePath, StringComparison.OrdinalIgnoreCase));
         record.Options.Add(new Entry
         {
+            Group = group, InAuthorGroup = inAuthorGroup,
             Name = option, GamePath = gamePath, File = rel.Replace('\\', '/'),
             BodyMod = bodyMod, From = from, To = to,
         });
         SaveRecord(modRoot, record);
     }
 
-    private static void ForgetOption(string modRoot, string option)
+    private static void ForgetOption(string modRoot, string group, string option)
+        => Forget(modRoot, group, e => string.Equals(e.Name, option, StringComparison.OrdinalIgnoreCase));
+
+    private static void ForgetGroup(string modRoot, string group) => Forget(modRoot, group, _ => true);
+
+    /// <summary>Drop the entries of <paramref name="group"/> that match, and the record once none are left.</summary>
+    private static void Forget(string modRoot, string group, Func<Entry, bool> match)
     {
         var record = ReadRecord(modRoot);
         if (record == null) return;
-        record.Options.RemoveAll(e => string.Equals(e.Name, option, StringComparison.OrdinalIgnoreCase));
+        record.Options.RemoveAll(e => string.Equals(record.GroupOf(e), group, StringComparison.OrdinalIgnoreCase)
+                                   && match(e));
+        if (record.Options.Count == 0)
+        {
+            DeleteRecord(modRoot);
+            return;
+        }
+        if (string.Equals(record.Group, group, StringComparison.OrdinalIgnoreCase))
+            record.Group = record.OwnGroupsExcept(group).LastOrDefault() ?? "";
         SaveRecord(modRoot, record);
     }
 
