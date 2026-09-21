@@ -602,6 +602,36 @@ public static partial class SecondSkinWriter
                                 if (n == 1) { onEdge.Add(k.Item1); onEdge.Add(k.Item2); }
                         }
 
+                        // ONLY AROUND THE CAP. This mesh is the whole layer — hands and all — and every boundary in it is not
+                        // a trim: a collapsed nail bed leaves a ring of boundary edges on one point, with the socket's own rim
+                        // a millimetre off. Snapping those together dragged the fingertip skin's shell onto the collapsed
+                        // bed, a millimetre and a third into the finger, and the fingertip showed through the glove.
+                        if (pEl2 is { } pwBox && emitter.build.capAllVerts.Count > 0)
+                        {
+                            var lo = new Vec3(float.MaxValue, float.MaxValue, float.MaxValue);
+                            var hi = new Vec3(float.MinValue, float.MinValue, float.MinValue);
+                            foreach (var cp in emitter.build.capAllVerts)
+                            {
+                                lo = new Vec3(MathF.Min(lo.X, cp.X), MathF.Min(lo.Y, cp.Y), MathF.Min(lo.Z, cp.Z));
+                                hi = new Vec3(MathF.Max(hi.X, cp.X), MathF.Max(hi.Y, cp.Y), MathF.Max(hi.Z, cp.Z));
+                            }
+                            Span<float> tb = stackalloc float[4];
+                            int outside = 0;
+                            foreach (var i in onEdge.ToArray())
+                            {
+                                ReadTyped(emitter.outStreams[pwBox.Stream], i * emitter.outStrides[pwBox.Stream] + pwBox.Offset,
+                                          pwBox.Type, tb);
+                                if (tb[0] >= lo.X - CrackWeldReach && tb[0] <= hi.X + CrackWeldReach
+                                 && tb[1] >= lo.Y - CrackWeldReach && tb[1] <= hi.Y + CrackWeldReach
+                                 && tb[2] >= lo.Z - CrackWeldReach && tb[2] <= hi.Z + CrackWeldReach) continue;
+                                onEdge.Remove(i);
+                                outside++;
+                            }
+                            if (outside > 0)
+                                emitter.build.diag?.Invoke($"authored cap: {outside} boundary vertex/vertices away from the cap "
+                                           + "left out of the crack weld");
+                        }
+
                         var at = new Dictionary<(int, int, int), ushort>();
                         var into = new ushort[emitter.vc];
                         for (ushort i = 0; i < emitter.vc; i++) into[i] = i;

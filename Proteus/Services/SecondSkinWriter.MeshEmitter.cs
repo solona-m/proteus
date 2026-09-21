@@ -238,7 +238,8 @@ public static partial class SecondSkinWriter
                 build.uvUnmapped += BuildVerbatim(s, src.Vb, 0x44 + m * DeclSize, vc, decl, vbo, bs, push,
                     out outStreams, out outStrides, out declBlock, out uv, out uvPre, src.UvConv,
                     out capSrcPos, out capOutPos, out capPlan, sides, cov, capTris, build.diag,
-                    buildCapGeometry: build.capSrc == null, bridge: bridge, pushSweep: build.pushSweep, spanTris: spanTris);
+                    buildCapGeometry: build.capSrc == null, bridge: bridge, pushSweep: build.pushSweep, spanTris: spanTris,
+                    nailBeds: cov != null ? build.NailBedsOf(src, m) : null);
                 if (src.UvConv != null) build.uvMoved += vc;
 
                 // The tile shift brings a mesh onto [0,1] only if it sits inside one integer cell. Reported, not

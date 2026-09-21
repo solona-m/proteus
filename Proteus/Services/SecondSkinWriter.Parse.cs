@@ -374,6 +374,9 @@ public static partial class SecondSkinWriter
 
         // Which of this source's meshes belong in the shell. Per-source: see SourceSpec.
         public Func<string, bool> Keep = IsBodySkinMaterial;
+
+        // The hands: unpainted nail beds take the fingertip's UV — see SourceSpec.CoverNails.
+        public bool CoverNails;
     }
 
     /// <summary>One mesh's index edits for a shape: for the mesh whose index range begins at

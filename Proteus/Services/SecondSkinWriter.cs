@@ -156,6 +156,11 @@ public static partial class SecondSkinWriter
     /// Attribute names the game has switched off on this model: a submesh carrying any is not drawn, not copied,
     /// and neither cover nor a join for the redundancy pass.
     /// </param>
+    /// <param name="CoverNails">
+    /// This source is the HANDS: a nail bed the layer leaves unpainted takes the fingertip's UV — see
+    /// <see cref="NailBeds"/>. Each is its own little island in the atlas that glove art never reaches, so
+    /// without this a glove leaves every nail bare.
+    /// </param>
     public readonly record struct SourceSpec(
         byte[] Model,
         Func<string, bool>? KeepMaterial = null,
@@ -167,7 +172,8 @@ public static partial class SecondSkinWriter
         IReadOnlySet<string>? HiddenAttributes = null,
         // What KeepMaterial and UvConv ARE, as text: delegates cannot be compared, so null makes a build
         // uncacheable. See SecondSkinService.ShellGeometryKey.
-        string? DelegateKey = null);
+        string? DelegateKey = null,
+        bool CoverNails = false);
 
     // Vertex Usage ids (FFXIV mdl).
     internal const byte UsePosition = 0, UseBlendWeight = 1, UseBlendIndices = 2,

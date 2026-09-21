@@ -86,18 +86,15 @@ public sealed unsafe class LiveModelDump(IObjectTable objects)
             if (string.IsNullOrEmpty(name)) continue;
             if (filter.Length > 0 && name.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0) continue;
 
-            // The resource keeps the file it was loaded from; length and pointer live on the handle's
-            // ResourceHandle base.
-            var res = (FFXIVClientStructs.FFXIV.Client.System.Resource.Handle.ResourceHandle*)handle;
-            var data = res->GetData();
-            var len = (int)res->GetLength();
-            if (data == null || len <= 0)
-            { outp.Add($"slot {i,2}: {name} — resource has no readable bytes"); continue; }
-
-            var bytes = new byte[len];
-            System.Runtime.InteropServices.Marshal.Copy((nint)data, bytes, 0, len);
+            // The bytes the renderer holds when the game kept them, else the file it names — a model's file data
+            // is usually freed once it is uploaded, and "no readable bytes" is not "nothing to look at".
+            var bytes = LiveCharacter.ModelBytes(handle, name);
+            if (bytes == null)
+            { outp.Add($"slot {i,2}: {name} — no bytes, and its file is not readable"); continue; }
+            int len = bytes.Length;
             var safe = new StringBuilder();
-            foreach (var c in Path.GetFileName(name)) safe.Append(char.IsLetterOrDigit(c) || c is '.' or '_' or '-' ? c : '_');
+            foreach (var c in Path.GetFileName(LiveCharacter.FilePath(name)))
+                safe.Append(char.IsLetterOrDigit(c) || c is '.' or '_' or '-' ? c : '_');
             var path = Path.Combine(dir, $"live_{i}_{safe}");
             File.WriteAllBytes(path, bytes);
             outp.Add($"slot {i,2}: {name}  ->  {path}  ({len} bytes)");
