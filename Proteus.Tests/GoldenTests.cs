@@ -104,6 +104,71 @@ public class GoldenTests(ITestOutputHelper o)
         cases.Compare("shell");
     }
 
+    // ── body retarget ─────────────────────────────────────────────────────────
+
+    private const string NeolitheChest = @"E:\Penumbradt\Neolithe [ALL IN ONE]\DEFAULT CHEST - SmallClothes";
+    private const string NeolitheExtra = @"E:\Penumbradt\Neolithe [ALL IN ONE]\EXTRA CHEST BUFF - SmallClothes";
+    private const string NeolitheLegs  = @"E:\Penumbradt\Neolithe [ALL IN ONE]\DEFAULT LEGS - SmallClothes";
+
+    [Fact]
+    public void Retarget_output_matches_baseline()
+    {
+        var cases = new Cases(o);
+
+        // The garment stands in as a body model of a size other than the pair being refitted between, so the solve
+        // has real geometry with a real body mesh to snap and real cloth (undies, pubes, piercings) to carry.
+        Retarget(cases, "chest/XS-to-L", NeolitheChest + @"\SFW M.mdl",
+                 "_top", NeolitheChest + @"\SFW XS.mdl", NeolitheChest + @"\SFW L.mdl");
+
+        // Across shape families as well as the size axis, because the picker allows any pair.
+        Retarget(cases, "chest/default-to-buff", NeolitheChest + @"\SFW M.mdl",
+                 "_top", NeolitheChest + @"\SFW M.mdl", NeolitheExtra + @"\SFW M.mdl");
+
+        Retarget(cases, "legs/small-to-large", NeolitheLegs + @"\GEN B Medium.mdl",
+                 "_dwn", NeolitheLegs + @"\SFW Small.mdl", NeolitheLegs + @"\SFW Large.mdl");
+
+        cases.Compare("retarget");
+    }
+
+    private void Retarget(Cases cases, string name, string garmentPath, string slot, string sourcePath, string targetPath)
+    {
+        if (!File.Exists(garmentPath) || !File.Exists(sourcePath) || !File.Exists(targetPath))
+        {
+            o.WriteLine($"{name}: models missing, skipped");
+            return;
+        }
+
+        var garmentBytes = File.ReadAllBytes(garmentPath);
+        var sourceBytes = File.ReadAllBytes(sourcePath);
+        var targetBytes = File.ReadAllBytes(targetPath);
+
+        var garment = ModelPartReader.Read(garmentBytes);
+        var source = ModelPartReader.Read(sourceBytes);
+        var target = ModelPartReader.Read(targetBytes);
+        if (garment == null || source == null || target == null)
+        {
+            cases.Text(name + "/bytes", "unreadable");
+            return;
+        }
+
+        if (!IdentityCorrespondence.TryBuild(source, target, slot, out var built, out string refusal,
+                                             BodyRetargetDiagTests.Uv(sourceBytes), BodyRetargetDiagTests.Uv(targetBytes)))
+        {
+            cases.Text(name + "/bytes", "refused: " + refusal);
+            return;
+        }
+
+        var planned = BodyRetarget.Plan(garment, garmentBytes, [new BodyRetarget.SlotPair(slot, built!, target)]);
+        cases.Bytes(name + "/bytes", planned.Model);
+
+        // Alongside the bytes, so "the model changed" and "the solve decided something different" are separable.
+        var r = planned.Report;
+        cases.Text(name + "/report",
+                   $"snapped {r.Snapped} transferred {r.Transferred} missed {r.Missed} pushed {r.Pushed} " +
+                   $"worstMove {r.WorstMove:F6} worstPush {r.WorstPush:F6} spares {r.UnmappedSpares} " +
+                   $"otherLods {r.HasOtherLods}");
+    }
+
     private static void BustCases(Cases cases)
     {
         void Solve(string name, Func<(SecondSkinWriter.Vec3[] Pos, SecondSkinWriter.Vec3[] Nrm, ushort[] Tris, float[] Bust)> chest,
