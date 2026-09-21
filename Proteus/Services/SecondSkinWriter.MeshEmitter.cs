@@ -24,6 +24,7 @@ public static partial class SecondSkinWriter
             private readonly bool mirrorUv1;
             private readonly IReadOnlySet<string>? hiddenAttrs;
             private readonly bool clearAttrs;
+            private readonly bool dropVariantAttrs;
             private readonly CapUvPlan? capUv;
             private byte[] s = null!;
             private int mo;
@@ -58,8 +59,9 @@ public static partial class SecondSkinWriter
             private ushort keptSubs;
             private List<byte[]> subsForMesh = null!;
 
-            public MeshEmitter(ShellBuild build, Source src, int m, ushort materialIndex, float push, bool preserve, SecondSkinLayer? cov, int mapBase, bool mirrorUv1, IReadOnlySet<string>? hiddenAttrs, bool clearAttrs, CapUvPlan? capUv)
+            public MeshEmitter(ShellBuild build, Source src, int m, ushort materialIndex, float push, bool preserve, SecondSkinLayer? cov, int mapBase, bool mirrorUv1, IReadOnlySet<string>? hiddenAttrs, bool clearAttrs, CapUvPlan? capUv, bool dropVariantAttrs = false)
             {
+                this.dropVariantAttrs = dropVariantAttrs;
                 this.build = build;
                 this.src = src;
                 this.m = m;
@@ -508,7 +510,9 @@ public static partial class SecondSkinWriter
                     W32(ns, 4, (uint)keep.Length);
                     // Cleared when Proteus owns this geometry's visibility (ContentGeometry.OwnAttributes), or the HOST's
                     // IMC mask could cull it.
-                    W32(ns, 8, clearAttrs ? 0 : build.RemapAttrs(src, U32(ss + 8)));
+                    // With dropVariantAttrs, the variant bits go and every other tag stays (ContentGeometry.DropVariantAttributes).
+                    uint mask = dropVariantAttrs ? U32(ss + 8) & ~VariantBits(src) : U32(ss + 8);
+                    W32(ns, 8, clearAttrs ? 0 : build.RemapAttrs(src, mask));
                     // The submesh's BONE WINDOW: the source's, rebased — unless the table was rebuilt, in which case
                     // window == table size.
                     if (capBoneTable != null)

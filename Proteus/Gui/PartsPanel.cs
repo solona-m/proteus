@@ -31,6 +31,7 @@ public sealed class PartsPanel
 
     private Dictionary<string, string>? mods;
     private string modFilter = string.Empty;
+    private string modelFilter = string.Empty;
 
     private string? modDir;
 
@@ -63,6 +64,13 @@ public sealed class PartsPanel
     /// covers all its islands. Kept for the session and never written into the mod.
     /// </summary>
     private readonly Dictionary<string, HashSet<string>> lockedParts = [];
+
+    /// <summary>
+    /// Parts Body size holds where their author put them, keyed like <see cref="lockedParts"/> but a separate set.
+    /// Holding a buckle still through a refit says nothing about whether it may be brushed or moved by hand, so the
+    /// two never share: a hold made here must not lock the part against Move afterwards.
+    /// </summary>
+    private readonly Dictionary<string, HashSet<string>> heldParts = [];
 
     /// <summary>For each vertex of <see cref="parts"/>, the index in its part list of the most specific part it
     /// belongs to (its island where the submesh lists islands, else the submesh); -1 for none.</summary>
@@ -106,12 +114,22 @@ public sealed class PartsPanel
 
         /// <summary>Pick one part and grow or shrink it about its centre by dragging it sideways.</summary>
         Scale,
+
+        /// <summary>Refit the whole model onto another size of the body it was made for — see <see cref="BodyRetargetPanel"/>.</summary>
+        Retarget,
     }
 
     /// <summary>The tools that work on one chosen part rather than painting: Move, Rotate and Scale share its choice.</summary>
     private static bool IsPartTool(Tool t) => t is Tool.Move or Tool.Rotate or Tool.Scale;
 
     private bool PartTool => IsPartTool(tool);
+
+    /// <summary>
+    /// The tools a drag on the model paints with. Written as its own predicate rather than "not Navigate", because
+    /// Retarget is a third thing that is neither painting nor dragging, and every guard phrased as a single exclusion
+    /// silently starts feeding strokes to the next tool added.
+    /// </summary>
+    private bool PaintTool => tool is Tool.Inflate or Tool.Deflate or Tool.Relax or Tool.Bridge or Tool.Wind;
 
     /// <summary>The handle Scale drags — the part itself — shared by the model view and the character.</summary>
     private readonly PartScaleDrag scaleDrag = new();
@@ -130,6 +148,24 @@ public sealed class PartsPanel
 
     /// <summary>Move carries the cloth joined to the part along, fading out over <see cref="moveFalloffMm"/>.</summary>
     private bool moveAdjacent = true;
+
+    /// <summary>
+    /// Move, Rotate and Scale act on single polygons rather than whole parts. The selection is
+    /// <see cref="movePolys"/>, and the soft falloff is measured along the surface through joined polygons.
+    /// </summary>
+    private bool movePolygons;
+
+    /// <summary>The selected polygons in polygon mode, by their corners. Cleared with the model.</summary>
+    private readonly HashSet<PolygonSelection.Key> movePolys = [];
+
+    /// <summary>The open model's selectable polygons and which touch which; built on first use per model.</summary>
+    private PolygonSelection? polySelection;
+
+    /// <summary>Changes whenever <see cref="movePolys"/> does, for the live tint's cache.</summary>
+    private int movePolysVersion;
+
+    /// <summary>The polygon under the mouse in the model view this frame, in polygon mode; null when none.</summary>
+    private PolygonSelection.Key? hoverPoly;
 
     /// <summary>How far along the surface the joined cloth follows a move, in millimetres.</summary>
     private float moveFalloffMm = 50f;
@@ -201,6 +237,9 @@ public sealed class PartsPanel
     /// <summary>Puts the edit on the character while painting on it — see <see cref="LiveBrushPreview"/>.</summary>
     private readonly LiveBrushPreview preview;
 
+    /// <summary>The Body size tool's own half of the tab — see <see cref="BodyRetargetPanel"/>.</summary>
+    private readonly BodyRetargetPanel retarget;
+
     /// <summary>The solve has changed since the character last showed it.</summary>
     private bool previewDirty;
 
@@ -220,12 +259,15 @@ public sealed class PartsPanel
         this.viewport = viewport;
         this.liveBrush = liveBrush;
         preview = new LiveBrushPreview(penumbra, compositor, log);
+        retarget = new BodyRetargetPanel(penumbra, log);
         LiveBrushPreview.CleanUp();
         partOfVertexFn = PartOfVertex;
         lockClickedFn = LockClickedOnCharacter;
         tickClickedFn = TickClickedOnCharacter;
         partTickedFn = PartTicked;
+        partHeldFn = PartHeld;
         moveClickedFn = MoveClickedOnCharacter;
+        polyClickedFn = PolygonClicked;
         moveTickedFn = MoveTicked;
         gizmoCaptureFn = () => tool switch
         {
@@ -260,6 +302,13 @@ public sealed class PartsPanel
         ShowingModel = false;
         TickAutosave();
         ConsumeApplySizes();
+
+        // Asked for mid-frame by a refit's save or undo; done here, before anything this frame reads the model.
+        if (refreshModelsPending)
+        {
+            refreshModelsPending = false;
+            RefreshModels();
+        }
 
         ImGui.Spacing();
         ImGui.PushTextWrapPos(0);
@@ -334,6 +383,7 @@ public sealed class PartsPanel
                 DrawToolPicker();
                 ImGui.Separator();
                 if (tool == Tool.Navigate) DrawStaging();
+                else if (tool == Tool.Retarget) DrawRetarget();
                 else if (PartTool) DrawMove();
                 else DrawBrush();
 
@@ -362,12 +412,16 @@ public sealed class PartsPanel
                                    lockClicked: moving ? moveClickedFn : pickParts ? tickClickedFn : lockClickedFn,
                                    pickParts: pickParts,
                                    partTicked: moving ? moveTickedFn : partTickedFn,
-                                   tickedVersion: moving ? MoveVersion() : TickedVersion(),
+                                   tickedVersion: moving ? (movePolygons ? movePolysVersion : MoveVersion()) : TickedVersion(),
                                    moveGizmo: tool == Tool.Move ? moveGizmo : null,
                                    movePivot: moving ? MovePivot() : null,
                                    graftedGamePath: GraftedGamePath(),
                                    scaleDrag: tool == Tool.Scale ? scaleDrag : null,
-                                   rotateGizmo: tool == Tool.Rotate ? rotateGizmo : null);
+                                   rotateGizmo: tool == Tool.Rotate ? rotateGizmo : null,
+                                   partLocked: tool == Tool.Retarget ? partHeldFn : null,
+                                   lockedVersion: tool == Tool.Retarget ? VersionOf(RetargetHolds) : 0,
+                                   polygons: moving && movePolygons ? movePolys : null,
+                                   polygonClicked: moving && movePolygons ? polyClickedFn : null);
         }
 
         PumpMove();
@@ -444,6 +498,7 @@ public sealed class PartsPanel
         FinishMove();   // a drag cut off by leaving still counts, and still undoes
         FlushPending(refreshGame);
         EndLivePreview(refreshGame);
+        retarget.Clear();     // its preview has just been taken down, so its plan no longer matches what is drawn
         autoPicked = false;   // the next visit may find different gear on
     }
 
@@ -454,7 +509,7 @@ public sealed class PartsPanel
     private void DrawLivePick()
     {
         if (showModelView || penumbra.GetModDirectory() is not { } modsRoot) return;
-        if (tool != Tool.Navigate && volume != null) return;
+        if (tool != Tool.Navigate && tool != Tool.Retarget && volume != null) return;
         liveBrush.ArmPick(modsRoot, OnLivePicked);
         ImGui.TextDisabled(Strings.Parts.LivePickTip);
         ImGui.Spacing();
@@ -562,7 +617,7 @@ public sealed class PartsPanel
     private void HandleUndoShortcut()
     {
         bool pressed = undoKey.Poll();   // every frame — see HeldKey
-        if (!pressed || tool == Tool.Navigate || volume is not { CanUndo: true } vol || Editing) return;
+        if (!pressed || !PaintTool || volume is not { CanUndo: true } vol || Editing) return;
         var io = ImGui.GetIO();
         if (!io.KeyCtrl || !ShortcutsHaveTheKeyboard()) return;
 
@@ -598,7 +653,7 @@ public sealed class PartsPanel
     {
         bool grow = growKey.Poll(), shrink = shrinkKey.Poll();   // every frame — see HeldKey
         if (!grow && !shrink) return;
-        if (tool == Tool.Navigate || PartTool || volume == null) return;
+        if (!PaintTool || volume == null) return;
         var io = ImGui.GetIO();
         if (io.KeyCtrl || !ShortcutsHaveTheKeyboard()) return;
 
@@ -735,7 +790,9 @@ public sealed class PartsPanel
         EndLivePreview(refreshGame: true);
         brushChangedAt = -1;
         movePart = null;
+        ClearPolygons(forgetModel: true);
         ReleaseHandles();
+        retarget.Clear();
         modDir = dir;
         modelIndex = -1;
         parts = null;
@@ -771,6 +828,50 @@ public sealed class PartsPanel
         // An imported pack's garments publish nothing, so they are listed from the sidecar, after the published ones.
         models.AddRange(ContentModels(root, contentFiles));
         modelLabels = ModelLabels(models);
+    }
+
+    /// <summary>Set by a refit's save or undo; <see cref="Draw"/> re-reads the model list at the top of the next frame.</summary>
+    private bool refreshModelsPending;
+
+    /// <summary>
+    /// Re-read the open mod's model list after something added or removed a model — a saved or undone body refit —
+    /// keeping the open model open. Unlike <see cref="SelectMod"/>, nothing else is reset: the model, its brush state
+    /// and its locks all stay, because the model itself did not change.
+    /// </summary>
+    private void RefreshModels()
+    {
+        if (ModRoot() is not { } root || modIsLegacy) return;
+        var open = modelIndex >= 0 && modelIndex < models.Count ? models[modelIndex] : (PenumbraModMeta.Redirect?)null;
+
+        redirects = PenumbraModMeta.ReadAllRedirects(root);
+        models = redirects
+            .Where(r => r.GamePath.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(r => r.GamePath, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        models.AddRange(ContentModels(root, contentFiles));
+        modelLabels = ModelLabels(models);
+
+        // The same row by file and game path; the list may have grown ahead of it. Gone (an undone refit that was
+        // open) falls back to nothing open, as opening the mod afresh would.
+        modelIndex = open is { } was
+            ? models.FindIndex(m => string.Equals(m.File, was.File, StringComparison.OrdinalIgnoreCase)
+                                    && string.Equals(m.GamePath, was.GamePath, StringComparison.OrdinalIgnoreCase)
+                                    && m.Source == was.Source)
+            : -1;
+        if (modelIndex < 0 && open != null)
+        {
+            // Everything tied to the model that went, as opening another model would drop it.
+            FinishMove();
+            EndLivePreview(refreshGame: true);
+            parts = null;
+            volume = null;
+            brushBase = null;
+            movePart = null;
+            ClearPolygons(forgetModel: true);
+            ReleaseHandles();
+            retarget.Clear();
+            viewport.Clear();
+        }
     }
 
     /// <summary>
@@ -853,8 +954,13 @@ public sealed class PartsPanel
                                         .Select(w => w.Rel)
                                         .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+            // A mod with a size group lists a model per size, and a mod with a size group per body lists dozens.
+            ComboSearch.Box("##partsModel", ref modelFilter);
+            bool any = false;
             for (int i = 0; i < models.Count; i++)
             {
+                if (!ComboSearch.Matches(modelFilter, modelLabels[i] + " " + models[i].File)) continue;
+                any = true;
                 // Green for the file the character is drawing right now.
                 bool worn = wornModels.Contains(models[i].File.Replace('\\', '/'));
                 bool picked;
@@ -862,6 +968,7 @@ public sealed class PartsPanel
                     picked = ImGui.Selectable(modelLabels[i] + "##m" + i, i == modelIndex);
                 if (picked && i != modelIndex) SelectModel(i);
             }
+            if (!any) ImGui.TextDisabled(Strings.Parts.NoMatches);
             ImGui.EndCombo();
         }
     }
@@ -902,7 +1009,9 @@ public sealed class PartsPanel
         brushChangedAt = -1;
         brushBase = null;
         movePart = null;
+        ClearPolygons(forgetModel: true);
         ReleaseHandles();
+        retarget.Clear();
         // A new solve starts from the file as it is now, so the other sizes must too. Replaced, not cleared — see sizeBases.
         sizeBases = new ConcurrentDictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
         modelIndex = index;
@@ -944,15 +1053,27 @@ public sealed class PartsPanel
 
     // ── locked parts ────────────────────────────────────────────────────────
 
-    /// <summary>The open model's locked labels, created on first use.</summary>
-    private HashSet<string> Locks
+    private static readonly HashSet<string> NoSelection = [];
+
+    /// <summary>
+    /// The open model's locked labels for the tool in use: Body size's holds under Body size, the brush locks under
+    /// every other tool. Everything that draws, toggles or tests a lock goes through this, so the rows, the model view
+    /// and a click on the character all follow the tool without knowing there are two sets.
+    /// </summary>
+    private HashSet<string> Locks => LockSet(tool == Tool.Retarget ? heldParts : lockedParts);
+
+    /// <summary>The open model's brush locks whatever the tool — what the brush solve is always given.</summary>
+    private HashSet<string> BrushLocks => LockSet(lockedParts);
+
+    /// <summary>The open model's holds for Body size whatever the tool.</summary>
+    private HashSet<string> RetargetHolds => LockSet(heldParts);
+
+    /// <summary>One set of labels for the open model, created on first use.</summary>
+    private HashSet<string> LockSet(Dictionary<string, HashSet<string>> byModel)
     {
-        get
-        {
-            if (!lockedParts.TryGetValue(ViewportKey, out var set))
-                lockedParts[ViewportKey] = set = new HashSet<string>(StringComparer.Ordinal);
-            return set;
-        }
+        if (!byModel.TryGetValue(ViewportKey, out var set))
+            byModel[ViewportKey] = set = new HashSet<string>(StringComparer.Ordinal);
+        return set;
     }
 
     private static int[] BuildPartOfVertex(ModelParts model)
@@ -983,8 +1104,9 @@ public sealed class PartsPanel
     /// <summary>Lock or unlock one part, from the list, a Shift-click on the model or one on the character.</summary>
     private void ToggleLock(string label)
     {
-        if (parts is not { } model || model.Parts.FirstOrDefault(p => p.Label == label) is not { } part || IsSkin(part))
-            return;
+        if (parts is not { } model || model.Parts.FirstOrDefault(p => p.Label == label) is not { } part) return;
+        // A skin lock means nothing to the brush, which never moves skin; only the refit, which does, offers one.
+        if (IsSkin(part) && tool != Tool.Retarget) return;
         var locks = Locks;
 
         if (!IsLocked(part))
@@ -1013,14 +1135,15 @@ public sealed class PartsPanel
         ApplyLocks();
     }
 
-    /// <summary>Hand the locks to the solve and the viewer.</summary>
+    /// <summary>Hand the locks to the solve and the viewer. Called again when the tool changes, since the viewer
+    /// shows the active tool's set.</summary>
     private void ApplyLocks()
     {
         if (parts == null) return;
-        var locks = Locks;
-        viewport.Locked = locks;
+        viewport.Locked = Locks;
         viewport.Recolour();
         if (volume == null) return;
+        var locks = BrushLocks;
         // A submesh's triangles already include every island of it, so the labels alone are enough.
         volume.SetLocked(parts.Parts.Where(p => locks.Contains(p.Label)).SelectMany(p => p.Triangles));
     }
@@ -1039,6 +1162,16 @@ public sealed class PartsPanel
     private readonly Action<int> lockClickedFn;
     private readonly Action<int> tickClickedFn;
     private readonly Func<int, bool> partTickedFn;
+    private readonly Func<int, bool> partHeldFn;
+
+    /// <summary>Whether part <paramref name="index"/> is held by Body size — itself, or through its whole submesh.</summary>
+    private bool PartHeld(int index)
+    {
+        if (parts == null || index < 0 || index >= parts.Parts.Count) return false;
+        var part = parts.Parts[index];
+        var holds = RetargetHolds;
+        return holds.Contains(part.Label) || (ParentOf(part) is { } parent && holds.Contains(parent.Label));
+    }
 
     /// <summary>A click on the character under Toggle Parts, with a vertex of the triangle it landed on.</summary>
     private void TickClickedOnCharacter(int vertex)
@@ -1056,10 +1189,13 @@ public sealed class PartsPanel
     }
 
     /// <summary>A value that changes whenever the ticked set does, for the live tint's cache.</summary>
-    private int TickedVersion()
+    private int TickedVersion() => VersionOf(ticked);
+
+    /// <summary>A value that changes whenever <paramref name="labels"/> does, for a live wash's cache.</summary>
+    private static int VersionOf(HashSet<string> labels)
     {
-        int h = ticked.Count;
-        foreach (var label in ticked) h ^= StringComparer.Ordinal.GetHashCode(label) * 16777619;
+        int h = labels.Count;
+        foreach (var label in labels) h ^= StringComparer.Ordinal.GetHashCode(label) * 16777619;
         return h;
     }
 
@@ -1073,13 +1209,85 @@ public sealed class PartsPanel
     private ModelPart? MovePart()
         => movePart == null ? null : parts?.Parts.FirstOrDefault(p => p.Label == movePart);
 
-    /// <summary>Choose the part to move, from the model, the list or the character. Skin and locked parts cannot be.</summary>
+    /// <summary>Choose the part to move, from the model, the list or the character. Skin and locked parts cannot be.
+    /// In polygon mode a part chosen from the list selects all its polygons, to grow or shrink from.</summary>
     private void SelectMovePart(string label)
     {
         if (volume is { Moving: true }) return;
         if (parts?.Parts.FirstOrDefault(p => p.Label == label) is not { } part || IsSkin(part) || IsLocked(part)) return;
+        if (movePolygons)
+        {
+            var polys = Polygons();
+            movePolys.Clear();
+            for (int t = 0; polys != null && t + 2 < part.Triangles.Length; t += 3)
+            {
+                var key = PolygonSelection.Key.Of(part.Triangles[t], part.Triangles[t + 1], part.Triangles[t + 2]);
+                if (polys.Contains(key)) movePolys.Add(key);
+            }
+            movePolysVersion++;
+            return;
+        }
         movePart = label;
         viewport.Recolour();
+    }
+
+    private readonly Action<PolygonSelection.Key> polyClickedFn;
+
+    /// <summary>The open model's polygons, built on first use.</summary>
+    private PolygonSelection? Polygons() => parts == null ? null : polySelection ??= new PolygonSelection(parts);
+
+    /// <summary>
+    /// A click on a polygon, from the model view or the character: it alone is selected, or with Shift held it is added
+    /// to the selection, or taken out of it if it was already in.
+    /// </summary>
+    private void PolygonClicked(PolygonSelection.Key key)
+    {
+        if (volume is { Moving: true } || Polygons() is not { } polys || !polys.Contains(key)) return;
+        if (ImGui.GetIO().KeyShift)
+        {
+            if (!movePolys.Remove(key)) movePolys.Add(key);
+        }
+        else
+        {
+            movePolys.Clear();
+            movePolys.Add(key);
+        }
+        movePolysVersion++;
+    }
+
+    /// <summary>Empty the polygon selection; with <paramref name="forgetModel"/>, also the open model's polygons.</summary>
+    private void ClearPolygons(bool forgetModel = false)
+    {
+        if (movePolys.Count > 0) movePolysVersion++;
+        movePolys.Clear();
+        hoverPoly = null;
+        if (forgetModel) polySelection = null;
+    }
+
+    /// <summary>
+    /// The selected polygons over the model view, and the one under the mouse — the view's own colouring is per part,
+    /// too coarse to show a polygon. Also finds <see cref="hoverPoly"/> for this frame's click.
+    /// </summary>
+    private void DrawPolygonsOverModel()
+    {
+        hoverPoly = null;
+        if (volume == null || Polygons() is not { } polys) return;
+        var positions = volume.Positions();
+
+        if (viewport.PointerOverModel && viewport.ScreenRay(ImGui.GetMousePos()) is { } ray)
+            hoverPoly = polys.Pick(ray.Origin, ray.Dir, positions);
+
+        var dl = ImGui.GetWindowDrawList();
+        void Fill(PolygonSelection.Key key, uint colour)
+        {
+            if (key.C * 3 + 2 >= positions.Length) return;
+            if (viewport.ModelToScreen(PolygonSelection.At(positions, key.A)) is not { } a) return;
+            if (viewport.ModelToScreen(PolygonSelection.At(positions, key.B)) is not { } b) return;
+            if (viewport.ModelToScreen(PolygonSelection.At(positions, key.C)) is not { } c) return;
+            dl.AddTriangleFilled(a, b, c, colour);
+        }
+        foreach (var key in movePolys) Fill(key, 0x9040A0FFu);                  // ABGR: amber, like a ticked part
+        if (hoverPoly is { } hot) Fill(hot, 0x90FFE0B0u);                        // ABGR: pale blue, what a click takes
     }
 
     private void MoveClickedOnCharacter(int vertex)
@@ -1125,14 +1333,24 @@ public sealed class PartsPanel
 
     private readonly HashSet<string> moveSelectionSet = new(StringComparer.Ordinal);
 
-    /// <summary>The middle of the chosen part's bounds as it now stands — where the gizmo sits. Null with no part.</summary>
+    /// <summary>The middle of the chosen part's bounds as it now stands — where the gizmo sits. Null with no part.
+    /// In polygon mode, the middle of the selected polygons'.</summary>
     private Vector3? MovePivot()
     {
-        if (volume == null || MovePart() is not { } part || part.Triangles.Length == 0) return null;
+        if (volume == null) return null;
+        IEnumerable<int> corners;
+        if (movePolygons)
+        {
+            if (movePolys.Count == 0) return null;
+            corners = PolygonSelection.CornersOf(movePolys);
+        }
+        else if (MovePart() is { Triangles.Length: > 0 } part) corners = part.Triangles;
+        else return null;
+
         var p = volume.Positions();
         var min = new Vector3(float.MaxValue);
         var max = new Vector3(float.MinValue);
-        foreach (int v in part.Triangles)
+        foreach (int v in corners)
         {
             if (v < 0 || v * 3 + 2 >= p.Length) continue;
             var at = new Vector3(p[v * 3], p[v * 3 + 1], p[v * 3 + 2]);
@@ -1168,9 +1386,13 @@ public sealed class PartsPanel
             _           => scaleDrag.Ended,
         };
 
-        if (started && MovePart() is { } part)
+        // What the drag carries: the selected polygons, the soft selection measured along the surface; or the part.
+        IEnumerable<int>? seeds = movePolygons
+            ? movePolys.Count > 0 ? PolygonSelection.CornersOf(movePolys) : null
+            : MovePart()?.Triangles;
+        if (started && seeds != null)
         {
-            if (volume.BeginMove(part.Triangles, moveAdjacent, moveFalloffMm / 1000f) == 0)
+            if (volume.BeginMove(seeds, moveAdjacent, moveFalloffMm / 1000f, alongSurface: movePolygons) == 0)
             {
                 status = Strings.Parts.MoveNothingFree;
                 statusIsError = true;
@@ -1219,7 +1441,40 @@ public sealed class PartsPanel
         ImGui.PopTextWrapPos();
         ImGui.Spacing();
 
-        if (MovePart() is { } part)
+        // Whole parts, or single polygons.
+        if (ImGui.RadioButton(ps.MoveSelectParts, !movePolygons) && movePolygons && volume is not { Moving: true })
+        {
+            movePolygons = false;
+            ClearPolygons();
+            viewport.Recolour();
+        }
+        ImGui.SameLine();
+        if (ImGui.RadioButton(ps.MoveSelectPolygons, movePolygons) && !movePolygons && volume is not { Moving: true })
+        {
+            movePolygons = true;
+            movePart = null;
+            viewport.Recolour();
+        }
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.MoveSelectPolygonsTip);
+        ImGui.Spacing();
+
+        if (movePolygons)
+        {
+            ImGui.PushTextWrapPos(0);
+            if (movePolys.Count == 0) ImGui.TextColored(ProteusStyle.Warn, ps.MoveNoPolygons);
+            else ImGui.TextUnformatted(string.Format(ps.MovePolygonsFmt, movePolys.Count));
+            ImGui.PopTextWrapPos();
+
+            using (ImRaii.Disabled(movePolys.Count == 0 || volume is { Moving: true } || Polygons() == null))
+            {
+                if (ImGui.SmallButton(ps.MoveGrow)) SetPolygons(Polygons()!.Grow(movePolys));
+                ImGui.SameLine();
+                if (ImGui.SmallButton(ps.MoveShrink)) SetPolygons(Polygons()!.Shrink(movePolys));
+                ImGui.SameLine();
+                if (ImGui.SmallButton(ps.MoveClearPolygons)) ClearPolygons();
+            }
+        }
+        else if (MovePart() is { } part)
         {
             ImGui.TextUnformatted(string.Format(ps.MovePartFmt, part.Label));
             ImGui.PushTextWrapPos(0);
@@ -1243,7 +1498,8 @@ public sealed class PartsPanel
             ImGui.SliderFloat(ps.MoveFalloff, ref moveFalloffMm, MinBrushMm, MaxBrushMm,
                               moveFalloffMm < 10f ? "%.1f mm" : "%.0f mm", ImGuiSliderFlags.Logarithmic);
         }
-        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(ps.MoveFalloffTip);
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(movePolygons ? ps.MoveFalloffSurfaceTip : ps.MoveFalloffTip);
 
         ImGui.Spacing();
         ImGui.PushTextWrapPos(0);
@@ -1258,6 +1514,14 @@ public sealed class PartsPanel
         }
 
         DrawEditActions();
+    }
+
+    /// <summary>Replace the polygon selection — a grow or a shrink.</summary>
+    private void SetPolygons(HashSet<PolygonSelection.Key> next)
+    {
+        movePolys.Clear();
+        movePolys.UnionWith(next);
+        movePolysVersion++;
     }
 
     private string ViewportKey => modDir + "|" + (modelIndex >= 0 ? models[modelIndex].File : "");
@@ -1280,28 +1544,36 @@ public sealed class PartsPanel
         var model = parts!;
 
         viewport.Show(ViewportKey, model);
-        viewport.Selected = PartTool ? MoveSelection() : ticked;
+        // Under Body size nothing is being staged for a switch, so nothing shows as selected; the locks show as locks.
+        // In polygon mode no whole part is selected; the polygons are drawn over the image instead.
+        viewport.Selected = PartTool ? (movePolygons ? NoSelection : MoveSelection())
+                          : tool == Tool.Retarget ? NoSelection : ticked;
 
         // Told every frame rather than on change: the mode also resets when a model is picked.
-        viewport.Mode = tool == Tool.Navigate ? PartViewport.ViewportMode.Navigate
+        viewport.Mode = tool is Tool.Navigate or Tool.Retarget ? PartViewport.ViewportMode.Navigate
                       : PartTool ? PartViewport.ViewportMode.Move
                       : PartViewport.ViewportMode.Brush;
         viewport.GizmoCapture = gizmoCaptureFn;
-        viewport.BrushRadius = tool == Tool.Navigate || PartTool ? 0f : ActiveRadiusMm / 1000f;
+        viewport.BrushRadius = !PaintTool ? 0f : ActiveRadiusMm / 1000f;
         viewport.VertexScalar = tool == Tool.Wind ? windAt : null;
         viewport.MirrorBrush = mirrorBrush;
 
         // The share cap is on the image's WIDTH, not the row's height: coupling the row to avail.X flickers as the
         // scrollbar comes and goes.
         // Under a brush a click on the model paints; it only reaches a part with Shift held.
-        bool brushing = tool != Tool.Navigate && !PartTool;
+        bool brushing = PaintTool;
         float width = MathF.Min(height * PartViewport.DefaultAspect, ImGui.GetContentRegionAvail().X * 0.55f);
         if (viewport.Draw(model, new Vector2(width, height)) is { } clicked)
         {
-            if (PartTool) SelectMovePart(clicked);
-            else if (brushing) ToggleLock(clicked);
+            // Body size has nothing to paint, so a plain click on a part holds or frees it — and must never stage a
+            // switch, which is what a click means only under Toggle Parts.
+            if (PartTool && movePolygons) { if (hoverPoly is { } poly) PolygonClicked(poly); }
+            else if (PartTool) SelectMovePart(clicked);
+            else if (brushing || tool == Tool.Retarget) ToggleLock(clicked);
             else Toggle(clicked);
         }
+
+        if (PartTool && movePolygons) DrawPolygonsOverModel();
 
         // Right after the image, so the gizmo is drawn over it, in the same window's draw list.
         if (tool == Tool.Move && MovePivot() is { } pivot)
@@ -1320,7 +1592,10 @@ public sealed class PartsPanel
         }
         else if (tool == Tool.Scale && MovePivot() is { } growAbout)
         {
-            bool overPart = viewport.PointerOverModel && viewport.Hovered is { } under && IsChosenPart(under);
+            bool overPart = viewport.PointerOverModel
+                            && (movePolygons
+                                    ? hoverPoly is { } underPoly && movePolys.Contains(underPoly)
+                                    : viewport.Hovered is { } under && IsChosenPart(under));
             scaleDrag.Update(growAbout, viewport.ModelToScreen, ImGui.GetMousePos(), overPart,
                              mouseAllowed: viewport.PointerOverModel, pressed: viewport.Pressed, down: viewport.Held,
                              background: false);
@@ -1361,6 +1636,7 @@ public sealed class PartsPanel
                 {
                     Tool.Navigate => ps.ClickTip,
                     Tool.Move or Tool.Rotate or Tool.Scale => ps.MoveListTip,
+                    Tool.Retarget => ps.RetargetLockListTip,
                     _             => ps.BrushLockListTip,
                 });
                 ImGui.PopTextWrapPos();
@@ -1387,8 +1663,11 @@ public sealed class PartsPanel
         string? hoveredRow = null;
 
         // Under a brush the rows lock parts instead: ticked means the brush moves it. Under Move each row chooses the part to move.
+        // Under Body size they are the same locks, and ticked means the refit moves it.
         bool moving = PartTool;
-        bool brushing = tool != Tool.Navigate && !moving;
+        bool brushing = PaintTool;
+        bool refitting = tool == Tool.Retarget;
+        bool locking = brushing || refitting;
 
         // Islands per submesh, so a submesh row can say how many it has and whether to draw them.
         var islands = model.Parts.Where(p => p.Island >= 0)
@@ -1402,7 +1681,7 @@ public sealed class PartsPanel
 
             // A locked island always has a row under a brush, as a ticked one does for a switch.
             bool listed = moving ? movePart == part.Label
-                        : brushing ? Locks.Contains(part.Label) : ticked.Contains(part.Label);
+                        : locking ? Locks.Contains(part.Label) : ticked.Contains(part.Label);
             if (isIsland && !expanded.Contains(owner) && !listed) continue;
             if (isIsland) ImGui.Indent(ProteusStyle.S(12f));
 
@@ -1415,14 +1694,20 @@ public sealed class PartsPanel
                 if (!movable && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
                     ImGui.SetTooltip(IsSkin(part) ? ps.MoveSkinTip : ps.MoveLockedTip);
             }
-            else if (brushing)
+            else if (locking)
             {
+                // The brush never moves skin, so its skin rows are fixed at ticked. The refit DOES move skin — the
+                // garment's own body mesh has to follow the body — so under Body size a skin row can be held too.
                 bool skin = IsSkin(part);
-                bool moves = skin || !IsLocked(part);
-                using (ImRaii.Disabled(skin))
+                bool fixedTicked = skin && brushing;
+                bool moves = fixedTicked || !IsLocked(part);
+                using (ImRaii.Disabled(fixedTicked))
                     if (ImGui.Checkbox($"{part.Label}##l_{part.Label}", ref moves))
                         ToggleLock(part.Label);
-                if (skin && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(ps.BrushLockSkinTip);
+                if (fixedTicked && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+                    ImGui.SetTooltip(ps.BrushLockSkinTip);
+                else if (refitting && skin && ImGui.IsItemHovered())
+                    ImGui.SetTooltip(ps.RetargetLockSkinTip);
             }
             else
             {
@@ -1440,7 +1725,7 @@ public sealed class PartsPanel
             if (ImGui.IsItemHovered()) hoveredRow = part.Label;
 
             // Marked on the row: ticking a part the author already switches means both switches must be on.
-            if (part.AuthorSwitched && !brushing && !moving)
+            if (part.AuthorSwitched && !locking && !moving)
             {
                 ImGui.SameLine();
                 ImGui.TextDisabled(ps.AuthorSwitchedTag);
@@ -1505,6 +1790,7 @@ public sealed class PartsPanel
                      (Tool.Relax,    FontAwesomeIcon.Feather,           ps.ToolRelax,    ps.ToolRelaxTip),
                      (Tool.Bridge,   FontAwesomeIcon.Archway,           ps.ToolBridge,   ps.ToolBridgeTip),
                      (Tool.Wind,     FontAwesomeIcon.Wind,              ps.ToolWind,     ps.ToolWindTip),
+                     (Tool.Retarget, FontAwesomeIcon.PeopleArrows,      ps.ToolRetarget, ps.ToolRetargetTip),
                      (Tool.Navigate, FontAwesomeIcon.MousePointer,      ps.ToolNavigate, ps.ToolNavigateTip),
                  })
         {
@@ -1521,15 +1807,23 @@ public sealed class PartsPanel
                 FinishMove();
                 FlushPending();
                 // The chosen part carries between Move, Rotate and Scale — they work on the same choice.
-                if (!(PartTool && IsPartTool(value))) movePart = null;
+                if (!(PartTool && IsPartTool(value)))
+                {
+                    movePart = null;
+                    ClearPolygons();
+                }
                 tool = value;
+                ApplyLocks();   // Body size shows its own holds, every other tool the brush locks
                 // Staged parts are a Pick-parts thing; a selection carried into the brush would sit there invisibly.
                 ticked.Clear();
                 ReleaseHandles();
                 viewport.Recolour();
                 viewport.GeometryChanged();   // the wind wash comes and goes with the wind tool
             }
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip(value == Tool.Navigate || IsPartTool(value) ? tip : tip + "\n\n" + ps.BrushLockHint);
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip(value is Tool.Navigate or Tool.Retarget || IsPartTool(value)
+                                     ? tip
+                                     : tip + "\n\n" + ps.BrushLockHint);
         }
         ImGui.Spacing();
     }
@@ -1540,7 +1834,7 @@ public sealed class PartsPanel
     /// </summary>
     private void PumpBrush()
     {
-        if (volume == null || tool == Tool.Navigate || PartTool) return;
+        if (volume == null || !PaintTool) return;
         var surface = Surface;
 
         if (surface.Painting && surface.Cursor is { } at)
@@ -2000,6 +2294,66 @@ public sealed class PartsPanel
         viewport.PositionOverride = volume.Positions();
         viewport.GeometryChanged();
         brushChangedAt = Environment.TickCount64;
+    }
+
+    // ── body retarget ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Hand the Body size tool everything it needs for this frame. The panel reaches nothing of this class directly:
+    /// what it may do arrives as a handful of callbacks, so the tab keeps sole ownership of the preview, the status
+    /// line and the pending save.
+    /// </summary>
+    private void DrawRetarget()
+    {
+        var ps = Strings.Parts;
+        if (ModRoot() is not { } root || modDir == null || parts == null || brushBase == null
+            || modelIndex < 0 || modelIndex >= models.Count)
+        {
+            ImGui.TextWrapped(ps.RetargetNoModel);
+            return;
+        }
+
+        retarget.Draw(new BodyRetargetPanel.RetargetContext(
+            root, modDir, MeshVolumeService.Rel(models[modelIndex].File), models[modelIndex].GamePath,
+            modelLabels[modelIndex], parts, brushBase, redirects,
+            FlushPending: () => FlushPending(),
+            PushPreview: PushRetargetPreview,
+            EndPreview: () => EndLivePreview(refreshGame: true),
+            SetStatus: (text, error) => { status = text; statusIsError = error; },
+            AfterModChange: () =>
+            {
+                compositor.ExpectOwnModEdit(modDir);
+                penumbra.ReloadModDirectory(modDir);
+                compositor.RedrawForChangedModel();
+                // The save added a model (or an undo took one away): list it, so the new size can be opened here.
+                // Next frame, not now: this runs inside the side panel, and the model view drawn after it in this same
+                // frame must not find the open model closed under it.
+                refreshModelsPending = true;
+            },
+            Held: RetargetHolds));
+    }
+
+    /// <summary>
+    /// Put a refitted model on the character, through the same temporary redirect the brush previews with.
+    /// <para/>
+    /// The bytes are complete rather than an edit to tick towards, so this pushes once and does not set
+    /// <see cref="previewDirty"/>: there is no stroke behind it to throttle.
+    /// </summary>
+    /// <returns>False only when the preview is busy and the push should be tried again next frame. A model that can
+    /// never be previewed here answers true, so the caller stops retrying.</returns>
+    private bool PushRetargetPreview(byte[] bytes)
+    {
+        if (modelIndex < 0 || modelIndex >= models.Count) return true;
+        if (preview.UnsupportedFor(TargetIsCustomizePart) || TargetIsContent) return true;
+
+        var file = models[modelIndex].File.Replace('\\', '/');
+        var gamePaths = redirects
+            .Where(r => string.Equals(r.File.Replace('\\', '/'), file, StringComparison.OrdinalIgnoreCase))
+            .Select(r => r.GamePath)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (gamePaths.Count == 0) return true;
+
+        return preview.Push(bytes, gamePaths, TargetIsCustomizePart);
     }
 
     // ── staging ─────────────────────────────────────────────────────────────

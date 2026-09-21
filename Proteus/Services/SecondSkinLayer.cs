@@ -93,9 +93,16 @@ public sealed class SecondSkinLayer
 /// tagged, the host's own IMC mask would judge them again. Not for a pack that toggles by NAME through
 /// Penumbra's <c>Atr</c> manipulation, which still needs its tags.
 /// </param>
+/// <param name="DropVariantAttributes">
+/// Keep every tag EXCEPT the IMC variant ones (<see cref="SecondSkinWriter.IsVariantAttribute"/>). For geometry that
+/// becomes part of the host item: the tags the game drives from what else is worn — a body skin's <c>atr_ude</c>,
+/// <c>atr_hij</c>, <c>atr_nek</c>, which long gloves or a high collar switch off — have to survive, while a variant
+/// tag would be judged against the host item's own IMC mask, which was never written for it. Ignored with
+/// <paramref name="OwnAttributes"/>, which drops every tag.
+/// </param>
 public sealed record ContentGeometry(
     byte[] Model, Func<string, bool> KeepMaterial, bool MirrorUv1 = false,
-    IReadOnlySet<string>? HiddenAttributes = null, bool OwnAttributes = false);
+    IReadOnlySet<string>? HiddenAttributes = null, bool OwnAttributes = false, bool DropVariantAttributes = false);
 
 /// <summary>
 /// A host's shell came out with no meshes. <see cref="ByToggle"/> separates a fault (coverage trimming

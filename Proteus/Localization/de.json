@@ -3226,5 +3226,301 @@
   "Presets.AddedTo.Fmt": {
     "message": "Added \"{0}\" to {1}. Wear it from that mod's Presets section in Colors.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
+  },
+  "Parts.Retarget.Ambiguous.Fmt": {
+    "message": "Several sizes fit this model equally well ({0}). Pick the one you know it was made for.",
+    "description": ""
+  },
+  "Parts.Retarget.Body": {
+    "message": "Body mod",
+    "description": ""
+  },
+  "Parts.Retarget.Checking": {
+    "message": "Working out which size this was made for\u2026",
+    "description": ""
+  },
+  "Parts.Retarget.Chest": {
+    "message": "Chest",
+    "description": ""
+  },
+  "Parts.Retarget.Choose": {
+    "message": "Choose\u2026",
+    "description": ""
+  },
+  "Parts.Retarget.Clash.Fmt": {
+    "message": "This mod already has a group (\u0022{0}\u0022) that replaces this model. The new group is set to win over it, so changing sizes there will not change this refit.",
+    "description": ""
+  },
+  "Parts.Retarget.ClearPreview": {
+    "message": "Clear the preview",
+    "description": ""
+  },
+  "Parts.Retarget.Exact.Fmt": {
+    "message": "This model\u0027s body mesh is exactly {0}.",
+    "description": ""
+  },
+  "Parts.Retarget.Feet": {
+    "message": "Feet",
+    "description": ""
+  },
+  "Parts.Retarget.From": {
+    "message": "Made for",
+    "description": ""
+  },
+  "Parts.Retarget.Group.Fmt": {
+    "message": "Body \u2014 {0}",
+    "description": ""
+  },
+  "Parts.Retarget.Guess.Fmt": {
+    "message": "Best guess: nothing matched exactly, but this one fits closest ({0:F2} mm average). Worth checking.",
+    "description": ""
+  },
+  "Parts.Retarget.Hands": {
+    "message": "Hands",
+    "description": ""
+  },
+  "Parts.Retarget.Legs": {
+    "message": "Legs",
+    "description": ""
+  },
+  "Parts.Retarget.Likely.Fmt": {
+    "message": "Very likely \u2014 the closest fit by a clear margin ({0:F2} mm average).",
+    "description": ""
+  },
+  "Parts.Retarget.LowSnap": {
+    "message": "This model\u0027s body mesh does not match the size it was made for exactly, so the seam where skin meets cloth may not come out perfect.",
+    "description": ""
+  },
+  "Parts.Retarget.Missed.Fmt": {
+    "message": "{0:N0} were too far from the body to follow it, and stayed where they were.",
+    "description": ""
+  },
+  "Parts.Retarget.Moved.Fmt": {
+    "message": "Moved up to {0:F1} mm.",
+    "description": ""
+  },
+  "Parts.Retarget.NoBody": {
+    "message": "Pick one\u2026",
+    "description": ""
+  },
+  "Parts.Retarget.NoBodyMesh": {
+    "message": "This model carries no body mesh, so the size it was made for cannot be guessed. Pick it yourself.",
+    "description": ""
+  },
+  "Parts.Retarget.NoModel": {
+    "message": "Open a model above to refit it onto another body size.",
+    "description": ""
+  },
+  "Parts.Retarget.OpenInPenumbra": {
+    "message": "Open in Penumbra",
+    "description": ""
+  },
+  "Parts.Retarget.OtherLods": {
+    "message": "This model has lower detail levels, which are not refitted \u2014 it will look like the old size from a distance.",
+    "description": ""
+  },
+  "Parts.Retarget.PickBody": {
+    "message": "Pick the body mod this garment was made for. Only mods that offer a choice of body models are listed.",
+    "description": ""
+  },
+  "Parts.Retarget.Preview": {
+    "message": "Refit and preview",
+    "description": ""
+  },
+  "Parts.Retarget.Pushed.Fmt": {
+    "message": "{0:N0} pushed back out of the body, up to {1:F2} mm.",
+    "description": ""
+  },
+  "Parts.Retarget.Save": {
+    "message": "Save as a new option",
+    "description": ""
+  },
+  "Parts.Retarget.Saved.Fmt": {
+    "message": "{0} refit option(s) saved in \u0022{1}\u0022. Penumbra only picks a default for a mod it is adding for the first time, so choose the option there to wear it.",
+    "description": ""
+  },
+  "Parts.Retarget.Slot.Fmt": {
+    "message": "{0} \u2014 {1} options",
+    "description": ""
+  },
+  "Parts.Retarget.Slot.Optional.Fmt": {
+    "message": "{0} \u2014 optional",
+    "description": ""
+  },
+  "Parts.Retarget.Slot.Optional.Tip": {
+    "message": "Fill this in only if the garment reaches here \u2014 a long dress worn in the chest slot\nalso hangs over the legs. Leave it alone for a garment that does not.",
+    "description": ""
+  },
+  "Parts.Retarget.Snapped.Fmt": {
+    "message": "{0:N0} landed on the new body exactly ({1:P0}).",
+    "description": ""
+  },
+  "Parts.Retarget.To": {
+    "message": "Refit onto",
+    "description": ""
+  },
+  "Parts.Retarget.Undo": {
+    "message": "Remove the last refit",
+    "description": ""
+  },
+  "Parts.Retarget.Unreadable.Fmt": {
+    "message": "The {0} body model could not be read.",
+    "description": ""
+  },
+  "Parts.Retarget.Working": {
+    "message": "Refitting\u2026",
+    "description": ""
+  },
+  "Parts.Tool.Retarget": {
+    "message": "Body size",
+    "description": ""
+  },
+  "Parts.Tool.Retarget.Tip": {
+    "message": "Refit this model onto a different size of the body it was made for.\nThe body\u0027s own change in shape is carried onto the garment, so it keeps\nthe way it sits. Saved as a new option in this mod, leaving the author\u0027s\nown files alone.",
+    "description": ""
+  },
+  "Parts.Retarget.CheckingPair": {
+    "message": "Checking these two are sizes of the same body\u2026",
+    "description": ""
+  },
+  "Parts.Retarget.FindingBodies": {
+    "message": "Looking through your mods for body mods\u2026",
+    "description": ""
+  },
+  "Parts.Retarget.Cloth.Guess.Fmt": {
+    "message": "Best guess from how the cloth sits: it fits {0} most snugly, but clears every size here, so it may simply be loose. Worth checking.",
+    "description": ""
+  },
+  "Parts.Retarget.Cloth.Likely.Fmt": {
+    "message": "Read from how the cloth sits: it fits {0} most snugly without passing into it, and passes into anything larger.",
+    "description": ""
+  },
+  "Parts.Retarget.TooLittle.Fmt": {
+    "message": "Too little of this model\u0027s body mesh reaches the {0} to tell which size it was made for. If the garment does reach here, choose both sizes yourself \u2014 a long top\u0027s hem over the hips needs them.",
+    "description": ""
+  },
+  "Parts.NoMatches": {
+    "message": "Nothing matches.",
+    "description": ""
+  },
+  "Parts.Retarget.Held.Fmt": {
+    "message": "{0:N0} held where the author put them.",
+    "description": ""
+  },
+  "Parts.Retarget.Lock.ListTip": {
+    "message": "Untick a part to hold it where its author put it: the refit leaves it exactly as it is. Useful for things that should not stretch with the body, like a buckle or a piece of jewellery. Clicking a part on the model does the same.",
+    "description": ""
+  },
+  "Parts.Retarget.Lock.SkinTip": {
+    "message": "This is the garment\u0027s own body skin. Holding it keeps it at the old size, so the new body can show through or gap at the edges.",
+    "description": ""
+  },
+  "Parts.Retarget.Laid.Fmt": {
+    "message": "{0:N0} skin points laid onto the new body.",
+    "description": ""
+  },
+  "Parts.Retarget.ReplaceSkin": {
+    "message": "Use the new body\u0027s skin",
+    "description": ""
+  },
+  "Parts.Retarget.SaveMany.Fmt": {
+    "message": "Save {0} sizes as new options",
+    "description": ""
+  },
+  "Parts.Retarget.Showing": {
+    "message": "Showing on the character",
+    "description": ""
+  },
+  "Parts.Retarget.ToMany": {
+    "message": "Refit onto (tick as many sizes as you like)",
+    "description": ""
+  },
+  "Parts.Retarget.Working.Fmt": {
+    "message": "Refitting {0} of {1}\u2026",
+    "description": ""
+  },
+  "Parts.Retarget.MadeHere": {
+    "message": "(made by a refit)",
+    "description": ""
+  },
+  "Parts.Retarget.NewGroup": {
+    "message": "A new group\u2026",
+    "description": ""
+  },
+  "Parts.Retarget.SaveTo": {
+    "message": "Save to group",
+    "description": ""
+  },
+  "Parts.Retarget.SwapShapes.Fmt": {
+    "message": "This garment had {0} shape key(s), which a skin swap does not carry over. Untick \u0022Use the new body\u0027s skin\u0022 to keep them.",
+    "description": ""
+  },
+  "Parts.Retarget.SwapSkin.Tip": {
+    "message": "On: the garment's skin for each part of the body being resized is removed and that part's new body\nskin put in its place, so the skin under and around the garment is exactly the body mod's.\nOff: the skin the garment came with is resized instead, keeping any reshaping its author did \u2014 a top\nthat lifts or presses the chest keeps doing so at the new size.",
+    "description": ""
+  },
+  "Parts.Retarget.SwapKeptMeshes.Fmt": {
+    "message": "{0} skin mesh(es) belong to a part of the body that is not being resized, and were left as they are.",
+    "description": ""
+  },
+  "Parts.Retarget.SwapSlots.Fmt": {
+    "message": "Skin swapped for the new body\u0027s where it is being resized: {0:N0} of the garment\u0027s skin triangles out, {1:N0} of the body\u0027s in.",
+    "description": ""
+  },
+  "Parts.Retarget.NeedFrom.Fmt": {
+    "message": "{0}: a size to refit onto is chosen, but not the size it was made for. Choose that, or click the chosen size again to untick it.",
+    "description": ""
+  },
+  "Parts.Retarget.NeedTo.Fmt": {
+    "message": "{0}: choose a size to refit onto.",
+    "description": ""
+  },
+  "Parts.Retarget.OtherParts": {
+    "message": "Other parts of the body (optional)",
+    "description": ""
+  },
+  "Parts.Retarget.OtherPartsInUse.Fmt": {
+    "message": "Other parts of the body \u2014 {0} being refitted",
+    "description": ""
+  },
+  "Parts.Retarget.RefusedHold": {
+    "message": "One of the chosen pairs cannot be refitted \u2014 see the message under it.",
+    "description": ""
+  },
+  "Parts.Move.ClearPolygons": {
+    "message": "Clear",
+    "description": ""
+  },
+  "Parts.Move.Falloff.SurfaceTip": {
+    "message": "How far from the selected polygons the cloth around them still follows, measured along the surface.\nOnly cloth joined to the selection follows: a separate piece that merely sits close does not.",
+    "description": ""
+  },
+  "Parts.Move.Grow": {
+    "message": "Grow",
+    "description": ""
+  },
+  "Parts.Move.NoPolygons": {
+    "message": "Click a polygon on the model to select it. Shift-click adds or removes one.",
+    "description": ""
+  },
+  "Parts.Move.Polygons.Fmt": {
+    "message": "{0:N0} polygon(s) selected",
+    "description": ""
+  },
+  "Parts.Move.SelectParts": {
+    "message": "Whole parts",
+    "description": ""
+  },
+  "Parts.Move.SelectPolygons": {
+    "message": "Polygons",
+    "description": ""
+  },
+  "Parts.Move.SelectPolygons.Tip": {
+    "message": "Move, turn or scale single polygons instead of whole parts. Click a polygon to select it; Shift-click adds\nor removes one. Choosing a part in the list selects all of its polygons.",
+    "description": ""
+  },
+  "Parts.Move.Shrink": {
+    "message": "Shrink",
+    "description": ""
   }
 }

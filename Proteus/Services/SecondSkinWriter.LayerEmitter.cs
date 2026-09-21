@@ -337,7 +337,8 @@ public static partial class SecondSkinWriter
 
                             build.EmitMesh(gsrc, m, matIndex, 0f, preserve: true, cov: null, gMapBase, ref gMapAppended,
                                 mirrorUv1: geo.MirrorUv1,
-                                hiddenAttrs: geo.HiddenAttributes, clearAttrs: geo.OwnAttributes);
+                                hiddenAttrs: geo.HiddenAttributes, clearAttrs: geo.OwnAttributes,
+                                dropVariantAttrs: geo.DropVariantAttributes);
                         }
                     }
                     return false;

@@ -1807,6 +1807,33 @@ public sealed class PartsStrings
     public readonly string MoveFalloffTip = Loc.Localize("Parts.Move.Falloff.Tip",
         "How far from the part nearby cloth still follows it.");
 
+    public readonly string MoveFalloffSurfaceTip = Loc.Localize("Parts.Move.Falloff.SurfaceTip",
+        "How far from the selected polygons the cloth around them still follows, measured along the surface.\n"
+      + "Only cloth joined to the selection follows: a separate piece that merely sits close does not.");
+
+    public readonly string MoveSelectParts = Loc.Localize("Parts.Move.SelectParts", "Whole parts")
+                                           + "###partsMoveSelectParts";
+
+    public readonly string MoveSelectPolygons = Loc.Localize("Parts.Move.SelectPolygons", "Polygons")
+                                              + "###partsMoveSelectPolygons";
+
+    public readonly string MoveSelectPolygonsTip = Loc.Localize("Parts.Move.SelectPolygons.Tip",
+        "Move, turn or scale single polygons instead of whole parts. Click a polygon to select it; Shift-click adds\n"
+      + "or removes one. Choosing a part in the list selects all of its polygons.");
+
+    public readonly string MoveNoPolygons = Loc.Localize("Parts.Move.NoPolygons",
+        "Click a polygon on the model to select it. Shift-click adds or removes one.");
+
+    /// <summary>{0} is how many polygons are selected.</summary>
+    public readonly string MovePolygonsFmt = Loc.Localize("Parts.Move.Polygons.Fmt", "{0:N0} polygon(s) selected");
+
+    public readonly string MoveGrow = Loc.Localize("Parts.Move.Grow", "Grow") + "###partsMoveGrow";
+
+    public readonly string MoveShrink = Loc.Localize("Parts.Move.Shrink", "Shrink") + "###partsMoveShrink";
+
+    public readonly string MoveClearPolygons = Loc.Localize("Parts.Move.ClearPolygons", "Clear")
+                                             + "###partsMoveClearPolygons";
+
     public readonly string MoveBonesNote = Loc.Localize("Parts.Move.BonesNote",
         "A moved part still follows the bones it was made for, so a part moved far from them can bend oddly in poses.");
 
@@ -1998,6 +2025,230 @@ public sealed class PartsStrings
     /// <summary>Added under <see cref="BrushRevertTip"/>: the button is armed only while a modifier is held.</summary>
     public readonly string BrushRevertArmTip = Loc.Localize("Parts.Brush.Revert.Arm.Tip",
         "Hold Ctrl or Shift and click.");
+
+    // ── body retarget ───────────────────────────────────────────────────────
+
+    public readonly string ToolRetarget = Loc.Localize("Parts.Tool.Retarget", "Body size")
+                                        + "###partsToolRetarget";
+
+    public readonly string ToolRetargetTip = Loc.Localize("Parts.Tool.Retarget.Tip",
+        "Refit this model onto a different size of the body it was made for.\n"
+      + "The body's own change in shape is carried onto the garment, so it keeps\n"
+      + "the way it sits. Saved as a new option in this mod, leaving the author's\n"
+      + "own files alone.");
+
+    public readonly string RetargetBody = Loc.Localize("Parts.Retarget.Body", "Body mod");
+
+    public readonly string RetargetNoBody = Loc.Localize("Parts.Retarget.NoBody", "Pick one…");
+
+    public readonly string RetargetPickBody = Loc.Localize("Parts.Retarget.PickBody",
+        "Pick the body mod this garment was made for. Only mods that offer a choice of body models are listed.");
+
+    /// <summary>{0} is the slot's name, {1} how many options it has.</summary>
+    public readonly string RetargetSlotFmt = Loc.Localize("Parts.Retarget.Slot.Fmt", "{0} — {1} options");
+
+    /// <summary>{0} is the slot's name.</summary>
+    public readonly string RetargetSlotOptionalFmt = Loc.Localize("Parts.Retarget.Slot.Optional.Fmt",
+        "{0} — optional");
+
+    public readonly string RetargetSlotOptionalTip = Loc.Localize("Parts.Retarget.Slot.Optional.Tip",
+        "Fill this in only if the garment reaches here — a long dress worn in the chest slot\n"
+      + "also hangs over the legs. Leave it alone for a garment that does not.");
+
+    public readonly string RetargetFrom = Loc.Localize("Parts.Retarget.From", "Made for");
+
+    public readonly string RetargetTo = Loc.Localize("Parts.Retarget.To", "Refit onto");
+
+    public readonly string RetargetOtherParts = Loc.Localize("Parts.Retarget.OtherParts",
+        "Other parts of the body (optional)");
+
+    /// <summary>{0} is how many of the other parts have a size chosen to refit onto.</summary>
+    public readonly string RetargetOtherPartsInUseFmt = Loc.Localize("Parts.Retarget.OtherPartsInUse.Fmt",
+        "Other parts of the body — {0} being refitted");
+
+    /// <summary>{0} is the slot's name ("Hands").</summary>
+    public readonly string RetargetNeedFromFmt = Loc.Localize("Parts.Retarget.NeedFrom.Fmt",
+        "{0}: a size to refit onto is chosen, but not the size it was made for. Choose that, or click the chosen "
+      + "size again to untick it.");
+
+    /// <summary>{0} is the slot's name ("Chest").</summary>
+    public readonly string RetargetNeedToFmt = Loc.Localize("Parts.Retarget.NeedTo.Fmt",
+        "{0}: choose a size to refit onto.");
+
+    public readonly string RetargetRefusedHold = Loc.Localize("Parts.Retarget.RefusedHold",
+        "One of the chosen pairs cannot be refitted — see the message under it.");
+
+    public readonly string RetargetToMany = Loc.Localize("Parts.Retarget.ToMany",
+        "Refit onto (tick as many sizes as you like)");
+
+    /// <summary>{0} is which size is being refitted, {1} how many there are.</summary>
+    public readonly string RetargetWorkingFmt = Loc.Localize("Parts.Retarget.Working.Fmt", "Refitting {0} of {1}…");
+
+    public readonly string RetargetShowing = Loc.Localize("Parts.Retarget.Showing", "Showing on the character");
+
+    /// <summary>{0} is how many sizes will be saved.</summary>
+    public readonly string RetargetSaveManyFmt = Loc.Localize("Parts.Retarget.SaveMany.Fmt",
+                                                              "Save {0} sizes as new options")
+                                               + "###partsRetargetSave";
+
+    public readonly string RetargetChoose = Loc.Localize("Parts.Retarget.Choose", "Choose…");
+
+    public readonly string RetargetChest = Loc.Localize("Parts.Retarget.Chest", "Chest");
+    public readonly string RetargetLegs  = Loc.Localize("Parts.Retarget.Legs",  "Legs");
+    public readonly string RetargetHands = Loc.Localize("Parts.Retarget.Hands", "Hands");
+    public readonly string RetargetFeet  = Loc.Localize("Parts.Retarget.Feet",  "Feet");
+
+    public readonly string RetargetChecking = Loc.Localize("Parts.Retarget.Checking",
+        "Working out which size this was made for…");
+
+    public readonly string RetargetWorking = Loc.Localize("Parts.Retarget.Working", "Refitting…");
+
+    /// <summary>{0} is the option the garment's own body mesh matched exactly.</summary>
+    public readonly string RetargetExactFmt = Loc.Localize("Parts.Retarget.Exact.Fmt",
+        "This model's body mesh is exactly {0}.");
+
+    /// <summary>{0} is the average distance from the garment's body mesh, in millimetres.</summary>
+    public readonly string RetargetLikelyFmt = Loc.Localize("Parts.Retarget.Likely.Fmt",
+        "Very likely — the closest fit by a clear margin ({0:F2} mm average).");
+
+    /// <summary>{0} is the average distance, in millimetres.</summary>
+    public readonly string RetargetGuessFmt = Loc.Localize("Parts.Retarget.Guess.Fmt",
+        "Best guess: nothing matched exactly, but this one fits closest ({0:F2} mm average). Worth checking.");
+
+    /// <summary>{0} is a comma-separated list of the sizes that fit equally well.</summary>
+    public readonly string RetargetAmbiguousFmt = Loc.Localize("Parts.Retarget.Ambiguous.Fmt",
+        "Several sizes fit this model equally well ({0}). Pick the one you know it was made for.");
+
+    /// <summary>{0} is the option the garment's cloth fits most snugly without passing through.</summary>
+    public readonly string RetargetClothLikelyFmt = Loc.Localize("Parts.Retarget.Cloth.Likely.Fmt",
+        "Read from how the cloth sits: it fits {0} most snugly without passing into it, and passes into anything "
+      + "larger.");
+
+    /// <summary>{0} is the option the garment's cloth fits most snugly without passing through.</summary>
+    public readonly string RetargetClothGuessFmt = Loc.Localize("Parts.Retarget.Cloth.Guess.Fmt",
+        "Best guess from how the cloth sits: it fits {0} most snugly, but clears every size here, so it may simply be "
+      + "loose. Worth checking.");
+
+    /// <summary>{0} is the slot's name, lower case ("legs").</summary>
+    public readonly string RetargetTooLittleFmt = Loc.Localize("Parts.Retarget.TooLittle.Fmt",
+        "Too little of this model's body mesh reaches the {0} to tell which size it was made for. If the garment "
+      + "does reach here, choose both sizes yourself — a long top's hem over the hips needs them.");
+
+    public readonly string RetargetNoBodyMesh = Loc.Localize("Parts.Retarget.NoBodyMesh",
+        "This model carries no body mesh, so the size it was made for cannot be guessed. Pick it yourself.");
+
+    public readonly string RetargetPreview = Loc.Localize("Parts.Retarget.Preview", "Refit and preview")
+                                           + "###partsRetargetPreview";
+
+    public readonly string RetargetClearPreview = Loc.Localize("Parts.Retarget.ClearPreview", "Clear the preview")
+                                                + "###partsRetargetClearPreview";
+
+    /// <summary>{0} is the furthest any vertex moved, in millimetres.</summary>
+    public readonly string RetargetMovedFmt = Loc.Localize("Parts.Retarget.Moved.Fmt", "Moved up to {0:F1} mm.");
+
+    /// <summary>{0} is how many landed on a body vertex exactly, {1} the share of those that moved.</summary>
+    public readonly string RetargetSnappedFmt = Loc.Localize("Parts.Retarget.Snapped.Fmt",
+        "{0:N0} landed on the new body exactly ({1:P0}).");
+
+    /// <summary>{0} is how many were pushed out, {1} the furthest, in millimetres.</summary>
+    public readonly string RetargetPushedFmt = Loc.Localize("Parts.Retarget.Pushed.Fmt",
+        "{0:N0} pushed back out of the body, up to {1:F2} mm.");
+
+    /// <summary>{0} is how many vertices found nothing on the body to follow.</summary>
+    public readonly string RetargetMissedFmt = Loc.Localize("Parts.Retarget.Missed.Fmt",
+        "{0:N0} were too far from the body to follow it, and stayed where they were.");
+
+    public readonly string RetargetOtherLods = Loc.Localize("Parts.Retarget.OtherLods",
+        "This model has lower detail levels, which are not refitted — it will look like the old size from a distance.");
+
+    public readonly string RetargetLowSnap = Loc.Localize("Parts.Retarget.LowSnap",
+        "This model's body mesh does not match the size it was made for exactly, so the seam where skin meets cloth "
+      + "may not come out perfect.");
+
+    public readonly string RetargetSaveTo = Loc.Localize("Parts.Retarget.SaveTo", "Save to group");
+
+    public readonly string RetargetNewGroup = Loc.Localize("Parts.Retarget.NewGroup", "A new group…");
+
+    /// <summary>Marks a group in the save list that an earlier refit made, rather than the author.</summary>
+    public readonly string RetargetMadeHere = Loc.Localize("Parts.Retarget.MadeHere", "(made by a refit)");
+
+    /// <summary>{0} is the model's label.</summary>
+    public readonly string RetargetGroupFmt = Loc.Localize("Parts.Retarget.Group.Fmt", "Body — {0}");
+
+    /// <summary>{0} is the name of the author's group that also replaces this model.</summary>
+    public readonly string RetargetClashFmt = Loc.Localize("Parts.Retarget.Clash.Fmt",
+        "This mod already has a group (\"{0}\") that replaces this model. The new group is set to win over it, so "
+      + "changing sizes there will not change this refit.");
+
+    public readonly string RetargetSave = Loc.Localize("Parts.Retarget.Save", "Save as a new option")
+                                        + "###partsRetargetSave";
+
+    /// <summary>{0} is how many options have been saved, {1} the group they are in.</summary>
+    public readonly string RetargetSavedFmt = Loc.Localize("Parts.Retarget.Saved.Fmt",
+        "{0} refit option(s) saved in \"{1}\". Penumbra only picks a default for a mod it is adding for the first "
+      + "time, so choose the option there to wear it.");
+
+    public readonly string RetargetOpenInPenumbra = Loc.Localize("Parts.Retarget.OpenInPenumbra", "Open in Penumbra")
+                                                  + "###partsRetargetOpen";
+
+    public readonly string RetargetUndo = Loc.Localize("Parts.Retarget.Undo", "Remove the last refit")
+                                        + "###partsRetargetUndo";
+
+    /// <summary>{0} is the slot's name.</summary>
+    public readonly string RetargetUnreadableFmt = Loc.Localize("Parts.Retarget.Unreadable.Fmt",
+        "The {0} body model could not be read.");
+
+    public readonly string RetargetLockListTip = Loc.Localize("Parts.Retarget.Lock.ListTip",
+        "Untick a part to hold it where its author put it: the refit leaves it exactly as it is. Useful for "
+      + "things that should not stretch with the body, like a buckle or a piece of jewellery. Clicking a part on "
+      + "the model does the same.");
+
+    public readonly string RetargetLockSkinTip = Loc.Localize("Parts.Retarget.Lock.SkinTip",
+        "This is the garment's own body skin. Holding it keeps it at the old size, so the new body can show "
+      + "through or gap at the edges.");
+
+    public readonly string RetargetReplaceSkin = Loc.Localize("Parts.Retarget.ReplaceSkin", "Use the new body's skin")
+                                               + "###partsRetargetReplaceSkin";
+
+    public readonly string RetargetReplaceSkinTip = Loc.Localize("Parts.Retarget.SwapSkin.Tip",
+        "On: the garment's skin for each part of the body being resized is removed and that part's new body\n"
+      + "skin put in its place, so the skin under and around the garment is exactly the body mod's.\n"
+      + "Off: the skin the garment came with is resized instead, keeping any reshaping its author did — a top\n"
+      + "that lifts or presses the chest keeps doing so at the new size.");
+
+    /// <summary>{0} is how many triangles the garment's swapped skin meshes had, {1} how many the body's have.</summary>
+    public readonly string RetargetSwappedFmt = Loc.Localize("Parts.Retarget.SwapSlots.Fmt",
+        "Skin swapped for the new body's where it is being resized: {0:N0} of the garment's skin triangles out, "
+      + "{1:N0} of the body's in.");
+
+    /// <summary>{0} is how many skin meshes were left because they belong to no slot being resized.</summary>
+    public readonly string RetargetSwapKeptFmt = Loc.Localize("Parts.Retarget.SwapKeptMeshes.Fmt",
+        "{0} skin mesh(es) belong to a part of the body that is not being resized, and were left as they are.");
+
+    /// <summary>{0} is how many shape keys the garment had.</summary>
+    public readonly string RetargetSwapShapesFmt = Loc.Localize("Parts.Retarget.SwapShapes.Fmt",
+        "This garment had {0} shape key(s), which a skin swap does not carry over. Untick \"Use the new body's skin\" "
+      + "to keep them.");
+
+    /// <summary>{0} is how many skin points were laid onto the new body.</summary>
+    public readonly string RetargetLaidFmt = Loc.Localize("Parts.Retarget.Laid.Fmt",
+        "{0:N0} skin points laid onto the new body.");
+
+    /// <summary>{0} is how many welded points were held.</summary>
+    public readonly string RetargetHeldFmt = Loc.Localize("Parts.Retarget.Held.Fmt",
+        "{0:N0} held where the author put them.");
+
+    /// <summary>Shown in a dropdown when its search box matches nothing.</summary>
+    public readonly string NoMatches = Loc.Localize("Parts.NoMatches", "Nothing matches.");
+
+    public readonly string RetargetNoModel = Loc.Localize("Parts.Retarget.NoModel",
+        "Open a model above to refit it onto another body size.");
+
+    public readonly string RetargetFindingBodies = Loc.Localize("Parts.Retarget.FindingBodies",
+        "Looking through your mods for body mods…");
+
+    public readonly string RetargetCheckingPair = Loc.Localize("Parts.Retarget.CheckingPair",
+        "Checking these two are sizes of the same body…");
 
     /// <summary>Added under <see cref="BrushSizeTip"/>.</summary>
     public readonly string BrushSizeKeysTip = Loc.Localize("Parts.Brush.Size.Keys.Tip",

@@ -74,12 +74,15 @@ public static partial class SecondSkinWriter
     /// Build the merged shell from fully-described sources. Every layer is applied to every source, so all
     /// sources must share one UV space and one race space.
     /// </summary>
+    /// <param name="dropHostMesh">Host meshes left out entirely, by their index in the host file — the whole mesh,
+    /// not some of its triangles. Null keeps every host mesh.</param>
     public static byte[] Build(IReadOnlyList<SourceSpec> sources, IReadOnlyList<SecondSkinLayer> layers,
         byte[]? baseModel, out Stats stats, Action<string>? diag = null,
         IReadOnlyList<AuthoredCapSet>? authoredCaps = null, PushSweep? pushSweep = null,
-        BuildTimings? timings = null)
+        BuildTimings? timings = null, Func<int, bool>? dropHostMesh = null)
     {
-        return new ShellBuild(sources, layers, baseModel, diag, authoredCaps, pushSweep, timings).Run(out stats);
+        return new ShellBuild(sources, layers, baseModel, diag, authoredCaps, pushSweep, timings, dropHostMesh)
+            .Run(out stats);
     }
 
     /// <summary>

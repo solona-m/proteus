@@ -730,6 +730,199 @@ internal static class PenumbraModMeta
             slot => BuildGroup(slot, name, optionNames, type, defaultSettings));
     }
 
+    /// <summary>One option of a group that publishes files.</summary>
+    /// <param name="Files">Game path to mod-root-relative file. Empty means "this option contributes nothing", which
+    /// is a useful thing for an option to do: it lets the group be switched off without deleting it.</param>
+    public readonly record struct FileOption(string Name, IReadOnlyDictionary<string, string> Files);
+
+    /// <summary>
+    /// Write one single-select group whose options CARRY redirects — which
+    /// <see cref="WriteSingleSelectGroup"/> deliberately does not do, its options existing only to make Penumbra show
+    /// a selector.
+    /// <para/>
+    /// The whole option list is passed every time: a caller adding one option reads the group back, appends to it and
+    /// rewrites. A same-named group is replaced, so that is also how an option is removed.
+    /// </summary>
+    /// <param name="priority">
+    /// Which group wins a game path two groups both claim. Passed rather than derived from
+    /// <paramref name="index"/>, because a group that has to beat the author's own needs to say so explicitly.
+    /// </param>
+    public static void WriteFileOptionGroup(string modRoot, int index, string name, int priority,
+                                            IReadOnlyList<FileOption> options, int defaultIndex)
+    {
+        if (options.Count == 0) return;
+        if (index < 0) index = 0;
+        if (defaultIndex < 0 || defaultIndex >= options.Count) defaultIndex = 0;
+
+        WriteGroupIntoManifest(modRoot, ReadManifestForWrite(modRoot), index, name,
+            _ => BuildFileGroup(name, priority, options, defaultIndex));
+    }
+
+    /// <inheritdoc cref="BuildGroup"/>
+    /// <remarks>The same shape, with files per option and an explicit priority.</remarks>
+    private static object BuildFileGroup(string name, int priority, IReadOnlyList<FileOption> options, int defaultIndex)
+        => new
+        {
+            Version         = 0,
+            Name            = name,
+            Description     = "",
+            Image           = "",
+            Page            = 0,
+            Priority        = priority,
+            Type            = "Single",
+            DefaultSettings = (long)defaultIndex,
+            Options         = options.Select(o => new
+            {
+                Name          = o.Name,
+                Description   = "",
+                Files         = o.Files.ToDictionary(p => p.Key, p => p.Value),
+                FileSwaps     = new Dictionary<string, string>(),
+                Manipulations = Array.Empty<object>(),
+            }).ToArray(),
+        };
+
+    /// <summary>A group's <c>Type</c> ("Single", "Multi", "Imc", …), or "" when it has none.</summary>
+    public static string TypeOf(JsonElement group)
+        => group.TryGetProperty("Type", out var t) && t.ValueKind == JsonValueKind.String ? t.GetString() ?? "" : "";
+
+    /// <summary>
+    /// Add options that carry files to a group somebody else wrote, or replace same-named ones, leaving every other
+    /// field of the group and every other option exactly as it was — its description, priority, default, and the
+    /// options' own swaps and manipulations. New options go at the END, so no option the author wrote changes index:
+    /// Penumbra keeps a Single group's selection as an index and a Multi group's as a bitmask, and either would
+    /// otherwise land on the wrong option.
+    /// </summary>
+    public static void AddFileOptions(string modRoot, string groupName, IReadOnlyList<FileOption> options)
+        => EditGroup(modRoot, groupName, (group, list) =>
+        {
+            foreach (var option in options)
+            {
+                var built = JsonSerializer.SerializeToNode(new
+                {
+                    Name          = option.Name,
+                    Description   = "",
+                    Files         = option.Files.ToDictionary(p => p.Key, p => p.Value),
+                    FileSwaps     = new Dictionary<string, string>(),
+                    Manipulations = Array.Empty<object>(),
+                });
+                int at = IndexOfOption(list, option.Name);
+                if (at >= 0) list[at] = built;
+                else list.Add(built);
+            }
+        });
+
+    /// <summary>
+    /// Take one option out of a group somebody else wrote, leaving the rest as it was. The group's default is
+    /// corrected for the options that move up a place. Returns the files the option published, or null when there was
+    /// no such option.
+    /// </summary>
+    public static Dictionary<string, string>? RemoveOption(string modRoot, string groupName, string optionName)
+    {
+        Dictionary<string, string>? removed = null;
+        EditGroup(modRoot, groupName, (group, list) =>
+        {
+            int at = IndexOfOption(list, optionName);
+            if (at < 0) return;
+
+            removed = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (list[at]?["Files"] is System.Text.Json.Nodes.JsonObject files)
+                foreach (var (path, rel) in files)
+                    if (rel?.GetValueKind() == JsonValueKind.String) removed[path] = rel.GetValue<string>();
+            list.RemoveAt(at);
+
+            long settings = group["DefaultSettings"]?.GetValueKind() == JsonValueKind.Number
+                                ? group["DefaultSettings"]!.GetValue<long>()
+                                : 0;
+            bool multi = string.Equals(group["Type"]?.GetValue<string>(), "Multi", StringComparison.OrdinalIgnoreCase);
+            settings = multi
+                ? (settings & ((1L << at) - 1)) | ((settings >> (at + 1)) << at)   // the bit goes, the higher ones drop
+                : settings > at ? settings - 1 : settings == at ? 0 : settings;
+            group["DefaultSettings"] = settings;
+        });
+        return removed;
+    }
+
+    private static int IndexOfOption(System.Text.Json.Nodes.JsonArray list, string name)
+    {
+        for (int i = 0; i < list.Count; i++)
+            if (list[i]?["Name"] is { } n && n.GetValueKind() == JsonValueKind.String
+                && string.Equals(n.GetValue<string>(), name, StringComparison.OrdinalIgnoreCase))
+                return i;
+        return -1;
+    }
+
+    /// <summary>Rewrite one existing group in place, keeping its position. Throws when there is no such group.</summary>
+    private static void EditGroup(string modRoot, string groupName,
+                                  Action<System.Text.Json.Nodes.JsonObject, System.Text.Json.Nodes.JsonArray> edit)
+    {
+        var manifest = ReadManifestForWrite(modRoot);
+        int index = -1, i = 0;
+        JsonElement found = default;
+        if (manifest.TryGetValue("Groups", out var groups) && groups.ValueKind == JsonValueKind.Array)
+            foreach (var g in groups.EnumerateArray())
+            {
+                if (g.TryGetProperty("Name", out var n) && n.ValueKind == JsonValueKind.String
+                    && string.Equals(n.GetString(), groupName, StringComparison.OrdinalIgnoreCase))
+                {
+                    index = i;
+                    found = g;
+                    break;
+                }
+                i++;
+            }
+        if (index < 0) throw new InvalidOperationException($"This mod has no group called \"{groupName}\".");
+
+        var group = System.Text.Json.Nodes.JsonNode.Parse(found.GetRawText())!.AsObject();
+        if (group["Options"] is not System.Text.Json.Nodes.JsonArray list)
+            group["Options"] = list = [];
+        edit(group, list);
+
+        // Written back under its own name, so the splice drops the old copy and puts this one in the same slot.
+        string name = group["Name"]?.GetValue<string>() ?? groupName;
+        WriteGroupIntoManifest(modRoot, manifest, index, name, _ => group);
+    }
+
+    /// <summary>
+    /// The highest <c>Priority</c> any of the mod's groups declares, or -1 when it has none. What a group has to beat
+    /// to win a game path the mod already claims elsewhere.
+    /// </summary>
+    public static int MaxGroupPriority(string modRoot)
+    {
+        int max = -1;
+        foreach (var (_, group) in TryReadGroups(modRoot) ?? [])
+            if (group.TryGetProperty("Priority", out var p) && p.ValueKind == JsonValueKind.Number
+                && p.TryGetInt32(out int value) && value > max)
+                max = value;
+        return max;
+    }
+
+    /// <summary>
+    /// The named group's options, each with the files it publishes, or null when there is no such group. What a caller
+    /// appending an option to its own group reads first.
+    /// </summary>
+    public static List<FileOption>? TryReadFileOptions(string modRoot, string name)
+    {
+        var group = (TryReadGroups(modRoot) ?? [])
+            .FirstOrDefault(g => string.Equals(g.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (group.Name == null) return null;
+        if (!group.Group.TryGetProperty("Options", out var options) || options.ValueKind != JsonValueKind.Array)
+            return null;
+
+        var result = new List<FileOption>();
+        foreach (var o in options.EnumerateArray())
+        {
+            if (o.ValueKind != JsonValueKind.Object) continue;
+            var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (o.TryGetProperty("Files", out var f) && f.ValueKind == JsonValueKind.Object)
+                foreach (var p in f.EnumerateObject())
+                    if (p.Value.ValueKind == JsonValueKind.String && p.Value.GetString() is { Length: > 0 } rel)
+                        files[p.Name] = rel;
+
+            result.Add(new FileOption(o.TryGetProperty("Name", out var n) ? n.GetString() ?? "" : "", files));
+        }
+        return result;
+    }
+
     /// <summary>
     /// The shape a group has on disk. <c>DefaultSettings</c> is the selected INDEX for Single and a bitmask for Multi;
     /// options carry no redirects.

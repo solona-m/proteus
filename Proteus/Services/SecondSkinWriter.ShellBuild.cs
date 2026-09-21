@@ -107,8 +107,13 @@ public static partial class SecondSkinWriter
         private byte[] strings = null!;
         private byte[] o = null!;
 
-        public ShellBuild(IReadOnlyList<SourceSpec> sources, IReadOnlyList<SecondSkinLayer> layers, byte[]? baseModel, Action<string>? diag, IReadOnlyList<AuthoredCapSet>? authoredCaps, PushSweep? pushSweep, BuildTimings? timings)
+        /// <summary>Host meshes left out whole, by their index in the host file — see <c>Build</c>'s
+        /// <c>dropHostMesh</c>.</summary>
+        private readonly Func<int, bool>? dropHostMesh;
+
+        public ShellBuild(IReadOnlyList<SourceSpec> sources, IReadOnlyList<SecondSkinLayer> layers, byte[]? baseModel, Action<string>? diag, IReadOnlyList<AuthoredCapSet>? authoredCaps, PushSweep? pushSweep, BuildTimings? timings, Func<int, bool>? dropHostMesh = null)
         {
+            this.dropHostMesh = dropHostMesh;
             this.sources = sources;
             this.layers = layers;
             this.baseModel = baseModel;
@@ -501,10 +506,19 @@ public static partial class SecondSkinWriter
                           .All(g => g.OwnAttributes))
                     ownedOnly.Add(src);
 
+            // A source whose every geometry drops its variant tags contributes only the rest.
+            var variantDropped = new HashSet<Source>();
+            foreach (var (model, src) in geomByModel)
+                if (layers.SelectMany(l => l.Geometry).Where(g => ReferenceEquals(g.Model, model))
+                          .All(g => g.DropVariantAttributes))
+                    variantDropped.Add(src);
+
             attrNames = new List<string>();
             attrIndex = new Dictionary<string, int>(StringComparer.Ordinal);
             foreach (var src in boneSources)
-                foreach (var name in ownedOnly.Contains(src) ? [] : src.AttrNames)
+                foreach (var name in ownedOnly.Contains(src) ? []
+                                   : variantDropped.Contains(src) ? src.AttrNames.Where(n => !IsVariantAttribute(n))
+                                   : src.AttrNames)
                 {
                     if (attrIndex.ContainsKey(name) || attrNames.Count >= 32) continue;
                     attrIndex[name] = attrNames.Count;
@@ -594,6 +608,8 @@ public static partial class SecondSkinWriter
                 {
                     int bmo = baseSrc.MeshStart + m * 36;
                     ushort srcMat = BitConverter.ToUInt16(baseSrc.S, bmo + 8);
+                    // A whole mesh left out when asked: a garment whose skin is being replaced loses that skin.
+                    if (dropHostMesh != null && dropHostMesh(m)) continue;
                     EmitMesh(baseSrc, m, srcMat, 0f, preserve: true, cov: null, mapBase, ref mapAppended);
                 }
             }
@@ -837,9 +853,10 @@ public static partial class SecondSkinWriter
         private void EmitMesh(Source src, int m, ushort materialIndex, float push, bool preserve,
                       SecondSkinLayer? cov, int mapBase, ref bool mapAppended,
                       bool mirrorUv1 = false, IReadOnlySet<string>? hiddenAttrs = null,
-                      bool clearAttrs = false, CapUvPlan? capUv = null)
+                      bool clearAttrs = false, CapUvPlan? capUv = null, bool dropVariantAttrs = false)
         {
-            new MeshEmitter(this, src, m, materialIndex, push, preserve, cov, mapBase, mirrorUv1, hiddenAttrs, clearAttrs, capUv).Run(ref mapAppended);
+            new MeshEmitter(this, src, m, materialIndex, push, preserve, cov, mapBase, mirrorUv1, hiddenAttrs, clearAttrs, capUv,
+                            dropVariantAttrs).Run(ref mapAppended);
         }
 
         /// <summary>

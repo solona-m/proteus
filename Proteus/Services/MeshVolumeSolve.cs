@@ -10,7 +10,7 @@ namespace Proteus.Services;
 /// One model's geometry under the brush: what the user has pushed out so far. Pure geometry — no files, mods or game.
 /// Everything is decided per welded node, never per vertex: moving one copy of a seam and not its twin opens a crack.
 /// </summary>
-internal sealed class MeshVolumeSolve
+internal sealed class MeshVolumeSolve : IMeshEdit
 {
     /// <summary>
     /// Bump when the geometry this produces changes, so an older build's edit is redone from the author's backup.
@@ -1058,8 +1058,11 @@ internal sealed class MeshVolumeSolve
     /// Skin and locked nodes never move; a part node welded to a neighbour moves both copies.
     /// </summary>
     /// <param name="partVertices">The part's triangle corners, indexed like <see cref="ModelParts.Positions"/>.</param>
+    /// <param name="alongSurface">Measure the falloff ALONG the surface, through joined polygons only, instead of
+    /// straight through space. What a polygon selection wants: the fade follows the garment, and a separate piece that
+    /// merely sits nearby — the other cup, a strap over the cloth — takes none of the move.</param>
     /// <returns>How many nodes the drag will move; 0 when there is nothing it may.</returns>
-    public int BeginMove(IEnumerable<int> partVertices, bool adjacent, float falloffRadius)
+    public int BeginMove(IEnumerable<int> partVertices, bool adjacent, float falloffRadius, bool alongSurface = false)
     {
         if (Moving) EndMove();
         moveWeights.Clear();
@@ -1072,7 +1075,7 @@ internal sealed class MeshVolumeSolve
         foreach (int n in seeds) moveWeights[n] = 1f;
 
         if (adjacent && falloffRadius > 0f)
-            foreach (var (n, d) in NearPart(seeds, falloffRadius))
+            foreach (var (n, d) in alongSurface ? AlongSurface(seeds, falloffRadius) : NearPart(seeds, falloffRadius))
             {
                 float w = Falloff(d / falloffRadius);
                 if (w > 0f) moveWeights[n] = w;
@@ -1082,6 +1085,45 @@ internal sealed class MeshVolumeSolve
         foreach (int n in moveWeights.Keys) stroke[n] = Snapshot(n);
         Moving = true;
         return moveWeights.Count;
+    }
+
+    /// <summary>
+    /// Every movable node outside <paramref name="seeds"/> reachable within <paramref name="radius"/> by walking the
+    /// mesh's edges from one of them, with the shortest such walk, measured on the surface as it now stands. Dijkstra
+    /// over the welded adjacency, so a walk crosses uv seams but never a gap between pieces. Skin and locked nodes are
+    /// walls: nothing that may not move is walked through to reach cloth beyond it.
+    /// </summary>
+    private List<(int Node, float Distance)> AlongSurface(HashSet<int> seeds, float radius)
+    {
+        var dist = new Dictionary<int, float>();
+        var queue = new PriorityQueue<int, float>();
+        foreach (int s in seeds)
+        {
+            dist[s] = 0f;
+            queue.Enqueue(s, 0f);
+        }
+
+        while (queue.TryDequeue(out int n, out float d))
+        {
+            if (d > dist[n]) continue;                     // a stale entry: a shorter walk already settled it
+            var here = Here(n);
+            foreach (int m in adj[n])
+            {
+                if (skin[m] || locked[m]) continue;
+                var there = Here(m);
+                float dx = there.X - here.X, dy = there.Y - here.Y, dz = there.Z - here.Z;
+                float next = d + MathF.Sqrt(dx * dx + dy * dy + dz * dz);
+                if (next > radius) continue;
+                if (dist.TryGetValue(m, out float was) && was <= next) continue;
+                dist[m] = next;
+                queue.Enqueue(m, next);
+            }
+        }
+
+        var found = new List<(int, float)>(dist.Count);
+        foreach (var (n, d) in dist)
+            if (!seeds.Contains(n)) found.Add((n, d));
+        return found;
     }
 
     /// <summary>

@@ -125,7 +125,7 @@ internal static class MeshVolumeService
     /// The edit itself, on bytes alone — no mod folder, no record. Separate so it can be tested against a
     /// model without a folder on disk around it.
     /// </summary>
-    internal static Written Inflate(byte[] mdl, MeshVolumeSolve solve)
+    internal static Written Inflate(byte[] mdl, IMeshEdit solve)
     {
         SecondSkinWriter.Source src;
         try { src = SecondSkinWriter.Parse(mdl); }
@@ -230,7 +230,7 @@ internal static class MeshVolumeService
 
     private static void WriteSpan(byte[] o, SecondSkinWriter.Source src, int mo, MeshSpan span,
                                   SecondSkinWriter.VElem pe, SecondSkinWriter.VElem? nrmEl,
-                                  MeshVolumeSolve solve, HashSet<long> spares)
+                                  IMeshEdit solve, HashSet<long> spares)
     {
         uint[] vbo =
         {
@@ -283,7 +283,7 @@ internal static class MeshVolumeService
     /// is a difference from the base pose and that difference is what has to survive the edit.
     /// </summary>
     private static int CarrySpares(byte[] o, byte[] mdl, SecondSkinWriter.Source src,
-                                   Dictionary<int, MeshSpan> spanOf, MeshVolumeSolve solve)
+                                   Dictionary<int, MeshSpan> spanOf, IMeshEdit solve)
     {
         int unmapped = 0;
         if (src.Shapes.Count == 0) return 0;

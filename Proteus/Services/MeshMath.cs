@@ -267,6 +267,22 @@ internal static partial class MeshMath
         return best;
     }
 
+    /// <summary>Buckets to the metre for <see cref="WeldByPosition"/>: coincident means within about 10 µm.</summary>
+    internal const float WeldPerMetre = 1e5f;
+
+    /// <summary>
+    /// The bucket a position falls in, at <paramref name="perMetre"/> buckets to the metre — so <c>1e5f</c> groups
+    /// points within about 10 µm and <c>1e4f</c> within about 0.1 mm. One function, so that two passes choosing
+    /// different tolerances still group points by structurally identical arithmetic.
+    /// <para/>
+    /// A MULTIPLIER, not a tolerance, on purpose: <c>p.X * 1e5f</c> and <c>p.X / 1e-5f</c> are not the same float
+    /// operation (1e-5f is not exactly representable) and disagree in the last bit for a point sitting on a bucket
+    /// boundary. Taking the multiplier keeps this bit-identical to the welding every golden baseline was recorded
+    /// against.
+    /// </summary>
+    internal static (int X, int Y, int Z) PositionKey(Vec3 p, float perMetre)
+        => ((int)MathF.Round(p.X * perMetre), (int)MathF.Round(p.Y * perMetre), (int)MathF.Round(p.Z * perMetre));
+
     /// <summary>
     /// Group coincident vertices into shared nodes, returning each vertex's node index. A body mesh
     /// splits vertices at UV seams and hard edges; the cap's displacement and its normals must both be
@@ -280,7 +296,7 @@ internal static partial class MeshMath
         nodeCount = 0;
         for (int i = 0; i < pos.Length; i++)
         {
-            var key = ((int)MathF.Round(pos[i].X * 1e5f), (int)MathF.Round(pos[i].Y * 1e5f), (int)MathF.Round(pos[i].Z * 1e5f));
+            var key = PositionKey(pos[i], WeldPerMetre);
             if (!byPos.TryGetValue(key, out int n)) byPos[key] = n = nodeCount++;
             nodeOf[i] = n;
         }
