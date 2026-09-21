@@ -214,9 +214,13 @@ internal static partial class BodyRetarget
     /// <param name="garment">The garment, already read.</param>
     /// <param name="garmentBytes">The bytes it was read from — the rewrite is in place and length-neutral.</param>
     /// <param name="pairs">One per body slot the garment spans: chest, legs, and whatever else a body mod sizes.</param>
-    public static Planned Plan(ModelParts garment, byte[] garmentBytes, IReadOnlyList<SlotPair> pairs)
+    /// <param name="garmentSlot">The slot the garment is worn in ("_top" for a top). Its body is excluded from the
+    /// push-out, because the garment is drawn in its place — see <see cref="TargetBody"/>. Null keeps every body.</param>
+    /// <param name="pushOut">Whether to run the push-out pass after the transfer.</param>
+    public static Planned Plan(ModelParts garment, byte[] garmentBytes, IReadOnlyList<SlotPair> pairs,
+                               string? garmentSlot = null, bool pushOut = true)
     {
-        var solved = Solve(garment, pairs);
+        var solved = Solve(garment, pairs, garmentSlot, pushOut);
         var written = MeshVolumeService.Inflate(garmentBytes, solved.Edit);
         var report = new Report(garment.Positions.Length / 3, solved.Snapped, solved.Transferred, solved.Missed,
                                 solved.Pushed, solved.WorstMove, solved.WorstPush,
@@ -226,22 +230,34 @@ internal static partial class BodyRetarget
 
     /// <inheritdoc cref="Plan"/>
     /// <remarks>The geometry, without touching the file. See <see cref="Solved"/>.</remarks>
-    internal static Solved Solve(ModelParts garment, IReadOnlyList<SlotPair> pairs)
+    internal static Solved Solve(ModelParts garment, IReadOnlyList<SlotPair> pairs, string? garmentSlot = null,
+                                 bool pushOut = true)
     {
         var sets = Sets.From(garment);
         var source = SourceBody.Build(pairs);
-        var target = TargetBody.Build(pairs);
 
         var nodeDelta = new Vec3[sets.NodeCount];
         var snapped = new bool[sets.NodeCount];
 
         Transfer(sets, sets.AllNodes, source, nodeDelta, snapped, out int transferred, out int missed);
 
-        var pushable = new List<int>(sets.ClothNodes.Length);
-        foreach (int n in sets.ClothNodes)
-            if (!snapped[n]) pushable.Add(n);
+        int pushed = 0;
+        float worstPush = 0f;
+        if (pushOut)
+        {
+            // The skin drawn under the cloth once it is worn, as authored and after the refit: the garment's own body
+            // mesh where it has one, and the other slots' bodies. See TargetBody, and PushOut for why both are needed.
+            bool hasSkin = sets.ClothNodes.Length < sets.NodeCount;
+            var before = TargetBody.Build(pairs, garmentSlot, hasSkin ? garment : null, before: true);
+            var after = TargetBody.Build(pairs, garmentSlot, hasSkin ? Moved(garment, sets, nodeDelta) : null,
+                                         before: false);
 
-        int pushed = PushOut(sets, pushable, target, nodeDelta, out float worstPush);
+            var pushable = new List<int>(sets.ClothNodes.Length);
+            foreach (int n in sets.ClothNodes)
+                if (!snapped[n]) pushable.Add(n);
+
+            pushed = PushOut(sets, pushable, before, after, nodeDelta, out worstPush);
+        }
 
         int vc = garment.Positions.Length / 3;
         var vertDelta = new Vec3[vc];

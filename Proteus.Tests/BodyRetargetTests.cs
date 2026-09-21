@@ -87,74 +87,181 @@ public class BodyRetargetTests
         Assert.Equal(0, solved.Pushed);
     }
 
+    // ── the push-out: only clips the refit CREATED ─────────────────────────────────────────────────────
+    //
+    // The scenario these share: two body slots. A holds still; B grows. The patch sits in the gap between them, 30 mm
+    // off A and 70 mm off B, so as authored it is outside everything and its nearest body is A — which does not move,
+    // so the transfer leaves the patch where it is. B's growth then swallows it, 10 mm deep. That is a clip the refit
+    // created, which is the only kind the push-out may undo.
+
+    [Fact]
+    public void Cloth_the_refit_drives_into_a_body_is_pushed_out()
+    {
+        var (garment, pairs) = CreatedClip(ClothMaterial);
+
+        var solved = BodyRetarget.Solve(garment, pairs);
+
+        Assert.True(solved.Pushed > 0, "the refit swallowed this cloth, so the push-out should have freed it");
+
+        // The deepest corner is 12.5 mm in. The slope-limited spread lifts the shallower corners towards that, so the
+        // whole patch moves together rather than crumpling — which is the spread's job — but nothing may be flung
+        // further than the worst clip needed.
+        const float deepest = 0.0125f;
+        foreach (int v in Enumerable.Range(0, garment.Positions.Length / 3))
+        {
+            var start = At(garment, v);
+            var landed = start + Delta(solved, v);
+            Assert.True(landed.X < GrownFace, $"vertex {v} is still inside the grown body at x={landed.X}");
+            Assert.True(start.X - landed.X <= deepest + BodyRetarget.Clearance + 1e-5f,
+                        $"vertex {v} was pushed {(start.X - landed.X) * 1000f:F2} mm, more than the worst clip needed");
+        }
+    }
+
+    [Fact]
+    public void The_push_moves_along_the_body_normal()
+    {
+        // B's face that swallowed the patch faces -X, so the patch must move towards -X. Aiming along
+        // (p - landing) instead would drive an interior point further in, and this fails outright then.
+        var (garment, pairs) = CreatedClip(ClothMaterial);
+
+        var solved = BodyRetarget.Solve(garment, pairs);
+
+        var d = Delta(solved, 0);
+        Assert.True(d.X < 0f, $"the push went the wrong way: {d}");
+    }
+
     [Fact]
     public void Push_out_leaves_an_unsnapped_skin_vertex_alone()
     {
-        // The test above proves the SNAP exclusion; this one proves the SKIN exclusion, which is a different rule and
-        // was silently uncovered while the two overlapped. Here the garment's body mesh was sculpted rather than
-        // copied, so nothing snaps — only membership of the cloth set keeps the push-out off it.
+        // The SKIN exclusion, which is a different rule from the snap one. The garment's own body mesh is itself one of
+        // the drawn surfaces, so a skin node always reads as ON the skin and is never pushed for its own sake — but the
+        // slope-limited spread lifts every node towards its neighbours' push, so body mesh beside a genuine cloth clip
+        // would be peeled off the body it must coincide with. Only membership of the cloth set stops that. This skin
+        // is sculpted rather than copied, 10 mm off any body vertex, so the snap cannot be what protects it.
+        var (_, pairs) = CreatedClip(ClothMaterial);
+
+        // Cloth: a clip patch in the gap (0-2), joined by an edge to vertex 3. Skin: a small patch (3-5) tucked 10 mm
+        // inside body A, far enough from the clip that the clip's own before/after reading is unaffected by it.
+        var pos = new List<float>
+        {
+            0.228f, -0.002f, 0f,
+            0.232f, -0.002f, 0f,
+            0.230f,  0.002f, 0f,
+            0.190f,  0.001f, 0f,
+            0.190f,  0.003f, 0f,
+            0.192f,  0.002f, 0f,
+        };
+        var filler = new List<int>();
+        for (int i = 0; i < 40; i++)
+        {
+            int b = pos.Count / 3;
+            float x = 5f + i * 0.01f;
+            pos.AddRange([x, 5f, 5f, x + 0.001f, 5f, 5f, x, 5.001f, 5f]);
+            filler.AddRange([b, b + 1, b + 2]);
+        }
+        var nrm = new float[pos.Count];
+        for (int i = 0; i < nrm.Length; i += 3) nrm[i + 2] = 1f;
+
+        int[] cloth = [0, 1, 2, 0, 2, 3, .. filler];
+        int[] skin = [3, 4, 5];
+        var garment = BuildTwoPart(pos.ToArray(), nrm, cloth, ClothMaterial, skin, SkinMaterial);
+
+        var solved = BodyRetarget.Solve(garment, pairs);
+
+        Assert.True(Delta(solved, 0).Length() > 0f, "the clip beside it should have been pushed, or this proves nothing");
+        for (int v = 3; v <= 5; v++)
+            Assert.Equal(0f, Delta(solved, v).Length(), 6);
+    }
+
+    [Fact]
+    public void Cloth_the_author_put_inside_the_skin_is_left_there()
+    {
+        // The third exclusion, and the one that decides whether the push-out helps at all. Authors leave the whole
+        // body mesh under the fabric where it is hidden, so cloth behind a skin surface is usually AUTHORED. Measured on
+        // a real outfit, pushing it made the refit 30% worse against the author's own hand-fitted size. Here source
+        // and target are the same body, so nothing about the refit put this cloth inside — the author did.
         var body = Cube(0.20f, SkinMaterial);
-        var garment = Patch(SkinMaterial, new Vector3(0f, 0f, 0.19f));
+        var garment = Patch(ClothMaterial, new Vector3(0f, 0f, 0.19f));
 
         var solved = Solve(garment, body, body);
 
-        Assert.Equal(0, solved.Snapped);
         Assert.Equal(0, solved.Pushed);
         for (int v = 0; v < garment.Positions.Length / 3; v++)
             Assert.Equal(0f, Delta(solved, v).Length(), 6);
     }
 
     [Fact]
-    public void An_unsnapped_cloth_patch_in_the_same_place_is_pushed()
+    public void Hidden_cloth_beside_a_fresh_clip_is_not_dragged_out()
     {
-        // The control for the test above: identical geometry, cloth material. If this did not move, the previous test
-        // would be proving nothing about the skin rule.
-        var body = Cube(0.20f, SkinMaterial);
-        var garment = Patch(ClothMaterial, new Vector3(0f, 0f, 0.19f));
+        // What the explicit authored-inside exclusion does that the push amount alone does not. A node is only ever
+        // pushed back to its OWN authored standoff, and a hidden node's is negative, so on its own it never moves — but
+        // the slope-limited spread lifts every node towards its neighbours' push. Hidden cloth sitting beside a genuine
+        // clip would be dragged out with it, which is the thing measured to hurt. Only set membership stops that.
+        var (_, pairs) = CreatedClip(ClothMaterial);
 
-        var solved = Solve(garment, body, body);
+        // A clip patch in the gap (vertices 0-2), joined by an edge to vertex 3, which the author tucked 2 mm inside body
+        // A's +X face. Tiny far-off triangles keep the mesh's mean edge short, so the spread reaches vertex 3 in one hop.
+        var pos = new List<float>
+        {
+            0.228f, -0.002f, 0f,
+            0.232f, -0.002f, 0f,
+            0.230f,  0.002f, 0f,
+            0.198f,  0f,     0f,
+        };
+        var tris = new List<int> { 0, 1, 2, 0, 2, 3 };
+        for (int i = 0; i < 40; i++)
+        {
+            int b = pos.Count / 3;
+            float x = 5f + i * 0.01f;
+            pos.AddRange([x, 5f, 5f, x + 0.001f, 5f, 5f, x, 5.001f, 5f]);
+            tris.AddRange([b, b + 1, b + 2]);
+        }
+        var nrm = new float[pos.Count];
+        for (int i = 0; i < nrm.Length; i += 3) nrm[i + 2] = 1f;
+        var garment = Build(pos.ToArray(), nrm, tris.ToArray(), ClothMaterial);
 
-        Assert.True(solved.Pushed > 0, "cloth inside the body should have been pushed out");
-    }
+        var solved = BodyRetarget.Solve(garment, pairs);
 
-    [Fact]
-    public void Cloth_inside_the_target_body_is_pushed_out()
-    {
-        // Source and target identical, so the transfer moves nothing and the push-out is the only pass with an
-        // opinion. One cloth vertex sits 10 mm inside the +Z face.
-        var body = Cube(0.20f, SkinMaterial);
-        var garment = Points(ClothMaterial, new Vector3(0f, 0f, 0.19f));
-
-        var solved = Solve(garment, body, body);
-
-        Assert.Equal(1, solved.Pushed);
-        var landed = At(garment, 0) + Delta(solved, 0);
-        Assert.True(landed.Z > 0.20f, $"the vertex stayed inside the body at z={landed.Z}");
-        Assert.True(landed.Z < 0.20f + 0.002f, $"the vertex overshot to z={landed.Z}");
+        Assert.True(Delta(solved, 0).Length() > 0f, "the clip beside it should have been pushed, or this proves nothing");
+        Assert.Equal(0f, Delta(solved, 3).Length(), 6);
     }
 
     [Fact]
     public void Snapped_cloth_vertices_are_not_pushed()
     {
-        // A CLOTH vertex that happens to sit exactly on a body vertex is snapped, and a snapped node is excluded
-        // from the push-out by set membership — never by a distance test. This target body has its +Z face centre
-        // dimpled inward, so the snapped vertex lands well INSIDE it: the winding number says "inside" with no
-        // ambiguity at all, and only the membership exclusion can keep it still.
-        var source = Cube(0.20f, SkinMaterial);
-        var target = Dimple(Cube(0.20f, SkinMaterial), new Vector3(0f, 0f, 0.20f), new Vector3(0f, 0f, 0.10f));
+        // A CLOTH vertex sitting exactly on a body vertex is snapped, and lands exactly on that vertex of the new body.
+        // The push amount alone would leave it there — it is on the surface, not in it — but the slope-limited spread
+        // lifts every node towards its neighbours' push, so cloth lying on the skin beside a genuine clip would be
+        // peeled off it. Only set membership stops that; the snap is also the one place float noise could put a node
+        // 1e-8 m either side of a surface, where no inside test can be trusted.
+        var (_, pairs) = CreatedClip(ClothMaterial);
 
-        int centre = IndexOf(source, new Vector3(0f, 0f, 0.20f));
-        Assert.True(centre >= 0, "the source body should have a vertex at the centre of its +Z face");
+        // A clip patch in the gap (vertices 0-2), joined by an edge to vertex 3, which sits exactly on the centre vertex
+        // of body A's +X face. Tiny far-off triangles keep the mean edge short, so the spread reaches it in one hop.
+        var pos = new List<float>
+        {
+            0.228f, -0.002f, 0f,
+            0.232f, -0.002f, 0f,
+            0.230f,  0.002f, 0f,
+            0.200f,  0f,     0f,
+        };
+        var tris = new List<int> { 0, 1, 2, 0, 2, 3 };
+        for (int i = 0; i < 40; i++)
+        {
+            int b = pos.Count / 3;
+            float x = 5f + i * 0.01f;
+            pos.AddRange([x, 5f, 5f, x + 0.001f, 5f, 5f, x, 5.001f, 5f]);
+            tris.AddRange([b, b + 1, b + 2]);
+        }
+        var nrm = new float[pos.Count];
+        for (int i = 0; i < nrm.Length; i += 3) nrm[i + 2] = 1f;
+        var garment = Build(pos.ToArray(), nrm, tris.ToArray(), ClothMaterial);
 
-        var garment = Points(ClothMaterial, new Vector3(0f, 0f, 0.20f));
-        var solved = Solve(garment, source, target);
+        var solved = BodyRetarget.Solve(garment, pairs);
 
-        Assert.Equal(1, solved.Snapped);
-        Assert.Equal(0, solved.Pushed);
-
-        var landed = At(garment, 0) + Delta(solved, 0);
-        Assert.True(Vector3.Distance(landed, new Vector3(0f, 0f, 0.10f)) < 1e-6f,
-                    $"the snapped vertex should sit on the dimpled body vertex, not be pushed off it; it is at {landed}");
+        Assert.True(solved.Snapped >= 1, "vertex 3 sits on a body vertex, so it should have snapped");
+        Assert.True(Delta(solved, 0).Length() > 0f, "the clip beside it should have been pushed, or this proves nothing");
+        Assert.Equal(0f, Delta(solved, 3).Length(), 6);
     }
 
     // ── the transfer ────────────────────────────────────────────────────────────────────────────────────
@@ -235,19 +342,6 @@ public class BodyRetargetTests
         Assert.Equal(a.X, b.X);
         Assert.Equal(a.Y, b.Y);
         Assert.Equal(a.Z, b.Z);
-    }
-
-    [Fact]
-    public void The_push_moves_along_the_body_normal()
-    {
-        // Aiming along (p - landing) instead would drive an interior point further in; this fails outright then.
-        var body = Cube(0.20f, SkinMaterial);
-        var garment = Points(ClothMaterial, new Vector3(0.05f, 0.05f, 0.185f));
-
-        var solved = Solve(garment, body, body);
-
-        var d = Delta(solved, 0);
-        Assert.True(d.Z > 0f, $"the push went inward: {d}");
     }
 
     // ── the topology guard ──────────────────────────────────────────────────────────────────────────────
@@ -361,13 +455,6 @@ public class BodyRetargetTests
         return new Vector3(d.X, d.Y, d.Z);
     }
 
-    private static int IndexOf(ModelParts m, Vector3 p)
-    {
-        for (int v = 0; v < m.Positions.Length / 3; v++)
-            if (Vector3.Distance(At(m, v), p) < 1e-6f) return v;
-        return -1;
-    }
-
     /// <summary>
     /// A closed cube of half-extent <paramref name="half"/>, each face a 2x2 grid of quads so that faces have a centre
     /// vertex as well as corners. Closed, because the push-out's winding number needs a solid to be inside of.
@@ -412,18 +499,38 @@ public class BodyRetargetTests
         return Build(pos.ToArray(), nrm.ToArray(), tris.ToArray(), material);
     }
 
-    /// <summary>The same model with one vertex moved — a target body that is not simply a scaled source.</summary>
-    private static ModelParts Dimple(ModelParts m, Vector3 from, Vector3 to)
+    /// <summary>Where the grown body B's -X face ends up in <see cref="CreatedClip"/>.</summary>
+    private const float GrownFace = 0.22f;
+
+    /// <summary>
+    /// A patch that the refit genuinely drives into a body — see the comment above the push-out tests. Body A (a cube
+    /// at the origin) holds still; body B (a small cube at x = 0.35) grows from half 0.05 to half 0.13, so its -X face
+    /// sweeps from x = 0.30 to <see cref="GrownFace"/>. The patch sits at x = 0.23.
+    /// </summary>
+    private static (ModelParts Garment, List<BodyRetarget.SlotPair> Pairs) CreatedClip(string material)
     {
-        var pos = (float[])m.Positions.Clone();
+        var a = Cube(0.20f, SkinMaterial);
+        var bFrom = Cube(0.05f, SkinMaterial, new Vector3(0.35f, 0f, 0f));
+        var bTo = Cube(0.13f, SkinMaterial, new Vector3(0.35f, 0f, 0f));
+
+        Assert.True(IdentityCorrespondence.TryBuild(a, a, "chest", out var still, out string r1), r1);
+        Assert.True(IdentityCorrespondence.TryBuild(bFrom, bTo, "legs", out var grow, out string r2), r2);
+
+        var garment = Patch(material, new Vector3(0.23f, 0f, 0f));
+        return (garment, [new BodyRetarget.SlotPair("_top", still!, a), new BodyRetarget.SlotPair("_dwn", grow!, bTo)]);
+    }
+
+    private static ModelParts Cube(float half, string material, Vector3 centre)
+    {
+        var cube = Cube(half, material);
+        var pos = (float[])cube.Positions.Clone();
         for (int v = 0; v < pos.Length / 3; v++)
         {
-            if (Vector3.Distance(new Vector3(pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2]), from) > 1e-6f) continue;
-            pos[v * 3] = to.X;
-            pos[v * 3 + 1] = to.Y;
-            pos[v * 3 + 2] = to.Z;
+            pos[v * 3] += centre.X;
+            pos[v * 3 + 1] += centre.Y;
+            pos[v * 3 + 2] += centre.Z;
         }
-        return Build(pos, m.Normals, m.Parts[0].Triangles, m.Parts[0].Material);
+        return Build(pos, cube.Normals, cube.Parts[0].Triangles, material);
     }
 
     /// <summary>A copy of <paramref name="m"/>'s geometry drawn with another material.</summary>
@@ -498,6 +605,40 @@ public class BodyRetargetTests
             Min = m.Min,
             Max = m.Max,
             ShatteredSubmeshes = m.ShatteredSubmeshes,
+        };
+    }
+
+    /// <summary>One vertex array, two submeshes with different materials — how a garment carries cloth beside skin.</summary>
+    private static ModelParts BuildTwoPart(float[] pos, float[] nrm, int[] trisA, string materialA,
+                                           int[] trisB, string materialB)
+    {
+        var a = Build(pos, nrm, trisA, materialA);
+        var b = Build(pos, nrm, trisB, materialB);
+        var partB = new ModelPart
+        {
+            Mesh = 0,
+            Submesh = 1,
+            Island = -1,
+            Label = "0.1",
+            Material = materialB,
+            Triangles = trisB,
+            Ordinals = b.Parts[0].Ordinals,
+            AttributeMask = 0,
+            Min = b.Min,
+            Max = b.Max,
+            Toggleable = true,
+        };
+
+        return new ModelParts
+        {
+            Positions = a.Positions,
+            Normals = a.Normals,
+            MeshSpans = a.MeshSpans,
+            Parts = [a.Parts[0], partB],
+            AttributeNames = [],
+            Min = a.Min,
+            Max = a.Max,
+            ShatteredSubmeshes = new Dictionary<string, int>(),
         };
     }
 

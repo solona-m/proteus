@@ -3288,7 +3288,7 @@
     "description": ""
   },
   "Parts.Retarget.Likely.Fmt": {
-    "message": "Very likely \u2014 {0:P0} of this model\u0027s body mesh matches.",
+    "message": "Very likely \u2014 the closest fit by a clear margin ({0:F2} mm average).",
     "description": ""
   },
   "Parts.Retarget.LowSnap": {
@@ -3389,6 +3389,18 @@
   },
   "Parts.Retarget.FindingBodies": {
     "message": "Looking through your mods for body mods\u2026",
+    "description": ""
+  },
+  "Parts.Retarget.Cloth.Guess.Fmt": {
+    "message": "Best guess from how the cloth sits: it fits {0} most snugly, but clears every size here, so it may simply be loose. Worth checking.",
+    "description": ""
+  },
+  "Parts.Retarget.Cloth.Likely.Fmt": {
+    "message": "Read from how the cloth sits: it fits {0} most snugly without passing into it, and passes into anything larger.",
+    "description": ""
+  },
+  "Parts.Retarget.TooLittle.Fmt": {
+    "message": "Too little of this model\u0027s body mesh reaches the {0} to tell which size it was made for. If the garment does reach here, choose both sizes yourself \u2014 a long top\u0027s hem over the hips needs them.",
     "description": ""
   }
 }

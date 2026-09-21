@@ -57,6 +57,12 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
     /// <summary>Per slot, what the detector made of the garment.</summary>
     private readonly Dictionary<string, BodySizeMatch.Ranking> detected = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Slots whose source the detector chose rather than the user. Only these are re-picked when a target is chosen —
+    /// see <see cref="BodySizeMatch.BestCompatible"/>. A source the user picked by hand is never overridden.
+    /// </summary>
+    private readonly HashSet<string> autoFrom = new(StringComparer.Ordinal);
+
     /// <summary>The model the detector last ran for, so opening another model runs it again.</summary>
     private string? detectedFor;
 
@@ -98,6 +104,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
         to.Clear();
         refusals.Clear();
         detected.Clear();
+        autoFrom.Clear();
         validating.Clear();
         detectedFor = null;
         planned = null;
@@ -303,8 +310,23 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
 
             into[slot] = option;
             planned = null;
+            if (ReferenceEquals(into, from)) autoFrom.Remove(slot);   // the user's own choice from now on
+            else FitSourceToTarget(slot);
             StartValidate(slot);
         }
+    }
+
+    /// <summary>
+    /// With a target chosen, move a DETECTED source to the best-ranked candidate that can actually pair with it. The
+    /// unconstrained best can sit in another family — Neolithe's Neobelly legs read a top's hem more snugly than the
+    /// plain ones — and a source that cannot pair with the target is no source at all. Runs off the detector's cache,
+    /// which already holds every candidate, so there is no file read here.
+    /// </summary>
+    private void FitSourceToTarget(string slot)
+    {
+        if (!autoFrom.Contains(slot) || catalog is not { } snapshot) return;
+        if (!detected.TryGetValue(slot, out var ranking) || !to.TryGetValue(slot, out var target)) return;
+        if (BodySizeMatch.BestCompatible(ranking, target, snapshot.PathOf) is { } best) from[slot] = best.Option;
     }
 
     private void DrawConfidence(string slot)
@@ -312,12 +334,21 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
         if (!detected.TryGetValue(slot, out var ranking)) return;
         var ps = Strings.Parts;
 
-        (string text, System.Numerics.Vector4 colour) = ranking.Confidence switch
+        (string text, System.Numerics.Vector4 colour) = ranking.FromCloth && ranking.Best is { } fromCloth
+            && ranking.Confidence is BodySizeMatch.Confidence.Likely or BodySizeMatch.Confidence.Guess
+            ? (string.Format(ranking.Confidence == BodySizeMatch.Confidence.Likely
+                                 ? ps.RetargetClothLikelyFmt
+                                 : ps.RetargetClothGuessFmt,
+                             fromCloth.Option.Label),
+               ranking.Confidence == BodySizeMatch.Confidence.Likely ? ProteusStyle.Ok : ProteusStyle.Warn)
+            : ranking.Confidence switch
         {
             BodySizeMatch.Confidence.NoBodyMesh => (ps.RetargetNoBodyMesh, ProteusStyle.Warn),
+            BodySizeMatch.Confidence.TooLittle  => (string.Format(ps.RetargetTooLittleFmt, SlotName(slot).ToLowerInvariant()),
+                                                    ProteusStyle.Warn),
             BodySizeMatch.Confidence.Exact      => (string.Format(ps.RetargetExactFmt, ranking.Best!.Value.Option.Label),
                                                     ProteusStyle.Ok),
-            BodySizeMatch.Confidence.Likely     => (string.Format(ps.RetargetLikelyFmt, ranking.Best!.Value.HitRate),
+            BodySizeMatch.Confidence.Likely     => (string.Format(ps.RetargetLikelyFmt, ranking.Best!.Value.Rms * 1000f),
                                                     ProteusStyle.Ok),
             BodySizeMatch.Confidence.Guess      => (string.Format(ps.RetargetGuessFmt, ranking.Best!.Value.Rms * 1000f),
                                                     ProteusStyle.Warn),
@@ -487,6 +518,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
         if (planTask != null || catalog is not { } snapshot) return;
         ctx.FlushPending();
 
+        string garmentSlot = Primary(ctx);
         var chosen = Chosen(ctx).Select(s => (Slot: s, Source: snapshot.PathOf(from[s]), Target: snapshot.PathOf(to[s]),
                                               Name: SlotName(s))).ToList();
         var garment = ctx.Garment;
@@ -504,7 +536,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
                         return new PlanResult(key, null, refusal);
                     pairs.Add(new BodyRetarget.SlotPair(slot, built!, target!));
                 }
-                return new PlanResult(key, BodyRetarget.Plan(garment, bytes, pairs), "");
+                return new PlanResult(key, BodyRetarget.Plan(garment, bytes, pairs, garmentSlot), "");
             }
             catch (Exception ex)
             {
@@ -602,6 +634,8 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
                     if (ranking.Preselect && ranking.Best is { } best && !from.ContainsKey(slot))
                     {
                         from[slot] = best.Option;
+                        autoFrom.Add(slot);
+                        FitSourceToTarget(slot);   // a target chosen while detection ran narrows it at once
                         StartValidate(slot);
                     }
                 }

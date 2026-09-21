@@ -12,24 +12,67 @@ namespace Proteus.Services;
 /// <summary>
 /// Which body option a garment was authored against.
 /// <para/>
-/// Gear models carry a real copy of the body's skin mesh beside their cloth — that is how a top reshapes the chest it
-/// exposes — so the garment usually holds the answer. Match its body mesh against each candidate and the right one
-/// scores about 1.0 while every other size scores about 0, because a size change moves every vertex of the chest by
-/// millimetres and an exact position match is all-or-nothing.
+/// Gear models carry a copy of the body's skin mesh beside their cloth — that is how a top reshapes the chest it
+/// exposes — so the garment usually holds the answer. The question is how to read it, and the obvious reading is wrong
+/// in a way worth recording.
+/// <para/>
+/// Scoring every probe point against every candidate — a hit rate, or an RMS over the whole body mesh — is dominated by
+/// points that cannot tell one option from another. Most of a chest model is identical across all 114 of Neolithe's
+/// options: the arms, back and shoulders never change. On "This Old Thing" every candidate scored about 42% on those
+/// alone, the real signal drowned, and the detector called the author's M "Macadamia L" and their L "Macadamia S" —
+/// so the refit ran as a shrink when the author had made a grow, and came out worse than doing nothing.
+/// <para/>
+/// So only probes where the candidates actually DISAGREE are scored. That region is where the sizes differ, which is
+/// also exactly where an author sculpts — a top that lifts the chest is sculpted there — so nothing matches it
+/// exactly, and the score is the RMS distance over it rather than an exact hit rate. Measured on the same outfit, this
+/// picks the author's size letter correctly for all four of XS, S, M and L, and finds they built on the Pushup chest;
+/// refitting between the detected sizes reproduces the author's own hand-fitted L to 0.24 mm on the body mesh.
 /// </summary>
 internal static class BodySizeMatch
 {
-    /// <summary>At or above this share of exact hits, the guess is as good as certain.</summary>
+    /// <summary>At or above this share of exact hits over the discriminating region, the garment's body mesh IS this
+    /// option, copied.</summary>
     public const float Exact = 0.98f;
 
-    /// <summary>Above this, the guess is worth preselecting.</summary>
-    public const float Likely = 0.50f;
+    /// <summary>The best fit this much closer than the next distinct one is a clear winner.</summary>
+    private const float LikelyRatio = 0.85f;
+
+    /// <summary>Closer than the next distinct one by this much is still worth showing as a guess.</summary>
+    private const float GuessRatio = 0.95f;
+
+    /// <summary>
+    /// A probe discriminates when the candidates' distances to it spread by more than this (0.5 mm): below it, every
+    /// candidate is saying the same thing there.
+    /// </summary>
+    private const float Discriminates = 0.0005f;
+
+    /// <summary>
+    /// Two candidates this close in score are the same answer as far as this garment can tell (1%). Neolithe's Default
+    /// and Neobelly chests differ only at the belly; a top that does not reach the belly scores them identically, and
+    /// either gives the same refit where the garment is, so they are one answer rather than a tie to agonise over.
+    /// </summary>
+    private const float SameAnswer = 0.01f;
+
+    /// <summary>How far to look for a candidate's surface from a probe; further than this is simply "far".</summary>
+    private const float Reach = 0.05f;
+
+    /// <summary>
+    /// A probe only counts as evidence where the garment's body mesh actually lies ON some candidate (10 mm). A top's
+    /// body mesh is the torso; against the LEGS models almost all of it is far away, and the few probes near the edge
+    /// of <see cref="Reach"/> differ between candidates only because one is 49 mm off and another is capped at 50.
+    /// Counting those produced a confident "SFW Small" for every size of "This Old Thing" — a wrong answer is worse
+    /// than an admitted blank, so they are not counted at all.
+    /// </summary>
+    private const float Contact = 0.01f;
+
+    /// <summary>Fewer evidence probes than this, and the garment cannot say which size it was made for here.</summary>
+    private const int MinEvidence = 100;
 
     /// <summary>Probe points taken from the garment. Enough to be decisive, few enough to keep 131 candidates cheap.</summary>
     private const int MaxProbes = 3000;
 
-    /// <param name="HitRate">Share of the garment's body-mesh points sitting exactly on a vertex of this candidate.</param>
-    /// <param name="Rms">Root-mean-square distance to this candidate's surface — the fallback when nothing snaps.</param>
+    /// <param name="HitRate">Share of the discriminating probes sitting exactly on a vertex of this candidate.</param>
+    /// <param name="Rms">Root-mean-square distance to this candidate's surface, over the discriminating probes.</param>
     internal readonly record struct Score(BodyOption Option, float HitRate, float Rms);
 
     /// <summary>How sure the top score is, and what to say about it.</summary>
@@ -37,19 +80,34 @@ internal static class BodySizeMatch
     {
         /// <summary>The garment has no body mesh, so there is nothing to match on.</summary>
         NoBodyMesh,
+
+        /// <summary>The garment has a body mesh, but too little of it lies on this slot's body to tell sizes apart —
+        /// a top's torso against the legs models, say.</summary>
+        TooLittle,
         Exact,
         Likely,
         Guess,
         Ambiguous,
     }
 
-    internal sealed record Ranking(Confidence Confidence, IReadOnlyList<Score> Scores)
+    /// <param name="FromCloth">The answer was read from how the garment's CLOTH sits on each body, because its body mesh
+    /// did not reach this slot — see <see cref="RankByCloth"/>. <see cref="Score.Rms"/> is then the mean gap.</param>
+    internal sealed record Ranking(Confidence Confidence, IReadOnlyList<Score> Scores, bool FromCloth = false)
     {
         public Score? Best => Scores.Count > 0 ? Scores[0] : null;
 
         /// <summary>Whether the top score is worth selecting for the user rather than merely showing.</summary>
         public bool Preselect => Confidence is Confidence.Exact or Confidence.Likely;
     }
+
+    /// <summary>
+    /// The share of nearby cloth that may sit inside a body and still count as clearing it (0.5%). Not zero: authors
+    /// tuck the odd waistband vertex under the skin on purpose.
+    /// </summary>
+    private const float ClearsBelow = 0.005f;
+
+    /// <summary>How close cloth has to be to a body to count as sitting on it, for the cloth reading (30 mm).</summary>
+    private const float ClothReach = 0.03f;
 
     /// <summary>
     /// Rank <paramref name="candidates"/> by how well they explain the garment's own body mesh.
@@ -60,72 +118,259 @@ internal static class BodySizeMatch
         var probes = Probes(garment);
         if (probes.Count == 0) return new Ranking(Confidence.NoBodyMesh, []);
 
-        // One score per distinct BODY, not per option, and distinct means "different vertex positions". Neolithe
-        // mirrors all 114 chest sizes onto the Emperor's New Robe, and those mirrors are neither the same path nor the
-        // same bytes — same geometry, different undies material — so only a geometric key merges them. Left unmerged
-        // they arrive as a pair of identical twins at the top of every ranking, which buries the genuine ties the
-        // tie-break below exists to surface.
-        var scores = new List<Score>();
-        var seenContent = new HashSet<string>(StringComparer.Ordinal);
+        // One entry per distinct BODY, in the author's order. Distinct means different vertex positions: Neolithe's
+        // Emperor's New Robe mirrors are neither the same path nor the same bytes as the SmallClothes sizes — same
+        // geometry, different undies material — so only a geometric key merges them.
+        var bodies = new List<(BodyOption Option, float[] Distance, bool[] Hit)>();
+        var seenGeometry = new HashSet<string>(StringComparer.Ordinal);
         foreach (var group in candidates.GroupBy(o => o.Rel, StringComparer.OrdinalIgnoreCase))
         {
             var option = group.First();
             var body = Load(pathOf(option));
-            if (body == null || !seenContent.Add(body.ContentKey)) continue;
+            if (body == null || !seenGeometry.Add(body.ContentKey)) continue;
 
-            int hits = 0;
-            double sum = 0;
-            int measured = 0;
+            var distance = new float[probes.Count];
+            var hit = new bool[probes.Count];
 
             // The candidate lives in a process-wide cache, and BodySurface reuses a scratch buffer between queries, so
-            // two rankings touching the same body at once would corrupt each other's answers. Uncontended in the
-            // normal case — the Studio runs one detection at a time.
+            // two rankings touching the same body at once would corrupt each other. Uncontended in the normal case.
             lock (body)
             {
-                foreach (var p in probes)
+                for (int i = 0; i < probes.Count; i++)
                 {
-                    if (body.Snap.Contains(MeshMath.PositionKey(BodyRetarget.ToVec(p), BodyRetarget.SnapPerMetre)))
-                        hits++;
-                    if (!body.Surface.Nearest(p, BodyRetarget.NearBand, out var hit)) continue;
-                    sum += hit.Distance * hit.Distance;
-                    measured++;
+                    hit[i] = body.Snap.Contains(MeshMath.PositionKey(BodyRetarget.ToVec(probes[i]),
+                                                                     BodyRetarget.SnapPerMetre));
+                    distance[i] = body.Surface.Nearest(probes[i], Reach, out var h) ? h.Distance : Reach;
                 }
             }
-
-            scores.Add(new Score(option, (float)hits / probes.Count,
-                                 measured > 0 ? (float)Math.Sqrt(sum / measured) : float.MaxValue));
+            bodies.Add((option, distance, hit));
         }
 
-        if (scores.Count == 0) return new Ranking(Confidence.Ambiguous, []);
+        if (bodies.Count == 0) return new Ranking(Confidence.Ambiguous, []);
 
-        scores.Sort((x, y) => x.HitRate != y.HitRate ? y.HitRate.CompareTo(x.HitRate) : x.Rms.CompareTo(y.Rms));
+        var distances = bodies.Select(b => b.Distance).ToList();
+        var touching = Touching(distances, probes.Count);
+        var region = DiscriminatingRegion(distances, touching);
+
+        // Where the candidates are all the same shape, the garment agrees with every one of them: score over everywhere
+        // it touches, so the scores stay comparable and the ties are reported as ties.
+        var scoredOver = region.Count > 0 ? region : touching;
+
+        var order = bodies.Select(b => b.Option).ToList();
+        var scores = scoredOver.Count == 0
+                         ? bodies.Select(b => new Score(b.Option, 0f, Reach)).ToList()
+                         : FirstListedAmongEquals(bodies.Select(b => ScoreOver(b.Option, b.Distance, b.Hit, scoredOver))
+                                                        .OrderBy(s => s.Rms)
+                                                        .ThenByDescending(s => s.HitRate)
+                                                        .ToList(),
+                                                  order);
+
+        // Too little of the garment's body mesh lies on this slot's body to be evidence either way. The cloth may still
+        // say — a top's torso never reaches the legs models, but its hem hangs right over them.
+        if (touching.Count < MinEvidence)
+            return RankByCloth(garment, bodies.Select(b => b.Option).ToList(), pathOf) is { } byCloth
+                       ? byCloth
+                       : new Ranking(Confidence.TooLittle, scores);
+
         return new Ranking(Judge(scores), scores);
     }
 
     /// <summary>
-    /// Two candidates this close are a tie, not a ranking.
+    /// Read the size from how the garment's CLOTH sits on each candidate, for a slot its body mesh never reaches.
     /// <para/>
-    /// It happens for a real reason: a garment that only covers the chest carries no belly geometry, so Neolithe's
-    /// Default and Neobelly sizes explain it equally well and differ only where the garment has nothing to say. Both
-    /// answers are defensible and they give different results elsewhere, so the honest move is to show both rather
-    /// than pick by sort order.
+    /// An author fits cloth to sit just outside the body it was made for. Against a larger body the cloth passes into
+    /// it; against a smaller one it floats clear. So the authored size is the TIGHTEST body the cloth still clears.
+    /// Measured on "This Old Thing", whose top's torso body mesh never touches the legs: its M's hem clears Small and
+    /// Medium and passes 75 vertices into Large, and its L's clears all three — Medium and Large, exactly the hips its
+    /// author fitted, which the refit had needed to make the cloth six times closer to the author's own sizes.
     /// </summary>
-    private const float TieMargin = 0.005f;
+    /// <returns>Null when the cloth does not reach this slot's bodies either, so there is nothing to read.</returns>
+    private static Ranking? RankByCloth(ModelParts garment, IReadOnlyList<BodyOption> options,
+                                        Func<BodyOption, string> pathOf)
+    {
+        var cloth = ClothProbes(garment);
+        if (cloth.Count == 0) return null;
+
+        var readings = new List<(BodyOption Option, int Near, int Inside, float Gap, string Family)>();
+        foreach (var option in options)
+        {
+            var body = Load(pathOf(option));
+            if (body == null) continue;
+
+            int near = 0, inside = 0, outside = 0;
+            double gap = 0;
+            lock (body)
+            {
+                foreach (var p in cloth)
+                {
+                    if (!body.Surface.Nearest(p, ClothReach, out var hit)) continue;
+                    near++;
+                    float s = Vector3.Dot(p - hit.Point, hit.Normal);
+                    if (s < 0f) inside++;
+                    else { gap += s; outside++; }
+                }
+            }
+            readings.Add((option, near, inside, outside > 0 ? (float)(gap / outside) : ClothReach, body.TopologyKey));
+        }
+
+        var evidence = readings.Where(r => r.Near >= MinEvidence).ToList();
+        if (evidence.Count == 0) return null;
+
+        // The size is read within ONE family, and the family is the author's first-listed one.
+        //
+        // "Tightest body the cloth clears" is the right signal along a size axis and the wrong one across families.
+        // Across them it rewards any body that is fatter wherever the garment happens to have room: Neolithe's Neobelly
+        // legs fill a top's hem with their belly, so they read tighter than the plain legs without being what the top
+        // was made for. A hem cannot tell belly from no belly, so the family is not read from it at all — the plain,
+        // first-listed family is taken, the size is read within it, and the other families follow for the user to
+        // choose. Once a target is chosen, BestCompatible re-picks within the target's family anyway.
+        string primary = evidence.OrderBy(r => IndexIn(options, r.Option)).First().Family;
+        var scores = new List<Score>();
+        Confidence confidence = Confidence.Ambiguous;
+        foreach (var family in evidence.GroupBy(r => r.Family)
+                                       .OrderBy(g => g.Key == primary ? 0 : 1)
+                                       .ThenBy(g => g.Min(r => IndexIn(options, r.Option))))
+        {
+            var members = family.ToList();
+            var clearing = members.Where(Clears).OrderBy(r => r.Gap).ToList();
+            var head = FirstListedAmongEquals(clearing.Select(r => new Score(r.Option, 0f, r.Gap)).ToList(), options);
+            scores.AddRange(head);
+            scores.AddRange(members.Where(r => !Clears(r)).OrderBy(r => r.Gap).Select(r => new Score(r.Option, 0f, r.Gap)));
+
+            if (family.Key != primary) continue;
+
+            // The cloth passes into every body of the family: nothing it was plainly fitted to. Otherwise a size is only
+            // pinned down when a larger one exists that the cloth passes into; without one, "the tightest it clears"
+            // might equally be "loose over all of them" — worth showing, not worth choosing for the user.
+            confidence = clearing.Count == 0 ? Confidence.Ambiguous
+                       : members.Any(r => !Clears(r)) ? Confidence.Likely
+                       : Confidence.Guess;
+        }
+
+        return new Ranking(confidence, scores, FromCloth: true);
+
+        static bool Clears((BodyOption, int Near, int Inside, float, string) r) => r.Inside <= r.Near * ClearsBelow;
+    }
+
+    private static int IndexIn(IReadOnlyList<BodyOption> options, BodyOption option)
+    {
+        for (int i = 0; i < options.Count; i++)
+            if (options[i] == option) return i;
+        return int.MaxValue;
+    }
+
+    /// <summary>
+    /// Of the leading scores that are the SAME answer (within <see cref="SameAnswer"/> of the best), put the one the
+    /// author listed first at the front.
+    /// <para/>
+    /// Which of several equally good candidates leads is not cosmetic. Neolithe's legs group lists the plain SFW sizes
+    /// alongside Bulge, Gen A/B/C and Puffy variants that share the hips and differ only at the crotch, which no hem
+    /// reaches — so they read identically from a top, give or take a hundredth of a millimetre. Leaving the pick to
+    /// that hundredth chose "Gen C Small" for one size and "SFW L" for another; those are different meshes, so the pair
+    /// was refused and the refit lost its legs. The author's own ordering puts the plain family first, and it is the
+    /// one a user would reach for.
+    /// </summary>
+    private static List<Score> FirstListedAmongEquals(List<Score> sorted, IReadOnlyList<BodyOption> order)
+    {
+        if (sorted.Count < 2) return sorted;
+
+        float best = MathF.Max(sorted[0].Rms, 1e-6f);
+        int same = sorted.TakeWhile(s => s.Rms <= best * (1f + SameAnswer)).Count();
+        if (same < 2) return sorted;
+
+        var rank = new Dictionary<BodyOption, int>();
+        for (int i = 0; i < order.Count; i++) rank.TryAdd(order[i], i);
+
+        return sorted.Take(same)
+                     .OrderBy(s => rank.TryGetValue(s.Option, out int i) ? i : int.MaxValue)
+                     .Concat(sorted.Skip(same))
+                     .ToList();
+    }
+
+    /// <summary>The garment's cloth points, welded and thinned the same way as <see cref="Probes"/>.</summary>
+    private static List<Vector3> ClothProbes(ModelParts garment)
+    {
+        int vc = garment.Positions.Length / 3;
+        var seen = new HashSet<(int, int, int)>();
+        var all = new List<Vector3>();
+
+        foreach (var part in garment.Parts)
+        {
+            if (part.Island >= 0 || SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+            foreach (int v in part.Triangles)
+            {
+                if (v < 0 || v >= vc) continue;
+                var p = new Vector3(garment.Positions[v * 3], garment.Positions[v * 3 + 1],
+                                    garment.Positions[v * 3 + 2]);
+                if (seen.Add(MeshMath.PositionKey(BodyRetarget.ToVec(p), BodyRetarget.SnapPerMetre))) all.Add(p);
+            }
+        }
+
+        if (all.Count <= MaxProbes) return all;
+        int stride = (all.Count + MaxProbes - 1) / MaxProbes;
+        var thinned = new List<Vector3>(MaxProbes);
+        for (int i = 0; i < all.Count; i += stride) thinned.Add(all[i]);
+        return thinned;
+    }
+
+    /// <summary>The probes lying on at least one candidate — the only ones that are evidence. See <see cref="Contact"/>.</summary>
+    private static List<int> Touching(IReadOnlyList<float[]> distances, int probeCount)
+    {
+        var touching = new List<int>();
+        for (int i = 0; i < probeCount; i++)
+        {
+            float lo = float.MaxValue;
+            foreach (var d in distances) lo = MathF.Min(lo, d[i]);
+            if (lo <= Contact) touching.Add(i);
+        }
+        return touching;
+    }
+
+    /// <summary>Of the touching probes, the ones where the candidates disagree — the region that decides it.</summary>
+    private static List<int> DiscriminatingRegion(IReadOnlyList<float[]> distances, List<int> touching)
+    {
+        var region = new List<int>();
+        foreach (int i in touching)
+        {
+            float lo = float.MaxValue, hi = float.MinValue;
+            foreach (var d in distances)
+            {
+                lo = MathF.Min(lo, d[i]);
+                hi = MathF.Max(hi, d[i]);
+            }
+            if (hi - lo > Discriminates) region.Add(i);
+        }
+        return region;
+    }
+
+    private static Score ScoreOver(BodyOption option, float[] distance, bool[] hit, List<int> region)
+    {
+        double sum = 0;
+        int hits = 0;
+        foreach (int i in region)
+        {
+            sum += distance[i] * distance[i];
+            if (hit[i]) hits++;
+        }
+        return new Score(option, (float)hits / region.Count, (float)Math.Sqrt(sum / region.Count));
+    }
 
     private static Confidence Judge(List<Score> scores)
     {
         var best = scores[0];
-        bool tied = scores.Count > 1 && best.HitRate - scores[1].HitRate <= TieMargin;
-
-        if (best.HitRate >= Likely) return tied ? Confidence.Ambiguous
-                                    : best.HitRate >= Exact ? Confidence.Exact
-                                    : Confidence.Likely;
-
-        // Nothing snapped, so fall back to how much closer the surface fit is than the runner-up's. A clear winner is
-        // a guess worth showing; a photo finish is not, and saying so is more useful than picking one.
+        if (best.HitRate >= Exact) return Confidence.Exact;
         if (scores.Count == 1) return Confidence.Guess;
-        float runnerUp = scores.Skip(1).Min(s => s.Rms);
-        return best.Rms < runnerUp * 0.9f ? Confidence.Guess : Confidence.Ambiguous;
+
+        // Measured against the first candidate that is a genuinely DIFFERENT answer, skipping the ones that score the
+        // same as the best because the garment cannot tell them apart. See SameAnswer.
+        float floor = MathF.Max(best.Rms, 1e-6f);
+        var runnerUp = scores.Skip(1).FirstOrDefault(s => s.Rms > floor * (1f + SameAnswer));
+        if (runnerUp.Option == null) return Confidence.Likely;   // everything left is the same answer
+
+        float ratio = best.Rms / MathF.Max(runnerUp.Rms, 1e-6f);
+        return ratio < LikelyRatio ? Confidence.Likely
+             : ratio < GuessRatio ? Confidence.Guess
+             : Confidence.Ambiguous;
     }
 
     /// <summary>
@@ -159,8 +404,31 @@ internal static class BodySizeMatch
         return thinned;
     }
 
+    /// <summary>
+    /// The highest-ranked candidate that can actually be paired with <paramref name="target"/> — the same mesh, so that
+    /// <see cref="IdentityCorrespondence"/> will accept the pair.
+    /// <para/>
+    /// The ranking is made before the user has chosen a target, and it answers "which body fits this garment best"
+    /// across every family the body mod offers. Once a target is chosen that question narrows: the source has to be the
+    /// same mesh as the target or there is no refit at all. Neolithe's Neobelly legs fit a top's hem a little more
+    /// snugly than the plain ones (the belly fills it), so the unconstrained best can sit in a different family from the
+    /// size the user wants — and then the best source that is POSSIBLE is the one to use.
+    /// </summary>
+    /// <returns>Null when nothing in the ranking shares the target's mesh.</returns>
+    public static Score? BestCompatible(Ranking ranking, BodyOption target, Func<BodyOption, string> pathOf)
+    {
+        if (Load(pathOf(target)) is not { } wanted) return null;
+        foreach (var score in ranking.Scores)
+            if (Load(pathOf(score.Option)) is { } body && body.TopologyKey == wanted.TopologyKey)
+                return score;
+        return null;
+    }
+
     /// <param name="ContentKey">Identifies the MODEL rather than the file, so two copies of one body deduplicate.</param>
-    private sealed record Candidate(BodySurface Surface, HashSet<(int, int, int)> Snap, string ContentKey);
+    /// <param name="TopologyKey">Identifies the MESH — vertex count and mesh layout — so two sizes of one body share it
+    /// and a different family (Neobelly, Gen C) does not.</param>
+    private sealed record Candidate(BodySurface Surface, HashSet<(int, int, int)> Snap, string ContentKey,
+                                    string TopologyKey);
 
     /// <summary>
     /// Read and index one candidate body, remembering it for the session.
@@ -189,11 +457,11 @@ internal static class BodySizeMatch
                     snap.Add(MeshMath.PositionKey(BodyRetarget.ToVec(surface.PositionOf(v)),
                                                   BodyRetarget.SnapPerMetre));
 
-                // Keyed on the VERTEX POSITIONS, not on the file's bytes. Neolithe's Emperor's New Robe mirror of a
-                // size is the same body with a different undies material, so its bytes differ while its geometry does
-                // not — and geometry is the only thing a retarget ever reads from a body.
-                return new Candidate(surface, snap,
-                                     Convert.ToHexString(SHA256.HashData(MemoryMarshal.AsBytes<float>(model.Positions))));
+                // Keyed on the VERTEX POSITIONS, not on the file's bytes: see the dedupe in Rank.
+                string content = Convert.ToHexString(SHA256.HashData(MemoryMarshal.AsBytes<float>(model.Positions)));
+                string topology = model.Positions.Length + ":" +
+                                  string.Join(",", model.MeshSpans.Select(s => $"{s.Mesh}/{s.Count}"));
+                return new Candidate(surface, snap, content, topology);
             });
         }
         catch

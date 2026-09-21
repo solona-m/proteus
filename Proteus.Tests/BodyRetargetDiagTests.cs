@@ -151,6 +151,598 @@ public class BodyRetargetDiagTests(ITestOutputHelper output)
         Assert.Equal("SFW M", ranking.Best!.Value.Option.Name);
     }
 
+    private const string ThisOldThing = @"E:\Penumbradt\This Old Thing - by Solona\size";
+
+    /// <summary>
+    /// The one measurement here with a right answer to compare against.
+    /// <para/>
+    /// "This Old Thing" ships its top in four Neolithe sizes that its author fitted by hand. Refit the author's M onto
+    /// the L body automatically and compare the result with the author's own L: every millimetre of difference is
+    /// the retarget disagreeing with a person who knew what they wanted. "Did nothing" — the M left as it is — is
+    /// printed beside it as the baseline the refit has to beat.
+    /// </summary>
+    [Theory]
+    [InlineData("neolithe m", "neolithe l")]
+    [InlineData("neolithe m", "neolithe s")]
+    [InlineData("neolithe s", "neolithe l")]
+    public void Refit_against_the_author_s_own_sizes(string fromSize, string toSize)
+    {
+        const string model = @"chara\equipment\e6255\model\c0201e6255_top.mdl";
+        string fromPath = Path.Combine(ThisOldThing, fromSize, model);
+        string toPath = Path.Combine(ThisOldThing, toSize, model);
+        if (!File.Exists(fromPath) || !File.Exists(toPath) || !Directory.Exists(NeolitheRoot)) return;
+
+        var fromBytes = File.ReadAllBytes(fromPath);
+        var toBytes = File.ReadAllBytes(toPath);
+        var authorFrom = ModelPartReader.Read(fromBytes)!;
+        var authorTo = ModelPartReader.Read(toBytes)!;
+
+        // Exactly what the Studio does: detect the source size of every slot the body mod sizes, from the garment
+        // itself, and take the target as the size detected for the author's other version — standing in for the size
+        // a user would pick. Nothing here is forced.
+        var catalog = BodySizeCatalog.Read(NeolitheRoot);
+        var pairs = new List<BodyRetarget.SlotPair>();
+        foreach (string slot in new[] { "_top", "_dwn" })
+        {
+            var options = catalog.For(slot);
+            var rankFrom = BodySizeMatch.Rank(authorFrom, options, catalog.PathOf);
+            var rankTo = BodySizeMatch.Rank(authorTo, options, catalog.PathOf);
+            output.WriteLine($"{slot} {fromSize}: {rankFrom.Confidence}, {Top(rankFrom)}");
+            output.WriteLine($"{slot} {toSize}: {rankTo.Confidence}, {Top(rankTo)}");
+            if (rankFrom.Best is not { } src) continue;
+
+            // The user's choice of target, modelled: the size the author used for the other version, within the family
+            // the garment was detected on — the same mesh as the source, so the pair is possible at all.
+            if (BodySizeMatch.BestCompatible(rankTo, src.Option, catalog.PathOf) is not { } dst)
+            {
+                output.WriteLine($"{slot}: nothing in the target ranking shares {src.Option.FullLabel}'s mesh");
+                continue;
+            }
+            output.WriteLine($"{slot} refit {src.Option.FullLabel} -> {dst.Option.FullLabel}");
+            if (src.Option.Rel == dst.Option.Rel) continue;   // the same size both ways: nothing to change here
+
+            var sourceBytes = File.ReadAllBytes(catalog.PathOf(src.Option));
+            var targetBytes = File.ReadAllBytes(catalog.PathOf(dst.Option));
+            var source = ModelPartReader.Read(sourceBytes)!;
+            var target = ModelPartReader.Read(targetBytes)!;
+            if (!IdentityCorrespondence.TryBuild(source, target, slot, out var built, out string refusal,
+                                                 Uv(sourceBytes), Uv(targetBytes)))
+            {
+                output.WriteLine($"{slot}: {refusal}");
+                continue;
+            }
+            pairs.Add(new BodyRetarget.SlotPair(slot, built!, target));
+        }
+        if (pairs.Count == 0) return;
+
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var planned = BodyRetarget.Plan(authorFrom, fromBytes, pairs, "_top");
+        clock.Stop();
+        var refit = ModelPartReader.Read(planned.Model)!;
+
+        var r = planned.Report;
+        output.WriteLine($"solve {clock.ElapsedMilliseconds} ms: snapped {r.Snapped:N0} ({r.SnapRate:P0}), " +
+                         $"pushed {r.Pushed:N0} (worst {r.WorstPush * 1000f:F2} mm), worst move {r.WorstMove * 1000f:F2} mm");
+
+        // Per vertex when the author's two sizes share a numbering (the reliable measure); otherwise nearest surface.
+        bool sameNumbering = authorFrom.Positions.Length == authorTo.Positions.Length
+                          && Uv(fromBytes).AsSpan().SequenceEqual(Uv(toBytes));
+        output.WriteLine(sameNumbering
+                             ? "the author's two sizes share a vertex numbering: comparing vertex for vertex"
+                             : "the author's two sizes are different meshes: comparing nearest surface");
+
+        output.WriteLine("");
+        output.WriteLine($"{"",-14}{"",8}{"mean",9}{"p95",9}{"max",9}   (mm, against the author's {toSize})");
+        foreach (bool skin in new[] { true, false })
+        {
+            string label = skin ? "body mesh" : "cloth";
+            var nothing = Errors(authorFrom, authorTo, skin, sameNumbering);
+            var ours = Errors(refit, authorTo, skin, sameNumbering);
+            output.WriteLine($"{label,-14}{"nothing",8}{Stats(nothing)}");
+            output.WriteLine($"{"",-14}{"refit",8}{Stats(ours)}");
+        }
+    }
+
+    /// <summary>
+    /// The same comparison with the body pair FORCED rather than detected, to separate "the detector picked the wrong
+    /// bodies" from "the refit itself is wrong". Run over each reading of which Neolithe sizes the author meant.
+    /// </summary>
+    [Theory]
+    [InlineData("neolithe m", "neolithe l", "DEFAULT · SFW M", "DEFAULT · SFW L")]
+    [InlineData("neolithe m", "neolithe l", "DEFAULT · NSFW M", "DEFAULT · NSFW L")]
+    [InlineData("neolithe m", "neolithe s", "DEFAULT · SFW M", "DEFAULT · SFW S")]
+    public void Refit_with_a_forced_pair_against_the_author(string fromSize, string toSize, string fromOption,
+                                                           string toOption)
+    {
+        const string model = @"chara\equipment\e6255\model\c0201e6255_top.mdl";
+        string fromPath = Path.Combine(ThisOldThing, fromSize, model);
+        string toPath = Path.Combine(ThisOldThing, toSize, model);
+        if (!File.Exists(fromPath) || !File.Exists(toPath) || !Directory.Exists(NeolitheRoot)) return;
+
+        var catalog = BodySizeCatalog.Read(NeolitheRoot);
+        var chest = catalog.For("_top").Where(o => o.Group == "CHEST: SmallClothes").ToList();
+        var src = chest.FirstOrDefault(o => o.Label == fromOption);
+        var dst = chest.FirstOrDefault(o => o.Label == toOption);
+        Assert.True(src != null && dst != null, $"no option {fromOption} or {toOption}");
+
+        var fromBytes = File.ReadAllBytes(fromPath);
+        var authorFrom = ModelPartReader.Read(fromBytes)!;
+        var authorTo = ModelPartReader.Read(File.ReadAllBytes(toPath))!;
+
+        var sourceBytes = File.ReadAllBytes(catalog.PathOf(src!));
+        var targetBytes = File.ReadAllBytes(catalog.PathOf(dst!));
+        var source = ModelPartReader.Read(sourceBytes)!;
+        var target = ModelPartReader.Read(targetBytes)!;
+        Assert.True(IdentityCorrespondence.TryBuild(source, target, "chest", out var built, out string refusal,
+                                                    Uv(sourceBytes), Uv(targetBytes)), refusal);
+
+        var planned = BodyRetarget.Plan(authorFrom, fromBytes, [new BodyRetarget.SlotPair("_top", built!, target)], "_top");
+        var refit = ModelPartReader.Read(planned.Model)!;
+        var r = planned.Report;
+        output.WriteLine($"{fromOption} -> {toOption}: snapped {r.Snapped:N0} ({r.SnapRate:P0}), pushed {r.Pushed:N0} " +
+                         $"(worst {r.WorstPush * 1000f:F2} mm), worst move {r.WorstMove * 1000f:F2} mm");
+
+        // And how far the garment's own body mesh sits from each candidate body, so it is visible which reading the
+        // author's model actually matches.
+        output.WriteLine($"garment body mesh to source body: {Stats(Errors(authorFrom, source, true, false))}");
+
+        output.WriteLine($"{"",-14}{"",8}{"mean",9}{"p95",9}{"max",9}   (mm, against the author's {toSize})");
+        foreach (bool skin in new[] { true, false })
+        {
+            output.WriteLine($"{(skin ? "body mesh" : "cloth"),-14}{"nothing",8}{Stats(Errors(authorFrom, authorTo, skin, true))}");
+            output.WriteLine($"{"",-14}{"refit",8}{Stats(Errors(refit, authorTo, skin, true))}");
+        }
+    }
+
+    /// <summary>
+    /// Whether the hem's motion belongs to the LEGS. A top's chest model is cut at the waist, so cloth over the hips is
+    /// far from it and near the legs model instead; if the author fitted each size to matching hips too, only a refit
+    /// that includes the legs pair can follow it. Tried under several readings of which hip sizes were meant.
+    /// </summary>
+    private const string ExtraChestSmallClothes = NeolitheRoot + @"\EXTRA CHEST - SmallClothes";
+
+    [Theory]
+    [InlineData(null, null, true, "default")]
+    [InlineData("SFW Medium", "SFW Medium", true, "default")]
+    [InlineData("SFW Medium", "SFW Large", true, "default")]
+    [InlineData("SFW Medium", "SFW Large", false, "default")]
+    [InlineData("SFW Small", "SFW Medium", true, "default")]
+    [InlineData("SFW Small", "SFW Large", true, "default")]
+    [InlineData("SFW Medium", "SFW Large", true, "pushup")]
+    public void The_legs_pair_carries_the_hem(string? legsFrom, string? legsTo, bool pushOut, string chest)
+    {
+        const string model = @"chara\equipment\e6255\model\c0201e6255_top.mdl";
+        string fromPath = Path.Combine(ThisOldThing, "neolithe m", model);
+        string toPath = Path.Combine(ThisOldThing, "neolithe l", model);
+        if (!File.Exists(fromPath) || !File.Exists(toPath) || !Directory.Exists(NeolitheRoot)) return;
+
+        var fromBytes = File.ReadAllBytes(fromPath);
+        var authorM = ModelPartReader.Read(fromBytes)!;
+        var authorL = ModelPartReader.Read(File.ReadAllBytes(toPath))!;
+
+        var pairs = new List<BodyRetarget.SlotPair>();
+        if (chest == "pushup")
+            AddPair(pairs, "_top", ExtraChestSmallClothes + @"\SFW Pushup M.mdl", ExtraChestSmallClothes + @"\SFW Pushup L.mdl");
+        else
+            AddPair(pairs, "_top", ChestFolder + @"\SFW M.mdl", ChestFolder + @"\SFW L.mdl");
+        if (legsFrom != null && legsTo != null)
+            AddPair(pairs, "_dwn", LegsFolder + $@"\{legsFrom}.mdl", LegsFolder + $@"\{legsTo}.mdl");
+
+        var planned = BodyRetarget.Plan(authorM, fromBytes, pairs, "_top", pushOut);
+        var refit = ModelPartReader.Read(planned.Model)!;
+        var r = planned.Report;
+
+        string label = $"{chest} chest" + (legsFrom == null ? " only" : $" + legs {legsFrom} -> {legsTo}")
+                     + (pushOut ? "" : ", NO push-out");
+        output.WriteLine($"{label}: pushed {r.Pushed:N0} (worst {r.WorstPush * 1000f:F2} mm), missed {r.Missed:N0}");
+        output.WriteLine($"{"",-14}{"",8}{"mean",9}{"p95",9}{"max",9}   (mm, against the author's L)");
+        foreach (bool skin in new[] { true, false })
+        {
+            output.WriteLine($"{(skin ? "body mesh" : "cloth"),-14}{"nothing",8}{Stats(Errors(authorM, authorL, skin, true))}");
+            output.WriteLine($"{"",-14}{"refit",8}{Stats(Errors(refit, authorL, skin, true))}");
+        }
+    }
+
+    /// <summary>
+    /// What the push-out is pushing against, when it pushes. Each node the push moved is attributed to the nearest
+    /// drawn surface — the garment's own retargeted body mesh, or the legs body its hem hangs over — and scored on
+    /// whether the push took it towards the author's answer or away from it.
+    /// </summary>
+    [Fact]
+    public void What_the_push_out_pushes_against()
+    {
+        const string model = @"chara\equipment\e6255\model\c0201e6255_top.mdl";
+        string fromPath = Path.Combine(ThisOldThing, "neolithe m", model);
+        string toPath = Path.Combine(ThisOldThing, "neolithe l", model);
+        if (!File.Exists(fromPath) || !File.Exists(toPath) || !Directory.Exists(NeolitheRoot)) return;
+
+        var fromBytes = File.ReadAllBytes(fromPath);
+        var authorM = ModelPartReader.Read(fromBytes)!;
+        var authorL = ModelPartReader.Read(File.ReadAllBytes(toPath))!;
+
+        var pairs = new List<BodyRetarget.SlotPair>();
+        AddPair(pairs, "_top", ChestFolder + @"\SFW M.mdl", ChestFolder + @"\SFW L.mdl");
+        AddPair(pairs, "_dwn", LegsFolder + @"\SFW Medium.mdl", LegsFolder + @"\SFW Large.mdl");
+
+        var pushed = ModelPartReader.Read(BodyRetarget.Plan(authorM, fromBytes, pairs, "_top", true).Model)!;
+        var still = ModelPartReader.Read(BodyRetarget.Plan(authorM, fromBytes, pairs, "_top", false).Model)!;
+
+        var ownSkin = new BodySurface(still, 0.02f);
+        var legs = new BodySurface(pairs[1].Target, 0.02f);
+
+        var tally = new Dictionary<string, (int N, double Better, double Worse, double Push)>();
+        var seen = new HashSet<int>();
+        foreach (var part in authorM.Parts)
+        {
+            if (part.Island >= 0 || SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+            foreach (int v in part.Triangles)
+            {
+                if (!seen.Add(v)) continue;
+                var before = At(still, v);
+                var after = At(pushed, v);
+                float push = Vector3.Distance(before, after);
+                if (push < 1e-6f) continue;
+
+                float dOwn = ownSkin.Nearest(before, 0.05f, out var hOwn) ? hOwn.Distance : float.MaxValue;
+                float dLegs = legs.Nearest(before, 0.05f, out var hLegs) ? hLegs.Distance : float.MaxValue;
+                string by = dOwn <= dLegs ? "own body mesh" : "legs body";
+                bool inside = dOwn <= dLegs
+                                  ? Vector3.Dot(before - hOwn.Point, hOwn.Normal) < 0f
+                                  : Vector3.Dot(before - hLegs.Point, hLegs.Normal) < 0f;
+                by += inside ? " (inside)" : " (spread)";
+
+                var truth = At(authorL, v);
+                float gain = Vector3.Distance(before, truth) - Vector3.Distance(after, truth);
+                var t = tally.GetValueOrDefault(by);
+                tally[by] = (t.N + 1, t.Better + Math.Max(0, gain), t.Worse + Math.Max(0, -gain), t.Push + push);
+            }
+        }
+
+        output.WriteLine($"{"pushed by",-26}{"nodes",7}{"mean push",11}{"closer",9}{"further",9}   (mm, vs author)");
+        foreach (var (by, t) in tally.OrderBy(p => p.Key))
+            output.WriteLine($"{by,-26}{t.N,7}{t.Push / t.N * 1000,11:F2}{t.Better / t.N * 1000,9:F2}{t.Worse / t.N * 1000,9:F2}");
+
+        // Were those nodes ALREADY inside the garment's own body mesh as the author shipped it? If so the "clip" is
+        // authored — cloth over skin the author left underneath, hidden — and a push-out has no business fixing it.
+        var authoredSkin = new BodySurface(authorM, 0.02f);
+        int already = 0, wasOutside = 0;
+        var authoredDepth = new List<float>();
+        seen.Clear();
+        foreach (var part in authorM.Parts)
+        {
+            if (part.Island >= 0 || SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+            foreach (int v in part.Triangles)
+            {
+                if (!seen.Add(v)) continue;
+                if (Vector3.Distance(At(still, v), At(pushed, v)) < 1e-6f) continue;
+                var p0 = At(authorM, v);
+                if (!authoredSkin.Nearest(p0, 0.05f, out var h0)) continue;
+                float s0 = Vector3.Dot(p0 - h0.Point, h0.Normal);
+                if (s0 < 0f) { already++; authoredDepth.Add(-s0); }
+                else wasOutside++;
+            }
+        }
+        output.WriteLine("");
+        output.WriteLine($"of the pushed nodes, as the AUTHOR shipped M: {already} already inside its own body mesh, " +
+                         $"{wasOutside} outside");
+        if (authoredDepth.Count > 0) output.WriteLine($"authored depth inside: {Stats(authoredDepth)}");
+    }
+
+    /// <summary>
+    /// Where the cloth error lives. For each cloth vertex: how far the AUTHOR moved it from M to L, how far the refit
+    /// moved it, and how far apart those two answers are — binned by distance from the source body, so a falloff that
+    /// gives up too early, and a field sampled in the wrong place, show up as different rows.
+    /// </summary>
+    [Fact]
+    public void Where_the_cloth_error_lives()
+    {
+        const string model = @"chara\equipment\e6255\model\c0201e6255_top.mdl";
+        string fromPath = Path.Combine(ThisOldThing, "neolithe m", model);
+        string toPath = Path.Combine(ThisOldThing, "neolithe l", model);
+        if (!File.Exists(fromPath) || !File.Exists(toPath) || !Directory.Exists(NeolitheRoot)) return;
+
+        var catalog = BodySizeCatalog.Read(NeolitheRoot);
+        var chest = catalog.For("_top").Where(o => o.Group == "CHEST: SmallClothes").ToList();
+        var src = chest.First(o => o.Label == "DEFAULT · SFW M");
+        var dst = chest.First(o => o.Label == "DEFAULT · SFW L");
+
+        var fromBytes = File.ReadAllBytes(fromPath);
+        var authorM = ModelPartReader.Read(fromBytes)!;
+        var authorL = ModelPartReader.Read(File.ReadAllBytes(toPath))!;
+        var sourceBytes = File.ReadAllBytes(catalog.PathOf(src));
+        var targetBytes = File.ReadAllBytes(catalog.PathOf(dst));
+        var source = ModelPartReader.Read(sourceBytes)!;
+        var target = ModelPartReader.Read(targetBytes)!;
+        IdentityCorrespondence.TryBuild(source, target, "chest", out var built, out _, Uv(sourceBytes), Uv(targetBytes));
+
+        var planned = BodyRetarget.Plan(authorM, fromBytes, [new BodyRetarget.SlotPair("_top", built!, target)], "_top");
+        var refit = ModelPartReader.Read(planned.Model)!;
+        var surface = new BodySurface(source, 0.02f);
+
+        float[] edges = [0.005f, 0.01f, 0.02f, 0.04f, 0.08f, 0.25f, float.MaxValue];
+        var rows = edges.Select(_ => (N: 0, Author: 0.0, Ours: 0.0, Miss: 0.0, Cos: 0.0)).ToArray();
+
+        var seen = new HashSet<int>();
+        foreach (var part in authorM.Parts)
+        {
+            if (part.Island >= 0 || SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+            foreach (int v in part.Triangles)
+            {
+                if (!seen.Add(v)) continue;
+                var p = At(authorM, v);
+                var author = At(authorL, v) - p;
+                var ours = At(refit, v) - p;
+                float d = surface.Nearest(p, 1f, out var hit) ? hit.Distance : float.MaxValue;
+                int bin = Array.FindIndex(edges, e => d < e);
+
+                float cos = author.Length() > 1e-5f && ours.Length() > 1e-5f
+                                ? Vector3.Dot(Vector3.Normalize(author), Vector3.Normalize(ours))
+                                : 0f;
+                var row = rows[bin];
+                rows[bin] = (row.N + 1, row.Author + author.Length(), row.Ours + ours.Length(),
+                             row.Miss + Vector3.Distance(author, ours), row.Cos + cos);
+            }
+        }
+
+        output.WriteLine($"{"from body",-12}{"verts",7}{"author moved",14}{"we moved",10}{"disagree",10}{"cos",7}");
+        float lo = 0f;
+        for (int i = 0; i < edges.Length; i++)
+        {
+            var row = rows[i];
+            string range = edges[i] == float.MaxValue ? $">{lo * 1000:F0}mm" : $"<{edges[i] * 1000:F0}mm";
+            lo = edges[i];
+            if (row.N == 0) continue;
+            output.WriteLine($"{range,-12}{row.N,7}{row.Author / row.N * 1000,14:F2}{row.Ours / row.N * 1000,10:F2}" +
+                             $"{row.Miss / row.N * 1000,10:F2}{row.Cos / row.N,7:F2}");
+        }
+
+        // ── prototype: a smooth volumetric field instead of nearest-point ──
+        //
+        // Every body vertex's displacement, averaged with a Gaussian weight on distance. Cloth hanging below the bust
+        // then feels the bust in proportion to how close it is, instead of feeling only the (unmoving) belly it
+        // happens to be nearest.
+        var bodyPos = new List<Vector3>();
+        var bodyDelta = new List<Vector3>();
+        foreach (int v in surface.SkinVertices)
+        {
+            bodyPos.Add(At(source, v));
+            bodyDelta.Add(built!.Field[v] ?? Vector3.Zero);
+        }
+
+        foreach (float sigma in new[] { 0.03f, 0.06f, 0.10f, 0.15f })
+        {
+            var proto = edges.Select(_ => (N: 0, Miss: 0.0, Cos: 0.0)).ToArray();
+            seen.Clear();
+            float inv = 1f / (2f * sigma * sigma);
+            foreach (var part in authorM.Parts)
+            {
+                if (part.Island >= 0 || SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+                foreach (int v in part.Triangles)
+                {
+                    if (!seen.Add(v)) continue;
+                    var p = At(authorM, v);
+                    var author = At(authorL, v) - p;
+
+                    var sum = Vector3.Zero;
+                    double wsum = 0;
+                    for (int k = 0; k < bodyPos.Count; k++)
+                    {
+                        float d2 = Vector3.DistanceSquared(p, bodyPos[k]);
+                        if (d2 > 9f * sigma * sigma) continue;
+                        float w = MathF.Exp(-d2 * inv);
+                        sum += bodyDelta[k] * w;
+                        wsum += w;
+                    }
+                    var ours = wsum > 1e-12 ? sum / (float)wsum : Vector3.Zero;
+
+                    float d = surface.Nearest(p, 1f, out var hit) ? hit.Distance : float.MaxValue;
+                    int bin = Array.FindIndex(edges, e => d < e);
+                    float cos = author.Length() > 1e-5f && ours.Length() > 1e-5f
+                                    ? Vector3.Dot(Vector3.Normalize(author), Vector3.Normalize(ours))
+                                    : 0f;
+                    var row = proto[bin];
+                    proto[bin] = (row.N + 1, row.Miss + Vector3.Distance(author, ours), row.Cos + cos);
+                }
+            }
+
+            output.WriteLine("");
+            output.WriteLine($"gaussian field, sigma {sigma * 1000:F0} mm:");
+            lo = 0f;
+            double total = 0;
+            int count = 0;
+            for (int i = 0; i < edges.Length; i++)
+            {
+                var row = proto[i];
+                string range = edges[i] == float.MaxValue ? $">{lo * 1000:F0}mm" : $"<{edges[i] * 1000:F0}mm";
+                lo = edges[i];
+                if (row.N == 0) continue;
+                total += row.Miss;
+                count += row.N;
+                output.WriteLine($"{range,-12}{row.N,7}{"",14}{"",10}{row.Miss / row.N * 1000,10:F2}{row.Cos / row.N,7:F2}");
+            }
+            output.WriteLine($"{"all cloth",-12}{count,7}{"",24}{total / count * 1000,10:F2}");
+        }
+
+        double baseline = rows.Sum(r => r.Miss) / rows.Sum(r => r.N);
+        output.WriteLine($"{"nearest-point, all cloth",-36}{baseline * 1000,10:F2}");
+    }
+
+    /// <summary>
+    /// Prototype for the detector: score candidates only over the probes where the candidates actually DIFFER.
+    /// <para/>
+    /// Most of a chest model is identical across all 114 options — arms, back, shoulders — so a hit rate or an RMS over
+    /// every probe is dominated by points that cannot tell one size from another, and every candidate scores about the
+    /// same. Keeping only probes whose distance varies across candidates leaves the region that decides it.
+    /// </summary>
+    [Theory]
+    [InlineData("neolithe xs")]
+    [InlineData("neolithe s")]
+    [InlineData("neolithe m")]
+    [InlineData("neolithe l")]
+    public void Detect_over_the_discriminating_region(string size)
+    {
+        const string model = @"chara\equipment\e6255\model\c0201e6255_top.mdl";
+        string path = Path.Combine(ThisOldThing, size, model);
+        if (!File.Exists(path) || !Directory.Exists(NeolitheRoot)) return;
+
+        var garment = ModelPartReader.Read(File.ReadAllBytes(path))!;
+        var catalog = BodySizeCatalog.Read(NeolitheRoot);
+        var candidates = catalog.For("_top").Where(o => o.Group == "CHEST: SmallClothes").ToList();
+
+        // Probes: the garment's body-mesh points, welded.
+        var probes = new List<Vector3>();
+        var seenKey = new HashSet<(int, int, int)>();
+        foreach (var part in garment.Parts)
+        {
+            if (part.Island >= 0 || !SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+            foreach (int v in part.Triangles)
+            {
+                var p = At(garment, v);
+                if (seenKey.Add(MeshMath.PositionKey(BodyRetarget.ToVec(p), 1e4f))) probes.Add(p);
+            }
+        }
+
+        // Distance from every probe to every (geometrically distinct) candidate.
+        var names = new List<string>();
+        var dist = new List<float[]>();
+        var seenGeometry = new HashSet<string>();
+        foreach (var option in candidates)
+        {
+            var body = ModelPartReader.Read(File.ReadAllBytes(catalog.PathOf(option)))!;
+            string key = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                System.Runtime.InteropServices.MemoryMarshal.AsBytes<float>(body.Positions)));
+            if (!seenGeometry.Add(key)) continue;
+            var surface = new BodySurface(body, 0.01f);
+            var d = new float[probes.Count];
+            for (int i = 0; i < probes.Count; i++)
+                d[i] = surface.Nearest(probes[i], 0.05f, out var hit) ? hit.Distance : 0.05f;
+            names.Add(option.Label);
+            dist.Add(d);
+        }
+
+        // Discriminating probes: where the candidates disagree by more than half a millimetre.
+        var keep = new List<int>();
+        for (int i = 0; i < probes.Count; i++)
+        {
+            float lo = float.MaxValue, hi = float.MinValue;
+            foreach (var d in dist) { lo = MathF.Min(lo, d[i]); hi = MathF.Max(hi, d[i]); }
+            if (hi - lo > 0.0005f) keep.Add(i);
+        }
+
+        var scored = names.Select((name, c) =>
+        {
+            double sum = 0;
+            foreach (int i in keep) sum += dist[c][i] * dist[c][i];
+            return (Name: name, Rms: keep.Count > 0 ? (float)Math.Sqrt(sum / keep.Count) : 0f);
+        }).OrderBy(s => s.Rms).ToList();
+
+        output.WriteLine($"{size}: {probes.Count} probes, {keep.Count} discriminating ({(float)keep.Count / probes.Count:P0})");
+        foreach (var s in scored.Take(6))
+            output.WriteLine($"  {s.Rms * 1000f,7:F3} mm  {s.Name}");
+    }
+
+    /// <summary>
+    /// Prototype: read the hip size from the CLOTH, for a garment whose body mesh never reaches the legs. An author fits
+    /// a hem to sit just outside the hips it was made for, so against too large a body the cloth goes inside it, and
+    /// against too small a body it floats clear. The authored size should be the tightest body the cloth still clears.
+    /// </summary>
+    [Theory]
+    [InlineData("neolithe xs")]
+    [InlineData("neolithe s")]
+    [InlineData("neolithe m")]
+    [InlineData("neolithe l")]
+    public void Read_the_hips_from_the_cloth(string size)
+    {
+        const string model = @"chara\equipment\e6255\model\c0201e6255_top.mdl";
+        string path = Path.Combine(ThisOldThing, size, model);
+        if (!File.Exists(path) || !Directory.Exists(NeolitheRoot)) return;
+
+        var garment = ModelPartReader.Read(File.ReadAllBytes(path))!;
+        var cloth = new List<Vector3>();
+        var seen = new HashSet<int>();
+        foreach (var part in garment.Parts)
+        {
+            if (part.Island >= 0 || SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+            foreach (int v in part.Triangles)
+                if (seen.Add(v)) cloth.Add(At(garment, v));
+        }
+
+        output.WriteLine($"{size}: {cloth.Count} cloth vertices");
+        output.WriteLine($"  {"legs",-14}{"near",7}{"inside",8}{"deep>2mm",10}{"mean gap",10}");
+        foreach (string legs in new[] { "SFW Small", "SFW Medium", "SFW Large" })
+        {
+            var body = ModelPartReader.Read(File.ReadAllBytes(LegsFolder + $@"\{legs}.mdl"))!;
+            var surface = new BodySurface(body, 0.01f);
+            int near = 0, inside = 0, deep = 0;
+            double gap = 0;
+            foreach (var p in cloth)
+            {
+                if (!surface.Nearest(p, 0.03f, out var hit)) continue;
+                near++;
+                float s = Vector3.Dot(p - hit.Point, hit.Normal);
+                if (s < 0f) inside++;
+                if (s < -0.002f) deep++;
+                if (s >= 0f) gap += s;
+            }
+            int outside = near - inside;
+            output.WriteLine($"  {legs,-14}{near,7}{inside,8}{deep,10}{(outside > 0 ? gap / outside * 1000 : 0),10:F2}");
+        }
+    }
+
+    private static string Top(BodySizeMatch.Ranking ranking)
+        => ranking.Best is { } b ? $"{b.Option.FullLabel} ({b.HitRate:P1})" : "nothing";
+
+    /// <summary>Per-vertex distance from <paramref name="model"/> to <paramref name="truth"/>, over one set.</summary>
+    private static List<float> Errors(ModelParts model, ModelParts truth, bool skin, bool sameNumbering)
+    {
+        var errors = new List<float>();
+        var truthSurface = sameNumbering ? null : new AnySurface(truth, skin);
+        foreach (var part in model.Parts)
+        {
+            if (part.Island >= 0 || SecondSkinWriter.IsBodySkinMaterial(part.Material) != skin) continue;
+            foreach (int v in part.Triangles.Distinct())
+            {
+                var p = At(model, v);
+                errors.Add(sameNumbering ? Vector3.Distance(p, At(truth, v)) : truthSurface!.Distance(p));
+            }
+        }
+        return errors;
+    }
+
+    private static string Stats(List<float> e)
+    {
+        if (e.Count == 0) return "   (none)";
+        e.Sort();
+        float mean = e.Average();
+        float p95 = e[(int)(e.Count * 0.95f)];
+        return $"{mean * 1000f,9:F2}{p95 * 1000f,9:F2}{e[^1] * 1000f,9:F2}";
+    }
+
+    private static Vector3 At(ModelParts m, int v)
+        => new(m.Positions[v * 3], m.Positions[v * 3 + 1], m.Positions[v * 3 + 2]);
+
+    /// <summary>Nearest-point distance to a model's parts of one kind, brute force: only a diag, only once.</summary>
+    private sealed class AnySurface(ModelParts m, bool skin)
+    {
+        private readonly List<(Vector3 A, Vector3 B, Vector3 C)> tris = m.Parts
+            .Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material) == skin)
+            .SelectMany(p => Enumerable.Range(0, p.Triangles.Length / 3)
+                                       .Select(t => (At(m, p.Triangles[t * 3]), At(m, p.Triangles[t * 3 + 1]),
+                                                     At(m, p.Triangles[t * 3 + 2]))))
+            .ToList();
+
+        public float Distance(Vector3 p)
+        {
+            float best = float.MaxValue;
+            foreach (var (a, b, c) in tris)
+            {
+                var q = BrushTransfer.ClosestOnTriangle(p, a, b, c, out _, out _, out _);
+                best = MathF.Min(best, Vector3.DistanceSquared(p, q));
+            }
+            return MathF.Sqrt(best);
+        }
+    }
+
     [Fact]
     public void Retarget_a_garment_between_two_Neolithe_sizes()
     {
@@ -168,7 +760,7 @@ public class BodyRetargetDiagTests(ITestOutputHelper output)
         AddPair(pairs, "_top", ChestFolder + @"\SFW M.mdl", ChestFolder + @"\SFW L.mdl");
         AddPair(pairs, "_dwn", LegsFolder + @"\SFW Medium.mdl", LegsFolder + @"\SFW Large.mdl");
 
-        var planned = BodyRetarget.Plan(garment!, garmentBytes, pairs);
+        var planned = BodyRetarget.Plan(garment!, garmentBytes, pairs, "_top");
         var r = planned.Report;
 
         output.WriteLine($"garment      {Path.GetFileName(garmentPath)}");

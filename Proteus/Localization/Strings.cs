@@ -2048,9 +2048,9 @@ public sealed class PartsStrings
     public readonly string RetargetExactFmt = Loc.Localize("Parts.Retarget.Exact.Fmt",
         "This model's body mesh is exactly {0}.");
 
-    /// <summary>{0} is the share of the garment's body mesh that matched.</summary>
+    /// <summary>{0} is the average distance from the garment's body mesh, in millimetres.</summary>
     public readonly string RetargetLikelyFmt = Loc.Localize("Parts.Retarget.Likely.Fmt",
-        "Very likely — {0:P0} of this model's body mesh matches.");
+        "Very likely — the closest fit by a clear margin ({0:F2} mm average).");
 
     /// <summary>{0} is the average distance, in millimetres.</summary>
     public readonly string RetargetGuessFmt = Loc.Localize("Parts.Retarget.Guess.Fmt",
@@ -2059,6 +2059,21 @@ public sealed class PartsStrings
     /// <summary>{0} is a comma-separated list of the sizes that fit equally well.</summary>
     public readonly string RetargetAmbiguousFmt = Loc.Localize("Parts.Retarget.Ambiguous.Fmt",
         "Several sizes fit this model equally well ({0}). Pick the one you know it was made for.");
+
+    /// <summary>{0} is the option the garment's cloth fits most snugly without passing through.</summary>
+    public readonly string RetargetClothLikelyFmt = Loc.Localize("Parts.Retarget.Cloth.Likely.Fmt",
+        "Read from how the cloth sits: it fits {0} most snugly without passing into it, and passes into anything "
+      + "larger.");
+
+    /// <summary>{0} is the option the garment's cloth fits most snugly without passing through.</summary>
+    public readonly string RetargetClothGuessFmt = Loc.Localize("Parts.Retarget.Cloth.Guess.Fmt",
+        "Best guess from how the cloth sits: it fits {0} most snugly, but clears every size here, so it may simply be "
+      + "loose. Worth checking.");
+
+    /// <summary>{0} is the slot's name, lower case ("legs").</summary>
+    public readonly string RetargetTooLittleFmt = Loc.Localize("Parts.Retarget.TooLittle.Fmt",
+        "Too little of this model's body mesh reaches the {0} to tell which size it was made for. If the garment "
+      + "does reach here, choose both sizes yourself — a long top's hem over the hips needs them.");
 
     public readonly string RetargetNoBodyMesh = Loc.Localize("Parts.Retarget.NoBodyMesh",
         "This model carries no body mesh, so the size it was made for cannot be guessed. Pick it yourself.");

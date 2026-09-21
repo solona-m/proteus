@@ -158,7 +158,7 @@ public class GoldenTests(ITestOutputHelper o)
             return;
         }
 
-        var planned = BodyRetarget.Plan(garment, garmentBytes, [new BodyRetarget.SlotPair(slot, built!, target)]);
+        var planned = BodyRetarget.Plan(garment, garmentBytes, [new BodyRetarget.SlotPair(slot, built!, target)], slot);
         cases.Bytes(name + "/bytes", planned.Model);
 
         // Alongside the bytes, so "the model changed" and "the solve decided something different" are separable.
