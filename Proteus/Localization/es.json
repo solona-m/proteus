@@ -3486,5 +3486,41 @@
   "Parts.Retarget.RefusedHold": {
     "message": "One of the chosen pairs cannot be refitted \u2014 see the message under it.",
     "description": ""
+  },
+  "Parts.Move.ClearPolygons": {
+    "message": "Clear",
+    "description": ""
+  },
+  "Parts.Move.Falloff.SurfaceTip": {
+    "message": "How far from the selected polygons the cloth around them still follows, measured along the surface.\nOnly cloth joined to the selection follows: a separate piece that merely sits close does not.",
+    "description": ""
+  },
+  "Parts.Move.Grow": {
+    "message": "Grow",
+    "description": ""
+  },
+  "Parts.Move.NoPolygons": {
+    "message": "Click a polygon on the model to select it. Shift-click adds or removes one.",
+    "description": ""
+  },
+  "Parts.Move.Polygons.Fmt": {
+    "message": "{0:N0} polygon(s) selected",
+    "description": ""
+  },
+  "Parts.Move.SelectParts": {
+    "message": "Whole parts",
+    "description": ""
+  },
+  "Parts.Move.SelectPolygons": {
+    "message": "Polygons",
+    "description": ""
+  },
+  "Parts.Move.SelectPolygons.Tip": {
+    "message": "Move, turn or scale single polygons instead of whole parts. Click a polygon to select it; Shift-click adds\nor removes one. Choosing a part in the list selects all of its polygons.",
+    "description": ""
+  },
+  "Parts.Move.Shrink": {
+    "message": "Shrink",
+    "description": ""
   }
 }

@@ -1807,6 +1807,33 @@ public sealed class PartsStrings
     public readonly string MoveFalloffTip = Loc.Localize("Parts.Move.Falloff.Tip",
         "How far from the part nearby cloth still follows it.");
 
+    public readonly string MoveFalloffSurfaceTip = Loc.Localize("Parts.Move.Falloff.SurfaceTip",
+        "How far from the selected polygons the cloth around them still follows, measured along the surface.\n"
+      + "Only cloth joined to the selection follows: a separate piece that merely sits close does not.");
+
+    public readonly string MoveSelectParts = Loc.Localize("Parts.Move.SelectParts", "Whole parts")
+                                           + "###partsMoveSelectParts";
+
+    public readonly string MoveSelectPolygons = Loc.Localize("Parts.Move.SelectPolygons", "Polygons")
+                                              + "###partsMoveSelectPolygons";
+
+    public readonly string MoveSelectPolygonsTip = Loc.Localize("Parts.Move.SelectPolygons.Tip",
+        "Move, turn or scale single polygons instead of whole parts. Click a polygon to select it; Shift-click adds\n"
+      + "or removes one. Choosing a part in the list selects all of its polygons.");
+
+    public readonly string MoveNoPolygons = Loc.Localize("Parts.Move.NoPolygons",
+        "Click a polygon on the model to select it. Shift-click adds or removes one.");
+
+    /// <summary>{0} is how many polygons are selected.</summary>
+    public readonly string MovePolygonsFmt = Loc.Localize("Parts.Move.Polygons.Fmt", "{0:N0} polygon(s) selected");
+
+    public readonly string MoveGrow = Loc.Localize("Parts.Move.Grow", "Grow") + "###partsMoveGrow";
+
+    public readonly string MoveShrink = Loc.Localize("Parts.Move.Shrink", "Shrink") + "###partsMoveShrink";
+
+    public readonly string MoveClearPolygons = Loc.Localize("Parts.Move.ClearPolygons", "Clear")
+                                             + "###partsMoveClearPolygons";
+
     public readonly string MoveBonesNote = Loc.Localize("Parts.Move.BonesNote",
         "A moved part still follows the bones it was made for, so a part moved far from them can bend oddly in poses.");
 

@@ -149,6 +149,24 @@ public sealed class PartsPanel
     /// <summary>Move carries the cloth joined to the part along, fading out over <see cref="moveFalloffMm"/>.</summary>
     private bool moveAdjacent = true;
 
+    /// <summary>
+    /// Move, Rotate and Scale act on single polygons rather than whole parts. The selection is
+    /// <see cref="movePolys"/>, and the soft falloff is measured along the surface through joined polygons.
+    /// </summary>
+    private bool movePolygons;
+
+    /// <summary>The selected polygons in polygon mode, by their corners. Cleared with the model.</summary>
+    private readonly HashSet<PolygonSelection.Key> movePolys = [];
+
+    /// <summary>The open model's selectable polygons and which touch which; built on first use per model.</summary>
+    private PolygonSelection? polySelection;
+
+    /// <summary>Changes whenever <see cref="movePolys"/> does, for the live tint's cache.</summary>
+    private int movePolysVersion;
+
+    /// <summary>The polygon under the mouse in the model view this frame, in polygon mode; null when none.</summary>
+    private PolygonSelection.Key? hoverPoly;
+
     /// <summary>How far along the surface the joined cloth follows a move, in millimetres.</summary>
     private float moveFalloffMm = 50f;
 
@@ -249,6 +267,7 @@ public sealed class PartsPanel
         partTickedFn = PartTicked;
         partHeldFn = PartHeld;
         moveClickedFn = MoveClickedOnCharacter;
+        polyClickedFn = PolygonClicked;
         moveTickedFn = MoveTicked;
         gizmoCaptureFn = () => tool switch
         {
@@ -386,14 +405,16 @@ public sealed class PartsPanel
                                    lockClicked: moving ? moveClickedFn : pickParts ? tickClickedFn : lockClickedFn,
                                    pickParts: pickParts,
                                    partTicked: moving ? moveTickedFn : partTickedFn,
-                                   tickedVersion: moving ? MoveVersion() : TickedVersion(),
+                                   tickedVersion: moving ? (movePolygons ? movePolysVersion : MoveVersion()) : TickedVersion(),
                                    moveGizmo: tool == Tool.Move ? moveGizmo : null,
                                    movePivot: moving ? MovePivot() : null,
                                    graftedGamePath: GraftedGamePath(),
                                    scaleDrag: tool == Tool.Scale ? scaleDrag : null,
                                    rotateGizmo: tool == Tool.Rotate ? rotateGizmo : null,
                                    partLocked: tool == Tool.Retarget ? partHeldFn : null,
-                                   lockedVersion: tool == Tool.Retarget ? VersionOf(RetargetHolds) : 0);
+                                   lockedVersion: tool == Tool.Retarget ? VersionOf(RetargetHolds) : 0,
+                                   polygons: moving && movePolygons ? movePolys : null,
+                                   polygonClicked: moving && movePolygons ? polyClickedFn : null);
         }
 
         PumpMove();
@@ -762,6 +783,7 @@ public sealed class PartsPanel
         EndLivePreview(refreshGame: true);
         brushChangedAt = -1;
         movePart = null;
+        ClearPolygons(forgetModel: true);
         ReleaseHandles();
         retarget.Clear();
         modDir = dir;
@@ -971,6 +993,7 @@ public sealed class PartsPanel
         brushChangedAt = -1;
         brushBase = null;
         movePart = null;
+        ClearPolygons(forgetModel: true);
         ReleaseHandles();
         retarget.Clear();
         // A new solve starts from the file as it is now, so the other sizes must too. Replaced, not cleared — see sizeBases.
@@ -1170,13 +1193,85 @@ public sealed class PartsPanel
     private ModelPart? MovePart()
         => movePart == null ? null : parts?.Parts.FirstOrDefault(p => p.Label == movePart);
 
-    /// <summary>Choose the part to move, from the model, the list or the character. Skin and locked parts cannot be.</summary>
+    /// <summary>Choose the part to move, from the model, the list or the character. Skin and locked parts cannot be.
+    /// In polygon mode a part chosen from the list selects all its polygons, to grow or shrink from.</summary>
     private void SelectMovePart(string label)
     {
         if (volume is { Moving: true }) return;
         if (parts?.Parts.FirstOrDefault(p => p.Label == label) is not { } part || IsSkin(part) || IsLocked(part)) return;
+        if (movePolygons)
+        {
+            var polys = Polygons();
+            movePolys.Clear();
+            for (int t = 0; polys != null && t + 2 < part.Triangles.Length; t += 3)
+            {
+                var key = PolygonSelection.Key.Of(part.Triangles[t], part.Triangles[t + 1], part.Triangles[t + 2]);
+                if (polys.Contains(key)) movePolys.Add(key);
+            }
+            movePolysVersion++;
+            return;
+        }
         movePart = label;
         viewport.Recolour();
+    }
+
+    private readonly Action<PolygonSelection.Key> polyClickedFn;
+
+    /// <summary>The open model's polygons, built on first use.</summary>
+    private PolygonSelection? Polygons() => parts == null ? null : polySelection ??= new PolygonSelection(parts);
+
+    /// <summary>
+    /// A click on a polygon, from the model view or the character: it alone is selected, or with Shift held it is added
+    /// to the selection, or taken out of it if it was already in.
+    /// </summary>
+    private void PolygonClicked(PolygonSelection.Key key)
+    {
+        if (volume is { Moving: true } || Polygons() is not { } polys || !polys.Contains(key)) return;
+        if (ImGui.GetIO().KeyShift)
+        {
+            if (!movePolys.Remove(key)) movePolys.Add(key);
+        }
+        else
+        {
+            movePolys.Clear();
+            movePolys.Add(key);
+        }
+        movePolysVersion++;
+    }
+
+    /// <summary>Empty the polygon selection; with <paramref name="forgetModel"/>, also the open model's polygons.</summary>
+    private void ClearPolygons(bool forgetModel = false)
+    {
+        if (movePolys.Count > 0) movePolysVersion++;
+        movePolys.Clear();
+        hoverPoly = null;
+        if (forgetModel) polySelection = null;
+    }
+
+    /// <summary>
+    /// The selected polygons over the model view, and the one under the mouse — the view's own colouring is per part,
+    /// too coarse to show a polygon. Also finds <see cref="hoverPoly"/> for this frame's click.
+    /// </summary>
+    private void DrawPolygonsOverModel()
+    {
+        hoverPoly = null;
+        if (volume == null || Polygons() is not { } polys) return;
+        var positions = volume.Positions();
+
+        if (viewport.PointerOverModel && viewport.ScreenRay(ImGui.GetMousePos()) is { } ray)
+            hoverPoly = polys.Pick(ray.Origin, ray.Dir, positions);
+
+        var dl = ImGui.GetWindowDrawList();
+        void Fill(PolygonSelection.Key key, uint colour)
+        {
+            if (key.C * 3 + 2 >= positions.Length) return;
+            if (viewport.ModelToScreen(PolygonSelection.At(positions, key.A)) is not { } a) return;
+            if (viewport.ModelToScreen(PolygonSelection.At(positions, key.B)) is not { } b) return;
+            if (viewport.ModelToScreen(PolygonSelection.At(positions, key.C)) is not { } c) return;
+            dl.AddTriangleFilled(a, b, c, colour);
+        }
+        foreach (var key in movePolys) Fill(key, 0x9040A0FFu);                  // ABGR: amber, like a ticked part
+        if (hoverPoly is { } hot) Fill(hot, 0x90FFE0B0u);                        // ABGR: pale blue, what a click takes
     }
 
     private void MoveClickedOnCharacter(int vertex)
@@ -1222,14 +1317,24 @@ public sealed class PartsPanel
 
     private readonly HashSet<string> moveSelectionSet = new(StringComparer.Ordinal);
 
-    /// <summary>The middle of the chosen part's bounds as it now stands — where the gizmo sits. Null with no part.</summary>
+    /// <summary>The middle of the chosen part's bounds as it now stands — where the gizmo sits. Null with no part.
+    /// In polygon mode, the middle of the selected polygons'.</summary>
     private Vector3? MovePivot()
     {
-        if (volume == null || MovePart() is not { } part || part.Triangles.Length == 0) return null;
+        if (volume == null) return null;
+        IEnumerable<int> corners;
+        if (movePolygons)
+        {
+            if (movePolys.Count == 0) return null;
+            corners = PolygonSelection.CornersOf(movePolys);
+        }
+        else if (MovePart() is { Triangles.Length: > 0 } part) corners = part.Triangles;
+        else return null;
+
         var p = volume.Positions();
         var min = new Vector3(float.MaxValue);
         var max = new Vector3(float.MinValue);
-        foreach (int v in part.Triangles)
+        foreach (int v in corners)
         {
             if (v < 0 || v * 3 + 2 >= p.Length) continue;
             var at = new Vector3(p[v * 3], p[v * 3 + 1], p[v * 3 + 2]);
@@ -1265,9 +1370,13 @@ public sealed class PartsPanel
             _           => scaleDrag.Ended,
         };
 
-        if (started && MovePart() is { } part)
+        // What the drag carries: the selected polygons, the soft selection measured along the surface; or the part.
+        IEnumerable<int>? seeds = movePolygons
+            ? movePolys.Count > 0 ? PolygonSelection.CornersOf(movePolys) : null
+            : MovePart()?.Triangles;
+        if (started && seeds != null)
         {
-            if (volume.BeginMove(part.Triangles, moveAdjacent, moveFalloffMm / 1000f) == 0)
+            if (volume.BeginMove(seeds, moveAdjacent, moveFalloffMm / 1000f, alongSurface: movePolygons) == 0)
             {
                 status = Strings.Parts.MoveNothingFree;
                 statusIsError = true;
@@ -1316,7 +1425,40 @@ public sealed class PartsPanel
         ImGui.PopTextWrapPos();
         ImGui.Spacing();
 
-        if (MovePart() is { } part)
+        // Whole parts, or single polygons.
+        if (ImGui.RadioButton(ps.MoveSelectParts, !movePolygons) && movePolygons && volume is not { Moving: true })
+        {
+            movePolygons = false;
+            ClearPolygons();
+            viewport.Recolour();
+        }
+        ImGui.SameLine();
+        if (ImGui.RadioButton(ps.MoveSelectPolygons, movePolygons) && !movePolygons && volume is not { Moving: true })
+        {
+            movePolygons = true;
+            movePart = null;
+            viewport.Recolour();
+        }
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.MoveSelectPolygonsTip);
+        ImGui.Spacing();
+
+        if (movePolygons)
+        {
+            ImGui.PushTextWrapPos(0);
+            if (movePolys.Count == 0) ImGui.TextColored(ProteusStyle.Warn, ps.MoveNoPolygons);
+            else ImGui.TextUnformatted(string.Format(ps.MovePolygonsFmt, movePolys.Count));
+            ImGui.PopTextWrapPos();
+
+            using (ImRaii.Disabled(movePolys.Count == 0 || volume is { Moving: true } || Polygons() == null))
+            {
+                if (ImGui.SmallButton(ps.MoveGrow)) SetPolygons(Polygons()!.Grow(movePolys));
+                ImGui.SameLine();
+                if (ImGui.SmallButton(ps.MoveShrink)) SetPolygons(Polygons()!.Shrink(movePolys));
+                ImGui.SameLine();
+                if (ImGui.SmallButton(ps.MoveClearPolygons)) ClearPolygons();
+            }
+        }
+        else if (MovePart() is { } part)
         {
             ImGui.TextUnformatted(string.Format(ps.MovePartFmt, part.Label));
             ImGui.PushTextWrapPos(0);
@@ -1340,7 +1482,8 @@ public sealed class PartsPanel
             ImGui.SliderFloat(ps.MoveFalloff, ref moveFalloffMm, MinBrushMm, MaxBrushMm,
                               moveFalloffMm < 10f ? "%.1f mm" : "%.0f mm", ImGuiSliderFlags.Logarithmic);
         }
-        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(ps.MoveFalloffTip);
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(movePolygons ? ps.MoveFalloffSurfaceTip : ps.MoveFalloffTip);
 
         ImGui.Spacing();
         ImGui.PushTextWrapPos(0);
@@ -1355,6 +1498,14 @@ public sealed class PartsPanel
         }
 
         DrawEditActions();
+    }
+
+    /// <summary>Replace the polygon selection — a grow or a shrink.</summary>
+    private void SetPolygons(HashSet<PolygonSelection.Key> next)
+    {
+        movePolys.Clear();
+        movePolys.UnionWith(next);
+        movePolysVersion++;
     }
 
     private string ViewportKey => modDir + "|" + (modelIndex >= 0 ? models[modelIndex].File : "");
@@ -1378,7 +1529,9 @@ public sealed class PartsPanel
 
         viewport.Show(ViewportKey, model);
         // Under Body size nothing is being staged for a switch, so nothing shows as selected; the locks show as locks.
-        viewport.Selected = PartTool ? MoveSelection() : tool == Tool.Retarget ? NoSelection : ticked;
+        // In polygon mode no whole part is selected; the polygons are drawn over the image instead.
+        viewport.Selected = PartTool ? (movePolygons ? NoSelection : MoveSelection())
+                          : tool == Tool.Retarget ? NoSelection : ticked;
 
         // Told every frame rather than on change: the mode also resets when a model is picked.
         viewport.Mode = tool is Tool.Navigate or Tool.Retarget ? PartViewport.ViewportMode.Navigate
@@ -1398,10 +1551,13 @@ public sealed class PartsPanel
         {
             // Body size has nothing to paint, so a plain click on a part holds or frees it — and must never stage a
             // switch, which is what a click means only under Toggle Parts.
-            if (PartTool) SelectMovePart(clicked);
+            if (PartTool && movePolygons) { if (hoverPoly is { } poly) PolygonClicked(poly); }
+            else if (PartTool) SelectMovePart(clicked);
             else if (brushing || tool == Tool.Retarget) ToggleLock(clicked);
             else Toggle(clicked);
         }
+
+        if (PartTool && movePolygons) DrawPolygonsOverModel();
 
         // Right after the image, so the gizmo is drawn over it, in the same window's draw list.
         if (tool == Tool.Move && MovePivot() is { } pivot)
@@ -1420,7 +1576,10 @@ public sealed class PartsPanel
         }
         else if (tool == Tool.Scale && MovePivot() is { } growAbout)
         {
-            bool overPart = viewport.PointerOverModel && viewport.Hovered is { } under && IsChosenPart(under);
+            bool overPart = viewport.PointerOverModel
+                            && (movePolygons
+                                    ? hoverPoly is { } underPoly && movePolys.Contains(underPoly)
+                                    : viewport.Hovered is { } under && IsChosenPart(under));
             scaleDrag.Update(growAbout, viewport.ModelToScreen, ImGui.GetMousePos(), overPart,
                              mouseAllowed: viewport.PointerOverModel, pressed: viewport.Pressed, down: viewport.Held,
                              background: false);
@@ -1632,7 +1791,11 @@ public sealed class PartsPanel
                 FinishMove();
                 FlushPending();
                 // The chosen part carries between Move, Rotate and Scale — they work on the same choice.
-                if (!(PartTool && IsPartTool(value))) movePart = null;
+                if (!(PartTool && IsPartTool(value)))
+                {
+                    movePart = null;
+                    ClearPolygons();
+                }
                 tool = value;
                 ApplyLocks();   // Body size shows its own holds, every other tool the brush locks
                 // Staged parts are a Pick-parts thing; a selection carried into the brush would sit there invisibly.

@@ -116,6 +116,10 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     /// locks — Body size, whose holds are a set of their own. Skin is greyed too, since a hold can take skin. Null to
     /// grey the solve's locks.</param>
     /// <param name="lockedVersion">With <paramref name="partLocked"/>: changes whenever its set does.</param>
+    /// <param name="polygons">The Move tools in polygon mode: the selected polygons, which are tinted, anchor the gizmo and
+    /// are the Scale tool's handle, in place of <paramref name="partTicked"/>'s part. Null in part mode.</param>
+    /// <param name="polygonClicked">In polygon mode: a click on the garment, with the polygon it landed on — in place of
+    /// <paramref name="lockClicked"/>.</param>
     /// <param name="graftedGamePath">
     /// Set for a model the character wears through Proteus rather than as a file of its own — an imported
     /// content piece, whose geometry the game only ever draws copied into a Proteus shell. The file is then
@@ -129,8 +133,12 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
                            TranslateGizmo? moveGizmo = null, Vector3? movePivot = null,
                            string? graftedGamePath = null, PartScaleDrag? scaleDrag = null,
                            RotateGizmo? rotateGizmo = null,
-                           Func<int, bool>? partLocked = null, int lockedVersion = 0)
+                           Func<int, bool>? partLocked = null, int lockedVersion = 0,
+                           IReadOnlySet<PolygonSelection.Key>? polygons = null,
+                           Action<PolygonSelection.Key>? polygonClicked = null)
     {
+        this.polygons = polygons;
+        this.polygonClicked = polygonClicked;
         this.partLocked = partLocked;
         this.lockedVersion = lockedVersion;
         this.moveGizmo = moveGizmo;
@@ -157,6 +165,14 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     private string? graftedGamePath;
     private Func<int, int>? partOf;
     private Action<int>? lockClicked;
+
+    // ── the Move tools in polygon mode ──
+    private IReadOnlySet<PolygonSelection.Key>? polygons;
+    private Action<PolygonSelection.Key>? polygonClicked;
+
+    /// <summary>The polygon live triangle <paramref name="t"/> is, by its corners.</summary>
+    private static PolygonSelection.Key PolygonOf(SkinnedMesh m, int t)
+        => PolygonSelection.Key.Of(m.BaseTriangles[t * 3], m.BaseTriangles[t * 3 + 1], m.BaseTriangles[t * 3 + 2]);
     private Func<int, bool>? partLocked;
     private int lockedVersion;
 
@@ -408,8 +424,11 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
                                 pressed: pressed, down: down, background: true);
 
             // Scale: the handle is the chosen part itself.
-            bool overPart = hit is { } over && partOf != null && partTicked != null
-                            && partOf(m.BaseTriangles[over.Triangle * 3]) is var part and >= 0 && partTicked(part);
+            bool overPart = hit is { } over
+                            && (polygons != null
+                                    ? polygons.Contains(PolygonOf(m, over.Triangle))
+                                    : partOf != null && partTicked != null
+                                      && partOf(m.BaseTriangles[over.Triangle * 3]) is var part and >= 0 && partTicked(part));
             scaleDrag?.Update(pivot, toScreen, io.MousePos, overPart, mouseAllowed: allowed,
                               pressed: pressed, down: down, background: true);
         }
@@ -424,6 +443,12 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
         if (hit is not { } h || overUi || io.KeyAlt) return;
         Hovering = true;
         ImGui.SetNextFrameWantCaptureMouse(true);
+        if (polygonClicked != null)
+        {
+            FillTriangles(projection, m, [h.Triangle], 0x60FFE0B0u);   // ABGR: a pale blue, the one polygon a click takes
+            if (ImGui.IsMouseClicked(ImGuiMouseButton.Left)) polygonClicked(PolygonOf(m, h.Triangle));
+            return;
+        }
         DrawHotPart(projection, m, h.Triangle);
         if (ImGui.IsMouseClicked(ImGuiMouseButton.Left)) lockClicked?.Invoke(m.BaseTriangles[h.Triangle * 3]);
     }
@@ -447,14 +472,18 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
 
     private int FindAnchor(SkinnedMesh m, Vector3 pivot)
     {
-        if (partOf == null || partTicked == null) return -1;
+        HashSet<int>? corners = polygons != null ? [.. PolygonSelection.CornersOf(polygons)] : null;
+        if (corners == null && (partOf == null || partTicked == null)) return -1;
         int best = -1;
         float bestD = float.MaxValue;
         for (int v = 0; v < m.VertexCount; v++)
         {
             if (spareBase[v] >= 0) continue;
-            int part = partOf(v);
-            if (part < 0 || !partTicked(part)) continue;
+            if (corners != null)
+            {
+                if (!corners.Contains(v)) continue;
+            }
+            else if (partOf!(v) is var part && (part < 0 || !partTicked!(part))) continue;
             float d = Vector3.DistanceSquared(edited[v], pivot);
             if (d < bestD) { bestD = d; best = v; }
         }
@@ -728,7 +757,7 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     /// <summary>Ticked parts, tinted, under Toggle Parts — rebuilt only when the ticked set or the garment changes.</summary>
     private void DrawTickedWash(ScreenProjection projection, SkinnedMesh m)
     {
-        if (partOf == null || partTicked == null) return;
+        if (polygons == null && (partOf == null || partTicked == null)) return;
         if (tickedTrianglesVersion != tickedVersion || !ReferenceEquals(tickedTrianglesMesh, m))
         {
             tickedTriangles.Clear();
@@ -736,8 +765,13 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
             for (int t = 0; t < m.TriangleCount; t++)
             {
                 if (t < skinTriangle.Length && skinTriangle[t]) continue;
-                int part = partOf(baseTris[t * 3]);
-                if (part >= 0 && partTicked(part)) tickedTriangles.Add(t);
+                if (polygons != null)
+                {
+                    if (polygons.Contains(PolygonOf(m, t))) tickedTriangles.Add(t);
+                    continue;
+                }
+                int part = partOf!(baseTris[t * 3]);
+                if (part >= 0 && partTicked!(part)) tickedTriangles.Add(t);
             }
             tickedTrianglesVersion = tickedVersion;
             tickedTrianglesMesh = m;
