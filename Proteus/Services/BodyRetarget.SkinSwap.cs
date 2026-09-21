@@ -84,10 +84,11 @@ internal static partial class BodyRetarget
         var layers = claimedBy.OrderBy(s => s).Select(s => new SecondSkinLayer
         {
             MaterialName = skinMaterial,
-            // Emitted untagged: whether this skin shows is the garment's business now, and the body's own attributes
-            // would otherwise be judged against the garment's item.
+            // Tagged as the body tags it — atr_ude, atr_hij, atr_nek are how long gloves or a high collar hide the
+            // skin under them, and the garment's own skin carried the same tags — except for variant tags, which would
+            // be judged against the garment's IMC mask (a Neolithe body carries eight, atr_tv_a..h).
             Geometry = [new ContentGeometry(swappable[s].TargetModel!, SecondSkinWriter.IsBodySkinMaterial,
-                                            OwnAttributes: true)],
+                                            DropVariantAttributes: true)],
         }).ToList();
         var rebuilt = SecondSkinWriter.Build(Array.Empty<SecondSkinWriter.SourceSpec>(), layers, garment, out _,
                                              dropHostMesh: dropped.Contains);

@@ -343,18 +343,45 @@ internal static class BodyRetargetWriter
         return at >= 0 ? at : groups.Count;
     }
 
+    /// <summary>
+    /// The mod's retarget record, without entries whose option is no longer in the mod — see <see cref="Pruned"/>.
+    /// </summary>
     public static Record? ReadRecord(string modRoot)
     {
         try
         {
             string path = Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, RecordFile);
             if (!File.Exists(path)) return null;
-            return JsonSerializer.Deserialize<Record>(File.ReadAllText(path));
+            return JsonSerializer.Deserialize<Record>(File.ReadAllText(path)) is { } record ? Pruned(modRoot, record) : null;
         }
         catch
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// Drop the entries whose group, or whose option in that group, is gone from the mod — deleted in Penumbra, or by
+    /// hand. Left in, the newest ghost is what Undo reaches for: it answers "There is no retarget group in this mod",
+    /// removes nothing, and every press after it does the same. The next write saves the pruned record, so a record
+    /// heals itself.
+    /// <para/>
+    /// Nothing is pruned when the manifest cannot be read: "could not tell" must never mean "gone".
+    /// </summary>
+    private static Record Pruned(string modRoot, Record record)
+    {
+        // Entries from before each named its own group were in the record's top-level one.
+        foreach (var e in record.Options.Where(e => e.Group.Length == 0)) e.Group = record.Group;
+
+        if (PenumbraModMeta.TryReadGroups(modRoot) is not { } groups) return record;
+        var options = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (name, group) in groups)
+            options.TryAdd(name, new HashSet<string>(PenumbraModMeta.ReadOptionNames(group), StringComparer.OrdinalIgnoreCase));
+
+        record.Options.RemoveAll(e => !options.TryGetValue(e.Group, out var names) || !names.Contains(e.Name));
+        if (!options.ContainsKey(record.Group))
+            record.Group = record.OwnGroupsExcept(record.Group).LastOrDefault() ?? "";
+        return record;
     }
 
     private static void WriteRecord(string modRoot, string group, bool inAuthorGroup, string option, string gamePath,
@@ -422,13 +449,23 @@ internal static class BodyRetargetWriter
     internal static string TailOf(string gamePath)
         => gamePath.Replace('/', Path.DirectorySeparatorChar);
 
-    /// <summary>An option name as a folder name. Never empty, so two options cannot collide on "".</summary>
+    /// <summary>
+    /// An option name as a folder name. Never empty, so two options cannot collide on "".
+    /// <para/>
+    /// Plain ASCII only. The option names this tool writes carry "—" and "·", and a file path with them in did load in
+    /// game but was never recognised by the Studio's live tools, which match the game's own name for the drawn file
+    /// against the path on disk: the game hands that name back in another encoding. Dashes and dots become "-", anything
+    /// else outside ASCII "_". The option's NAME keeps its characters; only the folder is plain.
+    /// </summary>
     internal static string Sanitise(string name)
     {
         var chars = name.Trim().ToCharArray();
         var invalid = Path.GetInvalidFileNameChars();
         for (int i = 0; i < chars.Length; i++)
-            if (Array.IndexOf(invalid, chars[i]) >= 0) chars[i] = '_';
+        {
+            if (chars[i] is '—' or '–' or '·' or '•') chars[i] = '-';
+            else if (chars[i] > '~' || Array.IndexOf(invalid, chars[i]) >= 0) chars[i] = '_';
+        }
 
         string cleaned = new string(chars).Trim(' ', '.');
         return cleaned.Length > 0 ? cleaned : "option";

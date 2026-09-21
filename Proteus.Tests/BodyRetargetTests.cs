@@ -111,6 +111,28 @@ public class BodyRetargetTests
     }
 
     [Fact]
+    public void The_swapped_skin_keeps_the_tags_other_gear_hides_it_by_and_drops_variant_tags()
+    {
+        // atr_ude is how long gloves hide the arm skin under them; atr_tv_a is a Neolithe body's own variant toggle,
+        // which the garment's IMC mask was never written for.
+        var garment = SyntheticModel.Build(["atr_ude"],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0b1, TrianglesPerIsland: 2)),
+            new SyntheticModel.Mesh(ClothMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 4, OffsetZ: 0.001f)));
+        var chest = SyntheticModel.Build(["atr_ude", "atr_tv_a"],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0b11, TrianglesPerIsland: 5)));
+
+        var rebuilt = BodyRetarget.SwapSkin(garment, [Resized("_top", chest)], out _);
+
+        var model = ModelPartReader.Read(rebuilt!)!;
+        var skin = model.Parts.Single(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material));
+        var tags = Enumerable.Range(0, model.AttributeNames.Count)
+                             .Where(bit => (skin.AttributeMask & (1u << bit)) != 0)
+                             .Select(bit => model.AttributeNames[bit]).ToList();
+        Assert.Equal(["atr_ude"], tags);
+        Assert.DoesNotContain("atr_tv_a", model.AttributeNames);
+    }
+
+    [Fact]
     public void Nothing_is_rebuilt_when_no_skin_mesh_belongs_to_a_resized_slot()
     {
         var clothOnly = SyntheticModel.Build([],

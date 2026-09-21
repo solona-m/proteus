@@ -506,10 +506,19 @@ public static partial class SecondSkinWriter
                           .All(g => g.OwnAttributes))
                     ownedOnly.Add(src);
 
+            // A source whose every geometry drops its variant tags contributes only the rest.
+            var variantDropped = new HashSet<Source>();
+            foreach (var (model, src) in geomByModel)
+                if (layers.SelectMany(l => l.Geometry).Where(g => ReferenceEquals(g.Model, model))
+                          .All(g => g.DropVariantAttributes))
+                    variantDropped.Add(src);
+
             attrNames = new List<string>();
             attrIndex = new Dictionary<string, int>(StringComparer.Ordinal);
             foreach (var src in boneSources)
-                foreach (var name in ownedOnly.Contains(src) ? [] : src.AttrNames)
+                foreach (var name in ownedOnly.Contains(src) ? []
+                                   : variantDropped.Contains(src) ? src.AttrNames.Where(n => !IsVariantAttribute(n))
+                                   : src.AttrNames)
                 {
                     if (attrIndex.ContainsKey(name) || attrNames.Count >= 32) continue;
                     attrIndex[name] = attrNames.Count;
@@ -844,9 +853,10 @@ public static partial class SecondSkinWriter
         private void EmitMesh(Source src, int m, ushort materialIndex, float push, bool preserve,
                       SecondSkinLayer? cov, int mapBase, ref bool mapAppended,
                       bool mirrorUv1 = false, IReadOnlySet<string>? hiddenAttrs = null,
-                      bool clearAttrs = false, CapUvPlan? capUv = null)
+                      bool clearAttrs = false, CapUvPlan? capUv = null, bool dropVariantAttrs = false)
         {
-            new MeshEmitter(this, src, m, materialIndex, push, preserve, cov, mapBase, mirrorUv1, hiddenAttrs, clearAttrs, capUv).Run(ref mapAppended);
+            new MeshEmitter(this, src, m, materialIndex, push, preserve, cov, mapBase, mirrorUv1, hiddenAttrs, clearAttrs, capUv,
+                            dropVariantAttrs).Run(ref mapAppended);
         }
 
         /// <summary>

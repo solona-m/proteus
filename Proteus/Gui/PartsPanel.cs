@@ -303,6 +303,13 @@ public sealed class PartsPanel
         TickAutosave();
         ConsumeApplySizes();
 
+        // Asked for mid-frame by a refit's save or undo; done here, before anything this frame reads the model.
+        if (refreshModelsPending)
+        {
+            refreshModelsPending = false;
+            RefreshModels();
+        }
+
         ImGui.Spacing();
         ImGui.PushTextWrapPos(0);
         ImGui.TextDisabled(ps.Intro);
@@ -823,6 +830,9 @@ public sealed class PartsPanel
         modelLabels = ModelLabels(models);
     }
 
+    /// <summary>Set by a refit's save or undo; <see cref="Draw"/> re-reads the model list at the top of the next frame.</summary>
+    private bool refreshModelsPending;
+
     /// <summary>
     /// Re-read the open mod's model list after something added or removed a model — a saved or undone body refit —
     /// keeping the open model open. Unlike <see cref="SelectMod"/>, nothing else is reset: the model, its brush state
@@ -850,10 +860,16 @@ public sealed class PartsPanel
             : -1;
         if (modelIndex < 0 && open != null)
         {
+            // Everything tied to the model that went, as opening another model would drop it.
+            FinishMove();
             EndLivePreview(refreshGame: true);
             parts = null;
             volume = null;
             brushBase = null;
+            movePart = null;
+            ClearPolygons(forgetModel: true);
+            ReleaseHandles();
+            retarget.Clear();
             viewport.Clear();
         }
     }
@@ -2310,7 +2326,9 @@ public sealed class PartsPanel
                 penumbra.ReloadModDirectory(modDir);
                 compositor.RedrawForChangedModel();
                 // The save added a model (or an undo took one away): list it, so the new size can be opened here.
-                RefreshModels();
+                // Next frame, not now: this runs inside the side panel, and the model view drawn after it in this same
+                // frame must not find the open model closed under it.
+                refreshModelsPending = true;
             },
             Held: RetargetHolds));
     }

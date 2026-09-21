@@ -241,6 +241,29 @@ public class BodyRetargetWriterTests : IDisposable
         Assert.True(File.Exists(Path.Combine(root, option.Files[GamePath].Replace('/', Path.DirectorySeparatorChar))));
     }
 
+    [Fact]
+    public void A_refit_s_folder_is_plain_ascii_whatever_its_option_is_called()
+    {
+        // The Studio's live tools match the game's name for a drawn file against the path on disk, and the game hands
+        // non-ASCII back in another encoding: a file under "— ·" was worn and never recognised.
+        string folder = BodyRetargetWriter.Sanitise("[HS] Rue+ — None · Yiggle - Small");
+        Assert.Equal("[HS] Rue+ - None - Yiggle - Small", folder);
+        Assert.All(folder, c => Assert.InRange(c, ' ', '~'));
+        Assert.Equal("caf_", BodyRetargetWriter.Sanitise("café"));
+    }
+
+    [Fact]
+    public void A_worn_file_under_a_non_ascii_folder_is_still_recognised()
+    {
+        const string onDisk = "e:/penumbradt/seaside/body retarget/[hs] rue+ — none · yiggle - small/c0201e0194_top.mdl";
+        // What the game hands back when it reads those UTF-8 bytes as one byte per character.
+        string asDrawn = System.Text.Encoding.Latin1.GetString(System.Text.Encoding.UTF8.GetBytes(onDisk));
+
+        Assert.True(Proteus.Gui.LiveBrush.SameFile(asDrawn, onDisk));
+        Assert.True(Proteus.Gui.LiveBrush.SameFile(onDisk, onDisk));
+        Assert.False(Proteus.Gui.LiveBrush.SameFile(onDisk.Replace("small", "medium"), onDisk));
+    }
+
     // ── saving into the author's own size group ─────────────────────────────────────────────────────────
 
     private const string TopSize = "Top Size";
@@ -359,6 +382,33 @@ public class BodyRetargetWriterTests : IDisposable
         string name = PenumbraModMeta.TryReadFileOptions(root, TopSize)![remove].Name;
         Assert.NotNull(PenumbraModMeta.RemoveOption(root, TopSize, name));
         Assert.Equal(after, Read(TopSize).GetProperty("DefaultSettings").GetInt64());
+    }
+
+    [Fact]
+    public void An_option_deleted_outside_Proteus_does_not_jam_undo()
+    {
+        // Two saves; then the whole group of the first is deleted in Penumbra, behind the record's back.
+        BodyRetargetWriter.Save(root, "Body — gone", "Neolithe SFW L", GamePath, [1], "Neolithe", "SFW M", "SFW L");
+        BodyRetargetWriter.Save(root, Group, "Neolithe SFW XS", GamePath, [2], "Neolithe", "SFW M", "SFW XS");
+        PenumbraModMeta.DeleteGroup(root, "Body — gone");
+
+        // The ghost is not offered: only the option that is really there.
+        var record = BodyRetargetWriter.ReadRecord(root)!;
+        Assert.Equal(["Neolithe SFW XS"], record.Options.Select(e => e.Name));
+
+        // And undoing it works, and leaves nothing behind to press again.
+        var outcome = BodyRetargetWriter.Undo(root, record.GroupOf(record.Options[^1]), record.Options[^1].Name);
+        Assert.True(outcome.Ok, outcome.Message);
+        Assert.Null(BodyRetargetWriter.ReadRecord(root));
+    }
+
+    [Fact]
+    public void An_unreadable_manifest_prunes_nothing()
+    {
+        BodyRetargetWriter.Save(root, Group, "Neolithe SFW L", GamePath, [1], "Neolithe", "SFW M", "SFW L");
+        File.WriteAllText(Path.Combine(root, PenumbraModMeta.MetaFile), "{ not json");
+
+        Assert.Single(BodyRetargetWriter.ReadRecord(root)!.Options);
     }
 
     [Fact]

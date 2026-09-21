@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Plugin.Services;
@@ -502,7 +503,8 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
             // While painting, the character draws the brush's preview in place of the mod's file — the same
             // garment, same vertex order, under a different name.
             if (string.IsNullOrEmpty(name)
-                || (BodyShapeReader.PathKey(name) != targetKey && !LiveBrushPreview.IsPreviewFile(LiveCharacter.FilePath(name))))
+                || (!SameFile(BodyShapeReader.PathKey(name), targetKey)
+                    && !LiveBrushPreview.IsPreviewFile(LiveCharacter.FilePath(name))))
                 continue;
 
             var shapes = EnabledShapes(model, handle);
@@ -526,6 +528,20 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
 
         Problem = Strings.Parts.LiveNotWorn;
         return false;
+    }
+
+    /// <summary>
+    /// Whether the game's name for a drawn file and the path on disk are one file. Exact first; failing that, with every
+    /// character outside ASCII dropped from both. The game hands a path back in its own encoding, so a folder named with
+    /// "—" or "·" (body refits saved before their folders were kept to ASCII) comes back as other characters entirely,
+    /// and an exact comparison never matches a file the character is plainly wearing.
+    /// </summary>
+    internal static bool SameFile(string? drawn, string? target)
+    {
+        if (drawn == null || target == null) return false;
+        if (drawn == target) return true;
+        static string Ascii(string s) => string.Concat(s.Where(c => c is >= ' ' and <= '~'));
+        return Ascii(drawn) == Ascii(target);
     }
 
     /// <summary>The target as <see cref="EnsureTarget"/> builds it, for a model no drawn file corresponds to.</summary>
