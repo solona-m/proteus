@@ -110,7 +110,34 @@ public class BodyRetargetWriterTests : IDisposable
 
         Assert.True(PriorityOf(Group) > PriorityOf("Body"),
                     "the retarget group must win the path the author's group also claims");
-        Assert.Equal(0, IndexOf(Group));
+    }
+
+    [Fact]
+    public void The_author_s_groups_keep_their_positions()
+    {
+        // Penumbra carries settings across a reload by group POSITION. A group inserted in front shifts every author
+        // group down one and each inherits its neighbour's selection — on "Seaside" that unticked both garments and
+        // left the character naked. So the author's groups must sit exactly where they were, and ours after them.
+        WriteAuthorGroups("Items", "Top Size", "Bottom Size");
+
+        BodyRetargetWriter.Save(root, Group, "Neolithe SFW L", GamePath, [1], "Neolithe", "SFW M", "SFW L");
+
+        Assert.Equal(["Items", "Top Size", "Bottom Size", Group], GroupNames());
+    }
+
+    [Fact]
+    public void Saving_again_and_undoing_leave_every_position_alone()
+    {
+        WriteAuthorGroups("Items", "Top Size");
+        BodyRetargetWriter.Save(root, Group, "Neolithe SFW L", GamePath, [1], "Neolithe", "SFW M", "SFW L");
+
+        // The author (or Penumbra) adds a group after ours; saving another size must not pull ours past it.
+        WriteAuthorGroups("Items", "Top Size", Group, "Later");
+        BodyRetargetWriter.Save(root, Group, "Neolithe SFW XS", GamePath, [2], "Neolithe", "SFW M", "SFW XS");
+        Assert.Equal(["Items", "Top Size", Group, "Later"], GroupNames());
+
+        BodyRetargetWriter.Undo(root, Group, "Neolithe SFW XS");
+        Assert.Equal(["Items", "Top Size", Group, "Later"], GroupNames());
     }
 
     [Fact]
@@ -190,10 +217,31 @@ public class BodyRetargetWriterTests : IDisposable
         Assert.True(File.Exists(Path.Combine(root, option.Files[GamePath].Replace('/', Path.DirectorySeparatorChar))));
     }
 
-    private int PriorityOf(string group) => Read(group).GetProperty("Priority").GetInt32();
+    /// <summary>
+    /// Lay out author groups in this order, each a one-option group with nothing in it — except any group of ours
+    /// already present, which is kept exactly as it is and simply placed where the list says.
+    /// </summary>
+    private void WriteAuthorGroups(params string[] names)
+    {
+        var ours = PenumbraModMeta.TryReadFileOptions(root, Group);
+        foreach (string name in names.Where(n => n != Group))
+            PenumbraModMeta.DeleteGroup(root, name);
 
-    private int IndexOf(string group)
-        => (PenumbraModMeta.TryReadGroups(root) ?? []).FindIndex(g => g.Name == group);
+        for (int i = 0; i < names.Length; i++)
+        {
+            if (names[i] == Group)
+            {
+                if (ours != null) PenumbraModMeta.WriteFileOptionGroup(root, i, Group, PriorityOf(Group), ours, 0);
+                continue;
+            }
+            PenumbraModMeta.WriteFileOptionGroup(root, i, names[i], 0,
+                [new PenumbraModMeta.FileOption("A", new Dictionary<string, string>())], 0);
+        }
+    }
+
+    private List<string> GroupNames() => (PenumbraModMeta.TryReadGroups(root) ?? []).Select(g => g.Name).ToList();
+
+    private int PriorityOf(string group) => Read(group).GetProperty("Priority").GetInt32();
 
     private JsonElement Read(string group)
         => (PenumbraModMeta.TryReadGroups(root) ?? []).Single(g => g.Name == group).Group;

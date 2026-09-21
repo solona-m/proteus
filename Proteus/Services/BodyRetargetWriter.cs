@@ -125,11 +125,11 @@ internal static class BodyRetargetWriter
                 final.AddRange(kept);
                 final.Add(new PenumbraModMeta.FileOption(optionName, files));
 
-                // Ordinal 0 AND a priority above every other group: Penumbra's conflict rule between two groups of one
-                // mod is priority, and the ordinal is what an older reading used, so setting both to agree means this
-                // group wins either way.
+                // A priority above every other group, which is what decides a game path two groups both claim. The
+                // POSITION is left alone: see Position.
                 int priority = Math.Max(PenumbraModMeta.MaxGroupPriority(modRoot) + 1, 1);
-                PenumbraModMeta.WriteFileOptionGroup(modRoot, 0, groupName, priority, final, final.Count - 1);
+                PenumbraModMeta.WriteFileOptionGroup(modRoot, Position(modRoot, groupName), groupName, priority, final,
+                                                     final.Count - 1);
 
                 WriteRecord(modRoot, groupName, optionName, gamePath, rel, bodyMod, from, to);
 
@@ -181,7 +181,8 @@ internal static class BodyRetargetWriter
                     };
                     final.AddRange(kept);
                     int priority = Math.Max(PenumbraModMeta.MaxGroupPriority(modRoot), 1);
-                    PenumbraModMeta.WriteFileOptionGroup(modRoot, 0, groupName, priority, final, 0);
+                    PenumbraModMeta.WriteFileOptionGroup(modRoot, Position(modRoot, groupName), groupName, priority,
+                                                         final, 0);
                     ForgetOption(modRoot, optionName);
                 }
 
@@ -206,6 +207,24 @@ internal static class BodyRetargetWriter
                 return new Outcome(false, groupName, optionName, $"Could not undo: {e.Message}");
             }
         }
+    }
+
+    /// <summary>
+    /// Where the group goes in the mod's group list: where it already is, or after everything else when it is new.
+    /// NEVER in front of the author's groups.
+    /// <para/>
+    /// Penumbra carries a mod's settings across a reload by group POSITION. Inserting a group at the front shifts every
+    /// author group down one, and each then inherits its neighbour's selection: on "Seaside" the multi-select group
+    /// that switches the halter and the tanga on inherited the size group's 0, which ticks nothing, and the character
+    /// was left naked the moment the save reloaded the mod. Appending shifts nothing; keeping an existing group where
+    /// it is means saving again, or undoing, shifts nothing either — and a group at the end is removed without moving
+    /// anything above it.
+    /// </summary>
+    internal static int Position(string modRoot, string groupName)
+    {
+        var groups = PenumbraModMeta.TryReadGroups(modRoot) ?? [];
+        int at = groups.FindIndex(g => string.Equals(g.Name, groupName, StringComparison.OrdinalIgnoreCase));
+        return at >= 0 ? at : groups.Count;
     }
 
     public static Record? ReadRecord(string modRoot)
