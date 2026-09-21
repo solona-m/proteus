@@ -10,7 +10,7 @@ namespace Proteus.Services;
 /// One model's geometry under the brush: what the user has pushed out so far. Pure geometry — no files, mods or game.
 /// Everything is decided per welded node, never per vertex: moving one copy of a seam and not its twin opens a crack.
 /// </summary>
-internal sealed class MeshVolumeSolve
+internal sealed class MeshVolumeSolve : IMeshEdit
 {
     /// <summary>
     /// Bump when the geometry this produces changes, so an older build's edit is redone from the author's backup.

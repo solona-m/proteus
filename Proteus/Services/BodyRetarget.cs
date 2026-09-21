@@ -1,0 +1,296 @@
+using System;
+using System.Collections.Generic;
+using System.Numerics;
+using Vec3 = Proteus.Services.SecondSkinWriter.Vec3;
+
+namespace Proteus.Services;
+
+/// <summary>
+/// Refit a garment authored for one body onto another — a different size of the same body today, a different body
+/// once <see cref="IBodyCorrespondence"/> grows its second implementation.
+/// <para/>
+/// Pure geometry: no files, no mods, no game. Everything is decided per WELDED NODE and spread to vertices at the very
+/// end, because moving one copy of a uv seam and not its twin opens a crack.
+/// <para/>
+/// Tangents are deliberately not refitted. A tangent frame is defined by the uv parameterisation, and a retarget moves
+/// positions only — never uvs, never topology, never the vertex count — so the frame's direction in uv space is still
+/// exactly right and only its projection onto the slightly-turned surface is stale, which the shader's
+/// re-orthogonalisation against the (recomputed) normal largely absorbs. Refitting would mean a full mesh re-emit and
+/// giving up the length-neutral in-place rewrite that makes this safe to do to somebody else's mod. Revisit for Rue+,
+/// where the deformation is large and anisotropic.
+/// </summary>
+internal static partial class BodyRetarget
+{
+    /// <summary>Inside this, cloth is resting on the body and follows it exactly (40 mm: past the thickest lining,
+    /// jacket and padding).</summary>
+    internal const float NearBand = 0.04f;
+
+    /// <summary>Past this, cloth is hanging free and does not move at all (250 mm).</summary>
+    internal const float FarBand = 0.25f;
+
+    /// <summary>
+    /// Buckets to the metre for the exact-match snap: 0.1 mm, the same tolerance <see cref="ModelPartReader"/> already
+    /// welds islands at, so "coincident" means one thing across the codebase. Not the welder's 10 µm — positions may
+    /// be stored as Half4 in one model and Float3 in the other, and half at body scale quantises well past that, so
+    /// 10 µm would miss most of a mesh that genuinely IS a copy.
+    /// </summary>
+    internal const float SnapPerMetre = 1e4f;
+
+    /// <inheritdoc cref="SnapPerMetre"/>
+    internal const float SnapEps = 1e-4f;
+
+    /// <summary>
+    /// How far a garment vertex may be from the target body and still be considered for a push-out (30 mm).
+    /// <para/>
+    /// Scoped on purpose, and the scope is the point: this pass fixes cloth that GRAZES the body, not cloth buried
+    /// five centimetres inside a torso. A vertex that deep was broken before the retarget ran, and inventing a 50 mm
+    /// push for it would do more damage than the poke-through does. It also keeps the winding-number query — which
+    /// walks every far cell — off the great majority of nodes.
+    /// </summary>
+    internal const float PushProbeRange = 0.03f;
+
+    /// <summary>
+    /// How far outside the target body a pushed cloth vertex is put (0.5 mm).
+    /// <para/>
+    /// This feature's own constant, measured for CLOTH OVER SKIN. Explicitly not <c>SecondSkinWriter.BaseOffset</c>,
+    /// which is 0.05 mm and was measured for a shell cut from the body and sitting on its own normal — a different
+    /// pass, whose number is height-banded for the foot on top of that.
+    /// </summary>
+    internal const float Clearance = 5e-4f;
+
+    /// <summary>Rounds of slope-limited spreading, so the push has no step where it stops.</summary>
+    internal const int PushSpreadRounds = 8;
+
+    /// <summary>Gradient the spread allows, as a rise over the mesh's own edge length (~27 degrees).</summary>
+    internal const float PushSlope = 0.5f;
+
+    /// <summary>One slot of the body: the correspondence that says where its skin went, and the target to land on.</summary>
+    internal readonly record struct SlotPair(string Slot, IBodyCorrespondence Correspondence, ModelParts Target);
+
+    /// <summary>What happened, for the status line and the saved record.</summary>
+    internal sealed record Report(
+        int Nodes, int Snapped, int Transferred, int Missed, int Pushed,
+        float WorstMove, float WorstPush, int UnmappedSpares, bool HasOtherLods)
+    {
+        /// <summary>Share of moved nodes that landed on a body vertex exactly. Low means the author sculpted the
+        /// garment's body mesh rather than copying it, and the seam may not come out perfect.</summary>
+        public float SnapRate => Transferred > 0 ? (float)Snapped / Transferred : 0f;
+    }
+
+    /// <summary>The retarget, ready to preview or save.</summary>
+    internal sealed record Planned(RetargetEdit Edit, byte[] Model, Report Report);
+
+    /// <summary>
+    /// The geometry half of a retarget, with no file anywhere near it. Separated from <see cref="Plan"/> so the solve
+    /// can be tested against a hand-built <see cref="ModelParts"/> at real body scale, rather than only through a
+    /// synthetic .mdl whose triangles are a metre across.
+    /// </summary>
+    internal sealed record Solved(RetargetEdit Edit, int Snapped, int Transferred, int Missed, int Pushed,
+                                  float WorstMove, float WorstPush);
+
+    /// <summary>
+    /// The garment split into the two sets the two passes act on.
+    /// <para/>
+    /// THE ONLY place in the retarget that asks <see cref="SecondSkinWriter.IsBodySkinMaterial"/>, because the two
+    /// passes need OPPOSITE answers and a shared flag read twice is exactly how that gets inverted by accident:
+    /// <list type="bullet">
+    /// <item>TRANSFER moves every node, <see cref="ClothNodes"/> and embedded skin alike — the garment's own body mesh
+    /// has to land on the new body exactly, or the body pokes through the cloth.</item>
+    /// <item>PUSH-OUT moves <see cref="ClothNodes"/> only — shoving the embedded skin mesh off the body it is meant to
+    /// coincide with would lift it clear and open a seam.</item>
+    /// </list>
+    /// So neither pass takes a flag and decides. Each pass is handed the node list it acts on, and neither pass body
+    /// mentions skin at all.
+    /// </summary>
+    internal sealed class Sets
+    {
+        /// <summary>Which welded node each vertex belongs to, indexed like <see cref="ModelParts.Positions"/>.</summary>
+        public required int[] NodeOf { get; init; }
+
+        public required int NodeCount { get; init; }
+
+        /// <summary>Each node's position as its author left it.</summary>
+        public required Vec3[] NodeAt { get; init; }
+
+        /// <summary>Each node's normal as its author left it.</summary>
+        public required Vec3[] NodeNormal { get; init; }
+
+        /// <summary>Node neighbours through shared triangle edges.</summary>
+        public required List<int>[] Adj { get; init; }
+
+        /// <summary>The mesh's own resolution, which the push-out's slope limit is expressed in.</summary>
+        public required float MeanEdge { get; init; }
+
+        /// <summary>Every triangle of every whole submesh, as vertex indices.</summary>
+        public required int[] Tris { get; init; }
+
+        /// <summary>The transfer's set: all of them.</summary>
+        public required int[] AllNodes { get; init; }
+
+        /// <summary>The push-out's set: everything that is not the garment's own body mesh.</summary>
+        public required int[] ClothNodes { get; init; }
+
+        public static Sets From(ModelParts garment)
+        {
+            int vc = garment.Positions.Length / 3;
+            var vertAt = new Vec3[vc];
+            for (int i = 0; i < vc; i++)
+                vertAt[i] = new Vec3(garment.Positions[i * 3], garment.Positions[i * 3 + 1], garment.Positions[i * 3 + 2]);
+
+            var nodeOf = MeshMath.WeldByPosition(vertAt, out int nodeCount);
+
+            var tris = new List<int>();
+            var isSkin = new bool[nodeCount];
+            foreach (var part in garment.Parts)
+            {
+                // An island is a subset of its own submesh; taking both would double every triangle, and would also
+                // let an island of a cloth submesh disagree with the submesh about what it is.
+                if (part.Island >= 0) continue;
+                tris.AddRange(part.Triangles);
+                if (!SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+                foreach (int v in part.Triangles)
+                    if (v >= 0 && v < vc) isSkin[nodeOf[v]] = true;
+            }
+
+            var nodeAt = new Vec3[nodeCount];
+            for (int i = 0; i < vc; i++) nodeAt[nodeOf[i]] = vertAt[i];
+
+            var accum = new Vec3[nodeCount];
+            for (int i = 0; i < vc && i * 3 + 2 < garment.Normals.Length; i++)
+            {
+                int n = nodeOf[i];
+                accum[n] = new Vec3(accum[n].X + garment.Normals[i * 3],
+                                    accum[n].Y + garment.Normals[i * 3 + 1],
+                                    accum[n].Z + garment.Normals[i * 3 + 2]);
+            }
+            var nodeNormal = new Vec3[nodeCount];
+            for (int n = 0; n < nodeCount; n++) nodeNormal[n] = Unit(accum[n]);
+
+            var adj = new List<int>[nodeCount];
+            for (int n = 0; n < nodeCount; n++) adj[n] = [];
+            var triArray = tris.ToArray();
+            for (int t = 0; t + 2 < triArray.Length; t += 3)
+            {
+                int a = triArray[t], b = triArray[t + 1], c = triArray[t + 2];
+                if (a < 0 || b < 0 || c < 0 || a >= vc || b >= vc || c >= vc) continue;
+                Link(adj, nodeOf[a], nodeOf[b]);
+                Link(adj, nodeOf[b], nodeOf[c]);
+                Link(adj, nodeOf[c], nodeOf[a]);
+            }
+
+            var all = new int[nodeCount];
+            for (int n = 0; n < nodeCount; n++) all[n] = n;
+
+            var cloth = new List<int>(nodeCount);
+            for (int n = 0; n < nodeCount; n++)
+                if (!isSkin[n]) cloth.Add(n);
+
+            return new Sets
+            {
+                NodeOf = nodeOf,
+                NodeCount = nodeCount,
+                NodeAt = nodeAt,
+                NodeNormal = nodeNormal,
+                Adj = adj,
+                MeanEdge = MeshMath.MeanEdgeLength(nodeAt, adj, new List<int>(all)),
+                Tris = triArray,
+                AllNodes = all,
+                ClothNodes = cloth.ToArray(),
+            };
+        }
+
+        private static void Link(List<int>[] adj, int a, int b)
+        {
+            if (a == b) return;
+            if (!adj[a].Contains(b)) adj[a].Add(b);
+            if (!adj[b].Contains(a)) adj[b].Add(a);
+        }
+    }
+
+    /// <summary>
+    /// Refit <paramref name="garment"/> from the source bodies to the target bodies, and write the result into
+    /// <paramref name="garmentBytes"/>.
+    /// </summary>
+    /// <param name="garment">The garment, already read.</param>
+    /// <param name="garmentBytes">The bytes it was read from — the rewrite is in place and length-neutral.</param>
+    /// <param name="pairs">One per body slot the garment spans: chest, legs, and whatever else a body mod sizes.</param>
+    public static Planned Plan(ModelParts garment, byte[] garmentBytes, IReadOnlyList<SlotPair> pairs)
+    {
+        var solved = Solve(garment, pairs);
+        var written = MeshVolumeService.Inflate(garmentBytes, solved.Edit);
+        var report = new Report(garment.Positions.Length / 3, solved.Snapped, solved.Transferred, solved.Missed,
+                                solved.Pushed, solved.WorstMove, solved.WorstPush,
+                                written.UnmappedSpares, written.HasOtherLods);
+        return new Planned(solved.Edit, written.Model, report);
+    }
+
+    /// <inheritdoc cref="Plan"/>
+    /// <remarks>The geometry, without touching the file. See <see cref="Solved"/>.</remarks>
+    internal static Solved Solve(ModelParts garment, IReadOnlyList<SlotPair> pairs)
+    {
+        var sets = Sets.From(garment);
+        var source = SourceBody.Build(pairs);
+        var target = TargetBody.Build(pairs);
+
+        var nodeDelta = new Vec3[sets.NodeCount];
+        var snapped = new bool[sets.NodeCount];
+
+        Transfer(sets, sets.AllNodes, source, nodeDelta, snapped, out int transferred, out int missed);
+
+        var pushable = new List<int>(sets.ClothNodes.Length);
+        foreach (int n in sets.ClothNodes)
+            if (!snapped[n]) pushable.Add(n);
+
+        int pushed = PushOut(sets, pushable, target, nodeDelta, out float worstPush);
+
+        int vc = garment.Positions.Length / 3;
+        var vertDelta = new Vec3[vc];
+        for (int i = 0; i < vc; i++) vertDelta[i] = nodeDelta[sets.NodeOf[i]];
+
+        var basePos = new Vec3[vc];
+        var baseNrm = new Vec3[vc];
+        for (int i = 0; i < vc; i++)
+        {
+            basePos[i] = new Vec3(garment.Positions[i * 3], garment.Positions[i * 3 + 1], garment.Positions[i * 3 + 2]);
+            baseNrm[i] = new Vec3(garment.Normals[i * 3], garment.Normals[i * 3 + 1], garment.Normals[i * 3 + 2]);
+        }
+
+        // A continuous weight rather than a moved/not-moved test: a hard edge here puts a shading seam exactly where
+        // the displacement fades out. A fifth of an edge is the scale below which the surface has not really turned.
+        var nodeWeight = new float[sets.NodeCount];
+        float scale = 0.2f * MathF.Max(sets.MeanEdge, 1e-6f);
+        float worstMove = 0f;
+        for (int n = 0; n < sets.NodeCount; n++)
+        {
+            float len = Len(nodeDelta[n]);
+            nodeWeight[n] = Math.Clamp(len / scale, 0f, 1f);
+            if (len > worstMove) worstMove = len;
+        }
+
+        var vertNrm = SecondSkinWriter.RelaxedNormals(basePos, baseNrm, vertDelta, sets.NodeOf,
+                                                      nodeWeight, sets.NodeNormal, sets.Tris);
+
+        var edit = new RetargetEdit(garment.MeshSpans, vertDelta, vertNrm);
+        return new Solved(edit, CountTrue(snapped), transferred, missed, pushed, worstMove, worstPush);
+    }
+
+    private static int CountTrue(bool[] flags)
+    {
+        int n = 0;
+        foreach (bool f in flags)
+            if (f) n++;
+        return n;
+    }
+
+    internal static float Len(Vec3 v) => MathF.Sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z);
+
+    private static Vec3 Unit(Vec3 v)
+    {
+        float len = Len(v);
+        return len > 1e-6f ? new Vec3(v.X / len, v.Y / len, v.Z / len) : default;
+    }
+
+    internal static Vector3 ToVector(Vec3 v) => new(v.X, v.Y, v.Z);
+
+    internal static Vec3 ToVec(Vector3 v) => new(v.X, v.Y, v.Z);
+}

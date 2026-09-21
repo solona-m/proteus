@@ -1,0 +1,149 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text.Json;
+
+namespace Proteus.Services;
+
+/// <summary>One selectable body option: a single model, in one equipment slot, behind one option of one group.</summary>
+/// <param name="Group">The option group, as the author named it.</param>
+/// <param name="Name">The option, as the author named it.</param>
+/// <param name="Rel">The model file, relative to the body mod's root.</param>
+/// <param name="GamePath">The game path it replaces.</param>
+/// <param name="Slot">"_top", "_dwn", "_glv", "_sho" — which half of the body this is.</param>
+/// <param name="Section">
+/// The heading this option sits under, or "". Authors build a long single-select list by putting file-less options
+/// like <c>--- DEFAULT ---</c> between the real ones, and Neolithe reuses the SAME option name under each heading —
+/// there are eight options called "SFW M". The heading is therefore not decoration, it is the only thing telling two
+/// identically-named sizes apart, and dropping it would put several indistinguishable entries in the picker.
+/// </param>
+internal sealed record BodyOption(string Group, string Section, string Name, string Rel, string GamePath, string Slot)
+{
+    /// <summary>What the picker shows: unique within a group, and spelled the way the author spelled it.</summary>
+    public string Label => Heading.Length > 0 ? $"{Heading} · {Name}" : Name;
+
+    /// <summary>
+    /// <see cref="Section"/> without the rule the author drew around it. A heading is written <c>--- DEFAULT ---</c>
+    /// because it has to stand out in a flat list of 114 radio buttons; beside an option name it reads as noise.
+    /// </summary>
+    private string Heading => Section.Trim(' ', '-', '–', '—', '=', '*', '~');
+
+    /// <summary>The same, with the group in front, for a message that has no group heading of its own.</summary>
+    public string FullLabel => $"{Group} / {Label}";
+}
+
+/// <summary>
+/// A body mod's size options, read off its Penumbra manifest.
+/// <para/>
+/// No attempt is made to parse size out of an option's NAME. Neolithe's chest axis alone is a pre-multiplied cross
+/// product of shape, flavour, SFW-ness and size, spelled inconsistently, with separator entries like
+/// <c>--- DEFAULT ---</c> mixed in; any rule for reading it would be guessing at one author's convention. Instead every
+/// option that contributes a model is offered, any source-to-target pair is allowed, and
+/// <see cref="IdentityCorrespondence"/> is what refuses the pairs that are not two sizes of one mesh. That is also why
+/// the separators drop out for the right reason — they carry no file — rather than by matching dashes.
+/// </summary>
+internal sealed record BodySizeCatalog(string ModRoot, IReadOnlyList<BodyOption> Options)
+{
+    /// <summary>Equipment slots a body model can occupy, longest-lived first.</summary>
+    private static readonly string[] KnownSlots = ["_top", "_dwn", "_glv", "_sho"];
+
+    /// <summary>The slots this mod actually sizes, in <see cref="KnownSlots"/> order.</summary>
+    public IEnumerable<string> Slots => KnownSlots.Where(s => Options.Any(o => o.Slot == s));
+
+    /// <summary>This mod's options for one slot, in the author's own order.</summary>
+    public IReadOnlyList<BodyOption> For(string slot) => Options.Where(o => o.Slot == slot).ToList();
+
+    /// <summary>True when the mod offers a choice of body models at all — what the mod picker filters on.</summary>
+    public bool IsBody => Options.Count > 0;
+
+    /// <summary>
+    /// Read a mod's body options.
+    /// <para/>
+    /// Walks the groups directly rather than through <c>PenumbraModMeta.ReadAllRedirects</c>, for two reasons that
+    /// both come down to option ORDER. A file-less option is a heading and has to be remembered for the options that
+    /// follow it, and <c>ReadAllRedirects</c> never yields one because it has no files. And option names repeat within
+    /// a group, so its <c>"Group / Option"</c> source string cannot say which of eight options called "SFW M" a
+    /// redirect belongs to.
+    /// </summary>
+    public static BodySizeCatalog Read(string modRoot)
+    {
+        var options = new List<BodyOption>();
+        var groups = PenumbraModMeta.TryReadGroups(modRoot);
+        if (groups == null) return new BodySizeCatalog(modRoot, options);
+
+        foreach (var (groupName, group) in groups)
+        {
+            if (!group.TryGetProperty("Options", out var list) || list.ValueKind != JsonValueKind.Array) continue;
+
+            string section = "";
+            foreach (var option in list.EnumerateArray())
+            {
+                if (option.ValueKind != JsonValueKind.Object) continue;
+                string name = option.TryGetProperty("Name", out var n) ? n.GetString() ?? "" : "";
+
+                bool anyFile = option.TryGetProperty("Files", out var files)
+                            && files.ValueKind == JsonValueKind.Object
+                            && files.EnumerateObject().Any();
+                if (!anyFile)
+                {
+                    // Carries nothing at all, so it exists to label the options below it.
+                    section = name;
+                    continue;
+                }
+
+                foreach (var file in files.EnumerateObject())
+                {
+                    if (file.Value.ValueKind != JsonValueKind.String) continue;
+                    if (file.Value.GetString() is not { Length: > 0 } rel) continue;
+                    if (SlotOf(file.Name) is not { } slot) continue;
+
+                    options.Add(new BodyOption(groupName, section, name, rel, file.Name, slot));
+                }
+            }
+        }
+
+        return new BodySizeCatalog(modRoot, options);
+    }
+
+    /// <summary>Which half of the body a game path is, or null when it is not an equipment model at all.</summary>
+    internal static string? SlotOf(string gamePath)
+    {
+        foreach (string slot in KnownSlots)
+            if (gamePath.EndsWith(slot + ".mdl", StringComparison.OrdinalIgnoreCase)) return slot;
+        return null;
+    }
+
+    /// <summary>
+    /// The option's file on disk. Penumbra writes these lowercase with backslashes while the real folders are
+    /// mixed-case, and resolves them case-insensitively; so must this.
+    /// </summary>
+    public string PathOf(BodyOption option) => ResolveCaseInsensitive(ModRoot, option.Rel);
+
+    internal static string ResolveCaseInsensitive(string root, string rel)
+    {
+        string direct = Path.Combine(root, rel.Replace('/', Path.DirectorySeparatorChar)
+                                              .Replace('\\', Path.DirectorySeparatorChar));
+        if (File.Exists(direct)) return direct;
+
+        string at = root;
+        foreach (string segment in rel.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            string next = Path.Combine(at, segment);
+            if (Directory.Exists(next) || File.Exists(next)) { at = next; continue; }
+
+            string? match = null;
+            try
+            {
+                match = Directory.EnumerateFileSystemEntries(at)
+                                 .FirstOrDefault(e => string.Equals(Path.GetFileName(e), segment,
+                                                                    StringComparison.OrdinalIgnoreCase));
+            }
+            catch { /* unreadable directory: fall through to the direct path and let the caller fail to open it */ }
+
+            if (match == null) return direct;
+            at = match;
+        }
+        return at;
+    }
+}
