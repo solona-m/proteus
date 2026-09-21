@@ -21,6 +21,9 @@ namespace Proteus.Services;
 /// What this class carries and the brush's does not is the interpolated NORMAL at the landing, which is the direction
 /// the push-out moves along. The one thing worth sharing is the closest-point test itself, taken from
 /// <see cref="BrushTransfer.ClosestOnTriangle"/>.
+/// <para/>
+/// NOT thread-safe: <see cref="Nearest"/> marks visited triangles in a buffer it reuses between queries, which is what
+/// keeps a query from allocating. A caller that shares one instance between threads must serialise it.
 /// </summary>
 internal sealed class BodySurface
 {

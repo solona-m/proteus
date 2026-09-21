@@ -76,13 +76,20 @@ internal static class BodySizeMatch
             int hits = 0;
             double sum = 0;
             int measured = 0;
-            foreach (var p in probes)
+
+            // The candidate lives in a process-wide cache, and BodySurface reuses a scratch buffer between queries, so
+            // two rankings touching the same body at once would corrupt each other's answers. Uncontended in the
+            // normal case — the Studio runs one detection at a time.
+            lock (body)
             {
-                if (body.Snap.Contains(MeshMath.PositionKey(BodyRetarget.ToVec(p), BodyRetarget.SnapPerMetre)))
-                    hits++;
-                if (!body.Surface.Nearest(p, BodyRetarget.NearBand, out var hit)) continue;
-                sum += hit.Distance * hit.Distance;
-                measured++;
+                foreach (var p in probes)
+                {
+                    if (body.Snap.Contains(MeshMath.PositionKey(BodyRetarget.ToVec(p), BodyRetarget.SnapPerMetre)))
+                        hits++;
+                    if (!body.Surface.Nearest(p, BodyRetarget.NearBand, out var hit)) continue;
+                    sum += hit.Distance * hit.Distance;
+                    measured++;
+                }
             }
 
             scores.Add(new Score(option, (float)hits / probes.Count,

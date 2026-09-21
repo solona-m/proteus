@@ -4,11 +4,10 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
-using Dalamud.Interface;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Plugin.Services;
-using Proteus.Localization;
 using Proteus.Interop;
+using Proteus.Localization;
 using Proteus.Services;
 
 namespace Proteus.Gui;
@@ -16,22 +15,30 @@ namespace Proteus.Gui;
 /// <summary>
 /// The Studio tool that refits a garment from one body size onto another.
 /// <para/>
-/// A class of its own rather than another <c>PartsPanel</c> partial: it owns some twenty fields of its own — the body
-/// mod, its catalog, a source and target per slot, three worker tasks, the plan, the preview, the group name — and
-/// that file's field block is long enough already. It reaches nothing of the panel directly; everything it needs
-/// arrives in <see cref="RetargetContext"/>.
+/// A class of its own rather than another <c>PartsPanel</c> partial: it owns some twenty fields — the body mod, its
+/// catalog, a source and target per slot, several worker tasks, the plan, the group name — and that file's field
+/// block is long enough already. It reaches nothing of the panel directly; everything it needs arrives in
+/// <see cref="RetargetContext"/>.
+/// <para/>
+/// Everything that touches a file runs on a worker, and that is a rule rather than a preference. Finding the body mods
+/// reads every installed mod's manifest; checking a pair reads two 900 KB models; a manifest here can be 400 KB of
+/// json. Any of those on the draw thread is a visible hitch at best and, for the mod scan, a freeze the first time the
+/// tool is opened.
 /// </summary>
 internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
 {
     /// <summary>What the Studio tab lends this tool for the frame: the open model, and the things only it can do.</summary>
+    /// <param name="Redirects">The open mod's redirects, already read by the tab. Used to spot a group of the author's
+    /// that also replaces this model, without re-reading the manifest every frame.</param>
     /// <param name="FlushPending">Save a pending brush stroke, so the retarget starts from what the user can see.</param>
-    /// <param name="PushPreview">Put bytes on the character for this model's game paths.</param>
+    /// <param name="PushPreview">Put bytes on the character for this model's game paths. False means "busy, try again
+    /// next frame"; true means pushed, or that this model can never be previewed and there is no point retrying.</param>
     /// <param name="SetStatus">Say something in the tab's status line.</param>
     /// <param name="AfterModChange">The mod's files changed on disk: reload it and redraw.</param>
     internal readonly record struct RetargetContext(
         string ModRoot, string ModDir, string ModelRel, string GamePath, string ModelLabel,
-        ModelParts Garment, byte[] GarmentBytes,
-        Action FlushPending, Action<byte[]> PushPreview, Action EndPreview,
+        ModelParts Garment, byte[] GarmentBytes, IReadOnlyList<PenumbraModMeta.Redirect> Redirects,
+        Action FlushPending, Func<byte[], bool> PushPreview, Action EndPreview,
         Action<string, bool> SetStatus, Action AfterModChange);
 
     // ── the body, and the pair chosen per slot ──────────────────────────────
@@ -44,23 +51,45 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
     private readonly Dictionary<string, BodyOption> from = new(StringComparer.Ordinal);
     private readonly Dictionary<string, BodyOption> to = new(StringComparer.Ordinal);
 
-    /// <summary>Per slot, why the chosen pair cannot be used; empty when it can.</summary>
+    /// <summary>Per slot, why the chosen pair cannot be used. Absent when it can, or has not been checked.</summary>
     private readonly Dictionary<string, string> refusals = new(StringComparer.Ordinal);
 
     /// <summary>Per slot, what the detector made of the garment.</summary>
     private readonly Dictionary<string, BodySizeMatch.Ranking> detected = new(StringComparer.Ordinal);
+
+    /// <summary>The model the detector last ran for, so opening another model runs it again.</summary>
+    private string? detectedFor;
 
     private string groupName = "";
     private string? groupNameFor;
 
     private BodyRetarget.Planned? planned;
 
+    /// <summary>A preview the live preview was too busy to take, retried each frame until it goes.</summary>
+    private byte[]? pendingPreview;
+
+    // ── worker tasks ────────────────────────────────────────────────────────
+
+    private Task<Dictionary<string, string>>? bodiesTask;
     private Task<DetectResult>? detectTask;
     private Task<PlanResult>? planTask;
-    private Task<BodyRetargetWriter.Outcome>? saveTask;
+    private Task<SaveResult>? saveTask;
+
+    /// <summary>Pair checks in flight, per slot, each tagged with the pair it was started for.</summary>
+    private readonly Dictionary<string, (string Pair, Task<string> Refusal)> validating = new(StringComparer.Ordinal);
 
     private sealed record DetectResult(string ModelRel, Dictionary<string, BodySizeMatch.Ranking> Rankings);
     private sealed record PlanResult(string Key, BodyRetarget.Planned? Planned, string Error);
+    private sealed record SaveResult(BodyRetargetWriter.Outcome Outcome, BodyRetargetWriter.Record? Record);
+
+    // ── caches for things that would otherwise be read every frame ──────────
+
+    /// <summary>Installed body mods, dir to display name; null until the first scan has come back.</summary>
+    private Dictionary<string, string>? bodies;
+
+    /// <summary>The mod's retarget record, and the mod it was read for. Re-read after a save or an undo.</summary>
+    private BodyRetargetWriter.Record? record;
+    private string? recordFor;
 
     /// <summary>Forget everything model-specific. Called when the open mod or model changes, and on leaving the tab.</summary>
     public void Clear()
@@ -69,8 +98,12 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
         to.Clear();
         refusals.Clear();
         detected.Clear();
+        validating.Clear();
+        detectedFor = null;
         planned = null;
+        pendingPreview = null;
         groupNameFor = null;
+        recordFor = null;
     }
 
     public void Draw(in RetargetContext ctx)
@@ -84,12 +117,23 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
             groupName = string.Format(ps.RetargetGroupFmt, ctx.ModelLabel);
         }
 
+        if (recordFor != ctx.ModRoot)
+        {
+            // One read per mod, not per frame; saves and undos hand back the fresh record themselves.
+            recordFor = ctx.ModRoot;
+            record = BodyRetargetWriter.ReadRecord(ctx.ModRoot);
+        }
+
         DrawBodyPicker(ctx);
         if (catalog is not { IsBody: true })
         {
-            ImGui.TextWrapped(ps.RetargetPickBody);
+            ImGui.TextWrapped(bodies == null ? ps.RetargetFindingBodies : ps.RetargetPickBody);
+            DrawSaved(ctx);
             return;
         }
+
+        // A different model opened under the same body: the old detection was about the old model.
+        if (detectedFor != ctx.ModelRel && detectTask == null) StartDetect(ctx);
 
         ImGui.Separator();
         foreach (string slot in Slots(ctx))
@@ -97,6 +141,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
 
         ImGui.Separator();
         DrawActions(ctx);
+        DrawSaved(ctx);
     }
 
     // ── the body mod ────────────────────────────────────────────────────────
@@ -107,10 +152,23 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
         ImGui.TextUnformatted(ps.RetargetBody);
         ImGui.SetNextItemWidth(-1);
 
-        var bodies = Bodies();
-        string current = bodyDir != null && bodies.TryGetValue(bodyDir, out string? name) ? name : ps.RetargetNoBody;
+        // The first scan starts as soon as the tool is shown, so the list is usually ready by the time it is opened.
+        if (bodies == null && bodiesTask == null) StartBodyScan();
+
+        string current = bodyDir != null && bodies != null && bodies.TryGetValue(bodyDir, out string? name)
+                             ? name
+                             : ps.RetargetNoBody;
         using var combo = ImRaii.Combo("##retargetBody", current);
         if (!combo) return;
+
+        // Opening the list re-scans in the background, so a body mod installed since the last look appears.
+        if (ImGui.IsWindowAppearing() && bodiesTask == null) StartBodyScan();
+
+        if (bodies == null)
+        {
+            ImGui.TextDisabled(ps.RetargetFindingBodies);
+            return;
+        }
 
         ImGui.SetNextItemWidth(-1);
         ImGui.InputTextWithHint("##retargetBodyFilter", Strings.Export.FilterHint, ref bodyFilter, 64);
@@ -120,42 +178,37 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
             if (!ImGui.Selectable(label, dir == bodyDir)) continue;
 
             bodyDir = dir;
-            catalog = BodySizeCatalog.Read(BodyRoot(dir) ?? "");
+            catalog = BodyRoot(dir) is { } root ? BodySizeCatalog.Read(root) : null;
             Clear();
-            StartDetect(ctx);
         }
     }
 
     /// <summary>
-    /// Installed mods that publish a choice of body models. Recomputed only when the mod list changes: reading every
-    /// mod's manifest is not something to do per frame.
+    /// Find installed mods that publish a choice of body models. The mod list is asked for here, on the framework
+    /// thread, because it is Penumbra IPC; only the manifest reads go to the worker.
     /// </summary>
-    private Dictionary<string, string> bodyCache = [];
-    private int bodyCacheCount = -1;
-
-    private Dictionary<string, string> Bodies()
+    private void StartBodyScan()
     {
-        // Null means Penumbra could not be asked, which is not the same as "no mods": keep the last answer rather
-        // than emptying the picker while the user is looking at it.
-        if (penumbra.GetAllMods() is not { } all) return bodyCache;
-        if (all.Count == bodyCacheCount) return bodyCache;
-        bodyCacheCount = all.Count;
+        var all = penumbra.GetAllMods();
+        string? modsRoot = penumbra.GetModDirectory();
+        if (all == null || modsRoot == null) return;
 
-        var found = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (dir, name) in all)
+        bodiesTask = Task.Run(() =>
         {
-            string? root = BodyRoot(dir);
-            if (root == null) continue;
-            try
+            var found = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (dir, name) in all)
             {
-                if (BodySizeCatalog.Read(root).IsBody) found[dir] = name;
+                try
+                {
+                    if (BodySizeCatalog.Read(Path.Combine(modsRoot, dir)).IsBody) found[dir] = name;
+                }
+                catch
+                {
+                    // A mod whose manifest cannot be read is not a body as far as the picker is concerned.
+                }
             }
-            catch (Exception ex)
-            {
-                log.Verbose("[Proteus] retarget: {0} is not a body ({1})", dir, ex.Message);
-            }
-        }
-        return bodyCache = found;
+            return found;
+        });
     }
 
     private string? BodyRoot(string dir)
@@ -164,9 +217,9 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
         return root == null ? null : Path.Combine(root, dir);
     }
 
-    /// <summary>
-    /// The slot this garment is worn in, which is the one its cloth was cut against. Always required.
-    /// </summary>
+    // ── which slots take part ───────────────────────────────────────────────
+
+    /// <summary>The slot this garment is worn in, which is the one its cloth was cut against. Always required.</summary>
     private string Primary(in RetargetContext ctx)
     {
         var slots = catalog!.Slots.ToList();
@@ -180,7 +233,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
     /// All of them are offered and only <see cref="Primary"/> is required, rather than trying to work out which halves
     /// of the body a garment reaches. A long dress is worn in the chest slot and hangs over the legs, so it genuinely
     /// needs both; a bikini top needs one. Nothing in the file says which, and the cheap guesses are wrong often
-    /// enough to be worse than a second dropdown the user can ignore. Slots with a single option are left out: there
+    /// enough to be worse than a second dropdown the user can ignore. Slots with a single model are left out: there
     /// is no size to change there.
     /// </summary>
     private List<string> Slots(in RetargetContext ctx)
@@ -214,11 +267,13 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
                                   : string.Format(ps.RetargetSlotFmt, SlotName(slot), Distinct(slot)));
         if (optional && ImGui.IsItemHovered()) ImGui.SetTooltip(ps.RetargetSlotOptionalTip);
 
-        DrawOptionCombo($"##retargetFrom{slot}", ps.RetargetFrom, options, from, slot, ctx);
+        DrawOptionCombo($"##retargetFrom{slot}", ps.RetargetFrom, options, from, slot);
         DrawConfidence(slot);
-        DrawOptionCombo($"##retargetTo{slot}", ps.RetargetTo, options, to, slot, ctx);
+        DrawOptionCombo($"##retargetTo{slot}", ps.RetargetTo, options, to, slot);
 
-        if (refusals.TryGetValue(slot, out string? why) && why.Length > 0)
+        if (validating.ContainsKey(slot))
+            ImGui.TextDisabled(ps.RetargetCheckingPair);
+        else if (refusals.TryGetValue(slot, out string? why))
             using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
                 ImGui.TextWrapped(why);
 
@@ -226,7 +281,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
     }
 
     private void DrawOptionCombo(string id, string label, IReadOnlyList<BodyOption> options,
-                                 Dictionary<string, BodyOption> into, string slot, in RetargetContext ctx)
+                                 Dictionary<string, BodyOption> into, string slot)
     {
         ImGui.TextUnformatted(label);
         ImGui.SetNextItemWidth(-1);
@@ -248,7 +303,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
 
             into[slot] = option;
             planned = null;
-            Revalidate(slot, ctx);
+            StartValidate(slot);
         }
     }
 
@@ -262,10 +317,10 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
             BodySizeMatch.Confidence.NoBodyMesh => (ps.RetargetNoBodyMesh, ProteusStyle.Warn),
             BodySizeMatch.Confidence.Exact      => (string.Format(ps.RetargetExactFmt, ranking.Best!.Value.Option.Label),
                                                     ProteusStyle.Ok),
-            BodySizeMatch.Confidence.Likely     => (string.Format(ps.RetargetLikelyFmt,
-                                                                  ranking.Best!.Value.HitRate), ProteusStyle.Ok),
-            BodySizeMatch.Confidence.Guess      => (string.Format(ps.RetargetGuessFmt,
-                                                                  ranking.Best!.Value.Rms * 1000f), ProteusStyle.Warn),
+            BodySizeMatch.Confidence.Likely     => (string.Format(ps.RetargetLikelyFmt, ranking.Best!.Value.HitRate),
+                                                    ProteusStyle.Ok),
+            BodySizeMatch.Confidence.Guess      => (string.Format(ps.RetargetGuessFmt, ranking.Best!.Value.Rms * 1000f),
+                                                    ProteusStyle.Warn),
             _                                   => (Ambiguous(ranking), ProteusStyle.Warn),
         };
 
@@ -293,7 +348,8 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
     private void DrawActions(in RetargetContext ctx)
     {
         var ps = Strings.Parts;
-        bool busy = detectTask != null || planTask != null || saveTask != null;
+        bool busy = detectTask != null || planTask != null || saveTask != null || validating.Count > 0;
+
         // The garment's own slot is required; the others take part only if both their ends are chosen.
         //
         // Only a MISSING SOURCE holds the button, never a missing target. The detector fills the source of every slot
@@ -303,7 +359,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
         string primary = Primary(ctx);
         var slots = Slots(ctx);
         bool sourceMissing = slots.Any(s => to.ContainsKey(s) && !from.ContainsKey(s));
-        bool refused = slots.Any(s => refusals.TryGetValue(s, out string? w) && w.Length > 0);
+        bool refused = Chosen(ctx).Any(s => refusals.ContainsKey(s));
         bool ready = from.ContainsKey(primary) && to.ContainsKey(primary) && !sourceMissing && !refused;
 
         if (detectTask != null) ImGui.TextUnformatted(ps.RetargetChecking);
@@ -313,54 +369,62 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
                 StartPlan(ctx);
 
         if (planTask != null) ImGui.TextUnformatted(ps.RetargetWorking);
+        if (planned is not { } done) return;
 
-        if (planned is { } done)
+        ImGui.TextWrapped(Describe(done.Report));
+        if (done.Report.HasOtherLods)
+            using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
+                ImGui.TextWrapped(ps.RetargetOtherLods);
+        if (done.Report.SnapRate is > 0f and < 0.8f)
+            using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
+                ImGui.TextWrapped(ps.RetargetLowSnap);
+
+        if (ImGui.Button(ps.RetargetClearPreview, FullWidth()))
         {
-            ImGui.TextWrapped(Describe(done.Report));
-            if (done.Report.HasOtherLods)
-                using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
-                    ImGui.TextWrapped(ps.RetargetOtherLods);
-            if (done.Report.SnapRate is > 0f and < 0.8f)
-                using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
-                    ImGui.TextWrapped(ps.RetargetLowSnap);
-
-            if (ImGui.Button(ps.RetargetClearPreview, FullWidth())) { ctx.EndPreview(); planned = null; }
-
-            ImGui.Spacing();
-            ImGui.TextUnformatted(ps.RetargetGroupName);
-            ImGui.SetNextItemWidth(-1);
-            ImGui.InputText("##retargetGroup", ref groupName, 128);
-
-            foreach (string clash in BodyRetargetWriter.ClashingGroups(ctx.ModRoot, ctx.GamePath, groupName))
-                using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
-                    ImGui.TextWrapped(string.Format(ps.RetargetClashFmt, clash));
-
-            using (ImRaii.Disabled(busy || groupName.Trim().Length == 0))
-                if (ImGui.Button(ps.RetargetSave, FullWidth()))
-                    StartSave(ctx);
+            ctx.EndPreview();
+            planned = null;
+            pendingPreview = null;
+            return;
         }
 
-        if (BodyRetargetWriter.ReadRecord(ctx.ModRoot) is { Options.Count: > 0 } record)
-        {
-            ImGui.Spacing();
-            ImGui.TextWrapped(string.Format(ps.RetargetSavedFmt, record.Options.Count, record.Group));
-            if (ImGui.Button(ps.RetargetOpenInPenumbra, FullWidth())) penumbra.OpenToMod(ctx.ModDir);
+        ImGui.Spacing();
+        ImGui.TextUnformatted(ps.RetargetGroupName);
+        ImGui.SetNextItemWidth(-1);
+        ImGui.InputText("##retargetGroup", ref groupName, 128);
 
-            bool armed = ImGui.GetIO().KeyCtrl && ImGui.GetIO().KeyShift;
-            using (ImRaii.Disabled(busy || !armed))
-                if (ImGui.Button(ps.RetargetUndo, FullWidth()))
-                    StartUndo(ctx, record);
-            if (!armed && ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushRevertArmTip);
-        }
+        foreach (string clash in BodyRetargetWriter.ClashingGroups(ctx.Redirects, ctx.GamePath, groupName))
+            using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
+                ImGui.TextWrapped(string.Format(ps.RetargetClashFmt, clash));
+
+        using (ImRaii.Disabled(busy || groupName.Trim().Length == 0))
+            if (ImGui.Button(ps.RetargetSave, FullWidth()))
+                StartSave(ctx);
+    }
+
+    /// <summary>What this mod already has saved, and the ways to see it in Penumbra or take the last one back.</summary>
+    private void DrawSaved(in RetargetContext ctx)
+    {
+        if (record is not { Options.Count: > 0 } saved) return;
+        var ps = Strings.Parts;
+
+        ImGui.Spacing();
+        ImGui.TextWrapped(string.Format(ps.RetargetSavedFmt, saved.Options.Count, saved.Group));
+        if (ImGui.Button(ps.RetargetOpenInPenumbra, FullWidth())) penumbra.OpenToMod(ctx.ModDir);
+
+        // Armed by a held modifier, like every other destructive button in the tab.
+        var io = ImGui.GetIO();
+        bool armed = io.KeyCtrl || io.KeyShift;
+        using (ImRaii.Disabled(saveTask != null || !armed))
+            if (ImGui.Button(ps.RetargetUndo, FullWidth()))
+                StartUndo(ctx, saved);
+        if (!armed && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(ps.BrushRevertArmTip);
     }
 
     private static string Describe(BodyRetarget.Report r)
     {
         var ps = Strings.Parts;
-        var lines = new List<string>
-        {
-            string.Format(ps.RetargetMovedFmt, r.WorstMove * 1000f),
-        };
+        var lines = new List<string> { string.Format(ps.RetargetMovedFmt, r.WorstMove * 1000f) };
         if (r.Snapped > 0) lines.Add(string.Format(ps.RetargetSnappedFmt, r.Snapped, r.SnapRate));
         if (r.Pushed > 0) lines.Add(string.Format(ps.RetargetPushedFmt, r.Pushed, r.WorstPush * 1000f));
         if (r.Missed > 0) lines.Add(string.Format(ps.RetargetMissedFmt, r.Missed));
@@ -373,12 +437,12 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
 
     private void StartDetect(in RetargetContext ctx)
     {
-        if (detectTask != null || catalog is not { IsBody: true }) return;
+        if (detectTask != null || catalog is not { IsBody: true } snapshot) return;
 
-        var snapshot = catalog;
         var garment = ctx.Garment;
         var slots = Slots(ctx);
         string rel = ctx.ModelRel;
+        detectedFor = rel;
 
         detectTask = Task.Run(() =>
         {
@@ -389,13 +453,42 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
         });
     }
 
+    /// <summary>
+    /// Check one slot's chosen pair as soon as it is chosen, so a refusal appears beside the two option names that
+    /// caused it rather than only when the user presses Preview.
+    /// </summary>
+    private void StartValidate(string slot)
+    {
+        refusals.Remove(slot);
+        if (catalog is not { } snapshot) return;
+        if (!from.TryGetValue(slot, out var source) || !to.TryGetValue(slot, out var target)) return;
+        if (string.Equals(source.Rel, target.Rel, StringComparison.OrdinalIgnoreCase)) return;
+
+        string pair = source.Rel + ">" + target.Rel;
+        string sourcePath = snapshot.PathOf(source), targetPath = snapshot.PathOf(target);
+        string name = SlotName(slot);
+
+        // A newer choice replaces an older check outright; the older one's answer is dropped in Consume by its tag.
+        validating[slot] = (pair, Task.Run(() =>
+        {
+            try
+            {
+                return Build(sourcePath, targetPath, name, out _, out _) ?? "";
+            }
+            catch (Exception ex)
+            {
+                return ex.Message;
+            }
+        }));
+    }
+
     private void StartPlan(in RetargetContext ctx)
     {
         if (planTask != null || catalog is not { } snapshot) return;
         ctx.FlushPending();
 
-        var slots = Chosen(ctx);
-        var chosen = slots.Select(s => (Slot: s, From: from[s], To: to[s])).ToList();
+        var chosen = Chosen(ctx).Select(s => (Slot: s, Source: snapshot.PathOf(from[s]), Target: snapshot.PathOf(to[s]),
+                                              Name: SlotName(s))).ToList();
         var garment = ctx.Garment;
         var bytes = ctx.GarmentBytes;
         string key = Key(ctx);
@@ -405,22 +498,12 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
             try
             {
                 var pairs = new List<BodyRetarget.SlotPair>();
-                foreach (var (slot, source, target) in chosen)
+                foreach (var (slot, sourcePath, targetPath, name) in chosen)
                 {
-                    var sourceBytes = File.ReadAllBytes(snapshot.PathOf(source));
-                    var targetBytes = File.ReadAllBytes(snapshot.PathOf(target));
-                    var sourceParts = ModelPartReader.Read(sourceBytes);
-                    var targetParts = ModelPartReader.Read(targetBytes);
-                    if (sourceParts == null || targetParts == null)
-                        return new PlanResult(key, null, string.Format(Strings.Parts.RetargetUnreadableFmt, slot));
-
-                    if (!IdentityCorrespondence.TryBuild(sourceParts, targetParts, SlotName(slot), out var built,
-                                                         out string refusal, Uv(sourceBytes), Uv(targetBytes)))
+                    if (Build(sourcePath, targetPath, name, out var built, out var target) is { } refusal)
                         return new PlanResult(key, null, refusal);
-
-                    pairs.Add(new BodyRetarget.SlotPair(slot, built!, targetParts));
+                    pairs.Add(new BodyRetarget.SlotPair(slot, built!, target!));
                 }
-
                 return new PlanResult(key, BodyRetarget.Plan(garment, bytes, pairs), "");
             }
             catch (Exception ex)
@@ -429,6 +512,28 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
                 return new PlanResult(key, null, ex.Message);
             }
         });
+    }
+
+    /// <summary>
+    /// Read a source and target body and prove they are two sizes of one mesh. Null on success; otherwise the reason,
+    /// worded for the user. Worker thread only.
+    /// </summary>
+    private static string? Build(string sourcePath, string targetPath, string name,
+                                 out IdentityCorrespondence? correspondence, out ModelParts? target)
+    {
+        correspondence = null;
+        target = null;
+
+        var sourceBytes = File.ReadAllBytes(sourcePath);
+        var targetBytes = File.ReadAllBytes(targetPath);
+        var source = ModelPartReader.Read(sourceBytes);
+        target = ModelPartReader.Read(targetBytes);
+        if (source == null || target == null) return string.Format(Strings.Parts.RetargetUnreadableFmt, name);
+
+        return IdentityCorrespondence.TryBuild(source, target, name, out correspondence, out string refusal,
+                                               Uv(sourceBytes), Uv(targetBytes))
+                   ? null
+                   : refusal;
     }
 
     private static float[] Uv(byte[] mdl)
@@ -446,27 +551,30 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
         string path = ctx.GamePath;
         byte[] model = done.Model;
         string body = bodyDir ?? "";
-        string labelFrom = string.Join(" + ", Chosen(ctx).Select(s => from[s].Label));
-        string labelTo = string.Join(" + ", Chosen(ctx).Select(s => to[s].Label));
+        var slots = Chosen(ctx);
+        string labelFrom = string.Join(" + ", slots.Select(s => from[s].Label));
+        string labelTo = string.Join(" + ", slots.Select(s => to[s].Label));
 
-        saveTask = Task.Run(() => BodyRetargetWriter.Save(root, group, option, path, model, body, labelFrom, labelTo));
+        saveTask = Task.Run(() => new SaveResult(
+            BodyRetargetWriter.Save(root, group, option, path, model, body, labelFrom, labelTo),
+            BodyRetargetWriter.ReadRecord(root)));
     }
 
-    private void StartUndo(in RetargetContext ctx, BodyRetargetWriter.Record record)
+    private void StartUndo(in RetargetContext ctx, BodyRetargetWriter.Record saved)
     {
         if (saveTask != null) return;
         string root = ctx.ModRoot;
-        string group = record.Group;
-        string option = record.Options[^1].Name;
-        saveTask = Task.Run(() => BodyRetargetWriter.Undo(root, group, option));
+        string group = saved.Group;
+        string option = saved.Options[^1].Name;
+        saveTask = Task.Run(() => new SaveResult(BodyRetargetWriter.Undo(root, group, option),
+                                                 BodyRetargetWriter.ReadRecord(root)));
     }
 
     /// <summary>The option's name: what the user will pick in Penumbra, so it says which body and which size.</summary>
     private string OptionName(in RetargetContext ctx)
     {
-        var slots = Chosen(ctx);
-        string body = bodyDir != null && Bodies().TryGetValue(bodyDir, out string? name) ? name : "Body";
-        return $"{body} — {string.Join(" + ", slots.Select(s => to[s].Label))}";
+        string body = bodyDir != null && bodies != null && bodies.TryGetValue(bodyDir, out string? name) ? name : "Body";
+        return $"{body} — {string.Join(" + ", Chosen(ctx).Select(s => to[s].Label))}";
     }
 
     private string Key(in RetargetContext ctx)
@@ -475,36 +583,53 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
     /// <summary>The framework-thread half: take up whatever finished, and do the parts only this thread may.</summary>
     private void Consume(in RetargetContext ctx)
     {
+        if (pendingPreview != null && ctx.PushPreview(pendingPreview)) pendingPreview = null;
+
+        if (bodiesTask is { IsCompleted: true } bt)
+        {
+            bodiesTask = null;
+            if (bt.IsCompletedSuccessfully) bodies = bt.Result;
+            else log.Warning(bt.Exception, "[Proteus] retarget: finding body mods failed");
+        }
+
         if (detectTask is { IsCompleted: true } dt)
         {
             detectTask = null;
-            if (Faulted(dt, ctx)) { }
-            else if (dt.Result.ModelRel == ctx.ModelRel)
-            {
+            if (!Faulted(dt, ctx) && dt.Result.ModelRel == ctx.ModelRel)
                 foreach (var (slot, ranking) in dt.Result.Rankings)
                 {
                     detected[slot] = ranking;
                     if (ranking.Preselect && ranking.Best is { } best && !from.ContainsKey(slot))
                     {
                         from[slot] = best.Option;
-                        Revalidate(slot, ctx);
+                        StartValidate(slot);
                     }
                 }
-            }
+        }
+
+        foreach (string slot in validating.Where(v => v.Value.Refusal.IsCompleted).Select(v => v.Key).ToList())
+        {
+            var (pair, task) = validating[slot];
+            validating.Remove(slot);
+
+            // Only the check for the pair that is chosen NOW counts; a slower check for an earlier choice is noise.
+            if (!from.TryGetValue(slot, out var source) || !to.TryGetValue(slot, out var target)) continue;
+            if (pair != source.Rel + ">" + target.Rel) continue;
+
+            string refusal = task.IsCompletedSuccessfully ? task.Result : task.Exception?.GetBaseException().Message ?? "";
+            if (refusal.Length > 0) refusals[slot] = refusal;
+            else refusals.Remove(slot);
         }
 
         if (planTask is { IsCompleted: true } pt)
         {
             planTask = null;
             if (Faulted(pt, ctx)) { }
-            else if (pt.Result.Error.Length > 0)
-            {
-                ctx.SetStatus(pt.Result.Error, true);
-            }
+            else if (pt.Result.Error.Length > 0) ctx.SetStatus(pt.Result.Error, true);
             else if (pt.Result.Planned is { } done && pt.Result.Key == Key(ctx))
             {
                 planned = done;
-                ctx.PushPreview(done.Model);
+                if (!ctx.PushPreview(done.Model)) pendingPreview = done.Model;
                 ctx.SetStatus(Describe(done.Report).Replace('\n', ' '), false);
             }
         }
@@ -514,12 +639,15 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
             saveTask = null;
             if (Faulted(st, ctx)) return;
 
-            var outcome = st.Result;
+            var (outcome, fresh) = st.Result;
+            record = fresh;
+            recordFor = ctx.ModRoot;
             ctx.SetStatus(outcome.Message, !outcome.Ok);
             if (!outcome.Ok) return;
 
             ctx.EndPreview();
             planned = null;
+            pendingPreview = null;
             ctx.AfterModChange();
         }
     }
@@ -530,39 +658,5 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
         log.Warning(task.Exception, "[Proteus] retarget: a background step failed");
         ctx.SetStatus(task.Exception?.GetBaseException().Message ?? "cancelled", true);
         return true;
-    }
-
-    /// <summary>
-    /// Check one slot's chosen pair now rather than at save time, so the refusal appears beside the two option names
-    /// that caused it. Reads two models, which is why it runs only when a choice changes.
-    /// </summary>
-    private void Revalidate(string slot, in RetargetContext ctx)
-    {
-        refusals.Remove(slot);
-        if (catalog is not { } snapshot) return;
-        if (!from.TryGetValue(slot, out var source) || !to.TryGetValue(slot, out var target)) return;
-        if (source.Rel == target.Rel) return;
-
-        try
-        {
-            var sourceBytes = File.ReadAllBytes(snapshot.PathOf(source));
-            var targetBytes = File.ReadAllBytes(snapshot.PathOf(target));
-            var sourceParts = ModelPartReader.Read(sourceBytes);
-            var targetParts = ModelPartReader.Read(targetBytes);
-            if (sourceParts == null || targetParts == null)
-            {
-                refusals[slot] = string.Format(Strings.Parts.RetargetUnreadableFmt, SlotName(slot));
-                return;
-            }
-
-            if (!IdentityCorrespondence.TryBuild(sourceParts, targetParts, SlotName(slot), out _, out string refusal,
-                                                 Uv(sourceBytes), Uv(targetBytes)))
-                refusals[slot] = refusal;
-        }
-        catch (Exception ex)
-        {
-            log.Warning(ex, "[Proteus] retarget: could not check {0}", slot);
-            refusals[slot] = ex.Message;
-        }
     }
 }

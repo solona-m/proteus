@@ -60,9 +60,15 @@ internal static class BodyRetargetWriter
     /// and the user should be told before they save rather than after.
     /// </summary>
     public static List<string> ClashingGroups(string modRoot, string gamePath, string ownGroup)
+        => ClashingGroups(PenumbraModMeta.ReadAllRedirects(modRoot), gamePath, ownGroup);
+
+    /// <inheritdoc cref="ClashingGroups(string, string, string)"/>
+    /// <remarks>Over redirects already read, so a caller drawing every frame never re-parses the manifest.</remarks>
+    public static List<string> ClashingGroups(IEnumerable<PenumbraModMeta.Redirect> redirects, string gamePath,
+                                              string ownGroup)
     {
         var clashes = new List<string>();
-        foreach (var r in PenumbraModMeta.ReadAllRedirects(modRoot))
+        foreach (var r in redirects)
         {
             if (!string.Equals(r.GamePath, gamePath, StringComparison.OrdinalIgnoreCase)) continue;
 

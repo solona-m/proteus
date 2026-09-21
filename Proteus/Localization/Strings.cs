@@ -2122,6 +2122,12 @@ public sealed class PartsStrings
     public readonly string RetargetNoModel = Loc.Localize("Parts.Retarget.NoModel",
         "Open a model above to refit it onto another body size.");
 
+    public readonly string RetargetFindingBodies = Loc.Localize("Parts.Retarget.FindingBodies",
+        "Looking through your mods for body mods…");
+
+    public readonly string RetargetCheckingPair = Loc.Localize("Parts.Retarget.CheckingPair",
+        "Checking these two are sizes of the same body…");
+
     /// <summary>Added under <see cref="BrushSizeTip"/>.</summary>
     public readonly string BrushSizeKeysTip = Loc.Localize("Parts.Brush.Size.Keys.Tip",
         "[ and ] change it; hold Shift for fine steps.");

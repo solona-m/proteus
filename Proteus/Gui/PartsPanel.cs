@@ -2043,7 +2043,7 @@ public sealed class PartsPanel
 
         retarget.Draw(new BodyRetargetPanel.RetargetContext(
             root, modDir, MeshVolumeService.Rel(models[modelIndex].File), models[modelIndex].GamePath,
-            modelLabels[modelIndex], parts, brushBase,
+            modelLabels[modelIndex], parts, brushBase, redirects,
             FlushPending: () => FlushPending(),
             PushPreview: PushRetargetPreview,
             EndPreview: () => EndLivePreview(refreshGame: true),
@@ -2062,18 +2062,21 @@ public sealed class PartsPanel
     /// The bytes are complete rather than an edit to tick towards, so this pushes once and does not set
     /// <see cref="previewDirty"/>: there is no stroke behind it to throttle.
     /// </summary>
-    private void PushRetargetPreview(byte[] bytes)
+    /// <returns>False only when the preview is busy and the push should be tried again next frame. A model that can
+    /// never be previewed here answers true, so the caller stops retrying.</returns>
+    private bool PushRetargetPreview(byte[] bytes)
     {
-        if (modelIndex < 0 || modelIndex >= models.Count) return;
-        if (preview.UnsupportedFor(TargetIsCustomizePart) || TargetIsContent) return;
+        if (modelIndex < 0 || modelIndex >= models.Count) return true;
+        if (preview.UnsupportedFor(TargetIsCustomizePart) || TargetIsContent) return true;
 
         var file = models[modelIndex].File.Replace('\\', '/');
         var gamePaths = redirects
             .Where(r => string.Equals(r.File.Replace('\\', '/'), file, StringComparison.OrdinalIgnoreCase))
             .Select(r => r.GamePath)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (gamePaths.Count == 0) return true;
 
-        preview.Push(bytes, gamePaths, TargetIsCustomizePart);
+        return preview.Push(bytes, gamePaths, TargetIsCustomizePart);
     }
 
     // ── staging ─────────────────────────────────────────────────────────────

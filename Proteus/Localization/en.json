@@ -3382,5 +3382,13 @@
   "Parts.Tool.Retarget.Tip": {
     "message": "Refit this model onto a different size of the body it was made for.\nThe body\u0027s own change in shape is carried onto the garment, so it keeps\nthe way it sits. Saved as a new option in this mod, leaving the author\u0027s\nown files alone.",
     "description": ""
+  },
+  "Parts.Retarget.CheckingPair": {
+    "message": "Checking these two are sizes of the same body\u2026",
+    "description": ""
+  },
+  "Parts.Retarget.FindingBodies": {
+    "message": "Looking through your mods for body mods\u2026",
+    "description": ""
   }
 }
