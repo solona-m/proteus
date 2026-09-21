@@ -2134,6 +2134,9 @@ public sealed class PartsStrings
     public readonly string RetargetUnreadableFmt = Loc.Localize("Parts.Retarget.Unreadable.Fmt",
         "The {0} body model could not be read.");
 
+    /// <summary>Shown in a dropdown when its search box matches nothing.</summary>
+    public readonly string NoMatches = Loc.Localize("Parts.NoMatches", "Nothing matches.");
+
     public readonly string RetargetNoModel = Loc.Localize("Parts.Retarget.NoModel",
         "Open a model above to refit it onto another body size.");
 

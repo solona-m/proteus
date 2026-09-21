@@ -31,6 +31,7 @@ public sealed class PartsPanel
 
     private Dictionary<string, string>? mods;
     private string modFilter = string.Empty;
+    private string modelFilter = string.Empty;
 
     private string? modDir;
 
@@ -870,8 +871,13 @@ public sealed class PartsPanel
                                         .Select(w => w.Rel)
                                         .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+            // A mod with a size group lists a model per size, and a mod with a size group per body lists dozens.
+            ComboSearch.Box("##partsModel", ref modelFilter);
+            bool any = false;
             for (int i = 0; i < models.Count; i++)
             {
+                if (!ComboSearch.Matches(modelFilter, modelLabels[i] + " " + models[i].File)) continue;
+                any = true;
                 // Green for the file the character is drawing right now.
                 bool worn = wornModels.Contains(models[i].File.Replace('\\', '/'));
                 bool picked;
@@ -879,6 +885,7 @@ public sealed class PartsPanel
                     picked = ImGui.Selectable(modelLabels[i] + "##m" + i, i == modelIndex);
                 if (picked && i != modelIndex) SelectModel(i);
             }
+            if (!any) ImGui.TextDisabled(Strings.Parts.NoMatches);
             ImGui.EndCombo();
         }
     }

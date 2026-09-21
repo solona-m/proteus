@@ -170,17 +170,22 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
             return;
         }
 
-        ImGui.SetNextItemWidth(-1);
-        ImGui.InputTextWithHint("##retargetBodyFilter", Strings.Export.FilterHint, ref bodyFilter, 64);
+        ComboSearch.Box("##retargetBody", ref bodyFilter);
+        bool any = false;
         foreach (var (dir, label) in bodies.OrderBy(p => p.Value, StringComparer.OrdinalIgnoreCase))
         {
-            if (bodyFilter.Length > 0 && label.IndexOf(bodyFilter, StringComparison.OrdinalIgnoreCase) < 0) continue;
+            // Mod names match anywhere, as the Studio's own mod picker does: people type fragments of a name ("lithe").
+            // Word starts are for the size lists, where a single letter has to mean a size.
+            if (bodyFilter.Length > 0 && !label.Contains(bodyFilter, StringComparison.OrdinalIgnoreCase)
+                && !dir.Contains(bodyFilter, StringComparison.OrdinalIgnoreCase)) continue;
+            any = true;
             if (!ImGui.Selectable(label, dir == bodyDir)) continue;
 
             bodyDir = dir;
             catalog = BodyRoot(dir) is { } root ? BodySizeCatalog.Read(root) : null;
             Clear();
         }
+        if (!any) ImGui.TextDisabled(ps.NoMatches);
     }
 
     /// <summary>
@@ -287,12 +292,19 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
         ImGui.SetNextItemWidth(-1);
 
         string current = into.TryGetValue(slot, out var chosen) ? chosen.Label : Strings.Parts.RetargetChoose;
-        using var combo = ImRaii.Combo(id, current);
+        using var combo = ImRaii.Combo(id, current, ImGuiComboFlags.HeightLarge);
         if (!combo) return;
 
+        string filter = searches.GetValueOrDefault(id, "");
+        ComboSearch.Box(id, ref filter);
+        searches[id] = filter;
+
         string? group = null;
+        bool any = false;
         foreach (var option in options)
         {
+            if (!ComboSearch.Matches(filter, option.FullLabel)) continue;
+            any = true;
             if (option.Group != group)
             {
                 group = option.Group;
@@ -305,8 +317,11 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
             planned = null;
             StartValidate(slot);
         }
+        if (!any) ImGui.TextDisabled(Strings.Parts.NoMatches);
     }
 
+    /// <summary>What has been typed into each dropdown's search box, by the dropdown's id.</summary>
+    private readonly Dictionary<string, string> searches = new(StringComparer.Ordinal);
     private void DrawConfidence(string slot)
     {
         if (!detected.TryGetValue(slot, out var ranking)) return;
