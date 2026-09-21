@@ -97,8 +97,8 @@ public partial class CompositorService
                     diffuseOv = null;
                     normalOv = null;
 
-                    // Coverage mask: the diffuse overlay's alpha defines where this overlay applies; with no diffuse it is synthesized
-                    // from the normal's blue channel. Every channel is gated by this same mask.
+                    // Coverage mask: the diffuse overlay's alpha defines where this overlay applies; with no diffuse, the normal's
+                    // alpha. Every channel is gated by this same mask.
                     covSrc = null;  // coverage source at (covW × covH)
                     covW = 0;
                     covH = 0;
@@ -181,7 +181,8 @@ public partial class CompositorService
 
                         if (normalOv != null && covSrc == null)
                         {
-                            // No diffuse overlay — synthesize coverage from normal blue channel.
+                            // No diffuse overlay — coverage is the normal's own alpha. Not its blue: on skin.shpk that is skin-colour
+                            // influence, and a normal exported the usual way is blue 255 everywhere.
                             var synth = new byte[normalOv.Length];
                             var nOv = normalOv;
                             ParallelPixels(0, nOv.Length, 4, (fromSi, toSi) =>
@@ -189,7 +190,7 @@ public partial class CompositorService
                                 for (int si = fromSi; si < toSi; si += 4)
                                 {
                                     synth[si] = synth[si + 1] = synth[si + 2] = 255;
-                                    synth[si + 3] = nOv[si + 2]; // blue → opacity
+                                    synth[si + 3] = nOv[si + 3];
                                 }
                             });
                             // Opacity (indexed and flat) deferred — CovAt applies it after the Masks-group mask.
@@ -318,7 +319,7 @@ public partial class CompositorService
                         if (!string.Equals(e2.ModDirectory, entry.ModDirectory,
                                            StringComparison.OrdinalIgnoreCase)) continue;
                         if (!Supplies(o2.Descriptor, ch)) continue;
-                        if (!AnyCoverage(material.CoverageOf(e2, o2, tw, th))) continue;
+                        if (!AnyCoverage(material.ClaimCoverageOf(e2, o2, tw, th, ch))) continue;
                         above.Add(o2.OptionGroup != null && o2.Option != null
                             ? $"{o2.OptionGroup}/{o2.Option}"
                             : o2.Option ?? o2.OptionGroup ?? "an overlay with no option group");
@@ -499,10 +500,7 @@ public partial class CompositorService
                     // resolution differing from the normal's does not matter.
                     string why;
                     if (!AnyCoverage(covSrc))
-                        why = desc.Diffuse == null
-                            // A normal-only overlay's coverage is synthesized from the normal's blue channel (LoadNormalArt).
-                            ? "its normal's blue channel is black, and that is what a normal-only overlay's coverage is made of"
-                            : "its own art has no opaque texel";
+                        why = "its own art has no opaque texel";
                     else
                     {
                         var above = CoveredAboveBy(OverlayChannel.Normal, material.wN, material.hN);
