@@ -81,49 +81,76 @@ internal static class BodyRetargetWriter
         return clashes;
     }
 
+    /// <summary>One refitted size to save: the option it becomes, its model, and the size it was refitted onto.</summary>
+    internal readonly record struct Refit(string Option, byte[] Model, string To);
+
     /// <summary>
     /// Write <paramref name="model"/> into the mod as <paramref name="optionName"/> of <paramref name="groupName"/>,
     /// adding the group if it is not there and replacing the option if it is.
     /// </summary>
     public static Outcome Save(string modRoot, string groupName, string optionName, string gamePath, byte[] model,
                                string bodyMod, string from, string to)
+        => Save(modRoot, groupName, gamePath, bodyMod, from, [new Refit(optionName, model, to)]);
+
+    /// <summary>
+    /// Write every refit into the mod as options of <paramref name="groupName"/> in one manifest write, adding the
+    /// group if it is not there and replacing any option of the same name.
+    /// <para/>
+    /// One write rather than one per size: Penumbra reloads the mod each time its manifest changes, and a half-saved
+    /// batch — three sizes of five, then a failure — is harder to reason about than all or nothing.
+    /// </summary>
+    public static Outcome Save(string modRoot, string groupName, string gamePath, string bodyMod, string from,
+                               IReadOnlyList<Refit> refits)
     {
+        string names = string.Join(", ", refits.Select(r => r.Option));
         lock (WriteLock)
         {
             try
             {
-                string rel = Path.Combine(Subfolder, Sanitise(optionName), TailOf(gamePath));
-                string full = Path.Combine(modRoot, rel);
-                Directory.CreateDirectory(Path.GetDirectoryName(full)!);
-                PenumbraModMeta.AtomicWrite(full, model);
+                if (refits.Count == 0) return new Outcome(false, groupName, "", "Nothing to save.");
 
                 var options = PenumbraModMeta.TryReadFileOptions(modRoot, groupName) ?? [];
+                var written = new List<(Refit Refit, string Rel)>();
+                foreach (var refit in refits)
+                {
+                    string rel = Path.Combine(Subfolder, Sanitise(refit.Option), TailOf(gamePath));
+                    string full = Path.Combine(modRoot, rel);
+                    Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+                    PenumbraModMeta.AtomicWrite(full, refit.Model);
+                    written.Add((refit, rel));
+                }
 
-                // Rebuilt from what is there, so saving a second size grows the group instead of replacing it, and
+                // Rebuilt from what is there, so saving more sizes grows the group instead of replacing it, and
                 // saving the same size twice replaces just that option.
-                var kept = options.Where(o => !string.Equals(o.Name, optionName, StringComparison.OrdinalIgnoreCase)
+                bool Saving(string name) => refits.Any(r => string.Equals(r.Option, name,
+                                                                         StringComparison.OrdinalIgnoreCase));
+                var kept = options.Where(o => !Saving(o.Name)
                                            && !string.Equals(o.Name, OriginalOption, StringComparison.OrdinalIgnoreCase))
                                   .ToList();
-
-                var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-                {
-                    [gamePath] = rel.Replace('\\', '/'),
-                };
-
-                // Carry over any other game path an earlier save of this same option wrote, so retargeting a mod's
-                // _top and then its _dwn leaves one option that covers both.
-                var existing = options.FirstOrDefault(o => string.Equals(o.Name, optionName,
-                                                                         StringComparison.OrdinalIgnoreCase));
-                if (existing.Files != null)
-                    foreach (var (path, at) in existing.Files)
-                        if (!files.ContainsKey(path)) files[path] = at;
 
                 var final = new List<PenumbraModMeta.FileOption>
                 {
                     new(OriginalOption, new Dictionary<string, string>()),
                 };
                 final.AddRange(kept);
-                final.Add(new PenumbraModMeta.FileOption(optionName, files));
+
+                foreach (var (refit, rel) in written)
+                {
+                    var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        [gamePath] = rel.Replace('\\', '/'),
+                    };
+
+                    // Carry over any other game path an earlier save of this same option wrote, so retargeting a
+                    // mod's _top and then its _dwn leaves one option that covers both.
+                    var existing = options.FirstOrDefault(o => string.Equals(o.Name, refit.Option,
+                                                                             StringComparison.OrdinalIgnoreCase));
+                    if (existing.Files != null)
+                        foreach (var (path, at) in existing.Files)
+                            if (!files.ContainsKey(path)) files[path] = at;
+
+                    final.Add(new PenumbraModMeta.FileOption(refit.Option, files));
+                }
 
                 // A priority above every other group, which is what decides a game path two groups both claim. The
                 // POSITION is left alone: see Position.
@@ -131,22 +158,26 @@ internal static class BodyRetargetWriter
                 PenumbraModMeta.WriteFileOptionGroup(modRoot, Position(modRoot, groupName), groupName, priority, final,
                                                      final.Count - 1);
 
-                WriteRecord(modRoot, groupName, optionName, gamePath, rel, bodyMod, from, to);
+                foreach (var (refit, rel) in written)
+                    WriteRecord(modRoot, groupName, refit.Option, gamePath, rel, bodyMod, from, refit.To);
 
-                return new Outcome(true, groupName, optionName,
-                                   $"Saved as \"{optionName}\" in the \"{groupName}\" group. " +
+                string saved = refits.Count == 1
+                                   ? $"Saved as \"{refits[0].Option}\" in the \"{groupName}\" group. "
+                                   : $"Saved {refits.Count} sizes in the \"{groupName}\" group. ";
+                return new Outcome(true, groupName, names,
+                                   saved +
                                    "Penumbra only picks a default for a mod it is adding for the first time, so " +
                                    "choose the option there to see it.");
             }
             catch (PenumbraModMeta.LegacyFolderException)
             {
-                return new Outcome(false, groupName, optionName,
+                return new Outcome(false, groupName, names,
                                    "This mod is still in Penumbra's old folder format, which Proteus will not edit. " +
                                    "Enable it in Penumbra once so Penumbra upgrades it, then come back.");
             }
             catch (Exception e)
             {
-                return new Outcome(false, groupName, optionName, $"Could not save: {e.Message}");
+                return new Outcome(false, groupName, names, $"Could not save: {e.Message}");
             }
         }
     }

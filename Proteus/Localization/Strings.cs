@@ -2032,6 +2032,19 @@ public sealed class PartsStrings
 
     public readonly string RetargetTo = Loc.Localize("Parts.Retarget.To", "Refit onto");
 
+    public readonly string RetargetToMany = Loc.Localize("Parts.Retarget.ToMany",
+        "Refit onto (tick as many sizes as you like)");
+
+    /// <summary>{0} is which size is being refitted, {1} how many there are.</summary>
+    public readonly string RetargetWorkingFmt = Loc.Localize("Parts.Retarget.Working.Fmt", "Refitting {0} of {1}…");
+
+    public readonly string RetargetShowing = Loc.Localize("Parts.Retarget.Showing", "Showing on the character");
+
+    /// <summary>{0} is how many sizes will be saved.</summary>
+    public readonly string RetargetSaveManyFmt = Loc.Localize("Parts.Retarget.SaveMany.Fmt",
+                                                              "Save {0} sizes as new options")
+                                               + "###partsRetargetSave";
+
     public readonly string RetargetChoose = Loc.Localize("Parts.Retarget.Choose", "Choose…");
 
     public readonly string RetargetChest = Loc.Localize("Parts.Retarget.Chest", "Chest");

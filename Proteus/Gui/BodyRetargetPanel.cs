@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility.Raii;
@@ -49,11 +50,18 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
     private string bodyFilter = "";
     private BodySizeCatalog? catalog;
 
-    /// <summary>Per slot: the option the garment was built for, and the one to refit it onto.</summary>
+    /// <summary>Per slot: the option the garment was built for.</summary>
     private readonly Dictionary<string, BodyOption> from = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, BodyOption> to = new(StringComparer.Ordinal);
 
-    /// <summary>Per slot, why the chosen pair cannot be used. Absent when it can, or has not been checked.</summary>
+    /// <summary>
+    /// Per slot: the options to refit it onto, in the order they were ticked. Several for the garment's own slot — one
+    /// refit, and one saved option, per size — and at most one for the others, which ride along with every one of
+    /// them. Several there too would mean pairing chest sizes with leg sizes, and nothing says which goes with which.
+    /// </summary>
+    private readonly Dictionary<string, List<BodyOption>> to = new(StringComparer.Ordinal);
+
+    /// <summary>Per slot and target (<see cref="PairKey"/>), why that pair cannot be used. Absent when it can, or has
+    /// not been checked.</summary>
     private readonly Dictionary<string, string> refusals = new(StringComparer.Ordinal);
 
     /// <summary>Per slot, what the detector made of the garment.</summary>
@@ -75,7 +83,14 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
     /// <summary>The model the worn body was last looked up for, so it is looked up once per model, not per frame.</summary>
     private string? wornFor;
 
-    private BodyRetarget.Planned? planned;
+    /// <summary>One refit per target of the garment's own slot, in the order the targets were ticked.</summary>
+    private List<(BodyOption To, BodyRetarget.Planned Planned)>? planned;
+
+    /// <summary>Which of <see cref="planned"/> is on the character.</summary>
+    private int showing;
+
+    /// <summary>How far the running plan has got, for the progress line. Written by the worker.</summary>
+    private int planDone, planTotal;
 
     /// <summary>
     /// What <see cref="planned"/> was made from. Ticking or unticking a part changes it, and a plan made with other
@@ -93,11 +108,12 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
     private Task<PlanResult>? planTask;
     private Task<SaveResult>? saveTask;
 
-    /// <summary>Pair checks in flight, per slot, each tagged with the pair it was started for.</summary>
-    private readonly Dictionary<string, (string Pair, Task<string> Refusal)> validating = new(StringComparer.Ordinal);
+    /// <summary>Pair checks in flight, per <see cref="PairKey"/>, each tagged with the source it was started for.</summary>
+    private readonly Dictionary<string, (string Source, Task<string> Refusal)> validating = new(StringComparer.Ordinal);
 
     private sealed record DetectResult(string ModelRel, Dictionary<string, BodySizeMatch.Ranking> Rankings);
-    private sealed record PlanResult(string Key, BodyRetarget.Planned? Planned, string Error);
+    private sealed record PlanResult(string Key, List<(BodyOption To, BodyRetarget.Planned Planned)>? Planned,
+                                     string Error);
     private sealed record SaveResult(BodyRetargetWriter.Outcome Outcome, BodyRetargetWriter.Record? Record);
 
     // ── caches for things that would otherwise be read every frame ──────────
@@ -120,6 +136,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
         detectedFor = null;
         wornFor = null;
         planned = null;
+        showing = 0;
         pendingPreview = null;
         groupNameFor = null;
         recordFor = null;
@@ -303,7 +320,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
         foreach (string slot in Slots(ctx))
         {
             if (to.ContainsKey(slot) || WornOption(snapshot, slot) is not { } worn) continue;
-            to[slot] = worn;
+            to[slot] = [worn];
             StartValidate(slot);
         }
     }
@@ -354,7 +371,14 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
 
     /// <summary>The slots actually taking part: the ones with both ends chosen.</summary>
     private List<string> Chosen(in RetargetContext ctx)
-        => Slots(ctx).Where(s => from.ContainsKey(s) && to.ContainsKey(s)).ToList();
+        => Slots(ctx).Where(s => from.ContainsKey(s) && Targets(s).Count > 0).ToList();
+
+    /// <summary>A slot's targets; empty when none is ticked.</summary>
+    private IReadOnlyList<BodyOption> Targets(string slot)
+        => to.TryGetValue(slot, out var list) ? list : [];
+
+    /// <summary>What a pair check and its refusal are filed under: a slot and one of its targets.</summary>
+    private static string PairKey(string slot, BodyOption target) => slot + ">" + target.Rel;
 
     /// <summary>How many different models a slot offers — several options can point at one file.</summary>
     private int Distinct(string slot)
@@ -374,33 +398,65 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
                                   : string.Format(ps.RetargetSlotFmt, SlotName(slot), Distinct(slot)));
         if (optional && ImGui.IsItemHovered()) ImGui.SetTooltip(ps.RetargetSlotOptionalTip);
 
-        DrawOptionCombo($"##retargetFrom{slot}", ps.RetargetFrom, options, from, slot);
+        from.TryGetValue(slot, out var source);
+        if (DrawOptionCombo($"##retargetFrom{slot}", ps.RetargetFrom, options,
+                            source == null ? [] : [source], many: false) is { } pickedFrom)
+        {
+            from[slot] = pickedFrom;
+            DropPlan(ctx);
+            StartValidate(slot);
+        }
         DrawConfidence(slot);
-        DrawOptionCombo($"##retargetTo{slot}", ps.RetargetTo, options, to, slot);
 
-        if (validating.ContainsKey(slot))
+        bool many = !optional;
+        var targets = Targets(slot);
+        if (DrawOptionCombo($"##retargetTo{slot}", many ? ps.RetargetToMany : ps.RetargetTo, options, targets,
+                            many) is { } pickedTo)
+        {
+            // Clicking a ticked size unticks it, in either list — which is also the only way to take an optional
+            // slot back out once something has been chosen for it.
+            var list = to.TryGetValue(slot, out var had) ? had : to[slot] = [];
+            if (list.Remove(pickedTo)) { }
+            else if (many) list.Add(pickedTo);
+            else { list.Clear(); list.Add(pickedTo); }
+            if (list.Count == 0) to.Remove(slot);
+            DropPlan(ctx);
+            StartValidate(slot);
+        }
+
+        if (targets.Any(t => validating.ContainsKey(PairKey(slot, t))))
             ImGui.TextDisabled(ps.RetargetCheckingPair);
-        else if (refusals.TryGetValue(slot, out string? why))
+        foreach (var target in targets)
+        {
+            if (!refusals.TryGetValue(PairKey(slot, target), out string? why)) continue;
             using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
-                ImGui.TextWrapped(why);
+                ImGui.TextWrapped(targets.Count > 1 ? $"{target.Label}: {why}" : why);
+        }
 
         ImGui.Spacing();
     }
 
-    private void DrawOptionCombo(string id, string label, IReadOnlyList<BodyOption> options,
-                                 Dictionary<string, BodyOption> into, string slot)
+    /// <summary>
+    /// A dropdown of a slot's options. Returns the option clicked this frame, if any; the caller decides what a click
+    /// means. With <paramref name="many"/> the list stays open, so several sizes can be ticked in one go.
+    /// </summary>
+    private BodyOption? DrawOptionCombo(string id, string label, IReadOnlyList<BodyOption> options,
+                                        IReadOnlyList<BodyOption> chosen, bool many)
     {
         ImGui.TextUnformatted(label);
         ImGui.SetNextItemWidth(-1);
 
-        string current = into.TryGetValue(slot, out var chosen) ? chosen.Label : Strings.Parts.RetargetChoose;
+        string current = chosen.Count == 0 ? Strings.Parts.RetargetChoose
+                       : string.Join(", ", chosen.Select(o => o.Label));
         using var combo = ImRaii.Combo(id, current, ImGuiComboFlags.HeightLarge);
-        if (!combo) return;
+        if (!combo) return null;
 
         string filter = searches.GetValueOrDefault(id, "");
         ComboSearch.Box(id, ref filter);
         searches[id] = filter;
 
+        var flags = many ? ImGuiSelectableFlags.DontClosePopups : ImGuiSelectableFlags.None;
+        BodyOption? picked = null;
         string? group = null;
         bool any = false;
         foreach (var option in options)
@@ -413,13 +469,19 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
                 ImGui.Separator();
                 ImGui.TextDisabled(group);
             }
-            if (!ImGui.Selectable(option.Label + "##" + option.Rel, chosen == option)) continue;
-
-            into[slot] = option;
-            planned = null;
-            StartValidate(slot);
+            if (ImGui.Selectable(option.Label + "##" + option.Rel, chosen.Contains(option), flags)) picked = option;
         }
         if (!any) ImGui.TextDisabled(Strings.Parts.NoMatches);
+        return picked;
+    }
+
+    /// <summary>The choices changed: a refit made from the old ones must not be shown or saved.</summary>
+    private void DropPlan(in RetargetContext ctx)
+    {
+        if (planned == null) return;
+        planned = null;
+        pendingPreview = null;
+        ctx.EndPreview();
     }
 
     /// <summary>What has been typed into each dropdown's search box, by the dropdown's id.</summary>
@@ -484,9 +546,9 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
         // disabled. "Target but no source" is the genuinely incomplete case.
         string primary = Primary(ctx);
         var slots = Slots(ctx);
-        bool sourceMissing = slots.Any(s => to.ContainsKey(s) && !from.ContainsKey(s));
-        bool refused = Chosen(ctx).Any(s => refusals.ContainsKey(s));
-        bool ready = from.ContainsKey(primary) && to.ContainsKey(primary) && !sourceMissing && !refused;
+        bool sourceMissing = slots.Any(s => Targets(s).Count > 0 && !from.ContainsKey(s));
+        bool refused = Chosen(ctx).Any(s => Targets(s).Any(t => refusals.ContainsKey(PairKey(s, t))));
+        bool ready = from.ContainsKey(primary) && Targets(primary).Count > 0 && !sourceMissing && !refused;
 
         if (detectTask != null) ImGui.TextUnformatted(ps.RetargetChecking);
 
@@ -497,9 +559,29 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
             if (ImGui.Button(ps.RetargetPreview, FullWidth()))
                 StartPlan(ctx);
 
-        if (planTask != null) ImGui.TextUnformatted(ps.RetargetWorking);
-        if (planned is not { } done) return;
+        if (planTask != null)
+            ImGui.TextUnformatted(Volatile.Read(ref planTotal) > 1
+                                      ? string.Format(ps.RetargetWorkingFmt, Volatile.Read(ref planDone) + 1,
+                                                      Volatile.Read(ref planTotal))
+                                      : ps.RetargetWorking);
+        if (planned is not { Count: > 0 } all) return;
 
+        // Several sizes refitted: one is on the character at a time, and choosing another puts it there.
+        if (all.Count > 1)
+        {
+            ImGui.TextUnformatted(ps.RetargetShowing);
+            ImGui.SetNextItemWidth(-1);
+            using (var combo = ImRaii.Combo("##retargetShowing", all[showing].To.Label))
+                if (combo)
+                    for (int i = 0; i < all.Count; i++)
+                        if (ImGui.Selectable(all[i].To.Label + "##show" + i, i == showing) && i != showing)
+                        {
+                            showing = i;
+                            if (!ctx.PushPreview(all[i].Planned.Model)) pendingPreview = all[i].Planned.Model;
+                        }
+        }
+
+        var done = all[showing].Planned;
         ImGui.TextWrapped(Describe(done.Report));
         if (done.Report.HasOtherLods)
             using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
@@ -526,7 +608,8 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
                 ImGui.TextWrapped(string.Format(ps.RetargetClashFmt, clash));
 
         using (ImRaii.Disabled(busy || groupName.Trim().Length == 0))
-            if (ImGui.Button(ps.RetargetSave, FullWidth()))
+            if (ImGui.Button(all.Count > 1 ? string.Format(ps.RetargetSaveManyFmt, all.Count) : ps.RetargetSave,
+                             FullWidth()))
                 StartSave(ctx);
     }
 
@@ -590,27 +673,34 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
     /// </summary>
     private void StartValidate(string slot)
     {
-        refusals.Remove(slot);
-        if (catalog is not { } snapshot) return;
-        if (!from.TryGetValue(slot, out var source) || !to.TryGetValue(slot, out var target)) return;
-        if (string.Equals(source.Rel, target.Rel, StringComparison.OrdinalIgnoreCase)) return;
+        // Every earlier answer for this slot goes, including those for sizes no longer ticked.
+        foreach (string key in refusals.Keys.Where(k => k.StartsWith(slot + ">", StringComparison.Ordinal)).ToList())
+            refusals.Remove(key);
+        foreach (string key in validating.Keys.Where(k => k.StartsWith(slot + ">", StringComparison.Ordinal)).ToList())
+            validating.Remove(key);
 
-        string pair = source.Rel + ">" + target.Rel;
-        string sourcePath = snapshot.PathOf(source), targetPath = snapshot.PathOf(target);
+        if (catalog is not { } snapshot || !from.TryGetValue(slot, out var source)) return;
+        string sourcePath = snapshot.PathOf(source);
         string name = SlotName(slot);
 
-        // A newer choice replaces an older check outright; the older one's answer is dropped in Consume by its tag.
-        validating[slot] = (pair, Task.Run(() =>
+        foreach (var target in Targets(slot))
         {
-            try
+            if (string.Equals(source.Rel, target.Rel, StringComparison.OrdinalIgnoreCase)) continue;
+            string targetPath = snapshot.PathOf(target);
+
+            // A newer choice replaces an older check outright; the older one's answer is dropped in Consume by its tag.
+            validating[PairKey(slot, target)] = (source.Rel, Task.Run(() =>
             {
-                return Build(sourcePath, targetPath, name, out _, out _) ?? "";
-            }
-            catch (Exception ex)
-            {
-                return ex.Message;
-            }
-        }));
+                try
+                {
+                    return Build(sourcePath, targetPath, name, out _, out _) ?? "";
+                }
+                catch (Exception ex)
+                {
+                    return ex.Message;
+                }
+            }));
+        }
     }
 
     private void StartPlan(in RetargetContext ctx)
@@ -619,24 +709,32 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
         ctx.FlushPending();
 
         string garmentSlot = Primary(ctx);
-        var chosen = Chosen(ctx).Select(s => (Slot: s, Source: snapshot.PathOf(from[s]), Target: snapshot.PathOf(to[s]),
-                                              Name: SlotName(s))).ToList();
+        string garmentSource = snapshot.PathOf(from[garmentSlot]);
+        var targets = Targets(garmentSlot).Select(t => (Option: t, Path: snapshot.PathOf(t))).ToList();
+        var others = Chosen(ctx).Where(s => s != garmentSlot)
+                                .Select(s => (Slot: s, Source: snapshot.PathOf(from[s]),
+                                              Target: snapshot.PathOf(Targets(s)[0]), Name: SlotName(s)))
+                                .ToList();
+        string garmentName = SlotName(garmentSlot);
         var garment = ctx.Garment;
         var bytes = ctx.GarmentBytes;
         var heldLabels = new HashSet<string>(ctx.Held, StringComparer.Ordinal);
         bool layOnBody = replaceSkin;
         string key = Key(ctx);
+        planDone = 0;
+        planTotal = targets.Count;
 
         planTask = Task.Run(() =>
         {
             try
             {
-                var pairs = new List<BodyRetarget.SlotPair>();
-                foreach (var (slot, sourcePath, targetPath, name) in chosen)
+                // The other slots are the same pair for every size, so each is built once and shared.
+                var shared = new List<BodyRetarget.SlotPair>();
+                foreach (var (slot, sourcePath, targetPath, name) in others)
                 {
                     if (Build(sourcePath, targetPath, name, out var built, out var target) is { } refusal)
                         return new PlanResult(key, null, refusal);
-                    pairs.Add(new BodyRetarget.SlotPair(slot, built!, target!));
+                    shared.Add(new BodyRetarget.SlotPair(slot, built!, target!));
                 }
 
                 // A submesh's triangles already include every island of it, so the labels alone are enough — the
@@ -646,8 +744,19 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
                     if (heldLabels.Contains(part.Label))
                         held.UnionWith(part.Triangles);
 
-                return new PlanResult(key, BodyRetarget.Plan(garment, bytes, pairs, garmentSlot, held: held,
-                                                             replaceSkin: layOnBody), "");
+                var results = new List<(BodyOption, BodyRetarget.Planned)>();
+                foreach (var (option, targetPath) in targets)
+                {
+                    if (Build(garmentSource, targetPath, garmentName, out var built, out var target) is { } refusal)
+                        return new PlanResult(key, null, targets.Count > 1 ? $"{option.Label}: {refusal}" : refusal);
+
+                    var pairs = new List<BodyRetarget.SlotPair> { new(garmentSlot, built!, target!) };
+                    pairs.AddRange(shared);
+                    results.Add((option, BodyRetarget.Plan(garment, bytes, pairs, garmentSlot, held: held,
+                                                           replaceSkin: layOnBody)));
+                    Interlocked.Increment(ref planDone);
+                }
+                return new PlanResult(key, results, "");
             }
             catch (Exception ex)
             {
@@ -687,20 +796,26 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
 
     private void StartSave(in RetargetContext ctx)
     {
-        if (saveTask != null || planned is not { } done) return;
+        if (saveTask != null || planned is not { Count: > 0 } all) return;
 
         string root = ctx.ModRoot;
         string group = groupName.Trim();
-        string option = OptionName(ctx);
         string path = ctx.GamePath;
-        byte[] model = done.Model;
         string body = bodyDir ?? "";
         var slots = Chosen(ctx);
         string labelFrom = string.Join(" + ", slots.Select(s => from[s].Label));
-        string labelTo = string.Join(" + ", slots.Select(s => to[s].Label));
+        var refits = new List<BodyRetargetWriter.Refit>();
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (target, plan) in all)
+        {
+            // Two sizes can carry the same label under different headings; each still needs an option of its own.
+            string option = OptionName(ctx, target);
+            for (int n = 2; !used.Add(option); n++) option = $"{OptionName(ctx, target)} ({n})";
+            refits.Add(new BodyRetargetWriter.Refit(option, plan.Model, ToLabel(ctx, target)));
+        }
 
         saveTask = Task.Run(() => new SaveResult(
-            BodyRetargetWriter.Save(root, group, option, path, model, body, labelFrom, labelTo),
+            BodyRetargetWriter.Save(root, group, path, body, labelFrom, refits),
             BodyRetargetWriter.ReadRecord(root)));
     }
 
@@ -714,17 +829,28 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
                                                  BodyRetargetWriter.ReadRecord(root)));
     }
 
-    /// <summary>The option's name: what the user will pick in Penumbra, so it says which body and which size.</summary>
-    private string OptionName(in RetargetContext ctx)
+    /// <summary>
+    /// The option's name for one refitted size: what the user will pick in Penumbra, so it says which body and which
+    /// size.
+    /// </summary>
+    private string OptionName(in RetargetContext ctx, BodyOption target)
     {
         string body = bodyDir != null && bodies != null && bodies.TryGetValue(bodyDir, out string? name) ? name : "Body";
-        return $"{body} — {string.Join(" + ", Chosen(ctx).Select(s => to[s].Label))}";
+        return $"{body} — {ToLabel(ctx, target)}";
+    }
+
+    /// <summary>One refit's sizes: the garment slot's <paramref name="target"/>, then each other slot's.</summary>
+    private string ToLabel(in RetargetContext ctx, BodyOption target)
+    {
+        string primary = Primary(ctx);
+        return string.Join(" + ", Chosen(ctx).Select(s => s == primary ? target.Label : Targets(s)[0].Label));
     }
 
     /// <summary>What a plan was made from: the model, each chosen pair, and which parts were held. A plan whose key no
     /// longer matches is stale — see <see cref="plannedKey"/>.</summary>
     private string Key(in RetargetContext ctx)
-        => ctx.ModelRel + "|" + string.Join("|", Chosen(ctx).Select(s => $"{s}:{from[s].Rel}>{to[s].Rel}"))
+        => ctx.ModelRel + "|"
+         + string.Join("|", Chosen(ctx).Select(s => $"{s}:{from[s].Rel}>{string.Join(",", Targets(s).Select(t => t.Rel))}"))
          + "|held:" + string.Join(",", ctx.Held.OrderBy(h => h, StringComparer.Ordinal))
          + (replaceSkin ? "|lay" : "");
 
@@ -761,18 +887,19 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
                 }
         }
 
-        foreach (string slot in validating.Where(v => v.Value.Refusal.IsCompleted).Select(v => v.Key).ToList())
+        foreach (string key in validating.Where(v => v.Value.Refusal.IsCompleted).Select(v => v.Key).ToList())
         {
-            var (pair, task) = validating[slot];
-            validating.Remove(slot);
+            var (sourceRel, task) = validating[key];
+            validating.Remove(key);
 
             // Only the check for the pair that is chosen NOW counts; a slower check for an earlier choice is noise.
-            if (!from.TryGetValue(slot, out var source) || !to.TryGetValue(slot, out var target)) continue;
-            if (pair != source.Rel + ">" + target.Rel) continue;
+            string slot = key[..key.IndexOf('>')];
+            if (!from.TryGetValue(slot, out var source) || source.Rel != sourceRel) continue;
+            if (!Targets(slot).Any(t => PairKey(slot, t) == key)) continue;
 
             string refusal = task.IsCompletedSuccessfully ? task.Result : task.Exception?.GetBaseException().Message ?? "";
-            if (refusal.Length > 0) refusals[slot] = refusal;
-            else refusals.Remove(slot);
+            if (refusal.Length > 0) refusals[key] = refusal;
+            else refusals.Remove(key);
         }
 
         if (planTask is { IsCompleted: true } pt)
@@ -780,12 +907,14 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
             planTask = null;
             if (Faulted(pt, ctx)) { }
             else if (pt.Result.Error.Length > 0) ctx.SetStatus(pt.Result.Error, true);
-            else if (pt.Result.Planned is { } done && pt.Result.Key == Key(ctx))
+            else if (pt.Result.Planned is { Count: > 0 } done && pt.Result.Key == Key(ctx))
             {
                 planned = done;
                 plannedKey = pt.Result.Key;
-                if (!ctx.PushPreview(done.Model)) pendingPreview = done.Model;
-                ctx.SetStatus(Describe(done.Report).Replace('\n', ' '), false);
+                showing = 0;
+                var first = done[0].Planned;
+                if (!ctx.PushPreview(first.Model)) pendingPreview = first.Model;
+                ctx.SetStatus(Describe(first.Report).Replace('\n', ' '), false);
             }
         }
 

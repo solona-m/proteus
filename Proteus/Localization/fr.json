@@ -3430,5 +3430,21 @@
   "Parts.Retarget.ReplaceSkin.Tip": {
     "message": "On: the garment\u0027s own body skin is laid exactly onto the new body, with the body\u0027s shading, so the seam\nwhere it meets the rest of your body disappears.\nOff: the skin the garment came with is resized instead, keeping any reshaping its author did \u2014 a top\nthat lifts or presses the chest keeps doing so at the new size.",
     "description": ""
+  },
+  "Parts.Retarget.SaveMany.Fmt": {
+    "message": "Save {0} sizes as new options",
+    "description": ""
+  },
+  "Parts.Retarget.Showing": {
+    "message": "Showing on the character",
+    "description": ""
+  },
+  "Parts.Retarget.ToMany": {
+    "message": "Refit onto (tick as many sizes as you like)",
+    "description": ""
+  },
+  "Parts.Retarget.Working.Fmt": {
+    "message": "Refitting {0} of {1}\u2026",
+    "description": ""
   }
 }
