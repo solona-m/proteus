@@ -233,6 +233,243 @@ public class BodyRetargetDiagTests(ITestOutputHelper output)
         }
     }
 
+    private const string Seaside = @"E:\Penumbradt\Seaside - by Solona (Default)";
+
+    /// <summary>
+    /// The refit that came out wrong in game: Seaside's L top onto an NSFW XS chest, "use the new body's skin" on — the
+    /// cloth did not shrink and the breast deformed. Seaside ships its own XS top, so it can be scored against the author.
+    /// </summary>
+    [Fact]
+    public void Seaside_large_to_extra_small()
+    {
+        string lPath = Path.Combine(Seaside, @"common\7\c0201e0194_top.mdl");
+        string xsPath = Path.Combine(Seaside, @"top size\neolithe xs\chara\equipment\e0194\model\c0201e0194_top.mdl");
+        if (!File.Exists(lPath) || !File.Exists(xsPath) || !Directory.Exists(NeolitheRoot)) return;
+
+        var lBytes = File.ReadAllBytes(lPath);
+        var authorL = ModelPartReader.Read(lBytes)!;
+        var authorXs = ModelPartReader.Read(File.ReadAllBytes(xsPath))!;
+        var catalog = BodySizeCatalog.Read(NeolitheRoot);
+        var chest = catalog.For("_top");
+
+        var rankL = BodySizeMatch.Rank(authorL, chest, catalog.PathOf);
+        var rankXs = BodySizeMatch.Rank(authorXs, chest, catalog.PathOf);
+        output.WriteLine($"L top reads as: {rankL.Confidence}; {string.Join(" | ", rankL.Scores.Take(4).Select(s => $"{s.Option.Label} {s.Rms * 1000:F2}mm {s.HitRate:P0}"))}");
+        output.WriteLine($"XS top reads as: {rankXs.Confidence}; {string.Join(" | ", rankXs.Scores.Take(4).Select(s => $"{s.Option.Label} {s.Rms * 1000:F2}mm {s.HitRate:P0}"))}");
+
+        bool sameNumbering = authorL.Positions.Length == authorXs.Positions.Length;
+        output.WriteLine($"author's L and XS share a numbering: {sameNumbering}");
+
+        void Run(string label, string fromLabel, string toLabel, bool replace)
+        {
+            var src = chest.First(o => o.Group == "CHEST: SmallClothes" && o.Label == fromLabel);
+            var dst = chest.First(o => o.Group == "CHEST: SmallClothes" && o.Label == toLabel);
+            var sb = File.ReadAllBytes(catalog.PathOf(src));
+            var tb = File.ReadAllBytes(catalog.PathOf(dst));
+            var s = ModelPartReader.Read(sb)!;
+            var t = ModelPartReader.Read(tb)!;
+            Assert.True(BodyCorrespondence.TryBuild(s, Uv(sb), t, Uv(tb), "chest", out var built, out string why), why);
+            var planned = BodyRetarget.Plan(authorL, lBytes, [new BodyRetarget.SlotPair("_top", built!, t)], "_top",
+                                            replaceSkin: replace);
+            var refit = ModelPartReader.Read(planned.Model)!;
+            var r = planned.Report;
+            output.WriteLine("");
+            output.WriteLine($"{label}: {fromLabel} -> {toLabel}, replace {replace} ({built!.GetType().Name})");
+            output.WriteLine($"  moved up to {r.WorstMove * 1000:F1} mm, snapped {r.Snapped:N0}, laid {r.Laid:N0}, pushed {r.Pushed:N0}, missed {r.Missed:N0}");
+            if (sameNumbering)
+                foreach (bool skin in new[] { true, false })
+                    output.WriteLine($"  {(skin ? "body mesh" : "cloth"),-10} nothing {Stats(Errors(authorL, authorXs, skin, true))}   refit {Stats(Errors(refit, authorXs, skin, true))}");
+            output.WriteLine($"  body mesh to the target body: {Stats(Errors(refit, t, true, false))}");
+        }
+
+        Run("as in game", "NEOBELLY ALMOND · SFW Almond L", "DEFAULT ALMOND · NSFW Almond XS", true);
+        Run("as in game", "NEOBELLY ALMOND · SFW Almond L", "DEFAULT ALMOND · NSFW Almond XS", false);
+        if (rankL.Best is { } bl && rankXs.Best is { } bx)
+        {
+            Run("detected", bl.Option.Label, bx.Option.Label, true);
+            Run("detected", bl.Option.Label, bx.Option.Label, false);
+        }
+    }
+
+    /// <summary>
+    /// The support pass and skin replacement, on and off, against every author-made size on this machine: Seaside's M
+    /// to XS, and "This Old Thing"'s M to L, S to L and M to S. A pass that fixes one outfit and hurts another shows up.
+    /// </summary>
+    [Fact]
+    public void Against_every_author_made_size()
+    {
+        if (!Directory.Exists(NeolitheRoot)) return;
+        const string tot = @"chara\equipment\e6255\model\c0201e6255_top.mdl";
+        var cases = new List<(string Name, string From, string To, (string Slot, string Src, string Dst)[] Pairs)>
+        {
+            ("Seaside M->XS", Path.Combine(Seaside, @"common\7\c0201e0194_top.mdl"),
+             Path.Combine(Seaside, @"top size\neolithe xs\chara\equipment\e0194\model\c0201e0194_top.mdl"),
+             [("_top", ExtraChestSmallClothes + @"\SFW Almond M.mdl", ExtraChestSmallClothes + @"\SFW Almond XS.mdl")]),
+            ("TOT M->L", Path.Combine(ThisOldThing, "neolithe m", tot), Path.Combine(ThisOldThing, "neolithe l", tot),
+             [("_top", ExtraChestSmallClothes + @"\SFW Pushup M.mdl", ExtraChestSmallClothes + @"\SFW Pushup L.mdl"),
+              ("_dwn", LegsFolder + @"\SFW Medium.mdl", LegsFolder + @"\SFW Large.mdl")]),
+            ("TOT S->L", Path.Combine(ThisOldThing, "neolithe s", tot), Path.Combine(ThisOldThing, "neolithe l", tot),
+             [("_top", ExtraChestSmallClothes + @"\SFW Pushup S.mdl", ExtraChestSmallClothes + @"\SFW Pushup L.mdl"),
+              ("_dwn", LegsFolder + @"\SFW Small.mdl", LegsFolder + @"\SFW Large.mdl")]),
+            ("TOT M->S", Path.Combine(ThisOldThing, "neolithe m", tot), Path.Combine(ThisOldThing, "neolithe s", tot),
+             [("_top", ExtraChestSmallClothes + @"\SFW Pushup M.mdl", ExtraChestSmallClothes + @"\SFW Pushup S.mdl"),
+              ("_dwn", LegsFolder + @"\SFW Medium.mdl", LegsFolder + @"\SFW Small.mdl")]),
+        };
+
+        output.WriteLine($"{"",-15}{"",-22}{"body mesh mean/p95/max",29}{"cloth mean/p95/max",29}");
+        foreach (var (name, fromPath, toPath, pairSpec) in cases)
+        {
+            if (!File.Exists(fromPath) || !File.Exists(toPath)) continue;
+            var fromBytes = File.ReadAllBytes(fromPath);
+            var authorFrom = ModelPartReader.Read(fromBytes)!;
+            var authorTo = ModelPartReader.Read(File.ReadAllBytes(toPath))!;
+            var pairs = new List<BodyRetarget.SlotPair>();
+            foreach (var (slot, src, dst) in pairSpec) AddPair(pairs, slot, src, dst);
+
+            output.WriteLine($"{name,-15}{"nothing",-22}{Stats(Errors(authorFrom, authorTo, true, true)),29}" +
+                             $"{Stats(Errors(authorFrom, authorTo, false, true)),29}");
+            foreach (bool replace in new[] { false, true })
+            {
+                var planned = BodyRetarget.Plan(authorFrom, fromBytes, pairs, "_top", replaceSkin: replace);
+                var refit = ModelPartReader.Read(planned.Model)!;
+                string label = replace ? "refit + replace skin" : "refit";
+                output.WriteLine($"{"",-15}{label,-22}{Stats(Errors(refit, authorTo, true, true)),29}" +
+                                 $"{Stats(Errors(refit, authorTo, false, true)),29}");
+            }
+        }
+    }
+
+    /// <summary>Where Seaside's cloth error is: by garment part and by distance from the body, author's motion vs ours.</summary>
+    [Fact]
+    public void Seaside_cloth_error_by_part()
+    {
+        string lPath = Path.Combine(Seaside, @"common\7\c0201e0194_top.mdl");
+        string xsPath = Path.Combine(Seaside, @"top size\neolithe xs\chara\equipment\e0194\model\c0201e0194_top.mdl");
+        if (!File.Exists(lPath) || !File.Exists(xsPath) || !Directory.Exists(NeolitheRoot)) return;
+
+        var lBytes = File.ReadAllBytes(lPath);
+        var authorL = ModelPartReader.Read(lBytes)!;
+        var authorXs = ModelPartReader.Read(File.ReadAllBytes(xsPath))!;
+        var pairs = new List<BodyRetarget.SlotPair>();
+        AddPair(pairs, "_top", ExtraChestSmallClothes + @"\SFW Almond M.mdl", ExtraChestSmallClothes + @"\SFW Almond XS.mdl");
+        var refit = ModelPartReader.Read(BodyRetarget.Plan(authorL, lBytes, pairs, "_top").Model)!;
+        var surface = new BodySurface(pairs[0].Correspondence.Source, 0.01f);
+
+        output.WriteLine($"{"part",-8}{"verts",7}{"author moved",14}{"we moved",10}{"error",8}{"cos",7}{"from body",11}");
+        foreach (var part in authorL.Parts.Where(p => p.Island < 0 && !SecondSkinWriter.IsBodySkinMaterial(p.Material)))
+        {
+            var verts = part.Triangles.Distinct().ToList();
+            double a = 0, o = 0, e = 0, c = 0, d = 0;
+            foreach (int v in verts)
+            {
+                var p = At(authorL, v);
+                var author = At(authorXs, v) - p;
+                var ours = At(refit, v) - p;
+                a += author.Length();
+                o += ours.Length();
+                e += Vector3.Distance(author, ours);
+                if (author.Length() > 1e-4f && ours.Length() > 1e-4f)
+                    c += Vector3.Dot(Vector3.Normalize(author), Vector3.Normalize(ours));
+                d += surface.Nearest(p, 0.3f, out var hit) ? hit.Distance : 0.3f;
+            }
+            int n = verts.Count;
+            output.WriteLine($"{part.Label,-8}{n,7}{a / n * 1000,14:F2}{o / n * 1000,10:F2}{e / n * 1000,8:F2}{c / n,7:F2}{d / n * 1000,11:F1}");
+        }
+
+        // Island by island inside the worst part, so a separate piece shows up as its own row.
+        foreach (var island in authorL.Parts.Where(p => p.Island >= 0 && !SecondSkinWriter.IsBodySkinMaterial(p.Material)))
+        {
+            var verts = island.Triangles.Distinct().ToList();
+            double a = 0, o = 0, d = 0;
+            var lo = new Vector3(float.MaxValue);
+            var hi = new Vector3(float.MinValue);
+            foreach (int v in verts)
+            {
+                var p = At(authorL, v);
+                a += (At(authorXs, v) - p).Length();
+                o += (At(refit, v) - p).Length();
+                d += surface.Nearest(p, 0.3f, out var hit) ? hit.Distance : 0.3f;
+                lo = Vector3.Min(lo, p);
+                hi = Vector3.Max(hi, p);
+            }
+            int n = verts.Count;
+            output.WriteLine($"  island {island.Label,-7}{n,6} verts  author {a / n * 1000,6:F2}  ours {o / n * 1000,6:F2}  " +
+                             $"from body {d / n * 1000,5:F1}  box {lo} .. {hi}");
+        }
+    }
+
+    /// <summary>The cup points where Seaside's rigid ring attaches: how the author moved them, and how we did.</summary>
+    [Fact]
+    public void Seaside_ring_attachment()
+    {
+        string lPath = Path.Combine(Seaside, @"common\7\c0201e0194_top.mdl");
+        string xsPath = Path.Combine(Seaside, @"top size\neolithe xs\chara\equipment\e0194\model\c0201e0194_top.mdl");
+        if (!File.Exists(lPath) || !File.Exists(xsPath) || !Directory.Exists(NeolitheRoot)) return;
+
+        var lBytes = File.ReadAllBytes(lPath);
+        var authorL = ModelPartReader.Read(lBytes)!;
+        var authorXs = ModelPartReader.Read(File.ReadAllBytes(xsPath))!;
+        var pairs = new List<BodyRetarget.SlotPair>();
+        AddPair(pairs, "_top", ExtraChestSmallClothes + @"\SFW Almond M.mdl", ExtraChestSmallClothes + @"\SFW Almond XS.mdl");
+        var refit = ModelPartReader.Read(BodyRetarget.Plan(authorL, lBytes, pairs, "_top").Model)!;
+        var surface = new BodySurface(pairs[0].Correspondence.Source, 0.01f);
+
+        var ring = authorL.Parts.First(p => p.Island < 0 && p.Label == "2.2").Triangles.Distinct().ToList();
+        var cup = authorL.Parts.First(p => p.Label == "2.1.1").Triangles.Distinct().ToList();
+        var ringAuthor = At(authorXs, ring[0]) - At(authorL, ring[0]);
+        output.WriteLine($"ring moved by the author: {ringAuthor} ({ringAuthor.Length() * 1000:F2} mm)");
+
+        foreach (float within in new[] { 0.002f, 0.005f, 0.01f, 0.02f })
+        {
+            var near = cup.Where(c => ring.Any(r => Vector3.Distance(At(authorL, c), At(authorL, r)) < within)).ToList();
+            if (near.Count == 0) { output.WriteLine($"cup points within {within * 1000:F0} mm of the ring: none"); continue; }
+            var a = near.Aggregate(Vector3.Zero, (s, v) => s + (At(authorXs, v) - At(authorL, v))) / near.Count;
+            var o = near.Aggregate(Vector3.Zero, (s, v) => s + (At(refit, v) - At(authorL, v))) / near.Count;
+            float d = near.Average(v => surface.Nearest(At(authorL, v), 0.3f, out var h) ? h.Distance : 0.3f);
+            output.WriteLine($"cup points within {within * 1000:F0} mm of the ring: {near.Count}, author moved {a} " +
+                             $"({a.Length() * 1000:F2} mm), we moved {o} ({o.Length() * 1000:F2} mm), from body {d * 1000:F1} mm");
+        }
+    }
+
+    /// <summary>Which vertices of the Seaside refit are wrong, and what they have in common.</summary>
+    [Fact]
+    public void Seaside_worst_vertices()
+    {
+        string lPath = Path.Combine(Seaside, @"common\7\c0201e0194_top.mdl");
+        string xsPath = Path.Combine(Seaside, @"top size\neolithe xs\chara\equipment\e0194\model\c0201e0194_top.mdl");
+        if (!File.Exists(lPath) || !File.Exists(xsPath) || !Directory.Exists(NeolitheRoot)) return;
+
+        var lBytes = File.ReadAllBytes(lPath);
+        var authorL = ModelPartReader.Read(lBytes)!;
+        var authorXs = ModelPartReader.Read(File.ReadAllBytes(xsPath))!;
+        var pairs = new List<BodyRetarget.SlotPair>();
+        AddPair(pairs, "_top", ExtraChestSmallClothes + @"\SFW Almond M.mdl", ExtraChestSmallClothes + @"\SFW Almond XS.mdl");
+        var source = pairs[0].Correspondence.Source;
+        var srcSurface = new BodySurface(source, 0.01f);
+
+        var laid = ModelPartReader.Read(BodyRetarget.Plan(authorL, lBytes, pairs, "_top", replaceSkin: true).Model)!;
+        var plain = ModelPartReader.Read(BodyRetarget.Plan(authorL, lBytes, pairs, "_top", replaceSkin: false).Model)!;
+
+        var partOf = new string[authorL.Positions.Length / 3];
+        foreach (var part in authorL.Parts.Where(p => p.Island < 0))
+            foreach (int v in part.Triangles) partOf[v] = part.Label + " " + Path.GetFileName(part.Material);
+
+        foreach (var (label, model) in new[] { ("laid skin", laid), ("plain", plain) })
+        {
+            output.WriteLine($"── {label}: worst 12 vs the author's XS ──");
+            var worst = Enumerable.Range(0, authorL.Positions.Length / 3)
+                .Select(v => (V: v, Err: Vector3.Distance(At(model, v), At(authorXs, v))))
+                .OrderByDescending(x => x.Err).Take(12);
+            foreach (var (v, err) in worst)
+            {
+                var p = At(authorL, v);
+                float d = srcSurface.Nearest(p, 0.3f, out var hit) ? hit.Distance : -1f;
+                output.WriteLine($"  v{v} {partOf[v]} at {p}  err {err * 1000:F1}  ours moved {(At(model, v) - p).Length() * 1000:F1} " +
+                                 $"author moved {(At(authorXs, v) - p).Length() * 1000:F1}  from body {d * 1000:F1} mm");
+            }
+        }
+    }
+
     [Fact]
     public void The_catalog_reads_Neolithe_s_real_option_list()
     {

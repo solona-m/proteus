@@ -277,7 +277,8 @@ internal static partial class BodyRetarget
 
         // Before the push-out, so the push-out measures cloth against the skin as it will actually be drawn.
         Vector3?[]? bodyNormal = null;
-        int laid = replaceSkin ? LaySkin(sets, source, pairs, nodeDelta, out bodyNormal) : 0;
+        float[]? bodyNormalWeight = null;
+        int laid = replaceSkin ? LaySkin(sets, source, pairs, nodeDelta, out bodyNormal, out bodyNormalWeight) : 0;
 
         int pushed = 0;
         float worstPush = 0f;
@@ -325,11 +326,17 @@ internal static partial class BodyRetarget
                                                       nodeWeight, sets.NodeNormal, sets.Tris);
 
         // Skin laid onto the body takes the BODY's normals, not ones recomputed from the garment's own triangles: those
-        // are what the body beside the garment is shaded with, so the seam where they meet shades as one surface.
-        if (bodyNormal != null)
+        // are what the body beside the garment is shaded with, so the seam where they meet shades as one surface. Skin
+        // only partly laid (fading out with distance from the body) blends the two the same way its position did.
+        if (bodyNormal != null && bodyNormalWeight != null)
             for (int i = 0; i < vc; i++)
-                if (bodyNormal[sets.NodeOf[i]] is { } n)
-                    vertNrm[i] = ToVec(n);
+            {
+                int node = sets.NodeOf[i];
+                if (bodyNormal[node] is not { } n) continue;
+                float w = bodyNormalWeight[node];
+                var mix = ToVector(vertNrm[i]) * (1f - w) + n * w;
+                vertNrm[i] = ToVec(mix.LengthSquared() > 1e-12f ? Vector3.Normalize(mix) : n);
+            }
 
         var edit = new RetargetEdit(garment.MeshSpans, vertDelta, vertNrm);
         return new Solved(edit, CountTrue(snapped), transferred, missed, pushed, worstMove, worstPush, sets.HeldCount,
@@ -337,11 +344,18 @@ internal static partial class BodyRetarget
     }
 
     /// <summary>
-    /// How far from the source body a skin point may be and still be taken as that body's skin to lay onto the new one
-    /// (30 mm). An author's reshaping under a garment — "This Old Thing" lifts its chest by up to 20 mm — sits inside
-    /// it; a skin point further off than that is not the body's surface at all, and keeps the refit's answer.
+    /// Skin this close to the source body is the body's skin, and is laid onto the new body completely (10 mm) — an
+    /// author's reshaping under a garment sits inside it: "This Old Thing" lifts its chest by up to 8 mm.
     /// </summary>
-    internal const float LayReach = 0.03f;
+    internal const float LayFull = 0.01f;
+
+    /// <summary>
+    /// Skin this far off is not the body's surface at all and keeps the refit's answer; between the two the laying fades
+    /// out smoothly, so there is no crease where laid skin meets skin that was left (20 mm). It was once a hard 30 mm,
+    /// and that caught a piece of Seaside's body mesh sitting 29 mm in front of the belly — a separate skin piece its
+    /// author never moves between sizes — and flattened it onto the belly, deforming the whole front.
+    /// </summary>
+    internal const float LayReach = 0.02f;
 
     /// <summary>
     /// Replace the garment's own body skin with the new body's: put every skin point exactly ON the target body, at the
@@ -355,9 +369,10 @@ internal static partial class BodyRetarget
     /// </summary>
     /// <returns>How many skin nodes were laid.</returns>
     private static int LaySkin(Sets sets, SourceBody source, IReadOnlyList<SlotPair> pairs, Vec3[] nodeDelta,
-                               out Vector3?[] bodyNormal)
+                               out Vector3?[] bodyNormal, out float[] bodyNormalWeight)
     {
         bodyNormal = new Vector3?[sets.NodeCount];
+        bodyNormalWeight = new float[sets.NodeCount];
         var targets = new List<BodySurface>(pairs.Count);
         foreach (var pair in pairs)
         {
@@ -369,7 +384,9 @@ internal static partial class BodyRetarget
         foreach (int n in sets.SkinNodes)
         {
             var p = ToVector(sets.NodeAt[n]);
-            if (!source.TryLand(p, LayReach, out var q)) continue;
+            if (!source.TryLand(p, LayReach, out var q, out float offBody)) continue;
+            float w = 1f - MeshMath.Smoothstep((offBody - LayFull) / (LayReach - LayFull));
+            if (w <= 0f) continue;
 
             // Onto the target surface itself, whose normal is the one the body is drawn with. The landing is already on
             // it for two sizes of one mesh; by texture coordinate it is within a whisker, and this closes the whisker.
@@ -384,9 +401,15 @@ internal static partial class BodyRetarget
                 onBody = true;
             }
 
+            // Between LayFull and LayReach, part way from the refit's answer to the body.
             var at = onBody ? best.Point : q;
-            nodeDelta[n] = ToVec(at - p);
-            if (onBody) bodyNormal[n] = best.Normal;
+            var carried = p + ToVector(nodeDelta[n]);
+            nodeDelta[n] = ToVec(carried + (at - carried) * w - p);
+            if (onBody)
+            {
+                bodyNormal[n] = best.Normal;
+                bodyNormalWeight[n] = w;
+            }
             laid++;
         }
         return laid;

@@ -91,9 +91,11 @@ internal static partial class BodyRetarget
         /// not <paramref name="p"/> carried along with it. What laying a garment's skin onto the new body needs: the
         /// author's offset from the body is exactly what it drops.
         /// </summary>
-        public bool TryLand(Vector3 p, float maxDistance, out Vector3 landing)
+        /// <param name="distance">How far <paramref name="p"/> was from the source body.</param>
+        public bool TryLand(Vector3 p, float maxDistance, out Vector3 landing, out float distance)
         {
             landing = default;
+            distance = 0f;
             bool found = false;
             float best = maxDistance;
             foreach (var (surface, field) in slots)
@@ -108,6 +110,7 @@ internal static partial class BodyRetarget
                 if (weight < 0.5f) continue;
 
                 best = hit.Distance;
+                distance = hit.Distance;
                 landing = hit.Point + (present == 3 ? sum : sum / weight);
                 found = true;
             }
