@@ -1235,7 +1235,7 @@ public class BodyRetargetDiagTests(ITestOutputHelper output)
         foreach (bool replace in new[] { true, false })
         {
             var pairs = new List<BodyRetarget.SlotPair>();
-            AddPair(pairs, "_top", catalog.PathOf(Option(from)), catalog.PathOf(Option("Yiggle - Small")));
+            AddPair(pairs, "_top", catalog.PathOf(Option(from)), catalog.PathOf(Option("Yiggle - Small")), swapSkin: true);
             var planned = BodyRetarget.Plan(garment, bytes, pairs, "_top", replaceSkin: replace);
             var r = planned.Report;
             output.WriteLine("");
@@ -1514,7 +1514,11 @@ public class BodyRetargetDiagTests(ITestOutputHelper output)
                          string.Join("; ", byPart.OrderBy(k => k.Key).Select(k => $"{k.Key} {k.Value.Count} (to {k.Value.Worst * 1000:F1})")));
     }
 
-    private static void AddPair(List<BodyRetarget.SlotPair> pairs, string slot, string sourcePath, string targetPath)
+    /// <param name="swapSkin">Hand the pair the target body's file, so a refit with replaceSkin swaps the garment's skin
+    /// meshes for the body's. Off by default: the swap rebuilds the model and renumbers its vertices, and most of these
+    /// diagnostics compare a refit with the author's model vertex for vertex.</param>
+    private static void AddPair(List<BodyRetarget.SlotPair> pairs, string slot, string sourcePath, string targetPath,
+                                bool swapSkin = false)
     {
         if (!File.Exists(sourcePath) || !File.Exists(targetPath)) return;
         var sourceBytes = File.ReadAllBytes(sourcePath);
@@ -1524,7 +1528,7 @@ public class BodyRetargetDiagTests(ITestOutputHelper output)
         if (!BodyCorrespondence.TryBuild(source, Uv(sourceBytes), target, Uv(targetBytes), slot,
                                          out var built, out string refusal))
             throw new InvalidOperationException(refusal);
-        pairs.Add(new BodyRetarget.SlotPair(slot, built!, target, targetBytes));
+        pairs.Add(new BodyRetarget.SlotPair(slot, built!, target, swapSkin ? targetBytes : null));
     }
 
     private static ModelParts Read(string path)
