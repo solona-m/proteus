@@ -54,7 +54,10 @@ internal sealed record BodySizeCatalog(string ModRoot, IReadOnlyList<BodyOption>
     /// <summary>This mod's options for one slot, in the author's own order.</summary>
     public IReadOnlyList<BodyOption> For(string slot) => Options.Where(o => o.Slot == slot).ToList();
 
-    /// <summary>True when the mod offers a choice of body models at all — what the mod picker filters on.</summary>
+    /// <summary>
+    /// True when the mod offers a choice of body models at all — what the mod picker filters on. Only smallclothes
+    /// paths count (see <see cref="IsBodyModel"/>), so an outfit with its own size group is not mistaken for a body.
+    /// </summary>
     public bool IsBody => Options.Count > 0;
 
     /// <summary>
@@ -96,7 +99,7 @@ internal sealed record BodySizeCatalog(string ModRoot, IReadOnlyList<BodyOption>
                 {
                     if (file.Value.ValueKind != JsonValueKind.String) continue;
                     if (file.Value.GetString() is not { Length: > 0 } rel) continue;
-                    if (SlotOf(file.Name) is not { } slot) continue;
+                    if (!IsBodyModel(file.Name) || SlotOf(file.Name) is not { } slot) continue;
 
                     options.Add(new BodyOption(groupName, section, name, rel, file.Name, slot));
                 }
@@ -105,6 +108,20 @@ internal sealed record BodySizeCatalog(string ModRoot, IReadOnlyList<BodyOption>
 
         return new BodySizeCatalog(modRoot, options);
     }
+
+    /// <summary>
+    /// Whether a game path is the body itself: the smallclothes model (<c>e0000</c>) of some slot and race, which is
+    /// what every body mod replaces. An outfit's models are other set ids, so an outfit mod with a size group of its
+    /// own — which is every outfit this tool refits — does not qualify.
+    /// <para/>
+    /// The Emperor's New set (<c>e0279</c>) is left out on purpose, although body mods replace it too: they point it at
+    /// the very same files as <c>e0000</c>, so counting it lists every size twice.
+    /// </summary>
+    internal static bool IsBodyModel(string gamePath) => BodyModelPath.IsMatch(gamePath);
+
+    private static readonly System.Text.RegularExpressions.Regex BodyModelPath = new(
+        @"^chara/equipment/e0000/model/c\d{4}e0000_(top|dwn|glv|sho)\.mdl$",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
 
     /// <summary>Which half of the body a game path is, or null when it is not an equipment model at all.</summary>
     internal static string? SlotOf(string gamePath)

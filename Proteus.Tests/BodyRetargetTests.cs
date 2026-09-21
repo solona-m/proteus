@@ -19,6 +19,19 @@ public class BodyRetargetTests
     private const string SkinMaterial = "/mt_c0201b0001_bibo.mtrl";
     private const string ClothMaterial = "/mt_c0201e6255_top_a.mtrl";
 
+    // ── which mods are bodies ───────────────────────────────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("chara/equipment/e0000/model/c0201e0000_top.mdl", true)]
+    [InlineData("chara/equipment/e0000/model/c0101e0000_dwn.mdl", true)]
+    [InlineData("Chara/Equipment/e0000/Model/c1401e0000_sho.mdl", true)]
+    [InlineData("chara/equipment/e0279/model/c0201e0279_top.mdl", false)]   // the same files again: sizes listed twice
+    [InlineData("chara/equipment/e0194/model/c0201e0194_top.mdl", false)]   // an outfit with a size group of its own
+    [InlineData("chara/equipment/e0000/model/c0201e0000_met.mdl", false)]
+    [InlineData("chara/equipment/e0000/texture/c0201e0000_top_n.tex", false)]
+    public void Only_the_smallclothes_model_makes_a_mod_a_body(string gamePath, bool body)
+        => Assert.Equal(body, BodySizeCatalog.IsBodyModel(gamePath));
+
     // ── the two senses of "is this skin?", asserted next to each other ──────────────────────────────────
     //
     // The transfer and the push-out consult SecondSkinWriter.IsBodySkinMaterial with OPPOSITE senses, and the brush
