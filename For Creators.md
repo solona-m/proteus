@@ -59,10 +59,11 @@ YourMod/
 |-------|----------|-------------|
 | `MaterialGamePath` | Yes | The game path of the `.mtrl` file this overlay targets. Proteus reads the material to find the actual texture game paths. |
 | `Diffuse` | No | Path to your diffuse overlay PNG, relative to the `Proteus/` folder. |
-| `Normal` | No | Path to your normal map overlay PNG. Alpha-composited onto the base normal. |
+| `Normal` | No | Path to your normal map overlay PNG. Its relief is added to the normal beneath, wherever the overlay covers. On a normal-only overlay the **blue channel** is the coverage — see [Normal-only overlays](#normal-only-overlays). |
+| `NormalMode` | No | `"Compound"` (the default) adds your relief to the relief beneath, so both show. `"Replace"` overwrites the relief beneath wherever the overlay covers — for an overlay that *is* the whole skin. |
 | `Mask` | No | Path to your mask/specular overlay PNG. |
 | `Index` | No | Path to your index texture PNG. Enables per-region coloring. See below. |
-| `GenerateDiffuse` | No | Only affects **normal-only** overlays (a `Normal` with no `Diffuse`). Defaults to `true`. Set `false` to apply the normal (and any mask) **without** synthesizing a diffuse tint on the skin. Ignored when a `Diffuse` is present. See [Normal-only overlays](#normal-only-overlays). |
+| `GenerateDiffuse` | No | Currently has no effect: normal-only overlays no longer tint the skin. Still read, so existing packs keep loading. |
 | `SkinToneMask` | No | `0`–`1`. How strongly to keep the character's skin tone out of this overlay (so an opaque overlay looks the same on any skin tone). Omitted = full masking (the default). Set `0` to let skin tone show through fully — use for tattoos/decals that should take the skin's color. Editable in Colors → Advanced. See [Skin-tone masking](#skin-tone-masking). |
 
 All paths are relative to the `Proteus/` folder. Subfolders and spaces in names are fine.
@@ -142,27 +143,19 @@ Users can override these values at any time from the Proteus status window. Thei
 
 #### Normal-only overlays
 
-If you provide a `Normal` but no `Diffuse`, Proteus by default **generates a diffuse tint** using the normal's **blue channel** as opacity and Row 16's color. This means:
-- The normal detail is applied only where the blue channel has value.
-- A matching tint (Row 16's diffuse color — white by default) is applied to the skin diffuse in those same pixels.
-- No extra files needed — just ship the normal PNG.
+If you provide a `Normal` but no `Diffuse`, there is no colour art to say where the overlay is, so Proteus reads its shape from the normal's **blue channel**: blue 255 is fully covered, blue 0 is not there at all. The relief is applied only where blue has value, and the skin's colour is left untouched. This is how the game's own skin normals carry coverage, and it suits lace, fabric texture or wetness — relief that follows the shape of a garment.
 
-This is ideal for lace, fabric texture detail, or lingerie overlays where you want normal map detail to follow the shape of the garment and color the skin to match.
-
-##### Disabling the auto-diffuse — `"GenerateDiffuse": false`
-
-Some normal-only overlays should change **only** the normal (and mask) and leave the skin's diffuse color untouched — for example a wetness effect (normal + mask) or pure surface relief. Set `"GenerateDiffuse": false` on the overlay to skip the generated diffuse:
+**A normal map exported the usual way is blue ≈ 255 everywhere**, because a flat normal is `128,128,255`. To Proteus that is an overlay covering the entire body at full strength. On its own it looks fine — flat areas add no relief — but it **hides every normal beneath it in the same mod** (see [How layers stack](#how-layers-stack)). Paint the blue channel as a coverage mask instead: white where you want relief, black everywhere else. Only red and green carry the relief's direction, so rewriting blue does not bend your normal.
 
 ```json
 {
   "MaterialGamePath": "chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_bibo.mtrl",
   "Normal": "Wet/normal.png",
-  "Mask":   "Wet/mask.png",
-  "GenerateDiffuse": false
+  "Mask":   "Wet/mask.png"
 }
 ```
 
-With the flag off, Proteus applies your normal and mask over the base textures and does **not** lighten or recolor the skin diffuse. The flag defaults to `true` (existing mods are unaffected) and is ignored when a `Diffuse` is present — in that case your diffuse is composited directly.
+> Normal-only overlays used to tint the skin diffuse with Row 16's colour, switched off per overlay by `"GenerateDiffuse": false`. They no longer do; the flag is still accepted and has no effect.
 
 > A `Mask`-only overlay (no `Diffuse` **and** no `Normal`) is also supported: the mask PNG's own alpha defines where it applies. Useful for effects carried entirely in the mask/multi map, like wetness specular.
 
@@ -239,7 +232,7 @@ If your mod has multiple options (style variants, independent pieces, etc.) you 
 
 **Group order is the `Groups` array order.** Where two groups overlay the same skin, the one earlier in the array starts on top — it draws over the later one, and it hides the later one wherever it is opaque. (Before FileVersion 4 this was the `group_NNN` filename number — same meaning, new home. Proteus still reads the old layout for mods that were never migrated.)
 
-This is only the **default**. The array order decides nothing once the wearer rearranges the option tabs in Proteus: their stack then sets both what draws on top and what covers what, and your `Groups` order is just the arrangement they start from.
+This is only the **default**. The array order decides nothing once the wearer rearranges the option tabs in Proteus: their stack then sets both what draws on top and what covers what, and your `Groups` order is just the arrangement they start from. The full set of rules is in [How layers stack](#how-layers-stack).
 
 **`DefaultSettings` is what a brand-new installer sees.** It is a bitmask over the option list — `0` selects nothing, `1` the first option, `2` the second, `3` the first two, and so on. Penumbra only consults it for a collection that has never seen your mod, so it does nothing for anyone who already has it installed, and it is not a substitute for telling people what to tick.
 
@@ -367,6 +360,85 @@ To let users enable pieces independently (e.g. top and bottom separately), use *
 ```
 
 Create a matching Penumbra group JSON for each group.
+
+### How layers stack
+
+Every selected option becomes a layer, and the layers are painted bottom to top. The wearer sees the stack as the row of option tabs in the Colors panel, **leftmost on top**.
+
+#### What decides the order
+
+From the strongest rule to the weakest:
+
+1. **Between mods, Penumbra priority.** A higher-priority mod's layers go on top of a lower one's.
+2. **Prints go above painted layers.** An option with any `Blend` row other than `Paint` sits above every painting option of the same mod, since its job is to colour what they painted.
+3. **The wearer's tab order.** Dragging the tabs (or using the arrows) restacks the mod, and the order is saved in *their* Proteus settings — or on the design binding or preset they are wearing. It survives restarts and updates, but it is theirs: it is not part of your pack.
+4. **Your group order.** The group earliest in `meta.json`'s `Groups` array goes on top.
+5. **Your option order.** In a multi-select group, the option earliest in its `Options` list goes on top.
+6. **Your overlay order.** Within one option, the overlay earliest in its `Overlays` list goes on top.
+
+The `Masks` group is not a layer in this sense; it is applied to the whole mod, on top of everything.
+
+To make a layer start on top for everyone — scales over a base skin, say — put its group first in `Groups`. The wearer can still restack it. A shipped preset can also carry a `StackOrder`, which applies while that preset is worn.
+
+#### What covers what
+
+Across mods, layers simply paint over one another. **Inside one mod, a layer also hides what is beneath it**, wherever it is opaque: a fully opaque bodysuit option erases the options under it rather than being blended with them, and a half-opaque one erases them by half. That is what lets a pack ship a base skin and a garment that replaces it.
+
+Hiding is per channel. A layer hides only the channels it ships art in:
+
+- a `Diffuse` hides diffuses beneath it,
+- a `Normal` hides normals beneath it,
+- a `Mask` hides masks beneath it.
+
+So an opaque full-body diffuse in one group and a full-body normal in another both show: neither can hide the other's channel.
+
+How much a layer covers comes from one silhouette, whichever channel it has first:
+
+| The overlay has… | Its coverage is… |
+|---|---|
+| a `Diffuse` | the diffuse's alpha — for *every* channel it ships, including its normal |
+| a `Normal` and no `Diffuse` | the normal's **blue channel** |
+| only a `Mask` | the mask's alpha |
+
+The `Masks` group and the row `Opacity` are then applied to that silhouette, so a layer faded to half opacity also covers only half.
+
+The usual surprise is a normal-only layer whose normal map is blue ≈ 255 everywhere, as normal maps normally are. That layer covers the whole body, so **every normal beneath it in the same mod goes flat**, and moving it down only moves the problem. Paint its blue channel as a coverage mask (see [Normal-only overlays](#normal-only-overlays)), give it a diffuse whose alpha is the shape, or put it at the bottom of the stack.
+
+Proteus says when this happens. Search `dalamud.log` for **`adds no relief`**; a layer that was hidden logs a line ending `its relief is fully covered by <option> above it in the stack`, naming the layer that hid it.
+
+#### Different opacity for each texture of one option
+
+`ColorTableRows` belong to the option, and an overlay's opacity scales everything that overlay ships. So one overlay with both a `Diffuse` and a `Normal` cannot be half-opaque in colour and fully opaque in relief.
+
+Split it into two overlays in the same option, each with its own `Index` texture choosing a different row:
+
+```json
+{
+  "Name": "Scales",
+  "Overlays": [
+    {
+      "MaterialGamePath": "chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_bibo.mtrl",
+      "Diffuse": "Scales/diffuse.png",
+      "Index":   "Scales/row1.png"
+    },
+    {
+      "MaterialGamePath": "chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_bibo.mtrl",
+      "Normal":  "Scales/normal.png",
+      "Index":   "Scales/row2.png"
+    }
+  ],
+  "ColorTableRows": [
+    { "Row": 1, "SubRowA": { "Diffuse": "#FFFFFF", "Opacity": -50 } },
+    { "Row": 2, "SubRowA": { "Diffuse": "#FFFFFF" } }
+  ]
+}
+```
+
+- `row1.png` is solid red 0, green 255 (row 1, sub-row A); `row2.png` is solid red 17, green 255 (row 2, sub-row A). See [Index Textures](#index-textures).
+- `Opacity` runs from −100 to 100 and `0` means unchanged, so `-50` halves the diffuse and row 2 leaves the normal at full strength.
+- The two overlays do not hide each other, because they ship art in different channels. The normal-only one still takes its coverage from its blue channel, so the advice above applies to it.
+
+If the two don't need to be one option, the simpler route is two options, each with its own `ColorTableRows`.
 
 ### Simple Unconditional Overlay
 
