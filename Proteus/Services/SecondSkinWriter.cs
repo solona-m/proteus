@@ -31,11 +31,74 @@ using static Proteus.Services.MeshMath;
 /// </summary>
 public static partial class SecondSkinWriter
 {
-    /// <summary>How far the first shell sits off the skin (0.05 mm); <see cref="PushSweep"/> scales it.</summary>
+    /// <summary>How far the first shell sits off the skin (0.05 mm) above the ankle. <see cref="FootPushAt"/>
+    /// scales it over the foot, and <see cref="PushSweep"/> replaces that scaling while it is on.</summary>
     public const float BaseOffset = 5e-5f;
 
     /// <summary>Separation between adjacent shells (0.01 mm): layer k sits at BaseOffset + k * LayerSeparation.</summary>
     public const float LayerSeparation = 1e-5f;
+
+    // ── the foot keeps the offset the rest of the body gave up ──────────────────────────────────────────
+    //
+    // BaseOffset went 1 mm -> 0.05 mm on the strength of a height-banded sweep that PINNED THE FEET AT 1.00x as
+    // its control (see PushSweep.DefaultLadder), so the feet were never measured below 1 mm and went to 0.05 mm
+    // on evidence gathered from the shins up. At 0.05 mm they z-fight the skin they were cut from: whole
+    // triangles flip between shell and bare skin frame to frame, over exactly the extent of the feet-slot
+    // model's own skin mesh. Swept again down the foot, 0.50 mm and 0.75 mm were both short and 1.00 mm was
+    // clean — the value the foot had all along.
+    //
+    // Banded by height rather than by source part: the ankle is where the feet and legs sources overlap, and
+    // which of them survives the redundancy pass there is not fixed, so a source-based rule would leave the
+    // ankle at whichever offset that pass happened to choose. The bands are ABSOLUTE metres in the body's own
+    // model space, which is race-sensitive — see FootPushAt.
+    //
+    /// <summary>Multiplier over the foot: 1.00 mm, what the whole body had before the 20x change.</summary>
+    public const float FootPushScale = 20f;
+
+    /// <summary>
+    /// Where the taper begins. The feet-slot skin mesh reaches y 0.151 on c0201 and the legs source starts at
+    /// 0.133, so 0.151 is the measured requirement — this sits ABOVE it, deliberately: see <see cref="FootPushAt"/>
+    /// on why over-reaching is the free direction and under-reaching is not.
+    /// </summary>
+    public const float FootBandTop = 0.20f;
+
+    /// <summary>Where the taper ends; above this the shipped <see cref="BaseOffset"/> stands unscaled.</summary>
+    public const float FootRampTop = 0.32f;
+
+    /// <summary>
+    /// How much of <see cref="BaseOffset"/> a shell vertex at height <paramref name="y"/> gets. A heeled foot is
+    /// modelled BELOW the origin (the sole sits at y -0.032 on the shoes this was measured against), so the foot
+    /// band has no bottom.
+    /// <para/>
+    /// CONTINUOUS, and smoothly so. The shell is one mesh: a step here puts the two ends of an edge at different
+    /// heights, which is a fold in the surface and — worse — a GAP wherever a part join straddles the step, since
+    /// the two sources meeting at the ankle would be pushed apart and the crack weld only closes 1 mm. A
+    /// smoothstep taper has no step and no crease in its slope either, so nothing downstream sees an edge at all.
+    /// Over 12 cm the whole taper is under 0.008 mm of height per mm of travel.
+    /// <para/>
+    /// The heights are absolute, and a body's model space scales with the race: a Lalafell's knee and a
+    /// Roegadyn's ankle do not sit at the same y as a Midlander's. The two ways that can be wrong are not
+    /// symmetric. Reaching too high only returns that region to at most 1 mm, which EVERY race shipped with for
+    /// the plugin's whole life (BaseOffset was 1 mm before the 20x change), so it costs nothing; reaching too low
+    /// leaves an ankle short of what was measured, and the z-fight this exists to stop survives there. So the band
+    /// is set from the TALLEST race rather than the measured one: a male Roegadyn is about 1.22x c0201, putting
+    /// that ankle near y 0.184, and the taper starts above it.
+    /// </summary>
+    public static float FootPushAt(float y)
+    {
+        if (y <= FootBandTop) return FootPushScale;
+        if (y >= FootRampTop) return 1f;
+        float t = (y - FootBandTop) / (FootRampTop - FootBandTop);
+        t = t * t * (3f - 2f * t);                        // smoothstep: C1, so the slope has no edge either
+        return FootPushScale + (1f - FootPushScale) * t;
+    }
+
+    /// <summary>
+    /// The height the cap passes ask the band at. A toe box is the lowest part of the body, so it is inside the
+    /// foot band by construction whatever the body — and on a heeled foot it is below the origin, which the band
+    /// also covers. Named rather than inlined so the two cap passes cannot drift apart.
+    /// </summary>
+    internal const float ToeBandHeight = 0f;
 
     private const int DeclSize = 17 * 8;   // vertex declaration block, one per mesh
     private const int BBoxSize = 32;       // min Vec4 + max Vec4
@@ -93,6 +156,11 @@ public static partial class SecondSkinWriter
     /// Attribute names the game has switched off on this model: a submesh carrying any is not drawn, not copied,
     /// and neither cover nor a join for the redundancy pass.
     /// </param>
+    /// <param name="CoverNails">
+    /// This source is the HANDS: a nail bed the layer leaves unpainted takes the fingertip's UV — see
+    /// <see cref="NailBeds"/>. Each is its own little island in the atlas that glove art never reaches, so
+    /// without this a glove leaves every nail bare.
+    /// </param>
     public readonly record struct SourceSpec(
         byte[] Model,
         Func<string, bool>? KeepMaterial = null,
@@ -104,7 +172,8 @@ public static partial class SecondSkinWriter
         IReadOnlySet<string>? HiddenAttributes = null,
         // What KeepMaterial and UvConv ARE, as text: delegates cannot be compared, so null makes a build
         // uncacheable. See SecondSkinService.ShellGeometryKey.
-        string? DelegateKey = null);
+        string? DelegateKey = null,
+        bool CoverNails = false);
 
     // Vertex Usage ids (FFXIV mdl).
     internal const byte UsePosition = 0, UseBlendWeight = 1, UseBlendIndices = 2,

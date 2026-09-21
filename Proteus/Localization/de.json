@@ -820,7 +820,7 @@
     "description": ""
   },
   "Content.Intro": {
-    "message": "Importiere eine gewöhnliche Mod (.pmp). Trage Teile davon, ohne einen Ausrüstungsplatz zu belegen, und füge erweiterte Farbtabellen-Funktionen hinzu.",
+    "message": "Importiere eine gewöhnliche Mod (.pmp oder die meta.json einer bereits in Penumbra installierten Mod). Trage Teile davon, ohne einen Ausrüstungsplatz zu belegen, und füge erweiterte Farbtabellen-Funktionen hinzu.",
     "description": ""
   },
   "Content.Materials.Fmt": {
@@ -863,6 +863,10 @@
     "message": "Dieses Paket konnte nicht gelesen werden: {0}",
     "description": ""
   },
+  "Content.NotAManifest": {
+    "message": "Um eine in Penumbra installierte Mod zu importieren, wähle die meta.json in ihrem Ordner.",
+    "description": ""
+  },
   "Content.Samples.Fmt": {
     "message": "Seine Index-Textur liest Zeile {0}, Spalte {1} — die übrigen Zeilen sind ausgegraut, weil nichts sie abtastet, und die andere Spalte dieser Zeile zu bearbeiten bewirkt ebenfalls nichts.",
     "description": ""
@@ -901,6 +905,14 @@
   },
   "ContentImport.Fail.Gone.Fmt": {
     "message": "Das Paket ist nicht mehr vorhanden: {0}",
+    "description": ""
+  },
+  "ContentImport.Fail.AlreadyProteus": {
+    "message": "Diese Mod ist bereits eine Proteus-Mod — es gibt nichts zu importieren.",
+    "description": ""
+  },
+  "ContentImport.Fail.ManagedMod": {
+    "message": "Das ist die von Proteus selbst verwaltete Mod — sie kann nicht importiert werden.",
     "description": ""
   },
   "ContentImport.Fail.NoModDir": {
@@ -2407,10 +2419,6 @@
     "message": "Dieses Kleidungsstück wurde nach Proteus importiert, das es für dich trägt. Male wie gewohnt — jeder Strich erscheint ein paar Sekunden nach dem Speichern an deinem Charakter, sobald das Kleidungsstück neu gebaut ist.",
     "description": ""
   },
-  "Parts.Content.NoSwitches": {
-    "message": "Zu einem importierten Kleidungsstück lassen sich keine Schalter hinzufügen: Proteus trägt es an einem anderen Gegenstand, dessen eigene Schalter es steuern. Die Pinsel oben funktionieren weiterhin.",
-    "description": ""
-  },
   "Parts.Live.PickedShell": {
     "message": "Das ist das Kleidungsstück, das Proteus für dich zeichnet; es wird bei jeder Änderung neu gebaut. Wähle den Mod, aus dem es stammt, um es zu bearbeiten.",
     "description": ""
@@ -2721,6 +2729,34 @@
   },
   "Settings.Diag.ClearCache.Tip": {
     "message": "Verwirft alle zwischengespeicherten dekodierten Texturen und komponiert sofort neu.\nNutze das, wenn eine Texturänderung nicht erscheint — etwa wenn du ein Overlay in\nderselben Größe neu exportiert hast und die Änderung sonst erst nach einem Neustart\ndes Plugins sichtbar würde.\n\nLeitet außerdem neu her, aus welchem Mod jede Basis-Hauttextur stammt — nutze das,\nwenn „Basis-Haut“ unten den falschen Mod nennt.",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Btn": {
+    "message": "Logs kopieren",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Busy": {
+    "message": "Aktualisiere und zeichne auf…",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Failed.Fmt": {
+    "message": "Log konnte nicht gespeichert werden: {0}",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.OpenTip": {
+    "message": "Klicken, um die Datei zu öffnen.",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Saved": {
+    "message": "Gespeichert:",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.ShowInFolder": {
+    "message": "Im Ordner anzeigen",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Tip": {
+    "message": "Führt eine vollständige Aktualisierung aus und speichert alles, was Proteus dabei\nprotokolliert, in einer Textdatei auf deinem Desktop. Hänge sie an, wenn du ein Problem meldest.",
     "description": ""
   },
   "Settings.Diag.Reach.EffectsOnly.Fmt": {

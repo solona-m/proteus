@@ -50,7 +50,14 @@ public static partial class SecondSkinWriter
                 // THE CAP IS PUSHED TO THE SHELL'S HEIGHT, NOT BY THE SHELL'S PUSH: it is a modelled object already
                 // standing off the skin by its own clearance, measured at selection. Clamped at zero: a cap authored
                 // below the shell's height is left where it is rather than pulled into the skin.
-                capPush = build.capStandoff > 0f ? MathF.Max(0f, push - build.capStandoff) : push;
+                //
+                // "The shell's height" means the height the shell around the cap actually reaches, which is the FOOT
+                // BAND's (see FootPushAt) — a toe box is the lowest part of the body, so it is inside that band by
+                // construction and y = 0 answers for it. The cap is emitted preserve:true and so never passes through
+                // the per-vertex push in VerbatimCopy; without this it would keep the unscaled height and sit most of
+                // a millimetre under the shell it is grafted into, opening the join.
+                float pushAtToes = push * build.PushBandAt(ToeBandHeight);
+                capPush = build.capStandoff > 0f ? MathF.Max(0f, pushAtToes - build.capStandoff) : pushAtToes;
             }
 
             private void DropDeclinedCap()
@@ -367,7 +374,8 @@ public static partial class SecondSkinWriter
 
                 if (build.weldRim != null)
                     build.diag?.Invoke($"authored cap: welded {build.welded} cut-lip vertices onto the rim "
-                               + $"(furthest moved {build.weldWorstD:F4}), {build.weldWorst} left beyond {WeldRadius:F3}");
+                               + $"(furthest moved {build.weldWorstD:F4}), {build.weldWorst} cut vertex/vertices "
+                               + $"left beyond {WeldCutReach:F3}");
                 return true;
             }
 

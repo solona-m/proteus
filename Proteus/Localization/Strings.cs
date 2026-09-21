@@ -635,6 +635,26 @@ public sealed class SettingsStrings
         "Also re-derives which mod each base skin texture comes from — use this if the\n" +
         "Base skin below names the wrong mod.");
 
+    public readonly string CopyLogs =
+        Loc.Localize("Settings.Diag.CopyLogs.Btn", "Copy Logs") + "###copyLogs";
+
+    public readonly string CopyLogsBusy =
+        Loc.Localize("Settings.Diag.CopyLogs.Busy", "Refreshing and capturing…") + "###copyLogs";
+
+    public readonly string CopyLogsTip = Loc.Localize("Settings.Diag.CopyLogs.Tip",
+        "Run a full refresh and save everything Proteus logs while it runs to a text\n" +
+        "file on your desktop. Attach that file when you report a problem.");
+
+    public readonly string CopyLogsSaved = Loc.Localize("Settings.Diag.CopyLogs.Saved", "Saved:");
+
+    public readonly string CopyLogsOpenTip = Loc.Localize("Settings.Diag.CopyLogs.OpenTip", "Click to open the file.");
+
+    public readonly string CopyLogsShowInFolder =
+        Loc.Localize("Settings.Diag.CopyLogs.ShowInFolder", "Show in folder") + "###copyLogsFolder";
+
+    public readonly string CopyLogsFailedFmt =
+        Loc.Localize("Settings.Diag.CopyLogs.Failed.Fmt", "Could not save the log: {0}");
+
     public readonly string BaseSkinHeaderFmt = Loc.Localize("Settings.Diag.BaseSkin.Header.Fmt", "Base skin ({0})");
 
     public readonly string BaseSkinUnconfirmedFmt =
@@ -721,11 +741,15 @@ public sealed class ContentStrings
     /// whether to press.
     /// </summary>
     public readonly string Intro = Loc.Localize("Content.Intro",
-        "Import a regular mod (.pmp). Wear parts of it without using a gear slot, and add advanced colour "
-      + "table features.");
+        "Import a regular mod (.pmp, or the meta.json of one already installed in Penumbra). Wear parts of it "
+      + "without using a gear slot, and add advanced colour table features.");
 
     public readonly string ReadFailedFmt = Loc.Localize("Content.ReadFailed.Fmt",
         "Couldn't read that pack: {0}");
+
+    /// <summary>A .json picked that isn't an installed mod's manifest: the filter can only match by extension.</summary>
+    public readonly string NotAManifest = Loc.Localize("Content.NotAManifest",
+        "To import a mod installed in Penumbra, pick the meta.json in its folder.");
 
     public readonly string PieceCountFmt = Loc.Localize("Content.PieceCount.Fmt",
         "Pieces: {0} of {1}");
@@ -1888,11 +1912,6 @@ public sealed class PartsStrings
     public readonly string ContentHint = Loc.Localize("Parts.Content.Hint",
         "This garment was imported into Proteus, which wears it for you. Paint it as usual — each stroke "
       + "appears on your character a few seconds after it saves, once the garment is rebuilt.");
-
-    /// <summary>Replaces the switch controls for an imported piece — see <c>DrawStaging</c>.</summary>
-    public readonly string ContentNoSwitches = Loc.Localize("Parts.Content.NoSwitches",
-        "Switches can't be added to an imported garment: Proteus wears it on another item, and that item's "
-      + "own switches control it. The brushes above still work.");
 
     /// <summary>Clicking a Proteus shell on the character — see <c>OnLivePicked</c>.</summary>
     public readonly string LivePickedShell = Loc.Localize("Parts.Live.PickedShell",

@@ -271,6 +271,9 @@ public partial class CompositorService
                                         material.wN == material.wD && material.hN == material.hD ? insidePlane : null,
                                         material.run.compositor.BustStandoff(modDir, bodyMdls, strapN, material.wN, material.hN, radiusN));
                                     aoIndentedNormal = true;
+                                    // A real write to the normal buffer, so the untouched-normal hand-back in PublishChannels
+                                    // must not discard it. Not a contributor bump — no overlay asked for this.
+                                    material.normalBlended = true;
                                 }
                             }
                         }

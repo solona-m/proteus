@@ -820,7 +820,7 @@
     "description": "Warning above a content pack's colour grid when its index texture cannot be read. \"Proteus\" is a plugin name - never translate it."
   },
   "Content.Intro": {
-    "message": "Import a regular mod (.pmp). Wear parts of it without using a gear slot, and add advanced colour table features.",
+    "message": "Import a regular mod (.pmp, or the meta.json of one already installed in Penumbra). Wear parts of it without using a gear slot, and add advanced colour table features.",
     "description": "First of the Import tab's two bulleted lines: what a regular .pmp mod gets you."
   },
   "Content.Materials.Fmt": {
@@ -863,6 +863,10 @@
     "message": "Couldn't read that pack: {0}",
     "description": "Shown when the picked file is not a readable pack. {0} is the error message."
   },
+  "Content.NotAManifest": {
+    "message": "To import a mod installed in Penumbra, pick the meta.json in its folder.",
+    "description": "Shown when a .json file other than a mod's meta.json is picked in the Import tab."
+  },
   "Content.Samples.Fmt": {
     "message": "Its index texture reads row {0}, column {1} — the other rows are dimmed because nothing samples them, and editing the other column of this row will do nothing either.",
     "description": "Above a content pack's colour grid. {0} is a row number 1-16, {1} is the column letter A or B."
@@ -902,6 +906,14 @@
   "ContentImport.Fail.Gone.Fmt": {
     "message": "The pack is no longer there: {0}",
     "description": "Import refused: the picked file has since been moved or deleted. {0} is its path."
+  },
+  "ContentImport.Fail.AlreadyProteus": {
+    "message": "This mod is already a Proteus mod — there is nothing to import.",
+    "description": "Import refused: the picked installed mod already carries a Proteus sidecar."
+  },
+  "ContentImport.Fail.ManagedMod": {
+    "message": "That is Proteus's own managed mod — it cannot be imported.",
+    "description": "Import refused: the picked installed mod is the one Proteus writes its composites into."
   },
   "ContentImport.Fail.NoModDir": {
     "message": "Penumbra's mod directory isn't available.",
@@ -2407,10 +2419,6 @@
     "message": "This garment was imported into Proteus, which wears it for you. Paint it as usual — each stroke appears on your character a few seconds after it saves, once the garment is rebuilt.",
     "description": "Note under the brush controls for a garment imported into Proteus, whose geometry the character wears through a Proteus-built model rather than from the mod's own file. \"Proteus\" is a plugin name - never translate it."
   },
-  "Parts.Content.NoSwitches": {
-    "message": "Switches can't be added to an imported garment: Proteus wears it on another item, and that item's own switches control it. The brushes above still work.",
-    "description": "Replaces the on/off switch controls for an imported garment. \"Proteus\" is a plugin name - never translate it."
-  },
   "Parts.Live.PickedShell": {
     "message": "That is the garment Proteus draws for you, which is rebuilt every time something changes. Pick the mod it came from to edit it.",
     "description": "Shown when the user clicks Proteus's own generated garment on their character instead of a mod's model. \"Proteus\" is a plugin name - never translate it."
@@ -2722,6 +2730,34 @@
   "Settings.Diag.ClearCache.Tip": {
     "message": "Drop all cached decoded textures and recomposite now. Use if a texture edit\nisn't showing up — e.g. you re-exported an overlay at the same size and the\nchange won't appear without restarting the plugin.\n\nAlso re-derives which mod each base skin texture comes from — use this if the\nBase skin below names the wrong mod.",
     "description": "Tooltip. Keep the blank line; \\n breaks are deliberate, move them as your language needs. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
+  "Settings.Diag.CopyLogs.Btn": {
+    "message": "Copy Logs",
+    "description": "Button in Diagnostics."
+  },
+  "Settings.Diag.CopyLogs.Busy": {
+    "message": "Refreshing and capturing…",
+    "description": "Replaces the Copy Logs button label while it runs."
+  },
+  "Settings.Diag.CopyLogs.Failed.Fmt": {
+    "message": "Could not save the log: {0}",
+    "description": "{0} is the error message."
+  },
+  "Settings.Diag.CopyLogs.OpenTip": {
+    "message": "Click to open the file.",
+    "description": "Tooltip on the saved file's path."
+  },
+  "Settings.Diag.CopyLogs.Saved": {
+    "message": "Saved:",
+    "description": "Label before the saved log file's path."
+  },
+  "Settings.Diag.CopyLogs.ShowInFolder": {
+    "message": "Show in folder",
+    "description": "Button that opens the folder holding the saved log."
+  },
+  "Settings.Diag.CopyLogs.Tip": {
+    "message": "Run a full refresh and save everything Proteus logs while it runs to a text\nfile on your desktop. Attach that file when you report a problem.",
+    "description": "Tooltip. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Settings.Diag.Reach.EffectsOnly.Fmt": {
     "message": "{0} — effects only (no overlay art)",

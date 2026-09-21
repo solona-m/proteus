@@ -51,7 +51,9 @@ internal sealed unsafe class ShellColorsetApplier : IDisposable
 
     private void OnFramework(IFramework fw)
     {
-        var addr = objects.LocalPlayer?.Address ?? 0;
+        // Proteus off: treated exactly as "no shell on the character", so anything still applied is let go
+        // rather than re-asserted. The master switch governs every feature.
+        var addr = config.PluginEnabled ? objects.LocalPlayer?.Address ?? 0 : 0;
         if (addr == 0) { _applied.Clear(); return; }
 
         var slots = ColorTableInterop.FindColorTableSlots(addr, IsShellLeaf);

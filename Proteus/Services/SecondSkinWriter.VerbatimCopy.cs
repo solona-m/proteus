@@ -25,6 +25,8 @@ public static partial class SecondSkinWriter
         private readonly Func<Vec3[], Vec3[], ushort[], (float U, float V)[], BustBridgePlan?>? bridge;
         private readonly PushSweep? pushSweep;
         private ushort[]? spanTris;
+        // A hand's nail beds and the fingertip UV under each — see NailBeds.
+        private readonly NailBedPlan? nailBeds;
         private int uvUnmapped;
         private VElem? pos;
         private VElem? norm;
@@ -36,8 +38,9 @@ public static partial class SecondSkinWriter
         private Vec3[]? basePos;
         private Vec3[]? baseNrm;
 
-        public VerbatimCopy(byte[] s, int vb, int srcDeclOff, ushort vc, VElem[] decl, uint[] vbo, byte[] bs, float push, UVRemapService.UvConversion? uvConv, sbyte[]? sides, SecondSkinLayer? cap, ushort[]? capTris, Action<string>? capLog, bool buildCapGeometry, Func<Vec3[], Vec3[], ushort[], (float U, float V)[], BustBridgePlan?>? bridge, PushSweep? pushSweep, ushort[]? spanTris)
+        public VerbatimCopy(byte[] s, int vb, int srcDeclOff, ushort vc, VElem[] decl, uint[] vbo, byte[] bs, float push, UVRemapService.UvConversion? uvConv, sbyte[]? sides, SecondSkinLayer? cap, ushort[]? capTris, Action<string>? capLog, bool buildCapGeometry, Func<Vec3[], Vec3[], ushort[], (float U, float V)[], BustBridgePlan?>? bridge, PushSweep? pushSweep, ushort[]? spanTris, NailBedPlan? nailBeds = null)
         {
+            this.nailBeds = nailBeds;
             this.s = s;
             this.vb = vb;
             this.srcDeclOff = srcDeclOff;
@@ -167,23 +170,78 @@ public static partial class SecondSkinWriter
                 float uOff = MathF.Floor(minU), vOff = MathF.Floor(minV);
                 bool uv0Half = u0e.Type is 13 or 14;
                 if (uvConv != null) uvsPreConv = new (float, float)[vc];
+                for (int i = 0; i < vc; i++) uvs[i] = ShiftAndConvert(i, uvs[i], uOff, vOff, uvsPreConv);
+                RescueNailBeds(uvs, uOff, vOff, uvsPreConv);
                 for (int i = 0; i < vc; i++)
                 {
-                    float u = uvs[i].U - uOff, v = uvs[i].V - vOff;
-                    // A part in another body's UV space is then moved into the SHELL's space; the maps are indexed over
-                    // [0,1], so this follows the tile shift. A vertex the maps can't place keeps its original UV.
-                    if (uvConv != null)
-                    {
-                        uvsPreConv![i] = (u, v);
-                        var moved = uvConv(u, v, sides != null && i < sides.Length ? sides[i] : 0);
-                        if (moved is { } mv) { u = mv.U; v = mv.V; }
-                        else uvUnmapped++;
-                    }
-                    uvs[i] = (u, v);
+                    var (u, v) = uvs[i];
                     WriteUV2(outStreams[u0e.Stream], i * outStrides[u0e.Stream] + u0e.Offset, uv0Half, u, v);
                     WriteUv1(uv1Plan, u0e, outStreams, outStrides, i, u, v);   // the SHIFTED value, unlike content
                 }
             }
+        }
+
+        /// <summary>One raw uv0 onto the coverage map's tile, then into the SHELL's space when the part is in
+        /// another body's: the maps are indexed over [0,1], so the conversion follows the tile shift. A vertex the
+        /// maps can't place keeps its original UV.</summary>
+        private (float U, float V) ShiftAndConvert(int i, (float U, float V) raw, float uOff, float vOff,
+                                                   (float U, float V)[]? uvsPreConv)
+        {
+            var (uv, pre, mapped) = Converted(i, raw, uOff, vOff);
+            if (uvsPreConv != null) uvsPreConv[i] = pre;
+            if (!mapped) uvUnmapped++;
+            return uv;
+        }
+
+        /// <summary><see cref="ShiftAndConvert"/> without recording anything: the UV, the UV before conversion, and
+        /// whether the maps could place it.</summary>
+        private ((float U, float V) Uv, (float U, float V) Pre, bool Mapped) Converted(int i, (float U, float V) raw,
+                                                                                     float uOff, float vOff)
+        {
+            float u = raw.U - uOff, v = raw.V - vOff;
+            var pre = (u, v);
+            if (uvConv == null) return ((u, v), pre, true);
+            var moved = uvConv(u, v, sides != null && i < sides.Length ? sides[i] : 0);
+            return moved is { } mv ? ((mv.U, mv.V), pre, true) : ((u, v), pre, false);
+        }
+
+        /// <summary>
+        /// A nail bed takes the UV of the fingertip around it wherever this layer paints that fingertip: the bed is a
+        /// separate little island in the atlas, and what art puts there is the NAIL — bare, or painted as a nail —
+        /// which is what shows through a glove. Coverage is only asked of the fingertip: an island the art leaves
+        /// clear would be trimmed away, one it paints would be drawn as a nail, and the glove wants neither. A
+        /// fingerless glove still leaves the nails bare, since the fingertip around them is unpainted too.
+        /// </summary>
+        private void RescueNailBeds((float U, float V)[] uvs, float uOff, float vOff, (float U, float V)[]? uvsPreConv)
+        {
+            if (nailBeds is not { } nb || cap is not { Coverage: not null }) return;
+            int rescued = 0;
+            float ownSum = 0f, tipSum = 0f;
+            for (int k = 0; k < nb.Islands.Count; k++)
+            {
+                // Mean coverage over the island's vertices, where it sits and where it would land.
+                float own = 0f, tip = 0f;
+                int n = 0;
+                foreach (int i in nb.VertsOf[k])
+                {
+                    if (nb.FingertipUv[i] is not { } t) continue;
+                    own += CoverageAt(cap, uvs[i]);
+                    tip += CoverageAt(cap, Converted(i, t, uOff, vOff).Uv);
+                    n++;
+                }
+                if (n == 0) continue;
+                own /= n; tip /= n;
+                ownSum += own; tipSum += tip;
+                if (tip < NailBedPaintedFloor) continue;
+
+                foreach (int i in nb.VertsOf[k])
+                    if (nb.FingertipUv[i] is { } t)
+                        uvs[i] = ShiftAndConvert(i, t, uOff, vOff, uvsPreConv);
+                rescued++;
+            }
+            capLog?.Invoke($"nail beds: {rescued} of {nb.Islands.Count} under painted fingertips on this layer "
+                         + $"(mean coverage {ownSum / Math.Max(1, nb.Islands.Count):F0} on the nails against "
+                         + $"{tipSum / Math.Max(1, nb.Islands.Count):F0} on the fingers), moved onto the fingertip's UV");
         }
 
         private void WritePositions(ref byte[][] outStreams, ref byte[] outStrides, ref (float U, float V)[] uvs, ref Vec3[]? capSrcPos, ref Vec3[]? capOutPos, ref ToeCapPlan? capPlan)
@@ -239,11 +297,16 @@ public static partial class SecondSkinWriter
 
                     // Banded by the vertex's height BEFORE the cap or bridge moved it, so a displacement cannot
                     // carry a vertex across a band edge and step the surface somewhere the ladder did not put one.
-                    float pushHere = pushSweep is null ? push : push * pushSweep.Take(basePos[i].Y);
+                    // The sweep REPLACES the shipped foot band rather than compounding with it: it is a measuring
+                    // instrument, and the millimetres it announces have to be the millimetres it applied.
+                    float pushHere = push * (pushSweep is null ? FootPushAt(basePos[i].Y) : pushSweep.Take(basePos[i].Y));
                     // Clearance given back where the bridge moved the surface — see BridgedClearance. ADDED, not a floor,
                     // so stacked layers stay LayerSeparation apart.
                     if (bridgeExtra is not null)
                         pushHere += bridgeExtra[i];
+                    // Clear of a nail mesh standing on the bed — see NailBedPlan.Lift.
+                    if (nailBeds is { } nb && i < nb.Lift.Length)
+                        pushHere += nb.Lift[i];
                     var final = new Vec3(p.X + n.X * pushHere, p.Y + n.Y * pushHere, p.Z + n.Z * pushHere);
                     WriteXYZ(outStreams[pw.Stream], i * stride + pw.Offset, pw.Type, final.X, final.Y, final.Z);
                     if (outPos is not null) outPos[i] = final;

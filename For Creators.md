@@ -59,8 +59,8 @@ YourMod/
 |-------|----------|-------------|
 | `MaterialGamePath` | Yes | The game path of the `.mtrl` file this overlay targets. Proteus reads the material to find the actual texture game paths. |
 | `Diffuse` | No | Path to your diffuse overlay PNG, relative to the `Proteus/` folder. |
-| `Normal` | No | Path to your normal map overlay PNG. Its relief is added to the normal beneath, wherever the overlay covers. On a normal-only overlay the **blue channel** is the coverage — see [Normal-only overlays](#normal-only-overlays). |
-| `NormalMode` | No | `"Compound"` (the default) adds your relief to the relief beneath, so both show. `"Replace"` overwrites the relief beneath wherever the overlay covers — for an overlay that *is* the whole skin. |
+| `Normal` | No | Path to your normal map overlay PNG. Its relief is added to the normal beneath, wherever the overlay covers; its alpha sets how strongly. On a normal-only overlay the alpha is also the coverage — see [Normal-only overlays](#normal-only-overlays). |
+| `NormalMode` | No | `"Compound"` (the default) adds your relief to the relief beneath, so both show. `"Replace"` overwrites the relief beneath wherever the overlay covers — for an overlay that *is* the whole skin — and also writes your blue channel, which the skin shader reads as skin-colour influence. |
 | `Mask` | No | Path to your mask/specular overlay PNG. |
 | `Index` | No | Path to your index texture PNG. Enables per-region coloring. See below. |
 | `GenerateDiffuse` | No | Currently has no effect: normal-only overlays no longer tint the skin. Still read, so existing packs keep loading. |
@@ -143,9 +143,13 @@ Users can override these values at any time from the Proteus status window. Thei
 
 #### Normal-only overlays
 
-If you provide a `Normal` but no `Diffuse`, there is no colour art to say where the overlay is, so Proteus reads its shape from the normal's **blue channel**: blue 255 is fully covered, blue 0 is not there at all. The relief is applied only where blue has value, and the skin's colour is left untouched. This is how the game's own skin normals carry coverage, and it suits lace, fabric texture or wetness — relief that follows the shape of a garment.
+If you provide a `Normal` but no `Diffuse`, there is no colour art to say where the overlay is, so Proteus reads its shape from the normal's **alpha**: 255 is fully covered, 0 is not there at all. The relief is applied only where alpha has value, and the skin's colour is left untouched. It suits lace, fabric texture or wetness — relief that follows the shape of a garment.
 
-**A normal map exported the usual way is blue ≈ 255 everywhere**, because a flat normal is `128,128,255`. To Proteus that is an overlay covering the entire body at full strength. On its own it looks fine — flat areas add no relief — but it **hides every normal beneath it in the same mod** (see [How layers stack](#how-layers-stack)). Paint the blue channel as a coverage mask instead: white where you want relief, black everywhere else. Only red and green carry the relief's direction, so rewriting blue does not bend your normal.
+The **blue channel is not coverage** on a skin overlay. The skin shader reads a normal's blue as skin-colour influence, so Proteus leaves it out of the question of where your overlay is. In the default `Compound` mode your blue is not used at all; in `Replace` mode it is written as skin-colour influence. (A gear layer is different: on a second-skin shell the normal's blue *is* its transparency, and Proteus writes it from the shell's coverage.)
+
+A normal-only overlay hides the normals beneath it in the same mod only **where it has relief** — near texels whose red and green are away from flat. So a normal exported the usual way, opaque and flat over most of the sheet, hides nothing where it is flat, and the layers beneath keep their relief there (see [How layers stack](#how-layers-stack)).
+
+> In earlier versions a normal-only skin overlay took its coverage from the blue channel instead, so a normal exported the usual way (blue ≈ 255 everywhere) covered the whole body and hid every normal beneath it. A pack that shaped its normal with blue and left alpha opaque should move that shape into alpha.
 
 ```json
 {
@@ -397,14 +401,14 @@ How much a layer covers comes from one silhouette, whichever channel it has firs
 | The overlay has… | Its coverage is… |
 |---|---|
 | a `Diffuse` | the diffuse's alpha — for *every* channel it ships, including its normal |
-| a `Normal` and no `Diffuse` | the normal's **blue channel** |
+| a `Normal` and no `Diffuse` | the normal's alpha |
 | only a `Mask` | the mask's alpha |
 
 The `Masks` group and the row `Opacity` are then applied to that silhouette, so a layer faded to half opacity also covers only half.
 
-The usual surprise is a normal-only layer whose normal map is blue ≈ 255 everywhere, as normal maps normally are. That layer covers the whole body, so **every normal beneath it in the same mod goes flat**, and moving it down only moves the problem. Paint its blue channel as a coverage mask (see [Normal-only overlays](#normal-only-overlays)), give it a diffuse whose alpha is the shape, or put it at the bottom of the stack.
+One exception, for relief: a normal-only layer in the default `Compound` mode adds its relief to what is beneath, and a flat texel adds nothing, so it hides the normals beneath it only **where it has relief** — near texels whose red and green are away from flat, within about 16 texels on a 4K sheet. The flat tops of scales and the gaps in lace still count as the pattern's own; a wide flat area does not. A `Replace` layer hides by its full coverage, because overwriting is what it is for.
 
-Proteus says when this happens. Search `dalamud.log` for **`adds no relief`**; a layer that was hidden logs a line ending `its relief is fully covered by <option> above it in the stack`, naming the layer that hid it.
+Proteus says when a layer is hidden. Search `dalamud.log` for **`adds no relief`**; a layer that was hidden logs a line ending `its relief is fully covered by <option> above it in the stack`, naming the layer that hid it.
 
 #### Different opacity for each texture of one option
 
@@ -436,7 +440,7 @@ Split it into two overlays in the same option, each with its own `Index` texture
 
 - `row1.png` is solid red 0, green 255 (row 1, sub-row A); `row2.png` is solid red 17, green 255 (row 2, sub-row A). See [Index Textures](#index-textures).
 - `Opacity` runs from −100 to 100 and `0` means unchanged, so `-50` halves the diffuse and row 2 leaves the normal at full strength.
-- The two overlays do not hide each other, because they ship art in different channels. The normal-only one still takes its coverage from its blue channel, so the advice above applies to it.
+- The two overlays do not hide each other, because they ship art in different channels. The normal-only one takes its coverage from its alpha, so leave it transparent wherever the scales are not.
 
 If the two don't need to be one option, the simpler route is two options, each with its own `ColorTableRows`.
 

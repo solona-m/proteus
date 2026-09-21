@@ -441,6 +441,108 @@ public class CompositorMathTests
     }
 
     /// <summary>
+    /// The claim scoping that lets one mod ship a whole-body diffuse group and a whole-body normal group: an
+    /// overlay can only take a channel away from the overlays beneath it if it puts art in that channel. Before
+    /// this, whichever of the two groups sat on top erased the other, since both cover the entire body.
+    /// </summary>
+    [Theory]
+    // diffuse, normal, mask declared      →  claims diffuse, normal, mask
+    [InlineData(true,  false, false,           true,  false, false)]
+    [InlineData(false, true,  false,           false, true,  false)]
+    [InlineData(false, false, true,            false, false, true)]
+    [InlineData(true,  true,  true,            true,  true,  true)]
+    [InlineData(false, false, false,           false, false, false)]
+    public void Supplies_ScopesAClaimToTheChannelsTheOverlayActuallyDeclares(
+        bool diffuse, bool normal, bool mask, bool claimsD, bool claimsN, bool claimsM)
+    {
+        var d = new OverlayDescriptor
+        {
+            Diffuse = diffuse ? "d.png" : null,
+            Normal  = normal  ? "n.png" : null,
+            Mask    = mask    ? "m.png" : null,
+        };
+
+        Assert.Equal(claimsD, OverlayBlend.Supplies(d, OverlayChannel.Diffuse));
+        Assert.Equal(claimsN, OverlayBlend.Supplies(d, OverlayChannel.Normal));
+        Assert.Equal(claimsM, OverlayBlend.Supplies(d, OverlayChannel.Mask));
+    }
+
+    /// <summary>
+    /// The silhouette channel follows the order CoverageOf picks a source in, so a decision that feeds every
+    /// channel at once (the UV-seam drop) is gated by the same art the coverage was built from.
+    /// </summary>
+    [Fact]
+    public void PrimaryChannel_FollowsCoverageOfsOrderAndIsNullWithNoArt()
+    {
+        Assert.Equal(OverlayChannel.Diffuse, OverlayBlend.PrimaryChannel(
+            new OverlayDescriptor { Diffuse = "d.png", Normal = "n.png", Mask = "m.png" }));
+        Assert.Equal(OverlayChannel.Normal, OverlayBlend.PrimaryChannel(
+            new OverlayDescriptor { Normal = "n.png", Mask = "m.png" }));
+        Assert.Equal(OverlayChannel.Mask, OverlayBlend.PrimaryChannel(
+            new OverlayDescriptor { Mask = "m.png" }));
+        Assert.Null(OverlayBlend.PrimaryChannel(new OverlayDescriptor()));
+    }
+
+    /// <summary>A normal sheet at the flat value, with the texels in <paramref name="bumps"/> set to R=G=128+dev.</summary>
+    private static byte[] FlatNormal(int w, int h, params (int X, int Y, int Dev)[] bumps)
+    {
+        var n = new byte[w * h * 4];
+        for (int i = 0; i < n.Length; i += 4) { n[i] = 128; n[i + 1] = 128; n[i + 2] = 255; n[i + 3] = 255; }
+        foreach (var (x, y, dev) in bumps)
+        {
+            int o = (y * w + x) * 4;
+            n[o] = n[o + 1] = (byte)(128 + dev / 2);
+        }
+        return n;
+    }
+
+    /// <summary>
+    /// A normal exported the usual way is flat and opaque over the whole sheet. As a Compound layer it adds no
+    /// relief there, so it must claim none: before this, its blue channel (255) made it hide every normal beneath.
+    /// </summary>
+    [Fact]
+    public void ReliefPresence_IsZeroOnAFlatSheet()
+    {
+        var p = OverlayBlend.ReliefPresence(FlatNormal(512, 512), 512, 512);
+        Assert.All(p, v => Assert.Equal(0, v));
+    }
+
+    [Fact]
+    public void ReliefPresence_IgnoresSlopesInsideTheDeadzone()
+    {
+        var p = OverlayBlend.ReliefPresence(
+            FlatNormal(512, 512, (100, 100, OverlayBlend.MaskReliefDeadzone - 2)), 512, 512);
+        Assert.All(p, v => Assert.Equal(0, v));
+    }
+
+    /// <summary>
+    /// A bump claims its own texel fully and its pooling cell with it, so a pattern's small flats (scale tops,
+    /// the gaps in lace) stay its own; far away, where the sheet is flat, nothing is claimed.
+    /// </summary>
+    [Fact]
+    public void ReliefPresence_ClaimsTheBumpAndItsCellButNotTheFlatFarAway()
+    {
+        const int W = 1024;   // 4-texel cells at 256 per side
+        var p = OverlayBlend.ReliefPresence(FlatNormal(W, W, (9, 9, 40)), W, W);
+
+        Assert.Equal(255, p[9 * W + 9]);
+        Assert.True(p[10 * W + 10] >= 128, $"same-cell neighbour got {p[10 * W + 10]}");
+        Assert.Equal(0, p[500 * W + 500]);
+    }
+
+    [Fact]
+    public void ScaleAlphaByPlane_ScalesAlphaOnlyAndLeavesTheInputAlone()
+    {
+        var rgba  = new byte[] { 10, 20, 30, 200,   40, 50, 60, 200 };
+        var plane = new byte[] { 255, 0 };
+
+        var got = OverlayBlend.ScaleAlphaByPlane(rgba, plane);
+
+        Assert.Equal(new byte[] { 10, 20, 30, 200,   40, 50, 60, 0 }, got);
+        Assert.Equal(200, rgba[7]);
+    }
+
+    /// <summary>
     /// An index cell nobody configured resolves to a default row, and a default row paints — so one
     /// unconfigured cell is enough to keep the overlay a surface. The safe direction.
     /// </summary>

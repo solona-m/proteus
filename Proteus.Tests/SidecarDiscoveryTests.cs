@@ -193,6 +193,29 @@ public class SidecarDiscoveryTests
         Assert.True(File.Exists(metaPath));
     }
 
+    /// <summary>
+    /// The Parts tab writes an imported mod's switch groups straight into the file. A colour edit made from an entry
+    /// loaded before that must not save the old list back over them: the switches would stop hiding anything.
+    /// </summary>
+    [Fact]
+    public void SaveMetadata_KeepsTheFilesContentAttributes_OverAStaleEntry()
+    {
+        using var tmpDir = new TempDirectory();
+        File.WriteAllText(Path.Combine(tmpDir.Path, "metadata.json"), """
+            { "Name": "Imported", "ContentAttributes": [
+              { "Group": "Toggles (Body)", "SetId": 43, "Slot": "Body", "DefaultMask": 1022, "Options": { "Bow": 1 } } ] }
+            """);
+        var entry = Entry(new ProteusMetadata { Name = "Imported", ContentAttributes = null }, sidecarRoot: tmpDir.Path);
+
+        MakeService().SaveMetadata(entry);
+
+        var saved = JsonSerializer.Deserialize<ProteusMetadata>(
+            File.ReadAllText(Path.Combine(tmpDir.Path, "metadata.json")), ProteusJson.MetadataRead)!;
+        var group = Assert.Single(saved.ContentAttributes!);
+        Assert.Equal("Toggles (Body)", group.Group);
+        Assert.Equal(1, group.Options["Bow"]);
+    }
+
     [Fact]
     public void SaveMetadata_WrittenJson_RoundTripsToEquivalentMetadata()
     {

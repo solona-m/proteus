@@ -205,7 +205,10 @@ public partial class CompositorService
                 log.Warning("[Proteus] Managed mod could not be enabled in the player collection ({0}) "
                           + "— composited textures will not apply", ec);
             else
+            {
                 penumbra.SetModPriority(collId.Value, SidecarDiscoveryService.ManagedModDir, WantedManagedModPriority);
+                log.Information("[Proteus] managed mod had no settings — re-enabled at priority {0}", WantedManagedModPriority);
+            }
             return;
         }
 
@@ -319,4 +322,84 @@ public partial class CompositorService
     /// Folded into every output filename, since everything downstream keys on the path.
     /// </summary>
     internal const int OutputFormatVersion = 1;
+
+    /// <summary>
+    /// Build the compressed copies of a freshly imported pack's own textures, so the first composite does not have to
+    /// (see <see cref="PackTextureCompressionCache"/>). Only art the author left uncompressed is converted, and only
+    /// while compression is switched on and this machine can afford it — the same gate the composite uses, asked once
+    /// here rather than per texture. Import runs off the framework thread already, and nothing here touches the game.
+    /// </summary>
+    internal void PrewarmPackTextures(string? modRoot)
+    {
+        if (string.IsNullOrEmpty(modRoot) || !config.EnableCompression || !textureLoader.CompressionAffordable())
+            return;
+
+        // Only the textures the sidecar says its pieces can be served from — not every .tex in the folder. A gear
+        // pack can carry hundreds that Penumbra serves directly and Proteus never republishes, and converting those
+        // would spend minutes of encoding and a sidecar full of copies nothing ever reads.
+        var declared = DeclaredPackTextures(modRoot);
+        if (declared.Count == 0) return;
+
+        int built = 0, refused = 0;
+        foreach (var (gamePath, disk) in declared)
+        {
+            if (!TextureLoader.IsSyncRecompressible(disk)) continue;   // the author already compressed it
+            if (PackTextureCompressionCache.TryEnsure(
+                    modRoot, disk, SecondSkinService.IsIndexTexturePath(gamePath), textureLoader, log, out _))
+                built++;
+            else
+                refused++;
+        }
+
+        if (built > 0 || refused > 0)
+            log.Information("[Proteus] pack textures: compressed {0} of this pack's own texture(s) into its sidecar; "
+                          + "{1} left as the author wrote them", built, refused);
+    }
+
+    /// <summary>
+    /// Every texture the freshly written sidecar names, as (published game path, the file inside the pack). Read back
+    /// from metadata.json rather than passed in, so this asks the same record the composite will ask. The game path is
+    /// what decides index-ness, which is why the pair is carried rather than the file alone.
+    /// </summary>
+    private List<(string GamePath, string Disk)> DeclaredPackTextures(string modRoot)
+    {
+        var found = new List<(string, string)>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (SidecarDiscoveryService.TryReadMetadata(modRoot) is not { } meta) return found;
+
+        void Collect(ContentPiece? piece)
+        {
+            if (piece?.TextureOptions is not { Count: > 0 } options) return;
+            foreach (var (gamePath, sources) in options)
+                foreach (var source in sources)
+                {
+                    if (string.IsNullOrWhiteSpace(source.File)) continue;
+                    var disk = Path.GetFullPath(Path.Combine(modRoot, source.File.Replace('/', Path.DirectorySeparatorChar)));
+                    // A pack can name the same file under several options; convert it once.
+                    if (!IsUnderDirectory(disk, modRoot) || !File.Exists(disk) || !seen.Add(disk)) continue;
+                    found.Add((gamePath, disk));
+                }
+        }
+
+        foreach (var piece in meta.Content ?? []) Collect(piece);
+        foreach (var group in meta.ContentGroups ?? [])
+            foreach (var option in group.Options ?? [])
+                foreach (var piece in option.Pieces) Collect(piece);
+
+        return found;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="path"/> sits inside <paramref name="directory"/>, compared as full paths. Also the
+    /// guard that keeps a pack's <c>..</c> in a declared file name from reaching outside its own folder.
+    /// </summary>
+    private static bool IsUnderDirectory(string path, string directory)
+    {
+        try
+        {
+            var root = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            return Path.GetFullPath(path).StartsWith(root, StringComparison.OrdinalIgnoreCase);
+        }
+        catch { return false; }
+    }
 }

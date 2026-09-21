@@ -218,6 +218,11 @@ internal static class ContentPieceResolver
     /// <summary>
     /// The file this pack's own selection supplies for a material, or null when its options say nothing. The LAST
     /// selected group wins (Penumbra's rule); default data (no group) always counts as ticked but ranks below every group.
+    /// <para/>
+    /// <paramref name="sources"/> is best-ranked first (<c>ContentPiece.SourcesFor</c>), which only matters among the
+    /// defaults: several of them can name one leaf under different IMC variant folders, and they DO disagree — a pack
+    /// that ships its dressed material at <c>v0002</c> and the vanilla one at <c>v0001</c> is the TexTools
+    /// "apply to all variants" shape. The best-ranked default is the one the author actually dressed.
     /// </summary>
     internal static string? SelectedMaterialFile(
         string modRoot, IReadOnlyList<ContentMaterialSource> sources,
@@ -243,7 +248,7 @@ internal static class ContentPieceResolver
             if (!IsUnder(modRoot, disk) || !File.Exists(disk)) continue;
 
             if (grouped) return disk;   // the last selected group, reached first — nothing earlier can beat it
-            fromDefault ??= disk;       // any default will do; two of them cannot disagree about one path
+            fromDefault = disk;         // overwritten while walking back, so the BEST-ranked default survives
         }
 
         return fromDefault;

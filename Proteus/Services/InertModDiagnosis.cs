@@ -9,10 +9,11 @@ public static class InertModDiagnosis
 {
     /// <summary>
     /// One body material's outcome on the last composite: how many overlays blended into each channel, whether
-    /// any asked for a diffuse, and whether a non-overlay pass (AO, skin-tint suppression) edited a buffer.
+    /// any asked for a diffuse or a normal, and whether a non-overlay pass (AO, skin-tint suppression) edited a buffer.
     /// </summary>
     public readonly record struct ChannelContribution(
-        string Material, int Diffuse, int Normal, int Mask, bool DiffuseWanted, bool Touched);
+        string Material, int Diffuse, int Normal, int Mask, bool DiffuseWanted, bool Touched,
+        bool NormalWanted = false);
 
     /// <summary>
     /// Why an enabled mod contributed nothing at all, in the order <see cref="Explain"/> tests them.

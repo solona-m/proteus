@@ -182,8 +182,8 @@ public class DesignBindingService : IDisposable
         }
         else
         {
-            log.Debug("[Proteus] design-binding: no boot restore (enabled={0}, glamourer={1}, lastActive={2}, bindings={3}).",
-                config.DesignBindingEnabled, glamourer.IsAvailable,
+            log.Debug("[Proteus] design-binding: no boot restore (proteus={0}, enabled={1}, glamourer={2}, lastActive={3}, bindings={4}).",
+                config.PluginEnabled, config.DesignBindingEnabled, glamourer.IsAvailable,
                 config.LastActiveDesignId?.ToString() ?? "(none)", store.Bindings.Count);
         }
     }
@@ -200,6 +200,106 @@ public class DesignBindingService : IDisposable
     }
 
     // ── UI / accessors ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Whether design binding may act at all. The master switch governs every feature, so a disabled plugin
+    /// binds nothing, restores nothing and writes no Penumbra settings - see <see cref="SetPluginEnabled"/>,
+    /// which stands the feature down the moment the switch is thrown rather than waiting for the next signal.
+    /// </summary>
+    private bool FeatureOn => config.PluginEnabled && config.DesignBindingEnabled;
+
+    /// <summary>
+    /// The master switch was thrown. Off: stand down exactly as turning the feature itself off does, so
+    /// nothing is left held in the player's collection. On: re-arm the boot restore, since Glamourer raises
+    /// no apply signal for the design the character is already wearing.
+    /// </summary>
+    /// <param name="then">
+    /// Started once the stand-down or re-arm is complete, so the caller can sequence
+    /// <c>CompositorService.SetEnabled</c> behind this rather than firing both and hoping: releasing the mods
+    /// Proteus holds AFTER the compositor had already redrawn would bring them back with no redraw behind them.
+    /// Run OFF the framework thread, and never skipped — see the body for why both matter.
+    /// </param>
+    public void SetPluginEnabled(bool on, Action? then = null)
+        // Called from the settings toggle, which draws on the UI thread; ApplyPluginEnabled touches
+        // framework-thread-only state (characterWorkGeneration, the boot-restore arming).
+        => framework.RunOnFrameworkThread(() =>
+        {
+            // finally, because the continuation carries the master switch's primary effect — withdrawing or
+            // republishing the output. A throw in the stand-down must not leave the plugin reporting itself
+            // off while its redirects stay live in Penumbra, which no later trigger would repair.
+            try { ApplyPluginEnabled(on); }
+            finally
+            {
+                // Task.Run, NOT an inline call: the continuation reaches SetGlassesOnFramework, which blocks
+                // on RunOnFrameworkThread(...).GetAwaiter().GetResult(). Issuing that from the framework
+                // thread would be safe only if Dalamud short-circuits a dispatch to the thread it is already
+                // on; the game deadlocks if it ever does not. Keep it on a thread we know is not that one.
+                if (then != null) Task.Run(then);
+            }
+        });
+
+    /// <summary>
+    /// Stand the feature down without forgetting what was on. Deliberately NOT <see cref="ClearOverrides"/>:
+    /// that wipes <see cref="Configuration.LastActiveDesignId"/>, which is the only key boot-restore step 1 has,
+    /// so clearing it here would destroy the very thing the re-enable re-arms to recover. This suspends the
+    /// active design the way a logout does and leaves the published overrides alone, so <c>AdoptRemembered</c>
+    /// sees them still live and simply marks the design active again.
+    ///
+    /// The mods held in the player's collection ARE let go — another plugin's mods locked off behind a disabled
+    /// Proteus is the thing the switch most needs to undo. <c>Rehold</c> re-establishes them when step 1 adopts.
+    /// </summary>
+    /// <returns>Whether anything actually changed.</returns>
+    private bool SuspendForPluginDisabled()
+    {
+        bool hadDesign;
+        lock (gate)
+        {
+            hadDesign = activeDesignId != null || suspendedDesignId != null;
+            if (activeDesignId != null) suspendedDesignId = activeDesignId;
+            activeDesignId = null;
+        }
+
+        // Stops the poll WITHOUT FinishBootRestore, which declares the restore resolved, drops the suspension
+        // and releases what a previous instance held. The re-enable arms a fresh one.
+        if (Interlocked.Exchange(ref bootRestoreDone, 1) == 0)
+        {
+            framework.Update -= OnBootRestoreTick;
+            compositor.BootCompositeHold = false;
+            log.Information("[Proteus] design-binding: boot restore stood down, Proteus was switched off.");
+        }
+
+        // Nothing is being restored any more: a temporary setting landing now must be left alone, and a queued
+        // post-load sweep must stand down.
+        DisarmTemporaryGuard();
+        characterWorkGeneration++;
+
+        return hadDesign | ReleaseHeldMods();
+    }
+
+    private void ApplyPluginEnabled(bool on)
+    {
+        if (!on)
+        {
+            if (SuspendForPluginDisabled())
+                log.Information("[Proteus] design-binding: stood down, Proteus was switched off.");
+            return;
+        }
+
+        if (!ShouldArmBootRestore()) return;
+
+        // The same arming RearmForNextLogin does, minus the login wait: the character is already here, and
+        // Glamourer will not re-announce the design it is wearing. No BootCompositeHold — that gates only the
+        // boot paths, not the recomposite SetEnabled is about to trigger, so taking it would buy nothing and
+        // could swallow a later boot poll. The restore triggers its own recomposite when it resolves.
+        bootDeadlineTick      = 0;
+        bootStep1Reported     = false;
+        bootAtLogin           = false;
+        bootAwaitingDeparture = false;
+        if (Interlocked.Exchange(ref bootRestoreDone, 0) == 1)
+            framework.Update += OnBootRestoreTick;
+        log.Information("[Proteus] design-binding: boot restore armed (Proteus switched on, {0} binding(s)).",
+            store.Bindings.Count);
+    }
 
     public Guid? ActiveDesignId { get { lock (gate) return activeDesignId; } }
 
@@ -234,7 +334,7 @@ public class DesignBindingService : IDisposable
     /// <summary>Called when a design's {guid}.json is written. Marshals to the framework thread.</summary>
     public void OnDesignSaved(Guid designId)
     {
-        if (!config.DesignBindingEnabled) return;
+        if (!FeatureOn) return;
         framework.RunOnFrameworkThread(() => Capture(designId));
     }
 
@@ -558,6 +658,10 @@ public class DesignBindingService : IDisposable
     /// applies that unequip the slots a design leaves unset.</param>
     public void Restore(Guid designId, bool stripImported = false)
     {
+        // A restore writes Penumbra mod settings, so it is the one thing that must never run behind the
+        // master switch. The UI hides the button, but IPC and deferred work reach this directly.
+        if (!FeatureOn) return;
+
         DesignBinding? b;
         lock (gate) store.Bindings.TryGetValue(designId, out b);
         if (b == null) return;
@@ -594,13 +698,23 @@ public class DesignBindingService : IDisposable
                     + "Penumbra content, which a disable would take with it: {1}",
                 held.Count, string.Join(", ", held));
 
+        // Every priority Proteus writes is named in the log with its value: "what set this mod to N?" has to be
+        // answerable from dalamud.log alone, and a restore is one of only two paths that writes one to a mod
+        // that is not our own. Collected rather than logged per mod, so a big binding stays one line, and read
+        // back before it is printed — see VerifyPriorityWrites.
+        var priorityWrites = new List<PriorityWrite>();
+
         if (collId != null)
         {
             foreach (var m in b.Mods)
             {
                 if (!present.Contains(m.ModDirectory)) continue; // mod no longer installed — skip
                 penumbra.SetModEnabled(collId.Value, m.ModDirectory, m.Enabled);
-                penumbra.SetModPriority(collId.Value, m.ModDirectory, m.Priority);
+                // Recorded only once Penumbra accepts it: a temporary collection (one Mare made, say) takes the
+                // call and does not apply it, and a log that claims a priority it never set is worse than none.
+                var pec = penumbra.SetModPriority(collId.Value, m.ModDirectory, m.Priority);
+                if (PriorityAccepted(m.ModDirectory, m.Priority, pec, out var already))
+                    priorityWrites.Add(new PriorityWrite(m.ModDirectory, m.Priority, already));
                 foreach (var (group, sel) in m.Options)
                     penumbra.SetModOption(collId.Value, m.ModDirectory, group, sel);
             }
@@ -614,7 +728,9 @@ public class DesignBindingService : IDisposable
         }
 
         compositor.TriggerRecomposite($"design-restore:{designId}");
-        log.Information("[Proteus] Restored Proteus state for design {0}.", b.DesignName ?? designId.ToString());
+        var prioritiesSet = collId != null ? VerifyPriorityWrites(collId.Value, priorityWrites) : [];
+        log.Information("[Proteus] Restored Proteus state for design {0}{1}.", b.DesignName ?? designId.ToString(),
+            prioritiesSet.Count > 0 ? $" — priorities set: {string.Join(", ", prioritiesSet)}" : "");
     }
 
     // ── Character snapshot (capture) ────────────────────────────────────────────
@@ -721,6 +837,72 @@ public class DesignBindingService : IDisposable
 
     // What each held mod is held as, with its recorded (un-raised) priority; a save reads this back. Framework thread only.
     private readonly Dictionary<string, PenumbraModSetting> heldTemporary = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>One priority write Penumbra accepted, pending the read-back in <see cref="VerifyPriorityWrites"/>.</summary>
+    private readonly record struct PriorityWrite(string ModDirectory, int Priority, bool Already);
+
+    /// <summary>
+    /// Whether Penumbra accepted one priority write. A refusal (<c>ModMissing</c> for a mod uninstalled since
+    /// the plan was built, say) is logged here and reported as not accepted.
+    /// </summary>
+    /// <remarks>
+    /// Accepted is NOT set: Penumbra answers <c>Success</c> for a write into a collection it cannot persist and
+    /// keeps the old value. Only <see cref="VerifyPriorityWrites"/> can tell the difference.
+    /// </remarks>
+    private bool PriorityAccepted(string modDir, int priority, PenumbraApiEc ec, out bool already)
+    {
+        already = ec == PenumbraApiEc.NothingChanged;
+        if (ec is PenumbraApiEc.Success or PenumbraApiEc.NothingChanged) return true;
+
+        log.Warning("[Proteus] design-restore: Penumbra would not set {0} to priority {1} ({2}).",
+            modDir, priority, ec);
+        return false;
+    }
+
+    /// <summary>
+    /// Read Penumbra back and report only the priorities that actually stuck, as the restore summary prints them.
+    /// </summary>
+    /// <remarks>
+    /// The return code cannot answer this. Penumbra accepts a write into a temporary collection — one Mare made,
+    /// say — and goes on reporting the old value; <c>CompositorService.TryRaisePriorityAbove</c> reads back for
+    /// exactly this reason. Without the read-back a summary line naming a mod and a number is worse than the bare
+    /// count it replaced, because it carries authority it has not earned. One bulk read covers the whole restore.
+    /// </remarks>
+    private List<string> VerifyPriorityWrites(Guid collId, List<PriorityWrite> accepted)
+    {
+        if (accepted.Count == 0) return [];
+
+        var live = penumbra.GetCollectionModSettings(collId, ignoreTemporary: true);
+        var notes = new List<string>(accepted.Count);
+        var stuck = new List<string>();
+
+        foreach (var (dir, priority, already) in accepted)
+        {
+            // Settings unreadable as a whole: say the write is unverified rather than vouch for it or drop it.
+            if (live == null) { notes.Add($"{dir}={priority} (unverified)"); continue; }
+
+            // Absent from the read means the mod has no settings at all, so the write cannot have landed.
+            var found = live.TryGetValue(dir, out var s);
+            if (!found || s.Priority != priority)
+            {
+                stuck.Add(found ? $"{dir}={s.Priority}, wanted {priority}"
+                                : $"{dir}=(no settings), wanted {priority}");
+                continue;
+            }
+
+            // Marked, not hidden: the mod IS at that value and Proteus asserted it, so it belongs in the answer
+            // to "what set this to N?" — but Proteus did not move it, and conflating the two misdirects whoever
+            // is reading the log.
+            notes.Add(already ? $"{dir}={priority} (already)" : $"{dir}={priority}");
+        }
+
+        if (stuck.Count > 0)
+            log.Warning("[Proteus] design-restore: Penumbra accepted {0} priority change(s) but still reports the "
+                      + "old value — the collection in use may be a temporary one that cannot be written to: {1}",
+                stuck.Count, string.Join(", ", stuck));
+
+        return notes;
+    }
 
     /// <summary>
     /// Let go of every mod Proteus is holding in the player's collection; returns whether anything was released.
@@ -913,6 +1095,12 @@ public class DesignBindingService : IDisposable
 
         RestorePlan? plan = null;
         var held = 0;
+        // Both feed the summary below. A character restore is the only path that writes a priority to a mod that
+        // is not Proteus's own, permanently via SetPriority or temporarily via a hold, so both are named with
+        // their values: the count alone cannot answer "what set this mod to N?". The permanent ones are read
+        // back before they are printed (VerifyPriorityWrites), so the log never claims one that did not land.
+        var priorityWrites = new List<PriorityWrite>();
+        var heldPriorities = new List<string>();
         using (compositor.SuppressModSettingEvents())
         {
             heldTemporary.Clear();
@@ -934,7 +1122,11 @@ public class DesignBindingService : IDisposable
                     foreach (var (dir, group, options) in plan.SetOptions)
                         penumbra.SetModOption(collId.Value, dir, group, options);
                     foreach (var (dir, priority) in plan.SetPriority)
-                        penumbra.SetModPriority(collId.Value, dir, priority);
+                    {
+                        var pec = penumbra.SetModPriority(collId.Value, dir, priority);
+                        if (PriorityAccepted(dir, priority, pec, out var already))
+                            priorityWrites.Add(new PriorityWrite(dir, priority, already));
+                    }
                     foreach (var (dir, enabled) in plan.SetEnabled)
                         penumbra.SetModEnabled(collId.Value, dir, enabled);
                 }
@@ -946,6 +1138,7 @@ public class DesignBindingService : IDisposable
                     if (ec == PenumbraApiEc.Success)
                     {
                         heldTemporary[recorded.ModDirectory] = recorded;
+                        heldPriorities.Add($"{recorded.ModDirectory}={priority}");
                         held++;
                     }
                     else
@@ -976,6 +1169,15 @@ public class DesignBindingService : IDisposable
             b.DesignName ?? designId.ToString(), held, plan.PriorityOffset, plan.ClearTemporary.Count, plan.Disable.Count,
             plan.SetOptions.Count, plan.SetPriority.Count, plan.SetEnabled.Count,
             plan.Missing.Count > 0 ? $"; not installed: {string.Join(", ", plan.Missing)}" : "");
+
+        // The counts above say how many; these say which, and to what. Kept to their own lines so the summary
+        // stays readable, and skipped entirely when nothing was written.
+        var prioritiesSet = VerifyPriorityWrites(collId.Value, priorityWrites);
+        if (prioritiesSet.Count > 0)
+            log.Information("[Proteus] design-restore: priorities set: {0}", string.Join(", ", prioritiesSet));
+        if (heldPriorities.Count > 0)
+            log.Information("[Proteus] design-restore: held at (offset +{0}): {1}",
+                plan.PriorityOffset, string.Join(", ", heldPriorities));
     }
 
     // ── Post-load sweep ─────────────────────────────────────────────────────────
@@ -1009,6 +1211,7 @@ public class DesignBindingService : IDisposable
 
     private void OnLocalPlayerRedrawn()
     {
+        if (!FeatureOn) return;
         if (Environment.TickCount64 < postLoadSweepUntil) QueuePostLoadSweep();
     }
 
@@ -1026,6 +1229,9 @@ public class DesignBindingService : IDisposable
 
     private void RunPostLoadSweep()
     {
+        // Re-checked here as well as at the trigger: a sweep queued before the switch was thrown lands a
+        // tick later, and it writes temporary mod settings.
+        if (!FeatureOn) return;
         if (Environment.TickCount64 >= postLoadSweepUntil) return;
         if (postLoadSweepGeneration != characterWorkGeneration || ActiveDesignId != postLoadSweepDesign) return;
 
@@ -1106,6 +1312,7 @@ public class DesignBindingService : IDisposable
 
     private void OnPenumbraModSettingChanged(ModSettingChange change, Guid collId, string modDir, bool inherited)
     {
+        if (!FeatureOn) return;
         if (change != ModSettingChange.TemporarySetting) return;
         if (Environment.TickCount64 >= Volatile.Read(ref temporaryGuardUntil)) return;
 
@@ -1293,6 +1500,8 @@ public class DesignBindingService : IDisposable
     /// </summary>
     public bool UpdateActiveBindingFromCurrentState()
     {
+        if (!FeatureOn) return false;
+
         Guid id;
         string? name;
         lock (gate)
@@ -1381,7 +1590,11 @@ public class DesignBindingService : IDisposable
     private JObject? preApplyState;
     private int preApplyRefreshQueued;
 
-    private void OnGlamourerStateChangedAny(StateChangeType _) => QueuePreApplyRefresh();
+    private void OnGlamourerStateChangedAny(StateChangeType _)
+    {
+        // Only bookkeeping for the apply path, which is gated; skipping it costs a Glamourer read per change.
+        if (FeatureOn) QueuePreApplyRefresh();
+    }
 
     private void QueuePreApplyRefresh()
     {
@@ -1418,7 +1631,7 @@ public class DesignBindingService : IDisposable
         if (Environment.TickCount64 < suppressUntilTick) return; // our own restore echo
 
         // Feature disabled → never restore, and drop any override left active so off means fully off.
-        if (!config.DesignBindingEnabled)
+        if (!FeatureOn)
         {
             if (IsApplySignal(type) && activeDesignId != null) ClearColorOverride();
             return;
@@ -1815,7 +2028,7 @@ public class DesignBindingService : IDisposable
     /// only when a design was active: the last session may have ended on a revert.</summary>
     private bool ShouldArmBootRestore()
     {
-        if (!config.DesignBindingEnabled || !glamourer.IsAvailable) return false;
+        if (!FeatureOn || !glamourer.IsAvailable) return false;
         lock (gate) return config.LastActiveDesignId != null || store.Bindings.Count > 0;
     }
 
@@ -1910,7 +2123,7 @@ public class DesignBindingService : IDisposable
         if (ActiveDesignId != null) { FinishBootRestore("a live Glamourer apply got there first"); return; }
 
         // Toggled off between arming and now: off means off.
-        if (!config.DesignBindingEnabled) { FinishBootRestore("design binding disabled"); return; }
+        if (!FeatureOn) { FinishBootRestore(config.PluginEnabled ? "design binding disabled" : "Proteus disabled"); return; }
 
         var state = glamourer.GetObjectState(0);
         if (state == null)

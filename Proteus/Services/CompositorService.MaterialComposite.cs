@@ -44,10 +44,13 @@ public partial class CompositorService
             private int normalContributors;
             private int maskContributors;
             private bool diffuseWanted;
+            private bool normalWanted;
             private bool warnedNoDiffuseSampler;
+            private bool warnedNoNormalSampler;
+            private bool warnedNoBaseNormal;
             private Dictionary<string, string?> lastSrcBodyTypeByMod = null!;
             private Dictionary<string, byte[]> paintedByMod = null!;
-            private Dictionary<(string Mod, int Stack, int W, int H), byte[]?> claimCache = null!;
+            private Dictionary<(string Mod, int Stack, int W, int H, OverlayChannel Ch), byte[]?> claimCache = null!;
             private const int glowMapCap = 1024;
             private List<(string ModDir, string? Group, string? Option, byte[] Map, int W, int H)> glowMaps = null!;
             private long tMaskRelief;
@@ -106,7 +109,8 @@ public partial class CompositorService
                     run.compositor.log.Warning("[Proteus] No textures found for material: {0}", mtrlGamePath);
                     // Record it before bailing, so the most broken materials still appear in the panel.
                     run.contributions[mtrlGamePath] = new ChannelContribution(mtrlGamePath, 0, 0, 0,
-                        DiffuseWanted: pairs.Any(p => p.Overlay.Descriptor.Diffuse != null), Touched: false);
+                        DiffuseWanted: pairs.Any(p => p.Overlay.Descriptor.Diffuse != null), Touched: false,
+                        NormalWanted: pairs.Any(p => p.Overlay.Descriptor.Normal != null));
                     return false;
                 }
 
@@ -137,11 +141,15 @@ public partial class CompositorService
                 normalContributors = 0;
                 maskContributors = 0;
 
-                // At least one overlay on this material asked for a diffuse; with zero contributors that is the fault the UI shows red.
+                // At least one overlay on this material asked for a diffuse (or a normal); with zero contributors that is the
+                // fault the UI shows red.
                 diffuseWanted = false;
+                normalWanted = false;
 
-                // The "no diffuse sampler" warning is about the material: log it once, not per overlay.
+                // These warnings are about the material: log each once, not per overlay.
                 warnedNoDiffuseSampler = false;
+                warnedNoNormalSampler = false;
+                warnedNoBaseNormal = false;
                 return true;
             }
 
@@ -159,7 +167,9 @@ public partial class CompositorService
                 // An overlay is faded by whatever composites above it in this material's order (`pairs`, bottom→top), the same
                 // ranking as the tab strip and Rank(). Fading coverage also stops a lower normal compounding through an opaque
                 // higher one. Same-group options stack against each other; the claim is a per-texel alpha union (UnionAlphaInto).
-                claimCache = new Dictionary<(string Mod, int Stack, int W, int H), byte[]?>();
+                // Keyed by channel as well: an overlay only claims a channel it supplies art in, so a diffuse-only group cannot
+                // erase a normal-only group beneath it in the same mod.
+                claimCache = new Dictionary<(string Mod, int Stack, int W, int H, OverlayChannel Ch), byte[]?>();
 
                 // Per-overlay glow row-maps for the live "glow" button, from the diffuse phase, downsampled to bound memory
                 // (the highlighter nearest-samples back up).
@@ -217,6 +227,8 @@ public partial class CompositorService
                                 reliefMasks.Add((normalOv, maskPng));
                         }
                         CombineMaskReliefs(baseN, wN, hN, reliefMasks);
+                        // A writer of the normal buffer, so the untouched-normal hand-back in PublishChannels must not fire.
+                        if (reliefMasks.Count > 0) normalBlended = true;
 
                         var msk = CombinedMaskAt(modDir, wN, hN, maskSrcBodyType);
                         if (msk != null)
@@ -366,6 +378,18 @@ public partial class CompositorService
                     run.compositor.log.Debug("[Proteus] Nothing composited into the diffuse of {0} — leaving the base texture "
                             + "in place rather than republishing it", mtrlGamePath);
                     baseD = null;
+                }
+
+                // Same for the normal. normalBlended covers every writer — the overlay blend, skin-tint suppression, the Masks
+                // relief pass and the AO indent — so this only fires when the buffer was loaded and left alone, which is what a
+                // normal declared on a material nothing could reach looks like. The AO pass has its own narrower hand-back for
+                // the case where it was the one that loaded it. faceDoubled is exempt for the same reason the diffuse is: on a
+                // doubled face material the relayout IS the change, and LoadBaseNormalHere is the only thing that applies it.
+                if (!normalBlended && !faceDoubled && baseN is { Length: > 0 })
+                {
+                    run.compositor.log.Debug("[Proteus] Nothing composited into the normal of {0} — leaving the base texture "
+                            + "in place rather than republishing it", mtrlGamePath);
+                    baseN = null;
                 }
 
                 // Edited to no effect: a fault only if an overlay blended (it looks like the overlay not applying). AO changing
@@ -525,7 +549,7 @@ public partial class CompositorService
 
                 run.contributions[mtrlGamePath] = new ChannelContribution(mtrlGamePath,
                     diffuseContributors, normalContributors, maskContributors,
-                    diffuseWanted, diffuseBlended || normalBlended || maskBlended);
+                    diffuseWanted, diffuseBlended || normalBlended || maskBlended, normalWanted);
 
                 if (channels.Length > 0)
                 {
@@ -541,6 +565,13 @@ public partial class CompositorService
                     run.compositor.log.Warning("[Proteus] Nothing reached the diffuse of {0} although an overlay declared one "
                               + "— the body will render its base skin colour (normal: {1}, mask: {2})",
                         mtrlGamePath, normalBlended ? "applied" : "not applied", maskBlended ? "applied" : "not applied");
+
+                // The normal's half of the same fault: relief was declared and none of it landed, so the body keeps whatever
+                // normal it already had. Its cause is named per overlay by ReportEmptyNormal; this is the headline.
+                if (normalWanted && normalContributors == 0)
+                    run.compositor.log.Warning("[Proteus] Nothing reached the normal of {0} although an overlay declared one "
+                              + "— the body will render its base skin relief (diffuse: {1}, mask: {2})",
+                        mtrlGamePath, diffuseBlended ? "applied" : "not applied", maskBlended ? "applied" : "not applied");
             }
 
             // TextureLoader caches decoded PNGs across runs (path + mtime) and dedups concurrent requests. Timed even on a hit.
@@ -943,12 +974,13 @@ public partial class CompositorService
                 }
                 else if (d.Normal != null)
                 {
+                    // Alpha, not blue: on skin.shpk blue is skin-colour influence, never where the overlay is.
                     var p = Path.Combine(e.SidecarRoot, d.Normal);
                     var n = LoadRemapped(p, tw, th, srcT);
                     if (n != null)
                     {
                         cov = new byte[n.Length];
-                        for (int i = 0; i < n.Length; i += 4) cov[i + 3] = n[i + 2];   // blue → opacity
+                        for (int i = 0; i < n.Length; i += 4) cov[i + 3] = n[i + 3];
                     }
                 }
                 else if (d.Mask != null)
@@ -986,23 +1018,41 @@ public partial class CompositorService
                 return cov;
             }
 
-            // Union alpha of every same-mod overlay composited above this one, built as a suffix union (above i = above i+1
-            // plus the overlay between). The buffer is shared when that overlay adds nothing.
-            private byte[]? ClaimAt(string modDir, int stackIdx, int tw, int th)
+            // What one overlay claims in `ch` from the overlays beneath it: its coverage, except that a Compound normal-only
+            // overlay claims the normal channel only where it has relief (OverlayBlend.ReliefPresence). Replace mode overwrites
+            // by design, and an overlay with a diffuse is a surface whose silhouette hides the relief under it.
+            private byte[]? ClaimCoverageOf(OverlayEntry e, ResolvedOverlay o, int tw, int th, OverlayChannel ch)
             {
-                var key = (modDir, stackIdx, tw, th);
+                var cov = CoverageOf(e, o, tw, th);
+                var d = o.Descriptor;
+                if (cov == null || ch != OverlayChannel.Normal || d.Diffuse != null || d.Normal == null
+                    || d.NormalMode != NormalMode.Compound)
+                    return cov;
+
+                var n = LoadRemapped(Path.Combine(e.SidecarRoot, d.Normal), tw, th, SrcTypeOf(d));
+                return n == null ? cov : ScaleAlphaByPlane(cov, ReliefPresence(n, tw, th));
+            }
+
+            // Union alpha of every same-mod overlay composited above this one THAT SUPPLIES `ch`, built as a suffix union
+            // (above i = above i+1 plus the overlay between). The buffer is shared when that overlay adds nothing.
+            // The channel scoping is what lets one mod ship a whole-body diffuse group and a whole-body normal group:
+            // neither can claim the other's channel, so neither erases the other. See OverlayBlend.Supplies.
+            private byte[]? ClaimAt(string modDir, int stackIdx, int tw, int th, OverlayChannel ch)
+            {
+                var key = (modDir, stackIdx, tw, th, ch);
                 if (claimCache.TryGetValue(key, out var hit)) return hit;
 
                 byte[]? acc = null;
                 if (stackIdx + 1 < pairs.Count)
                 {
-                    var above = ClaimAt(modDir, stackIdx + 1, tw, th);
+                    var above = ClaimAt(modDir, stackIdx + 1, tw, th, ch);
                     acc = above;
 
                     var (e, o) = pairs[stackIdx + 1];
-                    if (string.Equals(e.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase))
+                    if (string.Equals(e.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase)
+                     && Supplies(o.Descriptor, ch))
                     {
-                        var cov = CoverageOf(e, o, tw, th);
+                        var cov = ClaimCoverageOf(e, o, tw, th, ch);
                         if (cov != null)
                         {
                             // Clone before mutating: `above` is cached and shared by every deeper level.
@@ -1015,16 +1065,17 @@ public partial class CompositorService
                 return acc;
             }
 
-            // Fade a coverage buffer by what the overlays above it already claim. `suppress` times only the clone and serial
-            // pass, since ClaimAt's work is already charged to `cov`.
-            private byte[]? Suppress(byte[]? cov, OverlayEntry e, ResolvedOverlay o, int stackIdx, int tw, int th)
+            // Fade a coverage buffer by what the overlays above it already claim IN `ch`. `suppress` times only the clone and
+            // serial pass, since ClaimAt's work is already charged to `cov`.
+            private byte[]? Suppress(byte[]? cov, OverlayEntry e, ResolvedOverlay o, int stackIdx, int tw, int th,
+                                     OverlayChannel ch)
             {
                 if (cov == null) return null;
 
                 // A print is clipped by what its mod painted, the opposite of suppression, so it is exempt. Whole-overlay, erring
                 // toward showing art.
                 if (AnyBlendRow(o.ColorTableRows)) return cov;
-                var claim = ClaimAt(e.ModDirectory, stackIdx, tw, th);
+                var claim = ClaimAt(e.ModDirectory, stackIdx, tw, th, ch);
                 if (claim == null) return cov;
 
                 // Timed from here, after ClaimAt.

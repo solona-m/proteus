@@ -389,13 +389,7 @@ public class PresetBar
     {
         var last = config.LastExportDirectory;
         if (!string.IsNullOrEmpty(last) && Directory.Exists(last)) return last;
-
-        foreach (var folder in new[] { Environment.SpecialFolder.DesktopDirectory, Environment.SpecialFolder.Desktop })
-        {
-            var path = Environment.GetFolderPath(folder);
-            if (!string.IsNullOrEmpty(path) && Directory.Exists(path)) return path;
-        }
-        return null;
+        return DesktopFolder.Path();
     }
 
     private void RememberDirectory(string path)

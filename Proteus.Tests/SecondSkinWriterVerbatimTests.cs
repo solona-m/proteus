@@ -1152,6 +1152,650 @@ public class SecondSkinWriterVerbatimTests(Xunit.Abstractions.ITestOutputHelper 
         Validate(body);
     }
 
+    private const string RueHands =
+        @"E:\Penumbradt\hs-Rue+-2.2.7-y0f\files\Hands - Smallclothes\Short Nails\chara\equipment\e0000\model\c0201e0000_glv.mdl";
+
+    private const string BiboHands =
+        @"E:\Penumbradt\Bibo+\Hands\Small Clothes\chara\equipment\e0000\model\c0201e0000_glv.mdl";
+
+    /// <summary>
+    /// A glove has to cover the nails. Every one of these hands lays a small UV island of skin under each nail,
+    /// apart from the finger in the atlas, and glove art paints the fingers only — modelled here by painting every
+    /// island but the small ones. Without CoverNails the trim opens a hole over each nail; with it the nail beds
+    /// take the fingertip's UV and stay. Set PROTEUS_NAIL_OBJ to a folder to get the shells as .obj files.
+    /// </summary>
+    [Theory]
+    [InlineData(NeoHands)]
+    [InlineData(RueHands)]
+    [InlineData(BiboHands)]
+    public void A_glove_covers_the_nails(string path)
+    {
+        if (!File.Exists(path)) return;
+
+        var hand = File.ReadAllBytes(path);
+        const int size = 1024;
+        var layers = new[]
+        {
+            new SecondSkinLayer
+            {
+                MaterialName = "/mt_c0201a0053_rir_a.mtrl", Coverage = PaintFingersNotNailBeds(hand, size),
+                CoverageWidth = size, CoverageHeight = size,
+            },
+        };
+        var log = new List<string>();
+
+        var bareShell = SecondSkinWriter.Build(new[] { new SecondSkinWriter.SourceSpec(hand) }, layers, null, out var bare);
+        var nailed = SecondSkinWriter.Build(new[] { new SecondSkinWriter.SourceSpec(hand, CoverNails: true) },
+                                            layers, null, out var stats, log.Add);
+        foreach (var l in log.Where(l => l.StartsWith("nail beds", StringComparison.Ordinal))) o.WriteLine(l);
+        o.WriteLine($"triangles {bare.TrianglesOut} -> {stats.TrianglesOut}");
+
+        Assert.True(Rescued(log) > 0, "no nail bed moved onto the fingertip");
+        Assert.True(stats.TrianglesOut > bare.TrianglesOut, "the nail beds were still trimmed away");
+        Validate(nailed);
+
+        // Art that paints the nails too STILL moves them: what it puts there is the nail, which is what shows
+        // through a glove.
+        var all = new[] { new SecondSkinLayer { MaterialName = "/mt_c0201a0053_rir_a.mtrl",
+                                                Coverage = Enumerable.Repeat((byte)255, size * size).ToArray(),
+                                                CoverageWidth = size, CoverageHeight = size } };
+        var allLog = new List<string>();
+        SecondSkinWriter.Build(new[] { new SecondSkinWriter.SourceSpec(hand, CoverNails: true) },
+                               all, null, out _, allLog.Add);
+        Assert.True(Rescued(allLog) > 0, "art painting the nails should still put the glove over them");
+
+        // ...but a FINGERLESS glove leaves them alone: the fingertip they would land on is unpainted, so the nails
+        // are trimmed away with the fingers rather than dressed in fabric from elsewhere.
+        var none = new[] { new SecondSkinLayer { MaterialName = "/mt_c0201a0053_rir_a.mtrl",
+                                                 Coverage = PaintNailBedsOnly(hand, size),
+                                                 CoverageWidth = size, CoverageHeight = size } };
+        var noneLog = new List<string>();
+        SecondSkinWriter.Build(new[] { new SecondSkinWriter.SourceSpec(hand, CoverNails: true) },
+                               none, null, out _, noneLog.Add);
+        Assert.Equal(0, Rescued(noneLog));
+
+        if (Environment.GetEnvironmentVariable("PROTEUS_NAIL_OBJ") is { Length: > 0 } dir)
+        {
+            var stem = Path.Combine(dir, Path.GetFileNameWithoutExtension(path).Replace(' ', '_'));
+            ToeCapDiagTests.WriteObj(bareShell, stem + "_glove_before.obj");
+            ToeCapDiagTests.WriteObj(nailed, stem + "_glove_after.obj");
+            o.WriteLine($"wrote {stem}_glove_before.obj / _after.obj");
+        }
+    }
+
+    /// <summary>
+    /// The body-material nails (the hands' atr_gv_a submesh) survive the redundancy pass and the join cut in a
+    /// whole layout. Both read them as copies of the fingertips they lie on — every nail vertex is within the 5 mm
+    /// coincidence distance — and dropped them, so no glove could ever cover them.
+    /// </summary>
+    [Fact]
+    public void Body_material_nails_survive_the_redundancy_pass()
+    {
+        var parts = Bodies.First(b => b.Body == "Neolithe").Parts;
+        if (!parts.All(File.Exists)) return;
+        var layers = new[] { new SecondSkinLayer { MaterialName = "/mt_c0201a0053_rir_a.mtrl", Coverage = null } };
+        var hidden = new HashSet<string> { "atr_gv_b" };   // the game's pick: body-material nails, not the nail mesh
+
+        (int Tris, List<string> Log) Build(bool coverNails)
+        {
+            var log = new List<string>();
+            var specs = parts.Select((p, i) => new SecondSkinWriter.SourceSpec(File.ReadAllBytes(p),
+                DropConnectors: true, HiddenAttributes: i == 2 ? hidden : null, CoverNails: i == 2 && coverNails)).ToList();
+            var bytes = SecondSkinWriter.Build(specs, layers, null, out var st, log.Add);
+            Validate(bytes);
+            return (st.TrianglesOut, log);
+        }
+
+        var (before, beforeLog) = Build(false);
+        var (after, afterLog) = Build(true);
+        foreach (var l in afterLog.Where(l => l.StartsWith("nail beds", StringComparison.Ordinal))) o.WriteLine(l);
+        o.WriteLine($"triangles {before} -> {after}");
+
+        static bool DropsNails(List<string> log) => log.Any(l => l.StartsWith("redundant drop: source 2", StringComparison.Ordinal)
+                                                                  && l.Contains("attrs 0x1", StringComparison.Ordinal));
+        Assert.True(DropsNails(beforeLog), "the unflagged build no longer drops the nails — this test measures nothing");
+        Assert.False(DropsNails(afterLog), "the hands' nails were dropped as redundant");
+        Assert.True(after - before >= 1288, $"only {after - before} triangles came back; the nail submesh has 1288");
+    }
+
+    /// <summary>
+    /// The hands as the GAME built them, from %TEMP%\proteus-shell-dump (see SecondSkinService.DumpShellInputs):
+    /// per layer, how many of the nail mesh's vertices have shell over them, and the coverage the shell samples
+    /// there. Writes each layer's hand shell and the nails to the Desktop. Does nothing without a dump.
+    /// </summary>
+    [Fact]
+    public void Nails_from_game_dump()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "proteus-shell-dump");
+        if (!Directory.Exists(dir)) return;
+        var desk = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "OneDrive", "Desktop", "nails");
+        Directory.CreateDirectory(desk);
+
+        foreach (var info in Directory.GetFiles(dir, "host*_inputs.txt"))
+        {
+            var pre = info[..^"inputs.txt".Length];
+            var text = File.ReadAllLines(info);
+            // A dump from a build that predates the flag names no hands, so every source gets a turn.
+            bool anyFlagged = text.Any(l => l.Contains("coverNails=True", StringComparison.Ordinal));
+            for (int s = 0; ; s++)
+            {
+                var line = Array.Find(text, l => l.StartsWith($"source[{s}] ", StringComparison.Ordinal));
+                if (line == null) break;
+                if (anyFlagged && !line.Contains("coverNails=True", StringComparison.Ordinal)) continue;
+                o.WriteLine($"{Path.GetFileName(info)}: {line}");
+                var hand = File.ReadAllBytes($"{pre}body{s}.mdl");
+                SecondSkinWriter.TryReadLod0Geometry(hand, out var np, out _, out var nt, out _, out _,
+                                                     skinOnly: false, nonSkin: true);
+                // Nails are a handful of small patches. Without the flag to go on, anything bigger is some other
+                // part — a face carries eyes, lashes and brows here — and measuring it says nothing about nails.
+                if (!anyFlagged && np.Length / 3 > 2000) continue;
+                o.WriteLine($"  nail mesh: {np.Length / 3} verts, {nt.Length / 3} tris; materials: "
+                          + string.Join(", ", SecondSkinWriter.MaterialNames(hand)));
+                var hidden = System.Text.RegularExpressions.Regex.Match(line, @"hiddenAttrs=(\S*)").Groups[1].Value;
+                var shapes = System.Text.RegularExpressions.Regex.Match(line, @"shapes=(\S*)").Groups[1].Value;
+
+                for (int i = 0; ; i++)
+                {
+                    var ll = Array.Find(text, l => l.StartsWith($"layer[{i}] ", StringComparison.Ordinal));
+                    if (ll == null) break;
+                    var cvm = System.Text.RegularExpressions.Regex.Match(ll, @"coverage=(\d+)x(\d+)");
+                    var covPath = $"{pre}layer{i}_coverage.raw";
+                    var layer = new SecondSkinLayer
+                    {
+                        MaterialName = "/mt_c0201a0053_rir_a.mtrl",
+                        Coverage = cvm.Success && File.Exists(covPath) ? File.ReadAllBytes(covPath) : null,
+                        CoverageWidth = cvm.Success ? int.Parse(cvm.Groups[1].Value) : 0,
+                        CoverageHeight = cvm.Success ? int.Parse(cvm.Groups[2].Value) : 0,
+                    };
+                    var log = new List<string>();
+                    byte[] shell;
+                    try
+                    {
+                        // EVERY source, with the flags the game gave it: the redundancy pass decides per LAYOUT.
+                        var specs = new List<SecondSkinWriter.SourceSpec>();
+                        for (int q = 0; ; q++)
+                        {
+                            var sl = Array.Find(text, l => l.StartsWith($"source[{q}] ", StringComparison.Ordinal));
+                            if (sl == null) break;
+                            var sh = System.Text.RegularExpressions.Regex.Match(sl, @"shapes=(\S*)").Groups[1].Value;
+                            var hd = System.Text.RegularExpressions.Regex.Match(sl, @"hiddenAttrs=(\S*)").Groups[1].Value;
+                            specs.Add(new SecondSkinWriter.SourceSpec(File.ReadAllBytes($"{pre}body{q}.mdl"),
+                                EnabledShapes: sh.Length > 0 ? new HashSet<string>(sh.Split(',')) : null,
+                                HiddenAttributes: hd.Length > 0 ? new HashSet<string>(hd.Split(',')) : null,
+                                DropConnectors: sl.Contains("dropRedundant=True", StringComparison.Ordinal),
+                                CoverNails: anyFlagged ? sl.Contains("coverNails=True", StringComparison.Ordinal) : q == s));
+                        }
+                        shell = SecondSkinWriter.Build(specs, new[] { layer }, null, out _, log.Add);
+                    }
+                    catch (EmptyShellException) { o.WriteLine($"  layer {i}: nothing on the hands"); continue; }
+                    o.WriteLine($"  layer {i} ({ll}):");
+                    foreach (var l in log.Where(l => l.StartsWith("nail beds", StringComparison.Ordinal)
+                                                  || l.Contains("redundan", StringComparison.OrdinalIgnoreCase)
+                                                  || l.Contains("drop", StringComparison.OrdinalIgnoreCase)
+                                                  || l.StartsWith("attributes", StringComparison.Ordinal)))
+                        o.WriteLine("    " + l);
+
+                    // Nail vertices with shell over them: any shell triangle within 1 mm.
+                    SecondSkinWriter.TryReadLod0Geometry(shell, out var sp, out var su, out var st, out _, out _, skinOnly: false);
+                    int covered = 0;
+                    float worstGap = 0f;
+                    for (int v = 0; v < np.Length / 3; v++)
+                    {
+                        float best = float.MaxValue;
+                        for (int t = 0; t + 2 < st.Length; t += 3)
+                        {
+                            if (Math.Max(st[t], Math.Max(st[t + 1], st[t + 2])) * 3 + 2 >= sp.Length) continue;
+                            float cx = (sp[st[t] * 3] + sp[st[t + 1] * 3] + sp[st[t + 2] * 3]) / 3f - np[v * 3];
+                            float cy = (sp[st[t] * 3 + 1] + sp[st[t + 1] * 3 + 1] + sp[st[t + 2] * 3 + 1]) / 3f - np[v * 3 + 1];
+                            float cz = (sp[st[t] * 3 + 2] + sp[st[t + 1] * 3 + 2] + sp[st[t + 2] * 3 + 2]) / 3f - np[v * 3 + 2];
+                            best = MathF.Min(best, cx * cx + cy * cy + cz * cz);
+                        }
+                        float d = MathF.Sqrt(best);
+                        if (d <= 0.002f) covered++;
+                        worstGap = MathF.Max(worstGap, d);
+                    }
+                    o.WriteLine($"    nail verts with shell (a triangle centre within 2 mm): {covered}/{np.Length / 3}, "
+                              + $"furthest from any shell triangle {worstGap:F4}");
+                    ToeCapDiagTests.WriteObj(shell, Path.Combine(desk, $"hands_layer{i}_shell.obj"));
+
+                    // How big each nail-bed island is on the coverage map, and what the map says under it.
+                    if (layer.Coverage is { } cov)
+                    {
+                        SecondSkinWriter.TryReadLod0Geometry(hand, out _, out var hu, out var ht);
+                        int nvv = hu.Length / 2;
+                        var par = new int[nvv];
+                        for (int q = 0; q < nvv; q++) par[q] = q;
+                        int Find(int x) { while (par[x] != x) x = par[x] = par[par[x]]; return x; }
+                        for (int t = 0; t + 2 < ht.Length; t += 3)
+                        {
+                            int a = Find(ht[t]), b = Find(ht[t + 1]); if (a != b) par[a] = b;
+                            a = Find(ht[t + 1]); b = Find(ht[t + 2]); if (a != b) par[a] = b;
+                        }
+                        var cnt = new Dictionary<int, int>();
+                        for (int t = 0; t + 2 < ht.Length; t += 3) { int r = Find(ht[t]); cnt[r] = cnt.GetValueOrDefault(r) + 1; }
+                        int bedMax = (int)(cnt.Values.Max() * 0.2f);
+                        int w = layer.CoverageWidth;
+                        foreach (var r in cnt.Keys.Where(r => cnt[r] <= bedMax).Take(6))
+                        {
+                            float u0 = 9, u1 = -9, v0 = 9, v1 = -9;
+                            for (int q = 0; q < nvv; q++)
+                                if (Find(q) == r)
+                                {
+                                    u0 = MathF.Min(u0, hu[q * 2]); u1 = MathF.Max(u1, hu[q * 2]);
+                                    v0 = MathF.Min(v0, hu[q * 2 + 1]); v1 = MathF.Max(v1, hu[q * 2 + 1]);
+                                }
+                            int x0 = (int)(u0 * w), x1 = (int)(u1 * w), y0 = (int)(v0 * w), y1 = (int)(v1 * w);
+                            var vals = new List<string>();
+                            for (int y = y0 - 1; y <= y1 + 1; y++)
+                            {
+                                var row = new List<string>();
+                                for (int x = x0 - 1; x <= x1 + 1; x++)
+                                    row.Add(cov[(((y % w) + w) % w) * w + (((x % w) + w) % w)].ToString("D3"));
+                                vals.Add(string.Join(" ", row));
+                            }
+                            o.WriteLine($"    island {cnt[r]} tris: uv u {u0:F4}..{u1:F4} v {v0:F4}..{v1:F4} = "
+                                      + $"{x1 - x0 + 1}x{y1 - y0 + 1} texels; map around it:");
+                            foreach (var row in vals) o.WriteLine("      " + row);
+                        }
+                    }
+                }
+                ToeCapDiagTests.WriteObj(hand, Path.Combine(desk, "hands_body.obj"));
+                o.WriteLine($"  wrote {desk}");
+
+                // Do the nails skin like the skin under them? Nearest skin vertex per nail vertex, weights compared.
+                SecondSkinWriter.TryReadLod0Geometry(hand, out var kp, out _, out _, out var kw, out _);
+                SecondSkinWriter.TryReadLod0Geometry(hand, out var np2, out _, out _, out var nw, out _,
+                                                     skinOnly: false, nonSkin: true);
+                int same = 0, differ = 0;
+                float worstDiff = 0f;
+                var examples = new List<string>();
+                for (int v = 0; v < np2.Length / 3; v++)
+                {
+                    int best = -1; float bd = float.MaxValue;
+                    for (int k = 0; k < kp.Length / 3; k++)
+                    {
+                        float dx = kp[k * 3] - np2[v * 3], dy = kp[k * 3 + 1] - np2[v * 3 + 1], dz = kp[k * 3 + 2] - np2[v * 3 + 2];
+                        float d = dx * dx + dy * dy + dz * dz;
+                        if (d < bd) { bd = d; best = k; }
+                    }
+                    var a = nw[v].ToDictionary(x => x.Bone, x => x.W);
+                    var b = kw[best].ToDictionary(x => x.Bone, x => x.W);
+                    float diff = a.Keys.Union(b.Keys).Sum(bn => MathF.Abs(a.GetValueOrDefault(bn) - b.GetValueOrDefault(bn)));
+                    if (diff < 0.05f) same++; else differ++;
+                    if (diff > worstDiff) worstDiff = diff;
+                    if (diff >= 0.05f && examples.Count < 6)
+                        examples.Add($"nail [{string.Join(" ", nw[v].Select(x => $"{x.Bone}:{x.W:F2}"))}] vs skin "
+                                   + $"[{string.Join(" ", kw[best].Select(x => $"{x.Bone}:{x.W:F2}"))}] at {MathF.Sqrt(bd):F5}");
+                }
+                o.WriteLine($"  nail weights vs nearest skin vertex: {same} match, {differ} differ (worst L1 {worstDiff:F2})");
+                foreach (var e in examples) o.WriteLine("    " + e);
+            }
+        }
+    }
+
+    /// <summary>The point of triangle abc closest to p.</summary>
+    private static (float X, float Y, float Z) ClosestPointOnTriangle(
+        float px, float py, float pz, float ax, float ay, float az,
+        float bx, float by, float bz, float cx, float cy, float cz)
+    {
+        float abx = bx - ax, aby = by - ay, abz = bz - az;
+        float acx = cx - ax, acy = cy - ay, acz = cz - az;
+        float apx = px - ax, apy = py - ay, apz = pz - az;
+        float d1 = abx * apx + aby * apy + abz * apz, d2 = acx * apx + acy * apy + acz * apz;
+        if (d1 <= 0 && d2 <= 0) return (ax, ay, az);
+
+        float bpx = px - bx, bpy = py - by, bpz = pz - bz;
+        float d3 = abx * bpx + aby * bpy + abz * bpz, d4 = acx * bpx + acy * bpy + acz * bpz;
+        if (d3 >= 0 && d4 <= d3) return (bx, by, bz);
+
+        float vc = d1 * d4 - d3 * d2;
+        if (vc <= 0 && d1 >= 0 && d3 <= 0)
+        {
+            float v0 = d1 / (d1 - d3);
+            return (ax + abx * v0, ay + aby * v0, az + abz * v0);
+        }
+
+        float cpx = px - cx, cpy = py - cy, cpz = pz - cz;
+        float d5 = abx * cpx + aby * cpy + abz * cpz, d6 = acx * cpx + acy * cpy + acz * cpz;
+        if (d6 >= 0 && d5 <= d6) return (cx, cy, cz);
+
+        float vb = d5 * d2 - d1 * d6;
+        if (vb <= 0 && d2 >= 0 && d6 <= 0)
+        {
+            float w0 = d2 / (d2 - d6);
+            return (ax + acx * w0, ay + acy * w0, az + acz * w0);
+        }
+
+        float va = d3 * d6 - d5 * d4;
+        if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0)
+        {
+            float w1 = (d4 - d3) / (d4 - d3 + (d5 - d6));
+            return (bx + (cx - bx) * w1, by + (cy - by) * w1, bz + (cz - bz) * w1);
+        }
+
+        float den = 1f / (va + vb + vc);
+        float v2 = vb * den, w2 = vc * den;
+        return (ax + abx * v2 + acx * w2, ay + aby * v2 + acy * w2, az + abz * v2 + acz * w2);
+    }
+
+    /// <summary>
+    /// A glove whose art paints the fingers and NOT the nail charts still takes the nails off: that is the usual
+    /// glove, and the reason the nails showed through in the first place. Asking only the nail's own island whether
+    /// it is covered left every one of them on the hand.
+    /// </summary>
+    [Theory]
+    [InlineData(NeoHands)]
+    [InlineData(RueHands)]
+    public void A_glove_that_paints_only_the_fingers_takes_the_nails_off(string path)
+    {
+        if (!File.Exists(path)) return;
+        var hand = File.ReadAllBytes(path);
+        const int size = 256;
+        SecondSkinLayer Gate(byte[] cov) => new()
+        {
+            MaterialName = "/gate.mtrl", Coverage = cov, CoverageWidth = size, CoverageHeight = size,
+        };
+
+        var log = new List<string>();
+        var flat = BodyBridge.FlattenNails(hand, Gate(PaintFingersNotNailBeds(hand, size)), log.Add);
+        foreach (var l in log) o.WriteLine(l);
+        Assert.NotNull(flat);
+        Assert.Contains(log, l => l.Contains(" 0 left uncovered", StringComparison.Ordinal));
+        Assert.True(NailBedArea(flat!, hand) < 1e-9f, "a glove over the fingers must leave no nail to draw");
+    }
+
+    /// <summary>
+    /// The nails come off the BODY under a garment: each nail is relaxed into the socket it sits in, so there is
+    /// nothing left for a glove to poke through. Measured as the nail's height over a bridge pinned to its rim —
+    /// about a millimetre before, nothing after — and the file must not change length, since the edit is
+    /// positions and normals in place.
+    /// </summary>
+    [Theory]
+    [InlineData(NeoHands)]
+    [InlineData(RueHands)]
+    [InlineData(BiboHands)]
+    public void A_garment_flattens_the_nails_off_the_hand(string path)
+    {
+        if (!File.Exists(path)) return;
+        var hand = File.ReadAllBytes(path);
+        const int size = 256;
+        var covered = new SecondSkinLayer
+        {
+            MaterialName = "/gate.mtrl", Coverage = Enumerable.Repeat((byte)255, size * size).ToArray(),
+            CoverageWidth = size, CoverageHeight = size,
+        };
+
+        var log = new List<string>();
+        var flat = BodyBridge.FlattenNails(hand, covered, log.Add);
+        foreach (var l in log) o.WriteLine(l);
+        Assert.NotNull(flat);
+        Assert.Equal(hand.Length, flat!.Length);
+
+        // Whatever is left of the nails has to draw nothing: a collapsed nail has no area, and a nail laid down
+        // onto the finger is inside it. Areas come first — a collapsed island has no surface to measure a height
+        // against.
+        float areaBefore = NailBedArea(hand, hand), areaAfter = NailBedArea(flat, hand);
+        o.WriteLine($"the nail beds drew {areaBefore * 1e6f:F1}mm² before, {areaAfter * 1e6f:F1}mm² after");
+
+        // Measured against the SURROUNDING FINGER, never against the nail's own rim: the rim is the nail's outline,
+        // and a patch spanning it is still a nail — flat instead of domed. That mistake passed the old check.
+        float before = NailHeightOverTheFinger(hand, hand), after = NailHeightOverTheFinger(flat, hand);
+        o.WriteLine($"the worst nail stands {before * 1000:F3}mm above the finger before, {after * 1000:F3}mm after");
+
+        // Either way of taking a nail off has to leave nothing to see: collapsed, it has no area to draw; laid down
+        // onto the finger, it is inside it. A tenth of a millimetre of slack on the second, since a vertex landing
+        // on a socket's rim is level with the finger by definition.
+        bool gone = areaAfter <= areaBefore * 0.01f;
+        bool inside = after <= 0.0001f;
+        Assert.True(gone || inside, $"the nails still draw {areaAfter * 1e6f:F1}mm² and stand "
+                                  + $"{after * 1000:F3}mm above the finger");
+        // Bibo+'s nails are flush with the finger to begin with — nothing to take down, and nothing to prove here.
+        if (before > 0.0005f && !gone)
+            Assert.True(after < before * 0.05f, $"the nails barely moved: {before * 1000:F3}mm -> {after * 1000:F3}mm");
+
+        // A collapsed nail has to stay collapsed once the hand MOVES. Its vertices share a position, but if they
+        // keep their own bone weights the game's skinning pulls them apart and the triangles get their area back —
+        // which is the speck that survives at a fingertip. So every collapsed island must share one skinning too.
+        foreach (var (mesh, islands) in SecondSkinWriter.NailBedIslands(flat))
+            foreach (var island in islands)
+            {
+                var verts = new HashSet<int>(island);
+                var weights = SecondSkinWriter.SkinningOf(flat, [.. verts]);
+                if (weights.Count == 0) continue;
+                // Only the collapsed ones: a nail laid down onto the finger keeps its own skinning, and should.
+                var spread = SecondSkinWriter.SpreadOf(flat, mesh, [.. verts]);
+                if (spread > 0.0001f) continue;
+                Assert.True(weights.Distinct().Count() == 1,
+                    $"mesh {mesh}: a collapsed nail has {weights.Distinct().Count()} different skinnings, so it "
+                  + "comes apart as soon as the finger bends");
+            }
+
+        // ...and it has to stay gone through the SECOND SKIN, which pushes every vertex out along its own normal:
+        // a collapsed point whose vertices still face different ways fans back open into slivers wearing the
+        // nail's texture. That is what survived on the shell while the body measured clean.
+        {
+            var shell = SecondSkinWriter.Build(
+                new[] { new SecondSkinWriter.SourceSpec(flat, CoverNails: true) },
+                new[] { new SecondSkinLayer { MaterialName = "/mt_c0201a0053_rir_a.mtrl", Coverage = null } },
+                null, out _);
+            float onNails = NailUvArea(shell, hand);
+            o.WriteLine($"the shell draws {onNails * 1e6f:F2}mm² with nail UVs");
+            // Only where every nail was COLLAPSED. A bridged nail keeps its own UVs on purpose — it is lying flush
+            // against the finger, and the shell's own rescue moves those UVs onto the fingertip.
+            var counts = System.Text.RegularExpressions.Regex.Match(
+                string.Join("\n", log), @"nails: (\d+) of (\d+) collapsed");
+            if (counts.Success && counts.Groups[1].Value == counts.Groups[2].Value)
+                Assert.True(onNails < 0.1e-6f, $"the shell still draws {onNails * 1e6f:F2}mm² of nail");
+        }
+
+        // ...and a separate NAIL MESH is gone, not merely laid flat: every triangle of it has no area left.
+        SecondSkinWriter.TryReadLod0Geometry(hand, out var wasP, out _, out var wasT, out _, out _,
+                                             skinOnly: false, nonSkin: true);
+        if (wasT.Length > 0)
+        {
+            SecondSkinWriter.TryReadLod0Geometry(flat, out var nowP, out _, out var nowT, out _, out _,
+                                                 skinOnly: false, nonSkin: true);
+            Assert.Equal(wasT.Length, nowT.Length);   // nothing removed from the file, only collapsed
+            o.WriteLine($"the nail mesh drew {Area(wasP, wasT) * 1e6f:F1}mm² before, "
+                      + $"{Area(nowP, nowT) * 1e6f:F1}mm² after");
+            Assert.True(Area(wasP, wasT) > 1e-5f, "this hand has no nail mesh to remove");
+            Assert.True(Area(nowP, nowT) < Area(wasP, wasT) * 0.01f, "the nail mesh is still drawing");
+        }
+
+        // A garment that covers nothing leaves the hand exactly as it was.
+        var bare = new SecondSkinLayer
+        {
+            MaterialName = "/gate.mtrl", Coverage = new byte[size * size],
+            CoverageWidth = size, CoverageHeight = size,
+        };
+        Assert.Null(BodyBridge.FlattenNails(hand, bare));
+    }
+
+    /// <summary>
+    /// Area drawn with NAIL texture coordinates anywhere in a model, whatever geometry carries them: the nail art
+    /// lives in those islands of the sheet, so anything sampling them shows a nail.
+    /// </summary>
+    private static float NailUvArea(byte[] model, byte[] hand)
+    {
+        Assert.True(SecondSkinWriter.TryReadLod0Geometry(hand, out _, out var huv, out _));
+        var boxes = new List<(float U0, float U1, float V0, float V1)>();
+        foreach (var (_, beds) in SecondSkinWriter.NailBedIslands(hand))
+            foreach (var b in beds)
+            {
+                float u0 = 9, u1 = -9, v0 = 9, v1 = -9;
+                foreach (int v in b)
+                {
+                    if (v * 2 + 1 >= huv.Length) continue;
+                    u0 = MathF.Min(u0, huv[v * 2]); u1 = MathF.Max(u1, huv[v * 2]);
+                    v0 = MathF.Min(v0, huv[v * 2 + 1]); v1 = MathF.Max(v1, huv[v * 2 + 1]);
+                }
+                if (u1 > u0) boxes.Add((u0, u1, v0, v1));
+            }
+        if (boxes.Count == 0) return 0f;
+
+        SecondSkinWriter.TryReadLod0Geometry(model, out var p, out var u, out var t, out _, out _, skinOnly: false);
+        float area = 0f;
+        for (int i = 0; i + 2 < t.Length; i += 3)
+        {
+            if (Math.Max(t[i], Math.Max(t[i + 1], t[i + 2])) * 3 + 2 >= p.Length) continue;
+            float cu = (u[t[i] * 2] + u[t[i + 1] * 2] + u[t[i + 2] * 2]) / 3f;
+            float cv = (u[t[i] * 2 + 1] + u[t[i + 1] * 2 + 1] + u[t[i + 2] * 2 + 1]) / 3f;
+            if (!boxes.Any(b => cu >= b.U0 && cu <= b.U1 && cv >= b.V0 && cv <= b.V1)) continue;
+            var (ax, ay, az) = (p[t[i] * 3], p[t[i] * 3 + 1], p[t[i] * 3 + 2]);
+            float e1x = p[t[i + 1] * 3] - ax, e1y = p[t[i + 1] * 3 + 1] - ay, e1z = p[t[i + 1] * 3 + 2] - az;
+            float e2x = p[t[i + 2] * 3] - ax, e2y = p[t[i + 2] * 3 + 1] - ay, e2z = p[t[i + 2] * 3 + 2] - az;
+            float nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x;
+            area += 0.5f * MathF.Sqrt(nx * nx + ny * ny + nz * nz);
+        }
+        return area;
+    }
+
+    /// <summary>What the nail beds put on screen, in square metres: their islands' triangles in these positions.</summary>
+    private static float NailBedArea(byte[] hand, byte[] facing)
+    {
+        var byMesh = SecondSkinWriter.ReadCapMeshes(hand).ToDictionary(x => x.Mesh, x => x.Pos);
+        float sum = 0f;
+        foreach (var (mesh, beds) in SecondSkinWriter.NailBedIslands(facing))
+        {
+            if (!byMesh.TryGetValue(mesh, out var mp)) continue;
+            foreach (var tris in beds)
+                for (int t = 0; t + 2 < tris.Length; t += 3)
+                {
+                    if (tris[t] >= mp.Length || tris[t + 1] >= mp.Length || tris[t + 2] >= mp.Length) continue;
+                    var (a, b, c) = (mp[tris[t]], mp[tris[t + 1]], mp[tris[t + 2]]);
+                    float nx = (b.Y - a.Y) * (c.Z - a.Z) - (b.Z - a.Z) * (c.Y - a.Y);
+                    float ny = (b.Z - a.Z) * (c.X - a.X) - (b.X - a.X) * (c.Z - a.Z);
+                    float nz = (b.X - a.X) * (c.Y - a.Y) - (b.Y - a.Y) * (c.X - a.X);
+                    sum += 0.5f * MathF.Sqrt(nx * nx + ny * ny + nz * nz);
+                }
+        }
+        return sum;
+    }
+
+    /// <summary>
+    /// The furthest any nail-bed vertex stands OUTSIDE the surrounding finger: its distance to the nearest point of
+    /// the skin that is not a nail, signed by that skin's own outward normal. Islands come from
+    /// <paramref name="facing"/> so the same nails are measured before and after.
+    /// </summary>
+    private static float NailHeightOverTheFinger(byte[] hand, byte[] facing)
+    {
+        var byMesh = SecondSkinWriter.ReadCapMeshes(hand).ToDictionary(x => x.Mesh, x => x.Pos);
+        float worst = float.MinValue;
+        foreach (var (mesh, beds) in SecondSkinWriter.NailBedIslands(facing))
+        {
+            if (!byMesh.TryGetValue(mesh, out var mp)) continue;
+            // The rest of that mesh: everything no nail bed uses.
+            var isBed = new HashSet<int>();
+            foreach (var b in beds) foreach (int v in b) isBed.Add(v);
+            SecondSkinWriter.TryReadLod0Geometry(hand, out var ap, out _, out var at);
+            var rest = new List<(int A, int B, int C)>();
+            for (int t = 0; t + 2 < at.Length; t += 3)
+            {
+                if (at[t] >= mp.Length || at[t + 1] >= mp.Length || at[t + 2] >= mp.Length) continue;
+                if (isBed.Contains(at[t]) || isBed.Contains(at[t + 1]) || isBed.Contains(at[t + 2])) continue;
+                rest.Add((at[t], at[t + 1], at[t + 2]));
+            }
+            if (rest.Count == 0) continue;
+
+            foreach (var b in beds)
+                foreach (int v in new HashSet<int>(b))
+                {
+                    if (v >= mp.Length) continue;
+                    var p = mp[v];
+                    float best = float.MaxValue, signed = 0f;
+                    foreach (var (ia, ib, ic) in rest)
+                    {
+                        var (a, bb, c) = (mp[ia], mp[ib], mp[ic]);
+                        var (qx, qy, qz) = ClosestPointOnTriangle(p.X, p.Y, p.Z, a.X, a.Y, a.Z, bb.X, bb.Y, bb.Z, c.X, c.Y, c.Z);
+                        float dx = p.X - qx, dy = p.Y - qy, dz = p.Z - qz;
+                        float d = dx * dx + dy * dy + dz * dz;
+                        if (d >= best) continue;
+                        best = d;
+                        float nx = (bb.Y - a.Y) * (c.Z - a.Z) - (bb.Z - a.Z) * (c.Y - a.Y);
+                        float ny = (bb.Z - a.Z) * (c.X - a.X) - (bb.X - a.X) * (c.Z - a.Z);
+                        float nz = (bb.X - a.X) * (c.Y - a.Y) - (bb.Y - a.Y) * (c.X - a.X);
+                        float len = MathF.Sqrt(nx * nx + ny * ny + nz * nz);
+                        signed = len < 1e-12f ? 0f : (dx * nx + dy * ny + dz * nz) / len;
+                    }
+                    if (best < float.MaxValue) worst = MathF.Max(worst, signed);
+                }
+        }
+        return worst == float.MinValue ? 0f : worst;
+    }
+
+    /// <summary>Total area of a triangle list, in square metres: what it puts on screen.</summary>
+    private static float Area(float[] p, int[] tri)
+    {
+        float sum = 0f;
+        for (int t = 0; t + 2 < tri.Length; t += 3)
+        {
+            if (Math.Max(tri[t], Math.Max(tri[t + 1], tri[t + 2])) * 3 + 2 >= p.Length) continue;
+            float ax = p[tri[t + 1] * 3] - p[tri[t] * 3], ay = p[tri[t + 1] * 3 + 1] - p[tri[t] * 3 + 1],
+                  az = p[tri[t + 1] * 3 + 2] - p[tri[t] * 3 + 2];
+            float bx = p[tri[t + 2] * 3] - p[tri[t] * 3], by = p[tri[t + 2] * 3 + 1] - p[tri[t] * 3 + 1],
+                  bz = p[tri[t + 2] * 3 + 2] - p[tri[t] * 3 + 2];
+            float cx = ay * bz - az * by, cy = az * bx - ax * bz, cz = ax * by - ay * bx;
+            sum += 0.5f * MathF.Sqrt(cx * cx + cy * cy + cz * cz);
+        }
+        return sum;
+    }
+
+    /// <summary>Nail beds the build moved onto the fingertip, summed over its "nail beds: N of M under painted
+    /// fingertips" lines.</summary>
+    private static int Rescued(IEnumerable<string> log)
+        => log.Select(l => System.Text.RegularExpressions.Regex.Match(l, @"^nail beds: (\d+) of \d+ under painted"))
+              .Where(m => m.Success).Sum(m => int.Parse(m.Groups[1].Value));
+
+    /// <summary>A coverage map painting every UV island of the hand's skin except its nail beds.</summary>
+    private static byte[] PaintFingersNotNailBeds(byte[] hand, int size) => PaintIslands(hand, size, beds: false);
+
+    /// <summary>...and its opposite: only the nail beds, as a glove that bares the fingers leaves them.</summary>
+    private static byte[] PaintNailBedsOnly(byte[] hand, int size) => PaintIslands(hand, size, beds: true);
+
+    private static byte[] PaintIslands(byte[] hand, int size, bool beds)
+    {
+        Assert.True(SecondSkinWriter.TryReadLod0Geometry(hand, out _, out var uv, out var tri));
+        int nv = uv.Length / 2;
+        var parent = new int[nv];
+        for (int i = 0; i < nv; i++) parent[i] = i;
+        int Find(int x) { while (parent[x] != x) x = parent[x] = parent[parent[x]]; return x; }
+        for (int t = 0; t + 2 < tri.Length; t += 3)
+        {
+            int a = Find(tri[t]), b = Find(tri[t + 1]);
+            if (a != b) parent[a] = b;
+            a = Find(tri[t + 1]); b = Find(tri[t + 2]);
+            if (a != b) parent[a] = b;
+        }
+        var count = new Dictionary<int, int>();
+        for (int t = 0; t + 2 < tri.Length; t += 3) { int r = Find(tri[t]); count[r] = count.GetValueOrDefault(r) + 1; }
+        int bedMax = (int)(count.Values.Max() * 0.2f);
+
+        var mask = new byte[size * size];
+        for (int t = 0; t + 2 < tri.Length; t += 3)
+        {
+            if (count[Find(tri[t])] <= bedMax != beds) continue;
+            // The mesh's UVs as the shell sees them: shifted onto the tile by the floor of the minimum.
+            float Px(int v) => (uv[v * 2] - MathF.Floor(uv[v * 2])) * size;
+            float Py(int v) => (uv[v * 2 + 1] - MathF.Floor(uv[v * 2 + 1])) * size;
+            float ax = Px(tri[t]), ay = Py(tri[t]), bx = Px(tri[t + 1]), by = Py(tri[t + 1]), cx = Px(tri[t + 2]), cy = Py(tri[t + 2]);
+            int x0 = Math.Max(0, (int)MathF.Floor(MathF.Min(ax, MathF.Min(bx, cx))));
+            int x1 = Math.Min(size - 1, (int)MathF.Ceiling(MathF.Max(ax, MathF.Max(bx, cx))));
+            int y0 = Math.Max(0, (int)MathF.Floor(MathF.Min(ay, MathF.Min(by, cy))));
+            int y1 = Math.Min(size - 1, (int)MathF.Ceiling(MathF.Max(ay, MathF.Max(by, cy))));
+            float den = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
+            if (MathF.Abs(den) < 1e-9f) continue;
+            for (int y = y0; y <= y1; y++)
+                for (int x = x0; x <= x1; x++)
+                {
+                    float px = x + 0.5f, py = y + 0.5f;
+                    float l1 = ((by - cy) * (px - cx) + (cx - bx) * (py - cy)) / den;
+                    float l2 = ((cy - ay) * (px - cx) + (ax - cx) * (py - cy)) / den;
+                    if (l1 >= -0.01f && l2 >= -0.01f && 1f - l1 - l2 >= -0.01f) mask[y * size + x] = 255;
+                }
+        }
+        return mask;
+    }
+
     private static void Validate(byte[] m)
     {
         ushort U16(int o) => BitConverter.ToUInt16(m, o);

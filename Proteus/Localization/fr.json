@@ -820,7 +820,7 @@
     "description": ""
   },
   "Content.Intro": {
-    "message": "Importez un mod classique (.pmp). Portez-en certaines parties sans occuper d'emplacement d'équipement, et ajoutez des fonctions avancées de table de couleurs.",
+    "message": "Importez un mod classique (.pmp, ou le meta.json d'un mod déjà installé dans Penumbra). Portez-en certaines parties sans occuper d'emplacement d'équipement, et ajoutez des fonctions avancées de table de couleurs.",
     "description": ""
   },
   "Content.Materials.Fmt": {
@@ -863,6 +863,10 @@
     "message": "Impossible de lire ce pack : {0}",
     "description": ""
   },
+  "Content.NotAManifest": {
+    "message": "Pour importer un mod installé dans Penumbra, choisissez le meta.json de son dossier.",
+    "description": ""
+  },
   "Content.Samples.Fmt": {
     "message": "Sa texture d'index lit la ligne {0}, colonne {1} — les autres lignes sont grisées car rien ne les échantillonne, et modifier l'autre colonne de cette ligne ne fera rien non plus.",
     "description": ""
@@ -901,6 +905,14 @@
   },
   "ContentImport.Fail.Gone.Fmt": {
     "message": "Le pack n'est plus là : {0}",
+    "description": ""
+  },
+  "ContentImport.Fail.AlreadyProteus": {
+    "message": "Ce mod est déjà un mod Proteus — il n'y a rien à importer.",
+    "description": ""
+  },
+  "ContentImport.Fail.ManagedMod": {
+    "message": "C'est le mod géré par Proteus lui-même — il ne peut pas être importé.",
     "description": ""
   },
   "ContentImport.Fail.NoModDir": {
@@ -2407,10 +2419,6 @@
     "message": "Ce vêtement a été importé dans Proteus, qui le porte pour vous. Peignez-le normalement — chaque trait apparaît sur votre personnage quelques secondes après sa sauvegarde, une fois le vêtement reconstruit.",
     "description": ""
   },
-  "Parts.Content.NoSwitches": {
-    "message": "Impossible d'ajouter des interrupteurs à un vêtement importé : Proteus le porte sur un autre objet, et ce sont les interrupteurs de cet objet qui le commandent. Les pinceaux ci-dessus fonctionnent toujours.",
-    "description": ""
-  },
   "Parts.Live.PickedShell": {
     "message": "C'est le vêtement que Proteus dessine pour vous, reconstruit à chaque changement. Choisissez le mod dont il provient pour le modifier.",
     "description": ""
@@ -2721,6 +2729,34 @@
   },
   "Settings.Diag.ClearCache.Tip": {
     "message": "Supprime toutes les textures décodées en cache et recompose immédiatement. À utiliser\nsi une modification de texture n'apparaît pas — par exemple si vous avez réexporté un\ncalque à la même taille et que le changement n'apparaîtrait qu'après un redémarrage\ndu plugin.\n\nRedétermine aussi de quel mod provient chaque texture de peau de base — utilisez ceci\nsi « Peau de base » ci-dessous nomme le mauvais mod.",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Btn": {
+    "message": "Copier les journaux",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Busy": {
+    "message": "Actualisation et capture…",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Failed.Fmt": {
+    "message": "Impossible d'enregistrer le journal : {0}",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.OpenTip": {
+    "message": "Cliquez pour ouvrir le fichier.",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Saved": {
+    "message": "Enregistré :",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.ShowInFolder": {
+    "message": "Afficher dans le dossier",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Tip": {
+    "message": "Lance une actualisation complète et enregistre tout ce que Proteus journalise pendant ce temps\ndans un fichier texte sur votre bureau. Joignez ce fichier lorsque vous signalez un problème.",
     "description": ""
   },
   "Settings.Diag.Reach.EffectsOnly.Fmt": {

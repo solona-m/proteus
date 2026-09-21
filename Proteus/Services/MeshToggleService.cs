@@ -262,6 +262,7 @@ internal sealed class MeshToggleService
 
             WriteGroup(modRoot, item, baseEntry, variant, adopt);
             WriteRecord(modRoot, record);
+            SyncContentAttributes(modRoot);
         }
         catch (Exception ex)
         {
@@ -541,6 +542,7 @@ internal sealed class MeshToggleService
                 }
                 PenumbraModMeta.DeleteGroup(modRoot, i.GroupName);
             }
+            SyncContentAttributes(modRoot);
         }
         catch (Exception ex)
         {
@@ -556,6 +558,38 @@ internal sealed class MeshToggleService
             try { File.Delete(backup); } catch { /* harmless leftover */ }
 
         return new Outcome(true, "", restoredFrom.Count, skipped);
+    }
+
+    // ── imported mods ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Bring an imported mod's sidecar <c>ContentAttributes</c> back in line with the IMC groups its manifest now
+    /// has. An imported piece is appended onto a host accessory, so the game never applies this item's IMC mask to
+    /// it; the composite hides parts itself from that list (<see cref="ContentPieceResolver.HiddenAttributes"/>),
+    /// which the import wrote once. Rebuilt from the manifest rather than patched, so an adopted group, its changed
+    /// default mask and a revert all come out right. A mod with no imported pieces is left alone.
+    /// </summary>
+    internal static void SyncContentAttributes(string modRoot)
+    {
+        if (SidecarDiscoveryService.TryReadMetadata(modRoot) is not { } meta
+         || (meta.Content is not { Count: > 0 } && meta.ContentGroups is not { Count: > 0 }))
+            return;
+
+        var groups = ContentImportService.AttributeGroups(PenumbraPackage.Read(modRoot));
+
+        // Edited in place, so every field this build does not know about survives.
+        var path = Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, SidecarDiscoveryService.MetadataFile);
+        if (System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path)) is not System.Text.Json.Nodes.JsonObject root)
+            throw new InvalidDataException($"{path} is not a JSON object.");
+
+        // Whatever spelling the file uses: it is read case-insensitively.
+        foreach (var key in root.Select(p => p.Key)
+                     .Where(k => string.Equals(k, "ContentAttributes", StringComparison.OrdinalIgnoreCase)).ToList())
+            root.Remove(key);
+        if (groups != null)
+            root["ContentAttributes"] = JsonSerializer.SerializeToNode(groups, ProteusJson.MetadataWrite);
+
+        PenumbraModMeta.AtomicWrite(path, root.ToJsonString(ProteusJson.MetadataWrite));
     }
 
     // ── the record ──────────────────────────────────────────────────────────

@@ -904,6 +904,11 @@ public class SidecarDiscoveryService
             var path = Path.Combine(entry.SidecarRoot, MetadataFile);
             SnapshotDefaults(entry, path);
 
+            // The file owns ContentAttributes: no editor changes it, and the Parts tab rewrites it on disk when it adds a
+            // switch to an imported mod. An entry loaded before that would otherwise save the old list back.
+            if (File.Exists(path) && TryParseMetadata(path) is { } onDisk)
+                entry.Metadata.ContentAttributes = onDisk.ContentAttributes;
+
             var json = JsonSerializer.Serialize(entry.Metadata, ProteusJson.MetadataWrite);
             // AtomicWrite: this is the authored descriptor and nothing can rebuild it. Interactive retry budget, since
             // callers run on threads the user feels. Synchronous: the editor recomposites straight after and

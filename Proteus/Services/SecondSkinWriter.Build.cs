@@ -177,6 +177,16 @@ public static partial class SecondSkinWriter
     }
 
     /// <summary>
+    /// Is <paramref name="a"/> drawn only with a variant that <paramref name="b"/> does not need — an add-on laid on
+    /// the surface <paramref name="b"/> draws regardless? Then <paramref name="b"/> is no stand-in for it.
+    /// </summary>
+    internal static bool AddOnTo(uint a, uint b, uint variantBits)
+    {
+        uint av = a & variantBits, bv = b & variantBits;
+        return av != 0 && (av & bv) == 0;
+    }
+
+    /// <summary>
     /// Is this submesh switched off by the pack's toggles? A submesh draws only when every attribute it names
     /// is on; an untagged submesh (mask 0) always draws.
     /// </summary>
@@ -307,9 +317,9 @@ public static partial class SecondSkinWriter
         SecondSkinLayer? cap = null, ushort[]? capTris = null, Action<string>? capLog = null,
         bool buildCapGeometry = true,
         Func<Vec3[], Vec3[], ushort[], (float U, float V)[], BustBridgePlan?>? bridge = null,
-        PushSweep? pushSweep = null, ushort[]? spanTris = null)
+        PushSweep? pushSweep = null, ushort[]? spanTris = null, NailBedPlan? nailBeds = null)
     {
-        return new VerbatimCopy(s, vb, srcDeclOff, vc, decl, vbo, bs, push, uvConv, sides, cap, capTris, capLog, buildCapGeometry, bridge, pushSweep, spanTris).Run(out outStreams, out outStrides, out declBlock, out uvs, out uvsPreConv, out capSrcPos, out capOutPos, out capPlan);
+        return new VerbatimCopy(s, vb, srcDeclOff, vc, decl, vbo, bs, push, uvConv, sides, cap, capTris, capLog, buildCapGeometry, bridge, pushSweep, spanTris, nailBeds).Run(out outStreams, out outStrides, out declBlock, out uvs, out uvsPreConv, out capSrcPos, out capOutPos, out capPlan);
     }
 
     /// <summary>Texels the toe-cap map is pulled in by before it cuts. Zero: the weld closes the join instead.</summary>
@@ -365,6 +375,11 @@ public static partial class SecondSkinWriter
 
     /// <summary>How far apart two boundary vertices may sit and still be the same point; well under an edge length.</summary>
     private const float CrackWeldTolerance = 0.0010f;
+
+    /// <summary>How far outside the cap's bounding box a boundary vertex may sit and still be one of the cap's trims
+    /// for the crack weld. The trims hug the cap; anything past this is some other boundary — a hand's collapsed nail
+    /// bed, a garment's hem — and snapping it is damage.</summary>
+    private const float CrackWeldReach = 0.03f;
 
     /// <summary>How far apart in the atlas two coincident boundary vertices may sample and still be welded;
     /// a crack straddling two charts must stay open.</summary>

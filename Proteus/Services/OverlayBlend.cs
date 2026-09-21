@@ -8,6 +8,15 @@ namespace Proteus.Services;
 
 using static Proteus.Services.CompositorService;
 
+/// <summary>One of the three texture channels an overlay can put art in. Claims are scoped to a channel:
+/// see <see cref="OverlayBlend.Supplies"/>.</summary>
+internal enum OverlayChannel
+{
+    Diffuse,
+    Normal,
+    Mask,
+}
+
 internal static class OverlayBlend
 {
     /// <summary>
@@ -295,6 +304,83 @@ internal static class OverlayBlend
                 }
             });
         }
+    }
+
+    // ── Relief claim (skin normal-only overlays) ──────────────────────────────
+    // A Compound normal adds its slopes to what is beneath, and a flat texel adds nothing, so it has no reason to
+    // take the relief beneath it away. It claims only where it has relief, or near it: pooled over a coarse grid so
+    // a pattern's own flats (scale tops, the gaps in lace) are still its, while a wide flat area stays unclaimed.
+    internal const int ReliefClaimFull  = 24;   // |R-128|+|G-128| at/above this = full relief; MaskReliefDeadzone = none
+    internal const int ReliefClaimCells = 256;  // pooling grid, cells per side (16 texels at 4K)
+
+    /// <summary>
+    /// Where <paramref name="normal"/> (RGBA) has relief, as one 0–255 value per texel: its own strength, or its
+    /// ReliefClaimCells-grid cell's strongest texel spread bilinearly, whichever is higher.
+    /// </summary>
+    internal static byte[] ReliefPresence(byte[] normal, int w, int h)
+    {
+        int n = w * h;
+        var own = new byte[n];
+        ParallelPixels(0, n, 1, (from, to) =>
+        {
+            for (int p = from; p < to; p++)
+            {
+                int o = p * 4;
+                int dev = Math.Abs(normal[o] - 128) + Math.Abs(normal[o + 1] - 128);
+                own[p] = (byte)(Math.Clamp(dev - MaskReliefDeadzone, 0, ReliefClaimFull - MaskReliefDeadzone)
+                                * 255 / (ReliefClaimFull - MaskReliefDeadzone));
+            }
+        });
+
+        int gw = Math.Min(w, ReliefClaimCells), gh = Math.Min(h, ReliefClaimCells);
+        var grid = new byte[gw * gh];
+        Parallel.For(0, gh, gy =>
+        {
+            int y0 = gy * h / gh, y1 = (gy + 1) * h / gh;
+            for (int gx = 0; gx < gw; gx++)
+            {
+                int x0 = gx * w / gw, x1 = (gx + 1) * w / gw;
+                byte m = 0;
+                for (int y = y0; y < y1 && m < 255; y++)
+                    for (int x = x0; x < x1; x++)
+                        if (own[y * w + x] > m) m = own[y * w + x];
+                grid[gy * gw + gx] = m;
+            }
+        });
+
+        // Bilinear from cell centres; the max with the texel's own value keeps a cell-edge bump from being halved.
+        var dst = new byte[n];
+        Parallel.For(0, h, y =>
+        {
+            float fy = Math.Clamp((y + 0.5f) * gh / h - 0.5f, 0f, gh - 1);
+            int cy0 = (int)fy, cy1 = Math.Min(cy0 + 1, gh - 1);
+            float ty = fy - cy0;
+            for (int x = 0; x < w; x++)
+            {
+                float fx = Math.Clamp((x + 0.5f) * gw / w - 0.5f, 0f, gw - 1);
+                int cx0 = (int)fx, cx1 = Math.Min(cx0 + 1, gw - 1);
+                float tx = fx - cx0;
+                float top = grid[cy0 * gw + cx0] + (grid[cy0 * gw + cx1] - grid[cy0 * gw + cx0]) * tx;
+                float bot = grid[cy1 * gw + cx0] + (grid[cy1 * gw + cx1] - grid[cy1 * gw + cx0]) * tx;
+                int v = (int)(top + (bot - top) * ty + 0.5f);
+                int p = y * w + x;
+                dst[p] = (byte)Math.Max(v, own[p]);
+            }
+        });
+        return dst;
+    }
+
+    /// <summary>A copy of <paramref name="rgba"/> with its alpha scaled by <paramref name="plane"/> (0–255 per texel).</summary>
+    internal static byte[] ScaleAlphaByPlane(byte[] rgba, byte[] plane)
+    {
+        var dst = (byte[])rgba.Clone();
+        int n = Math.Min(plane.Length, dst.Length / 4);
+        ParallelPixels(0, n, 1, (from, to) =>
+        {
+            for (int p = from; p < to; p++)
+                dst[p * 4 + 3] = (byte)(dst[p * 4 + 3] * plane[p] / 255);
+        });
+        return dst;
     }
 
     /// <summary>Timing shim — see the blend sub-phase counters. Body unchanged, in <c>…Core</c>.</summary>
@@ -719,6 +805,30 @@ internal static class OverlayBlend
     /// decide whether the promotion notice is about glow specifically.</summary>
     internal static bool HasEmissiveRow(List<ColorTableRowPreset>? rows)
         => rows?.Any(r => r.SubRowA?.Emissive > 0f || r.SubRowB?.Emissive > 0f) == true;
+
+    /// <summary>
+    /// Does this overlay put art in <paramref name="ch"/>? Only an overlay that does can claim that channel
+    /// from the overlays beneath it. An opaque diffuse supplies no relief, so it cannot take relief away: it
+    /// leaves whatever normal is under it, exactly as a decal painted onto skin leaves the skin's own normal.
+    /// Without this scoping a mod that ships a whole-body diffuse in one group and a whole-body normal in
+    /// another can never show both — whichever group sits on top erases the other.
+    /// </summary>
+    internal static bool Supplies(OverlayDescriptor d, OverlayChannel ch) => ch switch
+    {
+        OverlayChannel.Diffuse => d.Diffuse != null,
+        OverlayChannel.Normal  => d.Normal  != null,
+        OverlayChannel.Mask    => d.Mask    != null,
+        _                      => false,
+    };
+
+    /// <summary>The channel an overlay's silhouette is taken from, in the order <c>CoverageOf</c> picks it.
+    /// Used where a decision feeds every channel at once (the UV-seam drop) and no single channel is being
+    /// gated. Null when the overlay declares no art at all.</summary>
+    internal static OverlayChannel? PrimaryChannel(OverlayDescriptor d)
+        => d.Diffuse != null ? OverlayChannel.Diffuse
+         : d.Normal  != null ? OverlayChannel.Normal
+         : d.Mask    != null ? OverlayChannel.Mask
+         : null;
 
     /// <summary>Does any row here composite as a print rather than painting?</summary>
     internal static bool AnyBlendRow(Dictionary<int, ColorTableRowOverride> rows)

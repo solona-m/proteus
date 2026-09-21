@@ -820,7 +820,7 @@
     "description": ""
   },
   "Content.Intro": {
-    "message": "일반 모드(.pmp)를 가져옵니다. 장비 칸을 쓰지 않고 일부만 착용할 수 있으며, 고급 컬러 테이블 기능을 추가할 수 있습니다.",
+    "message": "일반 모드(.pmp, 또는 Penumbra에 이미 설치된 모드의 meta.json)를 가져옵니다. 장비 칸을 쓰지 않고 일부만 착용할 수 있으며, 고급 컬러 테이블 기능을 추가할 수 있습니다.",
     "description": ""
   },
   "Content.Materials.Fmt": {
@@ -863,6 +863,10 @@
     "message": "해당 팩을 읽을 수 없습니다: {0}",
     "description": ""
   },
+  "Content.NotAManifest": {
+    "message": "Penumbra에 설치된 모드를 가져오려면 해당 폴더의 meta.json을 선택하세요.",
+    "description": ""
+  },
   "Content.Samples.Fmt": {
     "message": "이 머티리얼의 인덱스 텍스처는 {0}행 {1}열을 읽습니다. 다른 행은 샘플링되지 않아 흐리게 표시되며, 이 행의 반대쪽 열을 만져도 아무 일도 일어나지 않습니다.",
     "description": ""
@@ -901,6 +905,14 @@
   },
   "ContentImport.Fail.Gone.Fmt": {
     "message": "팩이 더 이상 존재하지 않습니다: {0}",
+    "description": ""
+  },
+  "ContentImport.Fail.AlreadyProteus": {
+    "message": "이 모드는 이미 Proteus 모드이므로 가져올 것이 없습니다.",
+    "description": ""
+  },
+  "ContentImport.Fail.ManagedMod": {
+    "message": "Proteus가 직접 관리하는 모드이므로 가져올 수 없습니다.",
     "description": ""
   },
   "ContentImport.Fail.NoModDir": {
@@ -2407,10 +2419,6 @@
     "message": "이 의상은 Proteus로 가져온 것이며 Proteus가 대신 입혀 줍니다. 평소처럼 칠하면 됩니다. 각 획은 저장된 뒤 의상이 다시 만들어지면서 몇 초 후 캐릭터에 나타납니다.",
     "description": ""
   },
-  "Parts.Content.NoSwitches": {
-    "message": "가져온 의상에는 스위치를 추가할 수 없습니다. Proteus가 다른 아이템에 얹어 입히며, 그 아이템의 스위치가 제어합니다. 위의 브러시는 계속 사용할 수 있습니다.",
-    "description": ""
-  },
   "Parts.Live.PickedShell": {
     "message": "이것은 Proteus가 그려 주는 의상으로, 무언가 바뀔 때마다 다시 만들어집니다. 편집하려면 가져온 원본 모드를 선택하세요.",
     "description": ""
@@ -2721,6 +2729,34 @@
   },
   "Settings.Diag.ClearCache.Tip": {
     "message": "캐시된 디코딩 텍스처를 모두 버리고 지금 다시 합성합니다. 텍스처 수정이\n반영되지 않을 때 사용하세요. 예를 들어 오버레이를 같은 크기로 다시 내보낸\n경우, 플러그인을 재시작하지 않으면 변경이 나타나지 않습니다.\n\n각 기본 피부 텍스처가 어느 모드에서 오는지도 다시 판별합니다. 아래의\n\"기본 피부\"가 잘못된 모드를 표시할 때 사용하세요.",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Btn": {
+    "message": "로그 복사",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Busy": {
+    "message": "새로 고치고 기록하는 중…",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Failed.Fmt": {
+    "message": "로그를 저장하지 못했습니다: {0}",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.OpenTip": {
+    "message": "클릭하면 파일을 엽니다.",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Saved": {
+    "message": "저장됨:",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.ShowInFolder": {
+    "message": "폴더에서 보기",
+    "description": ""
+  },
+  "Settings.Diag.CopyLogs.Tip": {
+    "message": "전체 새로 고침을 실행하고, 그동안 Proteus가 남긴 로그를 모두\n바탕 화면의 텍스트 파일로 저장합니다. 문제를 제보할 때 이 파일을 첨부하세요.",
     "description": ""
   },
   "Settings.Diag.Reach.EffectsOnly.Fmt": {

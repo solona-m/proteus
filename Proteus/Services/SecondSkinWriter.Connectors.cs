@@ -305,10 +305,13 @@ public static partial class SecondSkinWriter
     /// gated report can sweep it.</param>
     /// <param name="variantBits">Which attribute bits are IMC variant attributes (see <see cref="VariantBits"/>).
     /// Submeshes carrying different variants are alternatives, and neither is cover for the other.</param>
+    /// <param name="keepAddOns">A submesh drawn only with a variant is never covered by untagged geometry — see
+    /// <see cref="AddOnTo"/>. Set for the hands (SourceSpec.CoverNails), whose body-material nails are one.</param>
     internal static HashSet<(int Mesh, int Sub)> PlanConnectorDrops(
         ConnectorProfile profile, IReadOnlyList<ConnectorProfile.Box> otherPartBoxes,
         Func<uint, bool>? isHidden, Action<string>? diag, string label,
-        out int droppedSubs, out int droppedTris, float eps = CoincidenceEps, uint variantBits = 0)
+        out int droppedSubs, out int droppedTris, float eps = CoincidenceEps, uint variantBits = 0,
+        bool keepAddOns = false)
     {
         var drops = new HashSet<(int Mesh, int Sub)>();
         droppedSubs = 0; droppedTris = 0;
@@ -373,13 +376,18 @@ public static partial class SecondSkinWriter
                 else
                 {
                     // A kept sibling that is this submesh's VARIANT is not cover for it: the game draws one of
-                    // the two, and dropping this one may drop the one being drawn.
+                    // the two, and dropping this one may drop the one being drawn. With keepAddOns, nor is an
+                    // UNTAGGED sibling cover for a tagged one: a piece drawn only with a variant is an add-on to the
+                    // surface, not a copy of it — a hand's body-material nails (atr_gv_a) lie on the fingertips, well
+                    // inside the distance.
                     var against = cover;
-                    if (variantBits != 0 && keptSubs.Any(k => Alternatives(sub.AttrMask, profile.Subs[k].AttrMask, variantBits)))
+                    bool NotCover(int k) => Alternatives(sub.AttrMask, profile.Subs[k].AttrMask, variantBits)
+                                            || keepAddOns && AddOnTo(sub.AttrMask, profile.Subs[k].AttrMask, variantBits);
+                    if (variantBits != 0 && keptSubs.Any(NotCover))
                     {
                         against = new CoverGrid(eps);
                         foreach (int k in keptSubs)
-                            if (!Alternatives(sub.AttrMask, profile.Subs[k].AttrMask, variantBits))
+                            if (!NotCover(k))
                                 against.AddSub(profile, meshOf, k);
                     }
                     float frac = against.CoveredFraction(profile, meshOf, si, out string by, out int bestHits);
