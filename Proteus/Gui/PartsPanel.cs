@@ -65,6 +65,13 @@ public sealed class PartsPanel
     /// </summary>
     private readonly Dictionary<string, HashSet<string>> lockedParts = [];
 
+    /// <summary>
+    /// Parts Body size holds where their author put them, keyed like <see cref="lockedParts"/> but a separate set.
+    /// Holding a buckle still through a refit says nothing about whether it may be brushed or moved by hand, so the
+    /// two never share: a hold made here must not lock the part against Move afterwards.
+    /// </summary>
+    private readonly Dictionary<string, HashSet<string>> heldParts = [];
+
     /// <summary>For each vertex of <see cref="parts"/>, the index in its part list of the most specific part it
     /// belongs to (its island where the submesh lists islands, else the submesh); -1 for none.</summary>
     private int[] partOfVertex = [];
@@ -240,6 +247,7 @@ public sealed class PartsPanel
         lockClickedFn = LockClickedOnCharacter;
         tickClickedFn = TickClickedOnCharacter;
         partTickedFn = PartTicked;
+        partHeldFn = PartHeld;
         moveClickedFn = MoveClickedOnCharacter;
         moveTickedFn = MoveTicked;
         gizmoCaptureFn = () => tool switch
@@ -383,7 +391,9 @@ public sealed class PartsPanel
                                    movePivot: moving ? MovePivot() : null,
                                    graftedGamePath: GraftedGamePath(),
                                    scaleDrag: tool == Tool.Scale ? scaleDrag : null,
-                                   rotateGizmo: tool == Tool.Rotate ? rotateGizmo : null);
+                                   rotateGizmo: tool == Tool.Rotate ? rotateGizmo : null,
+                                   partLocked: tool == Tool.Retarget ? partHeldFn : null,
+                                   lockedVersion: tool == Tool.Retarget ? VersionOf(RetargetHolds) : 0);
         }
 
         PumpMove();
@@ -971,15 +981,25 @@ public sealed class PartsPanel
 
     private static readonly HashSet<string> NoSelection = [];
 
-    /// <summary>The open model's locked labels, created on first use.</summary>
-    private HashSet<string> Locks
+    /// <summary>
+    /// The open model's locked labels for the tool in use: Body size's holds under Body size, the brush locks under
+    /// every other tool. Everything that draws, toggles or tests a lock goes through this, so the rows, the model view
+    /// and a click on the character all follow the tool without knowing there are two sets.
+    /// </summary>
+    private HashSet<string> Locks => LockSet(tool == Tool.Retarget ? heldParts : lockedParts);
+
+    /// <summary>The open model's brush locks whatever the tool — what the brush solve is always given.</summary>
+    private HashSet<string> BrushLocks => LockSet(lockedParts);
+
+    /// <summary>The open model's holds for Body size whatever the tool.</summary>
+    private HashSet<string> RetargetHolds => LockSet(heldParts);
+
+    /// <summary>One set of labels for the open model, created on first use.</summary>
+    private HashSet<string> LockSet(Dictionary<string, HashSet<string>> byModel)
     {
-        get
-        {
-            if (!lockedParts.TryGetValue(ViewportKey, out var set))
-                lockedParts[ViewportKey] = set = new HashSet<string>(StringComparer.Ordinal);
-            return set;
-        }
+        if (!byModel.TryGetValue(ViewportKey, out var set))
+            byModel[ViewportKey] = set = new HashSet<string>(StringComparer.Ordinal);
+        return set;
     }
 
     private static int[] BuildPartOfVertex(ModelParts model)
@@ -1041,14 +1061,15 @@ public sealed class PartsPanel
         ApplyLocks();
     }
 
-    /// <summary>Hand the locks to the solve and the viewer.</summary>
+    /// <summary>Hand the locks to the solve and the viewer. Called again when the tool changes, since the viewer
+    /// shows the active tool's set.</summary>
     private void ApplyLocks()
     {
         if (parts == null) return;
-        var locks = Locks;
-        viewport.Locked = locks;
+        viewport.Locked = Locks;
         viewport.Recolour();
         if (volume == null) return;
+        var locks = BrushLocks;
         // A submesh's triangles already include every island of it, so the labels alone are enough.
         volume.SetLocked(parts.Parts.Where(p => locks.Contains(p.Label)).SelectMany(p => p.Triangles));
     }
@@ -1067,6 +1088,16 @@ public sealed class PartsPanel
     private readonly Action<int> lockClickedFn;
     private readonly Action<int> tickClickedFn;
     private readonly Func<int, bool> partTickedFn;
+    private readonly Func<int, bool> partHeldFn;
+
+    /// <summary>Whether part <paramref name="index"/> is held by Body size — itself, or through its whole submesh.</summary>
+    private bool PartHeld(int index)
+    {
+        if (parts == null || index < 0 || index >= parts.Parts.Count) return false;
+        var part = parts.Parts[index];
+        var holds = RetargetHolds;
+        return holds.Contains(part.Label) || (ParentOf(part) is { } parent && holds.Contains(parent.Label));
+    }
 
     /// <summary>A click on the character under Toggle Parts, with a vertex of the triangle it landed on.</summary>
     private void TickClickedOnCharacter(int vertex)
@@ -1084,10 +1115,13 @@ public sealed class PartsPanel
     }
 
     /// <summary>A value that changes whenever the ticked set does, for the live tint's cache.</summary>
-    private int TickedVersion()
+    private int TickedVersion() => VersionOf(ticked);
+
+    /// <summary>A value that changes whenever <paramref name="labels"/> does, for a live wash's cache.</summary>
+    private static int VersionOf(HashSet<string> labels)
     {
-        int h = ticked.Count;
-        foreach (var label in ticked) h ^= StringComparer.Ordinal.GetHashCode(label) * 16777619;
+        int h = labels.Count;
+        foreach (var label in labels) h ^= StringComparer.Ordinal.GetHashCode(label) * 16777619;
         return h;
     }
 
@@ -1565,6 +1599,7 @@ public sealed class PartsPanel
                 // The chosen part carries between Move, Rotate and Scale — they work on the same choice.
                 if (!(PartTool && IsPartTool(value))) movePart = null;
                 tool = value;
+                ApplyLocks();   // Body size shows its own holds, every other tool the brush locks
                 // Staged parts are a Pick-parts thing; a selection carried into the brush would sit there invisibly.
                 ticked.Clear();
                 ReleaseHandles();
@@ -2077,7 +2112,7 @@ public sealed class PartsPanel
                 penumbra.ReloadModDirectory(modDir);
                 compositor.RedrawForChangedModel();
             },
-            Held: Locks));
+            Held: RetargetHolds));
     }
 
     /// <summary>

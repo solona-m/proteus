@@ -112,6 +112,10 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     /// itself — pressed and dragged sideways. Null for every other tool.</param>
     /// <param name="rotateGizmo">The Rotate tool: as <paramref name="moveGizmo"/>, with rings instead of arrows. Null for
     /// every other tool. At most one of the three handles is ever set.</param>
+    /// <param name="partLocked">Greys the parts this names (by <paramref name="partOf"/>'s id) instead of the solve's
+    /// locks — Body size, whose holds are a set of their own. Skin is greyed too, since a hold can take skin. Null to
+    /// grey the solve's locks.</param>
+    /// <param name="lockedVersion">With <paramref name="partLocked"/>: changes whenever its set does.</param>
     /// <param name="graftedGamePath">
     /// Set for a model the character wears through Proteus rather than as a file of its own — an imported
     /// content piece, whose geometry the game only ever draws copied into a Proteus shell. The file is then
@@ -124,8 +128,11 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
                            Func<int, bool>? partTicked = null, int tickedVersion = 0,
                            TranslateGizmo? moveGizmo = null, Vector3? movePivot = null,
                            string? graftedGamePath = null, PartScaleDrag? scaleDrag = null,
-                           RotateGizmo? rotateGizmo = null)
+                           RotateGizmo? rotateGizmo = null,
+                           Func<int, bool>? partLocked = null, int lockedVersion = 0)
     {
+        this.partLocked = partLocked;
+        this.lockedVersion = lockedVersion;
         this.moveGizmo = moveGizmo;
         this.scaleDrag = scaleDrag;
         this.rotateGizmo = rotateGizmo;
@@ -150,6 +157,8 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     private string? graftedGamePath;
     private Func<int, int>? partOf;
     private Action<int>? lockClicked;
+    private Func<int, bool>? partLocked;
+    private int lockedVersion;
 
     // ── the Move, Rotate and Scale tools ──
     private TranslateGizmo? moveGizmo;
@@ -180,6 +189,9 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     private int lockedTrianglesVersion = -1;
     private SkinnedMesh? lockedTrianglesMesh;
     private MeshVolumeSolve? lockedTrianglesSolve;
+
+    /// <summary>Whether <c>lockedTriangles</c> holds Body size's holds rather than the solve's locks.</summary>
+    private bool lockedTrianglesHeld;
 
     /// <summary>Opacity of the grey over a locked part: enough to tell it apart, faint like the rest of the overlay.</summary>
     private const float LockedOpacity = 0.3f;
@@ -664,10 +676,17 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
         if (volume == null) return;
         var solve = volume;
 
+        if (partLocked != null && partOf != null)
+        {
+            DrawHeldWash(projection, m, partLocked, partOf);
+            return;
+        }
+
         // The solve too: a model re-opened builds a new one, whose version count starts again.
         if (lockedTrianglesVersion != solve.LockVersion || !ReferenceEquals(lockedTrianglesMesh, m)
-            || !ReferenceEquals(lockedTrianglesSolve, solve))
+            || !ReferenceEquals(lockedTrianglesSolve, solve) || lockedTrianglesHeld)
         {
+            lockedTrianglesHeld = false;
             lockedTrianglesSolve = solve;
             lockedTriangles.Clear();
             var baseTris = m.BaseTriangles;
@@ -679,6 +698,28 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
                     lockedTriangles.Add(t);
             }
             lockedTrianglesVersion = solve.LockVersion;
+            lockedTrianglesMesh = m;
+        }
+        FillTriangles(projection, m, lockedTriangles, ((uint)(LockedOpacity * 255f) << 24) | 0x00303030u);
+    }
+
+    /// <summary>
+    /// Body size's holds as the same grey, by part rather than by the solve's per-vertex locks. Shares the locked
+    /// wash's cache, flagged so switching between the two rebuilds it.
+    /// </summary>
+    private void DrawHeldWash(ScreenProjection projection, SkinnedMesh m, Func<int, bool> held, Func<int, int> part)
+    {
+        if (!lockedTrianglesHeld || lockedTrianglesVersion != lockedVersion || !ReferenceEquals(lockedTrianglesMesh, m))
+        {
+            lockedTrianglesHeld = true;
+            lockedTriangles.Clear();
+            var baseTris = m.BaseTriangles;
+            for (int t = 0; t < m.TriangleCount; t++)
+            {
+                int p = part(baseTris[t * 3]);
+                if (p >= 0 && held(p)) lockedTriangles.Add(t);
+            }
+            lockedTrianglesVersion = lockedVersion;
             lockedTrianglesMesh = m;
         }
         FillTriangles(projection, m, lockedTriangles, ((uint)(LockedOpacity * 255f) << 24) | 0x00303030u);
