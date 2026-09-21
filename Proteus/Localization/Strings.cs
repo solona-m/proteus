@@ -2143,6 +2143,19 @@ public sealed class PartsStrings
         "This is the garment's own body skin. Holding it keeps it at the old size, so the new body can show "
       + "through or gap at the edges.");
 
+    public readonly string RetargetReplaceSkin = Loc.Localize("Parts.Retarget.ReplaceSkin", "Use the new body's skin")
+                                               + "###partsRetargetReplaceSkin";
+
+    public readonly string RetargetReplaceSkinTip = Loc.Localize("Parts.Retarget.ReplaceSkin.Tip",
+        "On: the garment's own body skin is laid exactly onto the new body, with the body's shading, so the seam\n"
+      + "where it meets the rest of your body disappears.\n"
+      + "Off: the skin the garment came with is resized instead, keeping any reshaping its author did — a top\n"
+      + "that lifts or presses the chest keeps doing so at the new size.");
+
+    /// <summary>{0} is how many skin points were laid onto the new body.</summary>
+    public readonly string RetargetLaidFmt = Loc.Localize("Parts.Retarget.Laid.Fmt",
+        "{0:N0} skin points laid onto the new body.");
+
     /// <summary>{0} is how many welded points were held.</summary>
     public readonly string RetargetHeldFmt = Loc.Localize("Parts.Retarget.Held.Fmt",
         "{0:N0} held where the author put them.");

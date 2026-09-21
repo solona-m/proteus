@@ -343,6 +343,70 @@ public class BodyRetargetTests
         Assert.Equal(0f, Delta(solved, 3).Length());
     }
 
+    // ── replacing the skin: laying the garment's body mesh onto the new body ───────────────────────────
+
+    [Fact]
+    public void Replacing_the_skin_lays_sculpted_skin_onto_the_new_body()
+    {
+        // The author sculpted this skin 10 mm under the body's surface (a top pressing the chest). Resizing keeps that;
+        // replacing lays it exactly on the new body, facing the way the body faces.
+        var source = Cube(0.20f, SkinMaterial);
+        var target = Cube(0.25f, SkinMaterial);
+        var garment = Patch(SkinMaterial, new Vector3(0.01f, 0.01f, 0.19f));
+        Assert.True(IdentityCorrespondence.TryBuild(source, target, "chest", out var built, out _));
+        var pairs = new List<BodyRetarget.SlotPair> { new("_top", built!, target) };
+
+        var resized = BodyRetarget.Solve(garment, pairs);
+        var replaced = BodyRetarget.Solve(garment, pairs, replaceSkin: true);
+
+        for (int v = 0; v < 3; v++)
+        {
+            float keptOffset = 0.25f - (At(garment, v) + Delta(resized, v)).Z;
+            Assert.True(MathF.Abs(keptOffset - 0.01f) < 1e-4f, $"resizing should keep the 10 mm; it kept {keptOffset}");
+
+            var laid = At(garment, v) + Delta(replaced, v);
+            Assert.True(MathF.Abs(laid.Z - 0.25f) < 1e-5f, $"vertex {v} should sit on the new body's face, is at z={laid.Z}");
+            var n = replaced.Edit.NormalAt(v);
+            Assert.True(n.Z > 0.999f, $"vertex {v} should take the body's normal (+Z), has {n}");
+        }
+        Assert.Equal(3, replaced.Laid);
+    }
+
+    [Fact]
+    public void Replacing_the_skin_leaves_cloth_and_held_skin_alone()
+    {
+        var source = Cube(0.20f, SkinMaterial);
+        var target = Cube(0.25f, SkinMaterial);
+        Assert.True(IdentityCorrespondence.TryBuild(source, target, "chest", out var built, out _));
+        var pairs = new List<BodyRetarget.SlotPair> { new("_top", built!, target) };
+
+        // Cloth: laying is for skin only; cloth keeps the transfer's answer either way.
+        var cloth = Patch(ClothMaterial, new Vector3(0.01f, 0.01f, 0.21f));
+        var a = BodyRetarget.Solve(cloth, pairs);
+        var b = BodyRetarget.Solve(cloth, pairs, replaceSkin: true);
+        for (int v = 0; v < 3; v++) Assert.Equal(Delta(a, v), Delta(b, v));
+        Assert.Equal(0, b.Laid);
+
+        // Held skin: the user asked for it to stay put, and laying must respect that like every other pass.
+        var skin = Patch(SkinMaterial, new Vector3(0.01f, 0.01f, 0.19f));
+        var held = BodyRetarget.Solve(skin, pairs, held: new HashSet<int> { 0, 1, 2 }, replaceSkin: true);
+        for (int v = 0; v < 3; v++) Assert.Equal(0f, Delta(held, v).Length());
+    }
+
+    [Fact]
+    public void Skin_far_from_the_body_is_not_laid_onto_it()
+    {
+        // More than LayReach off the body is not the body's surface: laying it would drag it across the gap.
+        var source = Cube(0.20f, SkinMaterial);
+        var target = Cube(0.25f, SkinMaterial);
+        Assert.True(IdentityCorrespondence.TryBuild(source, target, "chest", out var built, out _));
+        var garment = Patch(SkinMaterial, new Vector3(0.01f, 0.01f, 0.20f + BodyRetarget.LayReach + 0.02f));
+
+        var solved = BodyRetarget.Solve(garment, [new BodyRetarget.SlotPair("_top", built!, target)], replaceSkin: true);
+
+        Assert.Equal(0, solved.Laid);
+    }
+
     private static BodyRetarget.Solved SolveHeld(ModelParts garment, ModelParts source, ModelParts target,
                                                  IEnumerable<int> held)
     {

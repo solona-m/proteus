@@ -69,9 +69,10 @@ internal static partial class BodyRetarget
 
     /// <summary>What happened, for the status line and the saved record.</summary>
     /// <param name="Held">Welded points the user held in place, by unticking their parts.</param>
+    /// <param name="Laid">Skin points laid exactly onto the new body — see <see cref="LaySkin"/>.</param>
     internal sealed record Report(
         int Nodes, int Snapped, int Transferred, int Missed, int Pushed,
-        float WorstMove, float WorstPush, int UnmappedSpares, bool HasOtherLods, int Held = 0)
+        float WorstMove, float WorstPush, int UnmappedSpares, bool HasOtherLods, int Held = 0, int Laid = 0)
     {
         /// <summary>Share of moved nodes that landed on a body vertex exactly. Low means the author sculpted the
         /// garment's body mesh rather than copying it, and the seam may not come out perfect.</summary>
@@ -87,7 +88,7 @@ internal static partial class BodyRetarget
     /// synthetic .mdl whose triangles are a metre across.
     /// </summary>
     internal sealed record Solved(RetargetEdit Edit, int Snapped, int Transferred, int Missed, int Pushed,
-                                  float WorstMove, float WorstPush, int Held = 0);
+                                  float WorstMove, float WorstPush, int Held = 0, int Laid = 0);
 
     /// <summary>
     /// The garment split into the two sets the two passes act on.
@@ -137,6 +138,10 @@ internal static partial class BodyRetarget
         /// held, so the two cannot come apart where they meet.
         /// </summary>
         public required int HeldCount { get; init; }
+
+        /// <summary>The garment's own body mesh, not held: what laying the skin onto the new body acts on — see
+        /// <see cref="BodyRetarget.LaySkin"/>.</summary>
+        public required int[] SkinNodes { get; init; }
 
         /// <param name="held">Vertices of the parts the user has held; null or empty for none.</param>
         public static Sets From(ModelParts garment, IReadOnlySet<int>? held = null)
@@ -197,12 +202,14 @@ internal static partial class BodyRetarget
 
             var all = new List<int>(nodeCount);
             var cloth = new List<int>(nodeCount);
+            var skin = new List<int>();
             int heldCount = 0;
             for (int n = 0; n < nodeCount; n++)
             {
                 if (isHeld[n]) { heldCount++; continue; }
                 all.Add(n);
-                if (!isSkin[n]) cloth.Add(n);
+                if (isSkin[n]) skin.Add(n);
+                else cloth.Add(n);
             }
 
             return new Sets
@@ -217,6 +224,7 @@ internal static partial class BodyRetarget
                 AllNodes = all.ToArray(),
                 ClothNodes = cloth.ToArray(),
                 HeldCount = heldCount,
+                SkinNodes = skin.ToArray(),
             };
         }
 
@@ -240,21 +248,24 @@ internal static partial class BodyRetarget
     /// <param name="pushOut">Whether to run the push-out pass after the transfer.</param>
     /// <param name="held">Vertices of the parts the user unticked, which stay exactly where the author put them — see
     /// <see cref="Sets.HeldCount"/>. Null for none.</param>
+    /// <param name="replaceSkin">Lay the garment's own body skin exactly onto the new body, with its normals, instead of
+    /// carrying the author's reshaping of it along — see <see cref="LaySkin"/>.</param>
     public static Planned Plan(ModelParts garment, byte[] garmentBytes, IReadOnlyList<SlotPair> pairs,
-                               string? garmentSlot = null, bool pushOut = true, IReadOnlySet<int>? held = null)
+                               string? garmentSlot = null, bool pushOut = true, IReadOnlySet<int>? held = null,
+                               bool replaceSkin = false)
     {
-        var solved = Solve(garment, pairs, garmentSlot, pushOut, held);
+        var solved = Solve(garment, pairs, garmentSlot, pushOut, held, replaceSkin);
         var written = MeshVolumeService.Inflate(garmentBytes, solved.Edit);
         var report = new Report(garment.Positions.Length / 3, solved.Snapped, solved.Transferred, solved.Missed,
                                 solved.Pushed, solved.WorstMove, solved.WorstPush,
-                                written.UnmappedSpares, written.HasOtherLods, solved.Held);
+                                written.UnmappedSpares, written.HasOtherLods, solved.Held, solved.Laid);
         return new Planned(solved.Edit, written.Model, report);
     }
 
     /// <inheritdoc cref="Plan"/>
     /// <remarks>The geometry, without touching the file. See <see cref="Solved"/>.</remarks>
     internal static Solved Solve(ModelParts garment, IReadOnlyList<SlotPair> pairs, string? garmentSlot = null,
-                                 bool pushOut = true, IReadOnlySet<int>? held = null)
+                                 bool pushOut = true, IReadOnlySet<int>? held = null, bool replaceSkin = false)
     {
         var sets = Sets.From(garment, held);
         var source = SourceBody.Build(pairs);
@@ -263,6 +274,10 @@ internal static partial class BodyRetarget
         var snapped = new bool[sets.NodeCount];
 
         Transfer(sets, sets.AllNodes, source, nodeDelta, snapped, out int transferred, out int missed);
+
+        // Before the push-out, so the push-out measures cloth against the skin as it will actually be drawn.
+        Vector3?[]? bodyNormal = null;
+        int laid = replaceSkin ? LaySkin(sets, source, pairs, nodeDelta, out bodyNormal) : 0;
 
         int pushed = 0;
         float worstPush = 0f;
@@ -309,8 +324,72 @@ internal static partial class BodyRetarget
         var vertNrm = SecondSkinWriter.RelaxedNormals(basePos, baseNrm, vertDelta, sets.NodeOf,
                                                       nodeWeight, sets.NodeNormal, sets.Tris);
 
+        // Skin laid onto the body takes the BODY's normals, not ones recomputed from the garment's own triangles: those
+        // are what the body beside the garment is shaded with, so the seam where they meet shades as one surface.
+        if (bodyNormal != null)
+            for (int i = 0; i < vc; i++)
+                if (bodyNormal[sets.NodeOf[i]] is { } n)
+                    vertNrm[i] = ToVec(n);
+
         var edit = new RetargetEdit(garment.MeshSpans, vertDelta, vertNrm);
-        return new Solved(edit, CountTrue(snapped), transferred, missed, pushed, worstMove, worstPush, sets.HeldCount);
+        return new Solved(edit, CountTrue(snapped), transferred, missed, pushed, worstMove, worstPush, sets.HeldCount,
+                          laid);
+    }
+
+    /// <summary>
+    /// How far from the source body a skin point may be and still be taken as that body's skin to lay onto the new one
+    /// (30 mm). An author's reshaping under a garment — "This Old Thing" lifts its chest by up to 20 mm — sits inside
+    /// it; a skin point further off than that is not the body's surface at all, and keeps the refit's answer.
+    /// </summary>
+    internal const float LayReach = 0.03f;
+
+    /// <summary>
+    /// Replace the garment's own body skin with the new body's: put every skin point exactly ON the target body, at the
+    /// place that corresponds to where it sits on the source body, and hand back the target body's normal there.
+    /// <para/>
+    /// This is the difference between resizing the skin a mod came with and swapping it for the body's. The transfer
+    /// carries each point along with the body, so an author's reshaping of the skin — a top that lifts or compresses the
+    /// chest — survives at the new size. Laying it drops that offset: the garment's skin becomes the new body's surface,
+    /// and shades as the body does. Still only positions and normals, so the file keeps its exact size and layout and
+    /// the rewrite stays safe to do to somebody else's mod; the garment's own triangles, uvs and weights are kept.
+    /// </summary>
+    /// <returns>How many skin nodes were laid.</returns>
+    private static int LaySkin(Sets sets, SourceBody source, IReadOnlyList<SlotPair> pairs, Vec3[] nodeDelta,
+                               out Vector3?[] bodyNormal)
+    {
+        bodyNormal = new Vector3?[sets.NodeCount];
+        var targets = new List<BodySurface>(pairs.Count);
+        foreach (var pair in pairs)
+        {
+            var surface = new BodySurface(pair.Target, BodySurface.CellFor(MeanEdgeOf(pair.Target)));
+            if (!surface.IsEmpty) targets.Add(surface);
+        }
+
+        int laid = 0;
+        foreach (int n in sets.SkinNodes)
+        {
+            var p = ToVector(sets.NodeAt[n]);
+            if (!source.TryLand(p, LayReach, out var q)) continue;
+
+            // Onto the target surface itself, whose normal is the one the body is drawn with. The landing is already on
+            // it for two sizes of one mesh; by texture coordinate it is within a whisker, and this closes the whisker.
+            BodySurface.Hit best = default;
+            bool onBody = false;
+            float within = 0.005f;
+            foreach (var surface in targets)
+            {
+                if (!surface.Nearest(q, within, out var hit)) continue;
+                best = hit;
+                within = hit.Distance;
+                onBody = true;
+            }
+
+            var at = onBody ? best.Point : q;
+            nodeDelta[n] = ToVec(at - p);
+            if (onBody) bodyNormal[n] = best.Normal;
+            laid++;
+        }
+        return laid;
     }
 
     private static int CountTrue(bool[] flags)

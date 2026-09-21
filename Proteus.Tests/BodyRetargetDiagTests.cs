@@ -201,6 +201,38 @@ public class BodyRetargetDiagTests(ITestOutputHelper output)
         Assert.True(diff.Max() < 0.0005f, $"the uv route should agree with the exact one to 0.5 mm; worst {diff.Max() * 1000f:F2} mm");
     }
 
+    /// <summary>
+    /// What replacing the skin costs and buys, on an outfit whose author reshaped the skin under it. Against the author's
+    /// own L, resizing keeps their reshaping and so should be closer; replacing lays the skin on the plain body and so
+    /// should sit on it exactly. Both numbers are printed, so the trade is visible rather than asserted.
+    /// </summary>
+    [Fact]
+    public void What_replacing_the_skin_costs_against_the_author()
+    {
+        const string model = @"chara\equipment\e6255\model\c0201e6255_top.mdl";
+        string fromPath = Path.Combine(ThisOldThing, "neolithe m", model);
+        string toPath = Path.Combine(ThisOldThing, "neolithe l", model);
+        if (!File.Exists(fromPath) || !File.Exists(toPath)) return;
+
+        var fromBytes = File.ReadAllBytes(fromPath);
+        var authorM = ModelPartReader.Read(fromBytes)!;
+        var authorL = ModelPartReader.Read(File.ReadAllBytes(toPath))!;
+        var pairs = new List<BodyRetarget.SlotPair>();
+        AddPair(pairs, "_top", ExtraChestSmallClothes + @"\SFW Pushup M.mdl", ExtraChestSmallClothes + @"\SFW Pushup L.mdl");
+        AddPair(pairs, "_dwn", LegsFolder + @"\SFW Medium.mdl", LegsFolder + @"\SFW Large.mdl");
+        var targetChest = pairs[0].Target;
+
+        foreach (bool replace in new[] { false, true })
+        {
+            var planned = BodyRetarget.Plan(authorM, fromBytes, pairs, "_top", replaceSkin: replace);
+            var refit = ModelPartReader.Read(planned.Model)!;
+            output.WriteLine($"{(replace ? "replaced" : "resized"),-9} vs author: body mesh " +
+                             $"{Stats(Errors(refit, authorL, true, true))}  cloth {Stats(Errors(refit, authorL, false, true))}");
+            output.WriteLine($"{"",-9} body mesh to the plain L body: {Stats(Errors(refit, targetChest, true, false))}" +
+                             $"   laid {planned.Report.Laid:N0}, pushed {planned.Report.Pushed:N0}");
+        }
+    }
+
     [Fact]
     public void The_catalog_reads_Neolithe_s_real_option_list()
     {

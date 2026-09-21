@@ -65,6 +65,16 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
     private string groupName = "";
     private string? groupNameFor;
 
+    /// <summary>
+    /// Lay the garment's own body skin exactly onto the new body instead of resizing the skin it came with. On by
+    /// default: the seam where garment skin meets body skin is what most often looks wrong, and this makes the two one
+    /// surface. Off keeps an author's reshaping of the skin (a top that lifts the chest) at the new size.
+    /// </summary>
+    private bool replaceSkin = true;
+
+    /// <summary>The model the worn body was last looked up for, so it is looked up once per model, not per frame.</summary>
+    private string? wornFor;
+
     private BodyRetarget.Planned? planned;
 
     /// <summary>
@@ -108,6 +118,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
         detected.Clear();
         validating.Clear();
         detectedFor = null;
+        wornFor = null;
         planned = null;
         pendingPreview = null;
         groupNameFor = null;
@@ -132,6 +143,8 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
             record = BodyRetargetWriter.ReadRecord(ctx.ModRoot);
         }
 
+        if (bodyDir == null && bodies != null) PickWornBody(ctx);
+
         DrawBodyPicker(ctx);
         if (catalog is not { IsBody: true })
         {
@@ -142,6 +155,9 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
 
         // A different model opened under the same body: the old detection was about the old model.
         if (detectedFor != ctx.ModelRel && detectTask == null) StartDetect(ctx);
+
+        // The sizes being refitted ONTO default to the ones the character is wearing right now.
+        if (wornFor != ctx.ModelRel) PresetWornTargets(ctx);
 
         // A part ticked or unticked since the refit ran: that plan is not what the user now asks for, so it may not be
         // saved. Taken down rather than kept, so the character does not show a refit the Save button would not write.
@@ -237,6 +253,75 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
     {
         string? root = penumbra.GetModDirectory();
         return root == null ? null : Path.Combine(root, dir);
+    }
+
+    // ── what the character is wearing ───────────────────────────────────────
+    //
+    // Both of these ask Penumbra to RESOLVE a body model's game path through the player's own collection, and match the
+    // file it answers with. That is the one reliable way to know which option is selected: option names are no good,
+    // because Neolithe has eight options all called "SFW M" and only their position tells them apart, while the file
+    // each one points at is unique. It also answers the question actually being asked — which body is being drawn —
+    // rather than which options happen to be ticked in some group.
+
+    /// <summary>
+    /// Choose, once, the body mod the character is wearing: the installed body mod that supplies the body model for the
+    /// garment's own slot.
+    /// </summary>
+    private void PickWornBody(in RetargetContext ctx)
+    {
+        if (wornBodyTried || bodies == null) return;
+        wornBodyTried = true;
+
+        string? modsRoot = penumbra.GetModDirectory();
+        if (modsRoot == null) return;
+        string slot = BodySizeCatalog.SlotOf(ctx.GamePath) ?? "_top";
+        string race = RaceCode.Match(ctx.GamePath) is { Success: true } m ? m.Groups[1].Value : "0201";
+        if (penumbra.ResolvePlayer($"chara/equipment/e0000/model/c{race}e0000{slot}.mdl") is not { } resolved) return;
+
+        string full = Path.GetFullPath(resolved);
+        foreach (string dir in bodies.Keys)
+        {
+            string root = Path.GetFullPath(Path.Combine(modsRoot, dir)) + Path.DirectorySeparatorChar;
+            if (!full.StartsWith(root, StringComparison.OrdinalIgnoreCase)) continue;
+            bodyDir = dir;
+            catalog = BodySizeCatalog.Read(Path.Combine(modsRoot, dir));
+            return;
+        }
+    }
+
+    /// <summary>Only ever tried once per session: the user may well choose another body mod on purpose.</summary>
+    private bool wornBodyTried;
+
+    private static readonly System.Text.RegularExpressions.Regex RaceCode = new(@"/c(\d{4})e\d{4}_",
+        System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>Default every slot's target to the option the character is wearing, leaving any choice already made.</summary>
+    private void PresetWornTargets(in RetargetContext ctx)
+    {
+        wornFor = ctx.ModelRel;
+        if (catalog is not { } snapshot) return;
+        foreach (string slot in Slots(ctx))
+        {
+            if (to.ContainsKey(slot) || WornOption(snapshot, slot) is not { } worn) continue;
+            to[slot] = worn;
+            StartValidate(slot);
+        }
+    }
+
+    /// <summary>The option of this slot whose file the player's collection resolves the body model to.</summary>
+    private BodyOption? WornOption(BodySizeCatalog snapshot, string slot)
+    {
+        var options = snapshot.For(slot);
+        foreach (string gamePath in options.Select(o => o.GamePath).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (penumbra.ResolvePlayer(gamePath) is not { } resolved) continue;
+            string full = Path.GetFullPath(resolved);
+            foreach (var option in options)
+                if (string.Equals(option.GamePath, gamePath, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(Path.GetFullPath(snapshot.PathOf(option)), full, StringComparison.OrdinalIgnoreCase))
+                    return option;
+        }
+        return null;
     }
 
     // ── which slots take part ───────────────────────────────────────────────
@@ -405,6 +490,9 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
 
         if (detectTask != null) ImGui.TextUnformatted(ps.RetargetChecking);
 
+        ImGui.Checkbox(ps.RetargetReplaceSkin, ref replaceSkin);
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.RetargetReplaceSkinTip);
+
         using (ImRaii.Disabled(busy || !ready))
             if (ImGui.Button(ps.RetargetPreview, FullWidth()))
                 StartPlan(ctx);
@@ -470,6 +558,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
         if (r.Pushed > 0) lines.Add(string.Format(ps.RetargetPushedFmt, r.Pushed, r.WorstPush * 1000f));
         if (r.Missed > 0) lines.Add(string.Format(ps.RetargetMissedFmt, r.Missed));
         if (r.Held > 0) lines.Add(string.Format(ps.RetargetHeldFmt, r.Held));
+        if (r.Laid > 0) lines.Add(string.Format(ps.RetargetLaidFmt, r.Laid));
         return string.Join("\n", lines);
     }
 
@@ -535,6 +624,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
         var garment = ctx.Garment;
         var bytes = ctx.GarmentBytes;
         var heldLabels = new HashSet<string>(ctx.Held, StringComparer.Ordinal);
+        bool layOnBody = replaceSkin;
         string key = Key(ctx);
 
         planTask = Task.Run(() =>
@@ -556,7 +646,8 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
                     if (heldLabels.Contains(part.Label))
                         held.UnionWith(part.Triangles);
 
-                return new PlanResult(key, BodyRetarget.Plan(garment, bytes, pairs, garmentSlot, held: held), "");
+                return new PlanResult(key, BodyRetarget.Plan(garment, bytes, pairs, garmentSlot, held: held,
+                                                             replaceSkin: layOnBody), "");
             }
             catch (Exception ex)
             {
@@ -634,7 +725,8 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
     /// longer matches is stale — see <see cref="plannedKey"/>.</summary>
     private string Key(in RetargetContext ctx)
         => ctx.ModelRel + "|" + string.Join("|", Chosen(ctx).Select(s => $"{s}:{from[s].Rel}>{to[s].Rel}"))
-         + "|held:" + string.Join(",", ctx.Held.OrderBy(h => h, StringComparer.Ordinal));
+         + "|held:" + string.Join(",", ctx.Held.OrderBy(h => h, StringComparer.Ordinal))
+         + (replaceSkin ? "|lay" : "");
 
     /// <summary>The framework-thread half: take up whatever finished, and do the parts only this thread may.</summary>
     private void Consume(in RetargetContext ctx)
@@ -655,7 +747,13 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
                 foreach (var (slot, ranking) in dt.Result.Rankings)
                 {
                     detected[slot] = ranking;
-                    if (ranking.Preselect && ranking.Best is { } best && !from.ContainsKey(slot))
+
+                    // The best guess is chosen even when it is only a guess — the line under the dropdown says how
+                    // sure it is, and changing it is one click. Only a ranking with no evidence behind it at all (no
+                    // body mesh, or none reaching this slot and no cloth either) leaves the choice empty.
+                    bool evidence = ranking.Confidence is not (BodySizeMatch.Confidence.NoBodyMesh
+                                                               or BodySizeMatch.Confidence.TooLittle);
+                    if (evidence && ranking.Best is { } best && !from.ContainsKey(slot))
                     {
                         from[slot] = best.Option;
                         StartValidate(slot);

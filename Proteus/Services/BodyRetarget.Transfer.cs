@@ -86,6 +86,34 @@ internal static partial class BodyRetarget
             return found;
         }
 
+        /// <summary>
+        /// Where the source body's nearest point to <paramref name="p"/> ends up on the target body — the point itself,
+        /// not <paramref name="p"/> carried along with it. What laying a garment's skin onto the new body needs: the
+        /// author's offset from the body is exactly what it drops.
+        /// </summary>
+        public bool TryLand(Vector3 p, float maxDistance, out Vector3 landing)
+        {
+            landing = default;
+            bool found = false;
+            float best = maxDistance;
+            foreach (var (surface, field) in slots)
+            {
+                if (!surface.Nearest(p, best, out var hit)) continue;
+                var sum = Vector3.Zero;
+                float weight = 0f;
+                int present = 0;
+                if (field[hit.A] is { } fa) { sum += fa * hit.U; weight += hit.U; present++; }
+                if (field[hit.B] is { } fb) { sum += fb * hit.V; weight += hit.V; present++; }
+                if (field[hit.C] is { } fc) { sum += fc * hit.W; weight += hit.W; present++; }
+                if (weight < 0.5f) continue;
+
+                best = hit.Distance;
+                landing = hit.Point + (present == 3 ? sum : sum / weight);
+                found = true;
+            }
+            return found;
+        }
+
         /// <summary>The displacement of the nearest point on any source body, interpolated across the triangle.</summary>
         public bool TryNearest(Vector3 p, float maxDistance, out Vector3 delta, out float distance)
         {

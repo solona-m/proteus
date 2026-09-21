@@ -3418,5 +3418,17 @@
   "Parts.Retarget.Lock.SkinTip": {
     "message": "This is the garment\u0027s own body skin. Holding it keeps it at the old size, so the new body can show through or gap at the edges.",
     "description": ""
+  },
+  "Parts.Retarget.Laid.Fmt": {
+    "message": "{0:N0} skin points laid onto the new body.",
+    "description": ""
+  },
+  "Parts.Retarget.ReplaceSkin": {
+    "message": "Use the new body\u0027s skin",
+    "description": ""
+  },
+  "Parts.Retarget.ReplaceSkin.Tip": {
+    "message": "On: the garment\u0027s own body skin is laid exactly onto the new body, with the body\u0027s shading, so the seam\nwhere it meets the rest of your body disappears.\nOff: the skin the garment came with is resized instead, keeping any reshaping its author did \u2014 a top\nthat lifts or presses the chest keeps doing so at the new size.",
+    "description": ""
   }
 }
