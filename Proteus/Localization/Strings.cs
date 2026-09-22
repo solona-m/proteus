@@ -295,7 +295,8 @@ public sealed class BindingsStrings
         "when it was saved (enable / priority / options), switches off mods on the character\n" +
         "that weren't, and raises the design's mods above anything they conflict with.\n\n" +
         "Mods that aren't Proteus mods are only held that way with Penumbra temporary settings:\n" +
-        "your collection isn't changed, and reverting or applying an unbound design puts them back.\n\n" +
+        "your collection isn't changed, and reverting or applying an unbound design puts them back.\n" +
+        "Penumbra's banner on a held mod can drop that one hold, if you want just it back.\n\n" +
         "When off, only Proteus mods are restored. Designs are captured either way, so\n" +
         "turning this on works for designs saved while it was off.");
 
