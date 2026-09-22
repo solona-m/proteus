@@ -3550,5 +3550,21 @@
   "Parts.Retarget.ToBody": {
     "message": "Refit onto body mod",
     "description": ""
+  },
+  "Settings.ReduceMotion": {
+    "message": "Réduire les animations",
+    "description": ""
+  },
+  "Settings.ReduceMotion.Tip": {
+    "message": "Garde la fenêtre immobile : les effets de survol s'appliquent aussitôt, et la lueur de fond\net la pulsation des mods actifs cessent de bouger.",
+    "description": ""
+  },
+  "Settings.AmbientBackground": {
+    "message": "Lueur d'arrière-plan",
+    "description": ""
+  },
+  "Settings.AmbientBackground.Tip": {
+    "message": "La douce lueur de braise qui dérive derrière le contenu de cette fenêtre.",
+    "description": ""
   }
 }

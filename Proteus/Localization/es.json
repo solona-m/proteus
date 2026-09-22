@@ -3550,5 +3550,21 @@
   "Parts.Retarget.ToBody": {
     "message": "Refit onto body mod",
     "description": ""
+  },
+  "Settings.ReduceMotion": {
+    "message": "Reducir el movimiento",
+    "description": ""
+  },
+  "Settings.ReduceMotion.Tip": {
+    "message": "Mantiene la ventana quieta: los efectos al pasar el ratón se aplican al instante, y el brillo de fondo\ny el pulso de los mods activos dejan de moverse.",
+    "description": ""
+  },
+  "Settings.AmbientBackground": {
+    "message": "Brillo de fondo",
+    "description": ""
+  },
+  "Settings.AmbientBackground.Tip": {
+    "message": "El suave brillo de brasas que flota detrás del contenido de esta ventana.",
+    "description": ""
   }
 }

@@ -198,6 +198,15 @@ public class Configuration : IPluginConfiguration
     /// </summary>
     public bool FaceUvInPlace { get; set; } = true;
 
+    /// <summary>
+    /// Stop the window's decorative motion: hovers land at once, the ambient glow and pulses hold still. For people
+    /// who find motion distracting or uncomfortable.
+    /// </summary>
+    public bool ReduceMotion { get; set; } = false;
+
+    /// <summary>Paint the slow ember glow behind the status window's contents.</summary>
+    public bool AmbientBackground { get; set; } = true;
+
     // No "hat-compat notice shown" flag: the notice fires per hairstyle fitted, tracked by the patch record on disk.
 
     /// <summary>

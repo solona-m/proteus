@@ -115,6 +115,8 @@ public class PresetBar
                     fieldWantsFocus = true;
                     ClearNotice();
                 }
+            if (collId != null)
+                ProteusStyle.Decorate();
             ProteusStyle.ReasonTooltip(collId == null ? ps.NoCollection : ps.SaveNewTip);
 
             ImGui.SameLine();

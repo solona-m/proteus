@@ -3550,5 +3550,21 @@
   "Parts.Retarget.ToBody": {
     "message": "Refit onto body mod",
     "description": ""
+  },
+  "Settings.ReduceMotion": {
+    "message": "動きを減らす",
+    "description": ""
+  },
+  "Settings.ReduceMotion.Tip": {
+    "message": "ウィンドウの動きを止めます。ホバー効果は即座に切り替わり、背景の光と\n有効なMODの脈動も動かなくなります。",
+    "description": ""
+  },
+  "Settings.AmbientBackground": {
+    "message": "背景の光",
+    "description": ""
+  },
+  "Settings.AmbientBackground.Tip": {
+    "message": "このウィンドウの内容の背後をゆっくり漂う、柔らかな残り火のような光。",
+    "description": ""
   }
 }
