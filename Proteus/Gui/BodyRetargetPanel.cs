@@ -26,7 +26,7 @@ namespace Proteus.Gui;
 /// json. Any of those on the draw thread is a visible hitch at best and, for the mod scan, a freeze the first time the
 /// tool is opened.
 /// </summary>
-internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
+internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService uvRemap, IPluginLog log)
 {
     /// <summary>What the Studio tab lends this tool for the frame: the open model, and the things only it can do.</summary>
     /// <param name="Redirects">The open mod's redirects, already read by the tab. Used to spot a group of the author's
@@ -46,9 +46,21 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
 
     // ── the body, and the pair chosen per slot ──────────────────────────────
 
+    /// <summary>The body mod refitted ONTO, and its sizes.</summary>
     private string? bodyDir;
     private string bodyFilter = "";
     private BodySizeCatalog? catalog;
+
+    /// <summary>
+    /// The body mod the garment was MADE for, when it is not the one it is refitted onto — a Neolithe outfit going to
+    /// Rue. Null means the same one, which is phase 1's refit between sizes of one body.
+    /// </summary>
+    private string? fromBodyDir;
+    private string fromBodyFilter = "";
+    private BodySizeCatalog? fromCatalog;
+
+    /// <summary>Where the "made for" sizes come from: the other body mod, or the same one.</summary>
+    private BodySizeCatalog? SourceCatalog => fromCatalog ?? catalog;
 
     /// <summary>Per slot: the option the garment was built for.</summary>
     private readonly Dictionary<string, BodyOption> from = new(StringComparer.Ordinal);
@@ -121,7 +133,12 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
     /// <summary>Pair checks in flight, per <see cref="PairKey"/>, each tagged with the source it was started for.</summary>
     private readonly Dictionary<string, (string Source, Task<string> Refusal)> validating = new(StringComparer.Ordinal);
 
-    private sealed record DetectResult(string ModelRel, Dictionary<string, BodySizeMatch.Ranking> Rankings);
+    /// <param name="Source">The "made for" body mod the ranking ran over. A ranking of another one — the user switched
+    /// while it ran — names options of the wrong mod, and is dropped.</param>
+    private sealed record DetectResult(string ModelRel, string? Source, Dictionary<string, BodySizeMatch.Ranking> Rankings);
+
+    /// <summary>The body mod the "made for" sizes come from: the other one, or the refit-onto one.</summary>
+    private string? SourceDir => fromBodyDir ?? bodyDir;
     private sealed record PlanResult(string Key, List<(BodyOption To, BodyRetarget.Planned Planned)>? Planned,
                                      string Error);
     private sealed record SaveResult(BodyRetargetWriter.Outcome Outcome, BodyRetargetWriter.Record? Record);
@@ -176,32 +193,42 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
 
         if (bodyDir == null && bodies != null) PickWornBody(ctx);
 
+        // Top to bottom as the refit reads: where the garment comes from — its body mod, then its size — and where it
+        // goes — the body mod, then the size.
+        DrawSourceBodyPicker();
+        bool ready = catalog is { IsBody: true };
+        List<string> slots = [];
+        if (ready)
+        {
+            // A different model opened under the same body: the old detection was about the old model.
+            if (detectedFor != ctx.ModelRel && detectTask == null) StartDetect(ctx);
+
+            // The sizes being refitted ONTO default to the ones the character is wearing right now.
+            if (wornFor != ctx.ModelRel) PresetWornTargets(ctx);
+
+            // A part ticked or unticked since the refit ran: that plan is not what the user now asks for, so it may not
+            // be saved. Taken down rather than kept, so the character does not show a refit Save would not write.
+            if (planned != null && plannedKey != Key(ctx))
+            {
+                planned = null;
+                pendingPreview = null;
+                ctx.EndPreview();
+            }
+
+            slots = Slots(ctx);
+            DrawSlotHeading(ctx, slots[0]);
+            DrawSlotFrom(ctx, slots[0]);
+        }
+
+        ImGui.Separator();
         DrawBodyPicker(ctx);
-        if (catalog is not { IsBody: true })
+        if (!ready)
         {
             ImGui.TextWrapped(bodies == null ? ps.RetargetFindingBodies : ps.RetargetPickBody);
             DrawSaved(ctx);
             return;
         }
-
-        // A different model opened under the same body: the old detection was about the old model.
-        if (detectedFor != ctx.ModelRel && detectTask == null) StartDetect(ctx);
-
-        // The sizes being refitted ONTO default to the ones the character is wearing right now.
-        if (wornFor != ctx.ModelRel) PresetWornTargets(ctx);
-
-        // A part ticked or unticked since the refit ran: that plan is not what the user now asks for, so it may not be
-        // saved. Taken down rather than kept, so the character does not show a refit the Save button would not write.
-        if (planned != null && plannedKey != Key(ctx))
-        {
-            planned = null;
-            pendingPreview = null;
-            ctx.EndPreview();
-        }
-
-        ImGui.Separator();
-        var slots = Slots(ctx);
-        DrawSlot(ctx, slots[0]);
+        DrawSlotTo(ctx, slots[0]);
 
         // The other slots in a panel of their own, closed until opened: most garments need none of them, and four
         // dropdown pairs for one top bury the one that matters. The header says when any of them is taking part, so a
@@ -215,7 +242,11 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
             {
                 ImGui.TextDisabled(ps.RetargetSlotOptionalTip);
                 foreach (string slot in slots.Skip(1))
-                    DrawSlot(ctx, slot);
+                {
+                    DrawSlotHeading(ctx, slot);
+                    DrawSlotFrom(ctx, slot);
+                    DrawSlotTo(ctx, slot);
+                }
             }
         }
 
@@ -229,17 +260,61 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
     private void DrawBodyPicker(in RetargetContext ctx)
     {
         var ps = Strings.Parts;
-        ImGui.TextUnformatted(ps.RetargetBody);
+        ImGui.TextUnformatted(ps.RetargetToBody);
+        if (DrawBodyCombo("##retargetBody", bodyDir, null, ref bodyFilter) is { } dir)
+        {
+            bodyDir = dir;
+            catalog = BodyRoot(dir) is { } root ? BodySizeCatalog.Read(root) : null;
+            if (fromBodyDir == dir)
+            {
+                fromBodyDir = null;
+                fromCatalog = null;
+            }
+            Clear();
+        }
+    }
+
+    /// <summary>
+    /// The body mod the garment was made for, when that is another one. "The same body" by default, which is a refit
+    /// between sizes; another body mod makes it a refit between bodies, which also rewrites the cloth's weights.
+    /// </summary>
+    private void DrawSourceBodyPicker()
+    {
+        var ps = Strings.Parts;
+        ImGui.TextUnformatted(ps.RetargetFromBody);
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.RetargetFromBodyTip);
+        if (DrawBodyCombo("##retargetFromBody", fromBodyDir, ps.RetargetSameBody, ref fromBodyFilter) is not { } dir) return;
+
+        // Choosing the refit-onto mod here is choosing "the same body".
+        fromBodyDir = dir.Length == 0 || dir == bodyDir ? null : dir;
+        fromCatalog = fromBodyDir != null && BodyRoot(fromBodyDir) is { } root ? BodySizeCatalog.Read(root) : null;
+
+        // Every "made for" choice and what was worked out from it belonged to the old source.
+        from.Clear();
+        detected.Clear();
+        detectedFor = null;
+        refusals.Clear();
+        validating.Clear();
+        planned = null;
+        pendingPreview = null;
+    }
+
+    /// <summary>
+    /// A dropdown of the installed body mods. Returns the directory picked this frame, if any — "" for
+    /// <paramref name="noneLabel"/>, when one is offered.
+    /// </summary>
+    private string? DrawBodyCombo(string id, string? current, string? noneLabel, ref string filter)
+    {
+        var ps = Strings.Parts;
         ImGui.SetNextItemWidth(-1);
 
         // The first scan starts as soon as the tool is shown, so the list is usually ready by the time it is opened.
         if (bodies == null && bodiesTask == null) StartBodyScan();
 
-        string current = bodyDir != null && bodies != null && bodies.TryGetValue(bodyDir, out string? name)
-                             ? name
-                             : ps.RetargetNoBody;
-        using var combo = ImRaii.Combo("##retargetBody", current);
-        if (!combo) return;
+        string shown = current != null && bodies != null && bodies.TryGetValue(current, out string? name) ? name
+                     : noneLabel ?? ps.RetargetNoBody;
+        using var combo = ImRaii.Combo(id, shown);
+        if (!combo) return null;
 
         // Opening the list re-scans in the background, so a body mod installed since the last look appears.
         if (ImGui.IsWindowAppearing() && bodiesTask == null) StartBodyScan();
@@ -247,25 +322,24 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
         if (bodies == null)
         {
             ImGui.TextDisabled(ps.RetargetFindingBodies);
-            return;
+            return null;
         }
 
-        ComboSearch.Box("##retargetBody", ref bodyFilter);
+        ComboSearch.Box(id, ref filter);
+        string? picked = null;
+        if (noneLabel != null && ImGui.Selectable(noneLabel + id + "_none", current == null)) picked = "";
         bool any = false;
         foreach (var (dir, label) in bodies.OrderBy(p => p.Value, StringComparer.OrdinalIgnoreCase))
         {
             // Mod names match anywhere, as the Studio's own mod picker does: people type fragments of a name ("lithe").
             // Word starts are for the size lists, where a single letter has to mean a size.
-            if (bodyFilter.Length > 0 && !label.Contains(bodyFilter, StringComparison.OrdinalIgnoreCase)
-                && !dir.Contains(bodyFilter, StringComparison.OrdinalIgnoreCase)) continue;
+            if (filter.Length > 0 && !label.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                && !dir.Contains(filter, StringComparison.OrdinalIgnoreCase)) continue;
             any = true;
-            if (!ImGui.Selectable(label, dir == bodyDir)) continue;
-
-            bodyDir = dir;
-            catalog = BodyRoot(dir) is { } root ? BodySizeCatalog.Read(root) : null;
-            Clear();
+            if (ImGui.Selectable(label + id + dir, dir == current)) picked = dir;
         }
         if (!any) ImGui.TextDisabled(ps.NoMatches);
+        return picked;
     }
 
     /// <summary>
@@ -420,20 +494,24 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
 
     // ── one slot's from/to ──────────────────────────────────────────────────
 
-    private void DrawSlot(in RetargetContext ctx, string slot)
+    /// <summary>The slot's name, and for the garment's own slot how many sizes the body mod offers.</summary>
+    private void DrawSlotHeading(in RetargetContext ctx, string slot)
     {
         var ps = Strings.Parts;
-        var options = catalog!.For(slot);
-        if (options.Count == 0) return;
-
         bool optional = slot != Primary(ctx);
         ImGui.TextUnformatted(optional
                                   ? string.Format(ps.RetargetSlotOptionalFmt, SlotName(slot))
                                   : string.Format(ps.RetargetSlotFmt, SlotName(slot), Distinct(slot)));
         if (optional && ImGui.IsItemHovered()) ImGui.SetTooltip(ps.RetargetSlotOptionalTip);
+    }
 
+    /// <summary>The size the garment was made for, from the made-for body mod, and what detection made of it.</summary>
+    private void DrawSlotFrom(in RetargetContext ctx, string slot)
+    {
+        var ps = Strings.Parts;
         from.TryGetValue(slot, out var source);
-        if (DrawOptionCombo($"##retargetFrom{slot}", ps.RetargetFrom, options,
+        var sourceOptions = SourceCatalog?.For(slot) ?? [];
+        if (DrawOptionCombo($"##retargetFrom{slot}", ps.RetargetFrom, sourceOptions,
                             source == null ? [] : [source], many: false) is { } pickedFrom)
         {
             from[slot] = pickedFrom;
@@ -441,6 +519,14 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
             StartValidate(slot);
         }
         DrawConfidence(slot);
+    }
+
+    /// <summary>The size to refit onto, from the refit-onto body mod, and why a pair cannot be refitted.</summary>
+    private void DrawSlotTo(in RetargetContext ctx, string slot)
+    {
+        var ps = Strings.Parts;
+        var options = catalog!.For(slot);
+        if (options.Count == 0) return;
 
         // One size at a time for now. The rest of the panel still handles several (the plan, the preview picker, the
         // batch save), so turning this back on is this line.
@@ -744,8 +830,12 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
         if (r.Held > 0) lines.Add(string.Format(ps.RetargetHeldFmt, r.Held));
         if (r.Swap is { } swap)
         {
-            lines.Add(string.Format(ps.RetargetSwappedFmt, swap.Removed, swap.Added));
+            if (swap.Removed > 0) lines.Add(string.Format(ps.RetargetSwappedFmt, swap.Removed, swap.Added));
             if (swap.Kept > 0) lines.Add(string.Format(ps.RetargetSwapKeptFmt, swap.Kept));
+            if (swap.Reweighted > 0) lines.Add(string.Format(ps.RetargetReweightedFmt, swap.Reweighted));
+            if (swap.Trimmed > 0) lines.Add(string.Format(ps.RetargetTrimmedFmt, swap.Trimmed));
+            if (swap.ExtrasDropped > 0) lines.Add(string.Format(ps.RetargetExtrasDroppedFmt, swap.ExtrasDropped));
+            if (swap.Unplaced > 0) lines.Add(string.Format(ps.RetargetUnplacedFmt, swap.Unplaced));
             if (swap.LostShapes > 0) lines.Add(string.Format(ps.RetargetSwapShapesFmt, swap.LostShapes));
         }
         else if (r.Laid > 0) lines.Add(string.Format(ps.RetargetLaidFmt, r.Laid));
@@ -758,19 +848,23 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
 
     private void StartDetect(in RetargetContext ctx)
     {
-        if (detectTask != null || catalog is not { IsBody: true } snapshot) return;
+        if (detectTask != null || SourceCatalog is not { IsBody: true } snapshot) return;
 
         var garment = ctx.Garment;
+        var garmentBytes = ctx.GarmentBytes;
         var slots = Slots(ctx);
         string rel = ctx.ModelRel;
+        string? sourceDir = SourceDir;
         detectedFor = rel;
 
         detectTask = Task.Run(() =>
         {
+            // Which of two identical meshes rigged two ways the garment was made for (Rue's plain and Yiggle sizes).
+            var garmentBones = new HashSet<string>(SecondSkinWriter.Parse(garmentBytes).BoneNames, StringComparer.Ordinal);
             var rankings = new Dictionary<string, BodySizeMatch.Ranking>(StringComparer.Ordinal);
             foreach (string slot in slots)
-                rankings[slot] = BodySizeMatch.Rank(garment, snapshot.For(slot), snapshot.PathOf);
-            return new DetectResult(rel, rankings);
+                rankings[slot] = BodySizeMatch.Rank(garment, snapshot.For(slot), snapshot.PathOf, garmentBones);
+            return new DetectResult(rel, sourceDir, rankings);
         });
     }
 
@@ -786,8 +880,9 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
         foreach (string key in validating.Keys.Where(k => k.StartsWith(slot + ">", StringComparison.Ordinal)).ToList())
             validating.Remove(key);
 
-        if (catalog is not { } snapshot || !from.TryGetValue(slot, out var source)) return;
-        string sourcePath = snapshot.PathOf(source);
+        if (catalog is not { } snapshot || SourceCatalog is not { } sources || !from.TryGetValue(slot, out var source))
+            return;
+        string sourcePath = sources.PathOf(source);
         string name = SlotName(slot);
 
         foreach (var target in Targets(slot))
@@ -800,7 +895,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
             {
                 try
                 {
-                    return Build(sourcePath, targetPath, name, out _, out _, out _) ?? "";
+                    return Build(sourcePath, targetPath, name, out _, out _, out _, out _) ?? "";
                 }
                 catch (Exception ex)
                 {
@@ -812,14 +907,14 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
 
     private void StartPlan(in RetargetContext ctx)
     {
-        if (planTask != null || catalog is not { } snapshot) return;
+        if (planTask != null || catalog is not { } snapshot || SourceCatalog is not { } sources) return;
         ctx.FlushPending();
 
         string garmentSlot = Primary(ctx);
-        string garmentSource = snapshot.PathOf(from[garmentSlot]);
+        string garmentSource = sources.PathOf(from[garmentSlot]);
         var targets = Targets(garmentSlot).Select(t => (Option: t, Path: snapshot.PathOf(t))).ToList();
         var others = Chosen(ctx).Where(s => s != garmentSlot)
-                                .Select(s => (Slot: s, Source: snapshot.PathOf(from[s]),
+                                .Select(s => (Slot: s, Source: sources.PathOf(from[s]),
                                               Target: snapshot.PathOf(Targets(s)[0]), Name: SlotName(s)))
                                 .ToList();
         string garmentName = SlotName(garmentSlot);
@@ -827,6 +922,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
         var bytes = ctx.GarmentBytes;
         var heldLabels = new HashSet<string>(ctx.Held, StringComparer.Ordinal);
         bool layOnBody = replaceSkin;
+        bool acrossBodies = fromBodyDir != null;
         string key = Key(ctx);
         planDone = 0;
         planTotal = targets.Count;
@@ -839,9 +935,10 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
                 var shared = new List<BodyRetarget.SlotPair>();
                 foreach (var (slot, sourcePath, targetPath, name) in others)
                 {
-                    if (Build(sourcePath, targetPath, name, out var built, out var target, out var body) is { } refusal)
+                    if (Build(sourcePath, targetPath, name, out var built, out var target, out var body,
+                              out var sourceBody) is { } refusal)
                         return new PlanResult(key, null, refusal);
-                    shared.Add(new BodyRetarget.SlotPair(slot, built!, target!, body));
+                    shared.Add(new BodyRetarget.SlotPair(slot, built!, target!, body, sourceBody));
                 }
 
                 // A submesh's triangles already include every island of it, so the labels alone are enough — the
@@ -854,13 +951,14 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
                 var results = new List<(BodyOption, BodyRetarget.Planned)>();
                 foreach (var (option, targetPath) in targets)
                 {
-                    if (Build(garmentSource, targetPath, garmentName, out var built, out var target, out var body) is { } refusal)
+                    if (Build(garmentSource, targetPath, garmentName, out var built, out var target, out var body,
+                              out var sourceBody) is { } refusal)
                         return new PlanResult(key, null, targets.Count > 1 ? $"{option.Label}: {refusal}" : refusal);
 
-                    var pairs = new List<BodyRetarget.SlotPair> { new(garmentSlot, built!, target!, body) };
+                    var pairs = new List<BodyRetarget.SlotPair> { new(garmentSlot, built!, target!, body, sourceBody) };
                     pairs.AddRange(shared);
                     results.Add((option, BodyRetarget.Plan(garment, bytes, pairs, garmentSlot, held: held,
-                                                           replaceSkin: layOnBody)));
+                                                           replaceSkin: layOnBody, acrossBodies: acrossBodies)));
                     Interlocked.Increment(ref planDone);
                 }
                 return new PlanResult(key, results, "");
@@ -880,20 +978,22 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
     /// </summary>
     /// <param name="targetBytes">The target body's file, which swapping the garment's skin copies the body's skin
     /// out of.</param>
-    private static string? Build(string sourcePath, string targetPath, string name,
-                                 out IBodyCorrespondence? correspondence, out ModelParts? target, out byte[] targetBytes)
+    /// <param name="sourceBytes">The source body's file, which says which bones the old body rigs.</param>
+    private string? Build(string sourcePath, string targetPath, string name,
+                          out IBodyCorrespondence? correspondence, out ModelParts? target, out byte[] targetBytes,
+                          out byte[] sourceBytes)
     {
         correspondence = null;
         target = null;
 
-        var sourceBytes = File.ReadAllBytes(sourcePath);
+        sourceBytes = File.ReadAllBytes(sourcePath);
         targetBytes = File.ReadAllBytes(targetPath);
         var source = ModelPartReader.Read(sourceBytes);
         target = ModelPartReader.Read(targetBytes);
         if (source == null || target == null) return string.Format(Strings.Parts.RetargetUnreadableFmt, name);
 
         return BodyCorrespondence.TryBuild(source, Uv(sourceBytes), target, Uv(targetBytes), name,
-                                           out correspondence, out string refusal)
+                                           out correspondence, out string refusal, uvRemap)
                    ? null
                    : refusal;
     }
@@ -913,6 +1013,8 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
         string body = bodyDir ?? "";
         var slots = Chosen(ctx);
         string labelFrom = string.Join(" + ", slots.Select(s => from[s].Label));
+        if (fromBodyDir != null && bodies != null && bodies.TryGetValue(fromBodyDir, out string? fromName))
+            labelFrom = fromName + " — " + labelFrom;
         var refits = new List<BodyRetargetWriter.Refit>();
         var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (target, plan) in all)
@@ -958,7 +1060,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
     /// <summary>What a plan was made from: the model, each chosen pair, and which parts were held. A plan whose key no
     /// longer matches is stale — see <see cref="plannedKey"/>.</summary>
     private string Key(in RetargetContext ctx)
-        => ctx.ModelRel + "|"
+        => ctx.ModelRel + "|from:" + (fromBodyDir ?? "") + "|"
          + string.Join("|", Chosen(ctx).Select(s => $"{s}:{from[s].Rel}>{string.Join(",", Targets(s).Select(t => t.Rel))}"))
          + "|held:" + string.Join(",", ctx.Held.OrderBy(h => h, StringComparer.Ordinal))
          + (replaceSkin ? "|lay" : "");
@@ -978,7 +1080,11 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, IPluginLog log)
         if (detectTask is { IsCompleted: true } dt)
         {
             detectTask = null;
-            if (!Faulted(dt, ctx) && dt.Result.ModelRel == ctx.ModelRel)
+            // Only a ranking of this model over the "made for" mod chosen NOW: one over a mod the user has since
+            // switched away from names options that are not in the list, and would stick, since only an empty
+            // choice is filled in.
+            if (!Faulted(dt, ctx) && dt.Result.ModelRel == ctx.ModelRel
+                && string.Equals(dt.Result.Source, SourceDir, StringComparison.OrdinalIgnoreCase))
                 foreach (var (slot, ranking) in dt.Result.Rankings)
                 {
                     detected[slot] = ranking;

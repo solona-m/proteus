@@ -114,48 +114,11 @@ public static partial class SecondSkinWriter
                         }
                         // Widen a four-influence cap to eight: both sides of a weld must deform the same way. Only when
                         // stream 0 holds exactly position, weights and indices; otherwise skipped rather than guessed.
-                        if (wEl2 is { } wUp && iEl2 is { } iUp && BlendCount(wUp.Type) == 4
-                            && wUp.Stream == 0 && iUp.Stream == 0
-                            && emitter.decl.Count(e => e.Stream == 0) == 3
-                            && emitter.decl.Any(e => e.Stream == 0 && e.Usage == UsePosition))
+                        if (wEl2 is { } wUp && BlendCount(wUp.Type) == 4 && emitter.WidenToEight(nvNew))
                         {
-                            var pEl0 = emitter.decl.First(e => e.Stream == 0 && e.Usage == UsePosition);
-                            const int wOffNew = 12, iOffNew = 20, strideNew = 28;
-                            if (pEl0.Offset == 0 && emitter.outStrides[0] >= 20)
-                            {
-                                var wide = new byte[nvNew * strideNew];
-                                for (int v = 0; v < nvNew; v++)
-                                {
-                                    int from = v * emitter.outStrides[0], to = v * strideNew;
-                                    Buffer.BlockCopy(emitter.outStreams[0], from, wide, to, 12);   // position
-                                    // The authored four influences carry over; the reskin below only touches the seam band.
-                                    for (int q = 0; q < 4; q++)
-                                    {
-                                        wide[to + wOffNew + q] = emitter.outStreams[0][from + wUp.Offset + q];
-                                        wide[to + iOffNew + q] = emitter.outStreams[0][from + iUp.Offset + q];
-                                    }
-                                }
-                                emitter.outStreams[0] = wide;
-                                emitter.outStrides[0] = strideNew;
-
-                                // The declaration has to say so too, or the game reads the old layout.
-                                for (int e = 0; e < 17; e++)
-                                {
-                                    int x = e * 8;
-                                    if (emitter.declBlock[x] == 0xFF) break;
-                                    if (emitter.declBlock[x + 3] == UseBlendWeight)
-                                    { emitter.declBlock[x + 1] = wOffNew; emitter.declBlock[x + 2] = 17; }
-                                    else if (emitter.declBlock[x + 3] == UseBlendIndices)
-                                    { emitter.declBlock[x + 1] = iOffNew; emitter.declBlock[x + 2] = 17; }
-                                }
-                                emitter.decl = emitter.decl.Select(e =>
-                                    e.Usage == UseBlendWeight ? e with { Offset = wOffNew, Type = 17 } :
-                                    e.Usage == UseBlendIndices ? e with { Offset = iOffNew, Type = 17 } : e)
-                                    .ToArray();
-                                wEl2 = emitter.decl.First(e => e.Usage == UseBlendWeight);
-                                iEl2 = emitter.decl.First(e => e.Usage == UseBlendIndices);
-                                emitter.build.diag?.Invoke("authored cap: widened to 8 bone influences to match the shell");
-                            }
+                            wEl2 = emitter.decl.First(e => e.Usage == UseBlendWeight);
+                            iEl2 = emitter.decl.First(e => e.Usage == UseBlendIndices);
+                            emitter.build.diag?.Invoke("authored cap: widened to 8 bone influences to match the shell");
                         }
 
                         if (wEl2 is { } we5 && iEl2 is { } ie5)
@@ -171,6 +134,14 @@ public static partial class SecondSkinWriter
                                 else tbl.Add(0);
                             }
                             int reskinned = 0, dropped = 0;
+                            int SlotOf(string bone)
+                            {
+                                if (slot.TryGetValue(bone, out int at)) return at;
+                                if (!emitter.build.boneIndex.TryGetValue(bone, out var union) || tbl.Count >= 255) return -1;
+                                slot[bone] = tbl.Count;
+                                tbl.Add(union);
+                                return tbl.Count - 1;
+                            }
                             int nInfNow = BlendCount(we5.Type);
                             // Hoisted: a stackalloc per iteration grows the frame by the iteration count.
                             Span<byte> wb2 = stackalloc byte[8], ib2 = stackalloc byte[8];
@@ -206,28 +177,10 @@ public static partial class SecondSkinWriter
                                     ? BlendWeights(mine.ToArray(), 1f - toBody, body, toBody, [], 0f)
                                     : body;
                                 if (w.Length == 0) continue;
-                                // As many influences as THIS element declares; anything not written must be zeroed.
+                                // As many influences as THIS element declares; anything not written is zeroed.
                                 int nInf = BlendCount(we5.Type);
-                                wb2.Clear(); ib2.Clear();
-                                int used2 = 0, total = 0;
-                                foreach (var (bone, f) in w)
-                                {
-                                    if (used2 == nInf) break;
-                                    if (!slot.TryGetValue(bone, out int at2))
-                                    {
-                                        if (!emitter.build.boneIndex.TryGetValue(bone, out var ui3)) { dropped++; continue; }
-                                        if (tbl.Count >= 255) { dropped++; continue; }
-                                        slot[bone] = at2 = tbl.Count;
-                                        tbl.Add(ui3);
-                                    }
-                                    byte q = (byte)Math.Clamp((int)MathF.Round(f * 255f), 0, 255);
-                                    if (q == 0) continue;
-                                    ib2[used2] = (byte)at2; wb2[used2] = q; total += q;
-                                    used2++;
-                                }
+                                int used2 = EncodeBlend(w, nInf, SlotOf, wb2, ib2, ref dropped);
                                 if (used2 == 0) continue;
-                                // The bytes must come to 255 or the vertex shrinks toward the origin.
-                                wb2[0] = (byte)Math.Clamp(wb2[0] + (255 - total), 0, 255);
                                 int wo = i * emitter.outStrides[we5.Stream] + we5.Offset;
                                 int io = i * emitter.outStrides[ie5.Stream] + ie5.Offset;
                                 for (int q2 = 0; q2 < nInf; q2++)

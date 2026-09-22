@@ -120,6 +120,19 @@ public static partial class SecondSkinWriter
                                         IReadOnlyDictionary<string, (byte[] Mask, int Size)>? ToeReinforceMaps = null);
 
     /// <summary>
+    /// What a host reskin did, filled in by <c>Build</c> when given one. Kept out of <see cref="Stats"/>, whose printed
+    /// form the golden baselines hash.
+    /// </summary>
+    public sealed class ReskinReport
+    {
+        /// <summary>Host vertices given new skinning.</summary>
+        public int Reskinned { get; internal set; }
+
+        /// <summary>Influences that could not be placed: a bone in no model the build was given, or a full table.</summary>
+        public int Dropped { get; internal set; }
+    }
+
+    /// <summary>
     /// A toe cap modelled for one body, with the binding that says where it sits on it. One per body; the
     /// binding covers the other axis (heels and any other foot model for the same body).
     /// </summary>

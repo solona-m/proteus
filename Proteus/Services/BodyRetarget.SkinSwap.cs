@@ -18,7 +18,13 @@ internal static partial class BodyRetarget
     /// <param name="Added">Triangles in the body skin meshes put in their place.</param>
     /// <param name="Kept">Skin meshes left alone because they belong to no slot being resized.</param>
     /// <param name="LostShapes">Shape keys the garment had, which the rebuilt model does not carry.</param>
-    internal readonly record struct SwapReport(int Removed, int Added, int Kept, int LostShapes);
+    /// <param name="Reweighted">Cloth vertices given the new body's weights (see <see cref="PlanWeights"/>).</param>
+    /// <param name="Trimmed">Of those, vertices whose body weights were cut to fit the eight-influence limit.</param>
+    /// <param name="ExtrasDropped">Triangles of the old body's piercings and pubic hair taken out.</param>
+    /// <param name="Unplaced">Influences the writer could not place — a bone in no model it was given, or a full table.</param>
+    internal readonly record struct SwapReport(int Removed, int Added, int Kept, int LostShapes,
+                                               int Reweighted = 0, int Trimmed = 0, int ExtrasDropped = 0,
+                                               int Unplaced = 0);
 
     /// <summary>
     /// Swap the garment's skin for the new body's, one body slot at a time: every skin mesh of the garment that belongs
@@ -41,10 +47,21 @@ internal static partial class BodyRetarget
     /// <param name="pairs">The slots being resized. Only those carrying their target body's file can be swapped.</param>
     /// <returns>The rebuilt model, or null when no skin mesh of the garment belongs to a slot being resized.</returns>
     internal static byte[]? SwapSkin(byte[] garment, IReadOnlyList<SlotPair> pairs, out SwapReport report)
+        => Rebuild(garment, pairs, swapSkin: true, weights: null, out report);
+
+    /// <summary>
+    /// Rebuild the refitted garment for its new body: swap the resized slots' skin meshes for the body's (see
+    /// <see cref="SwapSkin"/>), give its cloth the new body's weights (see <see cref="PlanWeights"/>), and — whenever the
+    /// weights change, which is to say across rigs — drop the piercings and pubic hair it carried from its old body
+    /// (see <see cref="IsBodyExtraMaterial"/>). One re-emit for all three.
+    /// </summary>
+    /// <returns>The rebuilt model, or null when there was nothing to change.</returns>
+    internal static byte[]? Rebuild(byte[] garment, IReadOnlyList<SlotPair> pairs, bool swapSkin, WeightPlan? weights,
+                                    out SwapReport report)
     {
         report = default;
-        var swappable = pairs.Where(p => p.TargetModel != null).ToList();
-        if (swappable.Count == 0 || ModelPartReader.Read(garment) is not { } model) return null;
+        var swappable = swapSkin ? pairs.Where(p => p.TargetModel != null).ToList() : [];
+        if ((swappable.Count == 0 && weights == null) || ModelPartReader.Read(garment) is not { } model) return null;
 
         var surfaces = swappable.Select(p => new BodySurface(p.Target, BodySurface.CellFor(MeanEdgeOf(p.Target))))
                                 .ToList();
@@ -78,23 +95,34 @@ internal static partial class BodyRetarget
             skinMaterial ??= mesh.First().Material;
             removed += mesh.Sum(p => p.Triangles.Length / 3);
         }
-        if (dropped.Count == 0 || skinMaterial == null) return null;
+        // The old body's extras: they sit on the shape the garment is leaving.
+        int extras = 0;
+        if (weights != null)
+            foreach (var part in model.Parts)
+                if (part.Island < 0 && IsBodyExtraMaterial(part.Material) && dropped.Add(part.Mesh))
+                    extras += model.Parts.Where(q => q.Island < 0 && q.Mesh == part.Mesh).Sum(q => q.Triangles.Length / 3);
+
+        if (dropped.Count == 0 && weights == null) return null;
 
         // One layer per slot whose skin came out: its body's skin meshes, whole, under the garment's skin material.
         var layers = claimedBy.OrderBy(s => s).Select(s => new SecondSkinLayer
         {
-            MaterialName = skinMaterial,
+            MaterialName = skinMaterial!,
             // Tagged as the body tags it — atr_ude, atr_hij, atr_nek are how long gloves or a high collar hide the
             // skin under them, and the garment's own skin carried the same tags — except for variant tags, which would
             // be judged against the garment's IMC mask (a Neolithe body carries eight, atr_tv_a..h).
             Geometry = [new ContentGeometry(swappable[s].TargetModel!, SecondSkinWriter.IsBodySkinMaterial,
                                             DropVariantAttributes: true)],
         }).ToList();
+        var reskinned = new SecondSkinWriter.ReskinReport();
         var rebuilt = SecondSkinWriter.Build(Array.Empty<SecondSkinWriter.SourceSpec>(), layers, garment, out _,
-                                             dropHostMesh: dropped.Contains);
+                                             dropHostMesh: dropped.Contains,
+                                             hostReskin: weights == null ? null : weights.For,
+                                             boneDonors: weights?.Donors, reskinReport: reskinned);
 
         int added = claimedBy.Sum(s => SkinTriangles(SecondSkinWriter.Parse(swappable[s].TargetModel!)));
-        report = new SwapReport(removed, added, kept, SecondSkinWriter.Parse(garment).Shapes.Count);
+        report = new SwapReport(removed, added, kept, SecondSkinWriter.Parse(garment).Shapes.Count,
+                                weights?.Reweighted ?? 0, weights?.Trimmed ?? 0, extras, reskinned.Dropped);
         return rebuilt;
     }
 

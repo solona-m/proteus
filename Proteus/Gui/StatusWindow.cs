@@ -380,6 +380,23 @@ public class StatusWindow : Window
 
     public override void Draw()
     {
+        // The whole window, timed: a frame slow enough to stall the game is logged with which part of it was slow.
+        windowFrame.Begin();
+        try
+        {
+            DrawWindow();
+        }
+        finally
+        {
+            windowFrame.Mark(_tabDrawn ?? "no tab");
+            windowFrame.End(Plugin.Log, "Proteus window");
+        }
+    }
+
+    private readonly FrameTimer windowFrame = new();
+
+    private void DrawWindow()
+    {
         // Reaching Draw means uncollapsed: release Show()'s forced state or the window could never collapse again.
         Collapsed = null;
 

@@ -2037,7 +2037,16 @@ public sealed class PartsStrings
       + "the way it sits. Saved as a new option in this mod, leaving the author's\n"
       + "own files alone.");
 
-    public readonly string RetargetBody = Loc.Localize("Parts.Retarget.Body", "Body mod");
+    public readonly string RetargetToBody = Loc.Localize("Parts.Retarget.ToBody", "Refit onto body mod");
+
+    public readonly string RetargetFromBody = Loc.Localize("Parts.Retarget.FromBody", "Made for body mod");
+
+    public readonly string RetargetFromBodyTip = Loc.Localize("Parts.Retarget.FromBody.Tip",
+        "The body mod this outfit was made for. Leave it on \"the same body mod\" to refit between sizes of one body.\n"
+      + "Choose another to move the outfit from that body to this one: its cloth then also takes the new body's\n"
+      + "bone weights, so it moves with the new body. Skirt chains and other bones of the outfit's own keep theirs.");
+
+    public readonly string RetargetSameBody = Loc.Localize("Parts.Retarget.SameBody", "The same body mod");
 
     public readonly string RetargetNoBody = Loc.Localize("Parts.Retarget.NoBody", "Pick one…");
 
@@ -2226,6 +2235,22 @@ public sealed class PartsStrings
         "{0} skin mesh(es) belong to a part of the body that is not being resized, and were left as they are.");
 
     /// <summary>{0} is how many shape keys the garment had.</summary>
+    /// <summary>{0} is how many cloth vertices took the new body's bone weights.</summary>
+    public readonly string RetargetReweightedFmt = Loc.Localize("Parts.Retarget.Reweighted.Fmt",
+        "{0:N0} cloth points now move with the new body's bones.");
+
+    /// <summary>{0} is how many vertices had body weights cut to fit eight influences.</summary>
+    public readonly string RetargetTrimmedFmt = Loc.Localize("Parts.Retarget.Trimmed.Fmt",
+        "{0:N0} of them had more bones than a point can follow; the weakest were left out.");
+
+    /// <summary>{0} is how many triangles of the old body's piercings and pubic hair were removed.</summary>
+    public readonly string RetargetExtrasDroppedFmt = Loc.Localize("Parts.Retarget.ExtrasDropped.Fmt",
+        "The old body's piercings and pubic hair ({0:N0} triangles) were left out.");
+
+    /// <summary>{0} is how many bone weights could not be written.</summary>
+    public readonly string RetargetUnplacedFmt = Loc.Localize("Parts.Retarget.Unplaced.Fmt",
+        "{0:N0} bone weights could not be written and were left out.");
+
     public readonly string RetargetSwapShapesFmt = Loc.Localize("Parts.Retarget.SwapShapes.Fmt",
         "This garment had {0} shape key(s), which a skin swap does not carry over. Untick \"Use the new body's skin\" "
       + "to keep them.");
