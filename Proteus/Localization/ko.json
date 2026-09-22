@@ -3546,5 +3546,21 @@
   "Parts.Retarget.ToBody": {
     "message": "Refit onto body mod",
     "description": ""
+  },
+  "Settings.ReduceMotion": {
+    "message": "움직임 줄이기",
+    "description": ""
+  },
+  "Settings.ReduceMotion.Tip": {
+    "message": "창을 정지시킵니다. 마우스 오버 효과가 즉시 적용되고, 배경 광채와\n활성 모드의 맥동이 멈춥니다.",
+    "description": ""
+  },
+  "Settings.AmbientBackground": {
+    "message": "배경 광채",
+    "description": ""
+  },
+  "Settings.AmbientBackground.Tip": {
+    "message": "이 창의 내용 뒤로 은은하게 떠다니는 불씨 같은 광채.",
+    "description": ""
   }
 }

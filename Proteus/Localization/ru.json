@@ -3546,5 +3546,21 @@
   "Parts.Retarget.ToBody": {
     "message": "Refit onto body mod",
     "description": ""
+  },
+  "Settings.ReduceMotion": {
+    "message": "Меньше анимации",
+    "description": ""
+  },
+  "Settings.ReduceMotion.Tip": {
+    "message": "Окно не двигается: эффекты наведения срабатывают сразу, а фоновое свечение\nи пульсация активных модов замирают.",
+    "description": ""
+  },
+  "Settings.AmbientBackground": {
+    "message": "Фоновое свечение",
+    "description": ""
+  },
+  "Settings.AmbientBackground.Tip": {
+    "message": "Мягкое свечение углей, плывущее за содержимым этого окна.",
+    "description": ""
   }
 }

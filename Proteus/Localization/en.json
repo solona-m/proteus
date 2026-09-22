@@ -3546,5 +3546,21 @@
   "Parts.Retarget.ToBody": {
     "message": "Refit onto body mod",
     "description": ""
+  },
+  "Settings.ReduceMotion": {
+    "message": "Reduce motion",
+    "description": "Settings > General checkbox. Stops the window's decorative animation."
+  },
+  "Settings.ReduceMotion.Tip": {
+    "message": "Hold the window still: hover effects land at once, and the background glow\nand the pulse on active mods stop moving.",
+    "description": "Tooltip for Settings.ReduceMotion."
+  },
+  "Settings.AmbientBackground": {
+    "message": "Background glow",
+    "description": "Settings > General checkbox. Turns the soft glow painted behind the window's contents on or off."
+  },
+  "Settings.AmbientBackground.Tip": {
+    "message": "The soft ember glow drifting behind this window's contents.",
+    "description": "Tooltip for Settings.AmbientBackground."
   }
 }

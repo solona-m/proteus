@@ -493,6 +493,17 @@ public sealed class SettingsStrings
 
     public readonly string SecLightResponse = Loc.Localize("Settings.Section.LightResponse", "Light-sensitive glow");
 
+    public readonly string ReduceMotion = Loc.Localize("Settings.ReduceMotion", "Reduce motion") + "###reduceMotion";
+
+    public readonly string ReduceMotionTip = Loc.Localize("Settings.ReduceMotion.Tip",
+        "Hold the window still: hover effects land at once, and the background glow\n"
+      + "and the pulse on active mods stop moving.");
+
+    public readonly string AmbientBackground = Loc.Localize("Settings.AmbientBackground", "Background glow") + "###ambientBackground";
+
+    public readonly string AmbientBackgroundTip = Loc.Localize("Settings.AmbientBackground.Tip",
+        "The soft ember glow drifting behind this window's contents.");
+
     public readonly string LightResponseEnabled = Loc.Localize("Settings.LightResponse.Enabled",
         "React to the scene's light");
 

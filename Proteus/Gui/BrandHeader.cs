@@ -73,7 +73,17 @@ internal static class BrandHeader
         //    base fill: it would cover the blur. Corner order is upper-left, upper-right, lower-right, lower-left.
         var bg = ImGui.GetColorU32(ImGuiCol.WindowBg);
         draw.AddRectFilledMultiColor(min, max, bg, 0u, 0u, bg);
-        draw.AddRect(min, max, ImGui.GetColorU32(ProteusStyle.Accent.WithAlpha(0.35f)), r);
+
+        // 4. Chrome: a faint frame, a lit hairline along the bottom, and accent brackets holding the corners.
+        var accent = ProteusStyle.Accent;
+        draw.AddRect(min, max, ImGui.GetColorU32(accent.WithAlpha(0.14f)), r);
+        var hair = MathF.Max(1f, ProteusStyle.S(1.5f));
+        ProteusDraw.SoftGlowEllipse(draw, new Vector2((min.X + max.X) * 0.5f, max.Y),
+            new Vector2((max.X - min.X) * 0.45f, ProteusStyle.S(6f)), accent.WithAlpha(0.20f), layers: 8);
+        ProteusDraw.FadeRule(draw, new Vector2(min.X, max.Y - hair), new Vector2(max.X, max.Y), accent.WithAlpha(0.95f));
+        // Breathes slowly; holds at full under Reduce Motion.
+        var bracket = accent.WithAlpha(0.55f + (0.35f * UiAnim.Pulse(5f)));
+        ProteusDraw.CornerBrackets(draw, min, max, ProteusStyle.S(12f), MathF.Max(1f, ProteusStyle.S(1.5f)), bracket);
 
         return (min, max);
     }

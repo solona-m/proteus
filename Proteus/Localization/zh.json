@@ -3546,5 +3546,21 @@
   "Parts.Retarget.ToBody": {
     "message": "Refit onto body mod",
     "description": ""
+  },
+  "Settings.ReduceMotion": {
+    "message": "减少动效",
+    "description": ""
+  },
+  "Settings.ReduceMotion.Tip": {
+    "message": "让窗口保持静止：悬停效果立即生效，背景光晕\n和已启用模组的脉动也会停止。",
+    "description": ""
+  },
+  "Settings.AmbientBackground": {
+    "message": "背景光晕",
+    "description": ""
+  },
+  "Settings.AmbientBackground.Tip": {
+    "message": "在此窗口内容后方缓缓飘动的柔和余烬光晕。",
+    "description": ""
   }
 }

@@ -3546,5 +3546,21 @@
   "Parts.Retarget.ToBody": {
     "message": "Refit onto body mod",
     "description": ""
+  },
+  "Settings.ReduceMotion": {
+    "message": "Bewegung reduzieren",
+    "description": ""
+  },
+  "Settings.ReduceMotion.Tip": {
+    "message": "Hält das Fenster ruhig: Hover-Effekte greifen sofort, und das Hintergrundleuchten\nsowie das Pulsieren aktiver Mods bewegen sich nicht mehr.",
+    "description": ""
+  },
+  "Settings.AmbientBackground": {
+    "message": "Hintergrundleuchten",
+    "description": ""
+  },
+  "Settings.AmbientBackground.Tip": {
+    "message": "Das sanfte Glutleuchten, das hinter dem Inhalt dieses Fensters treibt.",
+    "description": ""
   }
 }
