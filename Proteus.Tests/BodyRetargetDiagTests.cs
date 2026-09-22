@@ -1205,6 +1205,9 @@ public class BodyRetargetDiagTests(ITestOutputHelper output)
         output.WriteLine($"Rue chest options: {string.Join(", ", chest.Select(o => o.Label))}");
 
         var rank = BodySizeMatch.Rank(garment, chest, catalog.PathOf);
+        var rigged = BodySizeMatch.Rank(garment, chest, catalog.PathOf,
+                                        new HashSet<string>(SecondSkinWriter.Parse(bytes).BoneNames, StringComparer.Ordinal));
+        output.WriteLine($"with its rig, reads as: {rigged.Best?.Option.Label}");
         output.WriteLine($"reads as {rank.Confidence} (cloth {rank.FromCloth}): " +
                          string.Join(" | ", rank.Scores.Take(6).Select(s => $"{s.Option.Label} {s.Rms * 1000:F2}mm {s.HitRate:P0}")));
 
@@ -1517,8 +1520,185 @@ public class BodyRetargetDiagTests(ITestOutputHelper output)
     /// <param name="swapSkin">Hand the pair the target body's file, so a refit with replaceSkin swaps the garment's skin
     /// meshes for the body's. Off by default: the swap rebuilds the model and renumbers its vertices, and most of these
     /// diagnostics compare a refit with the author's model vertex for vertex.</param>
+    private const string YabRoot = @"E:\Penumbradt\hs-Yet Another Body+-4.2.0-tmi";
+
+    /// <summary>
+    /// Reported: a YAB garment made for Small detected as "exactly Yiggle - Large". Elegy ships its bra hand-made for
+    /// YAB S, M and L, so each can be ranked against YAB's chest options, the way the panel ranks it (with its rig).
+    /// </summary>
+    [Fact]
+    public void Detect_each_Yab_size()
+    {
+        const string elegy = @"E:\Penumbradt\Elegy - Sylvie Bra & Panties (RueYABUranusRe)\smallclothes - bra shape";
+        if (!Directory.Exists(elegy) || !Directory.Exists(YabRoot)) return;
+        var yab = BodySizeCatalog.Read(YabRoot);
+        var chest = yab.For("_top");
+
+        foreach (string size in new[] { "yab - s", "yab - m", "yab - l" })
+        {
+            string path = Path.Combine(elegy, size, @"chara\equipment\e0000\model\c0201e0000_top.mdl");
+            if (!File.Exists(path)) continue;
+            var bytes = File.ReadAllBytes(path);
+            var garment = ModelPartReader.Read(bytes)!;
+            var bones = new HashSet<string>(SecondSkinWriter.Parse(bytes).BoneNames, StringComparer.Ordinal);
+            var rank = BodySizeMatch.Rank(garment, chest, yab.PathOf, bones);
+            output.WriteLine($"{size}: {rank.Confidence} (cloth {rank.FromCloth}) — " +
+                             string.Join(" | ", rank.Scores.Take(6).Select(s => $"{s.Option.Label} {s.Rms * 1000:F2}mm {s.HitRate:P0}")));
+        }
+    }
+
+    /// <summary>
+    /// A refit from one body MOD to another, scored against the author's own hand-made version: Seaside's halter was
+    /// made for Neolithe XS and, separately, for Rue (Yiggle-rigged) Med. Refit the Neolithe top onto Rue Yiggle Medium
+    /// and compare with the author's Rue top; then the other way. The two versions' cloth does not share a vertex
+    /// numbering, so each refit cloth vertex is paired with the author's at the same texture coordinate.
+    /// </summary>
+    [Fact]
+    public void Between_bodies_against_the_author()
+    {
+        string neoTop = Path.Combine(Seaside, @"top size\neolithe xs\chara\equipment\e0194\model\c0201e0194_top.mdl");
+        string rueTop = Path.Combine(Seaside, @"top size\rue med\chara\equipment\e0194\model\c0201e0194_top.mdl");
+        if (!File.Exists(neoTop) || !File.Exists(rueTop) || !Directory.Exists(RueRoot) || !Directory.Exists(NeolitheRoot))
+            return;
+
+        var neo = BodySizeCatalog.Read(NeolitheRoot);
+        var rue = BodySizeCatalog.Read(RueRoot);
+        string neoBody = neo.PathOf(neo.For("_top").First(o => o.Label == "DEFAULT ALMOND · SFW Almond XS"));
+        string rueBody = rue.PathOf(rue.For("_top").First(o => o.Name == "Yiggle - Medium"));
+
+        void Run(string label, string garmentPath, string sourceBody, string targetBody, string truthPath)
+        {
+            var bytes = File.ReadAllBytes(garmentPath);
+            var garment = ModelPartReader.Read(bytes)!;
+            var pairs = new List<BodyRetarget.SlotPair>();
+            AddPair(pairs, "_top", sourceBody, targetBody, swapSkin: true, crossBody: true);
+            var planned = BodyRetarget.Plan(garment, bytes, pairs, "_top", replaceSkin: true);
+
+            output.WriteLine("");
+            output.WriteLine($"{label} ({pairs[0].Correspondence.Describe()})");
+            output.WriteLine("  " + Describe(planned.Report));
+            var truth = File.ReadAllBytes(truthPath);
+            output.WriteLine("  nothing  " + ClothAgainst(bytes, truth));
+            output.WriteLine("  refit    " + ClothAgainst(planned.Model, truth));
+        }
+
+        Run("Neolithe XS -> Rue Yiggle Medium", neoTop, neoBody, rueBody, rueTop);
+        Run("Rue Yiggle Medium -> Neolithe XS", rueTop, rueBody, neoBody, neoTop);
+    }
+
+    private static string Describe(BodyRetarget.Report r)
+        => $"moved up to {r.WorstMove * 1000:F1} mm, snapped {r.Snapped:N0}, pushed {r.Pushed:N0}, missed {r.Missed:N0}"
+         + (r.Swap is { } s
+                ? $"; skin {s.Removed:N0} out {s.Added:N0} in, reweighted {s.Reweighted:N0} (trimmed {s.Trimmed:N0}), "
+                  + $"extras out {s.ExtrasDropped:N0}, unplaced {s.Unplaced:N0}"
+                : "; no rebuild");
+
+    /// <summary>
+    /// The cloth of <paramref name="model"/> against the author's <paramref name="truth"/>: each cloth vertex paired
+    /// with the truth's cloth vertex at the nearest texture coordinate, then the position error and how much of the
+    /// weight sits on a different bone (0 = identical skinning, 1 = nothing in common), and the share of weight on the
+    /// chest, belly and hip bone families on each side.
+    /// </summary>
+    private static string ClothAgainst(byte[] model, byte[] truth)
+    {
+        var (mPos, mUv, mW) = ClothVertices(model);
+        var (tPos, tUv, tW) = ClothVertices(truth);
+
+        // Truth's cloth uvs in a grid, for the nearest-uv pairing.
+        const int cells = 512;
+        var grid = new Dictionary<(int, int), List<int>>();
+        (int, int) Cell(Vector2 uv) => ((int)MathF.Floor(uv.X * cells), (int)MathF.Floor(uv.Y * cells));
+        for (int i = 0; i < tUv.Count; i++)
+        {
+            if (!grid.TryGetValue(Cell(tUv[i]), out var list)) grid[Cell(tUv[i])] = list = [];
+            list.Add(i);
+        }
+
+        var posErr = new List<float>();
+        var wErr = new List<float>();
+        float mChest = 0, tChest = 0, mBelly = 0, tBelly = 0, mHip = 0, tHip = 0;
+        for (int i = 0; i < mUv.Count; i++)
+        {
+            var (cx, cy) = Cell(mUv[i]);
+            int best = -1;
+            float bestD = 0.002f;
+            for (int x = cx - 1; x <= cx + 1; x++)
+            for (int y = cy - 1; y <= cy + 1; y++)
+            {
+                if (!grid.TryGetValue((x, y), out var list)) continue;
+                foreach (int j in list)
+                {
+                    float d = Vector2.Distance(mUv[i], tUv[j]);
+                    // A uv can sit on both sides of a mirrored island: the nearer in space wins a tie.
+                    if (d < bestD || (d == bestD && best >= 0
+                                      && Vector3.Distance(mPos[i], tPos[j]) < Vector3.Distance(mPos[i], tPos[best])))
+                    {
+                        bestD = d;
+                        best = j;
+                    }
+                }
+            }
+            if (best < 0) continue;
+            posErr.Add(Vector3.Distance(mPos[i], tPos[best]));   // metres: Stats prints millimetres
+
+            var a = mW[i];
+            var b = tW[best];
+            float shared = 0f;
+            foreach (var (bone, w) in a)
+                shared += MathF.Min(w, b.Where(x => x.Bone == bone).Sum(x => x.W));
+            wErr.Add(1f - shared);
+
+            float Family(List<(string Bone, float W)> ws, string[] prefixes)
+                => ws.Where(x => prefixes.Any(pre => x.Bone.StartsWith(pre, StringComparison.Ordinal))).Sum(x => x.W);
+            mChest += Family(a, ["j_mune", "iv_c_mune"]); tChest += Family(b, ["j_mune", "iv_c_mune"]);
+            mBelly += Family(a, ["iv_fukubu", "ya_fukubu"]); tBelly += Family(b, ["iv_fukubu", "ya_fukubu"]);
+            mHip += Family(a, ["j_kosi", "iv_shiri", "ya_shiri"]); tHip += Family(b, ["j_kosi", "iv_shiri", "ya_shiri"]);
+        }
+
+        int n = Math.Max(1, posErr.Count);
+        wErr.Sort();
+        string weights = wErr.Count == 0 ? "(none)"
+                       : $"{wErr.Average():P1} mean, {wErr[(int)(wErr.Count * 0.95f)]:P0} p95";
+        return $"paired {posErr.Count:N0}/{mUv.Count:N0}: position {Stats(posErr)} mm; weights differ {weights}; "
+             + $"chest {mChest / n:P0} vs {tChest / n:P0}, belly {mBelly / n:P0} vs {tBelly / n:P0}, "
+             + $"hips {mHip / n:P0} vs {tHip / n:P0}";
+    }
+
+    /// <summary>A model's cloth vertices: position, uv0, and influences by bone name.</summary>
+    private static (List<Vector3> Pos, List<Vector2> Uv, List<List<(string Bone, float W)>> W) ClothVertices(byte[] mdl)
+    {
+        var parts = ModelPartReader.Read(mdl)!;
+        var uv = Uv(mdl);
+        var skin = ModelSkinReader.Read(mdl, null, null)!;
+        var seen = new HashSet<int>();
+        var pos = new List<Vector3>();
+        var uvs = new List<Vector2>();
+        var ws = new List<List<(string, float)>>();
+        foreach (var part in parts.Parts)
+        {
+            if (part.Island >= 0 || SecondSkinWriter.IsBodySkinMaterial(part.Material)
+                || BodyRetarget.IsBodyExtraMaterial(part.Material)) continue;
+            foreach (int v in part.Triangles)
+            {
+                if (!seen.Add(v) || v * 2 + 1 >= uv.Length) continue;
+                pos.Add(At(parts, v));
+                uvs.Add(new Vector2(uv[v * 2] - MathF.Floor(uv[v * 2]), uv[v * 2 + 1] - MathF.Floor(uv[v * 2 + 1])));
+                var list = new List<(string, float)>();
+                for (int k = 0; k < XivLiveMesh.SkinnedMesh.MaxInfluences; k++)
+                {
+                    float w = skin.BoneWeights[v * 8 + k];
+                    if (w > 0f) list.Add((skin.BoneNames[skin.BoneIndices[v * 8 + k]], w));
+                }
+                ws.Add(list);
+            }
+        }
+        return (pos, uvs, ws);
+    }
+
+    /// <param name="crossBody">Hand the pair both bodies' files, so a refit between two rigs rewrites the cloth's
+    /// weights (and, with replaceSkin, swaps the skin): a refit from one body mod to another.</param>
     private static void AddPair(List<BodyRetarget.SlotPair> pairs, string slot, string sourcePath, string targetPath,
-                                bool swapSkin = false)
+                                bool swapSkin = false, bool crossBody = false)
     {
         if (!File.Exists(sourcePath) || !File.Exists(targetPath)) return;
         var sourceBytes = File.ReadAllBytes(sourcePath);
@@ -1528,7 +1708,8 @@ public class BodyRetargetDiagTests(ITestOutputHelper output)
         if (!BodyCorrespondence.TryBuild(source, Uv(sourceBytes), target, Uv(targetBytes), slot,
                                          out var built, out string refusal))
             throw new InvalidOperationException(refusal);
-        pairs.Add(new BodyRetarget.SlotPair(slot, built!, target, swapSkin ? targetBytes : null));
+        pairs.Add(new BodyRetarget.SlotPair(slot, built!, target, swapSkin || crossBody ? targetBytes : null,
+                                            crossBody ? sourceBytes : null));
     }
 
     private static ModelParts Read(string path)

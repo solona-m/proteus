@@ -111,9 +111,25 @@ public static partial class SecondSkinWriter
         /// <c>dropHostMesh</c>.</summary>
         private readonly Func<int, bool>? dropHostMesh;
 
-        public ShellBuild(IReadOnlyList<SourceSpec> sources, IReadOnlyList<SecondSkinLayer> layers, byte[]? baseModel, Action<string>? diag, IReadOnlyList<AuthoredCapSet>? authoredCaps, PushSweep? pushSweep, BuildTimings? timings, Func<int, bool>? dropHostMesh = null)
+        /// <summary>New skinning for host meshes — see <c>Build</c>'s <c>hostReskin</c>.</summary>
+        private readonly Func<int, (string Bone, float W)[]?[]?>? hostReskin;
+
+        /// <summary>Models whose bones join the bone list and nothing else — see <c>Build</c>'s <c>boneDonors</c>.</summary>
+        private readonly IReadOnlyList<byte[]> boneDonors;
+
+        /// <summary>Host vertices given new skinning, and influences that could not be placed, across the build.</summary>
+        private int reskinned, reskinDropped;
+
+        /// <summary>Where <see cref="reskinned"/> and <see cref="reskinDropped"/> are reported; null for nobody.</summary>
+        private readonly ReskinReport? reskinReport;
+
+        public ShellBuild(IReadOnlyList<SourceSpec> sources, IReadOnlyList<SecondSkinLayer> layers, byte[]? baseModel, Action<string>? diag, IReadOnlyList<AuthoredCapSet>? authoredCaps, PushSweep? pushSweep, BuildTimings? timings, Func<int, bool>? dropHostMesh = null, Func<int, (string Bone, float W)[]?[]?>? hostReskin = null,
+                          IReadOnlyList<byte[]>? boneDonors = null, ReskinReport? reskinReport = null)
         {
+            this.reskinReport = reskinReport;
             this.dropHostMesh = dropHostMesh;
+            this.hostReskin = hostReskin;
+            this.boneDonors = boneDonors ?? [];
             this.sources = sources;
             this.layers = layers;
             this.baseModel = baseModel;
@@ -146,7 +162,9 @@ public static partial class SecondSkinWriter
         private void PrepareSources()
         {
             tPrepare = PhaseCounter.Begin();
-            if (layers.Count == 0) throw new ArgumentException("need at least one layer", nameof(layers));
+            // A host with nothing appended is a rebuild of the host alone — a reskin, or meshes dropped.
+            if (layers.Count == 0 && baseModel == null)
+                throw new ArgumentException("need at least one layer", nameof(layers));
             // Only a shell layer needs a source; a build made entirely of content layers legitimately has none.
             if (sources.Count == 0 && layers.Any(l => l.Geometry.Count == 0))
                 throw new ArgumentException("need at least one source model", nameof(sources));
@@ -481,7 +499,8 @@ public static partial class SecondSkinWriter
             // Content models and the authored cap contribute bones too. Materialised: walked three times below.
             boneSources = [.. baseSrc != null ? new[] { baseSrc }.Concat(parsed) : parsed, .. geomSrcs,
                  .. capSrc != null ? new[] { capSrc } : []];
-            foreach (var src in boneSources)
+            // Donors last: they only lend names, so they must never displace a bone the geometry already uses.
+            foreach (var src in boneSources.Concat(boneDonors.Select(Parse)))
                 for (int i = 0; i < src.BoneNames.Length; i++)
                 {
                     if (boneIndex.ContainsKey(src.BoneNames[i])) continue;
@@ -610,7 +629,8 @@ public static partial class SecondSkinWriter
                     ushort srcMat = BitConverter.ToUInt16(baseSrc.S, bmo + 8);
                     // A whole mesh left out when asked: a garment whose skin is being replaced loses that skin.
                     if (dropHostMesh != null && dropHostMesh(m)) continue;
-                    EmitMesh(baseSrc, m, srcMat, 0f, preserve: true, cov: null, mapBase, ref mapAppended);
+                    EmitMesh(baseSrc, m, srcMat, 0f, preserve: true, cov: null, mapBase, ref mapAppended,
+                             reskin: hostReskin?.Invoke(m));
                 }
             }
         }
@@ -692,7 +712,8 @@ public static partial class SecondSkinWriter
         {
             // Flags, the 0x44 header and the LOD block come from the source the emitted geometry was cut from
             // (source 0, or the first content model).
-            var head = parsed.Count > 0 ? parsed[0] : geomSrcs[0];
+            // The host itself when nothing else was given: a rebuild of the host alone.
+            var head = parsed.Count > 0 ? parsed[0] : geomSrcs.Count > 0 ? geomSrcs[0] : baseSrc!;
 
             // The CULLING quantities are about extent, so the merged model takes the max across every source:
             // too small and the game culls the shell while the body is still on screen.
@@ -832,6 +853,11 @@ public static partial class SecondSkinWriter
             stats = new Stats(meshCount, subOut.Count, boneCount, triIn, triOut, vertOut, capDeclined, capUsed,
                               redundantSubs, redundantTris, shellLayers > 0 ? trimmedOut / shellLayers : 0,
                               toeReinforceMaps.Count > 0 ? toeReinforceMaps : null);
+            if (reskinReport != null)
+            {
+                reskinReport.Reskinned = reskinned;
+                reskinReport.Dropped = reskinDropped;
+            }
             timings?.Serialize.Stop(tSerialize);
             return o;
         }
@@ -853,10 +879,11 @@ public static partial class SecondSkinWriter
         private void EmitMesh(Source src, int m, ushort materialIndex, float push, bool preserve,
                       SecondSkinLayer? cov, int mapBase, ref bool mapAppended,
                       bool mirrorUv1 = false, IReadOnlySet<string>? hiddenAttrs = null,
-                      bool clearAttrs = false, CapUvPlan? capUv = null, bool dropVariantAttrs = false)
+                      bool clearAttrs = false, CapUvPlan? capUv = null, bool dropVariantAttrs = false,
+                      (string Bone, float W)[]?[]? reskin = null)
         {
             new MeshEmitter(this, src, m, materialIndex, push, preserve, cov, mapBase, mirrorUv1, hiddenAttrs, clearAttrs, capUv,
-                            dropVariantAttrs).Run(ref mapAppended);
+                            dropVariantAttrs, reskin).Run(ref mapAppended);
         }
 
         /// <summary>

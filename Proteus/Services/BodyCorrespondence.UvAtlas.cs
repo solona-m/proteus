@@ -65,8 +65,12 @@ internal sealed class UvAtlasCorrespondence : IBodyCorrespondence
 
     /// <param name="sourceUv">uv0 per source vertex, in <see cref="ModelParts.Positions"/> order.</param>
     /// <param name="targetUv">uv0 per target vertex, in <see cref="ModelParts.Positions"/> order.</param>
+    /// <param name="convert">Carries a source uv into the target's texture layout, for two bodies in different layouts
+    /// (bibo and gen3, say) — see <see cref="UVRemapService.UvConverter"/>. Null when both share one. A point the
+    /// conversion cannot place finds no landing, and counts against <see cref="MinCoverage"/> like any other miss.</param>
     public static bool TryBuild(ModelParts source, float[] sourceUv, ModelParts target, float[] targetUv, string what,
-                                out UvAtlasCorrespondence? correspondence, out string refusal)
+                                out UvAtlasCorrespondence? correspondence, out string refusal,
+                                UVRemapService.UvConversion? convert = null)
     {
         correspondence = null;
         int svc = source.Positions.Length / 3, tvc = target.Positions.Length / 3;
@@ -91,6 +95,15 @@ internal sealed class UvAtlasCorrespondence : IBodyCorrespondence
         {
             var p = new Vector3(source.Positions[v * 3], source.Positions[v * 3 + 1], source.Positions[v * 3 + 2]);
             var uv = new Vector2(sourceUv[v * 2], sourceUv[v * 2 + 1]);
+            if (convert != null)
+            {
+                // The maps are indexed over the unit tile, so the uv goes onto it first; the side says which half a
+                // mirrored layout's point belongs to (+1 for the character's +X).
+                var tile = new Vector2(MathF.Floor(uv.X), MathF.Floor(uv.Y));
+                var onTile = uv - tile;
+                if (convert(onTile.X, onTile.Y, p.X >= 0f ? 1 : -1) is not { } moved) continue;
+                uv = new Vector2(moved.U, moved.V);
+            }
             if (!atlas.Land(uv, p, out var q)) continue;
             if (Vector3.Distance(p, q) > MaxShift) continue;
             field[v] = q - p;

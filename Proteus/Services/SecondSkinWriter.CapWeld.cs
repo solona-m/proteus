@@ -196,26 +196,17 @@ public static partial class SecondSkinWriter
                             {
                                 // Write every influence the element declares; leaving the rest was what over-weighted the join.
                                 int nInf3 = BlendCount(we6.Type);
-                                wb3.Clear(); ib3.Clear();
-                                int used3 = 0, total3 = 0;
-                                foreach (var (bone, f) in capW)
+                                int ignored = 0;
+                                int used3 = EncodeBlend(capW, nInf3, bone =>
                                 {
-                                    if (used3 == nInf3) break;
-                                    if (!shellSlot.TryGetValue(bone, out int at3))
-                                    {
-                                        if (!emitter.build.boneIndex.TryGetValue(bone, out var ui5)) continue;
-                                        if (shellTbl.Count >= 255) continue;
-                                        shellSlot[bone] = at3 = shellTbl.Count;
-                                        shellTbl.Add(ui5);
-                                    }
-                                    byte q3 = (byte)Math.Clamp((int)MathF.Round(f * 255f), 0, 255);
-                                    if (q3 == 0) continue;
-                                    ib3[used3] = (byte)at3; wb3[used3] = q3; total3 += q3;
-                                    used3++;
-                                }
+                                    if (shellSlot.TryGetValue(bone, out int at3)) return at3;
+                                    if (!emitter.build.boneIndex.TryGetValue(bone, out var ui5) || shellTbl.Count >= 255) return -1;
+                                    shellSlot[bone] = shellTbl.Count;
+                                    shellTbl.Add(ui5);
+                                    return shellTbl.Count - 1;
+                                }, wb3, ib3, ref ignored);
                                 if (used3 > 0)
                                 {
-                                    wb3[0] = (byte)Math.Clamp(wb3[0] + (255 - total3), 0, 255);
                                     int wo3 = i * emitter.outStrides[we6.Stream] + we6.Offset;
                                     int io3 = i * emitter.outStrides[ie6.Stream] + ie6.Offset;
                                     for (int q4 = 0; q4 < nInf3; q4++)

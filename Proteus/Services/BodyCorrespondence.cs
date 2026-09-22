@@ -18,8 +18,11 @@ internal static class BodyCorrespondence
 {
     /// <param name="sourceUv">uv0 per source vertex, in <see cref="ModelParts.Positions"/> order.</param>
     /// <param name="targetUv">uv0 per target vertex, in <see cref="ModelParts.Positions"/> order.</param>
+    /// <param name="uvRemap">Converts between texture layouts, for two bodies that do not share one. Null keeps the
+    /// same-layout requirement: a pair in different layouts is refused.</param>
     public static bool TryBuild(ModelParts source, float[] sourceUv, ModelParts target, float[] targetUv, string what,
-                                out IBodyCorrespondence? correspondence, out string refusal)
+                                out IBodyCorrespondence? correspondence, out string refusal,
+                                UVRemapService? uvRemap = null)
     {
         if (IdentityCorrespondence.TryBuild(source, target, what, out var identity, out _, sourceUv, targetUv))
         {
@@ -28,7 +31,24 @@ internal static class BodyCorrespondence
             return true;
         }
 
-        if (UvAtlasCorrespondence.TryBuild(source, sourceUv, target, targetUv, what, out var atlas, out refusal))
+        // Two layouts: carried across by the texture maps, or refused — landing a bibo uv on a gen3 atlas as it stands
+        // would put the chest on the back.
+        UVRemapService.UvConversion? convert = null;
+        string? from = LayoutOf(source), to = LayoutOf(target);
+        if (from != null && to != null && from != to)
+        {
+            // A mirrored layout (gen2) shares one half between both sides; unmirroring sends each side to its own.
+            convert = uvRemap?.UvConverter(from, to, unmirror: true);
+            if (convert == null)
+            {
+                correspondence = null;
+                refusal = $"The {what} models use different texture layouts ({from} and {to}), and Proteus has no map " +
+                          "between them, so there is no way to tell which point of one body is which point of the other.";
+                return false;
+            }
+        }
+
+        if (UvAtlasCorrespondence.TryBuild(source, sourceUv, target, targetUv, what, out var atlas, out refusal, convert))
         {
             correspondence = atlas;
             return true;
@@ -36,5 +56,14 @@ internal static class BodyCorrespondence
 
         correspondence = null;
         return false;
+    }
+
+    /// <summary>The texture layout a body's skin is drawn in ("bibo", "gen3", "gen2"), or null when none is known.</summary>
+    internal static string? LayoutOf(ModelParts body)
+    {
+        foreach (var part in body.Parts)
+            if (part.Island < 0 && SecondSkinWriter.SkinMaterialBodyType(part.Material) is { } layout)
+                return layout;
+        return null;
     }
 }

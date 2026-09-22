@@ -26,8 +26,14 @@ namespace Proteus.Tests;
 internal static class SyntheticModel
 {
     // Vertex element types and usages, as the model format numbers them (see SecondSkinWriter.ReadTyped).
-    private const byte Float2 = 1, Float3 = 2;
-    private const byte UsePosition = 0, UseUV = 4;
+    private const byte Float2 = 1, Float3 = 2, UByte4 = 5;
+    private const byte UsePosition = 0, UseBlendWeight = 1, UseBlendIndices = 2, UseUV = 4;
+
+    /// <summary>A skinned model's stream 0: position, four blend weights, four blend indices — the game's own layout.</summary>
+    private const int SkinnedStride = 20;
+
+    /// <summary>A skinned model's stream 1: uv0.</summary>
+    private const int UvStride = 8;
 
     private const int DeclSize = 17 * 8;
     private const int BBoxSize = 32;
@@ -53,8 +59,12 @@ internal static class SyntheticModel
     /// [<paramref name="OffsetY"/>, <paramref name="OffsetY"/> + N] — the convention every band assertion
     /// here is written against.
     /// </summary>
+    /// <param name="Weights">The bones every vertex of this submesh follows, at most four. Any submesh carrying them
+    /// makes the whole model SKINNED: a real bone table, and position, blend weights and blend indices in stream 0 with
+    /// uv0 in stream 1, the layout game models use. Submeshes without them then follow <c>n_root</c> alone.</param>
     internal sealed record Sub(uint AttrMask, int Islands = 1, int TrianglesPerIsland = 1,
-                               float OffsetX = 0f, float OffsetY = 0f, float OffsetZ = 0f)
+                               float OffsetX = 0f, float OffsetY = 0f, float OffsetZ = 0f,
+                               (string Bone, float W)[]? Weights = null)
     {
         internal int TriangleCount => Islands * TrianglesPerIsland;
     }
@@ -98,7 +108,10 @@ internal static class SyntheticModel
                                     IReadOnlyList<string>? shapeNames)
     {
         var materials = meshes.Select(m => m.Material).Distinct(StringComparer.Ordinal).ToList();
-        var bones = new[] { "n_root" };
+        bool skinned = meshes.Any(m => m.Submeshes.Any(x => x.Weights != null));
+        var bones = new[] { "n_root" }
+            .Concat(meshes.SelectMany(m => m.Submeshes).SelectMany(x => x.Weights ?? []).Select(w => w.Bone))
+            .Distinct(StringComparer.Ordinal).ToArray();
         var shapes = shapeNames ?? [];
 
         // ── string block: bones, attributes, materials, each NUL-terminated ──
@@ -134,6 +147,8 @@ internal static class SyntheticModel
             uint meshVtxOffset = (uint)vBuf.Position;
             uint meshStartIndex = indexCursor;
             ushort meshVerts = 0;
+            var stream0 = new MemoryStream();
+            var stream1 = new MemoryStream();
 
             foreach (var sub in mesh.Submeshes)
             {
@@ -143,7 +158,7 @@ internal static class SyntheticModel
                 W32(so, 4, (uint)(tris * 3));
                 W32(so, 8, sub.AttrMask);
                 W16(so, 12, 0);   // boneStart
-                W16(so, 14, 1);   // boneCount
+                W16(so, 14, (ushort)bones.Length);   // boneCount
                 subBytes.Add(so);
 
                 // Three fresh vertices per triangle, mesh-relative indices, spread so the model's bounding
@@ -155,13 +170,35 @@ internal static class SyntheticModel
                     float ix = i * 10f;
                     for (int v = 0; v < 3; v++)
                     {
-                        var vtx = new byte[Stride];
-                        BitConverter.GetBytes((v == 0 ? ix : ix + 1f) + sub.OffsetX).CopyTo(vtx, 0);
-                        BitConverter.GetBytes((v == 0 ? 0f : j + (v == 2 ? 1f : 0f)) + sub.OffsetY).CopyTo(vtx, 4);
-                        BitConverter.GetBytes(sub.OffsetZ).CopyTo(vtx, 8);
-                        BitConverter.GetBytes(v == 0 ? 0f : 0.5f).CopyTo(vtx, 12);
-                        BitConverter.GetBytes(v == 2 ? 0.5f : 0f).CopyTo(vtx, 16);
-                        vBuf.Write(vtx);
+                        float x = (v == 0 ? ix : ix + 1f) + sub.OffsetX;
+                        float y = (v == 0 ? 0f : j + (v == 2 ? 1f : 0f)) + sub.OffsetY;
+                        float u = v == 0 ? 0f : 0.5f, w = v == 2 ? 0.5f : 0f;
+                        if (!skinned)
+                        {
+                            var vtx = new byte[Stride];
+                            BitConverter.GetBytes(x).CopyTo(vtx, 0);
+                            BitConverter.GetBytes(y).CopyTo(vtx, 4);
+                            BitConverter.GetBytes(sub.OffsetZ).CopyTo(vtx, 8);
+                            BitConverter.GetBytes(u).CopyTo(vtx, 12);
+                            BitConverter.GetBytes(w).CopyTo(vtx, 16);
+                            stream0.Write(vtx);
+                        }
+                        else
+                        {
+                            var vtx = new byte[SkinnedStride];
+                            BitConverter.GetBytes(x).CopyTo(vtx, 0);
+                            BitConverter.GetBytes(y).CopyTo(vtx, 4);
+                            BitConverter.GetBytes(sub.OffsetZ).CopyTo(vtx, 8);
+                            var (weights, indices) = Blend(sub.Weights ?? [("n_root", 1f)], bones);
+                            weights.CopyTo(vtx, 12);
+                            indices.CopyTo(vtx, 16);
+                            stream0.Write(vtx);
+
+                            var uvBytes = new byte[UvStride];
+                            BitConverter.GetBytes(u).CopyTo(uvBytes, 0);
+                            BitConverter.GetBytes(w).CopyTo(uvBytes, 4);
+                            stream1.Write(uvBytes);
+                        }
 
                         var idx = new byte[2];
                         BitConverter.TryWriteBytes(idx, (ushort)(meshVerts + v));
@@ -172,6 +209,10 @@ internal static class SyntheticModel
                 }
             }
 
+            stream0.Position = 0; stream0.CopyTo(vBuf);
+            uint meshUvOffset = (uint)vBuf.Position;
+            stream1.Position = 0; stream1.CopyTo(vBuf);
+
             var mo = new byte[36];
             W16(mo, 0, meshVerts);
             W32(mo, 4, (uint)(mesh.Submeshes.Sum(x => x.TriangleCount) * 3));  // indexCount
@@ -181,8 +222,18 @@ internal static class SyntheticModel
             W16(mo, 14, 0);                                                    // bone table
             W32(mo, 16, meshStartIndex);
             W32(mo, 20, meshVtxOffset);
-            mo[32] = Stride;
-            mo[35] = 1;                                                        // one vertex stream
+            if (!skinned)
+            {
+                mo[32] = Stride;
+                mo[35] = 1;                                                    // one vertex stream
+            }
+            else
+            {
+                W32(mo, 24, meshUvOffset);
+                mo[32] = SkinnedStride;
+                mo[33] = UvStride;
+                mo[35] = 2;                                                    // position+skin, then uv
+            }
             meshBytes.Add(mo);
             vertexCursor += meshVerts;
         }
@@ -195,7 +246,13 @@ internal static class SyntheticModel
         var decl = new byte[DeclSize];
         for (int i = 0; i < DeclSize; i++) decl[i] = 0xFF;
         WriteElem(decl, 0, 0, 0, Float3, UsePosition, 0);
-        WriteElem(decl, 1, 0, 12, Float2, UseUV, 0);
+        if (!skinned) WriteElem(decl, 1, 0, 12, Float2, UseUV, 0);
+        else
+        {
+            WriteElem(decl, 1, 0, 12, UByte4, UseBlendWeight, 0);
+            WriteElem(decl, 2, 0, 16, UByte4, UseBlendIndices, 0);
+            WriteElem(decl, 3, 1, 0, Float2, UseUV, 0);
+        }
         for (int m = 0; m < meshes.Length; m++) ms.Write(decl);
 
         ms.Write(new byte[4]);                                                 // string count (unused)
@@ -220,7 +277,7 @@ internal static class SyntheticModel
         BitConverter.GetBytes(1f).CopyTo(mh, 32);                              // shadow clip
         // v6 only: the size of the shared bone-index pool. v5 has no pool, so this stays 0 there — and a
         // reader that consults it regardless is exactly the bug the v5 fixture exists to catch.
-        W16(mh, 44, version == V6 ? (ushort)2 : (ushort)0);
+        W16(mh, 44, version == V6 ? (ushort)((bones.Length + 1) & ~1) : (ushort)0);
         ms.Write(mh);
 
         long lodPos = ms.Position;
@@ -234,17 +291,19 @@ internal static class SyntheticModel
 
         if (version == V6)
         {
-            // One v6 bone table: { u16 offsetInDwords, u16 count } then the entries, padded to an even count.
+            // One v6 bone table: { u16 offsetInDwords, u16 count } then the entries (every bone, in order), padded to
+            // an even count.
             ms.Write(U16Bytes(1));
             ms.Write(U16Bytes((ushort)bones.Length));
-            ms.Write(U16Bytes(0));
-            ms.Write(U16Bytes(0));                                             // pad to an even short count
+            for (int b = 0; b < bones.Length; b++) ms.Write(U16Bytes((ushort)b));
+            if (bones.Length % 2 == 1) ms.Write(U16Bytes(0));
         }
         else
         {
             // One v5 bone table: u16 BoneIndex[64], then u8 BoneCount and 3 bytes of padding. Fixed width,
             // no shared pool — index 0 is the single bone, the rest stay zero.
             var table = new byte[V5BoneTableBytes];
+            for (int b = 0; b < bones.Length; b++) BitConverter.TryWriteBytes(table.AsSpan(b * 2), (ushort)b);
             table[128] = (byte)bones.Length;
             ms.Write(table);
         }
@@ -319,6 +378,22 @@ internal static class SyntheticModel
             W16(o, ol + l * 60 + 2, 0);
         }
         return o;
+    }
+
+    /// <summary>Four weight bytes summing to 255 and four indices into the (identity) bone table.</summary>
+    private static (byte[] Weights, byte[] Indices) Blend((string Bone, float W)[] weights, string[] bones)
+    {
+        var wb = new byte[4];
+        var ib = new byte[4];
+        int total = 0;
+        for (int k = 0; k < weights.Length && k < 4; k++)
+        {
+            wb[k] = (byte)Math.Clamp((int)MathF.Round(weights[k].W * 255f), 0, 255);
+            ib[k] = (byte)Array.IndexOf(bones, weights[k].Bone);
+            total += wb[k];
+        }
+        wb[0] = (byte)Math.Clamp(wb[0] + (255 - total), 0, 255);
+        return (wb, ib);
     }
 
     private static void WriteElem(byte[] d, int slot, byte stream, byte offset, byte type, byte usage, byte usageIndex)

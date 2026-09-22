@@ -3231,10 +3231,6 @@
     "message": "Several sizes fit this model equally well ({0}). Pick the one you know it was made for.",
     "description": ""
   },
-  "Parts.Retarget.Body": {
-    "message": "Body mod",
-    "description": ""
-  },
   "Parts.Retarget.Checking": {
     "message": "Working out which size this was made for\u2026",
     "description": ""
@@ -3521,6 +3517,38 @@
   },
   "Parts.Move.Shrink": {
     "message": "Shrink",
+    "description": ""
+  },
+  "Parts.Retarget.ExtrasDropped.Fmt": {
+    "message": "The old body\u0027s piercings and pubic hair ({0:N0} triangles) were left out.",
+    "description": ""
+  },
+  "Parts.Retarget.FromBody": {
+    "message": "Made for body mod",
+    "description": ""
+  },
+  "Parts.Retarget.FromBody.Tip": {
+    "message": "The body mod this outfit was made for. Leave it on \u0022the same body mod\u0022 to refit between sizes of one body.\nChoose another to move the outfit from that body to this one: its cloth then also takes the new body\u0027s\nbone weights, so it moves with the new body. Skirt chains and other bones of the outfit\u0027s own keep theirs.",
+    "description": ""
+  },
+  "Parts.Retarget.Reweighted.Fmt": {
+    "message": "{0:N0} cloth points now move with the new body\u0027s bones.",
+    "description": ""
+  },
+  "Parts.Retarget.SameBody": {
+    "message": "The same body mod",
+    "description": ""
+  },
+  "Parts.Retarget.Trimmed.Fmt": {
+    "message": "{0:N0} of them had more bones than a point can follow; the weakest were left out.",
+    "description": ""
+  },
+  "Parts.Retarget.Unplaced.Fmt": {
+    "message": "{0:N0} bone weights could not be written and were left out.",
+    "description": ""
+  },
+  "Parts.Retarget.ToBody": {
+    "message": "Refit onto body mod",
     "description": ""
   }
 }

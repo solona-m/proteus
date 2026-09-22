@@ -166,6 +166,29 @@ public class BodyRetargetTests
     // them is visibly a change to a set, not an isolated tweak.
 
     [Fact]
+    public void The_refit_never_touches_the_author_s_normals()
+    {
+        // Recomputing normals from the moved surface — relaxed, averaged over welded seams, blended toward the body's
+        // under laid skin — blotched a shirt sleeve dark and light. Every normal comes back zero, which Inflate reads
+        // as "leave this vertex's normal as the file has it".
+        var source = Cube(0.20f, SkinMaterial);
+        var target = Cube(0.25f, SkinMaterial);
+        var garment = Copy(source, ClothMaterial);
+        Assert.True(IdentityCorrespondence.TryBuild(source, target, "chest", out var built, out string why), why);
+
+        foreach (bool lay in new[] { false, true })
+        {
+            var solved = BodyRetarget.Solve(garment, [new BodyRetarget.SlotPair("_top", built!, target)], replaceSkin: lay);
+            Assert.True(solved.WorstMove > 0f, "the garment should have moved");
+            for (int v = 0; v < garment.Positions.Length / 3; v++)
+            {
+                var n = solved.Edit.NormalAt(v);
+                Assert.True(n.X == 0f && n.Y == 0f && n.Z == 0f, $"vertex {v} was given a normal ({n.X}, {n.Y}, {n.Z})");
+            }
+        }
+    }
+
+    [Fact]
     public void Retarget_moves_the_garment_s_own_skin_mesh()
     {
         var source = Cube(0.20f, SkinMaterial);
@@ -489,7 +512,8 @@ public class BodyRetargetTests
     public void Replacing_the_skin_lays_sculpted_skin_onto_the_new_body()
     {
         // The author sculpted this skin 10 mm under the body's surface (a top pressing the chest). Resizing keeps that;
-        // replacing lays it exactly on the new body, facing the way the body faces.
+        // replacing lays it exactly on the new body. Its normals are the author's either way — see
+        // The_refit_never_touches_the_author_s_normals.
         var source = Cube(0.20f, SkinMaterial);
         var target = Cube(0.25f, SkinMaterial);
         var garment = Patch(SkinMaterial, new Vector3(0.01f, 0.01f, 0.19f));
@@ -506,8 +530,6 @@ public class BodyRetargetTests
 
             var laid = At(garment, v) + Delta(replaced, v);
             Assert.True(MathF.Abs(laid.Z - 0.25f) < 1e-5f, $"vertex {v} should sit on the new body's face, is at z={laid.Z}");
-            var n = replaced.Edit.NormalAt(v);
-            Assert.True(n.Z > 0.999f, $"vertex {v} should take the body's normal (+Z), has {n}");
         }
         Assert.Equal(3, replaced.Laid);
     }

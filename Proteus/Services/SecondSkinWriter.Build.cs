@@ -76,12 +76,20 @@ public static partial class SecondSkinWriter
     /// </summary>
     /// <param name="dropHostMesh">Host meshes left out entirely, by their index in the host file — the whole mesh,
     /// not some of its triangles. Null keeps every host mesh.</param>
+    /// <param name="hostReskin">New skinning for a host mesh, by its index in the host file: per vertex of that mesh,
+    /// the influences it takes (null leaves the vertex as it was), at most eight. Null leaves every host mesh's
+    /// skinning alone.</param>
+    /// <param name="boneDonors">Models whose bones join the output's bone list without any of their geometry — so a
+    /// reskin can name bones the host does not have. A model passed as content geometry donates its bones already.</param>
     public static byte[] Build(IReadOnlyList<SourceSpec> sources, IReadOnlyList<SecondSkinLayer> layers,
         byte[]? baseModel, out Stats stats, Action<string>? diag = null,
         IReadOnlyList<AuthoredCapSet>? authoredCaps = null, PushSweep? pushSweep = null,
-        BuildTimings? timings = null, Func<int, bool>? dropHostMesh = null)
+        BuildTimings? timings = null, Func<int, bool>? dropHostMesh = null,
+        Func<int, (string Bone, float W)[]?[]?>? hostReskin = null, IReadOnlyList<byte[]>? boneDonors = null,
+        ReskinReport? reskinReport = null)
     {
-        return new ShellBuild(sources, layers, baseModel, diag, authoredCaps, pushSweep, timings, dropHostMesh)
+        return new ShellBuild(sources, layers, baseModel, diag, authoredCaps, pushSweep, timings, dropHostMesh,
+                              hostReskin, boneDonors, reskinReport)
             .Run(out stats);
     }
 

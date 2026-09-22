@@ -24,7 +24,9 @@ internal sealed class RetargetEdit : IMeshEdit
 
     /// <param name="spans">The garment's spans, straight from <see cref="ModelParts.MeshSpans"/>.</param>
     /// <param name="delta">Per vertex, indexed like <see cref="ModelParts.Positions"/>.</param>
-    /// <param name="normal">Per vertex, the normal after the move.</param>
+    /// <param name="normal">Per vertex, the normal after the move — or zero to leave the vertex's normal exactly as the
+    /// file has it, which <see cref="MeshVolumeService.Inflate"/> honours by not writing it. The refit passes zero for
+    /// every vertex: it never touches an author's normals.</param>
     public RetargetEdit(IReadOnlyList<MeshSpan> spans, Vec3[] delta, Vec3[] normal)
     {
         if (delta.Length != normal.Length)

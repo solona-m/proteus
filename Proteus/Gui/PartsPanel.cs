@@ -252,14 +252,14 @@ public sealed class PartsPanel
 
     public PartsPanel(
         PenumbraBridge penumbra, CompositorService compositor, PartViewport viewport, LiveBrush liveBrush,
-        TextureLoader textureLoader, IPluginLog log)
+        TextureLoader textureLoader, UVRemapService uvRemap, IPluginLog log)
     {
         this.penumbra = penumbra;
         this.compositor = compositor;
         this.viewport = viewport;
         this.liveBrush = liveBrush;
         preview = new LiveBrushPreview(penumbra, compositor, log);
-        retarget = new BodyRetargetPanel(penumbra, log);
+        retarget = new BodyRetargetPanel(penumbra, uvRemap, log);
         LiveBrushPreview.CleanUp();
         partOfVertexFn = PartOfVertex;
         lockClickedFn = LockClickedOnCharacter;
@@ -298,16 +298,35 @@ public sealed class PartsPanel
     /// <param name="reserveBelow">Height the window itself still needs under the tab content (its footer).</param>
     public void Draw(bool fillHeight, float reserveBelow)
     {
+        frame.Begin();
+        try
+        {
+            DrawCore(fillHeight, reserveBelow);
+        }
+        finally
+        {
+            frame.End(log, "Studio");
+        }
+    }
+
+    /// <summary>Where the Studio's frame time goes — logged only for a frame slow enough to stall the game.</summary>
+    private readonly FrameTimer frame = new();
+
+    private void DrawCore(bool fillHeight, float reserveBelow)
+    {
         var ps = Strings.Parts;
         ShowingModel = false;
         TickAutosave();
+        frame.Mark("autosave");
         ConsumeApplySizes();
+        frame.Mark("apply sizes");
 
         // Asked for mid-frame by a refit's save or undo; done here, before anything this frame reads the model.
         if (refreshModelsPending)
         {
             refreshModelsPending = false;
             RefreshModels();
+            frame.Mark("refresh models");
         }
 
         ImGui.Spacing();
@@ -320,10 +339,13 @@ public sealed class PartsPanel
         {
             autoPicked = true;
             AutoPickWorn();
+            frame.Mark("auto-pick worn");
         }
 
         DrawLivePick();
+        frame.Mark("live pick");
         DrawModPicker();
+        frame.Mark("mod picker");
         if (modDir == null) return;
 
         if (modIsLegacy)
@@ -341,7 +363,9 @@ public sealed class PartsPanel
 
         DrawExisting();
         DrawStatus();
+        frame.Mark("existing + status");
         DrawModelPicker();
+        frame.Mark("model picker");
         if (modelIndex < 0) return;
 
         if (modelUnreadable)
@@ -382,10 +406,12 @@ public sealed class PartsPanel
 
                 DrawToolPicker();
                 ImGui.Separator();
+                frame.Mark("tool picker");
                 if (tool == Tool.Navigate) DrawStaging();
                 else if (tool == Tool.Retarget) DrawRetarget();
                 else if (PartTool) DrawMove();
                 else DrawBrush();
+                frame.Mark($"tool {tool}");
 
                 // Window-local, so it already counts any scroll; plus the panel's bottom padding and border.
                 sidePanelContent = ImGui.GetCursorPosY() + ImGui.GetStyle().WindowPadding.Y + 2f;
@@ -396,11 +422,13 @@ public sealed class PartsPanel
         {
             ImGui.SameLine();
             DrawParts(height);
+            frame.Mark("model view");
         }
         else
         {
             ImGui.SameLine();
             DrawPartList(parts, height);
+            frame.Mark("part list");
 
             // Under Toggle Parts a click on the open garment ticks the part under it; a click on another worn garment opens that one.
             bool pickParts = tool == Tool.Navigate;
@@ -424,9 +452,12 @@ public sealed class PartsPanel
                                    polygonClicked: moving && movePolygons ? polyClickedFn : null);
         }
 
+        frame.Mark("arm live brush");
         PumpMove();
         PumpBrush();
+        frame.Mark("move + brush");
         TickLivePreview();
+        frame.Mark("live preview");
     }
 
     /// <summary>

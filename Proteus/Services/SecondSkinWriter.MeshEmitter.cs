@@ -25,6 +25,9 @@ public static partial class SecondSkinWriter
             private readonly IReadOnlySet<string>? hiddenAttrs;
             private readonly bool clearAttrs;
             private readonly bool dropVariantAttrs;
+
+            /// <summary>New skinning for this (host) mesh, per vertex; null leaves it as authored.</summary>
+            private readonly (string Bone, float W)[]?[]? reskin;
             private readonly CapUvPlan? capUv;
             private byte[] s = null!;
             private int mo;
@@ -59,8 +62,10 @@ public static partial class SecondSkinWriter
             private ushort keptSubs;
             private List<byte[]> subsForMesh = null!;
 
-            public MeshEmitter(ShellBuild build, Source src, int m, ushort materialIndex, float push, bool preserve, SecondSkinLayer? cov, int mapBase, bool mirrorUv1, IReadOnlySet<string>? hiddenAttrs, bool clearAttrs, CapUvPlan? capUv, bool dropVariantAttrs = false)
+            public MeshEmitter(ShellBuild build, Source src, int m, ushort materialIndex, float push, bool preserve, SecondSkinLayer? cov, int mapBase, bool mirrorUv1, IReadOnlySet<string>? hiddenAttrs, bool clearAttrs, CapUvPlan? capUv, bool dropVariantAttrs = false,
+                               (string Bone, float W)[]?[]? reskin = null)
             {
+                this.reskin = reskin;
                 this.dropVariantAttrs = dropVariantAttrs;
                 this.build = build;
                 this.src = src;
@@ -80,6 +85,7 @@ public static partial class SecondSkinWriter
             {
                 if (!ReadMesh()) return;
                 CopyStreams();
+                ReskinHost();
                 KeepTriangles();
                 if (!FinishTriangles()) return;
                 WeldToCapRim();

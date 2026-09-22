@@ -113,7 +113,11 @@ internal static class BodySizeMatch
     /// Rank <paramref name="candidates"/> by how well they explain the garment's own body mesh.
     /// Candidates that cannot be read are skipped rather than scored zero, so a broken file does not win by default.
     /// </summary>
-    public static Ranking Rank(ModelParts garment, IReadOnlyList<BodyOption> candidates, Func<BodyOption, string> pathOf)
+    /// <param name="garmentBones">The bones the garment is rigged to. Among bodies that fit it equally well — Rue's plain
+    /// and Yiggle sizes are one mesh rigged two ways — the one whose rig covers the most of these leads, so a garment
+    /// made for Yiggle reads as Yiggle. Null orders equals by the author's listing alone.</param>
+    public static Ranking Rank(ModelParts garment, IReadOnlyList<BodyOption> candidates, Func<BodyOption, string> pathOf,
+                               IReadOnlySet<string>? garmentBones = null)
     {
         var probes = Probes(garment);
         if (probes.Count == 0) return new Ranking(Confidence.NoBodyMesh, []);
@@ -122,6 +126,7 @@ internal static class BodySizeMatch
         // Emperor's New Robe mirrors are neither the same path nor the same bytes as the SmallClothes sizes — same
         // geometry, different undies material — so only a geometric key merges them.
         var bodies = new List<(BodyOption Option, float[] Distance, bool[] Hit)>();
+        var rigOf = new Dictionary<BodyOption, IReadOnlySet<string>>();
         var seenGeometry = new HashSet<string>(StringComparer.Ordinal);
         foreach (var group in candidates.GroupBy(o => o.Rel, StringComparer.OrdinalIgnoreCase))
         {
@@ -144,6 +149,7 @@ internal static class BodySizeMatch
                 }
             }
             bodies.Add((option, distance, hit));
+            rigOf[option] = body.Bones;
         }
 
         if (bodies.Count == 0) return new Ranking(Confidence.Ambiguous, []);
@@ -157,13 +163,16 @@ internal static class BodySizeMatch
         var scoredOver = region.Count > 0 ? region : touching;
 
         var order = bodies.Select(b => b.Option).ToList();
+        Func<BodyOption, int>? rigMatch = garmentBones is { Count: > 0 }
+            ? o => rigOf.TryGetValue(o, out var rig) ? garmentBones.Count(rig.Contains) : 0
+            : null;
         var scores = scoredOver.Count == 0
                          ? bodies.Select(b => new Score(b.Option, 0f, Reach)).ToList()
                          : FirstListedAmongEquals(bodies.Select(b => ScoreOver(b.Option, b.Distance, b.Hit, scoredOver))
                                                         .OrderBy(s => s.Rms)
                                                         .ThenByDescending(s => s.HitRate)
                                                         .ToList(),
-                                                  order);
+                                                  order, rigMatch);
 
         // Too little of the garment's body mesh lies on this slot's body to be evidence either way. The cloth may still
         // say — a top's torso never reaches the legs models, but its hem hangs right over them.
@@ -270,7 +279,9 @@ internal static class BodySizeMatch
     /// was refused and the refit lost its legs. The author's own ordering puts the plain family first, and it is the
     /// one a user would reach for.
     /// </summary>
-    private static List<Score> FirstListedAmongEquals(List<Score> sorted, IReadOnlyList<BodyOption> order)
+    /// <param name="rigMatch">How much of the garment's rig a candidate covers; among equals, more leads. Null to skip.</param>
+    private static List<Score> FirstListedAmongEquals(List<Score> sorted, IReadOnlyList<BodyOption> order,
+                                                      Func<BodyOption, int>? rigMatch = null)
     {
         if (sorted.Count < 2) return sorted;
 
@@ -282,7 +293,8 @@ internal static class BodySizeMatch
         for (int i = 0; i < order.Count; i++) rank.TryAdd(order[i], i);
 
         return sorted.Take(same)
-                     .OrderBy(s => rank.TryGetValue(s.Option, out int i) ? i : int.MaxValue)
+                     .OrderByDescending(s => rigMatch?.Invoke(s.Option) ?? 0)
+                     .ThenBy(s => rank.TryGetValue(s.Option, out int i) ? i : int.MaxValue)
                      .Concat(sorted.Skip(same))
                      .ToList();
     }
@@ -407,8 +419,9 @@ internal static class BodySizeMatch
     /// <param name="ContentKey">Identifies the MODEL rather than the file, so two copies of one body deduplicate.</param>
     /// <param name="TopologyKey">Identifies the MESH — vertex count and mesh layout — so two sizes of one body share it
     /// and a different family (Neobelly, Gen C) does not.</param>
+    /// <param name="Bones">The bones the body is rigged to — which of two identical meshes a garment was made for.</param>
     private sealed record Candidate(BodySurface Surface, HashSet<(int, int, int)> Snap, string ContentKey,
-                                    string TopologyKey);
+                                    string TopologyKey, IReadOnlySet<string> Bones);
 
     /// <summary>
     /// Read and index one candidate body, remembering it for the session.
@@ -437,11 +450,15 @@ internal static class BodySizeMatch
                     snap.Add(MeshMath.PositionKey(BodyRetarget.ToVec(surface.PositionOf(v)),
                                                   BodyRetarget.SnapPerMetre));
 
-                // Keyed on the VERTEX POSITIONS, not on the file's bytes: see the dedupe in Rank.
-                string content = Convert.ToHexString(SHA256.HashData(MemoryMarshal.AsBytes<float>(model.Positions)));
+                // Keyed on the VERTEX POSITIONS, not on the file's bytes: see the dedupe in Rank. And on the RIG: one
+                // mesh rigged two ways (Rue's plain and Yiggle sizes) is two bodies, and which one the garment was made
+                // for decides which bones it keeps when it is refitted.
+                var bones = new HashSet<string>(SecondSkinWriter.Parse(bytes).BoneNames, StringComparer.Ordinal);
+                string content = Convert.ToHexString(SHA256.HashData(MemoryMarshal.AsBytes<float>(model.Positions)))
+                               + "|" + string.Join(",", bones.OrderBy(b => b, StringComparer.Ordinal));
                 string topology = model.Positions.Length + ":" +
                                   string.Join(",", model.MeshSpans.Select(s => $"{s.Mesh}/{s.Count}"));
-                return new Candidate(surface, snap, content, topology);
+                return new Candidate(surface, snap, content, topology, bones);
             });
         }
         catch

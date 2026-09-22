@@ -67,9 +67,12 @@ internal static partial class BodyRetarget
 
     /// <summary>One slot of the body: the correspondence that says where its skin went, and the target to land on.</summary>
     /// <param name="TargetModel">The target body's file, which swapping the garment's skin copies the body's skin out
-    /// of (see <see cref="SwapSkin"/>). Null when only the geometry is wanted.</param>
+    /// of (see <see cref="SwapSkin"/>) and rewriting its weights reads the new body's weights from (see
+    /// <see cref="PlanWeights"/>). Null when only the geometry is wanted.</param>
+    /// <param name="SourceModel">The source body's file: which bones the OLD body rigs, so a weight rewrite knows which
+    /// of the garment's bones are body bones. Null when only the geometry is wanted.</param>
     internal readonly record struct SlotPair(string Slot, IBodyCorrespondence Correspondence, ModelParts Target,
-                                             byte[]? TargetModel = null);
+                                             byte[]? TargetModel = null, byte[]? SourceModel = null);
 
     /// <summary>What happened, for the status line and the saved record.</summary>
     /// <param name="Held">Welded points the user held in place, by unticking their parts.</param>
@@ -257,16 +260,24 @@ internal static partial class BodyRetarget
     /// <param name="replaceSkin">Replace the garment's own body skin with the new body's: laid onto the new body first
     /// (see <see cref="LaySkin"/>) so the push-out measures against the right surface, then swapped for the body's own
     /// skin, slot by slot, for every pair that carries its body's file (see <see cref="SwapSkin"/>).</param>
+    /// <param name="acrossBodies">The garment is going from one body MOD to another, rather than between sizes of one:
+    /// its cloth then always takes the new body's weights, and the old body's piercings and pubic hair are left out,
+    /// even when the two bodies' rigs name the same bones (YAB's and Rue's plain sizes do) — see
+    /// <see cref="PlanWeights"/>.</param>
     public static Planned Plan(ModelParts garment, byte[] garmentBytes, IReadOnlyList<SlotPair> pairs,
                                string? garmentSlot = null, bool pushOut = true, IReadOnlySet<int>? held = null,
-                               bool replaceSkin = false)
+                               bool replaceSkin = false, bool acrossBodies = false)
     {
         var solved = Solve(garment, pairs, garmentSlot, pushOut, held, replaceSkin);
         var written = MeshVolumeService.Inflate(garmentBytes, solved.Edit);
         byte[] model = written.Model;
 
+        // Across rigs the cloth takes the new body's weights; with the skin replaced, the body's skin meshes come in.
+        // Both are one rebuild, and nothing is rebuilt when neither applies — a same-rig refit with the skin kept stays
+        // the in-place rewrite above.
         SwapReport? swap = null;
-        if (replaceSkin && SwapSkin(model, pairs, out var swapped) is { } rebuilt)
+        var weights = PlanWeights(model, pairs, acrossBodies);
+        if ((replaceSkin || weights != null) && Rebuild(model, pairs, replaceSkin, weights, out var swapped) is { } rebuilt)
         {
             model = rebuilt;
             swap = swapped;
@@ -292,9 +303,7 @@ internal static partial class BodyRetarget
         Transfer(sets, sets.AllNodes, source, nodeDelta, snapped, out int transferred, out int missed);
 
         // Before the push-out, so the push-out measures cloth against the skin as it will actually be drawn.
-        Vector3?[]? bodyNormal = null;
-        float[]? bodyNormalWeight = null;
-        int laid = replaceSkin ? LaySkin(sets, source, pairs, nodeDelta, out bodyNormal, out bodyNormalWeight) : 0;
+        int laid = replaceSkin ? LaySkin(sets, source, pairs, nodeDelta) : 0;
 
         int pushed = 0;
         float worstPush = 0f;
@@ -318,41 +327,15 @@ internal static partial class BodyRetarget
         var vertDelta = new Vec3[vc];
         for (int i = 0; i < vc; i++) vertDelta[i] = nodeDelta[sets.NodeOf[i]];
 
-        var basePos = new Vec3[vc];
-        var baseNrm = new Vec3[vc];
-        for (int i = 0; i < vc; i++)
-        {
-            basePos[i] = new Vec3(garment.Positions[i * 3], garment.Positions[i * 3 + 1], garment.Positions[i * 3 + 2]);
-            baseNrm[i] = new Vec3(garment.Normals[i * 3], garment.Normals[i * 3 + 1], garment.Normals[i * 3 + 2]);
-        }
-
-        // A continuous weight rather than a moved/not-moved test: a hard edge here puts a shading seam exactly where
-        // the displacement fades out. A fifth of an edge is the scale below which the surface has not really turned.
-        var nodeWeight = new float[sets.NodeCount];
-        float scale = 0.2f * MathF.Max(sets.MeanEdge, 1e-6f);
         float worstMove = 0f;
         for (int n = 0; n < sets.NodeCount; n++)
-        {
-            float len = Len(nodeDelta[n]);
-            nodeWeight[n] = Math.Clamp(len / scale, 0f, 1f);
-            if (len > worstMove) worstMove = len;
-        }
+            worstMove = MathF.Max(worstMove, Len(nodeDelta[n]));
 
-        var vertNrm = SecondSkinWriter.RelaxedNormals(basePos, baseNrm, vertDelta, sets.NodeOf,
-                                                      nodeWeight, sets.NodeNormal, sets.Tris);
-
-        // Skin laid onto the body takes the BODY's normals, not ones recomputed from the garment's own triangles: those
-        // are what the body beside the garment is shaded with, so the seam where they meet shades as one surface. Skin
-        // only partly laid (fading out with distance from the body) blends the two the same way its position did.
-        if (bodyNormal != null && bodyNormalWeight != null)
-            for (int i = 0; i < vc; i++)
-            {
-                int node = sets.NodeOf[i];
-                if (bodyNormal[node] is not { } n) continue;
-                float w = bodyNormalWeight[node];
-                var mix = ToVector(vertNrm[i]) * (1f - w) + n * w;
-                vertNrm[i] = ToVec(mix.LengthSquared() > 1e-12f ? Vector3.Normalize(mix) : n);
-            }
+        // The author's normals, untouched: every normal zero means "leave it" to Inflate. Recomputing them from the
+        // moved surface — relaxed, averaged across welded seams, blended toward the body's under laid skin — broke the
+        // shading of authored hard edges and custom normals: a shirt sleeve came out blotched dark and light. A refit
+        // moves the cloth along with the body; the author's normals describe the cloth, and stay.
+        var vertNrm = new Vec3[vc];
 
         var edit = new RetargetEdit(garment.MeshSpans, vertDelta, vertNrm);
         return new Solved(edit, CountTrue(snapped), transferred, missed, pushed, worstMove, worstPush, sets.HeldCount,
@@ -375,20 +358,17 @@ internal static partial class BodyRetarget
 
     /// <summary>
     /// Replace the garment's own body skin with the new body's: put every skin point exactly ON the target body, at the
-    /// place that corresponds to where it sits on the source body, and hand back the target body's normal there.
+    /// place that corresponds to where it sits on the source body.
     /// <para/>
     /// This is the difference between resizing the skin a mod came with and swapping it for the body's. The transfer
     /// carries each point along with the body, so an author's reshaping of the skin — a top that lifts or compresses the
-    /// chest — survives at the new size. Laying it drops that offset: the garment's skin becomes the new body's surface,
-    /// and shades as the body does. Still only positions and normals, so the file keeps its exact size and layout and
-    /// the rewrite stays safe to do to somebody else's mod; the garment's own triangles, uvs and weights are kept.
+    /// chest — survives at the new size. Laying it drops that offset: the garment's skin sits on the new body's surface.
+    /// Positions only — the author's normals are never touched — so the file keeps its exact size and layout and the
+    /// rewrite stays safe to do to somebody else's mod; the garment's own triangles, uvs and weights are kept.
     /// </summary>
     /// <returns>How many skin nodes were laid.</returns>
-    private static int LaySkin(Sets sets, SourceBody source, IReadOnlyList<SlotPair> pairs, Vec3[] nodeDelta,
-                               out Vector3?[] bodyNormal, out float[] bodyNormalWeight)
+    private static int LaySkin(Sets sets, SourceBody source, IReadOnlyList<SlotPair> pairs, Vec3[] nodeDelta)
     {
-        bodyNormal = new Vector3?[sets.NodeCount];
-        bodyNormalWeight = new float[sets.NodeCount];
         var targets = new List<BodySurface>(pairs.Count);
         foreach (var pair in pairs)
         {
@@ -404,8 +384,8 @@ internal static partial class BodyRetarget
             float w = 1f - MeshMath.Smoothstep((offBody - LayFull) / (LayReach - LayFull));
             if (w <= 0f) continue;
 
-            // Onto the target surface itself, whose normal is the one the body is drawn with. The landing is already on
-            // it for two sizes of one mesh; by texture coordinate it is within a whisker, and this closes the whisker.
+            // Onto the target surface itself. The landing is already on it for two sizes of one mesh; by texture
+            // coordinate it is within a whisker, and this closes the whisker.
             BodySurface.Hit best = default;
             bool onBody = false;
             float within = 0.005f;
@@ -421,11 +401,6 @@ internal static partial class BodyRetarget
             var at = onBody ? best.Point : q;
             var carried = p + ToVector(nodeDelta[n]);
             nodeDelta[n] = ToVec(carried + (at - carried) * w - p);
-            if (onBody)
-            {
-                bodyNormal[n] = best.Normal;
-                bodyNormalWeight[n] = w;
-            }
             laid++;
         }
         return laid;
