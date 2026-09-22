@@ -23,20 +23,14 @@ internal static class BodyCorrespondence
     /// <param name="targetUv">uv0 per target vertex, in <see cref="ModelParts.Positions"/> order.</param>
     /// <param name="uvRemap">Converts between texture layouts, for two bodies that do not share one. Null keeps the
     /// same-layout requirement: a pair in different layouts is refused.</param>
+    /// <param name="male">Both bodies are men's — known from the models' game paths, which the caller has (see
+    /// <see cref="BodySizeCatalog.For(string, string?)"/>, which never offers a body of the other sex). Never from the
+    /// skin material: a body mod may name a woman's skin <c>mt_c0101b0001_bibo</c> (Tre does), since the game swaps
+    /// the race code for the wearer's own.</param>
     public static bool TryBuild(ModelParts source, float[] sourceUv, ModelParts target, float[] targetUv, string what,
                                 out IBodyCorrespondence? correspondence, out string refusal,
-                                UVRemapService? uvRemap = null)
+                                UVRemapService? uvRemap = null, bool male = false)
     {
-        // A man's body and a woman's are different skeletons and different skin layouts, whatever their materials'
-        // suffixes say (a male body's _b is TBSE's layout, not gen3). No map carries one onto the other.
-        if (IsMale(source) is { } sourceMale && IsMale(target) is { } targetMale && sourceMale != targetMale)
-        {
-            correspondence = null;
-            refusal = $"One {what} model is a male body and the other a female one, and a refit cannot turn one into " +
-                      "the other.";
-            return false;
-        }
-
         if (IdentityCorrespondence.TryBuild(source, target, what, out var identity, out _, sourceUv, targetUv))
         {
             correspondence = identity;
@@ -47,7 +41,7 @@ internal static class BodyCorrespondence
         // Two layouts: carried across by the texture maps, or refused — landing a bibo uv on a gen3 atlas as it stands
         // would put the chest on the back.
         UVRemapService.UvConversion? convert = null;
-        string? from = LayoutOf(source), to = LayoutOf(target);
+        string? from = LayoutOf(source, male), to = LayoutOf(target, male);
         if (from != null && to != null && from != to)
         {
             // A mirrored layout (gen2) shares one half between both sides; unmirroring sends each side to its own.
@@ -74,16 +68,16 @@ internal static class BodyCorrespondence
 
     /// <summary>
     /// The texture layout a body's skin is drawn in, or null when none is known. A woman's is "bibo", "gen3" or "gen2";
-    /// a man's is named apart, because the material suffixes mean something else on a male body: its <c>_b</c> is The
-    /// Body's layout ("tbse", which TBSE and the bodies built on it share) and its <c>_a</c> the game's own ("male
-    /// vanilla").
+    /// a man's (<paramref name="male"/>) is named apart, because the material suffixes mean something else on a male
+    /// body: its <c>_b</c> is The Body's layout ("tbse", which TBSE and the bodies built on it share) and its <c>_a</c>
+    /// the game's own ("male vanilla").
     /// </summary>
-    internal static string? LayoutOf(ModelParts body)
+    internal static string? LayoutOf(ModelParts body, bool male = false)
     {
         foreach (var part in body.Parts)
         {
             if (part.Island >= 0 || SecondSkinWriter.SkinMaterialBodyType(part.Material) is not { } layout) continue;
-            if (RaceOfMaterial(part.Material) is not { } race || !BodySizeCatalog.IsMaleRace(race)) return layout;
+            if (!male) return layout;
             return layout switch
             {
                 "gen3" => "tbse",
@@ -96,25 +90,4 @@ internal static class BodyCorrespondence
 
     private static bool IsMaleLayout(string layout) => layout == "tbse" || layout.StartsWith("male ", StringComparison.Ordinal);
 
-    /// <summary>Whether a body model is a man's, by the race its skin material names; null when it has no skin.</summary>
-    internal static bool? IsMale(ModelParts body)
-    {
-        foreach (var part in body.Parts)
-            if (part.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(part.Material)
-                && RaceOfMaterial(part.Material) is { } race)
-                return BodySizeCatalog.IsMaleRace(race);
-        return null;
-    }
-
-    /// <summary>The race a skin material names: <c>0101</c> for <c>mt_c0101b0001_b.mtrl</c>.</summary>
-    private static string? RaceOfMaterial(string material)
-    {
-        var name = material.TrimStart('/');
-        int slash = name.LastIndexOf('/');
-        if (slash >= 0) name = name[(slash + 1)..];
-        return name.Length >= 9 && name.StartsWith("mt_c", StringComparison.OrdinalIgnoreCase)
-               && name.Substring(4, 4).All(char.IsAsciiDigit)
-            ? name.Substring(4, 4)
-            : null;
-    }
 }

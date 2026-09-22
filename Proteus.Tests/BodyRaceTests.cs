@@ -6,7 +6,8 @@ namespace Proteus.Tests;
 
 /// <summary>
 /// A refit never crosses sexes, and men's bodies have texture layouts of their own: a male body's <c>_b</c> skin is
-/// The Body's layout, not the women's gen3, so two TBSE-family bodies pair and a man's body never pairs with a woman's.
+/// The Body's layout, not the women's gen3, so two TBSE-family bodies pair. Sex is read off a model's game path and the
+/// size lists never offer the other sex's bodies; never off a skin material, whose race code the game rewrites.
 /// </summary>
 public class BodyRaceTests
 {
@@ -74,24 +75,25 @@ public class BodyRaceTests
     [Fact]
     public void A_male_body_s_b_skin_is_the_tbse_layout_not_gen3()
     {
-        Assert.Equal("tbse", BodyCorrespondence.LayoutOf(Body("/mt_c0101b0001_b.mtrl")));
-        Assert.Equal("male vanilla", BodyCorrespondence.LayoutOf(Body("/mt_c0101b0001_a.mtrl")));
+        Assert.Equal("tbse", BodyCorrespondence.LayoutOf(Body("/mt_c0101b0001_b.mtrl"), male: true));
+        Assert.Equal("male vanilla", BodyCorrespondence.LayoutOf(Body("/mt_c0101b0001_a.mtrl"), male: true));
         Assert.Equal("gen3", BodyCorrespondence.LayoutOf(Body("/mt_c0201b0001_b.mtrl")));
-        Assert.Equal(true, BodyCorrespondence.IsMale(Body("/mt_c0101b0001_b.mtrl")));
-        Assert.Equal(false, BodyCorrespondence.IsMale(Body("/mt_c0201b0001_bibo.mtrl")));
     }
 
     [Fact]
-    public void A_man_s_body_and_a_woman_s_are_never_paired()
+    public void A_woman_s_body_whose_skin_material_names_the_male_race_is_still_a_woman_s()
     {
-        var tbse = Body("/mt_c0101b0001_b.mtrl");
-        var neolithe = Body("/mt_c0201b0001_bibo.mtrl");
-        var uv = new float[tbse.Positions.Length / 3 * 2];
+        // Tre's legs draw their skin with mt_c0101b0001_bibo: the game swaps a skin material's race code for the
+        // wearer's, so the name says nothing about the body. Its model path (c0201e0000_dwn.mdl) is what the refit goes by.
+        var tre = Body("/mt_c0101b0001_bibo.mtrl", triangles: 3);
+        var neolithe = Body("/mt_c0201b0001_bibo.mtrl", triangles: 4, offsetX: 0.01f);
+        var sourceUv = new float[tre.Positions.Length / 3 * 2];
+        var targetUv = new float[neolithe.Positions.Length / 3 * 2];
 
-        Assert.False(BodyCorrespondence.TryBuild(tbse, uv, neolithe, uv, "chest", out _, out string refusal, NoMaps()));
-        Assert.Contains("male body and the other a female one", refusal);
-        Assert.False(BodyCorrespondence.TryBuild(neolithe, uv, tbse, uv, "chest", out _, out refusal, NoMaps()));
-        Assert.Contains("male body and the other a female one", refusal);
+        Assert.Equal("bibo", BodyCorrespondence.LayoutOf(tre));
+        BodyCorrespondence.TryBuild(tre, sourceUv, neolithe, targetUv, "legs", out _, out string refusal, NoMaps());
+        Assert.DoesNotContain("texture layouts", refusal);
+        Assert.DoesNotContain("male", refusal);
     }
 
     [Fact]
@@ -103,7 +105,8 @@ public class BodyRaceTests
         var sourceUv = new float[tbse.Positions.Length / 3 * 2];
         var targetUv = new float[tbseX.Positions.Length / 3 * 2];
 
-        BodyCorrespondence.TryBuild(tbse, sourceUv, tbseX, targetUv, "chest", out _, out string refusal, NoMaps());
+        BodyCorrespondence.TryBuild(tbse, sourceUv, tbseX, targetUv, "chest", out _, out string refusal, NoMaps(),
+                                    male: true);
         Assert.DoesNotContain("texture layouts", refusal);
         Assert.DoesNotContain("female", refusal);
     }
@@ -117,7 +120,7 @@ public class BodyRaceTests
         var targetUv = new float[vanilla.Positions.Length / 3 * 2];
 
         Assert.False(BodyCorrespondence.TryBuild(tbse, sourceUv, vanilla, targetUv, "chest", out _, out string refusal,
-                                                 NoMaps()));
+                                                 NoMaps(), male: true));
         Assert.Contains("different texture layouts (tbse and male vanilla)", refusal);
     }
 }
