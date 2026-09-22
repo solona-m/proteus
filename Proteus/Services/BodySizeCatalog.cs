@@ -55,6 +55,40 @@ internal sealed record BodySizeCatalog(string ModRoot, IReadOnlyList<BodyOption>
     public IReadOnlyList<BodyOption> For(string slot) => Options.Where(o => o.Slot == slot).ToList();
 
     /// <summary>
+    /// This mod's options for one slot that fit an outfit made for <paramref name="race"/> (<c>"0101"</c>): the bodies
+    /// of that race when the mod has any, else those of the same sex, else none. A body mod usually publishes one race
+    /// per sex and lets the others fall back to it, so a Highlander outfit still refits against a Midlander body; but a
+    /// male outfit is never offered a female body, nor a female one a male — the skeletons, the skin layouts and the
+    /// path the refit is saved under all differ. Every option when the race is not known.
+    /// </summary>
+    public IReadOnlyList<BodyOption> For(string slot, string? race)
+    {
+        var all = For(slot);
+        if (race == null) return all;
+        var exact = all.Where(o => RaceOf(o.GamePath) == race).ToList();
+        if (exact.Count > 0) return exact;
+        bool male = IsMaleRace(race);
+        return all.Where(o => RaceOf(o.GamePath) is { } r && IsMaleRace(r) == male).ToList();
+    }
+
+    /// <summary>The slots this mod sizes for an outfit made for <paramref name="race"/> — see <see cref="For(string, string?)"/>.</summary>
+    public IEnumerable<string> SlotsFor(string? race) => KnownSlots.Where(s => For(s, race).Count > 0);
+
+    /// <summary>The race code an equipment model's game path names (<c>"0201"</c> for <c>…/c0201e0141_top.mdl</c>), or null.</summary>
+    internal static string? RaceOf(string gamePath)
+        => RaceCode.Match(gamePath) is { Success: true } m ? m.Groups[1].Value : null;
+
+    private static readonly System.Text.RegularExpressions.Regex RaceCode = new(@"(?:^|/)c(\d{4})e\d{4}_",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>
+    /// Whether a race code is a male one. The codes come in pairs, male then female — 01 and 02 are Midlander, 03 and
+    /// 04 Highlander, on to 17 and 18 for Viera — and the last two digits are the NPC variant (<c>0104</c> is still a
+    /// Midlander man), so an odd hundreds means male.
+    /// </summary>
+    internal static bool IsMaleRace(string race) => int.TryParse(race, out int code) && code / 100 % 2 == 1;
+
+    /// <summary>
     /// True when the mod offers a choice of body models at all — what the mod picker filters on. Only smallclothes
     /// paths count (see <see cref="IsBodyModel"/>), so an outfit with its own size group is not mistaken for a body.
     /// </summary>

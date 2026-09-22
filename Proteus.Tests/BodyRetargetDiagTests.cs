@@ -1586,6 +1586,79 @@ public class BodyRetargetDiagTests(ITestOutputHelper output)
         Run("Rue Yiggle Medium -> Neolithe XS", rueTop, rueBody, neoBody, neoTop);
     }
 
+    private const string TbseRoot = @"E:\Penumbradt\The Body SE";
+    private const string TbseXRoot = @"E:\Penumbradt\The Body SE-X IVCS2 V1_1_0";
+    private const string Ruffles = @"E:\Penumbradt\Ruffles - by Solona\male size";
+
+    /// <summary>
+    /// Between two MEN's bodies: Ruffles' TBSE tops refitted onto TBSE-X and scored against the author's own TBSE-X
+    /// versions. Both bodies draw their skin in The Body's layout, so they pair by texture coordinate with no map. The
+    /// author's TBSE-X tops do not use TBSE-X's IVCS bones, so only the fit is comparable; the weight columns show the
+    /// refit handing the chest to the new body's pec bones where the author did not.
+    /// </summary>
+    [Fact]
+    public void Between_men_s_bodies_against_the_author()
+    {
+        if (!Directory.Exists(TbseRoot) || !Directory.Exists(TbseXRoot) || !Directory.Exists(Ruffles)) return;
+
+        var tbse = BodySizeCatalog.Read(TbseRoot);
+        var tbseX = BodySizeCatalog.Read(TbseXRoot);
+        string tbseBody = tbse.PathOf(tbse.For("_top", "0101").Single());
+        string tbseXBody = tbseX.PathOf(tbseX.For("_top", "0101").Single());
+        const string top = @"chara\equipment\e6010\model\c0101e6010_top.mdl";
+
+        foreach (var (from, truth) in new[] { ("tbse open", "tbse-x open"), ("tbse tied", "tbse-x tied") })
+        {
+            var bytes = File.ReadAllBytes(Path.Combine(Ruffles, from, top));
+            var garment = ModelPartReader.Read(bytes)!;
+            var pairs = new List<BodyRetarget.SlotPair>();
+            AddPair(pairs, "_top", tbseBody, tbseXBody, swapSkin: true, crossBody: true);
+            var planned = BodyRetarget.Plan(garment, bytes, pairs, "_top", replaceSkin: true, acrossBodies: true);
+
+            output.WriteLine("");
+            output.WriteLine($"Ruffles {from} -> TBSE-X ({pairs[0].Correspondence.Describe()})");
+            output.WriteLine("  " + Describe(planned.Report));
+            var author = File.ReadAllBytes(Path.Combine(Ruffles, truth, top));
+            output.WriteLine("  nothing  " + ClothAgainst(bytes, author));
+            output.WriteLine("  refit    " + ClothAgainst(planned.Model, author));
+            output.WriteLine("  " + IvcsShare(bytes, planned.Model));
+        }
+    }
+
+    /// <summary>
+    /// How much of the refit's cloth weight went to TBSE-X's IVCS bones, and how far the rest moved from the garment's
+    /// own weights once that is set aside — which says whether the refit mostly ADDED the new body's physics bones or
+    /// also rewrote the author's weighting of the bones both bodies share. Cloth vertices pair by index: a refit keeps
+    /// every cloth mesh and its vertex order.
+    /// </summary>
+    private static string IvcsShare(byte[] before, byte[] after)
+    {
+        var (_, _, was) = ClothVertices(before);
+        var (_, _, now) = ClothVertices(after);
+        int n = Math.Min(was.Count, now.Count);
+        double ivcs = 0, total = 0, rest = 0;
+        for (int i = 0; i < n; i++)
+        {
+            ivcs += now[i].Where(w => w.Bone.StartsWith("iv_", StringComparison.Ordinal)).Sum(w => w.W);
+            total += now[i].Sum(w => w.W);
+
+            // Both sides without IVCS, renormalised, then half the L1 distance: the share on a different bone.
+            var a = Strip(was[i]);
+            var b = Strip(now[i]);
+            rest += a.Keys.Union(b.Keys).Sum(k => Math.Abs(a.GetValueOrDefault(k) - b.GetValueOrDefault(k))) / 2;
+        }
+        return $"on IVCS bones {ivcs / Math.Max(total, 1e-9):P1}; the other bones differ {rest / Math.Max(n, 1):P1} mean";
+
+        static Dictionary<string, float> Strip(List<(string Bone, float W)> w)
+        {
+            var kept = w.Where(x => !x.Bone.StartsWith("iv_", StringComparison.Ordinal)).ToList();
+            float sum = kept.Sum(x => x.W);
+            var d = new Dictionary<string, float>(StringComparer.Ordinal);
+            foreach (var (bone, weight) in kept) d[bone] = d.GetValueOrDefault(bone) + (sum > 0 ? weight / sum : 0);
+            return d;
+        }
+    }
+
     private const string QueenAnne = @"E:\Penumbradt\Queen Anne - by Solona";
 
     /// <summary>

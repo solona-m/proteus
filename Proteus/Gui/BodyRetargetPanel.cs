@@ -169,9 +169,13 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         recordFor = null;
     }
 
+    /// <summary>The race the open garment is made for (<c>"0101"</c>), which every option list is filtered to.</summary>
+    private string? race;
+
     public void Draw(in RetargetContext ctx)
     {
         var ps = Strings.Parts;
+        race = BodySizeCatalog.RaceOf(ctx.GamePath);
         Consume(ctx);
 
         if (recordFor != ctx.ModRoot)
@@ -196,7 +200,8 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         // Top to bottom as the refit reads: where the garment comes from — its body mod, then its size — and where it
         // goes — the body mod, then the size.
         DrawSourceBodyPicker();
-        bool ready = catalog is { IsBody: true };
+        DrawNoBodiesFor(SourceCatalog, SourceDir);
+        bool ready = catalog is { IsBody: true } && catalog.SlotsFor(race).Any();
         List<string> slots = [];
         if (ready)
         {
@@ -222,6 +227,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
 
         ImGui.Separator();
         DrawBodyPicker(ctx);
+        if (fromBodyDir != null) DrawNoBodiesFor(catalog, bodyDir);
         if (!ready)
         {
             ImGui.TextWrapped(bodies == null ? ps.RetargetFindingBodies : ps.RetargetPickBody);
@@ -297,6 +303,20 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         validating.Clear();
         planned = null;
         pendingPreview = null;
+    }
+
+    /// <summary>
+    /// Say so when a body mod has bodies, but none for this outfit's sex: a woman's body mod picked for a man's outfit.
+    /// Its size lists are empty then, and without this nothing would say why.
+    /// </summary>
+    private void DrawNoBodiesFor(BodySizeCatalog? snapshot, string? dir)
+    {
+        if (snapshot is not { IsBody: true } || race == null || snapshot.SlotsFor(race).Any()) return;
+        var ps = Strings.Parts;
+        string name = dir != null && bodies != null && bodies.TryGetValue(dir, out string? n) ? n : dir ?? "";
+        string sex = BodySizeCatalog.IsMaleRace(race) ? ps.RetargetMale : ps.RetargetFemale;
+        using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
+            ImGui.TextWrapped(string.Format(ps.RetargetNoBodiesForSexFmt, name, sex));
     }
 
     /// <summary>A dropdown of the installed body mods. Returns the directory picked this frame, if any.</summary>
@@ -392,8 +412,8 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         string? modsRoot = penumbra.GetModDirectory();
         if (modsRoot == null) return;
         string slot = BodySizeCatalog.SlotOf(ctx.GamePath) ?? "_top";
-        string race = RaceCode.Match(ctx.GamePath) is { Success: true } m ? m.Groups[1].Value : "0201";
-        if (penumbra.ResolvePlayer($"chara/equipment/e0000/model/c{race}e0000{slot}.mdl") is not { } resolved) return;
+        string wornRace = race ?? "0201";
+        if (penumbra.ResolvePlayer($"chara/equipment/e0000/model/c{wornRace}e0000{slot}.mdl") is not { } resolved) return;
 
         string full = Path.GetFullPath(resolved);
         foreach (string dir in bodies.Keys)
@@ -408,9 +428,6 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
 
     /// <summary>Only ever tried once per session: the user may well choose another body mod on purpose.</summary>
     private bool wornBodyTried;
-
-    private static readonly System.Text.RegularExpressions.Regex RaceCode = new(@"/c(\d{4})e\d{4}_",
-        System.Text.RegularExpressions.RegexOptions.Compiled);
 
     /// <summary>
     /// Default the garment's own slot's target to the option the character is wearing, leaving a choice already made.
@@ -432,7 +449,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     /// <summary>The option of this slot whose file the player's collection resolves the body model to.</summary>
     private BodyOption? WornOption(BodySizeCatalog snapshot, string slot)
     {
-        var options = snapshot.For(slot);
+        var options = snapshot.For(slot, race);
         foreach (string gamePath in options.Select(o => o.GamePath).Distinct(StringComparer.OrdinalIgnoreCase))
         {
             if (penumbra.ResolvePlayer(gamePath) is not { } resolved) continue;
@@ -450,7 +467,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     /// <summary>The slot this garment is worn in, which is the one its cloth was cut against. Always required.</summary>
     private string Primary(in RetargetContext ctx)
     {
-        var slots = catalog!.Slots.ToList();
+        var slots = catalog!.SlotsFor(race).ToList();
         string? own = BodySizeCatalog.SlotOf(ctx.GamePath);
         return own != null && slots.Contains(own) ? own : slots.FirstOrDefault() ?? "_top";
     }
@@ -468,7 +485,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     {
         string primary = Primary(ctx);
         var slots = new List<string> { primary };
-        foreach (string slot in catalog!.Slots)
+        foreach (string slot in catalog!.SlotsFor(race))
             if (slot != primary && Distinct(slot) > 1) slots.Add(slot);
         return slots;
     }
@@ -486,7 +503,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
 
     /// <summary>How many different models a slot offers — several options can point at one file.</summary>
     private int Distinct(string slot)
-        => catalog!.For(slot).Select(o => o.Rel).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+        => catalog!.For(slot, race).Select(o => o.Rel).Distinct(StringComparer.OrdinalIgnoreCase).Count();
 
     // ── one slot's from/to ──────────────────────────────────────────────────
 
@@ -506,7 +523,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     {
         var ps = Strings.Parts;
         from.TryGetValue(slot, out var source);
-        var sourceOptions = SourceCatalog?.For(slot) ?? [];
+        var sourceOptions = SourceCatalog?.For(slot, race) ?? [];
         if (DrawOptionCombo($"##retargetFrom{slot}", ps.RetargetFrom, sourceOptions,
                             source == null ? [] : [source], many: false) is { } pickedFrom)
         {
@@ -521,7 +538,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     private void DrawSlotTo(in RetargetContext ctx, string slot)
     {
         var ps = Strings.Parts;
-        var options = catalog!.For(slot);
+        var options = catalog!.For(slot, race);
         if (options.Count == 0) return;
 
         // One size at a time for now. The rest of the panel still handles several (the plan, the preview picker, the
@@ -851,6 +868,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         var slots = Slots(ctx);
         string rel = ctx.ModelRel;
         string? sourceDir = SourceDir;
+        string? garmentRace = race;
         detectedFor = rel;
 
         detectTask = Task.Run(() =>
@@ -859,7 +877,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
             var garmentBones = new HashSet<string>(SecondSkinWriter.Parse(garmentBytes).BoneNames, StringComparer.Ordinal);
             var rankings = new Dictionary<string, BodySizeMatch.Ranking>(StringComparer.Ordinal);
             foreach (string slot in slots)
-                rankings[slot] = BodySizeMatch.Rank(garment, snapshot.For(slot), snapshot.PathOf, garmentBones);
+                rankings[slot] = BodySizeMatch.Rank(garment, snapshot.For(slot, garmentRace), snapshot.PathOf, garmentBones);
             return new DetectResult(rel, sourceDir, rankings);
         });
     }

@@ -215,8 +215,62 @@ public class BodyWeightsTests
 
         var rebuilt = BodyRetarget.Rebuild(garment, pairs, swapSkin: false, plan, out var report)!;
         Assert.Equal(2, report.ExtrasDropped);                                // and the old body's piercings go
+        // The bodies differ by 0.3 moved from j_kosi to j_mune_l, and the cloth takes that change: 0.7 and 0.3, not
+        // the new body's 0.4 and 0.6 outright.
         foreach (int v in VerticesOf(garment, Cloth, 0))
-            Assert.Equal(0.6f, Weights(rebuilt)[v].Single(i => i.Bone == "j_mune_l").W, 2);
+        {
+            Assert.Equal(0.3f, Weights(rebuilt)[v].Single(i => i.Bone == "j_mune_l").W, 2);
+            Assert.Equal(0.7f, Weights(rebuilt)[v].Single(i => i.Bone == "j_kosi").W, 2);
+        }
+    }
+
+    [Fact]
+    public void Where_the_two_bodies_agree_the_author_s_weighting_stands()
+    {
+        // TBSE and TBSE-X weight their shared bones alike; the author weighted a loose shirt by hand, unlike the skin.
+        var body = new (string, float)[] { ("j_kosi", 0.7f), ("j_mune_l", 0.3f) };
+        var author = new List<(string, float)> { ("j_sebo_c", 0.8f), ("j_kosi", 0.2f) };
+
+        var changed = BodyRetarget.Change(author, body, body, new HashSet<string>(BodyBones) { "j_sebo_c" });
+
+        Assert.Equal(0.8f, changed.Single(i => i.Bone == "j_sebo_c").W, 4);
+        Assert.Equal(0.2f, changed.Single(i => i.Bone == "j_kosi").W, 4);
+        Assert.DoesNotContain(changed, i => i.Bone == "j_mune_l");
+    }
+
+    [Fact]
+    public void A_bone_the_new_body_adds_takes_its_share_from_what_the_old_body_had_there()
+    {
+        // TBSE-X hands part of the chest to its pec bone; the cloth over it follows, the rest of its weighting kept.
+        var oldBody = new (string, float)[] { ("j_mune_l", 1f) };
+        var newBody = new (string, float)[] { ("j_mune_l", 0.8f), ("iv_kyokin_phys_l", 0.2f) };
+        var author = new List<(string, float)> { ("j_mune_l", 0.5f), ("j_sebo_c", 0.5f) };
+        var bones = new HashSet<string>(BodyBones) { "iv_kyokin_phys_l", "j_sebo_c" };
+
+        var changed = BodyRetarget.Change(author, oldBody, newBody, bones);
+
+        Assert.Equal(0.3f, changed.Single(i => i.Bone == "j_mune_l").W, 4);
+        Assert.Equal(0.5f, changed.Single(i => i.Bone == "j_sebo_c").W, 4);
+        Assert.Equal(0.2f, changed.Single(i => i.Bone == "iv_kyokin_phys_l").W, 4);
+        Assert.Equal(1f, changed.Sum(i => i.W), 4);
+    }
+
+    [Fact]
+    public void A_change_that_would_go_below_zero_stops_there_and_the_body_share_is_kept()
+    {
+        // The old body put the vertex on j_mune_l, which the author never used; the new body moves it to iv_c_mune.
+        var oldBody = new (string, float)[] { ("j_mune_l", 1f) };
+        var newBody = new (string, float)[] { ("iv_c_mune_l", 1f) };
+        var author = new List<(string, float)> { ("j_sebo_c", 0.6f), ("j_sk_f_a_l", 0.4f) };
+        var bones = new HashSet<string>(BodyBones) { "iv_c_mune_l", "j_sebo_c" };
+
+        var changed = BodyRetarget.Change(author, oldBody, newBody, bones);
+        Assert.DoesNotContain(changed, i => i.Bone == "j_mune_l");            // -0.6 stops at nothing
+        var w = BodyRetarget.Combine(author, changed, bones, out _)!;
+
+        Assert.Equal(0.4f, w.Single(i => i.Bone == "j_sk_f_a_l").W, 4);       // the skirt, exactly
+        Assert.Equal(0.6f, w.Where(i => i.Bone != "j_sk_f_a_l").Sum(i => i.W), 4);   // the body keeps its 0.6
+        Assert.Equal(1f, w.Sum(i => i.W), 4);
     }
 
     [Fact]
