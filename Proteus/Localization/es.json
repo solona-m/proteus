@@ -1396,7 +1396,7 @@
     "description": ""
   },
   "HatCompat.AutoFit.Tip": {
-    "message": "La mayoría del pelo modificado no admite sombreros, así que un sombrero puesto\nencima lo atraviesa. Con esta opción activada, Proteus revisa cada peinado que\nte pones y aplasta contra la cabeza el pelo que un sombrero taparía.\n\nEsto edita los archivos del propio mod de pelo, así que sigue funcionando con\nProteus desactivado y viaja con el mod si lo exportas. Los originales se\nconservan y el cambio se puede deshacer aquí.",
+    "message": "La mayoría del pelo modificado no admite sombreros, así que un sombrero puesto\nencima lo atraviesa. Con esta opción activada, Proteus espera a que lleves un\nsombrero y entonces aplasta contra la cabeza el pelo que ese sombrero taparía.\n\nEsto edita los archivos del propio mod de pelo, así que sigue funcionando con\nProteus desactivado y viaja con el mod si lo exportas. Los originales se\nconservan y el cambio se puede deshacer aquí.",
     "description": ""
   },
   "HatCompat.HidePonytails.Label": {
@@ -1426,6 +1426,10 @@
   "HatCompat.InheritedTag.Tip": {
     "message": "Solo se reemplaza la parte que oculta el pelo. El peinado conserva su propio\naplanado, así que lo peor que puede pasar es que un sombrero atraviese el\npelo, en vez de que desaparezca pelo que ningún sombrero cubriría.\n\nDeshacer restaura exactamente lo que traía el peinado.",
     "description": "Tooltip for the text above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
+  "HatCompat.WaitingForHat": {
+    "message": "Proteus adaptará este peinado cuando te pongas un sombrero. O adáptalo ahora:",
+    "description": ""
   },
   "HatCompat.Apply.Btn": {
     "message": "Adaptar",
@@ -3561,6 +3565,22 @@
   },
   "Parts.Retarget.ToBody": {
     "message": "Refit onto body mod",
+    "description": ""
+  },
+  "Settings.ReduceMotion": {
+    "message": "Reducir el movimiento",
+    "description": ""
+  },
+  "Settings.ReduceMotion.Tip": {
+    "message": "Mantiene la ventana quieta: los efectos al pasar el ratón se aplican al instante, y el brillo de fondo\ny el pulso de los mods activos dejan de moverse.",
+    "description": ""
+  },
+  "Settings.AmbientBackground": {
+    "message": "Brillo de fondo",
+    "description": ""
+  },
+  "Settings.AmbientBackground.Tip": {
+    "message": "El suave brillo de brasas que flota detrás del contenido de esta ventana.",
     "description": ""
   }
 }

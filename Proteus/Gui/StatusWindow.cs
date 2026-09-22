@@ -171,7 +171,7 @@ public class StatusWindow : Window
         importTab = new ImportTab(contentImport, luminisImport, this, emissiveImport, eyeImport, onionImport, _fileDialog, config, discovery, presets);
         createTab = new CreateTab(modCreation, _fileDialog);
         exportTab = new ExportTab(_fileDialog, config, compositor, modExport);
-        modsTab = new ModsTab(penumbra, compositor, this, presets, designBindings, config);
+        modsTab = new ModsTab(penumbra, compositor, this, presets, designBindings, config, new ModPreviewService());
         bindingsTab = new BindingsTab(config, designBindings, penumbra);
         hatCompat = new HatCompatPanel(hatCompatWatcher, config);
         settingsTab = new SettingsTab(config, compositor, discovery, designBindings, hatCompat, logExport);
@@ -400,6 +400,11 @@ public class StatusWindow : Window
         // Reaching Draw means uncollapsed: release Show()'s forced state or the window could never collapse again.
         Collapsed = null;
 
+        // Every eased widget reads this; copied per frame so the setting takes effect without a reload.
+        UiAnim.ReduceMotion = config.ReduceMotion;
+        if (config.AmbientBackground)
+            DrawAmbient();
+
         // Which tab is selected is answered below, by the tab that draws.
         _tabDrawn = null;
         bool studioWasDrawn = _studioDrawn;
@@ -533,6 +538,35 @@ public class StatusWindow : Window
         _fileDialog.Draw();
     }
 
+    /// <summary>
+    /// Slow ember glows drifting behind the window's contents. Drawn first on the window's own draw list, so it sits
+    /// above the background and below every widget, clipped to the window. No item is submitted: the auto-fit never
+    /// sees it. Under Reduce Motion the glows hold their rest positions.
+    /// </summary>
+    private static void DrawAmbient()
+    {
+        var pos  = ImGui.GetWindowPos();
+        var size = ImGui.GetWindowSize();
+        var draw = ImGui.GetWindowDrawList();
+        var span = MathF.Min(size.X, size.Y);
+
+        // (rest x, rest y) as fractions of the window, drift amplitude, period, phase, radius fraction, colour.
+        Span<(float X, float Y, float Amp, float Period, float Phase, float Radius, Vector4 Colour)> blobs =
+        [
+            (0.18f, 0.30f, 0.07f, 29f, 0.00f, 0.75f, ProteusTheme.Accent.WithAlpha(0.070f)),
+            (0.85f, 0.55f, 0.09f, 37f, 0.33f, 0.85f, ProteusTheme.Ember.WithAlpha(0.080f)),
+            (0.50f, 0.95f, 0.10f, 43f, 0.66f, 0.70f, ProteusTheme.Accent.WithAlpha(0.050f)),
+        ];
+
+        foreach (var b in blobs)
+        {
+            var centre = pos + new Vector2(
+                size.X * (b.X + (b.Amp * UiAnim.Drift(b.Period, b.Phase))),
+                size.Y * (b.Y + (b.Amp * UiAnim.Drift(b.Period * 1.3f, b.Phase + 0.25f))));
+            ProteusDraw.SoftGlow(draw, centre, span * b.Radius, b.Colour, layers: 16);
+        }
+    }
+
     /// <summary>The colour editor, as its own window — stays open until closed.</summary>
     private void DrawColorWindow()
     {
@@ -586,7 +620,7 @@ public class StatusWindow : Window
             ImGui.GetContentRegionMax().X - btnW,
             barTop + ((barH - btnH) * 0.5f)));
 
-        if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.SyncAlt, "Refresh"))
+        if (ProteusStyle.FancyButton("Refresh", FontAwesomeIcon.SyncAlt))
         {
             // Shift: rebuild everything, forgetting what was published. See RefreshAndRecomposite.
             compositor.RefreshAndRecomposite(full: ImGui.GetIO().KeyShift);
@@ -612,9 +646,17 @@ public class StatusWindow : Window
         var btnX = max.X - btnW - padX;
 
         // ── wordmark ─────────────────────────────────────────────────────────
-        ImGui.SetCursorScreenPos(min + new Vector2(padX, padY));
+        var markAt = min + new Vector2(padX, padY);
+        ImGui.SetCursorScreenPos(markAt);
         using (ProteusStyle.Fonts?.PushWordmark())
+        {
+            // An ember glow behind the letters, measured in the wordmark font; it breathes unless motion is reduced.
+            var markSize = ImGui.CalcTextSize("PROTEUS");
+            ProteusDraw.SoftGlowEllipse(ImGui.GetWindowDrawList(), markAt + (markSize * 0.5f),
+                new Vector2(markSize.X * 0.62f, markSize.Y * 0.75f),
+                ProteusStyle.Accent.WithAlpha(0.16f + (0.08f * UiAnim.Pulse(6f))), layers: 10);
             ImGui.TextUnformatted("PROTEUS");
+        }
 
         var afterMark = ImGui.GetItemRectMax().X;
 

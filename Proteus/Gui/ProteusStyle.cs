@@ -31,7 +31,7 @@ public static class ProteusStyle
     /// <summary>
     /// #F27712, sampled from the logo art. Deliberately NOT the #F4C430 gold, which already means "Animated glow".
     /// </summary>
-    public static readonly Vector4 Accent = new(0.949f, 0.467f, 0.071f, 1f);
+    public static readonly Vector4 Accent = ProteusTheme.Accent;
 
     // Value is already 0.95, so lighter means desaturated toward white; ColorHelpers keeps the logo's hue.
     public static readonly Vector4 AccentHover  = Accent.Desaturate(0.20f);
@@ -71,7 +71,8 @@ public static class ProteusStyle
     // ---- widgets -----------------------------------------------------------------------------------
 
     /// <summary>
-    /// A heading in the game's Jupiter face with a short accent rule beneath it that fades out to the right.
+    /// A heading in the game's Jupiter face over an accent rule that runs past it and fades out to the right, headed
+    /// by a small diamond pip and lit by a faint glow.
     /// </summary>
     /// <param name="text">The heading.</param>
     /// <param name="display">False for text the user supplied (a mod name), which stays on the default font.</param>
@@ -84,13 +85,18 @@ public static class ProteusStyle
         var min  = ImGui.GetItemRectMin();
         var max  = ImGui.GetItemRectMax();
         var draw = ImGui.GetWindowDrawList();
-        var y    = max.Y + S(2f);
+        var y    = MathF.Round(max.Y + S(2.5f));
 
-        uint solid = ImGui.GetColorU32(Accent);
-        uint clear = ImGui.GetColorU32(Accent.WithAlpha(0f));
-        // Corner order is upper-left, upper-right, lower-right, lower-left.
-        draw.AddRectFilledMultiColor(
-            new Vector2(min.X, y), new Vector2(max.X, y + S(1.5f)), solid, clear, clear, solid);
+        // Past the text by a fixed reach, never past the content region: the rule contributes no width to auto-fit.
+        var edge = ImGui.GetWindowPos().X + ImGui.GetWindowContentRegionMax().X;
+        var end  = MathF.Min(max.X + S(60f), edge);
+        var pip  = S(2.5f);
+        var from = min.X + (pip * 2f) + S(2f);
+
+        ProteusDraw.SoftGlowEllipse(draw, new Vector2(from + ((end - from) * 0.25f), y),
+            new Vector2((end - from) * 0.45f, S(4f)), Accent.WithAlpha(0.18f), layers: 6);
+        ProteusDraw.Diamond(draw, new Vector2(min.X + pip, y + S(0.75f)), pip, Accent);
+        ProteusDraw.FadeRuleRight(draw, new Vector2(from, y), new Vector2(end, y + S(1.5f)), Accent);
 
         ImGui.Dummy(new Vector2(0f, S(5f)));
     }
@@ -226,27 +232,91 @@ public static class ProteusStyle
     public static ImRaii.TabItemDisposable HeaderTabItem(
         string label, string id, ImGuiTabItemFlags flags = ImGuiTabItemFlags.None)
     {
+        ImRaii.TabItemDisposable tab;
         using (DisplayFontUsable ? Fonts?.PushHeader() : null)
-            return ImRaii.TabItem($"{label}###{id}", flags);
+            tab = ImRaii.TabItem($"{label}###{id}", flags);
+
+        var selected = false;
+        if (tab) selected = true;
+        TabUnderline(selected);
+        return tab;
+    }
+
+    /// <summary>
+    /// An accent underline beneath the tab just submitted: full width under the selected tab, growing in from the
+    /// centre under a hovered one. Read from the last item, which after BeginTabItem is the tab itself.
+    /// </summary>
+    private static void TabUnderline(bool selected)
+    {
+        var hovered = ImGui.IsItemHovered();
+        var target  = selected ? 1f : hovered ? 0.55f : 0f;
+        var e       = UiAnim.Ease(ImGuiP.GetItemID(), target, 14f, initial: target);
+        if (e < 0.01f) return;
+
+        var min   = ImGui.GetItemRectMin();
+        var max   = ImGui.GetItemRectMax();
+        var half  = (max.X - min.X) * 0.5f * e;
+        var mid   = (min.X + max.X) * 0.5f;
+        var thick = MathF.Max(1f, S(2f));
+        var draw  = ImGui.GetWindowDrawList();
+
+        ProteusDraw.SoftGlowEllipse(draw, new Vector2(mid, max.Y - thick), new Vector2(half, S(5f)),
+            Accent.WithAlpha(0.22f * e), layers: 6);
+        ProteusDraw.FadeRule(draw, new Vector2(mid - half, max.Y - thick), new Vector2(mid + half, max.Y),
+            Accent.WithAlpha(0.35f + (0.65f * e)));
     }
 
     /// <summary>
     /// The brand tint for a tab bar. Safe to wrap the whole BeginTabBar/EndTabBar scope, unlike the font push:
-    /// <c>ImGuiCol.Tab*</c> is only read inside BeginTabBar/BeginTabItem. Alpha'd fills, since they sit behind text.
+    /// <c>ImGuiCol.Tab*</c> is only read inside BeginTabBar/BeginTabItem. Faint fills: the eased underline from
+    /// <see cref="HeaderTabItem"/> carries the selection.
     /// </summary>
     public static ImRaii.ColorDisposable TabAccent() =>
-        ImRaii.PushColor(ImGuiCol.Tab,          ImGui.GetColorU32(AccentSoft))
-              .Push(ImGuiCol.TabHovered,        ImGui.GetColorU32(AccentFillHover))
-              .Push(ImGuiCol.TabActive,         ImGui.GetColorU32(AccentFill))
+        ImRaii.PushColor(ImGuiCol.Tab,          ImGui.GetColorU32(Accent.WithAlpha(0.06f)))
+              .Push(ImGuiCol.TabHovered,        ImGui.GetColorU32(Accent.WithAlpha(0.20f)))
+              .Push(ImGuiCol.TabActive,         ImGui.GetColorU32(Accent.WithAlpha(0.28f)))
               // Unfocused = the window doesn't have focus; pulled back so it does not compete with the focused one.
-              .Push(ImGuiCol.TabUnfocused,       ImGui.GetColorU32(AccentSoft.WithAlpha(0.10f)))
-              .Push(ImGuiCol.TabUnfocusedActive, ImGui.GetColorU32(AccentFill.WithAlpha(0.25f)));
+              .Push(ImGuiCol.TabUnfocused,       ImGui.GetColorU32(Accent.WithAlpha(0.03f)))
+              .Push(ImGuiCol.TabUnfocusedActive, ImGui.GetColorU32(Accent.WithAlpha(0.14f)));
 
     /// <summary>The "this button is the current selection" idiom.</summary>
     public static ImRaii.ColorDisposable Selected(bool on) =>
         ImRaii.PushColor(ImGuiCol.Button,        ImGui.GetColorU32(AccentFill),       on)
               .Push(ImGuiCol.ButtonHovered,      ImGui.GetColorU32(AccentFillHover),  on)
               .Push(ImGuiCol.ButtonActive,       ImGui.GetColorU32(AccentFillActive), on);
+
+    /// <summary>
+    /// Dress the item just submitted as a prominent button: an accent border that eases in on hover and a sheen
+    /// that sweeps across once as the hover begins. Call straight after the button.
+    /// </summary>
+    public static void Decorate()
+    {
+        var id      = ImGuiP.GetItemID();
+        var hovered = ImGui.IsItemHovered();
+        var min     = ImGui.GetItemRectMin();
+        var max     = ImGui.GetItemRectMax();
+        var round   = ImGui.GetStyle().FrameRounding;
+        var draw    = ImGui.GetWindowDrawList();
+
+        var e = UiAnim.Ease(id, hovered);
+        if (e > 0.01f)
+        {
+            ProteusDraw.RectHalo(draw, min, max, round, S(4f), Accent.WithAlpha(0.30f * e), layers: 4);
+            draw.AddRect(min, max, ImGui.GetColorU32(Accent.WithAlpha(0.75f * e)), round, ImDrawFlags.None,
+                MathF.Max(1f, S(1f)));
+        }
+        ProteusDraw.HoverSheen(draw, min, max, UiAnim.Sheen(id, hovered));
+    }
+
+    /// <summary>A button with <see cref="Decorate"/>'s hover border and sheen; an optional FontAwesome icon leads the label.</summary>
+    public static bool FancyButton(string label, FontAwesomeIcon? icon = null)
+    {
+        var clicked = icon is { } i
+            ? Dalamud.Interface.Components.ImGuiComponents.IconButtonWithText(i, label)
+            : ImGui.Button(label);
+        Decorate();
+        return clicked;
+    }
 
     /// <summary>One sortable table-column header.</summary>
     /// <param name="label">The visible text. Localized.</param>
@@ -300,23 +370,63 @@ public static class ProteusStyle
     }
 
     /// <summary>
-    /// A bordered panel with an accent bar down its left edge, painted around a group of widgets.
+    /// A raised panel with an accent bar down its left edge, painted around a group of widgets. Its border warms to
+    /// the accent while the mouse is over it.
     /// </summary>
     /// <remarks>
-    /// A group, not a child: a zero-size BeginChild does not auto-size. Border-only: the frame is painted after the
-    /// group closes, so a fill would cover the widgets.
+    /// A group, not a child: a zero-size BeginChild does not auto-size. The fill must sit UNDER the widgets, but the
+    /// group's size is only known once it closes, so the fill is drawn up front from the size the same card measured
+    /// last frame (cards are told apart by their order within the window). The first frame draws no fill; a resize
+    /// lags one frame, which nobody can see.
     /// </remarks>
     public static CardScope Card(Vector4? barColour = null) => new(barColour);
+
+    /// <summary>Last frame's frame rect per card, as (offset from the group's start, size).</summary>
+    private static readonly Dictionary<uint, (Vector2 Offset, Vector2 Size)> CardRects = new();
+    private static int cardFrame;
+    private static int cardSeq;
 
     public readonly struct CardScope : IDisposable
     {
         private readonly Vector4 bar;
         private readonly float inset;
+        private readonly uint key;
+        private readonly Vector2 start;
+        /// <summary>This frame's eased hover, 0 before the card has been measured once.</summary>
+        private readonly float hover;
 
         internal CardScope(Vector4? barColour)
         {
             bar   = barColour ?? Accent;
             inset = S(8f);
+            hover = 0f;
+
+            var frame = ImGui.GetFrameCount();
+            if (frame != cardFrame)
+            {
+                cardFrame = frame;
+                cardSeq   = 0;
+                // Cards that stopped drawing (a tab closed) fall out here rather than accumulating.
+                if (CardRects.Count > 256) CardRects.Clear();
+            }
+            key   = unchecked(ImGui.GetID("##proteusCard") + (uint)(cardSeq++ * 0x9E3779B1u));
+            start = ImGui.GetCursorScreenPos();
+
+            if (CardRects.TryGetValue(key, out var r))
+            {
+                var min  = start + r.Offset;
+                var max  = min + r.Size;
+                var hot  = ImGui.IsWindowHovered(ImGuiHoveredFlags.ChildWindows | ImGuiHoveredFlags.AllowWhenBlockedByActiveItem)
+                        && ImGui.IsMouseHoveringRect(min, max, false);
+                var e    = hover = UiAnim.Ease(key, hot);
+                var fill = Vector4.Lerp(ProteusTheme.CardFill, ProteusTheme.CardFillHover, e);
+                var draw = ImGui.GetWindowDrawList();
+                draw.AddRectFilled(min, max, ImGui.GetColorU32(fill), S(4f));
+                // Light falling from above: a faint sheen across the top third.
+                ProteusDraw.GradientV(draw, min + new Vector2(S(2f), S(1f)), new Vector2(max.X - S(1f), min.Y + ((max.Y - min.Y) * 0.33f)),
+                    new Vector4(1f, 1f, 1f, 0.025f + (0.015f * e)), new Vector4(1f, 1f, 1f, 0f));
+            }
+
             ImGui.BeginGroup();
             ImGui.Indent(inset);
         }
@@ -334,9 +444,20 @@ public static class ProteusStyle
             if (max.X > edge)
                 max.X = edge;
 
-            var draw = ImGui.GetWindowDrawList();
-            draw.AddRect(min, max, ImGui.GetColorU32(ImGuiCol.Border), S(3f));
-            draw.AddRectFilled(min, new Vector2(min.X + S(2f), max.Y), ImGui.GetColorU32(bar), S(1f));
+            CardRects[key] = (min - start, max - min);
+
+            var e     = hover;
+            var draw  = ImGui.GetWindowDrawList();
+            var round = S(4f);
+            var line  = Vector4.Lerp(ImGui.ColorConvertU32ToFloat4(ImGui.GetColorU32(ImGuiCol.Border)), bar.WithAlpha(0.65f), e);
+            draw.AddRect(min, max, ImGui.GetColorU32(line), round);
+
+            // The bar fades from full strength at the top to a third at the bottom.
+            ProteusDraw.GradientV(draw, min + new Vector2(0f, S(1f)), new Vector2(min.X + S(2.5f), max.Y - S(1f)),
+                bar, bar.WithAlpha(0.35f));
+            if (e > 0.01f)
+                ProteusDraw.SoftGlowEllipse(draw, new Vector2(min.X + S(1f), (min.Y + max.Y) * 0.5f),
+                    new Vector2(S(6f), (max.Y - min.Y) * 0.5f), bar.WithAlpha(0.25f * e), layers: 5);
         }
     }
 }

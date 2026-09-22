@@ -974,12 +974,13 @@ public partial class CompositorService
                 }
                 else if (d.Normal != null)
                 {
+                    // Alpha, not blue: on skin.shpk blue is skin-colour influence, never where the overlay is.
                     var p = Path.Combine(e.SidecarRoot, d.Normal);
                     var n = LoadRemapped(p, tw, th, srcT);
                     if (n != null)
                     {
                         cov = new byte[n.Length];
-                        for (int i = 0; i < n.Length; i += 4) cov[i + 3] = n[i + 2];   // blue → opacity
+                        for (int i = 0; i < n.Length; i += 4) cov[i + 3] = n[i + 3];
                     }
                 }
                 else if (d.Mask != null)
@@ -1017,6 +1018,21 @@ public partial class CompositorService
                 return cov;
             }
 
+            // What one overlay claims in `ch` from the overlays beneath it: its coverage, except that a Compound normal-only
+            // overlay claims the normal channel only where it has relief (OverlayBlend.ReliefPresence). Replace mode overwrites
+            // by design, and an overlay with a diffuse is a surface whose silhouette hides the relief under it.
+            private byte[]? ClaimCoverageOf(OverlayEntry e, ResolvedOverlay o, int tw, int th, OverlayChannel ch)
+            {
+                var cov = CoverageOf(e, o, tw, th);
+                var d = o.Descriptor;
+                if (cov == null || ch != OverlayChannel.Normal || d.Diffuse != null || d.Normal == null
+                    || d.NormalMode != NormalMode.Compound)
+                    return cov;
+
+                var n = LoadRemapped(Path.Combine(e.SidecarRoot, d.Normal), tw, th, SrcTypeOf(d));
+                return n == null ? cov : ScaleAlphaByPlane(cov, ReliefPresence(n, tw, th));
+            }
+
             // Union alpha of every same-mod overlay composited above this one THAT SUPPLIES `ch`, built as a suffix union
             // (above i = above i+1 plus the overlay between). The buffer is shared when that overlay adds nothing.
             // The channel scoping is what lets one mod ship a whole-body diffuse group and a whole-body normal group:
@@ -1036,7 +1052,7 @@ public partial class CompositorService
                     if (string.Equals(e.ModDirectory, modDir, StringComparison.OrdinalIgnoreCase)
                      && Supplies(o.Descriptor, ch))
                     {
-                        var cov = CoverageOf(e, o, tw, th);
+                        var cov = ClaimCoverageOf(e, o, tw, th, ch);
                         if (cov != null)
                         {
                             // Clone before mutating: `above` is cached and shared by every deeper level.

@@ -757,9 +757,32 @@ public class DesignBindingService : IDisposable
         }
 
         var proteusDirs = discovery.DiscoverAll().Select(e => e.ModDirectory).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var mods = SelectCharacterMods(modsRoot, resources.Keys, permanent, heldTemporary, names, proteusDirs);
+        var mods = SelectCharacterMods(modsRoot, resources.Keys, permanent, StillHeld(collId), names, proteusDirs);
         log.Information("[Proteus] design-binding: captured {0} mod(s) on the character.", mods.Count);
         return mods;
+    }
+
+    /// <summary>
+    /// The holds in <see cref="heldTemporary"/> that Penumbra still reports as temporary. Proteus's lock is an
+    /// identification lock, so the player can drop one from Penumbra's temporary-settings banner; the record
+    /// left behind would otherwise make a capture write the design's settings for a mod the player has since
+    /// put back under their own. Unreadable settings keep the whole record, as before.
+    /// </summary>
+    private IReadOnlyDictionary<string, PenumbraModSetting> StillHeld(Guid collId)
+    {
+        if (heldTemporary.Count == 0) return heldTemporary;
+        var effective = penumbra.GetCollectionModSettings(collId, ignoreTemporary: false);
+        if (effective == null) return heldTemporary;
+
+        var live = new Dictionary<string, PenumbraModSetting>(heldTemporary.Count, StringComparer.OrdinalIgnoreCase);
+        foreach (var (dir, recorded) in heldTemporary)
+            if (effective.TryGetValue(dir, out var s) && s.Temporary)
+                live[dir] = recorded;
+
+        if (live.Count != heldTemporary.Count)
+            log.Information("[Proteus] design-binding: {0} of {1} held mod(s) are no longer held — captured from the collection instead.",
+                heldTemporary.Count - live.Count, heldTemporary.Count);
+        return live;
     }
 
     /// <summary>
@@ -829,11 +852,21 @@ public class DesignBindingService : IDisposable
     // A restore holds non-Proteus mods in the design's state with a Penumbra temporary setting locked with
     // Proteus's key, and releases them all when the look ends, so the collection is left as the player had it.
     // Proteus mods keep permanent writes, or Proteus's own option edits would appear to do nothing.
-    // The lock is positive: others can't replace it, and readers must pass TemporaryKey to see it. Penumbra
-    // forgets all of them on restart; the boot restore holds them again.
+    // The lock is NEGATIVE: an identification lock. It still marks the holds as Proteus's, so
+    // RemoveAllTemporaryModSettings releases only ours, and every reader sees them without passing it — but it
+    // does not bar the player, so Penumbra's temporary-settings banner can clear one mod's hold by hand. A
+    // positive lock refuses that, leaving the banner with no way out of it. The trade is that another plugin
+    // may replace a hold; the post-load sweep re-checks what is actually drawn. Penumbra forgets all of them
+    // on restart; the boot restore holds them again.
 
-    internal const int    TemporaryKey    = 0x50524F54;   // "PROT"
+    internal const int    TemporaryKey    = -0x50524F54;   // "PROT", negated
     internal const string TemporarySource = "Proteus";
+
+    // Builds before #1000 locked their holds with the positive form of the key. Penumbra keeps a temporary
+    // setting until it restarts, and a positive lock refuses both its own UI and the key above — so a hold
+    // placed by one of those builds would be stranded on the player's mod for the rest of the session. Every
+    // release drops these as well; the call is a no-op once a collection has none left.
+    internal const int    LegacyTemporaryKey = 0x50524F54;
 
     // What each held mod is held as, with its recorded (un-raised) priority; a save reads this back. Framework thread only.
     private readonly Dictionary<string, PenumbraModSetting> heldTemporary = new(StringComparer.OrdinalIgnoreCase);
@@ -914,10 +947,23 @@ public class DesignBindingService : IDisposable
         var had = heldTemporary.Count > 0;
         heldTemporary.Clear();
         // No suppression scope: NothingChanged raises no events, and a real release should recomposite.
-        var ec = penumbra.RemoveAllTemporaryModSettings(collId, TemporaryKey);
-        if (ec == PenumbraApiEc.Success)
+        var released = ReleaseEveryKey(collId);
+        if (released)
             log.Information("[Proteus] design-binding: released the mods Proteus was holding for the previous look.");
-        return had || ec == PenumbraApiEc.Success;
+        return had || released;
+    }
+
+    /// <summary>
+    /// Drop every hold Proteus placed in a collection, under the current key and the legacy positive one.
+    /// True when Penumbra removed something (NothingDone means there was nothing under that key).
+    /// </summary>
+    private bool ReleaseEveryKey(Guid collId)
+    {
+        var ec       = penumbra.RemoveAllTemporaryModSettings(collId, TemporaryKey);
+        var legacyEc = penumbra.RemoveAllTemporaryModSettings(collId, LegacyTemporaryKey);
+        if (legacyEc == PenumbraApiEc.Success)
+            log.Information("[Proteus] design-binding: released hold(s) a build before #1000 left locked.");
+        return ec == PenumbraApiEc.Success || legacyEc == PenumbraApiEc.Success;
     }
 
     /// <summary>
@@ -1104,7 +1150,7 @@ public class DesignBindingService : IDisposable
         using (compositor.SuppressModSettingEvents())
         {
             heldTemporary.Clear();
-            penumbra.RemoveAllTemporaryModSettings(collId.Value, TemporaryKey);
+            ReleaseEveryKey(collId.Value);
 
             var permanent = penumbra.GetCollectionModSettings(collId.Value, ignoreTemporary: true);
             var effective = penumbra.GetCollectionModSettings(collId.Value, ignoreTemporary: false);

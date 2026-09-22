@@ -24,11 +24,29 @@ public class ConfigurationMigrationTests
         var config = new Configuration();
         Assert.Equal(Configuration.CurrentVersion, config.Version);
 
-        // AutoHatCompat is the tell: the v6 step forces it false, and a new config must keep the property
-        // default instead.
-        bool before = config.AutoHatCompat;
+        // AutoHatCompat is the tell: the v8 step forces it true, and a new config must keep whatever the
+        // user set instead.
+        config.AutoHatCompat = false;
         config.Migrate();
-        Assert.Equal(before, config.AutoHatCompat);
+        Assert.False(config.AutoHatCompat);
+    }
+
+    /// <summary>
+    /// v7 -> v8 turns hat compatibility on for every existing config, once. A user who then switches it
+    /// off keeps it off: the second migration sees a config already stamped current.
+    /// </summary>
+    [Fact]
+    public void Hat_compat_is_turned_on_once_for_every_existing_config()
+    {
+        var config = new Configuration { Version = 7, AutoHatCompat = false };
+
+        config.Migrate();
+        Assert.True(config.AutoHatCompat);
+        Assert.Equal(Configuration.CurrentVersion, config.Version);
+
+        config.AutoHatCompat = false;   // as if the user then turned it off
+        config.Migrate();
+        Assert.False(config.AutoHatCompat);
     }
 
     /// <summary>
@@ -69,7 +87,7 @@ public class ConfigurationMigrationTests
             Version = 1,
             EnableCompression = true,
             DisableAutoRedraw = true,
-            AutoHatCompat = true,
+            AutoHatCompat = false,
             HideRedundantMeshes = false,
         };
 
@@ -77,8 +95,8 @@ public class ConfigurationMigrationTests
 
         Assert.False(config.EnableCompression);        // v1 -> v2
         Assert.False(config.AutoRedraw);               // v3 -> v4, carried across from the opt-out
-        Assert.False(config.AutoHatCompat);            // v6, which took back the v5 flip
         Assert.True(config.HideRedundantMeshes);       // v6 -> v7
+        Assert.True(config.AutoHatCompat);             // v8, after v6 forced it off
         Assert.Equal(Configuration.CurrentVersion, config.Version);
     }
 

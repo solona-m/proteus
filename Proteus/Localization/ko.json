@@ -1396,7 +1396,7 @@
     "description": ""
   },
   "HatCompat.AutoFit.Tip": {
-    "message": "대부분의 모드 헤어는 모자를 지원하지 않아서, 위에 모자를 쓰면 그대로 뚫고\n나옵니다. 켜면 Proteus가 착용하는 헤어스타일마다 확인하여, 모자가 가릴\n머리카락을 두상에 밀착시킵니다.\n\n이 작업은 헤어 모드 자체의 파일을 편집하므로 Proteus를 꺼도 계속 작동하고,\n모드를 내보내면 함께 따라갑니다. 원본은 보관되며 변경은 여기서 되돌릴 수\n있습니다.",
+    "message": "대부분의 모드 헤어는 모자를 지원하지 않아서, 위에 모자를 쓰면 그대로 뚫고\n나옵니다. 켜면 Proteus가 모자를 쓸 때까지 기다렸다가, 그 모자가 가릴\n머리카락을 두상에 밀착시킵니다.\n\n이 작업은 헤어 모드 자체의 파일을 편집하므로 Proteus를 꺼도 계속 작동하고,\n모드를 내보내면 함께 따라갑니다. 원본은 보관되며 변경은 여기서 되돌릴 수\n있습니다.",
     "description": ""
   },
   "HatCompat.HidePonytails.Label": {
@@ -1426,6 +1426,10 @@
   "HatCompat.InheritedTag.Tip": {
     "message": "머리카락을 숨기는 부분만 교체합니다. 헤어스타일 자체의 눌림은 그대로\n유지되므로, 최악의 경우 모자가 머리카락을 관통할 뿐이며 모자가 덮지도\n않는 머리카락이 사라지지는 않습니다.\n\n되돌리기는 헤어스타일에 원래 들어 있던 것을 그대로 복원합니다.",
     "description": "Tooltip for the text above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
+  "HatCompat.WaitingForHat": {
+    "message": "모자를 쓰면 Proteus가 이 헤어스타일을 맞춥니다. 지금 바로 맞출 수도 있습니다:",
+    "description": ""
   },
   "HatCompat.Apply.Btn": {
     "message": "맞추기",
@@ -3561,6 +3565,22 @@
   },
   "Parts.Retarget.ToBody": {
     "message": "Refit onto body mod",
+    "description": ""
+  },
+  "Settings.ReduceMotion": {
+    "message": "움직임 줄이기",
+    "description": ""
+  },
+  "Settings.ReduceMotion.Tip": {
+    "message": "창을 정지시킵니다. 마우스 오버 효과가 즉시 적용되고, 배경 광채와\n활성 모드의 맥동이 멈춥니다.",
+    "description": ""
+  },
+  "Settings.AmbientBackground": {
+    "message": "배경 광채",
+    "description": ""
+  },
+  "Settings.AmbientBackground.Tip": {
+    "message": "이 창의 내용 뒤로 은은하게 떠다니는 불씨 같은 광채.",
     "description": ""
   }
 }

@@ -74,6 +74,13 @@ public sealed class HatCompatWatcher : IDisposable
     /// </summary>
     private volatile IReadOnlyList<string>? livePartsCache;
 
+    /// <summary>
+    /// The last live walk drew a hat. The automatic path fits only while one is worn: a player who never wears a hat
+    /// gains nothing from their hair mod being rewritten.
+    /// </summary>
+    private volatile bool hatWorn;
+    public bool HatWorn => hatWorn;
+
     private volatile bool disposed;
 
     /// <summary>Everything the panel draws, replaced wholesale so a reader never sees half an update.</summary>
@@ -116,6 +123,10 @@ public sealed class HatCompatWatcher : IDisposable
         compositor.HairChanged += RequestWalk;
         penumbra.LocalPlayerRedrawn += RequestWalk;
 
+        // WHETHER A HAT IS ON: fitting waits for one, so a hat going on (or being shown again) must be seen.
+        glamourer.LocalPlayerEquipmentChanged += OnEquipmentChanged;
+        glamourer.LocalPlayerStateChangedAny += OnStateChangedAny;
+
         // WHICH FILE serves the hairstyle already on: the path list is unchanged, so only re-resolve.
         penumbra.ModSettingChanged += OnModSettingChanged;
         penumbra.PlayerCollectionChanged += OnCollectionChanged;
@@ -134,6 +145,8 @@ public sealed class HatCompatWatcher : IDisposable
         glamourer.LocalPlayerStateChanged -= RequestWalk;
         compositor.HairChanged -= RequestWalk;
         penumbra.LocalPlayerRedrawn -= RequestWalk;
+        glamourer.LocalPlayerEquipmentChanged -= OnEquipmentChanged;
+        glamourer.LocalPlayerStateChangedAny -= OnStateChangedAny;
         penumbra.ModSettingChanged -= OnModSettingChanged;
         penumbra.PlayerCollectionChanged -= OnCollectionChanged;
     }
@@ -177,7 +190,8 @@ public sealed class HatCompatWatcher : IDisposable
         Interlocked.CompareExchange(ref walkDueAt, 0, due);
 
         IReadOnlyList<string>? parts;
-        try { parts = compositor.HatCompatLiveParts(); }
+        bool hat;
+        try { parts = compositor.HatCompatLiveParts(out hat); }
         catch (Exception ex) { log.Error(ex, "hat compat: walking the equipped hairstyle failed"); return; }
 
         bool hasHair = parts?.Any(p => p.Contains("/obj/hair/", StringComparison.OrdinalIgnoreCase)) == true;
@@ -190,6 +204,7 @@ public sealed class HatCompatWatcher : IDisposable
 
         // The worker must not read the draw object, so hand it the walk.
         livePartsCache = parts;
+        hatWorn = hat;
         Refresh(mayApply: true);
     }
 
@@ -227,6 +242,20 @@ public sealed class HatCompatWatcher : IDisposable
         });
     }
 
+    /// <summary>
+    /// How long after an equip or headgear toggle to walk: Glamourer signals before the new model has loaded, and a
+    /// walk that finds no hat yet would leave the fit waiting for the next signal.
+    /// </summary>
+    private const int HeadGearSettleMs = 750;
+
+    private void OnEquipmentChanged() => RequestWalkIn(HeadGearSettleMs);
+
+    /// <summary>A meta toggle (headgear shown or hidden, visor) can put a hat on screen without an equip.</summary>
+    private void OnStateChangedAny(Glamourer.Api.Enums.StateChangeType change)
+    {
+        if (change is Glamourer.Api.Enums.StateChangeType.Other) RequestWalkIn(HeadGearSettleMs);
+    }
+
     // Gated on the feature: each reads a model and runs the solve.
     private void OnModSettingChanged(Penumbra.Api.Enums.ModSettingChange change, Guid collection,
                                      string modDirectory, bool inherited)
@@ -244,6 +273,8 @@ public sealed class HatCompatWatcher : IDisposable
         // Nothing that matters has changed: cheap on purpose, since Penumbra settings changes arrive in bursts.
         var live = livePartsCache;
         var key = live != null ? compositor.HatCompatKeyFor(live) : compositor.HatCompatKey();
+        // Putting a hat on over the same hairstyle is a change: it is what lets the automatic path act.
+        if (key != null && hatWorn) key += "|hat";
         if (key != null && key == lastKey && current.Target != null) return;
         lastKey = key;
 
@@ -259,7 +290,7 @@ public sealed class HatCompatWatcher : IDisposable
         if (HatCompatService.IsPatched(target.ModRoot, target.Rel, out var stale))
         {
             // A stale patch (older solve version) is redone from the author's backup when fitting is automatic.
-            if (!(stale && mayApply && config.PluginEnabled && config.AutoHatCompat))
+            if (!(stale && mayApply && hatWorn && config.PluginEnabled && config.AutoHatCompat))
             {
                 current = new View(target, null, Patched: true, Busy: true);
                 return;
@@ -278,6 +309,7 @@ public sealed class HatCompatWatcher : IDisposable
             target = live != null ? compositor.HatCompatTargetFor(live) : compositor.HatCompatTarget();
             if (target == null) { current = new View(); return; }
             lastKey = live != null ? compositor.HatCompatKeyFor(live) : compositor.HatCompatKey();
+            if (lastKey != null) lastKey += "|hat";   // only reached with a hat on
         }
 
         // The race code from the hair's game path picks which baked hat profile the cut measures against.
@@ -305,8 +337,8 @@ public sealed class HatCompatWatcher : IDisposable
         if (undone == Identity(target)) return;
 
         // Checked again here: a button press reaches this without the signal gates, and the setting may have
-        // changed during a delay.
-        if (mayApply && config.PluginEnabled && config.AutoHatCompat && !proposal.AlreadyCompatible)
+        // changed during a delay. No hat, no write: putting one on changes the key above and brings us back.
+        if (mayApply && hatWorn && config.PluginEnabled && config.AutoHatCompat && !proposal.AlreadyCompatible)
             Write(target, proposal, automatic: true);
     }
 

@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface.Textures.TextureWraps;
 using Dalamud.Interface;
 using Dalamud.Interface.Components;
 using Dalamud.Interface.Utility.Raii;
@@ -19,8 +21,9 @@ internal sealed class ModsTab
     private readonly PresetService presets;
     private readonly DesignBindingService designBindings;
     private readonly Configuration config;
+    private readonly ModPreviewService previews;
 
-    public ModsTab(PenumbraBridge penumbra, CompositorService compositor, StatusWindow window, PresetService presets, DesignBindingService designBindings, Configuration config)
+    public ModsTab(PenumbraBridge penumbra, CompositorService compositor, StatusWindow window, PresetService presets, DesignBindingService designBindings, Configuration config, ModPreviewService previews)
     {
         this.penumbra = penumbra;
         this.compositor = compositor;
@@ -28,7 +31,11 @@ internal sealed class ModsTab
         this.presets = presets;
         this.designBindings = designBindings;
         this.config = config;
+        this.previews = previews;
     }
+
+    // The list the preview cache was last validated against: a new list (a composite, an import) may carry new pictures.
+    private IReadOnlyList<OverlayEntry>? _lastMods;
 
     // Key: modDir → priority value being dragged; committed to Penumbra on edit-end.
     private readonly Dictionary<string, int> _priorityEdits = new();
@@ -52,6 +59,11 @@ internal sealed class ModsTab
         // ── Overlay mod list ─────────────────────────────────────────────────
         // The list comes from the last composite, so while the plugin is off say so rather than claim there are no mods.
         var mods = compositor.LastDiscovered;
+        if (!ReferenceEquals(mods, _lastMods))
+        {
+            _lastMods = mods;
+            previews.Invalidate();
+        }
         ImGui.Spacing();
         if (!config.PluginEnabled)
         {
@@ -152,8 +164,9 @@ internal sealed class ModsTab
                         penumbra.OpenToMod(entry.ModDirectory);
                     }
                 }
-                // Repeated on the name, which is what people hover.
-                ProteusStyle.ReasonTooltip(inertTip);
+                // Repeated on the name, which is what people hover, under the mod's own picture when it ships one.
+                if (ImGui.IsItemHovered())
+                    DrawNameTooltip(entry, inertTip);
 
                 // Priority (drag to edit, Ctrl+click to type) — writes to Penumbra on edit-end.
                 ImGui.TableNextColumn();
@@ -204,6 +217,40 @@ internal sealed class ModsTab
             ImGui.EndTable();
             // EndTable submits the table's rect as an item: the width the rows took.
             _modsTableWidth = ImGui.GetItemRectSize().X;
+        }
+    }
+
+    /// <summary>
+    /// The name's hover tooltip: the mod's picture, fitted into a fixed box, then the inert warning if there is one.
+    /// No picture (or one still loading) falls back to the plain warning, or no tooltip at all.
+    /// </summary>
+    private void DrawNameTooltip(OverlayEntry entry, string? inertTip)
+    {
+        IDalamudTextureWrap? wrap = null;
+        if (previews.ImagePathFor(entry.ModRoot) is { } path)
+        {
+            try { wrap = Plugin.TextureProvider.GetFromFileAbsolute(path).GetWrapOrDefault(); }
+            catch { /* undecodable: no picture */ }
+        }
+
+        if (wrap == null)
+        {
+            if (inertTip != null) ImGui.SetTooltip(inertTip);
+            return;
+        }
+
+        // Fit (not crop) into the box, never enlarged past the image's own size.
+        var box   = ProteusStyle.S(320f, 240f);
+        var scale = MathF.Min(1f, MathF.Min(box.X / wrap.Width, box.Y / wrap.Height));
+        var size  = new Vector2(wrap.Width, wrap.Height) * scale;
+
+        using var tip = ImRaii.Tooltip();
+        ImGui.Image(wrap.Handle, size);
+        if (inertTip != null)
+        {
+            ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + MathF.Max(size.X, ProteusStyle.S(240f)));
+            ImGui.TextColored(ProteusStyle.Warn, inertTip);
+            ImGui.PopTextWrapPos();
         }
     }
 

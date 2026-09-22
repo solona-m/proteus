@@ -90,8 +90,8 @@ public sealed class HatCompatStrings
 
     public readonly string AutoFitTip = Loc.Localize("HatCompat.AutoFit.Tip",
         "Most modded hair has no hat support, so a hat worn over it goes straight\n" +
-        "through. When on, Proteus checks each hairstyle as you put it on and presses\n" +
-        "the hair that a hat would cover flat against your head.\n\n" +
+        "through. When on, Proteus waits until you wear a hat, then presses the hair\n" +
+        "that the hat would cover flat against your head.\n\n" +
         "This edits the hair mod's own files, so it keeps working with Proteus turned\n" +
         "off and travels with the mod if you export it. Originals are kept and the\n" +
         "change can be undone here.");
@@ -144,6 +144,9 @@ public sealed class HatCompatStrings
 
     public readonly string NothingToHide = Loc.Localize("HatCompat.NothingToHide",
         "Every part of this hairstyle can be pressed under a hat, so none of it needs hiding.");
+
+    public readonly string WaitingForHat = Loc.Localize("HatCompat.WaitingForHat",
+        "Proteus will fit this hairstyle when you put on a hat. Or fit it now:");
 
     public readonly string Apply = Loc.Localize("HatCompat.Apply.Btn", "Make it fit") + "###hatCompatApply";
 
@@ -292,7 +295,8 @@ public sealed class BindingsStrings
         "when it was saved (enable / priority / options), switches off mods on the character\n" +
         "that weren't, and raises the design's mods above anything they conflict with.\n\n" +
         "Mods that aren't Proteus mods are only held that way with Penumbra temporary settings:\n" +
-        "your collection isn't changed, and reverting or applying an unbound design puts them back.\n\n" +
+        "your collection isn't changed, and reverting or applying an unbound design puts them back.\n" +
+        "Penumbra's banner on a held mod can drop that one hold, if you want just it back.\n\n" +
         "When off, only Proteus mods are restored. Designs are captured either way, so\n" +
         "turning this on works for designs saved while it was off.");
 
@@ -492,6 +496,17 @@ public sealed class SettingsStrings
     public readonly string SecHosting     = Loc.Localize("Settings.Section.Hosting", "Hosting");
 
     public readonly string SecLightResponse = Loc.Localize("Settings.Section.LightResponse", "Light-sensitive glow");
+
+    public readonly string ReduceMotion = Loc.Localize("Settings.ReduceMotion", "Reduce motion") + "###reduceMotion";
+
+    public readonly string ReduceMotionTip = Loc.Localize("Settings.ReduceMotion.Tip",
+        "Hold the window still: hover effects land at once, and the background glow\n"
+      + "and the pulse on active mods stop moving.");
+
+    public readonly string AmbientBackground = Loc.Localize("Settings.AmbientBackground", "Background glow") + "###ambientBackground";
+
+    public readonly string AmbientBackgroundTip = Loc.Localize("Settings.AmbientBackground.Tip",
+        "The soft ember glow drifting behind this window's contents.");
 
     public readonly string LightResponseEnabled = Loc.Localize("Settings.LightResponse.Enabled",
         "React to the scene's light");

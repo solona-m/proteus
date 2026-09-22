@@ -136,6 +136,25 @@ internal sealed class SettingsTab
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip(s.InPlaceReloadTip);
 
+        // Appearance only: nothing here reaches the composite, so no recomposite follows.
+        var ambient = config.AmbientBackground;
+        if (ImGui.Checkbox(s.AmbientBackground, ref ambient))
+        {
+            config.AmbientBackground = ambient;
+            config.Save();
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(s.AmbientBackgroundTip);
+
+        var reduceMotion = config.ReduceMotion;
+        if (ImGui.Checkbox(s.ReduceMotion, ref reduceMotion))
+        {
+            config.ReduceMotion = reduceMotion;
+            config.Save();
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(s.ReduceMotionTip);
+
         // A button into the scroll-map library in Proteus's own mod folder; null means Penumbra's mod directory is unavailable.
         var lib = discovery.EffectsLibraryPath();
         if (lib != null)

@@ -1396,7 +1396,7 @@
     "description": ""
   },
   "HatCompat.AutoFit.Tip": {
-    "message": "Die meisten Haar-Mods unterstützen keine Hüte, sodass ein Hut einfach\nhindurchgeht. Ist dies aktiv, prüft Proteus jede Frisur beim Aufsetzen und\ndrückt das Haar, das ein Hut verdecken würde, flach an den Kopf.\n\nDies bearbeitet die Dateien des Haar-Mods selbst, funktioniert also auch bei\nabgeschaltetem Proteus und bleibt beim Exportieren erhalten. Die Originale\nwerden aufbewahrt und die Änderung lässt sich hier rückgängig machen.",
+    "message": "Die meisten Haar-Mods unterstützen keine Hüte, sodass ein Hut einfach\nhindurchgeht. Ist dies aktiv, wartet Proteus, bis du einen Hut trägst, und\ndrückt dann das Haar, das der Hut verdecken würde, flach an den Kopf.\n\nDies bearbeitet die Dateien des Haar-Mods selbst, funktioniert also auch bei\nabgeschaltetem Proteus und bleibt beim Exportieren erhalten. Die Originale\nwerden aufbewahrt und die Änderung lässt sich hier rückgängig machen.",
     "description": ""
   },
   "HatCompat.HidePonytails.Label": {
@@ -1426,6 +1426,10 @@
   "HatCompat.InheritedTag.Tip": {
     "message": "Nur der Teil, der Haar verbirgt, wird ersetzt. Die Frisur behält ihr eigenes\nFlachdrücken, im schlimmsten Fall ragt also ein Hut durch das Haar, statt\ndass Haar verschwindet, das kein Hut bedeckt hätte.\n\n„Rückgängig“ stellt genau das wieder her, was die Frisur mitbrachte.",
     "description": "Tooltip for the text above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
+  "HatCompat.WaitingForHat": {
+    "message": "Proteus passt diese Frisur an, sobald du einen Hut aufsetzt. Oder jetzt anpassen:",
+    "description": ""
   },
   "HatCompat.Apply.Btn": {
     "message": "Anpassen",
@@ -3561,6 +3565,22 @@
   },
   "Parts.Retarget.ToBody": {
     "message": "Refit onto body mod",
+    "description": ""
+  },
+  "Settings.ReduceMotion": {
+    "message": "Bewegung reduzieren",
+    "description": ""
+  },
+  "Settings.ReduceMotion.Tip": {
+    "message": "Hält das Fenster ruhig: Hover-Effekte greifen sofort, und das Hintergrundleuchten\nsowie das Pulsieren aktiver Mods bewegen sich nicht mehr.",
+    "description": ""
+  },
+  "Settings.AmbientBackground": {
+    "message": "Hintergrundleuchten",
+    "description": ""
+  },
+  "Settings.AmbientBackground.Tip": {
+    "message": "Das sanfte Glutleuchten, das hinter dem Inhalt dieses Fensters treibt.",
     "description": ""
   }
 }

@@ -250,8 +250,8 @@ public class PenumbraBridge : IDisposable
 
     /// <summary>
     /// Drop whatever temporary setting holds a mod in a collection, so its permanent settings show again.
-    /// Key 0: Penumbra only refuses a removal when the lock is POSITIVE and not ours, and Glamourer's locks
-    /// are negative.
+    /// Key 0: Penumbra only refuses a removal when the lock is POSITIVE and not ours, and both Glamourer's
+    /// locks and Proteus's own are negative.
     /// </summary>
     public PenumbraApiEc ClearTemporaryModSettings(Guid collectionId, string modDirectory)
     {
@@ -265,8 +265,9 @@ public class PenumbraBridge : IDisposable
     /// the whole of it (a group missing from <paramref name="options"/> falls back to its default). The collection's
     /// own settings are untouched and show again when it is removed, and Penumbra forgets it on restart.
     /// <para/>
-    /// A positive <paramref name="key"/> locks it: no one else can overwrite or remove it (Glamourer's associated
-    /// mods included), and only a reader passing that key sees it.
+    /// A positive <paramref name="key"/> locks it: no one else — the player in Penumbra's UI included — can
+    /// overwrite or remove it, and only a reader passing that key sees it. A negative one only identifies the
+    /// holder, so <see cref="RemoveAllTemporaryModSettings"/> can single it out while anyone may still clear it.
     /// </summary>
     public PenumbraApiEc SetTemporaryModSettings(Guid collectionId, string modDirectory, bool enabled, int priority,
         IReadOnlyDictionary<string, List<string>> options, string source, int key)

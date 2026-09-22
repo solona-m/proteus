@@ -1396,7 +1396,7 @@
     "description": ""
   },
   "HatCompat.AutoFit.Tip": {
-    "message": "Modの髪の多くは帽子に対応しておらず、上から帽子をかぶると突き抜けてしまいま\nす。オンにすると、Proteusは着用した髪型をそのつど確認し、帽子で隠れる部分の\n髪を頭に沿って押し付けます。\n\nこれは髪Mod自身のファイルを編集するため、Proteusを無効にしても機能し、Modを\nエクスポートすれば一緒に持ち運べます。元のファイルは保管され、変更はここから\n元に戻せます。",
+    "message": "Modの髪の多くは帽子に対応しておらず、上から帽子をかぶると突き抜けてしまいま\nす。オンにすると、Proteusは帽子をかぶるまで待ち、その帽子で隠れる部分の\n髪を頭に沿って押し付けます。\n\nこれは髪Mod自身のファイルを編集するため、Proteusを無効にしても機能し、Modを\nエクスポートすれば一緒に持ち運べます。元のファイルは保管され、変更はここから\n元に戻せます。",
     "description": ""
   },
   "HatCompat.HidePonytails.Label": {
@@ -1426,6 +1426,10 @@
   "HatCompat.InheritedTag.Tip": {
     "message": "髪を隠す部分だけを置き換えます。髪型自身の押しつぶしはそのまま残るため、\n最悪の場合でも帽子が髪を貫通するだけで、帽子が覆わない髪が消えることは\nありません。\n\n「元に戻す」で元の状態にそのまま戻ります。",
     "description": "Tooltip for the text above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
+  "HatCompat.WaitingForHat": {
+    "message": "帽子をかぶると、Proteusがこの髪型を対応させます。今すぐ対応させることもできます：",
+    "description": ""
   },
   "HatCompat.Apply.Btn": {
     "message": "対応させる",
@@ -3561,6 +3565,22 @@
   },
   "Parts.Retarget.ToBody": {
     "message": "Refit onto body mod",
+    "description": ""
+  },
+  "Settings.ReduceMotion": {
+    "message": "動きを減らす",
+    "description": ""
+  },
+  "Settings.ReduceMotion.Tip": {
+    "message": "ウィンドウの動きを止めます。ホバー効果は即座に切り替わり、背景の光と\n有効なMODの脈動も動かなくなります。",
+    "description": ""
+  },
+  "Settings.AmbientBackground": {
+    "message": "背景の光",
+    "description": ""
+  },
+  "Settings.AmbientBackground.Tip": {
+    "message": "このウィンドウの内容の背後をゆっくり漂う、柔らかな残り火のような光。",
     "description": ""
   }
 }

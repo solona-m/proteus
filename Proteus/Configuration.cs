@@ -55,7 +55,7 @@ public class Configuration : IPluginConfiguration
     /// Current config schema version. Bump whenever a STORED value has to be reinterpreted on load, and add the step
     /// to <see cref="Migrate"/>. A new config is stamped current, so it never runs old migrations.
     /// </summary>
-    public const int CurrentVersion = 7;
+    public const int CurrentVersion = 8;
 
     public int Version { get; set; } = CurrentVersion;
 
@@ -188,15 +188,25 @@ public class Configuration : IPluginConfiguration
 
     /// <summary>
     /// Patch the worn hairstyle for hat compatibility (<c>atr_kam</c> above the hat line, a <c>shp_hib</c> press below).
-    /// OFF BY DEFAULT: it writes into another author's mod folder, which needs the user's consent.
+    /// On by default (v8). It writes into another author's mod folder, so it acts only while a hat is worn, and the
+    /// chat notice fires per hairstyle fitted.
     /// </summary>
-    public bool AutoHatCompat { get; set; }
+    public bool AutoHatCompat { get; set; } = true;
 
     /// <summary>
     /// Render asymmetric FACE art by rewriting the face model into the doubled sheet layout. On by default: a shell
     /// cannot carry a face (it has no shape keys, so it cannot blink). Off falls back to the fold.
     /// </summary>
     public bool FaceUvInPlace { get; set; } = true;
+
+    /// <summary>
+    /// Stop the window's decorative motion: hovers land at once, the ambient glow and pulses hold still. For people
+    /// who find motion distracting or uncomfortable.
+    /// </summary>
+    public bool ReduceMotion { get; set; } = false;
+
+    /// <summary>Paint the slow ember glow behind the status window's contents.</summary>
+    public bool AmbientBackground { get; set; } = true;
 
     // No "hat-compat notice shown" flag: the notice fires per hairstyle fitted, tracked by the patch record on disk.
 
@@ -390,6 +400,9 @@ public class Configuration : IPluginConfiguration
 
         // v6 -> v7: redundant-mesh hiding on for everyone, ignoring the old connector-mesh enum.
         if (Version < 7) HideRedundantMeshes = true;
+
+        // v7 -> v8: hat compatibility on for everyone, once; a later opt-out sticks.
+        if (Version < 8) AutoHatCompat = true;
 
         Version = CurrentVersion;
     }
