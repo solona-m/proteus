@@ -167,14 +167,14 @@ internal sealed class MeshVolumeSolve : IMeshEdit
         }
         nodeTris = nt.ToArray();
 
-        // Adjacency, deduped: a shared edge must not pull twice as hard as a boundary one.
+        // Adjacency, deduped: a shared edge must not pull twice as hard as a boundary one. Deduped against the
+        // node's own few neighbours, not a HashSet<long> of packed pairs: a long hashes as high ^ low, so neighbouring
+        // indices pile into a handful of buckets, and a big garment took seconds to open on the draw thread.
         adj = new List<int>[nodeCount];
         for (int n = 0; n < nodeCount; n++) adj[n] = [];
-        var seen = new HashSet<long>();
         void Link(int a, int b)
         {
-            long key = a < b ? ((long)a << 32) | (uint)b : ((long)b << 32) | (uint)a;
-            if (!seen.Add(key)) return;
+            if (adj[a].Contains(b)) return;
             adj[a].Add(b);
             adj[b].Add(a);
         }
