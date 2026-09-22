@@ -42,6 +42,25 @@ internal static class DrawnModelPaths
         return met;
     }
 
+    /// <summary>
+    /// Whether a HAT is drawn: a "_met" model that is neither bare (e0000) nor facewear. False when the Glasses sheet
+    /// cannot be read (<paramref name="facewearSets"/> null), since glasses alone would then look like a hat. A hat
+    /// hidden with /displayhead loads no model, so it reads as none.
+    /// </summary>
+    internal static bool HeadGearWornFromModels(IEnumerable<string>? modelPaths, HashSet<int>? facewearSets)
+    {
+        if (modelPaths == null || facewearSets == null) return false;
+        foreach (var p in modelPaths)
+        {
+            var match = MetModelRe.Match(p);
+            if (!match.Success) continue;
+            if (string.Equals(match.Groups[1].Value, "e0000", StringComparison.OrdinalIgnoreCase)) continue;
+            if (int.TryParse(match.Groups[1].Value.AsSpan(1), out var set) && !facewearSets.Contains(set))
+                return true;
+        }
+        return false;
+    }
+
     // The character's own HUMAN part models: face, hair, tail, Viera ears. A face draws SEVERAL models (_fac
     // beside _iri, _etc and a race's extras), so this is a list, not a by-slot map.
     private static readonly System.Text.RegularExpressions.Regex HumanPartModelRe = new(

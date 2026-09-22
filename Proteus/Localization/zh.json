@@ -1396,7 +1396,7 @@
     "description": ""
   },
   "HatCompat.AutoFit.Tip": {
-    "message": "大多数模组发型都不支持帽子，戴上帽子会直接穿模。开启后，Proteus 会在你每次\n换发型时检查它，并把帽子会遮住的头发压贴到头部。\n\n这会修改发型模组自身的文件，因此即使关闭 Proteus 也依然有效，导出模组时也会\n一并带走。原始文件会被保留，改动可以在这里撤销。",
+    "message": "大多数模组发型都不支持帽子，戴上帽子会直接穿模。开启后，Proteus 会等你戴上\n帽子，再把帽子会遮住的头发压贴到头部。\n\n这会修改发型模组自身的文件，因此即使关闭 Proteus 也依然有效，导出模组时也会\n一并带走。原始文件会被保留，改动可以在这里撤销。",
     "description": ""
   },
   "HatCompat.HidePonytails.Label": {
@@ -1426,6 +1426,10 @@
   "HatCompat.InheritedTag.Tip": {
     "message": "只替换隐藏头发的那部分。发型自身的压平效果会保留，因此最坏的结果只是\n帽子穿过头发，而不是本不该被遮住的头发消失。\n\n“撤销”会完整还原发型原本的内容。",
     "description": "Tooltip for the text above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
+  "HatCompat.WaitingForHat": {
+    "message": "你戴上帽子时，Proteus 会适配这个发型。也可以现在适配：",
+    "description": ""
   },
   "HatCompat.Apply.Btn": {
     "message": "让它适配",

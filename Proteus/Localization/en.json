@@ -1396,7 +1396,7 @@
     "description": "Checkbox, first control in Settings > Hats."
   },
   "HatCompat.AutoFit.Tip": {
-    "message": "Most modded hair has no hat support, so a hat worn over it goes straight\nthrough. When on, Proteus checks each hairstyle as you put it on and presses\nthe hair that a hat would cover flat against your head.\n\nThis edits the hair mod's own files, so it keeps working with Proteus turned\noff and travels with the mod if you export it. Originals are kept and the\nchange can be undone here.",
+    "message": "Most modded hair has no hat support, so a hat worn over it goes straight\nthrough. When on, Proteus waits until you wear a hat, then presses the hair\nthat the hat would cover flat against your head.\n\nThis edits the hair mod's own files, so it keeps working with Proteus turned\noff and travels with the mod if you export it. Originals are kept and the\nchange can be undone here.",
     "description": "Tooltip for the checkbox above. Keep the line breaks; the tooltip is not wrapped."
   },
   "HatCompat.HidePonytails.Label": {
@@ -1426,6 +1426,10 @@
   "HatCompat.InheritedTag.Tip": {
     "message": "Only the part that hides hair is replaced. The hairstyle keeps its own\nflattening, so the worst this can do is leave a hat clipping through hair,\ninstead of hair disappearing that no hat would have covered.\n\nUndo puts back exactly what the hairstyle came with.",
     "description": "Tooltip for the text above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
+  "HatCompat.WaitingForHat": {
+    "message": "Proteus will fit this hairstyle when you put on a hat. Or fit it now:",
+    "description": "Shown above the \"Make it fit\" button while automatic fitting is on but no hat is worn."
   },
   "HatCompat.Apply.Btn": {
     "message": "Make it fit",

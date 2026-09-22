@@ -1396,7 +1396,7 @@
     "description": ""
   },
   "HatCompat.AutoFit.Tip": {
-    "message": "La plupart des coiffures moddées ne gèrent pas les chapeaux : un chapeau porté\npar-dessus les traverse. Quand cette option est active, Proteus examine chaque\ncoiffure que vous mettez et plaque contre la tête les cheveux qu'un chapeau\nrecouvrirait.\n\nCela modifie les fichiers du mod de coiffure lui-même : cela continue donc de\nfonctionner avec Proteus désactivé et suit le mod si vous l'exportez. Les\noriginaux sont conservés et la modification peut être annulée ici.",
+    "message": "La plupart des coiffures moddées ne gèrent pas les chapeaux : un chapeau porté\npar-dessus les traverse. Quand cette option est active, Proteus attend que vous\nportiez un chapeau, puis plaque contre la tête les cheveux que ce chapeau\nrecouvrirait.\n\nCela modifie les fichiers du mod de coiffure lui-même : cela continue donc de\nfonctionner avec Proteus désactivé et suit le mod si vous l'exportez. Les\noriginaux sont conservés et la modification peut être annulée ici.",
     "description": ""
   },
   "HatCompat.HidePonytails.Label": {
@@ -1426,6 +1426,10 @@
   "HatCompat.InheritedTag.Tip": {
     "message": "Seule la partie qui masque les cheveux est remplacée. La coiffure conserve\nson propre aplatissement ; au pire, un chapeau traversera les cheveux, au\nlieu que des cheveux disparaissent sans qu'un chapeau les couvre.\n\nAnnuler restaure exactement ce que la coiffure contenait.",
     "description": "Tooltip for the text above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
+  "HatCompat.WaitingForHat": {
+    "message": "Proteus adaptera cette coiffure quand vous mettrez un chapeau. Ou adaptez-la maintenant :",
+    "description": ""
   },
   "HatCompat.Apply.Btn": {
     "message": "Adapter",

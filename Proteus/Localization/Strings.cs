@@ -90,8 +90,8 @@ public sealed class HatCompatStrings
 
     public readonly string AutoFitTip = Loc.Localize("HatCompat.AutoFit.Tip",
         "Most modded hair has no hat support, so a hat worn over it goes straight\n" +
-        "through. When on, Proteus checks each hairstyle as you put it on and presses\n" +
-        "the hair that a hat would cover flat against your head.\n\n" +
+        "through. When on, Proteus waits until you wear a hat, then presses the hair\n" +
+        "that the hat would cover flat against your head.\n\n" +
         "This edits the hair mod's own files, so it keeps working with Proteus turned\n" +
         "off and travels with the mod if you export it. Originals are kept and the\n" +
         "change can be undone here.");
@@ -144,6 +144,9 @@ public sealed class HatCompatStrings
 
     public readonly string NothingToHide = Loc.Localize("HatCompat.NothingToHide",
         "Every part of this hairstyle can be pressed under a hat, so none of it needs hiding.");
+
+    public readonly string WaitingForHat = Loc.Localize("HatCompat.WaitingForHat",
+        "Proteus will fit this hairstyle when you put on a hat. Or fit it now:");
 
     public readonly string Apply = Loc.Localize("HatCompat.Apply.Btn", "Make it fit") + "###hatCompatApply";
 

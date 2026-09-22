@@ -128,6 +128,8 @@ internal sealed class HatCompatPanel(HatCompatWatcher watcher, Configuration con
         // strands a hat cannot cover is a call the geometry cannot make reliably, and getting it wrong makes
         // hair disappear. The cut at the hat line is not affected — it is part of the fit, not an option.
         ImGui.Spacing();
+        // Auto-fit is on but waiting for a hat, so say why nothing has happened yet.
+        if (config.AutoHatCompat && !watcher.HatWorn) ImGui.TextWrapped(s.WaitingForHat);
         if (ImGui.Button(s.Apply)) watcher.Apply();
         if (ImGui.IsItemHovered()) ImGui.SetTooltip(s.ApplyTip);
         DrawMessage(view);

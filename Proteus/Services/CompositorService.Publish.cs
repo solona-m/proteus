@@ -178,9 +178,11 @@ public partial class CompositorService
     /// change in place without a redraw or composite. Returns only the list: resolving belongs on a worker thread. Does
     /// not publish into the shell builder's caches.
     /// </summary>
-    internal IReadOnlyList<string>? HatCompatLiveParts()
+    /// <param name="hatWorn">The same walk drew a hat (not facewear); see <see cref="DrawnModelPaths.HeadGearWornFromModels"/>.</param>
+    internal IReadOnlyList<string>? HatCompatLiveParts(out bool hatWorn)
     {
         var paths = penumbra.GetActivePlayerModelPaths();
+        hatWorn = HeadGearWornFromModels(paths, InvisibleGlasses.FacewearModelSets(Plugin.DataManager));
         return paths is { Count: > 0 } ? HumanPartModelsFromModels(paths) : null;
     }
 
