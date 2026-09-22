@@ -172,6 +172,9 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     /// <summary>The race the open garment is made for (<c>"0101"</c>), which every option list is filtered to.</summary>
     private string? race;
 
+    /// <summary>The open garment is a man's — and so, by the filtering, is every body it is refitted between.</summary>
+    private bool MaleGarment => race != null && BodySizeCatalog.IsMaleRace(race);
+
     public void Draw(in RetargetContext ctx)
     {
         var ps = Strings.Parts;
@@ -898,6 +901,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
             return;
         string sourcePath = sources.PathOf(source);
         string name = SlotName(slot);
+        bool male = MaleGarment;
 
         foreach (var target in Targets(slot))
         {
@@ -909,7 +913,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
             {
                 try
                 {
-                    return Build(sourcePath, targetPath, name, out _, out _, out _, out _) ?? "";
+                    return Build(sourcePath, targetPath, name, male, out _, out _, out _, out _) ?? "";
                 }
                 catch (Exception ex)
                 {
@@ -937,6 +941,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         var heldLabels = new HashSet<string>(ctx.Held, StringComparer.Ordinal);
         bool layOnBody = replaceSkin;
         bool acrossBodies = fromBodyDir != null;
+        bool male = MaleGarment;
         string key = Key(ctx);
         planDone = 0;
         planTotal = targets.Count;
@@ -949,7 +954,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
                 var shared = new List<BodyRetarget.SlotPair>();
                 foreach (var (slot, sourcePath, targetPath, name) in others)
                 {
-                    if (Build(sourcePath, targetPath, name, out var built, out var target, out var body,
+                    if (Build(sourcePath, targetPath, name, male, out var built, out var target, out var body,
                               out var sourceBody) is { } refusal)
                         return new PlanResult(key, null, refusal);
                     shared.Add(new BodyRetarget.SlotPair(slot, built!, target!, body, sourceBody));
@@ -965,7 +970,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
                 var results = new List<(BodyOption, BodyRetarget.Planned)>();
                 foreach (var (option, targetPath) in targets)
                 {
-                    if (Build(garmentSource, targetPath, garmentName, out var built, out var target, out var body,
+                    if (Build(garmentSource, targetPath, garmentName, male, out var built, out var target, out var body,
                               out var sourceBody) is { } refusal)
                         return new PlanResult(key, null, targets.Count > 1 ? $"{option.Label}: {refusal}" : refusal);
 
@@ -993,7 +998,8 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     /// <param name="targetBytes">The target body's file, which swapping the garment's skin copies the body's skin
     /// out of.</param>
     /// <param name="sourceBytes">The source body's file, which says which bones the old body rigs.</param>
-    private string? Build(string sourcePath, string targetPath, string name,
+    /// <param name="male">The garment is a man's, and so both bodies are: every option list is filtered to its sex.</param>
+    private string? Build(string sourcePath, string targetPath, string name, bool male,
                           out IBodyCorrespondence? correspondence, out ModelParts? target, out byte[] targetBytes,
                           out byte[] sourceBytes)
     {
@@ -1007,7 +1013,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         if (source == null || target == null) return string.Format(Strings.Parts.RetargetUnreadableFmt, name);
 
         return BodyCorrespondence.TryBuild(source, Uv(sourceBytes), target, Uv(targetBytes), name,
-                                           out correspondence, out string refusal, uvRemap)
+                                           out correspondence, out string refusal, uvRemap, male)
                    ? null
                    : refusal;
     }
