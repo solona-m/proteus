@@ -75,12 +75,17 @@ internal sealed class MeshVolumeSolve : IMeshEdit
     /// <summary>
     /// The direction the brush moves each node: away from the nearest skin where the model carries skin, else
     /// along the node's normal. Away-from-skin gives both layers of a cloth shell and its hem one shared direction.
-    /// Aimed once from the author's positions: skin never moves.
+    /// Aimed once from the author's positions: skin never moves. Aimed on first use (see <see cref="Pull"/>), not up
+    /// front: a skirt hangs far from the skin and each of its nodes sums thousands of skin points, which made opening
+    /// a dress take seconds on the draw thread.
     /// </summary>
     private readonly Vec3[] pullDir;
 
-    /// <summary>Nodes whose pull was aimed from skin rather than from their normal.</summary>
+    /// <summary>Nodes whose pull was aimed from skin rather than from their normal. Valid once <see cref="aimKnown"/>.</summary>
     private readonly bool[] aimedFromSkin;
+
+    /// <summary>Nodes <see cref="EnsureAim"/> has aimed; until then a node's pull is still its normal.</summary>
+    private readonly bool[] aimKnown;
 
     /// <summary>The pulls as first aimed, so starting over also forgets the re-aiming strokes did.</summary>
     private readonly Vec3[] initialPull;
@@ -227,7 +232,8 @@ internal sealed class MeshVolumeSolve : IMeshEdit
 
         pullDir = (Vec3[])nodeNormal.Clone();
         aimedFromSkin = new bool[nodeCount];
-        AimAwayFromSkin();
+        aimKnown = new bool[nodeCount];
+        BuildSkinGrid();
         initialPull = (Vec3[])pullDir.Clone();
 
         nodeDelta = new Vec3[nodeCount];
@@ -247,12 +253,8 @@ internal sealed class MeshVolumeSolve : IMeshEdit
         MaxDisplacement = model.Parts.Any(p => IsHairMaterial(p.Material)) ? HairMaxDisplacement : GarmentMaxDisplacement;
     }
 
-    /// <summary>
-    /// Point every cloth node's pull away from the skin around it — see <see cref="pullDir"/>. The direction is the
-    /// inverse-square field of nearby skin points (smooth, unlike nearest-point), searched outward in rings.
-    /// A model with no skin leaves every direction on its normal.
-    /// </summary>
-    private void AimAwayFromSkin()
+    /// <summary>Bucket the skin nodes into <see cref="skinGrid"/>.</summary>
+    private void BuildSkinGrid()
     {
         var grid = skinGrid;
         for (int n = 0; n < nodeCount; n++)
@@ -262,11 +264,29 @@ internal sealed class MeshVolumeSolve : IMeshEdit
             if (!grid.TryGetValue(key, out var list)) grid[key] = list = [];
             list.Add(n);
         }
-        if (grid.Count == 0) return;
+    }
 
-        for (int n = 0; n < nodeCount; n++)
+    /// <summary>The direction the brush moves node <paramref name="n"/>, aiming it first if nothing has yet.</summary>
+    private Vec3 Pull(int n)
+    {
+        EnsureAim(n);
+        return pullDir[n];
+    }
+
+    /// <summary>
+    /// Point a cloth node's pull away from the skin around it — see <see cref="pullDir"/>. The direction is the
+    /// inverse-square field of nearby skin points (smooth, unlike nearest-point), searched outward in rings.
+    /// A model with no skin leaves every direction on its normal. Each node depends only on the skin and its own
+    /// authored place, so aiming one when first needed gives what aiming all of them up front did.
+    /// </summary>
+    private void EnsureAim(int n)
+    {
+        if (aimKnown[n]) return;
+        aimKnown[n] = true;
+        var grid = skinGrid;
+        if (grid.Count == 0 || skin[n]) return;
+
         {
-            if (skin[n]) continue;
             var p = nodeAt[n];
             var (cx, cy, cz) = Cell(p);
             double fx = 0, fy = 0, fz = 0;
@@ -292,16 +312,17 @@ internal sealed class MeshVolumeSolve : IMeshEdit
                 if (found) break;
                 fx = fy = fz = 0;
             }
-            if (!found) continue;
+            if (!found) return;
 
             var dir = Unit(new Vec3((float)fx, (float)fy, (float)fz));
-            if (dir.X == 0f && dir.Y == 0f && dir.Z == 0f) continue;
+            if (dir.X == 0f && dir.Y == 0f && dir.Z == 0f) return;
             pullDir[n] = dir;
+            initialPull[n] = dir;
             aimedFromSkin[n] = true;
         }
     }
 
-    /// <summary>Skin nodes bucketed by <see cref="SkinCell"/>, filled once by <see cref="AimAwayFromSkin"/>.
+    /// <summary>Skin nodes bucketed by <see cref="SkinCell"/>, filled once by <see cref="BuildSkinGrid"/>.
     /// Skin never moves, so the buckets never go stale.</summary>
     private readonly Dictionary<(int, int, int), List<int>> skinGrid = [];
 
@@ -557,7 +578,7 @@ internal sealed class MeshVolumeSolve : IMeshEdit
             float w = DabWeight(n, c, radius, mirror, out bool mirrored);
             if (w <= 0f) continue;
 
-            var dir = pullDir[n];
+            var dir = Pull(n);
             if (dir.X == 0f && dir.Y == 0f && dir.Z == 0f) dir = mirrored ? viewerMirrored : viewer;   // double-sided: see toViewer
             if (dir.X == 0f && dir.Y == 0f && dir.Z == 0f) continue;
 
@@ -749,7 +770,8 @@ internal sealed class MeshVolumeSolve : IMeshEdit
             if (w <= 0f) continue;
             nodes.Add(n);
             weights.Add(w);
-            ax += pullDir[n].X * w; ay += pullDir[n].Y * w; az += pullDir[n].Z * w;
+            var pull = Pull(n);
+            ax += pull.X * w; ay += pull.Y * w; az += pull.Z * w;
             wsum += w;
         }
         if (nodes.Count < 3) return 0;
@@ -1284,7 +1306,9 @@ internal sealed class MeshVolumeSolve : IMeshEdit
         for (int i = 0; i < vertDelta.Length; i++)
         {
             int n = nodeOf[i];
-            if (nodeWeight[n] <= 0f || aimedFromSkin[n]) continue;
+            if (nodeWeight[n] <= 0f) continue;
+            EnsureAim(n);
+            if (aimedFromSkin[n]) continue;
             accum[n] = new Vec3(accum[n].X + vertNrm[i].X, accum[n].Y + vertNrm[i].Y, accum[n].Z + vertNrm[i].Z);
         }
         for (int n = 0; n < nodeCount; n++)

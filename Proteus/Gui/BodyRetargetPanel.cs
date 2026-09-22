@@ -261,7 +261,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     {
         var ps = Strings.Parts;
         ImGui.TextUnformatted(ps.RetargetToBody);
-        if (DrawBodyCombo("##retargetBody", bodyDir, null, ref bodyFilter) is { } dir)
+        if (DrawBodyCombo("##retargetBody", bodyDir, ref bodyFilter) is { } dir)
         {
             bodyDir = dir;
             catalog = BodyRoot(dir) is { } root ? BodySizeCatalog.Read(root) : null;
@@ -275,18 +275,18 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     }
 
     /// <summary>
-    /// The body mod the garment was made for, when that is another one. "The same body" by default, which is a refit
-    /// between sizes; another body mod makes it a refit between bodies, which also rewrites the cloth's weights.
+    /// The body mod the garment was made for, shown by name: the refit-onto mod until another is picked, which is a
+    /// refit between sizes; another body mod makes it a refit between bodies, which also rewrites the cloth's weights.
     /// </summary>
     private void DrawSourceBodyPicker()
     {
         var ps = Strings.Parts;
         ImGui.TextUnformatted(ps.RetargetFromBody);
         if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.RetargetFromBodyTip);
-        if (DrawBodyCombo("##retargetFromBody", fromBodyDir, ps.RetargetSameBody, ref fromBodyFilter) is not { } dir) return;
+        if (DrawBodyCombo("##retargetFromBody", SourceDir, ref fromBodyFilter) is not { } dir) return;
 
-        // Choosing the refit-onto mod here is choosing "the same body".
-        fromBodyDir = dir.Length == 0 || dir == bodyDir ? null : dir;
+        // Choosing the refit-onto mod here is a refit between its sizes, which is what no separate source means.
+        fromBodyDir = dir == bodyDir ? null : dir;
         fromCatalog = fromBodyDir != null && BodyRoot(fromBodyDir) is { } root ? BodySizeCatalog.Read(root) : null;
 
         // Every "made for" choice and what was worked out from it belonged to the old source.
@@ -299,11 +299,8 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         pendingPreview = null;
     }
 
-    /// <summary>
-    /// A dropdown of the installed body mods. Returns the directory picked this frame, if any — "" for
-    /// <paramref name="noneLabel"/>, when one is offered.
-    /// </summary>
-    private string? DrawBodyCombo(string id, string? current, string? noneLabel, ref string filter)
+    /// <summary>A dropdown of the installed body mods. Returns the directory picked this frame, if any.</summary>
+    private string? DrawBodyCombo(string id, string? current, ref string filter)
     {
         var ps = Strings.Parts;
         ImGui.SetNextItemWidth(-1);
@@ -312,7 +309,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         if (bodies == null && bodiesTask == null) StartBodyScan();
 
         string shown = current != null && bodies != null && bodies.TryGetValue(current, out string? name) ? name
-                     : noneLabel ?? ps.RetargetNoBody;
+                     : ps.RetargetNoBody;
         using var combo = ImRaii.Combo(id, shown);
         if (!combo) return null;
 
@@ -327,7 +324,6 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
 
         ComboSearch.Box(id, ref filter);
         string? picked = null;
-        if (noneLabel != null && ImGui.Selectable(noneLabel + id + "_none", current == null)) picked = "";
         bool any = false;
         foreach (var (dir, label) in bodies.OrderBy(p => p.Value, StringComparer.OrdinalIgnoreCase))
         {

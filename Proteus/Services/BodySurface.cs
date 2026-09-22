@@ -41,6 +41,11 @@ internal sealed class BodySurface
     private readonly List<int> tris = [];
     private readonly Dictionary<(int, int, int), List<int>> cells = [];
     private readonly float cell;
+
+    /// <summary>The occupied cells' bounding box, inclusive. Every cell outside it is empty, so a query skips it.</summary>
+    private int minX = int.MaxValue, minY = int.MaxValue, minZ = int.MaxValue;
+    private int maxX = int.MinValue, maxY = int.MinValue, maxZ = int.MinValue;
+
     private int[] stamp = [];
     private int query;
 
@@ -105,6 +110,8 @@ internal sealed class BodySurface
         var hi = Vector3.Max(pos[a], Vector3.Max(pos[b], pos[c]));
         var (x0, y0, z0) = Cell(lo);
         var (x1, y1, z1) = Cell(hi);
+        minX = Math.Min(minX, x0); minY = Math.Min(minY, y0); minZ = Math.Min(minZ, z0);
+        maxX = Math.Max(maxX, x1); maxY = Math.Max(maxY, y1); maxZ = Math.Max(maxZ, z1);
         for (int x = x0; x <= x1; x++)
         for (int y = y0; y <= y1; y++)
         for (int z = z0; z <= z1; z++)
@@ -133,20 +140,38 @@ internal sealed class BodySurface
 
         var (cx, cy, cz) = Cell(p);
         int maxRing = (int)MathF.Ceiling(maxDistance / cell);
+
+        // Rings nearer than the occupied box hold nothing: start at the first that reaches it, and a point whose search
+        // cannot reach it at all (a skirt's hem, a long way below a top's body) misses at once. Ring by ring the
+        // search walks every ring out to the reach when nothing is found, and a whole cube of cells per ring — what
+        // made a skirted dress take minutes.
+        int startRing = Math.Max(Math.Max(Math.Max(minX - cx, cx - maxX),
+                                          Math.Max(minY - cy, cy - maxY)),
+                                 Math.Max(Math.Max(minZ - cz, cz - maxZ), 0));
+        if (startRing > maxRing) return false;
+
         float best = maxDistance * maxDistance;
         bool found = false;
         int ba = 0, bb = 0, bc = 0;
         float bu = 0f, bv = 0f, bw = 0f;
         var landing = default(Vector3);
 
-        for (int r = 0; r <= maxRing; r++)
+        for (int r = startRing; r <= maxRing; r++)
         {
-            for (int x = -r; x <= r; x++)
-            for (int y = -r; y <= r; y++)
-            for (int z = -r; z <= r; z++)
+            // This ring's shell only, clipped to the occupied box, in the same x, y, z order as a walk of the whole
+            // cube: a face of the shell takes every z; inside it, only the two z caps.
+            int xlo = Math.Max(cx - r, minX), xhi = Math.Min(cx + r, maxX);
+            int ylo = Math.Max(cy - r, minY), yhi = Math.Min(cy + r, maxY);
+            int zlo = Math.Max(cz - r, minZ), zhi = Math.Min(cz + r, maxZ);
+            for (int x = xlo; x <= xhi; x++)
+            for (int y = ylo; y <= yhi; y++)
             {
-                if (Math.Max(Math.Abs(x), Math.Max(Math.Abs(y), Math.Abs(z))) != r) continue;   // this ring's shell only
-                if (!cells.TryGetValue((cx + x, cy + y, cz + z), out var bucket)) continue;
+                bool face = Math.Abs(x - cx) == r || Math.Abs(y - cy) == r;
+                int zStep = face ? 1 : 2 * r;
+                for (int z = face ? zlo : cz - r; z <= (face ? zhi : cz + r); z += zStep)
+                {
+                if (z < zlo || z > zhi) continue;
+                if (!cells.TryGetValue((x, y, z), out var bucket)) continue;
                 foreach (int t in bucket)
                 {
                     if (stamp[t] == query) continue;
@@ -161,6 +186,7 @@ internal sealed class BodySurface
                     ba = ta; bb = tb; bc = tc;
                     bu = tu; bv = tv; bw = tw;
                     landing = q;
+                }
                 }
             }
             // Every cell of the next ring is at least r cells away, so nothing there can beat a point this near.

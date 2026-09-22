@@ -2042,11 +2042,9 @@ public sealed class PartsStrings
     public readonly string RetargetFromBody = Loc.Localize("Parts.Retarget.FromBody", "Made for body mod");
 
     public readonly string RetargetFromBodyTip = Loc.Localize("Parts.Retarget.FromBody.Tip",
-        "The body mod this outfit was made for. Leave it on \"the same body mod\" to refit between sizes of one body.\n"
+        "The body mod this outfit was made for. Pick the same one it is being refitted onto to refit between its sizes.\n"
       + "Choose another to move the outfit from that body to this one: its cloth then also takes the new body's\n"
       + "bone weights, so it moves with the new body. Skirt chains and other bones of the outfit's own keep theirs.");
-
-    public readonly string RetargetSameBody = Loc.Localize("Parts.Retarget.SameBody", "The same body mod");
 
     public readonly string RetargetNoBody = Loc.Localize("Parts.Retarget.NoBody", "Pick one…");
 
