@@ -30,6 +30,50 @@ internal static partial class BodyRetarget
     internal const float FarBand = 0.25f;
 
     /// <summary>
+    /// How near two bodies have to be for a point to follow both, blended (2 cm). The slots overlap where they meet —
+    /// the foot's body and the leg's share the ankle — and a garment crossing that overlap tore when each point took
+    /// only the nearer one's answer. Past this, the nearest body alone, exactly as before.
+    /// </summary>
+    internal const float SlotBlend = 0.02f;
+
+    /// <summary>
+    /// How far a hole in the displacement field is filled in from its edge, in rings of the body's own triangles. Eight
+    /// covers the holes a texture-coordinate correspondence leaves — a seam, an island cut differently — without
+    /// inventing a field across a region neither body shares.
+    /// </summary>
+    internal const int HoleRounds = 8;
+
+    /// <summary>
+    /// How far one body vertex's displacement may differ from its neighbours' average before it is taken for a mistake
+    /// in the correspondence rather than the shape (4 mm). Two bodies differ smoothly across a surface; a vertex that
+    /// disagrees with everything around it by more than this landed somewhere it does not belong.
+    /// </summary>
+    internal const float DespikeGap = 0.004f;
+
+    /// <summary>
+    /// How many times its neighbourhood's own spread a vertex has to disagree by before its displacement is taken for a
+    /// mistake (3x). A field that varies quickly everywhere is the shape changing; one vertex out of step with
+    /// neighbours that agree with each other is the correspondence having gone astray.
+    /// </summary>
+    internal const float DespikeOutlier = 3f;
+
+    /// <summary>How many rounds of smoothing the displacement field gets, and how far each moves a vertex toward its
+    /// neighbours' average. Light on purpose: enough to take the correspondence's noise off a seam, not enough to move
+    /// the shape change itself.</summary>
+    internal const int SmoothRounds = 2;
+
+    /// <inheritdoc cref="SmoothRounds"/>
+    internal const float SmoothRate = 0.5f;
+
+    /// <summary>How many rounds the refit knits neighbouring points together, and how far each moves a point toward its
+    /// neighbours' answer. Enough to close a tear the nearest-point search opens, little enough to leave the shape the
+    /// body asked for.</summary>
+    internal const int KnitRounds = 2;
+
+    /// <inheritdoc cref="KnitRounds"/>
+    internal const float KnitRate = 0.5f;
+
+    /// <summary>
     /// Buckets to the metre for the exact-match snap: 0.1 mm, the same tolerance <see cref="ModelPartReader"/> already
     /// welds islands at, so "coincident" means one thing across the codebase. Not the welder's 10 µm — positions may
     /// be stored as Half4 in one model and Float3 in the other, and half at body scale quantises well past that, so
@@ -262,8 +306,8 @@ internal static partial class BodyRetarget
     /// <param name="garmentSlot">The slot the garment is worn in ("_top" for a top). Its body is excluded from the
     /// push-out, because the garment is drawn in its place — see <see cref="TargetBody"/>. Null keeps every body.</param>
     /// <param name="pushOut">Whether to run the push-out pass after the transfer.</param>
-    /// <param name="held">Vertices of the parts the user unticked, which stay exactly where the author put them — see
-    /// <see cref="Sets.HeldCount"/>. Null for none.</param>
+    /// <param name="held">Vertices of the parts the user unticked, which keep the author's work exactly: both where
+    /// the points sit and the bones they follow — see <see cref="Sets.HeldCount"/>. Null for none.</param>
     /// <param name="replaceSkin">Replace the garment's own body skin with the new body's: laid onto the new body first
     /// (see <see cref="LaySkin"/>) so the push-out measures against the right surface, then swapped for the body's own
     /// skin, slot by slot, for every pair that carries its body's file (see <see cref="SwapSkin"/>).</param>
@@ -283,7 +327,7 @@ internal static partial class BodyRetarget
         // Both are one rebuild, and nothing is rebuilt when neither applies — a same-rig refit with the skin kept stays
         // the in-place rewrite above.
         SwapReport? swap = null;
-        var weights = PlanWeights(model, pairs, acrossBodies, before: garmentBytes);
+        var weights = PlanWeights(model, pairs, acrossBodies, before: garmentBytes, held: held);
         if (replaceSkin || weights != null)
         {
             var rebuilt = Rebuild(model, pairs, replaceSkin, weights, out var swapped);
@@ -317,6 +361,7 @@ internal static partial class BodyRetarget
         var snapped = new bool[sets.NodeCount];
 
         Transfer(sets, sets.AllNodes, source, nodeDelta, snapped, out int transferred, out int missed);
+        Knit(sets, nodeDelta, snapped);
 
         // Before the push-out, so the push-out measures cloth against the skin as it will actually be drawn.
         int laid = replaceSkin ? LaySkin(sets, source, pairs, nodeDelta) : 0;
@@ -356,6 +401,47 @@ internal static partial class BodyRetarget
         var edit = new RetargetEdit(garment.MeshSpans, vertDelta, vertNrm);
         return new Solved(edit, CountTrue(snapped), transferred, missed, pushed, worstMove, worstPush, sets.HeldCount,
                           laid);
+    }
+
+    /// <summary>
+    /// Hold neighbouring points together: move each a little toward what its neighbours were given
+    /// (<see cref="KnitRounds"/> rounds at <see cref="KnitRate"/>). Points that landed on the body exactly are the
+    /// answer, not a guess, so they neither move nor are averaged into.
+    /// <para/>
+    /// Away from the body the nearest point is not a stable thing to ask for: three centimetres behind a heel, one
+    /// point's nearest body triangle is the heel and its neighbour's is the calf, and the two bodies' displacements
+    /// there differ by millimetres. Measured on a stocking, that parted a 0.3 mm edge to 7.1 mm — a spike through the
+    /// shoe. The garment's own surface says what the answer should look like between neighbours: continuous.
+    /// </summary>
+    private static void Knit(Sets sets, Vec3[] nodeDelta, bool[] snapped)
+    {
+        // The garment's own body mesh is left out entirely: it is meant to land ON the body, exactly, and an average
+        // with the cloth beside it would lift it off. Cloth welded to it still reads its answer as a neighbour, so the
+        // seam between them stays closed.
+        var isSkin = new bool[nodeDelta.Length];
+        foreach (int n in sets.SkinNodes) isSkin[n] = true;
+
+        var next = new Vec3[nodeDelta.Length];
+        for (int round = 0; round < KnitRounds; round++)
+        {
+            Array.Copy(nodeDelta, next, nodeDelta.Length);
+            for (int n = 0; n < nodeDelta.Length; n++)
+            {
+                if (snapped[n] || isSkin[n] || sets.Adj[n] is not { Count: > 0 } neighbours) continue;
+                float x = 0f, y = 0f, z = 0f;
+                int count = 0;
+                foreach (int m in neighbours)
+                {
+                    x += nodeDelta[m].X; y += nodeDelta[m].Y; z += nodeDelta[m].Z;
+                    count++;
+                }
+                if (count == 0) continue;
+                next[n] = new Vec3(nodeDelta[n].X + (x / count - nodeDelta[n].X) * KnitRate,
+                                   nodeDelta[n].Y + (y / count - nodeDelta[n].Y) * KnitRate,
+                                   nodeDelta[n].Z + (z / count - nodeDelta[n].Z) * KnitRate);
+            }
+            Array.Copy(next, nodeDelta, nodeDelta.Length);
+        }
     }
 
     /// <summary>

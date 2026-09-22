@@ -140,7 +140,7 @@
     "description": "Checkbox label in the Bindings tab."
   },
   "Bindings.RestoreCharacter.Tip": {
-    "message": "When on, applying a bound design also restores every mod that was on the character\nwhen it was saved (enable / priority / options), switches off mods on the character\nthat weren't, and raises the design's mods above anything they conflict with.\n\nMods that aren't Proteus mods are only held that way with Penumbra temporary settings:\nyour collection isn't changed, and reverting or applying an unbound design puts them back.\n\nWhen off, only Proteus mods are restored. Designs are captured either way, so\nturning this on works for designs saved while it was off.",
+    "message": "When on, applying a bound design also restores every mod that was on the character\nwhen it was saved (enable / priority / options), switches off mods on the character\nthat weren\u0027t, and raises the design\u0027s mods above anything they conflict with.\n\nMods that aren\u0027t Proteus mods are only held that way with Penumbra temporary settings:\nyour collection isn\u0027t changed, and reverting or applying an unbound design puts them back.\nPenumbra\u0027s banner on a held mod can drop that one hold, if you want just it back.\n\nWhen off, only Proteus mods are restored. Designs are captured either way, so\nturning this on works for designs saved while it was off.",
     "description": "Tooltip. Appears in the Bindings tab. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Bindings.SecondsAgo.Fmt": {

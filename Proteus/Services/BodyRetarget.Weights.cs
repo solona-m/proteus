@@ -66,8 +66,11 @@ internal static partial class BodyRetarget
     /// <param name="acrossBodies">The source and target are different body mods: rewrite whatever the rigs.</param>
     /// <param name="before">The garment as authored, in the same vertex order (the refit is in place): where each
     /// vertex sat on the OLD body. Null reads the old body's weights at the refitted positions instead.</param>
+    /// <param name="held">Vertices of parts the user unticked. Held means the author's work stands: a part held in
+    /// place keeps the bones it follows too, or it would sit still in the bind pose and fly apart in a posed one —
+    /// which is what a rigid heel did when it was held but reweighted.</param>
     internal static WeightPlan? PlanWeights(byte[] garment, IReadOnlyList<SlotPair> pairs, bool acrossBodies = false,
-                                            byte[]? before = null)
+                                            byte[]? before = null, IReadOnlySet<int>? held = null)
     {
         if (pairs.Count == 0 || pairs.Any(p => p.SourceModel == null || p.TargetModel == null)) return null;
 
@@ -113,6 +116,7 @@ internal static partial class BodyRetarget
 
         foreach (int v in ClothVertices(model))
         {
+            if (held != null && held.Contains(v)) continue;
             var p = new Vector3(model.Positions[v * 3], model.Positions[v * 3 + 1], model.Positions[v * 3 + 2]);
             var mine = Influences(own, v);
 

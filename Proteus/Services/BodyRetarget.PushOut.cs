@@ -211,6 +211,30 @@ internal static partial class BodyRetarget
             if (!changed) break;
         }
 
+        // The same slope limit against the cloth this pass left out — authored inside the skin, or nowhere near it.
+        // Those nodes never move, and the spread above cannot see them, so a node beside one could be pushed its whole
+        // distance while its neighbour held: on a stocking over a heeled foot that stretched a 0.3 mm edge to 7.1 mm,
+        // which in game is a spike through the shoe. A left-out node counts as no push, and its neighbours are capped.
+        var inSet = new bool[sets.NodeCount];
+        foreach (int n in nodes) inSet[n] = true;
+        for (int round = 0; round < PushSpreadRounds; round++)
+        {
+            bool changed = false;
+            foreach (int n in nodes)
+            {
+                float cap = need[n];
+                foreach (int m in sets.Adj[n])
+                {
+                    float limit = (inSet[m] ? need[m] : 0f) + step;
+                    if (limit < cap) cap = limit;
+                }
+                if (cap >= need[n] - 1e-9f) continue;
+                need[n] = cap;
+                changed = true;
+            }
+            if (!changed) break;
+        }
+
         int pushed = 0;
         foreach (int n in nodes)
         {

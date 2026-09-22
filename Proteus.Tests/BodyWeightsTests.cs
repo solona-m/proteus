@@ -319,6 +319,26 @@ public class BodyWeightsTests
     }
 
     [Fact]
+    public void A_held_part_keeps_the_bones_the_author_gave_it()
+    {
+        // Unticking a part holds it where the author put it. It has to hold the bones too: a rigid heel held in place
+        // but reweighted stands still in the bind pose and flies apart in a posed one.
+        var source = Body(("j_asi_d_l", 1f));
+        var target = Body(("j_asi_e_l", 1f));
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Cloth, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetZ: 0.001f,
+                                                                  Weights: [("j_asi_d_l", 1f)])));
+        var pairs = new[] { Pair(source, target) };
+        var mine = VerticesOf(garment, Cloth, 0);
+
+        Assert.NotNull(BodyRetarget.PlanWeights(garment, pairs, acrossBodies: true));
+        var plan = BodyRetarget.PlanWeights(garment, pairs, acrossBodies: true, held: mine.ToHashSet());
+
+        Assert.Equal(0, plan?.Reweighted ?? 0);
+        Assert.All(mine, v => Assert.Null(plan?.For(0)?[v]));
+    }
+
+    [Fact]
     public void Cloth_out_of_reach_of_the_body_keeps_the_weights_it_had()
     {
         // A thigh-high stocking refitted on the FEET slot: the body is the foot, and the cloth up the leg is nowhere
