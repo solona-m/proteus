@@ -2061,6 +2061,15 @@ public sealed class PartsStrings
       + "Choose another to move the outfit from that body to this one: its cloth then also takes the new body's\n"
       + "bone weights, so it moves with the new body. Skirt chains and other bones of the outfit's own keep theirs.");
 
+    public readonly string RetargetClearBody = Loc.Localize("Parts.Retarget.ClearBody", "Push the garment clear of the body");
+
+    public readonly string RetargetClearBodyTip = Loc.Localize("Parts.Retarget.ClearBody.Tip",
+        "On: cloth left inside the body anywhere is pushed out of it, not just cloth the refit pushed in.\n"
+      + "Use it when the body shows through the garment after a refit — a stocking whose mod draws its own\n"
+      + "leg skin over yours is the usual case, since cloth its author buried in the body is no longer hidden.\n"
+      + "Off (the default) leaves cloth the author tucked under the skin exactly where they put it, which is\n"
+      + "right for most garments: it is hidden on purpose, and pulling it out makes the fit worse.");
+
     public readonly string RetargetNoBody = Loc.Localize("Parts.Retarget.NoBody", "Pick one…");
 
     /// <summary>{0} is a body mod's name; {1} is <see cref="RetargetMale"/> or <see cref="RetargetFemale"/>.</summary>

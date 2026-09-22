@@ -102,6 +102,12 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     /// </summary>
     private bool replaceSkin = true;
 
+    /// <summary>
+    /// Push cloth out of the body wherever it is buried, not only where the refit buried it. Off by default — see
+    /// <see cref="BodyRetarget.Plan"/>, which explains why an author's buried cloth is normally left alone.
+    /// </summary>
+    private bool clearBody;
+
     /// <summary>The model the worn body was last looked up for, so it is looked up once per model, not per frame.</summary>
     private string? wornFor;
 
@@ -701,6 +707,9 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         ImGui.Checkbox(ps.RetargetReplaceSkin, ref replaceSkin);
         if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.RetargetReplaceSkinTip);
 
+        ImGui.Checkbox(ps.RetargetClearBody, ref clearBody);
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.RetargetClearBodyTip);
+
         using (ImRaii.Disabled(busy || !ready))
             if (ImGui.Button(ps.RetargetPreview, FullWidth()))
                 StartPlan(ctx);
@@ -949,6 +958,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         var bytes = ctx.GarmentBytes;
         var heldLabels = new HashSet<string>(ctx.Held, StringComparer.Ordinal);
         bool layOnBody = replaceSkin;
+        bool clear = clearBody;
         bool acrossBodies = fromBodyDir != null;
         bool male = MaleGarment;
         string key = Key(ctx);
@@ -986,7 +996,8 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
                     var pairs = new List<BodyRetarget.SlotPair> { new(garmentSlot, built!, target!, body, sourceBody) };
                     pairs.AddRange(shared);
                     results.Add((option, BodyRetarget.Plan(garment, bytes, pairs, garmentSlot, held: held,
-                                                           replaceSkin: layOnBody, acrossBodies: acrossBodies)));
+                                                           replaceSkin: layOnBody, acrossBodies: acrossBodies,
+                                                           clearBody: clear)));
                     Interlocked.Increment(ref planDone);
                 }
                 return new PlanResult(key, results, "");
@@ -1092,7 +1103,8 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         => ctx.ModelRel + "|from:" + (fromBodyDir ?? "") + "|"
          + string.Join("|", Chosen(ctx).Select(s => $"{s}:{from[s].Rel}>{string.Join(",", Targets(s).Select(t => t.Rel))}"))
          + "|held:" + string.Join(",", ctx.Held.OrderBy(h => h, StringComparer.Ordinal))
-         + (replaceSkin ? "|lay" : "");
+         + (replaceSkin ? "|lay" : "")
+         + (clearBody ? "|clear" : "");
 
     /// <summary>The framework-thread half: take up whatever finished, and do the parts only this thread may.</summary>
     private void Consume(in RetargetContext ctx)

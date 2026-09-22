@@ -373,6 +373,60 @@ public class BodyRetargetTests
     }
 
     [Fact]
+    public void A_held_point_beside_a_moving_one_stays_exactly_where_it_was()
+    {
+        // Holding is absolute: neither pass moves a held node. The knit that closes tears averages a node toward its
+        // neighbours, and run over every node it moved held ones too — the hold then slipped at exactly the seam it is
+        // there to hold, where a held part meets a moving one.
+        var source = Cube(0.20f, SkinMaterial);
+        var target = Cube(0.25f, SkinMaterial);
+        var garment = Patch(ClothMaterial, new Vector3(0f, 0f, 0.21f));
+
+        Assert.True(IdentityCorrespondence.TryBuild(source, target, "chest", out var built, out string refusal), refusal);
+        var pairs = new[] { new BodyRetarget.SlotPair("_top", built!, target) };
+
+        // One corner of the patch held, the other two free: the free ones move and the held one may not follow.
+        var solved = BodyRetarget.Solve(garment, pairs, held: new HashSet<int> { 0 });
+
+        Assert.Equal(0f, Delta(solved, 0).Length(), 6);
+        Assert.True(Delta(solved, 1).Length() > 1e-4f, "the unheld corners should still have moved");
+    }
+
+    [Fact]
+    public void Clearing_the_body_pulls_out_cloth_the_author_buried()
+    {
+        // "Push the garment clear of the body", for the garment the rule above is wrong for: one whose mod draws its
+        // own skin over yours, where cloth the author buried is no longer hidden by anything and shows as the body
+        // through the fabric. Same setup as the test above, where nothing the refit did put this cloth inside.
+        var body = Cube(0.20f, SkinMaterial);
+        // Four millimetres under the surface: shallow enough to be a clip rather than the garment's own structure.
+        var garment = Patch(ClothMaterial, new Vector3(0f, 0f, 0.196f));
+
+        var solved = Solve(garment, body, body, clearBody: true);
+
+        Assert.True(solved.Pushed > 0, "asked to clear the body, the pass should have pulled this cloth out of it");
+        for (int v = 0; v < garment.Positions.Length / 3; v++)
+        {
+            float z = At(garment, v).Z + Delta(solved, v).Z;
+            Assert.True(z >= 0.20f, $"vertex {v} is still inside the body at z={z}");
+        }
+    }
+
+    [Fact]
+    public void Clearing_the_body_leaves_cloth_buried_deeply_alone()
+    {
+        // Deeper than ClearDepth is the garment's own structure — an inner layer, a sole — and hauling it to the
+        // surface tears the mesh without uncovering anything. Measured on a stocking: 17,212 nodes moved up to 30 mm
+        // and edges grown by 54 mm, with the body still showing through.
+        var body = Cube(0.20f, SkinMaterial);
+        var garment = Patch(ClothMaterial, new Vector3(0f, 0f, 0.20f - BodyRetarget.ClearDepth - 0.005f));
+
+        var solved = Solve(garment, body, body, clearBody: true);
+
+        Assert.Equal(0, solved.Pushed);
+    }
+
+    [Fact]
     public void Hidden_cloth_beside_a_fresh_clip_is_not_dragged_out()
     {
         // What the explicit authored-inside exclusion does that the push amount alone does not. A node is only ever
@@ -865,11 +919,12 @@ public class BodyRetargetTests
 
     // ── helpers ─────────────────────────────────────────────────────────────────────────────────────────
 
-    private static BodyRetarget.Solved Solve(ModelParts garment, ModelParts source, ModelParts target)
+    private static BodyRetarget.Solved Solve(ModelParts garment, ModelParts source, ModelParts target,
+                                             bool clearBody = false)
     {
         Assert.True(IdentityCorrespondence.TryBuild(source, target, "chest", out var built, out string refusal),
                     refusal);
-        return BodyRetarget.Solve(garment, [new BodyRetarget.SlotPair("_top", built!, target)]);
+        return BodyRetarget.Solve(garment, [new BodyRetarget.SlotPair("_top", built!, target)], clearBody: clearBody);
     }
 
     /// <summary>

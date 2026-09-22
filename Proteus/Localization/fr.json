@@ -3251,6 +3251,14 @@
     "message": "This mod already has a group (\u0022{0}\u0022) that replaces this model. The new group is set to win over it, so changing sizes there will not change this refit.",
     "description": ""
   },
+  "Parts.Retarget.ClearBody": {
+    "message": "Push the garment clear of the body",
+    "description": ""
+  },
+  "Parts.Retarget.ClearBody.Tip": {
+    "message": "On: cloth left inside the body anywhere is pushed out of it, not just cloth the refit pushed in.\nUse it when the body shows through the garment after a refit \u2014 a stocking whose mod draws its own\nleg skin over yours is the usual case, since cloth its author buried in the body is no longer hidden.\nOff (the default) leaves cloth the author tucked under the skin exactly where they put it, which is\nright for most garments: it is hidden on purpose, and pulling it out makes the fit worse.",
+    "description": ""
+  },
   "Parts.Retarget.ClearPreview": {
     "message": "Clear the preview",
     "description": ""

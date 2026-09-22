@@ -95,6 +95,12 @@ internal static partial class BodyRetarget
     internal const float PushProbeRange = 0.03f;
 
     /// <summary>
+    /// How deep in the body cloth may be for "push the garment clear of the body" to pull it out (8 mm). Deeper than
+    /// this it is the garment's own structure rather than a clip — an inner layer, a sole — and it is left alone.
+    /// </summary>
+    internal const float ClearDepth = 0.008f;
+
+    /// <summary>
     /// How far the push-out looks for the skin when deciding whether cloth was authored INSIDE it (15 cm). Cloth tucked
     /// under a body can sit far inside it — a heeled shoe's foot is drawn where the body's flat foot is — and at
     /// <see cref="PushProbeRange"/> such a point read as "nowhere near skin", which the pass took for outside.
@@ -311,15 +317,21 @@ internal static partial class BodyRetarget
     /// <param name="replaceSkin">Replace the garment's own body skin with the new body's: laid onto the new body first
     /// (see <see cref="LaySkin"/>) so the push-out measures against the right surface, then swapped for the body's own
     /// skin, slot by slot, for every pair that carries its body's file (see <see cref="SwapSkin"/>).</param>
+    /// <param name="clearBody">Push the garment clear of the body wherever it is buried in it, instead of only undoing
+    /// what the refit buried. Off by default, and deliberately: cloth an author tucks under the skin is usually meant to
+    /// be hidden, and pulling it out on a garment built that way makes the fit worse rather than better (measured on
+    /// "This Old Thing": every node an unconditional push moved was already inside its own body as shipped). It is for
+    /// the garment this rule fails: one whose own skin is drawn over the body's, where cloth left buried shows as the
+    /// body poking through the fabric.</param>
     /// <param name="acrossBodies">The garment is going from one body MOD to another, rather than between sizes of one:
     /// its cloth then always takes the change between the two bodies' weights, and the old body's piercings and pubic hair are left out,
     /// even when the two bodies' rigs name the same bones (YAB's and Rue's plain sizes do) — see
     /// <see cref="PlanWeights"/>.</param>
     public static Planned Plan(ModelParts garment, byte[] garmentBytes, IReadOnlyList<SlotPair> pairs,
                                string? garmentSlot = null, bool pushOut = true, IReadOnlySet<int>? held = null,
-                               bool replaceSkin = false, bool acrossBodies = false)
+                               bool replaceSkin = false, bool acrossBodies = false, bool clearBody = false)
     {
-        var solved = Solve(garment, pairs, garmentSlot, pushOut, held, replaceSkin);
+        var solved = Solve(garment, pairs, garmentSlot, pushOut, held, replaceSkin, clearBody);
         var written = MeshVolumeService.Inflate(garmentBytes, solved.Edit);
         byte[] model = written.Model;
 
@@ -352,7 +364,8 @@ internal static partial class BodyRetarget
     /// <inheritdoc cref="Plan"/>
     /// <remarks>The geometry, without touching the file. See <see cref="Solved"/>.</remarks>
     internal static Solved Solve(ModelParts garment, IReadOnlyList<SlotPair> pairs, string? garmentSlot = null,
-                                 bool pushOut = true, IReadOnlySet<int>? held = null, bool replaceSkin = false)
+                                 bool pushOut = true, IReadOnlySet<int>? held = null, bool replaceSkin = false,
+                                 bool clearBody = false)
     {
         var sets = Sets.From(garment, held);
         var source = SourceBody.Build(pairs);
@@ -381,7 +394,7 @@ internal static partial class BodyRetarget
             foreach (int n in sets.ClothNodes)
                 if (!snapped[n]) pushable.Add(n);
 
-            pushed = PushOut(sets, pushable, before, after, nodeDelta, out worstPush);
+            pushed = PushOut(sets, pushable, before, after, nodeDelta, clearBody, out worstPush);
         }
 
         int vc = garment.Positions.Length / 3;
@@ -421,11 +434,13 @@ internal static partial class BodyRetarget
         var isSkin = new bool[nodeDelta.Length];
         foreach (int n in sets.SkinNodes) isSkin[n] = true;
 
+        // Over the transfer's own set, which is every node the user has NOT held: a held node is not the refit's to
+        // average, and knitting one toward a moving neighbour let a hold slip at exactly the seam it exists to hold.
         var next = new Vec3[nodeDelta.Length];
         for (int round = 0; round < KnitRounds; round++)
         {
             Array.Copy(nodeDelta, next, nodeDelta.Length);
-            for (int n = 0; n < nodeDelta.Length; n++)
+            foreach (int n in sets.AllNodes)
             {
                 if (snapped[n] || isSkin[n] || sets.Adj[n] is not { Count: > 0 } neighbours) continue;
                 float x = 0f, y = 0f, z = 0f;

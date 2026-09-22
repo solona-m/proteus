@@ -57,6 +57,31 @@ internal static partial class BodyRetarget
             return new TargetBody(surfaces.ToArray());
         }
 
+        /// <summary>
+        /// The drawn skin this point is deepest INSIDE, or the nearest one when it is outside them all.
+        /// <para/>
+        /// Not simply the nearest: two of these surfaces lie within a millimetre of each other wherever a garment
+        /// carries its own copy of the body, and cloth between them is outside one and inside the other. Judged by the
+        /// nearer, such a point reads as clear while the other surface goes straight through it — which is what a
+        /// stocking looked like with the body showing through the fabric all up the leg.
+        /// </summary>
+        public bool Deepest(Vector3 p, float maxDistance, out BodySurface.Hit hit)
+        {
+            hit = default;
+            bool found = false;
+            float worst = 0f;
+            foreach (var surface in surfaces)
+            {
+                if (!surface.Nearest(p, maxDistance, out var candidate)) continue;
+                float signed = Vector3.Dot(p - candidate.Point, candidate.Normal);
+                if (found && signed >= worst) continue;
+                worst = signed;
+                hit = candidate;
+                found = true;
+            }
+            return found;
+        }
+
         /// <summary>The nearest drawn skin within <paramref name="maxDistance"/>.</summary>
         public bool Nearest(Vector3 p, float maxDistance, out BodySurface.Hit hit)
         {
@@ -129,8 +154,11 @@ internal static partial class BodyRetarget
     /// authored outside, now inside — and by the least that clears them.
     /// </remarks>
     /// <returns>How many nodes moved.</returns>
+    /// <param name="clearBody">Clear cloth out of the body wherever it is buried, not only where the refit buried it
+    /// — see <see cref="BodyRetarget.Plan"/>. The exclusions above are what it drops: cloth the author tucked under the
+    /// skin comes out too, and the standoff it is pushed to is the clearance rather than the author's own.</param>
     private static int PushOut(Sets sets, IReadOnlyList<int> candidates, TargetBody before, TargetBody after,
-                               Vec3[] nodeDelta, out float worst)
+                               Vec3[] nodeDelta, bool clearBody, out float worst)
     {
         worst = 0f;
 
@@ -140,12 +168,28 @@ internal static partial class BodyRetarget
         var authored = new float[sets.NodeCount];
         foreach (int n in candidates)
         {
+            if (clearBody)
+            {
+                // Asked to clear the body: cloth just under the skin comes out whoever put it there, and is held to
+                // the clearance rather than to an authored standoff. Cloth buried DEEPER than ClearDepth is left: at
+                // that depth it is the garment's structure — an inner layer, a sole, a lining — and dragging it to the
+                // surface tears the mesh without uncovering anything (measured: 17,212 nodes moved up to 30 mm, edges
+                // grown by 54 mm, and the body still showed through).
+                authored[n] = float.MaxValue;
+                nodes.Add(n);
+                continue;
+            }
+
             var p0 = ToVector(sets.NodeAt[n]);
 
             // Reached much further than the push itself: a point DEEP inside the body is authored-inside just as much
             // as one just under the surface, and at the short range the two were indistinguishable from cloth far
             // outside. A heeled shoe's foot sits well inside where the body's flat foot is drawn, and reading it as
             // "outside" had the push-out balloon the stocking by up to 30 mm.
+            // The NEAREST drawn surface, not the deepest: this asks what the author did, and their standoff is from
+            // the surface their cloth sits on. Reading it against whichever surface the point is deepest inside counts
+            // more cloth as deliberately hidden and quietly stops the pass undoing clips it should — measured on a
+            // stocking, 350 buried points became 622 with the default settings.
             if (before.Nearest(p0, AuthoredProbeRange, out var h0))
             {
                 float s0 = Vector3.Dot(p0 - h0.Point, h0.Normal);
@@ -170,18 +214,19 @@ internal static partial class BodyRetarget
                                       sets.NodeAt[n].Y + nodeDelta[n].Y,
                                       sets.NodeAt[n].Z + nodeDelta[n].Z));
 
-            if (!after.Nearest(p, PushProbeRange, out var hit)) continue;
+            if (!after.Deepest(p, PushProbeRange, out var hit)) continue;
 
             dir[n] = ToVec(hit.Normal);
             hasDir[n] = true;
 
             float s1 = Vector3.Dot(p - hit.Point, hit.Normal);
             if (s1 >= 0f) continue;
+            if (clearBody && s1 < -ClearDepth) continue;   // buried deep on purpose — see above
 
             // Back to the clearance, or to the author's own standoff where that was less: un-clipping, not re-fitting.
             // Along the SKIN's normal at the landing, not along (p - landing): for a point inside, that difference aims
             // further in, and near the surface it is numerically meaningless as well.
-            float d = MathF.Min(authored[n], Clearance) - s1;
+            float d = (clearBody ? Clearance : MathF.Min(authored[n], Clearance)) - s1;
             if (d <= 0f) continue;
 
             need[n] = d;
@@ -217,6 +262,13 @@ internal static partial class BodyRetarget
         // which in game is a spike through the shoe. A left-out node counts as no push, and its neighbours are capped.
         var inSet = new bool[sets.NodeCount];
         foreach (int n in nodes) inSet[n] = true;
+
+        // Only cloth this pass considered and then left out holds its neighbours back. Skin, and a node that snapped
+        // onto the body, were never candidates: they are not cloth that stayed put, they are the surface the cloth is
+        // being cleared from, and counting them as "no push" pinned the fabric to the skin it had to come out of.
+        var candidate = new bool[sets.NodeCount];
+        foreach (int n in candidates) candidate[n] = true;
+
         for (int round = 0; round < PushSpreadRounds; round++)
         {
             bool changed = false;
@@ -225,6 +277,7 @@ internal static partial class BodyRetarget
                 float cap = need[n];
                 foreach (int m in sets.Adj[n])
                 {
+                    if (!candidate[m]) continue;
                     float limit = (inSet[m] ? need[m] : 0f) + step;
                     if (limit < cap) cap = limit;
                 }
