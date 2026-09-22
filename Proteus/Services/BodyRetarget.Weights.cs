@@ -15,10 +15,15 @@ internal static partial class BodyRetarget
     internal const int MaxInfluences = 8;
 
     /// <summary>
-    /// Nearest target body point a cloth vertex may take its body weights from (50 cm). Cloth further off than this —
-    /// the far end of a long cape — keeps the weights it had.
+    /// How near a body has to be under a cloth vertex for its weights to be rewritten (4 cm). Cloth sits millimetres
+    /// off the skin, and a boot shaft or a stiff cuff a centimetre or two; past that there is no body under the vertex
+    /// to speak of and its weights are left as the author made them.
+    /// <para/>
+    /// This used to be 50 cm, for "the far end of a long cape". A garment covers more of the body than the slots being
+    /// refitted: a thigh-high stocking refitted on the FEET slot alone found the foot half a metre below the thigh and
+    /// rigged the whole stocking to the ankle. Cloth out of reach of the bodies in play must keep its weights.
     /// </summary>
-    internal const float WeightReach = 0.5f;
+    internal const float WeightReach = 0.04f;
 
     /// <summary>
     /// New skinning for a garment's cloth, from the body it is being refitted onto.
@@ -115,9 +120,14 @@ internal static partial class BodyRetarget
             if (mine.Where(i => !bodyBones.Contains(i.Bone)).Sum(i => i.W) >= 0.999f) continue;
             if (Nearest(targets, p) is not { } body || body.Length == 0) continue;
             var was = new Vector3(wasAt[v * 3], wasAt[v * 3 + 1], wasAt[v * 3 + 2]);
-            if (sources != null && Nearest(sources, was) is { Length: > 0 } oldBody
-                && Change(mine, oldBody, body, bodyBones) is { Count: > 0 } changed)
-                body = [.. changed];
+            if (sources != null)
+            {
+                // Both bodies have to be under the vertex for the change between them to mean anything. With only the
+                // old one missing there is nothing to compare against, and taking the new body's weights outright
+                // would re-rig cloth that never sat on it.
+                if (Nearest(sources, was) is not { Length: > 0 } oldBody) continue;
+                if (Change(mine, oldBody, body, bodyBones) is { Count: > 0 } changed) body = [.. changed];
+            }
 
             if (Combine(mine, body, bodyBones, out bool cut) is not { } combined) continue;
             result[v] = combined;

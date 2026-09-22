@@ -2250,6 +2250,10 @@ public sealed class PartsStrings
         "{0:N0} of them had more bones than a point can follow; the weakest were left out.");
 
     /// <summary>{0} is how many triangles of the old body's piercings and pubic hair were removed.</summary>
+    /// <summary>{0} is how many skin meshes were kept because they are not the body's skin.</summary>
+    public readonly string RetargetPosedSkinFmt = Loc.Localize("Parts.Retarget.PosedSkin.Fmt",
+        "{0} of this model's skin mesh(es) are only partly on the body — a heeled shoe draws its own foot, turned onto the toe — so they were kept as the author made them instead of being swapped.");
+
     public readonly string RetargetExtrasDroppedFmt = Loc.Localize("Parts.Retarget.ExtrasDropped.Fmt",
         "The old body's piercings and pubic hair ({0:N0} triangles) were left out.");
 

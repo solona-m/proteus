@@ -141,7 +141,12 @@ internal static partial class BodyRetarget
         foreach (int n in candidates)
         {
             var p0 = ToVector(sets.NodeAt[n]);
-            if (before.Nearest(p0, PushProbeRange, out var h0))
+
+            // Reached much further than the push itself: a point DEEP inside the body is authored-inside just as much
+            // as one just under the surface, and at the short range the two were indistinguishable from cloth far
+            // outside. A heeled shoe's foot sits well inside where the body's flat foot is drawn, and reading it as
+            // "outside" had the push-out balloon the stocking by up to 30 mm.
+            if (before.Nearest(p0, AuthoredProbeRange, out var h0))
             {
                 float s0 = Vector3.Dot(p0 - h0.Point, h0.Normal);
                 if (s0 < 0f) continue;

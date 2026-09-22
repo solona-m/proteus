@@ -303,6 +303,47 @@ public class BodyWeightsTests
     }
 
     [Fact]
+    public void Two_bodies_a_whole_tile_apart_in_uv_still_pair()
+    {
+        // Bibo+ stores its legs at v -0.67..-0.02 where Neolithe stores them at 0.02..0.98. A sheet repeats, so those
+        // are the same texels; compared as stored they had nothing in common and the pair was refused.
+        var body = ModelPartReader.Read(SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0, TrianglesPerIsland: 4))))!;
+        int vc = body.Positions.Length / 3;
+        var uv = new float[vc * 2];
+        for (int v = 0; v < vc; v++) { uv[v * 2] = 0.1f + 0.2f * (v % 3); uv[v * 2 + 1] = 0.2f + 0.15f * (v % 4); }
+        var shifted = uv.Select((x, i) => i % 2 == 1 ? x - 1f : x).ToArray();
+
+        Assert.True(BodyCorrespondence.TryBuild(body, shifted, body, uv, "legs", out var c, out string why), why);
+        Assert.Contains("100.0%", c!.Describe());
+    }
+
+    [Fact]
+    public void Cloth_out_of_reach_of_the_body_keeps_the_weights_it_had()
+    {
+        // A thigh-high stocking refitted on the FEET slot: the body is the foot, and the cloth up the leg is nowhere
+        // near it. Weighting that cloth to the foot's bones is what tore a stocking apart.
+        var source = Body(("j_asi_d_l", 1f));
+        var target = Body(("j_asi_e_l", 1f));
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Cloth, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetZ: 0.001f,
+                                                                  Weights: [("j_asi_d_l", 1f)])),
+            new SyntheticModel.Mesh(Cloth, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetZ: 0.5f,
+                                                                  Weights: [("j_asi_d_l", 1f)])));
+        var pairs = new[] { Pair(source, target) };
+
+        var plan = BodyRetarget.PlanWeights(garment, pairs, acrossBodies: true)!;
+        var near = VerticesOf(garment, Cloth, 0);
+        var far = VerticesOf(garment, Cloth, 1);
+        var rebuilt = BodyRetarget.Rebuild(garment, pairs, swapSkin: false, plan, out _)!;
+        var w = Weights(rebuilt);
+
+        // On the body: it follows the new body's bone. Half a metre off it: untouched.
+        Assert.All(near, v => Assert.Equal("j_asi_e_l", w[v].OrderByDescending(i => i.W).First().Bone));
+        Assert.All(far, v => Assert.Equal([("j_asi_d_l", 1f)], w[v]));
+    }
+
+    [Fact]
     public void Bodies_in_different_texture_layouts_with_no_map_between_them_are_refused()
     {
         var bibo = ModelPartReader.Read(SyntheticModel.Build([],

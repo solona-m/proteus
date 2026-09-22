@@ -44,11 +44,11 @@ public class BodyRetargetTests
     [Fact]
     public void The_skin_swap_replaces_the_resized_slot_s_skin_mesh_with_the_body_s_whole()
     {
-        // The garment's chest skin mesh: two submeshes, most of it on the chest and one piece standing five metres off.
-        // The whole mesh goes, both of them — a mesh belongs to a slot by majority, and is never cut into.
+        // The garment's chest skin mesh, all of it on the chest: it goes whole, and the body's own skin takes its
+        // place. A mesh is never cut into — it is swapped entire or kept entire.
         var garment = SyntheticModel.Build([],
             new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 2),
-                                                  new SyntheticModel.Sub(0, OffsetZ: 5f)),
+                                                  new SyntheticModel.Sub(0, TrianglesPerIsland: 1)),
             new SyntheticModel.Mesh(ClothMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 4, OffsetZ: 0.001f)));
         // The chest's new body skin, denser than the garment's copy.
         var chest = SyntheticModel.Build([],
@@ -65,6 +65,25 @@ public class BodyRetargetTests
         var drawn = Drawn(rebuilt!);
         Assert.Equal(4, drawn[ClothMaterial.TrimStart('/')]);
         Assert.Equal(5, drawn.Where(d => SecondSkinWriter.IsBodySkinMaterial("/" + d.Key)).Sum(d => d.Value));
+    }
+
+    [Fact]
+    public void A_skin_mesh_only_partly_on_the_body_is_kept_whole()
+    {
+        // A heeled shoe draws its own foot, turned onto the toe, in the same mesh as the lower leg: the leg sits on the
+        // body and the foot does not. Swapping by majority handed the whole mesh to the body — whose skin has no foot
+        // — and the foot vanished. Part on, part off: the author's mesh stays, all of it.
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 2),
+                                                  new SyntheticModel.Sub(0, OffsetZ: 5f)),
+            new SyntheticModel.Mesh(ClothMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 4, OffsetZ: 0.001f)));
+        var chest = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)));
+
+        Assert.Null(BodyRetarget.SwapSkin(garment, [Resized("_top", chest)], out var report));
+        Assert.Equal(0, report.Removed);
+        Assert.Equal(1, report.Kept);
+        Assert.Equal(1, report.Posed);
     }
 
     [Fact]
@@ -795,9 +814,11 @@ public class BodyRetargetTests
     public void Bodies_with_different_texture_layouts_are_refused()
     {
         // Nothing lines up by uv, so there is no way to say which point is which: the one case still refused.
+        // Moved by part of a tile, not a whole one: a sheet repeats, so a whole-tile shift is the SAME layout and
+        // pairs (see Two_bodies_a_whole_tile_apart_in_uv_still_pair).
         var source = Cube(0.20f, SkinMaterial);
         var target = Scrambled(Cube(0.25f, SkinMaterial), out var targetUv);
-        for (int i = 0; i < targetUv.Length; i++) targetUv[i] += 10f;
+        for (int i = 0; i < targetUv.Length; i++) targetUv[i] += 0.37f;
 
         Assert.False(BodyCorrespondence.TryBuild(source, CubeUv(source), target, targetUv, "chest", out _,
                                                  out string refusal));

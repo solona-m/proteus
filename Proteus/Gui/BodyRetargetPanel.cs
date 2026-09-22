@@ -531,6 +531,14 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
                             source == null ? [] : [source], many: false) is { } pickedFrom)
         {
             from[slot] = pickedFrom;
+
+            // Choosing a made-for size is what puts an optional slot in use, and that is the moment to fill in what to
+            // refit it ONTO: the size being worn, as the garment's own slot gets on opening. Without it the user picks
+            // a target by hand and can pick one they are not wearing, which fits the garment to a body that is not
+            // there — a stocking refitted onto a size other than the worn one clips through the leg.
+            if (!to.ContainsKey(slot) && catalog is { } snapshot && WornOption(snapshot, slot) is { } worn)
+                to[slot] = [worn];
+
             DropPlan(ctx);
             StartValidate(slot);
         }
@@ -850,6 +858,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
             if (swap.Kept > 0) lines.Add(string.Format(ps.RetargetSwapKeptFmt, swap.Kept));
             if (swap.Reweighted > 0) lines.Add(string.Format(ps.RetargetReweightedFmt, swap.Reweighted));
             if (swap.Trimmed > 0) lines.Add(string.Format(ps.RetargetTrimmedFmt, swap.Trimmed));
+            if (swap.Posed > 0) lines.Add(string.Format(ps.RetargetPosedSkinFmt, swap.Posed));
             if (swap.ExtrasDropped > 0) lines.Add(string.Format(ps.RetargetExtrasDroppedFmt, swap.ExtrasDropped));
             if (swap.Unplaced > 0) lines.Add(string.Format(ps.RetargetUnplacedFmt, swap.Unplaced));
             if (swap.LostShapes > 0) lines.Add(string.Format(ps.RetargetSwapShapesFmt, swap.LostShapes));

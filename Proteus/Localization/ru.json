@@ -3331,6 +3331,10 @@
     "message": "Pick the body mod this garment was made for. Only mods that offer a choice of body models are listed.",
     "description": ""
   },
+  "Parts.Retarget.PosedSkin.Fmt": {
+    "message": "{0} of this model's skin mesh(es) are only partly on the body \u2014 a heeled shoe draws its own foot, turned onto the toe \u2014 so they were kept as the author made them instead of being swapped.",
+    "description": ""
+  },
   "Parts.Retarget.Preview": {
     "message": "Refit and preview",
     "description": ""

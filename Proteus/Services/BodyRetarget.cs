@@ -51,6 +51,13 @@ internal static partial class BodyRetarget
     internal const float PushProbeRange = 0.03f;
 
     /// <summary>
+    /// How far the push-out looks for the skin when deciding whether cloth was authored INSIDE it (15 cm). Cloth tucked
+    /// under a body can sit far inside it — a heeled shoe's foot is drawn where the body's flat foot is — and at
+    /// <see cref="PushProbeRange"/> such a point read as "nowhere near skin", which the pass took for outside.
+    /// </summary>
+    internal const float AuthoredProbeRange = 0.15f;
+
+    /// <summary>
     /// How far outside the target body a pushed cloth vertex is put (0.5 mm).
     /// <para/>
     /// This feature's own constant, measured for CLOTH OVER SKIN. Explicitly not <c>SecondSkinWriter.BaseOffset</c>,
@@ -277,10 +284,19 @@ internal static partial class BodyRetarget
         // the in-place rewrite above.
         SwapReport? swap = null;
         var weights = PlanWeights(model, pairs, acrossBodies, before: garmentBytes);
-        if ((replaceSkin || weights != null) && Rebuild(model, pairs, replaceSkin, weights, out var swapped) is { } rebuilt)
+        if (replaceSkin || weights != null)
         {
-            model = rebuilt;
-            swap = swapped;
+            var rebuilt = Rebuild(model, pairs, replaceSkin, weights, out var swapped);
+            if (rebuilt != null)
+            {
+                model = rebuilt;
+                swap = swapped;
+            }
+            else if (swapped.Kept > 0)
+            {
+                // Nothing was rebuilt, but the skin the swap left alone is worth reporting.
+                swap = swapped;
+            }
         }
 
         var report = new Report(garment.Positions.Length / 3, solved.Snapped, solved.Transferred, solved.Missed,
