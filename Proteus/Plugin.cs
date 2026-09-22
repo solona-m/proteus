@@ -25,7 +25,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1010;
+    public const int BuildNumber = 1012;
 
     /// <summary>
     /// When this assembly was compiled, as MM-dd HH:mm:ss, baked in by the csproj: Dalamud loads plugins from a stream,
@@ -226,7 +226,8 @@ public sealed class Plugin : IDalamudPlugin
         {
             // Read once, at registration: Dalamud caches the help line, so it keeps the load-time language.
             HelpMessage = Loc.Localize("Command.Help",
-                "Toggle the Proteus overlay compositor status window. \"/proteus config\" opens it on Settings."),
+                "Toggle the Proteus overlay compositor status window. \"/proteus config\" opens it on Settings,\n"
+              + "\"/proteus refresh\" recomposites now, and \"/proteus refresh full\" rebuilds everything first."),
         });
 
         // The boot composite is held (see BootCompositeHold) for the design-binding restore; with nothing armed, release it now.
@@ -323,6 +324,19 @@ public sealed class Plugin : IDalamudPlugin
                 Log.Information("[Proteus] {0}", l);
                 ChatGui.Print($"[Proteus] {l}");
             }
+            return;
+        }
+
+        // "/proteus refresh [full]": the tab bar's Refresh button, and its shift-click, from a macro.
+        if (a.StartsWith("refresh", StringComparison.OrdinalIgnoreCase))
+        {
+            bool full = a[7..].Trim() is "full" or "-full" or "all";
+            compositor.RefreshAndRecomposite(full);
+            // The Studio lists every Penumbra mod, so refresh that too: a recomposite alone would miss a new one.
+            partsPanel.Refresh();
+            ChatGui.Print("[Proteus] " + (full
+                ? Loc.Localize("Command.Refreshing.Full", "Rebuilding everything and recompositing. This takes longer than a plain refresh.")
+                : Loc.Localize("Command.Refreshing", "Recompositing now.")));
             return;
         }
 

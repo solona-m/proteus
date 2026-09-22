@@ -763,6 +763,14 @@
     "message": "Proteusオーバーレイ合成ウィンドウを開閉します。「/proteus config」で設定タブを開きます。",
     "description": ""
   },
+  "Command.Refreshing": {
+    "message": "Recompositing now.",
+    "description": "Chat line for \"/proteus refresh\"."
+  },
+  "Command.Refreshing.Full": {
+    "message": "Rebuilding everything and recompositing. This takes longer than a plain refresh.",
+    "description": "Chat line for \"/proteus refresh full\"."
+  },
   "Common.Browse.Btn": {
     "message": "参照",
     "description": ""

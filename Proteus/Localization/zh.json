@@ -763,6 +763,14 @@
     "message": "开关 Proteus 叠加合成器状态窗口。输入“/proteus config”可直接打开设置页。",
     "description": ""
   },
+  "Command.Refreshing": {
+    "message": "Recompositing now.",
+    "description": "Chat line for \"/proteus refresh\"."
+  },
+  "Command.Refreshing.Full": {
+    "message": "Rebuilding everything and recompositing. This takes longer than a plain refresh.",
+    "description": "Chat line for \"/proteus refresh full\"."
+  },
   "Common.Browse.Btn": {
     "message": "浏览",
     "description": ""

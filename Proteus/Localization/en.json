@@ -760,8 +760,16 @@
     "description": "Tooltip for the checkbox above. \"normal\" is the normal map (a texture). \"0.00\" is a numeric value - keep the digits. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Command.Help": {
-    "message": "Toggle the Proteus overlay compositor status window. \"/proteus config\" opens it on Settings.",
+    "message": "Toggle the Proteus overlay compositor status window. \"/proteus config\" opens it on Settings,\n\"/proteus refresh\" recomposites now, and \"/proteus refresh full\" rebuilds everything first.",
     "description": "Help line shown next to /proteus in Dalamud's command list. Leave the literal \"/proteus config\" untranslated - it is typed."
+  },
+  "Command.Refreshing": {
+    "message": "Recompositing now.",
+    "description": "Chat line for \"/proteus refresh\"."
+  },
+  "Command.Refreshing.Full": {
+    "message": "Rebuilding everything and recompositing. This takes longer than a plain refresh.",
+    "description": "Chat line for \"/proteus refresh full\"."
   },
   "Common.Browse.Btn": {
     "message": "Browse",

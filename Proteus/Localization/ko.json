@@ -763,6 +763,14 @@
     "message": "Proteus 오버레이 컴포지터 상태 창을 켜거나 끕니다. \"/proteus config\"를 입력하면 설정 탭이 열립니다.",
     "description": ""
   },
+  "Command.Refreshing": {
+    "message": "Recompositing now.",
+    "description": "Chat line for \"/proteus refresh\"."
+  },
+  "Command.Refreshing.Full": {
+    "message": "Rebuilding everything and recompositing. This takes longer than a plain refresh.",
+    "description": "Chat line for \"/proteus refresh full\"."
+  },
   "Common.Browse.Btn": {
     "message": "찾아보기",
     "description": ""
