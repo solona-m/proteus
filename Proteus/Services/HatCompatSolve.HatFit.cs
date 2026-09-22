@@ -19,6 +19,7 @@ public static partial class HatCompatSolve
         private float[] bandFloor = null!;
         private float hatLine;
         private SecondSkinWriter.Source parsed = null!;
+        private EarGeometry ears = EarGeometry.None;
         private Dictionary<int, int[]> valence = null!;
         private List<ModelPart> drop = null!;
         private HashSet<long> gone = null!;
@@ -73,6 +74,9 @@ public static partial class HatCompatSolve
             hatLine = centre.Y + HatLine;
 
             parsed = SecondSkinWriter.Parse(mdl);
+            // A Miqo'te's ear fur rides in the hairstyle but belongs to the ears; neither the cut nor the press
+            // may have it. Read before either runs.
+            ears = ReadEarGeometry(mdl, parsed, meshes);
             valence = Valence(mdl, parsed, meshes);
             return true;
         }
@@ -80,7 +84,7 @@ public static partial class HatCompatSolve
         private void CutAboveHatLine()
         {
             // Everything a hat certainly hides is cut away rather than pressed; nothing else is removed.
-            (drop, gone) = CutAtHatLine(mdl, parsed, meshes, hatLine, centre, radius, raceCode);
+            (drop, gone) = CutAtHatLine(mdl, parsed, meshes, hatLine, centre, radius, raceCode, ears);
         }
 
         private void CollectCandidates()
@@ -95,6 +99,9 @@ public static partial class HatCompatSolve
                 {
                     var p = mv.Positions[v];
                     if (gone.Contains(VertexKey(mv.Mesh, v))) continue;      // cut away; a shape value would move nothing
+
+                    // Ear fur, and the row it is rooted in: pressing it onto the skull flattens the ears.
+                    if (ears.Touched.Contains(VertexKey(mv.Mesh, v))) continue;
 
                     // The ring, plus the fade below the rim that stops it kinking against untouched hair.
                     float above = HatProfile.AboveRim(raceCode, p, centre);

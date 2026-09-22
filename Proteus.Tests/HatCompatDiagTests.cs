@@ -3618,6 +3618,203 @@ public class HatCompatDiagTests(ITestOutputHelper o)
         }
     }
 
+    /// <summary>
+    /// WHAT HOLDS A MIQO'TE'S EAR FUR. The fur on those ears ships inside the HAIRSTYLE, and it sits exactly
+    /// where a hat's rim plane says "under the hat" — so the cut tagged it atr_kam and the ears went bald.
+    /// This dumps, per submesh, the material, the bones it hangs from and how much of its weight rides
+    /// j_mimi_l/j_mimi_r, which is what <see cref="HatCompatSolve.ReadEarGeometry"/> keys off.
+    /// <para/>
+    /// The fur is NOT reliably its own mesh (some mods weld it into the hair), so the rule has to be
+    /// per-vertex, and the shares below are what set <see cref="HatCompatSolve.EarWeightFloor"/>: real fur
+    /// reads 0.3-1.0, while an earless conversion leaves one hair vertex holding a thousandth of an ear bone.
+    /// </summary>
+    [Fact]
+    public void WhatHoldsTheEarFurInAMiqoteHair()
+    {
+        if (!Directory.Exists(Mods)) return;
+        var want = Environment.GetEnvironmentVariable("PROTEUS_EARHAIR");
+        var files = HairModels()
+            .Where(f => f.Contains("c0801", StringComparison.OrdinalIgnoreCase)
+                     || f.Contains("c0701", StringComparison.OrdinalIgnoreCase))
+            .Where(f => want == null || f.Contains(want, StringComparison.OrdinalIgnoreCase))
+            .Take(14).ToArray();
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"{files.Length} miqo'te hair model(s)");
+
+        foreach (var f in files)
+        {
+            byte[] b;
+            try { b = File.ReadAllBytes(f); } catch (IOException) { continue; }
+            sb.AppendLine();
+            sb.AppendLine(f.Length > Mods.Length ? f[(Mods.Length + 1)..] : f);
+
+            var parts = ModelPartReader.Read(b);
+            var skin = ModelSkinReader.Read(b, null, f.Replace('\\', '/'));
+            if (parts == null || skin == null) { sb.AppendLine("  unreadable"); continue; }
+
+            try
+            {
+                var src = SecondSkinWriter.Parse(b);
+                sb.AppendLine($"  materials: {string.Join(", ", src.MatNames)}");
+                sb.AppendLine($"  attributes: {string.Join(", ", src.AttrNames)}");
+                sb.AppendLine($"  shapes: {string.Join(", ", src.Shapes.Select(s => s.Key))}");
+            }
+            catch (Exception ex) { sb.AppendLine($"  parse: {ex.GetType().Name}"); }
+
+            // By submesh, with islands folded back together: the island split says nothing about the fur.
+            foreach (var g in parts.Parts.GroupBy(p => (p.Mesh, p.Submesh)).OrderBy(g => g.Key))
+            {
+                var verts = new HashSet<int>(g.SelectMany(p => p.Triangles));
+                var weight = new Dictionary<string, float>(StringComparer.Ordinal);
+                var min = new Vector3(float.MaxValue);
+                var max = new Vector3(float.MinValue);
+                int onEar = 0;
+                float earWeight = 0f;
+                foreach (var v in verts)
+                {
+                    min = Vector3.Min(min, new Vector3(
+                        parts.Positions[v * 3], parts.Positions[v * 3 + 1], parts.Positions[v * 3 + 2]));
+                    max = Vector3.Max(max, new Vector3(
+                        parts.Positions[v * 3], parts.Positions[v * 3 + 1], parts.Positions[v * 3 + 2]));
+
+                    float ear = 0f;
+                    int at = v * XivLiveMesh.SkinnedMesh.MaxInfluences;
+                    for (int k = 0; k < XivLiveMesh.SkinnedMesh.MaxInfluences && at + k < skin.BoneWeights.Length; k++)
+                    {
+                        float w = skin.BoneWeights[at + k];
+                        if (w <= 0f) continue;
+                        var bone = skin.BoneIndices[at + k];
+                        if (bone >= skin.BoneNames.Length) continue;
+                        var name = skin.BoneNames[bone];
+                        weight[name] = weight.GetValueOrDefault(name) + w;
+                        if (name.StartsWith("j_mimi", StringComparison.Ordinal)) ear += w;
+                    }
+                    if (ear > 0f) onEar++;
+                    earWeight += ear;
+                }
+
+                var first = g.First();
+                var top = weight.OrderByDescending(kv => kv.Value).Take(5)
+                    .Select(kv => $"{kv.Key} {kv.Value / Math.Max(1, verts.Count):F2}");
+                sb.AppendLine($"  {first.Mesh}.{first.Submesh,-4} islands {g.Count(),3}  "
+                            + $"tris {g.Sum(p => p.TriangleCount),6}  verts {verts.Count,6}  "
+                            + $"mat {first.Material,-34} attr 0x{first.AttributeMask:x}");
+                sb.AppendLine($"          {F(min)}..{F(max)}");
+                sb.AppendLine($"          bones: {string.Join(", ", top)}");
+                sb.AppendLine($"          ear-bone verts {onEar}/{verts.Count}, "
+                            + $"mean ear weight {earWeight / Math.Max(1, verts.Count):F2}");
+            }
+        }
+
+        var dump = Environment.GetEnvironmentVariable("PROTEUS_DIAG_OUT");
+        if (dump != null) File.WriteAllText(dump, sb.ToString());
+        o.WriteLine(sb.ToString());
+    }
+
+    /// <summary>
+    /// IS ANY EAR FUR STILL BEING CUT? The synthetic tests prove the rule; this measures it on the real
+    /// hairstyles, where the fur is sometimes its own mesh and sometimes welded into the hair. Every line
+    /// should read 0 fur triangles cut, and a non-zero one names the file to look at.
+    /// </summary>
+    [Fact]
+    public void TheCutLeavesEveryMiqoteEarFurTriangleAlone()
+    {
+        var head = MiqoteHead();
+        if (head == null) { o.WriteLine("no miqo'te face model installed"); return; }
+
+        var files = HairModels()
+            .Where(f => f.Contains("c0801", StringComparison.OrdinalIgnoreCase)
+                     || f.Contains("c0701", StringComparison.OrdinalIgnoreCase))
+            .Take(14).ToArray();
+
+        foreach (var f in files)
+        {
+            byte[] b;
+            try { b = File.ReadAllBytes(f); } catch (IOException) { continue; }
+
+            HatCompatSolve.Result solve;
+            SecondSkinWriter.Source src;
+            System.Collections.Generic.List<HatCompatSolve.MeshVerts> meshes;
+            var parts = ModelPartReader.Read(b);
+            if (parts == null) continue;
+            try
+            {
+                src = SecondSkinWriter.Parse(b);
+                meshes = HatCompatSolve.ReadLod0Meshes(b);
+                solve = HatCompatSolve.Solve(b, parts, head, raceCode: "0801");
+            }
+            catch (Exception ex) { o.WriteLine($"{Path.GetFileName(f)}: {ex.GetType().Name}"); continue; }
+
+            var ears = HatCompatSolve.ReadEarGeometry(b, src, meshes);
+            if (ears.Fur.Count == 0) { o.WriteLine($"{ShortName(f),-58} no ear fur"); continue; }
+
+            // A cut piece names whole submeshes (Island < 0) or triangle ordinals within one; either way, how
+            // much of it is fur is what matters.
+            int furCut = 0;
+            foreach (var piece in solve.Cut)
+            {
+                var part = parts.Parts.FirstOrDefault(p => p.Mesh == piece.Mesh && p.Submesh == piece.Submesh);
+                if (part == null) continue;
+                var spans = parts.MeshSpans.FirstOrDefault(m => m.Mesh == piece.Mesh);
+                foreach (var p in parts.Parts.Where(p => p.Mesh == piece.Mesh && p.Submesh == piece.Submesh))
+                for (int t = 0; t < p.TriangleCount; t++)
+                {
+                    if (piece.Island >= 0 && !piece.Ordinals.Contains(p.Ordinals[t])) continue;
+                    for (int k = 0; k < 3; k++)
+                    {
+                        int v = p.Triangles[t * 3 + k] - spans.BaseVertex;
+                        if (ears.Fur.Contains(((long)piece.Mesh << 32) | (uint)v)) { furCut++; break; }
+                    }
+                }
+            }
+
+            // WHAT THE SPARING COSTS. A triangle is spared on ANY fur corner, so some of what stays is hair
+            // rather than fur. Counted against everything the rim would have cut, which is the thing a hat
+            // has to hide: "mixed" is the hair left standing beside the ear.
+            var centre = HatCompatSolve.FrameAndFloor(b, head)?.Centre ?? Vector3.Zero;
+            int wouldCut = 0, pure = 0, mixed = 0;
+            foreach (var mv in meshes)
+            {
+                int mo = src.MeshStart + mv.Mesh * 36;
+                uint ic = BitConverter.ToUInt32(b, mo + 4), start = BitConverter.ToUInt32(b, mo + 16);
+                if ((long)src.Ib + (start + ic) * 2 > b.Length) continue;
+                for (uint t = 0; t + 3 <= ic; t += 3)
+                {
+                    int furCorners = 0;
+                    bool above = false;
+                    for (int k = 0; k < 3; k++)
+                    {
+                        int v = BitConverter.ToUInt16(b, src.Ib + (int)(start + t + k) * 2);
+                        if (v >= mv.Positions.Length) { above = false; break; }
+                        if (HatProfile.AboveRim("0801", mv.Positions[v], centre) > HatCompatSolve.RingHeight)
+                            above = true;
+                        if (ears.Fur.Contains(((long)mv.Mesh << 32) | (uint)v)) furCorners++;
+                    }
+                    if (!above) continue;
+                    wouldCut++;
+                    if (furCorners == 3) pure++;
+                    else if (furCorners > 0) mixed++;
+                }
+            }
+
+            o.WriteLine($"{ShortName(f),-58} fur verts {ears.Fur.Count,5}  fur triangles cut {furCut}  "
+                      + $"| under the hat {wouldCut,6}, spared {pure + mixed,5} "
+                      + $"({pure} all-fur, {mixed} fur+hair)");
+        }
+    }
+
+    /// <summary>A Miqo'te face model, for the one race whose hair carries its ears' fur.</summary>
+    private static byte[]? MiqoteHead()
+    {
+        if (!Directory.Exists(Mods)) return null;
+        var f = Directory.GetFiles(Mods, "c0801f*_fac.mdl", SearchOption.AllDirectories)
+            .FirstOrDefault(x => !x.Contains(HatCompatService.BackupSubdir, StringComparison.OrdinalIgnoreCase));
+        return f == null ? null : File.ReadAllBytes(f);
+    }
+
+    private static string ShortName(string f) => f.Length > Mods.Length ? f[(Mods.Length + 1)..] : f;
+
     /// <summary>Bytes one vertex of a mesh occupies across every stream it has.</summary>
     private static int TotalStride(byte[] mdl, int mo)
     {

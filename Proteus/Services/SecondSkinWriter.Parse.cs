@@ -283,7 +283,7 @@ public static partial class SecondSkinWriter
     /// <summary>How many bone influences a blend-weight or blend-index element of this type holds: Dawntrail
     /// added an eight-influence format (type 17) beside the old four, and treating one as the other silently
     /// corrupts the weights.</summary>
-    private static int BlendCount(byte type) => type == 17 ? 8 : 4;
+    internal static int BlendCount(byte type) => type == 17 ? 8 : 4;
 
     /// <summary>A parsed body part. Internal because <see cref="ModelPartReader"/> and
     /// <see cref="ModelAttributeWriter"/> read a model through this parser rather than a second one.</summary>

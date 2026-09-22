@@ -16,7 +16,7 @@ public static partial class HatCompatSolve
     /// Which generation of this solve produced a patch. BUMP IT whenever a constant below changes or the output
     /// geometry changes: the watcher redoes patches stamped with an older version.
     /// </summary>
-    public const int Version = 31;
+    public const int Version = 32;
 
     /// <summary>How far above the head's centre a hat sits on the head, in model units; the lowest a cut may
     /// safely go, measured as visibility from a viewer's line of sight.</summary>
@@ -581,9 +581,11 @@ public static partial class HatCompatSolve
     /// <returns>The submesh pieces to tag, and the vertices no surviving triangle draws, which need no shape
     /// value.</returns>
     /// <param name="centre">The head's centre.</param>
+    /// <param name="ears">Ear fur, which is never cut however far above the rim it stands — see
+    /// <see cref="ReadEarGeometry"/>.</param>
     private static (List<ModelPart> Drop, HashSet<long> Gone) CutAtHatLine(
         byte[] mdl, SecondSkinWriter.Source src, IReadOnlyList<MeshVerts> meshes, float hatLine,
-        Vector3 centre, float radius, string? raceCode)
+        Vector3 centre, float radius, string? raceCode, EarGeometry ears)
     {
         var drop = new List<ModelPart>();
         var gone = new HashSet<long>();
@@ -618,6 +620,14 @@ public static partial class HatCompatSolve
                     if (a >= pos.Length || b >= pos.Length || c >= pos.Length) continue;
 
                     uses[a]++; uses[b]++; uses[c]++;
+
+                    // EAR FUR IS NOT SCALP. A Miqo'te's ears come out through the hat, so fur tagged away here
+                    // leaves them bald. Counted in uses above first, so sparing a triangle also keeps its
+                    // vertices out of `gone`. ANY corner spares it, for the same reason any corner cuts one.
+                    if (ears.Fur.Count > 0
+                     && (ears.Fur.Contains(VertexKey(mv.Mesh, a))
+                      || ears.Fur.Contains(VertexKey(mv.Mesh, b))
+                      || ears.Fur.Contains(VertexKey(mv.Mesh, c)))) continue;
 
                     // ANY corner under the hat takes the whole triangle: a sliver cut below the rim is hidden,
                     // where a fringe left standing pokes through. There is no radius bound; the cut goes by
