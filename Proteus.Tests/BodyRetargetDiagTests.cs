@@ -1586,6 +1586,39 @@ public class BodyRetargetDiagTests(ITestOutputHelper output)
         Run("Rue Yiggle Medium -> Neolithe XS", rueTop, rueBody, neoBody, neoTop);
     }
 
+    private const string QueenAnne = @"E:\Penumbradt\Queen Anne - by Solona";
+
+    /// <summary>
+    /// Queen Anne's dress — skirt bones, 3.7 MB — refitted from Neolithe onto Rue, timed: the weight rewrite on its own,
+    /// then the whole refit. A refit of it took minutes in game.
+    /// </summary>
+    [Fact]
+    public void Time_a_skirted_dress_between_bodies()
+    {
+        string dress = Path.Combine(QueenAnne, "size", "neolithe s", @"chara\equipment\e0141\model\c0201e0141_top.mdl");
+        if (!File.Exists(dress) || !Directory.Exists(RueRoot) || !Directory.Exists(NeolitheRoot)) return;
+
+        var neo = BodySizeCatalog.Read(NeolitheRoot);
+        var rue = BodySizeCatalog.Read(RueRoot);
+        string neoBody = neo.PathOf(neo.For("_top").First(o => o.Label == "DEFAULT ALMOND · SFW Almond S"));
+        string rueBody = rue.PathOf(rue.For("_top").First(o => o.Name == "Yiggle - Medium"));
+
+        var bytes = File.ReadAllBytes(dress);
+        var garment = ModelPartReader.Read(bytes)!;
+        var pairs = new List<BodyRetarget.SlotPair>();
+        AddPair(pairs, "_top", neoBody, rueBody, swapSkin: true, crossBody: true);
+        output.WriteLine($"dress: {garment.Positions.Length / 3:N0} vertices, {garment.Parts.Count} parts");
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var weights = BodyRetarget.PlanWeights(bytes, pairs, acrossBodies: true);
+        output.WriteLine($"weights alone: {sw.ElapsedMilliseconds:N0} ms, reweighted {weights?.Reweighted:N0}");
+
+        sw.Restart();
+        var planned = BodyRetarget.Plan(garment, bytes, pairs, "_top", replaceSkin: true, acrossBodies: true);
+        output.WriteLine($"whole refit: {sw.ElapsedMilliseconds:N0} ms");
+        output.WriteLine("  " + Describe(planned.Report));
+    }
+
     private static string Describe(BodyRetarget.Report r)
         => $"moved up to {r.WorstMove * 1000:F1} mm, snapped {r.Snapped:N0}, pushed {r.Pushed:N0}, missed {r.Missed:N0}"
          + (r.Swap is { } s
