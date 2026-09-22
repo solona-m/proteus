@@ -44,11 +44,11 @@ public class BodyRetargetTests
     [Fact]
     public void The_skin_swap_replaces_the_resized_slot_s_skin_mesh_with_the_body_s_whole()
     {
-        // The garment's chest skin mesh: two submeshes, most of it on the chest and one piece standing five metres off.
-        // The whole mesh goes, both of them — a mesh belongs to a slot by majority, and is never cut into.
+        // The garment's chest skin mesh, all of it on the chest: it goes whole, and the body's own skin takes its
+        // place. A mesh is never cut into — it is swapped entire or kept entire.
         var garment = SyntheticModel.Build([],
             new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 2),
-                                                  new SyntheticModel.Sub(0, OffsetZ: 5f)),
+                                                  new SyntheticModel.Sub(0, TrianglesPerIsland: 1)),
             new SyntheticModel.Mesh(ClothMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 4, OffsetZ: 0.001f)));
         // The chest's new body skin, denser than the garment's copy.
         var chest = SyntheticModel.Build([],
@@ -65,6 +65,25 @@ public class BodyRetargetTests
         var drawn = Drawn(rebuilt!);
         Assert.Equal(4, drawn[ClothMaterial.TrimStart('/')]);
         Assert.Equal(5, drawn.Where(d => SecondSkinWriter.IsBodySkinMaterial("/" + d.Key)).Sum(d => d.Value));
+    }
+
+    [Fact]
+    public void A_skin_mesh_only_partly_on_the_body_is_kept_whole()
+    {
+        // A heeled shoe draws its own foot, turned onto the toe, in the same mesh as the lower leg: the leg sits on the
+        // body and the foot does not. Swapping by majority handed the whole mesh to the body — whose skin has no foot
+        // — and the foot vanished. Part on, part off: the author's mesh stays, all of it.
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 2),
+                                                  new SyntheticModel.Sub(0, OffsetZ: 5f)),
+            new SyntheticModel.Mesh(ClothMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 4, OffsetZ: 0.001f)));
+        var chest = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)));
+
+        Assert.Null(BodyRetarget.SwapSkin(garment, [Resized("_top", chest)], out var report));
+        Assert.Equal(0, report.Removed);
+        Assert.Equal(1, report.Kept);
+        Assert.Equal(1, report.Posed);
     }
 
     [Fact]
@@ -351,6 +370,60 @@ public class BodyRetargetTests
         Assert.Equal(0, solved.Pushed);
         for (int v = 0; v < garment.Positions.Length / 3; v++)
             Assert.Equal(0f, Delta(solved, v).Length(), 6);
+    }
+
+    [Fact]
+    public void A_held_point_beside_a_moving_one_stays_exactly_where_it_was()
+    {
+        // Holding is absolute: neither pass moves a held node. The knit that closes tears averages a node toward its
+        // neighbours, and run over every node it moved held ones too — the hold then slipped at exactly the seam it is
+        // there to hold, where a held part meets a moving one.
+        var source = Cube(0.20f, SkinMaterial);
+        var target = Cube(0.25f, SkinMaterial);
+        var garment = Patch(ClothMaterial, new Vector3(0f, 0f, 0.21f));
+
+        Assert.True(IdentityCorrespondence.TryBuild(source, target, "chest", out var built, out string refusal), refusal);
+        var pairs = new[] { new BodyRetarget.SlotPair("_top", built!, target) };
+
+        // One corner of the patch held, the other two free: the free ones move and the held one may not follow.
+        var solved = BodyRetarget.Solve(garment, pairs, held: new HashSet<int> { 0 });
+
+        Assert.Equal(0f, Delta(solved, 0).Length(), 6);
+        Assert.True(Delta(solved, 1).Length() > 1e-4f, "the unheld corners should still have moved");
+    }
+
+    [Fact]
+    public void Clearing_the_body_pulls_out_cloth_the_author_buried()
+    {
+        // "Push the garment clear of the body", for the garment the rule above is wrong for: one whose mod draws its
+        // own skin over yours, where cloth the author buried is no longer hidden by anything and shows as the body
+        // through the fabric. Same setup as the test above, where nothing the refit did put this cloth inside.
+        var body = Cube(0.20f, SkinMaterial);
+        // Four millimetres under the surface: shallow enough to be a clip rather than the garment's own structure.
+        var garment = Patch(ClothMaterial, new Vector3(0f, 0f, 0.196f));
+
+        var solved = Solve(garment, body, body, clearBody: true);
+
+        Assert.True(solved.Pushed > 0, "asked to clear the body, the pass should have pulled this cloth out of it");
+        for (int v = 0; v < garment.Positions.Length / 3; v++)
+        {
+            float z = At(garment, v).Z + Delta(solved, v).Z;
+            Assert.True(z >= 0.20f, $"vertex {v} is still inside the body at z={z}");
+        }
+    }
+
+    [Fact]
+    public void Clearing_the_body_leaves_cloth_buried_deeply_alone()
+    {
+        // Deeper than ClearDepth is the garment's own structure — an inner layer, a sole — and hauling it to the
+        // surface tears the mesh without uncovering anything. Measured on a stocking: 17,212 nodes moved up to 30 mm
+        // and edges grown by 54 mm, with the body still showing through.
+        var body = Cube(0.20f, SkinMaterial);
+        var garment = Patch(ClothMaterial, new Vector3(0f, 0f, 0.20f - BodyRetarget.ClearDepth - 0.005f));
+
+        var solved = Solve(garment, body, body, clearBody: true);
+
+        Assert.Equal(0, solved.Pushed);
     }
 
     [Fact]
@@ -795,9 +868,11 @@ public class BodyRetargetTests
     public void Bodies_with_different_texture_layouts_are_refused()
     {
         // Nothing lines up by uv, so there is no way to say which point is which: the one case still refused.
+        // Moved by part of a tile, not a whole one: a sheet repeats, so a whole-tile shift is the SAME layout and
+        // pairs (see Two_bodies_a_whole_tile_apart_in_uv_still_pair).
         var source = Cube(0.20f, SkinMaterial);
         var target = Scrambled(Cube(0.25f, SkinMaterial), out var targetUv);
-        for (int i = 0; i < targetUv.Length; i++) targetUv[i] += 10f;
+        for (int i = 0; i < targetUv.Length; i++) targetUv[i] += 0.37f;
 
         Assert.False(BodyCorrespondence.TryBuild(source, CubeUv(source), target, targetUv, "chest", out _,
                                                  out string refusal));
@@ -844,11 +919,12 @@ public class BodyRetargetTests
 
     // ── helpers ─────────────────────────────────────────────────────────────────────────────────────────
 
-    private static BodyRetarget.Solved Solve(ModelParts garment, ModelParts source, ModelParts target)
+    private static BodyRetarget.Solved Solve(ModelParts garment, ModelParts source, ModelParts target,
+                                             bool clearBody = false)
     {
         Assert.True(IdentityCorrespondence.TryBuild(source, target, "chest", out var built, out string refusal),
                     refusal);
-        return BodyRetarget.Solve(garment, [new BodyRetarget.SlotPair("_top", built!, target)]);
+        return BodyRetarget.Solve(garment, [new BodyRetarget.SlotPair("_top", built!, target)], clearBody: clearBody);
     }
 
     /// <summary>

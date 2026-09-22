@@ -102,6 +102,12 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     /// </summary>
     private bool replaceSkin = true;
 
+    /// <summary>
+    /// Push cloth out of the body wherever it is buried, not only where the refit buried it. Off by default — see
+    /// <see cref="BodyRetarget.Plan"/>, which explains why an author's buried cloth is normally left alone.
+    /// </summary>
+    private bool clearBody;
+
     /// <summary>The model the worn body was last looked up for, so it is looked up once per model, not per frame.</summary>
     private string? wornFor;
 
@@ -531,6 +537,14 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
                             source == null ? [] : [source], many: false) is { } pickedFrom)
         {
             from[slot] = pickedFrom;
+
+            // Choosing a made-for size is what puts an optional slot in use, and that is the moment to fill in what to
+            // refit it ONTO: the size being worn, as the garment's own slot gets on opening. Without it the user picks
+            // a target by hand and can pick one they are not wearing, which fits the garment to a body that is not
+            // there — a stocking refitted onto a size other than the worn one clips through the leg.
+            if (!to.ContainsKey(slot) && catalog is { } snapshot && WornOption(snapshot, slot) is { } worn)
+                to[slot] = [worn];
+
             DropPlan(ctx);
             StartValidate(slot);
         }
@@ -693,6 +707,9 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         ImGui.Checkbox(ps.RetargetReplaceSkin, ref replaceSkin);
         if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.RetargetReplaceSkinTip);
 
+        ImGui.Checkbox(ps.RetargetClearBody, ref clearBody);
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.RetargetClearBodyTip);
+
         using (ImRaii.Disabled(busy || !ready))
             if (ImGui.Button(ps.RetargetPreview, FullWidth()))
                 StartPlan(ctx);
@@ -850,6 +867,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
             if (swap.Kept > 0) lines.Add(string.Format(ps.RetargetSwapKeptFmt, swap.Kept));
             if (swap.Reweighted > 0) lines.Add(string.Format(ps.RetargetReweightedFmt, swap.Reweighted));
             if (swap.Trimmed > 0) lines.Add(string.Format(ps.RetargetTrimmedFmt, swap.Trimmed));
+            if (swap.Posed > 0) lines.Add(string.Format(ps.RetargetPosedSkinFmt, swap.Posed));
             if (swap.ExtrasDropped > 0) lines.Add(string.Format(ps.RetargetExtrasDroppedFmt, swap.ExtrasDropped));
             if (swap.Unplaced > 0) lines.Add(string.Format(ps.RetargetUnplacedFmt, swap.Unplaced));
             if (swap.LostShapes > 0) lines.Add(string.Format(ps.RetargetSwapShapesFmt, swap.LostShapes));
@@ -940,6 +958,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         var bytes = ctx.GarmentBytes;
         var heldLabels = new HashSet<string>(ctx.Held, StringComparer.Ordinal);
         bool layOnBody = replaceSkin;
+        bool clear = clearBody;
         bool acrossBodies = fromBodyDir != null;
         bool male = MaleGarment;
         string key = Key(ctx);
@@ -977,7 +996,8 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
                     var pairs = new List<BodyRetarget.SlotPair> { new(garmentSlot, built!, target!, body, sourceBody) };
                     pairs.AddRange(shared);
                     results.Add((option, BodyRetarget.Plan(garment, bytes, pairs, garmentSlot, held: held,
-                                                           replaceSkin: layOnBody, acrossBodies: acrossBodies)));
+                                                           replaceSkin: layOnBody, acrossBodies: acrossBodies,
+                                                           clearBody: clear)));
                     Interlocked.Increment(ref planDone);
                 }
                 return new PlanResult(key, results, "");
@@ -1083,7 +1103,8 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         => ctx.ModelRel + "|from:" + (fromBodyDir ?? "") + "|"
          + string.Join("|", Chosen(ctx).Select(s => $"{s}:{from[s].Rel}>{string.Join(",", Targets(s).Select(t => t.Rel))}"))
          + "|held:" + string.Join(",", ctx.Held.OrderBy(h => h, StringComparer.Ordinal))
-         + (replaceSkin ? "|lay" : "");
+         + (replaceSkin ? "|lay" : "")
+         + (clearBody ? "|clear" : "");
 
     /// <summary>The framework-thread half: take up whatever finished, and do the parts only this thread may.</summary>
     private void Consume(in RetargetContext ctx)

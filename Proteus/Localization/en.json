@@ -140,7 +140,7 @@
     "description": "Checkbox label in the Bindings tab."
   },
   "Bindings.RestoreCharacter.Tip": {
-    "message": "When on, applying a bound design also restores every mod that was on the character\nwhen it was saved (enable / priority / options), switches off mods on the character\nthat weren't, and raises the design's mods above anything they conflict with.\n\nMods that aren't Proteus mods are only held that way with Penumbra temporary settings:\nyour collection isn't changed, and reverting or applying an unbound design puts them back.\n\nWhen off, only Proteus mods are restored. Designs are captured either way, so\nturning this on works for designs saved while it was off.",
+    "message": "When on, applying a bound design also restores every mod that was on the character\nwhen it was saved (enable / priority / options), switches off mods on the character\nthat weren\u0027t, and raises the design\u0027s mods above anything they conflict with.\n\nMods that aren\u0027t Proteus mods are only held that way with Penumbra temporary settings:\nyour collection isn\u0027t changed, and reverting or applying an unbound design puts them back.\nPenumbra\u0027s banner on a held mod can drop that one hold, if you want just it back.\n\nWhen off, only Proteus mods are restored. Designs are captured either way, so\nturning this on works for designs saved while it was off.",
     "description": "Tooltip. Appears in the Bindings tab. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Bindings.SecondsAgo.Fmt": {
@@ -3251,6 +3251,14 @@
     "message": "This mod already has a group (\u0022{0}\u0022) that replaces this model. The new group is set to win over it, so changing sizes there will not change this refit.",
     "description": ""
   },
+  "Parts.Retarget.ClearBody": {
+    "message": "Push the garment clear of the body",
+    "description": ""
+  },
+  "Parts.Retarget.ClearBody.Tip": {
+    "message": "On: cloth left inside the body anywhere is pushed out of it, not just cloth the refit pushed in.\nUse it when the body shows through the garment after a refit \u2014 a stocking whose mod draws its own\nleg skin over yours is the usual case, since cloth its author buried in the body is no longer hidden.\nOff (the default) leaves cloth the author tucked under the skin exactly where they put it, which is\nright for most garments: it is hidden on purpose, and pulling it out makes the fit worse.",
+    "description": ""
+  },
   "Parts.Retarget.ClearPreview": {
     "message": "Clear the preview",
     "description": ""
@@ -3333,6 +3341,10 @@
   },
   "Parts.Retarget.PickBody": {
     "message": "Pick the body mod this garment was made for. Only mods that offer a choice of body models are listed.",
+    "description": ""
+  },
+  "Parts.Retarget.PosedSkin.Fmt": {
+    "message": "{0} of this model's skin mesh(es) are only partly on the body \u2014 a heeled shoe draws its own foot, turned onto the toe \u2014 so they were kept as the author made them instead of being swapped.",
     "description": ""
   },
   "Parts.Retarget.Preview": {

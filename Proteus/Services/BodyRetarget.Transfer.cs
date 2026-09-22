@@ -18,26 +18,32 @@ internal static partial class BodyRetarget
     /// </summary>
     internal sealed class SourceBody
     {
-        private readonly (BodySurface Surface, IReadOnlyList<Vector3?> Field)[] slots;
+        /// <param name="Field">The correspondence's own answer per body vertex: what the garment's SKIN lands on,
+        /// which has to be exact.</param>
+        /// <param name="Eased">The same, smoothed over the body's surface: what CLOTH follows. Cloth samples the field
+        /// wherever it happens to hang, and away from the body the nearest point is not a stable thing to ask for, so a
+        /// step in the field tears the cloth across it. Skin is on the body and wants the exact answer.</param>
+        private readonly (BodySurface Surface, IReadOnlyList<Vector3?> Field, IReadOnlyList<Vector3?> Eased)[] slots;
         private readonly Dictionary<(int, int, int), List<(Vector3 At, Vector3 Delta)>> snap = [];
 
-        private SourceBody((BodySurface, IReadOnlyList<Vector3?>)[] slots) => this.slots = slots;
+        private SourceBody((BodySurface, IReadOnlyList<Vector3?>, IReadOnlyList<Vector3?>)[] slots) => this.slots = slots;
 
         public static SourceBody Build(IReadOnlyList<SlotPair> pairs)
         {
-            var built = new (BodySurface, IReadOnlyList<Vector3?>)[pairs.Count];
+            var built = new (BodySurface, IReadOnlyList<Vector3?>, IReadOnlyList<Vector3?>)[pairs.Count];
             for (int i = 0; i < pairs.Count; i++)
             {
                 var src = pairs[i].Correspondence.Source;
                 var surface = new BodySurface(src, BodySurface.CellFor(MeanEdgeOf(src)));
-                built[i] = (surface, pairs[i].Correspondence.Field);
+                var whole = Whole(src, pairs[i].Correspondence.Field);
+                built[i] = (surface, whole, Eased(src, whole));
             }
 
             var body = new SourceBody(built);
 
             // Built in slot order, then ascending vertex, so a tie between two body vertices in one bucket always
             // resolves the same way and a golden hash of the output is stable.
-            foreach (var (surface, field) in built)
+            foreach (var (surface, field, _) in built)
             {
                 var src = surface;
                 foreach (int v in src.SkinVertices)
@@ -51,6 +57,147 @@ internal static partial class BodyRetarget
             }
 
             return body;
+        }
+
+        /// <summary>
+        /// The field with its holes filled in from around them — the value at every vertex the correspondence DID place
+        /// is kept exactly, so a field with no holes comes back as it was.
+        /// <para/>
+        /// A correspondence by texture coordinate leaves the odd vertex unplaced, and a triangle touching one is no use:
+        /// the caller skips it and the point falls to another body, or to nothing. Either way the field steps where the
+        /// hole is, and cloth tears across the step — measured on a stocking at the ankle, a 0.3 mm edge stretched to
+        /// 7.1 mm. A hole is small by definition, so the average of its placed neighbours is a good answer, and holes
+        /// that touch only holes are filled in later rounds from the ones that have been.
+        /// </summary>
+        internal static IReadOnlyList<Vector3?> Whole(ModelParts body, IReadOnlyList<Vector3?> field)
+        {
+            int missing = 0;
+            for (int v = 0; v < field.Count; v++)
+                if (field[v] == null) missing++;
+
+            var adj = Neighbours(body, field.Count);
+
+            var filled = new Vector3?[field.Count];
+            for (int v = 0; v < field.Count; v++) filled[v] = field[v];
+            if (missing > 0) Fill(filled, adj, missing);
+            Despike(filled, adj);
+            return filled;
+        }
+
+        /// <summary>
+        /// The field eased over the body's surface — every vertex moved part way toward its neighbours' average,
+        /// <see cref="SmoothRounds"/> times at <see cref="SmoothRate"/>. What CLOTH follows; skin keeps the exact
+        /// field, since it is meant to land on the body rather than near it.
+        /// <para/>
+        /// A correspondence by texture coordinate is exact where the two bodies agree and noisy where the atlas is cut.
+        /// Cloth three centimetres off the body asks for the nearest point, and around a heel that question has two
+        /// answers a centimetre apart; between them the field steps, and the cloth tears across the step. Easing costs
+        /// nothing real, because the shape change between two bodies is smooth, and it measurably improves the fit
+        /// against an author's own hand-made size.
+        /// </summary>
+        internal static IReadOnlyList<Vector3?> Eased(ModelParts body, IReadOnlyList<Vector3?> field)
+        {
+            var adj = Neighbours(body, field.Count);
+            var eased = new Vector3?[field.Count];
+            for (int v = 0; v < field.Count; v++) eased[v] = field[v];
+
+            for (int round = 0; round < SmoothRounds; round++)
+            {
+                var next = (Vector3?[])eased.Clone();
+                for (int v = 0; v < eased.Length; v++)
+                {
+                    if (eased[v] is not { } d || adj[v] == null) continue;
+                    var sum = Vector3.Zero;
+                    int n = 0;
+                    foreach (int m in adj[v])
+                        if (eased[m] is { } other) { sum += other; n++; }
+                    if (n == 0) continue;
+                    next[v] = Vector3.Lerp(d, sum / n, SmoothRate);
+                }
+                Array.Copy(next, eased, eased.Length);
+            }
+            return eased;
+        }
+
+        /// <summary>
+        /// Replace a vertex's displacement where it disagrees with every neighbour by more than <see cref="DespikeGap"/>.
+        /// <para/>
+        /// Two bodies' shapes differ smoothly, so the field between them is smooth too — except where the correspondence
+        /// itself went wrong, which it can at the body's own texture seams: a vertex lands on the far side of a cut and
+        /// takes a displacement metres from its neighbours'. Cloth sampled either side of that vertex is torn apart by
+        /// it, and on a stocking it showed as a spike through the shoe. The neighbours' average is the answer the
+        /// surface itself gives.
+        /// </summary>
+        private static void Despike(Vector3?[] field, List<int>[] adj)
+        {
+            var fixedUp = new List<(int V, Vector3 D)>();
+            for (int v = 0; v < field.Length; v++)
+            {
+                if (field[v] is not { } d || adj[v] == null) continue;
+                var sum = Vector3.Zero;
+                int n = 0;
+                foreach (int m in adj[v])
+                    if (field[m] is { } other) { sum += other; n++; }
+                if (n == 0) continue;
+                var average = sum / n;
+                float off = Vector3.Distance(d, average);
+                if (off <= DespikeGap) continue;
+
+                // Only where the neighbours AGREE with each other: a field is allowed to change quickly, and on a
+                // body that changes shape a lot it does. What marks a mistake is one vertex disagreeing with a
+                // neighbourhood that does not disagree with itself.
+                float spread = 0f;
+                foreach (int m in adj[v])
+                    if (field[m] is { } other) spread += Vector3.Distance(other, average);
+                spread /= n;
+                if (off <= DespikeOutlier * spread) continue;
+
+                fixedUp.Add((v, average));
+            }
+            foreach (var (v, d) in fixedUp) field[v] = d;
+        }
+
+        /// <summary>Which body vertices share a skin triangle: the only places a displacement may be carried between.</summary>
+        private static List<int>[] Neighbours(ModelParts body, int count)
+        {
+            var adj = new List<int>[count];
+            foreach (var part in body.Parts)
+            {
+                if (part.Island >= 0 || !SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+                for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+                    for (int k = 0; k < 3; k++)
+                    {
+                        int a = part.Triangles[t + k], b = part.Triangles[t + (k + 1) % 3];
+                        if (a < 0 || b < 0 || a >= count || b >= count) continue;
+                        (adj[a] ??= []).Add(b);
+                        (adj[b] ??= []).Add(a);
+                    }
+            }
+            return adj;
+        }
+
+        /// <summary>Holes filled from their edges, ring by ring — see <see cref="Whole"/>.</summary>
+        private static void Fill(Vector3?[] filled, List<int>[] adj, int missing)
+        {
+            for (int round = 0; round < HoleRounds && missing > 0; round++)
+            {
+                var next = (Vector3?[])filled.Clone();
+                bool changed = false;
+                for (int v = 0; v < filled.Length; v++)
+                {
+                    if (filled[v] != null || adj[v] == null) continue;
+                    var sum = Vector3.Zero;
+                    int n = 0;
+                    foreach (int m in adj[v])
+                        if (filled[m] is { } d) { sum += d; n++; }
+                    if (n == 0) continue;
+                    next[v] = sum / n;
+                    missing--;
+                    changed = true;
+                }
+                Array.Copy(next, filled, filled.Length);
+                if (!changed) break;
+            }
         }
 
         /// <summary>
@@ -98,7 +245,7 @@ internal static partial class BodyRetarget
             distance = 0f;
             bool found = false;
             float best = maxDistance;
-            foreach (var (surface, field) in slots)
+            foreach (var (surface, field, _) in slots)
             {
                 if (!surface.Nearest(p, best, out var hit)) continue;
                 var sum = Vector3.Zero;
@@ -117,17 +264,29 @@ internal static partial class BodyRetarget
             return found;
         }
 
-        /// <summary>The displacement of the nearest point on any source body, interpolated across the triangle.</summary>
+        /// <summary>
+        /// The displacement of the nearest point on any source body, interpolated across the triangle — and, where two
+        /// bodies are both near, blended between them.
+        /// <para/>
+        /// Taking the nearest body outright puts a step in the field wherever two of them meet. The bodies overlap at
+        /// the ankle, and a stocking that runs from foot to thigh crosses that overlap: neighbouring points took the
+        /// foot's answer and the leg's, which differ, and the cloth between them tore — a 0.3 mm edge stretched to
+        /// 7.1 mm, which reads in game as a spike through the shoe. Within <see cref="SlotBlend"/> of the nearest, a
+        /// body's answer fades in rather than replacing it.
+        /// </summary>
         public bool TryNearest(Vector3 p, float maxDistance, out Vector3 delta, out float distance)
         {
             delta = default;
             distance = 0f;
             bool found = false;
             float best = maxDistance;
+            var blend = Vector3.Zero;
+            float blendWeight = 0f;
+            near.Clear();
 
-            foreach (var (surface, field) in slots)
+            foreach (var (surface, _, field) in slots)
             {
-                if (!surface.Nearest(p, best, out var hit)) continue;
+                if (!surface.Nearest(p, maxDistance, out var hit)) continue;
 
                 // Over the corners that have a landing, renormalised. A correspondence by texture coordinate leaves the
                 // odd vertex unplaced — a seam, an island the other body cuts differently — and dropping every triangle
@@ -141,16 +300,34 @@ internal static partial class BodyRetarget
                 if (field[hit.C] is { } fc) { sum += fc * hit.W; weight += hit.W; present++; }
                 if (weight < 0.5f) continue;
 
-                best = hit.Distance;
-                distance = hit.Distance;
                 // All three present: the plain barycentric sum, undivided, so a complete field gives bit-for-bit the
                 // answer it always did (u + v + w is 0.99999994 as often as it is 1).
-                delta = present == 3 ? sum : sum / weight;
+                var here = present == 3 ? sum : sum / weight;
+                if (hit.Distance < best)
+                {
+                    best = hit.Distance;
+                    distance = hit.Distance;
+                }
+                near.Add((hit.Distance, here));
                 found = true;
             }
+            if (!found) return false;
 
-            return found;
+            // Weighted toward the nearest: it alone at the surface it owns, the two blended where they overlap. One
+            // body in reach is its own answer, bit for bit, so a single-slot refit is untouched.
+            foreach (var (d, value) in near)
+            {
+                float w = SlotBlend <= 0f ? (d <= best ? 1f : 0f) : Math.Clamp(1f - (d - best) / SlotBlend, 0f, 1f);
+                if (w <= 0f) continue;
+                blend += value * w;
+                blendWeight += w;
+            }
+            delta = blendWeight > 0f ? blend / blendWeight : delta;
+            return true;
         }
+
+        /// <summary>Scratch for <see cref="TryNearest"/>: each slot's answer and how far its body was.</summary>
+        private readonly List<(float Distance, Vector3 Delta)> near = [];
     }
 
     /// <summary>

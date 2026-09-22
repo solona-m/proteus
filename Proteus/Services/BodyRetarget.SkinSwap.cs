@@ -14,6 +14,12 @@ internal static partial class BodyRetarget
     /// </summary>
     internal const float SwapOnBody = 0.002f;
 
+    /// <summary>
+    /// How much of a skin mesh has to sit on the bodies for it to be the body's skin and be swapped (95%). Below it the
+    /// mesh is the garment's own — a heeled shoe's foot, an author's sculpted piece — and is kept whole.
+    /// </summary>
+    internal const float OnBodyShare = 0.95f;
+
     /// <param name="Removed">Triangles in the garment's skin meshes that were taken out.</param>
     /// <param name="Added">Triangles in the body skin meshes put in their place.</param>
     /// <param name="Kept">Skin meshes left alone because they belong to no slot being resized.</param>
@@ -22,9 +28,10 @@ internal static partial class BodyRetarget
     /// <param name="Trimmed">Of those, vertices whose body weights were cut to fit the eight-influence limit.</param>
     /// <param name="ExtrasDropped">Triangles of the old body's piercings and pubic hair taken out.</param>
     /// <param name="Unplaced">Influences the writer could not place — a bone in no model it was given, or a full table.</param>
+    /// <param name="Posed">Skin meshes only partly on the bodies — a heeled shoe's own foot — which were kept.</param>
     internal readonly record struct SwapReport(int Removed, int Added, int Kept, int LostShapes,
                                                int Reweighted = 0, int Trimmed = 0, int ExtrasDropped = 0,
-                                               int Unplaced = 0);
+                                               int Unplaced = 0, int Posed = 0);
 
     /// <summary>
     /// Swap the garment's skin for the new body's, one body slot at a time: every skin mesh of the garment that belongs
@@ -73,17 +80,30 @@ internal static partial class BodyRetarget
         var dropped = new HashSet<int>();
         var claimedBy = new HashSet<int>();   // indices into swappable
         string? skinMaterial = null;
-        int removed = 0, kept = 0;
+        int removed = 0, kept = 0, posed = 0;
         foreach (var mesh in skinMeshes)
         {
             var verts = mesh.SelectMany(p => p.Triangles).Distinct().ToList();
+
+            // Every vertex, not a majority: a mesh is replaced only when the whole of it IS the body's skin. A heeled
+            // shoe draws the foot itself, turned onto the toe, in the same mesh as the lower leg. The leg sits on the
+            // body and the foot does not, and a majority rule handed the whole mesh to the legs — whose skin has no
+            // foot — so the foot vanished. Off the body, the author's skin is what the garment needs, and it stays.
             int best = -1;
-            float bestShare = 0.5f;   // a majority, or the mesh stays
+            float bestShare = 0f;
+            int onAny = verts.Count(v => surfaces.Any(s => s.Nearest(At(model, v), SwapOnBody, out _)));
             for (int s = 0; s < surfaces.Count; s++)
             {
                 int on = verts.Count(v => surfaces[s].Nearest(At(model, v), SwapOnBody, out _));
                 float share = verts.Count > 0 ? (float)on / verts.Count : 0f;
                 if (share > bestShare) { bestShare = share; best = s; }
+            }
+            if (verts.Count > 0 && onAny < verts.Count * OnBodyShare)
+            {
+                // Some of it is the body's and some is not: the whole mesh stays, since half a mesh cannot be swapped.
+                if (best >= 0) posed++;
+                kept++;
+                continue;
             }
             if (best < 0)
             {
@@ -102,7 +122,13 @@ internal static partial class BodyRetarget
                 if (part.Island < 0 && IsBodyExtraMaterial(part.Material) && dropped.Add(part.Mesh))
                     extras += model.Parts.Where(q => q.Island < 0 && q.Mesh == part.Mesh).Sum(q => q.Triangles.Length / 3);
 
-        if (dropped.Count == 0 && weights == null) return null;
+        if (dropped.Count == 0 && weights == null)
+        {
+            // Nothing to rebuild, but the caller still says WHY nothing was swapped: a mesh only partly on the body is
+            // kept, and the user is told so rather than left wondering.
+            report = new SwapReport(0, 0, kept, 0, Posed: posed);
+            return null;
+        }
 
         // One layer per slot whose skin came out: its body's skin meshes, whole, under the garment's skin material.
         var layers = claimedBy.OrderBy(s => s).Select(s => new SecondSkinLayer
@@ -122,7 +148,7 @@ internal static partial class BodyRetarget
 
         int added = claimedBy.Sum(s => SkinTriangles(SecondSkinWriter.Parse(swappable[s].TargetModel!)));
         report = new SwapReport(removed, added, kept, SecondSkinWriter.Parse(garment).Shapes.Count,
-                                weights?.Reweighted ?? 0, weights?.Trimmed ?? 0, extras, reskinned.Dropped);
+                                weights?.Reweighted ?? 0, weights?.Trimmed ?? 0, extras, reskinned.Dropped, posed);
         return rebuilt;
     }
 
