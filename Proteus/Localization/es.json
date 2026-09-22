@@ -763,6 +763,14 @@
     "message": "Muestra u oculta la ventana de estado del compositor Proteus. «/proteus config» la abre en Ajustes.",
     "description": ""
   },
+  "Command.Refreshing": {
+    "message": "Recompositing now.",
+    "description": "Chat line for \"/proteus refresh\"."
+  },
+  "Command.Refreshing.Full": {
+    "message": "Rebuilding everything and recompositing. This takes longer than a plain refresh.",
+    "description": "Chat line for \"/proteus refresh full\"."
+  },
   "Common.Browse.Btn": {
     "message": "Examinar",
     "description": ""

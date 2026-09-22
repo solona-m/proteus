@@ -763,6 +763,14 @@
     "message": "Blendet das Proteus-Statusfenster ein oder aus. \"/proteus config\" öffnet es bei den Einstellungen.",
     "description": ""
   },
+  "Command.Refreshing": {
+    "message": "Recompositing now.",
+    "description": "Chat line for \"/proteus refresh\"."
+  },
+  "Command.Refreshing.Full": {
+    "message": "Rebuilding everything and recompositing. This takes longer than a plain refresh.",
+    "description": "Chat line for \"/proteus refresh full\"."
+  },
   "Common.Browse.Btn": {
     "message": "Durchsuchen",
     "description": ""
