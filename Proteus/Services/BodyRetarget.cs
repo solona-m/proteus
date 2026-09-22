@@ -261,7 +261,7 @@ internal static partial class BodyRetarget
     /// (see <see cref="LaySkin"/>) so the push-out measures against the right surface, then swapped for the body's own
     /// skin, slot by slot, for every pair that carries its body's file (see <see cref="SwapSkin"/>).</param>
     /// <param name="acrossBodies">The garment is going from one body MOD to another, rather than between sizes of one:
-    /// its cloth then always takes the new body's weights, and the old body's piercings and pubic hair are left out,
+    /// its cloth then always takes the change between the two bodies' weights, and the old body's piercings and pubic hair are left out,
     /// even when the two bodies' rigs name the same bones (YAB's and Rue's plain sizes do) — see
     /// <see cref="PlanWeights"/>.</param>
     public static Planned Plan(ModelParts garment, byte[] garmentBytes, IReadOnlyList<SlotPair> pairs,
@@ -276,7 +276,7 @@ internal static partial class BodyRetarget
         // Both are one rebuild, and nothing is rebuilt when neither applies — a same-rig refit with the skin kept stays
         // the in-place rewrite above.
         SwapReport? swap = null;
-        var weights = PlanWeights(model, pairs, acrossBodies);
+        var weights = PlanWeights(model, pairs, acrossBodies, before: garmentBytes);
         if ((replaceSkin || weights != null) && Rebuild(model, pairs, replaceSkin, weights, out var swapped) is { } rebuilt)
         {
             model = rebuilt;

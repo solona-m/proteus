@@ -46,20 +46,32 @@ internal static partial class BodyRetarget
     /// author's weights are right as they stand — phase 1's refit keeps them untouched.
     /// <para/>
     /// A BODY bone is one either body rigs; every other bone — a skirt chain, a cape, hair — is the garment's own and its
-    /// weights are left exactly as they are. Per cloth vertex the non-body influences are kept first; the rest of the
-    /// vertex's weight is handed to the target body's weights at the nearest point of its skin, in as many of the
-    /// remaining slots as the eight-influence limit leaves.
+    /// weights are left exactly as they are. Per cloth vertex the non-body influences are kept first.
+    /// <para/>
+    /// The body share takes the CHANGE between the two bodies, not the new body's weights outright: the old body's
+    /// weights where the vertex was, the new body's where it now is, and their difference added to the author's. Where
+    /// the bodies agree — TBSE and TBSE-X on every bone they share — the author's weighting stands exactly, which
+    /// matters for a loose garment weighted by hand rather than copied off the skin. Where the new body moves weight to
+    /// a bone of its own (TBSE-X's pecs, Rue's <c>iv_c_mune</c> in place of <c>j_mune</c>) the cloth takes the same
+    /// move. A weight the change would take below zero stops at zero, and the body share is scaled back to what it was.
+    /// Without the old body under the vertex, the new body's weights are taken as they are.
     /// </summary>
     /// <param name="garment">The refitted garment, positions already on the new body.</param>
     /// <param name="pairs">The slots being refitted; each must carry both its source and target body's files.</param>
     /// <param name="acrossBodies">The source and target are different body mods: rewrite whatever the rigs.</param>
-    internal static WeightPlan? PlanWeights(byte[] garment, IReadOnlyList<SlotPair> pairs, bool acrossBodies = false)
+    /// <param name="before">The garment as authored, in the same vertex order (the refit is in place): where each
+    /// vertex sat on the OLD body. Null reads the old body's weights at the refitted positions instead.</param>
+    internal static WeightPlan? PlanWeights(byte[] garment, IReadOnlyList<SlotPair> pairs, bool acrossBodies = false,
+                                            byte[]? before = null)
     {
         if (pairs.Count == 0 || pairs.Any(p => p.SourceModel == null || p.TargetModel == null)) return null;
 
         var sourceBones = new HashSet<string>(StringComparer.Ordinal);
         var targetBones = new HashSet<string>(StringComparer.Ordinal);
         var targets = new List<(BodySurface Surface, XivLiveMesh.SkinnedMesh Skin)>();
+        // The old bodies, for the change between the two. Any one unreadable and the change cannot be taken anywhere:
+        // the new body's weights are then used outright, as before the change was.
+        List<(BodySurface Surface, XivLiveMesh.SkinnedMesh Skin)>? sources = [];
         foreach (var pair in pairs)
         {
             sourceBones.UnionWith(SecondSkinWriter.Parse(pair.SourceModel!).BoneNames);
@@ -67,6 +79,14 @@ internal static partial class BodyRetarget
             if (ModelSkinReader.Read(pair.TargetModel!, null, null) is not { } skin) return null;
             if (skin.VertexCount * 3 != pair.Target.Positions.Length) return null;   // not the part reader's order
             targets.Add((new BodySurface(pair.Target, BodySurface.CellFor(MeanEdgeOf(pair.Target))), skin));
+
+            if (sources != null
+                && ModelPartReader.Read(pair.SourceModel!) is { } sourceParts
+                && ModelSkinReader.Read(pair.SourceModel!, null, null) is { } sourceSkin
+                && sourceSkin.VertexCount * 3 == sourceParts.Positions.Length)
+                sources.Add((new BodySurface(sourceParts, BodySurface.CellFor(MeanEdgeOf(sourceParts))), sourceSkin));
+            else
+                sources = null;
         }
         if (!acrossBodies && sourceBones.SetEquals(targetBones)) return null;
 
@@ -76,6 +96,11 @@ internal static partial class BodyRetarget
         if (ModelPartReader.Read(garment) is not { } model) return null;
         if (ModelSkinReader.Read(garment, null, null) is not { } own || own.VertexCount * 3 != model.Positions.Length)
             return null;
+        // Where each vertex sat on the old body: the authored garment, when it lines up vertex for vertex.
+        float[] wasAt = before != null && ModelPartReader.Read(before) is { } authored
+                        && authored.Positions.Length == model.Positions.Length
+            ? authored.Positions
+            : model.Positions;
 
         int vc = model.Positions.Length / 3;
         var result = new (string Bone, float W)[]?[vc];
@@ -89,6 +114,10 @@ internal static partial class BodyRetarget
             // All the garment's own bones: untouched, and no body lookup needed.
             if (mine.Where(i => !bodyBones.Contains(i.Bone)).Sum(i => i.W) >= 0.999f) continue;
             if (Nearest(targets, p) is not { } body || body.Length == 0) continue;
+            var was = new Vector3(wasAt[v * 3], wasAt[v * 3 + 1], wasAt[v * 3 + 2]);
+            if (sources != null && Nearest(sources, was) is { Length: > 0 } oldBody
+                && Change(mine, oldBody, body, bodyBones) is { Count: > 0 } changed)
+                body = [.. changed];
 
             if (Combine(mine, body, bodyBones, out bool cut) is not { } combined) continue;
             result[v] = combined;
@@ -144,6 +173,28 @@ internal static partial class BodyRetarget
             share = share.Take(slots).ToList();
         }
         return [.. keep, .. Normalised(share, 1f - kept)];
+    }
+
+    /// <summary>
+    /// The body share of a vertex once the change between the bodies is applied: the author's body influences, plus the
+    /// new body's weights, less the old body's, both scaled to the share of the vertex the body has. A bone the change
+    /// takes below zero drops out. Empty when nothing is left, which the caller answers with the new body outright.
+    /// </summary>
+    /// <param name="mine">The vertex's influences as authored.</param>
+    /// <param name="oldBody">The old body's weights where the vertex was.</param>
+    /// <param name="newBody">The new body's weights where the vertex now is.</param>
+    internal static List<(string Bone, float W)> Change(IReadOnlyList<(string Bone, float W)> mine,
+                                                         IReadOnlyList<(string Bone, float W)> oldBody,
+                                                         IReadOnlyList<(string Bone, float W)> newBody,
+                                                         IReadOnlySet<string> bodyBones)
+    {
+        float share = mine.Where(i => bodyBones.Contains(i.Bone)).Sum(i => i.W);
+        var w = new Dictionary<string, float>(StringComparer.Ordinal);
+        foreach (var (bone, weight) in mine)
+            if (bodyBones.Contains(bone)) w[bone] = w.GetValueOrDefault(bone) + weight;
+        foreach (var (bone, weight) in newBody) w[bone] = w.GetValueOrDefault(bone) + share * weight;
+        foreach (var (bone, weight) in oldBody) w[bone] = w.GetValueOrDefault(bone) - share * weight;
+        return w.Where(p => p.Value > 1e-4f).Select(p => (p.Key, p.Value)).ToList();
     }
 
     /// <summary>Vertices of the garment's cloth — every whole submesh not drawn with a skin material.</summary>

@@ -3299,6 +3299,18 @@
     "message": "Pick one\u2026",
     "description": ""
   },
+  "Parts.Retarget.NoBodiesForSex.Fmt": {
+    "message": "{0} has no bodies for a {1} character, and this outfit is made for one. A refit cannot change a body's sex.",
+    "description": ""
+  },
+  "Parts.Retarget.Male": {
+    "message": "male",
+    "description": ""
+  },
+  "Parts.Retarget.Female": {
+    "message": "female",
+    "description": ""
+  },
   "Parts.Retarget.NoBodyMesh": {
     "message": "This model carries no body mesh, so the size it was made for cannot be guessed. Pick it yourself.",
     "description": ""

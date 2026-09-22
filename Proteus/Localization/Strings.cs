@@ -2048,6 +2048,14 @@ public sealed class PartsStrings
 
     public readonly string RetargetNoBody = Loc.Localize("Parts.Retarget.NoBody", "Pick one…");
 
+    /// <summary>{0} is a body mod's name; {1} is <see cref="RetargetMale"/> or <see cref="RetargetFemale"/>.</summary>
+    public readonly string RetargetNoBodiesForSexFmt = Loc.Localize("Parts.Retarget.NoBodiesForSex.Fmt",
+        "{0} has no bodies for a {1} character, and this outfit is made for one. A refit cannot change a body's sex.");
+
+    public readonly string RetargetMale = Loc.Localize("Parts.Retarget.Male", "male");
+
+    public readonly string RetargetFemale = Loc.Localize("Parts.Retarget.Female", "female");
+
     public readonly string RetargetPickBody = Loc.Localize("Parts.Retarget.PickBody",
         "Pick the body mod this garment was made for. Only mods that offer a choice of body models are listed.");
 
