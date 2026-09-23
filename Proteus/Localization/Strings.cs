@@ -1973,38 +1973,38 @@ public sealed class PartsStrings
     public readonly string LivePickedNotGearFmt = Loc.Localize("Parts.Live.PickedNotGear.Fmt",
         "{0} is not a piece of equipment, so there is nothing to refit onto another body.");
 
-    /// <summary>Shown under Body size, where the game's own gear can be clicked as well as a mod's.</summary>
+    /// <summary>Shown under Body size, where vanilla gear can be clicked as well as a mod's.</summary>
     public readonly string LivePickGameTip = Loc.Localize("Parts.Live.PickGame.Tip",
-        "Click a garment on your character to open it here — the game's own gear as well as a mod's.");
+        "Click a garment on your character to open it here — vanilla gear as well as a mod's.");
 
-    // ── the game's own gear ─────────────────────────────────────────────────────────────────────────
+    // ── vanilla gear ────────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>Marks a worn piece of the game's own gear in the mod picker, where everything else is a mod.</summary>
-    public readonly string VanillaWornSuffix = Loc.Localize("Parts.Vanilla.WornSuffix", "(the game's own)");
+    /// <summary>Marks a worn piece of vanilla gear in the mod picker, where everything else is a mod.</summary>
+    public readonly string VanillaWornSuffix = Loc.Localize("Parts.Vanilla.WornSuffix", "(vanilla)");
 
     public readonly string VanillaWornTip = Loc.Localize("Parts.Vanilla.Worn.Tip",
         "You are wearing this and no mod provides it. Open it to refit it onto your body — that makes a mod of "
       + "its own for it.");
 
-    /// <summary>The header over a piece of the game's own gear, in place of the mod and model pickers.</summary>
-    public readonly string VanillaHeader = Loc.Localize("Parts.Vanilla.Header", "The game's own gear");
+    /// <summary>The header over a piece of vanilla gear, in place of the mod and model pickers.</summary>
+    public readonly string VanillaHeader = Loc.Localize("Parts.Vanilla.Header", "Vanilla gear");
 
     /// <summary>{0} is the item, e.g. "Body — Ala Mhigan Coat of Fending".</summary>
     public readonly string VanillaOpenFmt = Loc.Localize("Parts.Vanilla.Open.Fmt",
-        "{0} — worn straight from the game, with no mod behind it.");
+        "{0} — vanilla, with no mod behind it.");
 
     public readonly string VanillaSaveNote = Loc.Localize("Parts.Vanilla.SaveNote",
         "Saving makes a new mod for this item, switched on for you, holding the refit and an \"Original\" option "
-      + "that gives the game's own back.");
+      + "that gives the vanilla one back.");
 
     public readonly string VanillaCaveats = Loc.Localize("Parts.Vanilla.Caveats",
-        "The game's gear leans on shape keys and lower detail levels, and a refit carries neither: expect the "
+        "Vanilla gear leans on shape keys and lower detail levels, and a refit carries neither: expect the "
       + "sleeves and hems where they meet other pieces to change, and the old size to show at a distance. Its "
-      + "textures are the game's own and stay that way.");
+      + "textures are vanilla and stay that way.");
 
-    /// <summary>Why every tool but Body size is greyed out on a piece of the game's gear.</summary>
+    /// <summary>Why every tool but Body size is greyed out on a piece of vanilla gear.</summary>
     public readonly string VanillaOnlyRetarget = Loc.Localize("Parts.Vanilla.OnlyRetarget",
-        "This is the game's own gear — there is no mod file to edit. Refit it onto your body first; that makes a "
+        "This is vanilla gear — there is no mod file to edit. Refit it onto your body first; that makes a "
       + "mod, which the other tools can then work on.");
 
     /// <summary>The label over the choice of WHICH MOD a refit is written into.</summary>
@@ -2021,7 +2021,7 @@ public sealed class PartsStrings
 
     /// <summary>The row above the body mods in the "made for" picker.</summary>
     public readonly string RetargetFromVanilla = Loc.Localize("Parts.Retarget.FromVanilla",
-        "The game's own body");
+        "The vanilla body");
 
     /// <summary>Said when the refit is about to write into a mod that does not exist yet.</summary>
     public readonly string RetargetSaveNewModFmt = Loc.Localize("Parts.Retarget.SaveNewMod.Fmt",

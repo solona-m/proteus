@@ -26,7 +26,7 @@ internal static class VanillaBodyCatalog
     internal const string Key = "::vanilla";
 
     /// <summary>The group every option is filed under, so the picker can say where these came from.</summary>
-    internal const string GroupName = "The game";
+    internal const string GroupName = "Vanilla";
 
     /// <summary>
     /// Where the extracts live. Deliberately NOT under Penumbra's mods root: these stand for what the game draws with
@@ -130,8 +130,8 @@ internal static class VanillaBodyCatalog
         return options;
     }
 
-    /// <summary>What the one size is called. A body mod's sizes are named by its author; the game's is just the body.</summary>
-    private const string SizeName = "The game's own body";
+    /// <summary>What the one size is called. A body mod's sizes are named by its author; vanilla has just the one.</summary>
+    private const string SizeName = "The vanilla body";
 
     private static readonly string[] Slots = ["_top", "_dwn", "_glv", "_sho"];
 }

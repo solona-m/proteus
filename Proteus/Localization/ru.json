@@ -3624,11 +3624,11 @@
     "description": ""
   },
   "Parts.Live.PickGame.Tip": {
-    "message": "Click a garment on your character to open it here \u2014 the game\u0027s own gear as well as a mod\u0027s.",
+    "message": "Click a garment on your character to open it here \u2014 vanilla gear as well as a mod\u0027s.",
     "description": ""
   },
   "Parts.Retarget.FromVanilla": {
-    "message": "The game\u0027s own body",
+    "message": "The vanilla body",
     "description": ""
   },
   "Parts.Retarget.SaveNewMod.Fmt": {
@@ -3636,23 +3636,23 @@
     "description": ""
   },
   "Parts.Vanilla.Caveats": {
-    "message": "The game\u0027s gear leans on shape keys and lower detail levels, and a refit carries neither: expect the sleeves and hems where they meet other pieces to change, and the old size to show at a distance. Its textures are the game\u0027s own and stay that way.",
+    "message": "Vanilla gear leans on shape keys and lower detail levels, and a refit carries neither: expect the sleeves and hems where they meet other pieces to change, and the old size to show at a distance. Its textures are vanilla and stay that way.",
     "description": ""
   },
   "Parts.Vanilla.Header": {
-    "message": "The game\u0027s own gear",
+    "message": "Vanilla gear",
     "description": ""
   },
   "Parts.Vanilla.OnlyRetarget": {
-    "message": "This is the game\u0027s own gear \u2014 there is no mod file to edit. Refit it onto your body first; that makes a mod, which the other tools can then work on.",
+    "message": "This is vanilla gear \u2014 there is no mod file to edit. Refit it onto your body first; that makes a mod, which the other tools can then work on.",
     "description": ""
   },
   "Parts.Vanilla.Open.Fmt": {
-    "message": "{0} \u2014 worn straight from the game, with no mod behind it.",
+    "message": "{0} \u2014 vanilla, with no mod behind it.",
     "description": ""
   },
   "Parts.Vanilla.SaveNote": {
-    "message": "Saving makes a new mod for this item, switched on for you, holding the refit and an \u0022Original\u0022 option that gives the game\u0027s own back.",
+    "message": "Saving makes a new mod for this item, switched on for you, holding the refit and an \u0022Original\u0022 option that gives the vanilla one back.",
     "description": ""
   },
   "Refit.Error.NoName.Fmt": {
@@ -3692,7 +3692,7 @@
     "description": ""
   },
   "Parts.Vanilla.WornSuffix": {
-    "message": "(the game\u0027s own)",
+    "message": "(vanilla)",
     "description": ""
   }
 }
