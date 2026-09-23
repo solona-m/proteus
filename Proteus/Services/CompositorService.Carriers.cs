@@ -61,12 +61,24 @@ public partial class CompositorService
         {
             if (config.InjectedGlasses == value) return;
             config.InjectedGlasses = value;
+            // Before the save, so a reader that captured the old generation sees the bump however the write races.
+            Interlocked.Increment(ref _glassesRecordGeneration);
             config.Save();
         }
     }
 
+    // Bumped on every change to the record above. ReconcileInvisibleGlasses can run on two threads at once — the
+    // redraw hook checks _compositesInFlight when it SCHEDULES its Task.Run and never again — and deciding the
+    // record's fate means blocking on a Glamourer read first. Capturing this across that read catches a record that
+    // moved underneath the decision, including away and back, so a stale reading cannot clear a record for a pair
+    // that is on the character right now.
+    private int _glassesRecordGeneration;
+
     // Our carrier item worn with no record of equipping it; reported once per session.
     private int _unclaimedGlassesLogged;
+
+    // The first "held our record" reading is worth an Information line; the rest are per-redraw noise.
+    private int _glassesHoldLogged;
 
     // Ring slots holding an Emperor's ring we have no record of equipping; reported once per slot per session.
     private readonly ConcurrentDictionary<string, byte> _unclaimedRingSlots = new(StringComparer.OrdinalIgnoreCase);
@@ -138,14 +150,16 @@ public partial class CompositorService
     private bool IsOurGlassesWorn(int ourSet) => CurrentMetSets().Contains(ourSet);
 
     /// <summary>
-    /// Whether the pair on the player's face is our carrier item, not merely a pair drawing its model (other variants
-    /// of the carrier's model set are real pairs). Checks Glamourer's state; falls back to remembering we equipped it. Any thread.
+    /// Whether the pair on the player's face is ours to act on: we recorded equipping it, and our carrier's model is
+    /// among the ones being drawn. Any thread, and no IPC.
+    /// <para/>
+    /// Deliberately NOT gated on the row Glamourer reports. That reading's job is to REVOKE the record — see
+    /// <see cref="GlassesRecord"/>, which runs first in every reconcile and clears it the moment another item answers
+    /// — and it is not sound as a precondition in its own right: mid-redraw it reports no pair while ours is still
+    /// drawn, and requiring it to match there left Proteus holding a record it could not act on, with the carrier
+    /// showing its real frames and no way to take it off.
     /// </summary>
-    private bool IsOurGlassesItemWorn(InvisibleGlasses.Identity g)
-    {
-        if (!IsOurGlassesWorn(g.ModelSet)) return false;
-        return WornGlassesRow() is { } row ? row == g.ItemId : _injectedGlasses;
-    }
+    private bool OurGlassesAreOn(InvisibleGlasses.Identity g) => _injectedGlasses && IsOurGlassesWorn(g.ModelSet);
 
     /// <summary>The Glasses row Glamourer says is worn (0 = none), or null when its state could not be read.</summary>
     private ulong? WornGlassesRow()
@@ -162,6 +176,67 @@ public partial class CompositorService
         {
             log.Debug("[Proteus] invisible glasses: Glamourer state read failed ({0})", ex.GetType().Name);
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Act on what Glamourer's state says about the pair we recorded equipping. Every outcome is logged: losing this
+    /// record silently is what strands the carrier on a player's face, and the only way that came to light was a user
+    /// sending in a log with no trace of it in them.
+    /// </summary>
+    private void JudgeGlassesRecord(InvisibleGlasses.Identity g)
+    {
+        // Captured before the read, checked after: see _glassesRecordGeneration. This narrows the window from the
+        // whole Glamourer round-trip — tens of milliseconds, going by the "carriers" figure in the refresh timeline —
+        // to the few instructions below. It does not close it; doing that would mean holding a lock across a
+        // dispatch to the framework thread, which is how this deadlocks.
+        var generation = Volatile.Read(ref _glassesRecordGeneration);
+        var worn = WornGlassesRow();
+        var drawn = IsOurGlassesWorn(g.ModelSet);
+        var decision = GlassesRecord.Evaluate(recorded: true, worn, g.ItemId, drawn);
+
+        if (decision is not GlassesRecord.Decision.Keep
+            && Volatile.Read(ref _glassesRecordGeneration) != generation)
+        {
+            log.Debug("[Proteus] invisible glasses: the record changed while we read Glamourer's state — "
+                    + "dropping this reading rather than acting on it");
+            return;
+        }
+
+        switch (decision)
+        {
+            case GlassesRecord.Decision.Keep:
+                break;
+
+            case GlassesRecord.Decision.Hold:
+                var why = worn is null
+                    ? "Glamourer's state could not be read"
+                    : "Glamourer reports no pair while its model is still drawn (a redraw in flight)";
+                // The first one at Information. This branch suppresses an action, and a suppression nobody can see is
+                // exactly what cost a user's log to diagnose; after that it is per-redraw noise.
+                if (Interlocked.Exchange(ref _glassesHoldLogged, 1) == 0)
+                    log.Information("[Proteus] invisible glasses: keeping our record of e{0:D4} — {1}", g.ModelSet, why);
+                else
+                    log.Debug("[Proteus] invisible glasses: keeping our record of e{0:D4} — {1}", g.ModelSet, why);
+                break;
+
+            case GlassesRecord.Decision.Forget:
+                _injectedGlasses = false;
+                log.Information("[Proteus] invisible glasses: forgetting our pair (e{0:D4}) — Glamourer reports {1}",
+                    g.ModelSet, worn == 0 ? "no glasses worn" : $"item #{worn}");
+                break;
+
+            // Matched with the reading it needs: the decision implies one, and binding it here keeps that a fact of
+            // the code rather than of GlassesRecord's current shape.
+            case GlassesRecord.Decision.ForgetAndRelease when worn is { } theirs:
+                _injectedGlasses = false;
+                // A pair of the player's now draws our carrier's model, which the shell may still be redirected onto. The
+                // redraw that got us here already took its equip signature (which skipped this set while it was ours), so
+                // nothing else will recomposite: do it now, so the shell moves off their pair.
+                log.Information("[Proteus] invisible glasses: item #{0} replaced our pair on the same model (e{1:D4}) — "
+                              + "forgetting it and recompositing to move the shell off it", theirs, g.ModelSet);
+                TriggerRecomposite("invisible-glasses-released");
+                break;
         }
     }
 
@@ -183,21 +258,10 @@ public partial class CompositorService
         bool want = config.AutoInvisibleGlasses && shellBuilt && hostedOnFacewear;
 
         // Glamourer says another pair (or none) is worn: ours is gone, so forget it, or a pair the player puts on later
-        // would be taken for it. Only on a positive reading; an unreadable state keeps the record.
-        if (_injectedGlasses && WornGlassesRow() is { } worn && worn != g.ItemId)
-        {
-            _injectedGlasses = false;
-            // A pair of the player's now draws our carrier's model, which the shell may still be redirected onto. The redraw
-            // that got us here already took its equip signature (which skipped this set while it was ours), so nothing else
-            // will recomposite: do it now, so the shell moves off their pair. Not on a plain revert (none worn): the want
-            // branch re-equips below without one.
-            if (worn != 0 && IsOurGlassesWorn(g.ModelSet))
-            {
-                log.Information("[Proteus] invisible glasses: item #{0} replaced our pair on the same model (e{1:D4}) — "
-                              + "recompositing to move the shell off it", worn, g.ModelSet);
-                TriggerRecomposite("invisible-glasses-released");
-            }
-        }
+        // would be taken for it. Guarded on holding a record at all, since the state read is IPC and this runs on every
+        // redraw. What the reading means is decided in GlassesRecord — see there for why a wrong clear is permanent.
+        if (_injectedGlasses)
+            JudgeGlassesRecord(g);
 
         if (want)
         {
@@ -233,15 +297,21 @@ public partial class CompositorService
             }
         }
         else if ((!config.AutoInvisibleGlasses || !gearWanted || (shellBuilt && !hostedOnFacewear))
-                 && IsOurGlassesItemWorn(g))
+                 && IsOurGlassesWorn(g.ModelSet))
         {
             // Remove when the feature is off, nothing is hosted, or the shell moved to another host (the carrier would render
             // its real frames). Not on a merely failed build, which is transient.
             //
-            // Worn but not recorded as ours: the player's own pair of the same item, so leave it and say so once.
+            // Our carrier's model is drawn with no record of us equipping it: the player's own pair, so leave it and say so
+            // once. Confirmed against Glamourer's row, since other rows share the model set and naming the wrong item sends
+            // them looking for something they are not wearing. The flag is taken BEFORE the read, not after a match: this
+            // branch is reached on every redraw for as long as they wear it, and a read gated on matching would repeat the
+            // IPC forever against a pair that never matches. The cost is that a variant worn at this moment and swapped for
+            // ours later goes unremarked — an advisory line, against an unbounded per-redraw round-trip.
             if (!_injectedGlasses)
             {
-                if (Interlocked.Exchange(ref _unclaimedGlassesLogged, 1) == 0)
+                if (Interlocked.Exchange(ref _unclaimedGlassesLogged, 1) == 0
+                    && WornGlassesRow() == g.ItemId)
                     log.Information("[Proteus] invisible glasses: item #{0} (e{1:D4}) is worn but Proteus has no record "
                                   + "of equipping it — leaving it alone. If you did not put it on yourself (an older "
                                   + "build could equip it and forget), take it off manually.", g.ItemId, g.ModelSet);
@@ -439,8 +509,9 @@ public partial class CompositorService
     public void RemoveInjectedGlasses()
     {
         if (InvisibleGlasses.Resolve(Plugin.DataManager, log) is not { } g) return;
-        // Teardown takes back only what we equipped; the item is not ownership.
-        bool ours = _injectedGlasses && (IsOurGlassesItemWorn(g) || !MetSnapshotKnown);
+        // Teardown takes back only what we equipped; the item is not ownership. An unknown walk is not evidence that
+        // the pair is gone, so the record alone carries it there.
+        bool ours = OurGlassesAreOn(g) || (_injectedGlasses && !MetSnapshotKnown);
         if (ours && SetGlassesOnFramework(0))
             _injectedGlasses = false;
     }

@@ -216,7 +216,7 @@ public partial class CompositorService
                 // not one we equipped. Our carrier item worn by the player's choice is theirs too, and is never rewritten.
                 if (invisibleGlassesSet is int ourSet && run.compositor.IsOurGlassesWorn(ourSet)
                     && InvisibleGlasses.Resolve(Plugin.DataManager, run.compositor.log) is { } ourGlasses
-                    && !(run.compositor._injectedGlasses && run.compositor.IsOurGlassesItemWorn(ourGlasses)))
+                    && !run.compositor.OurGlassesAreOn(ourGlasses))
                     invisibleGlassesSet = null;
 
                 // Snapshot the volatile shape set once, so the bake and its signature see the same value.
