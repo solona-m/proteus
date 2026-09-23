@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using Proteus.Services;
 using Xunit;
 
@@ -22,8 +24,8 @@ public class InertModTests
     private static InertModDiagnosis.InertReason Run(
         ResolutionDiagnostic diag,
         bool maskGroup = false, int masksOn = 0, bool maskGear = false,
-        bool filtered = false, string wants = "", string have = "")
-        => InertModDiagnosis.Explain(diag, maskGroup, masksOn, maskGear, filtered, wants, have);
+        bool filtered = false, string wants = "", string have = "", bool mismatch = true)
+        => InertModDiagnosis.Explain(diag, maskGroup, masksOn, maskGear, filtered, wants, have, mismatch);
 
     // ── rung 1: we could not find out ─────────────────────────────────────────
 
@@ -109,12 +111,114 @@ public class InertModTests
     }
 
     [Fact]
+    public void FilteredMaterialsForASurfaceTheCharacterHas_IsNotARaceProblem()
+    {
+        // A face pack for the character actually wearing it: her face is c0801 and her body c0201, so the two
+        // sides of the message LOOK like a mismatch while naming the same person. The filter can still have
+        // dropped a material — a face id she doesn't wear, a snapshot that hasn't caught up — and "nothing it
+        // ships fits the body you are wearing" would send its author hunting for a race problem they haven't got.
+        var r = Run(Diag(groups: 1, empty: []), filtered: true,
+                    wants: "Miqote F", have: "bibo+gen2 · Midlander F, Miqote F", mismatch: false);
+        Assert.Equal(InertModDiagnosis.InertCause.NothingReached, r.Cause);
+    }
+
+    [Fact]
     public void FilteredMaterialsMidRedraw_DoesNotAccuseTheMod()
     {
         // The snapshot legitimately reports no char code at all while a redraw is settling. Claiming a
         // race mismatch off that would libel every correctly-authored pack once per race change.
         var r = Run(Diag(groups: 1, empty: []), filtered: true, wants: "bibo · Midlander F", have: "");
         Assert.Equal(InertModDiagnosis.InertCause.NothingReached, r.Cause);
+    }
+
+    // ── what "another body" actually means ───────────────────────────────────
+    //
+    // The input to rung 4, which is where the wrong-race verdict is decided. A character has TWO race codes —
+    // the body's and the head's — and four of the nine races wear the Midlander body under a face of their own,
+    // so the two must be judged against the surfaces they belong to and never pooled.
+
+    private const string MidBody   = "chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_bibo.mtrl";
+    private const string MiqoFace  = "chara/human/c0801/obj/face/f0102/material/mt_c0801f0102_fac_a.mtrl";
+    private const string MidFace   = "chara/human/c0201/obj/face/f0102/material/mt_c0201f0102_fac_a.mtrl";
+    private const string AuRaBody  = "chara/human/c1401/obj/body/b0001/material/v0001/mt_c1401b0001_bibo.mtrl";
+
+    private static bool AnotherBody(
+        string[] pack, string[]? packTypes = null,
+        string[]? wornBody = null, string[]? wornHead = null, string[]? activeTypes = null)
+        => InertModDiagnosis.PaintsAnotherBody(
+            pack,
+            new HashSet<string>(packTypes ?? [], StringComparer.OrdinalIgnoreCase),
+            wornBody == null ? null : new HashSet<string>(wornBody, StringComparer.OrdinalIgnoreCase),
+            wornHead == null ? null : new HashSet<string>(wornHead, StringComparer.OrdinalIgnoreCase),
+            new HashSet<string>(activeTypes ?? [], StringComparer.OrdinalIgnoreCase));
+
+    [Fact]
+    public void AMiqoteInFullPlate_IsNotToldHerOwnBodyPackIsForAnotherRace()
+    {
+        // The regression this guards: fully clothed, no bare skin, so NO body material is drawn and her body's
+        // code is unknown — while her face still says c0801. Pooled, the only code left to compare is the
+        // face's, and a perfectly correct c0201 Bibo+ pack gets convicted on it.
+        Assert.False(AnotherBody([MidBody], packTypes: ["bibo"],
+                                 wornBody: null, wornHead: ["c0801"], activeTypes: ["bibo"]));
+    }
+
+    [Fact]
+    public void AFacePackForTheWearersOwnFace_IsNotAMismatch()
+    {
+        // The reported case: c0801 art on the c0801 head she is wearing, over a c0201 body. Measured against
+        // the BODY's code this reads as another race — which is how the wrong-race notice appeared at all.
+        Assert.False(AnotherBody([MiqoFace], wornBody: ["c0201"], wornHead: ["c0801"]));
+    }
+
+    [Fact]
+    public void AFacePackForAnotherRacesFace_IsAMismatchEvenWhenTheBodyCodeMatches()
+    {
+        // A Midlander face pack on a Miqo'te. c0201 is the code of the body she wears, so pooling the sets
+        // would let this one through; judged against her HEAD it is plainly someone else's face.
+        Assert.True(AnotherBody([MidFace], wornBody: ["c0201"], wornHead: ["c0801"]));
+    }
+
+    [Fact]
+    public void APackForAnotherRacesBody_IsStillAMismatch()
+    {
+        // The plain case the rung was written for: Au Ra art on a Midlander-bodied character.
+        Assert.True(AnotherBody([AuRaBody], packTypes: ["bibo"],
+                                wornBody: ["c0201"], wornHead: ["c0801"], activeTypes: ["bibo"]));
+    }
+
+    [Fact]
+    public void APackWhoseBodyFitsButWhoseFaceDoesNot_IsNotConvicted()
+    {
+        // Half right is not wrong: the body half matches, so the honest answer is the vaguer one rather than
+        // "nothing it ships fits you", which would be false of half the pack.
+        Assert.False(AnotherBody([MidBody, MidFace], packTypes: ["bibo"],
+                                 wornBody: ["c0201"], wornHead: ["c0801"], activeTypes: ["bibo"]));
+    }
+
+    [Fact]
+    public void AnUnknownWearer_IsNeverAMismatch()
+    {
+        // Mid-redraw: nothing is known about either surface. Silence must not convict.
+        Assert.False(AnotherBody([MidBody, MiqoFace], packTypes: ["bibo"]));
+    }
+
+    [Fact]
+    public void ABodyTypeNobodyIsWearing_IsStillTheRungsAnswer()
+    {
+        // A bibo-only pack on a gen3-only character: same race, wrong body. The rung has always covered this.
+        Assert.True(AnotherBody([MidBody], packTypes: ["bibo"],
+                                wornBody: ["c0201"], wornHead: ["c0201"], activeTypes: ["gen3"]));
+        // …and the same pack on a character who IS wearing bibo is not.
+        Assert.False(AnotherBody([MidBody], packTypes: ["bibo"],
+                                 wornBody: ["c0201"], wornHead: ["c0201"], activeTypes: ["bibo"]));
+    }
+
+    [Fact]
+    public void GearMaterialsCarryNoRaceToJudge()
+    {
+        // An equipment path has no human char code; a pack painting only gear cannot be convicted of a race.
+        Assert.False(AnotherBody(["chara/equipment/e6255/material/v0001/mt_c0201e6255_top_a.mtrl"],
+                                 wornBody: ["c1401"], wornHead: ["c1401"]));
     }
 
     // ── rung 5: a mask shell with no mask ────────────────────────────────────

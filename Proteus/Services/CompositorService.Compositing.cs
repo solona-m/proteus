@@ -358,19 +358,47 @@ public partial class CompositorService
     /// </summary>
     private static string MaskFallbackKey(string mtrlGamePath, string modDir) => mtrlGamePath + '\0' + modDir;
 
+    /// <summary>
+    /// Hyur is the one race whose head and body codes always agree, so both readings share this arm rather
+    /// than each carrying its own copy of the tribe encoding. Tribe 2 is Highlander.
+    /// </summary>
+    private static string HyurCode(byte tribe, bool female) => (tribe == 2, female) switch
+    {
+        (false, false) => "c0101",
+        (false, true)  => "c0201",
+        (true,  false) => "c0301",
+        _              => "c0401",
+    };
+
     internal static string? BodyCodeFromCustomize(byte race, byte tribe, byte sex)
     {
         bool f = sex == 1;
-        if (race == 1) return (tribe == 2, f) switch // Hyur: tribe 2 = Highlander
-        {
-            (false, false) => "c0101",
-            (false, true)  => "c0201",
-            (true,  false) => "c0301",
-            _              => "c0401",
-        };
+        if (race == 1) return HyurCode(tribe, f);
         return race switch
         {
             2 or 3 or 4 or 5 => f ? "c0201" : "c0101", // Elezen/Lalafell/Miqo'te/Roegadyn share mid bodies
+            6 => f ? "c1401" : "c1301", // Au Ra
+            7 => f ? "c1601" : "c1501", // Hrothgar
+            8 => f ? "c1801" : "c1701", // Viera
+            _ => null,
+        };
+    }
+
+    /// <summary>
+    /// The same customization as the code the character's own HEAD is published under — face, hair, tail and
+    /// ears. Unlike <see cref="BodyCodeFromCustomize"/> nothing is shared here: every race has its own, so an
+    /// Elezen, Miqo'te, Roegadyn or Lalafell female's face is c0601/c0801/c1001/c1201 over a c0201 body.
+    /// </summary>
+    internal static string? FaceCodeFromCustomize(byte race, byte tribe, byte sex)
+    {
+        bool f = sex == 1;
+        if (race == 1) return HyurCode(tribe, f);
+        return race switch
+        {
+            2 => f ? "c0601" : "c0501", // Elezen
+            3 => f ? "c1201" : "c1101", // Lalafell
+            4 => f ? "c0801" : "c0701", // Miqo'te
+            5 => f ? "c1001" : "c0901", // Roegadyn
             6 => f ? "c1401" : "c1301", // Au Ra
             7 => f ? "c1601" : "c1501", // Hrothgar
             8 => f ? "c1801" : "c1701", // Viera

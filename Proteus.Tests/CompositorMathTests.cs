@@ -1261,6 +1261,84 @@ public class CompositorMathTests
         Assert.Null(CompositorService.BodyCodeFromCustomize(9,  1, 0));
     }
 
+    // ── FaceCodeFromCustomize ─────────────────────────────────────────────────
+    //
+    // The head is NOT the body. Four races wear the Midlander body under a face of their own, and a face
+    // material measured against the body's code is thrown away as another race's — which is how a face pack
+    // for the very character wearing it came out inert.
+
+    [Theory]
+    [InlineData(1, 1, 0, "c0101")]  // Hyur Midlander male
+    [InlineData(1, 1, 1, "c0201")]  // Hyur Midlander female
+    [InlineData(1, 2, 0, "c0301")]  // Hyur Highlander male
+    [InlineData(1, 2, 1, "c0401")]  // Hyur Highlander female
+    [InlineData(2, 1, 0, "c0501")]  // Elezen male
+    [InlineData(2, 1, 1, "c0601")]  // Elezen female
+    [InlineData(3, 1, 0, "c1101")]  // Lalafell male
+    [InlineData(3, 1, 1, "c1201")]  // Lalafell female
+    [InlineData(4, 1, 0, "c0701")]  // Miqo'te male
+    [InlineData(4, 1, 1, "c0801")]  // Miqo'te female — the reported case: c0801 face over a c0201 body
+    [InlineData(5, 1, 0, "c0901")]  // Roegadyn male
+    [InlineData(5, 1, 1, "c1001")]  // Roegadyn female
+    [InlineData(6, 1, 1, "c1401")]  // Au Ra female — races with their own body agree with BodyCode
+    [InlineData(7, 1, 1, "c1601")]  // Hrothgar female
+    [InlineData(8, 1, 1, "c1801")]  // Viera female
+    public void FaceCodeFromCustomize_KnownRaces_ReturnTheirOwnCode(
+        byte race, byte tribe, byte sex, string expected)
+        => Assert.Equal(expected, CompositorService.FaceCodeFromCustomize(race, tribe, sex));
+
+    [Fact]
+    public void FaceCodeFromCustomize_SharedBodyRaces_DoNotShareAHead()
+    {
+        // The pairs the bug lived in: same body code, four different faces.
+        Assert.Equal("c0201", CompositorService.BodyCodeFromCustomize(4, 1, 1));
+        Assert.Equal("c0801", CompositorService.FaceCodeFromCustomize(4, 1, 1));
+        Assert.Equal("c0201", CompositorService.BodyCodeFromCustomize(2, 1, 1));
+        Assert.Equal("c0601", CompositorService.FaceCodeFromCustomize(2, 1, 1));
+    }
+
+    [Fact]
+    public void FaceCodeFromCustomize_UnknownRace_ReturnsNull()
+    {
+        Assert.Null(CompositorService.FaceCodeFromCustomize(99, 1, 0));
+        Assert.Null(CompositorService.FaceCodeFromCustomize(0,  1, 0));
+        Assert.Null(CompositorService.FaceCodeFromCustomize(9,  1, 0));
+    }
+
+    // ── HeadCodeSet ───────────────────────────────────────────────────────────
+
+    [Fact]
+    public void HeadCodeSet_IsTheHeadsCodeAloneAndNotTheBodysUnderIt()
+    {
+        // A Miqo'te woman's draw object, as the snapshot reports it: a c0201 body under a c0801 head. The
+        // body's code must NOT leak in, or a Midlander face pack would match her through the body she wears.
+        var materials = new[]
+        {
+            "chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_a.mtrl",
+            "chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_bibo.mtrl",
+            "chara/human/c0801/obj/face/f0102/material/mt_c0801f0102_fac_a.mtrl",
+            "chara/equipment/e6255/material/v0001/mt_c0201e6255_top_a.mtrl",   // no human code: skipped
+        };
+
+        Assert.Equal(["c0801"], CompositorService.HeadCodeSet(materials, null).OrderBy(c => c));
+    }
+
+    [Fact]
+    public void HeadCodeSet_ReadsTheHeadOffTheModelWalkWhenTheMaterialIsMissing()
+    {
+        // The case the fix turns on: the materials snapshot has not caught up with the face, but the model
+        // walk names it. Without the models, the face material would be measured against the body's code.
+        var materials = new[] { "chara/human/c0201/obj/body/b0001/material/v0001/mt_c0201b0001_a.mtrl" };
+        var models    = new[] { "chara/human/c0801/obj/face/f0102/model/c0801f0102_fac.mdl",
+                                "chara/human/c0801/obj/hair/h0009/model/c0801h0009_hir.mdl" };
+
+        Assert.Equal(["c0801"], CompositorService.HeadCodeSet(materials, models).OrderBy(c => c));
+    }
+
+    [Fact]
+    public void HeadCodeSet_IsEmptyWhenNothingIsKnown()
+        => Assert.Empty(CompositorService.HeadCodeSet(null, null));
+
     // ── BlurCoverage ──────────────────────────────────────────────────────────
 
     [Fact]

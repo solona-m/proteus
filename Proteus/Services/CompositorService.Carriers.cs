@@ -450,6 +450,33 @@ public partial class CompositorService
     }
 
     /// <summary>
+    /// The character codes of the wearer's HEAD — face, eyes, hair, tail and ears. The counterpart of
+    /// <see cref="CharCodeSet"/>, which answers for the body, and deliberately not a superset of it.
+    /// <para/>
+    /// The two are NOT the same code. Elezen, Miqo'te, Roegadyn and Lalafell females all wear the Midlander
+    /// female body (c0201) under their own face (c0601, c0801, c1001, c1201), and the males the Midlander male
+    /// one. Measured against <see cref="CharCodeSet"/>, a Miqo'te's own face material reads as another race's
+    /// and is thrown away — which is how a face pack for the character being worn came out inert. Pooling the
+    /// two is just as wrong in the other direction: a Midlander face pack would then match her body's code and
+    /// pass for hers.
+    /// <para/>
+    /// Models as well as materials: a face's material can be missing from a materials snapshot the model walk
+    /// still names, and the model is the sturdier signal of the two.
+    /// </summary>
+    internal static HashSet<string> HeadCodeSet(IEnumerable<string>? materials, IEnumerable<string>? models)
+    {
+        var codes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var source in new[] { materials, models })
+        {
+            if (source == null) continue;
+            foreach (var p in source)
+                if (ShellSurface.KeyFor(p) is { IsBody: false } && ExtractHumanCharCode(p) is { } code)
+                    codes.Add(code);
+        }
+        return codes;
+    }
+
+    /// <summary>
     /// <paramref name="codes"/> as one comparable key, or null when there are none. Every "which races is the
     /// character drawn as" check must use this, or WaitForRaceToSettle and SchedulePostRedrawBodyTypeCheck disagree.
     /// </summary>

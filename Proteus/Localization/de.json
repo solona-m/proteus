@@ -2084,7 +2084,7 @@
     "description": ""
   },
   "Mods.Inert.WrongRace.Fmt": {
-    "message": "Dieser Mod malt {0}, und du bist {1}. Nichts, was er mitbringt, passt zu dem Körper, den du trägst.",
+    "message": "Dieser Mod malt {0}, und du bist {1}. Nichts, was er mitbringt, passt zu deinem Körper oder deiner Rasse.",
     "description": ""
   },
   "Mods.NoSidecarMods": {

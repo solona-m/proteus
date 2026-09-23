@@ -123,6 +123,11 @@ public partial class CompositorService
     /// a full redraw, and so does withdrawing them: the copy names a texture only our manifest serves.</summary>
     private Dictionary<string, string> _lastSkinMaterialRedirects = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Game path → published file, for everything the last composite put on the character's HEAD: face,
+    /// eyes, hair, tail and ears. Any change forces a full redraw, because an in-place reload re-applies equipment
+    /// and those surfaces are customization — the game re-reads them only when the draw object is rebuilt.</summary>
+    private Dictionary<string, string> _lastHeadRedirects = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     /// The face materials the last composite rendered doubled, read by the editor's
     /// <see cref="NeedsUnmirroredShell(OverlayDescriptor)"/>. Replaced wholesale, never mutated.

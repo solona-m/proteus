@@ -55,6 +55,10 @@ public static class InertModDiagnosis
     /// <param name="masksSelected">Mask options ticked, toe cap excluded (it is not a mask).</param>
     /// <param name="materialsFiltered">The live-material filter dropped at least one of this mod's
     /// materials AND the sibling pass did not put it back.</param>
+    /// <param name="bodyMismatch">The dropped materials really are for another body or race: the sets the pack
+    /// paints and the ones the character wears share nothing. False when they overlap, which makes a dropped
+    /// material a surface this character simply is not drawing — a face id they don't wear, gear they took off —
+    /// and not a wrong-body problem at all.</param>
     /// <param name="wants">What the pack paints, already readable. Empty when unknown.</param>
     /// <param name="have">What the character is, same shape. Empty when unknown (mid-redraw); never a mismatch.</param>
     internal static InertReason Explain(
@@ -64,7 +68,8 @@ public static class InertModDiagnosis
         bool maskLayerIsGear,
         bool materialsFiltered,
         string wants,
-        string have)
+        string have,
+        bool bodyMismatch)
     {
         // 1. We could not find out. Only Unavailable counts; NotAsked is healthy.
         if (diag.Settings == SettingsRead.Unavailable)
@@ -86,8 +91,10 @@ public static class InertModDiagnosis
             return new InertReason(InertCause.NothingTicked, selectable, string.Join(", ", names), "", "");
         }
 
-        // 4. Ticked, but for a body nobody here is wearing. Requires a known wearer.
-        if (materialsFiltered && have.Length > 0 && wants.Length > 0)
+        // 4. Ticked, but for a body nobody here is wearing. Requires a known wearer AND a real mismatch: a pack
+        //    painting this very character's face still has a material dropped whenever the snapshot hasn't caught
+        //    up, and blaming the race for that sends its author looking for a problem they haven't got.
+        if (materialsFiltered && bodyMismatch && have.Length > 0 && wants.Length > 0)
             return new InertReason(InertCause.WrongRace, 0, "", wants, have);
 
         // 5. Ticked fabric with nothing to cut it into: with the Masks tab set to Gear, no mask means no shell.
@@ -97,6 +104,55 @@ public static class InertModDiagnosis
 
         // 6. Everything resolved and none of it arrived; a wrong specific reason is worse than an honest vague one.
         return new InertReason(InertCause.NothingReached, 0, "", "", "");
+    }
+
+    /// <summary>
+    /// Whether a pack whose materials were filtered out really is for another body or race — the question rung 4
+    /// asks. Judged PER SURFACE, because a character's head code is not their body code: a pack's body materials
+    /// answer to <paramref name="wornBodyCodes"/> and its face, eyes, hair, tail and ear materials to
+    /// <paramref name="wornHeadCodes"/>.
+    /// <para/>
+    /// Pooling the two sets is wrong in both directions. It tells a Miqo'te in full plate — no bare skin, so no
+    /// body material is drawn and her body's code is unknown — that her own Bibo+ pack is for another race, on
+    /// the strength of the only code left, her FACE's c0801. And it lets a pack painting a Midlander FACE pass
+    /// as hers, because c0201 is the code of the body she wears under it.
+    /// <para/>
+    /// An unknown half is silence, not evidence: every surface that CAN be judged must say "another race", and
+    /// at least one must have been judged, or the answer is no.
+    /// </summary>
+    /// <param name="packMaterials">Every material game path the pack paints.</param>
+    /// <param name="packBodyTypes">The body types those materials are in ("bibo", "gen3", …).</param>
+    /// <param name="activeBodyTypes">The body types the character is drawing. Empty when unknown.</param>
+    internal static bool PaintsAnotherBody(
+        IEnumerable<string> packMaterials,
+        IReadOnlySet<string> packBodyTypes,
+        IReadOnlySet<string>? wornBodyCodes,
+        IReadOnlySet<string>? wornHeadCodes,
+        IReadOnlySet<string> activeBodyTypes)
+    {
+        var mine = packMaterials as IReadOnlyList<string> ?? packMaterials.ToList();
+
+        // Null = not judgeable: either the wearer's code for that surface is unknown, or the pack paints none of it.
+        bool? Verdict(bool body, IReadOnlySet<string>? worn)
+        {
+            if (worn is not { Count: > 0 }) return null;
+            var codes = mine.Where(p => ShellSurface.KeyFor(p) is { } k && k.IsBody == body)
+                            .Select(CompositorService.ExtractHumanCharCode)
+                            .OfType<string>()
+                            .ToList();
+            return codes.Count == 0 ? null : !codes.Any(worn.Contains);
+        }
+
+        var bodyVerdict = Verdict(true,  wornBodyCodes);
+        var headVerdict = Verdict(false, wornHeadCodes);
+        bool wrongRace = (bodyVerdict.HasValue || headVerdict.HasValue)
+                      && (bodyVerdict ?? true) && (headVerdict ?? true);
+
+        // A body type nobody here is wearing is the same class of answer, and the one the rung was written for.
+        bool wrongBodyType = packBodyTypes.Count > 0 && activeBodyTypes.Count > 0
+                          && !packBodyTypes.Any(activeBodyTypes.Contains);
+
+        return wrongRace || wrongBodyType;
     }
 
     /// <summary>A body-type set and a race-code set as one deduplicated phrase.</summary>

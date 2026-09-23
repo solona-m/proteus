@@ -2084,7 +2084,7 @@
     "description": ""
   },
   "Mods.Inert.WrongRace.Fmt": {
-    "message": "この Mod は {0} 用ですが、あなたは {1} です。同梱されているものはどれも、現在の体に合いません。",
+    "message": "この Mod は {0} 用ですが、あなたは {1} です。同梱されているものはどれも、現在の体や種族に合いません。",
     "description": ""
   },
   "Mods.NoSidecarMods": {

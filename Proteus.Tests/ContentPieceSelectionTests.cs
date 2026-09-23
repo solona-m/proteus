@@ -1159,6 +1159,27 @@ public class ContentPieceSelectionTests
     }
 
     /// <summary>
+    /// A code read off a game path carries the leading "c", and that is the spelling every message about a
+    /// path has to hand. Refusing it made the panel say "this mod paints c0801, and you are c0201" — the two
+    /// facts a person needs, in the one form that doesn't tell them which races those are.
+    /// </summary>
+    [Fact]
+    public void A_race_code_is_read_the_same_with_or_without_its_leading_c()
+    {
+        Assert.Equal(8, ModelRace.Index("c0801"));
+        Assert.Equal(ModelRace.Index("0201"), ModelRace.Index("C0201"));
+        Assert.Null(ModelRace.Index("c9101"));              // still past the playable range
+        Assert.Null(ModelRace.Index("c"));                  // a bare c names nothing
+
+        Assert.Equal("Miqote F", ModelRace.Describe("c0801"));
+        Assert.Equal("Midlander F", ModelRace.Describe("c0201"));
+        Assert.Equal("Miqote F, Midlander F", ModelRace.DescribeAll(["c0801", "c0201"]));
+
+        Assert.True(ModelRace.IsSharedShape("c0201"));
+        Assert.False(ModelRace.IsSharedShape("c0801"));
+    }
+
+    /// <summary>
     /// Colours and glow belong to a MATERIAL, because that is what one of the panel's tabs governs.
     /// <para/>
     /// They used to be stored per option, which cannot express a pack holding nine accessories in one

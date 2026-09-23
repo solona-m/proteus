@@ -359,6 +359,10 @@ public partial class CompositorService : IDisposable
     // Null when Glamourer isn't available or hasn't overridden the race.
     private volatile string? _glamourerCharCode;
 
+    // The same customization read as the wearer's HEAD code (e.g. "c0801" for a Miqo'te female, whose body
+    // code above is "c0201"). Face, hair, tail and ears are published under this one, not the body's.
+    private volatile string? _glamourerFaceCode;
+
     /// <summary>A "displayed race|snapshot races" pair, and the tick after which the observation goes stale.</summary>
     private sealed record UnsettledRace(string Pair, long ExpiresAtTick);
 

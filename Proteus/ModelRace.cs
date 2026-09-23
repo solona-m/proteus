@@ -29,10 +29,18 @@ public static class ModelRace
     /// Bounded to the playable range 1..18. Out of it there is no race, so callers get null rather than a
     /// number: unbounded, <see cref="Fallback"/>'s catch-all arm made every unknown index look like a child
     /// of Midlander, so the fall-through check waved through pairs like c9101 -> c0101. A guard that decides
-    /// how a shell is published should not accept a race that cannot exist.</summary>
+    /// how a shell is published should not accept a race that cannot exist.
+    /// <para/>
+    /// Both spellings are accepted: "0801" as the shell builder carries it, and "c0801" as it is read off a
+    /// path. Refusing the second made every message that names a race off a game path print the raw code
+    /// instead ("this mod paints c0801, and you are c0201"), which is the one place the name was the point.</summary>
     public static int? Index(string? code)
-        => code is { Length: >= 2 } && int.TryParse(code.AsSpan(0, 2), out var n)
-        && n > 0 && n <= Names.Length * 2 ? n : null;
+    {
+        var digits = code != null && code.Length > 0 && (code[0] == 'c' || code[0] == 'C')
+            ? code[1..] : code;
+        return digits is { Length: >= 2 } && int.TryParse(digits.AsSpan(0, 2), out var n)
+            && n > 0 && n <= Names.Length * 2 ? n : null;
+    }
 
     /// <summary>
     /// The race the game falls through to when a set declares no model for <paramref name="n"/>, or 0 at
