@@ -287,6 +287,9 @@ public static partial class SecondSkinWriter
                 // This mesh's flap past the joins; null for the host and cap passes and for a mesh joined to nothing.
                 HashSet<ushort>? joinFlap = null;
                 src.JoinFlaps?.TryGetValue(m, out joinFlap);
+                // The only vertices this mesh may draw, when something cut it down — see Source.DrawOnly.
+                HashSet<ushort>? drawOnly = null;
+                src.DrawOnly?.TryGetValue(m, out drawOnly);
                 void SkipSubmesh(uint sc)
                 {
                     // The triangle loop below runs floor(sc/3) times, the same count CapTriangles walked.
@@ -348,6 +351,12 @@ public static partial class SecondSkinWriter
                         // shape key redirects a corner to a morph vertex that is never in the flap set.
                         if (joinFlap != null
                             && (joinFlap.Contains(rawA) || joinFlap.Contains(rawB) || joinFlap.Contains(rawC)))
+                        { build.trimmedOut++; continue; }
+
+                        // Outside what this source was cut down to. ANY corner inside keeps it, so the kept region
+                        // ends one triangle past the cut and meets whatever drew the rest. RAW indices, as above.
+                        if (drawOnly != null
+                            && !drawOnly.Contains(rawA) && !drawOnly.Contains(rawB) && !drawOnly.Contains(rawC))
                         { build.trimmedOut++; continue; }
 
                         if (cov != null && !AnyVisible(cov, uv[a], uv[b], uv[c])) continue;

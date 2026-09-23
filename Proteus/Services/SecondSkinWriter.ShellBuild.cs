@@ -478,7 +478,8 @@ public static partial class SecondSkinWriter
                 if (geomByModel.ContainsKey(g.Model)) continue;
                 var gs = Parse(g.Model);
                 // Deliberately NOT `gs.Keep = g.KeepMaterial`: two geometries may share one model, and the emit loop
-                // filters with the geometry's own predicate.
+                // filters with the geometry's own predicate. A cut, on the other hand, is a fact about the model.
+                gs.DrawOnly = g.DrawOnly;
                 geomByModel[g.Model] = gs;
                 geomSrcs.Add(gs);
             }

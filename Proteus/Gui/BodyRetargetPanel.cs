@@ -861,6 +861,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         if (r.Pushed > 0) lines.Add(string.Format(ps.RetargetPushedFmt, r.Pushed, r.WorstPush * 1000f));
         if (r.Missed > 0) lines.Add(string.Format(ps.RetargetMissedFmt, r.Missed));
         if (r.Held > 0) lines.Add(string.Format(ps.RetargetHeldFmt, r.Held));
+        if (r.Folded > 0) lines.Add(string.Format(ps.RetargetFoldedFmt, r.Folded));
         if (r.Swap is { } swap)
         {
             if (swap.Removed > 0) lines.Add(string.Format(ps.RetargetSwappedFmt, swap.Removed, swap.Added));

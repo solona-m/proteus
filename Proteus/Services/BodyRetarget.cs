@@ -100,6 +100,16 @@ internal static partial class BodyRetarget
     /// </summary>
     internal const float ClearDepth = 0.008f;
 
+    /// <summary>Rounds of halving the push-out's fold sweep gets. Each quarters the worst case, so eight is a factor
+    /// of 256 — past any push this pass can ask for.</summary>
+    private const int PushUnfoldPasses = 8;
+
+    /// <summary>Rounds the fold relax gets (see <see cref="Unfold"/>), and how far each one takes a corner toward
+    /// what its neighbours were given.</summary>
+    private const int UnfoldRounds = 24;
+
+    private const float UnfoldRate = 0.5f;
+
     /// <summary>
     /// How far the push-out looks for the skin when deciding whether cloth was authored INSIDE it (15 cm). Cloth tucked
     /// under a body can sit far inside it — a heeled shoe's foot is drawn where the body's flat foot is — and at
@@ -135,10 +145,11 @@ internal static partial class BodyRetarget
     /// <param name="Held">Welded points the user held in place, by unticking their parts.</param>
     /// <param name="Laid">Skin points laid exactly onto the new body — see <see cref="LaySkin"/>.</param>
     /// <param name="Swap">What swapping the garment's skin for the body's did; null when it did not run.</param>
+    /// <param name="Folded">Triangles the refit left facing the wrong way — see <see cref="Unfold"/>.</param>
     internal sealed record Report(
         int Nodes, int Snapped, int Transferred, int Missed, int Pushed,
         float WorstMove, float WorstPush, int UnmappedSpares, bool HasOtherLods, int Held = 0, int Laid = 0,
-        SwapReport? Swap = null)
+        SwapReport? Swap = null, int Folded = 0)
     {
         /// <summary>Share of moved nodes that landed on a body vertex exactly. Low means the author sculpted the
         /// garment's body mesh rather than copying it, and the seam may not come out perfect.</summary>
@@ -153,8 +164,10 @@ internal static partial class BodyRetarget
     /// can be tested against a hand-built <see cref="ModelParts"/> at real body scale, rather than only through a
     /// synthetic .mdl whose triangles are a metre across.
     /// </summary>
+    /// <param name="Folded">Triangles still facing the wrong way when <see cref="Unfold"/> ran out of rounds. Any at
+    /// all is worth saying: a folded triangle is a black speck on the garment.</param>
     internal sealed record Solved(RetargetEdit Edit, int Snapped, int Transferred, int Missed, int Pushed,
-                                  float WorstMove, float WorstPush, int Held = 0, int Laid = 0);
+                                  float WorstMove, float WorstPush, int Held = 0, int Laid = 0, int Folded = 0);
 
     /// <summary>
     /// The garment split into the two sets the two passes act on.
@@ -357,7 +370,8 @@ internal static partial class BodyRetarget
 
         var report = new Report(garment.Positions.Length / 3, solved.Snapped, solved.Transferred, solved.Missed,
                                 solved.Pushed, solved.WorstMove, solved.WorstPush,
-                                written.UnmappedSpares, written.HasOtherLods, solved.Held, solved.Laid, swap);
+                                written.UnmappedSpares, written.HasOtherLods, solved.Held, solved.Laid, swap,
+                                solved.Folded);
         return new Planned(solved.Edit, model, report);
     }
 
@@ -397,6 +411,9 @@ internal static partial class BodyRetarget
             pushed = PushOut(sets, pushable, before, after, nodeDelta, clearBody, out worstPush);
         }
 
+        // Last, once nothing else will move: the answer is only worth having if the mesh still reads front-side out.
+        int folded = Unfold(sets, nodeDelta, snapped);
+
         int vc = garment.Positions.Length / 3;
         var vertDelta = new Vec3[vc];
         for (int i = 0; i < vc; i++) vertDelta[i] = nodeDelta[sets.NodeOf[i]];
@@ -413,8 +430,98 @@ internal static partial class BodyRetarget
 
         var edit = new RetargetEdit(garment.MeshSpans, vertDelta, vertNrm);
         return new Solved(edit, CountTrue(snapped), transferred, missed, pushed, worstMove, worstPush, sets.HeldCount,
-                          laid);
+                          laid, folded);
     }
+
+    /// <summary>
+    /// Take the fold out of the answer: wherever a triangle ends up facing the other way, each of its corners moves
+    /// toward what its neighbours were given, and the test runs again. A turned-over triangle is drawn from behind,
+    /// and a garment's backfaces are black — on this jacket the cleavage of the lapel came out as black specks.
+    /// <para/>
+    /// Relaxed toward the neighbours rather than scaled back toward zero (the bust bridge's <c>UnfoldTriangles</c>
+    /// rule). A refit moves the WHOLE garment onto a body of another size, so scaling a corner's move back leaves it
+    /// short of the new body and sunk into it. A fold is a disagreement between neighbours, not too much movement, and
+    /// what fixes it is the neighbours' answer.
+    /// <para/>
+    /// Corners that landed exactly are left alone at first: that landing IS the answer, and the fold is usually in
+    /// the cloth beside it. Both kinds count — a point the transfer snapped onto a body vertex, and the garment's own
+    /// body mesh, which <see cref="LaySkin"/> puts ON the new body and which <see cref="Knit"/> excludes outright for
+    /// the same reason: averaged with the cloth beside it, skin lifts off the body it has to coincide with.
+    /// <para/>
+    /// Half way through the rounds any fold still standing is between two exact landings — the correspondence carried
+    /// neighbouring points across each other — and there the landing is no answer at all, so they are freed as well: a
+    /// folded triangle of skin is a black speck like any other. Held nodes are not in <see cref="Sets.AllNodes"/> and
+    /// never move.
+    /// </summary>
+    /// <returns>Triangles still folded when the rounds ran out — zero when the pass cleared them all.</returns>
+    internal static int Unfold(Sets sets, Vec3[] nodeDelta, bool[] snapped)
+    {
+        var isSkin = new bool[sets.NodeCount];
+        foreach (int n in sets.SkinNodes) isSkin[n] = true;
+
+        var mayMove = new bool[sets.NodeCount];
+        foreach (int n in sets.AllNodes) mayMove[n] = !snapped[n] && !isSkin[n];
+
+        var flagged = new bool[sets.NodeCount];
+        int folded = 0;
+        int round = 0;
+        for (; round < UnfoldRounds; round++)
+        {
+            if (round == UnfoldRounds / 2)
+                foreach (int n in sets.AllNodes) mayMove[n] = true;
+
+            folded = Folded(sets, nodeDelta, flagged);
+            if (folded == 0) break;
+
+            for (int n = 0; n < sets.NodeCount; n++)
+            {
+                if (!flagged[n] || !mayMove[n] || sets.Adj[n].Count == 0) continue;
+                var sum = default(Vec3);
+                foreach (int m in sets.Adj[n]) sum = new Vec3(sum.X + nodeDelta[m].X, sum.Y + nodeDelta[m].Y,
+                                                              sum.Z + nodeDelta[m].Z);
+                float inv = 1f / sets.Adj[n].Count;
+                nodeDelta[n] = new Vec3(
+                    nodeDelta[n].X + (sum.X * inv - nodeDelta[n].X) * UnfoldRate,
+                    nodeDelta[n].Y + (sum.Y * inv - nodeDelta[n].Y) * UnfoldRate,
+                    nodeDelta[n].Z + (sum.Z * inv - nodeDelta[n].Z) * UnfoldRate);
+            }
+        }
+
+        // The rounds ran out with the last relax untested, and the number reported has to describe what was WRITTEN.
+        return round < UnfoldRounds ? folded : Folded(sets, nodeDelta, flagged);
+    }
+
+    /// <summary>
+    /// Triangles the deltas turn over, and (in <paramref name="flagged"/>, which this clears first) the nodes they
+    /// hang off. Judged against the mesh as its author left it: a triangle already facing that way as authored is the
+    /// author's business and not the refit's.
+    /// </summary>
+    private static int Folded(Sets sets, Vec3[] nodeDelta, bool[] flagged)
+    {
+        Array.Clear(flagged);
+        int folded = 0;
+        for (int t = 0; t + 2 < sets.Tris.Length; t += 3)
+        {
+            int va = sets.Tris[t], vb = sets.Tris[t + 1], vc = sets.Tris[t + 2];
+            if (va < 0 || vb < 0 || vc < 0
+                || va >= sets.NodeOf.Length || vb >= sets.NodeOf.Length || vc >= sets.NodeOf.Length) continue;
+            int a = sets.NodeOf[va], b = sets.NodeOf[vb], c = sets.NodeOf[vc];
+            if (a == b || b == c || c == a) continue;   // welded to a line: no side to be on
+
+            var at = ToVector(sets.NodeAt[a]);
+            var n0 = Vector3.Cross(ToVector(sets.NodeAt[b]) - at, ToVector(sets.NodeAt[c]) - at);
+            if (n0.Length() <= 1e-12f) continue;        // already degenerate as authored; not this pass's doing
+            var to = Placed(sets, nodeDelta, a);
+            var n1 = Vector3.Cross(Placed(sets, nodeDelta, b) - to, Placed(sets, nodeDelta, c) - to);
+            if (Vector3.Dot(n0, n1) >= 0f) continue;
+
+            folded++;
+            flagged[a] = flagged[b] = flagged[c] = true;
+        }
+        return folded;
+    }
+
+
 
     /// <summary>
     /// Hold neighbouring points together: move each a little toward what its neighbours were given

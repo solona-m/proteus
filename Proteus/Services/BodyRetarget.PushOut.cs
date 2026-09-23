@@ -132,6 +132,12 @@ internal static partial class BodyRetarget
         };
     }
 
+    /// <summary>Where a node stands after the transfer so far: its authored place plus the delta planned for it.</summary>
+    private static Vector3 Placed(Sets sets, Vec3[] nodeDelta, int n)
+        => new(sets.NodeAt[n].X + nodeDelta[n].X,
+               sets.NodeAt[n].Y + nodeDelta[n].Y,
+               sets.NodeAt[n].Z + nodeDelta[n].Z);
+
     /// <summary>
     /// Push cloth the refit drove INTO the drawn skin back out of it — and nothing else.
     /// </summary>
@@ -269,23 +275,76 @@ internal static partial class BodyRetarget
         var candidate = new bool[sets.NodeCount];
         foreach (int n in candidates) candidate[n] = true;
 
-        for (int round = 0; round < PushSpreadRounds; round++)
+        void Slope()
         {
-            bool changed = false;
-            foreach (int n in nodes)
+            for (int round = 0; round < PushSpreadRounds; round++)
             {
-                float cap = need[n];
-                foreach (int m in sets.Adj[n])
+                bool changed = false;
+                foreach (int n in nodes)
                 {
-                    if (!candidate[m]) continue;
-                    float limit = (inSet[m] ? need[m] : 0f) + step;
-                    if (limit < cap) cap = limit;
+                    float cap = need[n];
+                    foreach (int m in sets.Adj[n])
+                    {
+                        if (!candidate[m]) continue;
+                        float limit = (inSet[m] ? need[m] : 0f) + step;
+                        if (limit < cap) cap = limit;
+                    }
+                    if (cap >= need[n] - 1e-9f) continue;
+                    need[n] = cap;
+                    changed = true;
                 }
-                if (cap >= need[n] - 1e-9f) continue;
-                need[n] = cap;
-                changed = true;
+                if (!changed) break;
             }
-            if (!changed) break;
+        }
+
+        Slope();
+
+        // Back the push off wherever it would turn a triangle over. Each node is pushed along the skin's normal
+        // where IT landed, and neighbours can land on surfaces facing different ways — a sleeve at the wrist lands on
+        // the fingers, which face every way at once — so two nodes pushed a few millimetres each can step past one
+        // another, and a turned-over triangle is drawn from behind, which on cloth is black. Halved until none does,
+        // which terminates because scaling a push toward zero moves its triangles back toward where they started.
+        // The real test on the real triangles, not a limit on how far or how differently nodes move: cloth wrapping a
+        // convex body corner is pushed two ways at once and grows, which is not a fold (measured on this jacket: 17
+        // faces of up to 9.6 mm² turned over, and no proxy for it left the pass able to clear a shoulder).
+        Vector3 Trial(int n)
+        {
+            var at = Placed(sets, nodeDelta, n);
+            if (need[n] <= 0f) return at;
+            var d = hasDir[n] ? dir[n] : sets.NodeNormal[n];
+            return at + ToVector(d) * need[n];
+        }
+
+        for (int pass = 0; pass < PushUnfoldPasses; pass++)
+        {
+            int folded = 0;
+            for (int t = 0; t + 2 < sets.Tris.Length; t += 3)
+            {
+                int va = sets.Tris[t], vb = sets.Tris[t + 1], vc = sets.Tris[t + 2];
+                if (va < 0 || vb < 0 || vc < 0
+                    || va >= sets.NodeOf.Length || vb >= sets.NodeOf.Length || vc >= sets.NodeOf.Length) continue;
+                int a = sets.NodeOf[va], b = sets.NodeOf[vb], c = sets.NodeOf[vc];
+                if (a == b || b == c || c == a) continue;
+                if (need[a] <= 0f && need[b] <= 0f && need[c] <= 0f) continue;
+
+                var was = Placed(sets, nodeDelta, a);
+                var n0 = Vector3.Cross(Placed(sets, nodeDelta, b) - was, Placed(sets, nodeDelta, c) - was);
+                if (n0.Length() <= 1e-12f) continue;   // degenerate before the push; not this pass's doing
+                var now = Trial(a);
+                var n1 = Vector3.Cross(Trial(b) - now, Trial(c) - now);
+                if (Vector3.Dot(n0, n1) > 0f) continue;
+
+                need[a] *= 0.5f;
+                need[b] *= 0.5f;
+                need[c] *= 0.5f;
+                folded++;
+            }
+            // Nothing folded, so nothing was halved and the slope limit still holds from the last time: done. Halving
+            // three corners cuts their push below what their neighbours kept, which is the very step Slope exists to
+            // take out — a node backed off to nothing beside one pushed its whole 7 mm is a crease, and a crease is
+            // not a fold, so no later pass would notice. Slope only ever LOWERS a push, so the next pass re-tests.
+            if (folded == 0) break;
+            Slope();
         }
 
         int pushed = 0;

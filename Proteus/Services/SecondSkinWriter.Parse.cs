@@ -364,6 +364,12 @@ public static partial class SecondSkinWriter
         // here, which lets the emit loop drop a triangle with ANY corner in the set. See PlanJoinCut.
         public Dictionary<int, HashSet<ushort>>? JoinFlaps;
 
+        // Per absolute mesh index, the only vertices this source may draw. A triangle with NO corner among them
+        // is dropped — the opposite polarity to JoinFlaps, so the kept region ends one triangle PAST the set and
+        // leaves no gap along its edge. Set for a body whose skin is being cut down to what another model drew
+        // (see BodyRetarget.CutLike). Null, or a mesh missing from it, draws whole.
+        public Dictionary<int, HashSet<ushort>>? DrawOnly;
+
         // Positions, bucketed at JoinWeld, of this source's vertices that coincide with another source's — the
         // rings it is stitched to its neighbours on. A displacement pass must not move these: the part on the
         // other side of the ring is solved on its own and will not follow. Null = not measured.
