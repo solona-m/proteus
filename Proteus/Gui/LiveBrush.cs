@@ -239,12 +239,20 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     private const float WashOpacity = 0.45f;
 
     /// <summary>Keep pick mode live for this frame: the next click on a worn garment names its file.</summary>
-    public void ArmPick(string penumbraModsRoot, Action<string> picked)
+    /// <param name="includeGameGear">
+    /// Offer the gear the GAME supplies as well as the gear a mod does. Only the refit can do anything with a piece
+    /// that has no mod behind it, so everywhere else these stay unhoverable rather than clickable and then refused.
+    /// </param>
+    public void ArmPick(string penumbraModsRoot, Action<string> picked, bool includeGameGear = false)
     {
         pickArmedFrame = ImGui.GetFrameCount();
         modsRoot = penumbraModsRoot;
         onPicked = picked;
+        pickGameGear = includeGameGear;
     }
+
+    /// <summary>See <see cref="ArmPick"/>. Re-armed every frame, so it cannot outlive the tool that asked for it.</summary>
+    private bool pickGameGear;
 
     public void Update()
     {
@@ -897,13 +905,21 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
             if (string.IsNullOrEmpty(name)) continue;
             var file = LiveCharacter.FilePath(name);
             if (BodyShapeReader.PathKey(file) == exclude) continue;
-            if (!HatCompatService.InMods(file, modsRoot, out _, out _)) continue;
+
+            // A model no mod redirects is the game's own, and then its resource name IS the game path — which is
+            // both how it is recognised and the only handle anything downstream has on it.
+            bool inMods = HatCompatService.InMods(file, modsRoot, out _, out _);
+            bool gameGear = !inMods && pickGameGear
+                         && file.StartsWith("chara/equipment/", StringComparison.OrdinalIgnoreCase);
+            if (!inMods && !gameGear) continue;
 
             var shapes = EnabledShapes(model, handle);
             var key = BodyShapeReader.PathKey(file) + "|" + string.Join(",", shapes);
             if (!pickMeshes.TryGetValue(key, out var entry))
             {
-                var bytes = File.Exists(file) ? File.ReadAllBytes(file) : null;
+                var bytes = File.Exists(file) ? File.ReadAllBytes(file)
+                          : gameGear              ? data.GetFile(file)?.Data
+                          : null;
                 var read = bytes != null ? ModelSkinReader.Read(bytes, shapes, LiveCharacter.GamePathOf(penumbra, name) ?? name) : null;
                 if (read == null) continue;
                 pickMeshes[key] = entry = (read, SkinTriangles(read));

@@ -153,10 +153,10 @@ internal static partial class BodyRetarget
             cutTris += gone;
         }
 
-        // One layer per slot whose skin came out: its body's skin meshes, under the garment's skin material.
+        // One layer per slot whose skin came out: its body's skin meshes, under the right skin material.
         var layers = claimedBy.OrderBy(s => s).Select(s => new SecondSkinLayer
         {
-            MaterialName = skinMaterial!,
+            MaterialName = SkinMaterialFor(skinMaterial!, swappable[s].TargetModel!),
             // Tagged as the body tags it — atr_ude, atr_hij, atr_nek are how long gloves or a high collar hide the
             // skin under them, and the garment's own skin carried the same tags — except for variant tags, which would
             // be judged against the garment's IMC mask (a Neolithe body carries eight, atr_tv_a..h).
@@ -227,6 +227,32 @@ internal static partial class BodyRetarget
         {
             if (covered[v] && v - bv is >= 0 and <= ushort.MaxValue) set.Add((ushort)(v - bv));
         }
+    }
+
+    /// <summary>
+    /// Which skin material the body's mesh is drawn with once it is in the garment.
+    /// <para/>
+    /// The garment's own, normally: an author who gave their skin its own material — a tattoo, a scar — meant it, and
+    /// a garment made for this body already names a material in the body's own texture layout.
+    /// <para/>
+    /// But the mesh going in is the BODY's, with the body's texture coordinates, and a material describes a layout.
+    /// Where the two disagree the garment's material is simply wrong for the mesh now under it: the game's own gear
+    /// names the vanilla skin material, whose texture is laid out gen2, while the body it is being refitted onto is
+    /// bibo. Same geometry, wrong half of the sheet — which reads in game as pale blocks across the back, hard-edged
+    /// where the texture's islands change. The body's own material is what that mesh is drawn with everywhere else on
+    /// the character, so it is what matches.
+    /// </summary>
+    private static string SkinMaterialFor(string garmentMaterial, byte[] body)
+    {
+        string? want = SecondSkinWriter.SkinMaterialBodyType(garmentMaterial);
+
+        foreach (string name in SecondSkinWriter.Parse(body).MatNames)
+        {
+            if (SecondSkinWriter.SkinMaterialBodyType(name) is not { } layout) continue;
+            if (want == null || !string.Equals(layout, want, StringComparison.OrdinalIgnoreCase)) return name;
+            break;   // they agree: the author's material stands
+        }
+        return garmentMaterial;
     }
 
     private static Vector3 At(ModelParts m, int v)

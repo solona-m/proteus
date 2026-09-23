@@ -26,7 +26,12 @@ namespace Proteus.Gui;
 /// json. Any of those on the draw thread is a visible hitch at best and, for the mod scan, a freeze the first time the
 /// tool is opened.
 /// </summary>
-internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService uvRemap, IPluginLog log)
+/// <param name="readGameFile">
+/// Reads a game path out of the GAME'S own data, past whatever a mod would redirect it to. The game's body is read
+/// through it, which is the "made for" side of every refit of the game's own gear.
+/// </param>
+internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService uvRemap,
+                                        Func<string, byte[]?> readGameFile, IPluginLog log)
 {
     /// <summary>What the Studio tab lends this tool for the frame: the open model, and the things only it can do.</summary>
     /// <param name="Redirects">The open mod's redirects, already read by the tab. Used to spot a group of the author's
@@ -35,14 +40,33 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     /// <param name="PushPreview">Put bytes on the character for this model's game paths. False means "busy, try again
     /// next frame"; true means pushed, or that this model can never be previewed and there is no point retrying.</param>
     /// <param name="SetStatus">Say something in the tab's status line.</param>
-    /// <param name="AfterModChange">The mod's files changed on disk: reload it and redraw.</param>
+    /// <param name="AfterModChange">
+    /// A mod's files changed on disk — reload it and redraw. Which mod is the argument, because it is not always the
+    /// one the garment came from: a refit saved into a mod of its own changed THAT one, and reloading the garment's
+    /// instead leaves the mod that actually holds the new model unread by Penumbra.
+    /// </param>
     /// <param name="Held">Labels of the parts unticked in the Studio's list, which the refit leaves exactly where the
     /// author put them. The same locks the brush honours.</param>
+    /// <param name="SaveMod">
+    /// The mod a refit of THIS garment belongs in, for the body named — asked with <c>create</c> false to find one
+    /// already there, true to make it. Null for a garment that came out of a mod: that mod is where it goes.
+    /// <para/>
+    /// Penumbra IPC, so the tab answers it on the framework thread and the panel never calls it from a worker.
+    /// </param>
     internal readonly record struct RetargetContext(
-        string ModRoot, string ModDir, string ModelRel, string GamePath, string ModelLabel,
+        string? ModRoot, string? ModDir, string ModelRel, string GamePath, string ModelLabel,
         ModelParts Garment, byte[] GarmentBytes, IReadOnlyList<PenumbraModMeta.Redirect> Redirects,
         Action FlushPending, Func<byte[], bool> PushPreview, Action EndPreview,
-        Action<string, bool> SetStatus, Action AfterModChange, IReadOnlyCollection<string> Held);
+        Action<string, bool> SetStatus, Action<string?> AfterModChange, IReadOnlyCollection<string> Held,
+        Func<string, bool, (string Root, string Dir)?>? SaveMod = null)
+    {
+        /// <summary>
+        /// The garment is the game's own: no mod holds it, and none holds the refit either until
+        /// <see cref="SaveMod"/> makes one. A mod root is the discriminator because there is no such thing as a
+        /// piece of the game's gear with one.
+        /// </summary>
+        public bool IsVanilla => ModRoot == null;
+    }
 
     // ── the body, and the pair chosen per slot ──────────────────────────────
 
@@ -187,12 +211,27 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         race = BodySizeCatalog.RaceOf(ctx.GamePath);
         Consume(ctx);
 
-        if (recordFor != ctx.ModRoot)
+        // Gear the game ships is fitted to the game's body, so that is the "made for" side — chosen here rather than
+        // left to the user, who would otherwise have to know that and find it in a list of their body mods. Once, and
+        // only while nothing else has been picked: changing it afterwards is theirs to do.
+        if (ctx.IsVanilla && fromBodyDir == null && !vanillaSourceTried)
+        {
+            vanillaSourceTried = true;
+            fromBodyDir = VanillaBodyCatalog.Key;
+            fromCatalog = LoadSource(fromBodyDir);
+        }
+        else if (!ctx.IsVanilla)
+        {
+            vanillaSourceTried = false;
+        }
+
+        string? modRoot = RecordRoot(ctx);
+        if (recordFor != modRoot)
         {
             // One read per mod, not per frame, and again after a save or an undo changes what is there.
-            recordFor = ctx.ModRoot;
-            record = BodyRetargetWriter.ReadRecord(ctx.ModRoot);
-            singleGroups = (PenumbraModMeta.TryReadGroups(ctx.ModRoot) ?? [])
+            recordFor = modRoot;
+            record = modRoot != null ? BodyRetargetWriter.ReadRecord(modRoot) : null;
+            singleGroups = (modRoot != null ? PenumbraModMeta.TryReadGroups(modRoot) ?? [] : [])
                 .Where(g => string.Equals(PenumbraModMeta.TypeOf(g.Group), "Single", StringComparison.OrdinalIgnoreCase))
                 .Select(g => g.Name).ToList();
         }
@@ -200,6 +239,9 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         if (groupNameFor != ctx.ModelRel)
         {
             groupNameFor = ctx.ModelRel;
+            // A new garment starts over: the author's mod is the default, and a choice made about the last garment
+            // is not a choice about this one. The game's own gear has no author's mod to default to.
+            toNewMod = ctx.IsVanilla;
             groupName = string.Format(ps.RetargetGroupFmt, ctx.ModelLabel);
             saveTo = SwitchingGroup(ctx);
         }
@@ -298,11 +340,11 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         var ps = Strings.Parts;
         ImGui.TextUnformatted(ps.RetargetFromBody);
         if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.RetargetFromBodyTip);
-        if (DrawBodyCombo("##retargetFromBody", SourceDir, ref fromBodyFilter) is not { } dir) return;
+        if (DrawBodyCombo("##retargetFromBody", SourceDir, ref fromBodyFilter, withGame: true) is not { } dir) return;
 
         // Choosing the refit-onto mod here is a refit between its sizes, which is what no separate source means.
         fromBodyDir = dir == bodyDir ? null : dir;
-        fromCatalog = fromBodyDir != null && BodyRoot(fromBodyDir) is { } root ? BodySizeCatalog.Read(root) : null;
+        fromCatalog = LoadSource(fromBodyDir);
 
         // Every "made for" choice and what was worked out from it belonged to the old source.
         from.Clear();
@@ -329,7 +371,12 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     }
 
     /// <summary>A dropdown of the installed body mods. Returns the directory picked this frame, if any.</summary>
-    private string? DrawBodyCombo(string id, string? current, ref string filter)
+    /// <param name="withGame">
+    /// Offer the game's own body above the mods. Only the "made for" side takes it: gear the game ships is fitted to
+    /// it, so it is a source. Refitting ONTO it would be shrinking a garment back to vanilla, which nobody has asked
+    /// for and which the rest of the panel — the worn-body preset, the size lists — has no shape for.
+    /// </param>
+    private string? DrawBodyCombo(string id, string? current, ref string filter, bool withGame = false)
     {
         var ps = Strings.Parts;
         ImGui.SetNextItemWidth(-1);
@@ -337,7 +384,8 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         // The first scan starts as soon as the tool is shown, so the list is usually ready by the time it is opened.
         if (bodies == null && bodiesTask == null) StartBodyScan();
 
-        string shown = current != null && bodies != null && bodies.TryGetValue(current, out string? name) ? name
+        string shown = current == VanillaBodyCatalog.Key ? ps.RetargetFromVanilla
+                     : current != null && bodies != null && bodies.TryGetValue(current, out string? name) ? name
                      : ps.RetargetNoBody;
         using var combo = ImRaii.Combo(id, shown);
         if (!combo) return null;
@@ -354,6 +402,17 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         ComboSearch.Box(id, ref filter);
         string? picked = null;
         bool any = false;
+
+        // Above the mods, and never filtered away: it is one row, and it is the answer for every piece of the game's
+        // own gear.
+        if (withGame)
+        {
+            any = true;
+            if (ImGui.Selectable(ps.RetargetFromVanilla + id + VanillaBodyCatalog.Key,
+                                 current == VanillaBodyCatalog.Key))
+                picked = VanillaBodyCatalog.Key;
+            ImGui.Separator();
+        }
         foreach (var (dir, label) in bodies.OrderBy(p => p.Value, StringComparer.OrdinalIgnoreCase))
         {
             // Mod names match anywhere, as the Studio's own mod picker does: people type fragments of a name ("lithe").
@@ -397,9 +456,22 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
 
     private string? BodyRoot(string dir)
     {
+        // The game's own body is not a mod and has no folder under the mods root; asking for one would build a path
+        // to a directory named "::vanilla", which every later read would fail on for the wrong reason.
+        if (dir == VanillaBodyCatalog.Key) return null;
         string? root = penumbra.GetModDirectory();
         return root == null ? null : Path.Combine(root, dir);
     }
+
+    /// <summary>
+    /// The sizes to refit FROM for a chosen source: a body mod's, or the game's own body extracted out of its data.
+    /// Null when nothing is chosen, which means the refit is between sizes of the one body mod.
+    /// </summary>
+    private BodySizeCatalog? LoadSource(string? dir)
+        => dir == null ? null
+         : dir == VanillaBodyCatalog.Key ? VanillaBodyCatalog.Read(race ?? "0201", readGameFile)
+         : BodyRoot(dir) is { } root ? BodySizeCatalog.Read(root)
+         : null;
 
     // ── what the character is wearing ───────────────────────────────────────
     //
@@ -435,6 +507,24 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         }
     }
 
+    /// <summary>
+    /// The mod a save made for a piece of the game's own gear, so the buttons after it — open in Penumbra, undo —
+    /// have something to name. Null until one is made, and for any garment that came out of a mod.
+    /// </summary>
+    private string? savedDir;
+
+    /// <summary>
+    /// The mod the save or undo now running is writing into — which is the one that changed, and not necessarily the
+    /// one the garment came from. Read once the task finishes, on the same thread that set it.
+    /// </summary>
+    private string? wroteInto;
+
+    /// <summary>
+    /// The game's own body has been offered as the source for the piece of the game's gear that is open. Once per
+    /// piece: picking something else, or clearing it, is a choice this must not undo on the next frame.
+    /// </summary>
+    private bool vanillaSourceTried;
+
     /// <summary>Only ever tried once per session: the user may well choose another body mod on purpose.</summary>
     private bool wornBodyTried;
 
@@ -454,6 +544,16 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         to[slot] = [worn];
         StartValidate(slot);
     }
+
+    /// <summary>
+    /// What to call a body: the mod's name as Penumbra lists it, or what the game's own body is called. Its folder
+    /// name is never shown — the sentinel is not a folder, and a mod's folder is not what its author called it.
+    /// </summary>
+    private string BodyName(string? dir)
+        => dir == null ? ""
+         : dir == VanillaBodyCatalog.Key ? Strings.Parts.RetargetFromVanilla
+         : bodies != null && bodies.TryGetValue(dir, out string? name) ? name
+         : dir;
 
     /// <summary>The option of this slot whose file the player's collection resolves the body model to.</summary>
     private BodyOption? WornOption(BodySizeCatalog snapshot, string slot)
@@ -784,6 +884,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         var own = record?.OwnGroups.ToHashSet(StringComparer.OrdinalIgnoreCase)
                   ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        DrawSaveToMod(ctx);
         ImGui.TextUnformatted(ps.RetargetSaveTo);
         ImGui.SetNextItemWidth(-1);
         using (var combo = ImRaii.Combo("##retargetSaveTo", saveTo ?? ps.RetargetNewGroup))
@@ -810,6 +911,48 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
                 using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
                     ImGui.TextWrapped(string.Format(ps.RetargetClashFmt, clash));
     }
+
+    /// <summary>
+    /// Which MOD the refit is written into, when the garment came out of one.
+    /// <para/>
+    /// The author's is the default and stays it: a size written there joins the author's own size group (see
+    /// <see cref="SwitchingGroup"/>), so it appears in the switch they already built rather than fighting it. A mod
+    /// of Proteus's own is the other answer, and the reason to want it is that it survives: a refit written into
+    /// somebody else's mod is gone the next time they update it, and until then their copy is not what they shipped.
+    /// <para/>
+    /// The game's own gear has no choice to make — there is no author's mod — so the row is not drawn for it.
+    /// </summary>
+    private void DrawSaveToMod(in RetargetContext ctx)
+    {
+        if (ctx.IsVanilla || ctx.SaveMod == null) return;
+        var ps = Strings.Parts;
+
+        ImGui.TextUnformatted(ps.RetargetSaveToMod);
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.RetargetSaveToModTip);
+        ImGui.SetNextItemWidth(-1);
+        using (var combo = ImRaii.Combo("##retargetSaveToMod",
+                                        toNewMod ? ps.RetargetSaveToNewMod : ps.RetargetSaveToThisMod))
+            if (combo)
+            {
+                if (ImGui.Selectable(ps.RetargetSaveToThisMod, !toNewMod) && toNewMod)
+                {
+                    toNewMod = false;
+                    saveTo = SwitchingGroup(ctx);      // back to the author's size group, if they have one
+                }
+                if (ImGui.Selectable(ps.RetargetSaveToNewMod, toNewMod) && !toNewMod)
+                {
+                    toNewMod = true;
+                    // Nothing of the author's is in the new mod, so neither their groups nor a clash with them apply.
+                    saveTo = null;
+                }
+            }
+    }
+
+    /// <summary>
+    /// Write the refit into a mod of its own rather than the one the garment came from. Always true for the game's
+    /// own gear, which has no other home; the user's choice for everything else, and off by default.
+    /// </summary>
+    private bool toNewMod;
 
     /// <summary>The group the save writes to.</summary>
     private string Destination() => saveTo ?? groupName.Trim();
@@ -841,7 +984,9 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
 
         ImGui.Spacing();
         ImGui.TextWrapped(string.Format(ps.RetargetSavedFmt, saved.Options.Count, saved.GroupOf(saved.Options[^1])));
-        if (ImGui.Button(ps.RetargetOpenInPenumbra, FullWidth())) penumbra.OpenToMod(ctx.ModDir);
+        // The mod the record above was read from — which with a refit saved elsewhere is not the garment's own.
+        string? openDir = RecordRoot(ctx) is { } root ? Path.GetFileName(root) : ctx.ModDir ?? savedDir;
+        if (openDir != null && ImGui.Button(ps.RetargetOpenInPenumbra, FullWidth())) penumbra.OpenToMod(openDir);
 
         // Armed by a held modifier, like every other destructive button in the tab.
         var io = ImGui.GetIO();
@@ -1044,11 +1189,51 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
             ? uv
             : [];
 
+    /// <summary>
+    /// The mod this garment's refits live in, or null when there is none yet.
+    /// <para/>
+    /// A garment out of a mod keeps them in that mod. The game's own gear keeps them in the mod a save made for it,
+    /// which is asked for without creating one — the saved list and the undo button want to know it is there, not to
+    /// bring it into being.
+    /// </summary>
+    private string? RecordRoot(in RetargetContext ctx)
+    {
+        if (!toNewMod && ctx.ModRoot != null) return ctx.ModRoot;
+        if (bodyDir == null) return null;
+
+        // Asking reads a manifest off disk, and this runs every frame. The answer only moves when the garment, the
+        // body or the choice does, so that is the key.
+        string key = ctx.ModelRel + "|" + bodyDir + "|" + toNewMod;
+        if (key != madeModFor)
+        {
+            madeModFor = key;
+            madeModRoot = ctx.SaveMod?.Invoke(BodyName(bodyDir), false)?.Root;
+        }
+        return madeModRoot;
+    }
+
+    /// <summary>The garment, body and choice <see cref="madeModRoot"/> was looked up for.</summary>
+    private string? madeModFor;
+
+    /// <summary>The mod of Proteus's own already holding this garment's refits, or null when there is none yet.</summary>
+    private string? madeModRoot;
+
     private void StartSave(in RetargetContext ctx)
     {
         if (saveTask != null || planned is not { Count: > 0 } all) return;
 
-        string root = ctx.ModRoot;
+        string? root = toNewMod ? null : ctx.ModRoot;
+        wroteInto = ctx.ModDir;
+        if (root == null)
+        {
+            // A mod of Proteus's own — always for the game's gear, on request for anything else. Making one is IPC,
+            // so it happens here on the framework thread and not inside the task below.
+            if (bodyDir == null || ctx.SaveMod?.Invoke(BodyName(bodyDir), true) is not { } made) return;
+            root = made.Root;
+            savedDir = made.Dir;
+            wroteInto = made.Dir;
+            madeModFor = null;   // it exists now, and the lookup above was told it did not
+        }
         string group = Destination();
         string path = ctx.GamePath;
         string body = bodyDir ?? "";
@@ -1066,15 +1251,18 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
             refits.Add(new BodyRetargetWriter.Refit(option, plan.Model, ToLabel(ctx, target)));
         }
 
+        string at = root;
         saveTask = Task.Run(() => new SaveResult(
-            BodyRetargetWriter.Save(root, group, path, body, labelFrom, refits),
-            BodyRetargetWriter.ReadRecord(root)));
+            BodyRetargetWriter.Save(at, group, path, body, labelFrom, refits),
+            BodyRetargetWriter.ReadRecord(at)));
     }
 
     private void StartUndo(in RetargetContext ctx, BodyRetargetWriter.Record saved)
     {
         if (saveTask != null) return;
-        string root = ctx.ModRoot;
+        // The button is only drawn when a record was read, and a record read means a root.
+        if (RecordRoot(ctx) is not { } root) return;
+        wroteInto = Path.GetFileName(root);
         string group = saved.GroupOf(saved.Options[^1]);
         string option = saved.Options[^1].Name;
         saveTask = Task.Run(() => new SaveResult(BodyRetargetWriter.Undo(root, group, option),
@@ -1188,7 +1376,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
             ctx.EndPreview();
             planned = null;
             pendingPreview = null;
-            ctx.AfterModChange();
+            ctx.AfterModChange(wroteInto);
         }
     }
 

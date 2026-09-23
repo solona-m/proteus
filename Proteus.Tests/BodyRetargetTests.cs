@@ -196,6 +196,48 @@ public class BodyRetargetTests
     }
 
     [Fact]
+    public void The_body_s_skin_keeps_the_body_s_material_when_the_layouts_differ()
+    {
+        // The game's own gear names the vanilla skin material, whose texture is laid out gen2. Swap the body's mesh
+        // in under that material and its bibo texture coordinates read the wrong half of the sheet — pale blocks
+        // across the back, hard-edged where the islands change.
+        const string vanillaSkin = "/mt_c0201b0001_a.mtrl";
+        const string biboSkin = "/mt_c0201b0001_bibo.mtrl";
+
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(vanillaSkin, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)),
+            new SyntheticModel.Mesh(ClothMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 4, OffsetZ: 0.001f)));
+        var chest = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(biboSkin, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)));
+
+        var rebuilt = BodyRetarget.SwapSkin(garment, [Resized("_top", chest)], out _);
+
+        Assert.NotNull(rebuilt);
+        var drawn = Drawn(rebuilt!);
+        Assert.Contains(biboSkin.TrimStart('/'), drawn.Keys);
+        Assert.DoesNotContain(vanillaSkin.TrimStart('/'), drawn.Keys);
+    }
+
+    [Fact]
+    public void The_author_s_own_skin_material_stands_when_the_layouts_agree()
+    {
+        // An author who gave their skin its own material — a tattoo, a scar — meant it, and a garment made for this
+        // body already names one in the body's layout. Nothing about swapping the mesh changes that.
+        const string theirs = "/mt_c0201b0001_bibo.mtrl";
+
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(theirs, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)),
+            new SyntheticModel.Mesh(ClothMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 4, OffsetZ: 0.001f)));
+        var chest = SyntheticModel.Build([],
+            new SyntheticModel.Mesh("/mt_c0201b0001_other_bibo.mtrl", new SyntheticModel.Sub(0, TrianglesPerIsland: 5)));
+
+        var rebuilt = BodyRetarget.SwapSkin(garment, [Resized("_top", chest)], out _);
+
+        Assert.NotNull(rebuilt);
+        Assert.Contains(theirs.TrimStart('/'), Drawn(rebuilt!).Keys);
+    }
+
+    [Fact]
     public void Nothing_is_rebuilt_when_no_skin_mesh_belongs_to_a_resized_slot()
     {
         var clothOnly = SyntheticModel.Build([],
