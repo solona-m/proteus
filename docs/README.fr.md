@@ -10,8 +10,9 @@ Les calques peuvent être rendus de deux façons : peints dans votre peau, ou en
 
 - **Portez des mods sans sacrifier un emplacement d'équipement.** Une seconde peau doit forcément être dessinée comme un objet, mais Proteus la dissimule sur quelque chose que vous n'utilisez pas — des lunettes invisibles, une bague que vous ne portez pas, ou en l'ajoutant à vos accessoires équipés — de sorte que votre glamour réel n'est pas touché. Il n'y a rien à configurer : Proteus choisit l'hôte tout seul et ne prend jamais un objet que vous portez.
 - **Remodelez les vêtements de n'importe quel mod, directement sur votre personnage.** Dans l'onglet **Studio**, peignez sur un vêtement que vous portez pour l'écarter de votre corps là où la peau passe au travers, le rentrer, le lisser, le tendre par-dessus un pli, ou peindre là où le vent le fait balancer. Chaque modification est enregistrée dans le mod et peut être annulée.
+- **Réajustez une tenue à votre corps.** Le **Studio** peut faire passer un vêtement conçu pour une taille de corps à une autre, ou d'un mod de corps à un autre, par exemple de Neolithe à Rue ou de TBSE à TBSE-X, et l'enregistrer comme nouvelle option dans le mod.
 - **Ajoutez des interrupteurs à n'importe quelle pièce de n'importe quel mod, pas seulement ceux de Proteus.** Quand un mod soude un nœud, un collier ou une sangle dans une géométrie que son auteur n'a jamais rendue optionnelle, l'onglet **Studio** peut détacher cette pièce et lui donner un vrai interrupteur.
-- **Adaptez les cheveux moddés aux chapeaux.** Proteus plaque contre votre tête les cheveux qu'un chapeau recouvrirait, pour que le chapeau cesse de passer au travers.
+- **Adaptez les cheveux moddés aux chapeaux.** Proteus plaque contre votre tête les cheveux qu'un chapeau recouvrirait, pour que le chapeau cesse de passer au travers. C'est activé par défaut, et cela n'agit que pendant que vous portez un chapeau.
 
 
 Si vous avez besoin d'aide, consultez d'abord ce [guide de dépannage](../TROUBLESHOOTING.md).
@@ -40,7 +41,7 @@ Ouvrez la fenêtre d'état avec `/proteus`. Elle comporte sept onglets, et le r�
 
 #### Mods
 
-Liste tous les mods Penumbra qui contiennent un fichier Proteus. Cliquez sur un en-tête de colonne pour trier selon celle-ci.
+Liste tous les mods Penumbra qui contiennent un fichier Proteus. Cliquez sur un en-tête de colonne pour trier selon celle-ci. Survolez le nom d'un mod pour voir l'image que son auteur a livrée avec lui.
 
 | Colonne | Rôle |
 |--------|-------------|
@@ -48,16 +49,15 @@ Liste tous les mods Penumbra qui contiennent un fichier Proteus. Cliquez sur un 
 | Mod | Le nom affiché du mod. Cliquez dessus pour ouvrir le mod dans Penumbra. |
 | Prio | Priorité dans la pile de composition de Proteus. Les nombres les plus bas passent en premier (couche du bas). Glissez pour changer ; Ctrl-clic pour saisir une valeur. |
 | Préréglage | Le look enregistré que porte ce mod. Choisis-en un autre pour changer sans ouvrir l'éditeur de couleurs. Affiche — pour un mod sans préréglages. |
-| Couleurs | Ouvre l'éditeur de couleurs de ce mod. |
-| Skindent | Ombre d'occlusion ambiante et creux de normale sur les bords de sangle de ce mod. « Pack » suit ce que le mod a demandé ; Oui/Non le remplace. |
+| Couleurs | Ouvre l'éditeur de couleurs de ce mod. Skindent, l'ombre de contact et le creux sur les bords de sangle, se règle là, sous **Effets**. |
 
 Cliquez sur **Recomposer maintenant** pour forcer une recomposition manuelle. Proteus recompose aussi automatiquement dès que vous changez une option ou un réglage Penumbra, changez d'équipement, ou changez de race ou de corps.
 
 #### Studio
 
-Modifie les modèles de **n'importe quel** mod installé, pas seulement ceux de Proteus. Vous pouvez remodeler un vêtement pour que votre corps cesse de passer au travers, peindre là où le vent le fait balancer, ou détacher une pièce derrière son propre interrupteur. Chaque changement est écrit dans les fichiers du mod lui-même, il **continue donc de fonctionner avec Proteus désactivé** et suit le mod si vous l'exportez.
+Modifie les modèles de **n'importe quel** mod installé, pas seulement ceux de Proteus, y compris les vêtements des packs que vous avez importés. Vous pouvez remodeler un vêtement pour que votre corps cesse de passer au travers, déplacer ou redimensionner certaines de ses pièces, le réajuster à un autre corps, peindre là où le vent le fait balancer, ou détacher une pièce derrière son propre interrupteur. Chaque changement est écrit dans les fichiers du mod lui-même, il **continue donc de fonctionner avec Proteus désactivé** et suit le mod si vous l'exportez.
 
-Choisissez un mod, puis l'un de ses modèles. L'onglet s'ouvre sur la pièce de torse que vous portez (ou sur vos jambes s'il n'y en a pas), et les mods et modèles que vous portez sont listés en premier, en vert. Cliquer sur un vêtement de votre personnage ouvre son mod et son modèle.
+Choisissez un mod, puis l'un de ses modèles. L'onglet s'ouvre sur la pièce de torse que vous portez (ou sur vos jambes s'il n'y en a pas), et les mods et modèles que vous portez sont listés en premier, en vert. Cliquer sur un vêtement de votre personnage ouvre son mod et son modèle. Toutes les listes de l'onglet peuvent être filtrées : tapez une partie d'un nom pour la restreindre.
 
 Les outils se trouvent dans un panneau à gauche :
 
@@ -69,6 +69,10 @@ Les outils se trouvent dans un panneau à gauche :
 | Lisser | Lisse la surface : les bosses d'origine du vêtement, ou une traction qui a donné un résultat irrégulier. Comme le relax de 3ds Max, il rétrécit : les courbes s'aplatissent et le tissu peut s'enfoncer vers le corps. |
 | Pont | Peignez par-dessus un creux, comme le sillon entre les fesses ou un pli, pour tendre le tissu tout droit par-dessus au lieu de suivre le corps jusqu'au fond. Il ne fait jamais que soulever. |
 | Vent | Peint à quel point le vent du jeu fait balancer le vêtement, affiché en rouge. Maintenez Ctrl, ou réglez **Quantité** sur 0 %, pour effacer. |
+| Déplacer | Fait glisser une pièce, ou quelques polygones, à l'aide de flèches : une flèche la déplace le long de cet axe, un carré dans ce plan. Voir [Déplacer, tourner et redimensionner](#déplacer-tourner-et-redimensionner) plus bas. |
+| Tourner | Fait pivoter une pièce autour de son centre : faites glisser un anneau coloré pour la tourner autour de cet axe, ou l'anneau extérieur pour la tourner autour de votre vue. |
+| Redimensionner | Agrandit ou rétrécit une pièce autour de son centre : appuyez dessus et faites glisser vers la droite pour l'agrandir, vers la gauche pour la rétrécir. |
+| Taille de corps | Réajuste le vêtement à une autre taille de corps, ou à un autre mod de corps. Voir [Taille de corps](#taille-de-corps) plus bas. |
 
 ##### Pinceau
 
@@ -88,6 +92,35 @@ Les outils se trouvent dans un panneau à gauche :
 - Les curseurs de corps d'un modèle ne peuvent pas toujours suivre une modification. Quand certains points n'ont pas pu bouger avec elle, Proteus indique combien, et activer ce curseur peut faire revenir le passage au travers par endroits.
 - La plupart des maillages moddés n'ont pas de canal de vent. Le premier trait de vent enregistré en ajoute un, et règle les matériaux du vêtement pour que le vent puisse le faire bouger. Les matériaux qui viennent du jeu plutôt que du mod ne peuvent pas être réglés.
 
+##### Déplacer, tourner et redimensionner
+
+**Déplacer**, **Tourner** et **Redimensionner** agissent sur une pièce choisie du vêtement au lieu de peindre. Cliquez sur une pièce de votre personnage ou dans la vue du modèle, ou choisissez-la dans la liste des pièces, puis faites glisser les poignées en son centre. Maintenez **Alt** pour déplacer la caméra pendant que vous travaillez sur votre personnage. Chaque changement est enregistré quand vous relâchez, et **Annuler le déplacement** revient sur le dernier.
+
+- **Pièces entières ou Polygones.** Par défaut, vous déplacez des pièces entières. Passez sur **Polygones** pour travailler sur quelques polygones à la place : cliquez sur l'un d'eux pour le sélectionner, Maj-clic pour en ajouter ou en retirer un, et **Agrandir** ou **Réduire** la sélection d'un anneau à la fois. Choisir une pièce dans la liste sélectionne tous ses polygones, et **Effacer** vide la sélection.
+- **Déplacer les pièces adjacentes** laisse le tissu autour de ce que vous déplacez le suivre, d'autant moins qu'il est loin, pour que le vêtement se plie au lieu de se déchirer. **Atténuation** règle la portée. Avec des polygones, l'atténuation est mesurée le long de la surface, donc seul le tissu rattaché à votre sélection suit : une pièce séparée qui se trouve simplement à côté ne bouge pas. Avec **Déplacer les pièces adjacentes** désactivé, seule votre sélection bouge, même si les points qu'elle partage exactement avec une voisine bougent quand même pour que les coutures restent fermées.
+- **La peau et les pièces verrouillées ne bougent jamais.** Déverrouillez une pièce sous un pinceau pour pouvoir la déplacer.
+- Une pièce déplacée suit toujours les os pour lesquels elle a été faite, donc une pièce éloignée d'eux peut se plier bizarrement dans les poses.
+
+##### Taille de corps
+
+**Taille de corps** réajuste un vêtement conçu pour un corps sur un autre : une autre taille du même mod de corps (Neolithe XS vers L), ou un tout autre mod de corps (Neolithe vers Rue, TBSE vers TBSE-X).
+
+**Les deux mods de corps doivent être installés dans Penumbra** : celui pour lequel le vêtement a été fait et celui sur lequel vous le réajustez. Ils n'ont pas besoin d'être activés. Proteus mesure de combien déplacer chaque point du vêtement en comparant les fichiers de modèle des deux corps, il lui faut donc les deux sur le disque. La taille pour laquelle le vêtement a été fait doit aussi être l'une des options de ce mod.
+
+1. Ouvrez le modèle du vêtement dans le Studio et choisissez **Taille de corps**.
+2. Sous **Conçu pour**, choisissez le mod de corps pour lequel le vêtement a été fait, puis sa taille. Proteus devine la taille pour vous.
+3. Sous **Réajuster vers**, choisissez le mod de corps et la taille voulus. Ils démarrent sur le corps que vous portez.
+4. Appuyez sur **Réajuster et prévisualiser** pour voir le résultat sur votre personnage. Quand cela vous convient, appuyez sur **Enregistrer comme nouvelle option**. Le réajustement est enregistré dans le mod du vêtement lui-même, par défaut dans le groupe qui contient déjà les tailles de l'auteur (**Enregistrer dans le groupe** permet d'en changer), il continue donc de fonctionner avec Proteus désactivé.
+
+Bon à savoir :
+
+- **Utiliser la peau du nouveau corps** est activé par défaut : la peau propre au vêtement, pour chaque partie du corps redimensionnée, est remplacée par celle du nouveau corps, afin qu'elle s'accorde au reste de vous. Décochez pour redimensionner à la place la peau livrée avec le vêtement.
+- **Décochez une pièce** dans la liste des pièces pour la laisser exactement là où l'auteur l'a mise.
+- **Entre deux mods de corps**, le vêtement reprend aussi les poids d'os du nouveau corps là où les deux corps diffèrent, pour qu'il bouge avec la physique du nouveau corps. Là où ils s'accordent, la pondération de l'auteur est conservée. Les chaînes de jupe et les autres os propres au vêtement ne sont jamais modifiés.
+- **La peau des deux corps doit partager une disposition de texture**, ou en utiliser une que Proteus sait convertir (bibo, gen3 et gen2). Les corps masculins et féminins ne sont jamais réajustés l'un sur l'autre.
+- **Les clés de forme sont perdues** quand la peau est remplacée ou que le vêtement passe d'un mod de corps à un autre. Proteus vous le signale quand cela arrive.
+- **Retirer le dernier réajustement** ressort du mod une taille enregistrée.
+
 ##### Interrupteurs de pièces
 
 **Basculer des pièces** sort une pièce de géométrie du modèle d'un mod et la place derrière un interrupteur : un nœud, un collier, une sangle que l'auteur a soudés dans un maillage toujours visible.
@@ -101,16 +134,25 @@ Bon à savoir :
 - **Dix interrupteurs par objet.** C'est la limite du jeu, pas celle de Proteus. Si un auteur les a déjà tous utilisés, l'onglet le signale et refuse d'en ajouter.
 - **Équipement et accessoires uniquement.** Il n'y a rien à quoi rattacher un interrupteur sur les autres types de modèles.
 - **Une pièce que l'auteur fait déjà basculer peut aussi recevoir le vôtre.** Les deux se cumulent : la pièce ne s'affiche que quand les deux sont activés.
+- **Les packs importés acceptent aussi les interrupteurs.** Un vêtement provenant d'un pack que vous avez importé via **Importer** reçoit son interrupteur de la même manière.
 - **C'est réversible.** Les modèles d'origine sont conservés, donc **Annuler – restaurer les modèles d'origine** remet le mod exactement dans son état initial et supprime le groupe d'options.
 - Si un objet possède plusieurs fichiers de modèle dont les pièces sont agencées différemment, Proteus ne modifie que ceux où l'interrupteur tombe juste et vous dit lesquels il a laissés de côté, plutôt que de deviner et de toucher la mauvaise géométrie.
 
 #### Liaisons
 
-Lie toute votre configuration Proteus — quels mods sont actifs, leurs priorités et options, et toutes leurs couleurs — à un design Glamourer. Cochez **Lier l'état de Proteus aux designs Glamourer** pour l'activer.
+Lie toute votre configuration Proteus — quels mods sont actifs, leurs priorités et options, et toutes leurs couleurs — à un design Glamourer. **Lier l'état de Proteus aux designs Glamourer** est activé par défaut.
 
-Enregistrer un design capture l'état actuel de Proteus avec lui. Appliquer ce design plus tard le restaure. Les couleurs et les réglages de couche sont restaurés sous forme de calque en direct, donc les fichiers du mod ne sont jamais réécrits.
+Enregistrer un design capture l'état actuel avec lui : chaque mod présent sur votre personnage, pas seulement ceux de Proteus, plus toutes les couleurs Proteus. Appliquer ce design plus tard le restaure. Les couleurs et les réglages de couche sont restaurés sous forme de calque en direct, donc les fichiers du mod ne sont jamais réécrits. Chaque liaison liste les mods qu'elle restaure ; **Appliquer** en restaure une immédiatement sans passer par Glamourer, et **Délier** l'oublie sans toucher au design.
 
-Tant qu'une liaison est active, les modifications faites dans l'éditeur de couleurs s'affichent immédiatement en aperçu mais ne sont **pas** enregistrées avant d'appuyer sur **Mettre à jour** — ce qui replie tout ce qui est à l'écran dans ce design.
+Tant qu'une liaison est active, les modifications faites dans l'éditeur de couleurs s'affichent immédiatement en aperçu mais ne sont **pas** enregistrées avant d'appuyer sur **Mettre à jour** à côté de ce design dans l'onglet Liaisons — ce qui replie tout ce qui est à l'écran dans ce design.
+
+| Option | Rôle |
+|--------|-------------|
+| Suivre l'automatisation Glamourer | Restaure une liaison quand l'automatisation de Glamourer applique son design lors d'un changement de set d'équipement ou de job. Activé par défaut. Elle ne fait jamais que restaurer, jamais effacer. |
+| Restaurer tous les mods du personnage | Restaure aussi les autres mods qui étaient actifs sur votre personnage quand le design a été enregistré, désactive ceux qui ne l'étaient pas, et élève les mods du design au-dessus de tout ce avec quoi ils entrent en conflit. Désactivé par défaut : seuls les mods Proteus sont restaurés. Les autres mods sont tenus par des réglages temporaires Penumbra, votre collection elle-même n'est donc pas modifiée. |
+| Vider les emplacements que le design ne définit pas | Quand vous appliquez un design lié, vide les emplacements d'équipement et de lunettes qu'il ne définit pas et désactive les packs importés qu'il n'a pas capturés, pour qu'aucun morceau du look précédent ne subsiste. Désactivé par défaut. Non utilisé pour l'automatisation, et les armes ainsi que l'emplacement qui héberge une seconde peau sont laissés tranquilles. |
+
+Un design enregistré avant que les liaisons ne capturent tout le personnage est marqué **Mods Proteus uniquement**. Appliquez-le et appuyez sur **Mettre à jour** pour capturer le reste.
 
 #### Créer
 
@@ -122,7 +164,7 @@ Les emplacements de texture que le matériau choisi ne peut pas utiliser sont gr
 
 Prend un pack de mod et le convertit en mod Proteus. Trois types sont pris en charge :
 
-**Mods Penumbra classiques (`.pmp`)** — portez des morceaux d'un mod d'équipement normal sans utiliser d'emplacement, et profitez en plus des fonctions avancées de table de couleurs.
+**Mods Penumbra classiques (`.pmp`)** — portez des morceaux d'un mod d'équipement normal sans utiliser d'emplacement, et profitez en plus des fonctions avancées de table de couleurs. Pour convertir un mod déjà installé dans Penumbra, choisissez le `meta.json` de son dossier au lieu d'un fichier de pack. Les packs à l'ancien format de Penumbra sont d'abord mis à niveau par Penumbra, puis convertis.
 
 Cela reste un mod Penumbra ordinaire : Penumbra continue de décider s'il est actif et quelles options sont choisies. Ce qui change, c'est que ses pièces sont dessinées sur l'objet porteur de Proteus au lieu d'un véritable emplacement d'équipement, donc votre glamour n'est pas touché.
 
@@ -159,11 +201,11 @@ Le pack est une copie directe du dossier du mod, donc rien n'est perdu : options
 
 | Paramètre | Rôle |
 |---------|-------------|
-| Activé | Interrupteur principal. Désactivé, Proteus efface sa sortie et vous redessine sans elle. |
+| Activé | Interrupteur principal. Désactivé, Proteus efface sa sortie, vous redessine sans elle, désactive le mod « Proteus » géré dans Penumbra et arrête les liaisons de design. Toutes les fonctions de Proteus se mettent en retrait. |
 | Redessin automatique | Laisse Proteus suivre tout seul : il recompose après un changement de zone, un changement d'équipement ou un redessin, puis recharge votre personnage pour que vous voyiez le résultat. Désactivé, Proteus devient essentiellement manuel. Votre look reste en place, mais une modification n'apparaît pas tant que rien ne vous redessine. |
 | Élever automatiquement la priorité du mod | Quand un autre mod est confirmé comme remplaçant une texture de peau dans laquelle Proteus compose, élève la priorité Penumbra de Proteus au-dessus de lui et le signale dans le chat. |
 | Rechargement sur place | Rafraîchit les textures via Glamourer au lieu d'un redessin complet, ce qui évite le clignotement de disparition/réapparition. Activé par défaut. |
-| Activer la compression | Compresse par blocs les textures cuites, réduisant leur taille sur le disque et en VRAM à environ un quart. Activé par défaut. |
+| Activer la compression | Compresse par blocs les textures cuites, réduisant leur taille sur le disque et en VRAM à environ un quart. Désactivé par défaut : c'est ce que Proteus fait de plus lent, et sur un PC ancien cela peut retenir votre look pendant une minute ou plus à chaque changement. Ne l'activez que si vous manquez de mémoire vidéo. Sur un PC trop lent pour elle, Proteus laisse les textures non compressées même si la case est cochée, et vous dit pourquoi. |
 | Alpha net | Expérimental. Garde les sphere maps et la métallicité fonctionnelles en pose de groupe, au prix de bords plus durs sur les tissus transparents. |
 | Cache de textures (Mo) | Quantité de données de texture décodées gardées en mémoire entre deux compositions. |
 | Masquer les maillages de corps redondants | Ignore la peau que la seconde peau dessinerait deux fois : anneaux de renfort d'articulation qu'une partie voisine couvre déjà, et copies superflues d'une région. Activé par défaut, sûr sur n'importe quel corps. |
@@ -172,9 +214,12 @@ Le pack est une copie directe du dossier du mod, donc rien n'est perdu : options
 | Occlusion ambiante / Douceur de l'ombre / Skindenting | Force globale de l'ombre de contact et du creux de normale autour des bords de sangle. |
 | Réagir à la lumière de la scène | Permet aux lignes de couleur marquées **S'estompe à la lumière** de s'atténuer à mesure que la lumière sur vous augmente. Désactivé, chaque lueur brille à pleine intensité partout. |
 | Définir le niveau de lumière à la main / Niveau de lumière | Ignore la scène et utilise le curseur à la place. C'est le moyen le plus rapide de voir une lueur réservée à l'obscurité sans attendre le crépuscule, et le bon réglage pour la pose de groupe. |
+| Lueur d'arrière-plan | La douce lueur de braise qui dérive derrière la fenêtre. Activée par défaut. |
+| Réduire les animations | Garde la fenêtre immobile : les effets de survol s'appliquent d'un coup, et la lueur d'arrière-plan ainsi que la pulsation des mods actifs cessent de bouger. |
 
-Trois boutons ici méritent d'être connus :
+Quatre boutons ici méritent d'être connus :
 
+- **Copier les journaux** — lance un rafraîchissement complet et enregistre dans un fichier texte sur votre bureau tout ce que Proteus journalise pendant ce temps, votre nom d'utilisateur Windows retiré. Joignez ce fichier quand vous signalez un problème.
 - **Restaurer l'accessoire modifié** — force un redessin complet si une seconde peau reste coincée sur une bague ou un bracelet après une désactivation ou un échange.
 - **Vider le cache de textures** — à utiliser quand une modification de texture n'apparaît pas, par exemple après avoir réexporté un calque à la même taille.
 - **Textures d'effet lumineux** — ouvre le dossier dans lequel Proteus lit les cartes de défilement de lueur animée. Déposez-y des images et elles apparaîtront dans la liste Effet de chaque calque d'équipement. Survolez le bouton pour voir le chemin complet.
@@ -183,7 +228,8 @@ Trois boutons ici méritent d'être connus :
 
 La plupart des cheveux moddés ne gèrent pas les chapeaux, si bien qu'un chapeau porté par-dessus passe au travers. La section **Chapeaux** plaque contre votre tête les cheveux qu'un chapeau recouvrirait. Comme le Studio, elle modifie les fichiers du mod de cheveux lui-même, donc l'adaptation continue de fonctionner avec Proteus désactivé et suit le mod si vous l'exportez.
 
-- **Adapter les coiffures aux chapeaux** est désactivé par défaut. Activez-le et Proteus vérifie chaque coiffure quand vous la mettez et l'adapte, en vous le signalant dans le chat la première fois.
+- **Adapter les coiffures aux chapeaux** est activé par défaut. Proteus attend que vous portiez réellement un chapeau, puis adapte la coiffure en dessous et vous le signale dans le chat. Si vous ne portez jamais de chapeau, vos mods de cheveux ne sont jamais touchés. Décochez pour arrêter, et votre choix est conservé.
+- **Masquer les queues de cheval** fait en plus disparaître, pendant qu'un chapeau est porté, les parties qu'aucun chapeau ne pourrait couvrir : queues de cheval, couettes, une longue chute dans le dos. Désactivé par défaut, car le masquage est tout ou rien et une partie mal jugée disparaît purement et simplement.
 - Ou adaptez vous-même la coiffure que vous portez. La section indique combien de points seraient plaqués et de combien, et **Adapter** écrit le changement.
 - **Annuler** rétablit la coiffure que vous portez. Un mod de cheveux livre généralement un modèle par race, donc **Annuler les coiffures de ce mod** rétablit toutes les coiffures que Proteus a modifiées dans ce mod. Les originaux sont conservés dans `Proteus/hatcompat-backup/` à l'intérieur du mod.
 - Les cheveux dont l'auteur a déjà ajouté la gestion des chapeaux sont laissés tels quels, et les cheveux fournis avec le jeu fonctionnent déjà. L'exception, c'est une gestion des chapeaux qui masque bien plus de cheveux qu'un chapeau n'en couvre, généralement héritée de la coiffure à partir de laquelle elle a été construite. Proteus propose de la mesurer à nouveau et de la remplacer.
@@ -202,7 +248,7 @@ Les préréglages occupent une section repliable **Préréglages** en bas de l'�
 
 Partage-en un avec **Copier le code** (une chaîne à coller dans le chat) ou **Exporter…** (un fichier `.ptp`). En face, on utilise **Coller le code** ou **Importer…** ; un préréglage fait pour un autre mod le signale avant d'être ajouté.
 
-Appliquer un préréglage pendant qu'une liaison de design est active se prévisualise dans cette liaison, comme toute autre modification — appuie sur **Mettre à jour la liaison** pour la conserver. Appliquer un design Glamourer retire les préréglages portés, puisque le design apporte ses propres couleurs ; les préréglages eux-mêmes restent enregistrés.
+Appliquer un préréglage pendant qu'une liaison de design est active se prévisualise dans cette liaison, comme toute autre modification — appuie sur **Mettre à jour** dans l'onglet Liaisons pour la conserver. Appliquer un design Glamourer retire les préréglages portés, puisque le design apporte ses propres couleurs ; les préréglages eux-mêmes restent enregistrés.
 
 Si une mise à jour du mod renomme ou supprime une option, appliquer un ancien préréglage règle tout ce qui existe encore et te dit ce qu'il n'a pas pu faire.
 
@@ -229,10 +275,31 @@ Sous les lignes, **Avancé** regroupe les réglages qui s'appliquent à tout le 
 | Paramètre | Rôle |
 |---------|-------------|
 | Forcer le mode de rendu | Épingle Skin / Cloth / Lueur animée au lieu de laisser les fonctions décider. **Revenir à auto** le libère. |
-| Corps | Sur quels types de corps ce mod est cuit — **Tous les corps** (corps frère bibo↔gen3/Eve, plus vanilla gen2), **bibo+gen3** (le corps frère uniquement — par défaut), ou **Aucun**. S'applique à tout le mod, et c'est un réglage global : les liaisons de design ne le capturent pas. |
+| Calquer sur gen2/vanilla | Peint aussi ce mod sur la peau vanilla (gen2) que vous portez, généralement une peau fournie avec une pièce d'équipement. Activé par défaut, et cela ne coûte rien quand vous n'avez aucune peau vanilla sur vous. bibo et gen3/Eve sont toujours peints. S'applique à tout le mod, et c'est un réglage global : les liaisons de design ne le capturent pas. |
 | Rétablir les valeurs par défaut | Rétablit les couleurs, la lueur et le mode de cette option aux réglages que Proteus a enregistrés en premier pour ce mod. Maintenez Ctrl pour l'armer. |
 
-Si un mod n'a aucune option active, il n'y a pas de couleurs à montrer, mais **Avancé** apparaît quand même pour que **Corps** reste accessible.
+Si un mod n'a aucune option active, il n'y a pas de couleurs à montrer, mais **Avancé** apparaît quand même pour que **Calquer sur gen2/vanilla** reste accessible.
+
+#### Effets et Géométrie
+
+Deux autres sections repliables s'appliquent à tout le mod :
+
+- **Effets** contient le sélecteur d'effet de lueur animée et **Skindent**, l'ombre de contact et le creux de normale sur les bords de sangle. Skindent est désactivé sauf si le pack le demande, car il traite la couverture comme du tissu pressé dans la peau, ce qui est faux pour un tatouage. **Pack** suit ce que le mod a demandé ; **Oui** et **Non** le remplacent.
+- **Géométrie** remodèle le vêtement que Proteus construit à partir de votre corps, pour qu'il se lise comme du tissu et non comme de la peinture. Proteus construit une seconde peau en copiant votre corps, elle suit donc par défaut chaque creux :
+  - **Tendre sur le décolleté** : le tissu entre les seins passe tout droit, comme le ferait du vrai tissu. Rien n'est tiré vers l'intérieur, il ne peut donc pas entailler le corps.
+  - **Tendre sur les fesses** : la même chose en travers de l'assise.
+  - **Lisser l'entrejambe** : lisse le pli à l'entrejambe. Cela modifie le corps en dessous, donc cela s'applique à tous les vêtements portés à la fois.
+  - **Lisser le téton** : lisse le tissu par-dessus. Pas encore terminé : le corps en dessous garde sa forme, donc sur un vêtement près du corps il peut encore transparaître.
+
+  En activer un seul fait rendre le mod en seconde peau.
+
+#### Options de calque
+
+Sous les lignes, l'onglet d'un calque peut afficher :
+
+- **Ce calque est toute la peau** — pour un mod de peau converti, une image qui *est* la peau plutôt que quelque chose posé dessus. Sa carte de normales remplace celle de la peau au lieu de s'y ajouter, et l'atténuation de la teinte de peau tombe à 0 pour que votre propre carnation ressorte.
+- **Cette image est asymétrique** — activez-le quand les deux côtés sont censés différer : un tatouage sur un seul bras, un maquillage non miroir. Un corps et un visage vanilla replient l'image en deux, donc sans cela un côté est recopié en miroir sur l'autre. Proteus ne peut pas le détecter pour vous.
+- **Pointe renforcée** — sur un bas à pointe renforcée, tricote une pointe plus dense : un panneau plus sombre où les orteils transparaissent encore, s'estompant sur les bords. **Densité** règle son opacité. C'est enregistré dans le mod, donc les préréglages et les designs ne le capturent pas.
 
 #### Lignes
 
@@ -252,7 +319,7 @@ Pour chaque sous-ligne :
 
 Les lignes et sous-lignes peuvent être copiées et collées entre elles.
 
-Les changements s'appliquent immédiatement à l'écran et sont recomposés environ une seconde après que vous arrêtez d'éditer. Ils sont enregistrés dans le `metadata.json` du mod — sauf si une liaison de design est active, auquel cas ils appartiennent à ce design jusqu'à ce que vous appuyiez sur **Mettre à jour**.
+Les changements s'appliquent immédiatement à l'écran et sont recomposés environ une seconde après que vous arrêtez d'éditer. Ils sont enregistrés dans le `metadata.json` du mod — sauf si une liaison de design est active, auquel cas ils appartiennent à ce design jusqu'à ce que vous appuyiez sur **Mettre à jour** dans l'onglet Liaisons.
 
 ### Remerciements
 Un immense merci à Sebby pour m'avoir appris à utiliser la correspondance d'images au pixel plutôt que la cuisson, et pour avoir publié les cartes cuites sous licence MIT via le loose texture compiler.
