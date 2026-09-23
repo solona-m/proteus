@@ -296,7 +296,7 @@
     "description": ""
   },
   "Colors.Blend.Tip": {
-    "message": "Comment l'image de cette ligne se combine avec ce qui se trouve déjà sur la peau.\n\n« Peindre » la pose par-dessus, ce que chaque calque a toujours fait.\nTout autre mode fait de cette ligne un IMPRIMÉ : il colore le tissu peint par les\nautres calques de ce mod et se découpe à leur forme — un arc-en-ciel sur une résille\nen colore ainsi les fils et laisse les trous en peau.\n\nUn imprimé n'atteint que les calques de SON PROPRE mod ; il ne touche jamais les\nvêtements d'un autre. Sur la peau nue il ne peint rien du tout : un imprimé\nsélectionné seul n'affiche rien, faute de support sur lequel imprimer.\n\nMultiplier ne peut qu'assombrir et rend donc à peine sur un tissu très sombre —\nutilisez plutôt Écran. La couleur de cette ligne teinte toujours l'image, et son\nOpacité règle la force de l'imprimé.",
+    "message": "Comment le motif de cette ligne se combine avec ce qui est déjà sur la peau.\n\n« Peindre » le pose par-dessus, comme chaque calque l'a toujours fait.\nTout autre mode fait de cette ligne une IMPRESSION, fusionnée comme un mode\nde calque Photoshop : Multiplier fait disparaître le blanc, Écran le noir.\n\n« Sur » choisit avec quoi l'impression se fusionne : tout ce qui est dessous,\npeau comprise, ou seulement le tissu peint par les autres calques de ce mod.\n\nMultiplier ne peut qu'assombrir et se voit donc peu sur un tissu très sombre —\nutilisez plutôt Écran. La couleur de cette ligne teinte toujours le motif, et son\nOpacité est la force de l'impression.",
     "description": ""
   },
   "Colors.Bodies.GlobalNote": {
@@ -3601,6 +3601,22 @@
   },
   "Settings.AmbientBackground.Tip": {
     "message": "La douce lueur de braise qui dérive derrière le contenu de cette fenêtre.",
+    "description": ""
+  },
+  "Colors.PrintOnto.Label": {
+    "message": "Sur",
+    "description": ""
+  },
+  "Colors.PrintOnto.Tip": {
+    "message": "Avec quoi cette impression se fusionne.\n\n« Tout ce qui est dessous » agit comme un calque de fusion Photoshop : elle\ns'applique à la peau et à chaque calque en dessous, façonnée seulement par son alpha.\n\n« Peinture de ce mod seule » la découpe selon ce que les autres calques de ce\nmod ont peint : un arc-en-ciel sur une résille colore les fils et laisse les\ntrous en peau. Sur la peau nue, elle n'affiche rien.",
+    "description": ""
+  },
+  "Colors.PrintOnto.OwnPaint": {
+    "message": "Peinture de ce mod seule",
+    "description": ""
+  },
+  "Colors.PrintOnto.Beneath": {
+    "message": "Tout ce qui est dessous",
     "description": ""
   }
 }

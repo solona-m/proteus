@@ -139,6 +139,65 @@ public class CompositorMathTests
         Assert.Equal(original, baseTex);
     }
 
+    /// <summary>A print onto everything beneath needs no clip: on bare skin, Multiply drops white out and keeps
+    /// black, like a Photoshop Multiply layer.</summary>
+    [Fact]
+    public void ApplyFlatOverlay_BeneathMultiply_PrintsOnBareSkin()
+    {
+        byte[] baseTex = [200, 150, 100, 255,  200, 150, 100, 255];
+        byte[] overlay = [255, 255, 255, 255,  0, 0, 0, 255];   // white, then black
+
+        OverlayBlend.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f, blend: RowBlend.Multiply, beneath: true),
+                                           2, 1, painted: null);
+
+        Assert.Equal(new byte[] { 200, 150, 100, 255, 0, 0, 0, 255 }, baseTex);
+    }
+
+    /// <summary>Beneath is weighted by the art's own alpha, so a half-transparent black darkens by half.</summary>
+    [Fact]
+    public void ApplyFlatOverlay_BeneathMultiply_WeightedByArtAlpha()
+    {
+        var baseTex = RGBA(200, 200, 200, 255);
+        var overlay = RGBA(0, 0, 0, 128);
+
+        OverlayBlend.ApplyFlatOverlay(baseTex, overlay, Row(1f, 1f, 1f, blend: RowBlend.Multiply, beneath: true),
+                                           1, 1, painted: [0]);   // the clip is ignored
+
+        Assert.InRange(baseTex[0], 98, 101);   // 200 × (1 − 128/255) ≈ 99.6
+    }
+
+    /// <summary>An indexed sub-row onto everything beneath prints without a clip; its OwnPaint sibling still does not.</summary>
+    [Fact]
+    public void ApplyIndexedOverlay_BeneathSubRow_IgnoresClip_OwnPaintSubRowKeepsIt()
+    {
+        var rows = new Dictionary<int, ColorTableRowOverride>
+        {
+            [0] = new() { A = Row(1f, 1f, 1f, blend: RowBlend.Multiply, beneath: true),
+                          B = Row(1f, 1f, 1f, blend: RowBlend.Multiply) },
+        };
+        byte[] baseTex = [200, 200, 200, 255,  200, 200, 200, 255];
+        byte[] overlay = [0, 0, 0, 255,  0, 0, 0, 255];
+        byte[] idx     = [0, 255, 0, 255,  0, 0, 0, 255];   // pixel 0 → sub-row A, pixel 1 → sub-row B
+
+        OverlayBlend.ApplyIndexedOverlay(baseTex, overlay, idx, rows, false, 2, 1, painted: [0, 0]);
+
+        Assert.Equal(0,   baseTex[0]);   // A: printed onto bare skin
+        Assert.Equal(200, baseTex[4]);   // B: nothing painted, so nothing printed
+    }
+
+    [Fact]
+    public void BuildRowDict_PrintOnto_MissingMeansOwnPaint()
+    {
+        var dict = OverlayBlend.BuildRowDict(
+        [
+            new() { Row = 1, SubRowA = new() { Blend = RowBlend.Multiply },
+                             SubRowB = new() { Blend = RowBlend.Multiply, PrintOnto = PrintTarget.Beneath } },
+        ]);
+
+        Assert.False(dict[0].A.OntoBeneath);
+        Assert.True(dict[0].B.OntoBeneath);
+    }
+
     [Fact]
     public void ApplyFlatOverlay_WhiteMultiply_IsIdentity()
     {
@@ -1661,9 +1720,9 @@ public class CompositorMathTests
 
     private static ColorTableSubRow Row(
         float r, float g, float b, float emissive = 0f, int opacity = 0,
-        RowBlend blend = RowBlend.Paint) =>
+        RowBlend blend = RowBlend.Paint, bool beneath = false) =>
         new() { DiffuseR = r, DiffuseG = g, DiffuseB = b, Emissive = emissive, Opacity = opacity,
-                Blend = blend };
+                Blend = blend, OntoBeneath = beneath };
 
     private static List<ColorTableRowPreset> Presets(int row, string? diffuseA = null, float emissiveA = 0f)
     {

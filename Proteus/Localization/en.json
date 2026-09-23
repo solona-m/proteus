@@ -296,7 +296,7 @@
     "description": "Blend mode name in a dropdown. Appears in the colour-table editor window. The opposite of Multiply - it can only lighten."
   },
   "Colors.Blend.Tip": {
-    "message": "How this row's art combines with what is already on the skin.\n\n\"Paint\" lays it on top, which is what every layer has always done.\nAnything else makes this row a PRINT: it colours the fabric this mod's\nother layers painted, and is clipped to their shape — so a rainbow on a\nfishnet colours the threads and leaves the holes as skin.\n\nA print only reaches its OWN mod's layers; it never touches another mod's\nclothing. On bare skin it paints nothing at all, so a print selected on its\nown shows nothing — there is nothing there to print on.\n\nMultiply can only darken, so it reads faintly on very dark fabric — use\nScreen there instead. This row's colour still tints the art, and its\nOpacity is the print's strength.",
+    "message": "How this row's art combines with what is already on the skin.\n\n\"Paint\" lays it on top, which is what every layer has always done.\nAnything else makes this row a PRINT, blended like a Photoshop layer\nmode: Multiply drops white out, Screen drops black out.\n\n\"Onto\" chooses what a print blends with: everything beneath it, skin\nincluded, or only the fabric this mod's other layers painted.\n\nMultiply can only darken, so it reads faintly on very dark fabric — use\nScreen there instead. This row's colour still tints the art, and its\nOpacity is the print's strength.",
     "description": "Tooltip on the Blend dropdown. \"Paint\", \"Multiply\" and \"Screen\" are mode names - translate them the same way as the Colors.Blend.* entries above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Colors.Bodies.GlobalNote": {
@@ -3602,5 +3602,21 @@
   "Settings.AmbientBackground.Tip": {
     "message": "The soft ember glow drifting behind this window's contents.",
     "description": "Tooltip for Settings.AmbientBackground."
+  },
+  "Colors.PrintOnto.Label": {
+    "message": "Onto",
+    "description": "Dropdown label, shown next to Blend when a row is a print (any mode but Paint). Appears in the colour-table editor window. Picks what the print blends with. Keep it short - it sits beside a narrow dropdown."
+  },
+  "Colors.PrintOnto.Tip": {
+    "message": "What this print blends with.\n\n\"Everything beneath\" works like a Photoshop blend layer: it lands on\nthe skin and on every layer under it, shaped only by its own alpha.\n\n\"This mod's paint only\" clips it to what this mod's other layers\npainted, so a rainbow on a fishnet colours the threads and leaves the\nholes as skin. On bare skin it shows nothing.",
+    "description": "Tooltip on the Onto dropdown. \"Everything beneath\" and \"This mod's paint only\" are the dropdown's options - translate them the same way as Colors.PrintOnto.Beneath and Colors.PrintOnto.OwnPaint. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
+  "Colors.PrintOnto.OwnPaint": {
+    "message": "This mod's paint only",
+    "description": "Option in the Onto dropdown. The print only lands on what this mod's own other layers painted; bare skin is left alone."
+  },
+  "Colors.PrintOnto.Beneath": {
+    "message": "Everything beneath",
+    "description": "Option in the Onto dropdown. The print blends with everything underneath it, skin included, like a Photoshop blend layer."
   }
 }

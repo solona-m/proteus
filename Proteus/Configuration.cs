@@ -218,6 +218,12 @@ public class Configuration : IPluginConfiguration
     public string? InjectedRingSlot { get; set; }
 
     /// <summary>
+    /// Whether the invisible glasses on the player's face are a pair PROTEUS equipped. The carrier is a real item
+    /// (<see cref="Services.InvisibleGlasses"/>) that players can also wear by choice, so this record, not the item, is what makes it ours to remove.
+    /// </summary>
+    public bool InjectedGlasses { get; set; }
+
+    /// <summary>
     /// The Glamourer design whose binding was active when the plugin last ran, so a reload can pick it back up
     /// (Glamourer signals nothing for an already-applied design). Null = nothing active. Restored only after
     /// <c>DesignBindingService.TryBootRestore</c> verifies it.

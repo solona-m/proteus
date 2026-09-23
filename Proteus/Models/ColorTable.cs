@@ -70,6 +70,13 @@ public class ColorTableSubRowPreset
     public RowBlend Blend { get; set; } = RowBlend.Paint;
 
     /// <summary>
+    /// What a print lands on. Null = <see cref="PrintTarget.OwnPaint"/>: rows saved before the choice existed were all
+    /// clipped to their mod's paint and must keep rendering that way. The editor fills it in when a row becomes a print.
+    /// </summary>
+    [JsonPropertyName("PrintOnto")]
+    public PrintTarget? PrintOnto { get; set; }
+
+    /// <summary>
     /// How much of this region's glow the scene's light takes away, 0–1 (default 0 = unconditional): the emissive
     /// scales by <c>1 − LightResponse × light</c>. Per sub-row; needs <see cref="Emissive"/> above zero.
     /// </summary>
@@ -143,6 +150,9 @@ public class ColorTableSubRow
 
     /// <summary>How this row composites; <see cref="RowBlend.Paint"/> for an unconfigured cell.</summary>
     public RowBlend Blend { get; set; } = RowBlend.Paint;
+
+    /// <summary>A print that blends with everything beneath it instead of only its own mod's paint.</summary>
+    public bool OntoBeneath { get; set; }
 }
 
 /// <summary>Runtime pair of sub-rows A and B for one color table row pair.</summary>
