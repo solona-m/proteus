@@ -2084,7 +2084,7 @@
     "description": "Why a mod that is switched on paints nothing - Penumbra could not be queried, so nothing could be determined. Tooltip on the Mods tab and a notice in the colour panel - wrapped prose, not a fixed-width column label. \"Penumbra\" and \"Proteus\" are product names and are never translated."
   },
   "Mods.Inert.WrongRace.Fmt": {
-    "message": "This mod paints {0}, and you are {1}. Nothing it ships fits the body you are wearing.",
+    "message": "This mod paints {0}, and you are {1}. Nothing it ships fits the body or the race you are wearing.",
     "description": "Why a mod that is switched on paints nothing - it is built for other body types or races. Tooltip on the Mods tab and a notice in the colour panel - wrapped prose, not a fixed-width column label. {0} is what the mod paints and {1} is what the character is, both in the form \"bibo · Midlander F, Viera F\": a body-mod name, a middle dot, then FFXIV race names with M/F for the gender. Both arrive already built and untranslated - insert them verbatim."
   },
   "Mods.NoSidecarMods": {

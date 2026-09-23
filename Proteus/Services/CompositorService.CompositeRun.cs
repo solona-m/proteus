@@ -37,6 +37,7 @@ public partial class CompositorService
         private Dictionary<string, ResolutionDiagnostic> resolution = null!;
         private HashSet<string> filteredOut = null!;
         private HashSet<string>? wornCharCodes;
+        private HashSet<string>? wornHeadCodes;
         private HashSet<string> toeCapMods = null!;
         private bool wearingMirroredBody;
         private HashSet<string> unmirrorMods = null!;
@@ -197,12 +198,14 @@ public partial class CompositorService
                 // Recorded so the history reflects reality: once this empty manifest ages out, everything becomes collectable.
                 compositor.RecordPublish(empty);
 
-                // A shell hosted on an accessory (or a rewritten skin material) needs a full redraw to go away. This early return
-                // skips the normal end-of-method reset, hence doing it explicitly.
-                if (compositor._secondSkinActive || compositor._lastSkinMaterialRedirects.Count > 0) compositor._needFullRedraw = true;
+                // A shell hosted on an accessory (a rewritten skin material, or anything on the head) needs a full redraw to
+                // go away. This early return skips the normal end-of-method reset, hence doing it explicitly.
+                if (compositor._secondSkinActive || compositor._lastSkinMaterialRedirects.Count > 0
+                    || compositor._lastHeadRedirects.Count > 0) compositor._needFullRedraw = true;
                 compositor._secondSkinActive = false;
                 compositor._lastShellHostPaths = new(StringComparer.OrdinalIgnoreCase);
                 compositor._lastSkinMaterialRedirects = new(StringComparer.OrdinalIgnoreCase);
+                compositor._lastHeadRedirects = new(StringComparer.OrdinalIgnoreCase);
                 // ...and the UI-facing locators, which the skipped gear phase would otherwise publish.
                 compositor.ClearShellLocators();
                 // Same for the "contributes nothing" warnings, which the skipped ExplainInertMods normally clears.
@@ -264,9 +267,10 @@ public partial class CompositorService
             resolution = new Dictionary<string, ResolutionDiagnostic>(StringComparer.OrdinalIgnoreCase);
             // Mods the live-material filter took a material away from.
             filteredOut = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            // The character's own race code(s) as the filter understood them; null until the filter runs, and empty
-            // mid-redraw ("don't know").
+            // The character's own race code(s) as the filter understood them — the BODY's, and the head's beside
+            // them; null until the filter runs, and empty when that half is unknown ("don't know", not "no match").
             wornCharCodes = null;
+            wornHeadCodes = null;
 
             // Is a toe cap selected anywhere in the look? A cap belongs to the foot, not the mod, and must be known before
             // promotion because a cap is geometry and needs a shell.
@@ -521,8 +525,20 @@ public partial class CompositorService
                         compositor.log.Debug("[Proteus] Glamourer race override: snapshot={0} → displayed={1}",
                             compositor._lastCompositedCharCodes ?? "none", glamCode!);
 
-                    // What the wearer is (the effective set, as Glamourer displays it), for explaining a pack that painted nothing.
+                    // The head's code, kept apart from the body's: four of the nine races wear the Midlander body
+                    // under their own face, so neither set answers for the other (see HeadCodeSet). A Glamourer
+                    // display override replaces this set the same way it replaces the body's — what is displayed
+                    // is what is drawn — and its own face code is added whenever it is known, since the model walk
+                    // can be a redraw behind.
+                    var wornHead = glamOverride
+                        ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                        : HeadCodeSet(activeMtrl, compositor._humanPartModels);
+                    if (compositor._glamourerFaceCode is { } glamFace) wornHead.Add(glamFace);
+
+                    // What the wearer is, for explaining a pack that painted nothing: the body's codes (the effective
+                    // set, as Glamourer displays it) and the head's, which are judged separately.
                     wornCharCodes = effectiveCharCodes;
+                    wornHeadCodes = wornHead;
 
                     // Noted before the removal, which destroys the evidence.
                     void NoteDropped(string key)
@@ -566,12 +582,18 @@ public partial class CompositorService
                         {
                             // The character's own non-body surfaces (face, hair, tail, ears) get the same mid-switch tolerance as the body:
                             // the snapshot's silence is not evidence the surface is absent. Equipment keeps the strict exact-path rule.
+                            // Measured against the HEAD's codes, not the body's: a Miqo'te's face is c0801 over a c0201 body.
                             var keyRace = ExtractHumanCharCode(key);
                             if (keyRace != null
-                                && (effectiveCharCodes.Count == 0 || effectiveCharCodes.Contains(keyRace)))
+                                && (wornHead.Count == 0 || wornHead.Contains(keyRace)))
                                 continue;   // keep — ours, and the snapshot simply hasn't caught up
 
-                            compositor.log.Debug("[Proteus] Skipping non-equipped material: {0}", key);
+                            // The head's codes are named because this is the line an author lands on when their face
+                            // art paints nothing: it says which race's head this character actually has.
+                            compositor.log.Debug("[Proteus] Skipping non-equipped material: {0} (this character's head is {1})",
+                                key, wornHead.Count > 0
+                                    ? string.Join(", ", wornHead.OrderBy(c => c, StringComparer.OrdinalIgnoreCase))
+                                    : "unknown");
                             NoteDropped(key);
                             byMaterial.Remove(key);
                         }
@@ -769,8 +791,8 @@ public partial class CompositorService
 
             // First point at which "contributed nothing" is settled and true (after the sibling pass). Placement is load-bearing.
             compositor.ExplainInertMods(entries, byMaterial, gearOverlays, contentLayers, maskShellMods,
-                             maskDescByMod, resolution, filteredOut, wornCharCodes, activeBodyTypes,
-                             allOverlays);
+                             maskDescByMod, resolution, filteredOut, wornCharCodes, wornHeadCodes,
+                             activeBodyTypes, allOverlays);
         }
 
         private void SortStacks()
@@ -1049,6 +1071,25 @@ public partial class CompositorService
                     skinMaterials.Count, compositor._lastSkinMaterialRedirects.Count);
             }
             compositor._lastSkinMaterialRedirects = skinMaterials;
+
+            // And for everything published onto the head — face, eyes, hair, tail, ears. An in-place reload re-applies
+            // EQUIPMENT; those surfaces are customization, and the game re-reads their materials and textures only when
+            // the draw object is rebuilt. The face-model check above catches only art that needed the UV rewrite: over a
+            // face model that already gives each side its own texels there is nothing to rewrite, so the art would be
+            // written to disk, published, and never fetched.
+            var headRedirects = redirects
+                .Where(kv => ShellSurface.KeyFor(kv.Key) is { IsBody: false })
+                .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
+            if (headRedirects.Count != compositor._lastHeadRedirects.Count
+             || headRedirects.Any(kv => !compositor._lastHeadRedirects.TryGetValue(kv.Key, out var was)
+                                     || !string.Equals(was, kv.Value, StringComparison.OrdinalIgnoreCase)))
+            {
+                nextNeedFullRedraw = true;
+                compositor.log.Debug("[Proteus] head surfaces: the published set changed ({0} now, {1} before) — full redraw",
+                    headRedirects.Count, compositor._lastHeadRedirects.Count);
+            }
+            compositor._lastHeadRedirects = headRedirects;
+
             // Shared with the editor, so its "Rendering as" badge cannot disagree with what was composited.
             compositor._faceDoubledMaterials = facePlan.Materials;
 

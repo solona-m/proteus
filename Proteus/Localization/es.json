@@ -2084,7 +2084,7 @@
     "description": ""
   },
   "Mods.Inert.WrongRace.Fmt": {
-    "message": "Este mod pinta {0}, y tú eres {1}. Nada de lo que incluye encaja con el cuerpo que llevas.",
+    "message": "Este mod pinta {0}, y tú eres {1}. Nada de lo que incluye encaja con tu cuerpo ni con tu raza.",
     "description": ""
   },
   "Mods.NoSidecarMods": {

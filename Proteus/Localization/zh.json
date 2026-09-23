@@ -2084,7 +2084,7 @@
     "description": ""
   },
   "Mods.Inert.WrongRace.Fmt": {
-    "message": "此模组绘制的是 {0}，而你是 {1}。它提供的内容都不适合你当前的身体。",
+    "message": "此模组绘制的是 {0}，而你是 {1}。它提供的内容都不适合你当前的身体或种族。",
     "description": ""
   },
   "Mods.NoSidecarMods": {

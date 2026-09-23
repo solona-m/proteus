@@ -175,9 +175,16 @@ public sealed class FaceUvDoublingService
             }
             if (!SurfaceMirror.LooksMirrored(pos, uv))
             {
-                // A face whose UV already gives each side its own texels needs no doubling.
-                log.Information("[Proteus] face uv: {0}'s UV already gives each side its own texels — "
-                              + "leaving the art as authored", modelPath);
+                // Someone else's mod has already unmirrored this face. There is nothing for us to rewrite — but the
+                // material is then NOT in this plan, so the composite treats it as an ordinary face and folds the
+                // doubled art onto the vanilla layout (LoadRemapped → FoldFaceSplit, a crop of the +X half). Said as
+                // a warning because that is a wrong picture, not a skipped step: the other half of the art is thrown
+                // away, and the half that is kept lands on UVs Proteus did not lay out.
+                log.Warning("[Proteus] face uv: {0}'s UV already gives each side its own texels — another mod has "
+                          + "doubled this face. Proteus cannot know which half of someone else's layout is which, "
+                          + "so {1}'s art is folded onto the vanilla sheet: its left half is dropped and what is "
+                          + "left will not line up. Turn that mod off for this face and let Proteus double it.",
+                    modelPath, mtrl);
                 continue;
             }
 

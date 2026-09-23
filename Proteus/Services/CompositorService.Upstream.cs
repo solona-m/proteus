@@ -287,6 +287,7 @@ public partial class CompositorService
         Dictionary<string, ResolutionDiagnostic> resolution,
         HashSet<string> filteredOut,
         HashSet<string>? wornCharCodes,
+        HashSet<string>? wornHeadCodes,
         HashSet<string> activeBodyTypes,
         List<(OverlayEntry Entry, ResolvedOverlay Overlay)> allOverlays)
     {
@@ -310,9 +311,12 @@ public partial class CompositorService
         // Only for mods that came out empty is it worth asking Penumbra anything extra.
         var collId = penumbra.GetPlayerCollectionId();
 
-        var have = wornCharCodes is { Count: > 0 }
-            ? Describe(activeBodyTypes, wornCharCodes)
-            : "";
+        // Both halves of the wearer in one phrase: the head's code is not the body's, and a message that named
+        // only one of them would be describing half a character (a Miqo'te is c0801 over a c0201 body).
+        var wornAll = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (wornCharCodes != null) wornAll.UnionWith(wornCharCodes);
+        if (wornHeadCodes != null) wornAll.UnionWith(wornHeadCodes);
+        var have = wornAll.Count > 0 ? Describe(activeBodyTypes, wornAll) : "";
 
         var next = new Dictionary<string, InertReason>(StringComparer.OrdinalIgnoreCase);
         foreach (var entry in inert)
@@ -333,16 +337,18 @@ public partial class CompositorService
                                                             StringComparison.OrdinalIgnoreCase))
                                   .SelectMany(p => p.Overlay.Descriptor.MaterialGamePaths)
                                   .ToList();
-            var wants = mine.Count > 0
-                ? Describe(mine.Select(UVRemapService.InferBodyType).OfType<string>(),
-                           mine.Select(ExtractHumanCharCode).OfType<string>())
-                : "";
+            var mineTypes = new HashSet<string>(mine.Select(UVRemapService.InferBodyType).OfType<string>(),
+                                                StringComparer.OrdinalIgnoreCase);
+            var mineCodes = new HashSet<string>(mine.Select(ExtractHumanCharCode).OfType<string>(),
+                                                StringComparer.OrdinalIgnoreCase);
+            var wants = mine.Count > 0 ? Describe(mineTypes, mineCodes) : "";
 
             bool maskGear = maskDescByMod.TryGetValue(entry.ModDirectory, out var md)
                          && md.Layer == OverlayLayer.Gear;
 
             var reason = Explain(diag, maskGroup, masksOn, maskGear,
-                                 filteredOut.Contains(entry.ModDirectory), wants, have);
+                                 filteredOut.Contains(entry.ModDirectory), wants, have,
+                                 PaintsAnotherBody(mine, mineTypes, wornCharCodes, wornHeadCodes, activeBodyTypes));
             next[entry.ModDirectory] = reason;
 
             if (_inertReported.TryAdd(

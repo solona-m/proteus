@@ -2084,7 +2084,7 @@
     "description": ""
   },
   "Mods.Inert.WrongRace.Fmt": {
-    "message": "이 모드는 {0}을(를) 칠하지만, 당신은 {1}입니다. 이 모드에 포함된 것 중 지금 착용한 몸에 맞는 것이 없습니다.",
+    "message": "이 모드는 {0}을(를) 칠하지만, 당신은 {1}입니다. 이 모드에 포함된 것 중 지금의 몸이나 종족에 맞는 것이 없습니다.",
     "description": ""
   },
   "Mods.NoSidecarMods": {

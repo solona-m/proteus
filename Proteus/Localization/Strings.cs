@@ -260,7 +260,7 @@ public sealed class ModsStrings
     /// <summary>{0} is what the mod paints and {1} what the character is, both as "body · Race F" — e.g.
     /// "bibo · Midlander F, Viera F". Race names come from ModelRace and are not translated.</summary>
     public readonly string InertWrongRaceFmt = Loc.Localize("Mods.Inert.WrongRace.Fmt",
-        "This mod paints {0}, and you are {1}. Nothing it ships fits the body you are wearing.");
+        "This mod paints {0}, and you are {1}. Nothing it ships fits the body or the race you are wearing.");
 
     /// <summary>{0} is the Penumbra group name for masks — literally "Masks", the author's own group
     /// name, which arrives already untranslated.</summary>

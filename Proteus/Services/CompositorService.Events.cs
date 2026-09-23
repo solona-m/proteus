@@ -541,7 +541,7 @@ public partial class CompositorService
         {
             var state = glamourer.GetObjectState(0);
             var cust  = state?["Customize"];
-            if (cust == null) { _glamourerCharCode = null; return; }
+            if (cust == null) { _glamourerCharCode = _glamourerFaceCode = null; return; }
             // No zero defaults: Gender 0 is male, so a failed read would produce a plausible wrong char code.
             // Unknown stays null and falls back to _lastCompositedCharCodes, read off the drawn body materials.
             var race  = cust["Race"]?["Value"]?.ToObject<byte>();
@@ -552,12 +552,13 @@ public partial class CompositorService
                 Plugin.Log.Warning("[Proteus] Glamourer customize is incomplete (race={0}, clan={1}, "
                                  + "gender={2}) — treating the char code as unknown rather than guessing",
                     race?.ToString() ?? "missing", tribe?.ToString() ?? "missing", sex?.ToString() ?? "missing");
-                _glamourerCharCode = null;
+                _glamourerCharCode = _glamourerFaceCode = null;
                 return;
             }
             _glamourerCharCode = BodyCodeFromCustomize(race.Value, tribe.Value, sex.Value);
+            _glamourerFaceCode = FaceCodeFromCustomize(race.Value, tribe.Value, sex.Value);
         }
-        catch { _glamourerCharCode = null; }
+        catch { _glamourerCharCode = _glamourerFaceCode = null; }
     }
 
     private void OnGlamourerStateChanged()

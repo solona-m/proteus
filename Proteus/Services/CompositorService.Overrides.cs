@@ -118,9 +118,10 @@ public partial class CompositorService
         RemoveInjectedGlasses();
         RemoveInjectedRing();
 
-        // A hosted accessory's (or rewritten skin material's) redirect won't be undone by an in-place reload, so
-        // force a full redraw.
-        bool restoreAccessory = _secondSkinActive || _lastSkinMaterialRedirects.Count > 0;
+        // A hosted accessory's redirect — or a rewritten skin material's, or anything published on the head —
+        // won't be undone by an in-place reload, so force a full redraw.
+        bool restoreAccessory = _secondSkinActive || _lastSkinMaterialRedirects.Count > 0
+                             || _lastHeadRedirects.Count > 0;
 
         Task.Run(() =>
         {
@@ -136,6 +137,7 @@ public partial class CompositorService
                 ReloadAndRedraw(userRequested: true);   // character reverts to un-composited
                 _secondSkinActive = false;
                 _lastSkinMaterialRedirects = new(StringComparer.OrdinalIgnoreCase);
+                _lastHeadRedirects = new(StringComparer.OrdinalIgnoreCase);
                 ClearShellLocators();   // the shell is off the character; nothing left for them to describe
 
                 if (collId.HasValue)

@@ -2084,7 +2084,7 @@
     "description": ""
   },
   "Mods.Inert.WrongRace.Fmt": {
-    "message": "Ce mod peint {0}, et vous êtes {1}. Rien de ce qu'il fournit ne correspond au corps que vous portez.",
+    "message": "Ce mod peint {0}, et vous êtes {1}. Rien de ce qu'il fournit ne correspond à votre corps ni à votre race.",
     "description": ""
   },
   "Mods.NoSidecarMods": {
