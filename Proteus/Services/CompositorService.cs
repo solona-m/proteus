@@ -557,12 +557,18 @@ public partial class CompositorService : IDisposable
 
     public void Dispose()
     {
-        // Pull our injected host items off the player before teardown (Glamourer is disposed after us), or a reload
-        // leaves a phantom bonus item and ring.
-        RemoveInjectedGlasses();
-        RemoveInjectedRing();
-
-        _disposed = true;   // an in-flight boot-probe task bails instead of touching torn-down bridges
+        // Pull our injected host items off the player before giving up the right to write to it (Glamourer is
+        // disposed after us), or a reload leaves a phantom bonus item and ring. The order is load-bearing and lives
+        // in CarrierWrites.Teardown, which is where it is tested.
+        CarrierWrites.Teardown(
+            removeCarriers: () =>
+            {
+                RemoveInjectedGlasses();
+                RemoveInjectedRing();
+            },
+            // An in-flight boot-probe task bails instead of touching torn-down bridges, and a composite that
+            // outlives this instance stops writing to the player's gear.
+            markGone: () => _disposed = true);
 
         idleCacheTimer.Dispose();
 

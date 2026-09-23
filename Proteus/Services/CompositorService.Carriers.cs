@@ -332,7 +332,11 @@ public partial class CompositorService
 
     private bool SetGlassesOnFramework(ulong itemId)
     {
-        try { return Plugin.Framework.RunOnFrameworkThread(() => glamourer.SetGlasses(itemId)).GetAwaiter().GetResult(); }
+        try
+        {
+            return CarrierWrites.Guarded(OnFramework, () => GoneAway("invisible glasses"),
+                                         () => glamourer.SetGlasses(itemId));
+        }
         catch (Exception ex) { log.Warning(ex, "[Proteus] invisible glasses: SetGlasses({0}) failed", itemId); return false; }
     }
 
@@ -483,9 +487,45 @@ public partial class CompositorService
 
     private bool SetAccessoryOnFramework(ulong itemId, string slot)
     {
-        try { return Plugin.Framework.RunOnFrameworkThread(() => glamourer.SetAccessory(itemId, slot)).GetAwaiter().GetResult(); }
+        try
+        {
+            return CarrierWrites.Guarded(OnFramework, () => GoneAway("invisible carrier"),
+                                         () => glamourer.SetAccessory(itemId, slot));
+        }
         catch (Exception ex) { log.Warning(ex, "[Proteus] invisible carrier: SetItem({0},{1}) failed", slot, itemId); return false; }
     }
+
+    /// <summary>The framework thread, as <see cref="CarrierWrites.Guarded"/> takes it.</summary>
+    private static bool OnFramework(Func<bool> write)
+        => Plugin.Framework.RunOnFrameworkThread(write).GetAwaiter().GetResult();
+
+    /// <summary>
+    /// This instance has been torn down, so it may not put anything on the player.
+    /// <para/>
+    /// Asked INSIDE the framework-thread write, not before it — see <see cref="CarrierWrites.Guarded"/>, which is
+    /// where that ordering lives and is tested. Asked at the call site there is a window between deciding and
+    /// writing, and it is wide: deciding to equip a carrier means a Glamourer read first.
+    /// <para/>
+    /// It matters because a composite outlives the instance that started it: it is a Task and nothing waits for it.
+    /// Measured on a reload, where one ran 9.5 seconds and equipped the facewear carrier 2.2 seconds AFTER its
+    /// instance was disposed. The item went on the player with the record that owns it in a config that died with
+    /// that instance, so the live one had no record of equipping it, would not take it off, and left the player
+    /// wearing an eyepatch nothing claimed. Refusing the write leaves the equipping to the instance that is still
+    /// there to remember it.
+    /// </summary>
+    /// <param name="what">Which carrier is being refused, for the log line.</param>
+    private bool GoneAway(string what)
+    {
+        if (!_disposed) return false;
+        // Once per kind: a torn-down composite can reach this for every carrier slot it was going to write, and
+        // which kinds were refused is the whole content of the line.
+        if (_goneAwayLogged.TryAdd(what, 0))
+            log.Information("[Proteus] {0}: not touching the player's gear — this Proteus was unloaded while a "
+                          + "composite was still running, and the one that replaced it owns the carriers now.", what);
+        return true;
+    }
+
+    private readonly ConcurrentDictionary<string, byte> _goneAwayLogged = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Remove our injected ring immediately (plugin disable/unload). Falls back to what we remember equipping only
