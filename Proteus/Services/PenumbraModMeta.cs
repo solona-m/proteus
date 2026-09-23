@@ -904,8 +904,16 @@ internal static class PenumbraModMeta
     {
         var group = (TryReadGroups(modRoot) ?? [])
             .FirstOrDefault(g => string.Equals(g.Name, name, StringComparison.OrdinalIgnoreCase));
-        if (group.Name == null) return null;
-        if (!group.Group.TryGetProperty("Options", out var options) || options.ValueKind != JsonValueKind.Array)
+        return group.Name == null ? null : FileOptionsOf(group.Group);
+    }
+
+    /// <summary>
+    /// One group's options and the files each publishes, from a group already read. Reading a group at a time through
+    /// <see cref="TryReadFileOptions"/> re-parses the whole manifest for each, and a manifest here can be 400 KB.
+    /// </summary>
+    public static List<FileOption>? FileOptionsOf(JsonElement group)
+    {
+        if (!group.TryGetProperty("Options", out var options) || options.ValueKind != JsonValueKind.Array)
             return null;
 
         var result = new List<FileOption>();

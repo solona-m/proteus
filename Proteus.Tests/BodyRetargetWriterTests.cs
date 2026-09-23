@@ -58,6 +58,82 @@ public class BodyRetargetWriterTests : IDisposable
     }
 
     [Fact]
+    public void A_refit_never_writes_over_the_file_a_renamed_option_points_at()
+    {
+        // The player's own sequence: save a refit, rename the option in Penumbra, then save another refit whose
+        // option has the name the first one had. The file is named after the option, so the second save landed on the
+        // first's file and both options drew the model saved last.
+        BodyRetargetWriter.Save(root, Group, "Neolithe SFW L", GamePath, [1], "Neolithe", "SFW M", "SFW L");
+        string first = PenumbraModMeta.TryReadFileOptions(root, Group)!
+            .Single(o => o.Name == "Neolithe SFW L").Files[GamePath];
+
+        Rename(Group, "Neolithe SFW L", "My top, large");
+
+        BodyRetargetWriter.Save(root, Group, "Neolithe SFW L", GamePath, [2], "Neolithe", "SFW M", "SFW L");
+
+        var options = PenumbraModMeta.TryReadFileOptions(root, Group)!;
+        string renamed = options.Single(o => o.Name == "My top, large").Files[GamePath];
+        string fresh = options.Single(o => o.Name == "Neolithe SFW L").Files[GamePath];
+
+        Assert.Equal(first, renamed);                       // the rename left the file where it was
+        Assert.NotEqual(renamed, fresh);                    // and the new option got one of its own
+        Assert.Equal([1], File.ReadAllBytes(Path.Combine(root, renamed.Replace('/', Path.DirectorySeparatorChar))));
+        Assert.Equal([2], File.ReadAllBytes(Path.Combine(root, fresh.Replace('/', Path.DirectorySeparatorChar))));
+    }
+
+    [Fact]
+    public void Saving_the_same_option_again_still_reuses_its_file()
+    {
+        // The other half of the rule above: an option of a name we are saving is ours to replace, path and all, or
+        // every re-save of one size would leave another folder behind.
+        BodyRetargetWriter.Save(root, Group, "Neolithe SFW L", GamePath, [1], "Neolithe", "SFW M", "SFW L");
+        string first = PenumbraModMeta.TryReadFileOptions(root, Group)!
+            .Single(o => o.Name == "Neolithe SFW L").Files[GamePath];
+
+        BodyRetargetWriter.Save(root, Group, "Neolithe SFW L", GamePath, [9], "Neolithe", "SFW M", "SFW L");
+
+        var options = PenumbraModMeta.TryReadFileOptions(root, Group)!;
+        Assert.Equal(first, options.Single(o => o.Name == "Neolithe SFW L").Files[GamePath]);
+        Assert.Equal([9], File.ReadAllBytes(Path.Combine(root, first.Replace('/', Path.DirectorySeparatorChar))));
+    }
+
+    [Fact]
+    public void An_option_s_files_stay_in_one_folder_even_when_its_own_name_is_taken()
+    {
+        // The folder a refit writes to is named after its option, and after the rename above that name belongs to
+        // another option's folder, so this one takes the next free name. A second slot saved into it has to land in
+        // that same folder: one folder per option, whatever it ended up called.
+        BodyRetargetWriter.Save(root, Group, "Neolithe SFW L", GamePath, [1], "Neolithe", "SFW M", "SFW L");
+        Rename(Group, "Neolithe SFW L", "My top, large");
+        BodyRetargetWriter.Save(root, Group, "Neolithe SFW L", GamePath, [2], "Neolithe", "SFW M", "SFW L");
+
+        const string legs = "chara/equipment/e6255/model/c0201e6255_dwn.mdl";
+        BodyRetargetWriter.Save(root, Group, "Neolithe SFW L", legs, [3], "Neolithe", "SFW M", "SFW L");
+
+        var files = PenumbraModMeta.TryReadFileOptions(root, Group)!
+            .Single(o => o.Name == "Neolithe SFW L").Files;
+        Assert.Equal(2, files.Count);
+        var folders = files.Values.Select(at => at.Split('/')[1]).Distinct().ToList();
+        Assert.Single(folders);
+        Assert.Equal("Neolithe SFW L 2", folders[0]);
+
+        // And the renamed option still has the first folder, and the first model.
+        string renamed = PenumbraModMeta.TryReadFileOptions(root, Group)!
+            .Single(o => o.Name == "My top, large").Files[GamePath];
+        Assert.Equal("Neolithe SFW L", renamed.Split('/')[1]);
+        Assert.Equal([1], File.ReadAllBytes(Path.Combine(root, renamed.Replace('/', Path.DirectorySeparatorChar))));
+    }
+
+    /// <summary>Rename one option in the manifest, as the player does in Penumbra's Edit Mod.</summary>
+    private void Rename(string group, string from, string to)
+    {
+        string meta = Path.Combine(root, "meta.json");
+        string text = File.ReadAllText(meta);
+        text = text.Replace($"\"Name\": \"{from}\"", $"\"Name\": \"{to}\"");
+        File.WriteAllText(meta, text);
+    }
+
+    [Fact]
     public void A_second_size_grows_the_group_rather_than_replacing_it()
     {
         BodyRetargetWriter.Save(root, Group, "Neolithe SFW L", GamePath, [1], "Neolithe", "SFW M", "SFW L");

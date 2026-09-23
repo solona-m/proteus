@@ -162,10 +162,20 @@ internal static class BodyRetargetWriter
                                            $"\"{groupName}\" already has an option called \"{taken.Option}\" of its own. " +
                                            "Save the refit to another group.");
                 }
+                // Paths every OTHER option already points at. A refit's file is named after its option, and an option
+                // can be renamed in Penumbra afterwards while its file keeps the old name: the next refit whose option
+                // has that name then wrote over the file the renamed option still points at, and both showed the model
+                // saved last. An option of a name we are saving is not "other" — saving the same size twice replaces
+                // it, file and all.
+                var claimed = Claimed(modRoot, groupName, refits);
+
                 var written = new List<(Refit Refit, string Rel)>();
                 foreach (var refit in refits)
                 {
-                    string rel = Path.Combine(Subfolder, Sanitise(refit.Option), TailOf(gamePath));
+                    // The folder this option already uses, so a second slot saved into it lands beside the first.
+                    string folder = FolderOf(options, refit.Option) ?? Sanitise(refit.Option);
+                    string rel = Free(claimed, folder, TailOf(gamePath));
+                    claimed.Add(rel.Replace('\\', '/'));   // and two refits in one batch cannot collide either
                     string full = Path.Combine(modRoot, rel);
                     Directory.CreateDirectory(Path.GetDirectoryName(full)!);
                     PenumbraModMeta.AtomicWrite(full, refit.Model);
@@ -243,6 +253,64 @@ internal static class BodyRetargetWriter
                 return new Outcome(false, groupName, names, $"Could not save: {e.Message}");
             }
         }
+    }
+
+    /// <summary>
+    /// Every file path the mod's options point at, less the options this save is replacing — the paths a save may not
+    /// land on. Read from the manifest rather than from our own record, because the record holds the name an option had
+    /// when we wrote it and the player may have renamed it since; the manifest is what the game actually reads.
+    /// </summary>
+    private static HashSet<string> Claimed(string modRoot, string groupName, IReadOnlyList<Refit> refits)
+    {
+        var mine = refits.Select(r => r.Option).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var claimed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // The groups once, then each one's options off the element already read: asking for a group at a time re-reads
+        // and re-parses the manifest every time, and this walks all of them.
+        foreach (var (name, group) in PenumbraModMeta.TryReadGroups(modRoot) ?? [])
+            foreach (var option in PenumbraModMeta.FileOptionsOf(group) ?? [])
+            {
+                bool replacing = string.Equals(name, groupName, StringComparison.OrdinalIgnoreCase)
+                              && mine.Contains(option.Name);
+                if (replacing) continue;
+                foreach (string at in option.Files.Values) claimed.Add(at.Replace('\\', '/'));
+            }
+        return claimed;
+    }
+
+    /// <summary>
+    /// The folder under <see cref="Subfolder"/> that an option's files already sit in, or null when it has none there.
+    /// An option keeps one folder for the life of it: saving a second slot into an option whose folder was numbered
+    /// (see <see cref="Free"/>) must put the new file in that same folder, not start another.
+    /// </summary>
+    private static string? FolderOf(IReadOnlyList<PenumbraModMeta.FileOption> options, string option)
+    {
+        var existing = options.FirstOrDefault(o => string.Equals(o.Name, option, StringComparison.OrdinalIgnoreCase));
+        foreach (string at in existing.Files?.Values ?? Enumerable.Empty<string>())
+        {
+            var parts = at.Replace('\\', '/').Split('/');
+            if (parts.Length > 2 && string.Equals(parts[0], Subfolder, StringComparison.OrdinalIgnoreCase))
+                return parts[1];
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Where one refit's file goes: the option's own folder under <see cref="Subfolder"/>, with a number on the end if
+    /// another option already holds that path. The OPTION's folder, not any deeper one — an option's files belong
+    /// together, and the rest of the path is the game path, which the file has to keep.
+    /// </summary>
+    private static string Free(HashSet<string> claimed, string option, string tail)
+    {
+        string rel = Path.Combine(Subfolder, option, tail);
+        if (!claimed.Contains(rel.Replace('\\', '/'))) return rel;
+
+        for (int n = 2; n < 1000; n++)
+        {
+            string candidate = Path.Combine(Subfolder, $"{option} {n}", tail);
+            if (!claimed.Contains(candidate.Replace('\\', '/'))) return candidate;
+        }
+        return rel;
     }
 
     private static string Added(IReadOnlyList<Refit> refits, string groupName)
