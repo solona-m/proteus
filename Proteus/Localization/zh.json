@@ -3618,5 +3618,81 @@
   "Colors.PrintOnto.Beneath": {
     "message": "下方的一切",
     "description": ""
+  },
+"Parts.Live.PickedNotGear.Fmt": {
+    "message": "{0} is not a piece of equipment, so there is nothing to refit onto another body.",
+    "description": ""
+  },
+  "Parts.Live.PickGame.Tip": {
+    "message": "Click a garment on your character to open it here \u2014 the game\u0027s own gear as well as a mod\u0027s.",
+    "description": ""
+  },
+  "Parts.Retarget.FromVanilla": {
+    "message": "The game\u0027s own body",
+    "description": ""
+  },
+  "Parts.Retarget.SaveNewMod.Fmt": {
+    "message": "Saved into a new mod, \u0022{0}\u0022.",
+    "description": ""
+  },
+  "Parts.Vanilla.Caveats": {
+    "message": "The game\u0027s gear leans on shape keys and lower detail levels, and a refit carries neither: expect the sleeves and hems where they meet other pieces to change, and the old size to show at a distance. Its textures are the game\u0027s own and stay that way.",
+    "description": ""
+  },
+  "Parts.Vanilla.Header": {
+    "message": "The game\u0027s own gear",
+    "description": ""
+  },
+  "Parts.Vanilla.OnlyRetarget": {
+    "message": "This is the game\u0027s own gear \u2014 there is no mod file to edit. Refit it onto your body first; that makes a mod, which the other tools can then work on.",
+    "description": ""
+  },
+  "Parts.Vanilla.Open.Fmt": {
+    "message": "{0} \u2014 worn straight from the game, with no mod behind it.",
+    "description": ""
+  },
+  "Parts.Vanilla.SaveNote": {
+    "message": "Saving makes a new mod for this item, switched on for you, holding the refit and an \u0022Original\u0022 option that gives the game\u0027s own back.",
+    "description": ""
+  },
+  "Refit.Error.NoName.Fmt": {
+    "message": "Couldn\u0027t find a free mod name for \u0022{0}\u0022.",
+    "description": ""
+  },
+  "Refit.Mod.Description.Fmt": {
+    "message": "{0}, refitted by Proteus.",
+    "description": ""
+  },
+  "Refit.Mod.Enabled.Fmt": {
+    "message": "Made \u0022{0}\u0022 and switched it on.",
+    "description": ""
+  },
+  "Refit.Mod.NotEnabled.Fmt": {
+    "message": "Made \u0022{0}\u0022, but couldn\u0027t switch it on \u2014 enable it in Penumbra.",
+    "description": ""
+  },
+"Parts.Retarget.SaveToMod": {
+    "message": "Save into",
+    "description": ""
+  },
+  "Parts.Retarget.SaveToMod.Tip": {
+    "message": "Where the refitted model goes. This mod puts it beside the author\u0027s own sizes, so it joins any size switch they already built \u2014 but their next update takes it away again. A new mod keeps it separate, survives their updates, and can be switched off or deleted on its own.",
+    "description": ""
+  },
+  "Parts.Retarget.SaveToNewMod": {
+    "message": "A new mod of its own",
+    "description": ""
+  },
+  "Parts.Retarget.SaveToThisMod": {
+    "message": "This mod",
+    "description": ""
+  },
+"Parts.Vanilla.Worn.Tip": {
+    "message": "You are wearing this and no mod provides it. Open it to refit it onto your body \u2014 that makes a mod of its own for it.",
+    "description": ""
+  },
+  "Parts.Vanilla.WornSuffix": {
+    "message": "(the game\u0027s own)",
+    "description": ""
   }
 }
