@@ -152,6 +152,50 @@ public class BodyRetargetTests
     }
 
     [Fact]
+    public void The_body_that_comes_in_is_cut_the_way_the_author_cut_the_one_going_out()
+    {
+        // A garment author hides the body under the cloth by deleting its faces — 84% of it, on the jacket this was
+        // measured on. The body mod ships the body whole, so putting it in whole puts the deleted shoulder back
+        // through the jacket. What the author drew is what the new body draws.
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)),
+            new SyntheticModel.Mesh(ClothMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 4, OffsetZ: 0.001f)));
+        // The body: the same five triangles the garment's skin draws, and three well away that it does not.
+        var chest = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5),
+                                                  new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetY: 50f)));
+
+        var rebuilt = BodyRetarget.SwapSkin(garment, [Resized("_top", chest)], out var report);
+
+        Assert.NotNull(rebuilt);
+        Assert.Equal("added 5 cut 3", $"added {report.Added} cut {report.Cut}");
+        Assert.Equal(5, Drawn(rebuilt!).Where(d => SecondSkinWriter.IsBodySkinMaterial("/" + d.Key))
+                                       .Sum(d => d.Value));
+    }
+
+    [Fact]
+    public void A_body_mesh_the_cut_empties_is_not_drawn_at_all()
+    {
+        // The cut is carried per mesh, and a mesh the writer has no entry for draws WHOLE — that is how a body
+        // nothing was cut from goes in. So a body whose skin spans two meshes, one of them entirely under the
+        // cloth, is the case that inverts: the mesh most deserving of the cut is the one that comes back in full.
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)),
+            new SyntheticModel.Mesh(ClothMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 4, OffsetZ: 0.001f)));
+        // Two skin MESHES: the five the garment draws, and three of a second mesh well away, which it does not.
+        var chest = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)),
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetY: 50f)));
+
+        var rebuilt = BodyRetarget.SwapSkin(garment, [Resized("_top", chest)], out var report);
+
+        Assert.NotNull(rebuilt);
+        Assert.Equal("added 5 cut 3", $"added {report.Added} cut {report.Cut}");
+        Assert.Equal(5, Drawn(rebuilt!).Where(d => SecondSkinWriter.IsBodySkinMaterial("/" + d.Key))
+                                       .Sum(d => d.Value));
+    }
+
+    [Fact]
     public void Nothing_is_rebuilt_when_no_skin_mesh_belongs_to_a_resized_slot()
     {
         var clothOnly = SyntheticModel.Build([],
@@ -410,6 +454,75 @@ public class BodyRetargetTests
             float z = At(garment, v).Z + Delta(solved, v).Z;
             Assert.True(z >= 0.20f, $"vertex {v} is still inside the body at z={z}");
         }
+    }
+
+    // ── folds: a triangle that ends up facing the wrong way is a black speck in game ───────────────
+
+    [Fact]
+    public void A_triangle_the_transfer_turns_over_is_relaxed_back()
+    {
+        // The refit moves neighbouring points by different amounts, and where the two bodies disagree sharply enough
+        // one point crosses the edge opposite it: the triangle is then drawn from behind, which on cloth is black.
+        // The delta here is hand-made, so the test is about the pass and not about any body pair reaching it.
+        var quad = Quad(0.01f);
+        var sets = BodyRetarget.Sets.From(quad);
+
+        // Corner 1 dragged clear across the diagonal between 0 and 2, which turns the first triangle over.
+        var delta = new SecondSkinWriter.Vec3[sets.NodeCount];
+        delta[sets.NodeOf[1]] = new SecondSkinWriter.Vec3(-0.02f, 0.02f, 0f);
+        Assert.True(Folded(quad, delta, sets) > 0, "the hand-made delta should have turned a triangle over");
+
+        int left = BodyRetarget.Unfold(sets, delta, new bool[sets.NodeCount]);
+
+        Assert.Equal(0, left);
+        Assert.Equal(0, Folded(quad, delta, sets));
+    }
+
+    [Fact]
+    public void A_fold_between_two_exact_landings_is_taken_out_as_well()
+    {
+        // Points the transfer landed exactly are the answer, so the pass leaves them alone — until a fold survives
+        // the rounds that respect them. Two exact landings that crossed each other are no answer at all, and holding
+        // both while only the cloth beside them moves cannot undo it.
+        var quad = Quad(0.01f);
+        var sets = BodyRetarget.Sets.From(quad);
+        var delta = new SecondSkinWriter.Vec3[sets.NodeCount];
+        delta[sets.NodeOf[1]] = new SecondSkinWriter.Vec3(-0.02f, 0.02f, 0f);
+
+        var snapped = new bool[sets.NodeCount];
+        for (int n = 0; n < sets.NodeCount; n++) snapped[n] = true;
+
+        Assert.Equal(0, BodyRetarget.Unfold(sets, delta, snapped));
+        Assert.Equal(0, Folded(quad, delta, sets));
+    }
+
+    /// <summary>A flat two-triangle quad of side <paramref name="side"/> in the XY plane, facing +Z.</summary>
+    private static ModelParts Quad(float side)
+    {
+        float[] pos = [0f, 0f, 0f, side, 0f, 0f, side, side, 0f, 0f, side, 0f];
+        float[] nrm = [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1];
+        return Build(pos, nrm, [0, 1, 2, 0, 2, 3], ClothMaterial);
+    }
+
+    /// <summary>Triangles of <paramref name="m"/> that the delta turns over.</summary>
+    private static int Folded(ModelParts m, SecondSkinWriter.Vec3[] delta, BodyRetarget.Sets sets)
+    {
+        Vector3 Moved(int v)
+        {
+            var d = delta[sets.NodeOf[v]];
+            return At(m, v) + new Vector3(d.X, d.Y, d.Z);
+        }
+
+        int folded = 0;
+        foreach (var part in m.Parts)
+            for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+            {
+                int a = part.Triangles[t], b = part.Triangles[t + 1], c = part.Triangles[t + 2];
+                var n0 = Vector3.Cross(At(m, b) - At(m, a), At(m, c) - At(m, a));
+                var n1 = Vector3.Cross(Moved(b) - Moved(a), Moved(c) - Moved(a));
+                if (Vector3.Dot(n0, n1) < 0f) folded++;
+            }
+        return folded;
     }
 
     [Fact]

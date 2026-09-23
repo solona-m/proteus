@@ -100,9 +100,16 @@ public sealed class SecondSkinLayer
 /// tag would be judged against the host item's own IMC mask, which was never written for it. Ignored with
 /// <paramref name="OwnAttributes"/>, which drops every tag.
 /// </param>
+/// <param name="DrawOnly">
+/// Per mesh of <paramref name="Model"/>, the only vertices it may draw: a triangle with no corner among them is not
+/// emitted (see <c>Source.DrawOnly</c>). How a body mod's skin is cut down to what the garment's own skin drew, so
+/// that a body swapped in whole does not put back the faces the garment's author deleted under the cloth. Unlike
+/// <paramref name="KeepMaterial"/> this belongs to the MODEL, so two geometries cut from one model share the first's.
+/// </param>
 public sealed record ContentGeometry(
     byte[] Model, Func<string, bool> KeepMaterial, bool MirrorUv1 = false,
-    IReadOnlySet<string>? HiddenAttributes = null, bool OwnAttributes = false, bool DropVariantAttributes = false);
+    IReadOnlySet<string>? HiddenAttributes = null, bool OwnAttributes = false, bool DropVariantAttributes = false,
+    Dictionary<int, HashSet<ushort>>? DrawOnly = null);
 
 /// <summary>
 /// A host's shell came out with no meshes. <see cref="ByToggle"/> separates a fault (coverage trimming

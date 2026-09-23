@@ -3447,6 +3447,10 @@
     "message": "This is the garment\u0027s own body skin. Holding it keeps it at the old size, so the new body can show through or gap at the edges.",
     "description": ""
   },
+  "Parts.Retarget.Folded.Fmt": {
+    "message": "{0:N0} triangle(s) still face the wrong way, which shows as a black speck. The two bodies disagree too sharply there for the fit to be smoothed out.",
+    "description": ""
+  },
   "Parts.Retarget.Laid.Fmt": {
     "message": "{0:N0} skin points laid onto the new body.",
     "description": ""

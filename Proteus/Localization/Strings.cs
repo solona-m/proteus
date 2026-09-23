@@ -2289,6 +2289,11 @@ public sealed class PartsStrings
         "This garment had {0} shape key(s), which a skin swap does not carry over. Untick \"Use the new body's skin\" "
       + "to keep them.");
 
+    /// <summary>{0} is how many triangles the refit left facing the wrong way.</summary>
+    public readonly string RetargetFoldedFmt = Loc.Localize("Parts.Retarget.Folded.Fmt",
+        "{0:N0} triangle(s) still face the wrong way, which shows as a black speck. The two bodies disagree too "
+      + "sharply there for the fit to be smoothed out.");
+
     /// <summary>{0} is how many skin points were laid onto the new body.</summary>
     public readonly string RetargetLaidFmt = Loc.Localize("Parts.Retarget.Laid.Fmt",
         "{0:N0} skin points laid onto the new body.");

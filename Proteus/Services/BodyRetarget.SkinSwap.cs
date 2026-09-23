@@ -20,6 +20,13 @@ internal static partial class BodyRetarget
     /// </summary>
     internal const float OnBodyShare = 0.95f;
 
+    /// <summary>
+    /// How close the new body must come to the garment's own skin for that face to be one the author kept (4 mm). The
+    /// garment's skin has just been laid onto the new body, so a face the author kept sits ON the body mod's own — the
+    /// two are the same mesh where both draw — while a face the author deleted has centimetres of cloth over it.
+    /// </summary>
+    internal const float CutReach = 0.004f;
+
     /// <param name="Removed">Triangles in the garment's skin meshes that were taken out.</param>
     /// <param name="Added">Triangles in the body skin meshes put in their place.</param>
     /// <param name="Kept">Skin meshes left alone because they belong to no slot being resized.</param>
@@ -29,9 +36,11 @@ internal static partial class BodyRetarget
     /// <param name="ExtrasDropped">Triangles of the old body's piercings and pubic hair taken out.</param>
     /// <param name="Unplaced">Influences the writer could not place — a bone in no model it was given, or a full table.</param>
     /// <param name="Posed">Skin meshes only partly on the bodies — a heeled shoe's own foot — which were kept.</param>
+    /// <param name="Cut">Triangles of the new body's skin left out, because the garment's author deleted the body
+    /// there — see <see cref="CutLike"/>.</param>
     internal readonly record struct SwapReport(int Removed, int Added, int Kept, int LostShapes,
                                                int Reweighted = 0, int Trimmed = 0, int ExtrasDropped = 0,
-                                               int Unplaced = 0, int Posed = 0);
+                                               int Unplaced = 0, int Posed = 0, int Cut = 0);
 
     /// <summary>
     /// Swap the garment's skin for the new body's, one body slot at a time: every skin mesh of the garment that belongs
@@ -130,7 +139,21 @@ internal static partial class BodyRetarget
             return null;
         }
 
-        // One layer per slot whose skin came out: its body's skin meshes, whole, under the garment's skin material.
+        // The author's own cut, carried onto the new body. A garment's author hides the body under the cloth by
+        // deleting its faces; the body mod ships the body whole. Put in whole, the shoulder the author deleted comes
+        // back through the jacket — so the body mod's skin only draws where the garment's skin drew.
+        var drawn = new BodySurface(model, BodySurface.CellFor(MeanEdgeOf(model)));
+        var cuts = new Dictionary<int, Dictionary<int, HashSet<ushort>>?>();
+        int cutTris = 0, keptTris = 0;
+        foreach (int s in claimedBy)
+        {
+            int these = 0, gone = 0;
+            cuts[s] = drawn.IsEmpty ? null : CutLike(drawn, swappable[s].TargetModel!, out these, out gone);
+            keptTris += cuts[s] == null ? SkinTriangles(SecondSkinWriter.Parse(swappable[s].TargetModel!)) : these;
+            cutTris += gone;
+        }
+
+        // One layer per slot whose skin came out: its body's skin meshes, under the garment's skin material.
         var layers = claimedBy.OrderBy(s => s).Select(s => new SecondSkinLayer
         {
             MaterialName = skinMaterial!,
@@ -138,7 +161,7 @@ internal static partial class BodyRetarget
             // skin under them, and the garment's own skin carried the same tags — except for variant tags, which would
             // be judged against the garment's IMC mask (a Neolithe body carries eight, atr_tv_a..h).
             Geometry = [new ContentGeometry(swappable[s].TargetModel!, SecondSkinWriter.IsBodySkinMaterial,
-                                            DropVariantAttributes: true)],
+                                            DropVariantAttributes: true, DrawOnly: cuts[s])],
         }).ToList();
         var reskinned = new SecondSkinWriter.ReskinReport();
         var rebuilt = SecondSkinWriter.Build(Array.Empty<SecondSkinWriter.SourceSpec>(), layers, garment, out _,
@@ -146,10 +169,64 @@ internal static partial class BodyRetarget
                                              hostReskin: weights == null ? null : weights.For,
                                              boneDonors: weights?.Donors, reskinReport: reskinned);
 
-        int added = claimedBy.Sum(s => SkinTriangles(SecondSkinWriter.Parse(swappable[s].TargetModel!)));
-        report = new SwapReport(removed, added, kept, SecondSkinWriter.Parse(garment).Shapes.Count,
-                                weights?.Reweighted ?? 0, weights?.Trimmed ?? 0, extras, reskinned.Dropped, posed);
+        report = new SwapReport(removed, keptTris, kept, SecondSkinWriter.Parse(garment).Shapes.Count,
+                                weights?.Reweighted ?? 0, weights?.Trimmed ?? 0, extras, reskinned.Dropped, posed,
+                                cutTris);
         return rebuilt;
+    }
+
+    /// <summary>
+    /// Which of a body model's skin vertices the garment's own skin still draws, per mesh, for
+    /// <see cref="ContentGeometry.DrawOnly"/>. A vertex counts when the garment's skin — already laid onto this body —
+    /// passes within <see cref="CutReach"/> of it.
+    /// <para/>
+    /// Null when the garment's skin covers the whole body: nothing was cut, so nothing is filtered, and the swap puts
+    /// the body in exactly as it always did.
+    /// </summary>
+    /// <param name="drawn">The garment's own skin, laid onto the new body.</param>
+    /// <param name="kept">Triangles of the body's skin that survive the cut.</param>
+    /// <param name="cut">Triangles left out.</param>
+    private static Dictionary<int, HashSet<ushort>>? CutLike(BodySurface drawn, byte[] body, out int kept, out int cut)
+    {
+        kept = cut = 0;
+        if (ModelPartReader.Read(body) is not { } parts) return null;
+
+        var baseOf = new Dictionary<int, int>();
+        foreach (var span in parts.MeshSpans) baseOf[span.Mesh] = span.BaseVertex;
+
+        var covered = new bool[parts.Positions.Length / 3];
+        foreach (int v in parts.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material))
+                                     .SelectMany(p => p.Triangles).Distinct())
+            covered[v] = drawn.Nearest(At(parts, v), CutReach, out _);
+
+        var sets = new Dictionary<int, HashSet<ushort>>();
+        foreach (var part in parts.Parts)
+        {
+            if (part.Island >= 0 || !SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+            if (!baseOf.TryGetValue(part.Mesh, out int bv)) continue;
+
+            // Every skin mesh gets its entry HERE, before a triangle is judged. A mesh missing from the dictionary
+            // draws whole — that is how the writer reads one nothing cut — so a mesh the cut empties has to be in it
+            // with an empty set, or the one mesh most deserving of the cut is the one that comes back in full.
+            var set = sets.TryGetValue(part.Mesh, out var have) ? have : sets[part.Mesh] = [];
+            for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+            {
+                int a = part.Triangles[t], b = part.Triangles[t + 1], c = part.Triangles[t + 2];
+                if (!covered[a] && !covered[b] && !covered[c]) { cut++; continue; }
+                kept++;
+                // The emit loop reads MESH-LOCAL indices, which is what the file stores.
+                Keep(set, a, bv);
+                Keep(set, b, bv);
+                Keep(set, c, bv);
+            }
+        }
+        if (cut == 0) { kept = 0; return null; }   // nothing cut: the body goes in whole, as before
+        return sets;
+
+        void Keep(HashSet<ushort> set, int v, int bv)
+        {
+            if (covered[v] && v - bv is >= 0 and <= ushort.MaxValue) set.Add((ushort)(v - bv));
+        }
     }
 
     private static Vector3 At(ModelParts m, int v)
