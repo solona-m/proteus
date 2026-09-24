@@ -3694,5 +3694,45 @@
   "Parts.Vanilla.WornSuffix": {
     "message": "(vanilla)",
     "description": ""
+  },
+  "WhatsNew.Title": {
+    "message": "Proteus 更新内容",
+    "description": ""
+  },
+  "WhatsNew.Intro": {
+    "message": "本次更新有三件事值得了解。此窗口只会打开一次，之后不再出现。",
+    "description": ""
+  },
+  "WhatsNew.Upscales.Head": {
+    "message": "一键更改体型",
+    "description": ""
+  },
+  "WhatsNew.Upscales.Body": {
+    "message": "工作室新增了「体型尺寸」工具。选择服装原本适配的体型和你想要的体型，Proteus 会把服装的每一个顶点都移动到位：既可以在同一个体型模组的不同尺寸之间转换，也可以在完全不同的体型模组之间转换。它可以套用新体型的皮肤与骨骼权重，一次转换到多个尺寸，也能转换游戏自带的装备。\n\n结果会作为普通的 Penumbra 选项保存进模组本身，因此关闭 Proteus 后依然有效，导出模组时也会一并带走。",
+    "description": ""
+  },
+  "WhatsNew.Hats.Head": {
+    "message": "帽子现在会自动适配模组头发",
+    "description": ""
+  },
+  "WhatsNew.Hats.Body": {
+    "message": "「让发型适配帽子」现已默认开启。Proteus 会等到你真正戴上帽子，再把帽子会遮住的头发压平贴向头部，帽子便不会再穿模。\n\n这会修改头发模组自己的文件，但原始文件会被保留，因此可以撤销，也可以在设置的「帽子」中彻底关闭。",
+    "description": ""
+  },
+  "WhatsNew.Designs.Head": {
+    "message": "设计可以还原整套造型",
+    "description": ""
+  },
+  "WhatsNew.Designs.Body": {
+    "message": "绑定到 Proteus 的 Glamourer 设计可以还原保存时角色身上的每一个模组，并把这些模组的优先级提到与其冲突的模组之上，造型不会再只还原一半。\n\n非 Proteus 模组只会通过 Penumbra 的临时设置保持，你的合集本身不会被改动；在 Penumbra 为被保持的模组显示的横幅上，可以单独解除其中一个。此功能默认关闭，可在「绑定」中的「还原角色身上的所有模组」处开启。",
+    "description": ""
+  },
+  "WhatsNew.Open": {
+    "message": "打开 Proteus",
+    "description": ""
+  },
+  "WhatsNew.Close": {
+    "message": "关闭",
+    "description": ""
   }
 }

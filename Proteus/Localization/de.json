@@ -3694,5 +3694,45 @@
   "Parts.Vanilla.WornSuffix": {
     "message": "(vanilla)",
     "description": ""
+  },
+  "WhatsNew.Title": {
+    "message": "Neu in Proteus",
+    "description": ""
+  },
+  "WhatsNew.Intro": {
+    "message": "Drei Dinge, die bei dieser Version wissenswert sind. Dieses Fenster öffnet sich einmal und danach nicht wieder.",
+    "description": ""
+  },
+  "WhatsNew.Upscales.Head": {
+    "message": "Upscales mit einem Klick",
+    "description": ""
+  },
+  "WhatsNew.Upscales.Body": {
+    "message": "Das Studio hat ein neues Werkzeug „Körpergröße“. Wähle den Körper, für den ein Kleidungsstück gemacht wurde, und den Körper, auf dem du es haben willst — Proteus verschiebt jeden Punkt des Kleidungsstücks passend dazu: zwischen Größen einer Körper-Mod oder zwischen ganz verschiedenen Körper-Mods. Es kann Haut und Bone-Weights des neuen Körpers übernehmen, in einem Durchgang auf mehrere Größen upscalen und auch die Ausrüstung des Spiels selbst upscalen.\n\nDas Ergebnis wird als gewöhnliche Penumbra-Option in der Mod gespeichert, funktioniert also auch mit ausgeschaltetem Proteus und reist beim Export mit der Mod mit.",
+    "description": ""
+  },
+  "WhatsNew.Hats.Head": {
+    "message": "Hüte passen jetzt automatisch über modifizierte Haare",
+    "description": ""
+  },
+  "WhatsNew.Hats.Body": {
+    "message": "„Frisuren unter Hüte passen lassen“ ist jetzt standardmäßig an. Proteus wartet, bis du tatsächlich einen Hut trägst, und drückt dann die Haare, die der Hut verdecken würde, flach an den Kopf, damit der Hut nicht mehr hindurchgeht.\n\nDabei werden die Dateien der Haar-Mod selbst bearbeitet, die Originale bleiben erhalten — es lässt sich also rückgängig machen oder unter Einstellungen, Hüte ganz abschalten.",
+    "description": ""
+  },
+  "WhatsNew.Designs.Head": {
+    "message": "Designs stellen den ganzen Look wieder her",
+    "description": ""
+  },
+  "WhatsNew.Designs.Body": {
+    "message": "Ein an Proteus gebundenes Glamourer-Design kann jede Mod wiederherstellen, die beim Speichern auf deinem Charakter war, und hebt diese Mods über alles, womit sie in Konflikt stehen — ein Look kommt also nicht mehr halb angewendet zurück.\n\nMods, die keine Proteus-Mods sind, werden nur über temporäre Penumbra-Einstellungen gehalten, deine Sammlung selbst wird also nie verändert, und Penumbras eigenes Banner auf einer gehaltenen Mod lässt dich genau diese eine Haltung lösen. Standardmäßig aus: einzuschalten unter Bindungen, „Jede Mod des Charakters wiederherstellen“.",
+    "description": ""
+  },
+  "WhatsNew.Open": {
+    "message": "Proteus öffnen",
+    "description": ""
+  },
+  "WhatsNew.Close": {
+    "message": "Schließen",
+    "description": ""
   }
 }

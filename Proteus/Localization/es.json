@@ -3694,5 +3694,45 @@
   "Parts.Vanilla.WornSuffix": {
     "message": "(vanilla)",
     "description": ""
+  },
+  "WhatsNew.Title": {
+    "message": "Novedades de Proteus",
+    "description": ""
+  },
+  "WhatsNew.Intro": {
+    "message": "Tres cosas que conviene saber de esta versión. Esta ventana se abre una vez y no vuelve a hacerlo.",
+    "description": ""
+  },
+  "WhatsNew.Upscales.Head": {
+    "message": "Upscales con un solo clic",
+    "description": ""
+  },
+  "WhatsNew.Upscales.Body": {
+    "message": "El Estudio tiene una nueva herramienta «Talla del cuerpo». Elige el cuerpo para el que se hizo una prenda y el cuerpo en el que la quieres, y Proteus mueve cada punto de la prenda para que encaje: entre tallas de un mismo mod de cuerpo, o entre mods de cuerpo distintos. Puede adoptar la piel y los pesos de huesos del cuerpo nuevo, hacer el upscale a varias tallas de una sola vez y también escalar el equipo propio del juego.\n\nEl resultado se guarda en el mod como una opción de Penumbra corriente, así que sigue funcionando con Proteus desactivado y viaja con el mod si lo exportas.",
+    "description": ""
+  },
+  "WhatsNew.Hats.Head": {
+    "message": "Los sombreros ya se ajustan automáticamente sobre el pelo modificado",
+    "description": ""
+  },
+  "WhatsNew.Hats.Body": {
+    "message": "«Hacer que los peinados encajen bajo los sombreros» ahora está activado por defecto. Proteus espera a que lleves un sombrero de verdad y entonces aplasta contra la cabeza el pelo que el sombrero taparía, para que deje de atravesarlo.\n\nEdita los archivos del propio mod de pelo, pero conserva los originales, así que se puede deshacer — o desactivar del todo — en Ajustes, Sombreros.",
+    "description": ""
+  },
+  "WhatsNew.Designs.Head": {
+    "message": "Los diseños restauran el conjunto entero",
+    "description": ""
+  },
+  "WhatsNew.Designs.Body": {
+    "message": "Un diseño de Glamourer vinculado a Proteus puede restaurar todos los mods que tenía tu personaje al guardarlo, y eleva esos mods por encima de cualquier cosa con la que entren en conflicto, de modo que un look ya no vuelve aplicado a medias.\n\nLos mods que no son de Proteus solo se retienen mediante los ajustes temporales de Penumbra, así que tu colección nunca se modifica, y el propio aviso de Penumbra sobre un mod retenido te permite soltar esa retención concreta. Está desactivado por defecto: actívalo en Vínculos, «Restaurar todos los mods del personaje».",
+    "description": ""
+  },
+  "WhatsNew.Open": {
+    "message": "Abrir Proteus",
+    "description": ""
+  },
+  "WhatsNew.Close": {
+    "message": "Cerrar",
+    "description": ""
   }
 }

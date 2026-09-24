@@ -25,7 +25,13 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1027;
+    public const int BuildNumber = 1032;
+
+    /// <summary>
+    /// Which set of release notes is current. Raise it when a release has something new to say: the window
+    /// then opens once more for everyone whose <see cref="Configuration.WhatsNewShown"/> is below it.
+    /// </summary>
+    public const int CurrentWhatsNew = 1;
 
     /// <summary>
     /// When this assembly was compiled, as MM-dd HH:mm:ss, baked in by the csproj: Dalamud loads plugins from a stream,
@@ -55,6 +61,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly OverlayEditRouter editRouter;
     private readonly WindowSystem windowSystem;
     private readonly StatusWindow statusWindow;
+    private readonly Gui.WhatsNewWindow whatsNewWindow;
     private readonly IpcProvider ipcProvider;
     private readonly SphereMapPreview spherePreview;
     private readonly TilePreview tilePreview;
@@ -214,8 +221,11 @@ public sealed class Plugin : IDalamudPlugin
 
         liveMesh = new Gui.LiveMeshOverlay(ObjectTable, DataManager, penumbra, ChatGui, log);
 
+        whatsNewWindow = new Gui.WhatsNewWindow(config, statusWindow);
+
         windowSystem = new WindowSystem("Proteus");
         windowSystem.AddWindow(statusWindow);
+        windowSystem.AddWindow(whatsNewWindow);
 
         pluginInterface.UiBuilder.DisableGposeUiHide = true;
         pluginInterface.UiBuilder.Draw += DrawUi;
@@ -244,6 +254,7 @@ public sealed class Plugin : IDalamudPlugin
         ChatGui.Print($"[Proteus] loaded — build #{BuildNumber} ({BuildStamp})");
 
         SuggestMirrorRepo(pluginInterface);
+        ShowWhatsNew();
     }
 
     /// <summary>How many times <see cref="SuggestMirrorRepo"/> may speak before it gives up.</summary>
@@ -282,6 +293,19 @@ public sealed class Plugin : IDalamudPlugin
                     "faster and takes load off GitHub. Your install keeps working either way. " +
                     "This reminder shows a few times, then stops."), 45)
             .Build());
+    }
+
+    /// <summary>
+    /// Opens the release notes if this install has not read the current set. The window records the read when it
+    /// is closed, not here, so a session that ends before anyone looks will offer them again.
+    /// </summary>
+    private void ShowWhatsNew()
+    {
+        // Logged before the early-out, as SuggestMirrorRepo is, so "why did it not appear" is answerable from a log.
+        Log.Information("[Proteus] What's new: read={0}, current={1}", config.WhatsNewShown, CurrentWhatsNew);
+
+        if (config.WantsWhatsNew(CurrentWhatsNew))
+            whatsNewWindow.IsOpen = true;
     }
 
     private void DrawUi()
