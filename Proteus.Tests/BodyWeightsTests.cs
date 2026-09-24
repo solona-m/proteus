@@ -364,6 +364,58 @@ public class BodyWeightsTests
     }
 
     [Fact]
+    public void Cloth_between_full_and_out_of_reach_takes_part_of_the_change()
+    {
+        // 3 cm off both bodies: half way from WeightFull to WeightReach, so half the change. A hard line at the reach
+        // is what two layers of cloth fell either side of.
+        var source = Body(("j_asi_d_l", 1f));
+        var target = Body(("j_asi_e_l", 1f));
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Cloth, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetZ: 0.03f,
+                                                                  Weights: [("j_asi_d_l", 1f)])));
+        var pairs = new[] { Pair(source, target) };
+
+        var rebuilt = BodyRetarget.Rebuild(garment, pairs, swapSkin: false,
+                                           BodyRetarget.PlanWeights(garment, pairs, acrossBodies: true), out _)!;
+
+        Assert.All(VerticesOf(garment, Cloth, 0), v =>
+        {
+            Assert.Equal(0.5f, Weights(rebuilt)[v].Single(i => i.Bone == "j_asi_d_l").W, 2);
+            Assert.Equal(0.5f, Weights(rebuilt)[v].Single(i => i.Bone == "j_asi_e_l").W, 2);
+        });
+        Assert.Equal(1f, BodyRetarget.Fade(BodyRetarget.WeightFull), 5);
+        Assert.Equal(0f, BodyRetarget.Fade(BodyRetarget.WeightReach), 5);
+    }
+
+    [Fact]
+    public void Two_layers_the_author_weighted_alike_stay_alike()
+    {
+        // A printed panel over a shirt, 2 mm apart, weighted identically by the author — the game's Oversized Plain
+        // Neotunic. Each looks the bodies up for itself; here one sits just inside the reach and one just outside, so
+        // on their own one takes a little of the change and the other none. They must still move as one.
+        var source = Body(("j_asi_d_l", 1f));
+        var target = Body(("j_asi_e_l", 1f));
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Cloth, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetZ: 0.035f,
+                                                                  Weights: [("j_asi_d_l", 1f)])),
+            new SyntheticModel.Mesh("/mt_c0201e6255_top_b.mtrl",
+                                    new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetZ: 0.0385f,
+                                                           Weights: [("j_asi_d_l", 1f)])));
+        var pairs = new[] { Pair(source, target) };
+
+        var rebuilt = BodyRetarget.Rebuild(garment, pairs, swapSkin: false,
+                                           BodyRetarget.PlanWeights(garment, pairs, acrossBodies: true), out _)!;
+        var w = Weights(rebuilt);
+        var shirt = VerticesOf(garment, Cloth, 0);
+        var panel = VerticesOf(garment, "/mt_c0201e6255_top_b.mtrl", 0);
+
+        float E(int v) => w[v].SingleOrDefault(i => i.Bone == "j_asi_e_l").W;
+        Assert.All(shirt, v => Assert.True(E(v) > 0.05f, $"the shirt took the change ({E(v):F3})"));
+        for (int k = 0; k < shirt.Length; k++)
+            Assert.Equal(E(shirt[k]), E(panel[k]), 2);
+    }
+
+    [Fact]
     public void Bodies_in_different_texture_layouts_with_no_map_between_them_are_refused()
     {
         var bibo = ModelPartReader.Read(SyntheticModel.Build([],

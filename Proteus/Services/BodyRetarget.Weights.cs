@@ -26,6 +26,19 @@ internal static partial class BodyRetarget
     internal const float WeightReach = 0.04f;
 
     /// <summary>
+    /// How near both bodies must be for a cloth vertex to take the change between them in full (2 cm). From here out to
+    /// <see cref="WeightReach"/> the change fades to nothing, so the author's weights take over gradually rather than at
+    /// a line.
+    /// <para/>
+    /// A line is what two layers of cloth a millimetre apart can fall either side of, and each then follows different
+    /// bones. Measured on the game's Oversized Plain Neotunic refitted onto Neolithe: the old body (the game's own) has
+    /// no skin under the breasts — that is smallclothes — so its nearest skin is 4 cm off, right at the reach. The shirt
+    /// found it at 39.8 mm and took +0.42 of the breast bone; the printed panel over it, 0.5 mm further out, missed it
+    /// and kept the author's 0.48. Posed, the shirt came through the print as a blue patch.
+    /// </summary>
+    internal const float WeightFull = 0.02f;
+
+    /// <summary>
     /// New skinning for a garment's cloth, from the body it is being refitted onto.
     /// </summary>
     /// <param name="PerMesh">By the garment's mesh index: per vertex of that mesh, the influences it takes, or null to
@@ -122,22 +135,29 @@ internal static partial class BodyRetarget
 
             // All the garment's own bones: untouched, and no body lookup needed.
             if (mine.Where(i => !bodyBones.Contains(i.Bone)).Sum(i => i.W) >= 0.999f) continue;
-            if (Nearest(targets, p) is not { } body || body.Length == 0) continue;
+            if (Nearest(targets, p, out float far) is not { } body || body.Length == 0) continue;
             var was = new Vector3(wasAt[v * 3], wasAt[v * 3 + 1], wasAt[v * 3 + 2]);
             if (sources != null)
             {
                 // Both bodies have to be under the vertex for the change between them to mean anything. With only the
                 // old one missing there is nothing to compare against, and taking the new body's weights outright
                 // would re-rig cloth that never sat on it.
-                if (Nearest(sources, was) is not { Length: > 0 } oldBody) continue;
+                if (Nearest(sources, was, out float oldFar) is not { Length: > 0 } oldBody) continue;
+                far = MathF.Max(far, oldFar);
                 if (Change(mine, oldBody, body, bodyBones) is { Count: > 0 } changed) body = [.. changed];
             }
 
             if (Combine(mine, body, bodyBones, out bool cut) is not { } combined) continue;
+            // Faded toward the author's weights as the bodies get far — see WeightFull.
+            float fade = Fade(far);
+            if (fade <= 0f) continue;
+            if (fade < 1f) combined = MeshMath.BlendWeights([.. mine], 1f - fade, combined, fade, [], 0f, MaxInfluences);
             result[v] = combined;
             reweighted++;
             if (cut) trimmed++;
         }
+
+        reweighted += KeepLayersTogether(model, own, wasAt, result, held);
 
         // The garment's own body mesh. It IS the body, so it takes the new body's weights OUTRIGHT rather than the
         // change between the two: the change exists for cloth an author weighted by hand, and a garment's body mesh
@@ -156,7 +176,7 @@ internal static partial class BodyRetarget
         {
             if (held != null && held.Contains(v)) continue;
             var p = new Vector3(model.Positions[v * 3], model.Positions[v * 3 + 1], model.Positions[v * 3 + 2]);
-            if (Nearest(targets, p) is not { } body || body.Length == 0) continue;
+            if (Nearest(targets, p, out _) is not { } body || body.Length == 0) continue;
             if (Combine(Influences(own, v), body, bodyBones, out bool cut) is not { } combined) continue;
             result[v] = combined;
             reweighted++;
@@ -284,11 +304,12 @@ internal static partial class BodyRetarget
     /// three corners' influences blended by where the point sits in their triangle. Null when no skin is in reach.
     /// </summary>
     private static (string Bone, float W)[]? Nearest(List<(BodySurface Surface, XivLiveMesh.SkinnedMesh Skin)> targets,
-                                                    Vector3 p)
+                                                    Vector3 p, out float distance)
     {
         BodySurface.Hit? best = null;
         XivLiveMesh.SkinnedMesh? on = null;
         float reach = WeightReach;
+        distance = WeightReach;
         foreach (var (surface, skin) in targets)
         {
             if (!surface.Nearest(p, reach, out var hit)) continue;
@@ -297,10 +318,118 @@ internal static partial class BodyRetarget
             reach = hit.Distance;
         }
         if (best is not { } h || on == null) return null;
+        distance = h.Distance;
 
         return MeshMath.BlendWeights([.. Influences(on, h.A)], h.U, [.. Influences(on, h.B)], h.V,
                                      [.. Influences(on, h.C)], h.W, MaxInfluences);
     }
+
+    /// <summary>
+    /// How near two cloth vertices of different meshes must have sat, as authored, to count as one place in two layers
+    /// (5 mm) — see <see cref="KeepLayersTogether"/>.
+    /// </summary>
+    internal const float LayerReach = 0.005f;
+
+    /// <summary>How alike their authored weights must be (summed difference 0.02) for the author to have meant them to
+    /// move as one.</summary>
+    internal const float LayerSameWeights = 0.02f;
+
+    /// <summary>
+    /// Give cloth layers the author rigged to move as one the same new weights: every cloth vertex takes the average of
+    /// its own new weights and those of its partners — vertices of OTHER meshes within <see cref="LayerReach"/> of it as
+    /// authored, weighted the same as it (<see cref="LayerSameWeights"/>).
+    /// <para/>
+    /// Each vertex looks the bodies up for itself, and two layers a millimetre apart can land either side of anything
+    /// sharp in that lookup: the midline between two breast bones, the edge of the old body's skin. The game's
+    /// Oversized Plain Neotunic draws its print on a panel over the shirt, every panel vertex weighted exactly as the
+    /// shirt beneath it; refitted onto Neolithe, a midline pair came out right breast on one layer and left on the
+    /// other, and the breasts move under physics. Identical weights on layered cloth is the author saying "these move
+    /// together", and a refit has to keep that.
+    /// <para/>
+    /// Other meshes only: within one mesh, vertices under 5 mm apart are neighbours along the same surface, and
+    /// averaging them would smear the gradient the lookup gives it.
+    /// </summary>
+    /// <param name="result">New weights per vertex, null where the author's stand. Updated in place.</param>
+    /// <returns>Vertices given weights that had none before — kept by the lookup, moved to match a partner.</returns>
+    private static int KeepLayersTogether(ModelParts model, XivLiveMesh.SkinnedMesh own, float[] wasAt,
+                                          (string Bone, float W)[]?[] result, IReadOnlySet<int>? held)
+    {
+        int vc = model.Positions.Length / 3;
+        var meshOf = new int[vc];
+        Array.Fill(meshOf, -1);
+        foreach (var span in model.MeshSpans)
+            for (int i = 0; i < span.Count && span.BaseVertex + i < vc; i++) meshOf[span.BaseVertex + i] = span.Mesh;
+
+        var cloth = ClothVertices(model);
+        Vector3 At(int v) => new(wasAt[v * 3], wasAt[v * 3 + 1], wasAt[v * 3 + 2]);
+        (int, int, int) Cell(Vector3 p) => ((int)MathF.Floor(p.X / LayerReach), (int)MathF.Floor(p.Y / LayerReach),
+                                            (int)MathF.Floor(p.Z / LayerReach));
+        var grid = new Dictionary<(int, int, int), List<int>>();
+        foreach (int v in cloth)
+        {
+            var c = Cell(At(v));
+            if (!grid.TryGetValue(c, out var bucket)) grid[c] = bucket = [];
+            bucket.Add(v);
+        }
+
+        // Read from a snapshot, so the order vertices are visited in cannot change the answer.
+        var before = ((string Bone, float W)[]?[])result.Clone();
+        var authored = new Dictionary<int, List<(string Bone, float W)>>();
+        List<(string Bone, float W)> Authored(int v)
+            => authored.TryGetValue(v, out var a) ? a : authored[v] = Influences(own, v);
+        IEnumerable<(string Bone, float W)> Now(int v) => before[v] ?? (IEnumerable<(string Bone, float W)>)Authored(v);
+
+        int added = 0;
+        foreach (int v in cloth)
+        {
+            if (held != null && held.Contains(v)) continue;
+            var p = At(v);
+            var (cx, cy, cz) = Cell(p);
+            var group = new List<int> { v };
+            for (int x = cx - 1; x <= cx + 1; x++)
+            for (int y = cy - 1; y <= cy + 1; y++)
+            for (int z = cz - 1; z <= cz + 1; z++)
+            {
+                if (!grid.TryGetValue((x, y, z), out var bucket)) continue;
+                foreach (int u in bucket)
+                    if (meshOf[u] != meshOf[v] && Vector3.DistanceSquared(p, At(u)) <= LayerReach * LayerReach
+                        && Difference(Authored(v), Authored(u)) <= LayerSameWeights)
+                        group.Add(u);
+            }
+            if (group.Count == 1 || group.All(u => before[u] == null)) continue;
+
+            // Each LAYER counts once, however many of its vertices share the spot: a seam or a fan's hub puts several
+            // there, and counting vertices would lean the answer toward whichever layer has more — differently seen
+            // from each side, so the two would still disagree.
+            var sum = new Dictionary<string, float>(StringComparer.Ordinal);
+            foreach (var layer in group.GroupBy(u => meshOf[u]))
+            {
+                float share = 1f / layer.Count();
+                foreach (int u in layer)
+                    foreach (var (bone, w) in Now(u))
+                        sum[bone] = sum.GetValueOrDefault(bone) + w * share;
+            }
+            var averaged = Normalised(sum.OrderByDescending(kv => kv.Value).Take(MaxInfluences)
+                                         .Select(kv => (kv.Key, kv.Value)).ToList(), 1f);
+            if (before[v] == null) added++;
+            result[v] = [.. averaged];
+        }
+        return added;
+    }
+
+    /// <summary>Summed absolute difference between two vertices' influences, by bone name.</summary>
+    private static float Difference(List<(string Bone, float W)> a, List<(string Bone, float W)> b)
+    {
+        var d = new Dictionary<string, float>(StringComparer.Ordinal);
+        foreach (var (bone, w) in a) d[bone] = d.GetValueOrDefault(bone) + w;
+        foreach (var (bone, w) in b) d[bone] = d.GetValueOrDefault(bone) - w;
+        return d.Values.Sum(MathF.Abs);
+    }
+
+    /// <summary>How much of the change a cloth vertex this far from the bodies takes: whole within
+    /// <see cref="WeightFull"/>, none at <see cref="WeightReach"/>, linear between.</summary>
+    internal static float Fade(float distance)
+        => Math.Clamp((WeightReach - distance) / (WeightReach - WeightFull), 0f, 1f);
 
     /// <summary><paramref name="list"/> scaled so its weights sum to <paramref name="total"/>.</summary>
     private static List<(string Bone, float W)> Normalised(List<(string Bone, float W)> list, float total)

@@ -152,6 +152,46 @@ public class BodyRetargetTests
     }
 
     [Fact]
+    public void A_body_bulging_off_a_large_skin_triangle_is_still_under_it()
+    {
+        // The game's own gear draws an arm in triangles 40 mm across. Laid onto a body, a triangle's corners sit on it
+        // and its middle is a chord the body rises off — 4.8 mm on the Neotunic's upper arm — and the swap cut holes
+        // there the author never made.
+        static BodySurface Triangle(float edge)
+            => new(Build([0f, 0f, 0f, edge, 0f, 0f, 0f, edge, 0f], [0, 0, 1, 0, 0, 1, 0, 0, 1], [0, 1, 2], SkinMaterial),
+                   0.01f);
+        var large = Triangle(0.04f);
+        var small = Triangle(0.01f);
+        var middle = new Vector3(0.01f, 0.01f, 0f);
+
+        Assert.True(BodyRetarget.Covers(large, middle + new Vector3(0f, 0f, 0.0065f)));   // inside, and within 20% of 40 mm
+        Assert.False(BodyRetarget.Covers(large, middle + new Vector3(0f, 0f, 0.0118f)));  // past 20% of its 56.6 mm side
+        // A 10 mm triangle sags nowhere near 6.5 mm: what the author's own fine skin allows stays at the plain reach.
+        Assert.False(BodyRetarget.Covers(small, new Vector3(0.003f, 0.003f, 0.0065f)));
+        Assert.True(BodyRetarget.Covers(small, new Vector3(0.003f, 0.003f, 0.0035f)));
+        // Off the triangle's edge is where the author stopped drawing skin: the plain reach, however large the triangle.
+        Assert.False(BodyRetarget.Covers(large, new Vector3(0.02f, -0.0065f, 0f)));
+    }
+
+    [Fact]
+    public void A_body_bulging_over_an_edge_two_skin_triangles_share_is_still_under_it()
+    {
+        // A ridge: two 40 mm triangles folded down either side of a shared edge, as coarse skin bends round an arm. A
+        // point above the ridge lands ON the edge — a zero weight — and the body rises off that edge as far as off a
+        // triangle's middle. The same edge on a lone triangle is where the author stopped drawing skin.
+        float[] pos = [0f, 0f, 0f, 0.04f, 0f, 0f, 0.02f, 0.03f, -0.015f, 0.02f, -0.03f, -0.015f];
+        float[] nrm = [0, 0, 1, 0, 0, 1, 0, 1, 0, 0, -1, 0];
+        var ridge = Build(pos, nrm, [0, 1, 2, 1, 0, 3], SkinMaterial);
+        var lone = Build(pos, nrm, [0, 1, 2], SkinMaterial);
+        var above = new Vector3(0.02f, 0f, 0.0065f);
+
+        Assert.True(BodyRetarget.Covers(new BodySurface(ridge, 0.01f), above, BodyRetarget.SkinEdges.Of(ridge)));
+        Assert.False(BodyRetarget.Covers(new BodySurface(lone, 0.01f), above, BodyRetarget.SkinEdges.Of(lone)));
+        // Without the edges, every edge is the author's boundary: the plain reach.
+        Assert.False(BodyRetarget.Covers(new BodySurface(ridge, 0.01f), above));
+    }
+
+    [Fact]
     public void The_body_that_comes_in_is_cut_the_way_the_author_cut_the_one_going_out()
     {
         // A garment author hides the body under the cloth by deleting its faces — 84% of it, on the jacket this was

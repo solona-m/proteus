@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using Vec3 = Proteus.Services.SecondSkinWriter.Vec3;
 
 namespace Proteus.Services;
 
@@ -26,6 +27,19 @@ internal static partial class BodyRetarget
     /// two are the same mesh where both draw — while a face the author deleted has centimetres of cloth over it.
     /// </summary>
     internal const float CutReach = 0.004f;
+
+    /// <summary>
+    /// How far off a garment skin triangle the body may bulge, as a share of that triangle's longest edge, and still be
+    /// under it (20%). Laid onto the new body, a skin triangle's CORNERS sit on it; its middle is a flat chord across a
+    /// curve, and the body rises off it by about edge²/8r. The game's own gear draws the arm in triangles 40 mm across,
+    /// up to 66 — the Oversized Plain Neotunic's upper arm came out 4.8 mm under its chords, past
+    /// <see cref="CutReach"/>, and the swap cut holes in both arms the author never made. Only a landing INSIDE a
+    /// triangle counts: a body vertex past the edge of the garment's skin lands on that edge, and the author's cut stands.
+    /// </summary>
+    internal const float CutSagShare = 0.2f;
+
+    /// <summary>The most <see cref="CutSagShare"/> may allow, however large the triangle (12 mm).</summary>
+    internal const float CutSagMax = 0.012f;
 
     /// <param name="Removed">Triangles in the garment's skin meshes that were taken out.</param>
     /// <param name="Added">Triangles in the body skin meshes put in their place.</param>
@@ -143,12 +157,13 @@ internal static partial class BodyRetarget
         // deleting its faces; the body mod ships the body whole. Put in whole, the shoulder the author deleted comes
         // back through the jacket — so the body mod's skin only draws where the garment's skin drew.
         var drawn = new BodySurface(model, BodySurface.CellFor(MeanEdgeOf(model)));
+        var drawnEdges = SkinEdges.Of(model);
         var cuts = new Dictionary<int, Dictionary<int, HashSet<ushort>>?>();
         int cutTris = 0, keptTris = 0;
         foreach (int s in claimedBy)
         {
             int these = 0, gone = 0;
-            cuts[s] = drawn.IsEmpty ? null : CutLike(drawn, swappable[s].TargetModel!, out these, out gone);
+            cuts[s] = drawn.IsEmpty ? null : CutLike(drawn, drawnEdges, swappable[s].TargetModel!, out these, out gone);
             keptTris += cuts[s] == null ? SkinTriangles(SecondSkinWriter.Parse(swappable[s].TargetModel!)) : these;
             cutTris += gone;
         }
@@ -186,7 +201,9 @@ internal static partial class BodyRetarget
     /// <param name="drawn">The garment's own skin, laid onto the new body.</param>
     /// <param name="kept">Triangles of the body's skin that survive the cut.</param>
     /// <param name="cut">Triangles left out.</param>
-    private static Dictionary<int, HashSet<ushort>>? CutLike(BodySurface drawn, byte[] body, out int kept, out int cut)
+    /// <param name="edges">Which of <paramref name="drawn"/>'s edges two of its triangles share — see <see cref="Covers"/>.</param>
+    private static Dictionary<int, HashSet<ushort>>? CutLike(BodySurface drawn, SkinEdges edges, byte[] body,
+                                                             out int kept, out int cut)
     {
         kept = cut = 0;
         if (ModelPartReader.Read(body) is not { } parts) return null;
@@ -197,7 +214,7 @@ internal static partial class BodyRetarget
         var covered = new bool[parts.Positions.Length / 3];
         foreach (int v in parts.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material))
                                      .SelectMany(p => p.Triangles).Distinct())
-            covered[v] = drawn.Nearest(At(parts, v), CutReach, out _);
+            covered[v] = Covers(drawn, At(parts, v), edges);
 
         var sets = new Dictionary<int, HashSet<ushort>>();
         foreach (var part in parts.Parts)
@@ -226,6 +243,79 @@ internal static partial class BodyRetarget
         void Keep(HashSet<ushort> set, int v, int bv)
         {
             if (covered[v] && v - bv is >= 0 and <= ushort.MaxValue) set.Add((ushort)(v - bv));
+        }
+    }
+
+    /// <summary>
+    /// Whether the garment's laid skin still draws over this body point: within <see cref="CutReach"/> of it, or no
+    /// further off than the skin's chord could sag there — see <see cref="CutSagShare"/>. The chord is the triangle when
+    /// the point lands inside one, and the edge when it lands on an edge two triangles share: over a limb the body rises
+    /// off an edge between two coarse triangles as far as off either triangle's middle, and it is the edge the nearest
+    /// point falls on. An edge only one triangle uses is where the author stopped drawing skin, and there the plain
+    /// reach stands.
+    /// </summary>
+    /// <param name="edges">The drawn skin's shared edges; null counts every edge as the author's boundary.</param>
+    internal static bool Covers(BodySurface drawn, Vector3 p, SkinEdges? edges = null)
+    {
+        if (!drawn.Nearest(p, CutSagMax, out var hit)) return false;
+        if (hit.Distance <= CutReach) return true;
+
+        const float inside = 0.01f;   // a landing clamped onto an edge has a zero weight; this is off it
+        bool offA = hit.U < inside, offB = hit.V < inside, offC = hit.W < inside;
+        Vector3 a = drawn.PositionOf(hit.A), b = drawn.PositionOf(hit.B), c = drawn.PositionOf(hit.C);
+
+        float chord;
+        if (!offA && !offB && !offC)
+            chord = MathF.Max(Vector3.Distance(a, b), MathF.Max(Vector3.Distance(b, c), Vector3.Distance(c, a)));
+        else if (offA && !offB && !offC && edges?.IsShared(hit.B, hit.C) == true)
+            chord = Vector3.Distance(b, c);
+        else if (offB && !offA && !offC && edges?.IsShared(hit.C, hit.A) == true)
+            chord = Vector3.Distance(c, a);
+        else if (offC && !offA && !offB && edges?.IsShared(hit.A, hit.B) == true)
+            chord = Vector3.Distance(a, b);
+        else
+            return false;   // on the author's boundary, or on a corner, which sits on the body
+        return hit.Distance <= MathF.Min(CutSagMax, CutSagShare * chord);
+    }
+
+    /// <summary>
+    /// The edges of a model's skin that two of its triangles share, with its vertices welded by position: a body mesh
+    /// splits vertices at uv seams, and an edge along a seam is still inside the skin.
+    /// </summary>
+    internal sealed class SkinEdges
+    {
+        private readonly int[] nodeOf;
+        private readonly HashSet<(int, int)> shared = [];
+
+        private SkinEdges(ModelParts m)
+        {
+            int vc = m.Positions.Length / 3;
+            var pos = new Vec3[vc];
+            for (int v = 0; v < vc; v++) pos[v] = new Vec3(m.Positions[v * 3], m.Positions[v * 3 + 1], m.Positions[v * 3 + 2]);
+            nodeOf = MeshMath.WeldByPosition(pos, out _);
+
+            var seen = new HashSet<(int, int)>();
+            foreach (var part in m.Parts)
+            {
+                if (part.Island >= 0 || !SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+                for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+                    for (int e = 0; e < 3; e++)
+                    {
+                        var key = Key(part.Triangles[t + e], part.Triangles[t + (e + 1) % 3]);
+                        if (!seen.Add(key)) shared.Add(key);
+                    }
+            }
+        }
+
+        internal static SkinEdges Of(ModelParts m) => new(m);
+
+        /// <summary>Whether the edge between these two vertices of the model is used by two triangles or more.</summary>
+        internal bool IsShared(int a, int b) => shared.Contains(Key(a, b));
+
+        private (int, int) Key(int a, int b)
+        {
+            int na = nodeOf[a], nb = nodeOf[b];
+            return na < nb ? (na, nb) : (nb, na);
         }
     }
 
