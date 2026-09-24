@@ -78,6 +78,47 @@ internal static class ImcEntrySource
         return best;
     }
 
+    /// <summary>
+    /// The attribute mask this mod gives an item under a choice of its options: the applied group's default entry with
+    /// each ticked option XORed in, which is how Penumbra builds it (<c>ImcModGroup.GetCurrentMask</c>) — so an option
+    /// can switch a part OFF as well as on. Neolithe's "SHINS: Thicker" is <c>3</c> over a default of <c>1</c>: the
+    /// thin shins' bit goes and the thick ones' comes.
+    /// <para/>
+    /// Null when the mod has no group for the item, or the ticked options switch the group off: the game's own entry
+    /// stands then, which this does not read.
+    /// </summary>
+    /// <param name="selected">The ticked options, group name to option names, as Penumbra reports a mod's settings.
+    /// Null, or a group missing from it, reads the group's own <c>DefaultSettings</c>.</param>
+    public static ushort? MaskFor(string modRoot, int setId, string equipSlot,
+                                  IReadOnlyDictionary<string, List<string>>? selected)
+    {
+        if (AppliedGroupFor(modRoot, setId, equipSlot, null) is not { } g || EntryOf(g.Group) is not { } entry)
+            return null;
+        if (!g.Group.TryGetProperty("Options", out var opts) || opts.ValueKind != JsonValueKind.Array)
+            return entry.AttributeMask;
+
+        List<string>? ticked = null;
+        if (selected != null)
+            foreach (var (name, names) in selected)
+                if (string.Equals(name, g.Name, StringComparison.OrdinalIgnoreCase)) { ticked = names; break; }
+        ulong defaults = g.Group.TryGetProperty("DefaultSettings", out var ds) && ds.ValueKind == JsonValueKind.Number
+                         && ds.TryGetUInt64(out var bits) ? bits : 0;
+
+        ushort mask = entry.AttributeMask;
+        int i = 0;
+        foreach (var o in opts.EnumerateArray())
+        {
+            int at = i++;
+            string optionName = o.TryGetProperty("Name", out var n) ? n.GetString() ?? "" : "";
+            bool on = ticked != null ? ticked.Contains(optionName, StringComparer.OrdinalIgnoreCase)
+                                     : at < 64 && (defaults & (1ul << at)) != 0;
+            if (!on) continue;
+            if (o.TryGetProperty("IsDisableSubMod", out var off) && off.ValueKind == JsonValueKind.True) return null;
+            mask ^= (ushort)((Int(o, "AttributeMask") ?? 0) & 0x3FF);
+        }
+        return mask;
+    }
+
     /// <summary>The <c>Imc</c> group of this name, or null.</summary>
     public static PenumbraModMeta.GroupRef? GroupNamed(string modRoot, string name)
     {

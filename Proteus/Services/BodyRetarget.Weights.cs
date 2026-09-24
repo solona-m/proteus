@@ -101,8 +101,9 @@ internal static partial class BodyRetarget
             if (skin.VertexCount * 3 != pair.Target.Positions.Length) return null;   // not the part reader's order
             targets.Add((new BodySurface(pair.Target, BodySurface.CellFor(MeanEdgeOf(pair.Target))), skin));
 
+            // The correspondence's own reading of the old body: without the variants its mod does not draw.
             if (sources != null
-                && ModelPartReader.Read(pair.SourceModel!) is { } sourceParts
+                && pair.Correspondence.Source is { } sourceParts
                 && ModelSkinReader.Read(pair.SourceModel!, null, null) is { } sourceSkin
                 && sourceSkin.VertexCount * 3 == sourceParts.Positions.Length)
                 sources.Add((new BodySurface(sourceParts, BodySurface.CellFor(MeanEdgeOf(sourceParts))), sourceSkin));

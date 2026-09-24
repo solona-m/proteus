@@ -163,8 +163,9 @@ internal static partial class BodyRetarget
         foreach (int s in claimedBy)
         {
             int these = 0, gone = 0;
-            cuts[s] = drawn.IsEmpty ? null : CutLike(drawn, drawnEdges, swappable[s].TargetModel!, out these, out gone);
-            keptTris += cuts[s] == null ? SkinTriangles(SecondSkinWriter.Parse(swappable[s].TargetModel!)) : these;
+            cuts[s] = drawn.IsEmpty ? null : CutLike(drawn, drawnEdges, swappable[s].TargetModel!,
+                                                     swappable[s].TargetHidden, out these, out gone);
+            keptTris += cuts[s] == null ? SkinTriangles(swappable[s].Target) : these;
             cutTris += gone;
         }
 
@@ -174,8 +175,11 @@ internal static partial class BodyRetarget
             MaterialName = SkinMaterialFor(skinMaterial!, swappable[s].TargetModel!),
             // Tagged as the body tags it — atr_ude, atr_hij, atr_nek are how long gloves or a high collar hide the
             // skin under them, and the garment's own skin carried the same tags — except for variant tags, which would
-            // be judged against the garment's IMC mask (a Neolithe body carries eight, atr_tv_a..h).
+            // be judged against the garment's IMC mask (a Neolithe body carries eight, atr_tv_a..h). Dropping the tag
+            // draws the part always, so the variants the body mod leaves off are left out first: two alternatives of
+            // one piece would otherwise both be drawn, the larger showing through the cloth fitted to the other.
             Geometry = [new ContentGeometry(swappable[s].TargetModel!, SecondSkinWriter.IsBodySkinMaterial,
+                                            HiddenAttributes: swappable[s].TargetHidden,
                                             DropVariantAttributes: true, DrawOnly: cuts[s])],
         }).ToList();
         var reskinned = new SecondSkinWriter.ReskinReport();
@@ -202,11 +206,13 @@ internal static partial class BodyRetarget
     /// <param name="kept">Triangles of the body's skin that survive the cut.</param>
     /// <param name="cut">Triangles left out.</param>
     /// <param name="edges">Which of <paramref name="drawn"/>'s edges two of its triangles share — see <see cref="Covers"/>.</param>
+    /// <param name="hidden">The body's variant tags its mod does not draw; their parts are neither kept nor counted.</param>
     private static Dictionary<int, HashSet<ushort>>? CutLike(BodySurface drawn, SkinEdges edges, byte[] body,
-                                                             out int kept, out int cut)
+                                                             IReadOnlySet<string>? hidden, out int kept, out int cut)
     {
         kept = cut = 0;
-        if (ModelPartReader.Read(body) is not { } parts) return null;
+        if (ModelPartReader.Read(body) is not { } read) return null;
+        var parts = Without(read, hidden);
 
         var baseOf = new Dictionary<int, int>();
         foreach (var span in parts.MeshSpans) baseOf[span.Mesh] = span.BaseVertex;
@@ -348,18 +354,8 @@ internal static partial class BodyRetarget
     private static Vector3 At(ModelParts m, int v)
         => new(m.Positions[v * 3], m.Positions[v * 3 + 1], m.Positions[v * 3 + 2]);
 
-    /// <summary>Triangles in a model's LOD0 meshes drawn with a body-skin material.</summary>
-    private static int SkinTriangles(SecondSkinWriter.Source src)
-    {
-        int total = 0;
-        int end = src.Lod0MeshIndex + src.Lod0MeshCount;
-        for (int m = src.Lod0MeshIndex; m < end && m < src.MeshCount; m++)
-        {
-            int mo = src.MeshStart + m * 36;
-            ushort mat = BitConverter.ToUInt16(src.S, mo + 8);
-            if (mat < src.MatNames.Count && SecondSkinWriter.IsBodySkinMaterial(src.MatNames[mat]))
-                total += (int)(BitConverter.ToUInt32(src.S, mo + 4) / 3);
-        }
-        return total;
-    }
+    /// <summary>Triangles of a body's skin: its parts drawn with a body-skin material.</summary>
+    private static int SkinTriangles(ModelParts body)
+        => body.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material))
+                     .Sum(p => p.Triangles.Length / 3);
 }

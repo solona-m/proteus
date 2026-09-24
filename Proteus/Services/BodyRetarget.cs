@@ -143,8 +143,12 @@ internal static partial class BodyRetarget
     /// <see cref="PlanWeights"/>). Null when only the geometry is wanted.</param>
     /// <param name="SourceModel">The source body's file: which bones the OLD body rigs, so a weight rewrite knows which
     /// of the garment's bones are body bones. Null when only the geometry is wanted.</param>
+    /// <param name="TargetHidden">The target body's variant tags its mod does not draw (see <see cref="UndrawnVariants"/>).
+    /// <paramref name="Target"/> is already without those parts; this carries the same choice to the swap, which copies
+    /// the body's skin out of <paramref name="TargetModel"/>. Null when every part is drawn.</param>
     internal readonly record struct SlotPair(string Slot, IBodyCorrespondence Correspondence, ModelParts Target,
-                                             byte[]? TargetModel = null, byte[]? SourceModel = null);
+                                             byte[]? TargetModel = null, byte[]? SourceModel = null,
+                                             IReadOnlySet<string>? TargetHidden = null);
 
     /// <summary>What happened, for the status line and the saved record.</summary>
     /// <param name="Held">Welded points the user held in place, by unticking their parts.</param>

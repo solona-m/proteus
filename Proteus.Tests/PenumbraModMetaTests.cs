@@ -452,6 +452,33 @@ public class PenumbraModMetaTests
         Assert.Null(ImcEntrySource.AppliedGroupFor(tmp.Path, 43, "Feet", null));
     }
 
+    /// <summary>
+    /// Penumbra XORs each ticked option into the default mask, so an option can take a part away. Neolithe's legs
+    /// default to the thin shins (bit a); "SHINS: Thicker" is a|b, which swaps them for the thick ones.
+    /// </summary>
+    [Fact]
+    public void MaskFor_xors_the_ticked_options_into_the_default()
+    {
+        using var tmp = new TempDir();
+        File.WriteAllText(tmp.File("meta.json"), """
+            {"FileVersion":4,"Name":"Body","Groups":[
+              {"Type":"Imc","Name":"LEGS OPTIONS","Priority":1,"DefaultSettings":2,
+               "Identifier":{"ObjectType":"Equipment","PrimaryId":0,"Variant":1,"EquipSlot":"Legs"},
+               "DefaultEntry":{"MaterialId":1,"AttributeMask":1},
+               "Options":[{"Name":"SHINS: Thicker","AttributeMask":3},{"Name":"PUBES","AttributeMask":4}]}]}
+            """);
+
+        // No settings reported: the group's own defaults, which tick PUBES only.
+        Assert.Equal((ushort)0b101, ImcEntrySource.MaskFor(tmp.Path, 0, "Legs", null));
+        // The player's own choice wins over the defaults.
+        var thick = new Dictionary<string, List<string>> { ["LEGS OPTIONS"] = ["SHINS: Thicker"] };
+        Assert.Equal((ushort)0b010, ImcEntrySource.MaskFor(tmp.Path, 0, "Legs", thick));
+        Assert.Null(ImcEntrySource.MaskFor(tmp.Path, 0, "Body", null));
+
+        Assert.Equal(["atr_dv_a"], BodyRetarget.UndrawnVariants(["atr_hiz", "atr_dv_a", "atr_dv_b", "atr_tv_a"],
+                                                                "_dwn", 0b010));
+    }
+
     [Fact]
     public void AtomicWrite_leaves_no_temp_files_behind()
     {
