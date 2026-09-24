@@ -2463,6 +2463,14 @@
     "message": "Cuánto se mueve la superficie por instante de pintado. Lo pequeño suele ser\nlo correcto: la ropa solo tiene que salvar el cuerpo por una fracción de\nmilímetro, y siempre puedes volver a pintar el mismo sitio.",
     "description": ""
   },
+  "Parts.Brush.Limit": {
+    "message": "Límite",
+    "description": ""
+  },
+  "Parts.Brush.Limit.Tip": {
+    "message": "Lo más lejos que los pinceles pueden mover un punto desde donde lo puso\nel autor del modelo. Súbelo para un cambio mayor; el pintado se detiene\nen el límite, para que un pincel mantenido no infle la prenda.",
+    "description": ""
+  },
   "Parts.Brush.TooSmall.Fmt": {
     "message": "El pincel es más pequeño que los triángulos de este modelo (unos {0:F1} mm), así que estirará puntos sueltos en picos en vez de mover la superficie. Hazlo más grande.",
     "description": ""

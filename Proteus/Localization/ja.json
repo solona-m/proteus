@@ -2463,6 +2463,14 @@
     "message": "塗っている間に表面が動く量。通常は小さめが適切です：服は体からわずか\n数分の一ミリ離れれば十分で、同じ場所を何度でも重ねて塗れます。",
     "description": ""
   },
+  "Parts.Brush.Limit": {
+    "message": "上限",
+    "description": ""
+  },
+  "Parts.Brush.Limit.Tip": {
+    "message": "ブラシが点を、モデル作者が置いた位置から動かせる最大距離。大きな変更には\n上げてください。上限で塗りが止まるので、押し続けても服が膨らみすぎません。",
+    "description": ""
+  },
   "Parts.Brush.TooSmall.Fmt": {
     "message": "ブラシがこのモデルのポリゴン（約 {0:F1} mm）より小さいため、表面でなく頂点をトゲ状に引っ張ります。大きくしてください。",
     "description": ""

@@ -2170,6 +2170,18 @@ public sealed class PartsPanel
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushStrengthTip);
         }
 
+        // Every brush the limit holds — all but wind — so it is never in force where it cannot be seen. On the solve,
+        // not the panel: each model opens at its own default, hair further than cloth.
+        if (tool != Tool.Wind && volume != null)
+        {
+            float limitMm = volume.MaxDisplacement * 1000f;
+            ImGui.SetNextItemWidth(w);
+            if (ImGui.SliderFloat(ps.BrushLimit, ref limitMm, MeshVolumeSolve.MinMaxDisplacement * 1000f,
+                                  MeshVolumeSolve.MaxMaxDisplacement * 1000f, "%.0f mm", ImGuiSliderFlags.Logarithmic))
+                volume.MaxDisplacement = limitMm / 1000f;
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushLimitTip);
+        }
+
         // A radius barely wider than one vertex moves a spike, not a surface; judged against the mesh's own resolution.
         if (volume is { MeanEdge: > 0f } v && ActiveRadiusMm / 1000f < v.MeanEdge * 1.5f)
         {

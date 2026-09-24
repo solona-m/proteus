@@ -875,6 +875,68 @@ public class MeshVolumeSolveTests
         Assert.Equal(0.2f, At(solve.Positions(), index[5, 5]).Y, 1e-5f);
     }
 
+    /// <summary>The Limit slider: a raised limit lets a held brush go that much further, and no further.</summary>
+    [Fact]
+    public void RaisedLimitLetsTheBrushGoFurther()
+    {
+        var (model, index) = Grid(11);
+        var solve = new MeshVolumeSolve(model) { MaxDisplacement = 0.3f };
+
+        var centre = At(model.Positions, index[5, 5]);
+        for (int i = 0; i < 500; i++) solve.Paint(centre, 0.04f, 0.001f);
+
+        Assert.Equal(0.3f, At(solve.Positions(), index[5, 5]).Y, 1e-5f);
+    }
+
+    /// <summary>The limit is held to its slider's range, whatever is asked of it.</summary>
+    [Fact]
+    public void LimitIsClampedToItsRange()
+    {
+        var (model, _) = Grid(3);
+        var solve = new MeshVolumeSolve(model) { MaxDisplacement = 5f };
+        Assert.Equal(MeshVolumeSolve.MaxMaxDisplacement, solve.MaxDisplacement);
+        solve.MaxDisplacement = 0f;
+        Assert.Equal(MeshVolumeSolve.MinMaxDisplacement, solve.MaxDisplacement);
+    }
+
+    /// <summary>
+    /// Carrying an edit to another size keeps the limit it was painted under: the other size's own solve defaults to
+    /// 100 mm, and without the limit its import would clip a 250 mm edit back to that.
+    /// </summary>
+    [Fact]
+    public void TransferKeepsARaisedLimit()
+    {
+        var (model, index) = Grid(11);
+        var solve = new MeshVolumeSolve(model) { MaxDisplacement = 0.3f };
+        var centre = At(model.Positions, index[5, 5]);
+        for (int i = 0; i < 250; i++) solve.Paint(centre, 0.04f, 0.001f);
+        solve.EndStroke();
+        Assert.True(solve.DeltaAt(index[5, 5]).Y > MeshVolumeSolve.GarmentMaxDisplacement + 0.05f);
+
+        var carried = BrushTransfer.Transfer(solve, model, model);
+        Assert.Equal(0.3f, carried.MaxDisplacement, 1e-6f);
+        Assert.Equal(solve.DeltaAt(index[5, 5]).Y, carried.DeltaAt(index[5, 5]).Y, 1e-5f);
+    }
+
+    /// <summary>
+    /// Lowering the limit after painting past it does not clip the edit on the other sizes: they import under the
+    /// furthest the brushes actually went, so every size ends up matching the one that was painted.
+    /// </summary>
+    [Fact]
+    public void TransferIgnoresALimitLoweredAfterPainting()
+    {
+        var (model, index) = Grid(11);
+        var solve = new MeshVolumeSolve(model) { MaxDisplacement = 0.3f };
+        var centre = At(model.Positions, index[5, 5]);
+        for (int i = 0; i < 250; i++) solve.Paint(centre, 0.04f, 0.001f);
+        solve.EndStroke();
+        solve.MaxDisplacement = MeshVolumeSolve.GarmentMaxDisplacement;
+
+        var carried = BrushTransfer.Transfer(solve, model, model);
+        Assert.True(carried.DeltaAt(index[5, 5]).Y > MeshVolumeSolve.GarmentMaxDisplacement + 0.05f);
+        Assert.Equal(solve.DeltaAt(index[5, 5]).Y, carried.DeltaAt(index[5, 5]).Y, 1e-5f);
+    }
+
     /// <summary>Undo puts a stroke back where it found the surface, not back to flat.</summary>
     [Fact]
     public void UndoReturnsTheSurfaceToWhereTheStrokeFoundIt()

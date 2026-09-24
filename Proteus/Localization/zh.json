@@ -2463,6 +2463,14 @@
     "message": "每一瞬涂抹中表面移动的距离。通常宜小：衣物只需离身体不到一毫米即可，\n而且同一处可以反复涂抹。",
     "description": ""
   },
+  "Parts.Brush.Limit": {
+    "message": "上限",
+    "description": ""
+  },
+  "Parts.Brush.Limit.Tip": {
+    "message": "笔刷能把一个点从模型作者放置的位置移动的最远距离。想要更大的改动就调高；\n涂抹会在上限处停止，因此按住笔刷也不会把衣物吹胀。",
+    "description": ""
+  },
   "Parts.Brush.TooSmall.Fmt": {
     "message": "笔刷比这个模型的三角面（约 {0:F1} mm）还小，会把单个顶点拉成尖刺而不是推动表面。请调大一些。",
     "description": ""
