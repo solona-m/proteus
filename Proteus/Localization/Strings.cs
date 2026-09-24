@@ -2182,7 +2182,32 @@ public sealed class PartsStrings
       + "the way it sits. Saved as a new option in this mod, leaving the author's\n"
       + "own files alone.");
 
-    public readonly string RetargetToBody = Loc.Localize("Parts.Retarget.ToBody", "Refit onto body mod");
+    // The first-use tips. Each tip is its own string, so a translation can reword one without the others.
+    public readonly string RetargetGuideTitle = Loc.Localize("Parts.Retarget.Guide.Title", "Body size: a few tips")
+                                              + "###partsRetargetGuide";
+
+    public readonly string RetargetGuideTip1 = Loc.Localize("Parts.Retarget.Guide.Tip1",
+        "Upscaling works best when the body the piece was originally made for is installed.");
+
+    public readonly string RetargetGuideTip2 = Loc.Localize("Parts.Retarget.Guide.Tip2",
+        "If the piece covers more than one part of the body, like a dress, choose the body mods and sizes it is made "
+      + "for and refitted onto for every part it covers.");
+
+    public readonly string RetargetGuideTip3 = Loc.Localize("Parts.Retarget.Guide.Tip3",
+        "If the piece has skindenting, a push-up, or other non-standard shaping, untick \"Use the new body's skin\". "
+      + "Leave it ticked if the two bodies have different skeletons: then the new body's skin is required.");
+
+    public readonly string RetargetGuideTip4 = Loc.Localize("Parts.Retarget.Guide.Tip4",
+        "Remember to save after previewing. A preview is not kept until you press \"Save as a new option\".");
+
+    public readonly string RetargetGuideTip5 = Loc.Localize("Parts.Retarget.Guide.Tip5",
+        "Touch up any details after resizing with the Studio's other brushes, like Pull out. Use Move for "
+      + "hard-sided pieces.");
+
+    public readonly string RetargetGuideOk = Loc.Localize("Parts.Retarget.Guide.Ok", "Got it")
+                                           + "###partsRetargetGuideOk";
+
+    public readonly string RetargetToBody =Loc.Localize("Parts.Retarget.ToBody", "Refit onto body mod");
 
     public readonly string RetargetFromBody = Loc.Localize("Parts.Retarget.FromBody", "Made for body mod");
 

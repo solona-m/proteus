@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Numerics;
 using System.Threading;
 using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
@@ -205,6 +206,63 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
 
     /// <summary>The open garment is a man's — and so, by the filtering, is every body it is refitted between.</summary>
     private bool MaleGarment => race != null && BodySizeCatalog.IsMaleRace(race);
+
+    /// <summary>Whether this session has asked for the tips popup yet; ImGui opens a popup once per request.</summary>
+    private bool guideOpened;
+
+    /// <summary>
+    /// The first-use tips, as a modal. Drawn whenever the tool is, model open or not, so it greets the first click on
+    /// Body size rather than the first garment. Closing it — the button, the titlebar cross, Escape — is what records it.
+    /// </summary>
+    public void DrawGuide()
+    {
+        if (config.RetargetGuideShown) return;
+
+        var ps = Strings.Parts;
+        if (!guideOpened)
+        {
+            guideOpened = true;
+            ImGui.OpenPopup(ps.RetargetGuideTitle);
+        }
+
+        ImGui.SetNextWindowPos(ImGui.GetMainViewport().GetCenter(), ImGuiCond.Appearing, new Vector2(0.5f, 0.5f));
+        ImGui.SetNextWindowSize(ProteusStyle.S(520f, 0f), ImGuiCond.Appearing);
+        bool open = true;
+        if (!ImGui.BeginPopupModal(ps.RetargetGuideTitle, ref open, ImGuiWindowFlags.AlwaysAutoResize))
+        {
+            // The cross (or Escape) closed it last frame.
+            if (!open) Dismiss();
+            return;
+        }
+
+        int n = 0;
+        foreach (var tip in new[] { ps.RetargetGuideTip1, ps.RetargetGuideTip2, ps.RetargetGuideTip3,
+                                    ps.RetargetGuideTip4, ps.RetargetGuideTip5 })
+        {
+            ImGui.Spacing();
+            ImGui.TextUnformatted($"{++n}.");
+            ImGui.SameLine();
+            ImGui.PushTextWrapPos(ProteusStyle.S(500f));
+            ImGui.TextWrapped(tip);
+            ImGui.PopTextWrapPos();
+        }
+
+        ImGui.Spacing();
+        ImGui.Separator();
+        ImGui.Spacing();
+        if (ImGui.Button(ps.RetargetGuideOk, ProteusStyle.S(140f, 0f)))
+        {
+            ImGui.CloseCurrentPopup();
+            Dismiss();
+        }
+        ImGui.EndPopup();
+    }
+
+    private void Dismiss()
+    {
+        config.RetargetGuideShown = true;
+        config.Save();
+    }
 
     public void Draw(in RetargetContext ctx)
     {

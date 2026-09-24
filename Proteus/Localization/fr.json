@@ -3746,5 +3746,33 @@
   "WhatsNew.Close": {
     "message": "Fermer",
     "description": ""
+  },
+  "Parts.Retarget.Guide.Title": {
+    "message": "Body size : quelques conseils",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip1": {
+    "message": "L'upscale fonctionne mieux si le corps pour lequel la pièce a été conçue à l'origine est installé.",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip2": {
+    "message": "Si la pièce couvre plus d'une partie du corps, comme une robe, choisissez les mods de corps et les tailles d'origine et de destination pour chaque partie qu'elle couvre.",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip3": {
+    "message": "Si la pièce a du Skindenting, un effet push-up ou une autre mise en forme inhabituelle, décochez \"Use the new body's skin\". Laissez-la cochée si les deux corps ont des squelettes différents : la peau du nouveau corps est alors obligatoire.",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip4": {
+    "message": "Pensez à enregistrer après l'aperçu. Un aperçu n'est conservé qu'une fois que vous avez cliqué sur \"Save as a new option\".",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip5": {
+    "message": "Retouchez les détails après le redimensionnement avec les autres pinceaux du Studio, comme Tirer dehors. Utilisez Déplacer pour les éléments rigides.",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Ok": {
+    "message": "Compris",
+    "description": ""
   }
 }

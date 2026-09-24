@@ -3746,5 +3746,33 @@
   "WhatsNew.Close": {
     "message": "Закрыть",
     "description": ""
+  },
+  "Parts.Retarget.Guide.Title": {
+    "message": "Body size: несколько советов",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip1": {
+    "message": "Апскейл работает лучше всего, если установлено тело, под которое вещь изначально делалась.",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip2": {
+    "message": "Если вещь закрывает больше одной части тела, как платье, выберите исходные и целевые мод тела и размеры для каждой закрытой части.",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip3": {
+    "message": "Если у вещи есть Skindenting, пуш-ап или другая нестандартная форма, снимите флажок \"Use the new body's skin\". Оставьте его, если у двух тел разные скелеты: тогда кожа нового тела обязательна.",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip4": {
+    "message": "Не забудьте сохранить после предпросмотра. Предпросмотр не сохраняется, пока вы не нажмёте \"Save as a new option\".",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip5": {
+    "message": "Детали после изменения размера можно доработать другими кистями Студии, например «Вытянуть». Для жёстких элементов используйте «Перемещение».",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Ok": {
+    "message": "Понятно",
+    "description": ""
   }
 }

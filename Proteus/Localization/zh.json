@@ -3746,5 +3746,33 @@
   "WhatsNew.Close": {
     "message": "关闭",
     "description": ""
+  },
+  "Parts.Retarget.Guide.Title": {
+    "message": "Body size：几点提示",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip1": {
+    "message": "如果安装了服装原本适配的体型模组，更改体型的效果最好。",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip2": {
+    "message": "如果服装覆盖身体的不止一个部位（比如连衣裙），请为它覆盖的每个部位都选择原本适配的和要转换到的体型模组与尺寸。",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip3": {
+    "message": "如果服装带有 Skindenting、聚拢效果或其他非标准造型，请取消勾选「Use the new body's skin」。如果两个体型的骨架不同，请保持勾选：此时必须使用新体型的皮肤。",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip4": {
+    "message": "预览后记得保存。在按下「Save as a new option」之前，预览不会被保留。",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip5": {
+    "message": "更改体型后，可以用工作室的其他笔刷（如「向外拉」）修饰细节。硬质部件请使用「移动」。",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Ok": {
+    "message": "知道了",
+    "description": ""
   }
 }

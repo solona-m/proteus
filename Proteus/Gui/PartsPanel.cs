@@ -2530,6 +2530,7 @@ public sealed class PartsPanel
     private void DrawRetarget()
     {
         var ps = Strings.Parts;
+        retarget.DrawGuide();
         bool vanillaOpen = vanilla != null;
         if (parts == null || brushBase == null || modelIndex < 0 || modelIndex >= models.Count
             || (!vanillaOpen && (ModRoot() == null || modDir == null)))

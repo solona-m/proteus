@@ -3746,5 +3746,33 @@
   "WhatsNew.Close": {
     "message": "Cerrar",
     "description": ""
+  },
+  "Parts.Retarget.Guide.Title": {
+    "message": "Body size: algunos consejos",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip1": {
+    "message": "El upscale funciona mejor si tienes instalado el cuerpo para el que se hizo originalmente la prenda.",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip2": {
+    "message": "Si la prenda cubre más de una parte del cuerpo, como un vestido, elige los mods de cuerpo y las tallas de origen y de destino para cada parte que cubra.",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip3": {
+    "message": "Si la prenda tiene Skindenting, efecto push-up u otra forma poco habitual, desmarca \"Use the new body's skin\". Déjala marcada si los dos cuerpos tienen esqueletos distintos: en ese caso la piel del cuerpo nuevo es obligatoria.",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip4": {
+    "message": "Recuerda guardar después de la vista previa. Una vista previa no se conserva hasta que pulsas \"Save as a new option\".",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip5": {
+    "message": "Retoca cualquier detalle después de cambiar la talla con los otros pinceles del Estudio, como Tirar afuera. Usa Mover para las piezas rígidas.",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Ok": {
+    "message": "Entendido",
+    "description": ""
   }
 }

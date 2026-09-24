@@ -3746,5 +3746,33 @@
   "WhatsNew.Close": {
     "message": "Schließen",
     "description": ""
+  },
+  "Parts.Retarget.Guide.Title": {
+    "message": "Body size: ein paar Tipps",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip1": {
+    "message": "Das Upscaling gelingt am besten, wenn der Körper installiert ist, für den das Stück ursprünglich gemacht wurde.",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip2": {
+    "message": "Bedeckt das Stück mehr als einen Körperteil, etwa ein Kleid, wähle für jeden bedeckten Teil die Körper-Mods und Größen, für die es gemacht ist und auf die es angepasst wird.",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip3": {
+    "message": "Hat das Stück Skindenting, einen Push-up oder eine andere ungewöhnliche Formung, entferne den Haken bei \"Use the new body's skin\". Lass ihn gesetzt, wenn die beiden Körper unterschiedliche Skelette haben: Dann ist die Haut des neuen Körpers Pflicht.",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip4": {
+    "message": "Denk daran, nach der Vorschau zu speichern. Eine Vorschau bleibt erst erhalten, wenn du \"Save as a new option\" drückst.",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip5": {
+    "message": "Details kannst du nach dem Anpassen mit den anderen Pinseln des Studios nachbessern, etwa Herausziehen. Für Teile mit harten Kanten nimm Verschieben.",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Ok": {
+    "message": "Verstanden",
+    "description": ""
   }
 }

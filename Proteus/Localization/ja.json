@@ -3746,5 +3746,33 @@
   "WhatsNew.Close": {
     "message": "閉じる",
     "description": ""
+  },
+  "Parts.Retarget.Guide.Title": {
+    "message": "Body size：いくつかのヒント",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip1": {
+    "message": "アップスケールは、衣装が元々作られた体型 Mod をインストールしておくと最もうまくいきます。",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip2": {
+    "message": "ドレスのように体の複数の部位を覆う衣装では、覆っているすべての部位について、元の体型 Mod とサイズ、適用先の体型 Mod とサイズを選んでください。",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip3": {
+    "message": "衣装に Skindenting やプッシュアップなど標準的でない造形がある場合は、「Use the new body's skin」のチェックを外してください。ただし二つの体型のスケルトンが異なる場合は、新しい体型の肌が必須なのでチェックしたままにしてください。",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip4": {
+    "message": "プレビューの後は忘れずに保存してください。「Save as a new option」を押すまでプレビューは残りません。",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip5": {
+    "message": "サイズ変更後の細部は、外に引く などスタジオの他のブラシで仕上げられます。硬い形状のパーツには 移動 を使ってください。",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Ok": {
+    "message": "了解",
+    "description": ""
   }
 }

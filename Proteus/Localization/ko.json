@@ -3746,5 +3746,33 @@
   "WhatsNew.Close": {
     "message": "닫기",
     "description": ""
+  },
+  "Parts.Retarget.Guide.Title": {
+    "message": "Body size: 몇 가지 팁",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip1": {
+    "message": "업스케일은 의상이 원래 제작된 체형 모드가 설치되어 있을 때 가장 잘 됩니다.",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip2": {
+    "message": "드레스처럼 몸의 여러 부위를 덮는 의상이라면, 덮는 모든 부위에 대해 원래 체형 모드와 크기, 적용할 체형 모드와 크기를 선택하세요.",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip3": {
+    "message": "의상에 Skindenting, 푸시업 또는 기타 비표준 형태가 있다면 \"Use the new body's skin\" 체크를 해제하세요. 두 체형의 스켈레톤이 다르다면 새 체형의 피부가 반드시 필요하므로 체크한 채로 두세요.",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip4": {
+    "message": "미리보기 후에는 꼭 저장하세요. \"Save as a new option\"을 누르기 전까지 미리보기는 남지 않습니다.",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Tip5": {
+    "message": "크기를 바꾼 뒤에는 '밖으로 당기기' 같은 스튜디오의 다른 브러시로 세부를 다듬을 수 있습니다. 단단한 형태의 부분에는 '이동'을 사용하세요.",
+    "description": ""
+  },
+  "Parts.Retarget.Guide.Ok": {
+    "message": "확인",
+    "description": ""
   }
 }

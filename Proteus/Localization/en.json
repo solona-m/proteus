@@ -3746,5 +3746,33 @@
   "WhatsNew.Close": {
     "message": "Close",
     "description": "Button. Dismisses the release-notes window."
+  },
+  "Parts.Retarget.Guide.Title": {
+    "message": "Body size: a few tips",
+    "description": "Title of the one-time tips popup shown the first time the Studio's Body size tool is chosen. 'Body size' is the tool's name (Parts.Tool.Retarget) - write it exactly as that key reads in your language."
+  },
+  "Parts.Retarget.Guide.Tip1": {
+    "message": "Upscaling works best when the body the piece was originally made for is installed.",
+    "description": "Tip 1 of 5 in the Body size tips popup. 'Upscaling' is the FFXIV modding community's word for refitting a garment onto a different body; keep whatever term that community uses in your language."
+  },
+  "Parts.Retarget.Guide.Tip2": {
+    "message": "If the piece covers more than one part of the body, like a dress, choose the body mods and sizes it is made for and refitted onto for every part it covers.",
+    "description": "Tip 2 of 5 in the Body size tips popup. Refers to the 'made for' and 'refit onto' body mod and size pickers in the Body size panel."
+  },
+  "Parts.Retarget.Guide.Tip3": {
+    "message": "If the piece has skindenting, a push-up, or other non-standard shaping, untick \"Use the new body's skin\". Leave it ticked if the two bodies have different skeletons: then the new body's skin is required.",
+    "description": "Tip 3 of 5 in the Body size tips popup. The quoted phrase is the checkbox label Parts.Retarget.ReplaceSkin - quote it exactly as that key reads in your language. 'Skindenting' is a coined feature name and is never translated."
+  },
+  "Parts.Retarget.Guide.Tip4": {
+    "message": "Remember to save after previewing. A preview is not kept until you press \"Save as a new option\".",
+    "description": "Tip 4 of 5 in the Body size tips popup. The quoted phrase is the button label Parts.Retarget.Save - quote it exactly as that key reads in your language."
+  },
+  "Parts.Retarget.Guide.Tip5": {
+    "message": "Touch up any details after resizing with the Studio's other brushes, like Pull out. Use Move for hard-sided pieces.",
+    "description": "Tip 5 of 5 in the Body size tips popup. 'Studio' is the tab name (Tab.Parts); 'Pull out' and 'Move' are tool names (Parts.Tool.Inflate, Parts.Tool.Move) - reuse your translations of all three."
+  },
+  "Parts.Retarget.Guide.Ok": {
+    "message": "Got it",
+    "description": "Button. Dismisses the Body size tips popup for good."
   }
 }

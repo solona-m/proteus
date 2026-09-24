@@ -253,6 +253,12 @@ public class Configuration : IPluginConfiguration
     public Dictionary<string, string> RetargetTargets { get; set; } = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// Whether the Body size tips have been dismissed. They open the first time the tool is chosen, and it is the
+    /// CLOSE that records it, as with <see cref="WhatsNewShown"/>: a crash with them on screen leaves them still owed.
+    /// </summary>
+    public bool RetargetGuideShown { get; set; }
+
+    /// <summary>
     /// The Glamourer design whose binding was active when the plugin last ran, so a reload can pick it back up
     /// (Glamourer signals nothing for an already-applied design). Null = nothing active. Restored only after
     /// <c>DesignBindingService.TryBootRestore</c> verifies it.
