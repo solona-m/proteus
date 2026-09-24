@@ -9,9 +9,17 @@ internal static partial class BodyBridge
 {
     /// <summary>
     /// Least coverage the garment must have over a nail before it is flattened. The body is only ever changed
-    /// where something covers it.
+    /// where something covers it. Half grey, not a trace: a mask's anti-aliased edge is a line of faint grey
+    /// (up to ~74 on Infinite Bodysuits) along the hand's island, exactly where the fingertip landings sit, and
+    /// the coarse map keeps the BRIGHTEST texel of each block — at 8, a neckline mask took every nail off.
     /// </summary>
-    private const byte NailCoveredFloor = 8;
+    private const byte NailCoveredFloor = 128;
+
+    /// <summary>
+    /// What share of a nail's fingertip landings must be covered. Not one: a glove's cuff or a mask's edge that
+    /// grazes a single landing is not a garment over the finger.
+    /// </summary>
+    private const float FingertipCoveredShare = 0.5f;
 
     /// <summary>
     /// Flattens the NAILS out of a hand, on the body itself, so a garment over them has nothing to poke through.
@@ -353,25 +361,30 @@ internal static partial class BodyBridge
     }
 
     /// <summary>Does the garment cover the fingertip around this nail? Asked at the UV of the skin each nail vertex
-    /// lands on (<see cref="NailBedPlan.FingertipUv"/>), the same question <c>RescueNailBeds</c> asks.</summary>
+    /// lands on (<see cref="NailBedPlan.FingertipUv"/>), the same question <c>RescueNailBeds</c> asks — and answered
+    /// yes only when most of the landings are covered (<see cref="FingertipCoveredShare"/>).</summary>
     private static bool FingertipCovered(SecondSkinLayer gate, NailBedPlan plan, int[] verts)
     {
         if (gate.Coverage is not { } mask || gate.CoverageWidth <= 0 || gate.CoverageHeight <= 0) return true;
         int w = gate.CoverageWidth, h = gate.CoverageHeight;
+        int landings = 0, covered = 0;
         foreach (int v in verts)
         {
             if (v >= plan.FingertipUv.Length || plan.FingertipUv[v] is not { } t) continue;
+            landings++;
             int x0 = (int)MathF.Floor(t.U * w), y0 = (int)MathF.Floor(t.V * h);
             // A texel either way: a landing sits on the EDGE of the finger's island, and the coarse map can round it
             // just off the paint.
-            for (int dy = -1; dy <= 1; dy++)
-                for (int dx = -1; dx <= 1; dx++)
+            bool hit = false;
+            for (int dy = -1; dy <= 1 && !hit; dy++)
+                for (int dx = -1; dx <= 1 && !hit; dx++)
                 {
                     int x = ((x0 + dx) % w + w) % w, y = ((y0 + dy) % h + h) % h;
-                    if (mask[y * w + x] >= NailCoveredFloor) return true;
+                    hit = mask[y * w + x] >= NailCoveredFloor;
                 }
+            if (hit) covered++;
         }
-        return false;
+        return landings > 0 && covered >= landings * FingertipCoveredShare;
     }
 
     /// <summary>Does the garment cover this nail? Asked of the island's own UVs, at its coarse coverage map.</summary>

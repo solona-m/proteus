@@ -1505,6 +1505,31 @@ public class SecondSkinWriterVerbatimTests(Xunit.Abstractions.ITestOutputHelper 
     }
 
     /// <summary>
+    /// A faint grey over the fingers is not a garment. Every mask of Infinite Bodysuits — necklines and leg cuts
+    /// included — has a one-pixel anti-aliased edge (up to 74 grey) along the hand's island, which the coarse map
+    /// spreads over the fingertip landings; at the old floor of 8 that took the nails off under any of them.
+    /// </summary>
+    [Theory]
+    [InlineData(NeoHands)]
+    [InlineData(BiboHands)]
+    public void A_mask_edge_over_the_fingers_leaves_the_nails_alone(string path)
+    {
+        if (!File.Exists(path)) return;
+        var hand = File.ReadAllBytes(path);
+        const int size = 256;
+        var faint = PaintFingersNotNailBeds(hand, size);
+        for (int i = 0; i < faint.Length; i++) if (faint[i] > 0) faint[i] = 74;
+
+        var log = new List<string>();
+        var flat = BodyBridge.FlattenNails(hand, new SecondSkinLayer
+        {
+            MaterialName = "/gate.mtrl", Coverage = faint, CoverageWidth = size, CoverageHeight = size,
+        }, log.Add);
+        foreach (var l in log) o.WriteLine(l);
+        Assert.Null(flat);
+    }
+
+    /// <summary>
     /// The nails come off the BODY under a garment: each nail is relaxed into the socket it sits in, so there is
     /// nothing left for a glove to poke through. Measured as the nail's height over a bridge pinned to its rim —
     /// about a millimetre before, nothing after — and the file must not change length, since the edit is
