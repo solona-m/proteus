@@ -214,6 +214,25 @@ public class BodyRetargetTests
     }
 
     [Fact]
+    public void With_the_cut_turned_off_the_body_comes_in_whole()
+    {
+        // The same garment and body as above; the user asked for the skin the author deleted to stay.
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)),
+            new SyntheticModel.Mesh(ClothMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 4, OffsetZ: 0.001f)));
+        var chest = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5),
+                                                  new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetY: 50f)));
+
+        var rebuilt = BodyRetarget.SwapSkin(garment, [Resized("_top", chest)], out var report, cutHidden: false);
+
+        Assert.NotNull(rebuilt);
+        Assert.Equal("added 8 cut 0", $"added {report.Added} cut {report.Cut}");
+        Assert.Equal(8, Drawn(rebuilt!).Where(d => SecondSkinWriter.IsBodySkinMaterial("/" + d.Key))
+                                       .Sum(d => d.Value));
+    }
+
+    [Fact]
     public void A_body_mesh_the_cut_empties_is_not_drawn_at_all()
     {
         // The cut is carried per mesh, and a mesh the writer has no entry for draws WHOLE — that is how a body

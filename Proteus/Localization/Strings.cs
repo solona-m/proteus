@@ -2424,6 +2424,14 @@ public sealed class PartsStrings
       + "Off: the skin the garment came with is resized instead, keeping any reshaping its author did — a top\n"
       + "that lifts or presses the chest keeps doing so at the new size.");
 
+    public readonly string RetargetCutHidden = Loc.Localize("Parts.Retarget.CutHidden", "Remove skin that can't be seen")
+                                             + "###partsRetargetCutHidden";
+
+    public readonly string RetargetCutHiddenTip = Loc.Localize("Parts.Retarget.CutHidden.Tip",
+        "On: the new body's skin is left out wherever the garment's author deleted theirs — usually skin under\n"
+      + "the cloth, so it cannot poke through.\n"
+      + "Off: the new body's skin is put in whole. Try this if the refit leaves holes where skin should show.");
+
     /// <summary>{0} is how many triangles the garment's swapped skin meshes had, {1} how many the body's have.</summary>
     public readonly string RetargetSwappedFmt = Loc.Localize("Parts.Retarget.SwapSlots.Fmt",
         "Skin swapped for the new body's where it is being resized: {0:N0} of the garment's skin triangles out, "

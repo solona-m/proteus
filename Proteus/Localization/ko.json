@@ -3503,6 +3503,14 @@
     "message": "On: the garment's skin for each part of the body being resized is removed and that part's new body\nskin put in its place, so the skin under and around the garment is exactly the body mod's.\nOff: the skin the garment came with is resized instead, keeping any reshaping its author did \u2014 a top\nthat lifts or presses the chest keeps doing so at the new size.",
     "description": ""
   },
+  "Parts.Retarget.CutHidden": {
+    "message": "Remove skin that can't be seen",
+    "description": ""
+  },
+  "Parts.Retarget.CutHidden.Tip": {
+    "message": "On: the new body's skin is left out wherever the garment's author deleted theirs \u2014 usually skin under\nthe cloth, so it cannot poke through.\nOff: the new body's skin is put in whole. Try this if the refit leaves holes where skin should show.",
+    "description": ""
+  },
   "Parts.Retarget.SwapKeptMeshes.Fmt": {
     "message": "{0} skin mesh(es) belong to a part of the body that is not being resized, and were left as they are.",
     "description": ""

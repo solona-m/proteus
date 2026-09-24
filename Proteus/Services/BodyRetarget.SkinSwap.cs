@@ -75,9 +75,12 @@ internal static partial class BodyRetarget
     /// </summary>
     /// <param name="garment">The refitted garment model, its skin already laid onto the new bodies.</param>
     /// <param name="pairs">The slots being resized. Only those carrying their target body's file can be swapped.</param>
+    /// <param name="cutHidden">Leave out the new body's skin where the garment's author deleted theirs — see
+    /// <see cref="CutLike"/>. Off puts the body in whole.</param>
     /// <returns>The rebuilt model, or null when no skin mesh of the garment belongs to a slot being resized.</returns>
-    internal static byte[]? SwapSkin(byte[] garment, IReadOnlyList<SlotPair> pairs, out SwapReport report)
-        => Rebuild(garment, pairs, swapSkin: true, weights: null, out report);
+    internal static byte[]? SwapSkin(byte[] garment, IReadOnlyList<SlotPair> pairs, out SwapReport report,
+                                     bool cutHidden = true)
+        => Rebuild(garment, pairs, swapSkin: true, weights: null, out report, cutHidden);
 
     /// <summary>
     /// Rebuild the refitted garment for its new body: swap the resized slots' skin meshes for the body's (see
@@ -85,9 +88,10 @@ internal static partial class BodyRetarget
     /// weights change, which is to say across rigs — drop the piercings and pubic hair it carried from its old body
     /// (see <see cref="IsBodyExtraMaterial"/>). One re-emit for all three.
     /// </summary>
+    /// <param name="cutHidden">Carry the author's cut onto the new body's skin (see <see cref="CutLike"/>).</param>
     /// <returns>The rebuilt model, or null when there was nothing to change.</returns>
     internal static byte[]? Rebuild(byte[] garment, IReadOnlyList<SlotPair> pairs, bool swapSkin, WeightPlan? weights,
-                                    out SwapReport report)
+                                    out SwapReport report, bool cutHidden = true)
     {
         report = default;
         var swappable = swapSkin ? pairs.Where(p => p.TargetModel != null).ToList() : [];
@@ -155,16 +159,17 @@ internal static partial class BodyRetarget
 
         // The author's own cut, carried onto the new body. A garment's author hides the body under the cloth by
         // deleting its faces; the body mod ships the body whole. Put in whole, the shoulder the author deleted comes
-        // back through the jacket — so the body mod's skin only draws where the garment's skin drew.
-        var drawn = new BodySurface(model, BodySurface.CellFor(MeanEdgeOf(model)));
-        var drawnEdges = SkinEdges.Of(model);
+        // back through the jacket — so the body mod's skin only draws where the garment's skin drew. Unless the user
+        // turned that off, and the body goes in whole.
+        var drawn = cutHidden ? new BodySurface(model, BodySurface.CellFor(MeanEdgeOf(model))) : null;
+        var drawnEdges = cutHidden ? SkinEdges.Of(model) : null;
         var cuts = new Dictionary<int, Dictionary<int, HashSet<ushort>>?>();
         int cutTris = 0, keptTris = 0;
         foreach (int s in claimedBy)
         {
             int these = 0, gone = 0;
-            cuts[s] = drawn.IsEmpty ? null : CutLike(drawn, drawnEdges, swappable[s].TargetModel!,
-                                                     swappable[s].TargetHidden, out these, out gone);
+            cuts[s] = drawn == null || drawn.IsEmpty ? null : CutLike(drawn, drawnEdges!, swappable[s].TargetModel!,
+                                                                      swappable[s].TargetHidden, out these, out gone);
             keptTris += cuts[s] == null ? SkinTriangles(swappable[s].Target) : these;
             cutTris += gone;
         }

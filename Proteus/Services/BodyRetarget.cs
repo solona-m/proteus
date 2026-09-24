@@ -528,9 +528,13 @@ internal static partial class BodyRetarget
     /// its cloth then always takes the change between the two bodies' weights, and the old body's piercings and pubic hair are left out,
     /// even when the two bodies' rigs name the same bones (YAB's and Rue's plain sizes do) — see
     /// <see cref="PlanWeights"/>.</param>
+    /// <param name="cutHidden">With <paramref name="replaceSkin"/>, leave out the new body's skin where the garment's
+    /// author deleted theirs, which is usually skin under the cloth that cannot be seen — see <see cref="CutLike"/>.
+    /// On by default; off puts the body's skin in whole.</param>
     public static Planned Plan(ModelParts garment, byte[] garmentBytes, IReadOnlyList<SlotPair> pairs,
                                string? garmentSlot = null, bool pushOut = true, IReadOnlySet<int>? held = null,
-                               bool replaceSkin = false, bool acrossBodies = false, bool clearBody = false)
+                               bool replaceSkin = false, bool acrossBodies = false, bool clearBody = false,
+                               bool cutHidden = true)
     {
         var solved = Solve(garment, pairs, garmentSlot, pushOut, held, replaceSkin, clearBody);
         var written = MeshVolumeService.Inflate(garmentBytes, solved.Edit);
@@ -543,7 +547,7 @@ internal static partial class BodyRetarget
         var weights = PlanWeights(model, pairs, acrossBodies, before: garmentBytes, held: held);
         if (replaceSkin || weights != null)
         {
-            var rebuilt = Rebuild(model, pairs, replaceSkin, weights, out var swapped);
+            var rebuilt = Rebuild(model, pairs, replaceSkin, weights, out var swapped, cutHidden);
             if (rebuilt != null)
             {
                 model = rebuilt;
