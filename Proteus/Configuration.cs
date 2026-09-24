@@ -253,10 +253,12 @@ public class Configuration : IPluginConfiguration
     public Dictionary<string, string> RetargetTargets { get; set; } = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// Whether the Body size tips have been dismissed. They open the first time the tool is chosen, and it is the
-    /// CLOSE that records it, as with <see cref="WhatsNewShown"/>: a crash with them on screen leaves them still owed.
+    /// The highest <see cref="Gui.BodyRetargetPanel.GuideVersion"/> of the Body size tips that has been dismissed. They
+    /// open the first time the tool is chosen and again whenever the tips change; it is the CLOSE that records it, as
+    /// with <see cref="WhatsNewShown"/>, so a crash with them on screen leaves them still owed. Replaces a yes/no
+    /// flag of testing-537, which is ignored on load, so anyone who dismissed those five tips sees all six.
     /// </summary>
-    public bool RetargetGuideShown { get; set; }
+    public int RetargetGuideSeen { get; set; }
 
     /// <summary>
     /// The Glamourer design whose binding was active when the plugin last ran, so a reload can pick it back up

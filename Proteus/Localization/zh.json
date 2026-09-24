@@ -3771,6 +3771,10 @@
     "message": "更改体型后，可以用工作室的其他笔刷（如「向外拉」）修饰细节。硬质部件请使用「移动」。",
     "description": ""
   },
+  "Parts.Retarget.Guide.Tip6": {
+    "message": "如果可以，请从比目标尺寸更小的尺寸开始转换。",
+    "description": ""
+  },
   "Parts.Retarget.Guide.Ok": {
     "message": "知道了",
     "description": ""

@@ -3771,6 +3771,10 @@
     "message": "サイズ変更後の細部は、外に引く などスタジオの他のブラシで仕上げられます。硬い形状のパーツには 移動 を使ってください。",
     "description": ""
   },
+  "Parts.Retarget.Guide.Tip6": {
+    "message": "可能であれば、適用先よりも小さいサイズから始めてください。",
+    "description": ""
+  },
   "Parts.Retarget.Guide.Ok": {
     "message": "了解",
     "description": ""

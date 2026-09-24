@@ -3771,6 +3771,10 @@
     "message": "Retouchez les détails après le redimensionnement avec les autres pinceaux du Studio, comme Tirer dehors. Utilisez Déplacer pour les éléments rigides.",
     "description": ""
   },
+  "Parts.Retarget.Guide.Tip6": {
+    "message": "Si possible, partez d'une taille plus petite que celle vers laquelle vous ajustez.",
+    "description": ""
+  },
   "Parts.Retarget.Guide.Ok": {
     "message": "Compris",
     "description": ""

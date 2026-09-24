@@ -3771,6 +3771,10 @@
     "message": "Details kannst du nach dem Anpassen mit den anderen Pinseln des Studios nachbessern, etwa Herausziehen. Für Teile mit harten Kanten nimm Verschieben.",
     "description": ""
   },
+  "Parts.Retarget.Guide.Tip6": {
+    "message": "Starte nach Möglichkeit mit einer kleineren Größe als der, auf die du anpasst.",
+    "description": ""
+  },
   "Parts.Retarget.Guide.Ok": {
     "message": "Verstanden",
     "description": ""

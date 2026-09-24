@@ -2183,6 +2183,7 @@ public sealed class PartsStrings
       + "own files alone.");
 
     // The first-use tips. Each tip is its own string, so a translation can reword one without the others.
+    // Changing any of them? Bump BodyRetargetPanel.GuideVersion so players see the popup again.
     public readonly string RetargetGuideTitle = Loc.Localize("Parts.Retarget.Guide.Title", "Body size: a few tips")
                                               + "###partsRetargetGuide";
 
@@ -2203,6 +2204,9 @@ public sealed class PartsStrings
     public readonly string RetargetGuideTip5 = Loc.Localize("Parts.Retarget.Guide.Tip5",
         "Touch up any details after resizing with the Studio's other brushes, like Pull out. Use Move for "
       + "hard-sided pieces.");
+
+    public readonly string RetargetGuideTip6 = Loc.Localize("Parts.Retarget.Guide.Tip6",
+        "When possible, start from a smaller size than the one you are refitting onto.");
 
     public readonly string RetargetGuideOk = Loc.Localize("Parts.Retarget.Guide.Ok", "Got it")
                                            + "###partsRetargetGuideOk";

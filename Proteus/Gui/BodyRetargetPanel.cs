@@ -207,6 +207,12 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     /// <summary>The open garment is a man's — and so, by the filtering, is every body it is refitted between.</summary>
     private bool MaleGarment => race != null && BodySizeCatalog.IsMaleRace(race);
 
+    /// <summary>
+    /// Which set of Body size tips this build shows. Bump it whenever a tip is added, removed or reworded, and everyone
+    /// who dismissed the old set sees the popup once more.
+    /// </summary>
+    public const int GuideVersion = 1;
+
     /// <summary>Whether this session has asked for the tips popup yet; ImGui opens a popup once per request.</summary>
     private bool guideOpened;
 
@@ -216,7 +222,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     /// </summary>
     public void DrawGuide()
     {
-        if (config.RetargetGuideShown) return;
+        if (config.RetargetGuideSeen >= GuideVersion) return;
 
         var ps = Strings.Parts;
         if (!guideOpened)
@@ -237,7 +243,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
 
         int n = 0;
         foreach (var tip in new[] { ps.RetargetGuideTip1, ps.RetargetGuideTip2, ps.RetargetGuideTip3,
-                                    ps.RetargetGuideTip4, ps.RetargetGuideTip5 })
+                                    ps.RetargetGuideTip4, ps.RetargetGuideTip5, ps.RetargetGuideTip6 })
         {
             ImGui.Spacing();
             ImGui.TextUnformatted($"{++n}.");
@@ -260,7 +266,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
 
     private void Dismiss()
     {
-        config.RetargetGuideShown = true;
+        config.RetargetGuideSeen = GuideVersion;
         config.Save();
     }
 

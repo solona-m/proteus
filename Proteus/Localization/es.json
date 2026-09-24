@@ -3771,6 +3771,10 @@
     "message": "Retoca cualquier detalle después de cambiar la talla con los otros pinceles del Estudio, como Tirar afuera. Usa Mover para las piezas rígidas.",
     "description": ""
   },
+  "Parts.Retarget.Guide.Tip6": {
+    "message": "Cuando sea posible, parte de una talla más pequeña que la de destino.",
+    "description": ""
+  },
   "Parts.Retarget.Guide.Ok": {
     "message": "Entendido",
     "description": ""
