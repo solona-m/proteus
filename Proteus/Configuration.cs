@@ -68,6 +68,19 @@ public class Configuration : IPluginConfiguration
     public int MirrorNoticeShown { get; set; }
 
     /// <summary>
+    /// The highest <see cref="Plugin.CurrentWhatsNew"/> generation whose release notes have been read. Zero on a
+    /// fresh config AND on one written before this field existed, so a new install and an upgrade both see the
+    /// current notes exactly once. Written when the window is CLOSED, so a crash cannot burn the one showing.
+    /// </summary>
+    public int WhatsNewShown { get; set; }
+
+    /// <summary>
+    /// Whether release notes of the given generation are still owed to this install. The one place the gate is
+    /// decided, so the window, the plugin and the tests cannot drift apart on what "already read" means.
+    /// </summary>
+    public bool WantsWhatsNew(int generation) => WhatsNewShown < generation;
+
+    /// <summary>
     /// Let Proteus act on its own initiative: ambient events recomposite and reload the character. Off makes it
     /// reactive: editor actions still recomposite, but nothing reloads until something redraws the character. On by default.
     /// </summary>

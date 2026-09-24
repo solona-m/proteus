@@ -3698,5 +3698,45 @@
   "Parts.Vanilla.WornSuffix": {
     "message": "(vanilla)",
     "description": ""
+  },
+  "WhatsNew.Title": {
+    "message": "What's new in Proteus",
+    "description": "Title of the one-time release-notes window."
+  },
+  "WhatsNew.Intro": {
+    "message": "Three things worth knowing about this release. This window opens once, and not again.",
+    "description": "First line of the release-notes window, above the three sections."
+  },
+  "WhatsNew.Upscales.Head": {
+    "message": "One click upscales",
+    "description": "Heading. 'Upscale' is the FFXIV modding community's word for refitting a garment onto a different body; keep whatever term that community uses in your language."
+  },
+  "WhatsNew.Upscales.Body": {
+    "message": "The Studio has a new Body size tool. Pick the body a garment was made for and the body you want it on, and Proteus moves every point of the garment to match: between sizes of one body mod, or between body mods entirely. It can take on the new body's skin and bone weights, upscale onto several sizes in one run, and upscale the game's own gear too.\n\nThe result is saved into the mod as an ordinary Penumbra option, so it keeps working with Proteus turned off and travels with the mod if you export it.",
+    "description": "Describes the Studio's Body size tool. 'Body size' and 'Studio' are names of things in the plugin's own UI - translate them the same way you translated Parts.Tool.Retarget and Tab.Parts."
+  },
+  "WhatsNew.Hats.Head": {
+    "message": "Hats now automatically fit over modded hair",
+    "description": "Heading for the hat-compatibility section."
+  },
+  "WhatsNew.Hats.Body": {
+    "message": "Making hairstyles fit under hats is now on by default. Proteus waits until you actually put a hat on, then presses the hair the hat would cover flat against your head, so the hat stops going straight through it.\n\nIt edits the hair mod's own files and keeps the originals, so it can be undone — or switched off altogether — under Settings, Hats.",
+    "description": "'Settings, Hats' names the Settings tab and its Hats section - match Tab.Settings and Settings.Section.HatCompat."
+  },
+  "WhatsNew.Designs.Head": {
+    "message": "Designs restore the whole look",
+    "description": "Heading for the Glamourer design-binding section."
+  },
+  "WhatsNew.Designs.Body": {
+    "message": "A Glamourer design bound to Proteus can restore every mod that was on your character when you saved it, and raises those mods above anything they conflict with, so a look no longer comes back half-applied.\n\nMods that aren't Proteus mods are only held that way with Penumbra temporary settings, so your collection itself is never changed, and Penumbra's own banner on a held mod lets you drop that one hold. It is off by default: turn it on under Bindings, \"Restore every mod on the character\".",
+    "description": "'Bindings' is the tab name (Tab.Bindings); the quoted phrase is the checkbox label (Bindings.RestoreCharacterMods) - reuse your translations of both."
+  },
+  "WhatsNew.Open": {
+    "message": "Open Proteus",
+    "description": "Button. Opens the main Proteus window and closes the notes."
+  },
+  "WhatsNew.Close": {
+    "message": "Close",
+    "description": "Button. Dismisses the release-notes window."
   }
 }

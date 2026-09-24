@@ -3698,5 +3698,45 @@
   "Parts.Vanilla.WornSuffix": {
     "message": "(vanilla)",
     "description": ""
+  },
+  "WhatsNew.Title": {
+    "message": "Proteus の新機能",
+    "description": ""
+  },
+  "WhatsNew.Intro": {
+    "message": "このリリースで知っておきたい3つの点です。このウィンドウが開くのは一度きりです。",
+    "description": ""
+  },
+  "WhatsNew.Upscales.Head": {
+    "message": "ワンクリックでアップスケール",
+    "description": ""
+  },
+  "WhatsNew.Upscales.Body": {
+    "message": "スタジオに「体型サイズ」ツールが加わりました。衣装が作られた体型と、着せたい体型を選ぶと、Proteus が衣装の全頂点をそれに合わせて移動します。同じ体型 Mod のサイズ違いにも、まったく別の体型 Mod にも対応します。新しい体型の肌とボーンウェイトを引き継ぎ、一度の実行で複数のサイズにアップスケールでき、ゲーム標準の装備もアップスケールできます。\n\n結果は通常の Penumbra オプションとして Mod 自体に保存されるため、Proteus をオフにしても機能し、Mod を書き出せば一緒に付いていきます。",
+    "description": ""
+  },
+  "WhatsNew.Hats.Head": {
+    "message": "帽子が Mod の髪に自動でなじむようになりました",
+    "description": ""
+  },
+  "WhatsNew.Hats.Body": {
+    "message": "「髪型を帽子に合わせる」が既定でオンになりました。Proteus は実際に帽子を装備するまで待ってから、帽子で隠れる部分の髪を頭に押し付けるので、帽子が髪を突き抜けなくなります。\n\n髪 Mod 自身のファイルを編集しますが、元のファイルは保持されるため、元に戻すことも、設定の「帽子」から完全にオフにすることもできます。",
+    "description": ""
+  },
+  "WhatsNew.Designs.Head": {
+    "message": "デザインが見た目をまるごと復元します",
+    "description": ""
+  },
+  "WhatsNew.Designs.Body": {
+    "message": "Proteus に紐付けた Glamourer のデザインは、保存時にキャラクターに適用されていたすべての Mod を復元し、競合する相手より優先度を引き上げられるようになりました。見た目が中途半端に復元されることはもうありません。\n\nProteus 以外の Mod は Penumbra の一時設定で保持されるだけなので、コレクション自体は変更されません。保持中の Mod は Penumbra 側のバナーから個別に解除できます。既定ではオフです。「バインド」タブの「キャラクターのすべての Mod を復元する」からオンにしてください。",
+    "description": ""
+  },
+  "WhatsNew.Open": {
+    "message": "Proteus を開く",
+    "description": ""
+  },
+  "WhatsNew.Close": {
+    "message": "閉じる",
+    "description": ""
   }
 }

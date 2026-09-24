@@ -52,6 +52,7 @@ public static class Strings
     public static PartsStrings      Parts      { get; private set; } = new();
     public static PresetsStrings    Presets    { get; private set; } = new();
     public static HatCompatStrings  HatCompat  { get; private set; } = new();
+    public static WhatsNewStrings   WhatsNew   { get; private set; } = new();
 
     /// <summary>
     /// Rebuilds every holder against the language CheapLoc was just set up with. Called from
@@ -79,7 +80,53 @@ public static class Strings
         Parts      = new PartsStrings();
         Presets    = new PresetsStrings();
         HatCompat  = new HatCompatStrings();
+        WhatsNew   = new WhatsNewStrings();
     }
+}
+
+/// <summary>The one-time release-notes window.</summary>
+public sealed class WhatsNewStrings
+{
+    // The stable id is fused here, not at the call site, so the concatenation is paid once per language.
+    public readonly string Title = Loc.Localize("WhatsNew.Title", "What's new in Proteus") + "###ProteusWhatsNew";
+
+    public readonly string Intro = Loc.Localize("WhatsNew.Intro",
+        "Three things worth knowing about this release. This window opens once, and not again.");
+
+    public readonly string UpscalesHead = Loc.Localize("WhatsNew.Upscales.Head", "One click upscales");
+
+    public readonly string UpscalesBody = Loc.Localize("WhatsNew.Upscales.Body",
+        "The Studio has a new Body size tool. Pick the body a garment was made for and the body you want it "
+      + "on, and Proteus moves every point of the garment to match: between sizes of one body mod, or between "
+      + "body mods entirely. It can take on the new body's skin and bone weights, upscale onto several sizes "
+      + "in one run, and upscale the game's own gear too.\n\n"
+      + "The result is saved into the mod as an ordinary Penumbra option, so it keeps working with Proteus "
+      + "turned off and travels with the mod if you export it.");
+
+    public readonly string HatsHead = Loc.Localize("WhatsNew.Hats.Head",
+        "Hats now automatically fit over modded hair");
+
+    public readonly string HatsBody = Loc.Localize("WhatsNew.Hats.Body",
+        "Making hairstyles fit under hats is now on by default. Proteus waits until you actually put a hat on, "
+      + "then presses the hair the hat would cover flat against your head, so the hat stops going straight "
+      + "through it.\n\n"
+      + "It edits the hair mod's own files and keeps the originals, so it can be undone — or switched off "
+      + "altogether — under Settings, Hats.");
+
+    public readonly string DesignsHead = Loc.Localize("WhatsNew.Designs.Head",
+        "Designs restore the whole look");
+
+    public readonly string DesignsBody = Loc.Localize("WhatsNew.Designs.Body",
+        "A Glamourer design bound to Proteus can restore every mod that was on your character when you saved "
+      + "it, and raises those mods above anything they conflict with, so a look no longer comes back "
+      + "half-applied.\n\n"
+      + "Mods that aren't Proteus mods are only held that way with Penumbra temporary settings, so your "
+      + "collection itself is never changed, and Penumbra's own banner on a held mod lets you drop that one "
+      + "hold. It is off by default: turn it on under Bindings, \"Restore every mod on the character\".");
+
+    public readonly string Open = Loc.Localize("WhatsNew.Open", "Open Proteus") + "###whatsNewOpen";
+
+    public readonly string Close = Loc.Localize("WhatsNew.Close", "Close") + "###whatsNewClose";
 }
 
 /// <summary>The hat-compatibility panel.</summary>

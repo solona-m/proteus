@@ -3698,5 +3698,45 @@
   "Parts.Vanilla.WornSuffix": {
     "message": "(vanilla)",
     "description": ""
+  },
+  "WhatsNew.Title": {
+    "message": "Proteus의 새로운 기능",
+    "description": ""
+  },
+  "WhatsNew.Intro": {
+    "message": "이번 릴리스에서 알아둘 만한 세 가지입니다. 이 창은 한 번만 열리고 다시 열리지 않습니다.",
+    "description": ""
+  },
+  "WhatsNew.Upscales.Head": {
+    "message": "클릭 한 번으로 업스케일",
+    "description": ""
+  },
+  "WhatsNew.Upscales.Body": {
+    "message": "스튜디오에 '체형 크기' 도구가 추가되었습니다. 의상이 제작된 체형과 적용하고 싶은 체형을 고르면 Proteus가 의상의 모든 점을 그에 맞게 옮깁니다. 같은 체형 모드의 다른 크기끼리도, 아예 다른 체형 모드끼리도 가능합니다. 새 체형의 피부와 본 웨이트를 가져올 수 있고, 한 번에 여러 크기로 업스케일할 수 있으며, 게임 자체의 장비도 업스케일할 수 있습니다.\n\n결과는 일반적인 Penumbra 옵션으로 모드 자체에 저장되므로 Proteus를 꺼도 계속 작동하고, 모드를 내보낼 때 함께 따라갑니다.",
+    "description": ""
+  },
+  "WhatsNew.Hats.Head": {
+    "message": "이제 모자가 모드 머리카락 위에 자동으로 맞춰집니다",
+    "description": ""
+  },
+  "WhatsNew.Hats.Body": {
+    "message": "'머리 모양을 모자에 맞추기'가 이제 기본으로 켜져 있습니다. Proteus는 실제로 모자를 쓸 때까지 기다렸다가, 모자가 가릴 머리카락을 머리에 납작하게 눌러 모자가 머리카락을 뚫고 나오지 않게 합니다.\n\n머리 모드 자체의 파일을 수정하지만 원본은 보관되므로 되돌릴 수 있고, 설정의 '모자'에서 완전히 끌 수도 있습니다.",
+    "description": ""
+  },
+  "WhatsNew.Designs.Head": {
+    "message": "디자인이 전체 외형을 복원합니다",
+    "description": ""
+  },
+  "WhatsNew.Designs.Body": {
+    "message": "Proteus에 연결된 Glamourer 디자인은 저장 당시 캐릭터에 적용되어 있던 모든 모드를 복원하고, 그 모드들을 충돌하는 어떤 것보다 위로 올립니다. 외형이 절반만 적용된 채 돌아오는 일이 더는 없습니다.\n\nProteus 모드가 아닌 것들은 Penumbra의 임시 설정으로만 고정되므로 컬렉션 자체는 바뀌지 않으며, 고정된 모드에 표시되는 Penumbra의 배너에서 그 하나만 풀 수 있습니다. 기본값은 꺼짐이며, '연결' 탭의 '캐릭터의 모든 모드 복원'에서 켤 수 있습니다.",
+    "description": ""
+  },
+  "WhatsNew.Open": {
+    "message": "Proteus 열기",
+    "description": ""
+  },
+  "WhatsNew.Close": {
+    "message": "닫기",
+    "description": ""
   }
 }

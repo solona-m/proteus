@@ -3698,5 +3698,45 @@
   "Parts.Vanilla.WornSuffix": {
     "message": "(vanilla)",
     "description": ""
+  },
+  "WhatsNew.Title": {
+    "message": "Nouveautés de Proteus",
+    "description": ""
+  },
+  "WhatsNew.Intro": {
+    "message": "Trois choses à savoir sur cette version. Cette fenêtre s'ouvre une fois, et plus jamais.",
+    "description": ""
+  },
+  "WhatsNew.Upscales.Head": {
+    "message": "Des upscales en un clic",
+    "description": ""
+  },
+  "WhatsNew.Upscales.Body": {
+    "message": "Le Studio dispose d'un nouvel outil « Taille du corps ». Choisissez le corps pour lequel un vêtement a été conçu et celui sur lequel vous le voulez : Proteus déplace chaque point du vêtement en conséquence, entre deux tailles d'un même mod de corps ou entre deux mods de corps différents. Il peut reprendre la peau et les poids d'os du nouveau corps, upscaler vers plusieurs tailles en une seule fois, et upscaler aussi l'équipement du jeu lui-même.\n\nLe résultat est enregistré dans le mod comme une option Penumbra ordinaire : il continue donc de fonctionner avec Proteus désactivé et suit le mod si vous l'exportez.",
+    "description": ""
+  },
+  "WhatsNew.Hats.Head": {
+    "message": "Les chapeaux s'adaptent désormais automatiquement aux cheveux moddés",
+    "description": ""
+  },
+  "WhatsNew.Hats.Body": {
+    "message": "« Adapter les coiffures aux chapeaux » est désormais activé par défaut. Proteus attend que vous portiez réellement un chapeau, puis plaque contre votre tête les cheveux que le chapeau recouvrirait, pour qu'il cesse de les traverser.\n\nCela modifie les fichiers du mod de cheveux lui-même, mais les originaux sont conservés : l'opération peut être annulée — ou désactivée entièrement — dans Paramètres, Chapeaux.",
+    "description": ""
+  },
+  "WhatsNew.Designs.Head": {
+    "message": "Les designs restaurent la tenue entière",
+    "description": ""
+  },
+  "WhatsNew.Designs.Body": {
+    "message": "Un design Glamourer lié à Proteus peut restaurer tous les mods présents sur votre personnage au moment de l'enregistrement, et fait passer ces mods au-dessus de tout ce avec quoi ils entrent en conflit : une tenue ne revient donc plus à moitié appliquée.\n\nLes mods qui ne sont pas des mods Proteus sont seulement retenus par les réglages temporaires de Penumbra : votre collection elle-même n'est jamais modifiée, et la bannière de Penumbra sur un mod retenu permet de relâcher cette rétention en particulier. Désactivé par défaut : à activer dans Liaisons, « Restaurer tous les mods du personnage ».",
+    "description": ""
+  },
+  "WhatsNew.Open": {
+    "message": "Ouvrir Proteus",
+    "description": ""
+  },
+  "WhatsNew.Close": {
+    "message": "Fermer",
+    "description": ""
   }
 }
