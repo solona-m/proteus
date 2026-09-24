@@ -82,6 +82,14 @@ internal static partial class BodyRetarget
             return found;
         }
 
+        /// <summary>Every point of the drawn skin, with its normal.</summary>
+        public IEnumerable<(Vector3 At, Vector3 Normal)> Points()
+        {
+            foreach (var surface in surfaces)
+                foreach (int v in surface.SkinVertices)
+                    yield return (surface.PositionOf(v), surface.NormalOf(v));
+        }
+
         /// <summary>The nearest drawn skin within <paramref name="maxDistance"/>.</summary>
         public bool Nearest(Vector3 p, float maxDistance, out BodySurface.Hit hit)
         {
@@ -137,6 +145,176 @@ internal static partial class BodyRetarget
         => new(sets.NodeAt[n].X + nodeDelta[n].X,
                sets.NodeAt[n].Y + nodeDelta[n].Y,
                sets.NodeAt[n].Z + nodeDelta[n].Z);
+
+    /// <summary>How far past a cloth face's edge a skin point may land and still count as under it (0.02 = 2% of the
+    /// face, in barycentric terms): a point over an edge or a corner is the neighbouring face's, or the vertex check's.</summary>
+    private const float FaceInterior = 0.02f;
+
+    /// <summary>
+    /// Skin coming through the MIDDLE of a cloth face while every corner of the face is outside it — which the
+    /// vertex check above cannot see. A garment's cloth is flat between its vertices and a body is round, so a coarse
+    /// cuff round a finer calf is clear at its corners and cut through between them. Measured on the Comfy Valentione
+    /// Skirt's leg warmers refitted onto Neolithe: the cuff's eight corners all 2-10 mm off the calf, and the calf 1 mm
+    /// through the middle of the wall faces at the front and back — a pale notch in game. Vanilla's calf was as coarse
+    /// as the cuff, and the two never crossed.
+    /// <para/>
+    /// The same rule as the vertex check — undo what the refit did, and nothing else: only faces whose corners are all
+    /// being considered (none authored inside the skin, unless the body is being cleared), only faces the skin is
+    /// actually THROUGH now, and only faces the old skin was not already through as authored. A face the skin merely
+    /// comes near is left alone: snug cloth the refit never moved is not this pass's to touch. A face that is through is
+    /// pushed until it clears by the clearance, or by the corners' own standoff where that is less; each corner takes
+    /// the whole of it, along the face's outward normal, and the spread and fold guard that follow treat it like any
+    /// other push.
+    /// </summary>
+    /// <returns>Whether any face needed a push.</returns>
+    private static bool SkinThroughFaces(Sets sets, List<int> nodes, TargetBody before, TargetBody after,
+                                         Vec3[] nodeDelta, float[] authored, bool clearBody, float[] need, Vec3[] dir,
+                                         bool[] hasDir)
+    {
+        var considered = new bool[sets.NodeCount];
+        foreach (int n in nodes) considered[n] = true;
+
+        var drawn = Grid(after);
+        var was = Grid(before);
+
+        // Edges two DIFFERENT cloth faces share. A skin point that lands on one is still under the cloth — the cuff's
+        // top edge, where its wall meets its cap — while one landing on an edge only one face uses is past the cloth's
+        // hem, where the body going on wider (a thigh above a stocking) is no clip at all. Faces are counted once per
+        // set of corners: double-sided or lined cloth draws every face twice, and counted twice its hems would all
+        // look shared.
+        var faces = new HashSet<(int, int, int)>();
+        var edgeUses = new Dictionary<(int, int), int>();
+        for (int t = 0; t + 2 < sets.Tris.Length; t += 3)
+        {
+            if (sets.Tris[t] < 0 || sets.Tris[t + 1] < 0 || sets.Tris[t + 2] < 0) continue;
+            if (sets.Tris[t] >= sets.NodeOf.Length || sets.Tris[t + 1] >= sets.NodeOf.Length
+                || sets.Tris[t + 2] >= sets.NodeOf.Length) continue;
+            int x = sets.NodeOf[sets.Tris[t]], y = sets.NodeOf[sets.Tris[t + 1]], z = sets.NodeOf[sets.Tris[t + 2]];
+            if (x == y || y == z || z == x || !faces.Add(FaceKey(x, y, z))) continue;
+            foreach (var key in new[] { EdgeKey(x, y), EdgeKey(y, z), EdgeKey(z, x) })
+                edgeUses[key] = edgeUses.GetValueOrDefault(key) + 1;
+        }
+        bool Shared(int x, int y) => edgeUses.GetValueOrDefault(EdgeKey(x, y)) >= 2;
+
+        bool any = false;
+        for (int t = 0; t + 2 < sets.Tris.Length; t += 3)
+        {
+            int va = sets.Tris[t], vb = sets.Tris[t + 1], vc = sets.Tris[t + 2];
+            if (va < 0 || vb < 0 || vc < 0
+                || va >= sets.NodeOf.Length || vb >= sets.NodeOf.Length || vc >= sets.NodeOf.Length) continue;
+            int a = sets.NodeOf[va], b = sets.NodeOf[vb], c = sets.NodeOf[vc];
+            if (a == b || b == c || c == a || !considered[a] || !considered[b] || !considered[c]) continue;
+
+            Vector3 pa = Placed(sets, nodeDelta, a), pb = Placed(sets, nodeDelta, b), pc = Placed(sets, nodeDelta, c);
+            float standoff = clearBody ? Clearance
+                           : MathF.Min(Clearance, MathF.Min(authored[a], MathF.Min(authored[b], authored[c])));
+            // Which of the face's edges a landing may sit on: the one opposite each corner.
+            bool edgeA = Shared(b, c), edgeB = Shared(c, a), edgeC = Shared(a, b);
+            var (depth, outward) = Through(drawn, pa, pb, pc, edgeA, edgeB, edgeC);
+            if (depth <= 0f) continue;   // near the skin, perhaps, but not through it
+
+            // Already through as authored: the author's, and left as it is.
+            if (!clearBody && Through(was, ToVector(sets.NodeAt[a]), ToVector(sets.NodeAt[b]),
+                                      ToVector(sets.NodeAt[c]), edgeA, edgeB, edgeC).Depth > 0f)
+                continue;
+
+            float push = depth + standoff;
+            foreach (int n in new[] { a, b, c })
+            {
+                if (push <= need[n]) continue;
+                need[n] = push;
+                // The face decides this corner's push, so it goes the way the face has to: along the corner's own
+                // nearest-skin normal it could come up short of clearing the face.
+                dir[n] = ToVec(outward);
+                hasDir[n] = true;
+            }
+            any = true;
+        }
+        return any;
+
+        // The skin's points, bucketed so a face only looks at the skin near it.
+        static Dictionary<(int, int, int), List<(Vector3 At, Vector3 Normal)>> Grid(TargetBody body)
+        {
+            var grid = new Dictionary<(int, int, int), List<(Vector3 At, Vector3 Normal)>>();
+            foreach (var (at, normal) in body.Points())
+            {
+                var key = ((int)MathF.Floor(at.X / FaceCell), (int)MathF.Floor(at.Y / FaceCell), (int)MathF.Floor(at.Z / FaceCell));
+                if (!grid.TryGetValue(key, out var bucket)) grid[key] = bucket = [];
+                bucket.Add((at, normal));
+            }
+            return grid;
+        }
+
+        // How far the skin is through the face abc — the deepest point of it on the outside — and which way is out.
+        // Zero when no skin is through.
+        static (float Depth, Vector3 Outward) Through(Dictionary<(int, int, int), List<(Vector3 At, Vector3 Normal)>> grid,
+                                                      Vector3 pa, Vector3 pb, Vector3 pc,
+                                                      bool edgeA, bool edgeB, bool edgeC)
+        {
+            var face = Vector3.Cross(pb - pa, pc - pa);
+            if (face.LengthSquared() < 1e-14f) return (0f, default);
+            face = Vector3.Normalize(face);
+
+            // The skin points under the face: its middle, or an edge another face shares.
+            var under = new List<(Vector3 Offset, Vector3 Normal)>();
+            var lo = Vector3.Min(pa, Vector3.Min(pb, pc)) - new Vector3(ClearDepth);
+            var hi = Vector3.Max(pa, Vector3.Max(pb, pc)) + new Vector3(ClearDepth);
+            var facing = Vector3.Zero;
+            for (int x = (int)MathF.Floor(lo.X / FaceCell); x <= (int)MathF.Floor(hi.X / FaceCell); x++)
+            for (int y = (int)MathF.Floor(lo.Y / FaceCell); y <= (int)MathF.Floor(hi.Y / FaceCell); y++)
+            for (int z = (int)MathF.Floor(lo.Z / FaceCell); z <= (int)MathF.Floor(hi.Z / FaceCell); z++)
+            {
+                if (!grid.TryGetValue((x, y, z), out var bucket)) continue;
+                foreach (var (s, sn) in bucket)
+                {
+                    var q = BrushTransfer.ClosestOnTriangle(s, pa, pb, pc, out float u, out float v, out float w);
+                    if (Vector3.DistanceSquared(s, q) > ClearDepth * ClearDepth) continue;
+                    bool offA = u < FaceInterior, offB = v < FaceInterior, offC = w < FaceInterior;
+                    int off = (offA ? 1 : 0) + (offB ? 1 : 0) + (offC ? 1 : 0);
+                    if (off > 1) continue;   // on a corner: the vertex check's
+                    if ((offA && !edgeA) || (offB && !edgeB) || (offC && !edgeC)) continue;   // past a hem
+                    if (sn.LengthSquared() < 1e-12f) continue;
+                    var n = Vector3.Normalize(sn);
+                    under.Add((s - q, n));
+                    facing += n;
+                }
+            }
+            if (under.Count == 0) return (0f, default);
+
+            // One outward for the face, the way the skin under it faces as a whole: its winding says nothing about which
+            // side of the body it is on, and deciding point by point lets skin behind a crease, facing away, read as
+            // through.
+            var outward = Vector3.Dot(face, facing) >= 0f ? face : -face;
+
+            float deepest = 0f;
+            foreach (var (offset, n) in under)
+            {
+                // Skin that faces the other way is the far side of a fold, not the surface this face lies over; and on
+                // an edge, only the face that looks the way the skin does — the cuff's wall, not its cap, which meets
+                // the calf edge-on.
+                if (Vector3.Dot(n, outward) < FaceFacing) continue;
+                deepest = MathF.Max(deepest, Vector3.Dot(offset, outward));
+            }
+            return (deepest, outward);
+        }
+    }
+
+    /// <summary>Grid cell the face check buckets skin points by (10 mm).</summary>
+    private const float FaceCell = 0.01f;
+
+    /// <summary>How squarely the skin under a face must look the face's way out to count (cos 60°): skin facing
+    /// elsewhere is the far side of a fold, or meets the face edge-on.</summary>
+    private const float FaceFacing = 0.5f;
+
+    private static (int, int) EdgeKey(int a, int b) => a < b ? (a, b) : (b, a);
+
+    private static (int, int, int) FaceKey(int a, int b, int c)
+    {
+        if (a > b) (a, b) = (b, a);
+        if (b > c) (b, c) = (c, b);
+        if (a > b) (a, b) = (b, a);
+        return (a, b, c);
+    }
 
     /// <summary>
     /// Push cloth the refit drove INTO the drawn skin back out of it — and nothing else.
@@ -238,6 +416,8 @@ internal static partial class BodyRetarget
             need[n] = d;
             any = true;
         }
+
+        any |= SkinThroughFaces(sets, nodes, before, after, nodeDelta, authored, clearBody, need, dir, hasDir);
 
         if (!any) return 0;
 

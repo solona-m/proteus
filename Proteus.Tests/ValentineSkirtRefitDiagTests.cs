@@ -93,6 +93,33 @@ public class ValentineSkirtRefitDiagTests(ITestOutputHelper output)
                                    .OrderBy(v => P(garment, v).Z).ThenBy(v => P(garment, v).Y))
             output.WriteLine($"  shipped seam v{v} {P(garment, v):F4}: {Bones(shippedSkin, v)}");
 
+        // The cloth mesh's texture coordinates, vertex for vertex, as shipped and as written.
+        float[] uvWas = BodyRetargetDiagTests.Uv(garmentBytes), uvNow = BodyRetargetDiagTests.Uv(planned.Model);
+        var clothMeshOf = garment.Parts.First(p => p.Island < 0 && p.Label == "2.2").Mesh;
+        var clothUsed = garment.Parts.Where(p => p.Island < 0 && p.Mesh == clothMeshOf).SelectMany(p => p.Triangles)
+                               .Distinct().OrderBy(v => v).ToList();
+        int clothBase = refit.MeshSpans.First(s => s.Mesh == refit.Parts.First(p => p.Island < 0 && p.Label == "1.4").Mesh).BaseVertex;
+        int uvChanged = 0;
+        foreach (int v in garment.Parts.First(p => p.Island < 0 && p.Label == "2.4").Triangles.Distinct().OrderBy(v => v))
+        {
+            int w = clothBase + clothUsed.IndexOf(v);
+            float du = MathF.Abs(uvWas[v * 2] - uvNow[w * 2]) + MathF.Abs(uvWas[v * 2 + 1] - uvNow[w * 2 + 1]);
+            bool moved = Vector3.Distance(P(garment, v), P(refit, w)) > 0.02f;
+            if (du > 1e-4f || moved) uvChanged++;
+            if (P(garment, v).X < 0f)
+                output.WriteLine($"  uv v{v}->{w} {P(garment, v):F3}->{P(refit, w):F3}: ({uvWas[v * 2]:F4},{uvWas[v * 2 + 1]:F4}) -> " +
+                                 $"({uvNow[w * 2]:F4},{uvNow[w * 2 + 1]:F4}){(du > 1e-4f ? "  CHANGED" : "")}");
+        }
+        output.WriteLine($"cuff vertices whose uv or place changed: {uvChanged}");
+
+        // Every corner of the cuff was clear of the calf while the calf came 1 mm through the middle of its wall faces,
+        // front and back: the pale notch. The push-out now looks at faces as well as vertices — with the body being
+        // cleared, and without, where it may only undo what the refit did.
+        Assert.Equal(0, SkinThroughCuff("clear", refit));
+        var kept = BodyRetarget.Plan(garment, garmentBytes, pairs, "_dwn", replaceSkin: true, acrossBodies: true);
+        output.WriteLine($"not clearing: {kept.Report}");
+        Assert.Equal(0, SkinThroughCuff("not clearing", ModelPartReader.Read(kept.Model)!));
+
         SockClearance(garment, source, drawn, refit);
         CuffStandoff(garment, source, target, refit);
     }
@@ -224,6 +251,43 @@ public class ValentineSkirtRefitDiagTests(ITestOutputHelper output)
             output.WriteLine($"tri {a},{b},{c}: {P(m, a):F3} {P(m, b):F3} {P(m, c):F3} face n {n:F2} " +
                              $"vertex n {new Vector3(norms[a * 3], norms[a * 3 + 1], norms[a * 3 + 2]):F2}");
         }
+    }
+
+    /// <summary>
+    /// The skin the refit draws, against the cuff's WALL faces (not the cap, which faces up): how many skin points at the
+    /// cuff's height stand in front of a wall face, within its reach, and so show through it.
+    /// </summary>
+    private int SkinThroughCuff(string label, ModelParts refit)
+    {
+        var cuffPart = refit.Parts.First(p => p.Island < 0 && p.Label == "1.4");
+        var wall = new List<(Vector3 A, Vector3 B, Vector3 C)>();
+        for (int t = 0; t + 2 < cuffPart.Triangles.Length; t += 3)
+        {
+            Vector3 a = P(refit, cuffPart.Triangles[t]), b = P(refit, cuffPart.Triangles[t + 1]), c = P(refit, cuffPart.Triangles[t + 2]);
+            if (MathF.Abs(Vector3.Normalize(Vector3.Cross(b - a, c - a)).Y) < 0.7f) wall.Add((a, b, c));
+        }
+        var skinVerts = refit.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material))
+                             .SelectMany(p => p.Triangles).Distinct()
+                             .Where(v => P(refit, v).Y is > 0.318f and < 0.345f).ToList();
+        int through = 0;
+        foreach (int v in skinVerts)
+        {
+            var s = P(refit, v);
+            float best = 1f, signed = 0f;
+            foreach (var (a, b, c) in wall)
+            {
+                var q = BrushTransfer.ClosestOnTriangle(s, a, b, c, out _, out _, out _);
+                float d = Vector3.Distance(s, q);
+                if (d >= best) continue;
+                best = d;
+                signed = Vector3.Dot(s - q, Vector3.Normalize(Vector3.Cross(b - a, c - a)));
+            }
+            if (best > 0.004f || signed <= 0f) continue;
+            through++;
+            output.WriteLine($"  {label}: skin v{v} ({s.X:F3},{s.Y:F3},{s.Z:F3}) is {signed * 1000:F2} mm OUTSIDE the cuff wall");
+        }
+        output.WriteLine($"{label}: skin points outside the cuff wall: {through} of {skinVerts.Count} at the cuff's height");
+        return through;
     }
 
     private static string Bones(XivLiveMesh.SkinnedMesh skin, int v)

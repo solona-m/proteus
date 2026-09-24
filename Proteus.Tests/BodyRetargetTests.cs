@@ -425,6 +425,68 @@ public class BodyRetargetTests
         }
     }
 
+    // ── the push-out: skin through the MIDDLE of a face ──────────────────────────────────────────────────
+    //
+    // A cube body whose +Z face has a bump at its centre, and one large cloth triangle over that face, 1 mm off it. The
+    // triangle's corners are far from the bump, so only the face itself can meet it.
+
+    /// <summary>A cube of half 0.20 whose +Z face centre (vertex 49: face 5, grid centre) stands out by <paramref name="bump"/>.</summary>
+    private static ModelParts Bumped(float bump)
+    {
+        var cube = Cube(0.20f, SkinMaterial);
+        var pos = (float[])cube.Positions.Clone();
+        pos[49 * 3 + 2] += bump;
+        return Build(pos, cube.Normals, cube.Parts[0].Triangles, SkinMaterial);
+    }
+
+    /// <summary>One cloth triangle 1 mm over the +Z face (0.4 mm over a 2.6 mm bump); doubled, back to back, on request.</summary>
+    private static ModelParts Sheet(Vector3 a, Vector3 b, Vector3 c, bool doubled = false)
+    {
+        float[] pos = [a.X, a.Y, a.Z, b.X, b.Y, b.Z, c.X, c.Y, c.Z];
+        float[] nrm = [0, 0, 1, 0, 0, 1, 0, 0, 1];
+        return Build(pos, nrm, doubled ? [0, 1, 2, 0, 2, 1] : [0, 1, 2], ClothMaterial);
+    }
+
+    private const float SheetZ = 0.201f;
+
+    [Fact]
+    public void Skin_the_refit_puts_through_the_middle_of_a_face_is_pushed_out()
+    {
+        // Every corner stays clear of the new body; its bump comes 2 mm through the face between them.
+        var garment = Sheet(new(-0.15f, -0.15f, SheetZ), new(0.15f, -0.15f, SheetZ), new(0f, 0.15f, SheetZ));
+        var solved = Solve(garment, Cube(0.20f, SkinMaterial), Bumped(0.003f));
+
+        Assert.True(solved.Pushed > 0, "the bump is through the face, so its corners should have been pushed");
+        var corners = Enumerable.Range(0, 3).Select(v => At(garment, v) + Delta(solved, v)).ToArray();
+        var q = BrushTransfer.ClosestOnTriangle(new Vector3(0f, 0f, 0.203f), corners[0], corners[1], corners[2],
+                                                out _, out _, out _);
+        Assert.True(q.Z >= 0.203f, $"the face still passes under the bump's top, at z={q.Z:F5}");
+    }
+
+    [Fact]
+    public void A_face_resting_close_over_skin_the_refit_left_alone_is_not_pushed()
+    {
+        // The bump on both bodies: the face's middle sits 0.4 mm over it as authored and after. Close, not through, and
+        // not the refit's doing — nothing moves.
+        var garment = Sheet(new(-0.15f, -0.15f, SheetZ + 0.002f), new(0.15f, -0.15f, SheetZ + 0.002f),
+                            new(0f, 0.15f, SheetZ + 0.002f));
+        var solved = Solve(garment, Bumped(0.0026f), Bumped(0.0026f));
+
+        Assert.Equal(0, solved.Pushed);
+    }
+
+    [Fact]
+    public void Skin_past_a_doubled_hem_is_not_through_it()
+    {
+        // The face stops 5 mm short of the new bump: a hem, with the body going on wider past it, like a thigh above a
+        // stocking. Drawn double-sided, the hem's edge is used by two triangles — the same face twice, not two faces.
+        var garment = Sheet(new(-0.15f, -0.005f, SheetZ), new(0.15f, -0.005f, SheetZ), new(0f, -0.15f, SheetZ),
+                            doubled: true);
+        var solved = Solve(garment, Cube(0.20f, SkinMaterial), Bumped(0.003f));
+
+        Assert.Equal(0, solved.Pushed);
+    }
+
     [Fact]
     public void The_push_moves_along_the_body_normal()
     {

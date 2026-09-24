@@ -58,6 +58,9 @@ internal sealed class BodySurface
     /// <summary>Where a vertex of the body sits — the snap builds its haystack out of these.</summary>
     public Vector3 PositionOf(int vertex) => pos[vertex];
 
+    /// <summary>A vertex's normal, as the body's author left it.</summary>
+    public Vector3 NormalOf(int vertex) => nrm[vertex];
+
     /// <param name="body">A body model. Only its skin parts are indexed: a body .mdl also carries undies (which have
     /// GEAR uv), nails, piercings and pubes, and none of those are the body.</param>
     /// <param name="cellSize">Grid cell, metres. <see cref="CellFor"/> picks it from the mesh's own resolution.</param>
