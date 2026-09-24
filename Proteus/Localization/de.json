@@ -2463,6 +2463,14 @@
     "message": "Wie weit sich die Oberfläche pro Malmoment bewegt. Klein ist meist richtig:\nKleidung muss den Körper nur um Bruchteile eines Millimeters freihalten, und\ndu kannst dieselbe Stelle jederzeit erneut übermalen.",
     "description": ""
   },
+  "Parts.Brush.Limit": {
+    "message": "Grenze",
+    "description": ""
+  },
+  "Parts.Brush.Limit.Tip": {
+    "message": "Wie weit die Pinsel einen Punkt höchstens von der Stelle bewegen dürfen,\nan die der Autor des Modells ihn gesetzt hat. Erhöhe sie für eine größere\nÄnderung; das Malen stoppt an der Grenze, damit ein gehaltener Pinsel\ndas Kleidungsstück nicht aufbläht.",
+    "description": ""
+  },
   "Parts.Brush.TooSmall.Fmt": {
     "message": "Der Pinsel ist kleiner als die Dreiecke dieses Modells (etwa {0:F1} mm), er zieht also einzelne Punkte zu Spitzen, statt die Oberfläche zu bewegen. Mach ihn größer.",
     "description": ""

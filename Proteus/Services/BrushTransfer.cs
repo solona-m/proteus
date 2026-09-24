@@ -31,7 +31,11 @@ internal static class BrushTransfer
     /// <param name="WindPainted">Wind was edited, so it is carried; otherwise each size keeps its author's.</param>
     /// <param name="Moved">The share of <paramref name="Delta"/> the Move tool put there, which the other size must
     /// not cap the way it caps a brush's.</param>
-    public sealed record Edit(Vector3[] Delta, float[] Weight, float[] Wind, bool WindPainted, float MeanEdge, Vector3[] Moved)
+    /// <param name="MaxDisplacement">The limit the other size imports under: the brushed model's, or further if the
+    /// brushes already went further — painted under a raised limit that was then lowered — so a carried edit is never
+    /// clipped short of what it is on the model it was painted on.</param>
+    public sealed record Edit(Vector3[] Delta, float[] Weight, float[] Wind, bool WindPainted, float MeanEdge, Vector3[] Moved,
+                              float MaxDisplacement)
     {
         /// <summary>Snapshot <paramref name="solve"/>, built over a model of <paramref name="vertexCount"/> vertices.</summary>
         public static Edit From(MeshVolumeSolve solve, int vertexCount)
@@ -40,6 +44,7 @@ internal static class BrushTransfer
             var moved = new Vector3[vertexCount];
             var weight = new float[vertexCount];
             var wind = new float[vertexCount];
+            float limit = solve.MaxDisplacement;
             for (int v = 0; v < vertexCount; v++)
             {
                 var d = solve.DeltaAt(v);
@@ -48,8 +53,10 @@ internal static class BrushTransfer
                 moved[v] = new Vector3(m.X, m.Y, m.Z);
                 weight[v] = solve.WeightAt(v);
                 wind[v] = solve.WindAt(v);
+                // The brushes' share only, the one the import caps.
+                limit = MathF.Max(limit, (delta[v] - moved[v]).Length());
             }
-            return new Edit(delta, weight, wind, solve.WindEdited, solve.MeanEdge, moved);
+            return new Edit(delta, weight, wind, solve.WindEdited, solve.MeanEdge, moved, limit);
         }
     }
 
@@ -66,7 +73,8 @@ internal static class BrushTransfer
     public static MeshVolumeSolve Transfer(Edit edit, ModelParts sourceModel, ModelParts target)
     {
         var src = new Surface(sourceModel, edit.MeanEdge);
-        var solve = new MeshVolumeSolve(target);
+        // Before ImportEdit, which caps what it imports.
+        var solve = new MeshVolumeSolve(target) { MaxDisplacement = edit.MaxDisplacement };
 
         int vc = target.Positions.Length / 3;
         var materialOf = new string?[vc];

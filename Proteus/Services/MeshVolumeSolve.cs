@@ -27,9 +27,22 @@ internal sealed class MeshVolumeSolve : IMeshEdit
     /// <summary>The same ceiling for hair, twice as far: restyling moves strands further than clearing cloth does.</summary>
     public const float HairMaxDisplacement = 0.2f;
 
-    /// <summary>This model's ceiling: <see cref="HairMaxDisplacement"/> for a hairstyle, else
-    /// <see cref="GarmentMaxDisplacement"/>.</summary>
-    public float MaxDisplacement { get; }
+    /// <summary>The range the brush limit may be set within (10 mm to 1 m).</summary>
+    public const float MinMaxDisplacement = 0.01f, MaxMaxDisplacement = 1f;
+
+    /// <summary>
+    /// This model's ceiling: <see cref="HairMaxDisplacement"/> for a hairstyle, else <see cref="GarmentMaxDisplacement"/>,
+    /// until the user sets it — clamped to <see cref="MinMaxDisplacement"/>..<see cref="MaxMaxDisplacement"/>. Raising
+    /// it lets the next dabs go further; lowering it never pulls back what is already painted, only what a dab touches
+    /// next, so the surface does not jump under the slider.
+    /// </summary>
+    public float MaxDisplacement
+    {
+        get => maxDisplacement;
+        set => maxDisplacement = Math.Clamp(value, MinMaxDisplacement, MaxMaxDisplacement);
+    }
+
+    private float maxDisplacement;
 
     /// <summary>A model is hair when it draws with a hair material (<c>mt_c0201h0162_hir_a.mtrl</c>).</summary>
     internal static bool IsHairMaterial(string material)

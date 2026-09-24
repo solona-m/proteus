@@ -2463,6 +2463,14 @@
     "message": "How far the surface moves per moment of painting. Small is usually right:\nclothing only has to clear the body by a fraction of a millimetre, and you\ncan always paint over the same place again.",
     "description": "Tooltip for the slider above. Keep the line breaks; the tooltip is not wrapped."
   },
+  "Parts.Brush.Limit": {
+    "message": "Limit",
+    "description": "Slider label: the furthest the push and pull brushes may move any point."
+  },
+  "Parts.Brush.Limit.Tip": {
+    "message": "The furthest the brushes may move any point from where the model's author\nput it. Raise it for a bigger change; painting stops at the limit, so a\nheld brush cannot balloon the garment.",
+    "description": "Tooltip for the slider above. Keep the line breaks; the tooltip is not wrapped."
+  },
   "Parts.Brush.TooSmall.Fmt": {
     "message": "The brush is smaller than this model's triangles (about {0:F1} mm across), so it will pull single points into spikes instead of moving the surface. Make it larger.",
     "description": "Warning when the brush is finer than the model's triangles. {0} is a length in millimetres."

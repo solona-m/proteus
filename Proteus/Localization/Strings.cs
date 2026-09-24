@@ -2090,6 +2090,14 @@ public sealed class PartsStrings
         "clothing only has to clear the body by a fraction of a millimetre, and you\n" +
         "can always paint over the same place again.");
 
+    public readonly string BrushLimit = Loc.Localize("Parts.Brush.Limit", "Limit")
+                                      + "###partsBrushLimit";
+
+    public readonly string BrushLimitTip = Loc.Localize("Parts.Brush.Limit.Tip",
+        "The furthest the brushes may move any point from where the model's author\n" +
+        "put it. Raise it for a bigger change; painting stops at the limit, so a\n" +
+        "held brush cannot balloon the garment.");
+
     /// <summary>The brush is finer than the mesh. {0} is the model's average edge length in millimetres.</summary>
     public readonly string BrushTooSmallFmt = Loc.Localize("Parts.Brush.TooSmall.Fmt",
         "The brush is smaller than this model's triangles (about {0:F1} mm across), so it will pull single "

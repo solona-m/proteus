@@ -2463,6 +2463,14 @@
     "message": "De combien la surface bouge à chaque instant de peinture. Petit convient\ngénéralement : un vêtement n'a qu'à dégager le corps d'une fraction de\nmillimètre, et vous pouvez toujours repasser au même endroit.",
     "description": ""
   },
+  "Parts.Brush.Limit": {
+    "message": "Limite",
+    "description": ""
+  },
+  "Parts.Brush.Limit.Tip": {
+    "message": "La distance maximale à laquelle les pinceaux peuvent déplacer un point\ndepuis l'endroit où l'auteur du modèle l'a placé. Augmentez-la pour un\nchangement plus important ; la peinture s'arrête à la limite, pour qu'un\npinceau maintenu ne fasse pas gonfler le vêtement.",
+    "description": ""
+  },
   "Parts.Brush.TooSmall.Fmt": {
     "message": "Le pinceau est plus petit que les triangles de ce modèle (environ {0:F1} mm), il tirera donc des points isolés en pointes au lieu de déplacer la surface. Agrandissez-le.",
     "description": ""
