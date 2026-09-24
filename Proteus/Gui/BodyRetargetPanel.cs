@@ -31,7 +31,7 @@ namespace Proteus.Gui;
 /// through it, which is the "made for" side of every refit of the game's own gear.
 /// </param>
 internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService uvRemap,
-                                        Func<string, byte[]?> readGameFile, IPluginLog log)
+                                        Func<string, byte[]?> readGameFile, Configuration config, IPluginLog log)
 {
     /// <summary>What the Studio tab lends this tool for the frame: the open model, and the things only it can do.</summary>
     /// <param name="Redirects">The open mod's redirects, already read by the tab. Used to spot a group of the author's
@@ -192,6 +192,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         validating.Clear();
         detectedFor = null;
         wornFor = null;
+        appliedFor = null;
         planned = null;
         showing = 0;
         pendingPreview = null;
@@ -246,7 +247,11 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
             saveTo = SwitchingGroup(ctx);
         }
 
-        if (bodyDir == null && bodies != null) PickWornBody(ctx);
+        if (bodyDir == null && bodies != null && !RestoreBody()) PickWornBody(ctx);
+
+        // Ahead of PresetWornTargets below, which is what makes the remembered size win over the worn one. Moving this
+        // after it would silently reverse that.
+        ApplyRemembered(ctx);
 
         // Top to bottom as the refit reads: where the garment comes from — its body mod, then its size — and where it
         // goes — the body mod, then the size.
@@ -292,7 +297,10 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         // closed panel never hides a choice that changes the refit.
         if (slots.Count > 1)
         {
-            int inUse = slots.Skip(1).Count(s => Targets(s).Count > 0);
+            // Both ends, not just a size to refit onto: the remembered sizes fill in every part, and a part with no
+            // "made for" size beside it is not being refitted. Counting those would make a closed panel claim work it
+            // is not doing.
+            int inUse = slots.Skip(1).Count(s => Targets(s).Count > 0 && from.ContainsKey(s));
             string header = (inUse > 0 ? string.Format(ps.RetargetOtherPartsInUseFmt, inUse) : ps.RetargetOtherParts)
                           + "###retargetOtherParts";
             if (ImGui.CollapsingHeader(header))
@@ -321,6 +329,8 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         if (DrawBodyCombo("##retargetBody", bodyDir, ref bodyFilter) is { } dir)
         {
             bodyDir = dir;
+            RememberBody(dir);
+            config.Save();
             catalog = BodyRoot(dir) is { } root ? BodySizeCatalog.Read(root) : null;
             if (fromBodyDir == dir)
             {
@@ -482,6 +492,39 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     // rather than which options happen to be ticked in some group.
 
     /// <summary>
+    /// The body mod this tool was last used with, if it is still installed. Ahead of the worn body, which is only a
+    /// guess at the same answer: a player who refits onto something other than what they have on — a size they are
+    /// about to wear, a second character's body — said so once and should not have to say it per garment.
+    /// <para/>
+    /// Once, like the worn guess: this runs every frame until a body is chosen, and reading a mod's sizes is a walk
+    /// over its files.
+    /// </summary>
+    /// <returns>Whether a body was restored, so the caller knows not to guess.</returns>
+    private bool RestoreBody()
+    {
+        if (restoreTried) return false;
+        if (config.RetargetBodyDir is not { Length: > 0 } last || bodies?.ContainsKey(last) != true) return false;
+        if (BodyRoot(last) is not { } root) return false;
+
+        restoreTried = true;
+
+        try
+        {
+            var read = BodySizeCatalog.Read(root);
+            if (!read.IsBody) return false;      // still installed, but no longer publishes bodies
+            bodyDir = last;
+            catalog = read;
+            wornBodyTried = true;                // the worn guess is moot once the remembered answer is in
+            return true;
+        }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "[Proteus] retarget: could not re-read the last body mod {0}", last);
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Choose, once, the body mod the character is wearing: the installed body mod that supplies the body model for the
     /// garment's own slot.
     /// </summary>
@@ -528,12 +571,18 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     /// <summary>Only ever tried once per session: the user may well choose another body mod on purpose.</summary>
     private bool wornBodyTried;
 
+    /// <summary>The same, for the remembered body mod: once, and never again over a choice made since.</summary>
+    private bool restoreTried;
+
     /// <summary>
     /// Default the garment's own slot's target to the option the character is wearing, leaving a choice already made.
     /// <para/>
-    /// Only the garment's own slot. The others are optional, and a target preset there — hands, feet, for a top that
-    /// reaches neither — is a target with no source, which holds the refit back until the user empties a slot they
-    /// never touched.
+    /// Only the garment's own slot — whichever that is: the legs for trousers, the feet for shoes. Not because a target
+    /// preset elsewhere would hold the refit back; it no longer does, an unpaired part simply sits out
+    /// (see <see cref="DrawActions"/>). It is that for the other parts there is nothing to go on. A top reaches neither
+    /// hands nor feet, so the size worn there says nothing about what this garment should be refitted onto, and a guess
+    /// presented as a default is worse than an empty dropdown. Those parts are filled in only from what the user chose
+    /// last themselves — see <see cref="ApplyRemembered"/>.
     /// </summary>
     private void PresetWornTargets(in RetargetContext ctx)
     {
@@ -554,6 +603,83 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
          : dir == VanillaBodyCatalog.Key ? Strings.Parts.RetargetFromVanilla
          : bodies != null && bodies.TryGetValue(dir, out string? name) ? name
          : dir;
+
+    /// <summary>
+    /// Keep this slot's chosen size for next time, or forget it when the slot is emptied. Written against the body
+    /// mod it belongs to, so switching mods does not leave one mod's sizes remembered under another's name.
+    /// </summary>
+    private void Remember(string slot)
+    {
+        if (bodyDir == null) return;
+
+        // Before this slot's own choice is written, because it may forget everything: the body can have changed since
+        // the sizes were remembered without the user ever opening the dropdown.
+        RememberBody(bodyDir);
+
+        if (Targets(slot).FirstOrDefault() is { } chosen) config.RetargetTargets[slot] = chosen.Rel;
+        else config.RetargetTargets.Remove(slot);
+
+        config.Save();
+    }
+
+    /// <summary>
+    /// Point the memory at a body mod, forgetting the remembered sizes if it is a different one from the sizes' own.
+    /// <para/>
+    /// Every change of <see cref="Configuration.RetargetBodyDir"/> goes through here, not just the dropdown: the body
+    /// is also chosen for the user, by <see cref="RestoreBody"/> and <see cref="PickWornBody"/>, and a size ticked
+    /// after one of those would otherwise re-label the previous mod's leftover sizes as this mod's. They mostly fail
+    /// to resolve and are skipped — but two mods that lay their files out alike (a fork of a body, the same body
+    /// reinstalled under another folder name) share rels, and then a size the user never picked would be filled in.
+    /// </summary>
+    private void RememberBody(string dir)
+    {
+        if (!string.Equals(dir, config.RetargetBodyDir, StringComparison.OrdinalIgnoreCase))
+            config.RetargetTargets.Clear();
+        config.RetargetBodyDir = dir;
+    }
+
+    /// <summary>
+    /// Fill in the sizes this tool was last used with — every slot, not only the garment's own, and whether or not the
+    /// slot has a "made for" size to pair with yet.
+    /// <para/>
+    /// An unpaired one costs nothing: a slot joins the refit only once both its ends are chosen (<see cref="Chosen"/>),
+    /// so a size to refit onto on its own sits out, and the row says so. What it buys is the garment the detector reads
+    /// late, or reads only half of: the size is already waiting when the "made for" side lands.
+    /// <para/>
+    /// Never over a choice already made — including one made moments ago for this garment — and never for a body mod
+    /// other than the one the sizes were remembered against.
+    /// <para/>
+    /// Once per garment and body, not per frame. A remembered size that the body mod no longer has — the author renamed
+    /// the option, or it belongs to another race's files — is looked for and not found, and without the gate that search
+    /// would repeat for every frame the panel is open. The size is NOT forgotten on a miss: the sizes are remembered per
+    /// part but the options are filtered by race, so a garment of another race misses sizes that are still right for
+    /// the race they were chosen for.
+    /// </summary>
+    private void ApplyRemembered(in RetargetContext ctx)
+    {
+        if (catalog is not { IsBody: true } snapshot || bodyDir == null) return;
+
+        string once = ctx.ModelRel + "|" + bodyDir;
+        if (appliedFor == once) return;
+        appliedFor = once;
+
+        var drawn = new HashSet<string>(Slots(ctx), StringComparer.Ordinal);
+        foreach (var (slot, rel) in RememberedTargets.Fillable(config.RetargetTargets, bodyDir,
+                                                              config.RetargetBodyDir, drawn.Contains, to.ContainsKey))
+        {
+            if (snapshot.For(slot, race).FirstOrDefault(o =>
+                    string.Equals(o.Rel, rel, StringComparison.OrdinalIgnoreCase)) is not { } remembered) continue;
+
+            to[slot] = [remembered];
+            StartValidate(slot);
+        }
+    }
+
+    /// <summary>
+    /// The garment and body <see cref="ApplyRemembered"/> has already run for. Cleared with everything else
+    /// model-specific, and keyed on the body too, because the body can change without that reset.
+    /// </summary>
+    private string? appliedFor;
 
     /// <summary>The option of this slot whose file the player's collection resolves the body model to.</summary>
     private BodyOption? WornOption(BodySizeCatalog snapshot, string slot)
@@ -672,9 +798,19 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
             else if (many) list.Add(pickedTo);
             else { list.Clear(); list.Add(pickedTo); }
             if (list.Count == 0) to.Remove(slot);
+            Remember(slot);
             DropPlan(ctx);
             StartValidate(slot);
         }
+
+        // A size sitting in the dropdown that nothing is being done with would otherwise be a lie — and with the
+        // remembered sizes filled in everywhere, it is the state of every part the garment does not reach.
+        //
+        // Not while the detector is still working, though: the remembered sizes are in from the first frame and the
+        // "made for" sides only land when it finishes, so every row would spend that time asking for something that is
+        // already on its way.
+        if (targets.Count > 0 && !from.ContainsKey(slot) && detectTask == null)
+            ImGui.TextDisabled(ps.RetargetSlotSittingOut);
 
         if (targets.Any(t => validating.ContainsKey(PairKey(slot, t))))
             ImGui.TextDisabled(ps.RetargetCheckingPair);
@@ -790,17 +926,14 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         var ps = Strings.Parts;
         bool busy = detectTask != null || planTask != null || saveTask != null || validating.Count > 0;
 
-        // The garment's own slot is required; the others take part only if both their ends are chosen.
-        //
-        // Only a MISSING SOURCE holds the button, never a missing target. The detector fills the source of every slot
-        // it recognises, including ones this garment does not reach, so "source but no target" is the normal state of
-        // an optional slot the user is ignoring — treating that as unfinished would leave the button permanently
-        // disabled. "Target but no source" is the genuinely incomplete case.
+        // Only the garment's own slot holds the button. An optional slot with one end chosen is not an unfinished
+        // state to be nagged about, in either direction: the detector fills the source of every slot it recognises
+        // whether the garment reaches there or not, and the remembered sizes fill the targets the same way, so half a
+        // pair is the ordinary resting state of a part nobody is refitting. Such a slot sits out — see
+        // <see cref="Chosen"/>, which everything downstream goes through — and its row says so.
         string primary = Primary(ctx);
-        var slots = Slots(ctx);
-        bool sourceMissing = slots.Any(s => Targets(s).Count > 0 && !from.ContainsKey(s));
         bool refused = Chosen(ctx).Any(s => Targets(s).Any(t => refusals.ContainsKey(PairKey(s, t))));
-        bool ready = from.ContainsKey(primary) && Targets(primary).Count > 0 && !sourceMissing && !refused;
+        bool ready = from.ContainsKey(primary) && Targets(primary).Count > 0 && !refused;
 
         if (detectTask != null) ImGui.TextUnformatted(ps.RetargetChecking);
 
@@ -819,8 +952,6 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         {
             string why = !from.ContainsKey(primary) ? string.Format(ps.RetargetNeedFromFmt, SlotName(primary))
                        : Targets(primary).Count == 0 ? string.Format(ps.RetargetNeedToFmt, SlotName(primary))
-                       : sourceMissing ? string.Format(ps.RetargetNeedFromFmt,
-                                                       SlotName(slots.First(s => Targets(s).Count > 0 && !from.ContainsKey(s))))
                        : ps.RetargetRefusedHold;
             using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
                 ImGui.TextWrapped(why);
@@ -1251,10 +1382,39 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
             refits.Add(new BodyRetargetWriter.Refit(option, plan.Model, ToLabel(ctx, target)));
         }
 
+        // What to switch on once it is written. A refit appended to a group the AUTHOR already ships lands beside
+        // their sizes and nothing selects it: Penumbra keeps the choice the user already had — "Small", say — and the
+        // refit sits in the list unused. The Studio then says it saved, the game keeps drawing the old size, and every
+        // symptom points at the refit being wrong when it is simply not being worn. (A group Proteus makes itself
+        // escapes this only by accident: a brand-new group has no stored choice, so its DefaultSettings applies — and
+        // the second refit into that same group would hit exactly this.)
+        selectAfterSave = (group, refits[Math.Clamp(showing, 0, refits.Count - 1)].Option);
+
         string at = root;
         saveTask = Task.Run(() => new SaveResult(
             BodyRetargetWriter.Save(at, group, path, body, labelFrom, refits),
             BodyRetargetWriter.ReadRecord(at)));
+    }
+
+    /// <summary>The group and option a finished save should switch on; null for an undo, which switches nothing on.</summary>
+    private (string Group, string Option)? selectAfterSave;
+
+    /// <summary>
+    /// Wear what was just saved. Penumbra IPC, so the framework thread — which is where the save is consumed.
+    /// </summary>
+    private void SelectSaved(string? modDir)
+    {
+        if (selectAfterSave is not { } pick || modDir == null) return;
+        selectAfterSave = null;
+
+        if (penumbra.GetPlayerCollectionId() is not { } collection)
+        {
+            log.Warning("[Proteus] retarget: saved, but there is no player collection to select {0} in", pick.Option);
+            return;
+        }
+
+        var ec = penumbra.SetModOption(collection, modDir, pick.Group, [pick.Option]);
+        log.Information("[Proteus] retarget: selected {0} / {1} in {2}: {3}", pick.Group, pick.Option, modDir, ec);
     }
 
     private void StartUndo(in RetargetContext ctx, BodyRetargetWriter.Record saved)
@@ -1262,6 +1422,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         if (saveTask != null) return;
         // The button is only drawn when a record was read, and a record read means a root.
         if (RecordRoot(ctx) is not { } root) return;
+        selectAfterSave = null;   // an undo takes an option away; there is nothing to switch on
         wroteInto = Path.GetFileName(root);
         string group = saved.GroupOf(saved.Options[^1]);
         string option = saved.Options[^1].Name;
@@ -1372,6 +1533,9 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
             recordFor = null;   // the record and the group list are both re-read next frame
             ctx.SetStatus(outcome.Message, !outcome.Ok);
             if (!outcome.Ok) return;
+
+            // Before AfterModChange, which reloads the mod: the selection is part of what the reload should pick up.
+            SelectSaved(wroteInto);
 
             ctx.EndPreview();
             planned = null;

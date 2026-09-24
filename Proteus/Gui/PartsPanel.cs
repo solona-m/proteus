@@ -271,14 +271,15 @@ public sealed class PartsPanel
 
     public PartsPanel(
         PenumbraBridge penumbra, CompositorService compositor, PartViewport viewport, LiveBrush liveBrush,
-        TextureLoader textureLoader, UVRemapService uvRemap, IPluginLog log)
+        TextureLoader textureLoader, UVRemapService uvRemap, Configuration config, IPluginLog log)
     {
         this.penumbra = penumbra;
         this.compositor = compositor;
         this.viewport = viewport;
         this.liveBrush = liveBrush;
         preview = new LiveBrushPreview(penumbra, compositor, log);
-        retarget = new BodyRetargetPanel(penumbra, uvRemap, path => textureLoader.LoadRawFile(null, path), log);
+        retarget = new BodyRetargetPanel(penumbra, uvRemap, path => textureLoader.LoadRawFile(null, path),
+                                         config, log);
         refitMods = new RefitModService(penumbra, compositor, log);
         LiveBrushPreview.CleanUp();
         // Last session's extracts of the game's body: a patch since then would make them stale, and the session is

@@ -3503,8 +3503,12 @@
     "message": "Skin swapped for the new body\u0027s where it is being resized: {0:N0} of the garment\u0027s skin triangles out, {1:N0} of the body\u0027s in.",
     "description": ""
   },
-  "Parts.Retarget.NeedFrom.Fmt": {
-    "message": "{0}: a size to refit onto is chosen, but not the size it was made for. Choose that, or click the chosen size again to untick it.",
+  "Parts.Retarget.NeedFromRequired.Fmt": {
+    "message": "{0}: choose the size the garment was made for.",
+    "description": ""
+  },
+  "Parts.Retarget.SlotSittingOut": {
+    "message": "Not being refitted \u2014 choose the size this part was made for, above, and it will be.",
     "description": ""
   },
   "Parts.Retarget.NeedTo.Fmt": {
