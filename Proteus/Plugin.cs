@@ -25,7 +25,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1032;
+    public const int BuildNumber = 1041;
 
     /// <summary>
     /// Which set of release notes is current. Raise it when a release has something new to say: the window
@@ -208,7 +208,8 @@ public sealed class Plugin : IDalamudPlugin
         // The clickable model view, and the panel that turns a mod's geometry into on/off switches.
         partViewport = new Gui.PartViewport(TextureProvider, log);
         liveBrush = new Gui.LiveBrush(ObjectTable, DataManager, penumbra, log);
-        partsPanel = new Gui.PartsPanel(penumbra, compositor, partViewport, liveBrush, textureLoader, uvRemap, log);
+        partsPanel = new Gui.PartsPanel(penumbra, compositor, partViewport, liveBrush, textureLoader, uvRemap,
+                                        config, log);
 
         // A service, not part of the panel: it subscribes to the hairstyle change so it works with the window shut.
         hatCompat = new HatCompatWatcher(compositor, penumbra, glamourer, config, log);

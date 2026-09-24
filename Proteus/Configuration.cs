@@ -237,6 +237,22 @@ public class Configuration : IPluginConfiguration
     public bool InjectedGlasses { get; set; }
 
     /// <summary>
+    /// The body mod the Studio's Body size tool last refitted ONTO, by folder. Null until one is chosen.
+    /// <para/>
+    /// A player refits onto the body they are wearing, over and over, across every garment they own — so the last
+    /// answer is very nearly always the next one. Only the destination is remembered: the "made for" side belongs to
+    /// the garment, and the detector reads it off the model.
+    /// </summary>
+    public string? RetargetBodyDir { get; set; }
+
+    /// <summary>
+    /// Per body slot ("_top", "_dwn", …), the size last refitted onto in <see cref="RetargetBodyDir"/>, by the
+    /// option's file relative to that mod — the same identity the panel pairs and de-duplicates by, and the only one
+    /// that survives an author reusing a name (Neolithe has eight options called "SFW M").
+    /// </summary>
+    public Dictionary<string, string> RetargetTargets { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// The Glamourer design whose binding was active when the plugin last ran, so a reload can pick it back up
     /// (Glamourer signals nothing for an already-applied design). Null = nothing active. Restored only after
     /// <c>DesignBindingService.TryBootRestore</c> verifies it.

@@ -2227,10 +2227,20 @@ public sealed class PartsStrings
     public readonly string RetargetOtherPartsInUseFmt = Loc.Localize("Parts.Retarget.OtherPartsInUse.Fmt",
         "Other parts of the body — {0} being refitted");
 
-    /// <summary>{0} is the slot's name ("Hands").</summary>
-    public readonly string RetargetNeedFromFmt = Loc.Localize("Parts.Retarget.NeedFrom.Fmt",
-        "{0}: a size to refit onto is chosen, but not the size it was made for. Choose that, or click the chosen "
-      + "size again to untick it.");
+    /// <summary>
+    /// A part with a size to refit onto but no size it was made for. It is not being refitted, and says so where the
+    /// size is chosen rather than holding the whole refit up: with the last sizes filled in for every part, this is
+    /// the ordinary state of every part the garment does not reach.
+    /// </summary>
+    public readonly string RetargetSlotSittingOut = Loc.Localize("Parts.Retarget.SlotSittingOut",
+        "Not being refitted — choose the size this part was made for, above, and it will be.");
+
+    /// <summary>
+    /// {0} is the slot's name ("Chest"). The garment's own part only, which is the one part that is required — a new
+    /// key, because the text it replaces told the user to untick their way out of a hold that no longer exists.
+    /// </summary>
+    public readonly string RetargetNeedFromFmt = Loc.Localize("Parts.Retarget.NeedFromRequired.Fmt",
+        "{0}: choose the size the garment was made for.");
 
     /// <summary>{0} is the slot's name ("Chest").</summary>
     public readonly string RetargetNeedToFmt = Loc.Localize("Parts.Retarget.NeedTo.Fmt",

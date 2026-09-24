@@ -327,9 +327,14 @@ internal static partial class BodyRetarget
                 if (a == b || b == c || c == a) continue;
                 if (need[a] <= 0f && need[b] <= 0f && need[c] <= 0f) continue;
 
-                var was = Placed(sets, nodeDelta, a);
-                var n0 = Vector3.Cross(Placed(sets, nodeDelta, b) - was, Placed(sets, nodeDelta, c) - was);
-                if (n0.Length() <= 1e-12f) continue;   // degenerate before the push; not this pass's doing
+                // Against the AUTHOR's orientation, not against where the transfer left the triangle. Measured on a
+                // sheer corset refitted Bibo+ to Neolithe: the transfer turns a triangle in the under-bust crease most
+                // of the way over, the push tips it the rest, and each step passes a test that only looks at its own
+                // step — 33 folds before the push, 95 after, every one of them over the bust. What the garment is
+                // drawn with is the author's winding, so that is what the push has to leave alone.
+                var was = ToVector(sets.NodeAt[a]);
+                var n0 = Vector3.Cross(ToVector(sets.NodeAt[b]) - was, ToVector(sets.NodeAt[c]) - was);
+                if (n0.Length() <= 1e-12f) continue;   // degenerate as authored; not this pass's doing
                 var now = Trial(a);
                 var n1 = Vector3.Cross(Trial(b) - now, Trial(c) - now);
                 if (Vector3.Dot(n0, n1) > 0f) continue;

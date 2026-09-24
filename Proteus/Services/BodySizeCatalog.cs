@@ -106,6 +106,19 @@ internal sealed record BodySizeCatalog(string ModRoot, IReadOnlyList<BodyOption>
     public static BodySizeCatalog Read(string modRoot)
     {
         var options = new List<BodyOption>();
+
+        // Files the mod ships with no option at all. A body pack can be a single replacement and nothing else — one
+        // smallclothes model, no groups — and read only through the groups such a mod has no options, so IsBody is
+        // false and it never reaches the picker. It is still a body, and it ships exactly one, which is what this
+        // stands for. Before the groups, so a mod that has both lists its plain files first.
+        if (PenumbraModMeta.TryReadDefaultData(modRoot) is { } dflt)
+            foreach (var (gamePath, rel) in dflt.Files)
+            {
+                if (rel is not { Length: > 0 }) continue;
+                if (!IsBodyModel(gamePath) || SlotOf(gamePath) is not { } dfltSlot) continue;
+                options.Add(new BodyOption(DefaultGroupName, Section: "", DefaultSizeName, rel, gamePath, dfltSlot));
+            }
+
         var groups = PenumbraModMeta.TryReadGroups(modRoot);
         if (groups == null) return new BodySizeCatalog(modRoot, options);
 
@@ -152,6 +165,15 @@ internal sealed record BodySizeCatalog(string ModRoot, IReadOnlyList<BodyOption>
     /// the very same files as <c>e0000</c>, so counting it lists every size twice.
     /// </summary>
     internal static bool IsBodyModel(string gamePath) => BodyModelPath.IsMatch(gamePath);
+
+    /// <summary>
+    /// What a body shipped with no option is filed under. The picker has already named the mod by the time these are
+    /// shown, so this only has to say WHERE in the mod it came from — and "no option" is the honest answer.
+    /// </summary>
+    internal const string DefaultGroupName = "No options";
+
+    /// <inheritdoc cref="DefaultGroupName"/>
+    internal const string DefaultSizeName = "The mod's own body";
 
     private static readonly System.Text.RegularExpressions.Regex BodyModelPath = new(
         @"^chara/equipment/e0000/model/c\d{4}e0000_(top|dwn|glv|sho)\.mdl$",

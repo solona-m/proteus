@@ -846,6 +846,104 @@ public static partial class SecondSkinWriter
     private static Vec3[] CapNormals(Vec3[] basePos, Vec3[] baseNrm, ToeCapPlan plan, ushort[] tris)
         => RelaxedNormals(basePos, baseNrm, plan.Delta, plan.NodeOf, plan.NodeWeight, plan.NodeNormal, tris);
 
+    /// <summary>
+    /// The author's normals TURNED by however far the surface turned under them, rather than replaced with normals
+    /// recomputed from the triangles.
+    /// <para/>
+    /// For an EDIT of somebody's finished garment, which is what the brush makes. <see cref="RelaxedNormals"/> is
+    /// right for a shell — a shell is built as position plus normal times an offset, so it needs the normal of the new
+    /// surface and nothing else. It is wrong for an edit, because a garment's shipped normals are not the geometric
+    /// ones: authors smooth them, or copy them off the body so the fabric shades as if it were skin, and recomputing
+    /// throws all of that away. Measured on two real garments held completely still — not one vertex moved — and asked
+    /// to reshade: 60% of one model's normals came out more than 10 degrees from the author's, 12% more than 60. That
+    /// is the blotching a brush stroke leaves across flat fabric, and none of it is at an edge.
+    /// <para/>
+    /// The rotation is taken per welded node, from the node's own face normals before and after the displacement, and
+    /// applied to each vertex's OWN authored normal. That keeps both of the things a normal pass has to keep: a uv
+    /// seam's copies carry identical normals and take an identical rotation, so they stay identical and the seam
+    /// cannot crack; a hard edge's copies carry different normals and keep the angle between them, because nothing
+    /// averages across them. Where the brush moved a vertex a hundredth of a millimetre the rotation is the identity
+    /// and the authored bytes survive exactly, which is the case that covers most of a stroke's falloff.
+    /// </summary>
+    /// <param name="nodeWeight">Only nodes with weight are turned; the rest keep their authored normal exactly.</param>
+    internal static Vec3[] TurnedNormals(Vec3[] basePos, Vec3[] baseNrm, Vec3[] delta, int[] nodeOf,
+                                         float[] nodeWeight, int[] tris)
+    {
+        int vc = basePos.Length;
+        int nodeCount = nodeWeight.Length;
+
+        var was = new Vec3[nodeCount];
+        var now = new Vec3[nodeCount];
+        var seenFace = new HashSet<(int, int, int)>();
+        for (int t = 0; t + 2 < tris.Length; t += 3)
+        {
+            int ia = tris[t], ib = tris[t + 1], ic = tris[t + 2];
+            if (ia < 0 || ib < 0 || ic < 0 || ia >= vc || ib >= vc || ic >= vc) continue;
+            int na = nodeOf[ia], nb = nodeOf[ib], nc = nodeOf[ic];
+            if (na == nb || nb == nc || na == nc) continue;
+
+            // Deduped by node triple, as RelaxedNormals is: a mesh carrying a duplicate variant of a submesh would
+            // otherwise weigh the same face twice.
+            int s0 = Math.Min(na, Math.Min(nb, nc)), s2 = Math.Max(na, Math.Max(nb, nc));
+            if (!seenFace.Add((s0, na + nb + nc - s0 - s2, s2))) continue;
+
+            Face(basePos, null, ia, ib, ic, out float bx, out float by, out float bz);
+            Face(basePos, delta, ia, ib, ic, out float ax, out float ay, out float az);
+            was[na] = new Vec3(was[na].X + bx, was[na].Y + by, was[na].Z + bz);
+            was[nb] = new Vec3(was[nb].X + bx, was[nb].Y + by, was[nb].Z + bz);
+            was[nc] = new Vec3(was[nc].X + bx, was[nc].Y + by, was[nc].Z + bz);
+            now[na] = new Vec3(now[na].X + ax, now[na].Y + ay, now[na].Z + az);
+            now[nb] = new Vec3(now[nb].X + ax, now[nb].Y + ay, now[nb].Z + az);
+            now[nc] = new Vec3(now[nc].X + ax, now[nc].Y + ay, now[nc].Z + az);
+        }
+
+        var outN = new Vec3[vc];
+        for (int i = 0; i < vc; i++)
+        {
+            int n = nodeOf[i];
+            outN[i] = baseNrm[i];
+            if (nodeWeight[n] <= 0f) continue;                       // untouched: the authored bytes must survive
+            if (Normalize(was[n]) is not { } a || Normalize(now[n]) is not { } b) continue;
+
+            // Rodrigues, about the axis that takes the old face direction to the new one. A surface that did not turn
+            // gives the identity, which is the whole point.
+            float cos = a.X * b.X + a.Y * b.Y + a.Z * b.Z;
+            var axis = new Vec3(a.Y * b.Z - a.Z * b.Y, a.Z * b.X - a.X * b.Z, a.X * b.Y - a.Y * b.X);
+            float sin = MathF.Sqrt(axis.X * axis.X + axis.Y * axis.Y + axis.Z * axis.Z);
+            if (sin <= 1e-7f) continue;                              // parallel, or turned clean over: leave it
+
+            var k = new Vec3(axis.X / sin, axis.Y / sin, axis.Z / sin);
+            var v = baseNrm[i];
+            float kv = k.X * v.X + k.Y * v.Y + k.Z * v.Z;
+            var kxv = new Vec3(k.Y * v.Z - k.Z * v.Y, k.Z * v.X - k.X * v.Z, k.X * v.Y - k.Y * v.X);
+            outN[i] = Normalize(new Vec3(
+                v.X * cos + kxv.X * sin + k.X * kv * (1f - cos),
+                v.Y * cos + kxv.Y * sin + k.Y * kv * (1f - cos),
+                v.Z * cos + kxv.Z * sin + k.Z * kv * (1f - cos))) ?? baseNrm[i];
+        }
+        return outN;
+    }
+
+    /// <summary>One face's unnormalized normal, with the displacement applied when there is one.</summary>
+    private static void Face(Vec3[] pos, Vec3[]? delta, int ia, int ib, int ic,
+                             out float x, out float y, out float z)
+    {
+        float ax = pos[ia].X, ay = pos[ia].Y, az = pos[ia].Z;
+        float bx = pos[ib].X, by = pos[ib].Y, bz = pos[ib].Z;
+        float cx = pos[ic].X, cy = pos[ic].Y, cz = pos[ic].Z;
+        if (delta is not null)
+        {
+            ax += delta[ia].X; ay += delta[ia].Y; az += delta[ia].Z;
+            bx += delta[ib].X; by += delta[ib].Y; bz += delta[ib].Z;
+            cx += delta[ic].X; cy += delta[ic].Y; cz += delta[ic].Z;
+        }
+        float ux = bx - ax, uy = by - ay, uz = bz - az;
+        float wx = cx - ax, wy = cy - ay, wz = cz - az;
+        x = uy * wz - uz * wy;
+        y = uz * wx - ux * wz;
+        z = ux * wy - uy * wx;
+    }
+
     /// <inheritdoc cref="CapNormals"/>
     /// <remarks>
     /// The plan-free form, shared by every pass that moves vertices without changing which vertices exist.
