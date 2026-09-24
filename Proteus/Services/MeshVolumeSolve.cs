@@ -1297,8 +1297,10 @@ internal sealed class MeshVolumeSolve : IMeshEdit
 
         Spread();
 
-        vertNrm = SecondSkinWriter.RelaxedNormals(
-            basePos, baseNrm, vertDelta, nodeOf, nodeWeight, nodeNormal, tris);
+        // Turned, not recomputed — see TurnedNormals. The brush edits somebody's finished garment, whose normals the
+        // author smoothed or copied off the body; replacing them with the triangles' own reshades flat fabric that
+        // barely moved, which is what the falloff of every stroke covers.
+        vertNrm = SecondSkinWriter.TurnedNormals(basePos, baseNrm, vertDelta, nodeOf, nodeWeight, tris);
 
         // Re-aim normal-following pulls from the current surface: inside a concavity the old directions drive the
         // walls apart. Pulls aimed from skin stay, since the skin has not moved.
