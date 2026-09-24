@@ -139,6 +139,30 @@ internal static partial class BodyRetarget
             if (cut) trimmed++;
         }
 
+        // The garment's own body mesh. It IS the body, so it takes the new body's weights OUTRIGHT rather than the
+        // change between the two: the change exists for cloth an author weighted by hand, and a garment's body mesh
+        // was copied off a body to begin with.
+        //
+        // Without this the refit moves the cloth to the new body's weighting and leaves the skin beside it — often
+        // sharing its vertices — still rigged to the old body, and two surfaces a millimetre apart weighted to two
+        // different bodies come apart as soon as a bust bone turns. Measured on a sheer corset refitted Bibo+ to
+        // Neolithe with the skin kept: cloth and skin 0.044 apart on average where the author's own file is 0.019,
+        // and 7% of the cup more than a tenth apart. That is the reported "the weights of the top don't match the
+        // skin", and no amount of moving the geometry answers it.
+        //
+        // Wasted when the skin is about to be swapped for the body's own mesh, which already carries these weights —
+        // but harmless, and whether the caller will swap is not something this can see.
+        foreach (int v in SkinVertices(model))
+        {
+            if (held != null && held.Contains(v)) continue;
+            var p = new Vector3(model.Positions[v * 3], model.Positions[v * 3 + 1], model.Positions[v * 3 + 2]);
+            if (Nearest(targets, p) is not { } body || body.Length == 0) continue;
+            if (Combine(Influences(own, v), body, bodyBones, out bool cut) is not { } combined) continue;
+            result[v] = combined;
+            reweighted++;
+            if (cut) trimmed++;
+        }
+
         // Per mesh, in each mesh's own vertex numbering, which is what the writer walks.
         var perMesh = new Dictionary<int, (string Bone, float W)[]?[]>();
         foreach (var span in model.MeshSpans)
@@ -209,6 +233,21 @@ internal static partial class BodyRetarget
         foreach (var (bone, weight) in newBody) w[bone] = w.GetValueOrDefault(bone) + share * weight;
         foreach (var (bone, weight) in oldBody) w[bone] = w.GetValueOrDefault(bone) - share * weight;
         return w.Where(p => p.Value > 1e-4f).Select(p => (p.Key, p.Value)).ToList();
+    }
+
+    /// <summary>Vertices of the garment's own body mesh — every whole submesh drawn with a skin material.</summary>
+    private static List<int> SkinVertices(ModelParts model)
+    {
+        int vc = model.Positions.Length / 3;
+        var seen = new bool[vc];
+        var list = new List<int>();
+        foreach (var part in model.Parts)
+        {
+            if (part.Island >= 0 || !SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+            foreach (int v in part.Triangles)
+                if (v >= 0 && v < vc && !seen[v]) { seen[v] = true; list.Add(v); }
+        }
+        return list;
     }
 
     /// <summary>Vertices of the garment's cloth — every whole submesh not drawn with a skin material.</summary>

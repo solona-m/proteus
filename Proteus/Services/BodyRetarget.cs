@@ -118,13 +118,18 @@ internal static partial class BodyRetarget
     internal const float AuthoredProbeRange = 0.15f;
 
     /// <summary>
-    /// How far outside the target body a pushed cloth vertex is put (0.5 mm).
+    /// How far outside the target body a pushed cloth vertex is put (1 mm).
     /// <para/>
     /// This feature's own constant, measured for CLOTH OVER SKIN. Explicitly not <c>SecondSkinWriter.BaseOffset</c>,
     /// which is 0.05 mm and was measured for a shell cut from the body and sitting on its own normal — a different
     /// pass, whose number is height-banded for the foot on top of that.
+    /// <para/>
+    /// It is a CAP on the author's own standoff, not a target: the push restores <c>min(authored, this)</c>. At 0.5 mm
+    /// a corset whose author held the cup 2 mm off the skin got a quarter of that back and still read as tight against
+    /// the breast. At 1 mm the same refit leaves 2 cup vertices inside the skin, which is what the author's own file
+    /// has, and the ground truth against "This Old Thing"'s hand-fitted sizes does not move at all.
     /// </summary>
-    internal const float Clearance = 5e-4f;
+    internal const float Clearance = 1e-3f;
 
     /// <summary>Rounds of slope-limited spreading, so the push has no step where it stops.</summary>
     internal const int PushSpreadRounds = 8;
@@ -222,6 +227,149 @@ internal static partial class BodyRetarget
         /// <see cref="BodyRetarget.LaySkin"/>.</summary>
         public required int[] SkinNodes { get; init; }
 
+        /// <summary>
+        /// How close two points of DIFFERENT pieces have to be for the refit to move them as one (1 mm).
+        /// <para/>
+        /// <see cref="MeshMath.WeldByPosition"/> groups points within about 10 um, which asks them to be coincident to
+        /// the last bit — and bucketed, so two points a micron apart never join if a bucket boundary runs between
+        /// them. A garment author does not build to that: the boning strips of a corset merely TOUCH the panels beside
+        /// them. Measured on "BiboPlus Sheer Elegance", where the pieces meet at a third of a millimetre rather than
+        /// at zero: 804 pairs within half a millimetre of each other were moved two different ways, opening seams of
+        /// up to 6 mm down the boning.
+        /// <para/>
+        /// Wide, and it can be wide because it only ever joins points of DIFFERENT pieces. A tolerance this size
+        /// applied within one piece would weld a panel to itself across its own thickness and stop it deforming; a
+        /// panel's interior needs no help, because it is connected geometry the knit already holds together. What
+        /// cracks is the join BETWEEN pieces, and nothing else is touched.
+        /// </summary>
+        internal const float SeamWeld = 1e-3f;
+
+        /// <summary>
+        /// The same, within ONE piece (0.2 mm): near-exact, and there only to catch what the bucketed weld misses —
+        /// two points a micron apart with a bucket boundary between them. A piece's interior is connected geometry the
+        /// knit already holds, so it needs nothing wider, and giving it <see cref="SeamWeld"/> would weld a panel
+        /// across its own thickness.
+        /// </summary>
+        internal const float SeamWeldWithinPiece = 2e-4f;
+
+        /// <summary>
+        /// The widest a locked node may end up (2 mm).
+        /// <para/>
+        /// Joining is transitive, so without a cap it has no scale of its own: a and b within a millimetre, b and c
+        /// within a millimetre, and a and c are two apart — and a seam running between alternating boning strips and
+        /// panels chains further still. Everything downstream treats a node as a POINT: the push-out probes the body
+        /// at it and takes its push direction there, and the fold tests judge winding from it. A node's spread is
+        /// therefore error, and it may not grow unbounded just because the joins are each small.
+        /// </summary>
+        internal const float MaxLockedSpan = 2e-3f;
+
+        /// <summary>
+        /// Join nodes the author left touching, so an edge shared by two pieces of the garment moves as one and the
+        /// seam between them cannot open.
+        /// <para/>
+        /// After the exact weld rather than instead of it: this only ever merges nodes further, so a garment built to
+        /// the tighter tolerance is unaffected. Skin is never merged with cloth — see the caller.
+        /// </summary>
+        /// <param name="pieceOf">Which piece each VERTEX belongs to; only points of different pieces are joined.</param>
+        /// <param name="nodeOf">Rewritten in place to the compacted numbering.</param>
+        /// <param name="isSkin">Rewritten to match; a merged node is skin only if the nodes making it up were.</param>
+        /// <returns>How many nodes there now are.</returns>
+        private static int LockSeams(Vec3[] vertAt, int[] pieceOf, int[] nodeOf, int nodeCount, ref bool[] isSkin)
+        {
+            var parent = new int[nodeCount];
+            for (int n = 0; n < nodeCount; n++) parent[n] = n;
+            int Find(int n)
+            {
+                while (parent[n] != n) n = parent[n] = parent[parent[n]];
+                return n;
+            }
+
+            // Each set's extent, kept on its root, so a join that would spread a node past MaxLockedSpan is refused.
+            var lo = new Vec3[nodeCount];
+            var hi = new Vec3[nodeCount];
+            for (int n = 0; n < nodeCount; n++)
+            {
+                lo[n] = new Vec3(float.MaxValue, float.MaxValue, float.MaxValue);
+                hi[n] = new Vec3(float.MinValue, float.MinValue, float.MinValue);
+            }
+            for (int i = 0; i < vertAt.Length; i++)
+            {
+                int n = nodeOf[i];
+                lo[n] = new Vec3(MathF.Min(lo[n].X, vertAt[i].X), MathF.Min(lo[n].Y, vertAt[i].Y),
+                                 MathF.Min(lo[n].Z, vertAt[i].Z));
+                hi[n] = new Vec3(MathF.Max(hi[n].X, vertAt[i].X), MathF.Max(hi[n].Y, vertAt[i].Y),
+                                 MathF.Max(hi[n].Z, vertAt[i].Z));
+            }
+
+            // A grid at the tolerance over VERTICES, so each one only has to look at itself and the 26 cells around it.
+            // Vertices rather than nodes, because the rule is about which PIECE a point came from and a node can hold
+            // points of several.
+            var grid = new Dictionary<(int, int, int), List<int>>(vertAt.Length);
+            (int, int, int) Cell(Vec3 p) => ((int)MathF.Floor(p.X / SeamWeld),
+                                             (int)MathF.Floor(p.Y / SeamWeld),
+                                             (int)MathF.Floor(p.Z / SeamWeld));
+            for (int i = 0; i < vertAt.Length; i++)
+            {
+                var key = Cell(vertAt[i]);
+                if (!grid.TryGetValue(key, out var list)) grid[key] = list = [];
+                list.Add(i);
+            }
+
+            float tol2 = SeamWeld * SeamWeld;
+            float withinPiece2 = SeamWeldWithinPiece * SeamWeldWithinPiece;
+            for (int i = 0; i < vertAt.Length; i++)
+            {
+                var (cx, cy, cz) = Cell(vertAt[i]);
+                for (int dx = -1; dx <= 1; dx++)
+                    for (int dy = -1; dy <= 1; dy++)
+                        for (int dz = -1; dz <= 1; dz++)
+                        {
+                            if (!grid.TryGetValue((cx + dx, cy + dy, cz + dz), out var list)) continue;
+                            foreach (int j in list)
+                            {
+                                if (j <= i) continue;
+                                int n = nodeOf[i], m = nodeOf[j];
+                                if (n == m || isSkin[n] != isSkin[m]) continue;
+                                float ddx = vertAt[i].X - vertAt[j].X;
+                                float ddy = vertAt[i].Y - vertAt[j].Y;
+                                float ddz = vertAt[i].Z - vertAt[j].Z;
+                                float reach = pieceOf[i] == pieceOf[j] ? withinPiece2 : tol2;
+                                if (ddx * ddx + ddy * ddy + ddz * ddz > reach) continue;
+                                int a = Find(n), b = Find(m);
+                                if (a == b) continue;
+
+                                var newLo = new Vec3(MathF.Min(lo[a].X, lo[b].X), MathF.Min(lo[a].Y, lo[b].Y),
+                                                     MathF.Min(lo[a].Z, lo[b].Z));
+                                var newHi = new Vec3(MathF.Max(hi[a].X, hi[b].X), MathF.Max(hi[a].Y, hi[b].Y),
+                                                     MathF.Max(hi[a].Z, hi[b].Z));
+                                float sx = newHi.X - newLo.X, sy = newHi.Y - newLo.Y, sz = newHi.Z - newLo.Z;
+                                if (sx * sx + sy * sy + sz * sz > MaxLockedSpan * MaxLockedSpan) continue;
+
+                                parent[a] = b;
+                                lo[b] = newLo;
+                                hi[b] = newHi;
+                            }
+                        }
+            }
+
+            // Compact, keeping the order the nodes were first seen in so the numbering stays deterministic.
+            var renumbered = new int[nodeCount];
+            Array.Fill(renumbered, -1);
+            int next = 0;
+            for (int n = 0; n < nodeCount; n++)
+            {
+                int root = Find(n);
+                if (renumbered[root] < 0) renumbered[root] = next++;
+                renumbered[n] = renumbered[root];
+            }
+
+            var merged = new bool[next];
+            for (int n = 0; n < nodeCount; n++) merged[renumbered[n]] |= isSkin[n];
+            for (int i = 0; i < nodeOf.Length; i++) nodeOf[i] = renumbered[nodeOf[i]];
+            isSkin = merged;
+            return next;
+        }
+
         /// <param name="held">Vertices of the parts the user has held; null or empty for none.</param>
         public static Sets From(ModelParts garment, IReadOnlySet<int>? held = null)
         {
@@ -232,21 +380,57 @@ internal static partial class BodyRetarget
 
             var nodeOf = MeshMath.WeldByPosition(vertAt, out int nodeCount);
 
-            var tris = new List<int>();
+            // Which nodes are the garment's own body mesh. Worked out BEFORE the seam lock below, because that lock
+            // must never fuse skin to cloth: the two passes are handed opposite node lists, and a node that is both
+            // would have to be in both.
             var isSkin = new bool[nodeCount];
+            foreach (var part in garment.Parts)
+            {
+                if (part.Island >= 0 || !SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+                foreach (int v in part.Triangles)
+                    if (v >= 0 && v < vc) isSkin[nodeOf[v]] = true;
+            }
+
+            // Which separately-moving piece each vertex belongs to. The reader has already split each submesh into
+            // islands by position, so its islands ARE the pieces that can crack apart from one another; a vertex in no
+            // island is given its submesh, which keeps two whole submeshes lockable to each other.
+            var pieceOf = new int[vc];
+            Array.Fill(pieceOf, -1);
+            foreach (var part in garment.Parts)               // islands first: they are the finer split
+                if (part.Island >= 0)
+                    foreach (int v in part.Triangles)
+                        if (v >= 0 && v < vc) pieceOf[v] = (part.Mesh << 16) | (part.Island + 1);
+            foreach (var part in garment.Parts)               // then whatever the islands did not claim
+                if (part.Island < 0)
+                    foreach (int v in part.Triangles)
+                        if (v >= 0 && v < vc && pieceOf[v] < 0) pieceOf[v] = part.Mesh << 16;
+
+            nodeCount = LockSeams(vertAt, pieceOf, nodeOf, nodeCount, ref isSkin);
+
+            var tris = new List<int>();
             foreach (var part in garment.Parts)
             {
                 // An island is a subset of its own submesh; taking both would double every triangle, and would also
                 // let an island of a cloth submesh disagree with the submesh about what it is.
                 if (part.Island >= 0) continue;
                 tris.AddRange(part.Triangles);
-                if (!SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
-                foreach (int v in part.Triangles)
-                    if (v >= 0 && v < vc) isSkin[nodeOf[v]] = true;
             }
 
+            // The MIDDLE of the points a node holds, not whichever of them the loop wrote last. Before the seam lock
+            // they were coincident to 10 um and any of them would do; a locked node spans up to a millimetre, which is
+            // the same order as the push-out's own clearance, so an arbitrary corner of it is a millimetre of error in
+            // every test that treats a node as a point.
             var nodeAt = new Vec3[nodeCount];
-            for (int i = 0; i < vc; i++) nodeAt[nodeOf[i]] = vertAt[i];
+            var points = new int[nodeCount];
+            for (int i = 0; i < vc; i++)
+            {
+                int n = nodeOf[i];
+                nodeAt[n] = new Vec3(nodeAt[n].X + vertAt[i].X, nodeAt[n].Y + vertAt[i].Y, nodeAt[n].Z + vertAt[i].Z);
+                points[n]++;
+            }
+            for (int n = 0; n < nodeCount; n++)
+                if (points[n] > 1)
+                    nodeAt[n] = new Vec3(nodeAt[n].X / points[n], nodeAt[n].Y / points[n], nodeAt[n].Z / points[n]);
 
             var accum = new Vec3[nodeCount];
             for (int i = 0; i < vc && i * 3 + 2 < garment.Normals.Length; i++)
@@ -401,8 +585,27 @@ internal static partial class BodyRetarget
             // mesh where it has one, and the other slots' bodies. See TargetBody, and PushOut for why both are needed.
             bool hasSkin = sets.ClothNodes.Length < sets.NodeCount;
             var before = TargetBody.Build(pairs, garmentSlot, hasSkin ? garment : null, before: true);
-            var after = TargetBody.Build(pairs, garmentSlot, hasSkin ? Moved(garment, sets, nodeDelta) : null,
-                                         before: false);
+
+            // With the skin replaced, the garment's OWN slot body is drawn after all — Rebuild embeds that very mesh
+            // in the garment, so it is what the cloth ends up lying against. Measured on a sheer corset refitted
+            // Bibo+ to Neolithe: pushed against the garment's transferred skin, 326 cup vertices came out buried up
+            // to 3.4 mm inside the breast the file actually carries, against 2 in the author's own; the two surfaces
+            // are not the same, and the one the solve could see is thrown away before the file is written.
+            //
+            // Only where the swap will really happen. TargetBody's remarks record the opposite measurement for a
+            // garment that KEEPS its own skin: "This Old Thing" compresses the chest under its top, its cloth
+            // legitimately sits inside the body, and pushing it out made that refit 50% worse. The swap is what
+            // separates the two cases — it discards the author's compressed skin and puts the body's own full-size
+            // mesh in its place, so there is no longer any compression for the cloth to be legitimately inside of.
+            //
+            // Asking for the swap is not enough: Rebuild only swaps a slot that carries its target body's FILE, so a
+            // pair built without one keeps the author's skin and must keep the old exclusion with it. The two must
+            // agree, or the cloth is pushed out of a body nobody draws.
+            bool ownSlotSwapped = replaceSkin && garmentSlot != null
+                               && pairs.Any(p => string.Equals(p.Slot, garmentSlot, StringComparison.Ordinal)
+                                              && p.TargetModel != null);
+            var after = TargetBody.Build(pairs, ownSlotSwapped ? null : garmentSlot,
+                                         hasSkin ? Moved(garment, sets, nodeDelta) : null, before: false);
 
             var pushable = new List<int>(sets.ClothNodes.Length);
             foreach (int n in sets.ClothNodes)
