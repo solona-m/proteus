@@ -20,6 +20,45 @@ internal static class BodyRetargetWriter
     /// <summary>The folder inside the mod that holds every retargeted model, one subfolder per option.</summary>
     public const string Subfolder = "Body Retarget";
 
+    /// <summary>
+    /// Whether a file an option publishes is one THIS writer put there.
+    /// <para/>
+    /// Undo deletes the files of the option it removes, which was safe while a refit option named nothing but the
+    /// models Proteus wrote. It no longer is: a refit also carries the material, the textures and the other races'
+    /// models of the option it was cut from — the AUTHOR's files, still named by the author's own option — and
+    /// deleting those would break their mod for every size, permanently, to undo one refit. Everything this writer
+    /// creates goes under <see cref="Subfolder"/>, and nothing outside it may ever be removed.
+    /// </summary>
+    private static bool Ours(string rel)
+        => rel.Replace('\\', '/').TrimStart('/')
+              .StartsWith(Subfolder + "/", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Which option of <paramref name="group"/> publishes <paramref name="modelRel"/> — the option a refit of that
+    /// model was cut from, whose other files it therefore has to carry. Null when the model comes from anywhere else:
+    /// the mod's default files, another group, or the game itself, none of which a save here switches off.
+    /// <para/>
+    /// Both paths are normalised before they are compared, and that is the whole difficulty: Penumbra writes an
+    /// author's manifest with backslashes (<c>chest size\small\chara\…</c>) while this writer and the panel use
+    /// forward slashes, so a literal comparison matches only the options Proteus wrote itself — never an author's,
+    /// which is the only kind that matters here.
+    /// </summary>
+    internal static string? OptionOfFile(IEnumerable<PenumbraModMeta.Redirect> redirects, string modelRel,
+                                         string group)
+    {
+        string want = MeshVolumeService.Rel(modelRel);
+        foreach (var redirect in redirects)
+        {
+            if (!string.Equals(MeshVolumeService.Rel(redirect.File), want, StringComparison.OrdinalIgnoreCase))
+                continue;
+            int split = redirect.Source.IndexOf(" / ", StringComparison.Ordinal);
+            if (split < 0) continue;                                    // the default files: no option to replace
+            if (!string.Equals(redirect.Source[..split], group, StringComparison.OrdinalIgnoreCase)) continue;
+            return redirect.Source[(split + 3)..];
+        }
+        return null;
+    }
+
     /// <summary>The record, beside the mod's other Proteus state.</summary>
     public const string RecordFile = "bodyretarget.json";
 
@@ -133,8 +172,13 @@ internal static class BodyRetargetWriter
     /// One write rather than one per size: Penumbra reloads the mod each time its manifest changes, and a half-saved
     /// batch — three sizes of five, then a failure — is harder to reason about than all or nothing.
     /// </summary>
+    /// <param name="fromOption">
+    /// The option of <paramref name="groupName"/> the refitted model was read from, or null when it came from
+    /// somewhere else — the default files, another group, or the game itself. Its other files are copied into the
+    /// refit, because a single-select group switches it off the moment the refit is switched on.
+    /// </param>
     public static Outcome Save(string modRoot, string groupName, string gamePath, string bodyMod, string from,
-                               IReadOnlyList<Refit> refits)
+                               IReadOnlyList<Refit> refits, string? fromOption = null)
     {
         string names = string.Join(", ", refits.Select(r => r.Option));
         lock (WriteLock)
@@ -182,14 +226,47 @@ internal static class BodyRetargetWriter
                     written.Add((refit, rel));
                 }
 
+                // What one refit's option publishes. Shared by both branches below, which write the same option into
+                // two different places — the author's group through AddFileOptions, one of ours by rewriting the
+                // whole group — and which drifted apart when only one of them carried anything over.
+                Dictionary<string, string> FilesFor(Refit refit, string rel)
+                {
+                    var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        [gamePath] = rel.Replace('\\', '/'),
+                    };
+
+                    // Any other game path an earlier save of this same option wrote, so retargeting a mod's _top and
+                    // then its _dwn leaves one option that covers both. Both writers replace an option outright.
+                    var existing = options.FirstOrDefault(o => string.Equals(o.Name, refit.Option,
+                                                                             StringComparison.OrdinalIgnoreCase));
+                    if (existing.Files != null)
+                        foreach (var (path, at) in existing.Files)
+                            if (!files.ContainsKey(path)) files[path] = at;
+
+                    // And everything ELSE the option this was refitted from carried — its material, its textures, the
+                    // other races' models. Most mods keep those in the default files or a required option and give a
+                    // size option nothing but a model, in which case there is nothing here to copy. Some give every
+                    // size its own, and there this matters: the group is single-select, so switching the refit ON
+                    // switches the option it came from OFF, and without this the garment keeps its new shape and
+                    // loses everything drawn on it.
+                    //
+                    // Only from an option of THIS group, which is exactly when that switching-off happens — see the
+                    // fromOption parameter.
+                    if (fromOption is { Length: > 0 }
+                        && options.FirstOrDefault(o => string.Equals(o.Name, fromOption,
+                                                                     StringComparison.OrdinalIgnoreCase))
+                           is { Files: not null } cutFrom)
+                        foreach (var (path, at) in cutFrom.Files)
+                            if (!files.ContainsKey(path)) files[path] = at;
+
+                    return files;
+                }
+
                 if (author)
                 {
-                    PenumbraModMeta.AddFileOptions(modRoot, groupName, written.Select(w => new PenumbraModMeta.FileOption(
-                        w.Refit.Option,
-                        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-                        {
-                            [gamePath] = w.Rel.Replace('\\', '/'),
-                        })).ToList());
+                    PenumbraModMeta.AddFileOptions(modRoot, groupName, written.Select(w =>
+                        new PenumbraModMeta.FileOption(w.Refit.Option, FilesFor(w.Refit, w.Rel))).ToList());
                     foreach (var (refit, rel) in written)
                         WriteRecord(modRoot, groupName, true, refit.Option, gamePath, rel, bodyMod, from, refit.To);
                     return new Outcome(true, groupName, names, Added(refits, groupName) +
@@ -211,22 +288,7 @@ internal static class BodyRetargetWriter
                 final.AddRange(kept);
 
                 foreach (var (refit, rel) in written)
-                {
-                    var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-                    {
-                        [gamePath] = rel.Replace('\\', '/'),
-                    };
-
-                    // Carry over any other game path an earlier save of this same option wrote, so retargeting a
-                    // mod's _top and then its _dwn leaves one option that covers both.
-                    var existing = options.FirstOrDefault(o => string.Equals(o.Name, refit.Option,
-                                                                             StringComparison.OrdinalIgnoreCase));
-                    if (existing.Files != null)
-                        foreach (var (path, at) in existing.Files)
-                            if (!files.ContainsKey(path)) files[path] = at;
-
-                    final.Add(new PenumbraModMeta.FileOption(refit.Option, files));
-                }
+                    final.Add(new PenumbraModMeta.FileOption(refit.Option, FilesFor(refit, rel)));
 
                 // A priority above every other group, which is what decides a game path two groups both claim. The
                 // POSITION is left alone: see Position.
@@ -336,7 +398,7 @@ internal static class BodyRetargetWriter
                     var removed = PenumbraModMeta.RemoveOption(modRoot, groupName, optionName);
                     ForgetOption(modRoot, groupName, optionName);
                     if (removed != null)
-                        foreach (var rel in removed.Values)
+                        foreach (var rel in removed.Values.Where(Ours))
                             DeleteQuietly(Path.Combine(modRoot, rel.Replace('/', Path.DirectorySeparatorChar)));
                     PruneEmptyFolders(Path.Combine(modRoot, Subfolder));
                     return new Outcome(true, groupName, optionName, $"Removed \"{optionName}\".");
@@ -373,7 +435,7 @@ internal static class BodyRetargetWriter
                 // The files last, so a crash between the two leaves an unreferenced folder rather than a group
                 // pointing at a file that is gone — Penumbra treats the second as a broken mod.
                 if (going.Files != null)
-                    foreach (var rel in going.Files.Values)
+                    foreach (var rel in going.Files.Values.Where(Ours))
                         DeleteQuietly(Path.Combine(modRoot, rel.Replace('/', Path.DirectorySeparatorChar)));
 
                 PruneEmptyFolders(Path.Combine(modRoot, Subfolder));

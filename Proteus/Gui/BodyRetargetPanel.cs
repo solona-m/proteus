@@ -1391,8 +1391,9 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         selectAfterSave = (group, refits[Math.Clamp(showing, 0, refits.Count - 1)].Option);
 
         string at = root;
+        string? cutFrom = BodyRetargetWriter.OptionOfFile(ctx.Redirects, ctx.ModelRel, group);
         saveTask = Task.Run(() => new SaveResult(
-            BodyRetargetWriter.Save(at, group, path, body, labelFrom, refits),
+            BodyRetargetWriter.Save(at, group, path, body, labelFrom, refits, cutFrom),
             BodyRetargetWriter.ReadRecord(at)));
     }
 
