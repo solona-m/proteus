@@ -111,6 +111,32 @@ internal static partial class BodyRetarget
     private const float UnfoldRate = 0.5f;
 
     /// <summary>
+    /// How many times a triangle the relax could not turn back has its corners' movement scaled down, and by how
+    /// much.
+    /// <para/>
+    /// Far more passes than the halving itself needs — a dozen already takes a displacement below anything that can
+    /// turn a triangle over. The passes are for PROPAGATION: giving one patch back its authored shape leaves its
+    /// neighbours straddling the boundary, and those fold in turn, so the count comes down a ring at a time.
+    /// Measured on "Rana" refitted Bibo+ to Neolithe: 422 folds without this, 149 at sixteen passes, 52 at
+    /// sixty-four, and 52 again at two hundred and fifty-six. Sixty-four is where it stops paying.
+    /// <para/>
+    /// It does not reach zero. What is left is held by a corner this pass may not move — the garment's own body mesh,
+    /// which has to stay on the body it was laid onto.
+    /// </summary>
+    private const int UnfoldGiveUpPasses = 64;
+
+    /// <inheritdoc cref="UnfoldGiveUpPasses"/>
+    private const float UnfoldGiveUpRate = 0.5f;
+
+    /// <summary>
+    /// The least of its movement a point may be left with. Halving without one takes a point the passes can never
+    /// help — its fold is held by the skin corner, which this may not move — down to nothing: it lands where the
+    /// author put it on the OLD body while the neighbours it is welded to keep the whole body-size displacement,
+    /// which is the very tear the pass exists to close. Four halvings is past where a fold this can clear clears.
+    /// </summary>
+    internal const float UnfoldGiveUpFloor = 0.0625f;
+
+    /// <summary>
     /// How far the push-out looks for the skin when deciding whether cloth was authored INSIDE it (15 cm). Cloth tucked
     /// under a body can sit far inside it — a heeled shoe's foot is drawn where the body's flat foot is — and at
     /// <see cref="PushProbeRange"/> such a point read as "nowhere near skin", which the pass took for outside.
@@ -698,8 +724,73 @@ internal static partial class BodyRetarget
             }
         }
 
-        // The rounds ran out with the last relax untested, and the number reported has to describe what was WRITTEN.
-        return round < UnfoldRounds ? folded : Folded(sets, nodeDelta, flagged);
+        // The rounds running out leaves the LAST relax untested: `folded` and `flagged` are from before it, so they
+        // describe a mesh that no longer exists. Counted again — the give-up would otherwise scale corners that last
+        // pass already straightened, surrendering their movement for nothing, and would measure its own work against
+        // a number too high to beat. Breaking out is the other case, and there the reading is current and free.
+        if (round == UnfoldRounds) folded = Folded(sets, nodeDelta, flagged);
+
+        return folded == 0 ? 0 : GiveUpFolds(sets, nodeDelta, isSkin, flagged, folded);
+    }
+
+    /// <summary>
+    /// Whatever the relax could not turn back, give up its movement for: a folded triangle's corners are scaled back
+    /// toward where the author had them, and the test runs again.
+    /// <para/>
+    /// Averaging a folded node against its neighbours only works when the neighbours are right; where a whole
+    /// patch is folded together they are all wrong the same way, and it converges to nothing. Measured on "Rana"
+    /// refitted Bibo+ to Neolithe, a loose off-shoulder jacket whose own body mesh the author sculpted rather than
+    /// copied (11% of its points snap): 424 triangles turned over, and 200 rounds of relaxing took that to 396.
+    /// <para/>
+    /// Scaling clears a fold whose corners are ALL ours, because at zero the triangle IS the authored one and
+    /// <see cref="Folded"/> judges against exactly that. Where the corner holding it is the skin's, no amount of
+    /// scaling reaches it — hence <see cref="UnfoldGiveUpFloor"/>, and hence keeping the BEST reading rather than
+    /// the last: this may not hand back a mesh worse than the one the relax gave it.
+    /// </summary>
+    /// <param name="isSkin">Nodes on the new body, which this may not pull back off it.</param>
+    /// <param name="flagged">The corners of <paramref name="folded"/>, as <see cref="Folded"/> left them; written
+    /// through.</param>
+    /// <param name="folded">The relax's own last reading, so a garment it cleared is never re-counted.</param>
+    /// <returns>Triangles still folded — never more than <paramref name="folded"/>.</returns>
+    internal static int GiveUpFolds(Sets sets, Vec3[] nodeDelta, bool[] isSkin, bool[] flagged, int folded)
+    {
+        var full = (Vec3[])nodeDelta.Clone();
+        var give = new float[sets.NodeCount];
+        Array.Fill(give, 1f);
+
+        int best = folded;
+        float[]? bestGive = null;
+
+        for (int pass = 0; pass < UnfoldGiveUpPasses; pass++)
+        {
+            bool moved = false;
+            for (int n = 0; n < sets.NodeCount; n++)
+            {
+                // The skin has to stay ON the body; it is not ours to undo. Nor is a point already at the floor.
+                if (!flagged[n] || isSkin[n] || give[n] <= UnfoldGiveUpFloor) continue;
+                give[n] = MathF.Max(UnfoldGiveUpFloor, give[n] * UnfoldGiveUpRate);
+                nodeDelta[n] = new Vec3(full[n].X * give[n], full[n].Y * give[n], full[n].Z * give[n]);
+                moved = true;
+            }
+            if (!moved) break;   // every folded point this may move is at the floor
+
+            folded = Folded(sets, nodeDelta, flagged);
+            if (folded == 0) return 0;
+            if (folded < best) { best = folded; bestGive = (float[])give.Clone(); }
+        }
+
+        // Scaling one patch folds its neighbours, so the last pass is not always the best one — and a run that only
+        // ever made things worse gives every point its movement back.
+        if (folded > best)
+        {
+            for (int n = 0; n < sets.NodeCount; n++)
+            {
+                float g = bestGive?[n] ?? 1f;
+                nodeDelta[n] = g >= 1f ? full[n] : new Vec3(full[n].X * g, full[n].Y * g, full[n].Z * g);
+            }
+            folded = Folded(sets, nodeDelta, flagged);
+        }
+        return folded;
     }
 
     /// <summary>

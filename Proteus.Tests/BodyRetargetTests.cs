@@ -659,6 +659,83 @@ public class BodyRetargetTests
         Assert.Equal(0, Folded(quad, delta, sets));
     }
 
+    /// <summary>
+    /// A fold the give-up cannot reach — its corner is the skin's, which may not be pulled back off the body — must
+    /// not cost the cloth around it its movement. Halving without a floor takes those corners to nothing: they land
+    /// where the author put them on the OLD body while the points they are welded to keep the full displacement,
+    /// which is the tear the pass exists to close, now in a place nothing was wrong.
+    /// </summary>
+    [Fact]
+    public void A_fold_held_by_the_skin_does_not_cost_the_cloth_its_movement()
+    {
+        var quad = Quad(0.01f);
+        var sets = BodyRetarget.Sets.From(quad);
+
+        // Corner 1 across the diagonal turns the first triangle over, and corner 1 is the skin's.
+        var delta = new SecondSkinWriter.Vec3[sets.NodeCount];
+        delta[sets.NodeOf[1]] = new SecondSkinWriter.Vec3(-0.02f, 0.02f, 0f);
+        // The cloth around it moved too — a body-size displacement, nothing to do with the fold.
+        foreach (int v in new[] { 0, 2, 3 })
+            delta[sets.NodeOf[v]] = new SecondSkinWriter.Vec3(0f, 0f, 0.004f);
+
+        var isSkin = new bool[sets.NodeCount];
+        isSkin[sets.NodeOf[1]] = true;
+        var flagged = new bool[sets.NodeCount];
+        int before = FoldedVia(quad, delta, sets, flagged);
+        Assert.True(before > 0, "the hand-made delta should have turned a triangle over");
+
+        int left = BodyRetarget.GiveUpFolds(sets, delta, isSkin, flagged, before);
+
+        // It cannot be cleared — and it must not be made worse trying.
+        Assert.True(left <= before, $"the give-up left {left} folds where the relax had {before}");
+
+        // Every cloth corner keeps a floor of what it was given. Unbounded halving leaves 0.5^64 of it.
+        foreach (int v in new[] { 0, 2, 3 })
+            Assert.True(delta[sets.NodeOf[v]].Z >= 0.004f * BodyRetarget.UnfoldGiveUpFloor - 1e-9f,
+                $"cloth corner {v} kept {delta[sets.NodeOf[v]].Z:0.#######} of 0.004");
+    }
+
+    /// <summary>
+    /// A fold whose corners are all the refit's own still clears outright: at zero the triangle is the authored one.
+    /// The floor must not have bought safety at the price of the thing the pass is for.
+    /// </summary>
+    [Fact]
+    public void A_fold_the_give_up_can_reach_is_still_cleared()
+    {
+        var quad = Quad(0.01f);
+        var sets = BodyRetarget.Sets.From(quad);
+        var delta = new SecondSkinWriter.Vec3[sets.NodeCount];
+        delta[sets.NodeOf[1]] = new SecondSkinWriter.Vec3(-0.02f, 0.02f, 0f);
+
+        var flagged = new bool[sets.NodeCount];
+        int before = FoldedVia(quad, delta, sets, flagged);
+
+        Assert.Equal(0, BodyRetarget.GiveUpFolds(sets, delta, new bool[sets.NodeCount], flagged, before));
+        Assert.Equal(0, Folded(quad, delta, sets));
+    }
+
+    /// <summary>Count the folds AND fill <paramref name="flagged"/> the way the relax hands them over.</summary>
+    private static int FoldedVia(ModelParts m, SecondSkinWriter.Vec3[] delta, BodyRetarget.Sets sets, bool[] flagged)
+    {
+        int folded = 0;
+        foreach (var part in m.Parts)
+            for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+            {
+                int a = part.Triangles[t], b = part.Triangles[t + 1], c = part.Triangles[t + 2];
+                Vector3 Moved(int v)
+                {
+                    var d = delta[sets.NodeOf[v]];
+                    return At(m, v) + new Vector3(d.X, d.Y, d.Z);
+                }
+                var n0 = Vector3.Cross(At(m, b) - At(m, a), At(m, c) - At(m, a));
+                var n1 = Vector3.Cross(Moved(b) - Moved(a), Moved(c) - Moved(a));
+                if (Vector3.Dot(n0, n1) >= 0f) continue;
+                folded++;
+                flagged[sets.NodeOf[a]] = flagged[sets.NodeOf[b]] = flagged[sets.NodeOf[c]] = true;
+            }
+        return folded;
+    }
+
     /// <summary>A flat two-triangle quad of side <paramref name="side"/> in the XY plane, facing +Z.</summary>
     private static ModelParts Quad(float side)
     {
