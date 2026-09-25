@@ -179,8 +179,9 @@ internal static class SyntheticModel
                 W32(so, 0, indexCursor);
                 W32(so, 4, (uint)(tris * 3));
                 W32(so, 8, sub.AttrMask);
-                W16(so, 12, 0);                          // boneStart — one shared window
-                W16(so, 14, (ushort)tableBones.Count);   // boneCount, the window's length
+                // Each submesh gets its OWN window, as every game and author model does — never one shared.
+                W16(so, 12, (ushort)(subBytes.Count * tableBones.Count));   // boneStart
+                W16(so, 14, (ushort)tableBones.Count);                      // boneCount
                 subBytes.Add(so);
 
                 // Three fresh vertices per triangle, mesh-relative indices, spread so the model's bounding
@@ -357,10 +358,11 @@ internal static class SyntheticModel
             ms.Write(sv);
         }
 
-        // Submesh bone map: one window every submesh shares, holding the table's bones as INDICES into the name
-        // list — the same thing a real model holds, and what every submesh above claims a window onto.
-        ms.Write(U32((uint)(tableBones.Count * 2)));
-        foreach (var tb in tableBones) ms.Write(U16Bytes((ushort)IndexOf(bones, tb)));
+        // Submesh bone map: one window PER SUBMESH, each holding the table's bones as INDICES into the name list
+        // — the same thing a real model holds, and what each submesh above claims a window onto.
+        ms.Write(U32((uint)(subTotal * tableBones.Count * 2)));
+        for (int i = 0; i < subTotal; i++)
+            foreach (var tb in tableBones) ms.Write(U16Bytes((ushort)IndexOf(bones, tb)));
         ms.WriteByte(0);                                                       // padding amount
 
         ms.Write(new byte[4 * BBoxSize]);                                      // model bounding boxes

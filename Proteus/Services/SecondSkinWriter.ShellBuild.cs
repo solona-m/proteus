@@ -627,8 +627,6 @@ public static partial class SecondSkinWriter
             // material indices (0..baseMatCount-1) — so the accessory still renders under the appended shell.
             if (baseSrc != null)
             {
-                int mapBase = submeshBoneMap.Count;
-                bool mapAppended = false;
                 int bEnd = baseSrc.Lod0MeshIndex + baseSrc.Lod0MeshCount;
                 for (int m = baseSrc.Lod0MeshIndex; m < bEnd && m < baseSrc.MeshCount; m++)
                 {
@@ -636,7 +634,7 @@ public static partial class SecondSkinWriter
                     ushort srcMat = BitConverter.ToUInt16(baseSrc.S, bmo + 8);
                     // A whole mesh left out when asked: a garment whose skin is being replaced loses that skin.
                     if (dropHostMesh != null && dropHostMesh(m)) continue;
-                    EmitMesh(baseSrc, m, srcMat, 0f, preserve: true, cov: null, mapBase, ref mapAppended,
+                    EmitMesh(baseSrc, m, srcMat, 0f, preserve: true, cov: null,
                              reskin: hostReskin?.Invoke(m));
                 }
             }
@@ -886,15 +884,15 @@ public static partial class SecondSkinWriter
 
         // Emit one source mesh into the merged model. preserve=true: exact byte copy, every triangle, authored
         // material index (host and cap). preserve=false: BuildVerbatim's push/colour/uv1 rewrites, coverage-trimmed.
-        // `cov` null keeps all triangles; `mapBase`/`mapAppended` share the source's submesh bone map across its meshes.
+        // `cov` null keeps all triangles. Each mesh writes its own submesh bone map windows (RebuildBoneMap).
         private void EmitMesh(Source src, int m, ushort materialIndex, float push, bool preserve,
-                      SecondSkinLayer? cov, int mapBase, ref bool mapAppended,
+                      SecondSkinLayer? cov,
                       bool mirrorUv1 = false, IReadOnlySet<string>? hiddenAttrs = null,
                       bool clearAttrs = false, CapUvPlan? capUv = null, bool dropVariantAttrs = false,
                       (string Bone, float W)[]?[]? reskin = null)
         {
-            new MeshEmitter(this, src, m, materialIndex, push, preserve, cov, mapBase, mirrorUv1, hiddenAttrs, clearAttrs, capUv,
-                            dropVariantAttrs, reskin).Run(ref mapAppended);
+            new MeshEmitter(this, src, m, materialIndex, push, preserve, cov, mirrorUv1, hiddenAttrs, clearAttrs, capUv,
+                            dropVariantAttrs, reskin).Run();
         }
 
         /// <summary>

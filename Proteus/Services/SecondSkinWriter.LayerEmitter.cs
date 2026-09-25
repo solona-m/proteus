@@ -321,10 +321,6 @@ public static partial class SecondSkinWriter
                     {
                         var gsrc = build.geomByModel[geo.Model];
                         var gs = gsrc.S;
-                        // Per geometry, not per layer: each contributes its own copy of its source's submesh
-                        // bone map, exactly as each (source, layer) pair does on the shell path below.
-                        int gMapBase = build.submeshBoneMap.Count;
-                        bool gMapAppended = false;
                         int gEnd = gsrc.Lod0MeshIndex + gsrc.Lod0MeshCount;
                         for (int m = gsrc.Lod0MeshIndex; m < gEnd && m < gsrc.MeshCount; m++)
                         {
@@ -335,7 +331,7 @@ public static partial class SecondSkinWriter
                             if (gMat >= gsrc.MatNames.Count || !geo.KeepMaterial(gsrc.MatNames[gMat]))
                                 continue;
 
-                            build.EmitMesh(gsrc, m, matIndex, 0f, preserve: true, cov: null, gMapBase, ref gMapAppended,
+                            build.EmitMesh(gsrc, m, matIndex, 0f, preserve: true, cov: null,
                                 mirrorUv1: geo.MirrorUv1,
                                 hiddenAttrs: geo.HiddenAttributes, clearAttrs: geo.OwnAttributes,
                                 dropVariantAttrs: geo.DropVariantAttributes);
@@ -348,10 +344,6 @@ public static partial class SecondSkinWriter
                 {
                     var s = src.S;
                     ushort U16(int o) => BitConverter.ToUInt16(s, o);
-
-                    // Each (source, layer) pair contributes its own copy of the source's submesh bone map.
-                    int mapBase = build.submeshBoneMap.Count;
-                    bool mapAppended = false;
 
                     // LOD0 meshes only — never the lower LODs (a full game model has all three; merging them
                     // stacks overlapping low-poly copies that fling geometry across the scene).
@@ -369,7 +361,7 @@ public static partial class SecondSkinWriter
 
                         // cutDef, not def: the toe-cap cut rides the coverage argument. Redundant submeshes were settled per
                         // source (Source.DropSubmeshes).
-                        build.EmitMesh(src, m, matIndex, push, preserve: false, cov: cutDef, mapBase, ref mapAppended);
+                        build.EmitMesh(src, m, matIndex, push, preserve: false, cov: cutDef);
                     }
                 }
 
@@ -389,15 +381,12 @@ public static partial class SecondSkinWriter
                     // The cap is authored WITHOUT UVs, so it takes the body's: each vertex is dropped onto the skin and
                     // takes the coordinate where it lands.
 
-                    int capMapBase = build.submeshBoneMap.Count;
-                    bool capMapAppended = false;
                     int cEnd = cs.Lod0MeshIndex + cs.Lod0MeshCount;
                     int emitted = 0;
                     for (int m = cs.Lod0MeshIndex; m < cEnd && m < cs.MeshCount; m++)
                     {
                         if (BitConverter.ToUInt16(cs.S, cs.MeshStart + m * 36) == 0) continue;   // empty mesh
-                        build.EmitMesh(cs, m, matIndex, capPush, preserve: true, cov: capDef, capMapBase,
-                                 ref capMapAppended,
+                        build.EmitMesh(cs, m, matIndex, capPush, preserve: true, cov: capDef,
                                  capUv: build.capUvCache.TryGetValue(m, out var cached) ? cached
                                       : build.capUvCache[m] = ProjectCapUV(cs, m, build.sourceModels, build.diag,
                                             build.capPlaced != null && build.capPlaced.TryGetValue(m, out var pc2) ? pc2 : null));

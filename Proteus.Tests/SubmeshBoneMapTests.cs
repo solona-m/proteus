@@ -171,7 +171,103 @@ public class SubmeshBoneMapTests
         Assert.Contains("n_root", ex2.Message);
     }
 
+    /// <summary>
+    /// Each submesh gets a window of ITS OWN, never one the whole mesh shares. Of 275 game and author models
+    /// measured, every one lays the map out that way and not one shares a window — and a reader is entitled to
+    /// that: xivModdingFramework, and so TexTools, rebuilds a bone set per part from this map. Lumina resolves
+    /// each window wherever it points and cannot tell the difference, which is why Penumbra read a shared window
+    /// quite happily while TexTools handed 3ds Max the wrong bone names.
+    /// </summary>
+    [Fact]
+    public void Sibling_submeshes_each_get_their_own_window()
+    {
+        var host = SyntheticModel.Build(
+            ["atr_top"],
+            [new SyntheticModel.Mesh(Material,
+                new SyntheticModel.Sub(0, Weights: [("j_hij_l", 0.4f), ("j_sebo_c", 0.3f), ("iv_fukubu_phys", 0.3f)]),
+                new SyntheticModel.Sub(1, Weights: [("j_hij_l", 0.4f), ("j_sebo_c", 0.3f), ("iv_fukubu_phys", 0.3f)]))],
+            SyntheticModel.V6,
+            boneTableOrder: TableOrder);
+
+        var plan = new (string Bone, float W)[]?[6];
+        for (int i = 0; i < plan.Length; i++) plan[i] = [("j_hij_l", 1f)];
+        var p = SecondSkinWriter.Parse(
+            SecondSkinWriter.Build([], [], host, out _, hostReskin: m => m == 0 ? plan : null));
+
+        var table = Assert.Single(p.BoneTables);
+        Assert.True(p.SubmeshCount >= 2, "the fixture should have produced two submeshes");
+
+        var starts = new List<int>();
+        for (int su = 0; su < p.SubmeshCount; su++)
+        {
+            int start = BitConverter.ToUInt16(p.S, p.SubmeshStart + su * 16 + 12);
+            int count = BitConverter.ToUInt16(p.S, p.SubmeshStart + su * 16 + 14);
+            starts.Add(start);
+            Assert.Equal(table.Length, count);
+            Assert.Equal(table.Select(b => p.BoneNames[b]), MappedNames(p, start, count));
+        }
+        Assert.Equal(starts.Count, starts.Distinct().Count());
+    }
+
+    /// <summary>
+    /// The whole map, for a build with CONTENT GEOMETRY as well as a host — the shape of a refit. Every submesh's
+    /// window has to be its own mesh's bone table, and the map has to be exactly as long as the windows need.
+    /// <para/>
+    /// A source's map used to be carried over and its windows rebased. A source's windows commonly reach further
+    /// than its own map, which is harmless in that file, but rebased into a merged map they land inside another
+    /// source's entries: the mesh then wears another mesh's bones in every tool that reads the map, while the game,
+    /// which skins from the bone table, draws it correctly. Measured on a refit, four of eight submeshes were wrong
+    /// and the windows wanted 267 entries from a 159-entry map.
+    /// </summary>
+    [Fact]
+    public void Every_window_is_its_own_meshs_table_and_the_map_is_exactly_that_long()
+    {
+        var host = SyntheticModel.Build(
+            ["atr_top"],
+            [new SyntheticModel.Mesh(Material,
+                new SyntheticModel.Sub(0, Weights: [("j_hij_l", 0.5f), ("j_sebo_c", 0.5f)]),
+                new SyntheticModel.Sub(1, Weights: [("j_hij_l", 0.5f), ("j_sebo_c", 0.5f)]))],
+            SyntheticModel.V6);
+        var content = SyntheticModel.Build(
+            ["atr_top"],
+            [new SyntheticModel.Mesh("/mt_c0201b0001_bibo.mtrl",
+                new SyntheticModel.Sub(0, Weights: [("iv_fukubu_phys", 1f)]),
+                new SyntheticModel.Sub(1, Weights: [("iv_fukubu_phys", 1f)]),
+                new SyntheticModel.Sub(2, Weights: [("iv_fukubu_phys", 1f)]))],
+            SyntheticModel.V6);
+
+        var layer = new SecondSkinLayer
+        {
+            MaterialName = "/mt_c0201b0001_bibo.mtrl",
+            Geometry = [new ContentGeometry(content, SecondSkinWriter.IsBodySkinMaterial)],
+        };
+        var p = SecondSkinWriter.Parse(SecondSkinWriter.Build([], [layer], host, out _));
+
+        int need = 0;
+        for (int m = 0; m < p.MeshCount; m++)
+        {
+            int mo = p.MeshStart + m * 36;
+            int ss = BitConverter.ToUInt16(p.S, mo + 10), sc = BitConverter.ToUInt16(p.S, mo + 12);
+            var table = p.BoneTables[BitConverter.ToUInt16(p.S, mo + 14)];
+            Assert.True(sc > 0, $"mesh {m} kept no submeshes");
+            for (int su = ss; su < ss + sc; su++)
+            {
+                int start = Window(p, su, 12), count = Window(p, su, 14);
+                need = Math.Max(need, start + count);
+                Assert.True(start + count <= p.SubmeshBoneMap.Length,
+                    $"mesh {m} submesh {su}: window {start}+{count} runs past a {p.SubmeshBoneMap.Length}-entry map");
+                Assert.Equal(table.Select(b => p.BoneNames[b]), MappedNames(p, start, count));
+            }
+        }
+        // Exactly as long: no carried prefix nothing points at, and nothing missing off the end.
+        Assert.Equal(need, p.SubmeshBoneMap.Length);
+    }
+
     /// <summary>The first submesh's bone window: <c>boneStart</c> at +12, <c>boneCount</c> at +14 of its 16-byte struct.</summary>
     private static int Window(SecondSkinWriter.Source p, int field)
-        => System.BitConverter.ToUInt16(p.S, p.SubmeshStart + field);
+        => Window(p, 0, field);
+
+    /// <summary>A given submesh's bone window field.</summary>
+    private static int Window(SecondSkinWriter.Source p, int submesh, int field)
+        => BitConverter.ToUInt16(p.S, p.SubmeshStart + submesh * 16 + field);
 }

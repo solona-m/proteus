@@ -325,7 +325,11 @@ public class ModelShapeWriterTests
         Assert.Equal(["shp_base", "shp_hib"], src.Shapes.Keys.OrderBy(k => k, StringComparer.Ordinal).ToArray());
         Assert.Equal(["atr_top"], src.AttrNames);
         Assert.Equal([0], src.BoneTables[0]);
-        Assert.Equal(src.BoneTables[0], src.SubmeshBoneMap);
+        // One window per submesh, each the mesh's table — the layout every real model has.
+        Assert.Equal(src.SubmeshCount * src.BoneTables[0].Length, src.SubmeshBoneMap.Length);
+        for (int w = 0; w < src.SubmeshCount; w++)
+            Assert.Equal(src.BoneTables[0],
+                src.SubmeshBoneMap.Skip(w * src.BoneTables[0].Length).Take(src.BoneTables[0].Length));
 
         Assert.True(SecondSkinWriter.TryReadLod0Geometry(after, out var pos, out _, out var tris));
         Assert.NotEmpty(tris);

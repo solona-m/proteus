@@ -20,7 +20,6 @@ public static partial class SecondSkinWriter
             private readonly float push;
             private readonly bool preserve;
             private readonly SecondSkinLayer? cov;
-            private readonly int mapBase;
             private readonly bool mirrorUv1;
             private readonly IReadOnlySet<string>? hiddenAttrs;
             private readonly bool clearAttrs;
@@ -62,7 +61,7 @@ public static partial class SecondSkinWriter
             private ushort keptSubs;
             private List<byte[]> subsForMesh = null!;
 
-            public MeshEmitter(ShellBuild build, Source src, int m, ushort materialIndex, float push, bool preserve, SecondSkinLayer? cov, int mapBase, bool mirrorUv1, IReadOnlySet<string>? hiddenAttrs, bool clearAttrs, CapUvPlan? capUv, bool dropVariantAttrs = false,
+            public MeshEmitter(ShellBuild build, Source src, int m, ushort materialIndex, float push, bool preserve, SecondSkinLayer? cov, bool mirrorUv1, IReadOnlySet<string>? hiddenAttrs, bool clearAttrs, CapUvPlan? capUv, bool dropVariantAttrs = false,
                                (string Bone, float W)[]?[]? reskin = null)
             {
                 this.reskin = reskin;
@@ -74,14 +73,13 @@ public static partial class SecondSkinWriter
                 this.push = push;
                 this.preserve = preserve;
                 this.cov = cov;
-                this.mapBase = mapBase;
                 this.mirrorUv1 = mirrorUv1;
                 this.hiddenAttrs = hiddenAttrs;
                 this.clearAttrs = clearAttrs;
                 this.capUv = capUv;
             }
 
-            public void Run(ref bool mapAppended)
+            public void Run()
             {
                 if (!ReadMesh()) return;
                 CopyStreams();
@@ -89,7 +87,6 @@ public static partial class SecondSkinWriter
                 KeepTriangles();
                 if (!FinishTriangles()) return;
                 WeldToCapRim();
-                AppendBoneMap(ref mapAppended);
                 CompactStreams();
                 RebuildBoneMap();
                 WriteMesh();
@@ -448,21 +445,6 @@ public static partial class SecondSkinWriter
                 new CapWeld(this).Run();
             }
 
-            private void AppendBoneMap(ref bool mapAppended)
-            {
-                if (!mapAppended)
-                {
-                    // The map's ENTRIES index THIS source's bone-name list, so they get the same by-name remap the bone
-                    // tables do; only the OFFSETS are rebased (mapBase, written as boneStart).
-                    foreach (var b in src.SubmeshBoneMap)
-                    {
-                        var bn = b < src.BoneNames.Length ? src.BoneNames[b] : null;
-                        build.submeshBoneMap.Add(bn != null && build.boneIndex.TryGetValue(bn, out var bi) ? bi : (ushort)0);
-                    }
-                    mapAppended = true;
-                }
-            }
-
             private void CompactStreams()
             {
                 // Recounted: the weld drops collapsed triangles after `used` was filled, and a vertex nothing points
@@ -500,18 +482,18 @@ public static partial class SecondSkinWriter
 
             private void RebuildBoneMap()
             {
-                // A REBUILT bone table needs a bone map of its own: publish the whole new table as this mesh's window.
-                // The ENTRIES are the table's own — bone indices into the output's name list, the same thing
-                // AppendBoneMap writes. NOT the local slots 0..n-1: the game skins from the bone table and never
-                // reads this map, so slot numbers animate correctly in game and still hand an exporter the wrong
-                // bone NAME for every vertex (a sleeve labelled with whatever bone sits at that place in the list).
-                int rebuiltMapBase = -1;
-                if (capBoneTable != null)
-                {
-                    rebuiltMapBase = build.submeshBoneMap.Count;
-                    foreach (var b in capBoneTable) build.submeshBoneMap.Add(b);
-                }
-
+                // Every mesh publishes its own bone map: one window per submesh, holding that mesh's bone table as
+                // bone indices into the output's name list. It is the layout every game and author model has.
+                //
+                // Never the source's map carried over with its windows rebased. A source's windows commonly reach
+                // further than its own map — harmless in that file, where a reader falls back to the bone table —
+                // but rebased into a MERGED map those same windows land inside another source's entries, and the
+                // mesh comes out wearing another mesh's bones. That is what sent a refitted body's parts to the
+                // wrong joints in every tool that reads this map, while the game, which skins from the bone table,
+                // drew it correctly.
+                //
+                // Not the local slots 0..n-1 either: that names the wrong bone for every vertex the same way.
+                var window = OutputBoneTable();
                 for (int su = 0; su < srcSubCount; su++)
                 {
                     var keep = keptPerSub[su];
@@ -532,35 +514,41 @@ public static partial class SecondSkinWriter
                     // With dropVariantAttrs, the variant bits go and every other tag stays (ContentGeometry.DropVariantAttributes).
                     uint mask = dropVariantAttrs ? U32(ss + 8) & ~VariantBits(src) : U32(ss + 8);
                     W32(ns, 8, clearAttrs ? 0 : build.RemapAttrs(src, mask));
-                    // The submesh's BONE WINDOW: the source's, rebased — unless the table was rebuilt, in which case
-                    // window == table size.
-                    if (capBoneTable != null)
-                    {
-                        W16(ns, 12, (ushort)rebuiltMapBase);
-                        W16(ns, 14, (ushort)capBoneTable.Length);
-                    }
-                    else
-                    {
-                        W16(ns, 12, (ushort)(U16(ss + 12) + mapBase));        // boneStart, rebased
-                        W16(ns, 14, U16(ss + 14));                            // boneCount, as authored
-                    }
+                    // A window of its OWN, never one shared by every submesh of the mesh: of 275 game and author
+                    // models measured, every one gives each submesh its own and not one shares.
+                    W16(ns, 12, (ushort)build.submeshBoneMap.Count);
+                    W16(ns, 14, (ushort)window.Length);
+                    foreach (var bn in window) build.submeshBoneMap.Add(bn);
                     subsForMesh.Add(ns);
                     keptSubs++;
                 }
             }
 
+            /// <summary>
+            /// This mesh's OWN bone table, entries remapped onto the union list. Never merged with other meshes'
+            /// tables — ubyte4 vertex indices cap a table at 255 entries. The rebuilt table when a reskin or a cap
+            /// weld made one, otherwise the source's own, by name.
+            /// </summary>
+            private ushort[] OutputBoneTable()
+            {
+                if (outTable != null) return outTable;
+                if (capBoneTable != null) return outTable = capBoneTable;
+
+                var srcTable = srcBoneTbl < src.BoneTables.Length ? src.BoneTables[srcBoneTbl] : [];
+                var t = new ushort[srcTable.Length];
+                for (int i = 0; i < srcTable.Length; i++)
+                {
+                    var name = srcTable[i] < src.BoneNames.Length ? src.BoneNames[srcTable[i]] : null;
+                    t[i] = name != null && build.boneIndex.TryGetValue(name, out var ui) ? ui : (ushort)0;
+                }
+                return outTable = t;
+            }
+
+            private ushort[]? outTable;
+
             private void WriteMesh()
             {
-                // This mesh's OWN bone table, entries remapped onto the union list. Never merged with
-                // other meshes' tables — ubyte4 vertex indices cap a table at 255 entries.
-                var srcTable = srcBoneTbl < src.BoneTables.Length ? src.BoneTables[srcBoneTbl] : [];
-                var table = capBoneTable ?? new ushort[srcTable.Length];
-                if (capBoneTable == null)
-                    for (int i = 0; i < srcTable.Length; i++)
-                    {
-                        var name = srcTable[i] < src.BoneNames.Length ? src.BoneNames[srcTable[i]] : null;
-                        table[i] = name != null && build.boneIndex.TryGetValue(name, out var ui) ? ui : (ushort)0;
-                    }
+                var table = OutputBoneTable();
 
                 var nm = new byte[36];
                 W16(nm, 0, nv);

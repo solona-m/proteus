@@ -1,3 +1,4 @@
+using System.Linq;
 using Proteus.Services;
 using Xunit;
 
@@ -66,9 +67,11 @@ public class ModelVersionParseTests
         // The shape's NAME is the assertion: it is read through an offset into the string block, so it only
         // comes out right if the parser reached the shape block at the correct position.
         Assert.Equal("shp_base", Assert.Single(src.Shapes).Key);
-        // The bone map sits after the bone table too, and the fixture fills it with the table's own bones —
-        // so its CONTENTS say the parser landed in the right place, not merely that it survived.
-        Assert.Equal(src.BoneTables[0], src.SubmeshBoneMap);
+        // The bone map sits after the bone table too, and the fixture fills it with one window per submesh,
+        // each the table's own bones — so its CONTENTS say the parser landed in the right place, not merely that
+        // it survived.
+        Assert.Equal(src.SubmeshCount * src.BoneTables[0].Length, src.SubmeshBoneMap.Length);
+        Assert.Equal(src.BoneTables[0], src.SubmeshBoneMap.Take(src.BoneTables[0].Length));
         Assert.Equal("atr_top", Assert.Single(src.AttrNames));
     }
 
