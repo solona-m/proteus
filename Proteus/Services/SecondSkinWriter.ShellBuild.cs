@@ -105,6 +105,12 @@ public static partial class SecondSkinWriter
         private List<uint> attrStrOff = null!;
         private List<uint> matStrOff = null!;
         private byte[] strings = null!;
+
+        /// <summary>How many NUL-terminated names <see cref="strings"/> holds. Written into the header: a reader
+        /// that slices the block into a LIST by this count (Lumina, and so Penumbra and TexTools) resolves every
+        /// name offset through it, and a count of zero gives every bone, attribute and material the empty name.
+        /// The game reads each name at its offset and never notices.</summary>
+        private int stringCount;
         private byte[] o = null!;
 
         /// <summary>Host meshes left out whole, by their index in the host file — see <c>Build</c>'s
@@ -705,6 +711,9 @@ public static partial class SecondSkinWriter
                 strMs.Write(Encoding.ASCII.GetBytes(l.MaterialName));
                 strMs.WriteByte(0);
             }
+            // Not the NULs in the block: the padding below adds more, and a name may not be there at all.
+            stringCount = boneNames.Count + attrNames.Count + matStrOff.Count;
+
             while (strMs.Position % 4 != 0) strMs.WriteByte(0);
             strings = strMs.ToArray();
         }
@@ -736,8 +745,9 @@ public static partial class SecondSkinWriter
             BitConverter.TryWriteBytes(fileHeader.AsSpan(0), MdlVersionV6);
             ms.Write(fileHeader);
             for (int i = 0; i < meshCount; i++) ms.Write(declOut[i]);   // each mesh's own (source) declaration
-            ms.Write(new byte[4]);                                      // string count (unused)
             Span<byte> tmp4 = stackalloc byte[4];
+            BitConverter.TryWriteBytes(tmp4, (uint)stringCount);        // string count
+            ms.Write(tmp4);
             BitConverter.TryWriteBytes(tmp4, (uint)strings.Length);
             ms.Write(tmp4);
             ms.Write(strings);
