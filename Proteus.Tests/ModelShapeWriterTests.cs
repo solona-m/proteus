@@ -325,7 +325,7 @@ public class ModelShapeWriterTests
         Assert.Equal(["shp_base", "shp_hib"], src.Shapes.Keys.OrderBy(k => k, StringComparer.Ordinal).ToArray());
         Assert.Equal(["atr_top"], src.AttrNames);
         Assert.Equal([0], src.BoneTables[0]);
-        Assert.Empty(src.SubmeshBoneMap);
+        Assert.Equal(src.BoneTables[0], src.SubmeshBoneMap);
 
         Assert.True(SecondSkinWriter.TryReadLod0Geometry(after, out var pos, out _, out var tris));
         Assert.NotEmpty(tris);

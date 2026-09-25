@@ -501,11 +501,15 @@ public static partial class SecondSkinWriter
             private void RebuildBoneMap()
             {
                 // A REBUILT bone table needs a bone map of its own: publish the whole new table as this mesh's window.
+                // The ENTRIES are the table's own — bone indices into the output's name list, the same thing
+                // AppendBoneMap writes. NOT the local slots 0..n-1: the game skins from the bone table and never
+                // reads this map, so slot numbers animate correctly in game and still hand an exporter the wrong
+                // bone NAME for every vertex (a sleeve labelled with whatever bone sits at that place in the list).
                 int rebuiltMapBase = -1;
                 if (capBoneTable != null)
                 {
                     rebuiltMapBase = build.submeshBoneMap.Count;
-                    for (int i = 0; i < capBoneTable.Length; i++) build.submeshBoneMap.Add((ushort)i);
+                    foreach (var b in capBoneTable) build.submeshBoneMap.Add(b);
                 }
 
                 for (int su = 0; su < srcSubCount; su++)

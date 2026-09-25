@@ -66,7 +66,9 @@ public class ModelVersionParseTests
         // The shape's NAME is the assertion: it is read through an offset into the string block, so it only
         // comes out right if the parser reached the shape block at the correct position.
         Assert.Equal("shp_base", Assert.Single(src.Shapes).Key);
-        Assert.Empty(src.SubmeshBoneMap);
+        // The bone map sits after the bone table too, and the fixture fills it with the table's own bones —
+        // so its CONTENTS say the parser landed in the right place, not merely that it survived.
+        Assert.Equal(src.BoneTables[0], src.SubmeshBoneMap);
         Assert.Equal("atr_top", Assert.Single(src.AttrNames));
     }
 
