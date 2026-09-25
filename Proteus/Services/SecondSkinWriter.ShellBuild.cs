@@ -676,20 +676,30 @@ public static partial class SecondSkinWriter
             meshCount = meshOut.Count;
             boneCount = boneNames.Count;
 
-            // ── string block: bone names (union), attribute names (union), material names ──
+            // ── string block: attribute names, then bone names (union), then material names ──
+            //
+            // That ORDER is the format's, not a convenience: 2987 of 2996 game and author models lay the block out
+            // attributes-first, and the nine that do not were written by this writer. Shapes, where a model has
+            // them, come after the materials — 1064 of 1064.
+            //
+            // A reader that resolves a name by its byte offset (Lumina, and so Penumbra) cannot tell the
+            // difference. One that walks the block in order reads every bone name displaced by the ATTRIBUTE
+            // COUNT, and the attribute names themselves turn up at the end of the bone list. Measured on a refit
+            // declaring three attributes: a sleeve bound to j_mune_r, bone 5, came out of TexTools named
+            // j_sako_l, bone 8.
             var strMs = new MemoryStream();
-            boneStrOff = new List<uint>();
-            foreach (var b in boneNames)
-            {
-                boneStrOff.Add((uint)strMs.Position);
-                strMs.Write(Encoding.ASCII.GetBytes(b));
-                strMs.WriteByte(0);
-            }
             attrStrOff = new List<uint>();
             foreach (var a in attrNames)
             {
                 attrStrOff.Add((uint)strMs.Position);
                 strMs.Write(Encoding.ASCII.GetBytes(a));
+                strMs.WriteByte(0);
+            }
+            boneStrOff = new List<uint>();
+            foreach (var b in boneNames)
+            {
+                boneStrOff.Add((uint)strMs.Position);
+                strMs.Write(Encoding.ASCII.GetBytes(b));
                 strMs.WriteByte(0);
             }
 

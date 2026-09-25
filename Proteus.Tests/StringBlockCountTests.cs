@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Proteus.Services;
 using Xunit;
@@ -24,6 +25,38 @@ public class StringBlockCountTests
         [new SyntheticModel.Mesh(Material,
             new SyntheticModel.Sub(0, Weights: [("j_ude_b_l", 0.6f), ("n_hte_l", 0.4f)]))],
         SyntheticModel.V6);
+
+    /// <summary>
+    /// The block's ORDER is the format's: attribute names, then bones, then materials. Of 2996 game and author
+    /// models carrying all three, 2987 are laid out that way and the nine that are not came from this writer.
+    /// <para/>
+    /// A reader that resolves a name by its byte offset — Lumina, and so Penumbra — cannot tell the difference. One
+    /// that walks the block in order reads every bone name displaced by the attribute count: with two attributes a
+    /// sleeve is named two bones along, and the attribute names themselves turn up at the end of the bone list,
+    /// which is exactly what TexTools handed 3ds Max.
+    /// </summary>
+    [Fact]
+    public void Attributes_come_before_bones_and_bones_before_materials()
+    {
+        var shell = Rebuilt();
+        var p = SecondSkinWriter.Parse(shell);
+        var sliced = SliceByCount(shell);
+
+        Assert.NotEmpty(p.AttrNames);
+        Assert.NotEmpty(p.BoneNames);
+        Assert.NotEmpty(p.MatNames);
+
+        int LastOf(IEnumerable<string> names) => names.Max(n => Array.IndexOf(sliced, n));
+        int FirstOf(IEnumerable<string> names) => names.Min(n => Array.IndexOf(sliced, n));
+
+        Assert.All(p.AttrNames, n => Assert.Contains(n, sliced));
+        Assert.All(p.BoneNames, n => Assert.Contains(n, sliced));
+
+        Assert.True(LastOf(p.AttrNames) < FirstOf(p.BoneNames),
+            $"attributes end at {LastOf(p.AttrNames)} but bones start at {FirstOf(p.BoneNames)}");
+        Assert.True(LastOf(p.BoneNames) < FirstOf(p.MatNames),
+            $"bones end at {LastOf(p.BoneNames)} but materials start at {FirstOf(p.MatNames)}");
+    }
 
     /// <summary>The host rebuilt through the writer, as a refit does it: the model under test.</summary>
     private static byte[] Rebuilt()

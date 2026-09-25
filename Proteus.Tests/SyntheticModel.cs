@@ -148,8 +148,12 @@ internal static class SyntheticModel
                 return at;
             })
         ];
-        var boneOff  = Intern(bones);
+        // Attributes, then bones, then materials, then shapes — the order the format uses, measured across 2996
+        // and 1064 game and author models. A reader that walks the block as a list assigns the first
+        // attributeCount strings to attributes, so a fixture in any other order would let a writer that breaks
+        // the grouping pass.
         var attrOff  = Intern(attrNames);
+        var boneOff  = Intern(bones);
         var matOff   = Intern(materials);
         var shapeOff = Intern(shapes);
         var strings  = strMs.ToArray();
@@ -278,7 +282,11 @@ internal static class SyntheticModel
         }
         for (int m = 0; m < meshes.Length; m++) ms.Write(decl);
 
-        ms.Write(new byte[4]);                                                 // string count (unused)
+        // The string COUNT. Not unused: a reader that slices the block into a LIST by it resolves every name
+        // through that list, and zero gives them all the empty name.
+        var cntBuf = new byte[4];
+        BitConverter.TryWriteBytes(cntBuf, (uint)(attrNames.Count + bones.Length + materials.Count + shapes.Count));
+        ms.Write(cntBuf);
         var lenBuf = new byte[4];
         BitConverter.TryWriteBytes(lenBuf, (uint)strings.Length);
         ms.Write(lenBuf);
