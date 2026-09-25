@@ -95,22 +95,55 @@ public static class ModelAttributeWriter
             throw new ModelEditException(
                 $"this model already declares {attrCount} attributes, which is all a submesh mask can hold");
 
-        // Padded to four bytes so every table after the string block keeps its alignment.
         var text = Encoding.ASCII.GetBytes(attributeName);
         int nameLen = text.Length + 1;
+        // Padded to four bytes so every table after the string block keeps its alignment. The padding goes at the
+        // END of the block, never beside the name: a reader that walks the block as a LIST would read each padding
+        // NUL as another empty string and shift every name after it.
         int pad = (4 - nameLen % 4) % 4;
-        var strBytes = new byte[nameLen + pad];
-        text.CopyTo(strBytes, 0);
 
-        uint nameOffset = src.StrSize;                       // relative to the string block, as attrs are
-        int insertStr = src.StrBlock + (int)src.StrSize;     // end of the string block
+        // The name goes at the end of the ATTRIBUTE region, not the end of the block. The block is grouped by kind
+        // — attributes, bones, materials, shapes, measured across 2996 and 1064 game and author models — and a
+        // reader that walks it in order (Lumina, and so Penumbra and TexTools) assigns the first attributeCount
+        // strings to attributes. A name parked after the materials makes that reader take the first BONE name as
+        // an attribute and misname every bone after it.
+        uint nameOffset = 0;
+        for (int i = 0; i < attrCount; i++)
+        {
+            uint end = BitConverter.ToUInt32(mdl, src.AttrStart + i * 4)
+                     + (uint)Encoding.ASCII.GetByteCount(src.AttrNames[i]) + 1;
+            if (end > nameOffset) nameOffset = end;
+        }
+
+        var nameBytes = new byte[nameLen];
+        text.CopyTo(nameBytes, 0);
+
+        int insertStr = src.StrBlock + (int)nameOffset;      // end of the attribute region
+        int insertPad = src.StrBlock + (int)src.StrSize;     // end of the block, for the alignment padding
         int insertOff = src.AttrStart + attrCount * 4;       // end of the attribute offset table
 
         var offBytes = new byte[4];
         BitConverter.TryWriteBytes(offBytes, nameOffset);
 
-        var o = Splice(mdl, [(insertStr, strBytes), (insertOff, offBytes)]);
-        int dStr = strBytes.Length, delta = dStr + 4;
+        // Ascending positions: Splice rebases each insert past the ones before it.
+        var o = pad > 0
+            ? Splice(mdl, [(insertStr, nameBytes), (insertPad, new byte[pad]), (insertOff, offBytes)])
+            : Splice(mdl, [(insertStr, nameBytes), (insertOff, offBytes)]);
+        int dStr = nameLen + pad, delta = dStr + 4;
+
+        // Every name the insert pushed along — the bones, materials and shapes, which all sit after the attributes,
+        // and any attribute a model of some other layout happens to keep there. Offsets are relative to the block,
+        // so only the VALUES move, by the name's length; the trailing padding sits past them all.
+        ShiftNameOffsets(o, src.AttrStart + dStr, attrCount, nameOffset, (uint)nameLen);
+        int matOffStart = src.MatOffStart + delta;
+        ShiftNameOffsets(o, matOffStart, src.MatCount, nameOffset, (uint)nameLen);
+        ShiftNameOffsets(o, matOffStart + src.MatCount * 4, src.BoneCount, nameOffset, (uint)nameLen);
+        for (int i = 0; i < src.Shapes.Count; i++)
+        {
+            int at = src.ShapeBlock + delta + i * 16;
+            uint v = BitConverter.ToUInt32(o, at);
+            if (v >= nameOffset) W32(o, at, v + (uint)nameLen);
+        }
 
         W32(o, src.DeclEnd + 4, src.StrSize + (uint)dStr);          // string block size
         // The string COUNT: the game ignores it, but Penumbra and TexTools walk exactly this many strings
@@ -135,6 +168,20 @@ public static class ModelAttributeWriter
             W32(o, ss + 8, BitConverter.ToUInt32(o, ss + 8) | bit);
         }
         return o;
+    }
+
+    /// <summary>
+    /// Add <paramref name="by"/> to every entry of a name-offset table that points at or past
+    /// <paramref name="from"/> — the names a mid-block insert pushed along.
+    /// </summary>
+    private static void ShiftNameOffsets(byte[] o, int tableAt, int count, uint from, uint by)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            int at = tableAt + i * 4;
+            uint v = BitConverter.ToUInt32(o, at);
+            if (v >= from) W32(o, at, v + by);
+        }
     }
 
     // ── splitting ───────────────────────────────────────────────────────────
