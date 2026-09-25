@@ -124,9 +124,10 @@ public static partial class SecondSkinWriter
         private readonly IReadOnlyList<byte[]> boneDonors;
 
         /// <summary>Host vertices given new skinning, and influences that could not be placed, across the build.</summary>
-        private int reskinned, reskinDropped;
+        private int reskinned, reskinDropped, reskinTrimmed;
 
-        /// <summary>Where <see cref="reskinned"/> and <see cref="reskinDropped"/> are reported; null for nobody.</summary>
+        /// <summary>Where <see cref="reskinned"/>, <see cref="reskinDropped"/> and <see cref="reskinTrimmed"/> are
+        /// reported; null for nobody.</summary>
         private readonly ReskinReport? reskinReport;
 
         public ShellBuild(IReadOnlyList<SourceSpec> sources, IReadOnlyList<SecondSkinLayer> layers, byte[]? baseModel, Action<string>? diag, IReadOnlyList<AuthoredCapSet>? authoredCaps, PushSweep? pushSweep, BuildTimings? timings, Func<int, bool>? dropHostMesh = null, Func<int, (string Bone, float W)[]?[]?>? hostReskin = null,
@@ -876,6 +877,7 @@ public static partial class SecondSkinWriter
             {
                 reskinReport.Reskinned = reskinned;
                 reskinReport.Dropped = reskinDropped;
+                reskinReport.Trimmed = reskinTrimmed;
             }
             timings?.Serialize.Stop(tSerialize);
             return o;

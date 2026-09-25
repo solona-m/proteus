@@ -157,8 +157,44 @@ public class BodyWeightsTests
         }
     }
 
+    /// <summary>
+    /// SKIN needing more than four influences is widened to eight, because <c>skin.shpk</c> reads eight — a body
+    /// mod's own meshes are the proof, the Neolithe body carrying 1058 five-influence vertices and drawing right.
+    /// </summary>
     [Fact]
-    public void A_vertex_needing_more_than_four_influences_is_widened_to_eight()
+    public void Skin_needing_more_than_four_influences_is_widened_to_eight()
+    {
+        var source = Body(("j_kosi", 1f));
+        var target = Body(("j_mune_l", 0.25f), ("j_mune_r", 0.25f), ("j_kosi", 0.25f), ("j_sebo_b", 0.25f));
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetZ: 0.001f,
+                Weights: [("j_sk_b_a_l", 0.2f), ("j_sk_b_a_r", 0.2f), ("j_kosi", 0.6f)])));
+        var pairs = new[] { Pair(source, target) };
+
+        var rebuilt = BodyRetarget.Rebuild(garment, pairs, swapSkin: false, BodyRetarget.PlanWeights(garment, pairs),
+                                           out _)!;
+
+        var after = Weights(rebuilt);
+        Assert.All(VerticesOf(garment, Skin, 0), v =>
+        {
+            Assert.Equal(6, after[v].Count);                                    // two skirt, four body
+            Assert.True(after[v].Count <= 8);
+            Assert.Equal(1f, after[v].Sum(i => i.W), 2);
+        });
+        var decl = SecondSkinWriter.Parse(rebuilt).Decls[0];
+        Assert.Contains(decl, e => e.Usage == SecondSkinWriter.UseBlendWeight && e.Type == 17);
+    }
+
+    /// <summary>
+    /// CLOTH is not. The character shaders declare their vertex input as <c>float4 blendWeight</c> and
+    /// <c>int4 blendIndices</c>, so a fifth influence is never read: the weights the shader sees would sum to less
+    /// than one and draw the vertex pulled toward the origin, a dent whose inner surface reads as a dark band.
+    /// <para/>
+    /// So the mesh keeps its four slots, and what is dropped is folded back into the largest — the weights the
+    /// shader reads still come to exactly one, which is the whole point.
+    /// </summary>
+    [Fact]
+    public void Cloth_needing_more_than_four_influences_keeps_its_four()
     {
         var source = Body(("j_kosi", 1f));
         var target = Body(("j_mune_l", 0.25f), ("j_mune_r", 0.25f), ("j_kosi", 0.25f), ("j_sebo_b", 0.25f));
@@ -173,12 +209,11 @@ public class BodyWeightsTests
         var after = Weights(rebuilt);
         Assert.All(VerticesOf(garment, Cloth, 0), v =>
         {
-            Assert.Equal(6, after[v].Count);                                    // two skirt, four body
-            Assert.True(after[v].Count <= 8);
+            Assert.True(after[v].Count <= 4, $"vertex {v} kept {after[v].Count} influences");
             Assert.Equal(1f, after[v].Sum(i => i.W), 2);
         });
         var decl = SecondSkinWriter.Parse(rebuilt).Decls[0];
-        Assert.Contains(decl, e => e.Usage == SecondSkinWriter.UseBlendWeight && e.Type == 17);
+        Assert.DoesNotContain(decl, e => e.Usage == SecondSkinWriter.UseBlendWeight && e.Type == 17);
     }
 
     [Fact]
@@ -191,13 +226,85 @@ public class BodyWeightsTests
         Span<byte> wb = stackalloc byte[8], ib = stackalloc byte[8];
         int dropped = 0;
 
-        int used = SecondSkinWriter.EncodeBlend(w, 8, bone => names.IndexOf(bone), wb, ib, ref dropped);
+        int trimmed = 0;
+        int used = SecondSkinWriter.EncodeBlend(w, 8, bone => names.IndexOf(bone), wb, ib, ref dropped, ref trimmed);
 
         Assert.Equal(5, used);
         int sum = 0;
         for (int k = 0; k < 8; k++) sum += wb[k];
         Assert.Equal(255, sum);
         Assert.Equal(1, wb[0]);                                                // the skirt's byte, untouched
+    }
+
+    /// <summary>
+    /// Too many influences for the slots: the HEAVIEST are kept, not the first.
+    /// <para/>
+    /// The planner lists a vertex's own garment bones ahead of the new body's share and plans to eight slots. Taking
+    /// the front of the list on a four-slot cloth mesh therefore drops the body share whole wherever the garment's
+    /// own bones already fill four — and that vertex stays rigged to the body the garment was made for while the
+    /// cloth beside it follows the new one, which comes apart as soon as a bone turns.
+    /// </summary>
+    [Fact]
+    public void Trimming_to_the_slots_keeps_the_heaviest_not_the_first()
+    {
+        // Four small garment bones first, then the body's share — the order Combine returns.
+        (string, float)[] w = [("own_a", 0.05f), ("own_b", 0.05f), ("own_c", 0.05f), ("own_d", 0.05f),
+                               ("body_l", 0.40f), ("body_r", 0.40f)];
+        var names = w.Select(i => i.Item1).ToList();
+        Span<byte> wb = stackalloc byte[8], ib = stackalloc byte[8];
+        int dropped = 0, trimmed = 0;
+
+        int used = SecondSkinWriter.EncodeBlend(w, 4, bone => names.IndexOf(bone), wb, ib, ref dropped, ref trimmed);
+
+        Assert.Equal(4, used);
+        Assert.Equal(2, trimmed);
+        Assert.Equal(0, dropped);
+
+        // Both body bones survived; two of the four small garment ones went.
+        var kept = new List<string>();
+        for (int k = 0; k < 4; k++)
+            if (wb[k] > 0) kept.Add(names[ib[k]]);
+        Assert.Contains("body_l", kept);
+        Assert.Contains("body_r", kept);
+
+        int sum = 0;
+        for (int k = 0; k < 4; k++) sum += wb[k];
+        Assert.Equal(255, sum);
+    }
+
+    /// <summary>A list that fits is written in the order given, untouched, and counts no trim.</summary>
+    [Fact]
+    public void A_list_that_fits_the_slots_is_not_reordered()
+    {
+        (string, float)[] w = [("own_a", 0.1f), ("body_l", 0.9f)];
+        var names = w.Select(i => i.Item1).ToList();
+        Span<byte> wb = stackalloc byte[8], ib = stackalloc byte[8];
+        int dropped = 0, trimmed = 0;
+
+        int used = SecondSkinWriter.EncodeBlend(w, 4, bone => names.IndexOf(bone), wb, ib, ref dropped, ref trimmed);
+
+        Assert.Equal(2, used);
+        Assert.Equal(0, trimmed);
+        Assert.Equal(0, ib[0]);                                                // own_a still leads
+        Assert.Equal(1, ib[1]);
+    }
+
+    /// <summary>What a trim gave up is counted, so a refit can say so rather than losing it silently.</summary>
+    [Fact]
+    public void A_refit_reports_what_the_slots_could_not_hold()
+    {
+        var source = Body(("j_kosi", 1f));
+        var target = Body(("j_mune_l", 0.25f), ("j_mune_r", 0.25f), ("j_kosi", 0.25f), ("j_sebo_b", 0.25f));
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Cloth, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetZ: 0.001f,
+                Weights: [("j_sk_b_a_l", 0.2f), ("j_sk_b_a_r", 0.2f), ("j_kosi", 0.6f)])));
+        var pairs = new[] { Pair(source, target) };
+
+        BodyRetarget.Rebuild(garment, pairs, swapSkin: false, BodyRetarget.PlanWeights(garment, pairs),
+                             out var report);
+
+        Assert.True(report.Reweighted > 0, "the refit should have reweighted something");
+        Assert.True(report.Slotted > 0, "six influences into four slots should be reported");
     }
 
     [Fact]

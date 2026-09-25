@@ -52,9 +52,12 @@ internal static partial class BodyRetarget
     /// <param name="Posed">Skin meshes only partly on the bodies — a heeled shoe's own foot — which were kept.</param>
     /// <param name="Cut">Triangles of the new body's skin left out, because the garment's author deleted the body
     /// there — see <see cref="CutLike"/>.</param>
+    /// <param name="Trimmed">Vertices the PLANNER could not fit in eight influences.</param>
+    /// <param name="Slotted">Influences the MESH had no slot for — a four-slot cloth mesh given a vertex planned
+    /// with five. The heaviest are kept and the weights renormalised, so nothing shrinks.</param>
     internal readonly record struct SwapReport(int Removed, int Added, int Kept, int LostShapes,
                                                int Reweighted = 0, int Trimmed = 0, int ExtrasDropped = 0,
-                                               int Unplaced = 0, int Posed = 0, int Cut = 0);
+                                               int Unplaced = 0, int Posed = 0, int Cut = 0, int Slotted = 0);
 
     /// <summary>
     /// Swap the garment's skin for the new body's, one body slot at a time: every skin mesh of the garment that belongs
@@ -195,7 +198,7 @@ internal static partial class BodyRetarget
 
         report = new SwapReport(removed, keptTris, kept, SecondSkinWriter.Parse(garment).Shapes.Count,
                                 weights?.Reweighted ?? 0, weights?.Trimmed ?? 0, extras, reskinned.Dropped, posed,
-                                cutTris);
+                                cutTris, reskinned.Trimmed);
         return rebuilt;
     }
 

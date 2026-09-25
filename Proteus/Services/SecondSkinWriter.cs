@@ -130,6 +130,13 @@ public static partial class SecondSkinWriter
 
         /// <summary>Influences that could not be placed: a bone in no model the build was given, or a full table.</summary>
         public int Dropped { get; internal set; }
+
+        /// <summary>
+        /// Influences left out because the mesh had no slot for them — a four-slot cloth mesh given a vertex the
+        /// planner wrote five for. The heaviest are kept and the weights renormalised, so nothing shrinks; this is
+        /// how many were given up, which is otherwise invisible.
+        /// </summary>
+        public int Trimmed { get; internal set; }
     }
 
     /// <summary>

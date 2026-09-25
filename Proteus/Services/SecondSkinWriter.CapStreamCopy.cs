@@ -179,7 +179,8 @@ public static partial class SecondSkinWriter
                                 if (w.Length == 0) continue;
                                 // As many influences as THIS element declares; anything not written is zeroed.
                                 int nInf = BlendCount(we5.Type);
-                                int used2 = EncodeBlend(w, nInf, SlotOf, wb2, ib2, ref dropped);
+                                int trimmed2 = 0;   // the cap's own lists never outrun its slots
+                                int used2 = EncodeBlend(w, nInf, SlotOf, wb2, ib2, ref dropped, ref trimmed2);
                                 if (used2 == 0) continue;
                                 int wo = i * emitter.outStrides[we5.Stream] + we5.Offset;
                                 int io = i * emitter.outStrides[ie5.Stream] + ie5.Offset;

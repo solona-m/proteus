@@ -196,7 +196,7 @@ public static partial class SecondSkinWriter
                             {
                                 // Write every influence the element declares; leaving the rest was what over-weighted the join.
                                 int nInf3 = BlendCount(we6.Type);
-                                int ignored = 0;
+                                int ignored = 0, ignoredTrim = 0;
                                 int used3 = EncodeBlend(capW, nInf3, bone =>
                                 {
                                     if (shellSlot.TryGetValue(bone, out int at3)) return at3;
@@ -204,7 +204,7 @@ public static partial class SecondSkinWriter
                                     shellSlot[bone] = shellTbl.Count;
                                     shellTbl.Add(ui5);
                                     return shellTbl.Count - 1;
-                                }, wb3, ib3, ref ignored);
+                                }, wb3, ib3, ref ignored, ref ignoredTrim);
                                 if (used3 > 0)
                                 {
                                     int wo3 = i * emitter.outStrides[we6.Stream] + we6.Offset;
