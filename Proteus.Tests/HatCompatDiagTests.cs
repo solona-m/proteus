@@ -650,12 +650,14 @@ public class HatCompatDiagTests(ITestOutputHelper o)
     }
 
     /// <summary>
-    /// Where TexTools exports live on the machine that owns the game. Every c0201 head piece under it is a
-    /// reference hat; nothing derived from them is ever shipped.
+    /// Where TexTools exports live on the machine that owns the game — set <c>PROTEUS_HAT_ROOT</c> to it. Every
+    /// c0201 head piece under it is a reference hat; nothing derived from them is ever shipped.
+    /// <para/>
+    /// No default: a path from one person's machine is of no use on anyone else's, and a home directory names its
+    /// owner. Unset, the hat tests find nothing and return.
     /// </summary>
     private static readonly string HatRoot =
-        Environment.GetEnvironmentVariable("PROTEUS_HAT_ROOT")
-        ?? @"";
+        Environment.GetEnvironmentVariable("PROTEUS_HAT_ROOT") ?? "";
 
     /// <summary>Every reference hat exported for a Midlander female, named by its folder.</summary>
     private static List<(string Name, string Path)> Hats()
@@ -675,10 +677,13 @@ public class HatCompatDiagTests(ITestOutputHelper o)
         return found.OrderBy(h => h.Item1, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
-    /// <summary>A TexTools export of one reference hat, for the tests that need something hat-shaped.</summary>
+    /// <summary>
+    /// A TexTools export of one reference hat, for the tests that need something hat-shaped — set
+    /// <c>PROTEUS_HAT_FBX</c> to it. No default, for the reason <see cref="HatRoot"/> gives; unset, those tests
+    /// return without asserting.
+    /// </summary>
     private static readonly string HatFbx =
-        Environment.GetEnvironmentVariable("PROTEUS_HAT_FBX")
-        ?? @"";
+        Environment.GetEnvironmentVariable("PROTEUS_HAT_FBX") ?? "";
 
     /// <summary>
     /// Where does a real hat actually sit, in the space hair vertices live in?
