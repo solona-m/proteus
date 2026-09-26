@@ -221,6 +221,7 @@ public sealed class PartsPanel
         this.liveBrush = liveBrush;
         preview = new LiveBrushPreview(penumbra, compositor, log);
         LiveBrushPreview.CleanUp();
+        preview.ForceEnd(false);
         partOfVertexFn = PartOfVertex;
         lockClickedFn = LockClickedOnCharacter;
         tickClickedFn = TickClickedOnCharacter;
