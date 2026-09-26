@@ -2552,7 +2552,7 @@ public sealed class PartsPanel
             PushPreview: PushRetargetPreview,
             EndPreview: () => EndLivePreview(refreshGame: true),
             SetStatus: (text, error) => { status = text; statusIsError = error; },
-            AfterModChange: changed =>
+            AfterModChange: (changed, afterReload) =>
             {
                 // Whichever mod the save actually wrote into: the garment's own, or one made to hold its refits.
                 changed ??= modDir ?? lastRefitModDir;
@@ -2560,6 +2560,7 @@ public sealed class PartsPanel
                 {
                     compositor.ExpectOwnModEdit(changed);
                     penumbra.ReloadModDirectory(changed);
+                    afterReload?.Invoke(changed);
                 }
                 compositor.RedrawForChangedModel();
                 // The save added a model (or an undo took one away): list it, so the new size can be opened here.

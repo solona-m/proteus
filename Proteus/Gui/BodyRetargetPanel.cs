@@ -44,7 +44,9 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     /// <param name="AfterModChange">
     /// A mod's files changed on disk — reload it and redraw. Which mod is the argument, because it is not always the
     /// one the garment came from: a refit saved into a mod of its own changed THAT one, and reloading the garment's
-    /// instead leaves the mod that actually holds the new model unread by Penumbra.
+    /// instead leaves the mod that actually holds the new model unread by Penumbra. The callback, when given, runs
+    /// between the reload and the redraw with the mod reloaded — the only point at which Penumbra knows an option the
+    /// save just added, so it can be selected and still be what the redraw draws.
     /// </param>
     /// <param name="Held">Labels of the parts unticked in the Studio's list, which the refit leaves exactly where the
     /// author put them. The same locks the brush honours.</param>
@@ -58,7 +60,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         string? ModRoot, string? ModDir, string ModelRel, string GamePath, string ModelLabel,
         ModelParts Garment, byte[] GarmentBytes, IReadOnlyList<PenumbraModMeta.Redirect> Redirects,
         Action FlushPending, Func<byte[], bool> PushPreview, Action EndPreview,
-        Action<string, bool> SetStatus, Action<string?> AfterModChange, IReadOnlyCollection<string> Held,
+        Action<string, bool> SetStatus, Action<string?, Action<string>?> AfterModChange, IReadOnlyCollection<string> Held,
         Func<string, bool, (string Root, string Dir)?>? SaveMod = null)
     {
         /// <summary>
@@ -1520,11 +1522,12 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     private (string Group, string Option)? selectAfterSave;
 
     /// <summary>
-    /// Wear what was just saved. Penumbra IPC, so the framework thread — which is where the save is consumed.
+    /// Wear what was just saved, in the mod that holds it, once Penumbra has reloaded it. Penumbra IPC, so the framework
+    /// thread — which is where the save is consumed.
     /// </summary>
-    private void SelectSaved(string? modDir)
+    private void SelectSaved(string modDir)
     {
-        if (selectAfterSave is not { } pick || modDir == null) return;
+        if (selectAfterSave is not { } pick) return;
         selectAfterSave = null;
 
         if (penumbra.GetPlayerCollectionId() is not { } collection)
@@ -1655,13 +1658,13 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
             ctx.SetStatus(outcome.Message, !outcome.Ok);
             if (!outcome.Ok) return;
 
-            // Before AfterModChange, which reloads the mod: the selection is part of what the reload should pick up.
-            SelectSaved(wroteInto);
-
             ctx.EndPreview();
             planned = null;
             pendingPreview = null;
-            ctx.AfterModChange(wroteInto);
+            // The selection goes AFTER the reload: until Penumbra has re-read the mod, an option (or group) the save
+            // just added does not exist to it, and selecting it answers OptionMissing and leaves the old size worn.
+            // Before the redraw, so the redraw draws the new size.
+            ctx.AfterModChange(wroteInto, SelectSaved);
         }
     }
 
