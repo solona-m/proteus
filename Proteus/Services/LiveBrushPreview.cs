@@ -113,6 +113,15 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
         // Not waited on (the push finishes on this framework thread); the generation mark makes it stand down.
         endedAt = generation;
         if (!Active) return;
+        ForceEnd(redraw);
+    }
+
+    /// <summary>
+    /// Take the preview down, so the character draws the mod's own file again, without checking if it was active.
+    /// </summary>
+    /// <param name="redraw">Redraw afterwards, the only sure way to replace the game's cached copy. False on teardown.</param>
+    public void ForceEnd(bool redraw)
+    {
         Active = false;
 
         penumbra.RemovePlayerTemporaryMod(Tag, Priority);
