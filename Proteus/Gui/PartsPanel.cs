@@ -296,6 +296,7 @@ public sealed class PartsPanel
         partHeldFn = PartHeld;
         moveClickedFn = MoveClickedOnCharacter;
         polyClickedFn = PolygonClicked;
+        polyPickableFn = PolygonPickable;
         moveTickedFn = MoveTicked;
         gizmoCaptureFn = () => tool switch
         {
@@ -493,7 +494,8 @@ public sealed class PartsPanel
                                    partLocked: tool == Tool.Retarget ? partHeldFn : null,
                                    lockedVersion: tool == Tool.Retarget ? VersionOf(RetargetHolds) : 0,
                                    polygons: moving && movePolygons ? movePolys : null,
-                                   polygonClicked: moving && movePolygons ? polyClickedFn : null);
+                                   polygonClicked: moving && movePolygons ? polyClickedFn : null,
+                                   polygonPickable: moving && movePolygons ? polyPickableFn : null);
         }
 
         frame.Mark("arm live brush");
@@ -1379,6 +1381,9 @@ public sealed class PartsPanel
         }
 
         ApplyLocks();
+        // A locked part is see-through to the pick, so polygons of it left selected could never be clicked back out.
+        // Body size's holds are a different set and say nothing about the Move selection.
+        if (tool != Tool.Retarget && movePolys.RemoveWhere(k => !PolygonPickable(k)) > 0) movePolysVersion++;
     }
 
     private void UnlockAll()
@@ -1488,13 +1493,24 @@ public sealed class PartsPanel
     /// <summary>The open model's polygons, built on first use.</summary>
     private PolygonSelection? Polygons() => parts == null ? null : polySelection ??= new PolygonSelection(parts);
 
+    private readonly Func<PolygonSelection.Key, bool> polyPickableFn;
+
+    /// <summary>
+    /// Whether a click can take <paramref name="key"/>: cloth of a part that is not locked. Everything else — skin, and
+    /// the parts unticked in the list — is see-through to the pick, so cloth clipped behind the skin, or hidden under
+    /// another piece, can be reached by locking what is in front of it.
+    /// </summary>
+    private bool PolygonPickable(PolygonSelection.Key key)
+        => parts != null && Polygons() is { } polys && polys.Contains(key)
+           && PartOfVertex(key.A) is var p and >= 0 && !IsLocked(parts.Parts[p]);
+
     /// <summary>
     /// A click on a polygon, from the model view or the character: it alone is selected, or with Shift held it is added
     /// to the selection, or taken out of it if it was already in.
     /// </summary>
     private void PolygonClicked(PolygonSelection.Key key)
     {
-        if (volume is { Moving: true } || Polygons() is not { } polys || !polys.Contains(key)) return;
+        if (volume is { Moving: true } || !PolygonPickable(key)) return;
         if (ImGui.GetIO().KeyShift)
         {
             if (!movePolys.Remove(key)) movePolys.Add(key);
@@ -1527,7 +1543,7 @@ public sealed class PartsPanel
         var positions = volume.Positions();
 
         if (viewport.PointerOverModel && viewport.ScreenRay(ImGui.GetMousePos()) is { } ray)
-            hoverPoly = polys.Pick(ray.Origin, ray.Dir, positions);
+            hoverPoly = polys.Pick(ray.Origin, ray.Dir, positions, polyPickableFn);
 
         var dl = ImGui.GetWindowDrawList();
         void Fill(PolygonSelection.Key key, uint colour)
@@ -1768,11 +1784,11 @@ public sealed class PartsPanel
         DrawEditActions();
     }
 
-    /// <summary>Replace the polygon selection — a grow or a shrink.</summary>
+    /// <summary>Replace the polygon selection — a grow or a shrink. A grow stops at skin and locked parts.</summary>
     private void SetPolygons(HashSet<PolygonSelection.Key> next)
     {
         movePolys.Clear();
-        movePolys.UnionWith(next);
+        movePolys.UnionWith(next.Where(PolygonPickable));
         movePolysVersion++;
     }
 

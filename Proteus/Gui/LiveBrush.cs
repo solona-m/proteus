@@ -121,6 +121,8 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     /// are the Scale tool's handle, in place of <paramref name="partTicked"/>'s part. Null in part mode.</param>
     /// <param name="polygonClicked">In polygon mode: a click on the garment, with the polygon it landed on — in place of
     /// <paramref name="lockClicked"/>.</param>
+    /// <param name="polygonPickable">In polygon mode: which polygons a click can take. The rest — skin, locked parts —
+    /// do not stop the ray, so cloth clipped behind them can still be picked.</param>
     /// <param name="graftedGamePath">
     /// Set for a model the character wears through Proteus rather than as a file of its own — an imported
     /// content piece, whose geometry the game only ever draws copied into a Proteus shell. The file is then
@@ -136,10 +138,12 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
                            RotateGizmo? rotateGizmo = null,
                            Func<int, bool>? partLocked = null, int lockedVersion = 0,
                            IReadOnlySet<PolygonSelection.Key>? polygons = null,
-                           Action<PolygonSelection.Key>? polygonClicked = null)
+                           Action<PolygonSelection.Key>? polygonClicked = null,
+                           Func<PolygonSelection.Key, bool>? polygonPickable = null)
     {
         this.polygons = polygons;
         this.polygonClicked = polygonClicked;
+        this.polygonPickable = polygonPickable;
         this.partLocked = partLocked;
         this.lockedVersion = lockedVersion;
         this.moveGizmo = moveGizmo;
@@ -170,6 +174,7 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     // ── the Move tools in polygon mode ──
     private IReadOnlySet<PolygonSelection.Key>? polygons;
     private Action<PolygonSelection.Key>? polygonClicked;
+    private Func<PolygonSelection.Key, bool>? polygonPickable;
 
     /// <summary>The polygon live triangle <paramref name="t"/> is, by its corners.</summary>
     private static PolygonSelection.Key PolygonOf(SkinnedMesh m, int t)
@@ -403,7 +408,12 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
         DrawLockedWash(projection, m);
 
         var io = ImGui.GetIO();
-        var hit = MouseHit(projection, world, m.Triangles, skinTriangle, out bool overUi);
+        // Picking polygons looks THROUGH whatever cannot be picked — the skin a clip pokes out behind, a locked part —
+        // rather than being stopped by it.
+        var hit = polygonClicked != null && polygonPickable is { } pickable
+            ? MouseHit(projection, world, m.Triangles,
+                       t => (t >= skinTriangle.Length || !skinTriangle[t]) && pickable(PolygonOf(m, t)), out bool overUi)
+            : MouseHit(projection, world, m.Triangles, skinTriangle, out overUi);
         var origin = ImGui.GetMainViewport().Pos;
         bool dragging = moveGizmo is { Active: not TranslateGizmo.Handle.None } || scaleDrag is { Active: true }
                         || rotateGizmo is { Active: not RotateGizmo.Handle.None };
@@ -624,6 +634,16 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
         if (!ScreenProjection.TryScreenRay(mouse, out var origin, out var dir)) return null;
         var hit = LiveMeshPicker.Raycast(posed, triangles, origin, dir);
         return hit is { } h && h.Triangle < skin.Length && skin[h.Triangle] ? null : hit;
+    }
+
+    /// <summary>The nearest triangle under the mouse that <paramref name="accept"/> takes; the rest are see-through.</summary>
+    private static LiveMeshHit? MouseHit(ScreenProjection projection, Vector3[] posed, int[] triangles,
+                                         Func<int, bool> accept, out bool overUi)
+    {
+        overUi = ImGui.IsWindowHovered(ImGuiHoveredFlags.AnyWindow);
+        var mouse = ImGui.GetIO().MousePos - ImGui.GetMainViewport().Pos;
+        if (!ScreenProjection.TryScreenRay(mouse, out var origin, out var dir)) return null;
+        return LiveMeshPicker.Raycast(posed, triangles, origin, dir, accept);
     }
 
     /// <summary>

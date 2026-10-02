@@ -122,15 +122,18 @@ internal sealed class PolygonSelection
     /// The nearest selectable polygon a ray passes through, against <paramref name="positions"/> (the surface as it now
     /// stands, three floats per vertex); null when it misses everything.
     /// </summary>
-    public Key? Pick(Vector3 origin, Vector3 direction, float[] positions)
+    /// <param name="accept">Optional further filter: a polygon it refuses is see-through, so the ray goes on to what
+    /// lies behind it.</param>
+    public Key? Pick(Vector3 origin, Vector3 direction, float[] positions, Func<Key, bool>? accept = null)
     {
         Key? best = null;
         float bestT = float.MaxValue;
         foreach (var key in polygons)
         {
             if (key.C * 3 + 2 >= positions.Length) continue;
+            // The filter last: it is the dear test, and most polygons are missed by the ray anyway.
             if (RayHits(origin, direction, At(positions, key.A), At(positions, key.B), At(positions, key.C), out float t)
-                && t < bestT)
+                && t < bestT && (accept == null || accept(key)))
             {
                 bestT = t;
                 best = key;
