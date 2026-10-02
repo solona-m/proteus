@@ -376,7 +376,9 @@ public partial class CompositorService
         if (race == 1) return HyurCode(tribe, f);
         return race switch
         {
-            2 or 3 or 4 or 5 => f ? "c0201" : "c0101", // Elezen/Lalafell/Miqo'te/Roegadyn share mid bodies
+            2 or 4 or 5 => f ? "c0201" : "c0101", // Elezen/Miqo'te/Roegadyn share mid bodies
+            // Lalafell have their own body, and both genders draw it: a female's body materials are c1101 too.
+            3 => "c1101",
             6 => f ? "c1401" : "c1301", // Au Ra
             7 => f ? "c1601" : "c1501", // Hrothgar
             8 => f ? "c1801" : "c1701", // Viera
@@ -387,7 +389,8 @@ public partial class CompositorService
     /// <summary>
     /// The same customization as the code the character's own HEAD is published under — face, hair, tail and
     /// ears. Unlike <see cref="BodyCodeFromCustomize"/> nothing is shared here: every race has its own, so an
-    /// Elezen, Miqo'te, Roegadyn or Lalafell female's face is c0601/c0801/c1001/c1201 over a c0201 body.
+    /// Elezen, Miqo'te or Roegadyn female's face is c0601/c0801/c1001 over a c0201 body, and a Lalafell female's
+    /// is c1201 over a c1101 one.
     /// </summary>
     internal static string? FaceCodeFromCustomize(byte race, byte tribe, byte sex)
     {
