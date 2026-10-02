@@ -425,10 +425,13 @@ public sealed class Plugin : IDalamudPlugin
         // "/proteus refresh [full]": the tab bar's Refresh button, and its shift-click, from a macro.
         if (a.StartsWith("refresh", StringComparison.OrdinalIgnoreCase))
         {
-            bool full = a[7..].Trim() is "full" or "-full" or "all";
+            string[] refreshArgs = a[7..].Trim().Split(' ');
+            bool full = refreshArgs.ContainsAny(["full", "-full", "all"], StringComparer.OrdinalIgnoreCase);
+            bool silent = refreshArgs.ContainsAny(["silent", "-silent"], StringComparer.OrdinalIgnoreCase);
             compositor.RefreshAndRecomposite(full);
             // The Studio lists every Penumbra mod, so refresh that too: a recomposite alone would miss a new one.
             partsPanel.Refresh();
+            if (silent) return;
             ChatGui.Print("[Proteus] " + (full
                 ? Loc.Localize("Command.Refreshing.Full", "Rebuilding everything and recompositing. This takes longer than a plain refresh.")
                 : Loc.Localize("Command.Refreshing", "Recompositing now.")));
