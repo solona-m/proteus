@@ -289,6 +289,7 @@ public sealed class PartsPanel
         // Last session's extracts of the game's body: a patch since then would make them stale, and the session is
         // the only clock that can outlast one.
         VanillaBodyCatalog.CleanUp();
+        preview.ForceEnd(false);
         partOfVertexFn = PartOfVertex;
         lockClickedFn = LockClickedOnCharacter;
         tickClickedFn = TickClickedOnCharacter;
