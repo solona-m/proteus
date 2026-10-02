@@ -112,16 +112,21 @@ internal static partial class BodyRetarget
         var sourceBones = new HashSet<string>(StringComparer.Ordinal);
         var targetBones = new HashSet<string>(StringComparer.Ordinal);
         var targets = new List<(BodySurface Surface, XivLiveMesh.SkinnedMesh Skin)>();
+        // Per target, in step with it: within one body mod, the slot's two sizes share a rig — see RigKept.
+        var rigKept = new List<bool>();
         // The old bodies, for the change between the two. Any one unreadable and the change cannot be taken anywhere:
         // the new body's weights are then used outright, as before the change was.
         List<(BodySurface Surface, XivLiveMesh.SkinnedMesh Skin)>? sources = [];
         foreach (var pair in pairs)
         {
-            sourceBones.UnionWith(SecondSkinWriter.Parse(pair.SourceModel!).BoneNames);
-            targetBones.UnionWith(SecondSkinWriter.Parse(pair.TargetModel!).BoneNames);
+            var pairSource = SecondSkinWriter.Parse(pair.SourceModel!).BoneNames;
+            var pairTarget = SecondSkinWriter.Parse(pair.TargetModel!).BoneNames;
+            sourceBones.UnionWith(pairSource);
+            targetBones.UnionWith(pairTarget);
             if (ModelSkinReader.Read(pair.TargetModel!, null, null) is not { } skin) return null;
             if (skin.VertexCount * 3 != pair.Target.Positions.Length) return null;   // not the part reader's order
             targets.Add((new BodySurface(pair.Target, BodySurface.CellFor(MeanEdgeOf(pair.Target))), skin));
+            rigKept.Add(!acrossBodies && new HashSet<string>(pairSource, StringComparer.Ordinal).SetEquals(pairTarget));
 
             // The correspondence's own reading of the old body: without the variants its mod does not draw.
             if (sources != null
@@ -162,6 +167,7 @@ internal static partial class BodyRetarget
         int vc = model.Positions.Length / 3;
         var result = new (string Bone, float W)[]?[vc];
         int reweighted = 0, trimmed = 0;
+        held = RigKept(model, targets, rigKept, held);
 
         foreach (int v in ClothVertices(model))
         {
@@ -271,6 +277,42 @@ internal static partial class BodyRetarget
         }
 
         return new WeightPlan(perMesh, reweighted, trimmed, bodyBones, pairs.Select(p => p.TargetModel!).ToList());
+    }
+
+    /// <summary>
+    /// <paramref name="held"/>, plus every vertex whose nearest new body is a slot that kept its rig: within one body
+    /// mod, the rule that two sizes on one rig leave the author's weights standing holds slot by slot, not only for the
+    /// refit as a whole.
+    /// <para/>
+    /// One slot whose rig changes used to reweight the whole garment. "Queen Marika" refitted on Rue+ from Yiggle
+    /// Medium to Large, its hands from Short Nails to Yiggle Stabbies: the Yiggle hands add eight finger bones, so every
+    /// cloth vertex of the top took a fresh per-vertex reading of the bodies — and, the refit being within one body mod,
+    /// none of the smoothing a refit across bodies gets. Under the bust, where the cloth bridges the crease, neighbours
+    /// read either side of it: 38 edges jumping more than 0.15 of <c>iv_c_mune_l</c> where the author had none, 82 of
+    /// <c>j_sebo_a</c> where the author had 10, posed as a ragged band under the breasts. The chest's two sizes share
+    /// one rig, and there the author's weights were right as they stood.
+    /// </summary>
+    /// <returns><paramref name="held"/> itself when no slot kept its rig.</returns>
+    private static IReadOnlySet<int>? RigKept(ModelParts model, List<(BodySurface Surface, XivLiveMesh.SkinnedMesh Skin)> targets,
+                                             List<bool> rigKept, IReadOnlySet<int>? held)
+    {
+        if (!rigKept.Contains(true)) return held;
+        var kept = held != null ? new HashSet<int>(held) : [];
+        int vc = model.Positions.Length / 3;
+        for (int v = 0; v < vc; v++)
+        {
+            var p = new Vector3(model.Positions[v * 3], model.Positions[v * 3 + 1], model.Positions[v * 3 + 2]);
+            float reach = WeightReach;
+            int on = -1;
+            for (int t = 0; t < targets.Count; t++)
+            {
+                if (!targets[t].Surface.Nearest(p, reach, out var hit)) continue;
+                reach = hit.Distance;
+                on = t;
+            }
+            if (on >= 0 && rigKept[on]) kept.Add(v);
+        }
+        return kept;
     }
 
     /// <summary>
