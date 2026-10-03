@@ -2167,6 +2167,10 @@
     "message": "请勾选此开关要隐藏的部件。",
     "description": ""
   },
+  "Parts.NameTaken": {
+    "message": "此物品已有同名开关（已写入或等待写入）。请为这个开关换一个名字。",
+    "description": ""
+  },
   "Parts.NoBudget": {
     "message": "此模型已没有可用的开关位。游戏为每件物品提供十个，作者已全部用完。",
     "description": ""

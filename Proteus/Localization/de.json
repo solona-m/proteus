@@ -2167,6 +2167,10 @@
     "message": "Markiere die Teile, die dieser Schalter ausblenden soll.",
     "description": ""
   },
+  "Parts.NameTaken": {
+    "message": "Dieser Gegenstand hat schon einen Schalter mit diesem Namen, geschrieben oder noch nicht geschrieben. Gib diesem einen anderen Namen.",
+    "description": ""
+  },
   "Parts.NoBudget": {
     "message": "Für dieses Modell sind keine Schalterplätze mehr frei. Das Spiel gibt jedem Gegenstand zehn, und hier sind bereits alle vergeben.",
     "description": ""
