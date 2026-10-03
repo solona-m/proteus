@@ -532,8 +532,6 @@ public class StatusWindow : Window
         DrawLastResult();
         _footerReserve = ImGui.GetCursorPosY() - footerTop;
 
-        DrawColorWindow();
-
         // File-picker dialogs must pump every frame while open.
         _fileDialog.Draw();
     }
@@ -566,6 +564,14 @@ public class StatusWindow : Window
             ProteusDraw.SoftGlow(draw, centre, span * b.Radius, b.Colour, layers: 16);
         }
     }
+
+    /// <summary>
+    /// The colour editor goes here, after this window's End, not inside Draw. Draw only runs while this window is
+    /// visible. If the two are docked as tabs, picking the Colors tab hides this one, so Draw stops submitting Colors.
+    /// Its tab then vanishes, the node falls back to this tab, and the two flicker and can no longer be pulled apart.
+    /// It also stays up while this window is collapsed.
+    /// </summary>
+    public override void PostDraw() => DrawColorWindow();
 
     /// <summary>The colour editor, as its own window — stays open until closed.</summary>
     private void DrawColorWindow()
