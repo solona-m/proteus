@@ -1293,8 +1293,8 @@ public class CompositorMathTests
     [InlineData(1, 2, 1, "c0401")]  // Hyur Highlander female
     [InlineData(2, 1, 0, "c0101")]  // Elezen male → shares mid body
     [InlineData(2, 1, 1, "c0201")]  // Elezen female
-    [InlineData(3, 1, 0, "c0101")]  // Lalafell male
-    [InlineData(3, 1, 1, "c0201")]  // Lalafell female
+    [InlineData(3, 1, 0, "c1101")]  // Lalafell male → own body
+    [InlineData(3, 1, 1, "c1101")]  // Lalafell female → the male's body (no c1201 body)
     [InlineData(4, 1, 0, "c0101")]  // Miqo'te male
     [InlineData(4, 1, 1, "c0201")]  // Miqo'te female
     [InlineData(5, 1, 0, "c0101")]  // Roegadyn male

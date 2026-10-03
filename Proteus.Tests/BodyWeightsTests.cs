@@ -427,6 +427,34 @@ public class BodyWeightsTests
     }
 
     [Fact]
+    public void A_slot_that_keeps_its_rig_keeps_the_author_s_weights_when_another_slot_changes_rig()
+    {
+        // Rue+ Yiggle Medium to Large with the hands going Short Nails to Yiggle Stabbies: only the hands' rig changes,
+        // and the chest's cloth used to be reweighted whole for it — ragged under the bust.
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Cloth,
+                new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetZ: 0.001f, Weights: [("j_kosi", 1f)]),
+                new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetX: 20f, OffsetZ: 0.001f, Weights: [("j_te_l", 1f)])));
+        var chest = Pair(Body(("j_kosi", 0.7f), ("j_mune_l", 0.3f)), Body(("j_mune_l", 0.6f), ("j_kosi", 0.4f)));
+        var hands = Pair(BodyAt(20f, ("j_te_l", 1f)), BodyAt(20f, ("j_te_l", 0.5f), ("iv_hito_c_l", 0.5f)));
+        var pairs = new[] { chest, hands };
+
+        var plan = BodyRetarget.PlanWeights(garment, pairs);
+        Assert.NotNull(plan);
+        var rebuilt = BodyRetarget.Rebuild(garment, pairs, swapSkin: false, plan, out _)!;
+
+        foreach (int v in VerticesOf(garment, Cloth, 0))
+            Assert.Equal([("j_kosi", 1f)], Weights(rebuilt)[v]);
+        foreach (int v in VerticesOf(garment, Cloth, 1))
+            Assert.Contains(Weights(rebuilt)[v], i => i.Bone == "iv_hito_c_l");
+    }
+
+    /// <summary>A body like <see cref="Body"/>, <paramref name="x"/> across — another slot, out of the first's reach.</summary>
+    private static byte[] BodyAt(float x, params (string, float)[] weights)
+        => SyntheticModel.Build([], new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0, TrianglesPerIsland: 3,
+                                                                                         OffsetX: x, Weights: weights)));
+
+    [Fact]
     public void Two_bodies_rigged_alike_keep_the_author_s_weights()
     {
         var garment = SyntheticModel.Build([],

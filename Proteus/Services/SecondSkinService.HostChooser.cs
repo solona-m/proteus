@@ -70,16 +70,25 @@ public sealed partial class SecondSkinService
             //    EQDP. The player's own visible pair is NOT a candidate.
             foreach (var metPath in OrderMetCandidates(metModels, invisibleGlassesSet))
             {
+                // Our own pair is REPLACED, so its bytes are never needed — and reading them can fail: once we publish it the
+                // path resolves to our output, and the game ships no original at every code (Lalafell F draws c1201, which
+                // e5521 lacks). Skipping it there flipped the shell between this pair and an accessory, and every flip was a
+                // model change: a full redraw that put the pair back on, forever.
+                if (invisibleGlassesSet is int own && ParseSetId(metPath, 'e') == own)
+                {
+                    service.log.Information("[Proteus] host: glasses/head e{0:D4} (met, REPLACE — our injected pair)", own);
+                    hosts.Add(new HostAccessory(own, "met", "Head", null, 0, "equipment", 'e', metPath,
+                        KnownVariant: invisibleGlassesVariant));
+                    break;
+                }
+
                 if (LoadCandidate("met", metPath, 'e') is not { } c) continue;
 
-                bool ours = invisibleGlassesSet is int inv && inv == c.SetId;
-                if (ours || IsDegenerate(c.Bytes))
+                if (IsDegenerate(c.Bytes))
                 {
-                    service.log.Information("[Proteus] host: glasses/head e{0:D4} (met, REPLACE — {1}, base {2} B)",
-                        c.SetId, ours ? "our injected pair" : "degenerate base", c.Bytes.Length);
-                    // Our pair's variant is known from its sheet, worn or not.
-                    hosts.Add(new HostAccessory(c.SetId, "met", "Head", null, 0, "equipment", 'e', metPath,
-                        KnownVariant: ours ? invisibleGlassesVariant : null));
+                    service.log.Information("[Proteus] host: glasses/head e{0:D4} (met, REPLACE — degenerate base, base {1} B)",
+                        c.SetId, c.Bytes.Length);
+                    hosts.Add(new HostAccessory(c.SetId, "met", "Head", null, 0, "equipment", 'e', metPath));
                     break;
                 }
                 service.log.Information("[Proteus] host: glasses/head e{0:D4} is the player's own pair ({1} material(s), "
