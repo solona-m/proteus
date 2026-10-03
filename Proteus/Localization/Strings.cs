@@ -2503,6 +2503,8 @@ public sealed class PartsStrings
 
     public readonly string NeedName  = Loc.Localize("Parts.NeedName", "Give the switch a name first.");
     public readonly string NeedParts = Loc.Localize("Parts.NeedParts", "Tick the parts this switch should hide.");
+    public readonly string NameTaken = Loc.Localize("Parts.NameTaken",
+        "This item already has a switch with this name, written or waiting to be written. Give this one a different name.");
 
     public readonly string RemoveBtn = Loc.Localize("Parts.Remove.Btn", "Remove");
 

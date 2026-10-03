@@ -105,6 +105,20 @@ internal sealed class MeshToggleService
         bool Ok, string Message, int FilesPatched, IReadOnlyList<string> Skipped, string GroupName = "");
 
     /// <summary>
+    /// The switches already written to <paramref name="gamePath"/>'s item, found the way <see cref="Write"/> finds
+    /// them, so a name it would refuse as a repeat can be refused before it is staged. Empty when there are none.
+    /// </summary>
+    public static IReadOnlyCollection<string> WrittenNames(MeshToggleRecord? record, string gamePath)
+    {
+        if (record == null
+            || ContentSlot.Parse(gamePath) is not { } slot
+            || ContentSlot.SetIdOf(slot.SetTag) is not { } setId
+            || PenumbraEquipSlot(slot.Label) is not { } equipSlot)
+            return [];
+        return record.Find(setId, equipSlot)?.Toggles.Keys ?? (IReadOnlyCollection<string>)[];
+    }
+
+    /// <summary>
     /// Add <paramref name="toggles"/> to <paramref name="model"/>'s item.
     /// </summary>
     /// <param name="siblings">Every redirect the mod publishes. Files serving the SAME game path are patched

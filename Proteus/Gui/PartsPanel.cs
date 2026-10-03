@@ -108,6 +108,12 @@ public sealed class PartsPanel
     private string? status;
     private bool statusIsError;
 
+    /// <summary>
+    /// Why the last Write was refused, drawn under the Write button: the panel's status line sits above the model
+    /// picker, out of sight of the button that was just pressed.
+    /// </summary>
+    private string? writeError;
+
     /// <summary>What a drag on the model does, and therefore which half of this tab is showing.</summary>
     private enum Tool
     {
@@ -960,6 +966,7 @@ public sealed class PartsPanel
         ticked.Clear();
         expanded.Clear();
         pending.Clear();
+        writeError = null;
 
         models = [];
         modelLabels = [];
@@ -1203,6 +1210,7 @@ public sealed class PartsPanel
         freeLetters = 0;
         // Staged switches name parts by label, and a label means something different on another model.
         pending.Clear();
+        writeError = null;
         parts = null;
         modelUnreadable = false;
     }
@@ -2784,17 +2792,26 @@ public sealed class PartsPanel
         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X * 0.6f);
         ImGui.InputText(ps.ToggleName, ref toggleName, 64);
 
-        bool canAdd = left > 0 && ticked.Count > 0 && !string.IsNullOrWhiteSpace(toggleName);
+        // A repeated name makes Write refuse the whole list, so it is stopped here where it is typed: against the
+        // switches waiting here and the ones this item already has.
+        string typed = toggleName.Trim();
+        IReadOnlyCollection<string> written = modelIndex >= 0 && modelIndex < models.Count
+            ? MeshToggleService.WrittenNames(existing, models[modelIndex].GamePath)
+            : [];
+        bool nameTaken = pending.Select(p => p.Name).Concat(written)
+            .Any(n => string.Equals(n, typed, StringComparison.OrdinalIgnoreCase));
+        bool canAdd = left > 0 && ticked.Count > 0 && !string.IsNullOrWhiteSpace(toggleName) && !nameTaken;
         using (ImRaii.Disabled(!canAdd))
             if (ImGui.Button(ps.AddBtn, FullWidth()))
             {
                 pending.Add((toggleName.Trim(), [.. ticked]));
                 ticked.Clear();
                 toggleName = string.Empty;
+                writeError = null;
                 viewport.Recolour();
             }
         if (!canAdd && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-            ImGui.SetTooltip(ticked.Count == 0 ? ps.NeedParts : ps.NeedName);
+            ImGui.SetTooltip(ticked.Count == 0 ? ps.NeedParts : nameTaken ? ps.NameTaken : ps.NeedName);
 
         if (pending.Count == 0) return;
 
@@ -2807,13 +2824,20 @@ public sealed class PartsPanel
             ImGui.PushTextWrapPos(0);
             ImGui.TextUnformatted(string.Format(ps.PendingFmt, name, string.Join(", ", list)));
             ImGui.PopTextWrapPos();
-            if (ImGui.Button($"{ps.RemoveBtn}##rm{i}", FullWidth())) { pending.RemoveAt(i); break; }
+            if (ImGui.Button($"{ps.RemoveBtn}##rm{i}", FullWidth())) { pending.RemoveAt(i); writeError = null; break; }
         }
 
         ImGui.Spacing();
         if (ImGui.Button(ps.WriteBtn, FullWidth())) Commit();
         if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.WriteTip);
         ImGui.TextColored(ProteusStyle.Warn, ps.NotWrittenYet);
+
+        if (writeError != null)
+        {
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextColored(ProteusStyle.Bad, writeError);
+            ImGui.PopTextWrapPos();
+        }
     }
 
     /// <summary>What Proteus has already put into this mod, and the way back out.</summary>
@@ -2863,18 +2887,20 @@ public sealed class PartsPanel
             root, models[modelIndex], parts, plans, siblings,
             gamePath => textureLoader.LoadRawFile(null, gamePath));
 
-        statusIsError = !result.Ok;
         if (!result.Ok)
         {
-            status = result.Message;
+            // Shown under the Write button only; the pending list stays, so the user can fix it and press again.
+            writeError = result.Message;
             log.Warning("[Proteus] parts: {0}", result.Message);
             return;
         }
 
+        statusIsError = false;
         status = string.Format(ps.WrittenFmt, plans.Count, result.GroupName);
         if (result.Skipped.Count > 0) status += "\n" + string.Format(ps.SkippedFmt, result.Skipped.Count);
 
         pending.Clear();
+        writeError = null;
         ticked.Clear();
         AfterModChange(root);
     }
@@ -2892,6 +2918,7 @@ public sealed class PartsPanel
         status = result.Ok ? string.Format(Strings.Parts.RevertedFmt, result.FilesPatched) : result.Message;
 
         pending.Clear();
+        writeError = null;
         ticked.Clear();
         AfterModChange(root);
     }
