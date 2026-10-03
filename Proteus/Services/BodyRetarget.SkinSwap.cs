@@ -127,9 +127,12 @@ internal static partial class BodyRetarget
             // shoe draws the foot itself, turned onto the toe, in the same mesh as the lower leg. The leg sits on the
             // body and the foot does not, and a majority rule handed the whole mesh to the legs — whose skin has no
             // foot — so the foot vanished. Off the body, the author's skin is what the garment needs, and it stays.
+            // "On" here allows the millimetres a laid point can miss the body by — see OnBody. The Pioneer's Bottoms'
+            // waist strip is 38 vertices, and two of its corners landed 6 mm off Rue+'s hip: 94.7% within 2 mm, so the
+            // vanilla strip was kept over the new body. The posed foot this guards against stands centimetres off.
             int best = -1;
             float bestShare = 0f;
-            int onAny = verts.Count(v => surfaces.Any(s => s.Nearest(At(model, v), SwapOnBody, out _)));
+            int onAny = verts.Count(v => surfaces.Any(s => OnBody(s, At(model, v))));
             for (int s = 0; s < surfaces.Count; s++)
             {
                 int on = verts.Count(v => surfaces[s].Nearest(At(model, v), SwapOnBody, out _));
@@ -318,6 +321,27 @@ internal static partial class BodyRetarget
         else
             return false;   // on the author's boundary, or on a corner, which sits on the body
         return hit.Distance <= MathF.Min(CutSagMax, CutSagShare * chord);
+    }
+
+    /// <summary>
+    /// How squarely off the body's surface a point must sit, beyond <see cref="SwapOnBody"/>, to count as on it: the
+    /// cosine between its offset and the body's normal at the landing (0.8, about 37°).
+    /// </summary>
+    internal const float OverBody = 0.8f;
+
+    /// <summary>
+    /// Whether a garment skin point counts as lying on this body, for <see cref="Rebuild"/>'s test that a whole skin
+    /// mesh is the body's: within <see cref="SwapOnBody"/>, or within <see cref="LayFull"/> straight OVER the body —
+    /// its offset along the body's normal (see <see cref="OverBody"/>). Laying can leave a point millimetres off: the
+    /// Pioneer's Bottoms' corners missed Rue+'s hip by 6 mm, above it. A point PAST the body's edge is off along the
+    /// surface instead: a long top's narrow hip strip, a few millimetres below where the chest body stops, is the legs'
+    /// skin, not the chest's, and counted on the chest it was swapped for skin that has nothing below the waist.
+    /// </summary>
+    internal static bool OnBody(BodySurface body, Vector3 p)
+    {
+        if (!body.Nearest(p, LayFull, out var hit)) return false;
+        if (hit.Distance <= SwapOnBody) return true;
+        return MathF.Abs(Vector3.Dot((p - hit.Point) / hit.Distance, hit.Normal)) >= OverBody;
     }
 
     /// <summary>

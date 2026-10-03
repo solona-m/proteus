@@ -87,6 +87,26 @@ public class BodyRetargetTests
     }
 
     [Fact]
+    public void A_skin_mesh_laid_millimetres_off_the_body_is_still_the_body_s()
+    {
+        // The Pioneer's Bottoms' waist strip: laid onto Rue+, two of its 38 corners missed the hip by 6 mm. Counted
+        // against the 2 mm that tells slots apart it read as a posed piece, and the vanilla skin stayed over the new body.
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 2),
+                                                  new SyntheticModel.Sub(0, OffsetZ: 0.006f)),
+            new SyntheticModel.Mesh(ClothMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 4, OffsetZ: 0.02f)));
+        var chest = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)));
+
+        var rebuilt = BodyRetarget.SwapSkin(garment, [Resized("_top", chest)], out var report);
+
+        Assert.NotNull(rebuilt);
+        Assert.Equal(3, report.Removed);
+        Assert.Equal(0, report.Kept);
+        Assert.Equal(0, report.Posed);
+    }
+
+    [Fact]
     public void Skin_of_a_slot_nobody_is_resizing_stays_as_the_author_left_it()
     {
         // A long top: chest skin, and hip skin that belongs to the legs. Only the chest is being resized.
@@ -189,6 +209,25 @@ public class BodyRetargetTests
         Assert.False(BodyRetarget.Covers(new BodySurface(lone, 0.01f), above, BodyRetarget.SkinEdges.Of(lone)));
         // Without the edges, every edge is the author's boundary: the plain reach.
         Assert.False(BodyRetarget.Covers(new BodySurface(ridge, 0.01f), above));
+    }
+
+    [Fact]
+    public void Skin_a_few_millimetres_off_the_body_is_on_it_only_over_its_middle()
+    {
+        // A 40 mm square of body. Laid skin that missed it by 6 mm sits OVER it — off along its normal — and counts, even
+        // above the square's edge or corner; skin 6 mm PAST its edge — a hip strip just below where the chest body
+        // stops — is off along the surface, and is another slot's.
+        float[] pos = [0f, 0f, 0f, 0.04f, 0f, 0f, 0.04f, 0.04f, 0f, 0f, 0.04f, 0f];
+        float[] nrm = [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1];
+        var body = new BodySurface(Build(pos, nrm, [0, 1, 2, 0, 2, 3], SkinMaterial), 0.01f);
+
+        Assert.True(BodyRetarget.OnBody(body, new Vector3(0.03f, 0.01f, 0.006f)));    // over a triangle
+        Assert.True(BodyRetarget.OnBody(body, new Vector3(0.02f, 0.02f, -0.006f)));   // under the shared diagonal
+        Assert.True(BodyRetarget.OnBody(body, new Vector3(0f, 0f, 0.006f)));          // over the corner
+        Assert.True(BodyRetarget.OnBody(body, new Vector3(0.02f, -0.001f, 0f)));      // past the edge, but within 2 mm
+        Assert.False(BodyRetarget.OnBody(body, new Vector3(0.02f, -0.006f, 0f)));     // past the edge
+        Assert.False(BodyRetarget.OnBody(body, new Vector3(-0.004f, -0.004f, 0f)));   // past the corner
+        Assert.False(BodyRetarget.OnBody(body, new Vector3(0.03f, 0.01f, 0.012f)));   // beyond LayFull
     }
 
     [Fact]
