@@ -2456,10 +2456,7 @@ public sealed class PartsPanel
             ? string.Format(Strings.Parts.BrushRevertedFmt, result.FilesWritten)
             : result.Message;
 
-        AfterModChange(root);
-
-        // A recomposite does not redraw gear, so the character would keep the cached brushed model.
-        if (result.Ok) compositor.RedrawForChangedModel();
+        AfterModChange(root);   // redraws, so the character drops the cached brushed model
     }
 
     // ── other sizes ─────────────────────────────────────────────────────────
@@ -2902,7 +2899,7 @@ public sealed class PartsPanel
         pending.Clear();
         writeError = null;
         ticked.Clear();
-        AfterModChange(root);
+        AfterModChange(root, result.Files);
     }
 
     private void Revert()
@@ -2920,21 +2917,42 @@ public sealed class PartsPanel
         pending.Clear();
         writeError = null;
         ticked.Clear();
-        AfterModChange(root);
+        AfterModChange(root, result.Files);
     }
 
     /// <summary>
-    /// Re-read everything the mod's files say, and make Penumbra do the same; a split renumbers parts.
+    /// Re-read everything the mod's files say, make Penumbra do the same, and redraw so the character shows it; a split
+    /// renumbers parts.
     /// </summary>
-    private void AfterModChange(string root)
+    /// <param name="changedFiles">The model files written, mod-relative; null when not known, which always redraws.</param>
+    private void AfterModChange(string root, IReadOnlyCollection<string>? changedFiles = null)
     {
+        // Read before SelectModel, against the redirect list the files were written under.
+        bool onlyContent = changedFiles is { Count: > 0 } && changedFiles.All(IsContentOnly);
+
         existing = MeshToggleService.ReadRecord(root);
         brushSaved = MeshVolumeService.PatchedCount(root);
         viewport.Clear();   // so it rebuilds its pickable set against the edited model
+        // Down without a redraw: SelectModel's own would run before the reload and draw the mod as Penumbra still has it.
+        EndLivePreview(refreshGame: false);
         if (modelIndex >= 0) SelectModel(modelIndex);
 
         if (modDir != null) penumbra.ReloadModDirectory(modDir);
         compositor.TriggerRecomposite("parts-written");
+
+        // A recomposite does not redraw gear: without this the character keeps the cached model, and a new switch hides
+        // nothing until something else redraws it. Not for imported pieces alone: the recomposite rebuilds their shell and
+        // a changed shell model fully redraws, so a second redraw here would only flicker.
+        if (!onlyContent) compositor.RedrawForChangedModel();
+    }
+
+    /// <summary>An imported piece's file that the mod does not also publish: only the composite ever draws it.</summary>
+    private bool IsContentOnly(string file)
+    {
+        // Compared slash-normalised: contentFiles holds the sidecar's spelling, the written files the model rows'.
+        var key = file.Replace('\\', '/');
+        bool Same(string other) => string.Equals(other.Replace('\\', '/'), key, StringComparison.OrdinalIgnoreCase);
+        return contentFiles.Any(Same) && !redirects.Any(r => Same(r.File));
     }
 
 }
