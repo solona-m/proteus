@@ -423,6 +423,28 @@ public static partial class SecondSkinWriter
         return replace;
     }
 
+    /// <summary>Every morph vertex of one mesh, paired with the vertex it replaces, across ALL of the model's shape
+    /// keys — enabled or not, since which side a vertex is on is a fact about the geometry. Shapes are parsed for LOD0's
+    /// index ranges, so <paramref name="indexBase"/> is LOD0's.</summary>
+    internal static IEnumerable<(ushort Base, ushort Replacement)> MorphPairs(Source src, int indexBase,
+                                                                              uint meshStartIndex, ushort vc)
+    {
+        var s = src.S;
+        foreach (var entries in src.Shapes.Values)
+            foreach (var e in entries)
+            {
+                if (e.MeshIndexOffset != meshStartIndex) continue;
+                foreach (var (bIdx, rep) in e.Values)
+                {
+                    if (rep >= vc) continue;
+                    int slot = indexBase + (int)(meshStartIndex + bIdx) * 2;
+                    if (slot < 0 || slot + 2 > s.Length) continue;
+                    ushort bv = BitConverter.ToUInt16(s, slot);
+                    if (bv < vc) yield return (bv, rep);
+                }
+            }
+    }
+
     /// <summary><see cref="MeshTriangles"/> with the enabled shape keys baked in — the triangles the shell draws.</summary>
     private static ushort[] ShapedTriangles(Source src, ushort subIdx, ushort subCount, uint meshStartIndex,
                                             Dictionary<int, ushort> replace)

@@ -135,44 +135,13 @@ internal static partial class FaceUvRewriter
                 conflicted += conf;
                 straddled += strad;
 
-                // Which vertices a triangle actually names. The rest are morph replacements no authored triangle
-                // references, so AssignSides leaves them at 0, the +X branch.
-                var claimed = new bool[vc];
-                foreach (var t in tris)
-                    if (t < vc) claimed[t] = true;
-
-                // So take the side of the vertex each one replaces. LOD0 only, the LOD Parse reads shapes for; a
-                // LOD1/LOD2 morph vertex falls through to its own X below.
-                if (lod == 0 && src.Shapes.Count > 0)
-                {
-                    uint meshStartIndex = U32(mo + 16);
-                    foreach (var entries in src.Shapes.Values)
-                        foreach (var e in entries)
-                        {
-                            if (e.MeshIndexOffset != meshStartIndex) continue;
-                            foreach (var (bIdx, rep) in e.Values)
-                            {
-                                if (rep >= vc || claimed[rep] || sides[rep] != 0) continue;
-                                int slot = ibBase + (int)(meshStartIndex + bIdx) * 2;
-                                if (slot < 0 || slot + 2 > s.Length) continue;
-                                ushort bv = U16(slot);
-                                if (bv >= vc || sides[bv] == 0) continue;
-                                sides[rep] = sides[bv];
-                                morphSided++;
-                            }
-                        }
-                }
-
-                // Anything still unplaced and named by no triangle answers from its own X. A vertex a
-                // triangle DID claim and that still reads 0 is genuinely disputed — two triangles on
-                // opposite sides — and keeps the documented +X default rather than being overruled here.
-                for (int i = 0; i < vc; i++)
-                {
-                    if (claimed[i] || sides[i] != 0) continue;
-                    sides[i] = x[i] > SurfaceMirror.Midline ? (sbyte)1
-                             : x[i] < -SurfaceMirror.Midline ? (sbyte)-1 : (sbyte)0;
-                    if (sides[i] == 0) unsided++;
-                }
+                // Morph replacements no authored triangle names. LOD0 only, the LOD Parse reads shapes for; a
+                // LOD1/LOD2 morph vertex is placed by its own X.
+                SurfaceMirror.PlaceUnclaimed(sides, x, tris,
+                    lod == 0 && src.Shapes.Count > 0 ? MorphPairs(src, ibBase, U32(mo + 16), vc) : null,
+                    out int morphs, out int lost);
+                morphSided += morphs;
+                unsided += lost;
 
                 for (int i = 0; i < vc; i++)
                 {
