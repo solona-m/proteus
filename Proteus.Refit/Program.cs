@@ -37,11 +37,13 @@ internal static class Program
                       [--from-root <body mod the garment was made on>] [--uvmaps <Proteus plugin dir>]
                       [--slot _top] [--race 0201] [--legs-from <rel>]
                       [--legs <label>=<size word>,... | --legs-to <rel in the target mod>]
+                      [--chest-from <rel> --chest-to <rel in the target mod>]   (legs garments only)
         Proteus.Refit --list --body-root <body mod> [--slot _top]
         Proteus.Refit --inspect --garment <model.mdl>
         Proteus.Refit --detect --garment <xs.mdl> --body-root <body mod> [--slot _top] [--race 0201]
         Proteus.Refit --finish --garment <in.mdl> --out <out.mdl> [--body-root <body mod> [--from <rel|auto>]]
                       [--slot _top] [--race 0201] [--tag-legs <rel|auto>]
+        Proteus.Refit --save --manifest <save.json>
         """;
 
     private static int Main(string[] args)
@@ -56,6 +58,7 @@ internal static class Program
             if (opts.ContainsKey("inspect")) return Inspect(opts);
             if (opts.ContainsKey("detect")) return Detect(opts);
             if (opts.ContainsKey("finish")) return Finish(opts);
+            if (opts.ContainsKey("save")) return Save(opts);
             return Run(opts);
         }
         catch (UsageException ex)
@@ -258,6 +261,36 @@ internal static class Program
         return 0;
     }
 
+    /// <summary>What <c>--save</c> reads: refitted sizes of one garment, all refitted onto one body mod.</summary>
+    private sealed record SaveManifest(string Mod, string Group, string GamePath, string BodyMod, string From,
+                                       List<SaveRefit> Refits);
+
+    /// <param name="Option">The option the size becomes.</param>
+    /// <param name="Model">The refitted model file.</param>
+    /// <param name="To">The body it was refitted onto, as the record names it.</param>
+    private sealed record SaveRefit(string Option, string Model, string To);
+
+    /// <summary>
+    /// Save refitted sizes into a mod as options of a size group, exactly as the Studio's Body size Save does
+    /// (<see cref="BodyRetargetWriter.Save(string, string, string, string, string, IReadOnlyList{BodyRetargetWriter.Refit}, string?, IReadOnlyList{object}?)"/>):
+    /// one manifest write, the group outranking the mod's others, and each option recorded so the Studio can undo it.
+    /// </summary>
+    private static int Save(Dictionary<string, string> opts)
+    {
+        var manifest = JsonSerializer.Deserialize<SaveManifest>(File.ReadAllText(Required(opts, "manifest")),
+                                                                new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                    ?? throw new UsageException("The manifest is empty.");
+        var refits = manifest.Refits
+            .Select(r => new BodyRetargetWriter.Refit(r.Option, File.ReadAllBytes(r.Model), r.To))
+            .ToList();
+        var outcome = BodyRetargetWriter.Save(manifest.Mod, manifest.Group, manifest.GamePath, manifest.BodyMod,
+                                              manifest.From, refits);
+        Console.WriteLine(JsonSerializer.Serialize(new { ok = outcome.Ok, group = outcome.Group, options = outcome.Option,
+                                                         message = outcome.Message },
+                                                   new JsonSerializerOptions { WriteIndented = true }));
+        return outcome.Ok ? 0 : 1;
+    }
+
     /// <summary>The tags <c>--tag-legs</c> carries: the knee (<c>atr_hiz</c>) and the calf/shin (<c>atr_sne</c>).</summary>
     private static readonly string[] LegTags = ["atr_hiz", "atr_sne"];
 
@@ -309,6 +342,29 @@ internal static class Program
                                targets.Select(t => t.Label).ToList(), pinned, out legsSkipped);
         }
 
+        // A legs garment that rises over the waist covers some of the chest body too, so it moves with the chest as well —
+        // the Studio's "other slot" pair. One chest for every size of the call, built once and shared, as there.
+        BodyRetarget.SlotPair? chestPair = null;
+        string? chestTo = null, chestNote = null;
+        if (opts.ContainsKey("chest-from") || opts.ContainsKey("chest-to"))
+        {
+            if (slot != "_dwn") throw new UsageException("--chest-from/--chest-to are for a legs garment (--slot _dwn).");
+            var chestSource = Find(src, "_top", Required(opts, "chest-from"));
+            var chestTarget = Find(dst, "_top", Required(opts, "chest-to"));
+            string chestSourcePath = src.PathOf(chestSource), chestTargetPath = dst.PathOf(chestTarget);
+            if (string.Equals(Path.GetFullPath(chestSourcePath), Path.GetFullPath(chestTargetPath),
+                              StringComparison.OrdinalIgnoreCase))
+                chestNote = $"the waist already sits on \"{chestTarget.Label}\"";
+            else if (BodyRetarget.BuildPair("_top", chestSourcePath, chestTargetPath, "_top", male, MaskOf(src, "_top"),
+                                            MaskOf(dst, "_top"), uvRemap, out var built) is { } chestRefusal)
+                chestNote = chestRefusal;
+            else
+            {
+                chestPair = built;
+                chestTo = chestTarget.Rel;
+            }
+        }
+
         var sizes = new List<object>();
         foreach (var (label, option) in targets)
         {
@@ -320,6 +376,7 @@ internal static class Program
                 continue;
             }
             pairs.Add(pair);
+            if (chestPair is { } chest) pairs.Add(chest);
 
             // The hips follow along; a size whose legs are the source's own needs none.
             string? legsTo = legs?.TargetFor(label);
@@ -345,6 +402,8 @@ internal static class Program
                 to = option.Rel,
                 legsTo = legsTo == null ? null : Path.GetRelativePath(dst.ModRoot, legsTo),
                 legsNote,
+                chestTo,
+                chestNote,
                 written,
                 report = new
                 {
@@ -422,7 +481,7 @@ internal static class Program
             if (!args[i].StartsWith("--", StringComparison.Ordinal))
                 throw new UsageException($"Unexpected argument \"{args[i]}\".");
             string key = args[i][2..];
-            opts[key] = key is "list" or "detect" or "finish" or "inspect" ? "" : i + 1 < args.Length ? args[++i] : throw new UsageException($"--{key} needs a value.");
+            opts[key] = key is "list" or "detect" or "finish" or "inspect" or "save" ? "" : i + 1 < args.Length ? args[++i] : throw new UsageException($"--{key} needs a value.");
         }
         return opts;
     }
