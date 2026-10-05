@@ -852,6 +852,29 @@ public class BodyRetargetTests
         }
     }
 
+    [Fact]
+    public void A_legs_waist_inside_the_chest_body_is_pulled_out_of_it()
+    {
+        // Over the belly the skin drawn is the worn TOP's own body mesh, which its author sculpts — so a legs garment's
+        // waist inside the body mod's plain chest says nothing about what its author meant. "Victoria's Secret Sauce":
+        // the waist sat 4 mm inside Bibo+'s chest, fitted to a top that pulls the belly in; refitted, the top took the
+        // new body's full belly and the waist stayed inside it. A top's hem inside the LEGS body keeps the rule.
+        var body = Cube(0.20f, SkinMaterial);
+        var garment = Patch(ClothMaterial, new Vector3(0f, 0f, 0.196f));
+        Assert.True(IdentityCorrespondence.TryBuild(body, body, "chest", out var built, out string refusal), refusal);
+
+        var legs = BodyRetarget.Solve(garment, [new BodyRetarget.SlotPair("_top", built!, body)], garmentSlot: "_dwn");
+        Assert.True(legs.Pushed > 0, "a legs garment's waist inside the chest body should have been pulled out");
+        for (int v = 0; v < garment.Positions.Length / 3; v++)
+        {
+            float z = At(garment, v).Z + Delta(legs, v).Z;
+            Assert.True(z >= 0.20f, $"vertex {v} is still inside the chest at z={z}");
+        }
+
+        var top = BodyRetarget.Solve(garment, [new BodyRetarget.SlotPair("_dwn", built!, body)], garmentSlot: "_top");
+        Assert.Equal(0, top.Pushed);
+    }
+
     // ── folds: a triangle that ends up facing the wrong way is a black speck in game ───────────────
 
     [Fact]

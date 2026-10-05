@@ -28,7 +28,17 @@ internal static partial class BodyRetarget
     {
         private readonly BodySurface[] surfaces;
 
-        private TargetBody(BodySurface[] surfaces) => this.surfaces = surfaces;
+        /// <summary>
+        /// Per surface: whether cloth found inside it AS AUTHORED can be taken for the author's doing. False for a legs
+        /// garment's chest body — see <see cref="Build"/>.
+        /// </summary>
+        private readonly bool[] witnessed;
+
+        private TargetBody(BodySurface[] surfaces, bool[] witnessed)
+        {
+            this.surfaces = surfaces;
+            this.witnessed = witnessed;
+        }
 
         /// <param name="garmentSlot">The slot the garment is worn in, whose body is therefore not drawn. Null to keep
         /// every slot's body, for a caller that cannot say.</param>
@@ -36,25 +46,44 @@ internal static partial class BodyRetarget
         /// with the transfer applied for the AFTER one; null when the garment carries no body mesh of its own.</param>
         /// <param name="before">Build the skin drawn under the garment as it was AUTHORED — the source bodies — rather
         /// than as it will be after the refit.</param>
+        /// <remarks>
+        /// A legs garment's CHEST body, as authored, says nothing about what its author fitted the waist to. Over the
+        /// belly the skin on screen is the worn top's own body mesh, and a top's author sculpts that freely; the waist of
+        /// legs made to go with it is fitted to the sculpted skin, not to the body mod's chest. Measured on "Victoria's
+        /// Secret Sauce" (Bibo+): its top pulls the belly in 3-4 mm, its bottoms' high waist sits up to 4.3 mm inside
+        /// the plain Bibo+ chest and 1 mm inside the top's own skin. Refitted to Tre, the top's skin is swapped for
+        /// Tre's full belly, and the waist — read as tucked under the skin on purpose — was left 4 mm inside it at
+        /// 184 points over the front alone. So cloth inside this surface as authored is a clip to undo like any other,
+        /// down to <see cref="ClearDepth"/>. A top's legs pair keeps the rule: under a top's hem the legs on screen are
+        /// the body's own or a pair of trousers, never another garment's sculpted belly, and the authors' own sizes
+        /// were measured with it.
+        /// </remarks>
         public static TargetBody Build(IReadOnlyList<SlotPair> pairs, string? garmentSlot, ModelParts? garmentSkin,
                                        bool before)
         {
             var surfaces = new List<BodySurface>();
+            var witnessed = new List<bool>();
             foreach (var pair in pairs)
             {
                 if (garmentSlot != null && string.Equals(pair.Slot, garmentSlot, StringComparison.Ordinal)) continue;
                 var model = before ? pair.Correspondence.Source : pair.Target;
                 var body = new BodySurface(model, BodySurface.CellFor(MeanEdgeOf(model)));
-                if (!body.IsEmpty) surfaces.Add(body);
+                if (body.IsEmpty) continue;
+                surfaces.Add(body);
+                witnessed.Add(!(garmentSlot == "_dwn" && pair.Slot == "_top"));
             }
 
             if (garmentSkin != null)
             {
                 var own = new BodySurface(garmentSkin, BodySurface.CellFor(MeanEdgeOf(garmentSkin)));
-                if (!own.IsEmpty) surfaces.Add(own);
+                if (!own.IsEmpty)
+                {
+                    surfaces.Add(own);
+                    witnessed.Add(true);
+                }
             }
 
-            return new TargetBody(surfaces.ToArray());
+            return new TargetBody(surfaces.ToArray(), witnessed.ToArray());
         }
 
         /// <summary>
@@ -83,24 +112,34 @@ internal static partial class BodyRetarget
         }
 
         /// <summary>Every point of the drawn skin, with its normal.</summary>
-        public IEnumerable<(Vector3 At, Vector3 Normal)> Points()
+        /// <param name="witnessedOnly">Only the surfaces cloth can have been authored inside of — see
+        /// <see cref="Build"/>.</param>
+        public IEnumerable<(Vector3 At, Vector3 Normal)> Points(bool witnessedOnly = false)
         {
-            foreach (var surface in surfaces)
+            for (int s = 0; s < surfaces.Length; s++)
+            {
+                if (witnessedOnly && !witnessed[s]) continue;
+                var surface = surfaces[s];
                 foreach (int v in surface.SkinVertices)
                     yield return (surface.PositionOf(v), surface.NormalOf(v));
+            }
         }
 
         /// <summary>The nearest drawn skin within <paramref name="maxDistance"/>.</summary>
-        public bool Nearest(Vector3 p, float maxDistance, out BodySurface.Hit hit)
+        /// <param name="witnessed">Whether cloth inside that surface can be the author's doing — see
+        /// <see cref="Build"/>.</param>
+        public bool Nearest(Vector3 p, float maxDistance, out BodySurface.Hit hit, out bool witnessed)
         {
             hit = default;
+            witnessed = true;
             bool found = false;
             float best = maxDistance;
-            foreach (var surface in surfaces)
+            for (int s = 0; s < surfaces.Length; s++)
             {
-                if (!surface.Nearest(p, best, out var candidate)) continue;
+                if (!surfaces[s].Nearest(p, best, out var candidate)) continue;
                 best = candidate.Distance;
                 hit = candidate;
+                witnessed = this.witnessed[s];
                 found = true;
             }
             return found;
@@ -238,8 +277,8 @@ internal static partial class BodyRetarget
             this.sets = sets;
             this.authored = authored;
             this.clearBody = clearBody;
-            drawn = Grid(after);
-            var was = clearBody ? null : Grid(before);
+            drawn = Grid(after.Points());
+            var was = clearBody ? null : Grid(before.Points(witnessedOnly: true));
 
             var considered = Considered = new bool[sets.NodeCount];
             foreach (int n in nodes) considered[n] = true;
@@ -349,10 +388,11 @@ internal static partial class BodyRetarget
         }
 
         // The skin's points, bucketed so a face only looks at the skin near it.
-        private static Dictionary<(int, int, int), List<(Vector3 At, Vector3 Normal)>> Grid(TargetBody body)
+        private static Dictionary<(int, int, int), List<(Vector3 At, Vector3 Normal)>> Grid(
+            IEnumerable<(Vector3 At, Vector3 Normal)> points)
         {
             var grid = new Dictionary<(int, int, int), List<(Vector3 At, Vector3 Normal)>>();
-            foreach (var (at, normal) in body.Points())
+            foreach (var (at, normal) in points)
             {
                 var key = ((int)MathF.Floor(at.X / FaceCell), (int)MathF.Floor(at.Y / FaceCell), (int)MathF.Floor(at.Z / FaceCell));
                 if (!grid.TryGetValue(key, out var bucket)) grid[key] = bucket = [];
@@ -497,11 +537,18 @@ internal static partial class BodyRetarget
             // the surface their cloth sits on. Reading it against whichever surface the point is deepest inside counts
             // more cloth as deliberately hidden and quietly stops the pass undoing clips it should — measured on a
             // stocking, 350 buried points became 622 with the default settings.
-            if (before.Nearest(p0, AuthoredProbeRange, out var h0))
+            if (before.Nearest(p0, AuthoredProbeRange, out var h0, out bool witnessed))
             {
                 float s0 = Vector3.Dot(p0 - h0.Point, h0.Normal);
-                if (s0 < 0f) continue;
-                authored[n] = s0;
+                if (s0 < 0f)
+                {
+                    // Inside a surface that cannot say what the author saw (a legs garment's chest — see TargetBody):
+                    // a clip to undo, held to the clearance as clearBody holds it. Deeper than ClearDepth it is still
+                    // the garment's own structure.
+                    if (witnessed || s0 < -ClearDepth) continue;
+                    authored[n] = float.MaxValue;
+                }
+                else authored[n] = s0;
             }
             else
             {
