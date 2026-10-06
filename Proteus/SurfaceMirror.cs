@@ -61,6 +61,42 @@ public static class SurfaceMirror
     }
 
     /// <summary>
+    /// Places the vertices <see cref="AssignSides"/> could not because no triangle names them. A shape key's morph
+    /// vertex is one: left at 0 it reads as +X, so on the -X side every expression and every customised lip or jaw
+    /// samples the other cheek's art, and its triangles stretch across the sheet. It takes the side of the vertex it
+    /// replaces. Anything else no triangle names answers from its own X. A vertex a triangle DID claim and that still
+    /// reads 0 is genuinely disputed and keeps the +X default.
+    /// </summary>
+    /// <param name="morphs">Each morph vertex with the vertex it replaces; the first answer for a vertex wins.</param>
+    /// <param name="morphSided">Morph vertices placed from the vertex they replace.</param>
+    /// <param name="unsided">Vertices left at 0 that no triangle names: on a real face, 0.</param>
+    public static void PlaceUnclaimed(sbyte[] sides, float[] x, IReadOnlyList<ushort> triangles,
+        IEnumerable<(ushort Base, ushort Replacement)>? morphs, out int morphSided, out int unsided)
+    {
+        morphSided = 0;
+        unsided = 0;
+        int n = Math.Min(sides.Length, x.Length);
+        var claimed = new bool[n];
+        foreach (var t in triangles)
+            if (t < n) claimed[t] = true;
+
+        if (morphs != null)
+            foreach (var (bv, rep) in morphs)
+            {
+                if (rep >= n || bv >= n || claimed[rep] || sides[rep] != 0 || sides[bv] == 0) continue;
+                sides[rep] = sides[bv];
+                morphSided++;
+            }
+
+        for (int i = 0; i < n; i++)
+        {
+            if (claimed[i] || sides[i] != 0) continue;
+            sides[i] = x[i] > Midline ? (sbyte)1 : x[i] < -Midline ? (sbyte)-1 : (sbyte)0;
+            if (sides[i] == 0) unsided++;
+        }
+    }
+
+    /// <summary>
     /// Whether this mesh's UV layout is mirrored: a vertex and its reflection across x = 0 share a UV. Sampled.
     /// Returns false when too few mirror partners were found to judge, leaving the caller's behaviour unchanged.
     /// </summary>

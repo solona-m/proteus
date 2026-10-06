@@ -573,12 +573,12 @@ internal static partial class BodyRetarget
         }
     }
 
-    /// <summary>Cloth this close to the new body carries none of the garment's own bones (12 mm) — see
+    /// <summary>Cloth this close to the new body carries none of the garment's own bones (4 mm) — see
     /// <see cref="DropOwnBonesNearBody"/>.</summary>
-    internal const float OwnBoneFull = 0.012f;
+    internal const float OwnBoneFull = 0.004f;
 
-    /// <summary>Cloth this far off keeps all of the garment's own bones (20 mm); between, they fade back in.</summary>
-    internal const float OwnBoneFade = 0.02f;
+    /// <summary>Cloth this far off keeps all of the garment's own bones (8 mm); between, they fade back in.</summary>
+    internal const float OwnBoneFade = 0.008f;
 
     /// <summary>
     /// Keep the garment's own bones — a skirt's chain, a cape — off the cloth near the body: within

@@ -101,8 +101,24 @@ internal sealed class MeshToggleService
 
     /// <param name="GroupName">The Penumbra group the switches actually landed in (the record's own name).
     /// Empty when nothing was written.</param>
+    /// <param name="Files">The model files written or restored, mod-relative; null when none were.</param>
     public sealed record Outcome(
-        bool Ok, string Message, int FilesPatched, IReadOnlyList<string> Skipped, string GroupName = "");
+        bool Ok, string Message, int FilesPatched, IReadOnlyList<string> Skipped, string GroupName = "",
+        IReadOnlyList<string>? Files = null);
+
+    /// <summary>
+    /// The switches already written to <paramref name="gamePath"/>'s item, found the way <see cref="Write"/> finds
+    /// them, so a name it would refuse as a repeat can be refused before it is staged. Empty when there are none.
+    /// </summary>
+    public static IReadOnlyCollection<string> WrittenNames(MeshToggleRecord? record, string gamePath)
+    {
+        if (record == null
+            || ContentSlot.Parse(gamePath) is not { } slot
+            || ContentSlot.SetIdOf(slot.SetTag) is not { } setId
+            || PenumbraEquipSlot(slot.Label) is not { } equipSlot)
+            return [];
+        return record.Find(setId, equipSlot)?.Toggles.Keys ?? (IReadOnlyCollection<string>)[];
+    }
 
     /// <summary>
     /// Add <paramref name="toggles"/> to <paramref name="model"/>'s item.
@@ -270,7 +286,7 @@ internal sealed class MeshToggleService
                 Loc.Localize("Parts.Write.Failed.Fmt", "Writing failed: {0}"), ex.Message), 0, skipped);
         }
 
-        return new Outcome(true, "", patched.Count, skipped, item.GroupName);
+        return new Outcome(true, "", patched.Count, skipped, item.GroupName, [.. patched.Keys]);
     }
 
     /// <summary>
@@ -515,6 +531,7 @@ internal sealed class MeshToggleService
 
         var skipped = new List<string>();
         var restoredFrom = new List<string>();
+        var restored = new List<string>();
         foreach (var rel in record.Items.SelectMany(i => i.Files).Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var backup = Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, BackupSubdir, Native(rel));
@@ -523,6 +540,7 @@ internal sealed class MeshToggleService
             {
                 PenumbraModMeta.AtomicWrite(Path.Combine(modRoot, Native(rel)), File.ReadAllBytes(backup));
                 restoredFrom.Add(backup);
+                restored.Add(rel);
             }
             catch { skipped.Add(rel); }
         }
@@ -550,14 +568,14 @@ internal sealed class MeshToggleService
             return new Outcome(false, string.Format(
                 Loc.Localize("Parts.Revert.Failed.Fmt",
                     "The models were restored, but the option group could not be removed: {0}"),
-                ex.Message), restoredFrom.Count, skipped);
+                ex.Message), restoredFrom.Count, skipped, Files: restored);
         }
 
         try { File.Delete(Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, RecordFile)); } catch { }
         foreach (var backup in restoredFrom)
             try { File.Delete(backup); } catch { /* harmless leftover */ }
 
-        return new Outcome(true, "", restoredFrom.Count, skipped);
+        return new Outcome(true, "", restoredFrom.Count, skipped, Files: restored);
     }
 
     // ── imported mods ───────────────────────────────────────────────────────

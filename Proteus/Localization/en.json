@@ -2167,6 +2167,10 @@
     "message": "Tick the parts this switch should hide.",
     "description": "Tooltip explaining why the create-switch button is unavailable."
   },
+  "Parts.NameTaken": {
+    "message": "This item already has a switch with this name, written or waiting to be written. Give this one a different name.",
+    "description": "Tooltip explaining why the create-switch button is unavailable: the item already has a switch, written or pending, with that name."
+  },
   "Parts.NoBudget": {
     "message": "This model has no switch slots left. The game gives each item ten, and this one's author has used them all.",
     "description": "Shown when all ten of the item's attribute slots are already in use."

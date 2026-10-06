@@ -22,6 +22,13 @@ internal static partial class BodyBridge
     private const float FingertipCoveredShare = 0.5f;
 
     /// <summary>
+    /// What share of a nail island's own vertices must be covered. Not one: the coarse map keeps the BRIGHTEST
+    /// texel of each block, so paint in the chart NEXT to a nail lands on its edge vertices — Solona's Stockings'
+    /// sheer legs sit 16 texels from the Neolithe ring-finger nails and took them off at 3 of 55.
+    /// </summary>
+    private const float NailIslandCoveredShare = 0.5f;
+
+    /// <summary>
     /// Flattens the NAILS out of a hand, on the body itself, so a garment over them has nothing to poke through.
     /// Each nail is its own little island of skin sitting in a socket in the finger (see
     /// <see cref="SecondSkinWriter.NailBedIslands"/>); relaxing its inside with its rim pinned replaces the nail
@@ -89,7 +96,7 @@ internal static partial class BodyBridge
                 var (tris, verts) = (plan.Islands[k], plan.VertsOf[k]);
                 // The FINGERTIP around the nail counts as well as the nail's own island: a glove's art rarely paints
                 // the nail chart at all — that is why the nails showed through it in the first place.
-                if (!Covered(gate, s, src, ue, At, bs, tris, tmp) && !FingertipCovered(gate, plan, verts))
+                if (!Covered(gate, s, src, ue, At, verts, tmp) && !FingertipCovered(gate, plan, verts))
                 { uncovered++; continue; }
 
                 var flat = new List<(int V, Vec3 To)>(verts.Length);
@@ -387,23 +394,26 @@ internal static partial class BodyBridge
         return landings > 0 && covered >= landings * FingertipCoveredShare;
     }
 
-    /// <summary>Does the garment cover this nail? Asked of the island's own UVs, at its coarse coverage map.</summary>
+    /// <summary>Does the garment cover this nail? Asked of the island's own UVs, at its coarse coverage map, and
+    /// answered yes only when most of its vertices are covered (<see cref="NailIslandCoveredShare"/>).</summary>
     private static bool Covered(SecondSkinLayer gate, byte[] s, Source src, VElem? uv,
-                                Func<VElem, int, int> at, byte[] bs, int[] tris, Span<float> tmp)
+                                Func<VElem, int, int> at, int[] verts, Span<float> tmp)
     {
         if (gate.Coverage is not { } mask || gate.CoverageWidth <= 0 || gate.CoverageHeight <= 0) return true;
         if (uv is not { } ue || ue.Stream > 2) return true;
         int w = gate.CoverageWidth, h = gate.CoverageHeight;
-        foreach (int v in tris)
+        int asked = 0, covered = 0;
+        foreach (int v in verts)
         {
             int a = at(ue, v);
             if (a < 0 || a + 16 > s.Length) continue;
             ReadTyped(s, a, ue.Type, tmp);
             int x = (((int)MathF.Floor(tmp[0] * w) % w) + w) % w;
             int y = (((int)MathF.Floor(tmp[1] * h) % h) + h) % h;
-            if (mask[y * w + x] >= NailCoveredFloor) return true;
+            asked++;
+            if (mask[y * w + x] >= NailCoveredFloor) covered++;
         }
-        return false;
+        return asked > 0 && covered >= asked * NailIslandCoveredShare;
     }
 
     /// <summary>Area-weighted vertex normals over one island, for the vertices it moved.</summary>

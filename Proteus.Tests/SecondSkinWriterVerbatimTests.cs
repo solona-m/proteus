@@ -1315,6 +1315,46 @@ public class SecondSkinWriterVerbatimTests(Xunit.Abstractions.ITestOutputHelper 
     }
 
     /// <summary>
+    /// Paint in the chart NEXT to a nail is not a garment over it. The coarse map keeps each block's brightest
+    /// texel, so Solona's Stockings' sheer legs, 16 texels from the Neolithe ring-finger nails, reached 3 of their
+    /// 55 vertices — and one vertex was enough to take the nail off. Modelled by painting only the block under
+    /// each nail's outermost vertex: a nail comes off only when that block holds most of it, which happens on the
+    /// smallest islands (Rue+'s four-vertex ones), where bleed cannot be told from paint at this size. Not Bibo+:
+    /// its nails are sewn into the finger, so the fingertip they land on is right beside them in the atlas and
+    /// FingertipCovered — a texel of slack either way — reads the same bleed.
+    /// </summary>
+    [LocalDataTheory(NeolitheNeed, RueNeed)]
+    [InlineData("Neolithe")]
+    [InlineData("Rue+")]
+    public void Paint_bleeding_onto_a_nails_edge_leaves_it_alone(string body)
+    {
+        var hand = Hands(body);
+        const int size = 256;
+        Assert.True(SecondSkinWriter.TryReadLod0Geometry(hand, out _, out var uv, out _));
+        (int X, int Y) Block(int v) => (Math.Clamp((int)MathF.Floor(uv[v * 2] * size), 0, size - 1),
+                                        Math.Clamp((int)MathF.Floor(uv[v * 2 + 1] * size), 0, size - 1));
+        var bleed = new byte[size * size];
+        var islands = SecondSkinWriter.NailBedPlans(hand).SelectMany(p => p.Value.VertsOf).ToList();
+        foreach (var verts in islands)
+        {
+            var (x, y) = Block(verts.MinBy(v => uv[v * 2]));
+            bleed[y * size + x] = 129;
+        }
+        int mostlyPainted = islands.Count(vs => vs.Count(v => bleed[Block(v).Y * size + Block(v).X] > 0) * 2 >= vs.Length);
+
+        var log = new List<string>();
+        var flat = BodyBridge.FlattenNails(hand, new SecondSkinLayer
+        {
+            MaterialName = "/gate.mtrl", Coverage = bleed, CoverageWidth = size, CoverageHeight = size,
+        }, log.Add);
+        foreach (var l in log) o.WriteLine(l);
+        o.WriteLine($"{mostlyPainted} of {islands.Count} nails have most of their vertices on the bled block");
+        Assert.True(mostlyPainted < islands.Count / 2, "the model of a bleed paints most of the nails outright");
+        var taken = System.Text.RegularExpressions.Regex.Match(string.Join("\n", log), @"nails: \d+ of (\d+) collapsed");
+        Assert.Equal(mostlyPainted, flat == null ? 0 : int.Parse(taken.Groups[1].Value));
+    }
+
+    /// <summary>
     /// The nails come off the BODY under a garment: each nail is relaxed into the socket it sits in, so there is
     /// nothing left for a glove to poke through. Measured as the nail's height over a bridge pinned to its rim —
     /// about a millimetre before, nothing after — and the file must not change length, since the edit is

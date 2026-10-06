@@ -2167,6 +2167,10 @@
     "message": "이 스위치로 숨길 부위를 선택하세요.",
     "description": ""
   },
+  "Parts.NameTaken": {
+    "message": "이 아이템에는 이미 같은 이름의 스위치가 있습니다(기록됨 또는 기록 대기 중). 다른 이름을 지정하세요.",
+    "description": ""
+  },
   "Parts.NoBudget": {
     "message": "이 모델에는 남은 스위치 자리가 없습니다. 게임은 아이템당 열 개를 제공하는데 제작자가 모두 사용했습니다.",
     "description": ""

@@ -108,6 +108,12 @@ public sealed class PartsPanel
     private string? status;
     private bool statusIsError;
 
+    /// <summary>
+    /// Why the last Write was refused, drawn under the Write button: the panel's status line sits above the model
+    /// picker, out of sight of the button that was just pressed.
+    /// </summary>
+    private string? writeError;
+
     /// <summary>What a drag on the model does, and therefore which half of this tab is showing.</summary>
     private enum Tool
     {
@@ -960,6 +966,7 @@ public sealed class PartsPanel
         ticked.Clear();
         expanded.Clear();
         pending.Clear();
+        writeError = null;
 
         models = [];
         modelLabels = [];
@@ -1203,6 +1210,7 @@ public sealed class PartsPanel
         freeLetters = 0;
         // Staged switches name parts by label, and a label means something different on another model.
         pending.Clear();
+        writeError = null;
         parts = null;
         modelUnreadable = false;
     }
@@ -2448,10 +2456,7 @@ public sealed class PartsPanel
             ? string.Format(Strings.Parts.BrushRevertedFmt, result.FilesWritten)
             : result.Message;
 
-        AfterModChange(root);
-
-        // A recomposite does not redraw gear, so the character would keep the cached brushed model.
-        if (result.Ok) compositor.RedrawForChangedModel();
+        AfterModChange(root);   // redraws, so the character drops the cached brushed model
     }
 
     // ── other sizes ─────────────────────────────────────────────────────────
@@ -2784,17 +2789,26 @@ public sealed class PartsPanel
         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X * 0.6f);
         ImGui.InputText(ps.ToggleName, ref toggleName, 64);
 
-        bool canAdd = left > 0 && ticked.Count > 0 && !string.IsNullOrWhiteSpace(toggleName);
+        // A repeated name makes Write refuse the whole list, so it is stopped here where it is typed: against the
+        // switches waiting here and the ones this item already has.
+        string typed = toggleName.Trim();
+        IReadOnlyCollection<string> written = modelIndex >= 0 && modelIndex < models.Count
+            ? MeshToggleService.WrittenNames(existing, models[modelIndex].GamePath)
+            : [];
+        bool nameTaken = pending.Select(p => p.Name).Concat(written)
+            .Any(n => string.Equals(n, typed, StringComparison.OrdinalIgnoreCase));
+        bool canAdd = left > 0 && ticked.Count > 0 && !string.IsNullOrWhiteSpace(toggleName) && !nameTaken;
         using (ImRaii.Disabled(!canAdd))
             if (ImGui.Button(ps.AddBtn, FullWidth()))
             {
                 pending.Add((toggleName.Trim(), [.. ticked]));
                 ticked.Clear();
                 toggleName = string.Empty;
+                writeError = null;
                 viewport.Recolour();
             }
         if (!canAdd && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-            ImGui.SetTooltip(ticked.Count == 0 ? ps.NeedParts : ps.NeedName);
+            ImGui.SetTooltip(ticked.Count == 0 ? ps.NeedParts : nameTaken ? ps.NameTaken : ps.NeedName);
 
         if (pending.Count == 0) return;
 
@@ -2807,13 +2821,20 @@ public sealed class PartsPanel
             ImGui.PushTextWrapPos(0);
             ImGui.TextUnformatted(string.Format(ps.PendingFmt, name, string.Join(", ", list)));
             ImGui.PopTextWrapPos();
-            if (ImGui.Button($"{ps.RemoveBtn}##rm{i}", FullWidth())) { pending.RemoveAt(i); break; }
+            if (ImGui.Button($"{ps.RemoveBtn}##rm{i}", FullWidth())) { pending.RemoveAt(i); writeError = null; break; }
         }
 
         ImGui.Spacing();
         if (ImGui.Button(ps.WriteBtn, FullWidth())) Commit();
         if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.WriteTip);
         ImGui.TextColored(ProteusStyle.Warn, ps.NotWrittenYet);
+
+        if (writeError != null)
+        {
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextColored(ProteusStyle.Bad, writeError);
+            ImGui.PopTextWrapPos();
+        }
     }
 
     /// <summary>What Proteus has already put into this mod, and the way back out.</summary>
@@ -2863,20 +2884,22 @@ public sealed class PartsPanel
             root, models[modelIndex], parts, plans, siblings,
             gamePath => textureLoader.LoadRawFile(null, gamePath));
 
-        statusIsError = !result.Ok;
         if (!result.Ok)
         {
-            status = result.Message;
+            // Shown under the Write button only; the pending list stays, so the user can fix it and press again.
+            writeError = result.Message;
             log.Warning("[Proteus] parts: {0}", result.Message);
             return;
         }
 
+        statusIsError = false;
         status = string.Format(ps.WrittenFmt, plans.Count, result.GroupName);
         if (result.Skipped.Count > 0) status += "\n" + string.Format(ps.SkippedFmt, result.Skipped.Count);
 
         pending.Clear();
+        writeError = null;
         ticked.Clear();
-        AfterModChange(root);
+        AfterModChange(root, result.Files);
     }
 
     private void Revert()
@@ -2892,22 +2915,44 @@ public sealed class PartsPanel
         status = result.Ok ? string.Format(Strings.Parts.RevertedFmt, result.FilesPatched) : result.Message;
 
         pending.Clear();
+        writeError = null;
         ticked.Clear();
-        AfterModChange(root);
+        AfterModChange(root, result.Files);
     }
 
     /// <summary>
-    /// Re-read everything the mod's files say, and make Penumbra do the same; a split renumbers parts.
+    /// Re-read everything the mod's files say, make Penumbra do the same, and redraw so the character shows it; a split
+    /// renumbers parts.
     /// </summary>
-    private void AfterModChange(string root)
+    /// <param name="changedFiles">The model files written, mod-relative; null when not known, which always redraws.</param>
+    private void AfterModChange(string root, IReadOnlyCollection<string>? changedFiles = null)
     {
+        // Read before SelectModel, against the redirect list the files were written under.
+        bool onlyContent = changedFiles is { Count: > 0 } && changedFiles.All(IsContentOnly);
+
         existing = MeshToggleService.ReadRecord(root);
         brushSaved = MeshVolumeService.PatchedCount(root);
         viewport.Clear();   // so it rebuilds its pickable set against the edited model
+        // Down without a redraw: SelectModel's own would run before the reload and draw the mod as Penumbra still has it.
+        EndLivePreview(refreshGame: false);
         if (modelIndex >= 0) SelectModel(modelIndex);
 
         if (modDir != null) penumbra.ReloadModDirectory(modDir);
         compositor.TriggerRecomposite("parts-written");
+
+        // A recomposite does not redraw gear: without this the character keeps the cached model, and a new switch hides
+        // nothing until something else redraws it. Not for imported pieces alone: the recomposite rebuilds their shell and
+        // a changed shell model fully redraws, so a second redraw here would only flicker.
+        if (!onlyContent) compositor.RedrawForChangedModel();
+    }
+
+    /// <summary>An imported piece's file that the mod does not also publish: only the composite ever draws it.</summary>
+    private bool IsContentOnly(string file)
+    {
+        // Compared slash-normalised: contentFiles holds the sidecar's spelling, the written files the model rows'.
+        var key = file.Replace('\\', '/');
+        bool Same(string other) => string.Equals(other.Replace('\\', '/'), key, StringComparison.OrdinalIgnoreCase);
+        return contentFiles.Any(Same) && !redirects.Any(r => Same(r.File));
     }
 
 }

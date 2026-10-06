@@ -2167,6 +2167,10 @@
     "message": "Marca las piezas que debe ocultar este interruptor.",
     "description": ""
   },
+  "Parts.NameTaken": {
+    "message": "Este objeto ya tiene un interruptor con este nombre, escrito o pendiente de escribir. Ponle otro nombre a este.",
+    "description": ""
+  },
   "Parts.NoBudget": {
     "message": "A este modelo no le quedan huecos para interruptores. El juego da diez por objeto y su autor los ha usado todos.",
     "description": ""

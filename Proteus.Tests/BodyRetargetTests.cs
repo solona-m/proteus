@@ -87,6 +87,26 @@ public class BodyRetargetTests
     }
 
     [Fact]
+    public void A_skin_mesh_laid_millimetres_off_the_body_is_still_the_body_s()
+    {
+        // The Pioneer's Bottoms' waist strip: laid onto Rue+, two of its 38 corners missed the hip by 6 mm. Counted
+        // against the 2 mm that tells slots apart it read as a posed piece, and the vanilla skin stayed over the new body.
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 2),
+                                                  new SyntheticModel.Sub(0, OffsetZ: 0.006f)),
+            new SyntheticModel.Mesh(ClothMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 4, OffsetZ: 0.02f)));
+        var chest = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)));
+
+        var rebuilt = BodyRetarget.SwapSkin(garment, [Resized("_top", chest)], out var report);
+
+        Assert.NotNull(rebuilt);
+        Assert.Equal(3, report.Removed);
+        Assert.Equal(0, report.Kept);
+        Assert.Equal(0, report.Posed);
+    }
+
+    [Fact]
     public void Skin_of_a_slot_nobody_is_resizing_stays_as_the_author_left_it()
     {
         // A long top: chest skin, and hip skin that belongs to the legs. Only the chest is being resized.
@@ -189,6 +209,25 @@ public class BodyRetargetTests
         Assert.False(BodyRetarget.Covers(new BodySurface(lone, 0.01f), above, BodyRetarget.SkinEdges.Of(lone)));
         // Without the edges, every edge is the author's boundary: the plain reach.
         Assert.False(BodyRetarget.Covers(new BodySurface(ridge, 0.01f), above));
+    }
+
+    [Fact]
+    public void Skin_a_few_millimetres_off_the_body_is_on_it_only_over_its_middle()
+    {
+        // A 40 mm square of body. Laid skin that missed it by 6 mm sits OVER it — off along its normal — and counts, even
+        // above the square's edge or corner; skin 6 mm PAST its edge — a hip strip just below where the chest body
+        // stops — is off along the surface, and is another slot's.
+        float[] pos = [0f, 0f, 0f, 0.04f, 0f, 0f, 0.04f, 0.04f, 0f, 0f, 0.04f, 0f];
+        float[] nrm = [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1];
+        var body = new BodySurface(Build(pos, nrm, [0, 1, 2, 0, 2, 3], SkinMaterial), 0.01f);
+
+        Assert.True(BodyRetarget.OnBody(body, new Vector3(0.03f, 0.01f, 0.006f)));    // over a triangle
+        Assert.True(BodyRetarget.OnBody(body, new Vector3(0.02f, 0.02f, -0.006f)));   // under the shared diagonal
+        Assert.True(BodyRetarget.OnBody(body, new Vector3(0f, 0f, 0.006f)));          // over the corner
+        Assert.True(BodyRetarget.OnBody(body, new Vector3(0.02f, -0.001f, 0f)));      // past the edge, but within 2 mm
+        Assert.False(BodyRetarget.OnBody(body, new Vector3(0.02f, -0.006f, 0f)));     // past the edge
+        Assert.False(BodyRetarget.OnBody(body, new Vector3(-0.004f, -0.004f, 0f)));   // past the corner
+        Assert.False(BodyRetarget.OnBody(body, new Vector3(0.03f, 0.01f, 0.012f)));   // beyond LayFull
     }
 
     [Fact]
@@ -811,6 +850,29 @@ public class BodyRetargetTests
             float z = At(garment, v).Z + Delta(solved, v).Z;
             Assert.True(z >= 0.20f, $"vertex {v} is still inside the body at z={z}");
         }
+    }
+
+    [Fact]
+    public void A_legs_waist_inside_the_chest_body_is_pulled_out_of_it()
+    {
+        // Over the belly the skin drawn is the worn TOP's own body mesh, which its author sculpts — so a legs garment's
+        // waist inside the body mod's plain chest says nothing about what its author meant. "Victoria's Secret Sauce":
+        // the waist sat 4 mm inside Bibo+'s chest, fitted to a top that pulls the belly in; refitted, the top took the
+        // new body's full belly and the waist stayed inside it. A top's hem inside the LEGS body keeps the rule.
+        var body = Cube(0.20f, SkinMaterial);
+        var garment = Patch(ClothMaterial, new Vector3(0f, 0f, 0.196f));
+        Assert.True(IdentityCorrespondence.TryBuild(body, body, "chest", out var built, out string refusal), refusal);
+
+        var legs = BodyRetarget.Solve(garment, [new BodyRetarget.SlotPair("_top", built!, body)], garmentSlot: "_dwn");
+        Assert.True(legs.Pushed > 0, "a legs garment's waist inside the chest body should have been pulled out");
+        for (int v = 0; v < garment.Positions.Length / 3; v++)
+        {
+            float z = At(garment, v).Z + Delta(legs, v).Z;
+            Assert.True(z >= 0.20f, $"vertex {v} is still inside the chest at z={z}");
+        }
+
+        var top = BodyRetarget.Solve(garment, [new BodyRetarget.SlotPair("_dwn", built!, body)], garmentSlot: "_top");
+        Assert.Equal(0, top.Pushed);
     }
 
     // ── folds: a triangle that ends up facing the wrong way is a black speck in game ───────────────

@@ -1074,7 +1074,12 @@ public static partial class SecondSkinWriter
                 tris.Add(BitConverter.ToUInt16(s, p + 4));
             }
         }
-        return SurfaceMirror.AssignSides(xs, tris, out conflicts, out straddling);
+        var sides = SurfaceMirror.AssignSides(xs, tris, out conflicts, out straddling);
+        // The shell bakes the character's shape keys in, so it draws morph vertices no authored triangle names.
+        SurfaceMirror.PlaceUnclaimed(sides, xs, tris,
+            src.Shapes.Count > 0 ? MorphPairs(src, src.Ib, BitConverter.ToUInt32(s, mo + 16), vc) : null,
+            out _, out _);
+        return sides;
     }
 
     /// <summary>

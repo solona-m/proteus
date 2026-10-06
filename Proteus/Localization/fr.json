@@ -2167,6 +2167,10 @@
     "message": "Cochez les pièces que cet interrupteur doit masquer.",
     "description": ""
   },
+  "Parts.NameTaken": {
+    "message": "Cet objet a déjà un interrupteur de ce nom, écrit ou en attente d'écriture. Donnez un autre nom à celui-ci.",
+    "description": ""
+  },
   "Parts.NoBudget": {
     "message": "Ce modèle n'a plus d'emplacement d'interrupteur libre. Le jeu en accorde dix par objet et l'auteur les a tous utilisés.",
     "description": ""
