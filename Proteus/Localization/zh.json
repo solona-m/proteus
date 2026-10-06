@@ -2435,10 +2435,6 @@
     "message": "在此窗口的模型上绘制，而不是在你的角色上。",
     "description": ""
   },
-  "Parts.Live.Pick.Tip": {
-    "message": "点击角色身上的服装，在此打开它的模组和模型。",
-    "description": ""
-  },
   "Parts.Live.Hint": {
     "message": "直接在角色上绘制。按住 Alt 可移动镜头。每一笔在松开时保存。",
     "description": ""
@@ -3651,10 +3647,6 @@
     "message": "Vanilla gear",
     "description": ""
   },
-  "Parts.Vanilla.OnlyRetarget": {
-    "message": "原版装备没有模组文件。请先转换以生成模组，供其他工具使用。",
-    "description": ""
-  },
   "Parts.Vanilla.Open.Fmt": {
     "message": "{0}（原版）",
     "description": ""
@@ -3695,8 +3687,20 @@
     "message": "This mod",
     "description": ""
   },
-"Parts.Vanilla.Worn.Tip": {
-    "message": "当前穿着，未经模组化。打开即可转换到你的体型并生成新模组。",
+  "Parts.Vanilla.Worn.Tip": {
+    "message": "当前穿着，未经模组化。打开时会复制到一个可编辑的新模组中。选中 Body size 时则改为打开以进行体型转换。",
+    "description": ""
+  },
+  "Parts.Vanilla.Editing.Fmt": {
+    "message": "{0} 已在模组“{1}”中打开。它是游戏原版的副本，在你修改之前外观不变。",
+    "description": ""
+  },
+  "Parts.Vanilla.ModDescription.Fmt": {
+    "message": "{0}，由 Proteus 从游戏中复制以供编辑。",
+    "description": ""
+  },
+  "Parts.Vanilla.EditTool.Tip": {
+    "message": "原版装备没有模组文件，因此选择此项会先将其复制到一个新模组中。",
     "description": ""
   },
   "Parts.Vanilla.WornSuffix": {

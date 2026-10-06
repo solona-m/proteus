@@ -2435,10 +2435,6 @@
     "message": "캐릭터 대신 이 창의 모델 위에 칠합니다.",
     "description": ""
   },
-  "Parts.Live.Pick.Tip": {
-    "message": "캐릭터의 장비를 클릭하면 해당 모드와 모델을 여기에서 엽니다.",
-    "description": ""
-  },
   "Parts.Live.Hint": {
     "message": "캐릭터 위에 칠하세요. Alt를 누른 채로 카메라를 움직일 수 있습니다. 각 획은 손을 뗄 때 저장됩니다.",
     "description": ""
@@ -3651,10 +3647,6 @@
     "message": "Vanilla gear",
     "description": ""
   },
-  "Parts.Vanilla.OnlyRetarget": {
-    "message": "바닐라 장비는 모드 파일이 없습니다. 다른 도구를 쓰려면 먼저 리핏해 모드를 만드세요.",
-    "description": ""
-  },
   "Parts.Vanilla.Open.Fmt": {
     "message": "{0} (바닐라)",
     "description": ""
@@ -3695,8 +3687,20 @@
     "message": "This mod",
     "description": ""
   },
-"Parts.Vanilla.Worn.Tip": {
-    "message": "착용 중이지만 모드가 아닙니다. 열어서 새 모드로 리핏하세요.",
+  "Parts.Vanilla.Worn.Tip": {
+    "message": "착용 중이지만 모드가 아닙니다. 열면 편집할 수 있는 새 모드로 복사됩니다. Body size를 선택한 상태에서는 리핏용으로 열립니다.",
+    "description": ""
+  },
+  "Parts.Vanilla.Editing.Fmt": {
+    "message": "{0}이(가) 모드 \"{1}\"에서 열려 있습니다. 게임 원본의 사본이라 변경하기 전까지는 똑같이 보입니다.",
+    "description": ""
+  },
+  "Parts.Vanilla.ModDescription.Fmt": {
+    "message": "{0}, 편집을 위해 Proteus가 게임에서 복사함.",
+    "description": ""
+  },
+  "Parts.Vanilla.EditTool.Tip": {
+    "message": "바닐라 장비에는 모드 파일이 없으므로, 이것을 선택하면 먼저 새 모드로 복사합니다.",
     "description": ""
   },
   "Parts.Vanilla.WornSuffix": {

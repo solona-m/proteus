@@ -8,8 +8,8 @@ using Xunit;
 namespace Proteus.Tests;
 
 /// <summary>
-/// Refitting the game's own gear: reading the game's body as a catalog, naming the mod a refit goes into, and
-/// writing into a mod Proteus made rather than an author's. Over real temp folders, because what is being tested is
+/// Refitting and editing the game's own gear: reading the game's body as a catalog, naming the mod a refit goes into,
+/// seeding the mod an edit goes into, and writing into a mod Proteus made rather than an author's. Over real temp folders, because what is being tested is
 /// the shape of what lands on disk.
 /// </summary>
 public class VanillaRefitTests : IDisposable
@@ -250,10 +250,59 @@ public class VanillaRefitTests : IDisposable
     }
 
     [Fact]
-    public void Anything_that_is_not_equipment_is_not_a_pick()
+    public void Anything_that_is_not_gear_is_not_a_pick()
     {
         Assert.Null(VanillaPick.From("chara/human/c0201/obj/body/b0001/model/c0201b0001_top.mdl", (_, _) => "Body"));
-        Assert.Null(VanillaPick.From("chara/equipment/e6255/model/c0201e6255_met.mdl", (_, _) => "Hat"));
         Assert.Null(VanillaPick.From("", (_, _) => null));
+    }
+
+    [Fact]
+    public void A_hat_or_a_ring_is_a_pick_but_not_a_refit()
+    {
+        // Every tool but Body size can edit them; Body size has no body under them to refit onto.
+        var hat = VanillaPick.From("chara/equipment/e6255/model/c0201e6255_met.mdl", (_, _) => "Hat");
+        var ring = VanillaPick.From("chara/accessory/a0053/model/c0201a0053_rir.mdl", (_, _) => "Ring");
+
+        Assert.NotNull(hat);
+        Assert.NotNull(ring);
+        Assert.False(hat!.Value.Refittable);
+        Assert.False(ring!.Value.Refittable);
+        Assert.True(VanillaPick.From(Coat, (_, _) => "Coat")!.Value.Refittable);
+    }
+
+    // ── editing the game's own gear in a mod of its own ───────────────────────────────────────────
+
+    [Fact]
+    public void A_seeded_mod_publishes_the_game_s_model_at_its_own_path()
+    {
+        string mod = Path.Combine(root, "coat");
+        Directory.CreateDirectory(mod);
+        RefitModService.WriteScaffold(mod, "Ala Mhigan Coat — " + RefitModService.EditQualifier, "");
+
+        Assert.True(RefitModService.AddGameModel(mod, Coat, [1, 2, 3]));
+
+        var published = PenumbraModMeta.ReadAllRedirects(mod).Single();
+        Assert.Equal(Coat, published.GamePath);
+        Assert.Equal([1, 2, 3], File.ReadAllBytes(Path.Combine(mod, published.File.Replace('/', Path.DirectorySeparatorChar))));
+        Assert.False(PenumbraModMeta.IsLegacyFolder(mod));
+    }
+
+    [Fact]
+    public void Seeding_again_keeps_the_edited_model_and_the_mod_s_other_redirects()
+    {
+        string mod = Path.Combine(root, "coat");
+        Directory.CreateDirectory(mod);
+        RefitModService.WriteScaffold(mod, "Ala Mhigan Coat — " + RefitModService.EditQualifier, "");
+        Assert.True(RefitModService.AddGameModel(mod, Coat, [1, 2, 3]));
+
+        // An edit made since, and the other half of the outfit opened afterwards.
+        string coatFile = Path.Combine(mod, Coat.Replace('/', Path.DirectorySeparatorChar));
+        File.WriteAllBytes(coatFile, [9, 9]);
+        Assert.True(RefitModService.AddGameModel(mod, Trousers, [4, 5]));
+
+        Assert.False(RefitModService.AddGameModel(mod, Coat, [1, 2, 3]));   // nothing to do
+        Assert.Equal([9, 9], File.ReadAllBytes(coatFile));
+        Assert.Equal([Trousers, Coat],
+                     PenumbraModMeta.ReadAllRedirects(mod).Select(r => r.GamePath).OrderBy(p => p, StringComparer.Ordinal));
     }
 }

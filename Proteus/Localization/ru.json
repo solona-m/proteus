@@ -2435,10 +2435,6 @@
     "message": "Рисовать на модели в этом окне, а не на персонаже.",
     "description": ""
   },
-  "Parts.Live.Pick.Tip": {
-    "message": "Щёлкните по одежде персонажа, чтобы открыть здесь её мод и модель.",
-    "description": ""
-  },
   "Parts.Live.Hint": {
     "message": "Рисуйте прямо на персонаже. Удерживайте Alt, чтобы двигать камеру. Каждый мазок сохраняется, когда отпускаете кнопку.",
     "description": ""
@@ -3651,10 +3647,6 @@
     "message": "Vanilla gear",
     "description": ""
   },
-  "Parts.Vanilla.OnlyRetarget": {
-    "message": "У ванильной экипировки нет файла мода. Сначала подгоните её, чтобы он появился для других инструментов.",
-    "description": ""
-  },
   "Parts.Vanilla.Open.Fmt": {
     "message": "{0} (ваниль)",
     "description": ""
@@ -3695,8 +3687,20 @@
     "message": "This mod",
     "description": ""
   },
-"Parts.Vanilla.Worn.Tip": {
-    "message": "Надето, но не модифицировано. Откройте, чтобы подогнать под своё тело в новом моде.",
+  "Parts.Vanilla.Worn.Tip": {
+    "message": "Надето, но не модифицировано. При открытии копируется в новый мод, который можно редактировать. Если выбран Body size, открывается для подгонки.",
+    "description": ""
+  },
+  "Parts.Vanilla.Editing.Fmt": {
+    "message": "{0} открыт в моде «{1}» — это копия оригинала из игры, и она выглядит так же, пока вы её не измените.",
+    "description": ""
+  },
+  "Parts.Vanilla.ModDescription.Fmt": {
+    "message": "{0}, скопировано из игры Proteus для редактирования.",
+    "description": ""
+  },
+  "Parts.Vanilla.EditTool.Tip": {
+    "message": "У ванильного снаряжения нет файла мода, поэтому выбор этого инструмента сначала копирует его в новый мод.",
     "description": ""
   },
   "Parts.Vanilla.WornSuffix": {

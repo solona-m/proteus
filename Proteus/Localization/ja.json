@@ -2435,10 +2435,6 @@
     "message": "キャラクターではなく、このウィンドウのモデル上で塗ります。",
     "description": ""
   },
-  "Parts.Live.Pick.Tip": {
-    "message": "キャラクターの装備をクリックすると、そのModとモデルをここで開きます。",
-    "description": ""
-  },
   "Parts.Live.Hint": {
     "message": "キャラクターの上で塗ります。Altを押しながらでカメラを動かせます。ストロークは離したときに保存されます。",
     "description": ""
@@ -3651,10 +3647,6 @@
     "message": "Vanilla gear",
     "description": ""
   },
-  "Parts.Vanilla.OnlyRetarget": {
-    "message": "バニラ装備にはModファイルがありません。先にリフィットして他のツール用のModを作成してください。",
-    "description": ""
-  },
   "Parts.Vanilla.Open.Fmt": {
     "message": "{0}（バニラ）",
     "description": ""
@@ -3695,8 +3687,20 @@
     "message": "This mod",
     "description": ""
   },
-"Parts.Vanilla.Worn.Tip": {
-    "message": "装着中でMod未適用です。開くと自分の体型にリフィットして新しいModにできます。",
+  "Parts.Vanilla.Worn.Tip": {
+    "message": "装着中でMod未適用です。開くと編集できる新しいModにコピーされます。Body size を選択中はリフィット用に開きます。",
+    "description": ""
+  },
+  "Parts.Vanilla.Editing.Fmt": {
+    "message": "{0} をMod「{1}」で開いています。ゲーム本来のもののコピーなので、変更するまで見た目は同じです。",
+    "description": ""
+  },
+  "Parts.Vanilla.ModDescription.Fmt": {
+    "message": "{0}。Proteusが編集用にゲームからコピーしたものです。",
+    "description": ""
+  },
+  "Parts.Vanilla.EditTool.Tip": {
+    "message": "バニラ装備にはModファイルがないため、これを選ぶとまず新しいModにコピーします。",
     "description": ""
   },
   "Parts.Vanilla.WornSuffix": {

@@ -2004,9 +2004,6 @@ public sealed class PartsStrings
     public readonly string ShowModelViewTip = Loc.Localize("Parts.ShowModelView.Tip",
         "Paint on the model in this window instead of on your character.");
 
-    public readonly string LivePickTip = Loc.Localize("Parts.Live.Pick.Tip",
-        "Click a garment on your character to open its mod and model here.");
-
     public readonly string LiveHint = Loc.Localize("Parts.Live.Hint",
         "Paint on your character. Hold Alt to move the camera. Each stroke is saved when you let go.");
 
@@ -2036,7 +2033,7 @@ public sealed class PartsStrings
     public readonly string LivePickedNotGearFmt = Loc.Localize("Parts.Live.PickedNotGear.Fmt",
         "{0} isn't equipment, so it can't be refitted.");
 
-    /// <summary>Shown under Body size, where vanilla gear can be clicked as well as a mod's.</summary>
+    /// <summary>Shown while a click on the character opens what was clicked — a mod's garment or the game's own.</summary>
     public readonly string LivePickGameTip = Loc.Localize("Parts.Live.PickGame.Tip",
         "Click a garment on your character to open it, vanilla or modded.");
 
@@ -2046,7 +2043,20 @@ public sealed class PartsStrings
     public readonly string VanillaWornSuffix = Loc.Localize("Parts.Vanilla.WornSuffix", "(vanilla)");
 
     public readonly string VanillaWornTip = Loc.Localize("Parts.Vanilla.Worn.Tip",
-        "Worn, not modded. Open it to refit it onto your body as a new mod.");
+        "Worn, not modded. Opening it copies it into a new mod you can edit. With Body size selected, it opens "
+      + "to be refitted instead.");
+
+    /// <summary>{0} is the item, e.g. "Body — Ala Mhigan Coat of Fending"; {1} is the mod it was copied into.</summary>
+    public readonly string VanillaEditingFmt = Loc.Localize("Parts.Vanilla.Editing.Fmt",
+        "{0} is open in the mod \"{1}\", a copy of the game's own that looks the same until you change it.");
+
+    /// <summary>The description of the mod a piece of vanilla gear is copied into. {0} is the item.</summary>
+    public readonly string VanillaModDescriptionFmt = Loc.Localize("Parts.Vanilla.ModDescription.Fmt",
+        "{0}, copied from the game by Proteus to be edited.");
+
+    /// <summary>Added to a tool's tooltip while a piece of vanilla gear is open for Body size.</summary>
+    public readonly string VanillaEditToolTip = Loc.Localize("Parts.Vanilla.EditTool.Tip",
+        "Vanilla gear has no mod file, so choosing this copies it into a new mod first.");
 
     /// <summary>The header over a piece of vanilla gear, in place of the mod and model pickers.</summary>
     public readonly string VanillaHeader = Loc.Localize("Parts.Vanilla.Header", "Vanilla gear");
@@ -2061,9 +2071,6 @@ public sealed class PartsStrings
         "Refits don't carry shape keys or lower detail levels: hems may shift where pieces meet, and the old "
       + "size shows at a distance.");
 
-    /// <summary>Why every tool but Body size is greyed out on a piece of vanilla gear.</summary>
-    public readonly string VanillaOnlyRetarget = Loc.Localize("Parts.Vanilla.OnlyRetarget",
-        "Vanilla gear has no mod file. Refit it first to make one for the other tools.");
 
     /// <summary>The label over the choice of WHICH MOD a refit is written into.</summary>
     public readonly string RetargetSaveToMod = Loc.Localize("Parts.Retarget.SaveToMod", "Save into");

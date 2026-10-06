@@ -2435,10 +2435,6 @@
     "message": "Paint on the model in this window instead of on your character.",
     "description": "Tooltip for the checkbox. Keep the line break; the tooltip is not wrapped."
   },
-  "Parts.Live.Pick.Tip": {
-    "message": "Click a garment on your character to open its mod and model here.",
-    "description": "Tooltip for the pick button."
-  },
   "Parts.Live.Hint": {
     "message": "Paint on your character. Hold Alt to move the camera. Each stroke is saved when you let go.",
     "description": "Shown above the brush controls when painting on the character."
@@ -3651,10 +3647,6 @@
     "message": "Vanilla gear",
     "description": ""
   },
-  "Parts.Vanilla.OnlyRetarget": {
-    "message": "Vanilla gear has no mod file. Refit it first to make one for the other tools.",
-    "description": ""
-  },
   "Parts.Vanilla.Open.Fmt": {
     "message": "{0} (vanilla)",
     "description": ""
@@ -3695,8 +3687,20 @@
     "message": "This mod",
     "description": ""
   },
-"Parts.Vanilla.Worn.Tip": {
-    "message": "Worn, not modded. Open it to refit it onto your body as a new mod.",
+  "Parts.Vanilla.Worn.Tip": {
+    "message": "Worn, not modded. Opening it copies it into a new mod you can edit. With Body size selected, it opens to be refitted instead.",
+    "description": ""
+  },
+  "Parts.Vanilla.Editing.Fmt": {
+    "message": "{0} is open in the mod \"{1}\", a copy of the game's own that looks the same until you change it.",
+    "description": ""
+  },
+  "Parts.Vanilla.ModDescription.Fmt": {
+    "message": "{0}, copied from the game by Proteus to be edited.",
+    "description": ""
+  },
+  "Parts.Vanilla.EditTool.Tip": {
+    "message": "Vanilla gear has no mod file, so choosing this copies it into a new mod first.",
     "description": ""
   },
   "Parts.Vanilla.WornSuffix": {

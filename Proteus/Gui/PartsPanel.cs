@@ -608,8 +608,8 @@ public sealed class PartsPanel
     {
         if (showModelView || penumbra.GetModDirectory() is not { } modsRoot) return;
         if (tool != Tool.Navigate && tool != Tool.Retarget && volume != null) return;
-        liveBrush.ArmPick(modsRoot, OnLivePicked, includeGameGear: tool == Tool.Retarget);
-        ImGui.TextDisabled(tool == Tool.Retarget ? Strings.Parts.LivePickGameTip : Strings.Parts.LivePickTip);
+        liveBrush.ArmPick(modsRoot, OnLivePicked);
+        ImGui.TextDisabled(Strings.Parts.LivePickGameTip);
         ImGui.Spacing();
     }
 
@@ -677,8 +677,10 @@ public sealed class PartsPanel
         if (!HatCompatService.InMods(file, modsRoot, out var modRoot, out var rel))
         {
             // Not under the mods root: the game's own gear, whose resource name is the game path it is drawn from.
-            // Only the refit can do anything with one, and only it arms the pick for them.
-            if (tool == Tool.Retarget) OpenVanilla(BodyShapeReader.PathKey(file));
+            string gamePath = BodyShapeReader.PathKey(file);
+            itemNames ??= ItemNames.Lookup(Plugin.DataManager, log);
+            if (VanillaPick.From(gamePath, itemNames) is { } item) OpenGameGear(item);
+            else if (tool == Tool.Retarget) OpenVanilla(gamePath);   // says why it can't be refitted
             return;
         }
 
@@ -789,9 +791,11 @@ public sealed class PartsPanel
         var popupMaxH = ImGui.GetTextLineHeightWithSpacing() * 18 + ImGui.GetStyle().WindowPadding.Y * 2;
         ImGui.SetNextWindowSizeConstraints(new Vector2(width, 0), new Vector2(width * 2.2f, popupMaxH));
 
+        // A mod made a moment ago for the game's gear is not in Penumbra's list until it has loaded; its folder is
+        // its name less punctuation, which is near enough for those few frames.
         var current = vanilla is { } open ? open.Label
                     : modDir != null && mods.TryGetValue(modDir, out var name) ? name
-                    : ps.PickMod;
+                    : modDir ?? ps.PickMod;
         if (!ImGui.BeginCombo(ps.Mod + "##partsMod", current)) return;
 
         // SetKeyboardFocusHere targets the NEXT item submitted, so it has to sit immediately before it.
@@ -811,8 +815,8 @@ public sealed class PartsPanel
         ImGui.Separator();
 
         // The game's own gear the character is wearing, first of all and in the green worn things are shown in.
-        // It is not a mod, but it is the answer to "what am I wearing that I could refit", which is what this list
-        // is for — and there is nowhere else to reach it from but a click on the character.
+        // It is not a mod, but it is the answer to "what am I wearing that I could change", which is what this list
+        // is for.
         int shown = 0;
         bool anyGame = false;
         foreach (var item in equippedGameGear)
@@ -828,13 +832,7 @@ public sealed class PartsPanel
                 pickedGame = ImGui.Selectable($"{item.Label}  {ps.VanillaWornSuffix}##game_{item.GamePath}",
                                               vanilla?.GamePath == item.GamePath);
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.VanillaWornTip);
-            if (pickedGame && vanilla?.GamePath != item.GamePath)
-            {
-                // Body size is the only tool that can take one of these, so land there rather than on a toolbar
-                // where everything is greyed out.
-                tool = Tool.Retarget;
-                OpenVanilla(item.GamePath);
-            }
+            if (pickedGame && vanilla?.GamePath != item.GamePath) OpenGameGear(item);
         }
         if (anyGame) ImGui.Separator();
 
@@ -1235,8 +1233,71 @@ public sealed class PartsPanel
     }
 
     /// <summary>
-    /// Open a piece of the game's own gear, clicked on the character. Nothing on disk backs it, so there is no mod
-    /// and no redirect list: one synthesised row stands in for the model the rest of the tab reads.
+    /// Open a piece of the game's own gear, chosen in the picker or clicked on the character. Under Body size a piece
+    /// it can refit opens as itself, and the refit makes its mod when saved; anything else is opened to be edited.
+    /// </summary>
+    private void OpenGameGear(VanillaPick item)
+    {
+        if (tool == Tool.Retarget && item.Refittable) OpenVanilla(item.GamePath);
+        else EditVanilla(item);
+    }
+
+    /// <summary>
+    /// Open a piece of the game's own gear to be edited: copy its model into a mod of Proteus's own and open that
+    /// copy, where every tool works as it does on anyone's mod. The mod is found again on every later visit, so the
+    /// edits to one item collect in one place, and the copy is the game's own bytes, so it draws exactly as before
+    /// until something is changed.
+    /// </summary>
+    private void EditVanilla(VanillaPick item)
+    {
+        var ps = Strings.Parts;
+        if (textureLoader.LoadRawFile(null, item.GamePath) is not { } bytes)
+        {
+            status = ps.Unreadable;
+            statusIsError = true;
+            return;
+        }
+
+        RefitModService.Result made;
+        try
+        {
+            // A new mod is filled before Penumbra registers it; one from an earlier visit keeps its edits and only
+            // takes this model if it is another of the item's (the trousers of a coat's outfit, another race's).
+            made = refitMods.Ensure(item.ItemName, RefitModService.EditQualifier,
+                                    fill: root => RefitModService.AddGameModel(root, item.GamePath, bytes),
+                                    description: string.Format(ps.VanillaModDescriptionFmt, item.ItemName));
+            if (made is { Ok: true, Made: false } && RefitModService.AddGameModel(made.Root, item.GamePath, bytes))
+            {
+                compositor.ExpectOwnModEdit(made.Dir);
+                penumbra.ReloadModDirectory(made.Dir);
+            }
+        }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "[Proteus] parts: could not copy {0} into a mod", item.GamePath);
+            status = ex.Message;
+            statusIsError = true;
+            return;
+        }
+        if (!made.Ok)
+        {
+            status = made.Message;
+            statusIsError = true;
+            return;
+        }
+
+        mods = LoadMods();
+        SelectMod(made.Dir);
+        int index = models.FindIndex(m => string.Equals(m.GamePath, item.GamePath, StringComparison.OrdinalIgnoreCase));
+        if (index >= 0) SelectModel(index);
+        log.Information("[Proteus] parts: editing {0} in {1}", item.GamePath, made.Dir);
+        status = string.Format(ps.VanillaEditingFmt, item.Label, made.Dir);
+        statusIsError = false;
+    }
+
+    /// <summary>
+    /// Open a piece of the game's own gear for Body size to refit. Nothing on disk backs it, so there is no mod and no
+    /// redirect list: one synthesised row stands in for the model the rest of the tab reads.
     /// </summary>
     private void OpenVanilla(string gamePath)
     {
@@ -2084,21 +2145,26 @@ public sealed class PartsPanel
                      (Tool.Navigate, FontAwesomeIcon.MousePointer,      ps.ToolNavigate, ps.ToolNavigateTip),
                  })
         {
-            // The game's own gear has no mod file to write into, so only the refit — which makes one — can take it.
-            // Disabled rather than hidden: the tools are the map of what this tab does, and a gap reads as a bug.
-            bool barred = vanilla != null && value != Tool.Retarget;
-
             // IconButtonWithText draws the text itself, so the ###id the label carries is cut off and pushed as an id instead.
             bool clicked;
             var text = label.Split("###")[0];
             using (ImRaii.PushId((int)value))
-            using (ImRaii.Disabled(barred))
             using (ProteusStyle.Selected(tool == value))
                 clicked = ImGuiComponents.IconButtonWithText(icon, text, FullWidth());
 
-            if (barred)
+            // The game's own gear, open for Body size, has no mod file for any other tool to write into: choosing one
+            // copies the piece into a mod of its own first, and opens that.
+            if (vanilla is { } item && value != Tool.Retarget)
             {
-                if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(ps.VanillaOnlyRetarget);
+                if (clicked)
+                {
+                    // Set first, so the model opens under it; put back if the copy failed and the piece is still
+                    // open as itself, which nothing but Body size can draw.
+                    tool = value;
+                    EditVanilla(item);
+                    if (vanilla != null) tool = Tool.Retarget;
+                }
+                if (ImGui.IsItemHovered()) ImGui.SetTooltip(tip + "\n\n" + ps.VanillaEditToolTip);
                 continue;
             }
 
@@ -2862,6 +2928,21 @@ public sealed class PartsPanel
 
     // ── writing ─────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// The variant of <paramref name="gamePath"/>'s item the character is wearing, read off the draw object; null when
+    /// they are not wearing it. See <see cref="MeshToggleService.Write"/>'s <c>wornVariant</c>.
+    /// </summary>
+    private static int? WornVariant(string gamePath)
+    {
+        if (ContentSlot.Parse(gamePath) is not { } p || ContentSlot.SetIdOf(p.SetTag) is not { } setId) return null;
+        string leaf = Path.GetFileNameWithoutExtension(gamePath);
+        string suffix = leaf[(leaf.LastIndexOf('_') + 1)..];
+        var player = Plugin.ObjectTable.LocalPlayer;
+        return EquippedSlotVariants.Read(player?.Address ?? 0)
+            .FirstOrDefault(s => s.SetId == setId && string.Equals(s.Suffix, suffix, StringComparison.OrdinalIgnoreCase))
+            is { SetId: > 0 } worn ? worn.Variant : null;
+    }
+
     private void Commit()
     {
         // A brush save rewrites the whole model from its opening bytes and would erase the switch, so save first;
@@ -2882,7 +2963,8 @@ public sealed class PartsPanel
         var siblings = redirects.Concat(models.Where(m => contentFiles.Contains(m.File))).ToList();
         var result = MeshToggleService.Write(
             root, models[modelIndex], parts, plans, siblings,
-            gamePath => textureLoader.LoadRawFile(null, gamePath));
+            gamePath => textureLoader.LoadRawFile(null, gamePath),
+            WornVariant(models[modelIndex].GamePath));
 
         if (!result.Ok)
         {

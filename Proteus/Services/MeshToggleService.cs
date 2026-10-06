@@ -126,13 +126,19 @@ internal sealed class MeshToggleService
     /// <param name="siblings">Every redirect the mod publishes. Files serving the SAME game path are patched
     /// too when their claimed geometry matches.</param>
     /// <param name="readGameFile">Reads a path from the game's own data, for the vanilla IMC entry.</param>
+    /// <param name="wornVariant">
+    /// The variant the character has on, for a mod whose files name none — one shipping only the model, such as the
+    /// game's own gear copied out to be edited. Without it that would be variant 1, and a switch on a dyed or alternate
+    /// variant would land on an IMC row nobody is wearing.
+    /// </param>
     public static Outcome Write(
         string modRoot,
         PenumbraModMeta.Redirect model,
         ModelParts parts,
         IReadOnlyList<Plan> toggles,
         IReadOnlyList<PenumbraModMeta.Redirect> siblings,
-        Func<string, byte[]?> readGameFile)
+        Func<string, byte[]?> readGameFile,
+        int? wornVariant = null)
     {
         if (toggles.Count == 0)
             return new Outcome(false, Loc.Localize("Parts.Write.Nothing", "No switches to write."), 0, []);
@@ -159,7 +165,7 @@ internal sealed class MeshToggleService
         var record = ReadRecord(modRoot) ?? new MeshToggleRecord();
         var item = record.Find(setId, equipSlot);
 
-        int variant = ImcEntrySource.VariantOf(siblings, slot.SetTag);
+        int variant = ImcEntrySource.MaterialVariantOf(siblings, slot.SetTag) ?? wornVariant ?? 1;
 
         // Merge into a group the author already has for this item rather than writing a competing one; see
         // WriteGroup.

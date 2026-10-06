@@ -285,6 +285,13 @@ internal static class ImcEntrySource
     /// to 1.
     /// </summary>
     public static int VariantOf(IEnumerable<PenumbraModMeta.Redirect> redirects, string setTag)
+        => MaterialVariantOf(redirects, setTag) ?? 1;
+
+    /// <summary>
+    /// <see cref="VariantOf"/>, but null when no material path names one — a mod shipping only the model, which
+    /// dresses whatever variant is worn.
+    /// </summary>
+    public static int? MaterialVariantOf(IEnumerable<PenumbraModMeta.Redirect> redirects, string setTag)
     {
         foreach (var r in redirects)
         {
@@ -296,6 +303,6 @@ internal static class ImcEntrySource
             int end = digits.IndexOf('/');
             if (end > 0 && int.TryParse(digits[..end], out var v) && v > 0) return v;
         }
-        return 1;
+        return null;
     }
 }
