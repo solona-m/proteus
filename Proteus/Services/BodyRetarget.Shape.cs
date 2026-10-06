@@ -68,18 +68,29 @@ internal static partial class BodyRetarget
     /// 3.4 mm into YAB's, and its bodice 0.9 mm into its own breasts and 10.5 mm into YAB's. The swap throws the reshaped
     /// skin away and draws the body's own full shape in its place, so the cloth came out buried by the difference.
     /// <para/>
-    /// <see cref="LaySkin"/> has already worked out, per skin point, how far putting it back on the body moves it. Cloth
-    /// near that skin takes the same correction — OUTWARD only. Where the author's skin stood proud of the body (a
-    /// lifted bust) laying it moves it in, and pulling the cloth in after it tightens the fit, which was measured in
-    /// game to make every clip worse (the reverted <c>HugBody</c>). Cloth keeps its side of the skin; it is only ever
-    /// let out.
+    /// Cloth the author put OUTSIDE its skin is put back at the gap it had from that skin, measured against the new
+    /// bodies it will be drawn over — out or in, never nearer than <see cref="Clearance"/>. Moving it only outward, by
+    /// <see cref="LaySkin"/>'s correction, left cloth standing off wherever the author's skin stood proud of the source
+    /// body: "Victoria's Secret Sauce", bikini bottoms whose own skin under the front panel is about 4 mm fuller than
+    /// Bibo+ Small, had the panel 1.5-2 mm off that skin and every refit kept it 6-7 mm off the new one. Pulling cloth in
+    /// WITHOUT a limit tightened it until it clipped (the reverted <c>HugBody</c>, measured in game); aimed at the author's
+    /// own gap it cannot go nearer than the author had it. Inward moves are fold-guarded (<see cref="PullIn"/>).
+    /// <para/>
+    /// Cloth the author tucked under its skin keeps the old rule: let out by the skin's correction, never pulled in.
     /// </summary>
     /// <param name="carried">Each node's delta before the skin was laid; the skin nodes' change since is the correction.</param>
-    /// <returns>How many cloth nodes were let out.</returns>
-    private static int FollowLaidSkin(ModelParts garment, Sets sets, Vec3[] carried, Vec3[] nodeDelta, bool[] snapped)
+    /// <returns>How many cloth nodes were moved.</returns>
+    private static int FollowLaidSkin(ModelParts garment, Sets sets, Vec3[] carried, Vec3[] nodeDelta, bool[] snapped,
+                                      IReadOnlyList<SlotPair> pairs)
     {
         var own = new BodySurface(garment, BodySurface.CellFor(MeanEdgeOf(garment)));
         if (own.IsEmpty) return 0;
+        var drawn = new List<BodySurface>(pairs.Count);
+        foreach (var pair in pairs)
+        {
+            var surface = new BodySurface(pair.Target, BodySurface.CellFor(MeanEdgeOf(pair.Target)));
+            if (!surface.IsEmpty) drawn.Add(surface);
+        }
 
         Vector3 Correction(int vertex)
         {
@@ -88,6 +99,7 @@ internal static partial class BodyRetarget
         }
 
         var add = new List<(int Node, Vector3 By)>();
+        var pull = new List<(int Node, Vector3 By)>();
         foreach (int n in sets.ClothNodes)
         {
             if (snapped[n]) continue;
@@ -95,13 +107,101 @@ internal static partial class BodyRetarget
             if (!own.Nearest(p, FollowReach, out var hit)) continue;
             var c = Correction(hit.A) * hit.U + Correction(hit.B) * hit.V + Correction(hit.C) * hit.W;
             float along = Vector3.Dot(c, hit.Normal);
-            if (along <= 0f) continue;
             float w = 1f - MeshMath.Smoothstep((hit.Distance - FollowFull) / (FollowReach - FollowFull));
             if (w <= 0f) continue;
-            add.Add((n, hit.Normal * (along * w)));
+
+            float authoredGap = Vector3.Dot(p - hit.Point, hit.Normal);
+            if (authoredGap <= 0f)
+            {
+                // Tucked under its skin by the author: only ever let out, by the skin's own move, as before.
+                if (along > 0f) add.Add((n, hit.Normal * (along * w)));
+                continue;
+            }
+
+            // Outside its skin: put back at the author's own gap from that skin, laid where it now is — out or in, and
+            // never nearer than Clearance. Aimed at the gap rather than moved by the skin's correction, which is not the
+            // author's offset alone: under the lower edge of "Victoria's Secret Sauce"'s low-poly front panel it read
+            // 2.5-3.6 mm outward, and following it left the panel 4-5 mm off the new skin where its author had 1.5-2.
+            // The gap now, against the skin that will be DRAWN — the new bodies themselves — not against the author's
+            // skin as laid: where that skin is too far off the source body it is laid only part way (LayFull..LayReach),
+            // and the panel's lower edge measured 7-8 mm inside it while 4-5 mm outside the body actually drawn.
+            var at = p + ToVector(nodeDelta[n]);
+            BodySurface.Hit drawnHit = default;
+            bool onDrawn = false;
+            float within = FollowReach;
+            foreach (var surface in drawn)
+            {
+                if (!surface.Nearest(at, within, out var h)) continue;
+                drawnHit = h;
+                within = h.Distance;
+                onDrawn = true;
+            }
+            if (!onDrawn) continue;
+            float gapNow = Vector3.Dot(at - drawnHit.Point, drawnHit.Normal);
+            float move = (MathF.Max(authoredGap, Clearance) - gapNow) * w;
+            if (move > 0f) add.Add((n, drawnHit.Normal * move));
+            else if (move < 0f) pull.Add((n, drawnHit.Normal * move));
         }
         foreach (var (n, by) in add) nodeDelta[n] = ToVec(ToVector(nodeDelta[n]) + by);
-        return add.Count;
+        return add.Count + PullIn(sets, nodeDelta, pull);
+    }
+
+    /// <summary>
+    /// Apply <see cref="FollowLaidSkin"/>'s inward moves, backed off wherever one would turn a triangle over: halved on
+    /// every corner of such a triangle for <c>PushUnfoldPasses</c> passes, then given up outright, as the push-out's own
+    /// guard does. Neighbours pulled in by different amounts step past each other; measured on "Victoria's Secret Sauce"
+    /// without this, YAB+ Skull Crushers went from 8 turned-over triangles to 33.
+    /// </summary>
+    /// <returns>How many nodes moved.</returns>
+    private static int PullIn(Sets sets, Vec3[] nodeDelta, List<(int Node, Vector3 By)> pull)
+    {
+        if (pull.Count == 0) return 0;
+        var by = new Vector3[sets.NodeCount];
+        var scale = new float[sets.NodeCount];
+        foreach (var (n, v) in pull) { by[n] = v; scale[n] = 1f; }
+
+        Vector3 Trial(int n) => Placed(sets, nodeDelta, n) + by[n] * scale[n];
+        for (int pass = 0; ; pass++)
+        {
+            bool giveUp = pass >= PushUnfoldPasses;
+            int folded = 0;
+            for (int t = 0; t + 2 < sets.Tris.Length; t += 3)
+            {
+                int va = sets.Tris[t], vb = sets.Tris[t + 1], vc = sets.Tris[t + 2];
+                if (va < 0 || vb < 0 || vc < 0
+                    || va >= sets.NodeOf.Length || vb >= sets.NodeOf.Length || vc >= sets.NodeOf.Length) continue;
+                int a = sets.NodeOf[va], b = sets.NodeOf[vb], c = sets.NodeOf[vc];
+                if (a == b || b == c || c == a) continue;
+                if (scale[a] <= 0f && scale[b] <= 0f && scale[c] <= 0f) continue;
+
+                var was = ToVector(sets.NodeAt[a]);
+                var n0 = Vector3.Cross(ToVector(sets.NodeAt[b]) - was, ToVector(sets.NodeAt[c]) - was);
+                if (n0.LengthSquared() <= 1e-24f) continue;
+                var now = Trial(a);
+                if (Vector3.Dot(n0, Vector3.Cross(Trial(b) - now, Trial(c) - now)) > 0f) continue;
+
+                // Turned over already, before this pull: not its doing, and backing off cannot help.
+                var before = Placed(sets, nodeDelta, a);
+                if (Vector3.Dot(n0, Vector3.Cross(Placed(sets, nodeDelta, b) - before, Placed(sets, nodeDelta, c) - before)) <= 0f)
+                    continue;
+
+                float keep = giveUp ? 0f : 0.5f;
+                scale[a] *= keep;
+                scale[b] *= keep;
+                scale[c] *= keep;
+                folded++;
+            }
+            if (folded == 0) break;
+        }
+
+        int moved = 0;
+        foreach (var (n, _) in pull)
+        {
+            if (scale[n] <= 0f) continue;
+            nodeDelta[n] = ToVec(ToVector(nodeDelta[n]) + by[n] * scale[n]);
+            moved++;
+        }
+        return moved;
     }
 
     /// <summary>The share of a piece's edges that may be open and still count as a closed solid (5%): the underwire of

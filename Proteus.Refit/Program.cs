@@ -44,6 +44,8 @@ internal static class Program
         Proteus.Refit --finish --garment <in.mdl> --out <out.mdl> [--body-root <body mod> [--from <rel|auto>]]
                       [--slot _top] [--race 0201] [--tag-legs <rel|auto>]
         Proteus.Refit --save --manifest <save.json>
+        Proteus.Refit --measure --garment <model.mdl> --bodies <body.mdl>[;<body.mdl>...]
+        Proteus.Refit --measure --garment <model.mdl>     (cloth points within 2 mm rigged apart)
         """;
 
     private static int Main(string[] args)
@@ -59,6 +61,14 @@ internal static class Program
             if (opts.ContainsKey("detect")) return Detect(opts);
             if (opts.ContainsKey("finish")) return Finish(opts);
             if (opts.ContainsKey("save")) return Save(opts);
+            if (opts.TryGetValue("obj", out var objOut)) return ExportObj(opts, objOut);
+            if (opts.ContainsKey("measure") && opts.ContainsKey("face-poke")) return MeasureFacePoke(opts);
+            if (opts.ContainsKey("measure"))
+                return opts.ContainsKey("skin-map") ? MeasureSkinMap(opts)
+                     : opts.ContainsKey("shell") ? MeasureShell(opts)
+                     : opts.ContainsKey("bodies") ? Measure(opts)
+                     : opts.ContainsKey("source") ? MeasureCrossings(opts)
+                     : opts.ContainsKey("other") ? MeasureDiff(opts) : MeasureSplit(opts);
             return Run(opts);
         }
         catch (UsageException ex)
@@ -261,6 +271,594 @@ internal static class Program
         return 0;
     }
 
+    /// <summary>
+    /// How a garment sits on the bodies it is worn over, per cloth submesh: how far each vertex is from the nearest skin of
+    /// any of them, signed by that skin's normal. Inside (below -0.5 mm) is a clip — skin showing through in game.
+    /// </summary>
+    private static int Measure(Dictionary<string, string> opts)
+    {
+        var garment = ModelPartReader.Read(File.ReadAllBytes(Required(opts, "garment")))
+                   ?? throw new UsageException("The garment could not be read.");
+        var bodyFiles = Required(opts, "bodies").Split(';', StringSplitOptions.RemoveEmptyEntries).ToList();
+        var bodies = bodyFiles
+            .Select(p => ModelPartReader.Read(File.ReadAllBytes(p)) ?? throw new UsageException($"{p} could not be read."))
+            .Select(b => new BodySurface(b, 0.01f))
+            .ToList();
+        var bodySkins = bodyFiles.Select(p => ModelSkinReader.Read(File.ReadAllBytes(p), null, null)).ToList();
+        var garmentSkin = ModelSkinReader.Read(File.ReadAllBytes(Required(opts, "garment")), null, null);
+
+        Dictionary<string, float> WeightsOf(XivLiveMesh.SkinnedMesh s, int v, float scale, Dictionary<string, float>? into = null)
+        {
+            into ??= new Dictionary<string, float>(StringComparer.Ordinal);
+            for (int k = 0; k < XivLiveMesh.SkinnedMesh.MaxInfluences; k++)
+            {
+                float w = s.BoneWeights[v * XivLiveMesh.SkinnedMesh.MaxInfluences + k];
+                if (w <= 0f) continue;
+                string bone = s.BoneNames[s.BoneIndices[v * XivLiveMesh.SkinnedMesh.MaxInfluences + k]];
+                into[bone] = into.GetValueOrDefault(bone) + w * scale;
+            }
+            return into;
+        }
+        // Cloth within 5 mm (or --weight-reach-mm) of drawn skin, rigged more than a tenth apart from the skin under it.
+        float weightReach = opts.TryGetValue("weight-reach-mm", out var reachArg)
+            ? float.Parse(reachArg, System.Globalization.CultureInfo.InvariantCulture) / 1000f : 0.005f;
+        int nearSkin = 0, apartFromSkin = 0;
+        var insideBands = new Dictionary<(float Y, string Side, string Face), (int N, float Deepest)>();
+        // How far the cloth sits off the skin, by height and face: what "it stands off the body" looks like in numbers.
+        var offBands = new Dictionary<(float Y, string Face), List<float>>();
+        // Which island each cloth vertex is on, and per island the points more than 5 mm inside.
+        var islandOf = new Dictionary<int, string>();
+        var islandSize = new Dictionary<string, int>();
+        foreach (var part in garment.Parts.Where(p => p.Island >= 0))
+        {
+            var vs = part.Triangles.Distinct().ToList();
+            islandSize[part.Label] = vs.Count;
+            foreach (int v in vs) islandOf[v] = part.Label;
+        }
+        var deepIslands = new Dictionary<string, (int N, float Deepest, System.Numerics.Vector3 Min, System.Numerics.Vector3 Max)>();
+        // Per island, every vertex's signed distance from the skin: a coarse piece standing off is lost in a whole-garment median.
+        var islandOff = new Dictionary<string, List<float>>();
+        var detail = new SortedDictionary<(float Y, string Side), List<float>>();
+        var coarse = new HashSet<int>();
+        foreach (var part in garment.Parts.Where(p => p.Island < 0 && !SecondSkinWriter.IsBodySkinMaterial(p.Material)))
+            for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+            {
+                int a = part.Triangles[t], b = part.Triangles[t + 1], c = part.Triangles[t + 2];
+                System.Numerics.Vector3 Pt(int i) => new(garment.Positions[i * 3], garment.Positions[i * 3 + 1], garment.Positions[i * 3 + 2]);
+                float longest = MathF.Max(System.Numerics.Vector3.Distance(Pt(a), Pt(b)),
+                                MathF.Max(System.Numerics.Vector3.Distance(Pt(b), Pt(c)), System.Numerics.Vector3.Distance(Pt(c), Pt(a))));
+                if (longest > 0.015f) { coarse.Add(a); coarse.Add(b); coarse.Add(c); }
+            }
+        var apartBands = new SortedDictionary<float, int>();
+
+        const float Reach = 0.05f, Clip = -0.0005f;
+        foreach (var part in garment.Parts.Where(p => p.Island < 0 && !SecondSkinWriter.IsBodySkinMaterial(p.Material)))
+        {
+            var verts = part.Triangles.Distinct().ToList();
+            var signed = new List<float>();
+            foreach (int v in verts)
+            {
+                var p = new System.Numerics.Vector3(garment.Positions[v * 3], garment.Positions[v * 3 + 1], garment.Positions[v * 3 + 2]);
+                BodySurface.Hit best = default;
+                bool found = false;
+                int on = -1;
+                for (int b = 0; b < bodies.Count; b++)
+                    if (bodies[b].Nearest(p, found ? best.Distance : Reach, out var hit)) { best = hit; found = true; on = b; }
+                if (!found) continue;
+                float s = System.Numerics.Vector3.Dot(p - best.Point, best.Normal);
+                signed.Add(s);
+                if (islandOf.TryGetValue(v, out var isl))
+                {
+                    if (!islandOff.TryGetValue(isl, out var il)) islandOff[isl] = il = [];
+                    il.Add(s);
+                    // --island-detail <label suffix>: that island's distances by 2 cm of height and by side.
+                    // --island-detail coarse: instead every vertex of a triangle with an edge over 15 mm (a low-poly panel).
+                    if (opts.TryGetValue("island-detail", out var want)
+                        && (want == "coarse" ? coarse.Contains(v) : isl.EndsWith(want, StringComparison.Ordinal)))
+                    {
+                        var dk = (MathF.Floor(p.Y * 50f) / 50f, p.X >= 0 ? "x+" : "x-");
+                        if (!detail.TryGetValue(dk, out var dl)) detail[dk] = dl = [];
+                        dl.Add(s);
+                    }
+                }
+                var offKey = (MathF.Floor(p.Y * 20f) / 20f, p.Z >= 0 ? "front" : "back");
+                if (!offBands.TryGetValue(offKey, out var offList)) offBands[offKey] = offList = [];
+                offList.Add(best.Distance);
+                if (s < Clip)
+                {
+                    var key = (MathF.Floor(p.Y * 20f) / 20f, p.X >= 0 ? "x+" : "x-", p.Z >= 0 ? "front" : "back");
+                    var (n, deep) = insideBands.GetValueOrDefault(key);
+                    insideBands[key] = (n + 1, MathF.Min(deep, s));
+                    if (s < -0.005f && islandOf.TryGetValue(v, out var island))
+                    {
+                        var (count, deepest, min, max) = deepIslands.GetValueOrDefault(island, (0, 0f, p, p));
+                        deepIslands[island] = (count + 1, MathF.Min(deepest, s),
+                                               System.Numerics.Vector3.Min(min, p), System.Numerics.Vector3.Max(max, p));
+                    }
+                }
+
+                if (best.Distance <= weightReach && garmentSkin != null && bodySkins[on] is { } under)
+                {
+                    nearSkin++;
+                    var mine = WeightsOf(garmentSkin, v, 1f);
+                    var theirs = WeightsOf(under, best.A, best.U);
+                    WeightsOf(under, best.B, best.V, theirs);
+                    WeightsOf(under, best.C, best.W, theirs);
+                    float diff = mine.Keys.Union(theirs.Keys).Sum(k => MathF.Abs(mine.GetValueOrDefault(k) - theirs.GetValueOrDefault(k)));
+                    if (diff > 0.2f)
+                    {
+                        apartFromSkin++;
+                        float band = MathF.Floor(p.Y * 20f) / 20f;
+                        apartBands[band] = apartBands.GetValueOrDefault(band) + 1;
+                    }
+                }
+            }
+            if (signed.Count == 0) { Console.WriteLine($"{part.Label}\t{part.Material}\tno skin within 5 cm"); continue; }
+            signed.Sort();
+            int inside = signed.Count(s => s < Clip);
+            Console.WriteLine($"{part.Label}\t{Path.GetFileName(part.Material)}\tverts {verts.Count}\tinside {inside}" +
+                              $" ({100f * inside / signed.Count:0.0}%)\tdeepest {signed[0] * 1000f:0.0} mm" +
+                              $"\tmedian {signed[signed.Count / 2] * 1000f:0.0} mm\tp95 {signed[(int)(signed.Count * 0.95f)] * 1000f:0.0} mm");
+        }
+        if (opts.ContainsKey("bands"))
+            foreach (var (key, (n, deep)) in insideBands.Where(kv => kv.Value.N >= 10)
+                                                        .OrderByDescending(kv => kv.Key.Y).ThenBy(kv => kv.Key.Side))
+                Console.WriteLine($"  inside at y {key.Y:0.00} {key.Side} {key.Face}\t{n}\tdeepest {deep * 1000f:0.0} mm");
+        if (opts.ContainsKey("islands"))
+            foreach (var (island, list) in islandOff.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+            {
+                list.Sort();
+                Console.WriteLine($"  island {island}\t{list.Count} verts\tmedian {list[list.Count / 2] * 1000f:0.0} mm" +
+                                  $"\tp90 {list[(int)(list.Count * 0.9f)] * 1000f:0.0} mm\tmax {list[^1] * 1000f:0.0} mm");
+            }
+        foreach (var (key, list) in detail.Reverse())
+        {
+            list.Sort();
+            Console.WriteLine($"  detail y {key.Y:0.00} {key.Side}\t{list.Count}\tmin {list[0] * 1000f:0.0}\tmedian {list[list.Count / 2] * 1000f:0.0}\tmax {list[^1] * 1000f:0.0} mm");
+        }
+        if (opts.ContainsKey("off"))
+            foreach (var (key, list) in offBands.Where(kv => kv.Value.Count >= 20)
+                                                .OrderByDescending(kv => kv.Key.Y).ThenBy(kv => kv.Key.Face))
+            {
+                list.Sort();
+                Console.WriteLine($"  off the skin at y {key.Y:0.00} {key.Face}\t{list.Count}\tmedian {list[list.Count / 2] * 1000f:0.0} mm" +
+                                  $"\tp90 {list[(int)(list.Count * 0.9f)] * 1000f:0.0} mm");
+            }
+        if (opts.ContainsKey("bands"))
+            foreach (var (island, (n, deep, min, max)) in deepIslands.OrderByDescending(kv => kv.Value.N).Take(15))
+                Console.WriteLine($"  island {island} ({islandSize[island]} verts): {n} more than 5 mm inside, deepest {deep * 1000f:0.0} mm," +
+                                  $" x {min.X:0.000}..{max.X:0.000} y {min.Y:0.000}..{max.Y:0.000} z {min.Z:0.000}..{max.Z:0.000}");
+        Console.WriteLine($"cloth within {weightReach * 1000f:0} mm of skin: {nearSkin}\trigged >0.2 apart from the skin under it: {apartFromSkin}");
+        foreach (var (band, n) in apartBands.Reverse())
+            Console.WriteLine($"  y {band:0.00}-{band + 0.05f:0.00} m\t{n}");
+        return 0;
+    }
+
+    /// <summary>
+    /// Cloth points within 2 mm of each other — stacked layers, seam twins — whose weights differ by more than a tenth
+    /// (summed difference over 0.2). Close and rigged apart is what pulls apart in a pose: skin, or a layer beneath,
+    /// showing through. By height band, and the bones most often behind the split.
+    /// </summary>
+    private static int MeasureSplit(Dictionary<string, string> opts)
+    {
+        var bytes = File.ReadAllBytes(Required(opts, "garment"));
+        var model = ModelPartReader.Read(bytes) ?? throw new UsageException("The garment could not be read.");
+        var skin = ModelSkinReader.Read(bytes, null, null) ?? throw new UsageException("The garment's skinning could not be read.");
+        if (skin.VertexCount * 3 != model.Positions.Length) throw new UsageException("Skinning and geometry disagree.");
+
+        float Near = opts.TryGetValue("near-mm", out var nearArg)
+            ? float.Parse(nearArg, System.Globalization.CultureInfo.InvariantCulture) / 1000f : 0.002f;
+        float minY = opts.TryGetValue("min-y", out var minYArg)
+            ? float.Parse(minYArg, System.Globalization.CultureInfo.InvariantCulture) : float.MinValue;
+        const float Apart = 0.2f;
+        System.Numerics.Vector3 At(int v) => new(model.Positions[v * 3], model.Positions[v * 3 + 1], model.Positions[v * 3 + 2]);
+        var cloth = model.Parts.Where(p => p.Island < 0 && !SecondSkinWriter.IsBodySkinMaterial(p.Material))
+                               .SelectMany(p => p.Triangles).Distinct().Where(v => At(v).Y >= minY).ToList();
+        Dictionary<string, float> Weights(int v)
+        {
+            var d = new Dictionary<string, float>(StringComparer.Ordinal);
+            for (int k = 0; k < XivLiveMesh.SkinnedMesh.MaxInfluences; k++)
+            {
+                float w = skin.BoneWeights[v * XivLiveMesh.SkinnedMesh.MaxInfluences + k];
+                if (w <= 0f) continue;
+                string bone = skin.BoneNames[skin.BoneIndices[v * XivLiveMesh.SkinnedMesh.MaxInfluences + k]];
+                d[bone] = d.GetValueOrDefault(bone) + w;
+            }
+            return d;
+        }
+
+        var grid = new Dictionary<(int, int, int), List<int>>();
+        (int, int, int) Cell(System.Numerics.Vector3 p) => ((int)MathF.Floor(p.X / Near), (int)MathF.Floor(p.Y / Near), (int)MathF.Floor(p.Z / Near));
+        foreach (int v in cloth)
+        {
+            var key = Cell(At(v));
+            if (!grid.TryGetValue(key, out var bucket)) grid[key] = bucket = [];
+            bucket.Add(v);
+        }
+
+        var weights = cloth.ToDictionary(v => v, Weights);
+        var split = new HashSet<int>();
+        var bones = new Dictionary<string, int>(StringComparer.Ordinal);
+        int pairs = 0, splitPairs = 0;
+        foreach (int v in cloth)
+        {
+            var p = At(v);
+            var (cx, cy, cz) = Cell(p);
+            for (int x = cx - 1; x <= cx + 1; x++)
+            for (int y = cy - 1; y <= cy + 1; y++)
+            for (int z = cz - 1; z <= cz + 1; z++)
+            {
+                if (!grid.TryGetValue((x, y, z), out var bucket)) continue;
+                foreach (int u in bucket)
+                {
+                    if (u <= v || System.Numerics.Vector3.Distance(p, At(u)) > Near) continue;
+                    pairs++;
+                    var a = weights[v];
+                    var b = weights[u];
+                    float diff = a.Keys.Union(b.Keys).Sum(k => MathF.Abs(a.GetValueOrDefault(k) - b.GetValueOrDefault(k)));
+                    if (diff <= Apart) continue;
+                    splitPairs++;
+                    split.Add(v);
+                    split.Add(u);
+                    string worst = a.Keys.Union(b.Keys).OrderByDescending(k => MathF.Abs(a.GetValueOrDefault(k) - b.GetValueOrDefault(k))).First();
+                    bones[worst] = bones.GetValueOrDefault(worst) + 1;
+                }
+            }
+        }
+
+        Console.WriteLine($"cloth verts {cloth.Count}\tclose pairs {pairs}\trigged apart {splitPairs}\tverts involved {split.Count}");
+        foreach (var band in split.GroupBy(v => MathF.Floor(At(v).Y * 20f) / 20f).OrderByDescending(g => g.Key))
+            Console.WriteLine($"  y {band.Key:0.00}-{band.Key + 0.05f:0.00} m\t{band.Count()}");
+        foreach (var (bone, n) in bones.OrderByDescending(kv => kv.Value).Take(8))
+            Console.WriteLine($"  {bone}\t{n}");
+
+        // What the waist follows: summed weight per bone over cloth above the band given (default 0.92 m).
+        float above = opts.TryGetValue("above", out var aboveArg) ? float.Parse(aboveArg,System.Globalization.CultureInfo.InvariantCulture) : 0.92f;
+        var waist = cloth.Where(v => At(v).Y > above).ToList();
+        var share = new Dictionary<string, float>(StringComparer.Ordinal);
+        foreach (int v in waist)
+            foreach (var (bone, w) in weights[v])
+                share[bone] = share.GetValueOrDefault(bone) + w;
+        Console.WriteLine($"  cloth above {above:0.00} m: {waist.Count} verts, by bone:");
+        foreach (var (bone, w) in share.OrderByDescending(kv => kv.Value).Take(8))
+            Console.WriteLine($"    {bone}\t{100f * w / Math.Max(1, waist.Count):0.0}%");
+        return 0;
+    }
+
+    /// <summary>
+    /// Two builds of one garment, vertex by vertex (they must share a vertex order): how many cloth vertices moved more
+    /// than 2 mm between them, the farthest, and where — by height band and side.
+    /// </summary>
+    private static int MeasureDiff(Dictionary<string, string> opts)
+    {
+        var a = ModelPartReader.Read(File.ReadAllBytes(Required(opts, "garment"))) ?? throw new UsageException("garment unreadable");
+        var b = ModelPartReader.Read(File.ReadAllBytes(Required(opts, "other"))) ?? throw new UsageException("other unreadable");
+        if (a.Positions.Length != b.Positions.Length) throw new UsageException("The two models do not share a vertex order.");
+        var cloth = a.Parts.Where(p => p.Island < 0 && !SecondSkinWriter.IsBodySkinMaterial(p.Material))
+                           .SelectMany(p => p.Triangles).Distinct().ToList();
+        var moved = new List<(int V, float D)>();
+        foreach (int v in cloth)
+        {
+            var pa = new System.Numerics.Vector3(a.Positions[v * 3], a.Positions[v * 3 + 1], a.Positions[v * 3 + 2]);
+            var pb = new System.Numerics.Vector3(b.Positions[v * 3], b.Positions[v * 3 + 1], b.Positions[v * 3 + 2]);
+            float d = System.Numerics.Vector3.Distance(pa, pb);
+            if (d > 0.002f) moved.Add((v, d));
+        }
+        Console.WriteLine($"cloth verts {cloth.Count}\tmoved > 2 mm: {moved.Count}" +
+                          (moved.Count > 0 ? $"\tfarthest {moved.Max(m => m.D) * 1000f:0.0} mm" : ""));
+        foreach (var band in moved.GroupBy(m => (Y: MathF.Floor(a.Positions[m.V * 3 + 1] * 20f) / 20f,
+                                                 Side: a.Positions[m.V * 3] >= 0 ? "x+" : "x-",
+                                                 Face: a.Positions[m.V * 3 + 2] >= 0 ? "front" : "back"))
+                                  .OrderByDescending(g => g.Key.Y).ThenBy(g => g.Key.Side))
+            Console.WriteLine($"  y {band.Key.Y:0.00} {band.Key.Side} {band.Key.Face}\t{band.Count()}\tmax {band.Max(m => m.D) * 1000f:0.0} mm");
+        return 0;
+    }
+
+    /// <summary>
+    /// Layers that crossed: pairs of cloth points stacked as authored (one within 6 mm in front of the other along its
+    /// normal, within 2 mm to the side, on a parallel sheet) whose order along that normal flipped in the refit, or whose
+    /// gap closed to under 0.2 mm. Cloth vertices are paired in order, so the two must carry the same cloth.
+    /// </summary>
+    private static int MeasureCrossings(Dictionary<string, string> opts)
+    {
+        var refit = ModelPartReader.Read(File.ReadAllBytes(Required(opts, "garment"))) ?? throw new UsageException("garment unreadable");
+        var src = ModelPartReader.Read(File.ReadAllBytes(Required(opts, "source"))) ?? throw new UsageException("source unreadable");
+        static List<int> Cloth(ModelParts m) => m.Parts.Where(p => p.Island < 0 && !SecondSkinWriter.IsBodySkinMaterial(p.Material))
+                                                 .SelectMany(p => p.Triangles).Distinct().OrderBy(v => v).ToList();
+        var cs = Cloth(src);
+        var cr = Cloth(refit);
+        if (cs.Count != cr.Count) throw new UsageException($"cloth differs: {cs.Count} vs {cr.Count} vertices");
+        static System.Numerics.Vector3 P(ModelParts m, int v) => new(m.Positions[v * 3], m.Positions[v * 3 + 1], m.Positions[v * 3 + 2]);
+        static System.Numerics.Vector3 N(ModelParts m, int v) => new(m.Normals[v * 3], m.Normals[v * 3 + 1], m.Normals[v * 3 + 2]);
+
+        const float Reach = 0.006f, Side = 0.002f, Closed = 0.0002f, Cell = 0.006f;
+        var grid = new Dictionary<(int, int, int), List<int>>();
+        (int, int, int) Key(System.Numerics.Vector3 p) => ((int)MathF.Floor(p.X / Cell), (int)MathF.Floor(p.Y / Cell), (int)MathF.Floor(p.Z / Cell));
+        for (int i = 0; i < cs.Count; i++)
+        {
+            var k = Key(P(src, cs[i]));
+            if (!grid.TryGetValue(k, out var b)) grid[k] = b = [];
+            b.Add(i);
+        }
+
+        int stacked = 0, flipped = 0, closed = 0;
+        var bands = new SortedDictionary<float, int>();
+        for (int i = 0; i < cs.Count; i++)
+        {
+            var p = P(src, cs[i]);
+            var n = N(src, cs[i]);
+            if (n.LengthSquared() < 1e-12f) continue;
+            n = System.Numerics.Vector3.Normalize(n);
+            var (x0, y0, z0) = Key(p);
+            for (int x = x0 - 1; x <= x0 + 1; x++)
+            for (int y = y0 - 1; y <= y0 + 1; y++)
+            for (int z = z0 - 1; z <= z0 + 1; z++)
+            {
+                if (!grid.TryGetValue((x, y, z), out var bucket)) continue;
+                foreach (int j in bucket)
+                {
+                    if (j == i) continue;
+                    var v = P(src, cs[j]) - p;
+                    float along = System.Numerics.Vector3.Dot(v, n);
+                    if (along < 0.0005f || along > Reach) continue;   // in front, and not the same point
+                    if ((v - n * along).Length() > Side) continue;
+                    if (MathF.Abs(System.Numerics.Vector3.Dot(N(src, cs[j]), n)) < 0.5f) continue;
+                    stacked++;
+
+                    var rn = N(refit, cr[i]);
+                    if (rn.LengthSquared() < 1e-12f) rn = n;
+                    float now = System.Numerics.Vector3.Dot(P(refit, cr[j]) - P(refit, cr[i]), System.Numerics.Vector3.Normalize(rn));
+                    if (now >= Closed) continue;
+                    if (now < 0f) flipped++; else closed++;
+                    float band = MathF.Floor(p.Y * 20f) / 20f;
+                    bands[band] = bands.GetValueOrDefault(band) + 1;
+                }
+            }
+        }
+        // Turned-over cloth triangles, against the author's winding — counted on the finished file, after every pass.
+        var toRefit = new Dictionary<int, int>(cs.Count);
+        for (int i = 0; i < cs.Count; i++) toRefit[cs[i]] = cr[i];
+        int turned = 0;
+        foreach (var part in src.Parts.Where(p => p.Island < 0 && !SecondSkinWriter.IsBodySkinMaterial(p.Material)))
+            for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+            {
+                int a = part.Triangles[t], b = part.Triangles[t + 1], c = part.Triangles[t + 2];
+                var n0 = System.Numerics.Vector3.Cross(P(src, b) - P(src, a), P(src, c) - P(src, a));
+                if (n0.LengthSquared() < 1e-14f) continue;
+                int ra = toRefit[a], rb = toRefit[b], rc = toRefit[c];
+                var n1 = System.Numerics.Vector3.Cross(P(refit, rb) - P(refit, ra), P(refit, rc) - P(refit, ra));
+                if (System.Numerics.Vector3.Dot(n0, n1) <= 0f) turned++;
+            }
+        Console.WriteLine($"stacked pairs {stacked}\tcrossed {flipped}\tclosed to < 0.2 mm {closed}\tturned-over triangles {turned}");
+        foreach (var (band, count) in bands.Reverse())
+            Console.WriteLine($"  y {band:0.00}-{band + 0.05f:0.00} m\t{count}");
+        return 0;
+    }
+
+    /// <summary>
+    /// A garment against a Proteus second-skin shell (every mesh of it, whatever its material): per cloth vertex, the
+    /// nearest shell vertex within 2 cm and the signed distance along that vertex's normal. Below zero the shell is in
+    /// front of the cloth — drawn through it in game.
+    /// </summary>
+    private static int MeasureShell(Dictionary<string, string> opts)
+    {
+        var garment = ModelPartReader.Read(File.ReadAllBytes(Required(opts, "garment"))) ?? throw new UsageException("garment unreadable");
+        var shell = ModelPartReader.Read(File.ReadAllBytes(Required(opts, "shell"))) ?? throw new UsageException("shell unreadable");
+        static System.Numerics.Vector3 P(ModelParts m, int v) => new(m.Positions[v * 3], m.Positions[v * 3 + 1], m.Positions[v * 3 + 2]);
+        static System.Numerics.Vector3 N(ModelParts m, int v) => new(m.Normals[v * 3], m.Normals[v * 3 + 1], m.Normals[v * 3 + 2]);
+
+        const float Cell = 0.01f, Reach = 0.02f;
+        (int, int, int) Key(System.Numerics.Vector3 p) => ((int)MathF.Floor(p.X / Cell), (int)MathF.Floor(p.Y / Cell), (int)MathF.Floor(p.Z / Cell));
+        var grid = new Dictionary<(int, int, int), List<int>>();
+        var shellVerts = shell.Parts.Where(p => p.Island < 0).SelectMany(p => p.Triangles).Distinct().ToList();
+        foreach (var part in shell.Parts.Where(p => p.Island < 0))
+            Console.WriteLine($"  shell mesh {part.Label}\t{Path.GetFileName(part.Material)}\t{part.TriangleCount} tris");
+        foreach (int v in shellVerts)
+        {
+            var k = Key(P(shell, v));
+            if (!grid.TryGetValue(k, out var b)) grid[k] = b = [];
+            b.Add(v);
+        }
+
+        // --skin-side: the garment's own skin instead of its cloth — how far the shell stands off the skin it was cut from.
+        bool skinSide = opts.ContainsKey("skin-side");
+        var cloth = garment.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material) == skinSide)
+                                 .SelectMany(p => p.Triangles).Distinct().ToList();
+        if (skinSide)
+        {
+            // Signed distance of each skin vertex from the nearest shell vertex, as a spread.
+            var offs = new List<float>();
+            foreach (int v in cloth)
+            {
+                var p = P(garment, v);
+                var (cx, cy, cz) = Key(p);
+                int best = -1;
+                float bestD = Reach * Reach;
+                for (int x = cx - 2; x <= cx + 2; x++)
+                for (int y = cy - 2; y <= cy + 2; y++)
+                for (int z = cz - 2; z <= cz + 2; z++)
+                {
+                    if (!grid.TryGetValue((x, y, z), out var b)) continue;
+                    foreach (int s in b)
+                    {
+                        float d = System.Numerics.Vector3.DistanceSquared(p, P(shell, s));
+                        if (d < bestD) { bestD = d; best = s; }
+                    }
+                }
+                if (best < 0) continue;
+                var n = N(shell, best);
+                if (n.LengthSquared() < 1e-12f) continue;
+                // Shell's offset from the skin, outward positive.
+                offs.Add(-System.Numerics.Vector3.Dot(p - P(shell, best), System.Numerics.Vector3.Normalize(n)));
+            }
+            offs.Sort();
+            if (offs.Count == 0) { Console.WriteLine("no skin near the shell"); return 0; }
+            Console.WriteLine($"skin verts {cloth.Count}\tnear the shell {offs.Count}\tshell off the skin: median {offs[offs.Count / 2] * 1000f:0.00} mm" +
+                              $"\tp95 {offs[(int)(offs.Count * 0.95f)] * 1000f:0.00} mm\tmax {offs[^1] * 1000f:0.00} mm" +
+                              $"\tover 1 mm {offs.Count(o => o > 0.001f)}");
+            return 0;
+        }
+        int near = 0, through = 0;
+        var bands = new SortedDictionary<(float Y, string Side, string Face), (int N, float Deepest)>();
+        foreach (int v in cloth)
+        {
+            var p = P(garment, v);
+            var (cx, cy, cz) = Key(p);
+            int best = -1;
+            float bestD = Reach * Reach;
+            for (int x = cx - 2; x <= cx + 2; x++)
+            for (int y = cy - 2; y <= cy + 2; y++)
+            for (int z = cz - 2; z <= cz + 2; z++)
+            {
+                if (!grid.TryGetValue((x, y, z), out var b)) continue;
+                foreach (int s in b)
+                {
+                    float d = System.Numerics.Vector3.DistanceSquared(p, P(shell, s));
+                    if (d < bestD) { bestD = d; best = s; }
+                }
+            }
+            if (best < 0) continue;
+            near++;
+            var n = N(shell, best);
+            if (n.LengthSquared() < 1e-12f) continue;
+            float signed = System.Numerics.Vector3.Dot(p - P(shell, best), System.Numerics.Vector3.Normalize(n));
+            if (signed >= -0.0002f) continue;
+            through++;
+            var key = (MathF.Floor(p.Y * 20f) / 20f, p.X >= 0 ? "x+" : "x-", p.Z >= 0 ? "front" : "back");
+            var (count, deep) = bands.GetValueOrDefault(key);
+            bands[key] = (count + 1, MathF.Min(deep, signed));
+        }
+        Console.WriteLine($"cloth verts {cloth.Count}\twithin 2 cm of the shell {near}\tbehind the shell {through}");
+        foreach (var (key, (count, deep)) in bands.Where(kv => kv.Value.N >= 5).Reverse())
+            Console.WriteLine($"  y {key.Y:0.00} {key.Side} {key.Face}\t{count}\tdeepest {deep * 1000f:0.0} mm");
+        return 0;
+    }
+
+    /// <summary>
+    /// Write models' LOD0 as one .obj to look at: <c>--obj out.obj --models a.mdl;b.mdl</c>. Each model's cloth and skin
+    /// come out as separate objects, named after the file's parent folders, in the game's own units (metres, Y up).
+    /// </summary>
+    private static int ExportObj(Dictionary<string, string> opts, string outPath)
+    {
+        using var w = new StreamWriter(outPath);
+        int baseIndex = 1;
+        foreach (string path in Required(opts, "models").Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var model = ModelPartReader.Read(File.ReadAllBytes(path)) ?? throw new UsageException($"{path} unreadable");
+            string name = string.Join("_", path.Split(Path.DirectorySeparatorChar).TakeLast(6).Take(2)).Replace(' ', '_');
+            int vc = model.Positions.Length / 3;
+            for (int v = 0; v < vc; v++)
+                w.WriteLine(string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                    $"v {model.Positions[v * 3]} {model.Positions[v * 3 + 1]} {model.Positions[v * 3 + 2]}"));
+            foreach (bool skin in new[] { false, true })
+            {
+                w.WriteLine($"o {name}_{(skin ? "skin" : "cloth")}");
+                foreach (var part in model.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material) == skin))
+                    for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+                        w.WriteLine($"f {part.Triangles[t] + baseIndex} {part.Triangles[t + 1] + baseIndex} {part.Triangles[t + 2] + baseIndex}");
+            }
+            baseIndex += vc;
+        }
+        Console.WriteLine($"wrote {outPath}");
+        return 0;
+    }
+
+    /// <summary>
+    /// How far the skin pokes through the MIDDLE of big cloth triangles (an edge over 15 mm): per such triangle, the
+    /// furthest a skin vertex of the given models that projects inside it lies on the cloth's outer side of its plane.
+    /// <c>--measure --face-poke --garment g.mdl --bodies a.mdl;b.mdl</c>.
+    /// </summary>
+    private static int MeasureFacePoke(Dictionary<string, string> opts)
+    {
+        var garment = ModelPartReader.Read(File.ReadAllBytes(Required(opts, "garment"))) ?? throw new UsageException("unreadable");
+        static System.Numerics.Vector3 P(ModelParts m, int v) => new(m.Positions[v * 3], m.Positions[v * 3 + 1], m.Positions[v * 3 + 2]);
+        var skin = new List<System.Numerics.Vector3>();
+        foreach (string path in Required(opts, "bodies").Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var body = ModelPartReader.Read(File.ReadAllBytes(path)) ?? throw new UsageException($"{path} unreadable");
+            foreach (int v in body.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material))
+                                        .SelectMany(p => p.Triangles).Distinct())
+                skin.Add(P(body, v));
+        }
+        const float Cell = 0.01f;
+        (int, int, int) Key(System.Numerics.Vector3 p) => ((int)MathF.Floor(p.X / Cell), (int)MathF.Floor(p.Y / Cell), (int)MathF.Floor(p.Z / Cell));
+        var grid = new Dictionary<(int, int, int), List<int>>();
+        for (int i = 0; i < skin.Count; i++)
+        {
+            var k = Key(skin[i]);
+            if (!grid.TryGetValue(k, out var b)) grid[k] = b = [];
+            b.Add(i);
+        }
+
+        var pokes = new List<(float Depth, float Y)>();
+        foreach (var part in garment.Parts.Where(p => p.Island < 0 && !SecondSkinWriter.IsBodySkinMaterial(p.Material)))
+            for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+            {
+                var a = P(garment, part.Triangles[t]);
+                var b = P(garment, part.Triangles[t + 1]);
+                var c = P(garment, part.Triangles[t + 2]);
+                float longest = MathF.Max(System.Numerics.Vector3.Distance(a, b), MathF.Max(System.Numerics.Vector3.Distance(b, c), System.Numerics.Vector3.Distance(c, a)));
+                if (longest <= 0.015f) continue;
+                var n = System.Numerics.Vector3.Cross(b - a, c - a);
+                if (n.LengthSquared() < 1e-14f) continue;
+                n = System.Numerics.Vector3.Normalize(n);
+                var centre = (a + b + c) / 3f;
+
+                // Candidates near the triangle; the cloth's outer side is the side away from the nearest skin point.
+                var lo = System.Numerics.Vector3.Min(a, System.Numerics.Vector3.Min(b, c)) - new System.Numerics.Vector3(0.01f);
+                var hi = System.Numerics.Vector3.Max(a, System.Numerics.Vector3.Max(b, c)) + new System.Numerics.Vector3(0.01f);
+                var (x0, y0, z0) = Key(lo);
+                var (x1, y1, z1) = Key(hi);
+                var near = new List<System.Numerics.Vector3>();
+                for (int x = x0; x <= x1; x++)
+                for (int y = y0; y <= y1; y++)
+                for (int z = z0; z <= z1; z++)
+                    if (grid.TryGetValue((x, y, z), out var bucket))
+                        foreach (int i in bucket) near.Add(skin[i]);
+                if (near.Count == 0) continue;
+                var closest = near.MinBy(s => System.Numerics.Vector3.DistanceSquared(s, centre));
+                if (System.Numerics.Vector3.Dot(centre - closest, n) < 0f) n = -n;
+
+                float worst = 0f;
+                foreach (var s in near)
+                {
+                    float h = System.Numerics.Vector3.Dot(s - a, n);
+                    if (h <= worst || h > 0.01f) continue;
+                    // Inside the triangle when projected onto its plane.
+                    var q = s - n * h;
+                    var v0 = b - a; var v1 = c - a; var v2 = q - a;
+                    float d00 = System.Numerics.Vector3.Dot(v0, v0), d01 = System.Numerics.Vector3.Dot(v0, v1), d11 = System.Numerics.Vector3.Dot(v1, v1);
+                    float d20 = System.Numerics.Vector3.Dot(v2, v0), d21 = System.Numerics.Vector3.Dot(v2, v1);
+                    float den = d00 * d11 - d01 * d01;
+                    if (MathF.Abs(den) < 1e-20f) continue;
+                    float bv = (d11 * d20 - d01 * d21) / den, bw = (d00 * d21 - d01 * d20) / den;
+                    if (bv < 0.05f || bw < 0.05f || bv + bw > 0.95f) continue;
+                    worst = h;
+                }
+                if (worst > 0f) pokes.Add((worst, centre.Y));
+            }
+        pokes.Sort((p, q) => p.Depth.CompareTo(q.Depth));
+        Console.WriteLine($"big cloth triangles with skin through their middle: {pokes.Count}" +
+                          (pokes.Count > 0 ? $"\tmedian {pokes[pokes.Count / 2].Depth * 1000f:0.0} mm\tp90 {pokes[(int)(pokes.Count * 0.9f)].Depth * 1000f:0.0} mm\tmax {pokes[^1].Depth * 1000f:0.0} mm" : ""));
+        foreach (var band in pokes.GroupBy(p => MathF.Floor(p.Y * 50f) / 50f).OrderByDescending(g => g.Key))
+            Console.WriteLine($"  y {band.Key:0.00}\t{band.Count()}\tmax {band.Max(p => p.Depth) * 1000f:0.0} mm");
+        return 0;
+    }
+
+    /// <summary>Where a model carries body skin: skin vertices per 5 cm height band, front and back.</summary>
+    private static int MeasureSkinMap(Dictionary<string, string> opts)
+    {
+        var model = ModelPartReader.Read(File.ReadAllBytes(Required(opts, "garment"))) ?? throw new UsageException("unreadable");
+        var skin = model.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material))
+                              .SelectMany(p => p.Triangles).Distinct().ToList();
+        Console.WriteLine($"skin verts {skin.Count}\tLODs {ModelLodTrimmer.LodCount(File.ReadAllBytes(Required(opts, "garment")))}");
+        foreach (var band in skin.GroupBy(v => (Y: MathF.Floor(model.Positions[v * 3 + 1] * 20f) / 20f,
+                                               Face: model.Positions[v * 3 + 2] >= 0 ? "front" : "back"))
+                                 .OrderByDescending(g => g.Key.Y).ThenBy(g => g.Key.Face))
+            Console.WriteLine($"  y {band.Key.Y:0.00} {band.Key.Face}\t{band.Count()}");
+        return 0;
+    }
+
     /// <summary>What <c>--save</c> reads: refitted sizes of one garment, all refitted onto one body mod.</summary>
     private sealed record SaveManifest(string Mod, string Group, string GamePath, string BodyMod, string From,
                                        List<SaveRefit> Refits);
@@ -390,8 +988,24 @@ internal static class Program
                     pairs.Add(legsPair);
             }
 
-            var planned = BodyRetarget.Plan(garment, garmentBytes, pairs, slot, replaceSkin: true,
-                                            acrossBodies: acrossBodies, cutHidden: true);
+            // --tune NoSettle,NoStackPush,...: a diagnostic's knobs, each named as BodyRetarget.Tuning names it.
+            var tuning = new BodyRetarget.Tuning();
+            foreach (string knob in opts.GetValueOrDefault("tune", "").Split(',', StringSplitOptions.RemoveEmptyEntries))
+                tuning = knob.Trim() switch
+                {
+                    "NoSettle" => tuning with { NoSettle = true },
+                    "NoFaceSettle" => tuning with { NoFaceSettle = true },
+                    "NoLayerGuard" => tuning with { NoLayerGuard = true },
+                    "NoUnderbustLift" => tuning with { NoUnderbustLift = true },
+                    "NoRelax" => tuning with { NoRelax = true },
+                    "NoGiveUp" => tuning with { NoGiveUp = true },
+                    "NoLayerKnit" => tuning with { NoLayerKnit = true },
+                    "NoFollow" => tuning with { NoFollow = true },
+                    _ => throw new UsageException($"Unknown --tune knob \"{knob}\"."),
+                };
+            var planned = BodyRetarget.WithTuning(tuning, () => BodyRetarget.Plan(
+                garment, garmentBytes, pairs, slot, pushOut: !opts.ContainsKey("no-push"),
+                replaceSkin: true, acrossBodies: acrossBodies, cutHidden: true));
             string written = Path.Combine(outDir, label + ".mdl");
             File.WriteAllBytes(written, planned.Model);
 
@@ -481,7 +1095,7 @@ internal static class Program
             if (!args[i].StartsWith("--", StringComparison.Ordinal))
                 throw new UsageException($"Unexpected argument \"{args[i]}\".");
             string key = args[i][2..];
-            opts[key] = key is "list" or "detect" or "finish" or "inspect" or "save" ? "" : i + 1 < args.Length ? args[++i] : throw new UsageException($"--{key} needs a value.");
+            opts[key] = key is "list" or "detect" or "finish" or "inspect" or "save" or "measure" or "no-push" or "bands" or "skin-map" or "skin-side" or "off" or "islands" or "face-poke" ? "" : i + 1 < args.Length ? args[++i] : throw new UsageException($"--{key} needs a value.");
         }
         return opts;
     }

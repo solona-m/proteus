@@ -644,7 +644,7 @@ internal static partial class BodyRetarget
         // Before the push-out, so the push-out measures cloth against the skin as it will actually be drawn.
         var carried = (Vec3[])nodeDelta.Clone();
         int laid = replaceSkin ? LaySkin(sets, source, pairs, nodeDelta) : 0;
-        if (ownSlotSwapped && laid > 0 && !Tuned.NoFollow) FollowLaidSkin(garment, sets, carried, nodeDelta, snapped);
+        if (ownSlotSwapped && laid > 0 && !Tuned.NoFollow) FollowLaidSkin(garment, sets, carried, nodeDelta, snapped, pairs);
 
         // Hard pieces whole, before the push-out measures them against the skin.
         var scales = new float[keepShape?.Count ?? 0];
