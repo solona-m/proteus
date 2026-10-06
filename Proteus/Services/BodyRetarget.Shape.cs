@@ -31,7 +31,7 @@ internal static partial class BodyRetarget
                                   float CopyTolerance = CopyToleranceDefault, bool NoGiveUp = false,
                                   bool NoSettle = false, bool NoFaceSettle = false, bool NoLayerGuard = false,
                                   bool NoWeightSmooth = false, bool NoUnderbustLift = false, bool NoRelax = false,
-                                  bool NoSkinHug = false, bool NoLayerKnit = false);
+                                  bool NoSkinHug = false, bool NoLayerKnit = false, bool NoRimLift = false);
 
     private static readonly Tuning DefaultTuning = new();
 

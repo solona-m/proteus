@@ -196,14 +196,20 @@ internal static partial class BodyRetarget
         bool anyCut = cutHidden || alwaysCut.Count > 0;
         var drawn = anyCut ? new BodySurface(model, BodySurface.CellFor(MeanEdgeOf(model))) : null;
         var drawnEdges = anyCut ? SkinEdges.Of(model) : null;
+        var cloth = anyCut ? new ClothCrossings(model) : null;
         var cuts = new Dictionary<int, Dictionary<int, HashSet<ushort>>?>();
+        // Each slot's body as it goes in: its own model, or one whose skin was pulled back to the author's edge.
+        var bodyOf = new Dictionary<int, byte[]>();
         int cutTris = 0, keptTris = 0;
         foreach (int s in claimedBy)
         {
             int these = 0, gone = 0;
+            byte[]? pulled = null;
             bool cutThis = cutHidden || alwaysCut.Contains(s);
-            cuts[s] = !cutThis || drawn == null || drawn.IsEmpty ? null : CutLike(drawn, drawnEdges!, swappable[s].TargetModel!,
-                                                                      swappable[s].TargetHidden, out these, out gone);
+            cuts[s] = !cutThis || drawn == null || drawn.IsEmpty ? null : CutLike(drawn, drawnEdges!, cloth!,
+                                                                      swappable[s].TargetModel!, swappable[s].TargetHidden,
+                                                                      out these, out gone, out pulled);
+            bodyOf[s] = pulled ?? swappable[s].TargetModel!;
             keptTris += cuts[s] == null ? SkinTriangles(swappable[s].Target) : these;
             cutTris += gone;
         }
@@ -217,7 +223,7 @@ internal static partial class BodyRetarget
             // be judged against the garment's IMC mask (a Neolithe body carries eight, atr_tv_a..h). Dropping the tag
             // draws the part always, so the variants the body mod leaves off are left out first: two alternatives of
             // one piece would otherwise both be drawn, the larger showing through the cloth fitted to the other.
-            Geometry = [new ContentGeometry(swappable[s].TargetModel!, SecondSkinWriter.IsBodySkinMaterial,
+            Geometry = [new ContentGeometry(bodyOf[s], SecondSkinWriter.IsBodySkinMaterial,
                                             HiddenAttributes: swappable[s].TargetHidden,
                                             DropVariantAttributes: true, DrawOnly: cuts[s])],
         }).ToList();
@@ -246,10 +252,15 @@ internal static partial class BodyRetarget
     /// <param name="cut">Triangles left out.</param>
     /// <param name="edges">Which of <paramref name="drawn"/>'s edges two of its triangles share — see <see cref="Covers"/>.</param>
     /// <param name="hidden">The body's variant tags its mod does not draw; their parts are neither kept nor counted.</param>
-    private static Dictionary<int, HashSet<ushort>>? CutLike(BodySurface drawn, SkinEdges edges, byte[] body,
-                                                             IReadOnlySet<string>? hidden, out int kept, out int cut)
+    /// <param name="pulled">The body with its kept skin pulled back to the author's edge (see <see cref="PullToEdge"/>),
+    /// or null when nothing needed pulling.</param>
+    /// <param name="cloth">The garment's cloth, which decides which of the kept skin needs pulling back.</param>
+    private static Dictionary<int, HashSet<ushort>>? CutLike(BodySurface drawn, SkinEdges edges, ClothCrossings cloth,
+                                                             byte[] body, IReadOnlySet<string>? hidden, out int kept,
+                                                             out int cut, out byte[]? pulled)
     {
         kept = cut = 0;
+        pulled = null;
         if (ModelPartReader.Read(body) is not { } read) return null;
         var parts = Without(read, hidden);
 
@@ -262,6 +273,8 @@ internal static partial class BodyRetarget
             covered[v] = Covers(drawn, At(parts, v), edges);
 
         var sets = new Dictionary<int, HashSet<ushort>>();
+        var drawnCorners = new HashSet<int>();
+        var keptTris = new List<(int A, int B, int C)>();
         foreach (var part in parts.Parts)
         {
             if (part.Island >= 0 || !SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
@@ -280,15 +293,355 @@ internal static partial class BodyRetarget
                 Keep(set, a, bv);
                 Keep(set, b, bv);
                 Keep(set, c, bv);
+                drawnCorners.Add(a);
+                drawnCorners.Add(b);
+                drawnCorners.Add(c);
+                keptTris.Add((a, b, c));
             }
         }
         if (cut == 0) { kept = 0; return null; }   // nothing cut: the body goes in whole, as before
+        pulled = PullToEdge(drawn, edges, cloth, body, parts, drawnCorners, keptTris);
         return sets;
 
         void Keep(HashSet<ushort> set, int v, int bv)
         {
             if (covered[v] && v - bv is >= 0 and <= ushort.MaxValue) set.Add((ushort)(v - bv));
         }
+    }
+
+    /// <summary>
+    /// The garment's skin meshes the swap will replace, read before anything moves: <see cref="Rebuild"/>'s own rule —
+    /// a mesh goes when <see cref="OnBodyShare"/> of it lies on a body being swapped in (<see cref="OnBody"/>) — asked of
+    /// the bodies the skin sits on as authored, the pairs' sources, instead of their targets once it is laid there.
+    /// A mesh partly off them (a heeled shoe's foot), or on a slot no pair resizes, is kept.
+    /// </summary>
+    internal static HashSet<int> SwappedSkinMeshes(ModelParts garment, IReadOnlyList<SlotPair> pairs)
+    {
+        var swapped = new HashSet<int>();
+        var sources = pairs.Where(p => p.TargetModel != null)
+                           .Select(p => new BodySurface(p.Correspondence.Source,
+                                                        BodySurface.CellFor(MeanEdgeOf(p.Correspondence.Source))))
+                           .Where(s => !s.IsEmpty)
+                           .ToList();
+        if (sources.Count == 0) return swapped;
+        foreach (var mesh in garment.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material))
+                                          .GroupBy(p => p.Mesh))
+        {
+            var verts = mesh.SelectMany(p => p.Triangles).Distinct().ToList();
+            int on = verts.Count(v => sources.Any(s => OnBody(s, At(garment, v))));
+            if (verts.Count > 0 && on >= verts.Count * OnBodyShare) swapped.Add(mesh.Key);
+        }
+        return swapped;
+    }
+
+    /// <summary>
+    /// How far past the author's edge a drawn corner is pulled back from (30 mm): the cut keeps a triangle with ANY corner
+    /// the author drew, so its other corners reach one body triangle past the edge.
+    /// </summary>
+    internal const float PullReach = 0.03f;
+
+    /// <summary>A corner this close to the author's skin (0.5 mm) is on it, and stays.</summary>
+    internal const float PullSlack = 0.0005f;
+
+    /// <summary>
+    /// The body with each corner of its kept skin that lies PAST the author's open edge, under cloth that leaves it no
+    /// room, moved back toward that edge.
+    /// <para/>
+    /// The cut keeps a body triangle when any corner of it is one the author drew, so that no gap opens along the
+    /// author's edge; its other corners then reach a whole body triangle further, plus <see cref="CutReach"/>. Under
+    /// the cloth the author tucked over that edge, the extra skin bulges through: the Pioneer's Bottoms' coarse hem
+    /// and stocking tops, faces 60-75 mm across tucked a few millimetres over a strip of skin, had Neolithe's buttock
+    /// through the hem and the stocking corners standing out of the thigh as black spikes.
+    /// <para/>
+    /// Each such corner is walked out from the author's edge toward where it was, and stops short of the first step the
+    /// cloth crowds (<see cref="ClothCrossings"/>); one the walk reaches stays. The walk, not the corner alone: a
+    /// corner 3 mm under the cloth can still span a triangle the face sags through — Neolithe's hip at the front of
+    /// the shorts. And no further under the rim than that: a fixed tuck closed the slit the buried hem leaves at the
+    /// back (271 mm² to 11 at 3 mm) but put the skin in front of the rim between its corners, which stood through it
+    /// as dark notches (739 / 1,964 mm² of skin over cloth, back / front, against 82 / 346 untucked). Landings inside
+    /// the author's skin, or on an edge two of its triangles share, are under it and never move.
+    /// <para/>
+    /// The body's own open edge stays where it is: that is its seam to another slot's skin, which pulling would open.
+    /// </summary>
+    /// <para/>
+    /// A corner pulled a whole body triangle back can cross the kept triangles beside it, which do not move: a pull that
+    /// would turn one over is halved, then given up, keyed by position so a vertex split at a texture seam moves as one.
+    /// </summary>
+    /// <param name="corners">Every corner of the triangles the cut keeps.</param>
+    /// <param name="keptTris">The triangles the cut keeps.</param>
+    /// <returns>The body's bytes with those corners moved, or null when none needed it or the model cannot be written.</returns>
+    private static byte[]? PullToEdge(BodySurface drawn, SkinEdges edges, ClothCrossings cloth, byte[] body,
+                                      ModelParts parts, IReadOnlyCollection<int> corners,
+                                      IReadOnlyList<(int A, int B, int C)> keptTris)
+    {
+        var bodyEdges = SkinEdges.Of(parts);
+        var surface = new BodySurface(parts, BodySurface.CellFor(MeanEdgeOf(parts)));
+        var edit = new PullEdit(parts.MeshSpans, parts.Positions.Length / 3);
+        foreach (int v in corners)
+        {
+            if (bodyEdges.OnBoundary(v)) continue;
+            var p = At(parts, v);
+            if (!drawn.Nearest(p, PullReach, out var hit) || hit.Distance <= PullSlack || !PastEdge(hit, edges)) continue;
+            // From the author's edge out toward where the corner was, as far as the cloth leaves the skin room: the
+            // author's edge was laid, the cloth refitted, and the two no longer meet exactly — pulled right onto the
+            // edge, a corner opened a slit under a hem that now ends above it. Each step lands on the body, which the
+            // laid edge only approximately sits on.
+            float reached = 1f;
+            for (int step = 1; step <= PullSteps; step++)
+            {
+                var q = OnBodyAt(surface, Vector3.Lerp(hit.Point, p, (float)step / PullSteps), out var qn);
+                if (!cloth.Crowds(q, qn)) continue;
+                reached = (step - 1f) / PullSteps;
+                break;
+            }
+            if (reached >= 1f) continue;
+            var to = OnBodyAt(surface, Vector3.Lerp(hit.Point, p, reached), out _);
+            var d = to - p;
+            if (d.Length() <= PullSlack) continue;
+            edit.Delta[v] = new Vec3(d.X, d.Y, d.Z);
+        }
+
+        // Back off pulls that turn a kept triangle over: halved on its moving corners, then given up.
+        var scale = new Dictionary<Vector3, float>();
+        foreach (int v in corners)
+            if (edit.Delta[v].X != 0f || edit.Delta[v].Y != 0f || edit.Delta[v].Z != 0f) scale[At(parts, v)] = 1f;
+        if (scale.Count == 0) return null;
+        Vector3 Trial(int v)
+        {
+            var p = At(parts, v);
+            var d = edit.Delta[v];
+            return scale.TryGetValue(p, out float s) ? p + new Vector3(d.X, d.Y, d.Z) * s : p;
+        }
+        for (int pass = 0; ; pass++)
+        {
+            bool giveUp = pass >= PushUnfoldPasses;
+            int turned = 0;
+            foreach (var (a, b, c) in keptTris)
+            {
+                Vector3 pa = At(parts, a), pb = At(parts, b), pc = At(parts, c);
+                bool any = scale.TryGetValue(pa, out float sa) && sa > 0f;
+                any |= scale.TryGetValue(pb, out float sb) && sb > 0f;
+                any |= scale.TryGetValue(pc, out float sc) && sc > 0f;
+                if (!any) continue;
+                var was = Vector3.Cross(pb - pa, pc - pa);
+                if (was.LengthSquared() <= 1e-24f) continue;
+                if (Vector3.Dot(was, Vector3.Cross(Trial(b) - Trial(a), Trial(c) - Trial(a))) > 0f) continue;
+                float keep = giveUp ? 0f : 0.5f;
+                foreach (var corner in new[] { pa, pb, pc })
+                    if (scale.ContainsKey(corner)) scale[corner] *= keep;
+                turned++;
+            }
+            if (turned == 0 || giveUp) break;
+        }
+
+        int moved = 0;
+        foreach (int v in corners)
+        {
+            var p = At(parts, v);
+            if (!scale.TryGetValue(p, out float s) || s <= 0f) { edit.Delta[v] = default; continue; }
+            var d = edit.Delta[v];
+            if (d.X == 0f && d.Y == 0f && d.Z == 0f) continue;
+            edit.Delta[v] = new Vec3(d.X * s, d.Y * s, d.Z * s);
+            edit.Worst = MathF.Max(edit.Worst, Len(edit.Delta[v]));
+            moved++;
+        }
+        if (moved == 0) return null;
+        try
+        {
+            return MeshVolumeService.Inflate(body, edit).Model;
+        }
+        catch (ModelAttributeWriter.ModelEditException)
+        {
+            return null;   // a position format the writer cannot store: the body goes in as cut, overhang and all
+        }
+    }
+
+    /// <summary>How many steps the walk from the author's edge out to a corner takes (32: about half a millimetre each on
+    /// the Pioneer's Bottoms' 14 mm overhang).</summary>
+    private const int PullSteps = 32;
+
+    /// <summary>The body point nearest <paramref name="p"/>, and its normal; <paramref name="p"/> itself when the body
+    /// is out of reach.</summary>
+    private static Vector3 OnBodyAt(BodySurface body, Vector3 p, out Vector3 normal)
+    {
+        if (body.Nearest(p, LayFull, out var hit))
+        {
+            normal = hit.Normal;
+            return hit.Point;
+        }
+        normal = default;
+        return p;
+    }
+
+    /// <summary>Whether a landing on the author's skin is on its open edge — an edge only one of its triangles uses,
+    /// or a corner on one — rather than inside it.</summary>
+    private static bool PastEdge(BodySurface.Hit hit, SkinEdges edges)
+    {
+        const float inside = 0.01f;   // a landing clamped onto an edge has a zero weight; this is off it
+        bool offA = hit.U < inside, offB = hit.V < inside, offC = hit.W < inside;
+        return (offA, offB, offC) switch
+        {
+            (false, false, false) => false,
+            (true, false, false) => !edges.IsShared(hit.B, hit.C),
+            (false, true, false) => !edges.IsShared(hit.C, hit.A),
+            (false, false, true) => !edges.IsShared(hit.A, hit.B),
+            (false, true, true) => edges.OnBoundary(hit.A),
+            (true, false, true) => edges.OnBoundary(hit.B),
+            (true, true, false) => edges.OnBoundary(hit.C),
+            _ => false,
+        };
+    }
+
+    /// <summary>
+    /// How far over the skin the garment's cloth must stand for the skin under it to stay (2 mm). Closer than that, the
+    /// skin past the author's edge is pulled back: it shows through the cloth's flat faces between their corners.
+    /// </summary>
+    internal const float PullClear = 0.002f;
+
+    /// <summary>
+    /// <see cref="PullClear"/> under a rim's faces (0.25 mm): under <see cref="RimClear"/>, so a rim
+    /// <see cref="LiftRims"/> has just lifted clear still has skin under it. At 2 mm the skin stopped short of every
+    /// lifted hem and left the slit the lift was there to close.
+    /// </summary>
+    internal const float PullClearRim = 0.00025f;
+
+    /// <summary>How far BEHIND the skin cloth still counts as crowding it (10 mm): the skin is already through it.</summary>
+    internal const float PullBehind = 0.01f;
+
+    /// <summary>How far in front of the skin the cloth is looked for (15 mm).</summary>
+    private const float PullAhead = 0.015f;
+
+    /// <summary>
+    /// The garment's cloth, for asking whether it crosses the line through a skin point along the skin's normal — and
+    /// where. Skin past the author's edge with no cloth over it is in the open, filling the gap between the author's edge
+    /// and the cloth, and stays; skin with cloth well over it is hidden and stays; skin the cloth sits right on, or is
+    /// already behind, is what shows through, and is pulled back.
+    /// </summary>
+    private sealed class ClothCrossings
+    {
+        private const float Cell = 0.02f;
+        private readonly List<(Vector3 A, Vector3 B, Vector3 C)> tris = [];
+        private readonly List<float> clear = [];
+        private readonly Dictionary<(int, int, int), List<int>> grid = [];
+
+        public ClothCrossings(ModelParts garment)
+        {
+            int vc = garment.Positions.Length / 3;
+            var vertAt = new Vec3[vc];
+            for (int i = 0; i < vc; i++)
+                vertAt[i] = new Vec3(garment.Positions[i * 3], garment.Positions[i * 3 + 1], garment.Positions[i * 3 + 2]);
+            var nodeOf = MeshMath.WeldByPosition(vertAt, out _);
+
+            // A part switched by an IMC variant tag may not be drawn — which of them is, is the wearer's setting, and
+            // nothing here knows it. Counted, a hidden long skirt would pull the thigh's skin back from under nothing.
+            uint variantBits = 0;
+            for (int i = 0; i < garment.AttributeNames.Count && i < 32; i++)
+                if (SecondSkinWriter.IsVariantAttribute(garment.AttributeNames[i])) variantBits |= 1u << i;
+
+            var faces = new List<(int A, int B, int C)>();
+            foreach (var part in garment.Parts)
+            {
+                if (part.Island >= 0 || SecondSkinWriter.IsBodySkinMaterial(part.Material)
+                    || IsBodyExtraMaterial(part.Material) || (part.AttributeMask & variantBits) != 0) continue;
+                for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+                {
+                    int a = part.Triangles[t], b = part.Triangles[t + 1], c = part.Triangles[t + 2];
+                    tris.Add((At(garment, a), At(garment, b), At(garment, c)));
+                    faces.Add((nodeOf[a], nodeOf[b], nodeOf[c]));
+                }
+            }
+
+            // A rim's faces have just been lifted off the skin by RimClear (see LiftRims), and the skin is meant to run
+            // on under them: there the cloth crowds only within PullClearRim. Everywhere else, PullClear.
+            var rims = RimFaces(faces, n => ToVector(vertAt[n]));
+            for (int index = 0; index < tris.Count; index++)
+            {
+                clear.Add(rims.Contains(index) ? PullClearRim : PullClear);
+                var tri = tris[index];
+                var (x0, y0, z0) = CellOf(Vector3.Min(tri.A, Vector3.Min(tri.B, tri.C)));
+                var (x1, y1, z1) = CellOf(Vector3.Max(tri.A, Vector3.Max(tri.B, tri.C)));
+                for (int x = x0; x <= x1; x++)
+                for (int y = y0; y <= y1; y++)
+                for (int z = z0; z <= z1; z++)
+                {
+                    if (!grid.TryGetValue((x, y, z), out var bucket)) grid[(x, y, z)] = bucket = [];
+                    bucket.Add(index);
+                }
+            }
+        }
+
+        private static (int, int, int) CellOf(Vector3 p)
+            => ((int)MathF.Floor(p.X / Cell), (int)MathF.Floor(p.Y / Cell), (int)MathF.Floor(p.Z / Cell));
+
+        /// <summary>Whether cloth crosses the line through <paramref name="p"/> along <paramref name="normal"/> between
+        /// <see cref="PullBehind"/> behind it and <see cref="PullClear"/> in front (<see cref="PullClearRim"/> for a rim's
+        /// faces).</summary>
+        public bool Crowds(Vector3 p, Vector3 normal) => Deepest(p, normal) != null;
+
+        /// <summary>
+        /// Of the cloth crowding <paramref name="p"/> (see <see cref="Crowds"/>), how far in front of it the deepest lies
+        /// — negative behind it; null when none does.
+        /// </summary>
+        public float? Deepest(Vector3 p, Vector3 normal)
+        {
+            if (normal.LengthSquared() < 1e-12f) return null;
+            var d = Vector3.Normalize(normal);
+            var from = p - d * PullBehind;
+            var to = p + d * PullAhead;
+            var (x0, y0, z0) = CellOf(Vector3.Min(from, to));
+            var (x1, y1, z1) = CellOf(Vector3.Max(from, to));
+            var seen = new HashSet<int>();
+            float? deepest = null;
+            for (int x = x0; x <= x1; x++)
+            for (int y = y0; y <= y1; y++)
+            for (int z = z0; z <= z1; z++)
+            {
+                if (!grid.TryGetValue((x, y, z), out var bucket)) continue;
+                foreach (int i in bucket)
+                {
+                    if (!seen.Add(i)) continue;
+                    var (a, b, c) = tris[i];
+                    if (!LineHits(from, d, a, b, c, out float t)) continue;
+                    float ahead = t - PullBehind;
+                    if (ahead <= clear[i] && (deepest == null || ahead < deepest)) deepest = ahead;
+                }
+            }
+            return deepest;
+        }
+
+        /// <summary>Möller–Trumbore, both faces, forward of <paramref name="o"/> only.</summary>
+        private static bool LineHits(Vector3 o, Vector3 d, Vector3 a, Vector3 b, Vector3 c, out float t)
+        {
+            t = 0f;
+            var e1 = b - a;
+            var e2 = c - a;
+            var p = Vector3.Cross(d, e2);
+            float det = Vector3.Dot(e1, p);
+            if (MathF.Abs(det) < 1e-12f) return false;
+            float inv = 1f / det;
+            var s = o - a;
+            float u = Vector3.Dot(s, p) * inv;
+            if (u < 0f || u > 1f) return false;
+            var q = Vector3.Cross(s, e1);
+            float v = Vector3.Dot(d, q) * inv;
+            if (v < 0f || u + v > 1f) return false;
+            t = Vector3.Dot(e2, q) * inv;
+            return t >= 0f;
+        }
+    }
+
+    /// <summary>The pull as an edit <see cref="MeshVolumeService.Inflate"/> can write. Normals are left as the body's.</summary>
+    private sealed class PullEdit(IReadOnlyList<MeshSpan> spans, int count) : IMeshEdit
+    {
+        public readonly Vec3[] Delta = new Vec3[count];
+
+        public IReadOnlyList<MeshSpan> Spans => spans;
+        public float Worst { get; set; }
+        public bool Dirty => true;
+        public bool WindEdited => false;
+        public Vec3 DeltaAt(int vertex) => Delta[vertex];
+        public Vec3 NormalAt(int vertex) => default;
+        public float WindAt(int vertex) => 0f;
     }
 
     /// <summary>
@@ -352,6 +705,7 @@ internal static partial class BodyRetarget
     {
         private readonly int[] nodeOf;
         private readonly HashSet<(int, int)> shared = [];
+        private readonly HashSet<int> boundary = [];
 
         private SkinEdges(ModelParts m)
         {
@@ -371,12 +725,21 @@ internal static partial class BodyRetarget
                         if (!seen.Add(key)) shared.Add(key);
                     }
             }
+            foreach (var (a, b) in seen)
+                if (!shared.Contains((a, b)))
+                {
+                    boundary.Add(a);
+                    boundary.Add(b);
+                }
         }
 
         internal static SkinEdges Of(ModelParts m) => new(m);
 
         /// <summary>Whether the edge between these two vertices of the model is used by two triangles or more.</summary>
         internal bool IsShared(int a, int b) => shared.Contains(Key(a, b));
+
+        /// <summary>Whether this vertex is on the skin's open edge — an end of an edge only one triangle uses.</summary>
+        internal bool OnBoundary(int v) => v >= 0 && v < nodeOf.Length && boundary.Contains(nodeOf[v]);
 
         private (int, int) Key(int a, int b)
         {
