@@ -2305,6 +2305,12 @@ public sealed class PartsStrings
 
     public readonly string RetargetChoose = Loc.Localize("Parts.Retarget.Choose", "Choose…");
 
+    /// <summary>
+    /// The first entry in an optional part's dropdowns. Picking it, in either dropdown, takes the part out of the
+    /// refit: both of its sizes are cleared and the remembered one is forgotten, so it is not filled back in.
+    /// </summary>
+    public readonly string RetargetLeaveOut = Loc.Localize("Parts.Retarget.LeaveOut", "None (leave this part out)");
+
     public readonly string RetargetChest = Loc.Localize("Parts.Retarget.Chest", "Chest");
     public readonly string RetargetLegs  = Loc.Localize("Parts.Retarget.Legs",  "Legs");
     public readonly string RetargetHands = Loc.Localize("Parts.Retarget.Hands", "Hands");

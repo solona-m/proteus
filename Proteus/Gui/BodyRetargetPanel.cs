@@ -1062,8 +1062,11 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         var ps = Strings.Parts;
         from.TryGetValue(slot, out var source);
         var sourceOptions = SourceCatalog?.For(slot, race) ?? [];
-        if (DrawOptionCombo($"##retargetFrom{slot}", ps.RetargetFrom, sourceOptions,
-                            source == null ? [] : [source], many: false) is { } pickedFrom)
+        var pickedFrom = DrawOptionCombo($"##retargetFrom{slot}", ps.RetargetFrom, sourceOptions,
+                                         source == null ? [] : [source], many: false,
+                                         slot != Primary(ctx), out bool leaveOut);
+        if (leaveOut) LeaveOut(ctx, slot);
+        else if (pickedFrom != null)
         {
             from[slot] = pickedFrom;
 
@@ -1091,11 +1094,16 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         // batch save), so turning this back on is this line.
         bool many = false;
         var targets = Targets(slot);
-        if (DrawOptionCombo($"##retargetTo{slot}", many ? ps.RetargetToMany : ps.RetargetTo, options, targets,
-                            many) is { } pickedTo)
+        var pickedTo = DrawOptionCombo($"##retargetTo{slot}", many ? ps.RetargetToMany : ps.RetargetTo, options,
+                                       targets, many, slot != Primary(ctx), out bool leaveOut);
+        if (leaveOut)
         {
-            // Clicking a ticked size unticks it, in either list — which is also the only way to take an optional
-            // slot back out once something has been chosen for it.
+            LeaveOut(ctx, slot);
+            targets = [];
+        }
+        else if (pickedTo != null)
+        {
+            // Clicking a ticked size unticks it, in either list.
             var list = to.TryGetValue(slot, out var had) ? had : to[slot] = [];
             if (list.Remove(pickedTo)) { }
             else if (many) list.Add(pickedTo);
@@ -1129,11 +1137,15 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
 
     /// <summary>
     /// A dropdown of a slot's options. Returns the option clicked this frame, if any; the caller decides what a click
-    /// means. With <paramref name="many"/> the list stays open, so several sizes can be ticked in one go.
+    /// means. With <paramref name="many"/> the list stays open, so several sizes can be ticked in one go. With
+    /// <paramref name="canLeaveOut"/> the list starts with a "None" entry, and <paramref name="leaveOut"/> says it was
+    /// clicked.
     /// </summary>
     private BodyOption? DrawOptionCombo(string id, string label, IReadOnlyList<BodyOption> options,
-                                        IReadOnlyList<BodyOption> chosen, bool many)
+                                        IReadOnlyList<BodyOption> chosen, bool many, bool canLeaveOut,
+                                        out bool leaveOut)
     {
+        leaveOut = false;
         ImGui.TextUnformatted(label);
         ImGui.SetNextItemWidth(-1);
 
@@ -1145,6 +1157,9 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         string filter = searches.GetValueOrDefault(id, "");
         ComboSearch.Box(id, ref filter);
         searches[id] = filter;
+
+        if (canLeaveOut && ImGui.Selectable(Strings.Parts.RetargetLeaveOut + "##none", chosen.Count == 0))
+            leaveOut = true;
 
         var flags = many ? ImGuiSelectableFlags.DontClosePopups : ImGuiSelectableFlags.None;
         BodyOption? picked = null;
@@ -1164,6 +1179,22 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         }
         if (!any) ImGui.TextDisabled(Strings.Parts.NoMatches);
         return picked;
+    }
+
+    /// <summary>
+    /// Take an optional part out of the refit: both of its sizes, and the remembered one, so neither the next garment
+    /// nor this one fills it back in. The detector only fills an empty "made for" when it finishes, so a run already
+    /// in flight can put that side back — harmless, since with no size to refit onto the part still sits out.
+    /// </summary>
+    private void LeaveOut(in RetargetContext ctx, string slot)
+    {
+        from.Remove(slot);
+        to.Remove(slot);
+        detected.Remove(slot);
+        foreach (string key in refusals.Keys.Where(k => k.StartsWith(slot + ">", StringComparison.Ordinal)).ToList())
+            refusals.Remove(key);
+        Remember(slot);
+        DropPlan(ctx);
     }
 
     /// <summary>The choices changed: a refit made from the old ones must not be shown or saved.</summary>
