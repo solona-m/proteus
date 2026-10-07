@@ -3408,7 +3408,7 @@
     "description": ""
   },
   "Parts.Tool.Retarget": {
-    "message": "Body size",
+    "message": "체형 크기",
     "description": ""
   },
   "Parts.Tool.Retarget.Tip": {
@@ -3688,7 +3688,7 @@
     "description": ""
   },
   "Parts.Vanilla.Worn.Tip": {
-    "message": "착용 중이지만 모드가 아닙니다. 열면 편집할 수 있는 새 모드로 복사됩니다. Body size를 선택한 상태에서는 리핏용으로 열립니다.",
+    "message": "착용 중이지만 모드가 아닙니다. 열면 편집할 수 있는 새 모드로 복사됩니다. '체형 크기'를 선택한 상태에서는 리핏용으로 열립니다.",
     "description": ""
   },
   "Parts.Vanilla.Editing.Fmt": {
@@ -3778,5 +3778,9 @@
   "Parts.Retarget.Guide.Ok": {
     "message": "확인",
     "description": ""
+  },
+  "Parts.Retarget.LeaveOut": {
+    "message": "없음 (이 부위 제외)",
+    "description": "First entry in an optional body part's dropdowns in the Body size panel. Picking it takes that part out of the refit."
   }
 }

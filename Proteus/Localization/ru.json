@@ -3408,7 +3408,7 @@
     "description": ""
   },
   "Parts.Tool.Retarget": {
-    "message": "Body size",
+    "message": "Размер тела",
     "description": ""
   },
   "Parts.Tool.Retarget.Tip": {
@@ -3688,7 +3688,7 @@
     "description": ""
   },
   "Parts.Vanilla.Worn.Tip": {
-    "message": "Надето, но не модифицировано. При открытии копируется в новый мод, который можно редактировать. Если выбран Body size, открывается для подгонки.",
+    "message": "Надето, но не модифицировано. При открытии копируется в новый мод, который можно редактировать. Если выбран «Размер тела», открывается для подгонки.",
     "description": ""
   },
   "Parts.Vanilla.Editing.Fmt": {
@@ -3748,7 +3748,7 @@
     "description": ""
   },
   "Parts.Retarget.Guide.Title": {
-    "message": "Body size: советы",
+    "message": "Размер тела: советы",
     "description": ""
   },
   "Parts.Retarget.Guide.Tip1": {
@@ -3778,5 +3778,9 @@
   "Parts.Retarget.Guide.Ok": {
     "message": "Понятно",
     "description": ""
+  },
+  "Parts.Retarget.LeaveOut": {
+    "message": "Нет (не включать эту часть)",
+    "description": "First entry in an optional body part's dropdowns in the Body size panel. Picking it takes that part out of the refit."
   }
 }

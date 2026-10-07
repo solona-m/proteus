@@ -3408,7 +3408,7 @@
     "description": ""
   },
   "Parts.Tool.Retarget": {
-    "message": "Body size",
+    "message": "Taille du corps",
     "description": ""
   },
   "Parts.Tool.Retarget.Tip": {
@@ -3688,7 +3688,7 @@
     "description": ""
   },
   "Parts.Vanilla.Worn.Tip": {
-    "message": "Porté, non moddé. L'ouvrir le copie dans un nouveau mod que vous pouvez modifier. Avec Body size sélectionné, il s'ouvre pour être ajusté.",
+    "message": "Porté, non moddé. L'ouvrir le copie dans un nouveau mod que vous pouvez modifier. Avec l'outil « Taille du corps » sélectionné, il s'ouvre pour être ajusté.",
     "description": ""
   },
   "Parts.Vanilla.Editing.Fmt": {
@@ -3748,7 +3748,7 @@
     "description": ""
   },
   "Parts.Retarget.Guide.Title": {
-    "message": "Body size : conseils",
+    "message": "Taille du corps : conseils",
     "description": ""
   },
   "Parts.Retarget.Guide.Tip1": {
@@ -3778,5 +3778,9 @@
   "Parts.Retarget.Guide.Ok": {
     "message": "Compris",
     "description": ""
+  },
+  "Parts.Retarget.LeaveOut": {
+    "message": "Aucune (laisser cette partie de côté)",
+    "description": "First entry in an optional body part's dropdowns in the Body size panel. Picking it takes that part out of the refit."
   }
 }

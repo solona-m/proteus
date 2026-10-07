@@ -3408,7 +3408,7 @@
     "description": ""
   },
   "Parts.Tool.Retarget": {
-    "message": "Body size",
+    "message": "体型尺寸",
     "description": ""
   },
   "Parts.Tool.Retarget.Tip": {
@@ -3688,7 +3688,7 @@
     "description": ""
   },
   "Parts.Vanilla.Worn.Tip": {
-    "message": "当前穿着，未经模组化。打开时会复制到一个可编辑的新模组中。选中 Body size 时则改为打开以进行体型转换。",
+    "message": "当前穿着，未经模组化。打开时会复制到一个可编辑的新模组中。选中「体型尺寸」时则改为打开以进行体型转换。",
     "description": ""
   },
   "Parts.Vanilla.Editing.Fmt": {
@@ -3748,7 +3748,7 @@
     "description": ""
   },
   "Parts.Retarget.Guide.Title": {
-    "message": "Body size 提示",
+    "message": "体型尺寸提示",
     "description": ""
   },
   "Parts.Retarget.Guide.Tip1": {
@@ -3778,5 +3778,9 @@
   "Parts.Retarget.Guide.Ok": {
     "message": "知道了",
     "description": ""
+  },
+  "Parts.Retarget.LeaveOut": {
+    "message": "无（不包含此部位）",
+    "description": "First entry in an optional body part's dropdowns in the Body size panel. Picking it takes that part out of the refit."
   }
 }

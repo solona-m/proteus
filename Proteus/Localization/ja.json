@@ -3408,7 +3408,7 @@
     "description": ""
   },
   "Parts.Tool.Retarget": {
-    "message": "Body size",
+    "message": "体型サイズ",
     "description": ""
   },
   "Parts.Tool.Retarget.Tip": {
@@ -3688,7 +3688,7 @@
     "description": ""
   },
   "Parts.Vanilla.Worn.Tip": {
-    "message": "装着中でMod未適用です。開くと編集できる新しいModにコピーされます。Body size を選択中はリフィット用に開きます。",
+    "message": "装着中でMod未適用です。開くと編集できる新しいModにコピーされます。「体型サイズ」を選択中はリフィット用に開きます。",
     "description": ""
   },
   "Parts.Vanilla.Editing.Fmt": {
@@ -3748,7 +3748,7 @@
     "description": ""
   },
   "Parts.Retarget.Guide.Title": {
-    "message": "Body size のヒント",
+    "message": "体型サイズのヒント",
     "description": ""
   },
   "Parts.Retarget.Guide.Tip1": {
@@ -3778,5 +3778,9 @@
   "Parts.Retarget.Guide.Ok": {
     "message": "了解",
     "description": ""
+  },
+  "Parts.Retarget.LeaveOut": {
+    "message": "なし（このパーツを含めない）",
+    "description": "First entry in an optional body part's dropdowns in the Body size panel. Picking it takes that part out of the refit."
   }
 }

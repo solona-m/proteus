@@ -3778,5 +3778,9 @@
   "Parts.Retarget.Guide.Ok": {
     "message": "Got it",
     "description": "Button. Dismisses the Body size tips popup for good."
+  },
+  "Parts.Retarget.LeaveOut": {
+    "message": "None (leave this part out)",
+    "description": "First entry in an optional body part's dropdowns in the Body size panel. Picking it takes that part out of the refit."
   }
 }
