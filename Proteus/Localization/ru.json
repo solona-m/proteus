@@ -764,11 +764,11 @@
     "description": ""
   },
   "Command.Refreshing": {
-    "message": "Recompositing now.",
+    "message": "Пересборка запущена.",
     "description": "Chat line for \"/proteus refresh\"."
   },
   "Command.Refreshing.Full": {
-    "message": "Rebuilding everything and recompositing. This takes longer than a plain refresh.",
+    "message": "Полная перестройка и пересборка. Это дольше, чем обычное обновление.",
     "description": "Chat line for \"/proteus refresh full\"."
   },
   "Common.Browse.Btn": {
@@ -3028,15 +3028,15 @@
     "description": ""
   },
   "Presets.Header": {
-    "message": "Presets",
+    "message": "Пресеты",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.None": {
-    "message": "No preset",
+    "message": "Без пресета",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.None.Tip": {
-    "message": "Wear the mod's own colours again. Your option ticks are left exactly as they are.",
+    "message": "Вернуть собственные цвета мода. Отмеченные опции останутся как есть.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.PackMarker": {
@@ -3048,39 +3048,39 @@
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.SaveNew": {
-    "message": "+ Save…",
+    "message": "+ Сохранить…",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.SaveNew.Tip": {
-    "message": "Save how this mod looks right now — its ticked options, colours and layer settings — under a name.",
+    "message": "Сохранить под именем текущий вид мода — отмеченные опции, цвета и настройки слоёв.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Save": {
-    "message": "Save",
+    "message": "Сохранить",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.RenameConfirm": {
-    "message": "Rename",
+    "message": "Переименовать",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Cancel": {
-    "message": "Cancel",
+    "message": "Отмена",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.NeedsAName": {
-    "message": "Give it a name first.",
+    "message": "Сначала дайте ему имя.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.NoCollection": {
-    "message": "Penumbra hasn't told Proteus which collection you're wearing yet.",
+    "message": "Penumbra ещё не сообщила Proteus, какая коллекция на вас.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.FirstName": {
-    "message": "My look",
+    "message": "Мой образ",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.NthName.Fmt": {
-    "message": "My look {0}",
+    "message": "Мой образ {0}",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Selected.Fmt": {
@@ -3088,139 +3088,139 @@
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.FromPack": {
-    "message": "from the mod",
+    "message": "из мода",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.PackReadOnly": {
-    "message": "This one came with the mod, so it can't be changed. Duplicate it to make it yours.",
+    "message": "Этот пресет пришёл с модом, поэтому его нельзя изменить. Сделайте копию, чтобы он стал вашим.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Update": {
-    "message": "Update",
+    "message": "Обновить",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Update.Tip": {
-    "message": "Fold everything on screen back into this preset.",
+    "message": "Перенести всё, что сейчас на экране, в этот пресет.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.NothingChanged": {
-    "message": "Nothing has changed since this preset was saved.",
+    "message": "С момента сохранения пресета ничего не изменилось.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Rename": {
-    "message": "Rename",
+    "message": "Переименовать",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Duplicate": {
-    "message": "Duplicate",
+    "message": "Дублировать",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Fork.Tip": {
-    "message": "Make an editable copy of the mod's preset and wear it.",
+    "message": "Сделать редактируемую копию пресета мода и надеть её.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.CopyCode.Tip": {
-    "message": "Copy this preset as a share code to paste to someone.",
+    "message": "Скопировать пресет как код, чтобы поделиться им.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.CodeCopied": {
-    "message": "Share code copied to the clipboard.",
+    "message": "Код скопирован в буфер обмена.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Export.Tip": {
-    "message": "Save this preset as a file.",
+    "message": "Сохранить пресет в файл.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Delete.Tip": {
-    "message": "Hold Ctrl and click to delete this preset.",
+    "message": "Удерживайте Ctrl и щёлкните, чтобы удалить пресет.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.PasteCode": {
-    "message": "Paste code",
+    "message": "Вставить код",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.PasteCode.Tip": {
-    "message": "Read a preset share code from the clipboard.",
+    "message": "Прочитать код пресета из буфера обмена.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Import": {
-    "message": "Import…",
+    "message": "Импорт…",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Import.Tip": {
-    "message": "Load a preset from a file.",
+    "message": "Загрузить пресет из файла.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Staged.Fmt": {
-    "message": "\"{0}\" is ready to add.",
+    "message": "«{0}» готов к добавлению.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.StagedOtherMod.Fmt": {
-    "message": "\"{0}\" was made for \"{1}\" by {2}, not for \"{3}\". Adding it anyway will apply whichever of its options and colours this mod happens to share.",
+    "message": "«{0}» создан {2} для «{1}», а не для «{3}». Если всё же добавить, применится то из опций и цветов, что совпадает с этим модом.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.AddStaged": {
-    "message": "Add",
+    "message": "Добавить",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Discard": {
-    "message": "Discard",
+    "message": "Отбросить",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Added.Fmt": {
-    "message": "Added \"{0}\".",
+    "message": "«{0}» добавлен.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.ExportDialog.Title": {
-    "message": "Save preset",
+    "message": "Сохранить пресет",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.ImportDialog.Title": {
-    "message": "Open preset",
+    "message": "Открыть пресет",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Dialog.Filter": {
-    "message": "Proteus preset",
+    "message": "Пресет Proteus",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Exported.Fmt": {
-    "message": "Saved to {0}.",
+    "message": "Сохранено в {0}.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.ExportFailed.Fmt": {
-    "message": "Couldn't save it: {0}",
+    "message": "Не удалось сохранить: {0}",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.PartialApply.Fmt": {
-    "message": "\"{0}\" was applied as far as it goes. {1}",
+    "message": "«{0}» применён, насколько это возможно. {1}",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.MissingGroups.Fmt": {
-    "message": "The mod no longer has these option groups: {0}.",
+    "message": "В моде больше нет этих групп опций: {0}.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.MissingOptions.Fmt": {
-    "message": "These options are gone: {0}.",
+    "message": "Этих опций больше нет: {0}.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.JustNow": {
-    "message": "just now",
+    "message": "только что",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.MinutesAgo.Fmt": {
-    "message": "{0} m ago",
+    "message": "{0} мин назад",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.HoursAgo.Fmt": {
-    "message": "{0} h ago",
+    "message": "{0} ч назад",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.DaysAgo.Fmt": {
-    "message": "{0} d ago",
+    "message": "{0} дн. назад",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Column.Header": {
-    "message": "Preset",
+    "message": "Пресет",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Column.None": {
@@ -3228,39 +3228,39 @@
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Column.Tip": {
-    "message": "A saved look for this mod: its ticked options, colours and layer settings. Open Colors to save one.",
+    "message": "Сохранённый образ этого мода: отмеченные опции, цвета и настройки слоёв. Откройте «Цвета», чтобы сохранить его.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.HeaderApplied.Fmt": {
-    "message": "Presets — {0}",
+    "message": "Пресеты — {0}",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.ImportFailed.Fmt": {
-    "message": "That isn't a preset Proteus can read: {0}",
+    "message": "Это не пресет, который Proteus может прочитать: {0}",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.ImportedFrom.Fmt": {
-    "message": "Preset \"{0}\" — made for \"{1}\" by {2}.",
+    "message": "Пресет «{0}» — создан {2} для «{1}».",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.NoMatchingMod": {
-    "message": "You don't have that mod installed under that name. Pick the mod it should go to, or install it first.",
+    "message": "Мод с таким именем не установлен. Выберите мод, к которому его отнести, или сначала установите мод.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.AddTo": {
-    "message": "Add to",
+    "message": "Добавить в",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.PickAMod": {
-    "message": "Pick a mod…",
+    "message": "Выберите мод…",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.AddTo.Tip": {
-    "message": "Saves it against that mod. Nothing changes on screen until you wear it from the mod's Presets section.",
+    "message": "Сохраняет пресет в этот мод. На экране ничего не изменится, пока вы не наденете его из раздела пресетов мода.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.AddedTo.Fmt": {
-    "message": "Added \"{0}\" to {1}. Wear it from that mod's Presets section in Colors.",
+    "message": "«{0}» добавлен в {1}. Наденьте его в разделе пресетов этого мода в «Цветах».",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Parts.Retarget.Ambiguous.Fmt": {
@@ -3272,11 +3272,11 @@
     "description": ""
   },
   "Parts.Retarget.Chest": {
-    "message": "Chest",
+    "message": "Грудь",
     "description": ""
   },
   "Parts.Retarget.Choose": {
-    "message": "Choose\u2026",
+    "message": "Выбрать…",
     "description": ""
   },
   "Parts.Retarget.Clash.Fmt": {
@@ -3292,7 +3292,7 @@
     "description": ""
   },
   "Parts.Retarget.ClearPreview": {
-    "message": "Clear the preview",
+    "message": "Убрать предпросмотр",
     "description": ""
   },
   "Parts.Retarget.Exact.Fmt": {
@@ -3300,15 +3300,15 @@
     "description": ""
   },
   "Parts.Retarget.Feet": {
-    "message": "Feet",
+    "message": "Ступни",
     "description": ""
   },
   "Parts.Retarget.From": {
-    "message": "Made for",
+    "message": "Сделано для",
     "description": ""
   },
   "Parts.Retarget.Group.Fmt": {
-    "message": "Body \u2014 {0}",
+    "message": "Тело — {0}",
     "description": ""
   },
   "Parts.Retarget.Guess": {
@@ -3316,11 +3316,11 @@
     "description": "Under the Body size tool's \"Made for\" size: the detector's pick is only a guess."
   },
   "Parts.Retarget.Hands": {
-    "message": "Hands",
+    "message": "Руки",
     "description": ""
   },
   "Parts.Retarget.Legs": {
-    "message": "Legs",
+    "message": "Ноги",
     "description": ""
   },
   "Parts.Retarget.Likely": {
@@ -3332,7 +3332,7 @@
     "description": ""
   },
   "Parts.Retarget.NoBody": {
-    "message": "Pick one\u2026",
+    "message": "Выберите…",
     "description": ""
   },
   "Parts.Retarget.NoBodiesForSex.Fmt": {
@@ -3340,11 +3340,11 @@
     "description": ""
   },
   "Parts.Retarget.Male": {
-    "message": "male",
+    "message": "мужское",
     "description": ""
   },
   "Parts.Retarget.Female": {
-    "message": "female",
+    "message": "женское",
     "description": ""
   },
   "Parts.Retarget.NoBodyMesh": {
@@ -3356,7 +3356,7 @@
     "description": ""
   },
   "Parts.Retarget.OpenInPenumbra": {
-    "message": "Open in Penumbra",
+    "message": "Открыть в Penumbra",
     "description": ""
   },
   "Parts.Retarget.OtherLods": {
@@ -3368,11 +3368,11 @@
     "description": ""
   },
   "Parts.Retarget.Preview": {
-    "message": "Refit and preview",
+    "message": "Подогнать и показать",
     "description": ""
   },
   "Parts.Retarget.Save": {
-    "message": "Save as a new option",
+    "message": "Сохранить как новую опцию",
     "description": ""
   },
   "Parts.Retarget.Saved.Fmt": {
@@ -3380,11 +3380,11 @@
     "description": ""
   },
   "Parts.Retarget.Slot.Fmt": {
-    "message": "{0} \u2014 {1} options",
+    "message": "{0} — опций: {1}",
     "description": ""
   },
   "Parts.Retarget.Slot.Optional.Fmt": {
-    "message": "{0} \u2014 optional",
+    "message": "{0} — необязательно",
     "description": ""
   },
   "Parts.Retarget.Slot.Optional.Tip": {
@@ -3392,7 +3392,7 @@
     "description": ""
   },
   "Parts.Retarget.To": {
-    "message": "Refit onto",
+    "message": "Подогнать под",
     "description": ""
   },
   "Parts.Retarget.Undo": {
@@ -3400,11 +3400,11 @@
     "description": ""
   },
   "Parts.Retarget.Unreadable.Fmt": {
-    "message": "The {0} body model could not be read.",
+    "message": "Не удалось прочитать модель тела ({0}).",
     "description": ""
   },
   "Parts.Retarget.Working": {
-    "message": "Refitting\u2026",
+    "message": "Подгонка…",
     "description": ""
   },
   "Parts.Tool.Retarget": {
@@ -3448,7 +3448,7 @@
     "description": ""
   },
   "Parts.NoMatches": {
-    "message": "Nothing matches.",
+    "message": "Совпадений нет.",
     "description": ""
   },
   "Parts.Retarget.Lock.ListTip": {
@@ -3464,7 +3464,7 @@
     "description": ""
   },
   "Parts.Retarget.KeepShape": {
-    "message": "Keep shape",
+    "message": "Сохранить форму",
     "description": ""
   },
   "Parts.Retarget.KeepShape.Tip": {
@@ -3472,15 +3472,15 @@
     "description": ""
   },
   "Parts.Retarget.ReplaceSkin": {
-    "message": "Use the new body\u0027s skin",
+    "message": "Использовать кожу нового тела",
     "description": ""
   },
   "Parts.Retarget.SaveMany.Fmt": {
-    "message": "Save {0} sizes as new options",
+    "message": "Сохранить размеры ({0}) как новые опции",
     "description": ""
   },
   "Parts.Retarget.Showing": {
-    "message": "Showing on the character",
+    "message": "Показано на персонаже",
     "description": ""
   },
   "Parts.Retarget.ToMany": {
@@ -3488,7 +3488,7 @@
     "description": ""
   },
   "Parts.Retarget.Working.Fmt": {
-    "message": "Refitting {0} of {1}\u2026",
+    "message": "Подгонка {0} из {1}…",
     "description": ""
   },
   "Parts.Retarget.MadeHere": {
@@ -3496,11 +3496,11 @@
     "description": ""
   },
   "Parts.Retarget.NewGroup": {
-    "message": "A new group\u2026",
+    "message": "Новая группа…",
     "description": ""
   },
   "Parts.Retarget.SaveTo": {
-    "message": "Save to group",
+    "message": "Сохранить в группу",
     "description": ""
   },
   "Parts.Retarget.SwapShapes.Fmt": {
@@ -3544,39 +3544,39 @@
     "description": ""
   },
   "Parts.Move.ClearPolygons": {
-    "message": "Clear",
+    "message": "Очистить",
     "description": ""
   },
   "Parts.Move.Falloff.SurfaceTip": {
-    "message": "How far from the selected polygons the cloth around them still follows, measured along the surface.\nOnly cloth joined to the selection follows: a separate piece that merely sits close does not.",
+    "message": "Как далеко от выбранных полигонов окружающая ткань ещё следует за ними, по поверхности.\nСледует только ткань, связанная с выделением: отдельная деталь, которая просто рядом, — нет.",
     "description": ""
   },
   "Parts.Move.Grow": {
-    "message": "Grow",
+    "message": "Расширить",
     "description": ""
   },
   "Parts.Move.NoPolygons": {
-    "message": "Click a polygon on the model to select it. Shift-click adds or removes one.",
+    "message": "Щёлкните полигон на модели, чтобы выбрать его. Shift+щелчок добавляет или убирает.",
     "description": ""
   },
   "Parts.Move.Polygons.Fmt": {
-    "message": "{0:N0} polygon(s) selected",
+    "message": "Выбрано полигонов: {0:N0}",
     "description": ""
   },
   "Parts.Move.SelectParts": {
-    "message": "Whole parts",
+    "message": "Целые детали",
     "description": ""
   },
   "Parts.Move.SelectPolygons": {
-    "message": "Polygons",
+    "message": "Полигоны",
     "description": ""
   },
   "Parts.Move.SelectPolygons.Tip": {
-    "message": "Move, turn or scale single polygons instead of whole parts. Click a polygon to select it; Shift-click adds\nor removes one. Choosing a part in the list selects all of its polygons.",
+    "message": "Перемещать, поворачивать и масштабировать отдельные полигоны вместо целых деталей. Щелчок выбирает полигон;\nShift+щелчок добавляет или убирает. Выбор детали в списке выделяет все её полигоны.",
     "description": ""
   },
   "Parts.Move.Shrink": {
-    "message": "Shrink",
+    "message": "Сузить",
     "description": ""
   },
   "Parts.Retarget.FromBody": {
@@ -3644,7 +3644,7 @@
     "description": ""
   },
   "Parts.Vanilla.Header": {
-    "message": "Vanilla gear",
+    "message": "Оригинальное снаряжение",
     "description": ""
   },
   "Parts.Vanilla.Open.Fmt": {
@@ -3656,23 +3656,23 @@
     "description": ""
   },
   "Refit.Error.NoName.Fmt": {
-    "message": "Couldn\u0027t find a free mod name for \u0022{0}\u0022.",
+    "message": "Не удалось подобрать свободное имя мода для «{0}».",
     "description": ""
   },
   "Refit.Mod.Description.Fmt": {
-    "message": "{0}, refitted by Proteus.",
+    "message": "{0}, подогнано Proteus.",
     "description": ""
   },
   "Refit.Mod.Enabled.Fmt": {
-    "message": "Made \u0022{0}\u0022 and switched it on.",
+    "message": "«{0}» создан и включён.",
     "description": ""
   },
   "Refit.Mod.NotEnabled.Fmt": {
-    "message": "Made \u0022{0}\u0022, but couldn\u0027t switch it on \u2014 enable it in Penumbra.",
+    "message": "«{0}» создан, но включить его не удалось — включите его в Penumbra.",
     "description": ""
   },
 "Parts.Retarget.SaveToMod": {
-    "message": "Save into",
+    "message": "Сохранить в",
     "description": ""
   },
   "Parts.Retarget.SaveToMod.Tip": {
@@ -3684,7 +3684,7 @@
     "description": ""
   },
   "Parts.Retarget.SaveToThisMod": {
-    "message": "This mod",
+    "message": "Этот мод",
     "description": ""
   },
   "Parts.Vanilla.Worn.Tip": {
@@ -3704,7 +3704,7 @@
     "description": ""
   },
   "Parts.Vanilla.WornSuffix": {
-    "message": "(vanilla)",
+    "message": "(оригинал)",
     "description": ""
   },
   "WhatsNew.Title": {
@@ -3782,5 +3782,625 @@
   "Parts.Retarget.LeaveOut": {
     "message": "Нет (не включать эту часть)",
     "description": "First entry in an optional body part's dropdowns in the Body size panel. Picking it takes that part out of the refit."
+  },
+  "Band.Refresh.Btn": {
+    "message": "Обновить",
+    "description": "Button on the tab bar that recomposites now. Keep it short: it sits right-aligned on the tab bar's own line."
+  },
+  "Colors.Window.Title.Fmt": {
+    "message": "Цвета — {0}",
+    "description": "Title of the colour editor window. {0} is the mod's name."
+  },
+  "Colors.NoShell": {
+    "message": "Это наложение рисует то, поверх чего Proteus не может построить слой: снаряжение, аксессуар\nили оружие. Режимам Glow и Cloth нужен слой поверх вашей собственной кожи: тела, лица, волос,\nхвоста или ушей.",
+    "description": "Under the glow-effect picker in the colour editor, for an overlay option that paints gear rather than skin. Glow and Cloth are the names of two render modes."
+  },
+  "Colors.Reset.Blocked.Tip": {
+    "message": "Исходные настройки этого мода ещё не сохранены — Proteus запоминает их, когда впервые\nсохраняет здесь изменение.",
+    "description": "Tooltip on \"Reset to defaults\" in the colour editor while the mod has no recorded defaults to reset to."
+  },
+  "Chat.Loaded.Fmt": {
+    "message": "[Proteus] загружен — сборка №{0} ({1})",
+    "description": "Chat line printed when the plugin loads. {0} is the build number, {1} the build date. Keep \"[Proteus]\" as it is."
+  },
+  "Export.Failed.Fmt": {
+    "message": "Не удалось экспортировать: {0}",
+    "description": "Export tab status line when writing the .pmp throws. {0} is the error message."
+  },
+  "Import.Layer.Size.Fmt": {
+    "message": "{0:0.#} МБ",
+    "description": "Onion layer table, last column: the layer's file size. {0:0.#} is megabytes; keep the format specifier exactly."
+  },
+  "Eye.Slot.Base": {
+    "message": "Основа",
+    "description": "Eye-pack table, second column: the file replaces the game's base eye texture."
+  },
+  "Eye.Slot.Mask": {
+    "message": "Маска",
+    "description": "Eye-pack table, second column: the file replaces the game's eye mask texture."
+  },
+  "Eye.Slot.Normal": {
+    "message": "Нормали",
+    "description": "Eye-pack table, second column: the file replaces the game's eye normal map."
+  },
+  "Settings.Output.TextureCache.Format": {
+    "message": "%d МБ",
+    "description": "Value text inside the texture-cache slider. An ImGui printf format: keep %d exactly as it is."
+  },
+  "Common.Cancelled": {
+    "message": "отменено",
+    "description": "Stands in for an error message when a background task was cancelled (e.g. after \"Could not save the log:\")."
+  },
+  "Common.Units.Mm0": {
+    "message": "%.0f мм",
+    "description": "Slider value in millimetres. An ImGui printf format: keep %.0f exactly as it is."
+  },
+  "Common.Units.Mm1": {
+    "message": "%.1f мм",
+    "description": "Slider value in millimetres. An ImGui printf format: keep %.1f exactly as it is."
+  },
+  "Common.Units.Mm2": {
+    "message": "%.2f мм",
+    "description": "Slider value in millimetres. An ImGui printf format: keep %.2f exactly as it is."
+  },
+  "Create.Dialog.ImageFilter": {
+    "message": "Изображения",
+    "description": "File-type name in the texture file dialog; the list of image extensions follows it. No commas or braces."
+  },
+  "Create.Picker.Tag.Body": {
+    "message": "Тело",
+    "description": "Material picker, left column: the material belongs to the body. Short tag."
+  },
+  "Create.Picker.Tag.Face": {
+    "message": "Лицо",
+    "description": "Material picker, left column: the material belongs to the face. Short tag."
+  },
+  "Create.Picker.Tag.Iris": {
+    "message": "Радужка",
+    "description": "Material picker, left column: the material is the eyes' iris. Short tag."
+  },
+  "Create.Picker.Tag.Hair": {
+    "message": "Волосы",
+    "description": "Material picker, left column: the material belongs to the hair. Short tag."
+  },
+  "Create.Picker.Tag.Tail": {
+    "message": "Хвост",
+    "description": "Material picker, left column: the material belongs to the tail. Short tag."
+  },
+  "Create.Picker.Tag.Ear": {
+    "message": "Уши",
+    "description": "Material picker, left column: the material belongs to Viera ears. Short tag."
+  },
+  "Create.Picker.Tag.Native": {
+    "message": "Расовое",
+    "description": "Material picker, left column: geometry an imported pack made for one race only. Short tag."
+  },
+  "Create.Picker.Tag.Weapon": {
+    "message": "Оружие",
+    "description": "Material picker, left column: the material belongs to a weapon. Short tag."
+  },
+  "Create.Picker.Tag.Gear": {
+    "message": "Снаряжение",
+    "description": "Material picker, left column: the material belongs to a piece of gear. Short tag."
+  },
+  "Create.Picker.Tag.Accessory": {
+    "message": "Аксессуар",
+    "description": "Material picker, left column: the material belongs to an accessory (earrings, necklace, ring…). Short tag."
+  },
+  "Create.Picker.Tag.Other": {
+    "message": "Другое",
+    "description": "Material picker, left column: anything else. Short tag."
+  },
+  "Parts.Retarget.Bake.ReadBack": {
+    "message": "не удалось прочитать новую модель",
+    "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. Lower-case, no full stop."
+  },
+  "Parts.Retarget.BodyFallback": {
+    "message": "Тело",
+    "description": "Body size: starts the name of a saved Penumbra option when the target body mod's own name is unknown."
+  },
+  "Parts.Retarget.Size.NoOptionsGroup": {
+    "message": "Без опций",
+    "description": "Body size pickers: heading over a body that a body mod ships without any option group."
+  },
+  "Parts.Retarget.Size.ModOwnBody": {
+    "message": "Собственное тело мода",
+    "description": "Body size pickers: the body a body mod ships without any option. Also starts saved option names."
+  },
+  "Parts.Retarget.Size.VanillaGroup": {
+    "message": "Оригинал",
+    "description": "Body size \"Made for\" picker: heading over the game's own body."
+  },
+  "Parts.Retarget.Size.VanillaBody": {
+    "message": "Оригинальное тело",
+    "description": "Body size \"Made for\" picker: the game's own body, which vanilla gear is made for."
+  },
+  "Common.Race.Midlander": {
+    "message": "Мидлендер",
+    "description": "Playable race (Hyur clan), as the game names it."
+  },
+  "Common.Race.Highlander": {
+    "message": "Хайлендер",
+    "description": "Playable race (Hyur clan), as the game names it."
+  },
+  "Common.Race.Elezen": {
+    "message": "Элезен",
+    "description": "Playable race, as the game names it."
+  },
+  "Common.Race.Miqote": {
+    "message": "Мико'тэ",
+    "description": "Playable race, as the game names it (Miqo'te)."
+  },
+  "Common.Race.Roegadyn": {
+    "message": "Руэгадин",
+    "description": "Playable race, as the game names it."
+  },
+  "Common.Race.Lalafell": {
+    "message": "Лалафелл",
+    "description": "Playable race, as the game names it."
+  },
+  "Common.Race.AuRa": {
+    "message": "Ау Ра",
+    "description": "Playable race, as the game names it (Au Ra)."
+  },
+  "Common.Race.Hrothgar": {
+    "message": "Хротгар",
+    "description": "Playable race, as the game names it."
+  },
+  "Common.Race.Viera": {
+    "message": "Виера",
+    "description": "Playable race, as the game names it."
+  },
+  "Common.Race.Male": {
+    "message": "М",
+    "description": "Short marker for a male body, after a race name (\"Miqo'te M\"). One or two characters."
+  },
+  "Common.Race.Female": {
+    "message": "Ж",
+    "description": "Short marker for a female body, after a race name (\"Miqo'te F\"). One or two characters."
+  },
+  "Common.Race.Gender.Fmt": {
+    "message": "{0} ({1})",
+    "description": "A race and body sex together. {0} is a race name, {1} the short male/female marker."
+  },
+  "Common.Slot.Head": {
+    "message": "Голова",
+    "description": "Equipment slot, as the game names it."
+  },
+  "Common.Slot.Body": {
+    "message": "Торс",
+    "description": "Equipment slot, as the game names it."
+  },
+  "Common.Slot.Hands": {
+    "message": "Руки",
+    "description": "Equipment slot, as the game names it."
+  },
+  "Common.Slot.Legs": {
+    "message": "Ноги",
+    "description": "Equipment slot, as the game names it."
+  },
+  "Common.Slot.Feet": {
+    "message": "Ступни",
+    "description": "Equipment slot, as the game names it."
+  },
+  "Common.Slot.Earrings": {
+    "message": "Серьги",
+    "description": "Accessory slot, as the game names it."
+  },
+  "Common.Slot.Necklace": {
+    "message": "Ожерелье",
+    "description": "Accessory slot, as the game names it."
+  },
+  "Common.Slot.Bracelets": {
+    "message": "Браслеты",
+    "description": "Accessory slot, as the game names it."
+  },
+  "Common.Slot.RightRing": {
+    "message": "Правое кольцо",
+    "description": "Accessory slot: the ring on the right hand."
+  },
+  "Common.Slot.LeftRing": {
+    "message": "Левое кольцо",
+    "description": "Accessory slot: the ring on the left hand."
+  },
+  "Common.Slot.Hair": {
+    "message": "Волосы",
+    "description": "Character part (not an equipment slot): the hair."
+  },
+  "Common.Slot.Face": {
+    "message": "Лицо",
+    "description": "Character part (not an equipment slot): the face."
+  },
+  "Common.Slot.Tail": {
+    "message": "Хвост",
+    "description": "Character part (not an equipment slot): the tail."
+  },
+  "Common.Slot.Ears": {
+    "message": "Уши",
+    "description": "Character part (not an equipment slot): Viera ears."
+  },
+  "Parts.Retarget.Save.Nothing": {
+    "message": "Нечего сохранять.",
+    "description": "Body size status line: Save was pressed with no sizes to save."
+  },
+  "Parts.Retarget.Save.OptionTaken.Fmt": {
+    "message": "В «{0}» уже есть собственная опция «{1}». Сохраните подгонку в другую группу.",
+    "description": "Body size status line. {0} is a Penumbra option group, {1} the option name the refit wanted."
+  },
+  "Parts.Retarget.Save.AddedOneToAuthor.Fmt": {
+    "message": "Сохранено как «{0}» в группе «{1}». Выберите его там в Penumbra, чтобы надеть.",
+    "description": "Body size status line after saving into the mod author's own group. {0} is the option, {1} the group."
+  },
+  "Parts.Retarget.Save.AddedManyToAuthor.Fmt": {
+    "message": "Сохранено размеров: {0}, в группе «{1}». Выберите нужный там в Penumbra, чтобы надеть.",
+    "description": "Body size status line after saving several sizes into the mod author's own group. {0} is how many, {1} the group."
+  },
+  "Parts.Retarget.Save.AddedOne.Fmt": {
+    "message": "Сохранено как «{0}» в группе «{1}». Penumbra выбирает вариант по умолчанию только для мода, который добавляет впервые, поэтому выберите опцию там, чтобы увидеть её.",
+    "description": "Body size status line after saving into a group Proteus made. {0} is the option, {1} the group."
+  },
+  "Parts.Retarget.Save.AddedMany.Fmt": {
+    "message": "Сохранено размеров: {0}, в группе «{1}». Penumbra выбирает вариант по умолчанию только для мода, который добавляет впервые, поэтому выберите опцию там, чтобы увидеть её.",
+    "description": "Body size status line after saving several sizes into a group Proteus made. {0} is how many, {1} the group."
+  },
+  "Parts.Retarget.Save.Legacy": {
+    "message": "Этот мод всё ещё в старом формате папок Penumbra, который Proteus не редактирует. Включите его один раз в Penumbra, чтобы она его обновила, и возвращайтесь.",
+    "description": "Body size status line: the mod is in Penumbra's pre-v3 folder format."
+  },
+  "Parts.Retarget.Save.Failed.Fmt": {
+    "message": "Не удалось сохранить: {0}",
+    "description": "Body size status line. {0} is the error message."
+  },
+  "Parts.Retarget.Undo.Removed.Fmt": {
+    "message": "«{0}» удалено.",
+    "description": "Body size status line after Undo. {0} is the option removed."
+  },
+  "Parts.Retarget.Undo.NoGroup": {
+    "message": "В этом моде нет группы подгонки.",
+    "description": "Body size status line: Undo found no group of refits to remove from."
+  },
+  "Parts.Retarget.Undo.Legacy": {
+    "message": "Этот мод в старом формате папок Penumbra. Включите его один раз в Penumbra и возвращайтесь.",
+    "description": "Body size status line: Undo on a mod in Penumbra's pre-v3 folder format."
+  },
+  "Parts.Retarget.Undo.Failed.Fmt": {
+    "message": "Не удалось отменить: {0}",
+    "description": "Body size status line. {0} is the error message."
+  },
+  "Parts.Retarget.Refuse.NoLayoutMap.Fmt": {
+    "message": "Модели ({0}) используют разные раскладки текстур ({1} и {2}), а у Proteus нет соответствия между ними, поэтому нельзя понять, какая точка одного тела соответствует какой точке другого.",
+    "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…), {1} and {2} texture-layout ids such as bibo or gen3 — never translate those."
+  },
+  "Parts.Retarget.Refuse.UvUnreadable.Fmt": {
+    "message": "Не удалось прочитать текстурные координаты моделей ({0}), поэтому нельзя понять, какая точка одного тела соответствует какой точке другого.",
+    "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…)."
+  },
+  "Parts.Retarget.Refuse.NoTargetSkin.Fmt": {
+    "message": "У целевой модели ({0}) нет кожи тела, на которую можно лечь.",
+    "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…)."
+  },
+  "Parts.Retarget.Refuse.OffSheet.Fmt": {
+    "message": "Большая часть исходного тела ({0}) нарисована вне своей раскладки текстур, поэтому нельзя понять, какая точка одного тела соответствует какой точке другого.",
+    "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…)."
+  },
+  "Parts.Retarget.Refuse.LowCoverage.Fmt": {
+    "message": "Лишь {1:P0} исходного тела ({0}) находят своё место на целевом по текстурным координатам, значит, у них разные раскладки текстур. Подогнать их друг под друга нельзя.",
+    "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…), {1:P0} the share that matched — keep the :P0."
+  },
+  "Parts.Retarget.Bake.NoPath.Fmt": {
+    "message": "у расового деформера нет пути из c{0:D4} в c{1:D4}",
+    "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. {0:D4} and {1:D4} are race codes such as 0101 — keep the c and the :D4. Lower-case, no full stop."
+  },
+  "Parts.Retarget.Bake.Unreadable": {
+    "message": "не удалось прочитать модель",
+    "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. Lower-case, no full stop."
+  },
+  "Parts.Retarget.Bake.WeightMismatch.Fmt": {
+    "message": "не удалось сопоставить вершины модели с их весами ({0} против {1})",
+    "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. {0} and {1} are vertex counts. Lower-case, no full stop."
+  },
+  "Refit.Error.RedirectsUnreadable.Fmt": {
+    "message": "Не удалось прочитать перенаправления {0}.",
+    "description": "Shown when a vanilla item is opened for editing and the new mod's file list cannot be read. {0} is a folder path."
+  },
+  "Parts.Write.NotJsonObject.Fmt": {
+    "message": "{0} не является объектом JSON.",
+    "description": "Inside Parts.Write.Failed.Fmt: a mod file is not valid JSON. {0} is a file path."
+  },
+  "Service.ModelEdit.NoSubmesh.Fmt": {
+    "message": "в меше {0} нет сабмеша {1}",
+    "description": "Why a model edit (part switch, hat fit, brush) failed; shown after a colon. {0} and {1} are numbers. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.AttributesFull.Fmt": {
+    "message": "модель уже объявляет {0} атрибутов — это всё, что вмещает маска сабмеша",
+    "description": "Why a model edit failed; shown after a colon. {0} is a number. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.NoTriangles": {
+    "message": "в этом сабмеше нет треугольников",
+    "description": "Why a model edit failed; shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.Fragmented.Fmt": {
+    "message": "эти треугольники перемешаны с остальной частью детали в {0} отрезках — слишком раздроблено, чтобы аккуратно разделить",
+    "description": "Why splitting a part failed; shown after a colon. {0} is a number. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.IndexRange.Fmt": {
+    "message": "диапазон индексов меша {0} выходит за конец файла",
+    "description": "Why a model edit failed (damaged file); shown after a colon. {0} is a number. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.ShapeBlock": {
+    "message": "блок шейпов этой модели выходит за конец файла",
+    "description": "Why a model edit failed (damaged file); shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.ShapeTooFar": {
+    "message": "существующий шейп этой модели ссылается на сабмеш слишком издалека, чтобы пережить перестановку, — разделить по геометрии нельзя",
+    "description": "Why splitting a part by geometry failed; shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.ShapeNoName": {
+    "message": "шейпу нужно имя",
+    "description": "Why a model edit failed; shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.TablesMismatch": {
+    "message": "таблицы модели не сходятся — блок шейпов находится не там, где указывает формат",
+    "description": "Why a model edit failed (damaged file); shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.ShapeExists.Fmt": {
+    "message": "в модели уже есть шейп с именем {0}",
+    "description": "Why a model edit failed; shown after a colon. {0} is a shape name. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.NeckMorph": {
+    "message": "модель содержит данные морфа шеи, которые здесь нельзя редактировать",
+    "description": "Why a model edit failed; shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.UnusedVertices": {
+    "message": "ни одна из этих вершин не используется треугольником, так что шейп по ним ничего бы не деформировал",
+    "description": "Why a model edit failed; shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.ShapeOverflow.Fmt": {
+    "message": "шейпу нужно {0} значений, больше, чем может учесть формат",
+    "description": "Why a model edit failed; shown after a colon. {0} is a number. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.NotLod0.Fmt": {
+    "message": "меш {0} не входит в LOD0, а изменять форму можно только у мешей LOD0",
+    "description": "Why a model edit failed; shown after a colon. {0} is a number; keep LOD0. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.NoVertex.Fmt": {
+    "message": "в меше {0} нет вершины {1} — их всего {2}",
+    "description": "Why a model edit failed; shown after a colon. {0}, {1} and {2} are numbers. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.TooManyVertices.Fmt": {
+    "message": "мешу {0} понадобилось бы {1} вершин — больше {2}, которые модель может учесть; именно поэтому причёски под шляпы держат ниже 30 тыс. полигонов",
+    "description": "Why a hat-fit edit failed; shown after a colon. {0}, {1} and {2} are numbers. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.NoPosition.Fmt": {
+    "message": "меш {0} не объявляет элемент позиции",
+    "description": "Why a model edit failed; shown after a colon. {0} is a number. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.PositionType.Fmt": {
+    "message": "меш {0} хранит позиции в типе вершин {1}, который здесь нельзя записать",
+    "description": "Why a model edit failed; shown after a colon. {0} is a number, {1} a vertex type id. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.StreamRange.Fmt": {
+    "message": "поток {1} меша {0} выходит за конец файла",
+    "description": "Why a model edit failed (damaged file); shown after a colon. {0} and {1} are numbers. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.ShapeTable": {
+    "message": "таблица шейпов этой модели выходит за конец файла",
+    "description": "Why a model edit failed (damaged file); shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.Unreadable.Fmt": {
+    "message": "не удалось прочитать модель ({0})",
+    "description": "Why a brush edit failed; shown after a colon. {0} is the underlying error message. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.BoundingBoxes": {
+    "message": "ограничивающие рамки модели находятся не там, где указывает формат",
+    "description": "Why a brush edit failed (damaged file); shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.PositionFormat.Fmt": {
+    "message": "меш {0} хранит позиции в формате, который здесь нельзя записать (тип {1})",
+    "description": "Why a brush edit failed; shown after a colon. {0} is a number, {1} a vertex type id. Lower-case, no full stop."
+  },
+  "Import.Layer.Skip.NoFile": {
+    "message": "в слое не указан файл изображения",
+    "description": "Onion layer tooltip, after \"Skipped:\". Lower-case, no full stop."
+  },
+  "Import.Layer.Skip.Missing.Fmt": {
+    "message": "в пакете нет «{0}»",
+    "description": "Onion layer tooltip, after \"Skipped:\". {0} is a file name. Lower-case, no full stop."
+  },
+  "Import.Layer.Skip.Transparent": {
+    "message": "слой полностью прозрачен (непрозрачность 0)",
+    "description": "Onion layer tooltip, after \"Skipped:\". Lower-case, no full stop."
+  },
+  "Import.Layer.Skip.Layout.Fmt": {
+    "message": "неподдерживаемая UV-раскладка «{0}»",
+    "description": "Onion layer tooltip, after \"Skipped:\". {0} is the pack's UV layout token, untranslated. Lower-case, no full stop."
+  },
+  "Import.Layer.Skip.Map.Fmt": {
+    "message": "неподдерживаемая карта текстуры «{0}»",
+    "description": "Onion layer tooltip, after \"Skipped:\". {0} is the pack's texture-map token, untranslated. Lower-case, no full stop."
+  },
+  "Import.Layer.Skip.BlendMode.Fmt": {
+    "message": "у режима наложения «{0}» нет аналога в Proteus",
+    "description": "Onion layer tooltip, after \"Skipped:\". {0} is the pack's blend-mode token (Multiply, Screen…), untranslated. Lower-case, no full stop."
+  },
+  "Import.Onion.Description.Fmt": {
+    "message": "Импортировано из пакета Onion «{0}».",
+    "description": "Written into the description of a mod imported from an Onion pack; Penumbra shows it. {0} is the pack's file name."
+  },
+  "Import.Pack.UnsafeEntry.Fmt": {
+    "message": "Пакет содержит небезопасный путь: {0}",
+    "description": "Why a pack could not be read: it holds a path that would escape its folder. {0} is that path."
+  },
+  "Import.Pack.Onion.NoMeta": {
+    "message": "Это не пакет Onion — в нём нет meta.json.",
+    "description": "Why an Onion pack could not be read. Keep meta.json as is."
+  },
+  "Import.Pack.MetaUnreadable": {
+    "message": "meta.json пакета пуст или нечитаем.",
+    "description": "Why a pack could not be read. Keep meta.json as is."
+  },
+  "Import.Pack.EntryGone.Fmt": {
+    "message": "В пакете больше нет {0}.",
+    "description": "Why an import failed: a file vanished from the pack after it was opened. {0} is the file."
+  },
+  "Import.Pack.Penumbra.NoMeta": {
+    "message": "Это не пакет Penumbra — в нём нет meta.json.",
+    "description": "Why a Penumbra pack could not be read. Keep meta.json as is."
+  },
+  "Import.Pack.MetaNotObject": {
+    "message": "meta.json пакета не является объектом.",
+    "description": "Why a pack could not be read. Keep meta.json as is."
+  },
+  "Import.Eye.Pack.UnsafeEntry.Fmt": {
+    "message": "Архив содержит небезопасный путь: {0}",
+    "description": "Why an eye-texture archive could not be read. {0} is the offending path."
+  },
+  "Import.Eye.Pack.NoImages": {
+    "message": "В архиве нет изображений, импортировать нечего.",
+    "description": "Why an eye-texture archive could not be imported."
+  },
+  "Import.Eye.Pack.EntryGone.Fmt": {
+    "message": "В архиве больше нет {0}.",
+    "description": "Why an eye import failed: a file vanished from the archive after it was opened. {0} is the file."
+  },
+  "Import.Luminis.Pack.NoManifest": {
+    "message": "Это не модпак TexTools — в нём нет TTMPL.mpl.",
+    "description": "Why a TexTools modpack could not be read. Keep TTMPL.mpl as is."
+  },
+  "Import.Luminis.Pack.NoData": {
+    "message": "В модпаке нет TTMPD.mpd, поэтому ни у одного из перечисленных файлов нет данных.",
+    "description": "Why a TexTools modpack could not be read. Keep TTMPD.mpd as is."
+  },
+  "Import.Luminis.Pack.Version1": {
+    "message": "Похоже на старый .ttmp из TexTools (версия 1), который Proteus не читает. Переэкспортируйте его из TexTools как .ttmp2.",
+    "description": "Why a TexTools modpack could not be read. Keep .ttmp and .ttmp2 as is."
+  },
+  "Import.Luminis.Pack.ManifestUnreadable": {
+    "message": "TTMPL.mpl модпака пуст или нечитаем.",
+    "description": "Why a TexTools modpack could not be read. Keep TTMPL.mpl as is."
+  },
+  "Import.Luminis.Pack.Version.Fmt": {
+    "message": "Модпак объявляет версию TTMP {0}, которую Proteus не читает. Переэкспортируйте его из TexTools как .ttmp2.",
+    "description": "Why a TexTools modpack could not be read. {0} is the version the pack declares. Keep TTMP and .ttmp2 as is."
+  },
+  "Import.Luminis.Pack.NoFiles": {
+    "message": "В модпаке не указано ни одного файла.",
+    "description": "Why a TexTools modpack could not be imported."
+  },
+  "Import.Luminis.Pack.DataGone": {
+    "message": "В модпаке больше нет TTMPD.mpd.",
+    "description": "Why a TexTools import failed: the data file vanished after the pack was opened. Keep TTMPD.mpd as is."
+  },
+  "Import.Luminis.Pack.OutOfBlob.Fmt": {
+    "message": "манифест помещает его на байт {0} блока данных размером {1} байт",
+    "description": "Why one file of a TexTools modpack is skipped; shown after a colon. {0} and {1} are byte counts. Lower-case, no full stop."
+  },
+  "Import.Luminis.Pack.Truncated": {
+    "message": "блок данных модпака обрезан",
+    "description": "Why one file of a TexTools modpack is skipped; shown after a colon. Lower-case, no full stop."
+  },
+  "Import.Luminis.Tex.HeaderSize": {
+    "message": "Размер заголовка SqPack выходит за пределы файла.",
+    "description": "Why a texture inside a TexTools modpack could not be read. Keep SqPack as is."
+  },
+  "Import.Luminis.Tex.MipCount.Fmt": {
+    "message": "Текстура с {0} уровнями mip нечитаема.",
+    "description": "Why a texture inside a TexTools modpack could not be read. {0} is a number."
+  },
+  "Import.Luminis.Tex.MipTable": {
+    "message": "Таблица mip выходит за заголовок SqPack.",
+    "description": "Why a texture inside a TexTools modpack could not be read. Keep SqPack as is."
+  },
+  "Import.Luminis.Tex.Header": {
+    "message": "Заголовок текстуры отсутствует или выходит за конец файла.",
+    "description": "Why a texture inside a TexTools modpack could not be read."
+  },
+  "Import.Luminis.Tex.Claims.Fmt": {
+    "message": "Текстура заявляет размер {0} байт.",
+    "description": "Why a texture inside a TexTools modpack could not be read: it says it is impossibly large. {0} is a byte count."
+  },
+  "Import.Luminis.Tex.BlockSize": {
+    "message": "Блок текстуры распаковался не до заявленного размера.",
+    "description": "Why a texture inside a TexTools modpack could not be read."
+  },
+  "Import.Luminis.Tex.BlockHeader": {
+    "message": "Заголовок блока текстуры выходит за конец файла.",
+    "description": "Why a texture inside a TexTools modpack could not be read."
+  },
+  "Import.Luminis.Tex.BlockHeaderSize.Fmt": {
+    "message": "Заголовок блока текстуры размером {0} байт нечитаем.",
+    "description": "Why a texture inside a TexTools modpack could not be read. {0} is a byte count."
+  },
+  "Import.Luminis.Tex.Block": {
+    "message": "Блок текстуры выходит за конец файла.",
+    "description": "Why a texture inside a TexTools modpack could not be read."
+  },
+  "Import.Luminis.Tex.Field": {
+    "message": "Поле SqPack выходит за конец файла.",
+    "description": "Why a texture inside a TexTools modpack could not be read. Keep SqPack as is."
+  },
+  "Presets.Error.Unreadable.Fmt": {
+    "message": "Не удалось прочитать этот файл: {0}",
+    "description": "Preset bar notice: a preset file could not be read. {0} is the underlying error message."
+  },
+  "Presets.Error.NothingToPaste": {
+    "message": "Нечего вставлять.",
+    "description": "Preset bar notice: Paste code was pressed with nothing on the clipboard."
+  },
+  "Presets.Error.NotACode": {
+    "message": "Это не похоже на код пресета Proteus.",
+    "description": "Preset bar notice: the clipboard does not hold a preset share code."
+  },
+  "Presets.Error.Version.Fmt": {
+    "message": "Это код версии {0}, а эта версия Proteus понимает {1}. Обновите Proteus.",
+    "description": "Preset bar notice: the share code is from a newer Proteus. {0} is the code's version, {1} the version this build reads."
+  },
+  "Presets.Error.NotAPreset": {
+    "message": "В этом файле нет пресета Proteus.",
+    "description": "Preset bar or Import tab notice: the chosen file is not a preset."
+  },
+  "Presets.Error.Empty": {
+    "message": "Этот пресет пуст.",
+    "description": "Preset bar notice: the preset holds no settings."
+  },
+  "Presets.ImportedName": {
+    "message": "Импортированный пресет",
+    "description": "Name given to an imported preset that arrives without one; shown in the preset list."
+  },
+  "HatCompat.Revert.Failed.Fmt": {
+    "message": "Не удалось отменить: {0}",
+    "description": "Hats panel, in red, when undoing a hat fit throws. {0} is the error message."
+  },
+  "Create.Description": {
+    "message": "Создано для Proteus.",
+    "description": "Written into the description of a mod made in the Create tab; Penumbra shows it."
+  },
+  "Service.ManagedMod.Description": {
+    "message": "Управляется плагином наложений Proteus.",
+    "description": "Description of the mod Proteus writes its output into; Penumbra shows it."
+  },
+  "Service.ModMeta.LegacyFolder.Fmt": {
+    "message": "{0} — папка мода Penumbra до v{1}, в которую Proteus не пишет.",
+    "description": "Why Proteus will not write to a mod. {0} is the mod's folder, {1} Penumbra's manifest version number."
+  },
+  "Service.ModMeta.InUse.Fmt": {
+    "message": "{0} занят другой программой и не читается, поэтому не был перезаписан.",
+    "description": "Why a mod's manifest was not rewritten. {0} is a file path."
+  },
+  "Service.ModMeta.NoGroup.Fmt": {
+    "message": "В этом моде нет группы «{0}».",
+    "description": "Why a change to a mod failed. {0} is a Penumbra option group's name."
+  },
+  "Service.Download.NoSources": {
+    "message": "не настроено ни одного источника",
+    "description": "Why a download (UV maps) failed; shown after a colon. Lower-case, no full stop."
+  },
+  "Service.Download.BadRange.Fmt": {
+    "message": "{0}: 206 с позиции {1}, ожидалось {2}",
+    "description": "Why a download (UV maps) failed; shown after a colon. {0} is a file name, {1} and {2} byte offsets; keep 206 (an HTTP status). Lower-case, no full stop."
+  },
+  "Service.Download.Checksum.Fmt": {
+    "message": "контрольная сумма {0} не совпадает ({1} байт, sha256 {2}…)",
+    "description": "Why a download (UV maps) failed; shown after a colon. {0} is a file name, {1} a byte count, {2} the start of a hash. Lower-case, no full stop."
   }
 }

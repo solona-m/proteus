@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using System.Text;
+using CheapLoc;
 
 namespace Proteus.Services;
 
@@ -83,7 +84,7 @@ public static class ModelAttributeWriter
                 ushort subIdx = BitConverter.ToUInt16(reused, mo + 10);
                 ushort subCount = BitConverter.ToUInt16(reused, mo + 12);
                 if (submesh < 0 || submesh >= subCount)
-                    throw new ModelEditException($"mesh {mesh} has no submesh {submesh}");
+                    throw new ModelEditException(string.Format(Loc.Localize("Service.ModelEdit.NoSubmesh.Fmt", "mesh {0} has no submesh {1}"), mesh, submesh));
                 int at = src.SubmeshStart + (subIdx + submesh) * 16;
                 W32(reused, at + 8, BitConverter.ToUInt32(reused, at + 8) | reusedBit);
             }
@@ -92,8 +93,8 @@ public static class ModelAttributeWriter
 
         // Only a NEW name needs a slot, so the ceiling is enforced here rather than at the top.
         if (attrCount >= MaxAttributes)
-            throw new ModelEditException(
-                $"this model already declares {attrCount} attributes, which is all a submesh mask can hold");
+            throw new ModelEditException(string.Format(Loc.Localize("Service.ModelEdit.AttributesFull.Fmt",
+                "this model already declares {0} attributes, which is all a submesh mask can hold"), attrCount));
 
         var text = Encoding.ASCII.GetBytes(attributeName);
         int nameLen = text.Length + 1;
@@ -163,7 +164,7 @@ public static class ModelAttributeWriter
             int mo = meshStart + mesh * 36;
             ushort subIdx = BitConverter.ToUInt16(o, mo + 10), subCount = BitConverter.ToUInt16(o, mo + 12);
             if (submesh < 0 || submesh >= subCount)
-                throw new ModelEditException($"mesh {mesh} has no submesh {submesh}");
+                throw new ModelEditException(string.Format(Loc.Localize("Service.ModelEdit.NoSubmesh.Fmt", "mesh {0} has no submesh {1}"), mesh, submesh));
             int ss = submeshStart + (subIdx + submesh) * 16;
             W32(o, ss + 8, BitConverter.ToUInt32(o, ss + 8) | bit);
         }
@@ -266,7 +267,7 @@ public static class ModelAttributeWriter
         int mo = src.MeshStart + mesh * 36;
         ushort subIdx = BitConverter.ToUInt16(mdl, mo + 10), subCount = BitConverter.ToUInt16(mdl, mo + 12);
         if (submesh < 0 || submesh >= subCount)
-            throw new ModelEditException($"mesh {mesh} has no submesh {submesh}");
+            throw new ModelEditException(string.Format(Loc.Localize("Service.ModelEdit.NoSubmesh.Fmt", "mesh {0} has no submesh {1}"), mesh, submesh));
 
         int ss = src.SubmeshStart + (subIdx + submesh) * 16;
         uint so = BitConverter.ToUInt32(mdl, ss), sc = BitConverter.ToUInt32(mdl, ss + 4);
@@ -282,11 +283,11 @@ public static class ModelAttributeWriter
             runs.Add((start, t - start, group));
         }
 
-        if (runs.Count == 0) throw new ModelEditException("that submesh has no triangles");
+        if (runs.Count == 0) throw new ModelEditException(Loc.Localize("Service.ModelEdit.NoTriangles", "that submesh has no triangles"));
         if (runs.Count > MaxRuns)
-            throw new ModelEditException(
-                $"those triangles are interleaved with the rest of the part across {runs.Count} runs, which "
-              + "is too fragmented to split cleanly");
+            throw new ModelEditException(string.Format(Loc.Localize("Service.ModelEdit.Fragmented.Fmt",
+                "those triangles are interleaved with the rest of the part across {0} runs, which "
+              + "is too fragmented to split cleanly"), runs.Count));
 
         // Already its own submesh: nothing to cut.
         if (runs.Count == 1)
@@ -351,14 +352,15 @@ public static class ModelAttributeWriter
         int mo = src.MeshStart + mesh * 36;
         ushort subIdx = BitConverter.ToUInt16(mdl, mo + 10), subCount = BitConverter.ToUInt16(mdl, mo + 12);
         if (submesh < 0 || submesh >= subCount)
-            throw new ModelEditException($"mesh {mesh} has no submesh {submesh}");
+            throw new ModelEditException(string.Format(Loc.Localize("Service.ModelEdit.NoSubmesh.Fmt", "mesh {0} has no submesh {1}"), mesh, submesh));
 
         int ss = src.SubmeshStart + (subIdx + submesh) * 16;
         uint so = BitConverter.ToUInt32(mdl, ss), sc = BitConverter.ToUInt32(mdl, ss + 4);
         int tris = (int)(sc / 3);
-        if (tris == 0) throw new ModelEditException("that submesh has no triangles");
+        if (tris == 0) throw new ModelEditException(Loc.Localize("Service.ModelEdit.NoTriangles", "that submesh has no triangles"));
         if ((long)src.Ib + (so + sc) * 2 > mdl.Length)
-            throw new ModelEditException($"mesh {mesh}'s index range runs past the end of the file");
+            throw new ModelEditException(string.Format(Loc.Localize("Service.ModelEdit.IndexRange.Fmt",
+                "mesh {0}'s index range runs past the end of the file"), mesh));
 
         // Labels in first-appearance order, original order kept within each, so a grouped submesh is a no-op.
         var labels = new int[tris];
@@ -411,7 +413,8 @@ public static class ModelAttributeWriter
         int shapeMeshBlock = src.ShapeBlock + shapeCount * 16;
         int shapeValBlock = shapeMeshBlock + shapeMeshCount * 12;
         if (shapeValBlock + shapeValueCount * 4 > o.Length)
-            throw new ModelEditException("this model's shape block runs past the end of the file");
+            throw new ModelEditException(Loc.Localize("Service.ModelEdit.ShapeBlock",
+                "this model's shape block runs past the end of the file"));
 
         for (int m = 0; m < shapeMeshCount; m++)
         {
@@ -430,9 +433,9 @@ public static class ModelAttributeWriter
                 long moved = (long)newOf[within / 3] * 3 + within % 3;
                 long rebased = so + moved - windowBase;
                 if (rebased < 0 || rebased > ushort.MaxValue)
-                    throw new ModelEditException(
+                    throw new ModelEditException(Loc.Localize("Service.ModelEdit.ShapeTooFar",
                         "this model's existing shape addresses this submesh from too far away to follow a "
-                      + "reorder — it cannot be split by geometry");
+                      + "reorder — it cannot be split by geometry"));
                 W16(o, vo, (ushort)rebased);
             }
         }
@@ -523,7 +526,7 @@ public static class ModelAttributeWriter
     {
         unaddressable = 0;
         if (string.IsNullOrEmpty(shapeName))
-            throw new ModelEditException("a shape needs a name");
+            throw new ModelEditException(Loc.Localize("Service.ModelEdit.ShapeNoName", "a shape needs a name"));
 
         var src = SecondSkinWriter.Parse(mdl);
 
@@ -539,31 +542,32 @@ public static class ModelAttributeWriter
         // The shape block's position proves the version-dependent bone-table walk was right: on a mis-walk the
         // submesh bone map's length prefix is arbitrary bytes and fails these checks.
         if (shapeValEnd < 0 || shapeValEnd + 4 > mdl.Length)
-            throw new ModelEditException("this model's shape block runs past the end of the file");
+            throw new ModelEditException(Loc.Localize("Service.ModelEdit.ShapeBlock",
+                "this model's shape block runs past the end of the file"));
         uint boneMapBytes = BitConverter.ToUInt32(mdl, shapeValEnd);
         if (boneMapBytes % 2 != 0 || (long)shapeValEnd + 4 + boneMapBytes > mdl.Length)
-            throw new ModelEditException(
-                "this model's tables do not add up — the shape block is not where the format says it is");
+            throw new ModelEditException(Loc.Localize("Service.ModelEdit.TablesMismatch",
+                "this model's tables do not add up — the shape block is not where the format says it is"));
 
         if (DeclaresShape(mdl, shapeName))
-            throw new ModelEditException($"this model already declares a shape named {shapeName}");
+            throw new ModelEditException(string.Format(Loc.Localize("Service.ModelEdit.ShapeExists.Fmt", "this model already declares a shape named {0}"), shapeName));
 
         // Neck-morph arrays are not accounted for here or in the parse; refuse rather than splice past them.
         if (mdl[src.Mh + 43] != 0)
-            throw new ModelEditException("this model carries neck morph data, which cannot be edited here");
+            throw new ModelEditException(Loc.Localize("Service.ModelEdit.NeckMorph", "this model carries neck morph data, which cannot be edited here"));
 
         var plans = BuildShapePlans(mdl, src, moved, normals, out unaddressable);
         if (plans.Count == 0)
-            throw new ModelEditException(
-                "none of those vertices are used by a triangle, so a shape over them would deform nothing");
+            throw new ModelEditException(Loc.Localize("Service.ModelEdit.UnusedVertices",
+                "none of those vertices are used by a triangle, so a shape over them would deform nothing"));
 
         int totalValues = plans.Sum(p => p.ValueCount);
         int totalMeshes = plans.Sum(p => p.Windows.Count);
         if (shapeCount + 1 > ushort.MaxValue
          || shapeMeshCount + totalMeshes > ushort.MaxValue
          || shapeValueCount + (long)totalValues > ushort.MaxValue)
-            throw new ModelEditException(
-                $"this shape needs {totalValues} shape values, which overflows what the format counts");
+            throw new ModelEditException(string.Format(Loc.Localize("Service.ModelEdit.ShapeOverflow.Fmt",
+                "this shape needs {0} shape values, which overflows what the format counts"), totalValues));
 
         // ── the three table records ──────────────────────────────────────────
         // Appended at the ends of their arrays: shapeMeshStart and valueStart are GLOBAL indices, so no
@@ -696,8 +700,8 @@ public static class ModelAttributeWriter
             var wanted = moved[mesh];
             if (wanted.Count == 0) continue;
             if (mesh < src.Lod0MeshIndex || mesh >= lod0End)
-                throw new ModelEditException(
-                    $"mesh {mesh} is not part of LOD0, whose meshes are the only ones this can shape");
+                throw new ModelEditException(string.Format(Loc.Localize("Service.ModelEdit.NotLod0.Fmt",
+                    "mesh {0} is not part of LOD0, whose meshes are the only ones this can shape"), mesh));
 
             int mo = src.MeshStart + mesh * 36;
             ushort vc = BitConverter.ToUInt16(mdl, mo);
@@ -706,14 +710,16 @@ public static class ModelAttributeWriter
             var asked = wanted.Keys.OrderBy(k => k).ToArray();
             foreach (var v in asked)
                 if (v < 0 || v >= vc)
-                    throw new ModelEditException($"mesh {mesh} has no vertex {v} — it has {vc}");
+                    throw new ModelEditException(string.Format(Loc.Localize("Service.ModelEdit.NoVertex.Fmt", "mesh {0} has no vertex {1} — it has {2}"), mesh, v, vc));
             if (vc + asked.Length > ushort.MaxValue)
-                throw new ModelEditException(
-                    $"mesh {mesh} would need {vc + asked.Length} vertices, past the {ushort.MaxValue} a "
-                  + "model can count — this is the format reason a hair meant for hats is kept under 30k polys");
+                throw new ModelEditException(string.Format(Loc.Localize("Service.ModelEdit.TooManyVertices.Fmt",
+                    "mesh {0} would need {1} vertices, past the {2} a "
+                  + "model can count — this is the format reason a hair meant for hats is kept under 30k polys"),
+                    mesh, vc + asked.Length, ushort.MaxValue));
 
             if ((long)src.Ib + (startIndex + ic) * 2 > mdl.Length)
-                throw new ModelEditException($"mesh {mesh}'s index range runs past the end of the file");
+                throw new ModelEditException(string.Format(Loc.Localize("Service.ModelEdit.IndexRange.Fmt",
+                    "mesh {0}'s index range runs past the end of the file"), mesh));
 
             var srcVerts = asked;
 
@@ -762,10 +768,10 @@ public static class ModelAttributeWriter
         var decl = src.Decls[mesh];
         var pos = Array.Find(decl, e => e.Usage == SecondSkinWriter.UsePosition);
         if (pos == default && !Array.Exists(decl, e => e.Usage == SecondSkinWriter.UsePosition))
-            throw new ModelEditException($"mesh {mesh} declares no position element");
+            throw new ModelEditException(string.Format(Loc.Localize("Service.ModelEdit.NoPosition.Fmt", "mesh {0} declares no position element"), mesh));
         if (Array.IndexOf(PositionTypes, pos.Type) < 0)
-            throw new ModelEditException(
-                $"mesh {mesh} stores its positions as vertex type {pos.Type}, which cannot be written here");
+            throw new ModelEditException(string.Format(Loc.Localize("Service.ModelEdit.PositionType.Fmt",
+                "mesh {0} stores its positions as vertex type {1}, which cannot be written here"), mesh, pos.Type));
 
         var nrm = Array.Find(decl, e => e.Usage == SecondSkinWriter.UseNormal);
         bool haveNormal = normals != null && Array.Exists(decl, e => e.Usage == SecondSkinWriter.UseNormal);
@@ -778,7 +784,7 @@ public static class ModelAttributeWriter
             uint vbo = BitConverter.ToUInt32(mdl, mo + 20 + j * 4);
             int blockStart = src.Vb + (int)vbo;
             if (blockStart < 0 || blockStart + (vc + 1) * stride > mdl.Length + stride)
-                throw new ModelEditException($"mesh {mesh}'s stream {j} runs past the end of the file");
+                throw new ModelEditException(string.Format(Loc.Localize("Service.ModelEdit.StreamRange.Fmt", "mesh {0}'s stream {1} runs past the end of the file"), mesh, j));
 
             var bytes = new byte[srcVerts.Length * stride];
             for (int r = 0; r < srcVerts.Length; r++)
@@ -818,7 +824,7 @@ public static class ModelAttributeWriter
         {
             int at = src.ShapeBlock + si * 16;
             if (at + 16 > mdl.Length)
-                throw new ModelEditException("this model's shape table runs past the end of the file");
+                throw new ModelEditException(Loc.Localize("Service.ModelEdit.ShapeTable", "this model's shape table runs past the end of the file"));
             if (string.Equals(StringAt(mdl, src, BitConverter.ToUInt32(mdl, at)), shapeName, StringComparison.Ordinal))
                 drop.Add(at);
         }

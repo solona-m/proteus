@@ -61,7 +61,8 @@ internal sealed class RefitModService(PenumbraBridge penumbra, CompositorService
         var data = PenumbraModMeta.TryReadDefaultData(root)
                 ?? (PenumbraModMeta.HasReadableManifest(root)
                         ? (new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), new List<object>())
-                        : throw new InvalidDataException($"Could not read the redirects of {root}."));
+                        : throw new InvalidDataException(string.Format(Loc.Localize("Refit.Error.RedirectsUnreadable.Fmt",
+                            "Could not read the redirects of {0}."), root)));
         if (data.Files.TryGetValue(rel, out var at) && string.Equals(at.Replace('\\', '/'), rel, StringComparison.OrdinalIgnoreCase))
             return changed;
 

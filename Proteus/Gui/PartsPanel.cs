@@ -1146,7 +1146,7 @@ public sealed class PartsPanel
 
     /// <summary>The slot and set a model path names — "Legs — e0488" — or its file name if it names neither.</summary>
     internal static string SlotOf(PenumbraModMeta.Redirect r)
-        => ContentSlot.Parse(r.GamePath) is { } p ? $"{p.Label} — {p.SetTag}" : Path.GetFileName(r.GamePath);
+        => ContentSlot.Parse(r.GamePath) is { } p ? $"{ContentSlot.DisplayLabel(p.Label)} — {p.SetTag}" : Path.GetFileName(r.GamePath);
 
     /// <summary>
     /// One label per model; the slot is appended to every member of a set sharing a label, and to nothing else.
@@ -1833,7 +1833,7 @@ public sealed class PartsPanel
         {
             ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X * 0.55f);
             ImGui.SliderFloat(ps.MoveFalloff, ref moveFalloffMm, MinBrushMm, MaxBrushMm,
-                              moveFalloffMm < 10f ? "%.1f mm" : "%.0f mm", ImGuiSliderFlags.Logarithmic);
+                              moveFalloffMm < 10f ? Strings.Common.Mm1 : Strings.Common.Mm0, ImGuiSliderFlags.Logarithmic);
         }
         if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
             ImGui.SetTooltip(movePolygons ? ps.MoveFalloffSurfaceTip : ps.MoveFalloffTip);
@@ -2286,7 +2286,7 @@ public sealed class PartsPanel
         ImGui.SetNextItemWidth(w);
         // Logarithmic, so the small end of the range is not squeezed into the first few pixels.
         if (ImGui.SliderFloat(ps.BrushSize, ref ActiveRadiusMm, MinBrushMm, MaxBrushMm,
-                              ActiveRadiusMm < 10f ? "%.1f mm" : "%.0f mm", ImGuiSliderFlags.Logarithmic))
+                              ActiveRadiusMm < 10f ? Strings.Common.Mm1 : Strings.Common.Mm0, ImGuiSliderFlags.Logarithmic))
             viewport.Recolour();
         if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushSizeTip + "\n\n" + ps.BrushSizeKeysTip);
 
@@ -2321,7 +2321,7 @@ public sealed class PartsPanel
         }
         else
         {
-            ImGui.SliderFloat(ps.BrushStrength, ref brushStrengthMm, 0.01f, 1f, "%.2f mm");
+            ImGui.SliderFloat(ps.BrushStrength, ref brushStrengthMm, 0.01f, 1f, Strings.Common.Mm2);
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushStrengthTip);
         }
 
@@ -2332,7 +2332,7 @@ public sealed class PartsPanel
             float limitMm = volume.MaxDisplacement * 1000f;
             ImGui.SetNextItemWidth(w);
             if (ImGui.SliderFloat(ps.BrushLimit, ref limitMm, MeshVolumeSolve.MinMaxDisplacement * 1000f,
-                                  MeshVolumeSolve.MaxMaxDisplacement * 1000f, "%.0f mm", ImGuiSliderFlags.Logarithmic))
+                                  MeshVolumeSolve.MaxMaxDisplacement * 1000f, Strings.Common.Mm0, ImGuiSliderFlags.Logarithmic))
                 volume.MaxDisplacement = limitMm / 1000f;
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushLimitTip);
         }

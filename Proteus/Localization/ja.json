@@ -764,11 +764,11 @@
     "description": ""
   },
   "Command.Refreshing": {
-    "message": "Recompositing now.",
+    "message": "再合成しています。",
     "description": "Chat line for \"/proteus refresh\"."
   },
   "Command.Refreshing.Full": {
-    "message": "Rebuilding everything and recompositing. This takes longer than a plain refresh.",
+    "message": "すべてを作り直して再合成しています。通常の更新より時間がかかります。",
     "description": "Chat line for \"/proteus refresh full\"."
   },
   "Common.Browse.Btn": {
@@ -3028,15 +3028,15 @@
     "description": ""
   },
   "Presets.Header": {
-    "message": "Presets",
+    "message": "プリセット",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.None": {
-    "message": "No preset",
+    "message": "プリセットなし",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.None.Tip": {
-    "message": "Wear the mod's own colours again. Your option ticks are left exactly as they are.",
+    "message": "Mod 本来の色に戻します。チェックしたオプションはそのまま残ります。",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.PackMarker": {
@@ -3048,39 +3048,39 @@
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.SaveNew": {
-    "message": "+ Save…",
+    "message": "+ 保存…",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.SaveNew.Tip": {
-    "message": "Save how this mod looks right now — its ticked options, colours and layer settings — under a name.",
+    "message": "この Mod の今の見た目（チェックしたオプション・色・レイヤー設定）を名前を付けて保存します。",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Save": {
-    "message": "Save",
+    "message": "保存",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.RenameConfirm": {
-    "message": "Rename",
+    "message": "名前を変更",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Cancel": {
-    "message": "Cancel",
+    "message": "キャンセル",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.NeedsAName": {
-    "message": "Give it a name first.",
+    "message": "先に名前を付けてください。",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.NoCollection": {
-    "message": "Penumbra hasn't told Proteus which collection you're wearing yet.",
+    "message": "どのコレクションを使っているか、Penumbra がまだ Proteus に知らせていません。",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.FirstName": {
-    "message": "My look",
+    "message": "マイルック",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.NthName.Fmt": {
-    "message": "My look {0}",
+    "message": "マイルック {0}",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Selected.Fmt": {
@@ -3088,139 +3088,139 @@
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.FromPack": {
-    "message": "from the mod",
+    "message": "Mod 付属",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.PackReadOnly": {
-    "message": "This one came with the mod, so it can't be changed. Duplicate it to make it yours.",
+    "message": "これは Mod に付属のもののため変更できません。複製すると自分のものにできます。",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Update": {
-    "message": "Update",
+    "message": "更新",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Update.Tip": {
-    "message": "Fold everything on screen back into this preset.",
+    "message": "画面上の状態をすべてこのプリセットに反映します。",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.NothingChanged": {
-    "message": "Nothing has changed since this preset was saved.",
+    "message": "このプリセットを保存してから何も変わっていません。",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Rename": {
-    "message": "Rename",
+    "message": "名前を変更",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Duplicate": {
-    "message": "Duplicate",
+    "message": "複製",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Fork.Tip": {
-    "message": "Make an editable copy of the mod's preset and wear it.",
+    "message": "Mod のプリセットを編集可能な複製にして着用します。",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.CopyCode.Tip": {
-    "message": "Copy this preset as a share code to paste to someone.",
+    "message": "このプリセットを共有コードとしてコピーし、他の人に貼り付けて渡せます。",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.CodeCopied": {
-    "message": "Share code copied to the clipboard.",
+    "message": "共有コードをクリップボードにコピーしました。",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Export.Tip": {
-    "message": "Save this preset as a file.",
+    "message": "このプリセットをファイルに保存します。",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Delete.Tip": {
-    "message": "Hold Ctrl and click to delete this preset.",
+    "message": "Ctrl を押しながらクリックすると、このプリセットを削除します。",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.PasteCode": {
-    "message": "Paste code",
+    "message": "コードを貼り付け",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.PasteCode.Tip": {
-    "message": "Read a preset share code from the clipboard.",
+    "message": "クリップボードからプリセットの共有コードを読み込みます。",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Import": {
-    "message": "Import…",
+    "message": "インポート…",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Import.Tip": {
-    "message": "Load a preset from a file.",
+    "message": "ファイルからプリセットを読み込みます。",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Staged.Fmt": {
-    "message": "\"{0}\" is ready to add.",
+    "message": "「{0}」を追加できます。",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.StagedOtherMod.Fmt": {
-    "message": "\"{0}\" was made for \"{1}\" by {2}, not for \"{3}\". Adding it anyway will apply whichever of its options and colours this mod happens to share.",
+    "message": "「{0}」は {2} が「{1}」用に作ったもので、「{3}」用ではありません。それでも追加すると、この Mod と共通するオプションと色だけが適用されます。",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.AddStaged": {
-    "message": "Add",
+    "message": "追加",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Discard": {
-    "message": "Discard",
+    "message": "破棄",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Added.Fmt": {
-    "message": "Added \"{0}\".",
+    "message": "「{0}」を追加しました。",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.ExportDialog.Title": {
-    "message": "Save preset",
+    "message": "プリセットを保存",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.ImportDialog.Title": {
-    "message": "Open preset",
+    "message": "プリセットを開く",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Dialog.Filter": {
-    "message": "Proteus preset",
+    "message": "Proteus プリセット",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Exported.Fmt": {
-    "message": "Saved to {0}.",
+    "message": "{0} に保存しました。",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.ExportFailed.Fmt": {
-    "message": "Couldn't save it: {0}",
+    "message": "保存できませんでした：{0}",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.PartialApply.Fmt": {
-    "message": "\"{0}\" was applied as far as it goes. {1}",
+    "message": "「{0}」を適用できる範囲で適用しました。{1}",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.MissingGroups.Fmt": {
-    "message": "The mod no longer has these option groups: {0}.",
+    "message": "Mod にこれらのオプショングループがなくなっています：{0}。",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.MissingOptions.Fmt": {
-    "message": "These options are gone: {0}.",
+    "message": "これらのオプションはなくなっています：{0}。",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.JustNow": {
-    "message": "just now",
+    "message": "たった今",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.MinutesAgo.Fmt": {
-    "message": "{0} m ago",
+    "message": "{0} 分前",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.HoursAgo.Fmt": {
-    "message": "{0} h ago",
+    "message": "{0} 時間前",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.DaysAgo.Fmt": {
-    "message": "{0} d ago",
+    "message": "{0} 日前",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Column.Header": {
-    "message": "Preset",
+    "message": "プリセット",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Column.None": {
@@ -3228,39 +3228,39 @@
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Column.Tip": {
-    "message": "A saved look for this mod: its ticked options, colours and layer settings. Open Colors to save one.",
+    "message": "この Mod の保存済みルック（チェックしたオプション・色・レイヤー設定）。保存するにはカラーを開いてください。",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.HeaderApplied.Fmt": {
-    "message": "Presets — {0}",
+    "message": "プリセット — {0}",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.ImportFailed.Fmt": {
-    "message": "That isn't a preset Proteus can read: {0}",
+    "message": "Proteus が読み込めるプリセットではありません：{0}",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.ImportedFrom.Fmt": {
-    "message": "Preset \"{0}\" — made for \"{1}\" by {2}.",
+    "message": "プリセット「{0}」— {2} が「{1}」用に作成。",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.NoMatchingMod": {
-    "message": "You don't have that mod installed under that name. Pick the mod it should go to, or install it first.",
+    "message": "その名前の Mod はインストールされていません。追加先の Mod を選ぶか、先にインストールしてください。",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.AddTo": {
-    "message": "Add to",
+    "message": "追加先",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.PickAMod": {
-    "message": "Pick a mod…",
+    "message": "Mod を選択…",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.AddTo.Tip": {
-    "message": "Saves it against that mod. Nothing changes on screen until you wear it from the mod's Presets section.",
+    "message": "その Mod に保存します。Mod のプリセット欄から着用するまで、画面上は何も変わりません。",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.AddedTo.Fmt": {
-    "message": "Added \"{0}\" to {1}. Wear it from that mod's Presets section in Colors.",
+    "message": "「{0}」を {1} に追加しました。カラーのその Mod のプリセット欄から着用してください。",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Parts.Retarget.Ambiguous.Fmt": {
@@ -3272,11 +3272,11 @@
     "description": ""
   },
   "Parts.Retarget.Chest": {
-    "message": "Chest",
+    "message": "胸",
     "description": ""
   },
   "Parts.Retarget.Choose": {
-    "message": "Choose\u2026",
+    "message": "選択…",
     "description": ""
   },
   "Parts.Retarget.Clash.Fmt": {
@@ -3292,7 +3292,7 @@
     "description": ""
   },
   "Parts.Retarget.ClearPreview": {
-    "message": "Clear the preview",
+    "message": "プレビューを消去",
     "description": ""
   },
   "Parts.Retarget.Exact.Fmt": {
@@ -3300,15 +3300,15 @@
     "description": ""
   },
   "Parts.Retarget.Feet": {
-    "message": "Feet",
+    "message": "足",
     "description": ""
   },
   "Parts.Retarget.From": {
-    "message": "Made for",
+    "message": "作成元の体型",
     "description": ""
   },
   "Parts.Retarget.Group.Fmt": {
-    "message": "Body \u2014 {0}",
+    "message": "体型 — {0}",
     "description": ""
   },
   "Parts.Retarget.Guess": {
@@ -3316,11 +3316,11 @@
     "description": "Under the Body size tool's \"Made for\" size: the detector's pick is only a guess."
   },
   "Parts.Retarget.Hands": {
-    "message": "Hands",
+    "message": "手",
     "description": ""
   },
   "Parts.Retarget.Legs": {
-    "message": "Legs",
+    "message": "脚",
     "description": ""
   },
   "Parts.Retarget.Likely": {
@@ -3332,7 +3332,7 @@
     "description": ""
   },
   "Parts.Retarget.NoBody": {
-    "message": "Pick one\u2026",
+    "message": "選択してください…",
     "description": ""
   },
   "Parts.Retarget.NoBodiesForSex.Fmt": {
@@ -3340,11 +3340,11 @@
     "description": ""
   },
   "Parts.Retarget.Male": {
-    "message": "male",
+    "message": "男性",
     "description": ""
   },
   "Parts.Retarget.Female": {
-    "message": "female",
+    "message": "女性",
     "description": ""
   },
   "Parts.Retarget.NoBodyMesh": {
@@ -3356,7 +3356,7 @@
     "description": ""
   },
   "Parts.Retarget.OpenInPenumbra": {
-    "message": "Open in Penumbra",
+    "message": "Penumbra で開く",
     "description": ""
   },
   "Parts.Retarget.OtherLods": {
@@ -3368,11 +3368,11 @@
     "description": ""
   },
   "Parts.Retarget.Preview": {
-    "message": "Refit and preview",
+    "message": "リフィットしてプレビュー",
     "description": ""
   },
   "Parts.Retarget.Save": {
-    "message": "Save as a new option",
+    "message": "新しいオプションとして保存",
     "description": ""
   },
   "Parts.Retarget.Saved.Fmt": {
@@ -3380,11 +3380,11 @@
     "description": ""
   },
   "Parts.Retarget.Slot.Fmt": {
-    "message": "{0} \u2014 {1} options",
+    "message": "{0} — オプション {1} 件",
     "description": ""
   },
   "Parts.Retarget.Slot.Optional.Fmt": {
-    "message": "{0} \u2014 optional",
+    "message": "{0} — 任意",
     "description": ""
   },
   "Parts.Retarget.Slot.Optional.Tip": {
@@ -3392,7 +3392,7 @@
     "description": ""
   },
   "Parts.Retarget.To": {
-    "message": "Refit onto",
+    "message": "リフィット先",
     "description": ""
   },
   "Parts.Retarget.Undo": {
@@ -3400,11 +3400,11 @@
     "description": ""
   },
   "Parts.Retarget.Unreadable.Fmt": {
-    "message": "The {0} body model could not be read.",
+    "message": "{0}の体型モデルを読み込めませんでした。",
     "description": ""
   },
   "Parts.Retarget.Working": {
-    "message": "Refitting\u2026",
+    "message": "リフィット中…",
     "description": ""
   },
   "Parts.Tool.Retarget": {
@@ -3448,7 +3448,7 @@
     "description": ""
   },
   "Parts.NoMatches": {
-    "message": "Nothing matches.",
+    "message": "一致するものがありません。",
     "description": ""
   },
   "Parts.Retarget.Lock.ListTip": {
@@ -3464,7 +3464,7 @@
     "description": ""
   },
   "Parts.Retarget.KeepShape": {
-    "message": "Keep shape",
+    "message": "形を保つ",
     "description": ""
   },
   "Parts.Retarget.KeepShape.Tip": {
@@ -3472,15 +3472,15 @@
     "description": ""
   },
   "Parts.Retarget.ReplaceSkin": {
-    "message": "Use the new body\u0027s skin",
+    "message": "新しい体型の肌を使う",
     "description": ""
   },
   "Parts.Retarget.SaveMany.Fmt": {
-    "message": "Save {0} sizes as new options",
+    "message": "{0} サイズを新しいオプションとして保存",
     "description": ""
   },
   "Parts.Retarget.Showing": {
-    "message": "Showing on the character",
+    "message": "キャラクターに表示中",
     "description": ""
   },
   "Parts.Retarget.ToMany": {
@@ -3488,7 +3488,7 @@
     "description": ""
   },
   "Parts.Retarget.Working.Fmt": {
-    "message": "Refitting {0} of {1}\u2026",
+    "message": "{1} 件中 {0} 件目をリフィット中…",
     "description": ""
   },
   "Parts.Retarget.MadeHere": {
@@ -3496,11 +3496,11 @@
     "description": ""
   },
   "Parts.Retarget.NewGroup": {
-    "message": "A new group\u2026",
+    "message": "新しいグループ…",
     "description": ""
   },
   "Parts.Retarget.SaveTo": {
-    "message": "Save to group",
+    "message": "保存先グループ",
     "description": ""
   },
   "Parts.Retarget.SwapShapes.Fmt": {
@@ -3544,39 +3544,39 @@
     "description": ""
   },
   "Parts.Move.ClearPolygons": {
-    "message": "Clear",
+    "message": "クリア",
     "description": ""
   },
   "Parts.Move.Falloff.SurfaceTip": {
-    "message": "How far from the selected polygons the cloth around them still follows, measured along the surface.\nOnly cloth joined to the selection follows: a separate piece that merely sits close does not.",
+    "message": "選択したポリゴンからどこまで周囲の布が追従するかを、表面に沿って測った距離です。\n追従するのは選択とつながった布だけで、近くにあるだけの別パーツは追従しません。",
     "description": ""
   },
   "Parts.Move.Grow": {
-    "message": "Grow",
+    "message": "拡大",
     "description": ""
   },
   "Parts.Move.NoPolygons": {
-    "message": "Click a polygon on the model to select it. Shift-click adds or removes one.",
+    "message": "モデル上のポリゴンをクリックして選択します。Shift+クリックで追加・解除します。",
     "description": ""
   },
   "Parts.Move.Polygons.Fmt": {
-    "message": "{0:N0} polygon(s) selected",
+    "message": "{0:N0} ポリゴンを選択中",
     "description": ""
   },
   "Parts.Move.SelectParts": {
-    "message": "Whole parts",
+    "message": "パーツ単位",
     "description": ""
   },
   "Parts.Move.SelectPolygons": {
-    "message": "Polygons",
+    "message": "ポリゴン",
     "description": ""
   },
   "Parts.Move.SelectPolygons.Tip": {
-    "message": "Move, turn or scale single polygons instead of whole parts. Click a polygon to select it; Shift-click adds\nor removes one. Choosing a part in the list selects all of its polygons.",
+    "message": "パーツ全体ではなく個々のポリゴンを移動・回転・拡大縮小します。ポリゴンをクリックで選択、\nShift+クリックで追加・解除。リストでパーツを選ぶと、そのポリゴンがすべて選択されます。",
     "description": ""
   },
   "Parts.Move.Shrink": {
-    "message": "Shrink",
+    "message": "縮小",
     "description": ""
   },
   "Parts.Retarget.FromBody": {
@@ -3644,7 +3644,7 @@
     "description": ""
   },
   "Parts.Vanilla.Header": {
-    "message": "Vanilla gear",
+    "message": "バニラ装備",
     "description": ""
   },
   "Parts.Vanilla.Open.Fmt": {
@@ -3656,23 +3656,23 @@
     "description": ""
   },
   "Refit.Error.NoName.Fmt": {
-    "message": "Couldn\u0027t find a free mod name for \u0022{0}\u0022.",
+    "message": "「{0}」に使える空き Mod 名が見つかりませんでした。",
     "description": ""
   },
   "Refit.Mod.Description.Fmt": {
-    "message": "{0}, refitted by Proteus.",
+    "message": "{0}（Proteus でリフィット）",
     "description": ""
   },
   "Refit.Mod.Enabled.Fmt": {
-    "message": "Made \u0022{0}\u0022 and switched it on.",
+    "message": "「{0}」を作成して有効にしました。",
     "description": ""
   },
   "Refit.Mod.NotEnabled.Fmt": {
-    "message": "Made \u0022{0}\u0022, but couldn\u0027t switch it on \u2014 enable it in Penumbra.",
+    "message": "「{0}」を作成しましたが、有効にできませんでした。Penumbra で有効にしてください。",
     "description": ""
   },
 "Parts.Retarget.SaveToMod": {
-    "message": "Save into",
+    "message": "保存先",
     "description": ""
   },
   "Parts.Retarget.SaveToMod.Tip": {
@@ -3684,7 +3684,7 @@
     "description": ""
   },
   "Parts.Retarget.SaveToThisMod": {
-    "message": "This mod",
+    "message": "この Mod",
     "description": ""
   },
   "Parts.Vanilla.Worn.Tip": {
@@ -3704,7 +3704,7 @@
     "description": ""
   },
   "Parts.Vanilla.WornSuffix": {
-    "message": "(vanilla)",
+    "message": "（バニラ）",
     "description": ""
   },
   "WhatsNew.Title": {
@@ -3782,5 +3782,625 @@
   "Parts.Retarget.LeaveOut": {
     "message": "なし（このパーツを含めない）",
     "description": "First entry in an optional body part's dropdowns in the Body size panel. Picking it takes that part out of the refit."
+  },
+  "Band.Refresh.Btn": {
+    "message": "更新",
+    "description": "Button on the tab bar that recomposites now. Keep it short: it sits right-aligned on the tab bar's own line."
+  },
+  "Colors.Window.Title.Fmt": {
+    "message": "カラー — {0}",
+    "description": "Title of the colour editor window. {0} is the mod's name."
+  },
+  "Colors.NoShell": {
+    "message": "このオーバーレイは、Proteus がレイヤーを作れないもの（装備・アクセサリー・武器）を塗っています。\nGlow と Clothには自分の肌（体・顔・髪・尻尾・耳）に重なるレイヤーが必要です。",
+    "description": "Under the glow-effect picker in the colour editor, for an overlay option that paints gear rather than skin. Glow and Cloth are the names of two render modes."
+  },
+  "Colors.Reset.Blocked.Tip": {
+    "message": "この Mod の元の設定はまだ記録されていません。ここで初めて変更を保存したときに\nProteus が記録します。",
+    "description": "Tooltip on \"Reset to defaults\" in the colour editor while the mod has no recorded defaults to reset to."
+  },
+  "Chat.Loaded.Fmt": {
+    "message": "[Proteus] 読み込み完了 — ビルド #{0}（{1}）",
+    "description": "Chat line printed when the plugin loads. {0} is the build number, {1} the build date. Keep \"[Proteus]\" as it is."
+  },
+  "Export.Failed.Fmt": {
+    "message": "エクスポートに失敗しました：{0}",
+    "description": "Export tab status line when writing the .pmp throws. {0} is the error message."
+  },
+  "Import.Layer.Size.Fmt": {
+    "message": "{0:0.#} MB",
+    "description": "Onion layer table, last column: the layer's file size. {0:0.#} is megabytes; keep the format specifier exactly."
+  },
+  "Eye.Slot.Base": {
+    "message": "ベース",
+    "description": "Eye-pack table, second column: the file replaces the game's base eye texture."
+  },
+  "Eye.Slot.Mask": {
+    "message": "マスク",
+    "description": "Eye-pack table, second column: the file replaces the game's eye mask texture."
+  },
+  "Eye.Slot.Normal": {
+    "message": "ノーマル",
+    "description": "Eye-pack table, second column: the file replaces the game's eye normal map."
+  },
+  "Settings.Output.TextureCache.Format": {
+    "message": "%d MB",
+    "description": "Value text inside the texture-cache slider. An ImGui printf format: keep %d exactly as it is."
+  },
+  "Common.Cancelled": {
+    "message": "キャンセルされました",
+    "description": "Stands in for an error message when a background task was cancelled (e.g. after \"Could not save the log:\")."
+  },
+  "Common.Units.Mm0": {
+    "message": "%.0f mm",
+    "description": "Slider value in millimetres. An ImGui printf format: keep %.0f exactly as it is."
+  },
+  "Common.Units.Mm1": {
+    "message": "%.1f mm",
+    "description": "Slider value in millimetres. An ImGui printf format: keep %.1f exactly as it is."
+  },
+  "Common.Units.Mm2": {
+    "message": "%.2f mm",
+    "description": "Slider value in millimetres. An ImGui printf format: keep %.2f exactly as it is."
+  },
+  "Create.Dialog.ImageFilter": {
+    "message": "画像",
+    "description": "File-type name in the texture file dialog; the list of image extensions follows it. No commas or braces."
+  },
+  "Create.Picker.Tag.Body": {
+    "message": "体",
+    "description": "Material picker, left column: the material belongs to the body. Short tag."
+  },
+  "Create.Picker.Tag.Face": {
+    "message": "顔",
+    "description": "Material picker, left column: the material belongs to the face. Short tag."
+  },
+  "Create.Picker.Tag.Iris": {
+    "message": "虹彩",
+    "description": "Material picker, left column: the material is the eyes' iris. Short tag."
+  },
+  "Create.Picker.Tag.Hair": {
+    "message": "髪",
+    "description": "Material picker, left column: the material belongs to the hair. Short tag."
+  },
+  "Create.Picker.Tag.Tail": {
+    "message": "尻尾",
+    "description": "Material picker, left column: the material belongs to the tail. Short tag."
+  },
+  "Create.Picker.Tag.Ear": {
+    "message": "耳",
+    "description": "Material picker, left column: the material belongs to Viera ears. Short tag."
+  },
+  "Create.Picker.Tag.Native": {
+    "message": "種族専用",
+    "description": "Material picker, left column: geometry an imported pack made for one race only. Short tag."
+  },
+  "Create.Picker.Tag.Weapon": {
+    "message": "武器",
+    "description": "Material picker, left column: the material belongs to a weapon. Short tag."
+  },
+  "Create.Picker.Tag.Gear": {
+    "message": "装備",
+    "description": "Material picker, left column: the material belongs to a piece of gear. Short tag."
+  },
+  "Create.Picker.Tag.Accessory": {
+    "message": "アクセサリー",
+    "description": "Material picker, left column: the material belongs to an accessory (earrings, necklace, ring…). Short tag."
+  },
+  "Create.Picker.Tag.Other": {
+    "message": "その他",
+    "description": "Material picker, left column: anything else. Short tag."
+  },
+  "Parts.Retarget.Bake.ReadBack": {
+    "message": "新しいモデルを読み戻せませんでした",
+    "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. Lower-case, no full stop."
+  },
+  "Parts.Retarget.BodyFallback": {
+    "message": "体型",
+    "description": "Body size: starts the name of a saved Penumbra option when the target body mod's own name is unknown."
+  },
+  "Parts.Retarget.Size.NoOptionsGroup": {
+    "message": "オプションなし",
+    "description": "Body size pickers: heading over a body that a body mod ships without any option group."
+  },
+  "Parts.Retarget.Size.ModOwnBody": {
+    "message": "Mod 本体の体型",
+    "description": "Body size pickers: the body a body mod ships without any option. Also starts saved option names."
+  },
+  "Parts.Retarget.Size.VanillaGroup": {
+    "message": "バニラ",
+    "description": "Body size \"Made for\" picker: heading over the game's own body."
+  },
+  "Parts.Retarget.Size.VanillaBody": {
+    "message": "バニラの体型",
+    "description": "Body size \"Made for\" picker: the game's own body, which vanilla gear is made for."
+  },
+  "Common.Race.Midlander": {
+    "message": "ミッドランダー",
+    "description": "Playable race (Hyur clan), as the game names it."
+  },
+  "Common.Race.Highlander": {
+    "message": "ハイランダー",
+    "description": "Playable race (Hyur clan), as the game names it."
+  },
+  "Common.Race.Elezen": {
+    "message": "エレゼン",
+    "description": "Playable race, as the game names it."
+  },
+  "Common.Race.Miqote": {
+    "message": "ミコッテ",
+    "description": "Playable race, as the game names it (Miqo'te)."
+  },
+  "Common.Race.Roegadyn": {
+    "message": "ルガディン",
+    "description": "Playable race, as the game names it."
+  },
+  "Common.Race.Lalafell": {
+    "message": "ララフェル",
+    "description": "Playable race, as the game names it."
+  },
+  "Common.Race.AuRa": {
+    "message": "アウラ",
+    "description": "Playable race, as the game names it (Au Ra)."
+  },
+  "Common.Race.Hrothgar": {
+    "message": "ロスガル",
+    "description": "Playable race, as the game names it."
+  },
+  "Common.Race.Viera": {
+    "message": "ヴィエラ",
+    "description": "Playable race, as the game names it."
+  },
+  "Common.Race.Male": {
+    "message": "男",
+    "description": "Short marker for a male body, after a race name (\"Miqo'te M\"). One or two characters."
+  },
+  "Common.Race.Female": {
+    "message": "女",
+    "description": "Short marker for a female body, after a race name (\"Miqo'te F\"). One or two characters."
+  },
+  "Common.Race.Gender.Fmt": {
+    "message": "{0}（{1}）",
+    "description": "A race and body sex together. {0} is a race name, {1} the short male/female marker."
+  },
+  "Common.Slot.Head": {
+    "message": "頭防具",
+    "description": "Equipment slot, as the game names it."
+  },
+  "Common.Slot.Body": {
+    "message": "胴防具",
+    "description": "Equipment slot, as the game names it."
+  },
+  "Common.Slot.Hands": {
+    "message": "手防具",
+    "description": "Equipment slot, as the game names it."
+  },
+  "Common.Slot.Legs": {
+    "message": "脚防具",
+    "description": "Equipment slot, as the game names it."
+  },
+  "Common.Slot.Feet": {
+    "message": "足防具",
+    "description": "Equipment slot, as the game names it."
+  },
+  "Common.Slot.Earrings": {
+    "message": "耳飾り",
+    "description": "Accessory slot, as the game names it."
+  },
+  "Common.Slot.Necklace": {
+    "message": "首飾り",
+    "description": "Accessory slot, as the game names it."
+  },
+  "Common.Slot.Bracelets": {
+    "message": "腕輪",
+    "description": "Accessory slot, as the game names it."
+  },
+  "Common.Slot.RightRing": {
+    "message": "右指輪",
+    "description": "Accessory slot: the ring on the right hand."
+  },
+  "Common.Slot.LeftRing": {
+    "message": "左指輪",
+    "description": "Accessory slot: the ring on the left hand."
+  },
+  "Common.Slot.Hair": {
+    "message": "髪",
+    "description": "Character part (not an equipment slot): the hair."
+  },
+  "Common.Slot.Face": {
+    "message": "顔",
+    "description": "Character part (not an equipment slot): the face."
+  },
+  "Common.Slot.Tail": {
+    "message": "尻尾",
+    "description": "Character part (not an equipment slot): the tail."
+  },
+  "Common.Slot.Ears": {
+    "message": "耳",
+    "description": "Character part (not an equipment slot): Viera ears."
+  },
+  "Parts.Retarget.Save.Nothing": {
+    "message": "保存するものがありません。",
+    "description": "Body size status line: Save was pressed with no sizes to save."
+  },
+  "Parts.Retarget.Save.OptionTaken.Fmt": {
+    "message": "「{0}」には「{1}」という独自のオプションがすでにあります。別のグループに保存してください。",
+    "description": "Body size status line. {0} is a Penumbra option group, {1} the option name the refit wanted."
+  },
+  "Parts.Retarget.Save.AddedOneToAuthor.Fmt": {
+    "message": "「{1}」グループに「{0}」として保存しました。着用するには Penumbra でそれを選んでください。",
+    "description": "Body size status line after saving into the mod author's own group. {0} is the option, {1} the group."
+  },
+  "Parts.Retarget.Save.AddedManyToAuthor.Fmt": {
+    "message": "「{1}」グループに {0} サイズを保存しました。着用するには Penumbra で選んでください。",
+    "description": "Body size status line after saving several sizes into the mod author's own group. {0} is how many, {1} the group."
+  },
+  "Parts.Retarget.Save.AddedOne.Fmt": {
+    "message": "「{1}」グループに「{0}」として保存しました。Penumbra が既定を選ぶのは初めて追加する Mod だけなので、表示するには Penumbra でそのオプションを選んでください。",
+    "description": "Body size status line after saving into a group Proteus made. {0} is the option, {1} the group."
+  },
+  "Parts.Retarget.Save.AddedMany.Fmt": {
+    "message": "「{1}」グループに {0} サイズを保存しました。Penumbra が既定を選ぶのは初めて追加する Mod だけなので、表示するには Penumbra でオプションを選んでください。",
+    "description": "Body size status line after saving several sizes into a group Proteus made. {0} is how many, {1} the group."
+  },
+  "Parts.Retarget.Save.Legacy": {
+    "message": "この Mod はまだ Penumbra の旧フォルダー形式で、Proteus は編集しません。Penumbra で一度有効にしてアップグレードさせてから、戻ってきてください。",
+    "description": "Body size status line: the mod is in Penumbra's pre-v3 folder format."
+  },
+  "Parts.Retarget.Save.Failed.Fmt": {
+    "message": "保存できませんでした：{0}",
+    "description": "Body size status line. {0} is the error message."
+  },
+  "Parts.Retarget.Undo.Removed.Fmt": {
+    "message": "「{0}」を削除しました。",
+    "description": "Body size status line after Undo. {0} is the option removed."
+  },
+  "Parts.Retarget.Undo.NoGroup": {
+    "message": "この Mod には体型変換のグループがありません。",
+    "description": "Body size status line: Undo found no group of refits to remove from."
+  },
+  "Parts.Retarget.Undo.Legacy": {
+    "message": "この Mod は Penumbra の旧フォルダー形式です。Penumbra で一度有効にしてから戻ってきてください。",
+    "description": "Body size status line: Undo on a mod in Penumbra's pre-v3 folder format."
+  },
+  "Parts.Retarget.Undo.Failed.Fmt": {
+    "message": "元に戻せませんでした：{0}",
+    "description": "Body size status line. {0} is the error message."
+  },
+  "Parts.Retarget.Refuse.NoLayoutMap.Fmt": {
+    "message": "{0}のモデルはテクスチャレイアウトが異なり（{1} と {2}）、Proteus にはその対応表がないため、一方の体のどの点がもう一方のどの点に当たるか判断できません。",
+    "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…), {1} and {2} texture-layout ids such as bibo or gen3 — never translate those."
+  },
+  "Parts.Retarget.Refuse.UvUnreadable.Fmt": {
+    "message": "{0}のモデルのテクスチャ座標を読み取れなかったため、一方の体のどの点がもう一方のどの点に当たるか判断できません。",
+    "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…)."
+  },
+  "Parts.Retarget.Refuse.NoTargetSkin.Fmt": {
+    "message": "変換先の{0}モデルには、乗せる先の体の肌がありません。",
+    "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…)."
+  },
+  "Parts.Retarget.Refuse.OffSheet.Fmt": {
+    "message": "変換元の{0}の体の大部分がテクスチャレイアウトの外にあるため、一方の体のどの点がもう一方のどの点に当たるか判断できません。",
+    "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…)."
+  },
+  "Parts.Retarget.Refuse.LowCoverage.Fmt": {
+    "message": "変換元の{0}の体のうち、テクスチャ座標で変換先に位置が見つかるのは {1:P0} だけです。両者はテクスチャレイアウトを共有していないため、相互に変換できません。",
+    "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…), {1:P0} the share that matched — keep the :P0."
+  },
+  "Parts.Retarget.Bake.NoPath.Fmt": {
+    "message": "種族デフォーマーに c{0:D4} から c{1:D4} への経路がありません",
+    "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. {0:D4} and {1:D4} are race codes such as 0101 — keep the c and the :D4. Lower-case, no full stop."
+  },
+  "Parts.Retarget.Bake.Unreadable": {
+    "message": "モデルを読み込めませんでした",
+    "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. Lower-case, no full stop."
+  },
+  "Parts.Retarget.Bake.WeightMismatch.Fmt": {
+    "message": "モデルの頂点をウェイトと対応付けられませんでした（{0} 対 {1}）",
+    "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. {0} and {1} are vertex counts. Lower-case, no full stop."
+  },
+  "Refit.Error.RedirectsUnreadable.Fmt": {
+    "message": "{0} のリダイレクトを読み込めませんでした。",
+    "description": "Shown when a vanilla item is opened for editing and the new mod's file list cannot be read. {0} is a folder path."
+  },
+  "Parts.Write.NotJsonObject.Fmt": {
+    "message": "{0} は JSON オブジェクトではありません。",
+    "description": "Inside Parts.Write.Failed.Fmt: a mod file is not valid JSON. {0} is a file path."
+  },
+  "Service.ModelEdit.NoSubmesh.Fmt": {
+    "message": "メッシュ {0} にサブメッシュ {1} がありません",
+    "description": "Why a model edit (part switch, hat fit, brush) failed; shown after a colon. {0} and {1} are numbers. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.AttributesFull.Fmt": {
+    "message": "このモデルはすでに {0} 個の属性を宣言しており、サブメッシュマスクにはこれ以上入りません",
+    "description": "Why a model edit failed; shown after a colon. {0} is a number. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.NoTriangles": {
+    "message": "そのサブメッシュには三角形がありません",
+    "description": "Why a model edit failed; shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.Fragmented.Fmt": {
+    "message": "それらの三角形はパーツの残りと {0} 区間にわたって入り混じっており、きれいに分割するには細切れすぎます",
+    "description": "Why splitting a part failed; shown after a colon. {0} is a number. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.IndexRange.Fmt": {
+    "message": "メッシュ {0} のインデックス範囲がファイルの終端を越えています",
+    "description": "Why a model edit failed (damaged file); shown after a colon. {0} is a number. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.ShapeBlock": {
+    "message": "このモデルのシェイプブロックがファイルの終端を越えています",
+    "description": "Why a model edit failed (damaged file); shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.ShapeTooFar": {
+    "message": "このモデルの既存シェイプはこのサブメッシュを遠すぎる位置から参照しており並べ替えに追従できないため、ジオメトリで分割できません",
+    "description": "Why splitting a part by geometry failed; shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.ShapeNoName": {
+    "message": "シェイプには名前が必要です",
+    "description": "Why a model edit failed; shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.TablesMismatch": {
+    "message": "このモデルのテーブルが合いません。シェイプブロックが形式上の位置にありません",
+    "description": "Why a model edit failed (damaged file); shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.ShapeExists.Fmt": {
+    "message": "このモデルにはすでに {0} という名前のシェイプがあります",
+    "description": "Why a model edit failed; shown after a colon. {0} is a shape name. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.NeckMorph": {
+    "message": "このモデルには首のモーフデータが含まれており、ここでは編集できません",
+    "description": "Why a model edit failed; shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.UnusedVertices": {
+    "message": "それらの頂点はどの三角形にも使われていないため、シェイプを作っても何も変形しません",
+    "description": "Why a model edit failed; shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.ShapeOverflow.Fmt": {
+    "message": "このシェイプには {0} 個のシェイプ値が必要で、形式が数えられる上限を超えます",
+    "description": "Why a model edit failed; shown after a colon. {0} is a number. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.NotLod0.Fmt": {
+    "message": "メッシュ {0} は LOD0 に含まれておらず、ここで変形できるのは LOD0 のメッシュだけです",
+    "description": "Why a model edit failed; shown after a colon. {0} is a number; keep LOD0. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.NoVertex.Fmt": {
+    "message": "メッシュ {0} に頂点 {1} はありません（頂点数 {2}）",
+    "description": "Why a model edit failed; shown after a colon. {0}, {1} and {2} are numbers. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.TooManyVertices.Fmt": {
+    "message": "メッシュ {0} には {1} 頂点が必要ですが、モデルが数えられる {2} を超えます。帽子向けの髪が 3 万ポリゴン未満に抑えられるのは、この形式上の理由です",
+    "description": "Why a hat-fit edit failed; shown after a colon. {0}, {1} and {2} are numbers. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.NoPosition.Fmt": {
+    "message": "メッシュ {0} に位置要素が宣言されていません",
+    "description": "Why a model edit failed; shown after a colon. {0} is a number. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.PositionType.Fmt": {
+    "message": "メッシュ {0} は位置を頂点タイプ {1} で保存しており、ここでは書き込めません",
+    "description": "Why a model edit failed; shown after a colon. {0} is a number, {1} a vertex type id. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.StreamRange.Fmt": {
+    "message": "メッシュ {0} のストリーム {1} がファイルの終端を越えています",
+    "description": "Why a model edit failed (damaged file); shown after a colon. {0} and {1} are numbers. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.ShapeTable": {
+    "message": "このモデルのシェイプテーブルがファイルの終端を越えています",
+    "description": "Why a model edit failed (damaged file); shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.Unreadable.Fmt": {
+    "message": "このモデルを読み込めませんでした（{0}）",
+    "description": "Why a brush edit failed; shown after a colon. {0} is the underlying error message. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.BoundingBoxes": {
+    "message": "このモデルのバウンディングボックスが形式上の位置にありません",
+    "description": "Why a brush edit failed (damaged file); shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.PositionFormat.Fmt": {
+    "message": "メッシュ {0} は書き込めない形式で位置を保存しています（タイプ {1}）",
+    "description": "Why a brush edit failed; shown after a colon. {0} is a number, {1} a vertex type id. Lower-case, no full stop."
+  },
+  "Import.Layer.Skip.NoFile": {
+    "message": "レイヤーに画像ファイルが指定されていません",
+    "description": "Onion layer tooltip, after \"Skipped:\". Lower-case, no full stop."
+  },
+  "Import.Layer.Skip.Missing.Fmt": {
+    "message": "パックに「{0}」が含まれていません",
+    "description": "Onion layer tooltip, after \"Skipped:\". {0} is a file name. Lower-case, no full stop."
+  },
+  "Import.Layer.Skip.Transparent": {
+    "message": "レイヤーが完全に透明です（不透明度 0）",
+    "description": "Onion layer tooltip, after \"Skipped:\". Lower-case, no full stop."
+  },
+  "Import.Layer.Skip.Layout.Fmt": {
+    "message": "未対応の UV レイアウト「{0}」",
+    "description": "Onion layer tooltip, after \"Skipped:\". {0} is the pack's UV layout token, untranslated. Lower-case, no full stop."
+  },
+  "Import.Layer.Skip.Map.Fmt": {
+    "message": "未対応のテクスチャマップ「{0}」",
+    "description": "Onion layer tooltip, after \"Skipped:\". {0} is the pack's texture-map token, untranslated. Lower-case, no full stop."
+  },
+  "Import.Layer.Skip.BlendMode.Fmt": {
+    "message": "ブレンドモード「{0}」に相当するものが Proteus にありません",
+    "description": "Onion layer tooltip, after \"Skipped:\". {0} is the pack's blend-mode token (Multiply, Screen…), untranslated. Lower-case, no full stop."
+  },
+  "Import.Onion.Description.Fmt": {
+    "message": "Onion パック「{0}」からインポートしました。",
+    "description": "Written into the description of a mod imported from an Onion pack; Penumbra shows it. {0} is the pack's file name."
+  },
+  "Import.Pack.UnsafeEntry.Fmt": {
+    "message": "パックに安全でないエントリパスが含まれています：{0}",
+    "description": "Why a pack could not be read: it holds a path that would escape its folder. {0} is that path."
+  },
+  "Import.Pack.Onion.NoMeta": {
+    "message": "Onion パックではありません（meta.json がありません）。",
+    "description": "Why an Onion pack could not be read. Keep meta.json as is."
+  },
+  "Import.Pack.MetaUnreadable": {
+    "message": "パックの meta.json が空か、読み込めません。",
+    "description": "Why a pack could not be read. Keep meta.json as is."
+  },
+  "Import.Pack.EntryGone.Fmt": {
+    "message": "パックに {0} が含まれなくなっています。",
+    "description": "Why an import failed: a file vanished from the pack after it was opened. {0} is the file."
+  },
+  "Import.Pack.Penumbra.NoMeta": {
+    "message": "Penumbra パックではありません（meta.json がありません）。",
+    "description": "Why a Penumbra pack could not be read. Keep meta.json as is."
+  },
+  "Import.Pack.MetaNotObject": {
+    "message": "パックの meta.json がオブジェクトではありません。",
+    "description": "Why a pack could not be read. Keep meta.json as is."
+  },
+  "Import.Eye.Pack.UnsafeEntry.Fmt": {
+    "message": "アーカイブに安全でないエントリパスが含まれています：{0}",
+    "description": "Why an eye-texture archive could not be read. {0} is the offending path."
+  },
+  "Import.Eye.Pack.NoImages": {
+    "message": "アーカイブに画像がないため、インポートするものがありません。",
+    "description": "Why an eye-texture archive could not be imported."
+  },
+  "Import.Eye.Pack.EntryGone.Fmt": {
+    "message": "アーカイブに {0} が含まれなくなっています。",
+    "description": "Why an eye import failed: a file vanished from the archive after it was opened. {0} is the file."
+  },
+  "Import.Luminis.Pack.NoManifest": {
+    "message": "TexTools の Modpack ではありません（TTMPL.mpl がありません）。",
+    "description": "Why a TexTools modpack could not be read. Keep TTMPL.mpl as is."
+  },
+  "Import.Luminis.Pack.NoData": {
+    "message": "Modpack に TTMPD.mpd がないため、記載されたファイルにデータがありません。",
+    "description": "Why a TexTools modpack could not be read. Keep TTMPD.mpd as is."
+  },
+  "Import.Luminis.Pack.Version1": {
+    "message": "古い TexTools の .ttmp（バージョン 1）のようで、Proteus では読み込めません。TexTools から .ttmp2 として書き出し直してください。",
+    "description": "Why a TexTools modpack could not be read. Keep .ttmp and .ttmp2 as is."
+  },
+  "Import.Luminis.Pack.ManifestUnreadable": {
+    "message": "Modpack の TTMPL.mpl が空か、読み込めません。",
+    "description": "Why a TexTools modpack could not be read. Keep TTMPL.mpl as is."
+  },
+  "Import.Luminis.Pack.Version.Fmt": {
+    "message": "Modpack は TTMP バージョン {0} を宣言しており、Proteus では読み込めません。TexTools から .ttmp2 として書き出し直してください。",
+    "description": "Why a TexTools modpack could not be read. {0} is the version the pack declares. Keep TTMP and .ttmp2 as is."
+  },
+  "Import.Luminis.Pack.NoFiles": {
+    "message": "Modpack にファイルが 1 つも記載されていません。",
+    "description": "Why a TexTools modpack could not be imported."
+  },
+  "Import.Luminis.Pack.DataGone": {
+    "message": "Modpack に TTMPD.mpd が含まれなくなっています。",
+    "description": "Why a TexTools import failed: the data file vanished after the pack was opened. Keep TTMPD.mpd as is."
+  },
+  "Import.Luminis.Pack.OutOfBlob.Fmt": {
+    "message": "マニフェストでは {1} バイトのデータブロックの {0} バイト目に置かれています",
+    "description": "Why one file of a TexTools modpack is skipped; shown after a colon. {0} and {1} are byte counts. Lower-case, no full stop."
+  },
+  "Import.Luminis.Pack.Truncated": {
+    "message": "Modpack のデータブロックが途中で切れています",
+    "description": "Why one file of a TexTools modpack is skipped; shown after a colon. Lower-case, no full stop."
+  },
+  "Import.Luminis.Tex.HeaderSize": {
+    "message": "SqPack ヘッダーのサイズがファイルの範囲外です。",
+    "description": "Why a texture inside a TexTools modpack could not be read. Keep SqPack as is."
+  },
+  "Import.Luminis.Tex.MipCount.Fmt": {
+    "message": "ミップレベルが {0} 個のテクスチャは読み込めません。",
+    "description": "Why a texture inside a TexTools modpack could not be read. {0} is a number."
+  },
+  "Import.Luminis.Tex.MipTable": {
+    "message": "ミップテーブルが SqPack ヘッダーを越えています。",
+    "description": "Why a texture inside a TexTools modpack could not be read. Keep SqPack as is."
+  },
+  "Import.Luminis.Tex.Header": {
+    "message": "テクスチャヘッダーがないか、ファイルを越えています。",
+    "description": "Why a texture inside a TexTools modpack could not be read."
+  },
+  "Import.Luminis.Tex.Claims.Fmt": {
+    "message": "テクスチャのサイズが {0} バイトと宣言されています。",
+    "description": "Why a texture inside a TexTools modpack could not be read: it says it is impossibly large. {0} is a byte count."
+  },
+  "Import.Luminis.Tex.BlockSize": {
+    "message": "テクスチャブロックが宣言サイズに展開されませんでした。",
+    "description": "Why a texture inside a TexTools modpack could not be read."
+  },
+  "Import.Luminis.Tex.BlockHeader": {
+    "message": "テクスチャブロックのヘッダーがファイルを越えています。",
+    "description": "Why a texture inside a TexTools modpack could not be read."
+  },
+  "Import.Luminis.Tex.BlockHeaderSize.Fmt": {
+    "message": "{0} バイトのテクスチャブロックヘッダーは読み込めません。",
+    "description": "Why a texture inside a TexTools modpack could not be read. {0} is a byte count."
+  },
+  "Import.Luminis.Tex.Block": {
+    "message": "テクスチャブロックがファイルを越えています。",
+    "description": "Why a texture inside a TexTools modpack could not be read."
+  },
+  "Import.Luminis.Tex.Field": {
+    "message": "SqPack のフィールドがファイルの終端を越えています。",
+    "description": "Why a texture inside a TexTools modpack could not be read. Keep SqPack as is."
+  },
+  "Presets.Error.Unreadable.Fmt": {
+    "message": "そのファイルを読み込めませんでした：{0}",
+    "description": "Preset bar notice: a preset file could not be read. {0} is the underlying error message."
+  },
+  "Presets.Error.NothingToPaste": {
+    "message": "貼り付けるものがありません。",
+    "description": "Preset bar notice: Paste code was pressed with nothing on the clipboard."
+  },
+  "Presets.Error.NotACode": {
+    "message": "Proteus のプリセットコードではないようです。",
+    "description": "Preset bar notice: the clipboard does not hold a preset share code."
+  },
+  "Presets.Error.Version.Fmt": {
+    "message": "このコードはバージョン {0} です。この Proteus が対応しているのは {1} です。Proteus を更新してください。",
+    "description": "Preset bar notice: the share code is from a newer Proteus. {0} is the code's version, {1} the version this build reads."
+  },
+  "Presets.Error.NotAPreset": {
+    "message": "そのファイルには Proteus のプリセットが含まれていません。",
+    "description": "Preset bar or Import tab notice: the chosen file is not a preset."
+  },
+  "Presets.Error.Empty": {
+    "message": "そのプリセットは空です。",
+    "description": "Preset bar notice: the preset holds no settings."
+  },
+  "Presets.ImportedName": {
+    "message": "インポートしたプリセット",
+    "description": "Name given to an imported preset that arrives without one; shown in the preset list."
+  },
+  "HatCompat.Revert.Failed.Fmt": {
+    "message": "元に戻せませんでした：{0}",
+    "description": "Hats panel, in red, when undoing a hat fit throws. {0} is the error message."
+  },
+  "Create.Description": {
+    "message": "Proteus 用に作成されました。",
+    "description": "Written into the description of a mod made in the Create tab; Penumbra shows it."
+  },
+  "Service.ManagedMod.Description": {
+    "message": "オーバーレイ合成プラグイン Proteus が管理しています。",
+    "description": "Description of the mod Proteus writes its output into; Penumbra shows it."
+  },
+  "Service.ModMeta.LegacyFolder.Fmt": {
+    "message": "{0} は v{1} より前の Penumbra Mod フォルダーで、Proteus は書き込みません。",
+    "description": "Why Proteus will not write to a mod. {0} is the mod's folder, {1} Penumbra's manifest version number."
+  },
+  "Service.ModMeta.InUse.Fmt": {
+    "message": "{0} は別のプログラムが使用中で読み込めなかったため、書き換えていません。",
+    "description": "Why a mod's manifest was not rewritten. {0} is a file path."
+  },
+  "Service.ModMeta.NoGroup.Fmt": {
+    "message": "この Mod には「{0}」というグループがありません。",
+    "description": "Why a change to a mod failed. {0} is a Penumbra option group's name."
+  },
+  "Service.Download.NoSources": {
+    "message": "ダウンロード元が設定されていません",
+    "description": "Why a download (UV maps) failed; shown after a colon. Lower-case, no full stop."
+  },
+  "Service.Download.BadRange.Fmt": {
+    "message": "{0}：206 が {1} から開始（想定は {2}）",
+    "description": "Why a download (UV maps) failed; shown after a colon. {0} is a file name, {1} and {2} byte offsets; keep 206 (an HTTP status). Lower-case, no full stop."
+  },
+  "Service.Download.Checksum.Fmt": {
+    "message": "{0} のチェックサムが一致しません（{1} バイト、sha256 {2}…）",
+    "description": "Why a download (UV maps) failed; shown after a colon. {0} is a file name, {1} a byte count, {2} the start of a hash. Lower-case, no full stop."
   }
 }

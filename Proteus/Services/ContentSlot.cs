@@ -88,6 +88,33 @@ public static class ContentSlot
         _         => null,
     };
 
+    /// <summary>
+    /// A <see cref="Slot.Label"/> translated for display. The label itself stays English: it is matched against
+    /// <see cref="LabelForEquipSlot"/> and written into the option names of imported packs.
+    /// </summary>
+    public static string DisplayLabel(string label)
+    {
+        var s = Localization.Strings.Common;
+        return label switch
+        {
+            "Head"       => s.SlotHead,
+            "Body"       => s.SlotBody,
+            "Hands"      => s.SlotHands,
+            "Legs"       => s.SlotLegs,
+            "Feet"       => s.SlotFeet,
+            "Earrings"   => s.SlotEarrings,
+            "Necklace"   => s.SlotNecklace,
+            "Bracelets"  => s.SlotBracelets,
+            "Right ring" => s.SlotRightRing,
+            "Left ring"  => s.SlotLeftRing,
+            "Hair"       => s.SlotHair,
+            "Face"       => s.SlotFace,
+            "Tail"       => s.SlotTail,
+            "Ears"       => s.SlotEars,
+            _            => label,
+        };
+    }
+
     /// <summary>The numeric set id out of a set tag ("e6085" → 6085), or null.</summary>
     public static int? SetIdOf(string setTag)
         => setTag.Length > 1 && int.TryParse(setTag[1..], out var n) ? n : null;

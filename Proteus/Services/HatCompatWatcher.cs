@@ -363,7 +363,12 @@ public sealed class HatCompatWatcher : IDisposable
             catch (Exception ex)
             {
                 log.Error(ex, "hat compat: applying to {0} failed", target.Rel);
-                current = current with { Message = ex.Message, Failed = true };
+                current = current with
+                {
+                    Message = string.Format(CheapLoc.Loc.Localize("HatCompat.Apply.Failed.Fmt", "Writing failed: {0}"),
+                                            ex.Message),
+                    Failed = true,
+                };
             }
             finally
             {
@@ -621,7 +626,12 @@ public sealed class HatCompatWatcher : IDisposable
             catch (Exception ex)
             {
                 log.Error(ex, "hat compat: reverting {0} failed", target.ModRoot);
-                current = current with { Message = ex.Message, Failed = true };
+                current = current with
+                {
+                    Message = string.Format(CheapLoc.Loc.Localize("HatCompat.Revert.Failed.Fmt", "Undo failed: {0}"),
+                                            ex.Message),
+                    Failed = true,
+                };
             }
             finally
             {

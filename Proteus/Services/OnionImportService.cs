@@ -223,21 +223,22 @@ public sealed class OnionImportService
 
         if (entry == null)
             skip = string.IsNullOrWhiteSpace(file)
-                ? "the layer names no image file"
-                : $"the pack doesn't contain \"{file}\"";
+                ? Loc.Localize("Import.Layer.Skip.NoFile", "the layer names no image file")
+                : string.Format(Loc.Localize("Import.Layer.Skip.Missing.Fmt", "the pack doesn't contain \"{0}\""), file);
         else if (opacity <= 0f)
             // Onion's way of hiding a layer. Baking that into the alpha would write a full-size image that
             // costs a decode on every composite and paints nothing — the same "would render wrong, so say
             // so" rule the blend modes get.
-            skip = "the layer is fully transparent (opacity 0)";
+            skip = Loc.Localize("Import.Layer.Skip.Transparent", "the layer is fully transparent (opacity 0)");
         else if (!Layouts.TryGetValue(layout, out var lay))
-            skip = $"unsupported UV layout \"{layout}\"";
+            skip = string.Format(Loc.Localize("Import.Layer.Skip.Layout.Fmt", "unsupported UV layout \"{0}\""), layout);
         else if (!Maps.TryGetValue(map, out var s))
-            skip = $"unsupported texture map \"{map}\"";
+            skip = string.Format(Loc.Localize("Import.Layer.Skip.Map.Fmt", "unsupported texture map \"{0}\""), map);
         else if (!string.Equals(mode, "Normal", StringComparison.OrdinalIgnoreCase))
             // Proteus composites alpha-over only. Importing a Multiply/Screen layer as alpha-over would
             // render visibly wrong, which is worse than saying so.
-            skip = $"blend mode \"{mode}\" has no Proteus equivalent";
+            skip = string.Format(Loc.Localize("Import.Layer.Skip.BlendMode.Fmt",
+                "blend mode \"{0}\" has no Proteus equivalent"), mode);
         else
             (bodyType, suffix, slot) = (lay.BodyType, lay.Suffix, s);
 
@@ -322,24 +323,24 @@ public sealed class OnionImportService
 
         PreparedImport Fail(string why) => new(false, why, null, null, 0, 0);
 
-        if (string.IsNullOrWhiteSpace(modName)) return Fail("Enter a mod name.");
-        if (!preview.AnyImportable) return Fail("Nothing in this pack can be imported.");
+        if (string.IsNullOrWhiteSpace(modName)) return Fail(Loc.Localize("Create.Error.NoName", "Enter a mod name."));
+        if (!preview.AnyImportable) return Fail(Loc.Localize("ContentImport.Fail.NothingUsable", "Nothing in this pack can be imported."));
         if (!File.Exists(preview.SourcePath))
-            return Fail($"The pack is no longer there: {preview.SourcePath}");
+            return Fail(string.Format(Loc.Localize("ContentImport.Fail.Gone.Fmt", "The pack is no longer there: {0}"), preview.SourcePath));
 
         var dirName = ModCreationService.Sanitize(modName);
         if (dirName == null)
-            return Fail("That mod name has no usable characters — use letters or numbers.");
+            return Fail(Loc.Localize("ContentImport.Fail.BadName", "That mod name has no usable characters — use letters or numbers."));
         if (string.Equals(dirName, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase))
-            return Fail("\"Proteus\" is reserved — choose a different mod name.");
+            return Fail(Loc.Localize("ContentImport.Fail.Reserved", "\"Proteus\" is reserved — choose a different mod name."));
 
         var modsRoot = penumbra.GetModDirectory();
         if (string.IsNullOrEmpty(modsRoot))
-            return Fail("Penumbra's mod directory isn't available.");
+            return Fail(Loc.Localize("ContentImport.Fail.NoModDir", "Penumbra's mod directory isn't available."));
 
         var root = Path.Combine(modsRoot, dirName);
         if (Directory.Exists(root))
-            return Fail($"A mod folder named \"{dirName}\" already exists.");
+            return Fail(string.Format(Loc.Localize("ContentImport.Fail.Exists.Fmt", "A mod folder named \"{0}\" already exists."), dirName));
 
         var materials = MaterialsFor(preview);
 
@@ -351,7 +352,7 @@ public sealed class OnionImportService
         {
             log.Error(ex, "[Proteus] onion import failed for {0}", dirName);
             try { if (Directory.Exists(root)) Directory.Delete(root, true); } catch { /* best effort */ }
-            return Fail($"Failed to write the mod: {ex.Message}");
+            return Fail(string.Format(Loc.Localize("ContentImport.Fail.Write.Fmt", "Failed to write the mod: {0}"), ex.Message));
         }
 
         var imported = preview.Layers.Count(l => l.Import);
@@ -541,9 +542,11 @@ public sealed class OnionImportService
 
         // Penumbra's manifest, in the older layout every Penumbra can read (see PenumbraModMeta remarks).
         // The pack's own description/version/website ride along so the origin isn't lost.
+        var importedFrom = string.Format(Loc.Localize("Import.Onion.Description.Fmt",
+            "Imported from the Onion pack \"{0}\"."), Path.GetFileName(preview.SourcePath));
         var description = string.IsNullOrWhiteSpace(preview.Description)
-            ? $"Imported from the Onion pack \"{Path.GetFileName(preview.SourcePath)}\"."
-            : preview.Description + $"\n\nImported from the Onion pack \"{Path.GetFileName(preview.SourcePath)}\".";
+            ? importedFrom
+            : preview.Description + "\n\n" + importedFrom;
         PenumbraModMeta.AtomicWrite(
             Path.Combine(root, PenumbraModMeta.MetaFile),
             PenumbraModMeta.NewMetaJson(modName, author, description, preview.Version, preview.Website));

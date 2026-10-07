@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using CheapLoc;
 
 namespace Proteus.Services;
 
@@ -228,7 +229,8 @@ internal static class BodyRetargetWriter
         {
             try
             {
-                if (refits.Count == 0) return new Outcome(false, groupName, "", "Nothing to save.");
+                if (refits.Count == 0)
+                    return new Outcome(false, groupName, "", Loc.Localize("Parts.Retarget.Save.Nothing", "Nothing to save."));
 
                 bool author = IsAuthorGroup(modRoot, groupName);
                 var options = PenumbraModMeta.TryReadFileOptions(modRoot, groupName) ?? [];
@@ -245,9 +247,11 @@ internal static class BodyRetargetWriter
                                                            && options.Any(o => string.Equals(o.Name, r.Option,
                                                                                              StringComparison.OrdinalIgnoreCase)));
                     if (taken.Option != null)
-                        return new Outcome(false, groupName, names,
-                                           $"\"{groupName}\" already has an option called \"{taken.Option}\" of its own. " +
-                                           "Save the refit to another group.");
+                        return new Outcome(false, groupName, names, string.Format(
+                                           Loc.Localize("Parts.Retarget.Save.OptionTaken.Fmt",
+                                               "\"{0}\" already has an option called \"{1}\" of its own. " +
+                                               "Save the refit to another group."),
+                                           groupName, taken.Option));
                 }
                 // Paths every OTHER option already points at. A refit's file is named after its option, and an option
                 // can be renamed in Penumbra afterwards while its file keeps the old name: the next refit whose option
@@ -338,8 +342,13 @@ internal static class BodyRetargetWriter
                                                                               .ToList());
                     foreach (var (refit, rel) in written)
                         WriteRecord(modRoot, groupName, true, refit.Option, gamePath, rel, bodyMod, from, refit.To);
-                    return new Outcome(true, groupName, names, Added(refits, groupName) +
-                                       "Choose it there in Penumbra to wear it.");
+                    return new Outcome(true, groupName, names, refits.Count == 1
+                        ? string.Format(Loc.Localize("Parts.Retarget.Save.AddedOneToAuthor.Fmt",
+                              "Saved as \"{0}\" in the \"{1}\" group. Choose it there in Penumbra to wear it."),
+                              refits[0].Option, groupName)
+                        : string.Format(Loc.Localize("Parts.Retarget.Save.AddedManyToAuthor.Fmt",
+                              "Saved {0} sizes in the \"{1}\" group. Choose it there in Penumbra to wear it."),
+                              refits.Count, groupName));
                 }
 
                 // Rebuilt from what is there, so saving more sizes grows the group instead of replacing it, and
@@ -368,20 +377,26 @@ internal static class BodyRetargetWriter
                 foreach (var (refit, rel) in written)
                     WriteRecord(modRoot, groupName, false, refit.Option, gamePath, rel, bodyMod, from, refit.To);
 
-                return new Outcome(true, groupName, names,
-                                   Added(refits, groupName) +
-                                   "Penumbra only picks a default for a mod it is adding for the first time, so " +
-                                   "choose the option there to see it.");
+                return new Outcome(true, groupName, names, refits.Count == 1
+                    ? string.Format(Loc.Localize("Parts.Retarget.Save.AddedOne.Fmt",
+                          "Saved as \"{0}\" in the \"{1}\" group. Penumbra only picks a default for a mod it is " +
+                          "adding for the first time, so choose the option there to see it."),
+                          refits[0].Option, groupName)
+                    : string.Format(Loc.Localize("Parts.Retarget.Save.AddedMany.Fmt",
+                          "Saved {0} sizes in the \"{1}\" group. Penumbra only picks a default for a mod it is " +
+                          "adding for the first time, so choose the option there to see it."),
+                          refits.Count, groupName));
             }
             catch (PenumbraModMeta.LegacyFolderException)
             {
-                return new Outcome(false, groupName, names,
+                return new Outcome(false, groupName, names, Loc.Localize("Parts.Retarget.Save.Legacy",
                                    "This mod is still in Penumbra's old folder format, which Proteus will not edit. " +
-                                   "Enable it in Penumbra once so Penumbra upgrades it, then come back.");
+                                   "Enable it in Penumbra once so Penumbra upgrades it, then come back."));
             }
             catch (Exception e)
             {
-                return new Outcome(false, groupName, names, $"Could not save: {e.Message}");
+                return new Outcome(false, groupName, names, string.Format(
+                    Loc.Localize("Parts.Retarget.Save.Failed.Fmt", "Could not save: {0}"), e.Message));
             }
         }
     }
@@ -444,10 +459,8 @@ internal static class BodyRetargetWriter
         return rel;
     }
 
-    private static string Added(IReadOnlyList<Refit> refits, string groupName)
-        => refits.Count == 1
-               ? $"Saved as \"{refits[0].Option}\" in the \"{groupName}\" group. "
-               : $"Saved {refits.Count} sizes in the \"{groupName}\" group. ";
+    private static string Removed(string optionName)
+        => string.Format(Loc.Localize("Parts.Retarget.Undo.Removed.Fmt", "Removed \"{0}\"."), optionName);
 
     /// <summary>
     /// Remove one retargeted option. From a group Proteus made, the whole group goes once only
@@ -470,12 +483,13 @@ internal static class BodyRetargetWriter
                         foreach (var rel in removed.Values.Where(Ours))
                             DeleteQuietly(Path.Combine(modRoot, rel.Replace('/', Path.DirectorySeparatorChar)));
                     PruneEmptyFolders(Path.Combine(modRoot, Subfolder));
-                    return new Outcome(true, groupName, optionName, $"Removed \"{optionName}\".");
+                    return new Outcome(true, groupName, optionName, Removed(optionName));
                 }
 
                 var options = PenumbraModMeta.TryReadFileOptions(modRoot, groupName);
                 if (options == null)
-                    return new Outcome(false, groupName, optionName, "There is no retarget group in this mod.");
+                    return new Outcome(false, groupName, optionName, Loc.Localize("Parts.Retarget.Undo.NoGroup",
+                                       "There is no retarget group in this mod."));
 
                 var going = options.FirstOrDefault(o => string.Equals(o.Name, optionName,
                                                                       StringComparison.OrdinalIgnoreCase));
@@ -509,17 +523,18 @@ internal static class BodyRetargetWriter
 
                 PruneEmptyFolders(Path.Combine(modRoot, Subfolder));
 
-                return new Outcome(true, groupName, optionName, $"Removed \"{optionName}\".");
+                return new Outcome(true, groupName, optionName, Removed(optionName));
             }
             catch (PenumbraModMeta.LegacyFolderException)
             {
-                return new Outcome(false, groupName, optionName,
+                return new Outcome(false, groupName, optionName, Loc.Localize("Parts.Retarget.Undo.Legacy",
                                    "This mod is in Penumbra's old folder format. Enable it in Penumbra once, then " +
-                                   "come back.");
+                                   "come back."));
             }
             catch (Exception e)
             {
-                return new Outcome(false, groupName, optionName, $"Could not undo: {e.Message}");
+                return new Outcome(false, groupName, optionName, string.Format(
+                    Loc.Localize("Parts.Retarget.Undo.Failed.Fmt", "Could not undo: {0}"), e.Message));
             }
         }
     }

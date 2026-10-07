@@ -438,7 +438,7 @@ internal sealed class CreateTab
             {
                 fileDialog.OpenFileDialog(
                     string.Format(Strings.Create.PickTextureTitleFmt, label),
-                    "Images{.png,.tex,.dds,.jpg,.jpeg,.bmp,.tga}",
+                    Strings.Create.ImageFilter + "{.png,.tex,.dds,.jpg,.jpeg,.bmp,.tga}",
                     (ok, paths) =>
                     {
                         if (!ok) return;
@@ -478,10 +478,10 @@ internal sealed class CreateTab
     {
         // Skin surfaces come from the shared taxonomy, which also keeps weapon paths containing /obj/body/ out of Body.
         if (ShellSurface.KeyFor(p) is { } surface) return ShellSurface.Label(surface.Kind);
-        if (p.Contains("chara/weapon/", StringComparison.OrdinalIgnoreCase)) return "Weapon";
-        if (p.Contains("chara/equipment/", StringComparison.OrdinalIgnoreCase)) return "Gear";
-        if (p.Contains("chara/accessory/", StringComparison.OrdinalIgnoreCase)) return "Accessory";
-        return "Other";
+        if (p.Contains("chara/weapon/", StringComparison.OrdinalIgnoreCase)) return Strings.Create.TagWeapon;
+        if (p.Contains("chara/equipment/", StringComparison.OrdinalIgnoreCase)) return Strings.Create.TagGear;
+        if (p.Contains("chara/accessory/", StringComparison.OrdinalIgnoreCase)) return Strings.Create.TagAccessory;
+        return Strings.Create.TagOther;
     }
 
     /// <summary>Picker row text: slot tag plus file name (full path in the tooltip), with the body type on skin rows.</summary>

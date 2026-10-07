@@ -167,7 +167,7 @@ internal sealed class ExportTab
                 Task.Run(() =>
                 {
                     try { _exportDone = modExport.Export(entry, path); }
-                    catch (Exception ex) { _exportDone = new ModExportService.ExportResult(false, $"Export failed: {ex.Message}"); }
+                    catch (Exception ex) { _exportDone = new ModExportService.ExportResult(false, string.Format(Strings.Export.FailedFmt, ex.Message)); }
                 });
             },
             ExportStartDirectory());

@@ -712,7 +712,7 @@ public sealed class ModCreationService
         // PenumbraModMeta refuses to write into a folder without one (it reads as pre-v4).
         PenumbraModMeta.AtomicWrite(
             Path.Combine(root, PenumbraModMeta.MetaFile),
-            PenumbraModMeta.NewMetaJson(modName, author, "Created for Proteus."));
+            PenumbraModMeta.NewMetaJson(modName, author, Loc.Localize("Create.Description", "Created for Proteus.")));
 
         // A no-op self-swap so Penumbra does not flag the empty default option as "changes nothing". See DummySwapPath.
         PenumbraModMeta.WriteRedirects(

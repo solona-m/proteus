@@ -53,8 +53,8 @@ internal static class PenumbraModMeta
     /// than a no-op, so a write that cannot happen is never mistaken for success.
     /// </summary>
     public sealed class LegacyFolderException(string modRoot)
-        : InvalidOperationException(
-            $"{modRoot} is a pre-v{SingleFileVersion} Penumbra mod folder, which Proteus does not write to.");
+        : InvalidOperationException(string.Format(CheapLoc.Loc.Localize("Service.ModMeta.LegacyFolder.Fmt",
+            "{0} is a pre-v{1} Penumbra mod folder, which Proteus does not write to."), modRoot, SingleFileVersion));
 
     /// <summary>
     /// Whether this folder is one Proteus will read but not edit. <see cref="HasReadableManifest"/> is checked
@@ -423,7 +423,8 @@ internal static class PenumbraModMeta
     /// overwriting with a fresh manifest would lose the mod.
     /// </summary>
     public sealed class ManifestInUseException(string path, Exception inner)
-        : IOException($"{path} is in use by another program and could not be read, so it was not rewritten.", inner);
+        : IOException(string.Format(CheapLoc.Loc.Localize("Service.ModMeta.InUse.Fmt",
+            "{0} is in use by another program and could not be read, so it was not rewritten."), path), inner);
 
     /// <summary>How many times a held manifest is re-read, backing off from 50 ms (about 1.5 s, matching
     /// <see cref="AtomicWrite"/>).</summary>
@@ -874,7 +875,8 @@ internal static class PenumbraModMeta
                 }
                 i++;
             }
-        if (index < 0) throw new InvalidOperationException($"This mod has no group called \"{groupName}\".");
+        if (index < 0) throw new InvalidOperationException(string.Format(
+            CheapLoc.Loc.Localize("Service.ModMeta.NoGroup.Fmt", "This mod has no group called \"{0}\"."), groupName));
 
         var group = System.Text.Json.Nodes.JsonNode.Parse(found.GetRawText())!.AsObject();
         if (group["Options"] is not System.Text.Json.Nodes.JsonArray list)

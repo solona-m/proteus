@@ -764,11 +764,11 @@
     "description": ""
   },
   "Command.Refreshing": {
-    "message": "Recompositing now.",
+    "message": "Wird jetzt neu zusammengesetzt.",
     "description": "Chat line for \"/proteus refresh\"."
   },
   "Command.Refreshing.Full": {
-    "message": "Rebuilding everything and recompositing. This takes longer than a plain refresh.",
+    "message": "Alles wird neu aufgebaut und zusammengesetzt. Das dauert länger als eine einfache Aktualisierung.",
     "description": "Chat line for \"/proteus refresh full\"."
   },
   "Common.Browse.Btn": {
@@ -3032,11 +3032,11 @@
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.None": {
-    "message": "No preset",
+    "message": "Kein Preset",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.None.Tip": {
-    "message": "Wear the mod's own colours again. Your option ticks are left exactly as they are.",
+    "message": "Wieder die eigenen Farben der Mod tragen. Deine gesetzten Optionen bleiben genau so, wie sie sind.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.PackMarker": {
@@ -3048,39 +3048,39 @@
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.SaveNew": {
-    "message": "+ Save…",
+    "message": "+ Speichern…",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.SaveNew.Tip": {
-    "message": "Save how this mod looks right now — its ticked options, colours and layer settings — under a name.",
+    "message": "Speichert, wie diese Mod gerade aussieht — gesetzte Optionen, Farben und Ebeneneinstellungen — unter einem Namen.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Save": {
-    "message": "Save",
+    "message": "Speichern",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.RenameConfirm": {
-    "message": "Rename",
+    "message": "Umbenennen",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Cancel": {
-    "message": "Cancel",
+    "message": "Abbrechen",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.NeedsAName": {
-    "message": "Give it a name first.",
+    "message": "Gib ihm zuerst einen Namen.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.NoCollection": {
-    "message": "Penumbra hasn't told Proteus which collection you're wearing yet.",
+    "message": "Penumbra hat Proteus noch nicht mitgeteilt, welche Sammlung du trägst.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.FirstName": {
-    "message": "My look",
+    "message": "Mein Look",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.NthName.Fmt": {
-    "message": "My look {0}",
+    "message": "Mein Look {0}",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Selected.Fmt": {
@@ -3088,135 +3088,135 @@
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.FromPack": {
-    "message": "from the mod",
+    "message": "aus der Mod",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.PackReadOnly": {
-    "message": "This one came with the mod, so it can't be changed. Duplicate it to make it yours.",
+    "message": "Dieses kam mit der Mod und kann nicht geändert werden. Dupliziere es, um es zu deinem zu machen.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Update": {
-    "message": "Update",
+    "message": "Aktualisieren",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Update.Tip": {
-    "message": "Fold everything on screen back into this preset.",
+    "message": "Übernimmt alles, was gerade zu sehen ist, in dieses Preset.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.NothingChanged": {
-    "message": "Nothing has changed since this preset was saved.",
+    "message": "Seit dem Speichern dieses Presets hat sich nichts geändert.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Rename": {
-    "message": "Rename",
+    "message": "Umbenennen",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Duplicate": {
-    "message": "Duplicate",
+    "message": "Duplizieren",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Fork.Tip": {
-    "message": "Make an editable copy of the mod's preset and wear it.",
+    "message": "Erstellt eine bearbeitbare Kopie des Mod-Presets und trägt sie.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.CopyCode.Tip": {
-    "message": "Copy this preset as a share code to paste to someone.",
+    "message": "Kopiert dieses Preset als Teilen-Code, den du jemandem schicken kannst.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.CodeCopied": {
-    "message": "Share code copied to the clipboard.",
+    "message": "Teilen-Code in die Zwischenablage kopiert.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Export.Tip": {
-    "message": "Save this preset as a file.",
+    "message": "Speichert dieses Preset als Datei.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Delete.Tip": {
-    "message": "Hold Ctrl and click to delete this preset.",
+    "message": "Strg gedrückt halten und klicken, um dieses Preset zu löschen.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.PasteCode": {
-    "message": "Paste code",
+    "message": "Code einfügen",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.PasteCode.Tip": {
-    "message": "Read a preset share code from the clipboard.",
+    "message": "Liest einen Preset-Teilen-Code aus der Zwischenablage.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Import": {
-    "message": "Import…",
+    "message": "Importieren…",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Import.Tip": {
-    "message": "Load a preset from a file.",
+    "message": "Lädt ein Preset aus einer Datei.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Staged.Fmt": {
-    "message": "\"{0}\" is ready to add.",
+    "message": "\"{0}\" kann hinzugefügt werden.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.StagedOtherMod.Fmt": {
-    "message": "\"{0}\" was made for \"{1}\" by {2}, not for \"{3}\". Adding it anyway will apply whichever of its options and colours this mod happens to share.",
+    "message": "\"{0}\" wurde von {2} für \"{1}\" erstellt, nicht für \"{3}\". Fügst du es trotzdem hinzu, wird angewendet, was diese Mod an Optionen und Farben zufällig gemeinsam hat.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.AddStaged": {
-    "message": "Add",
+    "message": "Hinzufügen",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Discard": {
-    "message": "Discard",
+    "message": "Verwerfen",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Added.Fmt": {
-    "message": "Added \"{0}\".",
+    "message": "\"{0}\" hinzugefügt.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.ExportDialog.Title": {
-    "message": "Save preset",
+    "message": "Preset speichern",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.ImportDialog.Title": {
-    "message": "Open preset",
+    "message": "Preset öffnen",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Dialog.Filter": {
-    "message": "Proteus preset",
+    "message": "Proteus-Preset",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Exported.Fmt": {
-    "message": "Saved to {0}.",
+    "message": "Gespeichert unter {0}.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.ExportFailed.Fmt": {
-    "message": "Couldn't save it: {0}",
+    "message": "Konnte nicht gespeichert werden: {0}",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.PartialApply.Fmt": {
-    "message": "\"{0}\" was applied as far as it goes. {1}",
+    "message": "\"{0}\" wurde so weit wie möglich angewendet. {1}",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.MissingGroups.Fmt": {
-    "message": "The mod no longer has these option groups: {0}.",
+    "message": "Die Mod hat diese Optionsgruppen nicht mehr: {0}.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.MissingOptions.Fmt": {
-    "message": "These options are gone: {0}.",
+    "message": "Diese Optionen gibt es nicht mehr: {0}.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.JustNow": {
-    "message": "just now",
+    "message": "gerade eben",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.MinutesAgo.Fmt": {
-    "message": "{0} m ago",
+    "message": "vor {0} Min.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.HoursAgo.Fmt": {
-    "message": "{0} h ago",
+    "message": "vor {0} Std.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.DaysAgo.Fmt": {
-    "message": "{0} d ago",
+    "message": "vor {0} T.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Column.Header": {
@@ -3228,7 +3228,7 @@
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Column.Tip": {
-    "message": "A saved look for this mod: its ticked options, colours and layer settings. Open Colors to save one.",
+    "message": "Ein gespeicherter Look für diese Mod: gesetzte Optionen, Farben und Ebeneneinstellungen. Öffne Farben, um einen zu speichern.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.HeaderApplied.Fmt": {
@@ -3236,31 +3236,31 @@
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.ImportFailed.Fmt": {
-    "message": "That isn't a preset Proteus can read: {0}",
+    "message": "Das ist kein Preset, das Proteus lesen kann: {0}",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.ImportedFrom.Fmt": {
-    "message": "Preset \"{0}\" — made for \"{1}\" by {2}.",
+    "message": "Preset \"{0}\" — von {2} für \"{1}\" erstellt.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.NoMatchingMod": {
-    "message": "You don't have that mod installed under that name. Pick the mod it should go to, or install it first.",
+    "message": "Du hast diese Mod nicht unter diesem Namen installiert. Wähle die Mod, zu der es gehört, oder installiere sie zuerst.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.AddTo": {
-    "message": "Add to",
+    "message": "Hinzufügen zu",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.PickAMod": {
-    "message": "Pick a mod…",
+    "message": "Mod wählen…",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.AddTo.Tip": {
-    "message": "Saves it against that mod. Nothing changes on screen until you wear it from the mod's Presets section.",
+    "message": "Speichert es bei dieser Mod. Auf dem Bildschirm ändert sich nichts, bis du es im Presets-Bereich der Mod trägst.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.AddedTo.Fmt": {
-    "message": "Added \"{0}\" to {1}. Wear it from that mod's Presets section in Colors.",
+    "message": "\"{0}\" zu {1} hinzugefügt. Trage es im Presets-Bereich dieser Mod unter Farben.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Parts.Retarget.Ambiguous.Fmt": {
@@ -3272,11 +3272,11 @@
     "description": ""
   },
   "Parts.Retarget.Chest": {
-    "message": "Chest",
+    "message": "Brust",
     "description": ""
   },
   "Parts.Retarget.Choose": {
-    "message": "Choose\u2026",
+    "message": "Wählen…",
     "description": ""
   },
   "Parts.Retarget.Clash.Fmt": {
@@ -3292,7 +3292,7 @@
     "description": ""
   },
   "Parts.Retarget.ClearPreview": {
-    "message": "Clear the preview",
+    "message": "Vorschau entfernen",
     "description": ""
   },
   "Parts.Retarget.Exact.Fmt": {
@@ -3300,15 +3300,15 @@
     "description": ""
   },
   "Parts.Retarget.Feet": {
-    "message": "Feet",
+    "message": "Füße",
     "description": ""
   },
   "Parts.Retarget.From": {
-    "message": "Made for",
+    "message": "Gemacht für",
     "description": ""
   },
   "Parts.Retarget.Group.Fmt": {
-    "message": "Body \u2014 {0}",
+    "message": "Körper — {0}",
     "description": ""
   },
   "Parts.Retarget.Guess": {
@@ -3316,11 +3316,11 @@
     "description": "Under the Body size tool's \"Made for\" size: the detector's pick is only a guess."
   },
   "Parts.Retarget.Hands": {
-    "message": "Hands",
+    "message": "Hände",
     "description": ""
   },
   "Parts.Retarget.Legs": {
-    "message": "Legs",
+    "message": "Beine",
     "description": ""
   },
   "Parts.Retarget.Likely": {
@@ -3332,7 +3332,7 @@
     "description": ""
   },
   "Parts.Retarget.NoBody": {
-    "message": "Pick one\u2026",
+    "message": "Eins wählen…",
     "description": ""
   },
   "Parts.Retarget.NoBodiesForSex.Fmt": {
@@ -3340,11 +3340,11 @@
     "description": ""
   },
   "Parts.Retarget.Male": {
-    "message": "male",
+    "message": "männlich",
     "description": ""
   },
   "Parts.Retarget.Female": {
-    "message": "female",
+    "message": "weiblich",
     "description": ""
   },
   "Parts.Retarget.NoBodyMesh": {
@@ -3356,7 +3356,7 @@
     "description": ""
   },
   "Parts.Retarget.OpenInPenumbra": {
-    "message": "Open in Penumbra",
+    "message": "In Penumbra öffnen",
     "description": ""
   },
   "Parts.Retarget.OtherLods": {
@@ -3368,11 +3368,11 @@
     "description": ""
   },
   "Parts.Retarget.Preview": {
-    "message": "Refit and preview",
+    "message": "Anpassen und Vorschau",
     "description": ""
   },
   "Parts.Retarget.Save": {
-    "message": "Save as a new option",
+    "message": "Als neue Option speichern",
     "description": ""
   },
   "Parts.Retarget.Saved.Fmt": {
@@ -3380,11 +3380,11 @@
     "description": ""
   },
   "Parts.Retarget.Slot.Fmt": {
-    "message": "{0} \u2014 {1} options",
+    "message": "{0} — {1} Optionen",
     "description": ""
   },
   "Parts.Retarget.Slot.Optional.Fmt": {
-    "message": "{0} \u2014 optional",
+    "message": "{0} — optional",
     "description": ""
   },
   "Parts.Retarget.Slot.Optional.Tip": {
@@ -3392,7 +3392,7 @@
     "description": ""
   },
   "Parts.Retarget.To": {
-    "message": "Refit onto",
+    "message": "Anpassen an",
     "description": ""
   },
   "Parts.Retarget.Undo": {
@@ -3400,11 +3400,11 @@
     "description": ""
   },
   "Parts.Retarget.Unreadable.Fmt": {
-    "message": "The {0} body model could not be read.",
+    "message": "Das {0}-Körpermodell konnte nicht gelesen werden.",
     "description": ""
   },
   "Parts.Retarget.Working": {
-    "message": "Refitting\u2026",
+    "message": "Wird angepasst…",
     "description": ""
   },
   "Parts.Tool.Retarget": {
@@ -3448,7 +3448,7 @@
     "description": ""
   },
   "Parts.NoMatches": {
-    "message": "Nothing matches.",
+    "message": "Keine Treffer.",
     "description": ""
   },
   "Parts.Retarget.Lock.ListTip": {
@@ -3464,7 +3464,7 @@
     "description": ""
   },
   "Parts.Retarget.KeepShape": {
-    "message": "Keep shape",
+    "message": "Form behalten",
     "description": ""
   },
   "Parts.Retarget.KeepShape.Tip": {
@@ -3472,15 +3472,15 @@
     "description": ""
   },
   "Parts.Retarget.ReplaceSkin": {
-    "message": "Use the new body\u0027s skin",
+    "message": "Haut des neuen Körpers verwenden",
     "description": ""
   },
   "Parts.Retarget.SaveMany.Fmt": {
-    "message": "Save {0} sizes as new options",
+    "message": "{0} Größen als neue Optionen speichern",
     "description": ""
   },
   "Parts.Retarget.Showing": {
-    "message": "Showing on the character",
+    "message": "Wird am Charakter gezeigt",
     "description": ""
   },
   "Parts.Retarget.ToMany": {
@@ -3488,7 +3488,7 @@
     "description": ""
   },
   "Parts.Retarget.Working.Fmt": {
-    "message": "Refitting {0} of {1}\u2026",
+    "message": "Passe {0} von {1} an…",
     "description": ""
   },
   "Parts.Retarget.MadeHere": {
@@ -3496,11 +3496,11 @@
     "description": ""
   },
   "Parts.Retarget.NewGroup": {
-    "message": "A new group\u2026",
+    "message": "Eine neue Gruppe…",
     "description": ""
   },
   "Parts.Retarget.SaveTo": {
-    "message": "Save to group",
+    "message": "In Gruppe speichern",
     "description": ""
   },
   "Parts.Retarget.SwapShapes.Fmt": {
@@ -3544,39 +3544,39 @@
     "description": ""
   },
   "Parts.Move.ClearPolygons": {
-    "message": "Clear",
+    "message": "Leeren",
     "description": ""
   },
   "Parts.Move.Falloff.SurfaceTip": {
-    "message": "How far from the selected polygons the cloth around them still follows, measured along the surface.\nOnly cloth joined to the selection follows: a separate piece that merely sits close does not.",
+    "message": "Wie weit von den ausgewählten Polygonen der Stoff drumherum noch mitgeht, entlang der Oberfläche gemessen.\nNur mit der Auswahl verbundener Stoff folgt: ein separates Teil, das nur nahe liegt, nicht.",
     "description": ""
   },
   "Parts.Move.Grow": {
-    "message": "Grow",
+    "message": "Vergrößern",
     "description": ""
   },
   "Parts.Move.NoPolygons": {
-    "message": "Click a polygon on the model to select it. Shift-click adds or removes one.",
+    "message": "Klicke ein Polygon am Modell an, um es auszuwählen. Umschalt-Klick fügt eins hinzu oder entfernt es.",
     "description": ""
   },
   "Parts.Move.Polygons.Fmt": {
-    "message": "{0:N0} polygon(s) selected",
+    "message": "{0:N0} Polygon(e) ausgewählt",
     "description": ""
   },
   "Parts.Move.SelectParts": {
-    "message": "Whole parts",
+    "message": "Ganze Teile",
     "description": ""
   },
   "Parts.Move.SelectPolygons": {
-    "message": "Polygons",
+    "message": "Polygone",
     "description": ""
   },
   "Parts.Move.SelectPolygons.Tip": {
-    "message": "Move, turn or scale single polygons instead of whole parts. Click a polygon to select it; Shift-click adds\nor removes one. Choosing a part in the list selects all of its polygons.",
+    "message": "Einzelne Polygone statt ganzer Teile verschieben, drehen oder skalieren. Klicke ein Polygon an, um es auszuwählen;\nUmschalt-Klick fügt eins hinzu oder entfernt es. Ein Teil in der Liste wählt alle seine Polygone aus.",
     "description": ""
   },
   "Parts.Move.Shrink": {
-    "message": "Shrink",
+    "message": "Verkleinern",
     "description": ""
   },
   "Parts.Retarget.FromBody": {
@@ -3644,7 +3644,7 @@
     "description": ""
   },
   "Parts.Vanilla.Header": {
-    "message": "Vanilla gear",
+    "message": "Vanilla-Ausrüstung",
     "description": ""
   },
   "Parts.Vanilla.Open.Fmt": {
@@ -3656,23 +3656,23 @@
     "description": ""
   },
   "Refit.Error.NoName.Fmt": {
-    "message": "Couldn\u0027t find a free mod name for \u0022{0}\u0022.",
+    "message": "Für \"{0}\" wurde kein freier Mod-Name gefunden.",
     "description": ""
   },
   "Refit.Mod.Description.Fmt": {
-    "message": "{0}, refitted by Proteus.",
+    "message": "{0}, angepasst von Proteus.",
     "description": ""
   },
   "Refit.Mod.Enabled.Fmt": {
-    "message": "Made \u0022{0}\u0022 and switched it on.",
+    "message": "\"{0}\" erstellt und eingeschaltet.",
     "description": ""
   },
   "Refit.Mod.NotEnabled.Fmt": {
-    "message": "Made \u0022{0}\u0022, but couldn\u0027t switch it on \u2014 enable it in Penumbra.",
+    "message": "\"{0}\" erstellt, konnte aber nicht eingeschaltet werden — aktiviere es in Penumbra.",
     "description": ""
   },
 "Parts.Retarget.SaveToMod": {
-    "message": "Save into",
+    "message": "Speichern in",
     "description": ""
   },
   "Parts.Retarget.SaveToMod.Tip": {
@@ -3684,7 +3684,7 @@
     "description": ""
   },
   "Parts.Retarget.SaveToThisMod": {
-    "message": "This mod",
+    "message": "Diese Mod",
     "description": ""
   },
   "Parts.Vanilla.Worn.Tip": {
@@ -3704,7 +3704,7 @@
     "description": ""
   },
   "Parts.Vanilla.WornSuffix": {
-    "message": "(vanilla)",
+    "message": "(Vanilla)",
     "description": ""
   },
   "WhatsNew.Title": {
@@ -3782,5 +3782,625 @@
   "Parts.Retarget.LeaveOut": {
     "message": "Keine (diesen Teil weglassen)",
     "description": "First entry in an optional body part's dropdowns in the Body size panel. Picking it takes that part out of the refit."
+  },
+  "Band.Refresh.Btn": {
+    "message": "Aktualisieren",
+    "description": "Button on the tab bar that recomposites now. Keep it short: it sits right-aligned on the tab bar's own line."
+  },
+  "Colors.Window.Title.Fmt": {
+    "message": "Farben — {0}",
+    "description": "Title of the colour editor window. {0} is the mod's name."
+  },
+  "Colors.NoShell": {
+    "message": "Dieses Overlay bemalt etwas, über das Proteus keine Ebene legen kann — Ausrüstung, ein\nAccessoire oder eine Waffe. Glow und Cloth brauchen eine Ebene über deiner eigenen Haut:\nKörper, Gesicht, Haare, Schwanz oder Ohren.",
+    "description": "Under the glow-effect picker in the colour editor, for an overlay option that paints gear rather than skin. Glow and Cloth are the names of two render modes."
+  },
+  "Colors.Reset.Blocked.Tip": {
+    "message": "Für diese Mod sind noch keine Originaleinstellungen gespeichert — Proteus hält sie fest,\nsobald es hier zum ersten Mal eine Änderung speichert.",
+    "description": "Tooltip on \"Reset to defaults\" in the colour editor while the mod has no recorded defaults to reset to."
+  },
+  "Chat.Loaded.Fmt": {
+    "message": "[Proteus] geladen — Build #{0} ({1})",
+    "description": "Chat line printed when the plugin loads. {0} is the build number, {1} the build date. Keep \"[Proteus]\" as it is."
+  },
+  "Export.Failed.Fmt": {
+    "message": "Export fehlgeschlagen: {0}",
+    "description": "Export tab status line when writing the .pmp throws. {0} is the error message."
+  },
+  "Import.Layer.Size.Fmt": {
+    "message": "{0:0.#} MB",
+    "description": "Onion layer table, last column: the layer's file size. {0:0.#} is megabytes; keep the format specifier exactly."
+  },
+  "Eye.Slot.Base": {
+    "message": "Basis",
+    "description": "Eye-pack table, second column: the file replaces the game's base eye texture."
+  },
+  "Eye.Slot.Mask": {
+    "message": "Maske",
+    "description": "Eye-pack table, second column: the file replaces the game's eye mask texture."
+  },
+  "Eye.Slot.Normal": {
+    "message": "Normal",
+    "description": "Eye-pack table, second column: the file replaces the game's eye normal map."
+  },
+  "Settings.Output.TextureCache.Format": {
+    "message": "%d MB",
+    "description": "Value text inside the texture-cache slider. An ImGui printf format: keep %d exactly as it is."
+  },
+  "Common.Cancelled": {
+    "message": "abgebrochen",
+    "description": "Stands in for an error message when a background task was cancelled (e.g. after \"Could not save the log:\")."
+  },
+  "Common.Units.Mm0": {
+    "message": "%.0f mm",
+    "description": "Slider value in millimetres. An ImGui printf format: keep %.0f exactly as it is."
+  },
+  "Common.Units.Mm1": {
+    "message": "%.1f mm",
+    "description": "Slider value in millimetres. An ImGui printf format: keep %.1f exactly as it is."
+  },
+  "Common.Units.Mm2": {
+    "message": "%.2f mm",
+    "description": "Slider value in millimetres. An ImGui printf format: keep %.2f exactly as it is."
+  },
+  "Create.Dialog.ImageFilter": {
+    "message": "Bilder",
+    "description": "File-type name in the texture file dialog; the list of image extensions follows it. No commas or braces."
+  },
+  "Create.Picker.Tag.Body": {
+    "message": "Körper",
+    "description": "Material picker, left column: the material belongs to the body. Short tag."
+  },
+  "Create.Picker.Tag.Face": {
+    "message": "Gesicht",
+    "description": "Material picker, left column: the material belongs to the face. Short tag."
+  },
+  "Create.Picker.Tag.Iris": {
+    "message": "Iris",
+    "description": "Material picker, left column: the material is the eyes' iris. Short tag."
+  },
+  "Create.Picker.Tag.Hair": {
+    "message": "Haare",
+    "description": "Material picker, left column: the material belongs to the hair. Short tag."
+  },
+  "Create.Picker.Tag.Tail": {
+    "message": "Schwanz",
+    "description": "Material picker, left column: the material belongs to the tail. Short tag."
+  },
+  "Create.Picker.Tag.Ear": {
+    "message": "Ohr",
+    "description": "Material picker, left column: the material belongs to Viera ears. Short tag."
+  },
+  "Create.Picker.Tag.Native": {
+    "message": "Rasseneigen",
+    "description": "Material picker, left column: geometry an imported pack made for one race only. Short tag."
+  },
+  "Create.Picker.Tag.Weapon": {
+    "message": "Waffe",
+    "description": "Material picker, left column: the material belongs to a weapon. Short tag."
+  },
+  "Create.Picker.Tag.Gear": {
+    "message": "Ausrüstung",
+    "description": "Material picker, left column: the material belongs to a piece of gear. Short tag."
+  },
+  "Create.Picker.Tag.Accessory": {
+    "message": "Accessoire",
+    "description": "Material picker, left column: the material belongs to an accessory (earrings, necklace, ring…). Short tag."
+  },
+  "Create.Picker.Tag.Other": {
+    "message": "Sonstiges",
+    "description": "Material picker, left column: anything else. Short tag."
+  },
+  "Parts.Retarget.Bake.ReadBack": {
+    "message": "das neue Modell konnte nicht zurückgelesen werden",
+    "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. Lower-case, no full stop."
+  },
+  "Parts.Retarget.BodyFallback": {
+    "message": "Körper",
+    "description": "Body size: starts the name of a saved Penumbra option when the target body mod's own name is unknown."
+  },
+  "Parts.Retarget.Size.NoOptionsGroup": {
+    "message": "Keine Optionen",
+    "description": "Body size pickers: heading over a body that a body mod ships without any option group."
+  },
+  "Parts.Retarget.Size.ModOwnBody": {
+    "message": "Der Körper der Mod selbst",
+    "description": "Body size pickers: the body a body mod ships without any option. Also starts saved option names."
+  },
+  "Parts.Retarget.Size.VanillaGroup": {
+    "message": "Vanilla",
+    "description": "Body size \"Made for\" picker: heading over the game's own body."
+  },
+  "Parts.Retarget.Size.VanillaBody": {
+    "message": "Der Vanilla-Körper",
+    "description": "Body size \"Made for\" picker: the game's own body, which vanilla gear is made for."
+  },
+  "Common.Race.Midlander": {
+    "message": "Wiesländer",
+    "description": "Playable race (Hyur clan), as the game names it."
+  },
+  "Common.Race.Highlander": {
+    "message": "Hochländer",
+    "description": "Playable race (Hyur clan), as the game names it."
+  },
+  "Common.Race.Elezen": {
+    "message": "Elezen",
+    "description": "Playable race, as the game names it."
+  },
+  "Common.Race.Miqote": {
+    "message": "Miqo'te",
+    "description": "Playable race, as the game names it (Miqo'te)."
+  },
+  "Common.Race.Roegadyn": {
+    "message": "Roegadyn",
+    "description": "Playable race, as the game names it."
+  },
+  "Common.Race.Lalafell": {
+    "message": "Lalafell",
+    "description": "Playable race, as the game names it."
+  },
+  "Common.Race.AuRa": {
+    "message": "Au Ra",
+    "description": "Playable race, as the game names it (Au Ra)."
+  },
+  "Common.Race.Hrothgar": {
+    "message": "Hrothgar",
+    "description": "Playable race, as the game names it."
+  },
+  "Common.Race.Viera": {
+    "message": "Viera",
+    "description": "Playable race, as the game names it."
+  },
+  "Common.Race.Male": {
+    "message": "m",
+    "description": "Short marker for a male body, after a race name (\"Miqo'te M\"). One or two characters."
+  },
+  "Common.Race.Female": {
+    "message": "w",
+    "description": "Short marker for a female body, after a race name (\"Miqo'te F\"). One or two characters."
+  },
+  "Common.Race.Gender.Fmt": {
+    "message": "{0} ({1})",
+    "description": "A race and body sex together. {0} is a race name, {1} the short male/female marker."
+  },
+  "Common.Slot.Head": {
+    "message": "Kopf",
+    "description": "Equipment slot, as the game names it."
+  },
+  "Common.Slot.Body": {
+    "message": "Rumpf",
+    "description": "Equipment slot, as the game names it."
+  },
+  "Common.Slot.Hands": {
+    "message": "Hände",
+    "description": "Equipment slot, as the game names it."
+  },
+  "Common.Slot.Legs": {
+    "message": "Beine",
+    "description": "Equipment slot, as the game names it."
+  },
+  "Common.Slot.Feet": {
+    "message": "Füße",
+    "description": "Equipment slot, as the game names it."
+  },
+  "Common.Slot.Earrings": {
+    "message": "Ohrringe",
+    "description": "Accessory slot, as the game names it."
+  },
+  "Common.Slot.Necklace": {
+    "message": "Halskette",
+    "description": "Accessory slot, as the game names it."
+  },
+  "Common.Slot.Bracelets": {
+    "message": "Armreife",
+    "description": "Accessory slot, as the game names it."
+  },
+  "Common.Slot.RightRing": {
+    "message": "Rechter Ring",
+    "description": "Accessory slot: the ring on the right hand."
+  },
+  "Common.Slot.LeftRing": {
+    "message": "Linker Ring",
+    "description": "Accessory slot: the ring on the left hand."
+  },
+  "Common.Slot.Hair": {
+    "message": "Haare",
+    "description": "Character part (not an equipment slot): the hair."
+  },
+  "Common.Slot.Face": {
+    "message": "Gesicht",
+    "description": "Character part (not an equipment slot): the face."
+  },
+  "Common.Slot.Tail": {
+    "message": "Schwanz",
+    "description": "Character part (not an equipment slot): the tail."
+  },
+  "Common.Slot.Ears": {
+    "message": "Ohren",
+    "description": "Character part (not an equipment slot): Viera ears."
+  },
+  "Parts.Retarget.Save.Nothing": {
+    "message": "Nichts zu speichern.",
+    "description": "Body size status line: Save was pressed with no sizes to save."
+  },
+  "Parts.Retarget.Save.OptionTaken.Fmt": {
+    "message": "\"{0}\" hat bereits eine eigene Option namens \"{1}\". Speichere die Anpassung in einer anderen Gruppe.",
+    "description": "Body size status line. {0} is a Penumbra option group, {1} the option name the refit wanted."
+  },
+  "Parts.Retarget.Save.AddedOneToAuthor.Fmt": {
+    "message": "Als \"{0}\" in der Gruppe \"{1}\" gespeichert. Wähle es dort in Penumbra aus, um es zu tragen.",
+    "description": "Body size status line after saving into the mod author's own group. {0} is the option, {1} the group."
+  },
+  "Parts.Retarget.Save.AddedManyToAuthor.Fmt": {
+    "message": "{0} Größen in der Gruppe \"{1}\" gespeichert. Wähle sie dort in Penumbra aus, um sie zu tragen.",
+    "description": "Body size status line after saving several sizes into the mod author's own group. {0} is how many, {1} the group."
+  },
+  "Parts.Retarget.Save.AddedOne.Fmt": {
+    "message": "Als \"{0}\" in der Gruppe \"{1}\" gespeichert. Penumbra wählt nur bei einer Mod, die es zum ersten Mal hinzufügt, eine Standardoption — wähle die Option dort aus, um sie zu sehen.",
+    "description": "Body size status line after saving into a group Proteus made. {0} is the option, {1} the group."
+  },
+  "Parts.Retarget.Save.AddedMany.Fmt": {
+    "message": "{0} Größen in der Gruppe \"{1}\" gespeichert. Penumbra wählt nur bei einer Mod, die es zum ersten Mal hinzufügt, eine Standardoption — wähle die Option dort aus, um sie zu sehen.",
+    "description": "Body size status line after saving several sizes into a group Proteus made. {0} is how many, {1} the group."
+  },
+  "Parts.Retarget.Save.Legacy": {
+    "message": "Diese Mod liegt noch im alten Ordnerformat von Penumbra vor, das Proteus nicht bearbeitet. Aktiviere sie einmal in Penumbra, damit Penumbra sie aktualisiert, und komm dann zurück.",
+    "description": "Body size status line: the mod is in Penumbra's pre-v3 folder format."
+  },
+  "Parts.Retarget.Save.Failed.Fmt": {
+    "message": "Speichern fehlgeschlagen: {0}",
+    "description": "Body size status line. {0} is the error message."
+  },
+  "Parts.Retarget.Undo.Removed.Fmt": {
+    "message": "\"{0}\" entfernt.",
+    "description": "Body size status line after Undo. {0} is the option removed."
+  },
+  "Parts.Retarget.Undo.NoGroup": {
+    "message": "Diese Mod hat keine Anpassungsgruppe.",
+    "description": "Body size status line: Undo found no group of refits to remove from."
+  },
+  "Parts.Retarget.Undo.Legacy": {
+    "message": "Diese Mod liegt im alten Ordnerformat von Penumbra vor. Aktiviere sie einmal in Penumbra und komm dann zurück.",
+    "description": "Body size status line: Undo on a mod in Penumbra's pre-v3 folder format."
+  },
+  "Parts.Retarget.Undo.Failed.Fmt": {
+    "message": "Rückgängig machen fehlgeschlagen: {0}",
+    "description": "Body size status line. {0} is the error message."
+  },
+  "Parts.Retarget.Refuse.NoLayoutMap.Fmt": {
+    "message": "Die {0}-Modelle nutzen unterschiedliche Texturlayouts ({1} und {2}), und Proteus hat keine Zuordnung zwischen ihnen. Es lässt sich also nicht sagen, welcher Punkt des einen Körpers welchem Punkt des anderen entspricht.",
+    "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…), {1} and {2} texture-layout ids such as bibo or gen3 — never translate those."
+  },
+  "Parts.Retarget.Refuse.UvUnreadable.Fmt": {
+    "message": "Die Texturkoordinaten der {0}-Modelle konnten nicht gelesen werden. Es lässt sich also nicht sagen, welcher Punkt des einen Körpers welchem Punkt des anderen entspricht.",
+    "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…)."
+  },
+  "Parts.Retarget.Refuse.NoTargetSkin.Fmt": {
+    "message": "Das Ziel-{0}-Modell hat keine Körperhaut, auf der etwas landen kann.",
+    "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…)."
+  },
+  "Parts.Retarget.Refuse.OffSheet.Fmt": {
+    "message": "Der Großteil des Quell-{0}-Körpers liegt außerhalb seines Texturlayouts. Es lässt sich also nicht sagen, welcher Punkt des einen Körpers welchem Punkt des anderen entspricht.",
+    "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…)."
+  },
+  "Parts.Retarget.Refuse.LowCoverage.Fmt": {
+    "message": "Nur {1:P0} des Quell-{0}-Körpers finden über die Texturkoordinaten ihren Platz auf dem Ziel, die beiden teilen also kein Texturlayout. Sie können nicht aufeinander angepasst werden.",
+    "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…), {1:P0} the share that matched — keep the :P0."
+  },
+  "Parts.Retarget.Bake.NoPath.Fmt": {
+    "message": "der Rassen-Deformer kennt keinen Weg von c{0:D4} nach c{1:D4}",
+    "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. {0:D4} and {1:D4} are race codes such as 0101 — keep the c and the :D4. Lower-case, no full stop."
+  },
+  "Parts.Retarget.Bake.Unreadable": {
+    "message": "das Modell konnte nicht gelesen werden",
+    "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. Lower-case, no full stop."
+  },
+  "Parts.Retarget.Bake.WeightMismatch.Fmt": {
+    "message": "die Vertices des Modells ließen sich nicht ihren Gewichten zuordnen ({0} gegenüber {1})",
+    "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. {0} and {1} are vertex counts. Lower-case, no full stop."
+  },
+  "Refit.Error.RedirectsUnreadable.Fmt": {
+    "message": "Die Umleitungen von {0} konnten nicht gelesen werden.",
+    "description": "Shown when a vanilla item is opened for editing and the new mod's file list cannot be read. {0} is a folder path."
+  },
+  "Parts.Write.NotJsonObject.Fmt": {
+    "message": "{0} ist kein JSON-Objekt.",
+    "description": "Inside Parts.Write.Failed.Fmt: a mod file is not valid JSON. {0} is a file path."
+  },
+  "Service.ModelEdit.NoSubmesh.Fmt": {
+    "message": "Mesh {0} hat kein Submesh {1}",
+    "description": "Why a model edit (part switch, hat fit, brush) failed; shown after a colon. {0} and {1} are numbers. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.AttributesFull.Fmt": {
+    "message": "dieses Modell deklariert bereits {0} Attribute — mehr kann eine Submesh-Maske nicht aufnehmen",
+    "description": "Why a model edit failed; shown after a colon. {0} is a number. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.NoTriangles": {
+    "message": "dieses Submesh hat keine Dreiecke",
+    "description": "Why a model edit failed; shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.Fragmented.Fmt": {
+    "message": "diese Dreiecke sind über {0} Abschnitte mit dem Rest des Teils verzahnt — zu zersplittert, um sauber getrennt zu werden",
+    "description": "Why splitting a part failed; shown after a colon. {0} is a number. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.IndexRange.Fmt": {
+    "message": "der Indexbereich von Mesh {0} reicht über das Dateiende hinaus",
+    "description": "Why a model edit failed (damaged file); shown after a colon. {0} is a number. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.ShapeBlock": {
+    "message": "der Shape-Block dieses Modells reicht über das Dateiende hinaus",
+    "description": "Why a model edit failed (damaged file); shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.ShapeTooFar": {
+    "message": "eine vorhandene Shape dieses Modells adressiert dieses Submesh aus zu großer Entfernung, um einer Umordnung zu folgen — es kann nicht nach Geometrie getrennt werden",
+    "description": "Why splitting a part by geometry failed; shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.ShapeNoName": {
+    "message": "eine Shape braucht einen Namen",
+    "description": "Why a model edit failed; shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.TablesMismatch": {
+    "message": "die Tabellen dieses Modells gehen nicht auf — der Shape-Block liegt nicht dort, wo das Format ihn erwartet",
+    "description": "Why a model edit failed (damaged file); shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.ShapeExists.Fmt": {
+    "message": "dieses Modell deklariert bereits eine Shape namens {0}",
+    "description": "Why a model edit failed; shown after a colon. {0} is a shape name. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.NeckMorph": {
+    "message": "dieses Modell enthält Hals-Morph-Daten, die hier nicht bearbeitet werden können",
+    "description": "Why a model edit failed; shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.UnusedVertices": {
+    "message": "keiner dieser Vertices wird von einem Dreieck genutzt, eine Shape darüber würde also nichts verformen",
+    "description": "Why a model edit failed; shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.ShapeOverflow.Fmt": {
+    "message": "diese Shape braucht {0} Shape-Werte — mehr, als das Format zählen kann",
+    "description": "Why a model edit failed; shown after a colon. {0} is a number. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.NotLod0.Fmt": {
+    "message": "Mesh {0} gehört nicht zu LOD0, und nur dessen Meshes lassen sich hier formen",
+    "description": "Why a model edit failed; shown after a colon. {0} is a number; keep LOD0. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.NoVertex.Fmt": {
+    "message": "Mesh {0} hat keinen Vertex {1} — es hat {2}",
+    "description": "Why a model edit failed; shown after a colon. {0}, {1} and {2} are numbers. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.TooManyVertices.Fmt": {
+    "message": "Mesh {0} bräuchte {1} Vertices, mehr als die {2}, die ein Modell zählen kann — das ist der Formatgrund, warum Haare für Hüte unter 30k Polygonen bleiben",
+    "description": "Why a hat-fit edit failed; shown after a colon. {0}, {1} and {2} are numbers. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.NoPosition.Fmt": {
+    "message": "Mesh {0} deklariert kein Positionselement",
+    "description": "Why a model edit failed; shown after a colon. {0} is a number. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.PositionType.Fmt": {
+    "message": "Mesh {0} speichert seine Positionen als Vertex-Typ {1}, der hier nicht geschrieben werden kann",
+    "description": "Why a model edit failed; shown after a colon. {0} is a number, {1} a vertex type id. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.StreamRange.Fmt": {
+    "message": "Stream {1} von Mesh {0} reicht über das Dateiende hinaus",
+    "description": "Why a model edit failed (damaged file); shown after a colon. {0} and {1} are numbers. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.ShapeTable": {
+    "message": "die Shape-Tabelle dieses Modells reicht über das Dateiende hinaus",
+    "description": "Why a model edit failed (damaged file); shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.Unreadable.Fmt": {
+    "message": "dieses Modell konnte nicht gelesen werden ({0})",
+    "description": "Why a brush edit failed; shown after a colon. {0} is the underlying error message. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.BoundingBoxes": {
+    "message": "die Bounding Boxes dieses Modells liegen nicht dort, wo das Format sie erwartet",
+    "description": "Why a brush edit failed (damaged file); shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.PositionFormat.Fmt": {
+    "message": "Mesh {0} speichert seine Positionen in einem Format, das hier nicht geschrieben werden kann (Typ {1})",
+    "description": "Why a brush edit failed; shown after a colon. {0} is a number, {1} a vertex type id. Lower-case, no full stop."
+  },
+  "Import.Layer.Skip.NoFile": {
+    "message": "die Ebene nennt keine Bilddatei",
+    "description": "Onion layer tooltip, after \"Skipped:\". Lower-case, no full stop."
+  },
+  "Import.Layer.Skip.Missing.Fmt": {
+    "message": "das Paket enthält \"{0}\" nicht",
+    "description": "Onion layer tooltip, after \"Skipped:\". {0} is a file name. Lower-case, no full stop."
+  },
+  "Import.Layer.Skip.Transparent": {
+    "message": "die Ebene ist vollständig transparent (Deckkraft 0)",
+    "description": "Onion layer tooltip, after \"Skipped:\". Lower-case, no full stop."
+  },
+  "Import.Layer.Skip.Layout.Fmt": {
+    "message": "nicht unterstütztes UV-Layout \"{0}\"",
+    "description": "Onion layer tooltip, after \"Skipped:\". {0} is the pack's UV layout token, untranslated. Lower-case, no full stop."
+  },
+  "Import.Layer.Skip.Map.Fmt": {
+    "message": "nicht unterstützte Textur-Map \"{0}\"",
+    "description": "Onion layer tooltip, after \"Skipped:\". {0} is the pack's texture-map token, untranslated. Lower-case, no full stop."
+  },
+  "Import.Layer.Skip.BlendMode.Fmt": {
+    "message": "für den Mischmodus \"{0}\" gibt es in Proteus keine Entsprechung",
+    "description": "Onion layer tooltip, after \"Skipped:\". {0} is the pack's blend-mode token (Multiply, Screen…), untranslated. Lower-case, no full stop."
+  },
+  "Import.Onion.Description.Fmt": {
+    "message": "Aus dem Onion-Paket \"{0}\" importiert.",
+    "description": "Written into the description of a mod imported from an Onion pack; Penumbra shows it. {0} is the pack's file name."
+  },
+  "Import.Pack.UnsafeEntry.Fmt": {
+    "message": "Das Paket enthält einen unsicheren Eintragspfad: {0}",
+    "description": "Why a pack could not be read: it holds a path that would escape its folder. {0} is that path."
+  },
+  "Import.Pack.Onion.NoMeta": {
+    "message": "Kein Onion-Paket — es hat keine meta.json.",
+    "description": "Why an Onion pack could not be read. Keep meta.json as is."
+  },
+  "Import.Pack.MetaUnreadable": {
+    "message": "Die meta.json des Pakets ist leer oder unlesbar.",
+    "description": "Why a pack could not be read. Keep meta.json as is."
+  },
+  "Import.Pack.EntryGone.Fmt": {
+    "message": "Das Paket enthält {0} nicht mehr.",
+    "description": "Why an import failed: a file vanished from the pack after it was opened. {0} is the file."
+  },
+  "Import.Pack.Penumbra.NoMeta": {
+    "message": "Kein Penumbra-Paket — es hat keine meta.json.",
+    "description": "Why a Penumbra pack could not be read. Keep meta.json as is."
+  },
+  "Import.Pack.MetaNotObject": {
+    "message": "Die meta.json des Pakets ist kein Objekt.",
+    "description": "Why a pack could not be read. Keep meta.json as is."
+  },
+  "Import.Eye.Pack.UnsafeEntry.Fmt": {
+    "message": "Das Archiv enthält einen unsicheren Eintragspfad: {0}",
+    "description": "Why an eye-texture archive could not be read. {0} is the offending path."
+  },
+  "Import.Eye.Pack.NoImages": {
+    "message": "Das Archiv enthält keine Bilder, es gibt also nichts zu importieren.",
+    "description": "Why an eye-texture archive could not be imported."
+  },
+  "Import.Eye.Pack.EntryGone.Fmt": {
+    "message": "Das Archiv enthält {0} nicht mehr.",
+    "description": "Why an eye import failed: a file vanished from the archive after it was opened. {0} is the file."
+  },
+  "Import.Luminis.Pack.NoManifest": {
+    "message": "Kein TexTools-Modpack — es hat keine TTMPL.mpl.",
+    "description": "Why a TexTools modpack could not be read. Keep TTMPL.mpl as is."
+  },
+  "Import.Luminis.Pack.NoData": {
+    "message": "Das Modpack hat keine TTMPD.mpd, keine der aufgeführten Dateien enthält also Daten.",
+    "description": "Why a TexTools modpack could not be read. Keep TTMPD.mpd as is."
+  },
+  "Import.Luminis.Pack.Version1": {
+    "message": "Das sieht nach einer alten TexTools-.ttmp (Version 1) aus, die Proteus nicht lesen kann. Exportiere sie in TexTools erneut als .ttmp2.",
+    "description": "Why a TexTools modpack could not be read. Keep .ttmp and .ttmp2 as is."
+  },
+  "Import.Luminis.Pack.ManifestUnreadable": {
+    "message": "Die TTMPL.mpl des Modpacks ist leer oder unlesbar.",
+    "description": "Why a TexTools modpack could not be read. Keep TTMPL.mpl as is."
+  },
+  "Import.Luminis.Pack.Version.Fmt": {
+    "message": "Das Modpack gibt TTMP-Version {0} an, die Proteus nicht lesen kann. Exportiere es in TexTools erneut als .ttmp2.",
+    "description": "Why a TexTools modpack could not be read. {0} is the version the pack declares. Keep TTMP and .ttmp2 as is."
+  },
+  "Import.Luminis.Pack.NoFiles": {
+    "message": "Das Modpack führt überhaupt keine Dateien auf.",
+    "description": "Why a TexTools modpack could not be imported."
+  },
+  "Import.Luminis.Pack.DataGone": {
+    "message": "Das Modpack enthält TTMPD.mpd nicht mehr.",
+    "description": "Why a TexTools import failed: the data file vanished after the pack was opened. Keep TTMPD.mpd as is."
+  },
+  "Import.Luminis.Pack.OutOfBlob.Fmt": {
+    "message": "laut Manifest liegt sie bei Byte {0} eines {1} Byte großen Datenblocks",
+    "description": "Why one file of a TexTools modpack is skipped; shown after a colon. {0} and {1} are byte counts. Lower-case, no full stop."
+  },
+  "Import.Luminis.Pack.Truncated": {
+    "message": "der Datenblock des Modpacks ist abgeschnitten",
+    "description": "Why one file of a TexTools modpack is skipped; shown after a colon. Lower-case, no full stop."
+  },
+  "Import.Luminis.Tex.HeaderSize": {
+    "message": "Die SqPack-Headergröße liegt außerhalb der Datei.",
+    "description": "Why a texture inside a TexTools modpack could not be read. Keep SqPack as is."
+  },
+  "Import.Luminis.Tex.MipCount.Fmt": {
+    "message": "Eine Textur mit {0} Mip-Stufen ist nicht lesbar.",
+    "description": "Why a texture inside a TexTools modpack could not be read. {0} is a number."
+  },
+  "Import.Luminis.Tex.MipTable": {
+    "message": "Die Mip-Tabelle reicht über den SqPack-Header hinaus.",
+    "description": "Why a texture inside a TexTools modpack could not be read. Keep SqPack as is."
+  },
+  "Import.Luminis.Tex.Header": {
+    "message": "Der Texturheader fehlt oder reicht über die Datei hinaus.",
+    "description": "Why a texture inside a TexTools modpack could not be read."
+  },
+  "Import.Luminis.Tex.Claims.Fmt": {
+    "message": "Die Textur gibt {0} Bytes an.",
+    "description": "Why a texture inside a TexTools modpack could not be read: it says it is impossibly large. {0} is a byte count."
+  },
+  "Import.Luminis.Tex.BlockSize": {
+    "message": "Ein Texturblock wurde nicht auf seine angegebene Größe entpackt.",
+    "description": "Why a texture inside a TexTools modpack could not be read."
+  },
+  "Import.Luminis.Tex.BlockHeader": {
+    "message": "Ein Texturblock-Header reicht über die Datei hinaus.",
+    "description": "Why a texture inside a TexTools modpack could not be read."
+  },
+  "Import.Luminis.Tex.BlockHeaderSize.Fmt": {
+    "message": "Ein Texturblock-Header mit {0} Bytes ist nicht lesbar.",
+    "description": "Why a texture inside a TexTools modpack could not be read. {0} is a byte count."
+  },
+  "Import.Luminis.Tex.Block": {
+    "message": "Ein Texturblock reicht über die Datei hinaus.",
+    "description": "Why a texture inside a TexTools modpack could not be read."
+  },
+  "Import.Luminis.Tex.Field": {
+    "message": "Ein SqPack-Feld reicht über das Dateiende hinaus.",
+    "description": "Why a texture inside a TexTools modpack could not be read. Keep SqPack as is."
+  },
+  "Presets.Error.Unreadable.Fmt": {
+    "message": "Diese Datei konnte nicht gelesen werden: {0}",
+    "description": "Preset bar notice: a preset file could not be read. {0} is the underlying error message."
+  },
+  "Presets.Error.NothingToPaste": {
+    "message": "Nichts zum Einfügen.",
+    "description": "Preset bar notice: Paste code was pressed with nothing on the clipboard."
+  },
+  "Presets.Error.NotACode": {
+    "message": "Das sieht nicht nach einem Proteus-Preset-Code aus.",
+    "description": "Preset bar notice: the clipboard does not hold a preset share code."
+  },
+  "Presets.Error.Version.Fmt": {
+    "message": "Dieser Code hat Version {0}; diese Proteus-Version versteht {1}. Aktualisiere Proteus.",
+    "description": "Preset bar notice: the share code is from a newer Proteus. {0} is the code's version, {1} the version this build reads."
+  },
+  "Presets.Error.NotAPreset": {
+    "message": "Diese Datei enthält kein Proteus-Preset.",
+    "description": "Preset bar or Import tab notice: the chosen file is not a preset."
+  },
+  "Presets.Error.Empty": {
+    "message": "Dieses Preset ist leer.",
+    "description": "Preset bar notice: the preset holds no settings."
+  },
+  "Presets.ImportedName": {
+    "message": "Importiertes Preset",
+    "description": "Name given to an imported preset that arrives without one; shown in the preset list."
+  },
+  "HatCompat.Revert.Failed.Fmt": {
+    "message": "Rückgängig machen fehlgeschlagen: {0}",
+    "description": "Hats panel, in red, when undoing a hat fit throws. {0} is the error message."
+  },
+  "Create.Description": {
+    "message": "Für Proteus erstellt.",
+    "description": "Written into the description of a mod made in the Create tab; Penumbra shows it."
+  },
+  "Service.ManagedMod.Description": {
+    "message": "Verwaltet vom Overlay-Compositor-Plugin Proteus.",
+    "description": "Description of the mod Proteus writes its output into; Penumbra shows it."
+  },
+  "Service.ModMeta.LegacyFolder.Fmt": {
+    "message": "{0} ist ein Penumbra-Mod-Ordner vor v{1}, in den Proteus nicht schreibt.",
+    "description": "Why Proteus will not write to a mod. {0} is the mod's folder, {1} Penumbra's manifest version number."
+  },
+  "Service.ModMeta.InUse.Fmt": {
+    "message": "{0} wird von einem anderen Programm verwendet und konnte nicht gelesen werden, daher wurde es nicht neu geschrieben.",
+    "description": "Why a mod's manifest was not rewritten. {0} is a file path."
+  },
+  "Service.ModMeta.NoGroup.Fmt": {
+    "message": "Diese Mod hat keine Gruppe namens \"{0}\".",
+    "description": "Why a change to a mod failed. {0} is a Penumbra option group's name."
+  },
+  "Service.Download.NoSources": {
+    "message": "keine Quellen eingerichtet",
+    "description": "Why a download (UV maps) failed; shown after a colon. Lower-case, no full stop."
+  },
+  "Service.Download.BadRange.Fmt": {
+    "message": "{0}: 206 ab {1}, erwartet {2}",
+    "description": "Why a download (UV maps) failed; shown after a colon. {0} is a file name, {1} and {2} byte offsets; keep 206 (an HTTP status). Lower-case, no full stop."
+  },
+  "Service.Download.Checksum.Fmt": {
+    "message": "Prüfsumme stimmt nicht für {0} ({1} Bytes, sha256 {2}…)",
+    "description": "Why a download (UV maps) failed; shown after a colon. {0} is a file name, {1} a byte count, {2} the start of a hash. Lower-case, no full stop."
   }
 }

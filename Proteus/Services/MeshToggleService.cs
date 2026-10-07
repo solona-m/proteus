@@ -604,7 +604,8 @@ internal sealed class MeshToggleService
         // Edited in place, so every field this build does not know about survives.
         var path = Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, SidecarDiscoveryService.MetadataFile);
         if (System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path)) is not System.Text.Json.Nodes.JsonObject root)
-            throw new InvalidDataException($"{path} is not a JSON object.");
+            throw new InvalidDataException(string.Format(Loc.Localize("Parts.Write.NotJsonObject.Fmt",
+                "{0} is not a JSON object."), path));
 
         // Whatever spelling the file uses: it is read case-insensitively.
         foreach (var key in root.Select(p => p.Key)

@@ -53,7 +53,8 @@ public sealed partial class SecondSkinService
                 for (int i = 0; i < build.gearOverlays.Count; i++)
                 {
                     var key = SurfaceKeyOf(build.gearOverlays[i].Overlay);
-                    build.layerSurfaceName[i] = key.ToString();
+                    // The {1} of two chat notices, so the translated surface name with its id, not the key's own spelling.
+                    build.layerSurfaceName[i] = key.Id.Length == 0 ? ShellSurface.Label(key.Kind) : $"{ShellSurface.Label(key.Kind)} {key.Id}";
                     if (build.resolvedByKey.TryGetValue(key, out var known)) { build.layerSurface[i] = known; continue; }
 
                     var leaves = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

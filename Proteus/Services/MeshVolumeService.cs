@@ -136,8 +136,8 @@ internal static class MeshVolumeService
         try { src = SecondSkinWriter.Parse(mdl); }
         catch (Exception ex)
         {
-            throw new ModelAttributeWriter.ModelEditException(
-                $"this model could not be read ({ex.Message})");
+            throw new ModelAttributeWriter.ModelEditException(string.Format(
+                Loc.Localize("Service.ModelEdit.Unreadable.Fmt", "this model could not be read ({0})"), ex.Message));
         }
 
         // A face's neck morph table is NOT refused. It is a handful of per-bone adjustments (position, normal,
@@ -146,8 +146,8 @@ internal static class MeshVolumeService
         // find the bounding boxes. Faces are sculpted with small brushes.
 
         if (src.ModelBBoxAt <= 0 || src.ModelBBoxAt + 4 * BBoxSize > mdl.Length)
-            throw new ModelAttributeWriter.ModelEditException(
-                "this model's bounding boxes are not where the format says they are");
+            throw new ModelAttributeWriter.ModelEditException(Loc.Localize("Service.ModelEdit.BoundingBoxes",
+                "this model's bounding boxes are not where the format says they are"));
 
         var o = (byte[])mdl.Clone();
 
@@ -184,8 +184,9 @@ internal static class MeshVolumeService
             // leaving the vertex exactly where it was. The edit would then be structurally perfect and move
             // the model nowhere, which is the worst kind of bug to go looking for.
             if (Array.IndexOf(ModelAttributeWriter.PositionTypes, pe.Type) < 0)
-                throw new ModelAttributeWriter.ModelEditException(
-                    $"mesh {span.Mesh} stores its positions in a format this cannot write (type {pe.Type})");
+                throw new ModelAttributeWriter.ModelEditException(string.Format(
+                    Loc.Localize("Service.ModelEdit.PositionFormat.Fmt",
+                        "mesh {0} stores its positions in a format this cannot write (type {1})"), span.Mesh, pe.Type));
 
             WriteSpan(o, src, mo, span, pe, nrmEl, solve, spares);
         }

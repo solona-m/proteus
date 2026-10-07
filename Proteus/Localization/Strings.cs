@@ -242,6 +242,51 @@ public sealed class CommonStrings
     public readonly string Browse = Loc.Localize("Common.Browse.Btn", "Browse");
     public readonly string Clear  = Loc.Localize("Common.Clear.Btn", "Clear");
     public readonly string None   = Loc.Localize("Common.None", "(none)");
+
+    /// <summary>Stands in for an error message when a background task was cancelled rather than failing.</summary>
+    public readonly string Cancelled = Loc.Localize("Common.Cancelled", "cancelled");
+
+    // Units in ImGui slider formats. These are printf formats, not string.Format: keep the %-token exactly.
+    public readonly string Mm0 = Loc.Localize("Common.Units.Mm0", "%.0f mm");
+    public readonly string Mm1 = Loc.Localize("Common.Units.Mm1", "%.1f mm");
+    public readonly string Mm2 = Loc.Localize("Common.Units.Mm2", "%.2f mm");
+
+    /// <summary>Playable races in the game's own order, as <see cref="ModelRace.Describe"/> shows them. A
+    /// separate table from <see cref="ModelRace.Names"/>, which is also written into mods and stays English.</summary>
+    public readonly string[] RaceNames =
+    [
+        Loc.Localize("Common.Race.Midlander", "Midlander"),
+        Loc.Localize("Common.Race.Highlander", "Highlander"),
+        Loc.Localize("Common.Race.Elezen", "Elezen"),
+        Loc.Localize("Common.Race.Miqote", "Miqote"),
+        Loc.Localize("Common.Race.Roegadyn", "Roegadyn"),
+        Loc.Localize("Common.Race.Lalafell", "Lalafell"),
+        Loc.Localize("Common.Race.AuRa", "AuRa"),
+        Loc.Localize("Common.Race.Hrothgar", "Hrothgar"),
+        Loc.Localize("Common.Race.Viera", "Viera"),
+    ];
+
+    public readonly string RaceMale   = Loc.Localize("Common.Race.Male", "M");
+    public readonly string RaceFemale = Loc.Localize("Common.Race.Female", "F");
+
+    /// <summary>{0} is a race from <see cref="RaceNames"/>, {1} <see cref="RaceMale"/> or <see cref="RaceFemale"/>.</summary>
+    public readonly string RaceGenderFmt = Loc.Localize("Common.Race.Gender.Fmt", "{0} {1}");
+
+    // Equipment slots and character parts, as Services.ContentSlot.DisplayLabel shows them.
+    public readonly string SlotHead      = Loc.Localize("Common.Slot.Head", "Head");
+    public readonly string SlotBody      = Loc.Localize("Common.Slot.Body", "Body");
+    public readonly string SlotHands     = Loc.Localize("Common.Slot.Hands", "Hands");
+    public readonly string SlotLegs      = Loc.Localize("Common.Slot.Legs", "Legs");
+    public readonly string SlotFeet      = Loc.Localize("Common.Slot.Feet", "Feet");
+    public readonly string SlotEarrings  = Loc.Localize("Common.Slot.Earrings", "Earrings");
+    public readonly string SlotNecklace  = Loc.Localize("Common.Slot.Necklace", "Necklace");
+    public readonly string SlotBracelets = Loc.Localize("Common.Slot.Bracelets", "Bracelets");
+    public readonly string SlotRightRing = Loc.Localize("Common.Slot.RightRing", "Right ring");
+    public readonly string SlotLeftRing  = Loc.Localize("Common.Slot.LeftRing", "Left ring");
+    public readonly string SlotHair      = Loc.Localize("Common.Slot.Hair", "Hair");
+    public readonly string SlotFace      = Loc.Localize("Common.Slot.Face", "Face");
+    public readonly string SlotTail      = Loc.Localize("Common.Slot.Tail", "Tail");
+    public readonly string SlotEars      = Loc.Localize("Common.Slot.Ears", "Ears");
 }
 
 /// <summary>
@@ -441,6 +486,22 @@ public sealed class CreateStrings
     public readonly string SlotIndex   = Loc.Localize("Create.Slot.Index", "Index");
 
     public readonly string SlotUnused = Loc.Localize("Create.Slot.Unused", "(not used by this material)");
+
+    /// <summary>The texture file dialog's filter name; the extension list is appended after it.</summary>
+    public readonly string ImageFilter = Loc.Localize("Create.Dialog.ImageFilter", "Images");
+
+    // The material picker's left-column tag: what a material belongs to. Skin surfaces first, then by path.
+    public readonly string TagBody      = Loc.Localize("Create.Picker.Tag.Body", "Body");
+    public readonly string TagFace      = Loc.Localize("Create.Picker.Tag.Face", "Face");
+    public readonly string TagIris      = Loc.Localize("Create.Picker.Tag.Iris", "Iris");
+    public readonly string TagHair      = Loc.Localize("Create.Picker.Tag.Hair", "Hair");
+    public readonly string TagTail      = Loc.Localize("Create.Picker.Tag.Tail", "Tail");
+    public readonly string TagEar       = Loc.Localize("Create.Picker.Tag.Ear", "Ear");
+    public readonly string TagNative    = Loc.Localize("Create.Picker.Tag.Native", "Native");
+    public readonly string TagWeapon    = Loc.Localize("Create.Picker.Tag.Weapon", "Weapon");
+    public readonly string TagGear      = Loc.Localize("Create.Picker.Tag.Gear", "Gear");
+    public readonly string TagAccessory = Loc.Localize("Create.Picker.Tag.Accessory", "Accessory");
+    public readonly string TagOther     = Loc.Localize("Create.Picker.Tag.Other", "Other");
 
     public readonly string PickTextureTitleFmt =
         Loc.Localize("Create.PickTexture.Title.Fmt", "Select {0} texture");
@@ -785,6 +846,9 @@ public sealed class SettingsStrings
     // ── cache + meshes ──────────────────────────────────────────────────────────────────────────────
     public readonly string TextureCache = Loc.Localize("Settings.Output.TextureCache.Label", "Texture cache (MB)");
 
+    /// <summary>The slider's own value text — a printf format, so the %d stays exactly as it is.</summary>
+    public readonly string TextureCacheFormat = Loc.Localize("Settings.Output.TextureCache.Format", "%d MB");
+
     public readonly string TextureCacheTip = Loc.Localize("Settings.Output.TextureCache.Tip",
         "How much decoded texture data Proteus keeps in memory between composites.\n\n" +
         "A 4K texture costs 64 MB decoded, so this is really a count: 2048 MB ≈ 30 of them.\n" +
@@ -1005,6 +1069,9 @@ public sealed class ImportStrings
     public readonly string LayoutGroupFmt = Loc.Localize("Import.Materials.Layout.Fmt", "{0}  ({1})");
 
     public readonly string ImportFailedFmt = Loc.Localize("Import.Failed.Fmt", "Import failed: {0}");
+
+    /// <summary>The Onion layer table's last column: {0} is the layer's size in megabytes.</summary>
+    public readonly string LayerSizeFmt = Loc.Localize("Import.Layer.Size.Fmt", "{0:0.#} MB");
 }
 
 /// <summary>The Atramentum Luminis (<c>.ttmp2</c>) half of the Import tab.</summary>
@@ -1200,6 +1267,19 @@ public sealed class EyeStrings
       + "brightly and fade out around it; keeping that falloff glows softly beyond the artwork, dropping it "
       + "confines the glow to the shape itself.\n"
       + "Baked in at import, so pick it now — afterwards the Glow dial can only scale what's left.");
+
+    // Which of the game's three eye textures a file replaces: the archive table's second column, and the
+    // {0} of Import.Eye.Skip.Duplicate.Fmt.
+    public readonly string SlotBase   = Loc.Localize("Eye.Slot.Base", "Base");
+    public readonly string SlotMask   = Loc.Localize("Eye.Slot.Mask", "Mask");
+    public readonly string SlotNormal = Loc.Localize("Eye.Slot.Normal", "Normal");
+
+    public string SlotName(Services.EyeSlot slot) => slot switch
+    {
+        Services.EyeSlot.Base => SlotBase,
+        Services.EyeSlot.Mask => SlotMask,
+        _                     => SlotNormal,
+    };
 }
 
 public sealed class ExportStrings
@@ -1228,6 +1308,8 @@ public sealed class ExportStrings
 
     public readonly string DialogTitle  = Loc.Localize("Export.Dialog.Title", "Export Proteus mod");
     public readonly string DialogFilter = Loc.Localize("Export.Dialog.Filter", "Penumbra mod pack");
+
+    public readonly string FailedFmt = Loc.Localize("Export.Failed.Fmt", "Export failed: {0}");
 }
 
 /// <summary>
@@ -1628,6 +1710,19 @@ public sealed class ColorsStrings
       + "And skin-tint suppression drops to 0.00, so the wearer's tone comes through — it exists\n"
       + "to stop fabric being re-tinted, which is backwards for skin. Turning this off restores\n"
       + "both. You can still set the slider by hand afterwards.");
+
+    /// <summary>{0} is the mod's name. The window's ImGui id is appended after, so it is never translated.</summary>
+    public readonly string WindowTitleFmt = Loc.Localize("Colors.Window.Title.Fmt", "Colors — {0}");
+
+    /// <summary>Under the glow-effect picker, for an option that paints gear rather than skin.</summary>
+    public readonly string NoShell = Loc.Localize("Colors.NoShell",
+        "This overlay paints something Proteus can't build a layer over — gear, an accessory or a\n"
+      + "weapon. Glow and Cloth need a layer over your own skin: body, face, hair, tail or ears.");
+
+    /// <summary>Stands in for the "Reset to defaults" tooltip while there is nothing to reset to.</summary>
+    public readonly string ResetBlockedTip = Loc.Localize("Colors.Reset.Blocked.Tip",
+        "No original settings recorded for this mod yet — Proteus captures them the first time\n"
+      + "it saves a change here.");
 }
 
 /// <summary>The colour window's own chrome — the panel StatusWindow draws around ColorTableEditor.</summary>
@@ -1741,6 +1836,8 @@ public sealed class BandStrings
     public readonly string PillNoPenumbra = Loc.Localize("Band.Pill.NoPenumbra", "no Penumbra");
 
     public readonly string Retry = Loc.Localize("Band.Retry.Btn", "Retry");
+
+    public readonly string Refresh = Loc.Localize("Band.Refresh.Btn", "Refresh");
 }
 
 /// <summary>The one-line composite result under the tab content.</summary>
@@ -2437,6 +2534,13 @@ public sealed class PartsStrings
 
     public readonly string RetargetBakeFailedFmt = Loc.Localize("Parts.Retarget.BakeFailed.Fmt",
         "Couldn't make a {0} model ({1}); refitting the {2} model as is.");
+
+    /// <summary>A reason in the {1} of <see cref="RetargetBakeFailedFmt"/>.</summary>
+    public readonly string RetargetBakeReadBack = Loc.Localize("Parts.Retarget.Bake.ReadBack",
+        "the new model could not be read back");
+
+    /// <summary>Starts a saved option's name when the target body mod's own name is not known.</summary>
+    public readonly string RetargetBodyFallback = Loc.Localize("Parts.Retarget.BodyFallback", "Body");
 
     public readonly string RetargetCheckingPair = Loc.Localize("Parts.Retarget.CheckingPair",
         "Checking the sizes match…");

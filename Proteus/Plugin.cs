@@ -25,7 +25,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1140;
+    public const int BuildNumber = 1141;
 
     /// <summary>
     /// Which set of release notes is current. Raise it when a release has something new to say: the window
@@ -252,7 +252,8 @@ public sealed class Plugin : IDalamudPlugin
             compositor.TriggerRecomposite("startup");
 
         log.Information("Proteus loaded. Penumbra={0} [build: equipped-model second-skin]", penumbra.IsAvailable);
-        ChatGui.Print($"[Proteus] loaded — build #{BuildNumber} ({BuildStamp})");
+        ChatGui.Print(string.Format(Loc.Localize("Chat.Loaded.Fmt", "[Proteus] loaded — build #{0} ({1})"),
+                                    BuildNumber, BuildStamp));
 
         SuggestMirrorRepo(pluginInterface);
         ShowWhatsNew();

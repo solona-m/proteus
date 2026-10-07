@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using CheapLoc;
 
 namespace Proteus.Services;
 
@@ -79,15 +80,17 @@ internal sealed class UvAtlasCorrespondence : IBodyCorrespondence
         int svc = source.Positions.Length / 3, tvc = target.Positions.Length / 3;
         if (sourceUv.Length != svc * 2 || targetUv.Length != tvc * 2)
         {
-            refusal = $"The {what} models' texture coordinates could not be read, so there is no way to tell which " +
-                      "point of one body is which point of the other.";
+            refusal = string.Format(Loc.Localize("Parts.Retarget.Refuse.UvUnreadable.Fmt",
+                          "The {0} models' texture coordinates could not be read, so there is no way to tell which " +
+                          "point of one body is which point of the other."), what);
             return false;
         }
 
         var atlas = new Atlas(target, targetUv);
         if (atlas.IsEmpty)
         {
-            refusal = $"The target {what} model has no body skin to land on.";
+            refusal = string.Format(Loc.Localize("Parts.Retarget.Refuse.NoTargetSkin.Fmt",
+                          "The target {0} model has no body skin to land on."), what);
             return false;
         }
 
@@ -96,8 +99,9 @@ internal sealed class UvAtlasCorrespondence : IBodyCorrespondence
         var offSheet = onSheet != null ? OffSheet(source, sourceUv, skin, onSheet) : [];
         if (offSheet.Count * 2 > skin.Count)
         {
-            refusal = $"Most of the source {what} body is drawn outside its texture layout, so there is no way to tell " +
-                      "which point of one body is which point of the other.";
+            refusal = string.Format(Loc.Localize("Parts.Retarget.Refuse.OffSheet.Fmt",
+                          "Most of the source {0} body is drawn outside its texture layout, so there is no way to " +
+                          "tell which point of one body is which point of the other."), what);
             return false;
         }
 
@@ -126,8 +130,10 @@ internal sealed class UvAtlasCorrespondence : IBodyCorrespondence
         float coverage = placeable > 0 ? (float)landed / placeable : 0f;
         if (coverage < MinCoverage)
         {
-            refusal = $"Only {coverage:P0} of the source {what} body finds its place on the target by texture " +
-                      "coordinate, so the two do not share a texture layout. They cannot be refitted onto each other.";
+            refusal = string.Format(Loc.Localize("Parts.Retarget.Refuse.LowCoverage.Fmt",
+                          "Only {1:P0} of the source {0} body finds its place on the target by texture coordinate, " +
+                          "so the two do not share a texture layout. They cannot be refitted onto each other."),
+                          what, coverage);
             return false;
         }
 

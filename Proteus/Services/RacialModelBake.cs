@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using System.Text.RegularExpressions;
+using CheapLoc;
 using XivLiveMesh;
 using Vec3 = Proteus.Services.SecondSkinWriter.Vec3;
 
@@ -86,7 +87,8 @@ internal static partial class RacialModelBake
         var chain = pbd.Chain(from, to);
         if (chain.Count == 0)
         {
-            refusal = $"the racial deformer has no way from c{from:D4} to c{to:D4}";
+            refusal = string.Format(Loc.Localize("Parts.Retarget.Bake.NoPath.Fmt",
+                "the racial deformer has no way from c{0:D4} to c{1:D4}"), from, to);
             return null;
         }
         return Transform(mdl, chain, parentOf, inverse: false, out refusal);
@@ -104,7 +106,8 @@ internal static partial class RacialModelBake
         var chain = pbd.Chain(from, to);
         if (chain.Count == 0)
         {
-            refusal = $"the racial deformer has no way from c{from:D4} to c{to:D4}";
+            refusal = string.Format(Loc.Localize("Parts.Retarget.Bake.NoPath.Fmt",
+                "the racial deformer has no way from c{0:D4} to c{1:D4}"), from, to);
             return null;
         }
         return Transform(mdl, chain, parentOf, inverse: true, out refusal);
@@ -117,7 +120,7 @@ internal static partial class RacialModelBake
         var skin = ModelSkinReader.Read(mdl, null, null);
         if (parts == null || skin == null)
         {
-            refusal = "the model could not be read";
+            refusal = Loc.Localize("Parts.Retarget.Bake.Unreadable", "the model could not be read");
             return null;
         }
 
@@ -126,7 +129,8 @@ internal static partial class RacialModelBake
         int count = parts.Positions.Length / 3;
         if (skin.VertexCount != count)
         {
-            refusal = $"the model's vertices could not be matched to their weights ({count} against {skin.VertexCount})";
+            refusal = string.Format(Loc.Localize("Parts.Retarget.Bake.WeightMismatch.Fmt",
+                "the model's vertices could not be matched to their weights ({0} against {1})"), count, skin.VertexCount);
             return null;
         }
 

@@ -7,6 +7,7 @@ using CheapLoc;
 using Dalamud.Plugin.Services;
 using Penumbra.Api.Enums;
 using Proteus.Interop;
+using Proteus.Localization;
 
 namespace Proteus.Services;
 
@@ -279,7 +280,7 @@ public sealed partial class EyeImportService
             if (!claimed.Add(slot))
             {
                 plans.Add(new FilePlan(f, string.Format(Loc.Localize("Import.Eye.Skip.Duplicate.Fmt",
-                    "another file in this archive is already the {0} texture."), slot)));
+                    "another file in this archive is already the {0} texture."), Strings.Eye.SlotName(slot))));
                 continue;
             }
             plans.Add(new FilePlan(f, null));

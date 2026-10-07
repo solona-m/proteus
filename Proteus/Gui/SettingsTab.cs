@@ -286,7 +286,7 @@ internal sealed class SettingsTab
         if (_copyLogsTask is { IsCompleted: true } done)
         {
             if (done.IsCompletedSuccessfully) _copyLogsPath = done.Result;
-            else _copyLogsError = done.Exception?.GetBaseException().Message ?? "cancelled";
+            else _copyLogsError = done.Exception?.GetBaseException().Message ?? Strings.Common.Cancelled;
             _copyLogsTask = null;
         }
 
@@ -443,7 +443,7 @@ internal sealed class SettingsTab
         // Logarithmic: the range spans 512 MB to 32 GB.
         if (ImGui.SliderInt(s.TextureCache, ref cacheMb,
                 Configuration.MinDecodeCacheBudgetMb, Configuration.MaxDecodeCacheBudgetMb,
-                "%d MB", ImGuiSliderFlags.Logarithmic))
+                s.TextureCacheFormat, ImGuiSliderFlags.Logarithmic))
             config.DecodeCacheBudgetMb = Math.Clamp(cacheMb,
                 Configuration.MinDecodeCacheBudgetMb, Configuration.MaxDecodeCacheBudgetMb);
         if (ImGui.IsItemDeactivatedAfterEdit())

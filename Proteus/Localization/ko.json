@@ -764,11 +764,11 @@
     "description": ""
   },
   "Command.Refreshing": {
-    "message": "Recompositing now.",
+    "message": "지금 다시 합성합니다.",
     "description": "Chat line for \"/proteus refresh\"."
   },
   "Command.Refreshing.Full": {
-    "message": "Rebuilding everything and recompositing. This takes longer than a plain refresh.",
+    "message": "모든 것을 다시 만들고 다시 합성합니다. 일반 새로고침보다 오래 걸립니다.",
     "description": "Chat line for \"/proteus refresh full\"."
   },
   "Common.Browse.Btn": {
@@ -3028,15 +3028,15 @@
     "description": ""
   },
   "Presets.Header": {
-    "message": "Presets",
+    "message": "프리셋",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.None": {
-    "message": "No preset",
+    "message": "프리셋 없음",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.None.Tip": {
-    "message": "Wear the mod's own colours again. Your option ticks are left exactly as they are.",
+    "message": "모드 원래 색상으로 되돌립니다. 체크한 옵션은 그대로 유지됩니다.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.PackMarker": {
@@ -3048,39 +3048,39 @@
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.SaveNew": {
-    "message": "+ Save…",
+    "message": "+ 저장…",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.SaveNew.Tip": {
-    "message": "Save how this mod looks right now — its ticked options, colours and layer settings — under a name.",
+    "message": "이 모드의 현재 모습(체크한 옵션, 색상, 레이어 설정)을 이름을 붙여 저장합니다.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Save": {
-    "message": "Save",
+    "message": "저장",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.RenameConfirm": {
-    "message": "Rename",
+    "message": "이름 바꾸기",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Cancel": {
-    "message": "Cancel",
+    "message": "취소",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.NeedsAName": {
-    "message": "Give it a name first.",
+    "message": "먼저 이름을 정하세요.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.NoCollection": {
-    "message": "Penumbra hasn't told Proteus which collection you're wearing yet.",
+    "message": "Penumbra가 아직 Proteus에 어떤 컬렉션을 착용 중인지 알려 주지 않았습니다.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.FirstName": {
-    "message": "My look",
+    "message": "내 룩",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.NthName.Fmt": {
-    "message": "My look {0}",
+    "message": "내 룩 {0}",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Selected.Fmt": {
@@ -3088,139 +3088,139 @@
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.FromPack": {
-    "message": "from the mod",
+    "message": "모드 제공",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.PackReadOnly": {
-    "message": "This one came with the mod, so it can't be changed. Duplicate it to make it yours.",
+    "message": "모드에 포함된 것이라 변경할 수 없습니다. 복제하면 내 것으로 만들 수 있습니다.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Update": {
-    "message": "Update",
+    "message": "업데이트",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Update.Tip": {
-    "message": "Fold everything on screen back into this preset.",
+    "message": "화면의 모든 상태를 이 프리셋에 반영합니다.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.NothingChanged": {
-    "message": "Nothing has changed since this preset was saved.",
+    "message": "이 프리셋을 저장한 이후 바뀐 것이 없습니다.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Rename": {
-    "message": "Rename",
+    "message": "이름 바꾸기",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Duplicate": {
-    "message": "Duplicate",
+    "message": "복제",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Fork.Tip": {
-    "message": "Make an editable copy of the mod's preset and wear it.",
+    "message": "모드 프리셋의 편집 가능한 사본을 만들어 착용합니다.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.CopyCode.Tip": {
-    "message": "Copy this preset as a share code to paste to someone.",
+    "message": "이 프리셋을 공유 코드로 복사해 다른 사람에게 붙여 넣을 수 있습니다.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.CodeCopied": {
-    "message": "Share code copied to the clipboard.",
+    "message": "공유 코드를 클립보드에 복사했습니다.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Export.Tip": {
-    "message": "Save this preset as a file.",
+    "message": "이 프리셋을 파일로 저장합니다.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Delete.Tip": {
-    "message": "Hold Ctrl and click to delete this preset.",
+    "message": "Ctrl을 누른 채 클릭하면 이 프리셋을 삭제합니다.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.PasteCode": {
-    "message": "Paste code",
+    "message": "코드 붙여 넣기",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.PasteCode.Tip": {
-    "message": "Read a preset share code from the clipboard.",
+    "message": "클립보드에서 프리셋 공유 코드를 읽습니다.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Import": {
-    "message": "Import…",
+    "message": "가져오기…",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Import.Tip": {
-    "message": "Load a preset from a file.",
+    "message": "파일에서 프리셋을 불러옵니다.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Staged.Fmt": {
-    "message": "\"{0}\" is ready to add.",
+    "message": "\"{0}\"을(를) 추가할 준비가 되었습니다.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.StagedOtherMod.Fmt": {
-    "message": "\"{0}\" was made for \"{1}\" by {2}, not for \"{3}\". Adding it anyway will apply whichever of its options and colours this mod happens to share.",
+    "message": "\"{0}\"은(는) {2}이(가) \"{1}\"용으로 만든 것이며 \"{3}\"용이 아닙니다. 그래도 추가하면 이 모드와 겹치는 옵션과 색상만 적용됩니다.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.AddStaged": {
-    "message": "Add",
+    "message": "추가",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Discard": {
-    "message": "Discard",
+    "message": "버리기",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Added.Fmt": {
-    "message": "Added \"{0}\".",
+    "message": "\"{0}\"을(를) 추가했습니다.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.ExportDialog.Title": {
-    "message": "Save preset",
+    "message": "프리셋 저장",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.ImportDialog.Title": {
-    "message": "Open preset",
+    "message": "프리셋 열기",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Dialog.Filter": {
-    "message": "Proteus preset",
+    "message": "Proteus 프리셋",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Exported.Fmt": {
-    "message": "Saved to {0}.",
+    "message": "{0}에 저장했습니다.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.ExportFailed.Fmt": {
-    "message": "Couldn't save it: {0}",
+    "message": "저장하지 못했습니다: {0}",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.PartialApply.Fmt": {
-    "message": "\"{0}\" was applied as far as it goes. {1}",
+    "message": "\"{0}\"을(를) 가능한 만큼 적용했습니다. {1}",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.MissingGroups.Fmt": {
-    "message": "The mod no longer has these option groups: {0}.",
+    "message": "모드에 더 이상 이 옵션 그룹이 없습니다: {0}.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.MissingOptions.Fmt": {
-    "message": "These options are gone: {0}.",
+    "message": "이 옵션들은 더 이상 없습니다: {0}.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.JustNow": {
-    "message": "just now",
+    "message": "방금",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.MinutesAgo.Fmt": {
-    "message": "{0} m ago",
+    "message": "{0}분 전",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.HoursAgo.Fmt": {
-    "message": "{0} h ago",
+    "message": "{0}시간 전",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.DaysAgo.Fmt": {
-    "message": "{0} d ago",
+    "message": "{0}일 전",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Column.Header": {
-    "message": "Preset",
+    "message": "프리셋",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Column.None": {
@@ -3228,39 +3228,39 @@
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.Column.Tip": {
-    "message": "A saved look for this mod: its ticked options, colours and layer settings. Open Colors to save one.",
+    "message": "이 모드의 저장된 룩(체크한 옵션, 색상, 레이어 설정)입니다. 저장하려면 색상을 여세요.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.HeaderApplied.Fmt": {
-    "message": "Presets — {0}",
+    "message": "프리셋 — {0}",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.ImportFailed.Fmt": {
-    "message": "That isn't a preset Proteus can read: {0}",
+    "message": "Proteus가 읽을 수 있는 프리셋이 아닙니다: {0}",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.ImportedFrom.Fmt": {
-    "message": "Preset \"{0}\" — made for \"{1}\" by {2}.",
+    "message": "프리셋 \"{0}\" — {2}이(가) \"{1}\"용으로 만듦.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.NoMatchingMod": {
-    "message": "You don't have that mod installed under that name. Pick the mod it should go to, or install it first.",
+    "message": "그 이름으로 설치된 모드가 없습니다. 추가할 모드를 고르거나 먼저 설치하세요.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.AddTo": {
-    "message": "Add to",
+    "message": "추가할 곳",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.PickAMod": {
-    "message": "Pick a mod…",
+    "message": "모드 선택…",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.AddTo.Tip": {
-    "message": "Saves it against that mod. Nothing changes on screen until you wear it from the mod's Presets section.",
+    "message": "그 모드에 저장합니다. 모드의 프리셋 섹션에서 착용하기 전까지 화면에는 변화가 없습니다.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Presets.AddedTo.Fmt": {
-    "message": "Added \"{0}\" to {1}. Wear it from that mod's Presets section in Colors.",
+    "message": "\"{0}\"을(를) {1}에 추가했습니다. 색상에서 그 모드의 프리셋 섹션으로 착용하세요.",
     "description": "Presets: a saved look for one mod (option ticks, colours and layer settings), shown in the strip at the top of that mod's colour editor."
   },
   "Parts.Retarget.Ambiguous.Fmt": {
@@ -3272,11 +3272,11 @@
     "description": ""
   },
   "Parts.Retarget.Chest": {
-    "message": "Chest",
+    "message": "가슴",
     "description": ""
   },
   "Parts.Retarget.Choose": {
-    "message": "Choose\u2026",
+    "message": "선택…",
     "description": ""
   },
   "Parts.Retarget.Clash.Fmt": {
@@ -3292,7 +3292,7 @@
     "description": ""
   },
   "Parts.Retarget.ClearPreview": {
-    "message": "Clear the preview",
+    "message": "미리보기 지우기",
     "description": ""
   },
   "Parts.Retarget.Exact.Fmt": {
@@ -3300,15 +3300,15 @@
     "description": ""
   },
   "Parts.Retarget.Feet": {
-    "message": "Feet",
+    "message": "발",
     "description": ""
   },
   "Parts.Retarget.From": {
-    "message": "Made for",
+    "message": "원래 체형",
     "description": ""
   },
   "Parts.Retarget.Group.Fmt": {
-    "message": "Body \u2014 {0}",
+    "message": "체형 — {0}",
     "description": ""
   },
   "Parts.Retarget.Guess": {
@@ -3316,11 +3316,11 @@
     "description": "Under the Body size tool's \"Made for\" size: the detector's pick is only a guess."
   },
   "Parts.Retarget.Hands": {
-    "message": "Hands",
+    "message": "손",
     "description": ""
   },
   "Parts.Retarget.Legs": {
-    "message": "Legs",
+    "message": "다리",
     "description": ""
   },
   "Parts.Retarget.Likely": {
@@ -3332,7 +3332,7 @@
     "description": ""
   },
   "Parts.Retarget.NoBody": {
-    "message": "Pick one\u2026",
+    "message": "하나 선택…",
     "description": ""
   },
   "Parts.Retarget.NoBodiesForSex.Fmt": {
@@ -3340,11 +3340,11 @@
     "description": ""
   },
   "Parts.Retarget.Male": {
-    "message": "male",
+    "message": "남성",
     "description": ""
   },
   "Parts.Retarget.Female": {
-    "message": "female",
+    "message": "여성",
     "description": ""
   },
   "Parts.Retarget.NoBodyMesh": {
@@ -3356,7 +3356,7 @@
     "description": ""
   },
   "Parts.Retarget.OpenInPenumbra": {
-    "message": "Open in Penumbra",
+    "message": "Penumbra에서 열기",
     "description": ""
   },
   "Parts.Retarget.OtherLods": {
@@ -3368,11 +3368,11 @@
     "description": ""
   },
   "Parts.Retarget.Preview": {
-    "message": "Refit and preview",
+    "message": "리핏 후 미리보기",
     "description": ""
   },
   "Parts.Retarget.Save": {
-    "message": "Save as a new option",
+    "message": "새 옵션으로 저장",
     "description": ""
   },
   "Parts.Retarget.Saved.Fmt": {
@@ -3380,11 +3380,11 @@
     "description": ""
   },
   "Parts.Retarget.Slot.Fmt": {
-    "message": "{0} \u2014 {1} options",
+    "message": "{0} — 옵션 {1}개",
     "description": ""
   },
   "Parts.Retarget.Slot.Optional.Fmt": {
-    "message": "{0} \u2014 optional",
+    "message": "{0} — 선택 사항",
     "description": ""
   },
   "Parts.Retarget.Slot.Optional.Tip": {
@@ -3392,7 +3392,7 @@
     "description": ""
   },
   "Parts.Retarget.To": {
-    "message": "Refit onto",
+    "message": "리핏 대상",
     "description": ""
   },
   "Parts.Retarget.Undo": {
@@ -3400,11 +3400,11 @@
     "description": ""
   },
   "Parts.Retarget.Unreadable.Fmt": {
-    "message": "The {0} body model could not be read.",
+    "message": "{0} 체형 모델을 읽을 수 없습니다.",
     "description": ""
   },
   "Parts.Retarget.Working": {
-    "message": "Refitting\u2026",
+    "message": "리핏 중…",
     "description": ""
   },
   "Parts.Tool.Retarget": {
@@ -3448,7 +3448,7 @@
     "description": ""
   },
   "Parts.NoMatches": {
-    "message": "Nothing matches.",
+    "message": "일치하는 항목이 없습니다.",
     "description": ""
   },
   "Parts.Retarget.Lock.ListTip": {
@@ -3464,7 +3464,7 @@
     "description": ""
   },
   "Parts.Retarget.KeepShape": {
-    "message": "Keep shape",
+    "message": "형태 유지",
     "description": ""
   },
   "Parts.Retarget.KeepShape.Tip": {
@@ -3472,15 +3472,15 @@
     "description": ""
   },
   "Parts.Retarget.ReplaceSkin": {
-    "message": "Use the new body\u0027s skin",
+    "message": "새 체형의 피부 사용",
     "description": ""
   },
   "Parts.Retarget.SaveMany.Fmt": {
-    "message": "Save {0} sizes as new options",
+    "message": "사이즈 {0}개를 새 옵션으로 저장",
     "description": ""
   },
   "Parts.Retarget.Showing": {
-    "message": "Showing on the character",
+    "message": "캐릭터에 표시 중",
     "description": ""
   },
   "Parts.Retarget.ToMany": {
@@ -3488,7 +3488,7 @@
     "description": ""
   },
   "Parts.Retarget.Working.Fmt": {
-    "message": "Refitting {0} of {1}\u2026",
+    "message": "{1}개 중 {0}번째 리핏 중…",
     "description": ""
   },
   "Parts.Retarget.MadeHere": {
@@ -3496,11 +3496,11 @@
     "description": ""
   },
   "Parts.Retarget.NewGroup": {
-    "message": "A new group\u2026",
+    "message": "새 그룹…",
     "description": ""
   },
   "Parts.Retarget.SaveTo": {
-    "message": "Save to group",
+    "message": "저장할 그룹",
     "description": ""
   },
   "Parts.Retarget.SwapShapes.Fmt": {
@@ -3544,39 +3544,39 @@
     "description": ""
   },
   "Parts.Move.ClearPolygons": {
-    "message": "Clear",
+    "message": "지우기",
     "description": ""
   },
   "Parts.Move.Falloff.SurfaceTip": {
-    "message": "How far from the selected polygons the cloth around them still follows, measured along the surface.\nOnly cloth joined to the selection follows: a separate piece that merely sits close does not.",
+    "message": "선택한 폴리곤에서 얼마나 먼 곳까지 주변 천이 따라오는지, 표면을 따라 잰 거리입니다.\n선택과 이어진 천만 따라오며, 가까이 있기만 한 별도 파츠는 따라오지 않습니다.",
     "description": ""
   },
   "Parts.Move.Grow": {
-    "message": "Grow",
+    "message": "늘리기",
     "description": ""
   },
   "Parts.Move.NoPolygons": {
-    "message": "Click a polygon on the model to select it. Shift-click adds or removes one.",
+    "message": "모델의 폴리곤을 클릭해 선택합니다. Shift+클릭으로 추가하거나 제거합니다.",
     "description": ""
   },
   "Parts.Move.Polygons.Fmt": {
-    "message": "{0:N0} polygon(s) selected",
+    "message": "폴리곤 {0:N0}개 선택됨",
     "description": ""
   },
   "Parts.Move.SelectParts": {
-    "message": "Whole parts",
+    "message": "파츠 전체",
     "description": ""
   },
   "Parts.Move.SelectPolygons": {
-    "message": "Polygons",
+    "message": "폴리곤",
     "description": ""
   },
   "Parts.Move.SelectPolygons.Tip": {
-    "message": "Move, turn or scale single polygons instead of whole parts. Click a polygon to select it; Shift-click adds\nor removes one. Choosing a part in the list selects all of its polygons.",
+    "message": "파츠 전체 대신 개별 폴리곤을 이동·회전·크기 조절합니다. 폴리곤을 클릭해 선택하고,\nShift+클릭으로 추가하거나 제거합니다. 목록에서 파츠를 고르면 그 폴리곤이 모두 선택됩니다.",
     "description": ""
   },
   "Parts.Move.Shrink": {
-    "message": "Shrink",
+    "message": "줄이기",
     "description": ""
   },
   "Parts.Retarget.FromBody": {
@@ -3644,7 +3644,7 @@
     "description": ""
   },
   "Parts.Vanilla.Header": {
-    "message": "Vanilla gear",
+    "message": "바닐라 장비",
     "description": ""
   },
   "Parts.Vanilla.Open.Fmt": {
@@ -3656,23 +3656,23 @@
     "description": ""
   },
   "Refit.Error.NoName.Fmt": {
-    "message": "Couldn\u0027t find a free mod name for \u0022{0}\u0022.",
+    "message": "\"{0}\"에 사용할 수 있는 모드 이름을 찾지 못했습니다.",
     "description": ""
   },
   "Refit.Mod.Description.Fmt": {
-    "message": "{0}, refitted by Proteus.",
+    "message": "{0}, Proteus로 리핏함.",
     "description": ""
   },
   "Refit.Mod.Enabled.Fmt": {
-    "message": "Made \u0022{0}\u0022 and switched it on.",
+    "message": "\"{0}\"을(를) 만들고 켰습니다.",
     "description": ""
   },
   "Refit.Mod.NotEnabled.Fmt": {
-    "message": "Made \u0022{0}\u0022, but couldn\u0027t switch it on \u2014 enable it in Penumbra.",
+    "message": "\"{0}\"을(를) 만들었지만 켜지 못했습니다. Penumbra에서 활성화하세요.",
     "description": ""
   },
 "Parts.Retarget.SaveToMod": {
-    "message": "Save into",
+    "message": "저장 위치",
     "description": ""
   },
   "Parts.Retarget.SaveToMod.Tip": {
@@ -3684,7 +3684,7 @@
     "description": ""
   },
   "Parts.Retarget.SaveToThisMod": {
-    "message": "This mod",
+    "message": "이 모드",
     "description": ""
   },
   "Parts.Vanilla.Worn.Tip": {
@@ -3704,7 +3704,7 @@
     "description": ""
   },
   "Parts.Vanilla.WornSuffix": {
-    "message": "(vanilla)",
+    "message": "(바닐라)",
     "description": ""
   },
   "WhatsNew.Title": {
@@ -3782,5 +3782,625 @@
   "Parts.Retarget.LeaveOut": {
     "message": "없음 (이 부위 제외)",
     "description": "First entry in an optional body part's dropdowns in the Body size panel. Picking it takes that part out of the refit."
+  },
+  "Band.Refresh.Btn": {
+    "message": "새로고침",
+    "description": "Button on the tab bar that recomposites now. Keep it short: it sits right-aligned on the tab bar's own line."
+  },
+  "Colors.Window.Title.Fmt": {
+    "message": "색상 — {0}",
+    "description": "Title of the colour editor window. {0} is the mod's name."
+  },
+  "Colors.NoShell": {
+    "message": "이 오버레이는 Proteus가 레이어를 만들 수 없는 대상(장비, 액세서리, 무기)을 칠합니다.\nGlow와 Cloth에는 자신의 피부(몸, 얼굴, 머리카락, 꼬리, 귀) 위에 놓이는 레이어가 필요합니다.",
+    "description": "Under the glow-effect picker in the colour editor, for an overlay option that paints gear rather than skin. Glow and Cloth are the names of two render modes."
+  },
+  "Colors.Reset.Blocked.Tip": {
+    "message": "이 모드의 원래 설정이 아직 기록되지 않았습니다. 여기서 처음 변경을 저장할 때\nProteus가 기록합니다.",
+    "description": "Tooltip on \"Reset to defaults\" in the colour editor while the mod has no recorded defaults to reset to."
+  },
+  "Chat.Loaded.Fmt": {
+    "message": "[Proteus] 로드됨 — 빌드 #{0} ({1})",
+    "description": "Chat line printed when the plugin loads. {0} is the build number, {1} the build date. Keep \"[Proteus]\" as it is."
+  },
+  "Export.Failed.Fmt": {
+    "message": "내보내기에 실패했습니다: {0}",
+    "description": "Export tab status line when writing the .pmp throws. {0} is the error message."
+  },
+  "Import.Layer.Size.Fmt": {
+    "message": "{0:0.#} MB",
+    "description": "Onion layer table, last column: the layer's file size. {0:0.#} is megabytes; keep the format specifier exactly."
+  },
+  "Eye.Slot.Base": {
+    "message": "베이스",
+    "description": "Eye-pack table, second column: the file replaces the game's base eye texture."
+  },
+  "Eye.Slot.Mask": {
+    "message": "마스크",
+    "description": "Eye-pack table, second column: the file replaces the game's eye mask texture."
+  },
+  "Eye.Slot.Normal": {
+    "message": "노멀",
+    "description": "Eye-pack table, second column: the file replaces the game's eye normal map."
+  },
+  "Settings.Output.TextureCache.Format": {
+    "message": "%d MB",
+    "description": "Value text inside the texture-cache slider. An ImGui printf format: keep %d exactly as it is."
+  },
+  "Common.Cancelled": {
+    "message": "취소됨",
+    "description": "Stands in for an error message when a background task was cancelled (e.g. after \"Could not save the log:\")."
+  },
+  "Common.Units.Mm0": {
+    "message": "%.0f mm",
+    "description": "Slider value in millimetres. An ImGui printf format: keep %.0f exactly as it is."
+  },
+  "Common.Units.Mm1": {
+    "message": "%.1f mm",
+    "description": "Slider value in millimetres. An ImGui printf format: keep %.1f exactly as it is."
+  },
+  "Common.Units.Mm2": {
+    "message": "%.2f mm",
+    "description": "Slider value in millimetres. An ImGui printf format: keep %.2f exactly as it is."
+  },
+  "Create.Dialog.ImageFilter": {
+    "message": "이미지",
+    "description": "File-type name in the texture file dialog; the list of image extensions follows it. No commas or braces."
+  },
+  "Create.Picker.Tag.Body": {
+    "message": "몸",
+    "description": "Material picker, left column: the material belongs to the body. Short tag."
+  },
+  "Create.Picker.Tag.Face": {
+    "message": "얼굴",
+    "description": "Material picker, left column: the material belongs to the face. Short tag."
+  },
+  "Create.Picker.Tag.Iris": {
+    "message": "홍채",
+    "description": "Material picker, left column: the material is the eyes' iris. Short tag."
+  },
+  "Create.Picker.Tag.Hair": {
+    "message": "머리카락",
+    "description": "Material picker, left column: the material belongs to the hair. Short tag."
+  },
+  "Create.Picker.Tag.Tail": {
+    "message": "꼬리",
+    "description": "Material picker, left column: the material belongs to the tail. Short tag."
+  },
+  "Create.Picker.Tag.Ear": {
+    "message": "귀",
+    "description": "Material picker, left column: the material belongs to Viera ears. Short tag."
+  },
+  "Create.Picker.Tag.Native": {
+    "message": "종족 전용",
+    "description": "Material picker, left column: geometry an imported pack made for one race only. Short tag."
+  },
+  "Create.Picker.Tag.Weapon": {
+    "message": "무기",
+    "description": "Material picker, left column: the material belongs to a weapon. Short tag."
+  },
+  "Create.Picker.Tag.Gear": {
+    "message": "장비",
+    "description": "Material picker, left column: the material belongs to a piece of gear. Short tag."
+  },
+  "Create.Picker.Tag.Accessory": {
+    "message": "액세서리",
+    "description": "Material picker, left column: the material belongs to an accessory (earrings, necklace, ring…). Short tag."
+  },
+  "Create.Picker.Tag.Other": {
+    "message": "기타",
+    "description": "Material picker, left column: anything else. Short tag."
+  },
+  "Parts.Retarget.Bake.ReadBack": {
+    "message": "새 모델을 다시 읽을 수 없었습니다",
+    "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. Lower-case, no full stop."
+  },
+  "Parts.Retarget.BodyFallback": {
+    "message": "체형",
+    "description": "Body size: starts the name of a saved Penumbra option when the target body mod's own name is unknown."
+  },
+  "Parts.Retarget.Size.NoOptionsGroup": {
+    "message": "옵션 없음",
+    "description": "Body size pickers: heading over a body that a body mod ships without any option group."
+  },
+  "Parts.Retarget.Size.ModOwnBody": {
+    "message": "모드 자체의 체형",
+    "description": "Body size pickers: the body a body mod ships without any option. Also starts saved option names."
+  },
+  "Parts.Retarget.Size.VanillaGroup": {
+    "message": "바닐라",
+    "description": "Body size \"Made for\" picker: heading over the game's own body."
+  },
+  "Parts.Retarget.Size.VanillaBody": {
+    "message": "바닐라 체형",
+    "description": "Body size \"Made for\" picker: the game's own body, which vanilla gear is made for."
+  },
+  "Common.Race.Midlander": {
+    "message": "미드랜더",
+    "description": "Playable race (Hyur clan), as the game names it."
+  },
+  "Common.Race.Highlander": {
+    "message": "하이랜더",
+    "description": "Playable race (Hyur clan), as the game names it."
+  },
+  "Common.Race.Elezen": {
+    "message": "엘레젠",
+    "description": "Playable race, as the game names it."
+  },
+  "Common.Race.Miqote": {
+    "message": "미코테",
+    "description": "Playable race, as the game names it (Miqo'te)."
+  },
+  "Common.Race.Roegadyn": {
+    "message": "루가딘",
+    "description": "Playable race, as the game names it."
+  },
+  "Common.Race.Lalafell": {
+    "message": "라라펠",
+    "description": "Playable race, as the game names it."
+  },
+  "Common.Race.AuRa": {
+    "message": "아우라",
+    "description": "Playable race, as the game names it (Au Ra)."
+  },
+  "Common.Race.Hrothgar": {
+    "message": "로스갈",
+    "description": "Playable race, as the game names it."
+  },
+  "Common.Race.Viera": {
+    "message": "비에라",
+    "description": "Playable race, as the game names it."
+  },
+  "Common.Race.Male": {
+    "message": "남",
+    "description": "Short marker for a male body, after a race name (\"Miqo'te M\"). One or two characters."
+  },
+  "Common.Race.Female": {
+    "message": "여",
+    "description": "Short marker for a female body, after a race name (\"Miqo'te F\"). One or two characters."
+  },
+  "Common.Race.Gender.Fmt": {
+    "message": "{0}({1})",
+    "description": "A race and body sex together. {0} is a race name, {1} the short male/female marker."
+  },
+  "Common.Slot.Head": {
+    "message": "머리",
+    "description": "Equipment slot, as the game names it."
+  },
+  "Common.Slot.Body": {
+    "message": "몸통",
+    "description": "Equipment slot, as the game names it."
+  },
+  "Common.Slot.Hands": {
+    "message": "손",
+    "description": "Equipment slot, as the game names it."
+  },
+  "Common.Slot.Legs": {
+    "message": "다리",
+    "description": "Equipment slot, as the game names it."
+  },
+  "Common.Slot.Feet": {
+    "message": "발",
+    "description": "Equipment slot, as the game names it."
+  },
+  "Common.Slot.Earrings": {
+    "message": "귀걸이",
+    "description": "Accessory slot, as the game names it."
+  },
+  "Common.Slot.Necklace": {
+    "message": "목걸이",
+    "description": "Accessory slot, as the game names it."
+  },
+  "Common.Slot.Bracelets": {
+    "message": "팔찌",
+    "description": "Accessory slot, as the game names it."
+  },
+  "Common.Slot.RightRing": {
+    "message": "오른쪽 반지",
+    "description": "Accessory slot: the ring on the right hand."
+  },
+  "Common.Slot.LeftRing": {
+    "message": "왼쪽 반지",
+    "description": "Accessory slot: the ring on the left hand."
+  },
+  "Common.Slot.Hair": {
+    "message": "머리카락",
+    "description": "Character part (not an equipment slot): the hair."
+  },
+  "Common.Slot.Face": {
+    "message": "얼굴",
+    "description": "Character part (not an equipment slot): the face."
+  },
+  "Common.Slot.Tail": {
+    "message": "꼬리",
+    "description": "Character part (not an equipment slot): the tail."
+  },
+  "Common.Slot.Ears": {
+    "message": "귀",
+    "description": "Character part (not an equipment slot): Viera ears."
+  },
+  "Parts.Retarget.Save.Nothing": {
+    "message": "저장할 것이 없습니다.",
+    "description": "Body size status line: Save was pressed with no sizes to save."
+  },
+  "Parts.Retarget.Save.OptionTaken.Fmt": {
+    "message": "\"{0}\"에는 이미 \"{1}\"(이)라는 자체 옵션이 있습니다. 다른 그룹에 저장하세요.",
+    "description": "Body size status line. {0} is a Penumbra option group, {1} the option name the refit wanted."
+  },
+  "Parts.Retarget.Save.AddedOneToAuthor.Fmt": {
+    "message": "\"{1}\" 그룹에 \"{0}\"(으)로 저장했습니다. 착용하려면 Penumbra에서 선택하세요.",
+    "description": "Body size status line after saving into the mod author's own group. {0} is the option, {1} the group."
+  },
+  "Parts.Retarget.Save.AddedManyToAuthor.Fmt": {
+    "message": "\"{1}\" 그룹에 사이즈 {0}개를 저장했습니다. 착용하려면 Penumbra에서 선택하세요.",
+    "description": "Body size status line after saving several sizes into the mod author's own group. {0} is how many, {1} the group."
+  },
+  "Parts.Retarget.Save.AddedOne.Fmt": {
+    "message": "\"{1}\" 그룹에 \"{0}\"(으)로 저장했습니다. Penumbra는 처음 추가하는 모드에만 기본값을 고르므로, 보려면 Penumbra에서 해당 옵션을 선택하세요.",
+    "description": "Body size status line after saving into a group Proteus made. {0} is the option, {1} the group."
+  },
+  "Parts.Retarget.Save.AddedMany.Fmt": {
+    "message": "\"{1}\" 그룹에 사이즈 {0}개를 저장했습니다. Penumbra는 처음 추가하는 모드에만 기본값을 고르므로, 보려면 Penumbra에서 옵션을 선택하세요.",
+    "description": "Body size status line after saving several sizes into a group Proteus made. {0} is how many, {1} the group."
+  },
+  "Parts.Retarget.Save.Legacy": {
+    "message": "이 모드는 아직 Penumbra의 이전 폴더 형식이라 Proteus가 편집하지 않습니다. Penumbra에서 한 번 활성화해 업그레이드한 다음 다시 오세요.",
+    "description": "Body size status line: the mod is in Penumbra's pre-v3 folder format."
+  },
+  "Parts.Retarget.Save.Failed.Fmt": {
+    "message": "저장하지 못했습니다: {0}",
+    "description": "Body size status line. {0} is the error message."
+  },
+  "Parts.Retarget.Undo.Removed.Fmt": {
+    "message": "\"{0}\"을(를) 제거했습니다.",
+    "description": "Body size status line after Undo. {0} is the option removed."
+  },
+  "Parts.Retarget.Undo.NoGroup": {
+    "message": "이 모드에는 체형 변환 그룹이 없습니다.",
+    "description": "Body size status line: Undo found no group of refits to remove from."
+  },
+  "Parts.Retarget.Undo.Legacy": {
+    "message": "이 모드는 Penumbra의 이전 폴더 형식입니다. Penumbra에서 한 번 활성화한 다음 다시 오세요.",
+    "description": "Body size status line: Undo on a mod in Penumbra's pre-v3 folder format."
+  },
+  "Parts.Retarget.Undo.Failed.Fmt": {
+    "message": "되돌리지 못했습니다: {0}",
+    "description": "Body size status line. {0} is the error message."
+  },
+  "Parts.Retarget.Refuse.NoLayoutMap.Fmt": {
+    "message": "{0} 모델의 텍스처 레이아웃이 서로 다르고({1}, {2}) Proteus에 둘 사이의 대응표가 없어서, 한 체형의 어느 점이 다른 체형의 어느 점인지 알 수 없습니다.",
+    "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…), {1} and {2} texture-layout ids such as bibo or gen3 — never translate those."
+  },
+  "Parts.Retarget.Refuse.UvUnreadable.Fmt": {
+    "message": "{0} 모델의 텍스처 좌표를 읽을 수 없어서, 한 체형의 어느 점이 다른 체형의 어느 점인지 알 수 없습니다.",
+    "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…)."
+  },
+  "Parts.Retarget.Refuse.NoTargetSkin.Fmt": {
+    "message": "대상 {0} 모델에 맞출 체형 피부가 없습니다.",
+    "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…)."
+  },
+  "Parts.Retarget.Refuse.OffSheet.Fmt": {
+    "message": "원본 {0} 체형의 대부분이 텍스처 레이아웃 밖에 그려져 있어서, 한 체형의 어느 점이 다른 체형의 어느 점인지 알 수 없습니다.",
+    "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…)."
+  },
+  "Parts.Retarget.Refuse.LowCoverage.Fmt": {
+    "message": "원본 {0} 체형 중 텍스처 좌표로 대상에서 자리를 찾는 부분은 {1:P0}뿐이므로, 둘은 텍스처 레이아웃을 공유하지 않습니다. 서로 변환할 수 없습니다.",
+    "description": "Body size: why two bodies cannot be paired. {0} is the body part (chest, legs…), {1:P0} the share that matched — keep the :P0."
+  },
+  "Parts.Retarget.Bake.NoPath.Fmt": {
+    "message": "종족 디포머에 c{0:D4}에서 c{1:D4}로 가는 경로가 없습니다",
+    "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. {0:D4} and {1:D4} are race codes such as 0101 — keep the c and the :D4. Lower-case, no full stop."
+  },
+  "Parts.Retarget.Bake.Unreadable": {
+    "message": "모델을 읽을 수 없었습니다",
+    "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. Lower-case, no full stop."
+  },
+  "Parts.Retarget.Bake.WeightMismatch.Fmt": {
+    "message": "모델의 정점을 가중치와 맞출 수 없었습니다({0} 대 {1})",
+    "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. {0} and {1} are vertex counts. Lower-case, no full stop."
+  },
+  "Refit.Error.RedirectsUnreadable.Fmt": {
+    "message": "{0}의 리디렉션을 읽을 수 없습니다.",
+    "description": "Shown when a vanilla item is opened for editing and the new mod's file list cannot be read. {0} is a folder path."
+  },
+  "Parts.Write.NotJsonObject.Fmt": {
+    "message": "{0}은(는) JSON 객체가 아닙니다.",
+    "description": "Inside Parts.Write.Failed.Fmt: a mod file is not valid JSON. {0} is a file path."
+  },
+  "Service.ModelEdit.NoSubmesh.Fmt": {
+    "message": "메시 {0}에 서브메시 {1}이(가) 없습니다",
+    "description": "Why a model edit (part switch, hat fit, brush) failed; shown after a colon. {0} and {1} are numbers. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.AttributesFull.Fmt": {
+    "message": "이 모델은 이미 속성을 {0}개 선언하고 있어 서브메시 마스크에 더 넣을 수 없습니다",
+    "description": "Why a model edit failed; shown after a colon. {0} is a number. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.NoTriangles": {
+    "message": "그 서브메시에는 삼각형이 없습니다",
+    "description": "Why a model edit failed; shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.Fragmented.Fmt": {
+    "message": "그 삼각형들은 파츠의 나머지와 {0}개 구간에 걸쳐 섞여 있어 깔끔하게 나누기에는 너무 조각나 있습니다",
+    "description": "Why splitting a part failed; shown after a colon. {0} is a number. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.IndexRange.Fmt": {
+    "message": "메시 {0}의 인덱스 범위가 파일 끝을 넘어갑니다",
+    "description": "Why a model edit failed (damaged file); shown after a colon. {0} is a number. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.ShapeBlock": {
+    "message": "이 모델의 셰이프 블록이 파일 끝을 넘어갑니다",
+    "description": "Why a model edit failed (damaged file); shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.ShapeTooFar": {
+    "message": "이 모델의 기존 셰이프가 이 서브메시를 너무 먼 곳에서 참조해 재정렬을 따라갈 수 없으므로, 지오메트리로 나눌 수 없습니다",
+    "description": "Why splitting a part by geometry failed; shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.ShapeNoName": {
+    "message": "셰이프에는 이름이 필요합니다",
+    "description": "Why a model edit failed; shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.TablesMismatch": {
+    "message": "이 모델의 테이블이 맞지 않습니다. 셰이프 블록이 형식상 있어야 할 위치에 없습니다",
+    "description": "Why a model edit failed (damaged file); shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.ShapeExists.Fmt": {
+    "message": "이 모델에는 이미 {0}(이)라는 셰이프가 있습니다",
+    "description": "Why a model edit failed; shown after a colon. {0} is a shape name. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.NeckMorph": {
+    "message": "이 모델에는 목 모프 데이터가 있어 여기서 편집할 수 없습니다",
+    "description": "Why a model edit failed; shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.UnusedVertices": {
+    "message": "그 정점들은 어떤 삼각형에도 쓰이지 않아, 셰이프를 만들어도 아무것도 변형되지 않습니다",
+    "description": "Why a model edit failed; shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.ShapeOverflow.Fmt": {
+    "message": "이 셰이프에는 셰이프 값이 {0}개 필요해 형식이 셀 수 있는 한도를 넘습니다",
+    "description": "Why a model edit failed; shown after a colon. {0} is a number. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.NotLod0.Fmt": {
+    "message": "메시 {0}은(는) LOD0에 속하지 않으며, 여기서는 LOD0의 메시만 변형할 수 있습니다",
+    "description": "Why a model edit failed; shown after a colon. {0} is a number; keep LOD0. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.NoVertex.Fmt": {
+    "message": "메시 {0}에 정점 {1}이(가) 없습니다(정점 {2}개)",
+    "description": "Why a model edit failed; shown after a colon. {0}, {1} and {2} are numbers. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.TooManyVertices.Fmt": {
+    "message": "메시 {0}에는 정점 {1}개가 필요하지만 모델이 셀 수 있는 {2}개를 넘습니다. 모자용 헤어를 3만 폴리곤 미만으로 유지하는 형식상의 이유입니다",
+    "description": "Why a hat-fit edit failed; shown after a colon. {0}, {1} and {2} are numbers. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.NoPosition.Fmt": {
+    "message": "메시 {0}에 위치 요소가 선언되어 있지 않습니다",
+    "description": "Why a model edit failed; shown after a colon. {0} is a number. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.PositionType.Fmt": {
+    "message": "메시 {0}은(는) 위치를 정점 유형 {1}(으)로 저장하며, 여기서는 쓸 수 없습니다",
+    "description": "Why a model edit failed; shown after a colon. {0} is a number, {1} a vertex type id. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.StreamRange.Fmt": {
+    "message": "메시 {0}의 스트림 {1}이(가) 파일 끝을 넘어갑니다",
+    "description": "Why a model edit failed (damaged file); shown after a colon. {0} and {1} are numbers. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.ShapeTable": {
+    "message": "이 모델의 셰이프 테이블이 파일 끝을 넘어갑니다",
+    "description": "Why a model edit failed (damaged file); shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.Unreadable.Fmt": {
+    "message": "이 모델을 읽을 수 없었습니다({0})",
+    "description": "Why a brush edit failed; shown after a colon. {0} is the underlying error message. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.BoundingBoxes": {
+    "message": "이 모델의 바운딩 박스가 형식상 있어야 할 위치에 없습니다",
+    "description": "Why a brush edit failed (damaged file); shown after a colon. Lower-case, no full stop."
+  },
+  "Service.ModelEdit.PositionFormat.Fmt": {
+    "message": "메시 {0}은(는) 쓸 수 없는 형식으로 위치를 저장합니다(유형 {1})",
+    "description": "Why a brush edit failed; shown after a colon. {0} is a number, {1} a vertex type id. Lower-case, no full stop."
+  },
+  "Import.Layer.Skip.NoFile": {
+    "message": "레이어에 이미지 파일이 지정되어 있지 않습니다",
+    "description": "Onion layer tooltip, after \"Skipped:\". Lower-case, no full stop."
+  },
+  "Import.Layer.Skip.Missing.Fmt": {
+    "message": "팩에 \"{0}\"이(가) 없습니다",
+    "description": "Onion layer tooltip, after \"Skipped:\". {0} is a file name. Lower-case, no full stop."
+  },
+  "Import.Layer.Skip.Transparent": {
+    "message": "레이어가 완전히 투명합니다(불투명도 0)",
+    "description": "Onion layer tooltip, after \"Skipped:\". Lower-case, no full stop."
+  },
+  "Import.Layer.Skip.Layout.Fmt": {
+    "message": "지원하지 않는 UV 레이아웃 \"{0}\"",
+    "description": "Onion layer tooltip, after \"Skipped:\". {0} is the pack's UV layout token, untranslated. Lower-case, no full stop."
+  },
+  "Import.Layer.Skip.Map.Fmt": {
+    "message": "지원하지 않는 텍스처 맵 \"{0}\"",
+    "description": "Onion layer tooltip, after \"Skipped:\". {0} is the pack's texture-map token, untranslated. Lower-case, no full stop."
+  },
+  "Import.Layer.Skip.BlendMode.Fmt": {
+    "message": "블렌드 모드 \"{0}\"에 해당하는 것이 Proteus에 없습니다",
+    "description": "Onion layer tooltip, after \"Skipped:\". {0} is the pack's blend-mode token (Multiply, Screen…), untranslated. Lower-case, no full stop."
+  },
+  "Import.Onion.Description.Fmt": {
+    "message": "Onion 팩 \"{0}\"에서 가져왔습니다.",
+    "description": "Written into the description of a mod imported from an Onion pack; Penumbra shows it. {0} is the pack's file name."
+  },
+  "Import.Pack.UnsafeEntry.Fmt": {
+    "message": "팩에 안전하지 않은 항목 경로가 있습니다: {0}",
+    "description": "Why a pack could not be read: it holds a path that would escape its folder. {0} is that path."
+  },
+  "Import.Pack.Onion.NoMeta": {
+    "message": "Onion 팩이 아닙니다. meta.json이 없습니다.",
+    "description": "Why an Onion pack could not be read. Keep meta.json as is."
+  },
+  "Import.Pack.MetaUnreadable": {
+    "message": "팩의 meta.json이 비어 있거나 읽을 수 없습니다.",
+    "description": "Why a pack could not be read. Keep meta.json as is."
+  },
+  "Import.Pack.EntryGone.Fmt": {
+    "message": "팩에 더 이상 {0}이(가) 없습니다.",
+    "description": "Why an import failed: a file vanished from the pack after it was opened. {0} is the file."
+  },
+  "Import.Pack.Penumbra.NoMeta": {
+    "message": "Penumbra 팩이 아닙니다. meta.json이 없습니다.",
+    "description": "Why a Penumbra pack could not be read. Keep meta.json as is."
+  },
+  "Import.Pack.MetaNotObject": {
+    "message": "팩의 meta.json이 객체가 아닙니다.",
+    "description": "Why a pack could not be read. Keep meta.json as is."
+  },
+  "Import.Eye.Pack.UnsafeEntry.Fmt": {
+    "message": "압축 파일에 안전하지 않은 항목 경로가 있습니다: {0}",
+    "description": "Why an eye-texture archive could not be read. {0} is the offending path."
+  },
+  "Import.Eye.Pack.NoImages": {
+    "message": "압축 파일에 이미지가 없어 가져올 것이 없습니다.",
+    "description": "Why an eye-texture archive could not be imported."
+  },
+  "Import.Eye.Pack.EntryGone.Fmt": {
+    "message": "압축 파일에 더 이상 {0}이(가) 없습니다.",
+    "description": "Why an eye import failed: a file vanished from the archive after it was opened. {0} is the file."
+  },
+  "Import.Luminis.Pack.NoManifest": {
+    "message": "TexTools 모드팩이 아닙니다. TTMPL.mpl이 없습니다.",
+    "description": "Why a TexTools modpack could not be read. Keep TTMPL.mpl as is."
+  },
+  "Import.Luminis.Pack.NoData": {
+    "message": "모드팩에 TTMPD.mpd가 없어 나열된 파일에 데이터가 없습니다.",
+    "description": "Why a TexTools modpack could not be read. Keep TTMPD.mpd as is."
+  },
+  "Import.Luminis.Pack.Version1": {
+    "message": "이전 TexTools .ttmp(버전 1)로 보이며 Proteus가 읽을 수 없습니다. TexTools에서 .ttmp2로 다시 내보내세요.",
+    "description": "Why a TexTools modpack could not be read. Keep .ttmp and .ttmp2 as is."
+  },
+  "Import.Luminis.Pack.ManifestUnreadable": {
+    "message": "모드팩의 TTMPL.mpl이 비어 있거나 읽을 수 없습니다.",
+    "description": "Why a TexTools modpack could not be read. Keep TTMPL.mpl as is."
+  },
+  "Import.Luminis.Pack.Version.Fmt": {
+    "message": "모드팩이 TTMP 버전 {0}을(를) 선언하며 Proteus가 읽을 수 없습니다. TexTools에서 .ttmp2로 다시 내보내세요.",
+    "description": "Why a TexTools modpack could not be read. {0} is the version the pack declares. Keep TTMP and .ttmp2 as is."
+  },
+  "Import.Luminis.Pack.NoFiles": {
+    "message": "모드팩에 나열된 파일이 하나도 없습니다.",
+    "description": "Why a TexTools modpack could not be imported."
+  },
+  "Import.Luminis.Pack.DataGone": {
+    "message": "모드팩에 더 이상 TTMPD.mpd가 없습니다.",
+    "description": "Why a TexTools import failed: the data file vanished after the pack was opened. Keep TTMPD.mpd as is."
+  },
+  "Import.Luminis.Pack.OutOfBlob.Fmt": {
+    "message": "매니페스트상 {1}바이트 데이터 블록의 {0}번째 바이트에 있습니다",
+    "description": "Why one file of a TexTools modpack is skipped; shown after a colon. {0} and {1} are byte counts. Lower-case, no full stop."
+  },
+  "Import.Luminis.Pack.Truncated": {
+    "message": "모드팩의 데이터 블록이 잘려 있습니다",
+    "description": "Why one file of a TexTools modpack is skipped; shown after a colon. Lower-case, no full stop."
+  },
+  "Import.Luminis.Tex.HeaderSize": {
+    "message": "SqPack 헤더 크기가 파일 범위를 벗어납니다.",
+    "description": "Why a texture inside a TexTools modpack could not be read. Keep SqPack as is."
+  },
+  "Import.Luminis.Tex.MipCount.Fmt": {
+    "message": "밉 레벨이 {0}개인 텍스처는 읽을 수 없습니다.",
+    "description": "Why a texture inside a TexTools modpack could not be read. {0} is a number."
+  },
+  "Import.Luminis.Tex.MipTable": {
+    "message": "밉 테이블이 SqPack 헤더를 넘어갑니다.",
+    "description": "Why a texture inside a TexTools modpack could not be read. Keep SqPack as is."
+  },
+  "Import.Luminis.Tex.Header": {
+    "message": "텍스처 헤더가 없거나 파일을 넘어갑니다.",
+    "description": "Why a texture inside a TexTools modpack could not be read."
+  },
+  "Import.Luminis.Tex.Claims.Fmt": {
+    "message": "텍스처가 {0}바이트라고 선언합니다.",
+    "description": "Why a texture inside a TexTools modpack could not be read: it says it is impossibly large. {0} is a byte count."
+  },
+  "Import.Luminis.Tex.BlockSize": {
+    "message": "텍스처 블록이 명시된 크기로 압축 해제되지 않았습니다.",
+    "description": "Why a texture inside a TexTools modpack could not be read."
+  },
+  "Import.Luminis.Tex.BlockHeader": {
+    "message": "텍스처 블록 헤더가 파일을 넘어갑니다.",
+    "description": "Why a texture inside a TexTools modpack could not be read."
+  },
+  "Import.Luminis.Tex.BlockHeaderSize.Fmt": {
+    "message": "{0}바이트 텍스처 블록 헤더는 읽을 수 없습니다.",
+    "description": "Why a texture inside a TexTools modpack could not be read. {0} is a byte count."
+  },
+  "Import.Luminis.Tex.Block": {
+    "message": "텍스처 블록이 파일을 넘어갑니다.",
+    "description": "Why a texture inside a TexTools modpack could not be read."
+  },
+  "Import.Luminis.Tex.Field": {
+    "message": "SqPack 필드가 파일 끝을 넘어갑니다.",
+    "description": "Why a texture inside a TexTools modpack could not be read. Keep SqPack as is."
+  },
+  "Presets.Error.Unreadable.Fmt": {
+    "message": "해당 파일을 읽을 수 없습니다: {0}",
+    "description": "Preset bar notice: a preset file could not be read. {0} is the underlying error message."
+  },
+  "Presets.Error.NothingToPaste": {
+    "message": "붙여 넣을 것이 없습니다.",
+    "description": "Preset bar notice: Paste code was pressed with nothing on the clipboard."
+  },
+  "Presets.Error.NotACode": {
+    "message": "Proteus 프리셋 코드가 아닌 것 같습니다.",
+    "description": "Preset bar notice: the clipboard does not hold a preset share code."
+  },
+  "Presets.Error.Version.Fmt": {
+    "message": "이 코드는 버전 {0}입니다. 이 Proteus 버전은 {1}을(를) 지원합니다. Proteus를 업데이트하세요.",
+    "description": "Preset bar notice: the share code is from a newer Proteus. {0} is the code's version, {1} the version this build reads."
+  },
+  "Presets.Error.NotAPreset": {
+    "message": "해당 파일에는 Proteus 프리셋이 없습니다.",
+    "description": "Preset bar or Import tab notice: the chosen file is not a preset."
+  },
+  "Presets.Error.Empty": {
+    "message": "해당 프리셋은 비어 있습니다.",
+    "description": "Preset bar notice: the preset holds no settings."
+  },
+  "Presets.ImportedName": {
+    "message": "가져온 프리셋",
+    "description": "Name given to an imported preset that arrives without one; shown in the preset list."
+  },
+  "HatCompat.Revert.Failed.Fmt": {
+    "message": "되돌리기에 실패했습니다: {0}",
+    "description": "Hats panel, in red, when undoing a hat fit throws. {0} is the error message."
+  },
+  "Create.Description": {
+    "message": "Proteus용으로 만들었습니다.",
+    "description": "Written into the description of a mod made in the Create tab; Penumbra shows it."
+  },
+  "Service.ManagedMod.Description": {
+    "message": "오버레이 합성 플러그인 Proteus가 관리합니다.",
+    "description": "Description of the mod Proteus writes its output into; Penumbra shows it."
+  },
+  "Service.ModMeta.LegacyFolder.Fmt": {
+    "message": "{0}은(는) v{1} 이전의 Penumbra 모드 폴더이므로 Proteus가 쓰지 않습니다.",
+    "description": "Why Proteus will not write to a mod. {0} is the mod's folder, {1} Penumbra's manifest version number."
+  },
+  "Service.ModMeta.InUse.Fmt": {
+    "message": "{0}을(를) 다른 프로그램이 사용 중이라 읽을 수 없어 다시 쓰지 않았습니다.",
+    "description": "Why a mod's manifest was not rewritten. {0} is a file path."
+  },
+  "Service.ModMeta.NoGroup.Fmt": {
+    "message": "이 모드에는 \"{0}\"(이)라는 그룹이 없습니다.",
+    "description": "Why a change to a mod failed. {0} is a Penumbra option group's name."
+  },
+  "Service.Download.NoSources": {
+    "message": "설정된 다운로드 소스가 없습니다",
+    "description": "Why a download (UV maps) failed; shown after a colon. Lower-case, no full stop."
+  },
+  "Service.Download.BadRange.Fmt": {
+    "message": "{0}: 206이 {1}에서 시작됨, 예상 위치 {2}",
+    "description": "Why a download (UV maps) failed; shown after a colon. {0} is a file name, {1} and {2} byte offsets; keep 206 (an HTTP status). Lower-case, no full stop."
+  },
+  "Service.Download.Checksum.Fmt": {
+    "message": "{0}의 체크섬이 일치하지 않습니다({1}바이트, sha256 {2}…)",
+    "description": "Why a download (UV maps) failed; shown after a colon. {0} is a file name, {1} a byte count, {2} the start of a hash. Lower-case, no full stop."
   }
 }

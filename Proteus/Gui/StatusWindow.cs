@@ -587,7 +587,7 @@ public class StatusWindow : Window
         ImGui.SetNextWindowSize(ProteusStyle.S(720f, 580f), ImGuiCond.FirstUseEver);
         // Narrow enough and the row picker wraps; this just stops it collapsing to something useless.
         ImGui.SetNextWindowSizeConstraints(ProteusStyle.S(400f, 300f), new Vector2(float.MaxValue, float.MaxValue));
-        if (ImGui.Begin($"Colors — {entry.ModName}###ProteusColors", ref open))
+        if (ImGui.Begin(string.Format(Strings.Colors.WindowTitleFmt, entry.ModName) + "###ProteusColors", ref open))
             DrawColorEditor(entry);
         ImGui.End();
 
@@ -619,14 +619,14 @@ public class StatusWindow : Window
     {
         var resume = ImGui.GetCursorPos();
         var barH   = (resume.Y - ImGui.GetStyle().ItemSpacing.Y) - barTop;
-        var btnW   = ImGuiComponents.GetIconButtonWithTextWidth(FontAwesomeIcon.SyncAlt, "Refresh");
+        var btnW   = ImGuiComponents.GetIconButtonWithTextWidth(FontAwesomeIcon.SyncAlt, Strings.Band.Refresh);
         var btnH   = ImGui.GetFrameHeight();
 
         ImGui.SetCursorPos(new Vector2(
             ImGui.GetContentRegionMax().X - btnW,
             barTop + ((barH - btnH) * 0.5f)));
 
-        if (ProteusStyle.FancyButton("Refresh", FontAwesomeIcon.SyncAlt))
+        if (ProteusStyle.FancyButton(Strings.Band.Refresh, FontAwesomeIcon.SyncAlt))
         {
             // Shift: rebuild everything, forgetting what was published. See RefreshAndRecomposite.
             compositor.RefreshAndRecomposite(full: ImGui.GetIO().KeyShift);
@@ -2046,9 +2046,7 @@ public class StatusWindow : Window
         // canShell: shells are cut from the wearer's own skin, so an option painting gear, an accessory or a weapon cannot become one.
         bool canShell = activeOpt.Overlays.Count == 0
                      || activeOpt.Overlays.Any(CompositorService.CanRenderAsShell);
-        var noShellReason = canShell ? null
-            : "This overlay paints something Proteus can't build a layer over — gear, an accessory or a\n"
-            + "weapon. Glow and Cloth need a layer over your own skin: body, face, hair, tail or ears.";
+        var noShellReason = canShell ? null : Strings.Colors.NoShell;
 
         bool promotedToGear = false;
         if (!gear)
@@ -2453,10 +2451,7 @@ public class StatusWindow : Window
         if (!_hasDefaultsCache.TryGetValue(entry.SidecarRoot, out var has))
             _hasDefaultsCache[entry.SidecarRoot] = has = discovery.HasDefaults(entry);
 
-        return has
-            ? null
-            : "No original settings recorded for this mod yet — Proteus captures them the first time\n" +
-              "it saves a change here.";
+        return has ? null : Strings.Colors.ResetBlockedTip;
     }
 
     /// <summary>

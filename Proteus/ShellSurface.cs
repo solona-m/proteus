@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using Proteus.Localization;
 using Proteus.Services;
 
 namespace Proteus;
@@ -134,12 +135,12 @@ public static class ShellSurface
     /// <summary>Short display tag for a surface, shared with the material picker's left column.</summary>
     public static string Label(ShellSurfaceKind kind) => kind switch
     {
-        ShellSurfaceKind.Body   => "Body",
-        ShellSurfaceKind.Face   => "Face",
-        ShellSurfaceKind.Iris   => "Iris",
-        ShellSurfaceKind.Hair   => "Hair",
-        ShellSurfaceKind.Tail   => "Tail",
-        ShellSurfaceKind.Native => "Native",
-        _                       => "Ear",
+        ShellSurfaceKind.Body   => Strings.Create.TagBody,
+        ShellSurfaceKind.Face   => Strings.Create.TagFace,
+        ShellSurfaceKind.Iris   => Strings.Create.TagIris,
+        ShellSurfaceKind.Hair   => Strings.Create.TagHair,
+        ShellSurfaceKind.Tail   => Strings.Create.TagTail,
+        ShellSurfaceKind.Native => Strings.Create.TagNative,
+        _                       => Strings.Create.TagEar,
     };
 }

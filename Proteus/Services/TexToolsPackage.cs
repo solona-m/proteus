@@ -6,6 +6,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using CheapLoc;
 
 namespace Proteus.Services;
 
@@ -78,11 +79,11 @@ public static class TexToolsPackage
         using var zip = ZipFile.OpenRead(ttmpPath);
 
         var manifestEntry = FindEntry(zip, ManifestEntry)
-            ?? throw new InvalidDataException(
-                "Not a TexTools modpack — it has no TTMPL.mpl.");
+            ?? throw new InvalidDataException(Loc.Localize("Import.Luminis.Pack.NoManifest",
+                "Not a TexTools modpack — it has no TTMPL.mpl."));
         if (FindEntry(zip, DataEntry) == null)
-            throw new InvalidDataException(
-                "The modpack has no TTMPD.mpd, so none of the files it lists have any data.");
+            throw new InvalidDataException(Loc.Localize("Import.Luminis.Pack.NoData",
+                "The modpack has no TTMPD.mpd, so none of the files it lists have any data."));
 
         TtmpManifest? manifest;
         try
@@ -93,17 +94,17 @@ public static class TexToolsPackage
         catch (JsonException ex)
         {
             // A v1 .ttmp is newline-delimited JSON with no root object, so it lands here.
-            throw new InvalidDataException(
+            throw new InvalidDataException(Loc.Localize("Import.Luminis.Pack.Version1",
                 "This looks like an old TexTools .ttmp (version 1), which Proteus can't read. "
-              + "Re-export it from TexTools as a .ttmp2.", ex);
+              + "Re-export it from TexTools as a .ttmp2."), ex);
         }
 
         if (manifest == null)
-            throw new InvalidDataException("The modpack's TTMPL.mpl is empty or unreadable.");
+            throw new InvalidDataException(Loc.Localize("Import.Luminis.Pack.ManifestUnreadable", "The modpack's TTMPL.mpl is empty or unreadable."));
         if (manifest.TTMPVersion is { Length: > 0 } v && v[0] == '1')
-            throw new InvalidDataException(
-                $"The modpack declares TTMP version {v}, which Proteus can't read. Re-export it from "
-              + "TexTools as a .ttmp2.");
+            throw new InvalidDataException(string.Format(Loc.Localize("Import.Luminis.Pack.Version.Fmt",
+                "The modpack declares TTMP version {0}, which Proteus can't read. Re-export it from "
+              + "TexTools as a .ttmp2."), v));
 
         var files = new List<PackFile>();
 
@@ -118,7 +119,7 @@ public static class TexToolsPackage
             Add(mod, null, null);
 
         if (files.Count == 0)
-            throw new InvalidDataException("The modpack lists no files at all.");
+            throw new InvalidDataException(Loc.Localize("Import.Luminis.Pack.NoFiles", "The modpack lists no files at all."));
 
         return new Contents(
             ttmpPath,
@@ -155,7 +156,7 @@ public static class TexToolsPackage
 
         using var zip = ZipFile.OpenRead(ttmpPath);
         var data = FindEntry(zip, DataEntry)
-            ?? throw new InvalidDataException("The modpack no longer contains TTMPD.mpd.");
+            ?? throw new InvalidDataException(Loc.Localize("Import.Luminis.Pack.DataGone", "The modpack no longer contains TTMPD.mpd."));
 
         long total = data.Length;
         using var stream = data.Open();
@@ -168,8 +169,8 @@ public static class TexToolsPackage
             // Past the end of the blob or absurdly large: recorded as a failure, not dropped.
             if (offset < position || size > MaxPayloadBytes || offset + size > total)
             {
-                result[offset] = new Payload(0, null,
-                    $"its manifest places it at byte {offset} of a {total}-byte data blob");
+                result[offset] = new Payload(0, null, string.Format(Loc.Localize("Import.Luminis.Pack.OutOfBlob.Fmt",
+                    "its manifest places it at byte {0} of a {1}-byte data blob"), offset, total));
                 continue;
             }
 
@@ -192,7 +193,7 @@ public static class TexToolsPackage
             position += filled;
             if (filled < slice.Length)
             {
-                result[offset] = new Payload(0, null, "the modpack's data blob is truncated");
+                result[offset] = new Payload(0, null, Loc.Localize("Import.Luminis.Pack.Truncated", "the modpack's data blob is truncated"));
                 return result;
             }
 
@@ -224,13 +225,13 @@ public static class TexToolsPackage
         int lodCount = (int)U32(slice, 0x14);
 
         if (headerSize < 0x18 || headerSize > slice.Length)
-            throw new InvalidDataException("SqPack header size is outside the file.");
+            throw new InvalidDataException(Loc.Localize("Import.Luminis.Tex.HeaderSize", "SqPack header size is outside the file."));
         if (type != TextureType) return new Payload(type, null);
         // One LOD per mip level, and a texture has at most 13.
         if (lodCount is < 1 or > 13)
-            throw new InvalidDataException($"A texture with {lodCount} mip levels is not readable.");
+            throw new InvalidDataException(string.Format(Loc.Localize("Import.Luminis.Tex.MipCount.Fmt", "A texture with {0} mip levels is not readable."), lodCount));
         if (0x18 + (long)lodCount * 20 > headerSize)
-            throw new InvalidDataException("The mip table runs past the SqPack header.");
+            throw new InvalidDataException(Loc.Localize("Import.Luminis.Tex.MipTable", "The mip table runs past the SqPack header."));
 
         var lods = new (uint Offset, uint Size, uint Decompressed, uint BlockIndex, uint BlockCount)[lodCount];
         for (int i = 0; i < lodCount; i++)
@@ -243,13 +244,13 @@ public static class TexToolsPackage
         // The .tex header sits uncompressed between the SqPack header and the first data block.
         long texHeaderLength = lods[0].Offset;
         if (texHeaderLength <= 0 || headerSize + texHeaderLength > slice.Length)
-            throw new InvalidDataException("The texture header is missing or runs past the file.");
+            throw new InvalidDataException(Loc.Localize("Import.Luminis.Tex.Header", "The texture header is missing or runs past the file."));
 
         // Sized from the block headers, not the mip table's DecompressedSize, which can overstate the tail mip.
         long dataLength = 0;
         WalkBlocks((_, _, _, decompressed) => dataLength += decompressed);
         if (texHeaderLength + dataLength > MaxPayloadBytes)
-            throw new InvalidDataException($"The texture claims {texHeaderLength + dataLength} bytes.");
+            throw new InvalidDataException(string.Format(Loc.Localize("Import.Luminis.Tex.Claims.Fmt", "The texture claims {0} bytes."), texHeaderLength + dataLength));
 
         var output = new byte[texHeaderLength + dataLength];
         Buffer.BlockCopy(slice, (int)headerSize, output, 0, (int)texHeaderLength);
@@ -274,7 +275,7 @@ public static class TexToolsPackage
                 filled += got;
             }
             if (filled != decompressed)
-                throw new InvalidDataException("A texture block did not decompress to its stated size.");
+                throw new InvalidDataException(Loc.Localize("Import.Luminis.Tex.BlockSize", "A texture block did not decompress to its stated size."));
             written += filled;
         });
 
@@ -289,7 +290,7 @@ public static class TexToolsPackage
                 for (uint b = 0; b < lod.BlockCount; b++)
                 {
                     if (at + 16 > slice.Length)
-                        throw new InvalidDataException("A texture block header runs past the file.");
+                        throw new InvalidDataException(Loc.Localize("Import.Luminis.Tex.BlockHeader", "A texture block header runs past the file."));
 
                     uint blockHeaderSize = U32(slice, (int)at);
                     uint compressed = U32(slice, (int)at + 8);
@@ -297,14 +298,14 @@ public static class TexToolsPackage
 
                     // The payload starts after the header's own stated size, not a hardcoded 16.
                     if (blockHeaderSize is < 16 or > 128)
-                        throw new InvalidDataException(
-                            $"A texture block header of {blockHeaderSize} bytes is not readable.");
+                        throw new InvalidDataException(string.Format(Loc.Localize("Import.Luminis.Tex.BlockHeaderSize.Fmt",
+                            "A texture block header of {0} bytes is not readable."), blockHeaderSize));
 
                     bool stored = compressed >= StoredBlockMarker;
                     long length = stored ? decompressed : compressed;
                     long from = at + blockHeaderSize;
                     if (length < 0 || from + length > slice.Length)
-                        throw new InvalidDataException("A texture block runs past the file.");
+                        throw new InvalidDataException(Loc.Localize("Import.Luminis.Tex.Block", "A texture block runs past the file."));
 
                     visit(from, length, stored, decompressed);
                     at += Align(blockHeaderSize + length, BlockAlignment);
@@ -318,7 +319,7 @@ public static class TexToolsPackage
     private static uint U32(byte[] buffer, int at)
     {
         if (at < 0 || at + 4 > buffer.Length)
-            throw new InvalidDataException("A SqPack field runs past the end of the file.");
+            throw new InvalidDataException(Loc.Localize("Import.Luminis.Tex.Field", "A SqPack field runs past the end of the file."));
         return BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(at, 4));
     }
 

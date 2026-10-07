@@ -58,7 +58,8 @@ public partial class CompositorService
             Path.Combine(managedModDir, PenumbraModMeta.MetaFile),
             PenumbraModMeta.NewMetaJson(
                 SidecarDiscoveryService.ManagedModDir, "Proteus",
-                "Managed by the Proteus overlay compositor plugin."));
+                CheapLoc.Loc.Localize("Service.ManagedMod.Description",
+                    "Managed by the Proteus overlay compositor plugin.")));
     }
 
     /// <summary>

@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using CheapLoc;
 
 namespace Proteus.Services;
 
@@ -60,8 +61,10 @@ internal static class BodyCorrespondence
             if (convert == null)
             {
                 correspondence = null;
-                refusal = $"The {what} models use different texture layouts ({from} and {to}), and Proteus has no map " +
-                          "between them, so there is no way to tell which point of one body is which point of the other.";
+                refusal = string.Format(Loc.Localize("Parts.Retarget.Refuse.NoLayoutMap.Fmt",
+                              "The {0} models use different texture layouts ({1} and {2}), and Proteus has no map " +
+                              "between them, so there is no way to tell which point of one body is which point of the " +
+                              "other."), what, from, to);
                 return false;
             }
             onSheet = uvRemap?.UvConverter(from, to, unmirror: true, fold: true, reach: OnSheetReach);

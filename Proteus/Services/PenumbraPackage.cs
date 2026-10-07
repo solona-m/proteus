@@ -5,6 +5,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using CheapLoc;
 
 namespace Proteus.Services;
 
@@ -116,14 +117,14 @@ public static class PenumbraPackage
             var name = Normalize(raw);
             // Entries are extracted by name, so a traversal entry rejects the whole pack.
             if (System.IO.Path.IsPathRooted(name) || name.Split('/').Any(IsTraversal))
-                throw new InvalidDataException($"The pack contains an unsafe entry path: {raw}");
+                throw new InvalidDataException(string.Format(Loc.Localize("Import.Pack.UnsafeEntry.Fmt", "The pack contains an unsafe entry path: {0}"), raw));
             entries[name] = length;
         }
 
         var manifestNode = ReadNode(zip, ManifestEntry)
-            ?? throw new InvalidDataException("Not a Penumbra pack — it has no meta.json.");
+            ?? throw new InvalidDataException(Loc.Localize("Import.Pack.Penumbra.NoMeta", "Not a Penumbra pack — it has no meta.json."));
         if (manifestNode is not JsonObject manifest)
-            throw new InvalidDataException("The pack's meta.json is not an object.");
+            throw new InvalidDataException(Loc.Localize("Import.Pack.MetaNotObject", "The pack's meta.json is not an object."));
 
         int fileVersion = Int(manifest, "FileVersion") ?? PenumbraModMeta.LegacyFileVersion;
 
@@ -222,7 +223,7 @@ public static class PenumbraPackage
         {
             var rel = Normalize(raw);
             if (System.IO.Path.IsPathRooted(rel) || rel.Split('/').Any(IsTraversal))
-                throw new InvalidDataException($"The pack contains an unsafe entry path: {raw}");
+                throw new InvalidDataException(string.Format(Loc.Localize("Import.Pack.UnsafeEntry.Fmt", "The pack contains an unsafe entry path: {0}"), raw));
             var dest = System.IO.Path.Combine(root, rel.Replace('/', System.IO.Path.DirectorySeparatorChar));
             Directory.CreateDirectory(System.IO.Path.GetDirectoryName(dest)!);
             src.CopyTo(raw, dest);

@@ -5,6 +5,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using CheapLoc;
 
 namespace Proteus.Services;
 
@@ -59,21 +60,21 @@ public static class OnionPackage
             // A traversal entry rejects the whole pack: it is corrupt or hostile.
             var name = Normalize(e.FullName);
             if (Path.IsPathRooted(name) || name.Split('/').Any(s => s == ".."))
-                throw new InvalidDataException($"The pack contains an unsafe entry path: {e.FullName}");
+                throw new InvalidDataException(string.Format(Loc.Localize("Import.Pack.UnsafeEntry.Fmt", "The pack contains an unsafe entry path: {0}"), e.FullName));
             entries[name] = e.Length;
         }
 
         var manifestEntry = zip.GetEntry(ManifestEntry)
             ?? zip.Entries.FirstOrDefault(e =>
                    string.Equals(Normalize(e.FullName), ManifestEntry, StringComparison.OrdinalIgnoreCase))
-            ?? throw new InvalidDataException("Not an Onion pack — it has no meta.json.");
+            ?? throw new InvalidDataException(Loc.Localize("Import.Pack.Onion.NoMeta", "Not an Onion pack — it has no meta.json."));
 
         OnionManifest? manifest;
         using (var s = manifestEntry.Open())
             manifest = JsonSerializer.Deserialize<OnionManifest>(s, ReadOptions);
 
         if (manifest == null)
-            throw new InvalidDataException("The pack's meta.json is empty or unreadable.");
+            throw new InvalidDataException(Loc.Localize("Import.Pack.MetaUnreadable", "The pack's meta.json is empty or unreadable."));
 
         return new Contents(manifest, entries);
     }
@@ -85,7 +86,7 @@ public static class OnionPackage
         var entry = zip.GetEntry(entryName)
             ?? zip.Entries.FirstOrDefault(e =>
                    string.Equals(Normalize(e.FullName), Normalize(entryName), StringComparison.OrdinalIgnoreCase))
-            ?? throw new InvalidDataException($"The pack no longer contains {entryName}.");
+            ?? throw new InvalidDataException(string.Format(Loc.Localize("Import.Pack.EntryGone.Fmt", "The pack no longer contains {0}."), entryName));
 
         using var src = entry.Open();
         using var mem = new MemoryStream(entry.Length > 0 && entry.Length < int.MaxValue ? (int)entry.Length : 0);

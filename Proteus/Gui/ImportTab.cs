@@ -740,7 +740,7 @@ internal sealed class ImportTab
         catch (Exception ex)
         {
             _importPreview = null;
-            _importStatus = $"Couldn't read that pack: {ex.Message}";
+            _importStatus = string.Format(Strings.Content.ReadFailedFmt, ex.Message);
             _importStatusOk = false;
         }
     }
@@ -929,8 +929,9 @@ internal sealed class ImportTab
                     ImGui.TableNextRow();
 
                     ImGui.TableNextColumn();
-                    if (unit.Import) ImGui.TextUnformatted(unit.Slot.Label);
-                    else ImGui.TextDisabled(unit.Slot.Label);
+                    var slotName = ContentSlot.DisplayLabel(unit.Slot.Label);
+                    if (unit.Import) ImGui.TextUnformatted(slotName);
+                    else ImGui.TextDisabled(slotName);
 
                     // The vanilla item the pack replaces, falling back to the set id.
                     ImGui.TableNextColumn();
@@ -1528,7 +1529,7 @@ internal sealed class ImportTab
                     else ImGui.TextDisabled(f.Name);
 
                     ImGui.TableNextColumn();
-                    ImGui.TextDisabled(f.Slot?.ToString() ?? "");
+                    ImGui.TextDisabled(f.Slot is { } slot ? es.SlotName(slot) : "");
 
                     ImGui.TableNextColumn();
                     if (f.Import) ImGui.TextDisabled(Path.GetFileName(f.GamePath ?? ""));
@@ -1654,22 +1655,33 @@ internal sealed class ImportTab
             ImGui.TableNextColumn();
             ImGui.TextUnformatted(l.LayoutToken.Length == 0 ? ims.NoLayout : l.LayoutToken);
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted(l.Slot ?? (l.MapToken.Length == 0 ? ims.NoMap : l.MapToken));
+            ImGui.TextUnformatted(l.Slot != null ? OnionSlotName(l.Slot) : l.MapToken.Length == 0 ? ims.NoMap : l.MapToken);
             ImGui.TableNextColumn();
             ImGui.TextUnformatted(l.Opacity < 0.999f ? $"{l.ModeToken}  {l.Opacity:0.##}" : l.ModeToken);
             ImGui.TableNextColumn();
             if (l.Import)
-                ImGui.TextDisabled($"{l.Bytes / 1024f / 1024f:0.#} MB");
+                ImGui.TextDisabled(string.Format(ims.LayerSizeFmt, l.Bytes / 1024f / 1024f));
             else
                 ImGui.TextColored(ProteusStyle.Warn, ims.Skipped);
 
             // Hovering the last column explains the layer; rows are only dimmed, not disabled, so hover reaches skipped ones.
             if (ImGui.IsItemHovered())
                 ImGui.SetTooltip(l.SkipReason == null
-                    ? string.Format(ims.LayerImportedFmt, l.File, l.Slot, l.BodyType)
+                    ? string.Format(ims.LayerImportedFmt, l.File, OnionSlotName(l.Slot), l.BodyType)
                     : string.Format(ims.LayerSkippedFmt, l.File, l.SkipReason));
         }
     }
+
+    /// <summary>An Onion layer's texture slot, translated for display. The slot itself stays the English
+    /// token: the import switches on it.</summary>
+    private static string OnionSlotName(string? slot) => slot switch
+    {
+        "Diffuse" => Strings.Create.SlotDiffuse,
+        "Normal"  => Strings.Create.SlotNormal,
+        "Mask"    => Strings.Create.SlotMask,
+        "Index"   => Strings.Create.SlotIndex,
+        _         => slot ?? "",
+    };
 
     /// <summary>What happens when the pack has nothing painted for the body the user wears; drawn for every pack, single-layout included.</summary>
     private static void DrawImportBodyFit(OnionImportService.ImportPreview preview)

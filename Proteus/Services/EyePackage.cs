@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using CheapLoc;
 
 namespace Proteus.Services;
 
@@ -86,7 +87,7 @@ public static class EyePackage
 
             // A traversal entry rejects the whole pack: it is corrupt or hostile.
             if (System.IO.Path.IsPathRooted(name) || name.Split('/').Any(s => s is ".." or "."))
-                throw new InvalidDataException($"The archive contains an unsafe entry path: {e.FullName}");
+                throw new InvalidDataException(string.Format(Loc.Localize("Import.Eye.Pack.UnsafeEntry.Fmt", "The archive contains an unsafe entry path: {0}"), e.FullName));
 
             if (!ImageExtensions.Contains(System.IO.Path.GetExtension(name), StringComparer.OrdinalIgnoreCase))
                 continue;   // readmes and previews ride along in these packs; they are not a fault
@@ -96,7 +97,7 @@ public static class EyePackage
         }
 
         if (files.Count == 0)
-            throw new InvalidDataException("The archive holds no images, so there is nothing to import.");
+            throw new InvalidDataException(Loc.Localize("Import.Eye.Pack.NoImages", "The archive holds no images, so there is nothing to import."));
 
         return new Contents(
             zipPath,
@@ -113,7 +114,7 @@ public static class EyePackage
         var e = zip.GetEntry(entry)
             ?? zip.Entries.FirstOrDefault(x =>
                    string.Equals(Normalize(x.FullName), Normalize(entry), StringComparison.OrdinalIgnoreCase))
-            ?? throw new InvalidDataException($"The archive no longer contains {entry}.");
+            ?? throw new InvalidDataException(string.Format(Loc.Localize("Import.Eye.Pack.EntryGone.Fmt", "The archive no longer contains {0}."), entry));
 
         using var src = e.Open();
         using var mem = new MemoryStream(e.Length is > 0 and < int.MaxValue ? (int)e.Length : 0);

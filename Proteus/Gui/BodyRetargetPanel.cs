@@ -541,7 +541,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         {
             var model = RacialModelBake.Bake(bytes, drawn, target, who.Pbd, who.ParentOf, out string why);
             if (model == null) return (key, (Baked?)null, why);
-            if (ModelPartReader.Read(model) is not { } parts) return (key, null, "the new model could not be read back");
+            if (ModelPartReader.Read(model) is not { } parts) return (key, null, Strings.Parts.RetargetBakeReadBack);
             return (key, new Baked(key, bytes, drawn, target, model, parts, savePath, who), "");
         });
     }
@@ -1848,7 +1848,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     /// </summary>
     private string OptionName(in RetargetContext ctx, BodyOption target)
     {
-        string body = bodyDir != null && bodies != null && bodies.TryGetValue(bodyDir, out string? name) ? name : "Body";
+        string body = bodyDir != null && bodies != null && bodies.TryGetValue(bodyDir, out string? name) ? name : Strings.Parts.RetargetBodyFallback;
         return $"{body} — {ToLabel(ctx, target)}";
     }
 
@@ -1969,7 +1969,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     {
         if (!task.IsFaulted && !task.IsCanceled) return false;
         log.Warning(task.Exception, "[Proteus] retarget: a background step failed");
-        ctx.SetStatus(task.Exception?.GetBaseException().Message ?? "cancelled", true);
+        ctx.SetStatus(task.Exception?.GetBaseException().Message ?? Strings.Common.Cancelled, true);
         return true;
     }
 }

@@ -70,10 +70,14 @@ public static class ModelRace
 
     /// <summary>A code as a person reads it — "0801" → "Miqote F". Falls back to the raw code when it names
     /// no playable race, because a message about a path is worse than useless if it renames the path.</summary>
+    /// <remarks>Translated: the names come from <see cref="Localization.CommonStrings.RaceNames"/>, not
+    /// <see cref="Names"/>, which stays English because it is also data.</remarks>
     public static string Describe(string? code)
-        => Index(code) is not { } n
-            ? code ?? "?"
-            : $"{Names[(n - 1) / 2]} {(n % 2 == 1 ? "M" : "F")}";
+    {
+        if (Index(code) is not { } n) return code ?? "?";
+        var s = Localization.Strings.Common;
+        return string.Format(s.RaceGenderFmt, s.RaceNames[(n - 1) / 2], n % 2 == 1 ? s.RaceMale : s.RaceFemale);
+    }
 
     /// <summary>Several codes, deduplicated and in the order given — for "this pack covers …".</summary>
     public static string DescribeAll(IEnumerable<string> codes)
