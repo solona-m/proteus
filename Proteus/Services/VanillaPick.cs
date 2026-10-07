@@ -16,8 +16,14 @@ namespace Proteus.Services;
 internal readonly record struct VanillaPick(string GamePath, string ItemName, string SetTag, string Label)
 {
     /// <summary>
-    /// Read a drawn model's game path as a piece of equipment, or null when it is not one — a body, a face, a
-    /// weapon, or anything else whose path does not name an equipment set.
+    /// Body size can take it: it fills a body slot. A hat or an earring has no body under it to be refitted onto, and
+    /// is opened to be edited instead.
+    /// </summary>
+    internal bool Refittable => BodySizeCatalog.SlotOf(GamePath) != null;
+
+    /// <summary>
+    /// Read a drawn model's game path as a piece of gear, or null when it is not one — a body, a face, a weapon, or
+    /// anything else whose path does not name an equipment or accessory set.
     /// </summary>
     /// <param name="gamePath">The path the game draws the model from.</param>
     /// <param name="lookup">
@@ -28,12 +34,14 @@ internal readonly record struct VanillaPick(string GamePath, string ItemName, st
     {
         if (ContentSlot.Parse(gamePath) is not { } p) return null;
 
-        // Equipment only, and said of the PATH: a body model is called "..._top.mdl" too, and the slot suffix alone
-        // would read the character's own body as a garment to refit.
-        if (!gamePath.Replace('\\', '/').StartsWith("chara/equipment/", StringComparison.OrdinalIgnoreCase)) return null;
+        // Gear only, and said of the PATH: a body model is called "..._top.mdl" too, and the slot suffix alone would
+        // read the character's own body as a garment.
+        string path = gamePath.Replace('\\', '/');
+        if (!path.StartsWith("chara/equipment/", StringComparison.OrdinalIgnoreCase)
+            && !path.StartsWith("chara/accessory/", StringComparison.OrdinalIgnoreCase))
+            return null;
 
-        // A refit needs a body slot to sit in, and the writer needs an item to name a mod after.
-        if (BodySizeCatalog.SlotOf(gamePath) is null) return null;
+        // The mod it is saved into is named after the item.
         if (ContentSlot.SetIdOf(p.SetTag) is not { } setId) return null;
 
         string? name = null;

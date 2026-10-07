@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using CheapLoc;
 using Dalamud.Plugin.Services;
@@ -16,12 +17,58 @@ namespace Proteus.Services;
 /// the group, the file-less <c>Original</c> option, the record and the undo are one implementation and not two. In a
 /// mod created here <c>Original</c> reads even better than it does elsewhere: picking it gives the player the game's
 /// own coat back.
+/// <para/>
+/// It also makes the mod the game's gear is EDITED in — switches, the brush, a moved part — named after the item and
+/// <see cref="EditQualifier"/> instead of a body, and seeded with the drawn model by <see cref="AddGameModel"/>.
 /// </summary>
 internal sealed class RefitModService(PenumbraBridge penumbra, CompositorService compositor, IPluginLog log)
 {
     /// <param name="Root">The mod folder, for <see cref="BodyRetargetWriter"/>.</param>
     /// <param name="Dir">Its name under Penumbra's mods root, for the IPC calls that take one.</param>
-    internal readonly record struct Result(bool Ok, string Root, string Dir, string Message);
+    /// <param name="Made">The folder is new this call, rather than one found from before.</param>
+    internal readonly record struct Result(bool Ok, string Root, string Dir, string Message, bool Made = false);
+
+    /// <summary>
+    /// What stands where a body name would in the name of the mod the game's gear is edited in: "Coat — Proteus edit".
+    /// Not localised, because <see cref="Find"/> matches it — a translated one would make a second mod after a
+    /// language change, with the edits stranded in the first.
+    /// </summary>
+    internal const string EditQualifier = "Proteus edit";
+
+    /// <summary>
+    /// Put a model of the game's own into <paramref name="root"/>, published at the path the game draws it from, so
+    /// the mod draws exactly what the game did and every tool can then edit it as a mod's file. A model already
+    /// there is kept — it may carry edits — and only a missing redirect is put back.
+    /// <para/>
+    /// The file sits at its game path inside the mod, which is how modders lay a mod out and cannot collide.
+    /// Pure filesystem, so it is testable without the game.
+    /// </summary>
+    /// <returns>True when anything was written, so the caller knows Penumbra has to reload the mod.</returns>
+    internal static bool AddGameModel(string root, string gamePath, byte[] bytes)
+    {
+        string rel = gamePath.Replace('\\', '/');
+        string file = Path.Combine(root, rel.Replace('/', Path.DirectorySeparatorChar));
+        bool changed = false;
+        if (!File.Exists(file))
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+            PenumbraModMeta.AtomicWrite(file, bytes);
+            changed = true;
+        }
+
+        // A fresh manifest has no default data at all, which reads as unknown; that is empty. An unreadable manifest
+        // is not, and writing over it would drop whatever it held.
+        var data = PenumbraModMeta.TryReadDefaultData(root)
+                ?? (PenumbraModMeta.HasReadableManifest(root)
+                        ? (new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), new List<object>())
+                        : throw new InvalidDataException($"Could not read the redirects of {root}."));
+        if (data.Files.TryGetValue(rel, out var at) && string.Equals(at.Replace('\\', '/'), rel, StringComparison.OrdinalIgnoreCase))
+            return changed;
+
+        data.Files[rel] = rel;
+        PenumbraModMeta.WriteRedirects(root, Path.GetFileName(root), data.Files, manipulations: data.Manipulations);
+        return true;
+    }
 
     /// <summary>
     /// What the mod is called: the item, then the body it was refitted onto. Both halves matter — the same coat
@@ -70,7 +117,12 @@ internal sealed class RefitModService(PenumbraBridge penumbra, CompositorService
     /// <c>ModCreationService</c> does it, because <c>AddMod</c> is asynchronous and a settings write that lands while
     /// Penumbra is still building the mod is discarded.
     /// </summary>
-    internal Result Ensure(string itemName, string bodyName)
+    /// <param name="fill">
+    /// Writes a NEW mod's contents before Penumbra is told about it, so it is loaded whole rather than reloaded half
+    /// way through registering. Not called for a mod that was found; the caller fills that and reloads it.
+    /// </param>
+    /// <param name="description">The manifest's description; a refit's when null.</param>
+    internal Result Ensure(string itemName, string bodyName, Action<string>? fill = null, string? description = null)
     {
         if (penumbra.GetModDirectory() is not { Length: > 0 } modsRoot)
             return new(false, "", "", Loc.Localize("Service.NoPenumbraDir", "Penumbra's mod directory isn't available."));
@@ -99,8 +151,9 @@ internal sealed class RefitModService(PenumbraBridge penumbra, CompositorService
         try
         {
             Directory.CreateDirectory(root);
-            WriteScaffold(root, modName, string.Format(Loc.Localize("Refit.Mod.Description.Fmt",
+            WriteScaffold(root, modName, description ?? string.Format(Loc.Localize("Refit.Mod.Description.Fmt",
                 "{0}, refitted by Proteus."), itemName));
+            fill?.Invoke(root);
         }
         catch (Exception ex)
         {
@@ -123,7 +176,7 @@ internal sealed class RefitModService(PenumbraBridge penumbra, CompositorService
         pending = new Pending(dirName, modName, Environment.TickCount64 + ActivateTimeoutMs);
         nextAttempt = 0;
         log.Information("[Proteus] made refit mod {0} for {1}", dirName, want);
-        return new(true, root, dirName, "");
+        return new(true, root, dirName, "", Made: true);
     }
 
     /// <summary>

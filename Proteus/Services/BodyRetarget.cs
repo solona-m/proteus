@@ -415,7 +415,9 @@ internal static partial class BodyRetarget
         }
 
         /// <param name="held">Vertices of the parts the user has held; null or empty for none.</param>
-        public static Sets From(ModelParts garment, IReadOnlySet<int>? held = null)
+        /// <param name="swappedSkin">The garment's skin meshes the swap will replace (see <see cref="SwappedSkinMeshes"/>):
+        /// cloth welded to them is cloth, not part of them. See the body.</param>
+        public static Sets From(ModelParts garment, IReadOnlySet<int>? held = null, IReadOnlySet<int>? swappedSkin = null)
         {
             int vc = garment.Positions.Length / 3;
             var vertAt = new Vec3[vc];
@@ -424,16 +426,52 @@ internal static partial class BodyRetarget
 
             var nodeOf = MeshMath.WeldByPosition(vertAt, out int nodeCount);
 
+            var skinVert = new bool[vc];
+            var swappedVert = new bool[vc];
+            foreach (var part in garment.Parts)
+            {
+                if (part.Island >= 0 || !SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+                bool swapped = swappedSkin?.Contains(part.Mesh) == true;
+                foreach (int v in part.Triangles)
+                    if (v >= 0 && v < vc)
+                    {
+                        skinVert[v] = true;
+                        if (swapped) swappedVert[v] = true;
+                    }
+            }
+
+            // Cloth welded to the skin it meets is one node with it, and a node with skin in it is skin: laid onto the
+            // new body, never pushed out. Right while that skin is drawn — the two must not part. But skin the swap
+            // replaces leaves nothing for the cloth to be welded to, and it went on being treated as skin: the Pioneer's
+            // Bottoms' hem shares its corners with the vanilla strip under it, so the hem was laid flat onto Neolithe's
+            // rounder buttock and its edges sank 5 mm in between — a slit seen in game. There, the cloth's points get a
+            // node of their own. Only there: a node that also holds skin the swap keeps — a heeled shoe's own foot, the
+            // skin of a slot nobody is resizing — stays fused, or the seam to that skin would open.
+            if (swappedSkin is { Count: > 0 })
+            {
+                var swappedNode = new bool[nodeCount];
+                var keptNode = new bool[nodeCount];
+                for (int v = 0; v < vc; v++)
+                {
+                    if (swappedVert[v]) swappedNode[nodeOf[v]] = true;
+                    else if (skinVert[v]) keptNode[nodeOf[v]] = true;
+                }
+                var clothNodeOf = new Dictionary<int, int>();
+                for (int v = 0; v < vc; v++)
+                {
+                    int n = nodeOf[v];
+                    if (skinVert[v] || !swappedNode[n] || keptNode[n]) continue;
+                    if (!clothNodeOf.TryGetValue(n, out int own)) clothNodeOf[n] = own = nodeCount++;
+                    nodeOf[v] = own;
+                }
+            }
+
             // Which nodes are the garment's own body mesh. Worked out BEFORE the seam lock below, because that lock
             // must never fuse skin to cloth: the two passes are handed opposite node lists, and a node that is both
             // would have to be in both.
             var isSkin = new bool[nodeCount];
-            foreach (var part in garment.Parts)
-            {
-                if (part.Island >= 0 || !SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
-                foreach (int v in part.Triangles)
-                    if (v >= 0 && v < vc) isSkin[nodeOf[v]] = true;
-            }
+            for (int v = 0; v < vc; v++)
+                if (skinVert[v]) isSkin[nodeOf[v]] = true;
 
             // Which separately-moving piece each vertex belongs to. The reader has already split each submesh into
             // islands by position, so its islands ARE the pieces that can crack apart from one another; a vertex in no
@@ -621,7 +659,15 @@ internal static partial class BodyRetarget
                                  bool pushOut = true, IReadOnlySet<int>? held = null, bool replaceSkin = false,
                                  bool clearBody = false, IReadOnlyList<IReadOnlyCollection<int>>? keepShape = null)
     {
-        var sets = Sets.From(garment, held);
+        // With the skin replaced, the garment's OWN slot body is drawn after all — Rebuild embeds that very mesh in the
+        // garment, so it is what the cloth ends up lying against. Asking for the swap is not enough: Rebuild only swaps
+        // a slot that carries its target body's FILE, so a pair built without one keeps the author's skin, and
+        // everything that depends on the swap must agree with it.
+        bool ownSlotSwapped = replaceSkin && garmentSlot != null
+                           && pairs.Any(p => string.Equals(p.Slot, garmentSlot, StringComparison.Ordinal)
+                                          && p.TargetModel != null);
+
+        var sets = Sets.From(garment, held, ownSlotSwapped ? SwappedSkinMeshes(garment, pairs) : null);
         var source = SourceBody.Build(pairs);
 
         var nodeDelta = new Vec3[sets.NodeCount];
@@ -633,18 +679,10 @@ internal static partial class BodyRetarget
         var layers = Tuned.NoLayerKnit ? null : LayerPartners(sets, snapped);
         if (layers != null) KnitLayers(sets, layers, nodeDelta);
 
-        // With the skin replaced, the garment's OWN slot body is drawn after all — Rebuild embeds that very mesh in the
-        // garment, so it is what the cloth ends up lying against. Asking for the swap is not enough: Rebuild only swaps
-        // a slot that carries its target body's FILE, so a pair built without one keeps the author's skin, and
-        // everything that depends on the swap must agree with it.
-        bool ownSlotSwapped = replaceSkin && garmentSlot != null
-                           && pairs.Any(p => string.Equals(p.Slot, garmentSlot, StringComparison.Ordinal)
-                                          && p.TargetModel != null);
-
         // Before the push-out, so the push-out measures cloth against the skin as it will actually be drawn.
         var carried = (Vec3[])nodeDelta.Clone();
         int laid = replaceSkin ? LaySkin(sets, source, pairs, nodeDelta) : 0;
-        if (ownSlotSwapped && laid > 0 && !Tuned.NoFollow) FollowLaidSkin(garment, sets, carried, nodeDelta, snapped);
+        if (ownSlotSwapped && laid > 0 && !Tuned.NoFollow) FollowLaidSkin(garment, sets, carried, nodeDelta, snapped, pairs);
 
         // Hard pieces whole, before the push-out measures them against the skin.
         var scales = new float[keepShape?.Count ?? 0];
@@ -722,6 +760,11 @@ internal static partial class BodyRetarget
             }
             pushed += ClearFaces(faceCheck, nodeDelta, pushedBy, ref worstPush, stay);
         }
+
+        // A hem lying on the skin whose edges the new, rounder body comes up through between its corners — see LiftRims.
+        // Only with the skin swapped: then the body's own skin is drawn under the rim, where the author's sculpted skin
+        // is not, and that is the case it was measured on (the Pioneer's Bottoms onto Neolithe).
+        if (drawn != null && ownSlotSwapped && !Tuned.NoRimLift) pushed += LiftRims(sets, drawn, nodeDelta, stay);
 
         // Never write a NaN into the file: one spreads through every smoothing pass it touches, and the model it lands in
         // draws nothing there and threw every frame from the Parts preview. A node with no finite answer stays put.

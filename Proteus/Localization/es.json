@@ -2435,10 +2435,6 @@
     "message": "Pintar sobre el modelo en esta ventana en lugar de sobre tu personaje.",
     "description": ""
   },
-  "Parts.Live.Pick.Tip": {
-    "message": "Haz clic en una prenda de tu personaje para abrir aquí su mod y su modelo.",
-    "description": ""
-  },
   "Parts.Live.Hint": {
     "message": "Pinta sobre tu personaje. Mantén Alt para mover la cámara. Cada trazo se guarda al soltar.",
     "description": ""
@@ -3651,10 +3647,6 @@
     "message": "Vanilla gear",
     "description": ""
   },
-  "Parts.Vanilla.OnlyRetarget": {
-    "message": "El equipo vanilla no tiene archivo de mod. Ajústalo primero para crear uno que usen las demás herramientas.",
-    "description": ""
-  },
   "Parts.Vanilla.Open.Fmt": {
     "message": "{0} (vanilla)",
     "description": ""
@@ -3695,8 +3687,20 @@
     "message": "This mod",
     "description": ""
   },
-"Parts.Vanilla.Worn.Tip": {
-    "message": "Puesto pero sin mod. Ábrelo para ajustarlo a tu cuerpo como un mod nuevo.",
+  "Parts.Vanilla.Worn.Tip": {
+    "message": "Puesto pero sin mod. Al abrirlo se copia en un mod nuevo que puedes editar. Con Body size seleccionado, se abre para ajustarlo.",
+    "description": ""
+  },
+  "Parts.Vanilla.Editing.Fmt": {
+    "message": "{0} está abierto en el mod \"{1}\", una copia del original del juego que se ve igual hasta que lo cambies.",
+    "description": ""
+  },
+  "Parts.Vanilla.ModDescription.Fmt": {
+    "message": "{0}, copiado del juego por Proteus para editarlo.",
+    "description": ""
+  },
+  "Parts.Vanilla.EditTool.Tip": {
+    "message": "El equipo vanilla no tiene archivo de mod, así que elegir esto primero lo copia en un mod nuevo.",
     "description": ""
   },
   "Parts.Vanilla.WornSuffix": {

@@ -2435,10 +2435,6 @@
     "message": "Auf dem Modell in diesem Fenster malen statt auf deinem Charakter.",
     "description": ""
   },
-  "Parts.Live.Pick.Tip": {
-    "message": "Klicke ein Kleidungsstück an deinem Charakter an, um seine Mod und sein Modell hier zu öffnen.",
-    "description": ""
-  },
   "Parts.Live.Hint": {
     "message": "Male auf deinem Charakter. Halte Alt, um die Kamera zu bewegen. Jeder Strich wird beim Loslassen gespeichert.",
     "description": ""
@@ -3651,10 +3647,6 @@
     "message": "Vanilla gear",
     "description": ""
   },
-  "Parts.Vanilla.OnlyRetarget": {
-    "message": "Vanilla-Ausrüstung hat keine Mod-Datei. Zuerst anpassen, um eine für die anderen Werkzeuge zu erstellen.",
-    "description": ""
-  },
   "Parts.Vanilla.Open.Fmt": {
     "message": "{0} (Vanilla)",
     "description": ""
@@ -3695,8 +3687,20 @@
     "message": "This mod",
     "description": ""
   },
-"Parts.Vanilla.Worn.Tip": {
-    "message": "Getragen, nicht gemoddet. Öffnen, um es als neue Mod auf deinen Körper anzupassen.",
+  "Parts.Vanilla.Worn.Tip": {
+    "message": "Getragen, nicht gemoddet. Beim Öffnen wird es in eine neue Mod kopiert, die du bearbeiten kannst. Ist Body size ausgewählt, wird es stattdessen zum Anpassen geöffnet.",
+    "description": ""
+  },
+  "Parts.Vanilla.Editing.Fmt": {
+    "message": "{0} ist in der Mod „{1}“ geöffnet – eine Kopie des Originals aus dem Spiel, die gleich aussieht, bis du sie änderst.",
+    "description": ""
+  },
+  "Parts.Vanilla.ModDescription.Fmt": {
+    "message": "{0}, von Proteus aus dem Spiel kopiert, um bearbeitet zu werden.",
+    "description": ""
+  },
+  "Parts.Vanilla.EditTool.Tip": {
+    "message": "Vanilla-Ausrüstung hat keine Mod-Datei, daher wird sie dafür zuerst in eine neue Mod kopiert.",
     "description": ""
   },
   "Parts.Vanilla.WornSuffix": {

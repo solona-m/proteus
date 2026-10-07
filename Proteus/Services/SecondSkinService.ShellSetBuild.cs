@@ -1591,16 +1591,24 @@ public sealed partial class SecondSkinService
         {
             int variant;
             string source;
-            if (h.KnownVariant is { } known)
+            // The drawn slot wins over the item sheet: it is the variant the game builds the material path from. A
+            // carrier worn under another variant than the sheet's (the game asked for e5521 v0001 while we published
+            // v0003) never draws its materials, so the tree walk below can never correct it.
+            var worn = equippedSlotVariants?.FirstOrDefault(s => s.SetId == h.SetId
+                           && string.Equals(s.Suffix, h.Slot, StringComparison.OrdinalIgnoreCase));
+            // Variant 0 is no reading (never a real item variant): fall back to the sheet rather than publish under v0000.
+            if (worn is { SetId: > 0, Variant: > 0 } drawn)
+            {
+                variant = drawn.Variant;
+                source = "drawn slot";
+                if (h.KnownVariant is { } sheet && sheet != drawn.Variant)
+                    service.log.Information("[Proteus] host {0}{1:D4}/{2}: drawn as variant {3}, not the item sheet's {4} "
+                                  + "— going with the drawn one", h.Prefix, h.SetId, h.Slot, drawn.Variant, sheet);
+            }
+            else if (h.KnownVariant is { } known)
             {
                 variant = known;
                 source = "item sheet";
-            }
-            else if (equippedSlotVariants?.FirstOrDefault(s => s.SetId == h.SetId
-                         && string.Equals(s.Suffix, h.Slot, StringComparison.OrdinalIgnoreCase)) is { SetId: > 0 } worn)
-            {
-                variant = worn.Variant;
-                source = "drawn slot";
             }
             else return null;
 

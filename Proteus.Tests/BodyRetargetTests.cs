@@ -1067,6 +1067,43 @@ public class BodyRetargetTests
         return folded;
     }
 
+    [Fact]
+    public void Cloth_welded_to_skin_that_is_swapped_out_is_cloth()
+    {
+        // A hem whose corner the author welded to the skin under it, as the Pioneer's Bottoms' is to its vanilla strip:
+        // one skin triangle and one cloth triangle sharing a point. Fused, the hem's corner was skin — laid flat onto the
+        // new body and never pushed out — though the skin it was fused to is thrown away by the swap.
+        float[] pos = [0f, 0f, 0f, 0.01f, 0f, 0f, 0f, 0.01f, 0f,
+                       0.01f, 0f, 0f, 0.02f, 0f, 0f, 0.02f, 0.01f, 0f];
+        float[] nrm = [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1];
+        var garment = BuildTwoPart(pos, nrm, [0, 1, 2], SkinMaterial, [3, 4, 5], ClothMaterial);
+
+        var kept = BodyRetarget.Sets.From(garment);
+        Assert.Equal(kept.NodeOf[1], kept.NodeOf[3]);
+        Assert.Contains(kept.NodeOf[3], kept.SkinNodes);
+
+        var apart = BodyRetarget.Sets.From(garment, swappedSkin: new HashSet<int> { 0 });
+        Assert.NotEqual(apart.NodeOf[1], apart.NodeOf[3]);
+        Assert.Contains(apart.NodeOf[1], apart.SkinNodes);
+        Assert.Contains(apart.NodeOf[3], apart.ClothNodes);
+    }
+
+    [Fact]
+    public void Cloth_welded_to_skin_the_swap_keeps_stays_welded()
+    {
+        // The same weld, but the skin mesh is one the swap leaves in (a heeled shoe's foot, a slot nobody resizes):
+        // parted from it, the cloth would be pushed out and the seam to that skin would open.
+        float[] pos = [0f, 0f, 0f, 0.01f, 0f, 0f, 0f, 0.01f, 0f,
+                       0.01f, 0f, 0f, 0.02f, 0f, 0f, 0.02f, 0.01f, 0f];
+        float[] nrm = [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1];
+        var garment = BuildTwoPart(pos, nrm, [0, 1, 2], SkinMaterial, [3, 4, 5], ClothMaterial);
+
+        // Another mesh is swapped; this skin (mesh 0) is not.
+        var sets = BodyRetarget.Sets.From(garment, swappedSkin: new HashSet<int> { 1 });
+        Assert.Equal(sets.NodeOf[1], sets.NodeOf[3]);
+        Assert.Contains(sets.NodeOf[3], sets.SkinNodes);
+    }
+
     /// <summary>A flat two-triangle quad of side <paramref name="side"/> in the XY plane, facing +Z.</summary>
     private static ModelParts Quad(float side)
     {

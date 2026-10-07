@@ -243,21 +243,16 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     /// <summary>Wash opacity at full wind: enough to read, not so much the garment underneath disappears.</summary>
     private const float WashOpacity = 0.45f;
 
-    /// <summary>Keep pick mode live for this frame: the next click on a worn garment names its file.</summary>
-    /// <param name="includeGameGear">
-    /// Offer the gear the GAME supplies as well as the gear a mod does. Only the refit can do anything with a piece
-    /// that has no mod behind it, so everywhere else these stay unhoverable rather than clickable and then refused.
-    /// </param>
-    public void ArmPick(string penumbraModsRoot, Action<string> picked, bool includeGameGear = false)
+    /// <summary>
+    /// Keep pick mode live for this frame: the next click on a worn garment names its file — a mod's, or for the
+    /// game's own gear its game path, which the Studio copies into a mod of its own to edit.
+    /// </summary>
+    public void ArmPick(string penumbraModsRoot, Action<string> picked)
     {
         pickArmedFrame = ImGui.GetFrameCount();
         modsRoot = penumbraModsRoot;
         onPicked = picked;
-        pickGameGear = includeGameGear;
     }
-
-    /// <summary>See <see cref="ArmPick"/>. Re-armed every frame, so it cannot outlive the tool that asked for it.</summary>
-    private bool pickGameGear;
 
     public void Update()
     {
@@ -929,8 +924,9 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
             // A model no mod redirects is the game's own, and then its resource name IS the game path — which is
             // both how it is recognised and the only handle anything downstream has on it.
             bool inMods = HatCompatService.InMods(file, modsRoot, out _, out _);
-            bool gameGear = !inMods && pickGameGear
-                         && file.StartsWith("chara/equipment/", StringComparison.OrdinalIgnoreCase);
+            bool gameGear = !inMods
+                         && (file.StartsWith("chara/equipment/", StringComparison.OrdinalIgnoreCase)
+                             || file.StartsWith("chara/accessory/", StringComparison.OrdinalIgnoreCase));
             if (!inMods && !gameGear) continue;
 
             var shapes = EnabledShapes(model, handle);
