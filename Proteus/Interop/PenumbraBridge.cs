@@ -579,8 +579,15 @@ public class PenumbraBridge : IDisposable
     /// any mod, and Penumbra forgets it on its own restart.
     /// </summary>
     public bool SetPlayerTemporaryMod(string tag, Dictionary<string, string> paths, int priority)
+        => GetPlayerCollectionId() is { } collection && SetTemporaryMod(tag, collection, paths, priority);
+
+    /// <summary>
+    /// <see cref="SetPlayerTemporaryMod"/> into a named collection. A caller that will take the mod down later keeps
+    /// the collection: the player's can change in between, and removing from the new one leaves the mod on the old.
+    /// </summary>
+    public bool SetTemporaryMod(string tag, Guid collection, Dictionary<string, string> paths, int priority)
     {
-        if (!IsAvailable || GetPlayerCollectionId() is not { } collection) return false;
+        if (!IsAvailable) return false;
         try
         {
             Interlocked.Exchange(ref lastOwnTemporaryModTick, Environment.TickCount64);   // before: the echo can be synchronous
@@ -592,15 +599,22 @@ public class PenumbraBridge : IDisposable
         catch (Exception ex) { log.Error(ex, "AddTemporaryMod failed"); return false; }
     }
 
-    /// <summary>Remove a temporary mod added by <see cref="SetPlayerTemporaryMod"/>.</summary>
+    /// <summary>Remove a temporary mod from the player's collection as it is NOW — see <see cref="RemoveTemporaryMod"/>.</summary>
     public bool RemovePlayerTemporaryMod(string tag, int priority)
+        => GetPlayerCollectionId() is { } collection && RemoveTemporaryMod(tag, collection, priority);
+
+    /// <summary>
+    /// Remove a temporary mod from the collection <see cref="SetTemporaryMod"/> put it in. True when it is gone, which
+    /// includes a collection deleted since: a caller that kept the collection would otherwise retry it forever.
+    /// </summary>
+    public bool RemoveTemporaryMod(string tag, Guid collection, int priority)
     {
-        if (!IsAvailable || GetPlayerCollectionId() is not { } collection) return false;
+        if (!IsAvailable) return false;
         try
         {
             Interlocked.Exchange(ref lastOwnTemporaryModTick, Environment.TickCount64);
             var ec = OnMainThread(() => removeTemporaryMod.Invoke(tag, collection, priority), WriteStats);
-            return ec is PenumbraApiEc.Success or PenumbraApiEc.NothingChanged;
+            return ec is PenumbraApiEc.Success or PenumbraApiEc.NothingChanged or PenumbraApiEc.CollectionMissing;
         }
         catch (Exception ex) { log.Error(ex, "RemoveTemporaryMod failed"); return false; }
     }

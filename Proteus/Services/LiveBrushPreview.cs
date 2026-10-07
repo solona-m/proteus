@@ -28,16 +28,32 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
 
     private readonly Queue<string> files = new();
     private Task? inFlight;
+
+    /// <summary>
+    /// Guards <see cref="generation"/>, <see cref="endedAt"/> and <see cref="holding"/>. A push applies on the
+    /// framework thread, but the unload can call <see cref="End"/> from another: without it a push could pass the
+    /// <see cref="endedAt"/> check, End then find nothing to remove, and the push put its redirect on for good.
+    /// </summary>
+    private readonly object gate = new();
+
     private int generation;
 
     /// <summary>The last generation <see cref="End"/> took down; a push at or below it must not apply.</summary>
     private int endedAt;
 
+    /// <summary>
+    /// Every collection a redirect was put into and not yet taken out of, each from just before it is asked for. Removed
+    /// from THOSE collections: the player's can change under a preview (a zone's assignment, a design), and removing
+    /// from the new one left the old at <see cref="Priority"/> until the game restarted. One that will not let go stays
+    /// here, and every push and End tries it again.
+    /// </summary>
+    private readonly HashSet<Guid> holding = [];
+
     /// <summary>A preview is being written or applied.</summary>
     public bool Busy => inFlight is { IsCompleted: false };
 
-    /// <summary>A temporary redirect is in place and has to be taken down.</summary>
-    public bool Active { get; private set; }
+    /// <summary>A temporary redirect may be in place and has to be taken down.</summary>
+    public bool Active { get { lock (gate) return holding.Count > 0; } }
 
     /// <summary>Glamourer could not reload gear in place; the caller should fall back to redrawing.</summary>
     public bool Unsupported { get; private set; }
@@ -61,7 +77,8 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
     public bool Push(byte[] model, IReadOnlyCollection<string> gamePaths, bool customizePart)
     {
         if (Busy || gamePaths.Count == 0) return false;
-        int gen = ++generation;
+        int gen;
+        lock (gate) gen = ++generation;
         var file = Path.Combine(Dir, $"{Environment.ProcessId}-{gen:D6}.mdl");
 
         inFlight = Task.Run(() =>
@@ -73,11 +90,20 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
 
                 bool applied = Plugin.Framework.RunOnFrameworkThread(() =>
                 {
-                    // Taken down while this was being written: applying it now would put back what End removed.
-                    if (gen <= endedAt) return false;
-                    var map = gamePaths.ToDictionary(p => p, _ => file, StringComparer.OrdinalIgnoreCase);
-                    if (!penumbra.SetPlayerTemporaryMod(Tag, map, Priority)) return false;
-                    Active = true;
+                    lock (gate)
+                    {
+                        // Taken down while this was being written: applying it now would put back what End removed.
+                        if (gen <= endedAt) return false;
+                        if (penumbra.GetPlayerCollectionId() is not { } collection) return false;
+
+                        // The player moved to another collection since an earlier push: those still have the old preview.
+                        holding.RemoveWhere(c => c != collection && penumbra.RemoveTemporaryMod(Tag, c, Priority));
+
+                        // Recorded before asking, so End removes it even if Penumbra took it and still reported failure.
+                        holding.Add(collection);
+                        var map = gamePaths.ToDictionary(p => p, _ => file, StringComparer.OrdinalIgnoreCase);
+                        if (!penumbra.SetTemporaryMod(Tag, collection, map, Priority)) return false;
+                    }
 
                     // The gear reloads in place to pick the new file up — see ReloadGearInPlace.
                     if (!compositor.ReloadGearInPlace())
@@ -110,13 +136,34 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
     /// <param name="redraw">Redraw afterwards, the only sure way to replace the game's cached copy. False on teardown.</param>
     public void End(bool redraw)
     {
-        // Not waited on (the push finishes on this framework thread); the generation mark makes it stand down.
-        endedAt = generation;
-        if (!Active) return;
-        Active = false;
+        // Not waited on (the push finishes on the framework thread, which may be this one); the generation mark makes
+        // it stand down, and the gate makes the mark and the redirect it may already have added one reading.
+        Guid[] held;
+        int mark;
+        lock (gate)
+        {
+            mark = endedAt = generation;
+            if (holding.Count == 0) return;
+            held = [.. holding];
+        }
 
-        penumbra.RemovePlayerTemporaryMod(Tag, Priority);
-        if (redraw) compositor.RedrawForChangedModel();
+        var gone = held.Where(c => penumbra.RemoveTemporaryMod(Tag, c, Priority)).ToList();
+        foreach (var stuck in held.Except(gone))
+            log.Warning("[Proteus] live brush: Penumbra did not take the preview down from collection {0}", stuck);
+
+        // A push begun since may have added its own redirect after those removals; then it is still Active, and its
+        // file is in use.
+        bool allGone;
+        lock (gate)
+        {
+            if (generation != mark) return;
+            holding.ExceptWith(gone);
+            allGone = holding.Count == 0;
+        }
+        if (gone.Count > 0 && redraw) compositor.RedrawForChangedModel();
+
+        // A collection that would not let go still points at the preview files, so they stay; the next End tries again.
+        if (!allGone) return;
 
         lock (files)
             while (files.Count > 0) TryDelete(files.Dequeue());
