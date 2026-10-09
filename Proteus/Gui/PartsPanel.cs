@@ -1354,15 +1354,7 @@ public sealed class PartsPanel
             if (keepShapeParts.TryGetValue(ViewportKey, out var set)) return set;
             // Not remembered until there is a model to look at, or a model still loading would start with nothing.
             if (parts is not { } model) return new HashSet<string>(StringComparer.Ordinal);
-            set = new HashSet<string>(BodyRetarget.HardPieces(model), StringComparer.Ordinal);
-            // A row whose pieces are ALL hard is ticked as the row, the way a user ticking it would leave it.
-            foreach (var row in model.Parts.Where(p => p.Island < 0))
-            {
-                var pieces = model.Parts.Where(p => p.Island >= 0 && p.Mesh == row.Mesh && p.Submesh == row.Submesh).ToList();
-                if (pieces.Count == 0 || !pieces.All(p => set.Contains(p.Label))) continue;
-                foreach (var piece in pieces) set.Remove(piece.Label);
-                set.Add(row.Label);
-            }
+            set = RefitCore.DefaultKeepShape(model);
             keepShapeParts[ViewportKey] = set;
             return set;
         }

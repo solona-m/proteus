@@ -18,6 +18,7 @@ public class PenumbraBridge : IDisposable
     private readonly GetModList getModList;
     private readonly GetModDirectory getModDirectory;
     private readonly GetCollectionForObject getCollectionForObject;
+    private readonly GetCollections getCollections;
     private readonly GetCurrentModSettingsWithTemp getCurrentModSettings;
     private readonly GetAllModSettings getAllModSettings;
     private readonly RemoveTemporaryModSettings removeTemporaryModSettings;
@@ -84,6 +85,7 @@ public class PenumbraBridge : IDisposable
         getModList = new GetModList(pluginInterface);
         getModDirectory = new GetModDirectory(pluginInterface);
         getCollectionForObject = new GetCollectionForObject(pluginInterface);
+        getCollections = new GetCollections(pluginInterface);
         getCurrentModSettings = new GetCurrentModSettingsWithTemp(pluginInterface);
         getAllModSettings = new GetAllModSettings(pluginInterface);
         removeTemporaryModSettings = new RemoveTemporaryModSettings(pluginInterface);
@@ -188,6 +190,14 @@ public class PenumbraBridge : IDisposable
             return string.IsNullOrEmpty(dir) ? null : dir;
         }
         catch (Exception ex) { log.Error(ex, "GetModDirectory failed"); return null; }
+    }
+
+    /// <summary>Every collection Penumbra has, id to name, or null when unavailable.</summary>
+    public Dictionary<Guid, string>? GetCollections()
+    {
+        if (!IsAvailable) return null;
+        try { return getCollections.Invoke(); }
+        catch (Exception ex) { log.Error(ex, "GetCollections failed"); return null; }
     }
 
     /// <summary>Returns the effective collection GUID for the local player (object index 0).</summary>

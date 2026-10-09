@@ -25,13 +25,13 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1141;
+    public const int BuildNumber = 1147;
 
     /// <summary>
     /// Which set of release notes is current. Raise it when a release has something new to say: the window
     /// then opens once more for everyone whose <see cref="Configuration.WhatsNewShown"/> is below it.
     /// </summary>
-    public const int CurrentWhatsNew = 1;
+    public const int CurrentWhatsNew = 2;
 
     /// <summary>
     /// When this assembly was compiled, as MM-dd HH:mm:ss, baked in by the csproj: Dalamud loads plugins from a stream,
@@ -68,6 +68,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly Gui.PartViewport partViewport;
     private readonly Gui.PartsPanel partsPanel;
     private readonly HatCompatWatcher hatCompat;
+    private readonly AutoRefitWatcher autoRefit;
     private readonly Gui.ProteusFonts fonts;
     private readonly Localization.LocSetup loc;
     private readonly ColorTableHighlighter highlighter;
@@ -214,10 +215,14 @@ public sealed class Plugin : IDalamudPlugin
         // A service, not part of the panel: it subscribes to the hairstyle change so it works with the window shut.
         hatCompat = new HatCompatWatcher(compositor, penumbra, glamourer, config, log);
 
+        // The same: gear put on is refitted onto the collection's body whether or not any window is open.
+        autoRefit = new AutoRefitWatcher(compositor, penumbra, glamourer, uvRemap,
+                                         path => textureLoader.LoadRawFile(null, path), config, log);
+
         statusWindow = new StatusWindow(compositor, discovery, penumbra, config, designBindings,
             presets, editRouter, uvMapDl, uvRemap,
             modCreation, onionImport, contentImport, luminisImport, emissiveImport, eyeImport, modExport,
-            textureLoader, partsPanel, hatCompat,
+            textureLoader, partsPanel, hatCompat, autoRefit,
             new LogExportService(capture, compositor, penumbra, config, dataDir));
 
         liveMesh = new Gui.LiveMeshOverlay(ObjectTable, DataManager, penumbra, ChatGui, log);
@@ -499,6 +504,7 @@ public sealed class Plugin : IDalamudPlugin
         designBindings.Dispose();
         uvMapDl.Dispose();
         effectsDl.Dispose();
+        autoRefit.Dispose();   // before the compositor and the bridges, whose events it unsubscribes from
         hatCompat.Dispose();   // before the compositor: it unsubscribes from that object's event
         compositor.Dispose();
         glamourer.Dispose();

@@ -269,6 +269,25 @@ public class Configuration : IPluginConfiguration
     public int RetargetGuideSeen { get; set; }
 
     /// <summary>
+    /// Refit chest, legs, hands and feet gear onto the collection's preferred body as it is equipped — see
+    /// <see cref="Services.AutoRefitWatcher"/>. Off by default: it writes into the gear's own mod.
+    /// </summary>
+    public bool AutoRefitEnabled { get; set; }
+
+    /// <summary>
+    /// With <see cref="AutoRefitEnabled"/>, refit the game's own gear too, into a mod of Proteus's own per item. A
+    /// separate switch because every unmodded piece put on makes a new mod.
+    /// </summary>
+    public bool AutoRefitVanilla { get; set; }
+
+    /// <summary>
+    /// The body and sizes gear is refitted onto, per Penumbra collection, keyed by the collection's id
+    /// (<c>Guid.ToString("D")</c>) — a collection is a character's look, and two characters can wear different bodies.
+    /// A collection with no entry is left alone. OrdinalIgnoreCase, which survives deserialization (populated in place).
+    /// </summary>
+    public Dictionary<string, AutoRefitPreference> AutoRefitByCollection { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// The Glamourer design whose binding was active when the plugin last ran, so a reload can pick it back up
     /// (Glamourer signals nothing for an already-applied design). Null = nothing active. Restored only after
     /// <c>DesignBindingService.TryBootRestore</c> verifies it.
@@ -460,4 +479,35 @@ public class Configuration : IPluginConfiguration
 
     public void Save()
         => Plugin.PluginInterface.SavePluginConfig(this);
+}
+
+/// <summary>One collection's preferred body for the automatic refit (<see cref="Configuration.AutoRefitByCollection"/>).</summary>
+[Serializable]
+public class AutoRefitPreference
+{
+    /// <summary>The collection's name when the preference was set — shown when the collection itself is gone.</summary>
+    public string CollectionName { get; set; } = "";
+
+    /// <summary>The body mod refitted onto, by folder. Empty means nothing is refitted.</summary>
+    public string BodyDir { get; set; } = "";
+
+    /// <summary>The chest size refitted onto. Hands and feet follow it (see <c>AutoRefitDecisions.Companion</c>).</summary>
+    public BodySizeRef? Chest { get; set; }
+
+    /// <summary>The legs size refitted onto.</summary>
+    public BodySizeRef? Legs { get; set; }
+}
+
+/// <summary>
+/// One body size, remembered so it can be found again at ANOTHER race than the one it was picked at: the settings list
+/// the player's own race, while a refit may run at the race a garment is baked to, where the file differs but the
+/// option is the same. The file is tried first, then the option by group, heading and name.
+/// </summary>
+[Serializable]
+public class BodySizeRef
+{
+    public string Rel { get; set; } = "";
+    public string Group { get; set; } = "";
+    public string Section { get; set; } = "";
+    public string Name { get; set; } = "";
 }

@@ -51,7 +51,7 @@ internal static class BodySizeMatch
     /// and Neobelly chests differ only at the belly; a top that does not reach the belly scores them identically, and
     /// either gives the same refit where the garment is, so they are one answer rather than a tie to agonise over.
     /// </summary>
-    private const float SameAnswer = 0.01f;
+    internal const float SameAnswer = 0.01f;
 
     /// <summary>How far to look for a candidate's surface from a probe; further than this is simply "far".</summary>
     private const float Reach = 0.05f;
@@ -430,6 +430,137 @@ internal static class BodySizeMatch
     /// time as well as path, so editing a body mod during a session is picked up.
     /// </summary>
     private static readonly ConcurrentDictionary<(string Path, long Length, long Ticks), Candidate?> Cache = new();
+
+    // ── which body FAMILY: the cheap reading ────────────────────────────────
+
+    /// <summary>
+    /// The garment's body-skin points as packed position keys, sorted — the input to <see cref="Shared"/>. Empty when
+    /// the garment has no body mesh.
+    /// </summary>
+    internal static long[] ProbeKeys(ModelParts garment)
+    {
+        var keys = Probes(garment).Select(p => Pack(MeshMath.PositionKey(BodyRetarget.ToVec(p), BodyRetarget.SnapPerMetre)))
+                                  .ToArray();
+        Array.Sort(keys);
+        return keys;
+    }
+
+    /// <summary>
+    /// <see cref="Shared"/>, read off the body as <see cref="Rank"/> indexes it rather than off its bare keys. Costs a
+    /// little more per body than <see cref="Shared"/>, and is for a mod that is about to be ranked anyway: the body is
+    /// read once, and the ranking that follows finds it cached instead of reading every size a second time.
+    /// </summary>
+    internal static float SharedIndexed(long[] probeKeys, string path)
+    {
+        if (probeKeys.Length == 0 || Load(path) is not { } body) return 0f;
+        int hits = 0;
+        foreach (long k in probeKeys)
+            if (body.Snap.Contains(Unpack(k))) hits++;
+        return (float)hits / probeKeys.Length;
+    }
+
+    /// <summary>
+    /// The share of a garment's body-skin points lying EXACTLY on a vertex of the body at <paramref name="path"/>.
+    /// <para/>
+    /// A different question from <see cref="Rank"/>'s, and far cheaper. Rank tells sizes of ONE body apart, which
+    /// needs every size indexed for distance queries — several megabytes each, and Neolithe has 114 chests. This tells
+    /// body FAMILIES apart: an author copies the body mesh into the garment, and every size of a body shares most of
+    /// its mesh (arms, back, shoulders), so any one size of the family the garment was cut from shares a large part of
+    /// its points exactly, while another body mod — another mesh altogether — shares next to none. Only a sorted array
+    /// of the body's vertex keys is kept, so a few sizes of every installed body cost little.
+    /// </summary>
+    /// <param name="content">Identifies the body's skin geometry, so two copies of one body (a mod and its fork)
+    /// can be recognised as one.</param>
+    internal static float Shared(long[] probeKeys, string path, out string? content)
+    {
+        content = null;
+        if (probeKeys.Length == 0 || LoadKeys(path) is not { } body) return 0f;
+        content = body.Content;
+        int hits = 0;
+        foreach (long k in probeKeys)
+            if (Array.BinarySearch(body.Keys, k) >= 0) hits++;
+        return (float)hits / probeKeys.Length;
+    }
+
+    private sealed record SkinKeys(long[] Keys, string Content);
+
+    /// <summary>Per body file, its skin vertex keys. Small (a few hundred KB a body), so kept for the session.</summary>
+    private static readonly ConcurrentDictionary<(string Path, long Length, long Ticks), SkinKeys?> KeyCache = new();
+
+    /// <summary>
+    /// The same, by the file's CONTENT: a body mod and its fork ship the very same files under other names, and parsing
+    /// a model is what costs — hashing its bytes is a small fraction of that.
+    /// </summary>
+    private static readonly ConcurrentDictionary<string, SkinKeys?> KeysByContent = new(StringComparer.Ordinal);
+
+    private static SkinKeys? LoadKeys(string path)
+    {
+        try
+        {
+            var info = new FileInfo(path);
+            if (!info.Exists) return null;
+            return KeyCache.GetOrAdd((path, info.Length, info.LastWriteTimeUtc.Ticks), key =>
+            {
+                var bytes = File.ReadAllBytes(key.Path);
+                return KeysByContent.GetOrAdd(Convert.ToHexString(SHA256.HashData(bytes)), _ => ReadKeys(bytes));
+            });
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static SkinKeys? ReadKeys(byte[] bytes)
+    {
+        try
+        {
+            if (ModelPartReader.Read(bytes) is not { } model) return null;
+            int vc = model.Positions.Length / 3;
+            var keys = new HashSet<long>();
+            foreach (var part in model.Parts)
+            {
+                if (part.Island >= 0 || !SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+                foreach (int v in part.Triangles)
+                {
+                    if (v < 0 || v >= vc) continue;
+                    var p = new Vector3(model.Positions[v * 3], model.Positions[v * 3 + 1], model.Positions[v * 3 + 2]);
+                    keys.Add(Pack(MeshMath.PositionKey(BodyRetarget.ToVec(p), BodyRetarget.SnapPerMetre)));
+                }
+            }
+            var sorted = keys.ToArray();
+            Array.Sort(sorted);
+            string content = Convert.ToHexString(SHA256.HashData(MemoryMarshal.AsBytes(sorted.AsSpan())));
+            return new SkinKeys(sorted, content);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>A position key in one long: 21 bits an axis, which at 0.1 mm covers ±100 m.</summary>
+    private static long Pack((int X, int Y, int Z) k)
+        => ((long)(k.X & 0x1FFFFF) << 42) | ((long)(k.Y & 0x1FFFFF) << 21) | (long)(k.Z & 0x1FFFFF);
+
+    /// <summary>The key <see cref="Pack"/> packed, sign restored.</summary>
+    private static (int X, int Y, int Z) Unpack(long k)
+    {
+        static int Axis(long v) => (int)((v & 0x1FFFFF) << 43 >> 43);
+        return (Axis(k >> 42), Axis(k >> 21), Axis(k));
+    }
+
+    /// <summary>
+    /// Forget every cached body once more than <paramref name="max"/> are held.
+    /// <para/>
+    /// An indexed body is several megabytes, and the automatic refit (<see cref="AutoRefitWatcher"/>) ranks the sizes of
+    /// whichever body mod each garment was made on, so over a long session the cache could hold several packs. Once it
+    /// holds more than <paramref name="max"/>, it is let go. All or nothing: the next ranking reads what it needs again.
+    /// </summary>
+    internal static void ForgetCandidatesBeyond(int max)
+    {
+        if (Cache.Count > max) Cache.Clear();
+    }
 
     private static Candidate? Load(string path)
     {
