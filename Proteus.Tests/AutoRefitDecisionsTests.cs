@@ -240,6 +240,22 @@ public class AutoRefitDecisionsTests
         Assert.Equal(AutoRefitDecisions.Skip.Unknown, AutoRefitDecisions.ShouldRefit(vanilla, true, true));
     }
 
+    [Fact]
+    public void Picking_original_or_the_author_s_size_after_a_refit_is_the_player_s_choice()
+    {
+        string[] refits = ["Rue+ — Large", "Rue+ — Medium"];
+
+        // Switched on here before, now "Original" (the game's model) or the author's own size: leave it.
+        Assert.True(AutoRefitDecisions.ChoseOtherwise(true, ["Original"], refits));
+        Assert.True(AutoRefitDecisions.ChoseOtherwise(true, ["Author M"], refits));
+        Assert.True(AutoRefitDecisions.ChoseOtherwise(true, null, refits));
+        // Still on one of the refits (any size, any case): not a choice against it.
+        Assert.False(AutoRefitDecisions.ChoseOtherwise(true, ["rue+ — medium"], refits));
+        Assert.False(AutoRefitDecisions.ChoseOtherwise(true, ["Author M", "Rue+ — Large"], refits));
+        // Never switched on in this collection — made in another one: it goes on.
+        Assert.False(AutoRefitDecisions.ChoseOtherwise(false, ["Author M"], refits));
+    }
+
     // ── settings ─────────────────────────────────────────────────────────────
 
     [Fact]
@@ -252,6 +268,7 @@ public class AutoRefitDecisionsTests
             BodyDir = "Rue",
             Chest = new BodySizeRef { Rel = "chest/m.mdl", Name = "M" },
         };
+        config.AutoRefitByCollection[id.ToString("D")].SwitchedOn.Add(AutoRefitDecisions.GroupKey("Old Thing", "Top"));
 
         var back = JsonConvert.DeserializeObject<Configuration>(JsonConvert.SerializeObject(config))!;
 
@@ -261,6 +278,7 @@ public class AutoRefitDecisionsTests
         Assert.Equal("Rue", pref!.BodyDir);
         Assert.Equal("chest/m.mdl", pref.Chest!.Rel);
         Assert.Null(pref.Legs);
+        Assert.Contains(AutoRefitDecisions.GroupKey("old thing", "TOP"), pref.SwitchedOn);
     }
 
     [Fact]

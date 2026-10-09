@@ -118,7 +118,10 @@ public sealed class AutoRefitWatcher : IDisposable
     /// <param name="Collection">The collection the piece was put on in — where the refit is switched on.</param>
     /// <param name="Resolved">The file the game draws, or null for the game's own gear.</param>
     /// <param name="ModRoot">The mod supplying it, or null for the game's own gear.</param>
-    private sealed record Request(string Slot, Worn Worn, string? Resolved, string? ModRoot, Guid Collection);
+    /// <param name="Forced">Asked for with "Refit what I'm wearing now": the player's earlier choice of another size is
+    /// overridden, since they asked for exactly that.</param>
+    private sealed record Request(string Slot, Worn Worn, string? Resolved, string? ModRoot, Guid Collection,
+                                 bool Forced = false);
 
     public AutoRefitWatcher(CompositorService compositor, PenumbraBridge penumbra, GlamourerBridge glamourer,
                             UVRemapService uvRemap, Func<string, byte[]?> readGameFile, Configuration config,
@@ -345,7 +348,7 @@ public sealed class AutoRefitWatcher : IDisposable
                 log.Debug("[Proteus] auto refit: {0} {1} left alone ({2})", slot, worn.GamePath, skip);
                 continue;
             }
-            Enqueue(new Request(slot, worn, resolved, root, collection.Id));
+            Enqueue(new Request(slot, worn, resolved, root, collection.Id, all));
         }
     }
 
@@ -466,10 +469,16 @@ public sealed class AutoRefitWatcher : IDisposable
     /// <summary>
     /// Run a short piece of a refit on the framework thread. Timed, because anything slow here is a frame the player
     /// sees drop: a hop over a few milliseconds is logged with what called it.
+    /// <para/>
+    /// After <see cref="Dispose"/> it throws <see cref="OperationCanceledException"/> instead. A refit's CPU work does not
+    /// stop for the cancel — the planner and the writer never look at the token — so a refit caught by an unload or a
+    /// dev reload would otherwise reload, select and redraw through bridges and a compositor already disposed; and the
+    /// switch-on after a save runs with no token at all.
     /// </summary>
     private Task<T> OnFramework<T>(Func<T> work, [System.Runtime.CompilerServices.CallerLineNumber] int line = 0)
-        => Plugin.Framework.RunOnFrameworkThread(() =>
+        => disposed ? throw new OperationCanceledException("auto refit disposed") : Plugin.Framework.RunOnFrameworkThread(() =>
         {
+            if (disposed) throw new OperationCanceledException("auto refit disposed");
             var clock = Stopwatch.StartNew();
             try { return work(); }
             finally
@@ -673,6 +682,15 @@ public sealed class AutoRefitWatcher : IDisposable
         string OptionFor(IEnumerable<(string Slot, BodyOption From, BodyOption To)> parts)
             => RefitCore.OptionName(targetMod.Name, new[] { target.Label }.Concat(parts.Select(p => p.To.Label)));
 
+        // A refit was switched on in this group before and the player has since picked something else — "Original", or
+        // one of the author's sizes. That choice reads as the piece newly put on; refitting would undo it.
+        if (!r.Forced && root != null && ChoseOtherwise(g, root, group))
+        {
+            log.Information("[Proteus] auto refit: {0} / {1} was switched away from its refit in this collection, left as "
+                          + "chosen", Path.GetFileName(root), group);
+            return;
+        }
+
         // Made before, and still there: put it back on rather than refitting again.
         string option = OptionFor(others);
         if (root != null && Existing(root, group, option, savePath))
@@ -826,6 +844,20 @@ public sealed class AutoRefitWatcher : IDisposable
             ? new AutoRefitDecisions.Pick(VanillaBodyCatalog.Key, options[0], Confidence.Exact, false)
             : null;
 
+    /// <summary>See <see cref="AutoRefitDecisions.ChoseOtherwise"/>: read from the collection's settings as gathered.</summary>
+    private static bool ChoseOtherwise(Gathered g, string root, string group)
+    {
+        string dir = Path.GetFileName(root);
+        bool before = g.Preference.SwitchedOn.Contains(AutoRefitDecisions.GroupKey(dir, group));
+        var ticked = g.Settings != null && g.Settings.TryGetValue(dir, out var s)
+            ? s.Options.FirstOrDefault(o => string.Equals(o.Key, group, StringComparison.OrdinalIgnoreCase)).Value
+            : null;
+        var record = BodyRetargetWriter.ReadRecord(root);
+        var refits = record?.Options.Where(e => string.Equals(record.GroupOf(e), group, StringComparison.OrdinalIgnoreCase))
+                                    .Select(e => e.Name) ?? [];
+        return AutoRefitDecisions.ChoseOtherwise(before, ticked, refits);
+    }
+
     /// <summary>Whether this exact refit is already saved in the mod and still offered by the group.</summary>
     private static bool Existing(string root, string group, string option, string savePath)
     {
@@ -874,6 +906,11 @@ public sealed class AutoRefitWatcher : IDisposable
             log.Information("[Proteus] auto refit: selected {0} / {1} in {2}: {3}", group, string.Join(", ", selection),
                             dir, ec);
 
+            // Remembered, so that the player picking something else in this group later is taken as their choice.
+            if (config.AutoRefitByCollection.TryGetValue(r.Collection.ToString("D"), out var pref)
+                && pref.SwitchedOn.Add(AutoRefitDecisions.GroupKey(dir, group)))
+                config.Save();
+
             // The walk after this redraw sees the refit worn and must leave it be.
             long quiet = Environment.TickCount64 + OwnChangeQuietMs;
             ours[r.Slot + "|" + r.Worn.GamePath] = quiet;
@@ -915,18 +952,28 @@ public sealed class AutoRefitWatcher : IDisposable
     private void Say(string message, bool problem = false)
     {
         current = current with { Message = message, Failed = problem };
-        _ = Plugin.Framework.RunOnFrameworkThread(() =>
+        if (disposed) return;
+        try
         {
-            try
+            _ = Plugin.Framework.RunOnFrameworkThread(() =>
             {
-                if (disposed) return;
-                Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(message, problem ? (ushort)17 : (ushort)45)
-                                                          .Build());
-            }
-            catch (Exception ex)
-            {
-                log.Warning(ex, "[Proteus] auto refit: could not print to chat");
-            }
-        });
+                try
+                {
+                    if (disposed) return;
+                    Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(message, problem ? (ushort)17 : (ushort)45)
+                                                              .Build());
+                }
+                catch (Exception ex)
+                {
+                    log.Warning(ex, "[Proteus] auto refit: could not print to chat");
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            // Thrown before the hop, by a framework being torn down: from inside RunQueue's catch it would escape the
+            // runner, faulting a task nobody observes.
+            log.Warning(ex, "[Proteus] auto refit: could not reach the framework to print to chat");
+        }
     }
 }

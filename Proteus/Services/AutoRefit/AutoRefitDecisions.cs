@@ -215,6 +215,26 @@ internal static class AutoRefitDecisions
         return Skip.None;
     }
 
+    /// <summary>The key a mod group is remembered by in <see cref="AutoRefitPreference.SwitchedOn"/>.</summary>
+    internal static string GroupKey(string modDir, string group) => modDir + "|" + group;
+
+    /// <summary>
+    /// Whether the player has chosen something other than the refit for this piece: a refit was switched on in this
+    /// group before, and the group now holds none of the mod's refits. Picking the made mod's "Original" — the game's own
+    /// model showing again — or one of the author's sizes reads as the piece newly put on, and switching the refit back
+    /// on would undo the choice the moment Penumbra redraws. Never true for a group no refit was switched on in here: a
+    /// refit made in another collection, worn here for the first time, still goes on.
+    /// </summary>
+    /// <param name="switchedOnBefore">The group is in <see cref="AutoRefitPreference.SwitchedOn"/>.</param>
+    /// <param name="ticked">The group's selected options in this collection; null when the mod has no setting here.</param>
+    /// <param name="refits">The options of the group that are refits (the mod's retarget record).</param>
+    internal static bool ChoseOtherwise(bool switchedOnBefore, IEnumerable<string>? ticked, IEnumerable<string> refits)
+    {
+        if (!switchedOnBefore) return false;
+        var ours = new HashSet<string>(refits, StringComparer.OrdinalIgnoreCase);
+        return !(ticked ?? []).Any(ours.Contains);
+    }
+
     /// <summary>
     /// The slots whose piece is newly worn since <paramref name="before"/>, with a missing slot counting as bare. Empty
     /// when <paramref name="before"/> is null — the first look after loading, enabling or a collection change is a
