@@ -1,4 +1,96 @@
 {
+  "AutoRefit.Body": {
+    "message": "Corps",
+    "description": ""
+  },
+  "AutoRefit.BodyMissing.Fmt": {
+    "message": "Le corps choisi ici, « {0} », n'est plus installé. Choisissez-en un autre.",
+    "description": ""
+  },
+  "AutoRefit.ChestSize": {
+    "message": "Taille de poitrine",
+    "description": ""
+  },
+  "AutoRefit.Choose": {
+    "message": "Choisir…",
+    "description": ""
+  },
+  "AutoRefit.Clear": {
+    "message": "Oublier le corps de cette collection",
+    "description": ""
+  },
+  "AutoRefit.Collection": {
+    "message": "Collection",
+    "description": ""
+  },
+  "AutoRefit.Collection.Current.Fmt": {
+    "message": "{0} (actuelle)",
+    "description": ""
+  },
+  "AutoRefit.Enable.Label": {
+    "message": "Ajuster l'équipement à mon corps quand je l'équipe",
+    "description": ""
+  },
+  "AutoRefit.Enable.Tip": {
+    "message": "L'ajustement est enregistré dans le mod de l'équipement comme nouvelle option de taille, exactement comme le fait l'outil « Taille du corps » du Studio : il fonctionne donc même avec Proteus désactivé. Si vous choisissez « Original » ou une autre taille dans Penumbra, ce choix est respecté.",
+    "description": ""
+  },
+  "AutoRefit.FindingBodies": {
+    "message": "Recherche des mods de corps…",
+    "description": ""
+  },
+  "AutoRefit.HandsFeet.Fmt": {
+    "message": "Les mains et les pieds sont assortis à ces tailles : {0} et {1}.",
+    "description": ""
+  },
+  "AutoRefit.Intro": {
+    "message": "Quand vous équipez une pièce de torse, de jambes, de mains ou de pieds, Proteus détermine pour quel corps elle a été faite, l'ajuste au corps et aux tailles choisis ici, puis active la nouvelle taille. Chaque collection Penumbra a son propre choix.",
+    "description": ""
+  },
+  "AutoRefit.ItemInMod.Fmt": {
+    "message": "{0} ({1})",
+    "description": ""
+  },
+  "AutoRefit.LegsSize": {
+    "message": "Taille des jambes",
+    "description": ""
+  },
+  "AutoRefit.NoBodies": {
+    "message": "Aucun mod de corps n'est installé : il n'y a rien sur quoi ajuster.",
+    "description": ""
+  },
+  "AutoRefit.NoBodyChosen": {
+    "message": "Aucun corps choisi : l'équipement porté dans cette collection reste tel quel.",
+    "description": ""
+  },
+  "AutoRefit.NoCollections": {
+    "message": "Penumbra n'est pas disponible : ses collections ne peuvent pas être listées.",
+    "description": ""
+  },
+  "AutoRefit.RunNow": {
+    "message": "Ajuster ce que je porte maintenant",
+    "description": ""
+  },
+  "AutoRefit.RunNow.Tip": {
+    "message": "Seul l'équipement porté à partir de maintenant est ajusté automatiquement. Ce bouton ajuste les pièces que votre personnage porte déjà.",
+    "description": ""
+  },
+  "AutoRefit.Vanilla.Label": {
+    "message": "Ajuster aussi l'équipement d'origine du jeu",
+    "description": ""
+  },
+  "AutoRefit.Vanilla.Tip": {
+    "message": "L'équipement non modifié n'a pas de mod où enregistrer : chaque pièce reçoit donc son propre nouveau mod, nommé d'après l'objet et le corps.",
+    "description": ""
+  },
+  "AutoRefit.Working": {
+    "message": "En cours…",
+    "description": ""
+  },
+  "AutoRefit.Working.Fmt": {
+    "message": "Ajustement de {0}…",
+    "description": ""
+  },
   "Band.Cap.Bind": {
     "message": "Liez le tout à un design",
     "description": ""
@@ -173,6 +265,42 @@
   },
   "Bindings.Update.Tip": {
     "message": "Capture chaque mod du personnage (activation / priorité / options) et les couleurs Proteus\nactuelles dans cette liaison. Les modifications manuelles ne persistent que si vous cliquez ici.",
+    "description": ""
+  },
+  "Chat.AutoRefit.BodyMissing.Fmt": {
+    "message": "[Proteus] Le corps choisi pour les ajustements automatiques de cette collection, « {0} », n'est pas installé : rien n'est ajusté. Choisissez-en un autre dans /proteus > Paramètres.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Done.Fmt": {
+    "message": "[Proteus] {0} est maintenant ajusté à {1}. Enregistré sous « {2} » dans {3} et activé.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Existing.Fmt": {
+    "message": "[Proteus] {0} avait déjà été ajusté à {1} ; cette taille est activée.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Failed.Fmt": {
+    "message": "[Proteus] Impossible d'ajuster {0} : {1}",
+    "description": ""
+  },
+  "Chat.AutoRefit.NoBodyMesh.Fmt": {
+    "message": "[Proteus] {0} ne contient aucune peau du corps d'où lire sa taille : il reste tel quel. Vous pouvez l'ajuster à la main avec l'outil « Taille du corps » du Studio.",
+    "description": ""
+  },
+  "Chat.AutoRefit.NoSizeForRace.Fmt": {
+    "message": "[Proteus] {0} n'a pas de taille pour {1} chez {2} : {3} reste tel quel.",
+    "description": ""
+  },
+  "Chat.AutoRefit.PartsLeftOut.Fmt": {
+    "message": "Ces parties n'ont pas pu être ajustées avec lui et gardent leur taille : {0}.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Start.Fmt": {
+    "message": "[Proteus] Ajustement de {0} de {1} vers {2}. Il sera activé une fois terminé.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Unsure.Fmt": {
+    "message": "[Proteus] Impossible de savoir pour quel corps {0} a été fait : il reste tel quel. Vous pouvez l'ajuster à la main avec l'outil « Taille du corps » du Studio.",
     "description": ""
   },
   "Chat.ContentUnplaced.Fmt": {
@@ -2939,6 +3067,10 @@
     "message": "Quantité de données de texture décodées que Proteus garde en mémoire entre deux compositions.\n\nUne texture 4K coûte 64 Mo décodée, c'est donc en réalité un nombre : 2048 Mo ≈ 30 textures.\nCela n'aide que si le cache couvre une composition entière — en dessous, chaque passage\névince ce dont le suivant a besoin et rien n'est réutilisé.\n\nRegardez la valeur « cache N entries, M MB » dans le journal de recomposition : si une\nDEUXIÈME composition sans aucun changement signale encore des échecs, augmentez cette\nvaleur. Baissez-la si le jeu se met à paginer. Libéré automatiquement après 60 s d'inactivité.",
     "description": ""
   },
+  "Settings.Section.AutoRefit": {
+    "message": "Ajustement au corps",
+    "description": ""
+  },
   "Settings.Section.Diagnostics": {
     "message": "Diagnostics",
     "description": ""
@@ -3707,12 +3839,24 @@
     "message": "(vanilla)",
     "description": ""
   },
-  "WhatsNew.Title": {
-    "message": "Nouveautés de Proteus",
+  "WhatsNew.AutoRefit.Body": {
+    "message": "Proteus peut désormais ajuster tout seul l'équipement de torse, de jambes, de mains et de pieds à votre corps, dès que vous l'équipez. Il détermine pour quel mod de corps et quelle taille l'équipement a été fait, l'ajuste ainsi que les parties du corps qu'il couvre, enregistre la nouvelle taille dans le mod de l'équipement et l'active. Le chat vous prévient au début et à la fin.\n\nPour l'utiliser, ouvrez Paramètres › Ajustement au corps. Cochez « Ajuster l'équipement à mon corps quand je l'équipe », puis choisissez votre mod de corps et ses tailles de poitrine et de jambes pour chaque collection Penumbra ; les mains et les pieds sont assortis pour vous. L'équipement déjà porté s'ajuste avec « Ajuster ce que je porte maintenant », et l'équipement d'origine du jeu a sa propre case à cocher. Choisir « Original » ou une autre taille dans Penumbra est toujours respecté.",
     "description": ""
   },
-  "WhatsNew.Intro": {
-    "message": "Trois choses à savoir sur cette version. Cette fenêtre s'ouvre une fois, et plus jamais.",
+  "WhatsNew.AutoRefit.Head": {
+    "message": "L'équipement s'ajuste tout seul à votre corps",
+    "description": ""
+  },
+  "WhatsNew.IntroAll": {
+    "message": "Quatre choses à savoir sur Proteus. Cette fenêtre s'ouvre une fois, puis plus jamais.",
+    "description": ""
+  },
+  "WhatsNew.IntroSince": {
+    "message": "Du nouveau depuis la dernière fois que vous avez vu cette fenêtre. Elle s'ouvre une fois, puis plus jamais.",
+    "description": ""
+  },
+  "WhatsNew.Title": {
+    "message": "Nouveautés de Proteus",
     "description": ""
   },
   "WhatsNew.Upscales.Head": {

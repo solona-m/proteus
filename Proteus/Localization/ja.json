@@ -1,4 +1,96 @@
 {
+  "AutoRefit.Body": {
+    "message": "体型",
+    "description": ""
+  },
+  "AutoRefit.BodyMissing.Fmt": {
+    "message": "ここで選んだ体型「{0}」はもうインストールされていません。別の体型を選んでください。",
+    "description": ""
+  },
+  "AutoRefit.ChestSize": {
+    "message": "胸のサイズ",
+    "description": ""
+  },
+  "AutoRefit.Choose": {
+    "message": "選択してください…",
+    "description": ""
+  },
+  "AutoRefit.Clear": {
+    "message": "このコレクションの体型設定を消去",
+    "description": ""
+  },
+  "AutoRefit.Collection": {
+    "message": "コレクション",
+    "description": ""
+  },
+  "AutoRefit.Collection.Current.Fmt": {
+    "message": "{0}（使用中）",
+    "description": ""
+  },
+  "AutoRefit.Enable.Label": {
+    "message": "身に着けた装備を自分の体型に自動で合わせる",
+    "description": ""
+  },
+  "AutoRefit.Enable.Tip": {
+    "message": "調整結果は、スタジオの「体型サイズ」ツールと同じように、装備の MOD 自体に新しいサイズのオプションとして保存されるため、Proteus をオフにしても使えます。Penumbra で MOD の「Original」や別のサイズを選んだ場合は、その選択がそのまま尊重されます。",
+    "description": ""
+  },
+  "AutoRefit.FindingBodies": {
+    "message": "体型 MOD を探しています…",
+    "description": ""
+  },
+  "AutoRefit.HandsFeet.Fmt": {
+    "message": "手と足はこれらのサイズに合わせて自動で選ばれます：{0} と {1}。",
+    "description": ""
+  },
+  "AutoRefit.Intro": {
+    "message": "胴・脚・手・足の装備を身に着けると、Proteus がその装備がどの体型用に作られたかを調べ、ここで選んだ体型とサイズに合わせて作り直し、新しいサイズをオンにします。Penumbra のコレクションごとに別々に選べます。",
+    "description": ""
+  },
+  "AutoRefit.ItemInMod.Fmt": {
+    "message": "{0}（{1}）",
+    "description": ""
+  },
+  "AutoRefit.LegsSize": {
+    "message": "脚のサイズ",
+    "description": ""
+  },
+  "AutoRefit.NoBodies": {
+    "message": "体型 MOD がインストールされていないため、合わせる先がありません。",
+    "description": ""
+  },
+  "AutoRefit.NoBodyChosen": {
+    "message": "体型が選ばれていません。このコレクションで身に着けた装備はそのままになります。",
+    "description": ""
+  },
+  "AutoRefit.NoCollections": {
+    "message": "Penumbra が利用できないため、コレクションを一覧表示できません。",
+    "description": ""
+  },
+  "AutoRefit.RunNow": {
+    "message": "今着ている装備を調整",
+    "description": ""
+  },
+  "AutoRefit.RunNow.Tip": {
+    "message": "自動で調整されるのは、これから身に着ける装備だけです。このボタンは、すでにキャラクターが着ている装備を調整します。",
+    "description": ""
+  },
+  "AutoRefit.Vanilla.Label": {
+    "message": "ゲーム本来の装備も調整する",
+    "description": ""
+  },
+  "AutoRefit.Vanilla.Tip": {
+    "message": "MOD のない装備には保存先がないため、装備ごとにアイテム名と体型名を付けた新しい MOD が作られます。",
+    "description": ""
+  },
+  "AutoRefit.Working": {
+    "message": "処理中…",
+    "description": ""
+  },
+  "AutoRefit.Working.Fmt": {
+    "message": "{0} を調整中…",
+    "description": ""
+  },
   "Band.Cap.Bind": {
     "message": "デザインに紐付け",
     "description": ""
@@ -173,6 +265,42 @@
   },
   "Bindings.Update.Tip": {
     "message": "キャラクターに適用中のすべてのMOD（有効／優先度／オプション）と現在のProteusカラーを\nこの紐付けに記録します。手動での変更は、ここをクリックしたときだけ保存されます。",
+    "description": ""
+  },
+  "Chat.AutoRefit.BodyMissing.Fmt": {
+    "message": "[Proteus] このコレクションの自動調整用に選ばれた体型「{0}」がインストールされていないため、何も調整されません。/proteus > 設定 で別の体型を選んでください。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Done.Fmt": {
+    "message": "[Proteus] {0} が {1} に合うようになりました。{3} に「{2}」として保存し、オンにしました。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Existing.Fmt": {
+    "message": "[Proteus] {0} はすでに {1} に調整済みです。そのサイズをオンにしました。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Failed.Fmt": {
+    "message": "[Proteus] {0} を調整できませんでした：{1}",
+    "description": ""
+  },
+  "Chat.AutoRefit.NoBodyMesh.Fmt": {
+    "message": "[Proteus] {0} にはサイズを読み取れる体の肌が含まれていないため、そのままにしました。スタジオの「体型サイズ」ツールで手動で調整できます。",
+    "description": ""
+  },
+  "Chat.AutoRefit.NoSizeForRace.Fmt": {
+    "message": "[Proteus] {0} には {2} 用の{1}のサイズがないため、{3} はそのままにしました。",
+    "description": ""
+  },
+  "Chat.AutoRefit.PartsLeftOut.Fmt": {
+    "message": "次の部位は一緒に調整できなかったため、元のサイズのままです：{0}。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Start.Fmt": {
+    "message": "[Proteus] {0} を {1} から {2} に調整しています。完了するとオンになります。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Unsure.Fmt": {
+    "message": "[Proteus] {0} がどの体型用に作られたか判断できなかったため、そのままにしました。スタジオの「体型サイズ」ツールで手動で調整できます。",
     "description": ""
   },
   "Chat.ContentUnplaced.Fmt": {
@@ -2939,6 +3067,10 @@
     "message": "合成と合成の間に、デコード済みテクスチャをどれだけメモリに保持するかです。\n\n4Kテクスチャはデコード時に64 MB必要なので、実質は枚数の設定です：2048 MB ≒ 30枚。\n1回の合成全体をまかなえて初めて効果があります。それを下回ると、毎回の実行で\n次に必要なものを追い出してしまい、何も再利用されません。\n\n再合成ログの「cache N entries, M MB」の値を確認してください。何も変更していない\n2回目の合成でもミスが報告されるなら、この値を上げてください。ゲームがページング\nを始めたら下げてください。60秒間アイドルで自動的に解放されます。",
     "description": ""
   },
+  "Settings.Section.AutoRefit": {
+    "message": "体型の自動調整",
+    "description": ""
+  },
   "Settings.Section.Diagnostics": {
     "message": "診断",
     "description": ""
@@ -3707,12 +3839,24 @@
     "message": "（バニラ）",
     "description": ""
   },
-  "WhatsNew.Title": {
-    "message": "Proteus の新機能",
+  "WhatsNew.AutoRefit.Body": {
+    "message": "Proteus は、胴・脚・手・足の装備を身に着けた瞬間に、自動であなたの体型に合わせられるようになりました。装備がどの体型 MOD のどのサイズ用に作られたかを調べ、装備とそれが覆う体の部位を作り直し、新しいサイズを装備の MOD 自体に保存してオンにします。開始時と完了時にはチャットでお知らせします。\n\n使うには、設定 › 体型の自動調整 を開きます。「身に着けた装備を自分の体型に自動で合わせる」にチェックを入れ、Penumbra のコレクションごとに体型 MOD と胸・脚のサイズを選んでください。手と足は自動で合わせます。すでに着ている装備は「今着ている装備を調整」で調整でき、ゲーム本来の装備には専用のチェックボックスがあります。Penumbra で「Original」や別のサイズを選んだ場合は、常にそのまま尊重されます。",
     "description": ""
   },
-  "WhatsNew.Intro": {
-    "message": "このリリースで知っておきたい3つの点です。このウィンドウが開くのは一度きりです。",
+  "WhatsNew.AutoRefit.Head": {
+    "message": "装備が自動で体型に合うように",
+    "description": ""
+  },
+  "WhatsNew.IntroAll": {
+    "message": "Proteus について知っておきたい 4 つのこと。このウィンドウは一度だけ表示され、二度と開きません。",
+    "description": ""
+  },
+  "WhatsNew.IntroSince": {
+    "message": "前回このウィンドウを見てから新しくなったことがあります。このウィンドウは一度だけ表示され、二度と開きません。",
+    "description": ""
+  },
+  "WhatsNew.Title": {
+    "message": "Proteus の新機能",
     "description": ""
   },
   "WhatsNew.Upscales.Head": {

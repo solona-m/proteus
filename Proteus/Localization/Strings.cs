@@ -52,6 +52,7 @@ public static class Strings
     public static PartsStrings      Parts      { get; private set; } = new();
     public static PresetsStrings    Presets    { get; private set; } = new();
     public static HatCompatStrings  HatCompat  { get; private set; } = new();
+    public static AutoRefitStrings  AutoRefit  { get; private set; } = new();
     public static WhatsNewStrings   WhatsNew   { get; private set; } = new();
 
     /// <summary>
@@ -80,8 +81,76 @@ public static class Strings
         Parts      = new PartsStrings();
         Presets    = new PresetsStrings();
         HatCompat  = new HatCompatStrings();
+        AutoRefit  = new AutoRefitStrings();
         WhatsNew   = new WhatsNewStrings();
     }
+}
+
+/// <summary>The automatic body refit's section of Settings, and the words it puts in chat.</summary>
+public sealed class AutoRefitStrings
+{
+    public readonly string Intro = Loc.Localize("AutoRefit.Intro",
+        "When you put on chest, legs, hands or feet gear, Proteus works out which body it was made for and refits it "
+      + "to the body and sizes chosen here, then switches the new size on. Each Penumbra collection has its own "
+      + "choice.");
+
+    public readonly string Enable = Loc.Localize("AutoRefit.Enable.Label",
+        "Refit gear to my body as I put it on") + "###autoRefitEnable";
+
+    public readonly string EnableTip = Loc.Localize("AutoRefit.Enable.Tip",
+        "The refit is saved into the gear's own mod as a new size option, exactly as the Studio's Body size tool "
+      + "saves one, so it keeps working with Proteus turned off. Choosing the mod's \"Original\" or another size in "
+      + "Penumbra is left alone.");
+
+    public readonly string Vanilla = Loc.Localize("AutoRefit.Vanilla.Label",
+        "Also refit the game's own gear") + "###autoRefitVanilla";
+
+    public readonly string VanillaTip = Loc.Localize("AutoRefit.Vanilla.Tip",
+        "Unmodded gear has no mod to save into, so each piece gets a new mod of its own, named after the item and "
+      + "the body.");
+
+    public readonly string Collection = Loc.Localize("AutoRefit.Collection", "Collection");
+
+    public readonly string CurrentFmt = Loc.Localize("AutoRefit.Collection.Current.Fmt", "{0} (current)");
+
+    public readonly string Body = Loc.Localize("AutoRefit.Body", "Body");
+
+    public readonly string ChestSize = Loc.Localize("AutoRefit.ChestSize", "Chest size");
+
+    public readonly string LegsSize = Loc.Localize("AutoRefit.LegsSize", "Legs size");
+
+    public readonly string Choose = Loc.Localize("AutoRefit.Choose", "Choose...");
+
+    public readonly string NoBodyChosen = Loc.Localize("AutoRefit.NoBodyChosen",
+        "No body chosen: gear put on in this collection is left as it is.");
+
+    public readonly string FindingBodies = Loc.Localize("AutoRefit.FindingBodies", "Looking for body mods...");
+
+    public readonly string NoBodies = Loc.Localize("AutoRefit.NoBodies",
+        "No body mods are installed, so there is nothing to refit onto.");
+
+    public readonly string BodyMissingFmt = Loc.Localize("AutoRefit.BodyMissing.Fmt",
+        "The body chosen here, \"{0}\", isn't installed any more. Choose another.");
+
+    public readonly string NoCollections = Loc.Localize("AutoRefit.NoCollections",
+        "Penumbra isn't available, so its collections can't be listed.");
+
+    public readonly string HandsFeetFmt = Loc.Localize("AutoRefit.HandsFeet.Fmt",
+        "Hands and feet are matched to these sizes: {0} and {1}.");
+
+    public readonly string Clear = Loc.Localize("AutoRefit.Clear", "Forget this collection's body") + "###autoRefitClear";
+
+    public readonly string RunNow = Loc.Localize("AutoRefit.RunNow", "Refit what I'm wearing now") + "###autoRefitRunNow";
+
+    public readonly string RunNowTip = Loc.Localize("AutoRefit.RunNow.Tip",
+        "Only gear put on from now on is refitted by itself. This does the pieces already on your character.");
+
+    public readonly string Working = Loc.Localize("AutoRefit.Working", "Working...");
+
+    public readonly string WorkingFmt = Loc.Localize("AutoRefit.Working.Fmt", "Refitting {0}...");
+
+    /// <summary>A modded piece in chat: the mod's name, then the part — "This Old Thing (chest)".</summary>
+    public readonly string ItemInModFmt = Loc.Localize("AutoRefit.ItemInMod.Fmt", "{0} ({1})");
 }
 
 /// <summary>The one-time release-notes window.</summary>
@@ -90,8 +159,26 @@ public sealed class WhatsNewStrings
     // The stable id is fused here, not at the call site, so the concatenation is paid once per language.
     public readonly string Title = Loc.Localize("WhatsNew.Title", "What's new in Proteus") + "###ProteusWhatsNew";
 
-    public readonly string Intro = Loc.Localize("WhatsNew.Intro",
-        "Three things worth knowing about this release. This window opens once, and not again.");
+    /// <summary>For someone seeing the notes for the first time: every section is shown.</summary>
+    public readonly string IntroAll = Loc.Localize("WhatsNew.IntroAll",
+        "Four things worth knowing about Proteus. This window opens once, and not again.");
+
+    /// <summary>For someone who closed the earlier notes: only what is new since then is shown.</summary>
+    public readonly string IntroSince = Loc.Localize("WhatsNew.IntroSince",
+        "Something new since you last saw this window. It opens once, and not again.");
+
+    public readonly string AutoRefitHead = Loc.Localize("WhatsNew.AutoRefit.Head",
+        "Gear refits itself to your body");
+
+    public readonly string AutoRefitBody = Loc.Localize("WhatsNew.AutoRefit.Body",
+        "Proteus can now refit chest, legs, hands and feet gear to your body by itself, the moment you put it on. "
+      + "It works out which body mod and size the gear was made for, refits it and the parts of the body it "
+      + "reaches, saves the new size into the gear's own mod and switches it on. Chat says when it starts and when "
+      + "it is done.\n\n"
+      + "To use it, open Settings, Body refit. Tick \"Refit gear to my body as I put it on\", then pick your body "
+      + "mod and its chest and legs sizes for each Penumbra collection; hands and feet are matched for you. Gear "
+      + "you are already wearing is refitted with \"Refit what I'm wearing now\", and the game's own gear has a "
+      + "checkbox of its own. Choosing \"Original\" or another size in Penumbra is always left alone.");
 
     public readonly string UpscalesHead = Loc.Localize("WhatsNew.Upscales.Head", "One click upscales");
 
@@ -616,6 +703,7 @@ public sealed class SettingsStrings
     public readonly string SecOutput      = Loc.Localize("Settings.Section.Output", "Output");
     public readonly string SecSkinEffects = Loc.Localize("Settings.Section.SkinEffects", "Skin effects");
     public readonly string SecHatCompat   = Loc.Localize("Settings.Section.HatCompat", "Hats");
+    public readonly string SecAutoRefit   = Loc.Localize("Settings.Section.AutoRefit", "Body refit");
 
     public readonly string SecHosting     = Loc.Localize("Settings.Section.Hosting", "Hosting");
 

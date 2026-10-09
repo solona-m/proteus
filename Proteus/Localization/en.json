@@ -1,4 +1,96 @@
 {
+  "AutoRefit.Body": {
+    "message": "Body",
+    "description": "Label above the dropdown of installed body mods to refit gear onto."
+  },
+  "AutoRefit.BodyMissing.Fmt": {
+    "message": "The body chosen here, \"{0}\", isn't installed any more. Choose another.",
+    "description": "Shown when the body mod chosen for a collection has been uninstalled. {0} is the mod's folder name."
+  },
+  "AutoRefit.ChestSize": {
+    "message": "Chest size",
+    "description": "Label above the dropdown of the body's chest sizes."
+  },
+  "AutoRefit.Choose": {
+    "message": "Choose...",
+    "description": "Shown in a dropdown when nothing has been chosen yet."
+  },
+  "AutoRefit.Clear": {
+    "message": "Forget this collection's body",
+    "description": "Button that removes the selected collection's chosen body."
+  },
+  "AutoRefit.Collection": {
+    "message": "Collection",
+    "description": "Label above the dropdown of Penumbra collections in the Body refit section."
+  },
+  "AutoRefit.Collection.Current.Fmt": {
+    "message": "{0} (current)",
+    "description": "A collection in the dropdown that the character is using right now. {0} is the collection's name."
+  },
+  "AutoRefit.Enable.Label": {
+    "message": "Refit gear to my body as I put it on",
+    "description": "Checkbox that switches the automatic body refit on."
+  },
+  "AutoRefit.Enable.Tip": {
+    "message": "The refit is saved into the gear's own mod as a new size option, exactly as the Studio's Body size tool saves one, so it keeps working with Proteus turned off. Choosing the mod's \"Original\" or another size in Penumbra is left alone.",
+    "description": "Tooltip on the Body refit checkbox. \"Original\" is the name of an option in Penumbra and must stay in English. \"Studio\" and \"Body size\" name a tab and a tool - use the same words as Tab.Parts and Parts.Tool.Retarget."
+  },
+  "AutoRefit.FindingBodies": {
+    "message": "Looking for body mods...",
+    "description": "Shown while the installed mods are searched for body mods."
+  },
+  "AutoRefit.HandsFeet.Fmt": {
+    "message": "Hands and feet are matched to these sizes: {0} and {1}.",
+    "description": "Hint under the chest and legs sizes. {0} is the hands size and {1} the feet size picked automatically to match."
+  },
+  "AutoRefit.Intro": {
+    "message": "When you put on chest, legs, hands or feet gear, Proteus works out which body it was made for and refits it to the body and sizes chosen here, then switches the new size on. Each Penumbra collection has its own choice.",
+    "description": "Explanation at the top of the Body refit section of Settings."
+  },
+  "AutoRefit.ItemInMod.Fmt": {
+    "message": "{0} ({1})",
+    "description": "How a modded piece of gear is named in messages. {0} is the mod's name, {1} the body part (Chest, Legs, Hands or Feet)."
+  },
+  "AutoRefit.LegsSize": {
+    "message": "Legs size",
+    "description": "Label above the dropdown of the body's legs sizes."
+  },
+  "AutoRefit.NoBodies": {
+    "message": "No body mods are installed, so there is nothing to refit onto.",
+    "description": "Shown in the body dropdown when no body mod is installed."
+  },
+  "AutoRefit.NoBodyChosen": {
+    "message": "No body chosen: gear put on in this collection is left as it is.",
+    "description": "Shown when the selected collection has no body chosen."
+  },
+  "AutoRefit.NoCollections": {
+    "message": "Penumbra isn't available, so its collections can't be listed.",
+    "description": "Shown when Penumbra cannot be reached to list its collections."
+  },
+  "AutoRefit.RunNow": {
+    "message": "Refit what I'm wearing now",
+    "description": "Button that refits every piece of gear the character is already wearing."
+  },
+  "AutoRefit.RunNow.Tip": {
+    "message": "Only gear put on from now on is refitted by itself. This does the pieces already on your character.",
+    "description": "Tooltip on the button that refits the gear already worn."
+  },
+  "AutoRefit.Vanilla.Label": {
+    "message": "Also refit the game's own gear",
+    "description": "Checkbox under the Body refit switch: also refit unmodded (the game's own) gear."
+  },
+  "AutoRefit.Vanilla.Tip": {
+    "message": "Unmodded gear has no mod to save into, so each piece gets a new mod of its own, named after the item and the body.",
+    "description": "Tooltip on the checkbox for refitting the game's own gear."
+  },
+  "AutoRefit.Working": {
+    "message": "Working...",
+    "description": "Shown while a refit is running."
+  },
+  "AutoRefit.Working.Fmt": {
+    "message": "Refitting {0}...",
+    "description": "Status line while a piece of gear is being refitted. {0} names the piece."
+  },
   "Band.Cap.Bind": {
     "message": "Bind it all to a design",
     "description": "Glamourer design bindings. Capability label in the header band, shown beside an icon. All four of these labels are hidden together the moment they stop fitting the window width, so a short translation is what keeps them on screen."
@@ -174,6 +266,42 @@
   "Bindings.Update.Tip": {
     "message": "Snapshot every mod on the character (enable / priority / options) and the current\nProteus colours into this binding. Manual edits only persist when you click this.",
     "description": "Tooltip. Appears in the Bindings tab. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
+  "Chat.AutoRefit.BodyMissing.Fmt": {
+    "message": "[Proteus] The body chosen for automatic refits in this collection, \"{0}\", isn't installed, so nothing is being refitted. Choose another under /proteus > Settings.",
+    "description": "Chat line when the body chosen for the collection is no longer installed. {0} is the body mod's folder name. \"/proteus\" is a command and \"Settings\" matches Tab.Settings. Do NOT translate \"Proteus\" or \"/proteus\"."
+  },
+  "Chat.AutoRefit.Done.Fmt": {
+    "message": "[Proteus] {0} now fits {1}. Saved as \"{2}\" in {3} and switched on.",
+    "description": "Chat line when an automatic refit is finished and worn. {0} names the gear, {1} the body and size, {2} the new option's name in Penumbra, {3} the mod it was saved into. Do NOT translate \"Proteus\"."
+  },
+  "Chat.AutoRefit.Existing.Fmt": {
+    "message": "[Proteus] {0} was already refitted to {1}; that size is switched on.",
+    "description": "Chat line when gear put on was already refitted earlier and that refit is switched back on. {0} names the gear, {1} the option. Do NOT translate \"Proteus\"."
+  },
+  "Chat.AutoRefit.Failed.Fmt": {
+    "message": "[Proteus] Couldn't refit {0}: {1}",
+    "description": "Chat line when an automatic refit failed. {0} names the gear, {1} is the reason. Do NOT translate \"Proteus\"."
+  },
+  "Chat.AutoRefit.NoBodyMesh.Fmt": {
+    "message": "[Proteus] {0} carries no body skin to read its size from, so it was left as it is. You can refit it by hand with the Studio's Body size tool.",
+    "description": "Chat line when a piece of gear has no body skin in it to measure its size from. {0} names the gear. \"Studio\" and \"Body size\" match Tab.Parts and Parts.Tool.Retarget. Do NOT translate \"Proteus\"."
+  },
+  "Chat.AutoRefit.NoSizeForRace.Fmt": {
+    "message": "[Proteus] {0} has no {1} size for {2}, so {3} was left as it is.",
+    "description": "Chat line when the chosen body has no size for this body part and race. {0} is the body mod, {1} the body part (Chest, Legs, Hands or Feet), {2} the race, {3} names the gear. Do NOT translate \"Proteus\"."
+  },
+  "Chat.AutoRefit.PartsLeftOut.Fmt": {
+    "message": "These parts could not be refitted with it and kept their size: {0}.",
+    "description": "Appended to the finished-refit chat line when some other body parts could not be refitted along with the gear. {0} lists the parts (Chest, Legs, Hands, Feet)."
+  },
+  "Chat.AutoRefit.Start.Fmt": {
+    "message": "[Proteus] Refitting {0} from {1} to {2}. It will be switched on when it is done.",
+    "description": "Chat line when an automatic refit starts. {0} names the gear, {1} the body and size it was made for, {2} the body and size it is refitted to. Do NOT translate \"Proteus\"."
+  },
+  "Chat.AutoRefit.Unsure.Fmt": {
+    "message": "[Proteus] Couldn't tell which body {0} was made for, so it was left as it is. You can refit it by hand with the Studio's Body size tool.",
+    "description": "Chat line when Proteus could not tell which body a piece of gear was made for. {0} names the gear. \"Studio\" and \"Body size\" match Tab.Parts and Parts.Tool.Retarget. Do NOT translate \"Proteus\"."
   },
   "Chat.ContentUnplaced.Fmt": {
     "message": "[Proteus] {0} mesh piece(s) from your mods could not be placed — your accessories are out of material slots. Equip another ring / bracelet / necklace, or turn off a layer.",
@@ -2939,6 +3067,10 @@
     "message": "How much decoded texture data Proteus keeps in memory between composites.\n\nA 4K texture costs 64 MB decoded, so this is really a count: 2048 MB ≈ 30 of them.\nIt only helps if it covers a whole composite's worth — below that, every run evicts\nwhat the next one needs and nothing is reused.\n\nCheck the \"cache N entries, M MB\" figure in the recomposite log: if a SECOND\ncomposite with nothing changed still reports misses, raise this. Lower it if the\ngame starts paging. Released automatically after 60s idle.",
     "description": "Quotes the literal log line \"cache N entries, M MB\" - leave that fragment in English, it is what the log actually prints. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
+  "Settings.Section.AutoRefit": {
+    "message": "Body refit",
+    "description": "Settings section heading for the automatic body refit: gear is refitted to the player's chosen body as it is put on."
+  },
   "Settings.Section.Diagnostics": {
     "message": "Diagnostics",
     "description": "Section heading in Settings."
@@ -3707,13 +3839,25 @@
     "message": "(vanilla)",
     "description": ""
   },
+  "WhatsNew.AutoRefit.Body": {
+    "message": "Proteus can now refit chest, legs, hands and feet gear to your body by itself, the moment you put it on. It works out which body mod and size the gear was made for, refits it and the parts of the body it reaches, saves the new size into the gear's own mod and switches it on. Chat says when it starts and when it is done.\n\nTo use it, open Settings, Body refit. Tick \"Refit gear to my body as I put it on\", then pick your body mod and its chest and legs sizes for each Penumbra collection; hands and feet are matched for you. Gear you are already wearing is refitted with \"Refit what I'm wearing now\", and the game's own gear has a checkbox of its own. Choosing \"Original\" or another size in Penumbra is always left alone.",
+    "description": "Release-notes section on the automatic body refit and how to switch it on. \"Settings\" and \"Body refit\" name a tab and a section - match Tab.Settings and Settings.Section.AutoRefit. The two quoted labels must match AutoRefit.Enable.Label and AutoRefit.RunNow. \"Original\" is a Penumbra option name and stays in English."
+  },
+  "WhatsNew.AutoRefit.Head": {
+    "message": "Gear refits itself to your body",
+    "description": "Release-notes section heading for the automatic body refit."
+  },
+  "WhatsNew.IntroAll": {
+    "message": "Four things worth knowing about Proteus. This window opens once, and not again.",
+    "description": "First line of the release-notes window for someone who has never seen it; all four sections follow."
+  },
+  "WhatsNew.IntroSince": {
+    "message": "Something new since you last saw this window. It opens once, and not again.",
+    "description": "First line of the release-notes window for someone who already read the earlier notes; only what is new since then follows."
+  },
   "WhatsNew.Title": {
     "message": "What's new in Proteus",
     "description": "Title of the one-time release-notes window."
-  },
-  "WhatsNew.Intro": {
-    "message": "Three things worth knowing about this release. This window opens once, and not again.",
-    "description": "First line of the release-notes window, above the three sections."
   },
   "WhatsNew.Upscales.Head": {
     "message": "One click upscales",

@@ -58,7 +58,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     /// Penumbra IPC, so the tab answers it on the framework thread and the panel never calls it from a worker.
     /// </param>
     /// <param name="KeepShape">Labels of the parts marked "keep shape": each piece of them moves whole, turned and
-    /// shifted onto the new body but never bent — see <see cref="ShapePieces"/>.</param>
+    /// shifted onto the new body but never bent — see <see cref="RefitCore.ShapePieces"/>.</param>
     /// <param name="Wearer">The character the garment is on, for baking a model of their race when it is drawn from
     /// another's (<see cref="RacialModelBake"/>). Null, or answering null, when there is no character to read.
     /// Framework thread.</param>
@@ -128,6 +128,9 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
 
     /// <summary>The mod's single-choice groups, in the author's order, re-read with <see cref="record"/>.</summary>
     private List<string> singleGroups = [];
+
+    /// <summary>The same for its multi-choice groups with room for another option — see <see cref="SwitchingGroup"/>.</summary>
+    private List<string> multiGroups = [];
 
     /// <summary>
     /// Lay the garment's own body skin exactly onto the new body instead of resizing the skin it came with. On by
@@ -321,9 +324,8 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
             // One read per mod, not per frame, and again after a save or an undo changes what is there.
             recordFor = modRoot;
             record = modRoot != null ? BodyRetargetWriter.ReadRecord(modRoot) : null;
-            singleGroups = (modRoot != null ? PenumbraModMeta.TryReadGroups(modRoot) ?? [] : [])
-                .Where(g => string.Equals(PenumbraModMeta.TypeOf(g.Group), "Single", StringComparison.OrdinalIgnoreCase))
-                .Select(g => g.Name).ToList();
+            singleGroups = modRoot != null ? RefitCore.SingleGroups(modRoot) : [];
+            multiGroups = modRoot != null ? RefitCore.MultiGroups(modRoot) : [];
         }
 
         if (groupNameFor != ctx.ModelRel)
@@ -479,22 +481,15 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         }
 
         ushort drawn = ModelSkinReader.RaceOf(given.GamePath);
-        ushort target = wearer == null ? (ushort)0 : RacialModelBake.Target(drawn, wearer.Race, HasBodies);
-
-        // Never over a model the mod already has for that race: an author who ships both a man's and a woman's model
-        // made the woman's on purpose, and a bake of the man's saved at her path would take its place in the option.
-        // A size this tool saved there is not the author's, or the first save would switch the bake off for the next.
-        if (target != 0 && given.ModRoot != null)
+        if (given.ModRoot != null && !ReferenceEquals(ownRecordFor, given.Redirects))
         {
-            if (!ReferenceEquals(ownRecordFor, given.Redirects))
-            {
-                ownRecordFor = given.Redirects;
-                ownRecord = BodyRetargetWriter.ReadRecord(given.ModRoot);
-            }
-            if (BodyRetargetWriter.AuthorProvides(given.Redirects, ownRecord,
-                                                  RacialModelBake.WithRace(given.GamePath, target)))
-                target = 0;
+            ownRecordFor = given.Redirects;
+            ownRecord = BodyRetargetWriter.ReadRecord(given.ModRoot);
         }
+        ushort target = wearer == null
+            ? (ushort)0
+            : RefitCore.BakeTarget(given.GamePath, wearer.Race, HasBodies, given.Redirects,
+                                   given.ModRoot != null ? ownRecord : null);
         string key = given.ModelRel + "|" + target;
         if (target == 0 || bakeRefusalFor == key)
         {
@@ -527,8 +522,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         if (!ReferenceEquals(catalogRacesOf, catalog))
         {
             catalogRacesOf = catalog;
-            catalogRaces = (catalog?.Options ?? []).Select(o => BodySizeCatalog.RaceOf(o.GamePath))
-                                                   .OfType<string>().ToHashSet(StringComparer.Ordinal);
+            catalogRaces = RefitCore.RacesOf(catalog);
         }
         return catalogRaces.Contains($"{code:D4}");
     }
@@ -986,19 +980,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
 
     /// <summary>The option of this slot whose file the player's collection resolves the body model to.</summary>
     private BodyOption? WornOption(BodySizeCatalog snapshot, string slot)
-    {
-        var options = snapshot.For(slot, race);
-        foreach (string gamePath in options.Select(o => o.GamePath).Distinct(StringComparer.OrdinalIgnoreCase))
-        {
-            if (penumbra.ResolvePlayer(gamePath) is not { } resolved) continue;
-            string full = Path.GetFullPath(resolved);
-            foreach (var option in options)
-                if (string.Equals(option.GamePath, gamePath, StringComparison.OrdinalIgnoreCase)
-                    && string.Equals(Path.GetFullPath(snapshot.PathOf(option)), full, StringComparison.OrdinalIgnoreCase))
-                    return option;
-        }
-        return null;
-    }
+        => RefitCore.WornOption(snapshot, slot, race, penumbra.ResolvePlayer);
 
     // ── which slots take part ───────────────────────────────────────────────
 
@@ -1367,7 +1349,12 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
             if (combo)
             {
                 if (ImGui.Selectable(ps.RetargetNewGroup + "##new", saveTo == null)) saveTo = null;
-                foreach (string group in singleGroups)
+                // The size groups, and the multi-choice list the garment itself is ticked in, if that is where a new
+                // size of it goes (see RefitCore.SwitchingGroup); no other multi-choice group.
+                var offered = singleGroups.ToList();
+                if (!toNewMod && SwitchingGroup(ctx) is { } list && !offered.Contains(list, StringComparer.OrdinalIgnoreCase))
+                    offered.Add(list);
+                foreach (string group in offered)
                     if (ImGui.Selectable((own.Contains(group) ? group + "  " + ps.RetargetMadeHere : group) + "##g_" + group,
                                          saveTo == group))
                         saveTo = group;
@@ -1441,19 +1428,8 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     /// null when there is none and the refit gets a group of its own.
     /// </summary>
     private string? SwitchingGroup(in RetargetContext ctx)
-    {
-        var own = record?.OwnGroups.ToHashSet(StringComparer.OrdinalIgnoreCase)
-                  ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var r in ctx.Redirects)
-        {
-            if (!string.Equals(r.GamePath, ctx.GamePath, StringComparison.OrdinalIgnoreCase)) continue;
-            int split = r.Source.IndexOf(" / ", StringComparison.Ordinal);
-            if (split <= 0) continue;
-            string group = r.Source[..split];
-            if (!own.Contains(group) && singleGroups.Contains(group, StringComparer.OrdinalIgnoreCase)) return group;
-        }
-        return null;
-    }
+        => RefitCore.SwitchingGroup(ctx.Redirects, ctx.GamePath, record?.OwnGroups, singleGroups,
+                                    ctx.IsVanilla ? null : ctx.ModelRel, multiGroups);
 
     /// <summary>What this mod already has saved, and the ways to see it in Penumbra or take the last one back.</summary>
     private void DrawSaved(in RetargetContext ctx)
@@ -1615,7 +1591,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
                 foreach (var part in garment.Parts)
                     if (heldLabels.Contains(part.Label))
                         held.UnionWith(part.Triangles);
-                var pieces = ShapePieces(garment, shapeLabels);
+                var pieces = RefitCore.ShapePieces(garment, shapeLabels);
 
                 var results = new List<(BodyOption, BodyRetarget.Planned)>();
                 foreach (var (option, targetPath) in targets)
@@ -1637,16 +1613,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
                         var back = RacialModelBake.Unbake(plan.Model, bake.From, bake.To, bake.Wearer.Pbd,
                                                           bake.Wearer.ParentOf, out _);
 
-                        // A bake names its skin after the new race, where the old race's material may not exist: the
-                        // skin the refit kept of the garment's own is drawn with the body's, or the model is not drawn.
-                        var model = RacialModelBake.SkinLikeBody(plan.Model, File.ReadAllBytes(targetPath),
-                                                                 out var renamed);
-                        if (renamed.Count > 0)
-                        {
-                            log.Information("[Proteus] retarget: baked garment's own skin {0} drawn with the body's",
-                                            string.Join(", ", renamed));
-                            plan = plan with { Model = model };
-                        }
+                        plan = RefitCore.WithBodySkin(plan, targetPath, log);
                         if (back != null) previews.AddOrUpdate(plan.Model, back);
                     }
                     results.Add((option, plan));
@@ -1660,35 +1627,6 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
                 return new PlanResult(key, null, ex.Message);
             }
         });
-    }
-
-    /// <summary>
-    /// The pieces the refit moves whole, from the labels marked "keep shape". An island is one piece; a marked submesh is
-    /// each of its islands separately — a chain is many links, each kept, not one rigid chain — or itself when the reader
-    /// found none.
-    /// </summary>
-    internal static List<IReadOnlyCollection<int>> ShapePieces(ModelParts garment, IReadOnlySet<string> labels)
-    {
-        var pieces = new List<IReadOnlyCollection<int>>();
-        if (labels.Count == 0) return pieces;
-
-        var wholeSubmesh = new HashSet<(int, int)>();
-        foreach (var part in garment.Parts)
-            if (part.Island < 0 && labels.Contains(part.Label))
-                wholeSubmesh.Add((part.Mesh, part.Submesh));
-
-        var covered = new HashSet<(int, int)>();
-        foreach (var part in garment.Parts)
-        {
-            if (part.Island < 0) continue;
-            if (!labels.Contains(part.Label) && !wholeSubmesh.Contains((part.Mesh, part.Submesh))) continue;
-            pieces.Add(part.Triangles.Distinct().ToArray());
-            covered.Add((part.Mesh, part.Submesh));
-        }
-        foreach (var part in garment.Parts)
-            if (part.Island < 0 && labels.Contains(part.Label) && !covered.Contains((part.Mesh, part.Submesh)))
-                pieces.Add(part.Triangles.Distinct().ToArray());
-        return pieces;
     }
 
     /// <summary>
@@ -1712,11 +1650,10 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     private ushort? VariantMask(string? dir, BodySizeCatalog? mod, string slot)
     {
         if (dir == null || dir == VanillaBodyCatalog.Key || mod == null) return null;
-        if (BodyRetarget.ImcSlotName(slot) is not { } equipSlot) return null;
         var selected = penumbra.GetPlayerCollectionId() is { } collection
             ? penumbra.GetModSettings(collection, dir)?.Options
             : null;
-        return ImcEntrySource.MaskFor(mod.ModRoot, 0, equipSlot, selected);
+        return RefitCore.MaskOf(dir, mod, slot, selected);
     }
 
     /// <summary>One slot's two IMC masks, read on the framework thread for a worker to use.</summary>
@@ -1779,9 +1716,10 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
             : null;
         string body = bodyDir ?? "";
         var slots = Chosen(ctx);
-        string labelFrom = string.Join(" + ", slots.Select(s => from[s].Label));
-        if (fromBodyDir != null && bodies != null && bodies.TryGetValue(fromBodyDir, out string? fromName))
-            labelFrom = fromName + " — " + labelFrom;
+        string? fromName = fromBodyDir != null && bodies != null && bodies.TryGetValue(fromBodyDir, out string? named)
+            ? named
+            : null;
+        string labelFrom = RefitCore.LabelFrom(fromName, slots.Select(s => from[s].Label));
         var refits = new List<BodyRetargetWriter.Refit>();
         var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (target, plan) in all)
@@ -1798,17 +1736,20 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         // symptom points at the refit being wrong when it is simply not being worn. (A group Proteus makes itself
         // escapes this only by accident: a brand-new group has no stored choice, so its DefaultSettings applies — and
         // the second refit into that same group would hit exactly this.)
-        selectAfterSave = (group, refits[Math.Clamp(showing, 0, refits.Count - 1)].Option);
-
         string at = root;
         string? cutFrom = BodyRetargetWriter.OptionOfFile(ctx.Redirects, ctx.ModelRel, group);
+        selectAfterSave = (group, refits[Math.Clamp(showing, 0, refits.Count - 1)].Option, cutFrom,
+                           RefitCore.IsMulti(at, group));
         saveTask = Task.Run(() => new SaveResult(
             BodyRetargetWriter.Save(at, group, path, body, labelFrom, refits, cutFrom, manipulations),
             BodyRetargetWriter.ReadRecord(at)));
     }
 
-    /// <summary>The group and option a finished save should switch on; null for an undo, which switches nothing on.</summary>
-    private (string Group, string Option)? selectAfterSave;
+    /// <summary>
+    /// The group and option a finished save should switch on; null for an undo, which switches nothing on. In a
+    /// multi-choice group, <c>CutFrom</c> is the option it replaces (see <see cref="RefitCore.SelectionFor"/>).
+    /// </summary>
+    private (string Group, string Option, string? CutFrom, bool Multi)? selectAfterSave;
 
     /// <summary>
     /// Wear what was just saved, in the mod that holds it, once Penumbra has reloaded it. Penumbra IPC, so the framework
@@ -1825,8 +1766,12 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
             return;
         }
 
-        var ec = penumbra.SetModOption(collection, modDir, pick.Group, [pick.Option]);
-        log.Information("[Proteus] retarget: selected {0} / {1} in {2}: {3}", pick.Group, pick.Option, modDir, ec);
+        var ticked = penumbra.GetModSettings(collection, modDir)?.Options
+                             .FirstOrDefault(o => string.Equals(o.Key, pick.Group, StringComparison.OrdinalIgnoreCase)).Value;
+        var selection = RefitCore.SelectionFor(pick.Multi, pick.Option, ticked, pick.CutFrom);
+        var ec = penumbra.SetModOption(collection, modDir, pick.Group, selection);
+        log.Information("[Proteus] retarget: selected {0} / {1} in {2}: {3}", pick.Group, string.Join(", ", selection),
+                        modDir, ec);
     }
 
     private void StartUndo(in RetargetContext ctx, BodyRetargetWriter.Record saved)
@@ -1849,14 +1794,16 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     private string OptionName(in RetargetContext ctx, BodyOption target)
     {
         string body = bodyDir != null && bodies != null && bodies.TryGetValue(bodyDir, out string? name) ? name : Strings.Parts.RetargetBodyFallback;
-        return $"{body} — {ToLabel(ctx, target)}";
+        return RefitCore.OptionName(body, ToLabels(ctx, target));
     }
 
     /// <summary>One refit's sizes: the garment slot's <paramref name="target"/>, then each other slot's.</summary>
-    private string ToLabel(in RetargetContext ctx, BodyOption target)
+    private string ToLabel(in RetargetContext ctx, BodyOption target) => string.Join(" + ", ToLabels(ctx, target));
+
+    private List<string> ToLabels(in RetargetContext ctx, BodyOption target)
     {
         string primary = Primary(ctx);
-        return string.Join(" + ", Chosen(ctx).Select(s => s == primary ? target.Label : Targets(s)[0].Label));
+        return Chosen(ctx).Select(s => s == primary ? target.Label : Targets(s)[0].Label).ToList();
     }
 
     /// <summary>What a plan was made from: the model, each chosen pair, and which parts were held. A plan whose key no

@@ -1,4 +1,96 @@
 {
+  "AutoRefit.Body": {
+    "message": "体型",
+    "description": ""
+  },
+  "AutoRefit.BodyMissing.Fmt": {
+    "message": "此处选择的体型“{0}”已不再安装。请另选一个。",
+    "description": ""
+  },
+  "AutoRefit.ChestSize": {
+    "message": "胸部尺寸",
+    "description": ""
+  },
+  "AutoRefit.Choose": {
+    "message": "请选择…",
+    "description": ""
+  },
+  "AutoRefit.Clear": {
+    "message": "清除此合集的体型",
+    "description": ""
+  },
+  "AutoRefit.Collection": {
+    "message": "合集",
+    "description": ""
+  },
+  "AutoRefit.Collection.Current.Fmt": {
+    "message": "{0}（当前）",
+    "description": ""
+  },
+  "AutoRefit.Enable.Label": {
+    "message": "穿上装备时自动适配我的体型",
+    "description": ""
+  },
+  "AutoRefit.Enable.Tip": {
+    "message": "适配结果会像工作室的“体型尺寸”工具一样，作为新的尺寸选项保存到装备自己的 MOD 中，因此关闭 Proteus 后依然有效。在 Penumbra 中选择该 MOD 的“Original”或其他尺寸时，不会被改动。",
+    "description": ""
+  },
+  "AutoRefit.FindingBodies": {
+    "message": "正在查找体型 MOD…",
+    "description": ""
+  },
+  "AutoRefit.HandsFeet.Fmt": {
+    "message": "手部和脚部会自动匹配这些尺寸：{0} 和 {1}。",
+    "description": ""
+  },
+  "AutoRefit.Intro": {
+    "message": "当你穿上胸部、腿部、手部或脚部装备时，Proteus 会判断它是为哪个体型制作的，将其适配到这里选择的体型和尺寸，然后启用新的尺寸。每个 Penumbra 合集都有各自的选择。",
+    "description": ""
+  },
+  "AutoRefit.ItemInMod.Fmt": {
+    "message": "{0}（{1}）",
+    "description": ""
+  },
+  "AutoRefit.LegsSize": {
+    "message": "腿部尺寸",
+    "description": ""
+  },
+  "AutoRefit.NoBodies": {
+    "message": "未安装体型 MOD，因此没有可适配的目标。",
+    "description": ""
+  },
+  "AutoRefit.NoBodyChosen": {
+    "message": "未选择体型：在此合集中穿上的装备将保持原样。",
+    "description": ""
+  },
+  "AutoRefit.NoCollections": {
+    "message": "Penumbra 不可用，因此无法列出其合集。",
+    "description": ""
+  },
+  "AutoRefit.RunNow": {
+    "message": "适配当前穿着的装备",
+    "description": ""
+  },
+  "AutoRefit.RunNow.Tip": {
+    "message": "只有从现在开始穿上的装备才会自动适配。此按钮会适配角色已经穿着的装备。",
+    "description": ""
+  },
+  "AutoRefit.Vanilla.Label": {
+    "message": "也适配游戏原版装备",
+    "description": ""
+  },
+  "AutoRefit.Vanilla.Tip": {
+    "message": "未经 MOD 修改的装备没有可保存的 MOD，因此每件装备都会得到一个以物品和体型命名的新 MOD。",
+    "description": ""
+  },
+  "AutoRefit.Working": {
+    "message": "处理中…",
+    "description": ""
+  },
+  "AutoRefit.Working.Fmt": {
+    "message": "正在适配 {0}…",
+    "description": ""
+  },
   "Band.Cap.Bind": {
     "message": "绑定到设计",
     "description": ""
@@ -173,6 +265,42 @@
   },
   "Bindings.Update.Tip": {
     "message": "将角色身上的每个模组（启用／优先级／选项）与当前 Proteus 颜色\n记录到此绑定中。手动修改只有在点击此处后才会保留。",
+    "description": ""
+  },
+  "Chat.AutoRefit.BodyMissing.Fmt": {
+    "message": "[Proteus] 此合集用于自动适配的体型“{0}”未安装，因此不会进行任何适配。请在 /proteus > 设置 中另选一个。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Done.Fmt": {
+    "message": "[Proteus] {0} 现已适配 {1}。已在 {3} 中保存为“{2}”并启用。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Existing.Fmt": {
+    "message": "[Proteus] {0} 已经适配为 {1}；已启用该尺寸。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Failed.Fmt": {
+    "message": "[Proteus] 无法适配 {0}：{1}",
+    "description": ""
+  },
+  "Chat.AutoRefit.NoBodyMesh.Fmt": {
+    "message": "[Proteus] {0} 不含可用于读取尺寸的身体皮肤，因此保持原样。你可以用工作室的“体型尺寸”工具手动适配。",
+    "description": ""
+  },
+  "Chat.AutoRefit.NoSizeForRace.Fmt": {
+    "message": "[Proteus] {0} 没有适用于 {2} 的{1}尺寸，因此 {3} 保持原样。",
+    "description": ""
+  },
+  "Chat.AutoRefit.PartsLeftOut.Fmt": {
+    "message": "以下部位无法一同适配，保持原尺寸：{0}。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Start.Fmt": {
+    "message": "[Proteus] 正在将 {0} 从 {1} 适配为 {2}。完成后会自动启用。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Unsure.Fmt": {
+    "message": "[Proteus] 无法判断 {0} 是为哪个体型制作的，因此保持原样。你可以用工作室的“体型尺寸”工具手动适配。",
     "description": ""
   },
   "Chat.ContentUnplaced.Fmt": {
@@ -2939,6 +3067,10 @@
     "message": "Proteus 在两次合成之间在内存中保留多少已解码的贴图数据。\n\n一张 4K 贴图解码后占用 64 MB，因此这实际上是个数量设置：2048 MB ≈ 30 张。\n只有当它能容纳整整一次合成所需的量时才有帮助——低于该值，每次运行都会挤掉\n下一次所需的内容，结果什么都无法复用。\n\n请查看重新合成日志中的“cache N entries, M MB”数值：如果在没有任何改动的\n第二次合成中仍报告未命中，就调高此值。若游戏开始使用页面文件，则调低。\n空闲 60 秒后会自动释放。",
     "description": ""
   },
+  "Settings.Section.AutoRefit": {
+    "message": "体型自动适配",
+    "description": ""
+  },
   "Settings.Section.Diagnostics": {
     "message": "诊断",
     "description": ""
@@ -3707,12 +3839,24 @@
     "message": "（原版）",
     "description": ""
   },
-  "WhatsNew.Title": {
-    "message": "Proteus 更新内容",
+  "WhatsNew.AutoRefit.Body": {
+    "message": "现在，Proteus 能在你穿上胸部、腿部、手部和脚部装备的那一刻，自动将其适配到你的体型。它会判断装备是为哪个体型 MOD 的哪个尺寸制作的，适配装备及其覆盖的身体部位，把新尺寸保存到装备自己的 MOD 中并启用。开始和完成时会在聊天栏提示。\n\n使用方法：打开 设置 › 体型自动适配，勾选“穿上装备时自动适配我的体型”，然后为每个 Penumbra 合集选择你的体型 MOD 以及胸部和腿部尺寸；手部和脚部会自动匹配。已经穿着的装备可以用“适配当前穿着的装备”来适配，游戏原版装备另有一个复选框。在 Penumbra 中选择“Original”或其他尺寸时，始终不会被改动。",
     "description": ""
   },
-  "WhatsNew.Intro": {
-    "message": "本次更新有三件事值得了解。此窗口只会打开一次，之后不再出现。",
+  "WhatsNew.AutoRefit.Head": {
+    "message": "装备会自动适配你的体型",
+    "description": ""
+  },
+  "WhatsNew.IntroAll": {
+    "message": "关于 Proteus 值得了解的四件事。此窗口只会打开一次，之后不再出现。",
+    "description": ""
+  },
+  "WhatsNew.IntroSince": {
+    "message": "自你上次看到此窗口以来有了新内容。此窗口只会打开一次，之后不再出现。",
+    "description": ""
+  },
+  "WhatsNew.Title": {
+    "message": "Proteus 更新内容",
     "description": ""
   },
   "WhatsNew.Upscales.Head": {

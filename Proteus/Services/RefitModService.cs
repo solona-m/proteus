@@ -259,6 +259,9 @@ internal sealed class RefitModService(PenumbraBridge penumbra, CompositorService
     private Pending? pending;
     private long nextAttempt;
 
+    /// <summary>A mod made by <see cref="Ensure"/> is still being registered and switched on; see <see cref="Pump"/>.</summary>
+    internal bool IsPending => pending != null;
+
     /// <summary>How often to re-ask while waiting, so Penumbra IPC is not called every frame.</summary>
     private const long AttemptIntervalMs = 250;
 

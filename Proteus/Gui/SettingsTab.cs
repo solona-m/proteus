@@ -17,6 +17,7 @@ internal sealed class SettingsTab
     private readonly SidecarDiscoveryService discovery;
     private readonly DesignBindingService designBindings;
     private readonly HatCompatPanel hatCompat;
+    private readonly AutoRefitPanel autoRefit;
     private readonly LogExportService logExport;
 
     // Copy Logs: the running export, polled each frame, then the file it wrote or why it could not.
@@ -25,13 +26,15 @@ internal sealed class SettingsTab
     private string? _copyLogsError;
 
     public SettingsTab(Configuration config, CompositorService compositor, SidecarDiscoveryService discovery,
-        DesignBindingService designBindings, HatCompatPanel hatCompat, LogExportService logExport)
+        DesignBindingService designBindings, HatCompatPanel hatCompat, AutoRefitPanel autoRefit,
+        LogExportService logExport)
     {
         this.config = config;
         this.compositor = compositor;
         this.discovery = discovery;
         this.designBindings = designBindings;
         this.hatCompat = hatCompat;
+        this.autoRefit = autoRefit;
         this.logExport = logExport;
     }
 
@@ -78,6 +81,12 @@ internal sealed class SettingsTab
         ProteusStyle.SectionHeader(s.SecHatCompat);
         using (ProteusStyle.Card())
             hatCompat.Draw();
+
+        // Always drawn, for the same reason: its switch lives inside it.
+        ImGui.Spacing();
+        ProteusStyle.SectionHeader(s.SecAutoRefit);
+        using (ProteusStyle.Card())
+            autoRefit.Draw();
 
         ImGui.Spacing();
         ProteusStyle.SectionHeader(s.SecSkinEffects);

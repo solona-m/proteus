@@ -403,6 +403,26 @@ public class BodyRetargetWriterTests : IDisposable
     }
 
     [Fact]
+    public void A_size_saved_into_a_multi_choice_list_joins_it_beside_the_piece_it_was_cut_from()
+    {
+        // The automatic refit's case: no size group switches the model, so the size goes into the list the piece itself
+        // is ticked in. Appended — Penumbra keeps a multi-choice selection as a bitmask, so nothing may move — and the
+        // list stays multi-choice, with the author's selection untouched.
+        WriteAuthorSizeGroup("Multi", 0b11L);
+        var outcome = BodyRetargetWriter.Save(root, TopSize, GamePath, "Neolithe", "Rue Med",
+                                              [new BodyRetargetWriter.Refit("Neolithe — S", [7], "S")],
+                                              fromOption: "Rue Med");
+        Assert.True(outcome.Ok, outcome.Message);
+
+        var after = Read(TopSize);
+        Assert.Equal("Multi", after.GetProperty("Type").GetString());
+        Assert.Equal(0b11L, after.GetProperty("DefaultSettings").GetInt64());
+        Assert.Equal(["Rue Med", "Rue Large", "Neolithe — S"],
+                     after.GetProperty("Options").EnumerateArray().Select(o => o.GetProperty("Name").GetString()));
+        Assert.True(BodyRetargetWriter.ReadRecord(root)!.Options.Single().InAuthorGroup);
+    }
+
+    [Fact]
     public void Undo_takes_only_its_own_option_out_of_the_author_s_group()
     {
         WriteAuthorSizeGroup();
