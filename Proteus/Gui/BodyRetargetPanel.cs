@@ -1470,6 +1470,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
             if (swap.Trimmed > 0) parts.Add($"{swap.Trimmed:N0} weights trimmed");
             if (swap.Posed > 0) parts.Add($"{swap.Posed} posed skin mesh(es) kept");
             if (swap.ExtrasDropped > 0) parts.Add($"{swap.ExtrasDropped:N0} extras tris dropped");
+            if (swap.Adorned > 0) parts.Add($"{swap.Adorned:N0} nail/piercing tris carried");
             if (swap.Unplaced > 0) parts.Add($"{swap.Unplaced:N0} weights unplaced");
             if (swap.LostShapes > 0) parts.Add($"{swap.LostShapes} shape key(s) lost");
         }

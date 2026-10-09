@@ -349,6 +349,143 @@ public class BodyRetargetTests
         Assert.Null(BodyRetarget.SwapSkin(hipsOnly, [Resized("_top", chest)], out _));
     }
 
+    // ── the new body's nails and piercings ──────────────────────────────────────────────────────────────
+
+    private const string TreNails = "/mt_c0201b0001_trenails.mtrl";
+
+    [Fact]
+    public void The_body_s_nails_come_in_with_its_skin_tagged_as_the_body_tags_them()
+    {
+        // Tre draws its nails in their own material, switched on by a nail mod's atrx_nt_mani. A glove refitted onto
+        // Tre's hands took the skin alone, and the hands went bare.
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)));
+        var hands = SyntheticModel.Build(["atrx_nt_mani"],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)),
+            new SyntheticModel.Mesh(TreNails, new SyntheticModel.Sub(0b1, OffsetZ: 0.001f)));
+
+        var rebuilt = BodyRetarget.SwapSkin(garment, [Resized("_glv", hands)], out var report);
+
+        Assert.NotNull(rebuilt);
+        Assert.Equal(1, report.Adorned);
+        var model = ModelPartReader.Read(rebuilt!)!;
+        var nails = model.Parts.Single(p => p.Island < 0 && p.Material == TreNails);
+        Assert.Equal(["atrx_nt_mani"], Enumerable.Range(0, model.AttributeNames.Count)
+                                                 .Where(bit => (nails.AttributeMask & (1u << bit)) != 0)
+                                                 .Select(bit => model.AttributeNames[bit]));
+    }
+
+    [Fact]
+    public void Nails_over_skin_the_author_deleted_stay_out()
+    {
+        // A full glove: its author deleted the fingertips, and the body's nails go with them. The one over skin the
+        // garment draws comes in.
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)));
+        var hands = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5),
+                                                  new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetY: 50f)),
+            new SyntheticModel.Mesh(TreNails, new SyntheticModel.Sub(0, OffsetZ: 0.001f),
+                                              new SyntheticModel.Sub(0, OffsetY: 50f, OffsetZ: 0.001f)));
+
+        var rebuilt = BodyRetarget.SwapSkin(garment, [Resized("_glv", hands)], out var report);
+
+        Assert.Equal("cut 3 adorned 1", $"cut {report.Cut} adorned {report.Adorned}");
+        Assert.Equal(1, Drawn(rebuilt!)[TreNails.TrimStart('/')]);
+    }
+
+    [Fact]
+    public void A_piercing_under_cloth_stays_out_unless_the_garment_showed_one_there()
+    {
+        // A top that keeps the skin under an opaque cup: put in, the body's ring would stand through the cloth. But
+        // where the garment carried its own piercing, its author showed one — through sheer cloth or not.
+        const string piercings = "/mt_c0201b0001_piercings.mtrl";
+        var chest = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)),
+            new SyntheticModel.Mesh(piercings, new SyntheticModel.Sub(0, OffsetZ: 0.001f)));
+        var covered = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)),
+            new SyntheticModel.Mesh(ClothMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 4, OffsetZ: 0.003f)));
+        var shown = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)),
+            new SyntheticModel.Mesh(ClothMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 4, OffsetZ: 0.003f)),
+            new SyntheticModel.Mesh(piercings, new SyntheticModel.Sub(0, OffsetZ: 0.001f)));
+
+        var under = BodyRetarget.SwapSkin(covered, [Resized("_top", chest)], out var underReport);
+        var over = BodyRetarget.SwapSkin(shown, [Resized("_top", chest)], out var overReport);
+
+        Assert.Equal(0, underReport.Adorned);
+        Assert.False(Drawn(under!).ContainsKey(piercings.TrimStart('/')));
+        // The garment's own, and the body's in its place: one, not two.
+        Assert.Equal(1, overReport.Adorned);
+        Assert.Equal(1, Drawn(over!)[piercings.TrimStart('/')]);
+    }
+
+    [Fact]
+    public void A_chain_hanging_off_the_skin_comes_in_with_what_it_hangs_from()
+    {
+        // YAB strings a chain between the nipple rings, its links 20-30 mm in front of the sternum: too far off the skin
+        // to land on it, they were left out link by link. A link goes with the one it touches; one touching nothing
+        // that came in stays out.
+        const string piercings = "/mt_c0201b0001_piercings.mtrl";
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)));
+        var chain = new[] { 0.001f, 0.005f, 0.009f, 0.013f, 0.017f, 0.021f, 0.025f, 0.029f }
+            .Select(z => new SyntheticModel.Sub(0, OffsetZ: z))
+            .Append(new SyntheticModel.Sub(0, OffsetX: 3f, OffsetZ: 0.025f))   // hung from nothing
+            .ToArray();
+        var chest = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)),
+            new SyntheticModel.Mesh(piercings, chain));
+
+        var rebuilt = BodyRetarget.SwapSkin(garment, [Resized("_top", chest)], out var report);
+
+        Assert.Equal(8, report.Adorned);
+        Assert.Equal(8, Drawn(rebuilt!)[piercings.TrimStart('/')]);
+    }
+
+    [Fact]
+    public void A_garment_with_no_material_room_keeps_its_own_nails()
+    {
+        // Nine materials, the garment's own Tre nails among them: the body's skin takes the tenth, and the body's nails
+        // have nowhere to go. Swapped piecemeal, the garment's nails went and nothing came in their place.
+        var meshes = new List<SyntheticModel.Mesh>
+        {
+            new(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)),
+            new(TreNails, new SyntheticModel.Sub(0, OffsetZ: 0.001f)),
+        };
+        for (int i = 0; i < 7; i++)
+            meshes.Add(new($"/mt_c0201e6255_glv_{(char)('a' + i)}.mtrl",
+                           new SyntheticModel.Sub(0, OffsetY: 50f + i, OffsetZ: 0.001f)));
+        var garment = SyntheticModel.Build([], [.. meshes]);
+        var hands = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)),
+            new SyntheticModel.Mesh(TreNails, new SyntheticModel.Sub(0, OffsetZ: 0.001f)));
+
+        var rebuilt = BodyRetarget.SwapSkin(garment, [Resized("_glv", hands)], out var report);
+
+        Assert.NotNull(rebuilt);
+        Assert.Equal(0, report.Adorned);
+        Assert.Equal(1, Drawn(rebuilt!)[TreNails.TrimStart('/')]);           // the garment's own, kept
+    }
+
+    [Theory]
+    [InlineData("/mt_c0201b0001_piercings.mtrl", true)]
+    [InlineData("/mt_c0201b0001_neolithe_piercings.mtrl", true)]
+    [InlineData("/mt_c0201b0001_nipplepierce.mtrl", true)]
+    [InlineData("/mt_c0201b0001_trenails.mtrl", true)]
+    [InlineData("/mt_c0201b0001_treaccent.mtrl", true)]
+    [InlineData("/mt_c0201b0001_neolithe_nails.mtrl", true)]
+    [InlineData("/mt_c0201b0001_yafinger.mtrl", true)]
+    [InlineData("/mt_c0201b0001_bibo.mtrl", false)]              // skin
+    [InlineData("/mt_c0201b0001_bibopube.mtrl", false)]          // sits under whatever the legs wear
+    [InlineData("/mt_c0201b0001_neolithe_penis.mtrl", false)]
+    [InlineData("/mt_c0201b0001_tre_trans.mtrl", false)]
+    [InlineData("/mt_c0201b0001_ckundies.mtrl", false)]
+    [InlineData("/mt_c0201e6255_top_a.mtrl", false)]             // a garment's own
+    public void Only_a_body_s_nails_and_piercings_are_carried(string material, bool carried)
+        => Assert.Equal(carried, BodyRetarget.IsBodyAdornmentMaterial(material));
+
     // ── which mods are bodies ───────────────────────────────────────────────────────────────────────────
 
     [Theory]

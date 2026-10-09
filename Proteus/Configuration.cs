@@ -496,6 +496,13 @@ public class AutoRefitPreference
 
     /// <summary>The legs size refitted onto.</summary>
     public BodySizeRef? Legs { get; set; }
+
+    /// <summary>
+    /// Every mod group (<c>"modDir|group"</c>) a refit has been switched on in, in this collection. Once there, a group
+    /// that no longer holds a refit is the player's choice — "Original", or the author's own size — and putting the
+    /// piece on again leaves it alone (see <c>AutoRefitDecisions.ChoseOtherwise</c>). OrdinalIgnoreCase, populated in place.
+    /// </summary>
+    public HashSet<string> SwitchedOn { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 /// <summary>
