@@ -251,9 +251,10 @@ internal sealed class AutoRefitPanel(AutoRefitWatcher watcher, PenumbraBridge pe
             config.Save();
         }
 
+        // Nothing until chest or legs is chosen: the refit follows only a chosen size, never the body's first.
         var anchor = chest ?? legs;
-        string hands = AutoRefitDecisions.Companion(catalog.For("_glv", race), anchor, null)?.Label ?? "—";
-        string feet = AutoRefitDecisions.Companion(catalog.For("_sho", race), anchor, null)?.Label ?? "—";
+        string hands = anchor == null ? "—" : AutoRefitDecisions.Companion(catalog.For("_glv", race), anchor, null)?.Label ?? "—";
+        string feet = anchor == null ? "—" : AutoRefitDecisions.Companion(catalog.For("_sho", race), anchor, null)?.Label ?? "—";
         ImGui.TextDisabled(string.Format(s.HandsFeetFmt, hands, feet));
     }
 

@@ -291,6 +291,10 @@
     "message": "[Proteus] {0} にはサイズを読み取れる体の肌が含まれていないため、そのままにしました。スタジオの「体型サイズ」ツールで手動で調整できます。",
     "description": ""
   },
+  "Chat.AutoRefit.NoSizeChosen.Fmt": {
+    "message": "[Proteus] {1} の{0}のサイズが選ばれていないため、{2} はそのままにしました。/proteus > 設定 で選んでください。",
+    "description": ""
+  },
   "Chat.AutoRefit.NoSizeForRace.Fmt": {
     "message": "[Proteus] {0} には {2} 用の{1}のサイズがないため、{3} はそのままにしました。",
     "description": ""

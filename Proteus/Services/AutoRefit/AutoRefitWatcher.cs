@@ -503,11 +503,9 @@ public sealed class AutoRefitWatcher : IDisposable
     /// dev reload would otherwise reload, select and redraw through bridges and a compositor already disposed; and the
     /// switch-on after a save runs with no token at all.
     /// <para/>
-    /// The caller carries on on a WORKER afterwards, never on the framework thread — and that is the point of the
-    /// <c>ForceYielding</c> below, not a detail. The task Dalamud hands back is completed on the framework thread, and an
-    /// await continues on whichever thread completed what it awaited; so without it, everything a refit did after its
-    /// first hop — sampling every body, ranking a pack's sizes, the refit itself, the save — ran inside the game's frame,
-    /// and the game hung for as long as the refit took.
+    /// The caller carries on on a WORKER afterwards, never on the framework thread — see <see cref="OffThread{T}"/>.
+    /// Without it, everything a refit did after its first hop — sampling every body, ranking a pack's sizes, the refit
+    /// itself, the save — ran inside the game's frame, and the game hung for as long as the refit took.
     /// </summary>
     private async Task<T> OnFramework<T>(Func<T> work, [System.Runtime.CompilerServices.CallerLineNumber] int line = 0)
     {
@@ -524,7 +522,29 @@ public sealed class AutoRefitWatcher : IDisposable
                                 clock.ElapsedMilliseconds);
             }
         });
-        return await hop.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
+        return await OffThread(hop);
+    }
+
+    /// <summary>
+    /// <paramref name="task"/>'s result, with whatever awaits it continuing on a thread-pool worker — never on the thread
+    /// that completed it.
+    /// <para/>
+    /// An await continues INLINE on whichever thread completes what it awaited. <c>ConfigureAwait(false)</c> does not
+    /// change that, and neither does <c>ConfigureAwaitOptions.ForceYielding</c>, which only yields when the task is
+    /// already complete at the await — a hop to the framework thread completes a frame later, so with it the refit
+    /// still ran inside the game's frame (testing-569/570 logged "running on the framework thread" on every refit, one
+    /// of them 17 s). A completion source that runs its continuations asynchronously queues them instead.
+    /// </summary>
+    internal static async Task<T> OffThread<T>(Task<T> task)
+    {
+        var done = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = task.ContinueWith(t =>
+        {
+            if (t.IsFaulted) done.TrySetException(t.Exception!.InnerExceptions);
+            else if (t.IsCanceled) done.TrySetCanceled();
+            else done.TrySetResult(t.Result);
+        }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        return await done.Task.ConfigureAwait(false);
     }
 
     /// <summary>
@@ -565,11 +585,30 @@ public sealed class AutoRefitWatcher : IDisposable
             return;
         }
         var targetCat = targetMod.Catalog;
+        string item = ItemName(r, g);
+        string primary = r.Slot;
+
+        // ── a size chosen for this part, before anything is read ──
+        // Never a guess at the size itself: picking a body in Settings clears both sizes, and a refit in the moment before
+        // they were chosen again took the body's first size — every piece put on came out in Neolithe "SFW XS". Hands and
+        // feet follow whichever of chest and legs was chosen.
+        bool chosen = primary switch
+        {
+            "_top" => g.Preference.Chest != null,
+            "_dwn" => g.Preference.Legs != null,
+            _ => g.Preference.Chest != null || g.Preference.Legs != null,
+        };
+        if (!chosen)
+        {
+            Say(string.Format(Loc.Localize("Chat.AutoRefit.NoSizeChosen.Fmt",
+                    "[Proteus] No {0} size is chosen for {1}, so {2} was left as it is. Choose one under /proteus > "
+                  + "Settings."), SlotName(primary), targetMod.Name, item), problem: true);
+            return;
+        }
 
         // ── the garment, baked for the wearer's race when it is drawn from another's ──
         byte[] bytes = isVanilla ? g.VanillaBytes ?? [] : await File.ReadAllBytesAsync(r.Resolved!, ct);
         if (bytes.Length == 0) return;
-        string item = ItemName(r, g);
 
         List<PenumbraModMeta.Redirect> redirects = isVanilla ? [] : PenumbraModMeta.ReadAllRedirects(r.ModRoot!);
         var ownRecord = isVanilla ? null : BodyRetargetWriter.ReadRecord(r.ModRoot!);
@@ -629,14 +668,19 @@ public sealed class AutoRefitWatcher : IDisposable
         // ── what to refit onto ──
         var chestTo = AutoRefitDecisions.Resolve(targetCat.For("_top", race), g.Preference.Chest);
         var legsTo = AutoRefitDecisions.Resolve(targetCat.For("_dwn", race), g.Preference.Legs);
+        // The piece's own part goes only onto a size the player chose (checked above). A part it merely reaches — the
+        // legs of a dress, with only a chest size chosen — follows the chosen one, as hands and feet always do: left
+        // out, the hem would keep the old body's thighs over the new body's skin.
+        BodyOption? Follow(string slot) => (chestTo ?? legsTo) is { } anchor
+            ? AutoRefitDecisions.Companion(targetCat.For(slot, race), anchor, worn[slot])
+            : null;
         BodyOption? TargetFor(string slot) => slot switch
         {
-            "_top" => chestTo ?? AutoRefitDecisions.Companion(targetCat.For(slot, race), legsTo, worn[slot]),
-            "_dwn" => legsTo ?? AutoRefitDecisions.Companion(targetCat.For(slot, race), chestTo, worn[slot]),
-            _ => AutoRefitDecisions.Companion(targetCat.For(slot, race), chestTo ?? legsTo, worn[slot]),
+            "_top" => chestTo ?? (slot == primary ? null : Follow(slot)),
+            "_dwn" => legsTo ?? (slot == primary ? null : Follow(slot)),
+            _ => Follow(slot),
         };
 
-        string primary = r.Slot;
         if (TargetFor(primary) is not { } target)
         {
             Say(string.Format(Loc.Localize("Chat.AutoRefit.NoSizeForRace.Fmt",

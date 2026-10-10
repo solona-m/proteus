@@ -291,6 +291,10 @@
     "message": "[Proteus] {0} no contiene piel del cuerpo de la que leer su talla, así que se queda como está. Puedes ajustarlo a mano con la herramienta «Talla del cuerpo» del Estudio.",
     "description": ""
   },
+  "Chat.AutoRefit.NoSizeChosen.Fmt": {
+    "message": "[Proteus] No se ha elegido una talla de {0} para {1}, así que {2} se dejó como estaba. Elige una en /proteus > Ajustes.",
+    "description": ""
+  },
   "Chat.AutoRefit.NoSizeForRace.Fmt": {
     "message": "[Proteus] {0} no tiene talla de {1} para {2}, así que {3} se queda como está.",
     "description": ""

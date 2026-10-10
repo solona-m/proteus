@@ -291,6 +291,10 @@
     "message": "[Proteus] {0} 不含可用于读取尺寸的身体皮肤，因此保持原样。你可以用工作室的“体型尺寸”工具手动适配。",
     "description": ""
   },
+  "Chat.AutoRefit.NoSizeChosen.Fmt": {
+    "message": "[Proteus] 尚未为 {1} 选择{0}尺寸，因此 {2} 保持原样。请在 /proteus > 设置 中选择。",
+    "description": ""
+  },
   "Chat.AutoRefit.NoSizeForRace.Fmt": {
     "message": "[Proteus] {0} 没有适用于 {2} 的{1}尺寸，因此 {3} 保持原样。",
     "description": ""

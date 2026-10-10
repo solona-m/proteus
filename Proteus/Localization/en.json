@@ -291,6 +291,10 @@
     "message": "[Proteus] {0} carries no body skin to read its size from, so it was left as it is. You can refit it by hand with the Studio's Body size tool.",
     "description": "Chat line when a piece of gear has no body skin in it to measure its size from. {0} names the gear. \"Studio\" and \"Body size\" match Tab.Parts and Parts.Tool.Retarget. Do NOT translate \"Proteus\"."
   },
+  "Chat.AutoRefit.NoSizeChosen.Fmt": {
+    "message": "[Proteus] No {0} size is chosen for {1}, so {2} was left as it is. Choose one under /proteus > Settings.",
+    "description": "Status line when the automatic refit has a body but no size chosen for this body part. {0} is the body part (Chest, Legs, Hands or Feet), {1} the body mod, {2} names the gear. Do NOT translate \"Proteus\" or \"/proteus\"."
+  },
   "Chat.AutoRefit.NoSizeForRace.Fmt": {
     "message": "[Proteus] {0} has no {1} size for {2}, so {3} was left as it is.",
     "description": "Chat line when the chosen body has no size for this body part and race. {0} is the body mod, {1} the body part (Chest, Legs, Hands or Feet), {2} the race, {3} names the gear. Do NOT translate \"Proteus\"."

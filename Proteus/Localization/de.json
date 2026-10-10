@@ -291,6 +291,10 @@
     "message": "[Proteus] {0} enthält keine Körperhaut, an der sich die Größe ablesen ließe, daher bleibt es, wie es ist. Du kannst es mit dem Werkzeug „Körpergröße“ im Studio von Hand anpassen.",
     "description": ""
   },
+  "Chat.AutoRefit.NoSizeChosen.Fmt": {
+    "message": "[Proteus] Für {1} ist keine Größe für {0} gewählt, daher wurde {2} so gelassen. Wähle eine unter /proteus > Einstellungen.",
+    "description": ""
+  },
   "Chat.AutoRefit.NoSizeForRace.Fmt": {
     "message": "[Proteus] {0} hat keine Größe für {1} bei {2}, daher bleibt {3}, wie es ist.",
     "description": ""

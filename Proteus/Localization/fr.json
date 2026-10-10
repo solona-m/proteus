@@ -291,6 +291,10 @@
     "message": "[Proteus] {0} ne contient aucune peau du corps d'où lire sa taille : il reste tel quel. Vous pouvez l'ajuster à la main avec l'outil « Taille du corps » du Studio.",
     "description": ""
   },
+  "Chat.AutoRefit.NoSizeChosen.Fmt": {
+    "message": "[Proteus] Aucune taille de {0} n'est choisie pour {1}, donc {2} a été laissé tel quel. Choisissez-en une dans /proteus > Paramètres.",
+    "description": ""
+  },
   "Chat.AutoRefit.NoSizeForRace.Fmt": {
     "message": "[Proteus] {0} n'a pas de taille pour {1} chez {2} : {3} reste tel quel.",
     "description": ""
