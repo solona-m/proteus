@@ -120,8 +120,17 @@ internal sealed class AutoRefitPanel(AutoRefitWatcher watcher, PenumbraBridge pe
             }
         }
 
+        // What is worn now, in the collection worn in — whichever one is shown above. Armed by a held modifier, as every
+        // destructive button in Proteus is: there are no confirmation dialogs.
+        ImGui.SameLine();
+        bool armed = ImGui.GetIO().KeyCtrl || ImGui.GetIO().KeyShift;
+        using (ImRaii.Disabled(!armed || watcher.Undoing))
+            if (ImGui.Button(s.UndoWorn))
+                watcher.UndoWorn();
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(s.UndoWornTip);
+
         var view = watcher.Current;
-        if (view.Busy) ImGui.TextDisabled(s.Working);
+        if (view.Busy) ImGui.TextDisabled(watcher.Undoing ? s.UndoWorking : s.Working);
         if (view.Message.Length > 0)
         {
             ImGui.Spacing();

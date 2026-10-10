@@ -75,6 +75,34 @@
     "message": "Automatisch angepasst wird nur Ausrüstung, die ab jetzt angelegt wird. Dies passt die Teile an, die dein Charakter bereits trägt.",
     "description": ""
   },
+  "AutoRefit.UndoDone.Fmt": {
+    "message": "Rückgängig gemacht: {0} angepasste Größen entfernt und {1} Mods für die Ausrüstung des Spiels gelöscht. Diese Teile werden nicht erneut angepasst, außer du klickst auf „Was ich gerade trage anpassen“.",
+    "description": ""
+  },
+  "AutoRefit.UndoFailed.Fmt": {
+    "message": "Die Anpassung konnte nicht rückgängig gemacht werden: {0}",
+    "description": ""
+  },
+  "AutoRefit.UndoNothing": {
+    "message": "Nichts von dem, was du trägst, wurde automatisch angepasst.",
+    "description": ""
+  },
+  "AutoRefit.UndoPartial.Fmt": {
+    "message": "{0} angepasste Größen entfernt, aber {1} konnten nicht entfernt werden. Im Log steht, welche und warum.",
+    "description": ""
+  },
+  "AutoRefit.UndoWorking": {
+    "message": "Anpassung wird rückgängig gemacht...",
+    "description": ""
+  },
+  "AutoRefit.UndoWorn": {
+    "message": "Anpassung meiner getragenen Ausrüstung rückgängig machen",
+    "description": ""
+  },
+  "AutoRefit.UndoWorn.Tip": {
+    "message": "Für die Ausrüstung, die du gerade trägst: entfernt die Größe, die die automatische Anpassung erstellt hat, löscht den Mod, den sie für die Ausrüstung des Spiels erstellt hat, und stellt die vorherige Option wieder her. Diese Teile bleiben danach so, wie sie sind, wenn du sie wieder anlegst. Größen, die du selbst im Werkzeug „Körpergröße“ erstellt hast, und Anpassungen von allem, was du nicht trägst, bleiben erhalten.\n\nHalte Strg oder Shift gedrückt und klicke.",
+    "description": ""
+  },
   "AutoRefit.Vanilla.Label": {
     "message": "Auch die Ausrüstung des Spiels anpassen",
     "description": ""

@@ -75,6 +75,34 @@
     "message": "자동으로 맞추는 것은 앞으로 착용하는 장비뿐입니다. 이 버튼은 캐릭터가 이미 입고 있는 장비를 맞춥니다.",
     "description": ""
   },
+  "AutoRefit.UndoDone.Fmt": {
+    "message": "되돌렸습니다: 맞춘 크기 {0}개를 제거하고 게임 기본 장비용으로 만든 모드 {1}개를 삭제했습니다. '지금 입고 있는 장비 맞추기'을(를) 누르지 않는 한 이 장비는 다시 맞추지 않습니다.",
+    "description": ""
+  },
+  "AutoRefit.UndoFailed.Fmt": {
+    "message": "맞춤을 되돌리지 못했습니다: {0}",
+    "description": ""
+  },
+  "AutoRefit.UndoNothing": {
+    "message": "착용 중인 장비 중 자동으로 맞춘 것이 없습니다.",
+    "description": ""
+  },
+  "AutoRefit.UndoPartial.Fmt": {
+    "message": "맞춘 크기 {0}개를 제거했지만 {1}개는 제거하지 못했습니다. 어떤 것이 왜 실패했는지는 로그에 있습니다.",
+    "description": ""
+  },
+  "AutoRefit.UndoWorking": {
+    "message": "맞춤을 되돌리는 중...",
+    "description": ""
+  },
+  "AutoRefit.UndoWorn": {
+    "message": "착용 중인 장비의 맞춤 되돌리기",
+    "description": ""
+  },
+  "AutoRefit.UndoWorn.Tip": {
+    "message": "지금 착용한 장비에 대해: 자동 맞춤이 만든 크기를 제거하고, 게임 기본 장비용으로 만든 모드를 삭제하고, 이전 옵션으로 되돌립니다. 이 장비는 다시 착용해도 그대로 둡니다. '체형 크기' 도구에서 직접 만든 크기와 착용하지 않은 장비의 맞춤은 그대로 남습니다.\n\nCtrl 또는 Shift를 누른 채 클릭하세요.",
+    "description": ""
+  },
   "AutoRefit.Vanilla.Label": {
     "message": "게임 기본 장비도 맞추기",
     "description": ""

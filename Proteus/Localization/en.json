@@ -75,6 +75,34 @@
     "message": "Only gear put on from now on is refitted by itself. This does the pieces already on your character.",
     "description": "Tooltip on the button that refits the gear already worn."
   },
+  "AutoRefit.UndoDone.Fmt": {
+    "message": "Undone: removed {0} refitted sizes and deleted {1} mods made for the game's own gear. These pieces won't be refitted again unless you click \"Refit what I'm wearing now\".",
+    "description": "Shown after the undo. {0} is how many refitted sizes were removed, {1} how many mods made for unmodded gear were deleted. The quoted text is the button AutoRefit.RunNow - quote it exactly as that key reads in your language."
+  },
+  "AutoRefit.UndoFailed.Fmt": {
+    "message": "Couldn't undo the refit: {0}",
+    "description": "Shown when the undo failed outright. {0} is the error."
+  },
+  "AutoRefit.UndoNothing": {
+    "message": "Nothing you're wearing was refitted automatically.",
+    "description": "Shown after the undo when none of the gear being worn had been refitted automatically."
+  },
+  "AutoRefit.UndoPartial.Fmt": {
+    "message": "Removed {0} refitted sizes, but {1} could not be removed. The log says which and why.",
+    "description": "Shown after the undo when some sizes could not be removed. {0} is how many were removed, {1} how many could not be."
+  },
+  "AutoRefit.UndoWorking": {
+    "message": "Undoing the refit...",
+    "description": "Status line while the undo is running."
+  },
+  "AutoRefit.UndoWorn": {
+    "message": "Undo the refit of what I'm wearing",
+    "description": "Button in Settings > Body refit that takes back the automatic refit of the gear being worn right now."
+  },
+  "AutoRefit.UndoWorn.Tip": {
+    "message": "For the gear you have on now: removes the size the automatic refit made, deletes the mod it made for the game's own gear, and puts back the option you had before. Those pieces are then left as they are when you put them on again. Sizes you made yourself in the Body size tool, and refits of anything you are not wearing, stay.\n\nHold Ctrl or Shift and click.",
+    "description": "Tooltip on the undo button. 'Body size' is the name of the Studio tool (Parts.Tool.Retarget) - use the same name. The last sentence is the same as Parts.Brush.Revert.Arm.Tip."
+  },
   "AutoRefit.Vanilla.Label": {
     "message": "Also refit the game's own gear",
     "description": "Checkbox under the Body refit switch: also refit unmodded (the game's own) gear."

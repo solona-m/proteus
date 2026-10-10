@@ -75,6 +75,34 @@
     "message": "自動で調整されるのは、これから身に着ける装備だけです。このボタンは、すでにキャラクターが着ている装備を調整します。",
     "description": ""
   },
+  "AutoRefit.UndoDone.Fmt": {
+    "message": "元に戻しました：調整済みサイズを {0} 個削除し、ゲーム本来の装備用に作った MOD を {1} 個削除しました。「今着ている装備を調整」をクリックしない限り、これらの装備は再び調整されません。",
+    "description": ""
+  },
+  "AutoRefit.UndoFailed.Fmt": {
+    "message": "調整を元に戻せませんでした：{0}",
+    "description": ""
+  },
+  "AutoRefit.UndoNothing": {
+    "message": "身に着けている装備に、自動調整されたものはありません。",
+    "description": ""
+  },
+  "AutoRefit.UndoPartial.Fmt": {
+    "message": "調整済みサイズを {0} 個削除しましたが、{1} 個は削除できませんでした。どれがなぜ失敗したかはログに記録されています。",
+    "description": ""
+  },
+  "AutoRefit.UndoWorking": {
+    "message": "調整を元に戻しています...",
+    "description": ""
+  },
+  "AutoRefit.UndoWorn": {
+    "message": "着ている装備の自動調整を元に戻す",
+    "description": ""
+  },
+  "AutoRefit.UndoWorn.Tip": {
+    "message": "今身に着けている装備について、自動調整が作ったサイズを削除し、ゲーム本来の装備用に作った MOD を削除して、以前のオプションに戻します。その装備は、次に身に着けたときもそのままになります。「体型サイズ」ツールで自分で作ったサイズと、身に着けていない装備の調整は残ります。\n\nCtrl または Shift を押しながらクリックします。",
+    "description": ""
+  },
   "AutoRefit.Vanilla.Label": {
     "message": "ゲーム本来の装備も調整する",
     "description": ""

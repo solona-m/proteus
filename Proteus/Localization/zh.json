@@ -75,6 +75,34 @@
     "message": "只有从现在开始穿上的装备才会自动适配。此按钮会适配角色已经穿着的装备。",
     "description": ""
   },
+  "AutoRefit.UndoDone.Fmt": {
+    "message": "已撤销：移除了 {0} 个适配尺寸，并删除了 {1} 个为游戏原版装备创建的 MOD。除非你点击“适配当前穿着的装备”，否则这些装备不会再被适配。",
+    "description": ""
+  },
+  "AutoRefit.UndoFailed.Fmt": {
+    "message": "无法撤销适配：{0}",
+    "description": ""
+  },
+  "AutoRefit.UndoNothing": {
+    "message": "你穿着的装备中没有自动适配过的。",
+    "description": ""
+  },
+  "AutoRefit.UndoPartial.Fmt": {
+    "message": "移除了 {0} 个适配尺寸，但有 {1} 个无法移除。日志中写明了是哪些以及原因。",
+    "description": ""
+  },
+  "AutoRefit.UndoWorking": {
+    "message": "正在撤销适配...",
+    "description": ""
+  },
+  "AutoRefit.UndoWorn": {
+    "message": "撤销身上装备的适配",
+    "description": ""
+  },
+  "AutoRefit.UndoWorn.Tip": {
+    "message": "针对你现在穿着的装备：移除自动适配生成的尺寸，删除它为游戏原版装备创建的 MOD，并恢复你之前的选项。之后再次穿上这些装备时会保持原样。你在“体型尺寸”工具中自己制作的尺寸，以及未穿着装备的适配，都会保留。\n\n按住 Ctrl 或 Shift 并点击。",
+    "description": ""
+  },
   "AutoRefit.Vanilla.Label": {
     "message": "也适配游戏原版装备",
     "description": ""

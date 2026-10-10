@@ -510,6 +510,41 @@ public class AutoRefitPreference
     /// move them off it. Dropped again when a refit is switched on in its place. OrdinalIgnoreCase, populated in place.
     /// </summary>
     public Dictionary<string, string> AuthorSwitchedOn { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Per mod group (<c>"modDir|group"</c>), what the collection's OWN setting had ticked there before the refit first
+    /// switched it — what undoing the automatic refit puts back. Recorded once, at the first switch, and never
+    /// overwritten by a later one, which would record a refit as the "before". Missing for groups switched before it was
+    /// kept. OrdinalIgnoreCase, populated in place.
+    /// </summary>
+    public Dictionary<string, List<string>> Before { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The same, for a group a design held at the time (see <c>DesignBindingService.HeldSelection</c>): what the hold
+    /// had ticked, put back into the hold on undo. Kept apart from <see cref="Before"/>, because the hold is the design's
+    /// state and the collection's own setting the player's — restoring one into the other left a released design
+    /// showing the design's size. OrdinalIgnoreCase, populated in place.
+    /// </summary>
+    public Dictionary<string, List<string>> HeldBefore { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The mods (by folder) that had no setting of the collection's OWN before the refit first switched ANY group of
+    /// them — inherited from another collection, or never set. Undoing the last switched group of such a mod hands it
+    /// back to inheritance rather than writing <see cref="Before"/> into it, which would fix the inherited size in place
+    /// and cut the mod off from the collection it inherits from.
+    /// <para/>
+    /// Per mod, not per group: the first group switched gives the mod a setting of its own, and the second group, read
+    /// then, looked as if the player had made one — an outfit's top and legs refitted one after the other left the mod
+    /// with its own setting for good. OrdinalIgnoreCase, populated in place.
+    /// </summary>
+    public HashSet<string> InheritedBefore { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Pieces whose automatic refit the player undid in this collection, by what the slot draws (<c>Worn.Key</c>,
+    /// <c>"gamepath|moddir"</c>): put on again, they are left as they are. "Refit what I'm wearing now" refits one anyway
+    /// and forgets it here. OrdinalIgnoreCase, populated in place.
+    /// </summary>
+    public HashSet<string> Declined { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 /// <summary>

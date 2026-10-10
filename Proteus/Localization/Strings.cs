@@ -151,6 +151,31 @@ public sealed class AutoRefitStrings
 
     /// <summary>A modded piece in chat: the mod's name, then the part — "This Old Thing (chest)".</summary>
     public readonly string ItemInModFmt = Loc.Localize("AutoRefit.ItemInMod.Fmt", "{0} ({1})");
+
+    public readonly string UndoWorn = Loc.Localize("AutoRefit.UndoWorn", "Undo the refit of what I'm wearing")
+                                    + "###autoRefitUndoWorn";
+
+    public readonly string UndoWornTip = Loc.Localize("AutoRefit.UndoWorn.Tip",
+        "For the gear you have on now: removes the size the automatic refit made, deletes the mod it made for the game's "
+      + "own gear, and puts back the option you had before. Those pieces are then left as they are when you put them on "
+      + "again. Sizes you made yourself in the Body size tool, and refits of anything you are not wearing, stay.\n\n"
+      + "Hold Ctrl or Shift and click.");
+
+    public readonly string UndoWorking = Loc.Localize("AutoRefit.UndoWorking", "Undoing the refit...");
+
+    /// <summary>{0} sizes removed, {1} mods deleted.</summary>
+    public readonly string UndoDoneFmt = Loc.Localize("AutoRefit.UndoDone.Fmt",
+        "Undone: removed {0} refitted sizes and deleted {1} mods made for the game's own gear. These pieces won't be "
+      + "refitted again unless you click \"Refit what I'm wearing now\".");
+
+    /// <summary>{0} sizes removed, {1} sizes that could not be removed.</summary>
+    public readonly string UndoPartialFmt = Loc.Localize("AutoRefit.UndoPartial.Fmt",
+        "Removed {0} refitted sizes, but {1} could not be removed. The log says which and why.");
+
+    public readonly string UndoNothing = Loc.Localize("AutoRefit.UndoNothing",
+        "Nothing you're wearing was refitted automatically.");
+
+    public readonly string UndoFailedFmt = Loc.Localize("AutoRefit.UndoFailed.Fmt", "Couldn't undo the refit: {0}");
 }
 
 /// <summary>The one-time release-notes window.</summary>
