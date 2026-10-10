@@ -829,6 +829,7 @@ public sealed class AutoRefitWatcher : IDisposable
         var plan = BodyRetarget.Plan(garment, bytes, pairs, primary, held: new HashSet<int>(),
                                      replaceSkin: across, acrossBodies: across, clearBody: false, cutHidden: true,
                                      keepShape: pieces);
+        plan = RefitCore.MatchSkinToBody(plan, sourcePath, targetPath, uvRemap, male, log);
         if (bakeTo != 0) plan = RefitCore.WithBodySkin(plan, targetPath, log);
         ct.ThrowIfCancellationRequested();
 

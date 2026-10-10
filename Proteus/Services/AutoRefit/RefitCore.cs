@@ -223,6 +223,91 @@ internal static class RefitCore
     }
 
     /// <summary>
+    /// Draw whatever skin a refit LEFT in the garment the way the new body draws its own: in the new body's texture
+    /// layout, with the new body's skin material.
+    /// <para/>
+    /// Replacing the skin swaps a garment's skin meshes for the new body's — but only the meshes lying wholly on the new
+    /// body (see <see cref="BodyRetarget.SwapSkin"/>). A mesh partly off it, a posed foot, a sculpted piece, is kept, and
+    /// so was its material: a garment made for the game's body or a gen3 one kept naming <c>_a</c> or <c>_b</c> on a
+    /// Rue character, whose body is <c>_bibo</c>. That draws a different skin texture from the body's — the wrong skin,
+    /// and none of the tattoos Proteus composites into the body's own. Players reported exactly that.
+    /// <para/>
+    /// The material NAME cannot say which layout the kept skin is in — Araneidae is a Bibo garment naming
+    /// <c>_b</c>, which gen3 uses too — so the layout is read off the body the garment was MADE on, whose mesh its
+    /// author copied. Where that differs from the new body's, the kept skin's texture coordinates are converted first;
+    /// where they cannot be, it is left exactly as it was, since a renamed material over unconverted coordinates draws
+    /// the wrong part of the sheet. A material only a skin by the shape of its name is touched: an author's own skin
+    /// material (a tattoo baked into it) is not a body-skin name, and stands.
+    /// </summary>
+    /// <param name="sourcePath">The body the garment was made on (its own slot's).</param>
+    /// <param name="targetPath">The body it was refitted onto.</param>
+    /// <param name="male">The bodies are a man's, whose layouts are named apart (see <c>BodyCorrespondence.LayoutOf</c>).</param>
+    internal static BodyRetarget.Planned MatchSkinToBody(BodyRetarget.Planned plan, string sourcePath, string targetPath,
+                                                         UVRemapService? uvRemap, bool male, IPluginLog log)
+    {
+        var model = MatchSkinToBody(plan.Model, sourcePath, targetPath, uvRemap, male, log);
+        return ReferenceEquals(model, plan.Model) ? plan : plan with { Model = model };
+    }
+
+    /// <inheritdoc cref="MatchSkinToBody(BodyRetarget.Planned, string, string, UVRemapService?, bool, IPluginLog)"/>
+    /// <returns>The model with its kept skin redrawn, or the very same array when there was nothing to do.</returns>
+    internal static byte[] MatchSkinToBody(byte[] model, string sourcePath, string targetPath, UVRemapService? uvRemap,
+                                           bool male, IPluginLog log)
+    {
+        var plan = model;
+        try
+        {
+            var target = File.ReadAllBytes(targetPath);
+            var bodySkins = SecondSkinWriter.Parse(target).MatNames.Where(SecondSkinWriter.IsBodySkinMaterial).ToList();
+            if (bodySkins.Count == 0) return plan;
+            var left = SecondSkinWriter.Parse(model).MatNames
+                                       .Where(m => SecondSkinWriter.IsBodySkinMaterial(m) && !bodySkins.Contains(m))
+                                       .ToHashSet(StringComparer.Ordinal);
+            if (left.Count == 0) return plan;
+
+            string? from = ModelPartReader.Read(File.ReadAllBytes(sourcePath)) is { } source
+                ? BodyCorrespondence.LayoutOf(source, male) : null;
+            string? to = ModelPartReader.Read(target) is { } body ? BodyCorrespondence.LayoutOf(body, male) : null;
+            if (from == null || to == null)
+            {
+                log.Information("[Proteus] retarget: left the garment's own skin {0} as it is — the bodies' layouts are "
+                              + "unknown", string.Join(", ", left));
+                return plan;
+            }
+            // Only skin a mesh still DRAWS has coordinates to convert. A material the swap left in the table with no mesh
+            // under it (the Scion Adventurer's Jacket keeps its "_a" so) is only renamed, so the model loads one skin.
+            var drawn = (ModelPartReader.Read(model)?.Parts ?? [])
+                        .Where(p => p.Island < 0 && left.Contains(p.Material)).Select(p => p.Material)
+                        .ToHashSet(StringComparer.Ordinal);
+            if (drawn.Count > 0 && !string.Equals(from, to, StringComparison.OrdinalIgnoreCase))
+            {
+                if (uvRemap?.UvConverter(from, to, unmirror: true) is not { } convert
+                    || FaceUvRewriter.RewriteFaceUv0(model, drawn.Contains, convert, out var stats,
+                                                     m => log.Information("[Proteus] retarget: {0}", m), tiled: true)
+                       is not { } converted)
+                {
+                    log.Information("[Proteus] retarget: left the garment's own skin {0} as it is — no way to convert {1} "
+                                  + "to {2}", string.Join(", ", left), from, to);
+                    return plan;
+                }
+                model = converted;
+                log.Information("[Proteus] retarget: the garment's own skin converted {0} → {1} ({2} vertices)", from, to,
+                                stats.VerticesWritten);
+            }
+            foreach (string name in left) model = ModelAttributeWriter.RenameMaterial(model, name, bodySkins[0]);
+            log.Information("[Proteus] retarget: the garment's own skin {0} now drawn with the body's {1}",
+                            string.Join(", ", left), bodySkins[0]);
+            return model;
+        }
+        catch (Exception ex)
+        {
+            // A cosmetic step on a refit that is otherwise done: failing it leaves the skin as it was, not the refit lost.
+            log.Warning(ex, "[Proteus] retarget: could not redraw the garment's own skin like the body's");
+            return plan;
+        }
+    }
+
+    /// <summary>
     /// The option of <paramref name="slot"/> whose file the collection resolves the body model to — which size the
     /// character is wearing there.
     /// <para/>

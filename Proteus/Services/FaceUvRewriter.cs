@@ -28,9 +28,15 @@ internal static partial class FaceUvRewriter
     /// <c>UvConverter(FaceSpace, FaceSplitSpace, unmirror: true)</c>, taken rather than built so the one
     /// affine the shell path uses is the one applied here.
     /// </param>
+    /// <param name="tiled">
+    /// Take a mesh laid out wholly inside one OTHER tile of the sheet (u 1..2, say) as the same layout shifted: it is
+    /// converted inside that tile and the shift put back, since the texture repeats and the game draws it the same.
+    /// Gear authors do that with skin — Beautiful Slayer's lies at u 1.03..1.99. Off for faces, where it has never
+    /// been seen and a refusal is the safer answer.
+    /// </param>
     internal static byte[]? RewriteFaceUv0(byte[] mdl, Func<string, bool> keepMaterial,
                                            UVRemapService.UvConversion convert,
-                                           out FaceUvStats stats, Action<string>? log = null)
+                                           out FaceUvStats stats, Action<string>? log = null, bool tiled = false)
     {
         stats = default;
         if (mdl is not { Length: > 0 }) return null;
@@ -110,7 +116,7 @@ internal static partial class FaceUvRewriter
 
                 var x = new float[vc];
                 var uv = new (float U, float V)[vc];
-                float uLo = float.MaxValue, uHi = float.MinValue;
+                float uLo = float.MaxValue, uHi = float.MinValue, vLo = float.MaxValue, vHi = float.MinValue;
                 for (int i = 0; i < vc; i++)
                 {
                     ReadTyped(s, posAt + i * posStride, pos.Type, tmp);
@@ -119,6 +125,20 @@ internal static partial class FaceUvRewriter
                     uv[i] = (tmp[0], tmp[1]);
                     if (tmp[0] < uLo) uLo = tmp[0];
                     if (tmp[0] > uHi) uHi = tmp[0];
+                    if (tmp[1] < vLo) vLo = tmp[1];
+                    if (tmp[1] > vHi) vHi = tmp[1];
+                }
+
+                // A mesh wholly inside one other tile is the same layout shifted by whole sheets: converted where it
+                // would sit in [0,1], the shift put back after. Only when nothing of it straddles a tile edge.
+                float uShift = 0f, vShift = 0f;
+                if (tiled)
+                {
+                    float uTile = MathF.Floor(uLo + UvTileSlack), vTile = MathF.Floor(vLo + UvTileSlack);
+                    if (uHi <= uTile + 1f + UvTileSlack) uShift = uTile;
+                    if (vHi <= vTile + 1f + UvTileSlack) vShift = vTile;
+                    uLo -= uShift;
+                    uHi -= uShift;
                 }
 
                 // The affine reads u as a position in the [0,1] sheet; a mesh tiled outside it is refused whole.
@@ -145,11 +165,11 @@ internal static partial class FaceUvRewriter
 
                 for (int i = 0; i < vc; i++)
                 {
-                    if (convert(uv[i].U, uv[i].V, sides[i]) is not { } r) continue;   // unmapped: as authored
+                    if (convert(uv[i].U - uShift, uv[i].V - vShift, sides[i]) is not { } r) continue;   // unmapped: as authored
                     // Clamped because the affine's ends land a rounding step outside the sheet, and a u of
                     // 1.0005 does not clip — it WRAPS to the far edge and drags the triangle across the face.
                     if (!WriteUv0(outBytes, uvAt + i * uvStride, uvE.Type,
-                                  Math.Clamp(r.U, 0f, 1f), r.V))
+                                  Math.Clamp(r.U, 0f, 1f) + uShift, r.V + vShift))
                     {
                         log?.Invoke($"face uv: mesh {m} declares a uv0 type ({uvE.Type}) this cannot write "
                                   + "— refusing to rewrite this model");

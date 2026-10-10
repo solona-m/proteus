@@ -34,6 +34,10 @@
     <Reference Include="Lumina">
       <HintPath>$(DalamudLibPath)Lumina.dll</HintPath>
     </Reference>
+    <!-- The game's typed sheets (Item): ScionAdventurerRefitTests finds the gear it refits by name. -->
+    <Reference Include="Lumina.Excel">
+      <HintPath>$(DalamudLibPath)Lumina.Excel.dll</HintPath>
+    </Reference>
     <Reference Include="InteropGenerator.Runtime">
       <HintPath>$(DalamudLibPath)InteropGenerator.Runtime.dll</HintPath>
     </Reference>
