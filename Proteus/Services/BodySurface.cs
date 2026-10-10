@@ -128,8 +128,12 @@ internal sealed class BodySurface
         => ((int)MathF.Floor(p.X / cell), (int)MathF.Floor(p.Y / cell), (int)MathF.Floor(p.Z / cell));
 
     /// <summary>The nearest point on the body's skin within <paramref name="maxDistance"/>, or false.</summary>
-    public bool Nearest(Vector3 p, float maxDistance, out Hit hit)
+    /// <param name="sides">Per body vertex, which side of the body it belongs to (see <c>BodyRetarget.SideOf</c>); with
+    /// <paramref name="avoid"/>, a triangle with any corner on that side is never landed on. Null for every triangle.</param>
+    /// <param name="avoid">The side to stay off: -1 or +1; 0 for none.</param>
+    public bool Nearest(Vector3 p, float maxDistance, out Hit hit, sbyte[]? sides = null, int avoid = 0)
     {
+        if (sides == null) avoid = 0;
         hit = default;
         if (tris.Count == 0) return false;
 
@@ -180,6 +184,7 @@ internal sealed class BodySurface
                     if (stamp[t] == query) continue;
                     stamp[t] = query;
                     int ta = tris[t * 3], tb = tris[t * 3 + 1], tc = tris[t * 3 + 2];
+                    if (avoid != 0 && (sides![ta] == avoid || sides[tb] == avoid || sides[tc] == avoid)) continue;
                     var q = BrushTransfer.ClosestOnTriangle(p, pos[ta], pos[tb], pos[tc],
                                                             out float tu, out float tv, out float tw);
                     float d2 = Vector3.DistanceSquared(p, q);
