@@ -983,11 +983,7 @@ public sealed class PartsPanel
         // Models the mod PUBLISHES: a published model carries the game path its item's IMC identity is read from.
         redirects = PenumbraModMeta.ReadAllRedirects(root);
 
-        // Grouped by item, but within an item kept in declaration order (the author's option order); OrderBy is stable.
-        models = redirects
-            .Where(r => r.GamePath.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase))
-            .OrderBy(r => r.GamePath, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        models = PublishedModels(redirects);
 
         // An imported pack's garments publish nothing, so they are listed from the sidecar, after the published ones.
         models.AddRange(ContentModels(root, contentFiles));
@@ -1008,10 +1004,7 @@ public sealed class PartsPanel
         var open = modelIndex >= 0 && modelIndex < models.Count ? models[modelIndex] : (PenumbraModMeta.Redirect?)null;
 
         redirects = PenumbraModMeta.ReadAllRedirects(root);
-        models = redirects
-            .Where(r => r.GamePath.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase))
-            .OrderBy(r => r.GamePath, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        models = PublishedModels(redirects);
         models.AddRange(ContentModels(root, contentFiles));
         modelLabels = ModelLabels(models);
 
@@ -1036,6 +1029,31 @@ public sealed class PartsPanel
             retarget.Clear();
             viewport.Clear();
         }
+    }
+
+    /// <summary>
+    /// The models among a mod's redirects, grouped by item, but within an item kept in declaration order (the author's
+    /// option order); OrderBy is stable. The item ignores the race a model is built for: sorted by the whole path, a mod
+    /// whose every option ships the ring at c0101 and sideburns at c1501 listed all its rings first, under the same
+    /// option names as the sideburns, and the first "Face 1" opened was the ring.
+    /// </summary>
+    internal static List<PenumbraModMeta.Redirect> PublishedModels(IEnumerable<PenumbraModMeta.Redirect> redirects)
+        => redirects
+            .Where(r => r.GamePath.EndsWith(".mdl", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(ItemKey, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    /// <summary>A model's game path with its race code taken out of the file name — the same for every race's model of
+    /// one item and slot.</summary>
+    private static string ItemKey(PenumbraModMeta.Redirect r)
+    {
+        if (ContentSlot.Parse(r.GamePath) is not { } p) return r.GamePath;
+        var path = r.GamePath.Replace('\\', '/');
+        int leaf = path.LastIndexOf('/') + 1;
+        var race = "c" + p.RaceCode;
+        return path.AsSpan(leaf).StartsWith(race, StringComparison.OrdinalIgnoreCase)
+            ? path[..leaf] + path[(leaf + race.Length)..]
+            : r.GamePath;
     }
 
     /// <summary>
@@ -1149,20 +1167,32 @@ public sealed class PartsPanel
         => ContentSlot.Parse(r.GamePath) is { } p ? $"{ContentSlot.DisplayLabel(p.Label)} — {p.SetTag}" : Path.GetFileName(r.GamePath);
 
     /// <summary>
-    /// One label per model; the slot is appended to every member of a set sharing a label, and to nothing else.
+    /// One label per model; the slot is appended to every member of a set sharing a label, and to nothing else. Rows
+    /// the slot still leaves alike are one item built per race — a mod shipping the ring at c0101 and sideburns at c1501
+    /// in one option — so those gain the race as well, or the ring and the sideburns read the same.
     /// </summary>
     internal static List<string> ModelLabels(IReadOnlyList<PenumbraModMeta.Redirect> models)
     {
         var labels = models.Select(ModelLabel).ToList();
-        var clashes = labels.GroupBy(l => l, StringComparer.Ordinal)
-            .Where(g => g.Count() > 1).Select(g => g.Key)
-            .ToHashSet(StringComparer.Ordinal);
+        var qualifiers = models.Select(_ => new List<string>()).ToList();
 
-        for (int i = 0; i < labels.Count; i++)
-            if (clashes.Contains(labels[i]))
-                labels[i] = $"{labels[i]}  ({SlotOf(models[i])})";
-        return labels;
+        // A label that is already the slot gains nothing from repeating it.
+        foreach (int i in Clashing(labels, qualifiers))
+            if (models[i].Source.Length > 0) qualifiers[i].Add(SlotOf(models[i]));
+        foreach (int i in Clashing(labels, qualifiers))
+            if (ContentSlot.Parse(models[i].GamePath) is { } p) qualifiers[i].Add(ModelRace.Describe(p.RaceCode));
+
+        return labels.Select((l, i) => qualifiers[i].Count == 0 ? l : $"{l}  ({string.Join(", ", qualifiers[i])})")
+                     .ToList();
     }
+
+    /// <summary>The rows whose label and qualifiers so far match another row's.</summary>
+    private static List<int> Clashing(List<string> labels, List<List<string>> qualifiers)
+        => Enumerable.Range(0, labels.Count)
+            .GroupBy(i => labels[i] + "\0" + string.Join("\0", qualifiers[i]), StringComparer.Ordinal)
+            .Where(g => g.Count() > 1)
+            .SelectMany(g => g)
+            .ToList();
 
     private void SelectModel(int index)
     {
