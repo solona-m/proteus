@@ -1358,6 +1358,26 @@ public class ContentPieceSelectionTests
     }
 
     /// <summary>
+    /// "Procyon Earrings": earrings authored for c0801 on the ring slot, shipped beside a copy of the vanilla c0101
+    /// ring. A Miqo'te female's gear loads at c0201, which reaches c0101 in one cross-gender hop, so the shared-shape
+    /// lookup put the vanilla ring on her and the earrings were never tried.
+    /// </summary>
+    [Fact]
+    public void A_model_for_the_wearers_own_race_beats_a_fall_through_hop()
+    {
+        const string ring     = "items/chara/accessory/a0055/model/c0101a0055_rir.mdl";
+        const string earrings = "items/chara/accessory/a0055/model/c0801a0055_rir.mdl";
+        var piece = new ContentPiece { Models = new() { ["0101"] = ring, ["0801"] = earrings } };
+
+        Assert.Equal(("0801", earrings), ContentPieceResolver.ResolveForWearer(piece, "0201", "0801"));
+
+        // Everyone else still falls through to the ring, and an exact shared-shape model still wins.
+        Assert.Equal(("0101", ring), ContentPieceResolver.ResolveForWearer(piece, "0201", "0601"));
+        var shared = new ContentPiece { Models = new() { ["0201"] = ring, ["0801"] = earrings } };
+        Assert.Equal(("0201", ring), ContentPieceResolver.ResolveForWearer(shared, "0201", "0801"));
+    }
+
+    /// <summary>
     /// An accessory may take the fall-through chain's cross-gender hop; a garment may not.
     /// <para/>
     /// The game itself hands accessories across genders — a Midlander female wears
