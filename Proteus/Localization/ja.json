@@ -299,6 +299,10 @@
     "message": "[Proteus] {0} を {1} から {2} に調整しています。完了するとオンになります。",
     "description": ""
   },
+  "Chat.AutoRefit.Summary.Fmt": {
+    "message": "[Proteus] {0} に合わせて調整しました：{1}。",
+    "description": ""
+  },
   "Chat.AutoRefit.Unsure.Fmt": {
     "message": "[Proteus] {0} がどの体型用に作られたか判断できなかったため、そのままにしました。スタジオの「体型サイズ」ツールで手動で調整できます。",
     "description": ""

@@ -299,6 +299,10 @@
     "message": "[Proteus] Refitting {0} from {1} to {2}. It will be switched on when it is done.",
     "description": "Chat line when an automatic refit starts. {0} names the gear, {1} the body and size it was made for, {2} the body and size it is refitted to. Do NOT translate \"Proteus\"."
   },
+  "Chat.AutoRefit.Summary.Fmt": {
+    "message": "[Proteus] Refitted to {0}: {1}.",
+    "description": "The one chat line printed when a batch of automatic refits is done. {0} is the body mod the gear now fits, {1} lists the pieces (e.g. \"This Old Thing (Chest), Boots (Feet)\"). Do NOT translate \"Proteus\"."
+  },
   "Chat.AutoRefit.Unsure.Fmt": {
     "message": "[Proteus] Couldn't tell which body {0} was made for, so it was left as it is. You can refit it by hand with the Studio's Body size tool.",
     "description": "Chat line when Proteus could not tell which body a piece of gear was made for. {0} names the gear. \"Studio\" and \"Body size\" match Tab.Parts and Parts.Tool.Retarget. Do NOT translate \"Proteus\"."

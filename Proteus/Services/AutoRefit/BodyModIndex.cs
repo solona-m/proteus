@@ -26,13 +26,34 @@ internal sealed class BodyModIndex
     /// <summary>Every mod looked at, body or not, so a mod that is not a body is not parsed again either.</summary>
     private readonly Dictionary<string, Known> known = new(StringComparer.OrdinalIgnoreCase);
 
-    private volatile IReadOnlyList<Entry>? snapshot;
+    /// <summary>
+    /// The body mods as one refresh left them, and which set that is. One object, replaced whole: a refit that reads the
+    /// list and the version separately can take them from two different refreshes, and then file a reading made against
+    /// the old bodies under the new bodies' version.
+    /// </summary>
+    /// <param name="List">The body mods, by name.</param>
+    /// <param name="Version">Changes when a body mod is installed, removed or edited, and for nothing else — a mod that
+    /// is not a body changing does not move it. What a reading of a garment against these bodies is filed under
+    /// (<see cref="DetectionCache"/>).</param>
+    internal sealed record State(IReadOnlyList<Entry> List, string Version)
+    {
+        /// <summary>One body mod by folder, or null when it is not installed or not a body.</summary>
+        public Entry? Find(string dir) => List.FirstOrDefault(e => string.Equals(e.Dir, dir, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private volatile State? current;
+
+    /// <summary>The body mods and their version, together; null until the first <see cref="Refresh"/> has finished.</summary>
+    public State? Current => current;
 
     /// <summary>The body mods, by name; null until the first <see cref="Refresh"/> has finished.</summary>
-    public IReadOnlyList<Entry>? Snapshot => snapshot;
+    public IReadOnlyList<Entry>? Snapshot => current?.List;
+
+    /// <inheritdoc cref="State.Version"/>
+    public string Version => current?.Version ?? "";
 
     /// <summary>One body mod by folder, or null when it is not installed or not a body.</summary>
-    public Entry? Find(string dir) => snapshot?.FirstOrDefault(e => string.Equals(e.Dir, dir, StringComparison.OrdinalIgnoreCase));
+    public Entry? Find(string dir) => current?.Find(dir);
 
     /// <summary>
     /// Bring the index up to date with Penumbra's mod list: forget mods that are gone, read new ones, re-read any whose
@@ -41,6 +62,11 @@ internal sealed class BodyModIndex
     /// <param name="mods">Mod folder to display name, as Penumbra lists them (IPC, so the caller asks on the framework
     /// thread and hands the answer over).</param>
     public IReadOnlyList<Entry> Refresh(IReadOnlyDictionary<string, string> mods, string modsRoot)
+        => RefreshState(mods, modsRoot).List;
+
+    /// <inheritdoc cref="Refresh"/>
+    /// <returns>The new list and its version, together.</returns>
+    public State RefreshState(IReadOnlyDictionary<string, string> mods, string modsRoot)
     {
         lock (gate)
         {
@@ -72,8 +98,13 @@ internal sealed class BodyModIndex
 
             var list = known.Values.Select(k => k.Entry).OfType<Entry>()
                             .OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase).ToList();
-            snapshot = list;
-            return list;
+            string version = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(
+                string.Join("\n", known.Where(k => k.Value.Entry != null)
+                                       .OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase)
+                                       .Select(k => k.Key.ToLowerInvariant() + "|" + k.Value.Fingerprint)))))[..16];
+            var state = new State(list, version);
+            current = state;
+            return state;
         }
     }
 

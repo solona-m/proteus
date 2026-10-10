@@ -98,6 +98,18 @@ public sealed class AutoRefitWatcher : IDisposable
     /// <summary>Collections already told their body mod is missing, so a session of equips says it once.</summary>
     private readonly ConcurrentDictionary<Guid, byte> toldMissing = new();
 
+    /// <summary>Pieces whose failure has already been put in chat this session; another failure of one goes to the log.</summary>
+    private readonly ConcurrentDictionary<string, byte> toldFailed = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>What garments were read as, on disk — see <see cref="DetectionCache"/>.</summary>
+    private readonly DetectionCache detections;
+
+    /// <summary>
+    /// The pieces refitted (or switched back to a refit) since the queue last ran dry, with the body they now fit. Said
+    /// in ONE chat line when it does: a design changing four slots used to print eight. Guarded by <see cref="queueGate"/>.
+    /// </summary>
+    private readonly List<(string Item, string Body)> finished = [];
+
     private readonly object queueGate = new();
     private readonly Dictionary<string, Request> queue = new(StringComparer.Ordinal);
     private Task? runner;
@@ -125,8 +137,9 @@ public sealed class AutoRefitWatcher : IDisposable
 
     public AutoRefitWatcher(CompositorService compositor, PenumbraBridge penumbra, GlamourerBridge glamourer,
                             UVRemapService uvRemap, Func<string, byte[]?> readGameFile, Configuration config,
-                            IPluginLog log)
+                            IPluginLog log, string dataDir)
     {
+        detections = new DetectionCache(Path.Combine(dataDir, "autorefit-garments.json"), log);
         this.compositor = compositor;
         this.penumbra = penumbra;
         this.glamourer = glamourer;
@@ -162,6 +175,7 @@ public sealed class AutoRefitWatcher : IDisposable
         penumbra.ModSettingChanged -= OnModSettingChanged;
         penumbra.PenumbraReady -= RequestIndexSoon;
         CancelAll();
+        detections.Flush();   // a reading made in a batch the unload cut short is still a good reading
     }
 
     private bool Enabled => config.PluginEnabled && config.AutoRefitEnabled;
@@ -185,8 +199,11 @@ public sealed class AutoRefitWatcher : IDisposable
     private void OnModSettingChanged(Penumbra.Api.Enums.ModSettingChange change, Guid collection, string modDir,
                                      bool inherited)
     {
-        // Only an edit can change which sizes a mod publishes; a setting change cannot.
-        if (change == Penumbra.Api.Enums.ModSettingChange.Edited) RequestIndexIn(IndexDebounceMs);
+        // Only an edit can change which sizes a mod publishes; a setting change cannot. Proteus's own managed mod is
+        // rewritten by every composite and is never a body, so its edits are not a reason to look at 1000 mods again.
+        if (change == Penumbra.Api.Enums.ModSettingChange.Edited
+            && !string.Equals(modDir, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase))
+            RequestIndexIn(IndexDebounceMs);
     }
 
     private void RequestWalkIn(int ms)
@@ -391,8 +408,8 @@ public sealed class AutoRefitWatcher : IDisposable
         {
             while (!disposed)
             {
-                Request request;
-                CancellationTokenSource cts;
+                Request? request = null;
+                CancellationTokenSource? cts = null;
                 lock (queueGate)
                 {
                     string? next = AutoRefitDecisions.Slots.FirstOrDefault(queue.ContainsKey);
@@ -401,12 +418,22 @@ public sealed class AutoRefitWatcher : IDisposable
                         // Cleared under the same lock Enqueue starts a runner under: a request arriving after this
                         // starts a new runner, and one arriving before it was taken by the loop.
                         runner = null;
-                        return;
+                        FlushSummary();
                     }
-                    request = queue[next];
-                    queue.Remove(next);
-                    cts = running = new CancellationTokenSource();
-                    runningSlot = next;
+                    else
+                    {
+                        request = queue[next];
+                        queue.Remove(next);
+                        cts = running = new CancellationTokenSource();
+                        runningSlot = next;
+                    }
+                }
+                if (request == null || cts == null)
+                {
+                    // Outside the lock: writing the cache is a megabyte or two to disk, and Enqueue — called from the
+                    // framework thread when gear changes — takes that lock, so the frame would wait for the disk.
+                    detections.Flush();
+                    return;
                 }
 
                 current = current with { Busy = true };
@@ -429,8 +456,9 @@ public sealed class AutoRefitWatcher : IDisposable
                 catch (Exception ex)
                 {
                     log.Error(ex, "[Proteus] auto refit: {0} failed", request.Worn.GamePath);
-                    Fail(string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"),
-                                       Path.GetFileName(request.Worn.GamePath), ex.Message));
+                    Fail(request, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt",
+                                                    "[Proteus] Couldn't refit {0}: {1}"),
+                                                Path.GetFileName(request.Worn.GamePath), ex.Message));
                 }
                 finally
                 {
@@ -474,9 +502,17 @@ public sealed class AutoRefitWatcher : IDisposable
     /// stop for the cancel — the planner and the writer never look at the token — so a refit caught by an unload or a
     /// dev reload would otherwise reload, select and redraw through bridges and a compositor already disposed; and the
     /// switch-on after a save runs with no token at all.
+    /// <para/>
+    /// The caller carries on on a WORKER afterwards, never on the framework thread — and that is the point of the
+    /// <c>ForceYielding</c> below, not a detail. The task Dalamud hands back is completed on the framework thread, and an
+    /// await continues on whichever thread completed what it awaited; so without it, everything a refit did after its
+    /// first hop — sampling every body, ranking a pack's sizes, the refit itself, the save — ran inside the game's frame,
+    /// and the game hung for as long as the refit took.
     /// </summary>
-    private Task<T> OnFramework<T>(Func<T> work, [System.Runtime.CompilerServices.CallerLineNumber] int line = 0)
-        => disposed ? throw new OperationCanceledException("auto refit disposed") : Plugin.Framework.RunOnFrameworkThread(() =>
+    private async Task<T> OnFramework<T>(Func<T> work, [System.Runtime.CompilerServices.CallerLineNumber] int line = 0)
+    {
+        if (disposed) throw new OperationCanceledException("auto refit disposed");
+        var hop = Plugin.Framework.RunOnFrameworkThread(() =>
         {
             if (disposed) throw new OperationCanceledException("auto refit disposed");
             var clock = Stopwatch.StartNew();
@@ -488,6 +524,18 @@ public sealed class AutoRefitWatcher : IDisposable
                                 clock.ElapsedMilliseconds);
             }
         });
+        return await hop.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
+    }
+
+    /// <summary>
+    /// Log, once per refit, when work meant for a worker finds itself on the framework thread — the bug
+    /// <see cref="OnFramework{T}"/> describes, should anything bring it back.
+    /// </summary>
+    private void AssertOffFramework(string step)
+    {
+        if (Plugin.Framework.IsInFrameworkUpdateThread)
+            log.Error("[Proteus] auto refit: {0} is running on the framework thread — the game waits for it", step);
+    }
 
     /// <summary>A framework-thread step longer than this is logged.</summary>
     private const long SlowFrameMs = 8;
@@ -502,14 +550,18 @@ public sealed class AutoRefitWatcher : IDisposable
         ct.ThrowIfCancellationRequested();
 
         // Kept current by Penumbra's add, delete and edit events; read fresh only before the first scan has finished.
-        var bodies = Index.Snapshot ?? Index.Refresh(g.Mods, g.ModsRoot);
-        if (Index.Find(g.Preference.BodyDir) is not { } targetMod)
+        // The list and its version taken TOGETHER, and used for the whole refit: a refresh landing part way through must
+        // not have the garment searched against one set of bodies and its reading filed under another's version.
+        var state = Index.Current ?? Index.RefreshState(g.Mods, g.ModsRoot);
+        var bodies = state.List;
+        if (state.Find(g.Preference.BodyDir) is not { } targetMod)
         {
-            if (toldMissing.TryAdd(r.Collection, 0))
-                Say(string.Format(Loc.Localize("Chat.AutoRefit.BodyMissing.Fmt",
-                        "[Proteus] The body chosen for automatic refits in this collection, \"{0}\", isn't installed, "
-                      + "so nothing is being refitted. Choose another under /proteus > Settings."),
-                        g.Preference.BodyDir), problem: true);
+            string missing = string.Format(Loc.Localize("Chat.AutoRefit.BodyMissing.Fmt",
+                    "[Proteus] The body chosen for automatic refits in this collection, \"{0}\", isn't installed, "
+                  + "so nothing is being refitted. Choose another under /proteus > Settings."),
+                    g.Preference.BodyDir);
+            Say(missing, problem: true);
+            if (toldMissing.TryAdd(r.Collection, 0)) Chat(missing, problem: true);
             return;
         }
         var targetCat = targetMod.Catalog;
@@ -548,7 +600,7 @@ public sealed class AutoRefitWatcher : IDisposable
 
         if (ModelPartReader.Read(bytes) is not { } garment)
         {
-            Fail(string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"), item,
+            Fail(r, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"), item,
                                Strings.Parts.Unreadable));
             return;
         }
@@ -593,10 +645,44 @@ public sealed class AutoRefitWatcher : IDisposable
             return;
         }
 
-        // ── what it was made on ──
-        var source = isVanilla
-            ? VanillaSource(vanillaCat, primary, race)
-            : DetectAcross(garment, bones, primary, race, targetMod, bodies, vanillaCat, g.Settings);
+        // ── what it was made on, and which other parts of that body it reaches ──
+        BodySizeCatalog? CatalogOf(string dir) => dir == VanillaBodyCatalog.Key ? vanillaCat : state.Find(dir)?.Catalog;
+        // The collection's own choice only. A body mod a Glamourer design holds on or off with a temporary setting comes
+        // and goes with every design; counted, it would make each design change read every garment again.
+        var enabledBodies = bodies.Where(b => g.Settings != null && g.Settings.TryGetValue(b.Dir, out var s)
+                                              && s.Enabled && !s.Temporary)
+                                  .Select(b => b.Dir);
+        string cacheKey = DetectionCache.KeyOf(bytes, primary, race, targetMod.Dir,
+                                               DetectionCache.BodiesOf(state.Version, enabledBodies,
+                                                                       VanillaPrint(vanillaCat, primary, race)));
+        AutoRefitDecisions.Pick? source = null;
+        Dictionary<string, string> otherFrom;
+        if (detections.TryGet(cacheKey) is { } hit && Restore(hit, primary, race, CatalogOf) is { } restored)
+        {
+            source = restored.Pick;
+            otherFrom = hit.Others;
+            log.Information("[Proteus] auto refit: {0} read before ({1}), not read again", item, hit.Confidence);
+        }
+        else
+        {
+            AssertOffFramework("reading the garment");
+            source = isVanilla
+                ? VanillaSource(vanillaCat, primary, race)
+                : DetectAcross(garment, bones, primary, race, targetMod, bodies, vanillaCat, g.Settings);
+            otherFrom = new Dictionary<string, string>(StringComparer.Ordinal);
+            if (source is { } found && AutoRefitDecisions.Proceed(found.Confidence) && CatalogOf(found.Dir) is { } from)
+                foreach (string slot in AutoRefitDecisions.Slots)
+                {
+                    if (slot == primary || from.For(slot, race).Count == 0) continue;
+                    var ranking = BodySizeMatch.Rank(garment, from.For(slot, race), from.PathOf, bones);
+                    if (AutoRefitDecisions.AcceptOther(ranking, found.Option)) otherFrom[slot] = ranking.Best!.Value.Option.Rel;
+                }
+            detections.Put(cacheKey, new DetectionCache.Entry(source?.Dir ?? "", source?.Option.Rel ?? "",
+                                                               source?.Confidence ?? Confidence.Ambiguous,
+                                                               source?.FromCloth ?? false, otherFrom));
+        }
+        ct.ThrowIfCancellationRequested();
+
         if (source is not { } pick)
         {
             Say(string.Format(Loc.Localize("Chat.AutoRefit.Unsure.Fmt",
@@ -619,9 +705,9 @@ public sealed class AutoRefitWatcher : IDisposable
             return;
         }
 
-        var sourceCat = pick.Dir == VanillaBodyCatalog.Key ? vanillaCat : Index.Find(pick.Dir)!.Catalog;
+        var sourceCat = pick.Dir == VanillaBodyCatalog.Key ? vanillaCat : state.Find(pick.Dir)!.Catalog;
         string sourceName = pick.Dir == VanillaBodyCatalog.Key ? Strings.Parts.RetargetFromVanilla
-                          : Index.Find(pick.Dir)?.Name ?? pick.Dir;
+                          : state.Find(pick.Dir)?.Name ?? pick.Dir;
         log.Information("[Proteus] auto refit: {0} {1} made on {2} / {3} ({4}{5})", item, primary, sourceName,
                         pick.Option.Label, pick.Confidence, pick.FromCloth ? ", from cloth" : "");
 
@@ -632,18 +718,15 @@ public sealed class AutoRefitWatcher : IDisposable
         }
         bool across = !string.Equals(pick.Dir, targetMod.Dir, StringComparison.OrdinalIgnoreCase);
 
-        // ── the other parts of the body the garment reaches ──
+        // ── the other parts of the body the garment reaches, each onto its chosen size ──
         var others = new List<(string Slot, BodyOption From, BodyOption To)>();
         foreach (string slot in AutoRefitDecisions.Slots)
         {
-            if (slot == primary || sourceCat.For(slot, race).Count == 0 || targetCat.For(slot, race).Count == 0) continue;
-            var ranking = BodySizeMatch.Rank(garment, sourceCat.For(slot, race), sourceCat.PathOf, bones);
-            if (!AutoRefitDecisions.AcceptOther(ranking, pick.Option)) continue;
-            var from = ranking.Best!.Value.Option;
+            if (slot == primary || !otherFrom.TryGetValue(slot, out string? fromRel)) continue;
+            if (OptionByFile(sourceCat.For(slot, race), fromRel) is not { } from) continue;
             if (TargetFor(slot) is not { } to || AutoRefitDecisions.SameFile(pick.Dir, from, targetMod.Dir, to)) continue;
             others.Add((slot, from, to));
         }
-        ct.ThrowIfCancellationRequested();
 
         ushort? SourceMask(string slot) => RefitCore.MaskOf(pick.Dir, sourceCat, slot, OptionsOf(g.Settings, pick.Dir));
         ushort? TargetMask(string slot) => RefitCore.MaskOf(targetMod.Dir, targetCat, slot, OptionsOf(g.Settings, targetMod.Dir));
@@ -695,9 +778,15 @@ public sealed class AutoRefitWatcher : IDisposable
         string option = OptionFor(others);
         if (root != null && Existing(root, group, option, savePath))
         {
-            await Apply(r, root, group, option, cutFrom, isVanilla, ct);
+            if (await Apply(r, root, group, option, cutFrom, isVanilla, ct) is { } offExisting)
+            {
+                Fail(r, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"),
+                                      item, offExisting));
+                return;
+            }
             Say(string.Format(Loc.Localize("Chat.AutoRefit.Existing.Fmt",
                     "[Proteus] {0} was already refitted to {1}; that size is switched on."), item, option));
+            Finished(item, targetMod.Name);
             return;
         }
 
@@ -712,7 +801,7 @@ public sealed class AutoRefitWatcher : IDisposable
         if (BodyRetarget.BuildPair(primary, sourcePath, targetPath, SlotName(primary), male, SourceMask(primary),
                                    TargetMask(primary), uvRemap, out var primaryPair) is { } refusal)
         {
-            Fail(string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"), item,
+            Fail(r, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"), item,
                                refusal));
             return;
         }
@@ -735,6 +824,7 @@ public sealed class AutoRefitWatcher : IDisposable
         option = OptionFor(kept);
         ct.ThrowIfCancellationRequested();
 
+        AssertOffFramework("the refit");
         var pieces = RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment));
         var plan = BodyRetarget.Plan(garment, bytes, pairs, primary, held: new HashSet<int>(),
                                      replaceSkin: across, acrossBodies: across, clearBody: false, cutHidden: true,
@@ -748,7 +838,7 @@ public sealed class AutoRefitWatcher : IDisposable
             var made = await OnFramework(() => refitMods.Ensure(g.Vanilla!.Value.ItemName, targetMod.Name));
             if (!made.Ok)
             {
-                Fail(string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"), item,
+                Fail(r, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"), item,
                                    made.Message));
                 return;
             }
@@ -764,12 +854,18 @@ public sealed class AutoRefitWatcher : IDisposable
                                               cutFrom, manipulations);
         if (!outcome.Ok)
         {
-            Fail(string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"), item,
+            Fail(r, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"), item,
                                outcome.Message));
             return;
         }
 
-        await Apply(r, root, group, option, cutFrom, isVanilla, CancellationToken.None);
+        if (await Apply(r, root, group, option, cutFrom, isVanilla, CancellationToken.None) is { } off)
+        {
+            // Saved, so the size is there to pick by hand; but it is not on, and must not be reported as worn.
+            Fail(r, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"), item,
+                                  off));
+            return;
+        }
         log.Information("[Proteus] auto refit: {0} {1} onto {2} in {3:F1}s (moved up to {4:F1} mm)", item, primary,
                         option, clock.Elapsed.TotalSeconds, plan.Report.WorstMove * 1000f);
 
@@ -784,6 +880,7 @@ public sealed class AutoRefitWatcher : IDisposable
                         "These parts could not be refitted with it and kept their size: {0}."),
                         string.Join(", ", dropped));
         Say(done);
+        Finished(item, targetMod.Name);
     }
 
     /// <summary>Collect what only the framework thread may read. Null when there is nothing to do after all.</summary>
@@ -838,6 +935,49 @@ public sealed class AutoRefitWatcher : IDisposable
                                       note => log.Information("[Proteus] auto refit: {0}", note));
     }
 
+    /// <summary>The game's own body's fingerprint per extracted file, hashed once a session: a game patch changes it.</summary>
+    private readonly ConcurrentDictionary<string, string> vanillaPrints = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// A fingerprint of the game's own body in <paramref name="slot"/> at <paramref name="race"/> — a candidate for every
+    /// garment, and the source of every piece of the game's gear — so a patch that reshapes it reads garments again.
+    /// "" when the game has no body there.
+    /// </summary>
+    private string VanillaPrint(BodySizeCatalog vanilla, string slot, string race)
+    {
+        if (vanilla.For(slot, race).FirstOrDefault() is not { } body) return "";
+        string path = vanilla.PathOf(body);
+        return vanillaPrints.GetOrAdd(path, p =>
+        {
+            try { return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(p)))[..16]; }
+            catch (Exception) { return ""; }
+        });
+    }
+
+    /// <summary>A cached reading, as it was. Its pick is null when the garment could not be read.</summary>
+    private sealed record Restored(AutoRefitDecisions.Pick? Pick);
+
+    /// <summary>
+    /// A cached reading turned back into the body option it names — or null when the bodies installed now no longer
+    /// have it (the key moves with every body mod change, so this is a belt to those braces), which reads the garment
+    /// again.
+    /// </summary>
+    private static Restored? Restore(DetectionCache.Entry hit, string slot, string race,
+                                     Func<string, BodySizeCatalog?> catalogOf)
+    {
+        if (hit.Dir.Length == 0) return new Restored(null);
+        if (catalogOf(hit.Dir) is not { } catalog || OptionByFile(catalog.For(slot, race), hit.Rel) is not { } option)
+            return null;
+        return new Restored(new AutoRefitDecisions.Pick(hit.Dir, option, hit.Confidence, hit.FromCloth));
+    }
+
+    /// <summary>The option whose model is <paramref name="rel"/>, slashes and case as Penumbra treats them.</summary>
+    private static BodyOption? OptionByFile(IReadOnlyList<BodyOption> options, string rel)
+    {
+        string want = RefitCore.Normal(rel);
+        return options.FirstOrDefault(o => RefitCore.Normal(o.Rel) == want);
+    }
+
     /// <summary>The game's own gear is made on the game's own body: one size, no search.</summary>
     private static AutoRefitDecisions.Pick? VanillaSource(BodySizeCatalog vanilla, string slot, string race)
         => vanilla.For(slot, race) is { Count: > 0 } options
@@ -875,8 +1015,10 @@ public sealed class AutoRefitWatcher : IDisposable
     /// save just added does not exist to it yet — and the character is redrawn.
     /// </summary>
     /// <param name="cutFrom">The option the refitted model came from: in a multi-choice group, the one it replaces.</param>
-    private async Task Apply(Request r, string root, string group, string option, string? cutFrom, bool madeForGame,
-                             CancellationToken ct)
+    /// <returns>Null when the refit is on; otherwise what Penumbra answered, for the player — a refit that was saved but
+    /// could not be switched on must not be reported as worn.</returns>
+    private async Task<string?> Apply(Request r, string root, string group, string option, string? cutFrom,
+                                      bool madeForGame, CancellationToken ct)
     {
         string dir = Path.GetFileName(root);
         bool multi = RefitCore.IsMulti(root, group);
@@ -894,7 +1036,7 @@ public sealed class AutoRefitWatcher : IDisposable
                 await Task.Delay(250, ct);
         }
 
-        await OnFramework(() =>
+        var answer = await OnFramework(() =>
         {
             var settings = penumbra.GetModSettings(r.Collection, dir);
             if (madeForGame && settings is not { Enabled: true })
@@ -905,6 +1047,8 @@ public sealed class AutoRefitWatcher : IDisposable
             var ec = penumbra.SetModOption(r.Collection, dir, group, selection);
             log.Information("[Proteus] auto refit: selected {0} / {1} in {2}: {3}", group, string.Join(", ", selection),
                             dir, ec);
+            if (ec is not (Penumbra.Api.Enums.PenumbraApiEc.Success or Penumbra.Api.Enums.PenumbraApiEc.NothingChanged))
+                return ec.ToString();
 
             // Remembered, so that the player picking something else in this group later is taken as their choice.
             if (config.AutoRefitByCollection.TryGetValue(r.Collection.ToString("D"), out var pref)
@@ -915,8 +1059,9 @@ public sealed class AutoRefitWatcher : IDisposable
             long quiet = Environment.TickCount64 + OwnChangeQuietMs;
             ours[r.Slot + "|" + r.Worn.GamePath] = quiet;
             compositor.RedrawForChangedModel();
-            return ec;
+            return (string?)null;
         });
+        return answer;
     }
 
     private static IReadOnlyDictionary<string, List<string>>? OptionsOf(
@@ -943,15 +1088,50 @@ public sealed class AutoRefitWatcher : IDisposable
 
     // ── telling the player ──────────────────────────────────────────────────
 
-    private void Fail(string message) => Say(message, problem: true);
+    // Chat is for what the player has to know: a refit finished (one line for the whole batch), a refit failed (once per
+    // piece a session), the chosen body is missing (once per collection). Everything else — a piece left alone because
+    // it already fits, could not be read or has no size here — goes to the status line under the setting and to the
+    // log. Players reported the chat log flooding: a refit said it was starting and that it was done, per slot, and a
+    // piece with no body skin said so on every equip.
 
-    /// <summary>
-    /// Print to chat and show under the setting. Onto the framework thread for chat, with the catch INSIDE the lambda,
-    /// since the returned task (which would capture the exception) is discarded.
-    /// </summary>
+    /// <summary>A refit failed: shown under the setting, and in chat the first time this piece fails this session.</summary>
+    private void Fail(Request r, string message)
+    {
+        Say(message, problem: true);
+        if (toldFailed.TryAdd(r.Worn.Key, 0)) Chat(message, problem: true);
+    }
+
+    /// <summary>Show under the setting, and in the log. Not chat — see above.</summary>
     private void Say(string message, bool problem = false)
     {
         current = current with { Message = message, Failed = problem };
+        log.Information("[Proteus] auto refit: {0}", message);
+    }
+
+    /// <summary>A piece now wears its refit; said with the rest of the batch when the queue runs dry.</summary>
+    private void Finished(string item, string body)
+    {
+        lock (queueGate) finished.Add((item, body));
+    }
+
+    /// <summary>Say, in one chat line, everything refitted since the last time. Called under <see cref="queueGate"/>.</summary>
+    private void FlushSummary()
+    {
+        if (finished.Count == 0) return;
+        var byBody = finished.GroupBy(f => f.Body, StringComparer.Ordinal)
+                             .Select(g => string.Format(Loc.Localize("Chat.AutoRefit.Summary.Fmt",
+                                                            "[Proteus] Refitted to {0}: {1}."),
+                                                        g.Key, string.Join(", ", g.Select(f => f.Item).Distinct())));
+        finished.Clear();
+        Chat(string.Join(" ", byBody), problem: false);
+    }
+
+    /// <summary>
+    /// Print to chat. Onto the framework thread, with the catch INSIDE the lambda, since the returned task (which would
+    /// capture the exception) is discarded.
+    /// </summary>
+    private void Chat(string message, bool problem)
+    {
         if (disposed) return;
         try
         {

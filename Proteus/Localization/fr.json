@@ -299,6 +299,10 @@
     "message": "[Proteus] Ajustement de {0} de {1} vers {2}. Il sera activé une fois terminé.",
     "description": ""
   },
+  "Chat.AutoRefit.Summary.Fmt": {
+    "message": "[Proteus] Ajusté à {0} : {1}.",
+    "description": ""
+  },
   "Chat.AutoRefit.Unsure.Fmt": {
     "message": "[Proteus] Impossible de savoir pour quel corps {0} a été fait : il reste tel quel. Vous pouvez l'ajuster à la main avec l'outil « Taille du corps » du Studio.",
     "description": ""

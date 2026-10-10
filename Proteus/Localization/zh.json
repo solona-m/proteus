@@ -299,6 +299,10 @@
     "message": "[Proteus] 正在将 {0} 从 {1} 适配为 {2}。完成后会自动启用。",
     "description": ""
   },
+  "Chat.AutoRefit.Summary.Fmt": {
+    "message": "[Proteus] 已适配为 {0}：{1}。",
+    "description": ""
+  },
   "Chat.AutoRefit.Unsure.Fmt": {
     "message": "[Proteus] 无法判断 {0} 是为哪个体型制作的，因此保持原样。你可以用工作室的“体型尺寸”工具手动适配。",
     "description": ""
