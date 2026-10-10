@@ -826,8 +826,9 @@ public sealed class AutoRefitWatcher : IDisposable
 
         AssertOffFramework("the refit");
         var pieces = RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment));
+        // The new body's skin goes in whole: nobody is watching an unattended refit to catch the holes a cut can leave.
         var plan = BodyRetarget.Plan(garment, bytes, pairs, primary, held: new HashSet<int>(),
-                                     replaceSkin: across, acrossBodies: across, clearBody: false, cutHidden: true,
+                                     replaceSkin: across, acrossBodies: across, clearBody: false, cutHidden: false,
                                      keepShape: pieces);
         plan = RefitCore.MatchSkinToBody(plan, sourcePath, targetPath, uvRemap, male, log);
         if (bakeTo != 0) plan = RefitCore.WithBodySkin(plan, targetPath, log);
