@@ -778,6 +778,14 @@ internal static partial class BodyRetarget
             if (!float.IsFinite(nodeDelta[n].X) || !float.IsFinite(nodeDelta[n].Y) || !float.IsFinite(nodeDelta[n].Z))
                 nodeDelta[n] = default;
 
+        // Last: every piece the author covered with another still behind it — see KeepLayerOrder. Past the guard above,
+        // so a node with no answer is already back where it was rather than a NaN spread through a covered piece.
+        if (!Tuned.NoLayerOrder)
+        {
+            var layered = GarmentCloth(garment, sets);
+            KeepLayerOrder(sets, CoveredPoints(sets, layered, FacesOneWay(garment, sets)), nodeDelta, stay, layered, drawn);
+        }
+
         int vc = garment.Positions.Length / 3;
         var vertDelta = new Vec3[vc];
         for (int i = 0; i < vc; i++) vertDelta[i] = nodeDelta[sets.NodeOf[i]];
