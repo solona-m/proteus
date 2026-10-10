@@ -267,6 +267,10 @@
     "message": "캐릭터에 적용된 모든 모드(사용 여부 / 우선도 / 옵션)와 현재 Proteus 색상을\n이 연결에 기록합니다. 수동 편집은 여기를 클릭해야만 유지됩니다.",
     "description": ""
   },
+  "Chat.AutoRefit.Author.Fmt": {
+    "message": "[Proteus] {0}은(는) 이미 {1} 크기가 있어서 원래 들어 있던 \"{2}\"을(를) 켰습니다.",
+    "description": ""
+  },
   "Chat.AutoRefit.BodyMissing.Fmt": {
     "message": "[Proteus] 이 컬렉션의 자동 맞춤용으로 고른 체형 \"{0}\"이(가) 설치되어 있지 않아 아무것도 맞추지 않습니다. /proteus > 설정 에서 다른 체형을 고르세요.",
     "description": ""

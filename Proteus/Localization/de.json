@@ -267,6 +267,10 @@
     "message": "Hält jeden Mod am Charakter (Aktivierung / Priorität / Optionen) und die aktuellen\nProteus-Farben in dieser Bindung fest. Manuelle Änderungen bleiben nur erhalten, wenn du hier klickst.",
     "description": ""
   },
+  "Chat.AutoRefit.Author.Fmt": {
+    "message": "[Proteus] {0} gibt es bereits in {1}; seine eigene Option „{2}“ ist eingeschaltet.",
+    "description": ""
+  },
   "Chat.AutoRefit.BodyMissing.Fmt": {
     "message": "[Proteus] Der für automatische Anpassungen in dieser Kollektion gewählte Körper „{0}“ ist nicht installiert, daher wird nichts angepasst. Wähle unter /proteus > Einstellungen einen anderen.",
     "description": ""

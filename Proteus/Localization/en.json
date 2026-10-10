@@ -267,6 +267,10 @@
     "message": "Snapshot every mod on the character (enable / priority / options) and the current\nProteus colours into this binding. Manual edits only persist when you click this.",
     "description": "Tooltip. Appears in the Bindings tab. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
+  "Chat.AutoRefit.Author.Fmt": {
+    "message": "[Proteus] {0} already comes in {1}; its own \"{2}\" is switched on.",
+    "description": "Status line when a mod already ships the chosen body size, so Proteus switches to the author's own option instead of refitting. {0} names the gear, {1} the body and size, {2} the author's option name. Do NOT translate \"Proteus\"."
+  },
   "Chat.AutoRefit.BodyMissing.Fmt": {
     "message": "[Proteus] The body chosen for automatic refits in this collection, \"{0}\", isn't installed, so nothing is being refitted. Choose another under /proteus > Settings.",
     "description": "Chat line when the body chosen for the collection is no longer installed. {0} is the body mod's folder name. \"/proteus\" is a command and \"Settings\" matches Tab.Settings. Do NOT translate \"Proteus\" or \"/proteus\"."

@@ -645,6 +645,58 @@ public sealed class AutoRefitWatcher : IDisposable
             return;
         }
 
+        // ── the author's own size, when the mod already ships it ──
+        // Farfalla offers "Rue M" beside "Neolithe XS", and its Rue M is Rue+'s Yiggle Medium exactly. Put on fresh, the
+        // shirt sits on its default — Neolithe XS — and refitting that to Yiggle Medium makes a copy of a size the author
+        // already made, worse than theirs; a refit that stopped short left the player in XS. Their own size is the answer.
+        if (!isVanilla && bakeTo == 0
+            && RefitCore.SwitchingGroup(redirects, r.Worn.GamePath, ownRecord?.OwnGroups, RefitCore.SingleGroups(r.ModRoot!))
+               is { } sizeGroup)
+        {
+            // The author's sizes only: a refit Proteus saved here before is a copy of OURS, put back on — with its save
+            // path and other parts checked — by the refit's own "made before" step, and must not be called the author's.
+            var refitNames = new HashSet<string>(
+                ownRecord?.Options.Where(e => string.Equals(ownRecord.GroupOf(e), sizeGroup, StringComparison.OrdinalIgnoreCase))
+                                  .Select(e => e.Name) ?? [],
+                StringComparer.OrdinalIgnoreCase);
+            var sizes = redirects.Where(d => string.Equals(d.GamePath, r.Worn.GamePath, StringComparison.OrdinalIgnoreCase)
+                                             && d.Source.StartsWith(sizeGroup + " / ", StringComparison.Ordinal))
+                                 .Select(d => (Option: d.Source[(sizeGroup.Length + 3)..], d.File))
+                                 .Where(s => !refitNames.Contains(s.Option))
+                                 .ToList();
+            string? wornSize = BodyRetargetWriter.OptionOfFile(redirects, r.Worn.Rel!, sizeGroup);
+            if (AuthorSizeCached(r.ModRoot!, sizeGroup, sizes, targetMod, target, primary, race, state.Version) is { } authored)
+            {
+                // By file, not by name: two options carrying one model would name the worn one either way.
+                if (string.Equals(authored, wornSize, StringComparison.OrdinalIgnoreCase)
+                    || sizes.Any(s => string.Equals(s.Option, authored, StringComparison.OrdinalIgnoreCase)
+                                      && string.Equals(RefitCore.Normal(s.File), RefitCore.Normal(r.Worn.Rel!),
+                                                       StringComparison.OrdinalIgnoreCase)))
+                {
+                    log.Information("[Proteus] auto refit: {0} is already the author's {1}, which is {2} / {3}", item,
+                                    authored, targetMod.Name, target.Label);
+                    return;
+                }
+                if (!r.Forced && ChoseOtherwise(g, r.ModRoot!, sizeGroup))
+                {
+                    log.Information("[Proteus] auto refit: {0} / {1} was switched away in this collection, left as chosen",
+                                    Path.GetFileName(r.ModRoot!), sizeGroup);
+                    return;
+                }
+                if (await Apply(r, r.ModRoot!, sizeGroup, authored, wornSize, false, ct, authorSize: true) is { } offAuthor)
+                {
+                    Fail(r, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"),
+                                          item, offAuthor));
+                    return;
+                }
+                Say(string.Format(Loc.Localize("Chat.AutoRefit.Author.Fmt",
+                        "[Proteus] {0} already comes in {1}; its own \"{2}\" is switched on."),
+                        item, targetMod.Name + " — " + target.Label, authored));
+                Finished(item, targetMod.Name);
+                return;
+            }
+        }
+
         // ── what it was made on, and which other parts of that body it reaches ──
         BodySizeCatalog? CatalogOf(string dir) => dir == VanillaBodyCatalog.Key ? vanillaCat : state.Find(dir)?.Catalog;
         // The collection's own choice only. A body mod a Glamourer design holds on or off with a temporary setting comes
@@ -956,6 +1008,74 @@ public sealed class AutoRefitWatcher : IDisposable
         });
     }
 
+    /// <summary>
+    /// <see cref="AuthorSize"/>, kept with the garment readings: it reads every size the group offers, and a pack-made
+    /// garment offers thirty, so a piece put on again must not read them all again. Keyed by each option's file as it
+    /// stands on disk (name, length, time written), so an author's update or a size added changes the key, and by the
+    /// installed bodies' version, which changes with any edit to the body the sizes are compared against.
+    /// </summary>
+    private string? AuthorSizeCached(string modRoot, string group, IReadOnlyList<(string Option, string File)> sizes,
+                                     BodyModIndex.Entry targetMod, BodyOption target, string slot, string race,
+                                     string bodiesVersion)
+    {
+        var files = new System.Text.StringBuilder();
+        foreach (var (option, file) in sizes.OrderBy(s => s.Option, StringComparer.Ordinal))
+        {
+            var info = new FileInfo(BodySizeCatalog.ResolveCaseInsensitive(modRoot, file));
+            files.Append(option).Append('|').Append(RefitCore.Normal(file)).Append('|')
+                 .Append(info.Exists ? $"{info.Length}:{info.LastWriteTimeUtc.Ticks}" : "-").Append('\n');
+        }
+        string key = "author|" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                                     System.Text.Encoding.UTF8.GetBytes(files.ToString())))
+                   + $"|{Path.GetFileName(modRoot).ToLowerInvariant()}|{group}|{slot}|{race}"
+                   + $"|{targetMod.Dir.ToLowerInvariant()}|{RefitCore.Normal(target.Rel)}|{bodiesVersion}";
+        // An entry's Rel is the author's option, or "" for none.
+        if (detections.TryGet(key) is { } hit) return hit.Rel.Length > 0 ? hit.Rel : null;
+
+        AssertOffFramework("reading the author's sizes");
+        string? found = AuthorSize(modRoot, sizes, targetMod.Catalog, target, slot, race);
+        detections.Put(key, new DetectionCache.Entry(targetMod.Dir, found ?? "",
+                                                     found != null ? Confidence.Exact : Confidence.Ambiguous, false, []));
+        return found;
+    }
+
+    /// <summary>
+    /// The author's own option in a size group whose model IS <paramref name="target"/> — the body skin it carries a
+    /// copy of that size, not merely near it — or null when none is.
+    /// <para/>
+    /// Cheap first: every option's share of skin points lying exactly on the target body (see
+    /// <see cref="BodySizeMatch.Shared"/>; the other sizes of one body share their arms and back, so only the very size
+    /// reaches <see cref="BodySizeMatch.Exact"/>). Then the best is ranked against the target mod's sizes as the Studio
+    /// ranks them, and must come out an exact copy of that very size.
+    /// </summary>
+    internal static string? AuthorSize(string modRoot, IReadOnlyList<(string Option, string File)> sizes,
+                                       BodySizeCatalog targetCat, BodyOption target, string slot, string race)
+    {
+        string targetPath = targetCat.PathOf(target);
+        float bestShare = 0f;
+        string? best = null;
+        ModelParts? bestModel = null;
+        byte[]? bestBytes = null;
+        foreach (var (option, file) in sizes)
+        {
+            string path = BodySizeCatalog.ResolveCaseInsensitive(modRoot, file);
+            if (!File.Exists(path)) continue;
+            var bytes = File.ReadAllBytes(path);
+            if (ModelPartReader.Read(bytes) is not { } model) continue;
+            float share = BodySizeMatch.Shared(BodySizeMatch.ProbeKeys(model), targetPath, out _);
+            if (share <= bestShare) continue;
+            (bestShare, best, bestModel, bestBytes) = (share, option, model, bytes);
+        }
+        if (best == null || bestShare < BodySizeMatch.Exact) return null;
+
+        var bones = new HashSet<string>(SecondSkinWriter.Parse(bestBytes!).BoneNames, StringComparer.Ordinal);
+        var ranking = BodySizeMatch.Rank(bestModel!, targetCat.For(slot, race), targetCat.PathOf, bones);
+        return ranking.Confidence == Confidence.Exact && ranking.Best is { } top
+               && RefitCore.Normal(top.Option.Rel) == RefitCore.Normal(target.Rel)
+            ? best
+            : null;
+    }
+
     /// <summary>A cached reading, as it was. Its pick is null when the garment could not be read.</summary>
     private sealed record Restored(AutoRefitDecisions.Pick? Pick);
 
@@ -997,6 +1117,9 @@ public sealed class AutoRefitWatcher : IDisposable
         var record = BodyRetargetWriter.ReadRecord(root);
         var refits = record?.Options.Where(e => string.Equals(record.GroupOf(e), group, StringComparison.OrdinalIgnoreCase))
                                     .Select(e => e.Name) ?? [];
+        // The author's size switched on in its stead is as much ours: still worn, it is not the player's choice.
+        if (g.Preference.AuthorSwitchedOn.TryGetValue(AutoRefitDecisions.GroupKey(dir, group), out string? authored))
+            refits = refits.Append(authored);
         return AutoRefitDecisions.ChoseOtherwise(before, ticked, refits);
     }
 
@@ -1020,7 +1143,7 @@ public sealed class AutoRefitWatcher : IDisposable
     /// <returns>Null when the refit is on; otherwise what Penumbra answered, for the player — a refit that was saved but
     /// could not be switched on must not be reported as worn.</returns>
     private async Task<string?> Apply(Request r, string root, string group, string option, string? cutFrom,
-                                      bool madeForGame, CancellationToken ct)
+                                      bool madeForGame, CancellationToken ct, bool authorSize = false)
     {
         string dir = Path.GetFileName(root);
         bool multi = RefitCore.IsMulti(root, group);
@@ -1053,9 +1176,19 @@ public sealed class AutoRefitWatcher : IDisposable
                 return ec.ToString();
 
             // Remembered, so that the player picking something else in this group later is taken as their choice.
-            if (config.AutoRefitByCollection.TryGetValue(r.Collection.ToString("D"), out var pref)
-                && pref.SwitchedOn.Add(AutoRefitDecisions.GroupKey(dir, group)))
-                config.Save();
+            // An author's size switched on is remembered by name, so that it too reads as ours (see ChoseOtherwise).
+            if (config.AutoRefitByCollection.TryGetValue(r.Collection.ToString("D"), out var pref))
+            {
+                string key = AutoRefitDecisions.GroupKey(dir, group);
+                bool changed = pref.SwitchedOn.Add(key);
+                if (authorSize)
+                {
+                    changed |= !pref.AuthorSwitchedOn.TryGetValue(key, out string? had) || had != option;
+                    pref.AuthorSwitchedOn[key] = option;
+                }
+                else changed |= pref.AuthorSwitchedOn.Remove(key);
+                if (changed) config.Save();
+            }
 
             // The walk after this redraw sees the refit worn and must leave it be.
             long quiet = Environment.TickCount64 + OwnChangeQuietMs;

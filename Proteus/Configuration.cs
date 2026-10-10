@@ -503,6 +503,13 @@ public class AutoRefitPreference
     /// piece on again leaves it alone (see <c>AutoRefitDecisions.ChoseOtherwise</c>). OrdinalIgnoreCase, populated in place.
     /// </summary>
     public HashSet<string> SwitchedOn { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Per mod group (<c>"modDir|group"</c>), the author's own size Proteus switched on there because it IS the size
+    /// chosen. Ours, as a refit is: the player still wearing it has not chosen otherwise, and a later change of size may
+    /// move them off it. Dropped again when a refit is switched on in its place. OrdinalIgnoreCase, populated in place.
+    /// </summary>
+    public Dictionary<string, string> AuthorSwitchedOn { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 /// <summary>

@@ -267,6 +267,10 @@
     "message": "Capture chaque mod du personnage (activation / priorité / options) et les couleurs Proteus\nactuelles dans cette liaison. Les modifications manuelles ne persistent que si vous cliquez ici.",
     "description": ""
   },
+  "Chat.AutoRefit.Author.Fmt": {
+    "message": "[Proteus] {0} existe déjà en {1} ; sa propre option « {2} » est activée.",
+    "description": ""
+  },
   "Chat.AutoRefit.BodyMissing.Fmt": {
     "message": "[Proteus] Le corps choisi pour les ajustements automatiques de cette collection, « {0} », n'est pas installé : rien n'est ajusté. Choisissez-en un autre dans /proteus > Paramètres.",
     "description": ""

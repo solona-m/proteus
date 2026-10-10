@@ -267,6 +267,10 @@
     "message": "キャラクターに適用中のすべてのMOD（有効／優先度／オプション）と現在のProteusカラーを\nこの紐付けに記録します。手動での変更は、ここをクリックしたときだけ保存されます。",
     "description": ""
   },
+  "Chat.AutoRefit.Author.Fmt": {
+    "message": "[Proteus] {0} には {1} のサイズが最初から用意されています。作者の「{2}」をオンにしました。",
+    "description": ""
+  },
   "Chat.AutoRefit.BodyMissing.Fmt": {
     "message": "[Proteus] このコレクションの自動調整用に選ばれた体型「{0}」がインストールされていないため、何も調整されません。/proteus > 設定 で別の体型を選んでください。",
     "description": ""

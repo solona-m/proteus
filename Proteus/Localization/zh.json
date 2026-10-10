@@ -267,6 +267,10 @@
     "message": "将角色身上的每个模组（启用／优先级／选项）与当前 Proteus 颜色\n记录到此绑定中。手动修改只有在点击此处后才会保留。",
     "description": ""
   },
+  "Chat.AutoRefit.Author.Fmt": {
+    "message": "[Proteus] {0} 本身已有 {1} 尺寸；已启用其自带的“{2}”。",
+    "description": ""
+  },
   "Chat.AutoRefit.BodyMissing.Fmt": {
     "message": "[Proteus] 此合集用于自动适配的体型“{0}”未安装，因此不会进行任何适配。请在 /proteus > 设置 中另选一个。",
     "description": ""
