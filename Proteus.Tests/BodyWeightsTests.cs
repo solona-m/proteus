@@ -421,6 +421,141 @@ public class BodyWeightsTests
         }
     }
 
+    [Theory]
+    [InlineData(0.001f)]   // lying on the thigh, where the skin-hug passes would take the skin's weights outright
+    [InlineData(0.015f)]   // hanging off it, where the change between the bodies is taken
+    public void A_skirt_never_takes_the_legs_weights(float off)
+    {
+        // A skirt panel over the thigh, rigged to the hip and its own chain alone; both bodies rig the thigh, the new
+        // one with Rue's thigh physics too. (Four bones: all a synthetic vertex holds.)
+        var source = Body(("j_asi_a_l", 0.7f), ("j_kosi", 0.3f));
+        var target = Body(("j_asi_a_l", 0.3f), ("iv_daitai_phys_l", 0.3f), ("j_kosi", 0.2f), ("iv_shiri_l", 0.2f));
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Cloth, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetZ: off,
+                                                                  Weights: [("j_kosi", 0.6f), ("j_sk_f_a_l", 0.4f)])));
+        var pairs = new[] { Pair(source, target) };
+
+        var plan = BodyRetarget.PlanWeights(garment, pairs, acrossBodies: true, before: garment);
+        var rebuilt = BodyRetarget.Rebuild(garment, pairs, swapSkin: false, plan, out _)!;
+
+        foreach (int v in VerticesOf(garment, Cloth, 0))
+        {
+            var w = Weights(rebuilt)[v];
+            Assert.DoesNotContain(w, i => BodyRetarget.IsLegBone(i.Bone));
+            Assert.DoesNotContain(w, i => i.Bone.Contains("daitai", StringComparison.Ordinal));
+            Assert.Equal(1f, w.Sum(i => i.W), 3);
+            Assert.Contains(w, i => i.Bone == "j_kosi");
+            // The buttocks are the hip a skirt hangs from: it follows them.
+            Assert.Contains(w, i => i.Bone == "iv_shiri_l");
+        }
+    }
+
+    [Theory]
+    [InlineData(0.001f)]
+    [InlineData(0.015f)]
+    public void A_skirt_hem_with_a_trace_of_thigh_is_still_a_skirt(float off)
+    {
+        // What weighting a skirt in Blender off a body leaves along the hem: 4% thigh. It keeps that trace and gains
+        // nothing — not the thigh's full share, not its physics.
+        var source = Body(("j_asi_a_l", 0.7f), ("j_kosi", 0.3f));
+        var target = Body(("j_asi_a_l", 0.4f), ("iv_daitai_phys_l", 0.3f), ("j_kosi", 0.2f), ("iv_shiri_l", 0.1f));
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Cloth, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetZ: off,
+                Weights: [("j_kosi", 0.56f), ("j_sk_f_a_l", 0.4f), ("j_asi_a_l", 0.04f)])));
+        var pairs = new[] { Pair(source, target) };
+
+        var plan = BodyRetarget.PlanWeights(garment, pairs, acrossBodies: true, before: garment);
+        var rebuilt = BodyRetarget.Rebuild(garment, pairs, swapSkin: false, plan, out _)!;
+
+        foreach (int v in VerticesOf(garment, Cloth, 0))
+        {
+            var w = Weights(rebuilt)[v];
+            Assert.True(w.Where(i => BodyRetarget.IsLegBone(i.Bone)).Sum(i => i.W) <= 0.045f,
+                        "the hem gained leg weight: " + string.Join(", ", w));
+            Assert.DoesNotContain(w, i => i.Bone.Contains("daitai", StringComparison.Ordinal));
+            Assert.Equal(1f, w.Sum(i => i.W), 3);
+        }
+    }
+
+    [Fact]
+    public void A_skirt_lying_on_the_thigh_keeps_its_chain_and_takes_no_hip_down_there()
+    {
+        // The edge of a front panel lying on the thigh, 1 mm off it, rigged mostly to the skirt chain. Cloth on the skin
+        // is normally rigged as the skin; a skirt on the leg is not — it keeps swinging with its chain, and the hip's
+        // share stays what the author gave it rather than taking the leg's place all the way down the thigh.
+        // Both bodies are nearly all thigh there, with a sliver of hip (so the hip is a body bone at all).
+        var source = Body(("j_asi_a_l", 0.95f), ("j_kosi", 0.05f));
+        var target = Body(("j_asi_a_l", 0.55f), ("iv_daitai_phys_l", 0.4f), ("j_kosi", 0.05f));
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Cloth, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetZ: 0.001f,
+                                                                  Weights: [("j_sk_f_b_l", 0.8f), ("j_kosi", 0.2f)])));
+        var pairs = new[] { Pair(source, target) };
+
+        var plan = BodyRetarget.PlanWeights(garment, pairs, acrossBodies: true, before: garment);
+        Assert.NotNull(plan);
+        Assert.True(plan.Reweighted > 0, "nothing was reweighted, so the test proves nothing");
+        var rebuilt = BodyRetarget.Rebuild(garment, pairs, swapSkin: false, plan, out _)!;
+
+        foreach (int v in VerticesOf(garment, Cloth, 0))
+        {
+            var w = Weights(rebuilt)[v];
+            // Within the sliver of hip the skin itself has there: not the near-whole vertex the leg's share became.
+            Assert.True(w.Single(i => i.Bone == "j_sk_f_b_l").W >= 0.7f, "the chain was taken off: " + string.Join(", ", w));
+            Assert.True(w.Single(i => i.Bone == "j_kosi").W <= 0.3f, "the hip came down the thigh: " + string.Join(", ", w));
+            Assert.DoesNotContain(w, i => BodyRetarget.IsLegBone(i.Bone));
+        }
+    }
+
+    [Fact]
+    public void A_skirt_s_leg_reading_goes_to_the_author_s_own_weights()
+    {
+        var author = new (string, float)[] { ("j_kosi", 0.6f), ("j_sebo_c", 0.4f) };
+
+        // 90% thigh: 90% the author's, and the reading's own 10% of hip kept as it is — not scaled up to all hip.
+        var mostly = BodyRetarget.WithoutLegs([("j_asi_a_l", 0.6f), ("iv_daitai_phys_l", 0.3f), ("j_kosi", 0.1f)], author)!;
+        Assert.Equal(0.64f, mostly.Single(i => i.Bone == "j_kosi").W, 3);
+        Assert.Equal(0.36f, mostly.Single(i => i.Bone == "j_sebo_c").W, 3);
+        Assert.DoesNotContain(mostly, i => BodyRetarget.IsLegBone(i.Bone));
+
+        // All thigh: the author's outright, rather than nothing at all.
+        var all = BodyRetarget.WithoutLegs([("j_asi_a_l", 1f)], author)!;
+        Assert.Equal(0.6f, all.Single(i => i.Bone == "j_kosi").W, 3);
+        Assert.Equal(0.4f, all.Single(i => i.Bone == "j_sebo_c").W, 3);
+
+        // No leg in it: untouched.
+        (string, float)[] hip = [("j_kosi", 0.7f), ("iv_shiri_l", 0.3f)];
+        Assert.Same(hip, BodyRetarget.WithoutLegs(hip, author));
+    }
+
+    [Theory]
+    [InlineData("j_asi_a_l", true)]
+    [InlineData("j_asi_e_r", true)]
+    [InlineData("iv_asi_oya_a_l", true)]
+    [InlineData("ya_daitai_phys_l", true)]
+    [InlineData("iv_daitai_phys_r", true)]
+    [InlineData("iv_shiri_l", false)]
+    [InlineData("j_kosi", false)]
+    [InlineData("j_sk_f_a_l", false)]
+    public void Which_bones_are_the_legs(string bone, bool leg) => Assert.Equal(leg, BodyRetarget.IsLegBone(bone));
+
+    [Fact]
+    public void Pants_keep_the_legs_weights()
+    {
+        // Rigged to the thigh by its author: the new body's thigh, physics included, is what it follows.
+        var source = Body(("j_asi_a_l", 1f));
+        var target = Body(("j_asi_a_l", 0.7f), ("ya_daitai_phys_l", 0.3f));
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Cloth, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetZ: 0.001f,
+                                                                  Weights: [("j_asi_a_l", 1f)])));
+        var pairs = new[] { Pair(source, target) };
+
+        var plan = BodyRetarget.PlanWeights(garment, pairs, acrossBodies: true, before: garment);
+        var rebuilt = BodyRetarget.Rebuild(garment, pairs, swapSkin: false, plan, out _)!;
+
+        foreach (int v in VerticesOf(garment, Cloth, 0))
+            Assert.Equal(0.3f, Weights(rebuilt)[v].Single(i => i.Bone == "ya_daitai_phys_l").W, 2);
+    }
+
     [Fact]
     public void Cloth_over_the_crotch_belongs_to_neither_leg()
     {
