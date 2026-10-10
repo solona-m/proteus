@@ -23,27 +23,32 @@ internal static partial class BodyRetarget
         /// <param name="Eased">The same, smoothed over the body's surface: what CLOTH follows. Cloth samples the field
         /// wherever it happens to hang, and away from the body the nearest point is not a stable thing to ask for, so a
         /// step in the field tears the cloth across it. Skin is on the body and wants the exact answer.</param>
-        private readonly (BodySurface Surface, IReadOnlyList<Vector3?> Field, IReadOnlyList<Vector3?> Eased)[] slots;
+        /// <param name="Sides">Per body vertex, the side of the body it belongs to (see <see cref="BodySides"/>), or null
+        /// when the body's skinning could not be read in this vertex order — that slot then answers from either side.</param>
+        private readonly (BodySurface Surface, IReadOnlyList<Vector3?> Field, IReadOnlyList<Vector3?> Eased, sbyte[]? Sides)[] slots;
         private readonly Dictionary<(int, int, int), List<(Vector3 At, Vector3 Delta)>> snap = [];
 
-        private SourceBody((BodySurface, IReadOnlyList<Vector3?>, IReadOnlyList<Vector3?>)[] slots) => this.slots = slots;
+        private SourceBody((BodySurface, IReadOnlyList<Vector3?>, IReadOnlyList<Vector3?>, sbyte[]?)[] slots) => this.slots = slots;
 
         public static SourceBody Build(IReadOnlyList<SlotPair> pairs)
         {
-            var built = new (BodySurface, IReadOnlyList<Vector3?>, IReadOnlyList<Vector3?>)[pairs.Count];
+            var built = new (BodySurface, IReadOnlyList<Vector3?>, IReadOnlyList<Vector3?>, sbyte[]?)[pairs.Count];
             for (int i = 0; i < pairs.Count; i++)
             {
                 var src = pairs[i].Correspondence.Source;
                 var surface = new BodySurface(src, BodySurface.CellFor(MeanEdgeOf(src)));
                 var whole = Whole(src, pairs[i].Correspondence.Field);
-                built[i] = (surface, whole, Eased(src, whole));
+                // The same reading of the old body the weights take: without the variants its mod does not draw.
+                sbyte[]? sides = pairs[i].SourceModel is { } file && ModelSkinReader.Read(file, null, null) is { } skin
+                                 && skin.VertexCount * 3 == src.Positions.Length ? BodySides(skin) : null;
+                built[i] = (surface, whole, Eased(src, whole), sides);
             }
 
             var body = new SourceBody(built);
 
             // Built in slot order, then ascending vertex, so a tie between two body vertices in one bucket always
             // resolves the same way and a golden hash of the output is stable.
-            foreach (var (surface, field, _) in built)
+            foreach (var (surface, field, _, _) in built)
             {
                 var src = surface;
                 foreach (int v in src.SkinVertices)
@@ -245,7 +250,7 @@ internal static partial class BodyRetarget
             distance = 0f;
             bool found = false;
             float best = maxDistance;
-            foreach (var (surface, field, _) in slots)
+            foreach (var (surface, field, _, _) in slots)
             {
                 if (!surface.Nearest(p, best, out var hit)) continue;
                 var sum = Vector3.Zero;
@@ -274,7 +279,10 @@ internal static partial class BodyRetarget
         /// 7.1 mm, which reads in game as a spike through the shoe. Within <see cref="SlotBlend"/> of the nearest, a
         /// body's answer fades in rather than replacing it.
         /// </summary>
-        public bool TryNearest(Vector3 p, float maxDistance, out Vector3 delta, out float distance)
+        /// <param name="side">The side of the body the garment's point belongs to (see <see cref="GarmentSides"/>): the
+        /// other side's skin is never asked, however near. The inside of a pant leg close against the other thigh took
+        /// THAT thigh's move — its mirror image — and was carried toward it. 0 asks any skin.</param>
+        public bool TryNearest(Vector3 p, float maxDistance, out Vector3 delta, out float distance, int side = 0)
         {
             delta = default;
             distance = 0f;
@@ -284,9 +292,9 @@ internal static partial class BodyRetarget
             float blendWeight = 0f;
             near.Clear();
 
-            foreach (var (surface, _, field) in slots)
+            foreach (var (surface, _, field, sides) in slots)
             {
-                if (!surface.Nearest(p, maxDistance, out var hit)) continue;
+                if (!surface.Nearest(p, maxDistance, out var hit, side != 0 ? sides : null, -side)) continue;
 
                 // Over the corners that have a landing, renormalised. A correspondence by texture coordinate leaves the
                 // odd vertex unplaced — a seam, an island the other body cuts differently — and dropping every triangle
@@ -349,8 +357,11 @@ internal static partial class BodyRetarget
     /// Carry the body's displacement onto the garment.
     /// </summary>
     /// <param name="nodes">The nodes to move. Called with every node, embedded skin included — see <see cref="Sets"/>.</param>
+    /// <param name="nodeSides">Per node, the side of the body its author rigged it to (see <see cref="NodeSides"/>);
+    /// null to ask any skin.</param>
     private static void Transfer(Sets sets, IReadOnlyList<int> nodes, SourceBody source,
-                                 Vec3[] nodeDelta, bool[] snapped, out int transferred, out int missed)
+                                 Vec3[] nodeDelta, bool[] snapped, out int transferred, out int missed,
+                                 sbyte[]? nodeSides = null)
     {
         transferred = 0;
         missed = 0;
@@ -367,7 +378,7 @@ internal static partial class BodyRetarget
                 continue;
             }
 
-            if (!source.TryNearest(p, FarBand, out var delta, out float distance))
+            if (!source.TryNearest(p, FarBand, out var delta, out float distance, nodeSides?[n] ?? 0))
             {
                 missed++;
                 continue;
@@ -376,6 +387,27 @@ internal static partial class BodyRetarget
             nodeDelta[n] = ToVec(delta * Reach(distance));
             transferred++;
         }
+    }
+
+    /// <summary>
+    /// Per welded node, the side of the body its vertices' author rigged them to (see <see cref="GarmentSides"/>): the
+    /// side its vertices agree on, ignoring those of neither side; 0 where they disagree. Null without the garment's
+    /// skinning, or when it is not in the part reader's vertex order.
+    /// </summary>
+    internal static sbyte[]? NodeSides(Sets sets, XivLiveMesh.SkinnedMesh? garmentSkin, IReadOnlySet<string> bodyBones)
+    {
+        if (garmentSkin == null || garmentSkin.VertexCount != sets.NodeOf.Length) return null;
+        var vertex = GarmentSides(garmentSkin, sets.NodeOf.Length, bodyBones);
+        var node = new sbyte[sets.NodeCount];
+        var mixed = new bool[sets.NodeCount];
+        for (int v = 0; v < vertex.Length; v++)
+        {
+            if (vertex[v] == 0) continue;
+            int n = sets.NodeOf[v];
+            if (node[n] == 0 && !mixed[n]) node[n] = vertex[v];
+            else if (node[n] != vertex[v]) { node[n] = 0; mixed[n] = true; }
+        }
+        return node;
     }
 
     private static float MeanEdgeOf(ModelParts model)

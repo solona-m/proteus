@@ -616,7 +616,8 @@ internal static partial class BodyRetarget
                                bool replaceSkin = false, bool acrossBodies = false, bool clearBody = false,
                                bool cutHidden = true, IReadOnlyList<IReadOnlyCollection<int>>? keepShape = null)
     {
-        var solved = Solve(garment, pairs, garmentSlot, pushOut, held, replaceSkin, clearBody, keepShape);
+        var solved = Solve(garment, pairs, garmentSlot, pushOut, held, replaceSkin, clearBody, keepShape,
+                           ModelSkinReader.Read(garmentBytes, null, null));
         var written = MeshVolumeService.Inflate(garmentBytes, solved.Edit);
         byte[] model = written.Model;
 
@@ -655,9 +656,13 @@ internal static partial class BodyRetarget
 
     /// <inheritdoc cref="Plan"/>
     /// <remarks>The geometry, without touching the file. See <see cref="Solved"/>.</remarks>
+    /// <param name="garmentSkin">The garment's skinning, in the part reader's vertex order: which side of the body each
+    /// point belongs to, so a pant leg never follows the other leg (see <see cref="SourceBody.TryNearest"/>). Null asks
+    /// either side.</param>
     internal static Solved Solve(ModelParts garment, IReadOnlyList<SlotPair> pairs, string? garmentSlot = null,
                                  bool pushOut = true, IReadOnlySet<int>? held = null, bool replaceSkin = false,
-                                 bool clearBody = false, IReadOnlyList<IReadOnlyCollection<int>>? keepShape = null)
+                                 bool clearBody = false, IReadOnlyList<IReadOnlyCollection<int>>? keepShape = null,
+                                 XivLiveMesh.SkinnedMesh? garmentSkin = null)
     {
         // With the skin replaced, the garment's OWN slot body is drawn after all — Rebuild embeds that very mesh in the
         // garment, so it is what the cloth ends up lying against. Asking for the swap is not enough: Rebuild only swaps
@@ -673,7 +678,8 @@ internal static partial class BodyRetarget
         var nodeDelta = new Vec3[sets.NodeCount];
         var snapped = new bool[sets.NodeCount];
 
-        Transfer(sets, sets.AllNodes, source, nodeDelta, snapped, out int transferred, out int missed);
+        Transfer(sets, sets.AllNodes, source, nodeDelta, snapped, out int transferred, out int missed,
+                 garmentSkin != null ? NodeSides(sets, garmentSkin, BodyBonesOf(pairs)) : null);
         Knit(sets, nodeDelta, snapped);
         // After the knit, which evens each sheet out along itself and would take the sheets apart again.
         var layers = Tuned.NoLayerKnit ? null : LayerPartners(sets, snapped);
