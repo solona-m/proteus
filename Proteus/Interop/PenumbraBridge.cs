@@ -30,6 +30,7 @@ public class PenumbraBridge : IDisposable
     private readonly DeleteMod deleteMod;
     private readonly TrySetMod trySetMod;
     private readonly TrySetModPriority trySetModPriority;
+    private readonly TryInheritMod tryInheritMod;
     private readonly TrySetModSetting trySetModSetting;
     private readonly TrySetModSettings trySetModSettings;
     private readonly RedrawObject redrawObject;
@@ -97,6 +98,7 @@ public class PenumbraBridge : IDisposable
         deleteMod = new DeleteMod(pluginInterface);
         trySetMod = new TrySetMod(pluginInterface);
         trySetModPriority = new TrySetModPriority(pluginInterface);
+        tryInheritMod = new TryInheritMod(pluginInterface);
         trySetModSetting = new TrySetModSetting(pluginInterface);
         trySetModSettings = new TrySetModSettings(pluginInterface);
         redrawObject = new RedrawObject(pluginInterface);
@@ -560,6 +562,17 @@ public class PenumbraBridge : IDisposable
         if (!IsAvailable) return PenumbraApiEc.SystemDisposed;
         try { return OnMainThread(() => trySetModPriority.Invoke(collectionId, modDirectory, priority), WriteStats); }
         catch (Exception ex) { log.Error(ex, "TrySetModPriority failed"); return PenumbraApiEc.UnknownError; }
+    }
+
+    /// <summary>
+    /// Drop a collection's own setting for a mod, so it takes the setting from the collections it inherits from again
+    /// (or none, and is off) — the state it was in before anything wrote a setting of its own there.
+    /// </summary>
+    public PenumbraApiEc SetModInherited(Guid collectionId, string modDirectory)
+    {
+        if (!IsAvailable) return PenumbraApiEc.SystemDisposed;
+        try { return OnMainThread(() => tryInheritMod.Invoke(collectionId, modDirectory, inherit: true), WriteStats); }
+        catch (Exception ex) { log.Error(ex, "TryInheritMod failed for {0}", modDirectory); return PenumbraApiEc.UnknownError; }
     }
 
     /// <summary>

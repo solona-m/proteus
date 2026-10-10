@@ -135,14 +135,18 @@ public sealed class AutoRefitWatcher : IDisposable
     private sealed record Request(string Slot, Worn Worn, string? Resolved, string? ModRoot, Guid Collection,
                                  bool Forced = false);
 
+    /// <summary>The design binding: a design restore holds mods with temporary settings, which a refit must change too.</summary>
+    private readonly DesignBindingService designs;
+
     public AutoRefitWatcher(CompositorService compositor, PenumbraBridge penumbra, GlamourerBridge glamourer,
-                            UVRemapService uvRemap, Func<string, byte[]?> readGameFile, Configuration config,
-                            IPluginLog log, string dataDir)
+                            DesignBindingService designs, UVRemapService uvRemap, Func<string, byte[]?> readGameFile,
+                            Configuration config, IPluginLog log, string dataDir)
     {
         detections = new DetectionCache(Path.Combine(dataDir, "autorefit-garments.json"), log);
         this.compositor = compositor;
         this.penumbra = penumbra;
         this.glamourer = glamourer;
+        this.designs = designs;
         this.uvRemap = uvRemap;
         this.readGameFile = readGameFile;
         this.config = config;
@@ -224,6 +228,196 @@ public sealed class AutoRefitWatcher : IDisposable
     {
         forceAll = true;
         Interlocked.Exchange(ref walkDueAt, Environment.TickCount64 + 1);
+    }
+
+    /// <summary>How long undo waits for a refit already running to finish before taking things out from under it.</summary>
+    private const int UndoWaitMs = 30_000;
+
+    private int undoing;
+
+    /// <summary>An undo of the automatic refit is under way (see <see cref="UndoWorn"/>).</summary>
+    public bool Undoing => Volatile.Read(ref undoing) != 0;
+
+    /// <summary>
+    /// Take back the automatic refit of what the player is wearing now, for one who does not like it: per body slot, the
+    /// size it saved that the slot draws is taken out of the mod (see <see cref="AutoRefitUndo"/>), a mod it made for
+    /// the game's gear is deleted once that leaves it empty, the group is put back to what was ticked before (where that
+    /// was recorded — see <see cref="AutoRefitPreference.Before"/>), and the piece is remembered as declined in this
+    /// collection (<see cref="AutoRefitPreference.Declined"/>) so it is not refitted again the next time it is put on.
+    /// The author's own size switched on in a refit's stead is switched back the same way. A size made by hand in the
+    /// Body size tool is left alone, and so is every refit not being worn. Framework thread; the work runs in the
+    /// background and its outcome shows in <see cref="Current"/>.
+    /// </summary>
+    public void UndoWorn()
+    {
+        if (disposed || Interlocked.Exchange(ref undoing, 1) != 0) return;
+
+        string? modsRoot = penumbra.GetModDirectory();
+        var collection = penumbra.GetPlayerCollection();
+        var worn = ReadWorn(penumbra.GetActivePlayerModelPaths(), modsRoot, out _);
+        if (modsRoot is not { Length: > 0 } || collection is not { } c
+            || !config.AutoRefitByCollection.TryGetValue(c.Id.ToString("D"), out var pref))
+        {
+            current = new View(Strings.AutoRefit.UndoNothing);
+            Volatile.Write(ref undoing, 0);
+            return;
+        }
+
+        // Nothing queued for these pieces may run after them: what is worn is about to be put back. Only these: a piece
+        // put on in another slot and not refitted yet keeps its turn.
+        CancelSlots(worn.Keys.ToList());
+        var switchedOn = new HashSet<string>(pref.SwitchedOn, StringComparer.OrdinalIgnoreCase);
+        var authorSwitched = new Dictionary<string, string>(pref.AuthorSwitchedOn, StringComparer.OrdinalIgnoreCase);
+        Task? job;
+        lock (queueGate) job = runner;
+        current = new View(Strings.AutoRefit.UndoWorking, Busy: true);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                // A refit already saving finishes first: undone under its feet, its save would land after the undo.
+                if (job != null) await Task.WhenAny(job, Task.Delay(UndoWaitMs));
+
+                // Per slot: the piece's automatic refits, on disk — by the piece, whichever size it draws right now. A
+                // piece with only sizes made by hand has nothing of the automatic refit's to take out.
+                var results = new List<(Worn Worn, AutoRefitUndo.ModResult Result)>();
+                var authorGroups = new List<(Worn Worn, List<string> Keys)>();
+                foreach (var (slot, piece) in worn)
+                {
+                    if (piece.ModDir is not { } dir)
+                    {
+                        log.Information("[Proteus] auto refit undo: {0} {1} is the game's own, nothing to undo", slot, piece.GamePath);
+                        continue;
+                    }
+                    string root = Path.Combine(modsRoot, dir);
+                    // The author's own size switched on as the size chosen, in a group of THIS piece: nothing to remove,
+                    // only to switch back. Read before the undo edits the manifest.
+                    var mine = AutoRefitUndo.GroupsServing(root, piece.GamePath, authorSwitched.Keys);
+                    if (mine.Count > 0) authorGroups.Add((piece, mine));
+
+                    if (AutoRefitUndo.Undo(root, piece.GamePath, switchedOn) is { } result)
+                    {
+                        results.Add((piece, result));
+                        log.Information("[Proteus] auto refit undo: {0} {1}: removed [{2}] from {3}{4}{5}", slot, piece.GamePath,
+                                        string.Join(", ", result.Removed), dir,
+                                        result.Failed.Count > 0 ? "; failed [" + string.Join("; ", result.Failed) + "]" : "",
+                                        result.Empty ? "; mod now empty, deleting" : "");
+                    }
+                    else if (mine.Count == 0)
+                        log.Information("[Proteus] auto refit undo: {0} {1} in {2} has no automatic refit (drawing {3})", slot,
+                                        piece.GamePath, dir, piece.Rel ?? "");
+                }
+
+                await OnFramework(() =>
+                {
+                    foreach (var (_, r) in results)
+                    {
+                        if (r.Empty)
+                            log.Information("[Proteus] auto refit undo: deleting {0}: {1}", r.Dir, penumbra.DeleteModDirectory(r.Dir));
+                        else if (r.Removed.Count > 0)
+                        {
+                            compositor.ExpectOwnModEdit(r.Dir);
+                            penumbra.ReloadModDirectory(r.Dir);
+                        }
+                    }
+                    return true;
+                });
+
+                // On a later frame than the reloads, as Apply does: a setting written into a mod Penumbra is still
+                // re-reading is lost.
+                await Task.Delay(250);
+                int restored = await OnFramework(() =>
+                {
+                    int count = 0;
+                    var groups = results.Where(r => !r.Result.Empty)
+                                        .SelectMany(r => r.Result.Groups.Select(g => AutoRefitDecisions.GroupKey(r.Result.Dir, g)))
+                                        .Concat(authorGroups.SelectMany(a => a.Keys))
+                                        .Distinct(StringComparer.OrdinalIgnoreCase);
+                    // Every mod's settings once for the whole loop, not once per group per call (see Apply).
+                    var effective = penumbra.GetCollectionModSettings(c.Id, ignoreTemporary: false);
+                    var keys = groups.ToList();
+                    foreach (string key in keys)
+                    {
+                        // Out of the record of groups switched on, so a refit asked for again records its "before"
+                        // afresh — left in, a second undo of it had nothing to put back. The piece is declined below,
+                        // so the restored selection is not read as the player's choice either.
+                        pref.SwitchedOn.Remove(key);
+                        pref.AuthorSwitchedOn.Remove(key);
+                    }
+                    foreach (string key in keys)
+                    {
+                        int bar = key.IndexOf('|');
+                        string dir = key[..bar], group = key[(bar + 1)..];
+
+                        // The collection's own setting, from what it had. A mod that had none — inherited, or never
+                        // set — is handed back to inheritance instead, unless another group of it still carries a
+                        // refit here: inheriting drops the whole mod's own setting, that refit with it.
+                        bool hadBefore = pref.Before.Remove(key, out var before);
+                        bool stillSwitched = pref.SwitchedOn.Any(k => k.StartsWith(dir + "|", StringComparison.OrdinalIgnoreCase));
+                        // Per mod: kept while another group of it is still switched, and used by the last one undone.
+                        if (!stillSwitched && pref.InheritedBefore.Remove(dir))
+                        {
+                            var ec = penumbra.SetModInherited(c.Id, dir);
+                            log.Information("[Proteus] auto refit undo: {0} back to inheriting its setting: {1}", dir, ec);
+                            if (ec is Penumbra.Api.Enums.PenumbraApiEc.Success or Penumbra.Api.Enums.PenumbraApiEc.NothingChanged)
+                                count++;
+                        }
+                        else if (hadBefore)
+                        {
+                            var ec = penumbra.SetModOption(c.Id, dir, group, before!);
+                            log.Information("[Proteus] auto refit undo: {0} / {1} back to [{2}]: {3}", dir, group,
+                                            string.Join(", ", before!), ec);
+                            if (ec is Penumbra.Api.Enums.PenumbraApiEc.Success or Penumbra.Api.Enums.PenumbraApiEc.NothingChanged)
+                                count++;
+                        }
+
+                        // A design's hold, from what IT had — whatever the collection's own setting answered: an own
+                        // setting already as it was says nothing about the hold, which may still name the refit just
+                        // removed. A refit switched before the hold's own "before" was kept recorded the hold's
+                        // selection as Before, so that stands in.
+                        var heldBefore = pref.HeldBefore.Remove(key, out var hb) ? hb : hadBefore ? before : null;
+                        if (heldBefore != null && designs.HeldSelection(c.Id, dir, group, effective) != null)
+                            ChangeHold(c.Id, dir, group, heldBefore, effective);
+                    }
+
+                    // Remembered, so the piece is not refitted again the next time it goes on. The game's own gear is
+                    // drawn from the game once its mod is gone, which is another key. Only the pieces undone: another
+                    // piece of the same mod keeps its refit.
+                    foreach (var (piece, r) in results)
+                    {
+                        pref.Declined.Add(piece.Key);
+                        if (r.Empty) pref.Declined.Add(new Worn(piece.GamePath, null, null).Key);
+                    }
+                    foreach (var (piece, _) in authorGroups) pref.Declined.Add(piece.Key);
+
+                    config.Save();
+                    compositor.RedrawForChangedModel();
+                    return count;
+                });
+
+                int removed = results.Sum(r => r.Result.Removed.Count), failed = results.Sum(r => r.Result.Failed.Count);
+                int gone = results.Count(r => r.Result.Empty);
+                current = failed > 0
+                    ? new View(string.Format(Strings.AutoRefit.UndoPartialFmt, removed, failed), Failed: true)
+                    : removed == 0 && restored == 0 && authorGroups.Count == 0
+                        ? new View(Strings.AutoRefit.UndoNothing)
+                        : new View(string.Format(Strings.AutoRefit.UndoDoneFmt, removed, gone));
+            }
+            catch (OperationCanceledException)
+            {
+                // Unloading: nothing to tell anyone.
+            }
+            catch (Exception e)
+            {
+                log.Error(e, "[Proteus] auto refit undo failed");
+                current = new View(string.Format(Strings.AutoRefit.UndoFailedFmt, e.Message), Failed: true);
+            }
+            finally
+            {
+                Volatile.Write(ref undoing, 0);
+            }
+        });
     }
 
     // ── the framework thread ────────────────────────────────────────────────
@@ -315,29 +509,7 @@ public sealed class AutoRefitWatcher : IDisposable
             lastSeen = null;
         }
 
-        string? modsRoot = penumbra.GetModDirectory();
-        var now = new Dictionary<string, Worn>(StringComparer.Ordinal);
-        var resolvedOf = new Dictionary<string, (string? Resolved, string? Root, bool Outside)>(StringComparer.Ordinal);
-        foreach (var (suffix, gamePath) in DrawnModelPaths.EquippedPartModelsFromModels(models))
-        {
-            string slot = "_" + suffix;
-            string? resolved = penumbra.ResolvePlayer(gamePath);
-            if (resolved == null || !Path.IsPathRooted(resolved))
-            {
-                now[slot] = new Worn(gamePath, null, null);
-                resolvedOf[slot] = (null, null, false);
-            }
-            else if (modsRoot != null && HatCompatService.InMods(resolved, modsRoot, out string root, out string rel))
-            {
-                now[slot] = new Worn(gamePath, Path.GetFileName(root), rel);
-                resolvedOf[slot] = (resolved, root, false);
-            }
-            else
-            {
-                now[slot] = new Worn(gamePath, null, null);
-                resolvedOf[slot] = (resolved, null, true);
-            }
-        }
+        var now = ReadWorn(models, penumbra.GetModDirectory(), out var resolvedOf);
 
         bool all = forceAll;
         forceAll = false;
@@ -365,8 +537,51 @@ public sealed class AutoRefitWatcher : IDisposable
                 log.Debug("[Proteus] auto refit: {0} {1} left alone ({2})", slot, worn.GamePath, skip);
                 continue;
             }
+
+            // A piece whose refit the player undid stays as it is — unless they ask for what they are wearing now.
+            if (pref.Declined.Contains(worn.Key))
+            {
+                if (!all)
+                {
+                    log.Information("[Proteus] auto refit: {0} {1} had its refit undone, left as it is", slot, worn.GamePath);
+                    continue;
+                }
+                pref.Declined.Remove(worn.Key);
+                config.Save();
+            }
             Enqueue(new Request(slot, worn, resolved, root, collection.Id, all));
         }
+    }
+
+    /// <summary>What each body slot draws: the mod and file supplying it, or the game's own. Framework thread.</summary>
+    /// <param name="resolvedOf">Per slot, the file the game resolved, the mod folder holding it, and whether it is a file
+    /// outside Penumbra's mods altogether.</param>
+    private Dictionary<string, Worn> ReadWorn(HashSet<string>? models, string? modsRoot,
+                                              out Dictionary<string, (string? Resolved, string? Root, bool Outside)> resolvedOf)
+    {
+        var now = new Dictionary<string, Worn>(StringComparer.Ordinal);
+        resolvedOf = new Dictionary<string, (string? Resolved, string? Root, bool Outside)>(StringComparer.Ordinal);
+        foreach (var (suffix, gamePath) in DrawnModelPaths.EquippedPartModelsFromModels(models))
+        {
+            string slot = "_" + suffix;
+            string? resolved = penumbra.ResolvePlayer(gamePath);
+            if (resolved == null || !Path.IsPathRooted(resolved))
+            {
+                now[slot] = new Worn(gamePath, null, null);
+                resolvedOf[slot] = (null, null, false);
+            }
+            else if (modsRoot != null && HatCompatService.InMods(resolved, modsRoot, out string root, out string rel))
+            {
+                now[slot] = new Worn(gamePath, Path.GetFileName(root), rel);
+                resolvedOf[slot] = (resolved, root, false);
+            }
+            else
+            {
+                now[slot] = new Worn(gamePath, null, null);
+                resolvedOf[slot] = (resolved, null, true);
+            }
+        }
+        return now;
     }
 
     // ── the queue ───────────────────────────────────────────────────────────
@@ -400,6 +615,41 @@ public sealed class AutoRefitWatcher : IDisposable
             queue.Clear();
             running?.Cancel();
         }
+    }
+
+    /// <summary>
+    /// Drop what is queued or running for <paramref name="slots"/>, and forget having seen only the slots that actually
+    /// had something dropped, so a piece put on and not refitted yet is looked at again on the next walk. Forgetting
+    /// every slot made every worn piece look newly put on, and an undo refitted the jacket worn beside the boots it undid.
+    /// </summary>
+    private void CancelSlots(IReadOnlyCollection<string> slots)
+    {
+        var dropped = new List<string>();
+        lock (queueGate)
+        {
+            foreach (string slot in slots)
+                if (queue.Remove(slot)) dropped.Add(slot);
+            if (runningSlot != null && slots.Contains(runningSlot))
+            {
+                running?.Cancel();
+                dropped.Add(runningSlot);
+            }
+        }
+        if (lastSeen != null)
+            foreach (string slot in dropped) lastSeen.Remove(slot);
+    }
+
+    /// <summary>
+    /// Put a selection into the design hold on a mod as well, where a design restore holds it — see
+    /// <see cref="DesignBindingService.ChangeHeldOption"/>. A hold outranks the collection's own setting: without this a
+    /// refit switched on "Success" and went on drawing the author's size. Framework thread.
+    /// </summary>
+    private void ChangeHold(Guid collection, string dir, string group, IReadOnlyList<string> selection,
+                            Dictionary<string, PenumbraBridge.ModSettingsSnapshot>? effective)
+    {
+        if (designs.ChangeHeldOption(collection, dir, group, selection, effective) is { } ec)
+            log.Information("[Proteus] auto refit: {0} is held by a design; {1} set to [{2}] there too: {3}", dir, group,
+                            string.Join(", ", selection), ec);
     }
 
     private async Task RunQueue(int id)
@@ -949,7 +1199,7 @@ public sealed class AutoRefitWatcher : IDisposable
         var outcome = BodyRetargetWriter.Save(root, group, savePath, targetMod.Dir, labelFrom,
                                               [new BodyRetargetWriter.Refit(option, plan.Model, string.Join(" + ",
                                                   new[] { target.Label }.Concat(kept.Select(k => k.To.Label))))],
-                                              cutFrom, manipulations);
+                                              cutFrom, manipulations, auto: true);
         if (!outcome.Ok)
         {
             Fail(r, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"), item,
@@ -1210,20 +1460,44 @@ public sealed class AutoRefitWatcher : IDisposable
             var settings = penumbra.GetModSettings(r.Collection, dir);
             if (madeForGame && settings is not { Enabled: true })
                 penumbra.SetModEnabled(r.Collection, dir, true);
-            var ticked = settings?.Options.FirstOrDefault(o => string.Equals(o.Key, group,
-                                                                              StringComparison.OrdinalIgnoreCase)).Value;
+
+            // The collection's OWN setting, beneath any design hold, and the hold's — each switched from what it has
+            // itself, and remembered apart (see AutoRefitPreference.HeldBefore). Every mod's settings are one call and
+            // not a cheap one: read once, and read again beneath the temporary ones only when this mod is held.
+            var effective = penumbra.GetCollectionModSettings(r.Collection, ignoreTemporary: false);
+            var underneath = effective != null && effective.TryGetValue(dir, out var e) && e.Temporary
+                ? penumbra.GetCollectionModSettings(r.Collection, ignoreTemporary: true)
+                : effective;
+            bool ownSetting = underneath != null && underneath.TryGetValue(dir, out var mine) && !mine.Inherited;
+            var ticked = underneath != null && underneath.TryGetValue(dir, out mine)
+                ? mine.Options.FirstOrDefault(o => string.Equals(o.Key, group, StringComparison.OrdinalIgnoreCase)).Value
+                : null;
+            var held = designs.HeldSelection(r.Collection, dir, group, effective);
+
             var selection = RefitCore.SelectionFor(multi, option, ticked, cutFrom);
             var ec = penumbra.SetModOption(r.Collection, dir, group, selection);
             log.Information("[Proteus] auto refit: selected {0} / {1} in {2}: {3}", group, string.Join(", ", selection),
                             dir, ec);
             if (ec is not (Penumbra.Api.Enums.PenumbraApiEc.Success or Penumbra.Api.Enums.PenumbraApiEc.NothingChanged))
                 return ec.ToString();
+            if (held != null)
+                ChangeHold(r.Collection, dir, group, RefitCore.SelectionFor(multi, option, held, cutFrom), effective);
 
             // Remembered, so that the player picking something else in this group later is taken as their choice.
             // An author's size switched on is remembered by name, so that it too reads as ours (see ChoseOtherwise).
             if (config.AutoRefitByCollection.TryGetValue(r.Collection.ToString("D"), out var pref))
             {
                 string key = AutoRefitDecisions.GroupKey(dir, group);
+                // Whether the collection had a setting of its own for the mod, judged when Proteus switches the FIRST
+                // group of it: by the second, the setting the first switch made would read as the player's.
+                if (!ownSetting && !pref.SwitchedOn.Any(k => k.StartsWith(dir + "|", StringComparison.OrdinalIgnoreCase)))
+                    pref.InheritedBefore.Add(dir);
+                // What was ticked before the FIRST switch, for undo: a later switch would only record a refit.
+                if (!pref.SwitchedOn.Contains(key) && !pref.Before.ContainsKey(key))
+                {
+                    pref.Before[key] = ticked?.ToList() ?? [];
+                    if (held != null) pref.HeldBefore[key] = [.. held];
+                }
                 bool changed = pref.SwitchedOn.Add(key);
                 if (authorSize)
                 {

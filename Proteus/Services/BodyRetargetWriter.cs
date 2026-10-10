@@ -110,6 +110,12 @@ internal static class BodyRetargetWriter
         public string BodyMod { get; set; } = "";
         public string From { get; set; } = "";
         public string To { get; set; } = "";
+
+        /// <summary>
+        /// Made by the automatic refit as gear went on, rather than by hand in the Body size tool — what undoing the
+        /// automatic refit removes. False for every entry written before it was kept.
+        /// </summary>
+        public bool Auto { get; set; }
     }
 
     /// <param name="Group">The group written.</param>
@@ -220,9 +226,10 @@ internal static class BodyRetargetWriter
     /// Midlander men, baked into a model of the wearer's own race (<see cref="RacialModelBake"/>), needs the EQDP entry
     /// that makes the game load that model at all — without it the file is written and never read.
     /// </param>
+    /// <param name="auto">Saved by the automatic refit (see <see cref="Entry.Auto"/>).</param>
     public static Outcome Save(string modRoot, string groupName, string gamePath, string bodyMod, string from,
                                IReadOnlyList<Refit> refits, string? fromOption = null,
-                               IReadOnlyList<object>? manipulations = null)
+                               IReadOnlyList<object>? manipulations = null, bool auto = false)
     {
         string names = string.Join(", ", refits.Select(r => r.Option));
         lock (WriteLock)
@@ -341,7 +348,7 @@ internal static class BodyRetargetWriter
                     PenumbraModMeta.AddFileOptions(modRoot, groupName, written.Select(w => OptionFor(w.Refit, w.Rel))
                                                                               .ToList());
                     foreach (var (refit, rel) in written)
-                        WriteRecord(modRoot, groupName, true, refit.Option, gamePath, rel, bodyMod, from, refit.To);
+                        WriteRecord(modRoot, groupName, true, refit.Option, gamePath, rel, bodyMod, from, refit.To, auto);
                     return new Outcome(true, groupName, names, refits.Count == 1
                         ? string.Format(Loc.Localize("Parts.Retarget.Save.AddedOneToAuthor.Fmt",
                               "Saved as \"{0}\" in the \"{1}\" group. Choose it there in Penumbra to wear it."),
@@ -375,7 +382,7 @@ internal static class BodyRetargetWriter
                                                      final.Count - 1);
 
                 foreach (var (refit, rel) in written)
-                    WriteRecord(modRoot, groupName, false, refit.Option, gamePath, rel, bodyMod, from, refit.To);
+                    WriteRecord(modRoot, groupName, false, refit.Option, gamePath, rel, bodyMod, from, refit.To, auto);
 
                 return new Outcome(true, groupName, names, refits.Count == 1
                     ? string.Format(Loc.Localize("Parts.Retarget.Save.AddedOne.Fmt",
@@ -599,7 +606,7 @@ internal static class BodyRetargetWriter
     }
 
     private static void WriteRecord(string modRoot, string group, bool inAuthorGroup, string option, string gamePath,
-                                    string rel, string bodyMod, string from, string to)
+                                    string rel, string bodyMod, string from, string to, bool auto)
     {
         var record = ReadRecord(modRoot) ?? new Record();
         // Entries from before each named its own group take the old top-level one now, before it moves on.
@@ -612,7 +619,7 @@ internal static class BodyRetargetWriter
         {
             Group = group, InAuthorGroup = inAuthorGroup,
             Name = option, GamePath = gamePath, File = rel.Replace('\\', '/'),
-            BodyMod = bodyMod, From = from, To = to,
+            BodyMod = bodyMod, From = from, To = to, Auto = auto,
         });
         SaveRecord(modRoot, record);
     }

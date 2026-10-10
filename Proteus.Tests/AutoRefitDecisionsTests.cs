@@ -269,6 +269,11 @@ public class AutoRefitDecisionsTests
             Chest = new BodySizeRef { Rel = "chest/m.mdl", Name = "M" },
         };
         config.AutoRefitByCollection[id.ToString("D")].SwitchedOn.Add(AutoRefitDecisions.GroupKey("Old Thing", "Top"));
+        config.AutoRefitByCollection[id.ToString("D")].Before[AutoRefitDecisions.GroupKey("Old Thing", "Top")] = ["Medium"];
+        config.AutoRefitByCollection[id.ToString("D")].HeldBefore[AutoRefitDecisions.GroupKey("Old Thing", "Top")] = ["Small"];
+        config.AutoRefitByCollection[id.ToString("D")].InheritedBefore.Add("Old Thing");
+        config.AutoRefitByCollection[id.ToString("D")].Declined.Add(
+            new AutoRefitDecisions.Worn("chara/equipment/e6255/model/c0201e6255_top.mdl", "Old Thing", "top.mdl").Key);
 
         var back = JsonConvert.DeserializeObject<Configuration>(JsonConvert.SerializeObject(config))!;
 
@@ -279,6 +284,15 @@ public class AutoRefitDecisionsTests
         Assert.Equal("chest/m.mdl", pref.Chest!.Rel);
         Assert.Null(pref.Legs);
         Assert.Contains(AutoRefitDecisions.GroupKey("old thing", "TOP"), pref.SwitchedOn);
+        // What was ticked before the refit, for undo — found whatever the case.
+        Assert.Equal(["Medium"], pref.Before[AutoRefitDecisions.GroupKey("old thing", "TOP")]);
+        // And the design hold's, apart from the collection's own.
+        Assert.Equal(["Small"], pref.HeldBefore[AutoRefitDecisions.GroupKey("old thing", "TOP")]);
+        // And that the collection had no setting of its own there, so undo hands the mod back to inheritance.
+        Assert.Contains("old thing", pref.InheritedBefore);
+        // A piece whose refit was undone stays declined, by what the slot draws.
+        Assert.Contains(new AutoRefitDecisions.Worn("chara/equipment/e6255/model/c0201e6255_top.mdl", "old thing", null).Key,
+                        pref.Declined);
     }
 
     [Fact]

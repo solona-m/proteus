@@ -75,6 +75,34 @@
     "message": "Seul l'équipement porté à partir de maintenant est ajusté automatiquement. Ce bouton ajuste les pièces que votre personnage porte déjà.",
     "description": ""
   },
+  "AutoRefit.UndoDone.Fmt": {
+    "message": "Annulé : {0} tailles ajustées retirées et {1} mods créés pour l'équipement du jeu supprimés. Ces pièces ne seront plus ajustées, sauf si vous cliquez sur « Ajuster ce que je porte maintenant ».",
+    "description": ""
+  },
+  "AutoRefit.UndoFailed.Fmt": {
+    "message": "Impossible d'annuler l'ajustement : {0}",
+    "description": ""
+  },
+  "AutoRefit.UndoNothing": {
+    "message": "Rien de ce que vous portez n'a été ajusté automatiquement.",
+    "description": ""
+  },
+  "AutoRefit.UndoPartial.Fmt": {
+    "message": "{0} tailles ajustées retirées, mais {1} n'ont pas pu être retirées. Le journal indique lesquelles et pourquoi.",
+    "description": ""
+  },
+  "AutoRefit.UndoWorking": {
+    "message": "Annulation de l'ajustement...",
+    "description": ""
+  },
+  "AutoRefit.UndoWorn": {
+    "message": "Annuler l'ajustement de ce que je porte",
+    "description": ""
+  },
+  "AutoRefit.UndoWorn.Tip": {
+    "message": "Pour l'équipement que vous portez : retire la taille créée par l'ajustement automatique, supprime le mod qu'il a créé pour l'équipement du jeu et rétablit l'option que vous aviez avant. Ces pièces restent ensuite telles quelles quand vous les remettez. Les tailles que vous avez créées vous-même avec l'outil Taille du corps et les ajustements de ce que vous ne portez pas sont conservés.\n\nMaintenez Ctrl ou Maj et cliquez.",
+    "description": ""
+  },
   "AutoRefit.Vanilla.Label": {
     "message": "Ajuster aussi l'équipement d'origine du jeu",
     "description": ""

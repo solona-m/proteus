@@ -25,7 +25,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1164;
+    public const int BuildNumber = 1170;
 
     /// <summary>
     /// Which set of release notes is current. Raise it when a release has something new to say: the window
@@ -216,7 +216,7 @@ public sealed class Plugin : IDalamudPlugin
         hatCompat = new HatCompatWatcher(compositor, penumbra, glamourer, config, log);
 
         // The same: gear put on is refitted onto the collection's body whether or not any window is open.
-        autoRefit = new AutoRefitWatcher(compositor, penumbra, glamourer, uvRemap,
+        autoRefit = new AutoRefitWatcher(compositor, penumbra, glamourer, designBindings, uvRemap,
                                          path => textureLoader.LoadRawFile(null, path), config, log, dataDir);
 
         statusWindow = new StatusWindow(compositor, discovery, penumbra, config, designBindings,

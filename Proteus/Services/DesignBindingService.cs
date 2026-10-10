@@ -786,6 +786,66 @@ public class DesignBindingService : IDisposable
     }
 
     /// <summary>
+    /// What a hold of Proteus's — a design restore's — has one group of a mod at, or null when Proteus does not hold the
+    /// mod in <paramref name="collection"/> right now (another plugin's hold, or none, is not Proteus's to answer for).
+    /// Framework thread.
+    /// </summary>
+    /// <param name="effective">The collection's settings as Penumbra applies them, temporary ones included, when the
+    /// caller has already read them; null reads them. Every mod's settings in one call is not cheap on the framework
+    /// thread, and a refit switching a size on needs them up to three times.</param>
+    internal List<string>? HeldSelection(Guid collection, string dir, string group,
+                                         IReadOnlyDictionary<string, PenumbraBridge.ModSettingsSnapshot>? effective = null)
+    {
+        if (!heldTemporary.ContainsKey(dir) || HeldNow(collection, dir, effective) is not { } held) return null;
+        return held.Options.FirstOrDefault(o => string.Equals(o.Key, group, StringComparison.OrdinalIgnoreCase)).Value
+               ?? [];
+    }
+
+    /// <summary>
+    /// Change one group of a hold Proteus placed, for a change made to the mod while a design holds it — a body refit
+    /// switching its new size on, or that refit undone. The hold is written again with that group changed and
+    /// everything else as it was, under Proteus's own key, so it is released with the design's other holds; and the
+    /// record of it changes too, so saving the design captures the new size rather than the one first held. The design
+    /// itself is unchanged until it is saved. A mod Proteus does not hold — another plugin's hold, or none — is left
+    /// alone: re-keying someone else's hold would strand it. Framework thread.
+    /// </summary>
+    /// <param name="effective">As for <see cref="HeldSelection"/>; when given, its entry for the mod is updated to the
+    /// hold as written, so a second group of the same mod changed from it does not write the first one back.</param>
+    /// <returns>Penumbra's answer; null when Proteus does not hold the mod.</returns>
+    internal PenumbraApiEc? ChangeHeldOption(Guid collection, string dir, string group, IReadOnlyList<string> selection,
+                                             Dictionary<string, PenumbraBridge.ModSettingsSnapshot>? effective = null)
+    {
+        if (!heldTemporary.TryGetValue(dir, out var recorded) || HeldNow(collection, dir, effective) is not { } held) return null;
+
+        var options = new Dictionary<string, List<string>>(held.Options, StringComparer.OrdinalIgnoreCase) { [group] = [.. selection] };
+        var ec = penumbra.SetTemporaryModSettings(collection, dir, held.Enabled, held.Priority, options,
+                                                  TemporarySource, TemporaryKey);
+        if (ec == PenumbraApiEc.Success)
+        {
+            if (effective != null) effective[dir] = held with { Options = options };
+            // A copy: the recorded setting may be the design's own, which only a save may change.
+            var changed = new Dictionary<string, List<string>>(recorded.Options, StringComparer.OrdinalIgnoreCase)
+            {
+                [group] = [.. selection],
+            };
+            heldTemporary[dir] = new PenumbraModSetting
+            {
+                ModDirectory = recorded.ModDirectory, ModName = recorded.ModName, Enabled = recorded.Enabled,
+                Priority = recorded.Priority, Options = changed,
+            };
+        }
+        return ec;
+    }
+
+    /// <summary>The mod's settings as Penumbra applies them, when a temporary setting is what produces them.</summary>
+    private PenumbraBridge.ModSettingsSnapshot? HeldNow(Guid collection, string dir,
+                                                        IReadOnlyDictionary<string, PenumbraBridge.ModSettingsSnapshot>? effective)
+        => (effective ?? penumbra.GetCollectionModSettings(collection, ignoreTemporary: false)) is { } all
+           && all.TryGetValue(dir, out var s) && s.Temporary
+            ? s
+            : null;
+
+    /// <summary>
     /// Which mods make up the character: every mod a drawn file resolves into, plus every Proteus mod (drawn
     /// through the managed mod, so the tree never names them). A <paramref name="held"/> mod records the
     /// design's un-raised state; any other records its PERMANENT setting, beneath Glamourer's temporary ones.

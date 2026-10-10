@@ -75,6 +75,34 @@
     "message": "Solo se ajusta por sí solo el equipo que te pongas a partir de ahora. Esto ajusta las piezas que tu personaje ya lleva.",
     "description": ""
   },
+  "AutoRefit.UndoDone.Fmt": {
+    "message": "Deshecho: se quitaron {0} tallas ajustadas y se borraron {1} mods creados para el equipo del juego. Estas piezas no se volverán a ajustar a menos que hagas clic en «Ajustar lo que llevo puesto».",
+    "description": ""
+  },
+  "AutoRefit.UndoFailed.Fmt": {
+    "message": "No se pudo deshacer el ajuste: {0}",
+    "description": ""
+  },
+  "AutoRefit.UndoNothing": {
+    "message": "Nada de lo que llevas puesto se ajustó automáticamente.",
+    "description": ""
+  },
+  "AutoRefit.UndoPartial.Fmt": {
+    "message": "Se quitaron {0} tallas ajustadas, pero {1} no se pudieron quitar. El registro dice cuáles y por qué.",
+    "description": ""
+  },
+  "AutoRefit.UndoWorking": {
+    "message": "Deshaciendo el ajuste...",
+    "description": ""
+  },
+  "AutoRefit.UndoWorn": {
+    "message": "Deshacer el ajuste de lo que llevo puesto",
+    "description": ""
+  },
+  "AutoRefit.UndoWorn.Tip": {
+    "message": "Para el equipo que llevas puesto: quita la talla que hizo el ajuste automático, borra el mod que creó para el equipo del propio juego y restaura la opción que tenías antes. Después, esas piezas se quedan como están cuando te las vuelvas a poner. Las tallas que hiciste tú en la herramienta Talla del cuerpo y los ajustes de lo que no llevas puesto se quedan.\n\nMantén Ctrl o Mayús y haz clic.",
+    "description": ""
+  },
   "AutoRefit.Vanilla.Label": {
     "message": "Ajustar también el equipo original del juego",
     "description": ""
