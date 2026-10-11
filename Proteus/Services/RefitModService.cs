@@ -123,7 +123,12 @@ internal sealed class RefitModService(PenumbraBridge penumbra, CompositorService
     /// way through registering. Not called for a mod that was found; the caller fills that and reloads it.
     /// </param>
     /// <param name="description">The manifest's description; a refit's when null.</param>
-    internal Result Ensure(string itemName, string bodyName, Action<string>? fill = null, string? description = null)
+    /// <param name="folder">
+    /// The folder in Penumbra's mod list a NEW mod is filed under, or null for the top level. A mod that was found
+    /// stays wherever the player has since put it.
+    /// </param>
+    internal Result Ensure(string itemName, string bodyName, Action<string>? fill = null, string? description = null,
+                           string? folder = null)
     {
         if (penumbra.GetModDirectory() is not { Length: > 0 } modsRoot)
             return new(false, "", "", Loc.Localize("Service.NoPenumbraDir", "Penumbra's mod directory isn't available."));
@@ -174,7 +179,7 @@ internal sealed class RefitModService(PenumbraBridge penumbra, CompositorService
                 "Wrote the mod, but Penumbra couldn't register it ({0}). Rescan mods in Penumbra."), ec));
         }
 
-        pending = new Pending(dirName, modName, Environment.TickCount64 + ActivateTimeoutMs);
+        pending = new Pending(dirName, modName, Environment.TickCount64 + ActivateTimeoutMs, ListPath(folder, modName));
         nextAttempt = 0;
         log.Information("[Proteus] made refit mod {0} for {1}", dirName, want);
         return new(true, root, dirName, "", Made: true);
@@ -201,6 +206,17 @@ internal sealed class RefitModService(PenumbraBridge penumbra, CompositorService
         long now = Environment.TickCount64;
         if (now < nextAttempt) return null;
         nextAttempt = now + AttemptIntervalMs;
+
+        // Filed first, because Penumbra cannot file a mod it has not finished loading: ModMissing is "not yet". Any
+        // other failure leaves the mod at the top level, which is no reason not to switch it on.
+        if (p.ListPath is { } path)
+        {
+            var moved = penumbra.SetModListPath(p.DirName, path);
+            if (moved == PenumbraApiEc.ModMissing && now < p.Deadline) return null;
+            if (moved != PenumbraApiEc.Success)
+                log.Warning("[Proteus] refit mod {0}: couldn't file it under {1} ({2})", p.DirName, path, moved);
+            pending = p = p with { ListPath = null };
+        }
 
         var collId = penumbra.GetPlayerCollectionId();
         if (collId == null)
@@ -254,7 +270,20 @@ internal sealed class RefitModService(PenumbraBridge penumbra, CompositorService
     /// <summary>How many same-named items to allow before giving up rather than spinning.</summary>
     private const int MaxNames = 20;
 
-    private record struct Pending(string DirName, string ModName, long Deadline);
+    /// <summary>
+    /// The folder in Penumbra's mod list the mods made here are filed under — refits and the game's gear edited —
+    /// named in the player's language. Only where a new mod is filed, never how one is found, so a language change
+    /// strands nothing; a '/' would nest it.
+    /// </summary>
+    internal static string OwnModsFolder
+        => Loc.Localize("Refit.Mod.Folder", "Proteus Upscales").Replace('/', '-').Trim();
+
+    /// <summary>The path Penumbra files a mod at: the folder, then the mod's name.</summary>
+    internal static string? ListPath(string? folder, string modName)
+        => string.IsNullOrWhiteSpace(folder) ? null : $"{folder}/{modName.Replace('/', '-')}";
+
+    /// <param name="ListPath">Where to file it in Penumbra's mod list; null once done, or never asked.</param>
+    private record struct Pending(string DirName, string ModName, long Deadline, string? ListPath);
 
     private Pending? pending;
     private long nextAttempt;

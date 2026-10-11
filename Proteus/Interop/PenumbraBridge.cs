@@ -28,6 +28,7 @@ public class PenumbraBridge : IDisposable
     private readonly AddMod addMod;
     private readonly ReloadMod reloadMod;
     private readonly DeleteMod deleteMod;
+    private readonly SetModPath setModPath;
     private readonly TrySetMod trySetMod;
     private readonly TrySetModPriority trySetModPriority;
     private readonly TryInheritMod tryInheritMod;
@@ -96,6 +97,7 @@ public class PenumbraBridge : IDisposable
         addMod = new AddMod(pluginInterface);
         reloadMod = new ReloadMod(pluginInterface);
         deleteMod = new DeleteMod(pluginInterface);
+        setModPath = new SetModPath(pluginInterface);
         trySetMod = new TrySetMod(pluginInterface);
         trySetModPriority = new TrySetModPriority(pluginInterface);
         tryInheritMod = new TryInheritMod(pluginInterface);
@@ -538,6 +540,15 @@ public class PenumbraBridge : IDisposable
         if (!IsAvailable) return PenumbraApiEc.SystemDisposed;
         try { return OnMainThread(() => deleteMod.Invoke(modDirectory), WriteStats); }
         catch (Exception ex) { log.Error(ex, "DeleteMod failed"); return PenumbraApiEc.UnknownError; }
+    }
+
+    /// <summary>File a mod in Penumbra's mod list: <paramref name="path"/> is folders and the mod's name joined by
+    /// '/'. ModMissing while Penumbra is still loading a mod just added.</summary>
+    public PenumbraApiEc SetModListPath(string modDirectory, string path)
+    {
+        if (!IsAvailable) return PenumbraApiEc.SystemDisposed;
+        try { return OnMainThread(() => setModPath.Invoke(modDirectory, path), WriteStats); }
+        catch (Exception ex) { log.Error(ex, "SetModPath failed"); return PenumbraApiEc.UnknownError; }
     }
 
     /// <summary>Tell Penumbra to reload a mod from disk. On the main thread — see <see cref="OnMainThread{T}"/>.</summary>
