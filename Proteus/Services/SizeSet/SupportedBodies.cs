@@ -47,6 +47,7 @@ internal static class SupportedBodies
         ("yab", "YAB", false),
         ("yab-buff", "YAB Buff", false),
         ("tre", "Tre", false),
+        ("rosaline", "Rosaline", false),
         ("tbse", "TBSE", true),
         ("tbse-x", "TBSE-X", true),
     ];
@@ -96,6 +97,15 @@ internal static class SupportedBodies
     private const string BiboChest = "breasts - small clothes/nude - {0}/chara/equipment/e0000/model/c0201e0000_top.mdl";
     private const string BiboLegs = "bottoms - small clothes/type a - {0}/chara/equipment/e0000/model/c0201e0000_dwn.mdl";
 
+    // Rosaline's Medium and Large chests, and the Vagina A legs under its "Hip Dips" heading (the user's choice; the
+    // same name is listed again under "Round Hips", common/21). Its folders are numbered like Tre's YAS release —
+    // files/common/5 is both Rosaline's Medium chest and YAS Tre's Large one — so Find tells them apart by name.
+    private static readonly Dictionary<string, string> RosalineChest = new()
+    {
+        ["M"] = "files/common/5/c0201e0000_top.mdl", ["L"] = "files/common/6/c0201e0000_top.mdl",
+    };
+    private const string RosalineLegs = "files/common/13/c0201e0000_dwn.mdl";
+
     // The men's bodies: one chest each (Midlander, which Miqo'te, Au Ra, Elezen and Viera men share) and their SFW legs.
     // Neither has chest sizes; TBSE-X's many legs are crotches, not sizes, and only SFW is offered.
     private const string TbseChest = "common/1/c0101e0000_top.mdl";
@@ -130,6 +140,8 @@ internal static class SupportedBodies
                _ => string.Format(HsLegs, "yiggle - watermelon crushers - a")),
         Chests("tre", "Tre", false, s => TreChest[s], s => TreLegs[s]),
         Chests("tre", "Tre", true, s => TreYasChest[s], s => TreYasLegs[s]),
+        new("rosaline", "Rosaline", "_top", false,
+            RosalineChest.Select(c => new Size(c.Key, c.Value, RosalineLegs)).ToList()),
 
         // ── legs garments: sized the way legs mods name them — Rue and YAB by their hips, Tre by its two sizes ──
         new("neolithe", "Neolithe", "_dwn", false,
@@ -145,6 +157,7 @@ internal static class SupportedBodies
              new Size("SC", string.Format(HsLegs, "yiggle - skull crushers - a"), null)]),
         new("tre", "Tre", "_dwn", false, [new Size("Medium", TreLegs["M"], null), new Size("Large", TreLegs["L"], null)]),
         new("tre", "Tre", "_dwn", true, [new Size("Medium", TreYasLegs["M"], null), new Size("Large", TreYasLegs["L"], null)]),
+        new("rosaline", "Rosaline", "_dwn", false, [new Size("", RosalineLegs, null)]),
 
         // ── men's ──
         new("tbse", "TBSE", "_top", false, [new Size("", TbseChest, TbseLegs)], Race: "0101"),
@@ -200,6 +213,7 @@ internal static class SupportedBodies
         ["yab"] = ["yet another body", "yab"],
         ["yab-buff"] = ["yet another body", "yab"],
         ["tre"] = ["tre"],
+        ["rosaline"] = ["rosaline"],
         ["tbse"] = ["body se", "tbse"],
         ["tbse-x"] = ["se-x", "tbse-x", "tbsex"],
     };

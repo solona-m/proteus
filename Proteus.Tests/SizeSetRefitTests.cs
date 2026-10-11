@@ -190,6 +190,55 @@ public class SizeSetRefitTests(ITestOutputHelper output)
         Assert.False(SupportedBodies.IsYas(["j_kosi", "j_ya_a_l"]));
     }
 
+    private const string Rosaline = LocalData.Mods + ":hs-Rosaline-1.1.2-hM5N";
+    private const string TreYas = LocalData.Mods + ":hs-[YAS] Tre-5.5.3-8xB";
+
+    /// <summary>
+    /// Rosaline numbers its folders as YAS Tre does — files/common/5 is Rosaline's Medium chest and YAS Tre's Large —
+    /// so with both installed each must still be found in its own mod, chest and legs.
+    /// </summary>
+    [LocalDataFact(Rosaline, TreYas)]
+    public void Rosaline_and_YAS_Tre_are_told_apart()
+    {
+        string modsRoot = LocalData.Path(LocalData.Mods);
+        var mods = new[] { Rosaline, TreYas }.Select(n => Path.GetFileName(LocalData.Path(n))).ToDictionary(d => d, d => d);
+        var bodies = new BodyModIndex().RefreshState(mods, modsRoot).List;
+
+        foreach (string slot in new[] { "_top", "_dwn" })
+        {
+            Assert.Equal(Path.GetFileName(LocalData.Path(Rosaline)),
+                         SupportedBodies.Find(SupportedBodies.Of("rosaline", slot, false)!, bodies)?.Dir);
+            Assert.Equal(Path.GetFileName(LocalData.Path(TreYas)),
+                         SupportedBodies.Find(SupportedBodies.Of("tre", slot, true)!, bodies)?.Dir);
+        }
+        Assert.True(SupportedBodies.Installed("rosaline", bodies));
+
+        // Its sizes are the table's: M and L tops onto the Hip Dips Vagina A legs, and that one legs size.
+        var tops = SupportedBodies.Of("rosaline", "_top", false)!;
+        Assert.Equal(["Rosaline M", "Rosaline L"], tops.Sizes.Select(s => SupportedBodies.OptionName(tops, s)));
+        var legs = SupportedBodies.Of("rosaline", "_dwn", false)!;
+        Assert.Equal(["Rosaline"], legs.Sizes.Select(s => SupportedBodies.OptionName(legs, s)));
+    }
+
+    /// <summary>This Old Thing, made on Neolithe, gains Rosaline M and L — its chest and hips pair with Neolithe's.</summary>
+    [LocalDataFact(ThisOldThing, Neolithe, Rosaline)]
+    public void A_Neolithe_top_gains_Rosaline_M_and_L()
+    {
+        string copy = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            CopyModels(LocalData.Path(ThisOldThing), copy);
+            var before = Options(copy);
+            var (result, _) = RunOn(copy, ["rosaline"], Neolithe, Rosaline);
+            Assert.Equal(["Rosaline M", "Rosaline L"], Options(copy).Except(before));
+            Assert.Equal(2, result.Made);
+        }
+        finally
+        {
+            if (Directory.Exists(copy)) Directory.Delete(copy, recursive: true);
+        }
+    }
+
     private const string ThisOldThing = LocalData.Mods + ":This Old Thing - by Solona";
     private const string Neolithe = LocalData.Mods + ":Neolithe [ALL IN ONE]";
     private const string Bibo = LocalData.Mods + ":Bibo+";
