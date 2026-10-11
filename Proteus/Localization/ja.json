@@ -3599,6 +3599,14 @@
     "message": "バックルや装飾品など、作者の配置のまま保ちたいパーツはチェックを外してください。モデル上のクリックでも同じです。",
     "description": ""
   },
+  "Parts.Dropdown.Ticked.Fmt": {
+    "message": "{1} 個中 {0} 個のパーツにチェック",
+    "description": ""
+  },
+  "Parts.Dropdown.NoneChosen": {
+    "message": "動かすパーツを選んでください",
+    "description": ""
+  },
   "Parts.Retarget.Lock.SkinTip": {
     "message": "衣装自身の肌です。保持すると元のサイズのままになり、体が透けたり隙間ができたりします。",
     "description": ""

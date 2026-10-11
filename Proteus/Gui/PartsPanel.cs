@@ -441,10 +441,11 @@ public sealed class PartsPanel
         HandleUndoShortcut();
         HandleBrushSizeKeys();
 
-        // The tools and their controls down the left, beside the model; one set of controls or the other, never both.
-        using (var side = ImRaii.Child("##partsSide", new Vector2(ProteusStyle.S(SidePanelWidth), height), true))
+        // Three columns: the tools, the chosen tool's settings, then the model when it is shown.
+        float toolsContent = 0f, settingsContent = 0f;
+        using (var tools = ImRaii.Child("##partsTools", new Vector2(ToolColumnWidth(), height), true))
         {
-            if (side)
+            if (tools)
             {
                 if (ImGui.Checkbox(Strings.Parts.ShowModelView, ref showModelView))
                 {
@@ -456,8 +457,22 @@ public sealed class PartsPanel
                 ImGui.Separator();
 
                 DrawToolPicker();
-                ImGui.Separator();
                 frame.Mark("tool picker");
+                toolsContent = ImGui.GetCursorPosY() + ImGui.GetStyle().WindowPadding.Y + 2f;
+            }
+        }
+
+        // Beside the model it keeps a fixed width; alone it takes the rest of the row.
+        ImGui.SameLine();
+        float settingsWidth = showModelView ? ProteusStyle.S(SidePanelWidth) : ImGui.GetContentRegionAvail().X;
+        using (var side = ImRaii.Child("##partsSide", new Vector2(settingsWidth, height), true))
+        {
+            if (side)
+            {
+                DrawPartDropdown(parts);
+                ImGui.Separator();
+                frame.Mark("part list");
+
                 if (tool == Tool.Navigate) DrawStaging();
                 else if (tool == Tool.Retarget) DrawRetarget();
                 else if (PartTool) DrawMove();
@@ -465,9 +480,10 @@ public sealed class PartsPanel
                 frame.Mark($"tool {tool}");
 
                 // Window-local, so it already counts any scroll; plus the panel's bottom padding and border.
-                sidePanelContent = ImGui.GetCursorPosY() + ImGui.GetStyle().WindowPadding.Y + 2f;
+                settingsContent = ImGui.GetCursorPosY() + ImGui.GetStyle().WindowPadding.Y + 2f;
             }
         }
+        sidePanelContent = MathF.Max(toolsContent, settingsContent);
 
         if (showModelView)
         {
@@ -477,9 +493,6 @@ public sealed class PartsPanel
         }
         else
         {
-            ImGui.SameLine();
-            DrawPartList(parts, height);
-            frame.Mark("part list");
 
             // Under Toggle Parts a click on the open garment ticks the part under it; a click on another worn garment opens that one.
             bool pickParts = tool == Tool.Navigate;
@@ -1863,11 +1876,12 @@ public sealed class PartsPanel
         return root == null || modDir == null ? null : Path.Combine(root, modDir);
     }
 
-    // ── the model, and the list beside it ───────────────────────────────────
+    // ── the model, and the part list ────────────────────────────────────────
 
     /// <summary>
-    /// The model on the left, the parts on the right, each driving the other. The list also shows parts hidden
-    /// behind others, their materials, and parts the author already switches (a new switch stacks on those).
+    /// The model, right of the settings pane, and the part dropdown in that pane, each driving the other. The list
+    /// also shows parts hidden behind others, their materials, and parts the author already switches (a new switch
+    /// stacks on those).
     /// </summary>
     private void DrawParts(float height)
     {
@@ -1893,7 +1907,7 @@ public sealed class PartsPanel
         // scrollbar comes and goes.
         // Under a brush a click on the model paints; it only reaches a part with Shift held.
         bool brushing = PaintTool;
-        float width = MathF.Min(height * PartViewport.DefaultAspect, ImGui.GetContentRegionAvail().X * 0.55f);
+        float width = MathF.Min(height * PartViewport.DefaultAspect, ImGui.GetContentRegionAvail().X);
         if (viewport.Draw(model, new Vector2(width, height)) is { } clicked)
         {
             // Body size has nothing to paint, so a plain click on a part holds or frees it — and must never stage a
@@ -1903,6 +1917,7 @@ public sealed class PartsPanel
             else if (brushing || tool == Tool.Retarget) ToggleLock(clicked);
             else Toggle(clicked);
         }
+        ApplyRowHover();
 
         if (PartTool && movePolygons) DrawPolygonsOverModel();
 
@@ -1939,49 +1954,6 @@ public sealed class PartsPanel
         {
             if (!hovered.Toggleable)          ImGui.SetTooltip(ps.UnreadableTagTip);
             else if (hovered.AuthorSwitched)  ImGui.SetTooltip(ps.StacksWithAuthorTip);
-        }
-
-        ImGui.SameLine();
-        DrawPartList(model, height);
-    }
-
-    private void DrawPartList(ModelParts model, float height)
-    {
-        var ps = Strings.Parts;
-
-        // A child clips silently, so a horizontal scrollbar admits a row is wider than the list.
-        float listWidth = ImGui.GetContentRegionAvail().X;
-        using (var group = ImRaii.Child("##partList", new Vector2(listWidth, height), false,
-                                        ImGuiWindowFlags.HorizontalScrollbar))
-        {
-            if (group)
-            {
-                // Wrapped at the child's own visible width: in a horizontally scrolling window wrap-pos 0 includes last frame's
-                // widest row and ratchets wider. Floored, because a negative wrap position means "do not wrap".
-                float wrapAt = MathF.Max(
-                    listWidth - ImGui.GetStyle().WindowPadding.X * 2f - ImGui.GetStyle().ScrollbarSize,
-                    ProteusStyle.S(80f));
-
-                ImGui.PushTextWrapPos(wrapAt);
-                ImGui.TextDisabled(tool switch
-                {
-                    Tool.Navigate => ps.ClickTip,
-                    Tool.Move or Tool.Rotate or Tool.Scale => ps.MoveListTip,
-                    Tool.Retarget => ps.RetargetLockListTip,
-                    _             => ps.BrushLockListTip,
-                });
-                ImGui.PopTextWrapPos();
-
-                foreach (var (label, count) in model.ShatteredSubmeshes)
-                {
-                    ImGui.PushTextWrapPos(wrapAt);
-                    ImGui.TextDisabled(string.Format(ps.ShatteredFmt, label, count));
-                    ImGui.PopTextWrapPos();
-                }
-
-                ImGui.Spacing();
-                DrawPartRows(model);
-            }
         }
     }
 
@@ -2096,13 +2068,104 @@ public sealed class PartsPanel
             }
         }
 
-        // Only override the viewport's own hover when the cursor is actually over a row; otherwise the
-        // model's hover highlight would be cleared by every frame the list is idle.
-        if (hoveredRow != null && viewport.Hovered != hoveredRow)
+        rowHovered = hoveredRow;
+    }
+
+    /// <summary>The part whose row the pointer is on this frame, lit on the model once the viewport has drawn.</summary>
+    private string? rowHovered;
+
+    /// <summary>
+    /// After the viewport has drawn, since it clears its own hover whenever the pointer is off the model. Only when
+    /// the cursor is actually over a row; otherwise the model's hover highlight would be cleared by every idle frame.
+    /// </summary>
+    private void ApplyRowHover()
+    {
+        if (rowHovered != null && viewport.Hovered != rowHovered)
         {
-            viewport.Hovered = hoveredRow;
+            viewport.Hovered = rowHovered;
             viewport.Recolour();
         }
+        rowHovered = null;
+    }
+
+    /// <summary>
+    /// The part list folded behind a dropdown at the top of the settings pane: it was most of the window, and is
+    /// wanted only now and then. The preview says what is ticked, so the common case needs no opening.
+    /// </summary>
+    private void DrawPartDropdown(ModelParts model)
+    {
+        var ps = Strings.Parts;
+        string tip = tool switch
+        {
+            Tool.Navigate => ps.ClickTip,
+            Tool.Move or Tool.Rotate or Tool.Scale => ps.MoveListTip,
+            Tool.Retarget => ps.RetargetLockListTip,
+            _             => ps.BrushLockListTip,
+        };
+
+        // Counted over submesh rows: those are what the closed list would show.
+        var rows = model.Parts.Where(p => p.Island < 0).ToList();
+        string preview;
+        if (PartTool) preview = movePart ?? ps.PartsNoneChosen;
+        else
+        {
+            bool locking = PaintTool || tool == Tool.Retarget;
+            int on = rows.Count(p => locking ? !IsLocked(p) : ticked.Contains(p.Label));
+            preview = string.Format(ps.PartsTickedFmt, on, rows.Count);
+        }
+
+        ImGui.SetNextItemWidth(-1);
+        using (var combo = ImRaii.Combo("##partDropdown", preview, ImGuiComboFlags.HeightLargest))
+        {
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(tip);
+            if (!combo) return;
+
+            // The popup sizes itself to its rows; the notes wrap at a readable width rather than that of the widest row.
+            ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + ProteusStyle.S(SidePanelWidth));
+            ImGui.TextDisabled(tip);
+            foreach (var (label, count) in model.ShatteredSubmeshes)
+                ImGui.TextDisabled(string.Format(ps.ShatteredFmt, label, count));
+            ImGui.PopTextWrapPos();
+
+            ImGui.Spacing();
+            DrawPartRows(model);
+        }
+    }
+
+    /// <summary>The tool buttons, in the order they are listed.</summary>
+    private static (Tool Value, FontAwesomeIcon Icon, string Label, string Tip)[] ToolButtons()
+    {
+        var ps = Strings.Parts;
+        return new[]
+        {
+            (Tool.Move,     FontAwesomeIcon.ArrowsAlt,         ps.ToolMove,     ps.ToolMoveTip),
+            (Tool.Rotate,   FontAwesomeIcon.SyncAlt,           ps.ToolRotate,   ps.ToolRotateTip),
+            (Tool.Scale,    FontAwesomeIcon.Expand,            ps.ToolScale,    ps.ToolScaleTip),
+            (Tool.Inflate,  FontAwesomeIcon.ExpandArrowsAlt,   ps.ToolInflate,  ps.ToolInflateTip),
+            (Tool.Deflate,  FontAwesomeIcon.CompressArrowsAlt, ps.ToolDeflate,  ps.ToolDeflateTip),
+            (Tool.Relax,    FontAwesomeIcon.Feather,           ps.ToolRelax,    ps.ToolRelaxTip),
+            (Tool.Bridge,   FontAwesomeIcon.Archway,           ps.ToolBridge,   ps.ToolBridgeTip),
+            (Tool.Wind,     FontAwesomeIcon.Wind,              ps.ToolWind,     ps.ToolWindTip),
+            (Tool.Retarget, FontAwesomeIcon.PeopleArrows,      ps.ToolRetarget, ps.ToolRetargetTip),
+            (Tool.Navigate, FontAwesomeIcon.MousePointer,      ps.ToolNavigate, ps.ToolNavigateTip),
+        };
+    }
+
+    private static string ButtonText(string label) => label.Split("###")[0];
+
+    /// <summary>
+    /// Just wide enough for the longest tool name (and the model-view checkbox), measured so a longer translation
+    /// still fits rather than being cut off.
+    /// </summary>
+    private static float ToolColumnWidth()
+    {
+        var style = ImGui.GetStyle();
+        float text = ToolButtons().Max(b => ImGui.CalcTextSize(ButtonText(b.Label)).X);
+        // IconButtonWithText: icon (about a frame high), spacing, text, frame padding both sides.
+        float button = ImGui.GetFrameHeight() + style.ItemInnerSpacing.X + text + style.FramePadding.X * 4f;
+        float check = ImGui.GetFrameHeight() + style.ItemInnerSpacing.X
+                    + ImGui.CalcTextSize(ButtonText(Strings.Parts.ShowModelView)).X;
+        return MathF.Max(button, check) + style.WindowPadding.X * 2f + style.ScrollbarSize;
     }
 
     /// <summary>Tick or untick one part, from wherever the click came from.</summary>
@@ -2123,23 +2186,11 @@ public sealed class PartsPanel
     {
         var ps = Strings.Parts;
 
-        foreach (var (value, icon, label, tip) in new[]
-                 {
-                     (Tool.Move,     FontAwesomeIcon.ArrowsAlt,         ps.ToolMove,     ps.ToolMoveTip),
-                     (Tool.Rotate,   FontAwesomeIcon.SyncAlt,           ps.ToolRotate,   ps.ToolRotateTip),
-                     (Tool.Scale,    FontAwesomeIcon.Expand,            ps.ToolScale,    ps.ToolScaleTip),
-                     (Tool.Inflate,  FontAwesomeIcon.ExpandArrowsAlt,   ps.ToolInflate,  ps.ToolInflateTip),
-                     (Tool.Deflate,  FontAwesomeIcon.CompressArrowsAlt, ps.ToolDeflate,  ps.ToolDeflateTip),
-                     (Tool.Relax,    FontAwesomeIcon.Feather,           ps.ToolRelax,    ps.ToolRelaxTip),
-                     (Tool.Bridge,   FontAwesomeIcon.Archway,           ps.ToolBridge,   ps.ToolBridgeTip),
-                     (Tool.Wind,     FontAwesomeIcon.Wind,              ps.ToolWind,     ps.ToolWindTip),
-                     (Tool.Retarget, FontAwesomeIcon.PeopleArrows,      ps.ToolRetarget, ps.ToolRetargetTip),
-                     (Tool.Navigate, FontAwesomeIcon.MousePointer,      ps.ToolNavigate, ps.ToolNavigateTip),
-                 })
+        foreach (var (value, icon, label, tip) in ToolButtons())
         {
             // IconButtonWithText draws the text itself, so the ###id the label carries is cut off and pushed as an id instead.
             bool clicked;
-            var text = label.Split("###")[0];
+            var text = ButtonText(label);
             using (ImRaii.PushId((int)value))
             using (ProteusStyle.Selected(tool == value))
                 clicked = ImGuiComponents.IconButtonWithText(icon, text, FullWidth());

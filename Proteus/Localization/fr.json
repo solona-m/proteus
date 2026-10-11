@@ -3599,6 +3599,14 @@
     "message": "Décochez une pièce pour la garder où l'auteur l'a placée, comme une boucle ou un bijou. Cliquer dessus sur le modèle fait de même.",
     "description": ""
   },
+  "Parts.Dropdown.Ticked.Fmt": {
+    "message": "{0} pièces cochées sur {1}",
+    "description": ""
+  },
+  "Parts.Dropdown.NoneChosen": {
+    "message": "Choisissez une pièce à déplacer",
+    "description": ""
+  },
   "Parts.Retarget.Lock.SkinTip": {
     "message": "La peau propre au vêtement. La conserver garde l'ancienne taille : le corps peut transparaître ou créer un écart.",
     "description": ""

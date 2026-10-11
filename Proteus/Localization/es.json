@@ -3599,6 +3599,14 @@
     "message": "Desmarca una pieza para dejarla donde la puso el autor, como una hebilla o una joya. Hacer clic en ella sobre el modelo hace lo mismo.",
     "description": ""
   },
+  "Parts.Dropdown.Ticked.Fmt": {
+    "message": "{0} de {1} piezas marcadas",
+    "description": ""
+  },
+  "Parts.Dropdown.NoneChosen": {
+    "message": "Elige una pieza para mover",
+    "description": ""
+  },
   "Parts.Retarget.Lock.SkinTip": {
     "message": "La piel propia de la prenda. Mantenerla conserva la talla antigua, así que el cuerpo puede transparentarse o dejar huecos.",
     "description": ""
