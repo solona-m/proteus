@@ -1183,7 +1183,9 @@ internal static class Program
             || ranking.Confidence is BodySizeMatch.Confidence.NoBodyMesh or BodySizeMatch.Confidence.TooLittle
                                   or BodySizeMatch.Confidence.Ambiguous)
             throw new UsageException($"Could not tell which {slot} body of {catalog.ModRoot} the garment was made on " +
-                                     $"({ranking.Confidence}). Pass --from.");
+                                     $"({ranking.Confidence}). Pass --from. Closest:\n" +
+                                     string.Join("\n", ranking.Scores.Take(8).Select(s =>
+                                         $"  {s.Option.Rel}  rms {s.Rms * 1000f:F2} mm, exact {s.HitRate:P0}")));
         return best.Option;
     }
 

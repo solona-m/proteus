@@ -78,6 +78,7 @@ documented by that workflow's own tooling (e.g. its installed plugin).
 ## Commands
 
 - `dotnet build Proteus/Proteus.csproj -c Release` — build
+- `dotnet build Proteus.Refit/Proteus.Refit.csproj -c Release` — build the headless refit CLI (not built by the tests; run it whenever `Proteus.Refit/` changes)
 - `dotnet test Proteus.Tests/Proteus.Tests.csproj -c Release` — run all tests
 - `dotnet test Proteus.Tests/Proteus.Tests.csproj -c Release` — all checks incl. tests (also `npm test --prefix worker` when `worker/` changes)
 - run: bump `Plugin.BuildNumber`, build, copy `Proteus/bin/Release/win-x64/` to `E:\repos\Proteus\Proteus\bin\release\win-x64` — the game dev-loads it (no app URL; verification is in game)
