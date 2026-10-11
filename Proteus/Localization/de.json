@@ -2427,6 +2427,30 @@
     "message": "Wie schnell die Oberfläche beim Malen glatt wird. Niedrig ist sanft und gut\nzu steuern; hoch glättet fast sofort.\n\nAn einer offenen Kante wie einem Saum zieht das Glätten die Kante leicht nach innen.",
     "description": ""
   },
+  "Parts.Tool.Smooth": {
+    "message": "Ausgleichen",
+    "description": ""
+  },
+  "Parts.Tool.Smooth.Tip": {
+    "message": "Male auf dem Modell, um Beulen und Wellen zu glätten, ohne es schrumpfen zu lassen:\nAnders als Glätten behalten Kurven ihre Form, und der Stoff bleibt vom Körper weg.",
+    "description": ""
+  },
+  "Parts.Brush.SmoothRate.Tip": {
+    "message": "Wie schnell die Oberfläche beim Malen glatt wird. Niedrig ist sanft und gut\nzu steuern; hoch glättet fast sofort.",
+    "description": ""
+  },
+  "Parts.Tool.Grab": {
+    "message": "Greifen",
+    "description": ""
+  },
+  "Parts.Tool.Grab.Tip": {
+    "message": "Drücke auf das Modell und ziehe: Der Stoff um den Pinsel folgt der Maus\nwie Gummi, in der Mitte am stärksten, ohne harte Kante.",
+    "description": ""
+  },
+  "Parts.Grab.Help": {
+    "message": "Drücke auf den Stoff und ziehe. Die Pinselgröße bestimmt, wie viel Stoff mitkommt;\ner bewegt sich quer zu deiner Ansicht, und Strg+Z nimmt ein Greifen zurück.",
+    "description": ""
+  },
   "Parts.Tool.Bridge": {
     "message": "Überbrücken",
     "description": ""
@@ -2644,7 +2668,7 @@
     "description": ""
   },
   "Parts.Brush.Strength.Tip": {
-    "message": "Wie weit sich die Oberfläche pro Malmoment bewegt. Klein ist meist richtig:\nKleidung muss den Körper nur um Bruchteile eines Millimeters freihalten, und\ndu kannst dieselbe Stelle jederzeit erneut übermalen.",
+    "message": "Wie weit die Pinselmitte die Oberfläche pro Viertelsekunde Halten bewegt,\nbei jeder Bildrate gleich. Klein ist meist richtig: Kleidung muss den Körper nur\num Bruchteile eines Millimeters freigeben, und du kannst jederzeit erneut\nüber dieselbe Stelle malen.",
     "description": ""
   },
   "Parts.Brush.Limit": {
@@ -4026,6 +4050,10 @@
   "Common.Units.Mm2": {
     "message": "%.2f mm",
     "description": "Slider value in millimetres. An ImGui printf format: keep %.2f exactly as it is."
+  },
+  "Common.Units.MmPerQuarterSecond": {
+    "message": "%.2f mm / 0,25 s",
+    "description": ""
   },
   "Create.Dialog.ImageFilter": {
     "message": "Bilder",

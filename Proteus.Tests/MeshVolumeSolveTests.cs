@@ -441,7 +441,10 @@ public class MeshVolumeSolveTests
         return (Assemble(pos.ToList(), grid.Normals.ToList(), grid.Parts[0].Triangles.ToList()), index, bump);
     }
 
-    /// <summary>Relax flattens a lump the model shipped with.</summary>
+    /// <summary>
+    /// Relax flattens a lump the model shipped with, and the lump stays flattened when the button comes up: the
+    /// stroke-end smoothing, run over what a relax stroke added, used to put about half of it back.
+    /// </summary>
     [Fact]
     public void RelaxFlattensALump()
     {
@@ -450,10 +453,12 @@ public class MeshVolumeSolveTests
         var solve = new MeshVolumeSolve(model);
 
         for (int i = 0; i < 10; i++) solve.Relax(At(model.Positions, bump), 0.04f, 1f);
+        float during = At(solve.Positions(), bump).Y;
         solve.EndStroke();
 
-        var after = solve.Positions();
-        Assert.True(At(after, bump).Y < height * 0.8f, $"the lump did not flatten: {At(after, bump).Y}");
+        float after = At(solve.Positions(), bump).Y;
+        Assert.True(after < height * 0.3f, $"the lump did not flatten: {after * 1000f:F2} mm");
+        Assert.True(after < during + 0.0005f, $"the lump came back on release: {during * 1000f:F2} -> {after * 1000f:F2} mm");
     }
 
     /// <summary>
@@ -1511,6 +1516,57 @@ public class MeshVolumeSolveTests
         solve.EndMove();
     }
 
+    /// <summary>
+    /// The falloff the view shows before a drag is exactly the share each vertex then takes of the move — and showing
+    /// it changes nothing and opens no drag.
+    /// </summary>
+    [Fact]
+    public void MoveFalloffIsWhatTheMoveThenTakes()
+    {
+        var (model, n, second, loose) = TwoPartsAndALooseStrap();
+        var solve = new MeshVolumeSolve(model);
+        const float radius = 0.05f;
+
+        var shown = solve.MoveFalloff(model.Parts[1].Triangles, radius, alongSurface: false);
+        Assert.NotNull(shown);
+        Assert.False(solve.Moving);
+        Assert.False(solve.Dirty);
+        Assert.Equal(model.Positions, solve.Positions());
+
+        var preview = shown!.ToArray();   // the drag below is free to fill the same buffer
+        Assert.Null(solve.DragFalloff());
+        solve.BeginMove(model.Parts[1].Triangles, adjacent: true, falloffRadius: radius);
+        Assert.Equal(preview, solve.DragFalloff());
+        solve.MoveTo(new Vector3(0f, 1f, 0f));
+        var after = solve.Positions();
+        for (int v = 0; v < model.Positions.Length / 3; v++)
+            Assert.Equal(preview[v], At(after, v).Y - At(model.Positions, v).Y, 1e-5f);
+        Assert.Equal(1f, preview[second + 5 * n + 5]);
+        solve.EndMove();
+        Assert.Null(solve.DragFalloff());
+    }
+
+    /// <summary>
+    /// A wind stroke left open and ended for it by a grab finishes as a wind stroke: nothing it never moved is smoothed
+    /// or settled, and it keeps its own undo step.
+    /// </summary>
+    [Fact]
+    public void AGrabEndsALeftoverWindStrokeAsWind()
+    {
+        var (model, index) = Grid(11);
+        var solve = new MeshVolumeSolve(model);
+        solve.PaintWind(At(model.Positions, index[5, 5]), 0.04f, 1f, 1f);
+        Assert.True(solve.StrokeOpen);
+
+        solve.BeginGrab(At(model.Positions, index[1, 1]), 0.01f);
+        solve.EndGrab();
+
+        Assert.Equal(model.Positions, solve.Positions());
+        Assert.True(solve.WindAt(index[5, 5]) > 0.9f);
+        solve.Undo();
+        Assert.Equal(0f, solve.WindAt(index[5, 5]));
+    }
+
     /// <summary>With adjacent parts off, only the seam — the points the part shares — follows the part.</summary>
     [Fact]
     public void AdjacentOffMovesOnlyThePart()
@@ -1597,5 +1653,398 @@ public class MeshVolumeSolveTests
         var carried = BrushTransfer.Transfer(solve, model, model);
         Assert.Equal(0.3f, carried.DeltaAt(second + 5 * n + 5).Y, 1e-5f);
         Assert.Equal(0.3f, carried.MovedAt(second + 5 * n + 5).Y, 1e-5f);
+    }
+
+    // ── smooth ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Smooth takes the sharpness out of a lump the model shipped with: the spike comes down and the step to the cloth
+    /// beside it all but goes. It does not make the lump vanish — what was there is spread into a gentle rise, since
+    /// keeping the volume is the whole difference from relax.
+    /// </summary>
+    [Fact]
+    public void SmoothSoftensALump()
+    {
+        const float height = 0.01f;
+        var (model, index, bump) = Bumped(height);
+        var solve = new MeshVolumeSolve(model);
+
+        for (int i = 0; i < 30; i++) solve.Smooth(At(model.Positions, bump), 0.04f, 1f);
+        var during = solve.Positions().ToArray();
+        solve.EndStroke();
+
+        var after = solve.Positions();
+        float peak = At(after, bump).Y, step = peak - At(after, index[5, 6]).Y;
+        string seen = $"during: peak {At(during, bump).Y * 1000f:F2} side {At(during, index[5, 6]).Y * 1000f:F2}; "
+                    + $"after: peak {peak * 1000f:F2} side {At(after, index[5, 6]).Y * 1000f:F2}";
+        Assert.True(peak < height * 0.3f, $"the spike did not come down — {seen}");
+        Assert.True(step < height * 0.1f, $"still a step beside the lump — {seen}");
+        // Release keeps what the stroke did: the stroke-end smoothing would have put half the lump back.
+        Assert.True(peak < At(during, bump).Y + 0.0005f, $"the lump came back on release — {seen}");
+    }
+
+    /// <summary>
+    /// The difference from relax: smoothing the top of a dome leaves its crest nearly where it was, where the same
+    /// stroke of relax sinks it. The point of having both.
+    /// </summary>
+    [Fact]
+    public void SmoothKeepsADomeThatRelaxSinks()
+    {
+        const int n = 21;
+        var (pos, nrm, tris, _) = Sheet(n, (i, j) =>
+        {
+            float x = (i - 10) * Spacing, z = (j - 10) * Spacing;
+            return -2f * (x * x + z * z);
+        }, 1f);
+        var model = Assemble(pos, nrm, tris);
+        int crest = 10 * n + 10;
+
+        float Sink(Func<MeshVolumeSolve, Vector3, int> dab)
+        {
+            var solve = new MeshVolumeSolve(model);
+            for (int d = 0; d < 20; d++) dab(solve, At(model.Positions, crest));
+            solve.EndStroke();
+            return -At(solve.Positions(), crest).Y;
+        }
+
+        float relaxed = Sink((s, c) => s.Relax(c, 0.08f, 1f));
+        float smoothed = Sink((s, c) => s.Smooth(c, 0.08f, 1f));
+        Assert.True(relaxed > 0.0005f, $"relax should sink the crest, sank {relaxed * 1000f:F3} mm");
+        Assert.True(MathF.Abs(smoothed) < relaxed * 0.25f,
+                    $"smooth moved the crest {smoothed * 1000f:F3} mm against relax's {relaxed * 1000f:F3} mm");
+    }
+
+    /// <summary>
+    /// A gentle smooth never roughens: at the slider's lowest strength, and at the faint rim of any brush, the finest
+    /// ripple the mesh can carry still only shrinks. Scaling the Taubin steps themselves by the strength gained above 1
+    /// there, so holding the brush grew the ripple it was meant to iron.
+    /// </summary>
+    [Fact]
+    public void AGentleSmoothNeverGrowsARipple()
+    {
+        const int n = 21;
+        var (pos, nrm, tris, _) = Sheet(n, (i, j) => (i + j) % 2 == 0 ? 0.001f : -0.001f, 1f);
+        var model = Assemble(pos, nrm, tris);
+        var solve = new MeshVolumeSolve(model);
+        int middle = 10 * n + 10;
+
+        float Ripple() => MathF.Abs(At(solve.Positions(), middle).Y - At(solve.Positions(), middle + 1).Y);
+        float before = Ripple();
+        for (int d = 0; d < 200; d++) solve.Smooth(At(model.Positions, middle), 0.05f, 0.05f);
+        Assert.True(Ripple() <= before + 1e-7f, $"the ripple grew from {before * 1000f:F4} to {Ripple() * 1000f:F4} mm");
+    }
+
+    /// <summary>A slow frame's dabs handed over at once do what the same dabs one at a time do.</summary>
+    [Fact]
+    public void SeveralDabsAtOnceAreTheSameDabsOneAtATime()
+    {
+        var (model, _, bump) = Bumped(0.01f);
+        var centre = At(model.Positions, bump);
+
+        void Same(Action<MeshVolumeSolve> once, Action<MeshVolumeSolve> three, string what)
+        {
+            var a = new MeshVolumeSolve(model);
+            var b = new MeshVolumeSolve(model);
+            for (int d = 0; d < 3; d++) once(a);
+            three(b);
+            var pa = a.Positions().ToArray();
+            var pb = b.Positions();
+            for (int i = 0; i < pa.Length; i++) Assert.True(MathF.Abs(pa[i] - pb[i]) < 1e-7f, $"{what}: coordinate {i}");
+            for (int v = 0; v < pa.Length / 3; v++) Assert.Equal(a.WindAt(v), b.WindAt(v), 1e-6f);
+        }
+
+        Same(s => s.Relax(centre, 0.04f, 0.5f), s => s.Relax(centre, 0.04f, 0.5f, dabs: 3), "relax");
+        Same(s => s.Smooth(centre, 0.04f, 0.5f), s => s.Smooth(centre, 0.04f, 0.5f, dabs: 3), "smooth");
+        Same(s => s.Paint(centre, 0.04f, 0.001f), s => s.Paint(centre, 0.04f, 0.001f, dabs: 3), "pull");
+        Same(s => s.PaintWind(centre, 0.04f, 1f, 0.3f), s => s.PaintWind(centre, 0.04f, 1f, 0.3f, dabs: 3), "wind");
+    }
+
+    /// <summary>Skin never moves under the smooth brush.</summary>
+    [Fact]
+    public void SmoothNeverMovesSkin()
+    {
+        var (model, clothStart, n) = DomeOverSkin(withSkin: true);
+        var solve = new MeshVolumeSolve(model);
+        for (int i = 0; i < 20; i++) solve.Smooth(At(model.Positions, clothStart + 6 * n + 6), 0.2f, 1f);
+        solve.EndStroke();
+
+        var after = solve.Positions();
+        for (int v = 0; v < clothStart; v++) Assert.Equal(At(model.Positions, v), At(after, v));
+    }
+
+    /// <summary>A mirrored smooth leaves a symmetric model symmetric, and one undo takes it back exactly.</summary>
+    [Fact]
+    public void MirroredSmoothIsSymmetricAndUndoIsExact()
+    {
+        const int n = 21;
+        var model = Centred(n, (i, j) => (i == 6 || i == 14) && j == 10 ? 0.01f : 0f);
+        var solve = new MeshVolumeSolve(model);
+        int right = 14 * n + 10, left = 6 * n + 10;
+
+        for (int d = 0; d < 10; d++) solve.Smooth(At(model.Positions, right), 0.04f, 1f, mirror: true);
+        AssertSymmetric(solve.Positions(), n, 1e-5f, "smooth dabs");
+        solve.EndStroke();
+        Assert.True(At(solve.Positions(), left).Y < 0.009f, $"left bump not smoothed: {At(solve.Positions(), left).Y}");
+
+        solve.Undo();
+        var back = solve.Positions();
+        for (int v = 0; v < n * n; v++) Assert.Equal(At(model.Positions, v), At(back, v));
+    }
+
+    // ── elastic grab ────────────────────────────────────────────────────────
+
+    /// <summary>The Kelvinlet is normalised to follow the drag exactly at its centre, and ends past the fade.</summary>
+    [Fact]
+    public void KelvinletIsOneAtTheCentreAndEndsPastTheRim()
+    {
+        var (a, b) = MeshVolumeSolve.Kelvinlet(0f, 0.05f);
+        Assert.Equal(1f, a, 1e-5f);
+        Assert.True(float.IsFinite(b));
+
+        Assert.Equal((0f, 0f), MeshVolumeSolve.Kelvinlet(0.075f, 0.05f));
+        var (rimA, _) = MeshVolumeSolve.Kelvinlet(0.05f, 0.05f);
+        Assert.True(MathF.Abs(rimA) < 0.05f, $"still {rimA:F3} of the drag at the rim");
+    }
+
+    /// <summary>The node the grab was taken at goes exactly where the mouse took it, however far — no cap.</summary>
+    [Fact]
+    public void GrabCentreFollowsTheDragUncapped()
+    {
+        var (model, index) = Grid(11);
+        var solve = new MeshVolumeSolve(model);
+        int middle = index[5, 5];
+        var offset = new Vector3(0.1f, 0.4f, -0.05f);   // well past the 100 mm brush limit
+
+        Assert.True(solve.BeginGrab(At(model.Positions, middle), 0.04f) > 0);
+        solve.GrabTo(offset);
+        solve.EndGrab();
+
+        var moved = At(solve.Positions(), middle) - At(model.Positions, middle);
+        Assert.True(Vector3.Distance(offset, moved) < 1e-5f, $"the centre went {moved}, not {offset}");
+    }
+
+    /// <summary>
+    /// The grab is soft: across the drag, cloth follows less the further out it is, with no step, and nothing past
+    /// the reach moves at all.
+    /// </summary>
+    [Fact]
+    public void GrabFallsOffSmoothlyAndEnds()
+    {
+        const int n = 31;
+        var (model, index) = Grid(n);
+        var solve = new MeshVolumeSolve(model);
+        const float radius = 0.08f;
+        solve.BeginGrab(At(model.Positions, index[15, 15]), radius);
+        solve.GrabTo(new Vector3(0f, 0.02f, 0f));   // up, across the sheet
+
+        var after = solve.Positions();
+        float last = float.MaxValue;
+        for (int i = 15; i <= 15 + 8; i++)   // out to the rim, 80 mm
+        {
+            float y = At(after, index[i, 15]).Y;
+            Assert.True(y <= last + 1e-7f, $"column {i} rose again: {y} after {last}");
+            Assert.True(last == float.MaxValue || last - y < 0.02f * 0.35f, $"a step at column {i}: {last} -> {y}");
+            last = y;
+        }
+        Assert.Equal(0f, At(after, index[0, 0]).Y);        // 212 mm away: past the reach
+        Assert.Equal(0f, At(after, index[15, 28]).Y);      // 130 mm along the sheet: past 120 mm
+    }
+
+    /// <summary>A grab is absolute: dragging through one place to another ends exactly where going straight there does.</summary>
+    [Fact]
+    public void GrabIsAbsolute()
+    {
+        var (model, index) = Grid(11);
+        var centre = At(model.Positions, index[5, 5]);
+
+        var wandered = new MeshVolumeSolve(model);
+        wandered.BeginGrab(centre, 0.05f);
+        wandered.GrabTo(new Vector3(0.03f, 0.01f, 0f));
+        wandered.GrabTo(new Vector3(-0.02f, 0.05f, 0.01f));
+        wandered.GrabTo(new Vector3(0f, 0.02f, 0f));
+
+        var straight = new MeshVolumeSolve(model);
+        straight.BeginGrab(centre, 0.05f);
+        straight.GrabTo(new Vector3(0f, 0.02f, 0f));
+
+        Assert.Equal(straight.Positions(), wandered.Positions());
+    }
+
+    /// <summary>Skin and locked cloth hold still under a grab, however close to it.</summary>
+    [Fact]
+    public void GrabNeverMovesSkinOrLocked()
+    {
+        var (model, clothStart, n) = DomeOverSkin(withSkin: true);
+        var solve = new MeshVolumeSolve(model);
+        int crest = clothStart + 6 * n + 6, held = clothStart + 6 * n + 7;
+        solve.SetLocked([held]);
+
+        solve.BeginGrab(At(model.Positions, crest), 0.1f);
+        solve.GrabTo(new Vector3(0f, 0.05f, 0f));
+        solve.EndGrab();
+
+        var after = solve.Positions();
+        for (int v = 0; v < clothStart; v++) Assert.Equal(At(model.Positions, v), At(after, v));
+        Assert.Equal(At(model.Positions, held), At(after, held));
+        Assert.True(At(after, crest).Y > At(model.Positions, crest).Y + 0.04f);
+    }
+
+    /// <summary>One undo takes a whole grab back exactly.</summary>
+    [Fact]
+    public void GrabUndoIsExact()
+    {
+        var (model, index) = Grid(11);
+        var solve = new MeshVolumeSolve(model);
+        solve.BeginGrab(At(model.Positions, index[5, 5]), 0.05f);
+        for (int f = 1; f <= 10; f++) solve.GrabTo(new Vector3(0f, f * 0.003f, 0f));
+        solve.EndGrab();
+        Assert.True(solve.Dirty);
+        Assert.True(solve.CanUndo);
+
+        solve.Undo();
+        Assert.Equal(model.Positions, solve.Positions());
+        Assert.False(solve.Dirty);
+    }
+
+    /// <summary>
+    /// While a grab is held the view is told the cloth it took hold of, weighed when it took hold — full where it was
+    /// pressed, nothing past its reach — and nothing between grabs.
+    /// </summary>
+    [Fact]
+    public void GrabFalloffIsWhatTheGrabHolds()
+    {
+        const int n = 31;
+        var (model, index) = Grid(n);
+        var solve = new MeshVolumeSolve(model);
+        Assert.Null(solve.GrabFalloff());
+
+        solve.BeginGrab(At(model.Positions, index[15, 15]), 0.08f);
+        solve.GrabTo(new Vector3(0f, 0.05f, 0f));   // the cloth moving does not move what is shown
+        var held = solve.GrabFalloff();
+        Assert.NotNull(held);
+        Assert.Equal(1f, held![index[15, 15]], 1e-5f);
+        Assert.True(held[index[15, 18]] > 0f && held[index[15, 18]] < 1f);
+        Assert.Equal(0f, held[index[0, 0]]);
+        Assert.Equal(0f, held[index[15, 28]]);   // 130 mm: past the 120 mm reach
+
+        solve.EndGrab();
+        Assert.Null(solve.GrabFalloff());
+    }
+
+    /// <summary>A press with no drag records nothing to undo.</summary>
+    [Fact]
+    public void GrabWithoutADragLeavesNoUndo()
+    {
+        var (model, index) = Grid(11);
+        var solve = new MeshVolumeSolve(model);
+        solve.BeginGrab(At(model.Positions, index[5, 5]), 0.05f);
+        Assert.False(solve.EndGrab());
+        Assert.False(solve.CanUndo);
+        Assert.False(solve.Grabbing);
+    }
+
+    /// <summary>A drag brought back where it began leaves an untouched model untouched: not edited, nothing to save.</summary>
+    [Fact]
+    public void AGrabBroughtBackLeavesTheModelUntouched()
+    {
+        var (model, index) = Grid(11);
+        var solve = new MeshVolumeSolve(model);
+        solve.BeginGrab(At(model.Positions, index[5, 5]), 0.05f);
+        solve.GrabTo(new Vector3(0f, 0.02f, 0f));
+        Assert.True(solve.Dirty);
+        solve.GrabTo(Vector3.Zero);
+
+        Assert.False(solve.EndGrab());
+        Assert.False(solve.Dirty);
+        Assert.False(solve.CanUndo);
+        Assert.Equal(model.Positions, solve.Positions());
+    }
+
+    /// <summary>
+    /// A grab is the Move tool's share, not a brush's: a pull painted afterwards finds the cloth where it was dragged
+    /// to and does not snap it back to the brush limit.
+    /// </summary>
+    [Fact]
+    public void BrushAfterGrabDoesNotSnapItBack()
+    {
+        var (model, index) = Grid(11);
+        var solve = new MeshVolumeSolve(model);
+        int middle = index[5, 5];
+        solve.BeginGrab(At(model.Positions, middle), 0.05f);
+        solve.GrabTo(new Vector3(0f, 0.3f, 0f));
+        solve.EndGrab();
+
+        var at = At(solve.Positions(), middle);
+        Assert.True(solve.Paint(at, 0.03f, 0.001f) > 0, "the brush did not find the grabbed cloth");
+        solve.EndStroke();
+        Assert.True(At(solve.Positions(), middle).Y >= 0.3f, $"snapped back to {At(solve.Positions(), middle).Y}");
+    }
+
+    /// <summary>
+    /// A mirrored grab taken just off the midline, with a brush far wider than that, still moves the point taken hold of
+    /// exactly with the mouse: its own side's drag alone, none of the mirror's.
+    /// </summary>
+    [Fact]
+    public void MirroredGrabNearTheMidlineFollowsTheMouse()
+    {
+        const int n = 21;
+        var model = Centred(n, (_, _) => 0f);
+        var solve = new MeshVolumeSolve(model);
+        // 20 mm right of the midline, under a 600 mm brush whose blend band would be 30 mm.
+        int near = 12 * n + 10;
+        var offset = new Vector3(0.02f, 0.01f, 0f);
+
+        solve.BeginGrab(At(model.Positions, near), 0.6f, mirror: true);
+        solve.GrabTo(offset);
+
+        var moved = At(solve.Positions(), near) - At(model.Positions, near);
+        Assert.True(Vector3.Distance(offset, moved) < 1e-5f, $"the grabbed point went {moved}, not {offset}");
+    }
+
+    /// <summary>
+    /// A stroke left open — its surface let go without ending it — is ended, not lost, when a grab begins: it stays on
+    /// the undo stack under the grab.
+    /// </summary>
+    [Fact]
+    public void AGrabEndsAStrokeLeftOpen()
+    {
+        var (model, index) = Grid(11);
+        var solve = new MeshVolumeSolve(model);
+        solve.Paint(At(model.Positions, index[5, 5]), 0.04f, 0.002f);
+        Assert.True(solve.StrokeOpen);
+        var pulled = solve.Positions().ToArray();
+
+        solve.BeginGrab(At(model.Positions, index[2, 2]), 0.02f);
+        Assert.False(solve.StrokeOpen);
+        solve.GrabTo(new Vector3(0f, 0.01f, 0f));
+        solve.EndGrab();
+
+        solve.Undo();   // the grab
+        Assert.True(solve.CanUndo, "the pull was dropped from the undo stack");
+        solve.Undo();   // the pull
+        Assert.Equal(model.Positions, solve.Positions());
+        Assert.True(At(pulled, index[5, 5]).Y > 0f);
+    }
+
+    /// <summary>
+    /// A mirrored grab drags the other side as the mirror image — sideways drags go opposite ways — and the centre
+    /// line stays on the centre line.
+    /// </summary>
+    [Fact]
+    public void MirroredGrabIsSymmetric()
+    {
+        const int n = 21;
+        var model = Centred(n, (_, _) => 0f);
+        var solve = new MeshVolumeSolve(model);
+        int right = 13 * n + 10, left = 7 * n + 10;
+
+        solve.BeginGrab(At(model.Positions, right), 0.05f, mirror: true);
+        solve.GrabTo(new Vector3(0.01f, 0.02f, 0.005f));
+        var after = solve.Positions();
+
+        AssertSymmetric(after, n, 1e-6f, "mirrored grab");
+        var l = At(after, left) - At(model.Positions, left);
+        Assert.True(Vector3.Distance(l, new Vector3(-0.01f, 0.02f, 0.005f)) < 1e-5f, $"the mirror centre went {l}");
+        for (int j = 0; j < n; j++) Assert.Equal(0f, At(after, 10 * n + j).X, 1e-7f);
     }
 }

@@ -29,6 +29,12 @@ public interface IBrushSurface
 
     /// <summary>Unit direction toward the viewer, in the model's space.</summary>
     Vector3 ToViewer { get; }
+
+    /// <summary>
+    /// The ray under the mouse in the model's space, wherever the mouse is — on the model or off it — while a stroke is
+    /// under way; null between strokes or where it cannot be had. What the grab brush drags along.
+    /// </summary>
+    (Vector3 Origin, Vector3 Dir)? MouseRay { get; }
 }
 
 /// <summary>
@@ -70,6 +76,9 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     private SkinnedMesh? mesh;
     private bool[] skinTriangle = [];
     private int[] spareBase = [];
+
+    /// <summary>The vertices <see cref="spareBase"/> maps, listed once per mesh so a per-frame pass visits only them.</summary>
+    private readonly List<int> spareVertices = [];
     private Vector3[] edited = [];
     private Vector3[] world = [];
 
@@ -81,6 +90,13 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     public bool Painting { get; private set; }
     public bool StrokeEnded { get; private set; }
     public Vector3 ToViewer { get; private set; } = Vector3.UnitZ;
+    public (Vector3 Origin, Vector3 Dir)? MouseRay { get; private set; }
+
+    /// <summary>
+    /// The world-to-model transform at the point a stroke began, held for the stroke's life, the way the Move gizmo
+    /// holds its anchor: an idle sway must not shift the ray under a mouse that is holding still. Null between strokes.
+    /// </summary>
+    private Matrix4x4? strokeUnskin;
 
     /// <summary>Why the brush cannot paint right now, for the tab to show; null when it can.</summary>
     public string? Problem { get; private set; }
@@ -123,6 +139,9 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     /// <paramref name="lockClicked"/>.</param>
     /// <param name="polygonPickable">In polygon mode: which polygons a click can take. The rest — skin, locked parts —
     /// do not stop the ray, so cloth clipped behind them can still be picked.</param>
+    /// <param name="moveFalloff">The Move tools with their falloff on: how much of a move each vertex takes (ModelPartReader
+    /// order), drawn as the brush's rainbow in place of the chosen part's tint. Null for the plain tint.</param>
+    /// <param name="grabBrush">The brush is the grab: its rainbow shows the grab's own reach and falloff.</param>
     /// <param name="graftedGamePath">
     /// Set for a model the character wears through Proteus rather than as a file of its own — an imported
     /// content piece, whose geometry the game only ever draws copied into a Proteus shell. The file is then
@@ -139,8 +158,11 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
                            Func<int, bool>? partLocked = null, int lockedVersion = 0,
                            IReadOnlySet<PolygonSelection.Key>? polygons = null,
                            Action<PolygonSelection.Key>? polygonClicked = null,
-                           Func<PolygonSelection.Key, bool>? polygonPickable = null)
+                           Func<PolygonSelection.Key, bool>? polygonPickable = null,
+                           float[]? moveFalloff = null, bool grabBrush = false)
     {
+        this.moveFalloff = moveFalloff;
+        this.grabBrush = grabBrush;
         this.polygons = polygons;
         this.polygonClicked = polygonClicked;
         this.polygonPickable = polygonPickable;
@@ -154,6 +176,8 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
         brushArmedFrame = ImGui.GetFrameCount();
         targetKey = BodyShapeReader.PathKey(modelFile);
         targetBytes = modelBytes;
+        // A new solve on the same file — reopened after a save — has its own authored normals to judge fronts by.
+        if (!ReferenceEquals(volume, solve)) Array.Clear(triangleFront);
         volume = solve;
         radius = brushRadius;
         this.showWind = showWind;
@@ -166,6 +190,13 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     }
 
     private bool mirror;
+
+    /// <summary>See <see cref="ArmBrush"/>: the Move tools' falloff by vertex, or null.</summary>
+    private float[]? moveFalloff;
+
+    /// <summary>See <see cref="ArmBrush"/>: the brush is the grab.</summary>
+    private bool grabBrush;
+
     /// <summary>See <see cref="ArmBrush"/>: the game path of a model worn through a Proteus shell, or null.</summary>
     private string? graftedGamePath;
     private Func<int, int>? partOf;
@@ -226,9 +257,6 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     /// <summary>Smallest the brush ring is drawn, in pixels, so a millimetre brush on a distant character still shows.</summary>
     private const float MinRingPixels = 4f;
 
-    /// <summary>Below this ring size, in pixels, the falloff dots are left out — they would be one smudge.</summary>
-    private const float DotsMinRingPixels = 12f;
-
     // ── the wind wash ──
     private bool showWind;
 
@@ -258,6 +286,7 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     {
         StrokeEnded = false;
         Hovering = false;
+        MouseRay = null;
         int frame = ImGui.GetFrameCount();
         bool brushArmed = brushArmedFrame >= frame - 1;
         bool pickArmed = pickArmedFrame >= frame - 1;
@@ -269,6 +298,7 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
             Painting = false;
             Cursor = null;
             Problem = null;
+            strokeUnskin = null;
             moveGizmo?.Release();
             moveGizmo = null;
             scaleDrag?.Release();
@@ -291,6 +321,7 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
             brushArmedFrame = pickArmedFrame = -10;
             Painting = false;
             Cursor = null;
+            strokeUnskin = null;
             Problem = ex.Message;
             log.Error(ex, "[Proteus] live brush failed");
         }
@@ -351,6 +382,23 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
             }
         }
 
+        // The mouse's ray in the model, held to the pose the stroke began under — also on the frame the stroke ends,
+        // so the mouse's last movement before the release still counts.
+        // A press always takes the pose afresh, whatever an earlier stroke left behind.
+        if (Painting && ImGui.IsMouseClicked(ImGuiMouseButton.Left)) strokeUnskin = null;
+        if (Painting && strokeUnskin == null && hit is { } first
+            && Matrix4x4.Invert(poser.SkinAt(m, m.Triangles[first.Triangle * 3], pose.Root), out var held))
+            strokeUnskin = held;
+        if ((Painting || StrokeEnded) && strokeUnskin is { } unskinRay
+            && ScreenProjection.TryScreenRay(io.MousePos - ImGui.GetMainViewport().Pos, out var rayFrom, out var rayDir))
+            MouseRay = (Vector3.Transform(rayFrom, unskinRay), Vector3.TransformNormal(rayDir, unskinRay));
+        if (!Painting) strokeUnskin = null;
+
+        // A grab held: the cloth it took hold of, wherever the mouse has gone — on the garment, off it, or over other cloth.
+        // On the release frame too: the grab is ended a moment later, and the brush disc stays hidden until it is, so
+        // dropping the wash here would blink both off for a frame.
+        if ((Painting || StrokeEnded) && volume.GrabFalloff() is { } grabbed) DrawMoveFalloffWash(projection, m, grabbed);
+
         if (hit is not { } h || (overUi && !Painting)) return;
         Hovering = true;
 
@@ -382,6 +430,8 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
         if (moveGizmo is { Active: not TranslateGizmo.Handle.None }) moveGizmo.Release();
         if (scaleDrag is { Active: true }) scaleDrag.Release();
         if (rotateGizmo is { Active: not RotateGizmo.Handle.None }) rotateGizmo.Release();
+        // The pose the stroke's ray was held to goes with it, or the next stroke would see through this one's pose.
+        strokeUnskin = null;
         if (!Painting) return;
         Painting = false;
         StrokeEnded = true;
@@ -399,9 +449,6 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     /// </summary>
     private void UpdateMove(ScreenProjection projection, SkinnedMesh m)
     {
-        DrawTickedWash(projection, m);
-        DrawLockedWash(projection, m);
-
         var io = ImGui.GetIO();
         // Picking polygons looks THROUGH whatever cannot be picked — the skin a clip pokes out behind, a locked part —
         // rather than being stopped by it.
@@ -409,6 +456,10 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
             ? MouseHit(projection, world, m.Triangles,
                        t => (t >= skinTriangle.Length || !skinTriangle[t]) && pickable(PolygonOf(m, t)), out bool overUi)
             : MouseHit(projection, world, m.Triangles, skinTriangle, out overUi);
+
+        if (moveFalloff is { } falloff) DrawMoveFalloffWash(projection, m, falloff);
+        else DrawTickedWash(projection, m);
+        DrawLockedWash(projection, m);
         var origin = ImGui.GetMainViewport().Pos;
         bool dragging = moveGizmo is { Active: not TranslateGizmo.Handle.None } || scaleDrag is { Active: true }
                         || rotateGizmo is { Active: not RotateGizmo.Handle.None };
@@ -586,12 +637,17 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     private void Prepare(SkinnedMesh m)
     {
         skinTriangle = SkinTriangles(m);
+        Array.Clear(triangleFront);
+        BuildVertexTriangles(m);
 
         // A shape's spare vertex stands in for a base vertex, so it moves with that vertex's edit.
         spareBase = new int[m.VertexCount];
         Array.Fill(spareBase, -1);
         for (int i = 0; i < m.Triangles.Length; i++)
             if (m.Triangles[i] != m.BaseTriangles[i]) spareBase[m.Triangles[i]] = m.BaseTriangles[i];
+        spareVertices.Clear();
+        for (int v = 0; v < m.VertexCount; v++)
+            if (spareBase[v] >= 0) spareVertices.Add(v);
 
         if (edited.Length < m.VertexCount) edited = new Vector3[m.VertexCount];
         if (world.Length < m.VertexCount) world = new Vector3[m.VertexCount];
@@ -642,26 +698,28 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     }
 
     /// <summary>
-    /// The brush on the character: a ring lying on the surface, and a faint wash over the points it reaches.
-    /// Kept dim on purpose — the character is the thing being looked at.
+    /// The brush on the character: a ring lying on the surface, over a translucent rainbow across the cloth it reaches
+    /// — red where it moves the surface most, through to violet at the rim (<see cref="BrushRainbow"/>).
     /// </summary>
     private void DrawBrush(ScreenProjection projection, LiveMeshHit hit, SkinnedMesh m, Matrix4x4 skin)
     {
-        var dl = ImGui.GetBackgroundDrawList();
-        var origin = ImGui.GetMainViewport().Pos;
+        // A grab held is drawn as what it holds (see UpdateBrush), not as a ring around whatever is under the mouse.
+        if (Cursor is not { } c || volume is not { Grabbing: false } solve) return;
+        var mc = new Vector3(-c.X, c.Y, c.Z);
+        bool mirrored = mirror && MathF.Abs(c.X) >= solve.MirrorMinX;   // exactly when the brush itself mirrors
+
+        // Under the rings, so they stay crisp on top of it.
+        DrawFalloffWash(projection, m, c, mc, mirrored);
 
         // Ring radius in the world: the model-space radius scaled by the pose at the hit.
         float scale = new Vector3(skin.M11, skin.M12, skin.M13).Length();
         float r = radius * (scale > 1e-6f ? scale : 1f);
         uint ringColour = Painting ? 0xC0FFFFFFu : 0x80FFFFFFu;
-        float pixels = DrawRing(projection, hit.World, hit.Normal, r, ringColour);
+        DrawRing(projection, hit.World, hit.Normal, r, ringColour);
 
         // The mirrored ring, fainter: at the garment's vertex nearest the mirrored centre, facing the camera. The
         // mirror is taken in the model's space, so it lands on the matching spot even though the pose is not
         // symmetric.
-        if (Cursor is not { } c) return;
-        var mc = new Vector3(-c.X, c.Y, c.Z);
-        bool mirrored = mirror && MathF.Abs(c.X) >= radius * 0.05f;
         if (mirrored)
         {
             int nearest = -1;
@@ -679,23 +737,213 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
                     DrawRing(projection, world[nearest], Vector3.Normalize(toCamera), r, Painting ? 0x80FFFFFFu : 0x50FFFFFFu);
             }
         }
+    }
 
-        // Faint dots where the brush reaches, stronger toward the middle — both discs when mirrored, the stronger
-        // of the two per point, as the solve weighs them. Left out when the ring is too small to hold them.
-        if (pixels < DotsMinRingPixels) return;
-        float r2 = radius * radius;
-        int drawn = 0;
-        for (int v = 0; v < m.VertexCount && drawn < 6000; v++)
+    /// <summary>Opacity of the falloff rainbow at the middle of the brush: plain to read, the cloth still showing through.</summary>
+    private const float FalloffWashOpacity = 0.45f;
+
+    /// <summary>Each vertex's falloff weight this frame; reused, so a frame makes no garbage.</summary>
+    private float[] falloffAt = [];
+
+    /// <summary>The brush's weight by distance, sampled once per brush — see <see cref="BrushWeightTable"/>.</summary>
+    private readonly BrushWeightTable brushWeights = new();
+
+    /// <summary>
+    /// Per triangle of the current mesh: +1 when its winding's face points the way its corner normals do, −1 when the
+    /// other way, 2 where the normals say nothing (a card whose faces cancel), 0 not yet worked out. A property of how
+    /// the triangle was authored — its winding against its normals — so it is worked out once, from the authored shape,
+    /// and no drag can turn it over.
+    /// </summary>
+    private sbyte[] triangleFront = [];
+
+    /// <summary>Which side of triangle <paramref name="t"/> is its front, as ±1; 0 when it has none to speak of.</summary>
+    private int FrontOf(SkinnedMesh m, MeshVolumeSolve solve, int t)
+    {
+        if (triangleFront.Length < m.TriangleCount) triangleFront = new sbyte[m.TriangleCount];
+        if (triangleFront[t] == 0)
+        {
+            var bases = m.BaseTriangles;
+            int o = t * 3, a = bases[o], b = bases[o + 1], c = bases[o + 2];
+            // Both from the solve's own file, as authored — positions and normals — so neither an edit since nor a
+            // reopened, re-saved model can pair one with the other turned over.
+            var na = solve.AuthoredNormalAt(a);
+            var nb = solve.AuthoredNormalAt(b);
+            var nc = solve.AuthoredNormalAt(c);
+            var normals = new Vector3(na.X + nb.X + nc.X, na.Y + nb.Y + nc.Y, na.Z + nb.Z + nc.Z);
+            Vector3 P(int v) { var q = solve.AuthoredPositionAt(v); return new Vector3(q.X, q.Y, q.Z); }
+            float side = Vector3.Dot(Vector3.Cross(P(b) - P(a), P(c) - P(a)), normals);
+            triangleFront[t] = side > 0f ? (sbyte)1 : side < 0f ? (sbyte)-1 : (sbyte)2;
+        }
+        return triangleFront[t] == 2 ? 0 : triangleFront[t];
+    }
+
+    // Per vertex, for the wash this frame: where it lands on screen, once projected. Valid where its stamp is this
+    // frame's, so nothing is cleared per frame. Reused.
+    private Vector2[] washScreen = [];
+    private bool[] washOnScreen = [];
+    private int[] washVertexStamp = [];
+    private int[] washTriangleStamp = [];
+    private int washStamp;
+
+    /// <summary>The vertices the falloff reaches this frame — where the wash looks for triangles.</summary>
+    private readonly List<int> washReached = [];
+    private readonly List<int> washTriangles = [];
+
+    // Which triangles each vertex is a corner of, as offsets into one array; built once per mesh.
+    private int[] vertexTriangleStart = [];
+    private int[] vertexTriangles = [];
+
+    private void BuildVertexTriangles(SkinnedMesh m)
+    {
+        var tris = m.Triangles;
+        var start = new int[m.VertexCount + 1];
+        foreach (int v in tris) start[v + 1]++;
+        for (int v = 0; v < m.VertexCount; v++) start[v + 1] += start[v];
+        var fill = (int[])start.Clone();
+        var list = new int[tris.Length];
+        for (int i = 0; i < tris.Length; i++) list[fill[tris[i]]++] = i / 3;
+        vertexTriangleStart = start;
+        vertexTriangles = list;
+    }
+
+    /// <summary>
+    /// The rainbow over the cloth the brush reaches — both discs when mirrored, the stronger of the two per point, as
+    /// the solve weighs them. A shape key's spare vertex takes the weight of the vertex it stands in for, which is the
+    /// one the solve moves.
+    /// </summary>
+    private void DrawFalloffWash(ScreenProjection projection, SkinnedMesh m, Vector3 c, Vector3 mc, bool mirrored)
+    {
+        if (radius <= 0f) return;
+        if (falloffAt.Length < m.VertexCount) falloffAt = new float[m.VertexCount];
+
+        brushWeights.Ensure(radius, grabBrush);
+        washReached.Clear();
+        // A pass over every vertex, deliberately not a spatial index: this same frame has already copied and posed
+        // every vertex of the garment (FillEdited, LiveMeshPoser.Pose), so one more distance each does not change what
+        // the frame costs, and an index would have to be rebuilt on every frame the cloth is being edited.
+        for (int v = 0; v < m.VertexCount; v++)
         {
             if (spareBase[v] >= 0) continue;
             float d2 = Vector3.DistanceSquared(edited[v], c);
-            if (mirrored) d2 = MathF.Min(d2, Vector3.DistanceSquared(edited[v], mc));
-            if (d2 >= r2) continue;
-            float w = MeshVolumeSolve.Falloff(MathF.Sqrt(d2) / radius);
-            if (w <= 0f || !projection.WorldToScreen(world[v], out var s)) continue;
-            dl.AddCircleFilled(s + origin, 1.5f, ((uint)(w * 0x38) << 24) | 0x5A5AFFu);
-            drawn++;
+            float w;
+            if (!mirrored) w = brushWeights.At(d2);
+            else
+            {
+                float m2 = Vector3.DistanceSquared(edited[v], mc);
+                // The painting brushes take the stronger disc; the grab blends its two sides as it will drag them.
+                if (!grabBrush) w = brushWeights.At(MathF.Min(d2, m2));
+                else
+                {
+                    float t = MeshVolumeSolve.GrabSide(edited[v].X, c.X, radius, volume!.MirrorMinX);
+                    w = t * brushWeights.At(d2) + (1f - t) * brushWeights.At(m2);
+                }
+            }
+            // Locked cloth stays clear, as in the model view: no brush moves it.
+            if (w > 0f && volume!.IsLocked(v)) w = 0f;
+            falloffAt[v] = w;
+            if (w > 0f) washReached.Add(v);
         }
+        if (washReached.Count == 0) return;
+        foreach (int v in spareVertices)
+            if ((falloffAt[v] = falloffAt[spareBase[v]]) > 0f) washReached.Add(v);
+        DrawRainbowWash(projection, m);
+    }
+
+    /// <summary>
+    /// The Move tools' falloff as the same rainbow: red on the chosen part, fading to violet where the cloth it carries
+    /// stops following. A shape key's spare vertex takes the weight of the vertex it stands in for.
+    /// </summary>
+    private void DrawMoveFalloffWash(ScreenProjection projection, SkinnedMesh m, float[] falloff)
+    {
+        if (falloffAt.Length < m.VertexCount) falloffAt = new float[m.VertexCount];
+        washReached.Clear();
+        for (int v = 0; v < m.VertexCount; v++)
+        {
+            int at = spareBase[v] >= 0 ? spareBase[v] : v;
+            float w = at < falloff.Length ? falloff[at] : 0f;
+            falloffAt[v] = w;
+            if (w > 0f) washReached.Add(v);
+        }
+        if (washReached.Count > 0) DrawRainbowWash(projection, m);
+    }
+
+    /// <summary>
+    /// <see cref="falloffAt"/> as a translucent rainbow over the garment, coloured per corner so it blends smoothly
+    /// across each triangle. Only the triangles at a vertex in <see cref="washReached"/> are looked at. Skin is left
+    /// clear: nothing that draws this moves it.
+    /// <para/>
+    /// So is cloth turned away from the camera — the back of a top, behind the body — which would otherwise show
+    /// through the front. Judged per triangle by the face it presents NOW, posed, so a flap a drag is turning shows
+    /// the side it is turning to; which of its sides counts as the front is <see cref="FrontOf"/>.
+    /// </summary>
+    private void DrawRainbowWash(ScreenProjection projection, SkinnedMesh m)
+    {
+        if (volume == null) return;
+        var solve = volume;
+        if (washScreen.Length < m.VertexCount)
+        {
+            washScreen = new Vector2[m.VertexCount];
+            washOnScreen = new bool[m.VertexCount];
+            washVertexStamp = new int[m.VertexCount];
+        }
+        if (washTriangleStamp.Length < m.TriangleCount) washTriangleStamp = new int[m.TriangleCount];
+        washStamp++;
+
+        var camera = projection.CameraPosition;
+        var tris = m.Triangles;
+        washTriangles.Clear();
+        foreach (int v in washReached)
+            for (int k = vertexTriangleStart[v]; k < vertexTriangleStart[v + 1]; k++)
+            {
+                int t = vertexTriangles[k];
+                if (washTriangleStamp[t] == washStamp) continue;   // already seen from another corner
+                washTriangleStamp[t] = washStamp;
+                if (t < skinTriangle.Length && skinTriangle[t]) continue;
+                int o = t * 3;
+                int a = tris[o], b = tris[o + 1], c = tris[o + 2];
+                if (TurnedAway(t, a, b, c)) continue;
+                if (!OnScreen(a) || !OnScreen(b) || !OnScreen(c)) continue;
+                washTriangles.Add(t);
+            }
+        if (washTriangles.Count == 0) return;
+
+        var dl = ImGui.GetBackgroundDrawList();
+        var origin = ImGui.GetMainViewport().Pos;
+        var uv = ImGui.GetFontTexUvWhitePixel();
+        // Thinned past the same budget as the other washes, so a dense garment under a big brush stays smooth.
+        int stride = Math.Max(1, washTriangles.Count / MaxWashTriangles);
+        for (int i = 0; i < washTriangles.Count; i += stride)
+        {
+            int o = washTriangles[i] * 3;
+            dl.PrimReserve(3, 3);
+            for (int k = 0; k < 3; k++)
+            {
+                int v = tris[o + k];
+                dl.PrimVtx(washScreen[v] + origin, uv, WashColour(falloffAt[v]));
+            }
+        }
+
+        // Each vertex projected once, however many triangles it is a corner of.
+        bool OnScreen(int v)
+        {
+            if (washVertexStamp[v] != washStamp)
+            {
+                washVertexStamp[v] = washStamp;
+                washOnScreen[v] = projection.WorldToScreen(world[v], out washScreen[v]);
+            }
+            return washOnScreen[v];
+        }
+
+        // The posed face turned from the camera — see FrontOf for which of its sides counts as the front.
+        bool TurnedAway(int t, int a, int b, int c)
+        {
+            int front = FrontOf(m, solve, t);
+            if (front == 0) return false;
+            var posed = Vector3.Cross(world[b] - world[a], world[c] - world[a]);
+            return Vector3.Dot(posed, camera - world[a]) * front < 0f;
+        }
+
+        static uint WashColour(float w) => BrushRainbow.Abgr(w, FalloffWashOpacity * BrushRainbow.Fade(w));
     }
 
     /// <summary>

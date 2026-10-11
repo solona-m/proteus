@@ -363,6 +363,8 @@ public sealed class CommonStrings
     public readonly string Mm1 = Loc.Localize("Common.Units.Mm1", "%.1f mm");
     public readonly string Mm2 = Loc.Localize("Common.Units.Mm2", "%.2f mm");
 
+    public readonly string MmPerQuarterSecond = Loc.Localize("Common.Units.MmPerQuarterSecond", "%.2f mm / 0.25 s");
+
     /// <summary>Playable races in the game's own order, as <see cref="ModelRace.Describe"/> shows them. A
     /// separate table from <see cref="ModelRace.Names"/>, which is also written into mods and stays English.</summary>
     public readonly string[] RaceNames =
@@ -2033,6 +2035,20 @@ public sealed class PartsStrings
         "pull that came out rough. Like 3ds Max's relax it shrinks: curves flatten and\n" +
         "cloth can sink toward the body.");
 
+    public readonly string ToolSmooth = Loc.Localize("Parts.Tool.Smooth", "Smooth")
+                                      + "###partsToolSmooth";
+
+    public readonly string ToolSmoothTip = Loc.Localize("Parts.Tool.Smooth.Tip",
+        "Paint on the model to iron out lumps and ripples without shrinking it:\n" +
+        "unlike Relax, curves keep their shape and cloth stays off the body.");
+
+    public readonly string ToolGrab = Loc.Localize("Parts.Tool.Grab", "Grab")
+                                    + "###partsToolGrab";
+
+    public readonly string ToolGrabTip = Loc.Localize("Parts.Tool.Grab.Tip",
+        "Press on the model and drag: the cloth around the brush follows the mouse\n" +
+        "like rubber, strongest in the middle, with no hard edge.");
+
     public readonly string ToolBridge = Loc.Localize("Parts.Tool.Bridge", "Bridge")
                                       + "###partsToolBridge";
 
@@ -2200,6 +2216,14 @@ public sealed class PartsStrings
         "control; high smooths almost at once.\n\n" +
         "Near an open edge, like a hem, relaxing draws the edge slightly inward.");
 
+    public readonly string BrushSmoothRateTip = Loc.Localize("Parts.Brush.SmoothRate.Tip",
+        "How quickly the surface smooths while you paint. Low is gentle and easy to\n" +
+        "control; high smooths almost at once.");
+
+    public readonly string GrabHelp = Loc.Localize("Parts.Grab.Help",
+        "Press on the cloth and drag. The brush size sets how much cloth comes along;\n" +
+        "it moves across your view, and Ctrl+Z takes a grab back.");
+
     public readonly string ToolDeflateTip = Loc.Localize("Parts.Tool.Deflate.Tip",
         "The same brush in reverse, for clothing that stands too far off the body.");
 
@@ -2312,9 +2336,10 @@ public sealed class PartsStrings
                                          + "###partsBrushStrength";
 
     public readonly string BrushStrengthTip = Loc.Localize("Parts.Brush.Strength.Tip",
-        "How far the surface moves per moment of painting. Small is usually right:\n" +
-        "clothing only has to clear the body by a fraction of a millimetre, and you\n" +
-        "can always paint over the same place again.");
+        "How far the middle of the brush moves the surface for each quarter second you\n" +
+        "hold it, the same on any frame rate. Small is usually right: clothing only has\n" +
+        "to clear the body by a fraction of a millimetre, and you can always paint over\n" +
+        "the same place again.");
 
     public readonly string BrushLimit = Loc.Localize("Parts.Brush.Limit", "Limit")
                                       + "###partsBrushLimit";

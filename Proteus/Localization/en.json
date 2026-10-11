@@ -2427,6 +2427,30 @@
     "message": "How quickly the surface smooths while you paint. Low is gentle and easy to\ncontrol; high smooths almost at once.\n\nNear an open edge, like a hem, relaxing draws the edge slightly inward.",
     "description": "Tooltip for the Strength slider while Relax is selected. Keep the line breaks; the tooltip is not wrapped."
   },
+  "Parts.Tool.Smooth": {
+    "message": "Smooth",
+    "description": "Icon button above the model; selects the brush that smooths the surface WITHOUT shrinking it. Must differ from Parts.Tool.Relax, which also smooths but shrinks."
+  },
+  "Parts.Tool.Smooth.Tip": {
+    "message": "Paint on the model to iron out lumps and ripples without shrinking it:\nunlike Relax, curves keep their shape and cloth stays off the body.",
+    "description": "Tooltip for the button. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "Parts.Brush.SmoothRate.Tip": {
+    "message": "How quickly the surface smooths while you paint. Low is gentle and easy to\ncontrol; high smooths almost at once.",
+    "description": "Tooltip for the Strength slider while Smooth is selected. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "Parts.Tool.Grab": {
+    "message": "Grab",
+    "description": "Icon button above the model; selects the brush that drags the surface along with the mouse, like rubber."
+  },
+  "Parts.Tool.Grab.Tip": {
+    "message": "Press on the model and drag: the cloth around the brush follows the mouse\nlike rubber, strongest in the middle, with no hard edge.",
+    "description": "Tooltip for the button. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "Parts.Grab.Help": {
+    "message": "Press on the cloth and drag. The brush size sets how much cloth comes along;\nit moves across your view, and Ctrl+Z takes a grab back.",
+    "description": "Hint in the side panel while Grab is selected, in place of the Strength slider. Wrapped to the panel."
+  },
   "Parts.Tool.Bridge": {
     "message": "Bridge",
     "description": "Icon button in the brush panel; selects the brush that stretches cloth across a hollow."
@@ -2641,10 +2665,10 @@
   },
   "Parts.Brush.Strength": {
     "message": "Strength",
-    "description": "Slider label. The value is shown in millimetres."
+    "description": "Slider label. The value is shown in millimetres per quarter second for Pull out and Push in, and as a percentage for the other brushes."
   },
   "Parts.Brush.Strength.Tip": {
-    "message": "How far the surface moves per moment of painting. Small is usually right:\nclothing only has to clear the body by a fraction of a millimetre, and you\ncan always paint over the same place again.",
+    "message": "How far the middle of the brush moves the surface for each quarter second you\nhold it, the same on any frame rate. Small is usually right: clothing only has\nto clear the body by a fraction of a millimetre, and you can always paint over\nthe same place again.",
     "description": "Tooltip for the slider above. Keep the line breaks; the tooltip is not wrapped."
   },
   "Parts.Brush.Limit": {
@@ -4026,6 +4050,10 @@
   "Common.Units.Mm2": {
     "message": "%.2f mm",
     "description": "Slider value in millimetres. An ImGui printf format: keep %.2f exactly as it is."
+  },
+  "Common.Units.MmPerQuarterSecond": {
+    "message": "%.2f mm / 0.25 s",
+    "description": "Slider value format for the brush Strength while pulling or pushing: millimetres moved per quarter second the brush is held. ImGui printf format: keep %.2f exactly; write a literal percent sign as %%."
   },
   "Create.Dialog.ImageFilter": {
     "message": "Images",

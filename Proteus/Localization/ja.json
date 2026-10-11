@@ -2427,6 +2427,30 @@
     "message": "塗っている間に表面がなめらかになる速さ。低いと穏やかで扱いやすく、\n高いとほぼすぐになめらかになります。\n\n裾のような開いた縁の近くでは、縁が少し内側へ寄ります。",
     "description": ""
   },
+  "Parts.Tool.Smooth": {
+    "message": "スムーズ",
+    "description": ""
+  },
+  "Parts.Tool.Smooth.Tip": {
+    "message": "モデルを塗って、縮ませずにでこぼこや波打ちを取り除きます。\n「ならす」と違い、曲面は形を保ち、布は体に沈みません。",
+    "description": ""
+  },
+  "Parts.Brush.SmoothRate.Tip": {
+    "message": "塗っている間に表面がなめらかになる速さ。低いと穏やかで扱いやすく、\n高いとほぼ一瞬でなめらかになります。",
+    "description": ""
+  },
+  "Parts.Tool.Grab": {
+    "message": "つかむ",
+    "description": ""
+  },
+  "Parts.Tool.Grab.Tip": {
+    "message": "モデルを押してドラッグ：ブラシ周りの布がゴムのようにマウスについてきます。\n中心ほど強く、はっきりした境目はありません。",
+    "description": ""
+  },
+  "Parts.Grab.Help": {
+    "message": "布を押してドラッグします。ブラシサイズで、ついてくる布の範囲が決まります。\n画面に沿って動き、Ctrl+Zで取り消せます。",
+    "description": ""
+  },
   "Parts.Tool.Bridge": {
     "message": "橋渡し",
     "description": ""
@@ -2644,7 +2668,7 @@
     "description": ""
   },
   "Parts.Brush.Strength.Tip": {
-    "message": "塗っている間に表面が動く量。通常は小さめが適切です：服は体からわずか\n数分の一ミリ離れれば十分で、同じ場所を何度でも重ねて塗れます。",
+    "message": "ブラシを押し続ける0.25秒ごとに、ブラシ中心が表面を動かす距離。\nフレームレートに関係なく同じです。小さい値で十分なことがほとんどです。\n服は体からほんのわずか離れればよく、同じ場所は何度でも塗り直せます。",
     "description": ""
   },
   "Parts.Brush.Limit": {
@@ -4026,6 +4050,10 @@
   "Common.Units.Mm2": {
     "message": "%.2f mm",
     "description": "Slider value in millimetres. An ImGui printf format: keep %.2f exactly as it is."
+  },
+  "Common.Units.MmPerQuarterSecond": {
+    "message": "%.2f mm / 0.25秒",
+    "description": ""
   },
   "Create.Dialog.ImageFilter": {
     "message": "画像",

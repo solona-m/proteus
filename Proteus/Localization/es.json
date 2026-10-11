@@ -2427,6 +2427,30 @@
     "message": "Qué tan rápido se suaviza la superficie mientras pintas. Bajo es suave y fácil\nde controlar; alto suaviza casi al instante.\n\nCerca de un borde abierto, como un dobladillo, suavizar mete el borde un poco hacia dentro.",
     "description": ""
   },
+  "Parts.Tool.Smooth": {
+    "message": "Alisar",
+    "description": ""
+  },
+  "Parts.Tool.Smooth.Tip": {
+    "message": "Pinta sobre el modelo para eliminar bultos y ondas sin encogerlo:\na diferencia de Suavizar, las curvas conservan su forma y la tela no se pega al cuerpo.",
+    "description": ""
+  },
+  "Parts.Brush.SmoothRate.Tip": {
+    "message": "Lo rápido que se alisa la superficie mientras pintas. Bajo es suave y fácil de\ncontrolar; alto alisa casi al instante.",
+    "description": ""
+  },
+  "Parts.Tool.Grab": {
+    "message": "Agarrar",
+    "description": ""
+  },
+  "Parts.Tool.Grab.Tip": {
+    "message": "Pulsa sobre el modelo y arrastra: la tela alrededor del pincel sigue al ratón\ncomo goma, con más fuerza en el centro y sin borde duro.",
+    "description": ""
+  },
+  "Parts.Grab.Help": {
+    "message": "Pulsa sobre la tela y arrastra. El tamaño del pincel fija cuánta tela se arrastra;\nse mueve a lo ancho de tu vista, y Ctrl+Z deshace un agarre.",
+    "description": ""
+  },
   "Parts.Tool.Bridge": {
     "message": "Puente",
     "description": ""
@@ -2644,7 +2668,7 @@
     "description": ""
   },
   "Parts.Brush.Strength.Tip": {
-    "message": "Cuánto se mueve la superficie por instante de pintado. Lo pequeño suele ser\nlo correcto: la ropa solo tiene que salvar el cuerpo por una fracción de\nmilímetro, y siempre puedes volver a pintar el mismo sitio.",
+    "message": "Cuánto mueve el centro del pincel la superficie por cada cuarto de segundo que\nlo mantienes, igual a cualquier tasa de fotogramas. Lo pequeño suele ser lo\ncorrecto: la ropa solo tiene que despejar el cuerpo una fracción de milímetro, y\nsiempre puedes volver a pintar sobre el mismo sitio.",
     "description": ""
   },
   "Parts.Brush.Limit": {
@@ -4026,6 +4050,10 @@
   "Common.Units.Mm2": {
     "message": "%.2f mm",
     "description": "Slider value in millimetres. An ImGui printf format: keep %.2f exactly as it is."
+  },
+  "Common.Units.MmPerQuarterSecond": {
+    "message": "%.2f mm / 0,25 s",
+    "description": ""
   },
   "Create.Dialog.ImageFilter": {
     "message": "Imágenes",
