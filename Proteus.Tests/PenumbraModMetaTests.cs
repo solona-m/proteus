@@ -262,9 +262,17 @@ public class PenumbraModMetaTests
             """{"FileVersion":4,"Identifier":"abc-123","Name":"Scarlet","Groups":[{"Name":"Items","Type":"Multi"}]}""");
 
         var hold = new FileStream(tmp.File("meta.json"), FileMode.Open, FileAccess.Read, FileShare.None);
-        using var release = new System.Threading.Timer(_ => hold.Dispose(), null, 150, System.Threading.Timeout.Infinite);
+        // Released from a thread of its own, not a thread-pool timer: with the full suite running in parallel the pool can
+        // be busy past the write's whole retry budget (~1.55 s), and the hold outlived it.
+        var release = new System.Threading.Thread(() =>
+        {
+            System.Threading.Thread.Sleep(150);
+            hold.Dispose();
+        });
+        release.Start();
 
         PenumbraModMeta.WriteMultiSelectGroup(tmp.Path, 1, "Pieces (Proteus)", ["Body"]);
+        release.Join();
 
         var written = JsonDocument.Parse(File.ReadAllText(tmp.File("meta.json"))).RootElement;
         Assert.Equal("Scarlet", written.GetProperty("Name").GetString());

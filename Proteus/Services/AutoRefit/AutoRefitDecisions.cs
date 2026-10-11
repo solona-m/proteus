@@ -14,6 +14,18 @@ internal static class AutoRefitDecisions
     /// <summary>The body slots the automatic refit acts on, in the order a design changing several is worked through.</summary>
     internal static readonly string[] Slots = ["_top", "_dwn", "_glv", "_sho"];
 
+    /// <summary>
+    /// The part of the body a piece worn in <paramref name="slot"/> is refitted on when it keeps its own end: the legs
+    /// for shoes, the chest model for gloves (it carries the arms to the wrists). Null for every other slot, which is
+    /// refitted as it always was. See <see cref="KeepEnds"/>.
+    /// </summary>
+    internal static string? LimbOf(string slot) => slot switch
+    {
+        "_sho" => "_dwn",
+        "_glv" => "_top",
+        _ => null,
+    };
+
     /// <summary>Whether a reading is sure enough to refit from unattended.</summary>
     internal static bool Proceed(Confidence confidence)
         => confidence is Confidence.Exact or Confidence.Likely or Confidence.Guess;

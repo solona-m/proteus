@@ -277,6 +277,8 @@ internal sealed class AutoRefitPanel(AutoRefitWatcher watcher, PenumbraBridge pe
         string hands = anchor == null ? "—" : AutoRefitDecisions.Companion(catalog.For("_glv", race), anchor, null)?.Label ?? "—";
         string feet = anchor == null ? "—" : AutoRefitDecisions.Companion(catalog.For("_sho", race), anchor, null)?.Label ?? "—";
         ImGui.TextDisabled(string.Format(s.HandsFeetFmt, hands, feet));
+        using (ImRaii.PushColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled)))
+            ImGui.TextWrapped(s.EndsKept);
     }
 
     /// <summary>A dropdown of one slot's sizes, grouped as the author grouped them. Returns the size clicked, if any.</summary>

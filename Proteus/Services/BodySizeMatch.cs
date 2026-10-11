@@ -196,7 +196,9 @@ internal static class BodySizeMatch
     /// author fitted, which the refit had needed to make the cloth six times closer to the author's own sizes.
     /// </summary>
     /// <returns>Null when the cloth does not reach this slot's bodies either, so there is nothing to read.</returns>
-    private static Ranking? RankByCloth(ModelParts garment, IReadOnlyList<BodyOption> options,
+    /// <remarks>Called directly for a garment with no skin there at all — a boot's cloth shaft, read with its kept foot
+    /// taken out — which <see cref="Rank"/> would give up on as having no body mesh before reaching the cloth.</remarks>
+    internal static Ranking? RankByCloth(ModelParts garment, IReadOnlyList<BodyOption> options,
                                         Func<BodyOption, string> pathOf)
     {
         var cloth = ClothProbes(garment);

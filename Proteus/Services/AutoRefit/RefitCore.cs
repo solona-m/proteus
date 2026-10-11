@@ -64,6 +64,61 @@ internal static class RefitCore
     }
 
     /// <summary>
+    /// The garment without its hand or foot: every triangle touching one of <paramref name="ends"/> left out, so a reading
+    /// sees only the leg or arm it reaches. The vertices themselves stay, numbered as before; parts left with nothing are
+    /// dropped. See <see cref="BodyRetarget.EndVertices"/>.
+    /// </summary>
+    internal static ModelParts LimbView(ModelParts garment, IReadOnlySet<int> ends)
+    {
+        if (ends.Count == 0) return garment;
+        var parts = new List<ModelPart>(garment.Parts.Count);
+        foreach (var part in garment.Parts)
+        {
+            var tris = new List<int>(part.Triangles.Length);
+            var ordinals = new List<int>(part.Ordinals.Length);
+            for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+            {
+                int a = part.Triangles[t], b = part.Triangles[t + 1], c = part.Triangles[t + 2];
+                if (ends.Contains(a) || ends.Contains(b) || ends.Contains(c)) continue;
+                tris.Add(a);
+                tris.Add(b);
+                tris.Add(c);
+                if (t / 3 < part.Ordinals.Length) ordinals.Add(part.Ordinals[t / 3]);
+            }
+            if (tris.Count == 0) continue;
+            parts.Add(new ModelPart
+            {
+                Mesh = part.Mesh,
+                Submesh = part.Submesh,
+                Island = part.Island,
+                Label = part.Label,
+                Material = part.Material,
+                Triangles = [.. tris],
+                Ordinals = [.. ordinals],
+                AttributeMask = part.AttributeMask,
+                Min = part.Min,
+                Max = part.Max,
+                Toggleable = part.Toggleable,
+                AuthorSwitched = part.AuthorSwitched,
+            });
+        }
+        return new ModelParts
+        {
+            Positions = garment.Positions,
+            Normals = garment.Normals,
+            MeshSpans = garment.MeshSpans,
+            Wind = garment.Wind,
+            HasWindChannel = garment.HasWindChannel,
+            FirstColorNotWhite = garment.FirstColorNotWhite,
+            Parts = parts,
+            AttributeNames = garment.AttributeNames,
+            Min = garment.Min,
+            Max = garment.Max,
+            ShatteredSubmeshes = garment.ShatteredSubmeshes,
+        };
+    }
+
+    /// <summary>
     /// The IMC attribute mask a body mod gives its model in <paramref name="slot"/> under a choice of its options —
     /// which of the body's variant parts the game draws (see <see cref="BodyRetarget.UndrawnVariants"/>). Null when the
     /// mod has no say, the game's own bodies included: every part is then taken as drawn.

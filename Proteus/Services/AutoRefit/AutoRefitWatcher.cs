@@ -32,7 +32,7 @@ namespace Proteus.Services;
 /// Every file read and every refit runs on a worker; Penumbra IPC and the character are touched on the framework thread,
 /// in short hops. One refit runs at a time.
 /// </summary>
-public sealed class AutoRefitWatcher : IDisposable
+public sealed partial class AutoRefitWatcher : IDisposable
 {
     /// <summary>Glamourer signals an equip before the new model has loaded; a walk sooner finds the old one.</summary>
     private const int EquipSettleMs = 750;
@@ -935,6 +935,14 @@ public sealed class AutoRefitWatcher : IDisposable
             _ => Follow(slot),
         };
 
+        // Shoes and gloves keep their own feet and hands: only the legs or arms they reach are refitted. See KeepEnds.
+        if (AutoRefitDecisions.LimbOf(primary) != null)
+        {
+            await RunKeepingEnds(new EndsJob(r, g, state, targetMod, item, bytes, redirects, ownRecord, bakeTo, savePath,
+                                             race, male, garment, bones, vanillaCat, TargetFor, clock), ct);
+            return;
+        }
+
         if (TargetFor(primary) is not { } target)
         {
             Say(string.Format(Loc.Localize("Chat.AutoRefit.NoSizeForRace.Fmt",
@@ -943,57 +951,9 @@ public sealed class AutoRefitWatcher : IDisposable
             return;
         }
 
-        // ── the author's own size, when the mod already ships it ──
-        // Farfalla offers "Rue M" beside "Neolithe XS", and its Rue M is Rue+'s Yiggle Medium exactly. Put on fresh, the
-        // shirt sits on its default — Neolithe XS — and refitting that to Yiggle Medium makes a copy of a size the author
-        // already made, worse than theirs; a refit that stopped short left the player in XS. Their own size is the answer.
-        if (!isVanilla && bakeTo == 0
-            && RefitCore.SwitchingGroup(redirects, r.Worn.GamePath, ownRecord?.OwnGroups, RefitCore.SingleGroups(r.ModRoot!))
-               is { } sizeGroup)
-        {
-            // The author's sizes only: a refit Proteus saved here before is a copy of OURS, put back on — with its save
-            // path and other parts checked — by the refit's own "made before" step, and must not be called the author's.
-            var refitNames = new HashSet<string>(
-                ownRecord?.Options.Where(e => string.Equals(ownRecord.GroupOf(e), sizeGroup, StringComparison.OrdinalIgnoreCase))
-                                  .Select(e => e.Name) ?? [],
-                StringComparer.OrdinalIgnoreCase);
-            var sizes = redirects.Where(d => string.Equals(d.GamePath, r.Worn.GamePath, StringComparison.OrdinalIgnoreCase)
-                                             && d.Source.StartsWith(sizeGroup + " / ", StringComparison.Ordinal))
-                                 .Select(d => (Option: d.Source[(sizeGroup.Length + 3)..], d.File))
-                                 .Where(s => !refitNames.Contains(s.Option))
-                                 .ToList();
-            string? wornSize = BodyRetargetWriter.OptionOfFile(redirects, r.Worn.Rel!, sizeGroup);
-            if (AuthorSizeCached(r.ModRoot!, sizeGroup, sizes, targetMod, target, primary, race, state.Version) is { } authored)
-            {
-                // By file, not by name: two options carrying one model would name the worn one either way.
-                if (string.Equals(authored, wornSize, StringComparison.OrdinalIgnoreCase)
-                    || sizes.Any(s => string.Equals(s.Option, authored, StringComparison.OrdinalIgnoreCase)
-                                      && string.Equals(RefitCore.Normal(s.File), RefitCore.Normal(r.Worn.Rel!),
-                                                       StringComparison.OrdinalIgnoreCase)))
-                {
-                    log.Information("[Proteus] auto refit: {0} is already the author's {1}, which is {2} / {3}", item,
-                                    authored, targetMod.Name, target.Label);
-                    return;
-                }
-                if (!r.Forced && ChoseOtherwise(g, r.ModRoot!, sizeGroup))
-                {
-                    log.Information("[Proteus] auto refit: {0} / {1} was switched away in this collection, left as chosen",
-                                    Path.GetFileName(r.ModRoot!), sizeGroup);
-                    return;
-                }
-                if (await Apply(r, r.ModRoot!, sizeGroup, authored, wornSize, false, ct, authorSize: true) is { } offAuthor)
-                {
-                    Fail(r, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"),
-                                          item, offAuthor));
-                    return;
-                }
-                Say(string.Format(Loc.Localize("Chat.AutoRefit.Author.Fmt",
-                        "[Proteus] {0} already comes in {1}; its own \"{2}\" is switched on."),
-                        item, targetMod.Name + " — " + target.Label, authored));
-                Finished(item, targetMod.Name);
-                return;
-            }
-        }
+        if (await SwitchToAuthorSize(r, g, item, redirects, ownRecord, bakeTo, targetMod, target, primary, race,
+                                     state.Version, null, ct))
+            return;
 
         // ── what it was made on, and which other parts of that body it reaches ──
         BodySizeCatalog? CatalogOf(string dir) => dir == VanillaBodyCatalog.Key ? vanillaCat : state.Find(dir)?.Catalog;
@@ -1082,63 +1042,14 @@ public sealed class AutoRefitWatcher : IDisposable
         ushort? TargetMask(string slot) => RefitCore.MaskOf(targetMod.Dir, targetCat, slot, OptionsOf(g.Settings, targetMod.Dir));
 
         // ── where it goes ──
-        string? root = r.ModRoot;
-        string group;
-        string? cutFrom = null;
-        if (isVanilla)
-        {
-            root = RefitModService.Find(g.ModsRoot, g.Vanilla!.Value.ItemName, targetMod.Name);
-            group = string.Format(Strings.Parts.RetargetGroupFmt, g.Vanilla.Value.Label);
-
-            // The mod made for this item before, switched off in this collection: that is the player taking the
-            // refit off, which is why the game's own model is showing — not a piece newly put on.
-            if (root != null && g.Settings != null && g.Settings.TryGetValue(Path.GetFileName(root), out var held)
-                && !held.Enabled)
-            {
-                log.Information("[Proteus] auto refit: {0} is switched off in this collection, left off", root);
-                return;
-            }
-        }
-        else
-        {
-            var record = BodyRetargetWriter.ReadRecord(root!);
-            var model = redirects.FirstOrDefault(d => RefitCore.Normal(d.File) == RefitCore.Normal(r.Worn.Rel!)
-                                                     && string.Equals(d.GamePath, r.Worn.GamePath,
-                                                                      StringComparison.OrdinalIgnoreCase));
-            group = RefitCore.SwitchingGroup(redirects, r.Worn.GamePath, record?.OwnGroups, RefitCore.SingleGroups(root!),
-                                             r.Worn.Rel, RefitCore.MultiGroups(root!))
-                 ?? string.Format(Strings.Parts.RetargetGroupFmt,
-                                  model.GamePath != null ? Gui.PartsPanel.ModelLabel(model) : item);
-            cutFrom = BodyRetargetWriter.OptionOfFile(redirects, r.Worn.Rel!, group);
-        }
+        if (WhereItGoes(r, g, targetMod, redirects, item) is not { } where) return;
+        var (root, group, cutFrom) = where;
 
         string OptionFor(IEnumerable<(string Slot, BodyOption From, BodyOption To)> parts)
             => RefitCore.OptionName(targetMod.Name, new[] { target.Label }.Concat(parts.Select(p => p.To.Label)));
 
-        // A refit was switched on in this group before and the player has since picked something else — "Original", or
-        // one of the author's sizes. That choice reads as the piece newly put on; refitting would undo it.
-        if (!r.Forced && root != null && ChoseOtherwise(g, root, group))
-        {
-            log.Information("[Proteus] auto refit: {0} / {1} was switched away from its refit in this collection, left as "
-                          + "chosen", Path.GetFileName(root), group);
-            return;
-        }
-
-        // Made before, and still there: put it back on rather than refitting again.
         string option = OptionFor(others);
-        if (root != null && Existing(root, group, option, savePath))
-        {
-            if (await Apply(r, root, group, option, cutFrom, isVanilla, ct) is { } offExisting)
-            {
-                Fail(r, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"),
-                                      item, offExisting));
-                return;
-            }
-            Say(string.Format(Loc.Localize("Chat.AutoRefit.Existing.Fmt",
-                    "[Proteus] {0} was already refitted to {1}; that size is switched on."), item, option));
-            Finished(item, targetMod.Name);
-            return;
-        }
+        if (await LetBeOrPutBack(r, g, root, group, option, savePath, cutFrom, item, targetMod.Name, ct)) return;
 
         // ── the refit ──
         string targetLabel = targetMod.Name + " — " + target.Label;
@@ -1184,7 +1095,168 @@ public sealed class AutoRefitWatcher : IDisposable
         if (bakeTo != 0) plan = RefitCore.WithBodySkin(plan, targetPath, log);
         ct.ThrowIfCancellationRequested();
 
-        // A mod of Proteus's own for the game's gear, made only now that there is something to put in it.
+        string labelFrom = RefitCore.LabelFrom(across ? sourceName : null,
+                                               new[] { pick.Option.Label }.Concat(kept.Select(k => k.From.Label)));
+        var refit = new BodyRetargetWriter.Refit(option, plan.Model, string.Join(" + ",
+                                                     new[] { target.Label }.Concat(kept.Select(k => k.To.Label))));
+        if (await SaveAndWear(r, g, root, group, savePath, targetMod, labelFrom, refit, cutFrom, bakeTo, item) is not { } savedRoot)
+            return;
+        log.Information("[Proteus] auto refit: {0} {1} onto {2} in {3:F1}s (moved up to {4:F1} mm)", item, primary,
+                        option, clock.Elapsed.TotalSeconds, plan.Report.WorstMove * 1000f);
+
+        string done = string.Format(Loc.Localize("Chat.AutoRefit.Done.Fmt",
+                "[Proteus] {0} now fits {1}. Saved as \"{2}\" in {3} and switched on."),
+                item, targetLabel, option, SavedIn(g, savedRoot, targetMod));
+        if (dropped.Count > 0)
+            done += " " + string.Format(Loc.Localize("Chat.AutoRefit.PartsLeftOut.Fmt",
+                        "These parts could not be refitted with it and kept their size: {0}."),
+                        string.Join(", ", dropped));
+        Say(done);
+        Finished(item, targetMod.Name);
+    }
+
+    /// <summary>
+    /// The author's own size, when the mod already ships it, switched on instead of a refit.
+    /// <para/>
+    /// Farfalla offers "Rue M" beside "Neolithe XS", and its Rue M is Rue+'s Yiggle Medium exactly. Put on fresh, the
+    /// shirt sits on its default — Neolithe XS — and refitting that to Yiggle Medium makes a copy of a size the author
+    /// already made, worse than theirs; a refit that stopped short left the player in XS. Their own size is the answer.
+    /// </summary>
+    /// <param name="slot">The slot <paramref name="target"/> is a size of: the piece's own, or the legs a shoe is read on.</param>
+    /// <param name="view">What of each size is compared — a shoe's leg without its kept foot (see
+    /// <see cref="KeepEnds.Reading.LimbView"/>) — and the slot its comparison is cached under; null for whole models.</param>
+    /// <returns>True when nothing more is to be done: the author's size is on, already was, or was switched away from.</returns>
+    private async Task<bool> SwitchToAuthorSize(Request r, Gathered g, string item, List<PenumbraModMeta.Redirect> redirects,
+                                                BodyRetargetWriter.Record? ownRecord, ushort bakeTo,
+                                                BodyModIndex.Entry targetMod, BodyOption target, string slot, string race,
+                                                string bodiesVersion,
+                                                (Func<byte[], ModelParts, ModelParts?> Of, string CacheSlot)? view,
+                                                CancellationToken ct)
+    {
+        if (r.ModRoot == null || bakeTo != 0
+            || RefitCore.SwitchingGroup(redirects, r.Worn.GamePath, ownRecord?.OwnGroups, RefitCore.SingleGroups(r.ModRoot))
+               is not { } sizeGroup)
+            return false;
+
+        // The author's sizes only: a refit Proteus saved here before is a copy of OURS, put back on — with its save
+        // path and other parts checked — by the refit's own "made before" step, and must not be called the author's.
+        var refitNames = new HashSet<string>(
+            ownRecord?.Options.Where(e => string.Equals(ownRecord.GroupOf(e), sizeGroup, StringComparison.OrdinalIgnoreCase))
+                              .Select(e => e.Name) ?? [],
+            StringComparer.OrdinalIgnoreCase);
+        var sizes = redirects.Where(d => string.Equals(d.GamePath, r.Worn.GamePath, StringComparison.OrdinalIgnoreCase)
+                                         && d.Source.StartsWith(sizeGroup + " / ", StringComparison.Ordinal))
+                             .Select(d => (Option: d.Source[(sizeGroup.Length + 3)..], d.File))
+                             .Where(s => !refitNames.Contains(s.Option))
+                             .ToList();
+        string? wornSize = BodyRetargetWriter.OptionOfFile(redirects, r.Worn.Rel!, sizeGroup);
+        if (AuthorSizeCached(r.ModRoot, sizeGroup, sizes, targetMod, target, slot, race, bodiesVersion, view)
+            is not { } authored)
+            return false;
+
+        // By file, not by name: two options carrying one model would name the worn one either way.
+        if (string.Equals(authored, wornSize, StringComparison.OrdinalIgnoreCase)
+            || sizes.Any(s => string.Equals(s.Option, authored, StringComparison.OrdinalIgnoreCase)
+                              && string.Equals(RefitCore.Normal(s.File), RefitCore.Normal(r.Worn.Rel!),
+                                               StringComparison.OrdinalIgnoreCase)))
+        {
+            log.Information("[Proteus] auto refit: {0} is already the author's {1}, which is {2} / {3}", item,
+                            authored, targetMod.Name, target.Label);
+            return true;
+        }
+        if (!r.Forced && ChoseOtherwise(g, r.ModRoot, sizeGroup))
+        {
+            log.Information("[Proteus] auto refit: {0} / {1} was switched away in this collection, left as chosen",
+                            Path.GetFileName(r.ModRoot), sizeGroup);
+            return true;
+        }
+        if (await Apply(r, r.ModRoot, sizeGroup, authored, wornSize, false, ct, authorSize: true) is { } offAuthor)
+        {
+            Fail(r, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"),
+                                  item, offAuthor));
+            return true;
+        }
+        Say(string.Format(Loc.Localize("Chat.AutoRefit.Author.Fmt",
+                "[Proteus] {0} already comes in {1}; its own \"{2}\" is switched on."),
+                item, targetMod.Name + " — " + target.Label, authored));
+        Finished(item, targetMod.Name);
+        return true;
+    }
+
+    /// <summary>
+    /// The mod and group a refit of the worn piece is saved into, and the option it was cut from: the author's size
+    /// group where the mod has one, a group of its own otherwise, and for the game's gear a mod of Proteus's own (Root
+    /// null when that mod is yet to be made). Null when that mod is switched off in this collection — the player taking
+    /// the refit off, which is why the game's own model is showing, not a piece newly put on.
+    /// </summary>
+    private (string? Root, string Group, string? CutFrom)? WhereItGoes(Request r, Gathered g, BodyModIndex.Entry targetMod,
+                                                                       List<PenumbraModMeta.Redirect> redirects, string item)
+    {
+        if (r.ModRoot == null)
+        {
+            string? made = RefitModService.Find(g.ModsRoot, g.Vanilla!.Value.ItemName, targetMod.Name);
+            string own = string.Format(Strings.Parts.RetargetGroupFmt, g.Vanilla.Value.Label);
+            if (made != null && g.Settings != null && g.Settings.TryGetValue(Path.GetFileName(made), out var held)
+                && !held.Enabled)
+            {
+                log.Information("[Proteus] auto refit: {0} is switched off in this collection, left off", made);
+                return null;
+            }
+            return (made, own, null);
+        }
+
+        string root = r.ModRoot;
+        var record = BodyRetargetWriter.ReadRecord(root);
+        var model = redirects.FirstOrDefault(d => RefitCore.Normal(d.File) == RefitCore.Normal(r.Worn.Rel!)
+                                                 && string.Equals(d.GamePath, r.Worn.GamePath,
+                                                                  StringComparison.OrdinalIgnoreCase));
+        string group = RefitCore.SwitchingGroup(redirects, r.Worn.GamePath, record?.OwnGroups, RefitCore.SingleGroups(root),
+                                                r.Worn.Rel, RefitCore.MultiGroups(root))
+                    ?? string.Format(Strings.Parts.RetargetGroupFmt,
+                                     model.GamePath != null ? Gui.PartsPanel.ModelLabel(model) : item);
+        return (root, group, BodyRetargetWriter.OptionOfFile(redirects, r.Worn.Rel!, group));
+    }
+
+    /// <summary>
+    /// Before any refit is worked out: the player switched away from a refit in this group — "Original", or one of the
+    /// author's sizes, which reads as the piece newly put on and must not be undone — or this very option was made
+    /// before and is still there, and is put back on.
+    /// </summary>
+    /// <returns>True when nothing more is to be done.</returns>
+    private async Task<bool> LetBeOrPutBack(Request r, Gathered g, string? root, string group, string option,
+                                            string savePath, string? cutFrom, string item, string body,
+                                            CancellationToken ct)
+    {
+        if (!r.Forced && root != null && ChoseOtherwise(g, root, group))
+        {
+            log.Information("[Proteus] auto refit: {0} / {1} was switched away from its refit in this collection, left as "
+                          + "chosen", Path.GetFileName(root), group);
+            return true;
+        }
+        if (root == null || !Existing(root, group, option, savePath)) return false;
+
+        if (await Apply(r, root, group, option, cutFrom, r.ModRoot == null, ct) is { } offExisting)
+        {
+            Fail(r, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"),
+                                  item, offExisting));
+            return true;
+        }
+        Say(string.Format(Loc.Localize("Chat.AutoRefit.Existing.Fmt",
+                "[Proteus] {0} was already refitted to {1}; that size is switched on."), item, option));
+        Finished(item, body);
+        return true;
+    }
+
+    /// <summary>
+    /// Save <paramref name="refit"/> into the mod and switch it on, making the mod first for the game's gear — only now
+    /// that there is something to put in it.
+    /// </summary>
+    /// <returns>The mod it was saved into, or null when it failed, which the player has been told.</returns>
+    private async Task<string?> SaveAndWear(Request r, Gathered g, string? root, string group, string savePath,
+                                            BodyModIndex.Entry targetMod, string labelFrom, BodyRetargetWriter.Refit refit,
+                                            string? cutFrom, ushort bakeTo, string item)
+    {
+        bool isVanilla = r.ModRoot == null;
         if (root == null)
         {
             var made = await OnFramework(() => refitMods.Ensure(g.Vanilla!.Value.ItemName, targetMod.Name,
@@ -1193,48 +1265,36 @@ public sealed class AutoRefitWatcher : IDisposable
             {
                 Fail(r, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"), item,
                                    made.Message));
-                return;
+                return null;
             }
             root = made.Root;
         }
 
-        string labelFrom = RefitCore.LabelFrom(across ? sourceName : null,
-                                               new[] { pick.Option.Label }.Concat(kept.Select(k => k.From.Label)));
         List<object>? manipulations = bakeTo != 0 && RacialModelBake.Switch(savePath, bakeTo) is { } eqdp ? [eqdp] : null;
-        var outcome = BodyRetargetWriter.Save(root, group, savePath, targetMod.Dir, labelFrom,
-                                              [new BodyRetargetWriter.Refit(option, plan.Model, string.Join(" + ",
-                                                  new[] { target.Label }.Concat(kept.Select(k => k.To.Label))))],
-                                              cutFrom, manipulations, auto: true);
+        var outcome = BodyRetargetWriter.Save(root, group, savePath, targetMod.Dir, labelFrom, [refit], cutFrom,
+                                              manipulations, auto: true);
         if (!outcome.Ok)
         {
             Fail(r, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"), item,
                                outcome.Message));
-            return;
+            return null;
         }
 
-        if (await Apply(r, root, group, option, cutFrom, isVanilla, CancellationToken.None) is { } off)
+        if (await Apply(r, root, group, refit.Option, cutFrom, isVanilla, CancellationToken.None) is { } off)
         {
             // Saved, so the size is there to pick by hand; but it is not on, and must not be reported as worn.
             Fail(r, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"), item,
                                   off));
-            return;
+            return null;
         }
-        log.Information("[Proteus] auto refit: {0} {1} onto {2} in {3:F1}s (moved up to {4:F1} mm)", item, primary,
-                        option, clock.Elapsed.TotalSeconds, plan.Report.WorstMove * 1000f);
-
-        string savedIn = isVanilla ? RefitModService.NameFor(g.Vanilla!.Value.ItemName, targetMod.Name)
-                       : g.Mods.TryGetValue(Path.GetFileName(root), out string? modName) && modName.Length > 0 ? modName
-                       : Path.GetFileName(root);
-        string done = string.Format(Loc.Localize("Chat.AutoRefit.Done.Fmt",
-                "[Proteus] {0} now fits {1}. Saved as \"{2}\" in {3} and switched on."),
-                item, targetLabel, option, savedIn);
-        if (dropped.Count > 0)
-            done += " " + string.Format(Loc.Localize("Chat.AutoRefit.PartsLeftOut.Fmt",
-                        "These parts could not be refitted with it and kept their size: {0}."),
-                        string.Join(", ", dropped));
-        Say(done);
-        Finished(item, targetMod.Name);
+        return root;
     }
+
+    /// <summary>What chat calls the mod a refit was saved into.</summary>
+    private static string SavedIn(Gathered g, string root, BodyModIndex.Entry targetMod)
+        => g.Vanilla is { } vanilla ? RefitModService.NameFor(vanilla.ItemName, targetMod.Name)
+         : g.Mods.TryGetValue(Path.GetFileName(root), out string? modName) && modName.Length > 0 ? modName
+         : Path.GetFileName(root);
 
     /// <summary>Collect what only the framework thread may read. Null when there is nothing to do after all.</summary>
     private Gathered? Gather(Request r)
@@ -1320,9 +1380,11 @@ public sealed class AutoRefitWatcher : IDisposable
     /// stands on disk (name, length, time written), so an author's update or a size added changes the key, and by the
     /// installed bodies' version, which changes with any edit to the body the sizes are compared against.
     /// </summary>
+    /// <param name="view">See <see cref="SwitchToAuthorSize"/>.</param>
     private string? AuthorSizeCached(string modRoot, string group, IReadOnlyList<(string Option, string File)> sizes,
                                      BodyModIndex.Entry targetMod, BodyOption target, string slot, string race,
-                                     string bodiesVersion)
+                                     string bodiesVersion,
+                                     (Func<byte[], ModelParts, ModelParts?> Of, string CacheSlot)? view = null)
     {
         var files = new System.Text.StringBuilder();
         foreach (var (option, file) in sizes.OrderBy(s => s.Option, StringComparer.Ordinal))
@@ -1333,13 +1395,13 @@ public sealed class AutoRefitWatcher : IDisposable
         }
         string key = "author|" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
                                      System.Text.Encoding.UTF8.GetBytes(files.ToString())))
-                   + $"|{Path.GetFileName(modRoot).ToLowerInvariant()}|{group}|{slot}|{race}"
+                   + $"|{Path.GetFileName(modRoot).ToLowerInvariant()}|{group}|{view?.CacheSlot ?? slot}|{race}"
                    + $"|{targetMod.Dir.ToLowerInvariant()}|{RefitCore.Normal(target.Rel)}|{bodiesVersion}";
         // An entry's Rel is the author's option, or "" for none.
         if (detections.TryGet(key) is { } hit) return hit.Rel.Length > 0 ? hit.Rel : null;
 
         AssertOffFramework("reading the author's sizes");
-        string? found = AuthorSize(modRoot, sizes, targetMod.Catalog, target, slot, race);
+        string? found = AuthorSize(modRoot, sizes, targetMod.Catalog, target, slot, race, view?.Of);
         detections.Put(key, new DetectionCache.Entry(targetMod.Dir, found ?? "",
                                                      found != null ? Confidence.Exact : Confidence.Ambiguous, false, []));
         return found;
@@ -1354,8 +1416,13 @@ public sealed class AutoRefitWatcher : IDisposable
     /// reaches <see cref="BodySizeMatch.Exact"/>). Then the best is ranked against the target mod's sizes as the Studio
     /// ranks them, and must come out an exact copy of that very size.
     /// </summary>
+    /// <param name="view">What of each size's model is compared, from its bytes and parts: a shoe's leg without its kept
+    /// foot, which on a heeled shoe lies on no body and holds the share of the rest below <see cref="BodySizeMatch.Exact"/>.
+    /// Null compares whole models. A size it gives nothing for — a model whose rig cannot be read, so its foot cannot be
+    /// told from its leg — is not compared at all.</param>
     internal static string? AuthorSize(string modRoot, IReadOnlyList<(string Option, string File)> sizes,
-                                       BodySizeCatalog targetCat, BodyOption target, string slot, string race)
+                                       BodySizeCatalog targetCat, BodyOption target, string slot, string race,
+                                       Func<byte[], ModelParts, ModelParts?>? view = null)
     {
         string targetPath = targetCat.PathOf(target);
         using var reading = BodySizeMatch.BeginReading();
@@ -1368,12 +1435,16 @@ public sealed class AutoRefitWatcher : IDisposable
             string path = BodySizeCatalog.ResolveCaseInsensitive(modRoot, file);
             if (!File.Exists(path)) continue;
             var bytes = File.ReadAllBytes(path);
-            if (ModelPartReader.Read(bytes) is not { } model) continue;
+            if (ModelPartReader.Read(bytes) is not { } read) continue;
+            if ((view == null ? read : view(bytes, read)) is not { } model) continue;   // no leg part to compare
             float share = BodySizeMatch.Shared(BodySizeMatch.ProbeKeys(model), targetPath, out _);
             if (share <= bestShare) continue;
             (bestShare, best, bestModel, bestBytes) = (share, option, model, bytes);
         }
-        if (best == null || bestShare < BodySizeMatch.Exact) return null;
+        // Seen through a view, part of what is compared lies on another slot's body — a shoe's shin is on the feet
+        // model, under the legs' hem — and never reaches the share a whole copy would; the ranking below, which reads
+        // only where the bodies are, still has to call it an exact copy of that very size.
+        if (best == null || bestShare < (view == null ? BodySizeMatch.Exact : 0f) || bestShare <= 0f) return null;
 
         var bones = new HashSet<string>(SecondSkinWriter.Parse(bestBytes!).BoneNames, StringComparer.Ordinal);
         var ranking = BodySizeMatch.Rank(bestModel!, targetCat.For(slot, race), targetCat.PathOf, bones);
@@ -1431,7 +1502,7 @@ public sealed class AutoRefitWatcher : IDisposable
     }
 
     /// <summary>Whether this exact refit is already saved in the mod and still offered by the group.</summary>
-    private static bool Existing(string root, string group, string option, string savePath)
+    internal static bool Existing(string root, string group, string option, string savePath)
     {
         var record = BodyRetargetWriter.ReadRecord(root);
         if (record == null) return false;

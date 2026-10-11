@@ -89,9 +89,12 @@ internal static partial class BodyRetarget
     /// Cloth the author tucked under its skin keeps the old rule: let out by the skin's correction, never pulled in.
     /// </summary>
     /// <param name="carried">Each node's delta before the skin was laid; the skin nodes' change since is the correction.</param>
+    /// <param name="held">Skin vertices kept where the author put them — a shoe's own foot — or null. Cloth whose nearest
+    /// skin is one of them is left alone: its gap was measured from that foot, and the new bodies drawn here are only
+    /// the legs, so asking for the same gap from them pulled an ankle strap toward the shin.</param>
     /// <returns>How many cloth nodes were moved.</returns>
     private static int FollowLaidSkin(ModelParts garment, Sets sets, Vec3[] carried, Vec3[] nodeDelta, bool[] snapped,
-                                      IReadOnlyList<SlotPair> pairs)
+                                      IReadOnlyList<SlotPair> pairs, IReadOnlySet<int>? held = null)
     {
         var own = new BodySurface(garment, BodySurface.CellFor(MeanEdgeOf(garment)));
         if (own.IsEmpty) return 0;
@@ -115,6 +118,7 @@ internal static partial class BodyRetarget
             if (snapped[n]) continue;
             var p = ToVector(sets.NodeAt[n]);
             if (!own.Nearest(p, FollowReach, out var hit)) continue;
+            if (held is { Count: > 0 } && (held.Contains(hit.A) || held.Contains(hit.B) || held.Contains(hit.C))) continue;
             var c = Correction(hit.A) * hit.U + Correction(hit.B) * hit.V + Correction(hit.C) * hit.W;
             float along = Vector3.Dot(c, hit.Normal);
             float w = 1f - MeshMath.Smoothstep((hit.Distance - FollowFull) / (FollowReach - FollowFull));

@@ -72,6 +72,7 @@ public class RefitCoreTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-keep-hand-foot-skin-21")]   // shoes and gloves save through the same SelectionFor
     public void Wearing_a_size_in_a_multi_choice_list_swaps_it_for_the_piece_and_keeps_the_rest()
     {
         const string size = "Neolithe — S";
