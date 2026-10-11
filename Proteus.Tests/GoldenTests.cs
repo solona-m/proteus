@@ -105,6 +105,7 @@ public class GoldenTests(ITestOutputHelper o)
     private const string NeolitheExtra = Neolithe + "/EXTRA CHEST BUFF - SmallClothes";
     private const string NeolitheLegs  = Neolithe + "/DEFAULT LEGS - SmallClothes";
 
+    /// <summary>[AC-within-body-weights-7] The refit's output, byte for byte against the recorded baseline.</summary>
     [LocalDataFact(NeolitheChest, NeolitheExtra, NeolitheLegs)]
     public void Retarget_output_matches_baseline()
     {

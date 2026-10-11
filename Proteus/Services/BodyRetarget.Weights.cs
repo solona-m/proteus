@@ -95,6 +95,10 @@ internal static partial class BodyRetarget
     /// a bone of its own (TBSE-X's pecs, Rue's <c>iv_c_mune</c> in place of <c>j_mune</c>) the cloth takes the same
     /// move. A weight the change would take below zero stops at zero, and the body share is scaled back to what it was.
     /// Without the old body under the vertex, the new body's weights are taken as they are.
+    /// <para/>
+    /// Across body mods, cloth rigged like the skin under it is rigged as the new skin outright (the copy rule), and
+    /// cloth lying on the body follows it (<see cref="FollowBodyNearSkin"/>, <see cref="DropOwnBonesNearBody"/>).
+    /// Within one body mod the change alone: there the author's weighting off the same body mod stands.
     /// </summary>
     /// <param name="garment">The refitted garment, positions already on the new body.</param>
     /// <param name="pairs">The slots being refitted; each must carry both its source and target body's files.</param>
@@ -164,6 +168,13 @@ internal static partial class BodyRetarget
             if (!surface.IsEmpty) ownSkin = [(surface, authoredSkin)];
         }
 
+        // The copy rule and the skin hug rig cloth on the skin as the new skin outright: for a garment going to another
+        // body mod, whose author's skin matches neither body. Within one, the bodies agree wherever the rig does not
+        // change and the change between them is exact — Rue+'s Gen A legs to Gen B differ only at the crotch, and the
+        // two passes took up to 0.21 of the thighs' weight off 13,588 vertices of the Starlit Skirt, which the author
+        // had weighted to the thighs on purpose; the legs came through it when posed.
+        bool crossBodyPasses = acrossBodies || tuned.CrossBodyPassesWithinBody;
+
         int vc = model.Positions.Length / 3;
         var result = new (string Bone, float W)[]?[vc];
         int reweighted = 0, trimmed = 0;
@@ -193,7 +204,7 @@ internal static partial class BodyRetarget
                 // legs filled in from the author's own weights, skin under a skirt would match it by construction.
                 var ownRaw = ownSkin != null ? Nearest(ownSkin, was, side, out ownFar) : null;
                 var fromOwn = legs != null ? WithoutLegs(ownRaw, legs) : ownRaw;
-                if (ownRaw is { Length: > 0 } && ownFar <= tuned.CopyReach
+                if (crossBodyPasses && ownRaw is { Length: > 0 } && ownFar <= tuned.CopyReach
                     && Difference([.. mine.Where(i => bodyBones.Contains(i.Bone))], [.. ownRaw]) <= tuned.CopyTolerance)
                 {
                     // Rigged as its own skin under it: rigged as the new skin under it, outright. Skin and cloth that
@@ -236,8 +247,9 @@ internal static partial class BodyRetarget
         // Smoothed before the layers are paired, so partners still come out identical.
         if (acrossBodies && !tuned.NoWeightSmooth) SmoothWeights(model, own, result, bodyBones, held);
 
-        // After the smoothing, which would otherwise take cloth lying on the skin off the skin's weights again.
-        if (!tuned.NoSkinHug)
+        // After the smoothing, which would otherwise take cloth lying on the skin off the skin's weights again. Across body
+        // mods only, as the copy rule above.
+        if (crossBodyPasses && !tuned.NoSkinHug)
         {
             FollowBodyNearSkin(model, own, targets, result, held, sides, legFill);
             DropOwnBonesNearBody(model, own, targets, result, bodyBones, held, sides, legFill);
@@ -782,6 +794,9 @@ internal static partial class BodyRetarget
     /// <c>j_sk_f_a_l</c>) on cloth within 3 mm of the hip, which has none, and physics swung that strip off it; and with
     /// the chain gone the cloth still bent apart from the thigh when the leg did, its weights a per-vertex reading of
     /// the bodies (and smoothed after it) rather than the skin's own. The skirt further out still swings.
+    /// <para/>
+    /// Between two body mods only. Within one the author weighted the cloth off the same body mod, and that weighting
+    /// stands: the Starlit Skirt keeps extra thigh weight at the hips on purpose, and Rue+'s Gen A to Gen B took it away.
     /// </summary>
     /// <param name="result">New weights per vertex, null where the author's stand. Updated in place.</param>
     private static void FollowBodyNearSkin(ModelParts model, XivLiveMesh.SkinnedMesh own,
@@ -853,6 +868,8 @@ internal static partial class BodyRetarget
     /// the same cloth in the same place — did not: in the fade beyond 3 mm, Rue's reading of the bodies left up to 38% of
     /// the side skirt bone (<c>j_sk_s_a_l</c>) on cloth 3-6 mm off the hip, YAB's 24%, and a third of a swinging chain on
     /// cloth that close is the hip through it. The skirt hanging free of the body still swings.
+    /// <para/>
+    /// Between two body mods only, as <see cref="FollowBodyNearSkin"/>.
     /// </summary>
     /// <param name="result">New weights per vertex, null where the author's stand. Updated in place.</param>
     private static void DropOwnBonesNearBody(ModelParts model, XivLiveMesh.SkinnedMesh own,
