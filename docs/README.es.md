@@ -10,7 +10,8 @@ Las superposiciones pueden representarse de dos maneras: pintadas en tu piel, o 
 
 - **Lleva mods sin renunciar a una ranura de equipo.** Una segunda piel tiene que dibujarse como un objeto, pero Proteus la esconde en algo que no estás usando — unas gafas invisibles, un anillo que no llevas puesto, o añadiéndola a los accesorios que sí llevas — así que tu glamour real queda intacto. No hay nada que configurar: elige el alojamiento por su cuenta y nunca te quita un objeto que llevas puesto.
 - **Remodela la ropa de cualquier mod, directamente sobre tu personaje.** En la pestaña **Estudio**, pinta sobre una prenda que llevas puesta para apartarla de tu cuerpo donde asoma la piel, empujarla hacia dentro, suavizarla, estirarla sobre un pliegue o pintar dónde la mece el viento. Cada edición se guarda en el mod y se puede deshacer.
-- **Reajusta un conjunto a tu cuerpo.** El **Estudio** puede pasar una prenda hecha para una talla de cuerpo a otra, o de un mod de cuerpo a otro, como de Neolithe a Rue o de TBSE a TBSE-X, y guardarla como una opción nueva del mod.
+- **Reajusta un conjunto a tu cuerpo.** El **Estudio** puede pasar una prenda hecha para una talla de cuerpo a otra, o de un mod de cuerpo a otro, como de Neolithe a Rue o de TBSE a TBSE-X, y guardarla como una opción nueva del mod. También funciona con el equipo propio del juego, y puede añadir de una vez todas las tallas de otros cuerpos a un mod entero.
+- **Haz que el equipo se ajuste solo al ponértelo.** Elige tu cuerpo una vez por colección de Penumbra, y el equipo de torso, piernas, manos y pies se ajusta a él en cuanto te lo pones.
 - **Añade interruptores a cualquier pieza de cualquier mod, no solo a los de Proteus.** Cuando un mod suelda un lazo, un collar o una correa dentro de una geometría que su autor nunca hizo opcional, la pestaña **Estudio** puede separar esa pieza y darle un interruptor de verdad.
 - **Haz que el pelo con mods quepa bajo los sombreros.** Proteus aplasta contra tu cabeza el pelo que cubriría un sombrero, para que el sombrero deje de atravesarlo. Está activado por defecto y solo actúa mientras llevas un sombrero puesto.
 
@@ -35,9 +36,21 @@ Guarda y busca Proteus en la ventana principal de /xlplugins.
 
 Instala algunos mods de superposición hechos para Proteus, elige tus opciones y tu personaje se actualizará.
 
+### Comandos de chat
+
+| Comando | Qué hace |
+|---------|-------------|
+| `/proteus` | Abre o cierra la ventana de estado. |
+| `/proteus config` | Abre la ventana de estado en Ajustes. |
+| `/proteus refresh` | Recompone ahora, igual que el botón **Actualizar**. Útil en una macro. |
+| `/proteus refresh full` | Primero lo reconstruye todo y luego recompone, igual que Mayús+clic en **Actualizar**. Más lento que una recomposición normal. |
+| `/proteus refresh silent` | Cualquiera de los anteriores sin el mensaje en el chat. `full` y `silent` se pueden combinar. |
+
 ### Ventana de estado
 
 Abre la ventana de estado con `/proteus`. Tiene siete pestañas, y el resultado de la última composición (texturas modificadas, mods usados, hace cuánto) aparece siempre en la parte inferior.
+
+Tras una actualización, una ventana **Novedades de Proteus** se abre una vez para mostrar qué ha cambiado. No vuelve a abrirse hasta que haya algo nuevo.
 
 #### Mods
 
@@ -51,15 +64,19 @@ Lista todos los mods de Penumbra que contienen un archivo Proteus. Haz clic en u
 | Preajuste | El aspecto guardado que lleva puesto este mod. Elige otro para cambiar sin abrir el editor de color. Muestra — en un mod que no tiene preajustes. |
 | Colores | Abre el editor de colores de ese mod. Skindent, la sombra de contacto y la hendidura en los bordes de las correas, se ajusta ahí, en **Efectos**. |
 
-Pulsa **Recomponer ahora** para forzar una recomposición manual. Proteus también recompone automáticamente cada vez que cambias una opción o un ajuste de Penumbra, cambias de equipo, o cambias de raza o de cuerpo.
+Pulsa **Actualizar** para forzar una recomposición manual, o Mayús+clic para reconstruirlo todo primero. Proteus también recompone automáticamente cada vez que cambias una opción o un ajuste de Penumbra, cambias de equipo, o cambias de raza o de cuerpo.
 
 #### Estudio
 
 Edita los modelos de **cualquier** mod que tengas instalado, no solo los de Proteus, incluidas las prendas de los paquetes que hayas importado. Puedes remodelar la ropa para que tu cuerpo deje de asomar a través de ella, mover o cambiar el tamaño de partes de ella, reajustarla a otro cuerpo, pintar dónde la mece el viento, o separar una pieza tras su propio interruptor. Cada cambio se escribe en los archivos del propio mod, así que **sigue funcionando con Proteus apagado** y viaja con el mod si lo exportas.
 
-Elige un mod y luego uno de sus modelos. La pestaña se abre en la pieza de torso que llevas puesta (o en las piernas si no hay ninguna), y los mods y modelos que llevas puestos aparecen primero, en verde. Hacer clic en una prenda de tu personaje abre su mod y su modelo. Todas las listas de la pestaña se pueden buscar: escribe parte de un nombre para acotarla.
+Elige un mod y luego uno de sus modelos. La pestaña se abre en la pieza de torso que llevas puesta (o en las piernas si no hay ninguna), y los mods y modelos que llevas puestos aparecen primero, en verde. Hacer clic en una prenda de tu personaje abre su mod y su modelo, sea vanilla o con mods. Todas las listas de la pestaña se pueden buscar: escribe parte de un nombre para acotarla. Cuando un objeto trae un modelo distinto para cada raza, cada uno lleva el nombre de su raza para que puedas distinguirlos.
 
-Las herramientas están en un panel a la izquierda:
+Las herramientas están a la izquierda y los ajustes de la herramienta elegida a su lado, con las piezas del modelo en una lista desplegable encima de los ajustes. Marca **Mostrar modelo** para tener una tercera columna con el modelo a la derecha.
+
+El **equipo vanilla** que llevas puesto también aparece, marcado como *(vanilla)*. El equipo propio del juego no tiene un archivo de mod que editar, así que al abrirlo se copia en un mod nuevo, que se ve exactamente como el original hasta que lo cambias. Todas las herramientas funcionan sobre esa copia. Con **Talla del cuerpo** elegida, una pieza vanilla se abre para reajustarla, ver [Talla de cuerpo](#talla-de-cuerpo).
+
+Las herramientas:
 
 | Herramienta | Qué hace |
 |------|-------------|
@@ -67,6 +84,8 @@ Las herramientas están en un panel a la izquierda:
 | Tirar afuera | Empuja la superficie hacia fuera, de modo que un cuerpo que asoma a través de una prenda vuelve a quedar cubierto. La tela se aleja en línea recta de la piel que tiene debajo. |
 | Empujar adentro | El mismo pincel a la inversa, para ropa que queda demasiado separada del cuerpo. |
 | Suavizar | Alisa la superficie: bultos que la ropa ya traía, o un tirón que quedó áspero. Como el relax de 3ds Max, encoge, así que las curvas se aplanan y la tela puede hundirse hacia el cuerpo. |
+| Alisar | Elimina bultos y ondulaciones **sin** encoger: a diferencia de Suavizar, las curvas conservan su forma y la tela se mantiene separada del cuerpo. **Fuerza** fija lo rápido que actúa. |
+| Agarrar | Presiona sobre la tela y arrastra: la tela alrededor del pincel sigue al ratón como si fuera goma, con más fuerza en el centro y sin borde duro. El tamaño del pincel fija cuánta tela acompaña, y Ctrl+Z deshace un agarre. |
 | Puente | Pinta sobre un hueco, como la hendidura entre los glúteos o un pliegue, para estirar la tela recta por encima en lugar de que siga al cuerpo hacia dentro. Solo levanta. |
 | Viento | Pinta cuánto mece el viento del juego la prenda, mostrado en rojo. Mantén Ctrl, o pon **Cantidad** a 0 %, para borrar. |
 | Mover | Arrastra una pieza, o unos pocos polígonos, con flechas: una flecha la mueve a lo largo de ese eje, un cuadrado por ese plano. Ver [Mover, girar y escalar](#mover-girar-y-escalar) más abajo. |
@@ -77,9 +96,10 @@ Las herramientas están en un panel a la izquierda:
 ##### Uso del pincel
 
 - **Pintas directamente sobre tu personaje**, y una prenda muestra cada trazo mientras lo pintas. Mantén **Alt** para mover la cámara. Marca **Mostrar modelo** para pintar en cambio sobre el modelo en la ventana: arrastra desde el fondo para girarlo, Mayús+arrastrar para moverlo, rueda para acercar.
-- **Tamaño del pincel** baja hasta 1 mm. `[` y `]` lo cambian, y Mayús da pasos más finos. El efecto es más fuerte en el centro y se desvanece hasta nada en el borde. **Fuerza** es cuánto se mueve la superficie por cada instante de pintura. Lo normal es que baste con poco: la ropa solo tiene que separarse del cuerpo una fracción de milímetro, y siempre puedes volver a pintar el mismo sitio.
+- **Tamaño del pincel** baja hasta 1 mm. `[` y `]` lo cambian, y Mayús da pasos más finos. El efecto es más fuerte en el centro y se desvanece hasta nada en el borde; el alcance del pincel se dibuja como un arcoíris sobre la tela para que puedas verlo. Los pinceles trabajan al mismo ritmo con cualquier tasa de fotogramas. Para **Tirar afuera** y **Empujar adentro**, **Fuerza** es cuánto mueve la superficie el centro del pincel por cada cuarto de segundo que lo mantienes; para los demás pinceles es lo rápido que actúan. Lo normal es que baste con poco: la ropa solo tiene que separarse del cuerpo una fracción de milímetro, y siempre puedes volver a pintar el mismo sitio.
+- **Límite** es lo máximo que los pinceles pueden alejar cualquier punto de donde lo puso el autor del mod. La pintura se detiene en el límite, así que un pincel mantenido no puede inflar la prenda. Súbelo para un cambio mayor.
 - **Espejo izquierda/derecha** pinta los dos lados a la vez.
-- **La piel nunca se mueve.** Para que un pincel no toque ninguna otra cosa, bloquéala: Mayús+clic en la pieza sobre tu personaje o el modelo, o desmárcala en la lista de piezas. Las costuras soldadas a una pieza bloqueada también se mantienen.
+- **La piel nunca se mueve.** Para que un pincel no toque ninguna otra cosa, bloquéala: Mayús+clic en la pieza sobre tu personaje o el modelo, o desmárcala en la lista desplegable de piezas. Una pieza bloqueada además se oculta, en el modelo y en tu personaje, así que los clics la atraviesan hasta lo que hay debajo: bloquea una falda para llegar a la ropa interior que cubre. Las costuras soldadas a una pieza bloqueada también se mantienen.
 - **También funciona con el pelo.** El pelo, la cara, las orejas y la cola se redibujan al soltar, en lugar de mostrar el trazo mientras pintas.
 - **Aplicar a otras tallas** copia la edición a los demás archivos del mod para la misma prenda, emparejados según dónde quedan sobre ella.
 
@@ -91,6 +111,7 @@ Las herramientas están en un panel a la izquierda:
 - Los interruptores de piezas, el ajuste a sombreros y el pincel guardan cada uno su propia copia de seguridad. Si más de uno ha cambiado el mismo modelo, deshaz primero el más reciente. Proteus te avisa si lo intentas en otro orden.
 - Los deslizadores de cuerpo de un modelo no siempre pueden seguir una edición. Cuando algunos puntos no pudieron moverse con ella, Proteus dice cuántos, y activar ese deslizador puede hacer que la ropa vuelva a atravesarse en algunos sitios.
 - La mayoría de las mallas con mods no tienen canal de viento. El primer trazo de viento que se guarda añade uno, y ajusta los materiales de la prenda para que el viento pueda moverla. Los materiales que vienen del juego y no del mod no se pueden ajustar.
+- **Tus amigos con un plugin de sincronización ven tus ediciones.** En cuanto un trazo se asienta y se guarda, quienes están emparejados contigo mediante un plugin de sincronización como PlayerSync o Lightless reciben la prenda editada en unos segundos, mientras el Estudio sigue abierto. Los trazos en curso siguen siendo privados. Si has bloqueado piezas, reaparecen unos segundos después de que dejes de trabajar para que pueda compartirse la prenda entera; pasar el ratón o pintar las vuelve a ocultar.
 
 ##### Mover, girar y escalar
 
@@ -107,19 +128,39 @@ Las herramientas están en un panel a la izquierda:
 
 **Los dos mods de cuerpo tienen que estar instalados en Penumbra**: aquel para el que se hizo la prenda y aquel sobre el que la reajustas. No hace falta que estén activados. Proteus mide cuánto hay que desplazar cada punto de la prenda comparando los archivos de modelo de ambos cuerpos, así que los necesita los dos en disco. La talla para la que se hizo la prenda también tiene que ser una de las opciones de ese mod.
 
-1. Abre el modelo de la prenda en el Estudio y elige **Talla de cuerpo**.
-2. En **Hecha para**, elige el mod de cuerpo para el que se hizo la prenda y luego su talla. Proteus adivina la talla por ti.
-3. En **Reajustar a**, elige el mod de cuerpo y la talla que quieras. Empiezan en el cuerpo que llevas puesto.
-4. Pulsa **Reajustar y previsualizar** para ver el resultado sobre tu personaje. Cuando esté bien, pulsa **Guardar como opción nueva**. El reajuste se guarda dentro del propio mod de la prenda, por defecto en el grupo que ya contiene las tallas del autor (**Guardar en el grupo** lo cambia), así que sigue funcionando con Proteus apagado.
+1. Abre el modelo de la prenda en el Estudio y elige **Talla del cuerpo**. La primera vez aparecen unos consejos; vuelven cuando cambian.
+2. En **Hecho para**, elige el mod de cuerpo para el que se hizo la prenda y luego su talla. Proteus adivina la talla por ti y dice cuán seguro está.
+3. En **Ajustar a**, elige el mod de cuerpo y una o más tallas. Empiezan en el cuerpo que llevas puesto. Marca varias tallas para hacerlas todas de una vez.
+4. Pulsa **Ajustar y previsualizar** para ver el resultado sobre tu personaje. Cuando esté bien, pulsa **Guardar como opción nueva** (o **Guardar *N* tallas como opciones nuevas**). No se conserva nada hasta que guardas.
+5. **Guardar en** elige adónde va. **Este mod** lo añade al propio mod de la prenda, por defecto en el grupo que ya contiene las tallas del autor (**Guardar en el grupo** lo cambia), pero la próxima actualización del autor lo quitará. **Un mod nuevo** lo guarda en un mod propio que sobrevive a las actualizaciones. En ambos casos sigue funcionando con Proteus apagado.
+
+Los mods que crea Proteus, para los reajustes y para el equipo vanilla editado, se agrupan en una carpeta **Ampliaciones de Proteus** en la lista de mods de Penumbra.
 
 Conviene saber:
 
-- **Usar la piel del cuerpo nuevo** está activado por defecto: la piel propia de la prenda, para cada parte del cuerpo que se redimensiona, se sustituye por la del cuerpo nuevo, de modo que case con el resto de ti. Desmárcalo para redimensionar en su lugar la piel que trae la prenda.
+- **Usar la piel del cuerpo nuevo** está activado por defecto: la piel propia de la prenda, para cada parte del cuerpo que se redimensiona, se sustituye por la del cuerpo nuevo, de modo que case con el resto de ti. Desmárcalo para redimensionar en su lugar la piel que trae la prenda, lo que conserva el realce o el skindent que le dio el autor.
+- **Quitar la piel oculta**, activado por defecto, omite la piel nueva allí donde el autor borró la suya, normalmente bajo la tela. Desactívalo si un reajuste deja agujeros. Solo se aplica mientras **Usar la piel del cuerpo nuevo** está activado.
+- **Sacar la tela del cuerpo** empuja hacia fuera toda la tela enterrada, no solo la que enterró el reajuste. Úsalo si el cuerpo se transparenta, por ejemplo con unas medias que traen su propia piel de piernas. Desactivado por defecto, porque los autores a menudo esconden tela bajo la piel a propósito.
+- **Mantener forma** mueve enteras las piezas rígidas (anillos, hebillas, cadenas) en lugar de doblarlas. Las piezas pequeñas y cerradas empiezan marcadas.
+- **Las piezas que cubren más de una parte**, como un vestido largo sobre las piernas, toman una talla para cada parte en **Otras partes del cuerpo**. Elige **Ninguna (dejar fuera esta parte)** para omitir una.
 - **Desmarca una pieza** en la lista de piezas para dejarla exactamente donde la puso el autor.
+- **El equipo que el juego no trae para tu raza**, como las piezas hechas solo para hombres, también se puede reajustar: Proteus crea primero un modelo para tu raza a partir del que existe.
+- **El equipo vanilla** se reajusta de la misma forma. No tiene un mod en el que guardarse, así que al guardar se crea un mod nuevo con el reajuste y una opción **Original**.
+- Retócalo después con los demás pinceles, como **Tirar afuera**, y usa **Mover** para las piezas rígidas. Reajustar de una talla menor a una mayor es lo que mejor funciona.
 - **Entre mods de cuerpo**, la prenda toma además los pesos de hueso del cuerpo nuevo allí donde los dos cuerpos difieren, para que se mueva con la física del cuerpo nuevo. Donde coinciden, se conserva el pesado del autor. Las cadenas de falda y los demás huesos propios de la prenda no se tocan nunca.
 - **La piel de los dos cuerpos tiene que compartir una disposición de texturas**, o usar una que Proteus sepa convertir (bibo, gen3 y gen2). Los cuerpos masculinos y femeninos nunca se reajustan entre sí.
 - **Las claves de forma se pierden** cuando se sustituye la piel o la prenda pasa de un mod de cuerpo a otro. Proteus te avisa cuando ocurre.
 - **Quitar el último reajuste** saca del mod una talla guardada.
+- Solo se reajusta el nivel de detalle más alto, así que la talla antigua puede verse a gran distancia.
+
+##### Todas las tallas para otros cuerpos
+
+Debajo de la herramienta para una sola prenda, **Todas las tallas para otros cuerpos** trabaja sobre un mod entero de una vez. Marca los mods de cuerpo que quieras, pulsa **Añadir las tallas**, y cada pieza de torso y de piernas del mod se reajusta desde la primera talla del autor a cada talla de esos cuerpos, y se guarda junto a las tallas propias del autor como «Rue S», «YAB Buff L», etc.
+
+- **Usar la versión YAS de un cuerpo cuando la tenga** da a Rue, YAB y Tre sus tallas de Yet Another Skeleton. Una pieza que ya tiene pesos de YAS recibe siempre tallas YAS.
+- Las tallas que el mod ya tiene no se tocan. Marca **Rehacer las tallas que Proteus añadió antes** para volver a hacer las que hizo Proteus; las tallas propias del autor no se tocan nunca.
+- Se ejecuta en segundo plano y puede tardar unos minutos en un mod grande. **Detener** conserva las tallas ya guardadas. Al terminar, enumera lo que tuvo que dejar fuera y por qué.
+- Solo se ofrecen cuerpos para las razas que viste el mod, así que un mod de mujer no muestra cuerpos de hombre. Un cuerpo tiene que estar instalado en Penumbra para recibir sus tallas. El equipo propio del juego no tiene un mod al que añadir tallas, así que esto no aparece para él.
 
 ##### Interruptores de piezas
 
@@ -149,7 +190,7 @@ Mientras un vínculo está activo, los cambios en el editor de colores se previs
 | Opción | Qué hace |
 |--------|-------------|
 | Seguir la automatización de Glamourer | Restaura un vínculo cuando la automatización de Glamourer aplica su diseño al cambiar de equipo guardado o de trabajo. Activado por defecto. Solo restaura, nunca borra. |
-| Restaurar todos los mods del personaje | Restaura también los demás mods que estaban activos en tu personaje cuando se guardó el diseño, apaga los que no lo estaban, y sube los mods del diseño por encima de todo aquello con lo que entren en conflicto. Desactivado por defecto: solo se restauran los mods de Proteus. Los demás mods se sujetan con ajustes temporales de Penumbra, así que tu colección no se modifica. |
+| Restaurar todos los mods del personaje | Restaura también los demás mods que estaban activos en tu personaje cuando se guardó el diseño, apaga los que no lo estaban, y sube los mods del diseño por encima de todo aquello con lo que entren en conflicto. Desactivado por defecto: solo se restauran los mods de Proteus. Los demás mods se sujetan con ajustes temporales de Penumbra, así que tu colección no se modifica, y el aviso de Penumbra sobre un mod sujeto te deja soltar esa sujeción concreta. |
 | Vaciar las ranuras que el diseño no fija | Al aplicar un diseño vinculado, vacía las ranuras de equipo y de gafas que no fija y apaga los paquetes importados que no capturó, para que no queden restos del look anterior. Desactivado por defecto. No se usa en la automatización, y las armas y la ranura que aloja una segunda piel se dejan en paz. |
 
 Un diseño guardado antes de que los vínculos capturaran el personaje entero se marca como **Solo mods de Proteus**. Aplícalo y pulsa **Actualizar** para capturar el resto.
@@ -159,6 +200,8 @@ Un diseño guardado antes de que los vínculos capturaran el personaje entero se
 Crea un mod de superposición básico sin salir del juego. Dale un nombre, un autor y elige al menos una textura (difusa, máscara, normales o índice). El material objetivo se rellena solo a partir del cuerpo que llevas puesto; puedes elegir otro material equipado en la lista desplegable o escribir una ruta a mano. Proteus escribe un nuevo mod de Penumbra y lo abre.
 
 Las ranuras de textura que el material elegido no puede usar aparecen atenuadas.
+
+Un objetivo de piel de cuerpo cubre también el mismo cuerpo en todas las demás razas que comparten su disposición de texturas, así que el mod te sigue si cambias de raza. La pestaña muestra cuántos materiales suma eso. Los cuerpos de mujer comparten una disposición y los de hombre otra; los Lalafell y los Hrothgar masculinos tienen la suya propia y no se incluyen.
 
 #### Importar
 
@@ -233,7 +276,25 @@ La mayoría del pelo con mods no tiene soporte para sombreros, así que un sombr
 - O adapta tú mismo el peinado que llevas puesto. La sección dice cuántos puntos se aplastarían y cuánto, y **Adaptar** escribe el cambio.
 - **Deshacer** devuelve el peinado que llevas puesto. Un mod de pelo suele traer un modelo por raza, así que **Deshacer los peinados de este mod** devuelve todos los peinados que Proteus cambió en ese mod. Los originales se guardan en `Proteus/hatcompat-backup/` dentro del mod.
 - El pelo cuyo autor ya añadió soporte para sombreros se deja en paz, y el pelo que viene con el juego ya funciona. La excepción es un soporte para sombreros que oculta mucho más pelo del que cubre un sombrero, normalmente heredado del peinado a partir del cual se construyó. Proteus se ofrece a medirlo de nuevo y reemplazarlo.
+- **Reemplazar el soporte para sombreros que trae un peinado** hace que Proteus descarte el ajuste a sombreros hecho a mano por el autor y use el suyo propio. Desactivado por defecto, ya que un ajuste hecho a mano suele ser mejor. La versión del autor se conserva y vuelve cuando lo desactivas.
 - Algunos peinados están soldados en piezas demasiado grandes para que el formato de formas del juego pueda abarcarlas. Esos puntos conservan su forma, así que un sombrero puede seguir atravesándolos ahí.
+
+##### Ajuste al cuerpo
+
+Ajusta por sí solo el equipo de torso, piernas, manos y pies a tu cuerpo, en cuanto te lo pones. Proteus averigua para qué mod de cuerpo y talla se hizo el equipo, lo reajusta a tu cuerpo igual que la herramienta [Talla de cuerpo](#talla-de-cuerpo) del Estudio, guarda la talla nueva en el propio mod del equipo y la activa. El chat avisa cuando empieza y cuando termina.
+
+1. Marca **Ajustar el equipo a mi cuerpo al ponérmelo**.
+2. Elige una **Colección**. Cada colección de Penumbra tiene su propia elección, y empieza en la que estás usando ahora.
+3. Elige tu mod de **Cuerpo** y luego su **Talla de pecho** y su **Talla de piernas**. Las manos y los pies se emparejan con ellas por ti.
+4. El equipo que te pongas a partir de ahora se reajusta. Para lo que ya llevas puesto, pulsa **Ajustar lo que llevo puesto**.
+
+Conviene saber:
+
+- **Ajustar también el equipo original del juego** reajusta además las piezas vanilla. No tienen un mod en el que guardarse, así que cada una recibe un mod nuevo propio, con el nombre del objeto y del cuerpo, dentro de **Ampliaciones de Proteus**.
+- **Tus elecciones en Penumbra mandan.** Si eliges tú mismo la opción **Original** de un mod u otra talla, Proteus lo deja en paz. Si un mod ya trae tu talla, se activa esa opción en lugar de crear una nueva.
+- Si Proteus no sabe para qué cuerpo se hizo una pieza, o la pieza no tiene piel de cuerpo que leer, la deja como está y lo dice en el chat. Aún puedes reajustarla a mano en el Estudio.
+- **Deshacer el ajuste de lo que llevo puesto** (mantén Ctrl o Mayús y haz clic) quita las tallas que el ajuste automático creó para el equipo que llevas, borra los mods que creó para el equipo vanilla y devuelve las opciones que tenías antes. Esas piezas no se volverán a reajustar salvo que pulses **Ajustar lo que llevo puesto**. Las tallas que hiciste tú en el Estudio se quedan.
+- **Olvidar el cuerpo de esta colección** lo desactiva para esa colección.
 
 ### Preajustes
 
