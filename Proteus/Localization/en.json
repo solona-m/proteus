@@ -3651,6 +3651,14 @@
     "message": "Untick a part to keep it where the author put it, like a buckle or jewellery. Clicking it on the model does the same.",
     "description": ""
   },
+  "Parts.Dropdown.Ticked.Fmt": {
+    "message": "{0} of {1} parts ticked",
+    "description": "The closed part dropdown. {0} is how many are ticked, {1} how many there are."
+  },
+  "Parts.Dropdown.NoneChosen": {
+    "message": "Choose a part to move",
+    "description": "The closed part dropdown under Move, Rotate or Scale, before a part is chosen."
+  },
   "Parts.Retarget.Lock.SkinTip": {
     "message": "The garment's own skin. Holding it keeps the old size, so the body may show through or gap.",
     "description": ""

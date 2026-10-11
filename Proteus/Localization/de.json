@@ -3651,6 +3651,14 @@
     "message": "Haken bei einem Teil entfernen, um es dort zu lassen, wo der Autor es platziert hat, z. B. eine Schnalle oder Schmuck. Anklicken am Modell macht dasselbe.",
     "description": ""
   },
+  "Parts.Dropdown.Ticked.Fmt": {
+    "message": "{0} von {1} Teilen angehakt",
+    "description": ""
+  },
+  "Parts.Dropdown.NoneChosen": {
+    "message": "Wähle ein Teil zum Bewegen",
+    "description": ""
+  },
   "Parts.Retarget.Lock.SkinTip": {
     "message": "Die eigene Haut des Kleidungsstücks. Hält sie die alte Größe, kann der Körper durchscheinen oder es entstehen Lücken.",
     "description": ""

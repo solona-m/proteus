@@ -3651,6 +3651,14 @@
     "message": "버클이나 장신구처럼 원래 위치를 유지하려면 파츠를 체크 해제하세요. 모델에서 클릭해도 같은 효과입니다.",
     "description": ""
   },
+  "Parts.Dropdown.Ticked.Fmt": {
+    "message": "부품 {1}개 중 {0}개 체크됨",
+    "description": ""
+  },
+  "Parts.Dropdown.NoneChosen": {
+    "message": "움직일 부품을 고르세요",
+    "description": ""
+  },
   "Parts.Retarget.Lock.SkinTip": {
     "message": "의상 자체의 피부입니다. 고정하면 이전 크기 그대로 남아 몸이 비치거나 틈이 생길 수 있습니다.",
     "description": ""

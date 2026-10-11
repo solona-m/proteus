@@ -90,10 +90,9 @@ public sealed partial class SecondSkinService
                 var piece = rc.Piece;
                 var modRoot = cEntry.ModRoot;
                 // Two codes: equipCode is what this character's gear loads at (usually shared c0201/c0101); the character's own
-                // race code finds a pack built for one race. Shared shape first.
+                // race code finds a pack built for one race. Exact matches first, shared shape before own race.
                 var ownCode = build.drawnRaceCode ?? build.charCode;
-                var variant = ResolveVariant(piece, build.equipCode)
-                           ?? ResolveVariant(piece, ownCode);
+                var variant = ResolveForWearer(piece, build.equipCode, ownCode);
                 if (modRoot == null || variant is not { } v)
                 {
                     // Named by race, not by code, since this message has to explain an enabled pack showing nothing.

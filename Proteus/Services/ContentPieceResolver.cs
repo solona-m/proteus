@@ -41,6 +41,20 @@ internal static class ContentPieceResolver
     }
 
     /// <summary>
+    /// The model a wearer gets: an exact variant at <paramref name="equipCode"/> (the shared shape their gear loads
+    /// at), then an exact one at <paramref name="ownCode"/>, and only then the fall-through chain from each. A hop
+    /// never beats a model authored for the wearer's own race: a pack shipping the vanilla c0101 ring beside
+    /// c0801 earrings put the ring on every Miqo'te, since c0201 reaches c0101 in one hop.
+    /// </summary>
+    internal static (string? Code, string Path)? ResolveForWearer(
+        ContentPiece piece, string? equipCode, string? ownCode)
+    {
+        if (piece.ModelFor(equipCode) is not null || piece.ModelFor(ownCode) is null)
+            return ResolveVariant(piece, equipCode) ?? ResolveVariant(piece, ownCode);
+        return ResolveVariant(piece, ownCode);
+    }
+
+    /// <summary>
     /// Is every model this piece ships an accessory? Read off the FILENAME (<c>cNNNNaNNNN</c>), not the folder: the
     /// sidecar stores archive entries, not game paths. Unknown means "not an accessory".
     /// </summary>
