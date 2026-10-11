@@ -62,13 +62,15 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     /// <param name="Wearer">The character the garment is on, for baking a model of their race when it is drawn from
     /// another's (<see cref="RacialModelBake"/>). Null, or answering null, when there is no character to read.
     /// Framework thread.</param>
+    /// <param name="DrawBeforeSaved">Another section of the tool, drawn above what the mod has saved and the buttons to
+    /// open it in Penumbra or undo — the whole-mod "every size for other bodies". Null for none.</param>
     internal readonly record struct RetargetContext(
         string? ModRoot, string? ModDir, string ModelRel, string GamePath, string ModelLabel,
         ModelParts Garment, byte[] GarmentBytes, IReadOnlyList<PenumbraModMeta.Redirect> Redirects,
         Action FlushPending, Func<byte[], bool> PushPreview, Action EndPreview,
         Action<string, bool> SetStatus, Action<string?, Action<string>?> AfterModChange, IReadOnlyCollection<string> Held,
         Func<string, bool, (string Root, string Dir)?>? SaveMod = null, IReadOnlyCollection<string>? KeepShape = null,
-        Func<RacialModelBake.Wearer?>? Wearer = null)
+        Func<RacialModelBake.Wearer?>? Wearer = null, Action? DrawBeforeSaved = null)
     {
         /// <summary>
         /// The garment is the game's own: no mod holds it, and none holds the refit either until
@@ -1434,6 +1436,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     /// <summary>What this mod already has saved, and the ways to see it in Penumbra or take the last one back.</summary>
     private void DrawSaved(in RetargetContext ctx)
     {
+        ctx.DrawBeforeSaved?.Invoke();
         if (record is not { Options.Count: > 0 } saved) return;
         var ps = Strings.Parts;
 

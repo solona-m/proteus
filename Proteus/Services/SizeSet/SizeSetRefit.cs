@@ -30,8 +30,10 @@ internal static class SizeSetRefit
     /// A garment already weighted to YAS goes to them whatever this says.</param>
     /// <param name="Remake">Make again the sizes an earlier run made, rather than leaving them.</param>
     /// <param name="Bodies">The installed body mods.</param>
+    /// <param name="ReadGameFile">Reads a game path from the game's own data, to tell the game's models a mod merely
+    /// ships apart from the author's (see <see cref="PiecesOf"/>); null takes every model as the author's.</param>
     internal sealed record Request(string ModRoot, IReadOnlyList<string> Keys, bool Yas, bool Remake,
-                                   IReadOnlyList<BodyModIndex.Entry> Bodies);
+                                   IReadOnlyList<BodyModIndex.Entry> Bodies, Func<string, byte[]?>? ReadGameFile = null);
 
     /// <param name="Made">Sizes saved.</param>
     /// <param name="Notes">Every size left out, and why — for the author to read.</param>
@@ -70,8 +72,13 @@ internal static class SizeSetRefit
     /// <summary>
     /// The chest and legs models of a mod, each with the group its sizes are switched in. A model only a refit of ours
     /// gives — under <see cref="BodyRetargetWriter.Subfolder"/> — is not one of the author's.
+    /// <para/>
+    /// Nor is the game's own model shipped at its own path. Mods built in TexTools carry the other races' models of an
+    /// item they only changed for one — Hell for Leather, a women's outfit, gives Midlander men the game's own Anemos
+    /// gambison, re-saved — and taking that for a men's piece offered TBSE sizes of a garment its author never made.
     /// </summary>
-    internal static List<Piece> PiecesOf(string modRoot)
+    /// <param name="readGameFile">The game's own copy of a game path; null takes every model as the author's.</param>
+    internal static List<Piece> PiecesOf(string modRoot, Func<string, byte[]?>? readGameFile = null)
     {
         var redirects = PenumbraModMeta.ReadAllRedirects(modRoot);
         var record = BodyRetargetWriter.ReadRecord(modRoot);
@@ -106,6 +113,7 @@ internal static class SizeSetRefit
                 options.Add((option, r.File));
             }
             if (options.Count == 0) continue;
+            if (readGameFile != null && AllTheGamesOwn(modRoot, gamePath, options, readGameFile)) continue;
             pieces.Add(new Piece(gamePath, slot, group, options, Gui.PartsPanel.SlotOf(authors[0]),
                                  string.Format(Strings.Parts.RetargetGroupFmt, Gui.PartsPanel.ModelLabel(authors[0])),
                                  BodySizeCatalog.RaceOf(gamePath)!));
@@ -121,6 +129,31 @@ internal static class SizeSetRefit
                      .ToList();
     }
 
+    /// <summary>
+    /// Whether every model a mod gives <paramref name="gamePath"/> is the game's own one there: the same vertices in the
+    /// same places. Not the same bytes — TexTools re-saves what it ships, 68 bytes longer — and stopping at the first
+    /// model that differs, so an author's piece costs one extra read.
+    /// </summary>
+    private static bool AllTheGamesOwn(string modRoot, string gamePath, IReadOnlyList<(string? Option, string File)> options,
+                                       Func<string, byte[]?> readGameFile)
+    {
+        float[]? game;
+        try { game = readGameFile(gamePath) is { } bytes ? ModelPartReader.Read(bytes)?.Positions : null; }
+        catch (Exception) { return false; }
+        if (game == null) return false;   // a new item: nothing of the game's to be
+
+        foreach (var (_, file) in options)
+        {
+            string path = BodySizeCatalog.ResolveCaseInsensitive(modRoot, file);
+            if (!File.Exists(path)) return false;
+            var mine = ModelPartReader.Read(File.ReadAllBytes(path))?.Positions;
+            if (mine == null || mine.Length != game.Length) return false;
+            for (int i = 0; i < mine.Length; i++)
+                if (MathF.Abs(mine[i] - game[i]) > 1e-5f) return false;
+        }
+        return true;
+    }
+
     /// <summary>Make every size. Worker thread; minutes for a mod of several pieces.</summary>
     /// <param name="progress">Told what is being made, for the panel's status line.</param>
     internal static Result Run(Request request, UVRemapService? uvRemap, IPluginLog log, Action<string> progress,
@@ -128,7 +161,7 @@ internal static class SizeSetRefit
     {
         var notes = new List<string>();
         int made = 0;
-        var pieces = PiecesOf(request.ModRoot);
+        var pieces = PiecesOf(request.ModRoot, request.ReadGameFile);
         if (pieces.Count == 0)
         {
             notes.Add(Strings.SizeSet.NoPieces);

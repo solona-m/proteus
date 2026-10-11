@@ -111,6 +111,25 @@ public class SizeSetRefitTests(ITestOutputHelper output)
         }
     }
 
+    private const string HellForLeather = LocalData.Mods + ":Hell for Leather - by Solona";
+
+    /// <summary>
+    /// Hell for Leather is a women's outfit whose "Items" group also gives Midlander men (and three other races) the
+    /// game's own Anemos gambison and chaps, re-saved by TexTools. Those are not pieces: the mod is a women's one, and
+    /// TBSE is not offered for it.
+    /// </summary>
+    [LocalDataFact(LocalData.GameData, HellForLeather)]
+    public void The_game_s_own_models_a_mod_ships_are_not_its_pieces()
+    {
+        var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));
+        string root = LocalData.Path(HellForLeather);
+
+        Assert.Contains("0101", SizeSetRefit.PiecesOf(root).Select(p => p.Race));    // without the game, they look like men's
+        var pieces = SizeSetRefit.PiecesOf(root, path => data.GetFile(path)?.Data);
+        Assert.Equal(["0201"], pieces.Select(p => p.Race).Distinct());
+        Assert.Equal(2, pieces.Count);                                              // the gambison and the chaps
+    }
+
     [Fact]
     public void A_single_group_s_default_is_read_and_put_back_by_name()
     {
