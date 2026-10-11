@@ -34,7 +34,7 @@ internal static class PenumbraManipulations
     /// preview shared there: that is the brushed mod's own file, read as any outside file is.
     /// </summary>
     internal static bool IsInsideOutputRoot(string diskPath, string outputRoot)
-        => ManagedModPaths.IsPublishedOutput(diskPath, outputRoot);   // unparseable path: treated as external
+        => ManagedModPaths.IsPublishedOutput(diskPath, outputRoot);
 
     /// <summary>
     /// A model file from a Proteus mod (carries Proteus/metadata.json, not our output mod), by the same rule

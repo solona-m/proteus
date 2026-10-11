@@ -66,17 +66,6 @@ public class LivePreviewPolicyTests
     }
 
     [Fact]
-    [Trait("Plan", "AC-brush-pair-sync-7")]
-    [Trait("Plan", "EDGE-brush-pair-sync-5")]
-    public void Once_the_hiding_ends_the_saved_model_is_shared()
-        => Assert.True(LivePreviewPolicy.ShouldShare(editing: false, savePending: false, hidesParts: false, savedMatches: true));
-
-    [Fact]
-    [Trait("Plan", "EDGE-brush-pair-sync-19")]
-    public void Changing_the_locks_alone_does_not_end_a_reveal()
-        => Assert.False(LivePreviewPolicy.ShouldHideAgain(editing: false, hovering: false));
-
-    [Fact]
     [Trait("Plan", "EDGE-brush-pair-sync-20")]
     public void No_reveal_while_a_save_is_pending_or_the_file_is_not_the_saved_one()
     {
@@ -93,7 +82,6 @@ public class LivePreviewPolicyTests
 
     [Fact]
     [Trait("Plan", "EDGE-brush-pair-sync-3")]
-    [Trait("Plan", "EDGE-brush-pair-sync-24")]
     [Trait("Plan", "EDGE-brush-pair-sync-25")]
     public void A_save_record_matches_only_its_own_mod_and_model()
     {
@@ -105,13 +93,13 @@ public class LivePreviewPolicyTests
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-brush-pair-sync-3")]
     [Trait("Plan", "EDGE-brush-pair-sync-24")]
-    public void With_no_save_record_nothing_is_shared()
+    public void Undone_back_to_nothing_the_file_from_opening_still_matches_and_is_shared()
     {
-        SavedEdit? none = null;
-        bool matches = none?.Matches("Old Thing", "chara/top.mdl", 1234, Saved) == true;
-        Assert.False(LivePreviewPolicy.ShouldShare(false, false, false, matches));
+        // Nothing was written by the undo, so the record taken on opening still names the file exactly as it is.
+        var opened = Edit();
+        bool matches = opened.Matches("Old Thing", "chara/top.mdl", opened.Length, opened.WriteUtc);
+        Assert.True(LivePreviewPolicy.ShouldShare(editing: false, savePending: false, hidesParts: false, matches));
     }
 
     [Fact]

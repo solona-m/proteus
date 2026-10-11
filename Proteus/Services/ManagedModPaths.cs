@@ -41,7 +41,10 @@ internal static class ManagedModPaths
         if (string.IsNullOrWhiteSpace(path)) return null;
         var key = BodyShapeReader.PathKey(path);
         try { key = BodyShapeReader.PathKey(Path.GetFullPath(key)); }
-        catch { /* not a path Windows can resolve; the plain key still compares */ }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            /* not a path Windows can resolve; the plain key still compares */
+        }
         return key.TrimEnd('/');
     }
 }

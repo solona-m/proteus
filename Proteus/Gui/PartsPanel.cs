@@ -342,21 +342,8 @@ public sealed class PartsPanel
     /// </summary>
     private SavedEdit? lastSave;
 
-    /// <summary>The <see cref="SavedEdit.Stamp"/> the last push tried to share; null when it did not try.</summary>
-    private string? shareWantedStamp;
-
-    /// <summary>What a share that could not be made was waiting on (see <see cref="ShareToken"/>); retried when it changes.</summary>
-    private string? shareParkedOn;
-
-    private long owedCheckedAt;
-
-    /// <summary>Locked parts are shown again after the brush was left idle — see <see cref="TickLockReveal"/>.</summary>
-    private bool revealed;
-
-    /// <summary>When the brush was last in use or on the garment, as a tick count.</summary>
-    private long lastActivityAt;
-
-    private long revealCheckedAt;
+    /// <summary>Which save a push tried to share, and whether locked parts are revealed — see <see cref="TickLockReveal"/>.</summary>
+    private readonly LivePreviewShareState share = new();
 
     private long lastPreviewAt;
 
@@ -622,16 +609,16 @@ public sealed class PartsPanel
     {
         RetryOwedShare();
         if (showModelView || !previewDirty || preview.Busy) return;
-        if (volume == null || brushBase == null || modelIndex < 0) { previewDirty = false; return; }
+        if (volume == null || brushBase == null || modelIndex < 0) { NoPreview(); return; }
         bool customizePart = TargetIsCustomizePart;
         // An imported piece is drawn inside a Proteus shell, so there is no game path to preview on; the save shows it.
-        if (TargetIsContent) { previewDirty = false; return; }
+        if (TargetIsContent) { NoPreview(); return; }
 
         // A part that does not reload in place: show the finished stroke once the brush is up, preview taken down first.
         if (preview.UnsupportedFor(customizePart))
         {
             if (Editing) return;
-            previewDirty = false;
+            NoPreview();
             previewHides = 0;
             if (preview.Active) preview.End(redraw: true);
             else compositor.RedrawForChangedModel();
@@ -643,7 +630,7 @@ public sealed class PartsPanel
 
         // Nowhere to show it: Push would refuse every frame, and every frame rebuild the model first.
         var gamePaths = OpenModelGamePaths();
-        if (gamePaths.Count == 0) { previewDirty = false; return; }
+        if (gamePaths.Count == 0) { NoPreview(); return; }
 
         int hides = WantedHides();
 
@@ -653,16 +640,14 @@ public sealed class PartsPanel
             && CurrentSave() is { } saved)
         {
             var token = ShareToken(saved);
-            if (preview.PushShared(saved, gamePaths, customizePart) == LiveBrushPreview.PushResult.Refused) return;
-            shareWantedStamp = saved.Stamp;
-            shareParkedOn = token;
+            if (preview.PushShared(saved, gamePaths) == LiveBrushPreview.PushResult.Refused) return;
+            share.SharePushed(saved.Stamp, token);
             previewDirty = false;
             previewHides = 0;
             lastPreviewAt = now;
             previewPushes++;
             return;
         }
-        shareWantedStamp = null;
 
         byte[] bytes;
         try
@@ -673,17 +658,25 @@ public sealed class PartsPanel
         catch (Exception ex)
         {
             log.Warning("[Proteus] live brush: preview could not build the model: {0}", ex.Message);
-            previewDirty = false;
+            NoPreview();
             return;
         }
 
         if (preview.Push(bytes, gamePaths, customizePart))
         {
+            share.NotSharing();
             previewDirty = false;
             previewHides = hides;
             lastPreviewAt = now;
             previewPushes++;
         }
+    }
+
+    /// <summary>The preview owed is not going to be pushed: nothing owed, and no share either.</summary>
+    private void NoPreview()
+    {
+        previewDirty = false;
+        share.NotSharing();
     }
 
     /// <summary>
@@ -694,7 +687,7 @@ public sealed class PartsPanel
     private int previewHides;
 
     /// <summary>What <see cref="previewHides"/> should be under the current tool and locks, unless they are revealed.</summary>
-    private int WantedHides() => revealed ? 0 : LockedHides();
+    private int WantedHides() => share.Revealed ? 0 : LockedHides();
 
     /// <summary>What the tool and locks would leave off the character, revealed or not.</summary>
     private int LockedHides()
@@ -719,32 +712,12 @@ public sealed class PartsPanel
     private void TickLockReveal()
     {
         if (showModelView) return;
-        long now = Environment.TickCount64;
-        bool editing = Editing, hovering = liveBrush.Hovering, pending = brushChangedAt >= 0;
-        if (editing || hovering || pending) lastActivityAt = now;
-
-        if (revealed)
-        {
-            if (LivePreviewPolicy.ShouldHideAgain(editing, hovering))
-            {
-                revealed = false;
-                SyncHiddenPreview();
-            }
-            return;
-        }
-
-        // Cheap tests first; the file is looked at at most a few times a second, and only with parts hidden.
-        long idle = now - lastActivityAt;
-        if (idle < LivePreviewPolicy.LockRevealIdleMs || previewHides == 0 || LockedHides() == 0) return;
-        if (now - revealCheckedAt < 250) return;
-        revealCheckedAt = now;
-
-        if (LivePreviewPolicy.ShouldRevealLocked(true, editing, hovering, pending, CurrentSave() != null, idle))
-        {
-            revealed = true;
-            log.Debug("[Proteus] live brush: locked parts shown again after {0} ms idle, to share the saved model", idle);
-            SyncHiddenPreview();
-        }
+        var step = share.Tick(Environment.TickCount64, Editing, liveBrush.Hovering, brushChangedAt >= 0, LockedHides(),
+                              hidingOnCharacter: previewHides != 0, savedMatches: () => CurrentSave() != null);
+        if (step == LivePreviewShareState.RevealStep.None) return;
+        if (step == LivePreviewShareState.RevealStep.Reveal)
+            log.Debug("[Proteus] live brush: locked parts shown again while idle, to share the saved model");
+        SyncHiddenPreview();
     }
 
     /// <summary><see cref="lastSave"/> when the open model's file on disk is still exactly that save; otherwise null.</summary>
@@ -756,7 +729,10 @@ public sealed class PartsPanel
             var fi = new FileInfo(save.FullPath);
             return fi.Exists && save.Matches(modDir, models[modelIndex].File, fi.Length, fi.LastWriteTimeUtc) ? save : null;
         }
-        catch { return null; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;   // asked several times a second: not knowing just means not sharing
+        }
     }
 
     /// <summary>The open model's file as it stands now, to be shared; null when it can't be read.</summary>
@@ -769,7 +745,12 @@ public sealed class PartsPanel
             var fi = new FileInfo(full);
             return fi.Exists ? new SavedEdit(modDir, rel, full, fi.Length, fi.LastWriteTimeUtc) : null;
         }
-        catch { return null; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException
+                                      or NotSupportedException)
+        {
+            log.Debug("[Proteus] live brush: could not stat {0} to share it: {1}", rel, ex.Message);
+            return null;
+        }
     }
 
     /// <summary>What a share depends on: the save, and whether the managed mod is there to share it in.</summary>
@@ -785,13 +766,11 @@ public sealed class PartsPanel
     /// </summary>
     private void RetryOwedShare()
     {
-        if (previewDirty || shareWantedStamp == null || preview.Busy) return;
-        long now = Environment.TickCount64;
-        if (now - owedCheckedAt < 1000) return;
-        owedCheckedAt = now;
-
-        if (preview.SharedStamp == shareWantedStamp) return;   // shared: nothing owed
-        if (LivePreviewPolicy.OwedShareDue(owed: true, shareParkedOn, ShareToken(CurrentSave()))) previewDirty = true;
+        if (previewDirty || preview.Busy) return;
+        // Neither shows the saved file: a refit preview, or a part that is redrawn rather than previewed.
+        if (tool == Tool.Retarget || preview.UnsupportedFor(TargetIsCustomizePart)) return;
+        if (share.OwedShareDue(Environment.TickCount64, preview.SharedStamp, () => ShareToken(CurrentSave())))
+            previewDirty = true;
     }
 
     // HiddenOnCharacter's last answer, for the locks and model it was worked out for.
@@ -850,8 +829,7 @@ public sealed class PartsPanel
     {
         previewDirty = false;
         previewHides = 0;
-        shareWantedStamp = null;
-        revealed = false;
+        share.Reset();
         preview.End(redraw: refreshGame);
     }
 
@@ -3065,8 +3043,8 @@ public sealed class PartsPanel
         // Undone back to nothing on a model never saved: there is nothing in the mod to put right.
         if (!volume.Dirty && !MeshVolumeService.IsPatched(root, rel))
         {
+            // The record from opening still names the file, unchanged — which is what is on screen again.
             brushChangedAt = -1;
-            lastSave = null;   // nothing was written, so no save is known to match what is on screen
             return;
         }
 
@@ -3460,6 +3438,7 @@ public sealed class PartsPanel
 
         if (!preview.Push(bytes, gamePaths, TargetIsCustomizePart)) return false;
         previewHides = 0;   // the refit's model, every part drawn
+        share.NotSharing();   // an unsaved refit: no share is owed over it
         return true;
     }
 

@@ -49,7 +49,7 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
     /// </summary>
     private (string Stamp, string Path)? lastShared;
 
-    private bool sharedSwept, warnedNoRoot, warnedCreate, warnedWrite;
+    private bool sharedSwept, warnedNoRoot, requestedManagedMod, warnedWrite;
 
     /// <summary>
     /// Guards <see cref="generation"/>, <see cref="endedAt"/> and <see cref="holding"/>. A push applies on the
@@ -129,27 +129,31 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
     /// Put the saved file <paramref name="saved"/> on the character, shared with sync pairs when the managed mod is there
     /// to share it in. A share of a save already shared reuses its file: the same bytes, so nothing new to upload.
     /// </summary>
-    /// <returns>Refused while a preview is in flight; Private when it could only be shown, not shared.</returns>
-    public PushResult PushShared(SavedEdit saved, IReadOnlyCollection<string> gamePaths, bool customizePart)
+    /// <returns>
+    /// Refused while a preview is in flight; Private when there is nowhere to share it; Shared when a shared copy is
+    /// being written. That write can still fall back to a private copy — <see cref="SharedStamp"/> says what landed.
+    /// </returns>
+    public PushResult PushShared(SavedEdit saved, IReadOnlyCollection<string> gamePaths)
     {
         if (Busy || gamePaths.Count == 0) return PushResult.Refused;
 
         var managedRoot = compositor.ManagedModFolder;
+        if (managedRoot != null) knownManagedRoot = managedRoot;
         bool exists = managedRoot != null && File.Exists(Path.Combine(managedRoot, PenumbraModMeta.MetaFile));
         string? sharedDir = null;
         switch (ChooseShareTarget(managedRoot, exists))
         {
             case ShareTarget.Shared:
                 sharedDir = ManagedModPaths.LivePreviewDir(managedRoot!);
-                knownManagedRoot = managedRoot;
                 break;
             case ShareTarget.CreateManagedMod:
-                if (!warnedCreate)
+                // Once a session: if the composite that makes it cannot, asking on every save only repeats a composite.
+                if (!requestedManagedMod)
                 {
-                    warnedCreate = true;
+                    requestedManagedMod = true;
                     log.Information("[Proteus] live brush: no managed mod to share the preview in yet; asking for one");
+                    compositor.RequestManagedModForPreview();
                 }
-                compositor.RequestManagedModForPreview();
                 break;
             default:
                 if (!warnedNoRoot)
@@ -208,6 +212,9 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
             {
                 (file, shared) = write();
 
+                // Kept before it is applied, so an End landing between the two still finds it and deletes it.
+                foreach (var gone in files.Add(file, shared)) TryDelete(gone);
+
                 bool applied = Plugin.Framework.RunOnFrameworkThread(() =>
                 {
                     lock (gate)
@@ -234,15 +241,13 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
                     return true;
                 }).GetAwaiter().GetResult();
 
-                foreach (var gone in files.Add(file, shared)) TryDelete(gone);
                 if (applied) onApplied?.Invoke(file, shared);
                 if (!applied && gen > endedAt) log.Warning("[Proteus] live brush: Penumbra refused the preview redirect");
             }
             catch (Exception ex)
             {
+                // A file already written is kept, and End deletes it: the redirect may have gone on before the failure.
                 log.Warning(ex, "[Proteus] live brush: preview failed");
-                // Never one already kept: a reused shared file may still be what the character draws.
-                if (file != null && !files.Contains(file)) TryDelete(file);
             }
         });
     }
@@ -330,7 +335,11 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
         }
         catch { /* temp space; nothing depends on it being tidy */ }
 
-        if (managedRoot != null) SweepShared(ManagedModPaths.LivePreviewDir(managedRoot));
+        if (managedRoot == null) return;
+        // Known from here on, so a preview still drawn from an earlier load of the plugin is recognised before this one
+        // shares anything.
+        knownManagedRoot = managedRoot;
+        SweepShared(ManagedModPaths.LivePreviewDir(managedRoot));
     }
 
     /// <summary>Delete the shared previews no running game is using (see <see cref="StaleShared"/>).</summary>
@@ -342,7 +351,10 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
             foreach (var f in StaleShared(Directory.GetFiles(sharedDir, "*.mdl"), Environment.ProcessId, Nonce, ProcessAlive))
                 TryDelete(f);
         }
-        catch { /* left for the next sweep */ }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            /* the folder could not be listed; left for the next sweep */
+        }
     }
 
     /// <summary>
