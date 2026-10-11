@@ -134,7 +134,6 @@ public class KeepEndsTests
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-keep-hand-foot-skin-17")]
     public void A_piece_whose_rig_cannot_be_read_is_not_split()
     {
         var bytes = SyntheticModel.Build([], new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0)));
@@ -226,7 +225,6 @@ public class KeepEndsTests
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-keep-hand-foot-skin-6")]
     public void Cloth_beside_the_kept_foot_is_not_pulled_toward_the_new_leg()
     {
         // An ankle strap 5 mm out from the kept foot, nearer it than any leg skin: its gap was measured from that foot,
@@ -476,7 +474,9 @@ public class KeepEndsTests
     public void A_kept_skin_with_nothing_to_redraw_is_the_very_same_model()
     {
         // The watcher writes a skin-only option only when the redraw changed something: a foot already drawn with the new
-        // body's skin, or one whose layout cannot be converted, comes back as the same bytes and nothing is written.
+        // body's skin, or one whose layout cannot be converted, comes back as the same bytes and nothing is written. The
+        // first is also every redraw put on again — it is drawn like the new body already — which is so left quietly,
+        // before any put-back, instead of being reloaded and announced on every equip.
         string dir = Path.Combine(Path.GetTempPath(), "proteus-keepends-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         try
@@ -547,6 +547,131 @@ public class KeepEndsTests
         finally
         {
             Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-keep-hand-foot-skin-8")]
+    public void A_foot_reading_too_weak_to_refit_from_is_not_redrawn_from_either()
+    {
+        // Its body would decide the texture layout the kept skin is converted from: unsure, nothing is written.
+        var (reading, parts) = ReadShoe(legSkin: false);
+        var found = KeepEnds.Find(reading, parts, NoBones, "0201",
+                                  Detect(null, Pick(FeetM, BodySizeMatch.Confidence.Ambiguous)), _ => Body,
+                                  (_, _, _, _) => null);
+        Assert.Equal(KeepEnds.Route.Unsure, found.Route);
+        Assert.Equal(new KeepEnds.LeftAsIs(KeepEnds.Route.Unsure),
+                     KeepEnds.Decide(found, reading, NoBones, "0201", "other", _ => Body, _ => FeetM));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-keep-hand-foot-skin-3")]
+    public void A_glove_is_never_lifted_like_a_breast()
+    {
+        // Worn as gloves, refitted on the chest model's arms: the underbust lift is for tops, and a glove is not one.
+        var with = BodyRetarget.Solve(Shoe(), [Legs("_top")], "_glv", held: FootVertices, replaceSkin: true, swapSlot: "_top");
+        var without = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoUnderbustLift: true),
+            () => BodyRetarget.Solve(Shoe(), [Legs("_top")], "_glv", held: FootVertices, replaceSkin: true, swapSlot: "_top"));
+        for (int v = 0; v < 9; v++) Assert.Equal(Delta(without, v), Delta(with, v));
+    }
+
+    // ── the whole plan: what is swapped, cut and held ────────────────────────────────────────────────────
+
+    /// <summary>A legs body: <paramref name="triangles"/> triangles of skin, raised by <paramref name="z"/>, rigged to the calf.</summary>
+    /// <param name="islands">Lay the triangles out as that many islands apart instead, which share no corner.</param>
+    private static byte[] LegsBody(int triangles, float z, float x = 0f, int islands = 1) => SyntheticModel.Build([],
+        new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0, Islands: islands, TrianglesPerIsland: triangles / islands,
+                                                             OffsetX: x, OffsetZ: z, Weights: Calf)));
+
+    /// <summary>A legs pair from <paramref name="body"/> at rest to the same body raised 10 mm, its files carried.</summary>
+    private static BodyRetarget.SlotPair Raised(Func<float, byte[]> body)
+    {
+        var source = ModelPartReader.Read(body(0f))!;
+        var targetBytes = body(0.01f);
+        var target = ModelPartReader.Read(targetBytes)!;
+        Assert.True(IdentityCorrespondence.TryBuild(source, target, "_dwn", out var built, out string refusal), refusal);
+        return new BodyRetarget.SlotPair("_dwn", built!, target, targetBytes, body(0f));
+    }
+
+    /// <summary>A shoe: its leg skin (mesh 0) lying on the legs, its foot (mesh 1) far off them, stocking cloth (mesh 2).</summary>
+    private static byte[] ShoeModel(int legTriangles, int islands = 1) => SyntheticModel.Build([],
+        new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0, Islands: islands, TrianglesPerIsland: legTriangles / islands,
+                                                             Weights: Calf)),
+        new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0, TrianglesPerIsland: 2, OffsetX: 100f, Weights: Foot)),
+        new SyntheticModel.Mesh(Cloth, new SyntheticModel.Sub(0, TrianglesPerIsland: 4, OffsetZ: 0.001f, Weights: Calf)));
+
+    [Fact]
+    [Trait("Plan", "EDGE-keep-hand-foot-skin-2")]
+    [Trait("Plan", "EDGE-keep-hand-foot-skin-4")]
+    public void A_leg_mesh_with_a_held_ankle_ring_is_swapped_as_the_solve_parted_it()
+    {
+        // Three of the leg mesh's 48 vertices (6%) are held, and stay where the old legs had them while the rest is laid
+        // 10 mm out onto the new ones. Judged again on that laid model the rebuild would keep the mesh — 6% off the body —
+        // though the solve had already parted the stocking from it as swapped, opening the seam. It is handed the solve's
+        // own set, and swaps it.
+        var bytes = ShoeModel(16);
+        var parts = ModelPartReader.Read(bytes)!;
+        var plan = BodyRetarget.Plan(parts, bytes, [Raised(z => LegsBody(16, z))], "_sho",
+                                     held: new HashSet<int> { 1, 2, 4 }, replaceSkin: true, cutHidden: false,
+                                     swapSlot: "_dwn");
+
+        Assert.Equal(16, plan.Report.Swap?.Removed);
+        Assert.Equal(0, plan.Report.Folded);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-keep-hand-foot-skin-2")]
+    [Trait("Plan", "AC-keep-hand-foot-skin-1")]
+    public void A_shoes_new_legs_are_cut_to_where_it_drew_skin_and_its_foot_is_kept()
+    {
+        // The shoe's leg skin covers 4 of the legs' 16 triangles, each its own island. Swapped whole, the new legs would
+        // carry all 16 into the shoe; cut, only what the shoe drew. The foot, a mesh of its own off the legs, is kept, and
+        // nothing folds.
+        var bytes = ShoeModel(4, islands: 4);
+        var parts = ModelPartReader.Read(bytes)!;
+        var reading = KeepEnds.Read("_sho", parts, bytes)!;
+        var plan = KeepEnds.Plan(parts, bytes, reading, Raised(z => LegsBody(16, z, islands: 16)), null, across: true);
+
+        Assert.Equal(4, plan.Report.Swap?.Removed);
+        Assert.True(plan.Report.Swap?.Cut > 0, $"nothing of the legs was cut: {plan.Report.Swap}");
+        Assert.True(plan.Report.Swap?.Added < 16, $"the legs went in whole: {plan.Report.Swap}");
+        Assert.Equal(1, plan.Report.Swap?.Kept);
+        Assert.Equal(0, plan.Report.Folded);
+        foreach (int v in reading.Ends) Assert.Equal(default, plan.Edit.DeltaAt(v));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-keep-hand-foot-skin-11")]
+    public void Legs_of_one_shape_within_a_body_mod_already_fit()
+    {
+        // Read as one size and aimed at another of the same body mod, whose legs are the same where the shoe is: the
+        // refit would move nothing, and nothing is saved. Where they differ, it is refitted.
+        string dir = Path.Combine(Path.GetTempPath(), "proteus-keepends-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            // 120 triangles: enough skin points on the legs for the ranking to read (BodySizeMatch.MinEvidence).
+            var (parts, _, bytes) = Skinned(
+                new SyntheticModel.Sub(0, TrianglesPerIsland: 2, Weights: Foot),
+                new SyntheticModel.Sub(0, TrianglesPerIsland: 120, OffsetX: 100f, Weights: Calf));
+            var reading = KeepEnds.Read("_sho", parts, bytes)!;
+            File.WriteAllBytes(Path.Combine(dir, "s.mdl"), LegsBody(120, 0f, 100f));
+            File.WriteAllBytes(Path.Combine(dir, "same.mdl"), LegsBody(120, 0f, 100f));
+            File.WriteAllBytes(Path.Combine(dir, "other.mdl"), LegsBody(120, 0.02f, 100f));
+            var s = LegsS with { Rel = "s.mdl" };
+            var same = LegsM with { Rel = "same.mdl" };
+            var other = LegsM with { Name = "L", Rel = "other.mdl" };
+            var body = new BodySizeCatalog(dir, [s, same, other, FeetM]);
+            var found = new KeepEnds.Found(KeepEnds.Route.Skin, Pick(s));
+
+            Assert.IsType<KeepEnds.AlreadyFits>(
+                KeepEnds.Decide(found, reading, NoBones, "0201", "body", _ => body, slot => slot == "_dwn" ? same : FeetM));
+            Assert.IsType<KeepEnds.Refit>(
+                KeepEnds.Decide(found, reading, NoBones, "0201", "body", _ => body, slot => slot == "_dwn" ? other : FeetM));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
         }
     }
 

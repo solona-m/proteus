@@ -44,6 +44,15 @@ internal static class KeepEnds
         NoSkin,
     }
 
+    /// <summary>A route as the log names it: A for the leg's skin, B its cloth, C the skin alone; the failures by name.</summary>
+    internal static string Letter(Route route) => route switch
+    {
+        Route.Skin => "A",
+        Route.Cloth => "B",
+        Route.SkinOnly => "C",
+        _ => route.ToString(),
+    };
+
     /// <summary>What a skin-only option is called after the body's name: the shape is the author's at every size, so it
     /// is one option per body, not per size.</summary>
     internal const string SkinOnlyLabel = "skin";
@@ -117,12 +126,14 @@ internal static class KeepEnds
         var own = detect(garment, reading.Slot);
         if (own?.Confidence == Confidence.NoBodyMesh) return new Found(Route.NoSkin, null);
         if (own == null || catalogOf(own.Dir) is not { } catalog) return new Found(Route.NoFamily, null);
+        // A reading too weak to refit from is too weak to redraw from: its body decides the texture layout converted.
+        if (!AutoRefitDecisions.Proceed(own.Confidence)) return new Found(Route.Unsure, null);
         var options = catalog.For(reading.Limb, race);
         // One size of legs is the answer once the body is known: nothing to tell apart. The game's own body is one —
         // its gear is made on it — and the cloth reading can only guess at a single size, which is not accepted.
-        if (options.Count == 1 && AutoRefitDecisions.Proceed(own.Confidence))
+        if (options.Count == 1)
             return new Found(Route.Cloth, new AutoRefitDecisions.Pick(own.Dir, options[0], own.Confidence, !limbSkin));
-        if (options.Count > 0 && AutoRefitDecisions.Proceed(own.Confidence))
+        if (options.Count > 0)
         {
             var ranking = rank(reading.LimbView, options, catalog, limbSkin);
             if (ranking is { Best: { } best } && ranking.Confidence is not (Confidence.NoBodyMesh or Confidence.TooLittle))

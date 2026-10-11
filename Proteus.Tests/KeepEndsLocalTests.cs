@@ -228,6 +228,37 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
         Assert.Equal(0, missing);
         Assert.True(done.Plan.Report.Swap?.Posed > 0 || done.Plan.Report.Swap?.Kept > 0,
                     "the foot's skin mesh should have been kept, not swapped");
+
+        // Kept in its rig too: across body mods the cloth takes the new body's weights, but the foot follows the bones
+        // its author gave it, the new feet's shape riding along notwithstanding.
+        var before = ModelSkinReader.Read(done.Bytes, null, null)!;
+        var after = ModelSkinReader.Read(done.Plan.Model, null, null)!;
+        Assert.Equal(before.VertexCount, after.VertexCount);   // nothing dropped: the kept meshes are numbered as before
+        int changed = 0;
+        foreach (int v in done.Reading.Ends)
+            if (!SameRig(before, after, v)) changed++;
+        output.WriteLine($"{changed} of {done.Reading.Ends.Count} foot vertices changed bones or weights");
+        Assert.Equal(0, changed);
+    }
+
+    /// <summary>Vertex <paramref name="v"/> follows the same bones by the same weights (to a byte) in both rigs.</summary>
+    private static bool SameRig(XivLiveMesh.SkinnedMesh a, XivLiveMesh.SkinnedMesh b, int v)
+    {
+        Dictionary<string, float> Of(XivLiveMesh.SkinnedMesh m)
+        {
+            var w = new Dictionary<string, float>(StringComparer.Ordinal);
+            for (int k = 0; k < XivLiveMesh.SkinnedMesh.MaxInfluences; k++)
+            {
+                float weight = m.BoneWeights[v * XivLiveMesh.SkinnedMesh.MaxInfluences + k];
+                if (weight <= 0f) continue;
+                string bone = m.BoneNames[m.BoneIndices[v * XivLiveMesh.SkinnedMesh.MaxInfluences + k]];
+                w[bone] = w.GetValueOrDefault(bone) + weight;
+            }
+            return w;
+        }
+        var x = Of(a);
+        var y = Of(b);
+        return x.Count == y.Count && x.All(kv => y.TryGetValue(kv.Key, out float o) && MathF.Abs(o - kv.Value) <= 1.5f / 255f);
     }
 
     [LocalDataFact(Heartthrob, Bibo, Neolithe, Rue, Yab)]
@@ -278,12 +309,34 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
             Assert.True(worst <= SeamLimit, $"{name}: the ankle stretched by {worst * 1000f:F1} mm");
             Assert.True(worst <= legsOnly + 1e-4f,
                         $"{name}: the feet's shape stretched the ankle more ({worst * 1000f:F1} mm) than the legs alone");
+
+            // The feet ride along for their shape, though the game draws the author's heeled foot there, not the new
+            // body's flat one. How far that moves the free cloth right beside the kept foot, against the legs alone.
+            var parts = done.Parts;
+            var keptAt = done.Reading.Ends.Select(v => new System.Numerics.Vector3(parts.Positions[v * 3],
+                             parts.Positions[v * 3 + 1], parts.Positions[v * 3 + 2])).ToList();
+            float apart = 0f, moved = 0f;
+            int beside = 0;
+            foreach (int v in parts.Parts.Where(p => p.Island < 0 && !SecondSkinWriter.IsBodySkinMaterial(p.Material))
+                                   .SelectMany(p => p.Triangles).Distinct())
+            {
+                if (done.Reading.Ends.Contains(v)) continue;
+                var at = new System.Numerics.Vector3(parts.Positions[v * 3], parts.Positions[v * 3 + 1], parts.Positions[v * 3 + 2]);
+                if (!keptAt.Any(k => System.Numerics.Vector3.DistanceSquared(k, at) < 0.02f * 0.02f)) continue;
+                beside++;
+                var a = done.Plan.Edit.DeltaAt(v);
+                var b = done.LegsOnly.Edit.DeltaAt(v);
+                var da = new System.Numerics.Vector3(a.X, a.Y, a.Z);
+                apart = MathF.Max(apart, System.Numerics.Vector3.Distance(da, new System.Numerics.Vector3(b.X, b.Y, b.Z)));
+                moved = MathF.Max(moved, da.Length());
+            }
+            output.WriteLine($"{name}: {beside} free cloth vertices within 20 mm of the kept foot moved up to "
+                           + $"{moved * 1000f:F1} mm, at most {apart * 1000f:F1} mm away from where the legs alone put them");
         }
     }
 
     [LocalDataFact(Heartthrob, Bibo, Neolithe, Rue, Yab)]
     [Trait("Plan", "AC-keep-hand-foot-skin-6")]
-    [Trait("Plan", "EDGE-keep-hand-foot-skin-21")]
     public void KeepEnds_e2e_Heartthrob_detect_plan_save()
     {
         var bodies = Bodies(Bibo, Neolithe, Rue, Yab);
@@ -350,7 +403,7 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
                                    .ToList();
 
         Assert.Equal("Medium", AutoRefitWatcher.AuthorSize(mod, sizes, bibo, medium, "_dwn", Race,
-                                                           (b, m) => KeepEnds.Read("_sho", m, b)?.LimbView ?? m));
+                                                           (b, m) => KeepEnds.Read("_sho", m, b)?.LimbView));
         Assert.Null(AutoRefitWatcher.AuthorSize(mod, sizes, bibo, medium, "_dwn", Race));
     }
 
@@ -453,6 +506,40 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
             foreach (int v in reading.Ends) Assert.Equal(default, plan.Edit.DeltaAt(v));
         }
         else Assert.Contains(found.Route, new[] { KeepEnds.Route.SkinOnly, KeepEnds.Route.NoSkin });
+    }
+
+    [LocalDataFact(Bibo, Neolithe, Rue, Yab)]
+    [Trait("Plan", "AC-keep-hand-foot-skin-3")]
+    public void Installed_long_gloves_are_read_on_their_arms()
+    {
+        // Every chest size of a body has the same arms, so a glove's forearm might tie between them and read as unsure.
+        // Read every installed woman's glove that carries forearm skin, as the watcher would.
+        var bodies = Bodies(Bibo, Neolithe, Rue, Yab);
+        var bodyDirs = bodies.Select(b => b.Dir).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var routes = new Dictionary<KeepEnds.Route, int>();
+        int read = 0;
+        foreach (string path in Directory.EnumerateFiles(LocalData.Path(LocalData.Mods), "c0201e*_glv.mdl",
+                                                         SearchOption.AllDirectories))
+        {
+            string mod = Path.GetRelativePath(LocalData.Path(LocalData.Mods), path).Split(Path.DirectorySeparatorChar)[0];
+            if (bodyDirs.Contains(mod)) continue;
+            byte[] bytes;
+            try { bytes = File.ReadAllBytes(path); } catch (IOException) { continue; }
+            if (ModelPartReader.Read(bytes) is not { } parts || KeepEnds.Read("_glv", parts, bytes) is not { } reading)
+                continue;
+            if (BodySizeMatch.SkinPoints(reading.LimbView).Count < 100) continue;
+            var bones = BonesOf(bytes);
+            var found = KeepEnds.Find(reading, parts, bones, Race, Detector(bodies, bones), CatalogOf(bodies));
+            routes[found.Route] = routes.GetValueOrDefault(found.Route) + 1;
+            output.WriteLine($"{Path.GetRelativePath(LocalData.Path(LocalData.Mods), path)}: route {KeepEnds.Letter(found.Route)}"
+                           + $" {found.Pick?.Dir} / {found.Pick?.Option.Label} ({found.Pick?.Confidence})");
+            if (++read == 25) break;
+        }
+        output.WriteLine($"{read} gloves with forearm skin: "
+                       + string.Join(", ", routes.Select(r => $"{KeepEnds.Letter(r.Key)} {r.Value}")));
+        Assert.True(read > 0, "no installed glove carries forearm skin to read");
+        Assert.True(routes.GetValueOrDefault(KeepEnds.Route.Unsure) < read,
+                    "every glove with forearm skin read as unsure: the arms cannot be told apart");
     }
 
     // ── reading the legs alone ───────────────────────────────────────────────────────────────────────────

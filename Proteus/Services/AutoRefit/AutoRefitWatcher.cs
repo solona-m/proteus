@@ -32,7 +32,7 @@ namespace Proteus.Services;
 /// Every file read and every refit runs on a worker; Penumbra IPC and the character are touched on the framework thread,
 /// in short hops. One refit runs at a time.
 /// </summary>
-public sealed class AutoRefitWatcher : IDisposable
+public sealed partial class AutoRefitWatcher : IDisposable
 {
     /// <summary>Glamourer signals an equip before the new model has loaded; a walk sooner finds the old one.</summary>
     private const int EquipSettleMs = 750;
@@ -1115,211 +1115,6 @@ public sealed class AutoRefitWatcher : IDisposable
         Finished(item, targetMod.Name);
     }
 
-    /// <summary>What <see cref="RunJob"/> has gathered and read of a shoe or glove when it hands it on.</summary>
-    /// <param name="TargetFor">The size the refit goes onto, per slot.</param>
-    private sealed record EndsJob(Request R, Gathered G, BodyModIndex.State State, BodyModIndex.Entry TargetMod,
-                                  string Item, byte[] Bytes, List<PenumbraModMeta.Redirect> Redirects,
-                                  BodyRetargetWriter.Record? OwnRecord, ushort BakeTo, string SavePath, string Race,
-                                  bool Male, ModelParts Garment, IReadOnlySet<string> Bones, BodySizeCatalog VanillaCat,
-                                  Func<string, BodyOption?> TargetFor, Stopwatch Clock);
-
-    /// <summary>
-    /// The automatic refit of a shoe or glove (see <see cref="KeepEnds"/>): its foot or hand kept exactly, the leg or arm
-    /// it reaches refitted and read on its own, and a piece that reaches neither only drawn with the new body's skin.
-    /// Everything up to the reading is <see cref="RunJob"/>'s; where it goes, what was made before and the save are
-    /// shared with it.
-    /// </summary>
-    private async Task RunKeepingEnds(EndsJob j, CancellationToken ct)
-    {
-        var r = j.R;
-        var g = j.G;
-        var targetMod = j.TargetMod;
-        var targetCat = targetMod.Catalog;
-        string item = j.Item, slot = r.Slot;
-        bool feet = slot == "_sho";
-
-        AssertOffFramework("reading the garment's ends");
-        if (KeepEnds.Read(slot, j.Garment, j.Bytes) is not { } reading)
-        {
-            log.Information("[Proteus] auto refit: {0} — its rig could not be read, so its {1} cannot be told from the rest",
-                            item, feet ? "feet" : "hands");
-            Say(string.Format(Loc.Localize("Chat.AutoRefit.Unsure.Fmt",
-                    "[Proteus] Couldn't tell which body {0} was made for, so it was left as it is. You can refit it by "
-                  + "hand with the Studio's Body size tool."), item), problem: true);
-            return;
-        }
-
-        // ── the author's own size, compared by the legs (see KeepEnds.ComparesAuthorSizes) ──
-        if (KeepEnds.ComparesAuthorSizes(slot) && j.TargetFor(reading.Limb) is { } limbTarget
-            && await SwitchToAuthorSize(r, g, item, j.Redirects, j.OwnRecord, j.BakeTo, targetMod, limbTarget,
-                                        reading.Limb, j.Race, j.State.Version,
-                                        ((b, m) => KeepEnds.Read(slot, m, b)?.LimbView ?? m, reading.CacheSlot), ct))
-            return;
-
-        // ── what it was made on, read from what it reaches ──
-        BodySizeCatalog? CatalogOf(string dir) => dir == VanillaBodyCatalog.Key ? j.VanillaCat : j.State.Find(dir)?.Catalog;
-        bool isVanilla = r.ModRoot == null;
-        var enabledBodies = j.State.List.Where(b => g.Permanent != null && g.Permanent.TryGetValue(b.Dir, out var s)
-                                                    && s.Enabled && !s.Temporary)
-                                        .Select(b => b.Dir);
-        string cacheKey = DetectionCache.KeyOf(j.Bytes, reading.CacheSlot, j.Race, targetMod.Dir,
-                                               DetectionCache.BodiesOf(j.State.Version, enabledBodies,
-                                                                       VanillaPrint(j.VanillaCat, reading.Limb, j.Race) + "|"
-                                                                     + VanillaPrint(j.VanillaCat, slot, j.Race)));
-        KeepEnds.Found? found = detections.TryGet(cacheKey) is { } hit
-            ? KeepEnds.FromCache(hit, reading, j.Race, CatalogOf)
-            : null;
-        if (found != null)
-            log.Information("[Proteus] auto refit: {0} read before ({1}), not read again", item, found.Route);
-        else
-        {
-            AssertOffFramework("reading the garment");
-            found = KeepEnds.Find(reading, j.Garment, j.Bones, j.Race,
-                                  (view, s) => isVanilla
-                                      ? VanillaSource(j.VanillaCat, s, j.Race)
-                                      : DetectAcross(view, j.Bones, s, j.Race, targetMod, j.State.List, j.VanillaCat,
-                                                     g.Permanent),
-                                  CatalogOf);
-            detections.Put(cacheKey, KeepEnds.ToCache(found));
-        }
-        ct.ThrowIfCancellationRequested();
-        log.Information("[Proteus] auto refit: {0} keeps its own {1}: {2} of {3} vertices ({4} in the 40-60% band); "
-                      + "route {5}", item, feet ? "feet" : "hands", reading.Ends.Count, reading.Vertices, reading.Band,
-                        found.Route);
-
-        // ── what to do with it, decided before anything is worked out ──
-        var decision = KeepEnds.Decide(found, reading, j.Bones, j.Race, targetMod.Dir, CatalogOf, j.TargetFor);
-        switch (decision)
-        {
-            case KeepEnds.LeftAsIs { Why: KeepEnds.Route.NoSkin }:
-                Say(string.Format(Loc.Localize("Chat.AutoRefit.NoBodyMesh.Fmt",
-                        "[Proteus] {0} carries no body skin to read its size from, so it was left as it is. You can refit "
-                      + "it by hand with the Studio's Body size tool."), item), problem: true);
-                return;
-            case KeepEnds.LeftAsIs:
-                Say(string.Format(Loc.Localize("Chat.AutoRefit.Unsure.Fmt",
-                        "[Proteus] Couldn't tell which body {0} was made for, so it was left as it is. You can refit it by "
-                      + "hand with the Studio's Body size tool."), item), problem: true);
-                return;
-            case KeepEnds.NoSize noSize:
-                Say(string.Format(Loc.Localize("Chat.AutoRefit.NoSizeForRace.Fmt",
-                        "[Proteus] {0} has no {1} size for {2}, so {3} was left as it is."),
-                        targetMod.Name, SlotName(noSize.Slot), ModelRace.Describe(j.Race), item), problem: true);
-                return;
-            case KeepEnds.AlreadyFits fits:
-                log.Information("[Proteus] auto refit: {0} already fits {1} / {2}", item, targetMod.Name, fits.Target.Label);
-                return;
-        }
-
-        string option = decision is KeepEnds.Refit refitTo
-            ? RefitCore.OptionName(targetMod.Name, [refitTo.Target.Label])
-            : KeepEnds.SkinOnlyOption(targetMod.Name);
-        if (WhereItGoes(r, g, targetMod, j.Redirects, item) is not { } where) return;
-        var (root, group, cutFrom) = where;
-        if (await LetBeOrPutBack(r, g, root, group, option, j.SavePath, cutFrom, item, targetMod.Name, ct)) return;
-
-        // ── the refit, or the skin alone ──
-        byte[] model;
-        string to, labelFrom;
-        Func<string, string> done;   // from the mod it was saved in
-        if (decision is KeepEnds.Refit refit)
-        {
-            var pick = refit.Source;
-            var sourceCat = CatalogOf(pick.Dir)!;
-            string sourceName = pick.Dir == VanillaBodyCatalog.Key ? Strings.Parts.RetargetFromVanilla
-                              : j.State.Find(pick.Dir)?.Name ?? pick.Dir;
-            bool across = !string.Equals(pick.Dir, targetMod.Dir, StringComparison.OrdinalIgnoreCase);
-            string targetLabel = targetMod.Name + " — " + refit.Target.Label;
-            Say(string.Format(Loc.Localize("Chat.AutoRefit.Start.Fmt",
-                    "[Proteus] Refitting {0} from {1} to {2}. It will be switched on when it is done."),
-                    item, sourceName + " — " + pick.Option.Label, targetLabel));
-            current = current with { Message = string.Format(Strings.AutoRefit.WorkingFmt, item), Failed = false };
-
-            string limb = reading.Limb;
-            string sourcePath = sourceCat.PathOf(pick.Option), targetPath = targetCat.PathOf(refit.Target);
-            if (BodyRetarget.BuildPair(limb, sourcePath, targetPath, SlotName(limb), j.Male,
-                                       RefitCore.MaskOf(pick.Dir, sourceCat, limb, OptionsOf(g.Settings, pick.Dir)),
-                                       RefitCore.MaskOf(targetMod.Dir, targetCat, limb, OptionsOf(g.Settings, targetMod.Dir)),
-                                       uvRemap, out var limbPair) is { } refusal)
-            {
-                Fail(r, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"),
-                                      item, refusal));
-                return;
-            }
-            // The feet or hands, for their shape only: they run up the shin or forearm, under the stocking or sleeve.
-            BodyRetarget.SlotPair? endPair = null;
-            if (refit is { EndFrom: { } endFrom, EndTo: { } endTo })
-            {
-                if (BodyRetarget.BuildPair(slot, sourceCat.PathOf(endFrom), targetCat.PathOf(endTo), SlotName(slot), j.Male,
-                                           RefitCore.MaskOf(pick.Dir, sourceCat, slot, OptionsOf(g.Settings, pick.Dir)),
-                                           RefitCore.MaskOf(targetMod.Dir, targetCat, slot,
-                                                            OptionsOf(g.Settings, targetMod.Dir)),
-                                           uvRemap, out var shape) is { } why)
-                    log.Information("[Proteus] auto refit: {0} refitted without the {1}' shape: {2}", item,
-                                    feet ? "feet" : "hands", why);
-                else endPair = shape;
-            }
-            ct.ThrowIfCancellationRequested();
-
-            AssertOffFramework("the refit");
-            var plan = KeepEnds.Plan(j.Garment, j.Bytes, reading, limbPair, endPair, across);
-            plan = RefitCore.MatchSkinToBody(plan, sourcePath, targetPath, uvRemap, j.Male, log);
-            if (j.BakeTo != 0) plan = RefitCore.WithBodySkin(plan, targetPath, log);
-            ct.ThrowIfCancellationRequested();
-            var (seamEdges, stretched) = KeepEnds.SeamStretch(j.Garment, reading.Ends, plan);
-            log.Information("[Proteus] auto refit: {0} {1} by its {2} ({3} folded, moved up to {4:F1} mm, the {5} "
-                          + "seam stretched up to {6:F1} mm over {7} edges)", item, slot, limb, plan.Report.Folded,
-                            plan.Report.WorstMove * 1000f, feet ? "ankle" : "wrist", stretched * 1000f, seamEdges);
-            if (stretched > KeepEnds.SeamWarn)
-                log.Warning("[Proteus] auto refit: {0}'s {1} seam stretched by {2:F1} mm — the kept {3} and the new "
-                          + "body's {4} differ there; look at it in game", item, feet ? "ankle" : "wrist",
-                            stretched * 1000f, feet ? "foot" : "hand", feet ? "legs" : "arms");
-
-            model = plan.Model;
-            to = refit.Target.Label;
-            labelFrom = RefitCore.LabelFrom(across ? sourceName : null, [pick.Option.Label]);
-            done = savedIn => string.Format(Loc.Localize("Chat.AutoRefit.Done.Fmt",
-                    "[Proteus] {0} now fits {1}. Saved as \"{2}\" in {3} and switched on."),
-                    item, targetLabel, option, savedIn);
-        }
-        else
-        {
-            // Reaches no leg or arm: the shape stays the author's, and the skin is drawn the new body's way if it is not.
-            var skin = (KeepEnds.SkinOnly)decision;
-            var ownCat = CatalogOf(skin.Own.Dir)!;
-            string targetPath = targetCat.PathOf(skin.Target);
-            model = RefitCore.MatchSkinToBody(j.Bytes, ownCat.PathOf(skin.Own.Option), targetPath, uvRemap, j.Male, log);
-            if (j.BakeTo != 0)
-                model = RacialModelBake.SkinLikeBody(model, File.ReadAllBytes(targetPath), out _);
-            else if (ReferenceEquals(model, j.Bytes))
-            {
-                Say(string.Format(feet
-                        ? Loc.Localize("Chat.AutoRefit.KeepsFeet.Fmt",
-                              "[Proteus] {0} doesn't reach the legs and its feet are already drawn like {1}'s, so it was "
-                            + "left as it is.")
-                        : Loc.Localize("Chat.AutoRefit.KeepsHands.Fmt",
-                              "[Proteus] {0} doesn't reach the arms and its hands are already drawn like {1}'s, so it was "
-                            + "left as it is."), item, targetMod.Name));
-                return;
-            }
-            to = KeepEnds.SkinOnlyLabel;
-            string sourceName = skin.Own.Dir == VanillaBodyCatalog.Key ? Strings.Parts.RetargetFromVanilla
-                              : j.State.Find(skin.Own.Dir)?.Name ?? skin.Own.Dir;
-            labelFrom = RefitCore.LabelFrom(sourceName, [skin.Own.Option.Label]);
-            done = savedIn => string.Format(Loc.Localize("Chat.AutoRefit.SkinOnly.Fmt",
-                    "[Proteus] {0} keeps its own shape; its skin is now drawn like {1}'s. Saved as \"{2}\" in {3} and "
-                  + "switched on."), item, targetMod.Name, option, savedIn);
-        }
-
-        if (await SaveAndWear(r, g, root, group, j.SavePath, targetMod, labelFrom,
-                              new BodyRetargetWriter.Refit(option, model, to), cutFrom, j.BakeTo, item) is not { } savedRoot)
-            return;
-        log.Information("[Proteus] auto refit: {0} {1} onto {2} in {3:F1}s", item, slot, option,
-                        j.Clock.Elapsed.TotalSeconds);
-        Say(done(SavedIn(g, savedRoot, targetMod)));
-        Finished(item, targetMod.Name);
-    }
-
     /// <summary>
     /// The author's own size, when the mod already ships it, switched on instead of a refit.
     /// <para/>
@@ -1335,7 +1130,7 @@ public sealed class AutoRefitWatcher : IDisposable
                                                 BodyRetargetWriter.Record? ownRecord, ushort bakeTo,
                                                 BodyModIndex.Entry targetMod, BodyOption target, string slot, string race,
                                                 string bodiesVersion,
-                                                (Func<byte[], ModelParts, ModelParts> Of, string CacheSlot)? view,
+                                                (Func<byte[], ModelParts, ModelParts?> Of, string CacheSlot)? view,
                                                 CancellationToken ct)
     {
         if (r.ModRoot == null || bakeTo != 0
@@ -1589,7 +1384,7 @@ public sealed class AutoRefitWatcher : IDisposable
     private string? AuthorSizeCached(string modRoot, string group, IReadOnlyList<(string Option, string File)> sizes,
                                      BodyModIndex.Entry targetMod, BodyOption target, string slot, string race,
                                      string bodiesVersion,
-                                     (Func<byte[], ModelParts, ModelParts> Of, string CacheSlot)? view = null)
+                                     (Func<byte[], ModelParts, ModelParts?> Of, string CacheSlot)? view = null)
     {
         var files = new System.Text.StringBuilder();
         foreach (var (option, file) in sizes.OrderBy(s => s.Option, StringComparer.Ordinal))
@@ -1623,10 +1418,11 @@ public sealed class AutoRefitWatcher : IDisposable
     /// </summary>
     /// <param name="view">What of each size's model is compared, from its bytes and parts: a shoe's leg without its kept
     /// foot, which on a heeled shoe lies on no body and holds the share of the rest below <see cref="BodySizeMatch.Exact"/>.
-    /// Null compares whole models.</param>
+    /// Null compares whole models. A size it gives nothing for — a model whose rig cannot be read, so its foot cannot be
+    /// told from its leg — is not compared at all.</param>
     internal static string? AuthorSize(string modRoot, IReadOnlyList<(string Option, string File)> sizes,
                                        BodySizeCatalog targetCat, BodyOption target, string slot, string race,
-                                       Func<byte[], ModelParts, ModelParts>? view = null)
+                                       Func<byte[], ModelParts, ModelParts?>? view = null)
     {
         string targetPath = targetCat.PathOf(target);
         using var reading = BodySizeMatch.BeginReading();
@@ -1640,7 +1436,7 @@ public sealed class AutoRefitWatcher : IDisposable
             if (!File.Exists(path)) continue;
             var bytes = File.ReadAllBytes(path);
             if (ModelPartReader.Read(bytes) is not { } read) continue;
-            var model = view?.Invoke(bytes, read) ?? read;
+            if ((view == null ? read : view(bytes, read)) is not { } model) continue;   // no leg part to compare
             float share = BodySizeMatch.Shared(BodySizeMatch.ProbeKeys(model), targetPath, out _);
             if (share <= bestShare) continue;
             (bestShare, best, bestModel, bestBytes) = (share, option, model, bytes);

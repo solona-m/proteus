@@ -27,7 +27,8 @@ public class PlanDefaultPathTests(ITestOutputHelper output)
         return new BodyRetarget.SlotPair(slot, built!, target, targetBytes, body(0f));
     }
 
-    /// <summary>Chest skin (mesh 0) lying on the chest, legs skin (mesh 1) on the legs, and cloth over the chest.</summary>
+    /// <summary>Chest skin (mesh 0, vertices 0-5) lying on the chest, legs skin (mesh 1, 6-8) on the legs, and cloth over
+    /// the chest (mesh 2, 9-20) — the first triangle of which the held fixture holds.</summary>
     private static byte[] Garment() => SyntheticModel.Build([],
         new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0, TrianglesPerIsland: 2)),
         new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0, TrianglesPerIsland: 1, OffsetX: 3f)),
@@ -44,7 +45,7 @@ public class PlanDefaultPathTests(ITestOutputHelper output)
     public static TheoryData<string, string> Pinned => new()
     {
         { "own slot swapped", "D822FCBCE979C1D0" },
-        { "own slot swapped, part held", "D822FCBCE979C1D0" },
+        { "own slot swapped, part held", "EA8C0D2D79C434D5" },
         { "a reached slot", "C7165EA5D9B4DDEE" },
         { "no swap", "08808348C0E19134" },
     };
@@ -62,7 +63,7 @@ public class PlanDefaultPathTests(ITestOutputHelper output)
         {
             "own slot swapped" => BodyRetarget.Plan(garment, bytes, [chest], "_top", replaceSkin: true, cutHidden: false),
             "own slot swapped, part held" => BodyRetarget.Plan(garment, bytes, [chest], "_top",
-                                                               held: new HashSet<int> { 6, 7, 8 }, replaceSkin: true,
+                                                               held: new HashSet<int> { 9, 10, 11 }, replaceSkin: true,
                                                                cutHidden: false),
             "a reached slot" => BodyRetarget.Plan(garment, bytes, [chest, legs], "_top", replaceSkin: true,
                                                   acrossBodies: true, cutHidden: true),
