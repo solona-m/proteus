@@ -129,10 +129,14 @@ internal static class KeepEnds
         // A reading too weak to refit from is too weak to redraw from: its body decides the texture layout converted.
         if (!AutoRefitDecisions.Proceed(own.Confidence)) return new Found(Route.Unsure, null);
         var options = catalog.For(reading.Limb, race);
-        // One size of legs is the answer once the body is known: nothing to tell apart. The game's own body is one —
-        // its gear is made on it — and the cloth reading can only guess at a single size, which is not accepted.
+        // One size of legs is the answer once the body is known — nothing to tell apart — provided the piece reaches the
+        // legs at all: skin there, or cloth sitting on that one body. The game's own body is one (its gear is made on
+        // it), and the cloth reading can only guess at a single size, which is not accepted; a plain game shoe reaches
+        // no legs and is a skin-only redraw like any other.
         if (options.Count == 1)
-            return new Found(Route.Cloth, new AutoRefitDecisions.Pick(own.Dir, options[0], own.Confidence, !limbSkin));
+            return limbSkin || rank(reading.LimbView, options, catalog, false) != null
+                ? new Found(Route.Cloth, new AutoRefitDecisions.Pick(own.Dir, options[0], own.Confidence, !limbSkin))
+                : new Found(Route.SkinOnly, own);
         if (options.Count > 0)
         {
             var ranking = rank(reading.LimbView, options, catalog, limbSkin);

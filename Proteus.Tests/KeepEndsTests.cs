@@ -374,10 +374,30 @@ public class KeepEndsTests
         var (reading, parts) = ReadShoe(legSkin: false);
         var game = new BodySizeCatalog("<game>", [LegsM, FeetM]);
         var found = KeepEnds.Find(reading, parts, NoBones, "0201", Detect(null, Pick(FeetM)), _ => game,
-                                  (_, _, _, _) => throw new InvalidOperationException("one size needs no ranking"));
+                                  (_, _, _, _) => new BodySizeMatch.Ranking(BodySizeMatch.Confidence.Guess,
+                                      [new BodySizeMatch.Score(LegsM, 0f, 0.002f)], FromCloth: true));
 
         Assert.Equal(KeepEnds.Route.Cloth, found.Route);
         Assert.Equal(LegsM, found.Pick!.Option);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-keep-hand-foot-skin-5")]
+    [Trait("Plan", "EDGE-keep-hand-foot-skin-14")]
+    public void A_plain_game_shoe_reaching_no_leg_is_a_skin_only_redraw()
+    {
+        // The game's body has one size of legs, but a shoe that is all foot reaches none of it: there is nothing to refit,
+        // only its skin to redraw — not a refit under a legs size name, saved again for every size chosen.
+        var (parts, _, bytes) = Skinned(new SyntheticModel.Sub(0, TrianglesPerIsland: 2, Weights: Foot));
+        var reading = KeepEnds.Read("_sho", parts, bytes)!;
+        Assert.Empty(reading.LimbView.Parts);
+        var game = new BodySizeCatalog("<game>", [LegsM, FeetM]);
+
+        var found = KeepEnds.Find(reading, parts, NoBones, "0201", Detect(null, Pick(FeetM)), _ => game,
+                                  (view, options, catalog, skin) => BodySizeMatch.RankByCloth(view, options, catalog.PathOf));
+
+        Assert.Equal(KeepEnds.Route.SkinOnly, found.Route);
+        Assert.Equal(FeetM, found.Pick!.Option);
     }
 
     [Fact]

@@ -320,11 +320,11 @@
     "description": ""
   },
   "Chat.AutoRefit.KeepsFeet.Fmt": {
-    "message": "[Proteus] {0} no llega a las piernas y sus pies ya se dibujan como los de {1}, así que se queda como está.",
+    "message": "[Proteus] {0} no llega a las piernas, así que conserva su propia forma y su piel se queda como está.",
     "description": ""
   },
   "Chat.AutoRefit.KeepsHands.Fmt": {
-    "message": "[Proteus] {0} no llega a los brazos y sus manos ya se dibujan como las de {1}, así que se queda como está.",
+    "message": "[Proteus] {0} no llega a los brazos, así que conserva su propia forma y su piel se queda como está.",
     "description": ""
   },
   "Chat.AutoRefit.NoBodyMesh.Fmt": {

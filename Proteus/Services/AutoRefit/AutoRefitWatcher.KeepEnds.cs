@@ -96,13 +96,13 @@ public sealed partial class AutoRefitWatcher
             skinOnly = RedrawSkin(j, skin, CatalogOf);
             if (skinOnly == null)
             {
+                // Said neutrally: the skin may already be drawn like the new body's, or its layout may not convert.
                 Say(string.Format(feet
                         ? Loc.Localize("Chat.AutoRefit.KeepsFeet.Fmt",
-                              "[Proteus] {0} doesn't reach the legs and its feet are already drawn like {1}'s, so it was "
-                            + "left as it is.")
+                              "[Proteus] {0} doesn't reach the legs, so it keeps its own shape and its skin was left as it is.")
                         : Loc.Localize("Chat.AutoRefit.KeepsHands.Fmt",
-                              "[Proteus] {0} doesn't reach the arms and its hands are already drawn like {1}'s, so it was "
-                            + "left as it is."), item, targetMod.Name));
+                              "[Proteus] {0} doesn't reach the arms, so it keeps its own shape and its skin was left as it is."),
+                        item));
                 return;
             }
         }

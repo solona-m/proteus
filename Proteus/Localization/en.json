@@ -320,12 +320,12 @@
     "description": "Chat line when an automatic refit failed. {0} names the gear, {1} is the reason. Do NOT translate \"Proteus\"."
   },
   "Chat.AutoRefit.KeepsFeet.Fmt": {
-    "message": "[Proteus] {0} doesn't reach the legs and its feet are already drawn like {1}'s, so it was left as it is.",
-    "description": "Status line when shoes reach no leg and their feet already use the chosen body's skin, so nothing is changed. {0} names the gear, {1} the body mod. Do NOT translate \"Proteus\"."
+    "message": "[Proteus] {0} doesn't reach the legs, so it keeps its own shape and its skin was left as it is.",
+    "description": "Status line when shoes reach no leg and nothing about them is changed: their shape is kept and their skin left as it is. {0} names the gear. Do NOT translate \"Proteus\"."
   },
   "Chat.AutoRefit.KeepsHands.Fmt": {
-    "message": "[Proteus] {0} doesn't reach the arms and its hands are already drawn like {1}'s, so it was left as it is.",
-    "description": "Status line when gloves reach no arm and their hands already use the chosen body's skin, so nothing is changed. {0} names the gear, {1} the body mod. Do NOT translate \"Proteus\"."
+    "message": "[Proteus] {0} doesn't reach the arms, so it keeps its own shape and its skin was left as it is.",
+    "description": "Status line when gloves reach no arm and nothing about them is changed: their shape is kept and their skin left as it is. {0} names the gear. Do NOT translate \"Proteus\"."
   },
   "Chat.AutoRefit.NoBodyMesh.Fmt": {
     "message": "[Proteus] {0} carries no body skin to read its size from, so it was left as it is. You can refit it by hand with the Studio's Body size tool.",

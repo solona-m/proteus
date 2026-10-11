@@ -320,11 +320,11 @@
     "description": ""
   },
   "Chat.AutoRefit.KeepsFeet.Fmt": {
-    "message": "[Proteus] {0} не доходит до ног, а ступни уже нарисованы как у {1}, поэтому оно оставлено как есть.",
+    "message": "[Proteus] {0} не доходит до ног, поэтому сохраняет свою форму, а кожа оставлена как есть.",
     "description": ""
   },
   "Chat.AutoRefit.KeepsHands.Fmt": {
-    "message": "[Proteus] {0} не доходит до рук, а кисти уже нарисованы как у {1}, поэтому оно оставлено как есть.",
+    "message": "[Proteus] {0} не доходит до рук, поэтому сохраняет свою форму, а кожа оставлена как есть.",
     "description": ""
   },
   "Chat.AutoRefit.NoBodyMesh.Fmt": {

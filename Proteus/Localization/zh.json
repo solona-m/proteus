@@ -320,11 +320,11 @@
     "description": ""
   },
   "Chat.AutoRefit.KeepsFeet.Fmt": {
-    "message": "[Proteus] {0} 没有延伸到腿部，且脚部已按 {1} 的方式绘制，因此保持原样。",
+    "message": "[Proteus] {0} 没有延伸到腿部，因此保留其原有形状，皮肤也保持原样。",
     "description": ""
   },
   "Chat.AutoRefit.KeepsHands.Fmt": {
-    "message": "[Proteus] {0} 没有延伸到手臂，且手部已按 {1} 的方式绘制，因此保持原样。",
+    "message": "[Proteus] {0} 没有延伸到手臂，因此保留其原有形状，皮肤也保持原样。",
     "description": ""
   },
   "Chat.AutoRefit.NoBodyMesh.Fmt": {

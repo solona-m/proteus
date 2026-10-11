@@ -320,11 +320,11 @@
     "description": ""
   },
   "Chat.AutoRefit.KeepsFeet.Fmt": {
-    "message": "[Proteus] {0} は脚まで届いておらず、足もすでに {1} と同じように描かれているため、そのままにしました。",
+    "message": "[Proteus] {0} は脚まで届いていないため、元の形のままにし、肌もそのままにしました。",
     "description": ""
   },
   "Chat.AutoRefit.KeepsHands.Fmt": {
-    "message": "[Proteus] {0} は腕まで届いておらず、手もすでに {1} と同じように描かれているため、そのままにしました。",
+    "message": "[Proteus] {0} は腕まで届いていないため、元の形のままにし、肌もそのままにしました。",
     "description": ""
   },
   "Chat.AutoRefit.NoBodyMesh.Fmt": {
