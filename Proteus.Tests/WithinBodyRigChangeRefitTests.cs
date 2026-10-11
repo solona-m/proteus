@@ -117,12 +117,12 @@ public class WithinBodyRigChangeRefitTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// [AC-within-body-weights-6] [EDGE-within-body-weights-7] Rue+ plain to Yiggle on a top, the rig change the
-    /// within-one-mod rule was written for: the Yiggle bones are taken where the body moves weight to them, the cloth
-    /// sits no further from its skin's weighting than the author had it, and no new ragged edges appear.
+    /// [AC-within-body-weights-6] [EDGE-within-body-weights-7] Rue+ Yiggle to plain on a top made on Yiggle, the rig
+    /// change the within-one-mod rule was written for: the Yiggle bones come off where the body moves weight off them,
+    /// the cloth sits no further from its skin's weighting than the author had it, and no new ragged edges appear.
     /// </summary>
     [LocalDataFact(Rue, OldThing)]
-    public void Rue_plain_to_Yiggle_chest_takes_the_new_rig_and_keeps_the_author_s_fit()
+    public void Rue_Yiggle_to_plain_chest_takes_the_new_rig_and_keeps_the_author_s_fit()
     {
         string rue = LocalData.Path(Rue);
         string garment = Path.Combine(LocalData.Path(OldThing), "size/rue m/chara/equipment/e6255/model/c0201e6255_top.mdl");
@@ -131,11 +131,12 @@ public class WithinBodyRigChangeRefitTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// [AC-within-body-weights-6] [EDGE-within-body-weights-6] The Starlit Skirt's legs between Rue+'s plain and
-    /// Yiggle Gen A: rigged alike, the author's weights stand; rigged apart, the same three checks as the chest.
+    /// [AC-within-body-weights-6] [EDGE-within-body-weights-6] The Starlit Skirt's legs from Rue+'s Yiggle Gen A, which
+    /// it was made on, to plain Gen A: rigged alike, the author's weights stand; rigged apart, the same three checks as
+    /// the chest.
     /// </summary>
     [LocalDataFact(Rue, Starlit)]
-    public void Rue_plain_to_Yiggle_legs_on_the_Starlit_skirt()
+    public void Rue_Yiggle_to_plain_legs_on_the_Starlit_skirt()
     {
         string rue = LocalData.Path(Rue);
         string garment = Path.Combine(LocalData.Path(Starlit), StarlitWc);
