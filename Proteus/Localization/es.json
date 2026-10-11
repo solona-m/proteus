@@ -3867,6 +3867,10 @@
     "message": "{0}, ajustado por Proteus.",
     "description": ""
   },
+  "Refit.Mod.Folder": {
+    "message": "Ampliaciones de Proteus",
+    "description": ""
+  },
   "Refit.Mod.Enabled.Fmt": {
     "message": "Se creó «{0}» y se activó.",
     "description": ""

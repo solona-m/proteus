@@ -3867,6 +3867,10 @@
     "message": "{0}, refitted by Proteus.",
     "description": ""
   },
+  "Refit.Mod.Folder": {
+    "message": "Proteus Upscales",
+    "description": "Folder in Penumbra's mod list that the mods Proteus makes for refits and for edited game gear are filed under."
+  },
   "Refit.Mod.Enabled.Fmt": {
     "message": "Made \u0022{0}\u0022 and switched it on.",
     "description": ""

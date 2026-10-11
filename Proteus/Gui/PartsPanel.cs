@@ -1349,7 +1349,8 @@ public sealed class PartsPanel
             // takes this model if it is another of the item's (the trousers of a coat's outfit, another race's).
             made = refitMods.Ensure(item.ItemName, RefitModService.EditQualifier,
                                     fill: root => RefitModService.AddGameModel(root, item.GamePath, bytes),
-                                    description: string.Format(ps.VanillaModDescriptionFmt, item.ItemName));
+                                    description: string.Format(ps.VanillaModDescriptionFmt, item.ItemName),
+                                    folder: RefitModService.OwnModsFolder);
             if (made is { Ok: true, Made: false } && RefitModService.AddGameModel(made.Root, item.GamePath, bytes))
             {
                 compositor.ExpectOwnModEdit(made.Dir);
@@ -3132,7 +3133,7 @@ public sealed class PartsPanel
                 ? (found, Path.GetFileName(found))
                 : null;
 
-        var made = refitMods.Ensure(subject, bodyName);
+        var made = refitMods.Ensure(subject, bodyName, folder: RefitModService.OwnModsFolder);
         if (!made.Ok)
         {
             status = made.Message;

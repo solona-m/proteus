@@ -3867,6 +3867,10 @@
     "message": "{0}, подогнано Proteus.",
     "description": ""
   },
+  "Refit.Mod.Folder": {
+    "message": "Увеличения Proteus",
+    "description": ""
+  },
   "Refit.Mod.Enabled.Fmt": {
     "message": "«{0}» создан и включён.",
     "description": ""

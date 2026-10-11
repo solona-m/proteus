@@ -1183,7 +1183,8 @@ public sealed class AutoRefitWatcher : IDisposable
         // A mod of Proteus's own for the game's gear, made only now that there is something to put in it.
         if (root == null)
         {
-            var made = await OnFramework(() => refitMods.Ensure(g.Vanilla!.Value.ItemName, targetMod.Name));
+            var made = await OnFramework(() => refitMods.Ensure(g.Vanilla!.Value.ItemName, targetMod.Name,
+                                                                    folder: RefitModService.OwnModsFolder));
             if (!made.Ok)
             {
                 Fail(r, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"), item,

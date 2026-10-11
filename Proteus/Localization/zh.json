@@ -3867,6 +3867,10 @@
     "message": "{0}，由 Proteus 转换。",
     "description": ""
   },
+  "Refit.Mod.Folder": {
+    "message": "Proteus 放大版",
+    "description": ""
+  },
   "Refit.Mod.Enabled.Fmt": {
     "message": "已创建“{0}”并启用。",
     "description": ""
