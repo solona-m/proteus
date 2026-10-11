@@ -24,8 +24,15 @@ internal sealed class AutoRefitPanel(AutoRefitWatcher watcher, PenumbraBridge pe
     private (Guid Id, string Name)? currentCollection;
     private long collectionsAt;
 
-    /// <summary>The collection being edited; the player's own until another is picked.</summary>
-    private Guid? editing;
+    /// <summary>A collection picked from the list other than the active one; null follows the active collection.</summary>
+    private Guid? picked;
+
+    /// <summary>The active collection when <see cref="picked"/> was chosen. Once the player moves to another, the pick
+    /// is dropped and the panel follows them there.</summary>
+    private Guid? pickedUnder;
+
+    /// <summary>The collection being edited: the player's active one, unless another was picked while it was active.</summary>
+    private Guid? Editing => picked ?? currentCollection?.Id;
 
     /// <summary>The player's race, which the size lists are filtered by — re-read now and then.</summary>
     private string? race;
@@ -74,10 +81,8 @@ internal sealed class AutoRefitPanel(AutoRefitWatcher watcher, PenumbraBridge pe
             ImGui.TextDisabled(s.NoCollections);
             return;
         }
-        editing ??= currentCollection?.Id;
-
         DrawCollectionCombo();
-        if (editing is not { } collection) return;
+        if (Editing is not { } collection) return;
 
         string key = collection.ToString("D");
         config.AutoRefitByCollection.TryGetValue(key, out var pref);
@@ -149,6 +154,8 @@ internal sealed class AutoRefitPanel(AutoRefitWatcher watcher, PenumbraBridge pe
         collectionsAt = now;
         collections = penumbra.GetCollections();
         currentCollection = penumbra.GetPlayerCollection();
+        // Unknown for a moment while zoning: keep the pick until the player is back and their collection can be told.
+        if (picked != null && currentCollection is { } active && active.Id != pickedUnder) picked = null;
 
         if (race == null || now - raceAt >= RefreshMs)
         {
@@ -170,13 +177,18 @@ internal sealed class AutoRefitPanel(AutoRefitWatcher watcher, PenumbraBridge pe
         var s = Strings.AutoRefit;
         ImGui.TextUnformatted(s.Collection);
         ImGui.SetNextItemWidth(-1);
+        var editing = Editing;
         using var combo = ImRaii.Combo("##autoRefitCollection", editing is { } e ? CollectionLabel(e) : s.Choose);
         if (!combo) return;
 
         foreach (var (id, _) in collections!.OrderBy(c => c.Key == currentCollection?.Id ? 0 : 1)
                                             .ThenBy(c => c.Value, StringComparer.OrdinalIgnoreCase))
             if (ImGui.Selectable(CollectionLabel(id) + "##" + id.ToString("N"), editing == id))
-                editing = id;
+            {
+                // Picking the active collection goes back to following it.
+                picked = id == currentCollection?.Id ? null : id;
+                pickedUnder = currentCollection?.Id;
+            }
     }
 
     private void DrawBodyCombo(IReadOnlyList<BodyModIndex.Entry>? bodies, AutoRefitPreference? pref, string key,
