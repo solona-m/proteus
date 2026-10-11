@@ -325,7 +325,7 @@ public class BodyWeightsTests
         var plan = BodyRetarget.WithTuning(NoHug, () => BodyRetarget.PlanWeights(garment, pairs, acrossBodies: true));
         Assert.NotNull(plan);
 
-        var rebuilt = BodyRetarget.Rebuild(garment, pairs, swapSkin: false, plan, out var report)!;
+        var rebuilt = BodyRetarget.Rebuild(garment, pairs, swapSkin: false, plan, out var report, acrossBodies: true)!;
         Assert.Equal(2, report.ExtrasDropped);                                // and the old body's piercings go
         // The bodies differ by 0.3 moved from j_kosi to j_mune_l, and the cloth takes that change: 0.7 and 0.3, not
         // the new body's 0.4 and 0.6 outright.
@@ -703,8 +703,9 @@ public class BodyWeightsTests
             new SyntheticModel.Mesh(Piercings, new SyntheticModel.Sub(0, TrianglesPerIsland: 2, Weights: [("j_kosi", 1f)])));
         var pairs = new[] { Pair(Body(("j_kosi", 1f)), Body(("j_mune_l", 1f))) };
 
-        var rebuilt = BodyRetarget.Rebuild(garment, pairs, swapSkin: false, BodyRetarget.PlanWeights(garment, pairs),
-                                           out var report)!;
+        var rebuilt = BodyRetarget.Rebuild(garment, pairs, swapSkin: false,
+                                           BodyRetarget.PlanWeights(garment, pairs, acrossBodies: true), out var report,
+                                           acrossBodies: true)!;
 
         Assert.Equal(2, report.ExtrasDropped);
         Assert.DoesNotContain(ModelPartReader.Read(rebuilt)!.Parts, p => p.Material == Piercings);
@@ -712,6 +713,37 @@ public class BodyWeightsTests
         Assert.True(BodyRetarget.IsBodyExtraMaterial("/mt_c0201b0001_neolithe_piercings.mtrl"));
         Assert.False(BodyRetarget.IsBodyExtraMaterial(Skin));
         Assert.False(BodyRetarget.IsBodyExtraMaterial("/mt_c0201e0000_top_neolithe_undies.mtrl"));
+    }
+
+    /// <summary>
+    /// Rue+'s Gen A legs to its Gen B: one mesh, but B rigs genital bones A does not, so the cloth is reweighted. The
+    /// pubic hair was carried along with the skin it sits on and still fits; with the author's skin kept nothing would
+    /// replace it, and the refit came out bald.
+    /// </summary>
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Within_one_body_mod_a_rig_change_keeps_the_pubic_hair_and_piercings(bool acrossBodies, bool replaceSkin)
+    {
+        const string Pubes = "/mt_c0201b0001_bibopube.mtrl";
+        byte[] bytes = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Cloth, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, Weights: [("j_kosi", 1f)])),
+            new SyntheticModel.Mesh(Pubes, new SyntheticModel.Sub(0, TrianglesPerIsland: 2, Weights: [("j_kosi", 1f)])),
+            new SyntheticModel.Mesh(Piercings, new SyntheticModel.Sub(0, TrianglesPerIsland: 2, Weights: [("j_kosi", 1f)])));
+        var pairs = new[] { Pair(Body(("j_kosi", 1f)), Body(("j_kosi", 0.8f), ("iv_omanko", 0.2f))) };
+
+        // Through Plan, as the Studio, the size set and the automatic refit call it: the flag has to reach the rebuild.
+        var plan = BodyRetarget.Plan(ModelPartReader.Read(bytes)!, bytes, pairs, "_top", pushOut: false,
+                                     replaceSkin: replaceSkin, acrossBodies: acrossBodies);
+
+        var materials = ModelPartReader.Read(plan.Model)!.Parts.Select(p => p.Material).ToHashSet();
+        Assert.NotNull(plan.Report.Swap);                                      // the rig changed, so it was rebuilt
+        Assert.Equal(acrossBodies ? 4 : 0, plan.Report.Swap!.Value.ExtrasDropped);
+        Assert.Equal(!acrossBodies, materials.Contains(Pubes));
+        Assert.Equal(!acrossBodies, materials.Contains(Piercings));
+        Assert.Contains(Cloth, materials);
     }
 
     [Fact]

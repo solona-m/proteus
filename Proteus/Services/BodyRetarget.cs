@@ -628,7 +628,7 @@ internal static partial class BodyRetarget
         var weights = PlanWeights(model, pairs, acrossBodies, before: garmentBytes, held: held);
         if (replaceSkin || weights != null)
         {
-            var rebuilt = Rebuild(model, pairs, replaceSkin, weights, out var swapped, cutHidden);
+            var rebuilt = Rebuild(model, pairs, replaceSkin, weights, out var swapped, cutHidden, acrossBodies);
             if (rebuilt != null)
             {
                 model = rebuilt;
