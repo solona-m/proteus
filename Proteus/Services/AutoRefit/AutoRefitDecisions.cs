@@ -157,13 +157,187 @@ internal static class AutoRefitDecisions
         if (full.Count == 0) return null;
         float best = full.Max(m => m.Share);
         if (best < MinShared) return null;
-        return full.Select((m, i) => (m, i))
-                   .Where(x => x.m.Share >= best - TieMargin)
-                   .OrderByDescending(x => x.m.Preferred)
-                   .ThenByDescending(x => x.m.Enabled)
-                   .ThenByDescending(x => x.m.Sizes)
-                   .ThenBy(x => x.i)
-                   .First().m.Dir;
+        return Prefer(full.Select((m, i) => (m.Dir, m.Preferred, m.Enabled, m.Sizes, i, m.Share >= best - TieMargin)));
+    }
+
+    /// <summary>
+    /// Among equal answers: the preferred body, then one switched on, then the larger pack, then the first given. The
+    /// one order both readings break ties in.
+    /// </summary>
+    private static string Prefer(IEnumerable<(string Dir, bool Preferred, bool Enabled, int Sizes, int Index, bool Equal)> all)
+        => all.Where(x => x.Equal)
+              .OrderByDescending(x => x.Preferred)
+              .ThenByDescending(x => x.Enabled)
+              .ThenByDescending(x => x.Sizes)
+              .ThenBy(x => x.Index)
+              .First().Dir;
+
+    // ── when no body matches exactly ─────────────────────────────────────────
+    //
+    // A garment made on an earlier release of its body mod shares next to nothing exactly with what is installed now:
+    // "Yet Another Too Tight Top+" (2023, YAB) shared 1.2% with YAB+ 4.2 — and 12.2% with Bibo+, which YAB descends
+    // from. Bibo+ won the family, the top was refitted from Bibo+ Nude Small, and the bust came through it by 13 mm. Below
+    // WeakShare the family is read by how close the garment's skin lies to each body instead (BodySizeMatch.Near).
+
+    /// <summary>
+    /// Below this best exact share the exact reading cannot place the garment. A garment cut from an installed body
+    /// shares 40–56% with its family; the YAB top's best, an ancestor's, was 12%.
+    /// </summary>
+    internal const float WeakShare = 0.25f;
+
+    /// <summary>
+    /// Closer than this to the best sampled body — metres, at the 90th percentile — a mod is in the family. Generous, as
+    /// <see cref="FamilyMargin"/> is: three samples can miss the size the garment was made on.
+    /// </summary>
+    internal const float NearFamilyMargin = 0.0015f;
+
+    /// <summary>
+    /// Further than this from even the closest body, the garment matches none of them closely enough to be refitted
+    /// unattended. The YAB top lay 0.8 mm from an old YAB S and 2.8 mm from YAB+ 4.2; Bibo+, the wrong answer, 4.3.
+    /// </summary>
+    internal const float NearMax = 0.003f;
+
+    /// <summary>
+    /// The closest body must be this much closer than the closest OTHER body, or the reading is no clearer than two
+    /// bodies' guesses: an old Bibo+ top lay 2.5 mm from Tre and 2.7 from Bibo+ (0.93). The YAB top, with no copy of its
+    /// own old body installed, lay 2.8 mm from YAB+ 4.2 and 3.4 from the next (0.82). The ratio Rank calls Likely.
+    /// </summary>
+    internal const float NearClearRatio = 0.85f;
+
+    /// <summary>
+    /// Fewer than this share of the garment's skin points within reach of any body, and the nearness reading has nothing
+    /// to say (<see cref="NearVerdict.NoReading"/>): what little it measured is not the garment.
+    /// </summary>
+    internal const float NearReached = 0.5f;
+
+    /// <summary>Too few of the garment's <paramref name="points"/> lie near any body to tell by (<see cref="NearReached"/>).</summary>
+    internal static bool TooFewReached(int reached, int points) => reached < points * NearReached;
+
+    /// <summary>
+    /// A centimetre off at the 90th percentile, the garment's skin lies on none of the bodies, and being nearer one of
+    /// them says nothing about which it was made on (<see cref="NearVerdict.NoReading"/>). A Tre top read 20 mm from Tre
+    /// and 15 from LavaBod+.
+    /// </summary>
+    internal const float NearNone = 0.01f;
+
+    /// <summary>
+    /// The exact answer is kept on nearness's doubt only while the nearest body lies within this: a sculpt moves a
+    /// garment's skin a few millimetres off its body, not the best part of a centimetre. Further, the garment lies near
+    /// none of them, and is not refitted from any.
+    /// </summary>
+    internal const float NearDoubtMax = 0.005f;
+
+    /// <param name="Distance">How far the garment's skin lies from the closest size read (see BodySizeMatch.Near).</param>
+    /// <param name="Body">What that closest size IS — its skin's geometry, so a fork that re-saved the same mesh with other
+    /// materials is still the same body. Two mods are one answer only when their closest is the same skin. A mod that
+    /// read the nearest body's skin among its sizes has that skin as its closest, so a fork sharing the file is caught;
+    /// a pack whose own closest is another body nearly as near is a rival, never hidden behind a file it shares. A fork
+    /// whose samples missed that size reads as another body, and the reading is refused rather than guessed.</param>
+    internal readonly record struct ModNear(string Dir, float Distance, bool Preferred, bool Enabled, int Sizes,
+                                            string? Body = null);
+
+    /// <summary>What the nearness reading said.</summary>
+    internal enum NearVerdict
+    {
+        /// <summary>One mod, clearly.</summary>
+        Chosen,
+
+        /// <summary>Nothing to measure: most of the garment's skin lies further than the cap from every body, or even the
+        /// closest body is a centimetre off. The reading says nothing, and the exact reading's answer stands.</summary>
+        NoReading,
+
+        /// <summary>Measured, and no body lies within <see cref="NearMax"/>.</summary>
+        NoneClose,
+
+        /// <summary>Two different bodies nearly as close as each other.</summary>
+        Unclear,
+    }
+
+    /// <summary>
+    /// The one mod to rank the garment's sizes in: the closest — when it is within <see cref="NearMax"/> and clear of
+    /// every other BODY by <see cref="NearClearRatio"/> — and among the mods whose closest is that same file (its
+    /// forks), the order of preference <see cref="Choose"/> uses. Two different bodies are never a tie, however close: the
+    /// refit target winning a tie by preference is how a wrong body would slip through.
+    /// </summary>
+    /// <param name="cap">The distance a point further than every body counts as (BodySizeMatch.NearCap).</param>
+    /// <param name="closest">Every mod sharing the closest body, whatever the verdict — what the exact reading's own answer
+    /// is checked against.</param>
+    internal static NearVerdict ChooseNear(IReadOnlyList<ModNear> full, float cap, out string? chosen,
+                                           out IReadOnlyList<string> closest)
+    {
+        chosen = null;
+        closest = [];
+        if (full.Count == 0) return NearVerdict.NoReading;
+        var top = full.MinBy(m => m.Distance);
+        float best = top.Distance;
+        if (best >= MathF.Min(cap, NearNone)) return NearVerdict.NoReading;
+        bool SameBody(ModNear m) => m.Dir == top.Dir || (top.Body != null && m.Body == top.Body);
+        closest = full.Where(SameBody).Select(m => m.Dir).ToList();
+        if (best > NearMax) return NearVerdict.NoneClose;
+        float runnerUp = full.Where(m => !SameBody(m)).Select(m => m.Distance).DefaultIfEmpty(float.MaxValue).Min();
+        if (best > runnerUp * NearClearRatio) return NearVerdict.Unclear;
+        chosen = Prefer(full.Select((m, i) => (m.Dir, m.Preferred, m.Enabled, m.Sizes, i, SameBody(m))));
+        return NearVerdict.Chosen;
+    }
+
+    /// <summary>Whether the exact reading's best share is too weak to stand alone (see <see cref="WeakShare"/>).</summary>
+    internal static bool Weak(float bestShare) => bestShare < WeakShare;
+
+    /// <summary>What becomes of a garment the exact reading could not place, once nearness has measured it.</summary>
+    internal enum NearOutcome
+    {
+        /// <summary>Refit from the body nearness chose.</summary>
+        Refit,
+
+        /// <summary>Keep the exact reading's answer as it is: nearness had nothing to say.</summary>
+        KeepExact,
+
+        /// <summary>Keep the exact reading's answer, its size held to <see cref="Sure"/>: nearness found no body clearly,
+        /// though that answer is the nearest.</summary>
+        KeepDoubted,
+
+        /// <summary>Leave the garment as it is.</summary>
+        Refuse,
+    }
+
+    /// <summary>
+    /// The outcome of a nearness reading. Fewer than <see cref="NearReached"/> of the points reaching any body says nothing,
+    /// as does <see cref="NearVerdict.NoReading"/>, and the exact answer stands as it was; a clear body is refitted from.
+    /// Otherwise nearness found no body clearly, and overrules the exact answer only where it clearly disagrees with it:
+    /// that answer stands, doubted, when it is among the nearest or not clearly further than they are
+    /// (<see cref="NearClearRatio"/>), and nothing is refitted when it is clearly further.
+    /// </summary>
+    /// <param name="closest">The mods sharing the nearest body (<see cref="ChooseNear"/>).</param>
+    /// <param name="best">The nearest body's distance.</param>
+    /// <param name="exactDistance">The exact answer's own distance, or null when it was not measured.</param>
+    /// <example>
+    /// The YAB top with no YAB installed: the exact answer, its ancestor Bibo+, lies 4.3 mm off and Lithe 3.4 — clearly
+    /// further (3.4 / 4.3 = 0.79), so nothing is refitted. A garment cut from Tre and lightly sculpted: Tre 3.2 mm, Lithe
+    /// 3.0 — no clearer than a guess (0.94), so Tre, the exact answer, stands.
+    /// </example>
+    internal static NearOutcome Settle(NearVerdict verdict, int reached, int points, IReadOnlyList<string> closest,
+                                       string? exactChosen, float best = float.MaxValue, float? exactDistance = null)
+    {
+        if (verdict == NearVerdict.NoReading || TooFewReached(reached, points)) return NearOutcome.KeepExact;
+        if (verdict == NearVerdict.Chosen) return NearOutcome.Refit;
+        if (exactChosen == null || best > NearDoubtMax) return NearOutcome.Refuse;
+        bool nearest = closest.Contains(exactChosen, StringComparer.OrdinalIgnoreCase);
+        // Not clearly further only counts where nothing is close: two bodies about as close (Unclear) is the very case
+        // where the runner-up must not be refitted from.
+        bool notClearlyFurther = verdict == NearVerdict.NoneClose && exactDistance is { } d && best > d * NearClearRatio;
+        return nearest || notClearlyFurther ? NearOutcome.KeepDoubted : NearOutcome.Refuse;
+    }
+
+    /// <summary>A reading that has already been doubted once: Likely or better, else Ambiguous, which is not refitted.</summary>
+    internal static Confidence Sure(Confidence confidence)
+        => confidence is Confidence.Exact or Confidence.Likely ? confidence : Confidence.Ambiguous;
+
+    /// <summary>The mods in the garment's family from their sampled distances, in the order given.</summary>
+    internal static List<string> NearFamily(IReadOnlyList<ModNear> sampled)
+    {
+        if (sampled.Count == 0) return [];
+        float best = sampled.Min(m => m.Distance);
+        return sampled.Where(m => m.Distance <= best + NearFamilyMargin).Select(m => m.Dir).ToList();
     }
 
     private static bool Same(string a, string b) => string.Equals(a.Trim(), b.Trim(), StringComparison.OrdinalIgnoreCase);

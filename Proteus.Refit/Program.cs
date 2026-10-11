@@ -38,9 +38,17 @@ internal static class Program
                       [--slot _top] [--race 0201] [--legs-from <rel>]
                       [--legs <label>=<size word>,... | --legs-to <rel in the target mod>]
                       [--chest-from <rel> --chest-to <rel in the target mod>]   (legs garments only)
+                      [--whole]   (the new body's skin in whole, as the automatic refit puts it)
+                      [--keep-default]   (keep the shape of the pieces the Studio ticks by default)
+                      [--no-push] [--tune <knob>,...]
         Proteus.Refit --list --body-root <body mod> [--slot _top]
         Proteus.Refit --inspect --garment <model.mdl>
         Proteus.Refit --detect --garment <xs.mdl> --body-root <body mod> [--slot _top] [--race 0201]
+        Proteus.Refit --detect --mods-root <Penumbra mods> --to-mod <body mod folder>
+                      (--garment <model.mdl> [--shares] [--time] | --garment-list <file, one model per line>)
+                      [--skip <mod folder>;...] [--slot _top] [--race 0201]
+                      (the automatic refit's reading across every installed body mod; --garment-list prints
+                       the garments it reads differently from the exact reading alone)
         Proteus.Refit --finish --garment <in.mdl> --out <out.mdl> [--body-root <body mod> [--from <rel|auto>]]
                       [--slot _top] [--race 0201] [--tag-legs <rel|auto>]
         Proteus.Refit --save --manifest <save.json>
@@ -58,6 +66,7 @@ internal static class Program
             var opts = Parse(args);
             if (opts.ContainsKey("list")) return List(opts);
             if (opts.ContainsKey("inspect")) return Inspect(opts);
+            if (opts.ContainsKey("detect") && opts.ContainsKey("mods-root")) return DetectAcross(opts);
             if (opts.ContainsKey("detect")) return Detect(opts);
             if (opts.ContainsKey("finish")) return Finish(opts);
             if (opts.ContainsKey("save")) return Save(opts);
@@ -131,6 +140,109 @@ internal static class Program
         var from = DetectSource(catalog, slot, garment, garmentBytes, race, out string confidence);
         Console.WriteLine(JsonSerializer.Serialize(new { from = from.Rel, confidence },
                                                    new JsonSerializerOptions { WriteIndented = true }));
+        return 0;
+    }
+
+    /// <summary>
+    /// The automatic refit's reading of a garment: every body mod under <c>--mods-root</c>, the one refitted onto
+    /// (<c>--to-mod</c>) first, all taken as switched on — <see cref="RefitCore.DetectSource"/> as the watcher calls it,
+    /// without the game's own body.
+    /// </summary>
+    private static int DetectAcross(Dictionary<string, string> opts)
+    {
+        string slot = opts.GetValueOrDefault("slot", "_top");
+        string race = opts.GetValueOrDefault("race", "0201")!;
+        string modsRoot = Required(opts, "mods-root"), toMod = Required(opts, "to-mod");
+        // --skip a;b: leave these mod folders out, as on a player's machine that lacks them.
+        var skip = new HashSet<string>(opts.GetValueOrDefault("skip", "").Split(';', StringSplitOptions.RemoveEmptyEntries),
+                                       StringComparer.OrdinalIgnoreCase);
+        var dirs = Directory.GetDirectories(modsRoot).Select(Path.GetFileName).Where(d => !skip.Contains(d!))
+                            .ToDictionary(d => d!, d => d!);
+        var bodies = new BodyModIndex().Refresh(dirs, modsRoot);
+        var target = bodies.FirstOrDefault(b => string.Equals(b.Dir, toMod, StringComparison.OrdinalIgnoreCase))
+                  ?? throw new UsageException($"\"{toMod}\" is not a body mod under {modsRoot}.");
+        // The watcher's own order, less the game's body, which cannot be read outside the game.
+        var order = RefitCore.SearchOrder(target.Dir, target.Catalog, bodies.Select(b => (b.Dir, b.Catalog)), vanilla: null);
+
+        // --garment-list file: one garment per line; per garment the exact reading's answer, then the answer now.
+        if (opts.TryGetValue("garment-list", out var listPath))
+        {
+            int total = 0, changed = 0;
+            foreach (string line in File.ReadAllLines(listPath).Where(l => l.Trim().Length > 0))
+            {
+                string path = line.Trim();
+                // A Git Bash path (/e/...) as the drive it names.
+                if (path.Length > 2 && path[0] == '/' && char.IsLetter(path[1]) && path[2] == '/')
+                    path = char.ToUpperInvariant(path[1]) + ":" + path[2..];
+                byte[] b;
+                try { b = File.ReadAllBytes(path); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    Console.WriteLine($"{path}\tunreadable: {ex.Message}");
+                    continue;
+                }
+                string? reading = null;
+                AutoRefitDecisions.Pick? before, now;
+                try
+                {
+                    if (ModelPartReader.Read(b) is not { } g) { Console.WriteLine($"{path}\tunreadable"); continue; }
+                    var bn = new HashSet<string>(SecondSkinWriter.Parse(b).BoneNames, StringComparer.Ordinal);
+                    (before, now) = RefitCore.CompareReadings(g, bn, slot, race, order, target.Dir, _ => true,
+                                                              n => reading = reading == null ? n : reading + "\n  " + n);
+                }
+                catch (Exception ex)
+                {
+                    // One malformed model must not cost the rest of a long batch.
+                    Console.WriteLine($"{path}\tfailed: {ex.Message}");
+                    continue;
+                }
+                static string Of(AutoRefitDecisions.Pick? p) => p == null ? "-" : $"{p.Dir} / {p.Option.Rel} ({p.Confidence})";
+                total++;
+                // Read differently = another body or size, or refitted then and refused now (a Guess held to Ambiguous):
+                // what the watcher would do differently. A confidence change that does not change that is not counted.
+                static string? Where(AutoRefitDecisions.Pick? p)
+                    => p == null ? null : $"{p.Dir}|{p.Option.Rel}|{AutoRefitDecisions.Proceed(p.Confidence)}";
+                if (Where(before) == Where(now)) continue;
+                changed++;
+                Console.WriteLine($"{Path.GetRelativePath(modsRoot, path)}\n  before: {Of(before)}\n  now:    {Of(now)}\n  {reading}");
+            }
+            Console.WriteLine($"{changed} of {total} garments read differently");
+            return 0;
+        }
+
+        string garmentPath = Required(opts, "garment");
+        var bytes = File.ReadAllBytes(garmentPath);
+        var garment = ModelPartReader.Read(bytes) ?? throw new UsageException($"{garmentPath} could not be read as a model.");
+        var bones = new HashSet<string>(SecondSkinWriter.Parse(bytes).BoneNames, StringComparer.Ordinal);
+        if (opts.ContainsKey("shares"))
+        {
+            // Every size's exact share, which the reading samples. The distances the nearness reading weighs are in its own
+            // note below, as the reading measured them — not measured again here, where they could come out otherwise.
+            var probes = BodySizeMatch.ProbeKeys(garment);
+            foreach (var (dir, catalog) in order)
+            {
+                var options = catalog.For(slot, race);
+                if (options.Count == 0) continue;
+                var best = options.Select(o => (o, s: BodySizeMatch.Shared(probes, catalog.PathOf(o), out _))).MaxBy(x => x.s);
+                Console.Error.WriteLine($"{dir}\t{best.s:P1}\t{best.o.Rel}");
+            }
+        }
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var pick = RefitCore.DetectSource(garment, bones, slot, race, order, target.Dir, _ => true,
+                                          note => Console.Error.WriteLine(note));
+        long cold = clock.ElapsedMilliseconds;
+        if (opts.ContainsKey("time"))
+        {
+            // Again, with the bodies' keys and indexes cached: what a second garment of the same family costs.
+            clock.Restart();
+            RefitCore.DetectSource(garment, bones, slot, race, order, target.Dir, _ => true);
+            var (held, size, points, triangles, entries) = BodySizeMatch.NearCacheSize();
+            Console.Error.WriteLine($"detection {cold} ms cold, {clock.ElapsedMilliseconds} ms warm; nearness cache "
+                                  + $"{held} bodies, {size / 1048576.0:0.0} MB ({(held > 0 ? size / held / 1024 : 0)} KB each; "
+                                  + $"per body {points / Math.Max(1, held)} points, {triangles / Math.Max(1, held)} triangles, "
+                                  + $"{entries / Math.Max(1, held)} cell entries)");
+        }
+        Console.WriteLine(pick == null ? "no pick" : $"{pick.Dir}\t{pick.Option.Rel}\t{pick.Confidence}");
         return 0;
     }
 
@@ -963,6 +1075,16 @@ internal static class Program
             }
         }
 
+        // --keep-default: the "keep shape" pieces the Studio and the automatic refit start with (RefitCore.DefaultKeepShape),
+        // the same for every size.
+        List<IReadOnlyCollection<int>>? keepShape = null;
+        if (opts.ContainsKey("keep-default"))
+        {
+            var labels = RefitCore.DefaultKeepShape(garment);
+            Console.Error.WriteLine($"keep shape: {string.Join(", ", labels.Order())}");
+            keepShape = RefitCore.ShapePieces(garment, labels);
+        }
+
         var sizes = new List<object>();
         foreach (var (label, option) in targets)
         {
@@ -1001,11 +1123,13 @@ internal static class Program
                     "NoGiveUp" => tuning with { NoGiveUp = true },
                     "NoLayerKnit" => tuning with { NoLayerKnit = true },
                     "NoFollow" => tuning with { NoFollow = true },
+                    "NoLayerOrder" => tuning with { NoLayerOrder = true },
                     _ => throw new UsageException($"Unknown --tune knob \"{knob}\"."),
                 };
             var planned = BodyRetarget.WithTuning(tuning, () => BodyRetarget.Plan(
                 garment, garmentBytes, pairs, slot, pushOut: !opts.ContainsKey("no-push"),
-                replaceSkin: true, acrossBodies: acrossBodies, cutHidden: true));
+                replaceSkin: true, acrossBodies: acrossBodies, cutHidden: !opts.ContainsKey("whole"),
+                keepShape: keepShape));
             string written = Path.Combine(outDir, label + ".mdl");
             File.WriteAllBytes(written, planned.Model);
 
@@ -1095,7 +1219,7 @@ internal static class Program
             if (!args[i].StartsWith("--", StringComparison.Ordinal))
                 throw new UsageException($"Unexpected argument \"{args[i]}\".");
             string key = args[i][2..];
-            opts[key] = key is "list" or "detect" or "finish" or "inspect" or "save" or "measure" or "no-push" or "bands" or "skin-map" or "skin-side" or "off" or "islands" or "face-poke" ? "" : i + 1 < args.Length ? args[++i] : throw new UsageException($"--{key} needs a value.");
+            opts[key] = key is "list" or "detect" or "finish" or "inspect" or "save" or "measure" or "no-push" or "whole" or "keep-default" or "shares" or "time" or "bands" or "skin-map" or "skin-side" or "off" or "islands" or "face-poke" ? "" : i + 1 < args.Length ? args[++i] : throw new UsageException($"--{key} needs a value.");
         }
         return opts;
     }
