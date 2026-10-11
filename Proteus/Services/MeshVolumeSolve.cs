@@ -147,6 +147,20 @@ internal sealed class MeshVolumeSolve : IMeshEdit
     private readonly List<Dictionary<int, Was>> undo = [];
     private Dictionary<int, Was>? stroke;
 
+    /// <summary>The open stroke is a relax or smooth stroke, which <see cref="EndStroke"/> does not smooth again.</summary>
+    private bool strokeSmooths;
+
+    /// <summary>The open stroke was painted by the bridge or the wind brush — finished as <see cref="EndStroke"/>'s
+    /// flags say, whoever ends it.</summary>
+    private bool strokeBridges, strokeWinds;
+
+    /// <summary>
+    /// A brush stroke has been painted and not yet ended — not a move or grab drag, which end themselves. A caller whose
+    /// surface let go without saying so (the tab stopped drawing mid-stroke) ends it with <see cref="EndStroke"/>,
+    /// or its undo record and its settle would be lost to whatever opens the next stroke.
+    /// </summary>
+    public bool StrokeOpen => stroke != null && !Moving && !Grabbing;
+
     private Was Snapshot(int n) => new(nodeDelta[n], nodeWeight[n], nodeWind[n], nodeMoved[n]);
 
 
@@ -478,7 +492,7 @@ internal sealed class MeshVolumeSolve : IMeshEdit
     }
 
     /// <summary>Whether a dab should also paint its mirror: asked for, and not already on the midline.</summary>
-    private bool MirrorAt(Vector3 centre, bool mirror) => mirror && MathF.Abs(centre.X) >= MathF.Max(MeanEdge, 1e-4f);
+    private bool MirrorAt(Vector3 centre, bool mirror) => mirror && MathF.Abs(centre.X) >= MirrorMinX;
 
     /// <summary>The mesh's own resolution, so a radius can be judged against what it will actually reach.</summary>
     public float MeanEdge { get; }
@@ -513,11 +527,14 @@ internal sealed class MeshVolumeSolve : IMeshEdit
     /// <param name="target">0..1: the amount being painted; 0 erases.</param>
     /// <param name="rate">0..1: how much of the remaining difference each dab closes at the middle of the brush.</param>
     /// <param name="mirror">Also paint the mirror image across the body's midline — see <see cref="DabWeight"/>.</param>
+    /// <param name="dabs">How many dabs land here at once — a slow frame's share of the brush's clock. The brush is
+    /// found once for all of them.</param>
     /// <returns>How many nodes changed.</returns>
-    public int PaintWind(Vector3 centre, float radius, float target, float rate, bool mirror = false)
+    public int PaintWind(Vector3 centre, float radius, float target, float rate, bool mirror = false, int dabs = 1)
     {
-        if (radius <= 0f || rate <= 0f) return 0;
+        if (radius <= 0f || rate <= 0f || dabs <= 0) return 0;
         stroke ??= [];
+        strokeWinds = true;
         target = Math.Clamp(target, 0f, 1f);
         rate = Math.Clamp(rate, 0f, 1f);
 
@@ -530,9 +547,13 @@ internal sealed class MeshVolumeSolve : IMeshEdit
             float w = DabWeight(n, c, radius, mirror, out _);
             if (w <= 0f) continue;
 
-            float next = Math.Clamp(nodeWind[n] + (target - nodeWind[n]) * rate * w, 0f, 1f);
-            // Settle exactly on the target within a 255th: the file stores a byte.
-            if (MathF.Abs(next - target) < 0.5f / 255f) next = target;
+            float next = nodeWind[n];
+            for (int d = 0; d < dabs; d++)
+            {
+                next = Math.Clamp(next + (target - next) * rate * w, 0f, 1f);
+                // Settle exactly on the target within a 255th: the file stores a byte.
+                if (MathF.Abs(next - target) < 0.5f / 255f) { next = target; break; }
+            }
             if (next == nodeWind[n]) continue;
 
             stroke.TryAdd(n, Snapshot(n));   // before the first change — see Paint
@@ -572,10 +593,14 @@ internal sealed class MeshVolumeSolve : IMeshEdit
     /// <param name="toViewer">Unit direction toward the viewer in model space: the "out" for a node with no direction
     /// of its own (double-sided surfaces whose normals cancel). Zero leaves such nodes where they are.</param>
     /// <param name="mirror">Also paint the mirror image across the body's midline — see <see cref="DabWeight"/>.</param>
+    /// <param name="dabs">How many dabs land here at once — see <see cref="PaintWind"/>. A pull is linear, so they are
+    /// one step of <paramref name="strength"/> times as many.</param>
     /// <returns>How many nodes moved.</returns>
-    public int Paint(Vector3 centre, float radius, float strength, Vector3 toViewer = default, bool mirror = false)
+    public int Paint(Vector3 centre, float radius, float strength, Vector3 toViewer = default, bool mirror = false,
+                     int dabs = 1)
     {
-        if (radius <= 0f || strength == 0f) return 0;
+        if (radius <= 0f || strength == 0f || dabs <= 0) return 0;
+        strength *= dabs;
         stroke ??= [];
         var viewer = Unit(new Vec3(toViewer.X, toViewer.Y, toViewer.Z));
         var viewerMirrored = new Vec3(-viewer.X, viewer.Y, viewer.Z);
@@ -603,8 +628,11 @@ internal sealed class MeshVolumeSolve : IMeshEdit
                                 nodeDelta[n].Y + dir.Y * step,
                                 nodeDelta[n].Z + dir.Z * step);
 
-            // Clamped by total magnitude, so holding the button cannot walk a vertex away indefinitely.
-            nodeDelta[n] = CapBrush(n, next);
+            // Clamped by total magnitude, so holding the button cannot walk a vertex away indefinitely. A node the cap
+            // holds where it was has not moved: counted, it would have the caller redraw and re-preview for nothing.
+            next = CapBrush(n, next);
+            if (next == nodeDelta[n]) continue;
+            nodeDelta[n] = next;
             nodeWeight[n] = MathF.Max(nodeWeight[n], w);
             moved++;
         }
@@ -626,11 +654,79 @@ internal sealed class MeshVolumeSolve : IMeshEdit
     /// <param name="rate">0..1: how far each dab moves toward the average, at the middle of the brush.</param>
     /// <param name="mirror">Also relax the mirror image across the body's midline — see <see cref="DabWeight"/>.</param>
     /// <returns>How many nodes moved.</returns>
-    public int Relax(Vector3 centre, float radius, float rate, bool mirror = false)
+    /// <param name="dabs">How many dabs land here at once — see <see cref="PaintWind"/>.</param>
+    public int Relax(Vector3 centre, float radius, float rate, bool mirror = false, int dabs = 1)
     {
-        if (radius <= 0f || rate <= 0f) return 0;
-        stroke ??= [];
+        if (radius <= 0f || rate <= 0f || dabs <= 0 || GatherDab(centre, radius, mirror) == 0) return 0;
 
+        // Half the way at full rate, Max's default relax value of 0.5. Capped after every dab, as separate dabs are, so
+        // a slow frame's batch settles exactly where the same dabs one frame apart would.
+        for (int d = 0; d < dabs; d++)
+        {
+            TowardNeighbours(SmoothLambda * rate);
+            CapGathered();
+        }
+        return FinishDab();
+    }
+
+    /// <summary>
+    /// One dab of the smooth brush: Blender's and ZBrush's smooth, which irons out lumps WITHOUT the shrink
+    /// <see cref="Relax"/> has. Each dab is a Taubin pair — a step toward the neighbours' average, then a slightly
+    /// larger step back — so ripples go and the bulk of a curve stays where it was. Stops above skin the model carries,
+    /// as relax does.
+    /// </summary>
+    /// <param name="rate">0..1: how strong each dab is at the middle of the brush.</param>
+    /// <param name="mirror">Also smooth the mirror image across the body's midline — see <see cref="DabWeight"/>.</param>
+    /// <param name="dabs">How many dabs land here at once — see <see cref="PaintWind"/>.</param>
+    /// <returns>How many nodes moved.</returns>
+    public int Smooth(Vector3 centre, float radius, float rate, bool mirror = false, int dabs = 1)
+    {
+        if (radius <= 0f || rate <= 0f || dabs <= 0 || GatherDab(centre, radius, mirror) == 0) return 0;
+        rate = MathF.Min(rate, 1f);
+
+        var nodes = brushNodes;
+        var start = Scratch(ref smoothStart, nodes.Count);
+        for (int d = 0; d < dabs; d++)
+        {
+            // The FULL pair, then each node taken only its share of the way there. Scaling the two steps themselves
+            // does not keep the filter from growing anything: with a small step the pair gains above 1 at the highest
+            // frequency, and the faint rim of the brush would roughen the cloth it was meant to iron.
+            for (int i = 0; i < nodes.Count; i++) start[i] = nodeDelta[nodes[i]];
+            // The skin floor only on the result below, not on these in-between states — each check is a grid search.
+            TowardNeighbours(SmoothLambda, weighted: false, keepAboveSkin: false);
+            TowardNeighbours(SmoothMu, weighted: false, keepAboveSkin: false);
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                int n = nodes[i];
+                float k = rate * brushWeights[i];
+                var s = start[i];
+                var full = nodeDelta[n];
+                nodeDelta[n] = KeepAboveSkin(n, new Vec3(s.X + (full.X - s.X) * k,
+                                                         s.Y + (full.Y - s.Y) * k,
+                                                         s.Z + (full.Z - s.Z) * k));
+            }
+            CapGathered();   // per dab, as for relax
+        }
+        return FinishDab();
+    }
+
+    /// <summary>Hold every gathered node's brush share within <see cref="MaxDisplacement"/> — see <see cref="CapBrush"/>.</summary>
+    private void CapGathered()
+    {
+        foreach (int n in brushNodes) nodeDelta[n] = CapBrush(n, nodeDelta[n]);
+    }
+
+    private Vec3[]? smoothStart;
+
+    /// <summary>
+    /// Fill <see cref="brushNodes"/> and <see cref="brushWeights"/> with the movable nodes a smoothing dab reaches,
+    /// and record them for undo before anything changes them — see <see cref="Paint"/>.
+    /// </summary>
+    /// <returns>How many it reaches.</returns>
+    private int GatherDab(Vector3 centre, float radius, bool mirror)
+    {
+        stroke ??= [];
+        strokeSmooths = true;
         var c = new Vec3(centre.X, centre.Y, centre.Z);
         mirror = MirrorAt(centre, mirror);
 
@@ -646,11 +742,26 @@ internal sealed class MeshVolumeSolve : IMeshEdit
             nodes.Add(n);
             weights.Add(w);
         }
-        if (nodes.Count == 0) return 0;
 
-        // Recorded before the first change of this stroke — see Paint.
         foreach (int n in nodes) stroke.TryAdd(n, Snapshot(n));
+        var before = Scratch(ref dabBefore, nodes.Count);
+        for (int i = 0; i < nodes.Count; i++) before[i] = nodeDelta[nodes[i]];
+        return nodes.Count;
+    }
 
+    /// <summary>Each gathered node's displacement before the dab, so <see cref="FinishDab"/> counts only what it moved.</summary>
+    private Vec3[]? dabBefore;
+
+    /// <summary>
+    /// Move every gathered node <paramref name="factor"/> of the way toward its neighbours' average, scaled by its
+    /// weight unless <paramref name="weighted"/> is off; negative moves it away. Reads every node before writing any,
+    /// so node order does not matter.
+    /// </summary>
+    /// <param name="keepAboveSkin">Hold each result above skin the model carries; off for a caller that does so itself.</param>
+    private void TowardNeighbours(float factor, bool weighted = true, bool keepAboveSkin = true)
+    {
+        var nodes = brushNodes;
+        var weights = brushWeights;
         var next = Scratch(ref relaxNext, nodes.Count);
         for (int i = 0; i < nodes.Count; i++)
         {
@@ -666,24 +777,36 @@ internal sealed class MeshVolumeSolve : IMeshEdit
             var d = nodeDelta[n];
             float px = nodeAt[n].X + d.X, py = nodeAt[n].Y + d.Y, pz = nodeAt[n].Z + d.Z;
 
-            // Half the way at full rate, Max's default relax value of 0.5.
-            float f = SmoothLambda * rate * weights[i];
-            next[i] = KeepAboveSkin(n, new Vec3(d.X + (sx * inv - px) * f,
-                                                d.Y + (sy * inv - py) * f,
-                                                d.Z + (sz * inv - pz) * f));
+            float f = weighted ? factor * weights[i] : factor;
+            var moved = new Vec3(d.X + (sx * inv - px) * f, d.Y + (sy * inv - py) * f, d.Z + (sz * inv - pz) * f);
+            next[i] = keepAboveSkin ? KeepAboveSkin(n, moved) : moved;
         }
         for (int i = 0; i < nodes.Count; i++) nodeDelta[nodes[i]] = next[i];
+    }
 
+    /// <summary>
+    /// Weigh the nodes a smoothing dab moved — each dab capped them already — and show the result. Only what moved: a
+    /// smooth over cloth already smooth reaches nodes without moving them, and must not have its caller redraw and
+    /// re-preview the whole model every frame for nothing.
+    /// </summary>
+    /// <returns>How many nodes the dab moved.</returns>
+    private int FinishDab()
+    {
+        var nodes = brushNodes;
+        var before = dabBefore!;
+        int moved = 0;
         for (int i = 0; i < nodes.Count; i++)
         {
             int n = nodes[i];
-            nodeDelta[n] = CapBrush(n, nodeDelta[n]);
-            nodeWeight[n] = MathF.Max(nodeWeight[n], weights[i]);
+            if (nodeDelta[n] == before[i]) continue;
+            nodeWeight[n] = MathF.Max(nodeWeight[n], brushWeights[i]);
+            moved++;
         }
+        if (moved == 0) return 0;
 
         Dirty = true;
         Spread();
-        return nodes.Count;
+        return moved;
     }
 
     // Per-dab working storage for Relax and Bridge, reused to avoid per-frame garbage.
@@ -731,6 +854,7 @@ internal sealed class MeshVolumeSolve : IMeshEdit
     {
         if (radius <= 0f || rate <= 0f) return 0;
         stroke ??= [];
+        strokeBridges = true;
 
         var c = new Vec3(centre.X, centre.Y, centre.Z);
         bool both = MirrorAt(centre, mirror);
@@ -966,7 +1090,10 @@ internal sealed class MeshVolumeSolve : IMeshEdit
             var next = new Vec3(nodeDelta[n].X + axis.X * step,
                                 nodeDelta[n].Y + axis.Y * step,
                                 nodeDelta[n].Z + axis.Z * step);
-            nodeDelta[n] = CapBrush(n, next);
+            // As for Paint: a node the cap holds where it was has not moved, and is not counted.
+            next = CapBrush(n, next);
+            if (next == nodeDelta[n]) continue;
+            nodeDelta[n] = next;
             nodeWeight[n] = MathF.Max(nodeWeight[n], weights[i]);
             moved++;
         }
@@ -983,27 +1110,46 @@ internal sealed class MeshVolumeSolve : IMeshEdit
     /// <param name="bridge">The stroke was the bridge brush, which is finished differently — see below.</param>
     /// <param name="wind">The stroke only painted wind: nothing moved, so there is nothing to smooth, unfold or
     /// re-light — it is recorded for undo and that is all.</param>
-    public void EndStroke(bool bridge = false, bool wind = false)
+    /// <returns>Whether the stroke changed anything. One that reached nothing — a tap, or dabs only over locked cloth
+    /// or skin — is not settled, and its caller has nothing to show again or save.</returns>
+    public bool EndStroke(bool bridge = false, bool wind = false)
     {
         var touched = stroke;
         stroke = null;
+        // The brush that painted it knows best: a stroke ended for it by a grab or move must finish the same way.
+        bool smoothing = strokeSmooths;
+        bridge |= strokeBridges;
+        wind |= strokeWinds;
+        strokeSmooths = strokeBridges = strokeWinds = false;
         bridgeAxis = bridgeMirrorAxis = null;
-        if (wind)
+        // Nothing changed — a tap, dabs only over locked cloth or skin, or a smooth over cloth already smooth (relax and
+        // smooth record every node they reach, moved or not): no undo step and no settle.
+        if (touched is not { Count: > 0 }) return false;
+        if (!ChangedSince(touched))
         {
-            if (touched is { Count: > 0 }) undo.Add(touched);
-            return;
-        }
-        if (touched is not { Count: > 0 })
-        {
-            Settle(null);
-            return;
+            // The dabs still raised the normal-rebuild weights of what they reached, and marked the model edited. Put
+            // both back, or the next settle re-lights cloth this stroke never moved and an untouched model reads edited.
+            foreach (var (n, was) in touched) nodeWeight[n] = was.Weight;
+            Dirty = undo.Count > 0 || nodeDelta.Any(d => d.X != 0f || d.Y != 0f || d.Z != 0f) || WindEdited;
+            return false;
         }
         undo.Add(touched);
+        if (wind) return true;
 
         // A bridge stroke is not smoothed and may collapse triangles: smoothing flattens its narrow band of lift,
-        // and filling a steep crack is meant to lay its walls flat.
-        if (!bridge) SmoothStroke(touched);
+        // and filling a steep crack is meant to lay its walls flat. Nor is a relax or smooth stroke: what it added is
+        // the lump turned upside down, a spike as sharp as the lump was, and smoothing THAT put half the lump back.
+        if (!bridge && !smoothing) SmoothStroke(touched);
         Settle(touched, allowCollapse: bridge);
+        return true;
+    }
+
+    /// <summary>Whether any node a stroke recorded is not as the stroke found it.</summary>
+    private bool ChangedSince(Dictionary<int, Was> strokeStart)
+    {
+        foreach (var (n, was) in strokeStart)
+            if (nodeDelta[n] != was.Delta || nodeWind[n] != was.Wind) return true;
+        return false;
     }
 
     /// <summary>
@@ -1074,7 +1220,10 @@ internal sealed class MeshVolumeSolve : IMeshEdit
         Array.Copy(initialPull, pullDir, nodeCount);
         undo.Clear();
         stroke = null;
+        strokeSmooths = strokeBridges = strokeWinds = false;
         bridgeAxis = bridgeMirrorAxis = null;
+        Grabbing = false;
+        grabTerms.Clear();
         Dirty = false;
         Settle(null);
     }
@@ -1100,26 +1249,77 @@ internal sealed class MeshVolumeSolve : IMeshEdit
     public int BeginMove(IEnumerable<int> partVertices, bool adjacent, float falloffRadius, bool alongSurface = false)
     {
         if (Moving) EndMove();
-        moveWeights.Clear();
+        if (Grabbing) EndGrab();
+        if (StrokeOpen) EndStroke();
+        if (CollectMoveWeights(partVertices, adjacent, falloffRadius, alongSurface, moveWeights) == 0) return 0;
 
+        stroke = [];
+        foreach (int n in moveWeights.Keys) stroke[n] = Snapshot(n);
+        Moving = true;
+        moveDrag++;
+        return moveWeights.Count;
+    }
+
+    /// <summary>
+    /// Fill <paramref name="into"/> with each node a move of these part vertices carries and how much of it — see
+    /// <see cref="BeginMove"/>.
+    /// </summary>
+    /// <returns>How many nodes that is; 0 when the part has nothing that may move.</returns>
+    private int CollectMoveWeights(IEnumerable<int> partVertices, bool adjacent, float falloffRadius, bool alongSurface,
+                                   Dictionary<int, float> into)
+    {
+        into.Clear();
         var seeds = new HashSet<int>();
         foreach (int v in partVertices)
             if (v >= 0 && v < nodeOf.Length && !skin[nodeOf[v]] && !locked[nodeOf[v]]) seeds.Add(nodeOf[v]);
         if (seeds.Count == 0) return 0;
 
-        foreach (int n in seeds) moveWeights[n] = 1f;
+        foreach (int n in seeds) into[n] = 1f;
 
         if (adjacent && falloffRadius > 0f)
             foreach (var (n, d) in alongSurface ? AlongSurface(seeds, falloffRadius) : NearPart(seeds, falloffRadius))
             {
                 float w = Falloff(d / falloffRadius);
-                if (w > 0f) moveWeights[n] = w;
+                if (w > 0f) into[n] = w;
             }
+        return into.Count;
+    }
 
-        stroke = [];
-        foreach (int n in moveWeights.Keys) stroke[n] = Snapshot(n);
-        Moving = true;
-        return moveWeights.Count;
+    /// <summary>
+    /// How much of a move each vertex would take if these part vertices were dragged now with the falloff on — 1 on
+    /// the part, fading to 0 at <paramref name="falloffRadius"/> — indexed like <see cref="ModelParts.Positions"/>.
+    /// What the view shows before a drag; nothing changes and no drag opens.
+    /// </summary>
+    /// <param name="into">A buffer from an earlier call to fill again rather than allocate; null for a new one.</param>
+    /// <returns>Null when nothing would move; otherwise <paramref name="into"/> when it was big enough.</returns>
+    public float[]? MoveFalloff(IEnumerable<int> partVertices, float falloffRadius, bool alongSurface, float[]? into = null)
+    {
+        if (CollectMoveWeights(partVertices, adjacent: true, falloffRadius, alongSurface, previewWeights) == 0) return null;
+        return PerVertex(previewWeights, into);
+    }
+
+    private readonly Dictionary<int, float> previewWeights = [];
+
+    /// <summary>
+    /// The share of the move each vertex is taking in the drag under way — the weights <see cref="BeginMove"/> measured,
+    /// whatever the view last showed. Null between drags. Filled once per drag.
+    /// </summary>
+    public float[]? DragFalloff()
+    {
+        if (!Moving) return null;
+        if (dragFalloffFor != moveDrag) { dragFalloff = PerVertex(moveWeights, dragFalloff); dragFalloffFor = moveDrag; }
+        return dragFalloff;
+    }
+
+    private float[]? dragFalloff;
+    private int dragFalloffFor = -1, moveDrag;
+
+    private float[] PerVertex(Dictionary<int, float> weights, float[]? into)
+    {
+        var perVertex = into is { } buffer && buffer.Length == nodeOf.Length ? buffer : new float[nodeOf.Length];
+        for (int v = 0; v < nodeOf.Length; v++)
+            perVertex[v] = weights.TryGetValue(nodeOf[v], out float w) ? w : 0f;
+        return perVertex;
     }
 
     /// <summary>
@@ -1292,6 +1492,240 @@ internal sealed class MeshVolumeSolve : IMeshEdit
         Settle(null);
     }
 
+    // ── elastic grab ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// How much the grabbed cloth keeps its volume, as a Poisson ratio (0..0.5): Blender's default for its elastic
+    /// brushes. Higher bulges the cloth around the grab more, sideways to the drag.
+    /// </summary>
+    private const float GrabPoisson = 0.4f;
+
+    /// <summary>
+    /// The grab's inner regularisation radius as a share of the brush radius. The outer is twice it, as in Blender:
+    /// the difference of the two Kelvinlets falls off as 1/r³ rather than 1/r, so the field is nearly spent at the
+    /// brush's rim instead of dragging the whole garment.
+    /// </summary>
+    private const float GrabScale = 1f / 2.5f;
+
+    /// <summary>How far past the brush rim the grab still reaches, fading to nothing, as a share of the radius.</summary>
+    private const float GrabFade = 0.5f;
+
+    /// <summary>
+    /// One node a grab carries: its offset from the grab centre and its two Kelvinlet coefficients, and the same for
+    /// the mirrored centre, with <see cref="Side"/> the share of the direct field (1 without mirror).
+    /// </summary>
+    private readonly record struct GrabTerm(int Node, Vector3 R, float A, float B,
+                                            Vector3 MirrorR, float MirrorA, float MirrorB, float Side);
+
+    private readonly List<GrabTerm> grabTerms = [];
+
+    /// <summary>The offset the grab was last placed at; what the normal rebuild at release is weighed against.</summary>
+    private Vector3 grabOffset;
+
+    /// <summary>Whether the model was edited before the grab began — what a grab that moved nothing leaves it as.</summary>
+    private bool dirtyBeforeGrab;
+
+    /// <summary>A grab is under way: <see cref="BeginGrab"/> was called and <see cref="EndGrab"/> not yet.</summary>
+    public bool Grabbing { get; private set; }
+
+    /// <summary>
+    /// The regularised Kelvinlet's two coefficients at distance <paramref name="r"/> from a grab of brush radius
+    /// <paramref name="radius"/>: a point offset <c>R</c> from the centre moves <c>A·f + B·R(R·f)</c> when the centre
+    /// moves <c>f</c>. Bi-scale (de Goes and James, "Regularized Kelvinlets", 2017), normalised so the centre itself
+    /// follows the drag exactly, and faded to nothing over <see cref="GrabFade"/> past the rim so the field ends.
+    /// The shear modulus cancels in the normalisation, so only <see cref="GrabPoisson"/> shapes it.
+    /// </summary>
+    internal static (float A, float B) Kelvinlet(float r, float radius)
+    {
+        float reach = radius * (1f + GrabFade);
+        if (radius <= 0f || r >= reach) return (0f, 0f);
+
+        const float a = 1f, b = a / (4f * (1f - GrabPoisson));
+        float e1 = radius * GrabScale, e2 = e1 * 2f;
+
+        static (float A, float B) One(float r2, float e)
+        {
+            float re = MathF.Sqrt(r2 + e * e);
+            float re3 = re * re * re;
+            return ((a - b) / re + a * e * e / (2f * re3), b / re3);
+        }
+
+        float r2 = r * r;
+        var (a1, b1) = One(r2, e1);
+        var (a2, b2) = One(r2, e2);
+        float atCentre = (1.5f * a - b) * (1f / e1 - 1f / e2);
+        float fade = r <= radius ? 1f : Falloff((r - radius) / (radius * GrabFade));
+        return ((a1 - a2) / atCentre * fade, (b1 - b2) / atCentre * fade);
+    }
+
+    /// <summary>
+    /// How far a brush of <paramref name="radius"/> reaches: the radius itself, or for the grab, the radius and its
+    /// fade beyond (<see cref="GrabFade"/>). What a view draws its falloff out to.
+    /// </summary>
+    public static float BrushReach(float radius, bool grab) => grab ? radius * (1f + GrabFade) : radius;
+
+    /// <summary>
+    /// How strongly a brush moves a point at distance <paramref name="d"/> from its centre, 0..1, as a view should show
+    /// it: <see cref="Falloff"/> for the painting brushes, and for the grab the share its Kelvinlet gives a point in
+    /// line with the drag — the most any point at that distance follows, so cloth past the ring that still comes along
+    /// shows as coming along.
+    /// </summary>
+    public static float BrushWeight(float d, float radius, bool grab)
+    {
+        if (radius <= 0f) return 0f;
+        if (!grab) return Falloff(d / radius);
+        var (a, b) = Kelvinlet(d, radius);
+        return Math.Clamp(a + b * d * d, 0f, 1f);
+    }
+
+    /// <summary>
+    /// How much of a mirrored grab's own side's drag a point at <paramref name="x"/> follows, 0..1 — the rest is the
+    /// mirror's. 1 on the grab's side, 0 on the other, blended across a narrow band at the midline so the centre line
+    /// stays on it. The band is never wider than the grab is from the midline: the point taken hold of must follow its
+    /// own side's drag alone, or a sideways drag is half cancelled by the mirror's and the cloth slides from the mouse.
+    /// Shared by the grab and the views that preview it.
+    /// </summary>
+    /// <param name="meshEdge">The mesh's own resolution — <see cref="MirrorMinX"/>.</param>
+    public static float GrabSide(float x, float centreX, float radius, float meshEdge)
+    {
+        float band = MathF.Min(MathF.Max(meshEdge, radius * 0.05f), MathF.Abs(centreX));
+        if (band <= 0f) return 1f;
+        return Math.Clamp(0.5f + x * MathF.Sign(centreX) / (2f * band), 0f, 1f);
+    }
+
+    /// <summary>
+    /// Start an elastic grab at <paramref name="centre"/>, Blender's Elastic Deform brush: the surface around it
+    /// follows the drag like rubber, with no hard edge. Every node within reach is measured once, from where it is
+    /// now, so the drag is absolute and cannot creep. Skin and locked nodes never move.
+    /// </summary>
+    /// <param name="mirror">Also grab the mirror image across the body's midline. Each node follows the grab on its own
+    /// side, blended across a narrow band at the midline so the centre line stays on it.</param>
+    /// <returns>How many nodes the grab can move; the grab is open either way, until <see cref="EndGrab"/>.</returns>
+    public int BeginGrab(Vector3 centre, float radius, bool mirror = false)
+    {
+        if (Moving) EndMove();
+        if (Grabbing) EndGrab();
+        if (StrokeOpen) EndStroke();
+        dirtyBeforeGrab = Dirty;
+        grabTerms.Clear();
+        grabOffset = Vector3.Zero;
+        Grabbing = true;
+        stroke = [];
+        if (radius <= 0f)
+        {
+            grabFalloff = null;   // nothing held, so nothing to show
+            return 0;
+        }
+
+        mirror = MirrorAt(centre, mirror);
+        var mc = new Vector3(-centre.X, centre.Y, centre.Z);
+        float reach = radius * (1f + GrabFade);
+
+        grabWeights.Clear();
+        for (int n = 0; n < nodeCount; n++)
+        {
+            if (skin[n] || locked[n]) continue;
+            var h = Here(n);
+            var p = new Vector3(h.X, h.Y, h.Z);
+            var r = p - centre;
+            var rm = p - mc;
+            float d = r.Length(), dm = mirror ? rm.Length() : float.MaxValue;
+            if (d >= reach && dm >= reach) continue;
+
+            var (ka, kb) = Kelvinlet(d, radius);
+            var (ma, mb) = mirror ? Kelvinlet(dm, radius) : (0f, 0f);
+            float t = mirror ? GrabSide(p.X, centre.X, radius, MirrorMinX) : 1f;
+            grabTerms.Add(new GrabTerm(n, r, ka, kb, rm, ma, mb, t));
+            stroke[n] = Snapshot(n);
+
+            // What the view shows while the grab is held: the cloth it took hold of, as it was weighed now — the in-line
+            // share BrushWeight gives, from the coefficients just worked out, each side blended exactly as GrabTo
+            // blends the two drags.
+            float w = t * Math.Clamp(ka + kb * d * d, 0f, 1f);
+            if (t < 1f) w += (1f - t) * Math.Clamp(ma + mb * dm * dm, 0f, 1f);
+            if (w > 0f) grabWeights[n] = w;
+        }
+        grabFalloff = PerVertex(grabWeights, grabFalloff);
+        return grabTerms.Count;
+    }
+
+    private readonly Dictionary<int, float> grabWeights = [];
+    private float[]? grabFalloff;
+
+    /// <summary>
+    /// How strongly the grab under way carries each vertex (indexed like <see cref="ModelParts.Positions"/>), as weighed
+    /// when it took hold — the cloth it holds, wherever the mouse has since gone. Null between grabs.
+    /// </summary>
+    public float[]? GrabFalloff() => Grabbing ? grabFalloff : null;
+
+    /// <summary>
+    /// Place the grab with its centre moved <paramref name="offset"/> from where it was taken. Absolute, like
+    /// <see cref="MoveTo"/>, and not capped: the cloth goes where the mouse takes it.
+    /// </summary>
+    /// <returns>How many nodes it moved.</returns>
+    public int GrabTo(Vector3 offset)
+    {
+        // A mouse held still: nothing to rewrite, re-spread or redraw.
+        if (!Grabbing || stroke == null || grabTerms.Count == 0 || offset == grabOffset) return 0;
+        grabOffset = offset;
+        var mf = new Vector3(-offset.X, offset.Y, offset.Z);
+        foreach (var g in grabTerms)
+        {
+            var u = g.A * offset + g.B * Vector3.Dot(g.R, offset) * g.R;
+            if (g.Side < 1f)
+                u = g.Side * u + (1f - g.Side) * (g.MirrorA * mf + g.MirrorB * Vector3.Dot(g.MirrorR, mf) * g.MirrorR);
+
+            var was = stroke[g.Node];
+            nodeDelta[g.Node] = new Vec3(was.Delta.X + u.X, was.Delta.Y + u.Y, was.Delta.Z + u.Z);
+            // The Move tool's share, not the brushes': uncapped, and found where it now is by every later dab.
+            nodeMoved[g.Node] = new Vec3(was.Moved.X + u.X, was.Moved.Y + u.Y, was.Moved.Z + u.Z);
+        }
+        Dirty = true;
+        Spread();
+        return grabTerms.Count;
+    }
+
+    /// <summary>
+    /// Finish a grab: record it for undo and re-light what it bent, each node as strongly as it followed the drag. No
+    /// smoothing or unfold, which would take back part of a drag the user placed on purpose — as for a move. A grab
+    /// that ends where it began — a tap, or a drag brought back — leaves the model exactly as it found it, edited or not.
+    /// </summary>
+    /// <returns>Whether the grab moved anything; when not, there is nothing to show again or save.</returns>
+    public bool EndGrab()
+    {
+        if (!Grabbing) return false;
+        Grabbing = false;
+        var touched = stroke;
+        stroke = null;
+
+        bool moved = false;
+        if (touched != null)
+            foreach (var (n, was) in touched)
+                if (nodeDelta[n] != was.Delta) { moved = true; break; }
+
+        if (!moved)
+        {
+            grabTerms.Clear();
+            Dirty = dirtyBeforeGrab;
+            return false;
+        }
+
+        undo.Add(touched!);
+        float len = grabOffset.Length();
+        foreach (var g in grabTerms)
+        {
+            var d = nodeDelta[g.Node];
+            var was = touched![g.Node].Delta;
+            float went = MathF.Sqrt((d.X - was.X) * (d.X - was.X) + (d.Y - was.Y) * (d.Y - was.Y)
+                                    + (d.Z - was.Z) * (d.Z - was.Z));
+            float w = len > 1e-9f ? Math.Clamp(went / len, 0f, 1f) : 0f;
+            nodeWeight[g.Node] = MathF.Max(nodeWeight[g.Node], w);
+        }
+        grabTerms.Clear();
+        Settle(null);
+        return true;
+    }
+
     /// <summary>A node's position as it now stands: the author's plus every edit.</summary>
     private Vec3 Here(int n)
         => new(nodeAt[n].X + nodeDelta[n].X, nodeAt[n].Y + nodeDelta[n].Y, nodeAt[n].Z + nodeDelta[n].Z);
@@ -1380,7 +1814,11 @@ internal sealed class MeshVolumeSolve : IMeshEdit
         }
         Worst = worst;
         positionsStale = true;
+        EditVersion++;
     }
+
+    /// <summary>Bumped whenever any position changes, so a view can tell when what it measured from them is stale.</summary>
+    public int EditVersion { get; private set; }
 
     private float[]? positionCache;
     private bool positionsStale = true;
@@ -1443,6 +1881,11 @@ internal sealed class MeshVolumeSolve : IMeshEdit
 
         undo.Clear();
         stroke = null;
+        strokeSmooths = strokeBridges = strokeWinds = false;
+        // A move or grab open on this solve is over too, as for Reset: its snapshots belong to the edit being replaced.
+        Moving = Grabbing = false;
+        moveWeights.Clear();
+        grabTerms.Clear();
         for (int n = 0; n < nodeCount; n++)
         {
             if (skin[n] || count[n] == 0) continue;
@@ -1460,6 +1903,18 @@ internal sealed class MeshVolumeSolve : IMeshEdit
 
     /// <summary>Per-vertex normal after the edit, indexed as <see cref="ModelParts.Positions"/> is.</summary>
     public Vec3 NormalAt(int vertex) => vertNrm[vertex];
+
+    /// <summary>The vertex's normal as the model's author made it, before any edit turned it.</summary>
+    public Vec3 AuthoredNormalAt(int vertex) => baseNrm[vertex];
+
+    /// <summary>The vertex's position as the model's author made it — the same file as <see cref="AuthoredNormalAt"/>.</summary>
+    public Vec3 AuthoredPositionAt(int vertex) => basePos[vertex];
+
+    /// <summary>
+    /// How far off the midline a brush's centre must be for its mirror to paint: closer, it is its own mirror. What
+    /// a view tests before drawing a mirrored disc, so it shows exactly when the brush will mirror.
+    /// </summary>
+    public float MirrorMinX => MathF.Max(MeanEdge, 1e-4f);
 
     private static Vec3 Unit(Vec3 v)
     {

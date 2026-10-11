@@ -212,6 +212,9 @@ public sealed class PartViewport : IDisposable, IBrushSurface
     /// <summary>The brush is down and being dragged across the model right now.</summary>
     public bool Painting { get; private set; }
 
+    /// <remarks>Also on the frame the stroke ends, so the mouse's last movement before the release still counts.</remarks>
+    public (Vector3 Origin, Vector3 Dir)? MouseRay => Painting || StrokeEnded ? ScreenRay(ImGui.GetMousePos()) : null;
+
     /// <summary>True for the single frame a stroke is released; the panel runs its expensive passes off this edge.</summary>
     public bool StrokeEnded { get; private set; }
 
@@ -233,8 +236,38 @@ public sealed class PartViewport : IDisposable, IBrushSurface
     /// </summary>
     public Func<int, float>? VertexScalar { get; set; }
 
+    /// <summary>
+    /// Draw <see cref="VertexScalar"/> as the brush's rainbow (<see cref="BrushRainbow"/>) rather than a red wash —
+    /// the Move tools' falloff, where it is a weight rather than an amount.
+    /// </summary>
+    public bool ScalarRainbow { get; set; }
+
+    /// <summary>How far off the midline the brush must be to mirror — the solve's <see cref="MeshVolumeSolve.MirrorMinX"/>.</summary>
+    public float MirrorMinX { get; set; } = 1e-4f;
+
+    /// <summary>The brush is the grab, whose reach and falloff differ from the painting brushes' — see
+    /// <see cref="MeshVolumeSolve.BrushWeight"/>.</summary>
+    public bool GrabBrush { get; set; }
+
+    /// <summary>How far toward the rainbow a fully weighted pixel is blended: opaque enough to read, the shading kept.</summary>
+    private const float RainbowOpacity = 0.7f;
+
+    /// <summary>The brush's weight by distance, sampled once per brush — see <see cref="BrushWeightTable"/>.</summary>
+    private readonly BrushWeightTable weights = new();
+
+    /// <summary>
+    /// The same values as <see cref="VertexScalar"/>, handed over as the array they already are — read directly, without
+    /// a call per vertex. Takes precedence when set.
+    /// </summary>
+    public float[]? VertexScalarValues { get; set; }
+
     /// <summary>Per pixel: <see cref="VertexScalar"/> interpolated across the surface the pixel shows.</summary>
     private float[] scalar = [];
+
+    // Per vertex, for each projection; reused — see Rasterize.
+    private Vector3[] rasterScreen = [], rasterWorld = [];
+    private bool[] rasterValid = [];
+    private float[] rasterScalar = [];
 
     public void Dispose()
     {
@@ -370,7 +403,8 @@ public sealed class PartViewport : IDisposable, IBrushSurface
                    : Cursor != null ? ImGuiMouseCursor.ResizeAll : ImGuiMouseCursor.Arrow)
                 : (label != null ? ImGuiMouseCursor.Hand : ImGuiMouseCursor.Arrow));
 
-            if (ImGui.GetIO().MouseWheel != 0)
+            // Not mid-stroke: the grab follows the mouse's ray, and a zoom would move the ray under a still mouse.
+            if (ImGui.GetIO().MouseWheel != 0 && !Painting)
             {
                 zoom = Math.Clamp(zoom * MathF.Pow(0.9f, ImGui.GetIO().MouseWheel), 0.15f, 6f);
                 geometryDirty = true;
@@ -470,16 +504,27 @@ public sealed class PartViewport : IDisposable, IBrushSurface
         var source = PositionOverride is { } ov && ov.Length == model.Positions.Length ? ov : model.Positions;
 
         int vertices = source.Length / 3;
-        var screen = new Vector3[vertices];
-        var valid = new bool[vertices];
-        var world = new Vector3[vertices];
-
-        // The wash's values, read once per vertex here rather than per pixel in the fill.
-        var scalarOf = VertexScalar;
-        float[]? perVertex = null;
-        if (scalarOf != null)
+        // Reused between projections: a drag re-projects every frame, and fresh per-vertex arrays each time were
+        // steady garbage on the draw thread for the whole drag.
+        if (rasterScreen.Length != vertices)
         {
-            perVertex = new float[vertices];
+            rasterScreen = new Vector3[vertices];
+            rasterValid = new bool[vertices];
+            rasterWorld = new Vector3[vertices];
+        }
+        var screen = rasterScreen;
+        var valid = rasterValid;
+        var world = rasterWorld;
+        Array.Clear(valid);
+
+        // The wash's values, read once per vertex here rather than per pixel in the fill — straight from an array
+        // when one was handed over, else through the callback into a reused buffer.
+        float[]? perVertex = null;
+        if (VertexScalarValues is { } given && given.Length >= vertices) perVertex = given;
+        else if (VertexScalar is { } scalarOf)
+        {
+            if (rasterScalar.Length != vertices) rasterScalar = new float[vertices];
+            perVertex = rasterScalar;
             for (int i = 0; i < vertices; i++) perVertex[i] = scalarOf(i);
         }
         Array.Clear(scalar);
@@ -603,8 +648,10 @@ public sealed class PartViewport : IDisposable, IBrushSurface
         bool brushing = brushMode && BrushRadius > 0f && Cursor is not null;
         var centre = Cursor ?? Vector3.Zero;
         var mirrorCentre = new Vector3(-centre.X, centre.Y, centre.Z);
-        bool mirrored = MirrorBrush && MathF.Abs(centre.X) > 1e-4f;
-        float r2 = BrushRadius * BrushRadius;
+        bool mirrored = MirrorBrush && MathF.Abs(centre.X) >= MirrorMinX;   // exactly when the brush itself mirrors
+        // The reach from the same table the weights come from, so the gate and the cutoff cannot disagree.
+        if (brushing) weights.Ensure(BrushRadius, GrabBrush);
+        float r2 = brushing ? weights.Reach * weights.Reach : 0f;
 
 
         for (int i = 0; i < id.Length; i++)
@@ -619,26 +666,39 @@ public sealed class PartViewport : IDisposable, IBrushSurface
             var (r, g, b) = tint[part];
             int s = shade[i];
 
-            // The wind wash, under the brush blob: red by how much the painted amount is.
-            if (VertexScalar != null && scalar[i] > 0f && canBrush[part])
+            // The wind wash, under the brush blob: red by how much the painted amount is. Or the Move tools' falloff
+            // as the rainbow, faded up from nothing at its edge as the brush's is.
+            if ((VertexScalar != null || VertexScalarValues != null) && scalar[i] > 0f && canBrush[part])
             {
-                float k = MathF.Min(scalar[i], 1f) * 0.75f;
-                r = (int)(r + (235 - r) * k);
-                g = (int)(g + (40 - g) * k);
-                b = (int)(b + (40 - b) * k);
+                float s01 = MathF.Min(scalar[i], 1f);
+                var (hr, hg, hb) = ScalarRainbow ? BrushRainbow.At(s01) : (235, 40, 40);
+                float k = ScalarRainbow ? RainbowOpacity * BrushRainbow.Fade(s01) : s01 * 0.75f;
+                r = (int)(r + (hr - r) * k);
+                g = (int)(g + (hg - g) * k);
+                b = (int)(b + (hb - b) * k);
             }
 
             if (brushing && canBrush[part])
             {
                 float d2 = (hit[i] - centre).LengthSquared();
-                if (mirrored) d2 = MathF.Min(d2, (hit[i] - mirrorCentre).LengthSquared());
-                if (d2 < r2)
+                float m2 = mirrored ? (hit[i] - mirrorCentre).LengthSquared() : float.MaxValue;
+                if (MathF.Min(d2, m2) < r2)
                 {
-                    // Blend toward the hot colour by the same falloff the edit uses.
-                    float w = MeshVolumeSolve.Falloff(MathF.Sqrt(d2) / BrushRadius);
-                    r = (int)(r + (255 - r) * w);
-                    g = (int)(g + (90 - g) * w);
-                    b = (int)(b + (70 - b) * w);
+                    // The rainbow the character shows, by the same falloff the edit uses: red where it moves the
+                    // surface most, violet at the rim, faded up from nothing so the rim is soft. Mirrored, the painting
+                    // brushes take the stronger disc and the grab blends its two sides as it will drag them.
+                    float w;
+                    if (!mirrored || !GrabBrush) w = weights.At(MathF.Min(d2, m2));
+                    else
+                    {
+                        float t = MeshVolumeSolve.GrabSide(hit[i].X, centre.X, BrushRadius, MirrorMinX);
+                        w = t * weights.At(d2) + (1f - t) * weights.At(m2);
+                    }
+                    var (hr, hg, hb) = BrushRainbow.At(w);
+                    float k = RainbowOpacity * BrushRainbow.Fade(w);
+                    r = (int)(r + (hr - r) * k);
+                    g = (int)(g + (hg - g) * k);
+                    b = (int)(b + (hb - b) * k);
                 }
             }
 

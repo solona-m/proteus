@@ -2399,6 +2399,30 @@
     "message": "칠하는 동안 표면이 매끄러워지는 속도. 낮으면 부드럽고 조절하기 쉽고,\n높으면 거의 즉시 매끄러워집니다.\n\n밑단 같은 열린 가장자리 근처에서는 가장자리가 조금 안쪽으로 끌려옵니다.",
     "description": ""
   },
+  "Parts.Tool.Smooth": {
+    "message": "스무딩",
+    "description": ""
+  },
+  "Parts.Tool.Smooth.Tip": {
+    "message": "모델을 칠해 줄어들게 하지 않고 울퉁불퉁함과 물결을 없앱니다.\n다듬기와 달리 곡면은 모양을 유지하고 천은 몸에서 떨어져 있습니다.",
+    "description": ""
+  },
+  "Parts.Brush.SmoothRate.Tip": {
+    "message": "칠하는 동안 표면이 매끄러워지는 속도. 낮으면 부드럽고 다루기 쉽고,\n높으면 거의 즉시 매끄러워집니다.",
+    "description": ""
+  },
+  "Parts.Tool.Grab": {
+    "message": "잡기",
+    "description": ""
+  },
+  "Parts.Tool.Grab.Tip": {
+    "message": "모델을 누르고 드래그하세요. 브러시 주변의 천이 고무처럼 마우스를 따라옵니다.\n가운데가 가장 강하고, 딱딱한 경계는 없습니다.",
+    "description": ""
+  },
+  "Parts.Grab.Help": {
+    "message": "천을 누르고 드래그하세요. 브러시 크기가 따라오는 천의 범위를 정합니다.\n화면을 따라 움직이며, Ctrl+Z로 되돌릴 수 있습니다.",
+    "description": ""
+  },
   "Parts.Tool.Bridge": {
     "message": "다리 놓기",
     "description": ""
@@ -2616,7 +2640,7 @@
     "description": ""
   },
   "Parts.Brush.Strength.Tip": {
-    "message": "칠하는 사이 표면이 움직이는 양. 보통 작은 것이 알맞습니다. 옷은 몸에서\n밀리미터의 일부만 뜨면 되고, 같은 자리를 여러 번 다시 칠할 수 있습니다.",
+    "message": "브러시를 누르고 있는 0.25초마다 브러시 중심이 표면을 움직이는 거리.\n프레임 속도와 관계없이 같습니다. 대개 작은 값이 맞습니다. 옷은 몸에서\n1밀리미터 미만만 떨어지면 되고, 같은 곳을 언제든 다시 칠할 수 있습니다.",
     "description": ""
   },
   "Parts.Brush.Limit": {
@@ -3998,6 +4022,10 @@
   "Common.Units.Mm2": {
     "message": "%.2f mm",
     "description": "Slider value in millimetres. An ImGui printf format: keep %.2f exactly as it is."
+  },
+  "Common.Units.MmPerQuarterSecond": {
+    "message": "%.2f mm / 0.25초",
+    "description": ""
   },
   "Create.Dialog.ImageFilter": {
     "message": "이미지",

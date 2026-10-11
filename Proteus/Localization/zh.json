@@ -2399,6 +2399,30 @@
     "message": "涂抹时表面变平滑的速度。低则柔和易控，高则几乎立刻平滑。\n\n靠近开放边缘（如下摆）时，平滑会把边缘稍微向内收。",
     "description": ""
   },
+  "Parts.Tool.Smooth": {
+    "message": "保形平滑",
+    "description": ""
+  },
+  "Parts.Tool.Smooth.Tip": {
+    "message": "在模型上涂抹，抹平鼓包和褶皱，但不会让它收缩：\n与“平滑”不同，曲面保持原形，布料也不会陷向身体。",
+    "description": ""
+  },
+  "Parts.Brush.SmoothRate.Tip": {
+    "message": "涂抹时表面变平滑的速度。低值柔和、易于控制；\n高值几乎立即变平滑。",
+    "description": ""
+  },
+  "Parts.Tool.Grab": {
+    "message": "抓取",
+    "description": ""
+  },
+  "Parts.Tool.Grab.Tip": {
+    "message": "在模型上按下并拖动：笔刷周围的布料像橡胶一样跟随鼠标，\n中心最强，没有硬边。",
+    "description": ""
+  },
+  "Parts.Grab.Help": {
+    "message": "在布料上按下并拖动。笔刷大小决定带动多少布料；\n它沿屏幕方向移动，Ctrl+Z 可撤销一次抓取。",
+    "description": ""
+  },
   "Parts.Tool.Bridge": {
     "message": "搭桥",
     "description": ""
@@ -2616,7 +2640,7 @@
     "description": ""
   },
   "Parts.Brush.Strength.Tip": {
-    "message": "每一瞬涂抹中表面移动的距离。通常宜小：衣物只需离身体不到一毫米即可，\n而且同一处可以反复涂抹。",
+    "message": "按住笔刷时，每 0.25 秒笔刷中心推动表面的距离，在任何帧率下都相同。\n通常小值就够了：衣物只需离开身体零点几毫米，\n而且同一处随时可以再涂。",
     "description": ""
   },
   "Parts.Brush.Limit": {
@@ -3998,6 +4022,10 @@
   "Common.Units.Mm2": {
     "message": "%.2f mm",
     "description": "Slider value in millimetres. An ImGui printf format: keep %.2f exactly as it is."
+  },
+  "Common.Units.MmPerQuarterSecond": {
+    "message": "%.2f 毫米 / 0.25 秒",
+    "description": ""
   },
   "Create.Dialog.ImageFilter": {
     "message": "图像",

@@ -146,6 +146,12 @@ public sealed class PartsPanel
 
         /// <summary>Refit the whole model onto another size of the body it was made for — see <see cref="BodyRetargetPanel"/>.</summary>
         Retarget,
+
+        /// <summary>Smooth the surface under the brush without the shrink <see cref="Relax"/> has — Blender's smooth.</summary>
+        Smooth,
+
+        /// <summary>Press on the surface and drag it like rubber — Blender's elastic grab.</summary>
+        Grab,
     }
 
     /// <summary>The tools that work on one chosen part rather than painting: Move, Rotate and Scale share its choice.</summary>
@@ -158,7 +164,8 @@ public sealed class PartsPanel
     /// Retarget is a third thing that is neither painting nor dragging, and every guard phrased as a single exclusion
     /// silently starts feeding strokes to the next tool added.
     /// </summary>
-    private bool PaintTool => tool is Tool.Inflate or Tool.Deflate or Tool.Relax or Tool.Bridge or Tool.Wind;
+    private bool PaintTool => tool is Tool.Inflate or Tool.Deflate or Tool.Relax or Tool.Smooth or Tool.Bridge or Tool.Wind
+                                   or Tool.Grab;
 
     /// <summary>The handle Scale drags — the part itself — shared by the model view and the character.</summary>
     private readonly PartScaleDrag scaleDrag = new();
@@ -204,16 +211,67 @@ public sealed class PartsPanel
     /// </summary>
     private MeshVolumeSolve? volume;
 
-    /// <summary>Brush radius and per-dab strength, both in millimetres.</summary>
-    private float brushRadiusMm = 200f, brushStrengthMm = 0.4f;
+    /// <summary>
+    /// Brush radius, and how far pull and push move the middle of the brush per quarter second held, both in
+    /// millimetres. Six is the 0.4 mm a dab that used to land once a frame, at 60 fps.
+    /// </summary>
+    private float brushRadiusMm = 200f, brushStrengthMm = 6f;
+
+    /// <summary>Paces every painting brush's dabs by time, not frames — see <see cref="DabClock"/>.</summary>
+    private readonly DabClock dabClock = new();
+
+    /// <summary>The most bridge dabs one frame runs — see <see cref="PumpBrush"/>.</summary>
+    private const int MaxBridgeDabsPerFrame = 2;
+
+    /// <summary>The most relax or smooth dabs one frame runs: below 20 fps they paint a little slower in real time.</summary>
+    private const int MaxSmoothDabsPerFrame = 3;
 
     /// <summary>The bridge brush's own size, smaller than the others': a wide bridge spans past the hollow onto the curves beside it.</summary>
     private float bridgeRadiusMm = 70f;
 
-    /// <summary>The size the current tool paints with; the bridge and wind brushes keep their own.</summary>
+    /// <summary>The size the current tool paints with; the bridge, wind and grab brushes keep their own.</summary>
     private ref float ActiveRadiusMm
-        => ref tool == Tool.Bridge ? ref bridgeRadiusMm
-             : ref (tool == Tool.Wind ? ref windRadiusMm : ref brushRadiusMm);
+    {
+        get
+        {
+            if (tool == Tool.Bridge) return ref bridgeRadiusMm;
+            if (tool == Tool.Wind) return ref windRadiusMm;
+            if (tool == Tool.Grab) return ref grabRadiusMm;
+            return ref brushRadiusMm;
+        }
+    }
+
+    /// <summary>
+    /// The grab brush's own size: what it drags is a handful of cloth, not the broad area the pull and relax brushes
+    /// sweep.
+    /// </summary>
+    private float grabRadiusMm = 60f;
+
+    /// <summary>The smooth brush's strength, as a percentage — see <see cref="MeshVolumeSolve.Smooth"/>.</summary>
+    private float smoothRatePercent = 50f;
+
+    /// <summary>Where the grab under way was taken, and the plane across the view it is dragged in; null between grabs.</summary>
+    private (Vector3 Anchor, Vector3 Normal)? grabPlane;
+
+    /// <summary>Where the mouse's ray first met <see cref="grabPlane"/>; the drag is measured from here. Null until then.</summary>
+    private Vector3? grabFrom;
+
+    /// <summary>The surface was painting last frame, so a press can be told from a button still held.</summary>
+    private bool sawPainting;
+
+    /// <summary>The grab under way has shown the views a moved cloth at least once.</summary>
+    private bool grabShownMoved;
+
+    /// <summary>Whether the character's preview was owed before the grab, and how many had been pushed by then.</summary>
+    private bool previewDirtyBeforeGrab;
+    private int previewPushesAtGrab;
+
+    /// <summary>
+    /// A grab ended having moved nothing. The character is owed a preview only if it was before the grab, or if one was
+    /// pushed mid-drag — that one showed cloth since brought back, and must be put right.
+    /// </summary>
+    private void AfterGrabMovedNothing()
+        => previewDirty = previewDirtyBeforeGrab || previewPushes != previewPushesAtGrab;
 
     /// <summary>The open model's wind lookup for the viewer's wash, made once per model rather than per frame.</summary>
     private Func<int, float>? windAt;
@@ -501,7 +559,8 @@ public sealed class PartsPanel
                                    lockedVersion: tool == Tool.Retarget ? VersionOf(RetargetHolds) : 0,
                                    polygons: moving && movePolygons ? movePolys : null,
                                    polygonClicked: moving && movePolygons ? polyClickedFn : null,
-                                   polygonPickable: moving && movePolygons ? polyPickableFn : null);
+                                   polygonPickable: moving && movePolygons ? polyPickableFn : null,
+                                   moveFalloff: MoveFalloffNow(), grabBrush: tool == Tool.Grab);
         }
 
         frame.Mark("arm live brush");
@@ -552,11 +611,20 @@ public sealed class PartsPanel
         {
             previewDirty = false;
             lastPreviewAt = now;
+            previewPushes++;
         }
     }
 
-    /// <summary>A brush stroke or a move drag is under way — the edit is still changing under the user's hand.</summary>
-    private bool Editing => Surface.Painting || volume is { Moving: true };
+    /// <summary>Counts the previews pushed, so a grab can tell whether the character saw any of it mid-drag.</summary>
+    private int previewPushes;
+
+    /// <summary>
+    /// A brush stroke, a move drag or a grab is under way — the edit is still changing under the user's hand. A grab
+    /// counts until it is ended, even on a frame its surface has already stopped reporting the button. So does a stroke:
+    /// on the character the button comes up a frame before the stroke is closed, and an undo in that gap would be
+    /// recorded under the stroke still open.
+    /// </summary>
+    private bool Editing => Surface.Painting || volume is { Moving: true } or { Grabbing: true } or { StrokeOpen: true };
 
     /// <summary>The model being edited is hair, face, ears or tail rather than gear — reloaded a different way.</summary>
     private bool TargetIsCustomizePart
@@ -573,7 +641,7 @@ public sealed class PartsPanel
     /// <param name="refreshGame">False on teardown, when nothing should be poked beyond landing the file.</param>
     public void Leave(bool refreshGame = true)
     {
-        FinishMove();   // a drag cut off by leaving still counts, and still undoes
+        FinishMove(refreshGame);   // a drag cut off by leaving still counts, and still undoes
         FlushPending(refreshGame);
         EndLivePreview(refreshGame);
         retarget.Clear();     // its preview has just been taken down, so its plan no longer matches what is drawn
@@ -758,7 +826,8 @@ public sealed class PartsPanel
     {
         bool grow = growKey.Poll(), shrink = shrinkKey.Poll();   // every frame — see HeldKey
         if (!grow && !shrink) return;
-        if (!PaintTool || volume == null) return;
+        // Not mid-grab: the grab measured its reach when it took hold, and a ring drawn at a new size would lie.
+        if (!PaintTool || volume == null || volume.Grabbing) return;
         var io = ImGui.GetIO();
         if (io.KeyCtrl || !ShortcutsHaveTheKeyboard()) return;
 
@@ -953,6 +1022,7 @@ public sealed class PartsPanel
         movePart = null;
         ClearPolygons(forgetModel: true);
         ReleaseHandles();
+        ForgetMoveFalloff();
         retarget.Clear();
         modDir = dir;
         // Opening a mod's model ends whatever piece of the game's own gear was open, header, gating and all.
@@ -1200,6 +1270,7 @@ public sealed class PartsPanel
         movePart = null;
         ClearPolygons(forgetModel: true);
         ReleaseHandles();
+        ForgetMoveFalloff();
         retarget.Clear();
         // A new solve starts from the file as it is now, so the other sizes must too. Replaced, not cleared — see sizeBases.
         sizeBases = new ConcurrentDictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
@@ -1690,6 +1761,116 @@ public sealed class PartsPanel
     }
 
     /// <summary>
+    /// How much of a move each vertex would take, for the rainbow over the chosen part and the cloth it carries — only
+    /// under Move, Rotate or Scale with "Move adjacent parts" on and something chosen; null otherwise. Measured again
+    /// only when the selection, the falloff or the cloth changes, and held while a drag is under way: the drag carries
+    /// the weights it started with.
+    /// </summary>
+    private float[]? MoveFalloffNow()
+    {
+        float[]? shown = null;
+        if (PartTool && moveAdjacent && moveFalloffMm > 0f && volume is { } vol)
+        {
+            // Mid-drag, exactly what the drag is carrying — not the last measure, which a throttled slider may have
+            // left behind it.
+            if (vol.DragFalloff() is { } dragging)
+            {
+                if (!moveFalloffDragShown)
+                {
+                    moveFalloffDragShown = true;
+                    viewport.GeometryChanged();
+                }
+                shown = dragging;
+            }
+            else
+            {
+                if (moveFalloffDragShown)
+                {
+                    // The drag moved the cloth: measure again now, not on the throttle.
+                    moveFalloffDragShown = false;
+                    moveFalloffChoice = null;
+                }
+                // A new choice shows at once. A falloff being dragged on its slider, or cloth an edit has moved, is
+                // measured again at most every MoveFalloffRefreshMs: each measure searches the mesh and re-projects
+                // the viewer, and a slider changes every frame it is held.
+                // The part by its name, not a hash of it: two names that hash alike must still count as a new choice.
+                var choice = (vol, vol.LockVersion, movePolygons, movePolysVersion, movePolygons ? null : movePart);
+                bool chosen = moveFalloffChoice != choice;
+                bool reshaped = vol.EditVersion != moveFalloffEdit || moveFalloffMm != moveFalloffMeasuredMm;
+                long now = Environment.TickCount64;
+                if (chosen || (reshaped && now - moveFalloffMeasuredAt >= MoveFalloffRefreshMs))
+                {
+                    moveFalloffChoice = choice;
+                    moveFalloffEdit = vol.EditVersion;
+                    moveFalloffMeasuredMm = moveFalloffMm;
+                    moveFalloffMeasuredAt = now;
+                    // Into the same buffer each time: a held slider would otherwise throw away an array a measure.
+                    var measured = MoveSeeds() is { } seeds
+                        ? vol.MoveFalloff(seeds, moveFalloffMm / 1000f, movePolygons, movePreview)
+                        : null;
+                    if (measured != null) movePreview = measured;
+                    movePreviewEmpty = measured == null;
+                    viewport.GeometryChanged();   // the viewer interpolates the weights when it projects
+                }
+                shown = movePreviewEmpty ? null : movePreview;
+            }
+        }
+
+        // Coming or going, the viewer's wash has to be projected again.
+        if ((shown != null) != moveFalloffShown)
+        {
+            moveFalloffShown = shown != null;
+            viewport.GeometryChanged();
+        }
+        return shown;
+    }
+
+    /// <summary>
+    /// What a drag carries, as vertices: the selected polygons' corners, whose soft selection is measured along the
+    /// surface; or the chosen part's. Null with nothing chosen. One answer for the drag and the rainbow shown before it.
+    /// </summary>
+    private IEnumerable<int>? MoveSeeds()
+        => movePolygons
+            ? movePolys.Count > 0 ? PolygonSelection.CornersOf(movePolys) : null
+            : MovePart()?.Triangles;
+
+
+    /// <summary>The last measured falloff before a drag, and whether that measure found nothing to move.</summary>
+    private float[]? movePreview;
+    private bool movePreviewEmpty = true;
+
+    /// <summary>The views are showing a drag's own weights, not the measure.</summary>
+    private bool moveFalloffDragShown;
+
+    /// <summary>The model view is showing a held grab's cloth.</summary>
+    private bool grabFalloffShown;
+
+    /// <summary>
+    /// Drop the falloff cache and what the views were shown of it, with the model or mod it was measured on: it keys on
+    /// that model's solve and holds a buffer sized to its mesh.
+    /// </summary>
+    private void ForgetMoveFalloff()
+    {
+        movePreview = null;
+        moveFalloffChoice = null;
+        movePreviewEmpty = true;
+        moveFalloffDragShown = moveFalloffShown = grabFalloffShown = false;
+        viewport.GeometryChanged();
+    }
+
+    // What movePreview was measured for, and when.
+    private (MeshVolumeSolve, int, bool, int, string?)? moveFalloffChoice;
+    private int moveFalloffEdit;
+    private float moveFalloffMeasuredMm;
+    private long moveFalloffMeasuredAt;
+
+    /// <summary>Least time between measures of the falloff for a change of its size or of the cloth — see
+    /// <see cref="MoveFalloffNow"/>.</summary>
+    private const long MoveFalloffRefreshMs = 100;
+    private bool moveFalloffShown;
+
+
+    /// <summary>
     /// Turn the gizmo's drag into a move of the chosen part: the Move tool's <see cref="PumpBrush"/>.
     /// </summary>
     private void PumpMove()
@@ -1715,12 +1896,10 @@ public sealed class PartsPanel
             _           => scaleDrag.Ended,
         };
 
-        // What the drag carries: the selected polygons, the soft selection measured along the surface; or the part.
-        IEnumerable<int>? seeds = movePolygons
-            ? movePolys.Count > 0 ? PolygonSelection.CornersOf(movePolys) : null
-            : MovePart()?.Triangles;
-        if (started && seeds != null)
+        if (started && MoveSeeds() is { } seeds)
         {
+            // A stroke still open is ended here, shown and saved as itself — not closed silently inside BeginMove.
+            if (volume.StrokeOpen) EndBrushStroke(volume);
             if (volume.BeginMove(seeds, moveAdjacent, moveFalloffMm / 1000f, alongSurface: movePolygons) == 0)
             {
                 status = Strings.Parts.MoveNothingFree;
@@ -1739,16 +1918,39 @@ public sealed class PartsPanel
         if (ended) FinishMove();
     }
 
-    /// <summary>End a move drag if one is under way: record it, and save — at once on the character, which shows
-    /// nothing until saved, or on the viewer's usual debounce.</summary>
-    private void FinishMove()
+    /// <summary>End a move drag or a grab if one is under way: record it, and save — at once on the character, which
+    /// shows nothing until saved, or on the viewer's usual debounce. The one way every drag ends, released or cut off.</summary>
+    /// <param name="refreshGame">Reload and redraw after the save. False only while the plugin is being torn down,
+    /// which must land the file and touch nothing else — see <see cref="Leave"/>.</param>
+    private void FinishMove(bool refreshGame = true)
     {
-        if (volume is not { Moving: true }) return;
-        volume.EndMove();
+        // A brush stroke too: this is what runs when the tab closes, the plugin unloads, the model or the tool changes,
+        // and a stroke cut off there would otherwise be saved unsettled, or lost with its undo when the model is swapped.
+        if (volume is { StrokeOpen: true } painting) EndBrushStroke(painting, refreshGame);
+        grabPlane = null;
+        if (volume is not ({ Moving: true } or { Grabbing: true })) return;
+        if (volume.Grabbing)
+        {
+            // A tap, or a drag brought back where it began: nothing moved, so no redraw and no save — on the character
+            // a save rewrites the whole model and redraws the game.
+            if (!volume.EndGrab())
+            {
+                AfterGrabMovedNothing();
+                // The view may still hold an offset it was shown before the cloth came back; a tap showed it none,
+                // and re-projecting the whole model for that would be a full pass for nothing.
+                if (grabShownMoved)
+                {
+                    viewport.PositionOverride = volume.Positions();
+                    viewport.GeometryChanged();
+                }
+                return;
+            }
+        }
+        else volume.EndMove();
         viewport.PositionOverride = volume.Positions();
         viewport.GeometryChanged();
         brushChangedAt = Environment.TickCount64;
-        if (!showModelView) SaveBrush();
+        if (!showModelView) SaveBrush(refreshGame);
     }
 
     private void DrawMove()
@@ -1875,9 +2077,19 @@ public sealed class PartsPanel
         var model = parts!;
 
         viewport.Show(ViewportKey, model);
+        var falloff = MoveFalloffNow();
+        // A grab held shows the cloth it took hold of, as the character does, in place of the brush disc.
+        var grabHeld = tool == Tool.Grab ? volume?.GrabFalloff() : null;
+        if (grabHeld != null) falloff = grabHeld;
+        if ((grabHeld != null) != grabFalloffShown)
+        {
+            grabFalloffShown = grabHeld != null;
+            viewport.GeometryChanged();
+        }
         // Under Body size nothing is being staged for a switch, so nothing shows as selected; the locks show as locks.
-        // In polygon mode no whole part is selected; the polygons are drawn over the image instead.
-        viewport.Selected = PartTool ? (movePolygons ? NoSelection : MoveSelection())
+        // In polygon mode no whole part is selected; the polygons are drawn over the image instead. With the move's
+        // falloff on, the rainbow shows the chosen part (red) instead of the plain tint.
+        viewport.Selected = PartTool ? (movePolygons || falloff != null ? NoSelection : MoveSelection())
                           : tool == Tool.Retarget ? NoSelection : ticked;
 
         // Told every frame rather than on change: the mode also resets when a model is picked.
@@ -1885,8 +2097,13 @@ public sealed class PartsPanel
                       : PartTool ? PartViewport.ViewportMode.Move
                       : PartViewport.ViewportMode.Brush;
         viewport.GizmoCapture = gizmoCaptureFn;
-        viewport.BrushRadius = !PaintTool ? 0f : ActiveRadiusMm / 1000f;
+        viewport.BrushRadius = !PaintTool || grabHeld != null ? 0f : ActiveRadiusMm / 1000f;
         viewport.VertexScalar = tool == Tool.Wind ? windAt : null;
+        // The falloff is an array already: handed over as it is, not read back through a call per vertex.
+        viewport.VertexScalarValues = tool == Tool.Wind ? null : falloff;
+        viewport.ScalarRainbow = falloff != null;
+        viewport.GrabBrush = tool == Tool.Grab;
+        viewport.MirrorMinX = volume?.MirrorMinX ?? 1e-4f;
         viewport.MirrorBrush = mirrorBrush;
 
         // The share cap is on the image's WIDTH, not the row's height: coupling the row to avail.X flickers as the
@@ -2131,6 +2348,8 @@ public sealed class PartsPanel
                      (Tool.Inflate,  FontAwesomeIcon.ExpandArrowsAlt,   ps.ToolInflate,  ps.ToolInflateTip),
                      (Tool.Deflate,  FontAwesomeIcon.CompressArrowsAlt, ps.ToolDeflate,  ps.ToolDeflateTip),
                      (Tool.Relax,    FontAwesomeIcon.Feather,           ps.ToolRelax,    ps.ToolRelaxTip),
+                     (Tool.Smooth,   FontAwesomeIcon.Water,             ps.ToolSmooth,   ps.ToolSmoothTip),
+                     (Tool.Grab,     FontAwesomeIcon.HandRock,          ps.ToolGrab,     ps.ToolGrabTip),
                      (Tool.Bridge,   FontAwesomeIcon.Archway,           ps.ToolBridge,   ps.ToolBridgeTip),
                      (Tool.Wind,     FontAwesomeIcon.Wind,              ps.ToolWind,     ps.ToolWindTip),
                      (Tool.Retarget, FontAwesomeIcon.PeopleArrows,      ps.ToolRetarget, ps.ToolRetargetTip),
@@ -2193,23 +2412,53 @@ public sealed class PartsPanel
     /// </summary>
     private void PumpBrush()
     {
+        // First, on every path: a stroke cut off by a model closing or a tool change must not leave the clock running,
+        // or the next press is not owed the dab every press gets.
+        if (volume == null || !PaintTool || tool == Tool.Grab || !Surface.Painting) dabClock.Stop();
+        // Also on every path, whatever the tool: whether the button went down THIS frame. Kept only under Grab, it went
+        // stale across a tool or view change and lost a press, or took a held button for one.
+        bool pressed = Surface.Painting && !sawPainting;
+        sawPainting = Surface.Painting;
         if (volume == null || !PaintTool) return;
         var surface = Surface;
 
-        if (surface.Painting && surface.Cursor is { } at)
+        if (tool == Tool.Grab)
+        {
+            // A stroke an earlier brush left open is ended here too, not left without its undo until the next grab.
+            if (!surface.Painting && volume.StrokeOpen) EndBrushStroke(volume);
+            PumpGrab(volume, surface, pressed);
+            return;
+        }
+
+        // Off the model mid-stroke nothing is owed: coming back must not land the time away as a burst.
+        if (surface.Painting && surface.Cursor is { } at && dabClock.Take(ImGui.GetIO().DeltaTime) is var dabs and > 0)
         {
             float radius = ActiveRadiusMm / 1000f;
-            int moved = tool switch
-            {
-                Tool.Relax  => volume.Relax(at, radius, relaxRatePercent / 100f, mirrorBrush),
-                Tool.Bridge => volume.Bridge(at, radius, bridgeRatePercent / 100f, surface.ToViewer, mirrorBrush),
-                // Ctrl held paints toward none: the eraser, without a second tool or reaching for the slider.
-                Tool.Wind   => volume.PaintWind(at, radius, ImGui.GetIO().KeyCtrl ? 0f : windAmountPercent / 100f,
-                                                windRatePercent / 100f, mirrorBrush),
-                _           => volume.Paint(at, radius,
-                                            brushStrengthMm / 1000f * (tool == Tool.Deflate ? -1f : 1f),
-                                            surface.ToViewer, mirrorBrush),
-            };
+            int moved = 0;
+            // A slow frame's dabs go to the solve together, so it finds the brush once rather than once a dab.
+            // Bridge re-measures its gap every dab, so it alone takes them one at a time — and at most
+            // MaxBridgeDabsPerFrame of them: each is a full pass, and on a PC too slow for that the extra passes would
+            // only slow the next frame further. Below 30 fps a held bridge closes the gap a little slower in real time.
+            if (tool == Tool.Bridge)
+                for (int d = 0; d < Math.Min(dabs, MaxBridgeDabsPerFrame); d++)
+                    moved += volume.Bridge(at, radius, bridgeRatePercent / 100f, surface.ToViewer, mirrorBrush);
+            else
+                moved = tool switch
+                {
+                    // Relax and smooth are a full neighbour pass per dab, so they are held to a few a frame as bridge
+                    // is: on a PC already too slow for them, more would only make the next frame owe more.
+                    Tool.Relax  => volume.Relax(at, radius, relaxRatePercent / 100f, mirrorBrush,
+                                                Math.Min(dabs, MaxSmoothDabsPerFrame)),
+                    Tool.Smooth => volume.Smooth(at, radius, smoothRatePercent / 100f, mirrorBrush,
+                                                 Math.Min(dabs, MaxSmoothDabsPerFrame)),
+                    // Ctrl held paints toward none: the eraser, without a second tool or reaching for the slider.
+                    Tool.Wind   => volume.PaintWind(at, radius, ImGui.GetIO().KeyCtrl ? 0f : windAmountPercent / 100f,
+                                                    windRatePercent / 100f, mirrorBrush, dabs),
+                    _           => volume.Paint(at, radius,
+                                                brushStrengthMm / DabClock.DabsPerQuarterSecond / 1000f
+                                                * (tool == Tool.Deflate ? -1f : 1f),
+                                                surface.ToViewer, mirrorBrush, dabs),
+                };
             if (moved > 0)
             {
                 viewport.PositionOverride = volume.Positions();
@@ -2219,16 +2468,76 @@ public sealed class PartsPanel
             }
         }
 
-        if (surface.StrokeEnded)
-        {
-            volume.EndStroke(bridge: tool == Tool.Bridge, wind: tool == Tool.Wind);
-            viewport.PositionOverride = volume.Positions();
-            viewport.GeometryChanged();
-            brushChangedAt = Environment.TickCount64;
+        // Released — or let go of without the surface saying so (the tab stopped drawing mid-stroke, or the view was
+        // switched): left open, the stroke would lose its undo and its settle to whatever opened the next one.
+        if (surface.StrokeEnded || (!surface.Painting && volume.StrokeOpen)) EndBrushStroke(volume);
+    }
 
-            // On the character, the character IS the preview: save as soon as the stroke is done.
-            if (!showModelView) SaveBrush();
+    /// <summary>End the brush stroke under way: settle it, show it, and save it.</summary>
+    /// <param name="refreshGame">As <see cref="FinishMove"/>'s.</param>
+    private void EndBrushStroke(MeshVolumeSolve vol, bool refreshGame = true)
+    {
+        // No flags from the tool: the stroke knows which brush painted it, and the tool may since have changed. One
+        // that changed nothing (a tap, dabs only over locked cloth) is not shown again or saved: on the character a
+        // save rewrites the whole model and redraws the game.
+        if (!vol.EndStroke()) return;
+        viewport.PositionOverride = vol.Positions();
+        viewport.GeometryChanged();
+        brushChangedAt = Environment.TickCount64;
+
+        // On the character, the character IS the preview: save as soon as the stroke is done.
+        if (!showModelView) SaveBrush(refreshGame);
+    }
+
+    /// <summary>
+    /// The grab brush: the press takes hold of the surface under the mouse, and from then on the mouse drags it across a
+    /// plane facing the view — on or off the model — until the button comes up. Released, it is recorded and saved
+    /// the way a stroke is.
+    /// </summary>
+    /// <param name="pressed">The button went down this frame. Only the press itself takes hold: not a stroke that began
+    /// off the cloth and later crossed it, and not a held button whose grab was ended under it.</param>
+    private void PumpGrab(MeshVolumeSolve vol, IBrushSurface surface, bool pressed)
+    {
+        // The solve's grab ended without this knowing (a Reset, or a move begun): let go of its plane, or every later
+        // press would skip taking hold and drive a grab that is not there.
+        if (grabPlane != null && !vol.Grabbing) grabPlane = null;
+
+        if (surface.Painting && grabPlane == null)
+        {
+            if (!pressed || vol.Grabbing || surface.Cursor is not { } at) return;
+            // Taken hold of only with the mouse's ray in hand on the press itself — the drag is measured from where it
+            // meets the plane NOW. Without it (a pose that would not invert, on the character) nothing is grabbed,
+            // rather than a grab that does not follow the mouse and then jumps when it starts to.
+            var normal0 = surface.ToViewer;
+            if (surface.MouseRay is not { } ray0
+                || !TranslateGizmo.RayPlane(ray0.Origin, ray0.Dir, at, normal0, out var from)) return;
+            // A stroke still open is ended here, shown and saved as itself — not closed silently inside BeginGrab.
+            if (vol.StrokeOpen) EndBrushStroke(vol);
+            previewDirtyBeforeGrab = previewDirty;
+            previewPushesAtGrab = previewPushes;
+            grabShownMoved = false;
+            vol.BeginGrab(at, ActiveRadiusMm / 1000f, mirrorBrush);
+            grabPlane = (at, normal0);
+            // Measured from where the mouse's own ray met the plane, not from the cursor: the two differ by the posing
+            // of one vertex and the hit buffer's pixels, and the cloth would jump by that gap at once.
+            grabFrom = from;
         }
+
+        // Every held frame, and the release frame too, so the mouse's last movement before letting go still counts.
+        if ((surface.Painting || surface.StrokeEnded) && grabPlane is { } plane && grabFrom is { } start
+            && surface.MouseRay is { } ray
+            && TranslateGizmo.RayPlane(ray.Origin, ray.Dir, plane.Anchor, plane.Normal, out var to)
+            && vol.GrabTo(to - start) > 0)
+        {
+            viewport.PositionOverride = vol.Positions();
+            viewport.GeometryChanged();
+            previewDirty = !showModelView;
+            grabShownMoved = true;
+        }
+
+        // Released — or let go of without this surface ever saying so: switched to the other view mid-grab, or the
+        // character stopped being drawn. A grab left open would be carried on by the next press, from its old anchor.
+        if (vol.Grabbing && (surface.StrokeEnded || !surface.Painting)) FinishMove();
     }
 
     /// <summary>How long after the last change the brush writes itself into the mod.</summary>
@@ -2290,6 +2599,18 @@ public sealed class PartsPanel
             ImGui.SliderFloat(ps.BrushStrength, ref relaxRatePercent, 5f, 100f, "%.0f%%");
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushRelaxRateTip);
         }
+        else if (tool == Tool.Smooth)
+        {
+            ImGui.SliderFloat(ps.BrushStrength, ref smoothRatePercent, 5f, 100f, "%.0f%%");
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushSmoothRateTip);
+        }
+        else if (tool == Tool.Grab)
+        {
+            // Nothing to set: the drag itself is the strength.
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextDisabled(ps.GrabHelp);
+            ImGui.PopTextWrapPos();
+        }
         else if (tool == Tool.Bridge)
         {
             ImGui.SliderFloat(ps.BrushStrength, ref bridgeRatePercent, 1f, 100f, "%.0f%%");
@@ -2313,13 +2634,17 @@ public sealed class PartsPanel
         }
         else
         {
-            ImGui.SliderFloat(ps.BrushStrength, ref brushStrengthMm, 0.01f, 1f, Strings.Common.Mm2);
+            // The old 0.01–1 mm a dab, as time: 0.15–15 mm a quarter second. Logarithmic, as the range spans a hundredfold.
+            // Not rounded to what it shows, and shown to two decimals: the low end is where strengths are chosen.
+            ImGui.SliderFloat(ps.BrushStrength, ref brushStrengthMm, 0.15f, 15f, Strings.Common.MmPerQuarterSecond,
+                              ImGuiSliderFlags.Logarithmic | ImGuiSliderFlags.NoRoundToFormat);
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.BrushStrengthTip);
         }
 
-        // Every brush the limit holds — all but wind — so it is never in force where it cannot be seen. On the solve,
-        // not the panel: each model opens at its own default, hair further than cloth.
-        if (tool != Tool.Wind && volume != null)
+        // Every brush the limit holds — all but wind and grab, which goes where it is dragged, as Move does — so it is
+        // never in force where it cannot be seen. On the solve, not the panel: each model opens at its own default,
+        // hair further than cloth.
+        if (tool is not (Tool.Wind or Tool.Grab) && volume != null)
         {
             float limitMm = volume.MaxDisplacement * 1000f;
             ImGui.SetNextItemWidth(w);
@@ -2364,7 +2689,7 @@ public sealed class PartsPanel
         {
             ImGui.Spacing();
             ImGui.TextDisabled(!vol.Dirty ? ps.BrushUntouched
-                : PartTool ? string.Format(ps.MoveMovedFmt, vol.Worst * 1000f)
+                : PartTool || tool == Tool.Grab ? string.Format(ps.MoveMovedFmt, vol.Worst * 1000f)
                 : string.Format(ps.BrushMovedFmt, vol.Worst * 1000f, vol.MaxDisplacement * 1000f));
 
             // Undo and start-over save and redraw at once rather than on the debounce.
@@ -2378,11 +2703,14 @@ public sealed class PartsPanel
                 if (applying) ImGui.TextDisabled(ps.BrushApplySizesRunning);
             }
 
-            using (ImRaii.Disabled(!vol.CanUndo || vol.Moving))
+            // Not under an open drag or stroke, which holds snapshots from before the undo and would put back what it
+            // took away; Ctrl+Z waits the same way (see Editing).
+            bool open = vol.Moving || vol.Grabbing || vol.StrokeOpen;
+            using (ImRaii.Disabled(!vol.CanUndo || open))
                 if (ImGui.Button(PartTool ? ps.MoveUndo : ps.BrushUndo, FullWidth()))
                 { vol.Undo(); AfterBrushEdit(); SaveBrush(); }
 
-            using (ImRaii.Disabled(!vol.Dirty || vol.Moving))
+            using (ImRaii.Disabled(!vol.Dirty || open))
                 if (ImGui.Button(ps.BrushReset, FullWidth())) { vol.Reset(); AfterBrushEdit(); SaveBrush(); }
 
             // Saving happens on its own; on the character the button shows only while a save is still owed.

@@ -2399,6 +2399,30 @@
     "message": "La vitesse à laquelle la surface se lisse pendant que vous peignez. Faible est\ndoux et facile à maîtriser ; élevé lisse presque aussitôt.\n\nPrès d'un bord ouvert, comme un ourlet, le lissage ramène légèrement le bord vers l'intérieur.",
     "description": ""
   },
+  "Parts.Tool.Smooth": {
+    "message": "Adoucir",
+    "description": ""
+  },
+  "Parts.Tool.Smooth.Tip": {
+    "message": "Peignez sur le modèle pour effacer bosses et ondulations sans le rétrécir :\ncontrairement à Lisser, les courbes gardent leur forme et le tissu reste loin du corps.",
+    "description": ""
+  },
+  "Parts.Brush.SmoothRate.Tip": {
+    "message": "La vitesse à laquelle la surface s'adoucit pendant que vous peignez. Bas est doux et\nfacile à contrôler ; haut adoucit presque immédiatement.",
+    "description": ""
+  },
+  "Parts.Tool.Grab": {
+    "message": "Saisir",
+    "description": ""
+  },
+  "Parts.Tool.Grab.Tip": {
+    "message": "Appuyez sur le modèle et faites glisser : le tissu autour du pinceau suit la souris\ncomme du caoutchouc, plus fort au centre, sans bord net.",
+    "description": ""
+  },
+  "Parts.Grab.Help": {
+    "message": "Appuyez sur le tissu et faites glisser. La taille du pinceau fixe la quantité de tissu entraînée ;\nil se déplace parallèlement à votre vue, et Ctrl+Z annule une saisie.",
+    "description": ""
+  },
   "Parts.Tool.Bridge": {
     "message": "Pont",
     "description": ""
@@ -2616,7 +2640,7 @@
     "description": ""
   },
   "Parts.Brush.Strength.Tip": {
-    "message": "De combien la surface bouge à chaque instant de peinture. Petit convient\ngénéralement : un vêtement n'a qu'à dégager le corps d'une fraction de\nmillimètre, et vous pouvez toujours repasser au même endroit.",
+    "message": "La distance dont le centre du pinceau déplace la surface pour chaque quart de\nseconde de maintien, identique quelle que soit la fréquence d'images. Une petite\nvaleur convient d'ordinaire : le vêtement n'a qu'à dégager le corps d'une fraction\nde millimètre, et vous pouvez toujours repeindre au même endroit.",
     "description": ""
   },
   "Parts.Brush.Limit": {
@@ -3998,6 +4022,10 @@
   "Common.Units.Mm2": {
     "message": "%.2f mm",
     "description": "Slider value in millimetres. An ImGui printf format: keep %.2f exactly as it is."
+  },
+  "Common.Units.MmPerQuarterSecond": {
+    "message": "%.2f mm / 0,25 s",
+    "description": ""
   },
   "Create.Dialog.ImageFilter": {
     "message": "Images",
