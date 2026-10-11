@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(git push --no-verify)",
+      "Bash(git push --no-verify:*)",
+      "Bash(SKIP_REVIEW_GATE=1 git push)",
+      "Bash(SKIP_REVIEW_GATE=1 git push:*)"
+    ]
+  }
+}
