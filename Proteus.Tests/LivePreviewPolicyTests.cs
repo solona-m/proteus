@@ -94,12 +94,31 @@ public class LivePreviewPolicyTests
 
     [Fact]
     [Trait("Plan", "EDGE-brush-pair-sync-24")]
-    public void Undone_back_to_nothing_the_file_from_opening_still_matches_and_is_shared()
+    public void Undone_back_to_nothing_keeps_the_record_from_opening()
     {
-        // Nothing was written by the undo, so the record taken on opening still names the file exactly as it is.
+        // Nothing was written, so the record taken on opening still names the file exactly as it is.
         var opened = Edit();
-        bool matches = opened.Matches("Old Thing", "chara/top.mdl", opened.Length, opened.WriteUtc);
-        Assert.True(LivePreviewPolicy.ShouldShare(editing: false, savePending: false, hidesParts: false, matches));
+        var after = LivePreviewPolicy.RecordAfterSave(LivePreviewPolicy.SaveOutcome.NothingWritten, opened,
+                                                      () => throw new InvalidOperationException("nothing to stat"));
+        Assert.Same(opened, after);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-brush-pair-sync-3")]
+    public void A_failed_save_leaves_no_record_so_nothing_is_shared()
+    {
+        var after = LivePreviewPolicy.RecordAfterSave(LivePreviewPolicy.SaveOutcome.Failed, Edit(), () => Edit());
+        Assert.Null(after);
+        Assert.False(LivePreviewPolicy.ShouldShare(false, false, false, savedMatches: after != null));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-brush-pair-sync-1")]
+    [Trait("Plan", "AC-brush-pair-sync-3")]
+    public void A_written_save_records_the_file_as_it_now_stands()
+    {
+        var fresh = Edit() with { Length = 5678 };
+        Assert.Same(fresh, LivePreviewPolicy.RecordAfterSave(LivePreviewPolicy.SaveOutcome.Written, Edit(), () => fresh));
     }
 
     [Fact]

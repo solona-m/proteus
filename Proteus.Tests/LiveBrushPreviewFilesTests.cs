@@ -69,6 +69,44 @@ public class LiveBrushPreviewFilesTests : IDisposable
 
     [Fact]
     [Trait("Plan", "AC-brush-pair-sync-5")]
+    [Trait("Plan", "EDGE-brush-pair-sync-7")]
+    public void A_copy_that_fails_leaves_nothing_behind_in_either_folder()
+    {
+        var sharedDir = Path.Combine(tmp, "Proteus", "LivePreview");
+        var privateDir = Path.Combine(tmp, "private");
+
+        Assert.ThrowsAny<IOException>(() =>
+            LiveBrushPreview.CopyPreview(Path.Combine(tmp, "missing.mdl"), sharedDir, privateDir, "1-ab-000003.mdl"));
+
+        Assert.Empty(Directory.Exists(sharedDir) ? Directory.GetFiles(sharedDir) : []);
+        Assert.Empty(Directory.Exists(privateDir) ? Directory.GetFiles(privateDir) : []);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-brush-pair-sync-5")]
+    [Trait("Plan", "EDGE-brush-pair-sync-10")]
+    public void A_file_dropped_after_the_preview_was_taken_down_leaves_the_list()
+    {
+        var kept = new LiveBrushPreview.PreviewFiles(keep: 4);
+        kept.Add("late", shared: true);
+        kept.Remove("LATE");
+        Assert.False(kept.Contains("late"));
+        Assert.Empty(kept.TakeAll());
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-brush-pair-sync-4")]
+    [Trait("Plan", "EDGE-brush-pair-sync-12")]
+    public void The_shared_folder_is_recognised_once_the_managed_mod_is_known()
+    {
+        LiveBrushPreview.RememberManagedRoot(@"C:\Penumbra\Proteus");
+        Assert.True(LiveBrushPreview.IsPreviewFile("c:/penumbra/proteus/livepreview/9-ff-000001.mdl"));
+        LiveBrushPreview.RememberManagedRoot(null);   // unknown later: what was learnt stays
+        Assert.True(LiveBrushPreview.IsPreviewFile(@"C:\Penumbra\Proteus\LivePreview\9-ff-000001.mdl"));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-brush-pair-sync-5")]
     [Trait("Plan", "EDGE-brush-pair-sync-9")]
     public void Private_previews_never_push_a_shared_one_out()
     {

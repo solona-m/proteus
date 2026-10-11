@@ -71,6 +71,33 @@ public class LivePreviewShareStateTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-brush-pair-sync-23")]
+    public void A_changed_answer_is_retried_once_not_every_second_after()
+    {
+        // Even if nothing the retry does records it (a redraw instead of a push), the same change is not due again.
+        var s = new LivePreviewShareState();
+        s.SharePushed("save1", "save1|True");
+        Assert.True(s.OwedShareDue(1_000, null, () => "save2|True"));
+        Assert.False(s.OwedShareDue(2_000, null, () => "save2|True"));
+        Assert.False(s.OwedShareDue(30_000, null, () => "save2|True"));
+        Assert.True(s.OwedShareDue(31_000, null, () => "save3|True"));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-brush-pair-sync-19")]
+    public void Unlocking_everything_while_revealed_ends_the_reveal()
+    {
+        var s = Hovered();
+        Frame(s, 3_000);
+        Assert.Equal(Step.Hide, Frame(s, 3_100, locks: 0, hiding: false));
+        Assert.False(s.Revealed);
+        // Locks back on count as activity: hidden again, not revealed at once.
+        Assert.Equal(Step.None, Frame(s, 3_200, hiding: false));
+        Assert.Equal(Step.None, Frame(s, 6_199));
+        Assert.Equal(Step.Reveal, Frame(s, 6_200));
+    }
+
+    [Fact]
     [Trait("Plan", "AC-brush-pair-sync-8")]
     public void Owed_shares_are_looked_at_no_more_than_once_a_second()
     {

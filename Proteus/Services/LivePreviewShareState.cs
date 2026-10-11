@@ -56,7 +56,11 @@ internal sealed class LivePreviewShareState
         if (wantedStamp == null || sharedStamp == wantedStamp) return false;
         if (now - owedCheckedAt < OwedCheckMs) return false;
         owedCheckedAt = now;
-        return LivePreviewPolicy.OwedShareDue(owed: true, parkedOn, token());
+        var current = token();
+        if (!LivePreviewPolicy.OwedShareDue(owed: true, parkedOn, current)) return false;
+        // Parked on the new answer: one retry per change, whatever the retry itself goes on to do.
+        parkedOn = current;
+        return true;
     }
 
     /// <summary>

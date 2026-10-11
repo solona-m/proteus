@@ -119,7 +119,8 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
         Start(gen, gamePaths, () =>
         {
             Directory.CreateDirectory(Dir);
-            File.WriteAllBytes(file, model);
+            try { File.WriteAllBytes(file, model); }
+            catch { TryDelete(file); throw; }   // never leave half a model behind
             return (file, false);
         }, onApplied: null);
         return true;
@@ -242,11 +243,25 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
                 }).GetAwaiter().GetResult();
 
                 if (applied) onApplied?.Invoke(file, shared);
-                if (!applied && gen > endedAt) log.Warning("[Proteus] live brush: Penumbra refused the preview redirect");
+                bool takenDown, ended;
+                lock (gate)
+                {
+                    takenDown = gen <= endedAt;
+                    ended = takenDown && holding.Count == 0;
+                }
+                if (ended)
+                {
+                    // Taken down while this was in flight, and nothing redirects to any preview: End may already have
+                    // cleared the list before this file joined it.
+                    files.Remove(file);
+                    TryDelete(file);
+                }
+                else if (!applied && !takenDown) log.Warning("[Proteus] live brush: Penumbra refused the preview redirect");
             }
             catch (Exception ex)
             {
-                // A file already written is kept, and End deletes it: the redirect may have gone on before the failure.
+                // A file already kept is left to End: the redirect may have gone on before the failure. A write that
+                // failed deleted its own partial file.
                 log.Warning(ex, "[Proteus] live brush: preview failed");
             }
         });
@@ -258,22 +273,26 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
     /// </summary>
     internal static (string Path, bool Shared) CopyPreview(string source, string? sharedDir, string privateDir, string name)
     {
+        // A copy that fails part way is deleted, never left for the game or a sync plugin to read.
         if (sharedDir != null)
         {
+            var dest = Path.Combine(sharedDir, name);
             try
             {
                 Directory.CreateDirectory(sharedDir);
-                var dest = Path.Combine(sharedDir, name);
                 File.Copy(source, dest, overwrite: true);
                 return (dest, true);
             }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                TryDelete(dest);
+            }
         }
 
         Directory.CreateDirectory(privateDir);
         var path = Path.Combine(privateDir, name);
-        File.Copy(source, path, overwrite: true);
+        try { File.Copy(source, path, overwrite: true); }
+        catch { TryDelete(path); throw; }
         return (path, false);
     }
 
@@ -290,8 +309,15 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
         lock (gate)
         {
             mark = endedAt = generation;
-            if (holding.Count == 0) return;
             held = [.. holding];
+            if (held.Length == 0) lastShared = null;
+        }
+
+        // Nothing redirects to any preview: whatever was written (a push still landing included) can go now.
+        if (held.Length == 0)
+        {
+            foreach (var f in files.TakeAll()) TryDelete(f);
+            return;
         }
 
         var gone = held.Where(c => penumbra.RemoveTemporaryMod(Tag, c, Priority)).ToList();
@@ -318,6 +344,15 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
 
     /// <summary>A loaded model's file is one of these previews — the garment being brushed, drawn from its preview.</summary>
     public static bool IsPreviewFile(string path) => IsPreviewFile(path, knownManagedRoot);
+
+    /// <summary>
+    /// Learn where shared previews live as soon as it is known — Penumbra may come up after the plugin — so one still
+    /// drawn from an earlier load of the plugin is recognised before this load shares anything.
+    /// </summary>
+    public static void RememberManagedRoot(string? managedRoot)
+    {
+        if (managedRoot != null) knownManagedRoot = managedRoot;
+    }
 
     /// <summary><see cref="IsPreviewFile(string)"/> against a given managed mod folder (null: only private previews).</summary>
     internal static bool IsPreviewFile(string path, string? managedRoot)
@@ -416,6 +451,15 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
                     list.RemoveAt(0);
                 }
                 return evicted;
+            }
+        }
+
+        public void Remove(string path)
+        {
+            lock (sync)
+            {
+                priv.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+                pub.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
             }
         }
 

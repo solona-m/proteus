@@ -711,6 +711,7 @@ public sealed class PartsPanel
     /// </summary>
     private void TickLockReveal()
     {
+        LiveBrushPreview.RememberManagedRoot(compositor.ManagedModFolder);
         if (showModelView) return;
         var step = share.Tick(Environment.TickCount64, Editing, liveBrush.Hovering, brushChangedAt >= 0, LockedHides(),
                               hidingOnCharacter: previewHides != 0, savedMatches: () => CurrentSave() != null);
@@ -3043,8 +3044,8 @@ public sealed class PartsPanel
         // Undone back to nothing on a model never saved: there is nothing in the mod to put right.
         if (!volume.Dirty && !MeshVolumeService.IsPatched(root, rel))
         {
-            // The record from opening still names the file, unchanged — which is what is on screen again.
             brushChangedAt = -1;
+            lastSave = LivePreviewPolicy.RecordAfterSave(LivePreviewPolicy.SaveOutcome.NothingWritten, lastSave, () => null);
             return;
         }
 
@@ -3059,11 +3060,12 @@ public sealed class PartsPanel
 
             // Still waiting: re-armed for another full debounce so a failed save is retried, not every frame.
             brushChangedAt = Environment.TickCount64;
-            lastSave = null;
+            lastSave = LivePreviewPolicy.RecordAfterSave(LivePreviewPolicy.SaveOutcome.Failed, lastSave, () => null);
             return;
         }
         brushChangedAt = -1;
-        lastSave = RecordSave(root, rel);
+        lastSave = LivePreviewPolicy.RecordAfterSave(LivePreviewPolicy.SaveOutcome.Written, lastSave,
+                                                     () => RecordSave(root, rel));
 
         status = Strings.Parts.BrushSaved;
         log.Information("[Proteus] brush: saved {0}, moved up to {1:F2} mm", rel, volume.Worst * 1000f);

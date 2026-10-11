@@ -36,6 +36,30 @@ internal static class LivePreviewPolicy
     /// </summary>
     public static bool OwedShareDue(bool owed, string? parkedOn, string current)
         => owed && !string.Equals(parkedOn, current, StringComparison.Ordinal);
+
+    internal enum SaveOutcome
+    {
+        /// <summary>Undone back to nothing on a model never saved: the file was left as it was.</summary>
+        NothingWritten,
+
+        /// <summary>The write failed; what is on screen is not on disk.</summary>
+        Failed,
+
+        /// <summary>The edit was written.</summary>
+        Written,
+    }
+
+    /// <summary>
+    /// The save record after a save: the one before it when nothing was written (the file is untouched, and so still
+    /// what is on screen), none when the write failed, and the file as it now stands when it was written.
+    /// </summary>
+    public static SavedEdit? RecordAfterSave(SaveOutcome outcome, SavedEdit? previous, Func<SavedEdit?> restat)
+        => outcome switch
+        {
+            SaveOutcome.NothingWritten => previous,
+            SaveOutcome.Written        => restat(),
+            _                          => null,
+        };
 }
 
 /// <summary>The mod file the edit on screen was last saved to (or opened from), as it stood on disk then.</summary>
