@@ -1194,6 +1194,9 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
             if (string.IsNullOrEmpty(name)) continue;
             var file = LiveCharacter.FilePath(name);
             if (BodyShapeReader.PathKey(file) == exclude) continue;
+            // The garment being brushed, drawn from its preview: shared ones sit in Proteus's own mod, but it is the
+            // brushed mod's garment, not a shell to pick.
+            if (LiveBrushPreview.IsPreviewFile(file)) continue;
 
             // A model no mod redirects is the game's own, and then its resource name IS the game path — which is
             // both how it is recognised and the only handle anything downstream has on it.

@@ -409,6 +409,13 @@ public class AutoRefitDecisionsTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-brush-pair-sync-6")]
+    [Trait("Plan", "EDGE-brush-pair-sync-15")]
+    public void A_live_brush_preview_shared_inside_Proteus_own_mod_is_never_refitted()
+        => Assert.Equal(AutoRefitDecisions.Skip.Managed, AutoRefitDecisions.ShouldRefit(
+            new Worn(Coat, SidecarDiscoveryService.ManagedModDir, "LivePreview/123-ab12cd34-000001.mdl"), true, false));
+
+    [Fact]
     public void The_games_own_gear_waits_for_its_own_switch()
     {
         var vanilla = new Worn(Coat, null, null);

@@ -29,18 +29,12 @@ internal static class PenumbraManipulations
         return m.Success ? m.Groups[1].Value : null;
     }
 
-    /// <summary>Is this resolved disk path one of OUR managed-mod files (i.e. our own composite output)?</summary>
+    /// <summary>
+    /// Is this resolved disk path one of OUR managed-mod files (i.e. our own composite output)? Not a live brush
+    /// preview shared there: that is the brushed mod's own file, read as any outside file is.
+    /// </summary>
     internal static bool IsInsideOutputRoot(string diskPath, string outputRoot)
-    {
-        try
-        {
-            var full = Path.GetFullPath(diskPath);
-            var root = Path.GetFullPath(outputRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            return full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
-                || full.StartsWith(root + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
-        }
-        catch { return false; }   // unparseable path: treat as external
-    }
+        => ManagedModPaths.IsPublishedOutput(diskPath, outputRoot);
 
     /// <summary>
     /// A model file from a Proteus mod (carries Proteus/metadata.json, not our output mod), by the same rule

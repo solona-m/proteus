@@ -224,17 +224,16 @@ public sealed class ModCreationService
     /// Whether a resolved disk path is a file Proteus itself published into the managed mod. A cheap prefix test;
     /// an unanswerable path reads as not ours.
     /// </summary>
-    private bool IsOwnOutput(string? diskPath)
-    {
-        if (string.IsNullOrEmpty(diskPath)) return false;
-        var root = penumbra.GetModDirectory();
-        if (string.IsNullOrEmpty(root)) return false;
+    private bool IsOwnOutput(string? diskPath) => IsOwnOutputUnder(diskPath, penumbra.GetModDirectory());
 
-        var managed = Path.Combine(root, SidecarDiscoveryService.ManagedModDir)
-                          .Replace('/', Path.DirectorySeparatorChar)
-                          .TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-        return diskPath.Replace('/', Path.DirectorySeparatorChar)
-                       .StartsWith(managed, StringComparison.OrdinalIgnoreCase);
+    /// <summary>
+    /// <see cref="IsOwnOutput"/> against a given mods root. A live brush preview shared in the managed mod is the
+    /// brushed mod's own file, so not ours.
+    /// </summary>
+    internal static bool IsOwnOutputUnder(string? diskPath, string? modsRoot)
+    {
+        if (string.IsNullOrEmpty(diskPath) || string.IsNullOrEmpty(modsRoot)) return false;
+        return ManagedModPaths.IsPublishedOutput(diskPath, Path.Combine(modsRoot, SidecarDiscoveryService.ManagedModDir));
     }
 
     /// <summary>
