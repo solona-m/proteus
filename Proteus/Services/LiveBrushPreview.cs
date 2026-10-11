@@ -243,20 +243,14 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
                 }).GetAwaiter().GetResult();
 
                 if (applied) onApplied?.Invoke(file, shared);
-                bool takenDown, ended;
-                lock (gate)
+                LateFile fate;
+                lock (gate) fate = LateFileFate(applied, takenDown: gen <= endedAt, holding.Count);
+                if (fate == LateFile.Delete)
                 {
-                    takenDown = gen <= endedAt;
-                    ended = takenDown && holding.Count == 0;
-                }
-                if (ended)
-                {
-                    // Taken down while this was in flight, and nothing redirects to any preview: End may already have
-                    // cleared the list before this file joined it.
                     files.Remove(file);
                     TryDelete(file);
                 }
-                else if (!applied && !takenDown) log.Warning("[Proteus] live brush: Penumbra refused the preview redirect");
+                else if (fate == LateFile.WarnRefused) log.Warning("[Proteus] live brush: Penumbra refused the preview redirect");
             }
             catch (Exception ex)
             {
@@ -267,12 +261,28 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
         });
     }
 
+    internal enum LateFile { Keep, Delete, WarnRefused }
+
+    /// <summary>
+    /// What becomes of a push's file once it has been applied, or not. Taken down while in flight with nothing
+    /// redirecting to any preview: deleted, since End may have cleared the list before this file joined it. A collection
+    /// that would not let go may still point at it, so then it stays for the next End. Not taken down and not applied:
+    /// Penumbra refused it.
+    /// </summary>
+    internal static LateFile LateFileFate(bool applied, bool takenDown, int holdingCount)
+        => takenDown && holdingCount == 0 ? LateFile.Delete
+         : !applied && !takenDown          ? LateFile.WarnRefused
+         :                                   LateFile.Keep;
+
     /// <summary>
     /// Copy <paramref name="source"/> into <paramref name="sharedDir"/>, or into <paramref name="privateDir"/> when there
     /// is no shared folder or it cannot be written. Byte for byte, so a shared copy hashes as the mod's own file.
     /// </summary>
-    internal static (string Path, bool Shared) CopyPreview(string source, string? sharedDir, string privateDir, string name)
+    /// <param name="copy">The copy itself, <see cref="File.Copy(string, string, bool)"/> unless a test stands in for it.</param>
+    internal static (string Path, bool Shared) CopyPreview(string source, string? sharedDir, string privateDir, string name,
+                                                          Action<string, string>? copy = null)
     {
+        copy ??= (from, to) => File.Copy(from, to, overwrite: true);
         // A copy that fails part way is deleted, never left for the game or a sync plugin to read.
         if (sharedDir != null)
         {
@@ -280,7 +290,7 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
             try
             {
                 Directory.CreateDirectory(sharedDir);
-                File.Copy(source, dest, overwrite: true);
+                copy(source, dest);
                 return (dest, true);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -291,7 +301,7 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
 
         Directory.CreateDirectory(privateDir);
         var path = Path.Combine(privateDir, name);
-        try { File.Copy(source, path, overwrite: true); }
+        try { copy(source, path); }
         catch { TryDelete(path); throw; }
         return (path, false);
     }
@@ -304,19 +314,26 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
     {
         // Not waited on (the push finishes on the framework thread, which may be this one); the generation mark makes
         // it stand down, and the gate makes the mark and the redirect it may already have added one reading.
+        // Files are taken from the list under the gate, in the same reading as the generation: a push begun after this
+        // mark (End may run off the framework thread on unload) bumps the generation first and adds its file later, so
+        // it is never taken.
         Guid[] held;
         int mark;
+        List<string> unheld = [];
         lock (gate)
         {
             mark = endedAt = generation;
             held = [.. holding];
-            if (held.Length == 0) lastShared = null;
+            if (held.Length == 0)
+            {
+                // Nothing redirects to any preview: whatever was written, a push still landing included, can go now.
+                lastShared = null;
+                unheld = files.TakeAll();
+            }
         }
-
-        // Nothing redirects to any preview: whatever was written (a push still landing included) can go now.
         if (held.Length == 0)
         {
-            foreach (var f in files.TakeAll()) TryDelete(f);
+            foreach (var f in unheld) TryDelete(f);
             return;
         }
 
@@ -326,20 +343,20 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
 
         // A push begun since may have added its own redirect after those removals; then it is still Active, and its
         // file is in use.
-        bool allGone;
+        // A collection that would not let go still points at the preview files, so they stay; the next End tries again.
+        List<string> released = [];
         lock (gate)
         {
             if (generation != mark) return;
             holding.ExceptWith(gone);
-            allGone = holding.Count == 0;
+            if (holding.Count == 0)
+            {
+                lastShared = null;
+                released = files.TakeAll();
+            }
         }
         if (gone.Count > 0 && redraw) compositor.RedrawForChangedModel();
-
-        // A collection that would not let go still points at the preview files, so they stay; the next End tries again.
-        if (!allGone) return;
-
-        lock (gate) lastShared = null;
-        foreach (var f in files.TakeAll()) TryDelete(f);
+        foreach (var f in released) TryDelete(f);
     }
 
     /// <summary>A loaded model's file is one of these previews — the garment being brushed, drawn from its preview.</summary>

@@ -596,6 +596,7 @@ public sealed class PartsPanel
         PumpMove();
         PumpBrush();
         frame.Mark("move + brush");
+        LiveBrushPreview.RememberManagedRoot(compositor.ManagedModFolder);   // Penumbra may have come up since startup
         TickLockReveal();
         TickLivePreview();
         frame.Mark("live preview");
@@ -711,7 +712,6 @@ public sealed class PartsPanel
     /// </summary>
     private void TickLockReveal()
     {
-        LiveBrushPreview.RememberManagedRoot(compositor.ManagedModFolder);
         if (showModelView) return;
         var step = share.Tick(Environment.TickCount64, Editing, liveBrush.Hovering, brushChangedAt >= 0, LockedHides(),
                               hidingOnCharacter: previewHides != 0, savedMatches: () => CurrentSave() != null);

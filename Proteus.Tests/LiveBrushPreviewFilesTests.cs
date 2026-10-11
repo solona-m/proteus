@@ -70,21 +70,69 @@ public class LiveBrushPreviewFilesTests : IDisposable
     [Fact]
     [Trait("Plan", "AC-brush-pair-sync-5")]
     [Trait("Plan", "EDGE-brush-pair-sync-7")]
-    public void A_copy_that_fails_leaves_nothing_behind_in_either_folder()
+    public void A_copy_that_fails_part_way_leaves_nothing_behind_in_either_folder()
     {
         var sharedDir = Path.Combine(tmp, "Proteus", "LivePreview");
         var privateDir = Path.Combine(tmp, "private");
 
-        Assert.ThrowsAny<IOException>(() =>
-            LiveBrushPreview.CopyPreview(Path.Combine(tmp, "missing.mdl"), sharedDir, privateDir, "1-ab-000003.mdl"));
+        // Half a model written, then the disk gives out — both times.
+        static void HalfThenFail(string from, string to)
+        {
+            File.WriteAllBytes(to, [1, 2]);
+            throw new IOException("disk full");
+        }
 
-        Assert.Empty(Directory.Exists(sharedDir) ? Directory.GetFiles(sharedDir) : []);
-        Assert.Empty(Directory.Exists(privateDir) ? Directory.GetFiles(privateDir) : []);
+        Assert.Throws<IOException>(() =>
+            LiveBrushPreview.CopyPreview("top.mdl", sharedDir, privateDir, "1-ab-000003.mdl", HalfThenFail));
+
+        Assert.Empty(Directory.GetFiles(sharedDir));
+        Assert.Empty(Directory.GetFiles(privateDir));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-brush-pair-sync-7")]
+    public void A_shared_copy_that_fails_part_way_is_removed_and_the_private_one_written()
+    {
+        var sharedDir = Path.Combine(tmp, "Proteus", "LivePreview");
+        var privateDir = Path.Combine(tmp, "private");
+        void FailInShared(string from, string to)
+        {
+            File.WriteAllBytes(to, [1, 2]);
+            if (to.StartsWith(sharedDir, StringComparison.OrdinalIgnoreCase)) throw new IOException("share locked");
+        }
+
+        var (path, shared) = LiveBrushPreview.CopyPreview("top.mdl", sharedDir, privateDir, "1-ab-000004.mdl", FailInShared);
+
+        Assert.False(shared);
+        Assert.Empty(Directory.GetFiles(sharedDir));
+        Assert.True(File.Exists(path));
     }
 
     [Fact]
     [Trait("Plan", "AC-brush-pair-sync-5")]
     [Trait("Plan", "EDGE-brush-pair-sync-10")]
+    public void A_push_landing_after_the_preview_was_taken_down_deletes_its_own_file()
+    {
+        // Applied or not, once End has run and nothing redirects to a preview, the late file goes.
+        Assert.Equal(LiveBrushPreview.LateFile.Delete, LiveBrushPreview.LateFileFate(applied: false, takenDown: true, holdingCount: 0));
+        Assert.Equal(LiveBrushPreview.LateFile.Delete, LiveBrushPreview.LateFileFate(applied: true, takenDown: true, holdingCount: 0));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-brush-pair-sync-10")]
+    public void A_late_file_a_stuck_collection_may_still_draw_is_kept()
+        => Assert.Equal(LiveBrushPreview.LateFile.Keep, LiveBrushPreview.LateFileFate(applied: false, takenDown: true, holdingCount: 1));
+
+    [Fact]
+    [Trait("Plan", "AC-brush-pair-sync-1")]
+    public void A_preview_that_landed_is_kept_and_a_refused_one_warned_about()
+    {
+        Assert.Equal(LiveBrushPreview.LateFile.Keep, LiveBrushPreview.LateFileFate(applied: true, takenDown: false, holdingCount: 1));
+        Assert.Equal(LiveBrushPreview.LateFile.WarnRefused, LiveBrushPreview.LateFileFate(applied: false, takenDown: false, holdingCount: 1));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-brush-pair-sync-5")]
     public void A_file_dropped_after_the_preview_was_taken_down_leaves_the_list()
     {
         var kept = new LiveBrushPreview.PreviewFiles(keep: 4);
