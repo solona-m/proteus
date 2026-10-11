@@ -72,7 +72,7 @@ Edita los modelos de **cualquier** mod que tengas instalado, no solo los de Prot
 
 Elige un mod y luego uno de sus modelos. La pestaña se abre en la pieza de torso que llevas puesta (o en las piernas si no hay ninguna), y los mods y modelos que llevas puestos aparecen primero, en verde. Hacer clic en una prenda de tu personaje abre su mod y su modelo, sea vanilla o con mods. Todas las listas de la pestaña se pueden buscar: escribe parte de un nombre para acotarla. Cuando un objeto trae un modelo distinto para cada raza, cada uno lleva el nombre de su raza para que puedas distinguirlos.
 
-Las herramientas están a la izquierda y los ajustes de la herramienta elegida a su lado, con las piezas del modelo en una lista desplegable encima de los ajustes. Marca **Mostrar modelo** para tener una tercera columna con el modelo a la derecha.
+Las herramientas están a la izquierda y los ajustes de la herramienta elegida a su lado, con las piezas del modelo en una lista desplegable en la parte superior de los ajustes. Marca **Mostrar modelo** para tener una tercera columna con el modelo a la derecha.
 
 El **equipo vanilla** que llevas puesto también aparece, marcado como *(vanilla)*. El equipo propio del juego no tiene un archivo de mod que editar, así que al abrirlo se copia en un mod nuevo, que se ve exactamente como el original hasta que lo cambias. Todas las herramientas funcionan sobre esa copia. Con **Talla del cuerpo** elegida, una pieza vanilla se abre para reajustarla, ver [Talla de cuerpo](#talla-de-cuerpo).
 
