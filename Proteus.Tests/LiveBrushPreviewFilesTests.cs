@@ -121,7 +121,11 @@ public class LiveBrushPreviewFilesTests : IDisposable
     [Fact]
     [Trait("Plan", "EDGE-brush-pair-sync-10")]
     public void A_late_file_a_stuck_collection_may_still_draw_is_kept()
-        => Assert.Equal(LiveBrushPreview.LateFile.Keep, LiveBrushPreview.LateFileFate(applied: false, takenDown: true, holdingCount: 1));
+    {
+        Assert.Equal(LiveBrushPreview.LateFile.Keep, LiveBrushPreview.LateFileFate(applied: false, takenDown: true, holdingCount: 1));
+        // Applied, then an End a collection would not let go of: that collection may be drawing this very file.
+        Assert.Equal(LiveBrushPreview.LateFile.Keep, LiveBrushPreview.LateFileFate(applied: true, takenDown: true, holdingCount: 1));
+    }
 
     [Fact]
     [Trait("Plan", "AC-brush-pair-sync-1")]
@@ -129,6 +133,8 @@ public class LiveBrushPreviewFilesTests : IDisposable
     {
         Assert.Equal(LiveBrushPreview.LateFile.Keep, LiveBrushPreview.LateFileFate(applied: true, takenDown: false, holdingCount: 1));
         Assert.Equal(LiveBrushPreview.LateFile.WarnRefused, LiveBrushPreview.LateFileFate(applied: false, takenDown: false, holdingCount: 1));
+        // The very first push refused, nothing held yet: still said.
+        Assert.Equal(LiveBrushPreview.LateFile.WarnRefused, LiveBrushPreview.LateFileFate(applied: false, takenDown: false, holdingCount: 0));
     }
 
     [Fact]
