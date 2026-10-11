@@ -1183,8 +1183,22 @@ internal static class Program
             || ranking.Confidence is BodySizeMatch.Confidence.NoBodyMesh or BodySizeMatch.Confidence.TooLittle
                                   or BodySizeMatch.Confidence.Ambiguous)
             throw new UsageException($"Could not tell which {slot} body of {catalog.ModRoot} the garment was made on " +
-                                     $"({ranking.Confidence}). Pass --from.");
+                                     $"({ranking.Confidence}). Pass --from." + Closest(ranking.Scores));
         return best.Option;
+    }
+
+    /// <summary>
+    /// The options nearest the garment, for picking <c>--from</c> by hand: nothing when there are none, and a plain
+    /// "no usable overlap" when every score is the placeholder <see cref="BodySizeMatch.Rank"/> hands out when no probe
+    /// reached any option (at <see cref="BodySizeMatch.Reach"/>, none exact, in catalogue order) — those rows would rank
+    /// nothing.
+    /// </summary>
+    private static string Closest(IReadOnlyList<BodySizeMatch.Score> scores)
+    {
+        if (scores.Count == 0) return "";
+        if (scores.All(s => s.HitRate == 0f && s.Rms >= BodySizeMatch.Reach)) return " No usable overlap with any option.";
+        return " Closest:\n" + string.Join("\n", scores.Take(8).Select(s =>
+                   $"  {s.Option.Rel}  rms {s.Rms * 1000f:F2} mm, exact {s.HitRate:P0}"));
     }
 
     /// <summary>A body mod's own IMC mask for a slot, under its default settings — no player here to ask.</summary>

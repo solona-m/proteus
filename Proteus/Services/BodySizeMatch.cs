@@ -55,7 +55,7 @@ internal static class BodySizeMatch
     internal const float SameAnswer = 0.01f;
 
     /// <summary>How far to look for a candidate's surface from a probe; further than this is simply "far".</summary>
-    private const float Reach = 0.05f;
+    internal const float Reach = 0.05f;
 
     /// <summary>
     /// A probe only counts as evidence where the garment's body mesh actually lies ON some candidate (10 mm). A top's
