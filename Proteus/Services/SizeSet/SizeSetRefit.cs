@@ -47,9 +47,6 @@ internal static class SizeSetRefit
     private static readonly Regex PiecePath = new(@"^chara/equipment/e(?!0000)\d{4}/model/c(0101|0201)e\d{4}_(top|dwn)\.mdl$",
                                                   RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    /// <summary>The author's own sizes tried before giving up on reading what a piece was made on.</summary>
-    private const int SourceTries = 4;
-
     /// <summary>One model of the mod to make sizes of.</summary>
     /// <param name="GamePath">Where it is drawn.</param>
     /// <param name="Slot">"_top" or "_dwn".</param>
@@ -202,7 +199,7 @@ internal static class SizeSetRefit
         // and nothing to say — a unisex mod asked for Rue sizes is not missing anything for its men's models.
         if (!request.Keys.Any(k => ForRace(k, sizeSlot, race))) return 0;
 
-        // ── what it was made on: the author's first size whose body can be read ──
+        // ── what it was made on: the author's first size whose body can be read, in the author's order ──
         progress(string.Format(Strings.SizeSet.ReadingFmt, piece.Label));
         var mods = request.Bodies.Select(b => (b.Dir, b.Catalog)).ToList();
         if (mods.Count == 0)
@@ -217,7 +214,9 @@ internal static class SizeSetRefit
                                        .FirstOrDefault(d => d != null) ?? mods[0].Dir;
 
         (string? Option, string File, byte[] Bytes, ModelParts Garment, HashSet<string> Bones, AutoRefitDecisions.Pick Pick)? source = null;
-        foreach (var (option, file) in piece.Options.Take(SourceTries))
+        // Every option until one reads, not the first few: a men's shirt lists "Type M", "TBSE-Q" and two Thicclanders
+        // fits — none on an installed body — before its TBSE ones. A readable first size stops this at once.
+        foreach (var (option, file) in piece.Options)
         {
             ct.ThrowIfCancellationRequested();
             string path = BodySizeCatalog.ResolveCaseInsensitive(root, file);

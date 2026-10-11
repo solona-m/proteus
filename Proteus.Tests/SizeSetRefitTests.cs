@@ -238,36 +238,101 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     }
 
     private const string CasualFitShirt = LocalData.Mods + ":raykie's casual fit shirt (tbse+)";
+    private const string TwillTrousers = LocalData.Mods + ":-Twill Trousers- [YAB, TBSE, TBSE-X]";
+
+    /// <summary>Run a size set on a copy of a mod, printing what it said and logged.</summary>
+    private (SizeSetRefit.Result Result, SizeSetRefit.Request Request) RunOn(string copy, IReadOnlyList<string> keys,
+                                                                            params string[] bodyMods)
+    {
+        string modsRoot = LocalData.Path(LocalData.Mods);
+        var mods = bodyMods.Select(n => Path.GetFileName(LocalData.Path(n))).ToDictionary(d => d, d => d);
+        var bodies = new BodyModIndex().RefreshState(mods, modsRoot).List;
+        var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
+        var request = new SizeSetRefit.Request(copy, keys, Yas: false, Remake: false, bodies);
+        var result = SizeSetRefit.Run(request, new UVRemapService(log, "."), log, p => output.WriteLine(p),
+                                      CancellationToken.None);
+        foreach (string note in result.Notes) output.WriteLine("note: " + note);
+        foreach (var call in log.ReceivedCalls())
+            output.WriteLine("log: " + string.Join(" | ", call.GetArguments().Select(a => a is object[] arr
+                ? string.Join(", ", arr) : a?.ToString())));
+        return (result, request);
+    }
 
     /// <summary>
-    /// A man's shirt, its sizes in a "Body Fit" group of TBSE variants, gains a TBSE-X size; its one woman's model (a
-    /// Neolithe option in the same group) is left to the women's bodies, none of which is asked for.
+    /// A men's top in a "Size" group with only a TBSE option gains "TBSE-X", refitted for a man, and a second run makes
+    /// nothing. None of the men's mods installed here can show it: the twill trousers are cloth with no skin to read a
+    /// body from, and the casual fit shirt was made on bodies that are not installed. So the "garment" is TBSE's own
+    /// chest, filed as an outfit's — all skin, and exactly a TBSE body.
+    /// <para/>
+    /// A top, not legs: TBSE's SFW legs and TBSE-X's are cut differently (77% of one finds its place on the other by
+    /// texture coordinate) and the pair is refused, so the hem is left on the source's hips.
     /// </summary>
-    [LocalDataFact(CasualFitShirt, TheBodySe, TheBodySeX, Neolithe)]
+    [LocalDataFact(TheBodySe, TheBodySeX)]
     public void A_man_s_garment_gains_the_men_s_bodies()
     {
         string copy = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
         try
         {
-            CopyModels(LocalData.Path(CasualFitShirt), copy);
-            string modsRoot = LocalData.Path(LocalData.Mods);
-            var mods = new[] { TheBodySe, TheBodySeX, Neolithe }.Select(n => Path.GetFileName(LocalData.Path(n)))
-                                                                 .ToDictionary(d => d, d => d);
-            var bodies = new BodyModIndex().RefreshState(mods, modsRoot).List;
+            Directory.CreateDirectory(Path.Combine(copy, "tbse"));
+            File.Copy(BodySizeCatalog.ResolveCaseInsensitive(LocalData.Path(TheBodySe), "common/1/c0101e0000_top.mdl"),
+                      Path.Combine(copy, "tbse", "c0101e6000_top.mdl"));
+            File.WriteAllText(Path.Combine(copy, PenumbraModMeta.MetaFile), """
+                { "FileVersion": 4, "Name": "Men's top",
+                  "DefaultData": { "Files": {}, "FileSwaps": {}, "Manipulations": [] },
+                  "Groups": [
+                    { "Version": 0, "Name": "Size", "Type": "Single", "Priority": 0, "DefaultSettings": 0, "Options": [
+                      { "Name": "TBSE", "Files": { "chara/equipment/e6000/model/c0101e6000_top.mdl": "tbse\\c0101e6000_top.mdl" } } ] } ] }
+                """);
 
-            var before = Options(copy, "Body Fit");
+            var (result, request) = RunOn(copy, ["tbse", "tbse-x"], TheBodySe, TheBodySeX);
+            Assert.Equal(["TBSE", "TBSE-X"], Options(copy));
+            Assert.Equal(1, result.Made);
+
             var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
-            var request = new SizeSetRefit.Request(copy, ["tbse", "tbse-x"], Yas: false, Remake: false, bodies);
-            var result = SizeSetRefit.Run(request, new UVRemapService(log, "."), log, p => output.WriteLine(p),
-                                          CancellationToken.None);
-            foreach (string note in result.Notes) output.WriteLine("note: " + note);
-            var added = Options(copy, "Body Fit").Except(before).ToList();
-            output.WriteLine("added: " + string.Join(", ", added));
-
-            Assert.NotEmpty(added);
-            Assert.All(added, a => Assert.Contains(a, new[] { "TBSE", "TBSE-X" }));
-            Assert.Equal(added.Count, result.Made);
             Assert.Equal(0, SizeSetRefit.Run(request, new UVRemapService(log, "."), log, _ => { }, CancellationToken.None).Made);
+        }
+        finally
+        {
+            if (Directory.Exists(copy)) Directory.Delete(copy, recursive: true);
+        }
+    }
+
+    /// <summary>Cloth with no skin under it has nothing to read a body from: the twill trousers get no sizes.</summary>
+    [LocalDataFact(TwillTrousers, TheBodySe, TheBodySeX)]
+    public void A_garment_with_no_skin_is_refused()
+    {
+        string copy = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            CopyModels(LocalData.Path(TwillTrousers), copy);
+            Assert.NotNull(PenumbraModMeta.RemoveOption(copy, "Male: Legs Style", "TBSE-X"));
+            var (result, _) = RunOn(copy, ["tbse-x"], TheBodySe, TheBodySeX);
+            Assert.Equal(0, result.Made);
+            Assert.Equal(3, result.Notes.Count);   // e6269, e6270, e6271
+        }
+        finally
+        {
+            if (Directory.Exists(copy)) Directory.Delete(copy, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// A shirt made on bodies none of which is installed — "Type M", TBSE-Q, Thicclanders, TBSE-Z, each 4.5 mm or more
+    /// from TBSE and TBSE-X — is refused rather than refitted from the nearest of them. The exact reading used to take
+    /// TBSE-X from 13% of shared points, and refit from a body the shirt was never made on.
+    /// </summary>
+    [LocalDataFact(CasualFitShirt, TheBodySe, TheBodySeX)]
+    public void A_garment_made_on_no_installed_body_is_refused()
+    {
+        string copy = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            CopyModels(LocalData.Path(CasualFitShirt), copy);
+            var before = Options(copy, "Body Fit");
+            var (result, _) = RunOn(copy, ["tbse", "tbse-x"], TheBodySe, TheBodySeX);
+            Assert.Equal(0, result.Made);
+            Assert.Equal(before, Options(copy, "Body Fit"));
+            Assert.Contains(result.Notes, n => n.Contains("e6146", StringComparison.Ordinal));
         }
         finally
         {
