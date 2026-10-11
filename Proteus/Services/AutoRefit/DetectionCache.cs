@@ -46,7 +46,14 @@ internal sealed class DetectionCache(string path, IPluginLog log)
     /// the collection has switched on — between two copies of one body, the switched-on one is the answer — and the
     /// game's own body, which a patch can change.</param>
     internal static string KeyOf(byte[] garment, string slot, string race, string preferredDir, string bodies)
-        => $"{Convert.ToHexString(SHA256.HashData(garment))}|{slot}|{race}|{preferredDir.ToLowerInvariant()}|{bodies}";
+        => $"{Reading}|{Convert.ToHexString(SHA256.HashData(garment))}|{slot}|{race}|{preferredDir.ToLowerInvariant()}|{bodies}";
+
+    /// <summary>
+    /// Which way of reading a garment the entries were made by. Raised whenever detection changes its answers, so a
+    /// reading the old way made is never reused: 2 reads a garment no body matches exactly by nearness, where 1 took an
+    /// ancestor body's sliver of shared vertices (a YAB top, read as Bibo+). Old entries age out by use.
+    /// </summary>
+    internal const int Reading = 2;
 
     /// <summary>
     /// What <see cref="KeyOf"/>'s <c>bodies</c> is made of, in one short string: the installed set's version, the body

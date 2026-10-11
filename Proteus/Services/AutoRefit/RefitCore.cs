@@ -349,8 +349,37 @@ internal static class RefitCore
                                                           string race, IReadOnlyList<(string Dir, BodySizeCatalog Catalog)> mods,
                                                           string preferredDir, Func<string, bool> enabled,
                                                           Action<string>? note = null)
+        => Detect(garment, bones, slot, race, mods, preferredDir, enabled, note, byNearness: true, onNearness: null);
+
+    /// <summary>
+    /// What <see cref="DetectSource"/> reads a garment as, beside what the exact reading alone would have — the
+    /// comparison that shows which garments the nearness reading changes. The exact reading is run a second time only
+    /// for a garment that went to nearness; for any other the two are one reading.
+    /// </summary>
+    internal static (AutoRefitDecisions.Pick? Exact, AutoRefitDecisions.Pick? Now) CompareReadings(
+        ModelParts garment, IReadOnlySet<string> bones, string slot, string race,
+        IReadOnlyList<(string Dir, BodySizeCatalog Catalog)> mods, string preferredDir, Func<string, bool> enabled,
+        Action<string>? note = null)
     {
-        var probes = BodySizeMatch.ProbeKeys(garment);
+        bool near = false;
+        var now = Detect(garment, bones, slot, race, mods, preferredDir, enabled, note, byNearness: true,
+                         onNearness: () => near = true);
+        var exact = near ? Detect(garment, bones, slot, race, mods, preferredDir, enabled, null, byNearness: false, null)
+                         : now;
+        return (exact, now);
+    }
+
+    /// <param name="byNearness">Read a garment no body matches exactly by nearness (<see cref="DetectByNearness"/>).
+    /// Off only to measure what the exact reading alone would have said.</param>
+    /// <param name="onNearness">Called when the garment is read by nearness.</param>
+    private static AutoRefitDecisions.Pick? Detect(ModelParts garment, IReadOnlySet<string> bones, string slot,
+                                                   string race, IReadOnlyList<(string Dir, BodySizeCatalog Catalog)> mods,
+                                                   string preferredDir, Func<string, bool> enabled, Action<string>? note,
+                                                   bool byNearness, Action? onNearness)
+    {
+        using var reading = BodySizeMatch.BeginReading();
+        var skinPoints = BodySizeMatch.SkinPoints(garment);
+        var probes = BodySizeMatch.ProbeKeys(skinPoints);
         if (probes.Length == 0)
         {
             var any = mods.Select(m => m.Catalog.For(slot, race).FirstOrDefault()).FirstOrDefault(o => o != null);
@@ -384,6 +413,8 @@ internal static class RefitCore
         var family = AutoRefitDecisions.Family(sampled);
         if (family.Count == 0)
         {
+            // Matching no installed body at all is not a weak match: a garment made for a body the player lacks lies a few
+            // millimetres from some unrelated body, and nearness would take that body for its own.
             note?.Invoke($"the garment's skin matches no installed body (best {sampled.Select(m => m.Share).DefaultIfEmpty(0f).Max():P0})");
             return null;
         }
@@ -404,16 +435,220 @@ internal static class RefitCore
                                                 .Max(),
                                         })
                        .ToList();
-        if (AutoRefitDecisions.Choose(full) is not { } chosen) return null;
+
+        // Weak only over every size read, not the first three: a Tight&Firm top shared 22% with three of its body's sizes
+        // and 35% with the one it was made on.
+        float bestShare = full.Max(m => m.Share);
+        string? chosen = AutoRefitDecisions.Choose(full);
+        // Kept after nearness found no body clearly, the exact answer has been doubted: its size must then be at least
+        // Likely, as nearness's own would have to be. Kept because nearness had nothing to say, it stands as it was.
+        bool doubted = false;
+        if (byNearness && AutoRefitDecisions.Weak(bestShare))
+        {
+            onNearness?.Invoke();
+            var (outcome, near) = DetectByNearness(garment, skinPoints, bones, slot, race, mods, catalogs, preferredDir,
+                                                   enabled, note, bestShare, family, chosen);
+            if (outcome is not (AutoRefitDecisions.NearOutcome.KeepExact or AutoRefitDecisions.NearOutcome.KeepDoubted))
+                return near;
+            doubted = outcome == AutoRefitDecisions.NearOutcome.KeepDoubted;
+        }
+        if (chosen == null)
+        {
+            note?.Invoke($"family {string.Join(", ", full.Select(m => $"{m.Dir} {m.Share:P1}"))}; "
+                       + (bestShare < AutoRefitDecisions.MinShared
+                              ? $"none shares enough to choose (best {bestShare:P1})"
+                              : "no one mod among them"));
+            return null;
+        }
         note?.Invoke($"family {string.Join(", ", full.Select(m => $"{m.Dir} {m.Share:P1}"))}; made on {chosen}");
 
         // 3. The chosen mod's sizes, ranked as the Studio ranks them.
         var source = catalogs[chosen];
-        var ranking = BodySizeMatch.Rank(garment, source.For(slot, race), source.PathOf, bones);
-        return ranking.Best is { } best
-            ? new AutoRefitDecisions.Pick(chosen, best.Option, ranking.Confidence, ranking.FromCloth)
-            : null;
+        var ranking = BodySizeMatch.Rank(garment, source.For(slot, race), source.PathOf, bones, skinPoints);
+        if (ranking.Best is not { } best) return null;
+        return new AutoRefitDecisions.Pick(chosen, best.Option,
+                                           doubted ? AutoRefitDecisions.Sure(ranking.Confidence) : ranking.Confidence,
+                                           ranking.FromCloth);
     }
+
+    /// <summary>
+    /// Every body <see cref="DetectSource"/> searches, in the order it breaks ties by: the body refitted onto first, every
+    /// other installed body mod, and the game's own body last.
+    /// </summary>
+    /// <param name="vanilla">The game's own body, or null to leave it out (outside the game, where it cannot be read).</param>
+    internal static List<(string Dir, BodySizeCatalog Catalog)> SearchOrder(
+        string targetDir, BodySizeCatalog target, IEnumerable<(string Dir, BodySizeCatalog Catalog)> bodies,
+        BodySizeCatalog? vanilla)
+    {
+        var order = new List<(string Dir, BodySizeCatalog Catalog)> { (targetDir, target) };
+        order.AddRange(bodies.Where(b => !string.Equals(b.Dir, targetDir, StringComparison.OrdinalIgnoreCase)));
+        if (vanilla is { IsBody: true }) order.Add((VanillaBodyCatalog.Key, vanilla));
+        return order;
+    }
+
+    /// <summary>
+    /// <see cref="DetectSource"/> for a garment no installed body shares much with exactly — one made on an earlier release
+    /// of its body mod (see <see cref="AutoRefitDecisions.WeakShare"/>). The same three steps, read by how close the
+    /// garment's skin lies to each body (<see cref="BodySizeMatch.Near"/>) instead of how much of it lies exactly on one.
+    /// <para/>
+    /// Unattended, a guess is not good enough where the readings disagree: a wrong source body is what pushes a bust 13 mm
+    /// through a sweater. Where nearness overrules the exact answer, a ranking of the new body's sizes that is not at least
+    /// Likely is returned as Ambiguous, which the watcher does not refit from; where the two agree, the size is read as it
+    /// always was. A reading that finds no body clearly refuses, unless the exact answer is not clearly further than the
+    /// nearest (<see cref="AutoRefitDecisions.Settle"/>) — then it stands, its size held to Likely.
+    /// </summary>
+    /// <param name="exactFamily">The exact reading's family: read again here over more sizes, so a mod whose three
+    /// sampled sizes missed the garment's is still weighed.</param>
+    /// <param name="exactChosen">The exact reading's answer, or null.</param>
+    /// <param name="skinPoints">The garment's skin points, as the exact reading took them (BodySizeMatch.SkinPoints).</param>
+    /// <returns>What becomes of the garment (<see cref="AutoRefitDecisions.Settle"/>), and the body to refit from when
+    /// that is <see cref="AutoRefitDecisions.NearOutcome.Refit"/>.</returns>
+    private static (AutoRefitDecisions.NearOutcome Outcome, AutoRefitDecisions.Pick? Pick) DetectByNearness(
+        ModelParts garment, List<System.Numerics.Vector3> skinPoints, IReadOnlySet<string> bones, string slot, string race,
+        IReadOnlyList<(string Dir, BodySizeCatalog Catalog)> mods, Dictionary<string, BodySizeCatalog> catalogs,
+        string preferredDir, Func<string, bool> enabled, Action<string>? note, float bestShare,
+        IReadOnlyList<string> exactFamily, string? exactChosen)
+    {
+        var probes = BodySizeMatch.NearProbePoints(skinPoints);
+
+        // Each body measured once, by the FILE it is: the twelve sizes of step 2 include the three of step 1, and two
+        // forks ship the same files under other names.
+        var measured = new Dictionary<string, float[]?>(StringComparer.Ordinal);
+        var skinOf = new Dictionary<string, string>(StringComparer.Ordinal);   // file → what its skin is
+        var readBy = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        void Read(string dir, IEnumerable<BodyOption> options)
+        {
+            if (!readBy.TryGetValue(dir, out var files)) readBy[dir] = files = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var option in options)
+            {
+                string path = catalogs[dir].PathOf(option);
+                // A file measured already under another mod's name is not measured again; one not read at all yet is read
+                // and parsed once, for its keys and its distances together.
+                if (BodySizeMatch.CachedFile(path) is { } known && measured.ContainsKey(known.File))
+                {
+                    skinOf[known.File] = known.Body;
+                    files.Add(known.File);
+                    continue;
+                }
+                var distances = BodySizeMatch.Near(probes, path, out string? file, out string? skin);
+                if (file == null) continue;
+                measured.TryAdd(file, distances);
+                if (skin != null) skinOf[file] = skin;
+                files.Add(file);
+            }
+        }
+
+        // The points weighed: those some body reaches at all. A neck or hand the chest bodies lack lies beyond the cap
+        // from every one of them, and counted, a tenth of the skin there would hold every body's 90th percentile at the
+        // cap — the reading would say nothing, and the exact reading's ancestor would be refitted from after all.
+        bool[] Reached()
+        {
+            var reached = new bool[probes.Length];
+            foreach (var d in measured.Values)
+                if (d != null)
+                    for (int i = 0; i < d.Length; i++)
+                        reached[i] |= d[i] < BodySizeMatch.NearCap;
+            return reached;
+        }
+        List<AutoRefitDecisions.ModNear> Weigh(bool[] reached)
+        {
+            var p90 = measured.ToDictionary(kv => kv.Key,
+                                            kv => kv.Value is { } d ? BodySizeMatch.NearP90(d, reached) : float.MaxValue,
+                                            StringComparer.Ordinal);
+            return readBy.Select(kv =>
+                         {
+                             string? closest = kv.Value.OrderBy(c => p90[c]).ThenBy(c => c, StringComparer.Ordinal)
+                                                 .FirstOrDefault();
+                             // Bodies compared by what their skin IS, not by file: a fork re-saving one mesh with other
+                             // materials is another file of the same body.
+                             string Skin(string file) => skinOf.GetValueOrDefault(file, file);
+                             return new AutoRefitDecisions.ModNear(
+                                 kv.Key, closest == null ? float.MaxValue : p90[closest],
+                                 string.Equals(kv.Key, preferredDir, StringComparison.OrdinalIgnoreCase), enabled(kv.Key),
+                                 catalogs[kv.Key].For(slot, race).Count, closest == null ? null : Skin(closest));
+                         })
+                         .ToList();
+        }
+
+        // Nearness has nothing to say: the exact answer stands as it was.
+        (AutoRefitDecisions.NearOutcome, AutoRefitDecisions.Pick?) NothingToTell(string head, int weighed,
+                                                                                 IReadOnlyList<AutoRefitDecisions.ModNear> read)
+        {
+            string why = AutoRefitDecisions.TooFewReached(weighed, probes.Length)
+                ? $"only {weighed} of {probes.Length} points lie near any body"
+                : $"the nearest body is {Mm(read.Min(m => m.Distance))} off, on none of them";
+            note?.Invoke($"{head}; {why}, too little to tell by; "
+                       + (exactChosen != null ? $"the exact reading's {exactChosen} stands" : "and the exact reading has none"));
+            return (AutoRefitDecisions.NearOutcome.KeepExact, null);
+        }
+
+        // 1. A few sizes of every mod: which family.
+        foreach (var (dir, catalog) in mods)
+            if (catalog.For(slot, race).Count > 0) Read(dir, AutoRefitDecisions.SamplesOf(catalog.For(slot, race)));
+        var firstReached = Reached();
+        var sampled = Weigh(firstReached);
+
+        // Nothing to measure already: more sizes will not change that, and reading twelve of every mod — every mod is
+        // "near" the best when all are at the cap — is the sweep that once froze the game.
+        int firstWeighed = firstReached.Count(r => r);
+        if (AutoRefitDecisions.TooFewReached(firstWeighed, probes.Length)
+            || AutoRefitDecisions.ChooseNear(sampled, BodySizeMatch.NearCap, out _, out _) == AutoRefitDecisions.NearVerdict.NoReading)
+            return NothingToTell($"no body matches exactly (best {bestShare:P1})", firstWeighed, sampled);
+        var family = AutoRefitDecisions.NearFamily(sampled)
+                                       .Union(exactFamily, StringComparer.OrdinalIgnoreCase)
+                                       .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        // 2. More sizes of the family's mods: which mod. Every other mod is weighed too, at its sampled distance, so a
+        //    body nearly as close is never left out of the clarity check for having been sampled badly.
+        foreach (string dir in family)
+            if (catalogs[dir].For(slot, race).Count > AutoRefitDecisions.Samples)
+                Read(dir, AutoRefitDecisions.SamplesOf(catalogs[dir].For(slot, race), AutoRefitDecisions.ChoiceSamples));
+        BodySizeMatch.NeedNear(measured.Count);
+        var reached = Reached();
+        int weighed = reached.Count(r => r);
+        var full = Weigh(reached);
+        string reading = string.Join(", ", full.Where(m => family.Contains(m.Dir))
+                                               .Select(m => $"{m.Dir} {Mm(m.Distance)}"));
+        var verdict = AutoRefitDecisions.ChooseNear(full, BodySizeMatch.NearCap, out string? chosen, out var closestBody);
+        float? exactDistance = exactChosen == null ? null
+            : full.Where(m => string.Equals(m.Dir, exactChosen, StringComparison.OrdinalIgnoreCase))
+                  .Select(m => (float?)m.Distance).FirstOrDefault();
+        var outcome = AutoRefitDecisions.Settle(verdict, weighed, probes.Length, closestBody, exactChosen,
+                                                full.Count > 0 ? full.Min(m => m.Distance) : float.MaxValue, exactDistance);
+        string head = $"no body matches exactly (best {bestShare:P1}); nearest {reading}";
+        if (outcome == AutoRefitDecisions.NearOutcome.KeepExact) return NothingToTell(head, weighed, full);
+        if (outcome == AutoRefitDecisions.NearOutcome.KeepDoubted)
+        {
+            note?.Invoke($"{head}; no body clearly, and the exact reading's {exactChosen} is not clearly further than the "
+                       + "nearest, so it stands if its size is sure");
+            return (outcome, null);
+        }
+        if (outcome == AutoRefitDecisions.NearOutcome.Refuse || chosen == null)
+        {
+            note?.Invoke(head + (verdict == AutoRefitDecisions.NearVerdict.NoneClose
+                                     ? "; none close enough to refit from"
+                                     : "; two bodies about as close, so neither is sure"));
+            return (AutoRefitDecisions.NearOutcome.Refuse, null);
+        }
+        note?.Invoke($"{head}; made on {chosen}");
+
+        // 3. The chosen mod's sizes, ranked as the Studio ranks them.
+        var source = catalogs[chosen];
+        var ranking = BodySizeMatch.Rank(garment, source.For(slot, race), source.PathOf, bones, skinPoints);
+        // Where nearness overrules the exact reading, its answer must be sure of its size; where the two agree on the body —
+        // whichever of its forks each picked — the size is read as it always was.
+        string? BodyOf(string? dir) => full.FirstOrDefault(m => string.Equals(m.Dir, dir, StringComparison.OrdinalIgnoreCase)).Body;
+        bool overruled = !string.Equals(chosen, exactChosen, StringComparison.OrdinalIgnoreCase)
+                         && (BodyOf(chosen) is not { } chosenBody || chosenBody != BodyOf(exactChosen));
+        return ranking.Best is { } best
+            ? (outcome, new AutoRefitDecisions.Pick(chosen, best.Option,
+                                                    overruled ? AutoRefitDecisions.Sure(ranking.Confidence) : ranking.Confidence,
+                                                    ranking.FromCloth))
+            : (AutoRefitDecisions.NearOutcome.Refuse, null);
+    }
+
+    /// <summary>A nearness distance for the log: millimetres, or "unreadable" for a body none of whose files could be read.</summary>
+    private static string Mm(float metres) => metres >= 1f ? "unreadable" : $"{metres * 1000f:0.0} mm";
 
     /// <summary>A relative path the way Penumbra compares them: forward slashes, no leading slash, any case.</summary>
     internal static string Normal(string rel) => rel.Replace('\\', '/').Trim('/').ToLowerInvariant();

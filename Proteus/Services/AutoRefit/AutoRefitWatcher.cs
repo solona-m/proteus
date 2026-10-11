@@ -739,10 +739,14 @@ public sealed class AutoRefitWatcher : IDisposable
     // ── one refit ───────────────────────────────────────────────────────────
 
     /// <summary>What the framework thread hands a refit before it starts.</summary>
+    /// <param name="Permanent">The collection's own settings, beneath any design's temporary ones: which body mods it has
+    /// switched on, for the detection's cache key and its ties alike. The same object as <paramref name="Settings"/>
+    /// when nothing is held temporarily.</param>
     private sealed record Gathered(
         AutoRefitPreference Preference, IReadOnlyDictionary<string, string> Mods, string ModsRoot,
         IReadOnlyDictionary<string, PenumbraBridge.ModSettingsSnapshot>? Settings,
-        RacialModelBake.Wearer? Wearer, byte[]? VanillaBytes, VanillaPick? Vanilla);
+        RacialModelBake.Wearer? Wearer, byte[]? VanillaBytes, VanillaPick? Vanilla,
+        IReadOnlyDictionary<string, PenumbraBridge.ModSettingsSnapshot>? Permanent);
 
     /// <summary>
     /// Run a short piece of a refit on the framework thread. Timed, because anything slow here is a frame the player
@@ -993,9 +997,9 @@ public sealed class AutoRefitWatcher : IDisposable
 
         // ── what it was made on, and which other parts of that body it reaches ──
         BodySizeCatalog? CatalogOf(string dir) => dir == VanillaBodyCatalog.Key ? vanillaCat : state.Find(dir)?.Catalog;
-        // The collection's own choice only. A body mod a Glamourer design holds on or off with a temporary setting comes
-        // and goes with every design; counted, it would make each design change read every garment again.
-        var enabledBodies = bodies.Where(b => g.Settings != null && g.Settings.TryGetValue(b.Dir, out var s)
+        // The collection's own choice only — beneath any design's temporary setting, which comes and goes with every
+        // design; counted, it would make each design change read every garment again. The detection's ties read the same.
+        var enabledBodies = bodies.Where(b => g.Permanent != null && g.Permanent.TryGetValue(b.Dir, out var s)
                                               && s.Enabled && !s.Temporary)
                                   .Select(b => b.Dir);
         string cacheKey = DetectionCache.KeyOf(bytes, primary, race, targetMod.Dir,
@@ -1014,7 +1018,7 @@ public sealed class AutoRefitWatcher : IDisposable
             AssertOffFramework("reading the garment");
             source = isVanilla
                 ? VanillaSource(vanillaCat, primary, race)
-                : DetectAcross(garment, bones, primary, race, targetMod, bodies, vanillaCat, g.Settings);
+                : DetectAcross(garment, bones, primary, race, targetMod, bodies, vanillaCat, g.Permanent);
             otherFrom = new Dictionary<string, string>(StringComparer.Ordinal);
             if (source is { } found && AutoRefitDecisions.Proceed(found.Confidence) && CatalogOf(found.Dir) is { } from)
                 foreach (string slot in AutoRefitDecisions.Slots)
@@ -1241,6 +1245,12 @@ public sealed class AutoRefitWatcher : IDisposable
         if (penumbra.GetAllMods() is not { } mods || penumbra.GetModDirectory() is not { } modsRoot) return null;
 
         var settings = penumbra.GetCollectionModSettings(r.Collection, ignoreTemporary: false);
+        // Read again beneath the temporary settings only when some mod has one: every mod's settings are one call, and
+        // not a cheap one.
+        // A failed second call falls back to the first rather than reading every body mod as switched off.
+        var permanent = settings != null && settings.Values.Any(s => s.Temporary)
+            ? penumbra.GetCollectionModSettings(r.Collection, ignoreTemporary: true) ?? settings
+            : settings;
 
         RacialModelBake.Wearer? wearer = null;
         if (LiveCharacter.PlayerSkeleton(Plugin.ObjectTable) is { } skeleton)
@@ -1262,7 +1272,7 @@ public sealed class AutoRefitWatcher : IDisposable
             if (vanilla is not { Refittable: true }) return null;
             vanillaBytes = readGameFile(r.Worn.GamePath);
         }
-        return new Gathered(pref, mods, modsRoot, settings, wearer, vanillaBytes, vanilla);
+        return new Gathered(pref, mods, modsRoot, settings, wearer, vanillaBytes, vanilla, permanent);
     }
 
     /// <summary>
@@ -1274,13 +1284,14 @@ public sealed class AutoRefitWatcher : IDisposable
                                                   BodySizeCatalog vanilla,
                                                   IReadOnlyDictionary<string, PenumbraBridge.ModSettingsSnapshot>? settings)
     {
-        var order = new List<(string Dir, BodySizeCatalog Catalog)> { (targetMod.Dir, targetMod.Catalog) };
-        order.AddRange(bodies.Where(b => !string.Equals(b.Dir, targetMod.Dir, StringComparison.OrdinalIgnoreCase))
-                             .Select(b => (b.Dir, b.Catalog)));
-        if (vanilla.IsBody) order.Add((VanillaBodyCatalog.Key, vanilla));
+        var order = RefitCore.SearchOrder(targetMod.Dir, targetMod.Catalog, bodies.Select(b => (b.Dir, b.Catalog)), vanilla);
 
+        // The collection's own settings (Gathered.Permanent), as the cache key counts them: a design's temporary setting
+        // is not the collection's, and a reading tied by it would be filed under a key that does not record it. A
+        // temporary one is left out too, for when the permanent read failed and these are the effective settings.
         return RefitCore.DetectSource(garment, bones, slot, race, order, targetMod.Dir,
-                                      dir => settings != null && settings.TryGetValue(dir, out var s) && s.Enabled,
+                                      dir => settings != null && settings.TryGetValue(dir, out var s) && s.Enabled
+                                             && !s.Temporary,
                                       note => log.Information("[Proteus] auto refit: {0}", note));
     }
 
@@ -1347,6 +1358,7 @@ public sealed class AutoRefitWatcher : IDisposable
                                        BodySizeCatalog targetCat, BodyOption target, string slot, string race)
     {
         string targetPath = targetCat.PathOf(target);
+        using var reading = BodySizeMatch.BeginReading();
         float bestShare = 0f;
         string? best = null;
         ModelParts? bestModel = null;

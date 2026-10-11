@@ -136,6 +136,184 @@ public class AutoRefitDecisionsTests
         ]));
     }
 
+    // ── when no body matches exactly: by nearness ────────────────────────────
+
+    /// <param name="body">What the mod's closest size is; by default a body of its own.</param>
+    private static AutoRefitDecisions.ModNear Near(string dir, float mm, bool preferred = false, bool enabled = false,
+                                                   int sizes = 10, string? body = null)
+        => new(dir, mm / 1000f, preferred, enabled, sizes, body ?? dir);
+
+    private static AutoRefitDecisions.NearVerdict ChooseNear(out string? chosen, params AutoRefitDecisions.ModNear[] mods)
+        => AutoRefitDecisions.ChooseNear(mods, BodySizeMatch.NearCap, out chosen, out _);
+
+    [Fact]
+    public void A_garment_made_on_an_older_body_is_read_as_the_body_it_lies_on_not_its_ancestor()
+    {
+        // "Yet Another Too Tight Top+" (2023, YAB S), 90th-percentile distances measured against what is installed. The
+        // exact reading said Bibo+ (12.2% shared, an ancestor) and the bust came 13 mm through the sweater.
+        Assert.Equal(AutoRefitDecisions.NearVerdict.Chosen,
+                     ChooseNear(out var withOld, Near("Elegy", 0.8f), Near("YAB", 2.8f), Near("Lithe", 3.4f),
+                                Near("Bibo", 4.3f)));
+        Assert.Equal("Elegy", withOld);
+        // No copy of the old YAB S installed: YAB+ 4.2 is still clearly the closest.
+        Assert.Equal(AutoRefitDecisions.NearVerdict.Chosen,
+                     ChooseNear(out var current, Near("Neolithe", 3.9f), Near("YAB", 2.8f), Near("Lithe", 3.4f)));
+        Assert.Equal("YAB", current);
+    }
+
+    [Fact]
+    public void Nearness_refuses_rather_than_refit_from_a_body_that_is_not_close()
+    {
+        // The same top with no YAB at all: every body is 3.4 mm or more away, Bibo+ among them.
+        Assert.Equal(AutoRefitDecisions.NearVerdict.NoneClose,
+                     ChooseNear(out var chosen, Near("Neolithe", 3.9f), Near("Lithe", 3.4f), Near("Bibo", 4.3f)));
+        Assert.Null(chosen);
+    }
+
+    [Fact]
+    public void Two_families_about_as_close_are_unclear()
+    {
+        // An old Bibo+ top: Tre 2.5 mm, Bibo+ 2.7 mm. Either could be wrong, and a wrong source is what clips.
+        Assert.Equal(AutoRefitDecisions.NearVerdict.Unclear,
+                     ChooseNear(out var chosen, Near("Tre", 2.5f), Near("Kräuter", 3.8f), Near("Bibo", 2.7f)));
+        Assert.Null(chosen);
+    }
+
+    [Fact]
+    public void Two_different_bodies_nearly_as_close_are_never_a_tie_the_preferred_one_wins()
+    {
+        // Were these a tie, the refit target (Tre, preferred) would be chosen as the source by preference alone.
+        Assert.Equal(AutoRefitDecisions.NearVerdict.Unclear,
+                     ChooseNear(out var chosen, Near("Tre", 2.50f, preferred: true), Near("Bibo", 2.65f)));
+        Assert.Null(chosen);
+    }
+
+    [Fact]
+    public void A_body_and_its_fork_are_one_answer_not_an_unclear_one()
+    {
+        // The same file under two mods: one body, so the preference order picks between them.
+        Assert.Equal(AutoRefitDecisions.NearVerdict.Chosen,
+                     ChooseNear(out var chosen, Near("Bibo", 1.0f, sizes: 40, body: "bibo nude s"),
+                                Near("IVCS Bibo", 1.0f, enabled: true, body: "bibo nude s"), Near("Lithe", 3.0f)));
+        Assert.Equal("IVCS Bibo", chosen);
+    }
+
+    [Fact]
+    public void Sharing_some_other_file_does_not_make_two_mods_one_body()
+    {
+        // An all-in-one pack's YAB size is closest; a Bibo mod it also bundles a size of lies further off. Merged by that
+        // shared file, the preferred Bibo would be chosen by preference and the garment refitted from the wrong body.
+        Assert.Equal(AutoRefitDecisions.NearVerdict.Chosen,
+                     ChooseNear(out var chosen, Near("Pack", 0.8f, body: "yab s"),
+                                Near("Bibo", 2.8f, preferred: true, enabled: true, body: "bibo s")));
+        Assert.Equal("Pack", chosen);
+        // A fork that never read the closest size reads as a second body: refused, not guessed.
+        Assert.Equal(AutoRefitDecisions.NearVerdict.Unclear,
+                     ChooseNear(out _, Near("Bibo", 1.0f, body: "bibo s"), Near("IVCS Bibo", 1.1f, body: "bibo m")));
+    }
+
+    [Fact]
+    public void A_pack_whose_own_closest_is_another_body_is_a_rival_not_the_same_body()
+    {
+        // The Bibo mod lies nearest (2.5 mm). An all-in-one pack ships a Bibo size too, but its own nearest is its YAB
+        // size at 2.6: a second body nearly as close, so the reading is unclear — not Bibo's by a file the pack shares.
+        Assert.Equal(AutoRefitDecisions.NearVerdict.Unclear,
+                     ChooseNear(out _, Near("Bibo", 2.5f, body: "bibo s"), Near("Pack", 2.6f, enabled: true, body: "yab s")));
+    }
+
+    [Fact]
+    public void The_bodies_nearest_are_reported_even_when_none_is_close_enough()
+    {
+        // What the exact reading's answer is checked against: its own body nearest means both readings agree.
+        Assert.Equal(AutoRefitDecisions.NearVerdict.NoneClose,
+                     AutoRefitDecisions.ChooseNear([Near("T&F", 3.6f, body: "tf m"), Near("T&F fork", 3.6f, body: "tf m"),
+                                                    Near("Bibo", 5.4f)], BodySizeMatch.NearCap, out _, out var closest));
+        Assert.Equal(["T&F", "T&F fork"], closest);
+    }
+
+    [Fact]
+    public void Nothing_measurable_leaves_the_exact_reading_standing()
+    {
+        // Tight&Firm and Tre garments whose skin no chest body reaches: every distance at the cap.
+        Assert.Equal(AutoRefitDecisions.NearVerdict.NoReading,
+                     ChooseNear(out _, Near("Neolithe", 20f), Near("Bibo", 20f), Near("Tre", 20f)));
+        Assert.Equal(AutoRefitDecisions.NearVerdict.NoReading, ChooseNear(out _));
+        // A Tre top 20 mm from Tre and 15 from LavaBod+: nearer to LavaBod+, and on neither.
+        Assert.Equal(AutoRefitDecisions.NearVerdict.NoReading,
+                     ChooseNear(out _, Near("Tre", 20f), Near("LavaBod", 15f)));
+    }
+
+    [Fact]
+    public void The_nearness_family_is_every_mod_near_the_closest_sampled()
+    {
+        Assert.Equal(["Elegy", "YAB"],
+                     AutoRefitDecisions.NearFamily([Near("Elegy", 0.8f), Near("YAB", 2.2f), Near("Bibo", 4.3f)]));
+        Assert.Empty(AutoRefitDecisions.NearFamily([]));
+    }
+
+    [Fact]
+    public void Only_a_share_below_the_weak_line_goes_to_nearness()
+    {
+        Assert.True(AutoRefitDecisions.Weak(0.122f));    // the YAB top's best, an ancestor's
+        Assert.False(AutoRefitDecisions.Weak(0.346f));   // a Tight&Firm top on its own body, over every size
+    }
+
+    [Fact]
+    public void A_clear_nearness_reading_is_refitted_from()
+    {
+        Assert.Equal(AutoRefitDecisions.NearOutcome.Refit,
+                     AutoRefitDecisions.Settle(AutoRefitDecisions.NearVerdict.Chosen, 525, 525, ["YAB"], "Bibo"));
+    }
+
+    [Fact]
+    public void Nearness_with_nothing_to_say_keeps_the_exact_answer()
+    {
+        Assert.Equal(AutoRefitDecisions.NearOutcome.KeepExact,
+                     AutoRefitDecisions.Settle(AutoRefitDecisions.NearVerdict.NoReading, 525, 525, [], "Tre"));
+        // Fewer than half the points near any body: a clear-looking verdict over the rest still says nothing.
+        Assert.Equal(AutoRefitDecisions.NearOutcome.KeepExact,
+                     AutoRefitDecisions.Settle(AutoRefitDecisions.NearVerdict.Chosen, 200, 525, ["Lithe"], "Tre"));
+    }
+
+    [Fact]
+    public void An_unclear_reading_keeps_the_exact_answer_only_when_it_is_the_nearest_body()
+    {
+        // Kept, but doubted: its size must then be sure.
+        Assert.Equal(AutoRefitDecisions.NearOutcome.KeepDoubted,
+                     AutoRefitDecisions.Settle(AutoRefitDecisions.NearVerdict.NoneClose, 525, 525, ["T&F", "T&F fork"], "t&f",
+                                               best: 0.0036f));
+        // Nearest, but 8 mm off: the garment lies near no body, and is not refitted from its exact answer either.
+        Assert.Equal(AutoRefitDecisions.NearOutcome.Refuse,
+                     AutoRefitDecisions.Settle(AutoRefitDecisions.NearVerdict.NoneClose, 525, 525, ["Tre"], "Tre",
+                                               best: 0.008f, exactDistance: 0.008f));
+        // The YAB top with no YAB installed: the exact reading's Bibo+ is clearly further (4.3 mm against Lithe's 3.4),
+        // so nothing is refitted.
+        Assert.Equal(AutoRefitDecisions.NearOutcome.Refuse,
+                     AutoRefitDecisions.Settle(AutoRefitDecisions.NearVerdict.NoneClose, 525, 525, ["Lithe"], "Bibo",
+                                               best: 0.0034f, exactDistance: 0.0043f));
+        // A garment cut from Tre and lightly sculpted: Tre 3.2 mm, Lithe 3.0 — no clearer than a guess, so Tre stands.
+        Assert.Equal(AutoRefitDecisions.NearOutcome.KeepDoubted,
+                     AutoRefitDecisions.Settle(AutoRefitDecisions.NearVerdict.NoneClose, 525, 525, ["Lithe"], "Tre",
+                                               best: 0.0030f, exactDistance: 0.0032f));
+        Assert.Equal(AutoRefitDecisions.NearOutcome.Refuse,
+                     AutoRefitDecisions.Settle(AutoRefitDecisions.NearVerdict.Unclear, 525, 525, ["Tre"], null));
+        // An old Bibo+ top: Tre 2.5 mm, Bibo+ 2.7 — two bodies about as close. The exact reading's Bibo+ is the
+        // runner-up, and the runner-up of an unclear reading is never refitted from.
+        Assert.Equal(AutoRefitDecisions.NearOutcome.Refuse,
+                     AutoRefitDecisions.Settle(AutoRefitDecisions.NearVerdict.Unclear, 525, 525, ["Tre"], "Bibo",
+                                               best: 0.0025f, exactDistance: 0.0027f));
+    }
+
+    [Fact]
+    public void A_doubted_reading_needs_a_sure_size()
+    {
+        // The exact answer kept after nearness doubted it: a Guess of a size is not refitted unattended.
+        Assert.Equal(Confidence.Ambiguous, AutoRefitDecisions.Sure(Confidence.Guess));
+        Assert.Equal(Confidence.Likely, AutoRefitDecisions.Sure(Confidence.Likely));
+        Assert.Equal(Confidence.Exact, AutoRefitDecisions.Sure(Confidence.Exact));
+        Assert.False(AutoRefitDecisions.Proceed(AutoRefitDecisions.Sure(Confidence.Guess)));
+    }
+
     [Fact]
     public void Only_a_reading_with_something_behind_it_proceeds()
     {
