@@ -816,6 +816,23 @@ internal static class PenumbraModMeta
             }
         });
 
+    /// <summary>The option a Single group selects by default, by name; null when there is no such group or option.</summary>
+    public static string? SingleDefault(string modRoot, string groupName)
+    {
+        var group = (TryReadGroups(modRoot) ?? [])
+                    .FirstOrDefault(g => string.Equals(g.Name, groupName, StringComparison.OrdinalIgnoreCase)).Group;
+        if (group.ValueKind != JsonValueKind.Object || FileOptionsOf(group) is not { } options) return null;
+        long at = group.TryGetProperty("DefaultSettings", out var d) && d.ValueKind == JsonValueKind.Number ? d.GetInt64() : 0;
+        return at >= 0 && at < options.Count ? options[(int)at].Name : null;
+    }
+
+    /// <summary>
+    /// Make <paramref name="optionName"/> a Single group's default, by name — after a rewrite that may have moved the
+    /// options about. The first option when it is not there.
+    /// </summary>
+    public static void SetSingleDefault(string modRoot, string groupName, string optionName)
+        => EditGroup(modRoot, groupName, (group, list) => group["DefaultSettings"] = (long)Math.Max(IndexOfOption(list, optionName), 0));
+
     /// <summary>
     /// Take one option out of a group somebody else wrote, leaving the rest as it was. The group's default is
     /// corrected for the options that move up a place. Returns the files the option published, or null when there was

@@ -4626,5 +4626,109 @@
   "Service.Download.Checksum.Fmt": {
     "message": "{0} のチェックサムが一致しません（{1} バイト、sha256 {2}…）",
     "description": "Why a download (UV maps) failed; shown after a colon. {0} is a file name, {1} a byte count, {2} the start of a hash. Lower-case, no full stop."
+  },
+  "SizeSet.Header": {
+    "message": "他のボディの全サイズ",
+    "description": ""
+  },
+  "SizeSet.Intro": {
+    "message": "下でチェックしたボディの全サイズを、このMOD全体に追加します。胴と脚の各パーツを作者の最初のサイズからリフィットし、作者のサイズの隣に「Rue S」「YAB Buff L」などとして保存します。MODにすでにあるサイズはそのままです。",
+    "description": ""
+  },
+  "SizeSet.Yas": {
+    "message": "YAS版があるボディはYAS版を使う",
+    "description": ""
+  },
+  "SizeSet.Yas.Tip": {
+    "message": "Rue、YAB、TreにはYet Another Skeleton版があります。NeolitheとBiboにはないため、通常のサイズのままです。すでにYASにウェイトされているパーツは常にYASサイズになります。",
+    "description": ""
+  },
+  "SizeSet.Remake": {
+    "message": "Proteusが以前追加したサイズを作り直す",
+    "description": ""
+  },
+  "SizeSet.Remake.Tip": {
+    "message": "オフ：Proteusが追加済みのサイズはそのままにします。オン：もう一度リフィットして置き換えます。作者自身のサイズには一切触れません。",
+    "description": ""
+  },
+  "SizeSet.Run": {
+    "message": "サイズを追加",
+    "description": ""
+  },
+  "SizeSet.Run.Tip": {
+    "message": "バックグラウンドで動作し、パーツの多いMODでは数分かかることがあります。完了するとPenumbraがMODを再読み込みします。",
+    "description": ""
+  },
+  "SizeSet.PickBody": {
+    "message": "ボディを1つ以上チェックしてください。",
+    "description": ""
+  },
+  "SizeSet.Cancel": {
+    "message": "停止",
+    "description": ""
+  },
+  "SizeSet.Cancelled": {
+    "message": "停止しました。保存済みのサイズはMODに残ります。",
+    "description": ""
+  },
+  "SizeSet.Done.Fmt": {
+    "message": "MODに{0}サイズを追加しました。",
+    "description": ""
+  },
+  "SizeSet.NothingAdded": {
+    "message": "追加したサイズはありません。MODにはチェックしたボディの全サイズがすでにあります。",
+    "description": ""
+  },
+  "SizeSet.LeftOut": {
+    "message": "作成しなかったもの：",
+    "description": ""
+  },
+  "SizeSet.Failed.Fmt": {
+    "message": "サイズを追加できませんでした：{0}",
+    "description": ""
+  },
+  "SizeSet.NoPieces": {
+    "message": "このMODには、サイズを作れる胴・脚モデルがありません。",
+    "description": ""
+  },
+  "SizeSet.NoBodies": {
+    "message": "リフィット先のボディMODがインストールされていません。",
+    "description": ""
+  },
+  "SizeSet.PieceFailed.Fmt": {
+    "message": "{0}：失敗：{1}",
+    "description": ""
+  },
+  "SizeSet.Reading.Fmt": {
+    "message": "{0}がどのボディ用に作られたか読み取っています...",
+    "description": ""
+  },
+  "SizeSet.Unreadable.Fmt": {
+    "message": "{0}：どのボディ用に作られたか判別できなかったため、サイズを作りませんでした。",
+    "description": ""
+  },
+  "SizeSet.NoSuchSize.Fmt": {
+    "message": "{0}：{2}には「{1}」のモデルがないため、そのサイズは作りませんでした。",
+    "description": ""
+  },
+  "SizeSet.Refused.Fmt": {
+    "message": "{0}：「{1}」を作れませんでした：{2}",
+    "description": ""
+  },
+  "SizeSet.SaveFailed.Fmt": {
+    "message": "{0}：{1}",
+    "description": ""
+  },
+  "SizeSet.NotInstalled.Fmt": {
+    "message": "{0}：{1}がインストールされていないため、そのサイズは作りませんでした。",
+    "description": ""
+  },
+  "SizeSet.Working.Fmt": {
+    "message": "{0}を{1}にリフィット中...",
+    "description": ""
+  },
+  "SizeSet.NotInstalledTip.Fmt": {
+    "message": "{0}はPenumbraにインストールされていません。インストールしてから、この項目を閉じて開き直してください。",
+    "description": ""
   }
 }

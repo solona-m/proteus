@@ -4626,5 +4626,109 @@
   "Service.Download.Checksum.Fmt": {
     "message": "контрольная сумма {0} не совпадает ({1} байт, sha256 {2}…)",
     "description": "Why a download (UV maps) failed; shown after a colon. {0} is a file name, {1} a byte count, {2} the start of a hash. Lower-case, no full stop."
+  },
+  "SizeSet.Header": {
+    "message": "Все размеры для других тел",
+    "description": ""
+  },
+  "SizeSet.Intro": {
+    "message": "Добавляет во весь этот мод все размеры отмеченных ниже тел. Каждая вещь для торса и ног переподгоняется с первого размера автора и сохраняется рядом с его размерами как «Rue S», «YAB Buff L» и так далее. Размеры, которые в моде уже есть, не трогаются.",
+    "description": ""
+  },
+  "SizeSet.Yas": {
+    "message": "Использовать YAS-версию тела, если она есть",
+    "description": ""
+  },
+  "SizeSet.Yas.Tip": {
+    "message": "У Rue, YAB и Tre есть версии для Yet Another Skeleton. У Neolithe и Bibo их нет, и они сохраняют обычные размеры. Вещь, уже привязанная к YAS, всегда получает YAS-размеры.",
+    "description": ""
+  },
+  "SizeSet.Remake": {
+    "message": "Переделать размеры, добавленные Proteus раньше",
+    "description": ""
+  },
+  "SizeSet.Remake.Tip": {
+    "message": "Выкл.: размер, уже добавленный Proteus, остаётся как есть. Вкл.: он подгоняется заново и заменяется. Собственные размеры автора никогда не трогаются.",
+    "description": ""
+  },
+  "SizeSet.Run": {
+    "message": "Добавить размеры",
+    "description": ""
+  },
+  "SizeSet.Run.Tip": {
+    "message": "Работает в фоне и для мода с множеством вещей может занять несколько минут. По завершении Penumbra перезагрузит мод.",
+    "description": ""
+  },
+  "SizeSet.PickBody": {
+    "message": "Отметьте хотя бы одно тело.",
+    "description": ""
+  },
+  "SizeSet.Cancel": {
+    "message": "Остановить",
+    "description": ""
+  },
+  "SizeSet.Cancelled": {
+    "message": "Остановлено. Уже сохранённые размеры остаются в моде.",
+    "description": ""
+  },
+  "SizeSet.Done.Fmt": {
+    "message": "Добавлено размеров в мод: {0}.",
+    "description": ""
+  },
+  "SizeSet.NothingAdded": {
+    "message": "Размеры не добавлены: в моде уже есть все размеры отмеченных тел.",
+    "description": ""
+  },
+  "SizeSet.LeftOut": {
+    "message": "Пропущено:",
+    "description": ""
+  },
+  "SizeSet.Failed.Fmt": {
+    "message": "Не удалось добавить размеры: {0}",
+    "description": ""
+  },
+  "SizeSet.NoPieces": {
+    "message": "В этом моде нет моделей торса или ног, из которых можно сделать размеры.",
+    "description": ""
+  },
+  "SizeSet.NoBodies": {
+    "message": "Не установлено ни одного мода тела, под которое можно подогнать.",
+    "description": ""
+  },
+  "SizeSet.PieceFailed.Fmt": {
+    "message": "{0}: ошибка: {1}",
+    "description": ""
+  },
+  "SizeSet.Reading.Fmt": {
+    "message": "Определяю, под какое тело сделана вещь {0}...",
+    "description": ""
+  },
+  "SizeSet.Unreadable.Fmt": {
+    "message": "{0}: не удалось определить, под какое тело она сделана, поэтому размеры из неё не созданы.",
+    "description": ""
+  },
+  "SizeSet.NoSuchSize.Fmt": {
+    "message": "{0}: в {2} нет модели для «{1}», поэтому этот размер пропущен.",
+    "description": ""
+  },
+  "SizeSet.Refused.Fmt": {
+    "message": "{0}: не удалось сделать «{1}»: {2}",
+    "description": ""
+  },
+  "SizeSet.SaveFailed.Fmt": {
+    "message": "{0}: {1}",
+    "description": ""
+  },
+  "SizeSet.NotInstalled.Fmt": {
+    "message": "{0}: {1} не установлено, поэтому его размеры не созданы.",
+    "description": ""
+  },
+  "SizeSet.Working.Fmt": {
+    "message": "Подгоняю {0} под {1}...",
+    "description": ""
+  },
+  "SizeSet.NotInstalledTip.Fmt": {
+    "message": "{0} не установлено в Penumbra. Установите его, затем закройте и снова откройте этот раздел.",
+    "description": ""
   }
 }

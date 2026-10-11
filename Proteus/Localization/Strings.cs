@@ -53,6 +53,7 @@ public static class Strings
     public static PresetsStrings    Presets    { get; private set; } = new();
     public static HatCompatStrings  HatCompat  { get; private set; } = new();
     public static AutoRefitStrings  AutoRefit  { get; private set; } = new();
+    public static SizeSetStrings    SizeSet    { get; private set; } = new();
     public static WhatsNewStrings   WhatsNew   { get; private set; } = new();
 
     /// <summary>
@@ -82,8 +83,89 @@ public static class Strings
         Presets    = new PresetsStrings();
         HatCompat  = new HatCompatStrings();
         AutoRefit  = new AutoRefitStrings();
+        SizeSet    = new SizeSetStrings();
         WhatsNew   = new WhatsNewStrings();
     }
+}
+
+/// <summary>The Body size tool's "every size for other bodies", which adds a whole set of sizes to a mod.</summary>
+public sealed class SizeSetStrings
+{
+    public readonly string Header = Loc.Localize("SizeSet.Header", "Every size for other bodies") + "###sizeSetHeader";
+
+    public readonly string Intro = Loc.Localize("SizeSet.Intro",
+        "Adds every size of the bodies ticked below to this whole mod. Each chest and legs piece is refitted from the "
+      + "author's first size and saved beside the author's sizes as \"Rue S\", \"YAB Buff L\" and so on. Sizes the mod "
+      + "already has are left alone.");
+
+    public readonly string Yas = Loc.Localize("SizeSet.Yas", "Use a body's YAS version where it has one") + "###sizeSetYas";
+
+    public readonly string YasTip = Loc.Localize("SizeSet.Yas.Tip",
+        "Rue, YAB and Tre come in Yet Another Skeleton versions. Neolithe and Bibo don't, and keep their plain sizes. A "
+      + "piece already weighted to YAS always gets YAS sizes.");
+
+    public readonly string Remake = Loc.Localize("SizeSet.Remake", "Make again the sizes Proteus added before")
+                                  + "###sizeSetRemake";
+
+    public readonly string RemakeTip = Loc.Localize("SizeSet.Remake.Tip",
+        "Off: a size Proteus already added is left as it is. On: it is refitted again and replaced. The author's own "
+      + "sizes are never touched.");
+
+    public readonly string Run = Loc.Localize("SizeSet.Run", "Add the sizes") + "###sizeSetRun";
+
+    public readonly string RunTip = Loc.Localize("SizeSet.Run.Tip",
+        "Runs in the background and can take a few minutes for a mod with many pieces. Penumbra reloads the mod when it "
+      + "is done.");
+
+    public readonly string PickBody = Loc.Localize("SizeSet.PickBody", "Tick at least one body.");
+
+    /// <summary>{0} is the body.</summary>
+    public readonly string NotInstalledTipFmt = Loc.Localize("SizeSet.NotInstalledTip.Fmt",
+        "{0} isn't installed in Penumbra. Install it, then close and reopen this section.");
+
+    public readonly string Cancel = Loc.Localize("SizeSet.Cancel", "Stop") + "###sizeSetCancel";
+
+    public readonly string Cancelled = Loc.Localize("SizeSet.Cancelled",
+        "Stopped. Sizes already saved stay in the mod.");
+
+    public readonly string DoneFmt = Loc.Localize("SizeSet.Done.Fmt", "Added {0} sizes to the mod.");
+
+    public readonly string NothingAdded = Loc.Localize("SizeSet.NothingAdded",
+        "No sizes were added: the mod already has every size of the bodies ticked.");
+
+    public readonly string LeftOut = Loc.Localize("SizeSet.LeftOut", "Left out:");
+
+    public readonly string FailedFmt = Loc.Localize("SizeSet.Failed.Fmt", "Couldn't add the sizes: {0}");
+
+    public readonly string NoPieces = Loc.Localize("SizeSet.NoPieces",
+        "This mod has no chest or legs models to make sizes of.");
+
+    public readonly string NoBodies = Loc.Localize("SizeSet.NoBodies", "No body mods are installed to refit onto.");
+
+    /// <summary>{0} is the piece, {1} what went wrong.</summary>
+    public readonly string PieceFailedFmt = Loc.Localize("SizeSet.PieceFailed.Fmt", "{0}: failed: {1}");
+
+    public readonly string ReadingFmt = Loc.Localize("SizeSet.Reading.Fmt", "Reading what {0} was made on...");
+
+    public readonly string UnreadableFmt = Loc.Localize("SizeSet.Unreadable.Fmt",
+        "{0}: couldn't tell which body it was made on, so no sizes were made of it.");
+
+    /// <summary>{0} is the piece, {1} the size ("Rue S"), {2} the body mod.</summary>
+    public readonly string NoSuchSizeFmt = Loc.Localize("SizeSet.NoSuchSize.Fmt",
+        "{0}: {2} has no model for \"{1}\", so that size was left out.");
+
+    /// <summary>{0} is the piece, {1} the size, {2} why.</summary>
+    public readonly string RefusedFmt = Loc.Localize("SizeSet.Refused.Fmt", "{0}: \"{1}\" couldn't be made: {2}");
+
+    /// <summary>{0} is the piece, {1} what the save said.</summary>
+    public readonly string SaveFailedFmt = Loc.Localize("SizeSet.SaveFailed.Fmt", "{0}: {1}");
+
+    /// <summary>{0} is the piece, {1} the body.</summary>
+    public readonly string NotInstalledFmt = Loc.Localize("SizeSet.NotInstalled.Fmt",
+        "{0}: {1} isn't installed, so it got none of its sizes.");
+
+    /// <summary>{0} is the piece, {1} the size.</summary>
+    public readonly string WorkingFmt = Loc.Localize("SizeSet.Working.Fmt", "Refitting {0} to {1}...");
 }
 
 /// <summary>The automatic body refit's section of Settings, and the words it puts in chat.</summary>

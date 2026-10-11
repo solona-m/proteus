@@ -4626,5 +4626,109 @@
   "Service.Download.Checksum.Fmt": {
     "message": "checksum mismatch for {0} ({1} bytes, sha256 {2}…)",
     "description": "Why a download (UV maps) failed; shown after a colon. {0} is a file name, {1} a byte count, {2} the start of a hash. Lower-case, no full stop."
+  },
+  "SizeSet.Header": {
+    "message": "Every size for other bodies",
+    "description": "Heading of the Body size tool's section that adds every size of other body mods to the whole open mod."
+  },
+  "SizeSet.Intro": {
+    "message": "Adds every size of the bodies ticked below to this whole mod. Each chest and legs piece is refitted from the author's first size and saved beside the author's sizes as \"Rue S\", \"YAB Buff L\" and so on. Sizes the mod already has are left alone.",
+    "description": "Explains the section. Rue S and YAB Buff L are option names: keep them as they are."
+  },
+  "SizeSet.Yas": {
+    "message": "Use a body's YAS version where it has one",
+    "description": "Checkbox. YAS is Yet Another Skeleton, a skeleton mod: keep the name."
+  },
+  "SizeSet.Yas.Tip": {
+    "message": "Rue, YAB and Tre come in Yet Another Skeleton versions. Neolithe and Bibo don't, and keep their plain sizes. A piece already weighted to YAS always gets YAS sizes.",
+    "description": "Tooltip of the YAS checkbox. Body mod names stay as they are."
+  },
+  "SizeSet.Remake": {
+    "message": "Make again the sizes Proteus added before",
+    "description": "Checkbox."
+  },
+  "SizeSet.Remake.Tip": {
+    "message": "Off: a size Proteus already added is left as it is. On: it is refitted again and replaced. The author's own sizes are never touched.",
+    "description": "Tooltip of the remake checkbox."
+  },
+  "SizeSet.Run": {
+    "message": "Add the sizes",
+    "description": "Button that starts the work."
+  },
+  "SizeSet.Run.Tip": {
+    "message": "Runs in the background and can take a few minutes for a mod with many pieces. Penumbra reloads the mod when it is done.",
+    "description": "Tooltip of the start button."
+  },
+  "SizeSet.PickBody": {
+    "message": "Tick at least one body.",
+    "description": "Tooltip of the start button while no body is ticked."
+  },
+  "SizeSet.Cancel": {
+    "message": "Stop",
+    "description": "Button that stops the work."
+  },
+  "SizeSet.Cancelled": {
+    "message": "Stopped. Sizes already saved stay in the mod.",
+    "description": "Shown after the work was stopped."
+  },
+  "SizeSet.Done.Fmt": {
+    "message": "Added {0} sizes to the mod.",
+    "description": "Shown when done. {0} is a number of sizes."
+  },
+  "SizeSet.NothingAdded": {
+    "message": "No sizes were added: the mod already has every size of the bodies ticked.",
+    "description": "Shown when done and nothing was needed."
+  },
+  "SizeSet.LeftOut": {
+    "message": "Left out:",
+    "description": "Heading over the list of sizes that were not made, each with its reason."
+  },
+  "SizeSet.Failed.Fmt": {
+    "message": "Couldn't add the sizes: {0}",
+    "description": "{0} is the error."
+  },
+  "SizeSet.NoPieces": {
+    "message": "This mod has no chest or legs models to make sizes of.",
+    "description": "Shown when the mod has nothing to refit."
+  },
+  "SizeSet.NoBodies": {
+    "message": "No body mods are installed to refit onto.",
+    "description": "Shown when no body mod is installed."
+  },
+  "SizeSet.PieceFailed.Fmt": {
+    "message": "{0}: failed: {1}",
+    "description": "{0} is the piece (\"Chest — e6255\"), {1} the error."
+  },
+  "SizeSet.Reading.Fmt": {
+    "message": "Reading what {0} was made on...",
+    "description": "Status line. {0} is the piece."
+  },
+  "SizeSet.Unreadable.Fmt": {
+    "message": "{0}: couldn't tell which body it was made on, so no sizes were made of it.",
+    "description": "{0} is the piece."
+  },
+  "SizeSet.NoSuchSize.Fmt": {
+    "message": "{0}: {2} has no model for \"{1}\", so that size was left out.",
+    "description": "{0} is the piece, {1} the size (\"Rue S\"), {2} the body mod."
+  },
+  "SizeSet.Refused.Fmt": {
+    "message": "{0}: \"{1}\" couldn't be made: {2}",
+    "description": "{0} is the piece, {1} the size, {2} the reason."
+  },
+  "SizeSet.SaveFailed.Fmt": {
+    "message": "{0}: {1}",
+    "description": "{0} is the piece, {1} what went wrong saving it."
+  },
+  "SizeSet.NotInstalled.Fmt": {
+    "message": "{0}: {1} isn't installed, so it got none of its sizes.",
+    "description": "{0} is the piece, {1} the body mod."
+  },
+  "SizeSet.Working.Fmt": {
+    "message": "Refitting {0} to {1}...",
+    "description": "Status line. {0} is the piece, {1} the size."
+  },
+  "SizeSet.NotInstalledTip.Fmt": {
+    "message": "{0} isn't installed in Penumbra. Install it, then close and reopen this section.",
+    "description": "Tooltip of a body that can't be ticked because its mod isn't installed. {0} is the body."
   }
 }

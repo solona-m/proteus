@@ -327,6 +327,12 @@ public sealed class PartsPanel
     /// <summary>The Body size tool's own half of the tab — see <see cref="BodyRetargetPanel"/>.</summary>
     private readonly BodyRetargetPanel retarget;
 
+    /// <summary>The Body size tool's whole-mod "every size for other bodies" — see <see cref="SizeSetPanel"/>.</summary>
+    private readonly SizeSetPanel sizeSet;
+
+    /// <summary>Share the automatic refit's index of body mods with "every size for other bodies".</summary>
+    internal void UseBodyIndex(BodyModIndex shared) => sizeSet.UseBodyIndex(shared);
+
     /// <summary>The solve has changed since the character last showed it.</summary>
     private bool previewDirty;
 
@@ -348,6 +354,7 @@ public sealed class PartsPanel
         preview = new LiveBrushPreview(penumbra, compositor, log);
         retarget = new BodyRetargetPanel(penumbra, uvRemap, path => textureLoader.LoadRawFile(null, path),
                                          config, log);
+        sizeSet = new SizeSetPanel(penumbra, uvRemap, config, log);
         refitMods = new RefitModService(penumbra, compositor, log);
         LiveBrushPreview.CleanUp();
         // Last session's extracts of the game's body: a patch since then would make them stale, and the session is
@@ -3097,6 +3104,17 @@ public sealed class PartsPanel
             SaveMod: (bodyName, create) => RefitModFor(bodyName, create),
             KeepShape: RetargetShapes,
             Wearer: RetargetWearer));
+
+        // The whole mod at once, below the one-garment tool: the game's own gear has no mod to add sizes to.
+        if (root == null || dir == null) return;
+        ImGui.Separator();
+        sizeSet.Draw(root, dir, changed =>
+        {
+            compositor.ExpectOwnModEdit(changed);
+            penumbra.ReloadModDirectory(changed);
+            compositor.RedrawForChangedModel();
+            refreshModelsPending = true;   // the new sizes are models of the mod: list them
+        });
     }
 
     /// <summary>The racial deformer, read once — the live brush reads its own the same way.</summary>

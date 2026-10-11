@@ -4626,5 +4626,109 @@
   "Service.Download.Checksum.Fmt": {
     "message": "{0} 的校验和不匹配（{1} 字节，sha256 {2}…）",
     "description": "Why a download (UV maps) failed; shown after a colon. {0} is a file name, {1} a byte count, {2} the start of a hash. Lower-case, no full stop."
+  },
+  "SizeSet.Header": {
+    "message": "其他体型的全部尺码",
+    "description": ""
+  },
+  "SizeSet.Intro": {
+    "message": "为整个模组添加下方勾选体型的每个尺码。每件上衣和腿部部件都会从作者的第一个尺码重新适配，并以“Rue S”“YAB Buff L”等名称保存在作者的尺码旁边。模组已有的尺码保持不变。",
+    "description": ""
+  },
+  "SizeSet.Yas": {
+    "message": "体型有 YAS 版本时使用 YAS 版本",
+    "description": ""
+  },
+  "SizeSet.Yas.Tip": {
+    "message": "Rue、YAB 和 Tre 有 Yet Another Skeleton 版本。Neolithe 和 Bibo 没有，保留普通尺码。已经按 YAS 绑定权重的部件总会得到 YAS 尺码。",
+    "description": ""
+  },
+  "SizeSet.Remake": {
+    "message": "重新制作 Proteus 之前添加的尺码",
+    "description": ""
+  },
+  "SizeSet.Remake.Tip": {
+    "message": "关闭：Proteus 已添加的尺码保持原样。开启：重新适配并替换。作者自己的尺码永远不会被改动。",
+    "description": ""
+  },
+  "SizeSet.Run": {
+    "message": "添加尺码",
+    "description": ""
+  },
+  "SizeSet.Run.Tip": {
+    "message": "在后台运行，部件较多的模组可能需要几分钟。完成后 Penumbra 会重新加载模组。",
+    "description": ""
+  },
+  "SizeSet.PickBody": {
+    "message": "请至少勾选一个体型。",
+    "description": ""
+  },
+  "SizeSet.Cancel": {
+    "message": "停止",
+    "description": ""
+  },
+  "SizeSet.Cancelled": {
+    "message": "已停止。已保存的尺码会留在模组中。",
+    "description": ""
+  },
+  "SizeSet.Done.Fmt": {
+    "message": "已向模组添加 {0} 个尺码。",
+    "description": ""
+  },
+  "SizeSet.NothingAdded": {
+    "message": "没有添加尺码：模组已经拥有所勾选体型的全部尺码。",
+    "description": ""
+  },
+  "SizeSet.LeftOut": {
+    "message": "未制作：",
+    "description": ""
+  },
+  "SizeSet.Failed.Fmt": {
+    "message": "无法添加尺码：{0}",
+    "description": ""
+  },
+  "SizeSet.NoPieces": {
+    "message": "此模组没有可制作尺码的上衣或腿部模型。",
+    "description": ""
+  },
+  "SizeSet.NoBodies": {
+    "message": "没有安装可适配的体型模组。",
+    "description": ""
+  },
+  "SizeSet.PieceFailed.Fmt": {
+    "message": "{0}：失败：{1}",
+    "description": ""
+  },
+  "SizeSet.Reading.Fmt": {
+    "message": "正在读取 {0} 是为哪个体型制作的……",
+    "description": ""
+  },
+  "SizeSet.Unreadable.Fmt": {
+    "message": "{0}：无法判断它是为哪个体型制作的，因此没有制作它的尺码。",
+    "description": ""
+  },
+  "SizeSet.NoSuchSize.Fmt": {
+    "message": "{0}：{2} 没有“{1}”的模型，因此跳过了该尺码。",
+    "description": ""
+  },
+  "SizeSet.Refused.Fmt": {
+    "message": "{0}：无法制作“{1}”：{2}",
+    "description": ""
+  },
+  "SizeSet.SaveFailed.Fmt": {
+    "message": "{0}：{1}",
+    "description": ""
+  },
+  "SizeSet.NotInstalled.Fmt": {
+    "message": "{0}：未安装 {1}，因此没有制作它的任何尺码。",
+    "description": ""
+  },
+  "SizeSet.Working.Fmt": {
+    "message": "正在将 {0} 适配为 {1}……",
+    "description": ""
+  },
+  "SizeSet.NotInstalledTip.Fmt": {
+    "message": "Penumbra 中未安装 {0}。请安装后关闭并重新打开此部分。",
+    "description": ""
   }
 }

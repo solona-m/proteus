@@ -4626,5 +4626,109 @@
   "Service.Download.Checksum.Fmt": {
     "message": "la suma de comprobación no coincide para {0} ({1} bytes, sha256 {2}…)",
     "description": "Why a download (UV maps) failed; shown after a colon. {0} is a file name, {1} a byte count, {2} the start of a hash. Lower-case, no full stop."
+  },
+  "SizeSet.Header": {
+    "message": "Todas las tallas para otros cuerpos",
+    "description": ""
+  },
+  "SizeSet.Intro": {
+    "message": "Añade a todo este mod cada talla de los cuerpos marcados abajo. Cada pieza de torso y piernas se reajusta desde la primera talla del autor y se guarda junto a sus tallas como «Rue S», «YAB Buff L», etc. Las tallas que el mod ya tiene no se tocan.",
+    "description": ""
+  },
+  "SizeSet.Yas": {
+    "message": "Usar la versión YAS de un cuerpo cuando la tenga",
+    "description": ""
+  },
+  "SizeSet.Yas.Tip": {
+    "message": "Rue, YAB y Tre tienen versiones para Yet Another Skeleton. Neolithe y Bibo no, y conservan sus tallas normales. Una pieza que ya está pesada para YAS siempre recibe tallas YAS.",
+    "description": ""
+  },
+  "SizeSet.Remake": {
+    "message": "Rehacer las tallas que Proteus añadió antes",
+    "description": ""
+  },
+  "SizeSet.Remake.Tip": {
+    "message": "Desactivado: una talla que Proteus ya añadió se deja como está. Activado: se reajusta de nuevo y se reemplaza. Las tallas propias del autor nunca se tocan.",
+    "description": ""
+  },
+  "SizeSet.Run": {
+    "message": "Añadir las tallas",
+    "description": ""
+  },
+  "SizeSet.Run.Tip": {
+    "message": "Se ejecuta en segundo plano y puede tardar unos minutos en un mod con muchas piezas. Penumbra recarga el mod al terminar.",
+    "description": ""
+  },
+  "SizeSet.PickBody": {
+    "message": "Marca al menos un cuerpo.",
+    "description": ""
+  },
+  "SizeSet.Cancel": {
+    "message": "Detener",
+    "description": ""
+  },
+  "SizeSet.Cancelled": {
+    "message": "Detenido. Las tallas ya guardadas se quedan en el mod.",
+    "description": ""
+  },
+  "SizeSet.Done.Fmt": {
+    "message": "Se añadieron {0} tallas al mod.",
+    "description": ""
+  },
+  "SizeSet.NothingAdded": {
+    "message": "No se añadió ninguna talla: el mod ya tiene todas las tallas de los cuerpos marcados.",
+    "description": ""
+  },
+  "SizeSet.LeftOut": {
+    "message": "Omitidas:",
+    "description": ""
+  },
+  "SizeSet.Failed.Fmt": {
+    "message": "No se pudieron añadir las tallas: {0}",
+    "description": ""
+  },
+  "SizeSet.NoPieces": {
+    "message": "Este mod no tiene modelos de torso o piernas de los que hacer tallas.",
+    "description": ""
+  },
+  "SizeSet.NoBodies": {
+    "message": "No hay mods de cuerpo instalados a los que reajustar.",
+    "description": ""
+  },
+  "SizeSet.PieceFailed.Fmt": {
+    "message": "{0}: falló: {1}",
+    "description": ""
+  },
+  "SizeSet.Reading.Fmt": {
+    "message": "Leyendo para qué se hizo {0}...",
+    "description": ""
+  },
+  "SizeSet.Unreadable.Fmt": {
+    "message": "{0}: no se pudo saber para qué cuerpo se hizo, así que no se hicieron tallas de ella.",
+    "description": ""
+  },
+  "SizeSet.NoSuchSize.Fmt": {
+    "message": "{0}: {2} no tiene modelo para «{1}», así que esa talla se omitió.",
+    "description": ""
+  },
+  "SizeSet.Refused.Fmt": {
+    "message": "{0}: no se pudo hacer «{1}»: {2}",
+    "description": ""
+  },
+  "SizeSet.SaveFailed.Fmt": {
+    "message": "{0}: {1}",
+    "description": ""
+  },
+  "SizeSet.NotInstalled.Fmt": {
+    "message": "{0}: {1} no está instalado, así que no recibió ninguna de sus tallas.",
+    "description": ""
+  },
+  "SizeSet.Working.Fmt": {
+    "message": "Reajustando {0} a {1}...",
+    "description": ""
+  },
+  "SizeSet.NotInstalledTip.Fmt": {
+    "message": "{0} no está instalado en Penumbra. Instálalo y luego cierra y vuelve a abrir esta sección.",
+    "description": ""
   }
 }

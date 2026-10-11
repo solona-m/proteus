@@ -4626,5 +4626,109 @@
   "Service.Download.Checksum.Fmt": {
     "message": "Prüfsumme stimmt nicht für {0} ({1} Bytes, sha256 {2}…)",
     "description": "Why a download (UV maps) failed; shown after a colon. {0} is a file name, {1} a byte count, {2} the start of a hash. Lower-case, no full stop."
+  },
+  "SizeSet.Header": {
+    "message": "Alle Größen für andere Körper",
+    "description": ""
+  },
+  "SizeSet.Intro": {
+    "message": "Fügt dem ganzen Mod jede Größe der unten angehakten Körper hinzu. Jedes Brust- und Beinteil wird von der ersten Größe des Autors aus angepasst und neben dessen Größen als „Rue S“, „YAB Buff L“ usw. gespeichert. Größen, die der Mod schon hat, bleiben unberührt.",
+    "description": ""
+  },
+  "SizeSet.Yas": {
+    "message": "Die YAS-Version eines Körpers nutzen, wo es eine gibt",
+    "description": ""
+  },
+  "SizeSet.Yas.Tip": {
+    "message": "Rue, YAB und Tre gibt es in Yet-Another-Skeleton-Versionen. Neolithe und Bibo nicht – sie behalten ihre normalen Größen. Ein Teil, das schon auf YAS gewichtet ist, bekommt immer YAS-Größen.",
+    "description": ""
+  },
+  "SizeSet.Remake": {
+    "message": "Von Proteus bereits hinzugefügte Größen neu erstellen",
+    "description": ""
+  },
+  "SizeSet.Remake.Tip": {
+    "message": "Aus: Eine Größe, die Proteus schon hinzugefügt hat, bleibt, wie sie ist. An: Sie wird erneut angepasst und ersetzt. Die eigenen Größen des Autors werden nie angefasst.",
+    "description": ""
+  },
+  "SizeSet.Run": {
+    "message": "Größen hinzufügen",
+    "description": ""
+  },
+  "SizeSet.Run.Tip": {
+    "message": "Läuft im Hintergrund und kann bei einem Mod mit vielen Teilen einige Minuten dauern. Penumbra lädt den Mod danach neu.",
+    "description": ""
+  },
+  "SizeSet.PickBody": {
+    "message": "Hake mindestens einen Körper an.",
+    "description": ""
+  },
+  "SizeSet.Cancel": {
+    "message": "Anhalten",
+    "description": ""
+  },
+  "SizeSet.Cancelled": {
+    "message": "Angehalten. Bereits gespeicherte Größen bleiben im Mod.",
+    "description": ""
+  },
+  "SizeSet.Done.Fmt": {
+    "message": "{0} Größen zum Mod hinzugefügt.",
+    "description": ""
+  },
+  "SizeSet.NothingAdded": {
+    "message": "Keine Größen hinzugefügt: Der Mod hat bereits jede Größe der angehakten Körper.",
+    "description": ""
+  },
+  "SizeSet.LeftOut": {
+    "message": "Ausgelassen:",
+    "description": ""
+  },
+  "SizeSet.Failed.Fmt": {
+    "message": "Die Größen konnten nicht hinzugefügt werden: {0}",
+    "description": ""
+  },
+  "SizeSet.NoPieces": {
+    "message": "Dieser Mod hat keine Brust- oder Beinmodelle, von denen Größen erstellt werden könnten.",
+    "description": ""
+  },
+  "SizeSet.NoBodies": {
+    "message": "Es sind keine Körper-Mods installiert, auf die angepasst werden könnte.",
+    "description": ""
+  },
+  "SizeSet.PieceFailed.Fmt": {
+    "message": "{0}: fehlgeschlagen: {1}",
+    "description": ""
+  },
+  "SizeSet.Reading.Fmt": {
+    "message": "Lese, wofür {0} gemacht wurde …",
+    "description": ""
+  },
+  "SizeSet.Unreadable.Fmt": {
+    "message": "{0}: Es ließ sich nicht erkennen, für welchen Körper es gemacht wurde, daher wurden keine Größen davon erstellt.",
+    "description": ""
+  },
+  "SizeSet.NoSuchSize.Fmt": {
+    "message": "{0}: {2} hat kein Modell für „{1}“, daher wurde diese Größe ausgelassen.",
+    "description": ""
+  },
+  "SizeSet.Refused.Fmt": {
+    "message": "{0}: „{1}“ konnte nicht erstellt werden: {2}",
+    "description": ""
+  },
+  "SizeSet.SaveFailed.Fmt": {
+    "message": "{0}: {1}",
+    "description": ""
+  },
+  "SizeSet.NotInstalled.Fmt": {
+    "message": "{0}: {1} ist nicht installiert, daher wurden keine seiner Größen erstellt.",
+    "description": ""
+  },
+  "SizeSet.Working.Fmt": {
+    "message": "Passe {0} an {1} an …",
+    "description": ""
+  },
+  "SizeSet.NotInstalledTip.Fmt": {
+    "message": "{0} ist in Penumbra nicht installiert. Installiere es und schließe und öffne diesen Abschnitt dann erneut.",
+    "description": ""
   }
 }

@@ -25,7 +25,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1196;
+    public const int BuildNumber = 1201;
 
     /// <summary>
     /// Which set of release notes is current. Raise it when a release has something new to say: the window
@@ -218,6 +218,7 @@ public sealed class Plugin : IDalamudPlugin
         // The same: gear put on is refitted onto the collection's body whether or not any window is open.
         autoRefit = new AutoRefitWatcher(compositor, penumbra, glamourer, designBindings, uvRemap,
                                          path => textureLoader.LoadRawFile(null, path), config, log, dataDir);
+        partsPanel.UseBodyIndex(autoRefit.Index);
 
         statusWindow = new StatusWindow(compositor, discovery, penumbra, config, designBindings,
             presets, editRouter, uvMapDl, uvRemap,

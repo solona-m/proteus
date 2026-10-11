@@ -269,6 +269,16 @@ public class Configuration : IPluginConfiguration
     public int RetargetGuideSeen { get; set; }
 
     /// <summary>
+    /// The bodies last ticked in the Body size tool's "every size for other bodies" (keys of
+    /// <see cref="Services.SupportedBodies.Choices"/>), so an author adding sizes to one mod after another ticks them once.
+    /// </summary>
+    public List<string> SizeSetBodies { get; set; } = [];
+
+    /// <summary>With <see cref="SizeSetBodies"/>, refit onto each body's Yet Another Skeleton sizes where it has them.
+    /// On by default: the mod packer's default too.</summary>
+    public bool SizeSetYas { get; set; } = true;
+
+    /// <summary>
     /// Refit chest, legs, hands and feet gear onto the collection's preferred body as it is equipped — see
     /// <see cref="Services.AutoRefitWatcher"/>. Off by default: it writes into the gear's own mod.
     /// </summary>
