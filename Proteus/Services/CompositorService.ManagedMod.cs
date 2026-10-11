@@ -289,28 +289,32 @@ public partial class CompositorService
     /// </summary>
     private bool IsOwnOutput(string? diskPath)
     {
-        var diskFull    = TryCanonicalise(diskPath);
-        var managedFull = TryCanonicalise(managedModDir);
-
-        if (diskFull != null && managedFull != null)
-            return IsUnderRoot(diskFull, managedFull);
-
-        // Wouldn't canonicalise: a separator-normalised compare still catches the ordinary case.
-        var d = diskPath?.Replace('/', Path.DirectorySeparatorChar);
-        var m = managedModDir?.Replace('/', Path.DirectorySeparatorChar);
-        if (!string.IsNullOrEmpty(d) && !string.IsNullOrEmpty(m))
-            return IsUnderRoot(d, m);
+        if (IsOwnOutputCore(diskPath, managedModDir) is { } own) return own;
 
         log.Warning("[Proteus] could not tell whether \"{0}\" is our own output — treating it as ours "
                   + "rather than risk compositing onto a previous composite", diskPath ?? "(null)");
         return true;
     }
 
-    private static bool IsUnderRoot(string path, string root)
-        => path.StartsWith(root.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar,
-                           StringComparison.OrdinalIgnoreCase)
-        || string.Equals(path.TrimEnd(Path.DirectorySeparatorChar),
-                         root.TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase);
+    /// <summary>
+    /// <see cref="IsOwnOutput"/> without the fallback: null when either path is missing. A live brush preview shared
+    /// inside the managed mod is the brushed mod's own file, so it answers false (see <see cref="ManagedModPaths"/>).
+    /// </summary>
+    internal static bool? IsOwnOutputCore(string? diskPath, string? managedModDir)
+    {
+        if (string.IsNullOrWhiteSpace(diskPath) || string.IsNullOrWhiteSpace(managedModDir)) return null;
+        return ManagedModPaths.IsPublishedOutput(diskPath, managedModDir);
+    }
+
+    /// <summary>The managed mod's folder; null while Penumbra's mod root is unknown.</summary>
+    internal string? ManagedModFolder => string.IsNullOrEmpty(modsRoot) ? null : managedModDir;
+
+    /// <summary>
+    /// The live brush wants to share a preview inside the managed mod, which does not exist yet. A composite makes it
+    /// (<see cref="CompositeRun"/>'s Discover), serialised with every other write to the manifest; nothing is created
+    /// here. Does nothing while the compositor is switched off, so the preview simply stays private.
+    /// </summary>
+    internal void RequestManagedModForPreview() => TriggerRecomposite("managed mod for live brush preview");
 
     private static string? TryCanonicalise(string? path)
     {

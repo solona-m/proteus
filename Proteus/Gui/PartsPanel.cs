@@ -336,6 +336,28 @@ public sealed class PartsPanel
     /// <summary>The solve has changed since the character last showed it.</summary>
     private bool previewDirty;
 
+    /// <summary>
+    /// The open model's file as it was last saved, or as it was opened: what the character can be shown as and shared
+    /// with sync pairs. Null when that is not known to be what is on screen.
+    /// </summary>
+    private SavedEdit? lastSave;
+
+    /// <summary>The <see cref="SavedEdit.Stamp"/> the last push tried to share; null when it did not try.</summary>
+    private string? shareWantedStamp;
+
+    /// <summary>What a share that could not be made was waiting on (see <see cref="ShareToken"/>); retried when it changes.</summary>
+    private string? shareParkedOn;
+
+    private long owedCheckedAt;
+
+    /// <summary>Locked parts are shown again after the brush was left idle — see <see cref="TickLockReveal"/>.</summary>
+    private bool revealed;
+
+    /// <summary>When the brush was last in use or on the garment, as a tick count.</summary>
+    private long lastActivityAt;
+
+    private long revealCheckedAt;
+
     private long lastPreviewAt;
 
     /// <summary>
@@ -356,7 +378,7 @@ public sealed class PartsPanel
                                          config, log);
         sizeSet = new SizeSetPanel(penumbra, uvRemap, path => textureLoader.LoadRawFile(null, path), config, log);
         refitMods = new RefitModService(penumbra, compositor, log);
-        LiveBrushPreview.CleanUp();
+        LiveBrushPreview.CleanUp(compositor.ManagedModFolder);
         // Last session's extracts of the game's body: a patch since then would make them stale, and the session is
         // the only clock that can outlast one.
         VanillaBodyCatalog.CleanUp();
@@ -587,6 +609,7 @@ public sealed class PartsPanel
         PumpMove();
         PumpBrush();
         frame.Mark("move + brush");
+        TickLockReveal();
         TickLivePreview();
         frame.Mark("live preview");
     }
@@ -597,6 +620,7 @@ public sealed class PartsPanel
     /// </summary>
     private void TickLivePreview()
     {
+        RetryOwedShare();
         if (showModelView || !previewDirty || preview.Busy) return;
         if (volume == null || brushBase == null || modelIndex < 0) { previewDirty = false; return; }
         bool customizePart = TargetIsCustomizePart;
@@ -621,8 +645,26 @@ public sealed class PartsPanel
         var gamePaths = OpenModelGamePaths();
         if (gamePaths.Count == 0) { previewDirty = false; return; }
 
-        byte[] bytes;
         int hides = WantedHides();
+
+        // Settled and saved: show the saved file itself, shared under the Penumbra root so sync pairs get the edit too.
+        // Mid-edit previews stay private — a pair is sent finished saves, not every step of a stroke.
+        if (LivePreviewPolicy.ShouldShare(Editing, brushChangedAt >= 0, hides != 0, savedMatches: true)
+            && CurrentSave() is { } saved)
+        {
+            var token = ShareToken(saved);
+            if (preview.PushShared(saved, gamePaths, customizePart) == LiveBrushPreview.PushResult.Refused) return;
+            shareWantedStamp = saved.Stamp;
+            shareParkedOn = token;
+            previewDirty = false;
+            previewHides = 0;
+            lastPreviewAt = now;
+            previewPushes++;
+            return;
+        }
+        shareWantedStamp = null;
+
+        byte[] bytes;
         try
         {
             bytes = MeshVolumeService.Inflate(brushBase, volume).Model;
@@ -651,8 +693,11 @@ public sealed class PartsPanel
     /// </summary>
     private int previewHides;
 
-    /// <summary>What <see cref="previewHides"/> should be under the current tool and locks.</summary>
-    private int WantedHides()
+    /// <summary>What <see cref="previewHides"/> should be under the current tool and locks, unless they are revealed.</summary>
+    private int WantedHides() => revealed ? 0 : LockedHides();
+
+    /// <summary>What the tool and locks would leave off the character, revealed or not.</summary>
+    private int LockedHides()
     {
         if (!HidesLocked || parts == null || TargetIsContent || preview.UnsupportedFor(TargetIsCustomizePart)) return 0;
         var locks = BrushLocks;
@@ -663,6 +708,90 @@ public sealed class PartsPanel
     private void SyncHiddenPreview()
     {
         if (WantedHides() != previewHides) previewDirty = true;
+    }
+
+    /// <summary>
+    /// The character and a sync pair draw the same file, so while locked parts are hidden the pair can't be sent the
+    /// saved model. Hiding only matters while the brush is on the garment: left idle off it for
+    /// <see cref="LivePreviewPolicy.LockRevealIdleMs"/>, the parts come back and the saved model is shared; the brush
+    /// back on the garment, or an edit, puts them away again.
+    /// </summary>
+    private void TickLockReveal()
+    {
+        if (showModelView) return;
+        long now = Environment.TickCount64;
+        bool editing = Editing, hovering = liveBrush.Hovering, pending = brushChangedAt >= 0;
+        if (editing || hovering || pending) lastActivityAt = now;
+
+        if (revealed)
+        {
+            if (LivePreviewPolicy.ShouldHideAgain(editing, hovering))
+            {
+                revealed = false;
+                SyncHiddenPreview();
+            }
+            return;
+        }
+
+        // Cheap tests first; the file is looked at at most a few times a second, and only with parts hidden.
+        long idle = now - lastActivityAt;
+        if (idle < LivePreviewPolicy.LockRevealIdleMs || previewHides == 0 || LockedHides() == 0) return;
+        if (now - revealCheckedAt < 250) return;
+        revealCheckedAt = now;
+
+        if (LivePreviewPolicy.ShouldRevealLocked(true, editing, hovering, pending, CurrentSave() != null, idle))
+        {
+            revealed = true;
+            log.Debug("[Proteus] live brush: locked parts shown again after {0} ms idle, to share the saved model", idle);
+            SyncHiddenPreview();
+        }
+    }
+
+    /// <summary><see cref="lastSave"/> when the open model's file on disk is still exactly that save; otherwise null.</summary>
+    private SavedEdit? CurrentSave()
+    {
+        if (lastSave is not { } save || modelIndex < 0 || modelIndex >= models.Count || TargetIsContent) return null;
+        try
+        {
+            var fi = new FileInfo(save.FullPath);
+            return fi.Exists && save.Matches(modDir, models[modelIndex].File, fi.Length, fi.LastWriteTimeUtc) ? save : null;
+        }
+        catch { return null; }
+    }
+
+    /// <summary>The open model's file as it stands now, to be shared; null when it can't be read.</summary>
+    private SavedEdit? RecordSave(string root, string rel)
+    {
+        if (modDir == null) return null;
+        try
+        {
+            var full = Path.Combine(root, rel.Replace('/', Path.DirectorySeparatorChar));
+            var fi = new FileInfo(full);
+            return fi.Exists ? new SavedEdit(modDir, rel, full, fi.Length, fi.LastWriteTimeUtc) : null;
+        }
+        catch { return null; }
+    }
+
+    /// <summary>What a share depends on: the save, and whether the managed mod is there to share it in.</summary>
+    private string ShareToken(SavedEdit? save)
+    {
+        bool managed = compositor.ManagedModFolder is { } dir && File.Exists(Path.Combine(dir, PenumbraModMeta.MetaFile));
+        return $"{save?.Stamp}|{managed}";
+    }
+
+    /// <summary>
+    /// A share that ended up private (no managed mod yet, a failed copy) is pushed again once what it waited on changes —
+    /// checked about once a second, never retried on the same answer.
+    /// </summary>
+    private void RetryOwedShare()
+    {
+        if (previewDirty || shareWantedStamp == null || preview.Busy) return;
+        long now = Environment.TickCount64;
+        if (now - owedCheckedAt < 1000) return;
+        owedCheckedAt = now;
+
+        if (preview.SharedStamp == shareWantedStamp) return;   // shared: nothing owed
+        if (LivePreviewPolicy.OwedShareDue(owed: true, shareParkedOn, ShareToken(CurrentSave()))) previewDirty = true;
     }
 
     // HiddenOnCharacter's last answer, for the locks and model it was worked out for.
@@ -721,6 +850,8 @@ public sealed class PartsPanel
     {
         previewDirty = false;
         previewHides = 0;
+        shareWantedStamp = null;
+        revealed = false;
         preview.End(redraw: refreshGame);
     }
 
@@ -828,6 +959,8 @@ public sealed class PartsPanel
     /// <summary>A garment was clicked on the character (or chosen for them on entry): open its mod and model.</summary>
     private void OnLivePicked(string file)
     {
+        // The garment being brushed, drawn from its preview: nothing new to open.
+        if (LiveBrushPreview.IsPreviewFile(file)) return;
         if (penumbra.GetModDirectory() is not { } modsRoot) return;
         if (!HatCompatService.InMods(file, modsRoot, out var modRoot, out var rel))
         {
@@ -1106,6 +1239,7 @@ public sealed class PartsPanel
         FlushPending();   // before modDir changes, which the save needs to find the file
         EndLivePreview(refreshGame: true);
         brushChangedAt = -1;
+        lastSave = null;
         movePart = null;
         ClearPolygons(forgetModel: true);
         ReleaseHandles();
@@ -1370,6 +1504,8 @@ public sealed class PartsPanel
             log.Warning(ex, "[Proteus] parts: could not read {0}", models[index].File);
         }
         AdoptModel(bytes);
+        // Opened from the file and not yet changed: the file is what is on screen, so it can be shared as it is.
+        if (bytes != null) lastSave = RecordSave(root, models[index].File);
     }
 
     /// <summary>
@@ -1383,6 +1519,7 @@ public sealed class PartsPanel
         FlushPending();
         EndLivePreview(refreshGame: true);
         brushChangedAt = -1;
+        lastSave = null;
         brushBase = null;
         movePart = null;
         ClearPolygons(forgetModel: true);
@@ -2929,6 +3066,7 @@ public sealed class PartsPanel
         if (!volume.Dirty && !MeshVolumeService.IsPatched(root, rel))
         {
             brushChangedAt = -1;
+            lastSave = null;   // nothing was written, so no save is known to match what is on screen
             return;
         }
 
@@ -2943,9 +3081,11 @@ public sealed class PartsPanel
 
             // Still waiting: re-armed for another full debounce so a failed save is retried, not every frame.
             brushChangedAt = Environment.TickCount64;
+            lastSave = null;
             return;
         }
         brushChangedAt = -1;
+        lastSave = RecordSave(root, rel);
 
         status = Strings.Parts.BrushSaved;
         log.Information("[Proteus] brush: saved {0}, moved up to {1:F2} mm", rel, volume.Worst * 1000f);
@@ -3001,6 +3141,7 @@ public sealed class PartsPanel
         if (previewed || (wind && !showModelView)) compositor.ExpectOwnModEdit(modDir);
         penumbra.ReloadModDirectory(modDir);
 
+        // The previewed push now shows the saved file itself, shared with sync pairs (see TickLivePreview).
         if (previewed) previewDirty = true;
         else if (preview.Active) EndLivePreview(refreshGame: true);
         else compositor.RedrawForChangedModel();
@@ -3012,6 +3153,7 @@ public sealed class PartsPanel
     {
         if (ModRoot() is not { } root) return;
         brushChangedAt = -1;   // an edit waiting to save must not land on top of the restore
+        lastSave = null;
         EndLivePreview(refreshGame: false);   // the redraw below replaces it with the restored file
 
         var result = MeshVolumeService.Revert(root);

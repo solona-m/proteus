@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -13,6 +14,10 @@ namespace Proteus.Services;
 /// Each preview is written to a new file (the game caches models by resolved path) and redirected with a
 /// Penumbra temporary mod, then Glamourer reloads the gear in place. One preview at a time; a push while one
 /// is in flight is refused.
+/// <para/>
+/// Previews mid-edit are private, in %TEMP%. Once an edit is saved, the saved file itself is shared: copied into
+/// <see cref="ManagedModPaths.LivePreviewSubdir"/> inside the managed mod, under the Penumbra root, which is where sync
+/// plugins look for the files a character draws. Otherwise a pair would not see the edit until the Studio is left.
 /// </summary>
 internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorService compositor, IPluginLog log)
 {
@@ -26,8 +31,25 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
 
     private static readonly string Dir = Path.Combine(Path.GetTempPath(), "proteus-live-brush");
 
-    private readonly Queue<string> files = new();
+    /// <summary>
+    /// Tells this load of the plugin's files from an earlier one in the same game: the game caches models by path, so a
+    /// reloaded plugin must not hand out a name it already gave the game.
+    /// </summary>
+    private static readonly string Nonce = Guid.NewGuid().ToString("N")[..8];
+
+    /// <summary>The managed mod folder shared previews were last put under, for <see cref="IsPreviewFile(string)"/>.</summary>
+    private static volatile string? knownManagedRoot;
+
+    private readonly PreviewFiles files = new(KeepFiles);
     private Task? inFlight;
+
+    /// <summary>
+    /// The save last shared, and the file it was shared as, which a later share of the same save reuses. Under
+    /// <see cref="gate"/>: set by the push's task, read on the framework thread.
+    /// </summary>
+    private (string Stamp, string Path)? lastShared;
+
+    private bool sharedSwept, warnedNoRoot, warnedCreate, warnedWrite;
 
     /// <summary>
     /// Guards <see cref="generation"/>, <see cref="endedAt"/> and <see cref="holding"/>. A push applies on the
@@ -58,6 +80,9 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
     /// <summary>Glamourer could not reload gear in place; the caller should fall back to redrawing.</summary>
     public bool Unsupported { get; private set; }
 
+    /// <summary>The <see cref="SavedEdit.Stamp"/> of the save last put on the character as a shared file; null when none.</summary>
+    public string? SharedStamp { get { lock (gate) return lastShared?.Stamp; } }
+
     /// <summary>
     /// Whether previews can reach this kind of part in place. Never for hair, face, ears or tail: Glamourer's gear
     /// reload does not touch customization, and forcing <c>Human.UpdateDrawData</c> changes the hairstyle.
@@ -71,22 +96,117 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
         || gamePath.Contains("/obj/tail/", StringComparison.OrdinalIgnoreCase)
         || gamePath.Contains("/obj/zear/", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Put <paramref name="model"/> on the character in place of the files at <paramref name="gamePaths"/>.</summary>
+    internal enum ShareTarget { Private, Shared, CreateManagedMod }
+
+    internal enum PushResult { Refused, Private, Shared }
+
+    /// <summary>Where a share can go: the managed mod, or nowhere until it exists, or nowhere at all.</summary>
+    internal static ShareTarget ChooseShareTarget(string? managedRoot, bool managedModExists)
+        => managedRoot == null ? ShareTarget.Private
+         : managedModExists    ? ShareTarget.Shared
+         :                       ShareTarget.CreateManagedMod;
+
+    internal static string FileName(int pid, string nonce, int gen) => $"{pid}-{nonce}-{gen:D6}.mdl";
+
+    /// <summary>Put <paramref name="model"/> on the character in place of the files at <paramref name="gamePaths"/>, privately.</summary>
     /// <param name="customizePart">The model is hair, face, ears or tail — see <see cref="IsCustomizePart"/>.</param>
     /// <returns>False when a preview is still in flight.</returns>
     public bool Push(byte[] model, IReadOnlyCollection<string> gamePaths, bool customizePart)
     {
         if (Busy || gamePaths.Count == 0) return false;
-        int gen;
-        lock (gate) gen = ++generation;
-        var file = Path.Combine(Dir, $"{Environment.ProcessId}-{gen:D6}.mdl");
+        int gen = NextGeneration();
+        var file = Path.Combine(Dir, FileName(Environment.ProcessId, Nonce, gen));
+        Start(gen, gamePaths, () =>
+        {
+            Directory.CreateDirectory(Dir);
+            File.WriteAllBytes(file, model);
+            return (file, false);
+        }, onApplied: null);
+        return true;
+    }
 
+    /// <summary>
+    /// Put the saved file <paramref name="saved"/> on the character, shared with sync pairs when the managed mod is there
+    /// to share it in. A share of a save already shared reuses its file: the same bytes, so nothing new to upload.
+    /// </summary>
+    /// <returns>Refused while a preview is in flight; Private when it could only be shown, not shared.</returns>
+    public PushResult PushShared(SavedEdit saved, IReadOnlyCollection<string> gamePaths, bool customizePart)
+    {
+        if (Busy || gamePaths.Count == 0) return PushResult.Refused;
+
+        var managedRoot = compositor.ManagedModFolder;
+        bool exists = managedRoot != null && File.Exists(Path.Combine(managedRoot, PenumbraModMeta.MetaFile));
+        string? sharedDir = null;
+        switch (ChooseShareTarget(managedRoot, exists))
+        {
+            case ShareTarget.Shared:
+                sharedDir = ManagedModPaths.LivePreviewDir(managedRoot!);
+                knownManagedRoot = managedRoot;
+                break;
+            case ShareTarget.CreateManagedMod:
+                if (!warnedCreate)
+                {
+                    warnedCreate = true;
+                    log.Information("[Proteus] live brush: no managed mod to share the preview in yet; asking for one");
+                }
+                compositor.RequestManagedModForPreview();
+                break;
+            default:
+                if (!warnedNoRoot)
+                {
+                    warnedNoRoot = true;
+                    log.Warning("[Proteus] live brush: Penumbra's mod folder is unknown, so previews cannot be shared with sync pairs");
+                }
+                break;
+        }
+
+        int gen = NextGeneration();
+        var name = FileName(Environment.ProcessId, Nonce, gen);
+        (string Stamp, string Path)? before;
+        lock (gate) before = lastShared;
+        var reuse = sharedDir != null && before is { } last && last.Stamp == saved.Stamp && files.Contains(last.Path)
+            ? last.Path : null;
+        bool sweep = sharedDir != null && !sharedSwept;
+        if (sweep) sharedSwept = true;
+        var stamp = saved.Stamp;
+
+        Start(gen, gamePaths, () =>
+        {
+            if (sweep) SweepShared(sharedDir!);
+            if (reuse != null && File.Exists(reuse)) return (reuse, true);
+
+            var written = CopyPreview(saved.FullPath, sharedDir, Dir, name);
+            if (sharedDir != null && !written.Shared && !warnedWrite)
+            {
+                warnedWrite = true;
+                log.Warning("[Proteus] live brush: could not write the shared preview into \"{0}\"; shown privately", sharedDir);
+            }
+            return written;
+        }, onApplied: (path, shared) =>
+        {
+            if (!shared) return;
+            lock (gate)
+                if (gen > endedAt) lastShared = (stamp, path);   // not after End took it down
+        });
+        return sharedDir != null ? PushResult.Shared : PushResult.Private;
+    }
+
+    private int NextGeneration()
+    {
+        lock (gate) return ++generation;
+    }
+
+    /// <summary>Write the preview (off the framework thread), then put its redirect on and reload the gear in place.</summary>
+    private void Start(int gen, IReadOnlyCollection<string> gamePaths, Func<(string Path, bool Shared)> write,
+                       Action<string, bool>? onApplied)
+    {
         inFlight = Task.Run(() =>
         {
+            string? file = null;
+            bool shared = false;
             try
             {
-                Directory.CreateDirectory(Dir);
-                File.WriteAllBytes(file, model);
+                (file, shared) = write();
 
                 bool applied = Plugin.Framework.RunOnFrameworkThread(() =>
                 {
@@ -114,20 +234,42 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
                     return true;
                 }).GetAwaiter().GetResult();
 
-                lock (files)
-                {
-                    files.Enqueue(file);
-                    while (files.Count > KeepFiles) TryDelete(files.Dequeue());
-                }
+                foreach (var gone in files.Add(file, shared)) TryDelete(gone);
+                if (applied) onApplied?.Invoke(file, shared);
                 if (!applied && gen > endedAt) log.Warning("[Proteus] live brush: Penumbra refused the preview redirect");
             }
             catch (Exception ex)
             {
                 log.Warning(ex, "[Proteus] live brush: preview failed");
-                TryDelete(file);
+                // Never one already kept: a reused shared file may still be what the character draws.
+                if (file != null && !files.Contains(file)) TryDelete(file);
             }
         });
-        return true;
+    }
+
+    /// <summary>
+    /// Copy <paramref name="source"/> into <paramref name="sharedDir"/>, or into <paramref name="privateDir"/> when there
+    /// is no shared folder or it cannot be written. Byte for byte, so a shared copy hashes as the mod's own file.
+    /// </summary>
+    internal static (string Path, bool Shared) CopyPreview(string source, string? sharedDir, string privateDir, string name)
+    {
+        if (sharedDir != null)
+        {
+            try
+            {
+                Directory.CreateDirectory(sharedDir);
+                var dest = Path.Combine(sharedDir, name);
+                File.Copy(source, dest, overwrite: true);
+                return (dest, true);
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+
+        Directory.CreateDirectory(privateDir);
+        var path = Path.Combine(privateDir, name);
+        File.Copy(source, path, overwrite: true);
+        return (path, false);
     }
 
     /// <summary>
@@ -165,27 +307,121 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
         // A collection that would not let go still points at the preview files, so they stay; the next End tries again.
         if (!allGone) return;
 
-        lock (files)
-            while (files.Count > 0) TryDelete(files.Dequeue());
+        lock (gate) lastShared = null;
+        foreach (var f in files.TakeAll()) TryDelete(f);
     }
 
     /// <summary>A loaded model's file is one of these previews — the garment being brushed, drawn from its preview.</summary>
-    public static bool IsPreviewFile(string path)
-        => BodyShapeReader.PathKey(path).StartsWith(BodyShapeReader.PathKey(Dir), StringComparison.Ordinal);
+    public static bool IsPreviewFile(string path) => IsPreviewFile(path, knownManagedRoot);
+
+    /// <summary><see cref="IsPreviewFile(string)"/> against a given managed mod folder (null: only private previews).</summary>
+    internal static bool IsPreviewFile(string path, string? managedRoot)
+        => BodyShapeReader.PathKey(path).StartsWith(BodyShapeReader.PathKey(Dir), StringComparison.Ordinal)
+        || ManagedModPaths.IsLivePreview(path, managedRoot);
 
     /// <summary>Clear preview files a previous session left behind — a crash or an unload mid-preview.</summary>
-    public static void CleanUp()
+    /// <param name="managedRoot">The managed mod folder, whose shared previews are swept too; null when not yet known.</param>
+    public static void CleanUp(string? managedRoot)
     {
         try
         {
-            if (!Directory.Exists(Dir)) return;
-            foreach (var f in Directory.GetFiles(Dir, "*.mdl")) TryDelete(f);
+            if (Directory.Exists(Dir))
+                foreach (var f in Directory.GetFiles(Dir, "*.mdl")) TryDelete(f);
         }
         catch { /* temp space; nothing depends on it being tidy */ }
+
+        if (managedRoot != null) SweepShared(ManagedModPaths.LivePreviewDir(managedRoot));
+    }
+
+    /// <summary>Delete the shared previews no running game is using (see <see cref="StaleShared"/>).</summary>
+    private static void SweepShared(string sharedDir)
+    {
+        try
+        {
+            if (!Directory.Exists(sharedDir)) return;
+            foreach (var f in StaleShared(Directory.GetFiles(sharedDir, "*.mdl"), Environment.ProcessId, Nonce, ProcessAlive))
+                TryDelete(f);
+        }
+        catch { /* left for the next sweep */ }
+    }
+
+    /// <summary>
+    /// Shared previews nothing can still be drawing: from a game that is no longer running, or from an earlier load of
+    /// the plugin in this one. Another running game sharing the mods folder keeps its own; a name not in
+    /// <see cref="FileName"/>'s form is not ours to judge.
+    /// </summary>
+    internal static IEnumerable<string> StaleShared(IEnumerable<string> files, int ownPid, string ownNonce,
+                                                     Func<int, bool> processAlive)
+    {
+        foreach (var file in files)
+        {
+            var parts = Path.GetFileNameWithoutExtension(file).Split('-');
+            if (parts.Length != 3 || !int.TryParse(parts[0], out var pid)) continue;
+            bool stale = pid == ownPid ? !string.Equals(parts[1], ownNonce, StringComparison.Ordinal)
+                                       : !processAlive(pid);
+            if (stale) yield return file;
+        }
+    }
+
+    private static bool ProcessAlive(int pid)
+    {
+        try
+        {
+            using var p = Process.GetProcessById(pid);
+            return !p.HasExited;
+        }
+        catch (ArgumentException) { return false; }   // no such process
+        catch { return true; }                          // cannot tell: keep its files
     }
 
     private static void TryDelete(string path)
     {
         try { File.Delete(path); } catch { /* still open in the game; left for the next CleanUp */ }
+    }
+
+    /// <summary>
+    /// The preview files kept after they are replaced, a few of each kind. Separate, so a stroke's private previews never
+    /// push out a shared file a sync plugin may still be reading. A file added again moves to the back.
+    /// </summary>
+    internal sealed class PreviewFiles(int keep)
+    {
+        private readonly object sync = new();
+        private readonly List<string> priv = [];
+        private readonly List<string> pub = [];
+
+        /// <returns>The files pushed out, to be deleted.</returns>
+        public List<string> Add(string path, bool shared)
+        {
+            lock (sync)
+            {
+                var list = shared ? pub : priv;
+                list.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+                list.Add(path);
+                var evicted = new List<string>();
+                while (list.Count > keep)
+                {
+                    evicted.Add(list[0]);
+                    list.RemoveAt(0);
+                }
+                return evicted;
+            }
+        }
+
+        public bool Contains(string path)
+        {
+            lock (sync)
+                return priv.Concat(pub).Any(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+        }
+
+        public List<string> TakeAll()
+        {
+            lock (sync)
+            {
+                var all = priv.Concat(pub).ToList();
+                priv.Clear();
+                pub.Clear();
+                return all;
+            }
+        }
     }
 }
