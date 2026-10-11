@@ -95,14 +95,15 @@ internal static partial class BodyRetarget
 
     /// <summary>
     /// Rebuild the refitted garment for its new body: swap the resized slots' skin meshes for the body's (see
-    /// <see cref="SwapSkin"/>), give its cloth the new body's weights (see <see cref="PlanWeights"/>), and — whenever the
-    /// weights change, which is to say across rigs — drop the piercings and pubic hair it carried from its old body
+    /// <see cref="SwapSkin"/>), give its cloth the new body's weights (see <see cref="PlanWeights"/>), and — when the
+    /// garment goes to another body mod — drop the piercings and pubic hair it carried from its old body
     /// (see <see cref="IsBodyExtraMaterial"/>). One re-emit for all three.
     /// </summary>
     /// <param name="cutHidden">Carry the author's cut onto the new body's skin (see <see cref="CutLike"/>).</param>
+    /// <param name="acrossBodies">The garment is going to another body mod, not between sizes of one.</param>
     /// <returns>The rebuilt model, or null when there was nothing to change.</returns>
     internal static byte[]? Rebuild(byte[] garment, IReadOnlyList<SlotPair> pairs, bool swapSkin, WeightPlan? weights,
-                                    out SwapReport report, bool cutHidden = true)
+                                    out SwapReport report, bool cutHidden = true, bool acrossBodies = false)
     {
         report = default;
         var swappable = swapSkin ? pairs.Where(p => p.TargetModel != null).ToList() : [];
@@ -173,9 +174,11 @@ internal static partial class BodyRetarget
             skinMaterial ??= mesh.First().Material;
             removed += mesh.Sum(p => p.Triangles.Length / 3);
         }
-        // The old body's extras: they sit on the shape the garment is leaving.
+        // The old body's extras: they sit on the shape the garment is leaving. Only across body mods — within one, a rig
+        // change (Rue+'s Gen A legs to Gen B) carries them with the skin they sit on, and nothing would replace them.
+        // Across body mods with no weights (a body unreadable) they stay, as before.
         int extras = 0;
-        if (weights != null)
+        if (acrossBodies && weights != null)
             foreach (var part in model.Parts)
                 if (part.Island < 0 && IsBodyExtraMaterial(part.Material) && dropped.Add(part.Mesh))
                     extras += model.Parts.Where(q => q.Island < 0 && q.Mesh == part.Mesh).Sum(q => q.Triangles.Length / 3);
