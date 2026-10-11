@@ -23,20 +23,25 @@ internal static partial class BodyRetarget
     /// (see <see cref="UnderbustClearance"/>).</param>
     /// <param name="NoRelax">Leave the cloth's movement as uneven as the transfer left it (see <see cref="Relax"/>).</param>
     /// <param name="NoSkinHug">Let cloth lying on the body keep the garment's own bones (see
-    /// <see cref="FollowBodyNearSkin"/>).</param>
+    /// <see cref="FollowBodyNearSkin"/>). Across body mods only: within one the skin hug never runs.</param>
+    /// <param name="CopyTolerance">How alike cloth and its own skin must be rigged for the copy rule (see
+    /// <see cref="CopyToleranceDefault"/>). Across body mods only, as <paramref name="NoSkinHug"/>.</param>
     /// <param name="NoLayerKnit">Let each sheet of cloth take its own move from the bodies, however near another sheet
     /// it lies (see <see cref="KnitLayers"/>).</param>
     /// <param name="NoLayerOrder">Leave a covered piece wherever the passes put it, in front of its cover or not (see
     /// <see cref="KeepLayerOrder"/>).</param>
     /// <param name="LegsForAll">Let cloth its author rigged to no leg bone take the legs' weights (see
     /// <see cref="LegFill"/>).</param>
+    /// <param name="CrossBodyPassesWithinBody">Run the copy rule and the skin hug within one body mod too, as builds
+    /// before 1221 did (see <see cref="PlanWeights"/>).</param>
     internal sealed record Tuning(bool NoFollow = false, bool NoOwnSkinWeights = false,
                                   float OwnSkinReach = OwnSkinReachDefault, float CopyReach = CopyReachDefault,
                                   float CopyTolerance = CopyToleranceDefault, bool NoGiveUp = false,
                                   bool NoSettle = false, bool NoFaceSettle = false, bool NoLayerGuard = false,
                                   bool NoWeightSmooth = false, bool NoUnderbustLift = false, bool NoRelax = false,
                                   bool NoSkinHug = false, bool NoLayerKnit = false, bool NoRimLift = false,
-                                  bool NoLayerOrder = false, bool LegsForAll = false);
+                                  bool NoLayerOrder = false, bool LegsForAll = false,
+                                  bool CrossBodyPassesWithinBody = false);
 
     private static readonly Tuning DefaultTuning = new();
 

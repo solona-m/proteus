@@ -604,7 +604,8 @@ internal static partial class BodyRetarget
     /// body poking through the fabric.</param>
     /// <param name="acrossBodies">The garment is going from one body MOD to another, rather than between sizes of one:
     /// its cloth then always takes the change between the two bodies' weights, and the old body's piercings and pubic hair are left out,
-    /// even when the two bodies' rigs name the same bones (YAB's and Rue's plain sizes do) — see
+    /// even when the two bodies' rigs name the same bones (YAB's and Rue's plain sizes do), and cloth on the skin is
+    /// rigged as the new skin. Within one body mod a rig change takes the change between the two bodies alone — see
     /// <see cref="PlanWeights"/>.</param>
     /// <param name="cutHidden">With <paramref name="replaceSkin"/>, leave out the new body's skin where the garment's
     /// author deleted theirs, which is usually skin under the cloth that cannot be seen — see <see cref="CutLike"/>.
