@@ -220,6 +220,9 @@ public sealed class AutoRefitStrings
     public readonly string HandsFeetFmt = Loc.Localize("AutoRefit.HandsFeet.Fmt",
         "Hands and feet are matched to these sizes: {0} and {1}.");
 
+    public readonly string EndsKept = Loc.Localize("AutoRefit.EndsKept",
+        "Gloves and shoes keep the hands and feet they were made with; only the arms and legs they reach are refitted.");
+
     public readonly string Clear = Loc.Localize("AutoRefit.Clear", "Forget this collection's body") + "###autoRefitClear";
 
     public readonly string RunNow = Loc.Localize("AutoRefit.RunNow", "Refit what I'm wearing now") + "###autoRefitRunNow";

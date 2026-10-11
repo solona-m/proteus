@@ -35,6 +35,10 @@
     "message": "The refit is saved into the gear's own mod as a new size option, exactly as the Studio's Body size tool saves one, so it keeps working with Proteus turned off. Choosing the mod's \"Original\" or another size in Penumbra is left alone.",
     "description": "Tooltip on the Body refit checkbox. \"Original\" is the name of an option in Penumbra and must stay in English. \"Studio\" and \"Body size\" name a tab and a tool - use the same words as Tab.Parts and Parts.Tool.Retarget."
   },
+  "AutoRefit.EndsKept": {
+    "message": "Gloves and shoes keep the hands and feet they were made with; only the arms and legs they reach are refitted.",
+    "description": "Note under the hands and feet sizes in Settings > Body refit: gloves and shoes keep their own hands and feet, and only the arms and legs they reach are refitted."
+  },
   "AutoRefit.FindingBodies": {
     "message": "Looking for body mods...",
     "description": "Shown while the installed mods are searched for body mods."
@@ -315,6 +319,14 @@
     "message": "[Proteus] Couldn't refit {0}: {1}",
     "description": "Chat line when an automatic refit failed. {0} names the gear, {1} is the reason. Do NOT translate \"Proteus\"."
   },
+  "Chat.AutoRefit.KeepsFeet.Fmt": {
+    "message": "[Proteus] {0} doesn't reach the legs and its feet are already drawn like {1}'s, so it was left as it is.",
+    "description": "Status line when shoes reach no leg and their feet already use the chosen body's skin, so nothing is changed. {0} names the gear, {1} the body mod. Do NOT translate \"Proteus\"."
+  },
+  "Chat.AutoRefit.KeepsHands.Fmt": {
+    "message": "[Proteus] {0} doesn't reach the arms and its hands are already drawn like {1}'s, so it was left as it is.",
+    "description": "Status line when gloves reach no arm and their hands already use the chosen body's skin, so nothing is changed. {0} names the gear, {1} the body mod. Do NOT translate \"Proteus\"."
+  },
   "Chat.AutoRefit.NoBodyMesh.Fmt": {
     "message": "[Proteus] {0} carries no body skin to read its size from, so it was left as it is. You can refit it by hand with the Studio's Body size tool.",
     "description": "Chat line when a piece of gear has no body skin in it to measure its size from. {0} names the gear. \"Studio\" and \"Body size\" match Tab.Parts and Parts.Tool.Retarget. Do NOT translate \"Proteus\"."
@@ -330,6 +342,10 @@
   "Chat.AutoRefit.PartsLeftOut.Fmt": {
     "message": "These parts could not be refitted with it and kept their size: {0}.",
     "description": "Appended to the finished-refit chat line when some other body parts could not be refitted along with the gear. {0} lists the parts (Chest, Legs, Hands, Feet)."
+  },
+  "Chat.AutoRefit.SkinOnly.Fmt": {
+    "message": "[Proteus] {0} keeps its own shape; its skin is now drawn like {1}'s. Saved as \"{2}\" in {3} and switched on.",
+    "description": "Status line when shoes or gloves that reach no leg or arm keep their shape and only have their skin redrawn the chosen body's way. {0} names the gear, {1} the body mod, {2} the new option's name in Penumbra, {3} the mod it was saved into. Do NOT translate \"Proteus\"."
   },
   "Chat.AutoRefit.Start.Fmt": {
     "message": "[Proteus] Refitting {0} from {1} to {2}. It will be switched on when it is done.",

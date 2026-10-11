@@ -186,9 +186,17 @@ internal static partial class BodyRetarget
     /// <param name="TargetHidden">The target body's variant tags its mod does not draw (see <see cref="UndrawnVariants"/>).
     /// <paramref name="Target"/> is already without those parts; this carries the same choice to the swap, which copies
     /// the body's skin out of <paramref name="TargetModel"/>. Null when every part is drawn.</param>
+    /// <param name="ShapeOnly">The slot is here for its shape alone — where its body sits, and what its skin weights
+    /// are — and its skin is never swapped in, though the pair carries the body's file: a shoe keeping its own foot
+    /// still has the feet body, which runs up the shin, to refit its stocking's shin by (see <see cref="KeepEnds.Plan"/>).</param>
     internal readonly record struct SlotPair(string Slot, IBodyCorrespondence Correspondence, ModelParts Target,
                                              byte[]? TargetModel = null, byte[]? SourceModel = null,
-                                             IReadOnlySet<string>? TargetHidden = null);
+                                             IReadOnlySet<string>? TargetHidden = null, bool ShapeOnly = false)
+    {
+        /// <summary>Whether the swap puts this slot's body skin in: it carries the body's file, and is not
+        /// <see cref="ShapeOnly"/>.</summary>
+        public bool Swaps => TargetModel != null && !ShapeOnly;
+    }
 
     /// <summary>What happened, for the status line and the saved record.</summary>
     /// <param name="Held">Welded points the user held in place, by unticking their parts.</param>
@@ -612,13 +620,24 @@ internal static partial class BodyRetarget
     /// On by default; off puts the body's skin in whole.</param>
     /// <param name="keepShape">Pieces moved whole rather than bent to the body — see <see cref="KeepShape"/>. One set
     /// of vertices per piece; null or empty for none.</param>
+    /// <param name="swapSlot">A slot other than <paramref name="garmentSlot"/> whose skin is the one being swapped: the
+    /// legs of a shoe whose own foot is held (see <see cref="SwapSlotSwapped"/>). Null for none, which is every refit but
+    /// the automatic one of shoes and gloves.</param>
     public static Planned Plan(ModelParts garment, byte[] garmentBytes, IReadOnlyList<SlotPair> pairs,
                                string? garmentSlot = null, bool pushOut = true, IReadOnlySet<int>? held = null,
                                bool replaceSkin = false, bool acrossBodies = false, bool clearBody = false,
-                               bool cutHidden = true, IReadOnlyList<IReadOnlyCollection<int>>? keepShape = null)
+                               bool cutHidden = true, IReadOnlyList<IReadOnlyCollection<int>>? keepShape = null,
+                               string? swapSlot = null)
     {
+        // The solver and the rebuild must agree on which skin meshes go: the solver parts the cloth welded to them, and a
+        // mesh it parted that the rebuild then keeps opens the seam (see Sets.From). Without a hold the two rules agree on
+        // their own; with one, a held ankle ring stays where the old body had it and the rebuild, judging the laid model,
+        // could keep a mesh the solver already parted. So the solver's set is handed to the rebuild.
+        IReadOnlySet<int>? swapMeshes = SwapSlotSwapped(pairs, replaceSkin, swapSlot)
+            ? SwappedSkinMeshes(garment, pairs)
+            : null;
         var solved = Solve(garment, pairs, garmentSlot, pushOut, held, replaceSkin, clearBody, keepShape,
-                           ModelSkinReader.Read(garmentBytes, null, null));
+                           ModelSkinReader.Read(garmentBytes, null, null), swapSlot, swapMeshes);
         var written = MeshVolumeService.Inflate(garmentBytes, solved.Edit);
         byte[] model = written.Model;
 
@@ -629,7 +648,8 @@ internal static partial class BodyRetarget
         var weights = PlanWeights(model, pairs, acrossBodies, before: garmentBytes, held: held);
         if (replaceSkin || weights != null)
         {
-            var rebuilt = Rebuild(model, pairs, replaceSkin, weights, out var swapped, cutHidden, acrossBodies);
+            var rebuilt = Rebuild(model, pairs, replaceSkin, weights, out var swapped, cutHidden, acrossBodies,
+                                  swapMeshes);
             if (rebuilt != null)
             {
                 model = rebuilt;
@@ -655,25 +675,51 @@ internal static partial class BodyRetarget
         return new Planned(solved.Edit, model, report);
     }
 
+    /// <summary>
+    /// Whether <paramref name="swapSlot"/>'s skin really is swapped: asked for, and its pair carries its target body's
+    /// file, which is the only kind <see cref="Rebuild"/> swaps.
+    /// </summary>
+    private static bool SwapSlotSwapped(IReadOnlyList<SlotPair> pairs, bool replaceSkin, string? swapSlot)
+        => replaceSkin && swapSlot != null
+        && pairs.Any(p => string.Equals(p.Slot, swapSlot, StringComparison.Ordinal) && p.Swaps);
+
+    /// <summary>
+    /// The skin meshes the solve parts the cloth welded to them from (see <see cref="Sets.From"/>): those the swap
+    /// replaces, when the garment's own slot is swapped or <paramref name="swapSlot"/>'s is. Null when neither is.
+    /// </summary>
+    internal static IReadOnlySet<int>? PartedSkinMeshes(ModelParts garment, IReadOnlyList<SlotPair> pairs,
+                                                        string? garmentSlot, bool replaceSkin, string? swapSlot)
+        => SwapSlotSwapped(pairs, replaceSkin, garmentSlot) || SwapSlotSwapped(pairs, replaceSkin, swapSlot)
+            ? SwappedSkinMeshes(garment, pairs)
+            : null;
+
     /// <inheritdoc cref="Plan"/>
     /// <remarks>The geometry, without touching the file. See <see cref="Solved"/>.</remarks>
     /// <param name="garmentSkin">The garment's skinning, in the part reader's vertex order: which side of the body each
     /// point belongs to, so a pant leg never follows the other leg (see <see cref="SourceBody.TryNearest"/>). Null asks
     /// either side.</param>
+    /// <param name="swapSlot">See <see cref="Plan"/>.</param>
+    /// <param name="swapMeshes">With <paramref name="swapSlot"/>, the skin meshes the swap replaces, as
+    /// <see cref="Plan"/> hands them to the rebuild; null works them out here.</param>
     internal static Solved Solve(ModelParts garment, IReadOnlyList<SlotPair> pairs, string? garmentSlot = null,
                                  bool pushOut = true, IReadOnlySet<int>? held = null, bool replaceSkin = false,
                                  bool clearBody = false, IReadOnlyList<IReadOnlyCollection<int>>? keepShape = null,
-                                 XivLiveMesh.SkinnedMesh? garmentSkin = null)
+                                 XivLiveMesh.SkinnedMesh? garmentSkin = null, string? swapSlot = null,
+                                 IReadOnlySet<int>? swapMeshes = null)
     {
         // With the skin replaced, the garment's OWN slot body is drawn after all — Rebuild embeds that very mesh in the
         // garment, so it is what the cloth ends up lying against. Asking for the swap is not enough: Rebuild only swaps
         // a slot that carries its target body's FILE, so a pair built without one keeps the author's skin, and
         // everything that depends on the swap must agree with it.
-        bool ownSlotSwapped = replaceSkin && garmentSlot != null
-                           && pairs.Any(p => string.Equals(p.Slot, garmentSlot, StringComparison.Ordinal)
-                                          && p.TargetModel != null);
+        bool ownSlotSwapped = SwapSlotSwapped(pairs, replaceSkin, garmentSlot);
+        // The cloth on swapped skin is handled the same whichever slot's skin it is: a shoe keeping its own foot swaps
+        // its legs, and the stocking welded to the old legs' skin must not be laid flat into the new ones. What depends
+        // on the GARMENT's own slot — which body the push-out leaves out, the underbust — still asks ownSlotSwapped.
+        bool slotSwapped = ownSlotSwapped || SwapSlotSwapped(pairs, replaceSkin, swapSlot);
 
-        var sets = Sets.From(garment, held, ownSlotSwapped ? SwappedSkinMeshes(garment, pairs) : null);
+        var sets = Sets.From(garment, held,
+                             slotSwapped ? swapMeshes ?? PartedSkinMeshes(garment, pairs, garmentSlot, replaceSkin, swapSlot)
+                                         : null);
         var source = SourceBody.Build(pairs);
 
         var nodeDelta = new Vec3[sets.NodeCount];
@@ -689,7 +735,10 @@ internal static partial class BodyRetarget
         // Before the push-out, so the push-out measures cloth against the skin as it will actually be drawn.
         var carried = (Vec3[])nodeDelta.Clone();
         int laid = replaceSkin ? LaySkin(sets, source, pairs, nodeDelta) : 0;
-        if (ownSlotSwapped && laid > 0 && !Tuned.NoFollow) FollowLaidSkin(garment, sets, carried, nodeDelta, snapped, pairs);
+        // Held skin is left out of what the cloth follows only on the swapSlot path, where the hold is a kept foot: the
+        // cloth beside it measured its gap from that foot, which the new legs do not draw. A Studio hold stays as it was.
+        if (slotSwapped && laid > 0 && !Tuned.NoFollow)
+            FollowLaidSkin(garment, sets, carried, nodeDelta, snapped, pairs, swapSlot != null ? held : null);
 
         // Hard pieces whole, before the push-out measures them against the skin.
         var scales = new float[keepShape?.Count ?? 0];
@@ -759,7 +808,7 @@ internal static partial class BodyRetarget
             if (!Tuned.NoUnderbustLift && drawn != null && garmentSlot == "_top")
             {
                 // The breast read off the new chest's own weights, where the swap will draw that chest.
-                var chest = ownSlotSwapped ? pairs.FirstOrDefault(p => p.Slot == garmentSlot && p.TargetModel != null) : default;
+                var chest = ownSlotSwapped ? pairs.FirstOrDefault(p => p.Slot == garmentSlot && p.Swaps) : default;
                 var isBreast = chest.TargetModel != null ? BreastTest(chest) : null;
                 // The hip across every body in play: it spans the chest's skin and the legs' beside it.
                 var isHip = HipTest(pairs);
@@ -771,7 +820,7 @@ internal static partial class BodyRetarget
         // A hem lying on the skin whose edges the new, rounder body comes up through between its corners — see LiftRims.
         // Only with the skin swapped: then the body's own skin is drawn under the rim, where the author's sculpted skin
         // is not, and that is the case it was measured on (the Pioneer's Bottoms onto Neolithe).
-        if (drawn != null && ownSlotSwapped && !Tuned.NoRimLift) pushed += LiftRims(sets, drawn, nodeDelta, stay);
+        if (drawn != null && slotSwapped && !Tuned.NoRimLift) pushed += LiftRims(sets, drawn, nodeDelta, stay);
 
         // Never write a NaN into the file: one spreads through every smoothing pass it touches, and the model it lands in
         // draws nothing there and threw every frame from the Parts preview. A node with no finite answer stays put.

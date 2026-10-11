@@ -112,6 +112,26 @@ public sealed class LocalizationTests
         Assert.True(orphaned.Count == 0, $"[{lang}] has {orphaned.Count} key(s) not in {Source}.json:\n  " + string.Join("\n  ", orphaned));
     }
 
+    /// <summary>
+    /// The strings shoes and gloves keeping their own hands and feet added are translated, not copied: a copied English
+    /// value passes every other check here, so a key can ship untranslated without a test noticing.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-keep-hand-foot-skin-9")]
+    public void KeepEnds_strings_are_translated_not_copied(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        string[] keys = ["AutoRefit.EndsKept", "Chat.AutoRefit.KeepsFeet.Fmt", "Chat.AutoRefit.KeepsHands.Fmt",
+                         "Chat.AutoRefit.SkinOnly.Fmt"];
+        foreach (string key in keys)
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+        }
+    }
+
     [Theory]
     [MemberData(nameof(Translations))]
     public void PlaceholderIndicesMatchEnglish(string lang)

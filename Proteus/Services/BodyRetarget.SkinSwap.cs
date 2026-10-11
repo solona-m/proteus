@@ -101,12 +101,16 @@ internal static partial class BodyRetarget
     /// </summary>
     /// <param name="cutHidden">Carry the author's cut onto the new body's skin (see <see cref="CutLike"/>).</param>
     /// <param name="acrossBodies">The garment is going to another body mod, not between sizes of one.</param>
+    /// <param name="swapMeshes">The skin meshes the solver parted the cloth from (<see cref="SwappedSkinMeshes"/>), when
+    /// it was told which: then exactly those go and every other stays, rather than judging again on the laid model —
+    /// see <see cref="Plan"/>. Null judges here, as always.</param>
     /// <returns>The rebuilt model, or null when there was nothing to change.</returns>
     internal static byte[]? Rebuild(byte[] garment, IReadOnlyList<SlotPair> pairs, bool swapSkin, WeightPlan? weights,
-                                    out SwapReport report, bool cutHidden = true, bool acrossBodies = false)
+                                    out SwapReport report, bool cutHidden = true, bool acrossBodies = false,
+                                    IReadOnlySet<int>? swapMeshes = null)
     {
         report = default;
-        var swappable = swapSkin ? pairs.Where(p => p.TargetModel != null).ToList() : [];
+        var swappable = swapSkin ? pairs.Where(p => p.Swaps).ToList() : [];
         if ((swappable.Count == 0 && weights == null) || ModelPartReader.Read(garment) is not { } model) return null;
 
         var surfaces = swappable.Select(p => new BodySurface(p.Target, BodySurface.CellFor(MeanEdgeOf(p.Target))))
@@ -142,7 +146,9 @@ internal static partial class BodyRetarget
                 float share = verts.Count > 0 ? (float)on / verts.Count : 0f;
                 if (share > bestShare) { bestShare = share; best = s; }
             }
-            if (verts.Count > 0 && onAny < verts.Count * OnBodyShare)
+            bool partlyOff = swapMeshes != null ? !swapMeshes.Contains(mesh.Key)
+                           : verts.Count > 0 && onAny < verts.Count * OnBodyShare;
+            if (partlyOff)
             {
                 // Some of it is the body's and some is not: the whole mesh stays, since half a mesh cannot be swapped.
                 if (best >= 0) posed++;
@@ -376,7 +382,7 @@ internal static partial class BodyRetarget
     internal static HashSet<int> SwappedSkinMeshes(ModelParts garment, IReadOnlyList<SlotPair> pairs)
     {
         var swapped = new HashSet<int>();
-        var sources = pairs.Where(p => p.TargetModel != null)
+        var sources = pairs.Where(p => p.Swaps)
                            .Select(p => new BodySurface(p.Correspondence.Source,
                                                         BodySurface.CellFor(MeanEdgeOf(p.Correspondence.Source))))
                            .Where(s => !s.IsEmpty)
