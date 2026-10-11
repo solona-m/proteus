@@ -542,6 +542,42 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
                     "every glove with forearm skin read as unsure: the arms cannot be told apart");
     }
 
+    private const string SheerElegance =
+        LocalData.Mods + ":BiboPlus Sheer Elegance/Chest size/Small/chara/equipment/e6010/model/c0201e6010_top.mdl";
+
+    [LocalDataFact(SheerElegance, Bibo, Neolithe)]
+    [Trait("Plan", "AC-keep-hand-foot-skin-3")]
+    public void A_glove_is_never_lifted_like_a_breast()
+    {
+        // The underbust lift is for tops. A Bibo+ corset refitted onto Neolithe's chest is where it acts: worn as a top,
+        // the lift changes the refit. Put through the same refit as gloves are — worn in the hands' slot, the chest
+        // model's skin the one swapped — it changes nothing, as no glove may be lifted like a breast.
+        var (parts, bytes) = Load(LocalData.Path(SheerElegance));
+        var bibo = BodySizeCatalog.Read(LocalData.Path(Bibo));
+        var neo = BodySizeCatalog.Read(LocalData.Path(Neolithe));
+        var from = bibo.For("_top", Race).First(o => o.Label.Contains("Small", StringComparison.Ordinal));
+        var to = neo.For("_top", Race).FirstOrDefault(o => o.Label.EndsWith("SFW M", StringComparison.Ordinal))
+                 ?? neo.For("_top", Race)[0];
+        var uv = new UVRemapService(NSubstitute.Substitute.For<Dalamud.Plugin.Services.IPluginLog>(), ".");
+        Assert.Null(BodyRetarget.BuildPair("_top", bibo.PathOf(from), neo.PathOf(to), "_top", false, null, null, uv,
+                                           out var chest));
+        var skin = ModelSkinReader.Read(bytes, null, null);
+
+        BodyRetarget.Solved Solve(string worn, bool noLift) => BodyRetarget.WithTuning(
+            new BodyRetarget.Tuning(NoUnderbustLift: noLift),
+            () => BodyRetarget.Solve(parts, [chest], worn, replaceSkin: true, garmentSkin: skin,
+                                     swapSlot: worn == "_glv" ? "_top" : null));
+
+        int Differ(BodyRetarget.Solved a, BodyRetarget.Solved b)
+            => Enumerable.Range(0, parts.Positions.Length / 3).Count(v => !a.Edit.DeltaAt(v).Equals(b.Edit.DeltaAt(v)));
+
+        int asTop = Differ(Solve("_top", false), Solve("_top", true));
+        int asGloves = Differ(Solve("_glv", false), Solve("_glv", true));
+        output.WriteLine($"the lift moved {asTop} vertices worn as a top, {asGloves} worn as gloves");
+        Assert.True(asTop > 0, "the lift did nothing to this top either, so the glove case proves nothing");
+        Assert.Equal(0, asGloves);
+    }
+
     // ── reading the legs alone ───────────────────────────────────────────────────────────────────────────
 
     [LocalDataFact(Heartthrob, Bibo, Neolithe, Rue, Yab)]

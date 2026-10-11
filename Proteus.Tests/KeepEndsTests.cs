@@ -564,17 +564,6 @@ public class KeepEndsTests
                      KeepEnds.Decide(found, reading, NoBones, "0201", "other", _ => Body, _ => FeetM));
     }
 
-    [Fact]
-    [Trait("Plan", "AC-keep-hand-foot-skin-3")]
-    public void A_glove_is_never_lifted_like_a_breast()
-    {
-        // Worn as gloves, refitted on the chest model's arms: the underbust lift is for tops, and a glove is not one.
-        var with = BodyRetarget.Solve(Shoe(), [Legs("_top")], "_glv", held: FootVertices, replaceSkin: true, swapSlot: "_top");
-        var without = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoUnderbustLift: true),
-            () => BodyRetarget.Solve(Shoe(), [Legs("_top")], "_glv", held: FootVertices, replaceSkin: true, swapSlot: "_top"));
-        for (int v = 0; v < 9; v++) Assert.Equal(Delta(without, v), Delta(with, v));
-    }
-
     // ── the whole plan: what is swapped, cut and held ────────────────────────────────────────────────────
 
     /// <summary>A legs body: <paramref name="triangles"/> triangles of skin, raised by <paramref name="z"/>, rigged to the calf.</summary>
