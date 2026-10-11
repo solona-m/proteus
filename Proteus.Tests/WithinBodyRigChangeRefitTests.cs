@@ -107,11 +107,13 @@ public class WithinBodyRigChangeRefitTests(ITestOutputHelper output)
                     .Count(v => Sum(after[v], genB) >= Written);
 
         int skirt = OnNewBones(m => m == SkirtFabric);
-        int crotch = OnNewBones(m => m == Panties || BodyRetarget.IsBodyExtraMaterial(m));
-        output.WriteLine($"on Gen B's bones: skirt {skirt}, panties and pubic hair {crotch}");
+        int panties = OnNewBones(m => m == Panties);
+        int pubes = OnNewBones(BodyRetarget.IsBodyExtraMaterial);
+        output.WriteLine($"on Gen B's bones: skirt {skirt}, panties {panties}, pubic hair {pubes}");
 
         Assert.Equal(0, skirt);
-        Assert.True(crotch > 0, "the crotch took none of Gen B's bones: the change between the bodies never ran");
+        Assert.True(panties > 0, "the panties took none of Gen B's bones: the change between the bodies never reached the cloth");
+        Assert.True(pubes > 0, "the pubic hair took none of Gen B's bones");
     }
 
     /// <summary>
@@ -166,8 +168,10 @@ public class WithinBodyRigChangeRefitTests(ITestOutputHelper output)
         var yiggleOnly = SecondSkinWriter.Parse(File.ReadAllBytes(yigglePath)).BoneNames
                              .Except(SecondSkinWriter.Parse(File.ReadAllBytes(plainPath)).BoneNames).ToList();
         bool madeOnYiggle = yiggleOnly.Any(garmentBones.Contains);
-        var (sourcePath, targetPath) = madeOnYiggle ? (yigglePath, plainPath) : (plainPath, yigglePath);
         output.WriteLine($"made on {(madeOnYiggle ? "Yiggle" : "plain")}; refitting onto {(madeOnYiggle ? "plain" : "Yiggle")}");
+        // Both fixtures are made on Yiggle: a pick the other way is a misreading, not a refit to measure.
+        Assert.True(madeOnYiggle, "the garment carries none of Yiggle's own bones");
+        var (sourcePath, targetPath) = (yigglePath, plainPath);
 
         var r = Run(garmentPath, slot, sourcePath, targetPath);
         Assert.NotNull(r.Plan.Report.Swap);

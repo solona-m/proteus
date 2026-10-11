@@ -657,6 +657,7 @@ public class BodyWeightsTests
         Assert.Equal(1f, w.Sum(i => i.W), 4);
     }
 
+    /// <summary>[EDGE-within-body-weights-2] Within one body mod, a slot whose rig stays keeps the author's weights.</summary>
     [Fact]
     public void A_slot_that_keeps_its_rig_keeps_the_author_s_weights_when_another_slot_changes_rig()
     {
@@ -685,6 +686,7 @@ public class BodyWeightsTests
         => SyntheticModel.Build([], new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0, TrianglesPerIsland: 3,
                                                                                          OffsetX: x, Weights: weights)));
 
+    /// <summary>[EDGE-within-body-weights-1] Within one body mod, two sizes rigged alike: nothing to rewrite.</summary>
     [Fact]
     public void Two_bodies_rigged_alike_keep_the_author_s_weights()
     {
