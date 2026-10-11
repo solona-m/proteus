@@ -2524,7 +2524,7 @@
     "description": ""
   },
   "Parts.Move.ListTip": {
-    "message": "Wähle hier das zu verschiebende Teil oder klicke es am Modell oder an deinem Charakter an.",
+    "message": "Wähle hier das zu verschiebende Teil oder klicke es am Modell oder an deinem Charakter an.\nEntferne das Häkchen bei einem Teil, um es wegzusperren und an das darunter zu kommen.",
     "description": ""
   },
   "Parts.Move.Adjacent": {
@@ -2552,7 +2552,11 @@
     "description": ""
   },
   "Parts.Move.LockedTip": {
-    "message": "Dieses Teil ist gesperrt. Entsperre es unter einem Pinsel, um es zu verschieben.",
+    "message": "Dieses Teil ist gesperrt. Setze das Häkchen daneben, um es zu verschieben.",
+    "description": ""
+  },
+  "Parts.Move.LockTip": {
+    "message": "Häkchen entfernen, um dieses Teil wegzusperren: Es wird am Modell und an deinem Charakter ausgeblendet, und Klicks gehen\nhindurch zu dem, was darunter liegt — etwa ein Rock, um an die Unterwäsche darunter zu kommen.\nAuch die Pinsel lassen ein gesperrtes Teil in Ruhe und blenden es aus.",
     "description": ""
   },
   "Parts.Move.NothingFree": {
@@ -2776,7 +2780,7 @@
     "description": ""
   },
   "Parts.Brush.Lock.ListTip": {
-    "message": "Entferne den Haken bei einem Teil, um es zu sperren: Kein Pinsel bewegt es dann. Ein Shift-Klick auf ein Teil am Modell oder an deinem Charakter tut dasselbe.",
+    "message": "Entferne das Häkchen, um ein Teil zu sperren: Kein Pinsel bewegt es, und es wird ausgeblendet, damit du an das darunter kommst. Ein Umschalt-Klick auf ein Teil am Modell oder an deinem Charakter sperrt es ebenfalls; setze das Häkchen hier, um es zurückzuholen.",
     "description": ""
   },
   "Parts.Brush.Lock.Count.Fmt": {

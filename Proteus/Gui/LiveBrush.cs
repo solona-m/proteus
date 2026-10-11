@@ -348,16 +348,21 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
             return;
         }
 
+        // Under a brush the locked parts are not drawn (PartsPanel.HiddenOnCharacter): no grey over them, and the brush
+        // reaches through them to the cloth beneath. Body size's holds are drawn, and greyed, as before.
+        bool hideLocked = !pickParts && partLocked == null;
+
         // The washes first, so the ring lies on top of them, and whether or not the mouse is over the garment.
         if (pickParts) DrawTickedWash(projection, m);
         else
         {
             if (showWind) DrawWindWash(projection, m);
-            DrawLockedWash(projection, m);
+            if (!hideLocked) DrawLockedWash(projection, m);
         }
 
         var io = ImGui.GetIO();
-        var hit = MouseHit(projection, world, m.Triangles, skinTriangle, out bool overUi);
+        var hit = hideLocked ? MouseHitPastLocked(projection, m, out bool overUi)
+                             : MouseHit(projection, world, m.Triangles, skinTriangle, out overUi);
 
         // Picking a part instead of painting: every click under Toggle Parts, and a Shift-click under a brush (a lock).
         bool locking = lockClicked != null && (pickParts || io.KeyShift);
@@ -451,15 +456,16 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     {
         var io = ImGui.GetIO();
         // Picking polygons looks THROUGH whatever cannot be picked — the skin a clip pokes out behind, a locked part —
-        // rather than being stopped by it.
+        // rather than being stopped by it. Picking a part looks through locked parts too, which the preview no longer
+        // draws (PartsPanel.HiddenOnCharacter), but skin still stops it, as it does the brushes.
         var hit = polygonClicked != null && polygonPickable is { } pickable
             ? MouseHit(projection, world, m.Triangles,
                        t => (t >= skinTriangle.Length || !skinTriangle[t]) && pickable(PolygonOf(m, t)), out bool overUi)
-            : MouseHit(projection, world, m.Triangles, skinTriangle, out overUi);
+            : MouseHitPastLocked(projection, m, out overUi);
 
+        // No grey over the locked parts: they are not drawn under the Move tools.
         if (moveFalloff is { } falloff) DrawMoveFalloffWash(projection, m, falloff);
         else DrawTickedWash(projection, m);
-        DrawLockedWash(projection, m);
         var origin = ImGui.GetMainViewport().Pos;
         bool dragging = moveGizmo is { Active: not TranslateGizmo.Handle.None } || scaleDrag is { Active: true }
                         || rotateGizmo is { Active: not RotateGizmo.Handle.None };
@@ -983,9 +989,28 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     }
 
     /// <summary>
-    /// Locked parts as a faint grey over the garment, whenever the brush is armed. A triangle is locked when all
-    /// three of its corners are — a seam point welded to a locked part is locked too, but the unlocked cloth
-    /// beside it is not greyed for sharing it.
+    /// The garment under the mouse, looking through the locked parts, which the preview does not draw. Skin still stops
+    /// the ray, and a skin hit is still no hit — see the other <see cref="MouseHit(ScreenProjection, Vector3[], int[], bool[], out bool)"/>.
+    /// </summary>
+    private LiveMeshHit? MouseHitPastLocked(ScreenProjection projection, SkinnedMesh m, out bool overUi)
+    {
+        var hit = MouseHit(projection, world, m.Triangles, t => !LockedTriangle(m, t), out overUi);
+        return hit is { } h && h.Triangle < skinTriangle.Length && skinTriangle[h.Triangle] ? null : hit;
+    }
+
+    /// <summary>Whether every corner of triangle <paramref name="t"/> is locked in the solve — cloth of a locked part.</summary>
+    private bool LockedTriangle(SkinnedMesh m, int t)
+    {
+        if (volume is not { } solve) return false;
+        int o = t * 3;
+        var baseTris = m.BaseTriangles;
+        return solve.IsLocked(baseTris[o]) && solve.IsLocked(baseTris[o + 1]) && solve.IsLocked(baseTris[o + 2]);
+    }
+
+    /// <summary>
+    /// Locked parts as a faint grey over the garment — Body size's holds, now that the brushes hide their locks instead.
+    /// A triangle is locked when all three of its corners are — a seam point welded to a locked part is locked too,
+    /// but the unlocked cloth beside it is not greyed for sharing it.
     /// </summary>
     private void DrawLockedWash(ScreenProjection projection, SkinnedMesh m)
     {
@@ -1136,6 +1161,7 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
         int stride = Math.Max(1, windTriangles.Count / MaxWashTriangles);
         for (int i = 0; i < windTriangles.Count; i += stride)
         {
+            if (LockedTriangle(m, windTriangles[i])) continue;   // a locked part is not drawn under the brushes
             int o = windTriangles[i] * 3;
             float wind = (solve.WindAt(bases[o]) + solve.WindAt(bases[o + 1]) + solve.WindAt(bases[o + 2])) / 3f;
             uint alpha = (uint)(Math.Clamp(wind, 0f, 1f) * WashOpacity * 255f);

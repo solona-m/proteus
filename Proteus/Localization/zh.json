@@ -2524,7 +2524,7 @@
     "description": ""
   },
   "Parts.Move.ListTip": {
-    "message": "在此选择要移动的部件，或在模型或角色上点击它。",
+    "message": "在此选择要移动的部件，或在模型或角色上点击它。\n取消勾选某个部件即可将其锁定移开，以便选到它下面的东西。",
     "description": ""
   },
   "Parts.Move.Adjacent": {
@@ -2552,7 +2552,11 @@
     "description": ""
   },
   "Parts.Move.LockedTip": {
-    "message": "该部件已锁定。请在笔刷下解锁后再移动。",
+    "message": "该部件已锁定。勾选旁边的复选框即可移动它。",
+    "description": ""
+  },
+  "Parts.Move.LockTip": {
+    "message": "取消勾选即可锁定此部件并将其移开：它会在模型和角色上隐藏，\n点击会穿过它，选到下面的东西——例如锁定裙子来选中里面的内衣。\n笔刷也不会改动已锁定的部件，并会将其隐藏。",
     "description": ""
   },
   "Parts.Move.NothingFree": {
@@ -2776,7 +2780,7 @@
     "description": ""
   },
   "Parts.Brush.Lock.ListTip": {
-    "message": "取消勾选部件即可锁定：任何笔刷都不会移动它。在模型或角色上 Shift+点击部件效果相同。",
+    "message": "取消勾选即可锁定部件：任何笔刷都不会移动它，它还会被隐藏，以便你碰到下面的东西。在模型或角色上 Shift+点击部件也能锁定；在此重新勾选即可让它回来。",
     "description": ""
   },
   "Parts.Brush.Lock.Count.Fmt": {

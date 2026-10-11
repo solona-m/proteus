@@ -112,7 +112,9 @@ public sealed class PartViewport : IDisposable, IBrushSurface
 
     /// <summary>
     /// Parts locked against the brush, by label (a submesh's label covers its islands): drawn dark and left out of
-    /// the brush blob and wind wash. Call <see cref="Recolour"/> after it changes.
+    /// the brush blob and wind wash. Outside <see cref="ViewportMode.Navigate"/> they are not drawn at all, so the cloth
+    /// they cover can be seen, picked and brushed — a skirt locked to reach the underwear beneath it. Call
+    /// <see cref="GeometryChanged"/> after it changes.
     /// </summary>
     public IReadOnlySet<string> Locked { get; set; } = new HashSet<string>();
 
@@ -144,7 +146,19 @@ public sealed class PartViewport : IDisposable, IBrushSurface
         Move,
     }
 
-    public ViewportMode Mode { get; set; } = ViewportMode.Navigate;
+    /// <summary>Set every frame; only a real change re-projects, since only <see cref="ViewportMode.Navigate"/> draws locked parts.</summary>
+    public ViewportMode Mode
+    {
+        get => mode;
+        set
+        {
+            if (mode == value) return;
+            mode = value;
+            geometryDirty = true;
+        }
+    }
+
+    private ViewportMode mode = ViewportMode.Navigate;
 
     /// <summary>
     /// In <see cref="ViewportMode.Move"/>: whether the gizmo has the mouse, asked when a press lands. True gives the
@@ -552,6 +566,11 @@ public sealed class PartViewport : IDisposable, IBrushSurface
         int bands = Math.Clamp(Environment.ProcessorCount, 1, 16);
         int rows = (bufH + bands - 1) / bands;
 
+        // A move or a brush leaves locked parts out: nothing can touch them, and drawn they would only hide what can.
+        var drawn = new bool[pickable.Count];
+        for (int part = 0; part < drawn.Length; part++)
+            drawn[part] = Mode == ViewportMode.Navigate || !IsLocked(part);
+
         System.Threading.Tasks.Parallel.For(0, bands, band =>
         {
             int yLo = band * rows, yHi = Math.Min(yLo + rows, bufH) - 1;
@@ -559,6 +578,7 @@ public sealed class PartViewport : IDisposable, IBrushSurface
 
             for (int part = 0; part < pickable.Count; part++)
             {
+                if (!drawn[part]) continue;
                 var tris = pickable[part].Triangles;
                 for (int t = 0; t + 2 < tris.Length; t += 3)
                 {
@@ -617,6 +637,10 @@ public sealed class PartViewport : IDisposable, IBrushSurface
         }
     }
 
+    /// <summary>Whether pickable part <paramref name="i"/> is locked — itself, or the submesh it is an island of.</summary>
+    private bool IsLocked(int i)
+        => Locked.Contains(pickable[i].Label) || (i < parentOf.Count && parentOf[i] is { } parent && Locked.Contains(parent));
+
     /// <summary>Paint the id/shade buffers into pixels. Geometry is untouched, so this costs no projection.</summary>
     private void Recolourize()
     {
@@ -634,7 +658,7 @@ public sealed class PartViewport : IDisposable, IBrushSurface
             var parent = i < parentOf.Count ? parentOf[i] : null;
             bool on = Selected.Contains(pickable[i].Label) || (parent != null && Selected.Contains(parent));
             bool hot = Hovered == pickable[i].Label || (parent != null && Hovered == parent);
-            bool locked = lockMode && (Locked.Contains(pickable[i].Label) || (parent != null && Locked.Contains(parent)));
+            bool locked = lockMode && IsLocked(i);
             canBrush[i] = i < brushable.Length && brushable[i] && !locked;
             tint[i] = locked      ? (hot ? (100, 110, 130) : (70, 70, 76))
                     : on && hot   ? (255, 220, 170)

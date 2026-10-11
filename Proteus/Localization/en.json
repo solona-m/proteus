@@ -2524,7 +2524,7 @@
     "description": "Shown when the Move tool has no part chosen."
   },
   "Parts.Move.ListTip": {
-    "message": "Choose the part to move here, or click it on the model or on your character.",
+    "message": "Choose the part to move here, or click it on the model or on your character.\nUntick a part's box to lock it out of the way and reach what is underneath.",
     "description": "Above the part list under the Move tool."
   },
   "Parts.Move.Adjacent": {
@@ -2552,8 +2552,12 @@
     "description": "Tooltip on a skin part in the list under the Move tool."
   },
   "Parts.Move.LockedTip": {
-    "message": "This part is locked. Unlock it under a brush to move it.",
+    "message": "This part is locked. Tick the box beside it to move it.",
     "description": "Tooltip on a locked part in the list under the Move tool."
+  },
+  "Parts.Move.LockTip": {
+    "message": "Untick to lock this part out of the way: it is hidden on the model and on your character, and clicks pass\nthrough to what is underneath — a skirt, say, to reach the underwear beneath it.\nThe brushes leave a locked part alone and hide it too.",
+    "description": "Tooltip on the lock checkbox beside a part in the list under the Move tool."
   },
   "Parts.Move.NothingFree": {
     "message": "Nothing in this part can move: it is skin or locked.",
@@ -2776,7 +2780,7 @@
     "description": ""
   },
   "Parts.Brush.Lock.ListTip": {
-    "message": "Untick a part to lock it: no brush moves it. Shift-clicking a part on the model or on your character does the same.",
+    "message": "Untick a part to lock it: no brush moves it, and it is hidden so you can reach what is beneath it. Shift-clicking a part on the model or on your character locks it too; tick it here to bring it back.",
     "description": ""
   },
   "Parts.Brush.Lock.Count.Fmt": {

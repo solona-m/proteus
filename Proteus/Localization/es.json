@@ -2524,7 +2524,7 @@
     "description": ""
   },
   "Parts.Move.ListTip": {
-    "message": "Elige aquí la pieza que quieres mover, o haz clic en ella en el modelo o en tu personaje.",
+    "message": "Elige aquí la pieza que quieres mover, o haz clic en ella en el modelo o en tu personaje.\nDesmarca la casilla de una pieza para bloquearla y llegar a lo que hay debajo.",
     "description": ""
   },
   "Parts.Move.Adjacent": {
@@ -2552,7 +2552,11 @@
     "description": ""
   },
   "Parts.Move.LockedTip": {
-    "message": "Esta pieza está bloqueada. Desbloquéala con un pincel para moverla.",
+    "message": "Esta pieza está bloqueada. Marca la casilla junto a ella para moverla.",
+    "description": ""
+  },
+  "Parts.Move.LockTip": {
+    "message": "Desmarca para bloquear esta pieza y apartarla: se oculta en el modelo y en tu personaje, y los clics la\natraviesan hasta lo que hay debajo — una falda, por ejemplo, para llegar a la ropa interior.\nLos pinceles tampoco tocan una pieza bloqueada y también la ocultan.",
     "description": ""
   },
   "Parts.Move.NothingFree": {
@@ -2776,7 +2780,7 @@
     "description": ""
   },
   "Parts.Brush.Lock.ListTip": {
-    "message": "Desmarca una pieza para bloquearla: ningún pincel la mueve. Hacer mayús-clic en una pieza del modelo o de tu personaje hace lo mismo.",
+    "message": "Desmarca una pieza para bloquearla: ningún pincel la mueve, y se oculta para que llegues a lo que hay debajo. Mayús+clic en una pieza del modelo o de tu personaje también la bloquea; márcala aquí para que vuelva.",
     "description": ""
   },
   "Parts.Brush.Lock.Count.Fmt": {

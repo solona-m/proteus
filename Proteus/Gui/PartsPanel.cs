@@ -608,6 +608,7 @@ public sealed class PartsPanel
         {
             if (Editing) return;
             previewDirty = false;
+            previewHides = 0;
             if (preview.Active) preview.End(redraw: true);
             else compositor.RedrawForChangedModel();
             return;
@@ -616,8 +617,17 @@ public sealed class PartsPanel
         long now = Environment.TickCount64;
         if (Editing && now - lastPreviewAt < PreviewIntervalMs) return;
 
+        // Nowhere to show it: Push would refuse every frame, and every frame rebuild the model first.
+        var gamePaths = OpenModelGamePaths();
+        if (gamePaths.Count == 0) { previewDirty = false; return; }
+
         byte[] bytes;
-        try { bytes = MeshVolumeService.Inflate(brushBase, volume).Model; }
+        int hides = WantedHides();
+        try
+        {
+            bytes = MeshVolumeService.Inflate(brushBase, volume).Model;
+            if (hides != 0 && HiddenOnCharacter(hides) is { } hidden) ModelPartHider.Hide(bytes, volume.Spans, hidden);
+        }
         catch (Exception ex)
         {
             log.Warning("[Proteus] live brush: preview could not build the model: {0}", ex.Message);
@@ -625,15 +635,71 @@ public sealed class PartsPanel
             return;
         }
 
-        var gamePaths = OpenModelGamePaths();
-
         if (preview.Push(bytes, gamePaths, customizePart))
         {
             previewDirty = false;
+            previewHides = hides;
             lastPreviewAt = now;
             previewPushes++;
         }
     }
+
+    /// <summary>
+    /// <see cref="VersionOf"/> the brush locks the preview on the character leaves out; 0 when it hides nothing, or when
+    /// there is no preview. Compared with <see cref="WantedHides"/> so a preview is pushed only when what it should
+    /// hide has changed: a push reloads the gear, or redraws the character where that cannot be done in place.
+    /// </summary>
+    private int previewHides;
+
+    /// <summary>What <see cref="previewHides"/> should be under the current tool and locks.</summary>
+    private int WantedHides()
+    {
+        if (!HidesLocked || parts == null || TargetIsContent || preview.UnsupportedFor(TargetIsCustomizePart)) return 0;
+        var locks = BrushLocks;
+        return locks.Count == 0 ? 0 : VersionOf(locks) | 1;   // never 0, which means "nothing hidden"
+    }
+
+    /// <summary>Queue a preview when the one on the character hides other parts than it should.</summary>
+    private void SyncHiddenPreview()
+    {
+        if (WantedHides() != previewHides) previewDirty = true;
+    }
+
+    // HiddenOnCharacter's last answer, for the locks and model it was worked out for.
+    private HashSet<PolygonSelection.Key>? hiddenKeys;
+    private int hiddenKeysVersion;
+    private ModelParts? hiddenKeysModel;
+
+    /// <summary>
+    /// Under the brushes and the Move tools, the polygons of the locked parts, which the preview leaves off the character
+    /// so what they cover can be seen, picked and brushed — as the model view leaves them out. Null when nothing is to
+    /// be hidden. Only the preview: the save writes every part. Kept between pushes, which come every few frames
+    /// during a stroke, until <paramref name="version"/> (<see cref="WantedHides"/>) or the model changes.
+    /// </summary>
+    private HashSet<PolygonSelection.Key>? HiddenOnCharacter(int version)
+    {
+        if (parts == null) return null;
+        if (hiddenKeysVersion == version && ReferenceEquals(hiddenKeysModel, parts)) return hiddenKeys;
+
+        var locks = BrushLocks;
+        var hidden = new HashSet<PolygonSelection.Key>();
+        foreach (var part in parts.Parts)
+        {
+            if (!locks.Contains(part.Label) || IsSkin(part)) continue;
+            for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+                hidden.Add(PolygonSelection.Key.Of(part.Triangles[t], part.Triangles[t + 1], part.Triangles[t + 2]));
+        }
+        hiddenKeys = hidden.Count > 0 ? hidden : null;
+        hiddenKeysVersion = version;
+        hiddenKeysModel = parts;
+        return hiddenKeys;
+    }
+
+    /// <summary>
+    /// The tool leaves the brush locks' parts undrawn: every tool that honours them. Not Toggle Parts, which locks
+    /// nothing, nor Body size, whose holds are a set of their own and are refitted with the rest.
+    /// </summary>
+    private bool HidesLocked => tool is not (Tool.Navigate or Tool.Retarget);
 
     /// <summary>Counts the previews pushed, so a grab can tell whether the character saw any of it mid-drag.</summary>
     private int previewPushes;
@@ -654,6 +720,7 @@ public sealed class PartsPanel
     private void EndLivePreview(bool refreshGame)
     {
         previewDirty = false;
+        previewHides = 0;
         preview.End(redraw: refreshGame);
     }
 
@@ -1537,6 +1604,12 @@ public sealed class PartsPanel
         // A locked part is see-through to the pick, so polygons of it left selected could never be clicked back out.
         // Body size's holds are a different set and say nothing about the Move selection.
         if (tool != Tool.Retarget && movePolys.RemoveWhere(k => !PolygonPickable(k)) > 0) movePolysVersion++;
+        // Nor can a locked part stay the one chosen to move — the Move list locks too.
+        if (tool != Tool.Retarget && MovePart() is { } chosen && IsLocked(chosen))
+        {
+            movePart = null;
+            viewport.Recolour();
+        }
     }
 
     private void UnlockAll()
@@ -1551,7 +1624,10 @@ public sealed class PartsPanel
     {
         if (parts == null) return;
         viewport.Locked = Locks;
-        viewport.Recolour();
+        viewport.GeometryChanged();   // under a brush or Move a locked part is not drawn at all
+        // Nor on the character (see HiddenOnCharacter); and a preview that hid them shows them again under a tool that
+        // does not hide. Only on a real change: a model opened with nothing locked pushes nothing.
+        SyncHiddenPreview();
         if (volume == null) return;
         var locks = BrushLocks;
         // A submesh's triangles already include every island of it, so the labels alone are enough.
@@ -2215,6 +2291,17 @@ public sealed class PartsPanel
 
             if (moving)
             {
+                // Untick to lock: the part is left out of the pick and the model view, so what it covers can be reached.
+                // Skin is never picked by a move, so it has nothing to untick.
+                if (!IsSkin(part))
+                {
+                    bool pickable = !IsLocked(part);
+                    using (ImRaii.Disabled(volume is { Moving: true }))
+                        if (ImGui.Checkbox($"##mvl_{part.Label}", ref pickable))
+                            ToggleLock(part.Label);
+                    if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(ps.MoveLockTip);
+                    ImGui.SameLine();
+                }
                 bool movable = !IsSkin(part) && !IsLocked(part);
                 using (ImRaii.Disabled(!movable))
                     if (ImGui.RadioButton($"{part.Label}##mv_{part.Label}", movePart == part.Label))
@@ -2450,7 +2537,7 @@ public sealed class PartsPanel
                     ClearPolygons();
                 }
                 tool = value;
-                ApplyLocks();   // Body size shows its own holds, every other tool the brush locks
+                ApplyLocks();   // Body size shows its own holds, every other tool the brush locks; and syncs the hiding
                 // Staged parts are a Pick-parts thing; a selection carried into the brush would sit there invisibly.
                 ticked.Clear();
                 ReleaseHandles();
@@ -2887,6 +2974,8 @@ public sealed class PartsPanel
         if (previewed) previewDirty = true;
         else if (preview.Active) EndLivePreview(refreshGame: true);
         else compositor.RedrawForChangedModel();
+        // A preview taken down for the save took its hiding with it: put the locked parts away again.
+        if (!previewed) SyncHiddenPreview();
     }
 
     private void RevertBrush()
@@ -3197,7 +3286,9 @@ public sealed class PartsPanel
         var gamePaths = OpenModelGamePaths();
         if (gamePaths.Count == 0) return true;
 
-        return preview.Push(bytes, gamePaths, TargetIsCustomizePart);
+        if (!preview.Push(bytes, gamePaths, TargetIsCustomizePart)) return false;
+        previewHides = 0;   // the refit's model, every part drawn
+        return true;
     }
 
     /// <summary>

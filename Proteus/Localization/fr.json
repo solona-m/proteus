@@ -2524,7 +2524,7 @@
     "description": ""
   },
   "Parts.Move.ListTip": {
-    "message": "Choisissez ici la pièce à déplacer, ou cliquez dessus sur le modèle ou sur votre personnage.",
+    "message": "Choisissez ici la pièce à déplacer, ou cliquez dessus sur le modèle ou sur votre personnage.\nDécochez la case d'une pièce pour la verrouiller et atteindre ce qui est dessous.",
     "description": ""
   },
   "Parts.Move.Adjacent": {
@@ -2552,7 +2552,11 @@
     "description": ""
   },
   "Parts.Move.LockedTip": {
-    "message": "Cette pièce est verrouillée. Déverrouillez-la sous un pinceau pour la déplacer.",
+    "message": "Cette pièce est verrouillée. Cochez la case à côté pour la déplacer.",
+    "description": ""
+  },
+  "Parts.Move.LockTip": {
+    "message": "Décochez pour verrouiller cette pièce et l'écarter : elle est masquée sur le modèle et sur votre personnage, et les clics\nla traversent jusqu'à ce qui est dessous — une jupe, par exemple, pour atteindre les sous-vêtements.\nLes pinceaux laissent aussi une pièce verrouillée intacte et la masquent.",
     "description": ""
   },
   "Parts.Move.NothingFree": {
@@ -2776,7 +2780,7 @@
     "description": ""
   },
   "Parts.Brush.Lock.ListTip": {
-    "message": "Décochez une pièce pour la verrouiller : aucun pinceau ne la déplace. Un maj-clic sur une pièce du modèle ou de votre personnage fait de même.",
+    "message": "Décochez une pièce pour la verrouiller : aucun pinceau ne la déplace, et elle est masquée pour atteindre ce qui est dessous. Maj-clic sur une pièce du modèle ou de votre personnage la verrouille aussi ; cochez-la ici pour la faire revenir.",
     "description": ""
   },
   "Parts.Brush.Lock.Count.Fmt": {

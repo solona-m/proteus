@@ -2197,7 +2197,8 @@ public sealed class PartsStrings
     public readonly string MoveNoPart = Loc.Localize("Parts.Move.NoPart", "Click a part to choose what to move.");
 
     public readonly string MoveListTip = Loc.Localize("Parts.Move.ListTip",
-        "Choose the part to move here, or click it on the model or on your character.");
+        "Choose the part to move here, or click it on the model or on your character.\n"
+      + "Untick a part's box to lock it out of the way and reach what is underneath.");
 
     public readonly string MoveAdjacent = Loc.Localize("Parts.Move.Adjacent", "Move adjacent parts");
 
@@ -2243,7 +2244,12 @@ public sealed class PartsStrings
     public readonly string MoveSkinTip = Loc.Localize("Parts.Move.SkinTip", "Skin can't be moved.");
 
     public readonly string MoveLockedTip = Loc.Localize("Parts.Move.LockedTip",
-        "This part is locked. Unlock it under a brush to move it.");
+        "This part is locked. Tick the box beside it to move it.");
+
+    public readonly string MoveLockTip = Loc.Localize("Parts.Move.LockTip",
+        "Untick to lock this part out of the way: it is hidden on the model and on your character, and clicks pass\n"
+      + "through to what is underneath — a skirt, say, to reach the underwear beneath it.\n"
+      + "The brushes leave a locked part alone and hide it too.");
 
     public readonly string MoveNothingFree = Loc.Localize("Parts.Move.NothingFree",
         "Nothing in this part can move: it is skin or locked.");
@@ -2786,8 +2792,8 @@ public sealed class PartsStrings
         "Shift-click a part to lock it.");
 
     public readonly string BrushLockListTip = Loc.Localize("Parts.Brush.Lock.ListTip",
-        "Untick a part to lock it: no brush moves it. Shift-clicking a part on the model or on your character "
-      + "does the same.");
+        "Untick a part to lock it: no brush moves it, and it is hidden so you can reach what is beneath it. "
+      + "Shift-clicking a part on the model or on your character locks it too; tick it here to bring it back.");
 
     /// <summary>{0} is how many parts are locked.</summary>
     public readonly string BrushLockCountFmt = Loc.Localize("Parts.Brush.Lock.Count.Fmt",

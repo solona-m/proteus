@@ -2524,7 +2524,7 @@
     "description": ""
   },
   "Parts.Move.ListTip": {
-    "message": "여기서 이동할 파츠를 고르거나, 모델이나 캐릭터에서 클릭하세요.",
+    "message": "여기서 이동할 파츠를 고르거나, 모델이나 캐릭터에서 클릭하세요.\n파츠의 체크를 해제하면 잠겨서 그 아래에 있는 것을 고를 수 있습니다.",
     "description": ""
   },
   "Parts.Move.Adjacent": {
@@ -2552,7 +2552,11 @@
     "description": ""
   },
   "Parts.Move.LockedTip": {
-    "message": "이 파츠는 잠겨 있습니다. 브러시에서 잠금을 풀면 이동할 수 있습니다.",
+    "message": "이 파츠는 잠겨 있습니다. 옆의 상자를 체크하면 이동할 수 있습니다.",
+    "description": ""
+  },
+  "Parts.Move.LockTip": {
+    "message": "체크를 해제하면 이 파츠를 잠가 치워 둡니다. 모델과 캐릭터 모두에서 숨겨지고,\n클릭하면 그 아래에 있는 것이 선택됩니다 — 예를 들어 치마를 잠가 속옷에 닿을 수 있습니다.\n잠긴 파츠는 브러시도 건드리지 않고 숨깁니다.",
     "description": ""
   },
   "Parts.Move.NothingFree": {
@@ -2776,7 +2780,7 @@
     "description": ""
   },
   "Parts.Brush.Lock.ListTip": {
-    "message": "부위의 체크를 해제하면 잠기며, 어떤 브러시도 움직이지 않습니다. 모델이나 캐릭터의 부위를 Shift+클릭해도 같습니다.",
+    "message": "체크를 해제하면 파츠가 잠깁니다. 어떤 브러시도 움직이지 않고, 숨겨져서 그 아래에 닿을 수 있습니다. 모델이나 캐릭터에서 파츠를 Shift+클릭해도 잠깁니다. 여기서 체크하면 다시 나타납니다.",
     "description": ""
   },
   "Parts.Brush.Lock.Count.Fmt": {
