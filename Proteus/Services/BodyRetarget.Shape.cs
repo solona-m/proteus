@@ -245,6 +245,9 @@ internal static partial class BodyRetarget
     /// modelled as a solid. Material says nothing: "pop" draws its arm bands with the shirt's own material. Measured on
     /// "pop": its four arm bands, 176 chain links and underwire pieces are closed or 3% open; its cloth is not split
     /// into pieces at all, and its belt is one whole submesh 21 cm across.
+    /// <para/>
+    /// Not every closed piece is metal: "Ash by Succubi"'s left cup cover is solidified cloth. Ticked here, it is let go
+    /// by the refit when moving it whole would sink it into the new body (see <see cref="ReleaseSink"/>).
     /// </summary>
     /// <returns>The labels of the pieces that look hard.</returns>
     internal static List<string> HardPieces(ModelParts garment)

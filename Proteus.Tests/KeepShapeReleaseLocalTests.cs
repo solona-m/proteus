@@ -141,6 +141,33 @@ public class KeepShapeReleaseLocalTests
                     $"released {Adorned(released)} adornment triangles carried, kept whole {Adorned(whole)}");
     }
 
+    private const string LaVieEnRose =
+        LocalData.Mods + ":La Vie en Rose - by Solona/size/large/chara/equipment/e6098/model/c0201e6098_top.mdl";
+    private const string BiboPerkyLarge = @"breasts - small clothes\perky - large\chara\equipment\e0000\model\c0201e0000_top.mdl";
+
+    [LocalDataFact(LaVieEnRose, Bibo, Rue)]
+    [Trait("Plan", "AC-keep-shape-release-4")]
+    public void Small_ornaments_stay_whole_however_deep_they_sink()
+    {
+        // La Vie en Rose's little roses and beads, onto Rue+ Yiggle Large: moved whole some sink far past ReleaseSink —
+        // 16.5 mm for a 1.7 cm rose when measured — but under ReleaseMinSize every one stays whole.
+        var bytes = File.ReadAllBytes(LocalData.Path(LaVieEnRose));
+        var garment = ModelPartReader.Read(bytes)!;
+        var run = Refit(bytes, Bibo, BiboPerkyLarge, Rue, YiggleLarge);
+
+        float SizeOf(string label)
+        {
+            var part = garment.Parts.First(p => p.Label == label);
+            var d = part.Max - part.Min;
+            return MathF.Max(d.X, MathF.Max(d.Y, d.Z));
+        }
+        var small = RefitCore.KeptPieces(run.Plan.Report, run.Names)
+                             .Where(p => SizeOf(p.Name) < BodyRetarget.ReleaseMinSize).ToList();
+
+        Assert.Contains(small, p => p.Sink > BodyRetarget.ReleaseSink);   // or this proves nothing
+        Assert.DoesNotContain(small, p => p.Released);
+    }
+
     public static TheoryData<string> PopTargets => new() { "pop > Uranus", "pop > Neolithe XS", "pop > Bibo S" };
 
     [LocalDataTheory(Pop, Yab, Uranus, Neolithe, Bibo)]
