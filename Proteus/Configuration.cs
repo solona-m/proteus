@@ -278,6 +278,10 @@ public class Configuration : IPluginConfiguration
     /// On by default: the mod packer's default too.</summary>
     public bool SizeSetYas { get; set; } = true;
 
+    /// <summary>With <see cref="SizeSetBodies"/>, make sizes of a mod's shoes and gloves too, their own feet and hands
+    /// kept. On by default; a config saved before it existed has no such key and keeps this default (no migration).</summary>
+    public bool SizeSetEnds { get; set; } = true;
+
     /// <summary>
     /// Refit chest, legs, hands and feet gear onto the collection's preferred body as it is equipped — see
     /// <see cref="Services.AutoRefitWatcher"/>. Off by default: it writes into the gear's own mod.

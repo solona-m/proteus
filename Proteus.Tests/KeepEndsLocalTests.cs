@@ -243,22 +243,26 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
     }
 
     /// <summary>Vertex <paramref name="v"/> follows the same bones by the same weights (to a byte) in both rigs.</summary>
-    private static bool SameRig(XivLiveMesh.SkinnedMesh a, XivLiveMesh.SkinnedMesh b, int v)
+    private static bool SameRig(XivLiveMesh.SkinnedMesh a, XivLiveMesh.SkinnedMesh b, int v) => SameRigAt(a, v, b, v);
+
+    /// <summary>Vertex <paramref name="v"/> of one rig and <paramref name="w"/> of another follow the same bones by the
+    /// same weights (to a byte).</summary>
+    private static bool SameRigAt(XivLiveMesh.SkinnedMesh a, int v, XivLiveMesh.SkinnedMesh b, int w)
     {
-        Dictionary<string, float> Of(XivLiveMesh.SkinnedMesh m)
+        static Dictionary<string, float> Of(XivLiveMesh.SkinnedMesh m, int vertex)
         {
-            var w = new Dictionary<string, float>(StringComparer.Ordinal);
+            var weights = new Dictionary<string, float>(StringComparer.Ordinal);
             for (int k = 0; k < XivLiveMesh.SkinnedMesh.MaxInfluences; k++)
             {
-                float weight = m.BoneWeights[v * XivLiveMesh.SkinnedMesh.MaxInfluences + k];
+                float weight = m.BoneWeights[vertex * XivLiveMesh.SkinnedMesh.MaxInfluences + k];
                 if (weight <= 0f) continue;
-                string bone = m.BoneNames[m.BoneIndices[v * XivLiveMesh.SkinnedMesh.MaxInfluences + k]];
-                w[bone] = w.GetValueOrDefault(bone) + weight;
+                string bone = m.BoneNames[m.BoneIndices[vertex * XivLiveMesh.SkinnedMesh.MaxInfluences + k]];
+                weights[bone] = weights.GetValueOrDefault(bone) + weight;
             }
-            return w;
+            return weights;
         }
-        var x = Of(a);
-        var y = Of(b);
+        var x = Of(a, v);
+        var y = Of(b, w);
         return x.Count == y.Count && x.All(kv => y.TryGetValue(kv.Key, out float o) && MathF.Abs(o - kv.Value) <= 1.5f / 255f);
     }
 
@@ -577,6 +581,392 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
         output.WriteLine($"the lift moved {asTop} vertices worn as a top, {asGloves} worn as gloves");
         Assert.True(asTop > 0, "the lift did nothing to this top either, so the glove case proves nothing");
         Assert.Equal(0, asGloves);
+    }
+
+    // ── the Studio's Body size tool, keeping the end (keep-ends-studio) ──────────────────────────────────
+
+    private const string LavaBod = LocalData.Mods + ":LavaBod+ 2.2";
+    private const string CleoGloves = LocalData.Mods + ":Cleo - by Solona/common/4/c0201e0361_glv.mdl";
+    private const string ShiftShoe = "e6219_sho.mdl";
+
+    private sealed record Studied(ModelParts Parts, byte[] Bytes, KeepEnds.Reading Reading, KeepEnds.StudioReading Read,
+                                  BodyOption From, BodyOption Target, BodyRetarget.Planned Plan,
+                                  BodyRetarget.Planned Unheld);
+
+    /// <summary>
+    /// A shoe or glove through the Body size tool with its end kept: the panel's worker's own planning
+    /// (<see cref="KeepEnds.StudioPlan"/>) with the panel's defaults (new body's skin on, cut, nothing cleared), the limb
+    /// read against the chosen source as the panel reads it — and, for comparison, the same pairs with nothing held.
+    /// </summary>
+    private static Studied StudioRefit(byte[] bytes, string slot, string sourceNeed, string targetNeed,
+                                       Func<BodySizeCatalog, BodyOption, BodyOption>? targetOf = null,
+                                       IReadOnlySet<int>? alsoHeld = null)
+    {
+        var parts = ModelPartReader.Read(bytes)!;
+        var bones = BonesOf(bytes);
+        var source = BodySizeCatalog.Read(LocalData.Path(sourceNeed));
+        var target = BodySizeCatalog.Read(LocalData.Path(targetNeed));
+        bool across = !string.Equals(sourceNeed, targetNeed, StringComparison.OrdinalIgnoreCase);
+        var pieces = RefitCore.ShapePieces(parts, new HashSet<string>());
+        var reading = KeepEnds.Read(slot, parts, bytes, pieces)!;
+        var read = KeepEnds.StudioLimb(reading, parts, bones, Race, Path.GetFileName(LocalData.Path(sourceNeed)), source);
+        Assert.True(read.Pick != null, $"route {read.Route} picked nothing");
+        var from = read.Pick!;
+        var to = targetOf?.Invoke(target, from)
+                 ?? AutoRefitDecisions.Companion(target.For(reading.Limb, Race), from, null)!;
+        var uv = new UVRemapService(NSubstitute.Substitute.For<Dalamud.Plugin.Services.IPluginLog>(), ".");
+        var log = NSubstitute.Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
+        var input = new KeepEnds.StudioPlanInput(parts, bytes, slot, pieces, source, target, Race, false, from, [to],
+                                                 SameBodyMod: !across, FromCloth: read.Shown?.FromCloth == true,
+                                                 ReplaceSkin: true, Across: across, ClearBody: false, Held: alsoHeld,
+                                                 Shared: null, _ => (null, null), s => s, "test");
+        var studied = KeepEnds.StudioPlan(input, (p, _) => p, uv, log);
+        Assert.True(studied.Planned is { Count: 1 }, $"planned nothing: {studied.Error}{studied.Notice}");
+        var plan = studied.Planned![0].Planned;
+
+        var (endFrom, endTo) = KeepEnds.EndPair(source, target, slot, Race, from, to);
+        Assert.Null(KeepEnds.BuildPairs(reading, source.PathOf(from), target.PathOf(to),
+                                        endFrom == null ? null : source.PathOf(endFrom),
+                                        endTo == null ? null : target.PathOf(endTo), false, _ => (null, null), s => s, uv,
+                                        null, out var limb, out var end));
+        List<BodyRetarget.SlotPair> pairs = [limb];
+        if (end is { } e) pairs.Add(e with { ShapeOnly = true });
+        var unheld = BodyRetarget.Plan(parts, bytes, pairs, slot, held: new HashSet<int>(), replaceSkin: true,
+                                       acrossBodies: across, clearBody: false, cutHidden: true,
+                                       keepShape: reading.FreePieces, swapSlot: reading.Limb);
+        return new Studied(parts, bytes, reading, read, from, to, plan, unheld);
+    }
+
+    /// <summary>How far each of <paramref name="vertices"/> sits from the nearest vertex of a body model, in metres.</summary>
+    private static float[] GapTo(string bodyPath, IEnumerable<System.Numerics.Vector3> points)
+    {
+        var body = ModelPartReader.Read(File.ReadAllBytes(bodyPath))!;
+        var verts = Enumerable.Range(0, body.Positions.Length / 3)
+                              .Select(i => new System.Numerics.Vector3(body.Positions[i * 3], body.Positions[i * 3 + 1],
+                                                                       body.Positions[i * 3 + 2]))
+                              .ToArray();
+        return points.Select(p => verts.Min(v => System.Numerics.Vector3.Distance(v, p))).ToArray();
+    }
+
+    private static float Median(IEnumerable<float> values)
+    {
+        var sorted = values.OrderBy(v => v).ToArray();
+        return sorted.Length == 0 ? 0f : sorted[sorted.Length / 2];
+    }
+
+    [LocalDataFact(LocalData.ShiftPack, Yab, LavaBod)]
+    [Trait("Plan", "AC-keep-ends-studio-1")]
+    public void Studio_Shift_YAB_WC_onto_LavaBod_keeps_the_heeled_foot_and_refits_the_stocking()   // [AC-keep-ends-studio-1]
+    {
+        var bytes = LocalData.PackEntryEndingWith(LocalData.ShiftPack, ShiftShoe);
+        var done = StudioRefit(bytes, "_sho", Yab, LavaBod);
+        output.WriteLine($"route {KeepEnds.Letter(done.Read.Route)}, made for {done.From.Label}, onto {done.Target.Label}; "
+                       + $"{done.Reading.Ends.Count} of {done.Reading.Vertices} vertices kept; swap {done.Plan.Report.Swap}");
+        Assert.Contains(done.Read.Route, new[] { KeepEnds.Route.Skin, KeepEnds.Route.Cloth });
+        Assert.Equal("_dwn", done.From.Slot);
+
+        // Not a point of the heeled foot moved, skin, shoe or stocking: the bug moved them 10.8, 27 and 28 mm.
+        foreach (int v in done.Reading.Ends) Assert.Equal(default, done.Plan.Edit.DeltaAt(v));
+        var footSkin = SkinPositions(bytes, done.Reading.Ends.Contains);
+        var written = SkinPositions(done.Plan.Model);
+        Assert.Equal(0, footSkin.Count(p => !written.Contains(p)));
+        Assert.True(done.Plan.Report.Swap?.Posed > 0 || done.Plan.Report.Swap?.Kept > 0,
+                    "the foot's skin mesh should have been kept, not swapped");
+        // In its own rig too. The swap renumbers the model (the limb's skin is cut and the new legs' laid in), so each kept
+        // vertex is found again where it stands — it did not move — and its bones compared there.
+        var before = ModelSkinReader.Read(bytes, null, null)!;
+        var after = ModelSkinReader.Read(done.Plan.Model, null, null)!;
+        var afterParts = ModelPartReader.Read(done.Plan.Model)!;
+        var at = new Dictionary<(float, float, float), int>();
+        for (int v = afterParts.Positions.Length / 3 - 1; v >= 0; v--)
+            at[(afterParts.Positions[v * 3], afterParts.Positions[v * 3 + 1], afterParts.Positions[v * 3 + 2])] = v;
+        int rigChanged = 0, found = 0;
+        foreach (int v in done.Reading.Ends)
+        {
+            if (!at.TryGetValue((done.Parts.Positions[v * 3], done.Parts.Positions[v * 3 + 1], done.Parts.Positions[v * 3 + 2]),
+                                out int w)) continue;
+            found++;
+            if (!SameRigAt(before, v, after, w)) rigChanged++;
+        }
+        output.WriteLine($"{found} of {done.Reading.Ends.Count} kept vertices found again; {rigChanged} changed bones");
+        Assert.Equal(done.Reading.Ends.Count, found);
+        Assert.Equal(0, rigChanged);
+
+        // The stocking follows the new legs up the thigh: its gap to LavaBod's legs after is its gap to YAB's before.
+        var yab = BodySizeCatalog.Read(LocalData.Path(Yab));
+        var lava = BodySizeCatalog.Read(LocalData.Path(LavaBod));
+        var parts = done.Parts;
+        var thigh = parts.Parts.Where(p => p.Island < 0 && !SecondSkinWriter.IsBodySkinMaterial(p.Material))
+                         .SelectMany(p => p.Triangles).Distinct()
+                         .Where(v => !done.Reading.Ends.Contains(v) && parts.Positions[v * 3 + 1] > 0.35f)
+                         .ToList();
+        Assert.NotEmpty(thigh);
+        System.Numerics.Vector3 At(int v, BodyRetarget.Planned? plan = null)
+        {
+            var p = new System.Numerics.Vector3(parts.Positions[v * 3], parts.Positions[v * 3 + 1], parts.Positions[v * 3 + 2]);
+            if (plan == null) return p;
+            var d = plan.Edit.DeltaAt(v);
+            return p + new System.Numerics.Vector3(d.X, d.Y, d.Z);
+        }
+        var gapBefore = GapTo(yab.PathOf(done.From), thigh.Select(v => At(v)));
+        var gapAfter = GapTo(lava.PathOf(done.Target), thigh.Select(v => At(v, done.Plan)));
+        float drift = Median(gapBefore.Zip(gapAfter, (a, b) => MathF.Abs(a - b)));
+        output.WriteLine($"{thigh.Count} thigh stocking vertices: median gap change {drift * 1000f:F2} mm; folded "
+                       + $"{done.Plan.Report.Folded} (unheld {done.Unheld.Report.Folded}); moved up to "
+                       + $"{done.Plan.Report.WorstMove * 1000f:F1} mm");
+        Assert.True(drift <= 0.001f, $"the stocking's gap to the legs changed by {drift * 1000f:F2} mm");
+        Assert.True(done.Plan.Report.Folded <= done.Unheld.Report.Folded);
+    }
+
+    [LocalDataFact(LocalData.ShiftPack, Yab, LavaBod)]
+    [Trait("Plan", "EDGE-keep-ends-studio-20")]
+    public void Studio_Shift_seam_report()   // [EDGE-keep-ends-studio-20]
+    {
+        var done = StudioRefit(LocalData.PackEntryEndingWith(LocalData.ShiftPack, ShiftShoe), "_sho", Yab, LavaBod);
+        var (edges, worst) = KeepEnds.SeamStretch(done.Parts, done.Reading.Ends, done.Plan);
+        output.WriteLine($"{edges} ankle edges; the most stretched by {worst * 1000f:F1} mm"
+                       + (worst > KeepEnds.SeamWarn ? " — LOOK AT THIS SEAM IN GAME" : ""));
+        Assert.True(edges > 0, "no skin edge runs from the kept foot to the leg");
+        Assert.True(worst <= SeamLimit, $"the ankle stretched by {worst * 1000f:F1} mm");
+    }
+
+    [LocalDataFact(LocalData.ShiftPack, Yab, Rue, Bibo, Neolithe)]
+    [Trait("Plan", "AC-keep-ends-studio-3")]
+    public void Studio_Shift_is_not_unsure()   // [AC-keep-ends-studio-3]
+    {
+        // The automatic refit refuses a weak reading of the heeled foot to find a body; the user has named one here.
+        var bytes = LocalData.PackEntryEndingWith(LocalData.ShiftPack, ShiftShoe);
+        var parts = ModelPartReader.Read(bytes)!;
+        var bones = BonesOf(bytes);
+        var reading = KeepEnds.Read("_sho", parts, bytes)!;
+        var yab = BodySizeCatalog.Read(LocalData.Path(Yab));
+        var read = KeepEnds.StudioLimb(reading, parts, bones, Race, Path.GetFileName(LocalData.Path(Yab)), yab);
+        var bodies = Bodies(Yab, Rue, Bibo, Neolithe);
+        var found = KeepEnds.Find(reading, parts, bones, Race, Detector(bodies, bones), CatalogOf(bodies));
+        output.WriteLine($"Studio: route {KeepEnds.Letter(read.Route)}, {read.Pick?.Label} ({read.Shown?.Confidence}); "
+                       + $"automatic: route {KeepEnds.Letter(found.Route)}, {found.Pick?.Dir} / {found.Pick?.Option.Label}");
+        Assert.NotNull(read.Pick);
+        Assert.Equal("_dwn", read.Pick!.Slot);
+    }
+
+    [LocalDataFact(LocalData.ShiftPack, Yab, LavaBod)]
+    [Trait("Plan", "EDGE-keep-ends-studio-7")]
+    public void Studio_unticked_foot_skin_keeps_the_stocking_beside_it_unfolded()   // [EDGE-keep-ends-studio-7]
+    {
+        // ND-7 (a): the parts unticked join the hold. Beside held skin there is no gap correction, so the stocking there
+        // keeps only its transfer move. Onto LavaBod+ legs other than YAB WC's twin, so the legs really differ; what the
+        // code guarantees is checked (the skin held, no new folds), the gap change only printed. (YAB to Bibo+ legs is
+        // refused outright: the two bodies' legs do not correspond.)
+        var bytes = LocalData.PackEntryEndingWith(LocalData.ShiftPack, ShiftShoe);
+        var parts = ModelPartReader.Read(bytes)!;
+        var skin = parts.Parts.Where(p => p.Mesh == 0).SelectMany(p => p.Triangles).ToHashSet();
+        BodyOption Other(BodySizeCatalog c, BodyOption from)
+            => c.For("_dwn", Race).Last(o => !string.Equals(o.Name, from.Name, StringComparison.OrdinalIgnoreCase));
+
+        var free = StudioRefit(bytes, "_sho", Yab, LavaBod, Other);
+        var held = StudioRefit(bytes, "_sho", Yab, LavaBod, Other, alsoHeld: skin);
+
+        foreach (int v in skin) Assert.Equal(default, held.Plan.Edit.DeltaAt(v));
+        float most = Enumerable.Range(0, parts.Positions.Length / 3).Where(v => !skin.Contains(v))
+                               .Max(v =>
+                               {
+                                   var a = held.Plan.Edit.DeltaAt(v);
+                                   var b = free.Plan.Edit.DeltaAt(v);
+                                   return new System.Numerics.Vector3(a.X - b.X, a.Y - b.Y, a.Z - b.Z).Length();
+                               });
+        output.WriteLine($"onto {held.Target.Label}: folded {held.Plan.Report.Folded} with the skin unticked, "
+                       + $"{free.Plan.Report.Folded} without; the rest moved at most {most * 1000f:F1} mm differently");
+        Assert.True(held.Plan.Report.Folded <= free.Plan.Report.Folded,
+                    $"unticking the skin folded {held.Plan.Report.Folded} triangles, {free.Plan.Report.Folded} without");
+    }
+
+    [LocalDataFact(Heartthrob, Bibo, Neolithe, Rue, Yab)]
+    [Trait("Plan", "AC-keep-ends-studio-1")]
+    public void Studio_path_equals_the_automatic_refit_when_options_match()   // [AC-keep-ends-studio-1]
+    {
+        // The Studio's plan with the automatic refit's settings — new skin only across body mods, nothing cleared, no
+        // hold of the user's and no other parts — is the automatic refit's plan, byte for byte.
+        var bodies = Bodies(Bibo, Neolithe, Rue, Yab);
+        var done = RefitHeartthrob("medium", bodies, bodies[1].Dir, NeolitheLegs);
+        var sourceCat = CatalogOf(bodies)(done.Decision.Source.Dir)!;
+        var targetCat = bodies[1].Catalog;
+        Assert.Null(KeepEnds.BuildPairs(done.Reading, sourceCat.PathOf(done.Decision.Source.Option),
+                                        targetCat.PathOf(done.Decision.Target), sourceCat.PathOf(done.Decision.EndFrom!),
+                                        targetCat.PathOf(done.Decision.EndTo!), false, _ => (null, null), s => s, null,
+                                        null, out var limb, out var end));
+        var studio = KeepEnds.Plan(done.Parts, done.Bytes, done.Reading, limb, end, replaceSkin: true, across: true,
+                                   clearBody: false, alsoHeld: null, extra: null);
+        Assert.Equal(done.Plan.Model, studio.Model);
+    }
+
+    private const string SeenGloves = LocalData.Mods + ":Seen - by Solona/common/8/c0201e0670_glv.mdl";
+
+    [LocalDataFact(SeenGloves, Rue, Yab)]
+    [Trait("Plan", "AC-keep-ends-studio-2")]
+    public void Studio_gloves_keep_their_hands_onto_another_body()   // [AC-keep-ends-studio-2]
+    {
+        // Rue+ to YAB+: one family's two bodies, whose arms correspond. (Neolithe to Bibo+ arms are refused outright.)
+        var bytes = File.ReadAllBytes(LocalData.Path(SeenGloves));
+        var done = StudioRefit(bytes, "_glv", Rue, Yab);
+        output.WriteLine($"route {KeepEnds.Letter(done.Read.Route)}, made for {done.From.Label}, onto {done.Target.Label}; "
+                       + $"{done.Reading.Ends.Count} hand vertices; folded {done.Plan.Report.Folded} (unheld "
+                       + $"{done.Unheld.Report.Folded}); moved up to {done.Plan.Report.WorstMove * 1000f:F1} mm");
+        Assert.Contains(done.Read.Route, new[] { KeepEnds.Route.Skin, KeepEnds.Route.Cloth });
+        Assert.Equal("_top", done.From.Slot);
+        Assert.NotEmpty(done.Reading.Ends);
+        foreach (int v in done.Reading.Ends) Assert.Equal(default, done.Plan.Edit.DeltaAt(v));
+        Assert.True(done.Plan.Report.Folded <= done.Unheld.Report.Folded);
+    }
+
+    [LocalDataFact(CleoGloves, Neolithe)]
+    [Trait("Plan", "EDGE-keep-ends-studio-5")]
+    public void Studio_gloves_across_one_bodys_chests_already_fit()   // [EDGE-keep-ends-studio-5]
+    {
+        // Every chest size of a body has the same arms: a glove read as one and aimed at another fits already.
+        var bytes = File.ReadAllBytes(LocalData.Path(CleoGloves));
+        var parts = ModelPartReader.Read(bytes)!;
+        var bones = BonesOf(bytes);
+        var neo = BodySizeCatalog.Read(LocalData.Path(Neolithe));
+        var reading = KeepEnds.Read("_glv", parts, bytes)!;
+        var read = KeepEnds.StudioLimb(reading, parts, bones, Race, Path.GetFileName(LocalData.Path(Neolithe)), neo);
+        var other = neo.For("_top", Race).First(o => !string.Equals(o.Rel, read.Pick!.Rel, StringComparison.OrdinalIgnoreCase)
+                                                     && o.Section == read.Pick.Section);
+        output.WriteLine($"read as {read.Pick!.Label}; compared with {other.Label}");
+        Assert.True(KeepEnds.SameShape(reading.LimbView, read.Pick!, other, neo, bones, read.Route == KeepEnds.Route.Cloth));
+
+        // And the tool says so: nothing planned, and "already fits" named for the size.
+        var input = new KeepEnds.StudioPlanInput(parts, bytes, "_glv", RefitCore.ShapePieces(parts, new HashSet<string>()),
+                                                 neo, neo, Race, false, read.Pick!, [other], SameBodyMod: true,
+                                                 FromCloth: read.Shown?.FromCloth == true, ReplaceSkin: true, Across: false,
+                                                 ClearBody: false, Held: null, Shared: null, _ => (null, null), s => s, "test");
+        var planned = KeepEnds.StudioPlan(input, (p, _) => p, null,
+                                          NSubstitute.Substitute.For<Dalamud.Plugin.Services.IPluginLog>());
+        Assert.Null(planned.Planned);
+        Assert.Equal(string.Format(Proteus.Localization.Strings.Parts.RetargetAlreadyFitsFmt, other.Label), planned.Notice);
+    }
+
+    [LocalDataFact(HellForLeather, Bibo, Neolithe)]
+    [Trait("Plan", "EDGE-keep-ends-studio-27")]
+    public void Studio_skinless_boot_with_legs_picked_by_hand_keeps_its_foot()   // [EDGE-keep-ends-studio-27]
+    {
+        // Leather from toe to thigh: nothing to read a body off (NoSkin), so the user picks the legs by hand. The refit
+        // then runs by them: the foot held, and no body skin brought into a boot that had none.
+        var bytes = File.ReadAllBytes(HellForLeatherModel("common/7/c0201e0380_sho.mdl"));
+        var parts = ModelPartReader.Read(bytes)!;
+        var bones = BonesOf(bytes);
+        var bibo = BodySizeCatalog.Read(LocalData.Path(Bibo));
+        var neo = BodySizeCatalog.Read(LocalData.Path(Neolithe));
+        var reading = KeepEnds.Read("_sho", parts, bytes, RefitCore.ShapePieces(parts, new HashSet<string>()))!;
+        Assert.Equal(KeepEnds.Route.NoSkin,
+                     KeepEnds.StudioLimb(reading, parts, bones, Race, Path.GetFileName(LocalData.Path(Bibo)), bibo).Route);
+
+        var from = bibo.For("_dwn", Race).First(o => o.Label.EndsWith("Medium", StringComparison.Ordinal));
+        var to = NeolitheLegs(neo);
+        var (endFrom, endTo) = KeepEnds.EndPair(bibo, neo, "_sho", Race, from, to);
+        Assert.Null(KeepEnds.BuildPairs(reading, bibo.PathOf(from), neo.PathOf(to),
+                                        endFrom == null ? null : bibo.PathOf(endFrom),
+                                        endTo == null ? null : neo.PathOf(endTo), false, _ => (null, null), s => s, null,
+                                        null, out var limb, out var end));
+        var plan = KeepEnds.Plan(parts, bytes, reading, limb, end, true, true, false, null, null);
+
+        output.WriteLine($"{reading.Ends.Count} foot vertices; swap {plan.Report.Swap}; moved up to "
+                       + $"{plan.Report.WorstMove * 1000f:F1} mm");
+        foreach (int v in reading.Ends) Assert.Equal(default, plan.Edit.DeltaAt(v));
+        Assert.Empty(SkinPositions(plan.Model));
+    }
+
+    [LocalDataFact(LocalData.GameData)]
+    [Trait("Plan", "EDGE-keep-ends-studio-10")]
+    public void Studio_game_boots_route_as_the_automatic_refit_does()   // [EDGE-keep-ends-studio-10]
+    {
+        var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));
+        string path = new[]
+        {
+            "chara/equipment/e0100/model/c0201e0100_sho.mdl", "chara/equipment/e0005/model/c0201e0005_sho.mdl",
+            "chara/equipment/e0036/model/c0201e0036_sho.mdl", "chara/equipment/e0001/model/c0201e0001_sho.mdl",
+        }.First(p => data.GetFile(p) != null);
+        var bytes = data.GetFile(path)!.Data;
+        var parts = ModelPartReader.Read(bytes)!;
+        var bones = BonesOf(bytes);
+        var vanilla = VanillaBodyCatalog.Read(Race, p => data.GetFile(p)?.Data);
+        var reading = KeepEnds.Read("_sho", parts, bytes)!;
+
+        var studio = KeepEnds.StudioLimb(reading, parts, bones, Race, VanillaBodyCatalog.Key, vanilla);
+        var auto = KeepEnds.Find(reading, parts, bones, Race, (_, s) => KeepEnds.VanillaPick(vanilla, s, Race),
+                                 _ => vanilla);
+        output.WriteLine($"{path}: Studio route {studio.Route}, automatic {auto.Route}");
+        Assert.Equal(auto.Route, studio.Route);
+        Assert.Equal(auto.Pick?.Option, studio.Pick);
+    }
+
+    [LocalDataFact(LocalData.GameData, Bibo)]
+    [Trait("Plan", "EDGE-keep-ends-studio-11")]
+    public void Studio_baked_boots_keep_their_feet()   // [EDGE-keep-ends-studio-11]
+    {
+        // A man's game boots baked onto a woman, as the panel bakes them, then refitted with the foot kept and drawn with
+        // the new body's skin.
+        var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));
+        var pbd = new XivLiveMesh.PbdFile(data.GetFile("chara/xls/boneDeformer/human.pbd")!.Data);
+        string path = new[]
+        {
+            "chara/equipment/e0100/model/c0101e0100_sho.mdl", "chara/equipment/e0005/model/c0101e0005_sho.mdl",
+            "chara/equipment/e0036/model/c0101e0036_sho.mdl", "chara/equipment/e0001/model/c0101e0001_sho.mdl",
+        }.First(p => data.GetFile(p) != null);
+        var baked = RacialModelBake.Bake(data.GetFile(path)!.Data, 101, 201, pbd, _ => null, out string why);
+        Assert.True(baked != null, why);
+        var parts = ModelPartReader.Read(baked!)!;
+        var bones = BonesOf(baked!);
+        var vanilla = VanillaBodyCatalog.Read(Race, p => data.GetFile(p)?.Data);
+        var reading = KeepEnds.Read("_sho", parts, baked!)!;
+        var read = KeepEnds.StudioLimb(reading, parts, bones, Race, VanillaBodyCatalog.Key, vanilla);
+        output.WriteLine($"{path}: route {read.Route}, {read.Pick?.Label}");
+        Assert.Contains(read.Route, new[] { KeepEnds.Route.Skin, KeepEnds.Route.Cloth });
+
+        var bibo = BodySizeCatalog.Read(LocalData.Path(Bibo));
+        var legs = bibo.For("_dwn", Race).First(o => o.Label.EndsWith("Medium", StringComparison.Ordinal));
+        var uv = new UVRemapService(NSubstitute.Substitute.For<Dalamud.Plugin.Services.IPluginLog>(), ".");
+        Assert.Null(KeepEnds.BuildPairs(reading, vanilla.PathOf(read.Pick!), bibo.PathOf(legs), null, null, false,
+                                        _ => (null, null), s => s, uv, null, out var limb, out _));
+        var plan = KeepEnds.Plan(parts, baked!, reading, limb, null, true, true, false, null, null);
+        plan = RefitCore.WithBodySkin(plan, bibo.PathOf(legs), NSubstitute.Substitute.For<Dalamud.Plugin.Services.IPluginLog>());
+        foreach (int v in reading.Ends) Assert.Equal(default, plan.Edit.DeltaAt(v));
+    }
+
+    [LocalDataFact(Bibo, Neolithe)]
+    [Trait("Plan", "AC-keep-ends-studio-4")]
+    public void Studio_shoe_reaching_no_leg_redraws_only_its_skin()   // [AC-keep-ends-studio-4]
+    {
+        // Bibo+'s own feet as a "shoe": all skin, nothing of the leg. Pointed at the men's Bibo skin (as Shift is), it
+        // is redrawn with Neolithe's; as Bibo+ ships them, there is nothing to change — unless it is being baked.
+        string feetPath = Path.Combine(LocalData.Path(Bibo), "feet", "small clothes", "chara", "equipment", "e0000",
+                                       "model", "c0201e0000_sho.mdl");
+        var plain = File.ReadAllBytes(feetPath);
+        var mens = ModelAttributeWriter.RenameMaterial(plain, "/mt_c0201b0001_bibo.mtrl", "/mt_c0101b0001_bibo.mtrl");
+        var bibo = BodySizeCatalog.Read(LocalData.Path(Bibo));
+        var neo = BodySizeCatalog.Read(LocalData.Path(Neolithe));
+        var parts = ModelPartReader.Read(mens)!;
+        var reading = KeepEnds.Read("_sho", parts, mens)!;
+        var read = KeepEnds.StudioLimb(reading, parts, BonesOf(mens), Race, Path.GetFileName(LocalData.Path(Bibo)), bibo);
+        Assert.Equal(KeepEnds.Route.SkinOnly, read.Route);
+        Assert.NotNull(read.Pick);
+        var end = AutoRefitDecisions.Companion(neo.For("_sho", Race), null, null)!;
+        var log = NSubstitute.Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
+
+        var redrawn = KeepEnds.StudioSkinOnly(mens, bibo.PathOf(read.Pick!), end, neo, false, baking: false, (p, _) => p,
+                                              null, log);
+        Assert.True(redrawn.Planned is { Count: 1 }, redrawn.Error + redrawn.Notice);
+        var model = redrawn.Planned![0].Planned.Model;
+        Assert.Equal(parts.Positions, ModelPartReader.Read(model)!.Positions);   // its shape, untouched
+        Assert.DoesNotContain("/mt_c0101b0001_bibo.mtrl", SecondSkinWriter.Parse(model).MatNames);
+        Assert.Contains("/mt_c0201b0001_bibo.mtrl", SecondSkinWriter.Parse(model).MatNames);
+
+        var same = KeepEnds.StudioSkinOnly(plain, bibo.PathOf(read.Pick!), end, neo, false, baking: false, (p, _) => p,
+                                           null, log);
+        Assert.Null(same.Planned);
+        Assert.Equal(Proteus.Localization.Strings.Parts.RetargetSkinAlreadyMatches, same.Notice);
+        var baked = KeepEnds.StudioSkinOnly(plain, bibo.PathOf(read.Pick!), end, neo, false, baking: true, (p, _) => p,
+                                            null, log);
+        Assert.True(baked.Planned is { Count: 1 });
     }
 
     // ── reading the legs alone ───────────────────────────────────────────────────────────────────────────

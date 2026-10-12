@@ -212,27 +212,26 @@ public sealed partial class AutoRefitWatcher
         ushort? TargetMask(string s) => RefitCore.MaskOf(targetMod.Dir, targetCat, s, OptionsOf(g.Settings, targetMod.Dir));
 
         string sourcePath = sourceCat.PathOf(pick.Option), targetPath = targetCat.PathOf(refit.Target);
-        if (BodyRetarget.BuildPair(limb, sourcePath, targetPath, SlotName(limb), j.Male, SourceMask(limb), TargetMask(limb),
-                                   uvRemap, out var limbPair) is { } refusal)
+        // The feet or hands, for their shape only: they run up the shin or forearm, under the stocking or sleeve.
+        bool withEnd = refit is { EndFrom: not null, EndTo: not null };
+        if (KeepEnds.BuildPairs(reading, sourcePath, targetPath,
+                                withEnd ? sourceCat.PathOf(refit.EndFrom!) : null,
+                                withEnd ? targetCat.PathOf(refit.EndTo!) : null,
+                                j.Male, s => (SourceMask(s), TargetMask(s)), SlotName, uvRemap,
+                                why => log.Information("[Proteus] auto refit: {0} refitted without the {1}' shape: {2}",
+                                                       item, feet ? "feet" : "hands", why),
+                                out var limbPair, out var endPair) is { } refusal)
         {
             Fail(j.R, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"),
                                     item, refusal));
             return null;
         }
-        // The feet or hands, for their shape only: they run up the shin or forearm, under the stocking or sleeve.
-        BodyRetarget.SlotPair? endPair = null;
-        if (refit is { EndFrom: { } endFrom, EndTo: { } endTo })
-        {
-            if (BodyRetarget.BuildPair(slot, sourceCat.PathOf(endFrom), targetCat.PathOf(endTo), SlotName(slot), j.Male,
-                                       SourceMask(slot), TargetMask(slot), uvRemap, out var shape) is { } why)
-                log.Information("[Proteus] auto refit: {0} refitted without the {1}' shape: {2}", item,
-                                feet ? "feet" : "hands", why);
-            else endPair = shape;
-        }
         ct.ThrowIfCancellationRequested();
 
         AssertOffFramework("the refit");
-        var plan = KeepEnds.Plan(j.Garment, j.Bytes, reading, limbPair, endPair, across);
+        var plan = KeepEnds.Plan(j.Garment, j.Bytes, reading, limbPair, endPair, across,
+                                 line => log.Debug("[Proteus] auto refit: {0}", line),
+                                 line => log.Warning("[Proteus] auto refit: {0}", line));
         plan = RefitCore.MatchSkinToBody(plan, sourcePath, targetPath, uvRemap, j.Male, log);
         if (j.BakeTo != 0) plan = RefitCore.WithBodySkin(plan, targetPath, log);
         ct.ThrowIfCancellationRequested();

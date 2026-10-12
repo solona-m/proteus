@@ -3759,6 +3759,54 @@
     "message": "Omet la nouvelle peau là où l'auteur a supprimé la sienne, en général sous le tissu.\nDésactivez si l'ajustement laisse des trous.",
     "description": ""
   },
+  "Parts.Retarget.CutForcedTip": {
+    "message": "Toujours actif tant que la chaussure garde son propre pied ou le gant sa propre main : sinon les nouvelles jambes ou les nouveaux bras entiers seraient ajoutés avec.",
+    "description": ""
+  },
+  "Parts.Retarget.KeepFeet": {
+    "message": "Garder ses propres pieds",
+    "description": ""
+  },
+  "Parts.Retarget.KeepFeet.Tip": {
+    "message": "Le pied reste exactement tel que son auteur l'a fait, talon compris ; seule la jambe que la chaussure atteint est réajustée, à la taille des jambes. Décochez pour réajuster toute la chaussure, pieds compris, comme avant.",
+    "description": ""
+  },
+  "Parts.Retarget.KeepHands": {
+    "message": "Garder ses propres mains",
+    "description": ""
+  },
+  "Parts.Retarget.KeepHands.Tip": {
+    "message": "La main reste exactement telle que son auteur l'a faite ; seul le bras que le gant atteint est réajusté, à la taille du buste. Décochez pour réajuster tout le gant, mains comprises, comme avant.",
+    "description": ""
+  },
+  "Parts.Retarget.NoLimbFeet": {
+    "message": "Cette chaussure n'atteint aucune jambe : elle garde sa forme, et seule sa peau est dessinée comme celle du nouveau corps. Choisissez quand même une taille de jambes pour la réajuster d'après elle.",
+    "description": ""
+  },
+  "Parts.Retarget.NoLimbHands": {
+    "message": "Ces gants n'atteignent aucun bras : ils gardent leur forme, et seule leur peau est dessinée comme celle du nouveau corps. Choisissez quand même une taille de buste pour les réajuster d'après elle.",
+    "description": ""
+  },
+  "Parts.Retarget.SkinAlreadyMatches": {
+    "message": "Rien à changer : sa peau est déjà dessinée comme celle du nouveau corps.",
+    "description": ""
+  },
+  "Parts.Retarget.AlreadyFits.Fmt": {
+    "message": "Rien à changer : là où la pièce arrive, {0} a la même forme que la taille pour laquelle elle a été faite.",
+    "description": ""
+  },
+  "Parts.Retarget.EndsUnreadable": {
+    "message": "Son rig est illisible, on ne peut donc pas distinguer le pied ou la main du reste : toute la pièce est réajustée.",
+    "description": ""
+  },
+  "Parts.Retarget.NoLegsInBody.Fmt": {
+    "message": "{0} n'a pas de jambes d'après lesquelles réajuster, toute la pièce est donc réajustée.",
+    "description": ""
+  },
+  "Parts.Retarget.NoChestInBody.Fmt": {
+    "message": "{0} n'a pas de torse d'après lequel réajuster, toute la pièce est donc réajustée.",
+    "description": ""
+  },
   "Parts.Retarget.NeedFromRequired.Fmt": {
     "message": "{0} : choisissez la taille d'origine.",
     "description": ""
@@ -4668,7 +4716,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "Ajoute à tout ce mod chaque taille des corps cochés ci-dessous. Chaque pièce de torse et de jambes est réajustée à partir de la première taille de l'auteur et enregistrée à côté de ses tailles sous « Rue S », « YAB Buff L », etc. Les tailles que le mod possède déjà ne sont pas touchées.",
+    "message": "Ajoute à tout ce mod chaque taille des corps cochés ci-dessous. Chaque pièce de torse, de jambes, de chaussures et de gants est réajustée à partir de la première taille de l'auteur et enregistrée à côté de ses tailles sous « Rue S », « YAB Buff L », etc. Les tailles que le mod possède déjà ne sont pas touchées.",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -4677,6 +4725,18 @@
   },
   "SizeSet.Yas.Tip": {
     "message": "Rue, YAB et Tre existent en versions Yet Another Skeleton. Neolithe et Bibo non, et gardent leurs tailles normales. Une pièce déjà pondérée pour YAS reçoit toujours des tailles YAS.",
+    "description": ""
+  },
+  "SizeSet.Ends": {
+    "message": "Inclure les chaussures et les gants",
+    "description": ""
+  },
+  "SizeSet.Ends.Tip": {
+    "message": "Les chaussures et les gants gardent leurs propres pieds et mains ; seule la jambe ou le bras qu'ils atteignent est réajusté. Les chaussures reçoivent les tailles des jambes, les gants une option par corps, et tous deux rejoignent les tailles de buste ou de jambes de la tenue quand ils partagent un groupe.",
+    "description": ""
+  },
+  "SizeSet.EndsUnreadable.Fmt": {
+    "message": "{0} : son rig est illisible, le pied ou la main ne peut donc pas être gardé et aucune taille n'en a été faite.",
     "description": ""
   },
   "SizeSet.Remake": {
@@ -4724,11 +4784,15 @@
     "description": ""
   },
   "SizeSet.NoPieces": {
-    "message": "Ce mod n'a aucun modèle de torse ou de jambes dont faire des tailles.",
+    "message": "Ce mod n'a aucun modèle de torse, de jambes, de chaussures ou de gants dont faire des tailles.",
     "description": ""
   },
   "SizeSet.NoBodies": {
     "message": "Aucun mod de corps n'est installé vers lequel réajuster.",
+    "description": ""
+  },
+  "SizeSet.Unpaired.Fmt": {
+    "message": "{0} : sa taille se choisit dans un même groupe qu'une autre pièce qu'il ne peut pas suivre, aucune taille n'en a donc été faite — chaque taille porterait l'autre pièce sans réajustement.",
     "description": ""
   },
   "SizeSet.PieceFailed.Fmt": {

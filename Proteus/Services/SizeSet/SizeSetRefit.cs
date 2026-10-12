@@ -21,8 +21,11 @@ namespace Proteus.Services;
 /// previous run made — is left as it is.
 /// <para/>
 /// No UI and no IPC: everything here reads and writes files, on a worker. The caller tells Penumbra afterwards.
+/// <para/>
+/// Shoes and gloves are pieces too, when asked for (<see cref="Request.Ends"/>): sized by their legs or arms with the foot
+/// or hand kept exactly, as the automatic refit does them (see <c>SizeSetRefit.Ends.cs</c>).
 /// </summary>
-internal static class SizeSetRefit
+internal static partial class SizeSetRefit
 {
     /// <param name="ModRoot">The mod's folder.</param>
     /// <param name="Keys">The bodies ticked (<see cref="SupportedBodies.Choices"/>).</param>
@@ -32,8 +35,14 @@ internal static class SizeSetRefit
     /// <param name="Bodies">The installed body mods.</param>
     /// <param name="ReadGameFile">Reads a game path from the game's own data, to tell the game's models a mod merely
     /// ships apart from the author's (see <see cref="PiecesOf"/>); null takes every model as the author's.</param>
+    /// <param name="Ends">Make sizes of the mod's shoes and gloves too. Off, the mod's chest and legs alone, as before.</param>
+    /// <param name="GameBody">The game's own body for a race (<see cref="VanillaBodyCatalog"/>), read on the framework
+    /// thread before the run: a shoe or glove may have been made on it, and is searched for there last, after the
+    /// installed body mods, as the automatic refit searches. Null, or a race without one, offers no game body. Chest and
+    /// legs are never read off it.</param>
     internal sealed record Request(string ModRoot, IReadOnlyList<string> Keys, bool Yas, bool Remake,
-                                   IReadOnlyList<BodyModIndex.Entry> Bodies, Func<string, byte[]?>? ReadGameFile = null);
+                                   IReadOnlyList<BodyModIndex.Entry> Bodies, Func<string, byte[]?>? ReadGameFile = null,
+                                   bool Ends = true, Func<string, BodySizeCatalog?>? GameBody = null);
 
     /// <param name="Made">Sizes saved.</param>
     /// <param name="Notes">Every size left out, and why — for the author to read.</param>
@@ -44,8 +53,11 @@ internal static class SizeSetRefit
     /// every other race of the sex falls back to. The body itself (<c>e0000</c>) is not an outfit and is never one of a
     /// mod's pieces.
     /// </summary>
-    private static readonly Regex PiecePath = new(@"^chara/equipment/e(?!0000)\d{4}/model/c(0101|0201)e\d{4}_(top|dwn)\.mdl$",
+    private static readonly Regex PiecePath = new(@"^chara/equipment/e(?!0000)\d{4}/model/c(0101|0201)e\d{4}_(top|dwn|sho|glv)\.mdl$",
                                                   RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>A shoe or glove: a piece that keeps its own foot or hand and is sized by its legs or arms.</summary>
+    private static bool IsEnd(string slot) => AutoRefitDecisions.LimbOf(slot) != null;
 
     /// <summary>One model of the mod to make sizes of.</summary>
     /// <param name="GamePath">Where it is drawn.</param>
@@ -62,9 +74,18 @@ internal static class SizeSetRefit
     /// chest's, so one choice in the group dresses both. Sized by the legs table instead ("Rue WC"), the chest and the
     /// legs became separate options and either one wore the other half unrefitted.
     /// </param>
+    /// <param name="FollowsLegs">
+    /// A shoe whose size group switches a legs model of the same race but no chest: it joins the options the legs made
+    /// ("Rue WC"), so one choice dresses both. A shoe or glove in a group with a chest follows the chest instead.
+    /// </param>
+    /// <param name="Unpaired">
+    /// A shoe or glove sized in one group with a piece of its race, of another slot, it cannot follow — gloves beside legs, or a shoe
+    /// and gloves with no chest or legs. Each would add sizes of its own to the group, every one wearing the other piece
+    /// unrefitted, so it gets no sizes, and a note.
+    /// </param>
     internal sealed record Piece(string GamePath, string Slot, string? Group,
                                  IReadOnlyList<(string? Option, string File)> Options, string Label, string GroupName,
-                                 string Race, bool FollowsChest = false);
+                                 string Race, bool FollowsChest = false, bool FollowsLegs = false, bool Unpaired = false);
 
     /// <summary>
     /// The chest and legs models of a mod, each with the group its sizes are switched in. A model only a refit of ours
@@ -75,7 +96,8 @@ internal static class SizeSetRefit
     /// gambison, re-saved — and taking that for a men's piece offered TBSE sizes of a garment its author never made.
     /// </summary>
     /// <param name="readGameFile">The game's own copy of a game path; null takes every model as the author's.</param>
-    internal static List<Piece> PiecesOf(string modRoot, Func<string, byte[]?>? readGameFile = null)
+    /// <param name="includeEnds">Shoes and gloves too (see <see cref="Request.Ends"/>).</param>
+    internal static List<Piece> PiecesOf(string modRoot, Func<string, byte[]?>? readGameFile = null, bool includeEnds = true)
     {
         var redirects = PenumbraModMeta.ReadAllRedirects(modRoot);
         var record = BodyRetargetWriter.ReadRecord(modRoot);
@@ -83,7 +105,8 @@ internal static class SizeSetRefit
         var single = RefitCore.SingleGroups(modRoot);
         var pieces = new List<Piece>();
 
-        foreach (var byPath in redirects.Where(r => PiecePath.IsMatch(r.GamePath))
+        foreach (var byPath in redirects.Where(r => PiecePath.IsMatch(r.GamePath)
+                                                    && (includeEnds || !IsEnd(BodySizeCatalog.SlotOf(r.GamePath)!)))
                                         .GroupBy(r => r.GamePath.ToLowerInvariant()))
         {
             var authors = byPath.Where(r => !ourFiles.Contains(RefitCore.Normal(r.File))
@@ -116,13 +139,21 @@ internal static class SizeSetRefit
                                  BodySizeCatalog.RaceOf(gamePath)!));
         }
 
-        // Legs sized in the same group as a chest of their race follow the chest's sizes. Chests first, so the options
-        // the legs go into are already there, named and placed by the chest.
-        return pieces.OrderBy(p => p.Slot == "_dwn").Select(p => p.Slot == "_dwn" && p.Group != null
-                                  && pieces.Any(c => c.Slot == "_top" && c.Race == p.Race
-                                                     && string.Equals(c.Group, p.Group, StringComparison.OrdinalIgnoreCase))
-                                      ? p with { FollowsChest = true }
-                                      : p)
+        // Legs sized in the same group as a chest of their race follow the chest's sizes, and a shoe or glove follows the
+        // chest — or, a shoe, the legs — it is sized with. Chests first, then legs, then shoes and gloves, so the options a
+        // follower goes into are already there, named and placed by what it follows.
+        bool SharesGroup(Piece p, string slot)
+            => p.Group != null && pieces.Any(c => c.Slot == slot && c.Race == p.Race
+                                                  && string.Equals(c.Group, p.Group, StringComparison.OrdinalIgnoreCase));
+        // A piece of another slot: two shoes (or two gloves) in one group are sized alike and share their options.
+        bool SharesWithAnother(Piece p)
+            => p.Group != null && pieces.Any(c => c.Slot != p.Slot && c.Race == p.Race
+                                                  && string.Equals(c.Group, p.Group, StringComparison.OrdinalIgnoreCase));
+        return pieces.OrderBy(p => p.Slot switch { "_top" => 0, "_dwn" => 1, _ => 2 })
+                     .Select(p => (p.Slot == "_dwn" || IsEnd(p.Slot)) && SharesGroup(p, "_top") ? p with { FollowsChest = true }
+                                : p.Slot == "_sho" && SharesGroup(p, "_dwn") ? p with { FollowsLegs = true }
+                                : IsEnd(p.Slot) && SharesWithAnother(p) ? p with { Unpaired = true }
+                                : p)
                      .ToList();
     }
 
@@ -158,7 +189,7 @@ internal static class SizeSetRefit
     {
         var notes = new List<string>();
         int made = 0;
-        var pieces = PiecesOf(request.ModRoot, request.ReadGameFile);
+        var pieces = PiecesOf(request.ModRoot, request.ReadGameFile, request.Ends);
         if (pieces.Count == 0)
         {
             notes.Add(Strings.SizeSet.NoPieces);
@@ -170,7 +201,8 @@ internal static class SizeSetRefit
             ct.ThrowIfCancellationRequested();
             try
             {
-                made += RunPiece(request, piece, uvRemap, log, progress, notes, ct);
+                made += IsEnd(piece.Slot) ? RunEndsPiece(request, piece, uvRemap, log, progress, notes, ct)
+                                          : RunPiece(request, piece, uvRemap, log, progress, notes, ct);
             }
             catch (OperationCanceledException)
             {
@@ -189,7 +221,6 @@ internal static class SizeSetRefit
                                 Action<string> progress, List<string> notes, CancellationToken ct)
     {
         string root = request.ModRoot;
-        var record = BodyRetargetWriter.ReadRecord(root);
         string race = piece.Race;
         bool male = BodySizeCatalog.IsMaleRace(race);
         // The table its sizes come from: its own slot's, or the chest's for legs that follow it.
@@ -253,30 +284,13 @@ internal static class SizeSetRefit
         }
 
         // ── where the sizes go ──
-        string group = piece.Group ?? piece.GroupName;
-        var existing = (PenumbraModMeta.TryReadFileOptions(root, group) ?? []).Select(o => o.Name)
-                                                                              .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var inGroup = (record?.Options ?? []).Where(e => string.Equals(record!.GroupOf(e), group,
-                                                                       StringComparison.OrdinalIgnoreCase)).ToList();
-        var ours = inGroup.Select(e => e.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        // Which of ours already carry a refit of THIS model. An option of ours without one is one the outfit's other piece
-        // made — "Rue S" saved for the chest, still wearing the author's legs — and this piece's refit goes into it.
-        var doneHere = inGroup.Where(e => string.Equals(e.GamePath, piece.GamePath, StringComparison.OrdinalIgnoreCase))
-                              .Select(e => e.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var authorSizes = AuthorSizes(root, piece, ours);
-
-        // A group of our own is rewritten whole by every save, which selects the size saved last by default: a fresh
-        // install, or a pack exported from here, would then draw "Bibo L" instead of the author's model. Its default is
-        // put back afterwards — what it was, or "Original" for a group this run makes. The author's group is only added
-        // to, and keeps its default untouched.
-        bool authorGroup = BodyRetargetWriter.IsAuthorGroup(root, group);
-        string defaultBefore = PenumbraModMeta.SingleDefault(root, group) ?? BodyRetargetWriter.OriginalOption;
+        using var group = new SizeGroup(root, piece);
+        var authorSizes = AuthorSizes(root, piece, group.Ours);
 
         bool yas = request.Yas || SupportedBodies.IsYas(src.Bones);
         var pieces = RefitCore.ShapePieces(src.Garment, RefitCore.DefaultKeepShape(src.Garment), out var pieceNames);
         ushort? sourceMask = RefitCore.MaskOf(src.Pick.Dir, sourceCat, piece.Slot, null);
         ushort? sourceLegsMask = RefitCore.MaskOf(src.Pick.Dir, sourceCat, "_dwn", null);
-        int saved = 0;
 
         foreach (string key in request.Keys)
         {
@@ -296,9 +310,7 @@ internal static class SizeSetRefit
             {
                 ct.ThrowIfCancellationRequested();
                 string option = SupportedBodies.OptionName(body, size);
-                // The author's option of that name is theirs; one of ours is done when it carries this model, and made
-                // again only when asked.
-                if (existing.Contains(option) && (!ours.Contains(option) || (doneHere.Contains(option) && !request.Remake)))
+                if (group.AlreadyThere(option, request.Remake))
                 {
                     log.Information("[Proteus] size set: {0}: \"{1}\" already there", piece.Label, option);
                     continue;
@@ -306,7 +318,7 @@ internal static class SizeSetRefit
                 // Legs following the chest only join a size the chest made. One it did not — the author already has it
                 // under another name, or the pair was refused — made here would wear refitted legs under the author's
                 // unrefitted chest, copied in from the option the legs were cut from.
-                if (piece.FollowsChest && !ours.Contains(option))
+                if (piece.FollowsChest && !group.Ours.Contains(option))
                 {
                     log.Information("[Proteus] size set: {0}: no \"{1}\" of the chest's to join", piece.Label, option);
                     continue;
@@ -383,24 +395,107 @@ internal static class SizeSetRefit
                                     piece.Label, option, released);
             }
             if (refits.Count == 0) continue;
+            group.Save(target.Dir, RefitCore.LabelFrom(across ? sourceEntry.Name : null, [src.Pick.Option.Label]), refits,
+                       src.Option, notes);
+        }
+        group.RestoreDefault();
+        return group.Saved;
+    }
 
-            // One save per body mod: the record names the body each size was made for.
-            string from = RefitCore.LabelFrom(across ? sourceEntry.Name : null, [src.Pick.Option.Label]);
-            var outcome = BodyRetargetWriter.Save(root, group, piece.GamePath, target.Dir, from, refits,
-                                                  piece.Group != null ? src.Option : null,
+    /// <summary>
+    /// The group a piece's sizes go into: which options are there, which are ours, which already carry this piece, and
+    /// the default to put back. One for every piece, chest, legs, shoe or glove alike. Disposed, it puts the default of a
+    /// group of ours back — however the piece ends, cancelled or failed partway included.
+    /// </summary>
+    private sealed class SizeGroup : IDisposable
+    {
+        private readonly string root;
+        private readonly Piece piece;
+        private readonly HashSet<string> existing;
+        private readonly HashSet<string> ours;
+        private readonly HashSet<string> doneHere;
+        private readonly bool authorGroup;
+        private readonly string defaultBefore;
+
+        internal string Name { get; }
+        /// <summary>Options of ours in the group: the sizes this piece, or the outfit's other pieces, were saved into.</summary>
+        internal IReadOnlySet<string> Ours => ours;
+        internal int Saved { get; private set; }
+
+        internal SizeGroup(string root, Piece piece)
+        {
+            this.root = root;
+            this.piece = piece;
+            var record = BodyRetargetWriter.ReadRecord(root);
+            Name = piece.Group ?? piece.GroupName;
+            existing = (PenumbraModMeta.TryReadFileOptions(root, Name) ?? []).Select(o => o.Name)
+                                                                            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var inGroup = (record?.Options ?? []).Where(e => string.Equals(record!.GroupOf(e), Name,
+                                                                           StringComparison.OrdinalIgnoreCase)).ToList();
+            ours = inGroup.Select(e => e.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            // Which of ours already carry a refit of THIS model. An option of ours without one is one the outfit's other
+            // piece made — "Rue S" saved for the chest, still wearing the author's legs — and this piece's refit goes into it.
+            doneHere = inGroup.Where(e => string.Equals(e.GamePath, piece.GamePath, StringComparison.OrdinalIgnoreCase))
+                              .Select(e => e.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            // A group of our own is rewritten whole by every save, which selects the size saved last by default: a fresh
+            // install, or a pack exported from here, would then draw "Bibo L" instead of the author's model. Its default
+            // is put back afterwards — what it was, or "Original" for a group this run makes. The author's group is only
+            // added to, and keeps its default untouched.
+            authorGroup = BodyRetargetWriter.IsAuthorGroup(root, Name);
+            defaultBefore = PenumbraModMeta.SingleDefault(root, Name) ?? BodyRetargetWriter.OriginalOption;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="option"/> is already there: the author's option of that name is theirs; one of ours is
+        /// done when it carries this model, and made again only when asked.
+        /// </summary>
+        internal bool AlreadyThere(string option, bool remake)
+            => existing.Contains(option) && (!ours.Contains(option) || (doneHere.Contains(option) && !remake));
+
+        /// <summary>One save per body mod: the record names the body each size was made for. False, noted, on failure.</summary>
+        internal bool Save(string targetDir, string from, List<BodyRetargetWriter.Refit> refits, string? sourceOption,
+                           List<string> notes)
+        {
+            var outcome = BodyRetargetWriter.Save(root, Name, piece.GamePath, targetDir, from, refits,
+                                                  piece.Group != null ? sourceOption : null,
                                                   fromGame: RefitCore.IsGameGear(root, piece.GamePath));
             if (!outcome.Ok)
             {
                 notes.Add(string.Format(Strings.SizeSet.SaveFailedFmt, piece.Label, outcome.Message));
-                continue;
+                return false;
             }
-            saved += refits.Count;
+            Saved += refits.Count;
             existing.UnionWith(refits.Select(r => r.Option));
             ours.UnionWith(refits.Select(r => r.Option));
             doneHere.UnionWith(refits.Select(r => r.Option));
+            return true;
         }
-        if (saved > 0 && !authorGroup) PenumbraModMeta.SetSingleDefault(root, group, defaultBefore);
-        return saved;
+
+        private bool restored;
+
+        /// <summary>
+        /// Put a group of our own's default back once the run saved into it — at the end of a piece that finished, where a
+        /// failure to is the piece's failure and reported as one.
+        /// </summary>
+        internal void RestoreDefault()
+        {
+            restored = true;
+            if (Saved > 0 && !authorGroup) PenumbraModMeta.SetSingleDefault(root, Name, defaultBefore);
+        }
+
+        /// <summary>The same for a piece that did not finish: cancelled, or failed partway.</summary>
+        public void Dispose()
+        {
+            if (restored) return;
+            try
+            {
+                RestoreDefault();
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // Not over what ended the piece — a cancel, or the failure the run reports. The sizes saved stand.
+            }
+        }
     }
 
     /// <summary>Whether a ticked body has sizes for a piece of this slot and race.</summary>
@@ -415,8 +510,9 @@ internal static class SizeSetRefit
     /// Neolithe's sizes are YAS-free whatever is asked (the table has none), and a garment made on a Neolithe install
     /// takes its sizes from that same install — a second copy of the pack must not be refitted onto from the first.
     /// </summary>
+    /// <param name="source">The body mod the piece was made on; null for the game's own body, which is no family's.</param>
     private static (SupportedBodies.Body? Body, BodyModIndex.Entry? Mod) BodyFor(string key, string slot, bool yas,
-        IReadOnlyList<BodyModIndex.Entry> installed, BodyModIndex.Entry source, List<string> notes, string piece)
+        IReadOnlyList<BodyModIndex.Entry> installed, BodyModIndex.Entry? source, List<string> notes, string piece)
     {
         var plain = SupportedBodies.Of(key, slot, false);
         var yasBody = SupportedBodies.Of(key, slot, true);
@@ -425,7 +521,7 @@ internal static class SizeSetRefit
         var order = yas ? new[] { yasBody, plain } : [plain, yasBody];
         foreach (var body in order.OfType<SupportedBodies.Body>())
         {
-            if (body.Family && SupportedBodies.Find(body, [source]) != null) return (body, source);
+            if (body.Family && source != null && SupportedBodies.Find(body, [source]) != null) return (body, source);
             if (SupportedBodies.Find(body, installed) is { } mod) return (body, mod);
         }
 
@@ -485,5 +581,11 @@ internal static class SizeSetRefit
         return options.FirstOrDefault(o => RefitCore.Normal(o.Rel) == want);
     }
 
-    private static string SlotName(string slot) => slot == "_dwn" ? Strings.Parts.RetargetLegs : Strings.Parts.RetargetChest;
+    private static string SlotName(string slot) => slot switch
+    {
+        "_dwn" => Strings.Parts.RetargetLegs,
+        "_sho" => Strings.Parts.RetargetFeet,
+        "_glv" => Strings.Parts.RetargetHands,
+        _ => Strings.Parts.RetargetChest,
+    };
 }

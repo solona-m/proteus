@@ -3759,6 +3759,54 @@
     "message": "Lässt die neue Haut dort weg, wo der Autor seine gelöscht hat, meist unter Stoff.\nAusschalten, wenn die Anpassung Löcher hinterlässt.",
     "description": ""
   },
+  "Parts.Retarget.CutForcedTip": {
+    "message": "Immer an, solange der Schuh seinen eigenen Fuß oder der Handschuh seine eigene Hand behält: sonst kämen die ganzen neuen Beine oder Arme mit hinein.",
+    "description": ""
+  },
+  "Parts.Retarget.KeepFeet": {
+    "message": "Eigene Füße behalten",
+    "description": ""
+  },
+  "Parts.Retarget.KeepFeet.Tip": {
+    "message": "Der Fuß bleibt genau so, wie sein Autor ihn gemacht hat, samt Absatz; angepasst wird nur das Bein, das der Schuh erreicht, und die Größe kommt von den Beinen. Abwählen, um wie bisher den ganzen Schuh samt Füßen anzupassen.",
+    "description": ""
+  },
+  "Parts.Retarget.KeepHands": {
+    "message": "Eigene Hände behalten",
+    "description": ""
+  },
+  "Parts.Retarget.KeepHands.Tip": {
+    "message": "Die Hand bleibt genau so, wie ihr Autor sie gemacht hat; angepasst wird nur der Arm, den der Handschuh erreicht, und die Größe kommt von der Brust. Abwählen, um wie bisher den ganzen Handschuh samt Händen anzupassen.",
+    "description": ""
+  },
+  "Parts.Retarget.NoLimbFeet": {
+    "message": "Dieser Schuh erreicht kein Bein: Er behält seine Form, nur seine Haut wird wie die des neuen Körpers gezeichnet. Wähle trotzdem eine Beingröße, um ihn danach anzupassen.",
+    "description": ""
+  },
+  "Parts.Retarget.NoLimbHands": {
+    "message": "Diese Handschuhe erreichen keinen Arm: Sie behalten ihre Form, nur ihre Haut wird wie die des neuen Körpers gezeichnet. Wähle trotzdem eine Brustgröße, um sie danach anzupassen.",
+    "description": ""
+  },
+  "Parts.Retarget.SkinAlreadyMatches": {
+    "message": "Nichts zu ändern: Die Haut wird schon so gezeichnet wie die des neuen Körpers.",
+    "description": ""
+  },
+  "Parts.Retarget.AlreadyFits.Fmt": {
+    "message": "Nichts zu ändern: Wo das Teil hinreicht, hat {0} dieselbe Form wie die Größe, für die es gemacht wurde.",
+    "description": ""
+  },
+  "Parts.Retarget.EndsUnreadable": {
+    "message": "Sein Rig lässt sich nicht lesen, also ist Fuß oder Hand nicht vom Rest zu unterscheiden: Das ganze Teil wird angepasst.",
+    "description": ""
+  },
+  "Parts.Retarget.NoLegsInBody.Fmt": {
+    "message": "{0} hat keine Beine zum Anpassen, also wird das ganze Teil angepasst.",
+    "description": ""
+  },
+  "Parts.Retarget.NoChestInBody.Fmt": {
+    "message": "{0} hat keine Brust zum Anpassen, also wird das ganze Teil angepasst.",
+    "description": ""
+  },
   "Parts.Retarget.NeedFromRequired.Fmt": {
     "message": "{0}: wähle die Größe, für die es gemacht wurde.",
     "description": ""
@@ -4668,7 +4716,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "Fügt dem ganzen Mod jede Größe der unten angehakten Körper hinzu. Jedes Brust- und Beinteil wird von der ersten Größe des Autors aus angepasst und neben dessen Größen als „Rue S“, „YAB Buff L“ usw. gespeichert. Größen, die der Mod schon hat, bleiben unberührt.",
+    "message": "Fügt dem ganzen Mod jede Größe der unten angehakten Körper hinzu. Jedes Brust-, Bein-, Schuh- und Handschuhteil wird von der ersten Größe des Autors aus angepasst und neben dessen Größen als „Rue S“, „YAB Buff L“ usw. gespeichert. Größen, die der Mod schon hat, bleiben unberührt.",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -4677,6 +4725,18 @@
   },
   "SizeSet.Yas.Tip": {
     "message": "Rue, YAB und Tre gibt es in Yet-Another-Skeleton-Versionen. Neolithe und Bibo nicht – sie behalten ihre normalen Größen. Ein Teil, das schon auf YAS gewichtet ist, bekommt immer YAS-Größen.",
+    "description": ""
+  },
+  "SizeSet.Ends": {
+    "message": "Schuhe und Handschuhe einbeziehen",
+    "description": ""
+  },
+  "SizeSet.Ends.Tip": {
+    "message": "Schuhe und Handschuhe behalten ihre eigenen Füße und Hände; angepasst wird nur das Bein oder der Arm, den sie erreichen. Schuhe bekommen die Größen der Beine, Handschuhe eine Option pro Körper, und beide schließen sich den Brust- oder Beingrößen des Outfits an, wenn sie eine Gruppe teilen.",
+    "description": ""
+  },
+  "SizeSet.EndsUnreadable.Fmt": {
+    "message": "{0}: Sein Rig lässt sich nicht lesen, also kann Fuß oder Hand nicht behalten werden und es wurden keine Größen davon gemacht.",
     "description": ""
   },
   "SizeSet.Remake": {
@@ -4724,11 +4784,15 @@
     "description": ""
   },
   "SizeSet.NoPieces": {
-    "message": "Dieser Mod hat keine Brust- oder Beinmodelle, von denen Größen erstellt werden könnten.",
+    "message": "Dieser Mod hat keine Brust-, Bein-, Schuh- oder Handschuhmodelle, von denen Größen erstellt werden könnten.",
     "description": ""
   },
   "SizeSet.NoBodies": {
     "message": "Es sind keine Körper-Mods installiert, auf die angepasst werden könnte.",
+    "description": ""
+  },
+  "SizeSet.Unpaired.Fmt": {
+    "message": "{0}: Es wird in einer Gruppe mit einem anderen Teil in der Größe gewählt, dem es nicht folgen kann, daher wurden keine Größen davon erstellt — jede Größe trüge das andere Teil unangepasst.",
     "description": ""
   },
   "SizeSet.PieceFailed.Fmt": {

@@ -3759,6 +3759,54 @@
     "message": "Omite la piel nueva donde el autor borró la suya, normalmente bajo la tela.\nDesactívalo si el ajuste deja huecos.",
     "description": ""
   },
+  "Parts.Retarget.CutForcedTip": {
+    "message": "Siempre activado mientras el zapato conserva su propio pie o el guante su propia mano: si no, entrarían con él las piernas o los brazos nuevos enteros.",
+    "description": ""
+  },
+  "Parts.Retarget.KeepFeet": {
+    "message": "Conservar sus propios pies",
+    "description": ""
+  },
+  "Parts.Retarget.KeepFeet.Tip": {
+    "message": "El pie se queda exactamente como lo hizo su autor, tacón incluido; solo se reajusta la pierna que alcanza el zapato, con la talla de las piernas. Desmárcalo para reajustar el zapato entero, pies incluidos, como antes.",
+    "description": ""
+  },
+  "Parts.Retarget.KeepHands": {
+    "message": "Conservar sus propias manos",
+    "description": ""
+  },
+  "Parts.Retarget.KeepHands.Tip": {
+    "message": "La mano se queda exactamente como la hizo su autor; solo se reajusta el brazo que alcanza el guante, con la talla del pecho. Desmárcalo para reajustar el guante entero, manos incluidas, como antes.",
+    "description": ""
+  },
+  "Parts.Retarget.NoLimbFeet": {
+    "message": "Este zapato no llega a ninguna pierna: conserva su forma y solo su piel se dibuja como la del cuerpo nuevo. Elige igualmente una talla de piernas para reajustarlo con ella.",
+    "description": ""
+  },
+  "Parts.Retarget.NoLimbHands": {
+    "message": "Estos guantes no llegan a ningún brazo: conservan su forma y solo su piel se dibuja como la del cuerpo nuevo. Elige igualmente una talla de pecho para reajustarlos con ella.",
+    "description": ""
+  },
+  "Parts.Retarget.SkinAlreadyMatches": {
+    "message": "Nada que cambiar: su piel ya se dibuja como la del cuerpo nuevo.",
+    "description": ""
+  },
+  "Parts.Retarget.AlreadyFits.Fmt": {
+    "message": "Nada que cambiar: donde llega la prenda, {0} tiene la misma forma que la talla para la que se hizo.",
+    "description": ""
+  },
+  "Parts.Retarget.EndsUnreadable": {
+    "message": "No se puede leer su rig, así que no se distingue el pie o la mano del resto: se reajusta la pieza entera.",
+    "description": ""
+  },
+  "Parts.Retarget.NoLegsInBody.Fmt": {
+    "message": "{0} no tiene piernas con que reajustar, así que se reajusta la pieza entera.",
+    "description": ""
+  },
+  "Parts.Retarget.NoChestInBody.Fmt": {
+    "message": "{0} no tiene torso con que reajustar, así que se reajusta la pieza entera.",
+    "description": ""
+  },
   "Parts.Retarget.NeedFromRequired.Fmt": {
     "message": "{0}: elige la talla para la que se hizo.",
     "description": ""
@@ -4668,7 +4716,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "Añade a todo este mod cada talla de los cuerpos marcados abajo. Cada pieza de torso y piernas se reajusta desde la primera talla del autor y se guarda junto a sus tallas como «Rue S», «YAB Buff L», etc. Las tallas que el mod ya tiene no se tocan.",
+    "message": "Añade a todo este mod cada talla de los cuerpos marcados abajo. Cada pieza de torso, piernas, zapatos y guantes se reajusta desde la primera talla del autor y se guarda junto a sus tallas como «Rue S», «YAB Buff L», etc. Las tallas que el mod ya tiene no se tocan.",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -4677,6 +4725,18 @@
   },
   "SizeSet.Yas.Tip": {
     "message": "Rue, YAB y Tre tienen versiones para Yet Another Skeleton. Neolithe y Bibo no, y conservan sus tallas normales. Una pieza que ya está pesada para YAS siempre recibe tallas YAS.",
+    "description": ""
+  },
+  "SizeSet.Ends": {
+    "message": "Incluir zapatos y guantes",
+    "description": ""
+  },
+  "SizeSet.Ends.Tip": {
+    "message": "Los zapatos y guantes conservan sus propios pies y manos; solo se reajusta la pierna o el brazo que alcanzan. Los zapatos reciben las tallas de las piernas, los guantes una opción por cuerpo, y ambos se suman a las tallas de pecho o piernas del conjunto cuando comparten grupo.",
+    "description": ""
+  },
+  "SizeSet.EndsUnreadable.Fmt": {
+    "message": "{0}: no se puede leer su rig, así que no se puede conservar el pie o la mano y no se hicieron tallas de él.",
     "description": ""
   },
   "SizeSet.Remake": {
@@ -4724,11 +4784,15 @@
     "description": ""
   },
   "SizeSet.NoPieces": {
-    "message": "Este mod no tiene modelos de torso o piernas de los que hacer tallas.",
+    "message": "Este mod no tiene modelos de torso, piernas, zapatos o guantes de los que hacer tallas.",
     "description": ""
   },
   "SizeSet.NoBodies": {
     "message": "No hay mods de cuerpo instalados a los que reajustar.",
+    "description": ""
+  },
+  "SizeSet.Unpaired.Fmt": {
+    "message": "{0}: comparte grupo de tallas con otra pieza a la que no puede seguir, así que no se hicieron tallas de ella; cada talla llevaría la otra pieza sin reajustar.",
     "description": ""
   },
   "SizeSet.PieceFailed.Fmt": {

@@ -153,6 +153,21 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     /// </summary>
     private bool clearBody;
 
+    /// <summary>
+    /// A shoe keeps its own foot, a glove its own hand, and only the leg or arm is refitted (see <see cref="KeepEnds"/>).
+    /// On for every garment it can apply to; unticked gives the whole-garment refit. Per garment, not remembered.
+    /// </summary>
+    private bool keepEnds = true;
+
+    /// <summary>The detector found this garment's rig unreadable: there is no telling its foot from its leg.</summary>
+    private bool endsUnreadable;
+
+    /// <summary>What the detector read a kept-end garment as, for this garment and layout; null until it has.</summary>
+    private KeepEnds.StudioReading? studio;
+
+    /// <summary>The layout last drawn, so a change of it resets what was preset for the old one.</summary>
+    private RetargetInputs.Layout? lastLayout;
+
     /// <summary>The model the worn body was last looked up for, so it is looked up once per model, not per frame.</summary>
     private string? wornFor;
 
@@ -190,12 +205,20 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
 
     /// <param name="Source">The "made for" body mod the ranking ran over. A ranking of another one — the user switched
     /// while it ran — names options of the wrong mod, and is dropped.</param>
-    private sealed record DetectResult(string ModelRel, string? Source, Dictionary<string, BodySizeMatch.Ranking> Rankings);
+    /// <param name="Layout">The layout it ran for. One for another — the box was toggled while it ran — ranked other
+    /// slots, or the whole garment where the leg alone was asked for, and is dropped.</param>
+    /// <param name="Studio">What a kept-end garment was read as; null when the layout keeps none.</param>
+    /// <param name="EndsUnreadable">The kept-end layout was asked for, and the rig could not be read.</param>
+    private sealed record DetectResult(string ModelRel, string? Source, Dictionary<string, BodySizeMatch.Ranking> Rankings,
+                                       RetargetInputs.Layout Layout, KeepEnds.StudioReading? Studio = null,
+                                       bool EndsUnreadable = false);
 
     /// <summary>The body mod the "made for" sizes come from: the other one, or the refit-onto one.</summary>
     private string? SourceDir => fromBodyDir ?? bodyDir;
+    /// <param name="Notice">Nothing to do, said plainly rather than as an error: the skin already matches, or the
+    /// leg is already the size chosen.</param>
     private sealed record PlanResult(string Key, List<(BodyOption To, BodyRetarget.Planned Planned)>? Planned,
-                                     string Error, IReadOnlyList<string>? ShapeNames = null);
+                                     string Error, string Notice = "", IReadOnlyList<string>? ShapeNames = null);
     private sealed record SaveResult(BodyRetargetWriter.Outcome Outcome, BodyRetargetWriter.Record? Record);
 
     // ── caches for things that would otherwise be read every frame ──────────
@@ -223,6 +246,10 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         pendingPreview = null;
         groupNameFor = null;
         recordFor = null;
+        keepEnds = true;
+        endsUnreadable = false;
+        studio = null;
+        lastLayout = null;
     }
 
     /// <summary>The race the open garment is made for (<c>"0101"</c>), which every option list is filtered to.</summary>
@@ -358,6 +385,20 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         List<string> slots = [];
         if (ready)
         {
+            // The rows changed — the box toggled, a body without legs chosen, or the rig turned out unreadable: what was
+            // detected, preset and remembered was for the old rows. The old choices are kept, only not offered.
+            var layout = Layout(ctx);
+            if (RetargetInputs.Flips(lastLayout, layout))
+            {
+                wornFor = null;
+                appliedFor = null;
+                detectedFor = null;
+                studio = null;
+                DropPlan(ctx);
+                StartValidate(layout.Primary);
+            }
+            lastLayout = layout;
+
             // A different model opened under the same body: the old detection was about the old model.
             if (detectedFor != ctx.ModelRel && detectTask == null) StartDetect(ctx);
 
@@ -374,6 +415,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
             }
 
             slots = Slots(ctx);
+            DrawKeepEnds(ctx);
             DrawSlotHeading(ctx, slots[0]);
             DrawSlotFrom(ctx, slots[0]);
         }
@@ -990,13 +1032,31 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
 
     // ── which slots take part ───────────────────────────────────────────────
 
-    /// <summary>The slot this garment is worn in, which is the one its cloth was cut against. Always required.</summary>
-    private string Primary(in RetargetContext ctx)
+    /// <summary>The slot this garment is worn in, which is the one its cloth was cut against, and the one it is planned as.</summary>
+    private string WornSlot(in RetargetContext ctx)
     {
         var slots = catalog!.SlotsFor(race).ToList();
         string? own = BodySizeCatalog.SlotOf(ctx.GamePath);
         return own != null && slots.Contains(own) ? own : slots.FirstOrDefault() ?? "_top";
     }
+
+    /// <summary>How the tool is laid out for this garment now (see <see cref="RetargetInputs.LayoutFor"/>).</summary>
+    private RetargetInputs.Layout Layout(in RetargetContext ctx)
+    {
+        string worn = WornSlot(ctx);
+        string? limb = AutoRefitDecisions.LimbOf(worn);
+        bool sourceHasLimb = limb != null && SourceCatalog?.For(limb, race).Count > 0;
+        bool targetHasLimb = limb != null && catalog?.For(limb, race).Count > 0;
+        return RetargetInputs.LayoutFor(worn, keepEnds, sourceHasLimb, targetHasLimb, endsUnreadable);
+    }
+
+    /// <summary>The slot whose sizes must be chosen: the garment's own, or the leg or arm a shoe or glove is refitted by.
+    /// Always required.</summary>
+    private string Primary(in RetargetContext ctx) => Layout(ctx).Primary;
+
+    /// <summary>What a refit is made from, as chosen now.</summary>
+    private RetargetInputs.Inputs Inputs(in RetargetContext ctx)
+        => RetargetInputs.Assemble(Layout(ctx), Slots(ctx), from, to, studio?.Route);
 
     /// <summary>
     /// Every slot worth offering, the garment's own first.
@@ -1008,17 +1068,10 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     /// is no size to change there.
     /// </summary>
     private List<string> Slots(in RetargetContext ctx)
-    {
-        string primary = Primary(ctx);
-        var slots = new List<string> { primary };
-        foreach (string slot in catalog!.SlotsFor(race))
-            if (slot != primary && Distinct(slot) > 1) slots.Add(slot);
-        return slots;
-    }
+        => RetargetInputs.Slots(Layout(ctx), catalog!.SlotsFor(race), Distinct);
 
     /// <summary>The slots actually taking part: the ones with both ends chosen.</summary>
-    private List<string> Chosen(in RetargetContext ctx)
-        => Slots(ctx).Where(s => from.ContainsKey(s) && Targets(s).Count > 0).ToList();
+    private List<string> Chosen(in RetargetContext ctx) => RetargetInputs.Chosen(Slots(ctx), from, to);
 
     /// <summary>A slot's targets; empty when none is ticked.</summary>
     private IReadOnlyList<BodyOption> Targets(string slot)
@@ -1032,6 +1085,33 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         => catalog!.For(slot, race).Select(o => o.Rel).Distinct(StringComparer.OrdinalIgnoreCase).Count();
 
     // ── one slot's from/to ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// The box that keeps a shoe's foot or a glove's hand, above the row it decides. Only for a shoe or glove; greyed,
+    /// saying why, when it cannot apply — no telling the foot from the leg, or a body with no legs to refit by.
+    /// </summary>
+    private void DrawKeepEnds(in RetargetContext ctx)
+    {
+        string worn = WornSlot(ctx);
+        if (!RetargetInputs.OffersKeepEnds(worn)) return;
+        var ps = Strings.Parts;
+        bool feet = worn == "_sho";
+        string limb = AutoRefitDecisions.LimbOf(worn)!;
+        string noLimb = limb == "_dwn" ? ps.RetargetNoLegsInBodyFmt : ps.RetargetNoChestInBodyFmt;
+        string? why = endsUnreadable ? ps.RetargetEndsUnreadable
+                    : SourceCatalog?.For(limb, race).Count is not > 0 ? string.Format(noLimb, BodyName(SourceDir))
+                    : catalog?.For(limb, race).Count is not > 0 ? string.Format(noLimb, BodyName(bodyDir))
+                    : null;
+
+        bool on = keepEnds && why == null;
+        using (ImRaii.Disabled(why != null))
+            if (ImGui.Checkbox(feet ? ps.RetargetKeepFeet : ps.RetargetKeepHands, ref on))
+                keepEnds = on;
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(why ?? (feet ? ps.RetargetKeepFeetTip : ps.RetargetKeepHandsTip));
+        if (why == null && keepEnds && studio?.Route == KeepEnds.Route.SkinOnly && !from.ContainsKey(limb))
+            ImGui.TextDisabled(feet ? ps.RetargetNoLimbFeet : ps.RetargetNoLimbHands);
+    }
 
     /// <summary>The slot's name, and for the garment's own slot how many sizes the body mod offers.</summary>
     private void DrawSlotHeading(in RetargetContext ctx, string slot)
@@ -1252,19 +1332,25 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         // pair is the ordinary resting state of a part nobody is refitting. Such a slot sits out — see
         // <see cref="Chosen"/>, which everything downstream goes through — and its row says so.
         string primary = Primary(ctx);
+        var inputs = Inputs(ctx);
         bool refused = Chosen(ctx).Any(s => Targets(s).Any(t => refusals.ContainsKey(PairKey(s, t))));
-        bool ready = from.ContainsKey(primary) && Targets(primary).Count > 0 && !refused;
+        bool targetHasEnd = inputs.EndSlot != null && catalog?.For(inputs.EndSlot, race).Count > 0;
+        bool ready = RetargetInputs.Ready(inputs, from, targetHasEnd, refused);
 
         if (detectTask != null) ImGui.TextUnformatted(ps.RetargetChecking);
 
         ImGui.Checkbox(ps.RetargetReplaceSkin, ref replaceSkin);
         if (ImGui.IsItemHovered()) ImGui.SetTooltip(ps.RetargetReplaceSkinTip);
 
-        // Only the swap brings in skin to cut, so the option sits under it and greys out with it.
+        // Only the swap brings in skin to cut, so the option sits under it and greys out with it. A kept foot always
+        // cuts: uncut, a shoe would carry the whole legs body, waist to ankles.
         ImGui.Indent();
-        using (ImRaii.Disabled(!replaceSkin))
-            ImGui.Checkbox(ps.RetargetCutHidden, ref cutHidden);
-        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(ps.RetargetCutHiddenTip);
+        bool cut = cutHidden || inputs.KeepEnds;
+        using (ImRaii.Disabled(!replaceSkin || inputs.KeepEnds))
+            if (ImGui.Checkbox(ps.RetargetCutHidden, ref cut) && !inputs.KeepEnds)
+                cutHidden = cut;
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(inputs.KeepEnds ? ps.RetargetCutForcedTip : ps.RetargetCutHiddenTip);
         ImGui.Unindent();
 
         ImGui.Checkbox(ps.RetargetClearBody, ref clearBody);
@@ -1277,7 +1363,8 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         // A greyed-out button says why, or the user is left guessing which of several dropdowns is holding it.
         if (!busy && !ready)
         {
-            string why = !from.ContainsKey(primary) ? string.Format(ps.RetargetNeedFromFmt, SlotName(primary))
+            string why = inputs.SkinOnly ? string.Format(ps.RetargetNeedFromFmt, SlotName(inputs.EndSlot!))
+                       : !from.ContainsKey(primary) ? string.Format(ps.RetargetNeedFromFmt, SlotName(primary))
                        : Targets(primary).Count == 0 ? string.Format(ps.RetargetNeedToFmt, SlotName(primary))
                        : ps.RetargetRefusedHold;
             using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
@@ -1500,6 +1587,8 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         var garment = ctx.Garment;
         var garmentBytes = ctx.GarmentBytes;
         var slots = Slots(ctx);
+        var layout = Layout(ctx);
+        var pieces = RefitCore.ShapePieces(garment, new HashSet<string>(ctx.KeepShape ?? [], StringComparer.Ordinal));
         string rel = ctx.ModelRel;
         string? sourceDir = SourceDir;
         string? garmentRace = race;
@@ -1510,9 +1599,22 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
             // Which of two identical meshes rigged two ways the garment was made for (Rue's plain and Yiggle sizes).
             var garmentBones = new HashSet<string>(SecondSkinWriter.Parse(garmentBytes).BoneNames, StringComparer.Ordinal);
             var rankings = new Dictionary<string, BodySizeMatch.Ranking>(StringComparer.Ordinal);
+            KeepEnds.StudioReading? read = null;
             foreach (string slot in slots)
+            {
+                // A kept-end garment's leg or arm is read alone: its heeled foot lies on no body's flat one.
+                if (layout.KeepEnds && slot == layout.Primary) continue;
                 rankings[slot] = BodySizeMatch.Rank(garment, snapshot.For(slot, garmentRace), snapshot.PathOf, garmentBones);
-            return new DetectResult(rel, sourceDir, rankings);
+            }
+            if (layout.KeepEnds)
+            {
+                if (KeepEnds.Read(layout.WornSlot, garment, garmentBytes, pieces) is not { } reading)
+                    return new DetectResult(rel, sourceDir, rankings, layout, EndsUnreadable: true);
+                read = KeepEnds.StudioLimb(reading, garment, garmentBones, garmentRace ?? "", sourceDir ?? "", snapshot);
+                if (read.Shown is { } shown)
+                    rankings[read.Route == KeepEnds.Route.SkinOnly ? layout.EndSlot! : layout.Primary] = shown;
+            }
+            return new DetectResult(rel, sourceDir, rankings, layout, read);
         });
     }
 
@@ -1560,16 +1662,15 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         if (planTask != null || catalog is not { } snapshot || SourceCatalog is not { } sources) return;
         ctx.FlushPending();
 
-        string garmentSlot = Primary(ctx);
-        string garmentSource = sources.PathOf(from[garmentSlot]);
-        var targets = Targets(garmentSlot).Select(t => (Option: t, Path: snapshot.PathOf(t))).ToList();
-        var others = Chosen(ctx).Where(s => s != garmentSlot)
-                                .Select(s => (Slot: s, Source: sources.PathOf(from[s]),
-                                              Target: snapshot.PathOf(Targets(s)[0]), Name: SlotName(s),
-                                              Masks: MasksFor(s)))
-                                .ToList();
-        string garmentName = SlotName(garmentSlot);
-        var garmentMasks = MasksFor(garmentSlot);
+        var inputs = Inputs(ctx);
+        // The slot planned as: always the one the garment is worn in. Without kept ends it is also the required one.
+        string garmentSlot = inputs.GarmentSlot;
+        string primary = inputs.Primary;
+        var targets = inputs.PrimaryTargets.Select(t => (Option: t, Path: snapshot.PathOf(t))).ToList();
+        var others = inputs.Shared.Select(s => (Slot: s.Slot, Source: sources.PathOf(s.From),
+                                                Target: snapshot.PathOf(s.To), Name: SlotName(s.Slot),
+                                                Masks: MasksFor(s.Slot)))
+                                  .ToList();
         var garment = ctx.Garment;
         var bytes = ctx.GarmentBytes;
         var heldLabels = new HashSet<string>(ctx.Held, StringComparer.Ordinal);
@@ -1581,8 +1682,31 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         bool male = MaleGarment;
         string key = Key(ctx);
         var bake = active;
+        string? garmentRace = race;
         planDone = 0;
-        planTotal = targets.Count;
+        planTotal = inputs.SkinOnly ? 1 : targets.Count;
+
+        // What only this thread may read (IPC): each slot's IMC masks, and the feet or hands being worn.
+        var limbMasks = MasksFor(primary);
+        var endMasks = inputs.EndSlot != null ? MasksFor(inputs.EndSlot) : default;
+        BodyOption? skinTarget = inputs.SkinOnly
+            ? AutoRefitDecisions.Companion(snapshot.For(inputs.EndSlot!, race), inputs.PrimaryTargets.FirstOrDefault(),
+                                           WornOption(snapshot, inputs.EndSlot!))
+            : null;
+        // Taken here, with everything else the worker reads: the panel's own dictionaries change under it on this thread.
+        BodyOption? limbFrom = !inputs.SkinOnly && from.TryGetValue(primary, out var chosenLimb) ? chosenLimb : null;
+        string? ownEndPath = inputs.SkinOnly ? sources.PathOf(from[inputs.EndSlot!]) : null;
+        // The sizes to make, copied: the "made for" list is the panel's own, edited in place by its dropdown.
+        List<BodyOption> limbTargets = [.. inputs.PrimaryTargets];
+        string? garmentSource = from.TryGetValue(garmentSlot, out var garmentFrom) ? sources.PathOf(garmentFrom) : null;
+        string garmentName = SlotName(garmentSlot);
+        bool sameBodyMod = fromBodyDir == null;
+        // Sizes are compared the way the limb was read: its skin, or how its cloth sits when the skin was too little —
+        // which a skin reading can fall back to as well.
+        bool fromCloth = studio?.Shown?.FromCloth == true || studio?.Route == KeepEnds.Route.Cloth;
+        var ps = Strings.Parts;
+        string noEnd = inputs.EndSlot != null ? string.Format(ps.RetargetNeedToFmt, SlotName(inputs.EndSlot)) : "";
+        string modelRel = ctx.ModelRel;
 
         planTask = Task.Run(() =>
         {
@@ -1605,10 +1729,48 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
                         held.UnionWith(part.Triangles);
                 var pieces = RefitCore.ShapePieces(garment, shapeLabels, out var shapeNames);
 
+                // A bake's preview, here rather than on the framework thread when it is first shown — and from the model
+                // BEFORE the rename below: the preview goes on the drawn race's path, and a skin material is named after
+                // the path's race, so there the garment's own material is the one that loads.
+                BodyRetarget.Planned Baked(BodyRetarget.Planned plan, string targetPath)
+                {
+                    if (bake == null) return plan;
+                    var back = RacialModelBake.Unbake(plan.Model, bake.From, bake.To, bake.Wearer.Pbd,
+                                                      bake.Wearer.ParentOf, out _);
+                    plan = RefitCore.WithBodySkin(plan, targetPath, log);
+                    if (back != null) previews.AddOrUpdate(plan.Model, back);
+                    return plan;
+                }
+
+                // ── a shoe or glove reaching no leg or arm: its shape kept, its skin drawn like the new body's ──
+                if (inputs.SkinOnly)
+                {
+                    if (skinTarget == null) return new PlanResult(key, null, noEnd);
+                    var redrawn = KeepEnds.StudioSkinOnly(bytes, ownEndPath!, skinTarget, snapshot, male, bake != null,
+                                                          Baked, uvRemap, log);
+                    if (redrawn.Planned != null) Interlocked.Increment(ref planDone);
+                    return new PlanResult(key, redrawn.Planned, redrawn.Error, redrawn.Notice);
+                }
+
+                // ── a shoe's leg or a glove's arm refitted, the foot or hand held where its author put it ──
+                if (inputs.KeepEnds)
+                {
+                    var input = new KeepEnds.StudioPlanInput(
+                        garment, bytes, garmentSlot, pieces, sources, snapshot, garmentRace ?? "", male, limbFrom!,
+                        limbTargets, sameBodyMod, fromCloth, layOnBody, acrossBodies, clear, held, shared,
+                        s => s == primary ? (limbMasks.Source, limbMasks.Target) : (endMasks.Source, endMasks.Target),
+                        SlotName, modelRel, shapeNames);
+                    var kept = KeepEnds.StudioPlan(input, Baked, uvRemap, log, () => Interlocked.Increment(ref planDone));
+                    return new PlanResult(key, kept.Planned, kept.Error, kept.Notice, kept.ShapeNames);
+                }
+
                 var results = new List<(BodyOption, BodyRetarget.Planned)>();
+
+                // ── the whole garment, refitted through its own slot ──
+                if (garmentSource == null) return new PlanResult(key, null, string.Format(ps.RetargetNeedFromFmt, garmentName));
                 foreach (var (option, targetPath) in targets)
                 {
-                    if (Build(garmentSource, targetPath, garmentName, male, garmentMasks, out var pair) is { } refusal)
+                    if (Build(garmentSource, targetPath, garmentName, male, limbMasks, out var pair) is { } refusal)
                         return new PlanResult(key, null, targets.Count > 1 ? $"{option.Label}: {refusal}" : refusal);
 
                     var pairs = new List<BodyRetarget.SlotPair> { pair };
@@ -1621,22 +1783,10 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
                     // Skin the refit kept of the garment's own, drawn in the new body's layout and material — or a
                     // gen2 garment's kept skin shows the wrong skin, and none of the tattoos, on a bibo body.
                     plan = RefitCore.MatchSkinToBody(plan, garmentSource, targetPath, uvRemap, male, log);
-
-                    if (bake != null)
-                    {
-                        // Its preview, here rather than on the framework thread when it is first shown — and from the
-                        // model BEFORE the rename below: the preview goes on the drawn race's path, and a skin material
-                        // is named after the path's race, so there the garment's own material is the one that loads.
-                        var back = RacialModelBake.Unbake(plan.Model, bake.From, bake.To, bake.Wearer.Pbd,
-                                                          bake.Wearer.ParentOf, out _);
-
-                        plan = RefitCore.WithBodySkin(plan, targetPath, log);
-                        if (back != null) previews.AddOrUpdate(plan.Model, back);
-                    }
-                    results.Add((option, plan));
+                    results.Add((option, Baked(plan, targetPath)));
                     Interlocked.Increment(ref planDone);
                 }
-                return new PlanResult(key, results, "", shapeNames);
+                return new PlanResult(key, results, "", ShapeNames: shapeNames);
             }
             catch (Exception ex)
             {
@@ -1736,7 +1886,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         string? fromName = fromBodyDir != null && bodies != null && bodies.TryGetValue(fromBodyDir, out string? named)
             ? named
             : null;
-        string labelFrom = RefitCore.LabelFrom(fromName, slots.Select(s => from[s].Label));
+        string labelFrom = RefitCore.LabelFrom(fromName, RetargetInputs.FromLabels(Inputs(ctx), slots, from));
         var refits = new List<BodyRetargetWriter.Refit>();
         var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (target, plan) in all)
@@ -1822,21 +1972,13 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     private string ToLabel(in RetargetContext ctx, BodyOption target) => string.Join(" + ", ToLabels(ctx, target));
 
     private List<string> ToLabels(in RetargetContext ctx, BodyOption target)
-    {
-        string primary = Primary(ctx);
-        return Chosen(ctx).Select(s => s == primary ? target.Label : Targets(s)[0].Label).ToList();
-    }
+        => RetargetInputs.ToLabels(Inputs(ctx), Chosen(ctx), target, to);
 
     /// <summary>What a plan was made from: the model, each chosen pair, and which parts were held. A plan whose key no
     /// longer matches is stale — see <see cref="plannedKey"/>.</summary>
     private string Key(in RetargetContext ctx)
-        => ctx.ModelRel + "|from:" + (fromBodyDir ?? "") + "|"
-         + string.Join("|", Chosen(ctx).Select(s => $"{s}:{from[s].Rel}>{string.Join(",", Targets(s).Select(t => t.Rel))}"))
-         + "|held:" + string.Join(",", ctx.Held.OrderBy(h => h, StringComparer.Ordinal))
-         + "|shape:" + string.Join(",", (ctx.KeepShape ?? []).OrderBy(h => h, StringComparer.Ordinal))
-         + (replaceSkin ? "|lay" : "")
-         + (replaceSkin && !cutHidden ? "|whole" : "")
-         + (clearBody ? "|clear" : "");
+        => RetargetInputs.Key(ctx.ModelRel, fromBodyDir, Inputs(ctx), Chosen(ctx), from, to, ctx.Held, ctx.KeepShape,
+                              replaceSkin, cutHidden, clearBody);
 
     /// <summary>The framework-thread half: take up whatever finished, and do the parts only this thread may.</summary>
     private void Consume(in RetargetContext ctx)
@@ -1856,8 +1998,27 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
             // Only a ranking of this model over the "made for" mod chosen NOW: one over a mod the user has since
             // switched away from names options that are not in the list, and would stick, since only an empty
             // choice is filled in.
-            if (!Faulted(dt, ctx) && dt.Result.ModelRel == ctx.ModelRel
-                && string.Equals(dt.Result.Source, SourceDir, StringComparison.OrdinalIgnoreCase))
+            // And only one made for the rows shown NOW: one for the other layout ranked the whole garment where the leg
+            // alone was asked for, and its guess would stick the same way.
+            bool current = !Faulted(dt, ctx) && dt.Result.ModelRel == ctx.ModelRel
+                           && string.Equals(dt.Result.Source, SourceDir, StringComparison.OrdinalIgnoreCase)
+                           && dt.Result.Layout == Layout(ctx);
+            if (current && dt.Result.EndsUnreadable)
+            {
+                // The rows change next frame (see Draw), and the detector runs again for them.
+                log.Information("[Proteus] retarget: {0}: its rig cannot be read, so its {1} cannot be kept", ctx.ModelRel,
+                                dt.Result.Layout.WornSlot == "_sho" ? "foot" : "hand");
+                endsUnreadable = true;
+            }
+            if (current)
+            {
+                studio = dt.Result.Studio;
+                if (studio != null)
+                    log.Information("[Proteus] retarget: {0} keeps its {1}: route {2}, read as {3}", ctx.ModelRel,
+                                    dt.Result.Layout.WornSlot == "_sho" ? "foot" : "hand", KeepEnds.Letter(studio.Route),
+                                    studio.Pick?.Label ?? "nothing");
+            }
+            if (current)
                 foreach (var (slot, ranking) in dt.Result.Rankings)
                 {
                     detected[slot] = ranking;
@@ -1877,6 +2038,12 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
                         StartValidate(slot);
                     }
                 }
+            // A shoe or glove: the Studio's own best guess, however weak, where the rankings left its row empty.
+            if (current && RetargetInputs.StudioPrefill(dt.Result.Layout, studio, from) is { } prefill)
+            {
+                from[prefill.Slot] = prefill.Option;
+                StartValidate(prefill.Slot);
+            }
         }
 
         foreach (string key in validating.Where(v => v.Value.Refusal.IsCompleted).Select(v => v.Key).ToList())
@@ -1899,6 +2066,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
             planTask = null;
             if (Faulted(pt, ctx)) { }
             else if (pt.Result.Error.Length > 0) ctx.SetStatus(pt.Result.Error, true);
+            else if (pt.Result.Notice.Length > 0) ctx.SetStatus(pt.Result.Notice, false);
             else if (pt.Result.Planned is { Count: > 0 } done && pt.Result.Key == Key(ctx))
             {
                 planned = done;

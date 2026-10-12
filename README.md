@@ -141,6 +141,7 @@ Things worth knowing:
 - **Remove hidden skin**, on by default, leaves out the new skin where the author deleted theirs, usually under cloth. Turn it off if a refit leaves holes. It only applies while **Use the new body's skin** is on.
 - **Push cloth out of the body** pushes out all buried cloth, not just what the refit buried. Use it if the body shows through, for example stockings with their own leg skin. Off by default, because authors often hide cloth under skin on purpose.
 - **Keep shape** moves rigid pieces (rings, buckles, chains) whole instead of bending them. Small closed pieces start ticked. A piece that would sink into the new body bends with it instead.
+- **Shoes and gloves keep their own feet and hands.** With **Keep its own feet** (or **hands**) ticked, the default, the foot stays exactly as its author made it, heel and all, and only the leg the shoe reaches is refitted, sized by the legs (the arm by the chest, for gloves). The feet go along by themselves. A shoe that reaches no leg keeps its shape and only has its skin redrawn, saved as "*Body* — skin". Untick it to refit the whole shoe as before.
 - **Pieces that cover more than one part**, like a long dress over the legs, take a size for each part under **Other body parts**. Choose **None (leave this part out)** to skip one.
 - **Untick a part** in the part list to keep it exactly where the author put it.
 - **Gear the game doesn't ship for your race**, such as pieces made only for men, can still be refitted: Proteus first makes a model for your race from the one that exists.
@@ -154,9 +155,10 @@ Things worth knowing:
 
 ##### Every size for other bodies
 
-Below the one-garment tool, **Every size for other bodies** does a whole mod at once. Tick the body mods you want, press **Add the sizes**, and every chest and legs piece in the mod is refitted from the author's first size into every size of those bodies, saved beside the author's own sizes as "Rue S", "YAB Buff L" and so on.
+Below the one-garment tool, **Every size for other bodies** does a whole mod at once. Tick the body mods you want, press **Add the sizes**, and every chest, legs, shoe and glove piece in the mod is refitted from the author's first size into every size of those bodies, saved beside the author's own sizes as "Rue S", "YAB Buff L" and so on.
 
 - **Use a body's YAS version where it has one** gives Rue, YAB and Tre their Yet Another Skeleton sizes. A piece already weighted to YAS always gets YAS sizes.
+- **Include shoes and gloves**, on by default, sizes the mod's shoes and gloves too, keeping their own feet and hands: shoes get the legs' sizes ("Rue WC", "YAB SC"), gloves one option per body. A shoe or glove in the same size group as the outfit's chest or legs joins the sizes that piece made, so one choice dresses the whole outfit. One that reaches no leg or arm only has its skin redrawn, and only where the new body draws skin another way. One sized in a group with a piece it can't follow — gloves beside legs, or a shoe and gloves with no chest — is left alone, with a note.
 - Sizes the mod already has are left alone. Tick **Make again the sizes Proteus added before** to redo the ones Proteus made; the author's own sizes are never touched.
 - It runs in the background and can take a few minutes on a big mod. **Stop** keeps the sizes already saved. When it's done, it lists anything it had to leave out and why.
 - Only bodies for the races the mod dresses are offered, so a women's mod doesn't list men's bodies. A body has to be installed in Penumbra to get its sizes. The game's own gear has no mod to add sizes to, so this doesn't appear for it.

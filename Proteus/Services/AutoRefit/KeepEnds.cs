@@ -22,9 +22,10 @@ namespace Proteus.Services;
 /// <item><see cref="Route.SkinOnly"/>: it reaches no leg or arm at all. Nothing is reshaped; the kept skin is only
 /// drawn the way the new body draws its own, when it is not already.</item>
 /// </list>
-/// Static and free of IPC: the watcher gathers, this decides, the watcher saves.
+/// Static and free of IPC: the watcher gathers, this decides, the watcher saves. The Studio shares the same core
+/// (<c>KeepEnds.Studio.cs</c>): one plan and one pair-building for both, so the two cannot drift apart.
 /// </summary>
-internal static class KeepEnds
+internal static partial class KeepEnds
 {
     /// <summary>How a piece was read; the last two are the ways it can fail to be.</summary>
     internal enum Route
@@ -79,11 +80,24 @@ internal static class KeepEnds
     /// Split a shoe or glove into its end and the rest. Null for any other slot, or when its rig cannot be read — there
     /// is then no telling the foot from the leg, and the piece is left as it is.
     /// </summary>
-    internal static Reading? Read(string slot, ModelParts garment, byte[] bytes)
+    internal static Reading? Read(string slot, ModelParts garment, byte[] bytes) => Read(slot, garment, bytes, null);
+
+    /// <inheritdoc cref="Read(string, ModelParts, byte[])"/>
+    /// <param name="pieces">The hard pieces the end must not split, as the caller keeps them: the Studio's from the
+    /// parts the user chose to keep the shape of. Null for the defaults (<see cref="RefitCore.DefaultKeepShape"/>).</param>
+    /// <param name="names">Each of <paramref name="pieces"/>' labels, in the same order, for the log of a piece the refit
+    /// let go; unnamed when not given. Ignored with the default pieces, which are named.</param>
+    internal static Reading? Read(string slot, ModelParts garment, byte[] bytes,
+                                  IReadOnlyList<IReadOnlyCollection<int>>? pieces, IReadOnlyList<string>? names = null)
     {
         if (AutoRefitDecisions.LimbOf(slot) is not { } limb) return null;
         if (ModelSkinReader.Read(bytes, null, null) is not { } skin) return null;
-        var pieces = RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment), out var names);
+        if (pieces == null)
+        {
+            pieces = RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment), out var defaults);
+            names = defaults;
+        }
+        names ??= pieces.Select(_ => "").ToList();
         var ends = BodyRetarget.EndVertices(garment, skin, slot, pieces, out int band);
         var (free, freeNames) = FreeOf(pieces, names, ends);
         return new Reading(slot, limb, ends, RefitCore.LimbView(garment, ends), free, band,
@@ -243,15 +257,75 @@ internal static class KeepEnds
     /// Neolithe SFW M, moved up to 19.0 mm and stretched the ankle by 5.1 mm; with the feet's shape, 11.9 mm and 4.3 mm.
     /// Null leaves it out.
     /// </summary>
+    /// <param name="log">The refit's own notes, for the debug log (see <see cref="BodyRetarget.Plan"/>).</param>
+    /// <param name="warn">Its warnings.</param>
     internal static BodyRetarget.Planned Plan(ModelParts garment, byte[] bytes, Reading reading,
-                                              BodyRetarget.SlotPair limb, BodyRetarget.SlotPair? end, bool across)
+                                              BodyRetarget.SlotPair limb, BodyRetarget.SlotPair? end, bool across,
+                                              Action<string>? log = null, Action<string>? warn = null)
+        => Plan(garment, bytes, reading, limb, end, replaceSkin: across, across: across, clearBody: false,
+                alsoHeld: null, extra: null, log, warn);
+
+    /// <inheritdoc cref="Plan(ModelParts, byte[], Reading, BodyRetarget.SlotPair, BodyRetarget.SlotPair?, bool)"/>
+    /// <param name="replaceSkin">Swap the limb's skin for the new body's. The automatic refit does so across body mods
+    /// only; the Studio leaves it to the user, as it does for every garment.</param>
+    /// <param name="clearBody">See <see cref="BodyRetarget.Plan"/>: the Studio's choice, never the automatic refit's.</param>
+    /// <param name="alsoHeld">More vertices to hold beside the end: the parts the Studio's user unticked. Next to held
+    /// skin there is no gap correction — cloth whose nearest skin is held keeps only its transfer move.</param>
+    /// <param name="extra">The other body parts chosen beside the limb (the Studio's other rows), refitted with it.
+    /// Never the end's slot: the end goes in for its shape only.</param>
+    internal static BodyRetarget.Planned Plan(ModelParts garment, byte[] bytes, Reading reading,
+                                              BodyRetarget.SlotPair limb, BodyRetarget.SlotPair? end, bool replaceSkin,
+                                              bool across, bool clearBody, IReadOnlySet<int>? alsoHeld,
+                                              IReadOnlyList<BodyRetarget.SlotPair>? extra,
+                                              Action<string>? log = null, Action<string>? warn = null)
     {
         List<BodyRetarget.SlotPair> pairs = [limb];
         if (end is { } shape) pairs.Add(shape with { ShapeOnly = true });
-        return BodyRetarget.Plan(garment, bytes, pairs, reading.Slot, held: reading.Ends, replaceSkin: across,
-                                 acrossBodies: across, clearBody: false, cutHidden: true, keepShape: reading.FreePieces,
-                                 swapSlot: reading.Limb);
+        if (extra != null) pairs.AddRange(extra);
+        IReadOnlySet<int> held = reading.Ends;
+        if (alsoHeld is { Count: > 0 }) held = new HashSet<int>(reading.Ends.Concat(alsoHeld));
+        return BodyRetarget.Plan(garment, bytes, pairs, reading.Slot, held: held, replaceSkin: replaceSkin,
+                                 acrossBodies: across, clearBody: clearBody, cutHidden: true,
+                                 keepShape: reading.FreePieces, swapSlot: reading.Limb, log: log, warn: warn);
     }
+
+    /// <summary>
+    /// The pairs a refit of the limb needs: the limb's own, and the end's for its shape. The limb's refusal is the
+    /// answer; the end's only leaves it out (reported through <paramref name="endRefused"/>), since the limb refits
+    /// fine without the feet's shape riding along.
+    /// </summary>
+    /// <param name="endFrom">The source body's feet or hands file; null, with <paramref name="endTo"/>, for none.</param>
+    /// <param name="mask">Each body mod's IMC mask by slot, source then target (see <see cref="RefitCore.MaskOf"/>).</param>
+    /// <returns>Null when the limb's pair was built; otherwise why not, worded for the user.</returns>
+    internal static string? BuildPairs(Reading reading, string limbFrom, string limbTo, string? endFrom, string? endTo,
+                                       bool male, Func<string, (ushort? Source, ushort? Target)> mask,
+                                       Func<string, string> slotName, UVRemapService? uvRemap, Action<string>? endRefused,
+                                       out BodyRetarget.SlotPair limb, out BodyRetarget.SlotPair? end)
+    {
+        end = null;
+        var (limbSource, limbTarget) = mask(reading.Limb);
+        if (BodyRetarget.BuildPair(reading.Limb, limbFrom, limbTo, slotName(reading.Limb), male, limbSource, limbTarget,
+                                   uvRemap, out limb) is { } refusal)
+            return refusal;
+        if (endFrom != null && endTo != null)
+        {
+            var (endSource, endTarget) = mask(reading.Slot);
+            if (BodyRetarget.BuildPair(reading.Slot, endFrom, endTo, slotName(reading.Slot), male, endSource, endTarget,
+                                       uvRemap, out var shape) is { } why)
+                endRefused?.Invoke(why);
+            else end = shape;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// What the game's own gear was made on: the game's own body, its one size in <paramref name="slot"/> — exactly, since
+    /// that is the body the game models its gear on. Null when the game body has nothing in that slot for the race.
+    /// </summary>
+    internal static AutoRefitDecisions.Pick? VanillaPick(BodySizeCatalog vanilla, string slot, string race)
+        => vanilla.For(slot, race) is { Count: > 0 } options
+            ? new AutoRefitDecisions.Pick(VanillaBodyCatalog.Key, options[0], Confidence.Exact, false)
+            : null;
 
     /// <summary>An ankle or wrist stretched by more than this (5 mm) is logged as worth a look in game.</summary>
     internal const float SeamWarn = 0.005f;

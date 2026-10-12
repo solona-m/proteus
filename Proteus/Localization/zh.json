@@ -3759,6 +3759,54 @@
     "message": "作者删除处（通常在布料下）不生成新皮肤。\n若转换留下破洞，请关闭此项。",
     "description": ""
   },
+  "Parts.Retarget.CutForcedTip": {
+    "message": "鞋子保留自己的脚、手套保留自己的手时始终开启：否则整条新腿或新手臂都会跟着放进去。",
+    "description": ""
+  },
+  "Parts.Retarget.KeepFeet": {
+    "message": "保留原本的脚",
+    "description": ""
+  },
+  "Parts.Retarget.KeepFeet.Tip": {
+    "message": "脚连同鞋跟完全保持作者制作的样子；只重新适配鞋子覆盖到的腿部，尺码按腿部来定。取消勾选则像以前一样，连脚一起重新适配整只鞋。",
+    "description": ""
+  },
+  "Parts.Retarget.KeepHands": {
+    "message": "保留原本的手",
+    "description": ""
+  },
+  "Parts.Retarget.KeepHands.Tip": {
+    "message": "手完全保持作者制作的样子；只重新适配手套覆盖到的手臂，尺码按胸部来定。取消勾选则像以前一样，连手一起重新适配整只手套。",
+    "description": ""
+  },
+  "Parts.Retarget.NoLimbFeet": {
+    "message": "这双鞋没有覆盖到腿：保持原有形状，只把皮肤画成新身体的样子。仍然可以选一个腿部尺码，按它来重新适配。",
+    "description": ""
+  },
+  "Parts.Retarget.NoLimbHands": {
+    "message": "这双手套没有覆盖到手臂：保持原有形状，只把皮肤画成新身体的样子。仍然可以选一个胸部尺码，按它来重新适配。",
+    "description": ""
+  },
+  "Parts.Retarget.SkinAlreadyMatches": {
+    "message": "无需更改：它的皮肤已经按新身体的方式绘制。",
+    "description": ""
+  },
+  "Parts.Retarget.AlreadyFits.Fmt": {
+    "message": "无需更改：在它覆盖的地方，{0} 与它原本制作时的尺码形状相同。",
+    "description": ""
+  },
+  "Parts.Retarget.EndsUnreadable": {
+    "message": "无法读取它的骨骼绑定，分不出脚或手与其余部分：将重新适配整件。",
+    "description": ""
+  },
+  "Parts.Retarget.NoLegsInBody.Fmt": {
+    "message": "{0} 没有可用来重新适配的腿部，因此将重新适配整件。",
+    "description": ""
+  },
+  "Parts.Retarget.NoChestInBody.Fmt": {
+    "message": "{0} 没有可用来重新适配的胸部，因此将重新适配整件。",
+    "description": ""
+  },
   "Parts.Retarget.NeedFromRequired.Fmt": {
     "message": "{0}：选择其原适配尺寸。",
     "description": ""
@@ -4668,7 +4716,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "为整个模组添加下方勾选体型的每个尺码。每件上衣和腿部部件都会从作者的第一个尺码重新适配，并以“Rue S”“YAB Buff L”等名称保存在作者的尺码旁边。模组已有的尺码保持不变。",
+    "message": "为整个模组添加下方勾选体型的每个尺码。每件上衣、腿部、鞋子和手套部件都会从作者的第一个尺码重新适配，并以“Rue S”“YAB Buff L”等名称保存在作者的尺码旁边。模组已有的尺码保持不变。",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -4677,6 +4725,18 @@
   },
   "SizeSet.Yas.Tip": {
     "message": "Rue、YAB 和 Tre 有 Yet Another Skeleton 版本。Neolithe 和 Bibo 没有，保留普通尺码。已经按 YAS 绑定权重的部件总会得到 YAS 尺码。",
+    "description": ""
+  },
+  "SizeSet.Ends": {
+    "message": "包括鞋子和手套",
+    "description": ""
+  },
+  "SizeSet.Ends.Tip": {
+    "message": "鞋子和手套保留原本的脚和手，只重新适配它们覆盖到的腿或手臂。鞋子获得腿部的尺码，手套每个身体一个选项；两者与服装的胸部或腿部尺码在同一组时会并入其中。",
+    "description": ""
+  },
+  "SizeSet.EndsUnreadable.Fmt": {
+    "message": "{0}：无法读取它的骨骼绑定，无法保留脚或手，因此没有为它制作尺码。",
     "description": ""
   },
   "SizeSet.Remake": {
@@ -4724,11 +4784,15 @@
     "description": ""
   },
   "SizeSet.NoPieces": {
-    "message": "此模组没有可制作尺码的上衣或腿部模型。",
+    "message": "此模组没有可制作尺码的上衣、腿部、鞋子或手套模型。",
     "description": ""
   },
   "SizeSet.NoBodies": {
     "message": "没有安装可适配的体型模组。",
+    "description": ""
+  },
+  "SizeSet.Unpaired.Fmt": {
+    "message": "{0}：它与另一件无法跟随的部件在同一个尺码组中，因此没有为它制作尺码——否则每个尺码都会穿着未重新适配的另一件部件。",
     "description": ""
   },
   "SizeSet.PieceFailed.Fmt": {
