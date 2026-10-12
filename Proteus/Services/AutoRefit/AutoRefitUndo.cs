@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.Json;
 
 namespace Proteus.Services;
 
@@ -94,11 +93,7 @@ internal static class AutoRefitUndo
     {
         try
         {
-            if (!PenumbraModMeta.HasReadableManifest(root)) return false;
-            using (var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, PenumbraModMeta.MetaFile))))
-                if (!doc.RootElement.TryGetProperty("Author", out var author)
-                    || !string.Equals(author.GetString(), "Proteus", StringComparison.Ordinal))
-                    return false;
+            if (!RefitModService.IsMadeByProteus(root)) return false;
 
             if (PenumbraModMeta.TryReadGroups(root) is not { } groups || groups.Count > 0) return false;
             // A mod made fresh has no default data at all, which reads as unknown; the manifest was readable, so that

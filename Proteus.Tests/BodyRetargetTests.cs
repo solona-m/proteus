@@ -1271,6 +1271,7 @@ public class BodyRetargetTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-vanilla-refit-cut-skin-7")]
     public void Clearing_the_body_leaves_cloth_buried_deeply_alone()
     {
         // Deeper than ClearDepth is the garment's own structure — an inner layer, a sole — and hauling it to the

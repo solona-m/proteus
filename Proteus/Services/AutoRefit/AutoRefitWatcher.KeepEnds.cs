@@ -119,7 +119,8 @@ public sealed partial class AutoRefitWatcher
         if (output == null) return;
 
         if (await SaveAndWear(r, g, root, group, j.SavePath, targetMod, output.LabelFrom,
-                              new BodyRetargetWriter.Refit(option, output.Model, output.To), cutFrom, j.BakeTo, item)
+                              new BodyRetargetWriter.Refit(option, output.Model, output.To), cutFrom, j.BakeTo, item,
+                              GameGear(r, j.Redirects, j.OwnRecord))
             is not { } savedRoot)
             return;
         log.Information("[Proteus] auto refit: {0} {1} onto {2} in {3:F1}s", item, slot, option,
