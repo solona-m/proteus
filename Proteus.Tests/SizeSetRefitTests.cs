@@ -215,6 +215,76 @@ public class SizeSetRefitTests(ITestOutputHelper output)
         }
     }
 
+    /// <summary>
+    /// Gloves sized with legs, and a shoe sized with gloves, neither group with a chest: nothing for either end to follow.
+    /// </summary>
+    private static string UnpairedMod()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        File.WriteAllText(Path.Combine(root, PenumbraModMeta.MetaFile), """
+            { "FileVersion": 4, "Name": "Unpaired",
+              "DefaultData": { "Files": {}, "FileSwaps": {}, "Manipulations": [] },
+              "Groups": [
+                { "Version": 0, "Name": "Bottoms", "Type": "Single", "Priority": 0, "DefaultSettings": 0, "Options": [
+                  { "Name": "S", "Files": { "chara/equipment/e6004/model/c0201e6004_dwn.mdl": "b\\dwn.mdl",
+                                            "chara/equipment/e6004/model/c0201e6004_glv.mdl": "b\\glv.mdl" } } ] },
+                { "Version": 0, "Name": "Accessories", "Type": "Single", "Priority": 0, "DefaultSettings": 0, "Options": [
+                  { "Name": "S", "Files": { "chara/equipment/e6005/model/c0201e6005_sho.mdl": "a\\sho.mdl",
+                                            "chara/equipment/e6005/model/c0201e6005_glv.mdl": "a\\glv.mdl" } } ] } ] }
+            """);
+        return root;
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-keep-ends-studio-8")]
+    public void Ends_with_nothing_to_follow_in_a_shared_group_are_unpaired()   // [AC-keep-ends-studio-8]
+    {
+        string root = UnpairedMod();
+        try
+        {
+            var pieces = SizeSetRefit.PiecesOf(root);
+            SizeSetRefit.Piece Of(string id, string slot) => pieces.Single(p => p.GamePath.Contains(id) && p.Slot == slot);
+            Assert.True(Of("e6004", "_glv").Unpaired);   // gloves beside legs
+            Assert.False(Of("e6004", "_dwn").Unpaired);  // the legs themselves are sized as ever
+            Assert.True(Of("e6005", "_sho").Unpaired);   // a shoe and gloves, no chest or legs
+            Assert.True(Of("e6005", "_glv").Unpaired);
+            // An end that follows a chest or legs, or has its group to itself, is not (see Follow_flags_for_shoes_and_gloves).
+            string ends = EndsMod();
+            try
+            {
+                Assert.All(SizeSetRefit.PiecesOf(ends), p => Assert.False(p.Unpaired, p.GamePath));
+            }
+            finally
+            {
+                Directory.Delete(ends, recursive: true);
+            }
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [LocalDataFact(Bibo)]
+    [Trait("Plan", "AC-keep-ends-studio-8")]
+    public void Unpaired_ends_get_a_note_and_no_sizes()   // [AC-keep-ends-studio-8]
+    {
+        // Each would add sizes of its own, every one wearing the other piece unrefitted: left alone, and said so.
+        string root = UnpairedMod();
+        try
+        {
+            var (result, _) = RunOn(root, ["bibo"], Bibo);
+            foreach (string label in new[] { "Hands — e6004", "Feet — e6005", "Hands — e6005" })
+                Assert.Contains(string.Format(Proteus.Localization.Strings.SizeSet.UnpairedFmt, label), result.Notes);
+            Assert.Equal(["S"], Options(root, "Accessories"));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Fact]
     [Trait("Plan", "EDGE-keep-ends-studio-22")]
     public void A_mod_with_only_shoes_has_pieces_only_with_ends()   // [EDGE-keep-ends-studio-22]
@@ -455,6 +525,117 @@ public class SizeSetRefitTests(ITestOutputHelper output)
             Assert.Equal(2, groups.Count);
             Assert.Equal(BodyRetargetWriter.OriginalOption, PenumbraModMeta.SingleDefault(root, groups[1]));
             Assert.DoesNotContain("\"FileVersion\": 3", File.ReadAllText(Path.Combine(root, PenumbraModMeta.MetaFile)));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>The body mods as installed, their catalogs changed by <paramref name="edit"/> (none, by default).</summary>
+    private static List<BodyModIndex.Entry> Installed(Func<BodyModIndex.Entry, BodySizeCatalog>? edit, params string[] bodyMods)
+    {
+        var dirs = bodyMods.Select(n => Path.GetFileName(LocalData.Path(n))).ToDictionary(d => d, d => d);
+        return new BodyModIndex().RefreshState(dirs, LocalData.Path(LocalData.Mods)).List
+                                 .Select(e => edit == null ? e : e with { Catalog = edit(e) }).ToList();
+    }
+
+    /// <summary>A size set over exactly <paramref name="bodies"/>, its notes printed.</summary>
+    private SizeSetRefit.Result RunWith(string root, IReadOnlyList<string> keys, IReadOnlyList<BodyModIndex.Entry> bodies,
+                                        Action<string>? progress = null, CancellationToken ct = default)
+    {
+        var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
+        var result = SizeSetRefit.Run(new SizeSetRefit.Request(root, keys, false, false, bodies), new UVRemapService(log, "."),
+                                      log, progress ?? (_ => { }), ct);
+        foreach (string note in result.Notes) output.WriteLine("note: " + note);
+        return result;
+    }
+
+    [LocalDataFact(LocalData.ShiftPack, Yab, Rue, Bibo, Neolithe)]
+    [Trait("Plan", "EDGE-keep-ends-studio-15")]
+    [Trait("Plan", "EDGE-keep-ends-studio-24")]
+    public void Cancelling_still_puts_a_group_of_ours_default_back()   // [EDGE-keep-ends-studio-15] [EDGE-keep-ends-studio-24]
+    {
+        // Sizes saved into a group of Proteus's own, then the run cancelled: the group still defaults to "Original", not
+        // to the size saved last.
+        string root = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            File.WriteAllBytes(Path.Combine(root, "sho.mdl"), LocalData.PackEntryEndingWith(LocalData.ShiftPack, "e6219_sho.mdl"));
+            File.WriteAllText(Path.Combine(root, PenumbraModMeta.MetaFile), $$"""
+                { "FileVersion": 4, "Name": "Shoe",
+                  "DefaultData": { "Files": { "{{ShoePath}}": "sho.mdl" }, "FileSwaps": {}, "Manipulations": [] }, "Groups": [] }
+                """);
+            using var cts = new CancellationTokenSource();
+            // Each body's sizes are saved together once made: Bibo+'s are saved, then the run is cancelled on Neolithe's.
+            Assert.Throws<OperationCanceledException>(() => RunWith(root, ["bibo", "neolithe"],
+                Installed(null, Yab, Rue, Bibo, Neolithe),
+                p => { if (p.Contains("Neolithe", StringComparison.Ordinal)) cts.Cancel(); }, cts.Token));
+            var group = Assert.Single(PenumbraModMeta.TryReadGroups(root) ?? []).Name;
+            output.WriteLine($"{group}: {string.Join(", ", Options(root, group))}");
+            Assert.Contains("Bibo S", Options(root, group));
+            Assert.Equal(BodyRetargetWriter.OriginalOption, PenumbraModMeta.SingleDefault(root, group));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [LocalDataFact(LocalData.ShiftPack)]
+    [Trait("Plan", "AC-keep-ends-studio-6")]
+    public void No_body_mods_installed_is_said()   // [AC-keep-ends-studio-6]
+    {
+        string root = ShoeMod(LocalData.PackEntryEndingWith(LocalData.ShiftPack, "e6219_sho.mdl"), "YAB WC");
+        try
+        {
+            var result = RunWith(root, ["bibo"], []);
+            Assert.Equal(0, result.Made);
+            Assert.Equal(Proteus.Localization.Strings.SizeSet.NoBodies, Assert.Single(result.Notes));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [LocalDataFact(LocalData.ShiftPack, Yab, Bibo)]
+    [Trait("Plan", "AC-keep-ends-studio-6")]
+    public void A_size_the_body_mod_lacks_is_noted_and_the_rest_made()   // [AC-keep-ends-studio-6]
+    {
+        // Bibo+ without its Type A Medium legs: no Bibo M shoe, and a note saying so; Bibo S and L are made.
+        string biboM = RefitCore.Normal(SupportedBodies.Of("bibo", "_dwn", false)!.Sizes.Single(s => s.Name == "M").Rel);
+        var bodies = Installed(e => e.Catalog with { Options = e.Catalog.Options.Where(o => RefitCore.Normal(o.Rel) != biboM).ToList() },
+                               Yab, Bibo);
+        string root = ShoeMod(LocalData.PackEntryEndingWith(LocalData.ShiftPack, "e6219_sho.mdl"), "YAB WC");
+        try
+        {
+            var result = RunWith(root, ["bibo"], bodies);
+            Assert.Equal(["YAB WC", "Bibo S", "Bibo L"], Options(root, "Shoes"));
+            Assert.Contains(result.Notes, n => n.Contains("Bibo M", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [LocalDataFact(Bibo, Neolithe)]
+    [Trait("Plan", "AC-keep-ends-studio-9")]
+    public void A_skin_only_shoe_gets_nothing_from_a_body_without_feet()   // [AC-keep-ends-studio-9]
+    {
+        // Its skin is drawn like the new body's own feet; a body mod without feet has none to draw it like.
+        var bodies = Installed(e => e.Dir.Contains("Neolithe", StringComparison.Ordinal)
+                                   ? e.Catalog with { Options = e.Catalog.Options.Where(o => o.Slot != "_sho").ToList() }
+                                   : e.Catalog,
+                               Bibo, Neolithe);
+        string root = ShoeMod(BiboFeet(mensSkin: true), "Barefoot");
+        try
+        {
+            var result = RunWith(root, ["neolithe"], bodies);
+            Assert.Equal(0, result.Made);
+            Assert.Equal(["Barefoot"], Options(root, "Shoes"));
         }
         finally
         {

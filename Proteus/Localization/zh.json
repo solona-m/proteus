@@ -4775,6 +4775,10 @@
     "message": "没有安装可适配的体型模组。",
     "description": ""
   },
+  "SizeSet.Unpaired.Fmt": {
+    "message": "{0}：它与另一件无法跟随的部件在同一个尺码组中，因此没有为它制作尺码——否则每个尺码都会穿着未重新适配的另一件部件。",
+    "description": ""
+  },
   "SizeSet.PieceFailed.Fmt": {
     "message": "{0}：失败：{1}",
     "description": ""

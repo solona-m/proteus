@@ -30,6 +30,11 @@ internal static partial class SizeSetRefit
         bool follows = piece.FollowsChest || piece.FollowsLegs;
 
         if (!request.Keys.Any(k => ForRace(k, sizeSlot, race))) return 0;
+        if (piece.Unpaired)
+        {
+            notes.Add(string.Format(Strings.SizeSet.UnpairedFmt, piece.Label));
+            return 0;
+        }
 
         // ── what it was made on: the author's first size the foot and leg can be read on ──
         progress(string.Format(Strings.SizeSet.ReadingFmt, piece.Label));
@@ -93,7 +98,7 @@ internal static partial class SizeSetRefit
             log.Information("[Proteus] size set: {0} was made on {1}", piece.Label, sourceName);
 
         // ── where the sizes go: the same bookkeeping as a chest or legs piece's ──
-        var group = new SizeGroup(root, piece);
+        using var group = new SizeGroup(root, piece);
         // A shoe's author sizes are compared by its legs, the foot left out; a glove's never (every chest has its arms).
         var authorSizes = !skinOnly && KeepEnds.ComparesAuthorSizes(piece.Slot) ? AuthorLimbSizes(root, piece, group.Ours) : [];
 
@@ -199,7 +204,6 @@ internal static partial class SizeSetRefit
             group.Save(target.Dir, RefitCore.LabelFrom(across ? sourceName : null, [pick.Option.Label]), refits,
                        src.Option, notes);
         }
-        group.RestoreDefault();
         return group.Saved;
     }
 

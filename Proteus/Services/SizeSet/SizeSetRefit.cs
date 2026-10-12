@@ -78,9 +78,14 @@ internal static partial class SizeSetRefit
     /// A shoe whose size group switches a legs model of the same race but no chest: it joins the options the legs made
     /// ("Rue WC"), so one choice dresses both. A shoe or glove in a group with a chest follows the chest instead.
     /// </param>
+    /// <param name="Unpaired">
+    /// A shoe or glove sized in one group with another piece of its race it cannot follow — gloves beside legs, or a shoe
+    /// and gloves with no chest or legs. Each would add sizes of its own to the group, every one wearing the other piece
+    /// unrefitted, so it gets no sizes, and a note.
+    /// </param>
     internal sealed record Piece(string GamePath, string Slot, string? Group,
                                  IReadOnlyList<(string? Option, string File)> Options, string Label, string GroupName,
-                                 string Race, bool FollowsChest = false, bool FollowsLegs = false);
+                                 string Race, bool FollowsChest = false, bool FollowsLegs = false, bool Unpaired = false);
 
     /// <summary>
     /// The chest and legs models of a mod, each with the group its sizes are switched in. A model only a refit of ours
@@ -140,9 +145,13 @@ internal static partial class SizeSetRefit
         bool SharesGroup(Piece p, string slot)
             => p.Group != null && pieces.Any(c => c.Slot == slot && c.Race == p.Race
                                                   && string.Equals(c.Group, p.Group, StringComparison.OrdinalIgnoreCase));
+        bool SharesWithAnother(Piece p)
+            => p.Group != null && pieces.Any(c => !ReferenceEquals(c, p) && c.Race == p.Race
+                                                  && string.Equals(c.Group, p.Group, StringComparison.OrdinalIgnoreCase));
         return pieces.OrderBy(p => p.Slot switch { "_top" => 0, "_dwn" => 1, _ => 2 })
                      .Select(p => (p.Slot == "_dwn" || IsEnd(p.Slot)) && SharesGroup(p, "_top") ? p with { FollowsChest = true }
                                 : p.Slot == "_sho" && SharesGroup(p, "_dwn") ? p with { FollowsLegs = true }
+                                : IsEnd(p.Slot) && SharesWithAnother(p) ? p with { Unpaired = true }
                                 : p)
                      .ToList();
     }
@@ -274,7 +283,7 @@ internal static partial class SizeSetRefit
         }
 
         // ── where the sizes go ──
-        var group = new SizeGroup(root, piece);
+        using var group = new SizeGroup(root, piece);
         var authorSizes = AuthorSizes(root, piece, group.Ours);
 
         bool yas = request.Yas || SupportedBodies.IsYas(src.Bones);
@@ -384,15 +393,15 @@ internal static partial class SizeSetRefit
             group.Save(target.Dir, RefitCore.LabelFrom(across ? sourceEntry.Name : null, [src.Pick.Option.Label]), refits,
                        src.Option, notes);
         }
-        group.RestoreDefault();
         return group.Saved;
     }
 
     /// <summary>
     /// The group a piece's sizes go into: which options are there, which are ours, which already carry this piece, and
-    /// the default to put back. One for every piece, chest, legs, shoe or glove alike.
+    /// the default to put back. One for every piece, chest, legs, shoe or glove alike. Disposed, it puts the default of a
+    /// group of ours back — however the piece ends, cancelled or failed partway included.
     /// </summary>
-    private sealed class SizeGroup
+    private sealed class SizeGroup : IDisposable
     {
         private readonly string root;
         private readonly Piece piece;
@@ -456,9 +465,17 @@ internal static partial class SizeSetRefit
         }
 
         /// <summary>Put a group of our own's default back once the run saved into it.</summary>
-        internal void RestoreDefault()
+        public void Dispose()
         {
-            if (Saved > 0 && !authorGroup) PenumbraModMeta.SetSingleDefault(root, Name, defaultBefore);
+            if (Saved == 0 || authorGroup) return;
+            try
+            {
+                PenumbraModMeta.SetSingleDefault(root, Name, defaultBefore);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // Not over what ended the piece — a cancel, or the failure the run reports. The sizes saved stand.
+            }
         }
     }
 

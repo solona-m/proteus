@@ -150,6 +150,10 @@ public sealed class SizeSetStrings
     public readonly string EndsUnreadableFmt = Loc.Localize("SizeSet.EndsUnreadable.Fmt",
         "{0}: its rig can't be read, so its foot or hand can't be kept and no sizes were made of it.");
 
+    /// <summary>{0} is the piece.</summary>
+    public readonly string UnpairedFmt = Loc.Localize("SizeSet.Unpaired.Fmt",
+        "{0}: it is sized in one group with another piece it can't follow, so no sizes were made of it — each size would wear the other piece unrefitted.");
+
     public readonly string NoBodies = Loc.Localize("SizeSet.NoBodies", "No body mods are installed to refit onto.");
 
     /// <summary>{0} is the piece, {1} what went wrong.</summary>

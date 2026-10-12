@@ -4775,6 +4775,10 @@
     "message": "Aucun mod de corps n'est installé vers lequel réajuster.",
     "description": ""
   },
+  "SizeSet.Unpaired.Fmt": {
+    "message": "{0} : sa taille se choisit dans un même groupe qu'une autre pièce qu'il ne peut pas suivre, aucune taille n'en a donc été faite — chaque taille porterait l'autre pièce sans réajustement.",
+    "description": ""
+  },
   "SizeSet.PieceFailed.Fmt": {
     "message": "{0} : échec : {1}",
     "description": ""

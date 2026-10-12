@@ -4775,6 +4775,10 @@
     "message": "リフィット先のボディMODがインストールされていません。",
     "description": ""
   },
+  "SizeSet.Unpaired.Fmt": {
+    "message": "{0}：合わせられない別のパーツと同じサイズグループにあるため、サイズは作りませんでした。作ると、どのサイズももう一方のパーツをリフィットしないまま身に着けることになります。",
+    "description": ""
+  },
   "SizeSet.PieceFailed.Fmt": {
     "message": "{0}：失敗：{1}",
     "description": ""

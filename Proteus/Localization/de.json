@@ -4775,6 +4775,10 @@
     "message": "Es sind keine Körper-Mods installiert, auf die angepasst werden könnte.",
     "description": ""
   },
+  "SizeSet.Unpaired.Fmt": {
+    "message": "{0}: Es wird in einer Gruppe mit einem anderen Teil in der Größe gewählt, dem es nicht folgen kann, daher wurden keine Größen davon erstellt — jede Größe trüge das andere Teil unangepasst.",
+    "description": ""
+  },
   "SizeSet.PieceFailed.Fmt": {
     "message": "{0}: fehlgeschlagen: {1}",
     "description": ""

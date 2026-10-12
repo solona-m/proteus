@@ -4775,6 +4775,10 @@
     "message": "리핏할 바디 모드가 설치되어 있지 않습니다.",
     "description": ""
   },
+  "SizeSet.Unpaired.Fmt": {
+    "message": "{0}: 따라갈 수 없는 다른 파츠와 같은 사이즈 그룹에 있어 사이즈를 만들지 않았습니다. 만들면 모든 사이즈가 다른 파츠를 리핏하지 않은 채 입게 됩니다.",
+    "description": ""
+  },
   "SizeSet.PieceFailed.Fmt": {
     "message": "{0}: 실패: {1}",
     "description": ""

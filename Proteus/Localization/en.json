@@ -4775,6 +4775,10 @@
     "message": "No body mods are installed to refit onto.",
     "description": "Shown when no body mod is installed."
   },
+  "SizeSet.Unpaired.Fmt": {
+    "message": "{0}: it is sized in one group with another piece it can't follow, so no sizes were made of it — each size would wear the other piece unrefitted.",
+    "description": "Size set note: a shoe or glove sized in one group with another piece (gloves beside legs, or a shoe and gloves with no chest) gets no sizes. {0} = the piece, e.g. 'Hands — e6039'."
+  },
   "SizeSet.PieceFailed.Fmt": {
     "message": "{0}: failed: {1}",
     "description": "{0} is the piece (\"Chest — e6255\"), {1} the error."

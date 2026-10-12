@@ -4775,6 +4775,10 @@
     "message": "No hay mods de cuerpo instalados a los que reajustar.",
     "description": ""
   },
+  "SizeSet.Unpaired.Fmt": {
+    "message": "{0}: comparte grupo de tallas con otra pieza a la que no puede seguir, así que no se hicieron tallas de ella; cada talla llevaría la otra pieza sin reajustar.",
+    "description": ""
+  },
   "SizeSet.PieceFailed.Fmt": {
     "message": "{0}: falló: {1}",
     "description": ""
