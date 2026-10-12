@@ -18,6 +18,12 @@ internal static partial class NavelBridge
     /// <summary>How far out, as a multiple of the pit's own reach, the belly the fill carries on is read from.</summary>
     private const float NavelFitReach = 2f;
 
+    /// <summary>
+    /// The flattest a belly is taken to be, as a radius of curvature: the most the fill may bow up over the membrane
+    /// at a distance d from its rim is d²/2R. Bellies curve tighter than this, so the allowance is generous.
+    /// </summary>
+    private const float NavelFlattestBelly = 0.1f;
+
     /// <summary>How far clear of the skin a node the membrane laid under it is raised: a fifth of a millimetre.</summary>
     private const float NavelSkinMargin = 0.0002f;
 
@@ -171,6 +177,9 @@ internal static partial class NavelBridge
             // Every node with any lift, out to where the belly is back on its hull. A navel can sit in a shallow
             // hollow of its own that runs on to a hem or a join, so the edge of the pit is taken higher, a step at a
             // time, until it is clear of them — never past half the depth, where it would no longer be the navel.
+            // Shallower than twice the floor, there is no level both above the floor and inside half the depth.
+            if (NavelLiftFloor > NavelLevelCeiling * report.DepthBefore)
+                return Decline($"the pit here is only {report.DepthBefore * 1000:0.##}mm deep");
             string? why = null;
             for (level = NavelLiftFloor; level <= NavelLevelCeiling * report.DepthBefore; level *= NavelLevelStep)
             {
@@ -321,14 +330,31 @@ internal static partial class NavelBridge
             // Blended in by the strength, and never below where the node started — the fill only ever lifts.
             float s01 = Math.Clamp(strength, 0f, 1f);
             final = (Vec3[])s.At.Clone();
+            proud = 0f;
             foreach (int n in order)
             {
                 float h0 = Dot(s.At[n], ax), hm = Dot(x[n], ax);
                 float target = Q(x[n]) + residual[n];
+                // Never higher than the membrane plus what the flattest belly bows up there: the membrane cannot bulge
+                // (its heights stay inside the rim's), so a target over that is a fit gone wrong, a raised button. Rue+'s
+                // long pit stands 0.72 mm over it unclamped. How far it was is kept for the log.
+                float d2 = float.MaxValue;
+                foreach (int r in rim)
+                {
+                    float du = Dot(x[n], u) - Dot(s.At[r], u), dv = Dot(x[n], v) - Dot(s.At[r], v);
+                    d2 = MathF.Min(d2, du * du + dv * dv);
+                }
+                if (d2 == float.MaxValue) d2 = 0f;
+                float bow = hm + d2 / (2f * NavelFlattestBelly);
+                proud = MathF.Max(proud, target - bow);
+                target = MathF.Min(target, bow);
                 float h = MathF.Max(h0, h0 + s01 * (target - h0));
                 final[n] = new Vec3(x[n].X + ax.X * (h - hm), x[n].Y + ax.Y * (h - hm), x[n].Z + ax.Z * (h - hm));
             }
         }
+
+        /// <summary>The most any pit node's target stood over the membrane beyond the belly's own bow, before the clamp.</summary>
+        private float proud;
 
         /// <summary>
         /// The belly round the pit as h(u, v), a quadric about the site through everything outside the pit out to
@@ -376,6 +402,7 @@ internal static partial class NavelBridge
             if (inward > 0 || inside > 0)
                 return Decline($"the cloth would fold ({inward} triangle(s) turned edge-on or over) or go into the "
                              + $"body ({inside} vertex(es)) — the navel keeps its shape");
+            report.Proud = proud;
 
             // How deep a hollow is left, read the way the pit was found.
             float left = 0f;
@@ -531,15 +558,19 @@ internal static partial class NavelBridge
          : $"navel fill: the navel was found on part {site.Owner}, but none of its meshes the garment covers holds it";
 
     /// <summary>
-    /// The navel's plan merged onto the other passes', unless they already moved any vertex it would: two
+    /// The navel's plan merged onto the other passes', unless they already moved any vertex of its pit or its rim: two
     /// displacements summed on one vertex are checked by neither, and can fold. Then the navel is left out, said so.
     /// </summary>
     internal static BustBridgePlan? MergeNavel(BustBridgePlan? others, BustBridgePlan? navel, Action<string>? log)
     {
         if (others == null || navel == null) return others ?? navel;
+        // Its rim too, not only what it moves: the fill was solved and checked against a rim that stays put.
         int shared = 0;
-        for (int i = 0; i < navel.Delta.Length && i < others.Delta.Length; i++)
-            if (Len(navel.Delta[i]) > BustBridgeEpsilon && Len(others.Delta[i]) > BustBridgeEpsilon) shared++;
+        for (int i = 0; i < navel.Delta.Length && i < others.Delta.Length && i < navel.NodeOf.Length; i++)
+        {
+            int n = navel.NodeOf[i];
+            if (n < navel.NodeWeight.Length && navel.NodeWeight[n] > 0f && Len(others.Delta[i]) > BustBridgeEpsilon) shared++;
+        }
         if (shared == 0) return MergePlans(others, navel);
         log?.Invoke($"navel fill: left out — another span already moves {shared} vertex(es) of the navel");
         return others;

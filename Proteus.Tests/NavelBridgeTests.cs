@@ -362,6 +362,20 @@ public class NavelBridgeTests
         Assert.Contains("open", report2.Reason);
     }
 
+    /// <summary>A navel a shape key has all but flattened is declined, and the log says why.</summary>
+    [Fact]
+    [Trait("Plan", "AC-navel-bridge-7")]
+    public void A_navel_too_shallow_to_fill_says_so()
+    {
+        var site = Locate(Belly(Pit()))!;
+        var log = new List<string>();
+        var (plan, report) = Fill(Belly(Pit(0.0005f)), site, log: log);
+        Assert.Null(plan);
+        Assert.Equal(NavelBridge.NavelOutcome.Declined, report.Outcome);
+        Assert.Contains("deep", report.Reason);
+        Assert.Contains(log, l => l.StartsWith("navel fill: not filled — the pit here is only"));
+    }
+
     [Fact]
     [Trait("Plan", "EDGE-navel-bridge-11")]
     public void A_site_on_another_mesh_is_silent()
@@ -424,21 +438,26 @@ public class NavelBridgeTests
     [Trait("Plan", "EDGE-navel-bridge-17")]
     public void The_navel_is_left_out_where_another_span_moved_it()
     {
-        int n = 3;
-        BodyBridge.BustBridgePlan Plan(params int[] moved)
+        int n = 4;
+        // Moved vertices, and a rim: reshaded (weighted) but not moved.
+        BodyBridge.BustBridgePlan Plan(int[] moved, int[]? rim = null)
         {
             var d = new Vec3[n];
-            foreach (int i in moved) d[i] = new Vec3(0, 0, 0.001f);
+            var w = new float[n];
+            foreach (int i in moved) { d[i] = new Vec3(0, 0, 0.001f); w[i] = 1f; }
+            foreach (int i in rim ?? []) w[i] = 1f;
             return new BodyBridge.BustBridgePlan
             {
-                Delta = d, NodeOf = [0, 1, 2], NodeWeight = new float[n], NodeNormal = new Vec3[n],
+                Delta = d, NodeOf = [0, 1, 2, 3], NodeWeight = w, NodeNormal = new Vec3[n],
             };
         }
         var log = new List<string>();
-        var others = Plan(0);
-        Assert.Same(others, NavelBridge.MergeNavel(others, Plan(0, 1), log.Add));
+        var others = Plan([0]);
+        Assert.Same(others, NavelBridge.MergeNavel(others, Plan([0, 1]), log.Add));
         Assert.Contains(log, l => l.StartsWith("navel fill:"));
-        var merged = NavelBridge.MergeNavel(others, Plan(2), log.Add)!;
+        // The other span moving only the navel's rim leaves it out too.
+        Assert.Same(others, NavelBridge.MergeNavel(others, Plan([2], rim: [0]), null));
+        var merged = NavelBridge.MergeNavel(others, Plan([2], rim: [3]), log.Add)!;
         Assert.Equal(0.001f, merged.Delta[0].Z);
         Assert.Equal(0.001f, merged.Delta[2].Z);
     }
@@ -567,8 +586,10 @@ public class NavelBridgeTests
 
         var plain = Written(SecondSkinWriter.Build([whole, half], [new SecondSkinLayer { MaterialName = Skin }], out _));
         var diag = new List<string>();
-        var filled = Written(SecondSkinWriter.Build([whole, half], [new SecondSkinLayer { MaterialName = Skin, NavelBridgeStrength = 1f }],
-                                                    null, false, out _, diag: diag.Add));
+        var shell = SecondSkinWriter.Build([whole, half], [new SecondSkinLayer { MaterialName = Skin, NavelBridgeStrength = 1f }],
+                                           null, false, out _, diag: diag.Add);
+        SecondSkinWriterVerbatimTests.Validate(shell);
+        var filled = Written(shell);
         Assert.Single(diag, l => l.StartsWith("navel fill: filled"));
         Assert.DoesNotContain(diag, l => l.StartsWith("navel fill: not filled"));
         Assert.Equal(plain.Length, filled.Length);

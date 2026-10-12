@@ -44,6 +44,9 @@ internal static partial class NavelBridge
         public int Spanned { get; set; }
         public int InwardTriangles { get; set; }
         public int InsideNodes { get; set; }
+
+        /// <summary>How far the fill would have stood over the membrane beyond the belly's bow, had it not been clamped there.</summary>
+        public float Proud { get; set; }
     }
 
     /// <summary>
