@@ -467,7 +467,8 @@ public class RefitNippleSmoothTests(ITestOutputHelper output)
         string R = lines.First(l => l.StartsWith("refit nipple smooth: side R tip"));
         Assert.Contains("source prom 0 mm", L);
         Assert.True(Excess(lines, true) > BodyRetarget.ExcessFloor);
-        Assert.Contains("scale 0", R[R.LastIndexOf("scale", StringComparison.Ordinal)..]);
+        Assert.Equal(0f, float.Parse(R[(R.LastIndexOf("scale ", StringComparison.Ordinal) + "scale ".Length)..],
+                                     System.Globalization.CultureInfo.InvariantCulture));
     }
 
     /// <summary>[EDGE-refit-nipple-smooth-8] New-body skin with no source landing near it is not covered.</summary>

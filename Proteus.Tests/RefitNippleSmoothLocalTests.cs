@@ -558,7 +558,7 @@ public class RefitNippleSmoothLocalTests(ITestOutputHelper output)
 
         // The shirt's cloth was read as cover: the pass got past coverage, so it really ran on this chest.
         Assert.DoesNotContain(log, l => l.Contains("covers none"));
-        Assert.True(BodyRetarget.CoveredTargetSkin(parts, pair, out _, SyntheticChest.Uv(garment)).Any(c => c));
+        Assert.Contains(true, BodyRetarget.CoveredTargetSkin(parts, pair, out _, SyntheticChest.Uv(garment)));
         Assert.True(on.Report.Folded <= off.Report.Folded);
         // Where nothing on the man's chest stands prouder than TBSE's, nothing changes at all.
         if (on.Report.Smoothed == 0)
