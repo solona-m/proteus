@@ -51,14 +51,6 @@ responsibility.
    `git submodule update --init --recursive` first, and check the copied
    `Proteus.dll` timestamp rather than trusting the build's output.
 
-6. **One clean command per step — use the right tool.** Use the `Read` tool for
-   file contents (never `cat`/`head`/`tail`/`sed`); search with a single plain
-   `grep`/`rg`/`find`. This applies to every command, reading or acting: no
-   leading `cd` (pass a path instead), and no `;`/`&&` chaining, `for`-loops, or
-   `$(…)` glue. Need several things? Issue separate (parallel) tool calls, not
-   one compound command. It keeps the transcript readable and sidesteps the
-   permission prompts that compound and `cd`-prefixed commands trigger.
-
 ## Project Overview
 
 Proteus is a Dalamud plugin for FFXIV (C# 14, .NET 10, x64, ImGui via Dalamud
