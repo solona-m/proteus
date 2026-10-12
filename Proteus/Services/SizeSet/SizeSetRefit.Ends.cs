@@ -44,8 +44,13 @@ internal static partial class SizeSetRefit
                                        .Where(b => b.Race == race)
                                        .Select(b => SupportedBodies.Find(b, request.Bodies)?.Dir)
                                        .FirstOrDefault(d => d != null) ?? mods[0].Dir;
+        // The game's own body, last, as the automatic refit searches: a shoe or glove made on it shares nothing with any
+        // body mod. Never "enabled" — no collection turns it on — so it wins no tie a body mod is in, as there.
+        var game = request.GameBody?.Invoke(race) is { IsBody: true } g ? g : null;
+        if (game != null) mods.Add((VanillaBodyCatalog.Key, game));
         BodySizeCatalog? CatalogOf(string dir)
-            => request.Bodies.FirstOrDefault(b => string.Equals(b.Dir, dir, StringComparison.OrdinalIgnoreCase))?.Catalog;
+            => dir == VanillaBodyCatalog.Key ? game
+             : request.Bodies.FirstOrDefault(b => string.Equals(b.Dir, dir, StringComparison.OrdinalIgnoreCase))?.Catalog;
 
         (string? Option, byte[] Bytes, ModelParts Garment, HashSet<string> Bones, KeepEnds.Reading Reading,
          KeepEnds.Found Found)? source = null;
@@ -62,7 +67,7 @@ internal static partial class SizeSetRefit
             var bones = new HashSet<string>(SecondSkinWriter.Parse(bytes).BoneNames, StringComparer.Ordinal);
             var found = KeepEnds.Find(reading, garment, bones, race,
                                       (view, slot) => RefitCore.DetectSource(view, bones, slot, race, mods, preferred,
-                                          _ => true, note => log.Information("[Proteus] size set: {0}: {1}", piece.Label, note)),
+                                          dir => dir != VanillaBodyCatalog.Key, note => log.Information("[Proteus] size set: {0}: {1}", piece.Label, note)),
                                       CatalogOf);
             log.Information("[Proteus] size set: {0} from {1}: route {2}, {3} / {4}", piece.Label, option ?? file,
                             KeepEnds.Letter(found.Route), found.Pick?.Dir ?? "-", found.Pick?.Option.Label ?? "-");
@@ -79,9 +84,13 @@ internal static partial class SizeSetRefit
 
         var pick = src.Found.Pick!;
         bool skinOnly = src.Found.Route == KeepEnds.Route.SkinOnly;
-        var sourceEntry = request.Bodies.First(b => string.Equals(b.Dir, pick.Dir, StringComparison.OrdinalIgnoreCase));
-        var sourceCat = sourceEntry.Catalog;
+        // The body mod it was made on — or none, for the game's own body: every refit from that is across bodies.
+        var sourceEntry = request.Bodies.FirstOrDefault(b => string.Equals(b.Dir, pick.Dir, StringComparison.OrdinalIgnoreCase));
+        var sourceCat = sourceEntry?.Catalog ?? game!;
+        string sourceName = sourceEntry?.Name ?? Strings.Parts.RetargetFromVanilla;
         string sourcePath = sourceCat.PathOf(pick.Option);
+        if (sourceEntry == null)
+            log.Information("[Proteus] size set: {0} was made on {1}", piece.Label, sourceName);
 
         // ── where the sizes go: the same bookkeeping as a chest or legs piece's ──
         var group = new SizeGroup(root, piece);
@@ -187,7 +196,7 @@ internal static partial class SizeSetRefit
                 refits.Add(new BodyRetargetWriter.Refit(option, plan.Model, to!.Label));
             }
             if (refits.Count == 0) continue;
-            group.Save(target.Dir, RefitCore.LabelFrom(across ? sourceEntry.Name : null, [pick.Option.Label]), refits,
+            group.Save(target.Dir, RefitCore.LabelFrom(across ? sourceName : null, [pick.Option.Label]), refits,
                        src.Option, notes);
         }
         group.RestoreDefault();

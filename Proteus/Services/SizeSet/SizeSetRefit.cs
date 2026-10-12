@@ -36,9 +36,13 @@ internal static partial class SizeSetRefit
     /// <param name="ReadGameFile">Reads a game path from the game's own data, to tell the game's models a mod merely
     /// ships apart from the author's (see <see cref="PiecesOf"/>); null takes every model as the author's.</param>
     /// <param name="Ends">Make sizes of the mod's shoes and gloves too. Off, the mod's chest and legs alone, as before.</param>
+    /// <param name="GameBody">The game's own body for a race (<see cref="VanillaBodyCatalog"/>), read on the framework
+    /// thread before the run: a shoe or glove may have been made on it, and is searched for there last, after the
+    /// installed body mods, as the automatic refit searches. Null, or a race without one, offers no game body. Chest and
+    /// legs are never read off it.</param>
     internal sealed record Request(string ModRoot, IReadOnlyList<string> Keys, bool Yas, bool Remake,
                                    IReadOnlyList<BodyModIndex.Entry> Bodies, Func<string, byte[]?>? ReadGameFile = null,
-                                   bool Ends = true);
+                                   bool Ends = true, Func<string, BodySizeCatalog?>? GameBody = null);
 
     /// <param name="Made">Sizes saved.</param>
     /// <param name="Notes">Every size left out, and why — for the author to read.</param>
@@ -470,8 +474,9 @@ internal static partial class SizeSetRefit
     /// Neolithe's sizes are YAS-free whatever is asked (the table has none), and a garment made on a Neolithe install
     /// takes its sizes from that same install — a second copy of the pack must not be refitted onto from the first.
     /// </summary>
+    /// <param name="source">The body mod the piece was made on; null for the game's own body, which is no family's.</param>
     private static (SupportedBodies.Body? Body, BodyModIndex.Entry? Mod) BodyFor(string key, string slot, bool yas,
-        IReadOnlyList<BodyModIndex.Entry> installed, BodyModIndex.Entry source, List<string> notes, string piece)
+        IReadOnlyList<BodyModIndex.Entry> installed, BodyModIndex.Entry? source, List<string> notes, string piece)
     {
         var plain = SupportedBodies.Of(key, slot, false);
         var yasBody = SupportedBodies.Of(key, slot, true);
@@ -480,7 +485,7 @@ internal static partial class SizeSetRefit
         var order = yas ? new[] { yasBody, plain } : [plain, yasBody];
         foreach (var body in order.OfType<SupportedBodies.Body>())
         {
-            if (body.Family && SupportedBodies.Find(body, [source]) != null) return (body, source);
+            if (body.Family && source != null && SupportedBodies.Find(body, [source]) != null) return (body, source);
             if (SupportedBodies.Find(body, installed) is { } mod) return (body, mod);
         }
 

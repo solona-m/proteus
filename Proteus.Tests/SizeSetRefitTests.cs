@@ -13,6 +13,7 @@ namespace Proteus.Tests;
 /// <summary>
 /// "Every size for other bodies": the body table carried over from the mod packer, and a whole mod given its sizes.
 /// </summary>
+[Collection(GameBodyCollection.Name)]
 public class SizeSetRefitTests(ITestOutputHelper output)
 {
     [Theory]
@@ -786,6 +787,359 @@ public class SizeSetRefitTests(ITestOutputHelper output)
         }
     }
 
+    // ── the game's own body as a source (sizeset-game-body-source) ───────────────────────────────────────
+
+    private const string Lace = LocalData.Mods + ":Lace Gloves and Boots - by Solona";
+    private const string LaceGlovePath = "chara/equipment/e6039/model/c0201e6039_glv.mdl";
+
+    /// <summary>The game's own body for a race, as the panel reads it on the framework thread before a run.</summary>
+    private static Func<string, BodySizeCatalog?> GameBodies()
+    {
+        var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));
+        return race => VanillaBodyCatalog.Read(race, p => data.GetFile(p)?.Data);
+    }
+
+    /// <summary>
+    /// The baseline a kept-end refit's folded triangles are judged by: the same limb and end pairs, planned across bodies
+    /// with nothing held.
+    /// </summary>
+    private static int UnheldFolded(byte[] model, string slot, BodySizeCatalog source, BodyOption from,
+                                    BodySizeCatalog target, BodyOption to)
+    {
+        var parts = ModelPartReader.Read(model)!;
+        var reading = KeepEnds.Read(slot, parts, model)!;
+        var (endFrom, endTo) = KeepEnds.EndPair(source, target, slot, BodySizeCatalog.RaceOf(to.GamePath) ?? "0201", from, to);
+        var uv = new UVRemapService(Substitute.For<Dalamud.Plugin.Services.IPluginLog>(), ".");
+        Assert.Null(KeepEnds.BuildPairs(reading, source.PathOf(from), target.PathOf(to),
+                                        endFrom == null ? null : source.PathOf(endFrom),
+                                        endTo == null ? null : target.PathOf(endTo), false, _ => (null, null), s => s, uv,
+                                        null, out var limb, out var end));
+        List<BodyRetarget.SlotPair> pairs = [limb];
+        if (end is { } e) pairs.Add(e with { ShapeOnly = true });
+        return BodyRetarget.Plan(parts, model, pairs, slot, held: new HashSet<int>(), replaceSkin: true, acrossBodies: true,
+                                 clearBody: false, cutHidden: true, keepShape: reading.FreePieces,
+                                 swapSlot: reading.Limb).Report.Folded;
+    }
+
+    /// <summary>No game body handed over, as outside the game.</summary>
+    private static readonly Func<string, BodySizeCatalog?>? NoGameBody = null;
+
+    private static byte[] LaceModel(string rel) => File.ReadAllBytes(Path.Combine(LocalData.Path(Lace), "common", rel));
+
+    /// <summary>The game's own boots, in a mod at another item's path: made on the game's body, by definition.</summary>
+    private static byte[] GameBoots(out string path)
+    {
+        var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));
+        path = new[]
+        {
+            "chara/equipment/e0100/model/c0201e0100_sho.mdl", "chara/equipment/e0005/model/c0201e0005_sho.mdl",
+            "chara/equipment/e0036/model/c0201e0036_sho.mdl", "chara/equipment/e0001/model/c0201e0001_sho.mdl",
+        }.First(p => data.GetFile(p) != null);
+        return data.GetFile(path)!.Data;
+    }
+
+    /// <summary>The route and pick of a shoe or glove read over the body mods, then the game's own body, last.</summary>
+    private static KeepEnds.Found ReadWithGameBody(byte[] model, string slot, string race, Func<string, BodySizeCatalog?> game,
+                                                   params string[] bodyMods)
+    {
+        string modsRoot = LocalData.Path(LocalData.Mods);
+        var dirs = bodyMods.Select(n => Path.GetFileName(LocalData.Path(n))).ToDictionary(d => d, d => d);
+        var bodies = new BodyModIndex().RefreshState(dirs, modsRoot).List;
+        var vanilla = game(race)!;
+        var mods = bodies.Select(b => (b.Dir, b.Catalog)).Append((Dir: VanillaBodyCatalog.Key, Catalog: vanilla)).ToList();
+        var parts = ModelPartReader.Read(model)!;
+        var bones = new HashSet<string>(SecondSkinWriter.Parse(model).BoneNames, StringComparer.Ordinal);
+        return KeepEnds.Find(KeepEnds.Read(slot, parts, model)!, parts, bones, race,
+                             (view, s) => RefitCore.DetectSource(view, bones, s, race, mods, mods[0].Dir,
+                                                                 d => d != VanillaBodyCatalog.Key, _ => { }),
+                             d => d == VanillaBodyCatalog.Key ? vanilla : bodies.FirstOrDefault(b => b.Dir == d)?.Catalog);
+    }
+
+    [LocalDataFact(LocalData.GameData, Rue, Yab)]
+    [Trait("Plan", "AC-sizeset-game-body-source-1")]
+    [Trait("Plan", "EDGE-sizeset-game-body-source-6")]
+    [Trait("Plan", "EDGE-sizeset-game-body-source-7")]
+    [Trait("Plan", "EDGE-sizeset-game-body-source-8")]
+    public void Game_boots_get_legs_sizes_read_off_the_game_body()   // [AC-sizeset-game-body-source-1] [EDGE-sizeset-game-body-source-6] [EDGE-sizeset-game-body-source-7] [EDGE-sizeset-game-body-source-8]
+    {
+        // The plan named Lace's boots; read over the game's body too, they still match nothing (5%), so they stay a
+        // note. The game's own boots, made on its body by definition, stand in.
+        var game = GameBodies();
+        var boots = GameBoots(out string from);
+        var found = ReadWithGameBody(boots, "_sho", "0201", game, Rue, Yab);
+        output.WriteLine($"{from}: route {found.Route}, {found.Pick?.Dir} / {found.Pick?.Option.Label}");
+        Assert.Contains(found.Route, new[] { KeepEnds.Route.Skin, KeepEnds.Route.Cloth });
+        Assert.Equal(VanillaBodyCatalog.Key, found.Pick!.Dir);
+
+        string root = ShoeMod(boots, "Boots");
+        try
+        {
+            var (result, _) = RunOn(root, ["rue", "yab"], game, Rue, Yab);
+            var added = Options(root, "Shoes").Skip(1).ToList();
+            output.WriteLine($"added: {string.Join(", ", added)}; {result.Made} made");
+            var table = new[] { "rue", "yab" }.Select(k => SupportedBodies.Of(k, "_dwn", false)!)
+                                             .SelectMany(b => b.Sizes.Select(s => SupportedBodies.OptionName(b, s))).ToHashSet();
+            Assert.NotEmpty(added);
+            Assert.All(added, o => Assert.Contains(o, table));
+            foreach (string option in added)
+                Assert.Equal(0, EndPointsMissing(boots, "_sho", ModelOf(root, "Shoes", option, ShoePath)));
+            Assert.Equal(added.Count, result.Made);
+            // Recorded as made from the game's body.
+            var record = BodyRetargetWriter.ReadRecord(root)!;
+            Assert.All(record.Options, e => Assert.Contains(Proteus.Localization.Strings.Parts.RetargetFromVanilla, e.From));
+            // The pass's own plans: nothing left folded.
+            Assert.All(EndRefitsLogged(), l => Assert.True(l.Folded == 0, $"{l.Option}: {l.Folded} triangles left folded"));
+            // The author's group keeps its place and default; never v3.
+            Assert.Equal(["Shoes"], (PenumbraModMeta.TryReadGroups(root) ?? []).Select(g => g.Name));
+            Assert.Equal("Boots", PenumbraModMeta.SingleDefault(root, "Shoes"));
+            Assert.DoesNotContain("\"FileVersion\": 3", File.ReadAllText(Path.Combine(root, PenumbraModMeta.MetaFile)));
+
+            var (again, _) = RunOn(root, ["rue", "yab"], game, Rue, Yab);
+            Assert.Equal(0, again.Made);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [LocalDataFact(LocalData.GameData, Lace, Rue, Yab)]
+    [Trait("Plan", "AC-sizeset-game-body-source-2")]
+    public void Lace_gloves_made_on_the_game_body_get_one_option_per_body()   // [AC-sizeset-game-body-source-2]
+    {
+        var game = GameBodies();
+        var gloves = LaceModel("4/c0201e6039_glv.mdl");
+        var found = ReadWithGameBody(gloves, "_glv", "0201", game, Rue, Yab);
+        Assert.Contains(found.Route, new[] { KeepEnds.Route.Skin, KeepEnds.Route.Cloth });
+        Assert.Equal(VanillaBodyCatalog.Key, found.Pick!.Dir);
+
+        string root = ShoeMod(gloves, "Lace", LaceGlovePath);
+        try
+        {
+            var (result, _) = RunOn(root, ["rue", "yab"], game, Rue, Yab);
+            var added = Options(root, "Shoes").Skip(1).ToList();
+            output.WriteLine($"added: {string.Join(", ", added)}; {result.Made} made");
+            Assert.Equal(["Rue", "YAB"], added);
+            foreach (string option in added)
+            {
+                var saved = ModelOf(root, "Shoes", option, LaceGlovePath);
+                Assert.Equal(0, EndPointsMissing(gloves, "_glv", saved));
+                // Its kept hands' gen2 skin, drawn as the new body draws its own — or, where it cannot be converted
+                // here, said so in the log.
+                bool converted = !MaterialsOf(saved).Contains("/mt_c0201b0001_a.mtrl");
+                bool said = lastLog.Any(l => l.Template.Contains("no way to convert", StringComparison.Ordinal));
+                output.WriteLine($"{option}: {string.Join(", ", MaterialsOf(saved))}{(said ? " (not convertible here)" : "")}");
+                Assert.True(converted || said, $"{option}: kept the gen2 skin without saying why");
+            }
+            // The pass's own plans leave no more folded than the same pairs planned with nothing held.
+            var vanilla = game("0201")!;
+            foreach (var (option, folded) in EndRefitsLogged())
+            {
+                string dir = Path.GetFileName(LocalData.Path(option == "Rue" ? Rue : Yab));
+                var target = BodySizeCatalog.Read(Path.Combine(LocalData.Path(LocalData.Mods), dir));
+                string middle = SupportedBodies.Of(option == "Rue" ? "rue" : "yab", "_top", false)!.Sizes.First(s => s.Name == "M").Rel;
+                var to = target.Options.First(o => RefitCore.Normal(o.Rel) == RefitCore.Normal(middle));
+                int unheld = UnheldFolded(gloves, "_glv", vanilla, found.Pick.Option, target, to);
+                output.WriteLine($"{option}: {folded} folded, {unheld} with nothing held");
+                Assert.True(folded <= unheld, $"{option}: {folded} triangles left folded, {unheld} with nothing held");
+            }
+            Assert.Equal(2, result.Made);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [LocalDataFact(LocalData.GameData, LocalData.ShiftPack, SeenGloves, Yab, Rue, Bibo)]
+    [Trait("Plan", "AC-sizeset-game-body-source-3")]
+    [Trait("Plan", "EDGE-sizeset-game-body-source-3")]
+    public void Body_mod_shoes_and_gloves_read_the_same_with_the_game_body_offered()   // [AC-sizeset-game-body-source-3] [EDGE-sizeset-game-body-source-3]
+    {
+        var game = GameBodies();
+        var cases = new (byte[] Model, string Option, string Path, string[] Keys, string[] Bodies)[]
+        {
+            (LocalData.PackEntryEndingWith(LocalData.ShiftPack, "e6219_sho.mdl"), "YAB WC", ShoePath, ["yab", "rue", "bibo"],
+             [Yab, Rue, Bibo]),
+            // Shift with the body it was made on not installed: still read as made on a body mod, not the game's.
+            (LocalData.PackEntryEndingWith(LocalData.ShiftPack, "e6219_sho.mdl"), "YAB WC", ShoePath, ["rue", "bibo"],
+             [Rue, Bibo]),
+            (File.ReadAllBytes(LocalData.Path(SeenGloves)), "Gloves", GlovePath, ["rue", "yab", "bibo"], [Rue, Yab, Bibo]),
+        };
+        foreach (var (model, option, path, keys, bodies) in cases)
+        {
+            string without = ShoeMod(model, option, path);
+            string with = ShoeMod(model, option, path);
+            try
+            {
+                var (a, _) = RunOn(without, keys, NoGameBody, bodies);
+                var (b, _) = RunOn(with, keys, game, bodies);
+                var addedA = Options(without, "Shoes").Skip(1).ToList();
+                var addedB = Options(with, "Shoes").Skip(1).ToList();
+                output.WriteLine($"{path} on {string.Join("/", keys)}: {string.Join(", ", addedA)} | {string.Join(", ", addedB)}");
+                Assert.Equal(addedA, addedB);
+                Assert.Equal(a.Made, b.Made);
+                foreach (string o in addedA) Assert.Equal(ModelOf(without, "Shoes", o, path), ModelOf(with, "Shoes", o, path));
+                Assert.DoesNotContain(BodyRetargetWriter.ReadRecord(with)?.Options ?? [],
+                                      e => e.From.Contains(Proteus.Localization.Strings.Parts.RetargetFromVanilla));
+            }
+            finally
+            {
+                Directory.Delete(without, recursive: true);
+                Directory.Delete(with, recursive: true);
+            }
+        }
+    }
+
+    [LocalDataFact(LocalData.GameData, Heartthrob, CasualFitShirt, TheBodySe, TheBodySeX, Bibo, Rue)]
+    [Trait("Plan", "AC-sizeset-game-body-source-4")]
+    public void Chest_and_legs_never_read_the_game_body()   // [AC-sizeset-game-body-source-4]
+    {
+        var game = GameBodies();
+        // A chest made on Bibo+: the very same sizes with the game's body offered as without.
+        string without = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
+        string with = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
+        string shirt = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            foreach (string root in new[] { without, with })
+            {
+                Directory.CreateDirectory(root);
+                File.Copy(Path.Combine(LocalData.Path(Heartthrob), "top size", "small", "chara", "equipment", "e6071",
+                                       "model", "c0201e6071_top.mdl"), Path.Combine(root, "top.mdl"));
+                File.WriteAllText(Path.Combine(root, PenumbraModMeta.MetaFile), """
+                    { "FileVersion": 4, "Name": "Top", "DefaultData": { "Files": {}, "FileSwaps": {}, "Manipulations": [] },
+                      "Groups": [ { "Version": 0, "Name": "Size", "Type": "Single", "Priority": 0, "DefaultSettings": 0,
+                        "Options": [ { "Name": "Small", "Files": { "chara/equipment/e6071/model/c0201e6071_top.mdl": "top.mdl" } } ] } ] }
+                    """);
+            }
+            RunOn(without, ["rue"], NoGameBody, Bibo, Rue);
+            RunOn(with, ["rue"], game, Bibo, Rue);
+            var added = Options(without).Skip(1).ToList();
+            Assert.NotEmpty(added);
+            Assert.Equal(added, Options(with).Skip(1));
+            foreach (string o in added)
+                Assert.Equal(ModelOf(without, "Size", o, "chara/equipment/e6071/model/c0201e6071_top.mdl"),
+                             ModelOf(with, "Size", o, "chara/equipment/e6071/model/c0201e6071_top.mdl"));
+
+            // A men's shirt made on no installed body is still refused, not taken for one made on the game's body.
+            CopyModels(LocalData.Path(CasualFitShirt), shirt);
+            var (refused, _) = RunOn(shirt, ["tbse", "tbse-x"], game, TheBodySe, TheBodySeX);
+            Assert.Equal(0, refused.Made);
+            Assert.Contains(refused.Notes, n => n.Contains("e6146", StringComparison.Ordinal));
+        }
+        finally
+        {
+            foreach (string root in new[] { without, with, shirt })
+                if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [LocalDataFact(Lace, Rue)]
+    [Trait("Plan", "AC-sizeset-game-body-source-5")]
+    [Trait("Plan", "EDGE-sizeset-game-body-source-1")]
+    public void Without_the_game_body_lace_gloves_read_as_they_did()   // [AC-sizeset-game-body-source-5] [EDGE-sizeset-game-body-source-1]
+    {
+        // No game body handed over (outside the game), or none for the race: read only over the body mods, as before.
+        // With Rue+ alone installed that is a nearness reading onto Rue+ (2.7 mm off), whose arms are one shape at every
+        // size — so nothing is made, and nothing is said to come from the game's body.
+        foreach (var gameBody in new[] { NoGameBody, _ => null })
+        {
+            string root = ShoeMod(LaceModel("4/c0201e6039_glv.mdl"), "Lace", LaceGlovePath);
+            try
+            {
+                var (result, _) = RunOn(root, ["rue"], gameBody, Rue);
+                Assert.Equal(0, result.Made);
+                Assert.Equal(["Lace"], Options(root, "Shoes"));
+                Assert.DoesNotContain(lastLog, l => l.Args.Contains(VanillaBodyCatalog.Key));
+            }
+            finally
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [LocalDataFact(LocalData.GameData, Lace, TheBodySe, Rue)]
+    [Trait("Plan", "EDGE-sizeset-game-body-source-2")]
+    public void Mens_lace_gloves_read_the_mens_game_body()   // [EDGE-sizeset-game-body-source-2]
+    {
+        var game = GameBodies();
+        var gloves = LaceModel("3/c0101e6039_glv.mdl");
+        var found = ReadWithGameBody(gloves, "_glv", "0101", game, TheBodySe);
+        output.WriteLine($"route {found.Route}, {found.Pick?.Dir} / {found.Pick?.Option.Label}");
+        Assert.Equal(VanillaBodyCatalog.Key, found.Pick?.Dir);
+
+        string root = ShoeMod(gloves, "Lace", "chara/equipment/e6039/model/c0101e6039_glv.mdl");
+        try
+        {
+            var (result, _) = RunOn(root, ["tbse", "rue"], game, TheBodySe, Rue);
+            var added = Options(root, "Shoes").Skip(1).ToList();
+            output.WriteLine($"added: {string.Join(", ", added)}; notes: {string.Join(" / ", result.Notes)}");
+            Assert.Equal(["TBSE"], added);
+            Assert.Equal(0, EndPointsMissing(gloves, "_glv",
+                                             ModelOf(root, "Shoes", "TBSE", "chara/equipment/e6039/model/c0101e6039_glv.mdl")));
+            Assert.Empty(result.Notes);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [LocalDataFact(LocalData.GameData, Lace, Neolithe)]
+    [Trait("Plan", "EDGE-sizeset-game-body-source-5")]
+    public void Lace_gloves_onto_Neolithe_take_the_table_sizes()   // [EDGE-sizeset-game-body-source-5]
+    {
+        // A family body, and a source that is no family's: the table's sizes, from the installed Neolithe.
+        var gloves = LaceModel("4/c0201e6039_glv.mdl");
+        string root = ShoeMod(gloves, "Lace", LaceGlovePath);
+        try
+        {
+            var (result, _) = RunOn(root, ["neolithe"], GameBodies(), Neolithe);
+            var added = Options(root, "Shoes").Skip(1).ToList();
+            output.WriteLine($"added: {string.Join(", ", added)}; notes: {string.Join(" / ", result.Notes)}");
+            Assert.Equal(["Neolithe"], added);
+            Assert.Equal(0, EndPointsMissing(gloves, "_glv", ModelOf(root, "Shoes", "Neolithe", LaceGlovePath)));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [LocalDataFact(LocalData.GameData, Lace, Rue)]
+    [Trait("Plan", "EDGE-sizeset-game-body-source-9")]
+    public void Lace_boots_beside_legs_read_off_no_body_make_nothing()   // [EDGE-sizeset-game-body-source-9]
+    {
+        // The boots in one group with legs the size set cannot read: the legs are never read off the game's body, so
+        // they make nothing and say so, and the boots, which only join what the legs made, make nothing either. One
+        // note from the legs, one from the boots — expected, not a fault.
+        string root = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            File.WriteAllBytes(Path.Combine(root, "sho.mdl"), LaceModel("19/c0201e6039_sho.mdl"));
+            var game = GameBodies();
+            File.Copy(game("0201")!.PathOf(game("0201")!.For("_dwn", "0201")[0]), Path.Combine(root, "dwn.mdl"));
+            File.WriteAllText(Path.Combine(root, PenumbraModMeta.MetaFile), """
+                { "FileVersion": 4, "Name": "Outfit", "DefaultData": { "Files": {}, "FileSwaps": {}, "Manipulations": [] },
+                  "Groups": [ { "Version": 0, "Name": "Bottom", "Type": "Single", "Priority": 0, "DefaultSettings": 0,
+                    "Options": [ { "Name": "Lace", "Files": { "chara/equipment/e6039/model/c0201e6039_dwn.mdl": "dwn.mdl",
+                                                              "chara/equipment/e6039/model/c0201e6039_sho.mdl": "sho.mdl" } } ] } ] }
+                """);
+            var (result, _) = RunOn(root, ["rue"], game, Rue);
+            output.WriteLine("notes: " + string.Join(" / ", result.Notes));
+            Assert.Equal(0, result.Made);
+            Assert.Equal(["Lace"], Options(root, "Bottom"));
+            Assert.Contains(result.Notes, n => n.Contains("Legs — e6039", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     [LocalDataFact(Heartthrob, Bibo, Rue, Yab)]
     [Trait("Plan", "AC-keep-ends-studio-10")]
     [Trait("Plan", "EDGE-keep-ends-studio-26")]
@@ -988,12 +1342,19 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     /// <summary>Run a size set on a copy of a mod, printing what it said and logged.</summary>
     private (SizeSetRefit.Result Result, SizeSetRefit.Request Request) RunOn(string copy, IReadOnlyList<string> keys,
                                                                             params string[] bodyMods)
+        => RunOn(copy, keys, null, bodyMods);
+
+    /// <inheritdoc cref="RunOn(string, IReadOnlyList{string}, string[])"/>
+    /// <param name="gameBody">The game's own body per race, as the panel hands it over; null offers none.</param>
+    private (SizeSetRefit.Result Result, SizeSetRefit.Request Request) RunOn(string copy, IReadOnlyList<string> keys,
+                                                                            Func<string, BodySizeCatalog?>? gameBody,
+                                                                            params string[] bodyMods)
     {
         string modsRoot = LocalData.Path(LocalData.Mods);
         var mods = bodyMods.Select(n => Path.GetFileName(LocalData.Path(n))).ToDictionary(d => d, d => d);
         var bodies = new BodyModIndex().RefreshState(mods, modsRoot).List;
         var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
-        var request = new SizeSetRefit.Request(copy, keys, Yas: false, Remake: false, bodies);
+        var request = new SizeSetRefit.Request(copy, keys, Yas: false, Remake: false, bodies, GameBody: gameBody);
         var result = SizeSetRefit.Run(request, new UVRemapService(log, "."), log, p => output.WriteLine(p),
                                       CancellationToken.None);
         foreach (string note in result.Notes) output.WriteLine("note: " + note);

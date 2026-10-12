@@ -225,8 +225,14 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
         // Penumbra's mod list is IPC: asked here, on the framework thread, and handed to the worker.
         if (penumbra.GetAllMods() is not { } mods || penumbra.GetModDirectory() is not { } modsRoot) return;
 
+        // The game's own body, which a shoe or glove may have been made on, read here: the game's data is read on this
+        // thread, and a read that failed on the worker would leave the automatic refit without the game's body too.
+        var gameBodies = new Dictionary<string, BodySizeCatalog>(StringComparer.Ordinal);
+        if (config.SizeSetEnds)
+            foreach (string race in keys.Select(k => SupportedBodies.Of(k, "_top", false)?.Race).OfType<string>().Distinct())
+                gameBodies[race] = VanillaBodyCatalog.Read(race, readGameFile);
         var request = new SizeSetRefit.Request(modRoot, keys, config.SizeSetYas, remake, [], readGameFile,
-                                               config.SizeSetEnds);
+                                               config.SizeSetEnds, race => gameBodies.GetValueOrDefault(race));
         cancel = new CancellationTokenSource();
         var ct = cancel.Token;
         runningFor = modDir;
