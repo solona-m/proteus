@@ -158,6 +158,33 @@ public class NavelBridgeLocalTests(ITestOutputHelper o)
                                                near.Contains, site.Axis, 1e-12f));
     }
 
+    /// <summary>
+    /// The written navel re-read as the locator reads a pit, where nothing lies under it: the top part built alone,
+    /// and its navel found as that build finds it. Not Rue+, whose shallow hollow then runs on to the top's hem — a
+    /// build the game never makes, since it always cuts a body from every part.
+    /// </summary>
+    [LocalDataTheory(Neo, Bibo)]
+    [Trait("Plan", "AC-navel-bridge-10")]
+    [InlineData("Neolithe")]
+    [InlineData("Bibo+")]
+    public void The_written_navel_reads_flush(string body)
+    {
+        int owner = NavelBridge.LocateNavel(Parts(body), null, out _)!.Owner;
+        var site = NavelBridge.LocateNavel([Parts(body)[owner]], null, out _)!;
+        var top = File.ReadAllBytes(PartsOf(body)[owner]);
+        Assert.True(TryReadLod0Geometry(Build([top], [new SecondSkinLayer { MaterialName = ShellMaterial }]),
+                                        out var pp, out _, out var pt, out _, out var pn, keepMaterial: _ => true));
+        Assert.True(TryReadLod0Geometry(Build([top], [Navel()]), out var fp, out _, out var ft, out _, out var fn,
+                                        keepMaterial: _ => true));
+        var before = NavelBridge.ToNavelMesh(pp, pn, pt, []);
+        var after = NavelBridge.ToNavelMesh(fp, fn, ft, []);
+        float deep = NavelBridge.NavelDepthAt(before.Pos, before.Nrm, before.Tris, site);
+        float left = NavelBridge.NavelDepthAt(after.Pos, after.Nrm, after.Tris, site);
+        o.WriteLine($"{body}: written navel {deep * 1000:0.##}mm deep plain, {left * 1000:0.##}mm with the tick");
+        Assert.True(deep > 0.003f, $"the plain shell's navel read {deep * 1000:0.##}mm");
+        Assert.True(left <= MostLeft, $"{left * 1000:0.##}mm left — a hollow, or a moat round a raised fill");
+    }
+
     /// <summary>The most the written shell may rise past the fill's own lift (AC-10).</summary>
     private const float ProudMost = 0.0003f;
 

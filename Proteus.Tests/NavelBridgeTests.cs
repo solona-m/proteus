@@ -256,6 +256,18 @@ public class NavelBridgeTests
         Assert.NotNull(Locate(b, bust: Near(0.05f)));
     }
 
+    /// <summary>
+    /// On a body with no breast bones only the lower half of the midline is searched: this belly runs from 0.95 to
+    /// 1.30, so the same pit is the navel at 1.05 and nothing at 1.20, where the gap between the pectorals would be.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "EDGE-navel-bridge-6")]
+    public void Without_breasts_only_the_lower_half_of_the_midline_is_searched()
+    {
+        Assert.NotNull(Locate(Belly(Pit(y0: NavelY))));
+        Assert.Null(Locate(Belly(Pit(y0: 1.2f))));
+    }
+
     [Fact]
     [Trait("Plan", "EDGE-navel-bridge-7")]
     public void An_overhanging_navel_fills_without_folding()
@@ -540,15 +552,17 @@ public class NavelBridgeTests
     {
         var dent = Pit(0.005f, 0.004f);
         var whole = SyntheticModel.Build([], BellyMesh(Skin, dent));
-        // Half a navel, just under the whole one, as the legs' copy lies under the top's: not a join.
-        var half = SyntheticModel.Build([], BellyMesh(Skin, dent, drop: c => c.X > -0.001f, inset: 0.0005f));
+        // A whole second copy just under the first, as the legs' copy lies under the top's (not a join). It would fill
+        // too if every part filled its own navel; the first part wins the tie, so it alone carries the navel.
+        var half = SyntheticModel.Build([], BellyMesh(Skin, dent, inset: 0.0005f));
         int wholeCount = Written(SecondSkinWriter.Build([whole], [new SecondSkinLayer { MaterialName = Skin }], out _)).Length;
 
         var plain = Written(SecondSkinWriter.Build([whole, half], [new SecondSkinLayer { MaterialName = Skin }], out _));
         var diag = new List<string>();
         var filled = Written(SecondSkinWriter.Build([whole, half], [new SecondSkinLayer { MaterialName = Skin, NavelBridgeStrength = 1f }],
                                                     null, false, out _, diag: diag.Add));
-        Assert.Contains(diag, l => l.StartsWith("navel fill: filled"));
+        Assert.Single(diag, l => l.StartsWith("navel fill: filled"));
+        Assert.DoesNotContain(diag, l => l.StartsWith("navel fill: not filled"));
         Assert.Equal(plain.Length, filled.Length);
         int movedWhole = Enumerable.Range(0, wholeCount).Count(i => plain[i] != filled[i]);
         int movedHalf = Enumerable.Range(wholeCount, plain.Length - wholeCount).Count(i => plain[i] != filled[i]);
