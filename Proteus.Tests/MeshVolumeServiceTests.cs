@@ -501,7 +501,11 @@ public class MeshVolumeServiceTests
         Assert.Equal(PositionAt(mdl, 0, 6), PositionAt(written.Model, 0, 6));
     }
 
-    /// <summary>A mesh with no shape of its own, in a model that has shapes, moves every vertex by its own delta.</summary>
+    /// <summary>
+    /// A mesh with no shape of its own, in a model that has shapes, moves every vertex by its own delta. Mesh 1 has three
+    /// triangles so its vertex 6 is a real corner at the same local index as mesh 0's spare: a spare key that forgot the
+    /// mesh would skip it in the main pass.
+    /// </summary>
     [Fact]
     public void A_shape_free_mesh_moves_by_its_own_delta()   // [EDGE-spare-carry-append-worn-7]
     {
@@ -509,7 +513,7 @@ public class MeshVolumeServiceTests
             [],
             [
                 new SyntheticModel.Mesh("/mt_a.mtrl", new SyntheticModel.Sub(0, TrianglesPerIsland: 2)) { Spares = 1 },
-                new SyntheticModel.Mesh("/mt_b.mtrl", new SyntheticModel.Sub(0, TrianglesPerIsland: 2, OffsetX: 5f)),
+                new SyntheticModel.Mesh("/mt_b.mtrl", new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetX: 5f)),
             ],
             SyntheticModel.V6,
             [new SyntheticModel.Shape("shp_a", 0, [(0, 6), (3, 6)])]);
@@ -517,6 +521,7 @@ public class MeshVolumeServiceTests
         var written = MeshVolumeService.Inflate(mdl, new FieldEdit(read.MeshSpans, read.Positions, _ => new Vector3(0f, 0.01f, 0f)));
 
         var mesh1 = read.MeshSpans[1];
+        Assert.True(mesh1.Count > 6, "mesh 1 needs a vertex at the spare's local index");
         for (int v = 0; v < mesh1.Count; v++)
             Assert.Equal(PositionAt(mdl, 1, v).Y + 0.01f, PositionAt(written.Model, 1, v).Y, 1e-6f);
     }
