@@ -96,6 +96,24 @@ public class ShellBuildMemoTests
         Assert.NotEqual(baseline, SecondSkinService.ShellGeometryKey([Body(model)], [Layer(cov)], Buffer(64, 9)));
     }
 
+    /// <summary>Ticking the navel rebuilds the shell: a key that ignored it would hand back the unfilled mesh.</summary>
+    [Fact]
+    [Trait("Plan", "AC-navel-bridge-9")]
+    public void GeometryKey_MovesWithTheNavel()
+    {
+        var model = Buffer(4096, 11);
+        var cov = Buffer(256, 12);
+        SecondSkinLayer L(float navel) => new()
+        {
+            MaterialName = "/mt_a.mtrl", Coverage = cov, CoverageWidth = 16, CoverageHeight = 16, NavelBridgeStrength = navel,
+        };
+        var off = SecondSkinService.ShellGeometryKey([Body(model)], [L(0f)], null);
+        Assert.NotNull(off);
+        Assert.NotEqual(off, SecondSkinService.ShellGeometryKey([Body(model)], [L(1f)], null));
+        Assert.NotEqual(SecondSkinService.ShellGeometryKey([Body(model)], [L(0.5f)], null),
+                        SecondSkinService.ShellGeometryKey([Body(model)], [L(1f)], null));
+    }
+
     /// <summary>Anything the key cannot describe must make the build uncacheable, never cache it under a partial key.</summary>
     [Fact]
     public void GeometryKey_RefusesWhatItCannotDescribe()

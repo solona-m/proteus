@@ -1883,6 +1883,16 @@ public sealed class ColorsStrings
         "How far the fabric relaxes toward the flat span. 1.00 lifts the cleft level with the\n"
       + "cheeks either side, which is usually too much — lower values keep more of it.");
 
+    public readonly string NavelBridge = Loc.Localize("Colors.NavelBridge.Label",
+        "Span the belly button");
+
+    public readonly string NavelBridgeTip = Loc.Localize("Colors.NavelBridge.Tip",
+        "Turn this on for cloth over the stomach.\n"
+      + "Proteus builds a garment as a copy of the body, so it dips into the belly button —\n"
+      + "which reads as painted on rather than worn. With this on, the fabric is stretched flat\n"
+      + "across it the way real cloth is. Nothing is pulled inward, so it cannot cut into the body.\n"
+      + "Where the garment is cut away at the belly button, or the body has none, this does nothing.");
+
     public readonly string SmoothFold = Loc.Localize("Colors.SmoothFold.Label",
         "Smooth between the legs");
 

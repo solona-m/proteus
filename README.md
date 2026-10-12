@@ -355,6 +355,7 @@ Two more collapsible sections apply to the whole mod:
 - **Geometry** reshapes the garment Proteus builds from your body, so it reads as fabric rather than paint. Proteus builds a second skin as a copy of your body, so by default it follows every hollow:
   - **Span the cleavage**: the fabric between the breasts spans straight across, the way real cloth does. Nothing is pulled inward, so it can't cut into the body.
   - **Span the buttocks**: the same across the seat.
+  - **Span the belly button**: the fabric stretches flat across the navel instead of dipping into it.
   - **Smooth between the legs**: smooths the fold at the crotch. This changes the body underneath, so it applies to every garment worn at once.
   - **Smooth the nipple**: smooths the fabric over it. Not finished yet: the body underneath keeps its shape, so on a close fit it can still show through.
 

@@ -711,6 +711,14 @@
     "message": "Skin(그리기)",
     "description": ""
   },
+  "Colors.NavelBridge.Label": {
+    "message": "배꼽 위를 천으로 잇기",
+    "description": ""
+  },
+  "Colors.NavelBridge.Tip": {
+    "message": "배를 덮는 천에 켜세요.\nProteus는 옷을 몸의 복사본으로 만들기 때문에 배꼽 안까지 파고들어,\n입은 것이 아니라 그린 것처럼 보입니다. 켜면 천이 진짜 천처럼\n배꼽 위로 평평하게 펴집니다. 안쪽으로 당기지 않으므로 몸을 파고들 수 없습니다.\n옷이 배꼽 부분에서 잘려 있거나 몸에 배꼽이 없으면 아무것도 하지 않습니다.",
+    "description": ""
+  },
   "Colors.NoActiveOptions": {
     "message": "활성 옵션이 없습니다 — Penumbra에서 하나를 선택하면 색상을 편집할 수 있습니다.",
     "description": ""

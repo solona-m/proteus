@@ -57,17 +57,20 @@ public static partial class SecondSkinWriter
         public readonly PhaseCounter Bust      = new();   //   of which: bust bridge solves
         public readonly PhaseCounter Cleft     = new();   //   of which: cleft solves
         public readonly PhaseCounter Crotch    = new();   //   of which: crotch flat solves
+        public readonly PhaseCounter Navel     = new();   //   of which: navel fills
+        public readonly PhaseCounter NavelFind = new();   // finding the navel, once per build that asks for it
         public readonly PhaseCounter Serialize = new();   // string block, headers, buffers
 
         public void Reset()
         {
             Prepare.Reset(); CapSelect.Reset(); Layers.Reset(); Bust.Reset(); Cleft.Reset(); Crotch.Reset();
-            Serialize.Reset();
+            Navel.Reset(); NavelFind.Reset(); Serialize.Reset();
         }
 
         public string Describe()
-            => $"prepare {Prepare.Ms:F0} (caps {CapSelect.Ms:F0}) | layers {Layers.Ms:F0} (bust {Bust.Ms:F0}/{Bust.Calls}"
-             + $" + cleft {Cleft.Ms:F0}/{Cleft.Calls} + crotch flat {Crotch.Ms:F0}/{Crotch.Calls}) | serialize {Serialize.Ms:F0}";
+            => $"prepare {Prepare.Ms:F0} (caps {CapSelect.Ms:F0}, navel {NavelFind.Ms:F0}) | layers {Layers.Ms:F0} "
+             + $"(bust {Bust.Ms:F0}/{Bust.Calls} + cleft {Cleft.Ms:F0}/{Cleft.Calls} + crotch flat "
+             + $"{Crotch.Ms:F0}/{Crotch.Calls} + navel {Navel.Ms:F0}/{Navel.Calls}) | serialize {Serialize.Ms:F0}";
     }
 
     /// <summary>
