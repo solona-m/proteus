@@ -862,8 +862,8 @@ public class KeepEndsTests
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-keep-ends-studio-7")]
-    public void Studio_kept_pieces_are_named_by_the_plans_own_list()   // [EDGE-keep-ends-studio-7]
+    [Trait("Plan", "EDGE-keep-shape-release-12")]
+    public void Studio_kept_pieces_are_named_by_the_plans_own_list()   // [EDGE-keep-shape-release-12]
     {
         // Two pieces kept in shape: one wholly on the foot — held with it, so not among the plan's pieces — and one on
         // the leg. The Studio's warning for a piece the refit let go is read by the plan's own piece index, so the names
