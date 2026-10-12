@@ -249,6 +249,15 @@ public class SizeSetRefitTests(ITestOutputHelper output)
             Assert.False(Of("e6004", "_dwn").Unpaired);  // the legs themselves are sized as ever
             Assert.True(Of("e6005", "_sho").Unpaired);   // a shoe and gloves, no chest or legs
             Assert.True(Of("e6005", "_glv").Unpaired);
+            // Two shoes of different items in one group are sized alike, into the same options: not unpaired.
+            File.WriteAllText(Path.Combine(root, PenumbraModMeta.MetaFile), """
+                { "FileVersion": 4, "Name": "Two shoes",
+                  "DefaultData": { "Files": {}, "FileSwaps": {}, "Manipulations": [] },
+                  "Groups": [ { "Version": 0, "Name": "Item", "Type": "Single", "Priority": 0, "DefaultSettings": 0, "Options": [
+                    { "Name": "S", "Files": { "chara/equipment/e6006/model/c0201e6006_sho.mdl": "a\\sho.mdl",
+                                              "chara/equipment/e6007/model/c0201e6007_sho.mdl": "b\\sho.mdl" } } ] } ] }
+                """);
+            Assert.All(SizeSetRefit.PiecesOf(root), p => Assert.False(p.Unpaired, p.GamePath));
             // An end that follows a chest or legs, or has its group to itself, is not (see Follow_flags_for_shoes_and_gloves).
             string ends = EndsMod();
             try

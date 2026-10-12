@@ -204,6 +204,7 @@ internal static partial class SizeSetRefit
             group.Save(target.Dir, RefitCore.LabelFrom(across ? sourceName : null, [pick.Option.Label]), refits,
                        src.Option, notes);
         }
+        group.RestoreDefault();
         return group.Saved;
     }
 

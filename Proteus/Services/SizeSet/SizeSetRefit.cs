@@ -79,7 +79,7 @@ internal static partial class SizeSetRefit
     /// ("Rue WC"), so one choice dresses both. A shoe or glove in a group with a chest follows the chest instead.
     /// </param>
     /// <param name="Unpaired">
-    /// A shoe or glove sized in one group with another piece of its race it cannot follow — gloves beside legs, or a shoe
+    /// A shoe or glove sized in one group with a piece of its race, of another slot, it cannot follow — gloves beside legs, or a shoe
     /// and gloves with no chest or legs. Each would add sizes of its own to the group, every one wearing the other piece
     /// unrefitted, so it gets no sizes, and a note.
     /// </param>
@@ -145,8 +145,9 @@ internal static partial class SizeSetRefit
         bool SharesGroup(Piece p, string slot)
             => p.Group != null && pieces.Any(c => c.Slot == slot && c.Race == p.Race
                                                   && string.Equals(c.Group, p.Group, StringComparison.OrdinalIgnoreCase));
+        // A piece of another slot: two shoes (or two gloves) in one group are sized alike and share their options.
         bool SharesWithAnother(Piece p)
-            => p.Group != null && pieces.Any(c => !ReferenceEquals(c, p) && c.Race == p.Race
+            => p.Group != null && pieces.Any(c => c.Slot != p.Slot && c.Race == p.Race
                                                   && string.Equals(c.Group, p.Group, StringComparison.OrdinalIgnoreCase));
         return pieces.OrderBy(p => p.Slot switch { "_top" => 0, "_dwn" => 1, _ => 2 })
                      .Select(p => (p.Slot == "_dwn" || IsEnd(p.Slot)) && SharesGroup(p, "_top") ? p with { FollowsChest = true }
@@ -393,6 +394,7 @@ internal static partial class SizeSetRefit
             group.Save(target.Dir, RefitCore.LabelFrom(across ? sourceEntry.Name : null, [src.Pick.Option.Label]), refits,
                        src.Option, notes);
         }
+        group.RestoreDefault();
         return group.Saved;
     }
 
@@ -464,13 +466,25 @@ internal static partial class SizeSetRefit
             return true;
         }
 
-        /// <summary>Put a group of our own's default back once the run saved into it.</summary>
+        private bool restored;
+
+        /// <summary>
+        /// Put a group of our own's default back once the run saved into it — at the end of a piece that finished, where a
+        /// failure to is the piece's failure and reported as one.
+        /// </summary>
+        internal void RestoreDefault()
+        {
+            restored = true;
+            if (Saved > 0 && !authorGroup) PenumbraModMeta.SetSingleDefault(root, Name, defaultBefore);
+        }
+
+        /// <summary>The same for a piece that did not finish: cancelled, or failed partway.</summary>
         public void Dispose()
         {
-            if (Saved == 0 || authorGroup) return;
+            if (restored) return;
             try
             {
-                PenumbraModMeta.SetSingleDefault(root, Name, defaultBefore);
+                RestoreDefault();
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
