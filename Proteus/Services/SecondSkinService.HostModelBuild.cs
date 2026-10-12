@@ -221,7 +221,13 @@ public sealed partial class SecondSkinService
                 build.redirects[mdlGamePath] = Rel(build.outputRoot, mdlDisk);
                 build.hostModelPaths.Add(mdlGamePath);
                 // Append hosts only: this path has a real upstream (the player's own item) that later composites must read back.
-                if (host.BaseModel != null) build.appendHostModelPaths.Add(mdlGamePath);
+                if (host.BaseModel != null)
+                {
+                    build.appendHostModelPaths.Add(mdlGamePath);
+                    // Keyed by the one game path an append host is published under (it gets no carrier aliases), which
+                    // is the path Studio sees our merged file drawn at.
+                    if (host.BaseDisk is { } source) build.appendHostSources[mdlGamePath] = source;
+                }
             }
 
             private void RedirectCarrier()

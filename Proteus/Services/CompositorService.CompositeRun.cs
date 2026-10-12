@@ -81,6 +81,7 @@ public partial class CompositorService
         private Dictionary<string, ShellLightProfile>? nextShellLight;
         private Dictionary<string, HashSet<string>>? nextContentMaterials;
         private Dictionary<string, HashSet<string>>? nextContentModels;
+        private Dictionary<string, string>? nextAppendHostSources;
         private ShellDrawnProbe? nextShellDrawnCheck;
         private bool shellBuilt;
         private bool glassesPreHosted;
@@ -1116,6 +1117,7 @@ public partial class CompositorService
             compositor._shellMaterials   = nextShellMaterials ?? new();
             compositor._contentMaterials = nextContentMaterials ?? new(StringComparer.OrdinalIgnoreCase);
             compositor._contentModels    = nextContentModels ?? new(StringComparer.OrdinalIgnoreCase);
+            compositor._appendHostSources = nextAppendHostSources ?? new(StringComparer.OrdinalIgnoreCase);
             compositor._shellLight       = nextShellLight ?? new(StringComparer.OrdinalIgnoreCase);
             compositor._shellDrawnCheck  = nextShellDrawnCheck;
 

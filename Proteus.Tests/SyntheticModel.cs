@@ -70,7 +70,27 @@ internal static class SyntheticModel
     }
 
     /// <summary>One LOD0 mesh, drawn with <paramref name="Material"/>.</summary>
-    internal sealed record Mesh(string Material, params Sub[] Submeshes);
+    internal sealed record Mesh(string Material, params Sub[] Submeshes)
+    {
+        /// <summary>
+        /// Extra vertices after the triangles' own, named by no index — the spare vertices a shape key's values
+        /// point at. Each is a copy of the mesh's vertex 0 raised by <see cref="SpareLift"/> in Y, so a spare sits
+        /// at a pose of its own, as a real shape target does, rather than on a vertex the edit moves.
+        /// </summary>
+        internal int Spares { get; init; }
+    }
+
+    /// <summary>How far above its mesh's vertex 0 every <see cref="Mesh.Spares"/> vertex sits.</summary>
+    internal const float SpareLift = 0.5f;
+
+    /// <summary>
+    /// A shape key on one mesh: each value rewires index slot <c>BaseSlot</c> (mesh-relative) to vertex
+    /// <c>Replace</c>. Real exporters name one spare from EVERY slot its base vertex fills, which is the layout the
+    /// one-value-per-name shapes cannot build.
+    /// </summary>
+    /// <param name="IndexOffset">The ShapeMesh's index offset, when it must NOT be the mesh's own start index — an entry
+    /// no mesh owns. Null (the norm) is <paramref name="Mesh"/>'s start index.</param>
+    internal sealed record Shape(string Name, int Mesh, (ushort BaseSlot, ushort Replace)[] Values, uint? IndexOffset = null);
 
     /// <summary>
     /// A content pack's piece, shaped the way packs ship one: a stock model with its vanilla mesh emptied — it still
@@ -121,21 +141,32 @@ internal static class SyntheticModel
     internal static byte[] Build(IReadOnlyList<string> attrNames, Mesh[] meshes, uint version,
                                  IReadOnlyList<string>? shapeNames = null,
                                  IReadOnlyList<string>? boneTableOrder = null)
-        => BuildCore(attrNames, meshes, version, shapeNames, boneTableOrder);
+        => BuildCore(attrNames, meshes, version,
+                     shapeNames?.Select(n => new Shape(n, 0, [(0, 0)])).ToList(), boneTableOrder);
+
+    /// <summary>As the other overload, with every shape's values spelled out (see <see cref="Shape"/>).</summary>
+    internal static byte[] Build(IReadOnlyList<string> attrNames, Mesh[] meshes, uint version,
+                                 IReadOnlyList<Shape> shapes)
+        => BuildCore(attrNames, meshes, version, shapes, null);
 
     /// <inheritdoc cref="Build(IReadOnlyList{string}, Mesh[], uint, IReadOnlyList{string}, IReadOnlyList{string})"/>
     internal static byte[] Build(IReadOnlyList<string> attrNames, params Mesh[] meshes)
         => BuildCore(attrNames, meshes, V6, null, null);
 
     private static byte[] BuildCore(IReadOnlyList<string> attrNames, Mesh[] meshes, uint version,
-                                    IReadOnlyList<string>? shapeNames, IReadOnlyList<string>? boneTableOrder)
+                                    IReadOnlyList<Shape>? shapeKeys, IReadOnlyList<string>? boneTableOrder)
     {
         var materials = meshes.Select(m => m.Material).Distinct(StringComparer.Ordinal).ToList();
         bool skinned = meshes.Any(m => m.Submeshes.Any(x => x.Weights != null));
         var bones = new[] { "n_root" }
             .Concat(meshes.SelectMany(m => m.Submeshes).SelectMany(x => x.Weights ?? []).Select(w => w.Bone))
             .Distinct(StringComparer.Ordinal).ToArray();
-        var shapes = shapeNames ?? [];
+        var shapeList = shapeKeys ?? [];
+        var shapes = shapeList.Select(s => s.Name).ToList();
+        foreach (var s in shapeList)
+            if (s.Mesh < 0 || s.Mesh >= meshes.Length)
+                throw new ArgumentException($"shape '{s.Name}' is on mesh {s.Mesh}, which this model does not have");
+        int valueTotal = shapeList.Sum(s => s.Values.Length);
         // Slot -> name. The blend indices a vertex carries are slots in THIS list; the table's entries are where
         // each of those lands in `bones`.
         var tableBones = boneTableOrder ?? bones;
@@ -183,6 +214,7 @@ internal static class SyntheticModel
         var subBytes = new List<byte[]>();
         ushort vertexCursor = 0;
         uint indexCursor = 0;
+        var meshStartIndices = new List<uint>();
 
         foreach (var mesh in meshes)
         {
@@ -252,6 +284,21 @@ internal static class SyntheticModel
                 }
             }
 
+            // Spares: vertex 0's record again, raised in Y, and named by no index. Stream 1 (uv) is copied as is.
+            if (mesh.Spares > 0 && meshVerts == 0)
+                throw new ArgumentException("a mesh with spares needs at least one triangle to copy them from");
+            byte[] first0 = mesh.Spares > 0 ? stream0.ToArray()[..(skinned ? SkinnedStride : Stride)] : [];
+            byte[] first1 = mesh.Spares > 0 && skinned ? stream1.ToArray()[..UvStride] : [];
+            for (int s = 0; s < mesh.Spares; s++)
+            {
+                var spare = (byte[])first0.Clone();
+                BitConverter.GetBytes(BitConverter.ToSingle(spare, 4) + SpareLift).CopyTo(spare, 4);
+                stream0.Write(spare);
+                if (skinned) stream1.Write(first1);
+                meshVerts++;
+            }
+            meshStartIndices.Add(meshStartIndex);
+
             stream0.Position = 0; stream0.CopyTo(vBuf);
             uint meshUvOffset = (uint)vBuf.Position;
             stream1.Position = 0; stream1.CopyTo(vBuf);
@@ -318,7 +365,7 @@ internal static class SyntheticModel
         W16(mh, 14, 1);                                                        // one bone table
         W16(mh, 16, (ushort)shapes.Count);                                     // shapeCount
         W16(mh, 18, (ushort)shapes.Count);                                     // one ShapeMesh each
-        W16(mh, 20, (ushort)shapes.Count);                                     // one ShapeValue each
+        W16(mh, 20, (ushort)valueTotal);                                       // every shape's values
         mh[22] = 1;                                                            // lodCount
         BitConverter.GetBytes(1f).CopyTo(mh, 28);                              // model clip
         BitConverter.GetBytes(1f).CopyTo(mh, 32);                              // shadow clip
@@ -366,19 +413,22 @@ internal static class SyntheticModel
             W16(shp, 10, 1);                                                   // LOD0 shapeMeshCount
             ms.Write(shp);
         }
-        for (int i = 0; i < shapes.Count; i++)
+        uint valueStart = 0;
+        foreach (var s in shapeList)
         {
             var sm = new byte[12];
-            W32(sm, 0, 0);                                                     // mesh index offset
-            W32(sm, 4, 1);                                                     // value count
-            W32(sm, 8, (uint)i);                                               // value start
+            W32(sm, 0, s.IndexOffset ?? meshStartIndices[s.Mesh]);             // mesh index offset: its start index
+            W32(sm, 4, (uint)s.Values.Length);                                 // value count
+            W32(sm, 8, valueStart);                                            // value start
             ms.Write(sm);
+            valueStart += (uint)s.Values.Length;
         }
-        for (int i = 0; i < shapes.Count; i++)
+        foreach (var s in shapeList)
+        foreach (var (baseSlot, replace) in s.Values)
         {
             var sv = new byte[4];
-            W16(sv, 0, 0);                                                     // base indices index
-            W16(sv, 2, 0);                                                     // replacing vertex index
+            W16(sv, 0, baseSlot);                                              // base indices index
+            W16(sv, 2, replace);                                               // replacing vertex index
             ms.Write(sv);
         }
 
