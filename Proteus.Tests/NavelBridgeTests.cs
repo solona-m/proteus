@@ -265,7 +265,13 @@ public class NavelBridgeTests
     public void Without_breasts_only_the_lower_half_of_the_midline_is_searched()
     {
         Assert.NotNull(Locate(Belly(Pit(y0: NavelY))));
-        Assert.Null(Locate(Belly(Pit(y0: 1.2f))));
+        var high = Belly(Pit(y0: 1.2f));
+        Assert.Null(Locate(high));
+        // The control: breast skin from 1.28 up puts the limit there instead, and the same pit is found — so it is the
+        // cap that turned it away above, nothing else about it.
+        var site = Locate(high, bust: [.. high.Pos.Select(p => p.Y >= 1.28f ? 0.5f : 0f)]);
+        Assert.NotNull(site);
+        Assert.True(MathF.Abs(site!.Centre.Y - 1.2f) < 0.002f, site.ToString());
     }
 
     [Fact]
@@ -553,8 +559,10 @@ public class NavelBridgeTests
         var dent = Pit(0.005f, 0.004f);
         var whole = SyntheticModel.Build([], BellyMesh(Skin, dent));
         // A whole second copy just under the first, as the legs' copy lies under the top's (not a join). It would fill
-        // too if every part filled its own navel; the first part wins the tie, so it alone carries the navel.
-        var half = SyntheticModel.Build([], BellyMesh(Skin, dent, inset: 0.0005f));
+        // too if every part filled its own navel; its pit is a millimetre shallower, so the first part alone carries
+        // it. Set 1.5 mm under, more than that millimetre, the two surfaces never meet anywhere: a point they shared
+        // would be a join, and the navel on it would not be filled at all.
+        var half = SyntheticModel.Build([], BellyMesh(Skin, Pit(0.004f, 0.004f), inset: 0.0015f));
         int wholeCount = Written(SecondSkinWriter.Build([whole], [new SecondSkinLayer { MaterialName = Skin }], out _)).Length;
 
         var plain = Written(SecondSkinWriter.Build([whole, half], [new SecondSkinLayer { MaterialName = Skin }], out _));
