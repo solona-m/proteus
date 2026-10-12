@@ -267,6 +267,7 @@ public sealed partial class SecondSkinService
                         BustBridgeStrength = SurfaceStrength(layerSurf.Key.IsBody, build.bridgeByMod, entry.ModDirectory),
                         NippleSmoothStrength = SurfaceStrength(layerSurf.Key.IsBody, build.smoothByMod, entry.ModDirectory),
                         CleftBridgeStrength = SurfaceStrength(layerSurf.Key.IsBody, build.cleftByMod, entry.ModDirectory),
+                        NavelBridgeStrength = SurfaceStrength(layerSurf.Key.IsBody, build.navelByMod, entry.ModDirectory),
                         FoldSmoothStrength = SurfaceStrength(layerSurf.Key.IsBody, build.foldByMod, entry.ModDirectory),
                     });
                     build.inHost[hIdx]++; build.diskLetter++;       // slot consumed

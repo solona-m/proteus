@@ -122,9 +122,12 @@ public static partial class SecondSkinWriter
     {
         int vc = plan.Delta.Length, nodes = plan.NodeWeight.Length;
         var e = new float[nodes];
+        var noExtra = plan.NoExtraClearance;
+        bool Exempt(int n) => noExtra is { } x && n < x.Length && x[n];
         for (int i = 0; i < vc; i++)
         {
             int n = plan.NodeOf[i];
+            if (Exempt(n)) continue;
             e[n] = MathF.Max(e[n], MathF.Min(Len(plan.Delta[i]), BridgedSkinClearance));
         }
 
@@ -148,7 +151,7 @@ public static partial class SecondSkinWriter
             for (int n = 0; n < nodes; n++)
             {
                 // A part join stays exactly where the part across it is: no clearance spreads onto it.
-                if (nbr[n] is not { } ns || (plan.NodePinned is { } pin && n < pin.Length && pin[n])) continue;
+                if (nbr[n] is not { } ns || (plan.NodePinned is { } pin && n < pin.Length && pin[n]) || Exempt(n)) continue;
                 foreach (int k in ns)
                     next[n] = MathF.Max(next[n], e[k] * BridgedSpreadDecay);
             }

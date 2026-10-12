@@ -132,6 +132,22 @@ public sealed class LocalizationTests
         }
     }
 
+    /// <summary>The navel tick is translated, not copied, and its tooltip keeps English's line breaks.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-navel-bridge-1")]
+    public void NavelBridge_strings_are_translated_not_copied(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (string key in new[] { "Colors.NavelBridge.Label", "Colors.NavelBridge.Tip" })
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+            Assert.Equal(en[key].Message.Count(c => c == '\n'), tr[key].Message.Count(c => c == '\n'));
+        }
+    }
+
     [Theory]
     [MemberData(nameof(Translations))]
     public void PlaceholderIndicesMatchEnglish(string lang)

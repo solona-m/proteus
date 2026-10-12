@@ -144,6 +144,11 @@ public static partial class SecondSkinWriter
                 bool wantBust  = build.bridgeDef != null && cov is { } cl  && cl.BustBridgeStrength  > 0f;
                 bool wantCleft = build.cleftDef  != null && cov is { } cl2 && cl2.CleftBridgeStrength > 0f;
                 bool wantFold  = build.foldDef   != null && cov is { } cl3 && cl3.FoldSmoothStrength  > 0f && !preserve;
+                // Only on the part that carries the navel: where the top and the legs overlap at the waist both draw a
+                // copy of it, and two membranes solved apart would not lie on each other. The other copy is left under it.
+                bool wantNavel = build.navelSite is { } ns && build.navelDef != null && cov is { } cl4
+                              && cl4.NavelBridgeStrength > 0f && !preserve
+                              && ReferenceEquals(src, build.parsed[ns.Owner]);
 
                 float[]? bustWeights = null, cleftWeights = null, foldWeights = null;
                 // The cleft's own weights — the same bones and the same thigh veto — so the two share one cache entry.
@@ -163,12 +168,13 @@ public static partial class SecondSkinWriter
                         build.cleftWeightCache[(src, m)] = cleftWeights =
                             MeshRegionWeights(src, m, vc, decl, vbo, bs, [HipBone], [ThighBoneL, ThighBoneR]);
                 }
-                var capTris = wantCap || bustWeights != null || cleftWeights != null || foldWeights != null
+                bool anySpan = bustWeights != null || cleftWeights != null || foldWeights != null || wantNavel;
+                var capTris = wantCap || anySpan
                     ? MeshTriangles(src, srcSubIdx, srcSubCount)
                     : null;
                 // The spans solve on the shape-baked surface, the one the game draws: in the unshaped list the morphed
                 // vertices have no triangles at all. The toe cap keeps the list it was built against.
-                var spanTris = capTris is not null && (bustWeights != null || cleftWeights != null || foldWeights != null) && !preserve
+                var spanTris = capTris is not null && anySpan && !preserve
                     && ShapeReplacements(src, U32(mo + 16), vc) is { } spanShape
                         ? ShapedTriangles(src, srcSubIdx, srcSubCount, U32(mo + 16), spanShape)
                         : capTris;
@@ -176,13 +182,14 @@ public static partial class SecondSkinWriter
                 // The solve itself, deferred until BuildVerbatim has normalised the mesh's UVs onto the
                 // tile the coverage map is indexed over — it cannot run before that and must not run twice.
                 Func<Vec3[], Vec3[], ushort[], (float U, float V)[], BustBridgePlan?>? bridge = null;
-                if (bustWeights != null || cleftWeights != null || foldWeights != null)
+                if (anySpan)
                 {
                     // The definitions travel with their weights: a weight array is only non-null when its definition was.
                     var bw = bustWeights;   var bDef = build.bridgeDef;
                     var cw = cleftWeights;  var cDef = build.cleftDef;
                     var fw = foldWeights;   var fDef = build.foldDef;
-                    var key = (src, m, bw != null, cw != null, fw != null);
+                    var nSite = wantNavel ? build.navelSite : null;  var nDef = build.navelDef;
+                    var key = (src, m, bw != null, cw != null, fw != null, nSite != null);
                     bridge = (bPos, bNrm, bTris, bUv) =>
                     {
                         if (build.bridgePlans.TryGetValue(key, out var cached)) return cached;
@@ -222,6 +229,18 @@ public static partial class SecondSkinWriter
                                 CrotchFlatAcross(bPos, bNrm, bTris, fw, CoveredVertices(bUv, fDef, bPos.Length),
                                                  build.foldStrength, build.diag));
                             build.timings?.Crotch.Stop(tSolve);
+                        }
+
+                        // ACROSS THE NAVEL, last: it leaves alone any vertex another span already moved. See NavelFill.
+                        if (nSite != null && nDef != null)
+                        {
+                            tSolve = PhaseCounter.Begin();
+                            var navelPlan = NavelFill(bPos, bNrm, bTris, nSite, CoveredVertices(bUv, nDef, bPos.Length),
+                                                      JoinPins(bPos, src.JoinRing), build.navelStrength, build.diag,
+                                                      out var navelReport);
+                            build.navelOutcomes.Add(navelReport.Outcome);
+                            plan = MergeNavel(plan, navelPlan, build.diag);
+                            build.timings?.Navel.Stop(tSolve);
                         }
 
                         build.bridgePlans[key] = plan;

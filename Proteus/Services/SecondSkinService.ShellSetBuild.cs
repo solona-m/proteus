@@ -103,6 +103,7 @@ public sealed partial class SecondSkinService
         private Dictionary<string, float> bridgeByMod = null!;
         private Dictionary<string, float> smoothByMod = null!;
         private Dictionary<string, float> cleftByMod = null!;
+        private Dictionary<string, float> navelByMod = null!;
         private Dictionary<string, float> foldByMod = null!;
         private Dictionary<int, string> topSpanningModOnHost = null!;
         private int[] inHost = null!;
@@ -1050,6 +1051,7 @@ public sealed partial class SecondSkinService
             bridgeByMod = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
             smoothByMod = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
             cleftByMod = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+            navelByMod = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
             foldByMod = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
             foreach (var bEntry in (allEntries ?? gearOverlays.Select(g => g.Entry).ToList())
                          .GroupBy(e => e.ModDirectory, StringComparer.OrdinalIgnoreCase).Select(g => g.First()))
@@ -1063,11 +1065,15 @@ public sealed partial class SecondSkinService
                 Take(bridgeByMod, md.BustBridge, md.BustBridgeStrength);
                 Take(smoothByMod, md.SmoothNipples, md.SmoothNipplesStrength);
                 Take(cleftByMod, md.CleftBridge, md.CleftBridgeStrength);
+                Take(navelByMod, md.NavelBridge, md.NavelBridgeStrength);
                 Take(foldByMod, md.SmoothFold, md.SmoothFoldStrength);
             }
             foreach (var (cMod, cStrength) in cleftByMod)
                 service.log.Information("[Proteus] second skin: cleft bridge at {0:0.##} applies to every shell of \"{1}\"",
                     cStrength, cMod);
+            foreach (var (nMod, nStrength) in navelByMod)
+                service.log.Information("[Proteus] second skin: navel fill at {0:0.##} applies to every shell of \"{1}\"",
+                    nStrength, nMod);
             foreach (var (fMod, fStrength) in foldByMod)
                 service.log.Information("[Proteus] second skin: fold smoothing at {0:0.##} applies to every shell of \"{1}\"",
                     fStrength, fMod);

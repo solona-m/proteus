@@ -349,6 +349,7 @@ Otras dos secciones plegables se aplican a todo el mod:
 - **Geometría** remodela la prenda que Proteus construye a partir de tu cuerpo, para que se lea como tela y no como pintura. Proteus construye una segunda piel copiando tu cuerpo, así que por defecto sigue cada hueco:
   - **Tender sobre el escote**: la tela entre los pechos pasa recta por encima, como hace la tela de verdad. Nada se tira hacia dentro, así que no puede clavarse en el cuerpo.
   - **Tender sobre los glúteos**: lo mismo a lo ancho del asiento.
+  - **Tensar la tela sobre el ombligo**: la tela queda plana sobre el ombligo en lugar de hundirse en él.
   - **Suavizar entre las piernas**: suaviza el pliegue de la entrepierna. Esto cambia el cuerpo de debajo, así que se aplica a todas las prendas que lleves a la vez.
   - **Suavizar el pezón**: suaviza la tela por encima. Aún sin terminar: el cuerpo de debajo conserva su forma, así que en una prenda ajustada todavía puede marcarse.
 

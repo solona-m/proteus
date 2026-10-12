@@ -78,6 +78,7 @@ public static partial class SecondSkinWriter
                         NippleSmoothStrength = def.NippleSmoothStrength,
                         CleftBridgeStrength = def.CleftBridgeStrength,
                         FoldSmoothStrength = def.FoldSmoothStrength,
+                        NavelBridgeStrength = def.NavelBridgeStrength,
                     };
             }
 
@@ -119,6 +120,7 @@ public static partial class SecondSkinWriter
                         NippleSmoothStrength = def.NippleSmoothStrength,
                         CleftBridgeStrength = def.CleftBridgeStrength,
                         FoldSmoothStrength = def.FoldSmoothStrength,
+                        NavelBridgeStrength = def.NavelBridgeStrength,
                     };
 
                 footprint = null;
@@ -310,6 +312,7 @@ public static partial class SecondSkinWriter
                         NippleSmoothStrength = def.NippleSmoothStrength,
                         CleftBridgeStrength = def.CleftBridgeStrength,
                         FoldSmoothStrength = def.FoldSmoothStrength,
+                        NavelBridgeStrength = def.NavelBridgeStrength,
                     };
                 }
             }

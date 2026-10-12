@@ -18,11 +18,13 @@ public class GeometryTogglesTests
     /// Every geometry property <see cref="RenderModeInference.WantsGeometry"/> reads, spelled out here rather than
     /// derived from the table: a tick added to the table but not to the promotion would otherwise pass.
     /// </summary>
-    private static readonly string[] GeometryProperties = ["BustBridge", "SmoothNipples", "CleftBridge", "SmoothFold"];
+    private static readonly string[] GeometryProperties =
+        ["BustBridge", "SmoothNipples", "NavelBridge", "CleftBridge", "SmoothFold"];
 
     [Fact]
+    [Trait("Plan", "AC-navel-bridge-1")]
     public void Ticks_are_drawn_in_body_order()
-        => Assert.Equal(["bustbridge", "smoothnipples", "cleftbridge", "smoothfold"],
+        => Assert.Equal(["bustbridge", "smoothnipples", "navelbridge", "cleftbridge", "smoothfold"],
                         GeometryToggles.All.Select(t => t.Id));
 
     [Fact]
@@ -38,6 +40,7 @@ public class GeometryTogglesTests
 
     /// <summary>Each tick alone promotes the mod to a shell, and each property the promotion reads has a tick.</summary>
     [Fact]
+    [Trait("Plan", "AC-navel-bridge-3")]
     public void Every_tick_alone_wants_geometry()
     {
         foreach (var t in GeometryToggles.All)

@@ -71,10 +71,17 @@ internal static partial class BodyBridge
                 if (ow[n] > overW[n]) { overW[n] = ow[n]; over[n] = o[n]; }
         }
 
+        // A node either pass keeps clear of the extra push stays clear of it.
+        bool[]? noExtra = null;
+        foreach (var src in new[] { a.NoExtraClearance, b.NoExtraClearance })
+            if (src != null)
+                for (int n = 0; n < src.Length && n < weight.Length; n++)
+                    if (src[n]) (noExtra ??= new bool[weight.Length])[n] = true;
+
         return new BustBridgePlan
         {
             Delta = delta, NodeOf = a.NodeOf, NodeWeight = weight, NodeNormal = a.NodeNormal, NodePinned = pinned,
-            NormalOverride = over, NormalOverrideWeight = overW,
+            NormalOverride = over, NormalOverrideWeight = overW, NoExtraClearance = noExtra,
         };
     }
 
@@ -465,6 +472,13 @@ internal static partial class BodyBridge
 
         /// <summary>Per-node weight of <see cref="NormalOverride"/>, 0..1.</summary>
         public float[]? NormalOverrideWeight { get; init; }
+
+        /// <summary>
+        /// Nodes <see cref="BridgedClearance"/> gives no extra push, and spreads none onto. The navel's membrane lies
+        /// over a pit, clear of the skin everywhere it moved, and the extra push would raise it a millimetre proud of the
+        /// belly. Null when every node gets it.
+        /// </summary>
+        public bool[]? NoExtraClearance { get; init; }
     }
 
     /// <summary>

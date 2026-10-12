@@ -77,6 +77,14 @@ public class ProteusMetadata
     [JsonPropertyName("CleftBridgeStrength")]
     public float? CleftBridgeStrength { get; set; }
 
+    /// <summary>Whether this mod's shells span the navel (null = off). Whole-mod; body surfaces only.</summary>
+    [JsonPropertyName("NavelBridge")]
+    public bool? NavelBridge { get; set; }
+
+    /// <summary>How far the <see cref="NavelBridge"/> lifts toward the flat span (0–1, default 1; 0 disables).</summary>
+    [JsonPropertyName("NavelBridgeStrength")]
+    public float? NavelBridgeStrength { get; set; }
+
     /// <summary>
     /// Whether this mod's shells flatten the crotch fold (null = off). A body pass: the body is republished and the
     /// shell cut from the result. Body only.

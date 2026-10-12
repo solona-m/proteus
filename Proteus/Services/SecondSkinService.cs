@@ -859,6 +859,7 @@ public sealed partial class SecondSkinService
               .Append("|bust=").Append(l.BustBridgeStrength.ToString("R"))
               .Append("|nipple=").Append(l.NippleSmoothStrength.ToString("R"))
               .Append("|cleft=").Append(l.CleftBridgeStrength.ToString("R"))
+              .Append("|navel=").Append(l.NavelBridgeStrength.ToString("R"))
               .Append("|fold=").Append(l.FoldSmoothStrength.ToString("R"))
               .Append("|push=").Append(l.PushScale.ToString("R")).Append('\n');
         }
@@ -1108,7 +1109,8 @@ public sealed partial class SecondSkinService
                             + $"toeCap={(l.ToeCap == null ? "none" : $"{l.ToeCapWidth}x{l.ToeCapHeight}")} strength={l.ToeCapStrength} "
                             + $"bustBridge={l.BustBridgeStrength} nippleSmooth={l.NippleSmoothStrength} "
                             // The body passes are recorded so a dump shows whether they ran.
-                            + $"cleftBridge={l.CleftBridgeStrength} smoothFold={l.FoldSmoothStrength}");
+                            + $"cleftBridge={l.CleftBridgeStrength} navelBridge={l.NavelBridgeStrength} "
+                            + $"smoothFold={l.FoldSmoothStrength}");
                 if (l.ToeCap != null) File.WriteAllBytes($"{pre}layer{i}_toecap.raw", l.ToeCap);
                 if (l.Coverage != null) File.WriteAllBytes($"{pre}layer{i}_coverage.raw", l.Coverage);
             }

@@ -265,6 +265,7 @@ public class RenderModeInferenceTests
     [Theory]
     [InlineData("BustBridge")]
     [InlineData("SmoothNipples")]
+    [InlineData("NavelBridge")]
     [InlineData("CleftBridge")]
     [InlineData("SmoothFold")]
     public void WantsGeometry_EachFeatureAloneCounts(string feature)

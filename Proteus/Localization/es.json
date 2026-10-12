@@ -711,6 +711,14 @@
     "message": "Skin (pintado)",
     "description": ""
   },
+  "Colors.NavelBridge.Label": {
+    "message": "Tensar la tela sobre el ombligo",
+    "description": ""
+  },
+  "Colors.NavelBridge.Tip": {
+    "message": "Actívalo para la tela que cubre el vientre.\nProteus crea una prenda como copia del cuerpo, así que se hunde en el ombligo —\ny parece pintada en vez de puesta. Con esto activado, la tela queda tensa y plana\nsobre él, como la tela de verdad. Nada se mete hacia dentro, así que no puede atravesar el cuerpo.\nSi la prenda está recortada en el ombligo, o el cuerpo no tiene, no hace nada.",
+    "description": ""
+  },
   "Colors.NoActiveOptions": {
     "message": "No hay opciones activas: selecciona una en Penumbra para editar sus colores.",
     "description": ""

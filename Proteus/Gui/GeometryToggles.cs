@@ -26,6 +26,8 @@ internal static class GeometryToggles
         new("smoothnipples", "smooth-nipples", c => c.SmoothNipples, c => c.SmoothNipplesTip,
             md => md.SmoothNipples == true,
             (md, on) => { md.SmoothNipples = on ? true : null; md.SmoothNipplesStrength = null; }),
+        new("navelbridge", "navel-bridge", c => c.NavelBridge, c => c.NavelBridgeTip, md => md.NavelBridge == true,
+            (md, on) => { md.NavelBridge = on ? true : null; md.NavelBridgeStrength = null; }),
         new("cleftbridge", "cleft-bridge", c => c.CleftBridge, c => c.CleftBridgeTip, md => md.CleftBridge == true,
             (md, on) => { md.CleftBridge = on ? true : null; md.CleftBridgeStrength = null; }),
         new("smoothfold", "smooth-fold", c => c.SmoothFold, c => c.SmoothFoldTip, md => md.SmoothFold == true,

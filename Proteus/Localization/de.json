@@ -711,6 +711,14 @@
     "message": "Skin (gemalt)",
     "description": ""
   },
+  "Colors.NavelBridge.Label": {
+    "message": "Bauchnabel überspannen",
+    "description": ""
+  },
+  "Colors.NavelBridge.Tip": {
+    "message": "Für Stoff über dem Bauch einschalten.\nProteus baut ein Kleidungsstück als Kopie des Körpers, also sinkt es in den Bauchnabel ein —\ndas wirkt aufgemalt statt getragen. Ist dies an, wird der Stoff flach darüber gespannt,\nwie echter Stoff. Nichts wird nach innen gezogen, also kann nichts in den Körper schneiden.\nWo das Kleidungsstück am Bauchnabel ausgeschnitten ist oder der Körper keinen hat, bewirkt es nichts.",
+    "description": ""
+  },
   "Colors.NoActiveOptions": {
     "message": "Keine aktiven Optionen — wähle in Penumbra eine aus, um ihre Farben zu bearbeiten.",
     "description": ""
