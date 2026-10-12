@@ -3695,6 +3695,14 @@
     "message": "반지, 버클, 체인 같은 단단한 파츠용: 구부러지지 않고 통째로 이동합니다.\n작고 닫힌 파츠는 기본으로 체크되어 있습니다.",
     "description": ""
   },
+  "Parts.Retarget.KeepShape.SinkTip": {
+    "message": "새 몸에 파묻히게 되는 조각은 대신 몸에 맞춰 휘어집니다.",
+    "description": ""
+  },
+  "Parts.Retarget.ShapeReleased.Fmt": {
+    "message": "형태 유지 조각 {0:N0}개는 통째로 옮기면 새 몸에 최대 {1:F1} mm 파묻히므로 대신 몸에 맞춰 휘어집니다: {2}",
+    "description": ""
+  },
   "Parts.Retarget.ReplaceSkin": {
     "message": "새 체형의 피부 사용",
     "description": ""

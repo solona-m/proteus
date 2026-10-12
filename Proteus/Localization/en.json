@@ -3695,6 +3695,14 @@
     "message": "For rigid pieces (rings, buckles, chains): each piece moves whole instead of bending.\nSmall closed pieces start ticked.",
     "description": "Tooltip on the Keep shape checkbox. Keep the line breaks."
   },
+  "Parts.Retarget.KeepShape.SinkTip": {
+    "message": "A piece that would sink into the new body bends with it instead.",
+    "description": "Last line of the Keep shape tooltip: a ticked piece that moving whole would push into the new body is bent to fit it after all."
+  },
+  "Parts.Retarget.ShapeReleased.Fmt": {
+    "message": "{0:N0} kept piece(s) would sink up to {1:F1} mm into the new body if moved whole, so they bend with it instead: {2}",
+    "description": "Warning under the Body size preview. {0} = number of Keep shape pieces let go, {1} = the deepest any would have sunk in millimetres, {2} = their part labels (e.g. 2.1.7)."
+  },
   "Parts.Retarget.ReplaceSkin": {
     "message": "Use the new body\u0027s skin",
     "description": ""

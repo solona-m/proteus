@@ -206,7 +206,7 @@ internal static partial class BodyRetarget
     internal sealed record Report(
         int Nodes, int Snapped, int Transferred, int Missed, int Pushed,
         float WorstMove, float WorstPush, int UnmappedSpares, bool HasOtherLods, int Held = 0, int Laid = 0,
-        SwapReport? Swap = null, int Folded = 0)
+        SwapReport? Swap = null, int Folded = 0, IReadOnlyList<ShapeOutcome>? Shapes = null)
     {
         /// <summary>Share of moved nodes that landed on a body vertex exactly. Low means the author sculpted the
         /// garment's body mesh rather than copying it, and the seam may not come out perfect.</summary>
@@ -224,7 +224,8 @@ internal static partial class BodyRetarget
     /// <param name="Folded">Triangles still facing the wrong way when <see cref="Unfold"/> ran out of rounds. Any at
     /// all is worth saying: a folded triangle is a black speck on the garment.</param>
     internal sealed record Solved(RetargetEdit Edit, int Snapped, int Transferred, int Missed, int Pushed,
-                                  float WorstMove, float WorstPush, int Held = 0, int Laid = 0, int Folded = 0);
+                                  float WorstMove, float WorstPush, int Held = 0, int Laid = 0, int Folded = 0,
+                                  IReadOnlyList<ShapeOutcome>? Shapes = null);
 
     /// <summary>
     /// The garment split into the two sets the two passes act on.
@@ -671,7 +672,7 @@ internal static partial class BodyRetarget
         var report = new Report(garment.Positions.Length / 3, solved.Snapped, solved.Transferred, solved.Missed,
                                 solved.Pushed, solved.WorstMove, solved.WorstPush,
                                 written.UnmappedSpares, ModelLodTrimmer.LodCount(model) > 1, solved.Held, solved.Laid,
-                                swap, solved.Folded);
+                                swap, solved.Folded, solved.Shapes);
         return new Planned(solved.Edit, model, report);
     }
 
@@ -740,47 +741,32 @@ internal static partial class BodyRetarget
         if (slotSwapped && laid > 0 && !Tuned.NoFollow)
             FollowLaidSkin(garment, sets, carried, nodeDelta, snapped, pairs, swapSlot != null ? held : null);
 
-        // Hard pieces whole, before the push-out measures them against the skin.
-        var scales = new float[keepShape?.Count ?? 0];
-        Array.Fill(scales, float.NaN);
-        if (keepShape is { Count: > 0 }) KeepShape(sets, keepShape, nodeDelta, scales);
+        // The skin drawn under the cloth as authored: the garment's own body mesh where it has one, and the other slots'
+        // bodies. See TargetBody, and PushOut for why it is needed. It reads nothing the passes below move.
+        bool hasSkin = sets.ClothNodes.Length < sets.NodeCount;
+        var before = pushOut ? TargetBody.Build(pairs, garmentSlot, hasSkin ? garment : null, before: true) : null;
 
-        int pushed = 0;
-        float worstPush = 0f;
-        TargetBody? drawn = null;
-        FaceCheck? faceCheck = null;
-        float[]? pushedBy = null;
-        if (pushOut)
+        // Hard pieces whole, the push-out, and whole again — and any piece the whole move would sink into the new body
+        // let go: the stage runs again from the same start without it, so it comes out exactly as if it had never been
+        // ticked. One round; see ReleaseSink.
+        var free = keepShape is { Count: > 0 } ? (Vec3[])nodeDelta.Clone() : null;
+        var stage = ShapeAndPush(garment, pairs, garmentSlot, ownSlotSwapped, sets, snapped, nodeDelta, keepShape,
+                                 before, clearBody);
+        var kept = keepShape;
+        if (free != null && stage.Shapes != null && Array.Exists(stage.Shapes, s => s.Released))
         {
-            // The skin drawn under the cloth once it is worn, as authored and after the refit: the garment's own body
-            // mesh where it has one, and the other slots' bodies. See TargetBody, and PushOut for why both are needed.
-            bool hasSkin = sets.ClothNodes.Length < sets.NodeCount;
-            var before = TargetBody.Build(pairs, garmentSlot, hasSkin ? garment : null, before: true);
-
-            // The swapped-in body is what the cloth is pushed against. Measured on a sheer corset refitted Bibo+ to
-            // Neolithe: pushed against the garment's transferred skin, 326 cup vertices came out buried up to 3.4 mm
-            // inside the breast the file actually carries, against 2 in the author's own; the two surfaces are not
-            // the same, and the one the solve could see is thrown away before the file is written.
-            //
-            // Only where the swap will really happen. TargetBody's remarks record the opposite measurement for a
-            // garment that KEEPS its own skin: "This Old Thing" compresses the chest under its top, its cloth
-            // legitimately sits inside the body, and pushing it out made that refit 50% worse. The swap is what
-            // separates the two cases — it discards the author's compressed skin and puts the body's own full-size
-            // mesh in its place, so there is no longer any compression for the cloth to be legitimately inside of.
-            var after = TargetBody.Build(pairs, ownSlotSwapped ? null : garmentSlot,
-                                         hasSkin ? Moved(garment, sets, nodeDelta) : null, before: false);
-
-            var pushable = new List<int>(sets.ClothNodes.Length);
-            foreach (int n in sets.ClothNodes)
-                if (!snapped[n]) pushable.Add(n);
-
-            pushed = PushOut(sets, pushable, before, after, nodeDelta, clearBody, out worstPush, out faceCheck,
-                             out pushedBy);
-            drawn = after;
-
-            // The push moves points one by one, and bent the pieces straight back: whole again, around where it put them.
-            if (keepShape is { Count: > 0 }) KeepShape(sets, keepShape, nodeDelta, scales);
+            var judged = stage.Shapes;
+            kept = keepShape!.Where((_, k) => !judged[k].Released).ToList();
+            Array.Copy(free, nodeDelta, nodeDelta.Length);
+            stage = ShapeAndPush(garment, pairs, garmentSlot, ownSlotSwapped, sets, snapped, nodeDelta, kept, before,
+                                 clearBody) with { Shapes = judged };
         }
+
+        int pushed = stage.Pushed;
+        float worstPush = stage.WorstPush;
+        TargetBody? drawn = stage.Drawn;
+        FaceCheck? faceCheck = stage.FaceCheck;
+        float[]? pushedBy = stage.PushedBy;
 
         // Last, once nothing else will move: the answer is only worth having if the mesh still reads front-side out.
         // Past the push-out, so whatever unfolding gives up is judged against the skin it would be given up into.
@@ -790,10 +776,10 @@ internal static partial class BodyRetarget
         // (which only keeps VERTICES out of the skin), by a pass that turns nothing over, so the fold count above still
         // stands. Hard pieces stay as they were put. See ClearFaces.
         bool[]? stay = null;
-        if (keepShape is { Count: > 0 })
+        if (kept is { Count: > 0 })
         {
             stay = new bool[sets.NodeCount];
-            foreach (var piece in keepShape)
+            foreach (var piece in kept)
                 foreach (int v in piece)
                     if (v >= 0 && v < sets.NodeOf.Length) stay[sets.NodeOf[v]] = true;
         }
@@ -852,7 +838,66 @@ internal static partial class BodyRetarget
 
         var edit = new RetargetEdit(garment.MeshSpans, vertDelta, vertNrm);
         return new Solved(edit, CountTrue(snapped), transferred, missed, pushed, worstMove, worstPush, sets.HeldCount,
-                          laid, folded);
+                          laid, folded, stage.Shapes);
+    }
+
+    /// <summary>What <see cref="ShapeAndPush"/> leaves for the passes after it.</summary>
+    /// <param name="Shapes">Each kept piece's outcome, by index; null when nothing was kept.</param>
+    private sealed record ShapeStage(int Pushed, float WorstPush, TargetBody? Drawn, FaceCheck? FaceCheck,
+                                     float[]? PushedBy, ShapeOutcome[]? Shapes);
+
+    /// <summary>
+    /// The kept pieces moved whole, the push-out, and the pieces whole again around where the push put them — then each
+    /// piece judged: how much deeper the whole move left it in the drawn skin than the push-out's own answer (see
+    /// <see cref="ReleaseSink"/>). Without <paramref name="before"/> there is no push-out and nothing is judged.
+    /// </summary>
+    private static ShapeStage ShapeAndPush(ModelParts garment, IReadOnlyList<SlotPair> pairs, string? garmentSlot,
+                                           bool ownSlotSwapped, Sets sets, bool[] snapped, Vec3[] nodeDelta,
+                                           IReadOnlyList<IReadOnlyCollection<int>>? keepShape, TargetBody? before,
+                                           bool clearBody)
+    {
+        bool keeping = keepShape is { Count: > 0 };
+
+        // Hard pieces whole, before the push-out measures them against the skin. Each piece's scale is taken here, from
+        // the transfer's smooth answer, and kept after the push (see KeepShape).
+        var scales = new float[keepShape?.Count ?? 0];
+        Array.Fill(scales, float.NaN);
+        if (keeping) KeepShape(sets, keepShape!, nodeDelta, scales);
+        if (before == null) return new ShapeStage(0, 0f, null, null, null, keeping ? new ShapeOutcome[keepShape!.Count] : null);
+
+        // The swapped-in body is what the cloth is pushed against. Measured on a sheer corset refitted Bibo+ to
+        // Neolithe: pushed against the garment's transferred skin, 326 cup vertices came out buried up to 3.4 mm
+        // inside the breast the file actually carries, against 2 in the author's own; the two surfaces are not
+        // the same, and the one the solve could see is thrown away before the file is written.
+        //
+        // Only where the swap will really happen. TargetBody's remarks record the opposite measurement for a
+        // garment that KEEPS its own skin: "This Old Thing" compresses the chest under its top, its cloth
+        // legitimately sits inside the body, and pushing it out made that refit 50% worse. The swap is what
+        // separates the two cases — it discards the author's compressed skin and puts the body's own full-size
+        // mesh in its place, so there is no longer any compression for the cloth to be legitimately inside of.
+        bool hasSkin = sets.ClothNodes.Length < sets.NodeCount;
+        var after = TargetBody.Build(pairs, ownSlotSwapped ? null : garmentSlot,
+                                     hasSkin ? Moved(garment, sets, nodeDelta) : null, before: false);
+
+        var pushable = new List<int>(sets.ClothNodes.Length);
+        foreach (int n in sets.ClothNodes)
+            if (!snapped[n]) pushable.Add(n);
+
+        int pushed = PushOut(sets, pushable, before, after, nodeDelta, clearBody, out float worstPush,
+                             out var faceCheck, out var pushedBy);
+
+        // The push moves points one by one, and bent the pieces straight back: whole again, around where it put them.
+        ShapeOutcome[]? shapes = null;
+        if (keeping)
+        {
+            var bent = (Vec3[])nodeDelta.Clone();
+            var placed = new bool[keepShape!.Count];
+            var owner = new int[sets.NodeCount];
+            Array.Fill(owner, -1);
+            KeepShape(sets, keepShape, nodeDelta, scales, placed, owner);
+            shapes = JudgeShapes(sets, placed, owner, bent, nodeDelta, SignedOff(after), SignedOff(before));
+        }
+        return new ShapeStage(pushed, worstPush, after, faceCheck, pushedBy, shapes);
     }
 
     /// <summary>

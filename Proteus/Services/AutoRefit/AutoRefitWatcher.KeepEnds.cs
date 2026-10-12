@@ -243,6 +243,9 @@ public sealed partial class AutoRefitWatcher
             log.Warning("[Proteus] auto refit: {0}'s {1} seam stretched by {2:F1} mm — the kept {3} and the new body's {4} "
                       + "differ there; look at it in game", item, feet ? "ankle" : "wrist", stretched * 1000f,
                         feet ? "foot" : "hand", feet ? "legs" : "arms");
+        if (RefitCore.ReleasedLog(plan.Report, reading.FreeNames ?? []) is { } released)
+            log.Information("[Proteus] auto refit: {0}: let go of kept piece(s) that would sink moved whole: {1}", item,
+                            released);
 
         return new EndsOutput(plan.Model, refit.Target.Label,
                               RefitCore.LabelFrom(across ? sourceName : null, [pick.Option.Label]),

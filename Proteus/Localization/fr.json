@@ -3695,6 +3695,14 @@
     "message": "Pour les pièces rigides (anneaux, boucles, chaînes) : chaque pièce se déplace d'un bloc au lieu de se courber.\nLes petites pièces fermées sont cochées par défaut.",
     "description": ""
   },
+  "Parts.Retarget.KeepShape.SinkTip": {
+    "message": "Une pièce qui s'enfoncerait dans le nouveau corps se courbe avec lui à la place.",
+    "description": ""
+  },
+  "Parts.Retarget.ShapeReleased.Fmt": {
+    "message": "{0:N0} pièce(s) à forme gardée s'enfonceraient jusqu'à {1:F1} mm dans le nouveau corps si elles étaient déplacées d'un bloc ; elles se courbent donc avec lui : {2}",
+    "description": ""
+  },
   "Parts.Retarget.ReplaceSkin": {
     "message": "Utiliser la peau du nouveau corps",
     "description": ""

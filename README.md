@@ -140,7 +140,7 @@ Things worth knowing:
 - **Use the new body's skin** is on by default: the garment's own skin for each part of the body being resized is replaced with the new body's, so it matches the rest of you. Untick it to resize the skin the garment came with instead, which keeps the author's push-up or skindent shaping.
 - **Remove hidden skin**, on by default, leaves out the new skin where the author deleted theirs, usually under cloth. Turn it off if a refit leaves holes. It only applies while **Use the new body's skin** is on.
 - **Push cloth out of the body** pushes out all buried cloth, not just what the refit buried. Use it if the body shows through, for example stockings with their own leg skin. Off by default, because authors often hide cloth under skin on purpose.
-- **Keep shape** moves rigid pieces (rings, buckles, chains) whole instead of bending them. Small closed pieces start ticked.
+- **Keep shape** moves rigid pieces (rings, buckles, chains) whole instead of bending them. Small closed pieces start ticked. A piece that would sink into the new body bends with it instead.
 - **Pieces that cover more than one part**, like a long dress over the legs, take a size for each part under **Other body parts**. Choose **None (leave this part out)** to skip one.
 - **Untick a part** in the part list to keep it exactly where the author put it.
 - **Gear the game doesn't ship for your race**, such as pieces made only for men, can still be refitted: Proteus first makes a model for your race from the one that exists.

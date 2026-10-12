@@ -1086,7 +1086,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
         ct.ThrowIfCancellationRequested();
 
         AssertOffFramework("the refit");
-        var pieces = RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment));
+        var pieces = RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment), out var pieceNames);
         // The new body's skin goes in whole: nobody is watching an unattended refit to catch the holes a cut can leave.
         var plan = BodyRetarget.Plan(garment, bytes, pairs, primary, held: new HashSet<int>(),
                                      replaceSkin: across, acrossBodies: across, clearBody: false, cutHidden: false,
@@ -1103,6 +1103,9 @@ public sealed partial class AutoRefitWatcher : IDisposable
             return;
         log.Information("[Proteus] auto refit: {0} {1} onto {2} in {3:F1}s (moved up to {4:F1} mm)", item, primary,
                         option, clock.Elapsed.TotalSeconds, plan.Report.WorstMove * 1000f);
+        if (RefitCore.ReleasedLog(plan.Report, pieceNames) is { } released)
+            log.Information("[Proteus] auto refit: {0}: let go of kept piece(s) that would sink moved whole: {1}", item,
+                            released);
 
         string done = string.Format(Loc.Localize("Chat.AutoRefit.Done.Fmt",
                 "[Proteus] {0} now fits {1}. Saved as \"{2}\" in {3} and switched on."),

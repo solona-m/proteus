@@ -159,6 +159,10 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     /// <summary>One refit per target of the garment's own slot, in the order the targets were ticked.</summary>
     private List<(BodyOption To, BodyRetarget.Planned Planned)>? planned;
 
+    /// <summary>The labels of the "keep shape" pieces <see cref="planned"/> was refitted with, by piece index — how a
+    /// piece the refit let go is named (see <see cref="RefitCore.ReleasedWarning"/>).</summary>
+    private IReadOnlyList<string> plannedShapeNames = [];
+
     /// <summary>Which of <see cref="planned"/> is on the character.</summary>
     private int showing;
 
@@ -191,7 +195,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     /// <summary>The body mod the "made for" sizes come from: the other one, or the refit-onto one.</summary>
     private string? SourceDir => fromBodyDir ?? bodyDir;
     private sealed record PlanResult(string Key, List<(BodyOption To, BodyRetarget.Planned Planned)>? Planned,
-                                     string Error);
+                                     string Error, IReadOnlyList<string>? ShapeNames = null);
     private sealed record SaveResult(BodyRetargetWriter.Outcome Outcome, BodyRetargetWriter.Record? Record);
 
     // ── caches for things that would otherwise be read every frame ──────────
@@ -1316,6 +1320,9 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         if (done.Report.SnapRate is > 0f and < 0.8f)
             using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
                 ImGui.TextWrapped(ps.RetargetLowSnap);
+        if (RefitCore.ReleasedWarning(done.Report, plannedShapeNames) is { } released)
+            using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
+                ImGui.TextWrapped(released);
 
         if (ImGui.Button(ps.RetargetClearPreview, FullWidth()))
         {
@@ -1457,9 +1464,10 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     }
 
     /// <summary>A refit's counts, for the log. Not localized: it is read when diagnosing, not by the player.</summary>
-    private static string Describe(BodyRetarget.Report r)
+    private static string Describe(BodyRetarget.Report r, IReadOnlyList<string> shapeNames)
     {
         var parts = new List<string> { $"moved up to {r.WorstMove * 1000f:F1} mm" };
+        if (RefitCore.ReleasedLog(r, shapeNames) is { } released) parts.Add($"let go of kept piece(s) {released}");
         if (r.Snapped > 0) parts.Add($"{r.Snapped:N0} snapped ({r.SnapRate:P0})");
         if (r.Pushed > 0) parts.Add($"{r.Pushed:N0} pushed out (up to {r.WorstPush * 1000f:F2} mm)");
         if (r.Missed > 0) parts.Add($"{r.Missed:N0} too far to follow");
@@ -1595,7 +1603,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
                 foreach (var part in garment.Parts)
                     if (heldLabels.Contains(part.Label))
                         held.UnionWith(part.Triangles);
-                var pieces = RefitCore.ShapePieces(garment, shapeLabels);
+                var pieces = RefitCore.ShapePieces(garment, shapeLabels, out var shapeNames);
 
                 var results = new List<(BodyOption, BodyRetarget.Planned)>();
                 foreach (var (option, targetPath) in targets)
@@ -1626,7 +1634,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
                     results.Add((option, plan));
                     Interlocked.Increment(ref planDone);
                 }
-                return new PlanResult(key, results, "");
+                return new PlanResult(key, results, "", shapeNames);
             }
             catch (Exception ex)
             {
@@ -1888,6 +1896,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
             else if (pt.Result.Planned is { Count: > 0 } done && pt.Result.Key == Key(ctx))
             {
                 planned = done;
+                plannedShapeNames = pt.Result.ShapeNames ?? [];
                 plannedKey = pt.Result.Key;
                 showing = 0;
                 var first = done[0].Planned;
@@ -1895,7 +1904,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
                 ctx.SetStatus("", false);
                 foreach (var (to, plan) in done)
                     log.Information("[Proteus] retarget: {0} onto {1}: {2}", ctx.ModelRel, to.Label,
-                                    Describe(plan.Report));
+                                    Describe(plan.Report, plannedShapeNames));
             }
         }
 
