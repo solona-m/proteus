@@ -862,6 +862,45 @@ public class KeepEndsTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-keep-ends-studio-7")]
+    public void Studio_kept_pieces_are_named_by_the_plans_own_list()   // [EDGE-keep-ends-studio-7]
+    {
+        // Two pieces kept in shape: one wholly on the foot — held with it, so not among the plan's pieces — and one on
+        // the leg. The Studio's warning for a piece the refit let go is read by the plan's own piece index, so the names
+        // that come back must be the plan's: the leg's alone.
+        InBodies(dir =>
+        {
+            var bytes = ShoeModel(4, islands: 4);
+            var parts = ModelPartReader.Read(bytes)!;
+            var whole = KeepEnds.Read("_sho", parts, bytes, [])!;
+            var onFoot = whole.Ends.Take(3).ToList();
+            var onLeg = Enumerable.Range(0, parts.Positions.Length / 3).Where(v => !whole.Ends.Contains(v)).Take(3).ToList();
+            Assert.Equal(3, onFoot.Count);
+            Assert.Equal(3, onLeg.Count);
+            IReadOnlyList<IReadOnlyCollection<int>> pieces = [onFoot, onLeg];
+
+            // Named by the caller, the end's own left out; unnamed, still one name per piece.
+            var named = KeepEnds.Read("_sho", parts, bytes, pieces, ["foot ring", "calf band"])!;
+            Assert.Equal(["calf band"], named.FreeNames);
+            var unnamed = KeepEnds.Read("_sho", parts, bytes, pieces)!;
+            Assert.Equal(unnamed.FreePieces.Count, unnamed.FreeNames!.Count);
+
+            Write(dir, "lm.mdl", LegsBody(16, 0.01f, islands: 16));
+            Write(dir, "ll.mdl", LegsBody(16, 0.02f, islands: 16));
+            var m = LegsM with { Rel = "lm.mdl" };
+            var l = LegsM with { Name = "L", Rel = "ll.mdl" };
+            var catalog = new BodySizeCatalog(dir, [m, l]);
+            var planned = KeepEnds.StudioPlan(new KeepEnds.StudioPlanInput(
+                    parts, bytes, "_sho", pieces, catalog, catalog, "0201", false, m, [l],
+                    SameBodyMod: false, FromCloth: false, ReplaceSkin: true, Across: true, ClearBody: false,
+                    Held: null, Shared: null, _ => (null, null), s => s, "test", ["foot ring", "calf band"]),
+                (p, _) => p, null, NSubstitute.Substitute.For<Dalamud.Plugin.Services.IPluginLog>());
+            Assert.True(planned.Planned is { Count: 1 }, planned.Error + planned.Notice);
+            Assert.Equal(["calf band"], planned.ShapeNames);
+        });
+    }
+
+    [Fact]
     [Trait("Plan", "AC-keep-ends-studio-3")]
     public void End_pair_is_the_companion_of_the_limb_sizes()   // [AC-keep-ends-studio-3]
     {

@@ -192,12 +192,17 @@ internal static partial class SizeSetRefit
                     notes.Add(string.Format(Strings.SizeSet.RefusedFmt, piece.Label, option, refusal));
                     continue;
                 }
-                var plan = KeepEnds.Plan(src.Garment, src.Bytes, src.Reading, limbPair, endPair, across);
+                var plan = KeepEnds.Plan(src.Garment, src.Bytes, src.Reading, limbPair, endPair, across,
+                                         line => log.Debug("[Proteus] size set: {0}", line),
+                                         line => log.Warning("[Proteus] size set: {0}", line));
                 plan = RefitCore.MatchSkinToBody(plan, sourcePath, targetCat.PathOf(to!), uvRemap, male, log);
                 var (seamEdges, stretched) = KeepEnds.SeamStretch(src.Garment, src.Reading.Ends, plan);
                 log.Information("[Proteus] size set: {0} onto {1} by its {2} (moved up to {3:F1} mm, the seam stretched "
                               + "up to {4:F1} mm over {5} edges, {6} triangles left folded)", piece.Label, option, limb,
                                 plan.Report.WorstMove * 1000f, stretched * 1000f, seamEdges, plan.Report.Folded);
+                if (RefitCore.ReleasedLog(plan.Report, src.Reading.FreeNames ?? []) is { } released)
+                    log.Information("[Proteus] size set: {0} {1}: let go of kept piece(s) that would sink moved whole: {2}",
+                                    piece.Label, option, released);
                 refits.Add(new BodyRetargetWriter.Refit(option, plan.Model, to!.Label));
             }
             if (refits.Count == 0) continue;

@@ -156,7 +156,9 @@ internal static partial class KeepEnds
                 return new StudioPlanned(null, input.LimbTargets.Count > 1 ? $"{option.Label}: {refusal}" : refusal);
 
             var plan = Plan(input.Garment, input.Bytes, reading, limbPair, endPair, input.ReplaceSkin, input.Across,
-                            input.ClearBody, input.Held, input.Shared);
+                            input.ClearBody, input.Held, input.Shared,
+                            line => log.Debug("[Proteus] body size: {0}", line),
+                            line => log.Warning("[Proteus] body size: {0}", line));
             plan = RefitCore.MatchSkinToBody(plan, limbSource, targetPath, uvRemap, input.Male, log);
             var (seamEdges, stretched) = SeamStretch(input.Garment, reading.Ends, plan);
             log.Information("[Proteus] retarget: {0} kept its {1}: moved up to {2:F1} mm, the seam stretched up to {3:F1} "

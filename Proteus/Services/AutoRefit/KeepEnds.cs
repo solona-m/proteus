@@ -257,10 +257,13 @@ internal static partial class KeepEnds
     /// Neolithe SFW M, moved up to 19.0 mm and stretched the ankle by 5.1 mm; with the feet's shape, 11.9 mm and 4.3 mm.
     /// Null leaves it out.
     /// </summary>
+    /// <param name="log">The refit's own notes, for the debug log (see <see cref="BodyRetarget.Plan"/>).</param>
+    /// <param name="warn">Its warnings.</param>
     internal static BodyRetarget.Planned Plan(ModelParts garment, byte[] bytes, Reading reading,
-                                              BodyRetarget.SlotPair limb, BodyRetarget.SlotPair? end, bool across)
+                                              BodyRetarget.SlotPair limb, BodyRetarget.SlotPair? end, bool across,
+                                              Action<string>? log = null, Action<string>? warn = null)
         => Plan(garment, bytes, reading, limb, end, replaceSkin: across, across: across, clearBody: false,
-                alsoHeld: null, extra: null);
+                alsoHeld: null, extra: null, log, warn);
 
     /// <inheritdoc cref="Plan(ModelParts, byte[], Reading, BodyRetarget.SlotPair, BodyRetarget.SlotPair?, bool)"/>
     /// <param name="replaceSkin">Swap the limb's skin for the new body's. The automatic refit does so across body mods
@@ -273,7 +276,8 @@ internal static partial class KeepEnds
     internal static BodyRetarget.Planned Plan(ModelParts garment, byte[] bytes, Reading reading,
                                               BodyRetarget.SlotPair limb, BodyRetarget.SlotPair? end, bool replaceSkin,
                                               bool across, bool clearBody, IReadOnlySet<int>? alsoHeld,
-                                              IReadOnlyList<BodyRetarget.SlotPair>? extra)
+                                              IReadOnlyList<BodyRetarget.SlotPair>? extra,
+                                              Action<string>? log = null, Action<string>? warn = null)
     {
         List<BodyRetarget.SlotPair> pairs = [limb];
         if (end is { } shape) pairs.Add(shape with { ShapeOnly = true });
@@ -282,7 +286,7 @@ internal static partial class KeepEnds
         if (alsoHeld is { Count: > 0 }) held = new HashSet<int>(reading.Ends.Concat(alsoHeld));
         return BodyRetarget.Plan(garment, bytes, pairs, reading.Slot, held: held, replaceSkin: replaceSkin,
                                  acrossBodies: across, clearBody: clearBody, cutHidden: true,
-                                 keepShape: reading.FreePieces, swapSlot: reading.Limb);
+                                 keepShape: reading.FreePieces, swapSlot: reading.Limb, log: log, warn: warn);
     }
 
     /// <summary>

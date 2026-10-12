@@ -229,7 +229,9 @@ public sealed partial class AutoRefitWatcher
         ct.ThrowIfCancellationRequested();
 
         AssertOffFramework("the refit");
-        var plan = KeepEnds.Plan(j.Garment, j.Bytes, reading, limbPair, endPair, across);
+        var plan = KeepEnds.Plan(j.Garment, j.Bytes, reading, limbPair, endPair, across,
+                                 line => log.Debug("[Proteus] auto refit: {0}", line),
+                                 line => log.Warning("[Proteus] auto refit: {0}", line));
         plan = RefitCore.MatchSkinToBody(plan, sourcePath, targetPath, uvRemap, j.Male, log);
         if (j.BakeTo != 0) plan = RefitCore.WithBodySkin(plan, targetPath, log);
         ct.ThrowIfCancellationRequested();
