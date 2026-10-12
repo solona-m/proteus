@@ -351,7 +351,7 @@ public class MeshVolumeServiceTests
         Assert.Equal((spare0 - base0).Y, offsetAfter.Y, 1e-6f);
     }
 
-    /// <summary>The refit's edit goes through the same writer: each spare once, and no normal written.</summary>
+    /// <summary>The refit's edit goes through the same writer, and carries each spare once.</summary>
     [Fact]
     public void A_retarget_carries_each_spare_once()   // [AC-spare-carry-append-worn-2]
     {
@@ -377,6 +377,54 @@ public class MeshVolumeServiceTests
         var (mdl, read) = SpareModel(new SyntheticModel.Shape("shp_a", 0, [(0, 999), (1, 999), (2, 999)]));
         var written = MeshVolumeService.Inflate(mdl, new FieldEdit(read.MeshSpans, read.Positions, Rising));
         Assert.Equal(1, written.UnmappedSpares);
+    }
+
+    /// <summary>Two meshes, each with spare 6 named from slots 0 and 3, mesh 1 placed apart in X.</summary>
+    private static (byte[] Mdl, ModelParts Read) TwoSpareMeshes(params SyntheticModel.Shape[] shapes)
+    {
+        var mdl = SyntheticModel.Build(
+            [],
+            [
+                new SyntheticModel.Mesh("/mt_a.mtrl", new SyntheticModel.Sub(0, TrianglesPerIsland: 2)) { Spares = 1 },
+                new SyntheticModel.Mesh("/mt_b.mtrl", new SyntheticModel.Sub(0, TrianglesPerIsland: 2, OffsetX: 5f)) { Spares = 1 },
+            ],
+            SyntheticModel.V6, shapes);
+        return (mdl, ModelPartReader.Read(mdl)!);
+    }
+
+    /// <summary>
+    /// A shaped mesh the edit does not cover cannot be carried: its spare is counted once, however many slots name it.
+    /// </summary>
+    [Fact]
+    public void A_spare_in_a_mesh_the_edit_leaves_out_counts_once()   // [AC-spare-carry-append-worn-3]
+    {
+        var (mdl, read) = TwoSpareMeshes(new SyntheticModel.Shape("shp_b", 1, [(0, 6), (3, 6)]));
+        var edit = new FieldEdit([read.MeshSpans[0]], read.Positions, Rising);
+        Assert.Equal(1, MeshVolumeService.Inflate(mdl, edit).UnmappedSpares);
+    }
+
+    /// <summary>
+    /// The same local spare index missed in one mesh and carried in another: the carried one moves once, and the missed
+    /// one is still counted — the key keeps the meshes apart.
+    /// </summary>
+    [Fact]
+    public void A_missed_spare_is_not_hidden_by_the_same_index_carried_in_another_mesh()   // [AC-spare-carry-append-worn-3]
+    {
+        var (mdl, read) = TwoSpareMeshes(new SyntheticModel.Shape("shp_a", 0, [(0, 6), (3, 6)]),
+                                         new SyntheticModel.Shape("shp_b", 1, [(0, 6), (3, 6)]));
+        var edit = new FieldEdit([read.MeshSpans[0]], read.Positions, Rising);
+
+        var written = MeshVolumeService.Inflate(mdl, edit);
+        Assert.Equal(1, written.UnmappedSpares);
+        Assert.Equal(PositionAt(mdl, 0, 6).Y + edit.DeltaAt(0).Y, PositionAt(written.Model, 0, 6).Y, 1e-6f);
+    }
+
+    /// <summary>An entry no mesh owns: its values name one spare, so one point is lost, not two.</summary>
+    [Fact]
+    public void An_entry_no_mesh_owns_counts_its_spares_once()   // [AC-spare-carry-append-worn-3]
+    {
+        var (mdl, read) = SpareModel(new SyntheticModel.Shape("shp_a", 0, [(0, 6), (3, 6)], IndexOffset: 100000));
+        Assert.Equal(1, MeshVolumeService.Inflate(mdl, new FieldEdit(read.MeshSpans, read.Positions, Rising)).UnmappedSpares);
     }
 
     /// <summary>One spare named by two different shapes still moves once.</summary>

@@ -88,7 +88,9 @@ internal static class SyntheticModel
     /// <c>Replace</c>. Real exporters name one spare from EVERY slot its base vertex fills, which is the layout the
     /// one-value-per-name shapes cannot build.
     /// </summary>
-    internal sealed record Shape(string Name, int Mesh, (ushort BaseSlot, ushort Replace)[] Values);
+    /// <param name="IndexOffset">The ShapeMesh's index offset, when it must NOT be the mesh's own start index — an entry
+    /// no mesh owns. Null (the norm) is <paramref name="Mesh"/>'s start index.</param>
+    internal sealed record Shape(string Name, int Mesh, (ushort BaseSlot, ushort Replace)[] Values, uint? IndexOffset = null);
 
     /// <summary>
     /// A content pack's piece, shaped the way packs ship one: a stock model with its vanilla mesh emptied — it still
@@ -415,7 +417,7 @@ internal static class SyntheticModel
         foreach (var s in shapeList)
         {
             var sm = new byte[12];
-            W32(sm, 0, meshStartIndices[s.Mesh]);                              // mesh index offset: its start index
+            W32(sm, 0, s.IndexOffset ?? meshStartIndices[s.Mesh]);             // mesh index offset: its start index
             W32(sm, 4, (uint)s.Values.Length);                                 // value count
             W32(sm, 8, valueStart);                                            // value start
             ms.Write(sm);
