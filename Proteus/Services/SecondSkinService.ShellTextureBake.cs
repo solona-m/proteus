@@ -264,22 +264,10 @@ public sealed partial class SecondSkinService
                         // Only for a shell whose normal was held for a reinforced toe, at the sheet's size so it matches texel for texel.
                         ToeReinforceSize = deferredNormal?.Norm != null ? build.texSize : 0,
                         // BODY SURFACES ONLY: a face or tail has no bust bones.
-                        BustBridgeStrength = layerSurf.Key.IsBody
-                                          && build.bridgeByMod.TryGetValue(entry.ModDirectory, out var bridgeS)
-                            ? bridgeS
-                            : 0f,
-                        NippleSmoothStrength = layerSurf.Key.IsBody
-                                            && build.smoothByMod.TryGetValue(entry.ModDirectory, out var smoothS)
-                            ? smoothS
-                            : 0f,
-                        CleftBridgeStrength = layerSurf.Key.IsBody
-                                           && build.cleftByMod.TryGetValue(entry.ModDirectory, out var cleftS)
-                            ? cleftS
-                            : 0f,
-                        FoldSmoothStrength = layerSurf.Key.IsBody
-                                          && build.foldByMod.TryGetValue(entry.ModDirectory, out var foldS)
-                            ? foldS
-                            : 0f,
+                        BustBridgeStrength = SurfaceStrength(layerSurf.Key.IsBody, build.bridgeByMod, entry.ModDirectory),
+                        NippleSmoothStrength = SurfaceStrength(layerSurf.Key.IsBody, build.smoothByMod, entry.ModDirectory),
+                        CleftBridgeStrength = SurfaceStrength(layerSurf.Key.IsBody, build.cleftByMod, entry.ModDirectory),
+                        FoldSmoothStrength = SurfaceStrength(layerSurf.Key.IsBody, build.foldByMod, entry.ModDirectory),
                     });
                     build.inHost[hIdx]++; build.diskLetter++;       // slot consumed
                     if (isMaskShell) build.maskLayers++; else build.clothLayers++;
