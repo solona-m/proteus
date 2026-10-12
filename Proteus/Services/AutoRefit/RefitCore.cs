@@ -718,6 +718,17 @@ internal static class RefitCore
                                  cutHidden: skin.CutHidden, keepShape: ShapePieces(garment, DefaultKeepShape(garment)));
     }
 
+    /// <summary>
+    /// Whether the garment at <paramref name="gamePath"/> of the mod at <paramref name="modRoot"/> (null: the game's own
+    /// file) is the game's own garment, read off the mod on disk — what a save records as
+    /// <see cref="BodyRetargetWriter.Entry.FromGame"/>, so a game item's own mod stays one however it is refitted. See
+    /// <see cref="AutoRefitDecisions.IsGameGear"/>.
+    /// </summary>
+    internal static bool IsGameGear(string? modRoot, string gamePath)
+        => modRoot == null
+           || AutoRefitDecisions.IsGameGear(modRoot, gamePath, PenumbraModMeta.ReadAllRedirects(modRoot),
+                                            BodyRetargetWriter.ReadRecord(modRoot), RefitModService.IsMadeByProteus(modRoot));
+
     /// <summary>A relative path the way Penumbra compares them: forward slashes, no leading slash, any case.</summary>
     internal static string Normal(string rel) => rel.Replace('\\', '/').Trim('/').ToLowerInvariant();
 }

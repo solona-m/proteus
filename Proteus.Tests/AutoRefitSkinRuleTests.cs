@@ -154,6 +154,40 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
 
     [Fact]
     [Trait("Plan", "EDGE-vanilla-refit-cut-skin-8")]
+    public void A_game_items_own_mod_stays_game_gear_however_it_is_refitted_again()
+    {
+        // What the Body size tool and the every-size refit record when they save into a mod: read off the mod on disk.
+        // A game item's own mod refitted again by hand — its flag carried forward — is still the game's garment; one
+        // refit in it recorded as not from the game makes it a mod, and whole skin, the safe way round.
+        string root = Path.Combine(Path.GetTempPath(), "proteus-skinrule-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            Assert.True(RefitCore.IsGameGear(null, Top_));
+
+            RefitModService.WriteScaffold(root, "Coat — Neolithe", "Coat, refitted by Proteus.");
+            Assert.True(BodyRetargetWriter.Save(root, "Body — Neolithe", Top_, "Neolithe", "Vanilla",
+                                                [new BodyRetargetWriter.Refit("Neolithe M", [1, 2, 3], "M")],
+                                                fromGame: RefitCore.IsGameGear(null, Top_)).Ok);
+            Assert.True(RefitCore.IsGameGear(root, Top_));
+
+            Assert.True(BodyRetargetWriter.Save(root, "Body — Neolithe", Top_, "Neolithe", "Neolithe M",
+                                                [new BodyRetargetWriter.Refit("Neolithe L", [4, 5, 6], "L")],
+                                                fromGame: RefitCore.IsGameGear(root, Top_)).Ok);
+            Assert.True(RefitCore.IsGameGear(root, Top_));
+
+            Assert.True(BodyRetargetWriter.Save(root, "Body — Neolithe", Top_, "Neolithe", "Neolithe M",
+                                                [new BodyRetargetWriter.Refit("Neolithe XL", [7, 8, 9], "XL")]).Ok);
+            Assert.False(RefitCore.IsGameGear(root, Top_));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-vanilla-refit-cut-skin-8")]
     public void A_save_records_whether_it_was_made_from_the_games_own_garment()
     {
         string root = Path.Combine(Path.GetTempPath(), "proteus-skinrule-" + Guid.NewGuid().ToString("N"));
