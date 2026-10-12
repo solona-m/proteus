@@ -19,8 +19,10 @@ internal static partial class NavelBridge
     private const float NavelFitReach = 2f;
 
     /// <summary>
-    /// The flattest a belly is taken to be, as a radius of curvature: the most the fill may bow up over the membrane
-    /// at a distance d from its rim is d²/2R. Bellies curve tighter than this, so the allowance is generous.
+    /// The belly the fill may bow up like, as a radius of curvature: over the membrane, at a distance d from its rim,
+    /// no more than d²/2R. A belly curving tighter than this is under-filled by the difference; on the bodies measured
+    /// 7 cm and 10 cm fill identically (Neolithe 0.49 mm left, Rue+ 0.76, Bibo+ 0.01), so the cap only takes off a
+    /// fit gone wrong.
     /// </summary>
     private const float NavelFlattestBelly = 0.1f;
 
@@ -337,7 +339,7 @@ internal static partial class NavelBridge
                 float target = Q(x[n]) + residual[n];
                 // Never higher than the membrane plus what the flattest belly bows up there: the membrane cannot bulge
                 // (its heights stay inside the rim's), so a target over that is a fit gone wrong, a raised button. Rue+'s
-                // long pit stands 0.72 mm over it unclamped. How far it was is kept for the log.
+                // long pit's target stands 0.55 mm over it. How far it was is kept for the report.
                 float d2 = float.MaxValue;
                 foreach (int r in rim)
                 {

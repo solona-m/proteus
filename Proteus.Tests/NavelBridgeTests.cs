@@ -26,10 +26,12 @@ public class NavelBridgeTests
     /// </summary>
     internal static (Vec3[] Pos, Vec3[] Nrm, ushort[] Tris) Belly(Func<float, float, float>? dent = null,
         Func<Vec3, Vec3>? warp = null, float scale = 1f, bool seam = false, Func<Vec3, bool>? hole = null,
-        float spacing = Spacing)
+        float spacing = Spacing, float across = 0.15f)
     {
         // Up to the chest: with no breast bones the navel is looked for only in the lower half of the midline.
-        float half = 0.075f * scale, lo = NavelY - 0.1f * scale, hi = NavelY + 0.25f * scale, step = spacing * scale;
+        // Narrower than the belly's sideways radius, or the curve runs out.
+        float half = MathF.Min(0.075f, 0.9f * across) * scale, lo = NavelY - 0.1f * scale, hi = NavelY + 0.25f * scale,
+              step = spacing * scale;
         int nx = (int)MathF.Round(2 * half / step) + 1, ny = (int)MathF.Round((hi - lo) / step) + 1;
         int mid = nx / 2;
         var pos = new List<Vec3>();
@@ -40,7 +42,7 @@ public class NavelBridgeTests
             int key = seam && i == mid ? side : 0;
             if (at.TryGetValue((i, j, key), out var v)) return v;
             float x = -half + i * step, y = lo + j * step;
-            float r = 0.15f * scale, rv = 0.3f * scale;
+            float r = across * scale, rv = 0.3f * scale;
             float z = 0.1f * scale + (MathF.Sqrt(r * r - x * x) - r) - (y - NavelY) * (y - NavelY) / (2 * rv);
             if (dent != null) z -= dent(x, y);
             var p = new Vec3(x, y, z);
@@ -515,6 +517,35 @@ public class NavelBridgeTests
         Assert.Contains(log, l => l.StartsWith("navel fill: the pit taken from"));
         for (int i = 0; i < b.Pos.Length; i++)
             if (!covered[i]) Assert.False(plan!.Moved(i), $"vertex {i} past the hem moved");
+    }
+
+    /// <summary>
+    /// The fill bows up no further than a 10 cm belly would. A raised lip round the navel throws the belly's fit far over
+    /// the middle; the fill is held at the lip rather than standing up as a button, and the report says by how much the
+    /// target was cut.
+    /// </summary>
+    [Fact]
+    public void The_fill_bows_no_more_than_a_ten_centimetre_belly()
+    {
+        // A lip round the navel, highest 9 mm out and falling away beyond: fitted to that, the belly bows up over the
+        // middle far more than any belly does.
+        float Lip(float x, float y)
+        {
+            float r = MathF.Sqrt(x * x + (y - NavelY) * (y - NavelY));
+            return -0.004f * MathF.Exp(-(r - 0.009f) * (r - 0.009f) / (2 * 0.002f * 0.002f));
+        }
+        var b = Belly((x, y) => Pit()(x, y) + Lip(x, y));
+        var site = Locate(b)!;
+        var (plan, report) = Fill(b, site);
+        Assert.Equal(NavelBridge.NavelOutcome.Filled, report.Outcome);
+        // The fit overshoots the lip by millimetres (2.3 mm measured); the fill is held at the lip instead.
+        Assert.True(report.Proud > 0.001f, $"proud {report.Proud * 1000:0.###}mm — the fit did not overshoot");
+        int bottom = Enumerable.Range(0, b.Pos.Length).MinBy(i => Dist(b.Pos[i], new Vec3(0, NavelY, b.Pos[i].Z)));
+        float top = b.Pos.Where(p => Dist(p, new Vec3(0, NavelY, p.Z)) < site.DiscRadius).Max(p => p.Z);
+        float over = plan!.Final(bottom).Z - top;
+        Assert.True(over <= 0.0003f, $"the fill stands {over * 1000:0.##}mm over the lip — a raised button");
+        // On a plain belly the fit does not overshoot, and nothing is cut.
+        Assert.True(Fill(Belly(Pit()), Locate(Belly(Pit()))!).Report.Proud < 0.0001f);
     }
 
     /// <summary>A node the membrane slid under the skin comes back out over it; one above it stays where it is.</summary>
