@@ -22,6 +22,9 @@ internal static partial class BodyBridge
         private readonly float strength;
         private readonly Action<string>? log;
         private readonly Vec3[]? nrm;
+        private readonly Func<NippleFound, float>? sideScale;
+        private float scaleL = 1f;
+        private float scaleR = 1f;
         private List<int> measure = null!;
         private List<int> region = null!;
         private float midLat;
@@ -44,8 +47,9 @@ internal static partial class BodyBridge
         private float[] finishW = null!;
         private Vec3[]? result;
 
-        public NippleSmoothing(Vec3[] pos, float[] h, float[] lat, float[] ver, float[] w, bool[] onBust, int count, List<int>[] adj, Vec3 ax, float strength, Action<string>? log, Vec3[]? nrm)
+        public NippleSmoothing(Vec3[] pos, float[] h, float[] lat, float[] ver, float[] w, bool[] onBust, int count, List<int>[] adj, Vec3 ax, float strength, Action<string>? log, Vec3[]? nrm, Func<NippleFound, float>? sideScale = null)
         {
+            this.sideScale = sideScale;
             this.pos = pos;
             this.h = h;
             this.lat = lat;
@@ -131,7 +135,32 @@ internal static partial class BodyBridge
                 log?.Invoke("nipple smooth: nothing stands proud of its surroundings — nothing to smooth");
                 { result = null; return false; }
             }
+
+            // How much of each the caller wants gone: all of it, unless it says otherwise per side.
+            if (sideScale != null)
+            {
+                float ScaleFor(int nip, float prom, bool left)
+                    => nip < 0 ? 0f
+                     : Math.Clamp(sideScale(new NippleFound(pos[nip], nrm != null && nip < nrm.Length ? nrm[nip] : ax,
+                                                            prom, ringIn, ringOut, left)), 0f, 1f);
+                scaleL = ScaleFor(nipL, promL, true);
+                scaleR = ScaleFor(nipR, promR, false);
+                if (scaleL <= 0f && scaleR <= 0f)
+                {
+                    log?.Invoke("nipple smooth: neither nipple is to be smoothed — nothing to do");
+                    { result = null; return false; }
+                }
+            }
             return true;
+        }
+
+        /// <summary>The share of the smoothing node <paramref name="n"/> gets: its nearer nipple's.</summary>
+        private float ScaleOf(int n)
+        {
+            if (sideScale == null) return 1f;
+            if (nipL < 0) return scaleR;
+            if (nipR < 0) return scaleL;
+            return Across(n, nipL) <= Across(n, nipR) ? scaleL : scaleR;
         }
 
         private bool RelaxPatch()
@@ -184,7 +213,7 @@ internal static partial class BodyBridge
             delta = new Vec3[count];
             foreach (int n in patch)
             {
-                float a = amount[n] * strength;
+                float a = amount[n] * strength * ScaleOf(n);
                 delta[n] = new Vec3((cur[n].X - pos[n].X) * a, (cur[n].Y - pos[n].Y) * a, (cur[n].Z - pos[n].Z) * a);
             }
         }
@@ -207,6 +236,8 @@ internal static partial class BodyBridge
             foreach (int nip in stackalloc[] { nipL, nipR })
             {
                 if (nip < 0) continue;
+                float side = sideScale == null ? 1f : nip == nipL ? scaleL : scaleR;
+                if (side <= 0f) continue;
                 // Sampled off the BUST, not the covered part of it; see the onBust param.
                 var ring = new List<(double, double, double)>();
                 foreach (int n in measure)
@@ -253,7 +284,7 @@ internal static partial class BodyBridge
                     // Toward the dome from either side (raise-only undoes the relax at the tip), bounded by the
                     // nipple's own prominence: the trough cannot be deeper than the nipple is tall.
                     float want = Math.Clamp((float)dome - here, -domeCap, domeCap);
-                    float lift = want * w[n] * strength * fade;
+                    float lift = want * w[n] * strength * fade * side;
                     if (want > 0f) { shortfall += want - lift; shortNodes++; }
                     if (MathF.Abs(lift) <= 1e-7f) continue;
                     delta[n] = new Vec3(delta[n].X + ax.X * lift,
@@ -299,7 +330,7 @@ internal static partial class BodyBridge
                 // Faded by coverage and strength like everything else, so it stops at the garment's edge.
                 foreach (int n in finishNodes)
                 {
-                    float a = finishW[n] * strength;
+                    float a = finishW[n] * strength * ScaleOf(n);
                     if (a <= 0f) continue;
                     float bx = pos[n].X + delta[n].X, by = pos[n].Y + delta[n].Y, bz = pos[n].Z + delta[n].Z;
                     delta[n] = new Vec3(delta[n].X + (cur2[n].X - bx) * a,

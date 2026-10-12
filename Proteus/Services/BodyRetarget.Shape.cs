@@ -36,6 +36,8 @@ internal static partial class BodyRetarget
     /// before 1221 did (see <see cref="PlanWeights"/>).</param>
     /// <param name="NoRelease">Keep every "keep shape" piece whole even where that sinks it into the new body, as
     /// builds before this rule did: still judged and reported, never let go (see <see cref="ReleaseSink"/>).</param>
+    /// <param name="NoNippleSmooth">Leave the new body's nipples as its mod made them, however far they stand through
+    /// the cloth (see <see cref="SmoothCoveredNipples"/>).</param>
     internal sealed record Tuning(bool NoFollow = false, bool NoOwnSkinWeights = false,
                                   float OwnSkinReach = OwnSkinReachDefault, float CopyReach = CopyReachDefault,
                                   float CopyTolerance = CopyToleranceDefault, bool NoGiveUp = false,
@@ -43,7 +45,8 @@ internal static partial class BodyRetarget
                                   bool NoWeightSmooth = false, bool NoUnderbustLift = false, bool NoRelax = false,
                                   bool NoSkinHug = false, bool NoLayerKnit = false, bool NoRimLift = false,
                                   bool NoLayerOrder = false, bool LegsForAll = false,
-                                  bool CrossBodyPassesWithinBody = false, bool NoRelease = false);
+                                  bool CrossBodyPassesWithinBody = false, bool NoRelease = false,
+                                  bool NoNippleSmooth = false);
 
     private static readonly Tuning DefaultTuning = new();
 

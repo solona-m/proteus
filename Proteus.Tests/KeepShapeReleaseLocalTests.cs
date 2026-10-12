@@ -53,7 +53,7 @@ public class KeepShapeReleaseLocalTests
 
     /// <summary>One refit as <c>Proteus.Refit --keep-default</c> runs it, the default ticks less <paramref name="untick"/>.</summary>
     private static Run Refit(byte[] bytes, string fromNeed, string fromRel, string toNeed, string toRel,
-                             bool noRelease = false, string? untick = null)
+                             bool noRelease = false, string? untick = null, bool noNippleSmooth = false)
     {
         var garment = ModelPartReader.Read(bytes)!;
         string fromRoot = LocalData.Path(fromNeed), toRoot = LocalData.Path(toNeed);
@@ -66,7 +66,7 @@ public class KeepShapeReleaseLocalTests
         if (untick != null) Assert.True(labels.Remove(untick), $"{untick} is not ticked by default");
         var pieces = RefitCore.ShapePieces(garment, labels, out var names);
         bool across = !string.Equals(fromRoot, toRoot, StringComparison.OrdinalIgnoreCase);
-        var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoRelease: noRelease), () => BodyRetarget.Plan(
+        var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoRelease: noRelease, NoNippleSmooth: noNippleSmooth), () => BodyRetarget.Plan(
             garment, bytes, [pair], "_top", replaceSkin: true, acrossBodies: across, keepShape: pieces));
         return new Run(plan, names);
     }
@@ -183,12 +183,20 @@ public class KeepShapeReleaseLocalTests
             _ => (Bibo, @"breasts - small clothes\nude - small\chara\equipment\e0000\model\c0201e0000_top.mdl"),
         };
 
-        var run = Refit(File.ReadAllBytes(LocalData.Path(Pop)), Yab, YabMedium, toNeed, toRel);
+        // Without the nipple smoothing, which smooths YAB+ Medium's excess off Uranus and Bibo+ Nude: the hashes are
+        // this rule's, taken before it — the smoothing came later and has its own (RefitNippleSmoothTests).
+        var run = Refit(File.ReadAllBytes(LocalData.Path(Pop)), Yab, YabMedium, toNeed, toRel, noNippleSmooth: true);
 
         // Arm bands, underwires and 173 chain links: every one judged stays whole, and the refit is the one before.
         var kept = RefitCore.KeptPieces(run.Plan.Report, run.Names);
         Assert.NotEmpty(kept);
         Assert.DoesNotContain(kept, p => p.Released);
         Assert.Equal(Before[which], run.Hash);
+
+        // And as the refit really runs, smoothing on: still nothing let go.
+        var on = Refit(File.ReadAllBytes(LocalData.Path(Pop)), Yab, YabMedium, toNeed, toRel);
+        var keptOn = RefitCore.KeptPieces(on.Plan.Report, on.Names);
+        Assert.NotEmpty(keptOn);
+        Assert.DoesNotContain(keptOn, p => p.Released);
     }
 }

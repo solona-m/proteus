@@ -1126,12 +1126,14 @@ internal static class Program
                     "NoFollow" => tuning with { NoFollow = true },
                     "NoLayerOrder" => tuning with { NoLayerOrder = true },
                     "NoRelease" => tuning with { NoRelease = true },
+                    "NoNippleSmooth" => tuning with { NoNippleSmooth = true },
                     _ => throw new UsageException($"Unknown --tune knob \"{knob}\"."),
                 };
+            // The passes that explain themselves, on stderr: stdout is the JSON report.
             var planned = BodyRetarget.WithTuning(tuning, () => BodyRetarget.Plan(
                 garment, garmentBytes, pairs, slot, pushOut: !opts.ContainsKey("no-push"),
                 replaceSkin: true, acrossBodies: acrossBodies, cutHidden: !opts.ContainsKey("whole"),
-                keepShape: keepShape));
+                keepShape: keepShape, log: line => Console.Error.WriteLine($"{label}: {line}")));
             string written = Path.Combine(outDir, label + ".mdl");
             File.WriteAllBytes(written, planned.Model);
 
@@ -1148,7 +1150,7 @@ internal static class Program
                 report = new
                 {
                     nodes = r.Nodes, snapped = r.Snapped, transferred = r.Transferred, missed = r.Missed,
-                    pushed = r.Pushed, folded = r.Folded, laid = r.Laid,
+                    pushed = r.Pushed, folded = r.Folded, laid = r.Laid, smoothed = r.Smoothed,
                     worstMoveMm = r.WorstMove * 1000f, worstPushMm = r.WorstPush * 1000f,
                 },
                 // Each kept piece judged against the new body: how far moving it whole would sink it, and whether the

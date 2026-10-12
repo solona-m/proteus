@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Numerics;
 using System.Text;
 
 namespace Proteus.Tests;
@@ -503,6 +504,195 @@ internal static class SyntheticModel
         W32(o, ol + 52, vtxOff);
         W32(o, ol + 56, idxOff);
         for (int l = 1; l < 3; l++)                                            // LOD 1/2 carry no meshes
+        {
+            W16(o, ol + l * 60, (ushort)meshes.Length);
+            W16(o, ol + l * 60 + 2, 0);
+        }
+        return o;
+    }
+
+    /// <summary>
+    /// One mesh of free geometry for <see cref="BuildSurface"/>: positions, normals and uv0 per vertex, each vertex's own
+    /// bones, and triangles grouped into submeshes by attribute mask.
+    /// </summary>
+    /// <param name="Weights">Per vertex, the bones it follows (at most four); null entries follow <c>n_root</c>.</param>
+    /// <param name="Submeshes">Each submesh's attribute mask and its triangles, as indices into this mesh's vertices.</param>
+    internal sealed record SurfaceMesh(string Material, Vector3[] Positions, Vector3[] Normals, Vector2[] Uv,
+                                       (string Bone, float W)[]?[] Weights, (uint AttrMask, int[] Triangles)[] Submeshes);
+
+    /// <summary>Stream 0 of a <see cref="BuildSurface"/> model: position, normal, blend weights, blend indices.</summary>
+    private const int SurfaceStride = 32;
+
+    /// <summary>
+    /// A model of free geometry at real scale, for passes that read shape rather than counts: the bust smoothing, the
+    /// refit's coverage. Separate from <see cref="BuildCore"/>, whose layout the pinned hashes elsewhere depend on. Always
+    /// skinned and always carries a normal, which the body smoothing will not run without.
+    /// </summary>
+    internal static byte[] BuildSurface(IReadOnlyList<string> attrNames, params SurfaceMesh[] meshes)
+    {
+        var materials = meshes.Select(m => m.Material).Distinct(StringComparer.Ordinal).ToList();
+        var bones = new[] { "n_root" }
+            .Concat(meshes.SelectMany(m => m.Weights).SelectMany(w => w ?? []).Select(w => w.Bone))
+            .Distinct(StringComparer.Ordinal).ToArray();
+
+        var strMs = new MemoryStream();
+        uint[] Intern(IEnumerable<string> names) =>
+        [
+            .. names.Select(n =>
+            {
+                var at = (uint)strMs.Position;
+                strMs.Write(Encoding.ASCII.GetBytes(n));
+                strMs.WriteByte(0);
+                return at;
+            })
+        ];
+        var attrOff = Intern(attrNames);
+        var boneOff = Intern(bones);
+        var matOff = Intern(materials);
+        var strings = strMs.ToArray();
+
+        var vBuf = new MemoryStream();
+        var iBuf = new MemoryStream();
+        var meshBytes = new List<byte[]>();
+        var subBytes = new List<byte[]>();
+        uint indexCursor = 0;
+        int subTotal = meshes.Sum(m => m.Submeshes.Length);
+        foreach (var mesh in meshes)
+        {
+            if (mesh.Positions.Length > ushort.MaxValue)
+                throw new ArgumentException("a mesh's vertices must fit 16-bit indices");
+            uint meshVtxOffset = (uint)vBuf.Position;
+            uint meshStartIndex = indexCursor;
+            for (int i = 0; i < mesh.Positions.Length; i++)
+            {
+                var vtx = new byte[SurfaceStride];
+                var p = mesh.Positions[i];
+                var n = mesh.Normals[i];
+                BitConverter.GetBytes(p.X).CopyTo(vtx, 0);
+                BitConverter.GetBytes(p.Y).CopyTo(vtx, 4);
+                BitConverter.GetBytes(p.Z).CopyTo(vtx, 8);
+                BitConverter.GetBytes(n.X).CopyTo(vtx, 12);
+                BitConverter.GetBytes(n.Y).CopyTo(vtx, 16);
+                BitConverter.GetBytes(n.Z).CopyTo(vtx, 20);
+                var (weights, indices) = Blend(mesh.Weights[i] ?? [("n_root", 1f)], bones);
+                weights.CopyTo(vtx, 24);
+                indices.CopyTo(vtx, 28);
+                vBuf.Write(vtx);
+            }
+            uint meshUvOffset = (uint)vBuf.Position;
+            foreach (var uv in mesh.Uv)
+            {
+                vBuf.Write(BitConverter.GetBytes(uv.X));
+                vBuf.Write(BitConverter.GetBytes(uv.Y));
+            }
+
+            int meshIndices = 0;
+            foreach (var (mask, triangles) in mesh.Submeshes)
+            {
+                var so = new byte[16];
+                W32(so, 0, indexCursor);
+                W32(so, 4, (uint)triangles.Length);
+                W32(so, 8, mask);
+                W16(so, 12, (ushort)(subBytes.Count * bones.Length));
+                W16(so, 14, (ushort)bones.Length);
+                subBytes.Add(so);
+                foreach (int t in triangles) iBuf.Write(U16Bytes((ushort)t));
+                indexCursor += (uint)triangles.Length;
+                meshIndices += triangles.Length;
+            }
+
+            var mo = new byte[36];
+            W16(mo, 0, (ushort)mesh.Positions.Length);
+            W32(mo, 4, (uint)meshIndices);
+            W16(mo, 8, (ushort)materials.IndexOf(mesh.Material));
+            W16(mo, 10, (ushort)(subBytes.Count - mesh.Submeshes.Length));
+            W16(mo, 12, (ushort)mesh.Submeshes.Length);
+            W32(mo, 16, meshStartIndex);
+            W32(mo, 20, meshVtxOffset);
+            W32(mo, 24, meshUvOffset);
+            mo[32] = SurfaceStride;
+            mo[33] = UvStride;
+            mo[35] = 2;
+            meshBytes.Add(mo);
+        }
+
+        var ms = new MemoryStream();
+        ms.Write(new byte[0x44]);
+        var decl = new byte[DeclSize];
+        for (int i = 0; i < DeclSize; i++) decl[i] = 0xFF;
+        WriteElem(decl, 0, 0, 0, Float3, UsePosition, 0);
+        WriteElem(decl, 1, 0, 12, Float3, UseNormal, 0);
+        WriteElem(decl, 2, 0, 24, UByte4, UseBlendWeight, 0);
+        WriteElem(decl, 3, 0, 28, UByte4, UseBlendIndices, 0);
+        WriteElem(decl, 4, 1, 0, Float2, UseUV, 0);
+        for (int m = 0; m < meshes.Length; m++) ms.Write(decl);
+
+        ms.Write(U32((uint)(attrNames.Count + bones.Length + materials.Count)));
+        ms.Write(U32((uint)strings.Length));
+        ms.Write(strings);
+
+        var mh = new byte[56];
+        BitConverter.GetBytes(1f).CopyTo(mh, 0);
+        W16(mh, 4, (ushort)meshes.Length);
+        W16(mh, 6, (ushort)attrNames.Count);
+        W16(mh, 8, (ushort)subTotal);
+        W16(mh, 10, (ushort)materials.Count);
+        W16(mh, 12, (ushort)bones.Length);
+        W16(mh, 14, 1);
+        mh[22] = 1;
+        BitConverter.GetBytes(1f).CopyTo(mh, 28);
+        BitConverter.GetBytes(1f).CopyTo(mh, 32);
+        W16(mh, 44, (ushort)((bones.Length + 1) & ~1));
+        ms.Write(mh);
+
+        long lodPos = ms.Position;
+        ms.Write(new byte[3 * 60]);
+        foreach (var m in meshBytes) ms.Write(m);
+        foreach (var off in attrOff) ms.Write(U32(off));
+        foreach (var sb in subBytes) ms.Write(sb);
+        foreach (var off in matOff) ms.Write(U32(off));
+        foreach (var off in boneOff) ms.Write(U32(off));
+
+        ms.Write(U16Bytes(1));
+        ms.Write(U16Bytes((ushort)bones.Length));
+        for (int b = 0; b < bones.Length; b++) ms.Write(U16Bytes((ushort)b));
+        if (bones.Length % 2 == 1) ms.Write(U16Bytes(0));
+
+        ms.Write(U32((uint)(subTotal * bones.Length * 2)));
+        for (int i = 0; i < subTotal; i++)
+            for (int b = 0; b < bones.Length; b++) ms.Write(U16Bytes((ushort)b));
+        ms.WriteByte(0);
+
+        ms.Write(new byte[4 * BBoxSize]);
+        ms.Write(new byte[bones.Length * BBoxSize]);
+
+        uint vtxOff = (uint)ms.Position;
+        vBuf.Position = 0; vBuf.CopyTo(ms);
+        uint idxOff = (uint)ms.Position;
+        iBuf.Position = 0; iBuf.CopyTo(ms);
+        ms.Write(new byte[16]);   // the reader's blanket 16-byte bounds check; see BuildCore
+
+        var o = ms.ToArray();
+        uint stackSize = (uint)(meshes.Length * DeclSize);
+        W32(o, 0, V6);
+        W32(o, 4, stackSize);
+        W32(o, 8, (uint)(vtxOff - 0x44 - stackSize));
+        W16(o, 12, (ushort)meshes.Length);
+        W16(o, 14, (ushort)materials.Count);
+        W32(o, 16, vtxOff);
+        W32(o, 28, idxOff);
+        W32(o, 40, (uint)vBuf.Length);
+        W32(o, 52, (uint)iBuf.Length);
+        o[64] = 1;
+
+        int ol = (int)lodPos;
+        W16(o, ol, 0);
+        W16(o, ol + 2, (ushort)meshes.Length);
+        W32(o, ol + 44, (uint)vBuf.Length);
+        W32(o, ol + 48, (uint)iBuf.Length);
+        W32(o, ol + 52, vtxOff);
+        W32(o, ol + 56, idxOff);
+        for (int l = 1; l < 3; l++)
         {
             W16(o, ol + l * 60, (ushort)meshes.Length);
             W16(o, ol + l * 60 + 2, 0);

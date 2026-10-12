@@ -772,13 +772,14 @@ internal static class RefitCore
     /// </summary>
     /// <param name="pieceNames">The kept pieces' labels, in order — for <see cref="ReleasedLog"/>.</param>
     internal static BodyRetarget.Planned PlanRefit(ModelParts garment, byte[] bytes, IReadOnlyList<BodyRetarget.SlotPair> pairs,
-                                                   string primary, bool across, bool gameGear, out List<string> pieceNames)
+                                                   string primary, bool across, bool gameGear, out List<string> pieceNames,
+                                                   Action<string>? log = null, Action<string>? warn = null)
     {
         var skin = AutoRefitDecisions.SkinFor(gameGear);
         var pieces = ShapePieces(garment, DefaultKeepShape(garment), out pieceNames);
         return BodyRetarget.Plan(garment, bytes, pairs, primary, held: new HashSet<int>(),
                                  replaceSkin: across, acrossBodies: across, clearBody: skin.ClearBody,
-                                 cutHidden: skin.CutHidden, keepShape: pieces);
+                                 cutHidden: skin.CutHidden, keepShape: pieces, log: log, warn: warn);
     }
 
     /// <summary>
