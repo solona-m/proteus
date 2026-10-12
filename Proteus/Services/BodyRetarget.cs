@@ -627,16 +627,19 @@ internal static partial class BodyRetarget
     /// legs of a shoe whose own foot is held (see <see cref="SwapSlotSwapped"/>). Null for none, which is every refit but
     /// the automatic one of shoes and gloves.</param>
     /// <param name="log">Where the passes that explain themselves write: the nipple smoothing. Null for nowhere.</param>
+    /// <param name="warn">Where a pass that failed — a bug, not a garment with nothing to do — says so. Null falls back to
+    /// <paramref name="log"/>.</param>
     public static Planned Plan(ModelParts garment, byte[] garmentBytes, IReadOnlyList<SlotPair> pairs,
                                string? garmentSlot = null, bool pushOut = true, IReadOnlySet<int>? held = null,
                                bool replaceSkin = false, bool acrossBodies = false, bool clearBody = false,
                                bool cutHidden = true, IReadOnlyList<IReadOnlyCollection<int>>? keepShape = null,
-                               string? swapSlot = null, Action<string>? log = null)
+                               string? swapSlot = null, Action<string>? log = null, Action<string>? warn = null)
     {
         // First, before anything reads the new chest: its nipples smoothed where the garment covers more of them than
         // the old body had, so every pass below sees one surface — the one the swap draws.
         int smoothed = 0;
-        if (!Tuned.NoNippleSmooth) pairs = SmoothCoveredNipples(garment, pairs, out smoothed, log);
+        if (!Tuned.NoNippleSmooth)
+            pairs = SmoothCoveredNipples(garment, pairs, out smoothed, log, swapSlot, Uv(garmentBytes), warn);
 
         // The solver and the rebuild must agree on which skin meshes go: the solver parts the cloth welded to them, and a
         // mesh it parted that the rebuild then keeps opens the seam (see Sets.From). Without a hold the two rules agree on

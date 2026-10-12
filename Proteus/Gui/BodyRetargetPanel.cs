@@ -1616,7 +1616,8 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
                     var plan = BodyRetarget.Plan(garment, bytes, pairs, garmentSlot, held: held,
                                                  replaceSkin: layOnBody, acrossBodies: acrossBodies,
                                                  clearBody: clear, cutHidden: cut, keepShape: pieces,
-                                                 log: line => log.Debug("[Proteus] body size: {0}", line));
+                                                 log: line => log.Debug("[Proteus] body size: {0}", line),
+                                                 warn: line => log.Warning("[Proteus] body size: {0}", line));
                     // Skin the refit kept of the garment's own, drawn in the new body's layout and material — or a
                     // gen2 garment's kept skin shows the wrong skin, and none of the tattoos, on a bibo body.
                     plan = RefitCore.MatchSkinToBody(plan, garmentSource, targetPath, uvRemap, male, log);

@@ -30,12 +30,12 @@ internal static class SyntheticChest
     internal static Vector2 Tip(bool left) => new(left ? -Centre : Centre, Base + Height * 0.5f);
 
     /// <summary>The chest's surface height at (x, y), in +Z.</summary>
-    internal static float Z(float x, float y, float nippleL, float nippleR, float coarse = 1f)
+    internal static float Z(float x, float y, float nippleL, float nippleR, float spread = NippleSpread)
     {
         float LobeAt(float c) => Lobe * MathF.Exp(-((x - c) * (x - c)) / (Spread * Spread));
         float NippleAt(float c, float h)
             => h <= 0f ? 0f
-             : h * MathF.Exp(-(((x - c) * (x - c) + (y - Tip(true).Y) * (y - Tip(true).Y)) / (NippleSpread * NippleSpread)));
+             : h * MathF.Exp(-(((x - c) * (x - c) + (y - Tip(true).Y) * (y - Tip(true).Y)) / (spread * spread)));
         return LobeAt(-Centre) + LobeAt(Centre) + NippleAt(-Centre, nippleL) + NippleAt(Centre, nippleR);
     }
 
@@ -45,7 +45,7 @@ internal static class SyntheticChest
     /// <summary>A chest grid with nipples of the given heights (metres, 0 for none).</summary>
     /// <param name="step">Columns and rows are taken every <paramref name="step"/>th line: 2 gives a coarser body over
     /// the same uv, a different topology for the atlas correspondence.</param>
-    internal static Grid Surface(float nippleL, float nippleR, int step = 1)
+    internal static Grid Surface(float nippleL, float nippleR, int step = 1, float spread = NippleSpread)
     {
         int cols = (Columns - 1) / step + 1, rows = (Rows - 1) / step + 1;
         var pos = new Vector3[cols * rows];
@@ -55,7 +55,7 @@ internal static class SyntheticChest
             {
                 float u = (float)c / (cols - 1), v = (float)r / (rows - 1);
                 float x = -HalfWidth + 2f * HalfWidth * u, y = Base + Height * v;
-                pos[r * cols + c] = new Vector3(x, y, Z(x, y, nippleL, nippleR));
+                pos[r * cols + c] = new Vector3(x, y, Z(x, y, nippleL, nippleR, spread));
                 uv[r * cols + c] = new Vector2(u, v);
             }
         var tris = new List<int>();
@@ -95,9 +95,9 @@ internal static class SyntheticChest
     /// <param name="altNipple">Adds, as a second submesh tagged <c>atr_tv_b</c>, a copy of the left lobe's nipple disc
     /// raised <paramref name="altNipple"/> further — welded to the drawn skin along its rim, as a real alternative is.</param>
     internal static byte[] Body(float nippleL, float nippleR, bool bust = true, bool piercing = false, int step = 1,
-                                float altNipple = 0f)
+                                float altNipple = 0f, float spread = NippleSpread)
     {
-        var g = Surface(nippleL, nippleR, step);
+        var g = Surface(nippleL, nippleR, step, spread);
         var weights = g.Pos.Select(p => (((string, float)[]?)BodyBones(p, bust))).ToArray();
         var subs = new List<(uint, int[])> { (0u, g.Tris) };
         var pos = g.Pos.ToList();

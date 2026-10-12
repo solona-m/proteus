@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
-using Vec3 = Proteus.Services.SecondSkinWriter.Vec3;
 
 namespace Proteus.Services;
 
@@ -44,6 +43,10 @@ internal static partial class BodyRetarget
     /// (1 mm): an author's sculpted skin under a custom material sits 0.4-0.9 mm off.</summary>
     internal const float SkinCopyReach = 0.001f;
 
+    /// <summary>How close a garment vertex's texture coordinate must be to the source skin's under it (0.01 of the
+    /// sheet) for the two to share a layout: a copy of the skin keeps the body's uvs, cloth painted on it does not.</summary>
+    internal const float SkinCopyUv = 0.01f;
+
     /// <summary>
     /// The new chest body with the part of each covered nipple that stands prouder than the source body's smoothed off,
     /// put in place of the old one in every pair it is in: the cloth lands on it, the push-out measures against it and
@@ -54,24 +57,34 @@ internal static partial class BodyRetarget
     /// with nipples as proud, leaves the pair as it was. A failure leaves it as it was too — this never fails a refit.
     /// </summary>
     /// <param name="smoothed">Target vertices moved, in all.</param>
+    /// <param name="swapSlot">See <see cref="Plan"/>: set, the refit is of a glove's or shoe's limb, which covers no
+    /// chest, and nothing is smoothed.</param>
+    /// <param name="garmentUv">The garment's uv0, in <see cref="ModelParts.Positions"/> order: tells a copy of the skin
+    /// from cloth painted on it (see <see cref="WithoutSkinCopies"/>). Null judges by distance alone.</param>
+    /// <param name="warn">Where a smoothing that FAILED says so — a bug, not a garment with nothing to smooth. Null
+    /// falls back to <paramref name="log"/>.</param>
     internal static IReadOnlyList<SlotPair> SmoothCoveredNipples(ModelParts garment, IReadOnlyList<SlotPair> pairs,
-                                                                 out int smoothed, Action<string>? log = null)
+                                                                 out int smoothed, Action<string>? log = null,
+                                                                 string? swapSlot = null, float[]? garmentUv = null,
+                                                                 Action<string>? warn = null)
     {
         smoothed = 0;
+        if (swapSlot != null) return pairs;
         List<SlotPair>? replaced = null;
         for (int i = 0; i < pairs.Count; i++)
         {
             var pair = pairs[i];
-            if (pair.Slot != "_top" || pair.TargetModel == null) continue;
+            // A ShapeOnly pair's skin is never drawn: there is no surface for the cloth to show a nipple through.
+            if (pair.Slot != "_top" || pair.TargetModel == null || pair.ShapeOnly) continue;
             SlotPair? done;
             int moved;
             try
             {
-                done = SmoothPair(garment, pair, log, out moved);
+                done = SmoothPair(garment, pair, garmentUv, log, warn ?? log, out moved);
             }
             catch (Exception ex)
             {
-                log?.Invoke($"refit nipple smooth: {pair.Slot} left as it was — {ex.GetType().Name}: {ex.Message}");
+                (warn ?? log)?.Invoke($"refit nipple smooth: {pair.Slot} left as it was — {ex.GetType().Name}: {ex.Message}");
                 continue;
             }
             if (done is not { } p) continue;
@@ -81,7 +94,12 @@ internal static partial class BodyRetarget
         return replaced ?? pairs;
     }
 
-    private static SlotPair? SmoothPair(ModelParts garment, SlotPair pair, Action<string>? log, out int moved)
+    /// <summary>One side of the chest as the excess gate read it: where its tip is, how much prouder than the source's
+    /// it stands, and the share of the smoothing that asked for.</summary>
+    private readonly record struct NippleSide(Vector3 Tip, float Excess, float Scale);
+
+    private static SlotPair? SmoothPair(ModelParts garment, SlotPair pair, float[]? garmentUv, Action<string>? log,
+                                        Action<string>? warn, out int moved)
     {
         moved = 0;
         var targetModel = pair.TargetModel!;
@@ -91,7 +109,7 @@ internal static partial class BodyRetarget
             return null;
         }
 
-        var covered = CoveredTargetSkin(garment, pair, out var landings);
+        var covered = CoveredTargetSkin(garment, pair, out var landings, garmentUv);
         int coveredCount = covered.Count(c => c);
         if (coveredCount == 0)
         {
@@ -103,14 +121,14 @@ internal static partial class BodyRetarget
         var drawn = DrawnVertices(targetModel, pair);
         var targetSkin = new SkinIndex(target);
         var sourceSkin = new SkinIndex(pair.Correspondence.Source);
-        var sides = new Dictionary<bool, (Vector3 Tip, float Excess, float Scale)>();
+        var sides = new Dictionary<bool, NippleSide>();
         var gate = new BodyBridge.BodySmoothGate(
             (m, vc, _) => SliceOf(covered, target, m, vc, false),
             drawn == null ? null : (m, vc) => SliceOf(drawn, target, m, vc, true),
             found =>
             {
                 var (excess, scale) = ExcessScale(found, targetSkin, sourceSkin, landings, log);
-                sides[found.Left] = (new Vector3(found.Tip.X, found.Tip.Y, found.Tip.Z), excess, scale);
+                sides[found.Left] = new NippleSide(new Vector3(found.Tip.X, found.Tip.Y, found.Tip.Z), excess, scale);
                 return scale;
             },
             FrameFromBust: true);
@@ -121,41 +139,27 @@ internal static partial class BodyRetarget
             log?.Invoke($"refit nipple smooth: {pair.Slot} left as it was — nothing on the new body was smoothed");
             return null;
         }
-        var read = ModelPartReader.Read(bytes);
-        if (read == null || read.Positions.Length != target.Positions.Length)
+        var read = ReadBack(bytes, target);
+        if (read == null)
         {
-            log?.Invoke($"refit nipple smooth: {pair.Slot} left as it was — the smoothed body did not read back the same");
+            warn?.Invoke($"refit nipple smooth: {pair.Slot} left as it was — the smoothed body did not read back the same");
             return null;
         }
 
-        // The smoothing's movement is near enough linear in its strength, not exactly: a tip that came down more than
-        // TipTolerance off its excess gets one step more, scaled by what the first run actually did there.
-        var corrected = new Dictionary<bool, float>();
-        foreach (var (left, (tip, excess, scale)) in sides)
+        var corrected = CorrectSideScales(sides, target, read, targetSkin, log);
+        if (corrected.Count > 0)
         {
-            if (scale <= 0f || excess <= 0f) continue;
-            int v = -1;
-            float best = float.MaxValue;
-            foreach (int k in targetSkin.Within(tip, TipReach))
+            var again = BodyBridge.SmoothBodyNipples(targetModel,
+                gate with { SideScale = f => corrected.TryGetValue(f.Left, out float s) ? s : sides[f.Left].Scale },
+                RefitNippleStrength);
+            if (again != null && ReadBack(again, target) is { } reread)
             {
-                float d = Vector3.DistanceSquared(At(target, k), tip);
-                if (d < best) { best = d; v = k; }
+                bytes = again;
+                read = reread;
             }
-            if (v < 0 || Normal(target, v).LengthSquared() < 1e-12f) continue;
-            float drop = Vector3.Dot(At(target, v) - At(read, v), Vector3.Normalize(Normal(target, v)));
-            if (drop <= 1e-5f || MathF.Abs(drop / excess - 1f) <= TipTolerance) continue;
-            corrected[left] = Math.Clamp(scale * excess / drop, 0f, 1f);
-            log?.Invoke($"refit nipple smooth: side {(left ? "L" : "R")} tip came down {drop * 1000:0.##} mm of "
-                      + $"{excess * 1000:0.##} — scale {scale:0.###} -> {corrected[left]:0.###}");
-        }
-        if (corrected.Count > 0
-            && BodyBridge.SmoothBodyNipples(targetModel,
-                   gate with { SideScale = f => corrected.TryGetValue(f.Left, out float s) ? s : sides[f.Left].Scale },
-                   RefitNippleStrength) is { } again
-            && ModelPartReader.Read(again) is { } reread && reread.Positions.Length == target.Positions.Length)
-        {
-            bytes = again;
-            read = reread;
+            else
+                warn?.Invoke($"refit nipple smooth: {pair.Slot} kept its first smoothing — the corrected one did not "
+                           + "read back the same");
         }
 
         var delta = new Vector3[target.Positions.Length / 3];
@@ -175,48 +179,39 @@ internal static partial class BodyRetarget
         };
     }
 
-    /// <summary>Where a source skin vertex lands on the target, and whether the garment's cloth covers it there.</summary>
-    internal readonly record struct Landing(Vector3 At, int Source, bool Covered);
+    /// <summary>The smoothed body read back, or null when it does not read or no longer counts its vertices the same.
+    /// </summary>
+    private static ModelParts? ReadBack(byte[] bytes, ModelParts target)
+        => ModelPartReader.Read(bytes) is { } read && read.Positions.Length == target.Positions.Length ? read : null;
 
-    /// <summary>The landings, bucketed by position for the nearest one to a target point.</summary>
-    internal sealed class Landings
+    /// <summary>
+    /// Each side whose tip came down more than <see cref="TipTolerance"/> off its excess, with the share that would have
+    /// landed it: the smoothing's movement is near enough linear in its strength, not exactly (LavaBod+ LaRue Teardrop's
+    /// tip came down 8.2 mm for a 4.4 mm excess, Bibo+ Nude Large's 1.32 for 1.64), so one step on what the first run
+    /// actually did there.
+    /// </summary>
+    private static Dictionary<bool, float> CorrectSideScales(Dictionary<bool, NippleSide> sides, ModelParts target,
+                                                            ModelParts smoothed, SkinIndex targetSkin, Action<string>? log)
     {
-        private const float Cell = NippleLandingMatch;
-        private readonly List<Landing> all = [];
-        private readonly Dictionary<(int, int, int), List<int>> grid = [];
-
-        public void Add(Landing landing)
+        var corrected = new Dictionary<bool, float>();
+        foreach (var (left, side) in sides)
         {
-            var key = CellOf(landing.At);
-            if (!grid.TryGetValue(key, out var bucket)) grid[key] = bucket = [];
-            bucket.Add(all.Count);
-            all.Add(landing);
-        }
-
-        /// <summary>The landing nearest <paramref name="p"/> within <paramref name="reach"/> (at most one cell), or null.</summary>
-        public Landing? Nearest(Vector3 p, float reach)
-        {
-            var (cx, cy, cz) = CellOf(p);
-            Landing? best = null;
-            float bestD = reach * reach;
-            for (int x = cx - 1; x <= cx + 1; x++)
-            for (int y = cy - 1; y <= cy + 1; y++)
-            for (int z = cz - 1; z <= cz + 1; z++)
+            if (side.Scale <= 0f || side.Excess <= 0f) continue;
+            int v = -1;
+            float best = float.MaxValue;
+            foreach (int k in targetSkin.Within(side.Tip, TipReach))
             {
-                if (!grid.TryGetValue((x, y, z), out var bucket)) continue;
-                foreach (int i in bucket)
-                {
-                    float d = Vector3.DistanceSquared(all[i].At, p);
-                    if (d > bestD) continue;
-                    bestD = d;
-                    best = all[i];
-                }
+                float d = Vector3.DistanceSquared(At(target, k), side.Tip);
+                if (d < best) { best = d; v = k; }
             }
-            return best;
+            if (v < 0 || Normal(target, v).LengthSquared() < 1e-12f) continue;
+            float drop = Vector3.Dot(At(target, v) - At(smoothed, v), Vector3.Normalize(Normal(target, v)));
+            if (drop <= 1e-5f || MathF.Abs(drop / side.Excess - 1f) <= TipTolerance) continue;
+            corrected[left] = Math.Clamp(side.Scale * side.Excess / drop, 0f, 1f);
+            log?.Invoke($"refit nipple smooth: side {(left ? "L" : "R")} tip came down {drop * 1000:0.##} mm of "
+                      + $"{side.Excess * 1000:0.##} — scale {side.Scale:0.###} -> {corrected[left]:0.###}");
         }
-
-        private static (int, int, int) CellOf(Vector3 p)
-            => ((int)MathF.Floor(p.X / Cell), (int)MathF.Floor(p.Y / Cell), (int)MathF.Floor(p.Z / Cell));
+        return corrected;
     }
 
     /// <summary>
@@ -229,11 +224,14 @@ internal static partial class BodyRetarget
     /// poke-through this exists to stop. A garment mesh that is a copy of the source skin does not: it is skin, whatever
     /// its material is named.
     /// </summary>
-    internal static bool[] CoveredTargetSkin(ModelParts garment, SlotPair pair, out Landings landings)
+    /// <param name="garmentUv">See <see cref="SmoothCoveredNipples"/>.</param>
+    internal static bool[] CoveredTargetSkin(ModelParts garment, SlotPair pair, out Landings landings,
+                                             float[]? garmentUv = null)
     {
         var source = pair.Correspondence.Source;
         var field = pair.Correspondence.Field;
-        var cloth = new ClothCrossings(WithoutSkinCopies(garment, source), countVariants: true);
+        var sourceUv = pair.SourceModel != null ? Uv(pair.SourceModel) : null;
+        var cloth = new ClothCrossings(WithoutSkinCopies(garment, source, garmentUv, sourceUv), countVariants: true);
         landings = new Landings();
         var skin = new SkinIndex(source);
         foreach (int s in skin.Vertices)
@@ -253,19 +251,36 @@ internal static partial class BodyRetarget
         return covered;
     }
 
-    /// <summary>The garment without its meshes that lie on the source skin (<see cref="OnBodyShare"/> of their vertices
-    /// within <see cref="SkinCopyReach"/>): a copy of the body under another material name is skin, not cloth.</summary>
-    private static ModelParts WithoutSkinCopies(ModelParts garment, ModelParts source)
+    /// <summary>
+    /// The garment without its meshes that are copies of the source skin under another material name: skin, not cloth.
+    /// A copy lies on the body (<see cref="OnBodyShare"/> of its vertices within <see cref="SkinCopyReach"/>) AND keeps
+    /// the body's texture layout there (within <see cref="SkinCopyUv"/>) — latex painted on within a millimetre has the
+    /// garment's own uvs, and is cloth. With either model's uvs unreadable, distance alone decides.
+    /// </summary>
+    private static ModelParts WithoutSkinCopies(ModelParts garment, ModelParts source, float[]? garmentUv,
+                                                float[]? sourceUv)
     {
         var body = new BodySurface(source, BodySurface.CellFor(MeanEdgeOf(source)));
         if (body.IsEmpty) return garment;
+        bool uvs = garmentUv?.Length == garment.Positions.Length / 3 * 2 && sourceUv?.Length == source.Positions.Length / 3 * 2;
+        bool IsCopy(int v)
+        {
+            if (!body.Nearest(At(garment, v), SkinCopyReach, out var hit)) return false;
+            if (!uvs) return true;
+            float u = sourceUv![hit.A * 2] * hit.U + sourceUv[hit.B * 2] * hit.V + sourceUv[hit.C * 2] * hit.W;
+            float w = sourceUv[hit.A * 2 + 1] * hit.U + sourceUv[hit.B * 2 + 1] * hit.V + sourceUv[hit.C * 2 + 1] * hit.W;
+            // Wrapped: a body may store its uvs a whole tile away, and the sheet repeats.
+            float du = garmentUv![v * 2] - u, dw = garmentUv[v * 2 + 1] - w;
+            du -= MathF.Round(du);
+            dw -= MathF.Round(dw);
+            return MathF.Abs(du) <= SkinCopyUv && MathF.Abs(dw) <= SkinCopyUv;
+        }
         var copies = new HashSet<int>();
         foreach (var mesh in garment.Parts.Where(p => p.Island < 0 && !SecondSkinWriter.IsBodySkinMaterial(p.Material))
                                           .GroupBy(p => p.Mesh))
         {
             var verts = mesh.SelectMany(p => p.Triangles).Distinct().ToList();
-            int on = verts.Count(v => body.Nearest(At(garment, v), SkinCopyReach, out _));
-            if (verts.Count > 0 && on >= verts.Count * OnBodyShare) copies.Add(mesh.Key);
+            if (verts.Count > 0 && verts.Count(IsCopy) >= verts.Count * OnBodyShare) copies.Add(mesh.Key);
         }
         if (copies.Count == 0) return garment;
         return new ModelParts
@@ -333,9 +348,8 @@ internal static partial class BodyRetarget
     /// The share of a located nipple the refit smooths: the part of it standing prouder than the source body's at the
     /// same spot, over the whole of it — none when that excess is under <see cref="ExcessFloor"/>. Both bodies are
     /// measured with one ruler (<see cref="ProminenceAt"/>), so two equal bodies compare equal; a source with no nipple
-    /// there, or nothing landing near the tip, counts as flat. The smoothing's movement is near enough linear in its
-    /// strength that the share lands the tip within a few tenths of a millimetre of the source's (Zayne onto LavaBod+
-    /// Teardrop: 4.4 mm asked, 4.57 moved).
+    /// there, or nothing landing near the tip, counts as flat. <see cref="CorrectSideScales"/> refines the share on what
+    /// it actually did.
     /// </summary>
     private static (float Excess, float Scale) ExcessScale(BodyBridge.NippleFound found, SkinIndex target, SkinIndex source,
                                                            Landings landings, Action<string>? log)
@@ -386,58 +400,6 @@ internal static partial class BodyRetarget
             best = MathF.Max(best, (float)(sum / ring));
         }
         return best;
-    }
-
-    /// <summary>A body's drawn skin vertices, bucketed by position: the haystack the prominence ruler and the coverage
-    /// read. Only skin parts, so a piercing on the nipple or the smallclothes over it never count as the breast.</summary>
-    internal sealed class SkinIndex
-    {
-        private const float Cell = 0.01f;
-        private readonly ModelParts body;
-        private readonly Dictionary<(int, int, int), List<int>> grid = [];
-
-        public IReadOnlyList<int> Vertices { get; }
-
-        public SkinIndex(ModelParts body)
-        {
-            this.body = body;
-            var skin = new SortedSet<int>();
-            int count = body.Positions.Length / 3;
-            foreach (var part in body.Parts)
-            {
-                if (part.Island >= 0 || !SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
-                foreach (int v in part.Triangles) if (v >= 0 && v < count) skin.Add(v);
-            }
-            Vertices = [.. skin];
-            foreach (int v in Vertices)
-            {
-                var key = CellOf(At(body, v));
-                if (!grid.TryGetValue(key, out var bucket)) grid[key] = bucket = [];
-                bucket.Add(v);
-            }
-        }
-
-        public Vector3 PositionOf(int v) => At(body, v);
-        public Vector3 NormalOf(int v) => Normal(body, v);
-
-        /// <summary>Skin vertices within <paramref name="radius"/> of <paramref name="p"/>.</summary>
-        public IEnumerable<int> Within(Vector3 p, float radius)
-        {
-            var (x0, y0, z0) = CellOf(p - new Vector3(radius));
-            var (x1, y1, z1) = CellOf(p + new Vector3(radius));
-            float r2 = radius * radius;
-            for (int x = x0; x <= x1; x++)
-            for (int y = y0; y <= y1; y++)
-            for (int z = z0; z <= z1; z++)
-            {
-                if (!grid.TryGetValue((x, y, z), out var bucket)) continue;
-                foreach (int v in bucket)
-                    if (Vector3.DistanceSquared(At(body, v), p) <= r2) yield return v;
-            }
-        }
-
-        private static (int, int, int) CellOf(Vector3 p)
-            => ((int)MathF.Floor(p.X / Cell), (int)MathF.Floor(p.Y / Cell), (int)MathF.Floor(p.Z / Cell));
     }
 
     private static Vector3 Normal(ModelParts m, int v)

@@ -192,5 +192,11 @@ public class KeepShapeReleaseLocalTests
         Assert.NotEmpty(kept);
         Assert.DoesNotContain(kept, p => p.Released);
         Assert.Equal(Before[which], run.Hash);
+
+        // And as the refit really runs, smoothing on: still nothing let go.
+        var on = Refit(File.ReadAllBytes(LocalData.Path(Pop)), Yab, YabMedium, toNeed, toRel);
+        var keptOn = RefitCore.KeptPieces(on.Plan.Report, on.Names);
+        Assert.NotEmpty(keptOn);
+        Assert.DoesNotContain(keptOn, p => p.Released);
     }
 }

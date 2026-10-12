@@ -66,14 +66,19 @@ public class RefitNippleSmoothLocalTests(ITestOutputHelper output)
 
     /// <summary>Each side's tip and excess, as the pass logged them.</summary>
     private static List<(bool Left, Vector3 Tip, float Excess, float Scale)> Sides(IEnumerable<string> log)
+        => SidesWithSource(log).Select(s => (s.Left, s.Tip, s.Excess, s.Scale)).ToList();
+
+    /// <summary>As <see cref="Sides"/>, with the source body's prominence the pass read at each tip.</summary>
+    private static List<(bool Left, Vector3 Tip, float Excess, float Scale, float SourceProm)> SidesWithSource(IEnumerable<string> log)
     {
-        var sides = new List<(bool, Vector3, float, float)>();
+        var sides = new List<(bool, Vector3, float, float, float)>();
         foreach (var line in log.Where(l => l.StartsWith("refit nipple smooth: side ") && l.Contains(" tip (")))
         {
             bool left = line["refit nipple smooth: side ".Length] == 'L';
             int open = line.IndexOf('('), close = line.IndexOf(')');
             var xyz = line[(open + 1)..close].Split(',').Select(s => float.Parse(s, CultureInfo.InvariantCulture)).ToArray();
-            sides.Add((left, new Vector3(xyz[0], xyz[1], xyz[2]), Number(line, "excess "), Number(line, "scale ")));
+            sides.Add((left, new Vector3(xyz[0], xyz[1], xyz[2]), Number(line, "excess ") / 1000f, Number(line, "scale "),
+                       Number(line, "source prom ") / 1000f));
         }
         return sides;
 
@@ -82,8 +87,7 @@ public class RefitNippleSmoothLocalTests(ITestOutputHelper output)
             int at = line.IndexOf(after, StringComparison.Ordinal) + after.Length;
             int end = at;
             while (end < line.Length && (char.IsDigit(line[end]) || line[end] is '.' or '-')) end++;
-            float v = float.Parse(line[at..end], CultureInfo.InvariantCulture);
-            return after == "excess " ? v / 1000f : v;
+            return float.Parse(line[at..end], CultureInfo.InvariantCulture);
         }
     }
 
@@ -448,7 +452,8 @@ public class RefitNippleSmoothLocalTests(ITestOutputHelper output)
     }
 
     /// <summary>[AC-refit-nipple-smooth-3] Gear made on a body with nipples ("Nip Slip", on Bibo+ Perky Medium) keeps
-    /// them: onto LavaBod+ Teardrop, no tip comes down by more than the part standing prouder than Bibo+'s.</summary>
+    /// them: onto LavaBod+ Teardrop, the pass reads Bibo+'s nipple at both tips, and no tip comes down by more than the
+    /// part standing prouder than it. ("Pasties", which the plan named too, ships no top model to refit.)</summary>
     [LocalDataFact(NipSlip, Bibo, Lava)]
     [Trait("Plan", "AC-refit-nipple-smooth-3")]
     public void Gear_made_on_a_nippled_body_keeps_its_nipples()
@@ -458,8 +463,11 @@ public class RefitNippleSmoothLocalTests(ITestOutputHelper output)
         var r = Run(garment, source, Path.Combine(LocalData.Path(Lava), LavaTeardrop));
         foreach (var l in r.Log.Where(l => l.StartsWith("refit nipple smooth"))) output.WriteLine(l);
         var smoothed = BodyRetarget.SmoothCoveredNipples(r.Garment, [r.Pair], out _)[0];
-        foreach (var (left, tip, excess, scale) in Sides(r.Log))
+        var sides = SidesWithSource(r.Log);
+        Assert.Equal(2, sides.Count);
+        foreach (var (left, tip, excess, scale, sourceProm) in sides)
         {
+            Assert.True(sourceProm > 0f, "the source body's nipple was not read");
             float drop = TipDrop(r.Pair, smoothed, tip);
             output.WriteLine($"{(left ? "L" : "R")}: excess {excess * 1000:0.##} mm, scale {scale}, tip down {drop * 1000:0.##} mm");
             Assert.True(drop <= MathF.Max(0f, excess) * 1.15f + 0.0002f, "flattened below the source's nipple");
@@ -495,12 +503,24 @@ public class RefitNippleSmoothLocalTests(ITestOutputHelper output)
         Assert.True(on.Plan.Report.Folded <= off.Plan.Report.Folded);
 
         var smoothed = BodyRetarget.SmoothCoveredNipples(on.Garment, [on.Pair], out int moved)[0];
-        foreach (var (left, tip, excess, scale) in Sides(on.Log).Where(s => s.Scale > 0f))
+        // Both nipples found on every body; every excess over the floor acted on, and nothing under it.
+        var sides = Sides(on.Log);
+        Assert.Equal(2, sides.Count);
+        foreach (var (left, tip, excess, scale) in sides)
         {
+            output.WriteLine($"{(left ? "L" : "R")}: excess {excess * 1000:0.##} mm, scale {scale}");
+            if (excess < BodyRetarget.ExcessFloor)
+            {
+                Assert.Equal(0f, scale);
+                continue;
+            }
+            Assert.True(scale > 0f);
             float drop = TipDrop(on.Pair, smoothed, tip);
-            output.WriteLine($"{(left ? "L" : "R")}: excess {excess * 1000:0.##} mm, tip down {drop * 1000:0.##} mm");
+            output.WriteLine($"  tip down {drop * 1000:0.##} mm");
             Assert.InRange(drop / excess, 0.85f, 1.15f);
         }
+        // LavaBod+ Teardrop's nipples stand prouder than Rue+'s: this row must have smoothed.
+        if (body == "lava") Assert.True(moved > 0 && on.Plan.Report.Smoothed > 0);
         if (moved == 0) return;
         var before = ModelPartReader.Read(on.Pair.TargetModel!)!;
         var after = ModelPartReader.Read(smoothed.TargetModel!)!;

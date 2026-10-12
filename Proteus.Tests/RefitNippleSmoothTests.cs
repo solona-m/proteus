@@ -292,11 +292,18 @@ public class RefitNippleSmoothTests(ITestOutputHelper output)
         Assert.NotEqual(PinnedHash("flat to nippled"), Hash(On("flat to nippled").Model));
 
         var garment = ModelPartReader.Read(Garment(0f, 0f, BothCups))!;
-        var shoes = Pair(Body(0f, 0f), Body(Nipple, Nipple), "_sho") with { ShapeOnly = true };
+        var chest = Pair(Body(0f, 0f), Body(Nipple, Nipple));
         var legs = Pair(Body(0f, 0f), Body(Nipple, Nipple), "_dwn");
-        IReadOnlyList<BodyRetarget.SlotPair> pairs = [shoes, legs];
+        IReadOnlyList<BodyRetarget.SlotPair> pairs = [chest with { ShapeOnly = true }, legs];
         Assert.Same(pairs, BodyRetarget.SmoothCoveredNipples(garment, pairs, out int moved));
         Assert.Equal(0, moved);
+
+        // A glove's or shoe's limb refit (KeepEnds passes the limb as swapSlot, "_top" for a glove's arm).
+        IReadOnlyList<BodyRetarget.SlotPair> limb = [chest];
+        Assert.Same(limb, BodyRetarget.SmoothCoveredNipples(garment, limb, out moved, swapSlot: "_top"));
+        Assert.Equal(0, moved);
+        // The control: the same chest pair alone, with no swap slot, is smoothed.
+        Assert.NotSame(limb, BodyRetarget.SmoothCoveredNipples(garment, limb, out moved));
     }
 
     /// <summary>[AC-refit-nipple-smooth-9] [EDGE-refit-nipple-smooth-2] A body the bust bones never reach is left as it
@@ -493,6 +500,91 @@ public class RefitNippleSmoothTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-refit-nipple-smooth-12")]
     public void Skin_copy_under_a_custom_material_is_not_cover()
         => Assert.Equal(PinnedHash("skin copy"), Hash(On("skin copy").Model));
+
+    /// <summary>[EDGE-refit-nipple-smooth-12] An exact copy of the skin, and one sculpted 0.9 mm off it, are skin too.</summary>
+    [Theory]
+    [InlineData(0f)]
+    [InlineData(0.0009f)]
+    [Trait("Plan", "EDGE-refit-nipple-smooth-12")]
+    public void Exact_and_sculpted_skin_copies_are_not_cover(float off)
+    {
+        var bytes = Garment(0f, 0f, (0f, 0f, 0f, 0f), skinCopyMaterial: "/mt_c0201e9999_top_skin.mtrl", skinCopyOff: off);
+        var garment = ModelPartReader.Read(bytes)!;
+        var pair = Pair(Body(0f, 0f), Body(Nipple, Nipple));
+        var on = BodyRetarget.Plan(garment, bytes, [pair], "_top", replaceSkin: true, acrossBodies: true, cutHidden: false);
+        var off2 = BodyRetarget.WithTuning(Off, () => BodyRetarget.Plan(garment, bytes, [pair], "_top", replaceSkin: true,
+                                                                         acrossBodies: true, cutHidden: false));
+        Assert.Equal(0, on.Report.Smoothed);
+        Assert.Equal(Hash(off2.Model), Hash(on.Model));
+    }
+
+    /// <summary>[EDGE-refit-nipple-smooth-12] Cloth painted on within a millimetre, with its own texture layout, is cloth:
+    /// it covers the nipple. Judged by distance alone (no uvs) it would read as a copy of the skin, and cover nothing.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-refit-nipple-smooth-12")]
+    public void Latex_painted_on_with_its_own_layout_is_cover()
+    {
+        var bytes = Garment(0f, 0f, BothCups, off: 0.0005f);
+        var garment = ModelPartReader.Read(bytes)!;
+        var pair = Pair(Body(0f, 0f), Body(Nipple, Nipple));
+        var tip = Tip(true);
+        var near = new BodyRetarget.SkinIndex(pair.Target).Within(new Vector3(tip.X, tip.Y, Z(tip.X, tip.Y, Nipple, Nipple)), 0.01f).ToList();
+        Assert.NotEmpty(near);
+
+        var byUv = BodyRetarget.CoveredTargetSkin(garment, pair, out _, Uv(bytes));
+        var byDistance = BodyRetarget.CoveredTargetSkin(garment, pair, out _);
+        Assert.All(near, v => Assert.True(byUv[v]));
+        Assert.All(near, v => Assert.False(byDistance[v]));
+
+        var plan = BodyRetarget.Plan(garment, bytes, [pair], "_top", replaceSkin: true, acrossBodies: true, cutHidden: false);
+        Assert.True(plan.Report.Smoothed > 0);
+    }
+
+    // ── the excess floor and the correction ────────────────────────────────────────────────────────
+
+    /// <summary>[AC-refit-nipple-smooth-3] A source nipple 3.2 mm against the target's 4 reads an excess just under the
+    /// floor (0.49 mm): nothing is smoothed. 3.0 mm reads just over it (0.69 mm): the tip comes down by it.</summary>
+    [Theory]
+    [InlineData(0.0032f, false)]
+    [InlineData(0.003f, true)]
+    [Trait("Plan", "AC-refit-nipple-smooth-3")]
+    public void Excess_either_side_of_the_floor(float source, bool smooths)
+    {
+        var bytes = Garment(source, source, BothCups);
+        var garment = ModelPartReader.Read(bytes)!;
+        var pair = Pair(Body(source, source), Body(Nipple, Nipple));
+        var lines = new List<string>();
+        var smoothed = BodyRetarget.SmoothCoveredNipples(garment, [pair], out int moved, lines.Add)[0];
+        foreach (var l in lines) output.WriteLine(l);
+        float excess = Excess(lines, true);
+        if (!smooths)
+        {
+            Assert.InRange(excess, BodyRetarget.ExcessFloor - 0.0002f, BodyRetarget.ExcessFloor);
+            Assert.Equal(0, moved);
+            BodyRetarget.Planned Refit() => BodyRetarget.Plan(garment, bytes, [pair], "_top", replaceSkin: true,
+                                                              acrossBodies: true, cutHidden: false);
+            Assert.Equal(Hash(BodyRetarget.WithTuning(Off, Refit).Model), Hash(Refit().Model));
+            return;
+        }
+        Assert.InRange(excess, BodyRetarget.ExcessFloor, BodyRetarget.ExcessFloor + 0.0003f);
+        Assert.True(moved > 0);
+        Assert.InRange(TipShare(pair.Target, smoothed.Target, lines, true), 0.85f, 1.15f);
+    }
+
+    /// <summary>[AC-refit-nipple-smooth-2] A wider nipple (16 mm) moves less than its share asks on the first pass: the
+    /// pass corrects it, and the tip comes down by the excess.</summary>
+    [Fact]
+    [Trait("Plan", "AC-refit-nipple-smooth-2")]
+    public void A_tip_that_misses_its_excess_is_corrected()
+    {
+        var garment = ModelPartReader.Read(Garment(0f, 0f, BothCups))!;
+        var pair = Pair(Body(0f, 0f, spread: 0.016f), Body(Nipple, Nipple, spread: 0.016f));
+        var lines = new List<string>();
+        var smoothed = BodyRetarget.SmoothCoveredNipples(garment, [pair], out _, lines.Add)[0];
+        Assert.Contains(lines, l => l.Contains("tip came down"));
+        foreach (bool left in new[] { true, false })
+            Assert.InRange(TipShare(pair.Target, smoothed.Target, lines, left), 0.9f, 1.1f);
+    }
 
     /// <summary>[EDGE-refit-nipple-smooth-13] Cloth behind a variant tag covers: which option is drawn is the wearer's.</summary>
     [Fact]
