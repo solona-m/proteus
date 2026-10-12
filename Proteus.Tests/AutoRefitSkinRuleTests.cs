@@ -52,12 +52,12 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
         // The game's own file: no mod root. A mod serving the game's model — a recolour, a "— Proteus edit" copy — serves
         // a file of its own, and keeps whole skin; the rule reads the worn piece, never a cached reading of what it was
         // made on.
-        Assert.True(AutoRefitWatcher.IsGameGear(null, Top_, [], null));
+        Assert.True(AutoRefitWatcher.IsGameGear(null, Top_, [], null, madeByProteus: false));
         Assert.False(AutoRefitWatcher.IsGameGear("mods/Coat — Proteus edit", Top_,
-                                                 [new PenumbraModMeta.Redirect(Top_, Top_, "")], null));
+                                                 [new PenumbraModMeta.Redirect(Top_, Top_, "")], null, madeByProteus: true));
         Assert.False(AutoRefitWatcher.IsGameGear("mods/Recolour", Top_,
                                                  [new PenumbraModMeta.Redirect(Top_, "coat.mdl", "Colour / Red")],
-                                                 Refitted("Body — Neolithe/neolithe m.mdl")));
+                                                 Refitted("Body — Neolithe/neolithe m.mdl"), madeByProteus: false));
 
         Assert.Equal(new AutoRefitDecisions.SkinRule(CutHidden: true, ClearBody: true), AutoRefitDecisions.SkinFor(true));
         Assert.Equal(new AutoRefitDecisions.SkinRule(CutHidden: false, ClearBody: false), AutoRefitDecisions.SkinFor(false));
@@ -72,19 +72,66 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
         // still, and keeps the cut. Back slashes and a leading slash in a path are the same path.
         const string refit = "Body — Neolithe/neolithe m.mdl";
         var redirects = new List<PenumbraModMeta.Redirect> { new(Top_, @"Body — Neolithe\neolithe m.mdl", "Body — Neolithe / Neolithe M") };
-        Assert.True(AutoRefitWatcher.IsGameGear("mods/Coat — Neolithe", Top_, redirects, Refitted(refit)));
+        Assert.True(AutoRefitWatcher.IsGameGear("mods/Coat — Neolithe", Top_, redirects, Refitted(refit), madeByProteus: true));
 
-        // With an author's file under it as well, the garment underneath is the author's.
+        // The same files in a mod Proteus did not make: an author's, whatever it serves.
+        Assert.False(AutoRefitWatcher.IsGameGear("mods/Coat — Neolithe", Top_, redirects, Refitted(refit), madeByProteus: false));
+
+        // With a file of another's under it as well, the garment underneath is that one.
         redirects.Add(new PenumbraModMeta.Redirect(Top_, "coat.mdl", ""));
-        Assert.False(AutoRefitWatcher.IsGameGear("mods/Coat — Neolithe", Top_, redirects, Refitted(refit)));
+        Assert.False(AutoRefitWatcher.IsGameGear("mods/Coat — Neolithe", Top_, redirects, Refitted(refit), madeByProteus: true));
 
-        // A record of refits of another path says nothing about this one.
+        // A mod serving nothing at the worn path is not what the piece is drawn from.
         Assert.False(AutoRefitWatcher.IsGameGear("mods/Coat — Neolithe", Top_,
-                                                 [new PenumbraModMeta.Redirect(Top_, refit, "Body — Neolithe / Neolithe M")],
-                                                 Refitted(refit, "chara/equipment/e0631/model/c0201e0631_dwn.mdl")));
+                                                 [new PenumbraModMeta.Redirect(Dwn_, refit, "Body — Neolithe / Neolithe M")],
+                                                 Refitted(refit, Dwn_), madeByProteus: true));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-vanilla-refit-cut-skin-1")]
+    [Trait("Plan", "EDGE-vanilla-refit-cut-skin-8")]
+    public void A_modders_top_baked_for_the_wearer_is_still_the_modders()
+    {
+        // A male-only top: the author's model at c0101, the refit baked to c0201 saved beside it. At the worn c0201 path
+        // only the refit is served, but the garment underneath is the author's — the whole mod says so.
+        const string baked = "Body — Neolithe/neolithe m.mdl";
+        var redirects = new List<PenumbraModMeta.Redirect>
+        {
+            new(Male_, "coat.mdl", ""),
+            new(Top_, baked, "Body — Neolithe / Neolithe M"),
+        };
+        Assert.False(AutoRefitWatcher.IsGameGear("mods/Coat", Top_, redirects, Refitted(baked), madeByProteus: false));
+        Assert.False(AutoRefitWatcher.IsGameGear("mods/Coat", Top_, redirects, Refitted(baked), madeByProteus: true));
+
+        // The game's own male-only top, baked into the mod Proteus made for it: only the refit, anywhere. Game gear.
+        Assert.True(AutoRefitWatcher.IsGameGear("mods/Coat — Neolithe", Top_, [redirects[1]], Refitted(baked),
+                                                madeByProteus: true));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-vanilla-refit-cut-skin-8")]
+    public void A_mod_is_Proteus_s_own_when_its_manifest_says_Proteus_wrote_it()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "proteus-skinrule-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            Assert.False(RefitModService.IsMadeByProteus(root));
+            RefitModService.WriteScaffold(root, "Coat — Neolithe", "Coat, refitted by Proteus.");
+            Assert.True(RefitModService.IsMadeByProteus(root));
+            PenumbraModMeta.AtomicWrite(Path.Combine(root, PenumbraModMeta.MetaFile),
+                                        PenumbraModMeta.NewMetaJson("Coat", "An author", ""));
+            Assert.False(RefitModService.IsMadeByProteus(root));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
     }
 
     private const string Top_ = "chara/equipment/e0631/model/c0201e0631_top.mdl";
+    private const string Male_ = "chara/equipment/e0631/model/c0101e0631_top.mdl";
+    private const string Dwn_ = "chara/equipment/e0631/model/c0201e0631_dwn.mdl";
 
     private static BodyRetargetWriter.Record Refitted(string file, string gamePath = "/" + Top_)
         => new() { Group = "Body — Neolithe", Options = [new() { GamePath = gamePath, File = file, Name = "Neolithe M" }] };

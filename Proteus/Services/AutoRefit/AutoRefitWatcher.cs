@@ -1087,7 +1087,8 @@ public sealed partial class AutoRefitWatcher : IDisposable
 
         AssertOffFramework("the refit");
         // Whole skin, but for the game's own gear — see AutoRefitDecisions.SkinFor.
-        bool gameGear = IsGameGear(r.ModRoot, r.Worn.GamePath, redirects, ownRecord);
+        bool gameGear = IsGameGear(r.ModRoot, r.Worn.GamePath, redirects, ownRecord,
+                                   r.ModRoot != null && RefitModService.IsMadeByProteus(r.ModRoot));
         if (gameGear)
             log.Information("[Proteus] auto refit: {0} is the game's own gear: hidden skin cut, cloth cleared of the body",
                             item);
@@ -1480,22 +1481,24 @@ public sealed partial class AutoRefitWatcher : IDisposable
     }
 
     /// <summary>
-    /// The piece is the game's own: no mod serves it, or the mod serving it serves nothing for its path but refits
-    /// Proteus recorded there — the mod a game item's refit is made in, whose "Original" is the game's own file. Refitted
-    /// again onto another body it is still the game's garment underneath. A mod shipping the game's model (a recolour,
-    /// a "— Proteus edit" copy) serves its own file, and is a mod.
+    /// The piece is the game's own: no mod serves it, or the mod serving it is one Proteus made for a game item — it
+    /// serves nothing, at any path, but refits Proteus recorded, and its "Original" is the game's own file. Refitted again
+    /// onto another body it is still the game's garment underneath. The whole mod is judged, not the worn path: a
+    /// modder's male-only top baked to the wearer's race serves only the refit at the wearer's path, its own model
+    /// sitting at another. A mod shipping the game's model (a recolour, a "— Proteus edit" copy) serves its own file,
+    /// and is a mod.
     /// </summary>
+    /// <param name="madeByProteus">The mod's manifest names Proteus as its author — see
+    /// <see cref="RefitModService.IsMadeByProteus"/>.</param>
     internal static bool IsGameGear(string? modRoot, string gamePath, IReadOnlyList<PenumbraModMeta.Redirect> redirects,
-                                    BodyRetargetWriter.Record? record)
+                                    BodyRetargetWriter.Record? record, bool madeByProteus)
     {
         if (modRoot == null) return true;
-        if (record == null) return false;
+        if (record == null || !madeByProteus) return false;
         static string Norm(string p) => p.Replace('\\', '/').TrimStart('/');
-        var refits = record.Options.Where(e => string.Equals(Norm(e.GamePath), Norm(gamePath), StringComparison.OrdinalIgnoreCase))
-                           .Select(e => Norm(e.File)).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var served = redirects.Where(d => string.Equals(Norm(d.GamePath), Norm(gamePath), StringComparison.OrdinalIgnoreCase))
-                              .ToList();
-        return refits.Count > 0 && served.Count > 0 && served.All(d => refits.Contains(Norm(d.File)));
+        var refits = record.Options.Select(e => Norm(e.File)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return redirects.Any(d => string.Equals(Norm(d.GamePath), Norm(gamePath), StringComparison.OrdinalIgnoreCase))
+               && redirects.All(d => refits.Contains(Norm(d.File)));
     }
 
     /// <summary>
