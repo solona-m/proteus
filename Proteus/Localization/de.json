@@ -3743,6 +3743,50 @@
     "message": "Lässt die neue Haut dort weg, wo der Autor seine gelöscht hat, meist unter Stoff.\nAusschalten, wenn die Anpassung Löcher hinterlässt.",
     "description": ""
   },
+  "Parts.Retarget.CutForcedTip": {
+    "message": "Immer an, solange der Schuh seinen eigenen Fuß oder der Handschuh seine eigene Hand behält: sonst kämen die ganzen neuen Beine oder Arme mit hinein.",
+    "description": ""
+  },
+  "Parts.Retarget.KeepFeet": {
+    "message": "Eigene Füße behalten",
+    "description": ""
+  },
+  "Parts.Retarget.KeepFeet.Tip": {
+    "message": "Der Fuß bleibt genau so, wie sein Autor ihn gemacht hat, samt Absatz; angepasst wird nur das Bein, das der Schuh erreicht, und die Größe kommt von den Beinen. Abwählen, um wie bisher den ganzen Schuh samt Füßen anzupassen.",
+    "description": ""
+  },
+  "Parts.Retarget.KeepHands": {
+    "message": "Eigene Hände behalten",
+    "description": ""
+  },
+  "Parts.Retarget.KeepHands.Tip": {
+    "message": "Die Hand bleibt genau so, wie ihr Autor sie gemacht hat; angepasst wird nur der Arm, den der Handschuh erreicht, und die Größe kommt von der Brust. Abwählen, um wie bisher den ganzen Handschuh samt Händen anzupassen.",
+    "description": ""
+  },
+  "Parts.Retarget.NoLimbFeet": {
+    "message": "Dieser Schuh erreicht kein Bein: Er behält seine Form, nur seine Haut wird wie die des neuen Körpers gezeichnet. Wähle trotzdem eine Beingröße, um ihn danach anzupassen.",
+    "description": ""
+  },
+  "Parts.Retarget.NoLimbHands": {
+    "message": "Diese Handschuhe erreichen keinen Arm: Sie behalten ihre Form, nur ihre Haut wird wie die des neuen Körpers gezeichnet. Wähle trotzdem eine Brustgröße, um sie danach anzupassen.",
+    "description": ""
+  },
+  "Parts.Retarget.SkinAlreadyMatches": {
+    "message": "Nichts zu ändern: Die Haut wird schon so gezeichnet wie die des neuen Körpers.",
+    "description": ""
+  },
+  "Parts.Retarget.AlreadyFits.Fmt": {
+    "message": "Nichts zu ändern: Wo das Teil hinreicht, hat {0} dieselbe Form wie die Größe, für die es gemacht wurde.",
+    "description": ""
+  },
+  "Parts.Retarget.EndsUnreadable": {
+    "message": "Sein Rig lässt sich nicht lesen, also ist Fuß oder Hand nicht vom Rest zu unterscheiden: Das ganze Teil wird angepasst.",
+    "description": ""
+  },
+  "Parts.Retarget.NoLimbInBody.Fmt": {
+    "message": "{0} hat keine {1} zum Anpassen, also wird das ganze Teil angepasst.",
+    "description": ""
+  },
   "Parts.Retarget.NeedFromRequired.Fmt": {
     "message": "{0}: wähle die Größe, für die es gemacht wurde.",
     "description": ""

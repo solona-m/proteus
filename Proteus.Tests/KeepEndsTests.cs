@@ -684,6 +684,293 @@ public class KeepEndsTests
         }
     }
 
+    // ── the shared core: the automatic refit's output, pinned ────────────────────────────────────────────
+
+    /// <summary>The automatic refit's keep-ends plan for <see cref="ShoeModel"/>, with and without the feet's shape.</summary>
+    private static (BodyRetarget.Planned WithFeet, BodyRetarget.Planned LegsOnly) AutomaticPlans()
+    {
+        var bytes = ShoeModel(4, islands: 4);
+        var parts = ModelPartReader.Read(bytes)!;
+        var reading = KeepEnds.Read("_sho", parts, bytes)!;
+        var legs = Raised(z => LegsBody(16, z, islands: 16));
+        var feet = Resized("_sho", SyntheticModel.Build([], new SyntheticModel.Mesh(Skin,
+                               new SyntheticModel.Sub(0, TrianglesPerIsland: 2, OffsetX: 100f, Weights: Foot))));
+        return (KeepEnds.Plan(parts, bytes, reading, legs, feet, across: true),
+                KeepEnds.Plan(parts, bytes, reading, legs, null, across: false));
+    }
+
+    private static string Hash(byte[] bytes) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes));
+
+    /// <summary>
+    /// The automatic refit's plan, byte for byte as it was before the Studio came to share it: recorded from the code
+    /// before the shared core was lifted out of it, so the lifting cannot have changed what the watcher writes.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-keep-ends-studio-10")]
+    public void Automatic_keep_ends_plan_is_unchanged()   // [AC-keep-ends-studio-10]
+    {
+        var (withFeet, legsOnly) = AutomaticPlans();
+        Assert.Equal("54513857BC98FE4A14E87E3B9D7EF82C75A69063768CC3DD14A1DDFF62B86CCE", Hash(withFeet.Model));
+        Assert.Equal("1398DC77C9E775E242310F71BB027817162C177C71B7ECA11F7873C9781DBBB6", Hash(legsOnly.Model));
+    }
+
+    // ── the shared core: pairs, the Studio's plan, the Studio's reading ──────────────────────────────────
+
+    /// <summary>A temp folder of synthetic body files, deleted after <paramref name="body"/> runs.</summary>
+    private static void InBodies(Action<string> body)
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "proteus-keepends-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try { body(dir); }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    /// <summary>A feet body: two triangles of foot skin, rigged to the foot, raised by <paramref name="z"/>.</summary>
+    private static byte[] FeetBody(float z) => SyntheticModel.Build([],
+        new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0, TrianglesPerIsland: 2, OffsetX: 100f, OffsetZ: z, Weights: Foot)));
+
+    private static string Write(string dir, string name, byte[] bytes)
+    {
+        string path = Path.Combine(dir, name);
+        File.WriteAllBytes(path, bytes);
+        return path;
+    }
+
+    private static (ushort?, ushort?) NoMask(string _) => (null, null);
+
+    [Fact]
+    [Trait("Plan", "AC-keep-ends-studio-10")]
+    public void BuildPairs_matches_the_watchers_two_pairs()   // [AC-keep-ends-studio-10]
+    {
+        InBodies(dir =>
+        {
+            var bytes = ShoeModel(4, islands: 4);
+            var parts = ModelPartReader.Read(bytes)!;
+            var reading = KeepEnds.Read("_sho", parts, bytes)!;
+            string legsFrom = Write(dir, "ls.mdl", LegsBody(16, 0f, islands: 16));
+            string legsTo = Write(dir, "lm.mdl", LegsBody(16, 0.01f, islands: 16));
+            string feetFrom = Write(dir, "fs.mdl", FeetBody(0f));
+            string feetTo = Write(dir, "fm.mdl", FeetBody(0.01f));
+
+            Assert.Null(KeepEnds.BuildPairs(reading, legsFrom, legsTo, feetFrom, feetTo, false, NoMask, s => s, null, null,
+                                            out var limb, out var end));
+            Assert.Null(BodyRetarget.BuildPair("_dwn", legsFrom, legsTo, "_dwn", false, null, null, null, out var watcherLimb));
+            Assert.Null(BodyRetarget.BuildPair("_sho", feetFrom, feetTo, "_sho", false, null, null, null, out var watcherEnd));
+
+            Assert.NotNull(end);
+            Assert.Equal(KeepEnds.Plan(parts, bytes, reading, watcherLimb, watcherEnd, true).Model,
+                         KeepEnds.Plan(parts, bytes, reading, limb, end, true).Model);
+        });
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-keep-ends-studio-3")]
+    public void Refused_end_pair_is_reported_and_left_out()   // [EDGE-keep-ends-studio-3]
+    {
+        InBodies(dir =>
+        {
+            var bytes = ShoeModel(4, islands: 4);
+            var parts = ModelPartReader.Read(bytes)!;
+            var reading = KeepEnds.Read("_sho", parts, bytes)!;
+            string legsFrom = Write(dir, "ls.mdl", LegsBody(16, 0f, islands: 16));
+            string legsTo = Write(dir, "lm.mdl", LegsBody(16, 0.01f, islands: 16));
+            string broken = Write(dir, "broken.mdl", [1, 2, 3, 4]);
+            string? reported = null;
+
+            Assert.Null(KeepEnds.BuildPairs(reading, legsFrom, legsTo, broken, broken, false, NoMask, s => s, null,
+                                            why => reported = why, out var limb, out var end));
+            Assert.Null(end);
+            Assert.NotNull(reported);
+            Assert.Equal("_dwn", limb.Slot);
+        });
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-keep-ends-studio-4")]
+    public void Refused_limb_pair_is_returned()   // [EDGE-keep-ends-studio-4]
+    {
+        InBodies(dir =>
+        {
+            var bytes = ShoeModel(4, islands: 4);
+            var parts = ModelPartReader.Read(bytes)!;
+            var reading = KeepEnds.Read("_sho", parts, bytes)!;
+            string broken = Write(dir, "broken.mdl", [1, 2, 3, 4]);
+            string legs = Write(dir, "lm.mdl", LegsBody(16, 0.01f, islands: 16));
+
+            Assert.NotNull(KeepEnds.BuildPairs(reading, broken, legs, null, null, false, NoMask, s => s, null, null,
+                                               out _, out var end));
+            Assert.Null(end);
+        });
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-keep-ends-studio-3")]
+    public void End_pair_is_the_companion_of_the_limb_sizes()   // [AC-keep-ends-studio-3]
+    {
+        var feetS = FeetM with { Name = "S", Rel = "fs.mdl" };
+        var source = new BodySizeCatalog("<a>", [LegsS, LegsM, feetS, FeetM]);
+        var target = new BodySizeCatalog("<b>", [LegsS, LegsM, feetS, FeetM]);
+
+        Assert.Equal((FeetM, FeetM), KeepEnds.EndPair(source, target, "_sho", "0201", LegsM, LegsM));
+        Assert.Equal((feetS, FeetM), KeepEnds.EndPair(source, target, "_sho", "0201", LegsS, LegsM));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-keep-ends-studio-2")]
+    public void No_end_option_plans_the_limb_alone()   // [EDGE-keep-ends-studio-2]
+    {
+        // A body with no feet at this race: no end pair, and the plan is the legs-only plan.
+        var noFeet = new BodySizeCatalog("<b>", [LegsS, LegsM]);
+        Assert.Equal((null, null), KeepEnds.EndPair(Body, noFeet, "_sho", "0201", LegsM, LegsM));
+        Assert.Equal((null, null), KeepEnds.EndPair(noFeet, Body, "_sho", "0201", LegsM, LegsM));
+
+        var bytes = ShoeModel(4, islands: 4);
+        var parts = ModelPartReader.Read(bytes)!;
+        var reading = KeepEnds.Read("_sho", parts, bytes)!;
+        var legs = Raised(z => LegsBody(16, z, islands: 16));
+        Assert.Equal(KeepEnds.Plan(parts, bytes, reading, legs, null, across: true).Model,
+                     KeepEnds.Plan(parts, bytes, reading, legs, null, true, true, false, null, null).Model);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-keep-ends-studio-7")]
+    public void Unticked_cloth_part_stays_put()   // [EDGE-keep-ends-studio-7]
+    {
+        var bytes = ShoeModel(4, islands: 4);
+        var parts = ModelPartReader.Read(bytes)!;
+        var reading = KeepEnds.Read("_sho", parts, bytes)!;
+        var cloth = parts.Parts.Where(p => p.Material == Cloth).SelectMany(p => p.Triangles).ToHashSet();
+        Assert.NotEmpty(cloth);
+
+        var plan = KeepEnds.Plan(parts, bytes, reading, Raised(z => LegsBody(16, z, islands: 16)), null,
+                                 replaceSkin: true, across: true, clearBody: false, alsoHeld: cloth, extra: null);
+
+        foreach (int v in cloth.Concat(reading.Ends)) Assert.Equal(default, plan.Edit.DeltaAt(v));
+        Assert.Equal(0, plan.Report.Folded);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-keep-ends-studio-8")]
+    public void Studio_plan_always_cuts_hidden_skin()   // [EDGE-keep-ends-studio-8]
+    {
+        // The Studio's plan has no cut setting: the limb's skin always goes in cut to where the piece drew skin.
+        var bytes = ShoeModel(4, islands: 4);
+        var parts = ModelPartReader.Read(bytes)!;
+        var reading = KeepEnds.Read("_sho", parts, bytes)!;
+        var plan = KeepEnds.Plan(parts, bytes, reading, Raised(z => LegsBody(16, z, islands: 16)), null,
+                                 replaceSkin: true, across: false, clearBody: false, alsoHeld: null, extra: null);
+
+        Assert.True(plan.Report.Swap?.Cut > 0, $"nothing of the legs was cut: {plan.Report.Swap}");
+        Assert.True(plan.Report.Swap?.Added < 16, $"the legs went in whole: {plan.Report.Swap}");
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-keep-ends-studio-9")]
+    public void Studio_plan_without_new_skin_swaps_nothing()   // [EDGE-keep-ends-studio-9]
+    {
+        var bytes = ShoeModel(4, islands: 4);
+        var parts = ModelPartReader.Read(bytes)!;
+        var reading = KeepEnds.Read("_sho", parts, bytes)!;
+        var plan = KeepEnds.Plan(parts, bytes, reading, Raised(z => LegsBody(16, z, islands: 16)), null,
+                                 replaceSkin: false, across: true, clearBody: false, alsoHeld: null, extra: null);
+
+        // Across body mods the weights are still the new body's (reweighted), but no skin goes out or in.
+        Assert.Equal(0, plan.Report.Swap?.Removed ?? 0);
+        Assert.Equal(0, plan.Report.Swap?.Added ?? 0);
+        foreach (int v in reading.Ends) Assert.Equal(default, plan.Edit.DeltaAt(v));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-keep-ends-studio-3")]
+    public void Studio_limb_prefills_the_best_guess_from_one_ranking()   // [AC-keep-ends-studio-3]
+    {
+        InBodies(dir =>
+        {
+            // The leg's skin, on the S legs exactly; the M legs 20 mm out.
+            var (parts, _, bytes) = Skinned(
+                new SyntheticModel.Sub(0, TrianglesPerIsland: 2, Weights: Foot),
+                new SyntheticModel.Sub(0, TrianglesPerIsland: 120, OffsetX: 100f, Weights: Calf));
+            var reading = KeepEnds.Read("_sho", parts, bytes)!;
+            Write(dir, "s.mdl", LegsBody(120, 0f, 100f));
+            Write(dir, "m.mdl", LegsBody(120, 0.02f, 100f));
+            var catalog = new BodySizeCatalog(dir, [LegsS with { Rel = "s.mdl" }, LegsM with { Rel = "m.mdl" }, FeetM]);
+
+            var read = KeepEnds.StudioLimb(reading, parts, NoBones, "0201", "body", catalog);
+
+            Assert.Equal(KeepEnds.Route.Skin, read.Route);
+            Assert.NotNull(read.Shown);
+            Assert.Equal(read.Shown!.Best!.Value.Option, read.Pick);
+            Assert.Equal("s.mdl", read.Pick!.Rel);
+        });
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-keep-ends-studio-25")]
+    public void Studio_limb_ambiguous_still_prefills_and_no_skin_does_not()   // [EDGE-keep-ends-studio-25]
+    {
+        InBodies(dir =>
+        {
+            var (parts, _, bytes) = Skinned(
+                new SyntheticModel.Sub(0, TrianglesPerIsland: 2, Weights: Foot),
+                new SyntheticModel.Sub(0, TrianglesPerIsland: 120, OffsetX: 100f, OffsetZ: 0.01f, Weights: Calf));
+            var reading = KeepEnds.Read("_sho", parts, bytes)!;
+            // The leg sits halfway between two sizes: no clear answer, and still a guess is filled in.
+            Write(dir, "s.mdl", LegsBody(120, 0f, 100f));
+            Write(dir, "m.mdl", LegsBody(120, 0.02f, 100f));
+            var catalog = new BodySizeCatalog(dir, [LegsS with { Rel = "s.mdl" }, LegsM with { Rel = "m.mdl" }, FeetM]);
+
+            var read = KeepEnds.StudioLimb(reading, parts, NoBones, "0201", "body", catalog);
+            Assert.NotNull(read.Pick);
+            Assert.Equal(read.Shown!.Best!.Value.Option, read.Pick);
+
+            // No skin anywhere: nothing to read a body off, and nothing filled in.
+            var clothOnly = SyntheticModel.Build([], new SyntheticModel.Mesh(Cloth,
+                new SyntheticModel.Sub(0, TrianglesPerIsland: 2, Weights: Foot),
+                new SyntheticModel.Sub(0, TrianglesPerIsland: 2, OffsetX: 100f, Weights: Calf)));
+            var clothParts = ModelPartReader.Read(clothOnly)!;
+            var noSkin = KeepEnds.StudioLimb(KeepEnds.Read("_sho", clothParts, clothOnly)!, clothParts, NoBones, "0201",
+                                             "body", catalog);
+            Assert.Equal(KeepEnds.Route.NoSkin, noSkin.Route);
+            Assert.Null(noSkin.Pick);
+        });
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-keep-ends-studio-4")]
+    public void Studio_reads_a_shoe_reaching_no_leg_as_skin_only()   // [AC-keep-ends-studio-4]
+    {
+        InBodies(dir =>
+        {
+            // All foot: nothing of the leg to read, so its own feet are what its skin is redrawn from.
+            var (parts, _, bytes) = Skinned(new SyntheticModel.Sub(0, TrianglesPerIsland: 2, Weights: Foot));
+            var reading = KeepEnds.Read("_sho", parts, bytes)!;
+            Write(dir, "s.mdl", LegsBody(120, 0f, 100f));
+            Write(dir, "fm.mdl", SyntheticModel.Build([], new SyntheticModel.Mesh(Skin,
+                                     new SyntheticModel.Sub(0, TrianglesPerIsland: 2, Weights: Foot))));
+            var feet = FeetM with { Rel = "fm.mdl" };
+            var catalog = new BodySizeCatalog(dir, [LegsS with { Rel = "s.mdl" }, feet]);
+
+            var read = KeepEnds.StudioLimb(reading, parts, NoBones, "0201", "body", catalog);
+
+            Assert.Equal(KeepEnds.Route.SkinOnly, read.Route);
+            Assert.Equal(feet, read.Pick);
+            var planned = KeepEnds.SkinOnlyPlanned(bytes);
+            Assert.Same(bytes, planned.Model);
+            Assert.Equal(0f, planned.Report.WorstMove);
+        });
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-keep-ends-studio-1")]
+    public void Unreadable_rig_falls_back()   // [EDGE-keep-ends-studio-1]
+    {
+        var bytes = SyntheticModel.Build([], new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0)));
+        var parts = ModelPartReader.Read(bytes)!;
+        Assert.Null(KeepEnds.Read("_sho", parts, [1, 2, 3], null));
+        Assert.Equal(new RetargetInputs.Layout("_sho", "_sho", null),
+                     RetargetInputs.LayoutFor("_sho", true, true, true, endsUnreadable: true));
+    }
+
     // ── the cache ────────────────────────────────────────────────────────────────────────────────────────
 
     [Theory]

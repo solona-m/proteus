@@ -34,6 +34,26 @@ internal static class LocalData
     /// <summary>The sample content pack, under <see cref="ModPacks"/>.</summary>
     internal const string PiercingsPack = ModPacks + ":Neolithe Piercings for Proteus.pmp";
 
+    /// <summary>Miette's "Shift": heels with stockings to the thigh, a heeled foot of Bibo skin, made on YAB WC.</summary>
+    internal const string ShiftPack = ModPacks + ":Shift.pmp";
+
+    /// <summary>
+    /// The one entry of a .pmp whose path ends in <paramref name="suffix"/>. By ending, so folder names a pack spells in
+    /// characters a zip may encode either way (Shift's "•") do not matter; throws unless exactly one entry matches.
+    /// </summary>
+    internal static byte[] PackEntryEndingWith(string packNeed, string suffix)
+    {
+        using var zip = ZipFile.OpenRead(Path(packNeed));
+        var matches = zip.Entries.Where(e => e.FullName.Replace('\\', '/').EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                                 .ToList();
+        if (matches.Count != 1)
+            throw new InvalidDataException($"{matches.Count} entries of {Path(packNeed)} end in {suffix}, not one");
+        using var s = matches[0].Open();
+        using var m = new MemoryStream();
+        s.CopyTo(m);
+        return m.ToArray();
+    }
+
     /// <summary>
     /// Where a need points. When its variable is not set the result is a relative path under a folder that does not
     /// exist, so nothing ever reads the wrong file — the attribute has skipped the test before it got here.

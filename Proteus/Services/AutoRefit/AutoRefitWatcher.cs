@@ -1480,9 +1480,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
 
     /// <summary>The game's own gear is made on the game's own body: one size, no search.</summary>
     private static AutoRefitDecisions.Pick? VanillaSource(BodySizeCatalog vanilla, string slot, string race)
-        => vanilla.For(slot, race) is { Count: > 0 } options
-            ? new AutoRefitDecisions.Pick(VanillaBodyCatalog.Key, options[0], Confidence.Exact, false)
-            : null;
+        => KeepEnds.VanillaPick(vanilla, slot, race);
 
     /// <summary>See <see cref="AutoRefitDecisions.ChoseOtherwise"/>: read from the collection's settings as gathered.</summary>
     private static bool ChoseOtherwise(Gathered g, string root, string group)

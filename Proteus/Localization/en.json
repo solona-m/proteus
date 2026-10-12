@@ -3743,6 +3743,50 @@
     "message": "Leave out the new skin where the author deleted theirs, usually under cloth.\nTurn off if the refit leaves holes.",
     "description": ""
   },
+  "Parts.Retarget.CutForcedTip": {
+    "message": "Always on while the shoe keeps its own foot or the glove its own hand: otherwise the whole new legs or arms would go in with it.",
+    "description": "Tooltip on the greyed-out 'Remove hidden skin' checkbox in Studio > Body size while a shoe keeps its own foot (or a glove its hand)."
+  },
+  "Parts.Retarget.KeepFeet": {
+    "message": "Keep its own feet",
+    "description": "Checkbox in Studio > Body size, shown for shoes: keep the shoe's own foot exactly and refit only the leg."
+  },
+  "Parts.Retarget.KeepFeet.Tip": {
+    "message": "The foot stays exactly as its author made it, heel and all; only the leg the shoe reaches is refitted, sized by the legs. Untick to refit the whole shoe, feet included, as before.",
+    "description": "Tooltip for the 'Keep its own feet' checkbox."
+  },
+  "Parts.Retarget.KeepHands": {
+    "message": "Keep its own hands",
+    "description": "Checkbox in Studio > Body size, shown for gloves: keep the glove's own hand exactly and refit only the arm."
+  },
+  "Parts.Retarget.KeepHands.Tip": {
+    "message": "The hand stays exactly as its author made it; only the arm the glove reaches is refitted, sized by the chest. Untick to refit the whole glove, hands included, as before.",
+    "description": "Tooltip for the 'Keep its own hands' checkbox."
+  },
+  "Parts.Retarget.NoLimbFeet": {
+    "message": "This shoe reaches no leg: it keeps its shape, and only its skin is drawn like the new body's. Pick a legs size to refit it by anyway.",
+    "description": "Grey note under the checkbox when the shoe reaches no leg, so only its skin is redrawn."
+  },
+  "Parts.Retarget.NoLimbHands": {
+    "message": "These gloves reach no arm: they keep their shape, and only their skin is drawn like the new body's. Pick a chest size to refit them by anyway.",
+    "description": "Grey note under the checkbox when the gloves reach no arm, so only their skin is redrawn."
+  },
+  "Parts.Retarget.SkinAlreadyMatches": {
+    "message": "Nothing to change: its skin is already drawn the way the new body draws its own.",
+    "description": "Status line after Preview when a shoe or glove that reaches no leg or arm already draws its skin like the new body."
+  },
+  "Parts.Retarget.AlreadyFits.Fmt": {
+    "message": "Nothing to change: where it reaches, {0} is the same shape as the size it was made for.",
+    "description": "Status line after Preview when the chosen size is the same shape as the one the piece was made for. {0} = the chosen size's name."
+  },
+  "Parts.Retarget.EndsUnreadable": {
+    "message": "Its rig can't be read, so its foot or hand can't be told from the rest: the whole piece is refitted.",
+    "description": "Shown when a shoe's or glove's rig can't be read, so its foot or hand can't be kept."
+  },
+  "Parts.Retarget.NoLimbInBody.Fmt": {
+    "message": "{0} has no {1} to refit by, so the whole piece is refitted.",
+    "description": "Shown when a body mod has no legs (for a shoe) or chest (for gloves) to refit by. {0} = the body mod's name, {1} = 'legs' or 'chest' in lower case (already translated)."
+  },
   "Parts.Retarget.NeedFromRequired.Fmt": {
     "message": "{0}: pick the size it was made for.",
     "description": "{0} is the name of the body part the garment is worn on, such as Chest or Feet. Shown when that part has no size chosen for the body the garment was made for, which is the one thing a refit cannot do without."

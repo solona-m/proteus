@@ -3743,6 +3743,50 @@
     "message": "作者が肌を削除した箇所（通常は布の下）には新しい肌を入れません。\n穴ができる場合はオフにしてください。",
     "description": ""
   },
+  "Parts.Retarget.CutForcedTip": {
+    "message": "靴が自分の足を、手袋が自分の手を残している間は常にオンです。オフにすると新しい脚や腕が丸ごと入ってしまいます。",
+    "description": ""
+  },
+  "Parts.Retarget.KeepFeet": {
+    "message": "元の足を残す",
+    "description": ""
+  },
+  "Parts.Retarget.KeepFeet.Tip": {
+    "message": "足はヒールも含めて作者が作ったままです。靴が届いている脚だけを、脚のサイズに合わせてリフィットします。チェックを外すと、これまでどおり足も含めて靴全体をリフィットします。",
+    "description": ""
+  },
+  "Parts.Retarget.KeepHands": {
+    "message": "元の手を残す",
+    "description": ""
+  },
+  "Parts.Retarget.KeepHands.Tip": {
+    "message": "手は作者が作ったままです。手袋が届いている腕だけを、胸のサイズに合わせてリフィットします。チェックを外すと、これまでどおり手も含めて手袋全体をリフィットします。",
+    "description": ""
+  },
+  "Parts.Retarget.NoLimbFeet": {
+    "message": "この靴は脚に届いていません。形はそのままで、肌だけを新しいボディと同じように描きます。それでも脚のサイズを選べば、それに合わせてリフィットします。",
+    "description": ""
+  },
+  "Parts.Retarget.NoLimbHands": {
+    "message": "この手袋は腕に届いていません。形はそのままで、肌だけを新しいボディと同じように描きます。それでも胸のサイズを選べば、それに合わせてリフィットします。",
+    "description": ""
+  },
+  "Parts.Retarget.SkinAlreadyMatches": {
+    "message": "変更はありません。肌はすでに新しいボディと同じように描かれています。",
+    "description": ""
+  },
+  "Parts.Retarget.AlreadyFits.Fmt": {
+    "message": "変更はありません。この装備が届く範囲では、{0} は作られた元のサイズと同じ形です。",
+    "description": ""
+  },
+  "Parts.Retarget.EndsUnreadable": {
+    "message": "リグを読み取れないため、足や手をそれ以外と区別できません。装備全体をリフィットします。",
+    "description": ""
+  },
+  "Parts.Retarget.NoLimbInBody.Fmt": {
+    "message": "{0} にはリフィットに使う{1}がないため、装備全体をリフィットします。",
+    "description": ""
+  },
   "Parts.Retarget.NeedFromRequired.Fmt": {
     "message": "{0}：元のサイズを選んでください。",
     "description": ""

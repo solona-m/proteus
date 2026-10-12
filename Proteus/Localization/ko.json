@@ -3743,6 +3743,50 @@
     "message": "제작자가 삭제한 부분(보통 천 아래)은 새 피부도 넣지 않습니다.\n리핏에 구멍이 생기면 끄세요.",
     "description": ""
   },
+  "Parts.Retarget.CutForcedTip": {
+    "message": "신발이 자기 발을, 장갑이 자기 손을 유지하는 동안에는 항상 켜집니다. 그렇지 않으면 새 다리나 팔 전체가 함께 들어갑니다.",
+    "description": ""
+  },
+  "Parts.Retarget.KeepFeet": {
+    "message": "원래 발 유지",
+    "description": ""
+  },
+  "Parts.Retarget.KeepFeet.Tip": {
+    "message": "발은 굽까지 포함해 제작자가 만든 그대로 둡니다. 신발이 닿는 다리만 다리 사이즈에 맞춰 리핏합니다. 체크를 해제하면 예전처럼 발까지 포함해 신발 전체를 리핏합니다.",
+    "description": ""
+  },
+  "Parts.Retarget.KeepHands": {
+    "message": "원래 손 유지",
+    "description": ""
+  },
+  "Parts.Retarget.KeepHands.Tip": {
+    "message": "손은 제작자가 만든 그대로 둡니다. 장갑이 닿는 팔만 가슴 사이즈에 맞춰 리핏합니다. 체크를 해제하면 예전처럼 손까지 포함해 장갑 전체를 리핏합니다.",
+    "description": ""
+  },
+  "Parts.Retarget.NoLimbFeet": {
+    "message": "이 신발은 다리에 닿지 않습니다. 모양은 그대로 두고 피부만 새 바디처럼 그립니다. 그래도 다리 사이즈를 고르면 그에 맞춰 리핏합니다.",
+    "description": ""
+  },
+  "Parts.Retarget.NoLimbHands": {
+    "message": "이 장갑은 팔에 닿지 않습니다. 모양은 그대로 두고 피부만 새 바디처럼 그립니다. 그래도 가슴 사이즈를 고르면 그에 맞춰 리핏합니다.",
+    "description": ""
+  },
+  "Parts.Retarget.SkinAlreadyMatches": {
+    "message": "바꿀 것이 없습니다. 피부가 이미 새 바디처럼 그려지고 있습니다.",
+    "description": ""
+  },
+  "Parts.Retarget.AlreadyFits.Fmt": {
+    "message": "바꿀 것이 없습니다. 이 장비가 닿는 곳에서 {0}은(는) 원래 만들어진 사이즈와 모양이 같습니다.",
+    "description": ""
+  },
+  "Parts.Retarget.EndsUnreadable": {
+    "message": "리그를 읽을 수 없어 발이나 손을 나머지와 구분할 수 없습니다. 장비 전체를 리핏합니다.",
+    "description": ""
+  },
+  "Parts.Retarget.NoLimbInBody.Fmt": {
+    "message": "{0}에는 리핏할 {1}이(가) 없어 장비 전체를 리핏합니다.",
+    "description": ""
+  },
   "Parts.Retarget.NeedFromRequired.Fmt": {
     "message": "{0}: 제작된 크기를 선택하세요.",
     "description": ""

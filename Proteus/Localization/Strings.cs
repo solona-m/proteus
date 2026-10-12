@@ -2748,6 +2748,46 @@ public sealed class PartsStrings
         "Leave out the new skin where the author deleted theirs, usually under cloth.\n"
       + "Turn off if the refit leaves holes.");
 
+    public readonly string RetargetCutForcedTip = Loc.Localize("Parts.Retarget.CutForcedTip",
+        "Always on while the shoe keeps its own foot or the glove its own hand: otherwise the whole new legs or arms "
+      + "would go in with it.");
+
+    public readonly string RetargetKeepFeet = Loc.Localize("Parts.Retarget.KeepFeet", "Keep its own feet")
+                                            + "###partsRetargetKeepEnds";
+
+    public readonly string RetargetKeepFeetTip = Loc.Localize("Parts.Retarget.KeepFeet.Tip",
+        "The foot stays exactly as its author made it, heel and all; only the leg the shoe reaches is refitted, sized by "
+      + "the legs. Untick to refit the whole shoe, feet included, as before.");
+
+    public readonly string RetargetKeepHands = Loc.Localize("Parts.Retarget.KeepHands", "Keep its own hands")
+                                             + "###partsRetargetKeepEnds";
+
+    public readonly string RetargetKeepHandsTip = Loc.Localize("Parts.Retarget.KeepHands.Tip",
+        "The hand stays exactly as its author made it; only the arm the glove reaches is refitted, sized by the chest. "
+      + "Untick to refit the whole glove, hands included, as before.");
+
+    public readonly string RetargetNoLimbFeet = Loc.Localize("Parts.Retarget.NoLimbFeet",
+        "This shoe reaches no leg: it keeps its shape, and only its skin is drawn like the new body's. Pick a legs size "
+      + "to refit it by anyway.");
+
+    public readonly string RetargetNoLimbHands = Loc.Localize("Parts.Retarget.NoLimbHands",
+        "These gloves reach no arm: they keep their shape, and only their skin is drawn like the new body's. Pick a "
+      + "chest size to refit them by anyway.");
+
+    public readonly string RetargetSkinAlreadyMatches = Loc.Localize("Parts.Retarget.SkinAlreadyMatches",
+        "Nothing to change: its skin is already drawn the way the new body draws its own.");
+
+    /// <summary>{0}: the size chosen to refit onto.</summary>
+    public readonly string RetargetAlreadyFitsFmt = Loc.Localize("Parts.Retarget.AlreadyFits.Fmt",
+        "Nothing to change: where it reaches, {0} is the same shape as the size it was made for.");
+
+    public readonly string RetargetEndsUnreadable = Loc.Localize("Parts.Retarget.EndsUnreadable",
+        "Its rig can't be read, so its foot or hand can't be told from the rest: the whole piece is refitted.");
+
+    /// <summary>{0}: a body mod's name. {1}: "legs" or "chest", lower case.</summary>
+    public readonly string RetargetNoLimbInBodyFmt = Loc.Localize("Parts.Retarget.NoLimbInBody.Fmt",
+        "{0} has no {1} to refit by, so the whole piece is refitted.");
+
     public readonly string RetargetSwapShapesFmt = Loc.Localize("Parts.Retarget.SwapShapes.Fmt",
         "{0} shape key(s) lost to the skin swap. Untick \"Use the new body's skin\" to keep them.");
 

@@ -3743,6 +3743,50 @@
     "message": "Omet la nouvelle peau là où l'auteur a supprimé la sienne, en général sous le tissu.\nDésactivez si l'ajustement laisse des trous.",
     "description": ""
   },
+  "Parts.Retarget.CutForcedTip": {
+    "message": "Toujours actif tant que la chaussure garde son propre pied ou le gant sa propre main : sinon les nouvelles jambes ou les nouveaux bras entiers seraient ajoutés avec.",
+    "description": ""
+  },
+  "Parts.Retarget.KeepFeet": {
+    "message": "Garder ses propres pieds",
+    "description": ""
+  },
+  "Parts.Retarget.KeepFeet.Tip": {
+    "message": "Le pied reste exactement tel que son auteur l'a fait, talon compris ; seule la jambe que la chaussure atteint est réajustée, à la taille des jambes. Décochez pour réajuster toute la chaussure, pieds compris, comme avant.",
+    "description": ""
+  },
+  "Parts.Retarget.KeepHands": {
+    "message": "Garder ses propres mains",
+    "description": ""
+  },
+  "Parts.Retarget.KeepHands.Tip": {
+    "message": "La main reste exactement telle que son auteur l'a faite ; seul le bras que le gant atteint est réajusté, à la taille du buste. Décochez pour réajuster tout le gant, mains comprises, comme avant.",
+    "description": ""
+  },
+  "Parts.Retarget.NoLimbFeet": {
+    "message": "Cette chaussure n'atteint aucune jambe : elle garde sa forme, et seule sa peau est dessinée comme celle du nouveau corps. Choisissez quand même une taille de jambes pour la réajuster d'après elle.",
+    "description": ""
+  },
+  "Parts.Retarget.NoLimbHands": {
+    "message": "Ces gants n'atteignent aucun bras : ils gardent leur forme, et seule leur peau est dessinée comme celle du nouveau corps. Choisissez quand même une taille de buste pour les réajuster d'après elle.",
+    "description": ""
+  },
+  "Parts.Retarget.SkinAlreadyMatches": {
+    "message": "Rien à changer : sa peau est déjà dessinée comme celle du nouveau corps.",
+    "description": ""
+  },
+  "Parts.Retarget.AlreadyFits.Fmt": {
+    "message": "Rien à changer : là où la pièce arrive, {0} a la même forme que la taille pour laquelle elle a été faite.",
+    "description": ""
+  },
+  "Parts.Retarget.EndsUnreadable": {
+    "message": "Son rig est illisible, on ne peut donc pas distinguer le pied ou la main du reste : toute la pièce est réajustée.",
+    "description": ""
+  },
+  "Parts.Retarget.NoLimbInBody.Fmt": {
+    "message": "{0} n'a pas de {1} d'après lesquels réajuster, toute la pièce est donc réajustée.",
+    "description": ""
+  },
   "Parts.Retarget.NeedFromRequired.Fmt": {
     "message": "{0} : choisissez la taille d'origine.",
     "description": ""
