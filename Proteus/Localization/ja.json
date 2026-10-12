@@ -711,6 +711,14 @@
     "message": "Skin（塗り）",
     "description": ""
   },
+  "Colors.NavelBridge.Label": {
+    "message": "へそを布で渡す",
+    "description": ""
+  },
+  "Colors.NavelBridge.Tip": {
+    "message": "お腹を覆う布に使います。\nProteus は衣装を体のコピーとして作るため、へその中まで沈み込み、\n着ているのではなく描いたように見えます。オンにすると、布が本物のように\nへその上へ平らに張られます。内側へ引き込むことはないので、体に食い込みません。\n衣装がへその部分で切り抜かれている場合や、体にへそがない場合は何もしません。",
+    "description": ""
+  },
   "Colors.NoActiveOptions": {
     "message": "有効なオプションがありません。Penumbraでいずれかを選ぶと色を編集できます。",
     "description": ""
@@ -3693,6 +3701,14 @@
   },
   "Parts.Retarget.KeepShape.Tip": {
     "message": "リング・バックル・チェーンなど硬いパーツ向け：曲げずにそのまま移動します。\n小さな閉じたパーツは既定でオンです。",
+    "description": ""
+  },
+  "Parts.Retarget.KeepShape.SinkTip": {
+    "message": "新しい体にめり込んでしまうパーツは、代わりに体に合わせて曲がります。",
+    "description": ""
+  },
+  "Parts.Retarget.ShapeReleased.Fmt": {
+    "message": "形を保つパーツ{0:N0}個は、そのまま動かすと新しい体に最大{1:F1} mmめり込むため、体に合わせて曲げました：{2}",
     "description": ""
   },
   "Parts.Retarget.ReplaceSkin": {

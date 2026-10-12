@@ -132,6 +132,66 @@ public sealed class LocalizationTests
         }
     }
 
+    /// <summary>The navel tick is translated, not copied, and its tooltip keeps English's line breaks.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-navel-bridge-1")]
+    public void NavelBridge_strings_are_translated_not_copied(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (string key in new[] { "Colors.NavelBridge.Label", "Colors.NavelBridge.Tip" })
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+            Assert.Equal(en[key].Message.Count(c => c == '\n'), tr[key].Message.Count(c => c == '\n'));
+        }
+    }
+
+    /// <summary>
+    /// The Keep shape release's words: the warning, and the tooltip's last line — under a key of its own, so a
+    /// translation of the tooltip as it was before cannot stand in for it.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-keep-shape-release-5")]
+    [Trait("Plan", "AC-keep-shape-release-6")]
+    public void KeepShapeRelease_strings_are_translated_not_copied(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (string key in new[] { "Parts.Retarget.ShapeReleased.Fmt", "Parts.Retarget.KeepShape.SinkTip" })
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+        }
+    }
+
+    /// <summary>The README's Keep shape bullet says it too, in each language's own words — the same sentence as the
+    /// tooltip's last line.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-keep-shape-release-6")]
+    public void KeepShape_tip_and_readme_say_buried_pieces_bend(string lang)
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+
+        string sentence = Load(lang)["Parts.Retarget.KeepShape.SinkTip"].Message;
+        string bullet = readme.Split('\n').Single(l => l.Contains("**" + ReadmeKeepShape[lang] + "**"));
+        Assert.Contains(sentence, bullet);
+    }
+
+    /// <summary>The Keep shape bullet's bold label in each README.</summary>
+    private static readonly Dictionary<string, string> ReadmeKeepShape = new()
+    {
+        ["en"] = "Keep shape", ["ja"] = "形を保つ", ["de"] = "Form behalten", ["fr"] = "Garder la forme",
+        ["zh"] = "保持形状", ["ko"] = "형태 유지", ["es"] = "Mantener forma", ["ru"] = "Сохранить форму",
+    };
+
     [Theory]
     [MemberData(nameof(Translations))]
     public void PlaceholderIndicesMatchEnglish(string lang)

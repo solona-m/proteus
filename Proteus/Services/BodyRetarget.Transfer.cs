@@ -410,7 +410,7 @@ internal static partial class BodyRetarget
         return node;
     }
 
-    private static float MeanEdgeOf(ModelParts model)
+    internal static float MeanEdgeOf(ModelParts model)
     {
         double total = 0;
         int count = 0;

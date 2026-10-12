@@ -60,7 +60,10 @@ code keys match `en.json`).
 
 - **Refit moves positions only — never normals** (or tangents) in
   `BodyRetarget*` / `RefitModService` / `Proteus.Refit`. Rewritten normals
-  change the garment's shading. `FAIL`. Diff-scoped.
+  change the garment's shading. `FAIL`. Diff-scoped. One exception, by the
+  user's decision: body-skin vertices the refit's nipple smoothing
+  (`SmoothCoveredNipples`) moves are reshaded, else the flattened skin still
+  shades as a nipple. Garment and cloth normals never.
 - **A mesh change must be checked for validity, not just smoothness** — a
   folded or degenerate triangle shows in game as a hole. A diff that adds or
   changes a mesh pass without a test asserting no folded/degenerate triangles

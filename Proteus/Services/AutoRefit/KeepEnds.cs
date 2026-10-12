@@ -66,8 +66,11 @@ internal static partial class KeepEnds
     /// <param name="FreePieces">The hard pieces that move with the leg or arm; every other is wholly in
     /// <paramref name="Ends"/>.</param>
     /// <param name="Band">Vertices with 40-60% of their weight on the end, for the log.</param>
+    /// <param name="FreeNames">Each of <paramref name="FreePieces"/>' labels, in the same order: how the log names a
+    /// piece the refit let go (see <see cref="RefitCore.ReleasedLog"/>).</param>
     internal sealed record Reading(string Slot, string Limb, IReadOnlySet<int> Ends, ModelParts LimbView,
-                                   IReadOnlyList<IReadOnlyCollection<int>> FreePieces, int Band, int Vertices)
+                                   IReadOnlyList<IReadOnlyCollection<int>> FreePieces, int Band, int Vertices,
+                                   IReadOnlyList<string>? FreeNames = null)
     {
         /// <summary>The slot a reading is cached under: never the piece's own, which the old way of reading used.</summary>
         public string CacheSlot => Slot + ">" + Limb;
@@ -82,16 +85,39 @@ internal static partial class KeepEnds
     /// <inheritdoc cref="Read(string, ModelParts, byte[])"/>
     /// <param name="pieces">The hard pieces the end must not split, as the caller keeps them: the Studio's from the
     /// parts the user chose to keep the shape of. Null for the defaults (<see cref="RefitCore.DefaultKeepShape"/>).</param>
+    /// <param name="names">Each of <paramref name="pieces"/>' labels, in the same order, for the log of a piece the refit
+    /// let go; unnamed when not given. Ignored with the default pieces, which are named.</param>
     internal static Reading? Read(string slot, ModelParts garment, byte[] bytes,
-                                  IReadOnlyList<IReadOnlyCollection<int>>? pieces)
+                                  IReadOnlyList<IReadOnlyCollection<int>>? pieces, IReadOnlyList<string>? names = null)
     {
         if (AutoRefitDecisions.LimbOf(slot) is not { } limb) return null;
         if (ModelSkinReader.Read(bytes, null, null) is not { } skin) return null;
-        pieces ??= RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment));
+        if (pieces == null)
+        {
+            pieces = RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment), out var defaults);
+            names = defaults;
+        }
+        names ??= pieces.Select(_ => "").ToList();
         var ends = BodyRetarget.EndVertices(garment, skin, slot, pieces, out int band);
-        var free = pieces.Where(p => !p.All(ends.Contains)).ToList();
+        var (free, freeNames) = FreeOf(pieces, names, ends);
         return new Reading(slot, limb, ends, RefitCore.LimbView(garment, ends), free, band,
-                           garment.Positions.Length / 3);
+                           garment.Positions.Length / 3, freeNames);
+    }
+
+    /// <summary>The pieces not wholly in <paramref name="ends"/> — the ones that move with the leg or arm — and their
+    /// names, in the same order.</summary>
+    internal static (List<IReadOnlyCollection<int>> Pieces, List<string> Names) FreeOf(
+        IReadOnlyList<IReadOnlyCollection<int>> pieces, IReadOnlyList<string> names, IReadOnlySet<int> ends)
+    {
+        var free = new List<IReadOnlyCollection<int>>();
+        var freeNames = new List<string>();
+        for (int k = 0; k < pieces.Count; k++)
+            if (!pieces[k].All(ends.Contains))
+            {
+                free.Add(pieces[k]);
+                freeNames.Add(names[k]);
+            }
+        return (free, freeNames);
     }
 
     /// <summary>

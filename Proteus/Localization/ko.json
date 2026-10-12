@@ -711,6 +711,14 @@
     "message": "Skin(그리기)",
     "description": ""
   },
+  "Colors.NavelBridge.Label": {
+    "message": "배꼽 위를 천으로 잇기",
+    "description": ""
+  },
+  "Colors.NavelBridge.Tip": {
+    "message": "배를 덮는 천에 켜세요.\nProteus는 옷을 몸의 복사본으로 만들기 때문에 배꼽 안까지 파고들어,\n입은 것이 아니라 그린 것처럼 보입니다. 켜면 천이 진짜 천처럼\n배꼽 위로 평평하게 펴집니다. 안쪽으로 당기지 않으므로 몸을 파고들 수 없습니다.\n옷이 배꼽 부분에서 잘려 있거나 몸에 배꼽이 없으면 아무것도 하지 않습니다.",
+    "description": ""
+  },
   "Colors.NoActiveOptions": {
     "message": "활성 옵션이 없습니다 — Penumbra에서 하나를 선택하면 색상을 편집할 수 있습니다.",
     "description": ""
@@ -3693,6 +3701,14 @@
   },
   "Parts.Retarget.KeepShape.Tip": {
     "message": "반지, 버클, 체인 같은 단단한 파츠용: 구부러지지 않고 통째로 이동합니다.\n작고 닫힌 파츠는 기본으로 체크되어 있습니다.",
+    "description": ""
+  },
+  "Parts.Retarget.KeepShape.SinkTip": {
+    "message": "새 몸에 파묻히게 되는 조각은 대신 몸에 맞춰 휘어집니다.",
+    "description": ""
+  },
+  "Parts.Retarget.ShapeReleased.Fmt": {
+    "message": "형태 유지 조각 {0:N0}개는 통째로 옮기면 새 몸에 최대 {1:F1} mm 파묻히므로 대신 몸에 맞춰 휘어집니다: {2}",
     "description": ""
   },
   "Parts.Retarget.ReplaceSkin": {

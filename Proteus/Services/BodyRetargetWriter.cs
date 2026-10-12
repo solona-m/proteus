@@ -116,6 +116,13 @@ internal static class BodyRetargetWriter
         /// automatic refit removes. False for every entry written before it was kept.
         /// </summary>
         public bool Auto { get; set; }
+
+        /// <summary>
+        /// Refitted from the game's own file rather than a mod's — what tells the mod a game item's refit is made in
+        /// from one the Body size tool made to hold a modder's garment, both Proteus's and both nothing but refits. See
+        /// <see cref="AutoRefitDecisions.IsGameGear"/>. False for every entry written before it was kept.
+        /// </summary>
+        public bool FromGame { get; set; }
     }
 
     /// <param name="Group">The group written.</param>
@@ -227,9 +234,10 @@ internal static class BodyRetargetWriter
     /// that makes the game load that model at all — without it the file is written and never read.
     /// </param>
     /// <param name="auto">Saved by the automatic refit (see <see cref="Entry.Auto"/>).</param>
+    /// <param name="fromGame">Refitted from the game's own file (see <see cref="Entry.FromGame"/>).</param>
     public static Outcome Save(string modRoot, string groupName, string gamePath, string bodyMod, string from,
                                IReadOnlyList<Refit> refits, string? fromOption = null,
-                               IReadOnlyList<object>? manipulations = null, bool auto = false)
+                               IReadOnlyList<object>? manipulations = null, bool auto = false, bool fromGame = false)
     {
         string names = string.Join(", ", refits.Select(r => r.Option));
         lock (WriteLock)
@@ -348,7 +356,8 @@ internal static class BodyRetargetWriter
                     PenumbraModMeta.AddFileOptions(modRoot, groupName, written.Select(w => OptionFor(w.Refit, w.Rel))
                                                                               .ToList());
                     foreach (var (refit, rel) in written)
-                        WriteRecord(modRoot, groupName, true, refit.Option, gamePath, rel, bodyMod, from, refit.To, auto);
+                        WriteRecord(modRoot, groupName, true, refit.Option, gamePath, rel, bodyMod, from, refit.To, auto,
+                                    fromGame);
                     return new Outcome(true, groupName, names, refits.Count == 1
                         ? string.Format(Loc.Localize("Parts.Retarget.Save.AddedOneToAuthor.Fmt",
                               "Saved as \"{0}\" in the \"{1}\" group. Choose it there in Penumbra to wear it."),
@@ -382,7 +391,8 @@ internal static class BodyRetargetWriter
                                                      final.Count - 1);
 
                 foreach (var (refit, rel) in written)
-                    WriteRecord(modRoot, groupName, false, refit.Option, gamePath, rel, bodyMod, from, refit.To, auto);
+                    WriteRecord(modRoot, groupName, false, refit.Option, gamePath, rel, bodyMod, from, refit.To, auto,
+                                fromGame);
 
                 return new Outcome(true, groupName, names, refits.Count == 1
                     ? string.Format(Loc.Localize("Parts.Retarget.Save.AddedOne.Fmt",
@@ -606,7 +616,7 @@ internal static class BodyRetargetWriter
     }
 
     private static void WriteRecord(string modRoot, string group, bool inAuthorGroup, string option, string gamePath,
-                                    string rel, string bodyMod, string from, string to, bool auto)
+                                    string rel, string bodyMod, string from, string to, bool auto, bool fromGame)
     {
         var record = ReadRecord(modRoot) ?? new Record();
         // Entries from before each named its own group take the old top-level one now, before it moves on.
@@ -619,7 +629,7 @@ internal static class BodyRetargetWriter
         {
             Group = group, InAuthorGroup = inAuthorGroup,
             Name = option, GamePath = gamePath, File = rel.Replace('\\', '/'),
-            BodyMod = bodyMod, From = from, To = to, Auto = auto,
+            BodyMod = bodyMod, From = from, To = to, Auto = auto, FromGame = fromGame,
         });
         SaveRecord(modRoot, record);
     }

@@ -174,6 +174,10 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     /// <summary>One refit per target of the garment's own slot, in the order the targets were ticked.</summary>
     private List<(BodyOption To, BodyRetarget.Planned Planned)>? planned;
 
+    /// <summary>The labels of the "keep shape" pieces <see cref="planned"/> was refitted with, by piece index — how a
+    /// piece the refit let go is named (see <see cref="RefitCore.ReleasedWarning"/>).</summary>
+    private IReadOnlyList<string> plannedShapeNames = [];
+
     /// <summary>Which of <see cref="planned"/> is on the character.</summary>
     private int showing;
 
@@ -214,7 +218,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     /// <param name="Notice">Nothing to do, said plainly rather than as an error: the skin already matches, or the
     /// leg is already the size chosen.</param>
     private sealed record PlanResult(string Key, List<(BodyOption To, BodyRetarget.Planned Planned)>? Planned,
-                                     string Error, string Notice = "");
+                                     string Error, string Notice = "", IReadOnlyList<string>? ShapeNames = null);
     private sealed record SaveResult(BodyRetargetWriter.Outcome Outcome, BodyRetargetWriter.Record? Record);
 
     // ── caches for things that would otherwise be read every frame ──────────
@@ -1403,6 +1407,9 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         if (done.Report.SnapRate is > 0f and < 0.8f)
             using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
                 ImGui.TextWrapped(ps.RetargetLowSnap);
+        if (RefitCore.ReleasedWarning(done.Report, plannedShapeNames) is { } released)
+            using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
+                ImGui.TextWrapped(released);
 
         if (ImGui.Button(ps.RetargetClearPreview, FullWidth()))
         {
@@ -1544,9 +1551,10 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     }
 
     /// <summary>A refit's counts, for the log. Not localized: it is read when diagnosing, not by the player.</summary>
-    private static string Describe(BodyRetarget.Report r)
+    private static string Describe(BodyRetarget.Report r, IReadOnlyList<string> shapeNames)
     {
         var parts = new List<string> { $"moved up to {r.WorstMove * 1000f:F1} mm" };
+        if (RefitCore.ReleasedLog(r, shapeNames) is { } released) parts.Add($"let go of kept piece(s) {released}");
         if (r.Snapped > 0) parts.Add($"{r.Snapped:N0} snapped ({r.SnapRate:P0})");
         if (r.Pushed > 0) parts.Add($"{r.Pushed:N0} pushed out (up to {r.WorstPush * 1000f:F2} mm)");
         if (r.Missed > 0) parts.Add($"{r.Missed:N0} too far to follow");
@@ -1719,7 +1727,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
                 foreach (var part in garment.Parts)
                     if (heldLabels.Contains(part.Label))
                         held.UnionWith(part.Triangles);
-                var pieces = RefitCore.ShapePieces(garment, shapeLabels);
+                var pieces = RefitCore.ShapePieces(garment, shapeLabels, out var shapeNames);
 
                 // A bake's preview, here rather than on the framework thread when it is first shown — and from the model
                 // BEFORE the rename below: the preview goes on the drawn race's path, and a skin material is named after
@@ -1751,9 +1759,9 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
                         garment, bytes, garmentSlot, pieces, sources, snapshot, garmentRace ?? "", male, limbFrom!,
                         limbTargets, sameBodyMod, fromCloth, layOnBody, acrossBodies, clear, held, shared,
                         s => s == primary ? (limbMasks.Source, limbMasks.Target) : (endMasks.Source, endMasks.Target),
-                        SlotName, modelRel);
+                        SlotName, modelRel, shapeNames);
                     var kept = KeepEnds.StudioPlan(input, Baked, uvRemap, log, () => Interlocked.Increment(ref planDone));
-                    return new PlanResult(key, kept.Planned, kept.Error, kept.Notice);
+                    return new PlanResult(key, kept.Planned, kept.Error, kept.Notice, kept.ShapeNames);
                 }
 
                 var results = new List<(BodyOption, BodyRetarget.Planned)>();
@@ -1769,14 +1777,16 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
                     pairs.AddRange(shared);
                     var plan = BodyRetarget.Plan(garment, bytes, pairs, garmentSlot, held: held,
                                                  replaceSkin: layOnBody, acrossBodies: acrossBodies,
-                                                 clearBody: clear, cutHidden: cut, keepShape: pieces);
+                                                 clearBody: clear, cutHidden: cut, keepShape: pieces,
+                                                 log: line => log.Debug("[Proteus] body size: {0}", line),
+                                                 warn: line => log.Warning("[Proteus] body size: {0}", line));
                     // Skin the refit kept of the garment's own, drawn in the new body's layout and material — or a
                     // gen2 garment's kept skin shows the wrong skin, and none of the tattoos, on a bibo body.
                     plan = RefitCore.MatchSkinToBody(plan, garmentSource, targetPath, uvRemap, male, log);
                     results.Add((option, Baked(plan, targetPath)));
                     Interlocked.Increment(ref planDone);
                 }
-                return new PlanResult(key, results, "");
+                return new PlanResult(key, results, "", ShapeNames: shapeNames);
             }
             catch (Exception ex)
             {
@@ -1894,11 +1904,15 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         // escapes this only by accident: a brand-new group has no stored choice, so its DefaultSettings applies — and
         // the second refit into that same group would hit exactly this.)
         string at = root;
+        // The garment's own mod, read with the save rather than in the frame: whether it is the game's garment.
+        string? garmentMod = ctx.ModRoot;
+        string garmentPath = ctx.GamePath;
         string? cutFrom = BodyRetargetWriter.OptionOfFile(ctx.Redirects, ctx.ModelRel, group);
         selectAfterSave = (group, refits[Math.Clamp(showing, 0, refits.Count - 1)].Option, cutFrom,
                            RefitCore.IsMulti(at, group));
         saveTask = Task.Run(() => new SaveResult(
-            BodyRetargetWriter.Save(at, group, path, body, labelFrom, refits, cutFrom, manipulations),
+            BodyRetargetWriter.Save(at, group, path, body, labelFrom, refits, cutFrom, manipulations,
+                                    fromGame: RefitCore.IsGameGear(garmentMod, garmentPath)),
             BodyRetargetWriter.ReadRecord(at)));
     }
 
@@ -2056,6 +2070,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
             else if (pt.Result.Planned is { Count: > 0 } done && pt.Result.Key == Key(ctx))
             {
                 planned = done;
+                plannedShapeNames = pt.Result.ShapeNames ?? [];
                 plannedKey = pt.Result.Key;
                 showing = 0;
                 var first = done[0].Planned;
@@ -2063,7 +2078,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
                 ctx.SetStatus("", false);
                 foreach (var (to, plan) in done)
                     log.Information("[Proteus] retarget: {0} onto {1}: {2}", ctx.ModelRel, to.Label,
-                                    Describe(plan.Report));
+                                    Describe(plan.Report, plannedShapeNames));
             }
         }
 

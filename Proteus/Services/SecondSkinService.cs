@@ -859,11 +859,26 @@ public sealed partial class SecondSkinService
               .Append("|bust=").Append(l.BustBridgeStrength.ToString("R"))
               .Append("|nipple=").Append(l.NippleSmoothStrength.ToString("R"))
               .Append("|cleft=").Append(l.CleftBridgeStrength.ToString("R"))
+              .Append("|navel=").Append(l.NavelBridgeStrength.ToString("R"))
               .Append("|fold=").Append(l.FoldSmoothStrength.ToString("R"))
               .Append("|push=").Append(l.PushScale.ToString("R")).Append('\n');
         }
         return sb.ToString();
     }
+
+    /// <summary>
+    /// How strongly a mod's geometry tick applies: 0 unless ticked, else its authored strength clamped to 0–1, full
+    /// when it has none. The one reading of every <c>…Bridge</c>/<c>Smooth…</c> pair in the sidecar.
+    /// </summary>
+    internal static float GeometryStrength(bool? on, float? strength)
+        => on == true ? Math.Clamp(strength ?? 1f, 0f, 1f) : 0f;
+
+    /// <summary>
+    /// A geometry pass's strength on one shell: the mod's, from <paramref name="byMod"/>, and only on a body surface —
+    /// a face or a tail has none of the bones any pass is seeded from.
+    /// </summary>
+    internal static float SurfaceStrength(bool isBody, IReadOnlyDictionary<string, float> byMod, string modDirectory)
+        => isBody && byMod.TryGetValue(modDirectory, out var s) ? s : 0f;
 
     private void ResetBuildStats()
     {
@@ -1094,7 +1109,8 @@ public sealed partial class SecondSkinService
                             + $"toeCap={(l.ToeCap == null ? "none" : $"{l.ToeCapWidth}x{l.ToeCapHeight}")} strength={l.ToeCapStrength} "
                             + $"bustBridge={l.BustBridgeStrength} nippleSmooth={l.NippleSmoothStrength} "
                             // The body passes are recorded so a dump shows whether they ran.
-                            + $"cleftBridge={l.CleftBridgeStrength} smoothFold={l.FoldSmoothStrength}");
+                            + $"cleftBridge={l.CleftBridgeStrength} navelBridge={l.NavelBridgeStrength} "
+                            + $"smoothFold={l.FoldSmoothStrength}");
                 if (l.ToeCap != null) File.WriteAllBytes($"{pre}layer{i}_toecap.raw", l.ToeCap);
                 if (l.Coverage != null) File.WriteAllBytes($"{pre}layer{i}_coverage.raw", l.Coverage);
             }

@@ -1645,7 +1645,7 @@ public class SecondSkinWriterVerbatimTests(Xunit.Abstractions.ITestOutputHelper 
         return mask;
     }
 
-    private static void Validate(byte[] m)
+    internal static void Validate(byte[] m)
     {
         ushort U16(int o) => BitConverter.ToUInt16(m, o);
         uint U32(int o) => BitConverter.ToUInt32(m, o);

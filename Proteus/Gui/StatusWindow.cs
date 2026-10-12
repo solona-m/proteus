@@ -2222,41 +2222,28 @@ public class StatusWindow : Window
     }
 
     /// <summary>
-    /// The four mod-wide geometry passes, written to the sidecar because they are authoring decisions that ship with the pack.
-    /// Ticking any promotes the mod's skin overlays to a shell, so <see cref="RenderModeInference.WantsGeometry"/> must list every one.
+    /// The mod-wide geometry passes (<see cref="GeometryToggles.All"/>), written to the sidecar because they are authoring
+    /// decisions that ship with the pack. Ticking any promotes the mod's skin overlays to a shell, so
+    /// <see cref="RenderModeInference.WantsGeometry"/> must list every one.
     /// </summary>
     private void DrawBustBridgeAdvanced(OverlayEntry entry)
     {
         var md = entry.Metadata;
         var cs = Strings.Colors;
 
-        // On or off, no amount: ticking writes "on, full", clearing any authored strength (which the compositor still honours).
-        void Toggle(string label, string id, string tip, bool current,
-                    Action<bool> set, string reason)
+        // On or off, no amount.
+        foreach (var t in GeometryToggles.All)
         {
-            bool on = current;
-            if (ImGui.Checkbox($"{label}##{id}_{entry.ModDirectory}", ref on))
+            bool on = t.IsOn(md);
+            if (ImGui.Checkbox($"{t.Label(cs)}##{t.Id}_{entry.ModDirectory}", ref on))
             {
-                set(on);
+                t.Set(md, on);
                 discovery.SaveMetadata(entry);
-                RecompositeForOverlay(entry, reason);
+                RecompositeForOverlay(entry, t.Reason);
             }
             if (ImGui.IsItemHovered())
-                ImGui.SetTooltip(tip);
+                ImGui.SetTooltip(t.Tip(cs));
         }
-
-        // Cleared to null rather than false, so an untick restores the "absent = off" default.
-        Toggle(cs.BustBridge, "bustbridge", cs.BustBridgeTip, md.BustBridge == true,
-               on => { md.BustBridge = on ? true : null; md.BustBridgeStrength = null; }, "bust-bridge");
-
-        Toggle(cs.SmoothNipples, "smoothnipples", cs.SmoothNipplesTip, md.SmoothNipples == true,
-               on => { md.SmoothNipples = on ? true : null; md.SmoothNipplesStrength = null; }, "smooth-nipples");
-
-        Toggle(cs.CleftBridge, "cleftbridge", cs.CleftBridgeTip, md.CleftBridge == true,
-               on => { md.CleftBridge = on ? true : null; md.CleftBridgeStrength = null; }, "cleft-bridge");
-
-        Toggle(cs.SmoothFold, "smoothfold", cs.SmoothFoldTip, md.SmoothFold == true,
-               on => { md.SmoothFold = on ? true : null; md.SmoothFoldStrength = null; }, "smooth-fold");
     }
 
     /// <summary>

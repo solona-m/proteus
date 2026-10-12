@@ -26,6 +26,41 @@ internal static class AutoRefitDecisions
         _ => null,
     };
 
+    /// <summary>How the new body's skin goes into an unattended refit: cut to where the garment drew its own, and
+    /// whether the cloth is pushed clear of the body wherever it is buried in it.</summary>
+    internal readonly record struct SkinRule(bool CutHidden, bool ClearBody);
+
+    /// <summary>
+    /// The new body's skin goes in whole: nobody is watching an unattended refit to catch the holes an author's cut can
+    /// leave on another body. The game's own gear is the exception. Its cloth is buried in the game's body on purpose —
+    /// the game draws no chest skin under a worn top, only the skin the top carries at its openings — so the skin goes
+    /// where the game puts it, and the cloth is cleared of the body. The Neo-Ishgardian Top of Maiming on Neolithe's
+    /// neobelly SFW M: 679 cm² of skin through the cloth whole, 224 cut, 193 cut and cleared.
+    /// </summary>
+    /// <param name="gameGear">The piece is drawn from the game's own file, not a mod's.</param>
+    internal static SkinRule SkinFor(bool gameGear) => gameGear ? new SkinRule(true, true) : new SkinRule(false, false);
+
+    /// <summary>
+    /// The piece is the game's own: no mod serves it, or the mod serving it is one Proteus made for a game item — it
+    /// serves nothing, at any path, but refits recorded as made from the game's own garment. Refitted again onto another
+    /// body it is still the game's garment underneath. The whole mod is judged, not the worn path: a modder's male-only
+    /// top baked to the wearer's race serves only the refit at the wearer's path, its own model sitting at another. A
+    /// mod Proteus made to hold a hand refit of a modder's garment holds nothing but refits too, but none from the game.
+    /// A mod shipping the game's model (a recolour, a "— Proteus edit" copy) serves its own file, and is a mod.
+    /// </summary>
+    /// <param name="madeByProteus">The mod's manifest names Proteus as its author — see
+    /// <see cref="RefitModService.IsMadeByProteus"/>.</param>
+    internal static bool IsGameGear(string? modRoot, string gamePath, IReadOnlyList<PenumbraModMeta.Redirect> redirects,
+                                    BodyRetargetWriter.Record? record, bool madeByProteus)
+    {
+        if (modRoot == null) return true;
+        if (record == null || !madeByProteus) return false;
+        var fromGame = record.Options.Where(e => e.FromGame).Select(e => RefitCore.Normal(e.File))
+                             .ToHashSet(StringComparer.Ordinal);
+        return redirects.Any(d => RefitCore.Normal(d.GamePath) == RefitCore.Normal(gamePath))
+               && redirects.All(d => fromGame.Contains(RefitCore.Normal(d.File)));
+    }
+
     /// <summary>Whether a reading is sure enough to refit from unattended.</summary>
     internal static bool Proceed(Confidence confidence)
         => confidence is Confidence.Exact or Confidence.Likely or Confidence.Guess;

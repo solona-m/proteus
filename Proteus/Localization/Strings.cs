@@ -1897,6 +1897,16 @@ public sealed class ColorsStrings
         "How far the fabric relaxes toward the flat span. 1.00 lifts the cleft level with the\n"
       + "cheeks either side, which is usually too much — lower values keep more of it.");
 
+    public readonly string NavelBridge = Loc.Localize("Colors.NavelBridge.Label",
+        "Span the belly button");
+
+    public readonly string NavelBridgeTip = Loc.Localize("Colors.NavelBridge.Tip",
+        "Turn this on for cloth over the stomach.\n"
+      + "Proteus builds a garment as a copy of the body, so it dips into the belly button —\n"
+      + "which reads as painted on rather than worn. With this on, the fabric is stretched flat\n"
+      + "across it the way real cloth is. Nothing is pulled inward, so it cannot cut into the body.\n"
+      + "Where the garment is cut away at the belly button, or the body has none, this does nothing.");
+
     public readonly string SmoothFold = Loc.Localize("Colors.SmoothFold.Label",
         "Smooth between the legs");
 
@@ -2747,6 +2757,16 @@ public sealed class PartsStrings
     public readonly string RetargetKeepShapeTip = Loc.Localize("Parts.Retarget.KeepShape.Tip",
         "For rigid pieces (rings, buckles, chains): each piece moves whole instead of bending.\n"
       + "Small closed pieces start ticked.");
+
+    /// <summary>The Keep shape tooltip's last line, under its own key so a translation of the older tooltip cannot
+    /// stand in for it.</summary>
+    public readonly string RetargetKeepShapeSinkTip = Loc.Localize("Parts.Retarget.KeepShape.SinkTip",
+        "A piece that would sink into the new body bends with it instead.");
+
+    /// <summary>{0} is how many kept pieces the refit let go, {1} the deepest any would have sunk (mm), {2} their
+    /// labels.</summary>
+    public readonly string RetargetShapeReleasedFmt = Loc.Localize("Parts.Retarget.ShapeReleased.Fmt",
+        "{0:N0} kept piece(s) would sink up to {1:F1} mm into the new body if moved whole, so they bend with it instead: {2}");
 
     public readonly string RetargetReplaceSkin = Loc.Localize("Parts.Retarget.ReplaceSkin", "Use the new body's skin")
                                                + "###partsRetargetReplaceSkin";

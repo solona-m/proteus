@@ -141,7 +141,7 @@ Conviene saber:
 - **Usar la piel del cuerpo nuevo** está activado por defecto: la piel propia de la prenda, para cada parte del cuerpo que se redimensiona, se sustituye por la del cuerpo nuevo, de modo que case con el resto de ti. Desmárcalo para redimensionar en su lugar la piel que trae la prenda, lo que conserva el realce o el skindent que le dio el autor.
 - **Quitar la piel oculta**, activado por defecto, omite la piel nueva allí donde el autor borró la suya, normalmente bajo la tela. Desactívalo si un reajuste deja agujeros. Solo se aplica mientras **Usar la piel del cuerpo nuevo** está activado.
 - **Sacar la tela del cuerpo** empuja hacia fuera toda la tela enterrada, no solo la que enterró el reajuste. Úsalo si el cuerpo se transparenta, por ejemplo con unas medias que traen su propia piel de piernas. Desactivado por defecto, porque los autores a menudo esconden tela bajo la piel a propósito.
-- **Mantener forma** mueve enteras las piezas rígidas (anillos, hebillas, cadenas) en lugar de doblarlas. Las piezas pequeñas y cerradas empiezan marcadas.
+- **Mantener forma** mueve enteras las piezas rígidas (anillos, hebillas, cadenas) en lugar de doblarlas. Las piezas pequeñas y cerradas empiezan marcadas. Una pieza que se hundiría en el nuevo cuerpo se dobla con él en su lugar.
 - **Los zapatos y guantes conservan sus propios pies y manos.** Con **Conservar sus propios pies** (o **manos**) marcado, como viene por defecto, el pie se queda exactamente como lo hizo su autor, tacón incluido, y solo se reajusta la pierna que alcanza el zapato, con la talla de las piernas (en los guantes, el brazo con la del pecho). Los pies van solos. Un zapato que no llega a ninguna pierna conserva su forma y solo se redibuja su piel, guardado como «*Cuerpo* — skin». Desmárcalo para reajustar el zapato entero como antes.
 - **Las piezas que cubren más de una parte**, como un vestido largo sobre las piernas, toman una talla para cada parte en **Otras partes del cuerpo**. Elige **Ninguna (dejar fuera esta parte)** para omitir una.
 - **Desmarca una pieza** en la lista de piezas para dejarla exactamente donde la puso el autor.
@@ -351,6 +351,7 @@ Otras dos secciones plegables se aplican a todo el mod:
 - **Geometría** remodela la prenda que Proteus construye a partir de tu cuerpo, para que se lea como tela y no como pintura. Proteus construye una segunda piel copiando tu cuerpo, así que por defecto sigue cada hueco:
   - **Tender sobre el escote**: la tela entre los pechos pasa recta por encima, como hace la tela de verdad. Nada se tira hacia dentro, así que no puede clavarse en el cuerpo.
   - **Tender sobre los glúteos**: lo mismo a lo ancho del asiento.
+  - **Tensar la tela sobre el ombligo**: la tela queda plana sobre el ombligo en lugar de hundirse en él.
   - **Suavizar entre las piernas**: suaviza el pliegue de la entrepierna. Esto cambia el cuerpo de debajo, así que se aplica a todas las prendas que lleves a la vez.
   - **Suavizar el pezón**: suaviza la tela por encima. Aún sin terminar: el cuerpo de debajo conserva su forma, así que en una prenda ajustada todavía puede marcarse.
 

@@ -711,6 +711,14 @@
     "message": "Skin (gemalt)",
     "description": ""
   },
+  "Colors.NavelBridge.Label": {
+    "message": "Bauchnabel überspannen",
+    "description": ""
+  },
+  "Colors.NavelBridge.Tip": {
+    "message": "Für Stoff über dem Bauch einschalten.\nProteus baut ein Kleidungsstück als Kopie des Körpers, also sinkt es in den Bauchnabel ein —\ndas wirkt aufgemalt statt getragen. Ist dies an, wird der Stoff flach darüber gespannt,\nwie echter Stoff. Nichts wird nach innen gezogen, also kann nichts in den Körper schneiden.\nWo das Kleidungsstück am Bauchnabel ausgeschnitten ist oder der Körper keinen hat, bewirkt es nichts.",
+    "description": ""
+  },
   "Colors.NoActiveOptions": {
     "message": "Keine aktiven Optionen — wähle in Penumbra eine aus, um ihre Farben zu bearbeiten.",
     "description": ""
@@ -3693,6 +3701,14 @@
   },
   "Parts.Retarget.KeepShape.Tip": {
     "message": "Für starre Teile (Ringe, Schnallen, Ketten): jedes Teil bewegt sich als Ganzes statt sich zu biegen.\nKleine geschlossene Teile starten angehakt.",
+    "description": ""
+  },
+  "Parts.Retarget.KeepShape.SinkTip": {
+    "message": "Ein Teil, das im neuen Körper versinken würde, biegt sich stattdessen mit ihm.",
+    "description": ""
+  },
+  "Parts.Retarget.ShapeReleased.Fmt": {
+    "message": "{0:N0} Teil(e) mit fester Form würden am Stück bewegt bis zu {1:F1} mm im neuen Körper versinken und biegen sich deshalb mit ihm: {2}",
     "description": ""
   },
   "Parts.Retarget.ReplaceSkin": {

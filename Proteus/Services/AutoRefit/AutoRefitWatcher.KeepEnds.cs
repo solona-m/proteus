@@ -119,7 +119,8 @@ public sealed partial class AutoRefitWatcher
         if (output == null) return;
 
         if (await SaveAndWear(r, g, root, group, j.SavePath, targetMod, output.LabelFrom,
-                              new BodyRetargetWriter.Refit(option, output.Model, output.To), cutFrom, j.BakeTo, item)
+                              new BodyRetargetWriter.Refit(option, output.Model, output.To), cutFrom, j.BakeTo, item,
+                              GameGear(r, j.Redirects, j.OwnRecord))
             is not { } savedRoot)
             return;
         log.Information("[Proteus] auto refit: {0} {1} onto {2} in {3:F1}s", item, slot, option,
@@ -240,6 +241,9 @@ public sealed partial class AutoRefitWatcher
             log.Warning("[Proteus] auto refit: {0}'s {1} seam stretched by {2:F1} mm — the kept {3} and the new body's {4} "
                       + "differ there; look at it in game", item, feet ? "ankle" : "wrist", stretched * 1000f,
                         feet ? "foot" : "hand", feet ? "legs" : "arms");
+        if (RefitCore.ReleasedLog(plan.Report, reading.FreeNames ?? []) is { } released)
+            log.Information("[Proteus] auto refit: {0}: let go of kept piece(s) that would sink moved whole: {1}", item,
+                            released);
 
         return new EndsOutput(plan.Model, refit.Target.Label,
                               RefitCore.LabelFrom(across ? sourceName : null, [pick.Option.Label]),

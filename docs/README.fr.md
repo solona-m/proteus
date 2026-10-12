@@ -141,7 +141,7 @@ Bon à savoir :
 - **Utiliser la peau du nouveau corps** est activé par défaut : la peau propre au vêtement, pour chaque partie du corps redimensionnée, est remplacée par celle du nouveau corps, afin qu'elle s'accorde au reste de vous. Décochez pour redimensionner à la place la peau livrée avec le vêtement, ce qui conserve le galbe push-up ou le skindent de l'auteur.
 - **Retirer la peau cachée**, activé par défaut, omet la nouvelle peau là où l'auteur a supprimé la sienne, généralement sous le tissu. Désactivez-le si un réajustement laisse des trous. Cela ne s'applique que lorsque **Utiliser la peau du nouveau corps** est activé.
 - **Sortir le tissu du corps** fait ressortir tout le tissu enfoui, pas seulement celui que le réajustement a enfoui. Utilisez-le si le corps transparaît, par exemple avec des bas qui ont leur propre peau de jambes. Désactivé par défaut, car les auteurs cachent souvent du tissu sous la peau exprès.
-- **Garder la forme** déplace les pièces rigides (bagues, boucles, chaînes) d'un bloc au lieu de les plier. Les petites pièces fermées sont cochées d'office.
+- **Garder la forme** déplace les pièces rigides (bagues, boucles, chaînes) d'un bloc au lieu de les plier. Les petites pièces fermées sont cochées d'office. Une pièce qui s'enfoncerait dans le nouveau corps se courbe avec lui à la place.
 - **Les chaussures et les gants gardent leurs propres pieds et mains.** Avec **Garder ses propres pieds** (ou **mains**) coché, par défaut, le pied reste exactement tel que son auteur l'a fait, talon compris, et seule la jambe que la chaussure atteint est réajustée, à la taille des jambes (pour les gants, le bras à la taille du buste). Les pieds suivent d'eux-mêmes. Une chaussure qui n'atteint aucune jambe garde sa forme et seule sa peau est redessinée, enregistrée sous « *Corps* — skin ». Décochez pour réajuster toute la chaussure comme avant.
 - **Les pièces qui couvrent plus d'une partie**, comme une robe longue sur les jambes, prennent une taille pour chaque partie sous **Autres parties du corps**. Choisissez **Aucune (laisser cette partie de côté)** pour en ignorer une.
 - **Décochez une pièce** dans la liste des pièces pour la laisser exactement là où l'auteur l'a mise.
@@ -351,6 +351,7 @@ Deux autres sections repliables s'appliquent à tout le mod :
 - **Géométrie** remodèle le vêtement que Proteus construit à partir de votre corps, pour qu'il se lise comme du tissu et non comme de la peinture. Proteus construit une seconde peau en copiant votre corps, elle suit donc par défaut chaque creux :
   - **Tendre sur le décolleté** : le tissu entre les seins passe tout droit, comme le ferait du vrai tissu. Rien n'est tiré vers l'intérieur, il ne peut donc pas entailler le corps.
   - **Tendre sur les fesses** : la même chose en travers de l'assise.
+  - **Tendre le tissu sur le nombril** : le tissu se tend à plat sur le nombril au lieu de s'y enfoncer.
   - **Lisser l'entrejambe** : lisse le pli à l'entrejambe. Cela modifie le corps en dessous, donc cela s'applique à tous les vêtements portés à la fois.
   - **Lisser le téton** : lisse le tissu par-dessus. Pas encore terminé : le corps en dessous garde sa forme, donc sur un vêtement près du corps il peut encore transparaître.
 

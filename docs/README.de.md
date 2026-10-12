@@ -141,7 +141,7 @@ Gut zu wissen:
 - **Haut des neuen Körpers verwenden** ist standardmäßig an: Die eigene Haut des Kleidungsstücks wird für jeden Körperteil, dessen Größe geändert wird, durch die des neuen Körpers ersetzt, damit sie zum Rest von dir passt. Nimm den Haken weg, um stattdessen die mitgelieferte Haut des Kleidungsstücks mitzuskalieren, was die Push-up- oder Skindent-Formung des Autors erhält.
 - **Verdeckte Haut entfernen**, standardmäßig an, lässt die neue Haut dort weg, wo der Autor seine gelöscht hat, meist unter Stoff. Schalte es aus, wenn eine Anpassung Löcher hinterlässt. Es gilt nur, solange **Haut des neuen Körpers verwenden** an ist.
 - **Stoff aus dem Körper drücken** drückt allen vergrabenen Stoff heraus, nicht nur den, den die Anpassung vergraben hat. Nutze es, wenn der Körper durchscheint, etwa bei Strümpfen mit eigener Beinhaut. Standardmäßig aus, weil Autoren Stoff oft absichtlich unter Haut verstecken.
-- **Form behalten** bewegt starre Teile (Ringe, Schnallen, Ketten) als Ganzes, statt sie zu verbiegen. Kleine geschlossene Teile sind von Anfang an angehakt.
+- **Form behalten** bewegt starre Teile (Ringe, Schnallen, Ketten) als Ganzes, statt sie zu verbiegen. Kleine geschlossene Teile sind von Anfang an angehakt. Ein Teil, das im neuen Körper versinken würde, biegt sich stattdessen mit ihm.
 - **Schuhe und Handschuhe behalten ihre eigenen Füße und Hände.** Mit **Eigene Füße behalten** (oder **Hände**) angehakt, der Standard, bleibt der Fuß genau so, wie sein Autor ihn gemacht hat, samt Absatz, und nur das Bein, das der Schuh erreicht, wird angepasst, mit der Größe der Beine (bei Handschuhen der Arm, mit der Größe der Brust). Die Füße kommen von selbst mit. Ein Schuh, der kein Bein erreicht, behält seine Form, nur seine Haut wird neu gezeichnet, gespeichert als „*Körper* — skin“. Abwählen, um wie bisher den ganzen Schuh anzupassen.
 - **Teile, die mehr als einen Körperteil bedecken**, wie ein langes Kleid über den Beinen, bekommen unter **Andere Körperteile** eine Größe für jeden Körperteil. Wähle **Keine (diesen Teil weglassen)**, um einen auszulassen.
 - **Nimm bei einem Teil den Haken weg**, um es genau dort zu lassen, wo der Autor es hingesetzt hat.
@@ -351,6 +351,7 @@ Zwei weitere aufklappbare Abschnitte gelten für den ganzen Mod:
 - **Geometrie** formt das Kleidungsstück um, das Proteus aus deinem Körper baut, damit es sich wie Stoff liest und nicht wie Farbe. Proteus baut eine zweite Haut als Kopie deines Körpers, sie folgt deshalb standardmäßig jeder Vertiefung:
   - **Dekolleté überspannen**: Der Stoff zwischen den Brüsten spannt sich gerade darüber, so wie echter Stoff es tut. Nichts wird nach innen gezogen, er kann also nicht in den Körper einschneiden.
   - **Gesäß überspannen**: dasselbe quer über die Sitzfläche.
+  - **Bauchnabel überspannen**: Der Stoff spannt sich flach über den Nabel, statt in ihn einzusinken.
   - **Zwischen den Beinen glätten**: glättet die Falte im Schritt. Das verändert den Körper darunter und gilt deshalb für alle gleichzeitig getragenen Kleidungsstücke.
   - **Brustwarze glätten**: glättet den Stoff darüber. Noch nicht fertig: Der Körper darunter behält seine Form, bei enger Passform kann sie also weiterhin durchdrücken.
 

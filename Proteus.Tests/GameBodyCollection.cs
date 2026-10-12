@@ -3,13 +3,13 @@ using Xunit;
 namespace Proteus.Tests;
 
 /// <summary>
-/// Tests that read the game's own body (<see cref="Services.VanillaBodyCatalog"/>). Its catalog is one cache for the whole
-/// process, its models extracted to one folder, and <see cref="VanillaRefitTests"/> clears both and fills them with
-/// synthetic bodies: run beside it, a test could read those, or find the files gone halfway. So these never run in
-/// parallel with each other or with anything else.
+/// Tests that read the game's body through <see cref="Proteus.Services.VanillaBodyCatalog"/>, run one at a time. Its
+/// extracts are one folder for the whole process: <c>VanillaRefitTests</c> deletes it and writes synthetic bodies into
+/// it, which beside a test reading the real game's body failed it with a missing file, or could hand it a fake body.
+/// Nor beside anything else: its catalog is one cache for the whole process too.
 /// </summary>
 [CollectionDefinition(Name, DisableParallelization = true)]
 public sealed class GameBodyCollection
 {
-    public const string Name = "Game body";
+    public const string Name = "The game's body";
 }

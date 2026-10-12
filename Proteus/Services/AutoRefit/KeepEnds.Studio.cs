@@ -94,20 +94,25 @@ internal static partial class KeepEnds
     /// <param name="Shared">The other chosen slots' pairs, refitted along.</param>
     /// <param name="Masks">Each slot's IMC masks, source and target, read on the framework thread.</param>
     /// <param name="SlotName">A slot's name as a refusal words it.</param>
+    /// <param name="PieceNames">Each of <paramref name="Pieces"/>' labels, in the same order: how a piece the refit let go
+    /// is named.</param>
     internal sealed record StudioPlanInput(
         ModelParts Garment, byte[] Bytes, string Slot, IReadOnlyList<IReadOnlyCollection<int>> Pieces,
         BodySizeCatalog Source, BodySizeCatalog Target, string Race, bool Male,
         BodyOption LimbFrom, IReadOnlyList<BodyOption> LimbTargets,
         bool SameBodyMod, bool FromCloth, bool ReplaceSkin, bool Across, bool ClearBody,
         IReadOnlySet<int>? Held, IReadOnlyList<BodyRetarget.SlotPair>? Shared,
-        Func<string, (ushort? Source, ushort? Target)> Masks, Func<string, string> SlotName, string ModelRel);
+        Func<string, (ushort? Source, ushort? Target)> Masks, Func<string, string> SlotName, string ModelRel,
+        IReadOnlyList<string>? PieceNames = null);
 
     /// <summary>
     /// The plans, one per target; or none, with the refusal to show (<paramref name="Error"/>) or a notice that there is
     /// nothing to make (<paramref name="Notice"/>).
     /// </summary>
+    /// <param name="ShapeNames">The labels of the pieces the plans kept in shape, by the plans' piece index — the end's
+    /// own left out (see <see cref="Reading.FreeNames"/>).</param>
     internal sealed record StudioPlanned(List<(BodyOption To, BodyRetarget.Planned Planned)>? Planned, string Error,
-                                         string Notice = "");
+                                         string Notice = "", IReadOnlyList<string>? ShapeNames = null);
 
     /// <summary>
     /// Plan a shoe's leg or a glove's arm refitted onto each of <see cref="StudioPlanInput.LimbTargets"/>, the foot or hand
@@ -122,7 +127,7 @@ internal static partial class KeepEnds
                                              UVRemapService? uvRemap, IPluginLog log, Action? done = null)
     {
         var ps = Strings.Parts;
-        if (Read(input.Slot, input.Garment, input.Bytes, input.Pieces) is not { } reading)
+        if (Read(input.Slot, input.Garment, input.Bytes, input.Pieces, input.PieceNames) is not { } reading)
             return new StudioPlanned(null, ps.RetargetEndsUnreadable);
         var source = input.Source;
         var target = input.Target;
@@ -165,7 +170,7 @@ internal static partial class KeepEnds
         }
         if (results.Count == 0 && fits != null)
             return new StudioPlanned(null, "", string.Format(ps.RetargetAlreadyFitsFmt, fits.Label));
-        return new StudioPlanned(results, "");
+        return new StudioPlanned(results, "", ShapeNames: reading.FreeNames);
     }
 
     /// <summary>

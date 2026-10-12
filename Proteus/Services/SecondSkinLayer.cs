@@ -58,6 +58,12 @@ public sealed class SecondSkinLayer
     public float CleftBridgeStrength { get; init; }
 
     /// <summary>
+    /// How far this layer's cloth is stretched across the navel (0 = off, the default; 1 = flat). Its own solve,
+    /// found from the geometry rather than any bone — see <c>LocateNavel</c> and <c>NavelFill</c>.
+    /// </summary>
+    public float NavelBridgeStrength { get; init; }
+
+    /// <summary>
     /// How far this layer's shell flattens the crotch fold (0 = off, the default; 1 = flat). Carried only as
     /// the DECLARATION, like <see cref="NippleSmoothStrength"/>: the flattening is a body pass.
     /// </summary>

@@ -29,6 +29,8 @@ internal static partial class BodyBridge
         private readonly float rampFull;
         private readonly float maxSlope;
         private readonly float openSlope;
+        private readonly Func<NippleFound, float>? nippleScale;
+        private readonly bool frameFromBust;
         private int vc;
         private int[] nodeOf = null!;
         private int nodeCount;
@@ -64,8 +66,10 @@ internal static partial class BodyBridge
         private float maxMove;
         private BustBridgePlan? result;
 
-        public BridgeSolution(Vec3[] pos, Vec3[] nrm, int[] tris, float[] bust, float strength, Action<string>? log, bool[]? covered, float smoothStrength, bool fillGap, Vec3? outward, bool envelope, float[]? ramp, float[]? relaxSeed, bool pinBoundary, float minDepthShare, bool[]? joinPin, float rampFull, float maxSlope, float openSlope)
+        public BridgeSolution(Vec3[] pos, Vec3[] nrm, int[] tris, float[] bust, float strength, Action<string>? log, bool[]? covered, float smoothStrength, bool fillGap, Vec3? outward, bool envelope, float[]? ramp, float[]? relaxSeed, bool pinBoundary, float minDepthShare, bool[]? joinPin, float rampFull, float maxSlope, float openSlope, Func<NippleFound, float>? nippleScale = null, bool frameFromBust = false)
         {
+            this.nippleScale = nippleScale;
+            this.frameFromBust = frameFromBust;
             this.pos = pos;
             this.nrm = nrm;
             this.tris = tris;
@@ -372,7 +376,15 @@ internal static partial class BodyBridge
             // A rough outward direction: the region's weighted mean normal. Only used to find the other two axes and settle
             // the final one's sign; it is not the direction anything moves in. A caller may supply it, because inside a
             // crease the walls face each other and the mean normal is not outward at all.
-            var seedOut = outward ?? Normalize(WeightedMean(nNorm, nW, nodeCount));
+            // With frameFromBust, both the seed and the span direction come off the whole bust: where the chest faces is a
+            // fact about the body, and a garment over one breast would tilt a frame fitted to what it covers.
+            var frameW = nW;
+            if (frameFromBust)
+            {
+                frameW = new float[nodeCount];
+                for (int n = 0; n < nodeCount; n++) frameW[n] = onBust[n] ? 1f : 0f;
+            }
+            var seedOut = outward ?? Normalize(WeightedMean(nNorm, frameW, nodeCount));
             if (seedOut is not { } outSeed)
             {
                 log?.Invoke("bust bridge: SKIPPED, the region's normals cancel out — no outward axis");
@@ -381,7 +393,7 @@ internal static partial class BodyBridge
 
             // The direction the span runs in — lobe to lobe. Everything is spanned ACROSS this and along
             // nothing else, because a cleft is a saddle and an isotropic relax settles on it unchanged.
-            var across = PrincipalAcross(start, nW, nodeCount, outSeed);
+            var across = PrincipalAcross(start, frameW, nodeCount, outSeed);
             if (across is not { } lateralValue)
             {
                 log?.Invoke("bust bridge: SKIPPED, the region has no principal direction across the chest");
@@ -626,7 +638,7 @@ internal static partial class BodyBridge
                 // onBust, not seed: where the nipple is is a fact about the body, and the seed is gated on what this garment
                 // covers (see NippleSmoothTarget).
                 nipple = NippleSmoothTarget(spanned, spannedH, lat, ver, nW, onBust, nodeCount, adj, ax,
-                                            smoothStrength, log, nNorm);
+                                            smoothStrength, log, nNorm, nippleScale);
                 if (nipple != null)
                 {
                     var comp = new float[nodeCount];

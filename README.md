@@ -140,7 +140,7 @@ Things worth knowing:
 - **Use the new body's skin** is on by default: the garment's own skin for each part of the body being resized is replaced with the new body's, so it matches the rest of you. Untick it to resize the skin the garment came with instead, which keeps the author's push-up or skindent shaping.
 - **Remove hidden skin**, on by default, leaves out the new skin where the author deleted theirs, usually under cloth. Turn it off if a refit leaves holes. It only applies while **Use the new body's skin** is on.
 - **Push cloth out of the body** pushes out all buried cloth, not just what the refit buried. Use it if the body shows through, for example stockings with their own leg skin. Off by default, because authors often hide cloth under skin on purpose.
-- **Keep shape** moves rigid pieces (rings, buckles, chains) whole instead of bending them. Small closed pieces start ticked.
+- **Keep shape** moves rigid pieces (rings, buckles, chains) whole instead of bending them. Small closed pieces start ticked. A piece that would sink into the new body bends with it instead.
 - **Shoes and gloves keep their own feet and hands.** With **Keep its own feet** (or **hands**) ticked, the default, the foot stays exactly as its author made it, heel and all, and only the leg the shoe reaches is refitted, sized by the legs (the arm by the chest, for gloves). The feet go along by themselves. A shoe that reaches no leg keeps its shape and only has its skin redrawn, saved as "*Body* — skin". Untick it to refit the whole shoe as before.
 - **Pieces that cover more than one part**, like a long dress over the legs, take a size for each part under **Other body parts**. Choose **None (leave this part out)** to skip one.
 - **Untick a part** in the part list to keep it exactly where the author put it.
@@ -357,6 +357,7 @@ Two more collapsible sections apply to the whole mod:
 - **Geometry** reshapes the garment Proteus builds from your body, so it reads as fabric rather than paint. Proteus builds a second skin as a copy of your body, so by default it follows every hollow:
   - **Span the cleavage**: the fabric between the breasts spans straight across, the way real cloth does. Nothing is pulled inward, so it can't cut into the body.
   - **Span the buttocks**: the same across the seat.
+  - **Span the belly button**: the fabric stretches flat across the navel instead of dipping into it.
   - **Smooth between the legs**: smooths the fold at the crotch. This changes the body underneath, so it applies to every garment worn at once.
   - **Smooth the nipple**: smooths the fabric over it. Not finished yet: the body underneath keeps its shape, so on a close fit it can still show through.
 

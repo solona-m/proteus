@@ -288,7 +288,7 @@ internal static partial class SizeSetRefit
         var authorSizes = AuthorSizes(root, piece, group.Ours);
 
         bool yas = request.Yas || SupportedBodies.IsYas(src.Bones);
-        var pieces = RefitCore.ShapePieces(src.Garment, RefitCore.DefaultKeepShape(src.Garment));
+        var pieces = RefitCore.ShapePieces(src.Garment, RefitCore.DefaultKeepShape(src.Garment), out var pieceNames);
         ushort? sourceMask = RefitCore.MaskOf(src.Pick.Dir, sourceCat, piece.Slot, null);
         ushort? sourceLegsMask = RefitCore.MaskOf(src.Pick.Dir, sourceCat, "_dwn", null);
 
@@ -384,11 +384,15 @@ internal static partial class SizeSetRefit
 
                 var plan = BodyRetarget.Plan(src.Garment, src.Bytes, pairs, piece.Slot, held: new HashSet<int>(),
                                              replaceSkin: true, acrossBodies: across, clearBody: false, cutHidden: true,
-                                             keepShape: pieces);
+                                             keepShape: pieces, log: line => log.Debug("[Proteus] size set: {0}", line),
+                                             warn: line => log.Warning("[Proteus] size set: {0}", line));
                 plan = RefitCore.MatchSkinToBody(plan, sourcePath, targetPath, uvRemap, male, log);
                 refits.Add(new BodyRetargetWriter.Refit(option, plan.Model, toLabel));
                 log.Information("[Proteus] size set: {0} onto {1} (moved up to {2:F1} mm)", piece.Label, option,
                                 plan.Report.WorstMove * 1000f);
+                if (RefitCore.ReleasedLog(plan.Report, pieceNames) is { } released)
+                    log.Information("[Proteus] size set: {0} {1}: let go of kept piece(s) that would sink moved whole: {2}",
+                                    piece.Label, option, released);
             }
             if (refits.Count == 0) continue;
             group.Save(target.Dir, RefitCore.LabelFrom(across ? sourceEntry.Name : null, [src.Pick.Option.Label]), refits,
@@ -453,7 +457,8 @@ internal static partial class SizeSetRefit
                            List<string> notes)
         {
             var outcome = BodyRetargetWriter.Save(root, Name, piece.GamePath, targetDir, from, refits,
-                                                  piece.Group != null ? sourceOption : null);
+                                                  piece.Group != null ? sourceOption : null,
+                                                  fromGame: RefitCore.IsGameGear(root, piece.GamePath));
             if (!outcome.Ok)
             {
                 notes.Add(string.Format(Strings.SizeSet.SaveFailedFmt, piece.Label, outcome.Message));
