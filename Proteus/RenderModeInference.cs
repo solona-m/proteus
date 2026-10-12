@@ -86,6 +86,7 @@ public static class RenderModeInference
         => md != null
         && (md.BustBridge == true
          || md.SmoothNipples == true
+         || md.NavelBridge == true
          || md.CleftBridge == true
          || md.SmoothFold == true);
 

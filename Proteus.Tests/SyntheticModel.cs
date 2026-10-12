@@ -63,11 +63,15 @@ internal static class SyntheticModel
     /// <param name="Weights">The bones every vertex of this submesh follows, at most four. Any submesh carrying them
     /// makes the whole model SKINNED: a real bone table, and position, blend weights and blend indices in stream 0 with
     /// uv0 in stream 1, the layout game models use. Submeshes without them then follow <c>n_root</c> alone.</param>
+    /// <param name="Corners">Explicit triangles, three corners each, in place of the generated islands — for a surface
+    /// whose shape matters (a belly with a navel). Each corner is its own vertex, as everywhere here; its uv is its x
+    /// and y mapped from ±0.1 and 0.9–1.4 onto the unit square.</param>
     internal sealed record Sub(uint AttrMask, int Islands = 1, int TrianglesPerIsland = 1,
                                float OffsetX = 0f, float OffsetY = 0f, float OffsetZ = 0f,
-                               (string Bone, float W)[]? Weights = null)
+                               (string Bone, float W)[]? Weights = null,
+                               (float X, float Y, float Z)[]? Corners = null)
     {
-        internal int TriangleCount => Islands * TrianglesPerIsland;
+        internal int TriangleCount => Corners != null ? Corners.Length / 3 : Islands * TrianglesPerIsland;
     }
 
     /// <summary>One LOD0 mesh, drawn with <paramref name="Material"/>.</summary>
@@ -159,6 +163,10 @@ internal static class SyntheticModel
     {
         var materials = meshes.Select(m => m.Material).Distinct(StringComparer.Ordinal).ToList();
         bool skinned = meshes.Any(m => m.Submeshes.Any(x => x.Weights != null));
+        // A shaped surface carries normals, as a body does: every pass that reshapes a shell reads them. Only then, so
+        // every other fixture keeps the layout its tests were written against.
+        bool normals = !skinned && meshes.Any(m => m.Submeshes.Any(x => x.Corners != null));
+        int stride0 = normals ? Stride + 12 : Stride;
         var bones = new[] { "n_root" }
             .Concat(meshes.SelectMany(m => m.Submeshes).SelectMany(x => x.Weights ?? []).Select(w => w.Bone))
             .Distinct(StringComparer.Ordinal).ToArray();
@@ -240,23 +248,38 @@ internal static class SyntheticModel
                 // Three fresh vertices per triangle, mesh-relative indices, spread so the model's bounding
                 // box is not degenerate. Corner 0 sits on the island's shared hub — same position every
                 // triangle, a different vertex each time.
-                for (int i = 0; i < sub.Islands; i++)
-                for (int j = 0; j < sub.TrianglesPerIsland; j++)
+                for (int t = 0; t < tris; t++)
                 {
+                    int i = sub.Corners != null ? 0 : t / sub.TrianglesPerIsland;
+                    int j = sub.Corners != null ? 0 : t % sub.TrianglesPerIsland;
                     float ix = i * 10f;
                     for (int v = 0; v < 3; v++)
                     {
                         float x = (v == 0 ? ix : ix + 1f) + sub.OffsetX;
                         float y = (v == 0 ? 0f : j + (v == 2 ? 1f : 0f)) + sub.OffsetY;
+                        float z = sub.OffsetZ;
                         float u = v == 0 ? 0f : 0.5f, w = v == 2 ? 0.5f : 0f;
+                        if (sub.Corners is { } cs)
+                        {
+                            (x, y, z) = cs[t * 3 + v];
+                            u = Math.Clamp((x + 0.1f) / 0.2f, 0f, 1f);
+                            w = Math.Clamp((y - 0.9f) / 0.5f, 0f, 1f);
+                        }
                         if (!skinned)
                         {
-                            var vtx = new byte[Stride];
+                            var vtx = new byte[stride0];
                             BitConverter.GetBytes(x).CopyTo(vtx, 0);
                             BitConverter.GetBytes(y).CopyTo(vtx, 4);
-                            BitConverter.GetBytes(sub.OffsetZ).CopyTo(vtx, 8);
+                            BitConverter.GetBytes(z).CopyTo(vtx, 8);
                             BitConverter.GetBytes(u).CopyTo(vtx, 12);
                             BitConverter.GetBytes(w).CopyTo(vtx, 16);
+                            if (normals)
+                            {
+                                var (nx, ny, nz) = sub.Corners is { } fc ? FaceNormal(fc, t) : (0f, 0f, 1f);
+                                BitConverter.GetBytes(nx).CopyTo(vtx, 20);
+                                BitConverter.GetBytes(ny).CopyTo(vtx, 24);
+                                BitConverter.GetBytes(nz).CopyTo(vtx, 28);
+                            }
                             stream0.Write(vtx);
                         }
                         else
@@ -264,7 +287,7 @@ internal static class SyntheticModel
                             var vtx = new byte[SkinnedStride];
                             BitConverter.GetBytes(x).CopyTo(vtx, 0);
                             BitConverter.GetBytes(y).CopyTo(vtx, 4);
-                            BitConverter.GetBytes(sub.OffsetZ).CopyTo(vtx, 8);
+                            BitConverter.GetBytes(z).CopyTo(vtx, 8);
                             var (weights, indices) = Blend(sub.Weights ?? [("n_root", 1f)], tableBones);
                             weights.CopyTo(vtx, 12);
                             indices.CopyTo(vtx, 16);
@@ -288,7 +311,7 @@ internal static class SyntheticModel
             // Spares: vertex 0's record again, raised in Y, and named by no index. Stream 1 (uv) is copied as is.
             if (mesh.Spares > 0 && meshVerts == 0)
                 throw new ArgumentException("a mesh with spares needs at least one triangle to copy them from");
-            byte[] first0 = mesh.Spares > 0 ? stream0.ToArray()[..(skinned ? SkinnedStride : Stride)] : [];
+            byte[] first0 = mesh.Spares > 0 ? stream0.ToArray()[..(skinned ? SkinnedStride : stride0)] : [];
             byte[] first1 = mesh.Spares > 0 && skinned ? stream1.ToArray()[..UvStride] : [];
             for (int s = 0; s < mesh.Spares; s++)
             {
@@ -315,7 +338,7 @@ internal static class SyntheticModel
             W32(mo, 20, meshVtxOffset);
             if (!skinned)
             {
-                mo[32] = Stride;
+                mo[32] = (byte)stride0;
                 mo[35] = 1;                                                    // one vertex stream
             }
             else
@@ -337,7 +360,11 @@ internal static class SyntheticModel
         var decl = new byte[DeclSize];
         for (int i = 0; i < DeclSize; i++) decl[i] = 0xFF;
         WriteElem(decl, 0, 0, 0, Float3, UsePosition, 0);
-        if (!skinned) WriteElem(decl, 1, 0, 12, Float2, UseUV, 0);
+        if (!skinned)
+        {
+            WriteElem(decl, 1, 0, 12, Float2, UseUV, 0);
+            if (normals) WriteElem(decl, 2, 0, 20, Float3, UseNormal, 0);
+        }
         else
         {
             WriteElem(decl, 1, 0, 12, UByte4, UseBlendWeight, 0);
@@ -688,6 +715,16 @@ internal static class SyntheticModel
         }
         wb[0] = (byte)Math.Clamp(wb[0] + (255 - total), 0, 255);
         return (wb, ib);
+    }
+
+    /// <summary>The unit normal of explicit triangle <paramref name="t"/>, by its winding.</summary>
+    private static (float X, float Y, float Z) FaceNormal((float X, float Y, float Z)[] c, int t)
+    {
+        var (a, b, d) = (c[t * 3], c[t * 3 + 1], c[t * 3 + 2]);
+        float ux = b.X - a.X, uy = b.Y - a.Y, uz = b.Z - a.Z, vx = d.X - a.X, vy = d.Y - a.Y, vz = d.Z - a.Z;
+        float nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+        float l = MathF.Sqrt(nx * nx + ny * ny + nz * nz);
+        return l > 0f ? (nx / l, ny / l, nz / l) : (0f, 0f, 1f);
     }
 
     private static void WriteElem(byte[] d, int slot, byte stream, byte offset, byte type, byte usage, byte usageIndex)

@@ -349,6 +349,7 @@ Deux autres sections repliables s'appliquent à tout le mod :
 - **Géométrie** remodèle le vêtement que Proteus construit à partir de votre corps, pour qu'il se lise comme du tissu et non comme de la peinture. Proteus construit une seconde peau en copiant votre corps, elle suit donc par défaut chaque creux :
   - **Tendre sur le décolleté** : le tissu entre les seins passe tout droit, comme le ferait du vrai tissu. Rien n'est tiré vers l'intérieur, il ne peut donc pas entailler le corps.
   - **Tendre sur les fesses** : la même chose en travers de l'assise.
+  - **Tendre le tissu sur le nombril** : le tissu se tend à plat sur le nombril au lieu de s'y enfoncer.
   - **Lisser l'entrejambe** : lisse le pli à l'entrejambe. Cela modifie le corps en dessous, donc cela s'applique à tous les vêtements portés à la fois.
   - **Lisser le téton** : lisse le tissu par-dessus. Pas encore terminé : le corps en dessous garde sa forme, donc sur un vêtement près du corps il peut encore transparaître.
 

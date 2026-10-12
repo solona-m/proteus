@@ -349,6 +349,7 @@ Zwei weitere aufklappbare Abschnitte gelten für den ganzen Mod:
 - **Geometrie** formt das Kleidungsstück um, das Proteus aus deinem Körper baut, damit es sich wie Stoff liest und nicht wie Farbe. Proteus baut eine zweite Haut als Kopie deines Körpers, sie folgt deshalb standardmäßig jeder Vertiefung:
   - **Dekolleté überspannen**: Der Stoff zwischen den Brüsten spannt sich gerade darüber, so wie echter Stoff es tut. Nichts wird nach innen gezogen, er kann also nicht in den Körper einschneiden.
   - **Gesäß überspannen**: dasselbe quer über die Sitzfläche.
+  - **Bauchnabel überspannen**: Der Stoff spannt sich flach über den Nabel, statt in ihn einzusinken.
   - **Zwischen den Beinen glätten**: glättet die Falte im Schritt. Das verändert den Körper darunter und gilt deshalb für alle gleichzeitig getragenen Kleidungsstücke.
   - **Brustwarze glätten**: glättet den Stoff darüber. Noch nicht fertig: Der Körper darunter behält seine Form, bei enger Passform kann sie also weiterhin durchdrücken.
 

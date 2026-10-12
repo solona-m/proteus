@@ -40,6 +40,7 @@ public class GoldenTests(ITestOutputHelper o)
     [LocalDataFact(SecondSkinWriterVerbatimTests.NeolitheNeed, SecondSkinWriterVerbatimTests.BiboNeed,
                    SecondSkinWriterVerbatimTests.RueNeed, SecondSkinWriterVerbatimTests.HostRingNeed, ToeCapPng,
                    LocalData.PiercingsPack)]
+    [Trait("Plan", "AC-navel-bridge-8")]
     public void Shell_output_matches_baseline()
     {
         var cases = new Cases(o);

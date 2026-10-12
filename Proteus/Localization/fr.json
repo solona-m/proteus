@@ -711,6 +711,14 @@
     "message": "Skin (peint)",
     "description": ""
   },
+  "Colors.NavelBridge.Label": {
+    "message": "Tendre le tissu sur le nombril",
+    "description": ""
+  },
+  "Colors.NavelBridge.Tip": {
+    "message": "À activer pour un tissu qui couvre le ventre.\nProteus construit un vêtement comme une copie du corps, qui s'enfonce donc dans le nombril —\net semble peint plutôt que porté. Avec cette option, le tissu est tendu à plat\npar-dessus, comme un vrai tissu. Rien n'est tiré vers l'intérieur, il ne peut donc pas entrer dans le corps.\nLà où le vêtement est découpé au nombril, ou si le corps n'en a pas, cela ne fait rien.",
+    "description": ""
+  },
   "Colors.NoActiveOptions": {
     "message": "Aucune option active — sélectionnez-en une dans Penumbra pour modifier ses couleurs.",
     "description": ""

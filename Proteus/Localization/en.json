@@ -711,6 +711,14 @@
     "message": "Skin (painted)",
     "description": "Render mode. \"Skin\" is the shader's name and stays English; the parenthetical describes it and should be translated."
   },
+  "Colors.NavelBridge.Label": {
+    "message": "Span the belly button",
+    "description": "Whole-mod authoring tick in the Geometry section, beside the cleavage and buttocks spans. Keep it short - it sits in a narrow panel."
+  },
+  "Colors.NavelBridge.Tip": {
+    "message": "Turn this on for cloth over the stomach.\nProteus builds a garment as a copy of the body, so it dips into the belly button —\nwhich reads as painted on rather than worn. With this on, the fabric is stretched flat\nacross it the way real cloth is. Nothing is pulled inward, so it cannot cut into the body.\nWhere the garment is cut away at the belly button, or the body has none, this does nothing.",
+    "description": "Tooltip for the tick above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
   "Colors.NoActiveOptions": {
     "message": "No active options — select one in Penumbra to edit its colours.",
     "description": "Appears in the colour-table editor window."
