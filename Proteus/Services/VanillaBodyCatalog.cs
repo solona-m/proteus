@@ -33,7 +33,9 @@ internal static class VanillaBodyCatalog
     /// Where the extracts live. Deliberately NOT under Penumbra's mods root: these stand for what the game draws with
     /// nothing on top, and a folder there could be redirected, indexed, or picked up as a mod.
     /// </summary>
-    internal static string Dir { get; } = Path.Combine(Path.GetTempPath(), "proteus-vanilla-body");
+    /// <remarks>Settable for the tests alone, which keep their own: the game's plugin clears this folder as it loads, and
+    /// a test run beside a running game would find its extracts gone halfway.</remarks>
+    internal static string Dir { get; set; } = Path.Combine(Path.GetTempPath(), "proteus-vanilla-body");
 
     private static readonly object Gate = new();
 
