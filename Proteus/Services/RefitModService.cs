@@ -258,10 +258,12 @@ internal sealed class RefitModService(PenumbraBridge penumbra, CompositorService
             using var doc = System.Text.Json.JsonDocument.Parse(
                 File.ReadAllText(Path.Combine(root, PenumbraModMeta.MetaFile)));
             return doc.RootElement.TryGetProperty("Author", out var author)
+                   && author.ValueKind == System.Text.Json.JsonValueKind.String
                    && string.Equals(author.GetString(), "Proteus", StringComparison.Ordinal);
         }
-        catch (Exception)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
         {
+            // Unreadable reads as somebody else's: the refit then treats it as any mod.
             return false;
         }
     }
