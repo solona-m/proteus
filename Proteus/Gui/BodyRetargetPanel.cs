@@ -1754,11 +1754,15 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         // escapes this only by accident: a brand-new group has no stored choice, so its DefaultSettings applies — and
         // the second refit into that same group would hit exactly this.)
         string at = root;
+        // The garment's own mod, read with the save rather than in the frame: whether it is the game's garment.
+        string? garmentMod = ctx.ModRoot;
+        string garmentPath = ctx.GamePath;
         string? cutFrom = BodyRetargetWriter.OptionOfFile(ctx.Redirects, ctx.ModelRel, group);
         selectAfterSave = (group, refits[Math.Clamp(showing, 0, refits.Count - 1)].Option, cutFrom,
                            RefitCore.IsMulti(at, group));
         saveTask = Task.Run(() => new SaveResult(
-            BodyRetargetWriter.Save(at, group, path, body, labelFrom, refits, cutFrom, manipulations),
+            BodyRetargetWriter.Save(at, group, path, body, labelFrom, refits, cutFrom, manipulations,
+                                    fromGame: RefitCore.IsGameGear(garmentMod, garmentPath)),
             BodyRetargetWriter.ReadRecord(at)));
     }
 

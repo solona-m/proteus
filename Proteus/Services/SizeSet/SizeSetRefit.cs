@@ -387,7 +387,8 @@ internal static class SizeSetRefit
             // One save per body mod: the record names the body each size was made for.
             string from = RefitCore.LabelFrom(across ? sourceEntry.Name : null, [src.Pick.Option.Label]);
             var outcome = BodyRetargetWriter.Save(root, group, piece.GamePath, target.Dir, from, refits,
-                                                  piece.Group != null ? src.Option : null);
+                                                  piece.Group != null ? src.Option : null,
+                                                  fromGame: RefitCore.IsGameGear(root, piece.GamePath));
             if (!outcome.Ok)
             {
                 notes.Add(string.Format(Strings.SizeSet.SaveFailedFmt, piece.Label, outcome.Message));

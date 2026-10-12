@@ -766,6 +766,33 @@ internal static class RefitCore
     /// <summary>A nearness distance for the log: millimetres, or "unreadable" for a body none of whose files could be read.</summary>
     private static string Mm(float metres) => metres >= 1f ? "unreadable" : $"{metres * 1000f:0.0} mm";
 
+    /// <summary>
+    /// The automatic refit of a chest or legs piece, its skin as <see cref="AutoRefitDecisions.SkinFor"/> says: shaped
+    /// pieces kept whole, nothing held, the skin replaced across bodies.
+    /// </summary>
+    /// <param name="pieceNames">The kept pieces' labels, in order — for <see cref="ReleasedLog"/>.</param>
+    internal static BodyRetarget.Planned PlanRefit(ModelParts garment, byte[] bytes, IReadOnlyList<BodyRetarget.SlotPair> pairs,
+                                                   string primary, bool across, bool gameGear, out List<string> pieceNames,
+                                                   Action<string>? log = null, Action<string>? warn = null)
+    {
+        var skin = AutoRefitDecisions.SkinFor(gameGear);
+        var pieces = ShapePieces(garment, DefaultKeepShape(garment), out pieceNames);
+        return BodyRetarget.Plan(garment, bytes, pairs, primary, held: new HashSet<int>(),
+                                 replaceSkin: across, acrossBodies: across, clearBody: skin.ClearBody,
+                                 cutHidden: skin.CutHidden, keepShape: pieces, log: log, warn: warn);
+    }
+
+    /// <summary>
+    /// Whether the garment at <paramref name="gamePath"/> of the mod at <paramref name="modRoot"/> (null: the game's own
+    /// file) is the game's own garment, read off the mod on disk — what a save records as
+    /// <see cref="BodyRetargetWriter.Entry.FromGame"/>, so a game item's own mod stays one however it is refitted. See
+    /// <see cref="AutoRefitDecisions.IsGameGear"/>.
+    /// </summary>
+    internal static bool IsGameGear(string? modRoot, string gamePath)
+        => modRoot == null
+           || AutoRefitDecisions.IsGameGear(modRoot, gamePath, PenumbraModMeta.ReadAllRedirects(modRoot),
+                                            BodyRetargetWriter.ReadRecord(modRoot), RefitModService.IsMadeByProteus(modRoot));
+
     /// <summary>A relative path the way Penumbra compares them: forward slashes, no leading slash, any case.</summary>
     internal static string Normal(string rel) => rel.Replace('\\', '/').Trim('/').ToLowerInvariant();
 }

@@ -16,6 +16,7 @@ namespace Proteus.Tests;
 /// own still named the game's skin material, which on a Rue character draws a texture the body's composite never
 /// touches. Needs the game's data and Rue+ installed.
 /// </summary>
+[Collection(GameBodyCollection.Name)]
 public class ScionAdventurerRefitTests(ITestOutputHelper output)
 {
     private const string Rue = LocalData.Mods + ":hs-Rue+-2.2.7-y0f";

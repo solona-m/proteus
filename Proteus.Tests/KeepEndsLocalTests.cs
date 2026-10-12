@@ -13,6 +13,7 @@ namespace Proteus.Tests;
 /// heeled shoes with stockings in three leg sizes, and Hell for Leather's boots and long gloves. Skipped where they are
 /// not installed. Everything is measured on the refit's own model, inside the pass — never on an export.
 /// </summary>
+[Collection(GameBodyCollection.Name)]
 public class KeepEndsLocalTests(ITestOutputHelper output)
 {
     private const string Heartthrob = LocalData.Mods + ":Heartthrob - by Solona";
