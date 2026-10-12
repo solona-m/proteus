@@ -5,8 +5,9 @@ using System.Linq;
 namespace Proteus.Services;
 using static Proteus.Services.SecondSkinWriter;
 using static Proteus.Services.MeshMath;
+using static Proteus.Services.BodyBridge;
 
-internal static partial class BodyBridge
+internal static partial class NavelBridge
 {
     /// <summary>How much higher the pit's edge is taken each time the last one ran into a hem or a join.</summary>
     private const float NavelLevelStep = 1.25f;
@@ -358,26 +359,7 @@ internal static partial class BodyBridge
         /// axis from the node through the original surface, the furthest crossing taken.
         /// </summary>
         private void KeepAboveSkin()
-        {
-            var ax = site.Axis;
-            var near = new List<(int A, int B, int C)>();
-            for (int t = 0; t + 2 < tris.Length; t += 3)
-            {
-                if (tris[t] >= pos.Length || tris[t + 1] >= pos.Length || tris[t + 2] >= pos.Length) continue;
-                int a = s.NodeOf[tris[t]], b = s.NodeOf[tris[t + 1]], c = s.NodeOf[tris[t + 2]];
-                if (a == b || b == c || a == c) continue;
-                if (index.ContainsKey(a) || index.ContainsKey(b) || index.ContainsKey(c)) near.Add((a, b, c));
-            }
-            foreach (int n in pit)
-            {
-                float far = -1f;
-                foreach (var (a, b, c) in near)
-                    if (RayHit(final[n], ax, s.At[a], s.At[b], s.At[c]) is { } d && d > far) far = d;
-                if (far < 0f) continue;
-                float up = far + NavelSkinMargin;
-                final[n] = new Vec3(final[n].X + ax.X * up, final[n].Y + ax.Y * up, final[n].Z + ax.Z * up);
-            }
-        }
+            => RaiseAboveSkin(s.At, final, tris, s.NodeOf, pit, index.ContainsKey, site.Axis, NavelSkinMargin);
 
         /// <summary>
         /// Every triangle round the pit still faces the way the belly does and keeps its area across the axis, and no
@@ -412,10 +394,12 @@ internal static partial class BodyBridge
                 if (!pit.Contains(n)) continue;
                 delta[i] = new Vec3(final[n].X - s.At[n].X, final[n].Y - s.At[n].Y, final[n].Z - s.At[n].Z);
             }
-            // The rim is reshaded too: its normals still lean into a pit that is no longer there.
+            // The rim is reshaded too: its normals still lean into a pit that is no longer there. Only the pit is kept
+            // off the extra clearance: a rim node another span moved keeps what that span gives it.
             var weight = new float[s.NodeCount];
             var noExtra = new bool[s.NodeCount];
-            foreach (int n in pit.Concat(rim)) { weight[n] = 1f; noExtra[n] = true; }
+            foreach (int n in rim) weight[n] = 1f;
+            foreach (int n in pit) { weight[n] = 1f; noExtra[n] = true; }
 
             report.Outcome = NavelOutcome.Filled;
             report.Spanned = pit.Count;
@@ -426,26 +410,6 @@ internal static partial class BodyBridge
             {
                 Delta = delta, NodeOf = s.NodeOf, NodeWeight = weight, NodeNormal = s.Nn, NoExtraClearance = noExtra,
             };
-        }
-
-        /// <summary>Distance along <paramref name="dir"/> from <paramref name="o"/> to the triangle, or null for none ahead.</summary>
-        private static float? RayHit(Vec3 o, Vec3 dir, Vec3 a, Vec3 b, Vec3 c)
-        {
-            // Möller–Trumbore.
-            float e1x = b.X - a.X, e1y = b.Y - a.Y, e1z = b.Z - a.Z;
-            float e2x = c.X - a.X, e2y = c.Y - a.Y, e2z = c.Z - a.Z;
-            float px = dir.Y * e2z - dir.Z * e2y, py = dir.Z * e2x - dir.X * e2z, pz = dir.X * e2y - dir.Y * e2x;
-            float det = e1x * px + e1y * py + e1z * pz;
-            if (MathF.Abs(det) < 1e-14f) return null;
-            float inv = 1f / det;
-            float tx = o.X - a.X, ty = o.Y - a.Y, tz = o.Z - a.Z;
-            float u = (tx * px + ty * py + tz * pz) * inv;
-            if (u < 0f || u > 1f) return null;
-            float qx = ty * e1z - tz * e1y, qy = tz * e1x - tx * e1z, qz = tx * e1y - ty * e1x;
-            float v = (dir.X * qx + dir.Y * qy + dir.Z * qz) * inv;
-            if (v < 0f || u + v > 1f) return null;
-            float d = (e2x * qx + e2y * qy + e2z * qz) * inv;
-            return d > 0f ? d : null;
         }
 
         private static float Dot(Vec3 a, Vec3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
@@ -507,6 +471,64 @@ internal static partial class BodyBridge
             if (Dist(after[n], before[n]) > NavelInsideCheck && body.Inside(after[n])) inside++;
         return inside;
     }
+
+    /// <summary>
+    /// Raises each of <paramref name="moved"/> that lies under the surface as it was — any triangle touching
+    /// <paramref name="near"/> above it along <paramref name="axis"/> — to <paramref name="margin"/> over the furthest
+    /// such triangle. Returns how many were raised.
+    /// </summary>
+    internal static int RaiseAboveSkin(Vec3[] before, Vec3[] after, ushort[] tris, int[] nodeOf, IEnumerable<int> moved,
+                                       Func<int, bool> near, Vec3 axis, float margin)
+    {
+        var faces = new List<(int A, int B, int C)>();
+        for (int t = 0; t + 2 < tris.Length; t += 3)
+        {
+            if (tris[t] >= nodeOf.Length || tris[t + 1] >= nodeOf.Length || tris[t + 2] >= nodeOf.Length) continue;
+            int a = nodeOf[tris[t]], b = nodeOf[tris[t + 1]], c = nodeOf[tris[t + 2]];
+            if (a == b || b == c || a == c) continue;
+            if (near(a) || near(b) || near(c)) faces.Add((a, b, c));
+        }
+        int raised = 0;
+        foreach (int n in moved)
+        {
+            float far = -1f;
+            foreach (var (a, b, c) in faces)
+                if (RayHit(after[n], axis, before[a], before[b], before[c]) is { } d && d > far) far = d;
+            if (far < 0f) continue;
+            float up = far + margin;
+            after[n] = new Vec3(after[n].X + axis.X * up, after[n].Y + axis.Y * up, after[n].Z + axis.Z * up);
+            raised++;
+        }
+        return raised;
+    }
+
+    /// <summary>Distance along <paramref name="dir"/> from <paramref name="o"/> to the triangle, or null for none ahead.</summary>
+    private static float? RayHit(Vec3 o, Vec3 dir, Vec3 a, Vec3 b, Vec3 c)
+    {
+        // Möller–Trumbore.
+        float e1x = b.X - a.X, e1y = b.Y - a.Y, e1z = b.Z - a.Z;
+        float e2x = c.X - a.X, e2y = c.Y - a.Y, e2z = c.Z - a.Z;
+        float px = dir.Y * e2z - dir.Z * e2y, py = dir.Z * e2x - dir.X * e2z, pz = dir.X * e2y - dir.Y * e2x;
+        float det = e1x * px + e1y * py + e1z * pz;
+        if (MathF.Abs(det) < 1e-14f) return null;
+        float inv = 1f / det;
+        float tx = o.X - a.X, ty = o.Y - a.Y, tz = o.Z - a.Z;
+        float u = (tx * px + ty * py + tz * pz) * inv;
+        if (u < 0f || u > 1f) return null;
+        float qx = ty * e1z - tz * e1y, qy = tz * e1x - tx * e1z, qz = tx * e1y - ty * e1x;
+        float v = (dir.X * qx + dir.Y * qy + dir.Z * qz) * inv;
+        if (v < 0f || u + v > 1f) return null;
+        float d = (e2x * qx + e2y * qy + e2z * qz) * inv;
+        return d > 0f ? d : null;
+    }
+
+    /// <summary>
+    /// The one line a build owes when a navel was found but no mesh did anything with it — neither filled nor said why
+    /// not — so the log always says what became of it. Null when there is nothing to say.
+    /// </summary>
+    internal static string? NavelSummary(NavelSite? site, IReadOnlyCollection<NavelOutcome> outcomes)
+        => site == null || outcomes.Any(o => o != NavelOutcome.NotOnThisMesh) ? null
+         : $"navel fill: the navel was found on part {site.Owner}, but none of its meshes the garment covers holds it";
 
     /// <summary>
     /// The navel's plan merged onto the other passes', unless they already moved any vertex it would: two

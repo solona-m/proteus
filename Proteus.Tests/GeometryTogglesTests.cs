@@ -100,6 +100,25 @@ public class GeometryTogglesTests
         Assert.Equal(0f, SecondSkinService.SurfaceStrength(true, byMod, "Mod B"));
     }
 
+    /// <summary>
+    /// The layer copies a toe cap needs carry every strength the layer has, found by name so a new pass cannot be
+    /// left out: one copy that forgot the crotch span turned it off for every capped layer.
+    /// </summary>
+    [Fact]
+    public void A_toe_cap_copy_of_a_layer_keeps_every_strength()
+    {
+        var strengths = typeof(SecondSkinLayer).GetProperties()
+            .Where(p => p.Name.EndsWith("Strength", StringComparison.Ordinal) && p.PropertyType == typeof(float)).ToList();
+        Assert.Contains(strengths, p => p.Name == "NavelBridgeStrength");
+        Assert.Contains(strengths, p => p.Name == "FoldSmoothStrength");
+
+        var def = new SecondSkinLayer { MaterialName = "/mt_a.mtrl" };
+        for (int i = 0; i < strengths.Count; i++)
+            typeof(SecondSkinLayer).GetProperty(strengths[i].Name)!.SetValue(def, 0.1f + i * 0.1f);
+        var copy = SecondSkinWriter.WithCoverageAndCap(def, null, null, 0, 0);
+        foreach (var p in strengths) Assert.Equal(p.GetValue(def), p.GetValue(copy));
+    }
+
     [Fact]
     [Trait("Plan", "EDGE-navel-bridge-15")]
     public void SurfaceStrength_is_per_mod_whatever_the_case()

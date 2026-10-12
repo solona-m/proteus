@@ -5,6 +5,30 @@ namespace Proteus.Services;
 
 public static partial class SecondSkinWriter
 {
+    /// <summary>
+    /// <paramref name="def"/> with its coverage and toe cap replaced: the copies a toe cap needs (declined, dilated,
+    /// cut). Every geometry strength is carried — a copy that forgot one turned that pass off for every capped layer, as
+    /// the crotch span once was. Not the push, the reinforce size or the geometry: the copies only ever stand in for the
+    /// layer as a coverage gate, and the shells built from them are pinned by the golden baseline.
+    /// </summary>
+    internal static SecondSkinLayer WithCoverageAndCap(SecondSkinLayer def, byte[]? coverage, byte[]? toeCap,
+                                                       int toeCapWidth, int toeCapHeight) => new()
+    {
+        MaterialName = def.MaterialName,
+        Coverage = coverage,
+        CoverageWidth = def.CoverageWidth,
+        CoverageHeight = def.CoverageHeight,
+        ToeCap = toeCap,
+        ToeCapWidth = toeCapWidth,
+        ToeCapHeight = toeCapHeight,
+        ToeCapStrength = def.ToeCapStrength,
+        BustBridgeStrength = def.BustBridgeStrength,
+        NippleSmoothStrength = def.NippleSmoothStrength,
+        CleftBridgeStrength = def.CleftBridgeStrength,
+        FoldSmoothStrength = def.FoldSmoothStrength,
+        NavelBridgeStrength = def.NavelBridgeStrength,
+    };
+
     private sealed partial class ShellBuild
     {
         private sealed class LayerEmitter
@@ -64,22 +88,7 @@ public static partial class SecondSkinWriter
             {
                 // A declined cap takes its cut with it, so the toes keep the shell they already had.
                 if (build.capDeclined != null && def.ToeCap != null)
-                    def = new SecondSkinLayer
-                    {
-                        MaterialName = def.MaterialName,
-                        Coverage = def.Coverage,
-                        CoverageWidth = def.CoverageWidth,
-                        CoverageHeight = def.CoverageHeight,
-                        ToeCap = null,
-                        ToeCapWidth = 0,
-                        ToeCapHeight = 0,
-                        ToeCapStrength = def.ToeCapStrength,
-                        BustBridgeStrength = def.BustBridgeStrength,
-                        NippleSmoothStrength = def.NippleSmoothStrength,
-                        CleftBridgeStrength = def.CleftBridgeStrength,
-                        FoldSmoothStrength = def.FoldSmoothStrength,
-                        NavelBridgeStrength = def.NavelBridgeStrength,
-                    };
+                    def = WithCoverageAndCap(def, def.Coverage, null, 0, 0);
             }
 
             private void PlaceCapRim()
@@ -105,23 +114,9 @@ public static partial class SecondSkinWriter
 
                 capDef = def;
                 if (def.Coverage != null && def.CoverageWidth > 0 && def.CoverageHeight > 0 && CapCoverDilate > 0)
-                    capDef = new SecondSkinLayer
-                    {
-                        MaterialName = def.MaterialName,
-                        Coverage = DilateMask(def.Coverage, def.CoverageWidth, def.CoverageHeight,
-                                              CapCoverDilate, CoverageFloor),
-                        CoverageWidth = def.CoverageWidth,
-                        CoverageHeight = def.CoverageHeight,
-                        ToeCap = def.ToeCap,
-                        ToeCapWidth = def.ToeCapWidth,
-                        ToeCapHeight = def.ToeCapHeight,
-                        ToeCapStrength = def.ToeCapStrength,
-                        BustBridgeStrength = def.BustBridgeStrength,
-                        NippleSmoothStrength = def.NippleSmoothStrength,
-                        CleftBridgeStrength = def.CleftBridgeStrength,
-                        FoldSmoothStrength = def.FoldSmoothStrength,
-                        NavelBridgeStrength = def.NavelBridgeStrength,
-                    };
+                    capDef = WithCoverageAndCap(def, DilateMask(def.Coverage, def.CoverageWidth, def.CoverageHeight,
+                                                                CapCoverDilate, CoverageFloor),
+                                                def.ToeCap, def.ToeCapWidth, def.ToeCapHeight);
 
                 footprint = null;
                 footprintSize = def.ToeCapWidth > 0 && def.ToeCapWidth == def.ToeCapHeight
@@ -298,22 +293,7 @@ public static partial class SecondSkinWriter
                                + $"covered, {cutLit} after dilating by {CapCutDilate} "
                                + $"(the painted map would have cut {lit})");
 
-                    cutDef = new SecondSkinLayer
-                    {
-                        MaterialName = def.MaterialName,
-                        Coverage = def.Coverage,
-                        CoverageWidth = def.CoverageWidth,
-                        CoverageHeight = def.CoverageHeight,
-                        ToeCap = cutMask,
-                        ToeCapWidth = cutSide,
-                        ToeCapHeight = cutSide,
-                        ToeCapStrength = def.ToeCapStrength,
-                        BustBridgeStrength = def.BustBridgeStrength,
-                        NippleSmoothStrength = def.NippleSmoothStrength,
-                        CleftBridgeStrength = def.CleftBridgeStrength,
-                        FoldSmoothStrength = def.FoldSmoothStrength,
-                        NavelBridgeStrength = def.NavelBridgeStrength,
-                    };
+                    cutDef = WithCoverageAndCap(def, def.Coverage, cutMask, cutSide, cutSide);
                 }
             }
 

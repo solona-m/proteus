@@ -6,10 +6,14 @@ namespace Proteus.Services;
 
 using static Proteus.Services.SecondSkinWriter;
 using static Proteus.Services.MeshMath;
+using static Proteus.Services.BodyBridge;
 
-internal static partial class BodyBridge
+/// <summary>
+/// The navel fill: where a body's navel is (<see cref="LocateNavel"/>), and the second skin stretched flat across it
+/// (<see cref="NavelFill"/>). Its own solve beside <see cref="BodyBridge"/>'s spans, sharing their plan type.
+/// </summary>
+internal static partial class NavelBridge
 {
-    // ── navel fill ────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
     /// Where a body's navel is: the bottom of the pit, the outward axis the fill lifts along, how far the pit's mouth
@@ -20,6 +24,12 @@ internal static partial class BodyBridge
 
     /// <summary>One source part's skin, as <see cref="LocateNavel"/> reads it: the bone weights only exclude.</summary>
     internal readonly record struct NavelMesh(Vec3[] Pos, Vec3[] Nrm, int[] Tris, float[] Bust, float[] Thigh);
+
+    /// <summary>
+    /// On a body with no breast bones (the game's men), how far up the midline from the crotch to the neck the navel is
+    /// looked for: the navel sits under halfway on every body, the gap between the pectorals and the throat above it.
+    /// </summary>
+    private const float NavelBelowNeck = 0.5f;
 
     /// <summary>What <see cref="NavelFill"/> did on one mesh.</summary>
     internal enum NavelOutcome { Filled, NotOnThisMesh, Declined }
@@ -202,19 +212,24 @@ internal static partial class BodyBridge
                                         : NavelSurface.Weld(p.Pos, p.Nrm, p.Tris, p.Bust, p.Thigh)).ToList();
         if (surfaces.All(s => s == null)) { why = "no skin to search"; return null; }
 
-        // Nothing above the breasts' lowest point: the cleavage and the crease under the breasts are deep pits too.
+        // Nothing above the breasts' lowest point: the cleavage and the crease under the breasts are deep pits too. A
+        // body with no breast bones (the game's men) is capped halfway up its midline instead, or the gap between the
+        // pectorals and the throat are searched. Not at a bone: the upper spine's weight runs right down their bellies.
         // Nothing below the crotch, the lowest skin on the midline: the hands and feet never reach the midline.
-        float bustLow = float.MaxValue, crotch = float.MaxValue;
+        float bustLow = float.MaxValue, crotch = float.MaxValue, neck = float.MinValue;
         foreach (var s in surfaces)
         {
             if (s == null) continue;
             for (int n = 0; n < s.NodeCount; n++)
             {
                 if (s.Bust[n] >= NavelBoneFloor) bustLow = MathF.Min(bustLow, s.At[n].Y);
-                if (MathF.Abs(s.At[n].X) < NavelCrotchMidline) crotch = MathF.Min(crotch, s.At[n].Y);
+                if (MathF.Abs(s.At[n].X) >= NavelCrotchMidline) continue;
+                crotch = MathF.Min(crotch, s.At[n].Y);
+                neck = MathF.Max(neck, s.At[n].Y);
             }
         }
         if (crotch == float.MaxValue) crotch = float.MinValue;
+        if (bustLow == float.MaxValue && crotch > float.MinValue) bustLow = crotch + NavelBelowNeck * (neck - crotch);
         // Only with the legs there: without thigh-weighted skin the lowest midline point is a hem, not the crotch, and
         // there is no vulva to keep out.
         bool hasLegs = surfaces.Any(s => s != null && s.Thigh.Any(w => w >= NavelBoneFloor));

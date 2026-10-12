@@ -33,13 +33,13 @@ public class NavelBridgeLocalTests(ITestOutputHelper o)
     private static string[] PartsOf(string body) => Array.Find(SecondSkinWriterVerbatimTests.Bodies, b => b.Body == body).Parts;
 
     /// <summary>A body's parts read the way the build's locator reads them.</summary>
-    private static List<BodyBridge.NavelMesh> Parts(string body)
+    private static List<NavelBridge.NavelMesh> Parts(string body)
     {
-        var parts = new List<BodyBridge.NavelMesh>();
+        var parts = new List<NavelBridge.NavelMesh>();
         foreach (var path in PartsOf(body))
         {
             Assert.True(TryReadLod0Geometry(File.ReadAllBytes(path), out var p, out _, out var t, out var w, out var nr));
-            parts.Add(BodyBridge.ToNavelMesh(p, nr, t, w));
+            parts.Add(NavelBridge.ToNavelMesh(p, nr, t, w));
         }
         return parts;
     }
@@ -64,15 +64,15 @@ public class NavelBridgeLocalTests(ITestOutputHelper o)
     public void Fills_the_navel_on_real_bodies(string body)
     {
         var parts = Parts(body);
-        var site = BodyBridge.LocateNavel(parts, o.WriteLine, out var why);
+        var site = NavelBridge.LocateNavel(parts, o.WriteLine, out var why);
         Assert.True(site != null, why);
         var part = parts[site!.Owner];
-        var plan = BodyBridge.NavelFill(part.Pos, part.Nrm, Array.ConvertAll(part.Tris, t => (ushort)t), site, null, null,
+        var plan = NavelBridge.NavelFill(part.Pos, part.Nrm, Array.ConvertAll(part.Tris, t => (ushort)t), site, null, null,
                                         1f, o.WriteLine, out var report);
         o.WriteLine($"{body}: {report.DepthBefore * 1000:0.##}mm deep, {report.DepthAfter * 1000:0.##}mm left");
 
         Assert.NotNull(plan);
-        Assert.Equal(BodyBridge.NavelOutcome.Filled, report.Outcome);
+        Assert.Equal(NavelBridge.NavelOutcome.Filled, report.Outcome);
         Assert.True(report.DepthAfter <= (body == "Rue+" ? RueLeft : MostLeft), $"{report.DepthAfter * 1000:0.##}mm left");
         Assert.Equal(0, report.InwardTriangles);
         Assert.Equal(0, report.InsideNodes);
@@ -93,6 +93,7 @@ public class NavelBridgeLocalTests(ITestOutputHelper o)
         var timings = new BuildTimings();
         var shell = Build(PartsOf(body).Select(File.ReadAllBytes), [Navel()], diag, timings);
         foreach (var l in diag.Where(l => l.StartsWith("navel fill:"))) o.WriteLine(l);
+        o.WriteLine(timings.Describe());
 
         Assert.Single(diag, l => l.StartsWith("navel fill: filled"));
         Assert.DoesNotContain(diag, l => l.StartsWith("navel fill: not filled") || l.StartsWith("navel fill: left out"));
@@ -101,39 +102,44 @@ public class NavelBridgeLocalTests(ITestOutputHelper o)
     }
 
     /// <summary>
-    /// Measured on what the writer wrote, not on the plan: the navel's top part built with and without the tick, the
-    /// written navel re-read as the locator reads a pit, and every written triangle round it facing out.
+    /// Measured on what the writer wrote, not on the plan, built as the game builds a body — every part at once: the
+    /// hollow the writer's own fill reports left, the written shell rising no further than the fill lifts, and every
+    /// written triangle round the navel facing out. Not the written navel re-read as a pit: where the legs overlap the
+    /// top, the legs' own copy of the navel sits under the fill, and a re-read finds it.
     /// </summary>
-    [LocalDataTheory(Neo, Bibo)]
+    [LocalDataTheory(Neo, Bibo, Rue)]
     [Trait("Plan", "AC-navel-bridge-10")]
     [InlineData("Neolithe")]
     [InlineData("Bibo+")]
+    [InlineData("Rue+")]
     public void The_written_navel_is_flush(string body)
     {
-        // The navel as the build of this one part finds it: alone, without the legs to place the crotch, it reads
-        // its belly over a different region than the whole body does, and a hull read over another region differs.
-        int owner = BodyBridge.LocateNavel(Parts(body), null, out _)!.Owner;
-        var tp = Parts(body)[owner];
-        var site = BodyBridge.LocateNavel([tp], null, out _)!;
-        var top = File.ReadAllBytes(PartsOf(body)[owner]);
-        var plain = Build([top], [new SecondSkinLayer { MaterialName = ShellMaterial }]);
-        var filled = Build([top], [Navel()]);
+        var parts = Parts(body);
+        var site = NavelBridge.LocateNavel(parts, null, out _)!;
+        var models = PartsOf(body).Select(File.ReadAllBytes).ToList();
+        var plain = Build(models, [new SecondSkinLayer { MaterialName = ShellMaterial }]);
+        var diag = new List<string>();
+        var filled = Build(models, [Navel()], diag);
+        foreach (var l in diag.Where(l => l.StartsWith("navel fill:"))) o.WriteLine(l);
 
         Assert.True(TryReadLod0Geometry(plain, out var pp, out _, out var pt, out _, out var pn, keepMaterial: _ => true));
         Assert.True(TryReadLod0Geometry(filled, out var fp, out _, out var ft, out _, out var fn, keepMaterial: _ => true));
         Assert.Equal(pt, ft);
-        var before = BodyBridge.ToNavelMesh(pp, pn, pt, []);
-        var after = BodyBridge.ToNavelMesh(fp, fn, ft, []);
+        var before = NavelBridge.ToNavelMesh(pp, pn, pt, []);
+        var after = NavelBridge.ToNavelMesh(fp, fn, ft, []);
 
-        float depthBefore = BodyBridge.NavelDepthAt(before.Pos, before.Nrm, before.Tris, site);
-        float left = BodyBridge.NavelDepthAt(after.Pos, after.Nrm, after.Tris, site);
-        o.WriteLine($"{body}: written navel {depthBefore * 1000:0.##}mm deep plain, {left * 1000:0.##}mm with the tick");
-        Assert.True(left <= MostLeft, $"{left * 1000:0.##}mm left — a hollow, or a moat round a raised fill");
+        // "navel fill: filled N vertex(es) — Dmm deep, Lmm left, …"
+        var filledLine = Assert.Single(diag, l => l.StartsWith("navel fill: filled"));
+        float left = float.Parse(filledLine.Split("deep, ")[1].Split("mm")[0],
+                                 System.Globalization.CultureInfo.InvariantCulture) / 1000f;
+        o.WriteLine($"{body}: the writer's fill left {left * 1000:0.##}mm");
+        Assert.True(left <= (body == "Rue+" ? RueLeft : MostLeft), $"{left * 1000:0.##}mm left");
 
         // A raised button over the navel — the extra clearance a bridge gets, a millimetre of it — rises past the
         // fill's own lift. The plan here is solved on the part whole, the writer's per mesh, so they agree closely,
         // not exactly.
-        var plan = BodyBridge.NavelFill(tp.Pos, tp.Nrm, Array.ConvertAll(tp.Tris, t => (ushort)t), site, null, null, 1f,
+        var tp = parts[site.Owner];
+        var plan = NavelBridge.NavelFill(tp.Pos, tp.Nrm, Array.ConvertAll(tp.Tris, t => (ushort)t), site, null, null, 1f,
                                         null, out _)!;
         float Up(Vec3 d) => d.X * site.Axis.X + d.Y * site.Axis.Y + d.Z * site.Axis.Z;
         float lifted = plan.Delta.Max(Up);
@@ -147,7 +153,7 @@ public class NavelBridgeLocalTests(ITestOutputHelper o)
         var nodes = Enumerable.Range(0, after.Pos.Length).ToArray();
         var near = new HashSet<int>(nodes.Where(i => Dist(after.Pos[i], site.Centre) <= site.DiscRadius));
         var tris = Array.ConvertAll(after.Tris, t => (ushort)t);
-        Assert.Equal(0, BodyBridge.NavelFolded(before.Pos, after.Pos, tris, nodes,
+        Assert.Equal(0, NavelBridge.NavelFolded(before.Pos, after.Pos, tris, nodes,
                                                new HashSet<int>(near.Where(i => Dist(after.Pos[i], before.Pos[i]) > 1e-6f)),
                                                near.Contains, site.Axis, 1e-12f));
     }
@@ -209,6 +215,8 @@ public class NavelBridgeLocalTests(ITestOutputHelper o)
         Build(models, [Navel(), Navel(half, size)], diag, two);
 
         Assert.Contains(diag, l => l.StartsWith("bust bridge: one navel solve for 2 layer(s)"));
+        Assert.Single(diag, l => l.StartsWith("navel fill: filled"));
+        Assert.True(one.Navel.Calls > 0);
         Assert.Equal(one.Navel.Calls, two.Navel.Calls);
     }
 
@@ -224,35 +232,47 @@ public class NavelBridgeLocalTests(ITestOutputHelper o)
         Assert.DoesNotContain(diag, l => l.StartsWith("navel fill: left out"));
     }
 
-    /// <summary>The game's own bodies: no navel to speak of, and nothing filled anywhere it should not be.</summary>
+    /// <summary>
+    /// The game's own bodies — Midlander male and female, Roegadyn male, Lalafell — have no navel deep enough to fill
+    /// (Lalafell's deepest pit is 0.42 mm), and nothing else on them is taken for one: before the men's search was
+    /// capped halfway up the midline, it reached the throat (a 10 mm pit at y 1.47 on c0101, 19 mm at 1.83 on c0901),
+    /// turned away only by its width.
+    /// </summary>
     [LocalDataTheory(LocalData.GameData)]
     [Trait("Plan", "EDGE-navel-bridge-21")]
     [InlineData("c0101")]
     [InlineData("c0201")]
+    [InlineData("c0901")]
     [InlineData("c1101")]
     public void The_game_bodies_fill_nothing_false(string race)
     {
         var data = new Lumina.GameData(LocalData.Path(LocalData.GameData));
-        var parts = new List<BodyBridge.NavelMesh>();
+        var parts = new List<NavelBridge.NavelMesh>();
         foreach (var slot in new[] { "top", "dwn" })
         {
             var file = data.GetFile($"chara/equipment/e0000/model/{race}e0000_{slot}.mdl");
             if (file == null) continue;
             Assert.True(TryReadLod0Geometry(file.Data, out var p, out _, out var t, out var w, out var nr));
-            parts.Add(BodyBridge.ToNavelMesh(p, nr, t, w));
+            parts.Add(NavelBridge.ToNavelMesh(p, nr, t, w));
         }
         Assert.NotEmpty(parts);
-        var site = BodyBridge.LocateNavel(parts, o.WriteLine, out var why);
+        var log = new List<string>();
+        var site = NavelBridge.LocateNavel(parts, log.Add, out var why);
+        foreach (var l in log) o.WriteLine(l);
         o.WriteLine(site?.ToString() ?? "none: " + why);
-        if (site == null) return;
+        Assert.Null(site);
 
-        // Found: then on the front midline, between the crotch and the breasts, and filled cleanly.
-        Assert.True(MathF.Abs(site.Centre.X) < 0.01f, site.ToString());
-        var part = parts[site.Owner];
-        BodyBridge.NavelFill(part.Pos, part.Nrm, Array.ConvertAll(part.Tris, t => (ushort)t), site, null, null, 1f,
-                             o.WriteLine, out var report);
-        Assert.Equal(0, report.InwardTriangles);
-        Assert.Equal(0, report.InsideNodes);
+        // Nor anything considered above the waist: every pit the search saw is below the breasts, or on a body with
+        // none, in the lower half of the midline.
+        float bustLow = parts.SelectMany(p => p.Pos.Zip(p.Bust, (q, x) => (q.Y, x)))
+            .Where(v => v.x >= NavelBridge.NavelBoneFloor).Select(v => v.Y).DefaultIfEmpty(float.MaxValue).Min();
+        var midline = parts.SelectMany(p => p.Pos).Where(q => MathF.Abs(q.X) < 0.01f).Select(q => q.Y).ToList();
+        float cap = bustLow < float.MaxValue ? bustLow : midline.Min() + 0.5f * (midline.Max() - midline.Min());
+        foreach (var l in log.Where(l => l.StartsWith("navel fill: pit")))
+        {
+            float y = float.Parse(l.Split('(')[1].Split(',')[1], System.Globalization.CultureInfo.InvariantCulture);
+            Assert.True(y < cap, $"{l} — above the cap at {cap:0.###}");
+        }
     }
 
     private static float Dist(Vec3 a, Vec3 b)

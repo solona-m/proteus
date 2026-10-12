@@ -6,6 +6,7 @@ using System.Text;
 
 namespace Proteus.Services;
 using static Proteus.Services.BodyBridge;
+using static Proteus.Services.NavelBridge;
 
 public static partial class SecondSkinWriter
 {
@@ -429,12 +430,9 @@ public static partial class SecondSkinWriter
             timings?.NavelFind.Stop(tFind);
         }
 
-        /// <summary>One line when a navel was found but no mesh did anything with it, so the log always says why.</summary>
         private void ReportNavel()
         {
-            if (navelSite == null || navelOutcomes.Any(o => o != NavelOutcome.NotOnThisMesh)) return;
-            diag?.Invoke($"navel fill: the navel was found on part {navelSite.Owner}, but none of its meshes the "
-                       + "garment covers holds it");
+            if (NavelSummary(navelSite, navelOutcomes) is { } line) diag?.Invoke(line);
         }
 
         private void PlaceCap()

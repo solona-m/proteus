@@ -19,15 +19,17 @@ public class NavelBridgeTests
     private const float NavelY = 1.05f;
 
     /// <summary>
-    /// A belly: x across ±75 mm, y from 0.95 to 1.15, curving back round a 15 cm radius sideways and a 30 cm one up
+    /// A belly: x across ±75 mm, y from 0.95 to 1.30, curving back round a 15 cm radius sideways and a 30 cm one up
     /// and down, with <paramref name="dent"/> pressed in (how deep at x, y) and <paramref name="warp"/> moving points
     /// across it. Two triangles a grid square, wound to face +Z. <paramref name="seam"/> splits the mesh down x = 0
     /// into two halves whose vertices along the seam are copies, as a UV seam leaves them.
     /// </summary>
     internal static (Vec3[] Pos, Vec3[] Nrm, ushort[] Tris) Belly(Func<float, float, float>? dent = null,
-        Func<Vec3, Vec3>? warp = null, float scale = 1f, bool seam = false, Func<Vec3, bool>? hole = null)
+        Func<Vec3, Vec3>? warp = null, float scale = 1f, bool seam = false, Func<Vec3, bool>? hole = null,
+        float spacing = Spacing)
     {
-        float half = 0.075f * scale, lo = NavelY - 0.1f * scale, hi = NavelY + 0.1f * scale, step = Spacing * scale;
+        // Up to the chest: with no breast bones the navel is looked for only in the lower half of the midline.
+        float half = 0.075f * scale, lo = NavelY - 0.1f * scale, hi = NavelY + 0.25f * scale, step = spacing * scale;
         int nx = (int)MathF.Round(2 * half / step) + 1, ny = (int)MathF.Round((hi - lo) / step) + 1;
         int mid = nx / 2;
         var pos = new List<Vec3>();
@@ -92,18 +94,18 @@ public class NavelBridgeTests
     private static Func<float, float, float> Pit(float depth = 0.005f, float sigma = 0.003f, float x0 = 0f, float y0 = NavelY)
         => (x, y) => depth * MathF.Exp(-((x - x0) * (x - x0) + (y - y0) * (y - y0)) / (2 * sigma * sigma));
 
-    private static BodyBridge.NavelMesh Part((Vec3[] Pos, Vec3[] Nrm, ushort[] Tris) b, float[]? bust = null, float[]? thigh = null)
+    private static NavelBridge.NavelMesh Part((Vec3[] Pos, Vec3[] Nrm, ushort[] Tris) b, float[]? bust = null, float[]? thigh = null)
         => new(b.Pos, b.Nrm, Array.ConvertAll(b.Tris, t => (int)t), bust ?? new float[b.Pos.Length], thigh ?? new float[b.Pos.Length]);
 
-    private static BodyBridge.NavelSite? Locate((Vec3[] Pos, Vec3[] Nrm, ushort[] Tris) b, List<string>? log = null,
+    private static NavelBridge.NavelSite? Locate((Vec3[] Pos, Vec3[] Nrm, ushort[] Tris) b, List<string>? log = null,
                                                 float[]? bust = null, float[]? thigh = null)
-        => BodyBridge.LocateNavel([Part(b, bust, thigh)], log == null ? null : log.Add, out _);
+        => NavelBridge.LocateNavel([Part(b, bust, thigh)], log == null ? null : log.Add, out _);
 
-    private static (BustBridgePlanView? Plan, BodyBridge.NavelFillReport Report) Fill(
-        (Vec3[] Pos, Vec3[] Nrm, ushort[] Tris) b, BodyBridge.NavelSite site, bool[]? covered = null, bool[]? pin = null,
+    private static (BustBridgePlanView? Plan, NavelBridge.NavelFillReport Report) Fill(
+        (Vec3[] Pos, Vec3[] Nrm, ushort[] Tris) b, NavelBridge.NavelSite site, bool[]? covered = null, bool[]? pin = null,
         float strength = 1f, List<string>? log = null)
     {
-        var plan = BodyBridge.NavelFill(b.Pos, b.Nrm, b.Tris, site, covered, pin, strength, log == null ? null : log.Add,
+        var plan = NavelBridge.NavelFill(b.Pos, b.Nrm, b.Tris, site, covered, pin, strength, log == null ? null : log.Add,
                                         out var report);
         return (plan == null ? null : new BustBridgePlanView(plan, b.Pos), report);
     }
@@ -132,7 +134,7 @@ public class NavelBridgeTests
 
         var (plan, report) = Fill(b, site);
         Assert.NotNull(plan);
-        Assert.Equal(BodyBridge.NavelOutcome.Filled, report.Outcome);
+        Assert.Equal(NavelBridge.NavelOutcome.Filled, report.Outcome);
         Assert.True(report.DepthBefore > 0.004f, $"read {report.DepthBefore * 1000:0.##}mm deep");
         Assert.True(report.DepthAfter <= 0.0005f, $"{report.DepthAfter * 1000:0.##}mm left");
     }
@@ -181,7 +183,8 @@ public class NavelBridgeTests
         for (int i = 0; i < b.Pos.Length; i++)
         {
             int n = plan.NodeOf[i];
-            if (plan.NodeWeight[n] > 0f && !moved.Contains(n)) rim++;
+            // The rim: reshaded, unmoved, and left the clearance any other span would give it.
+            if (plan.NodeWeight[n] > 0f && !moved.Contains(n) && !plan.NoExtraClearance![n]) rim++;
             // Everything that moved is reshaded, and kept off the extra clearance a bridge gets.
             if (moved.Contains(n)) { Assert.True(plan.NodeWeight[n] > 0f); Assert.True(plan.NoExtraClearance![n]); }
         }
@@ -194,7 +197,7 @@ public class NavelBridgeTests
     public void A_flat_belly_has_no_navel()
     {
         var b = Belly();
-        Assert.Null(BodyBridge.LocateNavel([Part(b)], null, out var why));
+        Assert.Null(NavelBridge.LocateNavel([Part(b)], null, out var why));
         Assert.False(string.IsNullOrEmpty(why));
     }
 
@@ -269,7 +272,7 @@ public class NavelBridgeTests
         var site = Locate(b);
         Assert.NotNull(site);
         var (plan, report) = Fill(b, site!);
-        Assert.Equal(BodyBridge.NavelOutcome.Filled, report.Outcome);
+        Assert.Equal(NavelBridge.NavelOutcome.Filled, report.Outcome);
         Assert.NotNull(plan);
         Assert.Equal(0, report.InwardTriangles);
     }
@@ -285,17 +288,17 @@ public class NavelBridgeTests
         var after = (Vec3[])before.Clone();
         after[3] = new Vec3(-1, -1, 0);
         var axis = new Vec3(0, 0, 1);
-        Assert.Equal(0, BodyBridge.NavelFolded(before, before, tris, nodeOf, new HashSet<int> { 3 }, _ => true, axis, 1e-9f));
-        Assert.Equal(1, BodyBridge.NavelFolded(before, after, tris, nodeOf, new HashSet<int> { 3 }, _ => true, axis, 1e-9f));
+        Assert.Equal(0, NavelBridge.NavelFolded(before, before, tris, nodeOf, new HashSet<int> { 3 }, _ => true, axis, 1e-9f));
+        Assert.Equal(1, NavelBridge.NavelFolded(before, after, tris, nodeOf, new HashSet<int> { 3 }, _ => true, axis, 1e-9f));
 
         // A closed box, and a corner moved to its middle.
         var (bp, bt) = Box();
         var bAfter = (Vec3[])bp.Clone();
         bAfter[0] = new Vec3(0.5f, 0.5f, 0.5f);
         var boxNodes = Enumerable.Range(0, bp.Length).ToArray();
-        Assert.Equal(1, BodyBridge.NavelInside(bp, bAfter, bt, boxNodes, [0]));
+        Assert.Equal(1, NavelBridge.NavelInside(bp, bAfter, bt, boxNodes, [0]));
         bAfter[0] = new Vec3(-0.5f, -0.5f, -0.5f);
-        Assert.Equal(0, BodyBridge.NavelInside(bp, bAfter, bt, boxNodes, [0]));
+        Assert.Equal(0, NavelBridge.NavelInside(bp, bAfter, bt, boxNodes, [0]));
     }
 
     /// <summary>A closed unit cube, wound outward.</summary>
@@ -317,7 +320,7 @@ public class NavelBridgeTests
         var log = new List<string>();
         var (plan, report) = Fill(b, site, covered: covered, log: log);
         Assert.Null(plan);
-        Assert.Equal(BodyBridge.NavelOutcome.Declined, report.Outcome);
+        Assert.Equal(NavelBridge.NavelOutcome.Declined, report.Outcome);
         Assert.Contains("edge", report.Reason);
         Assert.Contains(log, l => l.StartsWith("navel fill:"));
     }
@@ -337,7 +340,7 @@ public class NavelBridgeTests
         var holed = Belly(Pit(), hole: c => Dist(c, new Vec3(0, NavelY, c.Z)) < 0.001f);
         var (plan2, report2) = Fill(holed, site);
         Assert.Null(plan2);
-        Assert.Equal(BodyBridge.NavelOutcome.Declined, report2.Outcome);
+        Assert.Equal(NavelBridge.NavelOutcome.Declined, report2.Outcome);
         Assert.Contains("open", report2.Reason);
     }
 
@@ -350,7 +353,7 @@ public class NavelBridgeTests
         var log = new List<string>();
         var (plan, report) = Fill(b, far, log: log);
         Assert.Null(plan);
-        Assert.Equal(BodyBridge.NavelOutcome.NotOnThisMesh, report.Outcome);
+        Assert.Equal(NavelBridge.NavelOutcome.NotOnThisMesh, report.Outcome);
         Assert.Empty(log);
     }
 
@@ -360,7 +363,7 @@ public class NavelBridgeTests
     {
         var b = Belly(Pit(), seam: true);
         var (view, report) = Fill(b, Locate(b)!);
-        Assert.Equal(BodyBridge.NavelOutcome.Filled, report.Outcome);
+        Assert.Equal(NavelBridge.NavelOutcome.Filled, report.Outcome);
         var byPlace = new Dictionary<(int, int, int), Vec3>();
         int shared = 0;
         for (int i = 0; i < b.Pos.Length; i++)
@@ -380,7 +383,7 @@ public class NavelBridgeTests
         var b = Belly(Pit());
         var site = Locate(b)!;
         var (_, report) = Fill(b, site, strength: 0.5f);
-        Assert.Equal(BodyBridge.NavelOutcome.Filled, report.Outcome);
+        Assert.Equal(NavelBridge.NavelOutcome.Filled, report.Outcome);
         Assert.Equal(0, report.InwardTriangles);
         float share = report.DepthAfter / report.DepthBefore;
         Assert.InRange(share, 0.3f, 0.7f);
@@ -396,7 +399,7 @@ public class NavelBridgeTests
         var b = Belly((x, y) => Pit(0.005f * scale, 0.003f * scale, 0f, NavelY)(x, y), scale: scale);
         var site = Locate(b);
         Assert.NotNull(site);
-        Assert.Equal(BodyBridge.NavelOutcome.Filled, Fill(b, site!).Report.Outcome);
+        Assert.Equal(NavelBridge.NavelOutcome.Filled, Fill(b, site!).Report.Outcome);
     }
 
     [Fact]
@@ -415,9 +418,9 @@ public class NavelBridgeTests
         }
         var log = new List<string>();
         var others = Plan(0);
-        Assert.Same(others, BodyBridge.MergeNavel(others, Plan(0, 1), log.Add));
+        Assert.Same(others, NavelBridge.MergeNavel(others, Plan(0, 1), log.Add));
         Assert.Contains(log, l => l.StartsWith("navel fill:"));
-        var merged = BodyBridge.MergeNavel(others, Plan(2), log.Add)!;
+        var merged = NavelBridge.MergeNavel(others, Plan(2), log.Add)!;
         Assert.Equal(0.001f, merged.Delta[0].Z);
         Assert.Equal(0.001f, merged.Delta[2].Z);
     }
@@ -430,7 +433,7 @@ public class NavelBridgeTests
         var site = Locate(b)!;
         var shifted = Belly(Pit(x0: 0.003f));
         var (_, report) = Fill(shifted, site);
-        Assert.Equal(BodyBridge.NavelOutcome.Filled, report.Outcome);
+        Assert.Equal(NavelBridge.NavelOutcome.Filled, report.Outcome);
         Assert.True(report.DepthAfter <= 0.0005f, $"{report.DepthAfter * 1000:0.##}mm left");
     }
 
@@ -453,6 +456,125 @@ public class NavelBridgeTests
         Assert.Equal(0f, navel[1]);
         // Node 3 touches only the navel's node and node 2, which gets its spread from node 0.
         Assert.True(navel[3] < all[3]);
+    }
+
+    /// <summary>
+    /// A navel in a shallow hollow of its own that runs on past a hem: the pit's edge is taken higher, clear of the
+    /// hem, and the navel is still filled.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "EDGE-navel-bridge-9")]
+    public void A_pit_whose_hollow_runs_to_a_hem_is_taken_from_higher_up()
+    {
+        // A bowl 1.5 mm deep round the navel, and a hem 6 mm out, inside the bowl's hollow but clear of the navel.
+        var bowl = Pit(0.0015f, 0.015f);
+        var b = Belly((x, y) => Pit()(x, y) + bowl(x, y));
+        var site = Locate(b)!;
+        var covered = b.Pos.Select(p => p.X < 0.006f).ToArray();
+        var log = new List<string>();
+        var (plan, report) = Fill(b, site, covered: covered, log: log);
+        Assert.NotNull(plan);
+        Assert.Equal(NavelBridge.NavelOutcome.Filled, report.Outcome);
+        Assert.Contains(log, l => l.StartsWith("navel fill: the pit taken from"));
+        for (int i = 0; i < b.Pos.Length; i++)
+            if (!covered[i]) Assert.False(plan!.Moved(i), $"vertex {i} past the hem moved");
+    }
+
+    /// <summary>A node the membrane slid under the skin comes back out over it; one above it stays where it is.</summary>
+    [Fact]
+    public void A_node_under_the_skin_is_raised_back_over_it()
+    {
+        // One flat triangle at z = 0 facing +Z, and two loose nodes: one under it, one over it.
+        Vec3[] before = [new(-1, -1, 0), new(1, -1, 0), new(0, 1, 0), new(0, 0, 0.5f), new(0, 0, 0.5f)];
+        ushort[] tris = [0, 1, 2];
+        int[] nodeOf = [0, 1, 2, 3, 4];
+        Vec3[] after = [.. before];
+        after[3] = new Vec3(0, 0, -0.25f);
+        int raised = NavelBridge.RaiseAboveSkin(before, after, tris, nodeOf, [3, 4], _ => true, new Vec3(0, 0, 1), 0.01f);
+        Assert.Equal(1, raised);
+        Assert.Equal(0.01f, after[3].Z, 5);
+        Assert.Equal(0.5f, after[4].Z);
+    }
+
+    /// <summary>A navel found that no mesh then did anything with is reported once; one filled or declined is not.</summary>
+    [Fact]
+    [Trait("Plan", "AC-navel-bridge-7")]
+    public void A_navel_no_mesh_holds_is_reported()
+    {
+        var site = new NavelBridge.NavelSite(new Vec3(0, 1, 0.1f), new Vec3(0, 0, 1), 0.01f, 0.015f, 0.004f, 1);
+        Assert.Null(NavelBridge.NavelSummary(null, []));
+        Assert.Contains("part 1", NavelBridge.NavelSummary(site, [])!);
+        Assert.NotNull(NavelBridge.NavelSummary(site, [NavelBridge.NavelOutcome.NotOnThisMesh]));
+        Assert.Null(NavelBridge.NavelSummary(site, [NavelBridge.NavelOutcome.NotOnThisMesh, NavelBridge.NavelOutcome.Filled]));
+        Assert.Null(NavelBridge.NavelSummary(site, [NavelBridge.NavelOutcome.Declined]));
+    }
+
+    /// <summary>A belly as a synthetic body mesh, coarse enough for one mesh's 16-bit indices.</summary>
+    private static SyntheticModel.Mesh BellyMesh(string material, Func<float, float, float>? dent = null,
+                                                 Func<Vec3, bool>? drop = null, float inset = 0f)
+    {
+        var b = Belly(dent, spacing: 0.003f, warp: inset == 0f ? null : p => new Vec3(p.X, p.Y, p.Z - inset));
+        var corners = new List<(float, float, float)>();
+        for (int t = 0; t < b.Tris.Length; t += 3)
+        {
+            Vec3 p = b.Pos[b.Tris[t]], q = b.Pos[b.Tris[t + 1]], r = b.Pos[b.Tris[t + 2]];
+            if (drop != null && drop(new Vec3((p.X + q.X + r.X) / 3, (p.Y + q.Y + r.Y) / 3, (p.Z + q.Z + r.Z) / 3))) continue;
+            corners.Add((p.X, p.Y, p.Z)); corners.Add((q.X, q.Y, q.Z)); corners.Add((r.X, r.Y, r.Z));
+        }
+        return new SyntheticModel.Mesh(material, new SyntheticModel.Sub(0, Corners: [.. corners]));
+    }
+
+    private static Vec3[] Written(byte[] model)
+    {
+        Assert.True(TryReadLod0Geometry(model, out var p, out _, out _, keepMaterial: _ => true));
+        return [.. Enumerable.Range(0, p.Length / 3).Select(i => new Vec3(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]))];
+    }
+
+    /// <summary>
+    /// Two parts that both draw the navel, as the top and the legs do where they overlap: only the part that carries
+    /// it — the whole navel, not the half the other's edge cuts through — is filled, and the other is written as it was.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-navel-bridge-6")]
+    public void Only_the_part_that_carries_the_navel_fills_it()
+    {
+        var dent = Pit(0.005f, 0.004f);
+        var whole = SyntheticModel.Build([], BellyMesh(Skin, dent));
+        // Half a navel, just under the whole one, as the legs' copy lies under the top's: not a join.
+        var half = SyntheticModel.Build([], BellyMesh(Skin, dent, drop: c => c.X > -0.001f, inset: 0.0005f));
+        int wholeCount = Written(SecondSkinWriter.Build([whole], [new SecondSkinLayer { MaterialName = Skin }], out _)).Length;
+
+        var plain = Written(SecondSkinWriter.Build([whole, half], [new SecondSkinLayer { MaterialName = Skin }], out _));
+        var diag = new List<string>();
+        var filled = Written(SecondSkinWriter.Build([whole, half], [new SecondSkinLayer { MaterialName = Skin, NavelBridgeStrength = 1f }],
+                                                    null, false, out _, diag: diag.Add));
+        Assert.Contains(diag, l => l.StartsWith("navel fill: filled"));
+        Assert.Equal(plain.Length, filled.Length);
+        int movedWhole = Enumerable.Range(0, wholeCount).Count(i => plain[i] != filled[i]);
+        int movedHalf = Enumerable.Range(wholeCount, plain.Length - wholeCount).Count(i => plain[i] != filled[i]);
+        Assert.True(movedWhole > 0, "the part carrying the navel was not filled");
+        Assert.Equal(0, movedHalf);
+    }
+
+    /// <summary>The build searches the skin alone: a pit in a non-skin mesh over a smooth belly is no navel.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-navel-bridge-20")]
+    public void A_pit_in_a_non_skin_mesh_is_not_the_navel()
+    {
+        var model = SyntheticModel.Build([], BellyMesh(Skin),
+                                         BellyMesh(SyntheticModel.PackPieceVanillaMaterial, Pit(0.005f, 0.004f)));
+        var diag = new List<string>();
+        SecondSkinWriter.Build([model], [new SecondSkinLayer { MaterialName = Skin, NavelBridgeStrength = 1f }],
+                               null, false, out _, diag: diag.Add);
+        Assert.Contains(diag, l => l.StartsWith("navel fill: no navel found"));
+        Assert.DoesNotContain(diag, l => l.StartsWith("navel fill: pit on"));
+
+        // The same pit in the skin is found, so the build reads what the skin holds and nothing else.
+        var skin = SyntheticModel.Build([], BellyMesh(Skin, Pit(0.005f, 0.004f)));
+        var found = new List<string>();
+        SecondSkinWriter.Build([skin], [new SecondSkinLayer { MaterialName = Skin, NavelBridgeStrength = 1f }],
+                               null, false, out _, diag: found.Add);
+        Assert.Contains(found, l => l.StartsWith("navel fill: the navel is"));
     }
 
     // ── the tick and the writer ───────────────────────────────────────────────────────────────────

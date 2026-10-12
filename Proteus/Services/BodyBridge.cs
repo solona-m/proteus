@@ -18,7 +18,7 @@ internal static partial class BodyBridge
     /// </summary>
     internal static readonly string[] BustBones = ["j_mune_l", "j_mune_r", "iv_c_mune_l", "iv_c_mune_r"];
 
-    private static bool IsBustBone(string bone)
+    internal static bool IsBustBone(string bone)
     {
         foreach (var b in BustBones)
             if (bone.Equals(b, StringComparison.OrdinalIgnoreCase)) return true;

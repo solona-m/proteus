@@ -5,6 +5,7 @@ using System.Linq;
 
 namespace Proteus.Services;
 using static Proteus.Services.BodyBridge;
+using static Proteus.Services.NavelBridge;
 using static Proteus.Services.ToeCapSolver;
 
 public static partial class SecondSkinWriter
