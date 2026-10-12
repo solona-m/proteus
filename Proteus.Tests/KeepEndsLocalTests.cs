@@ -833,6 +833,16 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
                                                      && o.Section == read.Pick.Section);
         output.WriteLine($"read as {read.Pick!.Label}; compared with {other.Label}");
         Assert.True(KeepEnds.SameShape(reading.LimbView, read.Pick!, other, neo, bones, read.Route == KeepEnds.Route.Cloth));
+
+        // And the tool says so: nothing planned, and "already fits" named for the size.
+        var input = new KeepEnds.StudioPlanInput(parts, bytes, "_glv", RefitCore.ShapePieces(parts, new HashSet<string>()),
+                                                 neo, neo, Race, false, read.Pick!, [other], SameBodyMod: true,
+                                                 FromCloth: read.Shown?.FromCloth == true, ReplaceSkin: true, Across: false,
+                                                 ClearBody: false, Held: null, Shared: null, _ => (null, null), s => s, "test");
+        var planned = KeepEnds.StudioPlan(input, (p, _) => p, null,
+                                          NSubstitute.Substitute.For<Dalamud.Plugin.Services.IPluginLog>());
+        Assert.Null(planned.Planned);
+        Assert.Equal(string.Format(Proteus.Localization.Strings.Parts.RetargetAlreadyFitsFmt, other.Label), planned.Notice);
     }
 
     [LocalDataFact(HellForLeather, Bibo, Neolithe)]

@@ -12,7 +12,11 @@ internal static class TestAssemblySetup
     /// The game's body is extracted into a folder of this run's own, not the plugin's: a game running beside the tests
     /// clears the plugin's as it loads (Proteus's own reload included), and the tests would find their extracts gone.
     /// </summary>
+    /// <remarks>And thrown away when the run ends, so runs leave no folder each behind.</remarks>
     [ModuleInitializer]
     internal static void KeepTheGameBodyApart()
-        => VanillaBodyCatalog.Dir = Path.Combine(Path.GetTempPath(), $"proteus-vanilla-body-tests-{Environment.ProcessId}");
+    {
+        VanillaBodyCatalog.Dir = Path.Combine(Path.GetTempPath(), $"proteus-vanilla-body-tests-{Environment.ProcessId}");
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => VanillaBodyCatalog.CleanUp();
+    }
 }

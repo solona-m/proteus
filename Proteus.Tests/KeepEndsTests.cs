@@ -803,6 +803,47 @@ public class KeepEndsTests
         });
     }
 
+    /// <summary>The Body size tool's plan for a shoe, with the panel's defaults, onto <paramref name="targets"/>.</summary>
+    private static KeepEnds.StudioPlanned StudioPlanOf(ModelParts parts, byte[] bytes, BodySizeCatalog source, BodyOption from,
+                                                       BodySizeCatalog target, IReadOnlyList<BodyOption> targets)
+        => KeepEnds.StudioPlan(new KeepEnds.StudioPlanInput(
+                                   parts, bytes, "_sho", [], source, target, "0201", false, from, targets,
+                                   SameBodyMod: false, FromCloth: false, ReplaceSkin: true, Across: true, ClearBody: false,
+                                   Held: null, Shared: null, _ => (null, null), s => s, "test"),
+                               (p, _) => p, null, NSubstitute.Substitute.For<Dalamud.Plugin.Services.IPluginLog>());
+
+    [Fact]
+    [Trait("Plan", "EDGE-keep-ends-studio-1")]
+    [Trait("Plan", "EDGE-keep-ends-studio-4")]
+    public void Studio_plan_says_why_it_planned_nothing()   // [EDGE-keep-ends-studio-1] [EDGE-keep-ends-studio-4]
+    {
+        InBodies(dir =>
+        {
+            var bytes = ShoeModel(4, islands: 4);
+            var parts = ModelPartReader.Read(bytes)!;
+            Write(dir, "broken.mdl", [1, 2, 3, 4]);
+            Write(dir, "lm.mdl", LegsBody(16, 0.01f, islands: 16));
+            Write(dir, "ll.mdl", LegsBody(16, 0.02f, islands: 16));
+            var broken = LegsS with { Rel = "broken.mdl" };
+            var m = LegsM with { Rel = "lm.mdl" };
+            var l = LegsM with { Name = "L", Rel = "ll.mdl" };
+            var catalog = new BodySizeCatalog(dir, [broken, m, l]);
+
+            // A rig that cannot be read: nothing planned, and the tool says the foot cannot be kept.
+            var unreadable = StudioPlanOf(parts, [1, 2, 3], catalog, broken, catalog, [m]);
+            Assert.Null(unreadable.Planned);
+            Assert.Equal(Proteus.Localization.Strings.Parts.RetargetEndsUnreadable, unreadable.Error);
+
+            // A legs pair refused: the refusal, named for the size it was refused for when there are several.
+            var one = StudioPlanOf(parts, bytes, catalog, broken, catalog, [m]);
+            var two = StudioPlanOf(parts, bytes, catalog, broken, catalog, [m, l]);
+            Assert.Null(one.Planned);
+            Assert.NotEmpty(one.Error);
+            Assert.Null(two.Planned);
+            Assert.Equal($"{m.Label}: {one.Error}", two.Error);
+        });
+    }
+
     [Fact]
     [Trait("Plan", "AC-keep-ends-studio-3")]
     public void End_pair_is_the_companion_of_the_limb_sizes()   // [AC-keep-ends-studio-3]

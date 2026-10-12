@@ -773,13 +773,58 @@ public class SizeSetRefitTests(ITestOutputHelper output)
                 var glv = ModelOf(root, "Top Size", option, GlovePath);
                 Assert.False(glv.AsSpan().SequenceEqual(gloves), $"{option}: the gloves are the author's, not refitted");
                 Assert.Equal(0, EndPointsMissing(gloves, "_glv", glv));
-                // The shoe: refitted where the size has legs of its own, else left as the author's.
+                // The shoe: every Bibo+ chest size goes with legs of its own, so every one carries a refitted shoe.
                 var sho = ModelOf(root, "Top Size", option, ShoePath);
-                if (!sho.AsSpan().SequenceEqual(shoe)) Assert.Equal(0, EndPointsMissing(shoe, "_sho", sho));
+                Assert.False(sho.AsSpan().SequenceEqual(shoe), $"{option}: the shoe is the author's, not refitted");
+                Assert.Equal(0, EndPointsMissing(shoe, "_sho", sho));
             }
             Assert.All(logged, l => Assert.True(l.Folded == 0, $"{l.Option}: {l.Folded} triangles left folded"));
             Assert.DoesNotContain(result.Notes, n => n.Contains("e6219", StringComparison.Ordinal)
                                                      || n.Contains("e0670", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [LocalDataFact(Heartthrob, LocalData.ShiftPack, Bibo, Yab, Neolithe)]
+    [Trait("Plan", "AC-keep-ends-studio-8")]
+    public void A_shoe_beside_a_chest_keeps_the_authors_where_the_size_has_no_legs()   // [AC-keep-ends-studio-8]
+    {
+        // Neolithe XS is worn with the Small hips: no legs of its own. The shoe in that size stays the author's, quietly,
+        // as the legs piece does; the sizes with legs carry a refitted one.
+        string root = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            const string Top = "chara/equipment/e6071/model/c0201e6071_top.mdl";
+            File.Copy(Path.Combine(LocalData.Path(Heartthrob), "top size", "small", "chara", "equipment", "e6071",
+                                   "model", "c0201e6071_top.mdl"), Path.Combine(root, "top.mdl"));
+            var shoe = LocalData.PackEntryEndingWith(LocalData.ShiftPack, "e6219_sho.mdl");
+            File.WriteAllBytes(Path.Combine(root, "sho.mdl"), shoe);
+            File.WriteAllText(Path.Combine(root, PenumbraModMeta.MetaFile), $$"""
+                { "FileVersion": 4, "Name": "Outfit",
+                  "DefaultData": { "Files": {}, "FileSwaps": {}, "Manipulations": [] },
+                  "Groups": [ { "Version": 0, "Name": "Top Size", "Type": "Single", "Priority": 0, "DefaultSettings": 0,
+                                "Options": [ { "Name": "Small", "Files": { "{{Top}}": "top.mdl", "{{ShoePath}}": "sho.mdl" } } ] } ] }
+                """);
+            var (result, _) = RunOn(root, ["neolithe"], Bibo, Yab, Neolithe);
+            var added = Options(root, "Top Size").Skip(1).ToList();
+            output.WriteLine($"added: {string.Join(", ", added)}; notes: {string.Join(" / ", result.Notes)}");
+            var noLegs = SupportedBodies.Of("neolithe", "_top", false)!.Sizes.Where(s => s.LegsRel == null)
+                                        .Select(s => SupportedBodies.OptionName(SupportedBodies.Of("neolithe", "_top", false)!, s))
+                                        .ToHashSet();
+            Assert.Contains(added, noLegs.Contains);
+            Assert.Contains(added, o => !noLegs.Contains(o));
+            foreach (string option in added)
+            {
+                var sho = ModelOf(root, "Top Size", option, ShoePath);
+                Assert.Equal(noLegs.Contains(option), sho.AsSpan().SequenceEqual(shoe));
+            }
+            Assert.Contains(lastLog, l => l.Template.Contains("has no legs of its own", StringComparison.Ordinal)
+                                          && l.Args.Contains("Feet — e6219"));
+            Assert.DoesNotContain(result.Notes, n => n.Contains("e6219", StringComparison.Ordinal));
         }
         finally
         {
@@ -951,7 +996,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
         }
     }
 
-    [LocalDataFact(LocalData.GameData, LocalData.ShiftPack, SeenGloves, Yab, Rue, Bibo)]
+    [LocalDataFact(LocalData.GameData, LocalData.ShiftPack, SeenGloves, Heartthrob, Yab, Rue, Bibo)]
     [Trait("Plan", "AC-sizeset-game-body-source-3")]
     [Trait("Plan", "EDGE-sizeset-game-body-source-3")]
     public void Body_mod_shoes_and_gloves_read_the_same_with_the_game_body_offered()   // [AC-sizeset-game-body-source-3] [EDGE-sizeset-game-body-source-3]
@@ -988,6 +1033,28 @@ public class SizeSetRefitTests(ITestOutputHelper output)
                 Directory.Delete(without, recursive: true);
                 Directory.Delete(with, recursive: true);
             }
+        }
+
+        // Heartthrob's shoe, following its legs in "Bottom Size": a whole mod, copied without Proteus's record.
+        string modWithout = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
+        string modWith = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            CopyModels(LocalData.Path(Heartthrob), modWithout, withRecord: false);
+            CopyModels(LocalData.Path(Heartthrob), modWith, withRecord: false);
+            var (a, _) = RunOn(modWithout, ["rue"], NoGameBody, Bibo, Rue, Yab);
+            var (b, _) = RunOn(modWith, ["rue"], game, Bibo, Rue, Yab);
+            var addedA = Options(modWithout, "Bottom Size");
+            output.WriteLine($"Heartthrob: {string.Join(", ", addedA)}");
+            Assert.Equal(addedA, Options(modWith, "Bottom Size"));
+            Assert.Equal(a.Made, b.Made);
+            foreach (string o in addedA)
+                Assert.Equal(ModelOf(modWithout, "Bottom Size", o, HeartthrobShoe), ModelOf(modWith, "Bottom Size", o, HeartthrobShoe));
+        }
+        finally
+        {
+            if (Directory.Exists(modWithout)) Directory.Delete(modWithout, recursive: true);
+            if (Directory.Exists(modWith)) Directory.Delete(modWith, recursive: true);
         }
     }
 
@@ -1043,20 +1110,78 @@ public class SizeSetRefitTests(ITestOutputHelper output)
         // No game body handed over (outside the game), or none for the race: read only over the body mods, as before.
         // With Rue+ alone installed that is a nearness reading onto Rue+ (2.7 mm off), whose arms are one shape at every
         // size — so nothing is made, and nothing is said to come from the game's body.
-        foreach (var gameBody in new[] { NoGameBody, _ => null })
+        // A race the game has no body for is an empty catalog, as the panel hands it over.
+        string empty = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(empty);
+        try
         {
-            string root = ShoeMod(LaceModel("4/c0201e6039_glv.mdl"), "Lace", LaceGlovePath);
-            try
+            foreach (var gameBody in new[] { NoGameBody, _ => null, _ => new BodySizeCatalog(empty, []) })
             {
-                var (result, _) = RunOn(root, ["rue"], gameBody, Rue);
-                Assert.Equal(0, result.Made);
-                Assert.Equal(["Lace"], Options(root, "Shoes"));
-                Assert.DoesNotContain(lastLog, l => l.Args.Contains(VanillaBodyCatalog.Key));
+                string root = ShoeMod(LaceModel("4/c0201e6039_glv.mdl"), "Lace", LaceGlovePath);
+                try
+                {
+                    var (result, _) = RunOn(root, ["rue"], gameBody, Rue);
+                    Assert.Equal(0, result.Made);
+                    Assert.Equal(["Lace"], Options(root, "Shoes"));
+                    Assert.DoesNotContain(lastLog, l => l.Args.Contains(VanillaBodyCatalog.Key));
+                }
+                finally
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+
+                // Lace's boots match no body mod at all: today's note, and nothing made.
+                string boots = ShoeMod(LaceModel("19/c0201e6039_sho.mdl"), "Lace", "chara/equipment/e6039/model/c0201e6039_sho.mdl");
+                try
+                {
+                    var (result, _) = RunOn(boots, ["rue"], gameBody, Rue);
+                    Assert.Equal(0, result.Made);
+                    Assert.Equal(string.Format(Proteus.Localization.Strings.SizeSet.UnreadableFmt, "Feet — e6039"),
+                                 Assert.Single(result.Notes));
+                }
+                finally
+                {
+                    Directory.Delete(boots, recursive: true);
+                }
             }
-            finally
-            {
-                Directory.Delete(root, recursive: true);
-            }
+        }
+        finally
+        {
+            Directory.Delete(empty, recursive: true);
+        }
+    }
+
+    [LocalDataFact(Bibo, Neolithe)]
+    [Trait("Plan", "EDGE-sizeset-game-body-source-4")]
+    public void A_shoe_reaching_no_leg_made_on_the_game_body_gets_only_its_skin_redrawn()   // [EDGE-sizeset-game-body-source-4]
+    {
+        // No shoe of the game's own reaches no leg (its feet read by their cloth), so a body stands in for the game's:
+        // Bibo+'s catalog handed over as the game's body, Bibo+ itself not among the body mods. Its own feet, pointed at
+        // the men's skin, are then a shoe reaching no leg made on "the game's body".
+        var bibo = BodySizeCatalog.Read(LocalData.Path(Bibo));
+        Func<string, BodySizeCatalog?> game = _ => bibo;
+        var shoe = BiboFeet(mensSkin: true);
+        var found = ReadWithGameBody(shoe, "_sho", "0201", game, Neolithe);
+        output.WriteLine($"route {found.Route}, {found.Pick?.Dir} / {found.Pick?.Option.Label}");
+        Assert.Equal(KeepEnds.Route.SkinOnly, found.Route);
+        Assert.Equal(VanillaBodyCatalog.Key, found.Pick!.Dir);
+
+        string root = ShoeMod(shoe, "Barefoot");
+        try
+        {
+            var (result, _) = RunOn(root, ["neolithe"], game, Neolithe);
+            var added = Options(root, "Shoes").Skip(1).ToList();
+            output.WriteLine($"added: {string.Join(", ", added)}; {result.Made} made");
+            Assert.Equal(["Neolithe"], added);
+            var saved = ModelOf(root, "Shoes", "Neolithe", ShoePath);
+            Assert.Equal(AllPositions(shoe), AllPositions(saved));
+            Assert.DoesNotContain("/mt_c0101b0001_bibo.mtrl", MaterialsOf(saved));
+            Assert.All(BodyRetargetWriter.ReadRecord(root)!.Options,
+                       e => Assert.Contains(Proteus.Localization.Strings.Parts.RetargetFromVanilla, e.From));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
         }
     }
 
