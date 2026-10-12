@@ -3783,8 +3783,12 @@
     "message": "리그를 읽을 수 없어 발이나 손을 나머지와 구분할 수 없습니다. 장비 전체를 리핏합니다.",
     "description": ""
   },
-  "Parts.Retarget.NoLimbInBody.Fmt": {
-    "message": "{0}에는 리핏할 {1}이(가) 없어 장비 전체를 리핏합니다.",
+  "Parts.Retarget.NoLegsInBody.Fmt": {
+    "message": "{0}에는 리핏할 다리가 없어 장비 전체를 리핏합니다.",
+    "description": ""
+  },
+  "Parts.Retarget.NoChestInBody.Fmt": {
+    "message": "{0}에는 리핏할 가슴이 없어 장비 전체를 리핏합니다.",
     "description": ""
   },
   "Parts.Retarget.NeedFromRequired.Fmt": {

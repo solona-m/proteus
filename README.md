@@ -155,7 +155,7 @@ Things worth knowing:
 
 ##### Every size for other bodies
 
-Below the one-garment tool, **Every size for other bodies** does a whole mod at once. Tick the body mods you want, press **Add the sizes**, and every chest and legs piece in the mod is refitted from the author's first size into every size of those bodies, saved beside the author's own sizes as "Rue S", "YAB Buff L" and so on.
+Below the one-garment tool, **Every size for other bodies** does a whole mod at once. Tick the body mods you want, press **Add the sizes**, and every chest, legs, shoe and glove piece in the mod is refitted from the author's first size into every size of those bodies, saved beside the author's own sizes as "Rue S", "YAB Buff L" and so on.
 
 - **Use a body's YAS version where it has one** gives Rue, YAB and Tre their Yet Another Skeleton sizes. A piece already weighted to YAS always gets YAS sizes.
 - **Include shoes and gloves**, on by default, sizes the mod's shoes and gloves too, keeping their own feet and hands: shoes get the legs' sizes ("Rue WC", "YAB SC"), gloves one option per body. A shoe or glove in the same size group as the outfit's chest or legs joins the sizes that piece made, so one choice dresses the whole outfit. One that reaches no leg or arm only has its skin redrawn, and only where the new body draws skin another way.

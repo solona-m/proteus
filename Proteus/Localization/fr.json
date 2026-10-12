@@ -3783,8 +3783,12 @@
     "message": "Son rig est illisible, on ne peut donc pas distinguer le pied ou la main du reste : toute la pièce est réajustée.",
     "description": ""
   },
-  "Parts.Retarget.NoLimbInBody.Fmt": {
-    "message": "{0} n'a pas de {1} d'après lesquels réajuster, toute la pièce est donc réajustée.",
+  "Parts.Retarget.NoLegsInBody.Fmt": {
+    "message": "{0} n'a pas de jambes d'après lesquelles réajuster, toute la pièce est donc réajustée.",
+    "description": ""
+  },
+  "Parts.Retarget.NoChestInBody.Fmt": {
+    "message": "{0} n'a pas de torse d'après lequel réajuster, toute la pièce est donc réajustée.",
     "description": ""
   },
   "Parts.Retarget.NeedFromRequired.Fmt": {

@@ -156,7 +156,7 @@ Conviene saber:
 
 ##### Todas las tallas para otros cuerpos
 
-Debajo de la herramienta para una sola prenda, **Todas las tallas para otros cuerpos** trabaja sobre un mod entero de una vez. Marca los mods de cuerpo que quieras, pulsa **Añadir las tallas**, y cada pieza de torso y de piernas del mod se reajusta desde la primera talla del autor a cada talla de esos cuerpos, y se guarda junto a las tallas propias del autor como «Rue S», «YAB Buff L», etc.
+Debajo de la herramienta para una sola prenda, **Todas las tallas para otros cuerpos** trabaja sobre un mod entero de una vez. Marca los mods de cuerpo que quieras, pulsa **Añadir las tallas**, y cada pieza de torso, de piernas, de zapatos y de guantes del mod se reajusta desde la primera talla del autor a cada talla de esos cuerpos, y se guarda junto a las tallas propias del autor como «Rue S», «YAB Buff L», etc.
 
 - **Usar la versión YAS de un cuerpo cuando la tenga** da a Rue, YAB y Tre sus tallas de Yet Another Skeleton. Una pieza que ya tiene pesos de YAS recibe siempre tallas YAS.
 - **Incluir zapatos y guantes**, activado por defecto, también da tallas a los zapatos y guantes del mod, conservando sus propios pies y manos: los zapatos reciben las tallas de las piernas («Rue WC», «YAB SC»), los guantes una opción por cuerpo. Un zapato o guante en el mismo grupo de tallas que el pecho o las piernas del conjunto se suma a las tallas que hizo esa pieza, así que una sola elección viste todo el conjunto. Uno que no llega a ninguna pierna ni brazo solo redibuja su piel, y solo donde el cuerpo nuevo dibuja la piel de otra forma.

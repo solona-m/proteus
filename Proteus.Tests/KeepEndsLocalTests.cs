@@ -593,9 +593,9 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
                                   BodyRetarget.Planned Unheld);
 
     /// <summary>
-    /// A shoe or glove through the Body size tool with its end kept, exactly as the panel's worker does it with the
-    /// panel's defaults (new body's skin on, cut, nothing cleared): read against the chosen source, the limb pair and the
-    /// end's for its shape, the plan, its skin drawn like the new body's — and, for comparison, the same with nothing held.
+    /// A shoe or glove through the Body size tool with its end kept: the panel's worker's own planning
+    /// (<see cref="KeepEnds.StudioPlan"/>) with the panel's defaults (new body's skin on, cut, nothing cleared), the limb
+    /// read against the chosen source as the panel reads it — and, for comparison, the same pairs with nothing held.
     /// </summary>
     private static Studied StudioRefit(byte[] bytes, string slot, string sourceNeed, string targetNeed,
                                        Func<BodySizeCatalog, BodyOption, BodyOption>? targetOf = null,
@@ -606,22 +606,28 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
         var source = BodySizeCatalog.Read(LocalData.Path(sourceNeed));
         var target = BodySizeCatalog.Read(LocalData.Path(targetNeed));
         bool across = !string.Equals(sourceNeed, targetNeed, StringComparison.OrdinalIgnoreCase);
-        var reading = KeepEnds.Read(slot, parts, bytes, RefitCore.ShapePieces(parts, new HashSet<string>()))!;
+        var pieces = RefitCore.ShapePieces(parts, new HashSet<string>());
+        var reading = KeepEnds.Read(slot, parts, bytes, pieces)!;
         var read = KeepEnds.StudioLimb(reading, parts, bones, Race, Path.GetFileName(LocalData.Path(sourceNeed)), source);
         Assert.True(read.Pick != null, $"route {read.Route} picked nothing");
         var from = read.Pick!;
         var to = targetOf?.Invoke(target, from)
                  ?? AutoRefitDecisions.Companion(target.For(reading.Limb, Race), from, null)!;
-        var (endFrom, endTo) = KeepEnds.EndPair(source, target, slot, Race, from, to);
         var uv = new UVRemapService(NSubstitute.Substitute.For<Dalamud.Plugin.Services.IPluginLog>(), ".");
+        var log = NSubstitute.Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
+        var input = new KeepEnds.StudioPlanInput(parts, bytes, slot, pieces, source, target, Race, false, from, [to],
+                                                 SameBodyMod: !across, FromCloth: read.Shown?.FromCloth == true,
+                                                 ReplaceSkin: true, Across: across, ClearBody: false, Held: alsoHeld,
+                                                 Shared: null, _ => (null, null), s => s, "test");
+        var studied = KeepEnds.StudioPlan(input, (p, _) => p, uv, log);
+        Assert.True(studied.Planned is { Count: 1 }, $"planned nothing: {studied.Error}{studied.Notice}");
+        var plan = studied.Planned![0].Planned;
+
+        var (endFrom, endTo) = KeepEnds.EndPair(source, target, slot, Race, from, to);
         Assert.Null(KeepEnds.BuildPairs(reading, source.PathOf(from), target.PathOf(to),
                                         endFrom == null ? null : source.PathOf(endFrom),
                                         endTo == null ? null : target.PathOf(endTo), false, _ => (null, null), s => s, uv,
                                         null, out var limb, out var end));
-        var plan = KeepEnds.Plan(parts, bytes, reading, limb, end, replaceSkin: true, across: across, clearBody: false,
-                                 alsoHeld: alsoHeld, extra: null);
-        var log = NSubstitute.Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
-        plan = RefitCore.MatchSkinToBody(plan, source.PathOf(from), target.PathOf(to), uv, false, log);
         List<BodyRetarget.SlotPair> pairs = [limb];
         if (end is { } e) pairs.Add(e with { ShapeOnly = true });
         var unheld = BodyRetarget.Plan(parts, bytes, pairs, slot, held: new HashSet<int>(), replaceSkin: true,
@@ -903,7 +909,7 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
         var reading = KeepEnds.Read("_sho", parts, baked!)!;
         var read = KeepEnds.StudioLimb(reading, parts, bones, Race, VanillaBodyCatalog.Key, vanilla);
         output.WriteLine($"{path}: route {read.Route}, {read.Pick?.Label}");
-        if (read.Route is not (KeepEnds.Route.Skin or KeepEnds.Route.Cloth)) return;
+        Assert.Contains(read.Route, new[] { KeepEnds.Route.Skin, KeepEnds.Route.Cloth });
 
         var bibo = BodySizeCatalog.Read(LocalData.Path(Bibo));
         var legs = bibo.For("_dwn", Race).First(o => o.Label.EndsWith("Medium", StringComparison.Ordinal));
@@ -913,6 +919,43 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
         var plan = KeepEnds.Plan(parts, baked!, reading, limb, null, true, true, false, null, null);
         plan = RefitCore.WithBodySkin(plan, bibo.PathOf(legs), NSubstitute.Substitute.For<Dalamud.Plugin.Services.IPluginLog>());
         foreach (int v in reading.Ends) Assert.Equal(default, plan.Edit.DeltaAt(v));
+    }
+
+    [LocalDataFact(Bibo, Neolithe)]
+    [Trait("Plan", "AC-keep-ends-studio-4")]
+    public void Studio_shoe_reaching_no_leg_redraws_only_its_skin()   // [AC-keep-ends-studio-4]
+    {
+        // Bibo+'s own feet as a "shoe": all skin, nothing of the leg. Pointed at the men's Bibo skin (as Shift is), it
+        // is redrawn with Neolithe's; as Bibo+ ships them, there is nothing to change — unless it is being baked.
+        string feetPath = Path.Combine(LocalData.Path(Bibo), "feet", "small clothes", "chara", "equipment", "e0000",
+                                       "model", "c0201e0000_sho.mdl");
+        var plain = File.ReadAllBytes(feetPath);
+        var mens = ModelAttributeWriter.RenameMaterial(plain, "/mt_c0201b0001_bibo.mtrl", "/mt_c0101b0001_bibo.mtrl");
+        var bibo = BodySizeCatalog.Read(LocalData.Path(Bibo));
+        var neo = BodySizeCatalog.Read(LocalData.Path(Neolithe));
+        var parts = ModelPartReader.Read(mens)!;
+        var reading = KeepEnds.Read("_sho", parts, mens)!;
+        var read = KeepEnds.StudioLimb(reading, parts, BonesOf(mens), Race, Path.GetFileName(LocalData.Path(Bibo)), bibo);
+        Assert.Equal(KeepEnds.Route.SkinOnly, read.Route);
+        Assert.NotNull(read.Pick);
+        var end = AutoRefitDecisions.Companion(neo.For("_sho", Race), null, null)!;
+        var log = NSubstitute.Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
+
+        var redrawn = KeepEnds.StudioSkinOnly(mens, bibo.PathOf(read.Pick!), end, neo, false, baking: false, (p, _) => p,
+                                              null, log);
+        Assert.True(redrawn.Planned is { Count: 1 }, redrawn.Error + redrawn.Notice);
+        var model = redrawn.Planned![0].Planned.Model;
+        Assert.Equal(parts.Positions, ModelPartReader.Read(model)!.Positions);   // its shape, untouched
+        Assert.DoesNotContain("/mt_c0101b0001_bibo.mtrl", SecondSkinWriter.Parse(model).MatNames);
+        Assert.Contains("/mt_c0201b0001_bibo.mtrl", SecondSkinWriter.Parse(model).MatNames);
+
+        var same = KeepEnds.StudioSkinOnly(plain, bibo.PathOf(read.Pick!), end, neo, false, baking: false, (p, _) => p,
+                                           null, log);
+        Assert.Null(same.Planned);
+        Assert.Equal(Proteus.Localization.Strings.Parts.RetargetSkinAlreadyMatches, same.Notice);
+        var baked = KeepEnds.StudioSkinOnly(plain, bibo.PathOf(read.Pick!), end, neo, false, baking: true, (p, _) => p,
+                                            null, log);
+        Assert.True(baked.Planned is { Count: 1 });
     }
 
     // ── reading the legs alone ───────────────────────────────────────────────────────────────────────────

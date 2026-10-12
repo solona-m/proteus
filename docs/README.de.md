@@ -156,7 +156,7 @@ Gut zu wissen:
 
 ##### Alle Größen für andere Körper
 
-Unter dem Werkzeug für ein einzelnes Kleidungsstück erledigt **Alle Größen für andere Körper** einen ganzen Mod auf einmal. Hake die gewünschten Körper-Mods an, drücke **Größen hinzufügen**, und jedes Brust- und Beinteil im Mod wird aus der ersten Größe des Autors in jede Größe dieser Körper angepasst und neben den eigenen Größen des Autors gespeichert, als „Rue S“, „YAB Buff L“ und so weiter.
+Unter dem Werkzeug für ein einzelnes Kleidungsstück erledigt **Alle Größen für andere Körper** einen ganzen Mod auf einmal. Hake die gewünschten Körper-Mods an, drücke **Größen hinzufügen**, und jedes Brust-, Bein-, Schuh- und Handschuhteil im Mod wird aus der ersten Größe des Autors in jede Größe dieser Körper angepasst und neben den eigenen Größen des Autors gespeichert, als „Rue S“, „YAB Buff L“ und so weiter.
 
 - **Die YAS-Version eines Körpers nutzen, wo es eine gibt** gibt Rue, YAB und Tre ihre Yet-Another-Skeleton-Größen. Ein Teil, das bereits auf YAS gewichtet ist, bekommt immer YAS-Größen.
 - **Schuhe und Handschuhe einbeziehen**, standardmäßig an, gibt auch den Schuhen und Handschuhen des Mods Größen und behält dabei ihre eigenen Füße und Hände: Schuhe bekommen die Größen der Beine („Rue WC“, „YAB SC“), Handschuhe eine Option pro Körper. Ein Schuh oder Handschuh in derselben Größengruppe wie Brust oder Beine des Outfits schließt sich den Größen dieses Teils an, sodass eine Wahl das ganze Outfit anzieht. Einer, der kein Bein und keinen Arm erreicht, bekommt nur seine Haut neu gezeichnet, und nur dort, wo der neue Körper Haut anders zeichnet.

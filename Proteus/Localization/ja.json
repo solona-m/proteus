@@ -3783,8 +3783,12 @@
     "message": "リグを読み取れないため、足や手をそれ以外と区別できません。装備全体をリフィットします。",
     "description": ""
   },
-  "Parts.Retarget.NoLimbInBody.Fmt": {
-    "message": "{0} にはリフィットに使う{1}がないため、装備全体をリフィットします。",
+  "Parts.Retarget.NoLegsInBody.Fmt": {
+    "message": "{0} にはリフィットに使う脚がないため、装備全体をリフィットします。",
+    "description": ""
+  },
+  "Parts.Retarget.NoChestInBody.Fmt": {
+    "message": "{0} にはリフィットに使う胴がないため、装備全体をリフィットします。",
     "description": ""
   },
   "Parts.Retarget.NeedFromRequired.Fmt": {

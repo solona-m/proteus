@@ -953,6 +953,9 @@ public class KeepEndsTests
             var read = KeepEnds.StudioLimb(reading, parts, NoBones, "0201", "body", catalog);
 
             Assert.Equal(KeepEnds.Route.SkinOnly, read.Route);
+            // Two triangles of skin are too little to be sure by; its own feet are still the pick (and are filled in —
+            // RetargetInputs.StudioPrefill), since they are the only row it has.
+            Assert.Equal(BodySizeMatch.Confidence.TooLittle, read.Shown?.Confidence);
             Assert.Equal(feet, read.Pick);
             var planned = KeepEnds.SkinOnlyPlanned(bytes);
             Assert.Same(bytes, planned.Model);

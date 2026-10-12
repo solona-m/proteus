@@ -21,7 +21,6 @@ internal static partial class SizeSetRefit
                                     Action<string> progress, List<string> notes, CancellationToken ct)
     {
         string root = request.ModRoot;
-        var record = BodyRetargetWriter.ReadRecord(root);
         string race = piece.Race;
         bool male = BodySizeCatalog.IsMaleRace(race);
         string limb = AutoRefitDecisions.LimbOf(piece.Slot)!;
@@ -85,22 +84,12 @@ internal static partial class SizeSetRefit
         string sourcePath = sourceCat.PathOf(pick.Option);
 
         // ── where the sizes go: the same bookkeeping as a chest or legs piece's ──
-        string group = piece.Group ?? piece.GroupName;
-        var existing = (PenumbraModMeta.TryReadFileOptions(root, group) ?? []).Select(o => o.Name)
-                                                                              .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var inGroup = (record?.Options ?? []).Where(e => string.Equals(record!.GroupOf(e), group,
-                                                                       StringComparison.OrdinalIgnoreCase)).ToList();
-        var ours = inGroup.Select(e => e.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var doneHere = inGroup.Where(e => string.Equals(e.GamePath, piece.GamePath, StringComparison.OrdinalIgnoreCase))
-                              .Select(e => e.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var group = new SizeGroup(root, piece);
         // A shoe's author sizes are compared by its legs, the foot left out; a glove's never (every chest has its arms).
-        var authorSizes = !skinOnly && KeepEnds.ComparesAuthorSizes(piece.Slot) ? AuthorLimbSizes(root, piece, ours) : [];
-        bool authorGroup = BodyRetargetWriter.IsAuthorGroup(root, group);
-        string defaultBefore = PenumbraModMeta.SingleDefault(root, group) ?? BodyRetargetWriter.OriginalOption;
+        var authorSizes = !skinOnly && KeepEnds.ComparesAuthorSizes(piece.Slot) ? AuthorLimbSizes(root, piece, group.Ours) : [];
 
         bool yas = request.Yas || SupportedBodies.IsYas(src.Bones);
         ushort? sourceMask(string slot) => RefitCore.MaskOf(pick.Dir, sourceCat, slot, null);
-        int saved = 0;
 
         foreach (string key in request.Keys)
         {
@@ -116,16 +105,23 @@ internal static partial class SizeSetRefit
             foreach (var (option, limbRel) in EndTargets(body, piece, gloves, skinOnly, follows, across, pick))
             {
                 ct.ThrowIfCancellationRequested();
-                if (existing.Contains(option) && (!ours.Contains(option) || (doneHere.Contains(option) && !request.Remake)))
+                if (group.AlreadyThere(option, request.Remake))
                 {
                     log.Information("[Proteus] size set: {0}: \"{1}\" already there", piece.Label, option);
                     continue;
                 }
                 // A follower only joins a size what it follows made: one made here alone would wear the author's
                 // unrefitted chest or legs beside a refitted shoe.
-                if (follows && !ours.Contains(option))
+                if (follows && !group.Ours.Contains(option))
                 {
                     log.Information("[Proteus] size set: {0}: no \"{1}\" to join", piece.Label, option);
+                    continue;
+                }
+                // A shoe following a chest size with no legs of its own (Neolithe XS keeps the Small hips) keeps the
+                // author's, as the legs piece does.
+                if (limbRel == null && !skinOnly)
+                {
+                    log.Information("[Proteus] size set: {0}: {1} has no legs of its own", piece.Label, option);
                     continue;
                 }
 
@@ -186,27 +182,16 @@ internal static partial class SizeSetRefit
                 plan = RefitCore.MatchSkinToBody(plan, sourcePath, targetCat.PathOf(to!), uvRemap, male, log);
                 var (seamEdges, stretched) = KeepEnds.SeamStretch(src.Garment, src.Reading.Ends, plan);
                 log.Information("[Proteus] size set: {0} onto {1} by its {2} (moved up to {3:F1} mm, the seam stretched "
-                              + "up to {4:F1} mm over {5} edges)", piece.Label, option, limb, plan.Report.WorstMove * 1000f,
-                                stretched * 1000f, seamEdges);
+                              + "up to {4:F1} mm over {5} edges, {6} triangles left folded)", piece.Label, option, limb,
+                                plan.Report.WorstMove * 1000f, stretched * 1000f, seamEdges, plan.Report.Folded);
                 refits.Add(new BodyRetargetWriter.Refit(option, plan.Model, to!.Label));
             }
             if (refits.Count == 0) continue;
-
-            string from = RefitCore.LabelFrom(across ? sourceEntry.Name : null, [pick.Option.Label]);
-            var outcome = BodyRetargetWriter.Save(root, group, piece.GamePath, target.Dir, from, refits,
-                                                  piece.Group != null ? src.Option : null);
-            if (!outcome.Ok)
-            {
-                notes.Add(string.Format(Strings.SizeSet.SaveFailedFmt, piece.Label, outcome.Message));
-                continue;
-            }
-            saved += refits.Count;
-            existing.UnionWith(refits.Select(r => r.Option));
-            ours.UnionWith(refits.Select(r => r.Option));
-            doneHere.UnionWith(refits.Select(r => r.Option));
+            group.Save(target.Dir, RefitCore.LabelFrom(across ? sourceEntry.Name : null, [pick.Option.Label]), refits,
+                       src.Option, notes);
         }
-        if (saved > 0 && !authorGroup) PenumbraModMeta.SetSingleDefault(root, group, defaultBefore);
-        return saved;
+        group.RestoreDefault();
+        return group.Saved;
     }
 
     /// <summary>

@@ -327,55 +327,163 @@ public class SizeSetRefitTests(ITestOutputHelper output)
 
     private const string ShoePath = "chara/equipment/e6219/model/c0201e6219_sho.mdl";
 
+    /// <summary>
+    /// The body a shoe or glove is read as made on, through the very calls the size set makes: the first ticked body's
+    /// mod preferred, over the body mods given.
+    /// </summary>
+    private static AutoRefitDecisions.Pick? EndSourceOf(byte[] model, string slot, string preferredKey, params string[] bodyMods)
+    {
+        string modsRoot = LocalData.Path(LocalData.Mods);
+        var dirs = bodyMods.Select(n => Path.GetFileName(LocalData.Path(n))).ToDictionary(d => d, d => d);
+        var bodies = new BodyModIndex().RefreshState(dirs, modsRoot).List;
+        var mods = bodies.Select(b => (b.Dir, b.Catalog)).ToList();
+        string sizeSlot = slot == "_glv" ? "_top" : "_dwn";
+        string preferred = SupportedBodies.Find(SupportedBodies.Of(preferredKey, sizeSlot, false)!, bodies)?.Dir ?? mods[0].Dir;
+        var parts = ModelPartReader.Read(model)!;
+        var bones = new HashSet<string>(SecondSkinWriter.Parse(model).BoneNames, StringComparer.Ordinal);
+        var reading = KeepEnds.Read(slot, parts, model)!;
+        return KeepEnds.Find(reading, parts, bones, "0201",
+                             (view, s) => RefitCore.DetectSource(view, bones, s, "0201", mods, preferred, _ => true, _ => { }),
+                             dir => bodies.FirstOrDefault(b => b.Dir == dir)?.Catalog).Pick;
+    }
+
     [LocalDataFact(LocalData.ShiftPack, Yab, Rue, Bibo)]
     [Trait("Plan", "AC-keep-ends-studio-6")]
     [Trait("Plan", "EDGE-keep-ends-studio-13")]
     [Trait("Plan", "EDGE-keep-ends-studio-14")]
-    [Trait("Plan", "EDGE-keep-ends-studio-15")]
-    [Trait("Plan", "EDGE-keep-ends-studio-4")]
-    public void Shift_shoe_gains_legs_sizes_with_its_foot_kept()   // [AC-keep-ends-studio-6] [EDGE-keep-ends-studio-13] [EDGE-keep-ends-studio-14] [EDGE-keep-ends-studio-15] [EDGE-keep-ends-studio-4]
+    public void Shift_shoe_gains_legs_sizes_with_its_foot_kept()   // [AC-keep-ends-studio-6] [EDGE-keep-ends-studio-13] [EDGE-keep-ends-studio-14]
     {
         var shoe = LocalData.PackEntryEndingWith(LocalData.ShiftPack, "e6219_sho.mdl");
         string root = ShoeMod(shoe, "YAB WC");
         try
         {
+            // YAB's, Rue's and Bibo's feet are one shape: which body it is read as made on is read first, and the
+            // run's results are judged against that.
+            var pick = EndSourceOf(shoe, "_sho", "yab", Yab, Rue, Bibo);
+            output.WriteLine($"read as made on {pick?.Dir} / {pick?.Option.Label} ({pick?.Confidence})");
+            Assert.NotNull(pick);
+            // The body by its mod: Rue+ and YAB+ ship the very same legs files.
+            var installed = new BodyModIndex().RefreshState(
+                new[] { Yab, Rue, Bibo }.Select(n => Path.GetFileName(LocalData.Path(n))).ToDictionary(d => d, d => d),
+                LocalData.Path(LocalData.Mods)).List;
+            var made = new[] { "yab", "rue", "bibo" }.Select(k => SupportedBodies.Of(k, "_dwn", false)!)
+                                                    .First(b => SupportedBodies.Find(b, installed)?.Dir == pick!.Dir);
+
             var groupsBefore = (PenumbraModMeta.TryReadGroups(root) ?? []).Select(g => g.Name).ToList();
             var (result, _) = RunOn(root, ["yab", "rue", "bibo"], Yab, Rue, Bibo);
 
             var added = Options(root, "Shoes").Skip(1).ToList();
-            output.WriteLine("added: " + string.Join(", ", added));
+            output.WriteLine($"added: {string.Join(", ", added)}; read as {made.Label}");
             var table = new[] { "yab", "rue", "bibo" }.Select(k => SupportedBodies.Of(k, "_dwn", false)!)
                                                      .SelectMany(b => b.Sizes.Select(s => SupportedBodies.OptionName(b, s)))
                                                      .ToHashSet();
             Assert.NotEmpty(added);
             Assert.All(added, o => Assert.Contains(o, table));
-            // Made on YAB WC, which it already has; YAB SC's legs are the same shape, so YAB gives nothing. Rue's and
-            // Bibo's legs do.
-            Assert.DoesNotContain(added, o => o.StartsWith("YAB", StringComparison.Ordinal));
-            Assert.Contains(added, o => o.StartsWith("Rue", StringComparison.Ordinal));
-            Assert.Contains(added, o => o.StartsWith("Bibo", StringComparison.Ordinal));
+            // Not the body it was made on: its other sizes have legs of one shape with it, and give nothing. The other
+            // two bodies' legs do.
+            Assert.DoesNotContain(added, o => o.StartsWith(made.Label, StringComparison.Ordinal));
+            Assert.Equal(2, added.Select(o => o.Split(' ')[0]).Distinct().Count());
             foreach (string option in added)
                 Assert.Equal(0, EndPointsMissing(shoe, "_sho", ModelOf(root, "Shoes", option, ShoePath)));
+            // Measured inside the pass: no refit left a triangle folded.
+            var logged = EndRefitsLogged();
+            Assert.Equal(added.Count, logged.Count);
+            Assert.All(logged, l => Assert.True(l.Folded == 0, $"{l.Option}: {l.Folded} triangles left folded"));
 
             // Appended to the author's group, which keeps its place and its default; never a v3 file.
             Assert.Equal(groupsBefore, (PenumbraModMeta.TryReadGroups(root) ?? []).Select(g => g.Name).ToList());
             Assert.Equal("YAB WC", Options(root, "Shoes")[0]);
             Assert.Equal("YAB WC", PenumbraModMeta.SingleDefault(root, "Shoes"));
             Assert.DoesNotContain("\"FileVersion\": 3", File.ReadAllText(Path.Combine(root, PenumbraModMeta.MetaFile)));
-
-            // A pair the bodies cannot make is a note for that size, not a failure of the rest.
             output.WriteLine($"{result.Made} made; notes: {string.Join(" / ", result.Notes)}");
             Assert.Equal(added.Count, result.Made);
 
             // A second run finds nothing left to make.
             var (again, _) = RunOn(root, ["yab", "rue", "bibo"], Yab, Rue, Bibo);
             Assert.Equal(0, again.Made);
+
+            // Remake: only the sizes made here are made again, in place; the author's is untouched.
+            var authors = ModelOf(root, "Shoes", "YAB WC", ShoePath);
+            string modsRoot = LocalData.Path(LocalData.Mods);
+            var dirs = new[] { Yab, Rue, Bibo }.Select(n => Path.GetFileName(LocalData.Path(n))).ToDictionary(d => d, d => d);
+            var bodies = new BodyModIndex().RefreshState(dirs, modsRoot).List;
+            var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
+            var remade = SizeSetRefit.Run(new SizeSetRefit.Request(root, ["yab", "rue", "bibo"], false, Remake: true, bodies),
+                                          new UVRemapService(log, "."), log, _ => { }, CancellationToken.None);
+            Assert.Equal(added.Count, remade.Made);
+            Assert.Equal(Options(root, "Shoes").Skip(1), added);
+            Assert.Equal(authors, ModelOf(root, "Shoes", "YAB WC", ShoePath));
         }
         finally
         {
             Directory.Delete(root, recursive: true);
         }
     }
+
+    [LocalDataFact(LocalData.ShiftPack, Yab, Rue, Bibo)]
+    [Trait("Plan", "EDGE-keep-ends-studio-15")]
+    public void A_shoe_in_no_group_gets_a_group_of_ours_whose_default_is_put_back()   // [EDGE-keep-ends-studio-15]
+    {
+        // Given outside any group, its sizes go into a group of Proteus's own, appended after the author's, whose default
+        // is "Original" again once the run is done — not the size saved last.
+        string root = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            File.WriteAllBytes(Path.Combine(root, "sho.mdl"), LocalData.PackEntryEndingWith(LocalData.ShiftPack, "e6219_sho.mdl"));
+            File.WriteAllText(Path.Combine(root, PenumbraModMeta.MetaFile), $$"""
+                { "FileVersion": 4, "Name": "Shoe",
+                  "DefaultData": { "Files": { "{{ShoePath}}": "sho.mdl" }, "FileSwaps": {}, "Manipulations": [] },
+                  "Groups": [ { "Version": 0, "Name": "Colour", "Type": "Single", "Priority": 0, "DefaultSettings": 0,
+                                "Options": [ { "Name": "Black", "Files": {} } ] } ] }
+                """);
+            var (result, _) = RunOn(root, ["bibo"], Yab, Rue, Bibo);
+            var groups =(PenumbraModMeta.TryReadGroups(root) ?? []).Select(g => g.Name).ToList();
+            output.WriteLine($"groups: {string.Join(", ", groups)}; {result.Made} made");
+            Assert.True(result.Made > 0);
+            Assert.Equal("Colour", groups[0]);
+            Assert.Equal(2, groups.Count);
+            Assert.Equal(BodyRetargetWriter.OriginalOption, PenumbraModMeta.SingleDefault(root, groups[1]));
+            Assert.DoesNotContain("\"FileVersion\": 3", File.ReadAllText(Path.Combine(root, PenumbraModMeta.MetaFile)));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [LocalDataFact(LocalData.ShiftPack, Yab, Rue, Bibo)]
+    [Trait("Plan", "EDGE-keep-ends-studio-24")]
+    public void Cancelling_keeps_saved_end_sizes()   // [EDGE-keep-ends-studio-24]
+    {
+        // Cancelled while the third body is being made: what the first two saved stays, and nothing is half-written.
+        var shoe = LocalData.PackEntryEndingWith(LocalData.ShiftPack, "e6219_sho.mdl");
+        string root = ShoeMod(shoe, "YAB WC");
+        try
+        {
+            string modsRoot = LocalData.Path(LocalData.Mods);
+            var dirs = new[] { Yab, Rue, Bibo }.Select(n => Path.GetFileName(LocalData.Path(n))).ToDictionary(d => d, d => d);
+            var bodies = new BodyModIndex().RefreshState(dirs, modsRoot).List;
+            var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
+            using var cts = new CancellationTokenSource();
+            Assert.Throws<OperationCanceledException>(() => SizeSetRefit.Run(
+                new SizeSetRefit.Request(root, ["yab", "rue", "bibo"], false, false, bodies), new UVRemapService(log, "."),
+                log, p => { if (p.Contains("Bibo", StringComparison.Ordinal)) cts.Cancel(); }, cts.Token));
+
+            var kept = Options(root, "Shoes").Skip(1).ToList();
+            output.WriteLine("kept: " + string.Join(", ", kept));
+            Assert.NotEmpty(kept);
+            Assert.DoesNotContain(kept, o => o.StartsWith("Bibo", StringComparison.Ordinal));
+            foreach (string option in kept)
+                Assert.Equal(0, EndPointsMissing(shoe, "_sho", ModelOf(root, "Shoes", option, ShoePath)));
+            Assert.Equal("YAB WC", PenumbraModMeta.SingleDefault(root, "Shoes"));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
 
     [LocalDataFact(LocalData.ShiftPack, Yab)]
     [Trait("Plan", "EDGE-keep-ends-studio-6")]
@@ -497,6 +605,184 @@ public class SizeSetRefitTests(ITestOutputHelper output)
         finally
         {
             if (Directory.Exists(copy)) Directory.Delete(copy, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// A shoe that reaches no leg, from real data: Bibo+'s own feet, all skin and nothing of the leg. As Bibo+ ships them
+    /// they draw the women's Bibo skin every installed body draws its feet with, and there is nothing to redraw. Pointed
+    /// at the men's Bibo skin instead (as Shift's heels are), every body redraws it as its own.
+    /// </summary>
+    private static byte[] BiboFeet(bool mensSkin)
+    {
+        var feet = File.ReadAllBytes(Path.Combine(LocalData.Path(Bibo), "feet", "small clothes", "chara", "equipment",
+                                                  "e0000", "model", "c0201e0000_sho.mdl"));
+        return mensSkin ? ModelAttributeWriter.RenameMaterial(feet, "/mt_c0201b0001_bibo.mtrl", "/mt_c0101b0001_bibo.mtrl")
+                        : feet;
+    }
+
+    private static HashSet<(float, float, float)> AllPositions(byte[] model)
+    {
+        var p = ModelPartReader.Read(model)!;
+        return Enumerable.Range(0, p.Positions.Length / 3)
+                         .Select(v => (p.Positions[v * 3], p.Positions[v * 3 + 1], p.Positions[v * 3 + 2])).ToHashSet();
+    }
+
+    private static List<string> MaterialsOf(byte[] model) => SecondSkinWriter.Parse(model).MatNames.ToList();
+
+    [LocalDataFact(Bibo, Neolithe)]
+    [Trait("Plan", "AC-keep-ends-studio-9")]
+    public void A_shoe_reaching_no_leg_gets_a_skin_only_option_per_body_where_the_skin_changes()   // [AC-keep-ends-studio-9]
+    {
+        var shoe = BiboFeet(mensSkin: true);
+        Assert.Equal(KeepEnds.Route.SkinOnly, KeepEndsRouteOf(shoe, Bibo, Neolithe));
+        string root = ShoeMod(shoe, "Barefoot");
+        try
+        {
+            var (result, _) = RunOn(root, ["neolithe", "bibo"], Bibo, Neolithe);
+            var added = Options(root, "Shoes").Skip(1).ToList();
+            output.WriteLine($"added: {string.Join(", ", added)}; {result.Made} made");
+            // In its own group: one option per body, named by it.
+            Assert.Equal(["Neolithe", "Bibo"], added);
+            foreach (string option in added)
+            {
+                var saved = ModelOf(root, "Shoes", option, ShoePath);
+                Assert.Equal(AllPositions(shoe), AllPositions(saved));   // its shape, untouched
+                Assert.Contains("/mt_c0201b0001_bibo.mtrl", MaterialsOf(saved));
+                Assert.DoesNotContain("/mt_c0101b0001_bibo.mtrl", MaterialsOf(saved));
+            }
+            Assert.Equal(2, result.Made);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [LocalDataFact(Bibo, Neolithe)]
+    [Trait("Plan", "AC-keep-ends-studio-9")]
+    public void A_shoe_reaching_no_leg_whose_skin_already_matches_gets_nothing()   // [AC-keep-ends-studio-9]
+    {
+        var shoe = BiboFeet(mensSkin: false);
+        Assert.Equal(KeepEnds.Route.SkinOnly, KeepEndsRouteOf(shoe, Bibo, Neolithe));
+        string root = ShoeMod(shoe, "Barefoot");
+        try
+        {
+            var (result, _) = RunOn(root, ["neolithe", "bibo"], Bibo, Neolithe);
+            Assert.Equal(0, result.Made);
+            Assert.Equal(["Barefoot"], Options(root, "Shoes"));
+            Assert.Empty(result.Notes);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>The route a shoe is read on, through the size set's own reading.</summary>
+    private static KeepEnds.Route KeepEndsRouteOf(byte[] model, params string[] bodyMods)
+    {
+        string modsRoot = LocalData.Path(LocalData.Mods);
+        var dirs = bodyMods.Select(n => Path.GetFileName(LocalData.Path(n))).ToDictionary(d => d, d => d);
+        var bodies = new BodyModIndex().RefreshState(dirs, modsRoot).List;
+        var mods = bodies.Select(b => (b.Dir, b.Catalog)).ToList();
+        var parts = ModelPartReader.Read(model)!;
+        var bones = new HashSet<string>(SecondSkinWriter.Parse(model).BoneNames, StringComparer.Ordinal);
+        var reading = KeepEnds.Read("_sho", parts, model)!;
+        return KeepEnds.Find(reading, parts, bones, "0201",
+                             (view, s) => RefitCore.DetectSource(view, bones, s, "0201", mods, mods[0].Dir, _ => true, _ => { }),
+                             dir => bodies.FirstOrDefault(b => b.Dir == dir)?.Catalog).Route;
+    }
+
+    [LocalDataFact(Heartthrob, Bibo, Rue, Yab)]
+    [Trait("Plan", "EDGE-keep-ends-studio-23")]
+    public void A_skin_only_shoe_follows_the_legs_options()   // [EDGE-keep-ends-studio-23]
+    {
+        // Heartthrob's Small skirt and a shoe reaching no leg, sized together in "Bottom Size": each size the skirt
+        // makes carries that body's skin-only shoe, and the shoe makes no option of its own.
+        string root = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            const string Skirt = "chara/equipment/e6071/model/c0201e6071_dwn.mdl";
+            File.Copy(Path.Combine(LocalData.Path(Heartthrob), "bottom size", "small", "chara", "equipment", "e6071",
+                                   "model", "c0201e6071_dwn.mdl"), Path.Combine(root, "dwn.mdl"));
+            var shoe = BiboFeet(mensSkin: true);
+            File.WriteAllBytes(Path.Combine(root, "sho.mdl"), shoe);
+            File.WriteAllText(Path.Combine(root, PenumbraModMeta.MetaFile), $$"""
+                { "FileVersion": 4, "Name": "Skirt",
+                  "DefaultData": { "Files": {}, "FileSwaps": {}, "Manipulations": [] },
+                  "Groups": [ { "Version": 0, "Name": "Bottom Size", "Type": "Single", "Priority": 0, "DefaultSettings": 0,
+                                "Options": [ { "Name": "Small", "Files": { "{{Skirt}}": "dwn.mdl", "{{ShoePath}}": "sho.mdl" } } ] } ] }
+                """);
+            var (result, _) = RunOn(root, ["rue"], Bibo, Rue, Yab);
+            var added = Options(root, "Bottom Size").Skip(1).ToList();
+            output.WriteLine($"added: {string.Join(", ", added)}; {result.Made} made");
+            Assert.NotEmpty(added);
+            Assert.All(added, o => Assert.StartsWith("Rue", o));
+            foreach (string option in added)
+            {
+                var saved = ModelOf(root, "Bottom Size", option, ShoePath);
+                Assert.Equal(AllPositions(shoe), AllPositions(saved));
+                Assert.DoesNotContain("/mt_c0101b0001_bibo.mtrl", MaterialsOf(saved));
+            }
+            // The skirt's options, and one shoe per option: twice the options made.
+            Assert.Equal(2 * added.Count, result.Made);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [LocalDataFact(Heartthrob, SeenGloves, LocalData.ShiftPack, Bibo, Rue, Yab)]
+    [Trait("Plan", "AC-keep-ends-studio-8")]
+    public void Gloves_and_a_shoe_beside_a_chest_join_its_sizes()   // [AC-keep-ends-studio-8]
+    {
+        // Heartthrob's Small top, Seen's gloves and Shift's shoe, all sized in one "Top Size": each size the top makes
+        // carries the gloves refitted by that size's arms and the shoe by the legs that size goes with; neither makes
+        // an option of its own.
+        string root = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            const string Top = "chara/equipment/e6071/model/c0201e6071_top.mdl";
+            File.Copy(Path.Combine(LocalData.Path(Heartthrob), "top size", "small", "chara", "equipment", "e6071",
+                                   "model", "c0201e6071_top.mdl"), Path.Combine(root, "top.mdl"));
+            var gloves = File.ReadAllBytes(LocalData.Path(SeenGloves));
+            var shoe = LocalData.PackEntryEndingWith(LocalData.ShiftPack, "e6219_sho.mdl");
+            File.WriteAllBytes(Path.Combine(root, "glv.mdl"), gloves);
+            File.WriteAllBytes(Path.Combine(root, "sho.mdl"), shoe);
+            File.WriteAllText(Path.Combine(root, PenumbraModMeta.MetaFile), $$"""
+                { "FileVersion": 4, "Name": "Outfit",
+                  "DefaultData": { "Files": {}, "FileSwaps": {}, "Manipulations": [] },
+                  "Groups": [ { "Version": 0, "Name": "Top Size", "Type": "Single", "Priority": 0, "DefaultSettings": 0,
+                                "Options": [ { "Name": "Small", "Files": { "{{Top}}": "top.mdl", "{{GlovePath}}": "glv.mdl",
+                                                                           "{{ShoePath}}": "sho.mdl" } } ] } ] }
+                """);
+            // Onto Bibo+: the gloves are read as made on YAB+ (or Rue+, their twin), so these are refits across bodies.
+            var (result, _) = RunOn(root, ["bibo"], Bibo, Rue, Yab);
+            var added = Options(root, "Top Size").Skip(1).ToList();
+            output.WriteLine($"added: {string.Join(", ", added)}; {result.Made} made");
+            Assert.NotEmpty(added);
+            Assert.Equal(["Top Size"], (PenumbraModMeta.TryReadGroups(root) ?? []).Select(g => g.Name));
+            var logged = EndRefitsLogged();
+            foreach (string option in added)
+            {
+                var glv = ModelOf(root, "Top Size", option, GlovePath);
+                Assert.False(glv.AsSpan().SequenceEqual(gloves), $"{option}: the gloves are the author's, not refitted");
+                Assert.Equal(0, EndPointsMissing(gloves, "_glv", glv));
+                // The shoe: refitted where the size has legs of its own, else left as the author's.
+                var sho = ModelOf(root, "Top Size", option, ShoePath);
+                if (!sho.AsSpan().SequenceEqual(shoe)) Assert.Equal(0, EndPointsMissing(shoe, "_sho", sho));
+            }
+            Assert.All(logged, l => Assert.True(l.Folded == 0, $"{l.Option}: {l.Folded} triangles left folded"));
+            Assert.DoesNotContain(result.Notes, n => n.Contains("e6219", StringComparison.Ordinal)
+                                                     || n.Contains("e0670", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
         }
     }
 
@@ -711,11 +997,27 @@ public class SizeSetRefitTests(ITestOutputHelper output)
         var result = SizeSetRefit.Run(request, new UVRemapService(log, "."), log, p => output.WriteLine(p),
                                       CancellationToken.None);
         foreach (string note in result.Notes) output.WriteLine("note: " + note);
+        lastLog.Clear();
         foreach (var call in log.ReceivedCalls())
-            output.WriteLine("log: " + string.Join(" | ", call.GetArguments().Select(a => a is object[] arr
+        {
+            var args = call.GetArguments();
+            lastLog.Add((args.FirstOrDefault() as string ?? "", args.Skip(1).FirstOrDefault() as object[] ?? []));
+            output.WriteLine("log: " + string.Join(" | ", args.Select(a => a is object[] arr
                 ? string.Join(", ", arr) : a?.ToString())));
+        }
         return (result, request);
     }
+
+    /// <summary>What the last <see cref="RunOn"/> logged: each message template and its arguments.</summary>
+    private readonly List<(string Template, object[] Args)> lastLog = [];
+
+    /// <summary>
+    /// Each shoe or glove refit the last run saved, and the triangles its plan left folded — read off the pass's own log
+    /// line, the plan being measured where it was made, not in the saved model.
+    /// </summary>
+    private List<(string Option, int Folded)> EndRefitsLogged()
+        => lastLog.Where(l => l.Template.Contains("triangles left folded", StringComparison.Ordinal))
+                  .Select(l => ((string)l.Args[1], Convert.ToInt32(l.Args[6]))).ToList();
 
     /// <summary>
     /// A men's top in a "Size" group with only a TBSE option gains "TBSE-X", refitted for a man, and a second run makes

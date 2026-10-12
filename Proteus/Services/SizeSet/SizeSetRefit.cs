@@ -207,7 +207,6 @@ internal static partial class SizeSetRefit
                                 Action<string> progress, List<string> notes, CancellationToken ct)
     {
         string root = request.ModRoot;
-        var record = BodyRetargetWriter.ReadRecord(root);
         string race = piece.Race;
         bool male = BodySizeCatalog.IsMaleRace(race);
         // The table its sizes come from: its own slot's, or the chest's for legs that follow it.
@@ -271,30 +270,13 @@ internal static partial class SizeSetRefit
         }
 
         // ── where the sizes go ──
-        string group = piece.Group ?? piece.GroupName;
-        var existing = (PenumbraModMeta.TryReadFileOptions(root, group) ?? []).Select(o => o.Name)
-                                                                              .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var inGroup = (record?.Options ?? []).Where(e => string.Equals(record!.GroupOf(e), group,
-                                                                       StringComparison.OrdinalIgnoreCase)).ToList();
-        var ours = inGroup.Select(e => e.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        // Which of ours already carry a refit of THIS model. An option of ours without one is one the outfit's other piece
-        // made — "Rue S" saved for the chest, still wearing the author's legs — and this piece's refit goes into it.
-        var doneHere = inGroup.Where(e => string.Equals(e.GamePath, piece.GamePath, StringComparison.OrdinalIgnoreCase))
-                              .Select(e => e.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var authorSizes = AuthorSizes(root, piece, ours);
-
-        // A group of our own is rewritten whole by every save, which selects the size saved last by default: a fresh
-        // install, or a pack exported from here, would then draw "Bibo L" instead of the author's model. Its default is
-        // put back afterwards — what it was, or "Original" for a group this run makes. The author's group is only added
-        // to, and keeps its default untouched.
-        bool authorGroup = BodyRetargetWriter.IsAuthorGroup(root, group);
-        string defaultBefore = PenumbraModMeta.SingleDefault(root, group) ?? BodyRetargetWriter.OriginalOption;
+        var group = new SizeGroup(root, piece);
+        var authorSizes = AuthorSizes(root, piece, group.Ours);
 
         bool yas = request.Yas || SupportedBodies.IsYas(src.Bones);
         var pieces = RefitCore.ShapePieces(src.Garment, RefitCore.DefaultKeepShape(src.Garment));
         ushort? sourceMask = RefitCore.MaskOf(src.Pick.Dir, sourceCat, piece.Slot, null);
         ushort? sourceLegsMask = RefitCore.MaskOf(src.Pick.Dir, sourceCat, "_dwn", null);
-        int saved = 0;
 
         foreach (string key in request.Keys)
         {
@@ -314,9 +296,7 @@ internal static partial class SizeSetRefit
             {
                 ct.ThrowIfCancellationRequested();
                 string option = SupportedBodies.OptionName(body, size);
-                // The author's option of that name is theirs; one of ours is done when it carries this model, and made
-                // again only when asked.
-                if (existing.Contains(option) && (!ours.Contains(option) || (doneHere.Contains(option) && !request.Remake)))
+                if (group.AlreadyThere(option, request.Remake))
                 {
                     log.Information("[Proteus] size set: {0}: \"{1}\" already there", piece.Label, option);
                     continue;
@@ -324,7 +304,7 @@ internal static partial class SizeSetRefit
                 // Legs following the chest only join a size the chest made. One it did not — the author already has it
                 // under another name, or the pair was refused — made here would wear refitted legs under the author's
                 // unrefitted chest, copied in from the option the legs were cut from.
-                if (piece.FollowsChest && !ours.Contains(option))
+                if (piece.FollowsChest && !group.Ours.Contains(option))
                 {
                     log.Information("[Proteus] size set: {0}: no \"{1}\" of the chest's to join", piece.Label, option);
                     continue;
@@ -397,23 +377,85 @@ internal static partial class SizeSetRefit
                                 plan.Report.WorstMove * 1000f);
             }
             if (refits.Count == 0) continue;
+            group.Save(target.Dir, RefitCore.LabelFrom(across ? sourceEntry.Name : null, [src.Pick.Option.Label]), refits,
+                       src.Option, notes);
+        }
+        group.RestoreDefault();
+        return group.Saved;
+    }
 
-            // One save per body mod: the record names the body each size was made for.
-            string from = RefitCore.LabelFrom(across ? sourceEntry.Name : null, [src.Pick.Option.Label]);
-            var outcome = BodyRetargetWriter.Save(root, group, piece.GamePath, target.Dir, from, refits,
-                                                  piece.Group != null ? src.Option : null);
+    /// <summary>
+    /// The group a piece's sizes go into: which options are there, which are ours, which already carry this piece, and
+    /// the default to put back. One for every piece, chest, legs, shoe or glove alike.
+    /// </summary>
+    private sealed class SizeGroup
+    {
+        private readonly string root;
+        private readonly Piece piece;
+        private readonly HashSet<string> existing;
+        private readonly HashSet<string> ours;
+        private readonly HashSet<string> doneHere;
+        private readonly bool authorGroup;
+        private readonly string defaultBefore;
+
+        internal string Name { get; }
+        /// <summary>Options of ours in the group: the sizes this piece, or the outfit's other pieces, were saved into.</summary>
+        internal IReadOnlySet<string> Ours => ours;
+        internal int Saved { get; private set; }
+
+        internal SizeGroup(string root, Piece piece)
+        {
+            this.root = root;
+            this.piece = piece;
+            var record = BodyRetargetWriter.ReadRecord(root);
+            Name = piece.Group ?? piece.GroupName;
+            existing = (PenumbraModMeta.TryReadFileOptions(root, Name) ?? []).Select(o => o.Name)
+                                                                            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var inGroup = (record?.Options ?? []).Where(e => string.Equals(record!.GroupOf(e), Name,
+                                                                           StringComparison.OrdinalIgnoreCase)).ToList();
+            ours = inGroup.Select(e => e.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            // Which of ours already carry a refit of THIS model. An option of ours without one is one the outfit's other
+            // piece made — "Rue S" saved for the chest, still wearing the author's legs — and this piece's refit goes into it.
+            doneHere = inGroup.Where(e => string.Equals(e.GamePath, piece.GamePath, StringComparison.OrdinalIgnoreCase))
+                              .Select(e => e.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            // A group of our own is rewritten whole by every save, which selects the size saved last by default: a fresh
+            // install, or a pack exported from here, would then draw "Bibo L" instead of the author's model. Its default
+            // is put back afterwards — what it was, or "Original" for a group this run makes. The author's group is only
+            // added to, and keeps its default untouched.
+            authorGroup = BodyRetargetWriter.IsAuthorGroup(root, Name);
+            defaultBefore = PenumbraModMeta.SingleDefault(root, Name) ?? BodyRetargetWriter.OriginalOption;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="option"/> is already there: the author's option of that name is theirs; one of ours is
+        /// done when it carries this model, and made again only when asked.
+        /// </summary>
+        internal bool AlreadyThere(string option, bool remake)
+            => existing.Contains(option) && (!ours.Contains(option) || (doneHere.Contains(option) && !remake));
+
+        /// <summary>One save per body mod: the record names the body each size was made for. False, noted, on failure.</summary>
+        internal bool Save(string targetDir, string from, List<BodyRetargetWriter.Refit> refits, string? sourceOption,
+                           List<string> notes)
+        {
+            var outcome = BodyRetargetWriter.Save(root, Name, piece.GamePath, targetDir, from, refits,
+                                                  piece.Group != null ? sourceOption : null);
             if (!outcome.Ok)
             {
                 notes.Add(string.Format(Strings.SizeSet.SaveFailedFmt, piece.Label, outcome.Message));
-                continue;
+                return false;
             }
-            saved += refits.Count;
+            Saved += refits.Count;
             existing.UnionWith(refits.Select(r => r.Option));
             ours.UnionWith(refits.Select(r => r.Option));
             doneHere.UnionWith(refits.Select(r => r.Option));
+            return true;
         }
-        if (saved > 0 && !authorGroup) PenumbraModMeta.SetSingleDefault(root, group, defaultBefore);
-        return saved;
+
+        /// <summary>Put a group of our own's default back once the run saved into it.</summary>
+        internal void RestoreDefault()
+        {
+            if (Saved > 0 && !authorGroup) PenumbraModMeta.SetSingleDefault(root, Name, defaultBefore);
+        }
     }
 
     /// <summary>Whether a ticked body has sizes for a piece of this slot and race.</summary>

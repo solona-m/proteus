@@ -156,7 +156,7 @@ Bon à savoir :
 
 ##### Toutes les tailles pour d'autres corps
 
-Sous l'outil pour un seul vêtement, **Toutes les tailles pour d'autres corps** traite un mod entier d'un coup. Cochez les mods de corps voulus, appuyez sur **Ajouter les tailles**, et chaque pièce de torse et de jambes du mod est réajustée depuis la première taille de l'auteur vers chaque taille de ces corps, enregistrée à côté des tailles de l'auteur sous les noms "Rue S", "YAB Buff L" et ainsi de suite.
+Sous l'outil pour un seul vêtement, **Toutes les tailles pour d'autres corps** traite un mod entier d'un coup. Cochez les mods de corps voulus, appuyez sur **Ajouter les tailles**, et chaque pièce de torse, de jambes, de chaussures et de gants du mod est réajustée depuis la première taille de l'auteur vers chaque taille de ces corps, enregistrée à côté des tailles de l'auteur sous les noms "Rue S", "YAB Buff L" et ainsi de suite.
 
 - **Utiliser la version YAS d'un corps quand il en a une** donne à Rue, YAB et Tre leurs tailles Yet Another Skeleton. Une pièce déjà pondérée pour YAS reçoit toujours des tailles YAS.
 - **Inclure les chaussures et les gants**, actif par défaut, fait aussi des tailles des chaussures et des gants du mod en gardant leurs propres pieds et mains : les chaussures reçoivent les tailles des jambes (« Rue WC », « YAB SC »), les gants une option par corps. Une chaussure ou un gant dans le même groupe de tailles que le buste ou les jambes de la tenue rejoint les tailles que cette pièce a faites, et un seul choix habille toute la tenue. Celui qui n'atteint aucune jambe ni aucun bras ne fait que redessiner sa peau, et seulement là où le nouveau corps dessine la peau autrement.

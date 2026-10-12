@@ -3783,8 +3783,12 @@
     "message": "Её риг не читается, поэтому стопу или кисть не отличить от остального: подгоняется вся вещь.",
     "description": ""
   },
-  "Parts.Retarget.NoLimbInBody.Fmt": {
-    "message": "У {0} нет {1}, по которым можно подогнать, поэтому подгоняется вся вещь.",
+  "Parts.Retarget.NoLegsInBody.Fmt": {
+    "message": "У {0} нет ног, по которым можно подогнать, поэтому подгоняется вся вещь.",
+    "description": ""
+  },
+  "Parts.Retarget.NoChestInBody.Fmt": {
+    "message": "У {0} нет торса, по которому можно подогнать, поэтому подгоняется вся вещь.",
     "description": ""
   },
   "Parts.Retarget.NeedFromRequired.Fmt": {

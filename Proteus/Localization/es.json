@@ -3783,8 +3783,12 @@
     "message": "No se puede leer su rig, así que no se distingue el pie o la mano del resto: se reajusta la pieza entera.",
     "description": ""
   },
-  "Parts.Retarget.NoLimbInBody.Fmt": {
-    "message": "{0} no tiene {1} con que reajustar, así que se reajusta la pieza entera.",
+  "Parts.Retarget.NoLegsInBody.Fmt": {
+    "message": "{0} no tiene piernas con que reajustar, así que se reajusta la pieza entera.",
+    "description": ""
+  },
+  "Parts.Retarget.NoChestInBody.Fmt": {
+    "message": "{0} no tiene torso con que reajustar, así que se reajusta la pieza entera.",
     "description": ""
   },
   "Parts.Retarget.NeedFromRequired.Fmt": {

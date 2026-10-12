@@ -3783,9 +3783,13 @@
     "message": "Its rig can't be read, so its foot or hand can't be told from the rest: the whole piece is refitted.",
     "description": "Shown when a shoe's or glove's rig can't be read, so its foot or hand can't be kept."
   },
-  "Parts.Retarget.NoLimbInBody.Fmt": {
-    "message": "{0} has no {1} to refit by, so the whole piece is refitted.",
-    "description": "Shown when a body mod has no legs (for a shoe) or chest (for gloves) to refit by. {0} = the body mod's name, {1} = 'legs' or 'chest' in lower case (already translated)."
+  "Parts.Retarget.NoLegsInBody.Fmt": {
+    "message": "{0} has no legs to refit by, so the whole piece is refitted.",
+    "description": "Shown when a body mod has no legs to refit a shoe by. {0} = the body mod's name."
+  },
+  "Parts.Retarget.NoChestInBody.Fmt": {
+    "message": "{0} has no chest to refit by, so the whole piece is refitted.",
+    "description": "Shown when a body mod has no chest to refit gloves by. {0} = the body mod's name."
   },
   "Parts.Retarget.NeedFromRequired.Fmt": {
     "message": "{0}: pick the size it was made for.",

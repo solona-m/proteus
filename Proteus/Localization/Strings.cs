@@ -2794,9 +2794,13 @@ public sealed class PartsStrings
     public readonly string RetargetEndsUnreadable = Loc.Localize("Parts.Retarget.EndsUnreadable",
         "Its rig can't be read, so its foot or hand can't be told from the rest: the whole piece is refitted.");
 
-    /// <summary>{0}: a body mod's name. {1}: "legs" or "chest", lower case.</summary>
-    public readonly string RetargetNoLimbInBodyFmt = Loc.Localize("Parts.Retarget.NoLimbInBody.Fmt",
-        "{0} has no {1} to refit by, so the whole piece is refitted.");
+    /// <summary>{0}: a body mod's name. A shoe's.</summary>
+    public readonly string RetargetNoLegsInBodyFmt = Loc.Localize("Parts.Retarget.NoLegsInBody.Fmt",
+        "{0} has no legs to refit by, so the whole piece is refitted.");
+
+    /// <summary>{0}: a body mod's name. Gloves'.</summary>
+    public readonly string RetargetNoChestInBodyFmt = Loc.Localize("Parts.Retarget.NoChestInBody.Fmt",
+        "{0} has no chest to refit by, so the whole piece is refitted.");
 
     public readonly string RetargetSwapShapesFmt = Loc.Localize("Parts.Retarget.SwapShapes.Fmt",
         "{0} shape key(s) lost to the skin swap. Untick \"Use the new body's skin\" to keep them.");

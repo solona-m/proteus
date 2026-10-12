@@ -98,6 +98,28 @@ public class RetargetInputsTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-keep-ends-studio-4")]
+    [Trait("Plan", "EDGE-keep-ends-studio-25")]
+    public void A_weak_skin_only_reading_still_fills_in_its_own_feet()   // [AC-keep-ends-studio-4] [EDGE-keep-ends-studio-25]
+    {
+        // A sandal with little skin: its own feet read on too few points to be shown as sure, so the rankings fill no
+        // row — and its own feet are the only row it has. The Studio's best guess fills it, or Preview could never run.
+        var layout = Shoe();
+        var weak = new BodySizeMatch.Ranking(BodySizeMatch.Confidence.TooLittle, [new BodySizeMatch.Score(FeetM, 1f, 0f)]);
+        var read = new KeepEnds.StudioReading(KeepEnds.Route.SkinOnly, weak, FeetM);
+
+        Assert.Equal(("_sho", FeetM), RetargetInputs.StudioPrefill(layout, read, new Dictionary<string, BodyOption>()));
+        // The leg or arm, for a piece that reaches it.
+        Assert.Equal(("_dwn", LegsS), RetargetInputs.StudioPrefill(layout,
+            new KeepEnds.StudioReading(KeepEnds.Route.Cloth, null, LegsS), new Dictionary<string, BodyOption>()));
+        // Never over a choice made, nor with nothing read, nor with the ends not kept.
+        Assert.Null(RetargetInputs.StudioPrefill(layout, read, new Dictionary<string, BodyOption> { ["_sho"] = FeetS }));
+        Assert.Null(RetargetInputs.StudioPrefill(layout, new KeepEnds.StudioReading(KeepEnds.Route.NoSkin, null, null),
+                                                 new Dictionary<string, BodyOption>()));
+        Assert.Null(RetargetInputs.StudioPrefill(Shoe(keep: false), read, new Dictionary<string, BodyOption>()));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-keep-ends-studio-27")]
     public void Manual_legs_pick_overrides_skin_only()   // [EDGE-keep-ends-studio-27]
     {

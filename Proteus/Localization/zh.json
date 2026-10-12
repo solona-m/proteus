@@ -3783,8 +3783,12 @@
     "message": "无法读取它的骨骼绑定，分不出脚或手与其余部分：将重新适配整件。",
     "description": ""
   },
-  "Parts.Retarget.NoLimbInBody.Fmt": {
-    "message": "{0} 没有可用来重新适配的{1}，因此将重新适配整件。",
+  "Parts.Retarget.NoLegsInBody.Fmt": {
+    "message": "{0} 没有可用来重新适配的腿部，因此将重新适配整件。",
+    "description": ""
+  },
+  "Parts.Retarget.NoChestInBody.Fmt": {
+    "message": "{0} 没有可用来重新适配的胸部，因此将重新适配整件。",
     "description": ""
   },
   "Parts.Retarget.NeedFromRequired.Fmt": {

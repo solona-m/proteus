@@ -3783,8 +3783,12 @@
     "message": "Sein Rig lässt sich nicht lesen, also ist Fuß oder Hand nicht vom Rest zu unterscheiden: Das ganze Teil wird angepasst.",
     "description": ""
   },
-  "Parts.Retarget.NoLimbInBody.Fmt": {
-    "message": "{0} hat keine {1} zum Anpassen, also wird das ganze Teil angepasst.",
+  "Parts.Retarget.NoLegsInBody.Fmt": {
+    "message": "{0} hat keine Beine zum Anpassen, also wird das ganze Teil angepasst.",
+    "description": ""
+  },
+  "Parts.Retarget.NoChestInBody.Fmt": {
+    "message": "{0} hat keine Brust zum Anpassen, also wird das ganze Teil angepasst.",
     "description": ""
   },
   "Parts.Retarget.NeedFromRequired.Fmt": {

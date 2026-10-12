@@ -39,6 +39,20 @@ internal static class RetargetInputs
             : new Layout(wornSlot, wornSlot, null);
 
     /// <summary>
+    /// The choice the Studio's reading of a shoe or glove fills in when nothing is chosen there yet: its best guess, the
+    /// limb's size, or a skin-only piece's own feet or hands. The rankings fill a row only when they have evidence behind
+    /// them; a skin-only piece's own feet are its only row, and a sandal with little skin would otherwise leave Preview
+    /// waiting on a row that is not shown. Null when there is nothing to fill or it is filled already.
+    /// </summary>
+    internal static (string Slot, BodyOption Option)? StudioPrefill(Layout layout, KeepEnds.StudioReading? read,
+                                                                    IReadOnlyDictionary<string, BodyOption> from)
+    {
+        if (!layout.KeepEnds || read?.Pick is not { } pick) return null;
+        string slot = read.Route == KeepEnds.Route.SkinOnly ? layout.EndSlot! : layout.Primary;
+        return from.ContainsKey(slot) ? null : (slot, pick);
+    }
+
+    /// <summary>
     /// A change of layout, which leaves every preset, remembered size and detection made for the old one wrong. The very
     /// first layout of a garment is not a change.
     /// </summary>
