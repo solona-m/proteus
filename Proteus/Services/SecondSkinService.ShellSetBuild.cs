@@ -111,6 +111,7 @@ public sealed partial class SecondSkinService
         private bool modelChangedAny;
         private List<string> hostModelPaths = null!;
         private List<string> appendHostModelPaths = null!;
+        private Dictionary<string, string> appendHostSources = null!;
         private Result? result;
 
         public ShellSetBuild(SecondSkinService service, string charCode, IReadOnlyList<(OverlayEntry Entry, ResolvedOverlay Overlay)> gearOverlays, string outputRoot, string? bodyType, string? effectsFolder, IReadOnlyDictionary<string, string>? equippedPartModels, IReadOnlyDictionary<string, string>? equippedAccessories, Func<string, bool>? gen2Allowed, int? invisibleGlassesSet, IReadOnlyList<string>? metModels, IReadOnlyDictionary<string, HashSet<string>>? enabledBodyShapes, IReadOnlySet<string>? maskShellMods, IReadOnlyDictionary<string, string>? bareBodyModels, string? drawnRaceCode, IReadOnlySet<string>? activeMaterials, int? emperorRingVariant, int? invisibleGlassesVariant, IReadOnlyList<string>? humanPartModels, IReadOnlyList<(OverlayEntry Entry, ResolvedContent Content)>? contentLayers, IReadOnlyList<OverlayEntry>? allEntries, IReadOnlyDictionary<string, byte[]>? pristineHumanModels, int? shellTexSize, IReadOnlyList<EquippedSlotVariants.Slot>? equippedSlotVariants, IReadOnlySet<string>? hiddenParts = null)
@@ -1518,6 +1519,7 @@ public sealed partial class SecondSkinService
             // Build one shell model per host that got layers; fold each into the single Result.
             hostModelPaths = new List<string>();
             appendHostModelPaths = new List<string>();
+            appendHostSources = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             for (int h = 0; h < hosts.Count; h++)
             {
                 BuildHostModel(pushSweep, h);
@@ -1543,7 +1545,8 @@ public sealed partial class SecondSkinService
             if (hostModelPaths.Count == 0) return null;
 
             return new Result(redirects, manipulations, shellChanged, shellMaterials, modelChangedAny,
-                              hostModelPaths, appendHostModelPaths, contentMaterials, shellLight, contentModels);
+                              hostModelPaths, appendHostModelPaths, contentMaterials, shellLight, contentModels,
+                              appendHostSources);
         }
 
         private string VariantFolderFor(HostAccessory h)

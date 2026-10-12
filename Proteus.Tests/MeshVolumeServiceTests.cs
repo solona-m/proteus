@@ -248,7 +248,7 @@ public class MeshVolumeServiceTests
     /// handled afterwards.
     /// </summary>
     [Fact]
-    public void CarriesAShapesSpareVertexExactlyOnce()
+    public void CarriesAShapesSpareVertexExactlyOnce()   // [AC-spare-carry-append-worn-1] [EDGE-spare-carry-append-worn-4]
     {
         var (mdl, solve, model) = Setup(["shp_test"]);
 
@@ -262,6 +262,286 @@ public class MeshVolumeServiceTests
         // Once, not twice: the fixture's shape names vertex 0 for both roles.
         float expected = PositionY(mdl, 0) + solve.DeltaAt(0).Y;
         Assert.Equal(expected, PositionY(written.Model, 0), 1e-6f);
+    }
+
+    // ── shape spares named by several index slots ───────────────────────────────────────────────────────────────
+    //
+    // Real exporters make one spare per base vertex and name it from EVERY index slot that vertex fills, so a spare
+    // is named as many times as its vertex has triangles. Each spare must still move once, by its base's delta.
+
+    /// <summary>
+    /// An edit whose every vertex moves by a function of where it IS. Coincident vertices therefore share a delta,
+    /// as they do under the real welded edits, while a spare sitting at its shape pose would get a value of its own —
+    /// which is what tells "moved by its base" apart from "moved by itself".
+    /// </summary>
+    private sealed class FieldEdit : IMeshEdit
+    {
+        private readonly float[] positions;
+        private readonly Func<Vector3, Vector3> field;
+
+        public FieldEdit(IReadOnlyList<MeshSpan> spans, float[] positions, Func<Vector3, Vector3> field)
+        {
+            Spans = spans;
+            this.positions = positions;
+            this.field = field;
+            for (int v = 0; v < positions.Length / 3; v++) Worst = MathF.Max(Worst, Field(v).Length());
+        }
+
+        private Vector3 Field(int v) => field(new Vector3(positions[v * 3], positions[v * 3 + 1], positions[v * 3 + 2]));
+
+        public IReadOnlyList<MeshSpan> Spans { get; }
+        public float Worst { get; }
+        public bool Dirty => true;
+        public bool WindEdited => false;
+        public SecondSkinWriter.Vec3 DeltaAt(int vertex) { var d = Field(vertex); return new(d.X, d.Y, d.Z); }
+        public SecondSkinWriter.Vec3 NormalAt(int vertex) => new(0f, 0f, 0f);
+        public float WindAt(int vertex) => 0f;
+    }
+
+    /// <summary>Mesh <paramref name="mesh"/>'s vertex <paramref name="vertex"/>, as stored.</summary>
+    private static Vector3 PositionAt(byte[] mdl, int mesh, int vertex)
+    {
+        var src = SecondSkinWriter.Parse(mdl);
+        int mo = src.MeshStart + mesh * 36;
+        var pe = src.Decls[mesh].First(e => e.Usage == SecondSkinWriter.UsePosition);
+        uint vbo = BitConverter.ToUInt32(mdl, mo + 20 + pe.Stream * 4);
+        byte stride = mdl[mo + 32 + pe.Stream];
+        Span<float> tmp = stackalloc float[4];
+        SecondSkinWriter.ReadTyped(mdl, src.Vb + (int)vbo + vertex * stride + pe.Offset, pe.Type, tmp);
+        return new Vector3(tmp[0], tmp[1], tmp[2]);
+    }
+
+    /// <summary>
+    /// Two triangles (six vertices; 0 and 3 share the hub position) plus one spare, vertex 6, raised above vertex 0.
+    /// Slots 0 and 3 index vertices 0 and 3 — the fixture numbers every corner afresh.
+    /// </summary>
+    private static (byte[] Mdl, ModelParts Read) SpareModel(params SyntheticModel.Shape[] shapes)
+    {
+        var mdl = SyntheticModel.Build(
+            [],
+            [new SyntheticModel.Mesh("/mt_test.mtrl", new SyntheticModel.Sub(0, TrianglesPerIsland: 2)) { Spares = 1 }],
+            SyntheticModel.V6, shapes);
+        var read = ModelPartReader.Read(mdl);
+        Assert.NotNull(read);
+        Assert.Equal(7, read!.Positions.Length / 3);
+        return (mdl, read);
+    }
+
+    /// <summary>A field that rises with height, so a spare above its base would be moved further by its own value.</summary>
+    private static Vector3 Rising(Vector3 p) => new(0f, 0.01f + 0.1f * p.Y, 0f);
+
+    /// <summary>
+    /// A spare named from two slots moves once, by its base's delta — not twice, and not by its own.
+    /// </summary>
+    [Fact]
+    public void A_spare_named_by_several_slots_moves_once_by_its_base()   // [AC-spare-carry-append-worn-1]
+    {
+        var (mdl, read) = SpareModel(new SyntheticModel.Shape("shp_a", 0, [(0, 6), (3, 6)]));
+        var edit = new FieldEdit(read.MeshSpans, read.Positions, Rising);
+
+        var written = MeshVolumeService.Inflate(mdl, edit);
+        Assert.Equal(0, written.UnmappedSpares);
+
+        var base0 = PositionAt(mdl, 0, 0);
+        var spare0 = PositionAt(mdl, 0, 6);
+        Assert.Equal(spare0.Y + edit.DeltaAt(0).Y, PositionAt(written.Model, 0, 6).Y, 1e-6f);
+
+        // The shape's own offset survives: turning it on puts the slot where the author's shape put it, plus the edit.
+        var offsetAfter = PositionAt(written.Model, 0, 6) - PositionAt(written.Model, 0, 0);
+        Assert.Equal((spare0 - base0).Y, offsetAfter.Y, 1e-6f);
+    }
+
+    /// <summary>The refit's edit goes through the same writer: each spare once, and no normal written.</summary>
+    [Fact]
+    public void A_retarget_carries_each_spare_once()   // [AC-spare-carry-append-worn-2]
+    {
+        var (mdl, read) = SpareModel(new SyntheticModel.Shape("shp_a", 0, [(0, 6), (3, 6), (0, 6)]));
+        int n = read.Positions.Length / 3;
+        var delta = new SecondSkinWriter.Vec3[n];
+        for (int v = 0; v < n; v++)
+        {
+            var d = Rising(new Vector3(read.Positions[v * 3], read.Positions[v * 3 + 1], read.Positions[v * 3 + 2]));
+            delta[v] = new(d.X, d.Y, d.Z);
+        }
+        var edit = new RetargetEdit(read.MeshSpans, delta, new SecondSkinWriter.Vec3[n]);
+
+        var written = MeshVolumeService.Inflate(mdl, edit);
+        Assert.Equal(PositionAt(mdl, 0, 6).Y + delta[0].Y, PositionAt(written.Model, 0, 6).Y, 1e-6f);
+        Assert.Equal(mdl.Length, written.Model.Length);
+    }
+
+    /// <summary>The "points could not be moved" count is points, not the slots that name them.</summary>
+    [Fact]
+    public void Unmapped_counts_points_not_slots()   // [AC-spare-carry-append-worn-3]
+    {
+        var (mdl, read) = SpareModel(new SyntheticModel.Shape("shp_a", 0, [(0, 999), (1, 999), (2, 999)]));
+        var written = MeshVolumeService.Inflate(mdl, new FieldEdit(read.MeshSpans, read.Positions, Rising));
+        Assert.Equal(1, written.UnmappedSpares);
+    }
+
+    /// <summary>One spare named by two different shapes still moves once.</summary>
+    [Fact]
+    public void A_spare_shared_by_two_shapes_moves_once()   // [EDGE-spare-carry-append-worn-1]
+    {
+        var (mdl, read) = SpareModel(new SyntheticModel.Shape("shp_a", 0, [(0, 6)]),
+                                     new SyntheticModel.Shape("shp_b", 0, [(3, 6)]));
+        var edit = new FieldEdit(read.MeshSpans, read.Positions, Rising);
+        var written = MeshVolumeService.Inflate(mdl, edit);
+        Assert.Equal(PositionAt(mdl, 0, 6).Y + edit.DeltaAt(0).Y, PositionAt(written.Model, 0, 6).Y, 1e-6f);
+    }
+
+    /// <summary>The same local spare index in two meshes is two spares, each carried by its own mesh's base.</summary>
+    [Fact]
+    public void Same_spare_index_in_two_meshes_each_carried_by_its_own_base()   // [EDGE-spare-carry-append-worn-2]
+    {
+        var mdl = SyntheticModel.Build(
+            [],
+            [
+                new SyntheticModel.Mesh("/mt_a.mtrl", new SyntheticModel.Sub(0, TrianglesPerIsland: 2)) { Spares = 1 },
+                new SyntheticModel.Mesh("/mt_b.mtrl", new SyntheticModel.Sub(0, TrianglesPerIsland: 2, OffsetX: 5f)) { Spares = 1 },
+            ],
+            SyntheticModel.V6,
+            [new SyntheticModel.Shape("shp_a", 0, [(0, 6), (3, 6)]), new SyntheticModel.Shape("shp_b", 1, [(0, 6), (3, 6)])]);
+        var read = ModelPartReader.Read(mdl)!;
+        var edit = new FieldEdit(read.MeshSpans, read.Positions, p => new Vector3(0f, 0.01f + 0.01f * p.X + 0.1f * p.Y, 0f));
+
+        var written = MeshVolumeService.Inflate(mdl, edit);
+        Assert.Equal(0, written.UnmappedSpares);
+        foreach (var span in read.MeshSpans)
+            Assert.Equal(PositionAt(mdl, span.Mesh, 6).Y + edit.DeltaAt(span.BaseVertex).Y,
+                         PositionAt(written.Model, span.Mesh, 6).Y, 1e-6f);
+        Assert.NotEqual(edit.DeltaAt(read.MeshSpans[0].BaseVertex).Y, edit.DeltaAt(read.MeshSpans[1].BaseVertex).Y);
+    }
+
+    /// <summary>Bases that are seam duplicates of one point: once, by the first, which is also what the others say.</summary>
+    [Fact]
+    public void Spare_of_coincident_bases_moves_by_the_first()   // [EDGE-spare-carry-append-worn-3]
+    {
+        var (mdl, read) = SpareModel(new SyntheticModel.Shape("shp_a", 0, [(3, 6), (0, 6)]));
+        var edit = new FieldEdit(read.MeshSpans, read.Positions, Rising);
+        Assert.Equal(edit.DeltaAt(0).Y, edit.DeltaAt(3).Y, 1e-9f);
+
+        var written = MeshVolumeService.Inflate(mdl, edit);
+        Assert.Equal(PositionAt(mdl, 0, 6).Y + edit.DeltaAt(3).Y, PositionAt(written.Model, 0, 6).Y, 1e-6f);
+    }
+
+    /// <summary>A slot that cannot be resolved does not stop another slot carrying the same spare, nor count it lost.</summary>
+    [Fact]
+    public void A_spare_one_slot_misses_is_still_carried()   // [EDGE-spare-carry-append-worn-5]
+    {
+        var (mdl, read) = SpareModel(new SyntheticModel.Shape("shp_a", 0, [(60000, 6), (0, 6)]));
+        var edit = new FieldEdit(read.MeshSpans, read.Positions, Rising);
+
+        var written = MeshVolumeService.Inflate(mdl, edit);
+        Assert.Equal(0, written.UnmappedSpares);
+        Assert.Equal(PositionAt(mdl, 0, 6).Y + edit.DeltaAt(0).Y, PositionAt(written.Model, 0, 6).Y, 1e-6f);
+    }
+
+    /// <summary>
+    /// A spare whose first slot's base did not move stays where it is — and is not then moved by a later slot whose
+    /// base did. Vertex 0 sits at the origin, where this field is zero; vertex 1 does not.
+    /// </summary>
+    [Fact]
+    public void A_spare_whose_base_did_not_move_stays_put()   // [EDGE-spare-carry-append-worn-6]
+    {
+        var (mdl, read) = SpareModel(new SyntheticModel.Shape("shp_a", 0, [(0, 6), (1, 6)]));
+        var edit = new FieldEdit(read.MeshSpans, read.Positions, p => new Vector3(0f, 0.01f * p.X + 0.1f * p.Y, 0f));
+        Assert.Equal(0f, edit.DeltaAt(0).Y);
+        Assert.NotEqual(0f, edit.DeltaAt(1).Y);
+
+        var written = MeshVolumeService.Inflate(mdl, edit);
+        Assert.Equal(PositionAt(mdl, 0, 6), PositionAt(written.Model, 0, 6));
+    }
+
+    /// <summary>A mesh with no shape of its own, in a model that has shapes, moves every vertex by its own delta.</summary>
+    [Fact]
+    public void A_shape_free_mesh_moves_by_its_own_delta()   // [EDGE-spare-carry-append-worn-7]
+    {
+        var mdl = SyntheticModel.Build(
+            [],
+            [
+                new SyntheticModel.Mesh("/mt_a.mtrl", new SyntheticModel.Sub(0, TrianglesPerIsland: 2)) { Spares = 1 },
+                new SyntheticModel.Mesh("/mt_b.mtrl", new SyntheticModel.Sub(0, TrianglesPerIsland: 2, OffsetX: 5f)),
+            ],
+            SyntheticModel.V6,
+            [new SyntheticModel.Shape("shp_a", 0, [(0, 6), (3, 6)])]);
+        var read = ModelPartReader.Read(mdl)!;
+        var written = MeshVolumeService.Inflate(mdl, new FieldEdit(read.MeshSpans, read.Positions, _ => new Vector3(0f, 0.01f, 0f)));
+
+        var mesh1 = read.MeshSpans[1];
+        for (int v = 0; v < mesh1.Count; v++)
+            Assert.Equal(PositionAt(mdl, 1, v).Y + 0.01f, PositionAt(written.Model, 1, v).Y, 1e-6f);
+    }
+
+    /// <summary>The racial bake moves every vertex by its own delta, spares too — and leaves nothing "unmapped".</summary>
+    [Fact]
+    public void Without_carrying_every_vertex_moves_by_its_own_delta()   // [EDGE-spare-carry-append-worn-8]
+    {
+        var (mdl, read) = SpareModel(new SyntheticModel.Shape("shp_a", 0, [(0, 6), (3, 6)]));
+        var edit = new FieldEdit(read.MeshSpans, read.Positions, Rising);
+
+        var written = MeshVolumeService.Inflate(mdl, edit, carrySpares: false);
+        Assert.Equal(0, written.UnmappedSpares);
+        Assert.Equal(PositionAt(mdl, 0, 6).Y + edit.DeltaAt(6).Y, PositionAt(written.Model, 0, 6).Y, 1e-6f);
+    }
+
+    private const string PlugModel = LocalData.Mods + ":Butt Plug - True Colors/Plog/sized/default_fit.mdl";
+
+    /// <summary>
+    /// The model the tearing was found on: 16 size shapes over its three meshes, written by an exporter that
+    /// names each spare from every slot its base fills. A uniform move must move every vertex by exactly that much,
+    /// so every shape keeps its own offset from the base.
+    /// </summary>
+    [LocalDataFact(PlugModel)]
+    public void Real_shape_keyed_model_keeps_every_shape_offset()   // [EDGE-spare-carry-append-worn-9]
+    {
+        var mdl = System.IO.File.ReadAllBytes(LocalData.Path(PlugModel));
+        var src = SecondSkinWriter.Parse(mdl);
+        var read = ModelPartReader.Read(mdl)!;
+        Assert.Equal(3, read.MeshSpans.Count);
+
+        // Which spare each slot names, per mesh — and the precondition that makes this test able to fail: a spare
+        // named more than once.
+        var meshes = read.MeshSpans
+            .Select(s => (s.Mesh, Start: BitConverter.ToUInt32(mdl, src.MeshStart + s.Mesh * 36 + 16),
+                          Count: BitConverter.ToUInt32(mdl, src.MeshStart + s.Mesh * 36 + 4)))
+            .ToList();
+        var named = new List<(int Mesh, int Base, int Spare)>();
+        foreach (var entry in src.Shapes.Values.SelectMany(e => e))
+        {
+            var owner = meshes.First(m => entry.MeshIndexOffset >= m.Start && entry.MeshIndexOffset < m.Start + m.Count);
+            foreach (var (b, replace) in entry.Values)
+            {
+                int baseVertex = BitConverter.ToUInt16(mdl, src.Ib + (int)(entry.MeshIndexOffset + b) * 2);
+                named.Add((owner.Mesh, baseVertex, replace));
+            }
+        }
+        Assert.Contains(named.GroupBy(x => (x.Mesh, x.Spare)), g => g.Count() >= 2);
+
+        // The assumption "first slot wins" rests on: every slot naming a spare stands on the same point.
+        foreach (var g in named.GroupBy(x => (x.Mesh, x.Spare)))
+        {
+            var first = PositionAt(mdl, g.Key.Mesh, g.First().Base);
+            foreach (var x in g)
+                Assert.True(Vector3.Distance(first, PositionAt(mdl, x.Mesh, x.Base)) < 1e-5f,
+                            $"spare {x.Spare} of mesh {x.Mesh} is named from bases at different points");
+        }
+
+        var lift = new Vector3(0f, 0.01f, 0f);
+        var written = MeshVolumeService.Inflate(mdl, new FieldEdit(read.MeshSpans, read.Positions, _ => lift));
+
+        foreach (var span in read.MeshSpans)
+        for (int v = 0; v < span.Count; v++)
+        {
+            float moved = PositionAt(written.Model, span.Mesh, v).Y - PositionAt(mdl, span.Mesh, v).Y;
+            Assert.True(MathF.Abs(moved - 0.01f) < 1e-4f, $"mesh {span.Mesh} vertex {v} moved {moved * 1000f:F2} mm, not 10");
+        }
+        foreach (var (mesh, b, spare) in named)
+        {
+            var before = PositionAt(mdl, mesh, spare) - PositionAt(mdl, mesh, b);
+            var after = PositionAt(written.Model, mesh, spare) - PositionAt(written.Model, mesh, b);
+            Assert.True(Vector3.Distance(before, after) < 1e-4f, $"mesh {mesh} spare {spare} lost its shape offset");
+        }
     }
 
     /// <summary>

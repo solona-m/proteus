@@ -242,7 +242,11 @@ public sealed partial class SecondSkinService
         Dictionary<string, ShellLightProfile> ShellLight,
         // Per mod, the content MODEL files (mod-relative, forward slashes) whose meshes went into this build; the only
         // record that an imported garment is worn.
-        Dictionary<string, HashSet<string>> ContentModels);
+        Dictionary<string, HashSet<string>> ContentModels,
+        // Append host game path (one of AppendHostModelPaths) → the disk file its base model was read from, when that
+        // was a file rather than the game's own data: the only record of which mod supplies a ring the game now draws
+        // out of our output.
+        Dictionary<string, string> AppendHostSources);
 
     /// <summary>
     /// One surface, resolved: the geometry a shell is cut from, sharing one UV layout and one race code.
@@ -1685,7 +1689,11 @@ public sealed partial class SecondSkinService
         string? ModelPath = null,
         // The ITEM variant, off the item sheet, for a CARRIER (equipped after the shell is built, so nothing drawn can
         // answer). Null for the player's own items (VariantFolderFor reads the draw object). The IMC entry maps it to a folder.
-        int? KnownVariant = null);
+        int? KnownVariant = null,
+        // Where BaseModel was read from on disk, for an APPEND host: the file of the mod that supplies the worn item, so
+        // Studio can say that mod is worn although the game draws our merged copy. Null for carriers and for an item
+        // read from the game's own data.
+        string? BaseDisk = null);
 
     /// <summary>
     /// Every model the shell can be hosted on, in FILL priority (policy in the method body); a host holds up to

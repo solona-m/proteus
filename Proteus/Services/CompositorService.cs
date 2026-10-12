@@ -177,6 +177,19 @@ public partial class CompositorService : IDisposable
     public IReadOnlySet<string>? GetLiveContentModels(string modDir)
         => _contentModels.TryGetValue(modDir, out var models) ? models : null;
 
+    // Append host model game path → the disk file the last composite read that host's model from, before merging the
+    // shell into it. Published on the same terms as _contentModels beside it. Deliberately not the upstream cache,
+    // which every mod setting change clears: this changes only when a composite lands, and says what was merged.
+    private volatile Dictionary<string, string> _appendHostSources = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The file a worn item's model was read from before the shell was appended into it — which mod supplies the ring
+    /// the game now draws out of our output — or null when <paramref name="modelGamePath"/> is not an append host (or
+    /// not yet composited).
+    /// </summary>
+    public string? GetAppendHostSource(string modelGamePath)
+        => _appendHostSources.TryGetValue(modelGamePath, out var source) ? source : null;
+
     /// <summary>
     /// Why none of <paramref name="modDir"/>'s content pieces can be worn by this character, or null when
     /// they can. Recorded by the shell builder even on runs that host nothing.
@@ -226,7 +239,7 @@ public partial class CompositorService : IDisposable
         => string.Join('\n', p.Materials) + '\u0000' + string.Join('\n', p.Models);
 
     /// <summary>
-    /// Drop all three shell locators together, for tear-down paths that never reach the gear phase (plugin
+    /// Drop every shell locator together, for tear-down paths that never reach the gear phase (plugin
     /// disabled, "no enabled mods" early return). The composite does not call this on entry.
     /// </summary>
     private void ClearShellLocators()
@@ -234,6 +247,7 @@ public partial class CompositorService : IDisposable
         _shellMaterials   = new();
         _contentMaterials = new(StringComparer.OrdinalIgnoreCase);
         _contentModels    = new(StringComparer.OrdinalIgnoreCase);
+        _appendHostSources = new(StringComparer.OrdinalIgnoreCase);
         _shellLight       = new(StringComparer.OrdinalIgnoreCase);
         _shellDrawnCheck  = null;
         // The shell is gone, so the next one to be drawn is news even if it lands on the same materials.

@@ -1192,18 +1192,25 @@ public sealed class PartsPanel
     private HashSet<string> wornModels = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Every loaded model file that lives in a mod, as the mod's folder name and the file's path inside it.
+    /// Every loaded model file that lives in a mod, as the mod's folder name and the file's path inside it — and, for a
+    /// ring our second skin is appended into, the mod that supplies the ring (see <see cref="WornModelCredit"/>).
     /// Empty when Penumbra cannot answer, so both pickers fall back to plain lists.
     /// </summary>
     private List<(string Mod, string Rel)> WornFiles()
     {
-        var found = new List<(string, string)>();
         if (penumbra.GetModDirectory() is not { } root || penumbra.GetActivePlayerModelFiles() is not { } files)
-            return found;
+            return [];
 
-        foreach (var file in files)
-            if (HatCompatService.InMods(file, root, out var modRoot, out var rel))
-                found.Add((Path.GetFileName(modRoot), rel));
+        // Fetched only if one of the drawn files is ours: a character Proteus draws nothing for pays no second walk.
+        Dictionary<string, string>? gamePaths = null;
+        bool asked = false;
+        string? GamePathOf(string file)
+        {
+            if (!asked) { gamePaths = penumbra.GetActivePlayerModelGamePaths(); asked = true; }
+            return gamePaths != null && gamePaths.TryGetValue(BodyShapeReader.PathKey(file), out var g) ? g : null;
+        }
+
+        var found = WornModelCredit.Credit(files, root, GamePathOf, compositor.GetAppendHostSource);
 
         // Imported models worn through our shell, which the walk above cannot see. See CompositorService.GetLiveContentModels.
         if (modDir != null && compositor.GetLiveContentModels(modDir) is { } content)
