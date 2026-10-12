@@ -1087,12 +1087,11 @@ public sealed partial class AutoRefitWatcher : IDisposable
 
         AssertOffFramework("the refit");
         // Whole skin, but for the game's own gear — see AutoRefitDecisions.SkinFor.
-        bool gameGear = IsGameGear(r.ModRoot, r.Worn.GamePath, redirects, ownRecord,
-                                   r.ModRoot != null && RefitModService.IsMadeByProteus(r.ModRoot));
+        bool gameGear = GameGear(r, redirects, ownRecord);
         if (gameGear)
             log.Information("[Proteus] auto refit: {0} is the game's own gear: hidden skin cut, cloth cleared of the body",
                             item);
-        var plan = PlanRefit(garment, bytes, pairs, primary, across, gameGear);
+        var plan = RefitCore.PlanRefit(garment, bytes, pairs, primary, across, gameGear);
         plan = RefitCore.MatchSkinToBody(plan, sourcePath, targetPath, uvRemap, male, log);
         if (bakeTo != 0) plan = RefitCore.WithBodySkin(plan, targetPath, log);
         ct.ThrowIfCancellationRequested();
@@ -1101,7 +1100,8 @@ public sealed partial class AutoRefitWatcher : IDisposable
                                                new[] { pick.Option.Label }.Concat(kept.Select(k => k.From.Label)));
         var refit = new BodyRetargetWriter.Refit(option, plan.Model, string.Join(" + ",
                                                      new[] { target.Label }.Concat(kept.Select(k => k.To.Label))));
-        if (await SaveAndWear(r, g, root, group, savePath, targetMod, labelFrom, refit, cutFrom, bakeTo, item) is not { } savedRoot)
+        if (await SaveAndWear(r, g, root, group, savePath, targetMod, labelFrom, refit, cutFrom, bakeTo, item, gameGear)
+            is not { } savedRoot)
             return;
         log.Information("[Proteus] auto refit: {0} {1} onto {2} in {3:F1}s (moved up to {4:F1} mm)", item, primary,
                         option, clock.Elapsed.TotalSeconds, plan.Report.WorstMove * 1000f);
@@ -1253,10 +1253,11 @@ public sealed partial class AutoRefitWatcher : IDisposable
     /// Save <paramref name="refit"/> into the mod and switch it on, making the mod first for the game's gear — only now
     /// that there is something to put in it.
     /// </summary>
+    /// <param name="fromGame">The garment is the game's own (see <see cref="BodyRetargetWriter.Entry.FromGame"/>).</param>
     /// <returns>The mod it was saved into, or null when it failed, which the player has been told.</returns>
     private async Task<string?> SaveAndWear(Request r, Gathered g, string? root, string group, string savePath,
                                             BodyModIndex.Entry targetMod, string labelFrom, BodyRetargetWriter.Refit refit,
-                                            string? cutFrom, ushort bakeTo, string item)
+                                            string? cutFrom, ushort bakeTo, string item, bool fromGame)
     {
         bool isVanilla = r.ModRoot == null;
         if (root == null)
@@ -1274,7 +1275,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
 
         List<object>? manipulations = bakeTo != 0 && RacialModelBake.Switch(savePath, bakeTo) is { } eqdp ? [eqdp] : null;
         var outcome = BodyRetargetWriter.Save(root, group, savePath, targetMod.Dir, labelFrom, [refit], cutFrom,
-                                              manipulations, auto: true);
+                                              manipulations, auto: true, fromGame: fromGame);
         if (!outcome.Ok)
         {
             Fail(r, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"), item,
@@ -1480,40 +1481,11 @@ public sealed partial class AutoRefitWatcher : IDisposable
         return options.FirstOrDefault(o => RefitCore.Normal(o.Rel) == want);
     }
 
-    /// <summary>
-    /// The piece is the game's own: no mod serves it, or the mod serving it is one Proteus made for a game item — it
-    /// serves nothing, at any path, but refits Proteus recorded, and its "Original" is the game's own file. Refitted again
-    /// onto another body it is still the game's garment underneath. The whole mod is judged, not the worn path: a
-    /// modder's male-only top baked to the wearer's race serves only the refit at the wearer's path, its own model
-    /// sitting at another. A mod shipping the game's model (a recolour, a "— Proteus edit" copy) serves its own file,
-    /// and is a mod.
-    /// </summary>
-    /// <param name="madeByProteus">The mod's manifest names Proteus as its author — see
-    /// <see cref="RefitModService.IsMadeByProteus"/>.</param>
-    internal static bool IsGameGear(string? modRoot, string gamePath, IReadOnlyList<PenumbraModMeta.Redirect> redirects,
-                                    BodyRetargetWriter.Record? record, bool madeByProteus)
-    {
-        if (modRoot == null) return true;
-        if (record == null || !madeByProteus) return false;
-        static string Norm(string p) => p.Replace('\\', '/').TrimStart('/');
-        var refits = record.Options.Select(e => Norm(e.File)).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        return redirects.Any(d => string.Equals(Norm(d.GamePath), Norm(gamePath), StringComparison.OrdinalIgnoreCase))
-               && redirects.All(d => refits.Contains(Norm(d.File)));
-    }
-
-    /// <summary>
-    /// The refit of a chest or legs piece, its skin as <see cref="AutoRefitDecisions.SkinFor"/> says: shaped pieces kept
-    /// whole, nothing held, the skin replaced across bodies.
-    /// </summary>
-    internal static BodyRetarget.Planned PlanRefit(ModelParts garment, byte[] bytes, IReadOnlyList<BodyRetarget.SlotPair> pairs,
-                                                   string primary, bool across, bool gameGear)
-    {
-        var skin = AutoRefitDecisions.SkinFor(gameGear);
-        var pieces = RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment));
-        return BodyRetarget.Plan(garment, bytes, pairs, primary, held: new HashSet<int>(),
-                                 replaceSkin: across, acrossBodies: across, clearBody: skin.ClearBody,
-                                 cutHidden: skin.CutHidden, keepShape: pieces);
-    }
+    /// <summary>Whether the worn piece is the game's own garment — see <see cref="AutoRefitDecisions.IsGameGear"/>.</summary>
+    private static bool GameGear(Request r, IReadOnlyList<PenumbraModMeta.Redirect> redirects,
+                                 BodyRetargetWriter.Record? record)
+        => AutoRefitDecisions.IsGameGear(r.ModRoot, r.Worn.GamePath, redirects, record,
+                                         r.ModRoot != null && RefitModService.IsMadeByProteus(r.ModRoot));
 
     /// <summary>The game's own gear is made on the game's own body: one size, no search.</summary>
     private static AutoRefitDecisions.Pick? VanillaSource(BodySizeCatalog vanilla, string slot, string race)

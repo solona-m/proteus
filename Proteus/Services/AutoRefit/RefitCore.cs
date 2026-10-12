@@ -705,6 +705,19 @@ internal static class RefitCore
     /// <summary>A nearness distance for the log: millimetres, or "unreadable" for a body none of whose files could be read.</summary>
     private static string Mm(float metres) => metres >= 1f ? "unreadable" : $"{metres * 1000f:0.0} mm";
 
+    /// <summary>
+    /// The automatic refit of a chest or legs piece, its skin as <see cref="AutoRefitDecisions.SkinFor"/> says: shaped
+    /// pieces kept whole, nothing held, the skin replaced across bodies.
+    /// </summary>
+    internal static BodyRetarget.Planned PlanRefit(ModelParts garment, byte[] bytes, IReadOnlyList<BodyRetarget.SlotPair> pairs,
+                                                   string primary, bool across, bool gameGear)
+    {
+        var skin = AutoRefitDecisions.SkinFor(gameGear);
+        return BodyRetarget.Plan(garment, bytes, pairs, primary, held: new HashSet<int>(),
+                                 replaceSkin: across, acrossBodies: across, clearBody: skin.ClearBody,
+                                 cutHidden: skin.CutHidden, keepShape: ShapePieces(garment, DefaultKeepShape(garment)));
+    }
+
     /// <summary>A relative path the way Penumbra compares them: forward slashes, no leading slash, any case.</summary>
     internal static string Normal(string rel) => rel.Replace('\\', '/').Trim('/').ToLowerInvariant();
 }

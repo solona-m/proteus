@@ -52,10 +52,10 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
         // The game's own file: no mod root. A mod serving the game's model — a recolour, a "— Proteus edit" copy — serves
         // a file of its own, and keeps whole skin; the rule reads the worn piece, never a cached reading of what it was
         // made on.
-        Assert.True(AutoRefitWatcher.IsGameGear(null, Top_, [], null, madeByProteus: false));
-        Assert.False(AutoRefitWatcher.IsGameGear("mods/Coat — Proteus edit", Top_,
+        Assert.True(AutoRefitDecisions.IsGameGear(null, Top_, [], null, madeByProteus: false));
+        Assert.False(AutoRefitDecisions.IsGameGear("mods/Coat — Proteus edit", Top_,
                                                  [new PenumbraModMeta.Redirect(Top_, Top_, "")], null, madeByProteus: true));
-        Assert.False(AutoRefitWatcher.IsGameGear("mods/Recolour", Top_,
+        Assert.False(AutoRefitDecisions.IsGameGear("mods/Recolour", Top_,
                                                  [new PenumbraModMeta.Redirect(Top_, "coat.mdl", "Colour / Red")],
                                                  Refitted("Body — Neolithe/neolithe m.mdl"), madeByProteus: false));
 
@@ -69,20 +69,27 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
     {
         // "Coat — Neolithe", the mod a game item's auto refit is made in: its only file for the path is the refit Proteus
         // recorded, and its Original is the game's own coat. Refitted again onto another body, it is the game's garment
-        // still, and keeps the cut. Back slashes and a leading slash in a path are the same path.
+        // still, and keeps the cut. A back slash in a file, and a leading slash or other case in the worn path, change
+        // nothing.
         const string refit = "Body — Neolithe/neolithe m.mdl";
         var redirects = new List<PenumbraModMeta.Redirect> { new(Top_, @"Body — Neolithe\neolithe m.mdl", "Body — Neolithe / Neolithe M") };
-        Assert.True(AutoRefitWatcher.IsGameGear("mods/Coat — Neolithe", Top_, redirects, Refitted(refit), madeByProteus: true));
+        Assert.True(AutoRefitDecisions.IsGameGear("mods/Coat — Neolithe", "/" + Top_.ToUpperInvariant(), redirects,
+                                                  Refitted(refit), madeByProteus: true));
+
+        // The mod the Body size tool made to hold a modder's garment refitted by hand: Proteus's, nothing but refits,
+        // none of them from the game. The modder's garment, and whole skin.
+        Assert.False(AutoRefitDecisions.IsGameGear("mods/Their Coat — Neolithe", Top_, redirects,
+                                                   Refitted(refit, fromGame: false), madeByProteus: true));
 
         // The same files in a mod Proteus did not make: an author's, whatever it serves.
-        Assert.False(AutoRefitWatcher.IsGameGear("mods/Coat — Neolithe", Top_, redirects, Refitted(refit), madeByProteus: false));
+        Assert.False(AutoRefitDecisions.IsGameGear("mods/Coat — Neolithe", Top_, redirects, Refitted(refit), madeByProteus: false));
 
         // With a file of another's under it as well, the garment underneath is that one.
         redirects.Add(new PenumbraModMeta.Redirect(Top_, "coat.mdl", ""));
-        Assert.False(AutoRefitWatcher.IsGameGear("mods/Coat — Neolithe", Top_, redirects, Refitted(refit), madeByProteus: true));
+        Assert.False(AutoRefitDecisions.IsGameGear("mods/Coat — Neolithe", Top_, redirects, Refitted(refit), madeByProteus: true));
 
         // A mod serving nothing at the worn path is not what the piece is drawn from.
-        Assert.False(AutoRefitWatcher.IsGameGear("mods/Coat — Neolithe", Top_,
+        Assert.False(AutoRefitDecisions.IsGameGear("mods/Coat — Neolithe", Top_,
                                                  [new PenumbraModMeta.Redirect(Dwn_, refit, "Body — Neolithe / Neolithe M")],
                                                  Refitted(refit, Dwn_), madeByProteus: true));
     }
@@ -100,11 +107,11 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
             new(Male_, "coat.mdl", ""),
             new(Top_, baked, "Body — Neolithe / Neolithe M"),
         };
-        Assert.False(AutoRefitWatcher.IsGameGear("mods/Coat", Top_, redirects, Refitted(baked), madeByProteus: false));
-        Assert.False(AutoRefitWatcher.IsGameGear("mods/Coat", Top_, redirects, Refitted(baked), madeByProteus: true));
+        Assert.False(AutoRefitDecisions.IsGameGear("mods/Coat", Top_, redirects, Refitted(baked), madeByProteus: false));
+        Assert.False(AutoRefitDecisions.IsGameGear("mods/Coat", Top_, redirects, Refitted(baked), madeByProteus: true));
 
         // The game's own male-only top, baked into the mod Proteus made for it: only the refit, anywhere. Game gear.
-        Assert.True(AutoRefitWatcher.IsGameGear("mods/Coat — Neolithe", Top_, [redirects[1]], Refitted(baked),
+        Assert.True(AutoRefitDecisions.IsGameGear("mods/Coat — Neolithe", Top_, [redirects[1]], Refitted(baked),
                                                 madeByProteus: true));
     }
 
@@ -122,6 +129,11 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
             PenumbraModMeta.AtomicWrite(Path.Combine(root, PenumbraModMeta.MetaFile),
                                         PenumbraModMeta.NewMetaJson("Coat", "An author", ""));
             Assert.False(RefitModService.IsMadeByProteus(root));
+            PenumbraModMeta.AtomicWrite(Path.Combine(root, PenumbraModMeta.MetaFile),
+                                        PenumbraModMeta.NewMetaJson("Coat", "proteus", ""));
+            Assert.False(RefitModService.IsMadeByProteus(root));
+            File.WriteAllText(Path.Combine(root, PenumbraModMeta.MetaFile), """{ "FileVersion": 3, "Name": "Coat", "Author": 5 }""");
+            Assert.False(RefitModService.IsMadeByProteus(root));
         }
         finally
         {
@@ -133,8 +145,37 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
     private const string Male_ = "chara/equipment/e0631/model/c0101e0631_top.mdl";
     private const string Dwn_ = "chara/equipment/e0631/model/c0201e0631_dwn.mdl";
 
-    private static BodyRetargetWriter.Record Refitted(string file, string gamePath = "/" + Top_)
-        => new() { Group = "Body — Neolithe", Options = [new() { GamePath = gamePath, File = file, Name = "Neolithe M" }] };
+    private static BodyRetargetWriter.Record Refitted(string file, string gamePath = Top_, bool fromGame = true)
+        => new()
+        {
+            Group = "Body — Neolithe",
+            Options = [new() { GamePath = gamePath, File = file, Name = "Neolithe M", FromGame = fromGame }],
+        };
+
+    [Fact]
+    [Trait("Plan", "EDGE-vanilla-refit-cut-skin-8")]
+    public void A_save_records_whether_it_was_made_from_the_games_own_garment()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "proteus-skinrule-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            RefitModService.WriteScaffold(root, "Coat — Neolithe", "Coat, refitted by Proteus.");
+            Assert.True(BodyRetargetWriter.Save(root, "Body — Neolithe", Top_, "Neolithe", "Vanilla",
+                                                [new BodyRetargetWriter.Refit("Neolithe M", [1, 2, 3], "M")],
+                                                fromGame: true).Ok);
+            Assert.True(BodyRetargetWriter.Save(root, "Body — Neolithe", Top_, "Neolithe", "Vanilla",
+                                                [new BodyRetargetWriter.Refit("Neolithe L", [4, 5, 6], "L")]).Ok);
+
+            var record = BodyRetargetWriter.ReadRecord(root)!;
+            Assert.True(record.Options.Single(e => e.Name == "Neolithe M").FromGame);
+            Assert.False(record.Options.Single(e => e.Name == "Neolithe L").FromGame);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
 
     [Theory]
     [InlineData(true)]
@@ -150,7 +191,7 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
         var before = BodyRetarget.Plan(garment, bytes, [pair], "_top", held: new HashSet<int>(),
                                        replaceSkin: across, acrossBodies: across, clearBody: false, cutHidden: false,
                                        keepShape: RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)));
-        var now = AutoRefitWatcher.PlanRefit(garment, bytes, [pair], "_top", across, gameGear: false);
+        var now = RefitCore.PlanRefit(garment, bytes, [pair], "_top", across, gameGear: false);
 
         Assert.Equal(before.Model, now.Model);
         Assert.Equal(before.Report, now.Report);
@@ -167,8 +208,8 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
         var garment = ModelPartReader.Read(bytes)!;
         var pair = Raised(z => Chest(z));
 
-        var game = AutoRefitWatcher.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true);
-        var mod = AutoRefitWatcher.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: false);
+        var game = RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true);
+        var mod = RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: false);
         output.WriteLine($"game: {game.Report.Swap}; mod: {mod.Report.Swap}");
 
         Assert.True(game.Report.Swap?.Cut > 0, $"nothing of the chest was cut: {game.Report.Swap}");
@@ -188,8 +229,8 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
         var garment = ModelPartReader.Read(bytes)!;
         var pair = Raised(z => Chest(z), grow: 0f);
 
-        var game = AutoRefitWatcher.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true);
-        var mod = AutoRefitWatcher.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: false);
+        var game = RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true);
+        var mod = RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: false);
         output.WriteLine($"game pushed {game.Report.Pushed} (worst {game.Report.WorstPush}); mod pushed {mod.Report.Pushed}");
 
         Assert.True(game.Report.Pushed > 0, "the game's own top should have been pulled out of the body");
@@ -204,7 +245,7 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
             new SyntheticModel.Mesh(Cloth, new SyntheticModel.Sub(0, TrianglesPerIsland: 4, OffsetZ: 0.001f)));
         var garment = ModelPartReader.Read(bytes)!;
 
-        var plan = AutoRefitWatcher.PlanRefit(garment, bytes, [Raised(z => Chest(z))], "_top", across: true, gameGear: true);
+        var plan = RefitCore.PlanRefit(garment, bytes, [Raised(z => Chest(z))], "_top", across: true, gameGear: true);
 
         Assert.True(plan.Report.Swap is not { Added: > 0 }, $"skin went in: {plan.Report.Swap}");
         Assert.Equal(0, plan.Report.Folded);
@@ -220,7 +261,7 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
         var bytes = Top(GameSkin);
         var garment = ModelPartReader.Read(bytes)!;
         var pair = Raised(z => Chest(z));
-        var plan = AutoRefitWatcher.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true);
+        var plan = RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true);
 
         string target = Path.Combine(Path.GetTempPath(), "proteus-skinrule-" + Guid.NewGuid().ToString("N") + ".mdl");
         File.WriteAllBytes(target, Chest(0.01f));
@@ -246,7 +287,7 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
         var bytes = Top();
         var garment = ModelPartReader.Read(bytes)!;
 
-        var plan = AutoRefitWatcher.PlanRefit(garment, bytes, [Raised(z => Chest(z))], "_top", across: false, gameGear: true);
+        var plan = RefitCore.PlanRefit(garment, bytes, [Raised(z => Chest(z))], "_top", across: false, gameGear: true);
 
         Assert.Null(plan.Report.Swap);
     }
