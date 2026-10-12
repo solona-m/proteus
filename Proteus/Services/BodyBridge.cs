@@ -517,10 +517,11 @@ internal static partial class BodyBridge
         Action<string>? log = null, bool[]? covered = null, float smoothStrength = 0f,
         bool fillGap = true, Vec3? outward = null, bool envelope = false,
         float[]? ramp = null, float[]? relaxSeed = null, bool pinBoundary = false, float minDepthShare = 0f,
-        bool[]? joinPin = null, float rampFull = 1f, float maxSlope = BustMaxSlope, float openSlope = 0f)
+        bool[]? joinPin = null, float rampFull = 1f, float maxSlope = BustMaxSlope, float openSlope = 0f,
+        Func<NippleFound, float>? nippleScale = null, bool frameFromBust = false)
         => BustBridgeSolve(pos, nrm, Array.ConvertAll(tris, t => (int)t), bust, strength, log, covered,
                            smoothStrength, fillGap, outward, envelope, ramp, relaxSeed, pinBoundary, minDepthShare,
-                           joinPin, rampFull, maxSlope, openSlope);
+                           joinPin, rampFull, maxSlope, openSlope, nippleScale, frameFromBust);
 
     /// <inheritdoc cref="BustBridgeSolve(Vec3[], Vec3[], ushort[], float[], float, Action{string}, bool[])"/>
     /// <remarks>Int indices: a caller working on the whole body concatenates every skin mesh and runs past a ushort.</remarks>
@@ -538,14 +539,19 @@ internal static partial class BodyBridge
     /// Held in place like <paramref name="pinBoundary"/>'s rim, with the span fading to them over
     /// <see cref="JoinPinFade"/> rings. Safe on a shell: it pins only the join, never the hem.
     /// </param>
+    /// <param name="nippleScale">Per nipple located, the share of the nipple smoothing it gets — see
+    /// <see cref="BodySmoothGate.SideScale"/>. Null for all of it.</param>
+    /// <param name="frameFromBust">Fit the chest's axes on the whole bust, not the covered part — see
+    /// <see cref="BodySmoothGate.FrameFromBust"/>.</param>
     internal static BustBridgePlan? BustBridgeSolve(
         Vec3[] pos, Vec3[] nrm, int[] tris, float[] bust, float strength,
         Action<string>? log = null, bool[]? covered = null, float smoothStrength = 0f,
         bool fillGap = true, Vec3? outward = null, bool envelope = false,
         float[]? ramp = null, float[]? relaxSeed = null, bool pinBoundary = false, float minDepthShare = 0f,
-        bool[]? joinPin = null, float rampFull = 1f, float maxSlope = BustMaxSlope, float openSlope = 0f)
+        bool[]? joinPin = null, float rampFull = 1f, float maxSlope = BustMaxSlope, float openSlope = 0f,
+        Func<NippleFound, float>? nippleScale = null, bool frameFromBust = false)
     {
-        return new BridgeSolution(pos, nrm, tris, bust, strength, log, covered, smoothStrength, fillGap, outward, envelope, ramp, relaxSeed, pinBoundary, minDepthShare, joinPin, rampFull, maxSlope, openSlope).Run();
+        return new BridgeSolution(pos, nrm, tris, bust, strength, log, covered, smoothStrength, fillGap, outward, envelope, ramp, relaxSeed, pinBoundary, minDepthShare, joinPin, rampFull, maxSlope, openSlope, nippleScale, frameFromBust).Run();
     }
 
     /// <summary>

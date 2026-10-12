@@ -34,6 +34,8 @@ internal static partial class BodyRetarget
     /// <see cref="LegFill"/>).</param>
     /// <param name="CrossBodyPassesWithinBody">Run the copy rule and the skin hug within one body mod too, as builds
     /// before 1221 did (see <see cref="PlanWeights"/>).</param>
+    /// <param name="NoNippleSmooth">Leave the new body's nipples as its mod made them, however far they stand through
+    /// the cloth (see <see cref="SmoothCoveredNipples"/>).</param>
     internal sealed record Tuning(bool NoFollow = false, bool NoOwnSkinWeights = false,
                                   float OwnSkinReach = OwnSkinReachDefault, float CopyReach = CopyReachDefault,
                                   float CopyTolerance = CopyToleranceDefault, bool NoGiveUp = false,
@@ -41,7 +43,7 @@ internal static partial class BodyRetarget
                                   bool NoWeightSmooth = false, bool NoUnderbustLift = false, bool NoRelax = false,
                                   bool NoSkinHug = false, bool NoLayerKnit = false, bool NoRimLift = false,
                                   bool NoLayerOrder = false, bool LegsForAll = false,
-                                  bool CrossBodyPassesWithinBody = false);
+                                  bool CrossBodyPassesWithinBody = false, bool NoNippleSmooth = false);
 
     private static readonly Tuning DefaultTuning = new();
 

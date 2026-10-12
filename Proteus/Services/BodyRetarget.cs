@@ -203,10 +203,12 @@ internal static partial class BodyRetarget
     /// <param name="Laid">Skin points laid exactly onto the new body — see <see cref="LaySkin"/>.</param>
     /// <param name="Swap">What swapping the garment's skin for the body's did; null when it did not run.</param>
     /// <param name="Folded">Triangles the refit left facing the wrong way — see <see cref="Unfold"/>.</param>
+    /// <param name="Smoothed">Vertices of the new body whose covered nipples were smoothed — see
+    /// <see cref="SmoothCoveredNipples"/>.</param>
     internal sealed record Report(
         int Nodes, int Snapped, int Transferred, int Missed, int Pushed,
         float WorstMove, float WorstPush, int UnmappedSpares, bool HasOtherLods, int Held = 0, int Laid = 0,
-        SwapReport? Swap = null, int Folded = 0)
+        SwapReport? Swap = null, int Folded = 0, int Smoothed = 0)
     {
         /// <summary>Share of moved nodes that landed on a body vertex exactly. Low means the author sculpted the
         /// garment's body mesh rather than copying it, and the seam may not come out perfect.</summary>
@@ -623,12 +625,18 @@ internal static partial class BodyRetarget
     /// <param name="swapSlot">A slot other than <paramref name="garmentSlot"/> whose skin is the one being swapped: the
     /// legs of a shoe whose own foot is held (see <see cref="SwapSlotSwapped"/>). Null for none, which is every refit but
     /// the automatic one of shoes and gloves.</param>
+    /// <param name="log">Where the passes that explain themselves write: the nipple smoothing. Null for nowhere.</param>
     public static Planned Plan(ModelParts garment, byte[] garmentBytes, IReadOnlyList<SlotPair> pairs,
                                string? garmentSlot = null, bool pushOut = true, IReadOnlySet<int>? held = null,
                                bool replaceSkin = false, bool acrossBodies = false, bool clearBody = false,
                                bool cutHidden = true, IReadOnlyList<IReadOnlyCollection<int>>? keepShape = null,
-                               string? swapSlot = null)
+                               string? swapSlot = null, Action<string>? log = null)
     {
+        // First, before anything reads the new chest: its nipples smoothed where the garment covers more of them than
+        // the old body had, so every pass below sees one surface — the one the swap draws.
+        int smoothed = 0;
+        if (!Tuned.NoNippleSmooth) pairs = SmoothCoveredNipples(garment, pairs, out smoothed, log);
+
         // The solver and the rebuild must agree on which skin meshes go: the solver parts the cloth welded to them, and a
         // mesh it parted that the rebuild then keeps opens the seam (see Sets.From). Without a hold the two rules agree on
         // their own; with one, a held ankle ring stays where the old body had it and the rebuild, judging the laid model,
@@ -671,7 +679,7 @@ internal static partial class BodyRetarget
         var report = new Report(garment.Positions.Length / 3, solved.Snapped, solved.Transferred, solved.Missed,
                                 solved.Pushed, solved.WorstMove, solved.WorstPush,
                                 written.UnmappedSpares, ModelLodTrimmer.LodCount(model) > 1, solved.Held, solved.Laid,
-                                swap, solved.Folded);
+                                swap, solved.Folded, smoothed);
         return new Planned(solved.Edit, model, report);
     }
 

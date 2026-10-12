@@ -234,14 +234,20 @@ internal static class SyntheticChest
 
     /// <summary>A refit pair from <paramref name="source"/> to <paramref name="target"/>, through the identity when
     /// they share a topology and the uv atlas when they do not.</summary>
+    /// <param name="atlas">Go through the uv atlas even when the identity would do.</param>
     internal static BodyRetarget.SlotPair Pair(byte[] source, byte[] target, string slot = "_top",
-                                               IReadOnlySet<string>? hidden = null)
+                                               IReadOnlySet<string>? hidden = null, bool atlas = false)
     {
         var s = ModelPartReader.Read(source)!;
         var t = BodyRetarget.Without(ModelPartReader.Read(target)!, hidden);
         IBodyCorrespondence? built;
         string refusal;
-        if (s.Positions.Length == t.Positions.Length)
+        if (atlas)
+        {
+            Assert.True(UvAtlasCorrespondence.TryBuild(s, Uv(source), t, Uv(target), slot, out var byUv, out refusal), refusal);
+            built = byUv;
+        }
+        else if (s.Positions.Length == t.Positions.Length)
         {
             Assert.True(IdentityCorrespondence.TryBuild(s, t, slot, out var identity, out refusal), refusal);
             built = identity;

@@ -18,13 +18,13 @@ public class RefitNippleSmoothPinTests(ITestOutputHelper output)
     internal const float Nipple = 0.004f;
 
     /// <summary>A refit of a chest garment, by fixture name: the fixtures RefitNippleSmoothTests runs both ways.</summary>
-    internal static BodyRetarget.Planned Refit(string fixture)
+    internal static BodyRetarget.Planned Refit(string fixture, Action<string>? log = null)
     {
         byte[] flat = Body(0f, 0f), nippled = Body(Nipple, Nipple);
         BodyRetarget.Planned Run(byte[] garment, BodyRetarget.SlotPair pair, string slot = "_top",
                                  bool replaceSkin = true, IReadOnlySet<int>? held = null)
             => BodyRetarget.Plan(ModelPartReader.Read(garment)!, garment, [pair], slot, held: held,
-                                 replaceSkin: replaceSkin, acrossBodies: true, cutHidden: false);
+                                 replaceSkin: replaceSkin, acrossBodies: true, cutHidden: false, log: log);
         return fixture switch
         {
             "flat to nippled" => Run(Garment(0f, 0f, BothCups), Pair(flat, nippled)),
@@ -81,7 +81,7 @@ public class RefitNippleSmoothPinTests(ITestOutputHelper output)
     [Trait("Plan", "AC-refit-nipple-smooth-9")]
     public void Refit_matches_the_pre_feature_output(string fixture, string pinned)
     {
-        var plan = Refit(fixture);
+        var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoNippleSmooth: true), () => Refit(fixture));
         output.WriteLine($"{{ \"{fixture}\", \"{Hash(plan.Model)}\" }},");
         Assert.Equal(pinned, Hash(plan.Model));
     }

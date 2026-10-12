@@ -581,14 +581,16 @@ internal static partial class BodyRetarget
     /// and the cloth, and stays; skin with cloth well over it is hidden and stays; skin the cloth sits right on, or is
     /// already behind, is what shows through, and is pulled back.
     /// </summary>
-    private sealed class ClothCrossings
+    internal sealed class ClothCrossings
     {
         private const float Cell = 0.02f;
         private readonly List<(Vector3 A, Vector3 B, Vector3 C)> tris = [];
         private readonly List<float> clear = [];
         private readonly Dictionary<(int, int, int), List<int>> grid = [];
 
-        public ClothCrossings(ModelParts garment)
+        /// <param name="countVariants">Count parts switched by an IMC variant tag as cloth too: for asking what the
+        /// garment covers whichever of its options is drawn (see <see cref="CoveredTargetSkin"/>).</param>
+        public ClothCrossings(ModelParts garment, bool countVariants = false)
         {
             int vc = garment.Positions.Length / 3;
             var vertAt = new Vec3[vc];
@@ -599,7 +601,7 @@ internal static partial class BodyRetarget
             // A part switched by an IMC variant tag may not be drawn — which of them is, is the wearer's setting, and
             // nothing here knows it. Counted, a hidden long skirt would pull the thigh's skin back from under nothing.
             uint variantBits = 0;
-            for (int i = 0; i < garment.AttributeNames.Count && i < 32; i++)
+            for (int i = 0; i < garment.AttributeNames.Count && i < 32 && !countVariants; i++)
                 if (SecondSkinWriter.IsVariantAttribute(garment.AttributeNames[i])) variantBits |= 1u << i;
 
             var faces = new List<(int A, int B, int C)>();

@@ -372,7 +372,7 @@ internal static class SizeSetRefit
 
                 var plan = BodyRetarget.Plan(src.Garment, src.Bytes, pairs, piece.Slot, held: new HashSet<int>(),
                                              replaceSkin: true, acrossBodies: across, clearBody: false, cutHidden: true,
-                                             keepShape: pieces);
+                                             keepShape: pieces, log: line => log.Debug("[Proteus] size set: {0}", line));
                 plan = RefitCore.MatchSkinToBody(plan, sourcePath, targetPath, uvRemap, male, log);
                 refits.Add(new BodyRetargetWriter.Refit(option, plan.Model, toLabel));
                 log.Information("[Proteus] size set: {0} onto {1} (moved up to {2:F1} mm)", piece.Label, option,
