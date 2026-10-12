@@ -4696,7 +4696,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "아래에서 체크한 바디의 모든 사이즈를 이 모드 전체에 추가합니다. 상의와 하의 파츠를 제작자의 첫 번째 사이즈에서 리핏해, 제작자의 사이즈 옆에 \"Rue S\", \"YAB Buff L\" 등으로 저장합니다. 모드에 이미 있는 사이즈는 그대로 둡니다.",
+    "message": "아래에서 체크한 바디의 모든 사이즈를 이 모드 전체에 추가합니다. 상의, 하의, 신발, 장갑 파츠를 제작자의 첫 번째 사이즈에서 리핏해, 제작자의 사이즈 옆에 \"Rue S\", \"YAB Buff L\" 등으로 저장합니다. 모드에 이미 있는 사이즈는 그대로 둡니다.",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -4705,6 +4705,18 @@
   },
   "SizeSet.Yas.Tip": {
     "message": "Rue, YAB, Tre에는 Yet Another Skeleton 버전이 있습니다. Neolithe와 Bibo에는 없으므로 일반 사이즈를 유지합니다. 이미 YAS로 웨이트된 파츠는 항상 YAS 사이즈를 받습니다.",
+    "description": ""
+  },
+  "SizeSet.Ends": {
+    "message": "신발과 장갑 포함",
+    "description": ""
+  },
+  "SizeSet.Ends.Tip": {
+    "message": "신발과 장갑은 원래 발과 손을 유지하고, 닿는 다리나 팔만 리핏합니다. 신발은 다리 사이즈를, 장갑은 바디마다 옵션 하나를 받고, 같은 그룹이면 둘 다 의상의 가슴이나 다리 사이즈에 합류합니다.",
+    "description": ""
+  },
+  "SizeSet.EndsUnreadable.Fmt": {
+    "message": "{0}: 리그를 읽을 수 없어 발이나 손을 유지할 수 없으므로 사이즈를 만들지 않았습니다.",
     "description": ""
   },
   "SizeSet.Remake": {
@@ -4752,7 +4764,7 @@
     "description": ""
   },
   "SizeSet.NoPieces": {
-    "message": "이 모드에는 사이즈를 만들 상의나 하의 모델이 없습니다.",
+    "message": "이 모드에는 사이즈를 만들 상의, 하의, 신발, 장갑 모델이 없습니다.",
     "description": ""
   },
   "SizeSet.NoBodies": {

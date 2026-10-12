@@ -139,6 +139,16 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
                 config.Save();
             }
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(s.YasTip);
+
+            bool ends = config.SizeSetEnds;
+            if (ImGui.Checkbox(s.Ends, ref ends))
+            {
+                config.SizeSetEnds = ends;
+                config.Save();
+                // The races offered come from the pieces, and a mod of shoes alone has none without them.
+                racesFor = null;
+            }
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(s.EndsTip);
             ImGui.Checkbox(s.Remake, ref remake);
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(s.RemakeTip);
         }
@@ -190,7 +200,8 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
         if (racesFor == modDir || readingRaces != null) return;
         racesFor = modDir;
         races = null;
-        readingRaces = Task.Run(() => SizeSetRefit.PiecesOf(modRoot, readGameFile).Select(p => p.Race)
+        bool ends = config.SizeSetEnds;
+        readingRaces = Task.Run(() => SizeSetRefit.PiecesOf(modRoot, readGameFile, ends).Select(p => p.Race)
                                                   .ToHashSet(StringComparer.Ordinal));
     }
 
@@ -214,7 +225,8 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
         // Penumbra's mod list is IPC: asked here, on the framework thread, and handed to the worker.
         if (penumbra.GetAllMods() is not { } mods || penumbra.GetModDirectory() is not { } modsRoot) return;
 
-        var request = new SizeSetRefit.Request(modRoot, keys, config.SizeSetYas, remake, [], readGameFile);
+        var request = new SizeSetRefit.Request(modRoot, keys, config.SizeSetYas, remake, [], readGameFile,
+                                               config.SizeSetEnds);
         cancel = new CancellationTokenSource();
         var ct = cancel.Token;
         runningFor = modDir;

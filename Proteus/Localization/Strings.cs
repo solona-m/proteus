@@ -94,9 +94,15 @@ public sealed class SizeSetStrings
     public readonly string Header = Loc.Localize("SizeSet.Header", "Every size for other bodies") + "###sizeSetHeader";
 
     public readonly string Intro = Loc.Localize("SizeSet.Intro",
-        "Adds every size of the bodies ticked below to this whole mod. Each chest and legs piece is refitted from the "
-      + "author's first size and saved beside the author's sizes as \"Rue S\", \"YAB Buff L\" and so on. Sizes the mod "
-      + "already has are left alone.");
+        "Adds every size of the bodies ticked below to this whole mod. Each chest, legs, shoe and glove piece is refitted "
+      + "from the author's first size and saved beside the author's sizes as \"Rue S\", \"YAB Buff L\" and so on. Sizes "
+      + "the mod already has are left alone.");
+
+    public readonly string Ends = Loc.Localize("SizeSet.Ends", "Include shoes and gloves") + "###sizeSetEnds";
+
+    public readonly string EndsTip = Loc.Localize("SizeSet.Ends.Tip",
+        "Shoes and gloves keep their own feet and hands; only the leg or arm they reach is refitted. Shoes get the legs' "
+      + "sizes, gloves one option per body, and both join the outfit's chest or legs sizes when they share a group.");
 
     public readonly string Yas = Loc.Localize("SizeSet.Yas", "Use a body's YAS version where it has one") + "###sizeSetYas";
 
@@ -138,7 +144,11 @@ public sealed class SizeSetStrings
     public readonly string FailedFmt = Loc.Localize("SizeSet.Failed.Fmt", "Couldn't add the sizes: {0}");
 
     public readonly string NoPieces = Loc.Localize("SizeSet.NoPieces",
-        "This mod has no chest or legs models to make sizes of.");
+        "This mod has no chest, legs, shoe or glove models to make sizes of.");
+
+    /// <summary>{0} is the piece.</summary>
+    public readonly string EndsUnreadableFmt = Loc.Localize("SizeSet.EndsUnreadable.Fmt",
+        "{0}: its rig can't be read, so its foot or hand can't be kept and no sizes were made of it.");
 
     public readonly string NoBodies = Loc.Localize("SizeSet.NoBodies", "No body mods are installed to refit onto.");
 

@@ -4696,7 +4696,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "Fügt dem ganzen Mod jede Größe der unten angehakten Körper hinzu. Jedes Brust- und Beinteil wird von der ersten Größe des Autors aus angepasst und neben dessen Größen als „Rue S“, „YAB Buff L“ usw. gespeichert. Größen, die der Mod schon hat, bleiben unberührt.",
+    "message": "Fügt dem ganzen Mod jede Größe der unten angehakten Körper hinzu. Jedes Brust-, Bein-, Schuh- und Handschuhteil wird von der ersten Größe des Autors aus angepasst und neben dessen Größen als „Rue S“, „YAB Buff L“ usw. gespeichert. Größen, die der Mod schon hat, bleiben unberührt.",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -4705,6 +4705,18 @@
   },
   "SizeSet.Yas.Tip": {
     "message": "Rue, YAB und Tre gibt es in Yet-Another-Skeleton-Versionen. Neolithe und Bibo nicht – sie behalten ihre normalen Größen. Ein Teil, das schon auf YAS gewichtet ist, bekommt immer YAS-Größen.",
+    "description": ""
+  },
+  "SizeSet.Ends": {
+    "message": "Schuhe und Handschuhe einbeziehen",
+    "description": ""
+  },
+  "SizeSet.Ends.Tip": {
+    "message": "Schuhe und Handschuhe behalten ihre eigenen Füße und Hände; angepasst wird nur das Bein oder der Arm, den sie erreichen. Schuhe bekommen die Größen der Beine, Handschuhe eine Option pro Körper, und beide schließen sich den Brust- oder Beingrößen des Outfits an, wenn sie eine Gruppe teilen.",
+    "description": ""
+  },
+  "SizeSet.EndsUnreadable.Fmt": {
+    "message": "{0}: Sein Rig lässt sich nicht lesen, also kann Fuß oder Hand nicht behalten werden und es wurden keine Größen davon gemacht.",
     "description": ""
   },
   "SizeSet.Remake": {
@@ -4752,7 +4764,7 @@
     "description": ""
   },
   "SizeSet.NoPieces": {
-    "message": "Dieser Mod hat keine Brust- oder Beinmodelle, von denen Größen erstellt werden könnten.",
+    "message": "Dieser Mod hat keine Brust-, Bein-, Schuh- oder Handschuhmodelle, von denen Größen erstellt werden könnten.",
     "description": ""
   },
   "SizeSet.NoBodies": {

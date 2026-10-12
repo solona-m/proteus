@@ -4696,7 +4696,7 @@
     "description": "Heading of the Body size tool's section that adds every size of other body mods to the whole open mod."
   },
   "SizeSet.Intro": {
-    "message": "Adds every size of the bodies ticked below to this whole mod. Each chest and legs piece is refitted from the author's first size and saved beside the author's sizes as \"Rue S\", \"YAB Buff L\" and so on. Sizes the mod already has are left alone.",
+    "message": "Adds every size of the bodies ticked below to this whole mod. Each chest, legs, shoe and glove piece is refitted from the author's first size and saved beside the author's sizes as \"Rue S\", \"YAB Buff L\" and so on. Sizes the mod already has are left alone.",
     "description": "Explains the section. Rue S and YAB Buff L are option names: keep them as they are."
   },
   "SizeSet.Yas": {
@@ -4706,6 +4706,18 @@
   "SizeSet.Yas.Tip": {
     "message": "Rue, YAB and Tre come in Yet Another Skeleton versions. Neolithe and Bibo don't, and keep their plain sizes. A piece already weighted to YAS always gets YAS sizes.",
     "description": "Tooltip of the YAS checkbox. Body mod names stay as they are."
+  },
+  "SizeSet.Ends": {
+    "message": "Include shoes and gloves",
+    "description": "Checkbox in Studio > Body size > Every size for other bodies: also make sizes of the mod's shoes and gloves."
+  },
+  "SizeSet.Ends.Tip": {
+    "message": "Shoes and gloves keep their own feet and hands; only the leg or arm they reach is refitted. Shoes get the legs' sizes, gloves one option per body, and both join the outfit's chest or legs sizes when they share a group.",
+    "description": "Tooltip for 'Include shoes and gloves'."
+  },
+  "SizeSet.EndsUnreadable.Fmt": {
+    "message": "{0}: its rig can't be read, so its foot or hand can't be kept and no sizes were made of it.",
+    "description": "Note after a run: a shoe or glove whose rig can't be read got no sizes. {0} = the piece's name."
   },
   "SizeSet.Remake": {
     "message": "Make again the sizes Proteus added before",
@@ -4752,7 +4764,7 @@
     "description": "{0} is the error."
   },
   "SizeSet.NoPieces": {
-    "message": "This mod has no chest or legs models to make sizes of.",
+    "message": "This mod has no chest, legs, shoe or glove models to make sizes of.",
     "description": "Shown when the mod has nothing to refit."
   },
   "SizeSet.NoBodies": {

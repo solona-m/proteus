@@ -4696,7 +4696,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "Ajoute à tout ce mod chaque taille des corps cochés ci-dessous. Chaque pièce de torse et de jambes est réajustée à partir de la première taille de l'auteur et enregistrée à côté de ses tailles sous « Rue S », « YAB Buff L », etc. Les tailles que le mod possède déjà ne sont pas touchées.",
+    "message": "Ajoute à tout ce mod chaque taille des corps cochés ci-dessous. Chaque pièce de torse, de jambes, de chaussures et de gants est réajustée à partir de la première taille de l'auteur et enregistrée à côté de ses tailles sous « Rue S », « YAB Buff L », etc. Les tailles que le mod possède déjà ne sont pas touchées.",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -4705,6 +4705,18 @@
   },
   "SizeSet.Yas.Tip": {
     "message": "Rue, YAB et Tre existent en versions Yet Another Skeleton. Neolithe et Bibo non, et gardent leurs tailles normales. Une pièce déjà pondérée pour YAS reçoit toujours des tailles YAS.",
+    "description": ""
+  },
+  "SizeSet.Ends": {
+    "message": "Inclure les chaussures et les gants",
+    "description": ""
+  },
+  "SizeSet.Ends.Tip": {
+    "message": "Les chaussures et les gants gardent leurs propres pieds et mains ; seule la jambe ou le bras qu'ils atteignent est réajusté. Les chaussures reçoivent les tailles des jambes, les gants une option par corps, et tous deux rejoignent les tailles de buste ou de jambes de la tenue quand ils partagent un groupe.",
+    "description": ""
+  },
+  "SizeSet.EndsUnreadable.Fmt": {
+    "message": "{0} : son rig est illisible, le pied ou la main ne peut donc pas être gardé et aucune taille n'en a été faite.",
     "description": ""
   },
   "SizeSet.Remake": {
@@ -4752,7 +4764,7 @@
     "description": ""
   },
   "SizeSet.NoPieces": {
-    "message": "Ce mod n'a aucun modèle de torse ou de jambes dont faire des tailles.",
+    "message": "Ce mod n'a aucun modèle de torse, de jambes, de chaussures ou de gants dont faire des tailles.",
     "description": ""
   },
   "SizeSet.NoBodies": {

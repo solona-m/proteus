@@ -4696,7 +4696,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "Añade a todo este mod cada talla de los cuerpos marcados abajo. Cada pieza de torso y piernas se reajusta desde la primera talla del autor y se guarda junto a sus tallas como «Rue S», «YAB Buff L», etc. Las tallas que el mod ya tiene no se tocan.",
+    "message": "Añade a todo este mod cada talla de los cuerpos marcados abajo. Cada pieza de torso, piernas, zapatos y guantes se reajusta desde la primera talla del autor y se guarda junto a sus tallas como «Rue S», «YAB Buff L», etc. Las tallas que el mod ya tiene no se tocan.",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -4705,6 +4705,18 @@
   },
   "SizeSet.Yas.Tip": {
     "message": "Rue, YAB y Tre tienen versiones para Yet Another Skeleton. Neolithe y Bibo no, y conservan sus tallas normales. Una pieza que ya está pesada para YAS siempre recibe tallas YAS.",
+    "description": ""
+  },
+  "SizeSet.Ends": {
+    "message": "Incluir zapatos y guantes",
+    "description": ""
+  },
+  "SizeSet.Ends.Tip": {
+    "message": "Los zapatos y guantes conservan sus propios pies y manos; solo se reajusta la pierna o el brazo que alcanzan. Los zapatos reciben las tallas de las piernas, los guantes una opción por cuerpo, y ambos se suman a las tallas de pecho o piernas del conjunto cuando comparten grupo.",
+    "description": ""
+  },
+  "SizeSet.EndsUnreadable.Fmt": {
+    "message": "{0}: no se puede leer su rig, así que no se puede conservar el pie o la mano y no se hicieron tallas de él.",
     "description": ""
   },
   "SizeSet.Remake": {
@@ -4752,7 +4764,7 @@
     "description": ""
   },
   "SizeSet.NoPieces": {
-    "message": "Este mod no tiene modelos de torso o piernas de los que hacer tallas.",
+    "message": "Este mod no tiene modelos de torso, piernas, zapatos o guantes de los que hacer tallas.",
     "description": ""
   },
   "SizeSet.NoBodies": {

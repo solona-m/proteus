@@ -4696,7 +4696,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "下でチェックしたボディの全サイズを、このMOD全体に追加します。胴と脚の各パーツを作者の最初のサイズからリフィットし、作者のサイズの隣に「Rue S」「YAB Buff L」などとして保存します。MODにすでにあるサイズはそのままです。",
+    "message": "下でチェックしたボディの全サイズを、このMOD全体に追加します。胴・脚・靴・手袋の各パーツを作者の最初のサイズからリフィットし、作者のサイズの隣に「Rue S」「YAB Buff L」などとして保存します。MODにすでにあるサイズはそのままです。",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -4705,6 +4705,18 @@
   },
   "SizeSet.Yas.Tip": {
     "message": "Rue、YAB、TreにはYet Another Skeleton版があります。NeolitheとBiboにはないため、通常のサイズのままです。すでにYASにウェイトされているパーツは常にYASサイズになります。",
+    "description": ""
+  },
+  "SizeSet.Ends": {
+    "message": "靴と手袋も含める",
+    "description": ""
+  },
+  "SizeSet.Ends.Tip": {
+    "message": "靴と手袋は元の足と手を残し、届いている脚や腕だけをリフィットします。靴には脚のサイズが、手袋にはボディごとに1つのオプションが付き、同じグループならどちらも衣装の胸や脚のサイズに加わります。",
+    "description": ""
+  },
+  "SizeSet.EndsUnreadable.Fmt": {
+    "message": "{0}: リグを読み取れないため足や手を残せず、サイズは作られませんでした。",
     "description": ""
   },
   "SizeSet.Remake": {
@@ -4752,7 +4764,7 @@
     "description": ""
   },
   "SizeSet.NoPieces": {
-    "message": "このMODには、サイズを作れる胴・脚モデルがありません。",
+    "message": "このMODには、サイズを作れる胴・脚・靴・手袋のモデルがありません。",
     "description": ""
   },
   "SizeSet.NoBodies": {

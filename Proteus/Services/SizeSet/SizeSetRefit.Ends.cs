@@ -1,0 +1,262 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using Dalamud.Plugin.Services;
+using Proteus.Localization;
+
+namespace Proteus.Services;
+
+/// <summary>
+/// A mod's shoes and gloves, sized as the automatic refit sizes them (<see cref="KeepEnds"/>): the foot or hand kept
+/// exactly, and the leg or arm refitted onto each size — by the legs table for a shoe ("Rue WC", "YAB SC"), one option per
+/// body for gloves in their own group, since every chest size of a body has the same arms. A shoe or glove sized in the
+/// same group as the outfit's chest or legs joins the options that piece made, so one choice dresses the whole outfit.
+/// One that reaches no leg or arm has only its skin redrawn, where the new body draws skin another way.
+/// </summary>
+internal static partial class SizeSetRefit
+{
+    private static int RunEndsPiece(Request request, Piece piece, UVRemapService? uvRemap, IPluginLog log,
+                                    Action<string> progress, List<string> notes, CancellationToken ct)
+    {
+        string root = request.ModRoot;
+        var record = BodyRetargetWriter.ReadRecord(root);
+        string race = piece.Race;
+        bool male = BodySizeCatalog.IsMaleRace(race);
+        string limb = AutoRefitDecisions.LimbOf(piece.Slot)!;
+        bool gloves = piece.Slot == "_glv";
+        // The table the sizes come from: the chest's for gloves and for anything following a chest, else the legs'.
+        string sizeSlot = gloves || piece.FollowsChest ? "_top" : "_dwn";
+        bool follows = piece.FollowsChest || piece.FollowsLegs;
+
+        if (!request.Keys.Any(k => ForRace(k, sizeSlot, race))) return 0;
+
+        // ── what it was made on: the author's first size the foot and leg can be read on ──
+        progress(string.Format(Strings.SizeSet.ReadingFmt, piece.Label));
+        var mods = request.Bodies.Select(b => (b.Dir, b.Catalog)).ToList();
+        if (mods.Count == 0)
+        {
+            notes.Add(Strings.SizeSet.NoBodies);
+            return 0;
+        }
+        string preferred = request.Keys.Select(k => SupportedBodies.Of(k, sizeSlot, false))
+                                       .OfType<SupportedBodies.Body>()
+                                       .Where(b => b.Race == race)
+                                       .Select(b => SupportedBodies.Find(b, request.Bodies)?.Dir)
+                                       .FirstOrDefault(d => d != null) ?? mods[0].Dir;
+        BodySizeCatalog? CatalogOf(string dir)
+            => request.Bodies.FirstOrDefault(b => string.Equals(b.Dir, dir, StringComparison.OrdinalIgnoreCase))?.Catalog;
+
+        (string? Option, byte[] Bytes, ModelParts Garment, HashSet<string> Bones, KeepEnds.Reading Reading,
+         KeepEnds.Found Found)? source = null;
+        bool anyRead = false;
+        foreach (var (option, file) in piece.Options)
+        {
+            ct.ThrowIfCancellationRequested();
+            string path = BodySizeCatalog.ResolveCaseInsensitive(root, file);
+            if (!File.Exists(path)) continue;
+            byte[] bytes = File.ReadAllBytes(path);
+            if (ModelPartReader.Read(bytes) is not { } garment) continue;
+            if (KeepEnds.Read(piece.Slot, garment, bytes) is not { } reading) continue;
+            anyRead = true;
+            var bones = new HashSet<string>(SecondSkinWriter.Parse(bytes).BoneNames, StringComparer.Ordinal);
+            var found = KeepEnds.Find(reading, garment, bones, race,
+                                      (view, slot) => RefitCore.DetectSource(view, bones, slot, race, mods, preferred,
+                                          _ => true, note => log.Information("[Proteus] size set: {0}: {1}", piece.Label, note)),
+                                      CatalogOf);
+            log.Information("[Proteus] size set: {0} from {1}: route {2}, {3} / {4}", piece.Label, option ?? file,
+                            KeepEnds.Letter(found.Route), found.Pick?.Dir ?? "-", found.Pick?.Option.Label ?? "-");
+            if (found.Route is not (KeepEnds.Route.Skin or KeepEnds.Route.Cloth or KeepEnds.Route.SkinOnly)) continue;
+            source = (option, bytes, garment, bones, reading, found);
+            break;
+        }
+        if (source is not { } src)
+        {
+            notes.Add(string.Format(anyRead ? Strings.SizeSet.UnreadableFmt : Strings.SizeSet.EndsUnreadableFmt,
+                                    piece.Label));
+            return 0;
+        }
+
+        var pick = src.Found.Pick!;
+        bool skinOnly = src.Found.Route == KeepEnds.Route.SkinOnly;
+        var sourceEntry = request.Bodies.First(b => string.Equals(b.Dir, pick.Dir, StringComparison.OrdinalIgnoreCase));
+        var sourceCat = sourceEntry.Catalog;
+        string sourcePath = sourceCat.PathOf(pick.Option);
+
+        // ── where the sizes go: the same bookkeeping as a chest or legs piece's ──
+        string group = piece.Group ?? piece.GroupName;
+        var existing = (PenumbraModMeta.TryReadFileOptions(root, group) ?? []).Select(o => o.Name)
+                                                                              .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var inGroup = (record?.Options ?? []).Where(e => string.Equals(record!.GroupOf(e), group,
+                                                                       StringComparison.OrdinalIgnoreCase)).ToList();
+        var ours = inGroup.Select(e => e.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var doneHere = inGroup.Where(e => string.Equals(e.GamePath, piece.GamePath, StringComparison.OrdinalIgnoreCase))
+                              .Select(e => e.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // A shoe's author sizes are compared by its legs, the foot left out; a glove's never (every chest has its arms).
+        var authorSizes = !skinOnly && KeepEnds.ComparesAuthorSizes(piece.Slot) ? AuthorLimbSizes(root, piece, ours) : [];
+        bool authorGroup = BodyRetargetWriter.IsAuthorGroup(root, group);
+        string defaultBefore = PenumbraModMeta.SingleDefault(root, group) ?? BodyRetargetWriter.OriginalOption;
+
+        bool yas = request.Yas || SupportedBodies.IsYas(src.Bones);
+        ushort? sourceMask(string slot) => RefitCore.MaskOf(pick.Dir, sourceCat, slot, null);
+        int saved = 0;
+
+        foreach (string key in request.Keys)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (!ForRace(key, sizeSlot, race)) continue;
+            var (body, target) = BodyFor(key, sizeSlot, yas, request.Bodies, sourceEntry, notes, piece.Label);
+            if (body == null || target == null) continue;
+            var targetCat = target.Catalog;
+            bool across = !string.Equals(target.Dir, pick.Dir, StringComparison.OrdinalIgnoreCase);
+            ushort? targetMask(string slot) => RefitCore.MaskOf(target.Dir, targetCat, slot, null);
+
+            var refits = new List<BodyRetargetWriter.Refit>();
+            foreach (var (option, limbRel) in EndTargets(body, piece, gloves, skinOnly, follows, across, pick))
+            {
+                ct.ThrowIfCancellationRequested();
+                if (existing.Contains(option) && (!ours.Contains(option) || (doneHere.Contains(option) && !request.Remake)))
+                {
+                    log.Information("[Proteus] size set: {0}: \"{1}\" already there", piece.Label, option);
+                    continue;
+                }
+                // A follower only joins a size what it follows made: one made here alone would wear the author's
+                // unrefitted chest or legs beside a refitted shoe.
+                if (follows && !ours.Contains(option))
+                {
+                    log.Information("[Proteus] size set: {0}: no \"{1}\" to join", piece.Label, option);
+                    continue;
+                }
+
+                BodyOption? to = null;
+                if (limbRel != null && OptionByFile(targetCat.For(limb, race), limbRel) is { } found) to = found;
+                if (!skinOnly && to == null)
+                {
+                    notes.Add(string.Format(Strings.SizeSet.NoSuchSizeFmt, piece.Label, option, target.Name));
+                    continue;
+                }
+
+                progress(string.Format(Strings.SizeSet.WorkingFmt, piece.Label, option));
+                if (skinOnly)
+                {
+                    // Its shape is the author's at every size: only its skin, drawn the way this body draws its own.
+                    if (AutoRefitDecisions.Companion(targetCat.For(piece.Slot, race), to, null) is not { } end) continue;
+                    var model = RefitCore.MatchSkinToBody(src.Bytes, sourcePath, targetCat.PathOf(end), uvRemap, male, log);
+                    if (ReferenceEquals(model, src.Bytes))
+                    {
+                        log.Information("[Proteus] size set: {0}: its skin already matches {1}", piece.Label, option);
+                        continue;
+                    }
+                    refits.Add(new BodyRetargetWriter.Refit(option, model, KeepEnds.SkinOnlyLabel));
+                    log.Information("[Proteus] size set: {0}: skin drawn like {1}", piece.Label, option);
+                    continue;
+                }
+
+                if (AutoRefitDecisions.SameFile(pick.Dir, pick.Option, target.Dir, to!))
+                {
+                    log.Information("[Proteus] size set: {0}: {1} is the size it was made on", piece.Label, option);
+                    continue;
+                }
+                if (!across && KeepEnds.SameShape(src.Reading.LimbView, pick.Option, to!, sourceCat, src.Bones, pick.FromCloth))
+                {
+                    log.Information("[Proteus] size set: {0}: {1} is the same shape as the size it was made on",
+                                    piece.Label, option);
+                    continue;
+                }
+                if (AuthorHas(authorSizes, targetCat, to!, limb, race) is { } theirs)
+                {
+                    log.Information("[Proteus] size set: {0}: {1} is the author's own \"{2}\"", piece.Label, option, theirs);
+                    continue;
+                }
+
+                var (endFrom, endTo) = KeepEnds.EndPair(sourceCat, targetCat, piece.Slot, race, pick.Option, to!);
+                if (KeepEnds.BuildPairs(src.Reading, sourcePath, targetCat.PathOf(to!),
+                                        endFrom == null ? null : sourceCat.PathOf(endFrom),
+                                        endTo == null ? null : targetCat.PathOf(endTo), male,
+                                        s => (sourceMask(s), targetMask(s)), SlotName, uvRemap,
+                                        why => log.Information("[Proteus] size set: {0} {1} without the end's shape: {2}",
+                                                               piece.Label, option, why),
+                                        out var limbPair, out var endPair) is { } refusal)
+                {
+                    notes.Add(string.Format(Strings.SizeSet.RefusedFmt, piece.Label, option, refusal));
+                    continue;
+                }
+                var plan = KeepEnds.Plan(src.Garment, src.Bytes, src.Reading, limbPair, endPair, across);
+                plan = RefitCore.MatchSkinToBody(plan, sourcePath, targetCat.PathOf(to!), uvRemap, male, log);
+                var (seamEdges, stretched) = KeepEnds.SeamStretch(src.Garment, src.Reading.Ends, plan);
+                log.Information("[Proteus] size set: {0} onto {1} by its {2} (moved up to {3:F1} mm, the seam stretched "
+                              + "up to {4:F1} mm over {5} edges)", piece.Label, option, limb, plan.Report.WorstMove * 1000f,
+                                stretched * 1000f, seamEdges);
+                refits.Add(new BodyRetargetWriter.Refit(option, plan.Model, to!.Label));
+            }
+            if (refits.Count == 0) continue;
+
+            string from = RefitCore.LabelFrom(across ? sourceEntry.Name : null, [pick.Option.Label]);
+            var outcome = BodyRetargetWriter.Save(root, group, piece.GamePath, target.Dir, from, refits,
+                                                  piece.Group != null ? src.Option : null);
+            if (!outcome.Ok)
+            {
+                notes.Add(string.Format(Strings.SizeSet.SaveFailedFmt, piece.Label, outcome.Message));
+                continue;
+            }
+            saved += refits.Count;
+            existing.UnionWith(refits.Select(r => r.Option));
+            ours.UnionWith(refits.Select(r => r.Option));
+            doneHere.UnionWith(refits.Select(r => r.Option));
+        }
+        if (saved > 0 && !authorGroup) PenumbraModMeta.SetSingleDefault(root, group, defaultBefore);
+        return saved;
+    }
+
+    /// <summary>
+    /// The options a shoe or glove gets of one body, and the leg or arm each is refitted onto (null for a skin-only one
+    /// in its own group, which has no size).
+    /// <list type="bullet">
+    /// <item>Following a chest: the chest's sizes, onto the arms of that chest, or the legs it goes with.</item>
+    /// <item>A shoe in its own group, or following legs: the legs table's sizes.</item>
+    /// <item>Gloves in their own group: one option per body, onto the body's middle chest — all its chests' arms are one.</item>
+    /// <item>A skin-only piece in its own group: one option per body, named for it.</item>
+    /// </list>
+    /// </summary>
+    private static IEnumerable<(string Option, string? LimbRel)> EndTargets(SupportedBodies.Body body, Piece piece,
+        bool gloves, bool skinOnly, bool follows, bool across, AutoRefitDecisions.Pick pick)
+    {
+        if (!follows && (gloves || skinOnly))
+        {
+            var middle = body.Sizes.FirstOrDefault(s => s.Name == "M") ?? body.Sizes.FirstOrDefault();
+            if (middle == null) yield break;
+            // A skin-only shoe goes onto nothing: which legs it would have stood in does not matter.
+            yield return (SupportedBodies.OptionName(body, new SupportedBodies.Size("", middle.Rel, null)),
+                          skinOnly ? null : middle.Rel);
+            yield break;
+        }
+        string? familyFrom = across || follows || skinOnly ? null : pick.Option.Rel;
+        foreach (var size in SupportedBodies.SizesFor(body, familyFrom))
+        {
+            string option = SupportedBodies.OptionName(body, size);
+            string? rel = piece.FollowsChest && !gloves
+                ? across ? size.LegsRel : SupportedBodies.FamilyLegs(pick.Option.Rel, size.Name)
+                : size.Rel;
+            yield return (option, rel);
+        }
+    }
+
+    /// <summary>The author's sizes of a shoe read by their legs alone, the foot left out (see <see cref="AuthorHas"/>).</summary>
+    private static List<AuthorSize> AuthorLimbSizes(string root, Piece piece, IReadOnlySet<string> ours)
+    {
+        var sizes = new List<AuthorSize>();
+        foreach (var (option, file) in piece.Options)
+        {
+            if (option == null || ours.Contains(option)) continue;
+            string path = BodySizeCatalog.ResolveCaseInsensitive(root, file);
+            if (!File.Exists(path)) continue;
+            byte[] bytes = File.ReadAllBytes(path);
+            if (ModelPartReader.Read(bytes) is not { } model || KeepEnds.Read(piece.Slot, model, bytes) is not { } reading)
+                continue;
+            sizes.Add(new AuthorSize(option, reading.LimbView, BodySizeMatch.ProbeKeys(reading.LimbView),
+                                     new HashSet<string>(SecondSkinWriter.Parse(bytes).BoneNames, StringComparer.Ordinal)));
+        }
+        return sizes;
+    }
+}

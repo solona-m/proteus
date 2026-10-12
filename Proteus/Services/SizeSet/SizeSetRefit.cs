@@ -21,8 +21,11 @@ namespace Proteus.Services;
 /// previous run made — is left as it is.
 /// <para/>
 /// No UI and no IPC: everything here reads and writes files, on a worker. The caller tells Penumbra afterwards.
+/// <para/>
+/// Shoes and gloves are pieces too, when asked for (<see cref="Request.Ends"/>): sized by their legs or arms with the foot
+/// or hand kept exactly, as the automatic refit does them (see <c>SizeSetRefit.Ends.cs</c>).
 /// </summary>
-internal static class SizeSetRefit
+internal static partial class SizeSetRefit
 {
     /// <param name="ModRoot">The mod's folder.</param>
     /// <param name="Keys">The bodies ticked (<see cref="SupportedBodies.Choices"/>).</param>
@@ -32,8 +35,10 @@ internal static class SizeSetRefit
     /// <param name="Bodies">The installed body mods.</param>
     /// <param name="ReadGameFile">Reads a game path from the game's own data, to tell the game's models a mod merely
     /// ships apart from the author's (see <see cref="PiecesOf"/>); null takes every model as the author's.</param>
+    /// <param name="Ends">Make sizes of the mod's shoes and gloves too. Off, the mod's chest and legs alone, as before.</param>
     internal sealed record Request(string ModRoot, IReadOnlyList<string> Keys, bool Yas, bool Remake,
-                                   IReadOnlyList<BodyModIndex.Entry> Bodies, Func<string, byte[]?>? ReadGameFile = null);
+                                   IReadOnlyList<BodyModIndex.Entry> Bodies, Func<string, byte[]?>? ReadGameFile = null,
+                                   bool Ends = true);
 
     /// <param name="Made">Sizes saved.</param>
     /// <param name="Notes">Every size left out, and why — for the author to read.</param>
@@ -44,8 +49,11 @@ internal static class SizeSetRefit
     /// every other race of the sex falls back to. The body itself (<c>e0000</c>) is not an outfit and is never one of a
     /// mod's pieces.
     /// </summary>
-    private static readonly Regex PiecePath = new(@"^chara/equipment/e(?!0000)\d{4}/model/c(0101|0201)e\d{4}_(top|dwn)\.mdl$",
+    private static readonly Regex PiecePath = new(@"^chara/equipment/e(?!0000)\d{4}/model/c(0101|0201)e\d{4}_(top|dwn|sho|glv)\.mdl$",
                                                   RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>A shoe or glove: a piece that keeps its own foot or hand and is sized by its legs or arms.</summary>
+    private static bool IsEnd(string slot) => AutoRefitDecisions.LimbOf(slot) != null;
 
     /// <summary>One model of the mod to make sizes of.</summary>
     /// <param name="GamePath">Where it is drawn.</param>
@@ -62,9 +70,13 @@ internal static class SizeSetRefit
     /// chest's, so one choice in the group dresses both. Sized by the legs table instead ("Rue WC"), the chest and the
     /// legs became separate options and either one wore the other half unrefitted.
     /// </param>
+    /// <param name="FollowsLegs">
+    /// A shoe whose size group switches a legs model of the same race but no chest: it joins the options the legs made
+    /// ("Rue WC"), so one choice dresses both. A shoe or glove in a group with a chest follows the chest instead.
+    /// </param>
     internal sealed record Piece(string GamePath, string Slot, string? Group,
                                  IReadOnlyList<(string? Option, string File)> Options, string Label, string GroupName,
-                                 string Race, bool FollowsChest = false);
+                                 string Race, bool FollowsChest = false, bool FollowsLegs = false);
 
     /// <summary>
     /// The chest and legs models of a mod, each with the group its sizes are switched in. A model only a refit of ours
@@ -75,7 +87,8 @@ internal static class SizeSetRefit
     /// gambison, re-saved — and taking that for a men's piece offered TBSE sizes of a garment its author never made.
     /// </summary>
     /// <param name="readGameFile">The game's own copy of a game path; null takes every model as the author's.</param>
-    internal static List<Piece> PiecesOf(string modRoot, Func<string, byte[]?>? readGameFile = null)
+    /// <param name="includeEnds">Shoes and gloves too (see <see cref="Request.Ends"/>).</param>
+    internal static List<Piece> PiecesOf(string modRoot, Func<string, byte[]?>? readGameFile = null, bool includeEnds = true)
     {
         var redirects = PenumbraModMeta.ReadAllRedirects(modRoot);
         var record = BodyRetargetWriter.ReadRecord(modRoot);
@@ -83,7 +96,8 @@ internal static class SizeSetRefit
         var single = RefitCore.SingleGroups(modRoot);
         var pieces = new List<Piece>();
 
-        foreach (var byPath in redirects.Where(r => PiecePath.IsMatch(r.GamePath))
+        foreach (var byPath in redirects.Where(r => PiecePath.IsMatch(r.GamePath)
+                                                    && (includeEnds || !IsEnd(BodySizeCatalog.SlotOf(r.GamePath)!)))
                                         .GroupBy(r => r.GamePath.ToLowerInvariant()))
         {
             var authors = byPath.Where(r => !ourFiles.Contains(RefitCore.Normal(r.File))
@@ -116,13 +130,16 @@ internal static class SizeSetRefit
                                  BodySizeCatalog.RaceOf(gamePath)!));
         }
 
-        // Legs sized in the same group as a chest of their race follow the chest's sizes. Chests first, so the options
-        // the legs go into are already there, named and placed by the chest.
-        return pieces.OrderBy(p => p.Slot == "_dwn").Select(p => p.Slot == "_dwn" && p.Group != null
-                                  && pieces.Any(c => c.Slot == "_top" && c.Race == p.Race
-                                                     && string.Equals(c.Group, p.Group, StringComparison.OrdinalIgnoreCase))
-                                      ? p with { FollowsChest = true }
-                                      : p)
+        // Legs sized in the same group as a chest of their race follow the chest's sizes, and a shoe or glove follows the
+        // chest — or, a shoe, the legs — it is sized with. Chests first, then legs, then shoes and gloves, so the options a
+        // follower goes into are already there, named and placed by what it follows.
+        bool SharesGroup(Piece p, string slot)
+            => p.Group != null && pieces.Any(c => c.Slot == slot && c.Race == p.Race
+                                                  && string.Equals(c.Group, p.Group, StringComparison.OrdinalIgnoreCase));
+        return pieces.OrderBy(p => p.Slot switch { "_top" => 0, "_dwn" => 1, _ => 2 })
+                     .Select(p => (p.Slot == "_dwn" || IsEnd(p.Slot)) && SharesGroup(p, "_top") ? p with { FollowsChest = true }
+                                : p.Slot == "_sho" && SharesGroup(p, "_dwn") ? p with { FollowsLegs = true }
+                                : p)
                      .ToList();
     }
 
@@ -158,7 +175,7 @@ internal static class SizeSetRefit
     {
         var notes = new List<string>();
         int made = 0;
-        var pieces = PiecesOf(request.ModRoot, request.ReadGameFile);
+        var pieces = PiecesOf(request.ModRoot, request.ReadGameFile, request.Ends);
         if (pieces.Count == 0)
         {
             notes.Add(Strings.SizeSet.NoPieces);
@@ -170,7 +187,8 @@ internal static class SizeSetRefit
             ct.ThrowIfCancellationRequested();
             try
             {
-                made += RunPiece(request, piece, uvRemap, log, progress, notes, ct);
+                made += IsEnd(piece.Slot) ? RunEndsPiece(request, piece, uvRemap, log, progress, notes, ct)
+                                          : RunPiece(request, piece, uvRemap, log, progress, notes, ct);
             }
             catch (OperationCanceledException)
             {
@@ -480,5 +498,11 @@ internal static class SizeSetRefit
         return options.FirstOrDefault(o => RefitCore.Normal(o.Rel) == want);
     }
 
-    private static string SlotName(string slot) => slot == "_dwn" ? Strings.Parts.RetargetLegs : Strings.Parts.RetargetChest;
+    private static string SlotName(string slot) => slot switch
+    {
+        "_dwn" => Strings.Parts.RetargetLegs,
+        "_sho" => Strings.Parts.RetargetFeet,
+        "_glv" => Strings.Parts.RetargetHands,
+        _ => Strings.Parts.RetargetChest,
+    };
 }
