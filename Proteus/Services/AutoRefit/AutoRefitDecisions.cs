@@ -26,6 +26,20 @@ internal static class AutoRefitDecisions
         _ => null,
     };
 
+    /// <summary>How the new body's skin goes into an unattended refit: cut to where the garment drew its own, and
+    /// whether the cloth is pushed clear of the body wherever it is buried in it.</summary>
+    internal readonly record struct SkinRule(bool CutHidden, bool ClearBody);
+
+    /// <summary>
+    /// The new body's skin goes in whole: nobody is watching an unattended refit to catch the holes an author's cut can
+    /// leave on another body. The game's own gear is the exception. Its cloth is buried in the game's body on purpose —
+    /// the game draws no chest skin under a worn top, only the skin the top carries at its openings — so the skin goes
+    /// where the game puts it, and the cloth is cleared of the body. The Neo-Ishgardian Top of Maiming on Neolithe's
+    /// neobelly SFW M: 679 cm² of skin through the cloth whole, 224 cut.
+    /// </summary>
+    /// <param name="gameGear">The piece is drawn from the game's own file, not a mod's.</param>
+    internal static SkinRule SkinFor(bool gameGear) => gameGear ? new SkinRule(true, true) : new SkinRule(false, false);
+
     /// <summary>Whether a reading is sure enough to refit from unattended.</summary>
     internal static bool Proceed(Confidence confidence)
         => confidence is Confidence.Exact or Confidence.Likely or Confidence.Guess;

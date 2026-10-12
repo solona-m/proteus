@@ -631,6 +631,7 @@ public class KeepEndsTests
     [Fact]
     [Trait("Plan", "AC-keep-hand-foot-skin-2")]
     [Trait("Plan", "AC-keep-hand-foot-skin-1")]
+    [Trait("Plan", "EDGE-vanilla-refit-cut-skin-5")]
     public void A_shoes_new_legs_are_cut_to_where_it_drew_skin_and_its_foot_is_kept()
     {
         // The shoe's leg skin covers 4 of the legs' 16 triangles, each its own island. Swapped whole, the new legs would
