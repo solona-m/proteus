@@ -12,6 +12,7 @@ namespace Proteus.Tests;
 /// seeding the mod an edit goes into, and writing into a mod Proteus made rather than an author's. Over real temp folders, because what is being tested is
 /// the shape of what lands on disk.
 /// </summary>
+[Collection(GameBodyCollection.Name)]
 public class VanillaRefitTests : IDisposable
 {
     private readonly string root = Path.Combine(Path.GetTempPath(), "proteus-vanilla-" + Guid.NewGuid().ToString("N"));

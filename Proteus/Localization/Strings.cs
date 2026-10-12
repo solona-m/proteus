@@ -2744,6 +2744,16 @@ public sealed class PartsStrings
         "For rigid pieces (rings, buckles, chains): each piece moves whole instead of bending.\n"
       + "Small closed pieces start ticked.");
 
+    /// <summary>The Keep shape tooltip's last line, under its own key so a translation of the older tooltip cannot
+    /// stand in for it.</summary>
+    public readonly string RetargetKeepShapeSinkTip = Loc.Localize("Parts.Retarget.KeepShape.SinkTip",
+        "A piece that would sink into the new body bends with it instead.");
+
+    /// <summary>{0} is how many kept pieces the refit let go, {1} the deepest any would have sunk (mm), {2} their
+    /// labels.</summary>
+    public readonly string RetargetShapeReleasedFmt = Loc.Localize("Parts.Retarget.ShapeReleased.Fmt",
+        "{0:N0} kept piece(s) would sink up to {1:F1} mm into the new body if moved whole, so they bend with it instead: {2}");
+
     public readonly string RetargetReplaceSkin = Loc.Localize("Parts.Retarget.ReplaceSkin", "Use the new body's skin")
                                                + "###partsRetargetReplaceSkin";
 

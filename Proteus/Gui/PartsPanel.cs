@@ -2486,7 +2486,7 @@ public sealed class PartsPanel
                         if (ImGui.Checkbox($"{ps.RetargetKeepShape}##ks_{part.Label}", ref keep))
                             ToggleKeepShape(part);
                     if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-                        ImGui.SetTooltip(ps.RetargetKeepShapeTip);
+                        ImGui.SetTooltip($"{ps.RetargetKeepShapeTip}\n{ps.RetargetKeepShapeSinkTip}");
                 }
             }
             else

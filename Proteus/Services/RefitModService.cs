@@ -248,6 +248,26 @@ internal sealed class RefitModService(PenumbraBridge penumbra, CompositorService
                 "Made \"{0}\", but couldn't switch it on — enable it in Penumbra."), p.ModName);
     }
 
+    /// <summary>Whether Proteus made the mod at <paramref name="root"/> — its manifest names Proteus as the author, as
+    /// <see cref="WriteScaffold"/> writes it. False when the manifest cannot be read.</summary>
+    internal static bool IsMadeByProteus(string root)
+    {
+        try
+        {
+            if (!PenumbraModMeta.HasReadableManifest(root)) return false;
+            using var doc = System.Text.Json.JsonDocument.Parse(
+                File.ReadAllText(Path.Combine(root, PenumbraModMeta.MetaFile)));
+            return doc.RootElement.TryGetProperty("Author", out var author)
+                   && author.ValueKind == System.Text.Json.JsonValueKind.String
+                   && string.Equals(author.GetString(), "Proteus", StringComparison.Ordinal);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        {
+            // Unreadable reads as somebody else's: the refit then treats it as any mod.
+            return false;
+        }
+    }
+
     /// <summary>The mod's own name out of its manifest, or null when there is nothing readable there.</summary>
     private static string? NameOf(string root)
     {

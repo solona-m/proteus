@@ -3703,6 +3703,14 @@
     "message": "Para piezas rígidas (anillos, hebillas, cadenas): cada pieza se mueve entera en vez de doblarse.\nLas piezas pequeñas y cerradas empiezan marcadas.",
     "description": ""
   },
+  "Parts.Retarget.KeepShape.SinkTip": {
+    "message": "Una pieza que se hundiría en el nuevo cuerpo se dobla con él en su lugar.",
+    "description": ""
+  },
+  "Parts.Retarget.ShapeReleased.Fmt": {
+    "message": "{0:N0} pieza(s) con forma fija se hundirían hasta {1:F1} mm en el nuevo cuerpo si se movieran enteras, así que se doblan con él: {2}",
+    "description": ""
+  },
   "Parts.Retarget.ReplaceSkin": {
     "message": "Usar la piel del cuerpo nuevo",
     "description": ""
