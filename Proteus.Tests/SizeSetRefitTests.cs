@@ -271,6 +271,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
         Directory.CreateDirectory(root);
         try
         {
+            // No option whose model and rig could be read at all: its foot cannot be told from its leg.
             File.WriteAllBytes(Path.Combine(root, "boots.mdl"), [1, 2, 3, 4]);
             File.WriteAllText(Path.Combine(root, PenumbraModMeta.MetaFile), """
                 { "FileVersion": 4, "Name": "Shoes",
@@ -279,7 +280,15 @@ public class SizeSetRefitTests(ITestOutputHelper output)
                 """);
             var (result, _) = RunOn(root, ["bibo"], Bibo);
             Assert.Equal(0, result.Made);
-            Assert.Contains(result.Notes, n => n.Contains("e6002", StringComparison.Ordinal));
+            Assert.Equal(string.Format(Proteus.Localization.Strings.SizeSet.EndsUnreadableFmt, "Feet — e6002"),
+                         Assert.Single(result.Notes));
+
+            // One that reads — a model with no bones, so a rig of nothing — but on no body: the other note.
+            File.WriteAllBytes(Path.Combine(root, "boots.mdl"),
+                               SyntheticModel.Build([], new SyntheticModel.Mesh("/mt_c0201b0001_bibo.mtrl", new SyntheticModel.Sub(0))));
+            var (read, _) = RunOn(root, ["bibo"], Bibo);
+            Assert.Equal(string.Format(Proteus.Localization.Strings.SizeSet.UnreadableFmt, "Feet — e6002"),
+                         Assert.Single(read.Notes));
         }
         finally
         {
@@ -587,6 +596,43 @@ public class SizeSetRefitTests(ITestOutputHelper output)
         finally
         {
             if (Directory.Exists(copy)) Directory.Delete(copy, recursive: true);
+        }
+    }
+
+    [LocalDataFact(LocalData.ShiftPack, Yab, Rue, Bibo)]
+    [Trait("Plan", "EDGE-keep-ends-studio-17")]
+    public void A_shoe_in_its_own_group_skips_a_size_the_author_already_made()   // [EDGE-keep-ends-studio-17]
+    {
+        // Shift's shoe in its own group, with a second option of the author's whose legs ARE Bibo+ S's — the body's legs,
+        // copied in, as an author fitting a boot to a body does — under a name of the author's own. Asked for Bibo, its S
+        // size is found as that option, by the legs alone, and not made again; its other sizes are. (A refit Proteus made
+        // would not pass for one: it moves the shoe's own leg skin, which then shares 4% with the body's, not 98%.)
+        var shoe = LocalData.PackEntryEndingWith(LocalData.ShiftPack, "e6219_sho.mdl");
+        string root = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            string biboS = SupportedBodies.Of("bibo", "_dwn", false)!.Sizes.Single(s => s.Name == "S").Rel;
+            var rueFit = File.ReadAllBytes(BodySizeCatalog.ResolveCaseInsensitive(LocalData.Path(Bibo), biboS));
+
+            Directory.CreateDirectory(root);
+            File.WriteAllBytes(Path.Combine(root, "yab.mdl"), shoe);
+            File.WriteAllBytes(Path.Combine(root, "rue.mdl"), rueFit);
+            File.WriteAllText(Path.Combine(root, PenumbraModMeta.MetaFile), $$"""
+                { "FileVersion": 4, "Name": "Shoe", "DefaultData": { "Files": {}, "FileSwaps": {}, "Manipulations": [] },
+                  "Groups": [ { "Version": 0, "Name": "Shoes", "Type": "Single", "Priority": 0, "DefaultSettings": 0,
+                    "Options": [ { "Name": "YAB WC", "Files": { "{{ShoePath}}": "yab.mdl" } },
+                                 { "Name": "Curvy", "Files": { "{{ShoePath}}": "rue.mdl" } } ] } ] }
+                """);
+            var (result, _) = RunOn(root, ["bibo"], Yab, Rue, Bibo);
+            output.WriteLine($"options: {string.Join(", ", Options(root, "Shoes"))}; {result.Made} made");
+            Assert.DoesNotContain("Bibo S", Options(root, "Shoes"));
+            Assert.Contains("Bibo M", Options(root, "Shoes"));
+            Assert.Contains(lastLog, l => l.Template.Contains("is the author's own", StringComparison.Ordinal)
+                                          && l.Args.Contains("Bibo S") && l.Args.Contains("Curvy"));
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
         }
     }
 

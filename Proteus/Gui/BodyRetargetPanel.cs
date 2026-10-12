@@ -1688,6 +1688,10 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         // Taken here, with everything else the worker reads: the panel's own dictionaries change under it on this thread.
         BodyOption? limbFrom = !inputs.SkinOnly && from.TryGetValue(primary, out var chosenLimb) ? chosenLimb : null;
         string? ownEndPath = inputs.SkinOnly ? sources.PathOf(from[inputs.EndSlot!]) : null;
+        // The sizes to make, copied: the "made for" list is the panel's own, edited in place by its dropdown.
+        List<BodyOption> limbTargets = [.. inputs.PrimaryTargets];
+        string? garmentSource = from.TryGetValue(garmentSlot, out var garmentFrom) ? sources.PathOf(garmentFrom) : null;
+        string garmentName = SlotName(garmentSlot);
         bool sameBodyMod = fromBodyDir == null;
         // Sizes are compared the way the limb was read: its skin, or how its cloth sits when the skin was too little —
         // which a skin reading can fall back to as well.
@@ -1745,7 +1749,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
                 {
                     var input = new KeepEnds.StudioPlanInput(
                         garment, bytes, garmentSlot, pieces, sources, snapshot, garmentRace ?? "", male, limbFrom!,
-                        inputs.PrimaryTargets, sameBodyMod, fromCloth, layOnBody, acrossBodies, clear, held, shared,
+                        limbTargets, sameBodyMod, fromCloth, layOnBody, acrossBodies, clear, held, shared,
                         s => s == primary ? (limbMasks.Source, limbMasks.Target) : (endMasks.Source, endMasks.Target),
                         SlotName, modelRel);
                     var kept = KeepEnds.StudioPlan(input, Baked, uvRemap, log, () => Interlocked.Increment(ref planDone));
@@ -1755,8 +1759,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
                 var results = new List<(BodyOption, BodyRetarget.Planned)>();
 
                 // ── the whole garment, refitted through its own slot ──
-                string garmentSource = sources.PathOf(from[garmentSlot]);
-                string garmentName = SlotName(garmentSlot);
+                if (garmentSource == null) return new PlanResult(key, null, string.Format(ps.RetargetNeedFromFmt, garmentName));
                 foreach (var (option, targetPath) in targets)
                 {
                     if (Build(garmentSource, targetPath, garmentName, male, limbMasks, out var pair) is { } refusal)
