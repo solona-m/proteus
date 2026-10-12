@@ -107,6 +107,106 @@ public class RefitCoreTests
         Assert.Equal(0, RefitCore.BakeTarget(Top, 201, Bodies, [], null));
     }
 
+    // ── naming the "keep shape" pieces a refit let go ───────────────────────────────────────────────────
+
+    /// <summary>A model of two submeshes: 0.0 split into islands 0.0.1 (vertices 0-2) and 0.0.2 (3-5); 0.1 one piece
+    /// (6-8).</summary>
+    private static ModelParts Pieces()
+    {
+        static ModelPart Part(int sub, int island, string label, int[] tris) => new()
+        {
+            Mesh = 0, Submesh = sub, Island = island, Label = label, Material = "/mt_c0201e6255_top_a.mtrl",
+            Triangles = tris, Ordinals = Enumerable.Range(0, tris.Length / 3).ToArray(), AttributeMask = 0,
+            Min = default, Max = default, Toggleable = true,
+        };
+        return new ModelParts
+        {
+            Positions = new float[27],
+            Normals = new float[27],
+            MeshSpans = [new MeshSpan(0, 0, 9)],
+            Parts =
+            [
+                Part(0, -1, "0.0", [0, 1, 2, 3, 4, 5]),
+                Part(0, 0, "0.0.1", [0, 1, 2]),
+                Part(0, 1, "0.0.2", [3, 4, 5]),
+                Part(1, -1, "0.1", [6, 7, 8]),
+            ],
+            AttributeNames = [],
+            Min = default,
+            Max = default,
+            ShatteredSubmeshes = new Dictionary<string, int>(),
+        };
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-keep-shape-release-9")]
+    public void ShapePieces_names_follow_the_pieces()
+    {
+        var model = Pieces();
+
+        // A ticked row: each of its islands, named by its own label. A submesh with no islands: itself.
+        var labels = new HashSet<string> { "0.0", "0.1" };
+        var pieces = RefitCore.ShapePieces(model, labels, out var names);
+        Assert.Equal(["0.0.1", "0.0.2", "0.1"], names);
+        Assert.Equal(new[] { 0, 1, 2 }, pieces[0].Order());
+        Assert.Equal(new[] { 3, 4, 5 }, pieces[1].Order());
+        Assert.Equal(new[] { 6, 7, 8 }, pieces[2].Order());
+
+        // One island ticked alone.
+        RefitCore.ShapePieces(model, new HashSet<string> { "0.0.2" }, out var one);
+        Assert.Equal(["0.0.2"], one);
+
+        // The overload without names gives the same pieces.
+        Assert.Equal(pieces.Select(p => p.Order().ToArray()), RefitCore.ShapePieces(model, labels).Select(p => p.Order().ToArray()));
+    }
+
+    private static BodyRetarget.Report Report(params BodyRetarget.ShapeOutcome[] shapes)
+        => new(1, 0, 1, 0, 0, 0f, 0f, 0, false, Shapes: shapes);
+
+    [Fact]
+    [Trait("Plan", "AC-keep-shape-release-8")]
+    public void KeptPieces_lists_judged_pieces_with_sink_and_release()
+    {
+        var report = Report(new(true, 0.0064f, true, 0.19f), new(false, 0f, false), new(true, 0.001f, false, 0f));
+
+        var kept = RefitCore.KeptPieces(report, ["2.1.7", "2.1.8", "2.1.3"]);
+
+        Assert.Equal([new RefitCore.KeptPiece("2.1.7", 0.0064f, true, 0.19f), new RefitCore.KeptPiece("2.1.3", 0.001f, false)],
+                     kept);
+        Assert.Empty(RefitCore.KeptPieces(new BodyRetarget.Report(1, 0, 1, 0, 0, 0f, 0f, 0, false), ["2.1.7"]));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-keep-shape-release-7")]
+    [Trait("Plan", "EDGE-keep-shape-release-10")]
+    public void ReleasedLog_names_every_released_piece_with_its_depth()
+    {
+        var names = Enumerable.Range(1, 176).Select(i => $"3.1.{i}").ToList();
+        var report = Report(names.Select(_ => new BodyRetarget.ShapeOutcome(true, 0.0065f, true)).ToArray());
+
+        string log = RefitCore.ReleasedLog(report, names)!;
+
+        Assert.All(names, n => Assert.Contains($"{n} (6.5 mm)", log));
+        Assert.Null(RefitCore.ReleasedLog(Report(new BodyRetarget.ShapeOutcome(true, 0.001f, false)), ["2.1.3"]));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-keep-shape-release-5")]
+    [Trait("Plan", "EDGE-keep-shape-release-10")]
+    public void ReleasedWarning_names_five_and_counts_the_rest()
+    {
+        var names = Enumerable.Range(1, 8).Select(i => $"3.1.{i}").ToList();
+        var shapes = names.Select((_, i) => new BodyRetarget.ShapeOutcome(true, 0.003f + i * 0.001f, true)).ToArray();
+
+        string warning = RefitCore.ReleasedWarning(Report(shapes), names)!;
+
+        Assert.Contains("8 kept piece(s)", warning);
+        Assert.Contains("10.0 mm", warning);   // the deepest: 3 mm + 7 x 1 mm
+        Assert.Contains("3.1.1, 3.1.2, 3.1.3, 3.1.4, 3.1.5, +3", warning);
+        Assert.DoesNotContain("3.1.6", warning);
+        Assert.Null(RefitCore.ReleasedWarning(Report(new BodyRetarget.ShapeOutcome(true, 0.001f, false)), ["2.1.3"]));
+    }
+
     [Fact]
     public void The_races_a_body_mod_covers()
     {

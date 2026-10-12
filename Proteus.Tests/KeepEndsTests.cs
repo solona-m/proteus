@@ -134,6 +134,22 @@ public class KeepEndsTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-keep-shape-release-12")]
+    public void KeepEnds_free_names_align_with_free_pieces()
+    {
+        // Three kept pieces; the middle one is wholly in the foot, so only the first and last move with the leg — and
+        // each keeps its own name, or the log would blame the wrong piece for a release.
+        IReadOnlyCollection<int>[] pieces = [new[] { 0, 1, 2 }, new[] { 3, 4, 5 }, new[] { 5, 6, 7 }];
+        var ends = new HashSet<int> { 3, 4, 5 };
+
+        var (free, names) = KeepEnds.FreeOf(pieces, ["2.1.1", "2.1.2", "2.1.3"], ends);
+
+        Assert.Equal(["2.1.1", "2.1.3"], names);
+        Assert.Same(pieces[0], free[0]);
+        Assert.Same(pieces[2], free[1]);
+    }
+
+    [Fact]
     public void A_piece_whose_rig_cannot_be_read_is_not_split()
     {
         var bytes = SyntheticModel.Build([], new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0)));

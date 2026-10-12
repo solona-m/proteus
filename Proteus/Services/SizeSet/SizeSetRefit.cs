@@ -273,7 +273,7 @@ internal static class SizeSetRefit
         string defaultBefore = PenumbraModMeta.SingleDefault(root, group) ?? BodyRetargetWriter.OriginalOption;
 
         bool yas = request.Yas || SupportedBodies.IsYas(src.Bones);
-        var pieces = RefitCore.ShapePieces(src.Garment, RefitCore.DefaultKeepShape(src.Garment));
+        var pieces = RefitCore.ShapePieces(src.Garment, RefitCore.DefaultKeepShape(src.Garment), out var pieceNames);
         ushort? sourceMask = RefitCore.MaskOf(src.Pick.Dir, sourceCat, piece.Slot, null);
         ushort? sourceLegsMask = RefitCore.MaskOf(src.Pick.Dir, sourceCat, "_dwn", null);
         int saved = 0;
@@ -377,6 +377,9 @@ internal static class SizeSetRefit
                 refits.Add(new BodyRetargetWriter.Refit(option, plan.Model, toLabel));
                 log.Information("[Proteus] size set: {0} onto {1} (moved up to {2:F1} mm)", piece.Label, option,
                                 plan.Report.WorstMove * 1000f);
+                if (RefitCore.ReleasedLog(plan.Report, pieceNames) is { } released)
+                    log.Information("[Proteus] size set: {0} {1}: let go of kept piece(s) that would sink moved whole: {2}",
+                                    piece.Label, option, released);
             }
             if (refits.Count == 0) continue;
 
