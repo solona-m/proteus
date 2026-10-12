@@ -225,7 +225,7 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
         var before = BodyRetarget.Plan(garment, bytes, [pair], "_top", held: new HashSet<int>(),
                                        replaceSkin: across, acrossBodies: across, clearBody: false, cutHidden: false,
                                        keepShape: RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)));
-        var now = RefitCore.PlanRefit(garment, bytes, [pair], "_top", across, gameGear: false);
+        var now = RefitCore.PlanRefit(garment, bytes, [pair], "_top", across, gameGear: false, out _);
 
         Assert.Equal(before.Model, now.Model);
         Assert.Equal(before.Report, now.Report);
@@ -242,8 +242,8 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
         var garment = ModelPartReader.Read(bytes)!;
         var pair = Raised(z => Chest(z));
 
-        var game = RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true);
-        var mod = RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: false);
+        var game = RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true, out _);
+        var mod = RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: false, out _);
         output.WriteLine($"game: {game.Report.Swap}; mod: {mod.Report.Swap}");
 
         Assert.True(game.Report.Swap?.Cut > 0, $"nothing of the chest was cut: {game.Report.Swap}");
@@ -263,8 +263,8 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
         var garment = ModelPartReader.Read(bytes)!;
         var pair = Raised(z => Chest(z), grow: 0f);
 
-        var game = RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true);
-        var mod = RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: false);
+        var game = RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true, out _);
+        var mod = RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: false, out _);
         output.WriteLine($"game pushed {game.Report.Pushed} (worst {game.Report.WorstPush}); mod pushed {mod.Report.Pushed}");
 
         Assert.True(game.Report.Pushed > 0, "the game's own top should have been pulled out of the body");
@@ -279,7 +279,7 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
             new SyntheticModel.Mesh(Cloth, new SyntheticModel.Sub(0, TrianglesPerIsland: 4, OffsetZ: 0.001f)));
         var garment = ModelPartReader.Read(bytes)!;
 
-        var plan = RefitCore.PlanRefit(garment, bytes, [Raised(z => Chest(z))], "_top", across: true, gameGear: true);
+        var plan = RefitCore.PlanRefit(garment, bytes, [Raised(z => Chest(z))], "_top", across: true, gameGear: true, out _);
 
         Assert.True(plan.Report.Swap is not { Added: > 0 }, $"skin went in: {plan.Report.Swap}");
         Assert.Equal(0, plan.Report.Folded);
@@ -295,7 +295,7 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
         var bytes = Top(GameSkin);
         var garment = ModelPartReader.Read(bytes)!;
         var pair = Raised(z => Chest(z));
-        var plan = RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true);
+        var plan = RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true, out _);
 
         string target = Path.Combine(Path.GetTempPath(), "proteus-skinrule-" + Guid.NewGuid().ToString("N") + ".mdl");
         File.WriteAllBytes(target, Chest(0.01f));
@@ -321,7 +321,7 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
         var bytes = Top();
         var garment = ModelPartReader.Read(bytes)!;
 
-        var plan = RefitCore.PlanRefit(garment, bytes, [Raised(z => Chest(z))], "_top", across: false, gameGear: true);
+        var plan = RefitCore.PlanRefit(garment, bytes, [Raised(z => Chest(z))], "_top", across: false, gameGear: true, out _);
 
         Assert.Null(plan.Report.Swap);
     }

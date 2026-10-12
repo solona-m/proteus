@@ -1091,7 +1091,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
         if (gameGear)
             log.Information("[Proteus] auto refit: {0} is the game's own gear: hidden skin cut, cloth cleared of the body",
                             item);
-        var plan = RefitCore.PlanRefit(garment, bytes, pairs, primary, across, gameGear);
+        var plan = RefitCore.PlanRefit(garment, bytes, pairs, primary, across, gameGear, out var pieceNames);
         plan = RefitCore.MatchSkinToBody(plan, sourcePath, targetPath, uvRemap, male, log);
         if (bakeTo != 0) plan = RefitCore.WithBodySkin(plan, targetPath, log);
         ct.ThrowIfCancellationRequested();
@@ -1105,6 +1105,9 @@ public sealed partial class AutoRefitWatcher : IDisposable
             return;
         log.Information("[Proteus] auto refit: {0} {1} onto {2} in {3:F1}s (moved up to {4:F1} mm)", item, primary,
                         option, clock.Elapsed.TotalSeconds, plan.Report.WorstMove * 1000f);
+        if (RefitCore.ReleasedLog(plan.Report, pieceNames) is { } released)
+            log.Information("[Proteus] auto refit: {0}: let go of kept piece(s) that would sink moved whole: {1}", item,
+                            released);
 
         string done = string.Format(Loc.Localize("Chat.AutoRefit.Done.Fmt",
                 "[Proteus] {0} now fits {1}. Saved as \"{2}\" in {3} and switched on."),

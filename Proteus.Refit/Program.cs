@@ -1078,11 +1078,12 @@ internal static class Program
         // --keep-default: the "keep shape" pieces the Studio and the automatic refit start with (RefitCore.DefaultKeepShape),
         // the same for every size.
         List<IReadOnlyCollection<int>>? keepShape = null;
+        List<string> keepNames = [];
         if (opts.ContainsKey("keep-default"))
         {
             var labels = RefitCore.DefaultKeepShape(garment);
             Console.Error.WriteLine($"keep shape: {string.Join(", ", labels.Order())}");
-            keepShape = RefitCore.ShapePieces(garment, labels);
+            keepShape = RefitCore.ShapePieces(garment, labels, out keepNames);
         }
 
         var sizes = new List<object>();
@@ -1124,6 +1125,7 @@ internal static class Program
                     "NoLayerKnit" => tuning with { NoLayerKnit = true },
                     "NoFollow" => tuning with { NoFollow = true },
                     "NoLayerOrder" => tuning with { NoLayerOrder = true },
+                    "NoRelease" => tuning with { NoRelease = true },
                     _ => throw new UsageException($"Unknown --tune knob \"{knob}\"."),
                 };
             var planned = BodyRetarget.WithTuning(tuning, () => BodyRetarget.Plan(
@@ -1149,6 +1151,13 @@ internal static class Program
                     pushed = r.Pushed, folded = r.Folded, laid = r.Laid,
                     worstMoveMm = r.WorstMove * 1000f, worstPushMm = r.WorstPush * 1000f,
                 },
+                // Each kept piece judged against the new body: how far moving it whole would sink it, and whether the
+                // refit let it go for that (BodyRetarget.ReleaseSink). Only with --keep-default.
+                keep = keepShape == null
+                    ? null
+                    : RefitCore.KeptPieces(r, keepNames)
+                               .Select(p => PieceJson(garment, p))
+                               .ToList(),
             });
         }
 
@@ -1369,6 +1378,26 @@ internal static class Program
                 Notes = notes,
             };
         }
+    }
+
+    /// <summary>One judged "keep shape" piece for the JSON report, with what it is: its material, size and where it is,
+    /// so a release can be told apart from a metal piece without opening the model.</summary>
+    private static object PieceJson(ModelParts garment, RefitCore.KeptPiece p)
+    {
+        var part = garment.Parts.FirstOrDefault(x => x.Label == p.Name);
+        var size = part == null ? System.Numerics.Vector3.Zero : part.Max - part.Min;
+        var centre = part == null ? System.Numerics.Vector3.Zero : (part.Max + part.Min) * 0.5f;
+        return new
+        {
+            piece = p.Name,
+            sinkMm = p.Sink * 1000f,
+            share = p.Share,
+            released = p.Released,
+            material = part?.Material,
+            verts = part?.Triangles.Distinct().Count() ?? 0,
+            spanCm = MathF.Max(size.X, MathF.Max(size.Y, size.Z)) * 100f,
+            centre = new[] { centre.X, centre.Y, centre.Z },
+        };
     }
 
     private sealed class UsageException(string message) : Exception(message);

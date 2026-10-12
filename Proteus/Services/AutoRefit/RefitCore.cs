@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Dalamud.Plugin.Services;
+using Proteus.Localization;
 
 namespace Proteus.Services;
 
@@ -22,8 +23,16 @@ internal static class RefitCore
     /// found none.
     /// </summary>
     internal static List<IReadOnlyCollection<int>> ShapePieces(ModelParts garment, IReadOnlySet<string> labels)
+        => ShapePieces(garment, labels, out _);
+
+    /// <inheritdoc cref="ShapePieces(ModelParts, IReadOnlySet{string})"/>
+    /// <param name="names">Each piece's label, in the same order: the island's own label, or the submesh's where it is
+    /// one piece — how the report names a piece the refit let go (see <see cref="BodyRetarget.ShapeOutcome"/>).</param>
+    internal static List<IReadOnlyCollection<int>> ShapePieces(ModelParts garment, IReadOnlySet<string> labels,
+                                                               out List<string> names)
     {
         var pieces = new List<IReadOnlyCollection<int>>();
+        names = [];
         if (labels.Count == 0) return pieces;
 
         var wholeSubmesh = new HashSet<(int, int)>();
@@ -37,12 +46,64 @@ internal static class RefitCore
             if (part.Island < 0) continue;
             if (!labels.Contains(part.Label) && !wholeSubmesh.Contains((part.Mesh, part.Submesh))) continue;
             pieces.Add(part.Triangles.Distinct().ToArray());
+            names.Add(part.Label);
             covered.Add((part.Mesh, part.Submesh));
         }
         foreach (var part in garment.Parts)
             if (part.Island < 0 && labels.Contains(part.Label) && !covered.Contains((part.Mesh, part.Submesh)))
+            {
                 pieces.Add(part.Triangles.Distinct().ToArray());
+                names.Add(part.Label);
+            }
         return pieces;
+    }
+
+    /// <summary>One "keep shape" piece the refit judged: its label, how far moving it whole would have sunk it (metres),
+    /// and whether it was let go for that.</summary>
+    internal readonly record struct KeptPiece(string Name, float Sink, bool Released, float Share = 0f);
+
+    /// <summary>
+    /// The pieces <paramref name="report"/> judged, named from <paramref name="names"/> (the list
+    /// <see cref="ShapePieces(ModelParts, IReadOnlySet{string}, out List{string})"/> gave alongside the pieces). Pieces
+    /// it could not judge are left out.
+    /// </summary>
+    internal static List<KeptPiece> KeptPieces(BodyRetarget.Report report, IReadOnlyList<string> names)
+    {
+        var list = new List<KeptPiece>();
+        if (report.Shapes is not { } shapes) return list;
+        for (int k = 0; k < shapes.Count && k < names.Count; k++)
+            if (shapes[k].Judged) list.Add(new KeptPiece(names[k], shapes[k].Sink, shapes[k].Released, shapes[k].Share));
+        return list;
+    }
+
+    /// <summary>
+    /// For a log line: every piece the refit let go, with how far moving it whole would have sunk it — "2.1.7 (6.5 mm),
+    /// …". Null when none was.
+    /// </summary>
+    internal static string? ReleasedLog(BodyRetarget.Report report, IReadOnlyList<string> names)
+    {
+        var released = KeptPieces(report, names).Where(p => p.Released).ToList();
+        return released.Count == 0
+            ? null
+            : string.Join(", ", released.Select(p => string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                                                                   $"{p.Name} ({p.Sink * 1000f:F1} mm)")));
+    }
+
+    /// <summary>The most pieces <see cref="ReleasedWarning"/> names before it counts the rest.</summary>
+    internal const int ReleasedNamed = 5;
+
+    /// <summary>
+    /// For the Studio: how many kept pieces the refit let go, the deepest any would have sunk, and the first
+    /// <see cref="ReleasedNamed"/> of them by name ("+N" for the rest). Null when none was.
+    /// </summary>
+    internal static string? ReleasedWarning(BodyRetarget.Report report, IReadOnlyList<string> names)
+    {
+        var released = KeptPieces(report, names).Where(p => p.Released).ToList();
+        if (released.Count == 0) return null;
+        string listed = string.Join(", ", released.Take(ReleasedNamed).Select(p => p.Name));
+        if (released.Count > ReleasedNamed) listed += $", +{released.Count - ReleasedNamed}";
+        return string.Format(Strings.Parts.RetargetShapeReleasedFmt, released.Count,
+                             released.Max(p => p.Sink) * 1000f, listed);
     }
 
     /// <summary>
@@ -709,13 +770,15 @@ internal static class RefitCore
     /// The automatic refit of a chest or legs piece, its skin as <see cref="AutoRefitDecisions.SkinFor"/> says: shaped
     /// pieces kept whole, nothing held, the skin replaced across bodies.
     /// </summary>
+    /// <param name="pieceNames">The kept pieces' labels, in order — for <see cref="ReleasedLog"/>.</param>
     internal static BodyRetarget.Planned PlanRefit(ModelParts garment, byte[] bytes, IReadOnlyList<BodyRetarget.SlotPair> pairs,
-                                                   string primary, bool across, bool gameGear)
+                                                   string primary, bool across, bool gameGear, out List<string> pieceNames)
     {
         var skin = AutoRefitDecisions.SkinFor(gameGear);
+        var pieces = ShapePieces(garment, DefaultKeepShape(garment), out pieceNames);
         return BodyRetarget.Plan(garment, bytes, pairs, primary, held: new HashSet<int>(),
                                  replaceSkin: across, acrossBodies: across, clearBody: skin.ClearBody,
-                                 cutHidden: skin.CutHidden, keepShape: ShapePieces(garment, DefaultKeepShape(garment)));
+                                 cutHidden: skin.CutHidden, keepShape: pieces);
     }
 
     /// <summary>

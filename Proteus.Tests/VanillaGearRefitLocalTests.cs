@@ -75,8 +75,8 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
         Assert.Null(BodyRetarget.BuildPair("_top", source, target, "_top", false, null, null, uv, out var pair));
 
         byte[] Drawn(BodyRetarget.Planned plan) => RefitCore.MatchSkinToBody(plan.Model, source, target, uv, false, log);
-        var game = RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true);
-        var whole = RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: false);
+        var game = RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true, out _);
+        var whole = RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: false, out _);
         var cutOnly = BodyRetarget.Plan(garment, bytes, [pair], "_top", held: new HashSet<int>(), replaceSkin: true,
                                         acrossBodies: true, clearBody: false, cutHidden: true,
                                         keepShape: RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)));
