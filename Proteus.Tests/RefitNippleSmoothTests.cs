@@ -444,6 +444,32 @@ public class RefitNippleSmoothTests(ITestOutputHelper output)
 
     // ── what covers ────────────────────────────────────────────────────────────────────────────────
 
+    /// <summary>[EDGE-refit-nipple-smooth-19] Where the correspondence has a hole at the source's nipple, nothing says
+    /// what the source had there: it counts as flat, and that side is smoothed at full strength — here, though the source's
+    /// nipple was as proud as the target's. The other side, its landing intact, is left alone.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-refit-nipple-smooth-19")]
+    public void A_hole_at_the_source_nipple_counts_as_flat()
+    {
+        var garment = ModelPartReader.Read(Garment(Nipple, Nipple, BothCups))!;
+        var pair = Pair(Body(Nipple, Nipple, piercing: true), Body(Nipple, Nipple));
+        var source = pair.Correspondence.Source;
+        var left = Tip(true);
+        var holed = pair with
+        {
+            Correspondence = new Holed(pair.Correspondence,
+                s => Vector2.Distance(new Vector2(P(source, s).X, P(source, s).Y), left) < 0.012f),
+        };
+        var lines = new List<string>();
+        BodyRetarget.SmoothCoveredNipples(garment, [holed], out _, lines.Add);
+        foreach (var l in lines) output.WriteLine(l);
+        string L = lines.First(l => l.StartsWith("refit nipple smooth: side L tip"));
+        string R = lines.First(l => l.StartsWith("refit nipple smooth: side R tip"));
+        Assert.Contains("source prom 0 mm", L);
+        Assert.True(Excess(lines, true) > BodyRetarget.ExcessFloor);
+        Assert.Contains("scale 0", R[R.LastIndexOf("scale", StringComparison.Ordinal)..]);
+    }
+
     /// <summary>[EDGE-refit-nipple-smooth-8] New-body skin with no source landing near it is not covered.</summary>
     [Fact]
     [Trait("Plan", "EDGE-refit-nipple-smooth-8")]

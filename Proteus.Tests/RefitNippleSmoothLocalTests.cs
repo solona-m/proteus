@@ -389,6 +389,7 @@ public class RefitNippleSmoothLocalTests(ITestOutputHelper output)
         var off = Run(File.ReadAllBytes(garment), source, target, cutHidden: true, on: false);
         foreach (var l in on.Log.Where(l => l.StartsWith("refit nipple smooth"))) output.WriteLine(l);
         var tips = Sides(on.Log).Select(s => s.Tip).ToList();
+        Assert.Equal(2, tips.Count);
 
         (double Mean, float LocalP95) Fit(byte[] model)
         {
@@ -411,8 +412,9 @@ public class RefitNippleSmoothLocalTests(ITestOutputHelper output)
                 }
             }
             Assert.True(paired > 0, "fixture: no cloth mesh pairs with the author's");
+            Assert.NotEmpty(local);   // or "near the nipples" compares nothing
             local.Sort();
-            return (all.Average(), local.Count == 0 ? 0f : local[(int)(local.Count * 0.95f)]);
+            return (all.Average(), local[(int)(local.Count * 0.95f)]);
         }
         var (onMean, onLocal) = Fit(on.Plan.Model);
         var (offMean, offLocal) = Fit(off.Plan.Model);
@@ -534,15 +536,17 @@ public class RefitNippleSmoothLocalTests(ITestOutputHelper output)
         }
     }
 
-    /// <summary>[EDGE-refit-nipple-smooth-23] A man's chest (TBSE's own, as an outfit) onto TBSE-X fits no worse than
-    /// without the smoothing.</summary>
-    [LocalDataFact(TheBodySe, TheBodySeX)]
+    private const string CasualFitShirt = LocalData.Mods + ":raykie's casual fit shirt (tbse+)";
+
+    /// <summary>[EDGE-refit-nipple-smooth-23] A man's shirt (raykie's casual fit shirt, cloth over the chest) refitted
+    /// from TBSE onto TBSE-X: the pass reads the shirt's cover, and the refit fits no worse than without it.</summary>
+    [LocalDataFact(CasualFitShirt, TheBodySe, TheBodySeX)]
     [Trait("Plan", "EDGE-refit-nipple-smooth-23")]
-    public void A_man_s_chest_refit_is_no_worse()
+    public void A_man_s_shirt_refit_is_no_worse()
     {
         string tbse = Path.Combine(LocalData.Path(TheBodySe), "common/1/c0101e0000_top.mdl");
         string tbsex = Path.Combine(LocalData.Path(TheBodySeX), "p1/torso/m midlander miqo'te au'ra elezen viera/chara/equipment/e0000/model/c0101e0000_top.mdl");
-        var garment = File.ReadAllBytes(tbse);
+        var garment = File.ReadAllBytes(Path.Combine(LocalData.Path(CasualFitShirt), "body fit/type m/chara/equipment/e6146/model/c0101e6146_top.mdl"));
         Assert.Null(BodyRetarget.BuildPair("_top", tbse, tbsex, "_top", true, null, null, null, out var pair));
         var parts = ModelPartReader.Read(garment)!;
         var log = new List<string>();
@@ -550,8 +554,14 @@ public class RefitNippleSmoothLocalTests(ITestOutputHelper output)
                                    log: log.Add);
         var off = BodyRetarget.WithTuning(Off, () => BodyRetarget.Plan(parts, garment, [pair], "_top", replaceSkin: true,
                                                                         acrossBodies: true, cutHidden: true));
-        foreach (var l in log.Where(l => l.StartsWith("refit nipple smooth"))) output.WriteLine(l);
+        foreach (var l in log.Where(l => l.Contains("nipple smooth") || l.StartsWith("body smooth"))) output.WriteLine(l);
+
+        // The shirt's cloth was read as cover: the pass got past coverage, so it really ran on this chest.
+        Assert.DoesNotContain(log, l => l.Contains("covers none"));
+        Assert.True(BodyRetarget.CoveredTargetSkin(parts, pair, out _, SyntheticChest.Uv(garment)).Any(c => c));
         Assert.True(on.Report.Folded <= off.Report.Folded);
-        Assert.Equal(Convert.ToHexString(SHA256.HashData(off.Model)), Convert.ToHexString(SHA256.HashData(on.Model)));
+        // Where nothing on the man's chest stands prouder than TBSE's, nothing changes at all.
+        if (on.Report.Smoothed == 0)
+            Assert.Equal(Convert.ToHexString(SHA256.HashData(off.Model)), Convert.ToHexString(SHA256.HashData(on.Model)));
     }
 }
