@@ -15,7 +15,7 @@ namespace Proteus.Services;
 /// the two callers cannot drift apart on what a refit IS — which group it goes into, what its option is called, when a
 /// garment is baked for another race — and only differ in how its inputs are chosen.
 /// </summary>
-internal static class RefitCore
+internal static partial class RefitCore
 {
     /// <summary>
     /// The pieces the refit moves whole, from the labels marked "keep shape". An island is one piece; a marked submesh is

@@ -1090,8 +1090,22 @@ public sealed partial class AutoRefitWatcher : IDisposable
                                     TargetsOf(primary, target, others), option) is { } join
             && join != option)
             option = joined = join;
+
+        // A legs garment whose waist lies over the belly: the chest beneath goes along for its shape (see
+        // RefitCore.ChestBeneath) — never named in the option, only recorded. Not when its skin already reads the chest.
+        RefitCore.ChestBeneath? beneath = null;
+        BodyOption? chestBeneathTo = null;
+        if (primary == "_dwn" && !others.Any(o => o.Slot == "_top") && TargetFor("_top") is { } chestNow)
+        {
+            beneath = RefitCore.ChestBeneathOf(garment, pick, race, state.List.Select(b => (b.Dir, b.Catalog)).ToList(),
+                                               dir => dir == VanillaBodyCatalog.Key ? vanillaCat : state.Find(dir)?.Catalog,
+                                               note => log.Information("[Proteus] auto refit: {0}: {1}", item, note));
+            if (beneath != null && AutoRefitDecisions.SameFile(beneath.Dir, beneath.Chest, targetMod.Dir, chestNow))
+                beneath = null;
+            if (beneath != null) chestBeneathTo = chestNow;
+        }
         if (await LetBeOrPutBack(r, g, root, group, option, savePath, cutFrom, item, targetMod.Name, ct,
-                                 pick))
+                                 pick, chestBeneath: chestBeneathTo?.Rel))
             return;
 
         // ── the refit ──
@@ -1125,6 +1139,19 @@ public sealed partial class AutoRefitWatcher : IDisposable
             pairs.Add(pair);
             kept.Add(other);
         }
+        if (beneath != null && chestBeneathTo != null)
+        {
+            if (BodyRetarget.BuildPair("_top", beneath.Catalog.PathOf(beneath.Chest), targetCat.PathOf(chestBeneathTo),
+                                       SlotName("_top"), male,
+                                       RefitCore.MaskOf(beneath.Dir, beneath.Catalog, "_top", OptionsOf(g.Settings, beneath.Dir)),
+                                       TargetMask("_top"), uvRemap, out var chestPair) is { } why)
+            {
+                log.Information("[Proteus] auto refit: {0}: the chest beneath left out: {1}", item, why);
+                chestBeneathTo = null;
+            }
+            else
+                pairs.Add(chestPair with { ShapeOnly = true });
+        }
         option = joined ?? OptionFor(kept);
         ct.ThrowIfCancellationRequested();
 
@@ -1146,7 +1173,8 @@ public sealed partial class AutoRefitWatcher : IDisposable
         var refit = new BodyRetargetWriter.Refit(option, plan.Model, string.Join(" + ",
                                                      new[] { target.Label }.Concat(kept.Select(k => k.To.Label))));
         if (await SaveAndWear(r, g, root, group, savePath, targetMod, labelFrom, refit, cutFrom, bakeTo, item, gameGear,
-                              new BodyRetargetWriter.Provenance(pick.Dir, pick.Option.Rel, TargetsOf(primary, target, kept)))
+                              new BodyRetargetWriter.Provenance(pick.Dir, pick.Option.Rel,
+                                                                TargetsOf(primary, target, kept, chestBeneathTo)))
             is not { } savedRoot)
             return;
         Outcome(r, onTarget: true, pick, RecordedFile(savedRoot, group, option, savePath));
@@ -1280,11 +1308,14 @@ public sealed partial class AutoRefitWatcher : IDisposable
     /// <param name="source">What the refit would be made from now (see <see cref="Existing"/>); null for no check.</param>
     /// <param name="layers">The other piece of its outfit it would be kept outside now (see <see cref="Existing"/>);
     /// null for none.</param>
+    /// <param name="chestBeneath">The chest beneath a legs garment's waist it would be refitted along with now (see
+    /// <see cref="Existing"/>); null for none.</param>
     /// <returns>True when nothing more is to be done.</returns>
     private async Task<bool> LetBeOrPutBack(Request r, Gathered g, string? root, string group, string option,
                                             string savePath, string? cutFrom, string item, string body,
                                             CancellationToken ct, AutoRefitDecisions.Pick? source = null,
-                                            IReadOnlyDictionary<string, string>? layers = null)
+                                            IReadOnlyDictionary<string, string>? layers = null,
+                                            string? chestBeneath = null)
     {
         if (!r.Forced && root != null && ChoseOtherwise(g, root, group))
         {
@@ -1295,13 +1326,13 @@ public sealed partial class AutoRefitWatcher : IDisposable
         }
         if (root == null) return false;
         (string, string)? from = source == null ? null : (source.Dir, source.Option.Rel);
-        if (!Existing(root, group, option, savePath, from, layers, r.Forced))
+        if (!Existing(root, group, option, savePath, from, layers, r.Forced, chestBeneath))
         {
             if (from != null && !Existing(root, group, option, savePath, from) && Existing(root, group, option, savePath))
                 log.Information("[Proteus] auto refit: {0}: \"{1}\" was made from another size; making it again", item,
                                 option);
             else if (Existing(root, group, option, savePath, from))
-                log.Information("[Proteus] auto refit: {0}: \"{1}\" was kept outside another piece than it is worn over "
+                log.Information("[Proteus] auto refit: {0}: \"{1}\" was made for another piece or chest beside it than "
                               + "now; making it again", item, option);
             return false;
         }
@@ -1375,12 +1406,15 @@ public sealed partial class AutoRefitWatcher : IDisposable
         return chosen;
     }
 
-    /// <summary>The target body's file per part a refit goes onto: its own, then each other part's.</summary>
+    /// <summary>The target body's file per part a refit goes onto: its own, then each other part's — and the chest
+    /// beneath a legs garment's waist, refitted along for its shape (see <see cref="RefitCore.ChestBeneath"/>).</summary>
     private static Dictionary<string, string> TargetsOf(string slot, BodyOption target,
-                                                        IEnumerable<(string Slot, BodyOption From, BodyOption To)> others)
+                                                        IEnumerable<(string Slot, BodyOption From, BodyOption To)> others,
+                                                        BodyOption? chestBeneath = null)
     {
         var targets = new Dictionary<string, string>(StringComparer.Ordinal) { [slot] = target.Rel };
         foreach (var other in others) targets[other.Slot] = other.To.Rel;
+        if (chestBeneath != null) targets["_top"] = chestBeneath.Rel;
         return targets;
     }
 
@@ -1687,10 +1721,13 @@ public sealed partial class AutoRefitWatcher : IDisposable
     /// <param name="layers">The other piece of its outfit it would be kept outside now (see
     /// <see cref="OutfitPartners.SameLayers"/>); null for none.</param>
     /// <param name="forced">Asked for with "Refit what I'm wearing now": a refit made before outfits were kept in
-    /// order is made again rather than put back.</param>
+    /// order, or before a legs garment's chest went along, is made again rather than put back.</param>
+    /// <param name="chestBeneath">The target chest a legs garment's waist is refitted along with now (see
+    /// <see cref="SameChestBeneath"/>); null for none.</param>
     internal static bool Existing(string root, string group, string option, string savePath,
                                   (string Dir, string Rel)? source = null,
-                                  IReadOnlyDictionary<string, string>? layers = null, bool forced = false)
+                                  IReadOnlyDictionary<string, string>? layers = null, bool forced = false,
+                                  string? chestBeneath = null)
     {
         var record = BodyRetargetWriter.ReadRecord(root);
         if (record == null) return false;
@@ -1698,9 +1735,23 @@ public sealed partial class AutoRefitWatcher : IDisposable
                                                 && string.Equals(e.GamePath, savePath, StringComparison.OrdinalIgnoreCase)
                                                 && string.Equals(record.GroupOf(e), group, StringComparison.OrdinalIgnoreCase)
                                                 && SameSource(e, source)
-                                                && OutfitPartners.SameLayers(e.Layers, layers, forced));
+                                                && OutfitPartners.SameLayers(e.Layers, layers, forced)
+                                                && SameChestBeneath(e, chestBeneath, forced));
         return recorded && (PenumbraModMeta.TryReadFileOptions(root, group) ?? [])
                            .Any(o => string.Equals(o.Name, option, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Whether a legs garment's refit went along with <paramref name="chestBeneath"/> (see <see cref="TargetsOf"/>): only
+    /// legs entries are asked, and only when a chest goes along now. One made onto another chest is made again — the
+    /// belly differs between them; one recording none was made before the chest went along, and is put back as it was
+    /// unless the player asked for what they are wearing now.
+    /// </summary>
+    private static bool SameChestBeneath(BodyRetargetWriter.Entry e, string? chestBeneath, bool forced)
+    {
+        if (chestBeneath == null || !e.GamePath.EndsWith("_dwn.mdl", StringComparison.OrdinalIgnoreCase)) return true;
+        if (e.Targets == null || !e.Targets.TryGetValue("_top", out string? recorded)) return !forced;
+        return RefitCore.Normal(recorded) == RefitCore.Normal(chestBeneath);
     }
 
     /// <summary>Whether an entry was made from <paramref name="source"/>: by body mod folder and file where it records

@@ -1780,6 +1780,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     [LocalDataFact(Geometric, Bibo, IvcsBibo, FixPubes, Rue)]
     [Trait("Plan", "AC-outfit-fit-4")]
     [Trait("Plan", "AC-outfit-fit-1")]
+    [Trait("Plan", "AC-outfit-fit-9")]
     public void Geometrics_jacket_sizes_are_kept_outside_the_tops_refit_in_their_option()
     {
         string copy = GeometricAsShipped();
@@ -1798,6 +1799,11 @@ public class SizeSetRefitTests(ITestOutputHelper output)
                 Assert.StartsWith(RefitCore.Normal(top.File) + "|", jacket.Layers!["_top"]);
             }
             Assert.Contains(lastLog, l => l.Template.Contains("kept outside its {2} piece's refit", StringComparison.Ordinal));
+            // [AC-outfit-fit-9] The skirt's legs sizes ("Rue WC A") take Rue's middle chest beneath their waist.
+            var beneath = lastLog.Where(l => l.Template.Contains("the chest beneath refitted along onto {2}",
+                                                                 StringComparison.Ordinal)).ToList();
+            Assert.NotEmpty(beneath);
+            Assert.All(beneath, l => Assert.Equal("None · Medium", l.Args[2]));
 
             var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
             Assert.Equal(0, SizeSetRefit.Run(request, new UVRemapService(log, "."), log, _ => { }, CancellationToken.None).Made);
