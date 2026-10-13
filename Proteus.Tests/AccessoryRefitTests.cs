@@ -134,13 +134,48 @@ public class AccessoryRefitTests
 
     [Fact]
     [Trait("Plan", "EDGE-jacket-refit-23")]
-    public void A_jacket_over_the_chest_with_no_chest_size_chosen_says_so()
+    [Trait("Plan", "EDGE-jacket-refit-22")]
+    public void A_jacket_over_a_chest_with_no_size_to_go_onto_says_why()
     {
+        // Measured against the body's first chest when none is chosen, a jacket still covers it — not jewellery.
+        BodyOption[] sizes = [ChestXs, ChestM];
+        Assert.Equal(ChestXs, AccessoryCover.MeasuredOn(null, sizes));
+        Assert.Equal(ChestM, AccessoryCover.MeasuredOn(ChestM, sizes));
+        Assert.Null(AccessoryCover.MeasuredOn(null, []));
+
         var jacket = new AccessoryCover.Cover(0.6f, 0f).Covered(_ => false);
         var legsOnly = new BodyOption("Legs", "", "S", "s.mdl", "chara/equipment/e0000/model/c0201e0000_dwn.mdl", "_dwn");
-        Assert.Equal("_top", AccessoryCover.WithoutSize(jacket, s => s == "_dwn" ? legsOnly : null));
-        Assert.Null(AccessoryCover.WithoutSize(jacket, _ => ChestXs));
-        Assert.Null(AccessoryCover.WithoutSize([], _ => null));   // jewellery says that instead
+        Assert.Equal(("_top", AccessoryCover.NoSize.Chosen),
+                     AccessoryCover.WithoutSize(jacket, s => s == "_dwn" ? legsOnly : null, _ => true));
+        Assert.Equal(("_top", AccessoryCover.NoSize.ForRace),
+                     AccessoryCover.WithoutSize(jacket, _ => null, s => s == "_dwn"));
+        Assert.Null(AccessoryCover.WithoutSize(jacket, _ => ChestXs, _ => true));
+        Assert.Null(AccessoryCover.WithoutSize([], _ => null, _ => true));   // jewellery says that instead
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-jacket-refit-7")]
+    public void Jewellery_read_before_is_let_be_before_anything_is_gathered()
+    {
+        static bool None(string _) => false;
+        var necklace = AccessoryCover.ToCache(new AccessoryCover.Cover(0.23f, 0f));   // Covered In Ice's, as measured
+        Assert.True(AccessoryCover.KnownJewellery(necklace, None));
+        Assert.True(AccessoryCover.KnownJewellery(AccessoryCover.ToCache(new AccessoryCover.Cover(0.01f, 0f)), _ => true));
+        // Sized with a top, the same cover is a garment: gathered and refitted.
+        Assert.False(AccessoryCover.KnownJewellery(necklace, slot => slot == "_top"));
+        Assert.False(AccessoryCover.KnownJewellery(null, None));   // never read: measured
+        Assert.False(AccessoryCover.KnownJewellery(new DetectionCache.Entry("x", "y", Confidence.Exact, false, []), None));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-jacket-refit-6")]
+    public void A_source_made_on_the_games_own_body_is_read_in_the_games_own_sizes()
+    {
+        var game = new BodySizeCatalog("<game>", [ChestM]);
+        var installed = new BodySizeCatalog("<neo>", [ChestXs]);
+        Assert.Same(game, AccessoryCover.CatalogOf(VanillaBodyCatalog.Key, game, _ => installed));
+        Assert.Same(installed, AccessoryCover.CatalogOf("neo", game, d => d == "neo" ? installed : null));
+        Assert.Null(AccessoryCover.CatalogOf("gone", game, _ => null));
     }
 
     [Fact]
@@ -303,6 +338,88 @@ public class AccessoryRefitTests
         Assert.Equal(Refusal.NotOnTarget, Beneath(read: (Pick(ChestM), false)).Why);
         Assert.Equal(Refusal.Unsure, Beneath(read: (Pick(ChestXs, "neo", Confidence.Ambiguous), true)).Why);
         Assert.Equal(Refusal.Unsure, Beneath(read: (null, false)).Why);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-jacket-refit-6")]
+    [Trait("Plan", "EDGE-jacket-refit-14")]
+    public void Each_part_is_sized_by_its_sibling_or_what_is_worn_beneath_and_a_part_with_neither_is_left_out()
+    {
+        var legsS = new BodyOption("Legs", "", "S", "ls.mdl", "chara/equipment/e0000/model/c0201e0000_dwn.mdl", "_dwn");
+        BodyOption? TargetFor(string slot) => slot == "_top" ? ChestXs : legsS;
+        var beneathAsked = new List<string>();
+        AccessoryCover.Beneath Under(string slot)
+        {
+            beneathAsked.Add(slot);
+            return slot == "_top" ? new(Pick(ChestM), null) : new(null, Refusal.GameBeneath);
+        }
+
+        // A long coat: its chest from the top beside it in its options, its legs from nothing — left out.
+        var coat = AccessoryCover.SourcesFor(["_top", "_dwn"], TargetFor, s => s == "_top" ? Pick(ChestM, "bibo") : null,
+                                             Under, _ => true);
+        Assert.Null(coat.Refused);
+        Assert.Equal(["_top"], coat.Sources.Keys);
+        Assert.Equal(["_dwn"], coat.LeftOut);
+        Assert.Equal(["_dwn"], beneathAsked);   // a sibling read means the piece beneath is never asked
+
+        // The piece's own part with nothing to go by: the piece is left as it is, and why is said.
+        var bare = AccessoryCover.SourcesFor(["_dwn"], TargetFor, _ => null, Under, _ => true);
+        Assert.Equal(Refusal.GameBeneath, bare.Refused);
+
+        // Cloth sitting inside its supposed source: not its source.
+        var inside = AccessoryCover.SourcesFor(["_top"], TargetFor, _ => Pick(ChestM), Under, _ => false);
+        Assert.Equal(Refusal.OffBody, inside.Refused);
+
+        // From beneath when there is no sibling.
+        beneathAsked.Clear();
+        var under = AccessoryCover.SourcesFor(["_top"], TargetFor, _ => null, Under, _ => true);
+        Assert.Equal(ChestM, under.Sources["_top"].Option);
+        Assert.Equal(["_top"], beneathAsked);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-jacket-refit-8")]
+    public void An_authors_size_for_a_body_is_left_to_them_unless_it_is_the_size_chosen()
+    {
+        Assert.Equal(AccessoryCover.AuthorGate.None, AccessoryCover.ForAuthor(null, Pick(ChestM), "neo", ChestXs));
+        Assert.Equal(AccessoryCover.AuthorGate.AlreadyFits,
+                     AccessoryCover.ForAuthor("Neolithe XS", Pick(ChestXs, "neo"), "neo", ChestXs));
+        Assert.Equal(AccessoryCover.AuthorGate.LeftToAuthor,
+                     AccessoryCover.ForAuthor("Neolithe M", Pick(ChestM, "neo"), "neo", ChestXs));
+        Assert.Equal(AccessoryCover.AuthorGate.LeftToAuthor, AccessoryCover.ForAuthor("Neolithe M", null, "neo", ChestXs));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-jacket-refit-8")]
+    [Trait("Plan", "EDGE-jacket-refit-16")]
+    public void The_authors_option_is_the_one_selected_for_this_very_piece()
+    {
+        const string Ring = "chara/accessory/a0095/model/c0201a0095_rir.mdl";
+        List<PenumbraModMeta.Redirect> redirects =
+        [
+            new(Jacket, "xs\\nek.mdl", "Top Size / Neolithe XS"), new(Top, "xs\\top.mdl", "Top Size / Neolithe XS"),
+            new(Jacket, "common\\nek.mdl", "Top Size / Neolithe S"), new(Top, "s\\top.mdl", "Top Size / Neolithe S"),
+            new(Jacket, "common\\nek.mdl", "Top Size / Neo — XS"), new(Top, "Body Retarget\\top.mdl", "Top Size / Neo — XS"),
+            new(Ring, "ring\\a.mdl", "Ring Size / Neolithe Big"),
+        ];
+        var record = new BodyRetargetWriter.Record
+        {
+            Options = [new BodyRetargetWriter.Entry { Group = "Top Size", InAuthorGroup = true, Name = "Neo — XS", GamePath = Top }],
+        };
+        string[] bodies = ["Neolithe [ALL IN ONE]"];
+        var sizeWords = new HashSet<string> { "almond", "gen" };
+        string? Drawn(string selected, string gamePath = Jacket)
+            => AccessoryCover.AuthorsBodyOption(gamePath, redirects, record, ["Top Size", "Ring Size"],
+                                                g => g == "Top Size" ? [selected] : g == "Ring Size" ? ["Neolithe Big"] : null,
+                                                bodies, sizeWords);
+
+        Assert.Equal("Neolithe XS", Drawn("Neolithe XS"));     // what is selected now, not the first to serve the file
+        Assert.Equal("Neolithe S", Drawn("Neolithe S"));
+        Assert.Null(Drawn("Neo — XS"));                         // Proteus's own refit is no author's size
+        // The ring's group names a body, but it sizes the ring, not this jacket.
+        Assert.Null(AccessoryCover.AuthorsBodyOption(Jacket, redirects, record, ["Ring Size"],
+                                                     _ => ["Neolithe Big"], bodies, sizeWords));
+        Assert.Equal("Neolithe Big", Drawn("Neolithe XS", Ring));
     }
 
     [Fact]

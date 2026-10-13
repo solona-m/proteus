@@ -93,6 +93,17 @@ public class AccessoryRefitLocalTests(ITestOutputHelper output)
         Assert.Equal(jacket.Normals, refitted.Normals);
         Assert.Equal(SkinTriangles(jacket), SkinTriangles(refitted));
 
+        // The chest's underside is cleared because the chest is named. This jacket does not reach under the breast, so
+        // its top — cloth that does — is planned as an accessory would be: with the chest named the underside is cleared,
+        // without it, it is not.
+        var named = RefitCore.PlanAccessoryRefit(topParts, topBytes, [pair], "_top", across: false, out _);
+        var unnamed = RefitCore.PlanAccessoryRefit(topParts, topBytes, [pair], null, across: false, out _);
+        output.WriteLine($"top as an accessory: {named.Report.Pushed} pushed with the chest named, "
+                       + $"{unnamed.Report.Pushed} without");
+        Assert.NotEqual(unnamed.Model, named.Model);
+        Assert.True(named.Report.Pushed > unnamed.Report.Pushed,
+                    $"{named.Report.Pushed} pushed with the chest named, {unnamed.Report.Pushed} without");
+
         // A top's own refit is untouched by the chest slot: the same plan, byte for byte.
         var asTop = BodyRetarget.Plan(topParts, topBytes, [pair], "_top", held: new HashSet<int>());
         var asTopToo = BodyRetarget.Plan(topParts, topBytes, [pair], "_top", held: new HashSet<int>(), chestSlot: "_top");
@@ -124,13 +135,29 @@ public class AccessoryRefitLocalTests(ITestOutputHelper output)
         Assert.Null(agreed);
         Assert.Contains("disagree", Assert.Single(notes));
 
-        // Its options name a body: left to the author's sizes, wherever one is drawn.
-        var bodies = new[] { neo.Dir, "Neolithe [ALL IN ONE]", "Bibo+", "hs-Rue+-2.2.7-y0f" };
-        var sizeWords = AutoRefitDecisions.Slots.SelectMany(s => neo.Catalog.For(s, Race))
-                                                .SelectMany(o => AutoRefitDecisions.Words(o.Group + " " + o.Section + " " + o.Name))
-                                                .ToHashSet();
-        Assert.True(AutoRefitDecisions.NamesABody("Neolithe S", bodies, sizeWords));
-        Assert.False(AutoRefitDecisions.NamesABody("Medium", bodies, sizeWords));
+        // Its options name a body, read against every body installed, as the refit reads them: left to the author's
+        // sizes when one of theirs is selected; refitted when Proteus's own refit option is.
+        string modsRoot = Path.GetDirectoryName(root)!;
+        var mods = Directory.GetDirectories(modsRoot).Select(Path.GetFileName).ToDictionary(d => d!, d => d!);
+        var bodies = new BodyModIndex().RefreshState(mods, modsRoot).List;
+        output.WriteLine($"{bodies.Count} body mods installed");
+        var bodyNames = bodies.SelectMany(b => new[] { b.Name, b.Dir }).ToList();
+        var sizeWords = bodies.SelectMany(b => AutoRefitDecisions.Slots.SelectMany(s => b.Catalog.For(s, Race)))
+                              .SelectMany(o => AutoRefitDecisions.Words(o.Group + " " + o.Section + " " + o.Name))
+                              .ToHashSet();
+        foreach (string option in new[] { "Neolithe XS", "Neolithe S", "Neolithe M", "Neolithe L" })
+            Assert.True(AutoRefitDecisions.NamesABody(option, bodyNames, sizeWords), option);
+        foreach (string option in new[] { "Small", "Medium", "Large", "Puffy" })
+            Assert.False(AutoRefitDecisions.NamesABody(option, bodyNames, sizeWords), option);
+
+        string studio = record!.Options.First(e => e.GamePath == "chara/equipment/e0041/model/c0201e0041_top.mdl"
+                                                   && record.GroupOf(e) == "Top Size").Name;
+        string? Drawn(string selected)
+            => AccessoryCover.AuthorsBodyOption(Jacket, redirects, record, RefitCore.SingleGroups(root),
+                                                g => g == "Top Size" ? [selected] : null, bodyNames, sizeWords);
+        Assert.Equal("Neolithe XS", Drawn("Neolithe XS"));
+        Assert.Equal("Neolithe M", Drawn("Neolithe M"));
+        Assert.Null(Drawn(studio));
     }
 
     public static TheoryData<string, string> Jewellery => new()

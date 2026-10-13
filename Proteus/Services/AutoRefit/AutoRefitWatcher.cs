@@ -885,12 +885,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
         var bodies = state.List;
         if (state.Find(g.Preference.BodyDir) is not { } targetMod)
         {
-            string missing = string.Format(Loc.Localize("Chat.AutoRefit.BodyMissing.Fmt",
-                    "[Proteus] The body chosen for automatic refits in this collection, \"{0}\", isn't installed, "
-                  + "so nothing is being refitted. Choose another under /proteus > Settings."),
-                    g.Preference.BodyDir);
-            Say(missing, problem: true);
-            if (toldMissing.TryAdd(r.Collection, 0)) Chat(missing, problem: true);
+            SayBodyMissing(r, g);
             return;
         }
         var targetCat = targetMod.Catalog;

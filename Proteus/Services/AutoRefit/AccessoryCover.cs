@@ -65,11 +65,149 @@ internal static class AccessoryCover
         return (float)covered / skin.Count;
     }
 
-    /// <summary>The part the piece is refitted as (the first of <paramref name="covered"/>) when no size is chosen for it —
-    /// said to the player, nothing refitted — or null when it has one, or covers nothing.</summary>
-    /// <param name="targetFor">The size chosen per part: the chest for "_top", the legs for "_dwn".</param>
-    internal static string? WithoutSize(IReadOnlyList<string> covered, Func<string, BodyOption?> targetFor)
-        => covered.Count > 0 && targetFor(covered[0]) == null ? covered[0] : null;
+    /// <summary>Why the piece's own part has no size to go onto: none chosen, or none at the piece's race.</summary>
+    internal enum NoSize
+    {
+        Chosen,
+        ForRace,
+    }
+
+    /// <summary>
+    /// The part the piece is refitted as (the first of <paramref name="covered"/>) when it has no size to go onto — said
+    /// to the player, nothing refitted — and why; null when it has one, or covers nothing.
+    /// </summary>
+    /// <param name="targetFor">The size chosen per part at the piece's race: the chest for "_top", the legs for "_dwn".</param>
+    /// <param name="hasSizes">Whether the body has any size of a part at the piece's race.</param>
+    internal static (string Slot, NoSize Why)? WithoutSize(IReadOnlyList<string> covered, Func<string, BodyOption?> targetFor,
+                                                           Func<string, bool> hasSizes)
+        => covered.Count > 0 && targetFor(covered[0]) == null
+            ? (covered[0], hasSizes(covered[0]) ? NoSize.Chosen : NoSize.ForRace)
+            : null;
+
+    /// <summary>A source's sizes: the game's own body's for a piece made on it, an installed body mod's otherwise.</summary>
+    internal static BodySizeCatalog? CatalogOf(string dir, BodySizeCatalog gameBody, Func<string, BodySizeCatalog?> installed)
+        => dir == VanillaBodyCatalog.Key ? gameBody : installed(dir);
+
+    /// <summary>
+    /// Whether a cached cover reading already says the piece is jewellery — covering too little of any part, given what
+    /// its options size it with — so a piece put on again is let be before anything is gathered.
+    /// </summary>
+    internal static bool KnownJewellery(DetectionCache.Entry? hit, Func<string, bool> sizedWith)
+        => hit != null && FromCache(hit) is { } cover && cover.Covered(sizedWith).Count == 0;
+
+    /// <summary>
+    /// The size of a part the cover is measured against: the one chosen, or — none chosen yet — the body's first, so a
+    /// jacket over a chest with no chest size chosen still reads as covering it, and says so, rather than as jewellery.
+    /// </summary>
+    internal static BodyOption? MeasuredOn(BodyOption? chosen, IReadOnlyList<BodyOption> sizes)
+        => chosen ?? sizes.FirstOrDefault();
+
+    /// <summary>What the author's own sizes say about an accessory (see <see cref="AuthorsBodyOption"/>).</summary>
+    internal enum AuthorGate
+    {
+        /// <summary>No author's size for a body is drawn: refitted as any piece.</summary>
+        None,
+
+        /// <summary>The author's size drawn is the one chosen: nothing to do, said only in the log.</summary>
+        AlreadyFits,
+
+        /// <summary>The author's size drawn is another: left to the player to pick, and said.</summary>
+        LeftToAuthor,
+    }
+
+    /// <summary>
+    /// What to do with an accessory whose drawn option is <paramref name="authors"/>: nothing when null; quietly nothing
+    /// when the chest or legs piece shipped beside it reads as exactly the size chosen; otherwise leave it to the author's
+    /// sizes and say so.
+    /// </summary>
+    internal static AuthorGate ForAuthor(string? authors, AutoRefitDecisions.Pick? sibling, string targetDir, BodyOption target)
+        => authors == null ? AuthorGate.None
+         : sibling != null && AutoRefitDecisions.SameFile(sibling.Dir, sibling.Option, targetDir, target) ? AuthorGate.AlreadyFits
+         : AuthorGate.LeftToAuthor;
+
+    /// <summary>
+    /// The author's option drawn for the accessory at <paramref name="gamePath"/> in a single-choice group of theirs that
+    /// sizes it, when that option names a body (see <see cref="AutoRefitDecisions.NamesABody"/>) — read from what the
+    /// collection has selected NOW, after the body pieces' refits switched their groups, never from which option first
+    /// serves the file: Scarlet's jacket file is served by its "Neolithe S", "Neolithe M" and Proteus's own refit option
+    /// alike. Null when the option drawn is one of Proteus's refits, names no body, or no such group sizes the piece.
+    /// </summary>
+    /// <param name="ticked">The collection's selection in a group of the mod, or null for none.</param>
+    /// <param name="bodyNames">Every installed body mod's name and folder.</param>
+    /// <param name="sizeWords">Every word of every installed body's size labels and sections.</param>
+    internal static string? AuthorsBodyOption(string gamePath, IReadOnlyList<PenumbraModMeta.Redirect> redirects,
+                                              BodyRetargetWriter.Record? record, IReadOnlyList<string> singleGroups,
+                                              Func<string, IReadOnlyList<string>?> ticked, IEnumerable<string> bodyNames,
+                                              IReadOnlySet<string> sizeWords)
+    {
+        var bodies = bodyNames.ToList();
+        foreach (string group in singleGroups)
+        {
+            if (record?.OwnGroups.Contains(group, StringComparer.OrdinalIgnoreCase) == true) continue;
+            if (ticked(group) is not { Count: > 0 } selected) continue;
+            string drawn = selected[0];
+            // A group that sizes THIS piece, through the option drawn — not another accessory of the same mod.
+            if (!redirects.Any(d => string.Equals(d.Source, group + " / " + drawn, StringComparison.OrdinalIgnoreCase)
+                                    && string.Equals(d.GamePath, gamePath, StringComparison.OrdinalIgnoreCase)))
+                continue;
+            if (record?.Options.Any(e => string.Equals(record.GroupOf(e), group, StringComparison.OrdinalIgnoreCase)
+                                         && string.Equals(e.Name, drawn, StringComparison.OrdinalIgnoreCase)) == true)
+                return null;
+            return AutoRefitDecisions.NamesABody(drawn, bodies, sizeWords) ? drawn : null;
+        }
+        return null;
+    }
+
+    /// <summary>What each part the piece covers is refitted from, and what was left out.</summary>
+    /// <param name="Sources">Per part refitted, what it was made on.</param>
+    /// <param name="LeftOut">Parts covered but not refitted: no size, or no source.</param>
+    /// <param name="Refused">Why the piece's own part has no source — the piece is then left as it is; null when it has one.</param>
+    internal sealed record Parts(IReadOnlyDictionary<string, AutoRefitDecisions.Pick> Sources, IReadOnlyList<string> LeftOut,
+                                 Refusal? Refused);
+
+    /// <summary>
+    /// What each part <paramref name="covered"/> is refitted from: the chest or legs piece shipped beside the accessory in
+    /// its own options when there is one and they agree, else the one worn beneath it — and either only when the cloth
+    /// clears it. The piece's own part (the first) without a source refuses the whole piece; another is left out.
+    /// </summary>
+    /// <param name="targetFor">The size chosen per part.</param>
+    /// <param name="sibling">The siblings' agreed reading per part, or null (none, or they did not agree).</param>
+    /// <param name="beneath">What the piece worn beneath says, per part — asked only without a sibling.</param>
+    /// <param name="clears">Whether the cloth clears a source (see <see cref="ClearsSource"/>).</param>
+    internal static Parts SourcesFor(IReadOnlyList<string> covered, Func<string, BodyOption?> targetFor,
+                                     Func<string, AutoRefitDecisions.Pick?> sibling, Func<string, Beneath> beneath,
+                                     Func<AutoRefitDecisions.Pick, bool> clears)
+    {
+        var sources = new Dictionary<string, AutoRefitDecisions.Pick>(StringComparer.Ordinal);
+        var leftOut = new List<string>();
+        foreach (string slot in covered)
+        {
+            bool own = slot == covered[0];
+            if (targetFor(slot) == null)
+            {
+                if (own) return new Parts(sources, leftOut, Refusal.Unsure);   // said before this, by WithoutSize
+                leftOut.Add(slot);
+                continue;
+            }
+            AutoRefitDecisions.Pick? pick;
+            Refusal? why = null;
+            if (sibling(slot) is { } read) pick = read;
+            else
+            {
+                var under = beneath(slot);
+                (pick, why) = (under.Source, under.Why);
+            }
+            if (pick != null && !clears(pick)) (pick, why) = (null, Refusal.OffBody);
+            if (pick != null)
+            {
+                sources[slot] = pick;
+                continue;
+            }
+            if (own) return new Parts(sources, leftOut, why ?? Refusal.Unsure);
+            leftOut.Add(slot);
+        }
+        return new Parts(sources, leftOut, null);
+    }
 
     /// <summary>How much of the chosen chest and legs the accessory covers; a part with no body chosen covers nothing.</summary>
     internal static Cover Read(ModelParts accessory, ModelParts? chest, ModelParts? legs)
