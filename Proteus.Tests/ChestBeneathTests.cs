@@ -57,7 +57,7 @@ public class ChestBeneathTests
         string root = NewMod();
         try
         {
-            Save(root, Legs, new() { ["_dwn"] = "wca.mdl", ["_top"] = "small.mdl" });
+            Save(root, Legs, new() { ["_dwn"] = "wca.mdl", [RefitCore.ChestBeneathKey] = "small.mdl" });
             Assert.True(AutoRefitWatcher.Existing(root, "Size", "Rue WC A", Legs, chestBeneath: "small.mdl"));
             Assert.True(AutoRefitWatcher.Existing(root, "Size", "Rue WC A", Legs, chestBeneath: "SMALL.mdl"));
             Assert.False(AutoRefitWatcher.Existing(root, "Size", "Rue WC A", Legs, chestBeneath: "medium.mdl"));
@@ -72,7 +72,7 @@ public class ChestBeneathTests
             Assert.True(AutoRefitWatcher.Existing(root, "Size", "Rue WC A", Legs, chestBeneath: "medium.mdl"));
 
             // A chest piece's own entry is never asked about a chest beneath.
-            Save(root, Top, new() { ["_top"] = "small.mdl", ["_dwn"] = "wca.mdl" });
+            Save(root, Top, new() { ["_top"] = "small.mdl", ["_dwn"] = "wca.mdl", [RefitCore.ChestBeneathKey] = "small.mdl" });
             Assert.True(AutoRefitWatcher.Existing(root, "Size", "Rue WC A", Top, chestBeneath: "medium.mdl"));
         }
         finally
@@ -82,10 +82,21 @@ public class ChestBeneathTests
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-outfit-fit-21")]
-    public void A_legs_refit_joins_the_same_option_with_or_without_the_chest_beneath()
+    [Trait("Plan", "AC-outfit-fit-5")]
+    public void The_chest_beneath_is_recorded_under_its_own_key()
     {
-        // The chest beneath is recorded, never compared when joining: JoinOption is handed the legs' own targets.
+        var targets = AutoRefitWatcher.TargetsOf("_dwn", LegsOption("Watermelon Crushers - A"), [], Chest("Medium", "None"));
+        Assert.Equal("Medium.mdl", targets[RefitCore.ChestBeneathKey]);
+        Assert.Equal("Watermelon Crushers - A.mdl", targets["_dwn"]);
+        Assert.False(targets.ContainsKey("_top"));
+        Assert.False(AutoRefitWatcher.TargetsOf("_dwn", LegsOption("A"), []).ContainsKey(RefitCore.ChestBeneathKey));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-outfit-fit-21")]
+    public void Options_join_as_before_whatever_chest_went_beneath_a_skirt()
+    {
+        // A skirt's refit recorded with the chest beneath it, in a group the top and skirt share.
         var record = new BodyRetargetWriter.Record
         {
             Group = "Size",
@@ -93,13 +104,33 @@ public class ChestBeneathTests
             [
                 new BodyRetargetWriter.Entry
                 {
-                    Group = "Size", Name = "Rue M", GamePath = Top, BodyMod = "rue", Auto = true,
-                    Targets = new() { ["_top"] = "medium.mdl" },
+                    Group = "Size", Name = "Rue WC A", GamePath = Legs, BodyMod = "rue", Auto = true,
+                    Targets = new() { ["_dwn"] = "wca.mdl", [RefitCore.ChestBeneathKey] = "medium.mdl" },
                 },
             ],
         };
         var chosen = new Dictionary<string, string> { ["_top"] = "medium.mdl", ["_dwn"] = "wca.mdl" };
-        var legsOnly = new Dictionary<string, string> { ["_dwn"] = "wca.mdl" };
-        Assert.Equal("Rue WC A", RefitCore.JoinOption(record, "Size", Legs, "rue", chosen, legsOnly, "Rue WC A"));
+        // A top refitted later makes its own option: it shares no part with the skirt but the chest beneath.
+        Assert.Equal("Rue M", RefitCore.JoinOption(record, "Size", Top, "rue", chosen,
+                                                   new Dictionary<string, string> { ["_top"] = "medium.mdl" }, "Rue M"));
+        // A shoe on the same legs still joins the skirt's option, as it did before the chest was recorded.
+        const string shoe = "chara/equipment/e6010/model/c0201e6010_sho.mdl";
+        Assert.Equal("Rue WC A", RefitCore.JoinOption(record, "Size", shoe, "rue", chosen,
+                                                      new Dictionary<string, string> { ["_dwn"] = "wca.mdl" }, "Rue Shoe"));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-outfit-fit-15")]
+    [Trait("Plan", "EDGE-outfit-fit-16")]
+    public void Only_a_legs_garment_whose_skin_did_not_read_the_chest_asks_for_the_chest_beneath_a_chosen_chest()
+    {
+        var chest = Chest("Medium");
+        Assert.True(RefitCore.WantsChestBeneath("_dwn", [], chest));
+        Assert.True(RefitCore.WantsChestBeneath("_dwn", ["_sho"], chest));
+        // Its skin read the chest: that goes in whole, as before.
+        Assert.False(RefitCore.WantsChestBeneath("_dwn", ["_top"], chest));
+        // No chest chosen: never one that only follows the legs.
+        Assert.False(RefitCore.WantsChestBeneath("_dwn", [], null));
+        Assert.False(RefitCore.WantsChestBeneath("_top", [], chest));
     }
 }

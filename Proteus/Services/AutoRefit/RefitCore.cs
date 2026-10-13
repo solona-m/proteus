@@ -347,7 +347,8 @@ internal static partial class RefitCore
                                  || !string.Equals(e.BodyMod, bodyMod, StringComparison.OrdinalIgnoreCase)
                                  || string.Equals(e.GamePath, gamePath, StringComparison.OrdinalIgnoreCase)))
                 continue;
-            var recorded = entries.SelectMany(e => e.Targets!).ToList();
+            // The chest beneath a legs refit is no part of its own: never joined on (see ChestBeneathKey).
+            var recorded = entries.SelectMany(e => e.Targets!).Where(t => t.Key != ChestBeneathKey).ToList();
             bool current = recorded.All(t => chosen.TryGetValue(t.Key, out string? rel) && Normal(rel) == Normal(t.Value));
             bool shares = recorded.Any(t => own.ContainsKey(t.Key));
             if (current && shares) return option.Key;

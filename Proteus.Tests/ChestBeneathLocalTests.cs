@@ -58,6 +58,61 @@ public class ChestBeneathLocalTests(ITestOutputHelper output)
         Assert.Contains(notes, n => n.Contains("Type A - Small", StringComparison.Ordinal));
     }
 
+    [LocalDataFact(Geometric, IvcsBibo, FixPubes, Rue)]
+    [Trait("Plan", "EDGE-outfit-fit-19")]
+    public void Legs_with_no_chest_and_no_twin_among_the_bodies_take_no_chest()
+    {
+        // Bibo+ — the twin — is not among the bodies: [IVCS] Bibo+ and Rue have chests, but not the same legs.
+        var bodies = new[] { Body(FixPubes), Body(IvcsBibo), Body(Rue) }.ToList();
+        var (_, skirt, bones) = Load(Geometric, Skirt);
+        var pick = RefitCore.DetectSource(skirt, bones, "_dwn", Race, bodies, bodies[2].Dir, _ => true)!;
+        Assert.Equal("fix pubes", pick.Dir);
+        var notes = new List<string>();
+
+        Assert.Null(RefitCore.ChestBeneathOf(skirt, pick, Race, bodies, CatalogOf(bodies), notes.Add));
+        Assert.Contains(notes, n => n.Contains("no other body has the same legs", StringComparison.Ordinal));
+    }
+
+    [LocalDataFact(Rue)]
+    [Trait("Plan", "EDGE-outfit-fit-16")]
+    public void The_same_chest_or_a_refused_pair_leaves_the_legs_alone()
+    {
+        var rue = Body(Rue);
+        var medium = rue.Catalog.For("_top", Race).First(o => o.Label == "None · Medium");
+        var beneath = new RefitCore.ChestBeneath(rue.Dir, rue.Catalog, medium, 100);
+        var notes = new List<string>();
+
+        Assert.False(RefitCore.ChestBeneathPair(beneath, rue.Dir, rue.Catalog, medium, false, null, null, null, notes.Add,
+                                                out _));
+        // A legs model where a chest should be: the pair is refused.
+        var legs = rue.Catalog.For("_dwn", Race)[0];
+        Assert.False(RefitCore.ChestBeneathPair(beneath, rue.Dir, rue.Catalog, legs with { Slot = "_top" }, false, null,
+                                                null, null, notes.Add, out _));
+        notes.ForEach(output.WriteLine);
+        Assert.Equal(2, notes.Count);
+        Assert.Contains(notes, n => n.Contains("left out", StringComparison.Ordinal));
+
+        var small = rue.Catalog.For("_top", Race).First(o => o.Label == "None · Small");
+        Assert.True(RefitCore.ChestBeneathPair(beneath, rue.Dir, rue.Catalog, small, false, null, null, null, notes.Add,
+                                               out var pair));
+        Assert.True(pair.ShapeOnly);
+    }
+
+    [LocalDataFact(Rue)]
+    [Trait("Plan", "EDGE-outfit-fit-23")]
+    public void A_legs_size_takes_its_own_chest_when_it_follows_one_and_the_middle_chest_otherwise()
+    {
+        var rue = Body(Rue);
+        var chests = SupportedBodies.Of("rue", "_top", false)!;
+        var first = chests.Sizes[0];
+        Assert.Equal(RefitCore.Normal(first.Rel),
+                     RefitCore.Normal(SizeSetRefit.ChestBeneathTo("rue", first, true, false, rue.Catalog, Race)!.Rel));
+        var middle = chests.Sizes.First(s => s.Name == "M");
+        var legsSize = SupportedBodies.Of("rue", "_dwn", false)!.Sizes[0];
+        Assert.Equal(RefitCore.Normal(middle.Rel),
+                     RefitCore.Normal(SizeSetRefit.ChestBeneathTo("rue", legsSize, false, false, rue.Catalog, Race)!.Rel));
+    }
+
     [LocalDataFact(Heartthrob, Scarlet, Bibo, Neolithe)]
     [Trait("Plan", "AC-outfit-fit-7")]
     [Trait("Plan", "EDGE-outfit-fit-14")]
@@ -111,6 +166,8 @@ public class ChestBeneathLocalTests(ITestOutputHelper output)
         output.WriteLine($"inside Rue's chest: {before.Inside}/{before.Near} legs-only, {after.Inside}/{after.Near} with the chest "
                        + $"beneath; folds {alone.Report.Folded} -> {with.Report.Folded}");
         Assert.True(after.Inside * 2 <= before.Inside, $"{after.Inside} inside, {before.Inside} with the legs alone");
+        // One folded triangle more at most, as measured and accepted (256 → 257).
+        Assert.True(with.Report.Folded <= alone.Report.Folded + 1, $"{with.Report.Folded} folded, {alone.Report.Folded} legs-only");
         // Its shape only: no chest skin drawn, the author's normals, and the waist rigged by the legs.
         Assert.Equal(aloneParts.MeshSpans.Count, withParts.MeshSpans.Count);
         Assert.Equal(0, with.Report.Smoothed);

@@ -415,21 +415,16 @@ internal static partial class SizeSetRefit
                 // middle chest — its chests share their belly.
                 if (beneath != null
                     && ChestBeneathTo(key, size, piece.FollowsChest, yas, targetCat, race) is { } chestTo
-                    && !AutoRefitDecisions.SameFile(beneath.Dir, beneath.Chest, target.Dir, chestTo))
+                    && RefitCore.ChestBeneathPair(beneath, target.Dir, targetCat, chestTo, male,
+                                                  RefitCore.MaskOf(beneath.Dir, beneath.Catalog, "_top", null),
+                                                  RefitCore.MaskOf(target.Dir, targetCat, "_top", null), uvRemap,
+                                                  note => log.Information("[Proteus] size set: {0} {1}: {2}", piece.Label,
+                                                                          option, note),
+                                                  out var chestPair))
                 {
-                    if (BodyRetarget.BuildPair("_top", beneath.Catalog.PathOf(beneath.Chest), targetCat.PathOf(chestTo),
-                                               SlotName("_top"), male,
-                                               RefitCore.MaskOf(beneath.Dir, beneath.Catalog, "_top", null),
-                                               RefitCore.MaskOf(target.Dir, targetCat, "_top", null), uvRemap,
-                                               out var chestPair) is { } chestRefusal)
-                        log.Information("[Proteus] size set: {0} {1}: the chest beneath left out: {2}", piece.Label,
-                                        option, chestRefusal);
-                    else
-                    {
-                        pairs.Add(chestPair with { ShapeOnly = true });
-                        log.Information("[Proteus] size set: {0} {1}: the chest beneath refitted along onto {2}",
-                                        piece.Label, option, chestTo.Label);
-                    }
+                    pairs.Add(chestPair);
+                    log.Information("[Proteus] size set: {0} {1}: the chest beneath refitted along onto {2}",
+                                    piece.Label, option, chestTo.Label);
                 }
 
                 var plan = BodyRetarget.Plan(src.Garment, src.Bytes, pairs, piece.Slot, held: new HashSet<int>(),
@@ -456,7 +451,7 @@ internal static partial class SizeSetRefit
     /// The target chest beneath a legs size: the size's own chest, for legs following a chest; else the body's middle
     /// chest ("M") — a body's chests share their belly — or its first. Null when the body has none here.
     /// </summary>
-    private static BodyOption? ChestBeneathTo(string key, SupportedBodies.Size size, bool followsChest, bool yas,
+    internal static BodyOption? ChestBeneathTo(string key, SupportedBodies.Size size, bool followsChest, bool yas,
                                               BodySizeCatalog targetCat, string race)
     {
         string? rel = followsChest

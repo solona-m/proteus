@@ -1093,16 +1093,19 @@ public sealed partial class AutoRefitWatcher : IDisposable
 
         // A legs garment whose waist lies over the belly: the chest beneath goes along for its shape (see
         // RefitCore.ChestBeneath) — never named in the option, only recorded. Not when its skin already reads the chest.
-        RefitCore.ChestBeneath? beneath = null;
         BodyOption? chestBeneathTo = null;
-        if (primary == "_dwn" && !others.Any(o => o.Slot == "_top") && TargetFor("_top") is { } chestNow)
+        BodyRetarget.SlotPair chestBeneathPair = default;
+        if (RefitCore.WantsChestBeneath(primary, others.Select(o => o.Slot), chestTo))
         {
-            beneath = RefitCore.ChestBeneathOf(garment, pick, race, state.List.Select(b => (b.Dir, b.Catalog)).ToList(),
-                                               dir => dir == VanillaBodyCatalog.Key ? vanillaCat : state.Find(dir)?.Catalog,
-                                               note => log.Information("[Proteus] auto refit: {0}: {1}", item, note));
-            if (beneath != null && AutoRefitDecisions.SameFile(beneath.Dir, beneath.Chest, targetMod.Dir, chestNow))
-                beneath = null;
-            if (beneath != null) chestBeneathTo = chestNow;
+            void Note(string note) => log.Information("[Proteus] auto refit: {0}: {1}", item, note);
+            if (RefitCore.ChestBeneathOf(garment, pick, race, state.List.Select(b => (b.Dir, b.Catalog)).ToList(),
+                                         dir => dir == VanillaBodyCatalog.Key ? vanillaCat : state.Find(dir)?.Catalog,
+                                         Note) is { } beneath
+                && RefitCore.ChestBeneathPair(beneath, targetMod.Dir, targetCat, chestTo!, male,
+                                              RefitCore.MaskOf(beneath.Dir, beneath.Catalog, "_top",
+                                                               OptionsOf(g.Settings, beneath.Dir)),
+                                              TargetMask("_top"), uvRemap, Note, out chestBeneathPair))
+                chestBeneathTo = chestTo;
         }
         if (await LetBeOrPutBack(r, g, root, group, option, savePath, cutFrom, item, targetMod.Name, ct,
                                  pick, chestBeneath: chestBeneathTo?.Rel))
@@ -1139,19 +1142,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
             pairs.Add(pair);
             kept.Add(other);
         }
-        if (beneath != null && chestBeneathTo != null)
-        {
-            if (BodyRetarget.BuildPair("_top", beneath.Catalog.PathOf(beneath.Chest), targetCat.PathOf(chestBeneathTo),
-                                       SlotName("_top"), male,
-                                       RefitCore.MaskOf(beneath.Dir, beneath.Catalog, "_top", OptionsOf(g.Settings, beneath.Dir)),
-                                       TargetMask("_top"), uvRemap, out var chestPair) is { } why)
-            {
-                log.Information("[Proteus] auto refit: {0}: the chest beneath left out: {1}", item, why);
-                chestBeneathTo = null;
-            }
-            else
-                pairs.Add(chestPair with { ShapeOnly = true });
-        }
+        if (chestBeneathTo != null) pairs.Add(chestBeneathPair);
         option = joined ?? OptionFor(kept);
         ct.ThrowIfCancellationRequested();
 
@@ -1408,13 +1399,13 @@ public sealed partial class AutoRefitWatcher : IDisposable
 
     /// <summary>The target body's file per part a refit goes onto: its own, then each other part's — and the chest
     /// beneath a legs garment's waist, refitted along for its shape (see <see cref="RefitCore.ChestBeneath"/>).</summary>
-    private static Dictionary<string, string> TargetsOf(string slot, BodyOption target,
-                                                        IEnumerable<(string Slot, BodyOption From, BodyOption To)> others,
-                                                        BodyOption? chestBeneath = null)
+    internal static Dictionary<string, string> TargetsOf(string slot, BodyOption target,
+                                                         IEnumerable<(string Slot, BodyOption From, BodyOption To)> others,
+                                                         BodyOption? chestBeneath = null)
     {
         var targets = new Dictionary<string, string>(StringComparer.Ordinal) { [slot] = target.Rel };
         foreach (var other in others) targets[other.Slot] = other.To.Rel;
-        if (chestBeneath != null) targets["_top"] = chestBeneath.Rel;
+        if (chestBeneath != null) targets[RefitCore.ChestBeneathKey] = chestBeneath.Rel;
         return targets;
     }
 
@@ -1750,7 +1741,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
     private static bool SameChestBeneath(BodyRetargetWriter.Entry e, string? chestBeneath, bool forced)
     {
         if (chestBeneath == null || !e.GamePath.EndsWith("_dwn.mdl", StringComparison.OrdinalIgnoreCase)) return true;
-        if (e.Targets == null || !e.Targets.TryGetValue("_top", out string? recorded)) return !forced;
+        if (e.Targets == null || !e.Targets.TryGetValue(RefitCore.ChestBeneathKey, out string? recorded)) return !forced;
         return RefitCore.Normal(recorded) == RefitCore.Normal(chestBeneath);
     }
 

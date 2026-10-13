@@ -23,6 +23,45 @@ internal static partial class RefitCore
     /// </summary>
     internal const int OverBellyGate = 50;
 
+    /// <summary>
+    /// The key a legs refit's record keeps the chest beneath under, in <see cref="BodyRetargetWriter.Entry.Targets"/>:
+    /// not "_top", which says a chest piece of the garment's own went onto that chest — joining options goes by those
+    /// (<see cref="JoinOption"/>), and a top refitted later would otherwise join the skirt's option.
+    /// </summary>
+    internal const string ChestBeneathKey = "beneath:_top";
+
+    /// <summary>
+    /// Whether a legs garment's refit asks for the chest beneath at all: a legs garment, whose own skin did not read the
+    /// chest (then it goes in whole, as before), with a chest the player chose — never one that only follows the legs.
+    /// </summary>
+    internal static bool WantsChestBeneath(string primary, IEnumerable<string> otherSlots, BodyOption? chosenChest)
+        => primary == "_dwn" && chosenChest != null && !otherSlots.Contains("_top");
+
+    /// <summary>
+    /// The pair for the chest beneath, for its shape only — or false, noted: the same file on both sides, or the pair
+    /// refused. Either way the legs are refitted as before.
+    /// </summary>
+    internal static bool ChestBeneathPair(ChestBeneath beneath, string targetDir, BodySizeCatalog targetCat,
+                                          BodyOption chestTo, bool male, ushort? sourceMask, ushort? targetMask,
+                                          UVRemapService? uvRemap, Action<string> note, out BodyRetarget.SlotPair pair)
+    {
+        pair = default;
+        if (AutoRefitDecisions.SameFile(beneath.Dir, beneath.Chest, targetDir, chestTo))
+        {
+            note($"the chest beneath is \"{chestTo.Label}\" already; the legs are refitted alone");
+            return false;
+        }
+        if (BodyRetarget.BuildPair("_top", beneath.Catalog.PathOf(beneath.Chest), targetCat.PathOf(chestTo),
+                                   AutoRefitWatcher.SlotName("_top"), male, sourceMask, targetMask, uvRemap,
+                                   out var built) is { } why)
+        {
+            note($"the chest beneath left out: {why}");
+            return false;
+        }
+        pair = built with { ShapeOnly = true };
+        return true;
+    }
+
     /// <summary>The chest a legs garment's waist lies over, on the body it was made on.</summary>
     /// <param name="Dir">The body mod it is from: the garment's own, or a twin's (see <see cref="ChestBeneathOf"/>).</param>
     /// <param name="Cells">How much of it the cloth lies over (see <see cref="OverBellyGate"/>).</param>
@@ -110,17 +149,23 @@ internal static partial class RefitCore
             chest = chests[0];
             note?.Invoke($"no chest of {dir} is named for \"{legsOption.Label}\"; \"{chest.Label}\" is taken");
         }
-        int cells;
+        ModelParts? legsModel, chestModel;
         try
         {
-            cells = WaistOverChest(garment, ModelPartReader.Read(File.ReadAllBytes(catalog.PathOf(legsOption)))!,
-                                   ModelPartReader.Read(File.ReadAllBytes(catalog.PathOf(chest)))!);
+            legsModel = ModelPartReader.Read(File.ReadAllBytes(catalog.PathOf(legsOption)));
+            chestModel = ModelPartReader.Read(File.ReadAllBytes(catalog.PathOf(chest)));
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NullReferenceException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             note?.Invoke($"the chest beneath could not be read: {ex.Message}");
             return null;
         }
+        if (legsModel == null || chestModel == null)
+        {
+            note?.Invoke("the chest beneath could not be read");
+            return null;
+        }
+        int cells = WaistOverChest(garment, legsModel, chestModel);
         if (cells < OverBellyGate) return null;
         note?.Invoke($"its waist lies over {cells} cm² of {dir}'s \"{chest.Label}\": the chest beneath is refitted along");
         return new ChestBeneath(dir, catalog, chest, cells);
