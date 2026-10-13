@@ -21,7 +21,30 @@ internal static class AutoRefitUndo
     /// <param name="Removed">Options taken out.</param>
     /// <param name="Failed">Options that could not be, with why.</param>
     /// <param name="Empty">A mod Proteus made that now carries nothing at all: delete it.</param>
-    internal sealed record ModResult(string Dir, List<string> Groups, List<string> Removed, List<string> Failed, bool Empty);
+    /// <param name="Paths">Every body piece the options taken out served — what they published and what the record
+    /// said of them. An option sizing the chest and the legs together goes once, with the first piece undone; the
+    /// second finds nothing left to undo, and has to be named here to be left alone after.</param>
+    /// <param name="Recorded">Of <paramref name="Paths"/>, those the record had a refit of.</param>
+    internal sealed record ModResult(string Dir, List<string> Groups, List<string> Removed, List<string> Failed, bool Empty,
+                                     IReadOnlySet<string> Paths, IReadOnlySet<string> Recorded);
+
+    /// <summary>The model of a body piece: what an undone option's published files are read for.</summary>
+    private static readonly System.Text.RegularExpressions.Regex BodyModel = new(
+        @"_(top|dwn|glv|sho)\.mdl$",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>
+    /// The pieces to leave alone from now on after an undo: of <paramref name="paths"/> (see <see cref="ModResult.Paths"/>),
+    /// those the record had a refit of, or that are being worn. A piece the option merely published — the panty of a pair
+    /// option, never put on — would stay declined until "Refit what I'm wearing now", and putting it on later would do
+    /// nothing.
+    /// </summary>
+    internal static List<string> ToDecline(IReadOnlySet<string> paths, IReadOnlySet<string> recorded,
+                                           IEnumerable<string> worn)
+    {
+        var wearing = new HashSet<string>(worn, StringComparer.OrdinalIgnoreCase);
+        return paths.Where(p => recorded.Contains(p) || wearing.Contains(p)).ToList();
+    }
 
     /// <summary>
     /// Which of a mod's recorded refits of the piece at <paramref name="gamePath"/> the automatic refit made: those
@@ -54,6 +77,17 @@ internal static class AutoRefitUndo
         var going = Automatic(dir, record, gamePath, switchedOn);
         if (going.Count == 0) return null;
 
+        // What the options served, read before they go.
+        var recorded = record.Options.Where(e => going.Any(g => string.Equals(g.Group, record.GroupOf(e), StringComparison.OrdinalIgnoreCase)
+                                                                && string.Equals(g.Option, e.Name, StringComparison.OrdinalIgnoreCase)))
+                                     .Select(e => e.GamePath)
+                                     .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var paths = new HashSet<string>(recorded, StringComparer.OrdinalIgnoreCase);
+        foreach (var (group, option) in going)
+            foreach (var o in PenumbraModMeta.TryReadFileOptions(root, group) ?? [])
+                if (string.Equals(o.Name, option, StringComparison.OrdinalIgnoreCase))
+                    paths.UnionWith(o.Files.Keys.Where(path => BodyModel.IsMatch(path)));
+
         var removed = new List<string>();
         var failed = new List<string>();
         foreach (var (group, option) in going)
@@ -63,7 +97,8 @@ internal static class AutoRefitUndo
             else failed.Add($"{option}: {outcome.Message}");
         }
         var groups = going.Select(g => g.Group).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        return new ModResult(dir, groups, removed, failed, removed.Count > 0 && failed.Count == 0 && IsEmptyRefitMod(root));
+        return new ModResult(dir, groups, removed, failed, removed.Count > 0 && failed.Count == 0 && IsEmptyRefitMod(root),
+                             paths, recorded);
     }
 
     /// <summary>

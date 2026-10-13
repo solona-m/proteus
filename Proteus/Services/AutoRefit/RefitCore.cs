@@ -355,6 +355,180 @@ internal static class RefitCore
         return proposed;
     }
 
+    /// <summary>The chest and legs models: the two pieces one author option can size together (see <see cref="PlanOption"/>).</summary>
+    private static readonly System.Text.RegularExpressions.Regex PairModel = new(
+        @"_(top|dwn)\.mdl$",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>
+    /// The chest and legs models of <paramref name="race"/> that <paramref name="option"/> of <paramref name="group"/>
+    /// publishes, by slot ("_top", "_dwn") with each one's game path. Empty for no option. Only the one race: an option
+    /// shipping a woman's top and only a man's legs does not size a woman's legs.
+    /// </summary>
+    internal static Dictionary<string, string> BodySlotsOf(IEnumerable<PenumbraModMeta.Redirect> redirects, string group,
+                                                           string? option, string? race)
+    {
+        var slots = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (option == null) return slots;
+        string source = group + " / " + option;
+        foreach (var r in redirects)
+        {
+            if (!string.Equals(r.Source, source, StringComparison.OrdinalIgnoreCase)) continue;
+            if (PairModel.Match(r.GamePath) is not { Success: true } m) continue;
+            if (!string.Equals(BodySizeCatalog.RaceOf(r.GamePath), race, StringComparison.Ordinal)) continue;
+            slots.TryAdd("_" + m.Groups[1].Value.ToLowerInvariant(), r.GamePath);
+        }
+        return slots;
+    }
+
+    /// <summary>
+    /// What a refit's option is called and which option it is cut from (see <see cref="PlanOption"/>).
+    /// </summary>
+    /// <param name="Paired">The option sizes the chest and the legs together, so the refits of both share it.</param>
+    /// <param name="PairPaths">When paired, the chest's and the legs' game paths by slot.</param>
+    /// <param name="Note">Why a pair option was not used as one, for the log; null otherwise.</param>
+    internal sealed record PairPlan(string Option, string? CutFrom, bool Paired, IReadOnlyDictionary<string, string> PairPaths,
+                                    string? Note);
+
+    /// <summary>
+    /// The option a refit of the piece drawn at <paramref name="drawnPath"/> is saved as, and the option it is cut from.
+    /// <para/>
+    /// Cut from what the group selects NOW, where that publishes the very file drawn: a job sees the piece as it was when
+    /// it went on, and the first option in the manifest to publish a file is not always the one worn — several of an
+    /// author's options can share one legs model. Failing that, from the first option publishing it.
+    /// <para/>
+    /// Where that option sizes the chest AND the legs — Arabella's "Body Options", each option a top and a bottom — the
+    /// refits of both pieces share ONE option, named for both sizes chosen: two options, one per piece, would each switch
+    /// the other off, as single-choice options do. Only in a single-choice group, only with both sizes CHOSEN (a legs refit
+    /// refuses without one, so a name built on a fallback legs size would carry the author's legs for good), and never
+    /// over a size made by hand of that name. Otherwise <paramref name="proposed"/>, today's name for this piece alone.
+    /// </summary>
+    /// <param name="single">The group is single-choice.</param>
+    /// <param name="selected">What the collection ticks in the group now; null for nothing.</param>
+    /// <param name="drawnPath">The game path the piece is drawn at — not the path a racial bake saves it at.</param>
+    /// <param name="drawnRel">The file drawn there, in the mod.</param>
+    /// <param name="chosen">Whether the player chose a size for a slot.</param>
+    /// <param name="targetFor">The size a slot is refitted onto.</param>
+    internal static PairPlan PlanOption(IReadOnlyList<PenumbraModMeta.Redirect> redirects, BodyRetargetWriter.Record? record,
+                                        string group, bool single, IReadOnlyCollection<string>? selected,
+                                        string drawnPath, string drawnRel, string bodyName, Func<string, bool> chosen,
+                                        Func<string, BodyOption?> targetFor, string proposed)
+    {
+        var none = new Dictionary<string, string>(StringComparer.Ordinal);
+        string want = Normal(drawnRel);
+        string? cutFrom = (selected ?? []).FirstOrDefault(o => redirects.Any(
+                              d => string.Equals(d.Source, group + " / " + o, StringComparison.OrdinalIgnoreCase)
+                                   && string.Equals(d.GamePath, drawnPath, StringComparison.OrdinalIgnoreCase)
+                                   && Normal(d.File) == want))
+                          ?? BodyRetargetWriter.OptionOfFile(redirects, drawnRel, group);
+        if (!single) return new PairPlan(proposed, cutFrom, false, none, null);
+
+        var pair = BodySlotsOf(redirects, group, cutFrom, BodySizeCatalog.RaceOf(drawnPath));
+        if (!pair.ContainsKey("_top") || !pair.ContainsKey("_dwn") || !chosen("_top") || !chosen("_dwn")
+            || targetFor("_top") is not { } chest || targetFor("_dwn") is not { } legs)
+            return new PairPlan(proposed, cutFrom, false, none, null);
+
+        string merged = OptionName(bodyName, [chest.Label, legs.Label]);
+        bool handMade = record?.Options.Any(e => !e.Auto
+                                                 && string.Equals(record.GroupOf(e), group, StringComparison.OrdinalIgnoreCase)
+                                                 && string.Equals(e.Name, merged, StringComparison.OrdinalIgnoreCase)) ?? false;
+        if (handMade)
+            return new PairPlan(proposed, cutFrom, false, none, $"\"{merged}\" is held by a size made by hand");
+        return new PairPlan(merged, cutFrom, true, pair, null);
+    }
+
+    /// <summary>
+    /// Whether a piece of the pair other than the one at <paramref name="ownPath"/> is drawn now. Only then must an author
+    /// size fit both: with the legs not worn, switching to the author's exact chest switches nothing worn off, and keeps
+    /// the author's own model — the legs' refit, when they go on, is cut from that option, its chest and all.
+    /// </summary>
+    internal static bool OtherPieceWorn(IReadOnlyDictionary<string, string> pairPaths, string ownPath,
+                                        IReadOnlySet<string>? drawn)
+        => drawn != null && pairPaths.Values.Any(p => !string.Equals(p, ownPath, StringComparison.OrdinalIgnoreCase)
+                                                      && drawn.Contains(p));
+
+    /// <summary>
+    /// The options of <paramref name="group"/> that publish <paramref name="file"/> at <paramref name="gamePath"/>, in the
+    /// author's order, less <paramref name="exclude"/> — every option a size found by its file is, since an author's
+    /// options can share one model.
+    /// </summary>
+    internal static List<string> OptionsWithFile(IEnumerable<PenumbraModMeta.Redirect> redirects, string group,
+                                                 string gamePath, string file, IReadOnlySet<string> exclude)
+    {
+        string prefix = group + " / ", want = Normal(file);
+        return redirects.Where(d => d.Source.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                                    && string.Equals(d.GamePath, gamePath, StringComparison.OrdinalIgnoreCase)
+                                    && Normal(d.File) == want)
+                        .Select(d => d.Source[prefix.Length..])
+                        .Where(o => !exclude.Contains(o))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+    }
+
+    /// <summary>
+    /// The author's sizes of the piece at <paramref name="gamePath"/> in <paramref name="group"/>: each option publishing
+    /// it, with its file, less <paramref name="exclude"/> — refits Proteus saved there, which are copies of ours.
+    /// </summary>
+    internal static List<(string Option, string File)> SizesOf(IEnumerable<PenumbraModMeta.Redirect> redirects, string group,
+                                                               string gamePath, IReadOnlySet<string> exclude)
+    {
+        string prefix = group + " / ";
+        return redirects.Where(d => string.Equals(d.GamePath, gamePath, StringComparison.OrdinalIgnoreCase)
+                                    && d.Source.StartsWith(prefix, StringComparison.Ordinal))
+                        .Select(d => (Option: d.Source[prefix.Length..], d.File))
+                        .Where(s => !exclude.Contains(s.Option))
+                        .ToList();
+    }
+
+    /// <summary>
+    /// Whether switching <paramref name="sizeGroup"/> to an author's size must fit every piece of a pair: the option the
+    /// refit is cut from sizes the chest and the legs together, the other piece is worn, and it is that very group.
+    /// </summary>
+    internal static bool PairMustFitAll(PairPlan? plan, bool otherWorn, string? planGroup, string sizeGroup)
+        => plan is { Paired: true } && otherWorn && string.Equals(planGroup, sizeGroup, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The author's option that is the size chosen for every piece of a pair at once, or null when none is: this piece's
+    /// size (<paramref name="ownAuthored"/>, found by its file) and, for each other piece of
+    /// <paramref name="pairPaths"/>, what <paramref name="authoredOf"/> finds among that piece's sizes — each widened to
+    /// every option sharing the file found, and the first common to all taken (<see cref="AuthorOptionForPair"/>).
+    /// </summary>
+    /// <param name="authoredOf">The author's option among a piece's sizes that is the size chosen for it, given its slot,
+    /// its game path and its sizes; null for none.</param>
+    internal static string? AuthorOptionForPieces(IReadOnlyList<PenumbraModMeta.Redirect> redirects, string sizeGroup,
+                                                  string ownPath, string ownAuthored,
+                                                  IReadOnlyDictionary<string, string> pairPaths,
+                                                  Func<string, string, IReadOnlyList<(string Option, string File)>, string?> authoredOf,
+                                                  IReadOnlySet<string> exclude)
+    {
+        IReadOnlyList<string>? Fitting(string path, IReadOnlyList<(string Option, string File)> sizes, string? authored)
+            => sizes.FirstOrDefault(s => string.Equals(s.Option, authored, StringComparison.OrdinalIgnoreCase)) is
+                   { File: { } file }
+                ? OptionsWithFile(redirects, sizeGroup, path, file, exclude)
+                : null;
+
+        var fitting = new List<IReadOnlyList<string>?> { Fitting(ownPath, SizesOf(redirects, sizeGroup, ownPath, exclude), ownAuthored) };
+        foreach (var (slot, path) in pairPaths)
+        {
+            if (string.Equals(path, ownPath, StringComparison.OrdinalIgnoreCase)) continue;
+            var sizes = SizesOf(redirects, sizeGroup, path, exclude);
+            fitting.Add(Fitting(path, sizes, authoredOf(slot, path, sizes)));
+        }
+        return AuthorOptionForPair(fitting);
+    }
+
+    /// <summary>
+    /// The author's option that is the size chosen for EVERY piece of a pair at once — the first, in the author's order,
+    /// that each piece's list of fitting options (<see cref="OptionsWithFile"/>) holds — or null when none is. Switching
+    /// the group to an option that fits only one piece would switch the other piece's size off.
+    /// </summary>
+    /// <param name="fitting">Per piece, the options carrying its chosen size; null for a piece no option carries.</param>
+    internal static string? AuthorOptionForPair(IReadOnlyList<IReadOnlyList<string>?> fitting)
+    {
+        if (fitting.Count == 0 || fitting.Any(f => f == null)) return null;
+        return fitting[0]!.FirstOrDefault(o => fitting.Skip(1).All(f => f!.Contains(o, StringComparer.OrdinalIgnoreCase)));
+    }
+
     /// <summary>What the record says a refit was made from: the sizes, behind the body mod's name when it was another.</summary>
     internal static string LabelFrom(string? sourceBodyName, IEnumerable<string> sourceLabels)
     {

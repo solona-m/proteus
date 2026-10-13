@@ -500,6 +500,16 @@ internal static class BodyRetargetWriter
         return rel;
     }
 
+    /// <summary>
+    /// Every file the mod still publishes anywhere, normalised (see <see cref="Norm"/>) — read after an option is taken
+    /// out, so undo never deletes a refit another option still points at. One option sizing the chest and the legs
+    /// together can carry the chest refit of an option saved before it, and undoing that one must leave the file.
+    /// </summary>
+    private static HashSet<string> Published(string modRoot)
+        => PenumbraModMeta.ReadAllRedirects(modRoot).Select(r => Norm(r.File)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    private static string Norm(string rel) => rel.Replace('\\', '/').Trim('/');
+
     private static string Removed(string optionName)
         => string.Format(Loc.Localize("Parts.Retarget.Undo.Removed.Fmt", "Removed \"{0}\"."), optionName);
 
@@ -521,8 +531,11 @@ internal static class BodyRetargetWriter
                     var removed = PenumbraModMeta.RemoveOption(modRoot, groupName, optionName);
                     ForgetOption(modRoot, groupName, optionName);
                     if (removed != null)
-                        foreach (var rel in removed.Values.Where(Ours))
+                    {
+                        var stillPublished = Published(modRoot);
+                        foreach (var rel in removed.Values.Where(Ours).Where(rel => !stillPublished.Contains(Norm(rel))))
                             DeleteQuietly(Path.Combine(modRoot, rel.Replace('/', Path.DirectorySeparatorChar)));
+                    }
                     PruneEmptyFolders(Path.Combine(modRoot, Subfolder));
                     return new Outcome(true, groupName, optionName, Removed(optionName));
                 }
@@ -559,8 +572,11 @@ internal static class BodyRetargetWriter
                 // The files last, so a crash between the two leaves an unreferenced folder rather than a group
                 // pointing at a file that is gone — Penumbra treats the second as a broken mod.
                 if (going.Files != null)
-                    foreach (var rel in going.Files.Values.Where(Ours))
+                {
+                    var stillPublished = Published(modRoot);
+                    foreach (var rel in going.Files.Values.Where(Ours).Where(rel => !stillPublished.Contains(Norm(rel))))
                         DeleteQuietly(Path.Combine(modRoot, rel.Replace('/', Path.DirectorySeparatorChar)));
+                }
 
                 PruneEmptyFolders(Path.Combine(modRoot, Subfolder));
 
