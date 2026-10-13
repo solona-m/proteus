@@ -107,7 +107,7 @@ internal static class SiblingPiece
     internal static string CacheSuffix(IReadOnlyList<Candidate> siblings, Func<string, string> stamp)
         => siblings.Count == 0
             ? ""
-            : "|sib=" + string.Join(";", siblings.Select(c => RefitCore.Normal(c.File) + "@" + stamp(c.File)));
+            : "|sib2=" + string.Join(";", siblings.Select(c => RefitCore.Normal(c.File) + "@" + stamp(c.File)));
 
     /// <summary>
     /// A sibling's model, its parts and its rig, read from the mod — or null, noted, when it cannot be: missing, locked,

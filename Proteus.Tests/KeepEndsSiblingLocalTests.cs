@@ -107,4 +107,73 @@ public class KeepEndsSiblingLocalTests(ITestOutputHelper output)
                       + $"{byCloth.Inside}");
         }
     }
+
+    private const string Rue = LocalData.Mods + ":hs-Rue+-2.2.7-y0f";
+    private const string FixPubes = LocalData.Mods + ":fix pubes";
+    private const string SmallGlove = "chest size/small/chara/equipment/e0068/model/c0201e0068_glv.mdl";
+
+    /// <summary>
+    /// The size set's reading of Geometric's jacket onto each of Rue's chests, as "Every size for other bodies" reads it:
+    /// its "Chest Size / Small" option, the top in that option read over the body mods with Rue preferred. Per size: the
+    /// cloth inside Rue's chest sized by the top and by the old cloth reading, and the triangles each leaves turned over
+    /// and where — measured inside the pass.
+    /// </summary>
+    [LocalDataFact(Geometric, Bibo, IvcsBibo, FixPubes, Rue)]
+    [Trait("Plan", "AC-jacket-refit-12")]
+    public void Geometrics_jacket_onto_rue_sized_by_its_top_against_its_cloth()
+    {
+        string root = LocalData.Path(Geometric);
+        var bodies = Bodies(Bibo, IvcsBibo, FixPubes, Rue);
+        var rue = bodies[3];
+        BodySizeCatalog? CatalogOf(string dir)
+            => bodies.FirstOrDefault(b => string.Equals(b.Dir, dir, StringComparison.OrdinalIgnoreCase)).Catalog;
+
+        var redirects = PenumbraModMeta.ReadAllRedirects(root);
+        var top = Assert.Single(SiblingPiece.Find(redirects, BodyRetargetWriter.ReadRecord(root), SmallGlove, "_top", Race));
+        var topBytes = File.ReadAllBytes(BodySizeCatalog.ResolveCaseInsensitive(root, top.File));
+        var sibling = RefitCore.DetectSource(ModelPartReader.Read(topBytes)!, BonesOf(topBytes), "_top", Race, bodies,
+                                             rue.Dir, _ => true)!;
+        output.WriteLine($"Small's top reads {sibling.Dir} / {sibling.Option.Label} ({sibling.Confidence})");
+
+        var bytes = File.ReadAllBytes(BodySizeCatalog.ResolveCaseInsensitive(root, SmallGlove));
+        var parts = ModelPartReader.Read(bytes)!;
+        var bones = BonesOf(bytes);
+        var reading = KeepEnds.Read("_glv", parts, bytes)!;
+        Func<ModelParts, string, AutoRefitDecisions.Pick?> detect
+            = (view, slot) => RefitCore.DetectSource(view, bones, slot, Race, bodies, rue.Dir, _ => true);
+        var byCloth = KeepEnds.Find(reading, parts, bones, Race, detect, CatalogOf);
+        var byTop = KeepEnds.Find(reading, parts, bones, Race, detect, CatalogOf, sibling: sibling);
+        Assert.Equal(KeepEnds.Route.Sibling, byTop.Route);
+        Assert.Equal(sibling.Option, byTop.Pick!.Option);
+        Assert.NotEqual(KeepEnds.Route.Sibling, byCloth.Route);
+        output.WriteLine($"by its top: {byTop.Pick.Dir} / {byTop.Pick.Option.Label} (from cloth: {byTop.Pick.FromCloth}); "
+                       + $"by its cloth: route {KeepEnds.Letter(byCloth.Route)}, {byCloth.Pick?.Dir} / {byCloth.Pick?.Option.Label}");
+
+        foreach (string size in new[] { "Small", "Medium", "Large" })
+        {
+            var chest = rue.Catalog.For("_top", Race).First(o => o.Label == "None · " + size);
+            BodyOption? TargetFor(string slot) => slot == "_top" ? chest
+                : AutoRefitDecisions.Companion(rue.Catalog.For(slot, Race), chest, null);
+            string chestPath = rue.Catalog.PathOf(chest);
+            (int Inside, int Near, int Folded) RefitFrom(KeepEnds.Found from)
+            {
+                var refit = Assert.IsType<KeepEnds.Refit>(KeepEnds.Decide(from, reading, bones, Race, rue.Dir, CatalogOf, TargetFor));
+                var sourceCat = CatalogOf(refit.Source.Dir)!;
+                Assert.Null(KeepEnds.BuildPairs(reading, sourceCat.PathOf(refit.Source.Option), chestPath,
+                                                refit.EndFrom == null ? null : sourceCat.PathOf(refit.EndFrom),
+                                                refit.EndTo == null ? null : rue.Catalog.PathOf(refit.EndTo),
+                                                false, _ => (null, null), s => s, null, null, out var limb, out var end));
+                var plan = KeepEnds.Plan(parts, bytes, reading, limb, end, across: true);
+                var on = BodySizeMatch.ClothAgainst(ModelPartReader.Read(plan.Model)!, chestPath)!.Value;
+                return (on.Inside, on.Near, plan.Report.Folded);
+            }
+            var a = RefitFrom(byTop);
+            var b = RefitFrom(byCloth);
+            output.WriteLine($"Rue {size}: by its top {a.Inside}/{a.Near} inside, {a.Folded} folded; "
+                           + $"by its cloth {b.Inside}/{b.Near} inside, {b.Folded} folded");
+            // Measured 32/33/34 against 89/99/100, folded 0/2/3 against 0/0/2 (amendment 12).
+            Assert.True(a.Inside < b.Inside, $"Rue {size}: {a.Inside} inside sized by its top, {b.Inside} by its cloth");
+            Assert.True(a.Folded <= 3, $"Rue {size}: {a.Folded} triangles left folded");
+        }
+    }
 }

@@ -99,6 +99,39 @@ public class KeepEndsSiblingTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-jacket-refit-13")]
+    public void Skin_too_little_to_read_but_cloth_on_the_size_is_sized_by_the_sibling_through_its_cloth()
+    {
+        // Skin present but not enough to rank on the size, while the cloth over it is near and clear: the sibling is
+        // taken, and its same-shape check reads the cloth.
+        var (reading, parts) = ReadShoe(legSkin: true);
+        var tooLittle = KeepEnds.Find(reading, parts, NoBones, "0201", Detect(null, Pick(FeetM)), _ => Body,
+                                      (_, options, _, skin) => skin
+                                          ? new BodySizeMatch.Ranking(Confidence.TooLittle, [new BodySizeMatch.Score(options[0], 0f, 0.03f)])
+                                          : null,
+                                      sibling: Pick(LegsM), clothOn: On(400, 0));
+        Assert.Equal(KeepEnds.Route.Sibling, tooLittle.Route);
+        Assert.True(tooLittle.Pick!.FromCloth);
+
+        // A skin ranking that itself fell back to the cloth is not skin evidence either.
+        var byCloth = KeepEnds.Find(reading, parts, NoBones, "0201", Detect(null, Pick(FeetM)), _ => Body,
+                                    (_, options, _, skin) => skin
+                                        ? new BodySizeMatch.Ranking(Confidence.Likely, [new BodySizeMatch.Score(options[0], 0f, 0.002f)],
+                                                                    FromCloth: true)
+                                        : null,
+                                    sibling: Pick(LegsM), clothOn: On(400, 0));
+        Assert.Equal(KeepEnds.Route.Sibling, byCloth.Route);
+        Assert.True(byCloth.Pick!.FromCloth);
+        var none = KeepEnds.Find(reading, parts, NoBones, "0201", Detect(null, Pick(FeetM)), _ => Body,
+                                 (_, options, _, skin) => skin
+                                     ? new BodySizeMatch.Ranking(Confidence.Likely, [new BodySizeMatch.Score(options[0], 0f, 0.002f)],
+                                                                 FromCloth: true)
+                                     : null,
+                                 sibling: Pick(LegsM), clothOn: On(12, 0));
+        Assert.NotEqual(KeepEnds.Route.Sibling, none.Route);   // read as before: here by its cloth (route B)
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-jacket-refit-7")]
     [Trait("Plan", "EDGE-jacket-refit-35")]
     public void A_shoe_whose_few_shin_vertices_reach_no_legs_is_not_sized_by_them()
@@ -215,7 +248,7 @@ public class KeepEndsSiblingTests
         // sibling the author changed is read again; one put on again is not, without its siblings being opened.
         Assert.Equal("", SiblingPiece.CacheSuffix([], _ => throw new InvalidOperationException("stamped")));
         SiblingPiece.Candidate[] medium = [new(Top, "Chest Size\\Medium\\top.mdl", "Chest Size / Medium")];
-        Assert.Equal("|sib=chest size/medium/top.mdl@100:7", SiblingPiece.CacheSuffix(medium, _ => "100:7"));
+        Assert.Equal("|sib2=chest size/medium/top.mdl@100:7", SiblingPiece.CacheSuffix(medium, _ => "100:7"));
         Assert.NotEqual(SiblingPiece.CacheSuffix(medium, _ => "100:7"), SiblingPiece.CacheSuffix(medium, _ => "100:8"));
         SiblingPiece.Candidate[] small = [new(Top, "Chest Size\\Small\\top.mdl", "Chest Size / Small")];
         Assert.NotEqual(SiblingPiece.CacheSuffix(medium, _ => "1"), SiblingPiece.CacheSuffix(small, _ => "1"));
@@ -342,6 +375,7 @@ public class KeepEndsSiblingTests
 
     [Fact]
     [Trait("Plan", "EDGE-jacket-refit-5")]
+    [Trait("Plan", "EDGE-jacket-refit-33")]
     public void A_file_every_size_shares_is_not_read_at_all()
     {
         var redirects = new List<PenumbraModMeta.Redirect>();
@@ -404,6 +438,7 @@ public class KeepEndsSiblingTests
 
     [Fact]
     [Trait("Plan", "AC-jacket-refit-1")]
+    [Trait("Plan", "EDGE-jacket-refit-32")]
     public void Only_the_same_option_of_a_multi_group_is_a_sibling()
     {
         List<PenumbraModMeta.Redirect> together =

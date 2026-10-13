@@ -17,6 +17,40 @@ namespace Proteus.Services;
 /// </summary>
 internal static partial class SizeSetRefit
 {
+    /// <summary>
+    /// What a glove's or shoe's sibling (see <see cref="SiblingPiece"/>) was made on, as the size set reads it: off its own
+    /// skin, in the slot and race its own path names, over the body mods given — never the game's own body, which the size
+    /// set reads no chest or legs off — and kept in <paramref name="readings"/> for the run, so the sibling's own sizes and
+    /// the glove's are cut from one reading. Null, noted, when it cannot be read: a sibling never fails the glove.
+    /// </summary>
+    /// <param name="preferred">The body preferred on a tie for a slot and race (see <see cref="Preferred"/>).</param>
+    internal static AutoRefitDecisions.Pick? SiblingReading(string root, SiblingPiece.Candidate c, string limb,
+                                                           IReadOnlyList<(string Dir, BodySizeCatalog Catalog)> bodies,
+                                                           Func<string, string, string> preferred,
+                                                           Dictionary<string, AutoRefitDecisions.Pick?> readings,
+                                                           Action<string> note)
+    {
+        var (readSlot, race) = AutoRefitWatcher.ReadAs(c.GamePath);
+        string slot = readSlot ?? limb, prefer = preferred(slot, race);
+        string key = ReadingKey(c.File, slot, race, prefer);
+        if (readings.TryGetValue(key, out var known))
+        {
+            note($"its {(limb == "_top" ? "chest" : "legs")} piece {c.File} was read before in this run");
+            return known;
+        }
+        AutoRefitDecisions.Pick? pick = null;
+        if (SiblingPiece.TryOpen(root, c.File, note) is { } opened)
+            try
+            {
+                pick = RefitCore.DetectSource(opened.Model, opened.Bones, slot, race, bodies, prefer, _ => true, note);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                note($"{c.File} could not be read: {ex.Message}");
+            }
+        return readings[key] = pick;
+    }
+
     private static int RunEndsPiece(Request request, Piece piece, UVRemapService? uvRemap, IPluginLog log,
                                     Action<string> progress, List<string> notes,
                                     Dictionary<string, AutoRefitDecisions.Pick?> readings, CancellationToken ct)
@@ -55,20 +89,7 @@ internal static partial class SizeSetRefit
         var record = BodyRetargetWriter.ReadRecord(root);
         void Note(string note) => log.Information("[Proteus] size set: {0}: {1}", piece.Label, note);
         AutoRefitDecisions.Pick? ReadSibling(SiblingPiece.Candidate c)
-        {
-            string slot = AutoRefitWatcher.ReadAs(c.GamePath).Slot ?? limb, siblingRace = AutoRefitWatcher.ReadAs(c.GamePath).Race;
-            string key = ReadingKey(c.File, slot, siblingRace, Preferred(request, slot, siblingRace, mods[0].Dir));
-            if (readings.TryGetValue(key, out var known))
-            {
-                Note($"its {(limb == "_top" ? "chest" : "legs")} piece {c.File} was read before in this run");
-                return known;
-            }
-            var pick = SiblingPiece.TryOpen(root, c.File, Note) is { } opened
-                ? RefitCore.DetectSource(opened.Model, opened.Bones, slot, siblingRace, bodiesOnly,
-                                         Preferred(request, slot, siblingRace, mods[0].Dir), _ => true, Note)
-                : null;
-            return readings[key] = pick;
-        }
+            => SiblingReading(root, c, limb, bodiesOnly, (slot, r) => Preferred(request, slot, r, mods[0].Dir), readings, Note);
         // The game's own body, last, as the automatic refit searches: a shoe or glove made on it shares nothing with any
         // body mod. Never "enabled" — no collection turns it on — so it wins no tie a body mod is in, as there.
         var game = request.GameBody?.Invoke(race) is { IsBody: true } g ? g : null;

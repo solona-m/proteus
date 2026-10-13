@@ -1752,9 +1752,18 @@ public class SizeSetRefitTests(ITestOutputHelper output)
             var options = Options(copy, "Chest Size");
             var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
             Assert.Equal(0, SizeSetRefit.Run(request, new UVRemapService(log, "."), log, _ => { }, CancellationToken.None).Made);
-            var remade = SizeSetRefit.Run(request with { Remake = true }, new UVRemapService(log, "."), log, _ => { },
-                                          CancellationToken.None);
+            var remakeLog = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
+            var remade = SizeSetRefit.Run(request with { Remake = true }, new UVRemapService(remakeLog, "."), remakeLog,
+                                          _ => { }, CancellationToken.None);
             Assert.True(remade.Made > 0);
+            // The jacket's sizes themselves were made again — sized by the top — not only the top's.
+            var remadeLines = remakeLog.ReceivedCalls().Select(c => c.GetArguments())
+                                       .Where(a => a.FirstOrDefault() as string is { } t
+                                                   && t.Contains("triangles left folded", StringComparison.Ordinal))
+                                       .Select(a => (object[])a[1]!).ToList();
+            Assert.Equal(hands.Count, remadeLines.Count(a => (string)a[0] == "Hands — e0068"));
+            Assert.Contains(remakeLog.ReceivedCalls().Select(c => c.GetArguments()),
+                            a => a.FirstOrDefault() as string is { } t && t.Contains("sized by its {1} piece", StringComparison.Ordinal));
             Assert.Equal(options, Options(copy, "Chest Size"));
             Assert.DoesNotContain("\"FileVersion\": 3", File.ReadAllText(Path.Combine(copy, PenumbraModMeta.MetaFile)));
         }
@@ -1762,6 +1771,38 @@ public class SizeSetRefitTests(ITestOutputHelper output)
         {
             if (Directory.Exists(copy)) Directory.Delete(copy, recursive: true);
         }
+    }
+
+    /// <summary>
+    /// A sibling is read over the body mods the run searches, never the game's own body: one made on a body not among
+    /// them is not taken, and the glove is read as before. Read once, it is not read again.
+    /// </summary>
+    [LocalDataFact(Rue, Bibo)]
+    [Trait("Plan", "EDGE-jacket-refit-34")]
+    [Trait("Plan", "AC-jacket-refit-13")]
+    public void A_sibling_made_on_a_body_not_searched_is_not_taken()
+    {
+        string rueRoot = LocalData.Path(Rue);
+        var rue = BodySizeCatalog.Read(rueRoot);
+        var chest = rue.For("_top", "0201").First();
+        var candidate = new SiblingPiece.Candidate(chest.GamePath, chest.Rel, "");
+        (string, BodySizeCatalog)[] biboOnly = [(Path.GetFileName(LocalData.Path(Bibo)), BodySizeCatalog.Read(LocalData.Path(Bibo)))];
+        (string, BodySizeCatalog)[] withRue = [.. biboOnly, (Path.GetFileName(rueRoot), rue)];
+        var notes = new List<string>();
+
+        var offBody = SizeSetRefit.SiblingReading(rueRoot, candidate, "_top", biboOnly, (_, _) => biboOnly[0].Item1, [], notes.Add);
+        Assert.True(offBody == null || !AutoRefitDecisions.Proceed(offBody.Confidence),
+                    $"a Rue chest read over Bibo+ alone gave {offBody?.Option.Label} ({offBody?.Confidence})");
+        Assert.Null(SiblingPiece.Agree([candidate], _ => offBody));
+
+        var readings = new Dictionary<string, AutoRefitDecisions.Pick?>(StringComparer.Ordinal);
+        var onRue = SizeSetRefit.SiblingReading(rueRoot, candidate, "_top", withRue, (_, _) => withRue[1].Item1, readings, notes.Add);
+        Assert.NotNull(onRue);
+        Assert.Equal(Path.GetFileName(rueRoot), onRue!.Dir);
+        notes.Clear();
+        Assert.Same(onRue, SizeSetRefit.SiblingReading(rueRoot, candidate, "_top", withRue, (_, _) => withRue[1].Item1,
+                                                       readings, notes.Add));
+        Assert.Contains("read before in this run", Assert.Single(notes));
     }
 
     /// <summary>A shoe sized in its legs' option finds those legs beside it.</summary>
