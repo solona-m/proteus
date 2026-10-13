@@ -888,7 +888,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
                 bakeTo = 0;
             }
         }
-        string race = bakeTo != 0 ? $"{bakeTo:D4}" : BodySizeCatalog.RaceOf(r.Worn.GamePath) ?? "0201";
+        string race = bakeTo != 0 ? $"{bakeTo:D4}" : ReadAs(r.Worn.GamePath).Race;
         bool male = BodySizeCatalog.IsMaleRace(race);
 
         if (ModelPartReader.Read(bytes) is not { } garment)
@@ -1012,21 +1012,19 @@ public sealed partial class AutoRefitWatcher : IDisposable
         if (WhereItGoes(r, g, targetMod, redirects, item) is not { } where) return;
         var (root, group, cutFrom) = where;
 
-        var chosenNow = ChosenTargets(TargetFor);
-        bool shared = root != null && RefitCore.IsSharedSingleGroup(redirects, ownRecord, group,
-                                                                     RefitCore.SingleGroups(root));
         string OptionFor(IEnumerable<(string Slot, BodyOption From, BodyOption To)> parts)
-        {
-            var list = parts.ToList();
-            string proposed = RefitCore.OptionName(targetMod.Name,
-                                                   new[] { target.Label }.Concat(list.Select(p => p.To.Label)));
-            return shared
-                ? RefitCore.JoinOption(ownRecord, group, savePath, targetMod.Dir, chosenNow,
-                                       TargetsOf(primary, target, list), proposed)
-                : proposed;
-        }
+            => RefitCore.OptionName(targetMod.Name, new[] { target.Label }.Concat(parts.Select(p => p.To.Label)));
 
+        // Sized together with other pieces in one of the author's single-choice groups: into the option another piece's
+        // refit onto these sizes went into, so switching one on does not switch the other off. Worked out once: a part
+        // left out below still goes into the option joined here.
         string option = OptionFor(others);
+        string? joined = null;
+        if (root != null && RefitCore.IsSharedSingleGroup(redirects, ownRecord, group, RefitCore.SingleGroups(root))
+            && RefitCore.JoinOption(ownRecord, group, savePath, targetMod.Dir, ChosenTargets(TargetFor),
+                                    TargetsOf(primary, target, others), option) is { } join
+            && join != option)
+            option = joined = join;
         if (await LetBeOrPutBack(r, g, root, group, option, savePath, cutFrom, item, targetMod.Name, ct,
                                  (pick.Dir, pick.Option.Rel)))
             return;
@@ -1062,7 +1060,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
             pairs.Add(pair);
             kept.Add(other);
         }
-        option = OptionFor(kept);
+        option = joined ?? OptionFor(kept);
         ct.ThrowIfCancellationRequested();
 
         AssertOffFramework("the refit");
@@ -1386,6 +1384,15 @@ public sealed partial class AutoRefitWatcher : IDisposable
                                                            source?.FromCloth ?? false, otherFrom));
         return (source, otherFrom);
     }
+
+    /// <summary>
+    /// The slot and race a piece drawn at <paramref name="gamePath"/>, not baked, is read in — the walk's slot (see
+    /// <see cref="DrawnModelPaths.EquippedPartModelsFromModels"/>) and the path's race. One answer for a piece's own refit
+    /// and for a glove reading it as its sibling, so both read it under one cache key. Null slot for no body part.
+    /// </summary>
+    internal static (string? Slot, string Race) ReadAs(string gamePath)
+        => (DrawnModelPaths.EquippedPartModelsFromModels([gamePath]).Keys.Select(s => "_" + s).FirstOrDefault(),
+            BodySizeCatalog.RaceOf(gamePath) ?? "0201");
 
     /// <summary>The detection cache's key for a garment read in <paramref name="slot"/> — see
     /// <see cref="DetectionCache.KeyOf"/>.</summary>

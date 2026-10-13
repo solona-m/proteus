@@ -96,10 +96,17 @@ internal static class SiblingPiece
         return agreed;
     }
 
-    /// <summary>What a reading made by a sibling adds to the piece's cache key: "" for none, so a piece without one keeps
-    /// the key — and the reading — it always had.</summary>
-    internal static string CacheSuffix(AutoRefitDecisions.Pick? sibling)
-        => sibling == null ? "" : $"|sib={sibling.Dir.ToLowerInvariant()}/{RefitCore.Normal(sibling.Option.Rel)}";
+    /// <summary>
+    /// What a piece's siblings add to its cache key: "" for none, so a piece without one keeps the key — and the reading —
+    /// it always had; otherwise each sibling's file as it stands on disk (<paramref name="stamp"/>: its length and time
+    /// written), so a piece read by its cloth before it had a sibling is read again, as is one whose sibling the author
+    /// changed — and a piece put on again is not, without its siblings even being opened.
+    /// </summary>
+    /// <param name="stamp">A file's state on disk, by its path in the mod.</param>
+    internal static string CacheSuffix(IReadOnlyList<Candidate> siblings, Func<string, string> stamp)
+        => siblings.Count == 0
+            ? ""
+            : "|sib=" + string.Join(";", siblings.Select(c => RefitCore.Normal(c.File) + "@" + stamp(c.File)));
 
     /// <summary>Whether a piece is sized by its siblings at all: a mod's piece, refitted at the race it is drawn — one
     /// baked for another race is read in that race's sizes, which its siblings are not.</summary>

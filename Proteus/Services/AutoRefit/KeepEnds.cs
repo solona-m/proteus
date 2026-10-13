@@ -158,7 +158,8 @@ internal static partial class KeepEnds
                                Func<string, BodySizeCatalog?> catalogOf,
                                Func<ModelParts, IReadOnlyList<BodyOption>, BodySizeCatalog, bool, BodySizeMatch.Ranking?>? rank = null,
                                AutoRefitDecisions.Pick? sibling = null,
-                               Func<ModelParts, BodyOption, BodySizeCatalog, (int Near, int Inside, float Gap)?>? clothOn = null)
+                               Func<ModelParts, BodyOption, BodySizeCatalog, (int Near, int Inside, float Gap)?>? clothOn = null,
+                               Action<string>? note = null)
     {
         rank ??= (view, options, catalog, skin) => skin ? BodySizeMatch.Rank(view, options, catalog.PathOf, bones)
                                                         : BodySizeMatch.RankByCloth(view, options, catalog.PathOf);
@@ -171,8 +172,12 @@ internal static partial class KeepEnds
 
         // The chest or legs piece beside it in the same option, read off its own skin — provided the arm or leg sits on
         // that size: skin there, or cloth near it; and its cloth clears it, as cloth made on it would.
-        if (SiblingFits(reading, race, sibling, limbSkin, catalogOf, clothOn) is { } sib)
-            return new Found(Route.Sibling, sib);
+        if (sibling != null)
+        {
+            if (SiblingFits(reading, race, sibling, limbSkin, catalogOf, clothOn, out string why) is { } sib)
+                return new Found(Route.Sibling, sib);
+            note?.Invoke(why);
+        }
 
         // Too little leg skin to read: which body from the foot, as the piece was always read; which size of its legs
         // from the leg's cloth. A boot's shaft was refitted so before, as a part the boot reaches, and still is.
@@ -208,19 +213,36 @@ internal static partial class KeepEnds
     /// <paramref name="sibling"/> as the limb's reading, or null when it is not one: unclear, a size the body no longer
     /// has in the limb's slot, a limb that does not reach it, or cloth that sits inside it.
     /// </summary>
-    private static AutoRefitDecisions.Pick? SiblingFits(Reading reading, string race, AutoRefitDecisions.Pick? sibling,
+    /// <param name="why">Why not, for the log; "" when it is.</param>
+    private static AutoRefitDecisions.Pick? SiblingFits(Reading reading, string race, AutoRefitDecisions.Pick sib,
                                                         bool limbSkin, Func<string, BodySizeCatalog?> catalogOf,
-                                                        Func<ModelParts, BodyOption, BodySizeCatalog, (int Near, int Inside, float Gap)?> clothOn)
+                                                        Func<ModelParts, BodyOption, BodySizeCatalog, (int Near, int Inside, float Gap)?> clothOn,
+                                                        out string why)
     {
-        if (sibling is not { } sib || !AutoRefitDecisions.Proceed(sib.Confidence) || catalogOf(sib.Dir) is not { } catalog)
+        why = "";
+        if (!AutoRefitDecisions.Proceed(sib.Confidence))
+        {
+            why = $"its reading was {sib.Confidence}";
             return null;
+        }
         string want = RefitCore.Normal(sib.Option.Rel);
-        if (catalog.For(reading.Limb, race).FirstOrDefault(o => RefitCore.Normal(o.Rel) == want) is not { } option)
+        if (catalogOf(sib.Dir)?.For(reading.Limb, race).FirstOrDefault(o => RefitCore.Normal(o.Rel) == want) is not { } option)
+        {
+            why = $"{sib.Option.Label} is not a size of {sib.Dir} any more";
             return null;
-        var on = clothOn(reading.LimbView, option, catalog);
-        bool reaches = limbSkin || on is { Near: >= BodySizeMatch.MinEvidence };
-        bool clears = on is not { Near: >= BodySizeMatch.MinEvidence } o || o.Inside <= o.Near * SiblingInsideAtMost;
-        return reaches && clears ? new AutoRefitDecisions.Pick(sib.Dir, option, sib.Confidence, !limbSkin) : null;
+        }
+        var on = clothOn(reading.LimbView, option, catalogOf(sib.Dir)!);
+        if (!limbSkin && on is not { Near: >= BodySizeMatch.MinEvidence })
+        {
+            why = $"its cloth does not reach {option.Label} ({on?.Near ?? 0} points near)";
+            return null;
+        }
+        if (on is { Near: >= BodySizeMatch.MinEvidence } o && o.Inside > o.Near * SiblingInsideAtMost)
+        {
+            why = $"{o.Inside} of {o.Near} of its cloth points sit inside {option.Label}";
+            return null;
+        }
+        return new AutoRefitDecisions.Pick(sib.Dir, option, sib.Confidence, !limbSkin);
     }
 
     /// <summary>

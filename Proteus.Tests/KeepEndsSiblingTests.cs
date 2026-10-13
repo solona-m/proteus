@@ -99,10 +99,12 @@ public class KeepEndsSiblingTests
     public void A_confident_skin_reading_wins_over_the_sibling()
     {
         var (reading, parts) = ReadShoe(legSkin: true);
+        var notes = new List<string>();
         var found = KeepEnds.Find(reading, parts, NoBones, "0201", Detect(Pick(LegsM), null), _ => Body,
-                                  sibling: Pick(LegsS), clothOn: On(400, 0));
+                                  sibling: Pick(LegsS), clothOn: On(400, 0), note: notes.Add);
         Assert.Equal(KeepEnds.Route.Skin, found.Route);
         Assert.Equal(LegsM, found.Pick!.Option);
+        Assert.Empty(notes);   // never weighed, so never said to be turned down
 
         // And an unclear skin reading stays unclear: the sibling never overrides the leg's own skin.
         var unsure = KeepEnds.Find(reading, parts, NoBones, "0201", Detect(Pick(LegsM, Confidence.Ambiguous), null),
@@ -131,9 +133,11 @@ public class KeepEndsSiblingTests
         // More than 2% of the cloth near the size inside it: not cloth made on that size. An author's tucks — under 1%,
         // inside every size alike — are not.
         var (reading, parts) = ReadShoe(legSkin: false);
+        var notes = new List<string>();
         var found = KeepEnds.Find(reading, parts, NoBones, "0201", Detect(null, Pick(FeetM)), _ => Body,
-                                  (_, _, _, _) => null, sibling: Pick(LegsM), clothOn: On(400, 12));
+                                  (_, _, _, _) => null, sibling: Pick(LegsM), clothOn: On(400, 12), note: notes.Add);
         Assert.Equal(KeepEnds.Route.SkinOnly, found.Route);
+        Assert.Equal("12 of 400 of its cloth points sit inside M", notes.Single());
 
         var tucked = KeepEnds.Find(reading, parts, NoBones, "0201", Detect(null, Pick(FeetM)), _ => Body,
                                    (_, _, _, _) => null, sibling: Pick(LegsM), clothOn: On(400, 4));
@@ -185,11 +189,14 @@ public class KeepEndsSiblingTests
     [Trait("Plan", "EDGE-jacket-refit-1")]
     public void A_piece_with_a_sibling_reads_under_a_key_of_its_own()
     {
-        // A piece read by its cloth before it had a sibling to go by must not be served that reading again.
-        Assert.Equal("", SiblingPiece.CacheSuffix(null));
-        Assert.Equal("|sib=bibo+/nude/medium.mdl", SiblingPiece.CacheSuffix(
-            new AutoRefitDecisions.Pick("Bibo+", LegsM with { Rel = "Nude\\Medium.mdl" }, Confidence.Likely, false)));
-        Assert.NotEqual(SiblingPiece.CacheSuffix(Pick(LegsM)), SiblingPiece.CacheSuffix(Pick(LegsS)));
+        // A piece read by its cloth before it had a sibling to go by must not be served that reading again; one whose
+        // sibling the author changed is read again; one put on again is not, without its siblings being opened.
+        Assert.Equal("", SiblingPiece.CacheSuffix([], _ => throw new InvalidOperationException("stamped")));
+        SiblingPiece.Candidate[] medium = [new(Top, "Chest Size\\Medium\\top.mdl", "Chest Size / Medium")];
+        Assert.Equal("|sib=chest size/medium/top.mdl@100:7", SiblingPiece.CacheSuffix(medium, _ => "100:7"));
+        Assert.NotEqual(SiblingPiece.CacheSuffix(medium, _ => "100:7"), SiblingPiece.CacheSuffix(medium, _ => "100:8"));
+        SiblingPiece.Candidate[] small = [new(Top, "Chest Size\\Small\\top.mdl", "Chest Size / Small")];
+        Assert.NotEqual(SiblingPiece.CacheSuffix(medium, _ => "1"), SiblingPiece.CacheSuffix(small, _ => "1"));
 
         Assert.True(SiblingPiece.Applies("C:/mods/x", 0));
         Assert.False(SiblingPiece.Applies("C:/mods/x", 201));   // baked for another race
@@ -324,10 +331,14 @@ public class KeepEndsSiblingTests
         var notes = new List<string>();
         Assert.Empty(SiblingPiece.Find(redirects, null, "common/glv.mdl", "_top", "0201", notes.Add));
         Assert.Contains("more than 3", notes.Single());
+
+        // Three are still read.
+        Assert.Equal(SiblingPiece.MostRead,
+                     SiblingPiece.Find(redirects.Take(6).ToList(), null, "common/glv.mdl", "_top", "0201").Count);
     }
 
     [Fact]
-    [Trait("Plan", "AC-jacket-refit-7")]
+    [Trait("Plan", "AC-jacket-refit-1")]
     [Trait("Plan", "EDGE-jacket-refit-10")]
     public void A_shoe_finds_the_legs_in_its_option()
     {
@@ -342,7 +353,7 @@ public class KeepEndsSiblingTests
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-jacket-refit-12")]
+    [Trait("Plan", "AC-jacket-refit-1")]
     public void Only_the_same_option_of_a_multi_group_is_a_sibling()
     {
         List<PenumbraModMeta.Redirect> together =
@@ -360,6 +371,14 @@ public class KeepEndsSiblingTests
     [Trait("Plan", "EDGE-jacket-refit-27")]
     public void The_sibling_is_read_under_the_top_jobs_own_key_with_its_other_parts()
     {
+        // The glove reads its sibling in the slot and race the top's own refit reads it in: the slot the walk files the
+        // top under, and the top's race — so both land on one key.
+        var sibling = Assert.Single(SiblingPiece.Find(Geometric(), null, "chest size/medium/glv.mdl", "_top", "0201"));
+        var walked = Assert.Single(DrawnModelPaths.EquippedPartModelsFromModels([sibling.GamePath]));
+        Assert.Equal(("_" + walked.Key, "0201"), AutoRefitWatcher.ReadAs(sibling.GamePath));
+        Assert.Equal(("_glv", "0201"), AutoRefitWatcher.ReadAs(Glove));
+        Assert.Equal((null, "0101"), AutoRefitWatcher.ReadAs("chara/equipment/e0000/model/c0101e0000_top.mdl"));
+
         byte[] top = [1, 2, 3, 4];
         Assert.Equal(DetectionCache.KeyOf(top, "_top", "0201", "neo", "v1"),
                      AutoRefitWatcher.SourceCacheKey(top, "_top", "0201", "neo", "v1"));
@@ -410,6 +429,8 @@ public class KeepEndsSiblingTests
 
             Assert.False(AutoRefitWatcher.Existing(root, "Size", "Neo — XS", Glove, ("Bibo+", "nude/medium.mdl")));
             Assert.False(AutoRefitWatcher.Existing(root, "Size", "Neo — XS", Glove, ("[IVCS] Bibo+", "other.mdl")));
+            // A fork: the same file under another body mod's folder is another source.
+            Assert.False(AutoRefitWatcher.Existing(root, "Size", "Neo — XS", Glove, ("Bibo+", "smallclothes.mdl")));
             Assert.True(AutoRefitWatcher.Existing(root, "Size", "Neo — XS", Glove, ("[ivcs] bibo+", "SmallClothes.mdl")));
             Assert.True(AutoRefitWatcher.Existing(root, "Size", "Neo — XS", Glove));
 

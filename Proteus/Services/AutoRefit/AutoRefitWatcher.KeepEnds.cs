@@ -159,11 +159,14 @@ public sealed partial class AutoRefitWatcher
     private KeepEnds.Found ReadEnds(EndsJob j, KeepEnds.Reading reading, Func<string, BodySizeCatalog?> catalogOf)
     {
         var g = j.G;
-        // Read first, and part of the key: a piece read by its cloth before it had a sibling to go by must not be served
-        // that reading again.
-        var sibling = ReadSibling(j, reading.Limb);
-        string cacheKey = DetectionCache.KeyOf(j.Bytes, reading.CacheSlot + SiblingPiece.CacheSuffix(sibling), j.Race,
-                                               j.TargetMod.Dir,
+        // The siblings are part of the key, as they stand on disk: a piece read by its cloth before it had a sibling to
+        // go by must not be served that reading again. Only on a miss are they opened and read.
+        void Note(string note) => log.Information("[Proteus] auto refit: {0}: {1}", j.Item, note);
+        var siblings = SiblingPiece.Applies(j.R.ModRoot, j.BakeTo) && j.R.Worn.Rel is { } wornRel
+            ? SiblingPiece.Find(j.Redirects, j.OwnRecord, wornRel, reading.Limb, j.Race, Note)
+            : [];
+        string suffix = SiblingPiece.CacheSuffix(siblings, file => Stamp(j.R.ModRoot!, file));
+        string cacheKey = DetectionCache.KeyOf(j.Bytes, reading.CacheSlot + suffix, j.Race, j.TargetMod.Dir,
                                                DetectionCache.BodiesOf(j.State.Version, EnabledBodies(g, j.State),
                                                                        VanillaPrint(j.VanillaCat, reading.Limb, j.Race) + "|"
                                                                      + VanillaPrint(j.VanillaCat, reading.Slot, j.Race)));
@@ -176,51 +179,66 @@ public sealed partial class AutoRefitWatcher
 
         AssertOffFramework("reading the garment");
         bool isVanilla = j.R.ModRoot == null;
+        var sibling = siblings.Count > 0 ? ReadSibling(j, siblings, Note) : null;
         var found = KeepEnds.Find(reading, j.Garment, j.Bones, j.Race,
                                   (view, s) => isVanilla
                                       ? VanillaSource(j.VanillaCat, s, j.Race)
                                       : DetectAcross(view, j.Bones, s, j.Race, j.TargetMod, j.State.List, j.VanillaCat,
                                                      g.Permanent),
-                                  catalogOf, sibling: sibling);
+                                  catalogOf, sibling: sibling,
+                                  note: why => Note($"its {(reading.Limb == "_top" ? "chest" : "legs")} piece in the "
+                                                  + $"same option was not taken: {why}; read as before"));
         if (found.Route == KeepEnds.Route.Sibling)
             log.Information("[Proteus] auto refit: {0} sized by its {1} piece in the same option: {2} / {3} ({4})", j.Item,
                             reading.Limb == "_top" ? "chest" : "legs", NameOf(j, found.Pick!.Dir), found.Pick.Option.Label,
                             found.Pick.Confidence);
-        else if (sibling != null)
-            log.Information("[Proteus] auto refit: {0}'s {1} piece in the same option does not fit its {2}; read as before",
-                            j.Item, reading.Limb == "_top" ? "chest" : "legs", reading.Limb == "_top" ? "arms" : "legs");
         detections.Put(cacheKey, KeepEnds.ToCache(found));
         return found;
     }
 
     /// <summary>
-    /// What the chest or legs piece shipped in the same option as this one was made on (see <see cref="SiblingPiece"/>),
-    /// read off its own skin through <see cref="ReadSource"/> — the very reading that piece's own refit makes and keeps.
-    /// Null when there is none, or its pieces cannot be read or do not agree.
+    /// What the chest or legs pieces shipped in the same option as this one were made on (see <see cref="SiblingPiece"/>),
+    /// each read off its own skin through <see cref="ReadSource"/> — in the slot and race its own refit reads it in
+    /// (<see cref="ReadAs"/>), so the reading is the very one that refit makes and keeps. Null when they cannot be read
+    /// or do not agree.
     /// </summary>
-    /// <param name="limb">"_top" or "_dwn": the slot of the sibling looked for.</param>
-    private AutoRefitDecisions.Pick? ReadSibling(EndsJob j, string limb)
+    private AutoRefitDecisions.Pick? ReadSibling(EndsJob j, IReadOnlyList<SiblingPiece.Candidate> candidates,
+                                                 Action<string> note)
     {
-        if (!SiblingPiece.Applies(j.R.ModRoot, j.BakeTo) || j.R.Worn.Rel is not { } wornRel) return null;
         string root = j.R.ModRoot!;
-        void Note(string note) => log.Information("[Proteus] auto refit: {0}: {1}", j.Item, note);
-        var candidates = SiblingPiece.Find(j.Redirects, j.OwnRecord, wornRel, limb, j.Race, Note);
-        if (candidates.Count == 0) return null;
-        AssertOffFramework("reading the piece beside it");
         return SiblingPiece.Agree(candidates, c =>
         {
+            if (ReadAs(c.GamePath) is not { Slot: { } slot, Race: var race }) return null;
             byte[] bytes;
-            try { bytes = File.ReadAllBytes(BodySizeCatalog.ResolveCaseInsensitive(root, c.File)); }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            ModelParts? model;
+            IReadOnlySet<string> bones;
+            // A sibling that cannot be read leaves the piece read as before; it never fails the piece's own refit.
+            try
             {
-                Note($"{c.File} could not be read: {ex.Message}");
+                bytes = File.ReadAllBytes(BodySizeCatalog.ResolveCaseInsensitive(root, c.File));
+                model = ModelPartReader.Read(bytes);
+                bones = new HashSet<string>(SecondSkinWriter.Parse(bytes).BoneNames, StringComparer.Ordinal);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                note($"{c.File} could not be read: {ex.Message}");
                 return null;
             }
-            if (ModelPartReader.Read(bytes) is not { } model) return null;
-            var bones = new HashSet<string>(SecondSkinWriter.Parse(bytes).BoneNames, StringComparer.Ordinal);
-            return ReadSource(j.G, j.State, j.TargetMod, j.VanillaCat, bytes, model, bones, limb, j.Race, false,
+            if (model == null)
+            {
+                note($"{c.File} could not be read");
+                return null;
+            }
+            return ReadSource(j.G, j.State, j.TargetMod, j.VanillaCat, bytes, model, bones, slot, race, false,
                               j.Item + " (" + SiblingPiece.Shown(c.Source) + ")").Source;
-        }, Note);
+        }, note);
+    }
+
+    /// <summary>A file's state on disk — its length and time written — for a cache key; "-" when it is not there.</summary>
+    private static string Stamp(string root, string file)
+    {
+        var info = new FileInfo(BodySizeCatalog.ResolveCaseInsensitive(root, file));
+        return info.Exists ? $"{info.Length}:{info.LastWriteTimeUtc.Ticks}" : "-";
     }
 
     /// <summary>A body mod as the log names it.</summary>
