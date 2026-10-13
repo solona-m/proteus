@@ -202,7 +202,7 @@ internal static partial class BodyRetarget
     /// <param name="Held">Welded points the user held in place, by unticking their parts.</param>
     /// <param name="Laid">Skin points laid exactly onto the new body — see <see cref="LaySkin"/>.</param>
     /// <param name="Swap">What swapping the garment's skin for the body's did; null when it did not run.</param>
-    /// <param name="Folded">Triangles the refit left facing the wrong way — see <see cref="Unfold"/>.</param>
+    /// <param name="Folded">Triangles the refit left facing the wrong way — see <see cref="Solved"/>.</param>
     /// <param name="Smoothed">Vertices of the new body whose covered nipples were smoothed — see
     /// <see cref="SmoothCoveredNipples"/>.</param>
     /// <param name="Layered">Points lifted to keep the garment outside the other piece of its outfit — see
@@ -227,8 +227,9 @@ internal static partial class BodyRetarget
     /// can be tested against a hand-built <see cref="ModelParts"/> at real body scale, rather than only through a
     /// synthetic .mdl whose triangles are a metre across.
     /// </summary>
-    /// <param name="Folded">Triangles still facing the wrong way when <see cref="Unfold"/> ran out of rounds. Any at
-    /// all is worth saying: a folded triangle is a black speck on the garment.</param>
+    /// <param name="Folded">Triangles still facing the wrong way when <see cref="Unfold"/> ran out of rounds — or, when
+    /// <see cref="KeepOutfitOrder"/> lifted anything, on the mesh as written after it, every pass counted. Any at all is
+    /// worth saying: a folded triangle is a black speck on the garment.</param>
     internal sealed record Solved(RetargetEdit Edit, int Snapped, int Transferred, int Missed, int Pushed,
                                   float WorstMove, float WorstPush, int Held = 0, int Laid = 0, int Folded = 0,
                                   IReadOnlyList<ShapeOutcome>? Shapes = null, int Layered = 0,
