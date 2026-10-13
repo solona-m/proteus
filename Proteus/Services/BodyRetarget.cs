@@ -632,12 +632,14 @@ internal static partial class BodyRetarget
     /// <param name="chestSlot">"_top" for a garment over the chest that is not worn in the chest's slot — a jacket on a
     /// necklace, its <paramref name="garmentSlot"/> null so the chest beneath it stays in the push-out — so the
     /// underside of the breast is still cleared, faces and all. Null: a top's own slot decides, as it always has.</param>
+    /// <param name="trace">For a diagnostic: each stage of the solve by name, with a copy of every node's move so far
+    /// (see <see cref="Solve"/>). Null, as every refit has it, costs nothing.</param>
     public static Planned Plan(ModelParts garment, byte[] garmentBytes, IReadOnlyList<SlotPair> pairs,
                                string? garmentSlot = null, bool pushOut = true, IReadOnlySet<int>? held = null,
                                bool replaceSkin = false, bool acrossBodies = false, bool clearBody = false,
                                bool cutHidden = true, IReadOnlyList<IReadOnlyCollection<int>>? keepShape = null,
                                string? swapSlot = null, Action<string>? log = null, Action<string>? warn = null,
-                               string? chestSlot = null)
+                               string? chestSlot = null, Action<string, Vec3[]>? trace = null)
     {
         // First, before anything reads the new chest: its nipples smoothed where the garment covers more of them than
         // the old body had, so every pass below sees one surface — the one the swap draws.
@@ -653,7 +655,7 @@ internal static partial class BodyRetarget
             ? SwappedSkinMeshes(garment, pairs)
             : null;
         var solved = Solve(garment, pairs, garmentSlot, pushOut, held, replaceSkin, clearBody, keepShape,
-                           ModelSkinReader.Read(garmentBytes, null, null), swapSlot, swapMeshes, chestSlot);
+                           ModelSkinReader.Read(garmentBytes, null, null), swapSlot, swapMeshes, chestSlot, trace);
         var written = MeshVolumeService.Inflate(garmentBytes, solved.Edit);
         byte[] model = written.Model;
 
@@ -717,11 +719,15 @@ internal static partial class BodyRetarget
     /// <param name="swapSlot">See <see cref="Plan"/>.</param>
     /// <param name="swapMeshes">With <paramref name="swapSlot"/>, the skin meshes the swap replaces, as
     /// <see cref="Plan"/> hands them to the rebuild; null works them out here.</param>
+    /// <param name="trace">Each stage by name — "transfer", "knit", "layer-knit", "lay", "follow", "push", "unfold",
+    /// "relax", "face-settle", "rim-lift", "layer-order" — with a copy of every node's move so far, indexed as
+    /// <see cref="Sets.NodeOf"/> maps vertices. Changes nothing; null skips the copies.</param>
     internal static Solved Solve(ModelParts garment, IReadOnlyList<SlotPair> pairs, string? garmentSlot = null,
                                  bool pushOut = true, IReadOnlySet<int>? held = null, bool replaceSkin = false,
                                  bool clearBody = false, IReadOnlyList<IReadOnlyCollection<int>>? keepShape = null,
                                  XivLiveMesh.SkinnedMesh? garmentSkin = null, string? swapSlot = null,
-                                 IReadOnlySet<int>? swapMeshes = null, string? chestSlot = null)
+                                 IReadOnlySet<int>? swapMeshes = null, string? chestSlot = null,
+                                 Action<string, Vec3[]>? trace = null)
     {
         // With the skin replaced, the garment's OWN slot body is drawn after all — Rebuild embeds that very mesh in the
         // garment, so it is what the cloth ends up lying against. Asking for the swap is not enough: Rebuild only swaps
@@ -740,21 +746,27 @@ internal static partial class BodyRetarget
 
         var nodeDelta = new Vec3[sets.NodeCount];
         var snapped = new bool[sets.NodeCount];
+        void Stage(string name) => trace?.Invoke(name, (Vec3[])nodeDelta.Clone());
 
         Transfer(sets, sets.AllNodes, source, nodeDelta, snapped, out int transferred, out int missed,
                  garmentSkin != null ? NodeSides(sets, garmentSkin, BodyBonesOf(pairs)) : null);
+        Stage("transfer");
         Knit(sets, nodeDelta, snapped);
+        Stage("knit");
         // After the knit, which evens each sheet out along itself and would take the sheets apart again.
         var layers = Tuned.NoLayerKnit ? null : LayerPartners(sets, snapped);
         if (layers != null) KnitLayers(sets, layers, nodeDelta);
+        Stage("layer-knit");
 
         // Before the push-out, so the push-out measures cloth against the skin as it will actually be drawn.
         var carried = (Vec3[])nodeDelta.Clone();
         int laid = replaceSkin ? LaySkin(sets, source, pairs, nodeDelta) : 0;
+        Stage("lay");
         // Held skin is left out of what the cloth follows only on the swapSlot path, where the hold is a kept foot: the
         // cloth beside it measured its gap from that foot, which the new legs do not draw. A Studio hold stays as it was.
         if (slotSwapped && laid > 0 && !Tuned.NoFollow)
             FollowLaidSkin(garment, sets, carried, nodeDelta, snapped, pairs, swapSlot != null ? held : null);
+        Stage("follow");
 
         // The skin drawn under the cloth as authored: the garment's own body mesh where it has one, and the other slots'
         // bodies. See TargetBody, and PushOut for why it is needed. It reads nothing the passes below move.
@@ -777,6 +789,7 @@ internal static partial class BodyRetarget
                                  clearBody) with { Shapes = judged };
         }
 
+        Stage("push");
         int pushed = stage.Pushed;
         float worstPush = stage.WorstPush;
         TargetBody? drawn = stage.Drawn;
@@ -786,6 +799,7 @@ internal static partial class BodyRetarget
         // Last, once nothing else will move: the answer is only worth having if the mesh still reads front-side out.
         // Past the push-out, so whatever unfolding gives up is judged against the skin it would be given up into.
         int folded = Unfold(sets, nodeDelta, snapped, drawn == null ? null : SignedOff(drawn));
+        Stage("unfold");
 
         // Skin through the middle of a face, which the push-out's fold guard gave up on: cleared last, after the relax
         // (which only keeps VERTICES out of the skin), by a pass that turns nothing over, so the fold count above still
@@ -801,6 +815,7 @@ internal static partial class BodyRetarget
 
         // Movement out of line with its neighbours evened out, snapped cloth included — see Relax.
         if (drawn != null && !Tuned.NoRelax) Relax(sets, nodeDelta, SignedOff(drawn), stay, layers);
+        Stage("relax");
 
         if (faceCheck != null && pushedBy != null && !Tuned.NoFaceSettle)
         {
@@ -821,11 +836,13 @@ internal static partial class BodyRetarget
             }
             pushed += ClearFaces(faceCheck, nodeDelta, pushedBy, ref worstPush, stay);
         }
+        Stage("face-settle");
 
         // A hem lying on the skin whose edges the new, rounder body comes up through between its corners — see LiftRims.
         // Only with the skin swapped: then the body's own skin is drawn under the rim, where the author's sculpted skin
         // is not, and that is the case it was measured on (the Pioneer's Bottoms onto Neolithe).
         if (drawn != null && slotSwapped && !Tuned.NoRimLift) pushed += LiftRims(sets, drawn, nodeDelta, stay);
+        Stage("rim-lift");
 
         // Never write a NaN into the file: one spreads through every smoothing pass it touches, and the model it lands in
         // draws nothing there and threw every frame from the Parts preview. A node with no finite answer stays put.
@@ -840,6 +857,7 @@ internal static partial class BodyRetarget
             var layered = GarmentCloth(garment, sets);
             KeepLayerOrder(sets, CoveredPoints(sets, layered, FacesOneWay(garment, sets)), nodeDelta, stay, layered, drawn);
         }
+        Stage("layer-order");
 
         int vc = garment.Positions.Length / 3;
         var vertDelta = new Vec3[vc];
