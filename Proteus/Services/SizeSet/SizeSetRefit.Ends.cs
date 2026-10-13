@@ -23,13 +23,16 @@ internal static partial class SizeSetRefit
     /// set reads no chest or legs off — and kept in <paramref name="readings"/> for the run, so the sibling's own sizes and
     /// the glove's are cut from one reading. Null, noted, when it cannot be read: a sibling never fails the glove.
     /// </summary>
+    /// <param name="request">The run: its mod, and its body mods — <see cref="Request.Bodies"/> only, whatever
+    /// <see cref="Request.GameBody"/> offers.</param>
     /// <param name="preferred">The body preferred on a tie for a slot and race (see <see cref="Preferred"/>).</param>
-    internal static AutoRefitDecisions.Pick? SiblingReading(string root, SiblingPiece.Candidate c, string limb,
-                                                           IReadOnlyList<(string Dir, BodySizeCatalog Catalog)> bodies,
+    internal static AutoRefitDecisions.Pick? SiblingReading(Request request, SiblingPiece.Candidate c, string limb,
                                                            Func<string, string, string> preferred,
                                                            Dictionary<string, AutoRefitDecisions.Pick?> readings,
                                                            Action<string> note)
     {
+        string root = request.ModRoot;
+        var bodies = request.Bodies.Select(b => (b.Dir, b.Catalog)).ToList();
         var (readSlot, race) = AutoRefitWatcher.ReadAs(c.GamePath);
         string slot = readSlot ?? limb, prefer = preferred(slot, race);
         string key = ReadingKey(c.File, slot, race, prefer);
@@ -80,16 +83,15 @@ internal static partial class SizeSetRefit
             return 0;
         }
         string preferred = Preferred(request, sizeSlot, race, mods[0].Dir);
-        // The chest or legs piece the author ships beside it in each option, read off its own skin (see SiblingPiece):
+        // The chest or legs piece the author ships beside it in each option, read off its own skin (see SiblingReading):
         // over the body mods alone, as that piece's own sizes are read (RunPiece), so it is the reading they were cut
         // from — kept for the run, and taken from there when that piece was read first. The mod's manifest and record as
         // they stand NOW: the options a top made earlier in this run carry the glove's file too, and are Proteus's.
-        var bodiesOnly = mods.ToList();
         var redirects = PenumbraModMeta.ReadAllRedirects(root);
         var record = BodyRetargetWriter.ReadRecord(root);
         void Note(string note) => log.Information("[Proteus] size set: {0}: {1}", piece.Label, note);
         AutoRefitDecisions.Pick? ReadSibling(SiblingPiece.Candidate c)
-            => SiblingReading(root, c, limb, bodiesOnly, (slot, r) => Preferred(request, slot, r, mods[0].Dir), readings, Note);
+            => SiblingReading(request, c, limb, (slot, r) => Preferred(request, slot, r, mods[0].Dir), readings, Note);
         // The game's own body, last, as the automatic refit searches: a shoe or glove made on it shares nothing with any
         // body mod. Never "enabled" — no collection turns it on — so it wins no tie a body mod is in, as there.
         var game = request.GameBody?.Invoke(race) is { IsBody: true } g ? g : null;

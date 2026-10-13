@@ -1783,25 +1783,30 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     public void A_sibling_made_on_a_body_not_searched_is_not_taken()
     {
         string rueRoot = LocalData.Path(Rue);
+        string modsRoot = LocalData.Path(LocalData.Mods);
+        string rueDir = Path.GetFileName(rueRoot), biboDir = Path.GetFileName(LocalData.Path(Bibo));
         var rue = BodySizeCatalog.Read(rueRoot);
         var chest = rue.For("_top", "0201").First();
         var candidate = new SiblingPiece.Candidate(chest.GamePath, chest.Rel, "");
-        (string, BodySizeCatalog)[] biboOnly = [(Path.GetFileName(LocalData.Path(Bibo)), BodySizeCatalog.Read(LocalData.Path(Bibo)))];
-        (string, BodySizeCatalog)[] withRue = [.. biboOnly, (Path.GetFileName(rueRoot), rue)];
+        SizeSetRefit.Request RequestOver(params string[] dirs)
+            => new(rueRoot, ["rue"], Yas: false, Remake: false,
+                   new BodyModIndex().RefreshState(dirs.ToDictionary(d => d, d => d), modsRoot).List,
+                   // Offered as the "game's own body", the very body the chest is: never searched for a sibling.
+                   GameBody: _ => rue);
         var notes = new List<string>();
 
-        var offBody = SizeSetRefit.SiblingReading(rueRoot, candidate, "_top", biboOnly, (_, _) => biboOnly[0].Item1, [], notes.Add);
+        var offBody = SizeSetRefit.SiblingReading(RequestOver(biboDir), candidate, "_top", (_, _) => biboDir, [], notes.Add);
         Assert.True(offBody == null || !AutoRefitDecisions.Proceed(offBody.Confidence),
                     $"a Rue chest read over Bibo+ alone gave {offBody?.Option.Label} ({offBody?.Confidence})");
         Assert.Null(SiblingPiece.Agree([candidate], _ => offBody));
 
         var readings = new Dictionary<string, AutoRefitDecisions.Pick?>(StringComparer.Ordinal);
-        var onRue = SizeSetRefit.SiblingReading(rueRoot, candidate, "_top", withRue, (_, _) => withRue[1].Item1, readings, notes.Add);
+        var withRue = RequestOver(biboDir, rueDir);
+        var onRue = SizeSetRefit.SiblingReading(withRue, candidate, "_top", (_, _) => rueDir, readings, notes.Add);
         Assert.NotNull(onRue);
-        Assert.Equal(Path.GetFileName(rueRoot), onRue!.Dir);
+        Assert.Equal(rueDir, onRue!.Dir);
         notes.Clear();
-        Assert.Same(onRue, SizeSetRefit.SiblingReading(rueRoot, candidate, "_top", withRue, (_, _) => withRue[1].Item1,
-                                                       readings, notes.Add));
+        Assert.Same(onRue, SizeSetRefit.SiblingReading(withRue, candidate, "_top", (_, _) => rueDir, readings, notes.Add));
         Assert.Contains("read before in this run", Assert.Single(notes));
     }
 
