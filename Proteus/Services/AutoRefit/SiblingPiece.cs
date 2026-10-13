@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 
@@ -107,6 +108,30 @@ internal static class SiblingPiece
         => siblings.Count == 0
             ? ""
             : "|sib=" + string.Join(";", siblings.Select(c => RefitCore.Normal(c.File) + "@" + stamp(c.File)));
+
+    /// <summary>
+    /// A sibling's model, its parts and its rig, read from the mod — or null, noted, when it cannot be: missing, locked,
+    /// or not a model. A sibling that cannot be read leaves the piece read as before; it never fails the piece's refit.
+    /// </summary>
+    internal static (byte[] Bytes, ModelParts Model, IReadOnlySet<string> Bones)? TryOpen(string modRoot, string file,
+                                                                                         Action<string>? note = null)
+    {
+        try
+        {
+            var bytes = File.ReadAllBytes(BodySizeCatalog.ResolveCaseInsensitive(modRoot, file));
+            if (ModelPartReader.Read(bytes) is not { } model)
+            {
+                note?.Invoke($"{file} could not be read");
+                return null;
+            }
+            return (bytes, model, new HashSet<string>(SecondSkinWriter.Parse(bytes).BoneNames, StringComparer.Ordinal));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            note?.Invoke($"{file} could not be read: {ex.Message}");
+            return null;
+        }
+    }
 
     /// <summary>Whether a piece is sized by its siblings at all: a mod's piece, refitted at the race it is drawn — one
     /// baked for another race is read in that race's sizes, which its siblings are not.</summary>

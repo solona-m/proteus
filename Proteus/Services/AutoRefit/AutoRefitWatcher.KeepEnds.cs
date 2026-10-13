@@ -209,26 +209,8 @@ public sealed partial class AutoRefitWatcher
         return SiblingPiece.Agree(candidates, c =>
         {
             if (ReadAs(c.GamePath) is not { Slot: { } slot, Race: var race }) return null;
-            byte[] bytes;
-            ModelParts? model;
-            IReadOnlySet<string> bones;
-            // A sibling that cannot be read leaves the piece read as before; it never fails the piece's own refit.
-            try
-            {
-                bytes = File.ReadAllBytes(BodySizeCatalog.ResolveCaseInsensitive(root, c.File));
-                model = ModelPartReader.Read(bytes);
-                bones = new HashSet<string>(SecondSkinWriter.Parse(bytes).BoneNames, StringComparer.Ordinal);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                note($"{c.File} could not be read: {ex.Message}");
-                return null;
-            }
-            if (model == null)
-            {
-                note($"{c.File} could not be read");
-                return null;
-            }
+            if (SiblingPiece.TryOpen(root, c.File, note) is not { } opened) return null;
+            var (bytes, model, bones) = opened;
             return ReadSource(j.G, j.State, j.TargetMod, j.VanillaCat, bytes, model, bones, slot, race, false,
                               j.Item + " (" + SiblingPiece.Shown(c.Source) + ")").Source;
         }, note);

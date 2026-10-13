@@ -338,6 +338,34 @@ public class KeepEndsSiblingTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-jacket-refit-6")]
+    public void A_sibling_that_cannot_be_read_is_noted_and_skipped()
+    {
+        string root = NewMod();
+        try
+        {
+            File.WriteAllBytes(Path.Combine(root, "garbage.mdl"), [1, 2, 3, 4, 5, 6, 7, 8]);
+            File.WriteAllBytes(Path.Combine(root, "top.mdl"), Model);
+            var notes = new List<string>();
+
+            Assert.Null(SiblingPiece.TryOpen(root, "missing.mdl", notes.Add));
+            Assert.Null(SiblingPiece.TryOpen(root, "garbage.mdl", notes.Add));
+            Assert.Equal(2, notes.Count);
+            Assert.StartsWith("missing.mdl could not be read", notes[0]);
+            Assert.StartsWith("garbage.mdl could not be read", notes[1]);
+
+            var opened = SiblingPiece.TryOpen(root, "top.mdl", notes.Add);
+            Assert.NotNull(opened);
+            Assert.Equal(Model, opened!.Value.Bytes);
+            Assert.Equal(2, notes.Count);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     [Trait("Plan", "AC-jacket-refit-1")]
     [Trait("Plan", "EDGE-jacket-refit-10")]
     public void A_shoe_finds_the_legs_in_its_option()
