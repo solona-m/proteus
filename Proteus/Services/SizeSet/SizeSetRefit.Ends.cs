@@ -18,7 +18,8 @@ namespace Proteus.Services;
 internal static partial class SizeSetRefit
 {
     private static int RunEndsPiece(Request request, Piece piece, UVRemapService? uvRemap, IPluginLog log,
-                                    Action<string> progress, List<string> notes, CancellationToken ct)
+                                    Action<string> progress, List<string> notes,
+                                    Dictionary<string, AutoRefitDecisions.Pick?> readings, CancellationToken ct)
     {
         string root = request.ModRoot;
         string race = piece.Race;
@@ -44,11 +45,30 @@ internal static partial class SizeSetRefit
             notes.Add(Strings.SizeSet.NoBodies);
             return 0;
         }
-        string preferred = request.Keys.Select(k => SupportedBodies.Of(k, sizeSlot, false))
-                                       .OfType<SupportedBodies.Body>()
-                                       .Where(b => b.Race == race)
-                                       .Select(b => SupportedBodies.Find(b, request.Bodies)?.Dir)
-                                       .FirstOrDefault(d => d != null) ?? mods[0].Dir;
+        string preferred = Preferred(request, sizeSlot, race, mods[0].Dir);
+        // The chest or legs piece the author ships beside it in each option, read off its own skin (see SiblingPiece):
+        // over the body mods alone, as that piece's own sizes are read (RunPiece), so it is the reading they were cut
+        // from — kept for the run, and taken from there when that piece was read first. The mod's manifest and record as
+        // they stand NOW: the options a top made earlier in this run carry the glove's file too, and are Proteus's.
+        var bodiesOnly = mods.ToList();
+        var redirects = PenumbraModMeta.ReadAllRedirects(root);
+        var record = BodyRetargetWriter.ReadRecord(root);
+        void Note(string note) => log.Information("[Proteus] size set: {0}: {1}", piece.Label, note);
+        AutoRefitDecisions.Pick? ReadSibling(SiblingPiece.Candidate c)
+        {
+            string slot = AutoRefitWatcher.ReadAs(c.GamePath).Slot ?? limb, siblingRace = AutoRefitWatcher.ReadAs(c.GamePath).Race;
+            string key = ReadingKey(c.File, slot, siblingRace, Preferred(request, slot, siblingRace, mods[0].Dir));
+            if (readings.TryGetValue(key, out var known))
+            {
+                Note($"its {(limb == "_top" ? "chest" : "legs")} piece {c.File} was read before in this run");
+                return known;
+            }
+            var pick = SiblingPiece.TryOpen(root, c.File, Note) is { } opened
+                ? RefitCore.DetectSource(opened.Model, opened.Bones, slot, siblingRace, bodiesOnly,
+                                         Preferred(request, slot, siblingRace, mods[0].Dir), _ => true, Note)
+                : null;
+            return readings[key] = pick;
+        }
         // The game's own body, last, as the automatic refit searches: a shoe or glove made on it shares nothing with any
         // body mod. Never "enabled" — no collection turns it on — so it wins no tie a body mod is in, as there.
         var game = request.GameBody?.Invoke(race) is { IsBody: true } g ? g : null;
@@ -70,13 +90,24 @@ internal static partial class SizeSetRefit
             if (KeepEnds.Read(piece.Slot, garment, bytes) is not { } reading) continue;
             anyRead = true;
             var bones = new HashSet<string>(SecondSkinWriter.Parse(bytes).BoneNames, StringComparer.Ordinal);
+            // The chest or legs piece this very option serves beside it.
+            var siblings = SiblingPiece.Find(redirects, record, file, limb, race, Note);
+            var sibling = siblings.Count > 0 ? SiblingPiece.Agree(siblings, ReadSibling, Note) : null;
             var found = KeepEnds.Find(reading, garment, bones, race,
                                       (view, slot) => RefitCore.DetectSource(view, bones, slot, race, mods, preferred,
                                           dir => dir != VanillaBodyCatalog.Key, note => log.Information("[Proteus] size set: {0}: {1}", piece.Label, note)),
-                                      CatalogOf);
+                                      CatalogOf, sibling: sibling,
+                                      note: why => Note($"its {(limb == "_top" ? "chest" : "legs")} piece in the same option "
+                                                      + $"was not taken: {why}; read as before"));
+            if (found.Route == KeepEnds.Route.Sibling)
+                log.Information("[Proteus] size set: {0} sized by its {1} piece in the same option: {2} / {3} ({4})",
+                                piece.Label, limb == "_top" ? "chest" : "legs", found.Pick!.Dir, found.Pick.Option.Label,
+                                found.Pick.Confidence);
             log.Information("[Proteus] size set: {0} from {1}: route {2}, {3} / {4}", piece.Label, option ?? file,
                             KeepEnds.Letter(found.Route), found.Pick?.Dir ?? "-", found.Pick?.Option.Label ?? "-");
-            if (found.Route is not (KeepEnds.Route.Skin or KeepEnds.Route.Cloth or KeepEnds.Route.SkinOnly)) continue;
+            if (found.Route is not (KeepEnds.Route.Skin or KeepEnds.Route.Cloth or KeepEnds.Route.SkinOnly
+                                    or KeepEnds.Route.Sibling))
+                continue;
             source = (option, bytes, garment, bones, reading, found);
             break;
         }

@@ -85,13 +85,35 @@ public class KeepEndsSiblingTests
     [Trait("Plan", "EDGE-jacket-refit-7")]
     public void A_sleeve_with_skin_no_body_matched_takes_the_sibling()
     {
-        // Geometric: its arm skin matched no installed body (detect gives nothing), so the top beside it decides.
+        // Geometric: its arm skin matched no installed body (detect gives nothing), so the top beside it decides — its
+        // skin lying on that size.
         var (reading, parts) = ReadShoe(legSkin: true);
         var found = KeepEnds.Find(reading, parts, NoBones, "0201", Detect(null, Pick(FeetM)), _ => Body,
+                                  (_, options, _, skin) => skin
+                                      ? new BodySizeMatch.Ranking(Confidence.Likely, [new BodySizeMatch.Score(options[0], 0.6f, 0.002f)])
+                                      : null,
                                   sibling: Pick(LegsM), clothOn: On(0, 0));
 
         Assert.Equal(KeepEnds.Route.Sibling, found.Route);
         Assert.False(found.Pick!.FromCloth);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-jacket-refit-7")]
+    [Trait("Plan", "EDGE-jacket-refit-35")]
+    public void A_shoe_whose_few_shin_vertices_reach_no_legs_is_not_sized_by_them()
+    {
+        // A feet model runs a little up the shin: too little skin there to be evidence of any legs, and no cloth over
+        // them. It keeps its own shape (skin-only), however the legs beside it in its option read.
+        var (reading, parts) = ReadShoe(legSkin: true);
+        var notes = new List<string>();
+        var found = KeepEnds.Find(reading, parts, NoBones, "0201", Detect(null, Pick(FeetM)), _ => Body,
+                                  (_, options, _, skin) => skin
+                                      ? new BodySizeMatch.Ranking(Confidence.TooLittle, [new BodySizeMatch.Score(options[0], 0f, 0.03f)])
+                                      : null,
+                                  sibling: Pick(LegsM), clothOn: On(0, 0), note: notes.Add);
+        Assert.Equal(KeepEnds.Route.SkinOnly, found.Route);
+        Assert.Contains("neither its skin nor its cloth reaches", notes.Single());
     }
 
     [Fact]

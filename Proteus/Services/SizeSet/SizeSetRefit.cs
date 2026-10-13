@@ -196,13 +196,16 @@ internal static partial class SizeSetRefit
             return new Result(0, notes);
         }
 
+        // What each author's file was read as this run, so a glove sized by the top beside it in its option reads that
+        // top once — the reading the top's own sizes were cut from.
+        var readings = new Dictionary<string, AutoRefitDecisions.Pick?>(StringComparer.Ordinal);
         foreach (var piece in pieces)
         {
             ct.ThrowIfCancellationRequested();
             try
             {
-                made += IsEnd(piece.Slot) ? RunEndsPiece(request, piece, uvRemap, log, progress, notes, ct)
-                                          : RunPiece(request, piece, uvRemap, log, progress, notes, ct);
+                made += IsEnd(piece.Slot) ? RunEndsPiece(request, piece, uvRemap, log, progress, notes, readings, ct)
+                                          : RunPiece(request, piece, uvRemap, log, progress, notes, readings, ct);
             }
             catch (OperationCanceledException)
             {
@@ -217,8 +220,25 @@ internal static partial class SizeSetRefit
         return new Result(made, notes);
     }
 
+    /// <summary>
+    /// How a reading of an author's file is kept for the run: by the file, the slot and race it is read in, and the body
+    /// preferred on a tie — everything <see cref="RefitCore.DetectSource"/> answers by.
+    /// </summary>
+    internal static string ReadingKey(string file, string slot, string race, string preferred)
+        => RefitCore.Normal(file) + "|" + slot + "|" + race + "|" + preferred.ToLowerInvariant();
+
+    /// <summary>The body mod a size set prefers on a tie, for a piece sized from <paramref name="sizeSlot"/>'s table: the
+    /// first ticked key's body at the piece's race, else the first installed.</summary>
+    private static string Preferred(Request request, string sizeSlot, string race, string fallback)
+        => request.Keys.Select(k => SupportedBodies.Of(k, sizeSlot, false))
+                       .OfType<SupportedBodies.Body>()
+                       .Where(b => b.Race == race)
+                       .Select(b => SupportedBodies.Find(b, request.Bodies)?.Dir)
+                       .FirstOrDefault(d => d != null) ?? fallback;
+
     private static int RunPiece(Request request, Piece piece, UVRemapService? uvRemap, IPluginLog log,
-                                Action<string> progress, List<string> notes, CancellationToken ct)
+                                Action<string> progress, List<string> notes,
+                                Dictionary<string, AutoRefitDecisions.Pick?> readings, CancellationToken ct)
     {
         string root = request.ModRoot;
         string race = piece.Race;
@@ -238,11 +258,7 @@ internal static partial class SizeSetRefit
             notes.Add(Strings.SizeSet.NoBodies);
             return 0;
         }
-        string preferred = request.Keys.Select(k => SupportedBodies.Of(k, sizeSlot, false))
-                                       .OfType<SupportedBodies.Body>()
-                                       .Where(b => b.Race == race)
-                                       .Select(b => SupportedBodies.Find(b, request.Bodies)?.Dir)
-                                       .FirstOrDefault(d => d != null) ?? mods[0].Dir;
+        string preferred = Preferred(request, sizeSlot, race, mods[0].Dir);
 
         (string? Option, string File, byte[] Bytes, ModelParts Garment, HashSet<string> Bones, AutoRefitDecisions.Pick Pick)? source = null;
         // Every option until one reads, not the first few: a men's shirt lists "Type M", "TBSE-Q" and two Thicclanders
@@ -255,8 +271,13 @@ internal static partial class SizeSetRefit
             byte[] bytes = File.ReadAllBytes(path);
             if (ModelPartReader.Read(bytes) is not { } garment) continue;
             var bones = new HashSet<string>(SecondSkinWriter.Parse(bytes).BoneNames, StringComparer.Ordinal);
-            var pick = RefitCore.DetectSource(garment, bones, piece.Slot, race, mods, preferred, _ => true,
-                                              note => log.Information("[Proteus] size set: {0}: {1}", piece.Label, note));
+            // Read before in this run — by a glove sizing itself by this very file — or read now and kept.
+            string key = ReadingKey(file, piece.Slot, race, preferred);
+            if (readings.TryGetValue(key, out var pick))
+                log.Information("[Proteus] size set: {0}: {1} was read before in this run", piece.Label, file);
+            else
+                readings[key] = pick = RefitCore.DetectSource(garment, bones, piece.Slot, race, mods, preferred, _ => true,
+                                                              note => log.Information("[Proteus] size set: {0}: {1}", piece.Label, note));
             if (pick == null || !AutoRefitDecisions.Proceed(pick.Confidence)) continue;
             source = (option, file, bytes, garment, bones, pick);
             break;

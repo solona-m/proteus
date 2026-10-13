@@ -1700,6 +1700,97 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     private const string CasualFitShirt = LocalData.Mods + ":raykie's casual fit shirt (tbse+)";
     private const string TwillTrousers = LocalData.Mods + ":-Twill Trousers- [YAB, TBSE, TBSE-X]";
 
+    private const string Geometric = LocalData.Mods + ":Geometric - by Solona";
+    private const string IvcsBibo = LocalData.Mods + ":[IVCS] Bibo+";
+    private const string FixPubes = LocalData.Mods + ":fix pubes";
+
+    /// <summary>Geometric as its author ships it: its manifests and models, without the sizes Proteus added to it.</summary>
+    private static string GeometricAsShipped()
+    {
+        string copy = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
+        CopyModels(LocalData.Path(Geometric), copy, withRecord: false);
+        foreach (string group in new[] { "Chest Size", "Leg Size" })
+            foreach (var option in PenumbraModMeta.TryReadFileOptions(copy, group) ?? [])
+                if (option.Files != null && option.Files.Values.Any(f => RefitCore.Normal(f).StartsWith("body retarget/", StringComparison.Ordinal)))
+                    Assert.NotNull(PenumbraModMeta.RemoveOption(copy, group, option.Name));
+        return copy;
+    }
+
+    /// <summary>
+    /// Geometric's cropped jacket is its hands model, sized with its top in each "Chest Size" option. Read by its cloth it
+    /// came out [IVCS] Bibo+ Smallclothes, and every size was cut from too small a bust; it is sized by the top in its
+    /// option instead, read once for the top's own sizes and the jacket's alike.
+    /// </summary>
+    [LocalDataFact(Geometric, Bibo, IvcsBibo, FixPubes, Rue)]
+    [Trait("Plan", "AC-jacket-refit-12")]
+    [Trait("Plan", "AC-jacket-refit-13")]
+    [Trait("Plan", "EDGE-jacket-refit-36")]
+    public void Geometrics_jacket_is_sized_by_the_top_in_its_option()
+    {
+        string copy = GeometricAsShipped();
+        try
+        {
+            var (result, request) = RunOn(copy, ["rue"], Bibo, IvcsBibo, FixPubes, Rue);
+            Assert.True(result.Made > 0);
+            var sized = Assert.Single(lastLog, l => l.Template.Contains("sized by its {1} piece in the same option",
+                                                                        StringComparison.Ordinal));
+            Assert.Equal("chest", sized.Args[1]);
+            Assert.Equal("Bibo+", sized.Args[2]);
+            Assert.Contains(lastLog, l => l.Template.Contains("route {2}", StringComparison.Ordinal)
+                                          && l.Args.Length > 2 && (string)l.Args[2] == "D");
+            Assert.DoesNotContain(lastLog, l => l.Template.Contains("route {2}", StringComparison.Ordinal)
+                                                && l.Args.Length > 4 && (string)l.Args[4] == "Smallclothes");
+            // The top was read once: for its own sizes, or for the jacket — whichever came first — and not again.
+            Assert.Contains(lastLog, l => l.Template.Contains("read before in this run", StringComparison.Ordinal)
+                                          || (l.Args.Length > 1 && l.Args[1] is string s
+                                              && s.Contains("read before in this run", StringComparison.Ordinal)));
+            var hands = EndRefitsLogged();
+            output.WriteLine(string.Join("; ", hands.Select(h => $"{h.Option}: {h.Folded} folded")));
+            Assert.NotEmpty(hands);
+
+            // A second run makes nothing; asked to make them again, it remakes the sizes it added, in place.
+            var options = Options(copy, "Chest Size");
+            var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
+            Assert.Equal(0, SizeSetRefit.Run(request, new UVRemapService(log, "."), log, _ => { }, CancellationToken.None).Made);
+            var remade = SizeSetRefit.Run(request with { Remake = true }, new UVRemapService(log, "."), log, _ => { },
+                                          CancellationToken.None);
+            Assert.True(remade.Made > 0);
+            Assert.Equal(options, Options(copy, "Chest Size"));
+            Assert.DoesNotContain("\"FileVersion\": 3", File.ReadAllText(Path.Combine(copy, PenumbraModMeta.MetaFile)));
+        }
+        finally
+        {
+            if (Directory.Exists(copy)) Directory.Delete(copy, recursive: true);
+        }
+    }
+
+    /// <summary>A shoe sized in its legs' option finds those legs beside it.</summary>
+    [LocalDataFact(Heartthrob)]
+    [Trait("Plan", "EDGE-jacket-refit-35")]
+    public void Heartthrobs_shoe_finds_the_legs_in_its_option()
+    {
+        string root = LocalData.Path(Heartthrob);
+        var redirects = PenumbraModMeta.ReadAllRedirects(root);
+        string shoe = redirects.First(d => d.GamePath.EndsWith("c0201e6070_sho.mdl", StringComparison.OrdinalIgnoreCase)
+                                           && RefitCore.Normal(d.File).Contains("small", StringComparison.Ordinal)).File;
+        var legs = SiblingPiece.Find(redirects, BodyRetargetWriter.ReadRecord(root), shoe, "_dwn", "0201", output.WriteLine);
+        output.WriteLine(string.Join(", ", legs.Select(c => c.File)));
+        Assert.NotEmpty(legs);
+        Assert.All(legs, c => Assert.EndsWith("_dwn.mdl", c.GamePath, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>The same reading of one author's file is kept under one key, whatever its path's case or slashes.</summary>
+    [Fact]
+    [Trait("Plan", "AC-jacket-refit-13")]
+    public void A_reading_is_kept_by_file_slot_race_and_preferred_body()
+    {
+        string key = SizeSetRefit.ReadingKey("Chest Size\\Small\\top.mdl", "_top", "0201", "Bibo+");
+        Assert.Equal(key, SizeSetRefit.ReadingKey("chest size/small/top.mdl", "_top", "0201", "bibo+"));
+        Assert.NotEqual(key, SizeSetRefit.ReadingKey("chest size/small/top.mdl", "_dwn", "0201", "Bibo+"));
+        Assert.NotEqual(key, SizeSetRefit.ReadingKey("chest size/small/top.mdl", "_top", "0101", "Bibo+"));
+        Assert.NotEqual(key, SizeSetRefit.ReadingKey("chest size/small/top.mdl", "_top", "0201", "Rue"));
+    }
+
     /// <summary>Run a size set on a copy of a mod, printing what it said and logged.</summary>
     private (SizeSetRefit.Result Result, SizeSetRefit.Request Request) RunOn(string copy, IReadOnlyList<string> keys,
                                                                             params string[] bodyMods)
