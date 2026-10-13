@@ -132,8 +132,37 @@ public sealed partial class AutoRefitWatcher : IDisposable
     /// <param name="ModRoot">The mod supplying it, or null for the game's own gear.</param>
     /// <param name="Forced">Asked for with "Refit what I'm wearing now": the player's earlier choice of another size is
     /// overridden, since they asked for exactly that.</param>
+    /// <param name="Beside">For an accessory: the chest and legs pieces worn with it at the walk, as they were drawn then
+    /// — never resolved again, which would find their refits once their own jobs switched them on.</param>
+    /// <param name="Chosen">For an accessory: the body and sizes chosen at the walk, which key its cover reading — read
+    /// before anything is gathered, so jewellery read before costs no hop to the framework thread.</param>
     private sealed record Request(string Slot, Worn Worn, string? Resolved, string? ModRoot, Guid Collection,
-                                 bool Forced = false);
+                                 bool Forced = false, IReadOnlyDictionary<string, Beside>? Beside = null,
+                                 Chosen? Chosen = null);
+
+    /// <summary>A chest or legs piece worn beside an accessory at the walk: what it is, the file drawn and its mod.</summary>
+    private sealed record Beside(Worn Worn, string? Resolved, string? ModRoot);
+
+    /// <summary>
+    /// What each body piece's own refit came to since the queue last ran dry, by <see cref="OutcomeKey"/> — what an
+    /// accessory worn over it is sized by (see <see cref="AccessoryCover.FromBeneath"/>). Cleared when the queue runs dry
+    /// and with everything queued (<see cref="CancelAll"/>): an outcome from an earlier batch may since have been
+    /// switched away from.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, PieceOutcome> outcomes = new(StringComparer.Ordinal);
+
+    /// <summary>The author's own size switched on as the size chosen: made on that very size.</summary>
+    private static AutoRefitDecisions.Pick OnTarget(BodyModIndex.Entry targetMod, BodyOption target)
+        => new(targetMod.Dir, target, Confidence.Exact, false);
+
+    /// <summary>A body piece as <see cref="outcomes"/> knows it: its slot, what it is, and the file it was drawn from.</summary>
+    internal static string OutcomeKey(string slot, Worn worn) => slot + "|" + worn.Key + "|" + RefitCore.Normal(worn.Rel ?? "");
+
+    /// <summary>Note what a body piece's refit came to, for an accessory worn over it. Accessories note nothing.</summary>
+    private void Outcome(Request r, bool onTarget, AutoRefitDecisions.Pick? source)
+    {
+        if (!AutoRefitDecisions.IsAccessory(r.Slot)) outcomes[OutcomeKey(r.Slot, r.Worn)] = new PieceOutcome(onTarget, source);
+    }
 
     /// <summary>The design binding: a design restore holds mods with temporary settings, which a refit must change too.</summary>
     private readonly DesignBindingService designs;
@@ -531,10 +560,18 @@ public sealed partial class AutoRefitWatcher : IDisposable
             var (resolved, root, outside) = resolvedOf[slot];
             if (ours.TryGetValue(slot + "|" + worn.GamePath, out long until) && tick < until) continue;
 
-            var skip = AutoRefitDecisions.ShouldRefit(worn, config.AutoRefitVanilla, outside);
+            var skip = AutoRefitDecisions.ShouldRefit(slot, worn, config.AutoRefitVanilla, outside);
             if (skip != AutoRefitDecisions.Skip.None)
             {
-                log.Debug("[Proteus] auto refit: {0} {1} left alone ({2})", slot, worn.GamePath, skip);
+                // A garment the second skin is appended into is drawn from Proteus's managed mod, rebuilt from its own
+                // file by every shell build: a refit saved into its mod would never reach what is drawn. Named, so a
+                // report of one left unrefitted can be told apart from jewellery.
+                if (skip == AutoRefitDecisions.Skip.Managed && AutoRefitDecisions.IsAccessory(slot)
+                    && compositor.GetAppendHostSource(worn.GamePath) is { } host)
+                    log.Information("[Proteus] auto refit: {0} {1} hosts the second skin (from {2}), left as it is", slot,
+                                    worn.GamePath, host);
+                else
+                    log.Debug("[Proteus] auto refit: {0} {1} left alone ({2})", slot, worn.GamePath, skip);
                 continue;
             }
 
@@ -549,11 +586,20 @@ public sealed partial class AutoRefitWatcher : IDisposable
                 pref.Declined.Remove(worn.Key);
                 config.Save();
             }
-            Enqueue(new Request(slot, worn, resolved, root, collection.Id, all));
+            // An accessory is sized off the chest or legs piece worn with it: what those draw now, before their own
+            // refits switch them to another file.
+            var beside = AutoRefitDecisions.IsAccessory(slot)
+                ? AutoRefitDecisions.Slots.Where(s => s is "_top" or "_dwn" && now.ContainsKey(s))
+                                          .ToDictionary(s => s, s => new Beside(now[s], resolvedOf[s].Resolved,
+                                                                                resolvedOf[s].Root))
+                : null;
+            Enqueue(new Request(slot, worn, resolved, root, collection.Id, all, beside,
+                                beside == null ? null : new Chosen(pref.BodyDir, pref.Chest?.Rel, pref.Legs?.Rel)));
         }
     }
 
-    /// <summary>What each body slot draws: the mod and file supplying it, or the game's own. Framework thread.</summary>
+    /// <summary>What each body and accessory slot draws: the mod and file supplying it, or the game's own. Framework
+    /// thread.</summary>
     /// <param name="resolvedOf">Per slot, the file the game resolved, the mod folder holding it, and whether it is a file
     /// outside Penumbra's mods altogether.</param>
     private Dictionary<string, Worn> ReadWorn(HashSet<string>? models, string? modsRoot,
@@ -561,7 +607,8 @@ public sealed partial class AutoRefitWatcher : IDisposable
     {
         var now = new Dictionary<string, Worn>(StringComparer.Ordinal);
         resolvedOf = new Dictionary<string, (string? Resolved, string? Root, bool Outside)>(StringComparer.Ordinal);
-        foreach (var (suffix, gamePath) in DrawnModelPaths.EquippedPartModelsFromModels(models))
+        foreach (var (suffix, gamePath) in DrawnModelPaths.EquippedPartModelsFromModels(models)
+                                                          .Concat(DrawnModelPaths.EquippedAccessoryGarmentModelsFromModels(models)))
         {
             string slot = "_" + suffix;
             string? resolved = penumbra.ResolvePlayer(gamePath);
@@ -615,6 +662,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
             queue.Clear();
             running?.Cancel();
         }
+        outcomes.Clear();
     }
 
     /// <summary>
@@ -662,12 +710,13 @@ public sealed partial class AutoRefitWatcher : IDisposable
                 CancellationTokenSource? cts = null;
                 lock (queueGate)
                 {
-                    string? next = AutoRefitDecisions.Slots.FirstOrDefault(queue.ContainsKey);
+                    string? next = AutoRefitDecisions.WornSlots.FirstOrDefault(queue.ContainsKey);
                     if (next == null)
                     {
                         // Cleared under the same lock Enqueue starts a runner under: a request arriving after this
                         // starts a new runner, and one arriving before it was taken by the loop.
                         runner = null;
+                        outcomes.Clear();
                         FlushSummary();
                     }
                     else
@@ -816,6 +865,12 @@ public sealed partial class AutoRefitWatcher : IDisposable
 
     private async Task RunJob(Request r, CancellationToken ct)
     {
+        // A garment on an accessory slot: see AutoRefitWatcher.Accessories.cs.
+        if (AutoRefitDecisions.IsAccessory(r.Slot))
+        {
+            await RunAccessory(r, ct);
+            return;
+        }
         var clock = Stopwatch.StartNew();
         bool isVanilla = r.ModRoot == null;
 
@@ -830,12 +885,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
         var bodies = state.List;
         if (state.Find(g.Preference.BodyDir) is not { } targetMod)
         {
-            string missing = string.Format(Loc.Localize("Chat.AutoRefit.BodyMissing.Fmt",
-                    "[Proteus] The body chosen for automatic refits in this collection, \"{0}\", isn't installed, "
-                  + "so nothing is being refitted. Choose another under /proteus > Settings."),
-                    g.Preference.BodyDir);
-            Say(missing, problem: true);
-            if (toldMissing.TryAdd(r.Collection, 0)) Chat(missing, problem: true);
+            SayBodyMissing(r, g);
             return;
         }
         var targetCat = targetMod.Catalog;
@@ -888,7 +938,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
                 bakeTo = 0;
             }
         }
-        string race = bakeTo != 0 ? $"{bakeTo:D4}" : BodySizeCatalog.RaceOf(r.Worn.GamePath) ?? "0201";
+        string race = bakeTo != 0 ? $"{bakeTo:D4}" : ReadAs(r.Worn.GamePath).Race;
         bool male = BodySizeCatalog.IsMaleRace(race);
 
         if (ModelPartReader.Read(bytes) is not { } garment)
@@ -956,41 +1006,8 @@ public sealed partial class AutoRefitWatcher : IDisposable
             return;
 
         // ── what it was made on, and which other parts of that body it reaches ──
-        BodySizeCatalog? CatalogOf(string dir) => dir == VanillaBodyCatalog.Key ? vanillaCat : state.Find(dir)?.Catalog;
-        // The collection's own choice only — beneath any design's temporary setting, which comes and goes with every
-        // design; counted, it would make each design change read every garment again. The detection's ties read the same.
-        var enabledBodies = bodies.Where(b => g.Permanent != null && g.Permanent.TryGetValue(b.Dir, out var s)
-                                              && s.Enabled && !s.Temporary)
-                                  .Select(b => b.Dir);
-        string cacheKey = DetectionCache.KeyOf(bytes, primary, race, targetMod.Dir,
-                                               DetectionCache.BodiesOf(state.Version, enabledBodies,
-                                                                       VanillaPrint(vanillaCat, primary, race)));
-        AutoRefitDecisions.Pick? source = null;
-        Dictionary<string, string> otherFrom;
-        if (detections.TryGet(cacheKey) is { } hit && Restore(hit, primary, race, CatalogOf) is { } restored)
-        {
-            source = restored.Pick;
-            otherFrom = hit.Others;
-            log.Information("[Proteus] auto refit: {0} read before ({1}), not read again", item, hit.Confidence);
-        }
-        else
-        {
-            AssertOffFramework("reading the garment");
-            source = isVanilla
-                ? VanillaSource(vanillaCat, primary, race)
-                : DetectAcross(garment, bones, primary, race, targetMod, bodies, vanillaCat, g.Permanent);
-            otherFrom = new Dictionary<string, string>(StringComparer.Ordinal);
-            if (source is { } found && AutoRefitDecisions.Proceed(found.Confidence) && CatalogOf(found.Dir) is { } from)
-                foreach (string slot in AutoRefitDecisions.Slots)
-                {
-                    if (slot == primary || from.For(slot, race).Count == 0) continue;
-                    var ranking = BodySizeMatch.Rank(garment, from.For(slot, race), from.PathOf, bones);
-                    if (AutoRefitDecisions.AcceptOther(ranking, found.Option)) otherFrom[slot] = ranking.Best!.Value.Option.Rel;
-                }
-            detections.Put(cacheKey, new DetectionCache.Entry(source?.Dir ?? "", source?.Option.Rel ?? "",
-                                                               source?.Confidence ?? Confidence.Ambiguous,
-                                                               source?.FromCloth ?? false, otherFrom));
-        }
+        var (source, otherFrom) = ReadSource(g, state, targetMod, vanillaCat, bytes, garment, bones, primary, race,
+                                             isVanilla, item);
         ct.ThrowIfCancellationRequested();
 
         if (source is not { } pick)
@@ -1024,6 +1041,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
         if (AutoRefitDecisions.SameFile(pick.Dir, pick.Option, targetMod.Dir, target))
         {
             log.Information("[Proteus] auto refit: {0} already fits {1} / {2}", item, targetMod.Name, target.Label);
+            Outcome(r, onTarget: true, pick);
             return;
         }
         bool across = !string.Equals(pick.Dir, targetMod.Dir, StringComparison.OrdinalIgnoreCase);
@@ -1048,8 +1066,19 @@ public sealed partial class AutoRefitWatcher : IDisposable
         string OptionFor(IEnumerable<(string Slot, BodyOption From, BodyOption To)> parts)
             => RefitCore.OptionName(targetMod.Name, new[] { target.Label }.Concat(parts.Select(p => p.To.Label)));
 
+        // Sized together with other pieces in one of the author's single-choice groups: into the option another piece's
+        // refit onto these sizes went into, so switching one on does not switch the other off. Worked out once: a part
+        // left out below still goes into the option joined here.
         string option = OptionFor(others);
-        if (await LetBeOrPutBack(r, g, root, group, option, savePath, cutFrom, item, targetMod.Name, ct)) return;
+        string? joined = null;
+        if (root != null && RefitCore.IsSharedSingleGroup(redirects, ownRecord, group, RefitCore.SingleGroups(root))
+            && RefitCore.JoinOption(ownRecord, group, savePath, targetMod.Dir, ChosenTargets(TargetFor),
+                                    TargetsOf(primary, target, others), option) is { } join
+            && join != option)
+            option = joined = join;
+        if (await LetBeOrPutBack(r, g, root, group, option, savePath, cutFrom, item, targetMod.Name, ct,
+                                 pick))
+            return;
 
         // ── the refit ──
         string targetLabel = targetMod.Name + " — " + target.Label;
@@ -1082,7 +1111,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
             pairs.Add(pair);
             kept.Add(other);
         }
-        option = OptionFor(kept);
+        option = joined ?? OptionFor(kept);
         ct.ThrowIfCancellationRequested();
 
         AssertOffFramework("the refit");
@@ -1102,9 +1131,11 @@ public sealed partial class AutoRefitWatcher : IDisposable
                                                new[] { pick.Option.Label }.Concat(kept.Select(k => k.From.Label)));
         var refit = new BodyRetargetWriter.Refit(option, plan.Model, string.Join(" + ",
                                                      new[] { target.Label }.Concat(kept.Select(k => k.To.Label))));
-        if (await SaveAndWear(r, g, root, group, savePath, targetMod, labelFrom, refit, cutFrom, bakeTo, item, gameGear)
+        if (await SaveAndWear(r, g, root, group, savePath, targetMod, labelFrom, refit, cutFrom, bakeTo, item, gameGear,
+                              new BodyRetargetWriter.Provenance(pick.Dir, pick.Option.Rel, TargetsOf(primary, target, kept)))
             is not { } savedRoot)
             return;
+        Outcome(r, onTarget: true, pick);
         log.Information("[Proteus] auto refit: {0} {1} onto {2} in {3:F1}s (moved up to {4:F1} mm)", item, primary,
                         option, clock.Elapsed.TotalSeconds, plan.Report.WorstMove * 1000f);
         if (RefitCore.ReleasedLog(plan.Report, pieceNames) is { } released)
@@ -1169,12 +1200,14 @@ public sealed partial class AutoRefitWatcher : IDisposable
         {
             log.Information("[Proteus] auto refit: {0} is already the author's {1}, which is {2} / {3}", item,
                             authored, targetMod.Name, target.Label);
+            Outcome(r, onTarget: true, OnTarget(targetMod, target));
             return true;
         }
         if (!r.Forced && ChoseOtherwise(g, r.ModRoot, sizeGroup))
         {
             log.Information("[Proteus] auto refit: {0} / {1} was switched away in this collection, left as chosen",
                             Path.GetFileName(r.ModRoot), sizeGroup);
+            Outcome(r, onTarget: false, null);
             return true;
         }
         if (await Apply(r, r.ModRoot, sizeGroup, authored, wornSize, false, ct, authorSize: true) is { } offAuthor)
@@ -1183,6 +1216,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
                                   item, offAuthor));
             return true;
         }
+        Outcome(r, onTarget: true, OnTarget(targetMod, target));
         Say(string.Format(Loc.Localize("Chat.AutoRefit.Author.Fmt",
                 "[Proteus] {0} already comes in {1}; its own \"{2}\" is switched on."),
                 item, targetMod.Name + " — " + target.Label, authored));
@@ -1229,18 +1263,28 @@ public sealed partial class AutoRefitWatcher : IDisposable
     /// author's sizes, which reads as the piece newly put on and must not be undone — or this very option was made
     /// before and is still there, and is put back on.
     /// </summary>
+    /// <param name="source">What the refit would be made from now (see <see cref="Existing"/>); null for no check.</param>
     /// <returns>True when nothing more is to be done.</returns>
     private async Task<bool> LetBeOrPutBack(Request r, Gathered g, string? root, string group, string option,
                                             string savePath, string? cutFrom, string item, string body,
-                                            CancellationToken ct)
+                                            CancellationToken ct, AutoRefitDecisions.Pick? source = null)
     {
         if (!r.Forced && root != null && ChoseOtherwise(g, root, group))
         {
             log.Information("[Proteus] auto refit: {0} / {1} was switched away from its refit in this collection, left as "
                           + "chosen", Path.GetFileName(root), group);
+            Outcome(r, onTarget: false, null);
             return true;
         }
-        if (root == null || !Existing(root, group, option, savePath)) return false;
+        if (root == null) return false;
+        (string, string)? from = source == null ? null : (source.Dir, source.Option.Rel);
+        if (!Existing(root, group, option, savePath, from))
+        {
+            if (from != null && Existing(root, group, option, savePath))
+                log.Information("[Proteus] auto refit: {0}: \"{1}\" was made from another size; making it again", item,
+                                option);
+            return false;
+        }
 
         if (await Apply(r, root, group, option, cutFrom, r.ModRoot == null, ct) is { } offExisting)
         {
@@ -1248,6 +1292,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
                                   item, offExisting));
             return true;
         }
+        Outcome(r, onTarget: true, source);
         Say(string.Format(Loc.Localize("Chat.AutoRefit.Existing.Fmt",
                 "[Proteus] {0} was already refitted to {1}; that size is switched on."), item, option));
         Finished(item, body);
@@ -1259,10 +1304,13 @@ public sealed partial class AutoRefitWatcher : IDisposable
     /// that there is something to put in it.
     /// </summary>
     /// <param name="fromGame">The garment is the game's own (see <see cref="BodyRetargetWriter.Entry.FromGame"/>).</param>
+    /// <param name="provenance">What the refit was made from and onto, for the record (see
+    /// <see cref="BodyRetargetWriter.Entry.SourceDir"/>).</param>
     /// <returns>The mod it was saved into, or null when it failed, which the player has been told.</returns>
     private async Task<string?> SaveAndWear(Request r, Gathered g, string? root, string group, string savePath,
                                             BodyModIndex.Entry targetMod, string labelFrom, BodyRetargetWriter.Refit refit,
-                                            string? cutFrom, ushort bakeTo, string item, bool fromGame)
+                                            string? cutFrom, ushort bakeTo, string item, bool fromGame,
+                                            BodyRetargetWriter.Provenance? provenance)
     {
         bool isVanilla = r.ModRoot == null;
         if (root == null)
@@ -1280,7 +1328,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
 
         List<object>? manipulations = bakeTo != 0 && RacialModelBake.Switch(savePath, bakeTo) is { } eqdp ? [eqdp] : null;
         var outcome = BodyRetargetWriter.Save(root, group, savePath, targetMod.Dir, labelFrom, [refit], cutFrom,
-                                              manipulations, auto: true, fromGame: fromGame);
+                                              manipulations, auto: true, fromGame: fromGame, provenance: provenance);
         if (!outcome.Ok)
         {
             Fail(r, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"), item,
@@ -1296,6 +1344,24 @@ public sealed partial class AutoRefitWatcher : IDisposable
             return null;
         }
         return root;
+    }
+
+    /// <summary>The target body's file chosen now for every body part that has one (see <see cref="RefitCore.JoinOption"/>).</summary>
+    private static Dictionary<string, string> ChosenTargets(Func<string, BodyOption?> targetFor)
+    {
+        var chosen = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (string slot in AutoRefitDecisions.Slots)
+            if (targetFor(slot) is { } to) chosen[slot] = to.Rel;
+        return chosen;
+    }
+
+    /// <summary>The target body's file per part a refit goes onto: its own, then each other part's.</summary>
+    private static Dictionary<string, string> TargetsOf(string slot, BodyOption target,
+                                                        IEnumerable<(string Slot, BodyOption From, BodyOption To)> others)
+    {
+        var targets = new Dictionary<string, string>(StringComparer.Ordinal) { [slot] = target.Rel };
+        foreach (var other in others) targets[other.Slot] = other.To.Rel;
+        return targets;
     }
 
     /// <summary>What chat calls the mod a refit was saved into.</summary>
@@ -1341,6 +1407,84 @@ public sealed partial class AutoRefitWatcher : IDisposable
             vanillaBytes = readGameFile(r.Worn.GamePath);
         }
         return new Gathered(pref, mods, modsRoot, settings, wearer, vanillaBytes, vanilla, permanent);
+    }
+
+    /// <summary>
+    /// What a garment in <paramref name="slot"/> was made on, and the size of each other part of that body it reaches —
+    /// read once and kept in the detection cache. One reading for every caller: a glove sized by the top beside it in the
+    /// same option (<see cref="SiblingPiece"/>) reads that top here, under the very key the top's own refit reads it
+    /// under, so whichever comes first the other finds it, other parts and all.
+    /// </summary>
+    private (AutoRefitDecisions.Pick? Source, Dictionary<string, string> Others) ReadSource(
+        Gathered g, BodyModIndex.State state, BodyModIndex.Entry targetMod, BodySizeCatalog vanillaCat, byte[] bytes,
+        ModelParts garment, IReadOnlySet<string> bones, string slot, string race, bool isVanilla, string item)
+    {
+        BodySizeCatalog? CatalogOf(string dir) => dir == VanillaBodyCatalog.Key ? vanillaCat : state.Find(dir)?.Catalog;
+        string cacheKey = SourceCacheKey(bytes, slot, race, targetMod.Dir,
+                                         DetectionCache.BodiesOf(state.Version, EnabledBodies(g, state),
+                                                                 VanillaPrint(vanillaCat, slot, race)));
+        if (detections.TryGet(cacheKey) is { } hit && Restore(hit, slot, race, CatalogOf) is { } restored)
+        {
+            log.Information("[Proteus] auto refit: {0} read before ({1}), not read again", item, hit.Confidence);
+            return (restored.Pick, hit.Others);
+        }
+
+        AssertOffFramework("reading the garment");
+        var source = isVanilla
+            ? VanillaSource(vanillaCat, slot, race)
+            : DetectAcross(garment, bones, slot, race, targetMod, state.List, vanillaCat, g.Permanent);
+        var otherFrom = source is { } found && AutoRefitDecisions.Proceed(found.Confidence) && CatalogOf(found.Dir) is { } from
+            ? OtherParts(garment, slot, race, found, from,
+                         (s, options) => BodySizeMatch.Rank(garment, options, from.PathOf, bones))
+            : new Dictionary<string, string>(StringComparer.Ordinal);
+        detections.Put(cacheKey, new DetectionCache.Entry(source?.Dir ?? "", source?.Option.Rel ?? "",
+                                                           source?.Confidence ?? Confidence.Ambiguous,
+                                                           source?.FromCloth ?? false, otherFrom));
+        return (source, otherFrom);
+    }
+
+    /// <summary>
+    /// The slot and race a piece drawn at <paramref name="gamePath"/>, not baked, is read in — the walk's slot (see
+    /// <see cref="DrawnModelPaths.EquippedPartModelsFromModels"/>) and the path's race. One answer for a piece's own refit
+    /// and for a glove reading it as its sibling, so both read it under one cache key. Null slot for no body part.
+    /// </summary>
+    internal static (string? Slot, string Race) ReadAs(string gamePath)
+        => (DrawnModelPaths.EquippedPartModelsFromModels([gamePath]).Keys.Select(s => "_" + s).FirstOrDefault(),
+            BodySizeCatalog.RaceOf(gamePath) ?? "0201");
+
+    /// <summary>The detection cache's key for a garment read in <paramref name="slot"/> — see
+    /// <see cref="DetectionCache.KeyOf"/>.</summary>
+    internal static string SourceCacheKey(byte[] bytes, string slot, string race, string targetDir, string bodies)
+        => DetectionCache.KeyOf(bytes, slot, race, targetDir, bodies);
+
+    /// <summary>
+    /// The body mods switched on in the collection's own choice — beneath any design's temporary setting, which comes and
+    /// goes with every design; counted, it would make each design change read every garment again. The detection's ties
+    /// read the same.
+    /// </summary>
+    private static IEnumerable<string> EnabledBodies(Gathered g, BodyModIndex.State state)
+        => state.List.Where(b => g.Permanent != null && g.Permanent.TryGetValue(b.Dir, out var s) && s.Enabled
+                                 && !s.Temporary)
+                     .Select(b => b.Dir);
+
+    /// <summary>
+    /// The size, per other body part the garment reaches, of the body it was made on — the legs of a dress beside its
+    /// chest — by file. A part goes in only where its ranking agrees with the garment's own size (see
+    /// <see cref="AutoRefitDecisions.AcceptOther"/>).
+    /// </summary>
+    /// <param name="rank">The garment ranked against one part's sizes; a test passes its own.</param>
+    internal static Dictionary<string, string> OtherParts(ModelParts garment, string slot, string race,
+                                                          AutoRefitDecisions.Pick source, BodySizeCatalog from,
+                                                          Func<string, IReadOnlyList<BodyOption>, BodySizeMatch.Ranking> rank)
+    {
+        var otherFrom = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (string other in AutoRefitDecisions.Slots)
+        {
+            if (other == slot || from.For(other, race).Count == 0) continue;
+            var ranking = rank(other, from.For(other, race));
+            if (AutoRefitDecisions.AcceptOther(ranking, source.Option)) otherFrom[other] = ranking.Best!.Value.Option.Rel;
+        }
+        return otherFrom;
     }
 
     /// <summary>
@@ -1513,17 +1657,32 @@ public sealed partial class AutoRefitWatcher : IDisposable
         return AutoRefitDecisions.ChoseOtherwise(before, ticked, refits);
     }
 
-    /// <summary>Whether this exact refit is already saved in the mod and still offered by the group.</summary>
-    internal static bool Existing(string root, string group, string option, string savePath)
+    /// <summary>
+    /// Whether this exact refit is already saved in the mod and still offered by the group — made from
+    /// <paramref name="source"/>, where its entry records what it was made from: one read from another size before (a
+    /// glove sized by its cloth, before it was sized by its top) is made again rather than put back on. An entry from
+    /// before sources were recorded is put back, as it always was.
+    /// </summary>
+    /// <param name="source">The body mod folder and file the refit would be made from now; null compares no source.</param>
+    internal static bool Existing(string root, string group, string option, string savePath,
+                                  (string Dir, string Rel)? source = null)
     {
         var record = BodyRetargetWriter.ReadRecord(root);
         if (record == null) return false;
         bool recorded = record.Options.Any(e => string.Equals(e.Name, option, StringComparison.OrdinalIgnoreCase)
                                                 && string.Equals(e.GamePath, savePath, StringComparison.OrdinalIgnoreCase)
-                                                && string.Equals(record.GroupOf(e), group, StringComparison.OrdinalIgnoreCase));
+                                                && string.Equals(record.GroupOf(e), group, StringComparison.OrdinalIgnoreCase)
+                                                && SameSource(e, source));
         return recorded && (PenumbraModMeta.TryReadFileOptions(root, group) ?? [])
                            .Any(o => string.Equals(o.Name, option, StringComparison.OrdinalIgnoreCase));
     }
+
+    /// <summary>Whether an entry was made from <paramref name="source"/>: by body mod folder and file where it records
+    /// them, and taken as so where it does not.</summary>
+    private static bool SameSource(BodyRetargetWriter.Entry e, (string Dir, string Rel)? source)
+        => source is not { } s || e.SourceDir == null || e.SourceRel == null
+           || (string.Equals(e.SourceDir, s.Dir, StringComparison.OrdinalIgnoreCase)
+               && RefitCore.Normal(e.SourceRel) == RefitCore.Normal(s.Rel));
 
     /// <summary>
     /// Wear what was saved: Penumbra re-reads the mod, then the option is selected — in that order, or an option the
@@ -1626,12 +1785,17 @@ public sealed partial class AutoRefitWatcher : IDisposable
         return string.Format(Strings.AutoRefit.ItemInModFmt, mod, SlotName(r.Slot));
     }
 
-    private static string SlotName(string slot) => slot switch
+    internal static string SlotName(string slot) => slot switch
     {
         "_top" => Strings.Parts.RetargetChest,
         "_dwn" => Strings.Parts.RetargetLegs,
         "_glv" => Strings.Parts.RetargetHands,
         "_sho" => Strings.Parts.RetargetFeet,
+        "_nek" => Strings.Common.SlotNecklace,
+        "_ear" => Strings.Common.SlotEarrings,
+        "_wrs" => Strings.Common.SlotBracelets,
+        "_rir" => Strings.Common.SlotRightRing,
+        "_ril" => Strings.Common.SlotLeftRing,
         _ => slot,
     };
 
@@ -1646,6 +1810,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
     /// <summary>A refit failed: shown under the setting, and in chat the first time this piece fails this session.</summary>
     private void Fail(Request r, string message)
     {
+        Outcome(r, onTarget: false, null);
         Say(message, problem: true);
         if (toldFailed.TryAdd(r.Worn.Key, 0)) Chat(message, problem: true);
     }

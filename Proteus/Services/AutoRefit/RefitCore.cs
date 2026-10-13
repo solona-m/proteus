@@ -290,6 +290,71 @@ internal static class RefitCore
     internal static string OptionName(string bodyName, IEnumerable<string> targetLabels)
         => $"{bodyName} — {string.Join(" + ", targetLabels)}";
 
+    /// <summary>The model of a body part or an accessory — the pieces a size group can hold several of.</summary>
+    private static readonly System.Text.RegularExpressions.Regex PieceModel = new(
+        @"_(top|dwn|glv|sho|nek|ear|wrs|rir|ril)\.mdl$",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>
+    /// Whether <paramref name="group"/> is one of the author's single-choice groups that sizes several pieces together —
+    /// Geometric's "Chest Size", every option of which serves its top and its jacket — where two refits saved as two
+    /// options would switch each other off (see <see cref="JoinOption"/>). Counted by piece models only: a size group
+    /// serving one model and its materials sizes one piece.
+    /// </summary>
+    internal static bool IsSharedSingleGroup(IEnumerable<PenumbraModMeta.Redirect> redirects,
+                                             BodyRetargetWriter.Record? record, string group,
+                                             IReadOnlyCollection<string> singleGroups)
+    {
+        if (!singleGroups.Contains(group, StringComparer.OrdinalIgnoreCase)) return false;
+        var ours = new HashSet<string>(record?.Options.Where(e => string.Equals(record.GroupOf(e), group,
+                                                                                StringComparison.OrdinalIgnoreCase))
+                                                      .Select(e => e.Name) ?? [],
+                                       StringComparer.OrdinalIgnoreCase);
+        string prefix = group + " / ";
+        return redirects.Where(d => d.Source.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                                    && !ours.Contains(d.Source[prefix.Length..])
+                                    && PieceModel.IsMatch(d.GamePath))
+                        .Select(d => d.GamePath)
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .Skip(1).Any();
+    }
+
+    /// <summary>
+    /// The option a refit of <paramref name="gamePath"/> is saved as in a group that sizes several pieces together
+    /// (<see cref="IsSharedSingleGroup"/>): an automatic refit of another piece already there onto the same sizes, joined,
+    /// so switching one on does not switch the other off; otherwise <paramref name="proposed"/>.
+    /// <para/>
+    /// Joined only where every entry of the option is the automatic refit's (undoing it removes them all — never a size
+    /// made by hand), none is for this game path, the two share a part, and every part the option records went onto the
+    /// size chosen for it now. A top saved onto "XS + legs S" is not joined once legs M is chosen.
+    /// </summary>
+    /// <param name="chosen">The target body's file chosen now, per slot; a slot with none is left out.</param>
+    /// <param name="own">The slots this refit goes onto, each with its target's file.</param>
+    internal static string JoinOption(BodyRetargetWriter.Record? record, string group, string gamePath, string bodyMod,
+                                      IReadOnlyDictionary<string, string> chosen, IReadOnlyDictionary<string, string> own,
+                                      string proposed)
+    {
+        if (record == null) return proposed;
+        var inGroup = record.Options.Where(e => string.Equals(record.GroupOf(e), group, StringComparison.OrdinalIgnoreCase))
+                                    .ToList();
+        // The same refit saved before keeps its own name: Existing decides whether it is put back or made again.
+        if (inGroup.Any(e => string.Equals(e.Name, proposed, StringComparison.OrdinalIgnoreCase))) return proposed;
+
+        foreach (var option in inGroup.GroupBy(e => e.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            var entries = option.ToList();
+            if (entries.Any(e => !e.Auto || e.Targets == null
+                                 || !string.Equals(e.BodyMod, bodyMod, StringComparison.OrdinalIgnoreCase)
+                                 || string.Equals(e.GamePath, gamePath, StringComparison.OrdinalIgnoreCase)))
+                continue;
+            var recorded = entries.SelectMany(e => e.Targets!).ToList();
+            bool current = recorded.All(t => chosen.TryGetValue(t.Key, out string? rel) && Normal(rel) == Normal(t.Value));
+            bool shares = recorded.Any(t => own.ContainsKey(t.Key));
+            if (current && shares) return option.Key;
+        }
+        return proposed;
+    }
+
     /// <summary>What the record says a refit was made from: the sizes, behind the body mod's name when it was another.</summary>
     internal static string LabelFrom(string? sourceBodyName, IEnumerable<string> sourceLabels)
     {
@@ -780,6 +845,25 @@ internal static class RefitCore
         return BodyRetarget.Plan(garment, bytes, pairs, primary, held: new HashSet<int>(),
                                  replaceSkin: across, acrossBodies: across, clearBody: skin.ClearBody,
                                  cutHidden: skin.CutHidden, keepShape: pieces, log: log, warn: warn);
+    }
+
+    /// <summary>
+    /// The automatic refit of a garment worn on an accessory slot — a jacket on a necklace — over the body part(s) its
+    /// cloth covers (see <see cref="AccessoryCover"/>). Unlike <see cref="PlanRefit"/>: no slot of the body is left out of
+    /// the push-out, since the body is drawn beneath an accessory as it is; the cloth is cleared of the body wherever it
+    /// is buried in it, since every clip shows; its skin, if any, is kept, since the body beneath is drawn anyway; and the
+    /// underside of the breast is cleared as a top's is when it covers the chest.
+    /// </summary>
+    /// <param name="chestSlot">"_top" when the cloth covers the chest; null otherwise.</param>
+    internal static BodyRetarget.Planned PlanAccessoryRefit(ModelParts garment, byte[] bytes,
+                                                            IReadOnlyList<BodyRetarget.SlotPair> pairs, string? chestSlot,
+                                                            bool across, out List<string> pieceNames,
+                                                            Action<string>? log = null, Action<string>? warn = null)
+    {
+        var pieces = ShapePieces(garment, DefaultKeepShape(garment), out pieceNames);
+        return BodyRetarget.Plan(garment, bytes, pairs, garmentSlot: null, held: new HashSet<int>(), replaceSkin: false,
+                                 acrossBodies: across, clearBody: true, cutHidden: false, keepShape: pieces, log: log,
+                                 warn: warn, chestSlot: chestSlot);
     }
 
     /// <summary>

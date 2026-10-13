@@ -75,11 +75,12 @@ internal sealed record BodySizeCatalog(string ModRoot, IReadOnlyList<BodyOption>
     /// <summary>The slots this mod sizes for an outfit made for <paramref name="race"/> — see <see cref="For(string, string?)"/>.</summary>
     public IEnumerable<string> SlotsFor(string? race) => KnownSlots.Where(s => For(s, race).Count > 0);
 
-    /// <summary>The race code an equipment model's game path names (<c>"0201"</c> for <c>…/c0201e0141_top.mdl</c>), or null.</summary>
+    /// <summary>The race code an equipment or accessory model's game path names (<c>"0201"</c> for
+    /// <c>…/c0201e0141_top.mdl</c> and <c>…/c0201a0095_wrs.mdl</c>), or null.</summary>
     internal static string? RaceOf(string gamePath)
         => RaceCode.Match(gamePath) is { Success: true } m ? m.Groups[1].Value : null;
 
-    private static readonly System.Text.RegularExpressions.Regex RaceCode = new(@"(?:^|/)c(\d{4})e\d{4}_",
+    private static readonly System.Text.RegularExpressions.Regex RaceCode = new(@"(?:^|/)c(\d{4})[ea]\d{4}_",
         System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
 
     /// <summary>

@@ -48,7 +48,7 @@
     "description": ""
   },
   "AutoRefit.Intro": {
-    "message": "Quand vous équipez une pièce de torse, de jambes, de mains ou de pieds, Proteus détermine pour quel corps elle a été faite, l'ajuste au corps et aux tailles choisis ici, puis active la nouvelle taille. Chaque collection Penumbra a son propre choix.",
+    "message": "Quand vous équipez une pièce de torse, de jambes, de mains ou de pieds — ou un accessoire qui couvre le corps, comme une veste sur un collier —, Proteus détermine pour quel corps elle a été faite, l'ajuste au corps et aux tailles choisis ici, puis active la nouvelle taille. Chaque collection Penumbra a son propre choix.",
     "description": ""
   },
   "AutoRefit.ItemInMod.Fmt": {
@@ -357,6 +357,22 @@
   },
   "Chat.AutoRefit.Unsure.Fmt": {
     "message": "[Proteus] Impossible de savoir pour quel corps {0} a été fait : il reste tel quel. Vous pouvez l'ajuster à la main avec l'outil « Taille du corps » du Studio.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.Jewellery.Fmt": {
+    "message": "[Proteus] {0} ne couvre pas le corps, il a donc été laissé tel quel.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.AuthorSizes.Fmt": {
+    "message": "[Proteus] {0} existe déjà dans les tailles de son auteur pour des corps (« {1} » est active) ; choisissez-en une autre dans Penumbra. Il a été laissé tel quel.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.Beneath.Fmt": {
+    "message": "[Proteus] {0} a été laissé tel quel : il n'a pas de pièce de {1} à lui pour en lire la taille, et la pièce de {1} portée dessous est celle du jeu, n'est pas sur {2} ou a été ajustée avant cette version — rééquipez-la ou utilisez « Ajuster ce que je porte maintenant ».",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.Shared.Fmt": {
+    "message": "[Proteus] {0} partage sa taille avec les autres pièces du mod et s'ajuste avec elles : une fois celles-ci ajustées à {1}, utilisez « Ajuster ce que je porte maintenant ». Il a été laissé tel quel pour l'instant.",
     "description": ""
   },
   "Chat.ContentUnplaced.Fmt": {

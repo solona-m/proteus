@@ -123,7 +123,27 @@ internal static class BodyRetargetWriter
         /// <see cref="AutoRefitDecisions.IsGameGear"/>. False for every entry written before it was kept.
         /// </summary>
         public bool FromGame { get; set; }
+
+        /// <summary>
+        /// The body mod folder, and the file in it, of the size the refit was read as made on — what tells a refit made
+        /// from another reading from this one, where <see cref="From"/> only names it for people. Null for every entry
+        /// written before it was kept.
+        /// </summary>
+        public string? SourceDir { get; set; }
+
+        /// <inheritdoc cref="SourceDir"/>
+        public string? SourceRel { get; set; }
+
+        /// <summary>
+        /// The target body's file each part was refitted onto, by slot ("_top" → its chest's file). Null for every entry
+        /// written before it was kept.
+        /// </summary>
+        public Dictionary<string, string>? Targets { get; set; }
     }
+
+    /// <summary>Where a refit came from and went, as an entry records it (see <see cref="Entry.SourceDir"/>).</summary>
+    /// <param name="Targets">The target body's file per slot refitted.</param>
+    internal sealed record Provenance(string SourceDir, string SourceRel, IReadOnlyDictionary<string, string> Targets);
 
     /// <param name="Group">The group written.</param>
     /// <param name="Option">The option added.</param>
@@ -235,9 +255,11 @@ internal static class BodyRetargetWriter
     /// </param>
     /// <param name="auto">Saved by the automatic refit (see <see cref="Entry.Auto"/>).</param>
     /// <param name="fromGame">Refitted from the game's own file (see <see cref="Entry.FromGame"/>).</param>
+    /// <param name="provenance">Where the refit came from and went (see <see cref="Entry.SourceDir"/>); null records none.</param>
     public static Outcome Save(string modRoot, string groupName, string gamePath, string bodyMod, string from,
                                IReadOnlyList<Refit> refits, string? fromOption = null,
-                               IReadOnlyList<object>? manipulations = null, bool auto = false, bool fromGame = false)
+                               IReadOnlyList<object>? manipulations = null, bool auto = false, bool fromGame = false,
+                               Provenance? provenance = null)
     {
         string names = string.Join(", ", refits.Select(r => r.Option));
         lock (WriteLock)
@@ -357,6 +379,7 @@ internal static class BodyRetargetWriter
                                                                               .ToList());
                     foreach (var (refit, rel) in written)
                         WriteRecord(modRoot, groupName, true, refit.Option, gamePath, rel, bodyMod, from, refit.To, auto,
+                                    provenance,
                                     fromGame);
                     return new Outcome(true, groupName, names, refits.Count == 1
                         ? string.Format(Loc.Localize("Parts.Retarget.Save.AddedOneToAuthor.Fmt",
@@ -392,6 +415,7 @@ internal static class BodyRetargetWriter
 
                 foreach (var (refit, rel) in written)
                     WriteRecord(modRoot, groupName, false, refit.Option, gamePath, rel, bodyMod, from, refit.To, auto,
+                                provenance,
                                 fromGame);
 
                 return new Outcome(true, groupName, names, refits.Count == 1
@@ -616,7 +640,8 @@ internal static class BodyRetargetWriter
     }
 
     private static void WriteRecord(string modRoot, string group, bool inAuthorGroup, string option, string gamePath,
-                                    string rel, string bodyMod, string from, string to, bool auto, bool fromGame)
+                                    string rel, string bodyMod, string from, string to, bool auto,
+                                    Provenance? provenance, bool fromGame)
     {
         var record = ReadRecord(modRoot) ?? new Record();
         // Entries from before each named its own group take the old top-level one now, before it moves on.
@@ -630,6 +655,8 @@ internal static class BodyRetargetWriter
             Group = group, InAuthorGroup = inAuthorGroup,
             Name = option, GamePath = gamePath, File = rel.Replace('\\', '/'),
             BodyMod = bodyMod, From = from, To = to, Auto = auto, FromGame = fromGame,
+            SourceDir = provenance?.SourceDir, SourceRel = provenance?.SourceRel,
+            Targets = provenance == null ? null : new Dictionary<string, string>(provenance.Targets, StringComparer.Ordinal),
         });
         SaveRecord(modRoot, record);
     }

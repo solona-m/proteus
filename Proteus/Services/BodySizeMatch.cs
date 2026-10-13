@@ -67,7 +67,7 @@ internal static class BodySizeMatch
     private const float Contact = 0.01f;
 
     /// <summary>Fewer evidence probes than this, and the garment cannot say which size it was made for here.</summary>
-    private const int MinEvidence = 100;
+    internal const int MinEvidence = 100;
 
     /// <summary>Probe points taken from the garment. Enough to be decisive, few enough to keep 131 candidates cheap.</summary>
     private const int MaxProbes = 3000;
@@ -105,10 +105,10 @@ internal static class BodySizeMatch
     /// The share of nearby cloth that may sit inside a body and still count as clearing it (0.5%). Not zero: authors
     /// tuck the odd waistband vertex under the skin on purpose.
     /// </summary>
-    private const float ClearsBelow = 0.005f;
+    internal const float ClearsBelow = 0.005f;
 
     /// <summary>How close cloth has to be to a body to count as sitting on it, for the cloth reading (30 mm).</summary>
-    private const float ClothReach = 0.03f;
+    internal const float ClothReach = 0.03f;
 
     /// <summary>
     /// Rank <paramref name="candidates"/> by how well they explain the garment's own body mesh.
@@ -209,21 +209,8 @@ internal static class BodySizeMatch
         {
             var body = Load(pathOf(option));
             if (body == null) continue;
-
-            int near = 0, inside = 0, outside = 0;
-            double gap = 0;
-            lock (body)
-            {
-                foreach (var p in cloth)
-                {
-                    if (!body.Surface.Nearest(p, ClothReach, out var hit)) continue;
-                    near++;
-                    float s = Vector3.Dot(p - hit.Point, hit.Normal);
-                    if (s < 0f) inside++;
-                    else { gap += s; outside++; }
-                }
-            }
-            readings.Add((option, near, inside, outside > 0 ? (float)(gap / outside) : ClothReach, body.TopologyKey));
+            var (near, inside, gap) = ClothOn(cloth, body);
+            readings.Add((option, near, inside, gap, body.TopologyKey));
         }
 
         var evidence = readings.Where(r => r.Near >= MinEvidence).ToList();
@@ -263,6 +250,45 @@ internal static class BodySizeMatch
         return new Ranking(confidence, scores, FromCloth: true);
 
         static bool Clears((BodyOption, int Near, int Inside, float, string) r) => r.Inside <= r.Near * ClearsBelow;
+    }
+
+    /// <summary>
+    /// How the garment's cloth sits on one body: how many cloth points lie within <see cref="ClothReach"/> of it, how many
+    /// of those are inside it, and the mean gap of the rest — what <see cref="RankByCloth"/> reads per size. Null when the
+    /// body cannot be read or the garment has no cloth.
+    /// </summary>
+    internal static (int Near, int Inside, float Gap)? ClothAgainst(ModelParts garment, string bodyPath)
+    {
+        var cloth = ClothProbes(garment);
+        if (cloth.Count == 0 || Load(bodyPath) is not { } body) return null;
+        return ClothOn(cloth, body);
+    }
+
+    /// <summary>
+    /// Whether the garment's cloth clears the body at <paramref name="bodyPath"/> as an author fits it: no more than
+    /// <see cref="ClearsBelow"/> of the cloth near it inside it. True when too little cloth is near to say — nothing then
+    /// sits inside it either.
+    /// </summary>
+    internal static bool ClothClears(ModelParts garment, string bodyPath)
+        => ClothAgainst(garment, bodyPath) is not { } on || on.Near < MinEvidence || on.Inside <= on.Near * ClearsBelow;
+
+    private static (int Near, int Inside, float Gap) ClothOn(List<Vector3> cloth, Candidate body)
+    {
+        int near = 0, inside = 0, outside = 0;
+        double gap = 0;
+        // See Rank: the cached body's surface reuses a scratch buffer between queries.
+        lock (body)
+        {
+            foreach (var p in cloth)
+            {
+                if (!body.Surface.Nearest(p, ClothReach, out var hit)) continue;
+                near++;
+                float s = Vector3.Dot(p - hit.Point, hit.Normal);
+                if (s < 0f) inside++;
+                else { gap += s; outside++; }
+            }
+        }
+        return (near, inside, outside > 0 ? (float)(gap / outside) : ClothReach);
     }
 
     private static int IndexIn(IReadOnlyList<BodyOption> options, BodyOption option)

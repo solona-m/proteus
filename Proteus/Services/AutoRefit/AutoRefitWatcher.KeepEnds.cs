@@ -107,12 +107,34 @@ public sealed partial class AutoRefitWatcher
             }
         }
 
-        string option = decision is KeepEnds.Refit refitTo
-            ? RefitCore.OptionName(targetMod.Name, [refitTo.Target.Label])
-            : KeepEnds.SkinOnlyOption(targetMod.Name);
         if (WhereItGoes(r, g, targetMod, j.Redirects, item) is not { } where) return;
         var (root, group, cutFrom) = where;
-        if (await LetBeOrPutBack(r, g, root, group, option, j.SavePath, cutFrom, item, targetMod.Name, ct)) return;
+        // What it is made from, which a refit saved before must have been made from to be put back on (see Existing),
+        // and the size each part goes onto, for the record.
+        var (source, targets) = decision switch
+        {
+            KeepEnds.Refit refitTo => (refitTo.Source, new Dictionary<string, string>(StringComparer.Ordinal)
+                                                       {
+                                                           [reading.Limb] = refitTo.Target.Rel,
+                                                       }),
+            KeepEnds.SkinOnly skinTo => (skinTo.Own, new Dictionary<string, string>(StringComparer.Ordinal)
+                                                     {
+                                                         [reading.Slot] = skinTo.Target.Rel,
+                                                     }),
+            _ => throw new InvalidOperationException("a refit or a skin redraw was decided above"),
+        };
+        string option = decision is KeepEnds.Refit refitOnto
+            ? RefitCore.OptionName(targetMod.Name, [refitOnto.Target.Label])
+            : KeepEnds.SkinOnlyOption(targetMod.Name);
+        // Sized together with the chest or legs in one of the author's single-choice groups: into the option that piece's
+        // refit went into, so switching one on does not switch the other off.
+        if (decision is KeepEnds.Refit && root != null
+            && RefitCore.IsSharedSingleGroup(j.Redirects, j.OwnRecord, group, RefitCore.SingleGroups(root)))
+            option = RefitCore.JoinOption(j.OwnRecord, group, j.SavePath, targetMod.Dir, ChosenTargets(j.TargetFor),
+                                          targets, option);
+        if (await LetBeOrPutBack(r, g, root, group, option, j.SavePath, cutFrom, item, targetMod.Name, ct,
+                                 source))
+            return;
 
         // ── the refit ──
         var output = skinOnly ?? RefitEnds(j, reading, (KeepEnds.Refit)decision, option, CatalogOf, ct);
@@ -120,7 +142,8 @@ public sealed partial class AutoRefitWatcher
 
         if (await SaveAndWear(r, g, root, group, j.SavePath, targetMod, output.LabelFrom,
                               new BodyRetargetWriter.Refit(option, output.Model, output.To), cutFrom, j.BakeTo, item,
-                              GameGear(r, j.Redirects, j.OwnRecord))
+                              GameGear(r, j.Redirects, j.OwnRecord),
+                              new BodyRetargetWriter.Provenance(source.Dir, source.Option.Rel, targets))
             is not { } savedRoot)
             return;
         log.Information("[Proteus] auto refit: {0} {1} onto {2} in {3:F1}s", item, slot, option,
@@ -136,11 +159,15 @@ public sealed partial class AutoRefitWatcher
     private KeepEnds.Found ReadEnds(EndsJob j, KeepEnds.Reading reading, Func<string, BodySizeCatalog?> catalogOf)
     {
         var g = j.G;
-        var enabledBodies = j.State.List.Where(b => g.Permanent != null && g.Permanent.TryGetValue(b.Dir, out var s)
-                                                    && s.Enabled && !s.Temporary)
-                                        .Select(b => b.Dir);
-        string cacheKey = DetectionCache.KeyOf(j.Bytes, reading.CacheSlot, j.Race, j.TargetMod.Dir,
-                                               DetectionCache.BodiesOf(j.State.Version, enabledBodies,
+        // The siblings are part of the key, as they stand on disk: a piece read by its cloth before it had a sibling to
+        // go by must not be served that reading again. Only on a miss are they opened and read.
+        void Note(string note) => log.Information("[Proteus] auto refit: {0}: {1}", j.Item, note);
+        var siblings = SiblingPiece.Applies(j.R.ModRoot, j.BakeTo) && j.R.Worn.Rel is { } wornRel
+            ? SiblingPiece.Find(j.Redirects, j.OwnRecord, wornRel, reading.Limb, j.Race, Note)
+            : [];
+        string suffix = SiblingPiece.CacheSuffix(siblings, file => Stamp(j.R.ModRoot!, file));
+        string cacheKey = DetectionCache.KeyOf(j.Bytes, reading.CacheSlot + suffix, j.Race, j.TargetMod.Dir,
+                                               DetectionCache.BodiesOf(j.State.Version, EnabledBodies(g, j.State),
                                                                        VanillaPrint(j.VanillaCat, reading.Limb, j.Race) + "|"
                                                                      + VanillaPrint(j.VanillaCat, reading.Slot, j.Race)));
         if (detections.TryGet(cacheKey) is { } hit && KeepEnds.FromCache(hit, reading, j.Race, catalogOf) is { } cached)
@@ -152,15 +179,53 @@ public sealed partial class AutoRefitWatcher
 
         AssertOffFramework("reading the garment");
         bool isVanilla = j.R.ModRoot == null;
+        var sibling = siblings.Count > 0 ? ReadSibling(j, siblings, Note) : null;
         var found = KeepEnds.Find(reading, j.Garment, j.Bones, j.Race,
                                   (view, s) => isVanilla
                                       ? VanillaSource(j.VanillaCat, s, j.Race)
                                       : DetectAcross(view, j.Bones, s, j.Race, j.TargetMod, j.State.List, j.VanillaCat,
                                                      g.Permanent),
-                                  catalogOf);
+                                  catalogOf, sibling: sibling,
+                                  note: why => Note($"its {(reading.Limb == "_top" ? "chest" : "legs")} piece in the "
+                                                  + $"same option was not taken: {why}; read as before"));
+        if (found.Route == KeepEnds.Route.Sibling)
+            log.Information("[Proteus] auto refit: {0} sized by its {1} piece in the same option: {2} / {3} ({4})", j.Item,
+                            reading.Limb == "_top" ? "chest" : "legs", NameOf(j, found.Pick!.Dir), found.Pick.Option.Label,
+                            found.Pick.Confidence);
         detections.Put(cacheKey, KeepEnds.ToCache(found));
         return found;
     }
+
+    /// <summary>
+    /// What the chest or legs pieces shipped in the same option as this one were made on (see <see cref="SiblingPiece"/>),
+    /// each read off its own skin through <see cref="ReadSource"/> — in the slot and race its own refit reads it in
+    /// (<see cref="ReadAs"/>), so the reading is the very one that refit makes and keeps. Null when they cannot be read
+    /// or do not agree.
+    /// </summary>
+    private AutoRefitDecisions.Pick? ReadSibling(EndsJob j, IReadOnlyList<SiblingPiece.Candidate> candidates,
+                                                 Action<string> note)
+    {
+        string root = j.R.ModRoot!;
+        return SiblingPiece.Agree(candidates, c =>
+        {
+            if (ReadAs(c.GamePath) is not { Slot: { } slot, Race: var race }) return null;
+            if (SiblingPiece.TryOpen(root, c.File, note) is not { } opened) return null;
+            var (bytes, model, bones) = opened;
+            return ReadSource(j.G, j.State, j.TargetMod, j.VanillaCat, bytes, model, bones, slot, race, false,
+                              j.Item + " (" + SiblingPiece.Shown(c.Source) + ")").Source;
+        }, note);
+    }
+
+    /// <summary>A file's state on disk — its length and time written — for a cache key; "-" when it is not there.</summary>
+    private static string Stamp(string root, string file)
+    {
+        var info = new FileInfo(BodySizeCatalog.ResolveCaseInsensitive(root, file));
+        return info.Exists ? $"{info.Length}:{info.LastWriteTimeUtc.Ticks}" : "-";
+    }
+
+    /// <summary>A body mod as the log names it.</summary>
+    private static string NameOf(EndsJob j, string dir)
+        => dir == VanillaBodyCatalog.Key ? Strings.Parts.RetargetFromVanilla : j.State.Find(dir)?.Name ?? dir;
 
     /// <summary>
     /// The skin of a piece that reaches no leg or arm, drawn the way the new body draws its own (see

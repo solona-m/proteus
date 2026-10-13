@@ -129,6 +129,28 @@ internal static class DrawnModelPaths
         @"chara/accessory/(a\d+)/model/c\d+a\d+_(rir|ril|wrs|nek)\.mdl",
         System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
 
+    // Every accessory slot a modder can put a garment on — a jacket on a necklace, sleeves on a bracelet — earrings too,
+    // which the second skin never hosts in. The Emperor's New set is kept: carrying a mod on one is common, and the second
+    // skin's own carrier is drawn from Proteus's managed mod, which the refit leaves alone by that.
+    private static readonly System.Text.RegularExpressions.Regex AccessoryGarmentRe = new(
+        @"chara/accessory/(a\d+)/model/c\d+a\d+_(nek|ear|wrs|rir|ril)\.mdl",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>The accessory each accessory slot draws, by slot (nek, ear, wrs, rir, ril) — what the automatic refit
+    /// looks at for a garment worn there. Not <see cref="EquippedAccessoryModelsFromModels"/>, the second skin's hosts.</summary>
+    internal static Dictionary<string, string> EquippedAccessoryGarmentModelsFromModels(HashSet<string>? modelPaths)
+    {
+        var models = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (modelPaths == null) return models;
+        foreach (var p in modelPaths)
+        {
+            var match = AccessoryGarmentRe.Match(p);
+            if (!match.Success) continue;
+            models[match.Groups[2].Value.ToLowerInvariant()] = match.Value;
+        }
+        return models;
+    }
+
     internal static Dictionary<string, string> EquippedAccessoryModelsFromModels(HashSet<string>? modelPaths)
     {
         var models = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

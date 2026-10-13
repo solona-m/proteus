@@ -64,7 +64,18 @@ internal sealed class BodySurface
     /// <param name="body">A body model. Only its skin parts are indexed: a body .mdl also carries undies (which have
     /// GEAR uv), nails, piercings and pubes, and none of those are the body.</param>
     /// <param name="cellSize">Grid cell, metres. <see cref="CellFor"/> picks it from the mesh's own resolution.</param>
-    public BodySurface(ModelParts body, float cellSize)
+    public BodySurface(ModelParts body, float cellSize) : this(body, cellSize, cloth: false)
+    {
+    }
+
+    /// <summary>
+    /// A garment's CLOTH indexed the way a body's skin is: what is asked of it is how much of a body lies under cloth —
+    /// from each body vertex out to the cloth, so a choker round the neck covers a sliver of the chest, not all of it.
+    /// <see cref="SkinVertices"/> then lists the cloth's vertices.
+    /// </summary>
+    public static BodySurface OfCloth(ModelParts garment, float cellSize) => new(garment, cellSize, cloth: true);
+
+    private BodySurface(ModelParts body, float cellSize, bool cloth)
     {
         int vc = body.Positions.Length / 3;
         pos = new Vector3[vc];
@@ -80,7 +91,7 @@ internal sealed class BodySurface
         foreach (var part in body.Parts)
         {
             // An island is a subset of its own submesh; taking both would index every triangle twice.
-            if (part.Island >= 0 || !SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+            if (part.Island >= 0 || SecondSkinWriter.IsBodySkinMaterial(part.Material) == cloth) continue;
             for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
             {
                 int a = part.Triangles[t], b = part.Triangles[t + 1], c = part.Triangles[t + 2];
