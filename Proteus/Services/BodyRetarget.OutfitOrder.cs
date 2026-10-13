@@ -31,6 +31,9 @@ internal static partial class BodyRetarget
     /// <summary>Around each point that needed it, the lift is whole this far out (2 mm) before it starts to fade.</summary>
     private const float OutfitPlateau = 0.002f;
 
+    /// <summary>Rounds of raising a fold's low corners and fading their lift onto their neighbours (3).</summary>
+    private const int OutfitRaiseRounds = 3;
+
     /// <summary>
     /// Keep the garment outside the other piece of its outfit wherever its author had it outside: a jacket worn as
     /// gloves over the bra of the same option.
@@ -38,8 +41,9 @@ internal static partial class BodyRetarget
     /// Each piece is refitted against the body alone, and two files cannot see each other. Geometric's bra, laid 0.4-0.7
     /// mm off Bibo+'s skin, came out 2.4-4.1 mm off Rue's where the push-out cleared Rue's rounder breast out of its large
     /// faces, while its jacket kept its own gap to within 0.4 mm: the bra showed through the jacket in 7, 15 and 14 cells
-    /// on Rue S, M and L. The relation is read body-relatively — each piece's height above the nearest point of the
-    /// body pairs' skin — because a jacket's lining faces in and a ray from it says nothing (98% "through" as shipped).
+    /// on Rue S, M and L; with this pass, in none, and no triangle turned over. The relation is read body-relatively —
+    /// each piece's height above the nearest point of the body pairs' skin — because a jacket's lining faces in and a ray
+    /// from it says nothing (98% "through" as shipped).
     /// <para/>
     /// The garment is lifted, though it is the piece seen: the other piece is a file already written, and only the piece
     /// in hand is this refit's. <see cref="KeepLayerOrder"/> records that lifting the cover was measured worse within one
@@ -84,31 +88,68 @@ internal static partial class BodyRetarget
         var needs = OutfitNeeds(sets, nodeDelta, movable, source, target, below, now, gap);
         if (needs.Count == 0) return 0;
 
-        // The field: whole within OutfitPlateau of each point that needed it, faded to nothing over `fade` beyond.
-        var moves = new List<(int Node, Vector3 By)>();
-        var lifted = new bool[sets.NodeCount];
+        // Where each node stands over the skin now: the field is read there, and lifts along the skin's normal there.
+        var under = new BodySurface.Hit?[sets.NodeCount];
         for (int n = 0; n < sets.NodeCount; n++)
+            if (movable[n] && NearestOf(target, ToVector(sets.NodeAt[n]) + ToVector(nodeDelta[n]), out var hit))
+                under[n] = hit;
+
+        // The field: whole within OutfitPlateau of each point that needed it, faded to nothing over `fade` beyond.
+        var lifted = new bool[sets.NodeCount];
+        List<(int Node, Vector3 By)> Field()
         {
-            if (!movable[n]) continue;
-            var p = ToVector(sets.NodeAt[n]) + ToVector(nodeDelta[n]);
-            if (!NearestOf(target, p, out var hit)) continue;
-            float lift = 0f;
-            foreach (var (at, need) in needs)
+            var moves = new List<(int Node, Vector3 By)>();
+            for (int n = 0; n < sets.NodeCount; n++)
             {
-                if (need <= lift) continue;
-                float d = Vector3.Distance(hit.Point, at);
-                float w = d <= OutfitPlateau ? 1f : 1f - MeshMath.Smoothstep((d - OutfitPlateau) / fade);
-                lift = MathF.Max(lift, need * w);
+                if (under[n] is not { } hit) continue;
+                float lift = 0f;
+                foreach (var (at, need) in needs)
+                {
+                    if (need <= lift) continue;
+                    float d = Vector3.Distance(hit.Point, at);
+                    float w = d <= OutfitPlateau ? 1f : 1f - MeshMath.Smoothstep((d - OutfitPlateau) / fade);
+                    lift = MathF.Max(lift, need * w);
+                }
+                if (lift <= 0f) continue;
+                moves.Add((n, hit.Normal * lift));
+                lifted[n] = true;
             }
-            if (lift <= 0f) continue;
-            moves.Add((n, hit.Normal * lift));
-            lifted[n] = true;
+            return moves;
         }
+
+        // A triangle the lift would turn over has its low corners raised to its high ones — the far corner of a sliver
+        // standing edge-on at the garment's edge — and a corner so raised asks the field for its lift in turn, so its
+        // neighbours rise with it rather than leaving a spike. Whatever would still turn over is held back by the fold
+        // guard, as the push-out's moves are.
+        var moves = Field();
         if (moves.Count == 0) return 0;
+        for (int round = 0; round < OutfitRaiseRounds; round++)
+        {
+            var raised = RaiseLowCorners(sets, nodeDelta, moves, movable, lifted);
+            if (raised.Count == 0) break;
+            foreach (var (n, lift) in raised)
+                if (under[n] is { } hit) needs.Add((hit.Point, lift));
+            moves = Field();
+        }
         PullIn(sets, nodeDelta, moves);
 
-        // The garment's own layers back in order, by lifting the cover only: room 0 pulls nothing back.
-        if (covered.Count > 0) KeepLayerOrder(sets, covered, nodeDelta, stay, layered, drawn: null, liftOnly: true);
+        // The garment's own layers back in order where the lift moved them, by lifting the cover only (room 0 pulls
+        // nothing back, which would take a lining back under the other piece) — through the fold guard too.
+        var near = new List<Covered>();
+        foreach (var c in covered)
+            if (lifted[c.Node] || lifted[c.A] || lifted[c.B] || lifted[c.C]) near.Add(c);
+        if (near.Count > 0)
+        {
+            var ordered = (Vec3[])nodeDelta.Clone();
+            KeepLayerOrder(sets, near, ordered, stay, layered, drawn: null, liftOnly: true);
+            var orderMoves = new List<(int Node, Vector3 By)>();
+            for (int n = 0; n < sets.NodeCount; n++)
+            {
+                var by = ToVector(ordered[n]) - ToVector(nodeDelta[n]);
+                if (by != Vector3.Zero) orderMoves.Add((n, by));
+            }
+            PullIn(sets, nodeDelta, orderMoves);
+        }
 
         // What is left, at the garment's own points: the middles of its edges ask for the field, but between two points
         // lifted differently they sit lower than either, and are no cloth of their own.
@@ -117,6 +158,63 @@ internal static partial class BodyRetarget
         int count = 0;
         foreach (bool l in lifted) if (l) count++;
         return count;
+    }
+
+    /// <summary>
+    /// Where the lift would turn a triangle over, its lower corners are raised to its highest, rather than its higher
+    /// ones held back: a sliver standing edge-on to the skin at the garment's edge flips when its near corners rise and
+    /// its far one does not. Rounds until none would, or <see cref="PushUnfoldPasses"/>; what is left is for the fold
+    /// guard.
+    /// </summary>
+    /// <returns>The corners raised, and the lift each was raised to.</returns>
+    private static List<(int Node, float Lift)> RaiseLowCorners(Sets sets, Vec3[] nodeDelta,
+                                                                List<(int Node, Vector3 By)> moves, bool[] movable,
+                                                                bool[] lifted)
+    {
+        var lift = new float[sets.NodeCount];
+        var dir = new Vector3[sets.NodeCount];
+        foreach (var (n, by) in moves)
+        {
+            lift[n] = by.Length();
+            dir[n] = lift[n] > 0f ? by / lift[n] : Vector3.Zero;
+        }
+        Vector3 Trial(int n) => Placed(sets, nodeDelta, n) + dir[n] * lift[n];
+        var up = new HashSet<int>();
+        for (int pass = 0; pass < PushUnfoldPasses; pass++)
+        {
+            bool raised = false;
+            for (int t = 0; t + 2 < sets.Tris.Length; t += 3)
+            {
+                int a = sets.NodeOf[sets.Tris[t]], b = sets.NodeOf[sets.Tris[t + 1]], c = sets.NodeOf[sets.Tris[t + 2]];
+                if (a == b || b == c || c == a || (lift[a] <= 0f && lift[b] <= 0f && lift[c] <= 0f)) continue;
+                var was = ToVector(sets.NodeAt[a]);
+                var n0 = Vector3.Cross(ToVector(sets.NodeAt[b]) - was, ToVector(sets.NodeAt[c]) - was);
+                if (n0.LengthSquared() <= 1e-24f) continue;
+                var before = Placed(sets, nodeDelta, a);
+                if (Vector3.Dot(n0, Vector3.Cross(Placed(sets, nodeDelta, b) - before, Placed(sets, nodeDelta, c) - before)) <= 0f)
+                    continue;   // folded before the lift: not this pass's doing
+                var now = Trial(a);
+                if (Vector3.Dot(n0, Vector3.Cross(Trial(b) - now, Trial(c) - now)) > 0f) continue;
+                float top = MathF.Max(lift[a], MathF.Max(lift[b], lift[c]));
+                int from = lift[a] == top ? a : lift[b] == top ? b : c;
+                foreach (int m in new[] { a, b, c })
+                {
+                    if (!movable[m] || lift[m] >= top) continue;
+                    lift[m] = top;
+                    if (dir[m] == Vector3.Zero) dir[m] = dir[from];
+                    lifted[m] = true;
+                    raised = true;
+                    up.Add(m);
+                }
+            }
+            if (!raised) break;
+        }
+        moves.Clear();
+        for (int n = 0; n < sets.NodeCount; n++)
+            if (lift[n] > 0f) moves.Add((n, dir[n] * lift[n]));
+        var result = new List<(int Node, float Lift)>(up.Count);
+        foreach (int n in up) result.Add((n, lift[n]));
+        return result;
     }
 
     private static bool Finite(Vec3 v) => float.IsFinite(v.X) && float.IsFinite(v.Y) && float.IsFinite(v.Z);

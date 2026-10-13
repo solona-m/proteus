@@ -124,10 +124,9 @@ public class OutfitOrderLocalTests(ITestOutputHelper output)
         Assert.Equal(KeepEnds.Route.Sibling, found.Route);
         var keepShapeTop = RefitCore.ShapePieces(top, RefitCore.DefaultKeepShape(top));
 
-        // As measured when the pass was calibrated (M1b): Rue S, M and L at most 0, 3 and 2 cells through — the rest
-        // is the jacket's hem, which its author laid on the skin over a bra band tucked under it, and which cannot rise
-        // the 5-7 mm the band rose without folding.
-        var atMost = new Dictionary<string, int> { ["Small"] = 0, ["Medium"] = 3, ["Large"] = 2 };
+        // Nowhere through on Rue S, M or L (10, 20 and 19 cells before). The last few were the jacket's front edge, a sliver
+        // standing edge-on to the skin which the fold guard held back until its far corner was raised with its near ones.
+        var atMost = new Dictionary<string, int> { ["Small"] = 0, ["Medium"] = 0, ["Large"] = 0 };
         foreach (string size in new[] { "Small", "Medium", "Large" })
         {
             var chest = rue.Catalog.For("_top", Race).First(o => o.Label == "None · " + size);
@@ -147,6 +146,7 @@ public class OutfitOrderLocalTests(ITestOutputHelper output)
                                             refit.EndTo == null ? null : rue.Catalog.PathOf(refit.EndTo),
                                             false, _ => (null, null), s => s, null, null, out var limb, out var end));
             var outfit = new BodyRetarget.Outfit(top, bra);
+            Lift(size, glove, gloveBytes, reading, limb, end, outfit, pair.Target);
             var plain = KeepEnds.Plan(glove, gloveBytes, reading, limb, end, across: true);
             var kept = KeepEnds.Plan(glove, gloveBytes, reading, limb, end, across: true, outfit: outfit);
             var off = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoOutfitOrder: true),
@@ -167,13 +167,77 @@ public class OutfitOrderLocalTests(ITestOutputHelper output)
             Assert.Equal(plain.Model, off.Model);
             Assert.True(kept.Report.Layered > 0, "the jacket should have been lifted");
             Assert.True(now <= atMost[size], $"Rue {size}: {now} cells through");
+            // Counted on the mesh written, after the lift.
             Assert.True(kept.Report.Folded <= plain.Report.Folded, $"{kept.Report.Folded} folded, {plain.Report.Folded} before");
-            // The lift, faded over 15 mm on a jacket whose edges are ~9.5 mm: never more than 0.75 of an edge between
-            // neighbours, as measured (M1b), and normals left as the author made them.
-            Assert.True(neighbours <= 0.75f * 0.0095f, $"neighbours {neighbours * 1000f:F2} mm apart");
             Assert.Equal(before.Normals, after.Normals);
         }
+        Assert.True(failures.Count == 0, string.Join("; ", failures));
     }
+
+    /// <summary>
+    /// The lift itself, read on the solve's own nodes (the trace's last two stages): how uneven it is between neighbours
+    /// and across them (second difference), and how much more it stretches the cloth's edges than the refit had — no
+    /// worse than as accepted with the front edge's sliver raised (neighbours 0.37/0.71/0.79 of the 9.5 mm mean edge,
+    /// second difference 3.5/3.8/5.6 mm, worst edge stretch +0/+2.6/+2.5 mm on Rue S/M/L; before that fix, with the edge
+    /// still through, 0.37/0.46/0.73, 3.5/3.5/5.6 and +0/+0.3/+1.8); and not a triangle more folded.
+    /// </summary>
+    private void Lift(string size, ModelParts glove, byte[] bytes, KeepEnds.Reading reading, BodyRetarget.SlotPair limb,
+                      BodyRetarget.SlotPair? end, BodyRetarget.Outfit outfit, ModelParts target)
+    {
+        List<BodyRetarget.SlotPair> pairs = [limb];
+        if (end is { } shape) pairs.Add(shape with { ShapeOnly = true });
+        SecondSkinWriter.Vec3[]? was = null, now = null;
+        var solved = BodyRetarget.Solve(glove, pairs, reading.Slot, held: reading.Ends, replaceSkin: true,
+                                        keepShape: reading.FreePieces, garmentSkin: ModelSkinReader.Read(bytes, null, null),
+                                        swapSlot: reading.Limb, outfit: outfit,
+                                        trace: (stage, d) =>
+                                        {
+                                            if (stage == "layer-order") was = d;
+                                            if (stage == "outfit-order") now = d;
+                                        });
+        Assert.NotNull(was);
+        Assert.NotNull(now);
+        var sets = BodyRetarget.Sets.From(glove, reading.Ends,
+                                          BodyRetarget.PartedSkinMeshes(glove, pairs, reading.Slot, true, reading.Limb));
+        var layered = BodyRetarget.GarmentCloth(glove, sets);
+        Vector3 V(SecondSkinWriter.Vec3 v) => new(v.X, v.Y, v.Z);
+        float Lifted(int n) => Vector3.Distance(V(now![n]), V(was![n]));
+        float neighbours = 0f, second = 0f, stretchWas = 0f, stretchNow = 0f;
+        for (int n = 0; n < sets.NodeCount; n++)
+        {
+            if (!layered[n] || sets.Adj[n].Count == 0) continue;
+            float sum = 0f;
+            foreach (int m in sets.Adj[n])
+            {
+                neighbours = MathF.Max(neighbours, MathF.Abs(Lifted(n) - Lifted(m)));
+                sum += Lifted(m);
+                if (m < n || !layered[m]) continue;
+                float authored = Vector3.Distance(V(sets.NodeAt[n]), V(sets.NodeAt[m]));
+                stretchWas = MathF.Max(stretchWas, Vector3.Distance(V(sets.NodeAt[n]) + V(was![n]), V(sets.NodeAt[m]) + V(was[m])) - authored);
+                stretchNow = MathF.Max(stretchNow, Vector3.Distance(V(sets.NodeAt[n]) + V(now![n]), V(sets.NodeAt[m]) + V(now[m])) - authored);
+            }
+            second = MathF.Max(second, MathF.Abs(Lifted(n) - sum / sets.Adj[n].Count));
+        }
+        int foldsWas = BodyRetarget.FoldedTriangles(sets, was!), foldsNow = BodyRetarget.FoldedTriangles(sets, now!);
+        output.WriteLine($"Rue {size} lift: neighbours {neighbours * 1000f:F2} mm ({neighbours / sets.MeanEdge:F2} of an edge), "
+                       + $"second difference {second * 1000f:F2} mm, worst edge stretch {stretchWas * 1000f:F2} -> "
+                       + $"{stretchNow * 1000f:F2} mm, folds {foldsWas} -> {foldsNow}, {solved.Layered} lifted, "
+                       + $"{solved.LayerResidual * 1000f:F1} mm short");
+
+        var table = new Dictionary<string, (float Neighbours, float Second, float Stretch)>
+        {
+            ["Small"] = (0.37f, 0.0035f, 0.0005f), ["Medium"] = (0.72f, 0.0038f, 0.0027f), ["Large"] = (0.80f, 0.0057f, 0.0026f),
+        };
+        var (n0, s0, t0) = table[size];
+        // A hundredth of a millimetre over the table is rounding.
+        if (neighbours > n0 * sets.MeanEdge + 1e-5f) failures.Add($"Rue {size}: neighbours {neighbours * 1000f:F2} mm apart");
+        if (second > s0 + 1e-5f) failures.Add($"Rue {size}: second difference {second * 1000f:F2} mm");
+        if (stretchNow - stretchWas > t0 + 1e-5f)
+            failures.Add($"Rue {size}: the worst edge stretch grew {(stretchNow - stretchWas) * 1000f:F2} mm");
+        if (foldsNow > foldsWas) failures.Add($"Rue {size}: {foldsNow} folded after the lift, {foldsWas} before");
+    }
+
+    private readonly List<string> failures = [];
 
     [LocalDataFact(Scarlet, Neolithe)]
     [Trait("Plan", "AC-outfit-fit-3")]
@@ -204,9 +268,12 @@ public class OutfitOrderLocalTests(ITestOutputHelper output)
         output.WriteLine($"{chest.Label}: {was} cells through (worst {wasWorst * 1000f:F1} mm) -> {now} "
                        + $"({worst * 1000f:F1} mm); {kept.Report.Layered} lifted; folds {plain.Report.Folded} -> "
                        + $"{kept.Report.Folded}");
-        Assert.True(now <= was, $"{now} cells through, {was} before");
-        Assert.True(kept.Report.Folded <= plain.Report.Folded);
-        if (kept.Report.Layered == 0) Assert.Equal(plain.Model, kept.Model);
+        // Refitted within Neolithe the top keeps its gap under the jacket: nothing is through, nothing asks to be lifted,
+        // and the jacket is written byte for byte as without its top.
+        Assert.Equal(0, was);
+        Assert.Equal(0, now);
+        Assert.Equal(0, kept.Report.Layered);
+        Assert.Equal(plain.Model, kept.Model);
     }
 
     [LocalDataFact(Heartthrob, Bibo, Neolithe)]
@@ -248,8 +315,8 @@ public class OutfitOrderLocalTests(ITestOutputHelper output)
                                  outfit: new BodyRetarget.Outfit(pantsParts, pantsRefit));
         output.WriteLine($"{kept.Report.Layered} lifted, {kept.Report.LayerResidual * 1000f:F1} mm short; folds "
                        + $"{plain.Report.Folded} -> {kept.Report.Folded}");
-        Assert.True(kept.Report.Folded <= plain.Report.Folded);
-        if (kept.Report.Layered == 0) Assert.Equal(plain.Model, kept.Model);
-        else Assert.NotEqual(plain.Model, kept.Model);
+        // Its pants end above the shoe's cloth: nothing of the shoe is over them, nothing moves, byte for byte.
+        Assert.Equal(0, kept.Report.Layered);
+        Assert.Equal(plain.Model, kept.Model);
     }
 }

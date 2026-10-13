@@ -877,6 +877,8 @@ internal static partial class BodyRetarget
         {
             outfitLayered = KeepOutfitOrder(sets, pairs, outfit!, nodeDelta, stay, layered!, covered ?? [],
                                             out layerResidual);
+            // Counted again on what is written: the fold count reports the mesh as drawn, not as it stood before this.
+            if (outfitLayered > 0) folded = FoldedTriangles(sets, nodeDelta);
             Stage("outfit-order");
         }
 

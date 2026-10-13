@@ -65,6 +65,7 @@ public class AccessoryRefitTests
     [Fact]
     [Trait("Plan", "EDGE-jacket-refit-29")]
     [Trait("Plan", "EDGE-jacket-refit-27")]
+    [Trait("Plan", "EDGE-outfit-fit-13")]   // a chest piece's job is done before the glove kept outside it
     public void Body_slots_are_worked_first_and_stay_body_only()
     {
         Assert.Equal(["_top", "_dwn", "_glv", "_sho"], AutoRefitDecisions.Slots);

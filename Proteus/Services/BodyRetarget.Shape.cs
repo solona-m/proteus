@@ -168,10 +168,11 @@ internal static partial class BodyRetarget
     }
 
     /// <summary>
-    /// Apply <see cref="FollowLaidSkin"/>'s inward moves, backed off wherever one would turn a triangle over: halved on
-    /// every corner of such a triangle for <c>PushUnfoldPasses</c> passes, then given up outright, as the push-out's own
-    /// guard does. Neighbours pulled in by different amounts step past each other; measured on "Victoria's Secret Sauce"
-    /// without this, YAB+ Skull Crushers went from 8 turned-over triangles to 33.
+    /// Apply moves backed off wherever one would turn a triangle over: halved on every corner of such a triangle for
+    /// <c>PushUnfoldPasses</c> passes, then given up outright, as the push-out's own guard does. Any direction: made for
+    /// <see cref="FollowLaidSkin"/>'s inward moves — neighbours pulled in by different amounts step past each other;
+    /// measured on "Victoria's Secret Sauce" without this, YAB+ Skull Crushers went from 8 turned-over triangles to 33 —
+    /// and the guard for <see cref="KeepOutfitOrder"/>'s outward lifts too.
     /// </summary>
     /// <returns>How many nodes moved.</returns>
     private static int PullIn(Sets sets, Vec3[] nodeDelta, List<(int Node, Vector3 By)> pull)

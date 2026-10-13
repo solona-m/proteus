@@ -1804,6 +1804,18 @@ public class SizeSetRefitTests(ITestOutputHelper output)
             Assert.Equal(jackets.Select(j => j.Layers!["_top"]),
                          BodyRetargetWriter.ReadRecord(copy)!.Options.Where(e => e.GamePath.EndsWith("_glv.mdl", StringComparison.Ordinal))
                                            .Select(e => e.Layers!["_top"]));
+
+            // Made again: each over the top as it now stands, file and content.
+            var remakeLog = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
+            Assert.True(SizeSetRefit.Run(request with { Remake = true }, new UVRemapService(remakeLog, "."), remakeLog,
+                                         _ => { }, CancellationToken.None).Made > 0);
+            var remade = BodyRetargetWriter.ReadRecord(copy)!;
+            foreach (var jacket in remade.Options.Where(e => e.GamePath.EndsWith("_glv.mdl", StringComparison.Ordinal)))
+            {
+                var top = remade.Options.Single(e => e.Name == jacket.Name && e.GamePath.EndsWith("_top.mdl", StringComparison.Ordinal));
+                var expected = OutfitPartners.LayersOf(copy, new OutfitPartners.Partner("_top", "", top.File));
+                Assert.Equal(expected, jacket.Layers);
+            }
         }
         finally
         {

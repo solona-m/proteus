@@ -104,6 +104,9 @@ public class OutfitPartnersTests
             // Its refit failed, was declined, or it was read as made on another size: none.
             Assert.Null(OutfitPartners.ForAutoRefit(root, Sibling, "_top", Pick(), Onto, root, Top, AuthorsTop,
                                                     new PieceOutcome(false, null), null, notes.Add));
+            // On the size chosen, but by a file not known — the author's other size switched on: none.
+            Assert.Null(OutfitPartners.ForAutoRefit(root, Sibling, "_top", Pick(), Onto, root, Top, AuthorsTop,
+                                                    new PieceOutcome(true, Pick()), null, notes.Add));
             Assert.Null(OutfitPartners.ForAutoRefit(root, Sibling, "_top", Pick(), Onto, root, Top, AuthorsTop,
                                                     new PieceOutcome(true, Pick("[IVCS] Bibo+"), "x.mdl"), null, notes.Add));
             // Not refitted in this batch and still the author's file: on the old body, so none — never read on the new.
@@ -116,7 +119,13 @@ public class OutfitPartnersTests
                                                     refitted, null, notes.Add));
             Assert.Null(OutfitPartners.ForAutoRefit(root, Sibling, "_top", Pick(), Onto, null, null, null, null, null,
                                                     notes.Add));
-            Assert.Equal(6, notes.Count);
+            Assert.Equal(7, notes.Count);
+
+            // A refitted file that cannot be read: no outfit, said — the refit goes ahead as before.
+            int said = notes.Count;
+            Assert.Null(OutfitPartners.Load(root, new OutfitPartners.Partner("_top", AuthorsTop, "body retarget/gone.mdl"),
+                                            notes.Add));
+            Assert.True(notes.Count > said);
         }
         finally
         {

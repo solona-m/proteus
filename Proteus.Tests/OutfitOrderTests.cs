@@ -23,18 +23,24 @@ public class OutfitOrderTests
     /// <summary>Square grids of <paramref name="count"/> × <paramref name="count"/> points <see cref="Step"/> apart, one
     /// per height, facing +Z, each its own sheet.</summary>
     private static ModelParts Sheets(string material, int count, params float[] heights)
+        => Grid(material, count, Step, 0f, heights);
+
+    /// <inheritdoc cref="Sheets(string, int, float[])"/>
+    /// <param name="step">How far apart the points are.</param>
+    /// <param name="offsetX">Where along X the grid is centred.</param>
+    private static ModelParts Grid(string material, int count, float step, float offsetX, params float[] heights)
     {
         var pos = new List<float>();
         var nrm = new List<float>();
         var tris = new List<int>();
-        float half = (count - 1) * Step / 2f;
+        float half = (count - 1) * step / 2f;
         foreach (float z in heights)
         {
             int start = pos.Count / 3;
             for (int i = 0; i < count; i++)
             for (int k = 0; k < count; k++)
             {
-                pos.AddRange([i * Step - half, k * Step - half, z]);
+                pos.AddRange([i * step - half + offsetX, k * step - half, z]);
                 nrm.AddRange([0f, 0f, 1f]);
             }
             for (int i = 0; i + 1 < count; i++)
@@ -44,7 +50,11 @@ public class OutfitOrderTests
                 tris.AddRange([a, b, d, a, d, c]);
             }
         }
-        var p = pos.ToArray();
+        return Model(material, pos.ToArray(), nrm.ToArray(), tris.ToArray());
+    }
+
+    private static ModelParts Model(string material, float[] p, float[] normals, int[] t)
+    {
         var min = new Vector3(float.MaxValue);
         var max = new Vector3(float.MinValue);
         for (int v = 0; v < p.Length / 3; v++)
@@ -53,11 +63,10 @@ public class OutfitOrderTests
             min = Vector3.Min(min, at);
             max = Vector3.Max(max, at);
         }
-        var t = tris.ToArray();
         return new ModelParts
         {
             Positions = p,
-            Normals = nrm.ToArray(),
+            Normals = normals,
             MeshSpans = [new MeshSpan(0, 0, p.Length / 3)],
             Parts =
             [
@@ -88,14 +97,15 @@ public class OutfitOrderTests
     /// <summary>The pass alone, on a piece whose refit moved nothing: what it lifts is all its own doing.</summary>
     private static Run Keep(ModelParts piece, BodyRetarget.Outfit outfit, BodyRetarget.SlotPair? pair = null,
                             IReadOnlySet<int>? held = null, bool[]? stay = null, bool covered = false,
-                            float gap = BodyRetarget.OutfitOrderGapDefault)
+                            float gap = BodyRetarget.OutfitOrderGapDefault,
+                            float fade = BodyRetarget.OutfitFadeDefault)
     {
         var sets = BodyRetarget.Sets.From(piece, held);
         var delta = new Vec3[sets.NodeCount];
         var layered = BodyRetarget.GarmentCloth(piece, sets);
         var cover = covered ? BodyRetarget.CoveredPoints(sets, layered, BodyRetarget.FacesOneWay(piece, sets)) : [];
         int moved = BodyRetarget.KeepOutfitOrder(sets, [pair ?? Body()], outfit, delta, stay, layered, cover,
-                                                 out float residual, gap);
+                                                 out float residual, gap, fade);
         return new Run(sets, delta, moved, residual);
     }
 
@@ -241,6 +251,111 @@ public class OutfitOrderTests
                         $"vertex {v}: lining {lining * 1000f:F2} mm, shell {shell * 1000f:F2} mm");
         }
         Assert.True(HeightOf(jacket, run, Middle(21)) >= 0.006f - 1e-4f);
+    }
+
+    /// <summary>A sliver standing edge-on to the skin at a jacket's front edge, as on Geometric's: two corners 2 mm apart
+    /// over the bra, the third 24 mm off, past it. Lifted unevenly it turns over.</summary>
+    private static ModelParts Sliver()
+        => Model(ClothMaterial, [0f, 0f, 0.003f, 0.024f, 0f, 0.003f, 0.002f, 0f, 0.0028f],
+                 [0f, 1f, 0f, 0f, 1f, 0f, 0f, 1f, 0f], [0, 1, 2]);
+
+    /// <summary>A bra over x &lt; 5 mm only, authored 0.5 mm off the skin, refitted to stand 5 mm off.</summary>
+    private static BodyRetarget.Outfit BraToTheLeft()
+        => new(Grid(ClothMaterial, 11, Step, -0.02f, 0.0005f), Grid(ClothMaterial, 11, Step, -0.02f, 0.005f));
+
+    [Fact]
+    [Trait("Plan", "EDGE-outfit-fit-4")]
+    public void A_triangle_the_lift_would_turn_over_has_its_low_corner_raised()
+    {
+        var sliver = Sliver();
+        var run = Keep(sliver, BraToTheLeft());
+
+        Assert.True(run.Moved > 0);
+        Assert.Equal(0, BodyRetarget.FoldedTriangles(run.Sets, run.Delta));
+        // The far corner, past the bra and the fade, rose with the others rather than holding them down.
+        Assert.True(HeightOf(sliver, run, 1) >= HeightOf(sliver, run, 0) - 1e-4f,
+                    $"far corner {HeightOf(sliver, run, 1) * 1000f:F2} mm, near {HeightOf(sliver, run, 0) * 1000f:F2} mm");
+        Assert.True(run.Residual <= 1e-4f, $"{run.Residual * 1000f:F2} mm short");
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-outfit-fit-4")]
+    public void A_fold_the_low_corner_cannot_be_raised_out_of_is_backed_off_and_reported()
+    {
+        // The far corner is a kept-shape piece: it never moves, so the fold guard holds the near corners back.
+        var sliver = Sliver();
+        var sets = BodyRetarget.Sets.From(sliver);
+        var stay = new bool[sets.NodeCount];
+        stay[sets.NodeOf[1]] = true;
+
+        var run = Keep(sliver, BraToTheLeft(), stay: stay);
+
+        Assert.Equal(0, BodyRetarget.FoldedTriangles(run.Sets, run.Delta));
+        Assert.Equal(default, run.Delta[run.Sets.NodeOf[1]]);
+        Assert.True(run.Residual > 0f, "what the guard held back is reported");
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-outfit-fit-8")]
+    public void A_face_wider_than_a_cell_is_lifted_where_the_bra_comes_through_its_middle()
+    {
+        // A coarse jacket, its points 20 mm apart, over a bra strip 5 mm wide between them: no point of the jacket is over
+        // the bra, but the middles of its edges are.
+        var jacket = Grid(ClothMaterial, 5, 0.02f, 0.01f, 0.003f);
+        var outfit = new BodyRetarget.Outfit(Grid(ClothMaterial, 2, Step, 0f, 0.0005f),
+                                             Grid(ClothMaterial, 2, Step, 0f, 0.005f));
+
+        var run = Keep(jacket, outfit);
+
+        Assert.True(run.Moved > 0, "the edges over the bra should have asked for a lift");
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-outfit-fit-7")]
+    public void Keeping_layer_order_lift_only_moves_the_cover_never_the_covered_point()
+    {
+        // A lining 3.0 mm and a shell 4.5 mm off the skin; the lining has come up 2 mm, through the shell.
+        var jacket = Sheets(ClothMaterial, 11, 0.003f, 0.0045f);
+        var sets = BodyRetarget.Sets.From(jacket);
+        var layered = BodyRetarget.GarmentCloth(jacket, sets);
+        var covered = BodyRetarget.CoveredPoints(sets, layered, BodyRetarget.FacesOneWay(jacket, sets));
+        Assert.NotEmpty(covered);
+        var delta = new Vec3[sets.NodeCount];
+        for (int v = 0; v < 121; v++) delta[sets.NodeOf[v]] = new Vec3(0f, 0f, 0.002f);
+        var lining = (Vec3[])delta.Clone();
+
+        BodyRetarget.KeepLayerOrder(sets, covered, delta, null, layered, drawn: null, liftOnly: true);
+
+        for (int v = 0; v < 121; v++) Assert.Equal(lining[sets.NodeOf[v]], delta[sets.NodeOf[v]]);
+        float middleShell = 0.0045f + delta[sets.NodeOf[121 + 60]].Z, middleLining = 0.003f + delta[sets.NodeOf[60]].Z;
+        Assert.True(middleShell - middleLining >= BodyRetarget.LayerOrderGap - 1e-4f,
+                    $"shell {middleShell * 1000f:F2} mm over a lining at {middleLining * 1000f:F2} mm");
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-outfit-fit-7")]
+    public void Lining_and_shell_lifted_unevenly_across_a_cell_boundary_stay_in_order()
+    {
+        // The shell's points sit half a cell along from the lining's, 1.5 mm above it, at the bra's edge where a short
+        // fade (3 mm) lifts each by a very different share: the lining would come up through the shell.
+        var lining = Grid(ClothMaterial, 21, Step, 0f, 0.003f);
+        var shell = Grid(ClothMaterial, 21, Step, Step / 2f, 0.0045f);
+        var jacket = Model(ClothMaterial, [.. lining.Positions, .. shell.Positions], [.. lining.Normals, .. shell.Normals],
+                           [.. lining.Parts[0].Triangles, .. shell.Parts[0].Triangles.Select(i => i + 441)]);
+        var run = Keep(jacket, BraToTheLeft(), covered: true, fade: 0.003f);
+        Assert.True(run.Moved > 0);
+
+        var layered = BodyRetarget.GarmentCloth(jacket, run.Sets);
+        foreach (var c in BodyRetarget.CoveredPoints(run.Sets, layered, BodyRetarget.FacesOneWay(jacket, run.Sets)))
+        {
+            Vector3 Now(int n) => new Vector3(run.Sets.NodeAt[n].X, run.Sets.NodeAt[n].Y, run.Sets.NodeAt[n].Z)
+                                  + new Vector3(run.Delta[n].X, run.Delta[n].Y, run.Delta[n].Z);
+            var a = Now(c.A);
+            var at = a * (1f - c.U - c.V) + Now(c.B) * c.U + Now(c.C) * c.V;
+            float gap = (at - Now(c.Node)).Z;
+            Assert.True(gap >= MathF.Min(c.Gap, BodyRetarget.LayerOrderGap) - 1e-4f,
+                        $"node {c.Node}: {gap * 1000f:F2} mm under its cover, authored {c.Gap * 1000f:F2}");
+        }
     }
 
     [Fact]
