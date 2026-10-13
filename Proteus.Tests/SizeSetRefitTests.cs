@@ -1774,6 +1774,44 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     }
 
     /// <summary>
+    /// Each size of Geometric's jacket is kept outside the top's refit in the same option, made before it in the run, and
+    /// records which: a plain run again leaves them, a remake makes them again over the top as remade.
+    /// </summary>
+    [LocalDataFact(Geometric, Bibo, IvcsBibo, FixPubes, Rue)]
+    [Trait("Plan", "AC-outfit-fit-4")]
+    [Trait("Plan", "AC-outfit-fit-1")]
+    public void Geometrics_jacket_sizes_are_kept_outside_the_tops_refit_in_their_option()
+    {
+        string copy = GeometricAsShipped();
+        try
+        {
+            var (result, request) = RunOn(copy, ["rue"], Bibo, IvcsBibo, FixPubes, Rue);
+            Assert.True(result.Made > 0);
+            var record = BodyRetargetWriter.ReadRecord(copy)!;
+            var jackets = record.Options.Where(e => e.GamePath.EndsWith("_glv.mdl", StringComparison.Ordinal)).ToList();
+            Assert.NotEmpty(jackets);
+            foreach (var jacket in jackets)
+            {
+                var top = record.Options.Single(e => e.Name == jacket.Name && e.GamePath.EndsWith("_top.mdl", StringComparison.Ordinal));
+                output.WriteLine($"{jacket.Name}: over {jacket.Layers?["_top"]}");
+                Assert.NotNull(jacket.Layers);
+                Assert.StartsWith(RefitCore.Normal(top.File) + "|", jacket.Layers!["_top"]);
+            }
+            Assert.Contains(lastLog, l => l.Template.Contains("kept outside its {2} piece's refit", StringComparison.Ordinal));
+
+            var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
+            Assert.Equal(0, SizeSetRefit.Run(request, new UVRemapService(log, "."), log, _ => { }, CancellationToken.None).Made);
+            Assert.Equal(jackets.Select(j => j.Layers!["_top"]),
+                         BodyRetargetWriter.ReadRecord(copy)!.Options.Where(e => e.GamePath.EndsWith("_glv.mdl", StringComparison.Ordinal))
+                                           .Select(e => e.Layers!["_top"]));
+        }
+        finally
+        {
+            if (Directory.Exists(copy)) Directory.Delete(copy, recursive: true);
+        }
+    }
+
+    /// <summary>
     /// A sibling is read over the body mods the run searches, never the game's own body: one made on a body not among
     /// them is not taken, and the glove is read as before. Read once, it is not read again.
     /// </summary>

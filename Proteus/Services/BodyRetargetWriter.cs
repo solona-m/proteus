@@ -139,6 +139,14 @@ internal static class BodyRetargetWriter
         /// written before it was kept.
         /// </summary>
         public Dictionary<string, string>? Targets { get; set; }
+
+        /// <summary>
+        /// The other piece of its outfit the refit was kept outside (see <see cref="BodyRetarget.KeepOutfitOrder"/>), by
+        /// the slot it is worn in: its file in the mod and the start of its content's hash, "rel|sha8" — so a jacket laid
+        /// over one refit of its bra is told from one laid over another, even one remade in place. Null for a refit with
+        /// none, and for every entry written before it was kept.
+        /// </summary>
+        public Dictionary<string, string>? Layers { get; set; }
     }
 
     /// <summary>Where a refit came from and went, as an entry records it (see <see cref="Entry.SourceDir"/>).</summary>
@@ -177,7 +185,10 @@ internal static class BodyRetargetWriter
     }
 
     /// <summary>One refitted size to save: the option it becomes, its model, and the size it was refitted onto.</summary>
-    internal readonly record struct Refit(string Option, byte[] Model, string To);
+    /// <param name="Layers">The other piece of its outfit it was kept outside (see <see cref="Entry.Layers"/>); null
+    /// for none.</param>
+    internal readonly record struct Refit(string Option, byte[] Model, string To,
+                                          IReadOnlyDictionary<string, string>? Layers = null);
 
     /// <summary>
     /// Write <paramref name="model"/> into the mod as <paramref name="optionName"/> of <paramref name="groupName"/>,
@@ -380,7 +391,7 @@ internal static class BodyRetargetWriter
                     foreach (var (refit, rel) in written)
                         WriteRecord(modRoot, groupName, true, refit.Option, gamePath, rel, bodyMod, from, refit.To, auto,
                                     provenance,
-                                    fromGame);
+                                    fromGame, refit.Layers);
                     return new Outcome(true, groupName, names, refits.Count == 1
                         ? string.Format(Loc.Localize("Parts.Retarget.Save.AddedOneToAuthor.Fmt",
                               "Saved as \"{0}\" in the \"{1}\" group. Choose it there in Penumbra to wear it."),
@@ -416,7 +427,7 @@ internal static class BodyRetargetWriter
                 foreach (var (refit, rel) in written)
                     WriteRecord(modRoot, groupName, false, refit.Option, gamePath, rel, bodyMod, from, refit.To, auto,
                                 provenance,
-                                fromGame);
+                                fromGame, refit.Layers);
 
                 return new Outcome(true, groupName, names, refits.Count == 1
                     ? string.Format(Loc.Localize("Parts.Retarget.Save.AddedOne.Fmt",
@@ -641,7 +652,8 @@ internal static class BodyRetargetWriter
 
     private static void WriteRecord(string modRoot, string group, bool inAuthorGroup, string option, string gamePath,
                                     string rel, string bodyMod, string from, string to, bool auto,
-                                    Provenance? provenance, bool fromGame)
+                                    Provenance? provenance, bool fromGame,
+                                    IReadOnlyDictionary<string, string>? layers = null)
     {
         var record = ReadRecord(modRoot) ?? new Record();
         // Entries from before each named its own group take the old top-level one now, before it moves on.
@@ -657,6 +669,7 @@ internal static class BodyRetargetWriter
             BodyMod = bodyMod, From = from, To = to, Auto = auto, FromGame = fromGame,
             SourceDir = provenance?.SourceDir, SourceRel = provenance?.SourceRel,
             Targets = provenance == null ? null : new Dictionary<string, string>(provenance.Targets, StringComparer.Ordinal),
+            Layers = layers == null ? null : new Dictionary<string, string>(layers, StringComparer.Ordinal),
         });
         SaveRecord(modRoot, record);
     }

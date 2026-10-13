@@ -205,10 +205,14 @@ internal static partial class BodyRetarget
     /// <param name="Folded">Triangles the refit left facing the wrong way — see <see cref="Unfold"/>.</param>
     /// <param name="Smoothed">Vertices of the new body whose covered nipples were smoothed — see
     /// <see cref="SmoothCoveredNipples"/>.</param>
+    /// <param name="Layered">Points lifted to keep the garment outside the other piece of its outfit — see
+    /// <see cref="KeepOutfitOrder"/>.</param>
+    /// <param name="LayerResidual">How far, at most, the garment is still short of that piece (metres).</param>
     internal sealed record Report(
         int Nodes, int Snapped, int Transferred, int Missed, int Pushed,
         float WorstMove, float WorstPush, int UnmappedSpares, bool HasOtherLods, int Held = 0, int Laid = 0,
-        SwapReport? Swap = null, int Folded = 0, IReadOnlyList<ShapeOutcome>? Shapes = null, int Smoothed = 0)
+        SwapReport? Swap = null, int Folded = 0, IReadOnlyList<ShapeOutcome>? Shapes = null, int Smoothed = 0,
+        int Layered = 0, float LayerResidual = 0f)
     {
         /// <summary>Share of moved nodes that landed on a body vertex exactly. Low means the author sculpted the
         /// garment's body mesh rather than copying it, and the seam may not come out perfect.</summary>
@@ -227,7 +231,8 @@ internal static partial class BodyRetarget
     /// all is worth saying: a folded triangle is a black speck on the garment.</param>
     internal sealed record Solved(RetargetEdit Edit, int Snapped, int Transferred, int Missed, int Pushed,
                                   float WorstMove, float WorstPush, int Held = 0, int Laid = 0, int Folded = 0,
-                                  IReadOnlyList<ShapeOutcome>? Shapes = null);
+                                  IReadOnlyList<ShapeOutcome>? Shapes = null, int Layered = 0,
+                                  float LayerResidual = 0f);
 
     /// <summary>
     /// The garment split into the two sets the two passes act on.
@@ -634,12 +639,14 @@ internal static partial class BodyRetarget
     /// underside of the breast is still cleared, faces and all. Null: a top's own slot decides, as it always has.</param>
     /// <param name="trace">For a diagnostic: each stage of the solve by name, with a copy of every node's move so far
     /// (see <see cref="Solve"/>). Null, as every refit has it, costs nothing.</param>
+    /// <param name="outfit">See <see cref="Solve"/>.</param>
     public static Planned Plan(ModelParts garment, byte[] garmentBytes, IReadOnlyList<SlotPair> pairs,
                                string? garmentSlot = null, bool pushOut = true, IReadOnlySet<int>? held = null,
                                bool replaceSkin = false, bool acrossBodies = false, bool clearBody = false,
                                bool cutHidden = true, IReadOnlyList<IReadOnlyCollection<int>>? keepShape = null,
                                string? swapSlot = null, Action<string>? log = null, Action<string>? warn = null,
-                               string? chestSlot = null, Action<string, Vec3[]>? trace = null)
+                               string? chestSlot = null, Action<string, Vec3[]>? trace = null,
+                               Outfit? outfit = null)
     {
         // First, before anything reads the new chest: its nipples smoothed where the garment covers more of them than
         // the old body had, so every pass below sees one surface — the one the swap draws.
@@ -655,7 +662,7 @@ internal static partial class BodyRetarget
             ? SwappedSkinMeshes(garment, pairs)
             : null;
         var solved = Solve(garment, pairs, garmentSlot, pushOut, held, replaceSkin, clearBody, keepShape,
-                           ModelSkinReader.Read(garmentBytes, null, null), swapSlot, swapMeshes, chestSlot, trace);
+                           ModelSkinReader.Read(garmentBytes, null, null), swapSlot, swapMeshes, chestSlot, trace, outfit);
         var written = MeshVolumeService.Inflate(garmentBytes, solved.Edit);
         byte[] model = written.Model;
 
@@ -689,7 +696,7 @@ internal static partial class BodyRetarget
         var report = new Report(garment.Positions.Length / 3, solved.Snapped, solved.Transferred, solved.Missed,
                                 solved.Pushed, solved.WorstMove, solved.WorstPush,
                                 written.UnmappedSpares, ModelLodTrimmer.LodCount(model) > 1, solved.Held, solved.Laid,
-                                swap, solved.Folded, solved.Shapes, smoothed);
+                                swap, solved.Folded, solved.Shapes, smoothed, solved.Layered, solved.LayerResidual);
         return new Planned(solved.Edit, model, report);
     }
 
@@ -721,13 +728,17 @@ internal static partial class BodyRetarget
     /// <see cref="Plan"/> hands them to the rebuild; null works them out here.</param>
     /// <param name="trace">Each stage by name — "transfer", "knit", "layer-knit", "lay", "follow", "push", "unfold",
     /// "relax", "face-settle", "rim-lift", "layer-order" — with a copy of every node's move so far, indexed as
-    /// <see cref="Sets.NodeOf"/> maps vertices. Changes nothing; null skips the copies.</param>
+    /// <see cref="Sets.NodeOf"/> maps vertices — and "outfit-order" after them when <paramref name="outfit"/> is given.
+    /// Changes nothing; null skips the copies.</param>
+    /// <param name="outfit">The other piece of the garment's outfit, which it was authored over and must stay outside
+    /// (see <see cref="KeepOutfitOrder"/>). Null for none, which is every refit but a jacket's or shoe's whose author
+    /// option also ships the piece beneath.</param>
     internal static Solved Solve(ModelParts garment, IReadOnlyList<SlotPair> pairs, string? garmentSlot = null,
                                  bool pushOut = true, IReadOnlySet<int>? held = null, bool replaceSkin = false,
                                  bool clearBody = false, IReadOnlyList<IReadOnlyCollection<int>>? keepShape = null,
                                  XivLiveMesh.SkinnedMesh? garmentSkin = null, string? swapSlot = null,
                                  IReadOnlySet<int>? swapMeshes = null, string? chestSlot = null,
-                                 Action<string, Vec3[]>? trace = null)
+                                 Action<string, Vec3[]>? trace = null, Outfit? outfit = null)
     {
         // With the skin replaced, the garment's OWN slot body is drawn after all — Rebuild embeds that very mesh in the
         // garment, so it is what the cloth ends up lying against. Asking for the swap is not enough: Rebuild only swaps
@@ -852,12 +863,22 @@ internal static partial class BodyRetarget
 
         // Last: every piece the author covered with another still behind it — see KeepLayerOrder. Past the guard above,
         // so a node with no answer is already back where it was rather than a NaN spread through a covered piece.
-        if (!Tuned.NoLayerOrder)
-        {
-            var layered = GarmentCloth(garment, sets);
-            KeepLayerOrder(sets, CoveredPoints(sets, layered, FacesOneWay(garment, sets)), nodeDelta, stay, layered, drawn);
-        }
+        bool outfitOrder = outfit != null && !Tuned.NoOutfitOrder;
+        bool[]? layered = !Tuned.NoLayerOrder || outfitOrder ? GarmentCloth(garment, sets) : null;
+        List<Covered>? covered = !Tuned.NoLayerOrder ? CoveredPoints(sets, layered!, FacesOneWay(garment, sets)) : null;
+        if (covered != null) KeepLayerOrder(sets, covered, nodeDelta, stay, layered!, drawn);
         Stage("layer-order");
+
+        // And outside the other piece of its outfit, which is already drawn as it is — see KeepOutfitOrder. After the
+        // garment's own layers, which it puts back in order itself, so nothing moves either piece after it.
+        int outfitLayered = 0;
+        float layerResidual = 0f;
+        if (outfitOrder)
+        {
+            outfitLayered = KeepOutfitOrder(sets, pairs, outfit!, nodeDelta, stay, layered!, covered ?? [],
+                                            out layerResidual);
+            Stage("outfit-order");
+        }
 
         int vc = garment.Positions.Length / 3;
         var vertDelta = new Vec3[vc];
@@ -875,7 +896,7 @@ internal static partial class BodyRetarget
 
         var edit = new RetargetEdit(garment.MeshSpans, vertDelta, vertNrm);
         return new Solved(edit, CountTrue(snapped), transferred, missed, pushed, worstMove, worstPush, sets.HeldCount,
-                          laid, folded, stage.Shapes);
+                          laid, folded, stage.Shapes, outfitLayered, layerResidual);
     }
 
     /// <summary>What <see cref="ShapeAndPush"/> leaves for the passes after it.</summary>

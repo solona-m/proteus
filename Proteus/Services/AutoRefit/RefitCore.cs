@@ -855,15 +855,18 @@ internal static class RefitCore
     /// underside of the breast is cleared as a top's is when it covers the chest.
     /// </summary>
     /// <param name="chestSlot">"_top" when the cloth covers the chest; null otherwise.</param>
+    /// <param name="outfit">The piece the garment was authored over, as drawn now, which it stays outside (see
+    /// <see cref="BodyRetarget.KeepOutfitOrder"/>). Null for none.</param>
     internal static BodyRetarget.Planned PlanAccessoryRefit(ModelParts garment, byte[] bytes,
                                                             IReadOnlyList<BodyRetarget.SlotPair> pairs, string? chestSlot,
                                                             bool across, out List<string> pieceNames,
-                                                            Action<string>? log = null, Action<string>? warn = null)
+                                                            Action<string>? log = null, Action<string>? warn = null,
+                                                            BodyRetarget.Outfit? outfit = null)
     {
         var pieces = ShapePieces(garment, DefaultKeepShape(garment), out pieceNames);
         return BodyRetarget.Plan(garment, bytes, pairs, garmentSlot: null, held: new HashSet<int>(), replaceSkin: false,
                                  acrossBodies: across, clearBody: true, cutHidden: false, keepShape: pieces, log: log,
-                                 warn: warn, chestSlot: chestSlot);
+                                 warn: warn, chestSlot: chestSlot, outfit: outfit);
     }
 
     /// <summary>
