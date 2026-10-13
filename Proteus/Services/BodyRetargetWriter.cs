@@ -382,7 +382,7 @@ internal static class BodyRetargetWriter
                         WriteRecord(modRoot, groupName, true, refit.Option, gamePath, rel, bodyMod, from, refit.To, auto,
                                     provenance,
                                     fromGame);
-                        RecordCarried(modRoot, groupName, refit.Option, fromOption, FilesFor(refit, rel));
+                        if (auto) RecordCarried(modRoot, groupName, refit.Option, fromOption, FilesFor(refit, rel));
                     }
                     return new Outcome(true, groupName, names, refits.Count == 1
                         ? string.Format(Loc.Localize("Parts.Retarget.Save.AddedOneToAuthor.Fmt",
@@ -421,7 +421,7 @@ internal static class BodyRetargetWriter
                     WriteRecord(modRoot, groupName, false, refit.Option, gamePath, rel, bodyMod, from, refit.To, auto,
                                 provenance,
                                 fromGame);
-                    RecordCarried(modRoot, groupName, refit.Option, fromOption, FilesFor(refit, rel));
+                    if (auto) RecordCarried(modRoot, groupName, refit.Option, fromOption, FilesFor(refit, rel));
                 }
 
                 return new Outcome(true, groupName, names, refits.Count == 1
@@ -688,6 +688,10 @@ internal static class BodyRetargetWriter
     /// chest and the legs together, cut from an older refit of the chest alone, publishes that chest refit as its own —
     /// and recorded only with its legs, undoing the chest would leave it standing. Each carried entry is copied as it was,
     /// under the new option's name, wherever the new option publishes that very file.
+    /// <para/>
+    /// Only for an automatic save, and only the automatic refit's own entries: a size made by hand carried into ours would
+    /// read as holding the option by hand, and one of ours carried into a size made by hand would let the automatic undo
+    /// take that size away.
     /// </summary>
     private static void RecordCarried(string modRoot, string group, string option, string? fromOption,
                                       IReadOnlyDictionary<string, string> files)
@@ -696,7 +700,8 @@ internal static class BodyRetargetWriter
             return;
         if (ReadRecord(modRoot) is not { } record) return;
         var carried = record.Options
-            .Where(e => string.Equals(record.GroupOf(e), group, StringComparison.OrdinalIgnoreCase)
+            .Where(e => e.Auto
+                        && string.Equals(record.GroupOf(e), group, StringComparison.OrdinalIgnoreCase)
                         && string.Equals(e.Name, fromOption, StringComparison.OrdinalIgnoreCase)
                         && files.TryGetValue(e.GamePath, out string? at) && Norm(at) == Norm(e.File))
             .ToList();

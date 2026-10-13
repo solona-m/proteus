@@ -302,6 +302,58 @@ public class SharedGroupOneOptionTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "AC-shared-group-one-option-7")]
+    [Trait("Plan", "EDGE-shared-group-one-option-15")]
+    public void A_merged_option_cut_from_a_size_made_by_hand_stays_ours()
+    {
+        // The player wears a chest size they made by hand; the legs' refit is cut from it, its chest carried along.
+        string root = Gemma();
+        Assert.True(BodyRetargetWriter.Save(root, Group, Top, "neo", "from", [new BodyRetargetWriter.Refit("Mine", [5], "s")],
+                                            "Neolithe", auto: false).Ok);
+        Assert.Equal(Merged, Job(root, Dwn, "Mine"));
+
+        Assert.DoesNotContain(BodyRetargetWriter.ReadRecord(root)!.Options, e => e.Name == Merged && !e.Auto);
+        Assert.True(Plan(root, Top, Merged).Paired, "the merged option reads as made by hand");
+        // And the automatic undo of the chest leaves the size made by hand.
+        AutoRefitUndo.Undo(root, Top, NoneSwitched);
+        Assert.Contains(Options(root), o => o.Name == "Mine");
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-shared-group-one-option-7")]
+    public void A_size_made_by_hand_cut_from_an_automatic_refit_is_never_the_automatic_undos()
+    {
+        // The Studio's Body size tool saving legs cut from one of the automatic refit's options.
+        string root = Gemma();
+        Assert.True(BodyRetargetWriter.Save(root, Group, Top, "neo", "from", [new BodyRetargetWriter.Refit("Auto top", [1], "s")],
+                                            "Neolithe", auto: true).Ok);
+        Assert.True(BodyRetargetWriter.Save(root, Group, Dwn, "neo", "from", [new BodyRetargetWriter.Refit("By hand", [2], "s")],
+                                            "Auto top", auto: false).Ok);
+
+        Assert.DoesNotContain(BodyRetargetWriter.ReadRecord(root)!.Options, e => e.Name == "By hand" && e.Auto);
+        Assert.Equal(["Auto top"], AutoRefitUndo.Undo(root, Top, NoneSwitched)!.Removed);
+        Assert.Contains(Options(root), o => o.Name == "By hand");
+        Assert.Null(AutoRefitUndo.Undo(root, Dwn, NoneSwitched));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-shared-group-one-option-7")]
+    public void A_piece_saved_over_its_own_path_carries_nothing_there()
+    {
+        // The chest saved again, cut from an older option that refitted the chest too: the new option's chest is its own.
+        string root = Gemma();
+        Assert.True(BodyRetargetWriter.Save(root, Group, Top, "neo", "from", [new BodyRetargetWriter.Refit("Old", [1], "s")],
+                                            "Neolithe", auto: true).Ok);
+        Assert.True(BodyRetargetWriter.Save(root, Group, Top, "neo", "from", [new BodyRetargetWriter.Refit("New", [2], "s")],
+                                            "Old", auto: true).Ok);
+
+        string own = Option(root, "New").Files[Top];
+        Assert.NotEqual(Option(root, "Old").Files[Top], own);
+        Assert.Equal(own.Replace('\\', '/'),
+                     BodyRetargetWriter.ReadRecord(root)!.Options.Single(e => e.Name == "New" && e.GamePath == Top).File);
+    }
+
+    [Fact]
     [Trait("Plan", "AC-shared-group-one-option-8")]
     public void An_author_size_fitting_one_piece_is_refitted_instead_in_either_order()
     {
