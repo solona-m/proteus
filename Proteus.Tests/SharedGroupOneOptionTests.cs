@@ -578,6 +578,19 @@ public class SharedGroupOneOptionTests : IDisposable
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-shared-group-one-option-9")]
+    public void Undo_deletes_nothing_when_it_cannot_tell_what_is_published()
+    {
+        const string refit = "Body Retarget/M/chara/equipment/e6186/model/c0201e6186_top.mdl";
+        var published = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Body Retarget/Other/x.mdl" };
+
+        Assert.True(BodyRetargetWriter.Deletable(refit, published));
+        Assert.False(BodyRetargetWriter.Deletable(refit.Replace('/', '\\'), new HashSet<string>(StringComparer.OrdinalIgnoreCase) { refit }));
+        Assert.False(BodyRetargetWriter.Deletable(refit, null));          // the manifest could not be read
+        Assert.False(BodyRetargetWriter.Deletable(NeoTop, published));   // the author's file, never ours to delete
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-shared-group-one-option-10")]
     public void The_second_save_moves_no_option()
     {

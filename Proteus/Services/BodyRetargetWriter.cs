@@ -511,8 +511,18 @@ internal static class BodyRetargetWriter
     /// out, so undo never deletes a refit another option still points at. One option sizing the chest and the legs
     /// together can carry the chest refit of an option saved before it, and undoing that one must leave the file.
     /// </summary>
-    private static HashSet<string> Published(string modRoot)
-        => PenumbraModMeta.ReadAllRedirects(modRoot).Select(r => Norm(r.File)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    /// <returns>Null when the manifest cannot be read just then — another program mid-write — which keeps every file:
+    /// "could not tell" must never mean "nothing points at it". A file kept is inert; one deleted under an option still
+    /// naming it breaks the mod.</returns>
+    private static HashSet<string>? Published(string modRoot)
+        => PenumbraModMeta.TryReadGroups(modRoot) == null
+            ? null
+            : PenumbraModMeta.ReadAllRedirects(modRoot).Select(r => Norm(r.File)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Whether undo may delete <paramref name="rel"/>: one of ours that nothing in <paramref name="published"/>
+    /// still points at, and never when the manifest could not be read (see <see cref="Published"/>).</summary>
+    internal static bool Deletable(string rel, IReadOnlySet<string>? published)
+        => published != null && Ours(rel) && !published.Contains(Norm(rel));
 
     private static string Norm(string rel) => rel.Replace('\\', '/').Trim('/');
 
@@ -539,7 +549,7 @@ internal static class BodyRetargetWriter
                     if (removed != null)
                     {
                         var stillPublished = Published(modRoot);
-                        foreach (var rel in removed.Values.Where(Ours).Where(rel => !stillPublished.Contains(Norm(rel))))
+                        foreach (var rel in removed.Values.Where(rel => Deletable(rel, stillPublished)))
                             DeleteQuietly(Path.Combine(modRoot, rel.Replace('/', Path.DirectorySeparatorChar)));
                     }
                     PruneEmptyFolders(Path.Combine(modRoot, Subfolder));
@@ -580,7 +590,7 @@ internal static class BodyRetargetWriter
                 if (going.Files != null)
                 {
                     var stillPublished = Published(modRoot);
-                    foreach (var rel in going.Files.Values.Where(Ours).Where(rel => !stillPublished.Contains(Norm(rel))))
+                    foreach (var rel in going.Files.Values.Where(rel => Deletable(rel, stillPublished)))
                         DeleteQuietly(Path.Combine(modRoot, rel.Replace('/', Path.DirectorySeparatorChar)));
                 }
 
