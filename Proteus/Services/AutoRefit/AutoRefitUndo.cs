@@ -21,16 +21,16 @@ internal static class AutoRefitUndo
     /// <param name="Removed">Options taken out.</param>
     /// <param name="Failed">Options that could not be, with why.</param>
     /// <param name="Empty">A mod Proteus made that now carries nothing at all: delete it.</param>
-    /// <param name="Paths">Every body piece the options taken out served — what they published and what the record
-    /// said of them. An option sizing the chest and the legs together goes once, with the first piece undone; the
-    /// second finds nothing left to undo, and has to be named here to be left alone after.</param>
+    /// <param name="Paths">Every piece the options taken out served — what the record said of them, and the chest and
+    /// legs of an option publishing both. An option sizing the chest and the legs together goes once, with the first
+    /// piece undone; the second finds nothing left to undo, and has to be named here to be left alone after.</param>
     /// <param name="Recorded">Of <paramref name="Paths"/>, those the record had a refit of.</param>
     internal sealed record ModResult(string Dir, List<string> Groups, List<string> Removed, List<string> Failed, bool Empty,
                                      IReadOnlySet<string> Paths, IReadOnlySet<string> Recorded);
 
-    /// <summary>The model of a body piece: what an undone option's published files are read for.</summary>
-    private static readonly System.Text.RegularExpressions.Regex BodyModel = new(
-        @"_(top|dwn|glv|sho)\.mdl$",
+    /// <summary>The chest and legs models: what an undone option's published files are read for.</summary>
+    private static readonly System.Text.RegularExpressions.Regex PairModel = new(
+        @"_(top|dwn)\.mdl$",
         System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
 
     /// <summary>
@@ -82,11 +82,18 @@ internal static class AutoRefitUndo
                                                                 && string.Equals(g.Option, e.Name, StringComparison.OrdinalIgnoreCase)))
                                      .Select(e => e.GamePath)
                                      .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // And the chest and legs an option sizing both together published, refitted or not: the gloves or shoes an
+        // option merely carried from the one it was cut from keep their own way.
         var paths = new HashSet<string>(recorded, StringComparer.OrdinalIgnoreCase);
         foreach (var (group, option) in going)
             foreach (var o in PenumbraModMeta.TryReadFileOptions(root, group) ?? [])
                 if (string.Equals(o.Name, option, StringComparison.OrdinalIgnoreCase))
-                    paths.UnionWith(o.Files.Keys.Where(path => BodyModel.IsMatch(path)));
+                {
+                    var pair = o.Files.Keys.Where(path => PairModel.IsMatch(path)).ToList();
+                    if (pair.Any(p => p.EndsWith("_top.mdl", StringComparison.OrdinalIgnoreCase))
+                        && pair.Any(p => p.EndsWith("_dwn.mdl", StringComparison.OrdinalIgnoreCase)))
+                        paths.UnionWith(pair);
+                }
 
         var removed = new List<string>();
         var failed = new List<string>();

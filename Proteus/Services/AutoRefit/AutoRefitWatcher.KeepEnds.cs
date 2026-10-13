@@ -131,8 +131,8 @@ public sealed partial class AutoRefitWatcher
             : KeepEnds.SkinOnlyOption(targetMod.Name);
         // Shipped in an option that sizes the chest and the legs together: into the one option their refits share, a
         // redraw of its skin alone too — an option of its own would switch them off.
-        if (j.Pair is { Plan.Paired: true })
-            option = j.Pair.Plan.Option;
+        if (j.Pair is { Plan: { Paired: true, Option: { } shared } })
+            option = shared;
         // Sized together with the chest or legs in one of the author's single-choice groups: into the option that piece's
         // refit went into, so switching one on does not switch the other off.
         else if (decision is KeepEnds.Refit && root != null
@@ -250,7 +250,7 @@ public sealed partial class AutoRefitWatcher
 
         string sourceName = skin.Own.Dir == VanillaBodyCatalog.Key ? Strings.Parts.RetargetFromVanilla
                           : j.State.Find(skin.Own.Dir)?.Name ?? skin.Own.Dir;
-        string option = j.Pair is { Plan.Paired: true } ? j.Pair.Plan.Option : KeepEnds.SkinOnlyOption(j.TargetMod.Name);
+        string option = j.Pair?.Plan.Option ?? KeepEnds.SkinOnlyOption(j.TargetMod.Name);
         return new EndsOutput(model, KeepEnds.SkinOnlyLabel, RefitCore.LabelFrom(sourceName, [skin.Own.Option.Label]),
                               savedIn => string.Format(Loc.Localize("Chat.AutoRefit.SkinOnly.Fmt",
                                   "[Proteus] {0} keeps its own shape; its skin is now drawn like {1}'s. Saved as \"{2}\" in "

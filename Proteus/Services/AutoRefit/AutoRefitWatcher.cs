@@ -423,8 +423,9 @@ public sealed partial class AutoRefitWatcher : IDisposable
                     }
 
                     // Remembered, so the piece is not refitted again the next time it goes on. The game's own gear is
-                    // drawn from the game once its mod is gone, which is another key. Only the pieces undone: another
-                    // piece of the same mod keeps its refit.
+                    // drawn from the game once its mod is gone, which is another key. Only the pieces undone — and those
+                    // an undone option served with them (see AutoRefitUndo.ModResult.Paths): another piece of the same
+                    // mod with a refit of its own keeps it.
                     foreach (var (piece, r) in results)
                     {
                         pref.Declined.Add(piece.Key);
@@ -1116,8 +1117,8 @@ public sealed partial class AutoRefitWatcher : IDisposable
         // left out below still goes into the option joined here.
         string option = OptionFor(others);
         string? joined = null;
-        if (together is { Plan.Paired: true })
-            option = joined = together.Plan.Option;
+        if (together is { Plan: { Paired: true, Option: { } shared } })
+            option = joined = shared;
         else if (root != null && RefitCore.IsSharedSingleGroup(redirects, ownRecord, group, RefitCore.SingleGroups(root))
                  && RefitCore.JoinOption(ownRecord, group, savePath, targetMod.Dir, ChosenTargets(TargetFor),
                                          TargetsOf(primary, target, others), option) is { } join
@@ -1247,11 +1248,11 @@ public sealed partial class AutoRefitWatcher : IDisposable
                     ? AuthorSizeCached(modRoot, sizeGroup, otherSizes, targetMod, otherTarget, otherSlot,
                                        BodySizeCatalog.RaceOf(otherPath) ?? race, bodiesVersion)
                     : null,
-                refitNames);
+                refitNames, path => g.Drawn?.Contains(path) == true);
             if (both == null)
             {
                 log.Information("[Proteus] auto refit: {0}: the author's \"{1}\" fits it but not the other piece's size "
-                              + "chosen; refitted into \"{2}\" instead", item, authored, pair.Plan.Option);
+                              + "chosen; refitted into \"{2}\" instead", item, authored, pair.Plan.Option ?? "");
                 return false;
             }
             authored = both;
@@ -1355,12 +1356,12 @@ public sealed partial class AutoRefitWatcher : IDisposable
                                             "_dwn" => g.Preference.Legs != null,
                                             _ => false,
                                         },
-                                        targetFor, "");
+                                        targetFor);
         if (plan.Note != null) log.Information("[Proteus] auto refit: {0}: {1}", item, plan.Note);
         bool otherWorn = RefitCore.OtherPieceWorn(plan.PairPaths, r.Worn.GamePath, g.Drawn);
         if (plan.Paired)
-            log.Information("[Proteus] auto refit: {0}: \"{1}\" / \"{2}\" sizes the chest and the legs together; saved as "
-                          + "\"{3}\"{4}", item, group, plan.CutFrom ?? "", plan.Option,
+            log.Information("[Proteus] auto refit: {0}: \"{1}\" / \"{2}\" sizes the chest and the legs together; its refits "
+                          + "go into \"{3}\"{4}", item, group, plan.CutFrom ?? "", plan.Option ?? "",
                             otherWorn ? ", the other piece worn too" : "");
         return new PairContext(plan, group, otherWorn, targetFor);
     }

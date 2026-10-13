@@ -384,10 +384,12 @@ internal static class RefitCore
     /// <summary>
     /// What a refit's option is called and which option it is cut from (see <see cref="PlanOption"/>).
     /// </summary>
+    /// <param name="Option">When paired, the one option both refits share; null otherwise, the caller naming the refit
+    /// as it would anyway.</param>
     /// <param name="Paired">The option sizes the chest and the legs together, so the refits of both share it.</param>
     /// <param name="PairPaths">When paired, the chest's and the legs' game paths by slot.</param>
     /// <param name="Note">Why a pair option was not used as one, for the log; null otherwise.</param>
-    internal sealed record PairPlan(string Option, string? CutFrom, bool Paired, IReadOnlyDictionary<string, string> PairPaths,
+    internal sealed record PairPlan(string? Option, string? CutFrom, bool Paired, IReadOnlyDictionary<string, string> PairPaths,
                                     string? Note);
 
     /// <summary>
@@ -401,7 +403,8 @@ internal static class RefitCore
     /// refits of both pieces share ONE option, named for both sizes chosen: two options, one per piece, would each switch
     /// the other off, as single-choice options do. Only in a single-choice group, only with both sizes CHOSEN (a legs refit
     /// refuses without one, so a name built on a fallback legs size would carry the author's legs for good), and never
-    /// over a size made by hand of that name. Otherwise <paramref name="proposed"/>, today's name for this piece alone.
+    /// over a size made by hand of that name. Otherwise unpaired, with no option: the caller names the refit as it does
+    /// for one piece alone.
     /// </summary>
     /// <param name="single">The group is single-choice.</param>
     /// <param name="selected">What the collection ticks in the group now; null for nothing.</param>
@@ -412,7 +415,7 @@ internal static class RefitCore
     internal static PairPlan PlanOption(IReadOnlyList<PenumbraModMeta.Redirect> redirects, BodyRetargetWriter.Record? record,
                                         string group, bool single, IReadOnlyCollection<string>? selected,
                                         string drawnPath, string drawnRel, string bodyName, Func<string, bool> chosen,
-                                        Func<string, BodyOption?> targetFor, string proposed)
+                                        Func<string, BodyOption?> targetFor)
     {
         var none = new Dictionary<string, string>(StringComparer.Ordinal);
         string want = Normal(drawnRel);
@@ -421,19 +424,19 @@ internal static class RefitCore
                                    && string.Equals(d.GamePath, drawnPath, StringComparison.OrdinalIgnoreCase)
                                    && Normal(d.File) == want))
                           ?? BodyRetargetWriter.OptionOfFile(redirects, drawnRel, group);
-        if (!single) return new PairPlan(proposed, cutFrom, false, none, null);
+        if (!single) return new PairPlan(null, cutFrom, false, none, null);
 
         var pair = BodySlotsOf(redirects, group, cutFrom, BodySizeCatalog.RaceOf(drawnPath));
         if (!pair.ContainsKey("_top") || !pair.ContainsKey("_dwn") || !chosen("_top") || !chosen("_dwn")
             || targetFor("_top") is not { } chest || targetFor("_dwn") is not { } legs)
-            return new PairPlan(proposed, cutFrom, false, none, null);
+            return new PairPlan(null, cutFrom, false, none, null);
 
         string merged = OptionName(bodyName, [chest.Label, legs.Label]);
         bool handMade = record?.Options.Any(e => !e.Auto
                                                  && string.Equals(record.GroupOf(e), group, StringComparison.OrdinalIgnoreCase)
                                                  && string.Equals(e.Name, merged, StringComparison.OrdinalIgnoreCase)) ?? false;
         if (handMade)
-            return new PairPlan(proposed, cutFrom, false, none, $"\"{merged}\" is held by a size made by hand");
+            return new PairPlan(null, cutFrom, false, none, $"\"{merged}\" is held by a size made by hand");
         return new PairPlan(merged, cutFrom, true, pair, null);
     }
 
@@ -495,11 +498,13 @@ internal static class RefitCore
     /// </summary>
     /// <param name="authoredOf">The author's option among a piece's sizes that is the size chosen for it, given its slot,
     /// its game path and its sizes; null for none.</param>
+    /// <param name="worn">Whether a piece, by game path, is worn: one that is not has no size to switch off, and need not
+    /// fit — a glove shipped with the pair, worn under the top alone, is not held to the legs.</param>
     internal static string? AuthorOptionForPieces(IReadOnlyList<PenumbraModMeta.Redirect> redirects, string sizeGroup,
                                                   string ownPath, string ownAuthored,
                                                   IReadOnlyDictionary<string, string> pairPaths,
                                                   Func<string, string, IReadOnlyList<(string Option, string File)>, string?> authoredOf,
-                                                  IReadOnlySet<string> exclude)
+                                                  IReadOnlySet<string> exclude, Func<string, bool> worn)
     {
         IReadOnlyList<string>? Fitting(string path, IReadOnlyList<(string Option, string File)> sizes, string? authored)
             => sizes.FirstOrDefault(s => string.Equals(s.Option, authored, StringComparison.OrdinalIgnoreCase)) is
@@ -510,7 +515,7 @@ internal static class RefitCore
         var fitting = new List<IReadOnlyList<string>?> { Fitting(ownPath, SizesOf(redirects, sizeGroup, ownPath, exclude), ownAuthored) };
         foreach (var (slot, path) in pairPaths)
         {
-            if (string.Equals(path, ownPath, StringComparison.OrdinalIgnoreCase)) continue;
+            if (string.Equals(path, ownPath, StringComparison.OrdinalIgnoreCase) || !worn(path)) continue;
             var sizes = SizesOf(redirects, sizeGroup, path, exclude);
             fitting.Add(Fitting(path, sizes, authoredOf(slot, path, sizes)));
         }

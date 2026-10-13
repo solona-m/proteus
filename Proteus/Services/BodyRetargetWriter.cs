@@ -378,9 +378,12 @@ internal static class BodyRetargetWriter
                     PenumbraModMeta.AddFileOptions(modRoot, groupName, written.Select(w => OptionFor(w.Refit, w.Rel))
                                                                               .ToList());
                     foreach (var (refit, rel) in written)
+                    {
                         WriteRecord(modRoot, groupName, true, refit.Option, gamePath, rel, bodyMod, from, refit.To, auto,
                                     provenance,
                                     fromGame);
+                        RecordCarried(modRoot, groupName, refit.Option, fromOption, FilesFor(refit, rel));
+                    }
                     return new Outcome(true, groupName, names, refits.Count == 1
                         ? string.Format(Loc.Localize("Parts.Retarget.Save.AddedOneToAuthor.Fmt",
                               "Saved as \"{0}\" in the \"{1}\" group. Choose it there in Penumbra to wear it."),
@@ -414,9 +417,12 @@ internal static class BodyRetargetWriter
                                                      final.Count - 1);
 
                 foreach (var (refit, rel) in written)
+                {
                     WriteRecord(modRoot, groupName, false, refit.Option, gamePath, rel, bodyMod, from, refit.To, auto,
                                 provenance,
                                 fromGame);
+                    RecordCarried(modRoot, groupName, refit.Option, fromOption, FilesFor(refit, rel));
+                }
 
                 return new Outcome(true, groupName, names, refits.Count == 1
                     ? string.Format(Loc.Localize("Parts.Retarget.Save.AddedOne.Fmt",
@@ -674,6 +680,41 @@ internal static class BodyRetargetWriter
             SourceDir = provenance?.SourceDir, SourceRel = provenance?.SourceRel,
             Targets = provenance == null ? null : new Dictionary<string, string>(provenance.Targets, StringComparer.Ordinal),
         });
+        SaveRecord(modRoot, record);
+    }
+
+    /// <summary>
+    /// Record for <paramref name="option"/> the refits it carries from the option it was cut from: an option sizing the
+    /// chest and the legs together, cut from an older refit of the chest alone, publishes that chest refit as its own —
+    /// and recorded only with its legs, undoing the chest would leave it standing. Each carried entry is copied as it was,
+    /// under the new option's name, wherever the new option publishes that very file.
+    /// </summary>
+    private static void RecordCarried(string modRoot, string group, string option, string? fromOption,
+                                      IReadOnlyDictionary<string, string> files)
+    {
+        if (fromOption is not { Length: > 0 } || string.Equals(fromOption, option, StringComparison.OrdinalIgnoreCase))
+            return;
+        if (ReadRecord(modRoot) is not { } record) return;
+        var carried = record.Options
+            .Where(e => string.Equals(record.GroupOf(e), group, StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(e.Name, fromOption, StringComparison.OrdinalIgnoreCase)
+                        && files.TryGetValue(e.GamePath, out string? at) && Norm(at) == Norm(e.File))
+            .ToList();
+        if (carried.Count == 0) return;
+
+        foreach (var e in carried)
+        {
+            record.Options.RemoveAll(o => string.Equals(record.GroupOf(o), group, StringComparison.OrdinalIgnoreCase)
+                                          && string.Equals(o.Name, option, StringComparison.OrdinalIgnoreCase)
+                                          && string.Equals(o.GamePath, e.GamePath, StringComparison.OrdinalIgnoreCase));
+            record.Options.Add(new Entry
+            {
+                Group = group, InAuthorGroup = e.InAuthorGroup, Name = option, GamePath = e.GamePath, File = e.File,
+                BodyMod = e.BodyMod, From = e.From, To = e.To, Auto = e.Auto, FromGame = e.FromGame,
+                SourceDir = e.SourceDir, SourceRel = e.SourceRel,
+                Targets = e.Targets == null ? null : new Dictionary<string, string>(e.Targets, StringComparer.Ordinal),
+            });
+        }
         SaveRecord(modRoot, record);
     }
 

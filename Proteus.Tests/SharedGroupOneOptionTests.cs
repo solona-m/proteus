@@ -77,7 +77,7 @@ public class SharedGroupOneOptionTests : IDisposable
         _ => null,
     };
 
-    private static RefitCore.PairPlan Plan(string root, string drawnPath, string? selected, string proposed = "per slot",
+    private static RefitCore.PairPlan Plan(string root, string drawnPath, string? selected,
                                            bool single = true, Func<string, bool>? chosen = null, BodyOption? legs = null,
                                            string group = Group)
     {
@@ -85,7 +85,7 @@ public class SharedGroupOneOptionTests : IDisposable
         string drawnRel = DrawnBy(redirects, group, selected, drawnPath);
         return RefitCore.PlanOption(redirects, BodyRetargetWriter.ReadRecord(root), group, single,
                                     selected == null ? null : [selected], drawnPath, drawnRel, "Neolithe",
-                                    chosen ?? (_ => true), s => TargetsOf(s, legs ?? Legs), proposed);
+                                    chosen ?? (_ => true), s => TargetsOf(s, legs ?? Legs));
     }
 
     /// <summary>The file the collection draws at <paramref name="gamePath"/> with <paramref name="selected"/> ticked.</summary>
@@ -165,7 +165,7 @@ public class SharedGroupOneOptionTests : IDisposable
                      RefitCore.BodySlotsOf(redirects, Group, "Neolithe", "0201"));
         // Worn as the reporter left it — the chest's rival on — the legs are cut from it and sized together.
         var plan = RefitCore.PlanOption(redirects, BodyRetargetWriter.ReadRecord(root), Group, true, [RivalTop], Dwn,
-                                        NeoDwn, "Neolithe", _ => true, s => TargetsOf(s, Legs), "per slot");
+                                        NeoDwn, "Neolithe", _ => true, s => TargetsOf(s, Legs));
         Assert.True(plan.Paired);
         Assert.Equal(Merged, plan.Option);
         Assert.Equal(RivalTop, plan.CutFrom);
@@ -195,10 +195,10 @@ public class SharedGroupOneOptionTests : IDisposable
                           new PenumbraModMeta.FileOption("Neolithe S", Files((Top, "s/top.mdl"), ("chara/x/mt_top.mtrl", "s/top.mtrl"))),
                           new PenumbraModMeta.FileOption("Neolithe M", Files((Top, "m/top.mdl"))));
 
-        var plan = Plan(root, Top, "Neolithe S", proposed: "Neolithe — S", group: "Chest Size");
+        var plan = Plan(root, Top, "Neolithe S", group: "Chest Size");
 
         Assert.False(plan.Paired);
-        Assert.Equal("Neolithe — S", plan.Option);
+        Assert.Null(plan.Option);
         Assert.Equal("Neolithe S", plan.CutFrom);
     }
 
@@ -212,7 +212,7 @@ public class SharedGroupOneOptionTests : IDisposable
 
         Assert.Equal("Legs", RefitCore.SwitchingGroup(redirects, Dwn, null, RefitCore.SingleGroups(root)));
         Assert.False(RefitCore.PlanOption(redirects, null, "Chest", true, ["S"], Top, "s/top.mdl", "Neolithe",
-                                          _ => true, s => TargetsOf(s, Legs), "per slot").Paired);
+                                          _ => true, s => TargetsOf(s, Legs)).Paired);
     }
 
     [Fact]
@@ -248,6 +248,22 @@ public class SharedGroupOneOptionTests : IDisposable
         Assert.Null(AutoRefitUndo.Undo(root, Dwn, NoneSwitched));
     }
 
+    [Fact]
+    [Trait("Plan", "AC-shared-group-one-option-6")]
+    public void An_option_without_legs_never_declines_the_gloves_it_carried()
+    {
+        // A chest-only size group whose option ships the gloves too: the chest's refit carries them from its cut-from,
+        // and undoing it is the chest's undo alone.
+        string root = Mod("Shirt", "Chest Size", new PenumbraModMeta.FileOption("S", Files((Top, "s/top.mdl"), (Glv, "s/glv.mdl"))));
+        Assert.True(BodyRetargetWriter.Save(root, "Chest Size", Top, "neo", "from", [new BodyRetargetWriter.Refit("Neolithe — S", [1], "s")],
+                                            "S", auto: true).Ok);
+
+        var result = AutoRefitUndo.Undo(root, Top, NoneSwitched)!;
+
+        Assert.DoesNotContain(Glv, result.Paths);
+        Assert.Equal([Top], AutoRefitUndo.ToDecline(result.Paths, result.Recorded, [Top, Glv]));
+    }
+
     /// <summary>The reporter's mod as it was: one option per piece, each carrying the other piece's original.</summary>
     private string Rivals()
     {
@@ -271,9 +287,14 @@ public class SharedGroupOneOptionTests : IDisposable
         Assert.Equal(rivalTopFile, merged.Files[Top]);
         Assert.True(IsRefit(merged.Files[Dwn]));
 
+        // The chest refit it carries is recorded as its own, so undoing the chest takes it with the chest's rival.
+        Assert.Contains(BodyRetargetWriter.ReadRecord(root)!.Options, e => e.Name == Merged && e.GamePath == Top);
+        var chest = AutoRefitUndo.Undo(root, Top, NoneSwitched)!;
+        Assert.Equal(new[] { RivalTop, Merged }.Order(StringComparer.Ordinal), chest.Removed.Order(StringComparer.Ordinal));
+        Assert.Equal(["Neolithe", "Libelly Shaper", "x", RivalDwn], Options(root).Select(o => o.Name));
+        Assert.False(File.Exists(Path.Combine(root, rivalTopFile)), "a chest refit nothing publishes was left behind");
+
         // Undo, then "Refit what I'm wearing now": one Proteus option left.
-        AutoRefitUndo.Undo(root, Top, NoneSwitched);
-        Assert.True(File.Exists(Path.Combine(root, rivalTopFile)), "the chest refit the merged option draws was deleted");
         AutoRefitUndo.Undo(root, Dwn, NoneSwitched);
         Assert.False(Directory.Exists(Path.Combine(root, BodyRetargetWriter.Subfolder)));
         Job(root, Dwn, Job(root, Top, "Neolithe"));
@@ -295,11 +316,11 @@ public class SharedGroupOneOptionTests : IDisposable
         Assert.True(RefitCore.PairMustFitAll(plan, otherWorn: true, Group, Group));
 
         // The chest job: X is its size; the legs' is Y, or none of the author's.
-        Assert.Null(RefitCore.AuthorOptionForPieces(redirects, Group, Top, "X", plan.PairPaths, (_, _, _) => "Y", NoneExcluded));
-        Assert.Null(RefitCore.AuthorOptionForPieces(redirects, Group, Top, "X", plan.PairPaths, (_, _, _) => null, NoneExcluded));
+        Assert.Null(RefitCore.AuthorOptionForPieces(redirects, Group, Top, "X", plan.PairPaths, (_, _, _) => "Y", NoneExcluded, _ => true));
+        Assert.Null(RefitCore.AuthorOptionForPieces(redirects, Group, Top, "X", plan.PairPaths, (_, _, _) => null, NoneExcluded, _ => true));
         // The legs job, the other way round.
         Assert.Null(RefitCore.AuthorOptionForPieces(redirects, Group, Dwn, "Y", Plan(root, Dwn, "Neolithe").PairPaths,
-                                                    (_, _, _) => "X", NoneExcluded));
+                                                    (_, _, _) => "X", NoneExcluded, _ => true));
 
         // Refitted instead: both pieces end in the one merged option, in either order, the group never on X.
         Assert.Equal(Merged, Job(root, Dwn, Job(root, Top, "Neolithe")));
@@ -344,8 +365,8 @@ public class SharedGroupOneOptionTests : IDisposable
         string root = XY();
         var redirects = PenumbraModMeta.ReadAllRedirects(root);
         var pairPaths = Plan(root, Top, "Neolithe").PairPaths;
-        Assert.Equal("X", RefitCore.AuthorOptionForPieces(redirects, Group, Top, "X", pairPaths, (_, _, _) => "X", NoneExcluded));
-        Assert.Equal("X", RefitCore.AuthorOptionForPieces(redirects, Group, Dwn, "X", pairPaths, (_, _, _) => "X", NoneExcluded));
+        Assert.Equal("X", RefitCore.AuthorOptionForPieces(redirects, Group, Top, "X", pairPaths, (_, _, _) => "X", NoneExcluded, _ => true));
+        Assert.Equal("X", RefitCore.AuthorOptionForPieces(redirects, Group, Dwn, "X", pairPaths, (_, _, _) => "X", NoneExcluded, _ => true));
         // Asked of the legs' own sizes, by the legs' slot and path.
         RefitCore.AuthorOptionForPieces(redirects, Group, Top, "X", pairPaths, (slot, path, sizes) =>
         {
@@ -353,7 +374,7 @@ public class SharedGroupOneOptionTests : IDisposable
             Assert.Equal(Dwn, path);
             Assert.Equal(["Neolithe", "X", "Y"], sizes.Select(s => s.Option));
             return "X";
-        }, NoneExcluded);
+        }, NoneExcluded, _ => true);
 
         // The legs job, queued before the chest's switched the group to X, works on X's legs and is cut from X.
         var reread = AutoRefitDecisions.Reresolved(new AutoRefitDecisions.Worn(Dwn, "Gemma", NeoDwn),
@@ -371,7 +392,7 @@ public class SharedGroupOneOptionTests : IDisposable
         var redirects = PenumbraModMeta.ReadAllRedirects(root);
 
         var plan = RefitCore.PlanOption(redirects, null, Group, true, ["x"], Top, NeoTop, "Neolithe", _ => true,
-                                        s => TargetsOf(s, Legs), "per slot");
+                                        s => TargetsOf(s, Legs));
 
         Assert.Equal("Neolithe", plan.CutFrom);
         Assert.True(plan.Paired);
@@ -415,7 +436,7 @@ public class SharedGroupOneOptionTests : IDisposable
                           new PenumbraModMeta.FileOption("B", Files((Dwn, "b/dwn.mdl"))));
 
         Assert.False(RefitCore.PlanOption(PenumbraModMeta.ReadAllRedirects(root), null, Group, true, ["A"], Top,
-                                          "a/top.mdl", "Neolithe", _ => true, s => TargetsOf(s, Legs), "per slot").Paired);
+                                          "a/top.mdl", "Neolithe", _ => true, s => TargetsOf(s, Legs)).Paired);
     }
 
     [Fact]
@@ -425,7 +446,7 @@ public class SharedGroupOneOptionTests : IDisposable
         var plan = Plan(Gemma(), Top, "Neolithe", chosen: s => s == "_top");
 
         Assert.False(plan.Paired);
-        Assert.Equal("per slot", plan.Option);
+        Assert.Null(plan.Option);
     }
 
     [Fact]
@@ -439,8 +460,19 @@ public class SharedGroupOneOptionTests : IDisposable
         Assert.True(plan.Paired);
         Assert.Equal(Merged, plan.Option);
 
-        // Without a legs size, today's way: the proposed name, for JoinOption to join by the part it shares.
-        Assert.Equal("Neolithe — Hazelnut S", Plan(root, Glv, "Neolithe", "Neolithe — Hazelnut S", chosen: s => s == "_top").Option);
+        // Without a legs size, today's way: no shared option, the glove named as before for JoinOption to join.
+        var unpaired = Plan(root, Glv, "Neolithe", chosen: s => s == "_top");
+        Assert.False(unpaired.Paired);
+        Assert.Null(unpaired.Option);
+
+        // Worn under the top alone, a glove's author size need fit only the pieces worn with it.
+        var redirects = PenumbraModMeta.ReadAllRedirects(root);
+        Assert.Equal("Neolithe", RefitCore.AuthorOptionForPieces(redirects, Group, Glv, "Neolithe", plan.PairPaths,
+                                                                 (slot, _, _) => slot == "_top" ? "Neolithe" : null,
+                                                                 NoneExcluded, path => path == Top));
+        Assert.Null(RefitCore.AuthorOptionForPieces(redirects, Group, Glv, "Neolithe", plan.PairPaths,
+                                                    (slot, _, _) => slot == "_top" ? "Neolithe" : null,
+                                                    NoneExcluded, _ => true));
     }
 
     [Fact]
@@ -450,7 +482,7 @@ public class SharedGroupOneOptionTests : IDisposable
         string root = Mod("Gemma", Group,
                           new PenumbraModMeta.FileOption("Neolithe", Files((Top, NeoTop), (Dwn, NeoDwn), (Glv, "neo/glv.mdl"))));
 
-        Assert.Equal(Merged, Plan(root, Glv, "Neolithe", KeepEnds.SkinOnlyOption("Neolithe")).Option);
+        Assert.Equal(Merged, Plan(root, Glv, "Neolithe").Option);
     }
 
     [Fact]
@@ -566,7 +598,7 @@ public class SharedGroupOneOptionTests : IDisposable
         var plan = Plan(root, Top, "Neolithe");
 
         Assert.False(plan.Paired);
-        Assert.Equal("per slot", plan.Option);
+        Assert.Null(plan.Option);
         Assert.NotNull(plan.Note);
         Assert.Equal(file, Option(root, Merged).Files[Top]);
     }
@@ -582,9 +614,9 @@ public class SharedGroupOneOptionTests : IDisposable
 
         Assert.True(RefitCore.IsSharedSingleGroup(PenumbraModMeta.ReadAllRedirects(root), null, "Chest Size",
                                                   RefitCore.SingleGroups(root)));
-        var plan = Plan(root, Top, "S", "Neolithe — S", group: "Chest Size");
+        var plan = Plan(root, Top, "S", group: "Chest Size");
         Assert.False(plan.Paired);
-        Assert.Equal("Neolithe — S", plan.Option);
+        Assert.Null(plan.Option);
     }
 
     [Fact]
@@ -596,7 +628,7 @@ public class SharedGroupOneOptionTests : IDisposable
         string root = Mod("Gemma", Group, new PenumbraModMeta.FileOption("Neolithe", Files((manTop, "m/top.mdl"), (manDwn, "m/dwn.mdl"))));
 
         var plan = RefitCore.PlanOption(PenumbraModMeta.ReadAllRedirects(root), null, Group, true, ["Neolithe"], manTop,
-                                        "m/top.mdl", "Neolithe", _ => true, s => TargetsOf(s, Legs), "per slot");
+                                        "m/top.mdl", "Neolithe", _ => true, s => TargetsOf(s, Legs));
         Assert.True(plan.Paired);
 
         // Saved at the wearer's own race's path, carrying the man's files it was cut from.
@@ -654,7 +686,7 @@ public class SharedGroupOneOptionTests : IDisposable
         {
             Assert.DoesNotContain(sizes, s => s.Option == "M");
             return "Z2";
-        }, ours));
+        }, ours, _ => true));
     }
 
     [Fact]
