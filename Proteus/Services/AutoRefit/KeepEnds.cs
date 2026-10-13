@@ -22,6 +22,9 @@ namespace Proteus.Services;
 /// <item><see cref="Route.SkinOnly"/>: it reaches no leg or arm at all. Nothing is reshaped; the kept skin is only
 /// drawn the way the new body draws its own, when it is not already.</item>
 /// </list>
+/// Between the first two, <see cref="Route.Sibling"/>: where the leg or arm has too little skin to read, the chest or legs
+/// piece the author ships in the same option says the body and size — a cloth reading picks the tightest size the cloth
+/// clears, and a loose jacket clears a smaller bust than the one it was made on.
 /// Static and free of IPC: the watcher gathers, this decides, the watcher saves. The Studio shares the same core
 /// (<c>KeepEnds.Studio.cs</c>): one plan and one pair-building for both, so the two cannot drift apart.
 /// </summary>
@@ -33,6 +36,10 @@ internal static partial class KeepEnds
         Skin,
         Cloth,
         SkinOnly,
+
+        /// <summary>Too little skin on the leg or arm to read, so the body and size are those of the chest or legs piece
+        /// its author ships in the same option (see <see cref="SiblingPiece"/>).</summary>
+        Sibling,
 
         /// <summary>The leg or arm was readable but no size of it was clear: left as is, as any unclear reading is.</summary>
         Unsure,
@@ -51,6 +58,7 @@ internal static partial class KeepEnds
         Route.Skin => "A",
         Route.Cloth => "B",
         Route.SkinOnly => "C",
+        Route.Sibling => "D",
         _ => route.ToString(),
     };
 
@@ -141,18 +149,30 @@ internal static partial class KeepEnds
     /// <param name="rank">How the leg or arm is ranked against one body mod's sizes there, given whether it carries skin:
     /// <see cref="BodySizeMatch.Rank"/> with skin, its cloth reading without. Null for exactly that; a test passes its
     /// own.</param>
+    /// <param name="sibling">What the chest or legs piece shipped in the same option reads as (see
+    /// <see cref="SiblingPiece"/>); null when there is none, or it could not be read clearly.</param>
+    /// <param name="clothOn">How the leg's or arm's cloth sits on one size (<see cref="BodySizeMatch.ClothAgainst"/>);
+    /// null for exactly that, a test passes its own.</param>
     internal static Found Find(Reading reading, ModelParts garment, IReadOnlySet<string> bones, string race,
                                Func<ModelParts, string, AutoRefitDecisions.Pick?> detect,
                                Func<string, BodySizeCatalog?> catalogOf,
-                               Func<ModelParts, IReadOnlyList<BodyOption>, BodySizeCatalog, bool, BodySizeMatch.Ranking?>? rank = null)
+                               Func<ModelParts, IReadOnlyList<BodyOption>, BodySizeCatalog, bool, BodySizeMatch.Ranking?>? rank = null,
+                               AutoRefitDecisions.Pick? sibling = null,
+                               Func<ModelParts, BodyOption, BodySizeCatalog, (int Near, int Inside, float Gap)?>? clothOn = null)
     {
         rank ??= (view, options, catalog, skin) => skin ? BodySizeMatch.Rank(view, options, catalog.PathOf, bones)
                                                         : BodySizeMatch.RankByCloth(view, options, catalog.PathOf);
+        clothOn ??= (view, option, catalog) => BodySizeMatch.ClothAgainst(view, catalog.PathOf(option));
         // The leg's skin, read as any garment's.
         bool limbSkin = BodySizeMatch.SkinPoints(reading.LimbView).Count > 0;
         if (limbSkin && detect(reading.LimbView, reading.Limb) is { } read
             && read.Confidence is not (Confidence.NoBodyMesh or Confidence.TooLittle))
             return AutoRefitDecisions.Proceed(read.Confidence) ? new Found(Route.Skin, read) : new Found(Route.Unsure, null);
+
+        // The chest or legs piece beside it in the same option, read off its own skin — provided the arm or leg sits on
+        // that size: skin there, or cloth near it; and its cloth clears it, as cloth made on it would.
+        if (SiblingFits(reading, race, sibling, limbSkin, catalogOf, clothOn) is { } sib)
+            return new Found(Route.Sibling, sib);
 
         // Too little leg skin to read: which body from the foot, as the piece was always read; which size of its legs
         // from the leg's cloth. A boot's shaft was refitted so before, as a part the boot reaches, and still is.
@@ -183,6 +203,33 @@ internal static partial class KeepEnds
         // Nothing of the legs to read: a plain shoe. Its skin is redrawn if the new body draws skin another way.
         return new Found(Route.SkinOnly, own);
     }
+
+    /// <summary>
+    /// <paramref name="sibling"/> as the limb's reading, or null when it is not one: unclear, a size the body no longer
+    /// has in the limb's slot, a limb that does not reach it, or cloth that sits inside it.
+    /// </summary>
+    private static AutoRefitDecisions.Pick? SiblingFits(Reading reading, string race, AutoRefitDecisions.Pick? sibling,
+                                                        bool limbSkin, Func<string, BodySizeCatalog?> catalogOf,
+                                                        Func<ModelParts, BodyOption, BodySizeCatalog, (int Near, int Inside, float Gap)?> clothOn)
+    {
+        if (sibling is not { } sib || !AutoRefitDecisions.Proceed(sib.Confidence) || catalogOf(sib.Dir) is not { } catalog)
+            return null;
+        string want = RefitCore.Normal(sib.Option.Rel);
+        if (catalog.For(reading.Limb, race).FirstOrDefault(o => RefitCore.Normal(o.Rel) == want) is not { } option)
+            return null;
+        var on = clothOn(reading.LimbView, option, catalog);
+        bool reaches = limbSkin || on is { Near: >= BodySizeMatch.MinEvidence };
+        bool clears = on is not { Near: >= BodySizeMatch.MinEvidence } o || o.Inside <= o.Near * SiblingInsideAtMost;
+        return reaches && clears ? new AutoRefitDecisions.Pick(sib.Dir, option, sib.Confidence, !limbSkin) : null;
+    }
+
+    /// <summary>
+    /// The share of the arm's or leg's cloth near the sibling's size that may sit inside it (2%). Looser than the cloth
+    /// reading's <see cref="BodySizeMatch.ClearsBelow"/>, which picks among sizes by it: here one size is only checked,
+    /// and an author's tucks are inside every size alike. Geometric's jacket has 18 of 2,208 points (0.8%) inside Bibo+
+    /// Nude Medium — and inside Small and Large too — while X-Large, a bust it was not made on, takes 59 (2.7%).
+    /// </summary>
+    internal const float SiblingInsideAtMost = 0.02f;
 
     /// <summary>What to do with a piece read as <see cref="Found"/>.</summary>
     internal abstract record Decision;

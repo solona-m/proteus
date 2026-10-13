@@ -107,12 +107,34 @@ public sealed partial class AutoRefitWatcher
             }
         }
 
-        string option = decision is KeepEnds.Refit refitTo
-            ? RefitCore.OptionName(targetMod.Name, [refitTo.Target.Label])
-            : KeepEnds.SkinOnlyOption(targetMod.Name);
         if (WhereItGoes(r, g, targetMod, j.Redirects, item) is not { } where) return;
         var (root, group, cutFrom) = where;
-        if (await LetBeOrPutBack(r, g, root, group, option, j.SavePath, cutFrom, item, targetMod.Name, ct)) return;
+        // What it is made from, which a refit saved before must have been made from to be put back on (see Existing),
+        // and the size each part goes onto, for the record.
+        var (source, targets) = decision switch
+        {
+            KeepEnds.Refit refitTo => (refitTo.Source, new Dictionary<string, string>(StringComparer.Ordinal)
+                                                       {
+                                                           [reading.Limb] = refitTo.Target.Rel,
+                                                       }),
+            KeepEnds.SkinOnly skinTo => (skinTo.Own, new Dictionary<string, string>(StringComparer.Ordinal)
+                                                     {
+                                                         [reading.Slot] = skinTo.Target.Rel,
+                                                     }),
+            _ => throw new InvalidOperationException("a refit or a skin redraw was decided above"),
+        };
+        string option = decision is KeepEnds.Refit refitOnto
+            ? RefitCore.OptionName(targetMod.Name, [refitOnto.Target.Label])
+            : KeepEnds.SkinOnlyOption(targetMod.Name);
+        // Sized together with the chest or legs in one of the author's single-choice groups: into the option that piece's
+        // refit went into, so switching one on does not switch the other off.
+        if (decision is KeepEnds.Refit && root != null
+            && RefitCore.IsSharedSingleGroup(j.Redirects, j.OwnRecord, group, RefitCore.SingleGroups(root)))
+            option = RefitCore.JoinOption(j.OwnRecord, group, j.SavePath, targetMod.Dir, ChosenTargets(j.TargetFor),
+                                          targets, option);
+        if (await LetBeOrPutBack(r, g, root, group, option, j.SavePath, cutFrom, item, targetMod.Name, ct,
+                                 (source.Dir, source.Option.Rel)))
+            return;
 
         // ── the refit ──
         var output = skinOnly ?? RefitEnds(j, reading, (KeepEnds.Refit)decision, option, CatalogOf, ct);
@@ -120,7 +142,8 @@ public sealed partial class AutoRefitWatcher
 
         if (await SaveAndWear(r, g, root, group, j.SavePath, targetMod, output.LabelFrom,
                               new BodyRetargetWriter.Refit(option, output.Model, output.To), cutFrom, j.BakeTo, item,
-                              GameGear(r, j.Redirects, j.OwnRecord))
+                              GameGear(r, j.Redirects, j.OwnRecord),
+                              new BodyRetargetWriter.Provenance(source.Dir, source.Option.Rel, targets))
             is not { } savedRoot)
             return;
         log.Information("[Proteus] auto refit: {0} {1} onto {2} in {3:F1}s", item, slot, option,
@@ -136,11 +159,12 @@ public sealed partial class AutoRefitWatcher
     private KeepEnds.Found ReadEnds(EndsJob j, KeepEnds.Reading reading, Func<string, BodySizeCatalog?> catalogOf)
     {
         var g = j.G;
-        var enabledBodies = j.State.List.Where(b => g.Permanent != null && g.Permanent.TryGetValue(b.Dir, out var s)
-                                                    && s.Enabled && !s.Temporary)
-                                        .Select(b => b.Dir);
-        string cacheKey = DetectionCache.KeyOf(j.Bytes, reading.CacheSlot, j.Race, j.TargetMod.Dir,
-                                               DetectionCache.BodiesOf(j.State.Version, enabledBodies,
+        // Read first, and part of the key: a piece read by its cloth before it had a sibling to go by must not be served
+        // that reading again.
+        var sibling = ReadSibling(j, reading.Limb);
+        string cacheKey = DetectionCache.KeyOf(j.Bytes, reading.CacheSlot + SiblingPiece.CacheSuffix(sibling), j.Race,
+                                               j.TargetMod.Dir,
+                                               DetectionCache.BodiesOf(j.State.Version, EnabledBodies(g, j.State),
                                                                        VanillaPrint(j.VanillaCat, reading.Limb, j.Race) + "|"
                                                                      + VanillaPrint(j.VanillaCat, reading.Slot, j.Race)));
         if (detections.TryGet(cacheKey) is { } hit && KeepEnds.FromCache(hit, reading, j.Race, catalogOf) is { } cached)
@@ -157,10 +181,51 @@ public sealed partial class AutoRefitWatcher
                                       ? VanillaSource(j.VanillaCat, s, j.Race)
                                       : DetectAcross(view, j.Bones, s, j.Race, j.TargetMod, j.State.List, j.VanillaCat,
                                                      g.Permanent),
-                                  catalogOf);
+                                  catalogOf, sibling: sibling);
+        if (found.Route == KeepEnds.Route.Sibling)
+            log.Information("[Proteus] auto refit: {0} sized by its {1} piece in the same option: {2} / {3} ({4})", j.Item,
+                            reading.Limb == "_top" ? "chest" : "legs", NameOf(j, found.Pick!.Dir), found.Pick.Option.Label,
+                            found.Pick.Confidence);
+        else if (sibling != null)
+            log.Information("[Proteus] auto refit: {0}'s {1} piece in the same option does not fit its {2}; read as before",
+                            j.Item, reading.Limb == "_top" ? "chest" : "legs", reading.Limb == "_top" ? "arms" : "legs");
         detections.Put(cacheKey, KeepEnds.ToCache(found));
         return found;
     }
+
+    /// <summary>
+    /// What the chest or legs piece shipped in the same option as this one was made on (see <see cref="SiblingPiece"/>),
+    /// read off its own skin through <see cref="ReadSource"/> — the very reading that piece's own refit makes and keeps.
+    /// Null when there is none, or its pieces cannot be read or do not agree.
+    /// </summary>
+    /// <param name="limb">"_top" or "_dwn": the slot of the sibling looked for.</param>
+    private AutoRefitDecisions.Pick? ReadSibling(EndsJob j, string limb)
+    {
+        if (!SiblingPiece.Applies(j.R.ModRoot, j.BakeTo) || j.R.Worn.Rel is not { } wornRel) return null;
+        string root = j.R.ModRoot!;
+        void Note(string note) => log.Information("[Proteus] auto refit: {0}: {1}", j.Item, note);
+        var candidates = SiblingPiece.Find(j.Redirects, j.OwnRecord, wornRel, limb, j.Race, Note);
+        if (candidates.Count == 0) return null;
+        AssertOffFramework("reading the piece beside it");
+        return SiblingPiece.Agree(candidates, c =>
+        {
+            byte[] bytes;
+            try { bytes = File.ReadAllBytes(BodySizeCatalog.ResolveCaseInsensitive(root, c.File)); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Note($"{c.File} could not be read: {ex.Message}");
+                return null;
+            }
+            if (ModelPartReader.Read(bytes) is not { } model) return null;
+            var bones = new HashSet<string>(SecondSkinWriter.Parse(bytes).BoneNames, StringComparer.Ordinal);
+            return ReadSource(j.G, j.State, j.TargetMod, j.VanillaCat, bytes, model, bones, limb, j.Race, false,
+                              j.Item + " (" + SiblingPiece.Shown(c.Source) + ")").Source;
+        }, Note);
+    }
+
+    /// <summary>A body mod as the log names it.</summary>
+    private static string NameOf(EndsJob j, string dir)
+        => dir == VanillaBodyCatalog.Key ? Strings.Parts.RetargetFromVanilla : j.State.Find(dir)?.Name ?? dir;
 
     /// <summary>
     /// The skin of a piece that reaches no leg or arm, drawn the way the new body draws its own (see
