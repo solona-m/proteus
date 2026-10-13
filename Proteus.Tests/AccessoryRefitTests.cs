@@ -145,12 +145,24 @@ public class AccessoryRefitTests
 
         var jacket = new AccessoryCover.Cover(0.6f, 0f).Covered(_ => false);
         var legsOnly = new BodyOption("Legs", "", "S", "s.mdl", "chara/equipment/e0000/model/c0201e0000_dwn.mdl", "_dwn");
+        // No chest chosen: said so. A chest chosen that the body has none of at this race: the race's lack, as tops say.
         Assert.Equal(("_top", AccessoryCover.NoSize.Chosen),
-                     AccessoryCover.WithoutSize(jacket, s => s == "_dwn" ? legsOnly : null, _ => true));
+                     AccessoryCover.WithoutSize(jacket, s => s == "_dwn" ? legsOnly : null, s => s == "_dwn"));
         Assert.Equal(("_top", AccessoryCover.NoSize.ForRace),
-                     AccessoryCover.WithoutSize(jacket, _ => null, s => s == "_dwn"));
+                     AccessoryCover.WithoutSize(jacket, s => s == "_dwn" ? legsOnly : null, _ => true));
         Assert.Null(AccessoryCover.WithoutSize(jacket, _ => ChestXs, _ => true));
         Assert.Null(AccessoryCover.WithoutSize([], _ => null, _ => true));   // jewellery says that instead
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-jacket-refit-24")]
+    [Trait("Plan", "AC-jacket-refit-5")]
+    public void In_a_group_shared_with_its_top_an_accessory_joins_the_tops_refit_or_is_left_alone()
+    {
+        Assert.Equal("Neo — XS", AccessoryCover.SharedOption(shared: false, "Neo — XS", "Neo — XS", existing: false));
+        Assert.Equal("Neo — XS + M", AccessoryCover.SharedOption(shared: true, "Neo — XS", "Neo — XS + M", existing: false));
+        Assert.Equal("Neo — XS", AccessoryCover.SharedOption(shared: true, "Neo — XS", "Neo — XS", existing: true));
+        Assert.Null(AccessoryCover.SharedOption(shared: true, "Neo — XS", "Neo — XS", existing: false));
     }
 
     [Fact]

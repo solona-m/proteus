@@ -77,12 +77,24 @@ internal static class AccessoryCover
     /// to the player, nothing refitted — and why; null when it has one, or covers nothing.
     /// </summary>
     /// <param name="targetFor">The size chosen per part at the piece's race: the chest for "_top", the legs for "_dwn".</param>
-    /// <param name="hasSizes">Whether the body has any size of a part at the piece's race.</param>
+    /// <param name="chosen">Whether the player chose a size of a part at all: chosen but not found at the piece's race
+    /// is the race's lack, as a top's own refit says it.</param>
     internal static (string Slot, NoSize Why)? WithoutSize(IReadOnlyList<string> covered, Func<string, BodyOption?> targetFor,
-                                                           Func<string, bool> hasSizes)
+                                                           Func<string, bool> chosen)
         => covered.Count > 0 && targetFor(covered[0]) == null
-            ? (covered[0], hasSizes(covered[0]) ? NoSize.Chosen : NoSize.ForRace)
+            ? (covered[0], chosen(covered[0]) ? NoSize.ForRace : NoSize.Chosen)
             : null;
+
+    /// <summary>
+    /// The option a refit of an accessory sized together with other pieces in one of the author's single-choice groups is
+    /// saved as: the other pieces' automatic refit it joins (see <see cref="RefitCore.JoinOption"/>), or its own made
+    /// before — or none, null, when neither is there: a new option of its own would switch theirs off the moment it went
+    /// on. Outside such a group, its own.
+    /// </summary>
+    /// <param name="joined">What <see cref="RefitCore.JoinOption"/> answered for <paramref name="proposed"/>.</param>
+    /// <param name="existing">The piece's own option is already saved for it.</param>
+    internal static string? SharedOption(bool shared, string proposed, string joined, bool existing)
+        => !shared ? proposed : joined != proposed || existing ? joined : null;
 
     /// <summary>A source's sizes: the game's own body's for a piece made on it, an installed body mod's otherwise.</summary>
     internal static BodySizeCatalog? CatalogOf(string dir, BodySizeCatalog gameBody, Func<string, BodySizeCatalog?> installed)

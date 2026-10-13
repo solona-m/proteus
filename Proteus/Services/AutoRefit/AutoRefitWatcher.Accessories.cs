@@ -68,7 +68,10 @@ public sealed partial class AutoRefitWatcher
         bool HasSizes(string slot) => targetCat.For(slot, race).Count > 0;
         if (!HasSizes("_top") && !HasSizes("_dwn"))
         {
-            SayNoSizeForRace(targetMod, "_top", race, item);
+            // Nothing at this race to measure a cover against, so a garment cannot be told from jewellery: said in the
+            // log only. A body piece worn at this race says the body lacks it; every ring put on would otherwise too.
+            log.Debug("[Proteus] auto refit: {0} — {1} has no chest or legs at c{2}, left as it is", item, targetMod.Name,
+                      race);
             return;
         }
 
@@ -97,7 +100,8 @@ public sealed partial class AutoRefitWatcher
                     "[Proteus] {0} doesn't cover the body, so it was left as it is."), item));
             return;
         }
-        if (AccessoryCover.WithoutSize(covered, TargetFor, HasSizes) is { } unsized)
+        bool Chosen(string slot) => (slot == "_top" ? g.Preference.Chest : g.Preference.Legs) != null;
+        if (AccessoryCover.WithoutSize(covered, TargetFor, Chosen) is { } unsized)
         {
             if (unsized.Why == AccessoryCover.NoSize.ForRace) SayNoSizeForRace(targetMod, unsized.Slot, race, item);
             else
@@ -191,21 +195,22 @@ public sealed partial class AutoRefitWatcher
         var (saveRoot, group, cutFrom) = where;
         var labels = covered.Where(sources.ContainsKey).Select(s => TargetFor(s)!.Label).ToList();
         var targets = sources.ToDictionary(s => s.Key, s => TargetFor(s.Key)!.Rel, StringComparer.Ordinal);
-        string option = RefitCore.OptionName(targetMod.Name, labels);
-        if (saveRoot != null && RefitCore.IsSharedSingleGroup(redirects, ownRecord, group, RefitCore.SingleGroups(saveRoot)))
+        string proposed = RefitCore.OptionName(targetMod.Name, labels);
+        bool shared = saveRoot != null
+                      && RefitCore.IsSharedSingleGroup(redirects, ownRecord, group, RefitCore.SingleGroups(saveRoot));
+        string? sharedOption = AccessoryCover.SharedOption(
+            shared, proposed,
+            shared ? RefitCore.JoinOption(ownRecord, group, r.Worn.GamePath, targetMod.Dir, ChosenTargets(TargetFor),
+                                          targets, proposed)
+                   : proposed,
+            shared && Existing(saveRoot!, group, proposed, r.Worn.GamePath));
+        if (sharedOption is not { } option)
         {
-            // A new option of its own would switch the top's refit off the moment it went on: join that, or nothing.
-            string joined = RefitCore.JoinOption(ownRecord, group, r.Worn.GamePath, targetMod.Dir,
-                                                 ChosenTargets(TargetFor), targets, option);
-            if (joined == option && !Existing(saveRoot, group, option, r.Worn.GamePath))
-            {
-                Say(string.Format(Loc.Localize("Chat.AutoRefit.Accessory.Shared.Fmt",
-                        "[Proteus] {0} is sized together with the mod's other pieces, so it is refitted with them: once "
-                      + "they are refitted to {1}, use \"Refit what I'm wearing now\". It was left as it is for now."),
-                        item, targetMod.Name), problem: true);
-                return;
-            }
-            option = joined;
+            Say(string.Format(Loc.Localize("Chat.AutoRefit.Accessory.Shared.Fmt",
+                    "[Proteus] {0} is sized together with the mod's other pieces, so it is refitted with them: once "
+                  + "they are refitted to {1}, use \"Refit what I'm wearing now\". It was left as it is for now."),
+                    item, targetMod.Name), problem: true);
+            return;
         }
         if (await LetBeOrPutBack(r, g, saveRoot, group, option, r.Worn.GamePath, cutFrom, item, targetMod.Name, ct, pickOf))
             return;
