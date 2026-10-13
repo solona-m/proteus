@@ -276,6 +276,31 @@ public class NavelBridgeTests
         Assert.True(MathF.Abs(site!.Centre.Y - 1.2f) < 0.002f, site.ToString());
     }
 
+    /// <summary>
+    /// The floor that keeps the vulva out holds only on the part carrying the thighs. Legs whose lowest midline point
+    /// sits high (a garment, not skin) lift that floor over the navel; a top with no thigh weights is still searched
+    /// down to the crotch. Hellebore's skirt over Neolithe read its crotch 16 cm high and hid the navel this way.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "EDGE-navel-bridge-6")]
+    public void Legs_that_read_the_crotch_high_do_not_hide_the_navel_on_the_top()
+    {
+        // Breasts from 1.28 up and the crotch read at the belly's bottom, 0.95: the vulva floor is 1.082, over the navel.
+        var top = Belly(Pit());
+        float[] topBust = [.. top.Pos.Select(p => p.Y >= 1.28f ? 0.5f : 0f)];
+        // Legs: thigh weight off to the sides only, so their midline is searched — and floored.
+        float[] Sides((Vec3[] Pos, Vec3[] Nrm, ushort[] Tris) b) => [.. b.Pos.Select(p => MathF.Abs(p.X) > 0.06f ? 0.5f : 0f)];
+        var legs = Belly(warp: p => new Vec3(p.X, p.Y, p.Z - 0.01f));
+        var site = NavelBridge.LocateNavel([Part(top, topBust), Part(legs, thigh: Sides(legs))], null, out var why);
+        Assert.True(site != null, why);
+        Assert.Equal(0, site!.Owner);
+        Assert.True(MathF.Abs(site.Centre.Y - NavelY) < 0.002f, site.ToString());
+
+        // The control: the same pit on the legs part, under its floor, is still kept out.
+        var pittedLegs = Belly(Pit(), warp: p => new Vec3(p.X, p.Y, p.Z - 0.01f));
+        Assert.Null(NavelBridge.LocateNavel([Part(Belly(), topBust), Part(pittedLegs, thigh: Sides(pittedLegs))], null, out _));
+    }
+
     [Fact]
     [Trait("Plan", "EDGE-navel-bridge-7")]
     public void An_overhanging_navel_fills_without_folding()
