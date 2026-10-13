@@ -186,9 +186,9 @@ public sealed class SizeSetStrings
 public sealed class AutoRefitStrings
 {
     public readonly string Intro = Loc.Localize("AutoRefit.Intro",
-        "When you put on chest, legs, hands or feet gear, Proteus works out which body it was made for and refits it "
-      + "to the body and sizes chosen here, then switches the new size on. Each Penumbra collection has its own "
-      + "choice.");
+        "When you put on chest, legs, hands or feet gear — or an accessory that covers the body, such as a jacket on a "
+      + "necklace — Proteus works out which body it was made for and refits it to the body and sizes chosen here, then "
+      + "switches the new size on. Each Penumbra collection has its own choice.");
 
     public readonly string Enable = Loc.Localize("AutoRefit.Enable.Label",
         "Refit gear to my body as I put it on") + "###autoRefitEnable";

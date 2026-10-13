@@ -14,6 +14,47 @@ internal static class AutoRefitDecisions
     /// <summary>The body slots the automatic refit acts on, in the order a design changing several is worked through.</summary>
     internal static readonly string[] Slots = ["_top", "_dwn", "_glv", "_sho"];
 
+    /// <summary>The accessory slots a garment can be modded onto — a jacket on a necklace — refitted as the body part
+    /// its cloth covers (see <see cref="AccessoryCover"/>). Never a body slot: every body-part loop goes over
+    /// <see cref="Slots"/>.</summary>
+    internal static readonly string[] AccessorySlots = ["_nek", "_ear", "_wrs", "_rir", "_ril"];
+
+    /// <summary>Every slot a walk looks at, body slots first: a top and the jacket on its necklace put on together are
+    /// worked through top first, so the jacket finds the top's reading and its outcome.</summary>
+    internal static readonly string[] WornSlots = [.. Slots, .. AccessorySlots];
+
+    internal static bool IsAccessory(string slot) => Array.IndexOf(AccessorySlots, slot) >= 0;
+
+    /// <summary>Words in a body mod's name that name no body: shared by so many, or so generic, that an option carrying
+    /// one says nothing about which body it is a size of.</summary>
+    private static readonly HashSet<string> NotABody = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "body", "bodies", "all", "one", "the", "and", "for", "nsfw", "sfw", "default", "size", "sizes", "small", "medium",
+        "large", "mod", "mods", "version", "edit", "base",
+    };
+
+    private static readonly System.Text.RegularExpressions.Regex Word = new(@"[\p{L}\p{N}]{3,}",
+        System.Text.RegularExpressions.RegexOptions.Compiled | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>The words of a name as <see cref="NamesABody"/> compares them: letters and digits, three or more, any case.</summary>
+    internal static IEnumerable<string> Words(string name)
+        => Word.Matches(name).Select(m => m.Value.ToLowerInvariant()).Where(w => !w.All(char.IsDigit));
+
+    /// <summary>
+    /// Whether an author's option names a body — Scarlet's "Neolithe XS", "Bibo+ M" — so the piece already comes in the
+    /// author's sizes for bodies and is left to them. By a word of an installed body mod's name or folder, never a word
+    /// any body's sizes use: "Puffy" and "Gen C" are Neolithe sizes, and a mod named "puffy …" must not make every
+    /// option called "Puffy" a body's. "Small", "Medium", "Large" name no body.
+    /// </summary>
+    /// <param name="bodyNames">Every installed body mod's name and folder.</param>
+    /// <param name="sizeWords">Every word of every installed body's size labels and sections.</param>
+    internal static bool NamesABody(string option, IEnumerable<string> bodyNames, IReadOnlySet<string> sizeWords)
+    {
+        var bodies = bodyNames.SelectMany(Words).Where(w => !NotABody.Contains(w) && !sizeWords.Contains(w))
+                              .ToHashSet(StringComparer.Ordinal);
+        return Words(option).Any(bodies.Contains);
+    }
+
     /// <summary>
     /// The part of the body a piece worn in <paramref name="slot"/> is refitted on when it keeps its own end: the legs
     /// for shoes, the chest model for gloves (it carries the arms to the wrists). Null for every other slot, which is
@@ -419,7 +460,17 @@ internal static class AutoRefitDecisions
 
         /// <summary>A file served from outside the mods folder that is not the game's either.</summary>
         Unknown,
+
+        /// <summary>The game's own accessory: jewellery, never a garment, whatever the switch for the game's gear.</summary>
+        GameAccessory,
     }
+
+    /// <summary>Whether a newly worn piece in <paramref name="slot"/> may be refitted: as any piece, but the game's own
+    /// accessories never are.</summary>
+    internal static Skip ShouldRefit(string slot, Worn worn, bool vanillaEnabled, bool resolvedOutsideMods)
+        => IsAccessory(slot) && worn.ModDir == null && !resolvedOutsideMods
+            ? Skip.GameAccessory
+            : ShouldRefit(worn, vanillaEnabled, resolvedOutsideMods);
 
     /// <summary>Whether a newly worn piece may be refitted.</summary>
     /// <param name="resolvedOutsideMods">The file the game draws is not under Penumbra's mods folder and is not the
@@ -465,7 +516,7 @@ internal static class AutoRefitDecisions
     {
         var changed = new List<string>();
         if (before == null) return changed;
-        foreach (string slot in Slots)
+        foreach (string slot in WornSlots)
         {
             if (!now.TryGetValue(slot, out var worn)) continue;
             if (before.TryGetValue(slot, out var was) && was.Key == worn.Key) continue;

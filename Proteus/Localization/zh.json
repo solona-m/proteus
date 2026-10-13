@@ -48,7 +48,7 @@
     "description": ""
   },
   "AutoRefit.Intro": {
-    "message": "当你穿上胸部、腿部、手部或脚部装备时，Proteus 会判断它是为哪个体型制作的，将其适配到这里选择的体型和尺寸，然后启用新的尺寸。每个 Penumbra 合集都有各自的选择。",
+    "message": "当你穿上胸部、腿部、手部或脚部装备——或遮盖身体的饰品，例如放在项链栏的外套——时，Proteus 会判断它是为哪个身体制作的，按这里选择的身体和尺码进行适配，然后启用新尺码。每个 Penumbra 合集都有各自的选择。",
     "description": ""
   },
   "AutoRefit.ItemInMod.Fmt": {
@@ -357,6 +357,22 @@
   },
   "Chat.AutoRefit.Unsure.Fmt": {
     "message": "[Proteus] 无法判断 {0} 是为哪个体型制作的，因此保持原样。你可以用工作室的“体型尺寸”工具手动适配。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.Jewellery.Fmt": {
+    "message": "[Proteus] {0} 没有遮盖身体，因此保持原样。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.AuthorSizes.Fmt": {
+    "message": "[Proteus] {0} 已有作者为各身体制作的尺码（当前为“{1}”）；请在 Penumbra 中选择其他尺码。已保持原样。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.Beneath.Fmt": {
+    "message": "[Proteus] {0} 已保持原样：它没有可读取尺码的自带{1}部件，而穿在下面的{1}是游戏原装、未适配 {2}，或是在此版本之前适配的——请重新穿上或使用“适配当前穿着的装备”。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.Shared.Fmt": {
+    "message": "[Proteus] {0} 与该模组的其他部件共用尺码，因此会与它们一起适配：等它们适配到 {1} 后，请使用“适配当前穿着的装备”。目前已保持原样。",
     "description": ""
   },
   "Chat.ContentUnplaced.Fmt": {

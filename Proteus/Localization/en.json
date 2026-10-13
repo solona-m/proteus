@@ -48,7 +48,7 @@
     "description": "Hint under the chest and legs sizes. {0} is the hands size and {1} the feet size picked automatically to match."
   },
   "AutoRefit.Intro": {
-    "message": "When you put on chest, legs, hands or feet gear, Proteus works out which body it was made for and refits it to the body and sizes chosen here, then switches the new size on. Each Penumbra collection has its own choice.",
+    "message": "When you put on chest, legs, hands or feet gear — or an accessory that covers the body, such as a jacket on a necklace — Proteus works out which body it was made for and refits it to the body and sizes chosen here, then switches the new size on. Each Penumbra collection has its own choice.",
     "description": "Explanation at the top of the Body refit section of Settings."
   },
   "AutoRefit.ItemInMod.Fmt": {
@@ -358,6 +358,22 @@
   "Chat.AutoRefit.Unsure.Fmt": {
     "message": "[Proteus] Couldn't tell which body {0} was made for, so it was left as it is. You can refit it by hand with the Studio's Body size tool.",
     "description": "Chat line when Proteus could not tell which body a piece of gear was made for. {0} names the gear. \"Studio\" and \"Body size\" match Tab.Parts and Parts.Tool.Retarget. Do NOT translate \"Proteus\"."
+  },
+  "Chat.AutoRefit.Accessory.Jewellery.Fmt": {
+    "message": "[Proteus] {0} doesn't cover the body, so it was left as it is.",
+    "description": "Status line when an accessory's cloth covers no part of the body, so it is jewellery, not a garment, and is not refitted. {0} names the piece. Do NOT translate \"Proteus\"."
+  },
+  "Chat.AutoRefit.Accessory.AuthorSizes.Fmt": {
+    "message": "[Proteus] {0} already comes in its author's own sizes for bodies (\"{1}\" is on); pick another in Penumbra. It was left as it is.",
+    "description": "Status line when an accessory's own mod already offers sizes named for body mods, so it is left to the player. {0} names the piece, {1} the author's option that is on. \"Penumbra\" is a plugin's name. Do NOT translate \"Proteus\"."
+  },
+  "Chat.AutoRefit.Accessory.Beneath.Fmt": {
+    "message": "[Proteus] {0} was left as it is: it has no {1} piece of its own to read its size from, and the {1} worn under it is the game's own, isn't on {2}, or was refitted before this version — put it on again or use \"Refit what I'm wearing now\".",
+    "description": "Status line when an accessory covering the body could not be sized: its mod ships no chest/legs piece with it, and the piece worn under it is the game's own, is not on the chosen body, or was refitted by an older version. {0} names the piece, {1} the body part (Chest or Legs), {2} the chosen body mod. \"Refit what I'm wearing now\" matches AutoRefit.RunNow. Do NOT translate \"Proteus\"."
+  },
+  "Chat.AutoRefit.Accessory.Shared.Fmt": {
+    "message": "[Proteus] {0} is sized together with the mod's other pieces, so it is refitted with them: once they are refitted to {1}, use \"Refit what I'm wearing now\". It was left as it is for now.",
+    "description": "Status line when an accessory shares its author's size option with the mod's other pieces, and joining their refit is not possible yet. {0} names the piece, {1} the chosen body mod. \"Refit what I'm wearing now\" matches AutoRefit.RunNow. Do NOT translate \"Proteus\"."
   },
   "Chat.ContentUnplaced.Fmt": {
     "message": "[Proteus] {0} mesh piece(s) from your mods could not be placed — your accessories are out of material slots. Equip another ring / bracelet / necklace, or turn off a layer.",

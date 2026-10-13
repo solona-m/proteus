@@ -132,6 +132,61 @@ public sealed class LocalizationTests
         }
     }
 
+    /// <summary>What the automatic refit says about a garment on an accessory slot, and the Body refit section's intro
+    /// that now names them, are translated, not copied.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-jacket-refit-11")]
+    public void Accessory_refit_strings_are_translated_not_copied(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (string key in new[]
+                 {
+                     "AutoRefit.Intro", "Chat.AutoRefit.Accessory.Jewellery.Fmt", "Chat.AutoRefit.Accessory.AuthorSizes.Fmt",
+                     "Chat.AutoRefit.Accessory.Beneath.Fmt", "Chat.AutoRefit.Accessory.Shared.Fmt",
+                 })
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+        }
+    }
+
+    /// <summary>The README's gear-refits-itself bullet names accessories that cover the body, in each language — and the
+    /// Settings intro says it too.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-jacket-refit-11")]
+    public void Readme_and_intro_say_accessories_are_refitted(string lang)
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+
+        string bullet = readme.Split('\n').Single(l => l.Contains("**" + ReadmeRefitItself[lang] + "**"));
+        Assert.Contains(Necklace[lang], bullet);
+        Assert.Contains(Necklace[lang], Load(lang)["AutoRefit.Intro"].Message);
+    }
+
+    /// <summary>The gear-refits-itself bullet's bold label in each README.</summary>
+    private static readonly Dictionary<string, string> ReadmeRefitItself = new()
+    {
+        ["en"] = "Have gear refit itself as you put it on.", ["de"] = "Lass Ausrüstung sich beim Anlegen selbst anpassen.",
+        ["es"] = "Haz que el equipo se ajuste solo al ponértelo.",
+        ["fr"] = "Laissez l'équipement s'ajuster tout seul quand vous le portez.",
+        ["ja"] = "装備を着た瞬間に自分の体に合わせ直せます。", ["ko"] = "장비를 입는 순간 저절로 내 몸에 맞춰지게 하세요.",
+        ["ru"] = "Пусть снаряжение подгоняется само, когда вы его надеваете.", ["zh"] = "让装备在穿上时自动改配。",
+    };
+
+    /// <summary>"Necklace", as each language's README bullet and intro name the slot a jacket is put on.</summary>
+    private static readonly Dictionary<string, string> Necklace = new()
+    {
+        ["en"] = "necklace", ["de"] = "Halskette", ["es"] = "collar", ["fr"] = "collier", ["ja"] = "首飾り",
+        ["ko"] = "목걸이", ["ru"] = "ожерелье", ["zh"] = "项链",
+    };
+
     /// <summary>The navel tick is translated, not copied, and its tooltip keeps English's line breaks.</summary>
     [Theory]
     [MemberData(nameof(Translations))]

@@ -48,7 +48,7 @@
     "description": ""
   },
   "AutoRefit.Intro": {
-    "message": "Wenn du Ausrüstung für Brust, Beine, Hände oder Füße anlegst, ermittelt Proteus, für welchen Körper sie gemacht wurde, passt sie an den hier gewählten Körper und die gewählten Größen an und schaltet die neue Größe ein. Jede Penumbra-Kollektion hat ihre eigene Auswahl.",
+    "message": "Wenn du Ausrüstung für Brust, Beine, Hände oder Füße anlegst – oder ein Accessoire, das den Körper bedeckt, etwa eine Jacke auf einer Halskette –, ermittelt Proteus, für welchen Körper sie gemacht wurde, passt sie an den hier gewählten Körper und die gewählten Größen an und schaltet die neue Größe ein. Jede Penumbra-Kollektion hat ihre eigene Auswahl.",
     "description": ""
   },
   "AutoRefit.ItemInMod.Fmt": {
@@ -357,6 +357,22 @@
   },
   "Chat.AutoRefit.Unsure.Fmt": {
     "message": "[Proteus] Es ließ sich nicht erkennen, für welchen Körper {0} gemacht wurde, daher bleibt es, wie es ist. Du kannst es mit dem Werkzeug „Körpergröße“ im Studio von Hand anpassen.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.Jewellery.Fmt": {
+    "message": "[Proteus] {0} bedeckt den Körper nicht und wurde so gelassen, wie es ist.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.AuthorSizes.Fmt": {
+    "message": "[Proteus] {0} gibt es bereits in eigenen Größen des Autors für Körper („{1}“ ist aktiv); wähle in Penumbra eine andere. Es wurde so gelassen, wie es ist.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.Beneath.Fmt": {
+    "message": "[Proteus] {0} wurde so gelassen, wie es ist: Es hat kein eigenes Teil für {1}, an dem sich seine Größe ablesen ließe, und das darunter getragene Teil für {1} gehört zum Spiel, ist nicht auf {2} oder wurde vor dieser Version angepasst – lege es erneut an oder nutze „Was ich gerade trage anpassen“.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.Shared.Fmt": {
+    "message": "[Proteus] {0} hat seine Größe gemeinsam mit den anderen Teilen des Mods und wird mit ihnen angepasst: Sobald sie an {1} angepasst sind, nutze „Was ich gerade trage anpassen“. Vorerst wurde es so gelassen, wie es ist.",
     "description": ""
   },
   "Chat.ContentUnplaced.Fmt": {

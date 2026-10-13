@@ -48,7 +48,7 @@
     "description": ""
   },
   "AutoRefit.Intro": {
-    "message": "胴・脚・手・足の装備を身に着けると、Proteus がその装備がどの体型用に作られたかを調べ、ここで選んだ体型とサイズに合わせて作り直し、新しいサイズをオンにします。Penumbra のコレクションごとに別々に選べます。",
+    "message": "胴・脚・手・足の装備、または体を覆うアクセサリー（首飾りに付けたジャケットなど）を身に着けると、Proteus はそれがどのボディ用に作られたかを判断し、ここで選んだボディとサイズに合わせて調整し、新しいサイズを有効にします。Penumbra のコレクションごとに選択できます。",
     "description": ""
   },
   "AutoRefit.ItemInMod.Fmt": {
@@ -357,6 +357,22 @@
   },
   "Chat.AutoRefit.Unsure.Fmt": {
     "message": "[Proteus] {0} がどの体型用に作られたか判断できなかったため、そのままにしました。スタジオの「体型サイズ」ツールで手動で調整できます。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.Jewellery.Fmt": {
+    "message": "[Proteus] {0} は体を覆っていないため、そのままにしました。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.AuthorSizes.Fmt": {
+    "message": "[Proteus] {0} には作者によるボディ別サイズが用意されています（現在は「{1}」）。Penumbra で別のものを選んでください。そのままにしました。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.Beneath.Fmt": {
+    "message": "[Proteus] {0} はそのままにしました。サイズを読み取れる自前の{1}パーツがなく、下に着ている{1}はゲーム本来のもの、{2} に合わせていないもの、またはこのバージョンより前に調整されたものです。着け直すか「今着ている装備を調整」を使ってください。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.Shared.Fmt": {
+    "message": "[Proteus] {0} は MOD の他のパーツとサイズが共通なので、それらと一緒に調整されます。それらが {1} に調整されたら「今着ている装備を調整」を使ってください。今はそのままにしました。",
     "description": ""
   },
   "Chat.ContentUnplaced.Fmt": {

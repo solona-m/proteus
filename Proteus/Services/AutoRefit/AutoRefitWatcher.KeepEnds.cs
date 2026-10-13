@@ -133,7 +133,7 @@ public sealed partial class AutoRefitWatcher
             option = RefitCore.JoinOption(j.OwnRecord, group, j.SavePath, targetMod.Dir, ChosenTargets(j.TargetFor),
                                           targets, option);
         if (await LetBeOrPutBack(r, g, root, group, option, j.SavePath, cutFrom, item, targetMod.Name, ct,
-                                 (source.Dir, source.Option.Rel)))
+                                 source))
             return;
 
         // ── the refit ──

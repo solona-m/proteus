@@ -629,11 +629,15 @@ internal static partial class BodyRetarget
     /// <param name="log">Where the passes that explain themselves write: the nipple smoothing. Null for nowhere.</param>
     /// <param name="warn">Where a pass that failed — a bug, not a garment with nothing to do — says so. Null falls back to
     /// <paramref name="log"/>.</param>
+    /// <param name="chestSlot">"_top" for a garment over the chest that is not worn in the chest's slot — a jacket on a
+    /// necklace, its <paramref name="garmentSlot"/> null so the chest beneath it stays in the push-out — so the
+    /// underside of the breast is still cleared, faces and all. Null: a top's own slot decides, as it always has.</param>
     public static Planned Plan(ModelParts garment, byte[] garmentBytes, IReadOnlyList<SlotPair> pairs,
                                string? garmentSlot = null, bool pushOut = true, IReadOnlySet<int>? held = null,
                                bool replaceSkin = false, bool acrossBodies = false, bool clearBody = false,
                                bool cutHidden = true, IReadOnlyList<IReadOnlyCollection<int>>? keepShape = null,
-                               string? swapSlot = null, Action<string>? log = null, Action<string>? warn = null)
+                               string? swapSlot = null, Action<string>? log = null, Action<string>? warn = null,
+                               string? chestSlot = null)
     {
         // First, before anything reads the new chest: its nipples smoothed where the garment covers more of them than
         // the old body had, so every pass below sees one surface — the one the swap draws.
@@ -649,7 +653,7 @@ internal static partial class BodyRetarget
             ? SwappedSkinMeshes(garment, pairs)
             : null;
         var solved = Solve(garment, pairs, garmentSlot, pushOut, held, replaceSkin, clearBody, keepShape,
-                           ModelSkinReader.Read(garmentBytes, null, null), swapSlot, swapMeshes);
+                           ModelSkinReader.Read(garmentBytes, null, null), swapSlot, swapMeshes, chestSlot);
         var written = MeshVolumeService.Inflate(garmentBytes, solved.Edit);
         byte[] model = written.Model;
 
@@ -717,7 +721,7 @@ internal static partial class BodyRetarget
                                  bool pushOut = true, IReadOnlySet<int>? held = null, bool replaceSkin = false,
                                  bool clearBody = false, IReadOnlyList<IReadOnlyCollection<int>>? keepShape = null,
                                  XivLiveMesh.SkinnedMesh? garmentSkin = null, string? swapSlot = null,
-                                 IReadOnlySet<int>? swapMeshes = null)
+                                 IReadOnlySet<int>? swapMeshes = null, string? chestSlot = null)
     {
         // With the skin replaced, the garment's OWN slot body is drawn after all — Rebuild embeds that very mesh in the
         // garment, so it is what the cloth ends up lying against. Asking for the swap is not enough: Rebuild only swaps
@@ -801,11 +805,15 @@ internal static partial class BodyRetarget
         if (faceCheck != null && pushedBy != null && !Tuned.NoFaceSettle)
         {
             // The underside of the breast first, every layer together; then whatever face is still through.
-            // Tops only: on legs, skin facing down and forward is the crease under the belly, not a breast.
-            if (!Tuned.NoUnderbustLift && drawn != null && garmentSlot == "_top")
+            // Tops only: on legs, skin facing down and forward is the crease under the belly, not a breast. A garment
+            // over the chest worn in another slot — a jacket on a necklace — is one too (chestSlot).
+            if (!Tuned.NoUnderbustLift && drawn != null && (chestSlot ?? garmentSlot) == "_top")
             {
-                // The breast read off the new chest's own weights, where the swap will draw that chest.
-                var chest = ownSlotSwapped ? pairs.FirstOrDefault(p => p.Slot == garmentSlot && p.Swaps) : default;
+                // The breast read off the new chest's own weights: where the swap will draw that chest, or — for a garment
+                // over it, whose chest is drawn beneath it as it is — wherever its pair carries the new chest.
+                var chest = chestSlot != null && chestSlot != garmentSlot
+                    ? pairs.FirstOrDefault(p => p.Slot == chestSlot && p.TargetModel != null)
+                    : ownSlotSwapped ? pairs.FirstOrDefault(p => p.Slot == garmentSlot && p.Swaps) : default;
                 var isBreast = chest.TargetModel != null ? BreastTest(chest) : null;
                 // The hip across every body in play: it spans the chest's skin and the legs' beside it.
                 var isHip = HipTest(pairs);

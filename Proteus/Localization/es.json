@@ -48,7 +48,7 @@
     "description": ""
   },
   "AutoRefit.Intro": {
-    "message": "Cuando te pones equipo de pecho, piernas, manos o pies, Proteus averigua para qué cuerpo se hizo, lo ajusta al cuerpo y las tallas elegidos aquí y activa la nueva talla. Cada colección de Penumbra tiene su propia elección.",
+    "message": "Cuando te pones equipo de torso, piernas, manos o pies —o un accesorio que cubre el cuerpo, como una chaqueta en un collar—, Proteus averigua para qué cuerpo se hizo, lo ajusta al cuerpo y las tallas elegidos aquí y activa la nueva talla. Cada colección de Penumbra tiene su propia elección.",
     "description": ""
   },
   "AutoRefit.ItemInMod.Fmt": {
@@ -357,6 +357,22 @@
   },
   "Chat.AutoRefit.Unsure.Fmt": {
     "message": "[Proteus] No se pudo saber para qué cuerpo se hizo {0}, así que se queda como está. Puedes ajustarlo a mano con la herramienta «Talla del cuerpo» del Estudio.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.Jewellery.Fmt": {
+    "message": "[Proteus] {0} no cubre el cuerpo, así que se dejó como estaba.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.AuthorSizes.Fmt": {
+    "message": "[Proteus] {0} ya viene en tallas propias de su autor para cuerpos («{1}» está activa); elige otra en Penumbra. Se dejó como estaba.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.Beneath.Fmt": {
+    "message": "[Proteus] {0} se dejó como estaba: no tiene una pieza propia de {1} de la que leer su talla, y la pieza de {1} que llevas debajo es del juego, no está en {2} o se ajustó antes de esta versión; vuelve a ponértela o usa «Ajustar lo que llevo puesto».",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.Shared.Fmt": {
+    "message": "[Proteus] {0} comparte talla con las demás piezas del mod, así que se ajusta con ellas: cuando estén ajustadas a {1}, usa «Ajustar lo que llevo puesto». Por ahora se dejó como estaba.",
     "description": ""
   },
   "Chat.ContentUnplaced.Fmt": {

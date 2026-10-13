@@ -848,6 +848,25 @@ internal static class RefitCore
     }
 
     /// <summary>
+    /// The automatic refit of a garment worn on an accessory slot — a jacket on a necklace — over the body part(s) its
+    /// cloth covers (see <see cref="AccessoryCover"/>). Unlike <see cref="PlanRefit"/>: no slot of the body is left out of
+    /// the push-out, since the body is drawn beneath an accessory as it is; the cloth is cleared of the body wherever it
+    /// is buried in it, since every clip shows; its skin, if any, is kept, since the body beneath is drawn anyway; and the
+    /// underside of the breast is cleared as a top's is when it covers the chest.
+    /// </summary>
+    /// <param name="chestSlot">"_top" when the cloth covers the chest; null otherwise.</param>
+    internal static BodyRetarget.Planned PlanAccessoryRefit(ModelParts garment, byte[] bytes,
+                                                            IReadOnlyList<BodyRetarget.SlotPair> pairs, string? chestSlot,
+                                                            bool across, out List<string> pieceNames,
+                                                            Action<string>? log = null, Action<string>? warn = null)
+    {
+        var pieces = ShapePieces(garment, DefaultKeepShape(garment), out pieceNames);
+        return BodyRetarget.Plan(garment, bytes, pairs, garmentSlot: null, held: new HashSet<int>(), replaceSkin: false,
+                                 acrossBodies: across, clearBody: true, cutHidden: false, keepShape: pieces, log: log,
+                                 warn: warn, chestSlot: chestSlot);
+    }
+
+    /// <summary>
     /// Whether the garment at <paramref name="gamePath"/> of the mod at <paramref name="modRoot"/> (null: the game's own
     /// file) is the game's own garment, read off the mod on disk — what a save records as
     /// <see cref="BodyRetargetWriter.Entry.FromGame"/>, so a game item's own mod stays one however it is refitted. See
