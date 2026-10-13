@@ -125,12 +125,14 @@ public class ChestBeneathTests
     public void Only_a_legs_garment_whose_skin_did_not_read_the_chest_asks_for_the_chest_beneath_a_chosen_chest()
     {
         var chest = Chest("Medium");
-        Assert.True(RefitCore.WantsChestBeneath("_dwn", [], chest));
-        Assert.True(RefitCore.WantsChestBeneath("_dwn", ["_sho"], chest));
-        // Its skin read the chest: that goes in whole, as before.
-        Assert.False(RefitCore.WantsChestBeneath("_dwn", ["_top"], chest));
+        Assert.True(RefitCore.WantsChestBeneath("_dwn", [], chest, acrossBodies: true));
+        Assert.True(RefitCore.WantsChestBeneath("_dwn", ["_sho"], chest, acrossBodies: true));
+        // Its skin read the chest — needing a refit or already the chosen one: that goes in whole, or not at all.
+        Assert.False(RefitCore.WantsChestBeneath("_dwn", ["_top"], chest, acrossBodies: true));
         // No chest chosen: never one that only follows the legs.
-        Assert.False(RefitCore.WantsChestBeneath("_dwn", [], null));
-        Assert.False(RefitCore.WantsChestBeneath("_top", [], chest));
+        Assert.False(RefitCore.WantsChestBeneath("_dwn", [], null, acrossBodies: true));
+        Assert.False(RefitCore.WantsChestBeneath("_top", [], chest, acrossBodies: true));
+        // Within one body mod the chest it was made over is only a guess: the refit stays as it was.
+        Assert.False(RefitCore.WantsChestBeneath("_dwn", [], chest, acrossBodies: false));
     }
 }

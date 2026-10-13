@@ -40,6 +40,7 @@ public class ChestBeneathLocalTests(ITestOutputHelper output)
 
     [LocalDataFact(Geometric, Bibo, IvcsBibo, FixPubes, Rue)]
     [Trait("Plan", "AC-outfit-fit-6")]
+    [Trait("Plan", "EDGE-outfit-fit-24")]
     public void A_skirt_made_on_legs_with_no_chest_takes_the_chests_of_the_body_with_the_same_legs()
     {
         var bodies = new[] { Body(FixPubes), Body(IvcsBibo), Body(Bibo), Body(Rue) }.ToList();
@@ -56,6 +57,10 @@ public class ChestBeneathLocalTests(ITestOutputHelper output)
         Assert.Equal("Bibo+", beneath!.Dir);
         Assert.True(beneath.Cells >= RefitCore.OverBellyGate, $"{beneath.Cells} cells");
         Assert.Contains(notes, n => n.Contains("Type A - Small", StringComparison.Ordinal));
+
+        // [EDGE-outfit-fit-24] Asked again — the twin from what was found before, the gate from the geometry: the same.
+        var again = RefitCore.ChestBeneathOf(skirt, pick, Race, bodies, CatalogOf(bodies));
+        Assert.Equal(beneath, again);
     }
 
     [LocalDataFact(Geometric, IvcsBibo, FixPubes, Rue)]

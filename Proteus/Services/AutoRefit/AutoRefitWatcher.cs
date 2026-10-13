@@ -1095,7 +1095,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
         // RefitCore.ChestBeneath) — never named in the option, only recorded. Not when its skin already reads the chest.
         BodyOption? chestBeneathTo = null;
         BodyRetarget.SlotPair chestBeneathPair = default;
-        if (RefitCore.WantsChestBeneath(primary, others.Select(o => o.Slot), chestTo))
+        if (RefitCore.WantsChestBeneath(primary, otherFrom.Keys, chestTo, across))
         {
             void Note(string note) => log.Information("[Proteus] auto refit: {0}: {1}", item, note);
             if (RefitCore.ChestBeneathOf(garment, pick, race, state.List.Select(b => (b.Dir, b.Catalog)).ToList(),

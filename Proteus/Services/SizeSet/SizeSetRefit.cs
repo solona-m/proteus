@@ -413,7 +413,7 @@ internal static partial class SizeSetRefit
 
                 // The chest beneath goes along for its shape: the size's own chest for legs following one, else the body's
                 // middle chest — its chests share their belly.
-                if (beneath != null
+                if (beneath != null && across
                     && ChestBeneathTo(key, size, piece.FollowsChest, yas, targetCat, race) is { } chestTo
                     && RefitCore.ChestBeneathPair(beneath, target.Dir, targetCat, chestTo, male,
                                                   RefitCore.MaskOf(beneath.Dir, beneath.Catalog, "_top", null),

@@ -31,11 +31,16 @@ internal static partial class RefitCore
     internal const string ChestBeneathKey = "beneath:_top";
 
     /// <summary>
-    /// Whether a legs garment's refit asks for the chest beneath at all: a legs garment, whose own skin did not read the
-    /// chest (then it goes in whole, as before), with a chest the player chose — never one that only follows the legs.
+    /// Whether a legs garment's refit asks for the chest beneath at all: a legs garment going to another body mod, whose
+    /// own skin did not read the chest (then it goes in whole, as before — or not at all, where that chest is the one
+    /// chosen), with a chest the player chose — never one that only follows the legs. Within one body mod the chest it
+    /// was made over is not known, only guessed, and the refit stays as it was.
     /// </summary>
-    internal static bool WantsChestBeneath(string primary, IEnumerable<string> otherSlots, BodyOption? chosenChest)
-        => primary == "_dwn" && chosenChest != null && !otherSlots.Contains("_top");
+    /// <param name="readSlots">The other parts the garment's skin was read as made on (<c>otherFrom</c>), whether or not
+    /// they need refitting.</param>
+    internal static bool WantsChestBeneath(string primary, IEnumerable<string> readSlots, BodyOption? chosenChest,
+                                           bool acrossBodies)
+        => primary == "_dwn" && acrossBodies && chosenChest != null && !readSlots.Contains("_top");
 
     /// <summary>
     /// The pair for the chest beneath, for its shape only — or false, noted: the same file on both sides, or the pair
