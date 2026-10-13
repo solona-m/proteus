@@ -234,9 +234,11 @@ internal static partial class NavelBridge
         if (crotch == float.MaxValue) crotch = float.MinValue;
         if (bustLow == float.MaxValue && crotch > float.MinValue) bustLow = crotch + NavelBelowNeck * (neck - crotch);
         // Only with the legs there: without thigh-weighted skin the lowest midline point is a hem, not the crotch, and
-        // there is no vulva to keep out.
-        bool hasLegs = surfaces.Any(s => s != null && s.Thigh.Any(w => w >= NavelBoneFloor));
-        float floorY = hasLegs && bustLow < float.MaxValue && crotch > float.MinValue
+        // there is no vulva to keep out. And only on the parts that carry the thighs, the only ones a vulva can be on:
+        // when the legs are a garment its lowest midline point can sit well above the crotch, lifting this floor over
+        // a navel on the top (Hellebore's skirt over Neolithe read its crotch 16 cm high and raised it past the navel).
+        bool[] isLegs = [.. surfaces.Select(s => s != null && s.Thigh.Any(w => w >= NavelBoneFloor))];
+        float vulvaFloorY = isLegs.Any(l => l) && bustLow < float.MaxValue && crotch > float.MinValue
             ? crotch + NavelAboveCrotch * (bustLow - crotch)
             : crotch;
 
@@ -245,6 +247,7 @@ internal static partial class NavelBridge
         for (int p = 0; p < surfaces.Count; p++)
         {
             if (surfaces[p] is not { } s) continue;
+            float floorY = isLegs[p] ? vulvaFloorY : crotch;
             var region = new List<int>();
             for (int n = 0; n < s.NodeCount; n++)
             {
