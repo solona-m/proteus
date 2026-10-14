@@ -444,6 +444,37 @@ internal static class AutoRefitDecisions
         public string Key => GamePath.ToLowerInvariant() + "|" + (ModDir ?? "").ToLowerInvariant();
     }
 
+    /// <summary>What a queued piece's job does once the file is read again as it starts (see <see cref="Reresolved"/>).</summary>
+    internal enum Reread
+    {
+        /// <summary>The file it was queued with: refit it.</summary>
+        Proceed,
+
+        /// <summary>Another file of the same mod — the group switched under it: refit what is drawn now.</summary>
+        Retarget,
+
+        /// <summary>A refit of ours is drawn now: nothing to do.</summary>
+        OwnRefit,
+
+        /// <summary>Another mod or the game's own: no longer this request's; the next look decides.</summary>
+        Abandon,
+    }
+
+    /// <summary>
+    /// A piece queued as <paramref name="queued"/>, read again as <paramref name="now"/> when its job starts. A job was
+    /// queued by one look at everything worn, and the chest's job may have switched the group the legs are drawn from
+    /// since — a legs job working on the file it was queued with would cut its refit from an option no longer on.
+    /// </summary>
+    internal static Reread Reresolved(Worn queued, Worn now)
+    {
+        if (!string.Equals(queued.ModDir ?? "", now.ModDir ?? "", StringComparison.OrdinalIgnoreCase)) return Reread.Abandon;
+        if (RefitCore.Normal(queued.Rel ?? "") == RefitCore.Normal(now.Rel ?? "")) return Reread.Proceed;
+        if (now.ModDir == null || now.Rel == null) return Reread.Abandon;
+        return RefitCore.Normal(now.Rel).StartsWith(RefitCore.Normal(BodyRetargetWriter.Subfolder) + "/", StringComparison.Ordinal)
+            ? Reread.OwnRefit
+            : Reread.Retarget;
+    }
+
     /// <summary>Why a newly worn piece is not refitted; <see cref="Skip.None"/> when it is.</summary>
     internal enum Skip
     {

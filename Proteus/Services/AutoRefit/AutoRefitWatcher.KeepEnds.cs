@@ -20,11 +20,13 @@ public sealed partial class AutoRefitWatcher
 {
     /// <summary>What <see cref="RunJob"/> has gathered and read of a shoe or glove when it hands it on.</summary>
     /// <param name="TargetFor">The size the refit goes onto, per slot.</param>
+    /// <param name="Pair">Where it goes and is cut from, and whether its option sizes the chest and the legs together
+    /// (see <see cref="PlanPair"/>); null for the game's own gear.</param>
     private sealed record EndsJob(Request R, Gathered G, BodyModIndex.State State, BodyModIndex.Entry TargetMod,
                                   string Item, byte[] Bytes, List<PenumbraModMeta.Redirect> Redirects,
                                   BodyRetargetWriter.Record? OwnRecord, ushort BakeTo, string SavePath, string Race,
                                   bool Male, ModelParts Garment, IReadOnlySet<string> Bones, BodySizeCatalog VanillaCat,
-                                  Func<string, BodyOption?> TargetFor, Stopwatch Clock);
+                                  Func<string, BodyOption?> TargetFor, Stopwatch Clock, PairContext? Pair);
 
     /// <summary>What a shoe or glove becomes: the model saved, what its option says it is, and the line said when it is on.</summary>
     private sealed record EndsOutput(byte[] Model, string To, string LabelFrom, Func<string, string> Done);
@@ -54,7 +56,7 @@ public sealed partial class AutoRefitWatcher
         if (KeepEnds.ComparesAuthorSizes(slot) && j.TargetFor(reading.Limb) is { } limbTarget
             && await SwitchToAuthorSize(r, g, item, j.Redirects, j.OwnRecord, j.BakeTo, targetMod, limbTarget,
                                         reading.Limb, j.Race, j.State.Version,
-                                        ((b, m) => KeepEnds.Read(slot, m, b)?.LimbView, reading.CacheSlot), ct))
+                                        ((b, m) => KeepEnds.Read(slot, m, b)?.LimbView, reading.CacheSlot), ct, j.Pair))
             return;
 
         // ── what it was made on, read from what it reaches ──
@@ -109,6 +111,7 @@ public sealed partial class AutoRefitWatcher
 
         if (WhereItGoes(r, g, targetMod, j.Redirects, item) is not { } where) return;
         var (root, group, cutFrom) = where;
+        if (j.Pair != null) cutFrom = j.Pair.Plan.CutFrom;
         // What it is made from, which a refit saved before must have been made from to be put back on (see Existing),
         // and the size each part goes onto, for the record.
         var (source, targets) = decision switch
@@ -126,10 +129,14 @@ public sealed partial class AutoRefitWatcher
         string option = decision is KeepEnds.Refit refitOnto
             ? RefitCore.OptionName(targetMod.Name, [refitOnto.Target.Label])
             : KeepEnds.SkinOnlyOption(targetMod.Name);
+        // Shipped in an option that sizes the chest and the legs together: into the one option their refits share, a
+        // redraw of its skin alone too — an option of its own would switch them off.
+        if (j.Pair is { Plan: { Paired: true, Option: { } shared } })
+            option = shared;
         // Sized together with the chest or legs in one of the author's single-choice groups: into the option that piece's
         // refit went into, so switching one on does not switch the other off.
-        if (decision is KeepEnds.Refit && root != null
-            && RefitCore.IsSharedSingleGroup(j.Redirects, j.OwnRecord, group, RefitCore.SingleGroups(root)))
+        else if (decision is KeepEnds.Refit && root != null
+                 && RefitCore.IsSharedSingleGroup(j.Redirects, j.OwnRecord, group, RefitCore.SingleGroups(root)))
             option = RefitCore.JoinOption(j.OwnRecord, group, j.SavePath, targetMod.Dir, ChosenTargets(j.TargetFor),
                                           targets, option);
         // Sized by the chest or legs piece of its own option: kept outside that piece as it is drawn now, which a refit
@@ -278,7 +285,7 @@ public sealed partial class AutoRefitWatcher
 
         string sourceName = skin.Own.Dir == VanillaBodyCatalog.Key ? Strings.Parts.RetargetFromVanilla
                           : j.State.Find(skin.Own.Dir)?.Name ?? skin.Own.Dir;
-        string option = KeepEnds.SkinOnlyOption(j.TargetMod.Name);
+        string option = j.Pair?.Plan.Option ?? KeepEnds.SkinOnlyOption(j.TargetMod.Name);
         return new EndsOutput(model, KeepEnds.SkinOnlyLabel, RefitCore.LabelFrom(sourceName, [skin.Own.Option.Label]),
                               savedIn => string.Format(Loc.Localize("Chat.AutoRefit.SkinOnly.Fmt",
                                   "[Proteus] {0} keeps its own shape; its skin is now drawn like {1}'s. Saved as \"{2}\" in "

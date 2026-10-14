@@ -389,9 +389,12 @@ internal static class BodyRetargetWriter
                     PenumbraModMeta.AddFileOptions(modRoot, groupName, written.Select(w => OptionFor(w.Refit, w.Rel))
                                                                               .ToList());
                     foreach (var (refit, rel) in written)
+                    {
                         WriteRecord(modRoot, groupName, true, refit.Option, gamePath, rel, bodyMod, from, refit.To, auto,
                                     provenance,
                                     fromGame, refit.Layers);
+                        if (auto) RecordCarried(modRoot, groupName, refit.Option, fromOption, FilesFor(refit, rel));
+                    }
                     return new Outcome(true, groupName, names, refits.Count == 1
                         ? string.Format(Loc.Localize("Parts.Retarget.Save.AddedOneToAuthor.Fmt",
                               "Saved as \"{0}\" in the \"{1}\" group. Choose it there in Penumbra to wear it."),
@@ -425,9 +428,12 @@ internal static class BodyRetargetWriter
                                                      final.Count - 1);
 
                 foreach (var (refit, rel) in written)
+                {
                     WriteRecord(modRoot, groupName, false, refit.Option, gamePath, rel, bodyMod, from, refit.To, auto,
                                 provenance,
                                 fromGame, refit.Layers);
+                    if (auto) RecordCarried(modRoot, groupName, refit.Option, fromOption, FilesFor(refit, rel));
+                }
 
                 return new Outcome(true, groupName, names, refits.Count == 1
                     ? string.Format(Loc.Localize("Parts.Retarget.Save.AddedOne.Fmt",
@@ -511,6 +517,26 @@ internal static class BodyRetargetWriter
         return rel;
     }
 
+    /// <summary>
+    /// Every file the mod still publishes anywhere, normalised (see <see cref="Norm"/>) — read after an option is taken
+    /// out, so undo never deletes a refit another option still points at. One option sizing the chest and the legs
+    /// together can carry the chest refit of an option saved before it, and undoing that one must leave the file.
+    /// </summary>
+    /// <returns>Null when the manifest cannot be read just then — another program mid-write — which keeps every file:
+    /// "could not tell" must never mean "nothing points at it". A file kept is inert; one deleted under an option still
+    /// naming it breaks the mod.</returns>
+    private static HashSet<string>? Published(string modRoot)
+        => PenumbraModMeta.TryReadGroups(modRoot) == null
+            ? null
+            : PenumbraModMeta.ReadAllRedirects(modRoot).Select(r => Norm(r.File)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Whether undo may delete <paramref name="rel"/>: one of ours that nothing in <paramref name="published"/>
+    /// still points at, and never when the manifest could not be read (see <see cref="Published"/>).</summary>
+    internal static bool Deletable(string rel, IReadOnlySet<string>? published)
+        => published != null && Ours(rel) && !published.Contains(Norm(rel));
+
+    private static string Norm(string rel) => rel.Replace('\\', '/').Trim('/');
+
     private static string Removed(string optionName)
         => string.Format(Loc.Localize("Parts.Retarget.Undo.Removed.Fmt", "Removed \"{0}\"."), optionName);
 
@@ -532,8 +558,11 @@ internal static class BodyRetargetWriter
                     var removed = PenumbraModMeta.RemoveOption(modRoot, groupName, optionName);
                     ForgetOption(modRoot, groupName, optionName);
                     if (removed != null)
-                        foreach (var rel in removed.Values.Where(Ours))
+                    {
+                        var stillPublished = Published(modRoot);
+                        foreach (var rel in removed.Values.Where(rel => Deletable(rel, stillPublished)))
                             DeleteQuietly(Path.Combine(modRoot, rel.Replace('/', Path.DirectorySeparatorChar)));
+                    }
                     PruneEmptyFolders(Path.Combine(modRoot, Subfolder));
                     return new Outcome(true, groupName, optionName, Removed(optionName));
                 }
@@ -570,8 +599,11 @@ internal static class BodyRetargetWriter
                 // The files last, so a crash between the two leaves an unreferenced folder rather than a group
                 // pointing at a file that is gone — Penumbra treats the second as a broken mod.
                 if (going.Files != null)
-                    foreach (var rel in going.Files.Values.Where(Ours))
+                {
+                    var stillPublished = Published(modRoot);
+                    foreach (var rel in going.Files.Values.Where(rel => Deletable(rel, stillPublished)))
                         DeleteQuietly(Path.Combine(modRoot, rel.Replace('/', Path.DirectorySeparatorChar)));
+                }
 
                 PruneEmptyFolders(Path.Combine(modRoot, Subfolder));
 
@@ -671,6 +703,47 @@ internal static class BodyRetargetWriter
             Targets = provenance == null ? null : new Dictionary<string, string>(provenance.Targets, StringComparer.Ordinal),
             Layers = layers == null ? null : new Dictionary<string, string>(layers, StringComparer.Ordinal),
         });
+        SaveRecord(modRoot, record);
+    }
+
+    /// <summary>
+    /// Record for <paramref name="option"/> the refits it carries from the option it was cut from: an option sizing the
+    /// chest and the legs together, cut from an older refit of the chest alone, publishes that chest refit as its own —
+    /// and recorded only with its legs, undoing the chest would leave it standing. Each carried entry is copied as it was,
+    /// under the new option's name, wherever the new option publishes that very file.
+    /// <para/>
+    /// Only for an automatic save, and only the automatic refit's own entries: a size made by hand carried into ours would
+    /// read as holding the option by hand, and one of ours carried into a size made by hand would let the automatic undo
+    /// take that size away.
+    /// </summary>
+    private static void RecordCarried(string modRoot, string group, string option, string? fromOption,
+                                      IReadOnlyDictionary<string, string> files)
+    {
+        if (fromOption is not { Length: > 0 } || string.Equals(fromOption, option, StringComparison.OrdinalIgnoreCase))
+            return;
+        if (ReadRecord(modRoot) is not { } record) return;
+        var carried = record.Options
+            .Where(e => e.Auto
+                        && string.Equals(record.GroupOf(e), group, StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(e.Name, fromOption, StringComparison.OrdinalIgnoreCase)
+                        && files.TryGetValue(e.GamePath, out string? at) && Norm(at) == Norm(e.File))
+            .ToList();
+        if (carried.Count == 0) return;
+
+        foreach (var e in carried)
+        {
+            record.Options.RemoveAll(o => string.Equals(record.GroupOf(o), group, StringComparison.OrdinalIgnoreCase)
+                                          && string.Equals(o.Name, option, StringComparison.OrdinalIgnoreCase)
+                                          && string.Equals(o.GamePath, e.GamePath, StringComparison.OrdinalIgnoreCase));
+            record.Options.Add(new Entry
+            {
+                Group = group, InAuthorGroup = e.InAuthorGroup, Name = option, GamePath = e.GamePath, File = e.File,
+                BodyMod = e.BodyMod, From = e.From, To = e.To, Auto = e.Auto, FromGame = e.FromGame,
+                SourceDir = e.SourceDir, SourceRel = e.SourceRel,
+                Targets = e.Targets == null ? null : new Dictionary<string, string>(e.Targets, StringComparer.Ordinal),
+                Layers = e.Layers == null ? null : new Dictionary<string, string>(e.Layers, StringComparer.Ordinal),
+            });
+        }
         SaveRecord(modRoot, record);
     }
 
