@@ -40,7 +40,8 @@ public class KeepShapeReleaseLocalTests
     /// when the skin is cleared out of a face (<see cref="BodyRetarget.FaceCheck.WallPartner"/>) and whose inner wall now
     /// covers what lies beneath; the rim lift's fold guard now judges against the authored face. Measured before
     /// re-pinning, against <see cref="BeforeThickShells"/>: up to 354 points moved (worst 7.8 mm, pop onto Neolithe XS); the
-    /// solve's folds and cloth inside the body the same on every case.
+    /// cloth inside the body the same on every case; folds on the solve's last stage the same or fewer (Ash Yab L onto
+    /// Uranus 792 -> 771); a thick shell's walls through each other fewer or the same.
     /// </summary>
     private static readonly Dictionary<string, string> Before = new()
     {

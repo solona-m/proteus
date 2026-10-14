@@ -259,8 +259,9 @@ public class WallPairTests
         var (shell, pairs) = Bumped();
         var traced = new List<string>();
         BodyRetarget.FaceTrace.Value = (k, why) => traced.Add(why.StartsWith("crossed", StringComparison.Ordinal) ? $"{why}@{k}" : why);
-        var paired = BodyRetarget.Solve(shell, pairs);
-        BodyRetarget.FaceTrace.Value = null;
+        BodyRetarget.Solved paired;
+        try { paired = BodyRetarget.Solve(shell, pairs); }
+        finally { BodyRetarget.FaceTrace.Value = null; }
         var alone = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoWallPair: true), () => BodyRetarget.Solve(shell, pairs));
 
         // Pushed alone, the inner wall crossed the outer and the layer guard put it back; moved together, it cleared.
@@ -296,6 +297,38 @@ public class WallPairTests
             float inner = shell.Positions[v * 3 + 2] + solved.Edit.DeltaAt(v).Z;
             float outer = shell.Positions[(169 + v) * 3 + 2] + solved.Edit.DeltaAt(169 + v).Z;
             Assert.True(outer > inner, $"point {v}: outer wall {outer * 1000f:F2} mm, inner {inner * 1000f:F2}");
+        }
+        // And the kept points are not carried: each stays exactly where the refit without the pairing leaves it.
+        var unpaired = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoWallPair: true),
+                                               () => BodyRetarget.Solve(shell, pairs, keepShape: kept));
+        foreach (var piece in kept)
+            foreach (int v in piece)
+                Assert.Equal(unpaired.Edit.DeltaAt(v), solved.Edit.DeltaAt(v));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-skirt-hips-8")]
+    public void An_inner_wall_whose_outer_wall_cannot_move_is_not_lifted_through_it()
+    {
+        // As above, but the outer wall is a kept piece: the inner wall may not be lifted off the stocking through it.
+        var garment = Build(Cloth, [new(Fine, FineStep, 0.001f, true), new(Fine, FineStep, 0.003f, false),
+                                    new(Fine, FineStep, 0.004f, true)], (1, 2));
+        var sets = BodyRetarget.Sets.From(garment);
+        var layered = BodyRetarget.GarmentCloth(garment, sets);
+        var covered = BodyRetarget.CoveredPoints(sets, layered, BodyRetarget.FacesOneWay(garment, sets));
+        int n = Fine * Fine;
+        var delta = new Vec3[sets.NodeCount];
+        for (int v = 0; v < n; v++) delta[sets.NodeOf[v]] = new Vec3(0f, 0f, 0.003f);
+        var stay = new bool[sets.NodeCount];
+        for (int v = 2 * n; v < 3 * n; v++) stay[sets.NodeOf[v]] = true;
+        float Z(int v) => garment.Positions[v * 3 + 2] + delta[sets.NodeOf[v]].Z;
+
+        BodyRetarget.KeepLayerOrder(sets, covered, delta, stay, layered, drawn: null, liftOnly: true);
+
+        for (int v = 0; v < n; v++)
+        {
+            Assert.Equal(0.004f, Z(2 * n + v), 5);                                // the kept outer wall does not move
+            Assert.True(Z(n + v) <= Z(2 * n + v) + 1e-5f, $"point {v}: inner wall {Z(n + v) * 1000f:F2} mm, outer {Z(2 * n + v) * 1000f:F2}");
         }
     }
 }

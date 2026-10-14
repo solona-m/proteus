@@ -54,13 +54,20 @@ public class SkirtHipsRegressionLocalTests(ITestOutputHelper output)
         var pieces = RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment), out _);
         string target = CatalogOf(to.Dir).PathOf(to.Option);
 
+        // Folds counted on the solve's last stage: the report's count is taken at the fold relax, before the passes the
+        // rules change.
+        var sets = BodyRetarget.Sets.From(garment, new HashSet<int>(),
+                                          BodyRetarget.PartedSkinMeshes(garment, [pair], slot, true, null));
         Refitted Run(BodyRetarget.Tuning t)
         {
+            SecondSkinWriter.Vec3[]? final = null;
             var plan = BodyRetarget.WithTuning(t, () => BodyRetarget.Plan(garment, bytes, [pair], slot, held: new HashSet<int>(),
                                                                            replaceSkin: true, acrossBodies: across, clearBody: false,
-                                                                           cutHidden: true, keepShape: pieces));
+                                                                           cutHidden: true, keepShape: pieces,
+                                                                           trace: (s, d) => { if (s == "layer-order") final = d; }));
+            Assert.NotNull(final);
             var model = ModelPartReader.Read(plan.Model)!;
-            return new Refitted(model, plan.Report.Folded, BodySizeMatch.ClothAgainst(model, target)!.Value.Inside);
+            return new Refitted(model, BodyRetarget.FoldedTriangles(sets, final!), BodySizeMatch.ClothAgainst(model, target)!.Value.Inside);
         }
         return (Run(new BodyRetarget.Tuning()), Run(Old), author, BodySizeMatch.ClothAgainst(author, target)!.Value.Inside);
     }

@@ -185,8 +185,7 @@ public class SkirtHipsLocalTests(ITestOutputHelper output)
     {
         var bodies = new[] { Body(Bibo), Body(Rue), Body(Neolithe) }.ToList();
         var rueLegs = bodies[1].Catalog.For("_dwn", Race).First(o => o.Label == "None · Watermelon Crushers - A");
-        var neoLegs = bodies[2].Catalog.For("_dwn", Race).FirstOrDefault(o => o.Label.EndsWith("SFW M", StringComparison.Ordinal))
-                      ?? bodies[2].Catalog.For("_dwn", Race)[0];
+        var neoLegs = bodies[2].Catalog.For("_dwn", Race).First(o => o.Label.EndsWith("SFW M", StringComparison.Ordinal));
         foreach (var (mod, rel) in new[]
                  {
                      (Heartthrob, "bottom size/medium/chara/equipment/e6071/model/c0201e6071_dwn.mdl"),
