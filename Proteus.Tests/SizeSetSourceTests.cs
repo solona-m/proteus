@@ -219,8 +219,9 @@ public class SizeSetSourceTests(ITestOutputHelper output)
     }
 
     /// <summary>The source line the run logged for one size of one piece: "Rue L from YAB Large (by body, …)".</summary>
-    private string SourceOf(string option)
-        => logged.Select(l => l.Args.Length > 1 ? l.Args[1] as string : null)
+    private string SourceOf(string option, string? piece = null)
+        => logged.Where(l => l.Args.Length > 1 && (piece == null || l.Args[0] as string == piece))
+                 .Select(l => l.Args[1] as string)
                  .Single(s => s != null && s.StartsWith(option + " from ", StringComparison.Ordinal))!;
 
     /// <summary>How far, at most, the run moved one size of one piece (its own log line).</summary>
@@ -494,7 +495,7 @@ public class SizeSetSourceTests(ITestOutputHelper output)
             Assert.Single(SizeSetRefit.PiecesOf(root).Single(p => p.Slot == "_dwn").Options);
 
             Run(root, ["rue"], remake: false, Yab, Rue);
-            Assert.StartsWith("Rue L from YAB Large", SourceOf("Rue L"));
+            Assert.StartsWith("Rue L from YAB Large", SourceOf("Rue L", "Body — e0194"));
             Assert.Contains(logged, l => l.Args.Length > 1 && (string)l.Args[0] == "Legs — e0194"
                                          && l.Args[1] as string == "Rue L from \"YAB Large\", as the outfit's lead piece in that option was");
             var rueL = PenumbraModMeta.TryReadFileOptions(root, "Size")!.Single(o => o.Name == "Rue L").Files;
