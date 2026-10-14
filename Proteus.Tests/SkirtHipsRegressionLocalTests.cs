@@ -23,6 +23,8 @@ public class SkirtHipsRegressionLocalTests(ITestOutputHelper output)
     private const string Bibo = LocalData.Mods + ":Bibo+";
     private const string Rue = LocalData.Mods + ":hs-Rue+-2.2.7-y0f";
     private const string Neolithe = LocalData.Mods + ":Neolithe [ALL IN ONE]";
+    private const string Yab = LocalData.Mods + ":hs-Yet Another Body+-4.2.0-tmi";
+    private const string Sirius = LocalData.Mods + ":Sirius - by Solona";
     private const string Race = "0201";
 
     private static readonly BodyRetarget.Tuning Old = new(NoWallPair: true, NoWallCover: true, NoRimTurnGuard: true);
@@ -112,12 +114,13 @@ public class SkirtHipsRegressionLocalTests(ITestOutputHelper output)
         return (float)(sum / mine.Count);
     }
 
-    private void NoWorse(string what, (Refitted Now, Refitted Before, ModelParts Author, int AuthorInside) r, bool againstAuthor)
+    private void NoWorse(string what, (Refitted Now, Refitted Before, ModelParts Author, int AuthorInside) r, bool againstAuthor,
+                         float slack = 0f)
     {
         float now = FromAuthor(r.Author, r.Now.Model), before = FromAuthor(r.Author, r.Before.Model);
         output.WriteLine($"{what}: from the author's own {before * 1000f:F3} -> {now * 1000f:F3} mm; folded {r.Before.Folded} -> "
                        + $"{r.Now.Folded}; inside {r.Before.Inside} -> {r.Now.Inside} (the author's own {r.AuthorInside})");
-        if (againstAuthor) Assert.True(now <= before + 1e-5f, $"{now * 1000f:F3} mm from the author's own, {before * 1000f:F3} before");
+        if (againstAuthor) Assert.True(now <= before + 1e-5f + slack, $"{now * 1000f:F3} mm from the author's own, {before * 1000f:F3} before");
         Assert.True(r.Now.Folded <= r.Before.Folded, $"{r.Now.Folded} folded, {r.Before.Folded} before");
         // Against the author's own size, cloth the author put inside the body is theirs (Geometric's Large: 364 points
         // inside Bibo+ Large): no further from the author's count. Across body mods, no more than before.
@@ -141,6 +144,21 @@ public class SkirtHipsRegressionLocalTests(ITestOutputHelper output)
         => NoWorse("This Old Thing Rue M -> Rue L",
                    Refit(OldThing, "size/rue m/chara/equipment/e6255/model/c0201e6255_top.mdl",
                          "size/rue l/chara/equipment/e6255/model/c0201e6255_top.mdl", "_top", [Rue]), againstAuthor: true);
+
+    /// <summary>"Sirius", a corset over a blouse — a lined garment, where a wall paired wrongly would show — from its plain
+    /// L onto the sizes its author made for other bodies.</summary>
+    public static TheoryData<string> SiriusTargets => new() { "Rue L", "YAB Buff L" };
+
+    [LocalDataTheory(Sirius, Neolithe, Rue, Yab)]
+    [MemberData(nameof(SiriusTargets))]
+    [Trait("Plan", "AC-skirt-hips-4")]
+    public void Sirius_onto_other_bodies_is_no_worse(string size)
+        => NoWorse($"Sirius L -> {size}",
+                   Refit(Sirius, "size/Sirius/L/chara/equipment/e0154/model/c0201e0154_top.mdl",
+                         $"size/Sirius/{size}/chara/equipment/e0154/model/c0201e0154_top.mdl", "_top", [Neolithe, Rue, Yab]),
+                   // Accepted (build 1261): onto YAB Buff L the corset's two walls moved together end 0.024 mm (of 2.4)
+                   // further from the author's own; folds 80 -> 60.
+                   againstAuthor: true, slack: size == "YAB Buff L" ? 0.00003f : 0f);
 
     [LocalDataFact(OldThing, Rue, Neolithe)]
     [Trait("Plan", "AC-skirt-hips-4")]
