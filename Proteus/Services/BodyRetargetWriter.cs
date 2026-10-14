@@ -156,7 +156,13 @@ internal static class BodyRetargetWriter
     /// <param name="Group">The group written.</param>
     /// <param name="Option">The option added.</param>
     /// <param name="Message">What to tell the user.</param>
-    internal readonly record struct Outcome(bool Ok, string Group, string Option, string Message);
+    /// <param name="Notes">
+    /// What the multi-choice rule decided about the refit's metadata, and why — an entry left to another option of
+    /// the group, or kept though another option sets it differently; the same lines it writes to the log, for reading
+    /// a report. Never shown to the user and never localized; the tests are its only reader today. Null for none.
+    /// </param>
+    internal readonly record struct Outcome(bool Ok, string Group, string Option, string Message,
+                                            IReadOnlyList<string>? Notes = null);
 
     /// <summary>
     /// Another group of this mod already replaces <paramref name="gamePath"/>, so the retarget group has to outrank it
@@ -236,6 +242,29 @@ internal static class BodyRetargetWriter
     }
 
     /// <summary>
+    /// What a manipulation SETS: its <c>Entry</c>, the one field <see cref="ManipulationKey"/> leaves out — null when
+    /// it has none. <c>ShiftedEntry</c> is derived from it and dropped when Penumbra rewrites a manifest, so it is not
+    /// consulted.
+    /// </summary>
+    internal static System.Text.Json.Nodes.JsonNode? ManipulationValue(object manipulation)
+    {
+        var e = manipulation is JsonElement j ? j : JsonSerializer.SerializeToElement(manipulation);
+        return e.ValueKind == JsonValueKind.Object
+               && e.TryGetProperty("Manipulation", out var body) && body.ValueKind == JsonValueKind.Object
+               && body.TryGetProperty("Entry", out var entry)
+            ? System.Text.Json.Nodes.JsonNode.Parse(entry.GetRawText())
+            : null;
+    }
+
+    /// <summary>
+    /// Whether two entries of the same <see cref="ManipulationKey"/> set the same value. Compared as JSON structure, so
+    /// an Imc's fields in another order are the same value; one that leaves a zero field out is not (a known limit:
+    /// it reads as a difference). Only ever asked of entries read from a manifest.
+    /// </summary>
+    internal static bool SameValue(object a, object b)
+        => System.Text.Json.Nodes.JsonNode.DeepEquals(ManipulationValue(a), ManipulationValue(b));
+
+    /// <summary>
     /// Whether <paramref name="groupName"/> is a group of the author's that a save would add options to, rather than
     /// one Proteus made (or would make) itself: it exists, and no save of ours created it.
     /// </summary>
@@ -258,8 +287,9 @@ internal static class BodyRetargetWriter
     /// </summary>
     /// <param name="fromOption">
     /// The option of <paramref name="groupName"/> the refitted model was read from, or null when it came from
-    /// somewhere else — the default files, another group, or the game itself. Its other files are copied into the
-    /// refit, because a single-select group switches it off the moment the refit is switched on.
+    /// somewhere else — the default files, another group, or the game itself. Its other files and its metadata are
+    /// copied into the refit, because switching the refit on switches it off. In a multi-choice group, an entry
+    /// another option of the group sets differently is left to that option, and said so in <see cref="Outcome.Notes"/>.
     /// </param>
     /// <param name="manipulations">
     /// Metadata every refit's option carries besides its file, or null for none. A garment the game only ships for
@@ -316,6 +346,42 @@ internal static class BodyRetargetWriter
                 // it, file and all.
                 var claimed = Claimed(modRoot, groupName, refits);
 
+                // The option this was refitted from, when it is one of THIS group — the only case in which saving here
+                // switches it off. Shared by FilesFor and ManipulationsFor so the two cannot drift apart again.
+                var cutFrom = fromOption is { Length: > 0 }
+                    ? options.FirstOrDefault(o => string.Equals(o.Name, fromOption, StringComparison.OrdinalIgnoreCase))
+                    : default;
+
+                // In a multi-choice group, an entry of the source that another option of the group sets DIFFERENTLY — a
+                // "Hide bracelet" option beside the sizes, or a sibling variant never worn with it — is left to that
+                // option rather than carried into a refit that would fight it: the refit goes in with no priority of its
+                // own. The same entry with the same value is no conflict; sibling sizes repeat it. Not counting the
+                // source itself, the options this save replaces, or the options this tool recorded here: an earlier
+                // refit of ours carried the very same entry, and is not the author's to be in charge of.
+                var leftTo = new Dictionary<string, string>(StringComparer.Ordinal);   // key -> the option it is left to
+                if (cutFrom.Manipulations is { Count: > 0 } && PenumbraModMeta.IsMulti(modRoot, groupName))
+                {
+                    var record = ReadRecord(modRoot);
+                    var ourNames = (record?.Options ?? [])
+                        .Where(e => string.Equals(record!.GroupOf(e), groupName, StringComparison.OrdinalIgnoreCase))
+                        .Select(e => e.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    foreach (var other in options)
+                    {
+                        if (string.Equals(other.Name, cutFrom.Name, StringComparison.OrdinalIgnoreCase)
+                            || refits.Any(r => string.Equals(r.Option, other.Name, StringComparison.OrdinalIgnoreCase))
+                            || ourNames.Contains(other.Name))
+                            continue;
+                        foreach (var theirs in other.Manipulations ?? [])
+                        {
+                            string key = ManipulationKey(theirs);
+                            if (cutFrom.Manipulations.FirstOrDefault(m => ManipulationKey(m) == key) is { } mine
+                                && !SameValue(mine, theirs))
+                                leftTo.TryAdd(key, other.Name);
+                        }
+                    }
+                }
+                var notes = new List<string>();
+
                 var written = new List<(Refit Refit, string Rel)>();
                 foreach (var refit in refits)
                 {
@@ -356,10 +422,7 @@ internal static class BodyRetargetWriter
                     //
                     // Only from an option of THIS group, which is exactly when that switching-off happens — see the
                     // fromOption parameter.
-                    if (fromOption is { Length: > 0 }
-                        && options.FirstOrDefault(o => string.Equals(o.Name, fromOption,
-                                                                     StringComparison.OrdinalIgnoreCase))
-                           is { Files: not null } cutFrom)
+                    if (cutFrom.Files != null)
                         foreach (var (path, at) in cutFrom.Files)
                             if (!files.TryGetValue(path, out var had)
                                 || (sourceFilesWin && !string.Equals(path, gamePath, StringComparison.OrdinalIgnoreCase)
@@ -369,17 +432,26 @@ internal static class BodyRetargetWriter
                     return files;
                 }
 
-                // The metadata the option carries: this save's, and whatever an earlier save of the same option wrote,
-                // once each. Replacing an option outright would otherwise drop the EQDP entry a _top save put there when
-                // the _dwn is saved into the same option after it. Once each by what an entry is ABOUT, not by its text
-                // (see ManipulationKey), and this save's wins where the two disagree.
+                // The metadata the option carries, once each by what an entry is ABOUT, not by its text (see
+                // ManipulationKey), the later source winning where two disagree:
+                //   1. the option it was cut from — its EQP (a top's "show bracelet"), IMC, EQDP… stop applying the
+                //      moment the refit switches it off, exactly as its files would (see FilesFor), less what another
+                //      option of a multi-choice group sets differently (see leftTo);
+                //   2. whatever an earlier save of this same option wrote — above the source, because the _dwn saved
+                //      into an option after its _top passes no metadata of its own, and the source's entry for the
+                //      same thing must not overwrite the racial-bake EQDP the _top save put there. Not filtered by
+                //      leftTo: what an earlier save carried stays until the refit is undone and made again, as its
+                //      files do;
+                //   3. this save's own.
                 List<object>? ManipulationsFor(Refit refit)
                 {
                     var existing = options.FirstOrDefault(o => string.Equals(o.Name, refit.Option,
                                                                              StringComparison.OrdinalIgnoreCase));
                     var all = new List<object>();
                     var at = new Dictionary<string, int>(StringComparer.Ordinal);
-                    foreach (var m in (existing.Manipulations ?? []).Concat(manipulations ?? []))
+                    foreach (var m in (cutFrom.Manipulations ?? []).Where(m => !leftTo.ContainsKey(ManipulationKey(m)))
+                                                                   .Concat(existing.Manipulations ?? [])
+                                                                   .Concat(manipulations ?? []))
                     {
                         string key = ManipulationKey(m);
                         if (at.TryGetValue(key, out int i)) all[i] = m;
@@ -389,8 +461,26 @@ internal static class BodyRetargetWriter
                             all.Add(m);
                         }
                     }
+
+                    // Said only of what the option really ends up without: an entry left out of this save's carry can
+                    // still be on it from an earlier save, or from this save's own.
+                    foreach (var (key, other) in leftTo)
+                        notes.Add(at.ContainsKey(key)
+                            ? $"refit \"{refit.Option}\" in \"{groupName}\": kept {key}, which it sets itself; " +
+                              $"\"{other}\" sets it differently from \"{cutFrom.Name}\""
+                            : $"refit \"{refit.Option}\" in \"{groupName}\": left {key} to \"{other}\", which sets it " +
+                              $"differently from \"{cutFrom.Name}\"");
                     return all.Count > 0 ? all : null;
                 }
+
+                // Logged as soon as the manifest is written — not before, when a save that then failed would be
+                // described, nor only on full success, when a record write failing after it would leave an entry
+                // Penumbra is already missing unexplained.
+                void LogNotes()
+                {
+                    foreach (string note in notes) Plugin.Log?.Information("[Proteus] {0}", note);
+                }
+                IReadOnlyList<string>? Noted() => notes.Count > 0 ? notes : null;
 
                 PenumbraModMeta.FileOption OptionFor(Refit refit, string rel)
                     => new(refit.Option, FilesFor(refit, rel), ManipulationsFor(refit));
@@ -399,6 +489,7 @@ internal static class BodyRetargetWriter
                 {
                     PenumbraModMeta.AddFileOptions(modRoot, groupName, written.Select(w => OptionFor(w.Refit, w.Rel))
                                                                               .ToList());
+                    LogNotes();
                     foreach (var (refit, rel) in written)
                     {
                         WriteRecord(modRoot, groupName, true, refit.Option, gamePath, rel, bodyMod, from, refit.To, auto,
@@ -412,7 +503,7 @@ internal static class BodyRetargetWriter
                               refits[0].Option, groupName)
                         : string.Format(Loc.Localize("Parts.Retarget.Save.AddedManyToAuthor.Fmt",
                               "Saved {0} sizes in the \"{1}\" group. Choose it there in Penumbra to wear it."),
-                              refits.Count, groupName));
+                              refits.Count, groupName), Noted());
                 }
 
                 // Rebuilt from what is there, so saving more sizes grows the group instead of replacing it, and
@@ -437,6 +528,7 @@ internal static class BodyRetargetWriter
                 int priority = Math.Max(PenumbraModMeta.MaxGroupPriority(modRoot) + 1, 1);
                 PenumbraModMeta.WriteFileOptionGroup(modRoot, Position(modRoot, groupName), groupName, priority, final,
                                                      final.Count - 1);
+                LogNotes();
 
                 foreach (var (refit, rel) in written)
                 {
@@ -454,7 +546,7 @@ internal static class BodyRetargetWriter
                     : string.Format(Loc.Localize("Parts.Retarget.Save.AddedMany.Fmt",
                           "Saved {0} sizes in the \"{1}\" group. Penumbra only picks a default for a mod it is " +
                           "adding for the first time, so choose the option there to see it."),
-                          refits.Count, groupName));
+                          refits.Count, groupName), Noted());
             }
             catch (PenumbraModMeta.LegacyFolderException)
             {
