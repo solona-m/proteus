@@ -157,8 +157,9 @@ internal static class BodyRetargetWriter
     /// <param name="Option">The option added.</param>
     /// <param name="Message">What to tell the user.</param>
     /// <param name="Notes">
-    /// What a save left out of the refit's metadata, and why — the same lines it writes to the log, for reading a
-    /// report. Never shown to the user and never localized; the tests are its only reader today. Null for none.
+    /// What the multi-choice rule decided about the refit's metadata, and why — an entry left to another option of
+    /// the group, or kept though another option sets it differently; the same lines it writes to the log, for reading
+    /// a report. Never shown to the user and never localized; the tests are its only reader today. Null for none.
     /// </param>
     internal readonly record struct Outcome(bool Ok, string Group, string Option, string Message,
                                             IReadOnlyList<string>? Notes = null);
@@ -461,12 +462,14 @@ internal static class BodyRetargetWriter
                     return all.Count > 0 ? all : null;
                 }
 
-                // Only once the manifest is written: a line for a save that then failed would describe nothing.
-                IReadOnlyList<string>? Noted()
+                // Logged as soon as the manifest is written — not before, when a save that then failed would be
+                // described, nor only on full success, when a record write failing after it would leave an entry
+                // Penumbra is already missing unexplained.
+                void LogNotes()
                 {
                     foreach (string note in notes) Plugin.Log?.Information("[Proteus] {0}", note);
-                    return notes.Count > 0 ? notes : null;
                 }
+                IReadOnlyList<string>? Noted() => notes.Count > 0 ? notes : null;
 
                 PenumbraModMeta.FileOption OptionFor(Refit refit, string rel)
                     => new(refit.Option, FilesFor(refit, rel), ManipulationsFor(refit));
@@ -475,6 +478,7 @@ internal static class BodyRetargetWriter
                 {
                     PenumbraModMeta.AddFileOptions(modRoot, groupName, written.Select(w => OptionFor(w.Refit, w.Rel))
                                                                               .ToList());
+                    LogNotes();
                     foreach (var (refit, rel) in written)
                     {
                         WriteRecord(modRoot, groupName, true, refit.Option, gamePath, rel, bodyMod, from, refit.To, auto,
@@ -513,6 +517,7 @@ internal static class BodyRetargetWriter
                 int priority = Math.Max(PenumbraModMeta.MaxGroupPriority(modRoot) + 1, 1);
                 PenumbraModMeta.WriteFileOptionGroup(modRoot, Position(modRoot, groupName), groupName, priority, final,
                                                      final.Count - 1);
+                LogNotes();
 
                 foreach (var (refit, rel) in written)
                 {

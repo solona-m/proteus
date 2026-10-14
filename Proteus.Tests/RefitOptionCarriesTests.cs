@@ -313,6 +313,8 @@ public class RefitOptionCarriesTests(ITestOutputHelper output) : IDisposable
         Assert.Equal(2, carried.Count);
         Assert.Equal("4096", EntryOf(Assert.Single(carried, m => TypeOf(m) == "Eqp")));
         Assert.Single(carried, m => TypeOf(m) == "Imc");
+        // Every entry as the author wrote it, value and all, in the author's order.
+        Assert.True(JsonNode.DeepEquals(before, ManipulationsNode("Size", Small)), "the carried entries were changed");
         Assert.True(JsonNode.DeepEquals(before, ManipulationsNode("Size", "Medium")), "the author's size was changed");
         Assert.Null(outcome.Notes);
     }
@@ -625,6 +627,11 @@ public class RefitOptionCarriesTests(ITestOutputHelper output) : IDisposable
         Assert.True(BodyRetargetWriter.SameValue(
             El("""{ "Type": "Eqdp", "Manipulation": { "Entry": 3, "Gender": "Male", "Race": "Midlander", "SetId": 118, "Slot": "Body", "ShiftedEntry": 3 } }"""),
             El("""{ "Type": "Eqdp", "Manipulation": { "Entry": 3, "Gender": "Male", "Race": "Midlander", "SetId": 118, "Slot": "Body" } }""")));
+        // No Entry on either side sets the same nothing; on one side only, something else.
+        Assert.True(BodyRetargetWriter.SameValue(El("""{ "Type": "Eqp", "Manipulation": { "SetId": 118, "Slot": "Body" } }"""),
+                                                 El("""{ "Type": "Eqp", "Manipulation": { "SetId": 118, "Slot": "Body" } }""")));
+        Assert.False(BodyRetargetWriter.SameValue(El("""{ "Type": "Eqp", "Manipulation": { "SetId": 118, "Slot": "Body" } }"""),
+                                                  El(ShowBracelet)));
     }
 
     [Theory]
