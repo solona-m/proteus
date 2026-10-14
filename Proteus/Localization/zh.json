@@ -3703,6 +3703,10 @@
     "message": "选择要移动的部件",
     "description": ""
   },
+  "Parts.Drawer.Toggle.Tip": {
+    "message": "点击即可在单独的一栏中打开部件列表，勾选时模型始终可见。再次点击即可关闭。",
+    "description": ""
+  },
   "Parts.Retarget.Lock.SkinTip": {
     "message": "服装自带的皮肤。保持不变会维持旧尺寸，可能导致身体透出或出现空隙。",
     "description": ""

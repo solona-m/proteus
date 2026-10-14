@@ -2761,11 +2761,15 @@ public sealed class PartsStrings
         "Untick a part to keep it where the author put it, like a buckle or jewellery. Clicking it on the "
       + "model does the same.");
 
-    /// <summary>The closed part dropdown. {0} is how many are ticked, {1} how many there are.</summary>
+    /// <summary>The part drawer's header button. {0} is how many are ticked, {1} how many there are.</summary>
     public readonly string PartsTickedFmt = Loc.Localize("Parts.Dropdown.Ticked.Fmt", "{0} of {1} parts ticked");
 
-    /// <summary>The closed part dropdown under Move, Rotate or Scale, before a part is chosen.</summary>
+    /// <summary>The part drawer's header button under Move, Rotate or Scale, before a part is chosen.</summary>
     public readonly string PartsNoneChosen = Loc.Localize("Parts.Dropdown.NoneChosen", "Choose a part to move");
+
+    /// <summary>The last line of the part drawer header's tooltip.</summary>
+    public readonly string DrawerToggleTip = Loc.Localize("Parts.Drawer.Toggle.Tip",
+        "Click to open the part list in a column of its own, so the model stays in view while you tick. Click again to close it.");
 
     public readonly string RetargetLockSkinTip = Loc.Localize("Parts.Retarget.Lock.SkinTip",
         "The garment's own skin. Holding it keeps the old size, so the body may show through or gap.");

@@ -94,6 +94,11 @@ public class StatusWindow : Window
     // One-shot: once the grown size has landed, pull the window back on screen if it now hangs off an edge.
     private bool _keepOnScreen;
 
+    // The part drawer opened or closed in the Studio's last frame, applied next PreDraw.
+    private DrawerRequest.Pending? _drawerPending;
+    // The width the window took on for the part drawer, to give back when it closes and to leave out of the saved size.
+    private readonly DrawerResize _drawerResize = new();
+
     // Absolute index-texture path → rows that appear in it; cleared on each popup open.
     private readonly Dictionary<string, ContentIndexTexture.Scan> _indexRowCache = new();
     /// <summary>Mod whose colour editor window is open, or null. A window rather than a popup, so it survives clicks into the game.</summary>
@@ -280,11 +285,47 @@ public class StatusWindow : Window
             SizeConstraints = ResizableConstraints;
         }
 
+        // A fit sizes the window afresh, drawer and all: nothing of the drawer's is left to give back.
+        bool fitting = (Flags & ImGuiWindowFlags.AlwaysAutoResize) != 0;
+        if (fitting) _drawerResize.Forget();
+
         if (_growForModel)
         {
             _growForModel = false;
             GrowForModel();
         }
+
+        if (_drawerPending is { } drawer)
+        {
+            _drawerPending = null;
+            ResizeForDrawer(drawer, fitting);
+        }
+    }
+
+    /// <summary>Widen the window for the part drawer just opened, or give that width back now it closed.</summary>
+    /// <remarks>Goes through <see cref="_togglesSize"/> like <see cref="GrowForModel"/>, but the saved size leaves the
+    /// drawer's share out (<see cref="DrawerResize.SavedWidth"/>): the drawer starts closed next session.</remarks>
+    private void ResizeForDrawer(DrawerRequest.Pending drawer, bool fitting)
+    {
+        // Unscaled, like every size here; and within what the window may be, so the size recorded is the size it gets.
+        float screenWidth = MathF.Min(ImGuiHelpers.MainViewport.Size.X / ImGuiHelpers.GlobalScale,
+                                      ResizableConstraints.MaximumSize.X);
+        var size = drawer.Open
+            ? _drawerResize.Open(_togglesSize, drawer.Grow, fitting, screenWidth)
+            : _drawerResize.Close(_togglesSize, fitting);
+        if (size is not { } resized) return;
+
+        resized = ClampToResizable(resized);
+        _togglesSize = resized;
+        if (config.WindowUserSized)
+        {
+            _sizeDirty = true;
+            _sizeChangedAt = Environment.TickCount64;
+        }
+        Size = resized;
+        SizeCondition = ImGuiCond.Always;
+        _ownResizeFrames = Math.Max(_ownResizeFrames, 3);
+        _keepOnScreen = true;
     }
 
     /// <summary>Grow the window to at least half the screen per axis, because the model viewer just appeared.</summary>
@@ -299,6 +340,7 @@ public class StatusWindow : Window
         if (grown == _togglesSize) return;
 
         _togglesSize = grown;
+        _drawerResize.Forget();   // the model view's size now, not the drawer's
         if (config.WindowUserSized)
         {
             _sizeDirty = true;
@@ -331,7 +373,7 @@ public class StatusWindow : Window
         if (Environment.TickCount64 - _sizeChangedAt < 400) return;
 
         _sizeDirty = false;
-        config.TogglesWindowWidth  = _togglesSize.X;
+        config.TogglesWindowWidth  = _drawerResize.SavedWidth(_togglesSize);
         config.TogglesWindowHeight = _togglesSize.Y;
         config.Save();
     }
@@ -441,6 +483,9 @@ public class StatusWindow : Window
                     _sizeChangedAt = Environment.TickCount64;
                 }
             }
+
+            // The drawer's grow has landed: what the window came out at is what a close compares with.
+            if (_drawerResize.AwaitingLanding && _ownResizeFrames == 0) _drawerResize.Landed(_togglesSize);
         }
 
         // A deferred UV transfer map arrived: index scans taken without the island mask are wrong, so rescan.
@@ -483,6 +528,7 @@ public class StatusWindow : Window
                             _studioDrawn = true;
                             // Fill the height only while not auto-fitting, or the row and the window grow each other without bound.
                             parts.Draw(fillHeight: _fitFrames == 0, reserveBelow: _footerReserve);
+                            if (parts.TakeDrawerRequest() is { } drawer) _drawerPending = drawer;
 
                             // The controls grew past the fitted height, so fit again; grow only.
                             if (_fitFrames == 0 && parts.ControlsHeight > _studioFitHeight + 1f)

@@ -3703,6 +3703,10 @@
     "message": "Choisissez une pièce à déplacer",
     "description": ""
   },
+  "Parts.Drawer.Toggle.Tip": {
+    "message": "Cliquez pour ouvrir la liste des pièces dans sa propre colonne, afin que le modèle reste visible pendant que vous cochez. Cliquez à nouveau pour la fermer.",
+    "description": ""
+  },
   "Parts.Retarget.Lock.SkinTip": {
     "message": "La peau propre au vêtement. La conserver garde l'ancienne taille : le corps peut transparaître ou créer un écart.",
     "description": ""
