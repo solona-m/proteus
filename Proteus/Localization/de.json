@@ -4732,7 +4732,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "Fügt dem ganzen Mod jede Größe der unten angehakten Körper hinzu. Jedes Brust-, Bein-, Schuh- und Handschuhteil wird von der ersten Größe des Autors aus angepasst und neben dessen Größen als „Rue S“, „YAB Buff L“ usw. gespeichert. Größen, die der Mod schon hat, bleiben unberührt.",
+    "message": "Fügt dem ganzen Mod jede Größe der unten angehakten Körper hinzu. Jede Größe wird von der ihr nächsten Größe des Autors aus angepasst, die übrigen Teile des Outfits in dieser Option von derselben Größe, und neben den Größen des Autors als „Rue S“, „YAB Buff L“ usw. gespeichert. Größen, die der Mod schon hat, bleiben unberührt.",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -4760,7 +4760,7 @@
     "description": ""
   },
   "SizeSet.Remake.Tip": {
-    "message": "Aus: Eine Größe, die Proteus schon hinzugefügt hat, bleibt, wie sie ist. An: Sie wird erneut angepasst und ersetzt. Die eigenen Größen des Autors werden nie angefasst.",
+    "message": "Aus: Eine Größe, die Proteus schon hinzugefügt hat, bleibt, wie sie ist. An: Sie wird erneut angepasst und ersetzt. Die eigenen Größen des Autors werden nie angefasst. Hast du Größen mit einer früheren Proteus-Version hinzugefügt, hake dies einmal an: Diese wurden aus der ersten Größe des Autors gemacht.",
     "description": ""
   },
   "SizeSet.Run": {
@@ -4801,6 +4801,14 @@
   },
   "SizeSet.NoPieces": {
     "message": "Dieser Mod hat keine Brust-, Bein-, Schuh- oder Handschuhmodelle, von denen Größen erstellt werden könnten.",
+    "description": ""
+  },
+  "SizeSet.EndNoLeadSource.Fmt": {
+    "message": "{0}: bei „{1}“ ausgelassen: Die Größe des Autors, aus der Brust- oder Beinteil des Outfits dort gemacht wurde, konnte dafür nicht gefunden oder gelesen werden. Hake „Neu erstellen“ an, um die Option neu zu machen.",
+    "description": ""
+  },
+  "SizeSet.EndNoLeadSourceRemake.Fmt": {
+    "message": "{0}: „{1}“ bleibt, wie es war: Die Größe des Autors, aus der Brust- oder Beinteil des Outfits dort gemacht wurde, konnte dafür nicht gelesen werden.",
     "description": ""
   },
   "SizeSet.NoBodies": {

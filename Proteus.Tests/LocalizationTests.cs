@@ -240,6 +240,76 @@ public sealed class LocalizationTests
         Assert.Contains(sentence, bullet);
     }
 
+    /// <summary>The size set's strings that say each size is cut from the author's nearest one are translated, not
+    /// copied.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-bulk-nearest-source-7")]
+    public void SizeSet_source_strings_are_translated_not_copied(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (string key in new[]
+                 {
+                     "SizeSet.Intro", "SizeSet.Remake.Tip", "SizeSet.EndNoLeadSource.Fmt", "SizeSet.EndNoLeadSourceRemake.Fmt",
+                 })
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+        }
+    }
+
+    /// <summary>
+    /// No README still says the size set cuts from the author's first size, or that refitting from smaller to larger
+    /// works best — the size nearest the one wanted does.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-bulk-nearest-source-7")]
+    public void Readme_says_sizes_are_cut_from_the_nearest(string lang)
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+        foreach (string old in ReadmeFirstSize[lang]) Assert.DoesNotContain(old, readme);
+        // The by-hand tip, the size set's rule, and the "ran it before" sentence are there.
+        foreach (string now in ReadmeNearestSize[lang]) Assert.Contains(now, readme);
+        // The "ran it before" sentence names the remake checkbox's own label.
+        Assert.Contains(Load(lang)["SizeSet.Remake"].Message, readme);
+    }
+
+    /// <summary>What each README says now: the by-hand tip, the size set's rule, and the sentence for earlier runs.</summary>
+    private static readonly Dictionary<string, string[]> ReadmeNearestSize = new()
+    {
+        ["en"] = ["nearest the one you want", "the author's size nearest it", "If you ran it with an earlier version of Proteus"],
+        ["de"] = ["die der gewünschten am nächsten ist", "aus der ihr nächsten Größe des Autors",
+                  "Hast du es mit einer früheren Proteus-Version ausgeführt"],
+        ["es"] = ["más cercana a la que quieres", "desde la talla del autor más cercana a ella",
+                  "Si lo usaste con una versión anterior de Proteus"],
+        ["fr"] = ["la plus proche de celle voulue", "depuis la taille de l'auteur la plus proche (",
+                  "Si vous l'avez lancé avec une version antérieure de Proteus"],
+        ["ja"] = ["目的のサイズに最も近いものから", "作者のサイズのうち最も近いものから合わせ直され", "以前のバージョンのProteusで実行した場合は"],
+        ["ko"] = ["원하는 사이즈에 가장 가까운 제작자의 사이즈에서", "제작자의 사이즈 중 가장 가까운 것에서 리핏되고", "이전 버전의 Proteus로 실행했다면"],
+        ["ru"] = ["Перешивайте с ближайшего к нужному размера автора", "с ближайшего к нему авторского размера",
+                  "Если вы запускали это в более ранней версии Proteus"],
+        ["zh"] = ["请从最接近目标尺寸的作者尺寸改配", "从作者最接近它的尺寸改配", "如果你曾用较早版本的 Proteus 运行过"],
+    };
+
+    /// <summary>What each README said before: the size set's old rule, and the old by-hand tip.</summary>
+    private static readonly Dictionary<string, string[]> ReadmeFirstSize = new()
+    {
+        ["en"] = ["author's first size into every size", "smaller size to a larger one"],
+        ["de"] = ["aus der ersten Größe des Autors in jede Größe", "Von einer kleineren auf eine größere Größe"],
+        ["es"] = ["desde la primera talla del autor a cada talla", "de una talla menor a una mayor"],
+        ["fr"] = ["depuis la première taille de l'auteur vers chaque taille", "d'une petite taille vers une plus grande"],
+        ["ja"] = ["作者の最初のサイズからそれらのボディ", "小さいサイズから大きいサイズへ"],
+        ["ko"] = ["제작자의 첫 번째 사이즈에서 그 바디들의", "작은 크기에서 큰 크기로"],
+        ["ru"] = ["с первого авторского размера на каждый", "с меньшего размера на больший"],
+        ["zh"] = ["从作者的第一个尺寸改配到这些身体", "从较小的尺寸改配到较大的尺寸"],
+    };
+
     /// <summary>The Keep shape bullet's bold label in each README.</summary>
     private static readonly Dictionary<string, string> ReadmeKeepShape = new()
     {

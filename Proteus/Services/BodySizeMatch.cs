@@ -619,18 +619,20 @@ internal static class BodySizeMatch
     /// the same file are measured once.</param>
     /// <param name="body">What the body's skin is (its geometry), or null: two mods whose sizes are the same skin are one
     /// body, whatever else their files differ by.</param>
-    internal static float[]? Near(Vector3[] probes, string path, out string? file, out string? body)
+    /// <param name="cap">How far a point counts at most. <see cref="NearCap"/> tells body families apart; how far one size
+    /// of a body lies from another's (the size set's reading) needs the bust's whole offset, several centimetres.</param>
+    internal static float[]? Near(Vector3[] probes, string path, out string? file, out string? body, float cap = NearCap)
     {
         file = body = null;
         if (probes.Length == 0 || NearIndexOf(path, out file, out body) is not { Cells.Length: > 0 } index) return null;
         var distances = new float[probes.Length];
         // Rings searched at most: every triangle within the cap, a small one's centre up to Reach further.
-        int rings = (int)MathF.Ceiling((NearCap + index.Reach) / NearCellSize) + 1;
+        int rings = (int)MathF.Ceiling((cap + index.Reach) / NearCellSize) + 1;
         for (int i = 0; i < probes.Length; i++)
         {
             var q = probes[i];
             var (cx, cy, cz) = NearCell(q);
-            float best = NearCap * NearCap;
+            float best = cap * cap;
             // Ring by ring outward. A small triangle whose nearest point lies within d of this point has its centre
             // within d + Reach, so in a cell no more than that many cells' width away; a large one is filed in the cell
             // holding that nearest point. Once the best is nearer than the rings searched, less Reach, no ring further
