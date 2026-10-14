@@ -61,7 +61,7 @@ public sealed partial class AutoRefitWatcher
 
         // ── what it was made on, read from what it reaches ──
         BodySizeCatalog? CatalogOf(string dir) => dir == VanillaBodyCatalog.Key ? j.VanillaCat : j.State.Find(dir)?.Catalog;
-        var found = ReadEnds(j, reading, CatalogOf);
+        var found = ReadEnds(j, reading, CatalogOf, out var siblings);
         ct.ThrowIfCancellationRequested();
         log.Information("[Proteus] auto refit: {0} keeps its own {1}: {2} of {3} vertices ({4} in the 40-60% band); "
                       + "route {5}", item, feet ? "feet" : "hands", reading.Ends.Count, reading.Vertices, reading.Band,
@@ -139,16 +139,27 @@ public sealed partial class AutoRefitWatcher
                  && RefitCore.IsSharedSingleGroup(j.Redirects, j.OwnRecord, group, RefitCore.SingleGroups(root)))
             option = RefitCore.JoinOption(j.OwnRecord, group, j.SavePath, targetMod.Dir, ChosenTargets(j.TargetFor),
                                           targets, option);
+        // Sized by the chest or legs piece of its own option: kept outside that piece as it is drawn now, which a refit
+        // saved before must have been kept outside too (see OutfitPartners).
+        var partner = decision is KeepEnds.Refit sized && found.Route == KeepEnds.Route.Sibling && siblings.Count > 0
+            ? PartnerOf(j, reading.Limb, siblings[0], sized)
+            : null;
+        var layers = partner != null ? OutfitPartners.LayersOf(r.ModRoot!, partner) : null;
         if (await LetBeOrPutBack(r, g, root, group, option, j.SavePath, cutFrom, item, targetMod.Name, ct,
-                                 source))
+                                 source, layers))
             return;
 
         // ── the refit ──
-        var output = skinOnly ?? RefitEnds(j, reading, (KeepEnds.Refit)decision, option, CatalogOf, ct);
+        var outfit = partner != null
+            ? OutfitPartners.Load(r.ModRoot!, partner, note => log.Information("[Proteus] auto refit: {0}: {1}", item, note))
+            : null;
+        if (partner != null && outfit == null) layers = null;
+        var output = skinOnly ?? RefitEnds(j, reading, (KeepEnds.Refit)decision, option, CatalogOf, ct, outfit);
         if (output == null) return;
 
         if (await SaveAndWear(r, g, root, group, j.SavePath, targetMod, output.LabelFrom,
-                              new BodyRetargetWriter.Refit(option, output.Model, output.To), cutFrom, j.BakeTo, item,
+                              new BodyRetargetWriter.Refit(option, output.Model, output.To, layers), cutFrom, j.BakeTo,
+                              item,
                               GameGear(r, j.Redirects, j.OwnRecord),
                               new BodyRetargetWriter.Provenance(source.Dir, source.Option.Rel, targets))
             is not { } savedRoot)
@@ -163,13 +174,15 @@ public sealed partial class AutoRefitWatcher
     /// What the piece was made on, read from what it reaches (<see cref="KeepEnds.Find"/>), or as it was read before —
     /// kept apart from the old way of reading by <see cref="KeepEnds.Reading.CacheSlot"/>.
     /// </summary>
-    private KeepEnds.Found ReadEnds(EndsJob j, KeepEnds.Reading reading, Func<string, BodySizeCatalog?> catalogOf)
+    /// <param name="siblings">The chest or legs pieces of its own option (see <see cref="SiblingPiece.Find"/>).</param>
+    private KeepEnds.Found ReadEnds(EndsJob j, KeepEnds.Reading reading, Func<string, BodySizeCatalog?> catalogOf,
+                                    out IReadOnlyList<SiblingPiece.Candidate> siblings)
     {
         var g = j.G;
         // The siblings are part of the key, as they stand on disk: a piece read by its cloth before it had a sibling to
         // go by must not be served that reading again. Only on a miss are they opened and read.
         void Note(string note) => log.Information("[Proteus] auto refit: {0}: {1}", j.Item, note);
-        var siblings = SiblingPiece.Applies(j.R.ModRoot, j.BakeTo) && j.R.Worn.Rel is { } wornRel
+        siblings = SiblingPiece.Applies(j.R.ModRoot, j.BakeTo) && j.R.Worn.Rel is { } wornRel
             ? SiblingPiece.Find(j.Redirects, j.OwnRecord, wornRel, reading.Limb, j.Race, Note)
             : [];
         string suffix = SiblingPiece.CacheSuffix(siblings, file => Stamp(j.R.ModRoot!, file));
@@ -223,6 +236,28 @@ public sealed partial class AutoRefitWatcher
         }, note);
     }
 
+    /// <summary>
+    /// The chest or legs piece of its own option that the piece is kept outside (see <see cref="OutfitPartners"/>): as
+    /// worn beside it at the walk, refitted in this batch or already a refit for the size chosen. Null, logged, when it
+    /// is not on that size.
+    /// </summary>
+    private OutfitPartners.Partner? PartnerOf(EndsJob j, string limb, SiblingPiece.Candidate sibling, KeepEnds.Refit refit)
+    {
+        Beside? beside = null;
+        j.R.Beside?.TryGetValue(limb, out beside);
+        PieceOutcome? outcome = null;
+        if (beside != null) outcomes.TryGetValue(OutcomeKey(limb, beside.Worn), out outcome);
+        string root = j.R.ModRoot!;
+        var partner = OutfitPartners.ForAutoRefit(root, sibling, limb, refit.Source, refit.Target.Rel, beside?.ModRoot,
+                                                  beside?.Worn.GamePath, beside?.Worn.Rel, outcome,
+                                                  BodyRetargetWriter.ReadRecord(root),
+                                                  note => log.Information("[Proteus] auto refit: {0}: {1}", j.Item, note));
+        if (partner != null)
+            log.Information("[Proteus] auto refit: {0} is kept outside its {1} piece as drawn now: {2}", j.Item,
+                            limb == "_top" ? "chest" : "legs", partner.RefittedRel);
+        return partner;
+    }
+
     /// <summary>A file's state on disk — its length and time written — for a cache key; "-" when it is not there.</summary>
     private static string Stamp(string root, string file)
     {
@@ -261,8 +296,10 @@ public sealed partial class AutoRefitWatcher
     /// Refit the leg or arm onto <paramref name="refit"/>'s size, the end held, its skin then drawn like the new body's.
     /// Null when the pair cannot be built, which the player has been told.
     /// </summary>
+    /// <param name="outfit">The chest or legs piece it is kept outside (see <see cref="PartnerOf"/>); null for none.</param>
     private EndsOutput? RefitEnds(EndsJob j, KeepEnds.Reading reading, KeepEnds.Refit refit, string option,
-                                  Func<string, BodySizeCatalog?> catalogOf, CancellationToken ct)
+                                  Func<string, BodySizeCatalog?> catalogOf, CancellationToken ct,
+                                  BodyRetarget.Outfit? outfit = null)
     {
         var g = j.G;
         var targetMod = j.TargetMod;
@@ -303,7 +340,11 @@ public sealed partial class AutoRefitWatcher
         AssertOffFramework("the refit");
         var plan = KeepEnds.Plan(j.Garment, j.Bytes, reading, limbPair, endPair, across,
                                  line => log.Debug("[Proteus] auto refit: {0}", line),
-                                 line => log.Warning("[Proteus] auto refit: {0}", line));
+                                 line => log.Warning("[Proteus] auto refit: {0}", line), outfit);
+        if (outfit != null)
+            log.Information("[Proteus] auto refit: {0} kept outside its {1} piece: {2} points lifted, {3:F1} mm short at "
+                          + "most", item, limb == "_top" ? "chest" : "legs", plan.Report.Layered,
+                            plan.Report.LayerResidual * 1000f);
         plan = RefitCore.MatchSkinToBody(plan, sourcePath, targetPath, uvRemap, j.Male, log);
         if (j.BakeTo != 0) plan = RefitCore.WithBodySkin(plan, targetPath, log);
         ct.ThrowIfCancellationRequested();

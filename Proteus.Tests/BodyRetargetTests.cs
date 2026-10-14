@@ -529,6 +529,38 @@ public class BodyRetargetTests
     }
 
     [Fact]
+    public void Tracing_the_solve_changes_nothing()
+    {
+        // [AC-outfit-fit-2] A diagnostic reads each stage's moves; the refit it watches must come out the same.
+        var source = Cube(0.20f, SkinMaterial);
+        var target = Cube(0.25f, SkinMaterial);
+        var garment = Copy(Cube(0.21f, SkinMaterial), ClothMaterial);
+        Assert.True(IdentityCorrespondence.TryBuild(source, target, "chest", out var built, out string why), why);
+        List<BodyRetarget.SlotPair> pairs = [new("_top", built!, target)];
+
+        var plain = BodyRetarget.Solve(garment, pairs, "_top", replaceSkin: true);
+        var stages = new List<string>();
+        SecondSkinWriter.Vec3[]? last = null;
+        var traced = BodyRetarget.Solve(garment, pairs, "_top", replaceSkin: true,
+                                        trace: (stage, delta) => { stages.Add(stage); last = delta; });
+
+        Assert.Equal(["transfer", "knit", "layer-knit", "lay", "follow", "push", "unfold", "relax", "face-settle",
+                      "rim-lift", "layer-order"], stages);
+        Assert.True(plain.WorstMove > 0f, "the garment should have moved");
+        Assert.Equal(plain.Pushed, traced.Pushed);
+        Assert.Equal(plain.Folded, traced.Folded);
+        // The last stage is what is written.
+        var sets = BodyRetarget.Sets.From(garment, null, BodyRetarget.PartedSkinMeshes(garment, pairs, "_top", true, null));
+        Assert.NotNull(last);
+        for (int v = 0; v < garment.Positions.Length / 3; v++)
+        {
+            Assert.Equal(Delta(plain, v), Delta(traced, v));
+            var written = last![sets.NodeOf[v]];
+            Assert.Equal(Delta(plain, v), new Vector3(written.X, written.Y, written.Z));
+        }
+    }
+
+    [Fact]
     public void Retarget_moves_the_garment_s_own_skin_mesh()
     {
         var source = Cube(0.20f, SkinMaterial);

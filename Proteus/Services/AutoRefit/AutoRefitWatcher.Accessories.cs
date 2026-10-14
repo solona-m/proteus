@@ -212,8 +212,30 @@ public sealed partial class AutoRefitWatcher
                     item, targetMod.Name), problem: true);
             return;
         }
-        if (await LetBeOrPutBack(r, g, saveRoot, group, option, r.Worn.GamePath, cutFrom, item, targetMod.Name, ct, pickOf))
+        // Sized by the chest or legs piece of its own option: kept outside that piece as it is drawn now (see
+        // OutfitPartners). One sized by the piece worn beneath has no author's file of it to read their relation from.
+        var siblingFile = SiblingOf(primary) is { } bySibling
+                          && string.Equals(bySibling.Dir, pickOf.Dir, StringComparison.OrdinalIgnoreCase)
+                          && RefitCore.Normal(bySibling.Option.Rel) == RefitCore.Normal(pickOf.Option.Rel)
+            ? SiblingPiece.Find(redirects, ownRecord, r.Worn.Rel!, primary, race).FirstOrDefault()
+            : null;
+        OutfitPartners.Partner? partner = null;
+        if (siblingFile != null)
+        {
+            Beside? beside = null;
+            r.Beside?.TryGetValue(primary, out beside);
+            PieceOutcome? outcome = null;
+            if (beside != null) outcomes.TryGetValue(OutcomeKey(primary, beside.Worn), out outcome);
+            partner = OutfitPartners.ForAutoRefit(root, siblingFile, primary, pickOf, target.Rel, beside?.ModRoot,
+                                                  beside?.Worn.GamePath, beside?.Worn.Rel, outcome,
+                                                  BodyRetargetWriter.ReadRecord(root), Note);
+        }
+        var layers = partner != null ? OutfitPartners.LayersOf(root, partner) : null;
+        if (await LetBeOrPutBack(r, g, saveRoot, group, option, r.Worn.GamePath, cutFrom, item, targetMod.Name, ct, pickOf,
+                                 layers))
             return;
+        var outfit = partner != null ? OutfitPartners.Load(root, partner, Note) : null;
+        if (partner != null && outfit == null) layers = null;
 
         // ── the refit ──
         string sourceName = NameIn(state, pickOf.Dir);
@@ -254,12 +276,16 @@ public sealed partial class AutoRefitWatcher
         var plan = RefitCore.PlanAccessoryRefit(garment, bytes, pairs, covered.Contains("_top") ? "_top" : null,
                                                 across, out var pieceNames,
                                                 line => log.Debug("[Proteus] auto refit: {0}", line),
-                                                line => log.Warning("[Proteus] auto refit: {0}", line));
+                                                line => log.Warning("[Proteus] auto refit: {0}", line), outfit);
+        if (outfit != null)
+            log.Information("[Proteus] auto refit: {0} kept outside its {1} piece {2}: {3} points lifted, {4:F1} mm short "
+                          + "at most", item, primary == "_top" ? "chest" : "legs", partner!.RefittedRel,
+                            plan.Report.Layered, plan.Report.LayerResidual * 1000f);
         ct.ThrowIfCancellationRequested();
 
         string labelFrom = RefitCore.LabelFrom(across ? sourceName : null,
                                                covered.Where(sources.ContainsKey).Select(s => sources[s].Option.Label));
-        var refit = new BodyRetargetWriter.Refit(option, plan.Model, string.Join(" + ", labels));
+        var refit = new BodyRetargetWriter.Refit(option, plan.Model, string.Join(" + ", labels), layers);
         if (await SaveAndWear(r, g, saveRoot, group, r.Worn.GamePath, targetMod, labelFrom, refit, cutFrom, 0, item,
                               fromGame: false,
                               new BodyRetargetWriter.Provenance(pickOf.Dir, pickOf.Option.Rel, targets))
