@@ -69,4 +69,21 @@ public class OptionOfFileTests
         Assert.Equal("Medium", BodyRetargetWriter.OptionOfFile(
             redirects, "size/medium/chara/equipment/e0118/model/c0201e0118_top.mdl", "Size"));
     }
+
+    [Fact]
+    public void OptionOfFile_names_the_first_option_publishing_the_file_known_limit()
+    {
+        // [EDGE-refit-carries-meta-12] A known limit, pinned so it is seen rather than silent: two options of a group
+        // that point at one model and differ only in their metadata are told apart by nothing here, so the first wins
+        // — whichever of them is ticked — and a refit cut from it carries THAT option's metadata. Telling them apart
+        // needs the selection, which the Studio does not have when it asks.
+        var redirects = new[]
+        {
+            At(@"size\medium\chara\equipment\e0118\model\c0201e0118_top.mdl", "Size / Medium"),
+            At(@"size\medium\chara\equipment\e0118\model\c0201e0118_top.mdl", "Size / Medium (no bracelet)"),
+        };
+
+        Assert.Equal("Medium", BodyRetargetWriter.OptionOfFile(
+            redirects, "size/medium/chara/equipment/e0118/model/c0201e0118_top.mdl", "Size"));
+    }
 }
