@@ -3703,6 +3703,10 @@
     "message": "動かすパーツを選んでください",
     "description": ""
   },
+  "Parts.Drawer.Toggle.Tip": {
+    "message": "クリックするとパーツ一覧が専用の列に開き、チェックしながらモデルを見られます。もう一度クリックすると閉じます。",
+    "description": ""
+  },
   "Parts.Retarget.Lock.SkinTip": {
     "message": "衣装自身の肌です。保持すると元のサイズのままになり、体が透けたり隙間ができたりします。",
     "description": ""

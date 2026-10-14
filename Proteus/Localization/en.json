@@ -2321,7 +2321,7 @@
   },
   "Parts.Add.Btn": {
     "message": "Make a switch from the ticked parts",
-    "description": "Button. Creates one on/off switch covering every part currently ticked in the list above."
+    "description": "Button. Creates one on/off switch covering every part currently ticked in the part list."
   },
   "Parts.AuthorSwitched.Tag": {
     "message": "author switch",
@@ -3697,11 +3697,15 @@
   },
   "Parts.Dropdown.Ticked.Fmt": {
     "message": "{0} of {1} parts ticked",
-    "description": "The closed part dropdown. {0} is how many are ticked, {1} how many there are."
+    "description": "The part drawer's header button. {0} is how many are ticked, {1} how many there are."
   },
   "Parts.Dropdown.NoneChosen": {
     "message": "Choose a part to move",
-    "description": "The closed part dropdown under Move, Rotate or Scale, before a part is chosen."
+    "description": "The part drawer's header button under Move, Rotate or Scale, before a part is chosen."
+  },
+  "Parts.Drawer.Toggle.Tip": {
+    "message": "Click to open the part list in a column of its own, so the model stays in view while you tick. Click again to close it.",
+    "description": "Last line of the part drawer header's tooltip."
   },
   "Parts.Retarget.Lock.SkinTip": {
     "message": "The garment's own skin. Holding it keeps the old size, so the body may show through or gap.",

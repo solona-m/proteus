@@ -3703,6 +3703,10 @@
     "message": "움직일 부품을 고르세요",
     "description": ""
   },
+  "Parts.Drawer.Toggle.Tip": {
+    "message": "클릭하면 부위 목록이 별도의 열로 열려, 체크하는 동안에도 모델이 계속 보입니다. 다시 클릭하면 닫힙니다.",
+    "description": ""
+  },
   "Parts.Retarget.Lock.SkinTip": {
     "message": "의상 자체의 피부입니다. 고정하면 이전 크기 그대로 남아 몸이 비치거나 틈이 생길 수 있습니다.",
     "description": ""

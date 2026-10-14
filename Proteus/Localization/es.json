@@ -3703,6 +3703,10 @@
     "message": "Elige una pieza para mover",
     "description": ""
   },
+  "Parts.Drawer.Toggle.Tip": {
+    "message": "Haz clic para abrir la lista de piezas en una columna propia, así el modelo sigue a la vista mientras marcas. Vuelve a hacer clic para cerrarla.",
+    "description": ""
+  },
   "Parts.Retarget.Lock.SkinTip": {
     "message": "La piel propia de la prenda. Mantenerla conserva la talla antigua, así que el cuerpo puede transparentarse o dejar huecos.",
     "description": ""

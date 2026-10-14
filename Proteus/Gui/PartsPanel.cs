@@ -536,14 +536,29 @@ public sealed class PartsPanel
             }
         }
 
-        // Beside the model it keeps a fixed width; alone it takes the rest of the row.
+        // Beside the model or the open part drawer it keeps a fixed width; alone it takes the rest of the row.
         ImGui.SameLine();
-        float settingsWidth = showModelView ? ProteusStyle.S(SidePanelWidth) : ImGui.GetContentRegionAvail().X;
-        using (var side = ImRaii.Child("##partsSide", new Vector2(settingsWidth, height), true))
+        float spacing = ImGui.GetStyle().ItemSpacing.X;
+        float rowWidth = ImGui.GetContentRegionAvail().X;
+        float settingsFixed = ProteusStyle.S(SidePanelWidth);
+        // Measured only beside the model: without it the drawer takes the rest of the row, whatever its rows want.
+        float drawerWanted = drawerOpen && showModelView ? WantedDrawerWidth(parts) : 0f;
+        var cols = LayoutColumns(rowWidth, spacing, showModelView, drawerOpen, settingsFixed, drawerWanted,
+                                 ProteusStyle.S(MinDrawerWidth), ProteusStyle.S(MinViewerWidth));
+        using (var side = ImRaii.Child("##partsSide", new Vector2(cols.Settings, height), true))
         {
             if (side)
             {
-                DrawPartDropdown(parts);
+                if (DrawPartHeader(parts))
+                {
+                    drawerOpen = !drawerOpen;
+                    if (!drawerOpen) drawerRequest.Closed();
+                    else if (showModelView && DrawerOpenGrow(true, WantedDrawerWidth(parts), spacing,
+                                            viewerRoom: rowWidth - settingsFixed - spacing,
+                                            viewerNatural: height * PartViewport.DefaultAspect,
+                                            scale: ProteusStyle.S(1f)) is { } grow)
+                        drawerRequest.Opened(grow);
+                }
                 ImGui.Separator();
                 frame.Mark("part list");
 
@@ -557,12 +572,20 @@ public sealed class PartsPanel
                 settingsContent = ImGui.GetCursorPosY() + ImGui.GetStyle().WindowPadding.Y + 2f;
             }
         }
-        sidePanelContent = MathF.Max(toolsContent, settingsContent);
+        sidePanelContent = ControlsHeightFor(toolsContent, settingsContent);
+
+        // Before the model, as the dropdown was: a row's hover is lit on the model the same frame.
+        if (cols.Drawer > 0f)
+        {
+            ImGui.SameLine();
+            DrawPartDrawer(parts, cols.Drawer, height);
+            frame.Mark("part drawer");
+        }
 
         if (showModelView)
         {
             ImGui.SameLine();
-            DrawParts(height);
+            DrawParts(height, cols.Viewer);
             frame.Mark("model view");
         }
         else
@@ -981,6 +1004,71 @@ public sealed class PartsPanel
 
     /// <summary>How tall the tab's controls need to be, so the window can fit itself again when they grow.</summary>
     public float ControlsHeight => sidePanelContent;
+
+    /// <summary>The part drawer's width bounds, and the least the model keeps beside it, before UI scaling.</summary>
+    private const float MinDrawerWidth = 240f, MaxDrawerWidth = 440f, MinViewerWidth = 200f;
+
+    /// <summary>How far an island's row sits in from its submesh's, before UI scaling.</summary>
+    private const float IslandIndent = 12f;
+
+    /// <summary>
+    /// Whether the part list is open beside the settings. For the session only: it starts closed, as the dropdown it
+    /// replaced did, and is no setting to keep.
+    /// </summary>
+    private bool drawerOpen;
+
+    private readonly DrawerRequest drawerRequest = new();
+
+    /// <summary>The drawer opened or closed since last asked, so the window can widen for it or give the width back.</summary>
+    internal DrawerRequest.Pending? TakeDrawerRequest() => drawerRequest.Take();
+
+    /// <summary>Widths of the settings pane, the part drawer and the model in one Studio row; 0 for one not drawn.</summary>
+    internal readonly record struct StudioColumns(float Settings, float Drawer, float Viewer);
+
+    /// <summary>
+    /// Lay the row out right of the tools: the settings at their fixed width, then the drawer when open, then the
+    /// model when shown. The drawer is as wide as it wants up to what leaves the model <paramref name="minViewer"/>,
+    /// and no narrower than <paramref name="minDrawer"/>. A drawn column never gets 0 or less, which ImGui would read
+    /// as "fill the rest" and let it swallow the next.
+    /// </summary>
+    internal static StudioColumns LayoutColumns(float rowWidth, float itemSpacing, bool showModelView, bool drawerOpen,
+                                                float settingsWidth, float drawerWanted, float minDrawer, float minViewer)
+    {
+        if (!showModelView)
+            return drawerOpen
+                ? new StudioColumns(settingsWidth, MathF.Max(rowWidth - settingsWidth - itemSpacing, 1f), 0f)
+                : new StudioColumns(MathF.Max(rowWidth, 1f), 0f, 0f);
+        if (!drawerOpen)
+            return new StudioColumns(settingsWidth, 0f, MathF.Max(rowWidth - settingsWidth - itemSpacing, 1f));
+
+        float room = rowWidth - settingsWidth - 2f * itemSpacing;
+        float drawer = MathF.Max(MathF.Min(drawerWanted, room - minViewer), MathF.Min(minDrawer, drawerWanted));
+        drawer = MathF.Max(MathF.Min(drawer, room - 1f), 1f);
+        return new StudioColumns(settingsWidth, drawer, MathF.Max(room - drawer, 1f));
+    }
+
+    /// <summary>The drawer's width for its widest row and its padding, within the bounds.</summary>
+    internal static float DrawerWidth(float widestRow, float horizontalPadding, float min, float max)
+        => Math.Clamp(widestRow + horizontalPadding, min, max);
+
+    /// <summary>
+    /// The height the window fits itself to: the tools' and the settings', never the drawer's rows, which scroll
+    /// inside it rather than stretching the window.
+    /// </summary>
+    internal static float ControlsHeightFor(float toolsContent, float settingsContent) => MathF.Max(toolsContent, settingsContent);
+
+    /// <summary>
+    /// How much wider the window should be, unscaled, for the drawer just opened: what it takes beyond the room already
+    /// free beside a model its height holds narrower than its column. Null with the model view off, where the drawer
+    /// takes the settings' spare width and the window has no model to keep the size of.
+    /// </summary>
+    internal static float? DrawerOpenGrow(bool showingModel, float drawerWanted, float itemSpacing,
+                                          float viewerRoom, float viewerNatural, float scale)
+    {
+        if (!showingModel) return null;
+        float free = MathF.Max(viewerRoom - viewerNatural, 0f);
+        return MathF.Max(drawerWanted + itemSpacing - free, 0f) / scale;
+    }
 
     /// <summary>
     /// Ctrl+Z takes back the last brush stroke, saving and redrawing at once. Only while this tab has the keyboard
@@ -2318,11 +2406,11 @@ public sealed class PartsPanel
     // ── the model, and the part list ────────────────────────────────────────
 
     /// <summary>
-    /// The model, right of the settings pane, and the part dropdown in that pane, each driving the other. The list
-    /// also shows parts hidden behind others, their materials, and parts the author already switches (a new switch
-    /// stacks on those).
+    /// The model, right of the settings pane and the part drawer, each driving the other. The list also shows parts
+    /// hidden behind others, their materials, and parts the author already switches (a new switch stacks on those).
     /// </summary>
-    private void DrawParts(float height)
+    /// <param name="columnWidth">The width the row leaves the model, which the image fills up to its own aspect.</param>
+    private void DrawParts(float height, float columnWidth)
     {
         var ps = Strings.Parts;
         var model = parts!;
@@ -2361,7 +2449,7 @@ public sealed class PartsPanel
         // scrollbar comes and goes.
         // Under a brush a click on the model paints; it only reaches a part with Shift held.
         bool brushing = PaintTool;
-        float width = MathF.Min(height * PartViewport.DefaultAspect, ImGui.GetContentRegionAvail().X);
+        float width = MathF.Max(MathF.Min(height * PartViewport.DefaultAspect, columnWidth), 1f);
         if (viewport.Draw(model, new Vector2(width, height)) is { } clicked)
         {
             // Body size has nothing to paint, so a plain click on a part holds or frees it — and must never stage a
@@ -2426,21 +2514,10 @@ public sealed class PartsPanel
         bool refitting = tool == Tool.Retarget;
         bool locking = brushing || refitting;
 
-        // Islands per submesh, so a submesh row can say how many it has and whether to draw them.
-        var islands = model.Parts.Where(p => p.Island >= 0)
-            .GroupBy(p => (p.Mesh, p.Submesh))
-            .ToDictionary(g => g.Key, g => g.Count());
-
-        foreach (var part in model.Parts)
+        foreach (var (part, isIsland, pieces) in ListedRows(model))
         {
-            bool isIsland = part.Island >= 0;
             var owner = (part.Mesh, part.Submesh);
-
-            // A locked island always has a row under a brush, as a ticked one does for a switch.
-            bool listed = moving ? movePart == part.Label
-                        : locking ? Locks.Contains(part.Label) : ticked.Contains(part.Label);
-            if (isIsland && !expanded.Contains(owner) && !listed) continue;
-            if (isIsland) ImGui.Indent(ProteusStyle.S(12f));
+            if (isIsland) ImGui.Indent(ProteusStyle.S(IslandIndent));
 
             if (moving)
             {
@@ -2500,8 +2577,7 @@ public sealed class PartsPanel
             if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) hoveredRow = part.Label;
 
             ImGui.SameLine();
-            ImGui.TextDisabled(string.Format(ps.RowFmt,
-                Path.GetFileName(part.Material.TrimStart('/')), part.TriangleCount));
+            ImGui.TextDisabled(RowText(part));
             if (ImGui.IsItemHovered()) hoveredRow = part.Label;
 
             // Marked on the row: ticking a part the author already switches means both switches must be on.
@@ -2513,18 +2589,16 @@ public sealed class PartsPanel
             }
 
             // The expander sits on the SUBMESH row, because that is the thing being broken up.
-            if (!isIsland && islands.TryGetValue(owner, out var count))
+            if (pieces > 0)
             {
                 ImGui.SameLine();
-                bool open = expanded.Contains(owner);
-                if (ImGui.SmallButton(string.Format(open ? ps.HidePiecesFmt : ps.ShowPiecesFmt, count)
-                                    + $"##x_{part.Label}"))
+                if (ImGui.SmallButton(PiecesText(owner, pieces) + $"##x_{part.Label}"))
                 {
                     if (!expanded.Add(owner)) expanded.Remove(owner);
                 }
             }
 
-            if (isIsland) ImGui.Unindent(ProteusStyle.S(12f));
+            if (isIsland) ImGui.Unindent(ProteusStyle.S(IslandIndent));
 
             if (hoveredRow == part.Label && !brushing && !moving)
             {
@@ -2534,6 +2608,89 @@ public sealed class PartsPanel
         }
 
         rowHovered = hoveredRow;
+    }
+
+    /// <summary>One row of the part list: the part, whether it is an island, and the pieces its expander offers (0: none).</summary>
+    private readonly record struct PartRow(ModelPart Part, bool IsIsland, int Pieces);
+
+    /// <summary>
+    /// The rows the part list draws under the current tool, in order: every submesh, and an island only while its
+    /// submesh is expanded or it is ticked, locked or chosen. Shared by the list and the drawer's width, so the two
+    /// cannot disagree about which rows there are.
+    /// </summary>
+    private List<PartRow> ListedRows(ModelParts model)
+    {
+        bool moving = PartTool;
+        bool locking = PaintTool || tool == Tool.Retarget;
+
+        // Islands per submesh, so a submesh row can say how many it has and whether to draw them.
+        var islands = model.Parts.Where(p => p.Island >= 0)
+            .GroupBy(p => (p.Mesh, p.Submesh))
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        var rows = new List<PartRow>(model.Parts.Count);
+        foreach (var part in model.Parts)
+        {
+            bool isIsland = part.Island >= 0;
+            var owner = (part.Mesh, part.Submesh);
+
+            // A locked island always has a row under a brush, as a ticked one does for a switch.
+            bool listed = moving ? movePart == part.Label
+                        : locking ? Locks.Contains(part.Label) : ticked.Contains(part.Label);
+            if (isIsland && !expanded.Contains(owner) && !listed) continue;
+            rows.Add(new PartRow(part, isIsland, !isIsland && islands.TryGetValue(owner, out var count) ? count : 0));
+        }
+        return rows;
+    }
+
+    /// <summary>A row's material and triangle count.</summary>
+    private static string RowText(ModelPart part)
+        => string.Format(Strings.Parts.RowFmt, Path.GetFileName(part.Material.TrimStart('/')), part.TriangleCount);
+
+    /// <summary>A submesh row's expander: show or hide its pieces.</summary>
+    private string PiecesText((int Mesh, int Submesh) owner, int pieces)
+        => string.Format(expanded.Contains(owner) ? Strings.Parts.HidePiecesFmt : Strings.Parts.ShowPiecesFmt, pieces);
+
+    /// <summary>
+    /// How wide the widest row of <see cref="DrawPartRows"/> comes out, measured the way ImGui lays it out: each
+    /// checkbox or radio a frame-high box, its label after the inner spacing, items apart by the item spacing.
+    /// </summary>
+    private float WidestRow(ModelParts model)
+    {
+        var ps = Strings.Parts;
+        var style = ImGui.GetStyle();
+        float box = ImGui.GetFrameHeight(), inner = style.ItemInnerSpacing.X, gap = style.ItemSpacing.X;
+        float Labelled(string label) => box + (label.Length > 0 ? inner + ImGui.CalcTextSize(label).X : 0f);
+
+        bool moving = PartTool;
+        bool refitting = tool == Tool.Retarget;
+        bool locking = PaintTool || refitting;
+
+        float widest = 0f;
+        foreach (var (part, isIsland, pieces) in ListedRows(model))
+        {
+            float w = isIsland ? ProteusStyle.S(IslandIndent) : 0f;
+            if (moving) w += (IsSkin(part) ? 0f : box + gap) + Labelled(part.Label);
+            else
+            {
+                w += Labelled(part.Label);
+                if (refitting && !IsSkin(part)) w += gap + Labelled(ps.RetargetKeepShape);
+            }
+            w += gap + ImGui.CalcTextSize(RowText(part)).X;
+            if (part.AuthorSwitched && !locking && !moving) w += gap + ImGui.CalcTextSize(ps.AuthorSwitchedTag).X;
+            if (pieces > 0)
+                w += gap + ImGui.CalcTextSize(PiecesText((part.Mesh, part.Submesh), pieces)).X + style.FramePadding.X * 2f;
+            widest = MathF.Max(widest, w);
+        }
+        return widest;
+    }
+
+    /// <summary>The drawer's width for the rows it holds now, scaled.</summary>
+    private float WantedDrawerWidth(ModelParts model)
+    {
+        var style = ImGui.GetStyle();
+        return DrawerWidth(WidestRow(model), style.WindowPadding.X * 2f + style.ScrollbarSize,
+                           ProteusStyle.S(MinDrawerWidth), ProteusStyle.S(MaxDrawerWidth));
     }
 
     /// <summary>The part whose row the pointer is on this frame, lit on the model once the viewport has drawn.</summary>
@@ -2553,20 +2710,28 @@ public sealed class PartsPanel
         rowHovered = null;
     }
 
-    /// <summary>
-    /// The part list folded behind a dropdown at the top of the settings pane: it was most of the window, and is
-    /// wanted only now and then. The preview says what is ticked, so the common case needs no opening.
-    /// </summary>
-    private void DrawPartDropdown(ModelParts model)
+    /// <summary>What the part list is for under the current tool: its tooltip, and the note at the top of the drawer.</summary>
+    private string PartListTip()
     {
         var ps = Strings.Parts;
-        string tip = tool switch
+        return tool switch
         {
             Tool.Navigate => ps.ClickTip,
             Tool.Move or Tool.Rotate or Tool.Scale => ps.MoveListTip,
             Tool.Retarget => ps.RetargetLockListTip,
             _             => ps.BrushLockListTip,
         };
+    }
+
+    /// <summary>
+    /// The part list's header at the top of the settings pane: what is ticked, and a click opens the list as a drawer
+    /// beside the settings. A dropdown here covered the model, the one place that shows what the ticks are on. The
+    /// header says what is ticked, so the common case needs no opening. True when clicked.
+    /// </summary>
+    private bool DrawPartHeader(ModelParts model)
+    {
+        var ps = Strings.Parts;
+        string tip = PartListTip();
 
         // Counted over submesh rows: those are what the closed list would show.
         var rows = model.Parts.Where(p => p.Island < 0).ToList();
@@ -2579,22 +2744,35 @@ public sealed class PartsPanel
             preview = string.Format(ps.PartsTickedFmt, on, rows.Count);
         }
 
-        ImGui.SetNextItemWidth(-1);
-        using (var combo = ImRaii.Combo("##partDropdown", preview, ImGuiComboFlags.HeightLargest))
-        {
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip(tip);
-            if (!combo) return;
+        // IconButtonWithText takes its id from the text, which a tool button may share: the scope keeps this one apart.
+        bool clicked;
+        using (ImRaii.PushId("partDrawer"))
+        using (ProteusStyle.Selected(drawerOpen))
+            clicked = ImGuiComponents.IconButtonWithText(
+                drawerOpen ? FontAwesomeIcon.ChevronDown : FontAwesomeIcon.ChevronRight, preview, FullWidth());
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(tip + "\n\n" + ps.DrawerToggleTip);
+        return clicked;
+    }
 
-            // The popup sizes itself to its rows; the notes wrap at a readable width rather than that of the widest row.
-            ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + ProteusStyle.S(SidePanelWidth));
-            ImGui.TextDisabled(tip);
-            foreach (var (label, count) in model.ShatteredSubmeshes)
-                ImGui.TextDisabled(string.Format(ps.ShatteredFmt, label, count));
-            ImGui.PopTextWrapPos();
+    /// <summary>
+    /// The open part list, a column of its own between the settings and the model, so the model stays in view while
+    /// parts are ticked. Rows wider than it scroll sideways, a long list scrolls down, and neither grows the window.
+    /// </summary>
+    private void DrawPartDrawer(ModelParts model, float width, float height)
+    {
+        var ps = Strings.Parts;
+        using var drawer = ImRaii.Child("##partsDrawer", new Vector2(width, height), true, ImGuiWindowFlags.HorizontalScrollbar);
+        if (!drawer) return;
 
-            ImGui.Spacing();
-            DrawPartRows(model);
-        }
+        // The notes wrap at the drawer's width, never widening it as the rows can.
+        ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + width - ImGui.GetStyle().WindowPadding.X * 2f - ImGui.GetStyle().ScrollbarSize);
+        ImGui.TextDisabled(PartListTip());
+        foreach (var (label, count) in model.ShatteredSubmeshes)
+            ImGui.TextDisabled(string.Format(ps.ShatteredFmt, label, count));
+        ImGui.PopTextWrapPos();
+
+        ImGui.Spacing();
+        DrawPartRows(model);
     }
 
     /// <summary>The tool buttons, in the order they are listed.</summary>

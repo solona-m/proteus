@@ -240,6 +240,48 @@ public sealed class LocalizationTests
         Assert.Contains(sentence, bullet);
     }
 
+    /// <summary>The part drawer's tooltip line is the one new string, and every language has its own words for it.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-part-drawer-9")]
+    public void PartDrawer_strings_are_translated_not_copied(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        const string key = "Parts.Drawer.Toggle.Tip";
+        Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+        Assert.NotEqual(en[key].Message, tr[key].Message);
+    }
+
+    /// <summary>The part list is no longer a dropdown, and no README still says it is.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-part-drawer-9")]
+    public void Readme_says_part_list_not_dropdown(string lang)
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+
+        foreach (string phrase in ReadmePartDropdown[lang])
+            Assert.DoesNotContain(phrase, readme);
+    }
+
+    /// <summary>How each README used to describe the part list as a dropdown: the Studio layout line, then the lock bullet.</summary>
+    private static readonly Dictionary<string, string[]> ReadmePartDropdown = new()
+    {
+        ["en"] = ["parts in a dropdown", "part dropdown"],
+        ["ja"] = ["パーツのドロップダウン"],
+        ["de"] = ["Auswahlliste ganz oben in den Einstellungen", "Teile-Auswahlliste"],
+        ["es"] = ["lista desplegable en la parte superior de los ajustes", "lista desplegable de piezas"],
+        ["fr"] = ["liste déroulante en haut des réglages", "liste déroulante des pièces"],
+        ["ko"] = ["설정 맨 위의 드롭다운", "부위 드롭다운"],
+        ["ru"] = ["выпадающем списке вверху настроек", "выпадающем списке частей"],
+        ["zh"] = ["设置顶部的下拉列表", "部件下拉列表"],
+    };
+
     /// <summary>The Keep shape bullet's bold label in each README.</summary>
     private static readonly Dictionary<string, string> ReadmeKeepShape = new()
     {

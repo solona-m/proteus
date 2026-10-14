@@ -71,7 +71,7 @@ Edits the models of **any** mod you have installed, not just Proteus ones, inclu
 
 Pick a mod, then one of its models. The tab opens on the chest piece you're wearing (or your legs if there's none), and mods and models you're wearing are listed first, in green. Clicking a garment on your character opens its mod and model, vanilla or modded. Every list in the tab can be searched: type part of a name to narrow it. When an item ships a separate model per race, each one is named with its race so you can tell them apart.
 
-The tools are on the left and the chosen tool's settings beside them, with the model's parts in a dropdown at the top of the settings. Tick **Show model view** for a third column with the model on the right.
+The tools are on the left and the chosen tool's settings beside them, with the model's parts behind a button at the top of the settings: click it to open the part list as a column beside them, pushing the model right so it stays in view. Tick **Show model view** for a third column with the model on the right.
 
 **Vanilla gear** you're wearing is listed too, marked *(vanilla)*. The game's own gear has no mod file to edit, so opening it copies it into a new mod, which looks exactly like the original until you change it. Every tool works on that copy. With **Body size** chosen, a vanilla piece opens to be refitted instead, see [Body size](#body-size).
 
@@ -98,7 +98,7 @@ The tools:
 - **Brush size** goes down to 1 mm. `[` and `]` change it, and Shift gives finer steps. The effect is strongest in the middle and fades to nothing at the edge; the brush's reach is drawn as a rainbow on the cloth so you can see it. Brushes work at the same pace at any frame rate. For **Pull out** and **Push in**, **Strength** is how far the middle of the brush moves the surface for each quarter second you hold it; for the other brushes it's how quickly they work. Small is usually right: clothing only has to clear the body by a fraction of a millimetre, and you can always paint the same place again.
 - **Limit** is the furthest the brushes may move any point from where the mod's author put it. Painting stops at the limit, so a held brush can't balloon the garment. Raise it for a bigger change.
 - **Mirror left/right** paints both sides at once.
-- **Skin never moves.** To keep a brush off anything else, lock it: Shift-click the part on your character or the model, or untick it in the part dropdown. A locked part is also hidden, on the model and on your character, so clicks pass through it to what's underneath — lock a skirt to reach the underwear beneath it. Seams welded to a locked part hold too.
+- **Skin never moves.** To keep a brush off anything else, lock it: Shift-click the part on your character or the model, or untick it in the part list. A locked part is also hidden, on the model and on your character, so clicks pass through it to what's underneath — lock a skirt to reach the underwear beneath it. Seams welded to a locked part hold too.
 - **Hair works too.** Hair, face, ears and tail redraw when you let go, rather than showing the stroke as you paint.
 - **Apply to other sizes** copies the edit onto the mod's other files for the same garment, matched by where they sit on it.
 
