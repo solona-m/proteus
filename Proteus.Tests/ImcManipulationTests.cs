@@ -42,6 +42,25 @@ public class ImcManipulationTests
     }
 
     [Fact]
+    public void Effect_only_model_ignores_race()   // [AC-item-vfx-host-6] [EDGE-item-vfx-host-3]
+    {
+        // A race-locked piece (a Miqo'te-only model) refused to an Au Ra woman, as it always was...
+        var garment = new ContentPiece { Models = new() { ["0801"] = "items/c0801e6001_top.mdl" } };
+        Assert.Null(ContentPieceResolver.ResolveForWearerOrEffect(garment, "1401", "1401"));
+
+        // ...but an effect-only placeholder resolves for anyone: it is one invisible point.
+        var effect = new ContentPiece
+        {
+            EffectOnly = true,
+            Models = new() { ["0801"] = "items/c0801a0002_wrs.mdl" },
+        };
+        Assert.Null(ContentPieceResolver.ResolveForWearer(effect, "1401", "1401"));
+        var resolved = ContentPieceResolver.ResolveForWearerOrEffect(effect, "1401", "1401");
+        Assert.Equal("items/c0801a0002_wrs.mdl", resolved?.Path);
+        Assert.Null(resolved?.Code);
+    }
+
+    [Fact]
     public void Stale_effect_import_is_detected()   // [AC-item-vfx-host-8] [EDGE-item-vfx-host-12]
     {
         ProteusMetadata Meta(ContentEffect? effect) => new()

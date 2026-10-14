@@ -113,6 +113,8 @@ public sealed partial class SecondSkinService
         private List<string> hostModelPaths = null!;
         private List<string> appendHostModelPaths = null!;
         private Dictionary<string, string> appendHostSources = null!;
+        /// <summary>Mod folder → its live Penumbra selection, as content resolution read it (null: unread).</summary>
+        private Dictionary<string, IReadOnlyDictionary<string, List<string>>?> modSelections = new(StringComparer.OrdinalIgnoreCase);
         private Result? result;
 
         public ShellSetBuild(SecondSkinService service, string charCode, IReadOnlyList<(OverlayEntry Entry, ResolvedOverlay Overlay)> gearOverlays, string outputRoot, string? bodyType, string? effectsFolder, IReadOnlyDictionary<string, string>? equippedPartModels, IReadOnlyDictionary<string, string>? equippedAccessories, Func<string, bool>? gen2Allowed, int? invisibleGlassesSet, IReadOnlyList<string>? metModels, IReadOnlyDictionary<string, HashSet<string>>? enabledBodyShapes, IReadOnlySet<string>? maskShellMods, IReadOnlyDictionary<string, string>? bareBodyModels, string? drawnRaceCode, IReadOnlySet<string>? activeMaterials, int? emperorRingVariant, int? invisibleGlassesVariant, IReadOnlyList<string>? humanPartModels, IReadOnlyList<(OverlayEntry Entry, ResolvedContent Content)>? contentLayers, IReadOnlyList<OverlayEntry>? allEntries, IReadOnlyDictionary<string, byte[]>? pristineHumanModels, int? shellTexSize, IReadOnlyList<EquippedSlotVariants.Slot>? equippedSlotVariants, IReadOnlySet<string>? hiddenParts = null)
@@ -171,6 +173,7 @@ public sealed partial class SecondSkinService
             ReportUnhosted();
             SmoothBody();
             BuildHostModels();
+            PlaceEffects();
             return Finish();
         }
 
@@ -195,7 +198,13 @@ public sealed partial class SecondSkinService
             // Cleared first, so the field means "as of this build" even when a path below returns early.
             service.UnwearableContent = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-            if (gearOverlays.Count == 0 && contentIn == 0) { result = null; return false; }
+            if (gearOverlays.Count == 0 && contentIn == 0)
+            {
+                // Nothing published, so no effect either: the next one that appears is a change.
+                service._lastEffectKey = string.Empty;
+                result = null;
+                return false;
+            }
             return true;
         }
 
@@ -952,12 +961,16 @@ public sealed partial class SecondSkinService
             {
                 int surfIdx = unitSurface[u];
                 bool carrierOnly = surfaces[surfIdx].Key.RequiresNativeHost;
+                // An effect's IMC entry is only ours to write on an invisible ACCESSORY carrier (see EffectHostPlanner), so its
+                // placeholder goes nowhere else: on a worn ring it would rewrite the player's item for nothing visible.
+                bool effectOnly = contentUnits[u].EffectOnly;
                 int chosen = -1;
                 for (int h = 0; h < hosts.Count && diskBudget > 0; h++)
                 {
                     if (remaining[h] <= 0) continue;
                     // Only a carrier's EQDP may be rewritten, so only a carrier can publish a natively-authored piece undeformed.
                     if (carrierOnly && hosts[h].BaseModel != null) continue;
+                    if (effectOnly && (hosts[h].BaseModel != null || hosts[h].Prefix != 'a')) continue;
                     if (hostClaim[h] is { } claimed && claimed != surfIdx) continue;
                     chosen = h;
                     break;
