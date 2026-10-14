@@ -94,9 +94,9 @@ public sealed class SizeSetStrings
     public readonly string Header = Loc.Localize("SizeSet.Header", "Every size for other bodies") + "###sizeSetHeader";
 
     public readonly string Intro = Loc.Localize("SizeSet.Intro",
-        "Adds every size of the bodies ticked below to this whole mod. Each chest, legs, shoe and glove piece is refitted "
-      + "from the author's first size and saved beside the author's sizes as \"Rue S\", \"YAB Buff L\" and so on. Sizes "
-      + "the mod already has are left alone.");
+        "Adds every size of the bodies ticked below to this whole mod. Each size is refitted from the author's size "
+      + "nearest it, the outfit's other pieces in that option from the same size, and saved beside the author's sizes as "
+      + "\"Rue S\", \"YAB Buff L\" and so on. Sizes the mod already has are left alone.");
 
     public readonly string Ends = Loc.Localize("SizeSet.Ends", "Include shoes and gloves") + "###sizeSetEnds";
 
@@ -115,7 +115,8 @@ public sealed class SizeSetStrings
 
     public readonly string RemakeTip = Loc.Localize("SizeSet.Remake.Tip",
         "Off: a size Proteus already added is left as it is. On: it is refitted again and replaced. The author's own "
-      + "sizes are never touched.");
+      + "sizes are never touched. If you added sizes with an earlier version of Proteus, tick this once: those were cut "
+      + "from the author's first size.");
 
     public readonly string Run = Loc.Localize("SizeSet.Run", "Add the sizes") + "###sizeSetRun";
 
@@ -153,6 +154,16 @@ public sealed class SizeSetStrings
     /// <summary>{0} is the piece.</summary>
     public readonly string UnpairedFmt = Loc.Localize("SizeSet.Unpaired.Fmt",
         "{0}: it is sized in one group with another piece it can't follow, so no sizes were made of it — each size would wear the other piece unrefitted.");
+
+    /// <summary>{0} is the piece, {1} the size.</summary>
+    public readonly string EndNoLeadSourceFmt = Loc.Localize("SizeSet.EndNoLeadSource.Fmt",
+        "{0}: left out of \"{1}\": the author's size the outfit's chest or legs there was cut from couldn't be found or "
+      + "read for it. Tick \"Make again\" to redo the option.");
+
+    /// <summary>{0} is the piece, {1} the size.</summary>
+    public readonly string EndNoLeadSourceRemakeFmt = Loc.Localize("SizeSet.EndNoLeadSourceRemake.Fmt",
+        "{0}: \"{1}\" left as it was: the author's size the outfit's chest or legs there was cut from couldn't be read "
+      + "for it.");
 
     public readonly string NoBodies = Loc.Localize("SizeSet.NoBodies", "No body mods are installed to refit onto.");
 
