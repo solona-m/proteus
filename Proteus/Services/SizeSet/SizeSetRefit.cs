@@ -522,10 +522,12 @@ internal static partial class SizeSetRefit
                     log.Information("[Proteus] size set: {0} {1}: let go of kept piece(s) that would sink moved whole: {2}",
                                     piece.Label, option, released);
 
-                // One save per size: each names the size it was cut from. The first piece to make an option leads it.
+                // One save per size: each names the size it was cut from. The first piece to make an option leads it —
+                // never legs following the chest, which follow it or, when they cannot, fall back to their own nearest:
+                // the shoes and gloves beside them are left out rather than laid over a chest cut from another size.
                 // Stopped while this size was made: it is not saved — Stop keeps what was saved before it.
                 ct.ThrowIfCancellationRequested();
-                bool lead = !leadSources.ContainsKey(leadKey);
+                bool lead = !piece.FollowsChest && !leadSources.ContainsKey(leadKey);
                 if (group.Save(target.Dir, RefitCore.LabelFrom(across ? chosen.Entry.Name : null, [chosen.Pick.Option.Label]),
                                [new BodyRetargetWriter.Refit(option, plan.Model, toLabel)], sourceOption, notes,
                                sourceFilesWin: request.Remake && lead)
@@ -607,6 +609,9 @@ internal static partial class SizeSetRefit
         /// </summary>
         internal bool AlreadyThere(string option, bool remake)
             => existing.Contains(option) && (!ours.Contains(option) || (doneHere.Contains(option) && !remake));
+
+        /// <summary>Whether an option of ours already carries a refit of this piece.</summary>
+        internal bool Carries(string option) => doneHere.Contains(option);
 
         /// <summary>What an option of ours that carries this piece names it was cut from ("Yet Another Body+ — Large"),
         /// or null.</summary>

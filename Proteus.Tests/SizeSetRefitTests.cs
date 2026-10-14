@@ -277,6 +277,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
 
     [LocalDataFact(Bibo)]
     [Trait("Plan", "AC-keep-ends-studio-8")]
+    [Trait("Plan", "EDGE-bulk-nearest-source-25")]
     public void Unpaired_ends_get_a_note_and_no_sizes()   // [AC-keep-ends-studio-8]
     {
         // Each would add sizes of its own, every one wearing the other piece unrefitted: left alone, and said so.
@@ -344,6 +345,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     [LocalDataFact(Bibo)]
     [Trait("Plan", "AC-keep-ends-studio-9")]
     [Trait("Plan", "EDGE-keep-ends-studio-1")]
+    [Trait("Plan", "EDGE-bulk-nearest-source-3")]
     public void Unreadable_ends_are_noted()   // [AC-keep-ends-studio-9] [EDGE-keep-ends-studio-1]
     {
         string root = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
@@ -1027,6 +1029,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
 
     [LocalDataFact(Heartthrob, LocalData.ShiftPack, Bibo, Yab, Neolithe)]
     [Trait("Plan", "AC-keep-ends-studio-8")]
+    [Trait("Plan", "EDGE-bulk-nearest-source-7")]
     public void A_shoe_beside_a_chest_keeps_the_authors_where_the_size_has_no_legs()   // [AC-keep-ends-studio-8]
     {
         // Neolithe XS is worn with the Small hips: no legs of its own. The shoe in that size stays the author's, quietly,
@@ -1954,6 +1957,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     /// texture coordinate) and the pair is refused, so the hem is left on the source's hips.
     /// </summary>
     [LocalDataFact(TheBodySe, TheBodySeX)]
+    [Trait("Plan", "EDGE-bulk-nearest-source-16")]
     public void A_man_s_garment_gains_the_men_s_bodies()
     {
         string copy = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
@@ -1985,6 +1989,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
 
     /// <summary>Cloth with no skin under it has nothing to read a body from: the twill trousers get no sizes.</summary>
     [LocalDataFact(TwillTrousers, TheBodySe, TheBodySeX)]
+    [Trait("Plan", "EDGE-bulk-nearest-source-3")]
     public void A_garment_with_no_skin_is_refused()
     {
         string copy = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
@@ -2008,6 +2013,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     /// TBSE-X from 13% of shared points, and refit from a body the shirt was never made on.
     /// </summary>
     [LocalDataFact(CasualFitShirt, TheBodySe, TheBodySeX)]
+    [Trait("Plan", "EDGE-bulk-nearest-source-3")]
     public void A_garment_made_on_no_installed_body_is_refused()
     {
         string copy = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));

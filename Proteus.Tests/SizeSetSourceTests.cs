@@ -456,6 +456,59 @@ public class SizeSetSourceTests(ITestOutputHelper output)
     }
 
     /// <summary>
+    /// An outfit sized as one: a "Size" group whose YAB Small and YAB Large each give the top and the SAME legs file, and
+    /// Small a texture only it has. The legs of Rue L follow the chest's choice, YAB Large — found through the manifest,
+    /// as the file shared by both options is listed once, under Small — and carry Large's files, never Small's.
+    /// </summary>
+    [LocalDataFact(Yab, Rue, StarlightBikini)]
+    [Trait("Plan", "AC-bulk-nearest-source-3")]
+    [Trait("Plan", "EDGE-bulk-nearest-source-10")]
+    public void Legs_following_a_chest_take_the_chests_option_through_the_manifest()
+    {
+        const string top = "chara/equipment/e0194/model/c0201e0194_top.mdl";
+        const string legs = "chara/equipment/e0194/model/c0201e0194_dwn.mdl";
+        const string material = "chara/equipment/e0194/material/v0001/mt_c0201e0194_top_a.mtrl";
+        const string smallOnly = "chara/equipment/e0194/texture/v01_c0201e0194_top_s.tex";
+        string author = LocalData.Path(StarlightBikini);
+        string root = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            void Copy(string from, string to)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(root, to))!);
+                File.Copy(Path.Combine(author, from), Path.Combine(root, to));
+            }
+            Copy(@"top size\yab small\chara\equipment\e0194\model\c0201e0194_top.mdl", @"small\top.mdl");
+            Copy(@"top size\yab large\chara\equipment\e0194\model\c0201e0194_top.mdl", @"large\top.mdl");
+            Copy(@"bottom size\yab wc\chara\equipment\e0194\model\c0201e0194_dwn.mdl", @"shared\dwn.mdl");
+            File.WriteAllText(Path.Combine(root, PenumbraModMeta.MetaFile), $$"""
+                { "FileVersion": 4, "Name": "Outfit",
+                  "DefaultData": { "Files": {}, "FileSwaps": {}, "Manipulations": [] },
+                  "Groups": [
+                    { "Version": 0, "Name": "Size", "Type": "Single", "Priority": 0, "DefaultSettings": 0, "Options": [
+                      { "Name": "YAB Small", "Files": { "{{top}}": "small\\top.mdl", "{{legs}}": "shared\\dwn.mdl",
+                                                       "{{material}}": "small\\top.mtrl", "{{smallOnly}}": "small\\only.tex" } },
+                      { "Name": "YAB Large", "Files": { "{{top}}": "large\\top.mdl", "{{legs}}": "shared\\dwn.mdl",
+                                                       "{{material}}": "large\\top.mtrl" } } ] } ] }
+                """);
+            Assert.Single(SizeSetRefit.PiecesOf(root).Single(p => p.Slot == "_dwn").Options);
+
+            Run(root, ["rue"], remake: false, Yab, Rue);
+            Assert.StartsWith("Rue L from YAB Large", SourceOf("Rue L"));
+            Assert.Contains(logged, l => l.Args.Length > 1 && (string)l.Args[0] == "Legs — e0194"
+                                         && l.Args[1] as string == "Rue L from \"YAB Large\", as the outfit's lead piece in that option was");
+            var rueL = PenumbraModMeta.TryReadFileOptions(root, "Size")!.Single(o => o.Name == "Rue L").Files;
+            Assert.StartsWith(BodyRetargetWriter.Subfolder, rueL[legs], StringComparison.OrdinalIgnoreCase);
+            Assert.Equal("large/top.mtrl", rueL[material].Replace('\\', '/'));
+            Assert.False(rueL.ContainsKey(smallOnly), "the legs carried a file only YAB Small gives into Rue L");
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>
     /// Sizes of several bodies in one group: Abyss lists Neolithe XS–XL before its YAB ones. Rue Large is cut from YAB
     /// Large, not the first option.
     /// </summary>

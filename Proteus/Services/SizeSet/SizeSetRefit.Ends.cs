@@ -228,8 +228,10 @@ internal static partial class SizeSetRefit
                     if (why != null)
                     {
                         Note($"{option} left out: {why}");
-                        notes.Add(string.Format(request.Remake ? Strings.SizeSet.EndNoLeadSourceRemakeFmt
-                                                               : Strings.SizeSet.EndNoLeadSourceFmt, piece.Label, option));
+                        // "Left as it was" only of a refit an earlier run made there; one never made says to make it.
+                        notes.Add(string.Format(request.Remake && group.Carries(option) ? Strings.SizeSet.EndNoLeadSourceRemakeFmt
+                                                                                        : Strings.SizeSet.EndNoLeadSourceFmt,
+                                                piece.Label, option));
                         continue;
                     }
                     (from, sourceOption) = (led!, leadOption);

@@ -270,8 +270,9 @@ internal static partial class SizeSetRefit
                     Choices.Add(c);
                     continue;
                 }
-                // Read as the very size another already was: it would only tie with it, and lose on the author's order.
-                if (Choices.Any(o => string.Equals(o.Pick!.Dir, c.Pick!.Dir, StringComparison.OrdinalIgnoreCase)
+                // Read as the very size another already was, rigged alike: it would only tie with it, and lose on the
+                // author's order. Rigged otherwise, it is kept: a target rigged like it chooses among those alone.
+                if (Choices.Any(o => o.Yas == c.Yas && string.Equals(o.Pick!.Dir, c.Pick!.Dir, StringComparison.OrdinalIgnoreCase)
                                      && RefitCore.Normal(o.Pick.Option.Rel) == RefitCore.Normal(c.Pick.Option.Rel)))
                 {
                     note($"{c.Name} reads as the same size as another of the author's; not measured apart");

@@ -471,6 +471,34 @@ public class BodyRetargetWriterTests : IDisposable
         Assert.Equal("small/top.mtrl", PenumbraModMeta.TryReadFileOptions(root, TopSize)!.Single(o => o.Name == "Small").Files[MaterialPath]);
     }
 
+    /// <summary>The same in a group of Proteus's own, which the writer rewrites whole rather than appending to.</summary>
+    [Fact]
+    [Trait("Plan", "AC-bulk-nearest-source-6")]
+    [Trait("Plan", "EDGE-bulk-nearest-source-21")]
+    public void Made_again_in_a_group_of_ours_its_source_s_files_win_too()
+    {
+        Assert.True(BodyRetargetWriter.Save(root, Group, GamePath, "Rue+", "Small",
+                                            [new BodyRetargetWriter.Refit("Rue L", [1], "Large")]).Ok);
+        Assert.False(BodyRetargetWriter.IsAuthorGroup(root, Group));
+        // An option of the group the next save is cut from, and what "Rue L" carried before.
+        var meta = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(Path.Combine(root, PenumbraModMeta.MetaFile)))!;
+        var options = meta["Groups"]!.AsArray().Single(g => (string?)g!["Name"] == Group)!["Options"]!.AsArray();
+        options.Single(o => (string?)o!["Name"] == "Rue L")!["Files"]![MaterialPath] = "old/top.mtrl";
+        options.Add(System.Text.Json.Nodes.JsonNode.Parse($$"""{ "Name": "Source", "Files": { "{{MaterialPath}}": "source/top.mtrl" } }"""));
+        File.WriteAllText(Path.Combine(root, PenumbraModMeta.MetaFile), meta.ToJsonString());
+        string Material() => PenumbraModMeta.TryReadFileOptions(root, Group)!.Single(o => o.Name == "Rue L").Files[MaterialPath];
+
+        Assert.True(BodyRetargetWriter.Save(root, Group, GamePath, "Rue+", "Source",
+                                            [new BodyRetargetWriter.Refit("Rue L", [2], "Large")], fromOption: "Source").Ok);
+        Assert.Equal("old/top.mtrl", Material());
+        Assert.True(BodyRetargetWriter.Save(root, Group, GamePath, "Rue+", "Source",
+                                            [new BodyRetargetWriter.Refit("Rue L", [3], "Large")], fromOption: "Source",
+                                            sourceFilesWin: true).Ok);
+        Assert.Equal("source/top.mtrl", Material());
+        var files = PenumbraModMeta.TryReadFileOptions(root, Group)!.Single(o => o.Name == "Rue L").Files;
+        Assert.Equal([3], File.ReadAllBytes(Path.Combine(root, files[GamePath])));
+    }
+
     [Fact]
     public void A_size_saved_into_a_multi_choice_list_joins_it_beside_the_piece_it_was_cut_from()
     {
