@@ -878,11 +878,6 @@ internal static class Program
     }
 
     /// <summary>
-    /// How far the skin pokes through the MIDDLE of big cloth triangles (an edge over 15 mm): per such triangle, the
-    /// furthest a skin vertex of the given models that projects inside it lies on the cloth's outer side of its plane.
-    /// <c>--measure --face-poke --garment g.mdl --bodies a.mdl;b.mdl</c>.
-    /// </summary>
-    /// <summary>
     /// The garment's own skin standing outside the cloth over it (<see cref="SkinThroughCloth"/>): what shows through in
     /// game, by cloth part and by 5 cm of height. Catches cloth tessellated unlike the skin under it, which vertex checks
     /// miss — skin bulging between the cloth's vertices.
@@ -901,6 +896,11 @@ internal static class Program
         return 0;
     }
 
+    /// <summary>
+    /// How far the skin pokes through the MIDDLE of big cloth triangles (an edge over 15 mm): per such triangle, the
+    /// furthest a skin vertex of the given models that projects inside it lies on the cloth's outer side of its plane.
+    /// <c>--measure --face-poke --garment g.mdl --bodies a.mdl;b.mdl</c>.
+    /// </summary>
     private static int MeasureFacePoke(Dictionary<string, string> opts)
     {
         var garment = ModelPartReader.Read(File.ReadAllBytes(Required(opts, "garment"))) ?? throw new UsageException("unreadable");

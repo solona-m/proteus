@@ -32,7 +32,7 @@ public class LaurelTightsRegressionLocalTests(ITestOutputHelper output)
 
     /// <param name="Final">Each garment node's move at the solve's last stage, by node: compared node for node, since the
     /// written models' vertex numbering differs wherever the hidden skin cut differs.</param>
-    private sealed record Refitted(int Folded, int Inside, IReadOnlyList<SkinThroughCloth.Point> Through,
+    private sealed record Refitted(int Pushed, int Folded, int Inside, IReadOnlyList<SkinThroughCloth.Point> Through,
                                    SecondSkinWriter.Vec3[] Final, int[] Tights);
 
     /// <summary>Skin left through the tights below the lace band, as measured 2026-10-14: 7 points behind the knee
@@ -66,19 +66,20 @@ public class LaurelTightsRegressionLocalTests(ITestOutputHelper output)
         string source = bodies.First(b => string.Equals(b.Dir, from.Dir, StringComparison.OrdinalIgnoreCase)).Catalog.PathOf(from.Option);
         string target = BodySizeCatalog.ResolveCaseInsensitive(LocalData.Path(Rue), WatermelonA);
         Assert.Null(BodyRetarget.BuildPair("_dwn", source, target, "_dwn", false, null, null, null, out var pair));
+        Assert.False(pair.Correspondence.SameMesh, "the bodies must be two meshes, or the rule never runs");
         return (garment, bytes, pair, target);
     }
 
-    private static Refitted Measure(ModelParts garment, BodyRetarget.SlotPair pair, string target, byte[] model,
+    private static Refitted Measure(ModelParts garment, BodyRetarget.SlotPair pair, string target, BodyRetarget.Planned plan,
                                     SecondSkinWriter.Vec3[] final)
     {
         var sets = BodyRetarget.Sets.From(garment, new HashSet<int>(),
                                           BodyRetarget.PartedSkinMeshes(garment, [pair], "_dwn", true, null));
-        var drawn = ModelPartReader.Read(model)!;
+        var drawn = ModelPartReader.Read(plan.Model)!;
         var (_, outside) = SkinThroughCloth.Find(drawn);
         var tights = garment.Parts.Where(p => p.Island < 0 && p.Material.Contains("_dwn_c", StringComparison.Ordinal))
                                   .SelectMany(p => p.Triangles).Select(v => sets.NodeOf[v]).Distinct().ToArray();
-        return new Refitted(BodyRetarget.FoldedTriangles(sets, final), BodySizeMatch.ClothAgainst(drawn, target)!.Value.Inside,
+        return new Refitted(plan.Report.Pushed, BodyRetarget.FoldedTriangles(sets, final), BodySizeMatch.ClothAgainst(drawn, target)!.Value.Inside,
                             outside.Where(o => o.At.Y < LaceBand).ToList(), final, tights);
     }
 
@@ -96,7 +97,7 @@ public class LaurelTightsRegressionLocalTests(ITestOutputHelper output)
             garment, bytes, [pair], "_dwn", across: true, gameGear: false, out _,
             trace: (s, d) => { if (s == "layer-order") final = d; }));
         Assert.NotNull(final);
-        return Measure(garment, pair, target, plan.Model, final!);
+        return Measure(garment, pair, target, plan, final!);
     }
 
     private Refitted Studio(BodyRetarget.Tuning tuning)
@@ -107,7 +108,7 @@ public class LaurelTightsRegressionLocalTests(ITestOutputHelper output)
             garment, bytes, [pair], "_dwn", held: new HashSet<int>(), replaceSkin: true, acrossBodies: true,
             cutHidden: true, trace: (s, d) => { if (s == "layer-order") final = d; }));
         Assert.NotNull(final);
-        return Measure(garment, pair, target, plan.Model, final!);
+        return Measure(garment, pair, target, plan, final!);
     }
 
     private void NoThighThrough(string what, Refitted before, Refitted now)
@@ -118,6 +119,8 @@ public class LaurelTightsRegressionLocalTests(ITestOutputHelper output)
                        + $"(deepest {deepest * 1000f:F2} mm); folded {before.Folded} -> {now.Folded}; "
                        + $"inside {before.Inside} -> {now.Inside}; tights moved by the rule at most {lift * 1000f:F2} mm");
         Assert.True(before.Through.Count > 100, $"the defect as reported: {before.Through.Count} points before");
+        // The snapped tights join the push: more nodes pushed, by a hair each where they were already clear.
+        Assert.True(now.Pushed > before.Pushed, $"{now.Pushed} pushed, {before.Pushed} before");
         Assert.True(now.Through.Count <= MostLeft, $"{now.Through.Count} points still through");
         Assert.True(deepest <= DeepestLeft, $"skin still {deepest * 1000f:F2} mm through");
         Assert.True(now.Folded <= before.Folded + MostNewFolds, $"{now.Folded} folded, {before.Folded} before");
@@ -143,6 +146,7 @@ public class LaurelTightsRegressionLocalTests(ITestOutputHelper output)
         string source = BodySizeCatalog.ResolveCaseInsensitive(LocalData.Path(Neolithe), "neobelly legs - smallclothes/gen c small.mdl");
         string target = BodySizeCatalog.ResolveCaseInsensitive(LocalData.Path(Neolithe), "default legs - smallclothes/gen c small.mdl");
         Assert.Null(BodyRetarget.BuildPair("_dwn", source, target, "_dwn", false, null, null, null, out var pair));
+        Assert.False(pair.Correspondence.SameMesh, "the bodies must be two meshes, or the rule never runs");
         Refitted Run(BodyRetarget.Tuning tuning)
         {
             SecondSkinWriter.Vec3[]? final = null;
@@ -150,7 +154,7 @@ public class LaurelTightsRegressionLocalTests(ITestOutputHelper output)
                 garment, bytes, [pair], "_dwn", across: true, gameGear: false, out _,
                 trace: (s, d) => { if (s == "layer-order") final = d; }));
             Assert.NotNull(final);
-            return Measure(garment, pair, target, plan.Model, final!);
+            return Measure(garment, pair, target, plan, final!);
         }
         var before = Run(Before);
         var now = Run(new BodyRetarget.Tuning());

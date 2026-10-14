@@ -94,6 +94,39 @@ public class SkinThroughClothTests
         Assert.Empty(outside);
     }
 
+    /// <summary>A fan of four cloth faces around V = (20, 10) mm on the cloth's lower hem, 1 mm above the skin; the two
+    /// middle faces meet V along edges both share. The skin at (20, 5) raised to 1.5 mm is nearest V itself — past the
+    /// hem, whichever face around V the search reads first.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [Trait("Plan", "EDGE-snap-push-6")]
+    public void Skin_past_a_hem_corner_is_not_through_whatever_face_comes_first(bool middleFirst)
+    {
+        var plain = Model(raise: (20f, 5f, 1.5f), cloth: false);
+        var skin = plain.Parts.Single(p => p.Island < 0);
+        var skinPos = Enumerable.Range(0, plain.Positions.Length / 3)
+                                .Select(i => new Vector3(plain.Positions[i * 3], plain.Positions[i * 3 + 1], plain.Positions[i * 3 + 2]))
+                                .ToArray();
+        // V, L, R, TL, T, TR.
+        Vector3[] fan = [new(0.020f, 0.010f, 0.001f), new(0.010f, 0.010f, 0.001f), new(0.030f, 0.010f, 0.001f),
+                         new(0.010f, 0.030f, 0.001f), new(0.020f, 0.030f, 0.001f), new(0.030f, 0.030f, 0.001f)];
+        int[] outer = [0, 3, 1, 0, 2, 5];   // V-TL-L, V-R-TR: each with a hem edge at V
+        int[] middle = [0, 4, 3, 0, 5, 4];  // V-T-TL, V-TR-T: both edges at V shared
+        int[] tris = middleFirst ? [.. middle, .. outer] : [.. outer, .. middle];
+        (string, float)[]?[] Bones(int count) => Enumerable.Repeat<(string, float)[]?>([("j_kosi", 1f)], count).ToArray();
+        var model = ModelPartReader.Read(SyntheticModel.BuildSurface([],
+            new SyntheticModel.SurfaceMesh(Skin, skinPos, Enumerable.Repeat(Vector3.UnitZ, skinPos.Length).ToArray(),
+                                           new Vector2[skinPos.Length], Bones(skinPos.Length), [(0u, skin.Triangles)]),
+            new SyntheticModel.SurfaceMesh(Cloth, fan, Enumerable.Repeat(Vector3.UnitZ, fan.Length).ToArray(),
+                                           new Vector2[fan.Length], Bones(fan.Length), [(0u, tris)])))!;
+
+        var (covered, outside) = SkinThroughCloth.Find(model);
+
+        Assert.True(covered > 0);
+        Assert.Empty(outside);
+    }
+
     [Fact]
     [Trait("Plan", "EDGE-snap-push-7")]
     public void A_model_without_cloth_reports_nothing()

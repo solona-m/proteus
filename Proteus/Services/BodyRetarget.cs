@@ -942,7 +942,9 @@ internal static partial class BodyRetarget
 
         // Cloth the transfer snapped onto a body vertex is the surface itself, and stays out — unless the body it is
         // drawn over is tessellated otherwise (see SnappedLandsElsewhere). Not with clearBody: there the standoff is the
-        // full clearance, a node on the surface really is a coin flip, and it was never measured.
+        // full clearance, a node on the surface really is a coin flip, and it was never measured. And only when the
+        // garment's OWN slot is swapped: a shoe keeping its feet that swaps only its legs (swapSlot) was never measured
+        // either, and keeps the old rule.
         bool pushSnapped = !clearBody && !Tuned.NoSnapPush && SnappedLandsElsewhere(pairs, ownSlotSwapped);
         var pushable = new List<int>(sets.ClothNodes.Length);
         foreach (int n in sets.ClothNodes)

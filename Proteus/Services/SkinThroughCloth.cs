@@ -71,6 +71,12 @@ internal static class SkinThroughCloth
         }
         bool Shared(int x, int y) => edgeUses.GetValueOrDefault(EdgeKey(x, y)) >= 2;
 
+        // A corner on a hem: every face around it reaches the same nearest point there, and whichever came first must
+        // not decide whether a point past the hem counts — so a hem corner is judged as the hem, whatever face it is read off.
+        var hemCorner = new HashSet<int>();
+        foreach (var ((x, y), uses) in edgeUses)
+            if (uses < 2) { hemCorner.Add(x); hemCorner.Add(y); }
+
         (int, int, int) Cell(Vector3 p) => ((int)MathF.Floor(p.X / reach), (int)MathF.Floor(p.Y / reach), (int)MathF.Floor(p.Z / reach));
         var grid = new Dictionary<(int, int, int), List<int>>();
         for (int i = 0; i < tris.Count; i++)
@@ -113,8 +119,15 @@ internal static class SkinThroughCloth
             if (bestTri < 0 || best > reach) continue;
 
             var (ta, tb, tc, label) = tris[bestTri];
+            // On a corner (two weights near nothing): past the hem if that corner is on one.
+            int offCount = (bu < OnEdge ? 1 : 0) + (bv < OnEdge ? 1 : 0) + (bw < OnEdge ? 1 : 0);
+            if (offCount >= 2)
+            {
+                int corner = bu >= OnEdge ? ta : bv >= OnEdge ? tb : tc;
+                if (hemCorner.Contains(corner)) continue;
+            }
             // On an edge only one face uses: past the hem. (u weighs corner a, so a small u is the edge b–c.)
-            if ((bu < OnEdge && !Shared(tb, tc)) || (bv < OnEdge && !Shared(tc, ta)) || (bw < OnEdge && !Shared(ta, tb)))
+            else if ((bu < OnEdge && !Shared(tb, tc)) || (bv < OnEdge && !Shared(tc, ta)) || (bw < OnEdge && !Shared(ta, tb)))
                 continue;
 
             var face = Vector3.Cross(P(tb) - P(ta), P(tc) - P(ta));
