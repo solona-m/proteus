@@ -57,11 +57,8 @@ public class PioneerBottomsRefitTests(ITestOutputHelper output)
     /// the cut kept Neolithe's skin a whole body triangle past it, under faces 60-75 mm across lying on the skin. Skin the
     /// cloth crowds — within 0.5 mm under it, or already through it — is what shows.
     /// </summary>
-    [LocalDataFact(LocalData.GameData, LocalData.Mods + ":Neolithe [ALL IN ONE]")]
-    public void The_new_skin_stops_under_the_hem_instead_of_showing_through_it()
+    private void AssertTheNewSkinStopsUnderTheHem(ModelParts refit)
     {
-        var refit = RefitOntoNeolitheGenCSmall();
-
         var cloth = new List<(Vector3, Vector3, Vector3)>();
         var skin = new List<(Vector3 A, Vector3 B, Vector3 C, Vector3 Out)>();
         foreach (var part in refit.Parts.Where(p => p.Island < 0))
@@ -106,11 +103,15 @@ public class PioneerBottomsRefitTests(ITestOutputHelper output)
     /// were skin, and the hem's edges sank 5 mm into it between them; skin cut back from the buried edge left a gap
     /// under it. Looked at from behind, a slit is a point whose nearest surface is far behind the surface around it,
     /// beside the skin.
+    /// <para/>
+    /// One refit, both reports: the new skin stops under the hem (<see cref="AssertTheNewSkinStopsUnderTheHem"/>) and no
+    /// slit opens at the back.
     /// </summary>
     [LocalDataFact(LocalData.GameData, LocalData.Mods + ":Neolithe [ALL IN ONE]")]
-    public void No_slit_opens_between_the_hem_and_the_skin_at_the_back()
+    public void The_new_skin_stops_under_the_hem_and_no_slit_opens_at_the_back()
     {
         var refit = RefitOntoNeolitheGenCSmall();
+        AssertTheNewSkinStopsUnderTheHem(refit);
 
         // From behind (looking along +z, nearest = least z), the band from the stocking tops to above the hem.
         const float Step = 0.0005f, X0 = -0.16f, X1 = 0.16f, Y0 = 0.80f, Y1 = 0.90f;

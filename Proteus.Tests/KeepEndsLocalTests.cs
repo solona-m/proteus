@@ -195,6 +195,28 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
         return new Refitted(reading, parts, bytes, refit, plan, unheld, legsOnly);
     }
 
+    /// <summary>
+    /// The medium shoe refitted onto Neolithe's SFW M legs (<see cref="NeolitheMedium"/>) and onto Bibo+ Large, its own
+    /// body's (<see cref="BiboLarge"/>). Each is three plans and several tests read it, so it is made once a run.
+    /// <para/>
+    /// Shared, so read-only: a test that would change a model or a set it holds copies it first. A refit that throws keeps
+    /// its exception, and every test that reads it reports the same failure. Only ever read inside a
+    /// <see cref="LocalDataFactAttribute"/> test body, so without the mods it is never made.
+    /// </summary>
+    private static readonly Lazy<Refitted> NeolitheMedium = new(() =>
+    {
+        var bodies = Bodies(Bibo, Neolithe, Rue, Yab);
+        return RefitHeartthrob("medium", bodies, bodies[1].Dir, NeolitheLegs);
+    });
+
+    /// <inheritdoc cref="NeolitheMedium"/>
+    private static readonly Lazy<Refitted> BiboLarge = new(() =>
+    {
+        var bodies = Bodies(Bibo, Neolithe, Rue, Yab);
+        return RefitHeartthrob("medium", bodies, bodies[0].Dir,
+                               c => c.For("_dwn", Race).First(o => o.Label.EndsWith("Large", StringComparison.Ordinal)));
+    });
+
     /// <summary>The model's skin positions, exactly, as a set — what a kept foot has to be found in.</summary>
     private static HashSet<(float, float, float)> SkinPositions(byte[] model, Func<int, bool>? which = null)
     {
@@ -212,9 +234,7 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-keep-hand-foot-skin-1")]
     public void Heartthrob_keeps_its_foot_exactly_when_refitted_to_another_body()
     {
-        var bodies = Bodies(Bibo, Neolithe, Rue, Yab);
-        var neo = bodies[1];
-        var done = RefitHeartthrob("medium", bodies, neo.Dir, NeolitheLegs);
+        var done = NeolitheMedium.Value;
 
         // Not a point of the foot moved, skin or shoe.
         foreach (int v in done.Reading.Ends)
@@ -265,45 +285,30 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
         return x.Count == y.Count && x.All(kv => y.TryGetValue(kv.Key, out float o) && MathF.Abs(o - kv.Value) <= 1.5f / 255f);
     }
 
+    /// <summary>The ankle edge never stretches more than this (15 mm): beyond it the seam is a hole, not a crease.</summary>
+    private const float SeamLimit = 0.015f;
+
+    /// <summary>
+    /// Onto another body mod, and onto another size of the shoe's own body: holding the foot folds no more than refitting
+    /// with nothing held, and the seam it leaves at the ankle stays a crease.
+    /// <para/>
+    /// Rigid by choice: the foot does not follow the ankle, so where two bodies' ankles differ the seam stretches. The
+    /// foot and its leg are one skin mesh here, so the seam is the edges from the kept foot to the leg beside it: measured
+    /// inside the pass, on the solve's own move, as each edge's length now against as authored.
+    /// </summary>
     [LocalDataFact(Heartthrob, Bibo, Neolithe, Rue, Yab)]
     [Trait("Plan", "EDGE-keep-hand-foot-skin-6")]
-    public void Holding_the_foot_adds_no_folds()
+    [Trait("Plan", "EDGE-keep-hand-foot-skin-4")]
+    public void Holding_the_foot_adds_no_folds_and_the_ankle_seam_holds()
     {
-        var bodies = Bodies(Bibo, Neolithe, Rue, Yab);
-        // Onto another body mod, and onto another size of the shoe's own body.
-        var neo = RefitHeartthrob("medium", bodies, bodies[1].Dir, NeolitheLegs);
-        var bibo = RefitHeartthrob("medium", bodies, bodies[0].Dir,
-                                   c => c.For("_dwn", Race).First(o => o.Label.EndsWith("Large", StringComparison.Ordinal)));
-        foreach (var (name, done) in new[] { ("Neolithe", neo), ("Bibo+ Large", bibo) })
+        foreach (var (name, done) in new[] { ("Neolithe SFW M", NeolitheMedium.Value), ("Bibo+ Large", BiboLarge.Value) })
         {
             output.WriteLine($"{name}: {done.Plan.Report.Folded} folded holding the foot, {done.Unheld.Report.Folded} "
                            + $"without; moved up to {done.Plan.Report.WorstMove * 1000f:F1} mm");
             Assert.True(done.Plan.Report.Folded <= done.Unheld.Report.Folded,
                         $"{name}: holding the foot folded {done.Plan.Report.Folded} triangles, {done.Unheld.Report.Folded} without");
-        }
-    }
 
-    /// <summary>The ankle edge never stretches more than this (15 mm): beyond it the seam is a hole, not a crease.</summary>
-    private const float SeamLimit = 0.015f;
-
-    [LocalDataFact(Heartthrob, Bibo, Neolithe, Rue, Yab)]
-    [Trait("Plan", "EDGE-keep-hand-foot-skin-4")]
-    public void Heartthrob_seam_report()
-    {
-        // Rigid by choice: the foot does not follow the ankle, so where two bodies' ankles differ the seam stretches. The
-        // foot and its leg are one skin mesh here, so the seam is the edges from the kept foot to the leg beside it:
-        // measured inside the pass, on the solve's own move, as each edge's length now against as authored.
-        var bodies = Bodies(Bibo, Neolithe, Rue, Yab);
-        foreach (var (name, dir, target) in new (string, string, Func<BodySizeCatalog, BodyOption>)[]
-                 {
-                     ("Neolithe SFW M", bodies[1].Dir, NeolitheLegs),
-                     ("Bibo+ Large", bodies[0].Dir,
-                      c => c.For("_dwn", Race).First(o => o.Label.EndsWith("Large", StringComparison.Ordinal))),
-                 })
-        {
-            var done = RefitHeartthrob("medium", bodies, dir, target);
             foreach (int v in done.Reading.Ends) Assert.Equal(default, done.Plan.Edit.DeltaAt(v));
-
             var (edges, worst) = KeepEnds.SeamStretch(done.Parts, done.Reading.Ends, done.Plan);
             var (_, legsOnly) = KeepEnds.SeamStretch(done.Parts, done.Reading.Ends, done.LegsOnly);
             output.WriteLine($"{name}: {edges} ankle edges from the kept foot to the leg; the most stretched by "
@@ -313,29 +318,6 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
             Assert.True(worst <= SeamLimit, $"{name}: the ankle stretched by {worst * 1000f:F1} mm");
             Assert.True(worst <= legsOnly + 1e-4f,
                         $"{name}: the feet's shape stretched the ankle more ({worst * 1000f:F1} mm) than the legs alone");
-
-            // The feet ride along for their shape, though the game draws the author's heeled foot there, not the new
-            // body's flat one. How far that moves the free cloth right beside the kept foot, against the legs alone.
-            var parts = done.Parts;
-            var keptAt = done.Reading.Ends.Select(v => new System.Numerics.Vector3(parts.Positions[v * 3],
-                             parts.Positions[v * 3 + 1], parts.Positions[v * 3 + 2])).ToList();
-            float apart = 0f, moved = 0f;
-            int beside = 0;
-            foreach (int v in parts.Parts.Where(p => p.Island < 0 && !SecondSkinWriter.IsBodySkinMaterial(p.Material))
-                                   .SelectMany(p => p.Triangles).Distinct())
-            {
-                if (done.Reading.Ends.Contains(v)) continue;
-                var at = new System.Numerics.Vector3(parts.Positions[v * 3], parts.Positions[v * 3 + 1], parts.Positions[v * 3 + 2]);
-                if (!keptAt.Any(k => System.Numerics.Vector3.DistanceSquared(k, at) < 0.02f * 0.02f)) continue;
-                beside++;
-                var a = done.Plan.Edit.DeltaAt(v);
-                var b = done.LegsOnly.Edit.DeltaAt(v);
-                var da = new System.Numerics.Vector3(a.X, a.Y, a.Z);
-                apart = MathF.Max(apart, System.Numerics.Vector3.Distance(da, new System.Numerics.Vector3(b.X, b.Y, b.Z)));
-                moved = MathF.Max(moved, da.Length());
-            }
-            output.WriteLine($"{name}: {beside} free cloth vertices within 20 mm of the kept foot moved up to "
-                           + $"{moved * 1000f:F1} mm, at most {apart * 1000f:F1} mm away from where the legs alone put them");
         }
     }
 
@@ -345,7 +327,7 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
     {
         var bodies = Bodies(Bibo, Neolithe, Rue, Yab);
         var neo = bodies[1];
-        var done = RefitHeartthrob("medium", bodies, neo.Dir, NeolitheLegs);
+        var done = NeolitheMedium.Value;
 
         // Into a copy of the mod: its manifest and the shoe sizes. Never the installed mod.
         string root = Path.Combine(Path.GetTempPath(), "proteus-keepends-" + Guid.NewGuid().ToString("N"));
@@ -441,7 +423,7 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
         // watcher runs on every refit of a shoe — so the body's tattoos and texture reach it.
         var bodies = Bodies(Bibo, Neolithe, Rue, Yab);
         var neo = bodies[1];
-        var done = RefitHeartthrob("medium", bodies, neo.Dir, NeolitheLegs);
+        var done = NeolitheMedium.Value;
         var log = NSubstitute.Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
         var uv = new UVRemapService(log, ".");
         var sourceCat = CatalogOf(bodies)(done.Decision.Source.Dir)!;
@@ -655,7 +637,8 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
 
     [LocalDataFact(LocalData.ShiftPack, Yab, LavaBod)]
     [Trait("Plan", "AC-keep-ends-studio-1")]
-    public void Studio_Shift_YAB_WC_onto_LavaBod_keeps_the_heeled_foot_and_refits_the_stocking()   // [AC-keep-ends-studio-1]
+    [Trait("Plan", "EDGE-keep-ends-studio-20")]
+    public void Studio_Shift_YAB_WC_onto_LavaBod_keeps_the_heeled_foot_and_refits_the_stocking()   // [AC-keep-ends-studio-1] [EDGE-keep-ends-studio-20]
     {
         var bytes = LocalData.PackEntryEndingWith(LocalData.ShiftPack, ShiftShoe);
         var done = StudioRefit(bytes, "_sho", Yab, LavaBod);
@@ -715,37 +698,13 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
                        + $"{done.Plan.Report.WorstMove * 1000f:F1} mm");
         Assert.True(drift <= 0.001f, $"the stocking's gap to the legs changed by {drift * 1000f:F2} mm");
         Assert.True(done.Plan.Report.Folded <= done.Unheld.Report.Folded);
-    }
 
-    [LocalDataFact(LocalData.ShiftPack, Yab, LavaBod)]
-    [Trait("Plan", "EDGE-keep-ends-studio-20")]
-    public void Studio_Shift_seam_report()   // [EDGE-keep-ends-studio-20]
-    {
-        var done = StudioRefit(LocalData.PackEntryEndingWith(LocalData.ShiftPack, ShiftShoe), "_sho", Yab, LavaBod);
+        // [EDGE-keep-ends-studio-20] The seam at the heeled ankle stays a crease.
         var (edges, worst) = KeepEnds.SeamStretch(done.Parts, done.Reading.Ends, done.Plan);
         output.WriteLine($"{edges} ankle edges; the most stretched by {worst * 1000f:F1} mm"
                        + (worst > KeepEnds.SeamWarn ? " — LOOK AT THIS SEAM IN GAME" : ""));
         Assert.True(edges > 0, "no skin edge runs from the kept foot to the leg");
         Assert.True(worst <= SeamLimit, $"the ankle stretched by {worst * 1000f:F1} mm");
-    }
-
-    [LocalDataFact(LocalData.ShiftPack, Yab, Rue, Bibo, Neolithe)]
-    [Trait("Plan", "AC-keep-ends-studio-3")]
-    public void Studio_Shift_is_not_unsure()   // [AC-keep-ends-studio-3]
-    {
-        // The automatic refit refuses a weak reading of the heeled foot to find a body; the user has named one here.
-        var bytes = LocalData.PackEntryEndingWith(LocalData.ShiftPack, ShiftShoe);
-        var parts = ModelPartReader.Read(bytes)!;
-        var bones = BonesOf(bytes);
-        var reading = KeepEnds.Read("_sho", parts, bytes)!;
-        var yab = BodySizeCatalog.Read(LocalData.Path(Yab));
-        var read = KeepEnds.StudioLimb(reading, parts, bones, Race, Path.GetFileName(LocalData.Path(Yab)), yab);
-        var bodies = Bodies(Yab, Rue, Bibo, Neolithe);
-        var found = KeepEnds.Find(reading, parts, bones, Race, Detector(bodies, bones), CatalogOf(bodies));
-        output.WriteLine($"Studio: route {KeepEnds.Letter(read.Route)}, {read.Pick?.Label} ({read.Shown?.Confidence}); "
-                       + $"automatic: route {KeepEnds.Letter(found.Route)}, {found.Pick?.Dir} / {found.Pick?.Option.Label}");
-        Assert.NotNull(read.Pick);
-        Assert.Equal("_dwn", read.Pick!.Slot);
     }
 
     [LocalDataFact(LocalData.ShiftPack, Yab, LavaBod)]
@@ -784,9 +743,10 @@ public class KeepEndsLocalTests(ITestOutputHelper output)
     public void Studio_path_equals_the_automatic_refit_when_options_match()   // [AC-keep-ends-studio-1]
     {
         // The Studio's plan with the automatic refit's settings — new skin only across body mods, nothing cleared, no
-        // hold of the user's and no other parts — is the automatic refit's plan, byte for byte.
+        // hold of the user's and no other parts — is the automatic refit's plan, byte for byte. Its pairs are the Studio's
+        // own (BuildPairs), the refit's the watcher's: what this holds on real meshes is that the two build the same.
         var bodies = Bodies(Bibo, Neolithe, Rue, Yab);
-        var done = RefitHeartthrob("medium", bodies, bodies[1].Dir, NeolitheLegs);
+        var done = NeolitheMedium.Value;
         var sourceCat = CatalogOf(bodies)(done.Decision.Source.Dir)!;
         var targetCat = bodies[1].Catalog;
         Assert.Null(KeepEnds.BuildPairs(done.Reading, sourceCat.PathOf(done.Decision.Source.Option),

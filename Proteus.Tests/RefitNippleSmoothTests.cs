@@ -27,8 +27,7 @@ public class RefitNippleSmoothTests(ITestOutputHelper output)
     private BodyRetarget.Planned On(string fixture, List<string>? lines = null)
         => Refit(fixture, line => { lines?.Add(line); output.WriteLine(line); });
 
-    private static string PinnedHash(string fixture)
-        => (string)Pinned.First(row => (string)row[0] == fixture)[1];
+    private static string PinnedHash(string fixture) => RefitNippleSmoothPinTests.Hashes[fixture];
 
     /// <summary>How proud the skin a model draws stands at one nipple of the chest.</summary>
     private static float Prominence(byte[] model, bool left, Func<string, bool>? material = null)

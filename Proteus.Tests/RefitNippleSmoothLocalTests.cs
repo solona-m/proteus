@@ -184,14 +184,23 @@ public class RefitNippleSmoothLocalTests(ITestOutputHelper output)
     /// <summary>
     /// [AC-refit-nipple-smooth-2] [EDGE-refit-nipple-smooth-24] Step 0, inside the pass: on the reported refit both
     /// nipples are found on LavaBod+'s IVCS bust bones where its nipples are, the chest faces forward, the source reads
-    /// prouder than flat (Rue+ has nipples too), and each tip comes down by the excess.
+    /// prouder than flat (Rue+ has nipples too), and each tip comes down by the excess. [AC-refit-nipple-smooth-5] And the
+    /// body mods' files it read are on disk as they were.
     /// </summary>
     [LocalDataFact(Zayne, Rue, Lava)]
     [Trait("Plan", "AC-refit-nipple-smooth-2")]
     [Trait("Plan", "EDGE-refit-nipple-smooth-24")]
+    [Trait("Plan", "AC-refit-nipple-smooth-5")]
     public void Zayne_smoothing_inside_the_pass()
     {
+        // [AC-refit-nipple-smooth-5] The body mods' files on disk are the same after the refit.
+        string source = Path.Combine(LocalData.Path(Rue), Chest("yiggle - medium"));
+        string target = Path.Combine(LocalData.Path(Lava), LavaTeardrop);
+        string Hash(string path) => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
+        string sourceHash = Hash(source), targetHash = Hash(target);
         var r = ZayneOntoLava();
+        Assert.Equal(sourceHash, Hash(source));
+        Assert.Equal(targetHash, Hash(target));
         foreach (var l in r.Log) output.WriteLine(l);
         Assert.Contains(SecondSkinWriter.Parse(r.Pair.TargetModel!).BoneNames, b => b == "iv_c_mune_l");
         var sides = Sides(r.Log);
@@ -215,13 +224,15 @@ public class RefitNippleSmoothLocalTests(ITestOutputHelper output)
     /// <summary>
     /// [AC-refit-nipple-smooth-1] [AC-refit-nipple-smooth-2] The bralet no longer shows the nipples: no cloth face near
     /// either tip has the drawn skin more than a millimetre through it, and no more bralet lies inside the skin there than
-    /// without the smoothing — as the automatic refit runs it and as the Studio does.
+    /// without the smoothing — as the automatic refit runs it and as the Studio does. [AC-refit-nipple-smooth-6] As the
+    /// automatic refit runs it, the output is also a valid model that shades right (<see cref="ValidAndShadesRight"/>).
     /// </summary>
     [LocalDataTheory(Zayne, Rue, Lava)]
     [InlineData(false)]
     [InlineData(true)]
     [Trait("Plan", "AC-refit-nipple-smooth-1")]
     [Trait("Plan", "AC-refit-nipple-smooth-2")]
+    [Trait("Plan", "AC-refit-nipple-smooth-6")]
     public void Zayne_bralet_Rue_M_to_Lava_Teardrop_hides_the_nipples(bool cutHidden)
     {
         var on = ZayneOntoLava(cutHidden);
@@ -245,30 +256,16 @@ public class RefitNippleSmoothLocalTests(ITestOutputHelper output)
         Assert.True(beforeFaces > 0, "fixture: the unsmoothed refit should show the report's poke-through");
         Assert.Equal(0, afterFaces);
         Assert.True(afterInside <= beforeInside);
-    }
 
-    /// <summary>[AC-refit-nipple-smooth-5] The body mods' files on disk are the same after the refit.</summary>
-    [LocalDataFact(Zayne, Rue, Lava)]
-    [Trait("Plan", "AC-refit-nipple-smooth-5")]
-    public void Refit_leaves_the_body_mods_on_disk_untouched()
-    {
-        string source = Path.Combine(LocalData.Path(Rue), Chest("yiggle - medium"));
-        string target = Path.Combine(LocalData.Path(Lava), LavaTeardrop);
-        string Hash(string path) => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
-        string s = Hash(source), t = Hash(target);
-        var r = ZayneOntoLava();
-        Assert.True(r.Plan.Report.Smoothed > 0);
-        Assert.Equal(s, Hash(source));
-        Assert.Equal(t, Hash(target));
+        // As the automatic refit runs it, the same pair is the one the output's validity is read on.
+        if (!cutHidden) ValidAndShadesRight(on, off);
     }
 
     /// <summary>[AC-refit-nipple-smooth-6] The smoothed LavaBod+ chest reshades only what moved, along its new surface,
-    /// turns nothing over, and the refit's output reads back whole, as one level of detail.</summary>
-    [LocalDataFact(Zayne, Rue, Lava)]
-    [Trait("Plan", "AC-refit-nipple-smooth-6")]
-    public void Zayne_output_is_a_valid_model_that_shades_right()
+    /// turns nothing over, and the refit's output reads back whole, as one level of detail, folding no more than
+    /// <paramref name="off"/>, the same refit without the smoothing.</summary>
+    private void ValidAndShadesRight(Refit r, Refit off)
     {
-        var r = ZayneOntoLava();
         var smoothed = BodyRetarget.SmoothCoveredNipples(r.Garment, [r.Pair], out int moved)[0];
         Assert.True(moved > 0);
         var before = ModelPartReader.Read(r.Pair.TargetModel!)!;
@@ -345,7 +342,6 @@ public class RefitNippleSmoothLocalTests(ITestOutputHelper output)
         Assert.NotNull(ModelPartReader.Read(r.Plan.Model));
         Assert.NotNull(ModelSkinReader.Read(r.Plan.Model, null, null));
         Assert.Equal(1, ModelLodTrimmer.LodCount(r.Plan.Model));
-        var off = ZayneOntoLava(on: false);
         Assert.True(r.Plan.Report.Folded <= off.Plan.Report.Folded);
     }
 

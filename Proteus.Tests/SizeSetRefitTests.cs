@@ -435,11 +435,12 @@ public class SizeSetRefitTests(ITestOutputHelper output)
                              dir => bodies.FirstOrDefault(b => b.Dir == dir)?.Catalog).Pick;
     }
 
-    [LocalDataFact(LocalData.ShiftPack, Yab, Rue, Bibo)]
+    [LocalDataFact(LocalData.GameData, LocalData.ShiftPack, Yab, Rue, Bibo)]
     [Trait("Plan", "AC-keep-ends-studio-6")]
     [Trait("Plan", "EDGE-keep-ends-studio-13")]
     [Trait("Plan", "EDGE-keep-ends-studio-14")]
-    public void Shift_shoe_gains_legs_sizes_with_its_foot_kept()   // [AC-keep-ends-studio-6] [EDGE-keep-ends-studio-13] [EDGE-keep-ends-studio-14]
+    [Trait("Plan", "AC-sizeset-game-body-source-3")]
+    public void Shift_shoe_gains_legs_sizes_with_its_foot_kept()   // [AC-keep-ends-studio-6] [EDGE-keep-ends-studio-13] [EDGE-keep-ends-studio-14] [AC-sizeset-game-body-source-3]
     {
         var shoe = LocalData.PackEntryEndingWith(LocalData.ShiftPack, "e6219_sho.mdl");
         string root = ShoeMod(shoe, "YAB WC");
@@ -486,6 +487,23 @@ public class SizeSetRefitTests(ITestOutputHelper output)
             Assert.DoesNotContain("\"FileVersion\": 3", File.ReadAllText(Path.Combine(root, PenumbraModMeta.MetaFile)));
             output.WriteLine($"{result.Made} made; notes: {string.Join(" / ", result.Notes)}");
             Assert.Equal(added.Count, result.Made);
+
+            // [AC-sizeset-game-body-source-3] Offered the game's body too, with the body it was made on installed, it is
+            // still read as made on that body mod: the same sizes, the same models, nothing from the game's body.
+            string with = ShoeMod(shoe, "YAB WC");
+            try
+            {
+                var (b, _) = RunOn(with, ["yab", "rue", "bibo"], GameBodies(), Yab, Rue, Bibo);
+                Assert.Equal(added, Options(with, "Shoes").Skip(1));
+                Assert.Equal(result.Made, b.Made);
+                foreach (string o in added) Assert.Equal(ModelOf(root, "Shoes", o, ShoePath), ModelOf(with, "Shoes", o, ShoePath));
+                Assert.DoesNotContain(BodyRetargetWriter.ReadRecord(with)?.Options ?? [],
+                                      e => e.From.Contains(Proteus.Localization.Strings.Parts.RetargetFromVanilla));
+            }
+            finally
+            {
+                Directory.Delete(with, recursive: true);
+            }
 
             // A second run finds nothing left to make.
             var (again, _) = RunOn(root, ["yab", "rue", "bibo"], Yab, Rue, Bibo);
@@ -731,41 +749,6 @@ public class SizeSetRefitTests(ITestOutputHelper output)
 
     private const string Heartthrob = LocalData.Mods + ":Heartthrob - by Solona";
     private const string HeartthrobShoe = "chara/equipment/e6070/model/c0201e6070_sho.mdl";
-
-    [LocalDataFact(Heartthrob, Bibo, Rue, Yab)]
-    [Trait("Plan", "AC-keep-ends-studio-8")]
-    [Trait("Plan", "EDGE-keep-ends-studio-16")]
-    public void Heartthrob_shoe_joins_its_legs_sizes()   // [AC-keep-ends-studio-8] [EDGE-keep-ends-studio-16]
-    {
-        // The skirt and the shoe are sized together in "Bottom Size". Copied without Proteus's record of the automatic
-        // refit made into it, so nothing there is taken for a size made before.
-        string copy = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
-        try
-        {
-            CopyModels(LocalData.Path(Heartthrob), copy, withRecord: false);
-            var before = Options(copy, "Bottom Size");
-            var groupsBefore = (PenumbraModMeta.TryReadGroups(copy) ?? []).Select(g => g.Name).ToList();
-            var (result, _) = RunOn(copy, ["rue"], Bibo, Rue, Yab);
-
-            var added = Options(copy, "Bottom Size").Except(before).ToList();
-            output.WriteLine($"added: {string.Join(", ", added)}; {result.Made} made");
-            Assert.Equal(groupsBefore, (PenumbraModMeta.TryReadGroups(copy) ?? []).Select(g => g.Name).ToList());
-            Assert.NotEmpty(added);
-            var small = File.ReadAllBytes(Path.Combine(copy, "bottom size", "small", "chara", "equipment", "e6070", "model",
-                                                       "c0201e6070_sho.mdl"));
-            foreach (string option in added)
-            {
-                // Each option the legs made carries a refitted shoe too, its foot kept as the author's first size has it.
-                var shoe = ModelOf(copy, "Bottom Size", option, HeartthrobShoe);
-                Assert.False(shoe.AsSpan().SequenceEqual(small), $"{option}: the shoe is the author's, not refitted");
-                Assert.Equal(0, EndPointsMissing(small, "_sho", shoe));
-            }
-        }
-        finally
-        {
-            if (Directory.Exists(copy)) Directory.Delete(copy, recursive: true);
-        }
-    }
 
     [LocalDataFact(Heartthrob, Bibo, Rue, Yab)]
     [Trait("Plan", "EDGE-keep-ends-studio-17")]
@@ -1238,10 +1221,10 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     public void Body_mod_shoes_and_gloves_read_the_same_with_the_game_body_offered()   // [AC-sizeset-game-body-source-3] [EDGE-sizeset-game-body-source-3]
     {
         var game = GameBodies();
+        // Shift with the body it was made on installed is compared in Shift_shoe_gains_legs_sizes_with_its_foot_kept,
+        // beside the run it would repeat here.
         var cases = new (byte[] Model, string Option, string Path, string[] Keys, string[] Bodies)[]
         {
-            (LocalData.PackEntryEndingWith(LocalData.ShiftPack, "e6219_sho.mdl"), "YAB WC", ShoePath, ["yab", "rue", "bibo"],
-             [Yab, Rue, Bibo]),
             // Shift with the body it was made on not installed: still read as made on a body mod, not the game's.
             (LocalData.PackEntryEndingWith(LocalData.ShiftPack, "e6219_sho.mdl"), "YAB WC", ShoePath, ["rue", "bibo"],
              [Rue, Bibo]),
@@ -1501,10 +1484,18 @@ public class SizeSetRefitTests(ITestOutputHelper output)
         }
     }
 
+    /// <summary>
+    /// Heartthrob's skirt and shoe are sized together in "Bottom Size". With ends on, the shoe joins the legs' sizes: each
+    /// option the legs made carries a refitted shoe, its foot kept as the author's first size has it, and no group is
+    /// added. With ends off, the run is today's size set: the same skirts, the author's shoe left as it was. Copied
+    /// without Proteus's record of the automatic refit made into it, so nothing there is taken for a size made before.
+    /// </summary>
     [LocalDataFact(Heartthrob, Bibo, Rue, Yab)]
     [Trait("Plan", "AC-keep-ends-studio-10")]
     [Trait("Plan", "EDGE-keep-ends-studio-26")]
-    public void Ends_off_is_todays_size_set()   // [AC-keep-ends-studio-10] [EDGE-keep-ends-studio-26]
+    [Trait("Plan", "AC-keep-ends-studio-8")]
+    [Trait("Plan", "EDGE-keep-ends-studio-16")]
+    public void Ends_off_is_todays_size_set_and_on_the_shoe_joins_its_legs_sizes()   // [AC-keep-ends-studio-10] [EDGE-keep-ends-studio-26] [AC-keep-ends-studio-8] [EDGE-keep-ends-studio-16]
     {
         string off = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
         string on = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
@@ -1512,6 +1503,8 @@ public class SizeSetRefitTests(ITestOutputHelper output)
         {
             CopyModels(LocalData.Path(Heartthrob), off, withRecord: false);
             CopyModels(LocalData.Path(Heartthrob), on, withRecord: false);
+            var before = Options(on, "Bottom Size");
+            var groupsBefore = (PenumbraModMeta.TryReadGroups(on) ?? []).Select(g => g.Name).ToList();
             string modsRoot = LocalData.Path(LocalData.Mods);
             var mods = new[] { Bibo, Rue, Yab }.Select(n => Path.GetFileName(LocalData.Path(n))).ToDictionary(d => d, d => d);
             var bodies = new BodyModIndex().RefreshState(mods, modsRoot).List;
@@ -1532,6 +1525,20 @@ public class SizeSetRefitTests(ITestOutputHelper output)
                 var shoeOff = ModelOf(off, "Bottom Size", option, HeartthrobShoe);
                 var shoeOn = ModelOf(on, "Bottom Size", option, HeartthrobShoe);
                 Assert.False(shoeOff.AsSpan().SequenceEqual(shoeOn), $"{option}: the shoe was refitted with ends off");
+            }
+
+            // On: the shoe joined the legs' sizes, in the group they share, its foot kept as the author's small has it.
+            var added = Options(on, "Bottom Size").Except(before).ToList();
+            output.WriteLine($"added: {string.Join(", ", added)}");
+            Assert.Equal(groupsBefore, (PenumbraModMeta.TryReadGroups(on) ?? []).Select(g => g.Name).ToList());
+            Assert.NotEmpty(added);
+            var small = File.ReadAllBytes(Path.Combine(on, "bottom size", "small", "chara", "equipment", "e6070", "model",
+                                                       "c0201e6070_sho.mdl"));
+            foreach (string option in added)
+            {
+                var shoe = ModelOf(on, "Bottom Size", option, HeartthrobShoe);
+                Assert.False(shoe.AsSpan().SequenceEqual(small), $"{option}: the shoe is the author's, not refitted");
+                Assert.Equal(0, EndPointsMissing(small, "_sho", shoe));
             }
         }
         finally
@@ -1720,18 +1727,26 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     /// Geometric's cropped jacket is its hands model, sized with its top in each "Chest Size" option. Read by its cloth it
     /// came out [IVCS] Bibo+ Smallclothes, and every size was cut from too small a bust; it is sized by the top in its
     /// option instead, read once for the top's own sizes and the jacket's alike.
+    /// <para/>
+    /// Each size is also kept outside the top's refit in the same option, made before it in the run, and records which:
+    /// a plain run again leaves them, a remake makes them again over the top as remade. One refit, both outcomes.
     /// </summary>
     [LocalDataFact(Geometric, Bibo, IvcsBibo, FixPubes, Rue)]
     [Trait("Plan", "AC-jacket-refit-12")]
     [Trait("Plan", "AC-jacket-refit-13")]
     [Trait("Plan", "EDGE-jacket-refit-36")]
-    public void Geometrics_jacket_is_sized_by_the_top_in_its_option()
+    [Trait("Plan", "AC-outfit-fit-4")]
+    [Trait("Plan", "AC-outfit-fit-1")]
+    [Trait("Plan", "AC-outfit-fit-9")]
+    public void Geometrics_jacket_is_sized_by_the_top_in_its_option_and_kept_outside_its_refit()
     {
         string copy = GeometricAsShipped();
         try
         {
             var (result, request) = RunOn(copy, ["rue"], Bibo, IvcsBibo, FixPubes, Rue);
             Assert.True(result.Made > 0);
+
+            // Sized by the top in its option.
             var sized = Assert.Single(lastLog, l => l.Template.Contains("sized by its {1} piece in the same option",
                                                                         StringComparison.Ordinal));
             Assert.Equal("chest", sized.Args[1]);
@@ -1748,46 +1763,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
             output.WriteLine(string.Join("; ", hands.Select(h => $"{h.Option}: {h.Folded} folded")));
             Assert.NotEmpty(hands);
 
-            // A second run makes nothing; asked to make them again, it remakes the sizes it added, in place.
-            var options = Options(copy, "Chest Size");
-            var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
-            Assert.Equal(0, SizeSetRefit.Run(request, new UVRemapService(log, "."), log, _ => { }, CancellationToken.None).Made);
-            var remakeLog = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
-            var remade = SizeSetRefit.Run(request with { Remake = true }, new UVRemapService(remakeLog, "."), remakeLog,
-                                          _ => { }, CancellationToken.None);
-            Assert.True(remade.Made > 0);
-            // The jacket's sizes themselves were made again — sized by the top — not only the top's.
-            var remadeLines = remakeLog.ReceivedCalls().Select(c => c.GetArguments())
-                                       .Where(a => a.FirstOrDefault() as string is { } t
-                                                   && t.Contains("triangles left folded", StringComparison.Ordinal))
-                                       .Select(a => (object[])a[1]!).ToList();
-            Assert.Equal(hands.Count, remadeLines.Count(a => (string)a[0] == "Hands — e0068"));
-            Assert.Contains(remakeLog.ReceivedCalls().Select(c => c.GetArguments()),
-                            a => a.FirstOrDefault() as string is { } t && t.Contains("sized by its {1} piece", StringComparison.Ordinal));
-            Assert.Equal(options, Options(copy, "Chest Size"));
-            Assert.DoesNotContain("\"FileVersion\": 3", File.ReadAllText(Path.Combine(copy, PenumbraModMeta.MetaFile)));
-        }
-        finally
-        {
-            if (Directory.Exists(copy)) Directory.Delete(copy, recursive: true);
-        }
-    }
-
-    /// <summary>
-    /// Each size of Geometric's jacket is kept outside the top's refit in the same option, made before it in the run, and
-    /// records which: a plain run again leaves them, a remake makes them again over the top as remade.
-    /// </summary>
-    [LocalDataFact(Geometric, Bibo, IvcsBibo, FixPubes, Rue)]
-    [Trait("Plan", "AC-outfit-fit-4")]
-    [Trait("Plan", "AC-outfit-fit-1")]
-    [Trait("Plan", "AC-outfit-fit-9")]
-    public void Geometrics_jacket_sizes_are_kept_outside_the_tops_refit_in_their_option()
-    {
-        string copy = GeometricAsShipped();
-        try
-        {
-            var (result, request) = RunOn(copy, ["rue"], Bibo, IvcsBibo, FixPubes, Rue);
-            Assert.True(result.Made > 0);
+            // Kept outside the top's refit, and the record says over which.
             var record = BodyRetargetWriter.ReadRecord(copy)!;
             var jackets = record.Options.Where(e => e.GamePath.EndsWith("_glv.mdl", StringComparison.Ordinal)).ToList();
             Assert.NotEmpty(jackets);
@@ -1805,20 +1781,33 @@ public class SizeSetRefitTests(ITestOutputHelper output)
             Assert.NotEmpty(beneath);
             Assert.All(beneath, l => Assert.Equal("None · Medium", l.Args[2]));
 
+            // A second run makes nothing and leaves the jackets as they were.
+            var options = Options(copy, "Chest Size");
             var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
             Assert.Equal(0, SizeSetRefit.Run(request, new UVRemapService(log, "."), log, _ => { }, CancellationToken.None).Made);
             Assert.Equal(jackets.Select(j => j.Layers!["_top"]),
                          BodyRetargetWriter.ReadRecord(copy)!.Options.Where(e => e.GamePath.EndsWith("_glv.mdl", StringComparison.Ordinal))
                                            .Select(e => e.Layers!["_top"]));
 
-            // Made again: each over the top as it now stands, file and content.
+            // Asked to make them again, it remakes the sizes it added, in place: each over the top as it now stands.
             var remakeLog = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
-            Assert.True(SizeSetRefit.Run(request with { Remake = true }, new UVRemapService(remakeLog, "."), remakeLog,
-                                         _ => { }, CancellationToken.None).Made > 0);
-            var remade = BodyRetargetWriter.ReadRecord(copy)!;
-            foreach (var jacket in remade.Options.Where(e => e.GamePath.EndsWith("_glv.mdl", StringComparison.Ordinal)))
+            var remade = SizeSetRefit.Run(request with { Remake = true }, new UVRemapService(remakeLog, "."), remakeLog,
+                                          _ => { }, CancellationToken.None);
+            Assert.True(remade.Made > 0);
+            // The jacket's sizes themselves were made again — sized by the top — not only the top's.
+            var remadeLines = remakeLog.ReceivedCalls().Select(c => c.GetArguments())
+                                       .Where(a => a.FirstOrDefault() as string is { } t
+                                                   && t.Contains("triangles left folded", StringComparison.Ordinal))
+                                       .Select(a => (object[])a[1]!).ToList();
+            Assert.Equal(hands.Count, remadeLines.Count(a => (string)a[0] == "Hands — e0068"));
+            Assert.Contains(remakeLog.ReceivedCalls().Select(c => c.GetArguments()),
+                            a => a.FirstOrDefault() as string is { } t && t.Contains("sized by its {1} piece", StringComparison.Ordinal));
+            Assert.Equal(options, Options(copy, "Chest Size"));
+            Assert.DoesNotContain("\"FileVersion\": 3", File.ReadAllText(Path.Combine(copy, PenumbraModMeta.MetaFile)));
+            var remadeRecord = BodyRetargetWriter.ReadRecord(copy)!;
+            foreach (var jacket in remadeRecord.Options.Where(e => e.GamePath.EndsWith("_glv.mdl", StringComparison.Ordinal)))
             {
-                var top = remade.Options.Single(e => e.Name == jacket.Name && e.GamePath.EndsWith("_top.mdl", StringComparison.Ordinal));
+                var top = remadeRecord.Options.Single(e => e.Name == jacket.Name && e.GamePath.EndsWith("_top.mdl", StringComparison.Ordinal));
                 var expected = OutfitPartners.LayersOf(copy, new OutfitPartners.Partner("_top", "", top.File));
                 Assert.Equal(expected, jacket.Layers);
             }

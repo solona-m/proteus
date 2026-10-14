@@ -58,23 +58,41 @@ public class RefitNippleSmoothPinTests(ITestOutputHelper output)
 
     internal static string Hash(byte[] model) => Convert.ToHexString(SHA256.HashData(model))[..16];
 
-    public static TheoryData<string, string> Pinned => new()
+    /// <summary>Every fixture's output before the feature, by name.</summary>
+    internal static readonly Dictionary<string, string> Hashes = new()
     {
-        { "flat to nippled", "E129E7733A3454CE" },
-        { "flat to nippled, no swap", "2CC7CF11893446B7" },
-        { "equal nipples", "792417E74769D414" },
-        { "prouder source", "4D48227F8E808B0F" },
-        { "partial excess", "22026018D28BCE34" },
-        { "right cup only", "C63EA30C63FB25AD" },
-        { "cloth behind", "04F3528E293E16AE" },
-        { "no bust bones", "C514795710318539" },
-        { "legs slot", "E129E7733A3454CE" },
-        { "piercing", "E129E7733A3454CE" },
-        { "variant cloth", "15038A138508E0D1" },
-        { "skin copy", "1FF3E82CEE87F73F" },
-        { "held cloth", "844511733FED0C5A" },
-        { "coarse source", "A7379D94EF56DB33" },
+        ["flat to nippled"] = "E129E7733A3454CE",
+        ["flat to nippled, no swap"] = "2CC7CF11893446B7",
+        ["equal nipples"] = "792417E74769D414",
+        ["prouder source"] = "4D48227F8E808B0F",
+        ["partial excess"] = "22026018D28BCE34",
+        ["right cup only"] = "C63EA30C63FB25AD",
+        ["cloth behind"] = "04F3528E293E16AE",
+        ["no bust bones"] = "C514795710318539",
+        ["legs slot"] = "E129E7733A3454CE",
+        ["piercing"] = "E129E7733A3454CE",
+        ["variant cloth"] = "15038A138508E0D1",
+        ["skin copy"] = "1FF3E82CEE87F73F",
+        ["held cloth"] = "844511733FED0C5A",
+        ["coarse source"] = "A7379D94EF56DB33",
     };
+
+    /// <summary>
+    /// The fixtures refitted here with the smoothing off. The other six — "equal nipples", "prouder source", "cloth
+    /// behind", "no bust bones", "legs slot", "skin copy" — are ones the smoothing leaves alone, and RefitNippleSmoothTests
+    /// already holds each, smoothing on, to its hash above: off can only skip a pass that changed nothing there.
+    /// </summary>
+    public static TheoryData<string, string> Pinned
+    {
+        get
+        {
+            var rows = new TheoryData<string, string>();
+            foreach (string fixture in new[] { "flat to nippled", "flat to nippled, no swap", "partial excess", "right cup only",
+                                               "piercing", "variant cloth", "held cloth", "coarse source" })
+                rows.Add(fixture, Hashes[fixture]);
+            return rows;
+        }
+    }
 
     [Theory]
     [MemberData(nameof(Pinned))]
