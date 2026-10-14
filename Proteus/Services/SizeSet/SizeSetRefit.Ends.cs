@@ -101,7 +101,7 @@ internal static partial class SizeSetRefit
              : request.Bodies.FirstOrDefault(b => string.Equals(b.Dir, dir, StringComparison.OrdinalIgnoreCase))?.Catalog;
 
         (string? Option, byte[] Bytes, ModelParts Garment, HashSet<string> Bones, KeepEnds.Reading Reading,
-         KeepEnds.Found Found)? source = null;
+         KeepEnds.Found Found, SiblingPiece.Candidate? Sibling)? source = null;
         bool anyRead = false;
         foreach (var (option, file) in piece.Options)
         {
@@ -131,7 +131,8 @@ internal static partial class SizeSetRefit
             if (found.Route is not (KeepEnds.Route.Skin or KeepEnds.Route.Cloth or KeepEnds.Route.SkinOnly
                                     or KeepEnds.Route.Sibling))
                 continue;
-            source = (option, bytes, garment, bones, reading, found);
+            source = (option, bytes, garment, bones, reading, found,
+                      found.Route == KeepEnds.Route.Sibling ? siblings[0] : null);
             break;
         }
         if (source is not { } src)
@@ -246,9 +247,19 @@ internal static partial class SizeSetRefit
                     notes.Add(string.Format(Strings.SizeSet.RefusedFmt, piece.Label, option, refusal));
                     continue;
                 }
+                // Kept outside its chest or legs piece's refit in this very option, made before it in the run.
+                var partner = src.Sibling is { } sibling
+                    ? OutfitPartners.ForSizeSet(record, option, sibling, limb, pick, to!.Rel, Note)
+                    : null;
+                var outfit = partner != null ? OutfitPartners.Load(root, partner, Note) : null;
                 var plan = KeepEnds.Plan(src.Garment, src.Bytes, src.Reading, limbPair, endPair, across,
                                          line => log.Debug("[Proteus] size set: {0}", line),
-                                         line => log.Warning("[Proteus] size set: {0}", line));
+                                         line => log.Warning("[Proteus] size set: {0}", line), outfit);
+                if (outfit != null)
+                    log.Information("[Proteus] size set: {0} {1}: kept outside its {2} piece's refit {3}: {4} points "
+                                  + "lifted, {5:F1} mm short at most", piece.Label, option,
+                                    limb == "_top" ? "chest" : "legs", partner!.RefittedRel, plan.Report.Layered,
+                                    plan.Report.LayerResidual * 1000f);
                 plan = RefitCore.MatchSkinToBody(plan, sourcePath, targetCat.PathOf(to!), uvRemap, male, log);
                 var (seamEdges, stretched) = KeepEnds.SeamStretch(src.Garment, src.Reading.Ends, plan);
                 log.Information("[Proteus] size set: {0} onto {1} by its {2} (moved up to {3:F1} mm, the seam stretched "
@@ -257,7 +268,8 @@ internal static partial class SizeSetRefit
                 if (RefitCore.ReleasedLog(plan.Report, src.Reading.FreeNames ?? []) is { } released)
                     log.Information("[Proteus] size set: {0} {1}: let go of kept piece(s) that would sink moved whole: {2}",
                                     piece.Label, option, released);
-                refits.Add(new BodyRetargetWriter.Refit(option, plan.Model, to!.Label));
+                refits.Add(new BodyRetargetWriter.Refit(option, plan.Model, to!.Label,
+                                                        outfit != null ? OutfitPartners.LayersOf(root, partner!) : null));
             }
             if (refits.Count == 0) continue;
             group.Save(target.Dir, RefitCore.LabelFrom(across ? sourceName : null, [pick.Option.Label]), refits,

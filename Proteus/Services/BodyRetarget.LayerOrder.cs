@@ -167,8 +167,11 @@ internal static partial class BodyRetarget
     /// pulled back no further than it stands off this skin, and the cover is lifted by the rest. Hidden only while its
     /// cover is drawn, and Proteus's own part switches can hide the cover: a bra sunk into the breast showed the skin
     /// through it the moment the top was switched off.</param>
+    /// <param name="liftOnly">Pull no covered point back; lift the cover by the whole shortfall. For after
+    /// <see cref="KeepOutfitOrder"/>, which has just lifted the garment off another piece: a lining pulled back toward
+    /// the skin would go back under that piece.</param>
     internal static int KeepLayerOrder(Sets sets, IReadOnlyList<Covered> covered, Vec3[] nodeDelta, bool[]? stay,
-                                       bool[] layered, TargetBody? drawn = null)
+                                       bool[] layered, TargetBody? drawn = null, bool liftOnly = false)
     {
         if (covered.Count == 0) return 0;
         var movable = new bool[sets.NodeCount];
@@ -179,7 +182,7 @@ internal static partial class BodyRetarget
         int moved = 0;
         for (int round = 0; round < LayerOrderRounds; round++)
         {
-            int now = KeepLayerOrderOnce(sets, covered, nodeDelta, movable, drawn);
+            int now = KeepLayerOrderOnce(sets, covered, nodeDelta, movable, drawn, liftOnly);
             if (now == 0) break;
             moved += now;
         }
@@ -190,7 +193,7 @@ internal static partial class BodyRetarget
     private const int LayerOrderRounds = 3;
 
     private static int KeepLayerOrderOnce(Sets sets, IReadOnlyList<Covered> covered, Vec3[] nodeDelta, bool[] movable,
-                                          TargetBody? drawn)
+                                          TargetBody? drawn, bool liftOnly = false)
     {
         Vector3 Now(int n) => ToVector(sets.NodeAt[n]) + ToVector(nodeDelta[n]);
         bool Finite(Vector3 v) => float.IsFinite(v.X) && float.IsFinite(v.Y) && float.IsFinite(v.Z);
@@ -223,8 +226,8 @@ internal static partial class BodyRetarget
 
         // How far each point may go back before it reaches the skin.
         var room = new float[sets.NodeCount];
-        Array.Fill(room, float.PositiveInfinity);
-        if (drawn != null)
+        Array.Fill(room, liftOnly ? 0f : float.PositiveInfinity);
+        if (drawn != null && !liftOnly)
             for (int n = 0; n < sets.NodeCount; n++)
             {
                 if (!movable[n]) continue;

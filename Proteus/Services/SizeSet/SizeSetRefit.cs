@@ -304,6 +304,14 @@ internal static partial class SizeSetRefit
                                  piece.Label, ranking.Confidence);
         }
 
+        // ── the chest beneath a legs piece's waist, when it lies over the belly (see RefitCore.ChestBeneath) ──
+        var beneath = piece.Slot == "_dwn"
+            ? RefitCore.ChestBeneathOf(src.Garment, src.Pick, race, mods,
+                                       dir => request.Bodies.FirstOrDefault(b => string.Equals(b.Dir, dir,
+                                                  StringComparison.OrdinalIgnoreCase))?.Catalog,
+                                       note => log.Information("[Proteus] size set: {0}: {1}", piece.Label, note))
+            : null;
+
         // ── where the sizes go ──
         using var group = new SizeGroup(root, piece);
         var authorSizes = AuthorSizes(root, piece, group.Ours);
@@ -403,6 +411,22 @@ internal static partial class SizeSetRefit
                     }
                 }
 
+                // The chest beneath goes along for its shape: the size's own chest for legs following one, else the body's
+                // middle chest — its chests share their belly.
+                if (beneath != null && across
+                    && ChestBeneathTo(key, size, piece.FollowsChest, yas, targetCat, race) is { } chestTo
+                    && RefitCore.ChestBeneathPair(beneath, target.Dir, targetCat, chestTo, male,
+                                                  RefitCore.MaskOf(beneath.Dir, beneath.Catalog, "_top", null),
+                                                  RefitCore.MaskOf(target.Dir, targetCat, "_top", null), uvRemap,
+                                                  note => log.Information("[Proteus] size set: {0} {1}: {2}", piece.Label,
+                                                                          option, note),
+                                                  out var chestPair))
+                {
+                    pairs.Add(chestPair);
+                    log.Information("[Proteus] size set: {0} {1}: the chest beneath refitted along onto {2}",
+                                    piece.Label, option, chestTo.Label);
+                }
+
                 var plan = BodyRetarget.Plan(src.Garment, src.Bytes, pairs, piece.Slot, held: new HashSet<int>(),
                                              replaceSkin: true, acrossBodies: across, clearBody: false, cutHidden: true,
                                              keepShape: pieces, log: line => log.Debug("[Proteus] size set: {0}", line),
@@ -421,6 +445,21 @@ internal static partial class SizeSetRefit
         }
         group.RestoreDefault();
         return group.Saved;
+    }
+
+    /// <summary>
+    /// The target chest beneath a legs size: the size's own chest, for legs following a chest; else the body's middle
+    /// chest ("M") — a body's chests share their belly — or its first. Null when the body has none here.
+    /// </summary>
+    internal static BodyOption? ChestBeneathTo(string key, SupportedBodies.Size size, bool followsChest, bool yas,
+                                              BodySizeCatalog targetCat, string race)
+    {
+        string? rel = followsChest
+            ? size.Rel
+            : (SupportedBodies.Of(key, "_top", yas) ?? SupportedBodies.Of(key, "_top", !yas)) is { } chests
+                ? (chests.Sizes.FirstOrDefault(s => s.Name == "M") ?? chests.Sizes.FirstOrDefault())?.Rel
+                : null;
+        return rel == null ? null : OptionByFile(targetCat.For("_top", race), rel);
     }
 
     /// <summary>

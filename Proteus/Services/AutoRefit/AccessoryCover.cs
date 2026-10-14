@@ -335,4 +335,7 @@ internal static class AccessoryCover
 /// failed or cancelled is not.
 /// </summary>
 /// <param name="Source">What it was made on; null when that is not known (a refit put back from an old record).</param>
-internal sealed record PieceOutcome(bool OnTarget, AutoRefitDecisions.Pick? Source);
+/// <param name="File">The file it is drawn from now, in its mod — the refit saved or put back on, or the author's own
+/// file that already fits — for a garment worn over it to be kept outside (see <see cref="OutfitPartners"/>). Null when
+/// that is not known (the author's other size switched on).</param>
+internal sealed record PieceOutcome(bool OnTarget, AutoRefitDecisions.Pick? Source, string? File = null);

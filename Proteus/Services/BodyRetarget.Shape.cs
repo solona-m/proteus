@@ -38,6 +38,8 @@ internal static partial class BodyRetarget
     /// builds before this rule did: still judged and reported, never let go (see <see cref="ReleaseSink"/>).</param>
     /// <param name="NoNippleSmooth">Leave the new body's nipples as its mod made them, however far they stand through
     /// the cloth (see <see cref="SmoothCoveredNipples"/>).</param>
+    /// <param name="NoOutfitOrder">Leave the garment wherever the passes put it against the other piece of its outfit,
+    /// in front of it or not (see <see cref="KeepOutfitOrder"/>).</param>
     internal sealed record Tuning(bool NoFollow = false, bool NoOwnSkinWeights = false,
                                   float OwnSkinReach = OwnSkinReachDefault, float CopyReach = CopyReachDefault,
                                   float CopyTolerance = CopyToleranceDefault, bool NoGiveUp = false,
@@ -46,7 +48,7 @@ internal static partial class BodyRetarget
                                   bool NoSkinHug = false, bool NoLayerKnit = false, bool NoRimLift = false,
                                   bool NoLayerOrder = false, bool LegsForAll = false,
                                   bool CrossBodyPassesWithinBody = false, bool NoRelease = false,
-                                  bool NoNippleSmooth = false);
+                                  bool NoNippleSmooth = false, bool NoOutfitOrder = false);
 
     private static readonly Tuning DefaultTuning = new();
 
@@ -166,10 +168,11 @@ internal static partial class BodyRetarget
     }
 
     /// <summary>
-    /// Apply <see cref="FollowLaidSkin"/>'s inward moves, backed off wherever one would turn a triangle over: halved on
-    /// every corner of such a triangle for <c>PushUnfoldPasses</c> passes, then given up outright, as the push-out's own
-    /// guard does. Neighbours pulled in by different amounts step past each other; measured on "Victoria's Secret Sauce"
-    /// without this, YAB+ Skull Crushers went from 8 turned-over triangles to 33.
+    /// Apply moves backed off wherever one would turn a triangle over: halved on every corner of such a triangle for
+    /// <c>PushUnfoldPasses</c> passes, then given up outright, as the push-out's own guard does. Any direction: made for
+    /// <see cref="FollowLaidSkin"/>'s inward moves — neighbours pulled in by different amounts step past each other;
+    /// measured on "Victoria's Secret Sauce" without this, YAB+ Skull Crushers went from 8 turned-over triangles to 33 —
+    /// and the guard for <see cref="KeepOutfitOrder"/>'s outward lifts too.
     /// </summary>
     /// <returns>How many nodes moved.</returns>
     private static int PullIn(Sets sets, Vec3[] nodeDelta, List<(int Node, Vector3 By)> pull)

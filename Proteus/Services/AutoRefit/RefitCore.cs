@@ -15,7 +15,7 @@ namespace Proteus.Services;
 /// the two callers cannot drift apart on what a refit IS — which group it goes into, what its option is called, when a
 /// garment is baked for another race — and only differ in how its inputs are chosen.
 /// </summary>
-internal static class RefitCore
+internal static partial class RefitCore
 {
     /// <summary>
     /// The pieces the refit moves whole, from the labels marked "keep shape". An island is one piece; a marked submesh is
@@ -347,7 +347,8 @@ internal static class RefitCore
                                  || !string.Equals(e.BodyMod, bodyMod, StringComparison.OrdinalIgnoreCase)
                                  || string.Equals(e.GamePath, gamePath, StringComparison.OrdinalIgnoreCase)))
                 continue;
-            var recorded = entries.SelectMany(e => e.Targets!).ToList();
+            // The chest beneath a legs refit is no part of its own: never joined on (see ChestBeneathKey).
+            var recorded = entries.SelectMany(e => e.Targets!).Where(t => t.Key != ChestBeneathKey).ToList();
             bool current = recorded.All(t => chosen.TryGetValue(t.Key, out string? rel) && Normal(rel) == Normal(t.Value));
             bool shares = recorded.Any(t => own.ContainsKey(t.Key));
             if (current && shares) return option.Key;
@@ -855,15 +856,18 @@ internal static class RefitCore
     /// underside of the breast is cleared as a top's is when it covers the chest.
     /// </summary>
     /// <param name="chestSlot">"_top" when the cloth covers the chest; null otherwise.</param>
+    /// <param name="outfit">The piece the garment was authored over, as drawn now, which it stays outside (see
+    /// <see cref="BodyRetarget.KeepOutfitOrder"/>). Null for none.</param>
     internal static BodyRetarget.Planned PlanAccessoryRefit(ModelParts garment, byte[] bytes,
                                                             IReadOnlyList<BodyRetarget.SlotPair> pairs, string? chestSlot,
                                                             bool across, out List<string> pieceNames,
-                                                            Action<string>? log = null, Action<string>? warn = null)
+                                                            Action<string>? log = null, Action<string>? warn = null,
+                                                            BodyRetarget.Outfit? outfit = null)
     {
         var pieces = ShapePieces(garment, DefaultKeepShape(garment), out pieceNames);
         return BodyRetarget.Plan(garment, bytes, pairs, garmentSlot: null, held: new HashSet<int>(), replaceSkin: false,
                                  acrossBodies: across, clearBody: true, cutHidden: false, keepShape: pieces, log: log,
-                                 warn: warn, chestSlot: chestSlot);
+                                 warn: warn, chestSlot: chestSlot, outfit: outfit);
     }
 
     /// <summary>
