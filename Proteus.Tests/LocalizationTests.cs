@@ -274,9 +274,28 @@ public sealed class LocalizationTests
         string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
             dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
         foreach (string old in ReadmeFirstSize[lang]) Assert.DoesNotContain(old, readme);
+        // The by-hand tip, the size set's rule, and the "ran it before" sentence are there.
+        foreach (string now in ReadmeNearestSize[lang]) Assert.Contains(now, readme);
         // The "ran it before" sentence names the remake checkbox's own label.
         Assert.Contains(Load(lang)["SizeSet.Remake"].Message, readme);
     }
+
+    /// <summary>What each README says now: the by-hand tip, the size set's rule, and the sentence for earlier runs.</summary>
+    private static readonly Dictionary<string, string[]> ReadmeNearestSize = new()
+    {
+        ["en"] = ["nearest the one you want", "the author's size nearest it", "If you ran it with an earlier version of Proteus"],
+        ["de"] = ["die der gewünschten am nächsten ist", "aus der ihr nächsten Größe des Autors",
+                  "Hast du es mit einer früheren Proteus-Version ausgeführt"],
+        ["es"] = ["más cercana a la que quieres", "desde la talla del autor más cercana a ella",
+                  "Si lo usaste con una versión anterior de Proteus"],
+        ["fr"] = ["la plus proche de celle voulue", "depuis la taille de l'auteur la plus proche (",
+                  "Si vous l'avez lancé avec une version antérieure de Proteus"],
+        ["ja"] = ["目的のサイズに最も近いものから", "作者のサイズのうち最も近いものから合わせ直され", "以前のバージョンのProteusで実行した場合は"],
+        ["ko"] = ["원하는 사이즈에 가장 가까운 제작자의 사이즈에서", "제작자의 사이즈 중 가장 가까운 것에서 리핏되고", "이전 버전의 Proteus로 실행했다면"],
+        ["ru"] = ["Перешивайте с ближайшего к нужному размера автора", "с ближайшего к нему авторского размера",
+                  "Если вы запускали это в более ранней версии Proteus"],
+        ["zh"] = ["请从最接近目标尺寸的作者尺寸改配", "从作者最接近它的尺寸改配", "如果你曾用较早版本的 Proteus 运行过"],
+    };
 
     /// <summary>What each README said before: the size set's old rule, and the old by-hand tip.</summary>
     private static readonly Dictionary<string, string[]> ReadmeFirstSize = new()
