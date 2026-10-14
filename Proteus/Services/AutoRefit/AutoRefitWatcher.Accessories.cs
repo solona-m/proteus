@@ -130,7 +130,7 @@ public sealed partial class AutoRefitWatcher
             var candidates = SiblingPiece.Find(redirects, ownRecord, r.Worn.Rel!, slot, race, Note);
             var job = new EndsJob(r, g, state, targetMod, item, bytes, redirects, ownRecord, 0, r.Worn.GamePath, race,
                                   BodySizeCatalog.IsMaleRace(race), garment, new HashSet<string>(), vanilla[race],
-                                  TargetFor, clock);
+                                  TargetFor, clock, null);
             return siblings[slot] = candidates.Count == 0 ? null : ReadSibling(job, candidates, Note);
         }
 
