@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Proteus;
@@ -84,11 +85,43 @@ public class ImcManipulationTests
         };
         PenumbraPackage.PackImc Imc(int vfx) => new("Accessory", 2, 15, "Wrists", 15, 0, vfx, 0, 0x3FF, 0);
 
-        Assert.Equal("Bracelets", StaleEffectImport.Detect(Meta(null), [Imc(1)]));
-        Assert.Null(StaleEffectImport.Detect(Meta(new ContentEffect { VfxId = 1 }), [Imc(1)]));
-        Assert.Null(StaleEffectImport.Detect(Meta(null), [Imc(0)]));
+        var shipped = new HashSet<string> { "chara/accessory/a0002/vfx/eff/va0001.avfx" };
+        Assert.Equal("Bracelets", StaleEffectImport.Detect(Meta(null), [Imc(1)], shipped));
+        Assert.Null(StaleEffectImport.Detect(Meta(new ContentEffect { VfxId = 1 }), [Imc(1)], shipped));
+        Assert.Null(StaleEffectImport.Detect(Meta(null), [Imc(0)], shipped));
         // Another item's effect is not this piece's.
-        Assert.Null(StaleEffectImport.Detect(Meta(null), [Imc(1) with { PrimaryId = 3 }]));
+        Assert.Null(StaleEffectImport.Detect(Meta(null), [Imc(1) with { PrimaryId = 3 }], shipped));
+        // A game effect the pack only switches on (no .avfx of its own) is left on the item by the import too.
+        Assert.Null(StaleEffectImport.Detect(Meta(null), [Imc(1)], new HashSet<string>()));
+    }
+
+    [Theory]   // [AC-item-vfx-host-8] [EDGE-item-vfx-host-12] [EDGE-item-vfx-host-10]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_fresh_import_is_never_told_to_re_import(bool avfxRedirected)
+    {
+        var root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "proteus-stale-" + System.Guid.NewGuid().ToString("N"));
+        try
+        {
+            using var pack = SyntheticPack.EffectBearing(avfxRedirected: avfxRedirected);
+            var preview = ContentImportService.Inspect(pack.Path);
+            ContentImportService.WriteMod(root, "Veil", "Someone", preview);
+
+            var sidecar = ContentImportService.BuildSidecar(preview, "Veil", "Someone");
+            var (imc, redirected) = PenumbraPackage.ReadManifestImc(root);
+            Assert.Null(StaleEffectImport.Detect(sidecar, imc, redirected));
+
+            // The same pack's own manifests under an older import's sidecar (no effect recorded): told, when it ships one.
+            using var original = SyntheticPack.EffectBearing(avfxRedirected: avfxRedirected);
+            var raw = root + "-raw";
+            PenumbraPackage.ExtractTo(original.Path, raw);
+            foreach (var p in sidecar.ContentGroups!.SelectMany(g => g.Options).SelectMany(o => o.Pieces)) p.Effect = null;
+            var (rawImc, rawRedirected) = PenumbraPackage.ReadManifestImc(raw);
+            var told = StaleEffectImport.Detect(sidecar, rawImc, rawRedirected);
+            if (avfxRedirected) Assert.NotNull(told); else Assert.Null(told);
+            System.IO.Directory.Delete(raw, true);
+        }
+        finally { if (System.IO.Directory.Exists(root)) System.IO.Directory.Delete(root, true); }
     }
 
     [Theory]   // [AC-item-vfx-host-8] [EDGE-item-vfx-host-12]
@@ -102,8 +135,10 @@ public class ImcManipulationTests
         {
             using var pack = SyntheticPack.EffectBearing(legacy: legacy);
             PenumbraPackage.ExtractTo(pack.Path, dir);
-            var imc = Assert.Single(PenumbraPackage.ReadManifestImc(dir));
-            Assert.Equal(new PenumbraPackage.PackImc("Accessory", 2, 15, "Wrists", 15, 0, 1, 0, 0x3FF, 0), imc);
+            var (all, redirected) = PenumbraPackage.ReadManifestImc(dir);
+            Assert.Equal(new PenumbraPackage.PackImc("Accessory", 2, 15, "Wrists", 15, 0, 1, 0, 0x3FF, 0), Assert.Single(all));
+            Assert.Contains("chara/accessory/a0002/vfx/eff/va0001.avfx", redirected);
+            Assert.Contains("vfx/FroVeil/FroVeilDustT.atex", redirected);
         }
         finally { if (System.IO.Directory.Exists(dir)) System.IO.Directory.Delete(dir, true); }
     }
