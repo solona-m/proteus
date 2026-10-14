@@ -37,6 +37,9 @@ internal static class LocalData
     /// <summary>Miette's "Shift": heels with stockings to the thigh, a heeled foot of Bibo skin, made on YAB WC.</summary>
     internal const string ShiftPack = ModPacks + ":Shift.pmp";
 
+    /// <summary>Bijeon's "Frost Veil Plus+": an invisible a0002 bracelet whose whole look is an item effect, in the v3 layout.</summary>
+    internal const string FrostVeilPack = ModPacks + ":Frost Veil Plus+.pmp";
+
     /// <summary>
     /// The one entry of a .pmp whose path ends in <paramref name="suffix"/>. By ending, so folder names a pack spells in
     /// characters a zip may encode either way (Shift's "•") do not matter; throws unless exactly one entry matches.
