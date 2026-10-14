@@ -90,7 +90,7 @@ public sealed partial class ContentImportService
     /// <item>The <c>.avfx</c> redirects at each effect's game path.</item>
     /// <item>For an effect-only unit, every redirect of its item (its set folder, its slot's files): the composite reads
     /// them from the pack, and leaving them would put the pack's materials on the vanilla item.</item>
-    /// <item>Its <c>Imc</c> edits that set a <c>VfxId</c>: deleted when the rest of the entry is vanilla
+    /// <item>Its <c>Imc</c> edits that set the recorded <c>VfxId</c>: deleted when the rest of the entry is vanilla
     /// (<paramref name="readGameFile"/>), else kept with <c>VfxId 0</c>.</item>
     /// <item>Its <c>Eqdp</c> edits, which only routed every race to the placeholder.</item>
     /// </list>
@@ -200,9 +200,12 @@ public sealed partial class ContentImportService
             var primary = PenumbraPackage.Int(inner, "PrimaryId");
             var equipSlot = inner["EquipSlot"] is JsonValue ev && ev.TryGetValue<string>(out var es) ? es : null;
             var objectType = inner["ObjectType"] is JsonValue ov && ov.TryGetValue<string>(out var ot) ? ot : null;
-            if (primary == null || equipSlot == null
-             || (PenumbraPackage.Int(entry, "VfxId") ?? 0) == 0
-             || units.FirstOrDefault(u => Owns(u, primary.Value, equipSlot, objectType)) is not { } owner) continue;
+            // Only the effect that was recorded and carried: any other id on the item (a game effect it switches on, a second
+            // effect) stays exactly as the pack wrote it.
+            var vfx = PenumbraPackage.Int(entry, "VfxId") ?? 0;
+            if (primary == null || equipSlot == null || vfx == 0
+             || units.FirstOrDefault(u => u.Effect!.VfxId == vfx && Owns(u, primary.Value, equipSlot, objectType))
+                    is not { } owner) continue;
 
             if (VanillaButEffect(owner, PenumbraPackage.Int(inner, "Variant") ?? -1, entry, readGameFile))
                 manips.RemoveAt(i);

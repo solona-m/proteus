@@ -282,6 +282,58 @@ public partial class ContentImportTests
     }
 
     [Fact]
+    public void Only_the_pieces_own_item_and_effect_leave_the_pack()   // [EDGE-item-vfx-host-14] [AC-item-vfx-host-3]
+    {
+        var dir = TempDir();
+        try
+        {
+            using var pack = SyntheticPack.EffectBearing(neighbours: true);
+            var root = Path.Combine(dir, "mod");
+            ContentImportService.WriteMod(root, "Veil", "Someone", ContentImportService.Inspect(pack.Path));
+            var owners = Owners(root);
+            var keys = owners.SelectMany(FileKeys).ToList();
+
+            // The bracelet's own files go…
+            Assert.DoesNotContain("chara/accessory/a0002/material/v0015/mt_c0101a0002_wrs_a.mtrl", keys);
+            Assert.DoesNotContain("chara/accessory/a0002/texture/v01_c0101a0002_wrs_d.tex", keys);
+            // …but one set folder holds every slot: the necklace's material, and a texture the effect may load by path, stay.
+            Assert.Contains("chara/accessory/a0002/material/v0001/mt_c0101a0002_nek_a.mtrl", keys);
+            Assert.Contains("chara/accessory/a0002/vfx/texture/sparkle.atex", keys);
+
+            // The recorded effect is neutralised; a second effect on the same item is left as the pack wrote it.
+            var imcs = owners.SelectMany(o => Manips(o, "Imc")).Select(m => m["Manipulation"]!).ToList();
+            Assert.Equal(0, (int)imcs.Single(m => (int)m["Variant"]! == 15)["Entry"]!["VfxId"]!);
+            Assert.Equal(2, (int)imcs.Single(m => (int)m["Variant"]! == 3)["Entry"]!["VfxId"]!);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void An_imc_edit_that_differs_from_vanilla_keeps_all_but_its_effect()   // [EDGE-item-vfx-host-13]
+    {
+        var dir = TempDir();
+        try
+        {
+            using var pack = SyntheticPack.EffectBearing();
+            // The game's v15 entry uses material 14, not the pack's 15: the pack's edit is more than the effect, so it stays.
+            var imcFile = new byte[4 + 16 * 5 * 6];
+            BitConverter.GetBytes((ushort)15).CopyTo(imcFile, 0);
+            BitConverter.GetBytes((ushort)31).CopyTo(imcFile, 2);
+            int at = 4 + (15 * 5 + 2) * 6;
+            imcFile[at] = 14;
+            BitConverter.GetBytes((ushort)0x3FF).CopyTo(imcFile, at + 2);
+
+            var root = Path.Combine(dir, "mod");
+            ContentImportService.WriteMod(root, "Veil", "Someone", ContentImportService.Inspect(pack.Path),
+                readGameFile: p => p == "chara/accessory/a0002/a0002.imc" ? imcFile : null);
+            var entry = Owners(root).SelectMany(o => Manips(o, "Imc")).Single()["Manipulation"]!["Entry"]!;
+            Assert.Equal(0, (int)entry["VfxId"]!);
+            Assert.Equal(15, (int)entry["MaterialId"]!);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
     public void An_imc_edit_that_is_vanilla_but_for_its_effect_is_removed()   // [AC-item-vfx-host-3] [EDGE-item-vfx-host-13]
     {
         var dir = TempDir();

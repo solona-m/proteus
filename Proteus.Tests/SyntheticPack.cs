@@ -247,9 +247,11 @@ internal sealed class SyntheticPack : IDisposable
     /// <param name="avfxPresent">False names the effect files in the manifest without writing them.</param>
     /// <param name="materialPresent">False ships no material for the model's mesh.</param>
     /// <param name="avfxRedirected">False redirects no <c>.avfx</c> at all: the IMC turns on one of the game's own effects.</param>
+    /// <param name="neighbours">Also ship what is NOT the piece's: another slot's material in the same set, a set texture
+    /// named for no slot, and a second effect (variant 3, <c>VfxId 2</c>) on the same item.</param>
     internal static SyntheticPack EffectBearing(
         bool legacy = false, bool geometry = false, bool effect = true, bool imcInDefault = false,
-        bool avfxPresent = true, bool materialPresent = true, bool avfxRedirected = true)
+        bool avfxPresent = true, bool materialPresent = true, bool avfxRedirected = true, bool neighbours = false)
     {
         const string Model = "items/model.mdl";
         var corner = (0f, 1.077f, 0f);
@@ -275,7 +277,15 @@ internal sealed class SyntheticPack : IDisposable
                                   + Quote(race) + ",\"SetId\":\"2\",\"Slot\":\"Wrists\"}}";
         const string GlobalEqp = "{\"Type\":\"GlobalEqp\",\"Manipulation\":{\"Type\":\"DoNotHideBracelets\",\"Condition\":2}}";
 
+        if (neighbours)
+        {
+            items.Add(("chara/accessory/a0002/material/v0001/mt_c0101a0002_nek_a.mtrl", "items/nek.mtrl"));
+            items.Add(("chara/accessory/a0002/vfx/texture/sparkle.atex", "items/sparkle.atex"));
+        }
+
         var itemManips = new List<string> { Eqdp("Highlander"), Eqdp("Hrothgar") };
+        if (neighbours)
+            itemManips.Add(imc.Replace("\"VfxId\":" + (effect ? 1 : 0), "\"VfxId\":2").Replace("\"Variant\":15", "\"Variant\":3"));
         var defaultManips = new List<string> { GlobalEqp };
         (imcInDefault ? defaultManips : itemManips).Insert(0, imc);
 
@@ -342,6 +352,11 @@ internal sealed class SyntheticPack : IDisposable
             {
                 Write(zip, "items/v0001.mtrl", [0]);
                 Write(zip, "items/v0015.mtrl", [0]);
+            }
+            if (neighbours)
+            {
+                Write(zip, "items/nek.mtrl", [0]);
+                Write(zip, "items/sparkle.atex", [0]);
             }
             Write(zip, "vfx/dust.atex", [0]);
             Write(zip, "glitter/off.atex", [0]);

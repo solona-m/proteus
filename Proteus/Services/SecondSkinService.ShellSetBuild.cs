@@ -169,7 +169,13 @@ public sealed partial class SecondSkinService
             PlanSiblingRelief();
             BakeShellTextures();
             PlaceContentMeshes();
-            if (!PublishSkeletons()) return Abandoned();
+            if (!PublishSkeletons())
+            {
+                // Nothing placed — the effect-only placeholder alone, with no free carrier. Its effect is still reported (every
+                // request is unhosted, so this only logs and tells the user); nothing it writes is published.
+                PlaceEffects();
+                return Abandoned();
+            }
             ReportUnhosted();
             SmoothBody();
             BuildHostModels();
@@ -968,9 +974,16 @@ public sealed partial class SecondSkinService
                 // An effect's IMC entry is only ours to write on an invisible ACCESSORY carrier (see EffectHostPlanner), so its
                 // placeholder goes nowhere else: on a worn ring it would rewrite the player's item for nothing visible.
                 bool effectOnly = contentUnits[u].EffectOnly;
+                // A piece with real geometry AND an effect tries the carriers first, so its effect has a host that can carry
+                // it; it may still fall back to a worn item, where only its geometry is placed.
+                bool carriesEffect = contentUnits[u].Owners.Any(o => o.Content.Piece.Effect != null);
+                var order = Enumerable.Range(0, hosts.Count);
+                if (carriesEffect && !effectOnly)
+                    order = order.OrderBy(h => EffectHostPlanner.CanHostEffectOnly(hosts[h].BaseModel != null, hosts[h].Prefix) ? 0 : 1);
                 int chosen = -1;
-                for (int h = 0; h < hosts.Count && diskBudget > 0; h++)
+                foreach (var h in order)
                 {
+                    if (diskBudget <= 0) break;
                     if (remaining[h] <= 0) continue;
                     // Only a carrier's EQDP may be rewritten, so only a carrier can publish a natively-authored piece undeformed.
                     if (carrierOnly && hosts[h].BaseModel != null) continue;
@@ -1272,16 +1285,20 @@ public sealed partial class SecondSkinService
                           + "is drawing nothing there — its ex bones will not load", mod, entry, slot);
             }
 
+            // An effect-only placeholder needs a FREE slot, the opposite of this notice's advice, so it is told by the effect's
+            // own line (PlaceEffects) instead; the log still counts it.
+            int meshUnhosted = contentUnhosted.Count(u => !contentUnits[u].EffectOnly);
             if (contentUnhosted.Count > 0)
             {
                 // In chat as well as the log, deduped by count: a piece that silently does not appear has no other visible cause.
-                if (service._lastUnhostedContent != contentUnhosted.Count)
+                if (meshUnhosted == 0) service._lastUnhostedContent = -1;
+                else if (service._lastUnhostedContent != meshUnhosted)
                 {
-                    service._lastUnhostedContent = contentUnhosted.Count;
+                    service._lastUnhostedContent = meshUnhosted;
                     var msg = string.Format(Loc.Localize("Chat.ContentUnplaced.Fmt",
                         "[Proteus] {0} mesh piece(s) from your mods could not be placed — your accessories are "
                       + "out of material slots. Equip another ring / bracelet / necklace, or turn off a layer."),
-                        contentUnhosted.Count);
+                        meshUnhosted);
                     _ = Plugin.Framework.RunOnFrameworkThread(
                         () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 25).Build()));
                 }
