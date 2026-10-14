@@ -605,7 +605,8 @@ internal static partial class BodyRetarget
     /// Push cloth the refit drove INTO the drawn skin back out of it — and nothing else.
     /// </summary>
     /// <param name="candidates">
-    /// The CLOTH nodes, minus the ones the transfer snapped — see <see cref="Sets"/>. Both exclusions are set
+    /// The CLOTH nodes, minus the ones the transfer snapped unless they land on a body tessellated otherwise (see
+    /// <see cref="ShapeAndPush"/>) — see <see cref="Sets"/>. Both exclusions are set
     /// membership and never a distance test, deliberately: a snapped node sits exactly ON a body surface, where inside
     /// and outside are a coin flip, and the garment's own body mesh is SUPPOSED to coincide with the body. A cloth
     /// vertex 0.01 mm inside and a skin vertex exactly on the surface are the same number with opposite right answers,
@@ -629,9 +630,11 @@ internal static partial class BodyRetarget
     /// <param name="faceCheck">The face test it built, for <see cref="ClearFaces"/> to run again once the fold relax
     /// has had its turn.</param>
     /// <param name="pushedBy">How far it pushed each node, for the same.</param>
+    /// <param name="snapped">Which of <paramref name="candidates"/> the transfer snapped, when snapped cloth is among them;
+    /// null when it is not.</param>
     private static int PushOut(Sets sets, IReadOnlyList<int> candidates, TargetBody before, TargetBody after,
                                Vec3[] nodeDelta, bool clearBody, out float worst, out FaceCheck faceCheck,
-                               out float[] pushedBy)
+                               out float[] pushedBy, bool[]? snapped = null)
     {
         worst = 0f;
         pushedBy = new float[sets.NodeCount];
@@ -748,10 +751,12 @@ internal static partial class BodyRetarget
         foreach (int n in nodes) inSet[n] = true;
 
         // Only cloth this pass considered and then left out holds its neighbours back. Skin, and a node that snapped
-        // onto the body, were never candidates: they are not cloth that stayed put, they are the surface the cloth is
+        // onto a body of its own mesh, were never candidates: they are not cloth that stayed put, they are the surface the cloth is
         // being cleared from, and counting them as "no push" pinned the fabric to the skin it had to come out of.
+        // A snapped node left out as authored inside is that surface too: a skin copy a hair under the skin it copies is
+        // the coin flip, not a tuck, and holding its neighbours to it would keep them in the skin as before.
         var candidate = new bool[sets.NodeCount];
-        foreach (int n in candidates) candidate[n] = true;
+        foreach (int n in candidates) candidate[n] = snapped == null || !snapped[n] || inSet[n];
 
         void Slope()
         {
