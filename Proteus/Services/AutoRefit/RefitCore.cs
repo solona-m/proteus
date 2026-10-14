@@ -837,15 +837,18 @@ internal static partial class RefitCore
     /// pieces kept whole, nothing held, the skin replaced across bodies.
     /// </summary>
     /// <param name="pieceNames">The kept pieces' labels, in order — for <see cref="ReleasedLog"/>.</param>
+    /// <param name="trace">For a diagnostic: the solve's stages (see <see cref="BodyRetarget.Solve"/>). Null for every
+    /// refit.</param>
     internal static BodyRetarget.Planned PlanRefit(ModelParts garment, byte[] bytes, IReadOnlyList<BodyRetarget.SlotPair> pairs,
                                                    string primary, bool across, bool gameGear, out List<string> pieceNames,
-                                                   Action<string>? log = null, Action<string>? warn = null)
+                                                   Action<string>? log = null, Action<string>? warn = null,
+                                                   Action<string, SecondSkinWriter.Vec3[]>? trace = null)
     {
         var skin = AutoRefitDecisions.SkinFor(gameGear);
         var pieces = ShapePieces(garment, DefaultKeepShape(garment), out pieceNames);
         return BodyRetarget.Plan(garment, bytes, pairs, primary, held: new HashSet<int>(),
                                  replaceSkin: across, acrossBodies: across, clearBody: skin.ClearBody,
-                                 cutHidden: skin.CutHidden, keepShape: pieces, log: log, warn: warn);
+                                 cutHidden: skin.CutHidden, keepShape: pieces, log: log, warn: warn, trace: trace);
     }
 
     /// <summary>

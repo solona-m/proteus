@@ -35,14 +35,20 @@ public class KeepShapeReleaseLocalTests
     /// The written models of these refits on <c>test</c> before this rule (build 1229, 7e76b72), SHA-256: with release
     /// off, the refit must still write exactly these — the stage the release re-runs was pulled out of the solve, and
     /// nothing else on the Keep shape path may have moved.
+    /// <para/>
+    /// Re-pinned for build 1258: Ash and pop have big double-walled pieces, which a thick shell's walls now move together
+    /// when the skin is cleared out of a face (<see cref="BodyRetarget.FaceCheck.WallPartner"/>) and whose inner wall now
+    /// covers what lies beneath. Measured before re-pinning, against the same refit with both rules off: up to 393 points
+    /// moved (worst 7.8 mm, pop onto Neolithe XS); folds, faces with skin through the middle and cloth inside the body the
+    /// same on every case, or fewer (Ash Rue L onto Uranus: 9 points inside → 7).
     /// </summary>
     private static readonly Dictionary<string, string> Before = new()
     {
-        ["ash Rue L > Uranus"] = "8C21BA073FF3E10B5DCCC3A0D20BA411F12115546E08A61F0AE2AAAD66236334",
-        ["ash Yab L > Uranus"] = "3B4769B40112952A9A094AA1BE9A6CD94579F120B4CDB91CE5475AF5B179045C",
-        ["pop > Uranus"] = "DD799F3CC28B721C315420C1510FF459C0A2E7E1A67CA67C8C1F98825E3747B2",
-        ["pop > Neolithe XS"] = "96A5D5E72F62C2ECECBC75CF13D55DEC11A3369E202AB33956B282036D0C1345",
-        ["pop > Bibo S"] = "4860C45C6F7ADF88F0F85EB51DBDA8F5490C9F8E0EA19FEB8563AF61171E5B84",
+        ["ash Rue L > Uranus"] = "3282DCE97B15A5FE4C38147E93AD7EE1ECF501A759A8B3BB232B60AB573EDAAC",
+        ["ash Yab L > Uranus"] = "6F700B0C05B52930470B71D4195245C542141FDC9AC5F3E24CA5DD716717F0E1",
+        ["pop > Uranus"] = "C2608C960A4D85ABE857E9F083689D66832A6D9B90508327967013CCCBAC49BA",
+        ["pop > Neolithe XS"] = "D7C049C129A5EDBCCC655ED09D3C7A3BF65A871F89BF78E8B52CE346338A34B1",
+        ["pop > Bibo S"] = "58E1024ABB01A34C0F74E885FF0D39A54DACBF5AB503B215183ACF4E196F9D38",
     };
 
     private sealed record Run(BodyRetarget.Planned Plan, List<string> Names)
