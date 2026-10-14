@@ -36,7 +36,8 @@ public static class PenumbraPackage
         IReadOnlyList<string> Attributes, ushort AttributeMask = 0,
         IReadOnlyList<PackEst>? Est = null,
         IReadOnlyList<string>? Swaps = null,
-        IReadOnlyList<PackManipulation>? Manipulations = null)
+        IReadOnlyList<PackManipulation>? Manipulations = null,
+        IReadOnlyList<PackImc>? Imc = null)
     {
         /// <summary>Never null, so callers can enumerate without a guard.</summary>
         public IReadOnlyList<PackEst> Est { get; init; } = Est ?? [];
@@ -46,6 +47,9 @@ public static class PenumbraPackage
 
         /// <summary>Never null.</summary>
         public IReadOnlyList<PackManipulation> Manipulations { get; init; } = Manipulations ?? [];
+
+        /// <summary>The option's <c>Imc</c> manipulations in full. Never null.</summary>
+        public IReadOnlyList<PackImc> Imc { get; init; } = Imc ?? [];
     }
 
     /// <summary>
@@ -61,6 +65,16 @@ public static class PenumbraPackage
     /// <paramref name="Entry"/> of 0 means "no extra skeleton".
     /// </summary>
     public sealed record PackEst(string Slot, int SetId, int Entry);
+
+    /// <summary>
+    /// One <c>Imc</c> manipulation: the entry the pack writes for one variant of one item. <paramref name="VfxId"/>
+    /// non-zero means that variant spawns <c>vfx/eff/v{a|e}NNNN.avfx</c> from its own set whenever it is drawn.
+    /// </summary>
+    /// <param name="ObjectType">"Accessory" or "Equipment" (other kinds are read but match no piece).</param>
+    /// <param name="EquipSlot">Penumbra's slot name ("Wrists", "Body").</param>
+    public sealed record PackImc(
+        string ObjectType, int PrimaryId, int Variant, string EquipSlot,
+        int MaterialId, int DecalId, int VfxId, int MaterialAnimationId, int AttributeMask, int SoundId);
 
     /// <summary>
     /// One option group. <paramref name="Index"/> is Penumbra's own ordinal (v4 array position or v3 filename
@@ -93,10 +107,14 @@ public static class PenumbraPackage
         IReadOnlyDictionary<string, long> Entries,
         IReadOnlyDictionary<string, string> DefaultFiles,
         IReadOnlyList<PackGroup> Groups,
-        IReadOnlyList<PackEst>? DefaultEst = null)
+        IReadOnlyList<PackEst>? DefaultEst = null,
+        IReadOnlyList<PackImc>? DefaultImc = null)
     {
         /// <summary>The always-applied extra-skeleton entries, gated by no option. Never null.</summary>
         public IReadOnlyList<PackEst> DefaultEst { get; init; } = DefaultEst ?? [];
+
+        /// <summary>The always-applied <c>Imc</c> manipulations. Never null.</summary>
+        public IReadOnlyList<PackImc> DefaultImc { get; init; } = DefaultImc ?? [];
 
         /// <summary>Every redirect the pack declares anywhere, default data and every option alike.</summary>
         public IEnumerable<KeyValuePair<string, string>> AllFiles
@@ -130,11 +148,17 @@ public static class PenumbraPackage
 
         var defaultFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var defaultEst = new List<PackEst>();
+        var defaultImc = new List<PackImc>();
         var groups = new List<PackGroup>();
 
         if (fileVersion >= PenumbraModMeta.SingleFileVersion)
         {
-            if (manifest["DefaultData"] is JsonObject dd) { ReadFiles(dd, defaultFiles); ReadEst(dd, defaultEst); }
+            if (manifest["DefaultData"] is JsonObject dd)
+            {
+                ReadFiles(dd, defaultFiles);
+                ReadEst(dd, defaultEst);
+                defaultImc.AddRange(ReadImc(dd));
+            }
             if (manifest["Groups"] is JsonArray arr)
                 for (int i = 0; i < arr.Count; i++)
                     if (arr[i] is JsonObject g)
@@ -146,6 +170,7 @@ public static class PenumbraPackage
             {
                 ReadFiles(legacy, defaultFiles);
                 ReadEst(legacy, defaultEst);
+                defaultImc.AddRange(ReadImc(legacy));
             }
 
             // v3 group files, ordered by the number in their name: that number is the group's priority.
@@ -172,7 +197,8 @@ public static class PenumbraPackage
             entries,
             defaultFiles,
             groups,
-            defaultEst);
+            defaultEst,
+            defaultImc);
     }
 
     /// <summary>
@@ -334,7 +360,7 @@ public static class PenumbraPackage
                 ReadEst(oo, est);
                 options.Add(new PackOption(
                     Str(oo, "Name") ?? string.Empty, Str(oo, "Description"), files, attrs,
-                    Mask(oo, "AttributeMask"), est, ReadSwaps(oo), ReadManipulations(oo)));
+                    Mask(oo, "AttributeMask"), est, ReadSwaps(oo), ReadManipulations(oo), ReadImc(oo)));
             }
 
         // An Imc group's edit lives on the group; read only for that kind.
@@ -385,6 +411,37 @@ public static class PenumbraPackage
             if (rec.SetId < 0 || into.Contains(rec)) continue;
             into.Add(rec);
         }
+    }
+
+    /// <summary>
+    /// The <c>Imc</c> manipulations an owner declares, in full. <c>AttributeAndSound</c> is the packed form of the mask
+    /// and sound; the separate fields win when both are present, as Penumbra writes both.
+    /// </summary>
+    private static List<PackImc> ReadImc(JsonObject owner)
+    {
+        var result = new List<PackImc>();
+        if (owner["Manipulations"] is not JsonArray manips) return result;
+        foreach (var m in manips)
+        {
+            if (m is not JsonObject mo
+                || !string.Equals(Str(mo, "Type"), "Imc", StringComparison.OrdinalIgnoreCase)
+                || mo["Manipulation"] is not JsonObject inner
+                || inner["Entry"] is not JsonObject e) continue;
+
+            int packed = Int(e, "AttributeAndSound") ?? 0;
+            result.Add(new PackImc(
+                Str(inner, "ObjectType") ?? string.Empty,
+                Int(inner, "PrimaryId") ?? -1,
+                Int(inner, "Variant") ?? -1,
+                Str(inner, "EquipSlot") ?? string.Empty,
+                Int(e, "MaterialId") ?? 0,
+                Int(e, "DecalId") ?? 0,
+                Int(e, "VfxId") ?? 0,
+                Int(e, "MaterialAnimationId") ?? 0,
+                (Int(e, "AttributeMask") ?? packed) & 0x3FF,
+                Int(e, "SoundId") ?? (packed >> 10)));
+        }
+        return result;
     }
 
     private static List<string> ReadSwaps(JsonObject owner)
@@ -447,6 +504,17 @@ public static class PenumbraPackage
     private static string? Str(JsonObject o, string key)
         => o[key] is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
 
-    private static int? Int(JsonObject o, string key)
-        => o[key] is JsonValue v && v.TryGetValue<int>(out var n) ? n : null;
+    /// <summary>
+    /// A whole number, written as a number or as a numeric string: packs spell set ids both ways
+    /// (<c>"SetId": "2"</c> in Eqdp manipulations), and Penumbra reads both.
+    /// </summary>
+    internal static int? Int(JsonObject o, string key)
+    {
+        if (o[key] is not JsonValue v) return null;
+        if (v.TryGetValue<int>(out var n)) return n;
+        return v.TryGetValue<string>(out var s)
+            && int.TryParse(s, System.Globalization.NumberStyles.Integer,
+                            System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+            ? parsed : null;
+    }
 }

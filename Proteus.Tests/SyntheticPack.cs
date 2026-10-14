@@ -234,6 +234,124 @@ internal sealed class SyntheticPack : IDisposable
         return new SyntheticPack(path);
     }
 
+    /// <summary>
+    /// The Frost Veil shape: an accessory whose model is an invisible placeholder (one triangle with its three corners
+    /// in one spot) and whose whole look is an animated effect. The manifest JSON is copied from the real pack —
+    /// including <c>"SetId": "2"</c> as a STRING in its Eqdp edits, and both <c>AttributeAndSound</c> and
+    /// <c>AttributeMask</c> in its IMC entry — because a reader that only takes numbers matches nothing there.
+    /// </summary>
+    /// <param name="legacy">Write the v3 layout (default_mod.json + group_NNN files), as Frost Veil itself ships.</param>
+    /// <param name="geometry">A real triangle instead of the placeholder.</param>
+    /// <param name="effect">False writes the IMC entry with <c>VfxId 0</c>: a placeholder with no effect.</param>
+    /// <param name="imcInDefault">The IMC edit in the default data rather than the Items option.</param>
+    /// <param name="avfxPresent">False names the effect files in the manifest without writing them.</param>
+    /// <param name="materialPresent">False ships no material for the model's mesh.</param>
+    internal static SyntheticPack EffectBearing(
+        bool legacy = false, bool geometry = false, bool effect = true, bool imcInDefault = false,
+        bool avfxPresent = true, bool materialPresent = true)
+    {
+        const string Model = "items/model.mdl";
+        var corner = (0f, 1.077f, 0f);
+        var model = SyntheticModel.Build([], new SyntheticModel.Mesh("/mt_c0101a0002_wrs_a.mtrl",
+            geometry ? new SyntheticModel.Sub(0) : new SyntheticModel.Sub(0, Corners: [corner, corner, corner])));
+
+        var items = new List<(string GamePath, string Entry)>
+        {
+            ("chara/accessory/a0002/model/c0101a0002_wrs.mdl", Model),
+            ("chara/accessory/a0002/texture/v01_c0101a0002_wrs_d.tex", "items/v01_d.tex"),
+        };
+        if (materialPresent)
+        {
+            items.Add(("chara/accessory/a0002/material/v0001/mt_c0101a0002_wrs_a.mtrl", "items/v0001.mtrl"));
+            items.Add(("chara/accessory/a0002/material/v0015/mt_c0101a0002_wrs_a.mtrl", "items/v0015.mtrl"));
+        }
+
+        string imc = "{\"Type\":\"Imc\",\"Manipulation\":{\"Entry\":{\"AttributeAndSound\":1023,\"MaterialId\":15,"
+                   + "\"DecalId\":0,\"VfxId\":" + (effect ? 1 : 0) + ",\"MaterialAnimationId\":0,\"AttributeMask\":1023,"
+                   + "\"SoundId\":0},\"ObjectType\":\"Accessory\",\"PrimaryId\":2,\"SecondaryId\":0,\"Variant\":15,"
+                   + "\"EquipSlot\":\"Wrists\",\"BodySlot\":\"Unknown\"}}";
+        string Eqdp(string race) => "{\"Type\":\"Eqdp\",\"Manipulation\":{\"Entry\":0,\"Gender\":\"Male\",\"Race\":"
+                                  + Quote(race) + ",\"SetId\":\"2\",\"Slot\":\"Wrists\"}}";
+        const string GlobalEqp = "{\"Type\":\"GlobalEqp\",\"Manipulation\":{\"Type\":\"DoNotHideBracelets\",\"Condition\":2}}";
+
+        var itemManips = new List<string> { Eqdp("Highlander"), Eqdp("Hrothgar") };
+        var defaultManips = new List<string> { GlobalEqp };
+        (imcInDefault ? defaultManips : itemManips).Insert(0, imc);
+
+        var defaults = new List<(string GamePath, string Entry)>
+        {
+            ("vfx/FroVeil/FroVeilDustT.atex", "vfx/dust.atex"),
+            ("chara/accessory/a0002/vfx/eff/va0001.avfx", "vfx/va0001.avfx"),
+            ("vfx/FrostVeilVariant1.avfx", "vfx/variant1.avfx"),
+        };
+
+        string Files(IEnumerable<(string GamePath, string Entry)> files)
+            => "{" + string.Join(",", files.Select(f => $"{Quote(f.GamePath)}:{Quote(f.Entry.Replace('/', '\\'))}")) + "}";
+        string Option(string name, IEnumerable<(string, string)>? files = null, IEnumerable<string>? manips = null)
+            => "{\"Name\":" + Quote(name) + ",\"Description\":\"\""
+             + (files != null ? ",\"Files\":" + Files(files) : "")
+             + (manips != null ? ",\"Manipulations\":[" + string.Join(",", manips) + "]" : "") + "}";
+        string Group(string name, int priority, params string[] options)
+            => "{\"Version\":0,\"Name\":" + Quote(name) + ",\"Description\":\"\",\"Image\":\"\",\"Page\":0,"
+             + "\"Priority\":" + priority + ",\"Type\":\"Single\",\"DefaultSettings\":0,\"Options\":["
+             + string.Join(",", options) + "]}";
+
+        const string Va = "chara/accessory/a0002/vfx/eff/va0001.avfx";
+        var groups = new[]
+        {
+            Group("Style", 0,
+                Option("Frost"),
+                Option("Arcane Infusion", [(Va, "vfx/variant1.avfx")]),
+                Option("Ice Candies", [(Va, "vfx/variant2.avfx")])),
+            Group("Glitter", 1,
+                Option("On"),
+                Option("Off", [("vfx/FroVeil/FroVeilDustT.atex", "glitter/off.atex")])),
+            Group("Items", 0, Option("Astral Bracelet", items, itemManips)),
+        };
+
+        string defaultData = "{\"Version\":0,\"Files\":" + Files(defaults) + ",\"Manipulations\":["
+                           + string.Join(",", defaultManips) + "]}";
+        string metaHead = "\"Name\":\"[BM] Frost Veil Plus+\",\"Author\":\"Bijeon Milae\",\"Description\":\"\","
+                        + "\"Image\":\"\",\"Version\":\"1.0.0\",\"Website\":\"\"";
+
+        var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+            "proteus-synth-" + Guid.NewGuid().ToString("N") + ".pmp");
+        using (var zip = ZipFile.Open(path, ZipArchiveMode.Create))
+        {
+            if (legacy)
+            {
+                Write(zip, "meta.json", Encoding.UTF8.GetBytes("{\"FileVersion\":3," + metaHead + "}"));
+                Write(zip, "default_mod.json", Encoding.UTF8.GetBytes(defaultData));
+                for (int i = 0; i < groups.Length; i++)
+                    Write(zip, $"group_{i + 1:D3}_{(i == 0 ? "style" : i == 1 ? "glitter" : "items")}.json",
+                          Encoding.UTF8.GetBytes(groups[i]));
+            }
+            else
+            {
+                Write(zip, "meta.json", Encoding.UTF8.GetBytes(
+                    "{\"FileVersion\":4," + metaHead + ",\"DefaultData\":" + defaultData
+                  + ",\"Groups\":[" + string.Join(",", groups) + "]}"));
+            }
+
+            Write(zip, Model, model);
+            Write(zip, "items/v01_d.tex", [0]);
+            if (materialPresent)
+            {
+                Write(zip, "items/v0001.mtrl", [0]);
+                Write(zip, "items/v0015.mtrl", [0]);
+            }
+            Write(zip, "vfx/dust.atex", [0]);
+            Write(zip, "glitter/off.atex", [0]);
+            if (avfxPresent)
+            {
+                Write(zip, "vfx/va0001.avfx", [1]);
+                Write(zip, "vfx/variant1.avfx", [2]);
+                Write(zip, "vfx/variant2.avfx", [3]);
+            }
+        }
+        return new SyntheticPack(path);
+    }
+
     private static void Write(ZipArchive zip, string name, byte[] bytes)
     {
         using var st = zip.CreateEntry(name).Open();
