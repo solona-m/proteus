@@ -272,6 +272,67 @@ internal static class BodySizeMatch
     internal static bool ClothClears(ModelParts garment, string bodyPath)
         => ClothAgainst(garment, bodyPath) is not { } on || on.Near < MinEvidence || on.Inside <= on.Near * ClearsBelow;
 
+    /// <summary>Points of the garment at which two bodies must part (by more than <see cref="Discriminates"/>) before
+    /// they are two shapes where it is: a few stray ones are a seam vertex nudged between exports, not a size.</summary>
+    internal const int DifferAtLeast = 10;
+
+    /// <summary>
+    /// Whether the bodies at <paramref name="pathA"/> and <paramref name="pathB"/> are two SHAPES where the garment is:
+    /// at <see cref="DifferAtLeast"/> or more of its points, within <see cref="ClothReach"/> of either, their surfaces
+    /// lie more than <see cref="Discriminates"/> apart. False when either cannot be read.
+    /// <para/>
+    /// Asked of the bodies themselves, not of how the garment scores against each: a score is a mean, and two sizes
+    /// can score within <see cref="SameAnswer"/> of each other while one is fuller where the garment reaches. YAB's
+    /// Watermelon and Skull Crushers legs are one mesh and differ at the thighs; a thigh-high's cloth gap, read only
+    /// over the cloth outside each body, came out the same for both, and the refit up a size was refused as already
+    /// fitting.
+    /// </summary>
+    internal static bool ShapesDiffer(ModelParts garment, string pathA, string pathB)
+    {
+        if (Load(pathA) is not { } a || Load(pathB) is not { } b) return false;
+        if (a.ContentKey == b.ContentKey) return false;
+
+        // Only what the garment still draws: a limb view (RefitCore.LimbView) keeps the hand's or foot's vertices,
+        // numbered as before, and drops only their triangles.
+        int vc = garment.Positions.Length / 3;
+        var seen = new HashSet<(int, int, int)>();
+        var all = new List<Vector3>();
+        foreach (var part in garment.Parts)
+        {
+            if (part.Island >= 0) continue;
+            foreach (int v in part.Triangles)
+            {
+                if (v < 0 || v >= vc) continue;
+                var p = new Vector3(garment.Positions[v * 3], garment.Positions[v * 3 + 1],
+                                    garment.Positions[v * 3 + 2]);
+                if (seen.Add(MeshMath.PositionKey(BodyRetarget.ToVec(p), BodyRetarget.SnapPerMetre))) all.Add(p);
+            }
+        }
+        var probes = Thin(all, MaxProbes);
+
+        var da = DistancesTo(a, probes);
+        var db = DistancesTo(b, probes);
+        int differ = 0;
+        for (int i = 0; i < probes.Count; i++)
+        {
+            if (MathF.Min(da[i], db[i]) >= ClothReach) continue;
+            if (MathF.Abs(da[i] - db[i]) > Discriminates && ++differ >= DifferAtLeast) return true;
+        }
+        return false;
+
+        static float[] DistancesTo(Candidate body, List<Vector3> probes)
+        {
+            var d = new float[probes.Count];
+            // See Rank: the cached body's surface reuses a scratch buffer between queries.
+            lock (body)
+            {
+                for (int i = 0; i < probes.Count; i++)
+                    d[i] = body.Surface.Nearest(probes[i], ClothReach, out var hit) ? hit.Distance : ClothReach;
+            }
+            return d;
+        }
+    }
+
     private static (int Near, int Inside, float Gap) ClothOn(List<Vector3> cloth, Candidate body)
     {
         int near = 0, inside = 0, outside = 0;
