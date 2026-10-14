@@ -60,16 +60,23 @@ internal static class SkinThroughCloth
         if (tris.Count == 0 || skin.Count == 0) return (0, []);
 
         // Edges two DIFFERENT cloth faces share, counted once per set of corners (a double-sided sheet draws each twice):
-        // an edge only one face uses is a hem.
+        // an edge only one face uses is a hem. Corners are taken by POSITION: a model splits its vertices along every uv
+        // or normal seam, and counted by index a seam down the inside of a leg would read as two hems.
+        int vc = garment.Positions.Length / 3;
+        var at = new SecondSkinWriter.Vec3[vc];
+        for (int i = 0; i < vc; i++)
+            at[i] = new SecondSkinWriter.Vec3(garment.Positions[i * 3], garment.Positions[i * 3 + 1], garment.Positions[i * 3 + 2]);
+        var welded = MeshMath.WeldByPosition(at, out _);
         var edgeUses = new Dictionary<(int, int), int>();
         var faces = new HashSet<(int, int, int)>();
         foreach (var (a, b, c, _) in tris)
         {
-            if (!faces.Add(FaceKey(a, b, c))) continue;
-            foreach (var key in new[] { EdgeKey(a, b), EdgeKey(b, c), EdgeKey(c, a) })
+            int x = welded[a], y = welded[b], z = welded[c];
+            if (x == y || y == z || z == x || !faces.Add(FaceKey(x, y, z))) continue;
+            foreach (var key in new[] { EdgeKey(x, y), EdgeKey(y, z), EdgeKey(z, x) })
                 edgeUses[key] = edgeUses.GetValueOrDefault(key) + 1;
         }
-        bool Shared(int x, int y) => edgeUses.GetValueOrDefault(EdgeKey(x, y)) >= 2;
+        bool Shared(int a, int b) => edgeUses.GetValueOrDefault(EdgeKey(welded[a], welded[b])) >= 2;
 
         // A corner on a hem: every face around it reaches the same nearest point there, and whichever came first must
         // not decide whether a point past the hem counts — so a hem corner is judged as the hem, whatever face it is read off.
@@ -124,7 +131,7 @@ internal static class SkinThroughCloth
             if (offCount >= 2)
             {
                 int corner = bu >= OnEdge ? ta : bv >= OnEdge ? tb : tc;
-                if (hemCorner.Contains(corner)) continue;
+                if (hemCorner.Contains(welded[corner])) continue;
             }
             // On an edge only one face uses: past the hem. (u weighs corner a, so a small u is the edge b–c.)
             else if ((bu < OnEdge && !Shared(tb, tc)) || (bv < OnEdge && !Shared(tc, ta)) || (bw < OnEdge && !Shared(ta, tb)))

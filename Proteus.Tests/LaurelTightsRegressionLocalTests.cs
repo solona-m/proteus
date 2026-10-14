@@ -161,7 +161,7 @@ public class LaurelTightsRegressionLocalTests(ITestOutputHelper output)
         output.WriteLine($"Neobelly -> plain legs ({pair.Correspondence.GetType().Name}): folded {before.Folded} -> {now.Folded}; "
                        + $"inside {before.Inside} -> {now.Inside}; through {before.Through.Count} -> {now.Through.Count}");
         Assert.True(now.Folded <= before.Folded, $"{now.Folded} folded, {before.Folded} before");
-        // Accepted (2026-10-14): 174 -> 175 cloth points inside the plain legs, against skin through the tights 628 -> 20.
+        // Accepted (2026-10-14): 174 -> 175 cloth points inside the plain legs, against skin through the tights 630 -> 20.
         Assert.True(now.Inside <= before.Inside + 1, $"{now.Inside} inside, {before.Inside} before");
         Assert.True(now.Through.Count <= before.Through.Count, $"{now.Through.Count} through, {before.Through.Count} before");
     }
