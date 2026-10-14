@@ -13,7 +13,6 @@ namespace Proteus.Tests;
 /// <summary>
 /// "Every size for other bodies": the body table carried over from the mod packer, and a whole mod given its sizes.
 /// </summary>
-[Collection(GameBodyCollection.Name)]
 public class SizeSetRefitTests(ITestOutputHelper output)
 {
     [Theory]

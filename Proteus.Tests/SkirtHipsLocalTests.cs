@@ -16,7 +16,6 @@ namespace Proteus.Tests;
 /// waistband. The skirt is a thick shell, its walls 2 mm apart — see <see cref="BodyRetarget.FaceCheck.WallPartner"/>.
 /// Measured inside the pass, on the solve's own nodes; the buttock also against the skin the file draws.
 /// </summary>
-[Collection(GameBodyCollection.Name)]
 public class SkirtHipsLocalTests(ITestOutputHelper output)
 {
     private const string Geometric = LocalData.Mods + ":Geometric - by Solona";
