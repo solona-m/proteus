@@ -307,17 +307,20 @@ internal static partial class KeepEnds
     }
 
     /// <summary>Whether <paramref name="view"/> reads <paramref name="a"/> and <paramref name="b"/> as the same answer
-    /// (<see cref="BodySizeMatch.SameAnswer"/>) — the same body wherever the piece is.</summary>
+    /// (<see cref="BodySizeMatch.SameAnswer"/>) — the same body wherever the piece is — and the two bodies themselves
+    /// do not part where it is (<see cref="BodySizeMatch.ShapesDiffer"/>): a score close to both is not the same shape.</summary>
     internal static bool SameShape(ModelParts view, BodyOption a, BodyOption b, BodySizeCatalog catalog,
                                    IReadOnlySet<string> bones, bool fromCloth)
     {
         var ranking = fromCloth ? BodySizeMatch.RankByCloth(view, [a, b], catalog.PathOf)
                                 : BodySizeMatch.Rank(view, [a, b], catalog.PathOf, bones);
         if (ranking == null || ranking.Scores.Count == 0) return false;
-        // One score for two options: the ranking found them one geometry.
-        if (ranking.Scores.Count == 1) return true;
+        // One score for two options: the ranking found them one geometry — or, read by the cloth, only one of them had
+        // enough cloth near it to score, which says nothing of the other. The bodies answer either way.
+        if (ranking.Scores.Count == 1) return !BodySizeMatch.ShapesDiffer(view, catalog.PathOf(a), catalog.PathOf(b));
         float best = MathF.Max(ranking.Scores[0].Rms, 1e-6f);
-        return ranking.Scores[1].Rms <= best * (1f + BodySizeMatch.SameAnswer);
+        return ranking.Scores[1].Rms <= best * (1f + BodySizeMatch.SameAnswer)
+            && !BodySizeMatch.ShapesDiffer(view, catalog.PathOf(a), catalog.PathOf(b));
     }
 
     /// <summary>

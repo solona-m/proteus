@@ -468,10 +468,11 @@ public class SizeSetRefitTests(ITestOutputHelper output)
                                                      .ToHashSet();
             Assert.NotEmpty(added);
             Assert.All(added, o => Assert.Contains(o, table));
-            // Not the body it was made on: its other sizes have legs of one shape with it, and give nothing. The other
-            // two bodies' legs do.
-            Assert.DoesNotContain(added, o => o.StartsWith(made.Label, StringComparison.Ordinal));
-            Assert.Equal(2, added.Select(o => o.Split(' ')[0]).Distinct().Count());
+            // The body it was made on gives its other sizes too: YAB's Skull Crushers legs are WC's mesh, but up to
+            // 11.6 mm fuller under the top of the shaft (796 points past 0.5 mm), so they are another shape where the
+            // shoe is, not "already fits". The other two bodies' legs give theirs as well.
+            Assert.Contains(added, o => o.StartsWith(made.Label, StringComparison.Ordinal));
+            Assert.Equal(3, added.Select(o => o.Split(' ')[0]).Distinct().Count());
             foreach (string option in added)
                 Assert.Equal(0, EndPointsMissing(shoe, "_sho", ModelOf(root, "Shoes", option, ShoePath)));
             // Measured inside the pass: no refit left a triangle folded.

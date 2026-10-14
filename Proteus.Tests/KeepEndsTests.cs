@@ -701,6 +701,87 @@ public class KeepEndsTests
         }
     }
 
+    [Fact]
+    public void Two_sizes_of_one_mesh_that_part_where_the_piece_is_are_two_shapes()
+    {
+        // YAB's Watermelon and Skull Crushers legs: one mesh, fuller thighs. However close the garment scores to both,
+        // bodies 2 mm apart under it are two shapes, and the refit between them goes ahead. Bodies that part only far
+        // from the piece, or not at all, are one shape where it is.
+        string dir = Path.Combine(Path.GetTempPath(), "proteus-keepends-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var garment = ModelPartReader.Read(LegsBody(20, 0f))!;
+            byte[] TwoParts(float near, float far) => SyntheticModel.Build([],
+                new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0, TrianglesPerIsland: 20, OffsetZ: near, Weights: Calf),
+                                        new SyntheticModel.Sub(0, TrianglesPerIsland: 20, OffsetX: 100f, OffsetZ: far,
+                                                               Weights: Calf)));
+            string Write(string name, byte[] bytes)
+            {
+                string path = Path.Combine(dir, name);
+                File.WriteAllBytes(path, bytes);
+                return path;
+            }
+            string a = Write("a.mdl", TwoParts(0f, 0f));
+            string copy = Write("copy.mdl", TwoParts(0f, 0f));
+            string fuller = Write("fuller.mdl", TwoParts(0.002f, 0f));
+            string elsewhere = Write("elsewhere.mdl", TwoParts(0f, 0.02f));
+
+            Assert.True(BodySizeMatch.ShapesDiffer(garment, a, fuller));
+            Assert.False(BodySizeMatch.ShapesDiffer(garment, a, copy));
+            Assert.False(BodySizeMatch.ShapesDiffer(garment, a, elsewhere));
+            Assert.False(BodySizeMatch.ShapesDiffer(garment, a, Path.Combine(dir, "missing.mdl")));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Sizes_the_cloth_scores_alike_are_still_two_shapes_where_the_bodies_part()
+    {
+        // Read by its cloth, a piece scores both sizes alike: its cloth band sits over legs that are the same in both.
+        // Its skin lies further down, where one size is 2 mm fuller — two shapes, refitted, not "already fits". And a
+        // size with too little cloth near it to score at all is not thereby the one scored.
+        string dir = Path.Combine(Path.GetTempPath(), "proteus-keepends-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var view = ModelPartReader.Read(SyntheticModel.Build([],
+                new SyntheticModel.Mesh(Cloth, new SyntheticModel.Sub(0, TrianglesPerIsland: 120, OffsetZ: 0.005f,
+                                                                      Weights: Calf)),
+                new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0, TrianglesPerIsland: 20, OffsetX: 50f,
+                                                                     Weights: Calf))))!;
+            byte[] Legs(float band, float thigh) => SyntheticModel.Build([],
+                new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0, TrianglesPerIsland: 120, OffsetZ: band, Weights: Calf),
+                                        new SyntheticModel.Sub(0, TrianglesPerIsland: 20, OffsetX: 50f, OffsetZ: thigh,
+                                                               Weights: Calf)));
+            File.WriteAllBytes(Path.Combine(dir, "wc.mdl"), Legs(0f, 0f));
+            File.WriteAllBytes(Path.Combine(dir, "skull.mdl"), Legs(0f, 0.002f));
+            File.WriteAllBytes(Path.Combine(dir, "same.mdl"), Legs(0f, 0f));
+            File.WriteAllBytes(Path.Combine(dir, "away.mdl"), Legs(0.05f, 0f));
+            var wc = LegsS with { Rel = "wc.mdl" };
+            var skull = LegsM with { Rel = "skull.mdl" };
+            var same = LegsM with { Name = "Same", Rel = "same.mdl" };
+            var away = LegsM with { Name = "Away", Rel = "away.mdl" };
+            var body = new BodySizeCatalog(dir, [wc, skull, same, away]);
+
+            var ranking = BodySizeMatch.RankByCloth(view, [wc, skull], body.PathOf)!;
+            Assert.Equal(2, ranking.Scores.Count);
+            Assert.Equal(ranking.Scores[0].Rms, ranking.Scores[1].Rms, 6);
+            Assert.False(KeepEnds.SameShape(view, wc, skull, body, NoBones, fromCloth: true));
+            Assert.True(KeepEnds.SameShape(view, wc, same, body, NoBones, fromCloth: true));
+
+            Assert.Single(BodySizeMatch.RankByCloth(view, [wc, away], body.PathOf)!.Scores);
+            Assert.False(KeepEnds.SameShape(view, wc, away, body, NoBones, fromCloth: true));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
     // ── the shared core: the automatic refit's output, pinned ────────────────────────────────────────────
 
     /// <summary>The automatic refit's keep-ends plan for <see cref="ShoeModel"/>, with and without the feet's shape.</summary>
