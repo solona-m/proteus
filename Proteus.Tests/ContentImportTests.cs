@@ -16,7 +16,7 @@ namespace Proteus.Tests;
 /// appendable geometry, and the two things the write does — strip every model redirect, and name those
 /// models in the Proteus sidecar instead.
 /// </summary>
-public class ContentImportTests
+public partial class ContentImportTests
 {
     // ── synthetic packs ──────────────────────────────────────────────────────
 

@@ -55,7 +55,12 @@ public sealed partial class ContentImportService
         /// Dropped on purpose: every mesh is the wearer's own body. An explicit flag, because an unreadable model
         /// also arrives with empty Bindings and Unbound.
         /// </summary>
-        bool BodyOnly = false)
+        bool BodyOnly = false,
+        /// <summary>
+        /// Every vertex it draws sits in one spot: an invisible placeholder that only makes the game draw the item, so
+        /// that item's effect spawns. See <see cref="PieceUnit.EffectOnly"/>.
+        /// </summary>
+        bool Degenerate = false)
     {
         public bool Import => Problem == null && Bindings.Count > 0;
 
@@ -78,10 +83,19 @@ public sealed partial class ContentImportService
         ContentSlot.Parsed Slot,
         string? ItemName,
         string? GateOption,
-        IReadOnlyList<PiecePlan> Variants)
+        IReadOnlyList<PiecePlan> Variants,
+        ContentEffect? Effect = null)
     {
         /// <summary>What the user reads, in the Import tab and as the synthesized option's name.</summary>
         public string Label => ContentSlot.Label(Slot, ItemName);
+
+        /// <summary>
+        /// Only an effect: the pack attached an item effect (<see cref="Effect"/>) and every model it ships is an
+        /// invisible placeholder. Worn on a carrier whatever the race, since a placeholder has no size to get wrong.
+        /// </summary>
+        /// <remarks>Judged on the variants that import: one race's copy failing must not send the rest down the race gate.</remarks>
+        public bool EffectOnly => Effect != null && Variants.Any(v => v.Import)
+                               && Variants.Where(v => v.Import).All(v => v.Degenerate);
 
         /// <summary>Buildable when ANY race variant is — a pack missing one race's material still works
         /// for the races it does ship.</summary>
@@ -214,6 +228,9 @@ public sealed partial class ContentImportService
                 Loc.Localize("ContentImport.Problem.NoGeometry", "no geometry — every mesh in it is empty"));
 
         int meshes = 0, vertices = 0;
+        // The extent of everything bound, to tell an invisible placeholder (one point) from real geometry.
+        float minX = float.MaxValue, minY = float.MaxValue, minZ = float.MaxValue;
+        float maxX = float.MinValue, maxY = float.MinValue, maxZ = float.MinValue;
         foreach (var name in used)
         {
             var leaf = name.TrimStart('/');
@@ -228,6 +245,12 @@ public sealed partial class ContentImportService
                 {
                     vertices += pos.Length / 3;
                     if (tri.Length > 0) meshes++;
+                    for (int i = 0; i + 2 < pos.Length; i += 3)
+                    {
+                        minX = Math.Min(minX, pos[i]);     maxX = Math.Max(maxX, pos[i]);
+                        minY = Math.Min(minY, pos[i + 1]); maxY = Math.Max(maxY, pos[i + 1]);
+                        minZ = Math.Min(minZ, pos[i + 2]); maxZ = Math.Max(maxZ, pos[i + 2]);
+                    }
                 }
             }
             // Unbound and named like the body's own material: a mesh Proteus deliberately leaves behind.
@@ -256,8 +279,13 @@ public sealed partial class ContentImportService
                     string.Join(", ", skinOnly));
         }
 
+        // A tenth of a millimetre either way: a placeholder's corners coincide, real geometry spans centimetres.
+        const float PointExtent = 1e-4f;
+        bool degenerate = vertices > 0
+            && maxX - minX < PointExtent && maxY - minY < PointExtent && maxZ - minZ < PointExtent;
+
         return new PiecePlan(gamePath, entry, bindings, unbound, meshes, vertices, problem,
-                             MaterialAttributes: byMaterial, BodyOnly: bodyOnly);
+                             MaterialAttributes: byMaterial, BodyOnly: bodyOnly, Degenerate: degenerate);
     }
 
     /// <summary>
@@ -355,7 +383,7 @@ public sealed partial class ContentImportService
 
         try
         {
-            WriteMod(root, modName, author, preview, log);
+            WriteMod(root, modName, author, preview, log, p => Plugin.DataManager.GetFile(p)?.Data);
         }
         catch (Exception ex)
         {
@@ -378,8 +406,11 @@ public sealed partial class ContentImportService
     /// Unpack the archive, strip the model redirects from the manifests and write the Proteus sidecar. Pure
     /// filesystem work. A v3 pack's piece group is left for <see cref="Register"/>, after Penumbra upgrades it.
     /// </summary>
+    /// <param name="readGameFile">The game's own copy of a file, for telling an effect's IMC edit from the vanilla
+    /// entry (see <see cref="StripEffects"/>); null keeps every such edit with its effect zeroed.</param>
     internal static void WriteMod(
-        string root, string modName, string author, ImportPreview preview, IPluginLog? log = null)
+        string root, string modName, string author, ImportPreview preview, IPluginLog? log = null,
+        Func<string, byte[]?>? readGameFile = null)
     {
         Directory.CreateDirectory(root);
 
@@ -405,6 +436,7 @@ public sealed partial class ContentImportService
         // …plus the default-data copies an option replaces. See ImportPreview.ShadowedRedirects.
         if (preview.ShadowedRedirects is { } shadowed) taken.UnionWith(shadowed);
         StripModelRedirects(root, preview.Pack, taken, log);
+        StripEffects(root, preview, readGameFile, log);
 
         // The user's name goes into the copied manifest too, so it can be told apart from the original in
         // Penumbra's mod list.
@@ -829,6 +861,8 @@ public sealed partial class ContentImportService
             Surface    = ShellSurfaceKind.Body,
             Slot       = unit.Slot.Label,
             GateOption = unit.GateOption,
+            Effect     = unit.Effect,
+            EffectOnly = unit.EffectOnly,
         };
 
         // First declaration of a race wins; a duplicate is dropped rather than fatal.

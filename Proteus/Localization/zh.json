@@ -4846,5 +4846,29 @@
   "SizeSet.NotInstalledTip.Fmt": {
     "message": "Penumbra 中未安装 {0}。请安装后关闭并重新打开此部分。",
     "description": ""
+  },
+  "ContentImport.Warn.EffectFileMissing.Fmt": {
+    "message": "“{0}”带有动画特效，但其文件（{1}）不在包中，因此无法显示。",
+    "description": ""
+  },
+  "Content.StaleEffectImport.Fmt": {
+    "message": "“{0}”的动画特效被这次导入留在了原版物品上，只有穿戴该物品时才会出现。删除此模组并重新导入该包，即可无需该物品显示特效。",
+    "description": ""
+  },
+  "Content.EffectOnly": {
+    "message": "动画特效",
+    "description": ""
+  },
+  "Content.WithEffect.Fmt": {
+    "message": "{0} + 特效",
+    "description": ""
+  },
+  "Content.Effect.Tip": {
+    "message": "此部件带有动画特效。Proteus 会在空闲栏位放入一个隐形饰品来播放它，因此无需穿戴它替换的物品。",
+    "description": ""
+  },
+  "Chat.EffectUnplaced.Fmt": {
+    "message": "[Proteus] “{0}”的动画特效未显示：它的隐形载体需要一个空闲的饰品栏位。请空出戒指、手镯或项链栏位。",
+    "description": ""
   }
 }

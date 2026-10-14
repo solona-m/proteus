@@ -55,6 +55,15 @@ internal static class ContentPieceResolver
     }
 
     /// <summary>
+    /// <see cref="ResolveForWearer"/>, except that an effect-only piece (<see cref="ContentPiece.EffectOnly"/>) always
+    /// resolves: its model is an invisible point with no size to get wrong, so any race's copy will do. Code null then.
+    /// </summary>
+    internal static (string? Code, string Path)? ResolveForWearerOrEffect(
+        ContentPiece piece, string? equipCode, string? ownCode)
+        => ResolveForWearer(piece, equipCode, ownCode)
+           ?? (piece.EffectOnly && piece.ModelFiles().FirstOrDefault() is { } any ? (null, any) : null);
+
+    /// <summary>
     /// Is every model this piece ships an accessory? Read off the FILENAME (<c>cNNNNaNNNN</c>), not the folder: the
     /// sidecar stores archive entries, not game paths. Unknown means "not an accessory".
     /// </summary>
