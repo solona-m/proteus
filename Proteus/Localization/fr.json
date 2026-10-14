@@ -4846,5 +4846,29 @@
   "SizeSet.NotInstalledTip.Fmt": {
     "message": "{0} n'est pas installé dans Penumbra. Installez-le, puis fermez et rouvrez cette section.",
     "description": ""
+  },
+  "ContentImport.Warn.EffectFileMissing.Fmt": {
+    "message": "« {0} » a un effet animé, mais son fichier ({1}) est absent du pack, il ne peut donc pas être affiché.",
+    "description": ""
+  },
+  "Content.StaleEffectImport.Fmt": {
+    "message": "« {0} » a un effet animé que cette importation a laissé sur l'objet d'origine : il n'apparaît que si cet objet est porté. Supprimez ce mod et importez à nouveau le pack pour porter l'effet sans lui.",
+    "description": ""
+  },
+  "Content.EffectOnly": {
+    "message": "effet animé",
+    "description": ""
+  },
+  "Content.WithEffect.Fmt": {
+    "message": "{0} + effet",
+    "description": ""
+  },
+  "Content.Effect.Tip": {
+    "message": "Cette pièce a un effet animé. Proteus le joue sur un accessoire invisible placé dans un emplacement libre : inutile de porter l'objet qu'elle remplace.",
+    "description": ""
+  },
+  "Chat.EffectUnplaced.Fmt": {
+    "message": "[Proteus] L'effet animé de « {0} » n'est pas affiché : il lui faut un emplacement d'accessoire libre pour son support invisible. Libérez un emplacement de bague, bracelet ou collier.",
+    "description": ""
   }
 }

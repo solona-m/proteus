@@ -417,7 +417,7 @@ public static class PenumbraPackage
     /// The <c>Imc</c> manipulations an owner declares, in full. <c>AttributeAndSound</c> is the packed form of the mask
     /// and sound; the separate fields win when both are present, as Penumbra writes both.
     /// </summary>
-    private static List<PackImc> ReadImc(JsonObject owner)
+    internal static List<PackImc> ReadImc(JsonObject owner)
     {
         var result = new List<PackImc>();
         if (owner["Manipulations"] is not JsonArray manips) return result;
