@@ -35,8 +35,30 @@ public class KeepShapeReleaseLocalTests
     /// The written models of these refits on <c>test</c> before this rule (build 1229, 7e76b72), SHA-256: with release
     /// off, the refit must still write exactly these — the stage the release re-runs was pulled out of the solve, and
     /// nothing else on the Keep shape path may have moved.
+    /// <para/>
+    /// Re-pinned for build 1261: Ash and pop have big double-walled pieces, which a thick shell's walls now move together
+    /// when the skin is cleared out of a face (<see cref="BodyRetarget.FaceCheck.WallPartner"/>) and whose inner wall now
+    /// covers what lies beneath; the rim lift's fold guard now judges against the authored face. Measured before
+    /// re-pinning, against <see cref="BeforeThickShells"/>: up to 354 points moved (worst 7.8 mm, pop onto Neolithe XS); the
+    /// cloth inside the body the same on every case; folds on the solve's last stage the same or fewer (Ash Yab L onto
+    /// Uranus 792 -> 771); a thick shell's walls through each other fewer or the same.
     /// </summary>
     private static readonly Dictionary<string, string> Before = new()
+    {
+        ["ash Rue L > Uranus"] = "BA69821F8C9D0409C3C5EB2B18F27957AF259171355D6A54645A4E15EF562E0D",
+        ["ash Yab L > Uranus"] = "5A87F2DB114D70D0E8C72AF8F156E308C76E4E5230D1D991EB6ECDC25C140217",
+        ["pop > Uranus"] = "3ACD75DF39D6248760C50355E06B59FE1E61C311D6AA6D1337AA9ACADD887647",
+        ["pop > Neolithe XS"] = "448E7E303B1D235DA036F3C1D12236E937D7FBF8ACB34D04C6E4359A244906FA",
+        ["pop > Bibo S"] = "C619167AB0778D46CCF9C620423730FD4FFB1634F70706878404BAF61C1E4B1A",
+    };
+
+    /// <summary>
+    /// The same refits as builds before 1261 wrote them: with a thick shell's walls moved each on its own, no inner wall
+    /// taken for a cover, and the rim lift's old fold guard (<see cref="BodyRetarget.Tuning.NoWallPair"/>,
+    /// <see cref="BodyRetarget.Tuning.NoWallCover"/>, <see cref="BodyRetarget.Tuning.NoRimTurnGuard"/>), byte for byte
+    /// — the proof that nothing else moved when <see cref="Before"/> was re-pinned.
+    /// </summary>
+    private static readonly Dictionary<string, string> BeforeThickShells = new()
     {
         ["ash Rue L > Uranus"] = "8C21BA073FF3E10B5DCCC3A0D20BA411F12115546E08A61F0AE2AAAD66236334",
         ["ash Yab L > Uranus"] = "3B4769B40112952A9A094AA1BE9A6CD94579F120B4CDB91CE5475AF5B179045C",
@@ -53,7 +75,8 @@ public class KeepShapeReleaseLocalTests
 
     /// <summary>One refit as <c>Proteus.Refit --keep-default</c> runs it, the default ticks less <paramref name="untick"/>.</summary>
     private static Run Refit(byte[] bytes, string fromNeed, string fromRel, string toNeed, string toRel,
-                             bool noRelease = false, string? untick = null, bool noNippleSmooth = false)
+                             bool noRelease = false, string? untick = null, bool noNippleSmooth = false,
+                             bool beforeThickShells = false)
     {
         var garment = ModelPartReader.Read(bytes)!;
         string fromRoot = LocalData.Path(fromNeed), toRoot = LocalData.Path(toNeed);
@@ -66,7 +89,9 @@ public class KeepShapeReleaseLocalTests
         if (untick != null) Assert.True(labels.Remove(untick), $"{untick} is not ticked by default");
         var pieces = RefitCore.ShapePieces(garment, labels, out var names);
         bool across = !string.Equals(fromRoot, toRoot, StringComparison.OrdinalIgnoreCase);
-        var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoRelease: noRelease, NoNippleSmooth: noNippleSmooth), () => BodyRetarget.Plan(
+        var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoRelease: noRelease, NoNippleSmooth: noNippleSmooth,
+                                                                       NoWallPair: beforeThickShells, NoWallCover: beforeThickShells,
+                                                                       NoRimTurnGuard: beforeThickShells), () => BodyRetarget.Plan(
             garment, bytes, [pair], "_top", replaceSkin: true, acrossBodies: across, keepShape: pieces));
         return new Run(plan, names);
     }
@@ -87,6 +112,8 @@ public class KeepShapeReleaseLocalTests
         Assert.True(wholeCover.Sink > 0.005f, $"moved whole the cover should sink past 5 mm, not {wholeCover.Sink * 1000:F2}");
         Assert.True(wholeCover.Share * 893 > 100, $"only {wholeCover.Share * 893:F0} of the cover's points sank");
         Assert.Equal(Before["ash Rue L > Uranus"], whole.Hash);
+        Assert.Equal(BeforeThickShells["ash Rue L > Uranus"],
+                     Refit(bytes, Rue, YiggleLarge, Uranus, UranusRue, noRelease: true, beforeThickShells: true).Hash);
 
         var released = Refit(bytes, Rue, YiggleLarge, Uranus, UranusRue);
         var unticked = Refit(bytes, Rue, YiggleLarge, Uranus, UranusRue, untick: Cover);
@@ -118,6 +145,8 @@ public class KeepShapeReleaseLocalTests
         var bytes = Ash("Yab L");
 
         Assert.Equal(Before["ash Yab L > Uranus"], Refit(bytes, Yab, YiggleLarge, Uranus, UranusRue, noRelease: true).Hash);
+        Assert.Equal(BeforeThickShells["ash Yab L > Uranus"],
+                     Refit(bytes, Yab, YiggleLarge, Uranus, UranusRue, noRelease: true, beforeThickShells: true).Hash);
 
         var run = Refit(bytes, Yab, YiggleLarge, Uranus, UranusRue);
         Assert.Equal([Cover], RefitCore.KeptPieces(run.Plan.Report, run.Names).Where(p => p.Released).Select(p => p.Name));
@@ -192,6 +221,8 @@ public class KeepShapeReleaseLocalTests
         Assert.NotEmpty(kept);
         Assert.DoesNotContain(kept, p => p.Released);
         Assert.Equal(Before[which], run.Hash);
+        Assert.Equal(BeforeThickShells[which], Refit(File.ReadAllBytes(LocalData.Path(Pop)), Yab, YabMedium, toNeed, toRel,
+                                              noNippleSmooth: true, beforeThickShells: true).Hash);
 
         // And as the refit really runs, smoothing on: still nothing let go.
         var on = Refit(File.ReadAllBytes(LocalData.Path(Pop)), Yab, YabMedium, toNeed, toRel);

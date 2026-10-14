@@ -38,7 +38,13 @@ internal static partial class BodyRetarget
     /// and faces of anything else are left out.</param>
     /// <param name="oneWay">Per node, whether its welded vertices face one way (see <see cref="FacesOneWay"/>); a node
     /// that does not is no covered point, its normal being no direction at all. Null takes every node's.</param>
-    internal static List<Covered> CoveredPoints(Sets sets, bool[] layered, bool[]? oneWay = null)
+    /// <param name="reach">How far in front a cover may lie; <see cref="LayerOrderReach"/> for every refit — another
+    /// value is for a diagnostic.</param>
+    /// <param name="why">For a diagnostic: each cloth node found no cover, and why — "skin", "two-sided", "no-normal",
+    /// "touching" (only faces nearer than <see cref="LayerOrderTouching"/>), "no-face", "facing", "same-piece". Null for
+    /// every refit.</param>
+    internal static List<Covered> CoveredPoints(Sets sets, bool[] layered, bool[]? oneWay = null,
+                                                float reach = LayerOrderReach, Action<int, string>? why = null)
     {
         var isSkin = new bool[sets.NodeCount];
         foreach (int n in sets.SkinNodes) isSkin[n] = true;
@@ -48,8 +54,8 @@ internal static partial class BodyRetarget
         // Cloth faces, by node, bucketed by every cell their bounds touch.
         var faces = new List<(int A, int B, int C)>(sets.Tris.Length / 3);
         var grid = new Dictionary<(int, int, int), List<int>>();
-        (int, int, int) Cell(Vector3 p) => ((int)MathF.Floor(p.X / LayerOrderReach), (int)MathF.Floor(p.Y / LayerOrderReach),
-                                            (int)MathF.Floor(p.Z / LayerOrderReach));
+        (int, int, int) Cell(Vector3 p) => ((int)MathF.Floor(p.X / reach), (int)MathF.Floor(p.Y / reach),
+                                            (int)MathF.Floor(p.Z / reach));
         for (int t = 0; t + 2 < sets.Tris.Length; t += 3)
         {
             int a = sets.NodeOf[sets.Tris[t]], b = sets.NodeOf[sets.Tris[t + 1]], c = sets.NodeOf[sets.Tris[t + 2]];
@@ -72,24 +78,37 @@ internal static partial class BodyRetarget
 
         var found = new List<Covered>();
         var seen = new HashSet<int>();
+        int[]? walls = null;
         var way = new Dictionary<int, float>();
         var queue = new PriorityQueue<int, float>();
         foreach (int n in sets.ClothNodes)
         {
-            if (isSkin[n] || (oneWay != null && !oneWay[n])) continue;
+            if (isSkin[n]) { why?.Invoke(n, "skin"); continue; }
+            if (oneWay != null && !oneWay[n]) { why?.Invoke(n, "two-sided"); continue; }
             var o = ToVector(sets.NodeAt[n]);
             var d = ToVector(sets.NodeNormal[n]);
-            if (d.LengthSquared() < 1e-12f) continue;
+            if (d.LengthSquared() < 1e-12f) { why?.Invoke(n, "no-normal"); continue; }
             d = Vector3.Normalize(d);
+            bool InnerWall(int a, int b, int c)
+            {
+                walls ??= WallPartners(sets, layered);
+                foreach (int corner in new[] { a, b, c })
+                {
+                    int p = walls[corner];
+                    if (p < 0 || Vector3.Dot(ToVector(sets.NodeAt[p]) - ToVector(sets.NodeAt[corner]), d) <= 0f) return false;
+                }
+                return true;
+            }
 
             // The faces the ray could meet, from the cells along it.
             seen.Clear();
             int best = -1;
-            float bestT = LayerOrderReach, bestU = 0f, bestV = 0f;
+            bool touching = false;
+            float bestT = reach, bestU = 0f, bestV = 0f;
             // A quarter of a cell apart, so a ray crossing a cell's corner still looks in it.
             for (int step = 0; step <= 4; step++)
             {
-                if (!grid.TryGetValue(Cell(o + d * (LayerOrderReach * step / 4f)), out var bucket)) continue;
+                if (!grid.TryGetValue(Cell(o + d * (reach * step / 4f)), out var bucket)) continue;
                 foreach (int f in bucket)
                 {
                     if (!seen.Add(f)) continue;
@@ -97,11 +116,12 @@ internal static partial class BodyRetarget
                     if (a == n || b == n || c == n) continue;
                     if (!RayHits(o, d, ToVector(sets.NodeAt[a]), ToVector(sets.NodeAt[b]), ToVector(sets.NodeAt[c]),
                                  out float t, out float u, out float v)) continue;
+                    if (t <= LayerOrderTouching) touching = true;
                     if (t <= LayerOrderTouching || t >= bestT) continue;
                     (best, bestT, bestU, bestV) = (f, t, u, v);
                 }
             }
-            if (best < 0) continue;
+            if (best < 0) { why?.Invoke(n, touching ? "touching" : "no-face"); continue; }
             var (fa, fb, fc) = faces[best];
 
             // A cover faces the way the point does. A point facing IN — a lining's inside, the back of a double-sided
@@ -110,7 +130,15 @@ internal static partial class BodyRetarget
             var coverFaces = Vector3.Zero;
             foreach (int corner in new[] { fa, fb, fc })
                 if (oneWay == null || oneWay[corner]) coverFaces += ToVector(sets.NodeNormal[corner]);
-            if (coverFaces != Vector3.Zero && Vector3.Dot(coverFaces, d) <= 0f) continue;
+            // Except the inner wall of a thick shell, which faces the body by being the inside of the cloth over the point:
+            // every corner of it has its other wall (see FaceCheck.WallPartner) further out along the point's way. Geometric's
+            // skirt: its stocking met the inner wall at the waistband and was never kept behind the skirt.
+            if (coverFaces != Vector3.Zero && Vector3.Dot(coverFaces, d) <= 0f
+                && !(!Tuned.NoWallCover && InnerWall(fa, fb, fc)))
+            {
+                why?.Invoke(n, "facing");
+                continue;
+            }
 
             // Another piece, not this one folded back: none of the face's corners is reached along the cloth in less
             // than the detour a separate piece takes.
@@ -132,7 +160,7 @@ internal static partial class BodyRetarget
                     queue.Enqueue(m, to);
                 }
             }
-            if (same) continue;
+            if (same) { why?.Invoke(n, "same-piece"); continue; }
 
             var normal = Vector3.Cross(ToVector(sets.NodeAt[fb]) - ToVector(sets.NodeAt[fa]),
                                        ToVector(sets.NodeAt[fc]) - ToVector(sets.NodeAt[fa]));
@@ -180,9 +208,11 @@ internal static partial class BodyRetarget
         // Again until nothing moves: each round measures every pair as it stands, and with three layers pulling the
         // middle one behind the outer can take it behind the inner.
         int moved = 0;
+        // Paired over the garment's cloth, as CoveredPoints pairs them to take an inner wall for a cover.
+        var walls = Tuned.NoWallCover ? null : WallPartners(sets, layered);
         for (int round = 0; round < LayerOrderRounds; round++)
         {
-            int now = KeepLayerOrderOnce(sets, covered, nodeDelta, movable, drawn, liftOnly);
+            int now = KeepLayerOrderOnce(sets, covered, nodeDelta, movable, drawn, liftOnly, walls);
             if (now == 0) break;
             moved += now;
         }
@@ -193,7 +223,7 @@ internal static partial class BodyRetarget
     private const int LayerOrderRounds = 3;
 
     private static int KeepLayerOrderOnce(Sets sets, IReadOnlyList<Covered> covered, Vec3[] nodeDelta, bool[] movable,
-                                          TargetBody? drawn, bool liftOnly = false)
+                                          TargetBody? drawn, bool liftOnly = false, int[]? walls = null)
     {
         Vector3 Now(int n) => ToVector(sets.NodeAt[n]) + ToVector(nodeDelta[n]);
         bool Finite(Vector3 v) => float.IsFinite(v.X) && float.IsFinite(v.Y) && float.IsFinite(v.Z);
@@ -252,8 +282,17 @@ internal static partial class BodyRetarget
             foreach (int m in new[] { c.A, c.B, c.C })
             {
                 if (!movable[m] || rest <= lift[m]) continue;
+                // A thick shell's inner wall lifted carries its outer wall along, or it would come through it; one whose
+                // outer wall cannot move (a kept piece) is not lifted at all.
+                int outer = walls != null && walls[m] >= 0 && Vector3.Dot(Now(walls[m]) - Now(m), -dir[n]) > 0f ? walls[m] : -1;
+                if (outer >= 0 && !movable[outer]) continue;
                 lift[m] = rest;
                 way[m] = -dir[n];
+                if (outer >= 0 && rest > lift[outer])
+                {
+                    lift[outer] = rest;
+                    way[outer] = -dir[n];
+                }
             }
         }
         var raise = Spread(sets, lift, way, movable);

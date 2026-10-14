@@ -154,7 +154,7 @@ internal static partial class BodyRetarget
     /// push-out only uses the normal to tell inside from outside and to pick a direction, neither of which a few degrees
     /// changes.
     /// </summary>
-    private static ModelParts Moved(ModelParts garment, Sets sets, Vec3[] nodeDelta)
+    internal static ModelParts Moved(ModelParts garment, Sets sets, Vec3[] nodeDelta)
     {
         var pos = (float[])garment.Positions.Clone();
         int vc = pos.Length / 3;
@@ -227,6 +227,113 @@ internal static partial class BodyRetarget
         return any;
     }
 
+    /// <summary>For a diagnostic: why <see cref="FaceCheck"/> and <see cref="ClearFaces"/> left a face — by its corner
+    /// nodes, sorted — "not-considered", "authored-through", "clear", "too-deep", "held", "capped", "layer-guard",
+    /// "turned-over", "sinks", or "pushed"; and, for the cloth triangle a push was put back for crossing,
+    /// "crossed-by:" and the node that crossed it. Per logical call, as <see cref="Tuned"/>; null for every refit.</summary>
+    internal static readonly System.Threading.AsyncLocal<Action<(int, int, int), string>?> FaceTrace = new();
+
+    /// <summary>How far apart a thick shell's two walls may be to be paired (3 mm) — see <see cref="FaceCheck.WallPartner"/>.
+    /// Geometric's skirt: exactly 2 mm.</summary>
+    internal const float WallPairReach = 0.003f;
+
+    /// <summary>
+    /// Each considered cloth node's partner on the other wall of a thick shell (see <see cref="FaceCheck.WallPartner"/>):
+    /// the nearest considered node of the same connected piece within <see cref="WallPairReach"/> whose normal faces the
+    /// opposite way, when that node's nearest such node is this one. The same piece: a thick shell's walls meet at its
+    /// rims (Geometric's skirt, 1,450 nodes, 725 a wall), while a stocking beneath it, nearer the inner wall than the outer
+    /// is, would otherwise take the outer wall's place.
+    /// </summary>
+    internal static int[] WallPartners(Sets sets, bool[] considered)
+    {
+        var partner = new int[sets.NodeCount];
+        Array.Fill(partner, -1);
+        // A wall is part of a big piece of cloth: a chain link's, a bead's or a stud's two sides are as near as a thick
+        // shell's walls, and pairing them moved 393 points of "pop" (173 chain links) by up to 7.8 mm.
+        var (pieceOf, pieceSize) = Pieces(sets, considered);
+        var grid = new Dictionary<(int, int, int), List<int>>();
+        (int, int, int) Cell(Vector3 p) => ((int)MathF.Floor(p.X / WallPairReach), (int)MathF.Floor(p.Y / WallPairReach),
+                                            (int)MathF.Floor(p.Z / WallPairReach));
+        var normal = new Vector3[sets.NodeCount];
+        for (int n = 0; n < sets.NodeCount; n++)
+        {
+            if (!considered[n]) continue;
+            var d = ToVector(sets.NodeNormal[n]);
+            if (d.LengthSquared() < 1e-12f) continue;
+            normal[n] = Vector3.Normalize(d);
+            var key = Cell(ToVector(sets.NodeAt[n]));
+            if (!grid.TryGetValue(key, out var bucket)) grid[key] = bucket = [];
+            bucket.Add(n);
+        }
+        int Nearest(int n)
+        {
+            var p = ToVector(sets.NodeAt[n]);
+            var (cx, cy, cz) = Cell(p);
+            int best = -1;
+            float bestD = WallPairReach;
+            for (int x = cx - 1; x <= cx + 1; x++)
+            for (int y = cy - 1; y <= cy + 1; y++)
+            for (int z = cz - 1; z <= cz + 1; z++)
+            {
+                if (!grid.TryGetValue((x, y, z), out var bucket)) continue;
+                foreach (int m in bucket)
+                {
+                    if (m == n || pieceOf[m] != pieceOf[n] || Vector3.Dot(normal[m], normal[n]) > -0.7f) continue;
+                    float d = Vector3.Distance(p, ToVector(sets.NodeAt[m]));
+                    if (d < bestD) (best, bestD) = (m, d);
+                }
+            }
+            return best;
+        }
+        var nearest = new int[sets.NodeCount];
+        Array.Fill(nearest, -1);
+        for (int n = 0; n < sets.NodeCount; n++)
+            if (normal[n] != Vector3.Zero && pieceSize[pieceOf[n]] >= WallPieceLeast) nearest[n] = Nearest(n);
+        for (int n = 0; n < sets.NodeCount; n++)
+            if (nearest[n] >= 0 && nearest[nearest[n]] == n) partner[n] = nearest[n];
+        return partner;
+    }
+
+    /// <summary>The fewest nodes a connected piece of cloth has for its points to be walls (300) — see
+    /// <see cref="WallPartners"/>. Geometric's skirt shell: 1,450.</summary>
+    internal const int WallPieceLeast = 300;
+
+    /// <summary>The connected piece of considered nodes each node is in (0 for nodes not considered), and each piece's
+    /// size by its number (piece 0, "none", has size 0).</summary>
+    private static (int[] PieceOf, List<int> Size) Pieces(Sets sets, bool[] considered)
+    {
+        var pieceOf = new int[sets.NodeCount];
+        var size = new List<int> { 0 };
+        var stack = new Stack<int>();
+        for (int s = 0; s < sets.NodeCount; s++)
+        {
+            if (!considered[s] || pieceOf[s] != 0) continue;
+            int id = size.Count, count = 0;
+            pieceOf[s] = id;
+            stack.Push(s);
+            while (stack.Count > 0)
+            {
+                int n = stack.Pop();
+                count++;
+                foreach (int m in sets.Adj[n])
+                    if (considered[m] && pieceOf[m] == 0)
+                    {
+                        pieceOf[m] = id;
+                        stack.Push(m);
+                    }
+            }
+            size.Add(count);
+        }
+        return (pieceOf, size);
+    }
+
+    private static (int, int, int) Sorted(int a, int b, int c)
+    {
+        Span<int> s = [a, b, c];
+        s.Sort();
+        return (s[0], s[1], s[2]);
+    }
+
     /// <summary>
     /// The cloth faces <see cref="SkinThroughFaces"/> judges, and the test itself, built once so
     /// <see cref="ClearFaces"/> can ask it again once the push-out's fold guard has halved the face pushes away and the
@@ -264,6 +371,13 @@ internal static partial class BodyRetarget
         /// <summary>The nodes the push-out considers: the only ones a lift may move.</summary>
         public readonly bool[] Considered;
 
+        /// <summary>
+        /// Per node, the point of a thick shell's other wall facing it — its outer wall's for an inner-wall point and the
+        /// other way about — or -1: the nearest considered cloth point within <see cref="WallPairReach"/> facing the
+        /// opposite way, each the other's. A lining faces the way its shell does, and is never one.
+        /// </summary>
+        public readonly int[] WallPartner;
+
         /// <summary>Each node's neighbours (<see cref="Sets.Adj"/>).</summary>
         public List<int>[] Adj => sets.Adj;
 
@@ -282,6 +396,12 @@ internal static partial class BodyRetarget
 
             var considered = Considered = new bool[sets.NodeCount];
             foreach (int n in nodes) considered[n] = true;
+            if (Tuned.NoWallPair)
+            {
+                WallPartner = new int[sets.NodeCount];
+                Array.Fill(WallPartner, -1);
+            }
+            else WallPartner = WallPartners(sets, considered);
 
             // Edges two DIFFERENT cloth faces share. A skin point that lands on one is still under the cloth — the
             // cuff's top edge, where its wall meets its cap — while one landing on an edge only one face uses is past
@@ -326,11 +446,18 @@ internal static partial class BodyRetarget
                 IsCloth.Add(isCloth);
                 Unliftable.Add(isCloth);   // until it is found to be a face below
 
-                if (!considered[a] || !considered[b] || !considered[c]) continue;
+                if (!considered[a] || !considered[b] || !considered[c])
+                {
+                    FaceTrace.Value?.Invoke(Sorted(a, b, c), "not-considered");
+                    continue;
+                }
                 // Already through as authored: the author's, and left as it is.
                 if (was != null && Through(was, ToVector(sets.NodeAt[a]), ToVector(sets.NodeAt[b]),
                                            ToVector(sets.NodeAt[c]), edgeA, edgeB, edgeC).Depth > 0f)
+                {
+                    FaceTrace.Value?.Invoke(Sorted(a, b, c), "authored-through");
                     continue;
+                }
                 foreach (int n in new[] { a, b, c }) FacesOf[n].Add(Faces.Count);
                 Faces.Add((a, b, c, edgeA, edgeB, edgeC));
                 Unliftable[^1] = false;
@@ -1056,13 +1183,18 @@ internal static partial class BodyRetarget
             {
                 var face = check.Faces[f];
                 var (push, outward) = check.Need(face, nodeDelta, SettleTolerance);
-                if (push <= 0f || push > ClearFaceDeepest) continue;   // not sag: see ClearFaceDeepest
+                if (push <= 0f || push > ClearFaceDeepest)   // not sag: see ClearFaceDeepest
+                {
+                    FaceTrace.Value?.Invoke(Sorted(face.A, face.B, face.C), push <= 0f ? "clear" : "too-deep");
+                    continue;
+                }
+                FaceTrace.Value?.Invoke(Sorted(face.A, face.B, face.C), "pushed");
                 foreach (int n in new[] { face.A, face.B, face.C })
                 {
-                    if (held[n]) continue;
+                    if (held[n]) { FaceTrace.Value?.Invoke(Sorted(face.A, face.B, face.C), "held"); continue; }
                     // Never more than ClearFaceMost in all, over every round.
                     float allowed = MathF.Min(push, ClearFaceMost - cleared[n]);
-                    if (allowed <= 0f) continue;
+                    if (allowed <= 0f) { FaceTrace.Value?.Invoke(Sorted(face.A, face.B, face.C), "capped"); continue; }
                     if (need[n] == 0f) touched.Add(n);
                     if (allowed <= need[n]) continue;
                     need[n] = allowed;
@@ -1070,6 +1202,22 @@ internal static partial class BodyRetarget
                 }
             }
             if (touched.Count == 0) break;
+
+            // A thick shell's two walls move together: a face's corners pushed out carry the point of the other wall
+            // facing them by as much, so the shell keeps its thickness. Pushed alone, one wall went through the other and
+            // the layer guard below put every such push back — Geometric's skirt (walls 2 mm apart) onto Rue left skin
+            // through the middle of 28 of its faces over the buttock; with both walls moved, 2. A lining is no wall: it
+            // faces the way its shell does, and keeps the guard (Sirius).
+            for (int i = 0, count0 = touched.Count; i < count0; i++)
+            {
+                int n = touched[i], p = check.WallPartner[n];
+                if (p < 0 || held[p]) continue;
+                float carried = MathF.Min(need[n], ClearFaceMost - cleared[p]);
+                if (carried <= need[p]) continue;
+                if (need[p] == 0f) touched.Add(p);
+                need[p] = carried;
+                dir[p] = dir[n];
+            }
 
             // How deep the skin is through each triangle beside a push that nothing would lift again, before the push.
             var sunkBefore = new Dictionary<int, float>();
@@ -1104,10 +1252,27 @@ internal static partial class BodyRetarget
                 {
                     if (Tuned.NoLayerGuard) break;
                     if (held[n] || !was.TryGetValue(n, out var back)) continue;
-                    if (CrossedCloth(check, cloth, nodeDelta, n, check.AtWith(n, back), check.At(n, nodeDelta)) < 0) continue;
+                    int crossed = CrossedCloth(check, cloth, nodeDelta, n, check.AtWith(n, back), check.At(n, nodeDelta));
+                    if (crossed < 0) continue;
+                    // Its own shell's other wall, carried out with it (above): the wall a corner of it moved with, not
+                    // another layer — crossed only where the rest of that wall's triangle has not caught up. Only while
+                    // the partner really went as far: one held, put back or capped short leaves this push crossing it.
+                    int partnerOf = check.WallPartner[n];
+                    if (partnerOf >= 0 && was.ContainsKey(partnerOf) && !held[partnerOf]
+                        && need[partnerOf] >= need[n] - SettleTolerance
+                        && check.Tris[crossed] is var (pa, pb, pc)
+                        && (pa == partnerOf || pb == partnerOf || pc == partnerOf))
+                        continue;
                     nodeDelta[n] = back;
                     held[n] = true;
                     changed = true;
+                    if (FaceTrace.Value is { } traceGuard)
+                    {
+                        foreach (int f in check.FacesOf[n])
+                            traceGuard(Sorted(check.Faces[f].A, check.Faces[f].B, check.Faces[f].C), "layer-guard");
+                        var (xa, xb, xc) = check.Tris[crossed];
+                        traceGuard(Sorted(xa, xb, xc), "crossed-by:" + n);
+                    }
                 }
 
                 foreach (int n in touched)
@@ -1126,6 +1291,10 @@ internal static partial class BodyRetarget
                             nodeDelta[m] = back;
                             held[m] = true;
                             changed = true;
+                            if (FaceTrace.Value is { } traceBack)
+                                foreach (int f in check.FacesOf[m])
+                                    traceBack(Sorted(check.Faces[f].A, check.Faces[f].B, check.Faces[f].C),
+                                              folds ? "turned-over" : "sinks");
                         }
                     }
                 }
