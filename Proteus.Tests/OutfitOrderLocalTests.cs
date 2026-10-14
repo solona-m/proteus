@@ -15,7 +15,6 @@ namespace Proteus.Tests;
 /// jacket on a bracelet slot over its top; Heartthrob's shoes over its pants. Measured on the refit's own models, inside
 /// the pass, body-relatively: per 5 mm cell of the target chest, the bra's highest cloth against the jacket's lowest.
 /// </summary>
-[Collection(GameBodyCollection.Name)]
 public class OutfitOrderLocalTests(ITestOutputHelper output)
 {
     private const string Geometric = LocalData.Mods + ":Geometric - by Solona";
@@ -102,9 +101,15 @@ public class OutfitOrderLocalTests(ITestOutputHelper output)
         return (neighbours, stretch);
     }
 
+    /// <summary>
+    /// Geometric's jacket onto each of Rue's chests, sized by the top in its option as "Every size for other bodies" reads
+    /// it ("Chest Size / Small", the top read over the body mods with Rue preferred): kept outside the bra's refit, and —
+    /// the same refit — less of it inside the new chest than read by its cloth.
+    /// </summary>
     [LocalDataFact(Geometric, Bibo, IvcsBibo, FixPubes, Rue)]
     [Trait("Plan", "AC-outfit-fit-1")]
     [Trait("Plan", "AC-outfit-fit-2")]
+    [Trait("Plan", "AC-jacket-refit-12")]
     public void Geometrics_jacket_stays_outside_the_bras_refit_on_Rue()
     {
         string root = LocalData.Path(Geometric);
@@ -118,10 +123,21 @@ public class OutfitOrderLocalTests(ITestOutputHelper output)
         var sourceCat = CatalogOf(source.Dir)!;
         var (gloveBytes, glove, gloveBones) = Load(root, GloveRel);
         var reading = KeepEnds.Read("_glv", glove, gloveBytes)!;
-        var found = KeepEnds.Find(reading, glove, gloveBones, Race,
-                                  (view, slot) => RefitCore.DetectSource(view, gloveBones, slot, Race, bodies, rue.Dir, _ => true),
-                                  CatalogOf, sibling: source);
+        Func<ModelParts, string, AutoRefitDecisions.Pick?> detect
+            = (view, slot) => RefitCore.DetectSource(view, gloveBones, slot, Race, bodies, rue.Dir, _ => true);
+        var found = KeepEnds.Find(reading, glove, gloveBones, Race, detect, CatalogOf, sibling: source);
         Assert.Equal(KeepEnds.Route.Sibling, found.Route);
+        Assert.Equal(source.Dir, found.Pick!.Dir);
+        Assert.Equal(source.Option, found.Pick.Option);
+        // [AC-jacket-refit-12] The top is the one the size set finds beside the jacket in its option; read without it, by
+        // its cloth, the jacket takes another route — compared per size below.
+        var sibling = Assert.Single(SiblingPiece.Find(PenumbraModMeta.ReadAllRedirects(root), BodyRetargetWriter.ReadRecord(root),
+                                                      GloveRel, "_top", Race));
+        Assert.Equal(TopRel, sibling.File.Replace('\\', '/'), ignoreCase: true);
+        var byCloth = KeepEnds.Find(reading, glove, gloveBones, Race, detect, CatalogOf);
+        Assert.NotEqual(KeepEnds.Route.Sibling, byCloth.Route);
+        output.WriteLine($"by its top: {found.Pick.Dir} / {found.Pick.Option.Label}; by its cloth: route "
+                       + $"{KeepEnds.Letter(byCloth.Route)}, {byCloth.Pick?.Dir} / {byCloth.Pick?.Option.Label}");
         var keepShapeTop = RefitCore.ShapePieces(top, RefitCore.DefaultKeepShape(top));
 
         // Nowhere through on Rue S, M or L (10, 20 and 19 cells before). The last few were the jacket's front edge, a sliver
@@ -163,6 +179,24 @@ public class OutfitOrderLocalTests(ITestOutputHelper output)
                            + $"{kept.Report.Layered} lifted, {kept.Report.LayerResidual * 1000f:F1} mm short; folds "
                            + $"{plain.Report.Folded} -> {kept.Report.Folded}; neighbours {neighbours * 1000f:F2} mm apart, "
                            + $"an edge grew {stretch * 1000f:F2} mm");
+
+            // [AC-jacket-refit-12] Sized by its top — the plain refit — less of the jacket sits inside Rue's chest than
+            // sized by its old cloth reading. Measured 32/33/34 against 89/99/100, folded 0/2/3 against 0/0/2.
+            var clothRefit = Assert.IsType<KeepEnds.Refit>(KeepEnds.Decide(byCloth, reading, gloveBones, Race, rue.Dir, CatalogOf,
+                                                                           TargetFor));
+            var clothCat = CatalogOf(clothRefit.Source.Dir)!;
+            Assert.Null(KeepEnds.BuildPairs(reading, clothCat.PathOf(clothRefit.Source.Option), chestPath,
+                                            clothRefit.EndFrom == null ? null : clothCat.PathOf(clothRefit.EndFrom),
+                                            clothRefit.EndTo == null ? null : rue.Catalog.PathOf(clothRefit.EndTo),
+                                            false, _ => (null, null), s => s, null, null, out var clothLimb, out var clothEnd));
+            var clothPlan = KeepEnds.Plan(glove, gloveBytes, reading, clothLimb, clothEnd, across: true);
+            var byTopOn = BodySizeMatch.ClothAgainst(before, chestPath)!.Value;
+            var byClothOn = BodySizeMatch.ClothAgainst(ModelPartReader.Read(clothPlan.Model)!, chestPath)!.Value;
+            output.WriteLine($"Rue {size}: by its top {byTopOn.Inside}/{byTopOn.Near} inside, {plain.Report.Folded} folded; "
+                           + $"by its cloth {byClothOn.Inside}/{byClothOn.Near} inside, {clothPlan.Report.Folded} folded");
+            Assert.True(byTopOn.Inside < byClothOn.Inside,
+                        $"Rue {size}: {byTopOn.Inside} inside sized by its top, {byClothOn.Inside} by its cloth");
+            Assert.True(plain.Report.Folded <= 3, $"Rue {size}: {plain.Report.Folded} triangles left folded");
 
             Assert.Equal(plain.Model, off.Model);
             Assert.True(kept.Report.Layered > 0, "the jacket should have been lifted");

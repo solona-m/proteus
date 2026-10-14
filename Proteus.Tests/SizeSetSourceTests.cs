@@ -13,7 +13,6 @@ namespace Proteus.Tests;
 /// Which of the author's sizes a size set cuts each new size from (<c>SizeSetRefit.Source.cs</c>): the nearest, by the
 /// distance between the bodies, measured against the refit's own move.
 /// </summary>
-[Collection(GameBodyCollection.Name)]
 public class SizeSetSourceTests(ITestOutputHelper output)
 {
     private const string Yab = LocalData.Mods + ":hs-Yet Another Body+-4.2.0-tmi";

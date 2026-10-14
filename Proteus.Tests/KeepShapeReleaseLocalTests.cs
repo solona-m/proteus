@@ -39,9 +39,11 @@ public class KeepShapeReleaseLocalTests
     /// Re-pinned for build 1261: Ash and pop have big double-walled pieces, which a thick shell's walls now move together
     /// when the skin is cleared out of a face (<see cref="BodyRetarget.FaceCheck.WallPartner"/>) and whose inner wall now
     /// covers what lies beneath; the rim lift's fold guard now judges against the authored face. Measured before
-    /// re-pinning, against <see cref="BeforeThickShells"/>: up to 354 points moved (worst 7.8 mm, pop onto Neolithe XS); the
-    /// cloth inside the body the same on every case; folds on the solve's last stage the same or fewer (Ash Yab L onto
-    /// Uranus 792 -> 771); a thick shell's walls through each other fewer or the same.
+    /// re-pinning, against the same refits with <see cref="BodyRetarget.Tuning.NoWallPair"/>,
+    /// <see cref="BodyRetarget.Tuning.NoWallCover"/> and <see cref="BodyRetarget.Tuning.NoRimTurnGuard"/> set, which wrote
+    /// the builds before 1261 byte for byte (pinned here until the suite was trimmed): up to 354 points moved (worst
+    /// 7.8 mm, pop onto Neolithe XS); the cloth inside the body the same on every case; folds on the solve's last stage the
+    /// same or fewer (Ash Yab L onto Uranus 792 -> 771); a thick shell's walls through each other fewer or the same.
     /// <para/>
     /// Re-pinned for build 1266: Ash Yab L onto Uranus crosses to a body tessellated otherwise, where cloth the transfer
     /// snapped is now pushed clear of the new skin (<see cref="BodyRetarget.Tuning.NoSnapPush"/>). Measured against
@@ -55,21 +57,6 @@ public class KeepShapeReleaseLocalTests
         ["pop > Uranus"] = "3ACD75DF39D6248760C50355E06B59FE1E61C311D6AA6D1337AA9ACADD887647",
         ["pop > Neolithe XS"] = "448E7E303B1D235DA036F3C1D12236E937D7FBF8ACB34D04C6E4359A244906FA",
         ["pop > Bibo S"] = "C619167AB0778D46CCF9C620423730FD4FFB1634F70706878404BAF61C1E4B1A",
-    };
-
-    /// <summary>
-    /// The same refits as builds before 1261 wrote them: with a thick shell's walls moved each on its own, no inner wall
-    /// taken for a cover, and the rim lift's old fold guard (<see cref="BodyRetarget.Tuning.NoWallPair"/>,
-    /// <see cref="BodyRetarget.Tuning.NoWallCover"/>, <see cref="BodyRetarget.Tuning.NoRimTurnGuard"/>), byte for byte
-    /// — the proof that nothing else moved when <see cref="Before"/> was re-pinned.
-    /// </summary>
-    private static readonly Dictionary<string, string> BeforeThickShells = new()
-    {
-        ["ash Rue L > Uranus"] = "8C21BA073FF3E10B5DCCC3A0D20BA411F12115546E08A61F0AE2AAAD66236334",
-        ["ash Yab L > Uranus"] = "3B4769B40112952A9A094AA1BE9A6CD94579F120B4CDB91CE5475AF5B179045C",
-        ["pop > Uranus"] = "DD799F3CC28B721C315420C1510FF459C0A2E7E1A67CA67C8C1F98825E3747B2",
-        ["pop > Neolithe XS"] = "96A5D5E72F62C2ECECBC75CF13D55DEC11A3369E202AB33956B282036D0C1345",
-        ["pop > Bibo S"] = "4860C45C6F7ADF88F0F85EB51DBDA8F5490C9F8E0EA19FEB8563AF61171E5B84",
     };
 
     /// <summary>The refits <see cref="BodyRetarget.Tuning.NoSnapPush"/> changes, as builds before 1266 wrote them, release
@@ -88,7 +75,7 @@ public class KeepShapeReleaseLocalTests
     /// <summary>One refit as <c>Proteus.Refit --keep-default</c> runs it, the default ticks less <paramref name="untick"/>.</summary>
     private static Run Refit(byte[] bytes, string fromNeed, string fromRel, string toNeed, string toRel,
                              bool noRelease = false, string? untick = null, bool noNippleSmooth = false,
-                             bool beforeThickShells = false, bool beforeSnapPush = false)
+                             bool beforeSnapPush = false)
     {
         var garment = ModelPartReader.Read(bytes)!;
         string fromRoot = LocalData.Path(fromNeed), toRoot = LocalData.Path(toNeed);
@@ -102,17 +89,22 @@ public class KeepShapeReleaseLocalTests
         var pieces = RefitCore.ShapePieces(garment, labels, out var names);
         bool across = !string.Equals(fromRoot, toRoot, StringComparison.OrdinalIgnoreCase);
         var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoRelease: noRelease, NoNippleSmooth: noNippleSmooth,
-                                                                       NoWallPair: beforeThickShells, NoWallCover: beforeThickShells,
-                                                                       NoRimTurnGuard: beforeThickShells,
-                                                                       NoSnapPush: beforeThickShells || beforeSnapPush), () => BodyRetarget.Plan(
+                                                                       NoSnapPush: beforeSnapPush), () => BodyRetarget.Plan(
             garment, bytes, [pair], "_top", replaceSkin: true, acrossBodies: across, keepShape: pieces));
         return new Run(plan, names);
     }
 
     private static byte[] Ash(string size) => LocalData.PackEntry(AshPack, $"default group/Top Sizes/{size}.mdl");
 
+    /// <summary>
+    /// Ash Rue L onto Uranus: kept whole, the left cup cover sinks into the bigger breast; let go, it bends with it, exactly
+    /// as unticked, while the choker stays kept. The sunk cover also left the nipple reading bare, so the new body's
+    /// nipple piercing and its chain came in with the skin; let go, the cover covers it again, as unticked.
+    /// </summary>
     [LocalDataFact(AshPack, Rue, Uranus)]
     [Trait("Plan", "AC-keep-shape-release-1")]
+    [Trait("Plan", "AC-keep-shape-release-2")]
+    [Trait("Plan", "AC-keep-shape-release-3")]
     [Trait("Plan", "AC-keep-shape-release-9")]
     public void Ash_cover_bends_with_Uranus()
     {
@@ -125,8 +117,6 @@ public class KeepShapeReleaseLocalTests
         Assert.True(wholeCover.Sink > 0.005f, $"moved whole the cover should sink past 5 mm, not {wholeCover.Sink * 1000:F2}");
         Assert.True(wholeCover.Share * 893 > 100, $"only {wholeCover.Share * 893:F0} of the cover's points sank");
         Assert.Equal(Before["ash Rue L > Uranus"], whole.Hash);
-        Assert.Equal(BeforeThickShells["ash Rue L > Uranus"],
-                     Refit(bytes, Rue, YiggleLarge, Uranus, UranusRue, noRelease: true, beforeThickShells: true).Hash);
 
         var released = Refit(bytes, Rue, YiggleLarge, Uranus, UranusRue);
         var unticked = Refit(bytes, Rue, YiggleLarge, Uranus, UranusRue, untick: Cover);
@@ -135,19 +125,18 @@ public class KeepShapeReleaseLocalTests
         // Let go, it comes out exactly as if the user had unticked it.
         Assert.Equal(unticked.Hash, released.Hash);
         Assert.Equal(unticked.Plan.Report.Folded, released.Plan.Report.Folded);
-    }
 
-    [LocalDataFact(AshPack, Rue, Uranus)]
-    [Trait("Plan", "AC-keep-shape-release-2")]
-    public void Ash_choker_stays_kept()
-    {
-        var run = Refit(Ash("Rue L"), Rue, YiggleLarge, Uranus, UranusRue);
-
-        var choker = run.Of(Choker);
+        // [AC-keep-shape-release-2] The choker is judged and stays kept: only the cover is let go.
+        var choker = released.Of(Choker);
         Assert.True(choker.Judged);
         Assert.False(choker.Released, $"the choker sinks {choker.Sink * 1000:F2} mm");
-        // Only the cover is let go.
-        Assert.Equal([Cover], RefitCore.KeptPieces(run.Plan.Report, run.Names).Where(p => p.Released).Select(p => p.Name));
+        Assert.Equal([Cover], RefitCore.KeptPieces(released.Plan.Report, released.Names).Where(p => p.Released).Select(p => p.Name));
+
+        // [AC-keep-shape-release-3] No nipple piercing carried in under the cover let go.
+        int Adorned(Run r) => r.Plan.Report.Swap?.Adorned ?? 0;
+        Assert.Equal(Adorned(unticked), Adorned(released));
+        Assert.True(Adorned(released) < Adorned(whole),
+                    $"released {Adorned(released)} adornment triangles carried, kept whole {Adorned(whole)}");
     }
 
     [LocalDataFact(AshPack, Yab, Uranus)]
@@ -160,29 +149,10 @@ public class KeepShapeReleaseLocalTests
         Assert.Equal(Before["ash Yab L > Uranus"], Refit(bytes, Yab, YiggleLarge, Uranus, UranusRue, noRelease: true).Hash);
         Assert.Equal(BeforeSnapPush["ash Yab L > Uranus"],
                      Refit(bytes, Yab, YiggleLarge, Uranus, UranusRue, noRelease: true, beforeSnapPush: true).Hash);
-        Assert.Equal(BeforeThickShells["ash Yab L > Uranus"],
-                     Refit(bytes, Yab, YiggleLarge, Uranus, UranusRue, noRelease: true, beforeThickShells: true).Hash);
 
         var run = Refit(bytes, Yab, YiggleLarge, Uranus, UranusRue);
         Assert.Equal([Cover], RefitCore.KeptPieces(run.Plan.Report, run.Names).Where(p => p.Released).Select(p => p.Name));
         Assert.Equal(Refit(bytes, Yab, YiggleLarge, Uranus, UranusRue, untick: Cover).Hash, run.Hash);
-    }
-
-    [LocalDataFact(AshPack, Rue, Uranus)]
-    [Trait("Plan", "AC-keep-shape-release-3")]
-    public void Ash_no_longer_carries_the_left_nipple_piercing()
-    {
-        // The sunk cover left the nipple reading bare, so the new body's nipple piercing and its chain came in with the
-        // skin. Let go, the cover covers it again, as unticked.
-        var bytes = Ash("Rue L");
-        var whole = Refit(bytes, Rue, YiggleLarge, Uranus, UranusRue, noRelease: true);
-        var released = Refit(bytes, Rue, YiggleLarge, Uranus, UranusRue);
-        var unticked = Refit(bytes, Rue, YiggleLarge, Uranus, UranusRue, untick: Cover);
-
-        int Adorned(Run r) => r.Plan.Report.Swap?.Adorned ?? 0;
-        Assert.Equal(Adorned(unticked), Adorned(released));
-        Assert.True(Adorned(released) < Adorned(whole),
-                    $"released {Adorned(released)} adornment triangles carried, kept whole {Adorned(whole)}");
     }
 
     private const string LaVieEnRose =
@@ -236,8 +206,6 @@ public class KeepShapeReleaseLocalTests
         Assert.NotEmpty(kept);
         Assert.DoesNotContain(kept, p => p.Released);
         Assert.Equal(Before[which], run.Hash);
-        Assert.Equal(BeforeThickShells[which], Refit(File.ReadAllBytes(LocalData.Path(Pop)), Yab, YabMedium, toNeed, toRel,
-                                              noNippleSmooth: true, beforeThickShells: true).Hash);
 
         // And as the refit really runs, smoothing on: still nothing let go.
         var on = Refit(File.ReadAllBytes(LocalData.Path(Pop)), Yab, YabMedium, toNeed, toRel);

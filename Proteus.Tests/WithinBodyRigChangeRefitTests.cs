@@ -69,12 +69,15 @@ public class WithinBodyRigChangeRefitTests(ITestOutputHelper output)
     /// [AC-within-body-weights-1] [EDGE-within-body-weights-5] Rue+ Yiggle WC Gen A to Gen B, the new body's skin, no
     /// push-out — the user's settings. The two legs weight everything but the crotch alike, so the skirt keeps its
     /// thigh weights.
+    /// <para/>
+    /// [AC-within-body-weights-2] The new genital bones go where Gen B's skin moves to them — the panties and the pubic
+    /// hair at the crotch — and onto no skirt vertex.
     /// </summary>
     [LocalDataFact(Rue, Starlit)]
-    public void Starlit_skirt_Gen_A_to_B_keeps_its_thigh_weights()
+    public void Starlit_skirt_Gen_A_to_B_keeps_its_thigh_weights_and_puts_the_new_bones_only_on_the_crotch()
     {
         var r = StarlitGenAToB();
-        AssertGenAToBFixture(r);
+        var genB = AssertGenAToBFixture(r);
 
         var before = Weights(r.Garment);
         var after = Weights(r.Model);
@@ -88,18 +91,8 @@ public class WithinBodyRigChangeRefitTests(ITestOutputHelper output)
 
         Assert.True(lost.Max() <= 0.05f, $"a skirt vertex lost {lost.Max():0.000} of its thigh weight");
         Assert.Equal(0, moved.Count(m => m > 0.1f));
-    }
 
-    /// <summary>
-    /// [AC-within-body-weights-2] The new genital bones go where Gen B's skin moves to them — the panties and the
-    /// pubic hair at the crotch — and onto no skirt vertex.
-    /// </summary>
-    [LocalDataFact(Rue, Starlit)]
-    public void Starlit_skirt_Gen_A_to_B_puts_the_new_bones_only_on_the_crotch()
-    {
-        var r = StarlitGenAToB();
-        var genB = AssertGenAToBFixture(r);
-        var after = Weights(r.Model);
+        // [AC-within-body-weights-2] Gen B's new bones: on the crotch, not the skirt.
         var parts = ModelPartReader.Read(r.Model)!.Parts.Where(p => p.Island < 0).ToList();
 
         int OnNewBones(Func<string, bool> material)

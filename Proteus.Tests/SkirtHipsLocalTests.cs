@@ -16,7 +16,6 @@ namespace Proteus.Tests;
 /// waistband. The skirt is a thick shell, its walls 2 mm apart — see <see cref="BodyRetarget.FaceCheck.WallPartner"/>.
 /// Measured inside the pass, on the solve's own nodes; the buttock also against the skin the file draws.
 /// </summary>
-[Collection(GameBodyCollection.Name)]
 public class SkirtHipsLocalTests(ITestOutputHelper output)
 {
     private const string Geometric = LocalData.Mods + ":Geometric - by Solona";
@@ -41,9 +40,7 @@ public class SkirtHipsLocalTests(ITestOutputHelper output)
 
     /// <summary>The skirt refitted onto Rue WC A, with Rue's <paramref name="chest"/> beneath or (null) the legs alone,
     /// and what came through what.</summary>
-    /// <param name="sizeSet">Refitted as the size set refits it (<see cref="BodyRetarget.Plan"/> with the skin taken and
-    /// the default Keep shape pieces), not as the automatic refit does.</param>
-    private static Measured Refit(BodyRetarget.Tuning tuning, string? chest, bool sizeSet = false)
+    private static Measured Refit(BodyRetarget.Tuning tuning, string? chest)
     {
         var bodies = new[] { Body(FixPubes), Body(Bibo), Body(Rue) }.ToList();
         var rue = bodies[2];
@@ -68,12 +65,7 @@ public class SkirtHipsLocalTests(ITestOutputHelper output)
 
         Vec3[]? final = null;
         void Final(string s, Vec3[] d) { if (s == "layer-order") final = d; }
-        var plan = sizeSet
-            ? BodyRetarget.WithTuning(tuning, () => BodyRetarget.Plan(skirt, bytes, pairs, "_dwn", held: new HashSet<int>(), replaceSkin: true,
-                                                                      acrossBodies: true, clearBody: false, cutHidden: true,
-                                                                      keepShape: RefitCore.ShapePieces(skirt, RefitCore.DefaultKeepShape(skirt), out _),
-                                                                      trace: Final))
-            : BodyRetarget.WithTuning(tuning, () => RefitCore.PlanRefit(skirt, bytes, pairs, "_dwn", true, false, out _, trace: Final));
+        var plan = BodyRetarget.WithTuning(tuning, () => RefitCore.PlanRefit(skirt, bytes, pairs, "_dwn", true, false, out _, trace: Final));
         Assert.NotNull(final);
 
         var sets = BodyRetarget.Sets.From(skirt, new HashSet<int>(), BodyRetarget.PartedSkinMeshes(skirt, pairs, "_dwn", true, null));
@@ -148,7 +140,6 @@ public class SkirtHipsLocalTests(ITestOutputHelper output)
     [Trait("Plan", "AC-skirt-hips-7")]
     [Trait("Plan", "EDGE-skirt-hips-1")]
     [Trait("Plan", "EDGE-skirt-hips-2")]
-    [Trait("Plan", "EDGE-skirt-hips-11")]
     public void Rues_buttock_and_the_stocking_stay_under_Geometrics_skirt(string chest)
     {
         string? beneath = chest == "legs only" ? null : chest;
@@ -158,11 +149,6 @@ public class SkirtHipsLocalTests(ITestOutputHelper output)
                        + $"{now.ButtockFaces}, against the drawn skin {before.DrawnButtock} -> {now.DrawnButtock}); stocking through the "
                        + $"shell {before.StockingCells} -> {now.StockingCells} cells; folds {before.Folds} -> {now.Folds} (shell "
                        + $"{before.ShellFolds} -> {now.ShellFolds}, buttock/waistband {before.RegionFolds} -> {now.RegionFolds})");
-        // Printed beside it, not held to it: the size set refits the same pairs its own way (EDGE-11).
-        var set = Refit(new BodyRetarget.Tuning(), beneath, sizeSet: true);
-        output.WriteLine($"{chest}, as the size set refits it: shell faces with skin through {set.FacesThrough} (buttock {set.ButtockFaces}, "
-                       + $"against the drawn skin {set.DrawnButtock}); stocking through the shell {set.StockingCells} cells; folds {set.Folds} "
-                       + $"(shell {set.ShellFolds}, buttock/waistband {set.RegionFolds})");
 
         // What showed in game (build 1256): 28 faces and 14 cells with the chest beneath.
         Assert.True(before.ButtockFaces >= 10, "the harness should reproduce what showed in game");

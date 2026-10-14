@@ -17,7 +17,6 @@ namespace Proteus.Tests;
 /// inside it — and draws no chest skin there, so the new body's skin put in whole showed through the cloth under the bust
 /// and on the belly. Needs the game's data and the body mods named.
 /// </summary>
-[Collection(GameBodyCollection.Name)]
 public class VanillaGearRefitLocalTests(ITestOutputHelper output)
 {
     private const string Neolithe = LocalData.Mods + ":Neolithe [ALL IN ONE]";
