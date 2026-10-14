@@ -127,7 +127,8 @@ public class OutfitOrderLocalTests(ITestOutputHelper output)
             = (view, slot) => RefitCore.DetectSource(view, gloveBones, slot, Race, bodies, rue.Dir, _ => true);
         var found = KeepEnds.Find(reading, glove, gloveBones, Race, detect, CatalogOf, sibling: source);
         Assert.Equal(KeepEnds.Route.Sibling, found.Route);
-        Assert.Equal(source.Option, found.Pick!.Option);
+        Assert.Equal(source.Dir, found.Pick!.Dir);
+        Assert.Equal(source.Option, found.Pick.Option);
         // [AC-jacket-refit-12] The top is the one the size set finds beside the jacket in its option; read without it, by
         // its cloth, the jacket takes another route — compared per size below.
         var sibling = Assert.Single(SiblingPiece.Find(PenumbraModMeta.ReadAllRedirects(root), BodyRetargetWriter.ReadRecord(root),

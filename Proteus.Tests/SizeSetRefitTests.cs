@@ -435,7 +435,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
                              dir => bodies.FirstOrDefault(b => b.Dir == dir)?.Catalog).Pick;
     }
 
-    [LocalDataFact(LocalData.GameData, LocalData.ShiftPack, Yab, Rue, Bibo)]
+    [LocalDataFact(LocalData.ShiftPack, Yab, Rue, Bibo)]
     [Trait("Plan", "AC-keep-ends-studio-6")]
     [Trait("Plan", "EDGE-keep-ends-studio-13")]
     [Trait("Plan", "EDGE-keep-ends-studio-14")]
@@ -489,20 +489,26 @@ public class SizeSetRefitTests(ITestOutputHelper output)
             Assert.Equal(added.Count, result.Made);
 
             // [AC-sizeset-game-body-source-3] Offered the game's body too, with the body it was made on installed, it is
-            // still read as made on that body mod: the same sizes, the same models, nothing from the game's body.
-            string with = ShoeMod(shoe, "YAB WC");
-            try
+            // still read as made on that body mod: the same sizes, the same models, nothing from the game's body. Only
+            // where the game is installed; the rest of this test does not need it, so it does not skip for it.
+            if (LocalData.Missing([LocalData.GameData]) is { } noGame)
+                output.WriteLine($"not compared with the game's body offered: {noGame}");
+            else
             {
-                var (b, _) = RunOn(with, ["yab", "rue", "bibo"], GameBodies(), Yab, Rue, Bibo);
-                Assert.Equal(added, Options(with, "Shoes").Skip(1));
-                Assert.Equal(result.Made, b.Made);
-                foreach (string o in added) Assert.Equal(ModelOf(root, "Shoes", o, ShoePath), ModelOf(with, "Shoes", o, ShoePath));
-                Assert.DoesNotContain(BodyRetargetWriter.ReadRecord(with)?.Options ?? [],
-                                      e => e.From.Contains(Proteus.Localization.Strings.Parts.RetargetFromVanilla));
-            }
-            finally
-            {
-                Directory.Delete(with, recursive: true);
+                string with = ShoeMod(shoe, "YAB WC");
+                try
+                {
+                    var (b, _) = RunOn(with, ["yab", "rue", "bibo"], GameBodies(), Yab, Rue, Bibo);
+                    Assert.Equal(added, Options(with, "Shoes").Skip(1));
+                    Assert.Equal(result.Made, b.Made);
+                    foreach (string o in added) Assert.Equal(ModelOf(root, "Shoes", o, ShoePath), ModelOf(with, "Shoes", o, ShoePath));
+                    Assert.DoesNotContain(BodyRetargetWriter.ReadRecord(with)?.Options ?? [],
+                                          e => e.From.Contains(Proteus.Localization.Strings.Parts.RetargetFromVanilla));
+                }
+                finally
+                {
+                    Directory.Delete(with, recursive: true);
+                }
             }
 
             // A second run finds nothing left to make.
