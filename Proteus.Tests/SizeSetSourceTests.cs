@@ -138,6 +138,28 @@ public class SizeSetSourceTests(ITestOutputHelper output)
         Assert.Equal(["Neolithe L"], SizeSetRefit.RiggedAlike(mixed[..1], c => c.Yas, targetYas: true).Select(c => c.Name));
     }
 
+    /// <summary>
+    /// Where a size goes from each of the author's sizes: legs following a chest go onto the legs the table pairs with
+    /// that chest size across body mods, and within one, onto the legs of the CANDIDATE's own family — chosen before the
+    /// legs' target is read, never the first size's.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-bulk-nearest-source-3")]
+    [Trait("Plan", "EDGE-bulk-nearest-source-20")]
+    [Trait("Plan", "EDGE-bulk-nearest-source-28")]
+    public void A_size_s_target_follows_the_source_chosen_for_it()
+    {
+        var neolithe = SupportedBodies.Of("neolithe", "_top", false)!;
+        var l = neolithe.Sizes.Single(s => s.Name == "L");
+        const string smallLegs = "default legs - smallclothes/sfw small.mdl";
+        Assert.Equal(l.Rel, SizeSetRefit.TargetRel(followsChest: false, across: true, l, smallLegs));
+        Assert.Equal(l.LegsRel, SizeSetRefit.TargetRel(followsChest: true, across: true, l, smallLegs));
+        Assert.Equal("default legs - smallclothes/sfw large.mdl", SizeSetRefit.TargetRel(followsChest: true, across: false, l, smallLegs));
+        // A size whose family has no legs of its own: nowhere to go from that source.
+        var xs = neolithe.Sizes.Single(s => s.Name == "XS");
+        Assert.Null(SizeSetRefit.TargetRel(followsChest: true, across: false, xs, smallLegs));
+    }
+
     [Fact]
     [Trait("Plan", "AC-bulk-nearest-source-2")]
     public void Near_honours_its_cap()
@@ -308,26 +330,54 @@ public class SizeSetSourceTests(ITestOutputHelper output)
         return (patches.DefaultIfEmpty(0).Max(), patches.Sum());
     }
 
-    /// <summary>A refit of one author's file onto one target with the size set's arguments, as by hand.</summary>
-    private static byte[] DirectRefit(string garmentPath, string sourcePath, string targetPath, UVRemapService uv,
-                                      out float worstMove)
+    /// <summary>
+    /// A refit of one author's file onto one Rue chest made by hand the size set's way: its arguments (the Studio's
+    /// defaults), the hem's legs moved onto the table's legs, and its skin drawn the way the new body draws it.
+    /// </summary>
+    private static (BodyRetarget.Planned Plan, ModelParts Garment) DirectRefit(string garmentPath, BodyModIndex.Entry source,
+        BodyOption from, BodyModIndex.Entry target, BodyOption to, SupportedBodies.Size size, UVRemapService uv)
     {
         byte[] bytes = File.ReadAllBytes(garmentPath);
         var garment = ModelPartReader.Read(bytes)!;
-        Assert.Null(BodyRetarget.BuildPair("_top", sourcePath, targetPath, "Chest", false, null, null, uv, out var pair));
-        var plan = BodyRetarget.Plan(garment, bytes, [pair], "_top", held: new HashSet<int>(), replaceSkin: true,
+        var bones = new HashSet<string>(SecondSkinWriter.Parse(bytes).BoneNames, StringComparer.Ordinal);
+        string sourcePath = source.Catalog.PathOf(from), targetPath = target.Catalog.PathOf(to);
+        Assert.Null(BodyRetarget.BuildPair("_top", sourcePath, targetPath, "Chest", false,
+                                           RefitCore.MaskOf(source.Dir, source.Catalog, "_top", null),
+                                           RefitCore.MaskOf(target.Dir, target.Catalog, "_top", null), uv, out var pair));
+        var pairs = new List<BodyRetarget.SlotPair> { pair };
+        var hem = BodySizeMatch.Rank(garment, source.Catalog.For("_dwn", "0201"), source.Catalog.PathOf, bones);
+        if (hem.Best is { } legs && AutoRefitDecisions.Proceed(hem.Confidence)
+            && target.Catalog.For("_dwn").FirstOrDefault(o => RefitCore.Normal(o.Rel) == RefitCore.Normal(size.LegsRel!)) is { } legsTo
+            && BodyRetarget.BuildPair("_dwn", source.Catalog.PathOf(legs.Option), target.Catalog.PathOf(legsTo), "Legs", false,
+                                      RefitCore.MaskOf(source.Dir, source.Catalog, "_dwn", null),
+                                      RefitCore.MaskOf(target.Dir, target.Catalog, "_dwn", null), uv, out var legsPair) == null)
+            pairs.Add(legsPair);
+        var plan = BodyRetarget.Plan(garment, bytes, pairs, "_top", held: new HashSet<int>(), replaceSkin: true,
                                      acrossBodies: true, clearBody: false, cutHidden: true,
                                      keepShape: RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)));
-        worstMove = plan.Report.WorstMove;
-        return plan.Model;
+        var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
+        return (RefitCore.MatchSkinToBody(plan, sourcePath, targetPath, uv, false, log), garment);
+    }
+
+    /// <summary>Triangles a refit leaves folded, counted on its FINAL move (the report counts before the last passes).</summary>
+    private static int FoldedAfter(ModelParts garment, RetargetEdit edit)
+    {
+        var sets = BodyRetarget.Sets.From(garment);
+        var nodeDelta = new SecondSkinWriter.Vec3[sets.NodeCount];
+        var seen = new bool[sets.NodeCount];
+        for (int v = 0; v < sets.NodeOf.Length; v++)
+            if (!seen[sets.NodeOf[v]])
+            {
+                seen[sets.NodeOf[v]] = true;
+                nodeDelta[sets.NodeOf[v]] = edit.DeltaAt(v);
+            }
+        return BodyRetarget.FoldedTriangles(sets, nodeDelta);
     }
 
     /// <summary>
     /// The reporter's case: a top whose sizes are YAB Small, Medium and Large, given Rue's. Rue Large is cut from YAB
-    /// Large, not Small, and leaves no larger hole than a refit of YAB Large by hand — where cut from Small, the skin the
-    /// author hid under the bodysuit showed past it. Fishet Starlight shows it plainest of the library's YAB tops: by hand
-    /// from Small its largest hole is 13.9 cm², from Large 1.5 (a T-shirt whose skin is cut wholesale reads hundreds
-    /// either way, and tells nothing).
+    /// Large, not Small, and is the refit of YAB Large made by hand — where cut from Small, carried 57 mm, the move folded
+    /// 374 triangles over, the black specks seen at the cups' rims.
     /// </summary>
     [LocalDataFact(Yab, Rue, FishetStarlight)]
     [Trait("Plan", "AC-bulk-nearest-source-1")]
@@ -352,29 +402,44 @@ public class SizeSetSourceTests(ITestOutputHelper output)
             var record = BodyRetargetWriter.ReadRecord(copy)!;
             Assert.Contains("Large", record.Options.Single(e => e.Name == "Rue L" && e.GamePath == top).From);
 
-            // The hole itself: no larger than a refit of YAB Large by hand, and smaller than one of YAB Small.
+            // The hole itself: the bulk Rue L is the refit of YAB Large made by hand the same way, and the hole a refit of
+            // YAB Small leaves is gone.
             var dirs = new[] { Yab, Rue }.Select(n => Path.GetFileName(LocalData.Path(n))).ToDictionary(d => d, d => d);
             var bodies = new BodyModIndex().RefreshState(dirs, LocalData.Path(LocalData.Mods)).List;
             var yab = bodies.Single(b => b.Dir == Path.GetFileName(LocalData.Path(Yab)));
             var rue = bodies.Single(b => b.Dir == Path.GetFileName(LocalData.Path(Rue)));
-            string Body(BodyModIndex.Entry e, string key, string size)
-                => e.Catalog.PathOf(e.Catalog.For("_top").First(o => RefitCore.Normal(o.Rel) == RefitCore.Normal(
-                       SupportedBodies.Of(key, "_top", true)!.Sizes.Single(s => s.Name == size).Rel)));
-            string target = Body(rue, "rue", "L");
+            BodyOption Chest(BodyModIndex.Entry e, string key, string size)
+                => e.Catalog.For("_top").First(o => RefitCore.Normal(o.Rel) == RefitCore.Normal(
+                       SupportedBodies.Of(key, "_top", true)!.Sizes.Single(s => s.Name == size).Rel));
+            var rueL = SupportedBodies.Of("rue", "_top", true)!.Sizes.Single(s => s.Name == "L");
+            string target = rue.Catalog.PathOf(Chest(rue, "rue", "L"));
             var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
             var uv = new UVRemapService(log, ".");
             string Garment(string option) => Path.Combine(LocalData.Path(FishetStarlight), "size", option, "chara", "equipment",
                                                           "e6030", "model", "c0201e6030_top.mdl");
-            var large = UncoveredCutSkin(DirectRefit(Garment("yab large"), Body(yab, "yab", "L"), target, uv, out float largeMove), target);
-            var small = UncoveredCutSkin(DirectRefit(Garment("yab small"), Body(yab, "yab", "S"), target, uv, out float smallMove), target);
-            var bulk = UncoveredCutSkin(SizeSetRefitTests.ModelOfOption(copy, "Size", "Rue L", top), target);
+            var (byHand, garmentL) = DirectRefit(Garment("yab large"), yab, Chest(yab, "yab", "L"), rue, Chest(rue, "rue", "L"), rueL, uv);
+            var (fromSmall, garmentS) = DirectRefit(Garment("yab small"), yab, Chest(yab, "yab", "S"), rue, Chest(rue, "rue", "L"), rueL, uv);
+            byte[] bulkModel = SizeSetRefitTests.ModelOfOption(copy, "Size", "Rue L", top);
+            var large = UncoveredCutSkin(byHand.Model, target);
+            var small = UncoveredCutSkin(fromSmall.Model, target);
+            var bulk = UncoveredCutSkin(bulkModel, target);
+            int foldedL = FoldedAfter(garmentL, byHand.Edit), foldedS = FoldedAfter(garmentS, fromSmall.Edit);
             output.WriteLine($"uncovered cut skin, largest patch / all: by hand from Large {large.Largest:F2}/{large.Total:F2} cm² "
-                           + $"(moved {largeMove * 1000:F1} mm), from Small {small.Largest:F2}/{small.Total:F2} cm² "
-                           + $"(moved {smallMove * 1000:F1} mm), bulk {bulk.Largest:F2}/{bulk.Total:F2} cm²");
-            // The measure reads the clean case as clean, and the reported case as holed.
-            Assert.True(large.Largest < 2.0, $"a refit of YAB Large by hand reads {large.Largest:F2} cm² of hole");
-            Assert.True(small.Largest > 3 * large.Largest, "a refit of YAB Small by hand reads no hole");
-            Assert.True(bulk.Largest <= large.Largest + 0.3, "the bulk Rue L has a larger hole than a refit of YAB Large by hand");
+                           + $"(moved {byHand.Report.WorstMove * 1000:F1} mm, {foldedL} folded), from Small "
+                           + $"{small.Largest:F2}/{small.Total:F2} cm² (moved {fromSmall.Report.WorstMove * 1000:F1} mm, "
+                           + $"{foldedS} folded), bulk {bulk.Largest:F2}/{bulk.Total:F2} cm²");
+            // The holes are triangles the move folded over — black specks in game — and no skin left uncovered: from
+            // Small 374 folded, from Large 17, no skin uncovered either way.
+            Assert.True(foldedS > 5 * foldedL, $"from Small {foldedS} folded, from Large {foldedL}");
+            Assert.True(large.Largest < 1.0, $"a refit of YAB Large by hand reads {large.Largest:F2} cm² of hole");
+            // And the bulk Rue L IS that refit of Large: byte for byte, or (failing determinism) moved alike and holed alike.
+            if (bulkModel.AsSpan().SequenceEqual(byHand.Model))
+                output.WriteLine("the bulk Rue L is byte for byte the refit of YAB Large made by hand");
+            else
+            {
+                Assert.Equal(byHand.Report.WorstMove * 1000f, MovedMm("Body — e6030", "Rue L"), 0.1f);
+                Assert.InRange(bulk.Largest, large.Largest - 0.3, large.Largest + 0.3);
+            }
 
             // Logs name the mod's files by their place in it, never the folder on this machine.
             Assert.DoesNotContain(logged, l => l.Args.Any(a => a is string s && s.Contains(copy, StringComparison.OrdinalIgnoreCase)));

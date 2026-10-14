@@ -402,7 +402,8 @@ public class BodyRetargetWriterTests : IDisposable
         Assert.All(BodyRetargetWriter.ReadRecord(root)!.Options, e => Assert.True(e.InAuthorGroup));
     }
 
-    /// <summary>An author's size group whose two sizes each carry their own material, and Small a texture only it has.</summary>
+    /// <summary>An author's size group whose two sizes each carry their own material and legs, and Small a texture only it
+    /// has.</summary>
     private void WriteSizesWithMaterials(string type)
     {
         File.WriteAllText(Path.Combine(root, PenumbraModMeta.MetaFile), $$"""
@@ -412,7 +413,8 @@ public class BodyRetargetWriterTests : IDisposable
             { "Version": 0, "Name": "{{TopSize}}", "Priority": 0, "Type": "{{type}}", "DefaultSettings": 0, "Options": [
               { "Name": "Small", "Files": { "{{GamePath}}": "small/top.mdl", "{{MaterialPath}}": "small/top.mtrl",
                                             "{{TexturePath}}": "small/only.tex" } },
-              { "Name": "Large", "Files": { "{{GamePath}}": "large/top.mdl", "{{MaterialPath}}": "large/top.mtrl" } } ] } ]
+              { "Name": "Large", "Files": { "{{GamePath}}": "large/top.mdl", "{{MaterialPath}}": "large/top.mtrl",
+                                            "{{LegsPath}}": "large/dwn.mdl" } } ] } ]
         }
         """);
     }
@@ -426,7 +428,6 @@ public class BodyRetargetWriterTests : IDisposable
     [InlineData("Multi")]
     [Trait("Plan", "AC-bulk-nearest-source-6")]
     [Trait("Plan", "EDGE-bulk-nearest-source-21")]
-    [Trait("Plan", "EDGE-bulk-nearest-source-22")]
     [Trait("Plan", "EDGE-bulk-nearest-source-23")]
     public void Made_again_from_another_size_its_files_replace_the_old_ones(string type)
     {
@@ -438,14 +439,23 @@ public class BodyRetargetWriterTests : IDisposable
                                             [new BodyRetargetWriter.Refit("Rue L", [2], "WC")], fromOption: "Small").Ok);
         IReadOnlyDictionary<string, string> Files() => PenumbraModMeta.TryReadFileOptions(root, TopSize)!.Single(o => o.Name == "Rue L").Files;
         Assert.Equal("small/top.mtrl", Files()[MaterialPath]);
+        // And a file the player added to the option by hand, at a path no size of the author's gives.
+        const string handPath = "chara/equipment/e6255/texture/v01_c0201e6255_top_n.tex";
+        var meta = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(Path.Combine(root, PenumbraModMeta.MetaFile)))!;
+        var rueL = meta["Groups"]!.AsArray().Single(g => (string?)g!["Name"] == TopSize)!["Options"]!.AsArray()
+                                 .Single(o => (string?)o!["Name"] == "Rue L")!;
+        rueL["Files"]![handPath] = "mine/normal.tex";
+        File.WriteAllText(Path.Combine(root, PenumbraModMeta.MetaFile), meta.ToJsonString());
 
         // Saved again from Large without the flag: what the option carried stays, as every other save keeps it.
         Assert.True(BodyRetargetWriter.Save(root, TopSize, GamePath, "Rue+", "Large",
                                             [new BodyRetargetWriter.Refit("Rue L", [3], "Large")], fromOption: "Large").Ok);
         Assert.Equal("small/top.mtrl", Files()[MaterialPath]);
 
-        // With it, Large's material replaces Small's; the legs refit and this refit's own model are ours and stay ours.
+        // With it, Large's material replaces Small's; the legs refit and this refit's own model are ours and stay ours,
+        // though Large gives the legs a model of its own; and what the player added stays.
         string legs = Files()[LegsPath];
+        Assert.StartsWith(BodyRetargetWriter.Subfolder + "/", legs, StringComparison.OrdinalIgnoreCase);
         Assert.True(BodyRetargetWriter.Save(root, TopSize, GamePath, "Rue+", "Large",
                                             [new BodyRetargetWriter.Refit("Rue L", [4], "Large")], fromOption: "Large",
                                             sourceFilesWin: true).Ok);
@@ -456,6 +466,7 @@ public class BodyRetargetWriterTests : IDisposable
         Assert.Equal([4], File.ReadAllBytes(Path.Combine(root, files[GamePath])));
         // A path only Small gave stays carried: which option the size was cut from before is not recorded.
         Assert.Equal("small/only.tex", files[TexturePath]);
+        Assert.Equal("mine/normal.tex", files[handPath]);
         // And the author's options are as they were.
         Assert.Equal("small/top.mtrl", PenumbraModMeta.TryReadFileOptions(root, TopSize)!.Single(o => o.Name == "Small").Files[MaterialPath]);
     }

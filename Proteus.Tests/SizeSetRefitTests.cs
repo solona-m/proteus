@@ -2026,10 +2026,10 @@ public class SizeSetRefitTests(ITestOutputHelper output)
         }
     }
 
-    /// <summary>A group's options, in order.</summary>
     /// <summary>The model an option of a group gives a game path.</summary>
     internal static byte[] ModelOfOption(string root, string group, string option, string gamePath) => ModelOf(root, group, option, gamePath);
 
+    /// <summary>A group's options, in order.</summary>
     internal static List<string> Options(string modRoot, string group = "Size")
         => (PenumbraModMeta.TryReadFileOptions(modRoot, group) ?? []).Select(o => o.Name).ToList();
 

@@ -70,21 +70,37 @@ internal static partial class SizeSetRefit
         return (P90(d), Mean(d));
     }
 
-    /// <summary>A body's probe points: <see cref="BodySizeMatch.NearProbePoints"/> of its skin. Empty when unreadable.</summary>
-    internal static Vector3[] BodyProbes(string path)
+    /// <summary>
+    /// A body's probe points: <see cref="BodySizeMatch.NearProbePoints"/> of its skin. Empty when unreadable — every
+    /// distance to it then counts as <see cref="SourceCap"/> — said through <paramref name="note"/>.
+    /// </summary>
+    internal static Vector3[] BodyProbes(string path, Action<string>? note = null)
     {
         try
         {
-            return System.IO.File.Exists(path) && ModelPartReader.Read(System.IO.File.ReadAllBytes(path)) is { } body
-                ? BodySizeMatch.NearProbePoints(BodySizeMatch.SkinPoints(body))
-                : [];
+            if (System.IO.File.Exists(path) && ModelPartReader.Read(System.IO.File.ReadAllBytes(path)) is { } body)
+                return BodySizeMatch.NearProbePoints(BodySizeMatch.SkinPoints(body));
+            note?.Invoke($"body {System.IO.Path.GetFileName(path)} could not be read; sizes measured against it count as "
+                         + $"{SourceCap * 1000f:F0} mm off");
         }
         catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException or InvalidOperationException
                                        or ArgumentException or IndexOutOfRangeException)
         {
-            return [];
+            note?.Invoke($"body {System.IO.Path.GetFileName(path)} could not be read ({e.GetType().Name}); sizes measured "
+                         + $"against it count as {SourceCap * 1000f:F0} mm off");
         }
+        return [];
     }
+
+    /// <summary>
+    /// The model a piece goes onto for one of the table's sizes, when cut from a size made on <paramref name="sourceRel"/>.
+    /// Its own slot's size; legs following a chest onto the legs that size's chest is worn with — the table's across
+    /// body mods, the source's own family's within one. Null when there are none: Neolithe XS keeps the Small hips.
+    /// </summary>
+    internal static string? TargetRel(bool followsChest, bool across, SupportedBodies.Size size, string sourceRel)
+        => !followsChest ? size.Rel
+         : across ? size.LegsRel
+         : SupportedBodies.FamilyLegs(sourceRel, size.Name);
 
     /// <summary>
     /// The nearest of <paramref name="items"/>: at each key in turn — body 90th percentile, body mean, skin 90th
@@ -243,6 +259,9 @@ internal static partial class SizeSetRefit
                     unread++;
                     continue;
                 }
+                // Past the first readable one, every option tried counts, read or not: a mod of many unreadable fits
+                // must not detect them all.
+                if (Primary != null) extras++;
                 var c = Read(option, file, order++);
                 if (c == null) continue;
                 if (Primary == null)
@@ -251,7 +270,6 @@ internal static partial class SizeSetRefit
                     Choices.Add(c);
                     continue;
                 }
-                extras++;
                 // Read as the very size another already was: it would only tie with it, and lose on the author's order.
                 if (Choices.Any(o => string.Equals(o.Pick!.Dir, c.Pick!.Dir, StringComparison.OrdinalIgnoreCase)
                                      && RefitCore.Normal(o.Pick.Option.Rel) == RefitCore.Normal(c.Pick.Option.Rel)))

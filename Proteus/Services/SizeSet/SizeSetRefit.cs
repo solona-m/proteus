@@ -304,7 +304,7 @@ internal static partial class SizeSetRefit
         }
         // Bodies' probe points and the distances between them, read once per piece.
         var probes = new Dictionary<string, System.Numerics.Vector3[]>(StringComparer.OrdinalIgnoreCase);
-        System.Numerics.Vector3[] ProbesOf(string path) => probes.TryGetValue(path, out var p) ? p : probes[path] = BodyProbes(path);
+        System.Numerics.Vector3[] ProbesOf(string path) => probes.TryGetValue(path, out var p) ? p : probes[path] = BodyProbes(path, Note);
         var bodyDistances = new Dictionary<(string, string), (float P90, float Mean)>();
         SourceDistance Measure(Candidate c, string targetPath)
         {
@@ -342,12 +342,9 @@ internal static partial class SizeSetRefit
                 // worn with — across body mods the table's, within one the candidate's own family's; a size with none
                 // (Neolithe XS keeps the Small hips) has nowhere to go from it.
                 BodyOption? ToOf(Candidate c)
-                {
-                    string? rel = !piece.FollowsChest ? size.Rel
-                                : Across(c) ? size.LegsRel
-                                : SupportedBodies.FamilyLegs(c.Pick!.Option.Rel, size.Name);
-                    return rel == null ? null : OptionByFile(targetCat.For(piece.Slot), rel);
-                }
+                    => TargetRel(piece.FollowsChest, Across(c), size, c.Pick!.Option.Rel) is { } rel
+                        ? OptionByFile(targetCat.For(piece.Slot), rel)
+                        : null;
                 string? WhyNot(Candidate c) => Ineligible(c.Pick!.Dir, c.Pick.Option, body.Family, target.Dir, ToOf(c));
                 // The nearest of the author's sizes that may go onto this one, and the log line saying why.
                 (Candidate Chosen, string Why)? Nearest()
@@ -440,6 +437,16 @@ internal static partial class SizeSetRefit
                     if (sources.Choices.All(c => WhyNot(c) == MadeOnIt))
                     {
                         log.Information("[Proteus] size set: {0}: {1} is the size it was made on", piece.Label, option);
+                        continue;
+                    }
+                    // Legs following the chest with nowhere to go from any size: a size with no legs of its own keeps
+                    // the author's, as before; one whose legs the body mod lacks is said so.
+                    if (piece.FollowsChest && sources.Choices.All(c => ToOf(c) == null))
+                    {
+                        if (sources.Choices.Any(c => TargetRel(true, Across(c), size, c.Pick!.Option.Rel) != null))
+                            notes.Add(string.Format(Strings.SizeSet.NoSuchSizeFmt, piece.Label, option, target.Name));
+                        else
+                            log.Information("[Proteus] size set: {0}: {1} has no legs of its own", piece.Label, option);
                         continue;
                     }
                     if (Nearest() is not { } nearest) continue;

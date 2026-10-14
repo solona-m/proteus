@@ -304,6 +304,7 @@ internal static class BodyRetargetWriter
     /// the option carried at the same game path — the old source option's material, textures, other races' models —
     /// rather than only filling gaps. Never a refit of ours (another slot's, saved into this option) and never this
     /// refit's own path. A path only the OLD source option gave stays carried: which option that was is not recorded.
+    /// Files only: the option's metadata keeps what an earlier save of it wrote above the source's, as always.
     /// </param>
     public static Outcome Save(string modRoot, string groupName, string gamePath, string bodyMod, string from,
                                IReadOnlyList<Refit> refits, string? fromOption = null,
