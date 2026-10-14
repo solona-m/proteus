@@ -277,6 +277,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
 
     [LocalDataFact(Bibo)]
     [Trait("Plan", "AC-keep-ends-studio-8")]
+    [Trait("Plan", "EDGE-bulk-nearest-source-25")]
     public void Unpaired_ends_get_a_note_and_no_sizes()   // [AC-keep-ends-studio-8]
     {
         // Each would add sizes of its own, every one wearing the other piece unrefitted: left alone, and said so.
@@ -344,6 +345,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     [LocalDataFact(Bibo)]
     [Trait("Plan", "AC-keep-ends-studio-9")]
     [Trait("Plan", "EDGE-keep-ends-studio-1")]
+    [Trait("Plan", "EDGE-bulk-nearest-source-3")]
     public void Unreadable_ends_are_noted()   // [AC-keep-ends-studio-9] [EDGE-keep-ends-studio-1]
     {
         string root = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
@@ -1027,6 +1029,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
 
     [LocalDataFact(Heartthrob, LocalData.ShiftPack, Bibo, Yab, Neolithe)]
     [Trait("Plan", "AC-keep-ends-studio-8")]
+    [Trait("Plan", "EDGE-bulk-nearest-source-7")]
     public void A_shoe_beside_a_chest_keeps_the_authors_where_the_size_has_no_legs()   // [AC-keep-ends-studio-8]
     {
         // Neolithe XS is worn with the Small hips: no legs of its own. The shoe in that size stays the author's, quietly,
@@ -1726,6 +1729,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     [Trait("Plan", "AC-jacket-refit-12")]
     [Trait("Plan", "AC-jacket-refit-13")]
     [Trait("Plan", "EDGE-jacket-refit-36")]
+    [Trait("Plan", "AC-bulk-nearest-source-5")]
     public void Geometrics_jacket_is_sized_by_the_top_in_its_option()
     {
         string copy = GeometricAsShipped();
@@ -1733,10 +1737,11 @@ public class SizeSetRefitTests(ITestOutputHelper output)
         {
             var (result, request) = RunOn(copy, ["rue"], Bibo, IvcsBibo, FixPubes, Rue);
             Assert.True(result.Made > 0);
-            var sized = Assert.Single(lastLog, l => l.Template.Contains("sized by its {1} piece in the same option",
-                                                                        StringComparison.Ordinal));
-            Assert.Equal("chest", sized.Args[1]);
-            Assert.Equal("Bibo+", sized.Args[2]);
+            // Once for each of the author's sizes the top was cut from: the jacket is cut from the same one in each option.
+            var sized = lastLog.Where(l => l.Template.Contains("sized by its {1} piece in the same option",
+                                                               StringComparison.Ordinal)).ToList();
+            Assert.NotEmpty(sized);
+            Assert.All(sized, s => Assert.Equal(("chest", "Bibo+"), ((string)s.Args[1], (string)s.Args[2])));
             Assert.Contains(lastLog, l => l.Template.Contains("route {2}", StringComparison.Ordinal)
                                           && l.Args.Length > 2 && (string)l.Args[2] == "D");
             Assert.DoesNotContain(lastLog, l => l.Template.Contains("route {2}", StringComparison.Ordinal)
@@ -1752,7 +1757,10 @@ public class SizeSetRefitTests(ITestOutputHelper output)
             // A second run makes nothing; asked to make them again, it remakes the sizes it added, in place.
             var options = Options(copy, "Chest Size");
             var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
-            Assert.Equal(0, SizeSetRefit.Run(request, new UVRemapService(log, "."), log, _ => { }, CancellationToken.None).Made);
+            var again = SizeSetRefit.Run(request, new UVRemapService(log, "."), log, _ => { }, CancellationToken.None);
+            Assert.Equal(0, again.Made);
+            // [AC-bulk-nearest-source-5] Followers included: nothing to say either.
+            Assert.Empty(again.Notes);
             var remakeLog = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
             var remade = SizeSetRefit.Run(request with { Remake = true }, new UVRemapService(remakeLog, "."), remakeLog,
                                           _ => { }, CancellationToken.None);
@@ -1779,6 +1787,8 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     /// records which: a plain run again leaves them, a remake makes them again over the top as remade.
     /// </summary>
     [LocalDataFact(Geometric, Bibo, IvcsBibo, FixPubes, Rue)]
+    [Trait("Plan", "AC-bulk-nearest-source-3")]
+    [Trait("Plan", "EDGE-bulk-nearest-source-15")]
     [Trait("Plan", "AC-outfit-fit-4")]
     [Trait("Plan", "AC-outfit-fit-1")]
     [Trait("Plan", "AC-outfit-fit-9")]
@@ -1795,7 +1805,9 @@ public class SizeSetRefitTests(ITestOutputHelper output)
             foreach (var jacket in jackets)
             {
                 var top = record.Options.Single(e => e.Name == jacket.Name && e.GamePath.EndsWith("_top.mdl", StringComparison.Ordinal));
-                output.WriteLine($"{jacket.Name}: over {jacket.Layers?["_top"]}");
+                output.WriteLine($"{jacket.Name}: over {jacket.Layers?["_top"]}, cut from {jacket.From}, the top from {top.From}");
+                // [AC-bulk-nearest-source-3] [EDGE-bulk-nearest-source-15] Cut from the size the top in its option was.
+                Assert.Equal(top.From, jacket.From);
                 Assert.NotNull(jacket.Layers);
                 Assert.StartsWith(RefitCore.Normal(top.File) + "|", jacket.Layers!["_top"]);
             }
@@ -1945,6 +1957,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     /// texture coordinate) and the pair is refused, so the hem is left on the source's hips.
     /// </summary>
     [LocalDataFact(TheBodySe, TheBodySeX)]
+    [Trait("Plan", "EDGE-bulk-nearest-source-16")]
     public void A_man_s_garment_gains_the_men_s_bodies()
     {
         string copy = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
@@ -1976,6 +1989,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
 
     /// <summary>Cloth with no skin under it has nothing to read a body from: the twill trousers get no sizes.</summary>
     [LocalDataFact(TwillTrousers, TheBodySe, TheBodySeX)]
+    [Trait("Plan", "EDGE-bulk-nearest-source-3")]
     public void A_garment_with_no_skin_is_refused()
     {
         string copy = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
@@ -1999,6 +2013,7 @@ public class SizeSetRefitTests(ITestOutputHelper output)
     /// TBSE-X from 13% of shared points, and refit from a body the shirt was never made on.
     /// </summary>
     [LocalDataFact(CasualFitShirt, TheBodySe, TheBodySeX)]
+    [Trait("Plan", "EDGE-bulk-nearest-source-3")]
     public void A_garment_made_on_no_installed_body_is_refused()
     {
         string copy = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
@@ -2017,14 +2032,17 @@ public class SizeSetRefitTests(ITestOutputHelper output)
         }
     }
 
+    /// <summary>The model an option of a group gives a game path.</summary>
+    internal static byte[] ModelOfOption(string root, string group, string option, string gamePath) => ModelOf(root, group, option, gamePath);
+
     /// <summary>A group's options, in order.</summary>
-    private static List<string> Options(string modRoot, string group = "Size")
+    internal static List<string> Options(string modRoot, string group = "Size")
         => (PenumbraModMeta.TryReadFileOptions(modRoot, group) ?? []).Select(o => o.Name).ToList();
 
     /// <summary>A mod's manifests and models — what a refit reads and writes — without its textures.</summary>
     /// <param name="withRecord">Copy Proteus's own record of refits made into it too. Without it, nothing in the copy is
     /// taken for a size Proteus made, whatever the player last wore.</param>
-    private static void CopyModels(string from, string to, bool withRecord = true)
+    internal static void CopyModels(string from, string to, bool withRecord = true)
     {
         foreach (string file in Directory.EnumerateFiles(from, "*", SearchOption.AllDirectories))
         {

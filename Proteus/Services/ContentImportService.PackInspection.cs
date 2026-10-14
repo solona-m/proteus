@@ -261,7 +261,9 @@ public sealed partial class ContentImportService
                     : severalGarments && singleGroups.Contains(group) ? slot.Label
                     : null;                                             // its own option selects it
 
-                units.Add(new PieceUnit(group, option, slot, name, gate, byUnit[key]));
+                units.Add(new PieceUnit(group, option, slot, name, gate, byUnit[key],
+                    FindEffect(pack, group, option, slot)));
+                warnings.AddRange(EffectWarnings(pack, units[^1]));
 
                 // Only when a gate was actually suppressed, for a unit that will be imported.
                 if (group == null && packControls && units[^1].Import) selfDriven = true;

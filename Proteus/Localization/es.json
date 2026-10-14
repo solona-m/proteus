@@ -4736,7 +4736,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "Añade a todo este mod cada talla de los cuerpos marcados abajo. Cada pieza de torso, piernas, zapatos y guantes se reajusta desde la primera talla del autor y se guarda junto a sus tallas como «Rue S», «YAB Buff L», etc. Las tallas que el mod ya tiene no se tocan.",
+    "message": "Añade a todo este mod cada talla de los cuerpos marcados abajo. Cada talla se reajusta desde la talla del autor más cercana a ella, las demás piezas del conjunto en esa opción desde la misma talla, y se guarda junto a las tallas del autor como «Rue S», «YAB Buff L», etc. Las tallas que el mod ya tiene no se tocan.",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -4764,7 +4764,7 @@
     "description": ""
   },
   "SizeSet.Remake.Tip": {
-    "message": "Desactivado: una talla que Proteus ya añadió se deja como está. Activado: se reajusta de nuevo y se reemplaza. Las tallas propias del autor nunca se tocan.",
+    "message": "Desactivado: una talla que Proteus ya añadió se deja como está. Activado: se reajusta de nuevo y se reemplaza. Las tallas propias del autor nunca se tocan. Si añadiste tallas con una versión anterior de Proteus, márcalo una vez: aquellas se hicieron desde la primera talla del autor.",
     "description": ""
   },
   "SizeSet.Run": {
@@ -4805,6 +4805,14 @@
   },
   "SizeSet.NoPieces": {
     "message": "Este mod no tiene modelos de torso, piernas, zapatos o guantes de los que hacer tallas.",
+    "description": ""
+  },
+  "SizeSet.EndNoLeadSource.Fmt": {
+    "message": "{0}: no se incluyó en «{1}»: no se pudo encontrar ni leer para esta pieza la talla del autor de la que se hizo el torso o las piernas del conjunto ahí. Marca «Rehacer» para rehacer la opción.",
+    "description": ""
+  },
+  "SizeSet.EndNoLeadSourceRemake.Fmt": {
+    "message": "{0}: «{1}» se deja como estaba: no se pudo leer para esta pieza la talla del autor de la que se hizo el torso o las piernas del conjunto ahí.",
     "description": ""
   },
   "SizeSet.NoBodies": {
@@ -4849,6 +4857,30 @@
   },
   "SizeSet.NotInstalledTip.Fmt": {
     "message": "{0} no está instalado en Penumbra. Instálalo y luego cierra y vuelve a abrir esta sección.",
+    "description": ""
+  },
+  "ContentImport.Warn.EffectFileMissing.Fmt": {
+    "message": "«{0}» tiene un efecto animado, pero su archivo ({1}) no está en el paquete, así que no se puede mostrar.",
+    "description": ""
+  },
+  "Content.StaleEffectImport.Fmt": {
+    "message": "«{0}» tiene un efecto animado que esta importación dejó en el objeto original, así que solo aparece si lo llevas puesto. Borra este mod e importa el paquete de nuevo para llevar el efecto sin él.",
+    "description": ""
+  },
+  "Content.EffectOnly": {
+    "message": "efecto animado",
+    "description": ""
+  },
+  "Content.WithEffect.Fmt": {
+    "message": "{0} + efecto",
+    "description": ""
+  },
+  "Content.Effect.Tip": {
+    "message": "Esta pieza tiene un efecto animado. Proteus lo muestra en un accesorio invisible que coloca en una ranura libre, así que no necesitas llevar el objeto que reemplaza.",
+    "description": ""
+  },
+  "Chat.EffectUnplaced.Fmt": {
+    "message": "[Proteus] El efecto animado de «{0}» no se muestra: necesita una ranura de accesorio libre para su portador invisible. Libera una ranura de anillo, pulsera o collar.",
     "description": ""
   }
 }

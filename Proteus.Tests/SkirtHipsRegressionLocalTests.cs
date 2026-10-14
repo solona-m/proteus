@@ -27,7 +27,8 @@ public class SkirtHipsRegressionLocalTests(ITestOutputHelper output)
     private const string Sirius = LocalData.Mods + ":Sirius - by Solona";
     private const string Race = "0201";
 
-    private static readonly BodyRetarget.Tuning Old = new(NoWallPair: true, NoWallCover: true, NoRimTurnGuard: true);
+    private static readonly BodyRetarget.Tuning Old = new(NoWallPair: true, NoWallCover: true, NoRimTurnGuard: true,
+                                                          NoSnapPush: true);
 
     private sealed record Refitted(ModelParts Model, int Folded, int Inside);
 
@@ -152,6 +153,7 @@ public class SkirtHipsRegressionLocalTests(ITestOutputHelper output)
     [LocalDataTheory(Sirius, Neolithe, Rue, Yab)]
     [MemberData(nameof(SiriusTargets))]
     [Trait("Plan", "AC-skirt-hips-4")]
+    [Trait("Plan", "AC-snap-push-5")]
     public void Sirius_onto_other_bodies_is_no_worse(string size)
         => NoWorse($"Sirius L -> {size}",
                    Refit(Sirius, "size/Sirius/L/chara/equipment/e0154/model/c0201e0154_top.mdl",
@@ -160,8 +162,18 @@ public class SkirtHipsRegressionLocalTests(ITestOutputHelper output)
                    // further from the author's own; folds 80 -> 60.
                    againstAuthor: true, slack: size == "YAB Buff L" ? 0.00003f : 0f);
 
+    /// <summary>The other way: from Rue+ onto Neolithe, where the snapped cloth (<see cref="BodyRetarget.Tuning.NoSnapPush"/>)
+    /// meets the creases of a body tessellated otherwise.</summary>
+    [LocalDataFact(OldThing, Rue, Neolithe)]
+    [Trait("Plan", "AC-snap-push-5")]
+    public void This_Old_Thing_Rue_L_onto_Neolithe_L_keeps_the_authors_fit()
+        => NoWorse("This Old Thing Rue L -> Neolithe L",
+                   Refit(OldThing, "size/rue l/chara/equipment/e6255/model/c0201e6255_top.mdl",
+                         "size/neolithe l/chara/equipment/e6255/model/c0201e6255_top.mdl", "_top", [Rue, Neolithe]), againstAuthor: true);
+
     [LocalDataFact(OldThing, Rue, Neolithe)]
     [Trait("Plan", "AC-skirt-hips-4")]
+    [Trait("Plan", "AC-snap-push-5")]
     public void This_Old_Thing_L_onto_Rue_L_is_no_worse()
         => NoWorse("This Old Thing Neolithe L -> Rue L",
                    Refit(OldThing, "size/neolithe l/chara/equipment/e6255/model/c0201e6255_top.mdl",

@@ -14,9 +14,11 @@ namespace Proteus.Services;
 /// Give a mod every size of the bodies its author ticks — the mod packer's <c>--refit-to</c>, run in game on a mod that
 /// is already installed.
 /// <para/>
-/// For each chest and legs model of the mod: the first of the author's own sizes whose body can be read is the one
-/// refitted, from the body it was found to be made on, onto every size <see cref="SupportedBodies"/> lists for each body
-/// ticked. The sizes are saved beside the author's in their size group, as the Studio's Body size tool saves one, named
+/// For each chest and legs model of the mod, every size <see cref="SupportedBodies"/> lists for each body ticked is
+/// refitted from the author's own size whose body lies nearest it (see <c>SizeSetRefit.Source.cs</c>), and the outfit's
+/// other pieces in that option from the same size of theirs. The first of the author's sizes whose body can be read
+/// still picks the bodies' YAS or plain sizes and a body family's size list. The sizes are saved beside the author's in
+/// their size group, as the Studio's Body size tool saves one, named
 /// "Rue S", "YAB Buff L" and so on. A size the mod already has — one of the author's that IS that size, or one a
 /// previous run made — is left as it is.
 /// <para/>
@@ -199,13 +201,16 @@ internal static partial class SizeSetRefit
         // What each author's file was read as this run, so a glove sized by the top beside it in its option reads that
         // top once — the reading the top's own sizes were cut from.
         var readings = new Dictionary<string, AutoRefitDecisions.Pick?>(StringComparer.Ordinal);
+        // Which of the author's sizes each option of a group was cut from, by the piece that made it first — the chest,
+        // pieces running chests first — so the legs, shoes and gloves joining it are cut from that same size.
+        var leadSources = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var piece in pieces)
         {
             ct.ThrowIfCancellationRequested();
             try
             {
-                made += IsEnd(piece.Slot) ? RunEndsPiece(request, piece, uvRemap, log, progress, notes, readings, ct)
-                                          : RunPiece(request, piece, uvRemap, log, progress, notes, readings, ct);
+                made += IsEnd(piece.Slot) ? RunEndsPiece(request, piece, uvRemap, log, progress, notes, readings, leadSources, ct)
+                                          : RunPiece(request, piece, uvRemap, log, progress, notes, readings, leadSources, ct);
             }
             catch (OperationCanceledException)
             {
@@ -238,7 +243,8 @@ internal static partial class SizeSetRefit
 
     private static int RunPiece(Request request, Piece piece, UVRemapService? uvRemap, IPluginLog log,
                                 Action<string> progress, List<string> notes,
-                                Dictionary<string, AutoRefitDecisions.Pick?> readings, CancellationToken ct)
+                                Dictionary<string, AutoRefitDecisions.Pick?> readings,
+                                Dictionary<string, string> leadSources, CancellationToken ct)
     {
         string root = request.ModRoot;
         string race = piece.Race;
@@ -250,7 +256,7 @@ internal static partial class SizeSetRefit
         // and nothing to say — a unisex mod asked for Rue sizes is not missing anything for its men's models.
         if (!request.Keys.Any(k => ForRace(k, sizeSlot, race))) return 0;
 
-        // ── what it was made on: the author's first size whose body can be read, in the author's order ──
+        // ── what it was made on: every one of the author's sizes whose body can be read ──
         progress(string.Format(Strings.SizeSet.ReadingFmt, piece.Label));
         var mods = request.Bodies.Select(b => (b.Dir, b.Catalog)).ToList();
         if (mods.Count == 0)
@@ -259,67 +265,60 @@ internal static partial class SizeSetRefit
             return 0;
         }
         string preferred = Preferred(request, sizeSlot, race, mods[0].Dir);
+        void Note(string note) => log.Information("[Proteus] size set: {0}: {1}", piece.Label, note);
+        // Per piece, not per run: a reading open for the whole run would keep every body it touched for minutes.
+        using var reading = BodySizeMatch.BeginReading();
 
-        (string? Option, string File, byte[] Bytes, ModelParts Garment, HashSet<string> Bones, AutoRefitDecisions.Pick Pick)? source = null;
-        // Every option until one reads, not the first few: a men's shirt lists "Type M", "TBSE-Q" and two Thicclanders
-        // fits — none on an installed body — before its TBSE ones. A readable first size stops this at once.
-        foreach (var (option, file) in piece.Options)
-        {
-            ct.ThrowIfCancellationRequested();
-            string path = BodySizeCatalog.ResolveCaseInsensitive(root, file);
-            if (!File.Exists(path)) continue;
-            byte[] bytes = File.ReadAllBytes(path);
-            if (ModelPartReader.Read(bytes) is not { } garment) continue;
-            var bones = new HashSet<string>(SecondSkinWriter.Parse(bytes).BoneNames, StringComparer.Ordinal);
-            // Read before in this run — by a glove sizing itself by this very file — or read now and kept.
-            string key = ReadingKey(file, piece.Slot, race, preferred);
-            if (readings.TryGetValue(key, out var pick))
-                log.Information("[Proteus] size set: {0}: {1} was read before in this run", piece.Label, file);
-            else
-                readings[key] = pick = RefitCore.DetectSource(garment, bones, piece.Slot, race, mods, preferred, _ => true,
-                                                              note => log.Information("[Proteus] size set: {0}: {1}", piece.Label, note));
-            if (pick == null || !AutoRefitDecisions.Proceed(pick.Confidence)) continue;
-            source = (option, file, bytes, garment, bones, pick);
-            break;
-        }
-        if (source is not { } src)
+        var sources = new Sources(request, piece, preferred, mods, readings, Note, ct);
+        if (sources.Primary is not { } primary)
         {
             notes.Add(string.Format(Strings.SizeSet.UnreadableFmt, piece.Label));
             return 0;
         }
+        var sourceEntry = primary.Entry;
+        log.Information("[Proteus] size set: {0} from {1} made on {2} / {3} ({4})", piece.Label, primary.Name,
+                        sourceEntry.Name, primary.Pick!.Option.Label, primary.Pick.Confidence);
+        BodySizeMatch.NeedNear(sources.Choices.Count + 2 * SupportedBodies.Choices.Count);
 
-        var sourceEntry = request.Bodies.First(b => string.Equals(b.Dir, src.Pick.Dir, StringComparison.OrdinalIgnoreCase));
-        var sourceCat = sourceEntry.Catalog;
-        string sourcePath = sourceCat.PathOf(src.Pick.Option);
-        log.Information("[Proteus] size set: {0} from {1} made on {2} / {3} ({4})", piece.Label, src.Option ?? src.File,
-                        sourceEntry.Name, src.Pick.Option.Label, src.Pick.Confidence);
-
-        // ── the legs its hem sits on, for a chest piece ──
-        BodyOption? sourceLegs = null;
-        if (piece.Slot == "_top" && sourceCat.For("_dwn", race) is { Count: > 0 } legsOptions)
+        var redirects = PenumbraModMeta.ReadAllRedirects(root);
+        BodySizeCatalog? CatalogOf(string dir)
+            => request.Bodies.FirstOrDefault(b => string.Equals(b.Dir, dir, StringComparison.OrdinalIgnoreCase))?.Catalog;
+        // What a size cut from a candidate takes along, read once per candidate.
+        BodyOption? SourceLegsOf(Candidate c)
         {
-            var ranking = BodySizeMatch.Rank(src.Garment, legsOptions, sourceCat.PathOf, src.Bones);
-            if (ranking.Best is { } best && AutoRefitDecisions.Proceed(ranking.Confidence)) sourceLegs = best.Option;
-            else log.Information("[Proteus] size set: {0}: the hem's legs not read ({1}), hips left as they are",
-                                 piece.Label, ranking.Confidence);
+            if (c.LegsRead) return c.SourceLegs;
+            c.LegsRead = true;
+            // The legs its hem sits on, for a chest piece.
+            if (piece.Slot != "_top" || c.Entry.Catalog.For("_dwn", race) is not { Count: > 0 } legsOptions) return null;
+            var ranking = BodySizeMatch.Rank(c.Garment, legsOptions, c.Entry.Catalog.PathOf, c.Bones);
+            if (ranking.Best is { } best && AutoRefitDecisions.Proceed(ranking.Confidence)) c.SourceLegs = best.Option;
+            else Note($"{c.Name}: the hem's legs not read ({ranking.Confidence}), hips left as they are");
+            return c.SourceLegs;
         }
-
-        // ── the chest beneath a legs piece's waist, when it lies over the belly (see RefitCore.ChestBeneath) ──
-        var beneath = piece.Slot == "_dwn"
-            ? RefitCore.ChestBeneathOf(src.Garment, src.Pick, race, mods,
-                                       dir => request.Bodies.FirstOrDefault(b => string.Equals(b.Dir, dir,
-                                                  StringComparison.OrdinalIgnoreCase))?.Catalog,
-                                       note => log.Information("[Proteus] size set: {0}: {1}", piece.Label, note))
-            : null;
+        RefitCore.ChestBeneath? BeneathOf(Candidate c)
+        {
+            if (c.BeneathRead) return c.Beneath;
+            c.BeneathRead = true;
+            // The chest beneath a legs piece's waist, when it lies over the belly (see RefitCore.ChestBeneath).
+            return c.Beneath = piece.Slot == "_dwn" ? RefitCore.ChestBeneathOf(c.Garment, c.Pick!, race, mods, CatalogOf, Note) : null;
+        }
+        // Bodies' probe points and the distances between them, read once per piece.
+        var probes = new Dictionary<string, System.Numerics.Vector3[]>(StringComparer.OrdinalIgnoreCase);
+        System.Numerics.Vector3[] ProbesOf(string path) => probes.TryGetValue(path, out var p) ? p : probes[path] = BodyProbes(path, Note);
+        var bodyDistances = new Dictionary<(string, string), (float P90, float Mean)>();
+        SourceDistance Measure(Candidate c, string targetPath)
+        {
+            if (!bodyDistances.TryGetValue((c.SourcePath, targetPath), out var body))
+                bodyDistances[(c.SourcePath, targetPath)] = body = BodyDistance(c.SourcePath, targetPath, ProbesOf);
+            var skin = SkinDistance(c.SkinProbes, targetPath);
+            return new SourceDistance(body.P90, body.Mean, skin.P90, skin.Mean, c.Order);
+        }
 
         // ── where the sizes go ──
         using var group = new SizeGroup(root, piece);
         var authorSizes = AuthorSizes(root, piece, group.Ours);
 
-        bool yas = request.Yas || SupportedBodies.IsYas(src.Bones);
-        var pieces = RefitCore.ShapePieces(src.Garment, RefitCore.DefaultKeepShape(src.Garment), out var pieceNames);
-        ushort? sourceMask = RefitCore.MaskOf(src.Pick.Dir, sourceCat, piece.Slot, null);
-        ushort? sourceLegsMask = RefitCore.MaskOf(src.Pick.Dir, sourceCat, "_dwn", null);
+        bool yas = request.Yas || primary.Yas;
 
         foreach (string key in request.Keys)
         {
@@ -328,20 +327,62 @@ internal static partial class SizeSetRefit
             var (body, target) = BodyFor(key, sizeSlot, yas, request.Bodies, sourceEntry, notes, piece.Label);
             if (body == null || target == null) continue;
             var targetCat = target.Catalog;
-            bool across = !string.Equals(target.Dir, src.Pick.Dir, StringComparison.OrdinalIgnoreCase);
+            bool Across(Candidate c) => !string.Equals(target.Dir, c.Pick!.Dir, StringComparison.OrdinalIgnoreCase);
             ushort? targetMask = RefitCore.MaskOf(target.Dir, targetCat, piece.Slot, null);
             ushort? targetLegsMask = RefitCore.MaskOf(target.Dir, targetCat, "_dwn", null);
 
-            var refits = new List<BodyRetargetWriter.Refit>();
-            // A family's sizes are read off the source's file name, which for legs following a chest is a legs name: those
-            // take the table's chest sizes, and their legs move along the family below.
-            foreach (var size in SupportedBodies.SizesFor(body, across || piece.FollowsChest ? null : src.Pick.Option.Rel))
+            // A family's sizes are read off the primary's file name, which for legs following a chest is a legs name:
+            // those take the table's chest sizes, and their legs move along the family below.
+            foreach (var size in SupportedBodies.SizesFor(body, Across(primary) || piece.FollowsChest ? null : primary.Pick.Option.Rel))
             {
                 ct.ThrowIfCancellationRequested();
                 string option = SupportedBodies.OptionName(body, size);
+                string leadKey = LeadKey(group.Name, race, option);
+                // Where a candidate goes for this size. Legs following the chest go onto the legs that size's chest is
+                // worn with — across body mods the table's, within one the candidate's own family's; a size with none
+                // (Neolithe XS keeps the Small hips) has nowhere to go from it.
+                BodyOption? ToOf(Candidate c)
+                    => TargetRel(piece.FollowsChest, Across(c), size, c.Pick!.Option.Rel) is { } rel
+                        ? OptionByFile(targetCat.For(piece.Slot), rel)
+                        : null;
+                string? WhyNot(Candidate c) => Ineligible(c.Pick!.Dir, c.Pick.Option, body.Family, target.Dir, ToOf(c));
+                // The nearest of the author's sizes that may go onto this one, and the log line saying why.
+                (Candidate Chosen, string Why)? Nearest()
+                {
+                    var eligible = new List<(Candidate, SourceDistance)>();
+                    var said = new List<string>();
+                    var may = new List<Candidate>();
+                    foreach (var c in sources.Choices)
+                        if (WhyNot(c) is { } why) said.Add($"{c.Name}: {why}");
+                        else may.Add(c);
+                    var alike = RiggedAlike(may, c => c.Yas, body.Yas);
+                    foreach (var c in may.Except(alike)) said.Add($"{c.Name}: {(c.Yas ? "rigged for YAS" : "not rigged for YAS")}");
+                    foreach (var c in alike)
+                    {
+                        var d = Measure(c, targetCat.PathOf(ToOf(c)!));
+                        eligible.Add((c, d));
+                        said.Add($"{c.Name}: {Describe(d)}");
+                    }
+                    if (eligible.Count == 0)
+                    {
+                        Note($"{option}: none of the author's sizes goes onto it ({string.Join("; ", said)})");
+                        return null;
+                    }
+                    var (chosen, step, gap) = Choose(eligible);
+                    return (chosen, $"{option} from {chosen.Name} (by {step}, {gap * 1000f:F1} mm ahead; {string.Join("; ", said)})");
+                }
+
                 if (group.AlreadyThere(option, request.Remake))
                 {
                     log.Information("[Proteus] size set: {0}: \"{1}\" already there", piece.Label, option);
+                    // An option an earlier run cut from the size this one would choose still leads its outfit: the shoes
+                    // and gloves joining it now follow that size. One cut otherwise — from the author's first size, by an
+                    // earlier version — leads nothing, and they are left out until it is made again.
+                    if (!piece.FollowsChest && !leadSources.ContainsKey(leadKey) && group.FromOf(option) is { } was
+                        && Nearest() is { } seed && seed.Chosen.Option != null
+                        && RefitCore.LabelFrom(Across(seed.Chosen) ? seed.Chosen.Entry.Name : null,
+                                               [seed.Chosen.Pick!.Option.Label]) == was)
+                        leadSources[leadKey] = seed.Chosen.Option;
                     continue;
                 }
                 // Legs following the chest only join a size the chest made. One it did not — the author already has it
@@ -352,37 +393,80 @@ internal static partial class SizeSetRefit
                     log.Information("[Proteus] size set: {0}: no \"{1}\" of the chest's to join", piece.Label, option);
                     continue;
                 }
+                // A size the author ships is skipped before any source is measured for it — where it is one size for
+                // every source; legs following a chest go onto the legs of the source's family.
+                if (!piece.FollowsChest)
+                {
+                    if (OptionByFile(targetCat.For(piece.Slot), size.Rel) is not { } fixedTo)
+                    {
+                        notes.Add(string.Format(Strings.SizeSet.NoSuchSizeFmt, piece.Label, option, target.Name));
+                        continue;
+                    }
+                    if (AuthorHas(authorSizes, targetCat, fixedTo, piece.Slot, race) is { } own)
+                    {
+                        log.Information("[Proteus] size set: {0}: {1} is the author's own \"{2}\"", piece.Label, option, own);
+                        continue;
+                    }
+                }
 
-                // Legs following the chest go onto the legs that size's chest is worn with; a size with none (Neolithe XS
-                // keeps the Small hips) keeps the author's.
-                string? rel = !piece.FollowsChest ? size.Rel
-                            : across ? size.LegsRel
-                            : SupportedBodies.FamilyLegs(src.Pick.Option.Rel, size.Name);
-                if (rel == null)
+                // ── which of the author's sizes it is cut from: the one the outfit's lead was, else the nearest ──
+                Candidate? chosen = null;
+                string? sourceOption = null;
+                if (leadSources.TryGetValue(leadKey, out var leadOption))
                 {
-                    log.Information("[Proteus] size set: {0}: {1} has no legs of its own", piece.Label, option);
-                    continue;
+                    var c = ResolveOptionFile(redirects, piece.GamePath, group.Name, leadOption) is { } file
+                        ? sources.ByFile(leadOption, file)
+                        : null;
+                    string? why = c == null ? "its model there could not be read" : WhyNot(c);
+                    if (why == MadeOnIt)
+                    {
+                        // The author's own model there already fits this size, and the chest's option carries it.
+                        log.Information("[Proteus] size set: {0}: {1} is the size it was made on", piece.Label, option);
+                        continue;
+                    }
+                    if (why == null)
+                    {
+                        (chosen, sourceOption) = (c, leadOption);
+                        Note($"{option} from \"{leadOption}\", as the outfit's lead piece in that option was");
+                    }
+                    else
+                        Note($"{option}: not cut from \"{leadOption}\" as its lead piece was: {why}; the nearest instead");
                 }
-                if (OptionByFile(targetCat.For(piece.Slot), rel) is not { } to)
+                if (chosen == null)
                 {
-                    notes.Add(string.Format(Strings.SizeSet.NoSuchSizeFmt, piece.Label, option, target.Name));
-                    continue;
+                    if (sources.Choices.All(c => WhyNot(c) == MadeOnIt))
+                    {
+                        log.Information("[Proteus] size set: {0}: {1} is the size it was made on", piece.Label, option);
+                        continue;
+                    }
+                    // Legs following the chest with nowhere to go from any size: a size with no legs of its own keeps
+                    // the author's, as before; one whose legs the body mod lacks is said so.
+                    if (piece.FollowsChest && sources.Choices.All(c => ToOf(c) == null))
+                    {
+                        if (sources.Choices.Any(c => TargetRel(true, Across(c), size, c.Pick!.Option.Rel) != null))
+                            notes.Add(string.Format(Strings.SizeSet.NoSuchSizeFmt, piece.Label, option, target.Name));
+                        else
+                            log.Information("[Proteus] size set: {0}: {1} has no legs of its own", piece.Label, option);
+                        continue;
+                    }
+                    if (Nearest() is not { } nearest) continue;
+                    (chosen, sourceOption) = (nearest.Chosen, nearest.Chosen.Option);
+                    Note(nearest.Why);
                 }
-                if (AutoRefitDecisions.SameFile(src.Pick.Dir, src.Pick.Option, target.Dir, to))
-                {
-                    log.Information("[Proteus] size set: {0}: {1} is the size it was made on", piece.Label, option);
-                    continue;
-                }
-                if (AuthorHas(authorSizes, targetCat, to, piece.Slot, race) is { } theirs)
+                var to = ToOf(chosen)!;
+                if (piece.FollowsChest && AuthorHas(authorSizes, targetCat, to, piece.Slot, race) is { } theirs)
                 {
                     log.Information("[Proteus] size set: {0}: {1} is the author's own \"{2}\"", piece.Label, option, theirs);
                     continue;
                 }
 
                 progress(string.Format(Strings.SizeSet.WorkingFmt, piece.Label, option));
+                bool across = Across(chosen);
+                var sourceCat = chosen.Entry.Catalog;
                 string targetPath = targetCat.PathOf(to);
-                if (BodyRetarget.BuildPair(piece.Slot, sourcePath, targetPath, SlotName(piece.Slot), male, sourceMask,
-                                           targetMask, uvRemap, out var pair) is { } refusal)
+                if (BodyRetarget.BuildPair(piece.Slot, chosen.SourcePath, targetPath, SlotName(piece.Slot), male,
+                                           RefitCore.MaskOf(chosen.Pick!.Dir, sourceCat, piece.Slot, null), targetMask,
+                                           uvRemap, out var pair) is { } refusal)
                 {
                     notes.Add(string.Format(Strings.SizeSet.RefusedFmt, piece.Label, option, refusal));
                     continue;
@@ -392,15 +476,15 @@ internal static partial class SizeSetRefit
                 // The hem follows onto the new size's hips: the table's legs across body mods, the source's legs moved
                 // along their own sizes within one.
                 string toLabel = to.Label;
-                if (sourceLegs != null)
+                if (SourceLegsOf(chosen) is { } sourceLegs)
                 {
                     string? legsRel = across ? size.LegsRel : SupportedBodies.FamilyLegs(sourceLegs.Rel, size.Name);
                     if (legsRel != null && OptionByFile(targetCat.For("_dwn"), legsRel) is { } legsTo
-                        && !AutoRefitDecisions.SameFile(src.Pick.Dir, sourceLegs, target.Dir, legsTo))
+                        && !AutoRefitDecisions.SameFile(chosen.Pick.Dir, sourceLegs, target.Dir, legsTo))
                     {
                         if (BodyRetarget.BuildPair("_dwn", sourceCat.PathOf(sourceLegs), targetCat.PathOf(legsTo),
-                                                   SlotName("_dwn"), male, sourceLegsMask, targetLegsMask, uvRemap,
-                                                   out var legsPair) is { } legsRefusal)
+                                                   SlotName("_dwn"), male, RefitCore.MaskOf(chosen.Pick.Dir, sourceCat, "_dwn", null),
+                                                   targetLegsMask, uvRemap, out var legsPair) is { } legsRefusal)
                             log.Information("[Proteus] size set: {0} {1}: hips left as they are: {2}", piece.Label, option,
                                             legsRefusal);
                         else
@@ -413,7 +497,7 @@ internal static partial class SizeSetRefit
 
                 // The chest beneath goes along for its shape: the size's own chest for legs following one, else the body's
                 // middle chest — its chests share their belly.
-                if (beneath != null && across
+                if (across && BeneathOf(chosen) is { } beneath
                     && ChestBeneathTo(key, size, piece.FollowsChest, yas, targetCat, race) is { } chestTo
                     && RefitCore.ChestBeneathPair(beneath, target.Dir, targetCat, chestTo, male,
                                                   RefitCore.MaskOf(beneath.Dir, beneath.Catalog, "_top", null),
@@ -427,23 +511,33 @@ internal static partial class SizeSetRefit
                                     piece.Label, option, chestTo.Label);
                 }
 
-                var plan = BodyRetarget.Plan(src.Garment, src.Bytes, pairs, piece.Slot, held: new HashSet<int>(),
+                var plan = BodyRetarget.Plan(chosen.Garment, chosen.Bytes, pairs, piece.Slot, held: new HashSet<int>(),
                                              replaceSkin: true, acrossBodies: across, clearBody: false, cutHidden: true,
-                                             keepShape: pieces, log: line => log.Debug("[Proteus] size set: {0}", line),
+                                             keepShape: chosen.Shape, log: line => log.Debug("[Proteus] size set: {0}", line),
                                              warn: line => log.Warning("[Proteus] size set: {0}", line));
-                plan = RefitCore.MatchSkinToBody(plan, sourcePath, targetPath, uvRemap, male, log);
-                refits.Add(new BodyRetargetWriter.Refit(option, plan.Model, toLabel));
+                plan = RefitCore.MatchSkinToBody(plan, chosen.SourcePath, targetPath, uvRemap, male, log);
                 log.Information("[Proteus] size set: {0} onto {1} (moved up to {2:F1} mm)", piece.Label, option,
                                 plan.Report.WorstMove * 1000f);
-                if (RefitCore.ReleasedLog(plan.Report, pieceNames) is { } released)
+                if (RefitCore.ReleasedLog(plan.Report, chosen.ShapeNames) is { } released)
                     log.Information("[Proteus] size set: {0} {1}: let go of kept piece(s) that would sink moved whole: {2}",
                                     piece.Label, option, released);
+
+                // One save per size: each names the size it was cut from. The first piece to make an option leads it —
+                // never legs following the chest, which follow it or, when they cannot, fall back to their own nearest:
+                // the shoes and gloves beside them are left out rather than laid over a chest cut from another size.
+                // Stopped while this size was made: it is not saved — Stop keeps what was saved before it.
+                ct.ThrowIfCancellationRequested();
+                bool lead = !piece.FollowsChest && !leadSources.ContainsKey(leadKey);
+                if (group.Save(target.Dir, RefitCore.LabelFrom(across ? chosen.Entry.Name : null, [chosen.Pick.Option.Label]),
+                               [new BodyRetargetWriter.Refit(option, plan.Model, toLabel)], sourceOption, notes,
+                               sourceFilesWin: request.Remake && lead)
+                    && lead && sourceOption != null)
+                    leadSources[leadKey] = sourceOption;
             }
-            if (refits.Count == 0) continue;
-            group.Save(target.Dir, RefitCore.LabelFrom(across ? sourceEntry.Name : null, [src.Pick.Option.Label]), refits,
-                       src.Option, notes);
         }
         group.RestoreDefault();
+        var (indexed, bytes, _, _, _) = BodySizeMatch.NearCacheSize();
+        Note($"nearness cache: {indexed} bodies, {bytes / 1024} KB");
         return group.Saved;
     }
 
@@ -474,6 +568,7 @@ internal static partial class SizeSetRefit
         private readonly HashSet<string> existing;
         private readonly HashSet<string> ours;
         private readonly HashSet<string> doneHere;
+        private readonly Dictionary<string, string> fromHere;
         private readonly bool authorGroup;
         private readonly string defaultBefore;
 
@@ -497,6 +592,9 @@ internal static partial class SizeSetRefit
             // piece made — "Rue S" saved for the chest, still wearing the author's legs — and this piece's refit goes into it.
             doneHere = inGroup.Where(e => string.Equals(e.GamePath, piece.GamePath, StringComparison.OrdinalIgnoreCase))
                               .Select(e => e.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            fromHere = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var e in inGroup.Where(e => string.Equals(e.GamePath, piece.GamePath, StringComparison.OrdinalIgnoreCase)))
+                fromHere[e.Name] = e.From;
             // A group of our own is rewritten whole by every save, which selects the size saved last by default: a fresh
             // install, or a pack exported from here, would then draw "Bibo L" instead of the author's model. Its default
             // is put back afterwards — what it was, or "Original" for a group this run makes. The author's group is only
@@ -512,13 +610,25 @@ internal static partial class SizeSetRefit
         internal bool AlreadyThere(string option, bool remake)
             => existing.Contains(option) && (!ours.Contains(option) || (doneHere.Contains(option) && !remake));
 
-        /// <summary>One save per body mod: the record names the body each size was made for. False, noted, on failure.</summary>
+        /// <summary>Whether an option of ours already carries a refit of this piece.</summary>
+        internal bool Carries(string option) => doneHere.Contains(option);
+
+        /// <summary>What an option of ours that carries this piece names it was cut from ("Yet Another Body+ — Large"),
+        /// or null.</summary>
+        internal string? FromOf(string option) => fromHere.GetValueOrDefault(option);
+
+        /// <summary>
+        /// Save sizes — chests and legs one per size, each naming the size it was cut from. False, noted, on failure.
+        /// </summary>
+        /// <param name="sourceFilesWin">Made again from another of the author's options: that option's files replace
+        /// the ones carried from the old (see <see cref="BodyRetargetWriter.Save"/>).</param>
         internal bool Save(string targetDir, string from, List<BodyRetargetWriter.Refit> refits, string? sourceOption,
-                           List<string> notes)
+                           List<string> notes, bool sourceFilesWin = false)
         {
             var outcome = BodyRetargetWriter.Save(root, Name, piece.GamePath, targetDir, from, refits,
                                                   piece.Group != null ? sourceOption : null,
-                                                  fromGame: RefitCore.IsGameGear(root, piece.GamePath));
+                                                  fromGame: RefitCore.IsGameGear(root, piece.GamePath),
+                                                  sourceFilesWin: sourceFilesWin);
             if (!outcome.Ok)
             {
                 notes.Add(string.Format(Strings.SizeSet.SaveFailedFmt, piece.Label, outcome.Message));
@@ -528,6 +638,7 @@ internal static partial class SizeSetRefit
             existing.UnionWith(refits.Select(r => r.Option));
             ours.UnionWith(refits.Select(r => r.Option));
             doneHere.UnionWith(refits.Select(r => r.Option));
+            foreach (var refit in refits) fromHere[refit.Option] = from;
             return true;
         }
 

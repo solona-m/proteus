@@ -4736,7 +4736,7 @@
     "description": "Heading of the Body size tool's section that adds every size of other body mods to the whole open mod."
   },
   "SizeSet.Intro": {
-    "message": "Adds every size of the bodies ticked below to this whole mod. Each chest, legs, shoe and glove piece is refitted from the author's first size and saved beside the author's sizes as \"Rue S\", \"YAB Buff L\" and so on. Sizes the mod already has are left alone.",
+    "message": "Adds every size of the bodies ticked below to this whole mod. Each size is refitted from the author's size nearest it, the outfit's other pieces in that option from the same size, and saved beside the author's sizes as \"Rue S\", \"YAB Buff L\" and so on. Sizes the mod already has are left alone.",
     "description": "Explains the section. Rue S and YAB Buff L are option names: keep them as they are."
   },
   "SizeSet.Yas": {
@@ -4764,7 +4764,7 @@
     "description": "Checkbox."
   },
   "SizeSet.Remake.Tip": {
-    "message": "Off: a size Proteus already added is left as it is. On: it is refitted again and replaced. The author's own sizes are never touched.",
+    "message": "Off: a size Proteus already added is left as it is. On: it is refitted again and replaced. The author's own sizes are never touched. If you added sizes with an earlier version of Proteus, tick this once: those were cut from the author's first size.",
     "description": "Tooltip of the remake checkbox."
   },
   "SizeSet.Run": {
@@ -4806,6 +4806,14 @@
   "SizeSet.NoPieces": {
     "message": "This mod has no chest, legs, shoe or glove models to make sizes of.",
     "description": "Shown when the mod has nothing to refit."
+  },
+  "SizeSet.EndNoLeadSource.Fmt": {
+    "message": "{0}: left out of \"{1}\": the author's size the outfit's chest or legs there was cut from couldn't be found or read for it. Tick \"Make again\" to redo the option.",
+    "description": "A note after a run: a shoe or glove was not added to a size. {0} is the piece (\"Hands — e0068\"), {1} the size (\"Rue L\"). \"Make again\" is the checkbox SizeSet.Remake."
+  },
+  "SizeSet.EndNoLeadSourceRemake.Fmt": {
+    "message": "{0}: \"{1}\" left as it was: the author's size the outfit's chest or legs there was cut from couldn't be read for it.",
+    "description": "A note after a remake run: a shoe or glove's size was not remade. {0} is the piece, {1} the size."
   },
   "SizeSet.NoBodies": {
     "message": "No body mods are installed to refit onto.",
@@ -4850,5 +4858,29 @@
   "SizeSet.NotInstalledTip.Fmt": {
     "message": "{0} isn't installed in Penumbra. Install it, then close and reopen this section.",
     "description": "Tooltip of a body that can't be ticked because its mod isn't installed. {0} is the body."
+  },
+  "ContentImport.Warn.EffectFileMissing.Fmt": {
+    "message": "\"{0}\" has an animated effect, but its file ({1}) is not in the pack, so it cannot be shown.",
+    "description": "Import preview warning. {0} is the piece label (slot and item name), {1} the missing file path inside the pack."
+  },
+  "Content.StaleEffectImport.Fmt": {
+    "message": "\"{0}\" has an animated effect that this import left on the vanilla item, so it only plays when that item is worn. Delete this mod and import the pack again to wear the effect without it.",
+    "description": "Mods panel warning for a pack imported by an older Proteus build. {0} is the piece's slot label."
+  },
+  "Content.EffectOnly": {
+    "message": "animated effect",
+    "description": "Import preview table cell, in place of the mesh/vertex count, for a piece that is only an animated effect. Short."
+  },
+  "Content.WithEffect.Fmt": {
+    "message": "{0} + effect",
+    "description": "Import preview table cell for a piece with geometry and an animated effect. {0} is the mesh/vertex count text. Short."
+  },
+  "Content.Effect.Tip": {
+    "message": "This piece has an animated effect. Proteus plays it on an invisible accessory it puts in a free slot, so you do not need to wear the item it replaced.",
+    "description": "Tooltip on a piece with an animated effect in the import preview. \"Proteus\" is a plugin name - never translate it."
+  },
+  "Chat.EffectUnplaced.Fmt": {
+    "message": "[Proteus] The animated effect of \"{0}\" is not shown: it needs a free accessory slot for its invisible carrier. Free a ring, bracelet or necklace slot.",
+    "description": "Chat message when an imported animated effect cannot be shown. {0} is the mod name. \"[Proteus]\" and \"Proteus\" are the plugin name - never translate them."
   }
 }

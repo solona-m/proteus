@@ -147,7 +147,7 @@ Conviene saber:
 - **Desmarca una pieza** en la lista de piezas para dejarla exactamente donde la puso el autor.
 - **El equipo que el juego no trae para tu raza**, como las piezas hechas solo para hombres, también se puede reajustar: Proteus crea primero un modelo para tu raza a partir del que existe.
 - **El equipo vanilla** se reajusta de la misma forma. No tiene un mod en el que guardarse, así que al guardar se crea un mod nuevo con el reajuste y una opción **Original**.
-- Retócalo después con los demás pinceles, como **Tirar afuera**, y usa **Mover** para las piezas rígidas. Reajustar de una talla menor a una mayor es lo que mejor funciona.
+- Retócalo después con los demás pinceles, como **Tirar afuera**, y usa **Mover** para las piezas rígidas. Reajusta desde la talla del autor más cercana a la que quieres; las tallas para otros cuerpos de abajo lo hacen por ti.
 - **Entre mods de cuerpo**, la prenda toma además los pesos de hueso del cuerpo nuevo allí donde los dos cuerpos difieren, para que se mueva con la física del cuerpo nuevo. Donde coinciden, se conserva el pesado del autor. Las cadenas de falda y los demás huesos propios de la prenda no se tocan nunca.
 - **La piel de los dos cuerpos tiene que compartir una disposición de texturas**, o usar una que Proteus sepa convertir (bibo, gen3 y gen2). Los cuerpos masculinos y femeninos nunca se reajustan entre sí.
 - **Las claves de forma se pierden** cuando se sustituye la piel o la prenda pasa de un mod de cuerpo a otro. Proteus te avisa cuando ocurre.
@@ -156,11 +156,11 @@ Conviene saber:
 
 ##### Todas las tallas para otros cuerpos
 
-Debajo de la herramienta para una sola prenda, **Todas las tallas para otros cuerpos** trabaja sobre un mod entero de una vez. Marca los mods de cuerpo que quieras, pulsa **Añadir las tallas**, y cada pieza de torso, de piernas, de zapatos y de guantes del mod se reajusta desde la primera talla del autor a cada talla de esos cuerpos, y se guarda junto a las tallas propias del autor como «Rue S», «YAB Buff L», etc.
+Debajo de la herramienta para una sola prenda, **Todas las tallas para otros cuerpos** trabaja sobre un mod entero de una vez. Marca los mods de cuerpo que quieras, pulsa **Añadir las tallas**, y cada talla de esos cuerpos se reajusta desde la talla del autor más cercana a ella (las demás piezas del conjunto en esa opción, desde la misma talla) y se guarda junto a las tallas propias del autor como «Rue S», «YAB Buff L», etc.
 
 - **Usar la versión YAS de un cuerpo cuando la tenga** da a Rue, YAB y Tre sus tallas de Yet Another Skeleton. Una pieza que ya tiene pesos de YAS recibe siempre tallas YAS.
 - **Incluir zapatos y guantes**, activado por defecto, también da tallas a los zapatos y guantes del mod, conservando sus propios pies y manos: los zapatos reciben las tallas de las piernas («Rue WC», «YAB SC»), los guantes una opción por cuerpo. Un zapato o guante en el mismo grupo de tallas que el pecho o las piernas del conjunto se suma a las tallas que hizo esa pieza, así que una sola elección viste todo el conjunto. Uno que no llega a ninguna pierna ni brazo solo redibuja su piel, y solo donde el cuerpo nuevo dibuja la piel de otra forma. Uno que comparte grupo con una pieza a la que no puede seguir (guantes junto a piernas, o zapatos y guantes sin torso) se deja como está, con una nota.
-- Las tallas que el mod ya tiene no se tocan. Marca **Rehacer las tallas que Proteus añadió antes** para volver a hacer las que hizo Proteus; las tallas propias del autor no se tocan nunca.
+- Las tallas que el mod ya tiene no se tocan. Marca **Rehacer las tallas que Proteus añadió antes** para volver a hacer las que hizo Proteus; las tallas propias del autor no se tocan nunca. Si lo usaste con una versión anterior de Proteus, márcalo una vez: aquellas tallas se hicieron desde la primera talla del autor.
 - Se ejecuta en segundo plano y puede tardar unos minutos en un mod grande. **Detener** conserva las tallas ya guardadas. Al terminar, enumera lo que tuvo que dejar fuera y por qué.
 - Solo se ofrecen cuerpos para las razas que viste el mod, así que un mod de mujer no muestra cuerpos de hombre. Un cuerpo tiene que estar instalado en Penumbra para recibir sus tallas. El equipo propio del juego no tiene un mod al que añadir tallas, así que esto no aparece para él.
 

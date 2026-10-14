@@ -42,11 +42,16 @@ public class KeepShapeReleaseLocalTests
     /// re-pinning, against <see cref="BeforeThickShells"/>: up to 354 points moved (worst 7.8 mm, pop onto Neolithe XS); the
     /// cloth inside the body the same on every case; folds on the solve's last stage the same or fewer (Ash Yab L onto
     /// Uranus 792 -> 771); a thick shell's walls through each other fewer or the same.
+    /// <para/>
+    /// Re-pinned for build 1266: Ash Yab L onto Uranus crosses to a body tessellated otherwise, where cloth the transfer
+    /// snapped is now pushed clear of the new skin (<see cref="BodyRetarget.Tuning.NoSnapPush"/>). Measured against
+    /// <see cref="BeforeSnapPush"/>: folds on the solve's last stage 801 -> 800, cloth inside 43 -> 42, skin through the
+    /// cloth 930 -> 930. Every other case is between sizes of one mesh and did not move.
     /// </summary>
     private static readonly Dictionary<string, string> Before = new()
     {
         ["ash Rue L > Uranus"] = "BA69821F8C9D0409C3C5EB2B18F27957AF259171355D6A54645A4E15EF562E0D",
-        ["ash Yab L > Uranus"] = "5A87F2DB114D70D0E8C72AF8F156E308C76E4E5230D1D991EB6ECDC25C140217",
+        ["ash Yab L > Uranus"] = "DE3834F1EAB9F7B7EBA67EAD9D19BA3FB3726BED02E5AE45CEC9EBE9ABC45708",
         ["pop > Uranus"] = "3ACD75DF39D6248760C50355E06B59FE1E61C311D6AA6D1337AA9ACADD887647",
         ["pop > Neolithe XS"] = "448E7E303B1D235DA036F3C1D12236E937D7FBF8ACB34D04C6E4359A244906FA",
         ["pop > Bibo S"] = "C619167AB0778D46CCF9C620423730FD4FFB1634F70706878404BAF61C1E4B1A",
@@ -67,6 +72,13 @@ public class KeepShapeReleaseLocalTests
         ["pop > Bibo S"] = "4860C45C6F7ADF88F0F85EB51DBDA8F5490C9F8E0EA19FEB8563AF61171E5B84",
     };
 
+    /// <summary>The refits <see cref="BodyRetarget.Tuning.NoSnapPush"/> changes, as builds before 1266 wrote them, release
+    /// off — the proof that nothing but that rule moved when <see cref="Before"/> was re-pinned.</summary>
+    private static readonly Dictionary<string, string> BeforeSnapPush = new()
+    {
+        ["ash Yab L > Uranus"] = "5A87F2DB114D70D0E8C72AF8F156E308C76E4E5230D1D991EB6ECDC25C140217",
+    };
+
     private sealed record Run(BodyRetarget.Planned Plan, List<string> Names)
     {
         public BodyRetarget.ShapeOutcome Of(string piece) => Plan.Report.Shapes![Names.IndexOf(piece)];
@@ -76,7 +88,7 @@ public class KeepShapeReleaseLocalTests
     /// <summary>One refit as <c>Proteus.Refit --keep-default</c> runs it, the default ticks less <paramref name="untick"/>.</summary>
     private static Run Refit(byte[] bytes, string fromNeed, string fromRel, string toNeed, string toRel,
                              bool noRelease = false, string? untick = null, bool noNippleSmooth = false,
-                             bool beforeThickShells = false)
+                             bool beforeThickShells = false, bool beforeSnapPush = false)
     {
         var garment = ModelPartReader.Read(bytes)!;
         string fromRoot = LocalData.Path(fromNeed), toRoot = LocalData.Path(toNeed);
@@ -91,7 +103,8 @@ public class KeepShapeReleaseLocalTests
         bool across = !string.Equals(fromRoot, toRoot, StringComparison.OrdinalIgnoreCase);
         var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoRelease: noRelease, NoNippleSmooth: noNippleSmooth,
                                                                        NoWallPair: beforeThickShells, NoWallCover: beforeThickShells,
-                                                                       NoRimTurnGuard: beforeThickShells), () => BodyRetarget.Plan(
+                                                                       NoRimTurnGuard: beforeThickShells,
+                                                                       NoSnapPush: beforeThickShells || beforeSnapPush), () => BodyRetarget.Plan(
             garment, bytes, [pair], "_top", replaceSkin: true, acrossBodies: across, keepShape: pieces));
         return new Run(plan, names);
     }
@@ -145,6 +158,8 @@ public class KeepShapeReleaseLocalTests
         var bytes = Ash("Yab L");
 
         Assert.Equal(Before["ash Yab L > Uranus"], Refit(bytes, Yab, YiggleLarge, Uranus, UranusRue, noRelease: true).Hash);
+        Assert.Equal(BeforeSnapPush["ash Yab L > Uranus"],
+                     Refit(bytes, Yab, YiggleLarge, Uranus, UranusRue, noRelease: true, beforeSnapPush: true).Hash);
         Assert.Equal(BeforeThickShells["ash Yab L > Uranus"],
                      Refit(bytes, Yab, YiggleLarge, Uranus, UranusRue, noRelease: true, beforeThickShells: true).Hash);
 

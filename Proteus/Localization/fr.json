@@ -4736,7 +4736,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "Ajoute à tout ce mod chaque taille des corps cochés ci-dessous. Chaque pièce de torse, de jambes, de chaussures et de gants est réajustée à partir de la première taille de l'auteur et enregistrée à côté de ses tailles sous « Rue S », « YAB Buff L », etc. Les tailles que le mod possède déjà ne sont pas touchées.",
+    "message": "Ajoute à tout ce mod chaque taille des corps cochés ci-dessous. Chaque taille est réajustée à partir de la taille de l'auteur la plus proche, les autres pièces de la tenue dans cette option à partir de la même taille, et enregistrée à côté des tailles de l'auteur sous « Rue S », « YAB Buff L », etc. Les tailles que le mod possède déjà ne sont pas touchées.",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -4764,7 +4764,7 @@
     "description": ""
   },
   "SizeSet.Remake.Tip": {
-    "message": "Désactivé : une taille déjà ajoutée par Proteus reste telle quelle. Activé : elle est réajustée et remplacée. Les tailles de l'auteur ne sont jamais touchées.",
+    "message": "Désactivé : une taille déjà ajoutée par Proteus reste telle quelle. Activé : elle est réajustée et remplacée. Les tailles de l'auteur ne sont jamais touchées. Si vous avez ajouté des tailles avec une version antérieure de Proteus, cochez ceci une fois : elles ont été faites à partir de la première taille de l'auteur.",
     "description": ""
   },
   "SizeSet.Run": {
@@ -4805,6 +4805,14 @@
   },
   "SizeSet.NoPieces": {
     "message": "Ce mod n'a aucun modèle de torse, de jambes, de chaussures ou de gants dont faire des tailles.",
+    "description": ""
+  },
+  "SizeSet.EndNoLeadSource.Fmt": {
+    "message": "{0} : absent de « {1} » : la taille de l'auteur dont le torse ou les jambes de la tenue y ont été faits n'a pas pu être trouvée ou lue pour cette pièce. Cochez « Refaire » pour refaire l'option.",
+    "description": ""
+  },
+  "SizeSet.EndNoLeadSourceRemake.Fmt": {
+    "message": "{0} : « {1} » laissé tel quel : la taille de l'auteur dont le torse ou les jambes de la tenue y ont été faits n'a pas pu être lue pour cette pièce.",
     "description": ""
   },
   "SizeSet.NoBodies": {
@@ -4849,6 +4857,30 @@
   },
   "SizeSet.NotInstalledTip.Fmt": {
     "message": "{0} n'est pas installé dans Penumbra. Installez-le, puis fermez et rouvrez cette section.",
+    "description": ""
+  },
+  "ContentImport.Warn.EffectFileMissing.Fmt": {
+    "message": "« {0} » a un effet animé, mais son fichier ({1}) est absent du pack, il ne peut donc pas être affiché.",
+    "description": ""
+  },
+  "Content.StaleEffectImport.Fmt": {
+    "message": "« {0} » a un effet animé que cette importation a laissé sur l'objet d'origine : il n'apparaît que si cet objet est porté. Supprimez ce mod et importez à nouveau le pack pour porter l'effet sans lui.",
+    "description": ""
+  },
+  "Content.EffectOnly": {
+    "message": "effet animé",
+    "description": ""
+  },
+  "Content.WithEffect.Fmt": {
+    "message": "{0} + effet",
+    "description": ""
+  },
+  "Content.Effect.Tip": {
+    "message": "Cette pièce a un effet animé. Proteus le joue sur un accessoire invisible placé dans un emplacement libre : inutile de porter l'objet qu'elle remplace.",
+    "description": ""
+  },
+  "Chat.EffectUnplaced.Fmt": {
+    "message": "[Proteus] L'effet animé de « {0} » n'est pas affiché : il lui faut un emplacement d'accessoire libre pour son support invisible. Libérez un emplacement de bague, bracelet ou collier.",
     "description": ""
   }
 }

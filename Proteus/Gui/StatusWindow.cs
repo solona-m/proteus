@@ -897,6 +897,14 @@ public class StatusWindow : Window
             }
         }
 
+        // An effect an earlier import left on the vanilla item: nothing else on screen says why it is missing.
+        if (discovery.StaleEffectNotice(entry.ModDirectory) is { } stale)
+        {
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextColored(ProteusStyle.Warn, stale);
+            ImGui.PopTextWrapPos();
+        }
+
         // A pack the composite refused otherwise looks correct, so say why first, in amber.
         if (compositor.GetUnwearableContentReason(entry.ModDirectory) is { } unwearable)
         {
