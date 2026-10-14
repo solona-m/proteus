@@ -4854,5 +4854,29 @@
   "SizeSet.NotInstalledTip.Fmt": {
     "message": "{0} no está instalado en Penumbra. Instálalo y luego cierra y vuelve a abrir esta sección.",
     "description": ""
+  },
+  "ContentImport.Warn.EffectFileMissing.Fmt": {
+    "message": "«{0}» tiene un efecto animado, pero su archivo ({1}) no está en el paquete, así que no se puede mostrar.",
+    "description": ""
+  },
+  "Content.StaleEffectImport.Fmt": {
+    "message": "«{0}» tiene un efecto animado que esta importación dejó en el objeto original, así que solo aparece si lo llevas puesto. Borra este mod e importa el paquete de nuevo para llevar el efecto sin él.",
+    "description": ""
+  },
+  "Content.EffectOnly": {
+    "message": "efecto animado",
+    "description": ""
+  },
+  "Content.WithEffect.Fmt": {
+    "message": "{0} + efecto",
+    "description": ""
+  },
+  "Content.Effect.Tip": {
+    "message": "Esta pieza tiene un efecto animado. Proteus lo muestra en un accesorio invisible que coloca en una ranura libre, así que no necesitas llevar el objeto que reemplaza.",
+    "description": ""
+  },
+  "Chat.EffectUnplaced.Fmt": {
+    "message": "[Proteus] El efecto animado de «{0}» no se muestra: necesita una ranura de accesorio libre para su portador invisible. Libera una ranura de anillo, pulsera o collar.",
+    "description": ""
   }
 }

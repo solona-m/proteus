@@ -595,6 +595,20 @@ public class ContentPieceSelectionTests
     }
 
     [Fact]
+    public void An_effect_only_piece_is_gated_like_any_piece()   // [AC-item-vfx-host-5] [EDGE-item-vfx-host-8]
+    {
+        // Its effect rides with it: a piece that is off places nothing, so nothing asks for its effect.
+        var effect = new ContentPiece
+        {
+            Model = "m.mdl", GateOption = "Bracelets — Astral Bracelet", EffectOnly = true,
+            Effect = new ContentEffect { Variant = 15, VfxId = 1, GamePath = "chara/accessory/a0002/vfx/eff/va0001.avfx" },
+        };
+        Assert.True(SidecarDiscoveryService.PieceIsOn(effect, ["Bracelets — Astral Bracelet"]));
+        Assert.False(SidecarDiscoveryService.PieceIsOn(effect, []));
+        Assert.False(SidecarDiscoveryService.PieceIsOn(effect, null));
+    }
+
+    [Fact]
     public void A_gated_piece_is_worn_only_when_its_option_is_ticked()
     {
         var gated = new ContentPiece { Model = "m.mdl", GateOption = "Head — Hair Ribbon" };

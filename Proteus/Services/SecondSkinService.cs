@@ -282,6 +282,9 @@ public sealed partial class SecondSkinService
     {
         /// <summary>The entry any per-mod lookup should use; merged owners are all one mod.</summary>
         public OverlayEntry Entry => Owners[0].Entry;
+
+        /// <summary>Only invisible placeholders: placed on an accessory carrier, for the effect it then carries.</summary>
+        public bool EffectOnly => Owners.Count > 0 && Owners.All(o => o.Content.Piece.EffectOnly);
     }
 
     /// <summary>
@@ -419,6 +422,13 @@ public sealed partial class SecondSkinService
 
     // Content pieces last warned about as unplaceable, printed once per change. -1 = everything fits.
     private int _lastUnhostedContent = -1;
+
+    // The item effects the last build published (host, variant, id, file), so a change forces the redraw an IMC entry
+    // needs to take effect, and only a change. Empty = none.
+    private string _lastEffectKey = string.Empty;
+
+    // The mods whose effect was last reported in chat as not shown, printed once per change. Null = none dropped.
+    private string? _lastEffectDrops;
 
     /// <summary>
     /// Mod directory → why none of that pack's content pieces can be worn by this character, as the panel shows it.

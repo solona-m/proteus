@@ -4854,5 +4854,29 @@
   "SizeSet.NotInstalledTip.Fmt": {
     "message": "{0}はPenumbraにインストールされていません。インストールしてから、この項目を閉じて開き直してください。",
     "description": ""
+  },
+  "ContentImport.Warn.EffectFileMissing.Fmt": {
+    "message": "「{0}」にはアニメーションエフェクトがありますが、そのファイル（{1}）がパックにないため表示できません。",
+    "description": ""
+  },
+  "Content.StaleEffectImport.Fmt": {
+    "message": "「{0}」のアニメーションエフェクトはこのインポートで元のアイテムに残されたため、そのアイテムを装備したときだけ表示されます。アイテムなしで使うには、このModを削除してパックを再インポートしてください。",
+    "description": ""
+  },
+  "Content.EffectOnly": {
+    "message": "アニメーションエフェクト",
+    "description": ""
+  },
+  "Content.WithEffect.Fmt": {
+    "message": "{0} + エフェクト",
+    "description": ""
+  },
+  "Content.Effect.Tip": {
+    "message": "このパーツにはアニメーションエフェクトがあります。Proteus は空きスロットに置く透明なアクセサリーで再生するため、置き換え元のアイテムを装備する必要はありません。",
+    "description": ""
+  },
+  "Chat.EffectUnplaced.Fmt": {
+    "message": "[Proteus] 「{0}」のアニメーションエフェクトは表示されていません。透明なキャリアー用に空きアクセサリースロットが必要です。指輪、腕輪、首飾りのスロットを空けてください。",
+    "description": ""
   }
 }

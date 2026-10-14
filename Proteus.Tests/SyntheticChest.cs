@@ -179,11 +179,14 @@ internal static class SyntheticChest
     /// <param name="skinCopyMaterial">Also carry a copy of the source skin, <paramref name="skinCopyOff"/> out, under
     /// this (non-skin) material: an author's sculpted or custom-material skin.</param>
     /// <param name="behind">Put the panel behind the chest instead (a back piece): mirrored to -Z.</param>
+    /// <param name="step">The source chest's grid step (see <see cref="Surface"/>): the garment is made on that chest.</param>
+    /// <param name="offAt">Per panel vertex, by its x: how far out it stands instead of <paramref name="off"/>.</param>
     internal static byte[] Garment(float sourceNippleL, float sourceNippleR, (float X0, float Y0, float X1, float Y1) box,
                                    float off = 0.002f, string? clothAttr = null, string? skinCopyMaterial = null,
-                                   float skinCopyOff = 0f, bool behind = false, bool withSkin = true)
+                                   float skinCopyOff = 0f, bool behind = false, bool withSkin = true, int step = 1,
+                                   Func<float, float>? offAt = null)
     {
-        var g = Surface(sourceNippleL, sourceNippleR);
+        var g = Surface(sourceNippleL, sourceNippleR, step);
         var weights = g.Pos.Select(p => (((string, float)[]?)BodyBones(p))).ToArray();
         var meshes = new List<SyntheticModel.SurfaceMesh>();
         if (withSkin) meshes.Add(new(Skin, g.Pos, g.Nrm, g.Uv, weights, [(0u, g.Tris)]));
@@ -204,7 +207,7 @@ internal static class SyntheticChest
                 {
                     c = cp.Count;
                     map[v] = c;
-                    var p = g.Pos[v] + g.Nrm[v] * off;
+                    var p = g.Pos[v] + g.Nrm[v] * (offAt?.Invoke(g.Pos[v].X) ?? off);
                     var n = g.Nrm[v];
                     if (behind) { p = new Vector3(p.X, p.Y, -0.15f - p.Z); n = new Vector3(n.X, n.Y, -n.Z); }
                     cp.Add(p);

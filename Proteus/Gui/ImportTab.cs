@@ -944,10 +944,15 @@ internal sealed class ImportTab
                         ? string.Format(cms.RacesFmt, unit.Variants.Count)
                         : "");
 
+                    // An invisible placeholder has no geometry worth counting: it is there for its effect.
                     ImGui.TableNextColumn();
-                    ImGui.TextDisabled(unit.Import
-                        ? string.Format(cms.GeometryFmt, lead.Meshes, lead.Vertices)
-                        : cms.Skipped);
+                    ImGui.TextDisabled(!unit.Import ? cms.Skipped
+                        : unit.EffectOnly ? cms.EffectOnly
+                        : unit.Effect != null ? string.Format(cms.WithEffectFmt,
+                            string.Format(cms.GeometryFmt, lead.Meshes, lead.Vertices))
+                        : string.Format(cms.GeometryFmt, lead.Meshes, lead.Vertices));
+                    if (unit.Import && unit.Effect != null && ImGui.IsItemHovered())
+                        ImGui.SetTooltip(cms.EffectTip);
 
                     ImGui.TableNextColumn();
                     if (unit.Import)

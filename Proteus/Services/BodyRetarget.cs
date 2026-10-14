@@ -940,12 +940,18 @@ internal static partial class BodyRetarget
         var after = TargetBody.Build(pairs, ownSlotSwapped ? null : garmentSlot,
                                      hasSkin ? Moved(garment, sets, nodeDelta) : null, before: false);
 
+        // Cloth the transfer snapped onto a body vertex is the surface itself, and stays out — unless the body it is
+        // drawn over is tessellated otherwise (see SnappedLandsElsewhere). Not with clearBody: there the standoff is the
+        // full clearance, a node on the surface really is a coin flip, and it was never measured. And only when the
+        // garment's OWN slot is swapped: a shoe keeping its feet that swaps only its legs (swapSlot) was never measured
+        // either, and keeps the old rule.
+        bool pushSnapped = !clearBody && !Tuned.NoSnapPush && SnappedLandsElsewhere(pairs, ownSlotSwapped);
         var pushable = new List<int>(sets.ClothNodes.Length);
         foreach (int n in sets.ClothNodes)
-            if (!snapped[n]) pushable.Add(n);
+            if (!snapped[n] || pushSnapped) pushable.Add(n);
 
         int pushed = PushOut(sets, pushable, before, after, nodeDelta, clearBody, out float worstPush,
-                             out var faceCheck, out var pushedBy);
+                             out var faceCheck, out var pushedBy, pushSnapped ? snapped : null);
 
         // The push moves points one by one, and bent the pieces straight back: whole again, around where it put them.
         ShapeOutcome[]? shapes = null;
@@ -960,6 +966,25 @@ internal static partial class BodyRetarget
         }
         return new ShapeStage(pushed, worstPush, after, faceCheck, pushedBy, shapes);
     }
+
+    /// <summary>
+    /// Whether cloth the transfer snapped onto a body vertex can have the new skin through it: some pair whose skin the
+    /// swap really draws maps onto a body that is not the source's own mesh.
+    /// <para/>
+    /// A snapped point lands where its source vertex lands, and keeps the source's tessellation. Onto a size of the same
+    /// body every one of those faces lies on the target's own face, and pushing them would be noise. Onto a body
+    /// tessellated otherwise it lies on the new skin only at its own vertices, and the skin bulges through between them:
+    /// Laurel's tights — a copy of the Neolithe legs, 0.1 mm off them — refitted onto Rue+ had no vertex inside the new
+    /// legs, yet 516 skin points through the tights and stocking below the lace band, the thigh in long streaks to the
+    /// knee (see SkinThroughCloth). Left out of the push, nothing could clear them; let in, 7, none deeper than 0.5 mm.
+    /// <para/>
+    /// Only where the swap draws the pair's body: without it the skin under the cloth is the garment's own, moved by the
+    /// same field as the cloth, and it bulges nowhere.
+    /// </summary>
+    /// <param name="replaceSkin">Whether the garment's own skin is swapped for the bodies' — the solve's
+    /// ownSlotSwapped.</param>
+    internal static bool SnappedLandsElsewhere(IReadOnlyList<SlotPair> pairs, bool replaceSkin)
+        => replaceSkin && pairs.Any(p => p.Swaps && !p.Correspondence.SameMesh);
 
     /// <summary>
     /// Take the fold out of the answer: wherever a triangle ends up facing the other way, each of its corners moves

@@ -4854,5 +4854,29 @@
   "SizeSet.NotInstalledTip.Fmt": {
     "message": "{0}이(가) Penumbra에 설치되어 있지 않습니다. 설치한 뒤 이 항목을 닫았다가 다시 여세요.",
     "description": ""
+  },
+  "ContentImport.Warn.EffectFileMissing.Fmt": {
+    "message": "\"{0}\"에는 애니메이션 효과가 있지만 파일({1})이 팩에 없어 표시할 수 없습니다.",
+    "description": ""
+  },
+  "Content.StaleEffectImport.Fmt": {
+    "message": "\"{0}\"의 애니메이션 효과는 이 가져오기에서 원래 아이템에 남겨져 그 아이템을 착용할 때만 나타납니다. 아이템 없이 쓰려면 이 모드를 삭제하고 팩을 다시 가져오세요.",
+    "description": ""
+  },
+  "Content.EffectOnly": {
+    "message": "애니메이션 효과",
+    "description": ""
+  },
+  "Content.WithEffect.Fmt": {
+    "message": "{0} + 효과",
+    "description": ""
+  },
+  "Content.Effect.Tip": {
+    "message": "이 파츠에는 애니메이션 효과가 있습니다. Proteus는 빈 슬롯에 넣는 투명 액세서리에서 재생하므로 원래 아이템을 착용할 필요가 없습니다.",
+    "description": ""
+  },
+  "Chat.EffectUnplaced.Fmt": {
+    "message": "[Proteus] \"{0}\"의 애니메이션 효과가 표시되지 않습니다. 투명 운반체를 위한 빈 액세서리 슬롯이 필요합니다. 반지, 팔찌 또는 목걸이 슬롯을 비워 주세요.",
+    "description": ""
   }
 }

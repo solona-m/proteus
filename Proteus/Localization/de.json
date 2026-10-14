@@ -4854,5 +4854,29 @@
   "SizeSet.NotInstalledTip.Fmt": {
     "message": "{0} ist in Penumbra nicht installiert. Installiere es und schließe und öffne diesen Abschnitt dann erneut.",
     "description": ""
+  },
+  "ContentImport.Warn.EffectFileMissing.Fmt": {
+    "message": "„{0}“ hat einen animierten Effekt, aber seine Datei ({1}) fehlt im Paket, daher kann er nicht angezeigt werden.",
+    "description": ""
+  },
+  "Content.StaleEffectImport.Fmt": {
+    "message": "„{0}“ hat einen animierten Effekt, den dieser Import am Original-Gegenstand gelassen hat – er erscheint nur, wenn dieser getragen wird. Lösche diese Mod und importiere das Paket erneut, um den Effekt ohne ihn zu tragen.",
+    "description": ""
+  },
+  "Content.EffectOnly": {
+    "message": "animierter Effekt",
+    "description": ""
+  },
+  "Content.WithEffect.Fmt": {
+    "message": "{0} + Effekt",
+    "description": ""
+  },
+  "Content.Effect.Tip": {
+    "message": "Dieses Teil hat einen animierten Effekt. Proteus spielt ihn auf einem unsichtbaren Accessoire in einem freien Platz ab, du musst den ersetzten Gegenstand also nicht tragen.",
+    "description": ""
+  },
+  "Chat.EffectUnplaced.Fmt": {
+    "message": "[Proteus] Der animierte Effekt von „{0}“ wird nicht angezeigt: Er braucht einen freien Accessoire-Platz für seinen unsichtbaren Träger. Mach einen Ring-, Armband- oder Halsketten-Platz frei.",
+    "description": ""
   }
 }

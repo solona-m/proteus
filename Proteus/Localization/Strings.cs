@@ -1132,6 +1132,13 @@ public sealed class ContentStrings
     public readonly string Skipped = Loc.Localize("Content.Skipped", "skipped");
     public readonly string Unbound = Loc.Localize("Content.Unbound", "unbound material");
 
+    /// <summary>In place of the mesh count for an invisible placeholder that only carries an animated effect.</summary>
+    public readonly string EffectOnly = Loc.Localize("Content.EffectOnly", "animated effect");
+    public readonly string WithEffectFmt = Loc.Localize("Content.WithEffect.Fmt", "{0} + effect");
+    public readonly string EffectTip = Loc.Localize("Content.Effect.Tip",
+        "This piece has an animated effect. Proteus plays it on an invisible accessory it puts in a free slot, so "
+      + "you do not need to wear the item it replaced.");
+
     /// <summary>The deliberate drop, said plainly and NOT in the warning colour — an outfit pack ships the
     /// body it was fitted to, the wearer already has one, and leaving it out is the wanted outcome.</summary>
     public readonly string BodyOnly = Loc.Localize("Content.BodyOnly", "wearer's own body");

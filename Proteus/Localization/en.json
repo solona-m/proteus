@@ -4854,5 +4854,29 @@
   "SizeSet.NotInstalledTip.Fmt": {
     "message": "{0} isn't installed in Penumbra. Install it, then close and reopen this section.",
     "description": "Tooltip of a body that can't be ticked because its mod isn't installed. {0} is the body."
+  },
+  "ContentImport.Warn.EffectFileMissing.Fmt": {
+    "message": "\"{0}\" has an animated effect, but its file ({1}) is not in the pack, so it cannot be shown.",
+    "description": "Import preview warning. {0} is the piece label (slot and item name), {1} the missing file path inside the pack."
+  },
+  "Content.StaleEffectImport.Fmt": {
+    "message": "\"{0}\" has an animated effect that this import left on the vanilla item, so it only plays when that item is worn. Delete this mod and import the pack again to wear the effect without it.",
+    "description": "Mods panel warning for a pack imported by an older Proteus build. {0} is the piece's slot label."
+  },
+  "Content.EffectOnly": {
+    "message": "animated effect",
+    "description": "Import preview table cell, in place of the mesh/vertex count, for a piece that is only an animated effect. Short."
+  },
+  "Content.WithEffect.Fmt": {
+    "message": "{0} + effect",
+    "description": "Import preview table cell for a piece with geometry and an animated effect. {0} is the mesh/vertex count text. Short."
+  },
+  "Content.Effect.Tip": {
+    "message": "This piece has an animated effect. Proteus plays it on an invisible accessory it puts in a free slot, so you do not need to wear the item it replaced.",
+    "description": "Tooltip on a piece with an animated effect in the import preview. \"Proteus\" is a plugin name - never translate it."
+  },
+  "Chat.EffectUnplaced.Fmt": {
+    "message": "[Proteus] The animated effect of \"{0}\" is not shown: it needs a free accessory slot for its invisible carrier. Free a ring, bracelet or necklace slot.",
+    "description": "Chat message when an imported animated effect cannot be shown. {0} is the mod name. \"[Proteus]\" and \"Proteus\" are the plugin name - never translate them."
   }
 }

@@ -54,6 +54,7 @@ internal static class Program
         Proteus.Refit --save --manifest <save.json>
         Proteus.Refit --measure --garment <model.mdl> --bodies <body.mdl>[;<body.mdl>...]
         Proteus.Refit --measure --garment <model.mdl>     (cloth points within 2 mm rigged apart)
+        Proteus.Refit --measure --skin-out --garment <model.mdl>     (the garment's skin standing outside its cloth)
         """;
 
     private static int Main(string[] args)
@@ -72,6 +73,7 @@ internal static class Program
             if (opts.ContainsKey("save")) return Save(opts);
             if (opts.TryGetValue("obj", out var objOut)) return ExportObj(opts, objOut);
             if (opts.ContainsKey("measure") && opts.ContainsKey("face-poke")) return MeasureFacePoke(opts);
+            if (opts.ContainsKey("measure") && opts.ContainsKey("skin-out")) return MeasureSkinOut(opts);
             if (opts.ContainsKey("measure"))
                 return opts.ContainsKey("skin-map") ? MeasureSkinMap(opts)
                      : opts.ContainsKey("shell") ? MeasureShell(opts)
@@ -876,6 +878,25 @@ internal static class Program
     }
 
     /// <summary>
+    /// The garment's own skin standing outside the cloth over it (<see cref="SkinThroughCloth"/>): what shows through in
+    /// game, by cloth part and by 5 cm of height. Catches cloth tessellated unlike the skin under it, which vertex checks
+    /// miss — skin bulging between the cloth's vertices.
+    /// </summary>
+    private static int MeasureSkinOut(Dictionary<string, string> opts)
+    {
+        var garment = ModelPartReader.Read(File.ReadAllBytes(Required(opts, "garment")))
+                   ?? throw new UsageException("The garment could not be read.");
+        var (covered, outside) = SkinThroughCloth.Find(garment);
+        Console.WriteLine($"skin points under cloth ({SkinThroughCloth.Reach * 1000f:0} mm): {covered}" +
+                          $"\toutside the cloth by > {SkinThroughCloth.Tolerance * 1000f:0.0} mm: {outside.Count}");
+        foreach (var part in outside.GroupBy(o => o.Over).OrderBy(g => g.Key, StringComparer.Ordinal))
+            Console.WriteLine($"  over {part.Key}\t{part.Count()}\tmax {part.Max(o => o.By) * 1000f:0.0} mm");
+        foreach (var band in outside.GroupBy(o => MathF.Floor(o.At.Y * 20f) / 20f).OrderByDescending(g => g.Key))
+            Console.WriteLine($"  y {band.Key:0.00}-{band.Key + 0.05f:0.00} m\t{band.Count()}\tmax {band.Max(o => o.By) * 1000f:0.0} mm");
+        return 0;
+    }
+
+    /// <summary>
     /// How far the skin pokes through the MIDDLE of big cloth triangles (an edge over 15 mm): per such triangle, the
     /// furthest a skin vertex of the given models that projects inside it lies on the cloth's outer side of its plane.
     /// <c>--measure --face-poke --garment g.mdl --bodies a.mdl;b.mdl</c>.
@@ -1127,6 +1148,7 @@ internal static class Program
                     "NoLayerOrder" => tuning with { NoLayerOrder = true },
                     "NoRelease" => tuning with { NoRelease = true },
                     "NoNippleSmooth" => tuning with { NoNippleSmooth = true },
+                    "NoSnapPush" => tuning with { NoSnapPush = true },
                     _ => throw new UsageException($"Unknown --tune knob \"{knob}\"."),
                 };
             // The passes that explain themselves, on stderr: stdout is the JSON report.
@@ -1244,7 +1266,7 @@ internal static class Program
             if (!args[i].StartsWith("--", StringComparison.Ordinal))
                 throw new UsageException($"Unexpected argument \"{args[i]}\".");
             string key = args[i][2..];
-            opts[key] = key is "list" or "detect" or "finish" or "inspect" or "save" or "measure" or "no-push" or "whole" or "keep-default" or "shares" or "time" or "bands" or "skin-map" or "skin-side" or "off" or "islands" or "face-poke" ? "" : i + 1 < args.Length ? args[++i] : throw new UsageException($"--{key} needs a value.");
+            opts[key] = key is "list" or "detect" or "finish" or "inspect" or "save" or "measure" or "no-push" or "whole" or "keep-default" or "shares" or "time" or "bands" or "skin-map" or "skin-side" or "off" or "islands" or "face-poke" or "skin-out" ? "" : i + 1 < args.Length ? args[++i] : throw new UsageException($"--{key} needs a value.");
         }
         return opts;
     }
