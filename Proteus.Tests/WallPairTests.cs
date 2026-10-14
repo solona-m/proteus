@@ -169,7 +169,7 @@ public class WallPairTests
                                           () => BodyRetarget.CoveredPoints(sets, layered, oneWay, why: (n, w) => why[n] = w));
 
         Assert.True(on.Count(c => stocking.Contains(c.Node)) > stocking.Count / 2, "the stocking should be covered by the inner wall");
-        Assert.True(off.Count(c => stocking.Contains(c.Node)) == 0, "as before 1259, an inner wall facing the other way covers nothing");
+        Assert.True(off.Count(c => stocking.Contains(c.Node)) == 0, "as before 1261, an inner wall facing the other way covers nothing");
         // The diagnostic says why: the cover it met faced the other way.
         Assert.True(stocking.Count(n => why.GetValueOrDefault(n) == "facing") > stocking.Count / 2);
     }

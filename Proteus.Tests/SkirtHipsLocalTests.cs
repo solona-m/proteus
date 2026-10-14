@@ -159,7 +159,7 @@ public class SkirtHipsLocalTests(ITestOutputHelper output)
         // than before.
         Assert.True(beneath != null ? now.FacesThrough <= 2 : now.FacesThrough < before.FacesThrough,
                     $"{now.FacesThrough} shell faces with skin through, {before.FacesThrough} before");
-        // Legs only (accepted, build 1260): 5 -> 3 cells.
+        // Legs only (accepted, build 1261): 5 -> 3 cells.
         Assert.True(beneath != null ? now.StockingCells <= 2 : now.StockingCells <= 3,
                     $"{now.StockingCells} cells of stocking through the shell, {before.StockingCells} before");
         // Accepted: more folds only in the skirt's inner pieces, which lie inside the skin as its author made them — none
@@ -218,7 +218,7 @@ public class SkirtHipsLocalTests(ITestOutputHelper output)
                 output.WriteLine($"{Path.GetFileName(LocalData.Path(mod))} onto {target.Dir} / {legsTo.Label}: inside {inBefore.Inside} -> "
                                + $"{inNow.Inside}; folds {before.Folds} -> {now.Folds}; worst move {before.Plan.Report.WorstMove * 1000f:F1} -> "
                                + $"{now.Plan.Report.WorstMove * 1000f:F1} mm");
-                // Accepted when the rules were made (build 1260): Scarlet 3 points more inside on Rue WC A (of 2,711), its
+                // Accepted when the rules were made (build 1261): Scarlet 3 points more inside on Rue WC A (of 2,711), its
                 // worst move 1.7 mm more, its folds 77 -> 61; Heartthrob fewer inside.
                 Assert.True(inNow.Inside <= inBefore.Inside + 3, $"{inNow.Inside} inside, {inBefore.Inside} before");
                 Assert.True(now.Folds <= before.Folds, $"{now.Folds} folded, {before.Folds} before");
