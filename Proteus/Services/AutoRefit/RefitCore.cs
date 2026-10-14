@@ -278,10 +278,7 @@ internal static partial class RefitCore
     }
 
     /// <summary>Whether the mod's group of that name is a multi-choice one.</summary>
-    internal static bool IsMulti(string modRoot, string group)
-        => (PenumbraModMeta.TryReadGroups(modRoot) ?? [])
-            .Any(g => string.Equals(g.Name, group, StringComparison.OrdinalIgnoreCase)
-                      && string.Equals(PenumbraModMeta.TypeOf(g.Group), "Multi", StringComparison.OrdinalIgnoreCase));
+    internal static bool IsMulti(string modRoot, string group) => PenumbraModMeta.IsMulti(modRoot, group);
 
     /// <summary>
     /// The option's name for one refitted size: what the user will pick in Penumbra, so it says which body and which

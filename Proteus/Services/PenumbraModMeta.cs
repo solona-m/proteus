@@ -790,6 +790,12 @@ internal static class PenumbraModMeta
     public static string TypeOf(JsonElement group)
         => group.TryGetProperty("Type", out var t) && t.ValueKind == JsonValueKind.String ? t.GetString() ?? "" : "";
 
+    /// <summary>Whether the mod's group of that name is a multi-choice one (<c>Type</c> "Multi", in any case).</summary>
+    public static bool IsMulti(string modRoot, string groupName)
+        => (TryReadGroups(modRoot) ?? [])
+            .Any(g => string.Equals(g.Name, groupName, StringComparison.OrdinalIgnoreCase)
+                      && string.Equals(TypeOf(g.Group), "Multi", StringComparison.OrdinalIgnoreCase));
+
     /// <summary>
     /// Add options that carry files to a group somebody else wrote, or replace same-named ones, leaving every other
     /// field of the group and every other option exactly as it was — its description, priority, default, and the
