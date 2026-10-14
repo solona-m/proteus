@@ -281,7 +281,9 @@ internal static class BodyRetargetWriter
     /// group if it is not there and replacing any option of the same name.
     /// <para/>
     /// One write rather than one per size: Penumbra reloads the mod each time its manifest changes, and a half-saved
-    /// batch — three sizes of five, then a failure — is harder to reason about than all or nothing.
+    /// batch — three sizes of five, then a failure — is harder to reason about than all or nothing. The size set saves
+    /// one size at a time all the same: each is cut from another of the author's sizes, whose files it carries, and its
+    /// caller tells Penumbra once, at the end.
     /// </summary>
     /// <param name="fromOption">
     /// The option of <paramref name="groupName"/> the refitted model was read from, or null when it came from
@@ -297,10 +299,17 @@ internal static class BodyRetargetWriter
     /// <param name="auto">Saved by the automatic refit (see <see cref="Entry.Auto"/>).</param>
     /// <param name="fromGame">Refitted from the game's own file (see <see cref="Entry.FromGame"/>).</param>
     /// <param name="provenance">Where the refit came from and went (see <see cref="Entry.SourceDir"/>); null records none.</param>
+    /// <param name="sourceFilesWin">
+    /// A size made again from another of the author's options: what <paramref name="fromOption"/> gives replaces what
+    /// the option carried at the same game path — the old source option's material, textures, other races' models —
+    /// rather than only filling gaps. Never a refit of ours (another slot's, saved into this option) and never this
+    /// refit's own path. A path only the OLD source option gave stays carried: which option that was is not recorded.
+    /// Files only: the option's metadata keeps what an earlier save of it wrote above the source's, as always.
+    /// </param>
     public static Outcome Save(string modRoot, string groupName, string gamePath, string bodyMod, string from,
                                IReadOnlyList<Refit> refits, string? fromOption = null,
                                IReadOnlyList<object>? manipulations = null, bool auto = false, bool fromGame = false,
-                               Provenance? provenance = null)
+                               Provenance? provenance = null, bool sourceFilesWin = false)
     {
         string names = string.Join(", ", refits.Select(r => r.Option));
         lock (WriteLock)
@@ -416,7 +425,10 @@ internal static class BodyRetargetWriter
                     // fromOption parameter.
                     if (cutFrom.Files != null)
                         foreach (var (path, at) in cutFrom.Files)
-                            if (!files.ContainsKey(path)) files[path] = at;
+                            if (!files.TryGetValue(path, out var had)
+                                || (sourceFilesWin && !string.Equals(path, gamePath, StringComparison.OrdinalIgnoreCase)
+                                    && !Ours(had)))
+                                files[path] = at;
 
                     return files;
                 }

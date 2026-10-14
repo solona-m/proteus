@@ -94,9 +94,9 @@ public sealed class SizeSetStrings
     public readonly string Header = Loc.Localize("SizeSet.Header", "Every size for other bodies") + "###sizeSetHeader";
 
     public readonly string Intro = Loc.Localize("SizeSet.Intro",
-        "Adds every size of the bodies ticked below to this whole mod. Each chest, legs, shoe and glove piece is refitted "
-      + "from the author's first size and saved beside the author's sizes as \"Rue S\", \"YAB Buff L\" and so on. Sizes "
-      + "the mod already has are left alone.");
+        "Adds every size of the bodies ticked below to this whole mod. Each size is refitted from the author's size "
+      + "nearest it, the outfit's other pieces in that option from the same size, and saved beside the author's sizes as "
+      + "\"Rue S\", \"YAB Buff L\" and so on. Sizes the mod already has are left alone.");
 
     public readonly string Ends = Loc.Localize("SizeSet.Ends", "Include shoes and gloves") + "###sizeSetEnds";
 
@@ -115,7 +115,8 @@ public sealed class SizeSetStrings
 
     public readonly string RemakeTip = Loc.Localize("SizeSet.Remake.Tip",
         "Off: a size Proteus already added is left as it is. On: it is refitted again and replaced. The author's own "
-      + "sizes are never touched.");
+      + "sizes are never touched. If you added sizes with an earlier version of Proteus, tick this once: those were cut "
+      + "from the author's first size.");
 
     public readonly string Run = Loc.Localize("SizeSet.Run", "Add the sizes") + "###sizeSetRun";
 
@@ -153,6 +154,16 @@ public sealed class SizeSetStrings
     /// <summary>{0} is the piece.</summary>
     public readonly string UnpairedFmt = Loc.Localize("SizeSet.Unpaired.Fmt",
         "{0}: it is sized in one group with another piece it can't follow, so no sizes were made of it — each size would wear the other piece unrefitted.");
+
+    /// <summary>{0} is the piece, {1} the size.</summary>
+    public readonly string EndNoLeadSourceFmt = Loc.Localize("SizeSet.EndNoLeadSource.Fmt",
+        "{0}: left out of \"{1}\": the author's size the outfit's chest or legs there was cut from couldn't be found or "
+      + "read for it. Tick \"Make again\" to redo the option.");
+
+    /// <summary>{0} is the piece, {1} the size.</summary>
+    public readonly string EndNoLeadSourceRemakeFmt = Loc.Localize("SizeSet.EndNoLeadSourceRemake.Fmt",
+        "{0}: \"{1}\" left as it was: the author's size the outfit's chest or legs there was cut from couldn't be read "
+      + "for it.");
 
     public readonly string NoBodies = Loc.Localize("SizeSet.NoBodies", "No body mods are installed to refit onto.");
 
@@ -2750,11 +2761,15 @@ public sealed class PartsStrings
         "Untick a part to keep it where the author put it, like a buckle or jewellery. Clicking it on the "
       + "model does the same.");
 
-    /// <summary>The closed part dropdown. {0} is how many are ticked, {1} how many there are.</summary>
+    /// <summary>The part drawer's header button. {0} is how many are ticked, {1} how many there are.</summary>
     public readonly string PartsTickedFmt = Loc.Localize("Parts.Dropdown.Ticked.Fmt", "{0} of {1} parts ticked");
 
-    /// <summary>The closed part dropdown under Move, Rotate or Scale, before a part is chosen.</summary>
+    /// <summary>The part drawer's header button under Move, Rotate or Scale, before a part is chosen.</summary>
     public readonly string PartsNoneChosen = Loc.Localize("Parts.Dropdown.NoneChosen", "Choose a part to move");
+
+    /// <summary>The last line of the part drawer header's tooltip.</summary>
+    public readonly string DrawerToggleTip = Loc.Localize("Parts.Drawer.Toggle.Tip",
+        "Click to open the part list in a column of its own, so the model stays in view while you tick. Click again to close it.");
 
     public readonly string RetargetLockSkinTip = Loc.Localize("Parts.Retarget.Lock.SkinTip",
         "The garment's own skin. Holding it keeps the old size, so the body may show through or gap.");

@@ -2321,7 +2321,7 @@
   },
   "Parts.Add.Btn": {
     "message": "Make a switch from the ticked parts",
-    "description": "Button. Creates one on/off switch covering every part currently ticked in the list above."
+    "description": "Button. Creates one on/off switch covering every part currently ticked in the part list."
   },
   "Parts.AuthorSwitched.Tag": {
     "message": "author switch",
@@ -3697,11 +3697,15 @@
   },
   "Parts.Dropdown.Ticked.Fmt": {
     "message": "{0} of {1} parts ticked",
-    "description": "The closed part dropdown. {0} is how many are ticked, {1} how many there are."
+    "description": "The part drawer's header button. {0} is how many are ticked, {1} how many there are."
   },
   "Parts.Dropdown.NoneChosen": {
     "message": "Choose a part to move",
-    "description": "The closed part dropdown under Move, Rotate or Scale, before a part is chosen."
+    "description": "The part drawer's header button under Move, Rotate or Scale, before a part is chosen."
+  },
+  "Parts.Drawer.Toggle.Tip": {
+    "message": "Click to open the part list in a column of its own, so the model stays in view while you tick. Click again to close it.",
+    "description": "Last line of the part drawer header's tooltip."
   },
   "Parts.Retarget.Lock.SkinTip": {
     "message": "The garment's own skin. Holding it keeps the old size, so the body may show through or gap.",
@@ -4732,7 +4736,7 @@
     "description": "Heading of the Body size tool's section that adds every size of other body mods to the whole open mod."
   },
   "SizeSet.Intro": {
-    "message": "Adds every size of the bodies ticked below to this whole mod. Each chest, legs, shoe and glove piece is refitted from the author's first size and saved beside the author's sizes as \"Rue S\", \"YAB Buff L\" and so on. Sizes the mod already has are left alone.",
+    "message": "Adds every size of the bodies ticked below to this whole mod. Each size is refitted from the author's size nearest it, the outfit's other pieces in that option from the same size, and saved beside the author's sizes as \"Rue S\", \"YAB Buff L\" and so on. Sizes the mod already has are left alone.",
     "description": "Explains the section. Rue S and YAB Buff L are option names: keep them as they are."
   },
   "SizeSet.Yas": {
@@ -4760,7 +4764,7 @@
     "description": "Checkbox."
   },
   "SizeSet.Remake.Tip": {
-    "message": "Off: a size Proteus already added is left as it is. On: it is refitted again and replaced. The author's own sizes are never touched.",
+    "message": "Off: a size Proteus already added is left as it is. On: it is refitted again and replaced. The author's own sizes are never touched. If you added sizes with an earlier version of Proteus, tick this once: those were cut from the author's first size.",
     "description": "Tooltip of the remake checkbox."
   },
   "SizeSet.Run": {
@@ -4802,6 +4806,14 @@
   "SizeSet.NoPieces": {
     "message": "This mod has no chest, legs, shoe or glove models to make sizes of.",
     "description": "Shown when the mod has nothing to refit."
+  },
+  "SizeSet.EndNoLeadSource.Fmt": {
+    "message": "{0}: left out of \"{1}\": the author's size the outfit's chest or legs there was cut from couldn't be found or read for it. Tick \"Make again\" to redo the option.",
+    "description": "A note after a run: a shoe or glove was not added to a size. {0} is the piece (\"Hands — e0068\"), {1} the size (\"Rue L\"). \"Make again\" is the checkbox SizeSet.Remake."
+  },
+  "SizeSet.EndNoLeadSourceRemake.Fmt": {
+    "message": "{0}: \"{1}\" left as it was: the author's size the outfit's chest or legs there was cut from couldn't be read for it.",
+    "description": "A note after a remake run: a shoe or glove's size was not remade. {0} is the piece, {1} the size."
   },
   "SizeSet.NoBodies": {
     "message": "No body mods are installed to refit onto.",

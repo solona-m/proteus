@@ -71,7 +71,7 @@ Edits the models of **any** mod you have installed, not just Proteus ones, inclu
 
 Pick a mod, then one of its models. The tab opens on the chest piece you're wearing (or your legs if there's none), and mods and models you're wearing are listed first, in green. Clicking a garment on your character opens its mod and model, vanilla or modded. Every list in the tab can be searched: type part of a name to narrow it. When an item ships a separate model per race, each one is named with its race so you can tell them apart.
 
-The tools are on the left and the chosen tool's settings beside them, with the model's parts in a dropdown at the top of the settings. Tick **Show model view** for a third column with the model on the right.
+The tools are on the left and the chosen tool's settings beside them, with the model's parts behind a button at the top of the settings: click it to open the part list as a column beside them, pushing the model right so it stays in view. Tick **Show model view** for a third column with the model on the right.
 
 **Vanilla gear** you're wearing is listed too, marked *(vanilla)*. The game's own gear has no mod file to edit, so opening it copies it into a new mod, which looks exactly like the original until you change it. Every tool works on that copy. With **Body size** chosen, a vanilla piece opens to be refitted instead, see [Body size](#body-size).
 
@@ -98,7 +98,7 @@ The tools:
 - **Brush size** goes down to 1 mm. `[` and `]` change it, and Shift gives finer steps. The effect is strongest in the middle and fades to nothing at the edge; the brush's reach is drawn as a rainbow on the cloth so you can see it. Brushes work at the same pace at any frame rate. For **Pull out** and **Push in**, **Strength** is how far the middle of the brush moves the surface for each quarter second you hold it; for the other brushes it's how quickly they work. Small is usually right: clothing only has to clear the body by a fraction of a millimetre, and you can always paint the same place again.
 - **Limit** is the furthest the brushes may move any point from where the mod's author put it. Painting stops at the limit, so a held brush can't balloon the garment. Raise it for a bigger change.
 - **Mirror left/right** paints both sides at once.
-- **Skin never moves.** To keep a brush off anything else, lock it: Shift-click the part on your character or the model, or untick it in the part dropdown. A locked part is also hidden, on the model and on your character, so clicks pass through it to what's underneath — lock a skirt to reach the underwear beneath it. Seams welded to a locked part hold too.
+- **Skin never moves.** To keep a brush off anything else, lock it: Shift-click the part on your character or the model, or untick it in the part list. A locked part is also hidden, on the model and on your character, so clicks pass through it to what's underneath — lock a skirt to reach the underwear beneath it. Seams welded to a locked part hold too.
 - **Hair works too.** Hair, face, ears and tail redraw when you let go, rather than showing the stroke as you paint.
 - **Apply to other sizes** copies the edit onto the mod's other files for the same garment, matched by where they sit on it.
 
@@ -146,7 +146,7 @@ Things worth knowing:
 - **Untick a part** in the part list to keep it exactly where the author put it.
 - **Gear the game doesn't ship for your race**, such as pieces made only for men, can still be refitted: Proteus first makes a model for your race from the one that exists.
 - **Vanilla gear** can be refitted the same way. It has no mod to save into, so saving makes a new mod with the refit and an **Original** option.
-- Touch up afterwards with the other brushes, like **Pull out**, and use **Move** for rigid pieces. Refitting from a smaller size to a larger one works best.
+- Touch up afterwards with the other brushes, like **Pull out**, and use **Move** for rigid pieces. Refit from the author's size nearest the one you want — the size set below does that for you.
 - **Between body mods**, the garment also takes on the new body's bone weights where the two bodies differ, so it moves with the new body's physics. Where they agree, the author's weighting is kept. Skirt chains and other bones of the garment's own are never changed.
 - **The two bodies' skin must share a texture layout**, or use one Proteus can convert (bibo, gen3 and gen2). Men's and women's bodies are never refitted onto each other.
 - **Shape keys are lost** when the skin is replaced or the garment moves between body mods. Proteus tells you when that happens.
@@ -155,11 +155,11 @@ Things worth knowing:
 
 ##### Every size for other bodies
 
-Below the one-garment tool, **Every size for other bodies** does a whole mod at once. Tick the body mods you want, press **Add the sizes**, and every chest, legs, shoe and glove piece in the mod is refitted from the author's first size into every size of those bodies, saved beside the author's own sizes as "Rue S", "YAB Buff L" and so on.
+Below the one-garment tool, **Every size for other bodies** does a whole mod at once. Tick the body mods you want, press **Add the sizes**, and every size of those bodies is refitted from the author's size nearest it — the outfit's other pieces in that option from the same size — and saved beside the author's own sizes as "Rue S", "YAB Buff L" and so on.
 
 - **Use a body's YAS version where it has one** gives Rue, YAB and Tre their Yet Another Skeleton sizes. A piece already weighted to YAS always gets YAS sizes.
 - **Include shoes and gloves**, on by default, sizes the mod's shoes and gloves too, keeping their own feet and hands: shoes get the legs' sizes ("Rue WC", "YAB SC"), gloves one option per body. A shoe or glove in the same size group as the outfit's chest or legs joins the sizes that piece made, so one choice dresses the whole outfit. One that reaches no leg or arm only has its skin redrawn, and only where the new body draws skin another way. One sized in a group with a piece it can't follow — gloves beside legs, or a shoe and gloves with no chest — is left alone, with a note.
-- Sizes the mod already has are left alone. Tick **Make again the sizes Proteus added before** to redo the ones Proteus made; the author's own sizes are never touched.
+- Sizes the mod already has are left alone. Tick **Make again the sizes Proteus added before** to redo the ones Proteus made; the author's own sizes are never touched. If you ran it with an earlier version of Proteus, tick **Make again** once: those sizes were cut from the author's first size.
 - It runs in the background and can take a few minutes on a big mod. **Stop** keeps the sizes already saved. When it's done, it lists anything it had to leave out and why.
 - Only bodies for the races the mod dresses are offered, so a women's mod doesn't list men's bodies. A body has to be installed in Penumbra to get its sizes. The game's own gear has no mod to add sizes to, so this doesn't appear for it.
 

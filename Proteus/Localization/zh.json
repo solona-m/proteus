@@ -3703,6 +3703,10 @@
     "message": "选择要移动的部件",
     "description": ""
   },
+  "Parts.Drawer.Toggle.Tip": {
+    "message": "点击即可在单独的一栏中打开部件列表，勾选时模型始终可见。再次点击即可关闭。",
+    "description": ""
+  },
   "Parts.Retarget.Lock.SkinTip": {
     "message": "服装自带的皮肤。保持不变会维持旧尺寸，可能导致身体透出或出现空隙。",
     "description": ""
@@ -4732,7 +4736,7 @@
     "description": ""
   },
   "SizeSet.Intro": {
-    "message": "为整个模组添加下方勾选体型的每个尺码。每件上衣、腿部、鞋子和手套部件都会从作者的第一个尺码重新适配，并以“Rue S”“YAB Buff L”等名称保存在作者的尺码旁边。模组已有的尺码保持不变。",
+    "message": "为整个模组添加下方勾选体型的每个尺码。每个尺码都从作者最接近它的尺码重新适配，该选项中套装的其他部件也从同一尺码适配，并以“Rue S”“YAB Buff L”等名称保存在作者的尺码旁边。模组已有的尺码保持不变。",
     "description": ""
   },
   "SizeSet.Yas": {
@@ -4760,7 +4764,7 @@
     "description": ""
   },
   "SizeSet.Remake.Tip": {
-    "message": "关闭：Proteus 已添加的尺码保持原样。开启：重新适配并替换。作者自己的尺码永远不会被改动。",
+    "message": "关闭：Proteus 已添加的尺码保持原样。开启：重新适配并替换。作者自己的尺码永远不会被改动。如果你曾用较早版本的 Proteus 添加过尺码，请开启一次：那些尺码是从作者的第一个尺码适配的。",
     "description": ""
   },
   "SizeSet.Run": {
@@ -4801,6 +4805,14 @@
   },
   "SizeSet.NoPieces": {
     "message": "此模组没有可制作尺码的上衣、腿部、鞋子或手套模型。",
+    "description": ""
+  },
+  "SizeSet.EndNoLeadSource.Fmt": {
+    "message": "{0}：未加入“{1}”：无法为此部件找到或读取该选项中套装上衣或腿部所依据的作者尺码。勾选“重新制作”以重做该选项。",
+    "description": ""
+  },
+  "SizeSet.EndNoLeadSourceRemake.Fmt": {
+    "message": "{0}：“{1}”保持原样：无法为此部件读取该选项中套装上衣或腿部所依据的作者尺码。",
     "description": ""
   },
   "SizeSet.NoBodies": {
