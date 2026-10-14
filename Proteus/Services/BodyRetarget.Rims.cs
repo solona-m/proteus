@@ -141,6 +141,13 @@ internal static partial class BodyRetarget
             }
 
         Vector3 At(int n) => ToVector(sets.NodeAt[n]) + ToVector(nodeDelta[n]);
+        var authored = new Vector3[cloth.Count];
+        for (int i = 0; i < cloth.Count; i++)
+        {
+            var (a, b, c) = cloth[i];
+            authored[i] = Vector3.Cross(ToVector(sets.NodeAt[b]) - ToVector(sets.NodeAt[a]),
+                                        ToVector(sets.NodeAt[c]) - ToVector(sets.NodeAt[a]));
+        }
         float Off(Vector3 p, out Vector3 normal)
         {
             if (drawn.Deepest(p, PushProbeRange, out var hit))
@@ -220,7 +227,13 @@ internal static partial class BodyRetarget
                         var (a, b, c) = cloth[f];
                         var was = Vector3.Cross(At(b) - At(a), At(c) - At(a));
                         if (was.LengthSquared() <= 1e-24f) continue;
-                        if (Vector3.Dot(was, Vector3.Cross(Trial(b) - Trial(a), Trial(c) - Trial(a))) > 0f) continue;
+                        var trial = Vector3.Cross(Trial(b) - Trial(a), Trial(c) - Trial(a));
+                        // Turned over is judged against the face as authored, as the solve's fold count judges it: a face
+                        // the earlier passes had already tilted could tilt past a right angle from its author's without
+                        // ever flipping within one lift — Heartthrob's pants onto Neolithe, one fold the count then showed.
+                        bool pastAuthored = !Tuned.NoRimTurnGuard && Vector3.Dot(authored[f], was) > 0f
+                                            && Vector3.Dot(authored[f], trial) <= 0f;
+                        if (Vector3.Dot(was, trial) > 0f && !pastAuthored) continue;
                         float keep = giveUp ? 0f : 0.5f;
                         foreach (int m in new[] { a, b, c })
                             if (scale.ContainsKey(m)) scale[m] *= keep;

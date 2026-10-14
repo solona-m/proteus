@@ -41,9 +41,11 @@ internal static partial class BodyRetarget
     /// <param name="NoOutfitOrder">Leave the garment wherever the passes put it against the other piece of its outfit,
     /// in front of it or not (see <see cref="KeepOutfitOrder"/>).</param>
     /// <param name="NoWallPair">Push a thick shell's two walls each on its own when clearing the skin out of a face, as
-    /// builds before 1258 did (see <see cref="FaceCheck.WallPartner"/>).</param>
+    /// builds before 1259 did (see <see cref="FaceCheck.WallPartner"/>).</param>
     /// <param name="NoWallCover">Never take a thick shell's inner wall for the cover over a point beneath it, as builds
-    /// before 1258 did (see <see cref="CoveredPoints"/>).</param>
+    /// before 1259 did (see <see cref="CoveredPoints"/>).</param>
+    /// <param name="NoRimTurnGuard">Let the rim lift turn a face past a right angle from its authored way, so long as it never
+    /// flips within one lift, as builds before 1260 did (see <see cref="LiftRims"/>).</param>
     internal sealed record Tuning(bool NoFollow = false, bool NoOwnSkinWeights = false,
                                   float OwnSkinReach = OwnSkinReachDefault, float CopyReach = CopyReachDefault,
                                   float CopyTolerance = CopyToleranceDefault, bool NoGiveUp = false,
@@ -53,7 +55,7 @@ internal static partial class BodyRetarget
                                   bool NoLayerOrder = false, bool LegsForAll = false,
                                   bool CrossBodyPassesWithinBody = false, bool NoRelease = false,
                                   bool NoNippleSmooth = false, bool NoOutfitOrder = false, bool NoWallPair = false,
-                                  bool NoWallCover = false);
+                                  bool NoWallCover = false, bool NoRimTurnGuard = false);
 
     private static readonly Tuning DefaultTuning = new();
 

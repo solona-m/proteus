@@ -208,7 +208,8 @@ internal static partial class BodyRetarget
         // Again until nothing moves: each round measures every pair as it stands, and with three layers pulling the
         // middle one behind the outer can take it behind the inner.
         int moved = 0;
-        var walls = Tuned.NoWallCover ? null : WallPartners(sets, movable);
+        // Paired over the garment's cloth, as CoveredPoints pairs them to take an inner wall for a cover.
+        var walls = Tuned.NoWallCover ? null : WallPartners(sets, layered);
         for (int round = 0; round < LayerOrderRounds; round++)
         {
             int now = KeepLayerOrderOnce(sets, covered, nodeDelta, movable, drawn, liftOnly, walls);
@@ -281,14 +282,16 @@ internal static partial class BodyRetarget
             foreach (int m in new[] { c.A, c.B, c.C })
             {
                 if (!movable[m] || rest <= lift[m]) continue;
+                // A thick shell's inner wall lifted carries its outer wall along, or it would come through it; one whose
+                // outer wall cannot move (a kept piece) is not lifted at all.
+                int outer = walls != null && walls[m] >= 0 && Vector3.Dot(Now(walls[m]) - Now(m), -dir[n]) > 0f ? walls[m] : -1;
+                if (outer >= 0 && !movable[outer]) continue;
                 lift[m] = rest;
                 way[m] = -dir[n];
-                // A thick shell's inner wall lifted carries its outer wall along, or it would come through it.
-                if (walls != null && walls[m] >= 0 && movable[walls[m]] && rest > lift[walls[m]]
-                    && Vector3.Dot(Now(walls[m]) - Now(m), -dir[n]) > 0f)
+                if (outer >= 0 && rest > lift[outer])
                 {
-                    lift[walls[m]] = rest;
-                    way[walls[m]] = -dir[n];
+                    lift[outer] = rest;
+                    way[outer] = -dir[n];
                 }
             }
         }
