@@ -264,9 +264,7 @@ public class SidecarDiscoveryService
                 .ToList();
             if (pieces.Count > 0 && pieces.All(p => p.Effect == null))
             {
-                var pack = PenumbraPackage.Read(modRoot);
-                piece = StaleEffectImport.Detect(metadata,
-                    pack.DefaultImc.Concat(pack.Groups.SelectMany(g => g.Options).SelectMany(o => o.Imc)));
+                piece = StaleEffectImport.Detect(metadata, PenumbraPackage.ReadManifestImc(modRoot));
                 if (piece != null)
                 {
                     log.Warning("[Proteus] {0}: \"{1}\" was imported before item effects were carried — its effect "

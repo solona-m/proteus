@@ -243,6 +243,45 @@ public partial class ContentImportTests
     }
 
     [Fact]
+    public void An_effect_with_no_file_of_its_own_is_left_on_the_item()   // [EDGE-item-vfx-host-10]
+    {
+        var dir = TempDir();
+        try
+        {
+            // The pack switches on one of the game's effects for the item and ships no .avfx: nothing to carry, so the
+            // item keeps it exactly as the pack set it.
+            using var pack = SyntheticPack.EffectBearing(avfxRedirected: false);
+            var preview = ContentImportService.Inspect(pack.Path);
+            var unit = Assert.Single(preview.Units);
+            Assert.Null(unit.Effect);
+            Assert.False(unit.EffectOnly);
+
+            var root = Path.Combine(dir, "mod");
+            ContentImportService.WriteMod(root, "Veil", "Someone", preview);
+            var owners = Owners(root);
+            Assert.Equal(1, (int)owners.SelectMany(o => Manips(o, "Imc")).Single()["Manipulation"]!["Entry"]!["VfxId"]!);
+            Assert.Equal(2, owners.SelectMany(o => Manips(o, "Eqdp")).Count());
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void One_race_failing_does_not_stop_a_piece_being_an_effect()   // [AC-item-vfx-host-6]
+    {
+        var empty = new Dictionary<string, string>();
+        var bound = new Dictionary<string, string> { ["mt_c0101a0002_wrs_a.mtrl"] = "items/v0001.mtrl" };
+        var slot = ContentSlot.Parse("chara/accessory/a0002/model/c0101a0002_wrs.mdl")!.Value;
+        var placeholder = new ContentImportService.PiecePlan("p", "e", bound, [], 1, 3, null, "0101", Degenerate: true);
+        var unbound = new ContentImportService.PiecePlan("p", "e2", empty, ["mt_x.mtrl"], 0, 0, "unbound", "1401");
+        var effect = new ContentEffect { VfxId = 1 };
+
+        Assert.True(new ContentImportService.PieceUnit(null, null, slot, null, null, [placeholder, unbound], effect).EffectOnly);
+        Assert.False(new ContentImportService.PieceUnit(null, null, slot, null, null, [unbound], effect).EffectOnly);
+        var real = placeholder with { Degenerate = false };
+        Assert.False(new ContentImportService.PieceUnit(null, null, slot, null, null, [placeholder, real], effect).EffectOnly);
+    }
+
+    [Fact]
     public void An_imc_edit_that_is_vanilla_but_for_its_effect_is_removed()   // [AC-item-vfx-host-3] [EDGE-item-vfx-host-13]
     {
         var dir = TempDir();

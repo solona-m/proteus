@@ -90,4 +90,21 @@ public class ImcManipulationTests
         // Another item's effect is not this piece's.
         Assert.Null(StaleEffectImport.Detect(Meta(null), [Imc(1) with { PrimaryId = 3 }]));
     }
+
+    [Theory]   // [AC-item-vfx-host-8] [EDGE-item-vfx-host-12]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void An_installed_mods_effects_are_read_from_its_manifests_alone(bool legacy)
+    {
+        // What the older-import check reads: an installed copy of the pack, in either layout, without walking its files.
+        var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "proteus-manifest-" + System.Guid.NewGuid().ToString("N"));
+        try
+        {
+            using var pack = SyntheticPack.EffectBearing(legacy: legacy);
+            PenumbraPackage.ExtractTo(pack.Path, dir);
+            var imc = Assert.Single(PenumbraPackage.ReadManifestImc(dir));
+            Assert.Equal(new PenumbraPackage.PackImc("Accessory", 2, 15, "Wrists", 15, 0, 1, 0, 0x3FF, 0), imc);
+        }
+        finally { if (System.IO.Directory.Exists(dir)) System.IO.Directory.Delete(dir, true); }
+    }
 }

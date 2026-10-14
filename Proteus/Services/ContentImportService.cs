@@ -93,7 +93,9 @@ public sealed partial class ContentImportService
         /// Only an effect: the pack attached an item effect (<see cref="Effect"/>) and every model it ships is an
         /// invisible placeholder. Worn on a carrier whatever the race, since a placeholder has no size to get wrong.
         /// </summary>
-        public bool EffectOnly => Effect != null && Variants.Count > 0 && Variants.All(v => v.Import && v.Degenerate);
+        /// <remarks>Judged on the variants that import: one race's copy failing must not send the rest down the race gate.</remarks>
+        public bool EffectOnly => Effect != null && Variants.Any(v => v.Import)
+                               && Variants.Where(v => v.Import).All(v => v.Degenerate);
 
         /// <summary>Buildable when ANY race variant is — a pack missing one race's material still works
         /// for the races it does ship.</summary>

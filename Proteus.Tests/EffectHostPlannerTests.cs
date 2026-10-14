@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using Proteus.Services;
 using Xunit;
@@ -13,7 +14,7 @@ public class EffectHostPlannerTests
     private static C Worn(int index, string slot = "ril") => new(index, slot, IsCarrier: false, Variant: 3, OwnVfxId: 0);
 
     [Fact]
-    public void Carriers_are_preferred_over_worn_items()   // [AC-item-vfx-host-2] [EDGE-item-vfx-host-15]
+    public void Carriers_are_preferred_over_worn_items()   // [AC-item-vfx-host-2]
     {
         // The piece landed on a worn ring; a carrier is also drawn. The effect goes to the carrier, never the worn ring.
         var (assigned, dropped) = EffectHostPlanner.Assign([Worn(0), Carrier(1)], [new R(0, OwnHost: 0)]);
@@ -61,7 +62,8 @@ public class EffectHostPlannerTests
     [Fact]
     public void No_publishing_host_drops_the_effect()   // [EDGE-item-vfx-host-6]
     {
-        var (assigned, dropped) = EffectHostPlanner.Assign([], [new R(0, -1)]);
+        // Its piece's host is not drawn this build, and nothing else is.
+        var (assigned, dropped) = EffectHostPlanner.Assign([], [new R(0, 0)]);
         Assert.Empty(assigned);
         Assert.Contains("no accessory is drawn", Assert.Single(dropped).Reason);
     }
@@ -94,10 +96,81 @@ public class EffectHostPlannerTests
     }
 
     [Fact]
-    public void A_path_the_game_already_ships_is_not_taken()   // [EDGE-item-vfx-host-19]
+    public void A_path_the_game_already_ships_is_not_taken()   // [AC-item-vfx-host-7]
     {
         var (assigned, _) = EffectHostPlanner.Assign([Carrier(0) with { IdFree = false }, Carrier(1, "nek")],
             [new R(0, 0)]);
         Assert.Equal(new EffectHostPlanner.Assignment(0, 1, 4), Assert.Single(assigned));
+    }
+
+    [Fact]
+    public void Effect_key_changes_when_the_host_moves()   // [EDGE-item-vfx-host-19] [EDGE-item-vfx-host-7] [EDGE-item-vfx-host-8]
+    {
+        var onRight = EffectHostPlanner.EffectKey([("a0053/rir", 1, 1, @"C:\mods\veil\vfx\va0001.avfx")]);
+
+        // The same publish, built again: no redraw.
+        Assert.Equal(onRight, EffectHostPlanner.EffectKey([("a0053/rir", 1, 1, @"C:\mods\veil\vfx\va0001.avfx")]));
+        // The host moved (a ring freed, a carrier taken): redraw.
+        Assert.NotEqual(onRight, EffectHostPlanner.EffectKey([("a0053/ril", 1, 2, @"C:\mods\veil\vfx\va0001.avfx")]));
+        // Another style, another file: redraw.
+        Assert.NotEqual(onRight, EffectHostPlanner.EffectKey([("a0053/rir", 1, 1, @"C:\mods\veil\vfx\variant2.avfx")]));
+        // The piece switched off: nothing published, which is a change too.
+        Assert.NotEqual(onRight, EffectHostPlanner.EffectKey([]));
+        Assert.Equal("", EffectHostPlanner.EffectKey([]));
+        // Order of placement is not a change.
+        Assert.Equal(
+            EffectHostPlanner.EffectKey([("a0053/rir", 1, 1, "x"), ("a0053/ril", 1, 2, "y")]),
+            EffectHostPlanner.EffectKey([("a0053/ril", 1, 2, "y"), ("a0053/rir", 1, 1, "x")]));
+    }
+
+    [Fact]
+    public void A_placeholder_goes_only_on_an_accessory_carrier()   // [EDGE-item-vfx-host-15] [EDGE-item-vfx-host-17]
+    {
+        Assert.True(EffectHostPlanner.CanHostEffectOnly(hasBaseModel: false, 'a'));    // Emperor's New ring, bracelet…
+        Assert.False(EffectHostPlanner.CanHostEffectOnly(hasBaseModel: true, 'a'));    // the player's own ring
+        Assert.False(EffectHostPlanner.CanHostEffectOnly(hasBaseModel: false, 'e'));   // the facewear carrier
+    }
+
+    [Fact]
+    public void Each_piece_asks_once_and_one_without_a_host_is_dropped()   // [EDGE-item-vfx-host-6]
+    {
+        // Unit 0 (on host 2) and unit 1 (unhosted) both belong to the veil; unit 2 is someone's plain shirt.
+        var owners = new Dictionary<int, string[]> { [0] = ["veil"], [1] = ["veil", "sparkle"], [2] = ["shirt"] };
+        var requests = EffectHostPlanner.CollectRequests(
+            [(0, 2), (2, 2), (1, -1)], u => owners[u], o => o != "shirt", (a, b) => a == b);
+        Assert.Equal([("veil", 2), ("sparkle", -1)], requests);
+
+        var (assigned, dropped) = EffectHostPlanner.Assign([Carrier(2)],
+            requests.Select((r, i) => new R(i, r.Host)).ToList());
+        Assert.Equal(0, Assert.Single(assigned).Request);
+        Assert.Contains("no free carrier slot", Assert.Single(dropped).Reason);
+    }
+
+    [Fact]
+    public void Only_a_drawn_host_is_a_candidate_and_only_a_carrier_is_asked_about()   // [EDGE-item-vfx-host-6] [EDGE-item-vfx-host-11]
+    {
+        int lookups = 0;
+        int? Variant() { lookups++; return 1; }
+
+        Assert.Null(EffectHostPlanner.CandidateFor(0, "rir", false, 'a', drawn: false, Variant, _ => 0, _ => true));
+        var worn = EffectHostPlanner.CandidateFor(1, "ril", true, 'a', drawn: true, Variant, _ => 0, _ => true)!;
+        Assert.False(worn.IsCarrier);
+        Assert.Null(worn.Variant);
+        Assert.Equal(0, lookups);
+
+        var carrier = EffectHostPlanner.CandidateFor(2, "wrs", false, 'a', drawn: true, Variant, _ => 0, id => id != 3)!;
+        Assert.Equal(new C(2, "wrs", true, 1, 0, IdFree: false), carrier);
+    }
+
+    [Fact]
+    public void A_lost_effect_is_said_once_per_change()   // [AC-item-vfx-host-7]
+    {
+        string? last = null;
+        Assert.True(EffectHostPlanner.ShouldSay(ref last, ["Frost Veil"]));
+        Assert.False(EffectHostPlanner.ShouldSay(ref last, ["Frost Veil", "frost veil"]));
+        Assert.True(EffectHostPlanner.ShouldSay(ref last, ["Frost Veil", "Ember"]));
+        Assert.False(EffectHostPlanner.ShouldSay(ref last, []));
+        Assert.Null(last);
+        Assert.True(EffectHostPlanner.ShouldSay(ref last, ["Frost Veil"]));   // re-armed once nothing was lost
     }
 }

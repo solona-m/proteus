@@ -21,33 +21,29 @@ public sealed partial class SecondSkinService
         /// </summary>
         private void PlaceEffects()
         {
-            // One request per (mod, piece) with an effect, in placement order, with the host its unit went to.
-            // A unit that found no host still asks (host -1): another drawn carrier can carry its effect, and if none can the
-            // user is told which mod lost it.
-            var requests = new List<(OverlayEntry Entry, ResolvedContent Content, int Host)>();
-            var placedUnits = contentWork.Concat(contentUnhosted.Select(u => (Unit: u, HostIdx: -1)));
-            foreach (var (u, h) in placedUnits)
-                foreach (var (entry, content) in contentUnits[u].Owners)
-                    if (content.Piece.Effect != null
-                     && !requests.Any(r => ReferenceEquals(r.Content.Piece, content.Piece)
-                                        && string.Equals(r.Entry.ModDirectory, entry.ModDirectory, StringComparison.OrdinalIgnoreCase)))
-                        requests.Add((entry, content, h));
+            // One request per (mod, piece) with an effect, with the host its unit went to; a unit that found no host asks
+            // with -1 and is dropped, as its piece is.
+            var requests = EffectHostPlanner.CollectRequests(
+                contentWork.Concat(contentUnhosted.Select(u => (Unit: u, HostIdx: -1))),
+                u => contentUnits[u].Owners,
+                o => o.Content.Piece.Effect != null,
+                (a, b) => ReferenceEquals(a.Content.Piece, b.Content.Piece)
+                       && string.Equals(a.Entry.ModDirectory, b.Entry.ModDirectory, StringComparison.OrdinalIgnoreCase));
 
-            var key = new List<string>();
+            var published = new List<(string Host, int Variant, int VfxId, string File)>();
             var drops = new List<string>();
             if (requests.Count > 0)
             {
                 var candidates = new List<EffectHostPlanner.Candidate>();
                 for (int h = 0; h < hosts.Count; h++)
                 {
-                    if (perHostLayers[h].Count == 0) continue;   // not drawn this build, so nothing would spawn it
                     var host = hosts[h];
-                    bool carrier = host.BaseModel == null && host.Prefix == 'a';
-                    int? variant = carrier ? ItemVariantFolder(host)?.Variant : null;
-                    int? own = variant is { } v ? VanillaEntry(host, v)?.VfxId : null;
-                    int id = EffectHostPlanner.VfxIdFor(host.Slot);
-                    bool idFree = id == 0 || !Plugin.DataManager.FileExists(VfxGamePath(host.Prefix, host.SetId, id));
-                    candidates.Add(new EffectHostPlanner.Candidate(h, host.Slot, carrier, variant, own, idFree));
+                    if (EffectHostPlanner.CandidateFor(h, host.Slot, host.BaseModel != null, host.Prefix,
+                            drawn: perHostLayers[h].Count > 0,
+                            () => ItemVariantFolder(host)?.Variant,
+                            v => VanillaEntry(host, v)?.VfxId,
+                            id => !Plugin.DataManager.FileExists(VfxGamePath(host.Prefix, host.SetId, id))) is { } c)
+                        candidates.Add(c);
                 }
 
                 var (assigned, dropped) = EffectHostPlanner.Assign(candidates,
@@ -55,7 +51,7 @@ public sealed partial class SecondSkinService
 
                 foreach (var a in assigned)
                 {
-                    var (entry, content, _) = requests[a.Request];
+                    var ((entry, content), _) = requests[a.Request];
                     var effect = content.Piece.Effect!;
                     var host = hosts[a.Host];
                     var variant = ItemVariantFolder(host)!.Value.Variant;
@@ -63,9 +59,9 @@ public sealed partial class SecondSkinService
                     var modRoot = entry.ModRoot;
                     modSelections.TryGetValue(entry.ModDirectory, out var selection);
                     var src = modRoot == null ? null : SelectedMaterialFile(modRoot, effect.Sources, selection);
+                    // A missing or unreadable file is logged, not said in chat: no slot would fix it, and the import warned.
                     if (src == null)
                     {
-                        drops.Add(entry.ModDirectory);
                         service.log.Warning("[Proteus] effect: {0} \"{1}/{2}\" — none of its effect files ({3}) is in the "
                                   + "mod, so the effect is not shown", entry.ModDirectory, content.OptionGroup ?? "",
                             content.Option ?? "", string.Join(", ", effect.Sources.Select(s => s.File)));
@@ -76,7 +72,6 @@ public sealed partial class SecondSkinService
                     try { bytes = File.ReadAllBytes(src); }
                     catch (Exception ex)
                     {
-                        drops.Add(entry.ModDirectory);
                         service.log.Warning("[Proteus] effect: {0} — {1} could not be read ({2})",
                             entry.ModDirectory, src, ex.Message);
                         continue;
@@ -92,7 +87,7 @@ public sealed partial class SecondSkinService
                     var gamePath = VfxGamePath(host.Prefix, host.SetId, a.VfxId);
                     redirects[gamePath] = Rel(outputRoot, disk);
 
-                    key.Add($"{host.Prefix}{host.SetId:D4}/{host.Slot}/v{variant}/{a.VfxId}={src}");
+                    published.Add(($"{host.Prefix}{host.SetId:D4}/{host.Slot}", variant, a.VfxId, src));
                     service.log.Information("[Proteus] effect: {0} \"{1}/{2}\" -> {3}{4:D4}/{5} variant {6}, effect {7} ({8})",
                         entry.ModDirectory, content.OptionGroup ?? "", content.Option ?? "", host.Prefix, host.SetId,
                         host.Slot, variant, a.VfxId, Path.GetFileName(src));
@@ -100,7 +95,7 @@ public sealed partial class SecondSkinService
 
                 foreach (var d in dropped)
                 {
-                    var (entry, content, _) = requests[d.Request];
+                    var ((entry, content), _) = requests[d.Request];
                     drops.Add(entry.ModDirectory);
                     service.log.Warning("[Proteus] effect: {0} \"{1}/{2}\" — not shown: {3}",
                         entry.ModDirectory, content.OptionGroup ?? "", content.Option ?? "", d.Reason);
@@ -108,7 +103,7 @@ public sealed partial class SecondSkinService
             }
 
             // An IMC entry only takes effect when the item is recreated, so a change in what is published is a model change.
-            var effectKey = string.Join("\n", key.OrderBy(k => k, StringComparer.Ordinal));
+            var effectKey = EffectHostPlanner.EffectKey(published);
             if (!string.Equals(effectKey, service._lastEffectKey, StringComparison.Ordinal))
             {
                 modelChangedAny = true;
@@ -129,16 +124,11 @@ public sealed partial class SecondSkinService
         /// <summary>In chat once per change of WHICH mods lost their effect, as well as the log: nothing else shows why.</summary>
         private void ReportDroppedEffects(List<string> drops)
         {
-            var mods = drops.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(m => m, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-            if (mods.Count == 0) { service._lastEffectDrops = null; return; }
-
-            var said = string.Join("\n", mods);
-            if (string.Equals(said, service._lastEffectDrops, StringComparison.Ordinal)) return;
-            service._lastEffectDrops = said;
+            if (!EffectHostPlanner.ShouldSay(ref service._lastEffectDrops, drops)) return;
             var msg = string.Format(Loc.Localize("Chat.EffectUnplaced.Fmt",
                 "[Proteus] The animated effect of \"{0}\" is not shown: it needs a free accessory slot for its "
-              + "invisible carrier. Free a ring, bracelet or necklace slot."), string.Join(", ", mods));
+              + "invisible carrier. Free a ring, bracelet or necklace slot."),
+                string.Join(", ", service._lastEffectDrops!.Split('\n')));
             _ = Plugin.Framework.RunOnFrameworkThread(
                 () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 25).Build()));
         }

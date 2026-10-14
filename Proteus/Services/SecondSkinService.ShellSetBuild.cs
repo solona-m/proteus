@@ -148,12 +148,12 @@ public sealed partial class SecondSkinService
 
         public Result? Run()
         {
-            if (!Begin()) return result;
+            if (!Begin()) return Abandoned();
             ResolveHostVariants();
             CreateOutputs();
             VoteModelCode();
             HarvestParts();
-            if (!WholeBodyFallback()) return result;
+            if (!WholeBodyFallback()) return Abandoned();
             ChooseUvSpace();
             UnmirrorBody();
             ConvertUvSpace();
@@ -169,12 +169,22 @@ public sealed partial class SecondSkinService
             PlanSiblingRelief();
             BakeShellTextures();
             PlaceContentMeshes();
-            if (!PublishSkeletons()) return result;
+            if (!PublishSkeletons()) return Abandoned();
             ReportUnhosted();
             SmoothBody();
             BuildHostModels();
             PlaceEffects();
-            return Finish();
+            return Finish() ?? Abandoned();
+        }
+
+        /// <summary>
+        /// A build that publishes nothing publishes no effect either, so the next effect that appears is a change and gets
+        /// its redraw (see PlaceEffects).
+        /// </summary>
+        private Result? Abandoned()
+        {
+            service._lastEffectKey = string.Empty;
+            return result;
         }
 
         private bool Begin()
@@ -198,13 +208,7 @@ public sealed partial class SecondSkinService
             // Cleared first, so the field means "as of this build" even when a path below returns early.
             service.UnwearableContent = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-            if (gearOverlays.Count == 0 && contentIn == 0)
-            {
-                // Nothing published, so no effect either: the next one that appears is a change.
-                service._lastEffectKey = string.Empty;
-                result = null;
-                return false;
-            }
+            if (gearOverlays.Count == 0 && contentIn == 0) { result = null; return false; }
             return true;
         }
 
@@ -970,7 +974,7 @@ public sealed partial class SecondSkinService
                     if (remaining[h] <= 0) continue;
                     // Only a carrier's EQDP may be rewritten, so only a carrier can publish a natively-authored piece undeformed.
                     if (carrierOnly && hosts[h].BaseModel != null) continue;
-                    if (effectOnly && (hosts[h].BaseModel != null || hosts[h].Prefix != 'a')) continue;
+                    if (effectOnly && !EffectHostPlanner.CanHostEffectOnly(hosts[h].BaseModel != null, hosts[h].Prefix)) continue;
                     if (hostClaim[h] is { } claimed && claimed != surfIdx) continue;
                     chosen = h;
                     break;

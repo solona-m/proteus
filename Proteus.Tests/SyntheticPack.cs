@@ -246,9 +246,10 @@ internal sealed class SyntheticPack : IDisposable
     /// <param name="imcInDefault">The IMC edit in the default data rather than the Items option.</param>
     /// <param name="avfxPresent">False names the effect files in the manifest without writing them.</param>
     /// <param name="materialPresent">False ships no material for the model's mesh.</param>
+    /// <param name="avfxRedirected">False redirects no <c>.avfx</c> at all: the IMC turns on one of the game's own effects.</param>
     internal static SyntheticPack EffectBearing(
         bool legacy = false, bool geometry = false, bool effect = true, bool imcInDefault = false,
-        bool avfxPresent = true, bool materialPresent = true)
+        bool avfxPresent = true, bool materialPresent = true, bool avfxRedirected = true)
     {
         const string Model = "items/model.mdl";
         var corner = (0f, 1.077f, 0f);
@@ -281,9 +282,9 @@ internal sealed class SyntheticPack : IDisposable
         var defaults = new List<(string GamePath, string Entry)>
         {
             ("vfx/FroVeil/FroVeilDustT.atex", "vfx/dust.atex"),
-            ("chara/accessory/a0002/vfx/eff/va0001.avfx", "vfx/va0001.avfx"),
             ("vfx/FrostVeilVariant1.avfx", "vfx/variant1.avfx"),
         };
+        if (avfxRedirected) defaults.Insert(1, ("chara/accessory/a0002/vfx/eff/va0001.avfx", "vfx/va0001.avfx"));
 
         string Files(IEnumerable<(string GamePath, string Entry)> files)
             => "{" + string.Join(",", files.Select(f => $"{Quote(f.GamePath)}:{Quote(f.Entry.Replace('/', '\\'))}")) + "}";
@@ -299,10 +300,12 @@ internal sealed class SyntheticPack : IDisposable
         const string Va = "chara/accessory/a0002/vfx/eff/va0001.avfx";
         var groups = new[]
         {
-            Group("Style", 0,
-                Option("Frost"),
-                Option("Arcane Infusion", [(Va, "vfx/variant1.avfx")]),
-                Option("Ice Candies", [(Va, "vfx/variant2.avfx")])),
+            avfxRedirected
+                ? Group("Style", 0,
+                    Option("Frost"),
+                    Option("Arcane Infusion", [(Va, "vfx/variant1.avfx")]),
+                    Option("Ice Candies", [(Va, "vfx/variant2.avfx")]))
+                : Group("Style", 0, Option("Frost")),
             Group("Glitter", 1,
                 Option("On"),
                 Option("Off", [("vfx/FroVeil/FroVeilDustT.atex", "glitter/off.atex")])),

@@ -202,6 +202,41 @@ public static class PenumbraPackage
     }
 
     /// <summary>
+    /// Every <c>Imc</c> manipulation an installed mod's manifests declare, default data and options alike, in either
+    /// layout. Reads only the manifest files, never the folder's entry table: <see cref="Read"/> would stat every file.
+    /// Unreadable manifests contribute nothing.
+    /// </summary>
+    internal static List<PackImc> ReadManifestImc(string modRoot)
+    {
+        var result = new List<PackImc>();
+        JsonObject? Load(string path)
+        {
+            try { return File.Exists(path) ? JsonNode.Parse(File.ReadAllText(path)) as JsonObject : null; }
+            catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException) { return null; }
+        }
+        void Group(JsonObject? g)
+        {
+            if (g?["Options"] is not JsonArray opts) return;
+            foreach (var o in opts)
+                if (o is JsonObject oo) result.AddRange(ReadImc(oo));
+        }
+
+        var meta = Load(System.IO.Path.Combine(modRoot, ManifestEntry));
+        if (meta != null && (Int(meta, "FileVersion") ?? PenumbraModMeta.LegacyFileVersion) >= PenumbraModMeta.SingleFileVersion)
+        {
+            if (meta["DefaultData"] is JsonObject dd) result.AddRange(ReadImc(dd));
+            if (meta["Groups"] is JsonArray groups)
+                foreach (var g in groups) Group(g as JsonObject);
+            return result;
+        }
+
+        if (Load(System.IO.Path.Combine(modRoot, LegacyDefaultEntry)) is { } legacy) result.AddRange(ReadImc(legacy));
+        foreach (var file in Directory.EnumerateFiles(modRoot, "group_*.json", SearchOption.TopDirectoryOnly))
+            Group(Load(file));
+        return result;
+    }
+
+    /// <summary>
     /// Several entries in one pass over the archive. Entries the archive doesn't carry are absent from the result.
     /// </summary>
     public static Dictionary<string, byte[]> ReadEntries(string pmpPath, IEnumerable<string> entryNames)

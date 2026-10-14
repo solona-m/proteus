@@ -56,7 +56,10 @@ public sealed partial class ContentImportService
             foreach (var o in g.Options)
                 foreach (var (gp, entry) in o.Files)
                     Source(gp, entry, g.Name, o.Name);
-        return effect;
+
+        // No file of its own: the pack switches on one of the game's effects for that item. Left on the item where the pack
+        // put it — moving a game effect onto a carrier is not what this carries.
+        return effect.Sources.Count > 0 ? effect : null;
     }
 
     /// <summary>Penumbra's <c>ObjectType</c> for a set tag's kind letter, or null for one that carries no item effect.</summary>
@@ -74,7 +77,7 @@ public sealed partial class ContentImportService
     private static IEnumerable<string> EffectWarnings(PenumbraPackage.Contents pack, PieceUnit unit)
     {
         if (unit.Effect is not { } e || !unit.Import) yield break;
-        if (e.Sources.Count > 0 && e.Sources.All(s => !pack.Entries.ContainsKey(PenumbraPackage.Normalize(s.File))))
+        if (e.Sources.All(s => !pack.Entries.ContainsKey(PenumbraPackage.Normalize(s.File))))
             yield return string.Format(Loc.Localize("ContentImport.Warn.EffectFileMissing.Fmt",
                 "\"{0}\" has an animated effect, but its file ({1}) is not in the pack, so it cannot be shown."),
                 unit.Label, e.Sources[0].File);
