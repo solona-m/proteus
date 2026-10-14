@@ -31,4 +31,12 @@ internal interface IBodyCorrespondence
 
     /// <summary>One line for the status bar and the saved record.</summary>
     string Describe();
+
+    /// <summary>
+    /// The target is the source's own mesh, vertex for vertex — a size of the same body — so a point that sat exactly on
+    /// a source vertex lands exactly on the target's, and a face between such points on the target's own face. False
+    /// unless proven: a body tessellated otherwise bulges between those points (see
+    /// <see cref="BodyRetarget.SnappedLandsElsewhere"/>).
+    /// </summary>
+    bool SameMesh => false;
 }

@@ -42,6 +42,9 @@ internal sealed class IdentityCorrespondence : IBodyCorrespondence
 
     public string Describe() => description;
 
+    /// <summary>Proven by uv agreeing index for index (see <see cref="UvAgreement"/>).</summary>
+    public bool SameMesh => true;
+
     /// <summary>
     /// The share of vertices whose uv must agree index for index before two models are treated as the same mesh
     /// (90%). A different numbering agrees on almost nothing by accident, so the bar only has to clear noise — while
