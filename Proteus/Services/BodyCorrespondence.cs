@@ -12,7 +12,9 @@ namespace Proteus.Services;
 /// the common case for two sizes of one body. Anything else that shares the Bibo+ texture layout — a different
 /// Neolithe family, an NSFW chest that re-maps some uvs, Rue+ — is mapped by texture coordinate
 /// (<see cref="UvAtlasCorrespondence"/>). Only bodies with different layouts are refused, because for those there is
-/// genuinely no way to say which point is which.
+/// genuinely no way to say which point is which. Two layouts a transfer map or the gen2 affine converts between are
+/// mapped through it; a mirrored layout's body (gen2) is judged there by how much of its skin's surface lands, and the
+/// skin its target's layout has no place for follows the skin around it.
 /// <para/>
 /// This replaced a guard that refused any pair that was not the same mesh. That was the wrong kind of answer: the pair
 /// that first hit it was two Neolithe chests with identical structure and 98.8% of their uvs in common, and every
@@ -48,6 +50,7 @@ internal static class BodyCorrespondence
         // Two layouts: carried across by the texture maps, or refused — landing a bibo uv on a gen3 atlas as it stands
         // would put the chest on the back.
         UVRemapService.UvConversion? convert = null, onSheet = null;
+        bool byArea = false;
         string? from = LayoutOf(source, male), to = LayoutOf(target, male);
         if (from != null && to != null && from != to)
         {
@@ -68,10 +71,15 @@ internal static class BodyCorrespondence
                 return false;
             }
             onSheet = uvRemap?.UvConverter(from, to, unmirror: true, fold: true, reach: OnSheetReach);
+
+            // A mirrored layout's body (gen2: Tight&Firm Gen2, the game's own) may draw detail where the doubled
+            // layouts have no skin; judged by surface, that detail follows the skin around it. Only for these: a pair
+            // between two asymmetric layouts is judged by count alone, as it always was.
+            byArea = UVRemapService.DoubledSpaceOf(from) != null;
         }
 
         if (UvAtlasCorrespondence.TryBuild(source, sourceUv, target, targetUv, what, out var atlas, out refusal, convert,
-                                           onSheet))
+                                           onSheet, byArea))
         {
             correspondence = atlas;
             return true;

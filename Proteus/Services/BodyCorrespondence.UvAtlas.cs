@@ -51,11 +51,12 @@ internal sealed class UvAtlasCorrespondence : IBodyCorrespondence
 
     private readonly string description;
 
-    private UvAtlasCorrespondence(ModelParts source, IReadOnlyList<Vector3?> field, string what)
+    private UvAtlasCorrespondence(ModelParts source, IReadOnlyList<Vector3?> field, string what, Stats measured)
     {
         Source = source;
         Field = field;
         description = what;
+        Measured = measured;
     }
 
     public ModelParts Source { get; }
@@ -63,6 +64,24 @@ internal sealed class UvAtlasCorrespondence : IBodyCorrespondence
     public IReadOnlyList<Vector3?> Field { get; }
 
     public string Describe() => description;
+
+    /// <summary>How the source's skin landed: what decided the pair, for the log and the tests.</summary>
+    internal Stats Measured { get; }
+
+    /// <summary>
+    /// How much of the source's skin found its place on the target.
+    /// </summary>
+    /// <param name="Landed">Skin vertices that landed by texture coordinate.</param>
+    /// <param name="Placeable">Skin vertices that could have: the skin less the islands drawn off its sheet.</param>
+    /// <param name="OffSheet">Skin vertices on islands drawn off the source layout's sheet.</param>
+    /// <param name="VertexCoverage">Landed over placeable, by count.</param>
+    /// <param name="AreaCoverage">The same by the skin's surface, each vertex weighing a third of its triangles.</param>
+    /// <param name="MaxShift">The furthest any landed vertex moved, in metres.</param>
+    /// <param name="P99Shift">The 99th percentile of how far the landed vertices moved.</param>
+    /// <param name="Carried">Placeable vertices that missed and were given the skin's around them instead
+    /// (<see cref="TryBuild"/>'s <c>byArea</c>); 0 on any other pair.</param>
+    internal readonly record struct Stats(int Landed, int Placeable, int OffSheet, float VertexCoverage,
+                                          float AreaCoverage, float MaxShift, float P99Shift, int Carried);
 
     /// <param name="sourceUv">uv0 per source vertex, in <see cref="ModelParts.Positions"/> order.</param>
     /// <param name="targetUv">uv0 per target vertex, in <see cref="ModelParts.Positions"/> order.</param>
@@ -72,11 +91,27 @@ internal sealed class UvAtlasCorrespondence : IBodyCorrespondence
     /// <param name="onSheet">The same conversion with next to no reach: answers only for a uv ON the source layout's
     /// sheet. With it, islands drawn off the sheet are found (<see cref="OffSheet"/>), left out of the coverage, and
     /// carried by the skin around them. Null skips that.</param>
+    /// <param name="byArea">The source comes from a mirrored layout (gen2, a man's vanilla body) through
+    /// <paramref name="convert"/>. Such a body can carry detail its target's layout has no place for: Tight&amp;Firm Gen2's
+    /// NSFW crotch is 60% of its legs' vertices and lands on no Bibo+ triangle, so by count only 44% of the legs land —
+    /// though 93% of their SURFACE does. A pair the count refuses is then judged by surface instead, and what missed
+    /// follows the skin around it. Off for every other pair, which is judged by count alone, as it always was.</param>
     public static bool TryBuild(ModelParts source, float[] sourceUv, ModelParts target, float[] targetUv, string what,
                                 out UvAtlasCorrespondence? correspondence, out string refusal,
-                                UVRemapService.UvConversion? convert = null, UVRemapService.UvConversion? onSheet = null)
+                                UVRemapService.UvConversion? convert = null, UVRemapService.UvConversion? onSheet = null,
+                                bool byArea = false)
+        => TryBuild(source, sourceUv, target, targetUv, what, out correspondence, out refusal, out _, convert, onSheet,
+                    byArea);
+
+    /// <inheritdoc cref="TryBuild(ModelParts, float[], ModelParts, float[], string, out UvAtlasCorrespondence?, out string, UVRemapService.UvConversion?, UVRemapService.UvConversion?, bool)"/>
+    /// <param name="measured">How the skin landed, refused or not; default when it was never measured.</param>
+    internal static bool TryBuild(ModelParts source, float[] sourceUv, ModelParts target, float[] targetUv, string what,
+                                  out UvAtlasCorrespondence? correspondence, out string refusal, out Stats measured,
+                                  UVRemapService.UvConversion? convert = null,
+                                  UVRemapService.UvConversion? onSheet = null, bool byArea = false)
     {
         correspondence = null;
+        measured = default;
         int svc = source.Positions.Length / 3, tvc = target.Positions.Length / 3;
         if (sourceUv.Length != svc * 2 || targetUv.Length != tvc * 2)
         {
@@ -128,21 +163,83 @@ internal sealed class UvAtlasCorrespondence : IBodyCorrespondence
 
         int placeable = skin.Count - offSheet.Count;
         float coverage = placeable > 0 ? (float)landed / placeable : 0f;
+        float areaCoverage = AreaCoverage(source, skin, offSheet, field);
+        var (maxShift, p99Shift) = Shifts(field);
+        measured = new Stats(landed, placeable, offSheet.Count, coverage, areaCoverage, maxShift, p99Shift, 0);
+
+        // By count first, as every pair always was; by surface only for a mirrored layout's body the count refuses.
+        var carry = offSheet;
         if (coverage < MinCoverage)
         {
-            refusal = string.Format(Loc.Localize("Parts.Retarget.Refuse.LowCoverage.Fmt",
-                          "Only {1:P0} of the source {0} body finds its place on the target by texture coordinate, " +
-                          "so the two do not share a texture layout. They cannot be refitted onto each other."),
-                          what, coverage);
-            return false;
+            if (!byArea || areaCoverage < MinCoverage)
+            {
+                refusal = string.Format(Loc.Localize("Parts.Retarget.Refuse.LowCoverage.Fmt",
+                              "Only {1:P0} of the source {0} body finds its place on the target by texture coordinate, " +
+                              "so the two do not share a texture layout. They cannot be refitted onto each other."),
+                              what, byArea ? areaCoverage : coverage);
+                return false;
+            }
+            carry = [..offSheet];
+            foreach (int v in skin)
+                if (field[v] == null && carry.Add(v))
+                    measured = measured with { Carried = measured.Carried + 1 };
         }
 
-        if (offSheet.Count > 0) CarryOffSheet(source, field, offSheet);
+        if (carry.Count > 0) Carry(source, field, carry);
         correspondence = new UvAtlasCorrespondence(source, field,
             $"{what}: matched by texture coordinate, {landed:N0} of {placeable:N0} skin vertices ({coverage:P1})" +
-            (offSheet.Count > 0 ? $"; {offSheet.Count:N0} drawn off the texture layout follow the skin around them" : ""));
+            (measured.Carried > 0
+                 ? $"; {areaCoverage:P1} of its skin by area; {measured.Carried:N0} with no place on the target's " +
+                   "layout follow the skin around them"
+                 : "") +
+            (offSheet.Count > 0 ? $"; {offSheet.Count:N0} drawn off the texture layout follow the skin around them" : ""),
+            measured);
         refusal = "";
         return true;
+    }
+
+    /// <summary>
+    /// The share of the placeable skin's SURFACE that landed: each vertex weighs a third of the area of the skin
+    /// triangles it is a corner of. 0 for a skin with no area.
+    /// </summary>
+    private static float AreaCoverage(ModelParts source, List<int> skin, HashSet<int> offSheet, Vector3?[] field)
+    {
+        int vc = source.Positions.Length / 3;
+        var weight = new float[vc];
+        Vector3 P(int v) => new(source.Positions[v * 3], source.Positions[v * 3 + 1], source.Positions[v * 3 + 2]);
+        foreach (var part in source.Parts)
+        {
+            if (part.Island >= 0 || !SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+            for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+            {
+                int a = part.Triangles[t], b = part.Triangles[t + 1], c = part.Triangles[t + 2];
+                if (a < 0 || b < 0 || c < 0 || a >= vc || b >= vc || c >= vc) continue;
+                float third = Vector3.Cross(P(b) - P(a), P(c) - P(a)).Length() / 6f;
+                weight[a] += third;
+                weight[b] += third;
+                weight[c] += third;
+            }
+        }
+
+        double all = 0, landed = 0;
+        foreach (int v in skin)
+        {
+            if (offSheet.Contains(v)) continue;
+            all += weight[v];
+            if (field[v] != null) landed += weight[v];
+        }
+        return all > 0 ? (float)(landed / all) : 0f;
+    }
+
+    /// <summary>How far the landed vertices moved: the furthest, and the 99th percentile.</summary>
+    private static (float Max, float P99) Shifts(Vector3?[] field)
+    {
+        var shifts = new List<float>();
+        foreach (var d in field)
+            if (d is { } delta) shifts.Add(delta.Length());
+        if (shifts.Count == 0) return (0f, 0f);
+        shifts.Sort();
+        return (shifts[^1], shifts[Math.Min(shifts.Count - 1, (int)(shifts.Count * 0.99f))]);
     }
 
     /// <summary>
@@ -197,11 +294,12 @@ internal sealed class UvAtlasCorrespondence : IBodyCorrespondence
     }
 
     /// <summary>
-    /// Give the off-sheet vertices the displacement of the skin they are joined to, spread inward ring by ring from
-    /// the island's seam. The seam is where the island meets the rest of the body at the same POSITION (a uv cut
-    /// splits the vertices, so no triangle crosses it). An island joined to nothing takes its nearest placed point's.
+    /// Give vertices with no landing of their own — islands drawn off the sheet, and skin a mirrored layout's body has
+    /// where its target's layout has none — the displacement of the skin they are joined to, spread inward ring by
+    /// ring from the seam. The seam is where they meet the rest of the body at the same POSITION (a uv cut splits the
+    /// vertices, so no triangle crosses it), or by a triangle. Any joined to nothing take their nearest placed point's.
     /// </summary>
-    private static void CarryOffSheet(ModelParts source, Vector3?[] field, HashSet<int> offSheet)
+    private static void Carry(ModelParts source, Vector3?[] field, HashSet<int> offSheet)
     {
         int vc = source.Positions.Length / 3;
         Vector3 P(int v) => new(source.Positions[v * 3], source.Positions[v * 3 + 1], source.Positions[v * 3 + 2]);

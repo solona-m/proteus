@@ -469,8 +469,10 @@ internal static partial class SizeSetRefit
                                            uvRemap, out var pair) is { } refusal)
                 {
                     notes.Add(string.Format(Strings.SizeSet.RefusedFmt, piece.Label, option, refusal));
+                    log.Information("[Proteus] size set: {0} {1}: refused: {2}", piece.Label, option, refusal);
                     continue;
                 }
+                log.Information("[Proteus] size set: {0} {1}: {2}", piece.Label, option, pair.Correspondence.Describe());
                 var pairs = new List<BodyRetarget.SlotPair> { pair };
 
                 // The hem follows onto the new size's hips: the table's legs across body mods, the source's legs moved
@@ -489,6 +491,8 @@ internal static partial class SizeSetRefit
                                             legsRefusal);
                         else
                         {
+                            log.Information("[Proteus] size set: {0} {1}: hips: {2}", piece.Label, option,
+                                            legsPair.Correspondence.Describe());
                             pairs.Add(legsPair);
                             toLabel += " + " + legsTo.Label;
                         }
