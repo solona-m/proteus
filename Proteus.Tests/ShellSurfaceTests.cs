@@ -126,6 +126,57 @@ public class ShellSurfaceTests
         Assert.Equal(new ShellSurfaceKey(ShellSurfaceKind.Body, ""), keys[1]);
     }
 
+    /// <summary>
+    /// A pack that ships one face overlay for every face id (Frosting: f0001..f0249 in one option) must be
+    /// cut from the face the character wears. Taking the first named surface cut f0001 for everyone, so a
+    /// character on any other face got no shell at all.
+    /// </summary>
+    [Fact]
+    public void Drawn_keeps_only_the_face_the_character_wears()
+    {
+        var keys = ShellSurface.KeysFor(new[]
+        {
+            "chara/human/c0201/obj/face/f0001/material/mt_c0201f0001_fac_a.mtrl",
+            "chara/human/c0201/obj/face/f0002/material/mt_c0201f0002_fac_a.mtrl",
+            "chara/human/c0401/obj/face/f0101/material/mt_c0401f0101_fac_a.mtrl",
+        });
+        var drawn = ShellSurface.Drawn(keys,
+        [
+            "chara/human/c0401/obj/face/f0101/model/c0401f0101_fac.mdl",
+            "chara/human/c0401/obj/hair/h0105/model/c0401h0105_hir.mdl",
+        ]);
+        Assert.Equal([new ShellSurfaceKey(ShellSurfaceKind.Face, "f0101")], drawn);
+    }
+
+    [Fact]
+    public void Drawn_counts_the_body_and_an_iris_in_a_drawn_face()
+    {
+        var keys = new[]
+        {
+            new ShellSurfaceKey(ShellSurfaceKind.Body, ""),
+            new ShellSurfaceKey(ShellSurfaceKind.Iris, "f0002"),
+            new ShellSurfaceKey(ShellSurfaceKind.Iris, "f0001"),
+            new ShellSurfaceKey(ShellSurfaceKind.Native, "0801"),
+        };
+        var drawn = ShellSurface.Drawn(keys, ["chara/human/c0801/obj/face/f0002/model/c0801f0002_fac.mdl"]);
+        Assert.Equal([keys[0], keys[1]], drawn);
+    }
+
+    [Theory]
+    [InlineData(ShellSurfaceKind.Face, "f0101", "/obj/face/f0101/")]
+    [InlineData(ShellSurfaceKind.Iris, "f0001", "/obj/face/f0001/")]
+    [InlineData(ShellSurfaceKind.Hair, "h0133", "/obj/hair/h0133/")]
+    [InlineData(ShellSurfaceKind.Tail, "t0001", "/obj/tail/t0001/")]
+    [InlineData(ShellSurfaceKind.Ear, "z0001", "/obj/zear/z0001/")]
+    [InlineData(ShellSurfaceKind.Body, "", null)]
+    [InlineData(ShellSurfaceKind.Native, "0801", null)]
+    public void ModelFolder_names_each_human_part_folder(ShellSurfaceKind kind, string id, string? folder)
+        => Assert.Equal(folder, ShellSurface.ModelFolder(new ShellSurfaceKey(kind, id)));
+
+    [Fact]
+    public void Drawn_with_no_live_walk_drops_every_human_part()
+        => Assert.Empty(ShellSurface.Drawn([new ShellSurfaceKey(ShellSurfaceKind.Face, "f0001")], null));
+
     [Fact]
     public void CanShell_is_true_for_any_recognised_surface()
     {

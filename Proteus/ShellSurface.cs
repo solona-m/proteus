@@ -127,6 +127,31 @@ public static class ShellSurface
     }
 
     /// <summary>
+    /// The folder segment a human part's models live under ("/obj/face/f0001/"), or null for a kind that names
+    /// none (Body is cut from equipment, Native is a pack's own geometry). The eyes are cut from the face model.
+    /// </summary>
+    public static string? ModelFolder(ShellSurfaceKey key) => key.Kind switch
+    {
+        ShellSurfaceKind.Face or ShellSurfaceKind.Iris => $"/obj/face/{key.Id}/",
+        ShellSurfaceKind.Hair => $"/obj/hair/{key.Id}/",
+        ShellSurfaceKind.Tail => $"/obj/tail/{key.Id}/",
+        ShellSurfaceKind.Ear  => $"/obj/zear/{key.Id}/",
+        _                     => null,
+    };
+
+    /// <summary>
+    /// The surfaces among <paramref name="keys"/> the character is drawing, in order: the body always, a human
+    /// part when the live walk saw a model under its folder. A pack names one face overlay for every face id;
+    /// only the worn one can be cut.
+    /// </summary>
+    public static IReadOnlyList<ShellSurfaceKey> Drawn(IReadOnlyList<ShellSurfaceKey> keys,
+                                                       IReadOnlyList<string>? humanPartModels)
+        => keys.Where(k => k.IsBody
+                        || ModelFolder(k) is { } folder
+                           && (humanPartModels ?? []).Any(p => p.Contains(folder, StringComparison.OrdinalIgnoreCase)))
+               .ToList();
+
+    /// <summary>
     /// Whether any shell at all can be cut for this overlay. An overlay naming no material is left shellable.
     /// </summary>
     public static bool CanShell(IReadOnlyList<string>? materialGamePaths)
