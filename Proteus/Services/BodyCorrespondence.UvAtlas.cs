@@ -68,9 +68,6 @@ internal sealed partial class UvAtlasCorrespondence : IBodyCorrespondence
     /// <summary>How the source's skin landed: what decided the pair, for the log and the tests.</summary>
     internal Stats Measured { get; }
 
-    /// <summary>The vertices given the skin's around them on the by-area path, settled; empty on any other pair.</summary>
-    internal IReadOnlySet<int> CarriedVertices { get; private init; } = new HashSet<int>();
-
     /// <summary>
     /// How much of the source's skin found its place on the target.
     /// </summary>
@@ -187,7 +184,6 @@ internal sealed partial class UvAtlasCorrespondence : IBodyCorrespondence
         // By count first, as every pair always was; by surface only for a mirrored layout's body the count refuses —
         // and then only what the skin around it agrees with counts as landed.
         var carry = offSheet;
-        HashSet<int> carriedVertices = [];
         if (coverage < MinCoverage)
         {
             if (!byArea || rawArea < MinCoverage)
@@ -207,10 +203,6 @@ internal sealed partial class UvAtlasCorrespondence : IBodyCorrespondence
             carry = [..offSheet];
             foreach (int v in skin)
                 if (field[v] == null) carry.Add(v);
-            Carry(source, field, carry);
-            Relax(source, field, carry);
-            carriedVertices = carry;
-            carry = [];
         }
 
         if (carry.Count > 0) Carry(source, field, carry);
@@ -225,7 +217,7 @@ internal sealed partial class UvAtlasCorrespondence : IBodyCorrespondence
                  : "") +
             (measured.Unvouched > 0 ? $"; {measured.Unvouched:N0} that landed amid skin with no place follow it too" : "") +
             (offSheet.Count > 0 ? $"; {offSheet.Count:N0} drawn off the texture layout follow the skin around them" : ""),
-            measured) { CarriedVertices = carriedVertices };
+            measured);
         refusal = "";
         return true;
     }
@@ -418,61 +410,6 @@ internal sealed partial class UvAtlasCorrespondence : IBodyCorrespondence
             field[v] = field[best];
         }
     }
-
-    /// <summary>
-    /// Settle the carried vertices into the skin around them: each the mean of its neighbours (by triangle, and its
-    /// welded twins), the landings fixed, until nothing moves. Ring by ring, a carried region takes a copy of its seam
-    /// that is uneven across it — Tight&amp;Firm's crotch is a patch of 2 mm triangles between seams moved centimetres
-    /// apart, and 40–85 of them turned over. Settled, the region is the smoothest field its seam allows.
-    /// </summary>
-    private static void Relax(ModelParts source, Vector3?[] field, HashSet<int> carried)
-    {
-        if (carried.Count == 0) return;
-        int vc = source.Positions.Length / 3;
-        var nodes = SkinNodes.Build(source, SkinVertices(source));
-        var order = new List<int>(carried);
-        order.Sort();
-        var neighbours = new Dictionary<int, List<int>>();
-        foreach (int v in order)
-        {
-            int node = nodes.NodeOf[v];
-            var near = new List<int>();
-            if (node >= 0)
-            {
-                foreach (int twin in nodes.Members[node])
-                    if (twin != v) near.Add(twin);
-                foreach (int m in nodes.Ring1[node])
-                    near.AddRange(nodes.Members[m]);
-            }
-            neighbours[v] = near;
-        }
-
-        var next = new Vector3[vc];
-        for (int pass = 0; pass < RelaxPasses; pass++)
-        {
-            float moved = 0f;
-            foreach (int v in order)
-            {
-                var sum = Vector3.Zero;
-                int n = 0;
-                foreach (int m in neighbours[v])
-                    if (field[m] is { } d) { sum += d; n++; }
-                next[v] = n > 0 ? sum / n : field[v] ?? Vector3.Zero;
-            }
-            foreach (int v in order)
-            {
-                moved = MathF.Max(moved, Vector3.Distance(next[v], field[v] ?? Vector3.Zero));
-                field[v] = next[v];
-            }
-            if (moved < RelaxSettled) break;
-        }
-    }
-
-    /// <summary>The most passes <see cref="Relax"/> takes: enough for a patch 70 rings across to settle.</summary>
-    private const int RelaxPasses = 5000;
-
-    /// <summary>Settled once no carried vertex moves more than this in a pass (1 µm).</summary>
-    private const float RelaxSettled = 1e-6f;
 
     /// <summary>Two vertices this close (0.01 mm) are one point of the surface, split only by a uv seam.</summary>
     private const float WeldPerMetre = 100_000f;

@@ -43,6 +43,7 @@ public class Gen2LayoutRefitTests
         Assert.True(atlas.Measured.VertexCoverage < 0.8f, $"by count {atlas.Measured.VertexCoverage:P1}");
         Assert.True(atlas.Measured.AreaCoverage >= 0.8f, $"by area {atlas.Measured.AreaCoverage:P1}");
         Assert.Equal(source.Patch.Count, atlas.Measured.Carried);
+        Assert.Equal((0, 0), (atlas.Measured.Distrusted, atlas.Measured.Unjudged));
         Assert.Contains("no place on the target's layout", atlas.Describe());
     }
 
@@ -51,8 +52,7 @@ public class Gen2LayoutRefitTests
     public void The_patch_follows_the_skin_around_it()
     {
         // Sheared and lifted unevenly, so a carry that ignored where the patch is joined could not pass: the leg's top
-        // row moves by Move(y = 1), and every point of the patch above it with it — settled between the rows it touches,
-        // so within a millimetre.
+        // row moves by Move(y = 1), and so must every point of the patch above it.
         var source = Strip(Gen2, side: 1, patchTop: 1.02f);
         var target = Leg(Bibo, side: 1, Move);
 
@@ -62,7 +62,7 @@ public class Gen2LayoutRefitTests
         foreach (int v in source.Skin)
             Assert.True(built!.Field[v].HasValue, $"vertex {v} has no displacement");
         foreach (int v in source.Patch)
-            Assert.True(Vector3.Distance(built!.Field[v]!.Value, top) < 1e-3f,
+            Assert.True(Vector3.Distance(built!.Field[v]!.Value, top) < 1e-5f,
                         $"patch vertex {v} moved {built.Field[v]}, the leg's top {top}");
         Assert.Equal(0, Folded(source, built!));
     }
@@ -93,6 +93,7 @@ public class Gen2LayoutRefitTests
                                                     out string refusal, out var measured, Gen2ToBibo(), null,
                                                     byArea: true));
         Assert.InRange(measured.AreaCoverage, 0.6f, 0.8f);
+        Assert.Equal((0, 0, 0), (measured.Disagreed, measured.Unvouched, measured.Unjudged));   // the guard never ran
         Assert.Contains(string.Format("{0:P0}", measured.AreaCoverage), refusal);
         Assert.Contains("texture layout", refusal);
     }
@@ -184,6 +185,7 @@ public class Gen2LayoutRefitTests
                                                    out var built, out string refusal, out var measured, Gen2ToBibo(),
                                                    onSheet, byArea: true), refusal);
         Assert.Equal(source.OffSheet.Count, measured.OffSheet);
+        Assert.Equal(0, measured.Distrusted);
         Assert.Equal(source.Skin.Count - source.OffSheet.Count, measured.Placeable);
         foreach (int v in source.Patch.Concat(source.OffSheet))
             Assert.True(built!.Field[v].HasValue, $"vertex {v} was not carried");
@@ -236,6 +238,344 @@ public class Gen2LayoutRefitTests
         Assert.Contains("texture layout", refusal);
     }
 
+    // ── the coherence guard ──────────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    [Trait("Plan", "AC-gen2-legs-refit-8")]
+    public void A_landing_far_from_its_neighbours_is_not_trusted()
+    {
+        var source = Strip(Gen2, side: 1, patchTop: 1.02f);
+        int v = LegVertex(2, 5);
+        Lift(source, v, 0.15f);
+        var target = Leg(Bibo, side: 1, Move);
+
+        Assert.True(BodyCorrespondence.TryBuild(source.Model, source.Uv, target.Model, target.Uv, "legs", out var built,
+                                                out string refusal, Remap), refusal);
+        var atlas = Assert.IsType<UvAtlasCorrespondence>(built);
+        Assert.Equal((1, 0), (atlas.Measured.Disagreed, atlas.Measured.Unvouched));
+        var p = At(source.Model, v);
+        Assert.True(Vector3.Distance(atlas.Field[v]!.Value, Move(p) - p) < 0.002f, $"it moved {atlas.Field[v]}");
+        Assert.Contains("whose landing disagreed with the skin around them", atlas.Describe());
+        Assert.Equal(0, Folded(source, atlas));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-gen2-legs-refit-9")]
+    [Trait("Plan", "EDGE-gen2-legs-refit-27")]
+    public void Landings_the_guard_sets_aside_count_against_the_surface()
+    {
+        // A patch tall enough that 82% of the surface lands; three wrong landings, three rows apart, worth more than
+        // the two points above the bar.
+        var source = Strip(Gen2, side: 1, patchTop: 1.22f);
+        int[] wrong = [LegVertex(2, 2), LegVertex(2, 5), LegVertex(2, 8)];
+        foreach (int v in wrong) Lift(source, v, 0.15f);
+        var target = Leg(Bibo, side: 1, Move);
+
+        Assert.False(UvAtlasCorrespondence.TryBuild(source.Model, source.Uv, target.Model, target.Uv, "legs", out _,
+                                                    out string refusal, out var measured, Gen2ToBibo(), null,
+                                                    byArea: true));
+        Assert.InRange(measured.RawAreaCoverage, 0.81f, 0.83f);
+        var weight = AreaWeights(source.Model);
+        float placeable = source.Skin.Sum(v => weight[v]);
+        Assert.True(wrong.Sum(v => weight[v]) / placeable >= measured.RawAreaCoverage - 0.78f);
+        Assert.True(measured.RawAreaCoverage >= 0.8f && measured.AreaCoverage < 0.8f,
+                    $"{measured.RawAreaCoverage:P1} -> {measured.AreaCoverage:P1}");
+        Assert.Equal(3, measured.Disagreed);
+        Assert.Contains(string.Format("{0:P0}", measured.AreaCoverage), refusal);
+        Assert.Contains("texture layout", refusal);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-gen2-legs-refit-14")]
+    public void Wrong_landings_that_vouch_for_each_other_are_not_trusted()
+    {
+        // A uv seam down the leg: its two sides are welded twins. Both twins at mid-height land 0.15 m off, and so does
+        // the point beside them: the twins are one position and never vouch for themselves, so all three are outvoted.
+        var source = SeamStrip(Gen2);
+        int[] wrong = [SeamA(5), SeamB(0, 5), SeamB(1, 5)];
+        foreach (int v in wrong) Lift(source, v, 0.15f);
+        var target = Leg(Bibo, side: 1, Move);
+
+        Assert.True(BodyCorrespondence.TryBuild(source.Model, source.Uv, target.Model, target.Uv, "legs", out var built,
+                                                out string refusal, Remap), refusal);
+        var atlas = Assert.IsType<UvAtlasCorrespondence>(built);
+        Assert.Equal(3, atlas.Measured.Disagreed);
+        foreach (int v in wrong)
+        {
+            var p = At(source.Model, v);
+            Assert.True(Vector3.Distance(atlas.Field[v]!.Value, Move(p) - p) < 0.002f, $"vertex {v} moved {atlas.Field[v]}");
+        }
+        Assert.Equal(0, Folded(source, atlas));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-gen2-legs-refit-15")]
+    public void A_wrong_landing_on_the_midline_is_not_trusted()
+    {
+        // Both sides, built out from the midline and welded there; the -X side's midline is at x = -0, which the
+        // conversion takes for +X — where T&F's crotch midline landed wrong on Bibo+.
+        var source = Join(Strip(Gen2, side: 1, patchTop: 1.02f, x0: 0f), Strip(Gen2, side: -1, patchTop: 1.02f, x0: 0f));
+        int legs = source.Model.Positions.Length / 6;
+        int v = legs + LegVertex(0, 5);
+        Assert.True(source.Model.Positions[v * 3] == 0f && float.IsNegative(source.Model.Positions[v * 3]));
+        Lift(source, v, 0.15f);
+        var target = Join(Leg(Bibo, side: 1, Move, x0: 0f), Leg(Bibo, side: -1, Move, x0: 0f));
+
+        Assert.True(BodyCorrespondence.TryBuild(source.Model, source.Uv, target.Model, target.Uv, "legs", out var built,
+                                                out string refusal, Remap), refusal);
+        var atlas = Assert.IsType<UvAtlasCorrespondence>(built);
+        Assert.True(atlas.Measured.Disagreed >= 1);
+        var p = At(source.Model, v);
+        Assert.True(Vector3.Distance(atlas.Field[v]!.Value, Move(p) - p) < 0.002f, $"it moved {atlas.Field[v]}");
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-gen2-legs-refit-16")]
+    public void A_landing_amid_skin_with_no_place_is_carried()
+    {
+        // One point of the patch, five rows up, lands — on the leg's top row, where its uv says. Nothing around it
+        // landed, so nothing can vouch for it: it follows the patch.
+        var source = Strip(Gen2, side: 1, patchTop: 1.02f);
+        int v = source.Patch[5 * 31 + 15];
+        int top = LegVertex(2, 10);
+        source.Uv[v * 2] = source.Uv[top * 2];
+        source.Uv[v * 2 + 1] = source.Uv[top * 2 + 1];
+        var target = Leg(Bibo, side: 1, Move);
+
+        Assert.True(BodyCorrespondence.TryBuild(source.Model, source.Uv, target.Model, target.Uv, "legs", out var built,
+                                                out string refusal, Remap), refusal);
+        var atlas = Assert.IsType<UvAtlasCorrespondence>(built);
+        Assert.Equal((0, 1), (atlas.Measured.Disagreed, atlas.Measured.Unvouched));
+        Assert.Contains("that landed amid skin with no place", atlas.Describe());
+        Assert.True(Vector3.Distance(atlas.Field[v]!.Value, TopMove) < 1e-5f, $"it moved {atlas.Field[v]}");
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-gen2-legs-refit-17")]
+    public void A_distrusted_landing_never_feeds_the_carry()
+    {
+        // The leg's top row, where the patch is joined, lands 0.15 m low at one point: the patch takes the skin's move
+        // around it, nowhere near the spike.
+        var source = Strip(Gen2, side: 1, patchTop: 1.02f);
+        int v = LegVertex(2, 10);
+        Lift(source, v, -0.15f);
+        var target = Leg(Bibo, side: 1, Move);
+
+        Assert.True(BodyCorrespondence.TryBuild(source.Model, source.Uv, target.Model, target.Uv, "legs", out var built,
+                                                out string refusal, Remap), refusal);
+        var atlas = Assert.IsType<UvAtlasCorrespondence>(built);
+        Assert.True(atlas.Measured.Disagreed >= 1);
+        foreach (int w in source.Patch)
+            Assert.True(Vector3.Distance(atlas.Field[w]!.Value, TopMove) < 0.002f, $"patch vertex {w} moved {atlas.Field[w]}");
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-gen2-legs-refit-18")]
+    public void A_large_smooth_difference_is_trusted()
+    {
+        var source = Strip(Gen2, side: 1, patchTop: 1.02f);
+        var target = Leg(Bibo, side: 1, p => p + new Vector3(0.06f * p.Y, 0.01f, 0.02f * p.Y));
+
+        Assert.True(BodyCorrespondence.TryBuild(source.Model, source.Uv, target.Model, target.Uv, "legs", out var built,
+                                                out string refusal, Remap), refusal);
+        var m = Assert.IsType<UvAtlasCorrespondence>(built).Measured;
+        Assert.Equal((0, 0), (m.Distrusted, m.Unjudged));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-gen2-legs-refit-23")]
+    public void Sparse_skin_is_never_distrusted_for_being_sparse()
+    {
+        // Cells 60 × 125 mm, as T&F's shin: few neighbours, none within 40 mm, every one of them still a voucher.
+        var source = Strip(Gen2, side: 1, patchTop: 1.02f, nx: 3, ny: 8);
+        var target = Leg(Bibo, side: 1, p => new Vector3(0.11f + (p.X - 0.11f) * 1.15f, p.Y * 1.05f + 0.01f, p.Z));
+
+        Assert.True(BodyCorrespondence.TryBuild(source.Model, source.Uv, target.Model, target.Uv, "legs", out var built,
+                                                out string refusal, Remap), refusal);
+        var m = Assert.IsType<UvAtlasCorrespondence>(built).Measured;
+        Assert.Equal((0, 0, 0), (m.Disagreed, m.Unvouched, m.Unjudged));
+        Assert.Equal(m.RawAreaCoverage, m.AreaCoverage);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-gen2-legs-refit-24")]
+    public void Welded_twins_vote_once()
+    {
+        var source = SeamStrip(Gen2);
+        var nodes = UvAtlasCorrespondence.SkinNodes.Build(source.Model, source.Skin);
+        int twins = nodes.NodeOf[SeamA(5)];
+        Assert.Equal(twins, nodes.NodeOf[SeamB(0, 5)]);
+        Assert.Equal(2, nodes.Members[twins].Count);
+        var beside = nodes.Near[nodes.NodeOf[SeamB(1, 5)]];
+        Assert.Equal(1, beside.Count(n => n.Node == twins));
+
+        // Both twins land off: they are set aside, and the point beside them — one wrong voice among its vouchers — is not.
+        Lift(source, SeamA(5), 0.15f);
+        Lift(source, SeamB(0, 5), 0.15f);
+        var target = Leg(Bibo, side: 1, Move);
+        Assert.True(BodyCorrespondence.TryBuild(source.Model, source.Uv, target.Model, target.Uv, "legs", out var built,
+                                                out string refusal, Remap), refusal);
+        var atlas = Assert.IsType<UvAtlasCorrespondence>(built);
+        Assert.Equal(2, atlas.Measured.Disagreed);
+        int b = SeamB(1, 5);
+        var p = At(source.Model, b);
+        Assert.True(Vector3.Distance(atlas.Field[b]!.Value, Move(p) - p) < 1e-5f, $"vertex {b} moved {atlas.Field[b]}");
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-gen2-legs-refit-25")]
+    public void A_lone_landed_island_is_kept()
+    {
+        // A triangle of skin of its own, a millimetre in front of the leg, landing where it should: too small to judge,
+        // and kept.
+        var strip = Strip(Gen2, side: 1, patchTop: 1.02f);
+        Vector3[] corners = [new(0.05f, 0.45f, 0.001f), new(0.08f, 0.45f, 0.001f), new(0.05f, 0.52f, 0.001f)];
+        float U(Vector3 c) => LegUv.U0 + (LegUv.U1 - LegUv.U0) * (c.X - 0.02f) / 0.18f;
+        float V(Vector3 c) => LegUv.V0 + (LegUv.V1 - LegUv.V0) * c.Y;
+        int first = strip.Model.Positions.Length / 3;
+        var source = Join(strip, new Body(Model(corners.SelectMany(c => new[] { c.X, c.Y, c.Z }).ToArray(), [0, 1, 2], Gen2),
+                                          corners.SelectMany(c => new[] { U(c), V(c) }).ToArray(), [0, 1, 2], [], []));
+        var target = Leg(Bibo, side: 1, Move);
+
+        Assert.True(BodyCorrespondence.TryBuild(source.Model, source.Uv, target.Model, target.Uv, "legs", out var built,
+                                                out string refusal, Remap), refusal);
+        var atlas = Assert.IsType<UvAtlasCorrespondence>(built);
+        Assert.Equal((3, 0), (atlas.Measured.Unjudged, atlas.Measured.Distrusted));
+        for (int k = 0; k < 3; k++)
+        {
+            var c = corners[k];
+            var want = Move(c with { Z = 0f }) - c;
+            // Within the target's facets' flattening of the curved move.
+            Assert.True(Vector3.Distance(atlas.Field[first + k]!.Value, want) < 1e-4f, $"corner {k} moved {atlas.Field[first + k]}");
+        }
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-gen2-legs-refit-26")]
+    public void Mirrored_moves_across_the_midline_are_trusted()
+    {
+        var source = Join(Strip(Gen2, side: 1, patchTop: 1.02f, x0: 0f), Strip(Gen2, side: -1, patchTop: 1.02f, x0: 0f));
+        Func<Vector3, Vector3> widen = p => new Vector3(p.X * 1.2f, p.Y + 0.01f, p.Z);
+        var target = Join(Leg(Bibo, side: 1, widen, x0: 0f), Leg(Bibo, side: -1, widen, x0: 0f));
+
+        Assert.True(BodyCorrespondence.TryBuild(source.Model, source.Uv, target.Model, target.Uv, "legs", out var built,
+                                                out string refusal, Remap), refusal);
+        Assert.Equal(0, Assert.IsType<UvAtlasCorrespondence>(built).Measured.Distrusted);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-gen2-legs-refit-19")]
+    [Trait("Plan", "AC-gen2-legs-refit-6")]
+    public void The_guard_leaves_pairs_today_s_rule_accepts_alone()
+    {
+        // No patch: enough lands by count, so the pair is matched as it always was — a wrong landing included. A leg cut
+        // in three columns, not the target's four, so the two are matched by uv rather than vertex for vertex.
+        foreach (var (material, converted) in new[] { (Gen2, false), (Bibo, true) })
+        {
+            var source = Strip(material, side: 1, patchTop: null, converted: converted, nx: 3);
+            int v = LegVertex(1, 5, nx: 3);
+            Lift(source, v, 0.15f);
+            var target = Leg(Bibo, side: 1, Move);
+
+            Assert.True(BodyCorrespondence.TryBuild(source.Model, source.Uv, target.Model, target.Uv, "legs", out var built,
+                                                    out string refusal, Remap), refusal);
+            var atlas = Assert.IsType<UvAtlasCorrespondence>(built);
+            var m = atlas.Measured;
+            Assert.Equal((0, 0, 0, 0), (m.Disagreed, m.Unvouched, m.Unjudged, m.Carried));
+            var p = At(source.Model, v);
+            var spike = Move(p + new Vector3(0f, 0.15f, 0f)) - p;
+            Assert.True(Vector3.Distance(atlas.Field[v]!.Value, spike) < 1e-4f, $"{material}: it moved {atlas.Field[v]}");
+            Assert.DoesNotContain("disagreed", atlas.Describe());
+        }
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-gen2-legs-refit-22")]
+    public void The_guard_does_not_depend_on_vertex_order()
+    {
+        var lifted = Strip(Gen2, side: 1, patchTop: 1.02f);
+        Lift(lifted, LegVertex(2, 5), 0.15f);
+        var seam = SeamStrip(Gen2);
+        foreach (int v in new[] { SeamA(5), SeamB(0, 5), SeamB(1, 5) }) Lift(seam, v, 0.15f);
+        var target = Leg(Bibo, side: 1, Move);
+
+        foreach (var source in new[] { lifted, seam })
+        {
+            var reversed = Reversed(source, out var newIndexOf);
+            Assert.True(BodyCorrespondence.TryBuild(source.Model, source.Uv, target.Model, target.Uv, "legs", out var a,
+                                                    out string ra, Remap), ra);
+            Assert.True(BodyCorrespondence.TryBuild(reversed.Model, reversed.Uv, target.Model, target.Uv, "legs", out var b,
+                                                    out string rb, Remap), rb);
+            var ma = Assert.IsType<UvAtlasCorrespondence>(a).Measured;
+            var mb = Assert.IsType<UvAtlasCorrespondence>(b).Measured;
+            Assert.Equal((ma.Disagreed, ma.Unvouched, ma.Unjudged), (mb.Disagreed, mb.Unvouched, mb.Unjudged));
+            for (int v = 0; v < newIndexOf.Length; v++)
+                Assert.True(Vector3.Distance(a!.Field[v]!.Value, b!.Field[newIndexOf[v]]!.Value) < 1e-6f, $"vertex {v} differs");
+        }
+    }
+
+    /// <summary>What the target does to the leg's top row (y = 1), where the patch is joined.</summary>
+    private static Vector3 TopMove => Move(new Vector3(0.1f, 1f, 0f)) - new Vector3(0.1f, 1f, 0f);
+
+    /// <summary>The leg's vertex at column <paramref name="i"/>, row <paramref name="j"/> (the leg is built first).</summary>
+    private static int LegVertex(int i, int j, int nx = 4) => j * (nx + 1) + i;
+
+    /// <summary>Gives a vertex a uv that lands <paramref name="dy"/> higher up the target's leg than it belongs.</summary>
+    private static void Lift(Body body, int v, float dy) => body.Uv[v * 2 + 1] += dy * (LegUv.V1 - LegUv.V0);
+
+    /// <summary>
+    /// The leg as two grids with a uv seam between them at x = 0.11: the column there is a pair of welded twins, one on
+    /// each side. The patch on top, as <see cref="Strip"/>'s.
+    /// </summary>
+    private static Body SeamStrip(string material)
+    {
+        var b = new Builder(1);
+        b.Grid(0f, 1f, 2, 10, (0.1f, 0.3f, LegUv.V0, LegUv.V1), converted: false, xa: 0.02f, xb: 0.11f);
+        b.Grid(0f, 1f, 2, 10, (0.3f, 0.5f, LegUv.V0, LegUv.V1), converted: false, xa: 0.11f, xb: 0.2f);
+        var patch = b.Grid(1f, 1.02f, 30, 10, PatchUv, converted: false);
+        var model = Model(b.Positions.ToArray(), b.Triangles.ToArray(), material);
+        return new Body(model, b.Uvs.ToArray(), Enumerable.Range(0, b.Positions.Count / 3).ToList(), patch, []);
+    }
+
+    /// <summary>The seam's twin on the first grid's side, row <paramref name="j"/>.</summary>
+    private static int SeamA(int j) => j * 3 + 2;
+
+    /// <summary>The second grid's vertex at column <paramref name="i"/> (0 = the seam), row <paramref name="j"/>.</summary>
+    private static int SeamB(int i, int j) => 33 + j * 3 + i;
+
+    /// <summary>Each skin vertex's third of the area of the triangles it is a corner of.</summary>
+    private static float[] AreaWeights(ModelParts m)
+    {
+        var w = new float[m.Positions.Length / 3];
+        var t = m.Parts[0].Triangles;
+        for (int k = 0; k + 2 < t.Length; k += 3)
+        {
+            float third = Vector3.Cross(At(m, t[k + 1]) - At(m, t[k]), At(m, t[k + 2]) - At(m, t[k])).Length() / 6f;
+            w[t[k]] += third;
+            w[t[k + 1]] += third;
+            w[t[k + 2]] += third;
+        }
+        return w;
+    }
+
+    /// <summary>The same body with its vertices numbered backwards; <paramref name="newIndexOf"/> maps old to new.</summary>
+    private static Body Reversed(Body body, out int[] newIndexOf)
+    {
+        int vc = body.Model.Positions.Length / 3;
+        newIndexOf = Enumerable.Range(0, vc).Select(v => vc - 1 - v).ToArray();
+        var pos = new float[vc * 3];
+        var uv = new float[vc * 2];
+        for (int v = 0; v < vc; v++)
+        {
+            Array.Copy(body.Model.Positions, v * 3, pos, newIndexOf[v] * 3, 3);
+            Array.Copy(body.Uv, v * 2, uv, newIndexOf[v] * 2, 2);
+        }
+        var map = newIndexOf;
+        var tris = body.Model.Parts[0].Triangles.Select(i => map[i]).ToArray();
+        return new Body(Model(pos, tris, body.Model.Parts[0].Material), uv, body.Skin.Select(i => map[i]).ToList(),
+                        body.Patch.Select(i => map[i]).ToList(), body.OffSheet.Select(i => map[i]).ToList());
+    }
+
     // ── fixtures ────────────────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>How the target body differs from the source: sheared by height and lifted.</summary>
@@ -254,10 +594,10 @@ public class Gen2LayoutRefitTests
     /// <param name="patchGap">How far above the leg the patch starts; 0 joins it to the leg's top row by position.</param>
     /// <param name="offSheetTop">Adds an off-sheet island below the leg, down to this height; null for none.</param>
     private static Body Strip(string material, int side, float? patchTop, bool converted = false, float patchGap = 0f,
-                              float? offSheetTop = null, int offSheetCells = 4)
+                              float? offSheetTop = null, int offSheetCells = 4, int nx = 4, int ny = 10, float x0 = 0.02f)
     {
-        var b = new Builder(side);
-        b.Grid(0f, 1f, 4, 10, LegUv, converted);
+        var b = new Builder(side, x0: x0);
+        b.Grid(0f, 1f, nx, ny, LegUv, converted);
         var patch = patchTop is { } t ? b.Grid(1f + patchGap, t, 30, 10, PatchUv, converted) : [];
         var off = offSheetTop is { } o ? b.Grid(o, 0f, offSheetCells, 2, (0.97f, 0.99f, 0f, 0.05f), converted: true,
                                                 rawU: true) : [];
@@ -266,9 +606,9 @@ public class Gen2LayoutRefitTests
     }
 
     /// <summary>The target: the leg alone, moved by <paramref name="move"/>, its uvs on the doubled sheet.</summary>
-    private static Body Leg(string material, int side, Func<Vector3, Vector3> move)
+    private static Body Leg(string material, int side, Func<Vector3, Vector3> move, float x0 = 0.02f)
     {
-        var b = new Builder(side, move);
+        var b = new Builder(side, move, x0);
         b.Grid(0f, 1f, 4, 10, LegUv, converted: true);
         var model = Model(b.Positions.ToArray(), b.Triangles.ToArray(), material);
         return new Body(model, b.Uvs.ToArray(), Enumerable.Range(0, b.Positions.Count / 3).ToList(), [], []);
@@ -285,22 +625,25 @@ public class Gen2LayoutRefitTests
                         a.OffSheet.Concat(b.OffSheet.Select(i => i + offset)).ToList());
     }
 
-    private sealed class Builder(int side, Func<Vector3, Vector3>? move = null)
+    private sealed class Builder(int side, Func<Vector3, Vector3>? move = null, float x0 = 0.02f)
     {
         public readonly List<float> Positions = [];
         public readonly List<float> Uvs = [];
         public readonly List<int> Triangles = [];
 
-        /// <summary>A grid of quads across x 0.02..0.2 (mirrored for -X) and the given heights; its vertex indices.</summary>
+        /// <summary>A grid of quads across x0..0.2 (mirrored for -X) and the given heights; its vertex indices.</summary>
+        /// <param name="xa">Where this grid starts across, instead of the builder's x0.</param>
+        /// <param name="xb">Where it ends, instead of 0.2.</param>
         public List<int> Grid(float y0, float y1, int nx, int ny, (float U0, float U1, float V0, float V1) uv,
-                              bool converted, bool rawU = false)
+                              bool converted, bool rawU = false, float? xa = null, float? xb = null)
         {
             int first = Positions.Count / 3;
             var made = new List<int>();
+            float from = xa ?? x0, to = xb ?? 0.2f;
             for (int j = 0; j <= ny; j++)
             for (int i = 0; i <= nx; i++)
             {
-                var p = new Vector3(side * (0.02f + 0.18f * i / nx), y0 + (y1 - y0) * j / ny, 0f);
+                var p = new Vector3(side * (from + (to - from) * i / nx), y0 + (y1 - y0) * j / ny, 0f);
                 if (move != null) p = move(p);
                 Positions.AddRange([p.X, p.Y, p.Z]);
                 float u = uv.U0 + (uv.U1 - uv.U0) * i / nx, v = uv.V0 + (uv.V1 - uv.V0) * j / ny;
