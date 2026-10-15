@@ -1870,11 +1870,13 @@ public class DesignBindingService : IDisposable
             if (slots.Count == 0) return;
 
             var done = new List<string>(slots.Count);
+            int claim = compositor.ExpectIndirectRedraw("design restore: unequip " + string.Join(", ", slots));
             foreach (var slot in slots)
             {
                 var ok = slot == GlassesSlot ? glamourer.SetGlasses(0) : glamourer.UnequipSlot(slot);
                 if (ok) done.Add(slot);
             }
+            if (done.Count == 0) compositor.WithdrawIndirectRedraw(claim);
             log.Information("[Proteus] design-binding: unequipped slot(s) the design leaves unset: {0}{1}",
                 string.Join(", ", done),
                 done.Count < slots.Count ? $" (failed: {string.Join(", ", slots.Except(done))})" : "");

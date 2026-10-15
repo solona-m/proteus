@@ -459,7 +459,7 @@ public sealed class HatCompatWatcher : IDisposable
             var ec = penumbra.ReloadModDirectory(modDir);
             log.Information("hat compat: asked Penumbra to reload {0} — {1}", modDir, ec);
         }
-        compositor.RedrawForChangedModel();
+        compositor.RedrawForChangedModel("hat compat");
     }
 
     /// <summary>
@@ -519,7 +519,7 @@ public sealed class HatCompatWatcher : IDisposable
         }
 
         log.Information("hat compat: restored {0} file(s) in {1}", restored, target.ModRoot);
-        compositor.RedrawForChangedModel();
+        compositor.RedrawForChangedModel("hat compat");
         return true;
     }
 
@@ -539,7 +539,7 @@ public sealed class HatCompatWatcher : IDisposable
 
         log.Information("hat compat: restored every patched file ({0}) in {1}",
                         outcome.FilesPatched, target.ModRoot);
-        compositor.RedrawForChangedModel();
+        compositor.RedrawForChangedModel("hat compat");
         return true;
     }
 
@@ -575,7 +575,7 @@ public sealed class HatCompatWatcher : IDisposable
                 // Penumbra re-reads each mod before the redraw: the game caches a loaded model per resolved path.
                 foreach (var mod in mods)
                     penumbra.ReloadModDirectory(System.IO.Path.GetFileName(mod));
-                compositor.RedrawForChangedModel();
+                compositor.RedrawForChangedModel("hat compat");
 
                 // What is worn may be one of them; look again, without fitting anything.
                 lastKey = null;

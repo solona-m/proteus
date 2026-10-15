@@ -475,6 +475,76 @@ internal static class AutoRefitDecisions
             : Reread.Retarget;
     }
 
+    /// <summary>
+    /// For the log, when a queued piece is <see cref="Reread.Abandon"/>ed: what draws it now, and the settings of the mod
+    /// it was queued from and of the one that won it. Tells a mod that took the slot by priority from a group switch in
+    /// the garment's own mod that left the piece out.
+    /// </summary>
+    /// <param name="garmentBefore">The garment mod's settings when the piece was queued, if read: what changed since is
+    /// named.</param>
+    internal static string AbandonDetail(Worn now, string? garmentDir,
+                                         Interop.PenumbraBridge.ModSettingsSnapshot? garment,
+                                         Interop.PenumbraBridge.ModSettingsSnapshot? winner,
+                                         Interop.PenumbraBridge.ModSettingsSnapshot? garmentBefore = null)
+    {
+        var sb = new System.Text.StringBuilder("now drawn from ");
+        sb.Append(now.ModDir == null ? "the game" : $"{now.ModDir} ({now.Rel})");
+        if (garmentDir != null)
+        {
+            sb.Append("; ").Append(garmentDir).Append(": ").Append(Describe(garment));
+            if (garmentBefore is { } before && garment is { } after)
+                sb.Append("; since it was queued: ").Append(SettingsChange(before, after));
+        }
+        if (now.ModDir != null && !string.Equals(now.ModDir, garmentDir, StringComparison.OrdinalIgnoreCase))
+            sb.Append("; ").Append(now.ModDir).Append(": ").Append(Describe(winner));
+        return sb.ToString();
+
+        static string Describe(Interop.PenumbraBridge.ModSettingsSnapshot? s)
+        {
+            if (s is not { } m) return "not set in this collection";
+            var parts = new List<string> { m.Enabled ? "on" : "off", $"priority {m.Priority}" };
+            if (m.Temporary) parts.Add("temporary");
+            parts.AddRange(m.Options.OrderBy(o => o.Key, StringComparer.Ordinal)
+                                    .Select(o => $"{o.Key} = {string.Join(" + ", o.Value)}"));
+            return string.Join(", ", parts);
+        }
+    }
+
+    /// <summary>What changed between two readings of one mod's settings, group by group; "unchanged" when nothing did.</summary>
+    internal static string SettingsChange(Interop.PenumbraBridge.ModSettingsSnapshot before,
+                                          Interop.PenumbraBridge.ModSettingsSnapshot after)
+    {
+        var parts = new List<string>();
+        if (before.Enabled != after.Enabled) parts.Add(after.Enabled ? "switched on" : "switched off");
+        if (before.Priority != after.Priority) parts.Add($"priority {before.Priority} → {after.Priority}");
+        static string Ticked(Dictionary<string, List<string>> o, string g)
+            => o.TryGetValue(g, out var t) && t.Count > 0 ? string.Join(" + ", t) : "(none)";
+        foreach (string group in before.Options.Keys.Union(after.Options.Keys).OrderBy(g => g, StringComparer.Ordinal))
+        {
+            string was = Ticked(before.Options, group), now = Ticked(after.Options, group);
+            if (was != now) parts.Add($"{group} {was} → {now}");
+        }
+        return parts.Count == 0 ? "unchanged" : string.Join(", ", parts);
+    }
+
+    // ── the redraw hold a batch takes (see RedrawHold) ──────────────────────
+
+    /// <summary>The hold key of runner <paramref name="id"/>: one per runner, so an old runner can only let go its own.</summary>
+    internal static string RunnerKey(int id) => $"auto-refit#{id}";
+
+    /// <summary>
+    /// The grace a runner's last word lets its key go with: none when it already let go at drain (with its grace),
+    /// at once when it ended any other way — faulted, cancelled or disposed.
+    /// </summary>
+    internal static int? RunnerExitRelease(bool releasedAtDrain) => releasedAtDrain ? null : 0;
+
+    /// <summary>
+    /// Until when the walk leaves a piece this batch switched on alone: the redraw it waited for comes only when the
+    /// batch lets go, so the quiet runs from then — never ends at it, which the walk after that redraw would miss.
+    /// </summary>
+    internal static long QuietUntil(long quietFromSwitch, long releaseAt, int quietMs)
+        => Math.Max(quietFromSwitch, releaseAt + quietMs);
+
     /// <summary>Why a newly worn piece is not refitted; <see cref="Skip.None"/> when it is.</summary>
     internal enum Skip
     {

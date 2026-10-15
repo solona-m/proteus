@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
+using Proteus.Interop;
 using Proteus.Services;
 using Xunit;
 using Confidence = Proteus.Services.BodySizeMatch.Confidence;
@@ -487,5 +488,116 @@ public class AutoRefitDecisionsTests
         Assert.False(older.AutoRefitEnabled);
         Assert.False(older.AutoRefitVanilla);
         Assert.Empty(older.AutoRefitByCollection);
+    }
+
+    // ── the redraw hold a batch takes ────────────────────────────────────────
+
+    [Fact]
+    [Trait("Plan", "AC-fewer-redraws-1")]
+    [Trait("Plan", "EDGE-fewer-redraws-3")]
+    [Trait("Plan", "EDGE-fewer-redraws-4")]
+    [Trait("Plan", "EDGE-fewer-redraws-5")]
+    public void Each_runner_holds_under_its_own_key_and_lets_it_go_once()
+    {
+        Assert.NotEqual(AutoRefitDecisions.RunnerKey(1), AutoRefitDecisions.RunnerKey(2));
+        Assert.Null(AutoRefitDecisions.RunnerExitRelease(releasedAtDrain: true));   // the drain let go, with its grace
+        Assert.Equal(0, AutoRefitDecisions.RunnerExitRelease(releasedAtDrain: false));   // faulted, cancelled: at once
+
+        // An old runner's last word can only touch its own key.
+        var hold = new RedrawHold(() => 0);
+        hold.Hold(AutoRefitDecisions.RunnerKey(2), 30_000, 120_000);
+        Assert.False(hold.Release(AutoRefitDecisions.RunnerKey(1), 0));
+        Assert.True(hold.IsHeld);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-fewer-redraws-24")]
+    public void A_piece_switched_on_stays_quiet_past_the_redraw_the_batch_ends_with()
+    {
+        const int quiet = 5000;
+        long switched = 22_658, quietFromSwitch = switched + quiet, release = 46_000;
+
+        long until = AutoRefitDecisions.QuietUntil(quietFromSwitch, release, quiet);
+        Assert.Equal(release + quiet, until);
+        // The walk after the release's redraw comes at least a debounce later, and must still find it quiet; that
+        // includes an author's own size switched on, which is not under the refit subfolder.
+        Assert.True(until > release + 250);
+        // Never shortened.
+        Assert.Equal(90_000, AutoRefitDecisions.QuietUntil(90_000, release, quiet));
+    }
+
+    // ── why a queued piece was left ──────────────────────────────────────────
+
+    [Fact]
+    [Trait("Plan", "AC-fewer-redraws-6")]
+    public void A_piece_left_to_the_next_look_says_what_draws_it_now_and_both_mods_settings()
+    {
+        var now = new Worn("chara/equipment/e0254/model/c0201e0254_dwn.mdl", "VSS", "dwn/vss.mdl");
+        var garment = new PenumbraBridge.ModSettingsSnapshot(true, 998, new Dictionary<string, List<string>>
+        {
+            ["Skirt Size"] = ["Gen A Small"],
+            ["Hoodie Size"] = ["Neolithe XS", "Extra"],
+        }, Inherited: false, Temporary: true);
+        var winner = new PenumbraBridge.ModSettingsSnapshot(true, 716, [], Inherited: false, Temporary: false);
+
+        Assert.Equal("now drawn from VSS (dwn/vss.mdl); Cherry Pop: on, priority 998, temporary, "
+                   + "Hoodie Size = Neolithe XS + Extra, Skirt Size = Gen A Small; VSS: on, priority 716",
+            AutoRefitDecisions.AbandonDetail(now, "Cherry Pop", garment, winner));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-fewer-redraws-6")]
+    public void A_piece_now_drawn_from_the_game_says_so()
+    {
+        var now = new Worn("chara/equipment/e0254/model/c0201e0254_dwn.mdl", null, null);
+
+        Assert.Equal("now drawn from the game; Cherry Pop: off, priority 0",
+            AutoRefitDecisions.AbandonDetail(now, "Cherry Pop",
+                new PenumbraBridge.ModSettingsSnapshot(false, 0, [], false, false), winner: null));
+        Assert.Equal("now drawn from the game; Cherry Pop: not set in this collection",
+            AutoRefitDecisions.AbandonDetail(now, "Cherry Pop", garment: null, winner: null));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-fewer-redraws-6")]
+    public void A_piece_left_says_what_changed_in_its_mod_since_it_was_queued()
+    {
+        var now = new Worn("chara/equipment/e0254/model/c0201e0254_dwn.mdl", "VSS", "dwn/vss.mdl");
+        var before = new PenumbraBridge.ModSettingsSnapshot(true, 998, new Dictionary<string, List<string>>
+        {
+            ["Hoodie Size"] = ["Small"],
+            ["Skirt Size"] = ["Gen A Small"],
+        }, false, false);
+        var after = new PenumbraBridge.ModSettingsSnapshot(true, 998, new Dictionary<string, List<string>>
+        {
+            ["Hoodie Size"] = ["Neolithe XS"],
+            ["Skirt Size"] = [],
+        }, false, false);
+
+        Assert.Equal("now drawn from VSS (dwn/vss.mdl); Cherry Pop: on, priority 998, Hoodie Size = Neolithe XS, "
+                   + "Skirt Size = ; since it was queued: Hoodie Size Small → Neolithe XS, Skirt Size Gen A Small → (none); "
+                   + "VSS: not set in this collection",
+            AutoRefitDecisions.AbandonDetail(now, "Cherry Pop", after, winner: null, garmentBefore: before));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-fewer-redraws-6")]
+    public void Settings_that_did_not_change_read_unchanged()
+    {
+        var s = new PenumbraBridge.ModSettingsSnapshot(true, 3, new Dictionary<string, List<string>> { ["A"] = ["x"] }, false, false);
+        Assert.Equal("unchanged", AutoRefitDecisions.SettingsChange(s, s));
+        Assert.Equal("switched off, priority 3 → 4",
+            AutoRefitDecisions.SettingsChange(s, s with { Enabled = false, Priority = 4 }));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-fewer-redraws-6")]
+    public void A_game_piece_now_drawn_from_a_mod_names_only_the_mod()
+    {
+        var now = new Worn("chara/equipment/e0254/model/c0201e0254_dwn.mdl", "VSS", "dwn/vss.mdl");
+
+        Assert.Equal("now drawn from VSS (dwn/vss.mdl); VSS: on, priority 5",
+            AutoRefitDecisions.AbandonDetail(now, garmentDir: null, garment: null,
+                new PenumbraBridge.ModSettingsSnapshot(true, 5, [], false, false)));
     }
 }

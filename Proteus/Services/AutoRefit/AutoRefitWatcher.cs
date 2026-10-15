@@ -46,6 +46,13 @@ public sealed partial class AutoRefitWatcher : IDisposable
     /// <summary>How long a piece this watcher just switched on is left alone, whatever a walk makes of it.</summary>
     private const int OwnChangeQuietMs = 5000;
 
+    // The redraw hold a batch takes (see RedrawHold): renewed at every job, let go when the queue drains.
+    private const int HoldLeaseMs = 30_000;
+    private const int HoldCapMs = 120_000;
+    private const int ReleaseGraceMs = 1500;
+    // How long a draining batch waits for the evaluations its own option switches started.
+    private const int DrainWaitMs = 3000;
+
     /// <summary>Mods arrive and go in bursts (an import, a folder move): the index is re-read once they stop.</summary>
     private const int IndexDebounceMs = 2000;
 
@@ -112,6 +119,11 @@ public sealed partial class AutoRefitWatcher : IDisposable
 
     private readonly object queueGate = new();
     private readonly Dictionary<string, Request> queue = new(StringComparer.Ordinal);
+
+    // This batch's switch-ons, under queueGate: the mods it switched (whose evaluations a drain waits for) and the
+    // pieces whose quiet runs on past the release (see AutoRefitDecisions.QuietUntil).
+    private readonly HashSet<string> batchSwitchedDirs = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> batchOurs = new(StringComparer.OrdinalIgnoreCase);
     private Task? runner;
     private CancellationTokenSource? running;
     private string? runningSlot;
@@ -138,9 +150,12 @@ public sealed partial class AutoRefitWatcher : IDisposable
     /// before anything is gathered, so jewellery read before costs no hop to the framework thread.</param>
     /// <param name="Walked">The piece as the walk saw it, when its job found another file of the mod drawn by the time
     /// it started and works on that instead: an accessory beside it looks its outcome up by what the walk saw.</param>
+    /// <param name="ModSettings">The settings of the mod drawing it, as the walk saw them — for the log, should the piece
+    /// be drawn from elsewhere by the time its job starts.</param>
     private sealed record Request(string Slot, Worn Worn, string? Resolved, string? ModRoot, Guid Collection,
                                  bool Forced = false, IReadOnlyDictionary<string, Beside>? Beside = null,
-                                 Chosen? Chosen = null, Worn? Walked = null);
+                                 Chosen? Chosen = null, Worn? Walked = null,
+                                 PenumbraBridge.ModSettingsSnapshot? ModSettings = null);
 
     /// <summary>A chest or legs piece worn beside an accessory at the walk: what it is, the file drawn and its mod.</summary>
     private sealed record Beside(Worn Worn, string? Resolved, string? ModRoot);
@@ -204,7 +219,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
         this.readGameFile = readGameFile;
         this.config = config;
         this.log = log;
-        refitMods = new RefitModService(penumbra, compositor, log);
+        refitMods = new RefitModService(penumbra, compositor, log, ownedByAutoRefit: true);
 
         glamourer.LocalPlayerEquipmentChanged += OnEquipmentChanged;
         glamourer.LocalPlayerStateChanged += OnEquipmentChanged;
@@ -452,7 +467,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
                     foreach (var (piece, _) in authorGroups) pref.Declined.Add(piece.Key);
 
                     config.Save();
-                    compositor.RedrawForChangedModel();
+                    compositor.RedrawForChangedModel("auto refit undone");
                     return count;
                 });
 
@@ -625,8 +640,14 @@ public sealed partial class AutoRefitWatcher : IDisposable
                                           .ToDictionary(s => s, s => new Beside(now[s], resolvedOf[s].Resolved,
                                                                                 resolvedOf[s].Root))
                 : null;
+            // Read only for a body piece drawn from a mod: one call per piece, on the framework thread.
+            var modSettings = !accessory && worn.ModDir != null
+                              && penumbra.GetModSettings(collection.Id, worn.ModDir) is { } ms
+                ? new PenumbraBridge.ModSettingsSnapshot(ms.Enabled, ms.Priority, ms.Options, Inherited: false, Temporary: false)
+                : (PenumbraBridge.ModSettingsSnapshot?)null;
             Enqueue(new Request(slot, worn, resolved, root, collection.Id, all, beside,
-                                accessory ? new Chosen(pref.BodyDir, pref.Chest?.Rel, pref.Legs?.Rel) : null));
+                                accessory ? new Chosen(pref.BodyDir, pref.Chest?.Rel, pref.Legs?.Rel) : null,
+                                ModSettings: modSettings));
         }
     }
 
@@ -675,6 +696,9 @@ public sealed partial class AutoRefitWatcher : IDisposable
                 int id = ++runnerId;
                 runner = Task.Run(() => RunQueue(id));
             }
+            // Held from the first request, before its runner starts: nothing the batch causes may redraw in between.
+            // Lock order: queueGate, then the hold's.
+            compositor.HoldRedraws(AutoRefitDecisions.RunnerKey(runnerId), HoldLeaseMs, HoldCapMs);
         }
     }
 
@@ -691,6 +715,8 @@ public sealed partial class AutoRefitWatcher : IDisposable
         {
             queue.Clear();
             running?.Cancel();
+            // What the batch switched so far is drawn now, not when its runner gets round to draining.
+            if (runner != null) compositor.ReleaseRedraws(AutoRefitDecisions.RunnerKey(runnerId), 0);
         }
         outcomes.Clear();
     }
@@ -732,30 +758,51 @@ public sealed partial class AutoRefitWatcher : IDisposable
 
     private async Task RunQueue(int id)
     {
+        string holdKey = AutoRefitDecisions.RunnerKey(id);
+        bool releasedAtDrain = false;
+        bool drained = false;   // waited for this round's own evaluations already
         try
         {
             while (!disposed)
             {
                 Request? request = null;
                 CancellationTokenSource? cts = null;
+                bool letGo = false;
                 lock (queueGate)
                 {
                     string? next = AutoRefitDecisions.WornSlots.FirstOrDefault(queue.ContainsKey);
-                    if (next == null)
+                    if (next == null && drained)
                     {
                         // Cleared under the same lock Enqueue starts a runner under: a request arriving after this
                         // starts a new runner, and one arriving before it was taken by the loop.
                         runner = null;
                         outcomes.Clear();
                         FlushSummary();
+                        // The batch is done: its redraws and composites go as one, after the grace.
+                        compositor.ReleaseRedraws(holdKey, ReleaseGraceMs);
+                        releasedAtDrain = true;
+                        batchSwitchedDirs.Clear();
+                        batchOurs.Clear();
                     }
+                    else if (next == null)
+                        letGo = true;
                     else
                     {
                         request = queue[next];
                         queue.Remove(next);
                         cts = running = new CancellationTokenSource();
                         runningSlot = next;
+                        drained = false;
+                        compositor.HoldRedraws(holdKey, HoldLeaseMs, HoldCapMs);
                     }
+                }
+                if (letGo)
+                {
+                    // Out of the lock: wait for the evaluations this batch's own switches started, so the composite they
+                    // set off is let go with the rest rather than after it, then look at the queue once more.
+                    await DrainOwnEvaluations();
+                    drained = true;
+                    continue;
                 }
                 if (request == null || cts == null)
                 {
@@ -811,8 +858,31 @@ public sealed partial class AutoRefitWatcher : IDisposable
             lock (queueGate)
                 if (runnerId == id)
                     runner = null;
+            // Its own key only, and at once unless the drain already let it go.
+            if (AutoRefitDecisions.RunnerExitRelease(releasedAtDrain) is { } grace)
+                compositor.ReleaseRedraws(holdKey, grace);
             BodySizeMatch.ForgetCandidatesBeyond(CachedBodiesKept);
         }
+    }
+
+    /// <summary>
+    /// At the end of a batch: wait (at most <see cref="DrainWaitMs"/>) for the body-mod evaluations and re-checks its
+    /// own option switches set off, and run the walk's quiet on from the release the refits' redraw now waits for.
+    /// </summary>
+    private async Task DrainOwnEvaluations()
+    {
+        string[] dirs;
+        lock (queueGate) dirs = [.. batchSwitchedDirs];
+        var clock = Stopwatch.StartNew();
+        while (!RedrawHold.ReleaseAfterWait(compositor.BodyEvaluationPending(dirs), clock.ElapsedMilliseconds, DrainWaitMs))
+            await Task.Delay(50);
+
+        long releaseAt = Environment.TickCount64 + ReleaseGraceMs;
+        string[] pieces;
+        lock (queueGate) pieces = [.. batchOurs];
+        foreach (string piece in pieces)
+            if (ours.TryGetValue(piece, out long until))
+                ours[piece] = AutoRefitDecisions.QuietUntil(until, releaseAt, OwnChangeQuietMs);
     }
 
     // ── one refit ───────────────────────────────────────────────────────────
@@ -922,8 +992,11 @@ public sealed partial class AutoRefitWatcher : IDisposable
                                     r.Worn.GamePath, now.Worn.Rel ?? "");
                     return;
                 case AutoRefitDecisions.Reread.Abandon:
-                    log.Information("[Proteus] auto refit: {0} {1} is no longer drawn from {2}, left to the next look",
-                                    r.Slot, r.Worn.GamePath, r.Worn.ModDir ?? "the game");
+                    log.Information("[Proteus] auto refit: {0} {1} is no longer drawn from {2}, left to the next look — {3}",
+                                    r.Slot, r.Worn.GamePath, r.Worn.ModDir ?? "the game",
+                                    AutoRefitDecisions.AbandonDetail(now.Worn, r.Worn.ModDir,
+                                        SettingsOf(g.Settings, r.Worn.ModDir), SettingsOf(g.Settings, now.Worn.ModDir),
+                                        r.ModSettings));
                     return;
                 case AutoRefitDecisions.Reread.Retarget:
                     log.Information("[Proteus] auto refit: {0} {1}: its file changed since it was put on ({2} → {3}); "
@@ -1522,6 +1595,10 @@ public sealed partial class AutoRefitWatcher : IDisposable
          : g.Mods.TryGetValue(Path.GetFileName(root), out string? modName) && modName.Length > 0 ? modName
          : Path.GetFileName(root);
 
+    private static PenumbraBridge.ModSettingsSnapshot? SettingsOf(
+        IReadOnlyDictionary<string, PenumbraBridge.ModSettingsSnapshot>? settings, string? modDir)
+        => modDir != null && settings != null && settings.TryGetValue(modDir, out var s) ? s : null;
+
     /// <summary>Collect what only the framework thread may read. Null when there is nothing to do after all.</summary>
     private Gathered? Gather(Request r)
     {
@@ -1883,9 +1960,12 @@ public sealed partial class AutoRefitWatcher : IDisposable
     {
         string dir = Path.GetFileName(root);
         bool multi = RefitCore.IsMulti(root, group);
+        // The batch's own writes: what they set off waits for the batch's end (see CompositorService.ExpectOwnRefitWrite).
+        lock (queueGate) batchSwitchedDirs.Add(dir);
         await OnFramework(() =>
         {
             compositor.ExpectOwnModEdit(dir);
+            compositor.ExpectOwnRefitWrite(dir);
             return penumbra.ReloadModDirectory(dir);
         });
 
@@ -1899,6 +1979,8 @@ public sealed partial class AutoRefitWatcher : IDisposable
 
         var answer = await OnFramework(() =>
         {
+            // Marked again in this framework step: the registration wait above may have outlived the first mark.
+            compositor.ExpectOwnRefitWrite(dir);
             var settings = penumbra.GetModSettings(r.Collection, dir);
             if (madeForGame && settings is not { Enabled: true })
                 penumbra.SetModEnabled(r.Collection, dir, true);
@@ -1952,8 +2034,11 @@ public sealed partial class AutoRefitWatcher : IDisposable
 
             // The walk after this redraw sees the refit worn and must leave it be.
             long quiet = Environment.TickCount64 + OwnChangeQuietMs;
-            ours[r.Slot + "|" + r.Worn.GamePath] = quiet;
-            compositor.RedrawForChangedModel();
+            string piece = r.Slot + "|" + r.Worn.GamePath;
+            ours[piece] = quiet;
+            lock (queueGate) batchOurs.Add(piece);
+            // Held for the one redraw at the batch's end while the batch runs.
+            compositor.RedrawForChangedModel($"auto refit: {r.Slot} switched on", deferWhileHeld: true);
             return (string?)null;
         });
         return answer;

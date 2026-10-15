@@ -21,7 +21,11 @@ namespace Proteus.Services;
 /// It also makes the mod the game's gear is EDITED in — switches, the brush, a moved part — named after the item and
 /// <see cref="EditQualifier"/> instead of a body, and seeded with the drawn model by <see cref="AddGameModel"/>.
 /// </summary>
-internal sealed class RefitModService(PenumbraBridge penumbra, CompositorService compositor, IPluginLog log)
+/// <param name="ownedByAutoRefit">The automatic refit's instance: its registrations are the batch's own writes, held
+/// with the batch's other composites until it ends (see <see cref="CompositorService.ExpectOwnRefitWrite"/>). The
+/// Studio's instance leaves this off and composites as before.</param>
+internal sealed class RefitModService(PenumbraBridge penumbra, CompositorService compositor, IPluginLog log,
+                                      bool ownedByAutoRefit = false)
 {
     /// <param name="Root">The mod folder, for <see cref="BodyRetargetWriter"/>.</param>
     /// <param name="Dir">Its name under Penumbra's mods root, for the IPC calls that take one.</param>
@@ -169,6 +173,7 @@ internal sealed class RefitModService(PenumbraBridge penumbra, CompositorService
                 "Failed to write the mod: {0}"), ex.Message));
         }
 
+        if (ownedByAutoRefit) compositor.ExpectOwnRefitWrite(dirName);
         var ec = penumbra.AddModDirectory(dirName);
         if (ec != PenumbraApiEc.Success)
         {
@@ -227,6 +232,7 @@ internal sealed class RefitModService(PenumbraBridge penumbra, CompositorService
         }
 
         // Ask, then read back: a discarded write still reports Success.
+        if (ownedByAutoRefit) compositor.ExpectOwnRefitWrite(p.DirName);
         penumbra.SetModEnabled(collId.Value, p.DirName, true);
         if (penumbra.GetModSettings(collId.Value, p.DirName) is { Enabled: true }) return Done(p, enabled: true);
 
@@ -240,7 +246,7 @@ internal sealed class RefitModService(PenumbraBridge penumbra, CompositorService
     private string Done(Pending p, bool enabled)
     {
         pending = null;
-        if (enabled) compositor.TriggerRecomposite("refit-mod-created");
+        if (enabled) compositor.TriggerRecomposite("refit-mod-created", deferWhileHeld: ownedByAutoRefit);
         log.Information("[Proteus] refit mod {0} enabled={1}", p.DirName, enabled);
         return enabled
             ? string.Format(Loc.Localize("Refit.Mod.Enabled.Fmt", "Made \"{0}\" and switched it on."), p.ModName)

@@ -355,7 +355,7 @@ internal sealed class LiveBrushPreview(PenumbraBridge penumbra, CompositorServic
                 released = files.TakeAll();
             }
         }
-        if (gone.Count > 0 && redraw) compositor.RedrawForChangedModel();
+        if (gone.Count > 0 && redraw) compositor.RedrawForChangedModel("live brush");
         foreach (var f in released) TryDelete(f);
     }
 

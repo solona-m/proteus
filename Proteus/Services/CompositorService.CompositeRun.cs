@@ -229,7 +229,7 @@ public partial class CompositorService
 
                 // userRequested, as in SetEnabled(false): the output is already withdrawn, so a suppressed redraw strands the
                 // character. Only reachable with auto redraw off from a forced composite.
-                compositor.ReloadAndRedraw(userRequested: true);
+                compositor.ReloadAndRedraw("composite: no enabled mods", userRequested: true);
                 timeline.Mark("publish+reload");
                 compositor.LogRefreshTimeline(timeline, "no enabled mods");
                 compositor.LastResult = new CompositorResult { Success = true, TexturesPatched = 0, OverlayModsUsed = 0, Epoch = epoch };
@@ -1154,7 +1154,8 @@ public partial class CompositorService
 
             // Publish only: nothing is deleted in this composite; superseded output is collected at the top of the next one
             // (see PruneSupersededOutput).
-            manifestConfirmedLive = compositor.ReloadAndRedrawWhenReady(redirects, compositor.RecordPublish(redirects));
+            manifestConfirmedLive = compositor.ReloadAndRedrawWhenReady(redirects, compositor.RecordPublish(redirects),
+                $"composite ({(timeline.Reasons.Length == 0 ? "?" : timeline.Reasons)})");
             timeline.Mark("publish+reload");
 
             // Published: the manifest is now exactly these inputs' output, so set the fingerprint and settle the forced-work

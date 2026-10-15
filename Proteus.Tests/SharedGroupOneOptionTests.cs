@@ -121,6 +121,7 @@ public class SharedGroupOneOptionTests : IDisposable
 
     [Fact]
     [Trait("Plan", "AC-shared-group-one-option-1")]
+    [Trait("Plan", "EDGE-fewer-redraws-28")]   // switch order under the redraw hold: unchanged, still one option
     public void Top_then_legs_cut_from_one_author_option_share_one_merged_option()
     {
         string root = Gemma();
