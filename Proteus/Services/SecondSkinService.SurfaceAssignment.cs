@@ -75,44 +75,39 @@ public sealed partial class SecondSkinService
 
             // ── which surface each layer paints ───────────────────────────────────────────────────
             // From the overlay's declared material. A synthesized MASK shell and an overlay naming no material fall back to the body.
+            // Of several ids of the first-named kind, the one the character draws: a pack ships one face overlay for every face
+            // id, and only the worn face can be cut. None drawn keeps the first, so the skip names it. Kept to that kind so a
+            // face overlay that also names the body never lands its face-UV art on the body.
             private ShellSurfaceKey SurfaceKeyOf(ResolvedOverlay ov)
             {
                 if (ov.Descriptor.IsMaskShell) return build.bodySurface.Key;
                 var keys = ShellSurface.KeysFor(ov.Descriptor.MaterialGamePaths);
                 if (keys.Count == 0) return build.bodySurface.Key;
-                if (keys.Count > 1)
-                    // One overlay painting two surfaces would need one layer per surface, which is not built: take the first and say so.
+                if (keys.Count == 1) return keys[0];
+                var kind = keys[0].Kind;
+                var pick = ShellSurface.Drawn(keys.Where(k => k.Kind == kind).ToList(), build.humanPartModels)
+                                       .FirstOrDefault(keys[0]);
+                var lost = ShellSurface.Drawn(keys, build.humanPartModels).Where(k => !k.Equals(pick)).ToList();
+                if (lost.Count > 0)
+                    // One overlay painting two drawn surfaces would need one layer per surface, which is not built: take one and say so.
                     build.service.log.Warning("[Proteus] second skin: overlay \"{0}/{1}\" names {2} surfaces [{3}] — only {4} is "
-                              + "cut; split it into one overlay per surface to get the rest",
-                        ov.OptionGroup ?? "", ov.Option ?? "", keys.Count, string.Join(", ", keys), keys[0]);
-                return keys[0];
+                              + "cut, not the drawn [{5}]; split it into one overlay per surface to get the rest",
+                        ov.OptionGroup ?? "", ov.Option ?? "", keys.Count, string.Join(", ", keys), pick, string.Join(", ", lost));
+                return pick;
             }
-
-            // The .mdl folder a human part's models live under, or null for a kind that names none (Body is cut from
-            // equipment, Native is a pack's own geometry). Null rather than a throw: the kind comes from a hand-editable sidecar.
-            private static string? PartFolder(ShellSurfaceKind kind) => kind switch
-            {
-                ShellSurfaceKind.Face => "face",
-                // The eyes are cut from a face model; only the surface is separate (see ShellSurfaceKind.Iris).
-                ShellSurfaceKind.Iris => "face",
-                ShellSurfaceKind.Hair => "hair",
-                ShellSurfaceKind.Tail => "tail",
-                ShellSurfaceKind.Ear  => "zear",
-                _                     => null,
-            };
 
             // Resolve one human-part surface: the model the character is drawing, cut down to meshes bound to the named material.
             // No fallbacks: a human part loads from its literal path, so if the live walk did not report it, it is not worn.
             private ResolvedSurface? ResolveHumanSurface(ShellSurfaceKey key, IReadOnlySet<string> targetLeaves)
             {
-                if (PartFolder(key.Kind) is not { } part)
+                // Null rather than a throw: the kind comes from a hand-editable sidecar.
+                if (ShellSurface.ModelFolder(key) is not { } folder)
                 {
                     build.service.log.Warning("[Proteus] second skin: {0} overlay(s) skipped — {1} names no human part to cut "
                               + "from. Check the Surface in this mod's sidecar", key, key.Kind);
                     return null;
                 }
 
-                var folder = $"/obj/{part}/{key.Id}/";
                 var candidates = (build.humanPartModels ?? [])
                     .Where(p => p.Contains(folder, StringComparison.OrdinalIgnoreCase)).ToList();
                 if (candidates.Count == 0)
