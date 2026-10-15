@@ -109,6 +109,22 @@ public class RedrawLedgerTests
 
     [Fact]
     [Trait("Plan", "AC-fewer-redraws-8")]
+    public void A_redraw_counted_against_a_claim_later_taken_back_is_not_counted_again()
+    {
+        var ledger = Ledger();
+        ledger.Redrew("composite", reached: true);
+        var (id, _) = ledger.Expecting("_rir carrier on");
+
+        now += 30;
+        Assert.StartsWith("[Proteus] character redrawn (ours", ledger.Observed());
+        ledger.Withdraw(id);
+
+        now += 100;
+        Assert.Equal("[Proteus] character redrawn (not Proteus's — 130 ms since our last redraw)", ledger.Observed());
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-fewer-redraws-8")]
     public void Two_overlapping_refused_redraws_bring_back_neither()
     {
         var ledger = Ledger();

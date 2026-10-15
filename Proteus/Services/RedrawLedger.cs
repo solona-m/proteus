@@ -68,7 +68,15 @@ internal sealed class RedrawLedger
     {
         lock (gate)
         {
-            if (last.Number == id) { last = previous; previous = None; }
+            if (last.Number == id)
+            {
+                // A redraw already matched to the claim taken back was used up: the one falling back in place may not
+                // claim another.
+                bool used = last.Matched;
+                last = previous;
+                if (used) last.Matched = true;
+                previous = None;
+            }
             else if (previous.Number == id) previous = None;
         }
     }
