@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 
 namespace Proteus.Services;
 
@@ -106,6 +107,70 @@ internal sealed class RedrawLedger
     {
         lock (gate) return $"[Proteus] reload #{++reloads} (in place): {cause}";
     }
+
+    // ── an auto refit batch's hold (see RedrawHold) ─────────────────────────
+
+    // Counters when the batch's hold began, for its summary; null outside a batch.
+    private (int Redraws, int Reloads)? batchStart;
+    private bool batchHadWork;
+
+    /// <summary>A batch took the hold: its summary counts from here.</summary>
+    internal string HoldStarted(string key)
+    {
+        lock (gate)
+        {
+            if (batchStart == null)
+            {
+                batchStart = (redraws, reloads);
+                batchHadWork = false;
+            }
+            return $"[Proteus] redraws held: {key} (an auto refit batch is running)";
+        }
+    }
+
+    /// <summary>A model redraw the batch asked for, kept for the end of the batch.</summary>
+    internal string Absorbed(string cause)
+    {
+        lock (gate)
+        {
+            batchHadWork = true;
+            return $"[Proteus] redraw held until the batch ends: {cause}";
+        }
+    }
+
+    /// <summary>The hold ended: how long, how, and what waited.</summary>
+    internal string HoldReleased(RedrawHold.Released r)
+    {
+        lock (gate)
+        {
+            if (r.AnyDeferred || r.ModelRedrawCauses.Count > 0) batchHadWork = true;
+            var how = string.Join(", ", r.Keys.Select(k =>
+                k.Capped ? $"{k.Key} hit its cap" : k.TimedOut ? $"{k.Key} timed out" : k.Key));
+            return $"[Proteus] redraws released after {r.HeldMs} ms ({how}): {r.ModelRedrawCauses.Count} redraw(s), "
+                 + $"{r.Reasons.Count} composite trigger(s) waiting"
+                 + (r.Reasons.Count == 0 ? "" : $" — {string.Join(", ", r.Reasons)}");
+        }
+    }
+
+    /// <summary>
+    /// What the batch cost, from the hold to now (the caller asks a while after the release, so the release's own
+    /// redraw, composite and any correction are in it). Null when the batch held nothing, or there was no batch.
+    /// </summary>
+    internal string? BatchSummary()
+    {
+        lock (gate)
+        {
+            if (batchStart is not { } start) return null;
+            batchStart = null;
+            if (!batchHadWork) return null;
+            return $"[Proteus] outfit change (auto refit batch): {redraws - start.Redraws} redraw(s), "
+                 + $"{reloads - start.Reloads} in-place reload(s)";
+        }
+    }
+
+    /// <summary>A composite the batch's own write set off arrived after the batch let go: it runs on its own.</summary>
+    internal static string LateRecheck(string reason, long msAfterRelease)
+        => $"[Proteus] {reason}: a re-check landed {msAfterRelease} ms after the batch let its redraws go — it runs on its own";
 
     /// <summary>The character was redrawn, by whoever: ours when it follows our latest within the window, once.</summary>
     internal string Observed()

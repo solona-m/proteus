@@ -242,8 +242,15 @@ public partial class CompositorService
     /// <see cref="RestoreChangedAccessory"/>, which also re-renders the whole composite.
     /// </summary>
     /// <param name="cause">What changed the model, for the redraw's line in the log.</param>
-    public void RedrawForChangedModel(string cause)
+    /// <param name="deferWhileHeld">An auto refit batch's own change: while the batch runs, kept for the one redraw
+    /// at its end (see <see cref="RedrawHold"/>).</param>
+    public void RedrawForChangedModel(string cause, bool deferWhileHeld = false)
     {
+        if (deferWhileHeld && redrawHold.TryAbsorbModelRedraw(cause))
+        {
+            log.Information("{0}", redrawLedger.Absorbed(cause));
+            return;
+        }
         Task.Run(() =>
         {
             try
@@ -289,7 +296,8 @@ public partial class CompositorService
             return;
         }
 
-        if (config.UseInPlaceReload && !_needFullRedraw)
+        // A redraw an auto refit batch owes is paid off by this one, in full: an in-place reload loads no model.
+        if (!RedrawHold.FullRedrawFor(_needFullRedraw, config.UseInPlaceReload, Volatile.Read(ref _redrawOwed) == 1))
         {
             Interlocked.Exchange(ref _lastOwnReapplyTick, Environment.TickCount64);
             // ReapplyState mutates game objects synchronously, so it must run on the framework thread (a background call crashes).

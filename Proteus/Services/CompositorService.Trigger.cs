@@ -135,29 +135,45 @@ public partial class CompositorService
     /// The trigger came from Proteus's own UI, not the world, so the settle wait may accept a first reading that
     /// matches the last settled state. Never set after an equipment change, design apply or redraw.
     /// </param>
+    /// <param name="deferWhileHeld">
+    /// The trigger is an auto refit batch's own doing: held while the batch runs, and composited with the rest of the
+    /// batch's when it ends (see <see cref="RedrawHold"/>). Everything else runs as before.
+    /// </param>
+    /// <param name="releaseToken">Set only by a batch's release: lets its composite skip the material reload the
+    /// release's redraw already did.</param>
+    /// <param name="reDeferrals">How often this trigger already found a hold at the end of its debounce.</param>
     public void TriggerRecomposite(string reason, int delayMs = 200, bool force = true,
-        bool skinFingerprintAuthoritative = false, bool autoRedrawExempt = false, bool drawStateStable = false)
+        bool skinFingerprintAuthoritative = false, bool autoRedrawExempt = false, bool drawStateStable = false,
+        bool deferWhileHeld = false, int releaseToken = 0, int reDeferrals = 0)
     {
         if (_disposed || !config.PluginEnabled || !penumbra.IsAvailable) return;
 
         // Auto redraw off: Proteus does nothing on its own initiative, so ambient (!force) triggers stop here. The
         // previous composite stays published. autoRedrawExempt covers a stale action (the carrier host decision),
-        // not a stale look.
-        if (!force && !config.AutoRedraw && !autoRedrawExempt)
+        // not a stale look. A forced composite cancelled by an ambient one must not be lost, so the force is latched
+        // (cleared only when a composite publishes) whether or not the trigger is then held. Held before the
+        // debounce token is taken, so a held trigger never cancels the composite in flight.
+        var admission = RedrawHold.Admit(force, config.AutoRedraw, autoRedrawExempt, deferWhileHeld,
+            latchForce: () =>
+            {
+                Interlocked.Exchange(ref _forcePending, 1);
+                // The skin half of the latch: set only by a forced trigger whose skin effect the fingerprint cannot see.
+                if (!skinFingerprintAuthoritative) Interlocked.Exchange(ref _skinForcePending, 1);
+            },
+            tryDefer: () => redrawHold.TryDefer(new RedrawHold.Deferred(reason, force, skinFingerprintAuthoritative,
+                                                                         autoRedrawExempt, reDeferrals)));
+        if (admission == RedrawHold.Admission.AutoRedrawOff)
         {
             log.Debug("[Proteus] Recomposite skipped ({0}) — auto redraw is off.", reason);
             return;
         }
+        if (admission == RedrawHold.Admission.Deferred)
+        {
+            log.Debug("[Proteus] Recomposite held until the auto refit batch ends: {0}", reason);
+            return;
+        }
 
         Highlighter?.Clear();
-
-        // A forced composite cancelled by an ambient one must not be lost; cleared only when a composite publishes.
-        if (force)
-        {
-            Interlocked.Exchange(ref _forcePending, 1);
-            // The skin half of the latch: set only by a forced trigger whose skin effect the fingerprint cannot see.
-            if (!skinFingerprintAuthoritative) Interlocked.Exchange(ref _skinForcePending, 1);
-        }
 
         // Cancels whatever composite was pending and gives us the token for this one (see DebounceGate).
         var token = recompositeGate.Next();
@@ -165,10 +181,20 @@ public partial class CompositorService
         log.Debug("[Proteus] Recomposite triggered: {0} (delay {1}ms)", reason, delayMs);
         NoteRefreshTrigger(reason);
         var tTriggered = PhaseCounter.Begin();
+        Interlocked.Increment(ref _recompositesPending);
         Task.Run(async () =>
         {
+            using var pending = new OnExit(() => Interlocked.Decrement(ref _recompositesPending));
             try { await Task.Delay(delayMs, token).ConfigureAwait(false); }
             catch (OperationCanceledException) { return; }
+
+            // A batch that took the hold during the debounce keeps its own trigger with the rest; once only.
+            if (deferWhileHeld && redrawHold.TryDefer(new RedrawHold.Deferred(reason, force,
+                    skinFingerprintAuthoritative, autoRedrawExempt, reDeferrals + 1)))
+            {
+                log.Debug("[Proteus] Recomposite held at the end of its debounce: {0}", reason);
+                return;
+            }
             var tDebounced = PhaseCounter.Begin();
 
             // Read the Glamourer char code if still unknown, or the first composites after a load fingerprint differently
@@ -220,8 +246,10 @@ public partial class CompositorService
                 // A body mod changed but its materials load only on reload: force the reload up front and wait for the body
                 // types to change, so we composite once. Skipped with auto redraw off (it is a redraw);
                 // SchedulePostRedrawBodyTypeCheck is the backstop.
-                if (wasDirty && fresh != null && config.AutoRedraw
-                    && string.Equals(BodyTypeKey(fresh), _lastCompositedBodyType, StringComparison.OrdinalIgnoreCase))
+                // A batch's release redraw has already done this reload for its own composite.
+                if (fresh != null && RedrawHold.PreambleReload(wasDirty, config.AutoRedraw,
+                        string.Equals(BodyTypeKey(fresh), _lastCompositedBodyType, StringComparison.OrdinalIgnoreCase),
+                        wasDirty && ReleaseTokenValid(releaseToken)))
                 {
                     var beforeKey = _lastCompositedBodyType;
                     RefreshPlayerTextures("body mod changed: load its materials before compositing"); // reload the character so the new body's materials load

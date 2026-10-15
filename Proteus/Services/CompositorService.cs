@@ -533,6 +533,7 @@ public partial class CompositorService : IDisposable
         glamourer.LocalPlayerCustomizationChanged += OnGlamourerCustomizationChanged;
         glamourer.LocalPlayerEquipmentChanged  += OnGlamourerEquipmentChanged;
         Plugin.Framework.Update += OnBootPoll;
+        Plugin.Framework.Update += OnRedrawHoldPoll;
 
         // The decode cache is only trimmed when over budget, so release it on an idle timer (30s cadence, any thread).
         idleCacheTimer = new Timer(_ =>
@@ -630,6 +631,7 @@ public partial class CompositorService : IDisposable
         glamourer.LocalPlayerCustomizationChanged -= OnGlamourerCustomizationChanged;
         glamourer.LocalPlayerEquipmentChanged   -= OnGlamourerEquipmentChanged;
         Plugin.Framework.Update -= OnBootPoll;
+        Plugin.Framework.Update -= OnRedrawHoldPoll;
 
         recompositeGate.Stop();
     }

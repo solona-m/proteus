@@ -14,7 +14,7 @@ public class RedrawLedgerTests
     private RedrawLedger Ledger() => new(() => now);
 
     [Fact]
-    [Trait("Plan", "AC-fewer-redraws-8")]
+    [Trait("Plan", "AC-fewer-redraws-6")]
     [Trait("Plan", "EDGE-fewer-redraws-28")]
     public void Redraws_and_in_place_reloads_are_numbered_apart_with_their_cause()
     {
@@ -27,7 +27,7 @@ public class RedrawLedgerTests
     }
 
     [Fact]
-    [Trait("Plan", "AC-fewer-redraws-8")]
+    [Trait("Plan", "AC-fewer-redraws-6")]
     public void A_redraw_the_character_goes_through_soon_after_ours_is_ours_once()
     {
         var ledger = Ledger();
@@ -42,7 +42,7 @@ public class RedrawLedgerTests
     }
 
     [Fact]
-    [Trait("Plan", "AC-fewer-redraws-8")]
+    [Trait("Plan", "AC-fewer-redraws-6")]
     public void A_redraw_long_after_ours_is_not_ours()
     {
         var ledger = Ledger();
@@ -53,14 +53,14 @@ public class RedrawLedgerTests
     }
 
     [Fact]
-    [Trait("Plan", "AC-fewer-redraws-8")]
+    [Trait("Plan", "AC-fewer-redraws-6")]
     public void A_redraw_before_any_of_ours_is_not_ours()
     {
         Assert.Equal("[Proteus] character redrawn (not Proteus's — none of ours yet)", Ledger().Observed());
     }
 
     [Fact]
-    [Trait("Plan", "AC-fewer-redraws-8")]
+    [Trait("Plan", "AC-fewer-redraws-6")]
     public void A_redraw_Penumbra_refused_claims_nothing()
     {
         var ledger = Ledger();
@@ -71,7 +71,7 @@ public class RedrawLedgerTests
     }
 
     [Fact]
-    [Trait("Plan", "AC-fewer-redraws-8")]
+    [Trait("Plan", "AC-fewer-redraws-6")]
     public void The_characters_redraw_arriving_before_our_call_returns_is_still_ours()
     {
         var ledger = Ledger();
@@ -83,7 +83,7 @@ public class RedrawLedgerTests
     }
 
     [Fact]
-    [Trait("Plan", "AC-fewer-redraws-8")]
+    [Trait("Plan", "AC-fewer-redraws-6")]
     public void A_redraw_following_a_glamourer_change_we_asked_for_is_ours_under_its_cause()
     {
         var ledger = Ledger();
@@ -94,7 +94,7 @@ public class RedrawLedgerTests
     }
 
     [Fact]
-    [Trait("Plan", "AC-fewer-redraws-8")]
+    [Trait("Plan", "AC-fewer-redraws-6")]
     public void A_glamourer_change_that_failed_claims_nothing()
     {
         var ledger = Ledger();
@@ -108,7 +108,7 @@ public class RedrawLedgerTests
     }
 
     [Fact]
-    [Trait("Plan", "AC-fewer-redraws-8")]
+    [Trait("Plan", "AC-fewer-redraws-6")]
     public void A_redraw_counted_against_a_claim_later_taken_back_is_not_counted_again()
     {
         var ledger = Ledger();
@@ -124,7 +124,7 @@ public class RedrawLedgerTests
     }
 
     [Fact]
-    [Trait("Plan", "AC-fewer-redraws-8")]
+    [Trait("Plan", "AC-fewer-redraws-6")]
     public void Two_overlapping_refused_redraws_bring_back_neither()
     {
         var ledger = Ledger();
@@ -138,7 +138,7 @@ public class RedrawLedgerTests
     }
 
     [Fact]
-    [Trait("Plan", "AC-fewer-redraws-8")]
+    [Trait("Plan", "AC-fewer-redraws-6")]
     public void The_window_ends_at_two_seconds()
     {
         var ledger = Ledger();
@@ -152,7 +152,7 @@ public class RedrawLedgerTests
     }
 
     [Fact]
-    [Trait("Plan", "AC-fewer-redraws-8")]
+    [Trait("Plan", "AC-fewer-redraws-6")]
     public void A_refused_redraw_leaves_the_claim_of_the_one_before_it()
     {
         var ledger = Ledger();
@@ -165,7 +165,7 @@ public class RedrawLedgerTests
     }
 
     [Fact]
-    [Trait("Plan", "AC-fewer-redraws-8")]
+    [Trait("Plan", "AC-fewer-redraws-6")]
     public void Numbers_stay_unique_and_gapless_across_threads()
     {
         var ledger = Ledger();
@@ -179,7 +179,55 @@ public class RedrawLedgerTests
     }
 
     [Fact]
-    [Trait("Plan", "AC-fewer-redraws-8")]
+    [Trait("Plan", "AC-fewer-redraws-6")]
+    [Trait("Plan", "EDGE-fewer-redraws-25")]
+    public void A_batchs_hold_is_logged_from_start_to_summary()
+    {
+        var ledger = Ledger();
+        ledger.Redrew("design restore", reached: true);
+        Assert.Equal("[Proteus] redraws held: auto-refit#3 (an auto refit batch is running)", ledger.HoldStarted("auto-refit#3"));
+        Assert.Equal("[Proteus] redraw held until the batch ends: auto refit: _top switched on",
+                     ledger.Absorbed("auto refit: _top switched on"));
+
+        var hold = new RedrawHold(() => now);
+        hold.Hold("auto-refit#3", 30_000, 120_000);
+        hold.TryAbsorbModelRedraw("auto refit: _top switched on");
+        hold.TryDefer(new RedrawHold.Deferred("ModSettingChanged", true, false, false));
+        now += 24_000;
+        hold.Release("auto-refit#3", 0);
+        Assert.Equal("[Proteus] redraws released after 24000 ms (auto-refit#3): 1 redraw(s), 1 composite trigger(s) "
+                   + "waiting — ModSettingChanged", ledger.HoldReleased(hold.Poll()!));
+
+        ledger.Redrew("auto refit batch", reached: true);
+        ledger.Reloaded("composite (held)");
+        ledger.Reloaded("composite (post-settle-correction)");
+        Assert.Equal("[Proteus] outfit change (auto refit batch): 1 redraw(s), 2 in-place reload(s)", ledger.BatchSummary());
+        Assert.Null(ledger.BatchSummary());   // once
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-fewer-redraws-6")]
+    [Trait("Plan", "EDGE-fewer-redraws-26")]
+    public void A_batch_that_held_nothing_writes_no_summary()
+    {
+        var ledger = Ledger();
+        ledger.HoldStarted("auto-refit#1");
+        ledger.Redrew("someone else's", reached: true);
+        Assert.Null(ledger.BatchSummary());
+        Assert.Null(Ledger().BatchSummary());   // no batch at all
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-fewer-redraws-7")]
+    public void A_late_recheck_says_how_late()
+    {
+        Assert.Equal("[Proteus] ModSettingChanged:Setting:Chibi: a re-check landed 1800 ms after the batch let its "
+                   + "redraws go — it runs on its own",
+                     RedrawLedger.LateRecheck("ModSettingChanged:Setting:Chibi", 1800));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-fewer-redraws-6")]
     public void Only_the_latest_of_ours_is_matched()
     {
         var ledger = Ledger();

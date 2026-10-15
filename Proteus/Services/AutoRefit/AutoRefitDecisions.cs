@@ -527,6 +527,24 @@ internal static class AutoRefitDecisions
         return parts.Count == 0 ? "unchanged" : string.Join(", ", parts);
     }
 
+    // ── the redraw hold a batch takes (see RedrawHold) ──────────────────────
+
+    /// <summary>The hold key of runner <paramref name="id"/>: one per runner, so an old runner can only let go its own.</summary>
+    internal static string RunnerKey(int id) => $"auto-refit#{id}";
+
+    /// <summary>
+    /// The grace a runner's last word lets its key go with: none when it already let go at drain (with its grace),
+    /// at once when it ended any other way — faulted, cancelled or disposed.
+    /// </summary>
+    internal static int? RunnerExitRelease(bool releasedAtDrain) => releasedAtDrain ? null : 0;
+
+    /// <summary>
+    /// Until when the walk leaves a piece this batch switched on alone: the redraw it waited for comes only when the
+    /// batch lets go, so the quiet runs from then — never ends at it, which the walk after that redraw would miss.
+    /// </summary>
+    internal static long QuietUntil(long quietFromSwitch, long releaseAt, int quietMs)
+        => Math.Max(quietFromSwitch, releaseAt + quietMs);
+
     /// <summary>Why a newly worn piece is not refitted; <see cref="Skip.None"/> when it is.</summary>
     internal enum Skip
     {
