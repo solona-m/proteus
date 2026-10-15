@@ -334,6 +334,7 @@ public partial class CompositorService
     {
         try
         {
+            ExpectIndirectRedraw(itemId == 0 ? "glasses carrier off" : "glasses carrier on");
             return CarrierWrites.Guarded(OnFramework, () => GoneAway("invisible glasses"),
                                          () => glamourer.SetGlasses(itemId));
         }
@@ -489,6 +490,7 @@ public partial class CompositorService
     {
         try
         {
+            ExpectIndirectRedraw($"{slot} carrier {(itemId == 0 ? "off" : "on")}");
             return CarrierWrites.Guarded(OnFramework, () => GoneAway("invisible carrier"),
                                          () => glamourer.SetAccessory(itemId, slot));
         }

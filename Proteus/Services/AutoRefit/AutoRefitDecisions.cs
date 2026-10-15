@@ -480,13 +480,21 @@ internal static class AutoRefitDecisions
     /// it was queued from and of the one that won it. Tells a mod that took the slot by priority from a group switch in
     /// the garment's own mod that left the piece out.
     /// </summary>
+    /// <param name="garmentBefore">The garment mod's settings when the piece was queued, if read: what changed since is
+    /// named.</param>
     internal static string AbandonDetail(Worn now, string? garmentDir,
                                          Interop.PenumbraBridge.ModSettingsSnapshot? garment,
-                                         Interop.PenumbraBridge.ModSettingsSnapshot? winner)
+                                         Interop.PenumbraBridge.ModSettingsSnapshot? winner,
+                                         Interop.PenumbraBridge.ModSettingsSnapshot? garmentBefore = null)
     {
         var sb = new System.Text.StringBuilder("now drawn from ");
         sb.Append(now.ModDir == null ? "the game" : $"{now.ModDir} ({now.Rel})");
-        if (garmentDir != null) sb.Append("; ").Append(garmentDir).Append(": ").Append(Describe(garment));
+        if (garmentDir != null)
+        {
+            sb.Append("; ").Append(garmentDir).Append(": ").Append(Describe(garment));
+            if (garmentBefore is { } before && garment is { } after)
+                sb.Append("; since it was queued: ").Append(SettingsChange(before, after));
+        }
         if (now.ModDir != null && !string.Equals(now.ModDir, garmentDir, StringComparison.OrdinalIgnoreCase))
             sb.Append("; ").Append(now.ModDir).Append(": ").Append(Describe(winner));
         return sb.ToString();
@@ -500,6 +508,23 @@ internal static class AutoRefitDecisions
                                     .Select(o => $"{o.Key} = {string.Join(" + ", o.Value)}"));
             return string.Join(", ", parts);
         }
+    }
+
+    /// <summary>What changed between two readings of one mod's settings, group by group; "unchanged" when nothing did.</summary>
+    internal static string SettingsChange(Interop.PenumbraBridge.ModSettingsSnapshot before,
+                                          Interop.PenumbraBridge.ModSettingsSnapshot after)
+    {
+        var parts = new List<string>();
+        if (before.Enabled != after.Enabled) parts.Add(after.Enabled ? "switched on" : "switched off");
+        if (before.Priority != after.Priority) parts.Add($"priority {before.Priority} → {after.Priority}");
+        static string Ticked(Dictionary<string, List<string>> o, string g)
+            => o.TryGetValue(g, out var t) && t.Count > 0 ? string.Join(" + ", t) : "(none)";
+        foreach (string group in before.Options.Keys.Union(after.Options.Keys).OrderBy(g => g, StringComparer.Ordinal))
+        {
+            string was = Ticked(before.Options, group), now = Ticked(after.Options, group);
+            if (was != now) parts.Add($"{group} {was} → {now}");
+        }
+        return parts.Count == 0 ? "unchanged" : string.Join(", ", parts);
     }
 
     /// <summary>Why a newly worn piece is not refitted; <see cref="Skip.None"/> when it is.</summary>

@@ -107,9 +107,15 @@ public partial class CompositorService : IDisposable
         StampOwnRedraw();
         bool reached = redraw();
         if (!reached) CancelOwnRedrawEcho();
-        log.Information(redrawLedger.Answered(n, cause, reached));
+        log.Information("{0}", redrawLedger.Answered(n, cause, reached));
         return reached;
     }
+
+    /// <summary>
+    /// Proteus is about to ask another plugin for something that may redraw the character (see
+    /// <see cref="RedrawLedger.Expecting"/>): a redraw that follows is logged as ours. Any thread.
+    /// </summary>
+    public void ExpectIndirectRedraw(string cause) => log.Information("{0}", redrawLedger.Expecting(cause));
 
     // Non-persistent per-mod color override pushed by the design-binding system. When set, the
     // compositor uses these colors in place of each mod's metadata.json colors for the run; null

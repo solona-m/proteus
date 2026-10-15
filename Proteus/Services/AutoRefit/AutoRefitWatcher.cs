@@ -138,9 +138,12 @@ public sealed partial class AutoRefitWatcher : IDisposable
     /// before anything is gathered, so jewellery read before costs no hop to the framework thread.</param>
     /// <param name="Walked">The piece as the walk saw it, when its job found another file of the mod drawn by the time
     /// it started and works on that instead: an accessory beside it looks its outcome up by what the walk saw.</param>
+    /// <param name="ModSettings">The settings of the mod drawing it, as the walk saw them — for the log, should the piece
+    /// be drawn from elsewhere by the time its job starts.</param>
     private sealed record Request(string Slot, Worn Worn, string? Resolved, string? ModRoot, Guid Collection,
                                  bool Forced = false, IReadOnlyDictionary<string, Beside>? Beside = null,
-                                 Chosen? Chosen = null, Worn? Walked = null);
+                                 Chosen? Chosen = null, Worn? Walked = null,
+                                 PenumbraBridge.ModSettingsSnapshot? ModSettings = null);
 
     /// <summary>A chest or legs piece worn beside an accessory at the walk: what it is, the file drawn and its mod.</summary>
     private sealed record Beside(Worn Worn, string? Resolved, string? ModRoot);
@@ -625,8 +628,14 @@ public sealed partial class AutoRefitWatcher : IDisposable
                                           .ToDictionary(s => s, s => new Beside(now[s], resolvedOf[s].Resolved,
                                                                                 resolvedOf[s].Root))
                 : null;
+            // Read only for a body piece drawn from a mod: one call per piece, on the framework thread.
+            var modSettings = !accessory && worn.ModDir != null
+                              && penumbra.GetModSettings(collection.Id, worn.ModDir) is { } ms
+                ? new PenumbraBridge.ModSettingsSnapshot(ms.Enabled, ms.Priority, ms.Options, Inherited: false, Temporary: false)
+                : (PenumbraBridge.ModSettingsSnapshot?)null;
             Enqueue(new Request(slot, worn, resolved, root, collection.Id, all, beside,
-                                accessory ? new Chosen(pref.BodyDir, pref.Chest?.Rel, pref.Legs?.Rel) : null));
+                                accessory ? new Chosen(pref.BodyDir, pref.Chest?.Rel, pref.Legs?.Rel) : null,
+                                ModSettings: modSettings));
         }
     }
 
@@ -925,7 +934,8 @@ public sealed partial class AutoRefitWatcher : IDisposable
                     log.Information("[Proteus] auto refit: {0} {1} is no longer drawn from {2}, left to the next look — {3}",
                                     r.Slot, r.Worn.GamePath, r.Worn.ModDir ?? "the game",
                                     AutoRefitDecisions.AbandonDetail(now.Worn, r.Worn.ModDir,
-                                        SettingsOf(g.Settings, r.Worn.ModDir), SettingsOf(g.Settings, now.Worn.ModDir)));
+                                        SettingsOf(g.Settings, r.Worn.ModDir), SettingsOf(g.Settings, now.Worn.ModDir),
+                                        r.ModSettings));
                     return;
                 case AutoRefitDecisions.Reread.Retarget:
                     log.Information("[Proteus] auto refit: {0} {1}: its file changed since it was put on ({2} → {3}); "

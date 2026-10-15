@@ -231,6 +231,8 @@ public partial class CompositorService
         Interlocked.Exchange(ref _glamourerEchoUntil, until);
         glamourer.ExpectOwnReapplyUntil(until);
         Interlocked.Exchange(ref _lastOwnReapplyTick, Environment.TickCount64);
+        // Counted, but at Debug: the brush reloads once per stroke.
+        log.Debug("{0}", redrawLedger.Reloaded("live brush"));
         return glamourer.ReapplyPlayerState();
     }
 
@@ -240,7 +242,7 @@ public partial class CompositorService
     /// <see cref="RestoreChangedAccessory"/>, which also re-renders the whole composite.
     /// </summary>
     /// <param name="cause">What changed the model, for the redraw's line in the log.</param>
-    public void RedrawForChangedModel(string cause = "a changed model")
+    public void RedrawForChangedModel(string cause)
     {
         Task.Run(() =>
         {
@@ -306,7 +308,7 @@ public partial class CompositorService
 
             if (reapplied)
             {
-                log.Information(redrawLedger.Reloaded(cause));
+                log.Information("{0}", redrawLedger.Reloaded(cause));
                 return;
             }
         }

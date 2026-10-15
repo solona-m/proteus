@@ -1870,6 +1870,7 @@ public class DesignBindingService : IDisposable
             if (slots.Count == 0) return;
 
             var done = new List<string>(slots.Count);
+            compositor.ExpectIndirectRedraw("design restore: unequip " + string.Join(", ", slots));
             foreach (var slot in slots)
             {
                 var ok = slot == GlassesSlot ? glamourer.SetGlasses(0) : glamourer.UnequipSlot(slot);

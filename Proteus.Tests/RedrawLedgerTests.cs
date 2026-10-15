@@ -84,6 +84,17 @@ public class RedrawLedgerTests
 
     [Fact]
     [Trait("Plan", "AC-fewer-redraws-8")]
+    public void A_redraw_following_a_glamourer_change_we_asked_for_is_ours_under_its_cause()
+    {
+        var ledger = Ledger();
+        Assert.Equal("[Proteus] asked: _rir carrier on (may redraw the character)", ledger.Expecting("_rir carrier on"));
+
+        now += 120;
+        Assert.Equal("[Proteus] character redrawn (ours: _rir carrier on, 120 ms after it was asked for)", ledger.Observed());
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-fewer-redraws-8")]
     public void The_window_ends_at_two_seconds()
     {
         var ledger = Ledger();
