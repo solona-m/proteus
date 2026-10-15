@@ -220,9 +220,12 @@ public class Gen2LayoutRefitLocalTests(ITestOutputHelper output)
     /// 10 mm shorter; its skin triangles it turns over or shrinks to a tenth of their area; and of all those, the ones outside
     /// the crotch. Per edge and triangle, judged on its own: nothing here asks the neighbours, as the guard does.
     /// </summary>
+    /// <param name="legs">The source is legs, which have a crotch; any other piece is judged everywhere as outside it.</param>
     private static (int Torn, int Turned, int Outside) TornOrTurned(ModelParts source,
-                                                                         IReadOnlyList<System.Numerics.Vector3?> field)
+                                                                         IReadOnlyList<System.Numerics.Vector3?> field,
+                                                                         bool legs = true)
     {
+        bool InCrotch(float y) => legs && Gen2LayoutRefitLocalTests.InCrotch(y);
         int outside = 0;
         System.Numerics.Vector3 P(int v) => new(source.Positions[v * 3], source.Positions[v * 3 + 1], source.Positions[v * 3 + 2]);
         System.Numerics.Vector3 Q(int v) => P(v) + (field[v] ?? default);
@@ -325,8 +328,15 @@ public class Gen2LayoutRefitLocalTests(ITestOutputHelper output)
                     Assert.Equal(0, m.Distrusted);
                     continue;
                 }
-                var (_, _, outside) = TornOrTurned(atlas.Source, atlas.Field);
+                // Paired by surface: held to the T&F grid's standard — the crotch allowance for legs alone.
+                var (torn, turned, outside) = TornOrTurned(atlas.Source, atlas.Field, legs: slot == "_dwn");
                 Assert.Equal(0, outside);
+                Assert.True(torn + turned <= CrotchTurnedCap, $"{slot} onto {target}: {torn} torn and {turned} turned");
+                var skin = Skin(atlas.Source);
+                float finalMax = skin.Max(v => atlas.Field[v]?.Length() ?? float.PositiveInfinity);
+                string targetPath = targetCat.PathOf(to);
+                float bound = MathF.Max(0.06f, 2f * SizeSetRefit.BodyDistance(sourcePath, targetPath, p => SizeSetRefit.BodyProbes(p)).P90);
+                Assert.True(finalMax <= bound, $"{slot} onto {target}: a point moved {finalMax * 1000f:F1} mm");
             }
         }
     }
@@ -386,6 +396,45 @@ public class Gen2LayoutRefitLocalTests(ITestOutputHelper output)
 
             var (again, _, _) = Run(copy, ["bibo", "rue"], remake: false);
             Assert.Equal(0, again.Made);
+        }
+        finally
+        {
+            if (Directory.Exists(copy)) Directory.Delete(copy, recursive: true);
+        }
+    }
+
+    private const string TheBodySe = LocalData.Mods + ":The Body SE";
+    private const string TheBodySeX = LocalData.Mods + ":The Body SE-X IVCS2 V1_1_0";
+
+    /// <summary>
+    /// The size set says in its log why it refused a size, not only in its notes: TBSE's SFW legs and TBSE-X's are cut
+    /// differently and do not pair, so legs made on TBSE get no TBSE-X size — and the log names the reason.
+    /// </summary>
+    [LocalDataFact(TheBodySe, TheBodySeX)]
+    [Trait("Plan", "AC-gen2-legs-refit-7")]
+    public void A_refused_size_is_logged_with_its_reason()
+    {
+        string copy = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(copy, "tbse"));
+            File.Copy(BodySizeCatalog.ResolveCaseInsensitive(LocalData.Path(TheBodySe),
+                          "p2/step 6- smallclothes options/sfw/chara/equipment/e0000/model/c0101e0000_dwn.mdl"),
+                      Path.Combine(copy, "tbse", "c0101e6000_dwn.mdl"));
+            File.WriteAllText(Path.Combine(copy, PenumbraModMeta.MetaFile), """
+                { "FileVersion": 4, "Name": "Men's legs",
+                  "DefaultData": { "Files": {}, "FileSwaps": {}, "Manipulations": [] },
+                  "Groups": [
+                    { "Version": 0, "Name": "Size", "Type": "Single", "Priority": 0, "DefaultSettings": 0, "Options": [
+                      { "Name": "TBSE", "Files": { "chara/equipment/e6000/model/c0101e6000_dwn.mdl": "tbse\\c0101e6000_dwn.mdl" } } ] } ] }
+                """);
+
+            var (result, log, _) = Run(copy, ["tbse", "tbse-x"], remake: false, bodyMods: [TheBodySe, TheBodySeX]);
+            Assert.Equal(0, result.Made);
+            Assert.NotEmpty(result.Notes);
+            Assert.Contains(log, l => l.Contains("size set:", StringComparison.Ordinal)
+                                      && l.Contains("refused:", StringComparison.Ordinal)
+                                      && l.Contains("texture layout", StringComparison.Ordinal));
         }
         finally
         {
@@ -461,10 +510,10 @@ public class Gen2LayoutRefitLocalTests(ITestOutputHelper output)
     }
 
     private (SizeSetRefit.Result Result, List<string> Log, SizeSetRefit.Request Request) Run(string copy,
-        IReadOnlyList<string> keys, bool remake)
+        IReadOnlyList<string> keys, bool remake, string[]? bodyMods = null)
     {
         string modsRoot = LocalData.Path(LocalData.Mods);
-        var mods = new[] { TandF, Bibo, Rue }.Select(n => Path.GetFileName(LocalData.Path(n))).ToDictionary(d => d, d => d);
+        var mods = (bodyMods ?? [TandF, Bibo, Rue]).Select(n => Path.GetFileName(LocalData.Path(n))).ToDictionary(d => d, d => d);
         var bodies = new BodyModIndex().RefreshState(mods, modsRoot).List;
         var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
         var request = new SizeSetRefit.Request(copy, keys, Yas: false, Remake: remake, bodies);

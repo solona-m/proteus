@@ -90,8 +90,8 @@ internal sealed partial class UvAtlasCorrespondence : IBodyCorrespondence
     /// <param name="MaxDisagreement">The same, the largest.</param>
     internal readonly record struct Stats(int Landed, int Placeable, int OffSheet, float VertexCoverage,
                                           float RawAreaCoverage, float AreaCoverage, float MaxShift, float P99Shift,
-                                          int Carried, int Disagreed = 0, int Unvouched = 0, int Unjudged = 0,
-                                          float P99Disagreement = 0f, float MaxDisagreement = 0f)
+                                          int Carried, int Disagreed, int Unvouched, int Unjudged,
+                                          float P99Disagreement, float MaxDisagreement)
     {
         /// <summary>Landings the guard set aside.</summary>
         public int Distrusted => Disagreed + Unvouched;
@@ -179,7 +179,8 @@ internal sealed partial class UvAtlasCorrespondence : IBodyCorrespondence
         float coverage = placeable > 0 ? (float)landed / placeable : 0f;
         float rawArea = AreaCoverage(source, skin, offSheet, field);
         var (maxShift, p99Shift) = Shifts(field);
-        measured = new Stats(landed, placeable, offSheet.Count, coverage, rawArea, rawArea, maxShift, p99Shift, 0);
+        measured = new Stats(landed, placeable, offSheet.Count, coverage, rawArea, rawArea, maxShift, p99Shift,
+                             0, 0, 0, 0, 0f, 0f);
 
         // By count first, as every pair always was; by surface only for a mirrored layout's body the count refuses —
         // and then only what the skin around it agrees with counts as landed.

@@ -65,6 +65,7 @@ public class Gen2LayoutRefitTests
             Assert.True(Vector3.Distance(built!.Field[v]!.Value, top) < 1e-5f,
                         $"patch vertex {v} moved {built.Field[v]}, the leg's top {top}");
         Assert.Equal(0, Folded(source, built!));
+        NothingSetAside(built);
     }
 
     [Fact]
@@ -145,6 +146,7 @@ public class Gen2LayoutRefitTests
 
         Assert.True(BodyCorrespondence.TryBuild(source.Model, source.Uv, target.Model, target.Uv, "legs", out var built,
                                                 out string refusal, Remap), refusal);
+        NothingSetAside(built);
         foreach (int v in source.Patch)
         {
             var want = At(source.Model, v).X > 0 ? new Vector3(0.01f, 0f, 0f) : lift;
@@ -163,6 +165,7 @@ public class Gen2LayoutRefitTests
 
         Assert.True(BodyCorrespondence.TryBuild(source.Model, source.Uv, target.Model, target.Uv, "legs", out var built,
                                                 out string refusal, Remap), refusal);
+        NothingSetAside(built);
         var placed = source.Skin.Except(source.Patch).ToList();
         foreach (int v in source.Patch)
         {
@@ -185,7 +188,7 @@ public class Gen2LayoutRefitTests
                                                    out var built, out string refusal, out var measured, Gen2ToBibo(),
                                                    onSheet, byArea: true), refusal);
         Assert.Equal(source.OffSheet.Count, measured.OffSheet);
-        Assert.Equal(0, measured.Distrusted);
+        Assert.Equal((0, 0), (measured.Distrusted, measured.Unjudged));
         Assert.Equal(source.Skin.Count - source.OffSheet.Count, measured.Placeable);
         foreach (int v in source.Patch.Concat(source.OffSheet))
             Assert.True(built!.Field[v].HasValue, $"vertex {v} was not carried");
@@ -209,6 +212,7 @@ public class Gen2LayoutRefitTests
         Assert.True(BodyCorrespondence.TryBuild(source.Model, source.Uv, target.Model, target.Uv, "legs", out var built,
                                                 out string refusal, Remap, male: true), refusal);
         Assert.Equal(source.Patch.Count, Assert.IsType<UvAtlasCorrespondence>(built).Measured.Carried);
+        NothingSetAside(built);
     }
 
     [Fact]
@@ -460,7 +464,7 @@ public class Gen2LayoutRefitTests
 
         Assert.True(BodyCorrespondence.TryBuild(source.Model, source.Uv, target.Model, target.Uv, "legs", out var built,
                                                 out string refusal, Remap), refusal);
-        Assert.Equal(0, Assert.IsType<UvAtlasCorrespondence>(built).Measured.Distrusted);
+        NothingSetAside(built);
     }
 
     [Fact]
@@ -512,6 +516,13 @@ public class Gen2LayoutRefitTests
             for (int v = 0; v < newIndexOf.Length; v++)
                 Assert.True(Vector3.Distance(a!.Field[v]!.Value, b!.Field[newIndexOf[v]]!.Value) < 1e-6f, $"vertex {v} differs");
         }
+    }
+
+    /// <summary>Nothing landed wrong, so the guard set nothing aside and judged every landing.</summary>
+    private static void NothingSetAside(IBodyCorrespondence? built)
+    {
+        var m = Assert.IsType<UvAtlasCorrespondence>(built).Measured;
+        Assert.Equal((0, 0), (m.Distrusted, m.Unjudged));
     }
 
     /// <summary>What the target does to the leg's top row (y = 1), where the patch is joined.</summary>
