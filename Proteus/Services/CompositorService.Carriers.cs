@@ -332,13 +332,20 @@ public partial class CompositorService
 
     private bool SetGlassesOnFramework(ulong itemId)
     {
+        int claim = ExpectIndirectRedraw(itemId == 0 ? "glasses carrier off" : "glasses carrier on");
         try
         {
-            ExpectIndirectRedraw(itemId == 0 ? "glasses carrier off" : "glasses carrier on");
-            return CarrierWrites.Guarded(OnFramework, () => GoneAway("invisible glasses"),
-                                         () => glamourer.SetGlasses(itemId));
+            bool ok = CarrierWrites.Guarded(OnFramework, () => GoneAway("invisible glasses"),
+                                            () => glamourer.SetGlasses(itemId));
+            if (!ok) WithdrawIndirectRedraw(claim);
+            return ok;
         }
-        catch (Exception ex) { log.Warning(ex, "[Proteus] invisible glasses: SetGlasses({0}) failed", itemId); return false; }
+        catch (Exception ex)
+        {
+            WithdrawIndirectRedraw(claim);
+            log.Warning(ex, "[Proteus] invisible glasses: SetGlasses({0}) failed", itemId);
+            return false;
+        }
     }
 
     /// <summary>The model the game draws in a ring slot ("rir"/"ril"), or null when empty. Only meaningful once
@@ -488,13 +495,20 @@ public partial class CompositorService
 
     private bool SetAccessoryOnFramework(ulong itemId, string slot)
     {
+        int claim = ExpectIndirectRedraw($"{slot} carrier {(itemId == 0 ? "off" : "on")}");
         try
         {
-            ExpectIndirectRedraw($"{slot} carrier {(itemId == 0 ? "off" : "on")}");
-            return CarrierWrites.Guarded(OnFramework, () => GoneAway("invisible carrier"),
-                                         () => glamourer.SetAccessory(itemId, slot));
+            bool ok = CarrierWrites.Guarded(OnFramework, () => GoneAway("invisible carrier"),
+                                            () => glamourer.SetAccessory(itemId, slot));
+            if (!ok) WithdrawIndirectRedraw(claim);
+            return ok;
         }
-        catch (Exception ex) { log.Warning(ex, "[Proteus] invisible carrier: SetItem({0},{1}) failed", slot, itemId); return false; }
+        catch (Exception ex)
+        {
+            WithdrawIndirectRedraw(claim);
+            log.Warning(ex, "[Proteus] invisible carrier: SetItem({0},{1}) failed", slot, itemId);
+            return false;
+        }
     }
 
     /// <summary>The framework thread, as <see cref="CarrierWrites.Guarded"/> takes it.</summary>

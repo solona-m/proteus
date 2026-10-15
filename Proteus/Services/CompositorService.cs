@@ -100,6 +100,8 @@ public partial class CompositorService : IDisposable
     /// <summary>
     /// Redraw the player through <paramref name="redraw"/>, stamped as our own (<see cref="StampOwnRedraw"/>) and logged
     /// with <paramref name="cause"/>. The one way Proteus redraws the player, so the log counts every one.
+    /// A throw from <paramref name="redraw"/> (only while the plugin unloads) leaves its number without a line and its
+    /// claim standing for the echo window; accepted, as the log ends there.
     /// </summary>
     private bool RedrawPlayerLogged(string cause, Func<bool> redraw)
     {
@@ -115,7 +117,16 @@ public partial class CompositorService : IDisposable
     /// Proteus is about to ask another plugin for something that may redraw the character (see
     /// <see cref="RedrawLedger.Expecting"/>): a redraw that follows is logged as ours. Any thread.
     /// </summary>
-    public void ExpectIndirectRedraw(string cause) => log.Information("{0}", redrawLedger.Expecting(cause));
+    /// <returns>The claim's id, for <see cref="WithdrawIndirectRedraw"/> when the request fails.</returns>
+    public int ExpectIndirectRedraw(string cause)
+    {
+        var (id, line) = redrawLedger.Expecting(cause);
+        log.Information("{0}", line);
+        return id;
+    }
+
+    /// <summary>The request <see cref="ExpectIndirectRedraw"/> announced failed: no redraw of ours follows it.</summary>
+    public void WithdrawIndirectRedraw(int id) => redrawLedger.Withdraw(id);
 
     // Non-persistent per-mod color override pushed by the design-binding system. When set, the
     // compositor uses these colors in place of each mod's metadata.json colors for the run; null

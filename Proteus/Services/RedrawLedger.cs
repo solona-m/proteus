@@ -26,7 +26,10 @@ internal sealed class RedrawLedger
 
     // The latest thing of ours that may redraw the character, until a character redraw is matched to it; and the one
     // before it, for a refusal to fall back to. Label is "redraw #N", or the cause of an indirect one.
-    private (int Number, string Label, long At, bool Matched) last = (0, "", -1, false), previous = (0, "", -1, false);
+    // Number is the redraw's, or a negative id for an indirect one (see Expecting); 0 is nothing.
+    private static readonly (int Number, string Label, long At, bool Matched) None = (0, "", -1, false);
+    private (int Number, string Label, long At, bool Matched) last = None, previous = None;
+    private int expectations;
 
     internal RedrawLedger(Func<long> nowMs) => this.nowMs = nowMs;
 
@@ -52,8 +55,21 @@ internal sealed class RedrawLedger
         lock (gate)
         {
             if (reached) return $"[Proteus] redraw #{n}: {cause}";
-            if (last.Number == n) last = previous;
+            Withdraw(n);
             return $"[Proteus] redraw #{n}: {cause} (not drawn: Penumbra refused it)";
+        }
+    }
+
+    /// <summary>
+    /// Take back claim <paramref name="id"/>, wherever it still stands: as the latest, the one before falls back into
+    /// place; as the one before, it is dropped, so a later refusal cannot bring it back.
+    /// </summary>
+    internal void Withdraw(int id)
+    {
+        lock (gate)
+        {
+            if (last.Number == id) { last = previous; previous = None; }
+            else if (previous.Number == id) previous = None;
         }
     }
 
@@ -63,15 +79,17 @@ internal sealed class RedrawLedger
     /// <summary>
     /// Something Proteus asks another plugin to do that may redraw the character (Glamourer equipping a carrier, a design
     /// restore taking a slot off). A redraw that follows within the window is counted as ours, under
-    /// <paramref name="cause"/>. Asked before the call, for the same reason as <see cref="Asking"/>.
+    /// <paramref name="cause"/>. Asked before the call, for the same reason as <see cref="Asking"/>; the id is for
+    /// <see cref="Withdraw"/>, should the call fail.
     /// </summary>
-    internal string Expecting(string cause)
+    internal (int Id, string Line) Expecting(string cause)
     {
         lock (gate)
         {
+            int id = -++expectations;
             previous = last;
-            last = (0, cause, nowMs(), false);
-            return $"[Proteus] asked: {cause} (may redraw the character)";
+            last = (id, cause, nowMs(), false);
+            return (id, $"[Proteus] asked: {cause} (may redraw the character)");
         }
     }
 

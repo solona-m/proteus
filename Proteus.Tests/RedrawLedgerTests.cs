@@ -87,10 +87,38 @@ public class RedrawLedgerTests
     public void A_redraw_following_a_glamourer_change_we_asked_for_is_ours_under_its_cause()
     {
         var ledger = Ledger();
-        Assert.Equal("[Proteus] asked: _rir carrier on (may redraw the character)", ledger.Expecting("_rir carrier on"));
+        Assert.Equal("[Proteus] asked: _rir carrier on (may redraw the character)", ledger.Expecting("_rir carrier on").Line);
 
         now += 120;
         Assert.Equal("[Proteus] character redrawn (ours: _rir carrier on, 120 ms after it was asked for)", ledger.Observed());
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-fewer-redraws-8")]
+    public void A_glamourer_change_that_failed_claims_nothing()
+    {
+        var ledger = Ledger();
+        ledger.Redrew("composite", reached: true);
+        now += 10;
+        var (id, _) = ledger.Expecting("_rir carrier on");
+        ledger.Withdraw(id);
+
+        now += 20;
+        Assert.Equal("[Proteus] character redrawn (ours: redraw #1, 30 ms after it was asked for)", ledger.Observed());
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-fewer-redraws-8")]
+    public void Two_overlapping_refused_redraws_bring_back_neither()
+    {
+        var ledger = Ledger();
+        int first = ledger.Asking();
+        int second = ledger.Asking();
+        ledger.Answered(first, "composite", reached: false);
+        ledger.Answered(second, "auto refit", reached: false);
+
+        now += 30;
+        Assert.Equal("[Proteus] character redrawn (not Proteus's — none of ours yet)", ledger.Observed());
     }
 
     [Fact]
