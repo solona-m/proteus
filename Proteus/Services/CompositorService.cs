@@ -103,10 +103,11 @@ public partial class CompositorService : IDisposable
     /// </summary>
     private bool RedrawPlayerLogged(string cause, Func<bool> redraw)
     {
+        int n = redrawLedger.Asking();
         StampOwnRedraw();
         bool reached = redraw();
         if (!reached) CancelOwnRedrawEcho();
-        log.Information(redrawLedger.Redrew(cause, reached));
+        log.Information(redrawLedger.Answered(n, cause, reached));
         return reached;
     }
 

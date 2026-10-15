@@ -521,4 +521,15 @@ public class AutoRefitDecisionsTests
         Assert.Equal("now drawn from the game; Cherry Pop: not set in this collection",
             AutoRefitDecisions.AbandonDetail(now, "Cherry Pop", garment: null, winner: null));
     }
+
+    [Fact]
+    [Trait("Plan", "AC-fewer-redraws-8")]
+    public void A_game_piece_now_drawn_from_a_mod_names_only_the_mod()
+    {
+        var now = new Worn("chara/equipment/e0254/model/c0201e0254_dwn.mdl", "VSS", "dwn/vss.mdl");
+
+        Assert.Equal("now drawn from VSS (dwn/vss.mdl); VSS: on, priority 5",
+            AutoRefitDecisions.AbandonDetail(now, garmentDir: null, garment: null,
+                new PenumbraBridge.ModSettingsSnapshot(true, 5, [], false, false)));
+    }
 }
