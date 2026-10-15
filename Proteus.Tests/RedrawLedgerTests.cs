@@ -15,7 +15,7 @@ public class RedrawLedgerTests
 
     [Fact]
     [Trait("Plan", "AC-fewer-redraws-6")]
-    [Trait("Plan", "EDGE-fewer-redraws-28")]
+    [Trait("Plan", "EDGE-fewer-redraws-25")]
     public void Redraws_and_in_place_reloads_are_numbered_apart_with_their_cause()
     {
         var ledger = Ledger();
@@ -185,7 +185,7 @@ public class RedrawLedgerTests
     {
         var ledger = Ledger();
         ledger.Redrew("design restore", reached: true);
-        Assert.Equal("[Proteus] redraws held: auto-refit#3 (an auto refit batch is running)", ledger.HoldStarted("auto-refit#3"));
+        Assert.Equal("[Proteus] redraws held: auto-refit#3 (an auto refit batch is running)", ledger.HoldStarted("auto-refit#3", out _));
         Assert.Equal("[Proteus] redraw held until the batch ends: auto refit: _top switched on",
                      ledger.Absorbed("auto refit: _top switched on"));
 
@@ -211,10 +211,40 @@ public class RedrawLedgerTests
     public void A_batch_that_held_nothing_writes_no_summary()
     {
         var ledger = Ledger();
-        ledger.HoldStarted("auto-refit#1");
+        ledger.HoldStarted("auto-refit#1", out _);
         ledger.Redrew("someone else's", reached: true);
+        var hold = new RedrawHold(() => now);
+        hold.Hold("auto-refit#1", 30_000, 120_000);
+        hold.Release("auto-refit#1", 0);
+        ledger.HoldReleased(hold.Poll()!);
         Assert.Null(ledger.BatchSummary());
         Assert.Null(Ledger().BatchSummary());   // no batch at all
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-fewer-redraws-6")]
+    public void A_batch_starting_in_the_last_ones_tail_ends_that_summary_and_gets_its_own()
+    {
+        var ledger = Ledger();
+        var hold = new RedrawHold(() => now);
+        void Batch(string key, int redraws)
+        {
+            hold.Hold(key, 30_000, 120_000);
+            hold.TryAbsorbModelRedraw("refit");
+            hold.Release(key, 0);
+            ledger.HoldReleased(hold.Poll()!);
+            for (int i = 0; i < redraws; i++) ledger.Redrew("release", reached: true);
+        }
+
+        ledger.HoldStarted("auto-refit#1", out var none);
+        Assert.Null(none);
+        Batch("auto-refit#1", redraws: 2);
+
+        ledger.HoldStarted("auto-refit#2", out var first);
+        Assert.Equal("[Proteus] outfit change (auto refit batch): 2 redraw(s), 0 in-place reload(s)", first);
+        Assert.Null(ledger.BatchSummary());   // batch 2 is still running
+        Batch("auto-refit#2", redraws: 1);
+        Assert.Equal("[Proteus] outfit change (auto refit batch): 1 redraw(s), 0 in-place reload(s)", ledger.BatchSummary());
     }
 
     [Fact]

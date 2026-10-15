@@ -27,9 +27,8 @@ internal sealed class RedrawHold
     /// <summary>How long the token handed to a release's composite stays good (see <see cref="IssueReleaseToken"/>).</summary>
     internal const int ReleaseTokenMs = 10_000;
 
-    /// <summary>A trigger held for later: its arguments, and how often it found a hold at the end of its debounce.</summary>
-    internal readonly record struct Deferred(string Reason, bool Force, bool SkinAuth, bool AutoRedrawExempt,
-                                             int ReDeferrals = 0);
+    /// <summary>A trigger held for later: the arguments it is composited with when the hold ends.</summary>
+    internal readonly record struct Deferred(string Reason, bool Force, bool SkinAuth, bool AutoRedrawExempt);
 
     /// <summary>One key as it ended.</summary>
     internal readonly record struct KeyReport(string Key, long HeldMs, bool TimedOut, bool Capped);
@@ -39,15 +38,19 @@ internal sealed class RedrawHold
     /// <see cref="SkinAuth"/> every forced one's (true when none was forced), <see cref="AutoRedrawExempt"/> any one's.
     /// </summary>
     internal sealed record Released(IReadOnlyList<string> Reasons, bool AnyDeferred, bool Force, bool SkinAuth,
-        bool AutoRedrawExempt, int MaxReDeferrals, IReadOnlyList<string> ModelRedrawCauses, bool MaterialsOwed,
+        bool AutoRedrawExempt, IReadOnlyList<string> ModelRedrawCauses, bool MaterialsOwed,
         IReadOnlyList<KeyReport> Keys, long HeldMs)
     {
         /// <summary>A key timed out or hit a cap rather than being let go by its batch.</summary>
         public bool Forced => Keys.Any(k => k.TimedOut || k.Capped);
     }
 
-    /// <summary>What to do with a release: redraw first when a model change is owed, then composite what waited.</summary>
-    internal readonly record struct ReleasePlan(bool RedrawFirst, bool Composite, bool ComposeHeld);
+    /// <summary>
+    /// What to do with a release: redraw first when a model change is owed, then composite what waited. That composite
+    /// is never held again: a batch starting during its debounce would otherwise hold back whatever composite it had
+    /// already replaced (see <see cref="CompositorService.TriggerRecomposite"/>'s debounce gate).
+    /// </summary>
+    internal readonly record struct ReleasePlan(bool RedrawFirst, bool Composite);
 
     /// <summary>What <see cref="Admit"/> decided for a trigger.</summary>
     internal enum Admission { Run, Deferred, AutoRedrawOff }
@@ -202,7 +205,7 @@ internal sealed class RedrawHold
             var r = new Released(
                 deferred.Select(d => d.Reason).Distinct().ToList(), deferred.Count > 0,
                 deferred.Any(d => d.Force), forced.All(d => d.SkinAuth), deferred.Any(d => d.AutoRedrawExempt),
-                deferred.Count == 0 ? 0 : deferred.Max(d => d.ReDeferrals), causes.ToList(), materialsOwed,
+                causes.ToList(), materialsOwed,
                 reports.ToList(), now - spanStart);
             deferred.Clear();
             causes.Clear();
@@ -257,16 +260,15 @@ internal sealed class RedrawHold
 
     /// <summary>
     /// A release redraws first when a model change is owed, so the composite after it samples the refits; then
-    /// composites what waited, if it can. A forced release, or one already re-held once, composites unheld.
+    /// composites what waited, if it can — unheld, forced release or not.
     /// </summary>
     internal static ReleasePlan PlanRelease(Released r, bool disposed, bool canComposite)
-        => disposed ? default
-         : new ReleasePlan(r.ModelRedrawCauses.Count > 0, r.AnyDeferred && canComposite,
-                           !r.Forced && r.MaxReDeferrals == 0);
+        => disposed ? default : new ReleasePlan(r.ModelRedrawCauses.Count > 0, r.AnyDeferred && canComposite);
 
     /// <summary>
     /// Whether to ask again for an owed redraw no redraw has answered: not while held or while a composite (whose
-    /// publish pays it off) is under way, every 2 s, three times at most, and only with the character drawn.
+    /// publish pays it off) is under way, every 2 s, and only with the character drawn. <paramref name="asks"/> counts
+    /// the release's own redraw: three asks in all, that one and two more.
     /// </summary>
     internal static bool OwedRedrawDue(bool owed, bool held, bool compositeBusy, long msSinceAsk, int asks,
                                        bool playerDrawn)
@@ -286,4 +288,21 @@ internal sealed class RedrawHold
     /// <summary>A draining batch lets its key go once its own evaluations are done, or after <paramref name="capMs"/>.</summary>
     internal static bool ReleaseAfterWait(bool evaluationsPending, long waitedMs, int capMs)
         => !evaluationsPending || waitedMs >= capMs;
+}
+
+/// <summary>
+/// The mods an auto refit batch is writing, each for a short window from its mark: a setting event on one within it
+/// is the batch's own, and what it sets off is held with the batch. A player's change to the same mod inside the window
+/// is held too — accepted: it is rare, and only waits for the batch's end. Thread-safe.
+/// </summary>
+internal sealed class OwnWriteMarks(Func<long> nowMs, int windowMs)
+{
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, long> until =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The batch is about to write <paramref name="modDir"/>.</summary>
+    internal void Mark(string modDir) => until[modDir] = nowMs() + windowMs;
+
+    /// <summary>Whether an event on <paramref name="modDir"/> now falls in a mark's window.</summary>
+    internal bool IsMarked(string modDir) => until.TryGetValue(modDir, out long u) && nowMs() < u;
 }

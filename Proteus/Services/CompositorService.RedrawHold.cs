@@ -15,7 +15,7 @@ namespace Proteus.Services;
 public partial class CompositorService
 {
     /// <summary>How long after the auto refit marks a mod its setting events count as the batch's own.</summary>
-    private const int OwnRefitWriteMs = 2000;
+    internal const int OwnRefitWriteMs = 2000;
 
     /// <summary>How long after a batch let go its summary is written, so the release's redraw, composite and any
     /// correction are counted.</summary>
@@ -26,8 +26,8 @@ public partial class CompositorService
 
     private readonly RedrawHold redrawHold = new(() => Environment.TickCount64);
 
-    // Mods the auto refit is writing, until when — their setting events are the batch's own (ExpectOwnRefitWrite).
-    private readonly ConcurrentDictionary<string, long> _ownRefitWriteUntil = new(StringComparer.OrdinalIgnoreCase);
+    // Mods the auto refit is writing: their setting events are the batch's own (ExpectOwnRefitWrite).
+    private readonly OwnWriteMarks _ownRefitWrites = new(() => Environment.TickCount64, OwnRefitWriteMs);
 
     // Body-mod evaluations under way, by mod: a draining batch waits for its own (BodyEvaluationPending).
     private readonly ConcurrentDictionary<string, int> _evaluatingMods = new(StringComparer.OrdinalIgnoreCase);
@@ -58,7 +58,13 @@ public partial class CompositorService
     {
         bool fresh = !redrawHold.IsHeld;
         bool ok = redrawHold.Hold(key, leaseMs, capMs);
-        if (ok && fresh) log.Information("{0}", redrawLedger.HoldStarted(key));
+        if (ok && fresh)
+        {
+            var line = redrawLedger.HoldStarted(key, out var previous);
+            // The last batch's summary, ended by this one: its tail is not waited out.
+            if (previous != null) log.Information("{0}", previous);
+            log.Information("{0}", line);
+        }
         return ok;
     }
 
@@ -69,12 +75,10 @@ public partial class CompositorService
     /// The auto refit is about to write <paramref name="modDir"/>'s settings or register it: the setting events that
     /// follow, and the composites they set off, are the batch's own and are held with it. Any thread.
     /// </summary>
-    public void ExpectOwnRefitWrite(string modDir)
-        => _ownRefitWriteUntil[modDir] = Environment.TickCount64 + OwnRefitWriteMs;
+    public void ExpectOwnRefitWrite(string modDir) => _ownRefitWrites.Mark(modDir);
 
     /// <summary>Whether a setting event on <paramref name="modDir"/> now is one of the auto refit's own writes.</summary>
-    private bool IsOwnRefitWrite(string modDir)
-        => _ownRefitWriteUntil.TryGetValue(modDir, out long until) && Environment.TickCount64 < until;
+    private bool IsOwnRefitWrite(string modDir) => _ownRefitWrites.IsMarked(modDir);
 
     /// <summary>Whether a body-mod evaluation or a moved-base re-check is still running for any of <paramref name="modDirs"/>.</summary>
     public bool BodyEvaluationPending(IEnumerable<string> modDirs)
@@ -153,10 +157,10 @@ public partial class CompositorService
             Interlocked.Exchange(ref _releaseRedrawTick, now);
             RedrawPlayerLogged("auto refit batch: " + string.Join(", ", r.ModelRedrawCauses), penumbra.RedrawPlayer);
         }
+        // Unheld (see RedrawHold.ReleasePlan): nothing it replaces in the debounce gate may wait on a later batch.
         if (plan.Composite)
             TriggerRecomposite("held: " + string.Join(",", r.Reasons), 200, r.Force, r.SkinAuth, r.AutoRedrawExempt,
-                               deferWhileHeld: plan.ComposeHeld, releaseToken: redrawHold.IssueReleaseToken(),
-                               reDeferrals: r.MaxReDeferrals);
+                               releaseToken: redrawHold.IssueReleaseToken());
     }
 
     /// <summary>

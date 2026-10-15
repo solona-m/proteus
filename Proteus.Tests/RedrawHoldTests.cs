@@ -17,8 +17,8 @@ public class RedrawHoldTests
     private RedrawHold Hold() => new(() => now);
     private const string Batch = "auto-refit#1";
 
-    private static Deferred Trigger(string reason, bool force = true, bool skinAuth = false, int reDeferrals = 0)
-        => new(reason, force, skinAuth, AutoRedrawExempt: false, reDeferrals);
+    private static Deferred Trigger(string reason, bool force = true, bool skinAuth = false)
+        => new(reason, force, skinAuth, AutoRedrawExempt: false);
 
     [Fact]
     [Trait("Plan", "AC-fewer-redraws-1")]
@@ -106,7 +106,6 @@ public class RedrawHoldTests
         var plan = RedrawHold.PlanRelease(r, disposed: false, canComposite: true);
         Assert.True(plan.RedrawFirst);
         Assert.True(plan.Composite);
-        Assert.True(plan.ComposeHeld);
     }
 
     [Fact]
@@ -172,7 +171,7 @@ public class RedrawHoldTests
         var lapsed = hold.Poll()!;
         Assert.True(lapsed.Keys.Single().TimedOut);
         Assert.True(lapsed.Forced);
-        Assert.False(RedrawHold.PlanRelease(lapsed, false, true).ComposeHeld);
+        Assert.True(RedrawHold.PlanRelease(lapsed, false, true).Composite);
 
         // The next job may take it again, under the same cap from its first take.
         Assert.True(hold.Hold(Batch, 30_000, 120_000));
@@ -224,14 +223,65 @@ public class RedrawHoldTests
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-fewer-redraws-10")]
-    public void A_release_composite_held_again_once_runs_unheld_the_next_time()
+    [Trait("Plan", "AC-fewer-redraws-4")]
+    public void The_frame_poll_is_due_at_the_nearest_deadline_lease_cap_or_global_cap()
     {
         var hold = Hold();
-        hold.Hold(Batch, 30_000, 120_000);
-        hold.TryDefer(Trigger("held: t", reDeferrals: 1));
-        hold.Release(Batch, 0);
-        Assert.False(RedrawHold.PlanRelease(hold.Poll()!, false, true).ComposeHeld);
+        Assert.Equal(long.MaxValue, hold.NextDueMs);
+        hold.Hold("a", 30_000, 120_000);
+        Assert.Equal(now + 30_000, hold.NextDueMs);
+        hold.Hold("b", 30_000, 10_000);
+        Assert.Equal(now + 10_000, hold.NextDueMs);    // b's cap
+        hold.Release("a", 1500);
+        Assert.Equal(now + 1500, hold.NextDueMs);
+        hold.Release("a", 0);
+        hold.Release("b", 0);
+        Assert.True(hold.NextDueMs <= now);
+        Assert.NotNull(hold.Poll());
+        Assert.Equal(long.MaxValue, hold.NextDueMs);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-fewer-redraws-4")]
+    [Trait("Plan", "EDGE-fewer-redraws-1")]
+    public void A_key_that_lapses_beside_a_live_one_is_reported_forced_at_the_end()
+    {
+        var hold = Hold();
+        hold.Hold("a", 1000, 120_000);
+        hold.Hold("b", 30_000, 120_000);
+        now += 1000;
+        Assert.Null(hold.Poll());      // b still holds
+        hold.Release("b", 0);
+        var r = hold.Poll()!;
+        Assert.True(r.Keys.Single(k => k.Key == "a").TimedOut);
+        Assert.True(r.Forced);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-fewer-redraws-2")]
+    public void A_lapsed_key_taken_again_past_its_cap_is_refused()
+    {
+        var hold = Hold();
+        hold.Hold(Batch, 1000, 5000);
+        now += 1000;
+        Assert.NotNull(hold.Poll());   // lapsed
+        now += 4000;
+        Assert.False(hold.Hold(Batch, 1000, 5000));
+        Assert.False(hold.IsHeld);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-fewer-redraws-21")]
+    public void An_event_on_a_mod_counts_as_the_batchs_own_for_two_seconds_after_its_mark()
+    {
+        var marks = new OwnWriteMarks(() => now, CompositorService.OwnRefitWriteMs);
+        Assert.False(marks.IsMarked("Chibi"));
+        marks.Mark("Chibi");
+        now += CompositorService.OwnRefitWriteMs - 1;
+        Assert.True(marks.IsMarked("chibi"));     // a player's change in the window is held too (accepted)
+        Assert.False(marks.IsMarked("Other"));
+        now += 1;
+        Assert.False(marks.IsMarked("Chibi"));
     }
 
     [Fact]
@@ -299,5 +349,34 @@ public class RedrawHoldTests
         var r = hold.Poll()!;
         Assert.Equal(deferred.OrderBy(x => x), r.Reasons.OrderBy(x => x));
         Assert.Equal(500, r.Reasons.Count);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-fewer-redraws-23")]
+    public void A_trigger_racing_the_release_is_either_handed_back_or_told_to_run_now()
+    {
+        for (int round = 0; round < 50; round++)
+        {
+            var hold = Hold();
+            hold.Hold(Batch, 30_000, 120_000);
+            var deferred = new ConcurrentBag<string>();
+            var ranNow = new ConcurrentBag<string>();
+            var handedBack = new ConcurrentBag<string>();
+            Parallel.Invoke(
+                () => Parallel.For(0, 200, i =>
+                {
+                    if (hold.TryDefer(Trigger($"t{i}"))) deferred.Add($"t{i}"); else ranNow.Add($"t{i}");
+                }),
+                () =>
+                {
+                    hold.Release(Batch, 0);
+                    for (int i = 0; i < 50; i++)
+                        if (hold.Poll() is { } r) foreach (var reason in r.Reasons) handedBack.Add(reason);
+                });
+            if (hold.Poll() is { } last) foreach (var reason in last.Reasons) handedBack.Add(reason);
+
+            Assert.Equal(deferred.OrderBy(x => x), handedBack.OrderBy(x => x));
+            Assert.Equal(200, deferred.Count + ranNow.Count);
+        }
     }
 }

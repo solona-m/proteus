@@ -71,11 +71,14 @@ public class RedrawHoldWiringTests
     public void Nothing_but_the_auto_refits_own_work_is_held()
     {
         var root = Path.GetDirectoryName(Path.GetFullPath(Path.Combine(Path.GetDirectoryName(Here())!, "..", "Proteus", "Plugin.cs")))!;
-        var holders = Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories)
+        // Any opt-in at all, literal or not, outside the three places the batch's own work passes through.
+        var optIns = Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories)
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
-                     && Regex.IsMatch(File.ReadAllText(f), @"deferWhileHeld:\s*true"))
-            .Select(f => Path.GetFileName(f)).ToHashSet();
-        Assert.Equal(["AutoRefitWatcher.cs"], holders);
+                     && Regex.IsMatch(File.ReadAllText(f), @"deferWhileHeld:"))
+            .Select(f => Path.GetFileName(f)).OrderBy(f => f).ToArray();
+        Assert.Equal(["AutoRefitWatcher.cs", "CompositorService.Events.cs", "RefitModService.cs"], optIns);
+        Assert.Single(Regex.Matches(Source("Services/AutoRefit/AutoRefitWatcher.cs"), @"deferWhileHeld:"));
+        Assert.Single(Regex.Matches(Source("Services/RefitModService.cs"), @"deferWhileHeld:"));
 
         // The literal opt-ins are the switch-on redraw only; the registrations go through the watcher's flag.
         var watcher = Source("Services/AutoRefit/AutoRefitWatcher.cs");
@@ -115,7 +118,12 @@ public class RedrawHoldWiringTests
 
         var hold = Source("Services/CompositorService.RedrawHold.cs");
         Assert.Single(Regex.Matches(hold, Regex.Escape("redrawHold.Poll()")));
-        Assert.Contains("redrawHold.Poll()", Method(hold, "void OnRedrawHoldPoll("));
+        var poll = Method(hold, "void OnRedrawHoldPoll(");
+        Assert.Contains("redrawHold.Poll()", poll);
+        // The release's composite is fired unheld: a batch starting in its debounce cannot hold back what it replaced.
+        var release = Calls(poll, "TriggerRecomposite");
+        Assert.Single(release);
+        Assert.DoesNotContain("deferWhileHeld", release[0]);
 
         var watcher = Source("Services/AutoRefit/AutoRefitWatcher.cs");
         var runQueue = Method(watcher, "async Task RunQueue(");

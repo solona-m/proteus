@@ -110,15 +110,20 @@ internal sealed class RedrawLedger
 
     // ── an auto refit batch's hold (see RedrawHold) ─────────────────────────
 
-    // Counters when the batch's hold began, for its summary; null outside a batch.
+    // Counters when the batch's hold began, for its summary; null outside a batch. Released: its hold has ended and
+    // only the summary is still to come.
     private (int Redraws, int Reloads)? batchStart;
-    private bool batchHadWork;
+    private bool batchHadWork, batchReleased;
 
-    /// <summary>A batch took the hold: its summary counts from here.</summary>
-    internal string HoldStarted(string key)
+    /// <summary>
+    /// A batch took the hold: its summary counts from here. A batch starting while the last one's summary is still
+    /// to come ends that summary now, in <paramref name="previousSummary"/>, rather than folding into it.
+    /// </summary>
+    internal string HoldStarted(string key, out string? previousSummary)
     {
         lock (gate)
         {
+            previousSummary = batchReleased ? Summarise() : null;
             if (batchStart == null)
             {
                 batchStart = (redraws, reloads);
@@ -144,6 +149,7 @@ internal sealed class RedrawLedger
         lock (gate)
         {
             if (r.AnyDeferred || r.ModelRedrawCauses.Count > 0) batchHadWork = true;
+            batchReleased = batchStart != null;
             var how = string.Join(", ", r.Keys.Select(k =>
                 k.Capped ? $"{k.Key} hit its cap" : k.TimedOut ? $"{k.Key} timed out" : k.Key));
             return $"[Proteus] redraws released after {r.HeldMs} ms ({how}): {r.ModelRedrawCauses.Count} redraw(s), "
@@ -154,18 +160,23 @@ internal sealed class RedrawLedger
 
     /// <summary>
     /// What the batch cost, from the hold to now (the caller asks a while after the release, so the release's own
-    /// redraw, composite and any correction are in it). Null when the batch held nothing, or there was no batch.
+    /// redraw, composite and any correction are in it). Null when the batch held nothing, has not let go yet, or there
+    /// was no batch.
     /// </summary>
     internal string? BatchSummary()
     {
-        lock (gate)
-        {
-            if (batchStart is not { } start) return null;
-            batchStart = null;
-            if (!batchHadWork) return null;
-            return $"[Proteus] outfit change (auto refit batch): {redraws - start.Redraws} redraw(s), "
-                 + $"{reloads - start.Reloads} in-place reload(s)";
-        }
+        lock (gate) return batchReleased ? Summarise() : null;
+    }
+
+    // Under gate.
+    private string? Summarise()
+    {
+        batchReleased = false;
+        if (batchStart is not { } start) return null;
+        batchStart = null;
+        if (!batchHadWork) return null;
+        return $"[Proteus] outfit change (auto refit batch): {redraws - start.Redraws} redraw(s), "
+             + $"{reloads - start.Reloads} in-place reload(s)";
     }
 
     /// <summary>A composite the batch's own write set off arrived after the batch let go: it runs on its own.</summary>

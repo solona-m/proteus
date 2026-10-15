@@ -140,11 +140,10 @@ public partial class CompositorService
     /// batch's when it ends (see <see cref="RedrawHold"/>). Everything else runs as before.
     /// </param>
     /// <param name="releaseToken">Set only by a batch's release: lets its composite skip the material reload the
-    /// release's redraw already did.</param>
-    /// <param name="reDeferrals">How often this trigger already found a hold at the end of its debounce.</param>
+    /// release's redraw already did. That composite is never held itself.</param>
     public void TriggerRecomposite(string reason, int delayMs = 200, bool force = true,
         bool skinFingerprintAuthoritative = false, bool autoRedrawExempt = false, bool drawStateStable = false,
-        bool deferWhileHeld = false, int releaseToken = 0, int reDeferrals = 0)
+        bool deferWhileHeld = false, int releaseToken = 0)
     {
         if (_disposed || !config.PluginEnabled || !penumbra.IsAvailable) return;
 
@@ -161,7 +160,7 @@ public partial class CompositorService
                 if (!skinFingerprintAuthoritative) Interlocked.Exchange(ref _skinForcePending, 1);
             },
             tryDefer: () => redrawHold.TryDefer(new RedrawHold.Deferred(reason, force, skinFingerprintAuthoritative,
-                                                                         autoRedrawExempt, reDeferrals)));
+                                                                         autoRedrawExempt)));
         if (admission == RedrawHold.Admission.AutoRedrawOff)
         {
             log.Debug("[Proteus] Recomposite skipped ({0}) — auto redraw is off.", reason);
@@ -188,9 +187,10 @@ public partial class CompositorService
             try { await Task.Delay(delayMs, token).ConfigureAwait(false); }
             catch (OperationCanceledException) { return; }
 
-            // A batch that took the hold during the debounce keeps its own trigger with the rest; once only.
+            // A batch that took the hold during the debounce keeps its own trigger with the rest. Only a batch's own
+            // trigger does; the release's composite, which is not, can never loop back into a hold.
             if (deferWhileHeld && redrawHold.TryDefer(new RedrawHold.Deferred(reason, force,
-                    skinFingerprintAuthoritative, autoRedrawExempt, reDeferrals + 1)))
+                    skinFingerprintAuthoritative, autoRedrawExempt)))
             {
                 log.Debug("[Proteus] Recomposite held at the end of its debounce: {0}", reason);
                 return;
