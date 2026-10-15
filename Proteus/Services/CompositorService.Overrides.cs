@@ -134,7 +134,7 @@ public partial class CompositorService
                 if (restoreAccessory) _needFullRedraw = true;
                 // userRequested: the output is already withdrawn, so a suppressed redraw would leave the character
                 // rendering textures nothing points at.
-                ReloadAndRedraw(userRequested: true);   // character reverts to un-composited
+                ReloadAndRedraw("Proteus output withdrawn", userRequested: true);   // character reverts to un-composited
                 _secondSkinActive = false;
                 _lastSkinMaterialRedirects = new(StringComparer.OrdinalIgnoreCase);
                 _lastHeadRedirects = new(StringComparer.OrdinalIgnoreCase);

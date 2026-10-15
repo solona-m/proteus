@@ -224,7 +224,7 @@ public partial class CompositorService
                     && string.Equals(BodyTypeKey(fresh), _lastCompositedBodyType, StringComparison.OrdinalIgnoreCase))
                 {
                     var beforeKey = _lastCompositedBodyType;
-                    RefreshPlayerTextures(); // reload the character so the new body's materials load
+                    RefreshPlayerTextures("body mod changed: load its materials before compositing"); // reload the character so the new body's materials load
                     for (int i = 0; i < 12; i++) // up to ~3s, then compose anyway (backstop covers misses)
                     {
                         try { await Task.Delay(250, token).ConfigureAwait(false); }

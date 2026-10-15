@@ -645,7 +645,7 @@ public sealed class PartsPanel
             NoPreview();
             previewHides = 0;
             if (preview.Active) preview.End(redraw: true);
-            else compositor.RedrawForChangedModel();
+            else compositor.RedrawForChangedModel("Studio parts");
             return;
         }
 
@@ -3309,7 +3309,7 @@ public sealed class PartsPanel
         // The previewed push now shows the saved file itself, shared with sync pairs (see TickLivePreview).
         if (previewed) previewDirty = true;
         else if (preview.Active) EndLivePreview(refreshGame: true);
-        else compositor.RedrawForChangedModel();
+        else compositor.RedrawForChangedModel("Studio parts");
         // A preview taken down for the save took its hiding with it: put the locked parts away again.
         if (!previewed) SyncHiddenPreview();
     }
@@ -3467,7 +3467,7 @@ public sealed class PartsPanel
         penumbra.ReloadModDirectory(r.ModDir);
         if (!r.WornChanged) return;
         if (preview.Active) EndLivePreview(refreshGame: true);
-        else compositor.RedrawForChangedModel();
+        else compositor.RedrawForChangedModel("Studio parts");
     }
 
     private void AfterBrushEdit()
@@ -3520,7 +3520,7 @@ public sealed class PartsPanel
                     penumbra.ReloadModDirectory(changed);
                     afterReload?.Invoke(changed);
                 }
-                compositor.RedrawForChangedModel();
+                compositor.RedrawForChangedModel("Studio parts");
                 // The save added a model (or an undo took one away): list it, so the new size can be opened here.
                 // Next frame, not now: this runs inside the side panel, and the model view drawn after it in this same
                 // frame must not find the open model closed under it.
@@ -3539,7 +3539,7 @@ public sealed class PartsPanel
                 {
                     compositor.ExpectOwnModEdit(changed);
                     penumbra.ReloadModDirectory(changed);
-                    compositor.RedrawForChangedModel();
+                    compositor.RedrawForChangedModel("Studio parts");
                     refreshModelsPending = true;   // the new sizes are models of the mod: list them
                 });
             }));
@@ -3846,7 +3846,7 @@ public sealed class PartsPanel
         // A recomposite does not redraw gear: without this the character keeps the cached model, and a new switch hides
         // nothing until something else redraws it. Not for imported pieces alone: the recomposite rebuilds their shell and
         // a changed shell model fully redraws, so a second redraw here would only flicker.
-        if (!onlyContent) compositor.RedrawForChangedModel();
+        if (!onlyContent) compositor.RedrawForChangedModel("Studio parts");
     }
 
     /// <summary>An imported piece's file that the mod does not also publish: only the composite ever draws it.</summary>

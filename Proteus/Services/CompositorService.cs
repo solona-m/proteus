@@ -94,6 +94,22 @@ public partial class CompositorService : IDisposable
     private void CancelOwnRedrawEcho()
         => Interlocked.Exchange(ref _pendingRedrawEchoTick, 0);
 
+    /// <summary>Every redraw and in-place reload Proteus asks for, numbered with its cause in dalamud.log.</summary>
+    private readonly RedrawLedger redrawLedger = new(() => Environment.TickCount64);
+
+    /// <summary>
+    /// Redraw the player through <paramref name="redraw"/>, stamped as our own (<see cref="StampOwnRedraw"/>) and logged
+    /// with <paramref name="cause"/>. The one way Proteus redraws the player, so the log counts every one.
+    /// </summary>
+    private bool RedrawPlayerLogged(string cause, Func<bool> redraw)
+    {
+        StampOwnRedraw();
+        bool reached = redraw();
+        if (!reached) CancelOwnRedrawEcho();
+        log.Information(redrawLedger.Redrew(cause, reached));
+        return reached;
+    }
+
     // Non-persistent per-mod color override pushed by the design-binding system. When set, the
     // compositor uses these colors in place of each mod's metadata.json colors for the run; null
     // means "use metadata as authored". Reference assignment is atomic; read on the recomposite task.

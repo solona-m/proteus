@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
+using Proteus.Interop;
 using Proteus.Services;
 using Xunit;
 using Confidence = Proteus.Services.BodySizeMatch.Confidence;
@@ -487,5 +488,37 @@ public class AutoRefitDecisionsTests
         Assert.False(older.AutoRefitEnabled);
         Assert.False(older.AutoRefitVanilla);
         Assert.Empty(older.AutoRefitByCollection);
+    }
+
+    // ── why a queued piece was left ──────────────────────────────────────────
+
+    [Fact]
+    [Trait("Plan", "AC-fewer-redraws-8")]
+    public void A_piece_left_to_the_next_look_says_what_draws_it_now_and_both_mods_settings()
+    {
+        var now = new Worn("chara/equipment/e0254/model/c0201e0254_dwn.mdl", "VSS", "dwn/vss.mdl");
+        var garment = new PenumbraBridge.ModSettingsSnapshot(true, 998, new Dictionary<string, List<string>>
+        {
+            ["Skirt Size"] = ["Gen A Small"],
+            ["Hoodie Size"] = ["Neolithe XS", "Extra"],
+        }, Inherited: false, Temporary: true);
+        var winner = new PenumbraBridge.ModSettingsSnapshot(true, 716, [], Inherited: false, Temporary: false);
+
+        Assert.Equal("now drawn from VSS (dwn/vss.mdl); Cherry Pop: on, priority 998, temporary, "
+                   + "Hoodie Size = Neolithe XS + Extra, Skirt Size = Gen A Small; VSS: on, priority 716",
+            AutoRefitDecisions.AbandonDetail(now, "Cherry Pop", garment, winner));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-fewer-redraws-8")]
+    public void A_piece_now_drawn_from_the_game_says_so()
+    {
+        var now = new Worn("chara/equipment/e0254/model/c0201e0254_dwn.mdl", null, null);
+
+        Assert.Equal("now drawn from the game; Cherry Pop: off, priority 0",
+            AutoRefitDecisions.AbandonDetail(now, "Cherry Pop",
+                new PenumbraBridge.ModSettingsSnapshot(false, 0, [], false, false), winner: null));
+        Assert.Equal("now drawn from the game; Cherry Pop: not set in this collection",
+            AutoRefitDecisions.AbandonDetail(now, "Cherry Pop", garment: null, winner: null));
     }
 }

@@ -443,6 +443,7 @@ public partial class CompositorService
     // null or empty result is the mid-redraw teardown and would clear a valid snapshot.
     private void OnLocalPlayerRedrawn()
     {
+        log.Information(redrawLedger.Observed());
         var snapshot = penumbra.GetActivePlayerMaterialPaths();
         bool equipChanged = false;
         bool modelWalkOk = false;   // a draw object we actually read — see the carrier reconcile below

@@ -87,7 +87,7 @@ public partial class CompositorService
     }
 
     /// <param name="userRequested">See <see cref="RefreshPlayerTextures"/>: the redraw is the action, so auto redraw does not gate it.</param>
-    private void ReloadAndRedraw(bool redraw = true, bool userRequested = false)
+    private void ReloadAndRedraw(string cause, bool redraw = true, bool userRequested = false)
     {
         var ec = penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
         log.Debug("[Proteus] ReloadMod -> {0}", ec);
@@ -95,7 +95,7 @@ public partial class CompositorService
         {
             // Give Penumbra's async reload time to process before the refresh re-requests textures.
             Thread.Sleep(300);
-            RefreshPlayerTextures(userRequested);
+            RefreshPlayerTextures(cause, userRequested);
         }
     }
 
@@ -239,16 +239,16 @@ public partial class CompositorService
     /// hair), and do nothing else. The caller has already reloaded the owning mod. Not
     /// <see cref="RestoreChangedAccessory"/>, which also re-renders the whole composite.
     /// </summary>
-    public void RedrawForChangedModel()
+    /// <param name="cause">What changed the model, for the redraw's line in the log.</param>
+    public void RedrawForChangedModel(string cause = "a changed model")
     {
         Task.Run(() =>
         {
             try
             {
                 // Stamped so the compositor recognises the echo as its own doing.
-                StampOwnRedraw();
-                if (!Plugin.Framework.RunOnFrameworkThread(penumbra.RedrawPlayer).GetAwaiter().GetResult())
-                    CancelOwnRedrawEcho();
+                RedrawPlayerLogged(cause,
+                    () => Plugin.Framework.RunOnFrameworkThread(penumbra.RedrawPlayer).GetAwaiter().GetResult());
             }
             catch (Exception ex) { log.Error(ex, "[Proteus] redraw for a changed model failed"); }
         });
@@ -266,10 +266,8 @@ public partial class CompositorService
             {
                 penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
                 Thread.Sleep(300);
-                StampOwnRedraw();
-                if (!Plugin.Framework.RunOnFrameworkThread(penumbra.RedrawPlayer).GetAwaiter().GetResult())
-                    CancelOwnRedrawEcho();
-                log.Information("[Proteus] restored changed accessory via full redraw");
+                RedrawPlayerLogged("restore a changed accessory",
+                    () => Plugin.Framework.RunOnFrameworkThread(penumbra.RedrawPlayer).GetAwaiter().GetResult());
             }
             catch (Exception ex) { log.Error(ex, "[Proteus] restore changed accessory failed"); }
         });
@@ -278,7 +276,8 @@ public partial class CompositorService
     /// <param name="userRequested">
     /// The reload is the action the user asked for (e.g. switching Proteus off), so auto redraw does not gate it.
     /// </param>
-    private void RefreshPlayerTextures(bool userRequested = false)
+    /// <param name="cause">Why, for the reload's line in the log.</param>
+    private void RefreshPlayerTextures(string cause, bool userRequested = false)
     {
         // The chokepoint every self-initiated reload goes through, so the auto-redraw check is enforced here as well as at
         // call sites (which also skip other reload-dependent work).
@@ -307,14 +306,12 @@ public partial class CompositorService
 
             if (reapplied)
             {
-                log.Debug("[Proteus] Refreshed textures via Glamourer in-place reload.");
+                log.Information(redrawLedger.Reloaded(cause));
                 return;
             }
         }
 
-        StampOwnRedraw();
-        if (!penumbra.RedrawPlayer())
-            CancelOwnRedrawEcho();
+        RedrawPlayerLogged(cause, penumbra.RedrawPlayer);
     }
 
     /// <summary>
@@ -345,7 +342,7 @@ public partial class CompositorService
     /// <see cref="VerifyRedirectsLive"/> needs the distinction.
     /// </returns>
     private bool ReloadAndRedrawWhenReady(IDictionary<string, string> redirects,
-                                          IDictionary<string, string>? previous)
+                                          IDictionary<string, string>? previous, string cause)
     {
         var ec = penumbra.ReloadModDirectory(SidecarDiscoveryService.ManagedModDir);
         log.Debug("[Proteus] ReloadMod -> {0}", ec);
@@ -353,7 +350,7 @@ public partial class CompositorService
 
         bool live = WaitForManifestLive(redirects, previous);
 
-        RefreshPlayerTextures();
+        RefreshPlayerTextures(cause);
         SchedulePostRedrawBodyTypeCheck();
         return live;
     }

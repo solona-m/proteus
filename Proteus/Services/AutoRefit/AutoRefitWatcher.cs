@@ -452,7 +452,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
                     foreach (var (piece, _) in authorGroups) pref.Declined.Add(piece.Key);
 
                     config.Save();
-                    compositor.RedrawForChangedModel();
+                    compositor.RedrawForChangedModel("auto refit undone");
                     return count;
                 });
 
@@ -922,8 +922,10 @@ public sealed partial class AutoRefitWatcher : IDisposable
                                     r.Worn.GamePath, now.Worn.Rel ?? "");
                     return;
                 case AutoRefitDecisions.Reread.Abandon:
-                    log.Information("[Proteus] auto refit: {0} {1} is no longer drawn from {2}, left to the next look",
-                                    r.Slot, r.Worn.GamePath, r.Worn.ModDir ?? "the game");
+                    log.Information("[Proteus] auto refit: {0} {1} is no longer drawn from {2}, left to the next look — {3}",
+                                    r.Slot, r.Worn.GamePath, r.Worn.ModDir ?? "the game",
+                                    AutoRefitDecisions.AbandonDetail(now.Worn, r.Worn.ModDir,
+                                        SettingsOf(g.Settings, r.Worn.ModDir), SettingsOf(g.Settings, now.Worn.ModDir)));
                     return;
                 case AutoRefitDecisions.Reread.Retarget:
                     log.Information("[Proteus] auto refit: {0} {1}: its file changed since it was put on ({2} → {3}); "
@@ -1522,6 +1524,10 @@ public sealed partial class AutoRefitWatcher : IDisposable
          : g.Mods.TryGetValue(Path.GetFileName(root), out string? modName) && modName.Length > 0 ? modName
          : Path.GetFileName(root);
 
+    private static PenumbraBridge.ModSettingsSnapshot? SettingsOf(
+        IReadOnlyDictionary<string, PenumbraBridge.ModSettingsSnapshot>? settings, string? modDir)
+        => modDir != null && settings != null && settings.TryGetValue(modDir, out var s) ? s : null;
+
     /// <summary>Collect what only the framework thread may read. Null when there is nothing to do after all.</summary>
     private Gathered? Gather(Request r)
     {
@@ -1953,7 +1959,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
             // The walk after this redraw sees the refit worn and must leave it be.
             long quiet = Environment.TickCount64 + OwnChangeQuietMs;
             ours[r.Slot + "|" + r.Worn.GamePath] = quiet;
-            compositor.RedrawForChangedModel();
+            compositor.RedrawForChangedModel($"auto refit: {r.Slot} switched on");
             return (string?)null;
         });
         return answer;

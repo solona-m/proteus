@@ -475,6 +475,33 @@ internal static class AutoRefitDecisions
             : Reread.Retarget;
     }
 
+    /// <summary>
+    /// For the log, when a queued piece is <see cref="Reread.Abandon"/>ed: what draws it now, and the settings of the mod
+    /// it was queued from and of the one that won it. Tells a mod that took the slot by priority from a group switch in
+    /// the garment's own mod that left the piece out.
+    /// </summary>
+    internal static string AbandonDetail(Worn now, string? garmentDir,
+                                         Interop.PenumbraBridge.ModSettingsSnapshot? garment,
+                                         Interop.PenumbraBridge.ModSettingsSnapshot? winner)
+    {
+        var sb = new System.Text.StringBuilder("now drawn from ");
+        sb.Append(now.ModDir == null ? "the game" : $"{now.ModDir} ({now.Rel})");
+        if (garmentDir != null) sb.Append("; ").Append(garmentDir).Append(": ").Append(Describe(garment));
+        if (now.ModDir != null && !string.Equals(now.ModDir, garmentDir, StringComparison.OrdinalIgnoreCase))
+            sb.Append("; ").Append(now.ModDir).Append(": ").Append(Describe(winner));
+        return sb.ToString();
+
+        static string Describe(Interop.PenumbraBridge.ModSettingsSnapshot? s)
+        {
+            if (s is not { } m) return "not set in this collection";
+            var parts = new List<string> { m.Enabled ? "on" : "off", $"priority {m.Priority}" };
+            if (m.Temporary) parts.Add("temporary");
+            parts.AddRange(m.Options.OrderBy(o => o.Key, StringComparer.Ordinal)
+                                    .Select(o => $"{o.Key} = {string.Join(" + ", o.Value)}"));
+            return string.Join(", ", parts);
+        }
+    }
+
     /// <summary>Why a newly worn piece is not refitted; <see cref="Skip.None"/> when it is.</summary>
     internal enum Skip
     {
