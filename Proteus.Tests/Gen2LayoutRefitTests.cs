@@ -51,7 +51,8 @@ public class Gen2LayoutRefitTests
     public void The_patch_follows_the_skin_around_it()
     {
         // Sheared and lifted unevenly, so a carry that ignored where the patch is joined could not pass: the leg's top
-        // row moves by Move(y = 1), and so must every point of the patch above it.
+        // row moves by Move(y = 1), and every point of the patch above it with it — settled between the rows it touches,
+        // so within a millimetre.
         var source = Strip(Gen2, side: 1, patchTop: 1.02f);
         var target = Leg(Bibo, side: 1, Move);
 
@@ -61,7 +62,7 @@ public class Gen2LayoutRefitTests
         foreach (int v in source.Skin)
             Assert.True(built!.Field[v].HasValue, $"vertex {v} has no displacement");
         foreach (int v in source.Patch)
-            Assert.True(Vector3.Distance(built!.Field[v]!.Value, top) < 1e-5f,
+            Assert.True(Vector3.Distance(built!.Field[v]!.Value, top) < 1e-3f,
                         $"patch vertex {v} moved {built.Field[v]}, the leg's top {top}");
         Assert.Equal(0, Folded(source, built!));
     }
@@ -165,7 +166,8 @@ public class Gen2LayoutRefitTests
         foreach (int v in source.Patch)
         {
             int nearest = placed.MinBy(m => Vector3.DistanceSquared(At(source.Model, m), At(source.Model, v)));
-            Assert.Equal(built!.Field[nearest], built.Field[v]);
+            Assert.True(Vector3.Distance(built!.Field[nearest]!.Value, built.Field[v]!.Value) < 1e-6f,
+                        $"vertex {v} moved {built.Field[v]}, its nearest placed point {built.Field[nearest]}");
         }
     }
 

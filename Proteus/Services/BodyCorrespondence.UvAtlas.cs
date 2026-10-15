@@ -19,7 +19,7 @@ namespace Proteus.Services;
 /// The atlas is mirrored in places (the feet, at least), so one uv can lie on both sides of the body. Where it does,
 /// the landing on the source point's own side wins, and among those the nearest in space.
 /// </summary>
-internal sealed class UvAtlasCorrespondence : IBodyCorrespondence
+internal sealed partial class UvAtlasCorrespondence : IBodyCorrespondence
 {
     /// <summary>
     /// The share of the source body's skin that must find a landing before the two are accepted as sharing a layout.
@@ -68,6 +68,9 @@ internal sealed class UvAtlasCorrespondence : IBodyCorrespondence
     /// <summary>How the source's skin landed: what decided the pair, for the log and the tests.</summary>
     internal Stats Measured { get; }
 
+    /// <summary>The vertices given the skin's around them on the by-area path, settled; empty on any other pair.</summary>
+    internal IReadOnlySet<int> CarriedVertices { get; private init; } = new HashSet<int>();
+
     /// <summary>
     /// How much of the source's skin found its place on the target.
     /// </summary>
@@ -75,13 +78,27 @@ internal sealed class UvAtlasCorrespondence : IBodyCorrespondence
     /// <param name="Placeable">Skin vertices that could have: the skin less the islands drawn off its sheet.</param>
     /// <param name="OffSheet">Skin vertices on islands drawn off the source layout's sheet.</param>
     /// <param name="VertexCoverage">Landed over placeable, by count.</param>
-    /// <param name="AreaCoverage">The same by the skin's surface, each vertex weighing a third of its triangles.</param>
-    /// <param name="MaxShift">The furthest any landed vertex moved, in metres.</param>
-    /// <param name="P99Shift">The 99th percentile of how far the landed vertices moved.</param>
+    /// <param name="RawAreaCoverage">The same by the skin's surface, each vertex weighing a third of its triangles,
+    /// before the coherence guard.</param>
+    /// <param name="AreaCoverage">By surface, over the landings trusted after the guard; the raw figure off its path.</param>
+    /// <param name="MaxShift">The furthest any trusted landing moved, in metres.</param>
+    /// <param name="P99Shift">The 99th percentile of how far the trusted landings moved.</param>
     /// <param name="Carried">Placeable vertices that missed and were given the skin's around them instead
     /// (<see cref="TryBuild"/>'s <c>byArea</c>); 0 on any other pair.</param>
+    /// <param name="Disagreed">Landings the guard set aside for disagreeing with the skin around them.</param>
+    /// <param name="Unvouched">Landings the guard set aside amid skin with no place.</param>
+    /// <param name="Unjudged">Landings too sparsely surrounded to judge, and kept.</param>
+    /// <param name="P99Disagreement">How far the kept landings disagree with their neighbours, 99th percentile, as a
+    /// share of what is allowed.</param>
+    /// <param name="MaxDisagreement">The same, the largest.</param>
     internal readonly record struct Stats(int Landed, int Placeable, int OffSheet, float VertexCoverage,
-                                          float AreaCoverage, float MaxShift, float P99Shift, int Carried);
+                                          float RawAreaCoverage, float AreaCoverage, float MaxShift, float P99Shift,
+                                          int Carried, int Disagreed = 0, int Unvouched = 0, int Unjudged = 0,
+                                          float P99Disagreement = 0f, float MaxDisagreement = 0f)
+    {
+        /// <summary>Landings the guard set aside.</summary>
+        public int Distrusted => Disagreed + Unvouched;
+    }
 
     /// <param name="sourceUv">uv0 per source vertex, in <see cref="ModelParts.Positions"/> order.</param>
     /// <param name="targetUv">uv0 per target vertex, in <see cref="ModelParts.Positions"/> order.</param>
@@ -163,39 +180,63 @@ internal sealed class UvAtlasCorrespondence : IBodyCorrespondence
 
         int placeable = skin.Count - offSheet.Count;
         float coverage = placeable > 0 ? (float)landed / placeable : 0f;
-        float areaCoverage = AreaCoverage(source, skin, offSheet, field);
+        float rawArea = AreaCoverage(source, skin, offSheet, field);
         var (maxShift, p99Shift) = Shifts(field);
-        measured = new Stats(landed, placeable, offSheet.Count, coverage, areaCoverage, maxShift, p99Shift, 0);
+        measured = new Stats(landed, placeable, offSheet.Count, coverage, rawArea, rawArea, maxShift, p99Shift, 0);
 
-        // By count first, as every pair always was; by surface only for a mirrored layout's body the count refuses.
+        // By count first, as every pair always was; by surface only for a mirrored layout's body the count refuses —
+        // and then only what the skin around it agrees with counts as landed.
         var carry = offSheet;
+        HashSet<int> carriedVertices = [];
         if (coverage < MinCoverage)
         {
-            if (!byArea || areaCoverage < MinCoverage)
+            if (!byArea || rawArea < MinCoverage)
+                return Refuse(what, byArea ? rawArea : coverage, out refusal);
+
+            var coherence = Distrust(source, skin, offSheet, field);
+            float area = AreaCoverage(source, skin, offSheet, field);
+            (maxShift, p99Shift) = Shifts(field);
+            measured = measured with
             {
-                refusal = string.Format(Loc.Localize("Parts.Retarget.Refuse.LowCoverage.Fmt",
-                              "Only {1:P0} of the source {0} body finds its place on the target by texture coordinate, " +
-                              "so the two do not share a texture layout. They cannot be refitted onto each other."),
-                              what, byArea ? areaCoverage : coverage);
-                return false;
-            }
+                AreaCoverage = area, MaxShift = maxShift, P99Shift = p99Shift, Carried = placeable - landed,
+                Disagreed = coherence.Disagreed, Unvouched = coherence.Unvouched, Unjudged = coherence.Unjudged,
+                P99Disagreement = coherence.P99Ratio, MaxDisagreement = coherence.MaxRatio,
+            };
+            if (area < MinCoverage) return Refuse(what, area, out refusal);
+
             carry = [..offSheet];
             foreach (int v in skin)
-                if (field[v] == null && carry.Add(v))
-                    measured = measured with { Carried = measured.Carried + 1 };
+                if (field[v] == null) carry.Add(v);
+            Carry(source, field, carry);
+            Relax(source, field, carry);
+            carriedVertices = carry;
+            carry = [];
         }
 
         if (carry.Count > 0) Carry(source, field, carry);
         correspondence = new UvAtlasCorrespondence(source, field,
             $"{what}: matched by texture coordinate, {landed:N0} of {placeable:N0} skin vertices ({coverage:P1})" +
             (measured.Carried > 0
-                 ? $"; {areaCoverage:P1} of its skin by area; {measured.Carried:N0} with no place on the target's " +
-                   "layout follow the skin around them"
+                 ? $"; {measured.AreaCoverage:P1} of its skin by area; {measured.Carried:N0} with no place on the " +
+                   "target's layout follow the skin around them"
                  : "") +
+            (measured.Disagreed > 0
+                 ? $"; {measured.Disagreed:N0} whose landing disagreed with the skin around them follow it instead"
+                 : "") +
+            (measured.Unvouched > 0 ? $"; {measured.Unvouched:N0} that landed amid skin with no place follow it too" : "") +
             (offSheet.Count > 0 ? $"; {offSheet.Count:N0} drawn off the texture layout follow the skin around them" : ""),
-            measured);
+            measured) { CarriedVertices = carriedVertices };
         refusal = "";
         return true;
+    }
+
+    private static bool Refuse(string what, float coverage, out string refusal)
+    {
+        refusal = string.Format(Loc.Localize("Parts.Retarget.Refuse.LowCoverage.Fmt",
+                      "Only {1:P0} of the source {0} body finds its place on the target by texture coordinate, " +
+                      "so the two do not share a texture layout. They cannot be refitted onto each other."),
+                      what, coverage);
+        return false;
     }
 
     /// <summary>
@@ -299,7 +340,7 @@ internal sealed class UvAtlasCorrespondence : IBodyCorrespondence
     /// ring from the seam. The seam is where they meet the rest of the body at the same POSITION (a uv cut splits the
     /// vertices, so no triangle crosses it), or by a triangle. Any joined to nothing take their nearest placed point's.
     /// </summary>
-    private static void Carry(ModelParts source, Vector3?[] field, HashSet<int> offSheet)
+    private static void Carry(ModelParts source, Vector3?[] field, HashSet<int> carried)
     {
         int vc = source.Positions.Length / 3;
         Vector3 P(int v) => new(source.Positions[v * 3], source.Positions[v * 3 + 1], source.Positions[v * 3 + 2]);
@@ -320,7 +361,7 @@ internal sealed class UvAtlasCorrespondence : IBodyCorrespondence
                 {
                     int a = part.Triangles[t + k], b = part.Triangles[t + (k + 1) % 3];
                     if (a < 0 || b < 0 || a >= vc || b >= vc) continue;
-                    if (offSheet.Contains(a) || offSheet.Contains(b)) Link(a, b);
+                    if (carried.Contains(a) || carried.Contains(b)) Link(a, b);
                 }
         }
 
@@ -332,12 +373,12 @@ internal sealed class UvAtlasCorrespondence : IBodyCorrespondence
             if (!at.TryGetValue(Key(v), out var bucket)) at[Key(v)] = bucket = [];
             bucket.Add(v);
         }
-        foreach (int v in offSheet)
+        foreach (int v in carried)
             foreach (int m in at[Key(v)])
                 if (m != v) Link(v, m);
 
         // Ring by ring from the seam, until the island is full or no ring reaches further.
-        var pending = new HashSet<int>(offSheet);
+        var pending = new HashSet<int>(carried);
         while (pending.Count > 0)
         {
             var ring = new List<(int V, Vector3 D)>();
@@ -362,7 +403,7 @@ internal sealed class UvAtlasCorrespondence : IBodyCorrespondence
         if (pending.Count == 0) return;
         var placed = new List<int>();
         for (int v = 0; v < vc; v++)
-            if (field[v] != null && !offSheet.Contains(v)) placed.Add(v);
+            if (field[v] != null && !carried.Contains(v)) placed.Add(v);
         if (placed.Count == 0) return;
         foreach (int v in pending)
         {
@@ -377,6 +418,61 @@ internal sealed class UvAtlasCorrespondence : IBodyCorrespondence
             field[v] = field[best];
         }
     }
+
+    /// <summary>
+    /// Settle the carried vertices into the skin around them: each the mean of its neighbours (by triangle, and its
+    /// welded twins), the landings fixed, until nothing moves. Ring by ring, a carried region takes a copy of its seam
+    /// that is uneven across it — Tight&amp;Firm's crotch is a patch of 2 mm triangles between seams moved centimetres
+    /// apart, and 40–85 of them turned over. Settled, the region is the smoothest field its seam allows.
+    /// </summary>
+    private static void Relax(ModelParts source, Vector3?[] field, HashSet<int> carried)
+    {
+        if (carried.Count == 0) return;
+        int vc = source.Positions.Length / 3;
+        var nodes = SkinNodes.Build(source, SkinVertices(source));
+        var order = new List<int>(carried);
+        order.Sort();
+        var neighbours = new Dictionary<int, List<int>>();
+        foreach (int v in order)
+        {
+            int node = nodes.NodeOf[v];
+            var near = new List<int>();
+            if (node >= 0)
+            {
+                foreach (int twin in nodes.Members[node])
+                    if (twin != v) near.Add(twin);
+                foreach (int m in nodes.Ring1[node])
+                    near.AddRange(nodes.Members[m]);
+            }
+            neighbours[v] = near;
+        }
+
+        var next = new Vector3[vc];
+        for (int pass = 0; pass < RelaxPasses; pass++)
+        {
+            float moved = 0f;
+            foreach (int v in order)
+            {
+                var sum = Vector3.Zero;
+                int n = 0;
+                foreach (int m in neighbours[v])
+                    if (field[m] is { } d) { sum += d; n++; }
+                next[v] = n > 0 ? sum / n : field[v] ?? Vector3.Zero;
+            }
+            foreach (int v in order)
+            {
+                moved = MathF.Max(moved, Vector3.Distance(next[v], field[v] ?? Vector3.Zero));
+                field[v] = next[v];
+            }
+            if (moved < RelaxSettled) break;
+        }
+    }
+
+    /// <summary>The most passes <see cref="Relax"/> takes: enough for a patch 70 rings across to settle.</summary>
+    private const int RelaxPasses = 5000;
+
+    /// <summary>Settled once no carried vertex moves more than this in a pass (1 µm).</summary>
+    private const float RelaxSettled = 1e-6f;
 
     /// <summary>Two vertices this close (0.01 mm) are one point of the surface, split only by a uv seam.</summary>
     private const float WeldPerMetre = 100_000f;
