@@ -1990,6 +1990,48 @@ public class TextureLoader
         return ((byte[])mtrl.Clone(), false);
     }
 
+    // Patches the constant in place if the material declares it; otherwise ADDS it, the way Penumbra's material editor
+    // does: an 8-byte entry (id, value offset, byte size) at the end of the constant table, its floats at the end of
+    // the ShaderValues list, and ConstantCount, ShaderValueListSize and FileSize grown to match. Returns
+    // (originalClone, false) when the file can't be walked, declares the constant too small for vals, or would grow
+    // past the header's 16-bit sizes.
+    public static (byte[] data, bool written) EnsureConstantValues(byte[] mtrl, uint id, params float[] vals)
+    {
+        var (patched, found) = PatchConstantValues(mtrl, id, vals);
+        if (found) return (patched, true);
+        if (!TryParseMtrlHeader(mtrl, out int matHeaderStart, out int svListSize, out _, out int constCount, out _,
+                                out int constBase, out int svBase))
+            return (patched, false);
+
+        // Declared, just too small for vals: a second entry of the same id is not ours to add.
+        for (int i = 0; i < constCount; i++)
+            if (BitConverter.ToUInt32(mtrl, constBase + i * 8) == id) return (patched, false);
+
+        int need     = vals.Length * 4;
+        int valueEnd = svBase + svListSize;
+        int fileSize = BitConverter.ToUInt16(mtrl, 4);
+        if (valueEnd > mtrl.Length || svListSize % 4 != 0
+            || svListSize + need > ushort.MaxValue || mtrl.Length + 8 + need > ushort.MaxValue)
+            return (patched, false);
+
+        int entryAt = constBase + constCount * 8;
+        var result  = new byte[mtrl.Length + 8 + need];
+        Array.Copy(mtrl, 0, result, 0, entryAt);
+        BitConverter.TryWriteBytes(result.AsSpan(entryAt),     id);
+        BitConverter.TryWriteBytes(result.AsSpan(entryAt + 4), (ushort)svListSize);
+        BitConverter.TryWriteBytes(result.AsSpan(entryAt + 6), (ushort)need);
+        // The samplers and the existing values move down by the entry; the new values follow them.
+        Array.Copy(mtrl, entryAt, result, entryAt + 8, valueEnd - entryAt);
+        for (int k = 0; k < vals.Length; k++)
+            BitConverter.TryWriteBytes(result.AsSpan(valueEnd + 8 + k * 4), vals[k]);
+        Array.Copy(mtrl, valueEnd, result, valueEnd + 8 + need, mtrl.Length - valueEnd);
+
+        BitConverter.TryWriteBytes(result.AsSpan(matHeaderStart),     (ushort)(svListSize + need));
+        BitConverter.TryWriteBytes(result.AsSpan(matHeaderStart + 4), (ushort)(constCount + 1));
+        BitConverter.TryWriteBytes(result.AsSpan(4), (ushort)(fileSize + 8 + need));
+        return (result, true);
+    }
+
     // Writes a unique .tmp in the same directory, then atomically moves it into place, so file watchers (Mare
     // Synchronos) only ever see a fully written file.
     private static void WriteWithRetry(string path, Action<FileStream> write, int attempts = 5, int delayMs = 40)
