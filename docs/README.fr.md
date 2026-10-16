@@ -90,7 +90,7 @@ Les outils :
 | Vent | Peint à quel point le vent du jeu fait balancer le vêtement, affiché en rouge. Maintenez Ctrl, ou réglez **Quantité** sur 0 %, pour effacer. |
 | Déplacer | Fait glisser une pièce, ou quelques polygones, à l'aide de flèches : une flèche la déplace le long de cet axe, un carré dans ce plan. Voir [Déplacer, tourner et redimensionner](#déplacer-tourner-et-redimensionner) plus bas. |
 | Tourner | Fait pivoter une pièce autour de son centre : faites glisser un anneau coloré pour la tourner autour de cet axe, ou l'anneau extérieur pour la tourner autour de votre vue. |
-| Redimensionner | Agrandit ou rétrécit une pièce autour de son centre : appuyez dessus et faites glisser vers la droite pour l'agrandir, vers la gauche pour la rétrécir. |
+| Redimensionner | Agrandit, rétrécit ou étire une pièce autour de son centre : faites glisser une poignée colorée pour l'étirer le long de cet axe, ou appuyez sur la pièce et faites glisser vers la droite pour l'agrandir, vers la gauche pour la rétrécir. |
 | Taille du corps | Réajuste le vêtement à une autre taille de corps, ou à un autre mod de corps. Voir [Taille de corps](#taille-de-corps) plus bas. |
 
 ##### Pinceau

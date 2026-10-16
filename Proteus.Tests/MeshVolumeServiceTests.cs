@@ -300,6 +300,65 @@ public class MeshVolumeServiceTests
         public float WindAt(int vertex) => 0f;
     }
 
+    /// <summary>Mesh <paramref name="mesh"/>'s vertex <paramref name="vertex"/>'s normal, as stored.</summary>
+    private static Vector3 StoredNormalAt(byte[] mdl, int mesh, int vertex)
+    {
+        var src = SecondSkinWriter.Parse(mdl);
+        int mo = src.MeshStart + mesh * 36;
+        var ne = src.Decls[mesh].First(e => e.Usage == SecondSkinWriter.UseNormal);
+        uint vbo = BitConverter.ToUInt32(mdl, mo + 20 + ne.Stream * 4);
+        byte stride = mdl[mo + 32 + ne.Stream];
+        Span<float> tmp = stackalloc float[4];
+        SecondSkinWriter.ReadTyped(mdl, src.Vb + (int)vbo + vertex * stride + ne.Offset, ne.Type, tmp);
+        return new Vector3(tmp[0], tmp[1], tmp[2]);
+    }
+
+    /// <summary>
+    /// A one-axis stretch's exact normals reach the file: every vertex the stretch moved is written with the normal the
+    /// solve gives it — the inverse-transpose, not the author's turned. A vertex the stretch left exactly where it was
+    /// (on the pivot's plane) keeps its stored bytes, as every unmoved vertex does.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-axis-scale-7")]
+    public void InflateWritesStretchedNormals()
+    {
+        const int n = 4;
+        var tilt = Vector3.Normalize(new Vector3(1f, 1f, 0f));
+        var along = Vector3.Normalize(new Vector3(1f, -1f, 0f));
+        var pos = new Vector3[n * n];
+        for (int i = 0; i < n; i++)
+            for (int j = 0; j < n; j++)
+                pos[i * n + j] = new Vector3(0.5f, 0.2f, 0.5f) + along * (i * 0.01f) + Vector3.UnitZ * (j * 0.01f);
+        var tris = new List<int>();
+        for (int i = 0; i + 1 < n; i++)
+            for (int j = 0; j + 1 < n; j++)
+            {
+                int a = i * n + j, b = (i + 1) * n + j, c = i * n + j + 1, d = (i + 1) * n + j + 1;
+                tris.AddRange([a, b, d, a, d, c]);
+            }
+        var mdl = SyntheticModel.BuildSurface([], new SyntheticModel.SurfaceMesh(
+            "/mt_test.mtrl", pos, [.. Enumerable.Repeat(tilt, pos.Length)], new Vector2[pos.Length],
+            new (string, float)[]?[pos.Length], [(0u, tris.ToArray())]));
+        var read = ModelPartReader.Read(mdl)!;
+        var solve = new MeshVolumeSolve(read);
+
+        var pivot = new Vector3(0.515f, 0.1853f, 0.515f);       // on no vertex's plane: every vertex moves
+        Assert.True(solve.BeginMove(read.Parts.First(p => p.Island < 0).Triangles, adjacent: false, falloffRadius: 0f) > 0);
+        solve.TransformTo(Proteus.Gui.PartScaleDrag.Build(pivot, new Vector3(1f, 2f, 1f)));
+        solve.EndMove();
+
+        var written = MeshVolumeService.Inflate(mdl, solve).Model;
+        var expected = Vector3.Normalize(new Vector3(1f, 0.5f, 0f));
+        for (int v = 0; v < pos.Length; v++)
+        {
+            Assert.NotEqual(0f, solve.DeltaAt(v).Y);
+            var stored = StoredNormalAt(written, 0, v);
+            var solved = solve.NormalAt(v);
+            Assert.True(Vector3.Distance(new Vector3(solved.X, solved.Y, solved.Z), stored) < 2e-3f, $"vertex {v}: wrote {stored}");
+            Assert.True(Vector3.Distance(expected, Vector3.Normalize(stored)) < 2e-3f, $"vertex {v}: wrote {stored}");
+        }
+    }
+
     /// <summary>Mesh <paramref name="mesh"/>'s vertex <paramref name="vertex"/>, as stored.</summary>
     private static Vector3 PositionAt(byte[] mdl, int mesh, int vertex)
     {

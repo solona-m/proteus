@@ -140,13 +140,18 @@ public sealed class TranslateGizmo
     /// <summary>How long, in model units, a segment from <paramref name="centre"/> must be to span
     /// <see cref="ArrowPixels"/> on screen — measured along whichever axis shows longest.</summary>
     private static float ModelLengthForPixels(Vector3 centre, Vector2 sc, Func<Vector3, Vector2?> toScreen)
+        => LengthForPixels(centre, sc, toScreen, ProteusStyle.S(ArrowPixels));
+
+    /// <summary>How long, in model units, a segment from <paramref name="centre"/> must be to span
+    /// <paramref name="pixels"/> on screen along whichever axis shows longest; 0 when none shows.</summary>
+    internal static float LengthForPixels(Vector3 centre, Vector2 sc, Func<Vector3, Vector2?> toScreen, float pixels)
     {
         const float Probe = 0.01f;
         float best = 0f;
         foreach (var axis in new[] { Vector3.UnitX, Vector3.UnitY, Vector3.UnitZ })
             if (toScreen(centre + axis * Probe) is { } s)
                 best = MathF.Max(best, Vector2.Distance(s, sc));
-        return best > 1e-4f ? Probe * ProteusStyle.S(ArrowPixels) / best : 0f;
+        return best > 1e-4f ? Probe * pixels / best : 0f;
     }
 
     private static bool IsAxis(Handle h) => h is Handle.X or Handle.Y or Handle.Z;
@@ -277,7 +282,7 @@ public sealed class TranslateGizmo
     }
 
     /// <summary>ABGR, without alpha: X red, Y green, Z blue, as in every DCC tool.</summary>
-    private static uint ColourOf(Handle h) => h switch
+    internal static uint ColourOf(Handle h) => h switch
     {
         Handle.X => 0x003C3CE6u,
         Handle.Y => 0x0050C850u,
@@ -287,7 +292,7 @@ public sealed class TranslateGizmo
         _ => 0x00E63CC8u,
     };
 
-    private static uint Brighten(uint rgb)
+    internal static uint Brighten(uint rgb)
     {
         uint r = Math.Min(255u, (rgb & 0xFF) + 60), g = Math.Min(255u, ((rgb >> 8) & 0xFF) + 60), b = Math.Min(255u, ((rgb >> 16) & 0xFF) + 60);
         return r | (g << 8) | (b << 16);

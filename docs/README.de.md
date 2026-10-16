@@ -90,7 +90,7 @@ Die Werkzeuge:
 | Wind | Malt, wie stark der Wind des Spiels das Kleidungsstück bewegt, rot dargestellt. Halte Strg gedrückt oder setze **Menge** auf 0 %, um zu radieren. |
 | Verschieben | Zieht ein Teil oder einige Polygone an Pfeilen: Ein Pfeil verschiebt es entlang dieser Achse, ein Quadrat in dieser Ebene. Siehe [Verschieben, Drehen und Skalieren](#verschieben-drehen-und-skalieren) weiter unten. |
 | Drehen | Dreht ein Teil um seine Mitte: Ziehe an einem farbigen Ring, um es um diese Achse zu drehen, oder am äußeren Ring, um es um deine Blickrichtung zu drehen. |
-| Skalieren | Vergrößert oder verkleinert ein Teil um seine Mitte: Drücke darauf und ziehe nach rechts zum Vergrößern, nach links zum Verkleinern. |
+| Skalieren | Vergrößert, verkleinert oder streckt ein Teil um seine Mitte: Ziehe an einem farbigen Griff, um es entlang dieser Achse zu strecken, oder drücke auf das Teil und ziehe nach rechts zum Vergrößern, nach links zum Verkleinern. |
 | Körpergröße | Passt das Kleidungsstück an eine andere Körpergröße oder an einen anderen Körper-Mod an. Siehe [Körpergröße](#körpergröße) weiter unten. |
 
 ##### Malen
