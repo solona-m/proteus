@@ -227,10 +227,12 @@ public class RetargetInputsTests
     [Fact]
     [Trait("Plan", "AC-refit-piercings-option-7")]
     [Trait("Plan", "EDGE-refit-piercings-option-7")]
+    [Trait("Plan", "EDGE-refit-piercings-option-12")]
     public void Key_changes_with_piercings()
     {
         // [AC-refit-piercings-option-7] Ticking the box takes a preview down; [EDGE-refit-piercings-option-7] without
-        // the skin replaced, or on a skin-only redraw, it changes nothing and leaves the preview up.
+        // the skin replaced, or on a skin-only redraw ([EDGE-refit-piercings-option-12]), it changes nothing and leaves the
+        // preview up.
         var from = new Dictionary<string, BodyOption> { ["_sho"] = FeetM, ["_dwn"] = LegsS };
         var to = new Dictionary<string, List<BodyOption>> { ["_dwn"] = [LegsM], ["_sho"] = [FeetM] };
         string Key(KeepEnds.Route? route, bool replaceSkin, bool piercings, Dictionary<string, BodyOption>? f = null)

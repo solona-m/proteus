@@ -913,7 +913,8 @@ public class SizeSetRefitTests(ITestOutputHelper output)
 
     [LocalDataFact(Bibo, Neolithe)]
     [Trait("Plan", "AC-keep-ends-studio-9")]
-    public void A_shoe_reaching_no_leg_gets_a_skin_only_option_per_body_where_the_skin_changes()   // [AC-keep-ends-studio-9]
+    [Trait("Plan", "EDGE-refit-piercings-option-12")]
+    public void A_shoe_reaching_no_leg_gets_a_skin_only_option_per_body_where_the_skin_changes()   // [AC-keep-ends-studio-9] [EDGE-refit-piercings-option-12]
     {
         var shoe = BiboFeet(mensSkin: true);
         Assert.Equal(KeepEnds.Route.SkinOnly, KeepEndsRouteOf(shoe, Bibo, Neolithe));
@@ -942,7 +943,8 @@ public class SizeSetRefitTests(ITestOutputHelper output)
 
     [LocalDataFact(Bibo, Neolithe)]
     [Trait("Plan", "AC-keep-ends-studio-9")]
-    public void A_shoe_reaching_no_leg_whose_skin_already_matches_gets_nothing()   // [AC-keep-ends-studio-9]
+    [Trait("Plan", "EDGE-refit-piercings-option-12")]
+    public void A_shoe_reaching_no_leg_whose_skin_already_matches_gets_nothing()   // [AC-keep-ends-studio-9] [EDGE-refit-piercings-option-12]
     {
         var shoe = BiboFeet(mensSkin: false);
         Assert.Equal(KeepEnds.Route.SkinOnly, KeepEndsRouteOf(shoe, Bibo, Neolithe));
