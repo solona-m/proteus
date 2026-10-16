@@ -27,6 +27,13 @@ internal static partial class BodyRetarget
     /// </summary>
     internal const float FloatGrowMost = 0.004f;
 
+    /// <summary>
+    /// How close the author fitted cloth (5 mm) for the standoff pass to bring it back wherever the refit carried it off the
+    /// breast — under the bust and over one that grew too, not only above it: a bodice hugs the body. Dirndl's Bodice on
+    /// Almond XS in game: authored 2-4 mm off under and on the bust, left 7-17 mm off there.
+    /// </summary>
+    internal const float FloatTight = 0.005f;
+
     /// <summary>How far from a body the standoff pass looks for it (60 mm).</summary>
     internal const float FloatReach = DeepGrowReach;
 
@@ -39,7 +46,8 @@ internal static partial class BodyRetarget
 
     /// <summary>The chest pair's two surfaces and what the standoff pass reads off the new one — see
     /// <see cref="StandoffTest"/>.</summary>
-    internal sealed record Standoff(BodySurface Source, BodySurface Target, float ApexY, Func<Vector3, bool> IsArm);
+    internal sealed record Standoff(BodySurface Source, BodySurface Target, float ApexY, Func<Vector3, bool> IsArm,
+                                    Func<Vector3, bool> IsBreast);
 
     /// <summary>
     /// The garment's own chest, before and after: the source chest the author drew on, the new one, the height of the new
@@ -53,7 +61,8 @@ internal static partial class BodyRetarget
         var chest = pairs.FirstOrDefault(p => p.Slot == garmentSlot && p.Swaps);
         if (chest.TargetModel == null || ModelSkinReader.Read(chest.TargetModel, null, null) is not { } skin
             || skin.VertexCount * 3 != chest.Target.Positions.Length
-            || RegionTest([chest], IsArmBone, TuckArmShare) is not { } isArm) return null;
+            || RegionTest([chest], IsArmBone, TuckArmShare) is not { } isArm
+            || BreastTest(chest) is not { } isBreast) return null;
 
         var target = chest.Target;
         float left = float.NaN, right = float.NaN, leftZ = float.MinValue, rightZ = float.MinValue;
@@ -68,7 +77,8 @@ internal static partial class BodyRetarget
 
         var source = chest.Correspondence.Source;
         return new Standoff(new BodySurface(source, BodySurface.CellFor(MeanEdgeOf(source))),
-                            new BodySurface(target, BodySurface.CellFor(MeanEdgeOf(target))), MathF.Min(left, right), isArm);
+                            new BodySurface(target, BodySurface.CellFor(MeanEdgeOf(target))), MathF.Min(left, right), isArm,
+                            isBreast);
     }
 
     /// <summary>
@@ -83,9 +93,10 @@ internal static partial class BodyRetarget
     /// <para/>
     /// Each cloth point that stands further off the new chest than <see cref="FloatSlack"/> past its authored standoff, both
     /// read nearest-point on their own chest, comes back along the new chest's normal to that standoff — never nearer than
-    /// <see cref="FloatFloor"/>. Only above the new breast's apex, where the body did not grow (<see cref="FloatGrowMost"/>),
-    /// off the arm, and for cloth the author put outside the body: below the apex standing off is a drape, and cloth the
-    /// author buried has the clearance by design. Hard pieces, snapped cloth and the garment's skin stay — but skin welded
+    /// <see cref="FloatFloor"/>. Off the arm, for cloth the author put outside the body (cloth the author buried has the
+    /// clearance by design); and cloth not fitted within <see cref="FloatTight"/> over the breast only above the new
+    /// breast's apex, where the body did not grow (<see cref="FloatGrowMost"/>) — below it, or over a grown bust, it stands
+    /// off as a drape. Hard pieces, snapped cloth and the garment's skin stay — but skin welded
     /// to the cloth, which comes back with its rim. The pull keeps the
     /// push-out's slope to its neighbours, and is halved wherever it would turn a face over against the author's winding,
     /// bring the skin within <see cref="TuckClear"/> plus <see cref="FloatFaceMargin"/> of a face it moves anywhere across
@@ -110,7 +121,10 @@ internal static partial class BodyRetarget
             foreach (int v in part.Triangles)
                 if (v >= 0 && v < sets.NodeOf.Length) isCloth[sets.NodeOf[v]] = true;
         }
-        var movable = Enumerable.Range(0, sets.NodeCount).Where(n => isCloth[n]).ToArray();
+        // Held points (the Studio's unticked parts) are in neither of the solve's sets, and stay.
+        var inSolve = new bool[sets.NodeCount];
+        foreach (int n in sets.AllNodes) inSolve[n] = true;
+        var movable = Enumerable.Range(0, sets.NodeCount).Where(n => isCloth[n] && inSolve[n]).ToArray();
 
         // Each eligible point's wish and its direction (toward the new chest), read where the passes above left it.
         var want = new float[sets.NodeCount];
@@ -123,9 +137,14 @@ internal static partial class BodyRetarget
             float own = Vector3.Dot(authored - h0.Point, h0.Normal);
             if (own < 0f) continue;
             var p = Placed(sets, nodeDelta, n);
-            if (!test.Target.Nearest(p, FloatReach, out var h) || h.Point.Y < test.ApexY || test.IsArm(h.Point)) continue;
-            if (!test.Source.Nearest(h.Point, FloatReach, out var q)
-                || Vector3.Dot(h.Point - q.Point, h.Normal) > FloatGrowMost) continue;
+            if (!test.Target.Nearest(p, FloatReach, out var h) || test.IsArm(h.Point)) continue;
+            // Cloth the author fitted close hugs the breast wherever it is carried off it; anything else only above the bust
+            // and where the body did not grow — below it, or over a bust that grew, standing off is the cloth's drape. Not
+            // the belly: pulled in there, the Top of Maiming's hem showed more of the body it leaves undrawn.
+            bool hugs = own <= FloatTight && test.IsBreast(h.Point);
+            if (!hugs
+                && (h.Point.Y < test.ApexY || !test.Source.Nearest(h.Point, FloatReach, out var q)
+                    || Vector3.Dot(h.Point - q.Point, h.Normal) > FloatGrowMost)) continue;
             float now = Vector3.Dot(p - h.Point, h.Normal);
             float to = MathF.Max(own + FloatSlack, FloatFloor);
             if (now <= to) continue;
@@ -194,7 +213,8 @@ internal static partial class BodyRetarget
             // The tuck's room kept where a face had it; where it was nearer already — beside cloth the clear held at the
             // clearance — kept clear of the skin, and never nearer than it was if it was nearer than that.
             float was = roomBefore[f];
-            float least = was >= TuckClear + FloatFaceMargin ? TuckClear + FloatFaceMargin : MathF.Min(was, Clearance);
+            float least = was >= TuckClear + FloatFaceMargin ? TuckClear + FloatFaceMargin
+                        : MathF.Min(was, Clearance);
             return Room(a, b, c) < least;
         }
 
@@ -217,7 +237,8 @@ internal static partial class BodyRetarget
             return false;
         }
 
-        // The slope: no point pulled further than a neighbour plus one step; cloth that is not pulled counts as none.
+        // The slope: no point pulled further than a neighbour plus one step; a neighbour that is not pulled — cloth, or the
+        // garment's skin a pulled rim is welded to — counts as none, so the lip under the rim tapers rather than stretches.
         void Slope()
         {
             for (int round = 0; round < PushSpreadRounds; round++)
@@ -228,7 +249,7 @@ internal static partial class BodyRetarget
                     if (pull[n] <= 0f) continue;
                     float cap = pull[n];
                     foreach (int m in sets.Adj[n])
-                        if (isCloth[m]) cap = MathF.Min(cap, pull[m] + step);
+                        cap = MathF.Min(cap, pull[m] + step);
                     if (cap >= pull[n] - 1e-9f) continue;
                     pull[n] = cap;
                     changed = true;
@@ -282,6 +303,9 @@ internal static partial class BodyRetarget
                 foreach (int m in new[] { f.A, f.B, f.C })
                     if (pull[m] > 0f) { pull[m] = 0f; failing = true; }
             }
+            // And the crossings again: giving a point up can leave another's path through it.
+            foreach (int n in movable)
+                if (Crosses(n)) { pull[n] = 0f; failing = true; }
         }
 
         int pulled = 0;

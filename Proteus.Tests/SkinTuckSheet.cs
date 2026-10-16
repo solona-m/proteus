@@ -192,13 +192,14 @@ internal static class SkinTuckSheet
     /// Cloth edges of <paramref name="after"/> stretched past 1.5× their length in <paramref name="before"/> and by more
     /// than 5 mm, by index — two plans of the same garment, laid (see <see cref="Laid"/>).
     /// </summary>
-    internal static int ClothStretch(ModelParts before, ModelParts after, Action<string>? describe = null)
+    /// <param name="withSkin">The garment's own skin too — a skin lip welded to the cloth moves with it.</param>
+    internal static int ClothStretch(ModelParts before, ModelParts after, Action<string>? describe = null, bool withSkin = false)
     {
         Assert.Equal(before.Positions.Length, after.Positions.Length);
         Vector3 At(ModelParts m, int v) => new(m.Positions[v * 3], m.Positions[v * 3 + 1], m.Positions[v * 3 + 2]);
         int stretched = 0;
         var seen = new HashSet<(int, int)>();
-        foreach (var part in before.Parts.Where(p => p.Island < 0 && !SecondSkinWriter.IsBodySkinMaterial(p.Material)))
+        foreach (var part in before.Parts.Where(p => p.Island < 0 && (withSkin || !SecondSkinWriter.IsBodySkinMaterial(p.Material))))
             for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
                 for (int e = 0; e < 3; e++)
                 {
@@ -215,11 +216,12 @@ internal static class SkinTuckSheet
 
     /// <summary>Cloth triangles of <paramref name="laid"/> turned over against <paramref name="authored"/>'s winding — the
     /// same garment, by index; what the written cloth shows, counted here rather than taken from the plan's report.</summary>
-    internal static int FoldedAgainstAuthored(ModelParts authored, ModelParts laid)
+    /// <param name="withSkin">The garment's own skin too — a skin lip welded to the cloth moves with it.</param>
+    internal static int FoldedAgainstAuthored(ModelParts authored, ModelParts laid, bool withSkin = false)
     {
         Vector3 P(ModelParts m, int v) => new(m.Positions[v * 3], m.Positions[v * 3 + 1], m.Positions[v * 3 + 2]);
         int folded = 0;
-        foreach (var part in authored.Parts.Where(p => p.Island < 0 && !SecondSkinWriter.IsBodySkinMaterial(p.Material)))
+        foreach (var part in authored.Parts.Where(p => p.Island < 0 && (withSkin || !SecondSkinWriter.IsBodySkinMaterial(p.Material))))
             for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
             {
                 int a = part.Triangles[t], b = part.Triangles[t + 1], c = part.Triangles[t + 2];
@@ -362,8 +364,9 @@ internal static class SkinTuckSheet
 
     /// <summary>A body whose chest dips <paramref name="depth"/> (negative: bulges) under rows 11-12, columns 3-5 —
     /// under <see cref="CoarseSkinTop"/>'s skin, where its chord spans 85 mm.</summary>
-    internal static byte[] Dipped(float depth, Func<int, bool>? arm = null)
-        => Body(arm: arm, z: (r, c) => r is 11 or 12 && c is >= 3 and <= 5 ? -depth : 0f);
+    internal static byte[] Dipped(float depth, Func<int, bool>? arm = null, int? hiddenBelow = null, bool piercing = false)
+        => Body(arm: arm, hiddenBelow: hiddenBelow, piercing: piercing,
+                z: (r, c) => r is 11 or 12 && c is >= 3 and <= 5 ? -depth : 0f);
 
     /// <summary>Whether a rebuilt model draws a skin triangle lying wholly in the dip of <see cref="Dipped"/> — the cut
     /// itself draws the ones on its rim, through their corners outside it.</summary>

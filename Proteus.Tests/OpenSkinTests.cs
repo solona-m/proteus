@@ -15,9 +15,10 @@ namespace Proteus.Tests;
 /// </summary>
 public class OpenSkinTests(ITestOutputHelper output)
 {
-    private (byte[] Model, BodyRetarget.SwapReport Report) Swap(byte[] top, byte[] body, bool tuck = true)
+    private (byte[] Model, BodyRetarget.SwapReport Report) Swap(byte[] top, byte[] body, bool tuck = true,
+                                                               IReadOnlySet<string>? hidden = null)
     {
-        var model = BodyRetarget.SwapSkin(top, [Resized(body)], out var report, tuckSlot: tuck ? "_top" : null)!;
+        var model = BodyRetarget.SwapSkin(top, [Resized(body, hidden: hidden)], out var report, tuckSlot: tuck ? "_top" : null)!;
         Assert.NotNull(model);
         output.WriteLine($"{(tuck ? "tuck" : "no tuck")}: {report}");
         return (model, report);
@@ -81,6 +82,31 @@ public class OpenSkinTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-neckline-large-bust-15")]
     public void A_bulge_over_the_games_skin_is_kept_like_a_dip()
         => Assert.True(DrawsDip(Swap(CoarseSkinTop(), Dipped(-0.015f)).Model));
+
+    [Fact]
+    [Trait("Plan", "EDGE-neckline-large-bust-17")]
+    public void Hidden_variants_are_never_opened()
+    {
+        // The dip and everything below row 12 is a variant the body mod does not draw: the author's skin over it no longer
+        // lies on a body that is drawn, so nothing is swapped at all — and nothing of the variant comes in.
+        var model = BodyRetarget.SwapSkin(CoarseSkinTop(), [Resized(Dipped(0.015f, hiddenBelow: 12),
+                                                                    hidden: new HashSet<string> { "atr_tv_b" })],
+                                          out var report, tuckSlot: "_top");
+        Assert.True(model == null || !DrawsDip(model));
+        Assert.Equal(0, report.Opened);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-neckline-large-bust-18")]
+    public void Open_skin_brings_no_piercing_the_author_did_not_show()
+    {
+        // The body carries a ring; whether it comes in is the author's cut's to say, not the open skin's.
+        var (_, opened) = Swap(CoarseSkinTop(), Dipped(0.015f, piercing: true));
+        var closed = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoOpenSkin: true),
+                                             () => Swap(CoarseSkinTop(), Dipped(0.015f, piercing: true)));
+        Assert.True(opened.Opened > 0);
+        Assert.Equal(closed.Report.Adorned, opened.Adorned);
+    }
 
     [Fact]
     [Trait("Plan", "EDGE-neckline-large-bust-19")]

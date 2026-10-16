@@ -222,14 +222,16 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
         double holesNoPull = UncoveredUndrawn(noPullModel, body, new SortedDictionary<(float, string), double>());
         var laidPull = LaidGarment(r);
         var laidNoPull = LaidGarment(r with { Game = r.NoPull });
-        int foldedPull = SkinTuckSheet.FoldedAgainstAuthored(garment, laidPull);
-        int foldedNoPull = SkinTuckSheet.FoldedAgainstAuthored(garment, laidNoPull);
+        // The garment's own skin counted too: a lip welded to a rim the pass brings back moves with it.
+        int foldedPull = SkinTuckSheet.FoldedAgainstAuthored(garment, laidPull, withSkin: true);
+        int foldedNoPull = SkinTuckSheet.FoldedAgainstAuthored(garment, laidNoPull, withSkin: true);
         output.WriteLine($"  standoff pass: brought back {game.Report.StandoffPulled}; cloth under the skin {underGame:0.0} cm² "
                          + $"(without {underNoPull:0.0}); undrawn {holesTucked:0.0} (without {holesNoPull:0.0}); folded against "
                          + $"the author {foldedPull} (without {foldedNoPull})");
         Assert.True(underGame <= underNoPull + 0.5, $"{underGame:0.0} cm² under the skin against {underNoPull:0.0} without the pass");
         Assert.True(holesTucked <= holesNoPull + 0.5, $"{holesTucked:0.0} cm² undrawn against {holesNoPull:0.0} without the pass");
-        Assert.Equal(0, SkinTuckSheet.ClothStretch(laidNoPull, laidPull, s => output.WriteLine($"    stretched by the pass {s}")));
+        Assert.Equal(0, SkinTuckSheet.ClothStretch(laidNoPull, laidPull, s => output.WriteLine($"    stretched by the pass {s}"),
+                                                   withSkin: true));
         Assert.True(foldedPull <= foldedNoPull, $"folded {foldedPull} against {foldedNoPull} without the pass");
 
         // And the two together, as written, against the refit before either — no tolerance stacked on another.
@@ -742,6 +744,13 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
                          + $"brought back {r.Game.Report.StandoffPulled} points up to {r.Game.Report.StandoffWorst * 1000:0.0} mm, "
                          + $"held {r.Game.Report.StandoffHeld}; planning the five refits took {planMs} ms");
 
+        // [A16] Cloth the author fitted close, over the whole front of the chest: under the bust and on it too.
+        var tight = NecklineFloat(r.Garment, full, sourceSurf, targetSurf, fromY: 1.0f).Where(f => f.Own <= BodyRetarget.FloatTight).ToList();
+        var tightBefore = NecklineFloat(r.Garment, none, sourceSurf, targetSurf, fromY: 1.0f).Where(f => f.Own <= BodyRetarget.FloatTight).ToList();
+        output.WriteLine($"  close-fitted cloth floating anywhere in front: {tight.Count} ({tight.Sum(f => f.Now - f.Own) * 1000:0} mm past), "
+                         + $"without the pass {tightBefore.Count} ({tightBefore.Sum(f => f.Now - f.Own) * 1000:0} mm)");
+        Assert.True(tight.Count <= tightBefore.Count, $"{tight.Count} close-fitted points floating against {tightBefore.Count}");
+
         // [AC-2] Never more floating than without the pass; at least half gone where the pass could reach ten or more.
         Assert.True(floating.Count <= before.Count, $"{floating.Count} floating against {before.Count}");
         if (garmentName == Dirndl && reachable >= 10)
@@ -750,7 +759,16 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
         // for distinct positions, 26 → ≤ 6 (target ≤ 3); the 4 left are by design — 2 where the bust grew 25 mm, 2 the
         // author buried — so measured + 2 is held.
         if (garmentName == Dirndl && modNeed == Neolithe)
+        {
             Assert.True(floating.Count <= 6, $"{floating.Count} floating");
+            // And the four points traced in game, within their author's standoff + FloatSlack + 3 mm.
+            foreach (int v in new[] { 173, 286, 277, 166 })
+            {
+                float own = Standoff(At(r.Garment, v), sourceSurf), now = Standoff(At(full, v), targetSurf);
+                output.WriteLine($"  traced v{v}: own {own * 1000:0.0} mm, now {now * 1000:0.0} (without the pass {Standoff(At(none, v), targetSurf) * 1000:0.0})");
+                Assert.True(now <= own + BodyRetarget.FloatSlack + 0.003f, $"v{v} {now * 1000:0.0} mm off, own {own * 1000:0.0}");
+            }
+        }
 
         // [AC-6][AC-3] What moved, against the refit without the pass, by this test's own lookups: only above the apex,
         // where the body did not grow, off the arm and outside the author's body; never outward, never under the floor.
@@ -758,6 +776,10 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
         float ArmShare(BodySurface.Hit h)
             => BodyRetarget.EndShareOf(skin, h.A, BodyRetarget.IsArmBone) * h.U + BodyRetarget.EndShareOf(skin, h.B, BodyRetarget.IsArmBone) * h.V
                + BodyRetarget.EndShareOf(skin, h.C, BodyRetarget.IsArmBone) * h.W;
+        static bool Mune(string b) => b.Contains("mune", StringComparison.Ordinal);
+        float BreastShare(BodySurface.Hit h)
+            => BodyRetarget.EndShareOf(skin, h.A, Mune) * h.U + BodyRetarget.EndShareOf(skin, h.B, Mune) * h.V
+               + BodyRetarget.EndShareOf(skin, h.C, Mune) * h.W;
         int moved = 0;
         var wrong = new List<string>();
         foreach (int v in ClothParts(r.Garment).SelectMany(p => p.Triangles).Distinct())
@@ -774,8 +796,10 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
             // in order around the cloth it brought back (the Top of Maiming on Neolithe XS: two points where the bust grew,
             // 1.4 mm in). Up to 2 mm, then — the plan's 0.5, raised.
             bool far = Vector3.Distance(was, now) > 0.002f;
-            if (far && (!landed || h.Point.Y < apex - 0.002f)) why.Add($"below the apex by {(apex - h.Point.Y) * 1000:0.0} mm");
-            if (far && Grew(was) > BodyRetarget.FloatGrowMost + 0.001f) why.Add($"where the body grew {Grew(was) * 1000:0.0} mm");
+            // Cloth the author fitted close hugs the breast anywhere (amendment A16); the apex and growth limits are the rest's.
+            bool loose = own > BodyRetarget.FloatTight + 0.0005f || !landed || BreastShare(h) < BodyRetarget.BreastWeight - 0.05f;
+            if (far && loose && (!landed || h.Point.Y < apex - 0.002f)) why.Add($"below the apex by {(apex - h.Point.Y) * 1000:0.0} mm");
+            if (far && loose && Grew(was) > BodyRetarget.FloatGrowMost + 0.001f) why.Add($"where the body grew {Grew(was) * 1000:0.0} mm");
             if (far && landed && ArmShare(h) >= BodyRetarget.TuckArmShare) why.Add($"on the arm ({ArmShare(h):0.00})");
             if (far && own < -0.0005f) why.Add($"authored {own * 1000:0.0} mm inside");
             if (off > offWas + 0.0005f) why.Add($"outward {offWas * 1000:0.0} → {off * 1000:0.0} mm");

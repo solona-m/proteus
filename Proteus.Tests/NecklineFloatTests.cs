@@ -63,13 +63,24 @@ public class NecklineFloatTests(ITestOutputHelper output)
     {
         var (top, pair) = FloatingNeckline();
         AssertFloats(top, pair);
-        // And it floats for the game's reasons: the push stage carries it off (see neckline-float Step 0).
+        // And it floats for the game's reasons: the push stage carries the neckline itself (rows 9 and up) off — see
+        // neckline-float Step 0 — not merely the breast cloth it clears.
         var stages = new List<(string, SecondSkinWriter.Vec3[])>();
-        BodyRetarget.WithTuning(NoPull, () => RefitCore.PlanRefit(ModelPartReader.Read(top)!, top, [pair], "_top", across: true,
-            gameGear: true, out _, trace: (s, d) => stages.Add((s, (SecondSkinWriter.Vec3[])d.Clone()))));
+        var unpulled = BodyRetarget.WithTuning(NoPull, () => RefitCore.PlanRefit(ModelPartReader.Read(top)!, top, [pair], "_top",
+            across: true, gameGear: true, out _, trace: (s, d) => stages.Add((s, (SecondSkinWriter.Vec3[])d.Clone()))));
+        var garment = ModelPartReader.Read(top)!;
+        var laidUnpulled = Laid(top, unpulled);
+        var last = stages[^1].Item2;
         int pushIndex = stages.FindIndex(s => s.Item1 == "push");
-        Assert.True(stages[pushIndex].Item2.Zip(stages[pushIndex - 1].Item2)
-                                            .Any(z => MathF.Abs(z.First.Z - z.Second.Z) > 0.005f), "the push carries nothing off");
+        float neckLift = 0f;
+        foreach (int v in ClothVerts(garment).Where(v => Row(garment, v) >= 9))
+        {
+            var d = Pos(laidUnpulled, v) - Pos(garment, v);
+            int n = Enumerable.Range(0, last.Length).OrderBy(k => (new Vector3(last[k].X, last[k].Y, last[k].Z) - d).LengthSquared()).First();
+            neckLift = MathF.Max(neckLift, stages[pushIndex].Item2[n].Z - stages[pushIndex - 1].Item2[n].Z);
+        }
+        output.WriteLine($"the push lifts the neckline up to {neckLift * 1000:0.0} mm");
+        Assert.True(neckLift > 0.002f, "the push does not carry the neckline off");
 
         // Two rows or more from the cloth the clear holds at the clearance (row 8): back to the author's standoff. Row 9,
         // beside it, comes back only as far as the face between them keeps clear of the skin.
@@ -176,7 +187,8 @@ public class NecklineFloatTests(ITestOutputHelper output)
     public void A_pulled_face_keeps_the_skin_out_of_it_between_its_corners()
     {
         // The coarse neckline's faces span 20-40 mm of a chest that rounds under them. Every face, across a grid of this
-        // test's own: no nearer the skin than the clearance, or than it was without the pass where it was nearer already.
+        // test's own: the tuck's 3 mm kept where the face had it, and no nearer the skin than the clearance (or than it was,
+        // nearer already) where it did not.
         var (top, pair) = FloatingNeckline(coarse: true);
         var plan = GameTop(top, pair);
         Assert.True(plan.Report.StandoffPulled > 0);
@@ -197,8 +209,9 @@ public class NecklineFloatTests(ITestOutputHelper output)
             {
                 int a = part.Triangles[t], b = part.Triangles[t + 1], c = part.Triangles[t + 2];
                 float now = Least(laid, a, b, c), was = Least(without, a, b, c);
-                Assert.True(now >= MathF.Min(BodyRetarget.Clearance, was) - 1e-4f,
-                            $"skin within {now * 1000:0.0} mm of a face (without the pass {was * 1000:0.0})");
+                // This grid is finer than the pass's: a quarter millimetre of its sampling allowed.
+                float least = was >= BodyRetarget.TuckClear ? BodyRetarget.TuckClear - 0.00025f : MathF.Min(BodyRetarget.Clearance, was) - 1e-4f;
+                Assert.True(now >= least, $"skin within {now * 1000:0.0} mm of a face (without the pass {was * 1000:0.0})");
             }
     }
 
@@ -244,6 +257,8 @@ public class NecklineFloatTests(ITestOutputHelper output)
     [Trait("Plan", "AC-neckline-float-5")]
     public void The_tops_own_skin_and_every_normal_are_left_alone()
     {
+        // The top's skin here is not welded to its cloth: it stays. (Skin welded to a rim the pass brings back moves with
+        // it — Dirndl's chemise on the game's turned-in lip — judged by the local tests' folds and stretch with the skin in.)
         var (top, pair) = FloatingNeckline();
         var plan = GameTop(top, pair);
         Assert.True(plan.Report.StandoffPulled > 0);
