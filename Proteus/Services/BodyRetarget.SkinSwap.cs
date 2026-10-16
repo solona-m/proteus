@@ -65,10 +65,12 @@ internal static partial class BodyRetarget
     /// <param name="Tucked">Of <paramref name="Added"/>, triangles drawn past the author's edge, in under the cloth (see
     /// <see cref="TuckUnderCloth"/>).</param>
     /// <param name="TuckUnread">Slots the tuck was asked for whose body's weights could not be read: nothing tucked there.</param>
+    /// <param name="Opened">Of <paramref name="Tucked"/>, triangles drawn in the open, inside the author's own skin
+    /// (see <see cref="TuckSpanShare"/>).</param>
     internal readonly record struct SwapReport(int Removed, int Added, int Kept, int LostShapes,
                                                int Reweighted = 0, int Trimmed = 0, int ExtrasDropped = 0,
                                                int Unplaced = 0, int Posed = 0, int Cut = 0, int Slotted = 0,
-                                               int Adorned = 0, int Tucked = 0, int TuckUnread = 0);
+                                               int Adorned = 0, int Tucked = 0, int TuckUnread = 0, int Opened = 0);
 
     /// <summary>
     /// Swap the garment's skin for the new body's, one body slot at a time: every skin mesh of the garment that belongs
@@ -234,10 +236,10 @@ internal static partial class BodyRetarget
         var authorCuts = new Dictionary<int, Dictionary<int, HashSet<ushort>>?>();
         // Each slot's body as it goes in: its own model, or one whose skin was pulled back to the author's edge.
         var bodyOf = new Dictionary<int, byte[]>();
-        int cutTris = 0, keptTris = 0, tuckedTris = 0, tuckUnreadSlots = 0;
+        int cutTris = 0, keptTris = 0, tuckedTris = 0, tuckUnreadSlots = 0, openedTris = 0;
         foreach (int s in claimedBy)
         {
-            int these = 0, gone = 0, tucked = 0;
+            int these = 0, gone = 0, tucked = 0, opened = 0;
             byte[]? pulled = null;
             Dictionary<int, HashSet<ushort>>? authorCut = null;
             bool tuckUnread = false;
@@ -246,12 +248,13 @@ internal static partial class BodyRetarget
             cuts[s] = !cutThis || drawn == null || drawn.IsEmpty ? null : CutLike(drawn, drawnEdges!, cloth,
                                                                       swappable[s].TargetModel!, swappable[s].TargetHidden,
                                                                       tuck, out these, out gone, out pulled, out tucked,
-                                                                      out authorCut, out tuckUnread);
+                                                                      out authorCut, out tuckUnread, out opened);
             authorCuts[s] = authorCut ?? cuts[s];
             bodyOf[s] = pulled ?? swappable[s].TargetModel!;
             keptTris += cuts[s] == null ? SkinTriangles(swappable[s].Target) : these;
             cutTris += gone;
             tuckedTris += tucked;
+            openedTris += opened;
             if (tuckUnread) tuckUnreadSlots++;
         }
 
@@ -314,7 +317,7 @@ internal static partial class BodyRetarget
 
         report = new SwapReport(removed, keptTris, kept, SecondSkinWriter.Parse(garment).Shapes.Count,
                                 weights?.Reweighted ?? 0, weights?.Trimmed ?? 0, extras, reskinned.Dropped, posed,
-                                cutTris, reskinned.Trimmed, adorned, tuckedTris, tuckUnreadSlots);
+                                cutTris, reskinned.Trimmed, adorned, tuckedTris, tuckUnreadSlots, openedTris);
         return rebuilt;
     }
 
@@ -338,14 +341,15 @@ internal static partial class BodyRetarget
     /// <param name="tucked">Triangles the tuck drew, counted in <paramref name="kept"/>.</param>
     /// <param name="authorCut">The cut before the tuck, when the tuck added to it; null otherwise.</param>
     /// <param name="tuckUnread">The tuck was asked for and the body's weights could not be read, so it grew nothing.</param>
+    /// <param name="opened">Of <paramref name="tucked"/>, triangles drawn in the open, inside the author's own skin.</param>
     private static Dictionary<int, HashSet<ushort>>? CutLike(BodySurface drawn, SkinEdges edges, ClothCrossings cloth,
                                                              byte[] body, IReadOnlySet<string>? hidden, bool tuck,
                                                              out int kept, out int cut, out byte[]? pulled,
                                                              out int tucked,
                                                              out Dictionary<int, HashSet<ushort>>? authorCut,
-                                                             out bool tuckUnread)
+                                                             out bool tuckUnread, out int opened)
     {
-        kept = cut = tucked = 0;
+        kept = cut = tucked = opened = 0;
         pulled = null;
         authorCut = null;
         tuckUnread = false;
@@ -391,9 +395,11 @@ internal static partial class BodyRetarget
         pulled = PullToEdge(drawn, edges, cloth, body, parts, drawnCorners, keptTris, out var movedAt);
         if (!tuck) return sets;
 
-        var (grown, added, unread) = TuckUnderCloth(drawn, cloth, body, parts, covered, keptTris, movedAt, baseOf);
+        var (grown, added, open, unread) = TuckUnderCloth(drawn, cloth, body, parts, covered, keptTris, movedAt, baseOf,
+                                                          edges);
         tuckUnread = unread;
         if (added == 0) return sets;
+        opened = open;
         authorCut = sets.ToDictionary(e => e.Key, e => new HashSet<ushort>(e.Value));
         foreach (var (mesh, local) in grown)
         {
@@ -815,23 +821,29 @@ internal static partial class BodyRetarget
     {
         if (!drawn.Nearest(p, CutSagMax, out var hit)) return false;
         if (hit.Distance <= CutReach) return true;
+        return ChordUnder(drawn, hit, edges) is float chord && hit.Distance <= MathF.Min(CutSagMax, CutSagShare * chord);
+    }
 
+    /// <summary>
+    /// The chord of the garment's laid skin a point lands under: the triangle when it lands inside one, the edge when it
+    /// lands on an edge two triangles share — see <see cref="Covers"/>. Null on the author's boundary (an edge one
+    /// triangle uses) or on a corner, which sits on the body.
+    /// </summary>
+    internal static float? ChordUnder(BodySurface drawn, BodySurface.Hit hit, SkinEdges? edges)
+    {
         const float inside = 0.01f;   // a landing clamped onto an edge has a zero weight; this is off it
         bool offA = hit.U < inside, offB = hit.V < inside, offC = hit.W < inside;
         Vector3 a = drawn.PositionOf(hit.A), b = drawn.PositionOf(hit.B), c = drawn.PositionOf(hit.C);
 
-        float chord;
         if (!offA && !offB && !offC)
-            chord = MathF.Max(Vector3.Distance(a, b), MathF.Max(Vector3.Distance(b, c), Vector3.Distance(c, a)));
-        else if (offA && !offB && !offC && edges?.IsShared(hit.B, hit.C) == true)
-            chord = Vector3.Distance(b, c);
-        else if (offB && !offA && !offC && edges?.IsShared(hit.C, hit.A) == true)
-            chord = Vector3.Distance(c, a);
-        else if (offC && !offA && !offB && edges?.IsShared(hit.A, hit.B) == true)
-            chord = Vector3.Distance(a, b);
-        else
-            return false;   // on the author's boundary, or on a corner, which sits on the body
-        return hit.Distance <= MathF.Min(CutSagMax, CutSagShare * chord);
+            return MathF.Max(Vector3.Distance(a, b), MathF.Max(Vector3.Distance(b, c), Vector3.Distance(c, a)));
+        if (offA && !offB && !offC && edges?.IsShared(hit.B, hit.C) == true)
+            return Vector3.Distance(b, c);
+        if (offB && !offA && !offC && edges?.IsShared(hit.C, hit.A) == true)
+            return Vector3.Distance(c, a);
+        if (offC && !offA && !offB && edges?.IsShared(hit.A, hit.B) == true)
+            return Vector3.Distance(a, b);
+        return null;
     }
 
     /// <summary>

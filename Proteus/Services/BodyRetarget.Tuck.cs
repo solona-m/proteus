@@ -33,6 +33,15 @@ internal static partial class BodyRetarget
     /// a sleeve and the arm in it move on different bones, and room measured standing says little about either.</summary>
     internal const float TuckArmShare = 0.25f;
 
+    /// <summary>
+    /// How far under the garment's laid skin, as a share of the chord it spans there (see <see cref="ChordUnder"/>), the
+    /// new body may dip in the open — no cloth over it — and still be drawn (a half). The author drew skin across it, so
+    /// the body belongs there; the cut keeps it only within <see cref="CutSagShare"/>. Measured in game: Dirndl's Bodice on
+    /// Neolithe's Almond XS left the cleavage open, its vertices 8-11 mm under a 27 mm chord (0.30-0.39) of the game's
+    /// coarse chest skin, a hole straight through to the bodice's inside.
+    /// </summary>
+    internal const float TuckSpanShare = 0.5f;
+
     private static readonly string[] ArmBonePrefixes = ["j_ude_", "j_kata_", "n_hkata_", "n_hhiji_", "n_hte_"];
 
     /// <summary>An upper arm, forearm, shoulder or hand bone.</summary>
@@ -55,7 +64,12 @@ internal static partial class BodyRetarget
     /// weight on the arm, and no move from <see cref="PullToEdge"/>; and its middle and the middles of its edges no
     /// cloth that close either. Newly drawn is judged against the cut as made, so whether a vertex qualifies is its own
     /// affair and the result is the same in any order. Nothing moves.
+    /// <para/>
+    /// A corner with no cloth over it still qualifies where the garment's laid skin spans it — lands inside its triangles
+    /// or on an edge two share, within <see cref="TuckSpanShare"/> of the chord: skin the author drew, over a body that dips
+    /// further below it than the cut's sag allows (the new body's cleavage under the game's coarse chest skin).
     /// </summary>
+    /// <param name="edges">Which of <paramref name="drawn"/>'s edges two of its triangles share.</param>
     /// <param name="drawn">The garment's own skin, laid onto the new body.</param>
     /// <param name="cloth">The garment's cloth.</param>
     /// <param name="body">The new body's file, for its weights.</param>
@@ -64,16 +78,16 @@ internal static partial class BodyRetarget
     /// <param name="keptTris">The triangles the cut kept.</param>
     /// <param name="movedAt">Where corners the pull moved stood (see <see cref="PullToEdge"/>).</param>
     /// <param name="baseOf">Each mesh's first vertex in <paramref name="parts"/>.</param>
-    /// <returns>Per mesh, the vertices to draw as well (mesh-local), how many triangles they draw, and whether the body's
-    /// weights could not be read — then nothing is grown.</returns>
-    internal static (Dictionary<int, HashSet<ushort>> Grown, int Triangles, bool Unread) TuckUnderCloth(
+    /// <returns>Per mesh, the vertices to draw as well (mesh-local), how many triangles they draw, how many of those have
+    /// a corner in the open, and whether the body's weights could not be read — then nothing is grown.</returns>
+    internal static (Dictionary<int, HashSet<ushort>> Grown, int Triangles, int Opened, bool Unread) TuckUnderCloth(
         BodySurface drawn, ClothCrossings cloth, byte[] body, ModelParts parts, bool[] covered,
         IReadOnlyCollection<(int A, int B, int C)> keptTris, IReadOnlySet<Vector3> movedAt,
-        IReadOnlyDictionary<int, int> baseOf)
+        IReadOnlyDictionary<int, int> baseOf, SkinEdges? edges)
     {
         int vc = parts.Positions.Length / 3;
         // Unread weights cannot tell the torso from the arm: nothing is grown, the safe way round.
-        if (ModelSkinReader.Read(body, null, null) is not { } skin || skin.VertexCount != vc) return ([], 0, true);
+        if (ModelSkinReader.Read(body, null, null) is not { } skin || skin.VertexCount != vc) return ([], 0, 0, true);
 
         var pos = new Vec3[vc];
         for (int v = 0; v < vc; v++) pos[v] = ToVec(At(parts, v));
@@ -117,6 +131,8 @@ internal static partial class BodyRetarget
         // Per vertex, not per welded node: at a seam with a hard normal each copy is judged by its own normal, whichever
         // of them is asked first.
         var cornerOk = new bool?[vc];
+        // Corners that qualify only because the garment's laid skin spans them, with no cloth over them.
+        var openOnly = new bool[vc];
         bool CornerOk(int v)
         {
             int n = nodeOf[v];
@@ -124,13 +140,19 @@ internal static partial class BodyRetarget
             var p = At(parts, v);
             var nrm = NormalOf(v);
             var level = new Vector3(nrm.X, 0f, nrm.Z);
+            BodySurface.Hit hit = default;
             bool ok = nrm.LengthSquared() > 1e-12f
-                      && drawn.Nearest(p, TuckBand, out _)
-                      && (cloth.Over(p, nrm, TuckOver)
-                          || (level.LengthSquared() > 1e-6f && cloth.Over(p, Vector3.Normalize(level), TuckOver)))
+                      && drawn.Nearest(p, TuckBand, out hit)
                       && !cloth.Crowds(p, nrm, TuckClear, TuckBehind)
                       && copies[n].All(c => EndShareOf(skin, c, IsArmBone) < TuckArmShare)
                       && !movedAt.Contains(p);
+            if (ok && !(cloth.Over(p, nrm, TuckOver)
+                        || (level.LengthSquared() > 1e-6f && cloth.Over(p, Vector3.Normalize(level), TuckOver))))
+            {
+                ok = !Tuned.NoOpenSkin && ChordUnder(drawn, hit, edges) is float chord
+                     && hit.Distance <= MathF.Min(TuckBand, TuckSpanShare * chord);
+                openOnly[v] = ok;
+            }
             cornerOk[v] = ok;
             return ok;
         }
@@ -205,6 +227,7 @@ internal static partial class BodyRetarget
             foreach (int t in around[n])
                 if (NewlyDrawn(t)) drawnNow.Add(t);
         }
-        return (sets, drawnNow.Count, false);
+        int opened = drawnNow.Count(t => openOnly[tris[t].A] || openOnly[tris[t].B] || openOnly[tris[t].C]);
+        return (sets, drawnNow.Count, opened, false);
     }
 }

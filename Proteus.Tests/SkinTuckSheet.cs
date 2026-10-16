@@ -271,7 +271,9 @@ internal static class SkinTuckSheet
     /// A top whose own skin is two triangles, the corners of rows <see cref="Edge"/> to <see cref="Rows"/> - 1 — a game
     /// top's coarse skin — with its cloth over the rows below only.
     /// </summary>
-    internal static byte[] CoarseSkinTop(float clothZ = 0.015f)
+    /// <param name="clothTo">The cloth's last row; below the author's edge unless given.</param>
+    /// <param name="patch">A patch of cloth over the dip's rows (11-12) and columns (3-5), at this height; null for none.</param>
+    internal static byte[] CoarseSkinTop(float clothZ = 0.015f, int clothTo = Edge - 1, float? patch = null)
     {
         Vector3[] corners =
         [
@@ -282,7 +284,31 @@ internal static class SkinTuckSheet
                                                   [.. corners.Select(_ => Vector2.Zero)],
                                                   [.. corners.Select(_ => ((string, float)[]?)[("j_sebo_c", 1f)])],
                                                   [(0u, [0, 1, 3, 0, 3, 2])]);
-        return SyntheticModel.BuildSurface([], skin, Sheet(Cloth, 2, Edge - 1, _ => clothZ));
+        var meshes = new List<SyntheticModel.SurfaceMesh> { skin, Sheet(Cloth, 2, clothTo, _ => clothZ) };
+        if (patch is float z)
+        {
+            var pos = new[] { 10.5f, 13f }.SelectMany(r => new[] { 2, 6 }.Select(c => new Vector3(X(c), Bottom + r * Step, z))).ToArray();
+            meshes.Add(new SyntheticModel.SurfaceMesh(Cloth, pos, [.. pos.Select(_ => Vector3.UnitZ)], [.. pos.Select(_ => Vector2.Zero)],
+                                                      [.. pos.Select(_ => ((string, float)[]?)[("j_sebo_c", 1f)])],
+                                                      [(0u, [0, 1, 3, 0, 3, 2])]));
+        }
+        return SyntheticModel.BuildSurface([], [.. meshes]);
+    }
+
+    /// <summary>A body whose chest dips <paramref name="depth"/> (negative: bulges) under rows 11-12, columns 3-5 —
+    /// under <see cref="CoarseSkinTop"/>'s skin, where its chord spans 85 mm.</summary>
+    internal static byte[] Dipped(float depth, Func<int, bool>? arm = null)
+        => Body(arm: arm, z: (r, c) => r is 11 or 12 && c is >= 3 and <= 5 ? -depth : 0f);
+
+    /// <summary>Whether a rebuilt model draws a skin triangle lying wholly in the dip of <see cref="Dipped"/> — the cut
+    /// itself draws the ones on its rim, through their corners outside it.</summary>
+    internal static bool DrawsDip(byte[] model)
+    {
+        var read = ModelPartReader.Read(model)!;
+        bool In(int v) => MathF.Abs(read.Positions[v * 3 + 2]) > 0.002f;
+        return read.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material))
+                   .Any(p => Enumerable.Range(0, p.Triangles.Length / 3)
+                                       .Any(t => In(p.Triangles[t * 3]) && In(p.Triangles[t * 3 + 1]) && In(p.Triangles[t * 3 + 2])));
     }
 
     /// <summary>The loose sheet: cloth 15 mm off over the rows from <paramref name="looseFrom"/> up, 1 mm off below.</summary>

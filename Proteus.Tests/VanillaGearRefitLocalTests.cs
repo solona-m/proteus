@@ -332,7 +332,8 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
         var bodyVertexAt = new Dictionary<(int, int, int), int>();
         for (int v = 0; v < body.Positions.Length / 3; v++) bodyVertexAt.TryAdd(Key(At(body, v)), v);
         var gaps = new SortedDictionary<int, int>();
-        int beyondBand = 0, uncovered = 0, onArm = 0;
+        var laidSkin = LaidSkinTriangles(LaidGarment(r));
+        int beyondBand = 0, uncovered = 0, onArm = 0, open = 0;
         foreach (var (p, n) in newCorners)
         {
             float off = untuckedSkin.Nearest(p, 0.2f, out var hit) ? hit.Distance : 0.2f;
@@ -343,11 +344,16 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
             var level = new Vector3(n.X, 0f, n.Z);
             if (Along(cloth, p, n, BodyRetarget.TuckOver) == null
                 && (level.LengthSquared() < 1e-6f || Along(cloth, p, Vector3.Normalize(level), BodyRetarget.TuckOver) == null))
-                uncovered++;
+            {
+                // [AC-neckline-large-bust-7] Open skin: inside the game's laid skin, never past its open edge.
+                if (SpannedByLaidSkin(laidSkin, p, BodyRetarget.TuckBand)) open++;
+                else uncovered++;
+            }
             if (bodyVertexAt.TryGetValue(Key(p), out int bv)
                 && BodyRetarget.EndShareOf(skin, bv, BodyRetarget.IsArmBone) >= BodyRetarget.TuckArmShare)
                 onArm++;
         }
+        output.WriteLine($"  of them in the open, spanned by the game's laid skin: {open}; opened {r.Game.Report.Swap?.Opened ?? 0} triangles");
         output.WriteLine($"  new corners {newCorners.Count}: by cm from the untucked skin "
                          + string.Join(", ", gaps.Select(g => $"{g.Key}:{g.Value}")));
         // Why the skin still seen from above was not tucked: how far it lies from the skin kept, and how much room the
@@ -491,6 +497,91 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
         output.WriteLine($"  extra move (slope {step * 1000:0.00} mm per edge), by cm along the cloth from a deep push: "
                          + string.Join(", ", histogram.Select(h => $"{h.Key}:{h.Value.Count} up to {h.Value.Worst * 1000:0.0} mm")));
         Assert.True(over == 0, $"{over} cloth vertices moved past the slope: {first}");
+    }
+
+    /// <summary>The garment's own skin triangles as laid, with how many triangles use each of their edges (by position).</summary>
+    private static (List<(Vector3 A, Vector3 B, Vector3 C)> Tris, Dictionary<((int, int, int), (int, int, int)), int> EdgeUse)
+        LaidSkinTriangles(ModelParts laid)
+    {
+        var tris = new List<(Vector3, Vector3, Vector3)>();
+        var use = new Dictionary<((int, int, int), (int, int, int)), int>();
+        foreach (var part in laid.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material)))
+            for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+            {
+                Vector3 a = At(laid, part.Triangles[t]), b = At(laid, part.Triangles[t + 1]), c = At(laid, part.Triangles[t + 2]);
+                tris.Add((a, b, c));
+                foreach (var (x, y) in new[] { (a, b), (b, c), (c, a) })
+                {
+                    var e = EdgeKey(x, y);
+                    use[e] = use.GetValueOrDefault(e) + 1;
+                }
+            }
+        return (tris, use);
+    }
+
+    private static ((int, int, int), (int, int, int)) EdgeKey(Vector3 x, Vector3 y)
+    {
+        var (kx, ky) = (Key(x), Key(y));
+        return kx.CompareTo(ky) < 0 ? (kx, ky) : (ky, kx);
+    }
+
+    /// <summary>
+    /// Whether the nearest point of the game's laid skin to <paramref name="p"/>, within <paramref name="reach"/>, lies
+    /// inside one of its triangles (every barycentric weight over 0.01) or on an edge two of them share — this test's own
+    /// reading of "the author drew skin across it".
+    /// </summary>
+    private static bool SpannedByLaidSkin(
+        (List<(Vector3 A, Vector3 B, Vector3 C)> Tris, Dictionary<((int, int, int), (int, int, int)), int> EdgeUse) skin,
+        Vector3 p, float reach)
+    {
+        float best = reach;
+        bool spanned = false;
+        foreach (var (a, b, c) in skin.Tris)
+        {
+            var (q, u, v, w) = ClosestOnTriangle(p, a, b, c);
+            float d = Vector3.Distance(p, q);
+            if (d >= best) continue;
+            best = d;
+            const float inside = 0.01f;
+            bool offA = u < inside, offB = v < inside, offC = w < inside;
+            spanned = (offA, offB, offC) switch
+            {
+                (false, false, false) => true,
+                (true, false, false) => skin.EdgeUse.GetValueOrDefault(EdgeKey(b, c)) >= 2,
+                (false, true, false) => skin.EdgeUse.GetValueOrDefault(EdgeKey(c, a)) >= 2,
+                (false, false, true) => skin.EdgeUse.GetValueOrDefault(EdgeKey(a, b)) >= 2,
+                _ => false,
+            };
+        }
+        return spanned;
+    }
+
+    /// <summary>The point of triangle abc nearest <paramref name="p"/>, with its barycentric weights on a, b and c.</summary>
+    private static (Vector3 Q, float U, float V, float W) ClosestOnTriangle(Vector3 p, Vector3 a, Vector3 b, Vector3 c)
+    {
+        // Ericson, Real-Time Collision Detection, 5.1.5.
+        Vector3 ab = b - a, ac = c - a, ap = p - a;
+        float d1 = Vector3.Dot(ab, ap), d2 = Vector3.Dot(ac, ap);
+        if (d1 <= 0f && d2 <= 0f) return (a, 1f, 0f, 0f);
+        var bp = p - b;
+        float d3 = Vector3.Dot(ab, bp), d4 = Vector3.Dot(ac, bp);
+        if (d3 >= 0f && d4 <= d3) return (b, 0f, 1f, 0f);
+        float vc = d1 * d4 - d3 * d2;
+        if (vc <= 0f && d1 >= 0f && d3 <= 0f) { float t = d1 / (d1 - d3); return (a + t * ab, 1f - t, t, 0f); }
+        var cp = p - c;
+        float d5 = Vector3.Dot(ab, cp), d6 = Vector3.Dot(ac, cp);
+        if (d6 >= 0f && d5 <= d6) return (c, 0f, 0f, 1f);
+        float vb = d5 * d2 - d1 * d6;
+        if (vb <= 0f && d2 >= 0f && d6 <= 0f) { float t = d2 / (d2 - d6); return (a + t * ac, 1f - t, 0f, t); }
+        float va = d3 * d6 - d5 * d4;
+        if (va <= 0f && d4 - d3 >= 0f && d5 - d6 >= 0f)
+        {
+            float t = (d4 - d3) / (d4 - d3 + (d5 - d6));
+            return (b + t * (c - b), 0f, 1f - t, t);
+        }
+        float den = 1f / (va + vb + vc);
+        float v2 = vb * den, w2 = vc * den;
+        return (a + ab * v2 + ac * w2, 1f - v2 - w2, v2, w2);
     }
 
     /// <summary>What cloth beyond a deep push's reach may still move further: the passes after the push-out (the fold

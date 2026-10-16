@@ -318,11 +318,12 @@ public class SkinTuckTests(ITestOutputHelper output)
                        .Where(t => covered[t.Item1] || covered[t.Item2] || covered[t.Item3]).ToList();
         var baseOf = body.MeshSpans.ToDictionary(s => s.Mesh, s => s.BaseVertex);
 
-        var readable = BodyRetarget.TuckUnderCloth(drawn, cloth, bodyBytes, body, covered, kept, new HashSet<Vector3>(), baseOf);
+        var readable = BodyRetarget.TuckUnderCloth(drawn, cloth, bodyBytes, body, covered, kept, new HashSet<Vector3>(), baseOf,
+                                                   edges);
         Assert.True(readable.Triangles > 0, "the fixture does not grow with readable weights");
         Assert.False(readable.Unread);
 
-        var unread = BodyRetarget.TuckUnderCloth(drawn, cloth, [], body, covered, kept, new HashSet<Vector3>(), baseOf);
+        var unread = BodyRetarget.TuckUnderCloth(drawn, cloth, [], body, covered, kept, new HashSet<Vector3>(), baseOf, edges);
         Assert.Empty(unread.Grown);
         Assert.Equal(0, unread.Triangles);
         Assert.True(unread.Unread);

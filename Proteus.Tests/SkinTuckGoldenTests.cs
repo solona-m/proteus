@@ -20,8 +20,8 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
     /// <summary>A game top as it was before the neckline tuck and the deep clear.</summary>
     private static readonly BodyRetarget.Tuning Before = new(NoTuck: true, NoDeepClear: true);
 
-    /// <summary>A game top with the tuck as change (a) made it: no deep clear.</summary>
-    private static readonly BodyRetarget.Tuning TuckOnly = new(NoDeepClear: true);
+    /// <summary>A game top with the tuck as change (a) made it: no deep clear, no open skin.</summary>
+    private static readonly BodyRetarget.Tuning TuckOnly = new(NoDeepClear: true, NoOpenSkin: true);
 
     private string Pinned(byte[] model, string expected)
     {
@@ -285,19 +285,21 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-neckline-large-bust-22")]
     public void The_Studio_cut_and_clear_tuck_is_as_change_a_made_it()
     {
-        // No knob at all: the Studio never deep-clears whatever the knobs say, and that is left to show here.
+        // Without the open skin only: the Studio never deep-clears whatever the knobs say, and that is left to show here.
+        var noOpen = new BodyRetarget.Tuning(NoOpenSkin: true);
         var bytes = SkinTuckSheet.LooseTop();
         var garment = ModelPartReader.Read(bytes)!;
-        var loose = BodyRetarget.Plan(garment, bytes, [SkinTuckSheet.Resized(SkinTuckSheet.Body())], "_top", held: NoneHeld,
-                                      replaceSkin: true, acrossBodies: true, clearBody: true, cutHidden: true,
-                                      keepShape: RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)),
-                                      tuckSlot: RefitCore.TuckSlot(true, "_top"));
+        var loose = BodyRetarget.WithTuning(noOpen, () => BodyRetarget.Plan(
+            garment, bytes, [SkinTuckSheet.Resized(SkinTuckSheet.Body())], "_top", held: NoneHeld, replaceSkin: true,
+            acrossBodies: true, clearBody: true, cutHidden: true,
+            keepShape: RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)),
+            tuckSlot: RefitCore.TuckSlot(true, "_top")));
         Pinned(loose.Model, LooseStudioTucked);
 
         var (gBytes, gGarment, pair, pieces) = GrownBust();
-        var grown = BodyRetarget.Plan(gGarment, gBytes, [pair], "_top", held: NoneHeld, replaceSkin: true, acrossBodies: true,
-                                      clearBody: true, cutHidden: true, keepShape: pieces,
-                                      tuckSlot: RefitCore.TuckSlot(true, "_top"));
+        var grown = BodyRetarget.WithTuning(noOpen, () => BodyRetarget.Plan(
+            gGarment, gBytes, [pair], "_top", held: NoneHeld, replaceSkin: true, acrossBodies: true, clearBody: true,
+            cutHidden: true, keepShape: pieces, tuckSlot: RefitCore.TuckSlot(true, "_top")));
         Assert.Equal(0, grown.Report.DeepCleared);
         Pinned(grown.Model, GrownStudioTucked);
     }

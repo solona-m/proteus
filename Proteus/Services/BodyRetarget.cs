@@ -722,7 +722,8 @@ internal static partial class BodyRetarget
                 model = rebuilt;
                 swap = swapped;
                 if (swapped.Tucked > 0)
-                    log?.Invoke($"skin tucked: {swapped.Tucked} triangles of the new body under the cloth past the author's edge");
+                    log?.Invoke($"skin tucked: {swapped.Tucked} triangles of the new body under the cloth past the author's edge "
+                                + $"({swapped.Opened} in the open, inside the author's skin)");
                 if (swapped.TuckUnread > 0)
                     log?.Invoke("skin tuck: the new body's weights could not be read, so nothing was tucked under the cloth");
             }
