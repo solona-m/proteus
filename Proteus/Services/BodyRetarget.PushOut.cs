@@ -233,6 +233,12 @@ internal static partial class BodyRetarget
     /// "crossed-by:" and the node that crossed it. Per logical call, as <see cref="Tuned"/>; null for every refit.</summary>
     internal static readonly System.Threading.AsyncLocal<Action<(int, int, int), string>?> FaceTrace = new();
 
+    /// <summary>For tests: <see cref="PushOut"/>'s need per node as each of its steps leaves it — "need-direct" (each
+    /// node's own), "need-faces" (with the faces the skin comes through), "need-spread", "need-slope", "need-guarded" (after
+    /// the fold guard) — and "settled", how far the settle then moved each node. A copy each time; per
+    /// logical call, as <see cref="Tuned"/>; null for every refit.</summary>
+    internal static readonly System.Threading.AsyncLocal<Action<string, float[]>?> PushTrace = new();
+
     /// <summary>How far apart a thick shell's two walls may be to be paired (3 mm) — see <see cref="FaceCheck.WallPartner"/>.
     /// Geometric's skirt: exactly 2 mm.</summary>
     internal const float WallPairReach = 0.003f;
@@ -734,8 +740,11 @@ internal static partial class BodyRetarget
             any = true;
         }
 
+        var pushTrace = PushTrace.Value;
+        pushTrace?.Invoke("need-direct", (float[])need.Clone());
         faceCheck = new FaceCheck(sets, nodes, before, after, authored, clearBody);
         any |= SkinThroughFaces(faceCheck, nodeDelta, need, dir, hasDir);
+        pushTrace?.Invoke("need-faces", (float[])need.Clone());
 
         if (!any) return 0;
 
@@ -759,6 +768,7 @@ internal static partial class BodyRetarget
             }
             if (!changed) break;
         }
+        pushTrace?.Invoke("need-spread", (float[])need.Clone());
 
         // The same slope limit against the cloth this pass left out — authored inside the skin, or nowhere near it.
         // Those nodes never move, and the spread above cannot see them, so a node beside one could be pushed its whole
@@ -798,6 +808,7 @@ internal static partial class BodyRetarget
         }
 
         Slope();
+        pushTrace?.Invoke("need-slope", (float[])need.Clone());
 
         // Back the push off wherever it would turn a triangle over. Each node is pushed along the skin's normal
         // where IT landed, and neighbours can land on surfaces facing different ways — a sleeve at the wrist lands on
@@ -851,6 +862,7 @@ internal static partial class BodyRetarget
             if (folded == 0) break;
             Slope();
         }
+        pushTrace?.Invoke("need-guarded", (float[])need.Clone());
 
         // How far each node has been pushed out, so the settle below reports pushes and not the smoothing that rides
         // along with them.
@@ -871,8 +883,17 @@ internal static partial class BodyRetarget
         // Whatever the fold guard backed off from is still inside: settled rather than left. The settle never halves, so it
         // can push a deep node back out to the full depth the fold guard backed it off from — the deep clear is bounded by
         // what the refit is measured on afterwards (folds, stretch), not by that guard.
+        var beforeSettle = pushTrace != null ? (Vec3[])nodeDelta.Clone() : null;
         if (!Tuned.NoSettle)
             pushed += Settle(sets, nodes, after, nodeDelta, authored, clearBody, pushedBy, ref worst, deep, deepNode);
+        if (pushTrace != null)
+        {
+            var settled = new float[sets.NodeCount];
+            for (int n = 0; n < sets.NodeCount; n++)
+                settled[n] = Len(new Vec3(nodeDelta[n].X - beforeSettle![n].X, nodeDelta[n].Y - beforeSettle[n].Y,
+                                          nodeDelta[n].Z - beforeSettle[n].Z));
+            pushTrace("settled", settled);
+        }
 
         for (int n = 0; start != null && n < sets.NodeCount; n++)
         {

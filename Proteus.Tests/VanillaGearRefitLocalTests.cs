@@ -597,6 +597,218 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
     private static ModelParts LaidGarment(Refit r)
         => ModelPartReader.Read(MeshVolumeService.Inflate(r.Bytes, r.Game.Edit).Model)!;
 
+    public static TheoryData<string, string, string?> FloatCases
+    {
+        get
+        {
+            var cases = NecklineCases;
+            cases.Add(Maiming, LavaBod, Teardrop);
+            cases.Add(Scion, LavaBod, Teardrop);
+            return cases;
+        }
+    }
+
+    /// <summary>One floating point of the cloth: a distinct laid position, its authored standoff off the source chest
+    /// and its standoff now off the new chest, and the garment vertex it was found at.</summary>
+    internal readonly record struct Floater(int Vertex, Vector3 At, float Own, float Now);
+
+    /// <summary>
+    /// Cloth of the laid garment standing more than 5 mm further off the new chest than the author put it off the source
+    /// chest, each by its nearest point on its own body file, at distinct laid positions. In front (z &gt; 0.02) and from
+    /// <paramref name="fromY"/> up: the fixed region is y ≥ 1.18, apart from any apex the pass may compute.
+    /// </summary>
+    private static List<Floater> NecklineFloat(ModelParts garment, ModelParts laid, BodySurface source, BodySurface target,
+                                               float fromY = 1.18f, float excess = 0.005f)
+    {
+        var floaters = new List<Floater>();
+        var seen = new HashSet<(int, int, int)>();
+        foreach (int v in ClothParts(garment).SelectMany(p => p.Triangles).Distinct().Order())
+        {
+            var p = At(laid, v);
+            if (p.Z <= 0.02f || p.Y < fromY || !seen.Add(Key(p))) continue;
+            if (!source.Nearest(At(garment, v), 0.06f, out var h0) || !target.Nearest(p, 0.06f, out var h)) continue;
+            float own = Vector3.Dot(At(garment, v) - h0.Point, h0.Normal);
+            float now = Vector3.Dot(p - h.Point, h.Normal);
+            if (now - own > excess) floaters.Add(new Floater(v, p, own, now));
+        }
+        return floaters;
+    }
+
+    /// <summary>The new chest's breast apex height: on each side, the breast vertex (weighted at least
+    /// <see cref="BodyRetarget.BreastWeight"/> to the breast bones) standing furthest forward; the lower of the two.</summary>
+    private static float ApexY(byte[] targetFile)
+    {
+        var body = ModelPartReader.Read(targetFile)!;
+        var skin = ModelSkinReader.Read(targetFile, null, null)!;
+        float left = float.NaN, right = float.NaN, leftZ = float.MinValue, rightZ = float.MinValue;
+        for (int v = 0; v < body.Positions.Length / 3; v++)
+        {
+            if (BodyRetarget.EndShareOf(skin, v, b => b.Contains("mune", StringComparison.Ordinal)) < BodyRetarget.BreastWeight) continue;
+            var p = At(body, v);
+            if (p.X <= 0.01f && p.Z > leftZ) { leftZ = p.Z; left = p.Y; }
+            if (p.X >= -0.01f && p.Z > rightZ) { rightZ = p.Z; right = p.Y; }
+        }
+        return MathF.Min(left, right);
+    }
+
+    /// <summary>
+    /// [Step 0 of neckline-float: measure before building.] The cloth of a game top that the refit carried further off
+    /// the new chest than the author placed it: how much, by which stage of the solve and which step of the push-out,
+    /// which scope would reach it and what else that scope would take, whether the two standoffs land on the same part
+    /// of the body, and how much a slope-limited pull back could undo.
+    /// </summary>
+    [LocalDataTheory(LocalData.GameData, Neolithe, LavaBod, Rue, Bibo)]
+    [MemberData(nameof(FloatCases))]
+    public void Neckline_float_is_measured(string garmentName, string modNeed, string? rel)
+    {
+        var r = Plan(garmentName, modNeed, rel);
+        output.WriteLine($"RAN {garmentName} on {Path.GetFileName(LocalData.Path(modNeed))} / {r.Option.Rel}");
+        var laid = LaidGarment(r);
+        var sourceSurf = new BodySurface(ModelPartReader.Read(File.ReadAllBytes(r.Source))!, 0.01f);
+        var targetSurf = new BodySurface(ModelPartReader.Read(File.ReadAllBytes(r.Target))!, 0.01f);
+        float apex = ApexY(File.ReadAllBytes(r.Target));
+        var fixedRegion = NecklineFloat(r.Garment, laid, sourceSurf, targetSurf);
+        var apexRegion = NecklineFloat(r.Garment, laid, sourceSurf, targetSurf, fromY: apex);
+        output.WriteLine($"  apex at y {apex:0.000}; floaters: fixed region (y ≥ 1.18) {fixedRegion.Count}, summed excess "
+                         + $"{fixedRegion.Sum(f => f.Now - f.Own) * 1000:0} mm; above the apex {apexRegion.Count}, "
+                         + $"{apexRegion.Sum(f => f.Now - f.Own) * 1000:0} mm");
+
+        // The solve, traced by stage and by push-out step.
+        var stages = new List<(string Name, SecondSkinWriter.Vec3[] Delta)>();
+        var push = new List<(string Name, float[] Value)>();
+        BodyRetarget.PushTrace.Value = (s, a) => push.Add((s, a));
+        try
+        {
+            RefitCore.PlanRefit(r.Garment, r.Bytes, [r.Pair], "_top", across: true, gameGear: true, out _,
+                                trace: (s, d) => stages.Add((s, (SecondSkinWriter.Vec3[])d.Clone())));
+        }
+        finally { BodyRetarget.PushTrace.Value = null; }
+        var last = stages[^1].Delta;
+        var nodeByDelta = new Dictionary<(int, int, int), int>();
+        for (int n = 0; n < last.Length; n++) nodeByDelta.TryAdd(Key(new Vector3(last[n].X, last[n].Y, last[n].Z)), n);
+        int NodeOf(int v) => nodeByDelta.TryGetValue(Key(At(laid, v) - At(r.Garment, v)), out int n) ? n : -1;
+        float Off(Vector3 p) => targetSurf.Nearest(p, 0.06f, out var h) ? Vector3.Dot(p - h.Point, h.Normal) : float.NaN;
+
+        var floaterNodes = fixedRegion.Select(f => NodeOf(f.Vertex)).ToList();
+        output.WriteLine($"  floaters matched to solve nodes: {floaterNodes.Count(n => n >= 0)} of {fixedRegion.Count}");
+        var byStage = new List<string>();
+        float previous = 0f;
+        for (int s = 0; s < stages.Count; s++)
+        {
+            float sum = 0f;
+            for (int i = 0; i < fixedRegion.Count; i++)
+            {
+                int n = floaterNodes[i];
+                if (n < 0) continue;
+                var d = stages[s].Delta[n];
+                sum += Off(At(r.Garment, fixedRegion[i].Vertex) + new Vector3(d.X, d.Y, d.Z)) - fixedRegion[i].Own;
+            }
+            byStage.Add($"{stages[s].Name} {(sum - previous) * 1000:+0;-0} mm");
+            previous = sum;
+        }
+        output.WriteLine($"  excess added, summed over the floaters, by stage: {string.Join(", ", byStage)}");
+        foreach (var name in push.Select(p => p.Name).Distinct())
+        {
+            var value = push.Last(p => p.Name == name).Value;
+            var on = floaterNodes.Where(n => n >= 0 && n < value.Length).Select(n => value[n]).ToList();
+            output.WriteLine($"    push {name} (x{push.Count(p => p.Name == name)}): floaters with any {on.Count(x => x > 1e-5f)}, "
+                             + $"summed {on.Sum() * 1000:0} mm, most {(on.Count > 0 ? on.Max() * 1000 : 0):0.0} mm");
+        }
+
+        // Scope: Q1 at or above the apex; Q2 the body did not grow (B ≤ g) at the landing. Coverage of the floaters, and
+        // what each would take below the apex that is not floating.
+        float Grew(Vector3 p)
+            => targetSurf.Nearest(p, 0.06f, out var h) && sourceSurf.Nearest(h.Point, 0.06f, out var q)
+                ? Vector3.Dot(h.Point - q.Point, h.Normal) : float.NaN;
+        bool Q1(Floater f) => targetSurf.Nearest(f.At, 0.06f, out var h) && h.Point.Y >= apex;
+        foreach (float g in new[] { 0f, 0.002f, 0.004f })
+        {
+            int q2 = fixedRegion.Count(f => Grew(f.At) <= g);
+            int q3 = fixedRegion.Count(f => Q1(f) && Grew(f.At) <= g);
+            output.WriteLine($"  scope at B ≤ {g * 1000:0} mm: Q1 {fixedRegion.Count(Q1)}, Q2 {q2}, Q3 {q3} of {fixedRegion.Count}");
+        }
+        var below = NecklineFloat(r.Garment, laid, sourceSurf, targetSurf, fromY: 0f).Where(f => !Q1(f)).ToList();
+        output.WriteLine($"  floating below the apex (drape): {below.Count}; of them B ≤ 0: {below.Count(f => Grew(f.At) <= 0f)}");
+        var backB = new SortedDictionary<int, int>();
+        foreach (int v in ClothParts(r.Garment).SelectMany(p => p.Triangles).Distinct())
+        {
+            var p = At(laid, v);
+            if (p.Z > -0.02f || p.Y < 1.15f) continue;
+            float b = Grew(p);
+            if (float.IsNaN(b)) continue;
+            int bucket = (int)MathF.Round(b * 1000);
+            backB[bucket] = backB.GetValueOrDefault(bucket) + 1;
+        }
+        output.WriteLine($"  B over the back of the chest (noise; mm:count): {string.Join(" ", backB.Select(b => $"{b.Key}:{b.Value}"))}");
+
+        // Do "own" and "now" land on the same part of the body?
+        foreach (var f in fixedRegion.OrderByDescending(f => f.Now - f.Own).Take(12))
+        {
+            sourceSurf.Nearest(At(r.Garment, f.Vertex), 0.06f, out var h0);
+            targetSurf.Nearest(f.At, 0.06f, out var h);
+            var apart = h.Point - h0.Point;
+            float along = Vector3.Dot(apart, h.Normal);
+            output.WriteLine($"    v{f.Vertex} ({f.At.X:0.000},{f.At.Y:0.000},{f.At.Z:0.000}) own {f.Own * 1000:0.0} now {f.Now * 1000:0.0}; "
+                             + $"landings {apart.Length() * 1000:0.0} mm apart, {MathF.Sqrt(MathF.Max(0f, apart.LengthSquared() - along * along)) * 1000:0.0} "
+                             + $"across; B {Grew(f.At) * 1000:0.0} mm; y − apex {(f.At.Y - apex) * 1000:0} mm");
+        }
+
+        // Dry run of the pull: each eligible cloth point's wish (back to own + 3 mm, never under 4 mm), capped by its
+        // neighbours' pull plus PushSlope × the mean edge — cloth not eligible pulls nothing.
+        var welded = new Dictionary<(int, int, int), int>();
+        var nodeAt = new List<Vector3>();
+        var nodeVerts = new List<List<int>>();
+        foreach (int v in ClothParts(r.Garment).SelectMany(p => p.Triangles).Distinct().Order())
+        {
+            var k = Key(At(laid, v));
+            if (!welded.TryGetValue(k, out int n)) { n = nodeAt.Count; welded[k] = n; nodeAt.Add(At(laid, v)); nodeVerts.Add([]); }
+            nodeVerts[n].Add(v);
+        }
+        var adj = nodeAt.Select(_ => new HashSet<int>()).ToArray();
+        foreach (var part in ClothParts(r.Garment))
+            for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+                for (int e = 0; e < 3; e++)
+                {
+                    int a = welded[Key(At(laid, part.Triangles[t + e]))], b = welded[Key(At(laid, part.Triangles[t + (e + 1) % 3]))];
+                    if (a != b) { adj[a].Add(b); adj[b].Add(a); }
+                }
+        float step = BodyRetarget.PushSlope * BodyRetarget.MeanEdgeOf(r.Garment);
+        void DryRun(string label, Func<int, bool> eligible)
+        {
+            var want = new float[nodeAt.Count];
+            for (int n = 0; n < nodeAt.Count; n++)
+            {
+                if (!eligible(n)) continue;
+                int v = nodeVerts[n][0];
+                if (!sourceSurf.Nearest(At(r.Garment, v), 0.06f, out var h0)) continue;
+                float own = Vector3.Dot(At(r.Garment, v) - h0.Point, h0.Normal);
+                float now = Off(nodeAt[n]);
+                if (own < 0f || float.IsNaN(now)) continue;
+                want[n] = MathF.Max(0f, now - MathF.Max(own + 0.003f, 0.004f));
+            }
+            var pull = (float[])want.Clone();
+            for (bool changed = true; changed;)
+            {
+                changed = false;
+                for (int n = 0; n < nodeAt.Count; n++)
+                    foreach (int m in adj[n])
+                        if (pull[n] > pull[m] + step + 1e-7f) { pull[n] = pull[m] + step; changed = true; }
+            }
+            int left = 0;
+            foreach (var f in fixedRegion)
+            {
+                int n = welded[Key(f.At)];
+                if (f.Now - pull[n] - f.Own > 0.005f) left++;
+            }
+            output.WriteLine($"  dry run {label} (slope {step * 1000:0.00} mm per edge): floaters left {left} of {fixedRegion.Count}; "
+                             + $"without the slope {fixedRegion.Count(f => f.Now - want[welded[Key(f.At)]] - f.Own > 0.005f)}");
+        }
+        bool AboveApex(int n) => targetSurf.Nearest(nodeAt[n], 0.06f, out var h) && h.Point.Y >= apex;
+        DryRun("Q3 (above the apex, B ≤ 0)", n => AboveApex(n) && Grew(nodeAt[n]) <= 0f);
+        DryRun("Q3 (above the apex, B ≤ 2 mm)", n => AboveApex(n) && Grew(nodeAt[n]) <= 0.002f);
+        DryRun("Q1 (above the apex)", AboveApex);
+    }
+
     /// <summary>
     /// [Step 2 of neckline-large-bust: measure before choosing numbers.] For the cloth the refit leaves buried 8-30 mm in
     /// the new chest over its breast, two signals of "the bust grew here": A, how far the refit carried that cloth out
