@@ -641,13 +641,16 @@ internal static partial class BodyRetarget
     /// <param name="trace">For a diagnostic: each stage of the solve by name, with a copy of every node's move so far
     /// (see <see cref="Solve"/>). Null, as every refit has it, costs nothing.</param>
     /// <param name="outfit">See <see cref="Solve"/>.</param>
+    /// <param name="tuckSlot">The slot whose cut skin is carried on in under the cloth past the author's edge (see
+    /// <see cref="TuckUnderCloth"/>), or null for none: the game's own top in the automatic refit, and a top the Body
+    /// size tool refits with the hidden skin cut and the body cleared.</param>
     public static Planned Plan(ModelParts garment, byte[] garmentBytes, IReadOnlyList<SlotPair> pairs,
                                string? garmentSlot = null, bool pushOut = true, IReadOnlySet<int>? held = null,
                                bool replaceSkin = false, bool acrossBodies = false, bool clearBody = false,
                                bool cutHidden = true, IReadOnlyList<IReadOnlyCollection<int>>? keepShape = null,
                                string? swapSlot = null, Action<string>? log = null, Action<string>? warn = null,
                                string? chestSlot = null, Action<string, Vec3[]>? trace = null,
-                               Outfit? outfit = null)
+                               Outfit? outfit = null, string? tuckSlot = null)
     {
         // First, before anything reads the new chest: its nipples smoothed where the garment covers more of them than
         // the old body had, so every pass below sees one surface — the one the swap draws.
@@ -675,11 +678,13 @@ internal static partial class BodyRetarget
         if (replaceSkin || weights != null)
         {
             var rebuilt = Rebuild(model, pairs, replaceSkin, weights, out var swapped, cutHidden, acrossBodies,
-                                  swapMeshes);
+                                  swapMeshes, tuckSlot);
             if (rebuilt != null)
             {
                 model = rebuilt;
                 swap = swapped;
+                if (swapped.Tucked > 0)
+                    log?.Invoke($"skin tucked: {swapped.Tucked} triangles of the new body under the cloth past the author's edge");
             }
             else if (swapped.Kept > 0)
             {

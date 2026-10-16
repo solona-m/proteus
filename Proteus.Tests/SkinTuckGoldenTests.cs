@@ -13,7 +13,6 @@ namespace Proteus.Tests;
 /// the planned model on <c>test</c> 054b7d3 (each value taken from two separate test runs that agreed). Equality of two
 /// runs in one process proves nothing about a change to the shared cut; these do.
 /// </summary>
-[Collection(GameBodyCollection.Name)]
 public class SkinTuckGoldenTests(ITestOutputHelper output)
 {
     private static readonly HashSet<int> NoneHeld = [];
@@ -40,14 +39,19 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
 
     [Fact]
     [Trait("Plan", "AC-neckline-skin-tuck-3")]
-    public void Studio_cut_and_clear_plans_as_before()
+    public void Studio_cut_and_clear_tucks_a_top()
     {
+        // The Body size tool's call for a top with "Cut hidden skin" and "Clear body" both on: it tucks, as the automatic
+        // refit of the game's own top does. Without the tuck, it is what it was.
         var bytes = SkinTuckSheet.LooseTop();
         var garment = ModelPartReader.Read(bytes)!;
-        var plan = BodyRetarget.Plan(garment, bytes, [SkinTuckSheet.Resized(SkinTuckSheet.Body())], "_top", held: NoneHeld,
-                                     replaceSkin: true, acrossBodies: true, clearBody: true, cutHidden: true,
-                                     keepShape: RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)));
-        Pinned(plan.Model, StudioCutAndClear);
+        BodyRetarget.Planned Studio() => BodyRetarget.Plan(garment, bytes, [SkinTuckSheet.Resized(SkinTuckSheet.Body())],
+                                                           "_top", held: NoneHeld, replaceSkin: true, acrossBodies: true,
+                                                           clearBody: true, cutHidden: true,
+                                                           keepShape: RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)),
+                                                           tuckSlot: RefitCore.TuckSlot(true, "_top"));
+        Assert.True(Studio().Report.Swap?.Tucked > 0, "the Body size tool's cut-and-clear top did not tuck");
+        Pinned(BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoTuck: true), Studio).Model, StudioCutAndClear);
     }
 
     [Fact]
@@ -76,8 +80,9 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
     {
         var bytes = SkinTuckSheet.LooseTop();
         var garment = ModelPartReader.Read(bytes)!;
-        var plan = RefitCore.PlanRefit(garment, bytes, [SkinTuckSheet.Resized(SkinTuckSheet.Body())], "_top", across: true,
-                                       gameGear: true, out _);
+        var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoTuck: true),
+            () => RefitCore.PlanRefit(garment, bytes, [SkinTuckSheet.Resized(SkinTuckSheet.Body())], "_top", across: true,
+                                      gameGear: true, out _));
         Pinned(plan.Model, GameTopUntucked);
     }
 
@@ -141,7 +146,8 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
                         ("target", File.ReadAllBytes(target), AlmondXsSha))) return;
         var garment = ModelPartReader.Read(bytes)!;
         var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
-        var plan = RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true, out _);
+        var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoTuck: true),
+            () => RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true, out _));
         Pinned(RefitCore.MatchSkinToBody(plan.Model, source, target, uv, false, log), DirndlGameRefit);
     }
 

@@ -59,8 +59,10 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
                                                  [new PenumbraModMeta.Redirect(Top_, "coat.mdl", "Colour / Red")],
                                                  Refitted("Body — Neolithe/neolithe m.mdl"), madeByProteus: false));
 
-        Assert.Equal(new AutoRefitDecisions.SkinRule(CutHidden: true, ClearBody: true), AutoRefitDecisions.SkinFor(true));
-        Assert.Equal(new AutoRefitDecisions.SkinRule(CutHidden: false, ClearBody: false), AutoRefitDecisions.SkinFor(false));
+        Assert.Equal(new AutoRefitDecisions.SkinRule(CutHidden: true, ClearBody: true, TuckUnderCloth: true),
+                     AutoRefitDecisions.SkinFor(true));
+        Assert.Equal(new AutoRefitDecisions.SkinRule(CutHidden: false, ClearBody: false, TuckUnderCloth: false),
+                     AutoRefitDecisions.SkinFor(false));
     }
 
     [Fact]
@@ -312,6 +314,25 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
         {
             File.Delete(target);
         }
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-neckline-skin-tuck-5")]
+    public void A_game_tops_tuck_is_logged()
+    {
+        var bytes = SkinTuckSheet.LooseTop(looseFrom: 5);
+        var garment = ModelPartReader.Read(bytes)!;
+        var game = new List<string>();
+        var mod = new List<string>();
+
+        var plan = RefitCore.PlanRefit(garment, bytes, [SkinTuckSheet.Resized(SkinTuckSheet.Body())], "_top", across: true,
+                                       gameGear: true, out _, log: game.Add);
+        RefitCore.PlanRefit(garment, bytes, [SkinTuckSheet.Resized(SkinTuckSheet.Body())], "_top", across: true,
+                            gameGear: false, out _, log: mod.Add);
+
+        Assert.True(plan.Report.Swap?.Tucked > 0, $"{plan.Report.Swap}");
+        Assert.Contains(game, l => l.StartsWith($"skin tucked: {plan.Report.Swap!.Value.Tucked} triangles", StringComparison.Ordinal));
+        Assert.DoesNotContain(mod, l => l.StartsWith("skin tucked:", StringComparison.Ordinal));
     }
 
     [Fact]

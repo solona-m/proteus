@@ -48,6 +48,8 @@ internal static partial class BodyRetarget
     /// flips within one lift, as builds before 1261 did (see <see cref="LiftRims"/>).</param>
     /// <param name="NoSnapPush">Leave cloth the transfer snapped onto a body vertex out of the push-out and the face clear
     /// whatever body it lands on, as builds before 1266 did (see <see cref="SnappedLandsElsewhere"/>).</param>
+    /// <param name="NoTuck">Leave the new body's skin ending where the author's edge was laid, as builds before 1286 did
+    /// (see <see cref="TuckUnderCloth"/>).</param>
     internal sealed record Tuning(bool NoFollow = false, bool NoOwnSkinWeights = false,
                                   float OwnSkinReach = OwnSkinReachDefault, float CopyReach = CopyReachDefault,
                                   float CopyTolerance = CopyToleranceDefault, bool NoGiveUp = false,
@@ -57,7 +59,8 @@ internal static partial class BodyRetarget
                                   bool NoLayerOrder = false, bool LegsForAll = false,
                                   bool CrossBodyPassesWithinBody = false, bool NoRelease = false,
                                   bool NoNippleSmooth = false, bool NoOutfitOrder = false, bool NoWallPair = false,
-                                  bool NoWallCover = false, bool NoRimTurnGuard = false, bool NoSnapPush = false);
+                                  bool NoWallCover = false, bool NoRimTurnGuard = false, bool NoSnapPush = false,
+                                  bool NoTuck = false);
 
     private static readonly Tuning DefaultTuning = new();
 

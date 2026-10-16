@@ -1024,8 +1024,15 @@ internal static partial class RefitCore
         var pieces = ShapePieces(garment, DefaultKeepShape(garment), out pieceNames);
         return BodyRetarget.Plan(garment, bytes, pairs, primary, held: new HashSet<int>(),
                                  replaceSkin: across, acrossBodies: across, clearBody: skin.ClearBody,
-                                 cutHidden: skin.CutHidden, keepShape: pieces, log: log, warn: warn, trace: trace);
+                                 cutHidden: skin.CutHidden, keepShape: pieces, log: log, warn: warn, trace: trace,
+                                 tuckSlot: TuckSlot(skin.TuckUnderCloth, primary));
     }
+
+    /// <summary>
+    /// Which slot's cut skin is tucked in under the cloth (see <see cref="BodyRetarget.TuckUnderCloth"/>): a top's own
+    /// chest, when the rule asks for it. Measured on tops only — a pair of legs, a skirt or a long top's hips is not tucked.
+    /// </summary>
+    internal static string? TuckSlot(bool tuck, string garmentSlot) => tuck && garmentSlot == "_top" ? "_top" : null;
 
     /// <summary>
     /// The automatic refit of a garment worn on an accessory slot — a jacket on a necklace — over the body part(s) its

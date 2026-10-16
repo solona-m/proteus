@@ -49,6 +49,10 @@ internal static class SkinTuckSheet
 
     private static SyntheticModel.SurfaceMesh Sheet(string material, int from, int to, Func<int, float> z,
                                                     Func<int, bool>? arm = null)
+        => Sheet(material, from, to, (r, _) => z(r), arm);
+
+    private static SyntheticModel.SurfaceMesh Sheet(string material, int from, int to, Func<int, int, float> z,
+                                                    Func<int, bool>? arm = null)
     {
         var pos = new List<Vector3>();
         var uv = new List<Vector2>();
@@ -56,7 +60,7 @@ internal static class SkinTuckSheet
         for (int r = from; r <= to; r++)
             for (int c = 0; c < Columns; c++)
             {
-                pos.Add(new Vector3(X(c), Y(r), z(r)));
+                pos.Add(new Vector3(X(c), Y(r), z(r, c)));
                 uv.Add(new Vector2((float)c / (Columns - 1), (float)r / (Rows - 1)));
                 w.Add(Bones(r, arm));
             }
@@ -68,12 +72,20 @@ internal static class SkinTuckSheet
     /// <param name="arm">Rows rigged to an upper arm instead of the spine.</param>
     /// <param name="splitAt">Split the skin into two meshes at this row: rows below it in the second.</param>
     /// <param name="hiddenBelow">Rows below this go in a submesh tagged <c>atr_tv_b</c>, a variant the body may hide.</param>
+    /// <param name="halvesAt">Two untagged submeshes split at this row — below it first, or last when
+    /// <paramref name="reversed"/>: the same skin in another order.</param>
     internal static byte[] Body(Func<int, bool>? arm = null, int? splitAt = null, int? hiddenBelow = null,
-                                bool piercing = false)
+                                bool piercing = false, int? halvesAt = null, bool reversed = false)
     {
         var meshes = new List<SyntheticModel.SurfaceMesh>();
         var attrs = new List<string>();
-        if (splitAt is { } split)
+        if (halvesAt is { } half)
+        {
+            var whole = Sheet(Skin, 0, Rows - 1, _ => 0f, arm);
+            (uint, int[]) low = (0u, Grid(0, half)), high = (0u, Grid(half, Rows - 1));
+            meshes.Add(whole with { Submeshes = reversed ? [high, low] : [low, high] });
+        }
+        else if (splitAt is { } split)
         {
             meshes.Add(Sheet(Skin, split, Rows - 1, _ => 0f, arm));
             meshes.Add(Sheet(Skin, 0, split, _ => 0f, arm));
@@ -119,6 +131,12 @@ internal static class SkinTuckSheet
     /// <param name="extra">More cloth, as (first row, last row, height) — a second layer, buried or not.</param>
     internal static byte[] Top(Func<int, float> clothZ, int clothFrom = 2, string? clothAttr = null, bool withSkin = true,
                                (int From, int To, float Z)? extra = null, int skinFrom = Edge)
+        => Top((r, _) => clothZ(r), clothFrom, clothAttr, withSkin, extra, skinFrom);
+
+    /// <inheritdoc cref="Top(Func{int, float}, int, string?, bool, (int From, int To, float Z)?, int)"/>
+    /// <param name="clothZ">Each cloth vertex's height off the skin, by row and column.</param>
+    internal static byte[] Top(Func<int, int, float> clothZ, int clothFrom = 2, string? clothAttr = null,
+                               bool withSkin = true, (int From, int To, float Z)? extra = null, int skinFrom = Edge)
     {
         var meshes = new List<SyntheticModel.SurfaceMesh>();
         if (withSkin) meshes.Add(Sheet(Skin, skinFrom, Rows - 1, _ => 0f));
