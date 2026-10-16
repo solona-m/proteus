@@ -17,6 +17,12 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
 {
     private static readonly HashSet<int> NoneHeld = [];
 
+    /// <summary>A game top as it was before the neckline tuck and the deep clear.</summary>
+    private static readonly BodyRetarget.Tuning Before = new(NoTuck: true, NoDeepClear: true);
+
+    /// <summary>A game top with the tuck as change (a) made it: no deep clear, no open neckline skin.</summary>
+    private static readonly BodyRetarget.Tuning TuckOnly = new(NoDeepClear: true, NoOpenSkin: true);
+
     private string Pinned(byte[] model, string expected)
     {
         string actual = SkinTuckSheet.Sha(model);
@@ -80,7 +86,7 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
     {
         var bytes = SkinTuckSheet.LooseTop();
         var garment = ModelPartReader.Read(bytes)!;
-        var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoTuck: true),
+        var plan = BodyRetarget.WithTuning(Before,
             () => RefitCore.PlanRefit(garment, bytes, [SkinTuckSheet.Resized(SkinTuckSheet.Body())], "_top", across: true,
                                       gameGear: true, out _));
         Pinned(plan.Model, GameTopUntucked);
@@ -171,7 +177,7 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
     public void A_game_top_on_a_grown_bust_before_the_tuck_plans_as_before()
     {
         var (bytes, garment, pair, _) = GrownBust();
-        var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoTuck: true),
+        var plan = BodyRetarget.WithTuning(Before,
             () => RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true, out _));
         Pinned(plan.Model, GrownGameTopBefore);
     }
@@ -183,7 +189,8 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
     public void A_game_tops_tuck_on_a_grown_bust_is_as_change_a_made_it()
     {
         var (bytes, garment, pair, _) = GrownBust();
-        var plan = RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true, out _);
+        var plan = BodyRetarget.WithTuning(TuckOnly,
+            () => RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true, out _));
         Pinned(plan.Model, GrownGameTopTucked);
     }
 
@@ -193,8 +200,9 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
     {
         var bytes = SkinTuckSheet.LooseTop();
         var garment = ModelPartReader.Read(bytes)!;
-        var plan = RefitCore.PlanRefit(garment, bytes, [SkinTuckSheet.Resized(SkinTuckSheet.Body())], "_top", across: true,
-                                       gameGear: true, out _);
+        var plan = BodyRetarget.WithTuning(TuckOnly,
+            () => RefitCore.PlanRefit(garment, bytes, [SkinTuckSheet.Resized(SkinTuckSheet.Body())], "_top", across: true,
+                                      gameGear: true, out _));
         Pinned(plan.Model, LooseGameTopTucked);
     }
 
@@ -202,18 +210,22 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-neckline-large-bust-22")]
     public void The_Studio_cut_and_clear_tuck_is_as_change_a_made_it()
     {
+        // Without the open neckline skin only — the Studio never deep-clears whatever the knobs say, and that is left to
+        // show here rather than switched off.
         var bytes = SkinTuckSheet.LooseTop();
         var garment = ModelPartReader.Read(bytes)!;
-        var loose = BodyRetarget.Plan(garment, bytes, [SkinTuckSheet.Resized(SkinTuckSheet.Body())], "_top", held: NoneHeld,
-                                      replaceSkin: true, acrossBodies: true, clearBody: true, cutHidden: true,
-                                      keepShape: RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)),
-                                      tuckSlot: RefitCore.TuckSlot(true, "_top"));
+        var noOpen = new BodyRetarget.Tuning(NoOpenSkin: true);
+        var loose = BodyRetarget.WithTuning(noOpen, () => BodyRetarget.Plan(
+            garment, bytes, [SkinTuckSheet.Resized(SkinTuckSheet.Body())], "_top", held: NoneHeld, replaceSkin: true,
+            acrossBodies: true, clearBody: true, cutHidden: true,
+            keepShape: RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)),
+            tuckSlot: RefitCore.TuckSlot(true, "_top")));
         Pinned(loose.Model, LooseStudioTucked);
 
         var (gBytes, gGarment, pair, pieces) = GrownBust();
-        var grown = BodyRetarget.Plan(gGarment, gBytes, [pair], "_top", held: NoneHeld, replaceSkin: true, acrossBodies: true,
-                                      clearBody: true, cutHidden: true, keepShape: pieces,
-                                      tuckSlot: RefitCore.TuckSlot(true, "_top"));
+        var grown = BodyRetarget.WithTuning(noOpen, () => BodyRetarget.Plan(
+            gGarment, gBytes, [pair], "_top", held: NoneHeld, replaceSkin: true, acrossBodies: true, clearBody: true,
+            cutHidden: true, keepShape: pieces, tuckSlot: RefitCore.TuckSlot(true, "_top")));
         Pinned(grown.Model, GrownStudioTucked);
     }
 
@@ -303,7 +315,7 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
                         ("target", File.ReadAllBytes(target), AlmondXsSha))) return;
         var garment = ModelPartReader.Read(bytes)!;
         var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
-        var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoTuck: true),
+        var plan = BodyRetarget.WithTuning(Before,
             () => RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true, out _));
         Pinned(RefitCore.MatchSkinToBody(plan.Model, source, target, uv, false, log), DirndlGameRefit);
     }

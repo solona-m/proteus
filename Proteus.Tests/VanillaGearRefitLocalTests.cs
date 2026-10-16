@@ -81,9 +81,14 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-neckline-skin-tuck-14")]
     public void A_game_top_on_LavaBod_shows_no_skin_through_and_no_holes(string garment) => Check(garment, LavaBod, Teardrop);
 
-    /// <summary>A game top refitted onto a body as the automatic refit does it, and the same with the tuck off.</summary>
+    /// <summary>
+    /// A game top refitted onto a body as the automatic refit does it (<see cref="Game"/>), and the same with parts of it
+    /// switched off: <see cref="BeforeAB"/> as it was before the neckline tuck and the deep clear, <see cref="AOnly"/> with
+    /// the tuck as it first shipped (no deep clear, no open neckline skin), <see cref="DeepOnly"/> without the tuck.
+    /// </summary>
     private sealed record Refit(byte[] Bytes, ModelParts Garment, string Source, string Target, BodyOption Option,
-                                BodyRetarget.SlotPair Pair, BodyRetarget.Planned Game, BodyRetarget.Planned Untucked,
+                                BodyRetarget.SlotPair Pair, BodyRetarget.Planned Game, BodyRetarget.Planned BeforeAB,
+                                BodyRetarget.Planned AOnly, BodyRetarget.Planned DeepOnly,
                                 Func<BodyRetarget.Planned, byte[]> Drawn, Lumina.GameData Data, long TuckMs, long UntuckedMs);
 
     private static Refit Plan(string garmentName, string modNeed, string? rel)
@@ -106,10 +111,13 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
         var game = RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true, out _);
         long tuckMs = clock.ElapsedMilliseconds;
         clock.Restart();
-        var untucked = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoTuck: true),
+        BodyRetarget.Planned With(BodyRetarget.Tuning tuning) => BodyRetarget.WithTuning(tuning,
             () => RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true, out _));
+        var beforeAB = With(new BodyRetarget.Tuning(NoTuck: true, NoDeepClear: true));
         long untuckedMs = clock.ElapsedMilliseconds;
-        return new Refit(bytes, garment, source, target, option, pair, game, untucked,
+        var aOnly = With(new BodyRetarget.Tuning(NoDeepClear: true, NoOpenSkin: true));
+        var deepOnly = With(new BodyRetarget.Tuning(NoTuck: true));
+        return new Refit(bytes, garment, source, target, option, pair, game, beforeAB, aOnly, deepOnly,
                          plan => RefitCore.MatchSkinToBody(plan.Model, source, target, uv, false, log), data, tuckMs,
                          untuckedMs);
     }
@@ -125,7 +133,7 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
                                         keepShape: RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)));
 
         var gameModel = ModelPartReader.Read(r.Drawn(game))!;
-        var untuckedModel = ModelPartReader.Read(r.Drawn(r.Untucked))!;
+        var untuckedModel = ModelPartReader.Read(r.Drawn(r.BeforeAB))!;
         var body = ModelPartReader.Read(File.ReadAllBytes(target))!;
         double throughGame = SkinThrough(gameModel);
         double throughUntucked = SkinThrough(untuckedModel);
@@ -185,7 +193,7 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
         // cloth (49 cm² in all against the game's 14). Every Top of Maiming case comes in far below its own body's 436.
         Assert.True(holes <= Math.Max(1.5 * baseline, baseline + 40.0), $"{holes:0.0} cm² undrawn against {baseline:0.0}");
         // AC-4
-        Assert.True(r.Untucked.Report.Folded <= whole.Report.Folded, $"folded {r.Untucked.Report.Folded} against {whole.Report.Folded}");
+        Assert.True(r.BeforeAB.Report.Folded <= whole.Report.Folded, $"folded {r.BeforeAB.Report.Folded} against {whole.Report.Folded}");
     }
 
     public static TheoryData<string, string, string?> NecklineCases => new()
@@ -223,7 +231,7 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
 
         var body = ModelPartReader.Read(File.ReadAllBytes(r.Target))!;
         var tucked = ModelPartReader.Read(r.Drawn(r.Game))!;
-        var untucked = ModelPartReader.Read(r.Drawn(r.Untucked))!;
+        var untucked = ModelPartReader.Read(r.Drawn(r.BeforeAB))!;
         var bands = new SortedDictionary<(float, string), double>();
         var untuckedBands = new SortedDictionary<(float, string), double>();
         var baseBands = new SortedDictionary<(float, string), double>();
@@ -300,6 +308,122 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
         // [EDGE-12] On the written model: every triangle the tuck drew is one of the body's own, wound as the body winds it.
         Assert.NotNull(ModelPartReader.Read(r.Game.Model));
         Assert.Equal(0, SkinTuckSheet.NewSkinAgainstBody(untucked, tucked, body).NotTheBodys);
+    }
+
+    /// <summary>The garment as the refit laid it, before the rebuild: the same vertices as the garment, moved — exactly
+    /// what <see cref="BodyRetarget.Rebuild"/> takes the laid skin from.</summary>
+    private static ModelParts LaidGarment(Refit r)
+        => ModelPartReader.Read(MeshVolumeService.Inflate(r.Bytes, r.Game.Edit).Model)!;
+
+    /// <summary>
+    /// [Step 2 of neckline-large-bust: measure before choosing numbers.] For the cloth the refit leaves buried 8-30 mm in
+    /// the new chest over its breast, two signals of "the bust grew here": A, how far the refit carried that cloth out
+    /// along the skin's normal; B, how far the new chest's surface lies outside the source chest's at the landing. On
+    /// LavaBod+ Teardrop the hole's cloth (near the skin seen from above) against Neolithe XS's buried breast cloth —
+    /// the choice of signal and threshold is read off these. And the open neckline skin seen from above: spanned by the
+    /// game's laid skin (and by how much of the chord) or past its open edge.
+    /// </summary>
+    [LocalDataTheory(LocalData.GameData, Neolithe, LavaBod)]
+    [InlineData(Dirndl, LavaBod, Teardrop)]
+    [InlineData(Dirndl, Neolithe, AlmondXs)]
+    [InlineData(Scion, LavaBod, Teardrop)]
+    public void Deep_clear_signals_are_measured(string garmentName, string modNeed, string rel)
+    {
+        var r = Plan(garmentName, modNeed, rel);
+        output.WriteLine($"RAN {garmentName} on {Path.GetFileName(LocalData.Path(modNeed))} / {r.Option.Rel}");
+        var laid = LaidGarment(r);
+        var body = ModelPartReader.Read(File.ReadAllBytes(r.Target))!;
+        var source = ModelPartReader.Read(File.ReadAllBytes(r.Source))!;
+        var bodySurface = new BodySurface(body, 0.01f);
+        var sourceSurface = new BodySurface(source, 0.01f);
+        var skin = ModelSkinReader.Read(File.ReadAllBytes(r.Target), null, null)!;
+        float Breast(BodySurface.Hit hit)
+            => (BodyRetarget.EndShareOf(skin, hit.A, b => b.StartsWith("j_mune_", StringComparison.Ordinal)) * hit.U
+              + BodyRetarget.EndShareOf(skin, hit.B, b => b.StartsWith("j_mune_", StringComparison.Ordinal)) * hit.V
+              + BodyRetarget.EndShareOf(skin, hit.C, b => b.StartsWith("j_mune_", StringComparison.Ordinal)) * hit.W);
+
+        // Where the skin is seen from above, as the neckline metric finds it.
+        var culled = Culled(r.Data, r.Garment);
+        var tucked = ModelPartReader.Read(r.Drawn(r.Game))!;
+        var seenAt = new List<(Vector3 Centre, Vector3 Normal, int Elevation)>();
+        double seen = NecklineSeenThrough(tucked, culled, body, new SortedDictionary<(float, string), double>(), seenAt);
+        var seenAbove = seenAt.Where(s => s.Elevation >= 20).ToList();
+        output.WriteLine($"  seen through {seen:0.0} cm², {seenAbove.Count} triangles from above");
+
+        // Every cloth vertex buried 8-30 mm over the breast, with both signals.
+        var hole = new List<(float A, float B)>();
+        var other = new List<(float A, float B)>();
+        int buriedOffBreast = 0;
+        var clothVerts = ClothParts(r.Garment).SelectMany(p => p.Triangles).Distinct().ToList();
+        foreach (int v in clothVerts)
+        {
+            var p = At(laid, v);
+            if (!bodySurface.Nearest(p, 0.05f, out var hit)) continue;
+            float s = Vector3.Dot(p - hit.Point, hit.Normal);
+            if (s > -BodyRetarget.ClearDepth || s < -0.03f) continue;
+            if (Breast(hit) < 0.15f) { buriedOffBreast++; continue; }
+            float a = Vector3.Dot(p - At(r.Garment, v), hit.Normal);
+            float b = sourceSurface.Nearest(hit.Point, 0.06f, out var was) ? Vector3.Dot(hit.Point - was.Point, hit.Normal) : 0.06f;
+            bool nearHole = seenAbove.Any(q => Vector3.Distance(q.Centre, hit.Point) < 0.02f);
+            (nearHole ? hole : other).Add((a, b));
+        }
+        output.WriteLine($"  buried 8-30 mm over the breast: {hole.Count} near the hole, {other.Count} elsewhere; "
+                         + $"{buriedOffBreast} off the breast");
+        void Histogram(string name, IEnumerable<float> values)
+        {
+            var bins = values.GroupBy(x => (int)MathF.Floor(x * 1000 / 4) * 4).OrderBy(g => g.Key)
+                             .Select(g => $"{g.Key}:{g.Count()}");
+            output.WriteLine($"    {name} (mm bucket:count) {string.Join(", ", bins)}");
+        }
+        // The cloth's FACES, sampled: coarse game cloth crosses the bust between corners that are not buried.
+        var faceDepth = new SortedDictionary<int, double>();
+        foreach (var part in ClothParts(laid))
+            for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+            {
+                var fa = At(laid, part.Triangles[t]); var fb = At(laid, part.Triangles[t + 1]); var fc = At(laid, part.Triangles[t + 2]);
+                double share = Vector3.Cross(fb - fa, fc - fa).Length() / 2 * 1e4 / 15;
+                for (int i = 1; i < 6; i++)
+                for (int j = 1; i + j < 6; j++)
+                {
+                    var q = fa * (1 - i / 6f - j / 6f) + fb * (i / 6f) + fc * (j / 6f);
+                    if (!bodySurface.Nearest(q, 0.06f, out var fh) || Breast(fh) < 0.15f) continue;
+                    float s = Vector3.Dot(q - fh.Point, fh.Normal);
+                    if (s > 0f) continue;
+                    int key = (int)MathF.Floor(s * 1000 / 4) * 4;
+                    faceDepth[key] = faceDepth.GetValueOrDefault(key) + share;
+                }
+            }
+        output.WriteLine($"    cloth face area inside the breast by depth (mm bucket:cm²) "
+                         + string.Join(", ", faceDepth.Select(f => $"{f.Key}:{f.Value:0.0}")));
+        Histogram("A near the hole", hole.Select(h => h.A));
+        Histogram("B near the hole", hole.Select(h => h.B));
+        Histogram("A elsewhere", other.Select(h => h.A));
+        Histogram("B elsewhere", other.Select(h => h.B));
+
+        // The open skin seen from above: spanned by the game's laid skin, by distance over chord, or past its edge.
+        var laidSkin = new BodySurface(laid, BodySurface.CellFor(BodyRetarget.MeanEdgeOf(laid)));
+        var edges = BodyRetarget.SkinEdges.Of(laid);
+        var cloth = ClothTriangles(tucked);
+        var spans = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        foreach (var (centre, normal, _) in seenAbove)
+        {
+            if (Along(cloth, centre, normal, 0.1f) != null) continue;   // cloth over it: not open skin
+            if (!laidSkin.Nearest(centre, BodyRetarget.TuckBand, out var hit)) { Count("beyond the band"); continue; }
+            const float inside = 0.01f;
+            bool offA = hit.U < inside, offB = hit.V < inside, offC = hit.W < inside;
+            Vector3 a = laidSkin.PositionOf(hit.A), b = laidSkin.PositionOf(hit.B), c = laidSkin.PositionOf(hit.C);
+            float? chord = (offA, offB, offC) switch
+            {
+                (false, false, false) => MathF.Max(Vector3.Distance(a, b), MathF.Max(Vector3.Distance(b, c), Vector3.Distance(c, a))),
+                (true, false, false) when edges.IsShared(hit.B, hit.C) => Vector3.Distance(b, c),
+                (false, true, false) when edges.IsShared(hit.C, hit.A) => Vector3.Distance(c, a),
+                (false, false, true) when edges.IsShared(hit.A, hit.B) => Vector3.Distance(a, b),
+                _ => null,
+            };
+            Count(chord is float ch ? $"spanned {MathF.Floor(hit.Distance / ch * 10) / 10:0.0} of the chord" : "past the open edge");
+        }
+        output.WriteLine($"  open skin seen from above: {string.Join(", ", spans.Select(s => $"{s.Key} x{s.Value}"))}");
+        void Count(string key) => spans[key] = spans.GetValueOrDefault(key) + 1;
     }
 
     /// <summary>The c0201 body model of the first game item named <paramref name="name"/> worn on the body.</summary>

@@ -245,7 +245,7 @@ public class SkinTuckTests(ITestOutputHelper output)
         var bytes = LooseTop(looseFrom: 5);
         var garment = ModelPartReader.Read(bytes)!;
         var tucked = RefitCore.PlanRefit(garment, bytes, [Resized(Body())], "_top", across: true, gameGear: true, out _);
-        var untucked = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoTuck: true),
+        var untucked = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoTuck: true, NoDeepClear: true),
             () => RefitCore.PlanRefit(garment, bytes, [Resized(Body())], "_top", across: true, gameGear: true, out _));
         var log = new List<string>();
         RefitCore.PlanRefit(garment, bytes, [Resized(Body())], "_top", across: true, gameGear: true, out _, log: log.Add);
