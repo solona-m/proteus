@@ -188,12 +188,6 @@ internal static class SkinTuckSheet
         => Body(arm: breast ?? BreastRow, armBone: "j_mune_l",
                 z: height == 0f ? null : (r, _) => Ridge(r, height));
 
-    /// <summary>Two breasts side by side, <paramref name="height"/> at their peaks over columns 2 and 6, the cleavage at
-    /// column 4 down to the plane: the ridge shaped across as well as along.</summary>
-    internal static byte[] Busts(float height)
-        => Body(arm: BreastRow, armBone: "j_mune_l",
-                z: (r, c) => Ridge(r, height) * MathF.Pow(MathF.Sin(MathF.PI * c / 4f), 2));
-
     /// <summary>
     /// Cloth edges of <paramref name="after"/> stretched past 1.5× their length in <paramref name="before"/> and by more
     /// than 5 mm, by index — two plans of the same garment, laid (see <see cref="Laid"/>).
@@ -247,25 +241,29 @@ internal static class SkinTuckSheet
     /// </summary>
     /// <param name="lining">A second coarse sheet this much deeper again behind it, over rows 5-6 — where the ridge grew
     /// past <see cref="BodyRetarget.DeepGrowLeast"/> all over it; 0 for none.</param>
-    internal static byte[] CoarseBuriedTop(float depth, float lining = 0f)
+    /// <param name="rows">The cloth's rows instead of 2, 5.5 and 9.</param>
+    /// <param name="columns">The cloth's columns instead of 0, 4 and 8.</param>
+    internal static byte[] CoarseBuriedTop(float depth, float lining = 0f, float[]? rows = null, int[]? columns = null)
     {
-        SyntheticModel.SurfaceMesh Coarse(float z, float rowFrom, float rowTo)
+        SyntheticModel.SurfaceMesh Coarse(float z, float[] rs, int[] cs)
         {
-            var rows = new[] { rowFrom, (rowFrom + rowTo) / 2f, rowTo };
-            var cols = new[] { 0, 4, 8 };
-            var pos = rows.SelectMany(r => cols.Select(c => new Vector3(X(c), Bottom + r * Step, z))).ToArray();
+            var pos = rs.SelectMany(r => cs.Select(c => new Vector3(X(c), Bottom + r * Step, z))).ToArray();
             var tris = new List<int>();
-            for (int r = 0; r < 2; r++)
-                for (int c = 0; c < 2; c++)
+            for (int r = 0; r + 1 < rs.Length; r++)
+                for (int c = 0; c + 1 < cs.Length; c++)
                 {
-                    int a = r * 3 + c, b = a + 1, d = a + 3, e = d + 1;
+                    int a = r * cs.Length + c, b = a + 1, d = a + cs.Length, e = d + 1;
                     tris.AddRange([a, b, e, a, e, d]);
                 }
             return new SyntheticModel.SurfaceMesh(Cloth, pos, [.. pos.Select(_ => Vector3.UnitZ)], [.. pos.Select(_ => Vector2.Zero)],
                                                   [.. pos.Select(_ => ((string, float)[]?)[("j_sebo_c", 1f)])], [(0u, [.. tris])]);
         }
-        var meshes = new List<SyntheticModel.SurfaceMesh> { Sheet(Skin, Edge, Rows - 1, _ => 0f), Coarse(-depth, 2f, Edge - 1) };
-        if (lining > 0f) meshes.Add(Coarse(-depth - lining, 5f, 6f));
+        int[] cols = columns ?? [0, 4, 8];
+        var meshes = new List<SyntheticModel.SurfaceMesh>
+        {
+            Sheet(Skin, Edge, Rows - 1, _ => 0f), Coarse(-depth, rows ?? [2f, (2f + Edge - 1) / 2f, Edge - 1], cols),
+        };
+        if (lining > 0f) meshes.Add(Coarse(-depth - lining, [5f, 5.5f, 6f], cols));
         return SyntheticModel.BuildSurface([], [.. meshes]);
     }
 

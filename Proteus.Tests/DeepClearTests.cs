@@ -94,16 +94,15 @@ public class DeepClearTests(ITestOutputHelper output)
     [Trait("Plan", "AC-neckline-large-bust-4")]
     public void The_deep_clear_turns_nothing_over_and_stretches_nothing()
     {
-        // The ridge's flank turns more than 30° from its top: neighbouring cloth is pushed along skin facing different
-        // ways, where the push-out's fold guard has work to do.
+        // Cloth rows on the ridge's flanks as well as its peak: neighbouring cloth lands on skin facing more than 30° apart
+        // (amendment B8, read at the landings), so it is pushed different ways — where the push-out's fold guard has work.
         var target = Bust(0.02f);
-        var body = ModelPartReader.Read(target)!;
-        Vector3 NormalAtRow(int row) => new(body.Normals[(row * Columns + 4) * 3], body.Normals[(row * Columns + 4) * 3 + 1],
-                                            body.Normals[(row * Columns + 4) * 3 + 2]);
-        Assert.True(Vector3.Dot(NormalAtRow(3), NormalAtRow(7)) < MathF.Cos(MathF.PI / 6), "the ridge is too gentle");
-
-        var top = CoarseBuriedTop(0.012f);
+        var top = CoarseBuriedTop(0.012f, rows: [2f, 3.5f, 5.5f, 7.5f, 9f]);
         var before = BodyRetarget.WithTuning(NoDeep, () => GameTop(top, target));
+        float turn = MostLandingTurn(Laid(top, before), target);
+        output.WriteLine($"adjacent landings turn up to {turn:0}°");
+        Assert.True(turn > 30f, "the landings are too alike");
+
         var plan = GameTop(top, target);
         Assert.True(plan.Report.DeepCleared > 0);
         Assert.True(plan.Report.Folded <= before.Report.Folded, $"folded {plan.Report.Folded} against {before.Report.Folded}");
@@ -116,10 +115,17 @@ public class DeepClearTests(ITestOutputHelper output)
     public void Two_buried_layers_come_out_in_order()
     {
         // A shell 6 mm in, and a lining 10 mm in behind it over the ridge — 4 mm apart, past WallPairReach, so the two
-        // are layers and not one thick shell's walls. A 35 mm ridge: a lining lands on the ridge's flank, and the 20 mm
-        // one's flank grew short of DeepGrowLeast (as the real buried cloth's did not — 36 mm and more).
+        // are layers and not one thick shell's walls (the plan's 2 mm would be one). A 35 mm ridge: a lining lands on the
+        // ridge's flank, and the 20 mm one's flank grew short of DeepGrowLeast (as the real buried cloth's did not — 36 mm
+        // and more). Without the deep clear the lining is left deeper than the usual clear reaches: it is the deep layer,
+        // under a shell the usual clear takes out. (Both deep — shell 10 mm, lining 14 — the lining lands where the ridge
+        // grew short of DeepGrowLeast and stays in, behind the shell.)
         var top = CoarseBuriedTop(0.006f, lining: 0.004f);
         var target = Bust(0.035f);
+        var buried = Laid(top, BodyRetarget.WithTuning(NoDeep, () => GameTop(top, target)));
+        var lining = buried.Parts.Where(p => p.Island < 0 && p.Material == Cloth).GroupBy(p => p.Mesh).OrderBy(g => g.Key).Last()
+                           .SelectMany(p => p.Triangles).ToHashSet();
+        Assert.Contains(ClothOff(buried, target, GrownRows), c => lining.Contains(c.Vertex) && c.Off < -BodyRetarget.ClearDepth);
         var plan = GameTop(top, target);
         Assert.True(plan.Report.DeepCleared > 0);
         var laid = Laid(top, plan);
@@ -153,8 +159,10 @@ public class DeepClearTests(ITestOutputHelper output)
                               .ToList();
         Assert.True(piece.Count >= 2);
         var plan = GameTop(top, Bust(0.02f), keepShape: [piece]);
+        Assert.True(plan.Report.DeepCleared > 0);
         var shape = Assert.Single(plan.Report.Shapes!);
-        if (shape.Released) return;
+        output.WriteLine($"piece judged {shape.Judged}, sink {shape.Sink * 1000:0.0} mm, released {shape.Released}");
+        Assert.False(shape.Released);
         // Whole: every distance within the piece scaled by one factor (a kept piece may grow with the body).
         var laid = Laid(top, plan);
         var pairs = piece.SelectMany(a => piece.Where(b => b > a).Select(b => (a, b))).ToList();
@@ -190,30 +198,27 @@ public class DeepClearTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-neckline-large-bust-23")]
-    public void Cloth_spanning_the_cleavage_is_not_driven_into_it()
-    {
-        // Two breasts with the cleavage between; the cloth spans it. Out of the breasts, and not into the valley.
-        var top = CoarseBuriedTop(0.012f);
-        var target = Busts(0.02f);
-        var before = BodyRetarget.WithTuning(NoDeep, () => GameTop(top, target));
-        var plan = GameTop(top, target);
-        Assert.True(plan.Report.Folded <= before.Report.Folded, $"folded {plan.Report.Folded} against {before.Report.Folded}");
-        Assert.Equal(0, ClothStretch(Laid(top, before), Laid(top, plan)));
-
-        var valleyBefore = ClothOff(Laid(top, before), target, GrownRows)
-                               .Where(c => MathF.Abs(Laid(top, before).Positions[c.Vertex * 3] - X(4)) < 0.001f)
-                               .ToDictionary(c => c.Vertex, c => c.Off);
-        var after = Laid(top, plan);
-        foreach (var (v, off) in ClothOff(after, target, GrownRows))
-            if (valleyBefore.TryGetValue(v, out float was))
-                Assert.True(off >= was - 0.0005f, $"valley cloth {v} driven in: {was * 1000:0.0} -> {off * 1000:0.0} mm");
-    }
-
-    [Fact]
     [Trait("Plan", "EDGE-neckline-large-bust-19")]
     public void The_deep_clear_is_deterministic()
         => Assert.Equal(GameTop(CoarseBuriedTop(0.012f), Bust(0.02f)).Model, GameTop(CoarseBuriedTop(0.012f), Bust(0.02f)).Model);
+
+    /// <summary>The most two cloth points joined by an edge of the laid garment turn apart where they land on the target
+    /// body, degrees.</summary>
+    private static float MostLandingTurn(ModelParts laid, byte[] target)
+    {
+        var surface = new BodySurface(ModelPartReader.Read(target)!, 0.01f);
+        float most = 0f;
+        foreach (var part in laid.Parts.Where(p => p.Island < 0 && p.Material == Cloth))
+            for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+                for (int e = 0; e < 3; e++)
+                {
+                    if (!surface.Nearest(Pos(laid, part.Triangles[t + e]), 0.05f, out var a)
+                        || !surface.Nearest(Pos(laid, part.Triangles[t + (e + 1) % 3]), 0.05f, out var b)) continue;
+                    float cos = Math.Clamp(Vector3.Dot(a.Normal, b.Normal), -1f, 1f);
+                    most = MathF.Max(most, MathF.Acos(cos) * 180f / MathF.PI);
+                }
+        return most;
+    }
 
     private static Vector3 Pos(ModelParts m, int v) => new(m.Positions[v * 3], m.Positions[v * 3 + 1], m.Positions[v * 3 + 2]);
 

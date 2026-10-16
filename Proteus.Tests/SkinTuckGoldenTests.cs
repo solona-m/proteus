@@ -184,7 +184,8 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
 
     // ── the same paths on coarse cloth buried 12 mm, which the usual clear's spread does not drag out: where the deep clear
     // DOES act on a game top (the fine sheet above it never reaches). Pinned on 78eefd4 — (a)'s production code with the
-    // deep clear's knobs still inert — before any of the deep clear's production code. ──
+    // deep clear's knobs still inert — in a clean worktree holding only this SkinTuckSheet.cs and a theory printing each
+    // hash, two runs agreeing. ──
 
     private static (byte[] Bytes, ModelParts Garment, BodyRetarget.SlotPair Pair, IReadOnlyList<IReadOnlyCollection<int>> Pieces) CoarseGrownBust()
     {
@@ -203,6 +204,7 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
         { "size set", CoarseSizeSet },
         { "studio cut and clear, untucked", CoarseStudioCutAndClear },
         { "game top before", CoarseGameTopBefore },
+        { "game top, deep clear off", CoarseGameTopTuckOnly },
     };
 
     [Theory]
@@ -229,6 +231,9 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
                                             acrossBodies: true, clearBody: false, cutHidden: true, keepShape: []),
             "studio cut and clear, untucked" => BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoTuck: true), () => Studio(true)),
             "game top before" => BodyRetarget.WithTuning(Before,
+                () => RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true, out _)),
+            // The tuck on, the deep clear's knob off: where the deep clear would act, the knob must hold it back.
+            "game top, deep clear off" => BodyRetarget.WithTuning(TuckOnly,
                 () => RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true, out _)),
             _ => throw new System.ArgumentException(path),
         };
@@ -421,6 +426,7 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
     private const string CoarseSizeSet = "21B091D9AFB675E5713076EAC3B37BAF66DF4DADBE20BAECAB7B8BB81AF5C35A";
     private const string CoarseStudioCutAndClear = "8EBC3389DDBFB920865E12A10C28CE81190D1C07307E3D056184F0372254262A";
     private const string CoarseGameTopBefore = "8EBC3389DDBFB920865E12A10C28CE81190D1C07307E3D056184F0372254262A";
+    private const string CoarseGameTopTuckOnly = "8EBC3389DDBFB920865E12A10C28CE81190D1C07307E3D056184F0372254262A";
     private const string ChordSagStudioCut = "96F3E796E4D5AFD1C3A1F268DF77997FDEEED7E5720DCF6673C6CACAF122E6D3";
     private const string GrownGameTopTucked = "F0637CE799121F93B6B3CD40FB3BA06864DB30330B14BE21F09D31F60D1BFED6";
     private const string LooseGameTopTucked = "D80A3792966E94E9A937CEF3D655EACB20998A6903E6521DD3561B4022C3E4E1";

@@ -114,7 +114,9 @@ internal static partial class BodyRetarget
     /// <summary>
     /// How far the new body must stand outside the source body, where buried cloth lands on it, for that cloth to be
     /// cleared from deeper than <see cref="ClearDepth"/> (16 mm). Measured where the bodice stays buried on LavaBod+'s
-    /// Teardrop, the body grew 36-60 mm and more; on Neolithe's Almond XS no cloth is buried in the breast at all.
+    /// Teardrop, the body grew 36-60 mm and more; on Neolithe's Almond XS no cloth is buried in the breast at all. A
+    /// medium bust passes too: Neolithe's neobelly M clears 8-14 points of the Top of Maiming and Scion Adventurer's (their
+    /// necklines no worse — 34.0 → 32.0, 28.3 → 27.4 cm²), and 24 mm would not keep it out.
     /// </summary>
     internal const float DeepGrowLeast = 0.016f;
 
@@ -232,7 +234,8 @@ internal static partial class BodyRetarget
     /// <param name="LayerResidual">How far, at most, the garment is still short of that piece (metres).</param>
     /// <param name="DeepCleared">Cloth points pulled out of the new breast from deeper than <see cref="ClearDepth"/> —
     /// see <see cref="DeepClearDepth"/>.</param>
-    /// <param name="DeepWorst">The furthest any of them was pushed (metres).</param>
+    /// <param name="DeepWorst">The furthest any of them ended up from where the push-out found it (metres): the push and
+    /// the settle together.</param>
     /// <param name="DeepAt">A garment vertex of each of them, for a check of how far the clear's spread reached.</param>
     internal sealed record Report(
         int Nodes, int Snapped, int Transferred, int Missed, int Pushed,

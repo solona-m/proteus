@@ -205,6 +205,9 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
         Assert.True(underDeep <= underUntucked + 0.5, $"deep cleared {underDeep:0.0} cm² under the skin against {underUntucked:0.0}");
         bool hangs = garmentName == Scion && modNeed == Neolithe && rel == "neobelly chest - smallclothes/sfw m.mdl";
         Assert.True(holesDeep <= (hangs ? 50.7 : holes + 0.5), $"deep cleared {holesDeep:0.0} cm² undrawn against {holes:0.0}");
+        // And the two together, as written, against the refit before either — no tolerance stacked on another.
+        Assert.True(underGame <= underUntucked + 0.5, $"written {underGame:0.0} cm² under the skin against {underUntucked:0.0}");
+        Assert.True(holesTucked <= (hangs ? 50.7 : holes + 0.5), $"written {holesTucked:0.0} cm² undrawn against {holes:0.0}");
         // [EDGE-12] On the written model: every triangle the tuck drew is one of the body's own, wound as the body winds it.
         var (fresh, wrong) = SkinTuckSheet.NewSkinAgainstBody(deepModel, gameModel, body);
         output.WriteLine($"  new skin triangles {fresh}, not the body's own {wrong}");
@@ -407,13 +410,9 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
     /// <see cref="BodyRetarget.SettleRings"/> rings out, and the push spreads PushSlope × the mesh's mean edge per edge
     /// crossed beyond — on the game's coarse cloth a ring can be 56 mm (Scion Adventurer's on neobelly M: 9.3 mm one edge
     /// from a 20 mm push). So max(0, DeepWorst − PushSlope·MeanEdge·(edges − SettleRings)) + <see cref="FarMove"/>. With no
-    /// deep push, <see cref="FarMove"/> everywhere. [B7] The tuck moves no cloth: the cloth is laid exactly as without it.
+    /// deep push, <see cref="FarMove"/> everywhere. And beyond <see cref="FarFrom"/> along the cloth, the plan's 1 mm.
+    /// [B7] The tuck moves no cloth: the cloth is laid exactly as without it.
     /// </summary>
-    /// <summary>What cloth beyond a deep push's reach may still move further: the passes after the push-out (the fold
-    /// relax, the face settle) answer over the whole garment. Measured up to 1.7 mm, 200 mm from the push (the Top of
-    /// Maiming on neobelly M; Scion Adventurer's there 1.3 mm, 243 mm out) — the plan's 1 mm, raised.</summary>
-    private const float FarMove = 0.002f;
-
     private void OffBreastMove(Refit r)
     {
         var full = LaidGarment(r);
@@ -481,7 +480,9 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
             int band = dist[n] == float.MaxValue ? 999 : (int)(dist[n] * 100);
             var (count, worst) = histogram.GetValueOrDefault(band);
             histogram[band] = (count + 1, MathF.Max(worst, extra));
-            float allowed = MathF.Max(0f, r.Game.Report.DeepWorst - step * Math.Max(0, hops[n] - BodyRetarget.SettleRings)) + FarMove;
+            float allowed = dist[n] > FarFrom
+                ? 0.001f
+                : MathF.Max(0f, r.Game.Report.DeepWorst - step * Math.Max(0, hops[n] - BodyRetarget.SettleRings)) + FarMove;
             if (extra <= allowed) continue;
             over++;
             first ??= $"vertex {v} {dist[n] * 1000:0} mm ({hops[n]} edges) from a deep push moved {extra * 1000:0.0} mm "
@@ -491,6 +492,14 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
                          + string.Join(", ", histogram.Select(h => $"{h.Key}:{h.Value.Count} up to {h.Value.Worst * 1000:0.0} mm")));
         Assert.True(over == 0, $"{over} cloth vertices moved past the slope: {first}");
     }
+
+    /// <summary>What cloth beyond a deep push's reach may still move further: the passes after the push-out (the fold
+    /// relax, the face settle) answer over the whole garment. Measured up to 1.7 mm, 200 mm from the push (the Top of
+    /// Maiming on neobelly M; Scion Adventurer's there 1.3 mm, 243 mm out) — the plan's 1 mm, raised.</summary>
+    private const float FarMove = 0.002f;
+
+    /// <summary>How far along the cloth from any deep push the plan's own 1 mm still holds.</summary>
+    private const float FarFrom = 0.25f;
 
     /// <summary>The garment as the refit laid it, before the rebuild: the same vertices as the garment, moved — exactly
     /// what <see cref="BodyRetarget.Rebuild"/> takes the laid skin from.</summary>
