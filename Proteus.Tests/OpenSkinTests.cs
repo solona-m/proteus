@@ -114,24 +114,6 @@ public class OpenSkinTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-refit-piercings-option-11")]
-    public void Open_skin_brings_no_piercing_with_the_option_off()
-    {
-        // [EDGE-refit-piercings-option-11] The game's own top, as the automatic refit plans it: the dip is drawn in the
-        // open, and the ring in it comes in only when asked.
-        var top = CoarseSkinTop();
-        var garment = ModelPartReader.Read(top)!;
-        var off = RefitCore.PlanRefit(garment, top, [Resized(Dipped(0.015f, ringInDip: true))], "_top", across: true,
-                                      gameGear: true, out _).Report.Swap!.Value;
-        var on = RefitCore.PlanRefit(garment, top, [Resized(Dipped(0.015f, ringInDip: true))], "_top", across: true,
-                                     gameGear: true, out _, carryPiercings: true).Report.Swap!.Value;
-        output.WriteLine($"off {off}; on {on}");
-        Assert.True(off.Opened > 0);
-        Assert.Equal(0, off.Adorned);
-        Assert.True(on.Adorned >= off.Adorned);
-    }
-
-    [Fact]
     [Trait("Plan", "EDGE-neckline-large-bust-19")]
     public void Open_skin_is_deterministic()
         => Assert.Equal(Swap(CoarseSkinTop(), Dipped(0.015f)).Model, Swap(CoarseSkinTop(), Dipped(0.015f)).Model);

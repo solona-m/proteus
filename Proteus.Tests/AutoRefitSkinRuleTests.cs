@@ -57,11 +57,13 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
 
     [Theory]
     [Trait("Plan", "AC-refit-piercings-option-4")]
+    [Trait("Plan", "EDGE-refit-piercings-option-11")]
     [InlineData(false)]
     [InlineData(true)]
     public void Auto_refit_carries_piercings_only_when_asked(bool gameGear)
     {
         // [AC-refit-piercings-option-4] A mod's top and the game's own alike: the setting, not the skin rule, decides.
+        // [EDGE-refit-piercings-option-11] The game's own, its hidden skin cut and tucked, follows it the same way.
         var bytes = BareTop();
         var garment = ModelPartReader.Read(bytes)!;
         var off = RefitCore.PlanRefit(garment, bytes, [Raised(PiercedChest)], "_top", across: true, gameGear, out _);
