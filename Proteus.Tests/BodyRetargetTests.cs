@@ -425,6 +425,7 @@ public class BodyRetargetTests
 
     [Fact]
     [Trait("Plan", "AC-refit-piercings-option-2")]
+    [Trait("Plan", "EDGE-refit-piercings-option-2")]
     public void A_chain_hanging_off_the_skin_comes_in_with_what_it_hangs_from()
     {
         // [AC-refit-piercings-option-2]
