@@ -451,7 +451,7 @@ public class HatCompatServiceTests
           + "\"Hidden\":{\"" + native + "\":[\"1.0\"]},"
           + "\"Versions\":{\"" + native + "\":" + HatCompatSolve.Version + "}}");
 
-        Assert.True(HatCompatService.IsPatched(mod.Root, ModelRel, out var stale));
+        Assert.True(HatCompatService.IsPatched(mod.Root, ModelRel, mod.Model(), out var stale));
         Assert.False(stale);
 
         // And undo reaches it, restores the author's bytes exactly, and retires the record — which only
@@ -566,7 +566,7 @@ public class HatCompatServiceTests
         for (int m = 0; m < src.MeshCount; m++)
             Assert.Equal(0u, MaskOf(after, src, m) & (1u << bit));
 
-        Assert.True(HatCompatService.IsPatched(mod.Root, ModelRel, out _, out var replaced));
+        Assert.True(HatCompatService.IsPatched(mod.Root, ModelRel, mod.Model(), out _, out var replaced));
         Assert.True(replaced);
 
         var undo = HatCompatService.Revert(mod.Root, ModelRel);
@@ -605,7 +605,7 @@ public class HatCompatServiceTests
             Assert.Equal([replaced.Root], mods);
             Assert.Equal(authored, replaced.Model());               // the author's, byte for byte
             Assert.Equal(fittedBytes, fitted.Model());              // Proteus's own fit stays
-            Assert.True(HatCompatService.IsPatched(fitted.Root, ModelRel, out _));
+            Assert.True(HatCompatService.IsPatched(fitted.Root, ModelRel, fitted.Model(), out _));
 
             // Nothing left to restore the second time.
             Assert.Equal(0, HatCompatService.RestoreReplaced(modsRoot).Restored);
@@ -672,4 +672,333 @@ public class HatCompatServiceTests
         Assert.False(File.Exists(mod.Backup));
         Assert.False(File.Exists(mod.Record));
     }
+
+    // ── version 33: the ear skin ─────────────────────────────────────────────
+
+    /// <summary>A hair that names a Miqo'te ear bone, so its output changed in version 33.</summary>
+    private static byte[] MiqoteHair() => SyntheticModel.Build(
+        ["atr_hv_a"],
+        new SyntheticModel.Mesh("/mt_c0801h0001_hir_a.mtrl", new SyntheticModel.Sub(0, Weights: [("j_kao", 1f)])),
+        new SyntheticModel.Mesh("/mt_c0801h0001_hir_b.mtrl", new SyntheticModel.Sub(0, Weights: [("j_mimi_l", 1f)])));
+
+    /// <summary>Fit, then stamp the record as if an older build had: the version only.</summary>
+    private static Mod FittedAt(byte[] hair, int version)
+    {
+        var mod = new Mod(hair);
+        var parts = ModelPartReader.Read(hair)!;
+        Assert.True(HatCompatService.Apply(mod.Root, hair, Proposal(hair, parts), [PartOf(parts, 0)]).Ok);
+        File.WriteAllText(mod.Record, File.ReadAllText(mod.Record).Replace(
+            $": {HatCompatSolve.Version}", $": {version}"));
+        return mod;
+    }
+
+    /// <summary>A Miqo'te hair patched before the ear-skin fix is refit the next time it is worn.</summary>
+    [Fact]
+    [Trait("Plan", "AC-miqote-ear-skin-5")]
+    public void AMiqoteHairPatchedBeforeTheEarSkinFixIsStale()
+    {
+        using var mod = FittedAt(MiqoteHair(), HatCompatSolve.WithoutEars);
+        Assert.True(HatCompatService.IsPatched(mod.Root, ModelRel, mod.Model(), out var stale));
+        Assert.True(stale);
+    }
+
+    /// <summary>No other hairstyle's output changed, so its patch is not refit for nothing.</summary>
+    [Fact]
+    [Trait("Plan", "AC-miqote-ear-skin-4")]
+    [Trait("Plan", "AC-miqote-ear-skin-5")]
+    public void AnotherRacesPatchFromBeforeTheEarSkinFixStaysCurrent()
+    {
+        using var mod = FittedAt(Hair(), HatCompatSolve.WithoutEars);
+        Assert.True(HatCompatService.IsPatched(mod.Root, ModelRel, mod.Model(), out var stale));
+        Assert.False(stale);
+    }
+
+    /// <summary>
+    /// An author's update replaced the fitted file. Restoring the backup would put the OLD file back over it; the
+    /// patch is let go instead, and the new file kept as found.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-miqote-ear-skin-5")]
+    [Trait("Plan", "EDGE-miqote-ear-skin-8")]
+    public void AFileReplacedSinceItWasFittedIsForgottenNotRestored()
+    {
+        using var mod = FittedAt(MiqoteHair(), HatCompatSolve.WithoutEars);
+        Assert.True(HatCompatService.LooksPatched(mod.Model()));
+
+        var update = MiqoteHair();
+        File.WriteAllBytes(Path.Combine(mod.Root, ModelRel.Replace('/', Path.DirectorySeparatorChar)), update);
+        Assert.False(HatCompatService.LooksPatched(update));
+
+        Assert.Null(HatCompatService.Forget(mod.Root, ModelRel));
+        Assert.False(HatCompatService.IsPatched(mod.Root, ModelRel, update, out _));
+        Assert.False(File.Exists(mod.Backup));
+        Assert.Equal(update, mod.Model());
+    }
+
+    private const string SiblingRel = "hair/option b/c0201h0001_hir.mdl";
+
+    /// <summary>Fit a second option of the same hairstyle into <paramref name="mod"/>, as the watcher fits siblings.</summary>
+    private static void FitSibling(Mod mod, byte[] hair)
+    {
+        var path = Path.Combine(mod.Root, SiblingRel.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllBytes(path, hair);
+        var parts = ModelPartReader.Read(hair)!;
+        var proposal = Proposal(hair, parts) with { Rel = SiblingRel };
+        Assert.True(HatCompatService.Apply(mod.Root, hair, proposal, [PartOf(parts, 0)]).Ok);
+    }
+
+    /// <summary>
+    /// Each option is judged on its own: the one its author updated since keeps the update — its old backup let go, never
+    /// restored over it — while the one still fitted comes back as the author shipped it.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-miqote-ear-skin-5")]
+    [Trait("Plan", "AC-miqote-ear-skin-6")]
+    [Trait("Plan", "EDGE-miqote-ear-skin-7")]
+    public void UndoJudgesEverySiblingOnItsOwn()
+    {
+        var original = MiqoteHair();
+        using var mod = FittedAt(original, HatCompatSolve.WithoutEars);
+        FitSibling(mod, original);
+
+        var update = SyntheticModel.Build(["atr_hv_b"],
+            new SyntheticModel.Mesh("/mt_c0801h0001_hir_a.mtrl", new SyntheticModel.Sub(0, Weights: [("j_mimi_l", 1f)])));
+        var siblingPath = Path.Combine(mod.Root, SiblingRel.Replace('/', Path.DirectorySeparatorChar));
+        File.WriteAllBytes(siblingPath, update);
+
+        Assert.Equal(HatCompatService.Undone.Restored, HatCompatService.RevertOrForget(mod.Root, ModelRel, out _));
+        Assert.Equal(original, mod.Model());
+        Assert.Equal(HatCompatService.Undone.Forgotten, HatCompatService.RevertOrForget(mod.Root, SiblingRel, out _));
+        Assert.Equal(update, File.ReadAllBytes(siblingPath));
+        Assert.False(File.Exists(mod.Record));
+        Assert.Equal(HatCompatService.Undone.Nothing, HatCompatService.RevertOrForget(mod.Root, SiblingRel, out _));
+    }
+
+    /// <summary>Letting one file go keeps the record for the others.</summary>
+    [Fact]
+    [Trait("Plan", "AC-miqote-ear-skin-5")]
+    public void ForgettingOneFileKeepsTheOthersPatched()
+    {
+        var hair = MiqoteHair();
+        using var mod = FittedAt(hair, HatCompatSolve.Version);
+        FitSibling(mod, hair);
+
+        Assert.Null(HatCompatService.Forget(mod.Root, SiblingRel));
+        Assert.True(HatCompatService.IsPatched(mod.Root, ModelRel, mod.Model(), out _));
+        Assert.True(File.Exists(mod.Backup));
+        Assert.DoesNotContain(SiblingRel, HatCompatService.ReadRecord(mod.Root)!.Files);
+    }
+
+    /// <summary>
+    /// A backup that cannot be deleted is the OLD file: a fit after it would keep it and the next undo restore it. So
+    /// the failure is reported, the record keeps naming the file, and nothing is half done.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-miqote-ear-skin-5")]
+    public void AForgetThatCannotDeleteTheBackupSaysSoAndChangesNothing()
+    {
+        using var mod = FittedAt(MiqoteHair(), HatCompatSolve.WithoutEars);
+        string? why;
+        using (File.Open(mod.Backup, FileMode.Open, FileAccess.Read, FileShare.None))
+            why = HatCompatService.Forget(mod.Root, ModelRel);
+        Assert.NotNull(why);
+        Assert.True(File.Exists(mod.Backup));
+        Assert.True(HatCompatService.IsPatched(mod.Root, ModelRel, mod.Model(), out _));
+    }
+
+    /// <summary>
+    /// With auto-fit off nothing refits a stale patch: the watcher's gate refits only when the hairstyle is stale, may be
+    /// fitted, a hat is worn, and both the plugin and auto-fit are on. Pinned by reading the source, since the watcher
+    /// cannot be built in a test.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "EDGE-miqote-ear-skin-8")]
+    public void AStalePatchIsRefitOnlyWhenAutoFitIsOn()
+    {
+        var source = File.ReadAllText(Path.Combine(SourceDir(), "Proteus", "Services", "HatCompatWatcher.cs"));
+        Assert.Contains("if (!(stale && mayApply && hatWorn && config.PluginEnabled && config.AutoHatCompat))", source);
+    }
+
+    /// <summary>
+    /// A stale refit leaves its reload to the fit; when no fit follows (the face unreadable, the hairstyle compatible
+    /// after all), the examination still reloads, or the game keeps drawing a patch no longer on disk.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-miqote-ear-skin-5")]
+    public void AStaleRefitsUndoIsReloadedEvenWhenNoFitFollows()
+    {
+        var source = File.ReadAllText(Path.Combine(SourceDir(), "Proteus", "Services", "HatCompatWatcher.cs"));
+        int stale = source.IndexOf("RevertFiles(target, redraw: false)", StringComparison.Ordinal);
+        Assert.True(stale >= 0);
+        Assert.Contains("reloadOwed = target;", source[stale..(stale + 600)]);
+        var examine = source[source.IndexOf("private void Examine(bool mayApply)", StringComparison.Ordinal)..];
+        examine = examine[..examine.IndexOf("private void ExamineCore(", StringComparison.Ordinal)];
+        Assert.Contains("finally", examine);
+        Assert.Contains("ReloadAndRedraw(owed)", examine);
+    }
+
+    /// <summary>
+    /// An ordinary refusal — a sibling whose backup is gone, or one another feature edited later — leaves that file as
+    /// it is and is reported, so the rest of the hairstyle can still be undone; only a backup that cannot be let go stops
+    /// everything.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-miqote-ear-skin-6")]
+    public void ARefusedFileIsReportedAndLeftAsItIs()
+    {
+        using var mod = FittedAt(MiqoteHair(), HatCompatSolve.Version);
+        var patched = mod.Model();
+        File.Delete(mod.Backup);
+        Assert.Equal(HatCompatService.Undone.Refused,
+                     HatCompatService.RevertOrForget(mod.Root, ModelRel, out var message));
+        Assert.NotEmpty(message);
+        Assert.Equal(patched, mod.Model());
+    }
+
+    /// <summary>
+    /// Undo carries on past a refused sibling, so the rest of the hairstyle is still undone and the undo sticks: the
+    /// watcher's <c>Refused</c> case notes it and goes on. Pinned by reading the source, since the watcher cannot be
+    /// built in a test.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-miqote-ear-skin-6")]
+    public void UndoCarriesOnPastARefusedSibling()
+    {
+        var source = File.ReadAllText(Path.Combine(SourceDir(), "Proteus", "Services", "HatCompatWatcher.cs"));
+        var revertFiles = source[source.IndexOf("private bool RevertFiles(", StringComparison.Ordinal)..];
+        revertFiles = revertFiles[..revertFiles.IndexOf("private bool RevertWholeMod(", StringComparison.Ordinal)];
+        int refused = revertFiles.IndexOf("case HatCompatService.Undone.Refused:", StringComparison.Ordinal);
+        Assert.True(refused >= 0);
+        var arm = revertFiles[refused..];
+        arm = arm[..arm.IndexOf("case HatCompatService.Undone.", "case ".Length, StringComparison.Ordinal)];
+        Assert.DoesNotContain("return", arm);
+        Assert.Contains("break;", arm);
+    }
+
+    /// <summary>Undo-all restores every file and lets the record go.</summary>
+    [Fact]
+    [Trait("Plan", "AC-miqote-ear-skin-6")]
+    public void UndoAllRestoresEveryFile()
+    {
+        var hair = MiqoteHair();
+        using var mod = FittedAt(hair, HatCompatSolve.Version);
+        FitSibling(mod, hair);
+
+        var undo = HatCompatService.RevertOrForgetAll(mod.Root);
+        Assert.True(undo.Ok);
+        Assert.Equal(2, undo.Restored);
+        Assert.Equal(hair, mod.Model());
+        Assert.Equal(hair, File.ReadAllBytes(Path.Combine(mod.Root, SiblingRel.Replace('/', Path.DirectorySeparatorChar))));
+        Assert.False(File.Exists(mod.Record));
+    }
+
+    /// <summary>
+    /// A later feature (here the brush) holding its own backup of ANY file blocks the whole undo before a single file is
+    /// touched: restoring ours would silently undo that edit too.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-miqote-ear-skin-6")]
+    public void UndoAllTouchesNothingWhileALaterEditHoldsAnyFile()
+    {
+        var hair = MiqoteHair();
+        using var mod = FittedAt(hair, HatCompatSolve.Version);
+        FitSibling(mod, hair);
+        var patched = mod.Model();
+        var siblingPath = Path.Combine(mod.Root, SiblingRel.Replace('/', Path.DirectorySeparatorChar));
+        var patchedSibling = File.ReadAllBytes(siblingPath);
+
+        var brushBackup = Path.Combine(mod.Root, "Proteus", MeshVolumeService.BackupSubdir,
+                                       SiblingRel.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(brushBackup)!);
+        File.WriteAllBytes(brushBackup, patchedSibling);
+        var ours = Path.Combine(mod.Root, "Proteus", HatCompatService.BackupSubdir,
+                                SiblingRel.Replace('/', Path.DirectorySeparatorChar));
+        File.SetLastWriteTimeUtc(brushBackup, File.GetLastWriteTimeUtc(ours).AddMinutes(1));
+
+        var undo = HatCompatService.RevertOrForgetAll(mod.Root);
+        Assert.False(undo.Ok);
+        Assert.False(undo.Failed);
+        Assert.NotEmpty(undo.Message);
+        Assert.Equal(0, undo.Restored);
+        Assert.Equal(patched, mod.Model());
+        Assert.Equal(patchedSibling, File.ReadAllBytes(siblingPath));
+        Assert.Equal(2, HatCompatService.ReadRecord(mod.Root)!.Files.Count);
+    }
+
+    /// <summary>A file whose backup is gone is left and reported; the others are still undone.</summary>
+    [Fact]
+    [Trait("Plan", "AC-miqote-ear-skin-6")]
+    public void UndoAllLeavesAFileWithoutABackupAndUndoesTheRest()
+    {
+        var hair = MiqoteHair();
+        using var mod = FittedAt(hair, HatCompatSolve.Version);
+        FitSibling(mod, hair);
+        var siblingPath = Path.Combine(mod.Root, SiblingRel.Replace('/', Path.DirectorySeparatorChar));
+        var patchedSibling = File.ReadAllBytes(siblingPath);
+        File.Delete(Path.Combine(mod.Root, "Proteus", HatCompatService.BackupSubdir,
+                                 SiblingRel.Replace('/', Path.DirectorySeparatorChar)));
+
+        var undo = HatCompatService.RevertOrForgetAll(mod.Root);
+        Assert.True(undo.Ok);
+        Assert.Equal(1, undo.Restored);
+        Assert.Equal(hair, mod.Model());
+        Assert.Equal(patchedSibling, File.ReadAllBytes(siblingPath));
+    }
+
+    /// <summary>Nothing recorded: a plain "nothing to undo", not a failure.</summary>
+    [Fact]
+    [Trait("Plan", "AC-miqote-ear-skin-6")]
+    public void UndoAllWithNothingRecordedSaysSo()
+    {
+        using var mod = new Mod(MiqoteHair());
+        var undo = HatCompatService.RevertOrForgetAll(mod.Root);
+        Assert.False(undo.Ok);
+        Assert.False(undo.Failed);
+        Assert.NotEmpty(undo.Message);
+    }
+
+    /// <summary>A Miqo'te hair whose attribute table is full refuses the fit cleanly, writing nothing.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-miqote-ear-skin-12")]
+    public void AFullAttributeTableStillRefusesCleanly()
+    {
+        var hair = SyntheticModel.Build(
+            Enumerable.Range(0, 32).Select(i => $"atr_x{i:D2}").ToArray(),
+            new SyntheticModel.Mesh("/mt_c0801h0001_hir_a.mtrl", new SyntheticModel.Sub(0, Weights: [("j_kao", 1f)])),
+            new SyntheticModel.Mesh("/mt_c0801h0001_hir_b.mtrl", new SyntheticModel.Sub(0, Weights: [("j_mimi_l", 1f)])));
+        using var mod = new Mod(hair);
+        var parts = ModelPartReader.Read(hair)!;
+        var outcome = HatCompatService.Apply(mod.Root, hair, Proposal(hair, parts), [PartOf(parts, 0)]);
+        Assert.False(outcome.Ok);
+        Assert.Equal(hair, mod.Model());
+        Assert.False(File.Exists(mod.Backup));
+        Assert.False(File.Exists(mod.Record));
+    }
+
+    /// <summary>
+    /// Undo restores the file on disk, and the game must then load it: Penumbra caches a model per resolved path, so a
+    /// redraw without a reload kept drawing the patched hairstyle. Every way back reloads the mod first.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-miqote-ear-skin-6")]
+    public void EveryUndoReloadsTheModBeforeItRedraws()
+    {
+        var source = File.ReadAllText(Path.Combine(SourceDir(), "Proteus", "Services", "HatCompatWatcher.cs"));
+        foreach (var method in new[] { "private bool RevertFiles(", "private bool RevertWholeMod(" })
+        {
+            int at = source.IndexOf(method, StringComparison.Ordinal);
+            Assert.True(at >= 0, method);
+            int end = source.IndexOf("\n    }", at, StringComparison.Ordinal);
+            var body = source[at..end];
+            Assert.Contains("ReloadAndRedraw(target)", body);
+            Assert.DoesNotContain("compositor.RedrawForChangedModel(", body);
+        }
+        var reload = source[source.IndexOf("private void ReloadAndRedraw(", StringComparison.Ordinal)..];
+        Assert.True(reload.IndexOf("ReloadModDirectory(", StringComparison.Ordinal)
+                  < reload.IndexOf("RedrawForChangedModel(", StringComparison.Ordinal));
+    }
+
+    private static string SourceDir([System.Runtime.CompilerServices.CallerFilePath] string here = "")
+        => Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, ".."));
 }

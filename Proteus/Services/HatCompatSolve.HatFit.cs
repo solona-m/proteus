@@ -140,7 +140,7 @@ public static partial class HatCompatSolve
 
             // The header's shape-value count is for the whole file, so the model's own shapes come off the top.
             int already = BitConverter.ToUInt16(mdl, parsed.Mh + 20);
-            budget = Math.Max(0, MaxShapeValues - already);
+            budget = Math.Max(0, Math.Min(MaxShapeValues - already, BudgetCap ?? int.MaxValue));
             spent = 0;
             if (candidates.Sum(c => c.Cost) > budget)
                 // Over budget: ABOVE THE HAT LINE FIRST (hair that would pierce the hat), then furthest out

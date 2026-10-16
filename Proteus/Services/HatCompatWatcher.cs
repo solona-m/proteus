@@ -268,7 +268,29 @@ public sealed class HatCompatWatcher : IDisposable
         if (Enabled) Refresh(mayApply: true, delayMs: PenumbraSettleMs);
     }
 
+    /// <summary>
+    /// A stale refit's undo whose reload was left to the fit (see <see cref="RevertFiles"/>): owed until a reload is
+    /// done, and done at the end of the examination when no fit got there — the author's file is back on disk, and a
+    /// game that never reloads keeps drawing the old patch.
+    /// </summary>
+    private HatCompatService.Target? reloadOwed;
+
     private void Examine(bool mayApply)
+    {
+        try { ExamineCore(mayApply); }
+        finally
+        {
+            if (reloadOwed is { } owed)
+            {
+                reloadOwed = null;
+                // Its own catch, so a failed reload never hides why the examination itself threw.
+                try { ReloadAndRedraw(owed); }
+                catch (Exception ex) { log.Error(ex, "hat compat: reloading after a stale refit's undo failed"); }
+            }
+        }
+    }
+
+    private void ExamineCore(bool mayApply)
     {
         // Nothing that matters has changed: cheap on purpose, since Penumbra settings changes arrive in bursts.
         var live = livePartsCache;
@@ -286,8 +308,9 @@ public sealed class HatCompatWatcher : IDisposable
         // Undo holds only until a different hairstyle is worn.
         if (undone != null && undone != Identity(target)) undone = null;
 
-        // Per FILE, not per mod: a hair pack ships many hairstyles from one folder.
-        if (HatCompatService.IsPatched(target.ModRoot, target.Rel, out var stale))
+        // Per FILE, not per mod: a hair pack ships many hairstyles from one folder. Stale only when THIS hairstyle's
+        // output changed since its patch (HatCompatSolve.VersionFor).
+        if (HatCompatService.IsPatched(target.ModRoot, target.Rel, target.Model, out var stale))
         {
             // A stale patch (older solve version) is redone from the author's backup when fitting is automatic.
             if (!(stale && mayApply && hatWorn && config.PluginEnabled && config.AutoHatCompat))
@@ -297,15 +320,19 @@ public sealed class HatCompatWatcher : IDisposable
             }
 
             log.Information("hat compat: {0} was fitted by an older build — fitting it again", target.Rel);
-            if (!RevertFiles(target))
+            // No reload or redraw of its own: the fit that follows does both once, rather than showing the author's
+            // hairstyle under the hat for a moment in between.
+            if (!RevertFiles(target, redraw: false))
             {
                 // Still patched with the older patch, which is a working hairstyle, not a failure.
                 current = new View(target, null, Patched: true, Busy: true,
                                    Message: current.Message, Failed: current.Failed);
                 return;
             }
+            reloadOwed = target;   // paid by the fit's reload, or by Examine on any way out without one
 
-            // Re-read from the restored backup: solving the patched bytes would press twice.
+            // Re-read from the restored backup (or the author's update, kept): solving the patched bytes would press
+            // twice.
             target = live != null ? compositor.HatCompatTargetFor(live) : compositor.HatCompatTarget();
             if (target == null) { current = new View(); return; }
             lastKey = live != null ? compositor.HatCompatKeyFor(live) : compositor.HatCompatKey();
@@ -449,9 +476,17 @@ public sealed class HatCompatWatcher : IDisposable
         patchedInMod = HatCompatService.PatchedCount(target.ModRoot);
 
         current = new View(target, null, Patched: true, Busy: current.Busy);
+        ReloadAndRedraw(target);
+    }
 
-        // Make Penumbra re-read the mod BEFORE forcing the redraw: the game caches a loaded model per resolved
-        // path, so a redraw alone gets the old bytes.
+    /// <summary>
+    /// Make Penumbra re-read the mod BEFORE forcing the redraw: the game caches a loaded model per resolved path, so a
+    /// redraw alone gets the old bytes. For a write and for an undo alike — an undo that only redrew left the patched
+    /// model drawn until something else reloaded the mod.
+    /// </summary>
+    private void ReloadAndRedraw(HatCompatService.Target target)
+    {
+        reloadOwed = null;
         var modDir = System.IO.Path.GetFileName(target.ModRoot.TrimEnd(
             System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar));
         if (modDir.Length > 0)
@@ -499,27 +534,49 @@ public sealed class HatCompatWatcher : IDisposable
     /// already holds the busy flag.
     /// </summary>
     /// <returns>False if nothing could be restored, with the reason already on <see cref="Current"/>.</returns>
-    private bool RevertFiles(HatCompatService.Target target)
+    /// <param name="redraw">Reload the mod and redraw now. Off for a stale refit, whose fit does both.</param>
+    private bool RevertFiles(HatCompatService.Target target, bool redraw = true)
     {
-        var restored = 0;
+        int restored = 0, forgotten = 0;
         var reason = "";
+        // Each file judged on its own: an option the author updated since keeps the update (RevertOrForget).
         foreach (var rel in FilesFor(target))
         {
-            var outcome = HatCompatService.Revert(target.ModRoot, rel);
-            if (outcome.Ok) { restored += outcome.FilesPatched; continue; }
-            // A never-touched sibling reports "nothing to undo", which is not a failure; kept only to explain
-            // a revert that restored nothing.
-            reason = outcome.Message;
+            switch (HatCompatService.RevertOrForget(target.ModRoot, rel, out var message))
+            {
+                case HatCompatService.Undone.Restored: restored++; break;
+                case HatCompatService.Undone.Forgotten:
+                    forgotten++;
+                    log.Information("hat compat: {0} changed since it was fitted — kept as it is, the old backup let go",
+                                    rel);
+                    break;
+                case HatCompatService.Undone.Refused:
+                    // A sibling another feature edited later (or whose backup is gone) stays as it is, and the rest are
+                    // still undone; kept only to explain an undo that restored nothing.
+                    reason = message;
+                    break;
+                case HatCompatService.Undone.Nothing:
+                    // A never-touched sibling: not a failure, and the explanation only if nothing better comes.
+                    if (reason.Length == 0) reason = message;
+                    break;
+                case HatCompatService.Undone.Failed:
+                    // A backup that cannot be let go would be restored over the update by the next undo: stop here.
+                    log.Warning("hat compat: {0} could not be undone — {1}", rel, message);
+                    current = current with { Message = message, Failed = true };
+                    // What did come back must be drawn, stale refit or not: no fit follows a failure.
+                    if (restored + forgotten > 0) ReloadAndRedraw(target);
+                    return false;
+            }
         }
 
-        if (restored == 0)
+        if (restored + forgotten == 0)
         {
             current = current with { Message = reason, Failed = reason.Length > 0 };
             return false;
         }
 
         log.Information("hat compat: restored {0} file(s) in {1}", restored, target.ModRoot);
-        compositor.RedrawForChangedModel("hat compat");
+        if (redraw) ReloadAndRedraw(target);
         return true;
     }
 
@@ -530,21 +587,23 @@ public sealed class HatCompatWatcher : IDisposable
     /// <returns>False if nothing could be restored, with the reason already on <see cref="Current"/>.</returns>
     private bool RevertWholeMod(HatCompatService.Target target)
     {
-        var outcome = HatCompatService.Revert(target.ModRoot, only: null);
-        if (!outcome.Ok)
+        var undo = HatCompatService.RevertOrForgetAll(target.ModRoot);
+        if (!undo.Ok)
         {
-            current = current with { Message = outcome.Message, Failed = outcome.Message.Length > 0 };
+            if (undo.Failed) log.Warning("hat compat: undoing {0} stopped — {1}", target.ModRoot, undo.Message);
+            current = current with { Message = undo.Message, Failed = undo.Message.Length > 0 };
+            if (undo.Restored + undo.Forgotten > 0) ReloadAndRedraw(target);   // what did come back must be drawn
             return false;
         }
 
-        log.Information("hat compat: restored every patched file ({0}) in {1}",
-                        outcome.FilesPatched, target.ModRoot);
-        compositor.RedrawForChangedModel("hat compat");
+        log.Information("hat compat: restored every patched file ({0}, {1} kept as updated since) in {2}",
+                        undo.Restored, undo.Forgotten, target.ModRoot);
+        ReloadAndRedraw(target);
         return true;
     }
 
     /// <summary>Put this hairstyle back the way its author shipped it.</summary>
-    public void Revert() => RunRevert(RevertFiles);
+    public void Revert() => RunRevert(t => RevertFiles(t));
 
     /// <summary>
     /// Give every hairstyle whose own hat support Proteus replaced its author's version back, in every mod — for
