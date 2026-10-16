@@ -23,6 +23,9 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
     /// <summary>A game top with the tuck as change (a) made it: no deep clear, no open skin.</summary>
     private static readonly BodyRetarget.Tuning TuckOnly = new(NoDeepClear: true, NoOpenSkin: true);
 
+    /// <summary>A game top as it was before the standoff pass: everything else on.</summary>
+    private static readonly BodyRetarget.Tuning NoPull = new();
+
     private string Pinned(byte[] model, string expected)
     {
         string actual = SkinTuckSheet.Sha(model);
@@ -257,6 +260,72 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
         Assert.Equal(0, studio.Report.DeepCleared);
     }
 
+    // ── a neckline the refit carries off the upper chest (SkinTuckSheet.FloatingNeckline): where the standoff pass will
+    // act. Pinned on 4432f7c + the inert push trace (f0c2e0a), before any of the pass's production code. ──
+
+    public static TheoryData<string, string> FloatingPaths => new()
+    {
+        { "studio cut", FloatStudioCut },
+        { "mod garment", FloatModGarment },
+        { "accessory", FloatAccessory },
+        { "keep ends", FloatKeepEnds },
+        { "size set", FloatSizeSet },
+        { "studio cut and clear", FloatStudioCutAndClear },
+    };
+
+    [Theory]
+    [MemberData(nameof(FloatingPaths))]
+    [Trait("Plan", "AC-neckline-float-6")]
+    public void Every_other_path_on_a_floating_neckline_plans_as_before(string path, string expected)
+    {
+        var (bytes, pair) = SkinTuckSheet.FloatingNeckline();
+        var garment = ModelPartReader.Read(bytes)!;
+        var pieces = RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment));
+        var plan = path switch
+        {
+            "studio cut" => BodyRetarget.Plan(garment, bytes, [pair], "_top", held: NoneHeld, replaceSkin: true,
+                                              acrossBodies: true, clearBody: false, cutHidden: true, keepShape: pieces),
+            "mod garment" => RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: false, out _),
+            "accessory" => RefitCore.PlanAccessoryRefit(garment, bytes, [pair], "_top", across: true, out _),
+            "keep ends" => BodyRetarget.Plan(garment, bytes, [pair], "_glv", held: NoneHeld, replaceSkin: true,
+                                             acrossBodies: true, clearBody: true, cutHidden: true, keepShape: pieces,
+                                             swapSlot: "_top"),
+            "size set" => BodyRetarget.Plan(garment, bytes, [pair], "_top", held: new HashSet<int>(), replaceSkin: true,
+                                            acrossBodies: true, clearBody: false, cutHidden: true, keepShape: []),
+            "studio cut and clear" => BodyRetarget.Plan(garment, bytes, [pair], "_top", held: NoneHeld, replaceSkin: true,
+                                                        acrossBodies: true, clearBody: true, cutHidden: true,
+                                                        keepShape: pieces, tuckSlot: RefitCore.TuckSlot(true, "_top")),
+            _ => throw new System.ArgumentException(path),
+        };
+        Pinned(plan.Model, expected);
+    }
+
+    public static TheoryData<string, string> FloatingGameTops => new()
+    {
+        { "fine", FloatGameTop },
+        { "coarse", FloatGameTopCoarse },
+        { "layered", FloatGameTopLayered },
+        { "coarse grown bust", CoarseGrownGameTop },
+    };
+
+    [Theory]
+    [MemberData(nameof(FloatingGameTops))]
+    [Trait("Plan", "EDGE-neckline-float-21")]
+    public void A_game_top_without_the_standoff_pass_plans_as_before(string fixture, string expected)
+    {
+        var (bytes, pair) = fixture switch
+        {
+            "fine" => SkinTuckSheet.FloatingNeckline(),
+            "coarse" => SkinTuckSheet.FloatingNeckline(coarse: true),
+            "layered" => SkinTuckSheet.FloatingNeckline(lining: 0.004f),
+            _ => (CoarseGrownBust().Bytes, CoarseGrownBust().Pair),
+        };
+        var garment = ModelPartReader.Read(bytes)!;
+        var plan = BodyRetarget.WithTuning(NoPull,
+            () => RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true, out _));
+        Pinned(plan.Model, expected);
+    }
+
     // ── change (a)'s tuck as it stands at 72dde80: what (b)'s open skin and deep clear, switched off, must leave alone ──
 
     [Fact]
@@ -429,6 +498,16 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
     private const string CoarseStudioCutAndClear = "8EBC3389DDBFB920865E12A10C28CE81190D1C07307E3D056184F0372254262A";
     private const string CoarseGameTopBefore = "8EBC3389DDBFB920865E12A10C28CE81190D1C07307E3D056184F0372254262A";
     private const string CoarseGameTopTuckOnly = "8EBC3389DDBFB920865E12A10C28CE81190D1C07307E3D056184F0372254262A";
+    private const string FloatStudioCut = "E5AE8557FA4485B8CC2801B07DE482652D51DB4734955038422DD75DA7DBE018";
+    private const string FloatModGarment = "20633D6DEC0C8E9A01C9859490CF275A4ED1C1157629ACDE4543E1ADC5317051";
+    private const string FloatAccessory = "455A6CABB5E960B5C487C7001724324CEB2BF2175EA96FF796C6D63116FBF886";
+    private const string FloatKeepEnds = "0BEB5729AFEFA7230D231CF413802754F739BAD21D6ED343EEAC37150299624C";
+    private const string FloatSizeSet = "E5AE8557FA4485B8CC2801B07DE482652D51DB4734955038422DD75DA7DBE018";
+    private const string FloatStudioCutAndClear = "F712B6FC7BD95B90D2FF123FFDBB7E0169F3D58BFBFACE168BB8E89EED775B1C";
+    private const string FloatGameTop = "F712B6FC7BD95B90D2FF123FFDBB7E0169F3D58BFBFACE168BB8E89EED775B1C";
+    private const string FloatGameTopCoarse = "5FF3A7838F12B64BABE4A9BD0D95D73A903C72D262E0DB1BF90E6BAA11EA1763";
+    private const string FloatGameTopLayered = "09B325290977D5B083D2D2E1648E59E6BFBFC328D5190BB53920D65478D29052";
+    private const string CoarseGrownGameTop = "D273BB294DD31AEADEE320153F8FD3470AFDBB87306A3F4AC600E04CEFE8BA04";
     private const string ChordSagStudioCut = "96F3E796E4D5AFD1C3A1F268DF77997FDEEED7E5720DCF6673C6CACAF122E6D3";
     private const string GrownGameTopTucked = "F0637CE799121F93B6B3CD40FB3BA06864DB30330B14BE21F09D31F60D1BFED6";
     private const string LooseGameTopTucked = "D80A3792966E94E9A937CEF3D655EACB20998A6903E6521DD3561B4022C3E4E1";

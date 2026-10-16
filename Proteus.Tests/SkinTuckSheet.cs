@@ -213,6 +213,29 @@ internal static class SkinTuckSheet
         return stretched;
     }
 
+    /// <summary>Cloth triangles of <paramref name="laid"/> turned over against <paramref name="authored"/>'s winding — the
+    /// same garment, by index; what the written cloth shows, counted here rather than taken from the plan's report.</summary>
+    internal static int FoldedAgainstAuthored(ModelParts authored, ModelParts laid)
+    {
+        Vector3 P(ModelParts m, int v) => new(m.Positions[v * 3], m.Positions[v * 3 + 1], m.Positions[v * 3 + 2]);
+        int folded = 0;
+        foreach (var part in authored.Parts.Where(p => p.Island < 0 && !SecondSkinWriter.IsBodySkinMaterial(p.Material)))
+            for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+            {
+                int a = part.Triangles[t], b = part.Triangles[t + 1], c = part.Triangles[t + 2];
+                var was = Vector3.Cross(P(authored, b) - P(authored, a), P(authored, c) - P(authored, a));
+                if (was.LengthSquared() < 1e-20f) continue;
+                var now = Vector3.Cross(P(laid, b) - P(laid, a), P(laid, c) - P(laid, a));
+                if (Vector3.Dot(was, now) <= 0f) folded++;
+            }
+        return folded;
+    }
+
+    /// <summary>How far a point stands off <paramref name="on"/> along its normal at the nearest point (negative
+    /// inside); NaN with nothing within 60 mm.</summary>
+    internal static float Standoff(Vector3 p, BodySurface on)
+        => on.Nearest(p, 0.06f, out var h) ? Vector3.Dot(p - h.Point, h.Normal) : float.NaN;
+
     /// <summary>The garment as a plan laid it, before the rebuild: the garment's own vertices, moved.</summary>
     internal static ModelParts Laid(byte[] garment, BodyRetarget.Planned plan)
         => ModelPartReader.Read(MeshVolumeService.Inflate(garment, plan.Edit).Model)!;
@@ -265,6 +288,48 @@ internal static class SkinTuckSheet
         };
         if (lining > 0f) meshes.Add(Coarse(-depth - lining, [5f, 5.5f, 6f], cols));
         return SyntheticModel.BuildSurface([], [.. meshes]);
+    }
+
+    /// <summary>
+    /// A game top whose neckline the refit carries off the upper chest: the bust (rows 3-8) grows <paramref name="grow"/>
+    /// while the chest above it (rows 10 and up, half at row 9) sinks <paramref name="shrink"/>; the top's cloth is 6 mm
+    /// buried over the breast and 6 mm off above, as the game authors it. The push lifts the buried cloth out of the grown
+    /// breast and carries the neckline with it — measured: the fine sheet's rows 9-11 end 9-12 mm off (own 6), the coarse
+    /// one's rows 10-12 24-29 mm. Row 2, below the breast, is carried off too: a drape.
+    /// </summary>
+    /// <param name="coarse">Coarse cloth (<see cref="CoarseNeckline"/>) instead of the fine sheet.</param>
+    /// <param name="lining">A second cloth sheet over rows 9-13 this far off, under the shell (8 mm off there); 0 for none.</param>
+    internal static (byte[] Top, BodyRetarget.SlotPair Pair) FloatingNeckline(bool coarse = false, float grow = 0.02f,
+                                                                            float shrink = 0.008f, float lining = 0f)
+    {
+        byte[] target = Body(arm: BreastRow, armBone: "j_mune_l",
+                             z: (r, _) => Ridge(r, grow) - (r >= 10 ? shrink : r == 9 ? shrink / 2 : 0f));
+        byte[] top = coarse ? CoarseNeckline(-0.006f, 0.006f)
+                   : lining > 0f ? Top(r => r <= 8 ? -0.006f : 0.008f, extra: (9, Rows - 1, lining))
+                   : Top(r => r <= 8 ? -0.006f : 0.006f);
+        return (top, Grown(Bust(0f), target));
+    }
+
+    /// <summary>
+    /// A top with coarse cloth over rows 2, 5, 8, 10 and 12 (columns 0, 4 and 8): <paramref name="buried"/> off its flat
+    /// body up to row 8, <paramref name="off"/> above — a game top's cloth buried over the breast, standing off the upper
+    /// chest — and its own skin over rows <see cref="Edge"/> and up.
+    /// </summary>
+    internal static byte[] CoarseNeckline(float buried, float off, float[]? rows = null)
+    {
+        float[] rs = rows ?? [2f, 5f, 8f, 10f, 12f];
+        int[] cs = [0, 4, 8];
+        var pos = rs.SelectMany(r => cs.Select(c => new Vector3(X(c), Bottom + r * Step, r <= 8f ? buried : off))).ToArray();
+        var tris = new List<int>();
+        for (int r = 0; r + 1 < rs.Length; r++)
+            for (int c = 0; c + 1 < cs.Length; c++)
+            {
+                int a = r * cs.Length + c, b = a + 1, d = a + cs.Length, e = d + 1;
+                tris.AddRange([a, b, e, a, e, d]);
+            }
+        var cloth = new SyntheticModel.SurfaceMesh(Cloth, pos, [.. pos.Select(_ => Vector3.UnitZ)], [.. pos.Select(_ => Vector2.Zero)],
+                                                   [.. pos.Select(_ => ((string, float)[]?)[("j_sebo_c", 1f)])], [(0u, [.. tris])]);
+        return SyntheticModel.BuildSurface([], Sheet(Skin, Edge, Rows - 1, _ => 0f), cloth);
     }
 
     /// <summary>
