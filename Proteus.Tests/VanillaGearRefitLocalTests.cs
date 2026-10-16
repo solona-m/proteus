@@ -121,7 +121,7 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
     }
 
     /// <summary>The c0201 body model of the first game item named <paramref name="name"/> worn on the body.</summary>
-    private static byte[] TopOf(Lumina.GameData data, string name)
+    internal static byte[] TopOf(Lumina.GameData data, string name)
     {
         foreach (var item in data.GetExcelSheet<Item>()!)
         {
