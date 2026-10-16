@@ -128,7 +128,8 @@ public sealed partial class AutoRefitWatcher
         {
             if (siblings.TryGetValue(slot, out var known)) return known;
             var candidates = SiblingPiece.Find(redirects, ownRecord, r.Worn.Rel!, slot, race, Note);
-            var job = new EndsJob(r, g, state, targetMod, item, bytes, redirects, ownRecord, 0, r.Worn.GamePath, race,
+            var job = new EndsJob(r, g, state, targetMod, item, bytes, redirects, ownRecord, RacialModelBake.Route.None,
+                                  r.Worn.GamePath, race,
                                   BodySizeCatalog.IsMaleRace(race), garment, new HashSet<string>(), vanilla[race],
                                   TargetFor, clock, null);
             return siblings[slot] = candidates.Count == 0 ? null : ReadSibling(job, candidates, Note);
@@ -286,7 +287,7 @@ public sealed partial class AutoRefitWatcher
         string labelFrom = RefitCore.LabelFrom(across ? sourceName : null,
                                                covered.Where(sources.ContainsKey).Select(s => sources[s].Option.Label));
         var refit = new BodyRetargetWriter.Refit(option, plan.Model, string.Join(" + ", labels), layers);
-        if (await SaveAndWear(r, g, saveRoot, group, r.Worn.GamePath, targetMod, labelFrom, refit, cutFrom, 0, item,
+        if (await SaveAndWear(r, g, saveRoot, group, r.Worn.GamePath, targetMod, labelFrom, refit, cutFrom, RacialModelBake.Route.None, item,
                               fromGame: false,
                               new BodyRetargetWriter.Provenance(pickOf.Dir, pickOf.Option.Rel, targets))
             is not { } savedRoot)

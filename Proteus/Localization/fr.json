@@ -3683,6 +3683,26 @@
     "message": "Impossible de créer un modèle {0} ({1}) ; ajustement du modèle {2} tel quel.",
     "description": ""
   },
+  "Parts.Retarget.Shaping": {
+    "message": "Mise du modèle dans la forme pour laquelle les corps sont faits…",
+    "description": ""
+  },
+  "Parts.Retarget.ShapedDown.Fmt": {
+    "message": "Il n'y a pas de corps {0} entre lesquels ajuster, donc le modèle {0} est ajusté dans la forme {1}, comme le jeu le déforme, puis réenregistré en {0}.",
+    "description": ""
+  },
+  "Parts.Retarget.Bake.BendBack.Fmt": {
+    "message": "l'ajustement n'a pas pu être ramené à la forme {0} ({1})",
+    "description": ""
+  },
+  "Parts.Retarget.Bake.NoWearer": {
+    "message": "votre personnage n'a pas pu être lu",
+    "description": ""
+  },
+  "Parts.Retarget.Refused.Fmt": {
+    "message": "Impossible de réajuster ce modèle : {0}.",
+    "description": ""
+  },
   "Parts.Retarget.Cloth.Guess.Fmt": {
     "message": "D'après le tissu : probablement {0}, mais il peut juste être ample. À vérifier.",
     "description": ""

@@ -24,7 +24,8 @@ public sealed partial class AutoRefitWatcher
     /// (see <see cref="PlanPair"/>); null for the game's own gear.</param>
     private sealed record EndsJob(Request R, Gathered G, BodyModIndex.State State, BodyModIndex.Entry TargetMod,
                                   string Item, byte[] Bytes, List<PenumbraModMeta.Redirect> Redirects,
-                                  BodyRetargetWriter.Record? OwnRecord, ushort BakeTo, string SavePath, string Race,
+                                  BodyRetargetWriter.Record? OwnRecord, RacialModelBake.Route Route, string SavePath,
+                                  string Race,
                                   bool Male, ModelParts Garment, IReadOnlySet<string> Bones, BodySizeCatalog VanillaCat,
                                   Func<string, BodyOption?> TargetFor, Stopwatch Clock, PairContext? Pair);
 
@@ -54,7 +55,7 @@ public sealed partial class AutoRefitWatcher
 
         // ── the author's own size, compared by the legs (see KeepEnds.ComparesAuthorSizes) ──
         if (KeepEnds.ComparesAuthorSizes(slot) && j.TargetFor(reading.Limb) is { } limbTarget
-            && await SwitchToAuthorSize(r, g, item, j.Redirects, j.OwnRecord, j.BakeTo, targetMod, limbTarget,
+            && await SwitchToAuthorSize(r, g, item, j.Redirects, j.OwnRecord, j.Route, targetMod, limbTarget,
                                         reading.Limb, j.Race, j.State.Version,
                                         ((b, m) => KeepEnds.Read(slot, m, b)?.LimbView, reading.CacheSlot), ct, j.Pair))
             return;
@@ -95,7 +96,8 @@ public sealed partial class AutoRefitWatcher
         EndsOutput? skinOnly = null;
         if (decision is KeepEnds.SkinOnly skin)
         {
-            skinOnly = RedrawSkin(j, skin, CatalogOf);
+            skinOnly = RedrawSkin(j, skin, CatalogOf, out bool refused);
+            if (refused) return;   // said why already
             if (skinOnly == null)
             {
                 // Said neutrally: the skin may already be drawn like the new body's, or its layout may not convert.
@@ -158,7 +160,7 @@ public sealed partial class AutoRefitWatcher
         if (output == null) return;
 
         if (await SaveAndWear(r, g, root, group, j.SavePath, targetMod, output.LabelFrom,
-                              new BodyRetargetWriter.Refit(option, output.Model, output.To, layers), cutFrom, j.BakeTo,
+                              new BodyRetargetWriter.Refit(option, output.Model, output.To, layers), cutFrom, j.Route,
                               item,
                               GameGear(r, j.Redirects, j.OwnRecord),
                               new BodyRetargetWriter.Provenance(source.Dir, source.Option.Rel, targets))
@@ -182,7 +184,7 @@ public sealed partial class AutoRefitWatcher
         // The siblings are part of the key, as they stand on disk: a piece read by its cloth before it had a sibling to
         // go by must not be served that reading again. Only on a miss are they opened and read.
         void Note(string note) => log.Information("[Proteus] auto refit: {0}: {1}", j.Item, note);
-        siblings = SiblingPiece.Applies(j.R.ModRoot, j.BakeTo) && j.R.Worn.Rel is { } wornRel
+        siblings = SiblingPiece.Applies(j.R.ModRoot, j.Route.To) && j.R.Worn.Rel is { } wornRel
             ? SiblingPiece.Find(j.Redirects, j.OwnRecord, wornRel, reading.Limb, j.Race, Note)
             : [];
         string suffix = SiblingPiece.CacheSuffix(siblings, file => Stamp(j.R.ModRoot!, file));
@@ -273,15 +275,33 @@ public sealed partial class AutoRefitWatcher
     /// The skin of a piece that reaches no leg or arm, drawn the way the new body draws its own (see
     /// <see cref="RefitCore.MatchSkinToBody(byte[], string, string, UVRemapService?, bool, IPluginLog)"/>); its shape is
     /// the author's. Null when nothing changes — it is drawn so already, or its layout cannot be converted — and the piece
-    /// is not baked for another race, whose bake is itself a change worth saving.
+    /// is not baked for another race, whose bake is itself a change worth saving. One only bent down to be read is not:
+    /// the bend there and back changes nothing.
     /// </summary>
-    private EndsOutput? RedrawSkin(EndsJob j, KeepEnds.SkinOnly skin, Func<string, BodySizeCatalog?> catalogOf)
+    /// <param name="refused">The redraw could not be bent back into the drawn race, which the player has been told.</param>
+    private EndsOutput? RedrawSkin(EndsJob j, KeepEnds.SkinOnly skin, Func<string, BodySizeCatalog?> catalogOf,
+                                   out bool refused)
     {
+        refused = false;
         var ownCat = catalogOf(skin.Own.Dir)!;
         string targetPath = j.TargetMod.Catalog.PathOf(skin.Target);
         var model = RefitCore.MatchSkinToBody(j.Bytes, ownCat.PathOf(skin.Own.Option), targetPath, uvRemap, j.Male, log);
-        if (j.BakeTo != 0) model = RacialModelBake.SkinLikeBody(model, File.ReadAllBytes(targetPath), out _);
+        if (j.Route.ChangesModel) model = RacialModelBake.SkinLikeBody(model, File.ReadAllBytes(targetPath), out _);
         else if (ReferenceEquals(model, j.Bytes)) return null;
+        // Bent down to be read, its skin redrawn: bent back up to be saved where it is drawn.
+        else if (j.Route.Down)
+        {
+            var (finished, _, bentBack) = RefitCore.Finish(KeepEnds.SkinOnlyPlanned(model), j.Route, j.G.Wearer,
+                                                           targetPath, log);
+            if (finished == null)
+            {
+                Fail(j.R, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"),
+                                        j.Item, bentBack));
+                refused = true;
+                return null;
+            }
+            model = finished.Model;
+        }
 
         string sourceName = skin.Own.Dir == VanillaBodyCatalog.Key ? Strings.Parts.RetargetFromVanilla
                           : j.State.Find(skin.Own.Dir)?.Name ?? skin.Own.Dir;
@@ -346,7 +366,6 @@ public sealed partial class AutoRefitWatcher
                           + "most", item, limb == "_top" ? "chest" : "legs", plan.Report.Layered,
                             plan.Report.LayerResidual * 1000f);
         plan = RefitCore.MatchSkinToBody(plan, sourcePath, targetPath, uvRemap, j.Male, log);
-        if (j.BakeTo != 0) plan = RefitCore.WithBodySkin(plan, targetPath, log);
         ct.ThrowIfCancellationRequested();
         var (seamEdges, stretched) = KeepEnds.SeamStretch(j.Garment, reading.Ends, plan);
         log.Information("[Proteus] auto refit: {0} {1} by its {2} ({3} folded, moved up to {4:F1} mm, the {5} "
@@ -360,7 +379,16 @@ public sealed partial class AutoRefitWatcher
             log.Information("[Proteus] auto refit: {0}: let go of kept piece(s) that would sink moved whole: {1}", item,
                             released);
 
-        return new EndsOutput(plan.Model, refit.Target.Label,
+        // After the seam is measured, which compares the plan with the garment as it was refitted: up, the kept skin
+        // named like the body's; down, bent back into the drawn race — or not saved at all.
+        var (finished, _, bentBack) = RefitCore.Finish(plan, j.Route, g.Wearer, targetPath, log);
+        if (finished == null)
+        {
+            Fail(j.R, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"),
+                                    item, bentBack));
+            return null;
+        }
+        return new EndsOutput(finished.Model, refit.Target.Label,
                               RefitCore.LabelFrom(across ? sourceName : null, [pick.Option.Label]),
                               savedIn => string.Format(Loc.Localize("Chat.AutoRefit.Done.Fmt",
                                   "[Proteus] {0} now fits {1}. Saved as \"{2}\" in {3} and switched on."),

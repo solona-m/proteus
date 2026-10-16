@@ -3683,6 +3683,26 @@
     "message": "Не удалось создать модель {0} ({1}); подгоняется модель {2} как есть.",
     "description": ""
   },
+  "Parts.Retarget.Shaping": {
+    "message": "Модель приводится к форме, для которой сделаны тела…",
+    "description": ""
+  },
+  "Parts.Retarget.ShapedDown.Fmt": {
+    "message": "Тел {0} нет, поэтому модель {0} подгоняется в форме {1} — так, как её деформирует игра, — и сохраняется обратно как {0}.",
+    "description": ""
+  },
+  "Parts.Retarget.Bake.BendBack.Fmt": {
+    "message": "подгонку не удалось вернуть в форму {0} ({1})",
+    "description": ""
+  },
+  "Parts.Retarget.Bake.NoWearer": {
+    "message": "не удалось прочитать вашего персонажа",
+    "description": ""
+  },
+  "Parts.Retarget.Refused.Fmt": {
+    "message": "Не удалось перешить эту модель: {0}.",
+    "description": ""
+  },
   "Parts.Retarget.Cloth.Guess.Fmt": {
     "message": "По ткани: похоже на {0}, но одежда может быть просто свободной. Стоит проверить.",
     "description": ""
