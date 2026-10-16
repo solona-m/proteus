@@ -268,7 +268,27 @@ public sealed class HatCompatWatcher : IDisposable
         if (Enabled) Refresh(mayApply: true, delayMs: PenumbraSettleMs);
     }
 
+    /// <summary>
+    /// A stale refit's undo whose reload was left to the fit (see <see cref="RevertFiles"/>): owed until a reload is
+    /// done, and done at the end of the examination when no fit got there — the author's file is back on disk, and a
+    /// game that never reloads keeps drawing the old patch.
+    /// </summary>
+    private HatCompatService.Target? reloadOwed;
+
     private void Examine(bool mayApply)
+    {
+        try { ExamineCore(mayApply); }
+        finally
+        {
+            if (reloadOwed is { } owed)
+            {
+                reloadOwed = null;
+                ReloadAndRedraw(owed);
+            }
+        }
+    }
+
+    private void ExamineCore(bool mayApply)
     {
         // Nothing that matters has changed: cheap on purpose, since Penumbra settings changes arrive in bursts.
         var live = livePartsCache;
@@ -307,6 +327,7 @@ public sealed class HatCompatWatcher : IDisposable
                                    Message: current.Message, Failed: current.Failed);
                 return;
             }
+            reloadOwed = target;   // paid by the fit's reload, or by Examine on any way out without one
 
             // Re-read from the restored backup (or the author's update, kept): solving the patched bytes would press
             // twice.
@@ -463,6 +484,7 @@ public sealed class HatCompatWatcher : IDisposable
     /// </summary>
     private void ReloadAndRedraw(HatCompatService.Target target)
     {
+        reloadOwed = null;
         var modDir = System.IO.Path.GetFileName(target.ModRoot.TrimEnd(
             System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar));
         if (modDir.Length > 0)
@@ -526,6 +548,15 @@ public sealed class HatCompatWatcher : IDisposable
                     log.Information("hat compat: {0} changed since it was fitted — kept as it is, the old backup let go",
                                     rel);
                     break;
+                case HatCompatService.Undone.Refused:
+                    // A sibling another feature edited later (or whose backup is gone) stays as it is, and the rest are
+                    // still undone; kept only to explain an undo that restored nothing.
+                    reason = message;
+                    break;
+                case HatCompatService.Undone.Nothing:
+                    // A never-touched sibling: not a failure, and the explanation only if nothing better comes.
+                    if (reason.Length == 0) reason = message;
+                    break;
                 case HatCompatService.Undone.Failed:
                     // A backup that cannot be let go would be restored over the update by the next undo: stop here.
                     log.Warning("hat compat: {0} could not be undone — {1}", rel, message);
@@ -562,20 +593,40 @@ public sealed class HatCompatWatcher : IDisposable
             return false;
         }
 
+        // All or nothing while a later feature still holds its own backup of any file, as the whole-mod undo always
+        // was: restoring ours would silently undo that edit too (ModelBackupOrder).
+        foreach (var rel in files)
+            if (ModelBackupOrder.LaterFeature(target.ModRoot, HatCompatService.BackupSubdir, rel) is { } later)
+            {
+                current = current with { Message = ModelBackupOrder.BlockedMessage(later), Failed = true };
+                return false;
+            }
+
         // Per file, as RevertFiles: an option the author updated since keeps the update.
         int restored = 0, forgotten = 0;
+        var refusal = "";
         foreach (var rel in files)
         {
             switch (HatCompatService.RevertOrForget(target.ModRoot, rel, out var message))
             {
                 case HatCompatService.Undone.Restored: restored++; break;
                 case HatCompatService.Undone.Forgotten: forgotten++; break;
+                case HatCompatService.Undone.Refused:
+                    log.Information("hat compat: {0} left as it is — {1}", rel, message);   // a missing backup
+                    refusal = message;
+                    break;
                 case HatCompatService.Undone.Failed:
                     log.Warning("hat compat: {0} could not be undone — {1}", rel, message);
                     current = current with { Message = message, Failed = true };
                     if (restored + forgotten > 0) ReloadAndRedraw(target);   // what did come back must be drawn
                     return false;
             }
+        }
+
+        if (restored + forgotten == 0)
+        {
+            current = current with { Message = refusal, Failed = refusal.Length > 0 };
+            return false;
         }
 
         log.Information("hat compat: restored every patched file ({0}, {1} kept as updated since) in {2}",

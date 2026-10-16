@@ -279,7 +279,18 @@ public static class HatCompatService
     }
 
     /// <summary>What <see cref="RevertOrForget"/> did with one file.</summary>
-    public enum Undone { Nothing, Restored, Forgotten, Failed }
+    public enum Undone
+    {
+        /// <summary>Not a file this mod's record names.</summary>
+        Nothing,
+        Restored,
+        /// <summary>Replaced since it was fitted: kept as found, its old backup let go.</summary>
+        Forgotten,
+        /// <summary><see cref="Revert"/> declined (a later feature's edit, a missing backup): the file is as it was.</summary>
+        Refused,
+        /// <summary>The old backup could not be let go: anything that follows would build on it.</summary>
+        Failed,
+    }
 
     /// <summary>
     /// Undo one patched file — unless it no longer looks patched (<see cref="LooksPatched"/>): then it was replaced
@@ -291,7 +302,11 @@ public static class HatCompatService
     {
         message = "";
         rel = Rel(rel);
-        if (ReadRecord(modRoot)?.Files.Contains(rel, StringComparer.OrdinalIgnoreCase) != true) return Undone.Nothing;
+        if (ReadRecord(modRoot)?.Files.Contains(rel, StringComparer.OrdinalIgnoreCase) != true)
+        {
+            message = Loc.Localize("HatCompat.Revert.Nothing", "This mod has no Proteus hat-compatibility edits to undo.");
+            return Undone.Nothing;
+        }
 
         byte[]? current = null;
         try { current = File.ReadAllBytes(Path.Combine(modRoot, Native(rel))); }
@@ -306,7 +321,7 @@ public static class HatCompatService
 
         var outcome = Revert(modRoot, rel);
         message = outcome.Message;
-        return outcome.Ok ? Undone.Restored : Undone.Failed;
+        return outcome.Ok ? Undone.Restored : Undone.Refused;
     }
 
     /// <summary>Work out what this hair needs, without writing anything.</summary>

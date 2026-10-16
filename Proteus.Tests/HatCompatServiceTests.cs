@@ -807,15 +807,52 @@ public class HatCompatServiceTests
         Assert.True(HatCompatService.IsPatched(mod.Root, ModelRel, mod.Model(), out _));
     }
 
-    /// <summary>With auto-fit off nothing refits a stale patch: it stays as it is, reported stale, until fitted by hand.</summary>
+    /// <summary>
+    /// With auto-fit off nothing refits a stale patch: the watcher's gate refits only when the hairstyle is stale, may be
+    /// fitted, a hat is worn, and both the plugin and auto-fit are on. Pinned by reading the source, since the watcher
+    /// cannot be built in a test.
+    /// </summary>
     [Fact]
     [Trait("Plan", "EDGE-miqote-ear-skin-8")]
-    public void AStalePatchStaysAsItIsUntilItIsFitted()
+    public void AStalePatchIsRefitOnlyWhenAutoFitIsOn()
     {
-        using var mod = FittedAt(MiqoteHair(), HatCompatSolve.WithoutEars);
+        var source = File.ReadAllText(Path.Combine(SourceDir(), "Proteus", "Services", "HatCompatWatcher.cs"));
+        Assert.Contains("if (!(stale && mayApply && hatWorn && config.PluginEnabled && config.AutoHatCompat))", source);
+    }
+
+    /// <summary>
+    /// A stale refit leaves its reload to the fit; when no fit follows (the face unreadable, the hairstyle compatible
+    /// after all), the examination still reloads, or the game keeps drawing a patch no longer on disk.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-miqote-ear-skin-5")]
+    public void AStaleRefitsUndoIsReloadedEvenWhenNoFitFollows()
+    {
+        var source = File.ReadAllText(Path.Combine(SourceDir(), "Proteus", "Services", "HatCompatWatcher.cs"));
+        int stale = source.IndexOf("RevertFiles(target, redraw: false)", StringComparison.Ordinal);
+        Assert.True(stale >= 0);
+        Assert.Contains("reloadOwed = target;", source[stale..(stale + 600)]);
+        var examine = source[source.IndexOf("private void Examine(bool mayApply)", StringComparison.Ordinal)..];
+        examine = examine[..examine.IndexOf("private void ExamineCore(", StringComparison.Ordinal)];
+        Assert.Contains("finally", examine);
+        Assert.Contains("ReloadAndRedraw(owed)", examine);
+    }
+
+    /// <summary>
+    /// An ordinary refusal — a sibling whose backup is gone, or one another feature edited later — leaves that file as
+    /// it is and is reported, so the rest of the hairstyle can still be undone; only a backup that cannot be let go stops
+    /// everything.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-miqote-ear-skin-6")]
+    public void ARefusedFileIsReportedAndLeftAsItIs()
+    {
+        using var mod = FittedAt(MiqoteHair(), HatCompatSolve.Version);
         var patched = mod.Model();
-        Assert.True(HatCompatService.IsPatched(mod.Root, ModelRel, patched, out var stale));
-        Assert.True(stale);
+        File.Delete(mod.Backup);
+        Assert.Equal(HatCompatService.Undone.Refused,
+                     HatCompatService.RevertOrForget(mod.Root, ModelRel, out var message));
+        Assert.NotEmpty(message);
         Assert.Equal(patched, mod.Model());
     }
 

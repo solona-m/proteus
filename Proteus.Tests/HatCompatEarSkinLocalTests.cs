@@ -108,13 +108,17 @@ public class HatCompatEarSkinLocalTests(ITestOutputHelper output)
     public void ATakeOverOrAReplacementKeepsTheEarSkin()
     {
         var hair = Author(TideRotMod, TideRotRel);
+        // The rule is what keeps it: version 32's solve cuts 28 triangles of that ear.
+        Assert.Contains(Solve(hair, withoutEarSkin: true).Cut, p => p.Mesh == 2);
+
         var replaced = HatCompatService.Inspect(hair, TideRotRel, Face(), "0801", replaceAuthored: true)!;
         Assert.True(replaced.Replaced);
         Assert.DoesNotContain(replaced.Solve.Cut, p => p.Mesh == 2);
 
-        var kept = HatCompatService.Inspect(hair, TideRotRel, Face(), "0801", replaceAuthored: false)!;
-        Assert.True(kept.AlreadyCompatible || kept.TookOver);
-        Assert.DoesNotContain(kept.Solve.Cut, p => p.Mesh == 2);
+        // TideRot's own mask hides hair no hat covers, so Proteus takes it over — through the same solve.
+        var takenOver = HatCompatService.Inspect(hair, TideRotRel, Face(), "0801", replaceAuthored: false)!;
+        Assert.True(takenOver.TookOver, "TideRot is no longer a take-over; pick a hairstyle that is");
+        Assert.DoesNotContain(takenOver.Solve.Cut, p => p.Mesh == 2);
     }
 
     /// <summary>
@@ -189,6 +193,7 @@ public class HatCompatEarSkinLocalTests(ITestOutputHelper output)
     {
         string mods = LocalData.Path(LocalData.Mods);
         var seen = new HashSet<string>();
+        var failed = new List<string>();
         int hairs = 0, changed = 0;
         foreach (var file in Directory.EnumerateFiles(mods, "c0?01h*_hir.mdl", SearchOption.AllDirectories))
         {
@@ -207,18 +212,48 @@ public class HatCompatEarSkinLocalTests(ITestOutputHelper output)
             string race = name.Substring(1, 4);
             HatCompatSolve.Result before, after;
             try { before = Solve(hair, withoutEarSkin: true, race: race); after = Solve(hair, race: race); }
-            catch (Exception) { continue; }   // unreadable models are the solve's own business
+            catch (Exception ex) { failed.Add($"{Path.GetRelativePath(mods, file)}: {ex.Message}"); continue; }
             hairs++;
 
             var earSubmeshes = EarSubmeshes(hair);
             var outsideBefore = Key(before.Cut.Where(p => !earSubmeshes.Contains((p.Mesh, p.Submesh))));
             var outsideAfter = Key(after.Cut.Where(p => !earSubmeshes.Contains((p.Mesh, p.Submesh))));
             Assert.True(outsideBefore == outsideAfter, $"{Path.GetRelativePath(mods, file)}: the cut outside the ear changed");
+
+            // Nor the press: a skin vertex shared with another submesh would leave that submesh's hair unpressed.
+            var earVertices = EarSubmeshVertices(hair, earSubmeshes);
+            Assert.True(PressOutside(before, earVertices) == PressOutside(after, earVertices),
+                        $"{Path.GetRelativePath(mods, file)}: the press outside the ear changed");
             if (Key(before.Cut) != Key(after.Cut)) changed++;
         }
         output.WriteLine($"{hairs} Miqo'te hairstyles, {changed} with ear skin newly spared");
+        foreach (var f in failed) output.WriteLine("could not solve " + f);
+        Assert.Empty(failed);
         Assert.True(hairs > 0);
     }
+
+    /// <summary>Every vertex any triangle of an ear submesh names.</summary>
+    private static HashSet<long> EarSubmeshVertices(byte[] mdl, HashSet<(int, int)> earSubmeshes)
+    {
+        var src = SecondSkinWriter.Parse(mdl);
+        var found = new HashSet<long>();
+        foreach (var (mesh, sub) in earSubmeshes)
+        {
+            int mo = src.MeshStart + mesh * 36;
+            ushort si = BitConverter.ToUInt16(mdl, mo + 10);
+            int ss = src.SubmeshStart + (si + sub) * 16;
+            uint io = BitConverter.ToUInt32(mdl, ss), ic = BitConverter.ToUInt32(mdl, ss + 4);
+            for (uint i = 0; i < ic; i++)
+                found.Add(((long)mesh << 32) | BitConverter.ToUInt16(mdl, src.Ib + (int)(io + i) * 2));
+        }
+        return found;
+    }
+
+    /// <summary>The press on every vertex outside the ear submeshes, as one comparable string.</summary>
+    private static string PressOutside(HatCompatSolve.Result r, HashSet<long> earVertices)
+        => string.Join(";", r.Moved.OrderBy(m => m.Key).SelectMany(m => m.Value
+               .Where(v => !earVertices.Contains(((long)m.Key << 32) | (uint)v.Key))
+               .OrderBy(v => v.Key).Select(v => $"{m.Key}.{v.Key}:{v.Value.X:F5},{v.Value.Y:F5},{v.Value.Z:F5}")));
 
     private static string? ModRootOf(string mods, string file)
     {
