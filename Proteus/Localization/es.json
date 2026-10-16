@@ -115,6 +115,14 @@
     "message": "El equipo sin mods no tiene un mod donde guardarse, así que cada pieza recibe un mod nuevo propio, con el nombre del objeto y del cuerpo.",
     "description": ""
   },
+  "AutoRefit.Piercings.Label": {
+    "message": "Añadir los piercings de mi cuerpo al equipo ajustado",
+    "description": ""
+  },
+  "AutoRefit.Piercings.Tip": {
+    "message": "Desactivado: el equipo se ajusta sin los piercings de tu mod de cuerpo. Las uñas siempre se incluyen.\nEl equipo ya ajustado conserva lo que tenía; deshaz y vuelve a ajustar lo que llevas puesto para cambiarlo.",
+    "description": ""
+  },
   "AutoRefit.Working": {
     "message": "Trabajando…",
     "description": ""
@@ -3807,6 +3815,14 @@
     "message": "Omite la piel nueva donde el autor borró la suya, normalmente bajo la tela.\nDesactívalo si el ajuste deja huecos.",
     "description": ""
   },
+  "Parts.Retarget.Piercings": {
+    "message": "Añadir los piercings del nuevo cuerpo",
+    "description": ""
+  },
+  "Parts.Retarget.Piercings.Tip": {
+    "message": "Activado: los piercings del nuevo cuerpo llegan con su piel donde la prenda muestra esa piel.\nLas uñas siempre se incluyen.",
+    "description": ""
+  },
   "Parts.Retarget.CutForcedTip": {
     "message": "Siempre activado mientras el zapato conserva su propio pie o el guante su propia mano: si no, entrarían con él las piernas o los brazos nuevos enteros.",
     "description": ""
@@ -4781,6 +4797,14 @@
   },
   "SizeSet.Ends.Tip": {
     "message": "Los zapatos y guantes conservan sus propios pies y manos; solo se reajusta la pierna o el brazo que alcanzan. Los zapatos reciben las tallas de las piernas, los guantes una opción por cuerpo, y ambos se suman a las tallas de pecho o piernas del conjunto cuando comparten grupo.",
+    "description": ""
+  },
+  "SizeSet.Piercings": {
+    "message": "Añadir los piercings de los nuevos cuerpos",
+    "description": ""
+  },
+  "SizeSet.Piercings.Tip": {
+    "message": "Activado: los piercings de cada cuerpo llegan con su piel donde la pieza muestra esa piel. Las uñas siempre se incluyen.\nLas tallas ya hechas solo cambian cuando se vuelven a hacer.",
     "description": ""
   },
   "SizeSet.EndsUnreadable.Fmt": {

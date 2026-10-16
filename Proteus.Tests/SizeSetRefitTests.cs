@@ -390,6 +390,59 @@ public class SizeSetRefitTests(ITestOutputHelper output)
         return root;
     }
 
+    /// <summary>A top mod whose one size is Rue's own bare chest, its piercings and all: every bit of skin shown.</summary>
+    private static string BareChestMod()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "proteus-sizeset-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "top"));
+        File.Copy(BodySizeCatalog.ResolveCaseInsensitive(LocalData.Path(Rue),
+                                                         "files/chest - smallclothes/buff - medium/chara/equipment/e0000/model/c0201e0000_top.mdl"),
+                  Path.Combine(root, "top", "top.mdl"));
+        File.WriteAllText(Path.Combine(root, PenumbraModMeta.MetaFile),
+            "{ \"FileVersion\": 4, \"Name\": \"Bare\", \"DefaultData\": { \"Files\": {}, \"FileSwaps\": {}, \"Manipulations\": [] },"
+          + " \"Groups\": [ { \"Version\": 0, \"Name\": \"Size\", \"Type\": \"Single\", \"Priority\": 0, \"DefaultSettings\": 0,"
+          + $" \"Options\": [ {{ \"Name\": \"Rue M\", \"Files\": {{ \"{BareTopPath}\": \"top\\\\top.mdl\" }} }} ] }} ] }}");
+        return root;
+    }
+
+    private const string BareTopPath = "chara/equipment/e6000/model/c0201e6000_top.mdl";
+
+    [LocalDataFact(Rue, Yab)]
+    [Trait("Plan", "AC-refit-piercings-option-5")]
+    public void Size_set_carries_piercings_only_when_asked()
+    {
+        // [AC-refit-piercings-option-5] Rue's bare chest sized onto YAB. First that the case is reached: asked for, the
+        // made sizes carry YAB's piercings. Then, not asked for, the same sizes carry none.
+        static int Pierced(byte[] model)
+            => ModelPartReader.Read(model)!.Parts.Where(p => p.Island < 0 && BodyRetarget.IsBodyPiercingMaterial(p.Material))
+                                               .Sum(p => p.Triangles.Length / 3);
+        List<(string Option, int Pierced)> Made(bool piercings)
+        {
+            string root = BareChestMod();
+            try
+            {
+                runPiercings = piercings;
+                var (result, _) = RunOn(root, ["yab"], Rue, Yab);
+                Assert.True(result.Made > 0, "nothing was made");
+                return Options(root, "Size").Where(o => o != "Rue M")
+                                            .Select(o => (o, Pierced(ModelOf(root, "Size", o, BareTopPath)))).ToList();
+            }
+            finally
+            {
+                runPiercings = false;
+                Directory.Delete(root, recursive: true);
+            }
+        }
+
+        var on = Made(piercings: true);
+        output.WriteLine("on: " + string.Join(", ", on));
+        Assert.Contains(on, o => o.Pierced > 0);
+        var off = Made(piercings: false);
+        output.WriteLine("off: " + string.Join(", ", off));
+        Assert.Equal(on.Select(o => o.Option), off.Select(o => o.Option));
+        Assert.DoesNotContain(off, o => o.Pierced > 0);
+    }
+
     /// <summary>The model a group's option gives a game path, read from the mod.</summary>
     private static byte[] ModelOf(string root, string group, string option, string gamePath)
     {
@@ -860,7 +913,8 @@ public class SizeSetRefitTests(ITestOutputHelper output)
 
     [LocalDataFact(Bibo, Neolithe)]
     [Trait("Plan", "AC-keep-ends-studio-9")]
-    public void A_shoe_reaching_no_leg_gets_a_skin_only_option_per_body_where_the_skin_changes()   // [AC-keep-ends-studio-9]
+    [Trait("Plan", "EDGE-refit-piercings-option-12")]
+    public void A_shoe_reaching_no_leg_gets_a_skin_only_option_per_body_where_the_skin_changes()   // [AC-keep-ends-studio-9] [EDGE-refit-piercings-option-12]
     {
         var shoe = BiboFeet(mensSkin: true);
         Assert.Equal(KeepEnds.Route.SkinOnly, KeepEndsRouteOf(shoe, Bibo, Neolithe));
@@ -889,7 +943,8 @@ public class SizeSetRefitTests(ITestOutputHelper output)
 
     [LocalDataFact(Bibo, Neolithe)]
     [Trait("Plan", "AC-keep-ends-studio-9")]
-    public void A_shoe_reaching_no_leg_whose_skin_already_matches_gets_nothing()   // [AC-keep-ends-studio-9]
+    [Trait("Plan", "EDGE-refit-piercings-option-12")]
+    public void A_shoe_reaching_no_leg_whose_skin_already_matches_gets_nothing()   // [AC-keep-ends-studio-9] [EDGE-refit-piercings-option-12]
     {
         var shoe = BiboFeet(mensSkin: false);
         Assert.Equal(KeepEnds.Route.SkinOnly, KeepEndsRouteOf(shoe, Bibo, Neolithe));
@@ -1916,7 +1971,8 @@ public class SizeSetRefitTests(ITestOutputHelper output)
         var mods = bodyMods.Select(n => Path.GetFileName(LocalData.Path(n))).ToDictionary(d => d, d => d);
         var bodies = new BodyModIndex().RefreshState(mods, modsRoot).List;
         var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
-        var request = new SizeSetRefit.Request(copy, keys, Yas: false, Remake: false, bodies, GameBody: gameBody);
+        var request = new SizeSetRefit.Request(copy, keys, Yas: false, Remake: false, bodies, GameBody: gameBody,
+                                               Piercings: runPiercings);
         var result = SizeSetRefit.Run(request, new UVRemapService(log, "."), log, p => output.WriteLine(p),
                                       CancellationToken.None);
         foreach (string note in result.Notes) output.WriteLine("note: " + note);
@@ -1930,6 +1986,9 @@ public class SizeSetRefitTests(ITestOutputHelper output)
         }
         return (result, request);
     }
+
+    /// <summary>What <see cref="RunOn"/> asks of the new bodies' piercings (<see cref="SizeSetRefit.Request.Piercings"/>).</summary>
+    private bool runPiercings;
 
     /// <summary>What the last <see cref="RunOn"/> logged: each message template and its arguments.</summary>
     private readonly List<(string Template, object[] Args)> lastLog = [];

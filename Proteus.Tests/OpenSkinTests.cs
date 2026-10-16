@@ -16,9 +16,11 @@ namespace Proteus.Tests;
 public class OpenSkinTests(ITestOutputHelper output)
 {
     private (byte[] Model, BodyRetarget.SwapReport Report) Swap(byte[] top, byte[] body, bool tuck = true,
-                                                               IReadOnlySet<string>? hidden = null)
+                                                               IReadOnlySet<string>? hidden = null,
+                                                               bool carryPiercings = false)
     {
-        var model = BodyRetarget.SwapSkin(top, [Resized(body, hidden: hidden)], out var report, tuckSlot: tuck ? "_top" : null)!;
+        var model = BodyRetarget.SwapSkin(top, [Resized(body, hidden: hidden)], out var report, tuckSlot: tuck ? "_top" : null,
+                                          carryPiercings: carryPiercings)!;
         Assert.NotNull(model);
         output.WriteLine($"{(tuck ? "tuck" : "no tuck")}: {report}");
         return (model, report);
@@ -101,9 +103,11 @@ public class OpenSkinTests(ITestOutputHelper output)
     public void Open_skin_brings_no_piercing_the_author_did_not_show()
     {
         // A ring in the middle of the dip, which the open skin draws: whether it comes in is the author's cut's to say.
-        var (model, opened) = Swap(CoarseSkinTop(), Dipped(0.015f, ringInDip: true));
+        // With the piercings carried, or the two would agree on none for nothing.
+        var (model, opened) = Swap(CoarseSkinTop(), Dipped(0.015f, ringInDip: true), carryPiercings: true);
         var closed = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoOpenSkin: true),
-                                             () => Swap(CoarseSkinTop(), Dipped(0.015f, ringInDip: true)));
+                                             () => Swap(CoarseSkinTop(), Dipped(0.015f, ringInDip: true),
+                                                        carryPiercings: true));
         Assert.True(opened.Opened > 0);
         Assert.True(DrawsDip(model));   // the skin around the ring is drawn
         Assert.Equal(closed.Report.Adorned, opened.Adorned);

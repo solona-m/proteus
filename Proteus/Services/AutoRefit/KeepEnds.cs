@@ -339,12 +339,14 @@ internal static partial class KeepEnds
     /// <param name="warn">Its warnings.</param>
     /// <param name="outfit">The chest or legs piece of the same author option, as drawn now, which the garment stays
     /// outside (see <see cref="BodyRetarget.KeepOutfitOrder"/>). Null for none.</param>
+    /// <param name="carryPiercings">Bring the new body's piercings in with the limb's skin (see
+    /// <see cref="BodyRetarget.Rebuild"/>): the user's setting. Off by default.</param>
     internal static BodyRetarget.Planned Plan(ModelParts garment, byte[] bytes, Reading reading,
                                               BodyRetarget.SlotPair limb, BodyRetarget.SlotPair? end, bool across,
                                               Action<string>? log = null, Action<string>? warn = null,
-                                              BodyRetarget.Outfit? outfit = null)
+                                              BodyRetarget.Outfit? outfit = null, bool carryPiercings = false)
         => Plan(garment, bytes, reading, limb, end, replaceSkin: across, across: across, clearBody: false,
-                alsoHeld: null, extra: null, log, warn, outfit);
+                alsoHeld: null, extra: null, log, warn, outfit, carryPiercings);
 
     /// <inheritdoc cref="Plan(ModelParts, byte[], Reading, BodyRetarget.SlotPair, BodyRetarget.SlotPair?, bool)"/>
     /// <param name="replaceSkin">Swap the limb's skin for the new body's. The automatic refit does so across body mods
@@ -359,7 +361,7 @@ internal static partial class KeepEnds
                                               bool across, bool clearBody, IReadOnlySet<int>? alsoHeld,
                                               IReadOnlyList<BodyRetarget.SlotPair>? extra,
                                               Action<string>? log = null, Action<string>? warn = null,
-                                              BodyRetarget.Outfit? outfit = null)
+                                              BodyRetarget.Outfit? outfit = null, bool carryPiercings = false)
     {
         List<BodyRetarget.SlotPair> pairs = [limb];
         if (end is { } shape) pairs.Add(shape with { ShapeOnly = true });
@@ -369,7 +371,7 @@ internal static partial class KeepEnds
         return BodyRetarget.Plan(garment, bytes, pairs, reading.Slot, held: held, replaceSkin: replaceSkin,
                                  acrossBodies: across, clearBody: clearBody, cutHidden: true,
                                  keepShape: reading.FreePieces, swapSlot: reading.Limb, log: log, warn: warn,
-                                 outfit: outfit);
+                                 outfit: outfit, carryPiercings: carryPiercings);
     }
 
     /// <summary>

@@ -94,10 +94,12 @@ internal static partial class BodyRetarget
     /// <param name="cutHidden">Leave out the new body's skin where the garment's author deleted theirs — see
     /// <see cref="CutLike"/>. Off puts the body in whole.</param>
     /// <param name="tuckSlot">See <see cref="Rebuild"/>.</param>
+    /// <param name="carryPiercings">See <see cref="Rebuild"/>.</param>
     /// <returns>The rebuilt model, or null when no skin mesh of the garment belongs to a slot being resized.</returns>
     internal static byte[]? SwapSkin(byte[] garment, IReadOnlyList<SlotPair> pairs, out SwapReport report,
-                                     bool cutHidden = true, string? tuckSlot = null)
-        => Rebuild(garment, pairs, swapSkin: true, weights: null, out report, cutHidden, tuckSlot: tuckSlot);
+                                     bool cutHidden = true, string? tuckSlot = null, bool carryPiercings = false)
+        => Rebuild(garment, pairs, swapSkin: true, weights: null, out report, cutHidden, tuckSlot: tuckSlot,
+                   carryPiercings: carryPiercings);
 
     /// <summary>
     /// Rebuild the refitted garment for its new body: swap the resized slots' skin meshes for the body's (see
@@ -112,10 +114,14 @@ internal static partial class BodyRetarget
     /// see <see cref="Plan"/>. Null judges here, as always.</param>
     /// <param name="tuckSlot">The slot whose cut skin is carried on in under the cloth past the author's edge (see
     /// <see cref="TuckUnderCloth"/>): the game's own top's chest. Null tucks nothing, as every other refit has it.</param>
+    /// <param name="carryPiercings">Bring the new body's piercings in with its skin, as its nails always are (see
+    /// <see cref="AdornmentsOf"/>). Off, the default, carries none, and the garment's own piercings are left as they were
+    /// before build 1147: dropped with the old body's extras across body mods, kept within one.</param>
     /// <returns>The rebuilt model, or null when there was nothing to change.</returns>
     internal static byte[]? Rebuild(byte[] garment, IReadOnlyList<SlotPair> pairs, bool swapSkin, WeightPlan? weights,
                                     out SwapReport report, bool cutHidden = true, bool acrossBodies = false,
-                                    IReadOnlySet<int>? swapMeshes = null, string? tuckSlot = null)
+                                    IReadOnlySet<int>? swapMeshes = null, string? tuckSlot = null,
+                                    bool carryPiercings = false)
     {
         report = default;
         var swappable = swapSkin ? pairs.Where(p => p.Swaps).ToList() : [];
@@ -198,11 +204,13 @@ internal static partial class BodyRetarget
                     extras += model.Parts.Where(q => q.Island < 0 && q.Mesh == part.Mesh).Sum(q => q.Triangles.Length / 3);
         // The old body's nails and piercings on a slot whose skin is swapped go with that skin — the new body brings its
         // own (see AdornmentsOf) — even within one body mod, where they would otherwise be doubled. Where they were is
-        // kept: the author showed one there. Taken out only once the new body's are known to fit (below).
+        // kept: the author showed one there. Taken out only once the new body's are known to fit (below). Piercings only
+        // when the new body's come in: otherwise the garment's own are left to the rule above.
         var authored = new PointGrid();
         var oldAdornments = new List<(int Mesh, int Triangles)>();
         if (claimedBy.Count > 0)
-            foreach (var mesh in model.Parts.Where(p => p.Island < 0 && IsBodyAdornmentMaterial(p.Material))
+            foreach (var mesh in model.Parts.Where(p => p.Island < 0 && IsBodyAdornmentMaterial(p.Material)
+                                                        && (carryPiercings || !IsBodyPiercingMaterial(p.Material)))
                                             .GroupBy(p => p.Mesh))
             {
                 var verts = mesh.SelectMany(p => p.Triangles).Distinct().ToList();
@@ -266,7 +274,8 @@ internal static partial class BodyRetarget
         // every one of the new body's fits, so a garment with no room keeps the nails it had rather than going bare.
         var adornments = claimedBy.OrderBy(s => s)
                                   .Select(s => (Slot: s, Adorn: AdornmentsOf(bodyOf[s], swappable[s].TargetHidden,
-                                                                             authorCuts[s], cloth, authored)))
+                                                                             authorCuts[s], cloth, authored,
+                                                                             carryPiercings)))
                                   .Where(a => a.Adorn.Materials.Count > 0)
                                   .ToList();
         int room = SecondSkinWriter.MaxMaterials - SecondSkinWriter.Parse(garment).MatNames.Count - claimedBy.Count;

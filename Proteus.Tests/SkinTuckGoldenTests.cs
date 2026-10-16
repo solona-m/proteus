@@ -459,8 +459,10 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
                         ("target", File.ReadAllBytes(target), AlmondXsSha))) return;
         var garment = ModelPartReader.Read(bytes)!;
         var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
+        // The new body's piercings carried, as every refit did when this was pinned.
         var plan = BodyRetarget.WithTuning(Before,
-            () => RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true, out _));
+            () => RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true, out _,
+                                      carryPiercings: true));
         Pinned(RefitCore.MatchSkinToBody(plan.Model, source, target, uv, false, log), DirndlGameRefit);
     }
 

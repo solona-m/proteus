@@ -115,6 +115,14 @@
     "message": "Unveränderte Ausrüstung hat keinen Mod, in den gespeichert werden kann, daher bekommt jedes Teil einen eigenen neuen Mod, benannt nach Gegenstand und Körper.",
     "description": ""
   },
+  "AutoRefit.Piercings.Label": {
+    "message": "Piercings meines Körpers in angepasste Ausrüstung übernehmen",
+    "description": ""
+  },
+  "AutoRefit.Piercings.Tip": {
+    "message": "Aus: Ausrüstung wird ohne die Piercings deines Körper-Mods angepasst. Nägel kommen immer mit.\nBereits angepasste Ausrüstung behält, womit sie erstellt wurde; mach die Anpassung von dem, was du trägst, rückgängig und passe sie neu an, um das zu ändern.",
+    "description": ""
+  },
   "AutoRefit.Working": {
     "message": "Wird bearbeitet …",
     "description": ""
@@ -3807,6 +3815,14 @@
     "message": "Lässt die neue Haut dort weg, wo der Autor seine gelöscht hat, meist unter Stoff.\nAusschalten, wenn die Anpassung Löcher hinterlässt.",
     "description": ""
   },
+  "Parts.Retarget.Piercings": {
+    "message": "Piercings des neuen Körpers übernehmen",
+    "description": ""
+  },
+  "Parts.Retarget.Piercings.Tip": {
+    "message": "An: Die Piercings des neuen Körpers kommen mit seiner Haut, wo das Kleidungsstück diese Haut zeigt.\nNägel kommen immer mit.",
+    "description": ""
+  },
   "Parts.Retarget.CutForcedTip": {
     "message": "Immer an, solange der Schuh seinen eigenen Fuß oder der Handschuh seine eigene Hand behält: sonst kämen die ganzen neuen Beine oder Arme mit hinein.",
     "description": ""
@@ -4781,6 +4797,14 @@
   },
   "SizeSet.Ends.Tip": {
     "message": "Schuhe und Handschuhe behalten ihre eigenen Füße und Hände; angepasst wird nur das Bein oder der Arm, den sie erreichen. Schuhe bekommen die Größen der Beine, Handschuhe eine Option pro Körper, und beide schließen sich den Brust- oder Beingrößen des Outfits an, wenn sie eine Gruppe teilen.",
+    "description": ""
+  },
+  "SizeSet.Piercings": {
+    "message": "Piercings der neuen Körper übernehmen",
+    "description": ""
+  },
+  "SizeSet.Piercings.Tip": {
+    "message": "An: Die Piercings jedes Körpers kommen mit seiner Haut, wo das Teil diese Haut zeigt. Nägel kommen immer mit.\nBereits erstellte Größen ändern sich erst, wenn sie neu erstellt werden.",
     "description": ""
   },
   "SizeSet.EndsUnreadable.Fmt": {

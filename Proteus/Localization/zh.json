@@ -115,6 +115,14 @@
     "message": "未经 MOD 修改的装备没有可保存的 MOD，因此每件装备都会得到一个以物品和体型命名的新 MOD。",
     "description": ""
   },
+  "AutoRefit.Piercings.Label": {
+    "message": "将我的体型的穿孔加入适配的装备",
+    "description": ""
+  },
+  "AutoRefit.Piercings.Tip": {
+    "message": "关闭：装备适配时不带体型模组的穿孔。指甲始终会带上。\n已适配的装备保持原样；要更改，请撤销正在穿戴的装备的适配后重新适配。",
+    "description": ""
+  },
   "AutoRefit.Working": {
     "message": "处理中…",
     "description": ""
@@ -3807,6 +3815,14 @@
     "message": "作者删除处（通常在布料下）不生成新皮肤。\n若转换留下破洞，请关闭此项。",
     "description": ""
   },
+  "Parts.Retarget.Piercings": {
+    "message": "加入新体型的穿孔",
+    "description": ""
+  },
+  "Parts.Retarget.Piercings.Tip": {
+    "message": "开启：在服装露出该皮肤的地方，新体型的穿孔随皮肤一同加入。\n指甲始终会带上。",
+    "description": ""
+  },
   "Parts.Retarget.CutForcedTip": {
     "message": "鞋子保留自己的脚、手套保留自己的手时始终开启：否则整条新腿或新手臂都会跟着放进去。",
     "description": ""
@@ -4781,6 +4797,14 @@
   },
   "SizeSet.Ends.Tip": {
     "message": "鞋子和手套保留原本的脚和手，只重新适配它们覆盖到的腿或手臂。鞋子获得腿部的尺码，手套每个身体一个选项；两者与服装的胸部或腿部尺码在同一组时会并入其中。",
+    "description": ""
+  },
+  "SizeSet.Piercings": {
+    "message": "加入各新体型的穿孔",
+    "description": ""
+  },
+  "SizeSet.Piercings.Tip": {
+    "message": "开启：在部件露出该皮肤的地方，每个体型的穿孔随皮肤一同加入。指甲始终会带上。\n已制作的尺码只有在重新制作时才会改变。",
     "description": ""
   },
   "SizeSet.EndsUnreadable.Fmt": {

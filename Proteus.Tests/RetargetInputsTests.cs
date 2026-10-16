@@ -214,6 +214,56 @@ public class RetargetInputsTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-refit-piercings-option-7")]
+    [Trait("Plan", "EDGE-refit-piercings-option-7")]
+    public void Piercings_take_effect_only_with_the_skin_replaced()
+    {
+        // [AC-refit-piercings-option-7] [EDGE-refit-piercings-option-7] The box greys out with "Use the new body's skin".
+        Assert.False(RetargetInputs.CarryPiercings(replaceSkin: false, carryPiercings: true));
+        Assert.True(RetargetInputs.CarryPiercings(replaceSkin: true, carryPiercings: true));
+        Assert.False(RetargetInputs.CarryPiercings(replaceSkin: true, carryPiercings: false));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-refit-piercings-option-7")]
+    [Trait("Plan", "EDGE-refit-piercings-option-7")]
+    [Trait("Plan", "EDGE-refit-piercings-option-12")]
+    public void Key_changes_with_piercings()
+    {
+        // [AC-refit-piercings-option-7] Ticking the box takes a preview down; [EDGE-refit-piercings-option-7] without
+        // the skin replaced, or on a skin-only redraw ([EDGE-refit-piercings-option-12]), it changes nothing and leaves the
+        // preview up.
+        var from = new Dictionary<string, BodyOption> { ["_sho"] = FeetM, ["_dwn"] = LegsS };
+        var to = new Dictionary<string, List<BodyOption>> { ["_dwn"] = [LegsM], ["_sho"] = [FeetM] };
+        string Key(KeepEnds.Route? route, bool replaceSkin, bool piercings, Dictionary<string, BodyOption>? f = null)
+        {
+            f ??= from;
+            var slots = RetargetInputs.Slots(Shoe(), CatalogSlots, Two);
+            var inputs = RetargetInputs.Assemble(Shoe(), slots, f, to, route);
+            return RetargetInputs.Key("m", null, inputs, RetargetInputs.Chosen(slots, f, to), f, to, [], [],
+                                      replaceSkin, true, false, piercings);
+        }
+
+        string off = Key(KeepEnds.Route.Skin, true, false);
+        string on = Key(KeepEnds.Route.Skin, true, true);
+        Assert.EndsWith("|pierce", on);
+        Assert.NotEqual(off, on);
+        Assert.DoesNotContain("|pierce", off);
+        Assert.Equal(Key(KeepEnds.Route.Skin, false, false), Key(KeepEnds.Route.Skin, false, true));
+        var feet = new Dictionary<string, BodyOption> { ["_sho"] = FeetM };
+        Assert.Equal(Key(KeepEnds.Route.SkinOnly, true, false, feet), Key(KeepEnds.Route.SkinOnly, true, true, feet));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-refit-piercings-option-8")]
+    public void Piercings_flag_turns_the_cli_carry_on()
+    {
+        // [AC-refit-piercings-option-8] The headless refit carries none unless given --piercings.
+        Assert.False(RetargetInputs.CliCarryPiercings(new Dictionary<string, string> { ["whole"] = "" }));
+        Assert.True(RetargetInputs.CliCarryPiercings(new Dictionary<string, string> { ["piercings"] = "" }));
+    }
+
+    [Fact]
     [Trait("Plan", "EDGE-keep-ends-studio-19")]
     public void Flip_resets_presets_and_keeps_end_choices_aside()   // [EDGE-keep-ends-studio-19]
     {

@@ -96,6 +96,8 @@ internal static partial class KeepEnds
     /// <param name="SlotName">A slot's name as a refusal words it.</param>
     /// <param name="PieceNames">Each of <paramref name="Pieces"/>' labels, in the same order: how a piece the refit let go
     /// is named.</param>
+    /// <param name="CarryPiercings">Bring the new body's piercings in with the limb's skin: the panel's box, with the skin
+    /// replaced (see <see cref="RetargetInputs.CarryPiercings"/>).</param>
     internal sealed record StudioPlanInput(
         ModelParts Garment, byte[] Bytes, string Slot, IReadOnlyList<IReadOnlyCollection<int>> Pieces,
         BodySizeCatalog Source, BodySizeCatalog Target, string Race, bool Male,
@@ -103,7 +105,7 @@ internal static partial class KeepEnds
         bool SameBodyMod, bool FromCloth, bool ReplaceSkin, bool Across, bool ClearBody,
         IReadOnlySet<int>? Held, IReadOnlyList<BodyRetarget.SlotPair>? Shared,
         Func<string, (ushort? Source, ushort? Target)> Masks, Func<string, string> SlotName, string ModelRel,
-        IReadOnlyList<string>? PieceNames = null);
+        IReadOnlyList<string>? PieceNames = null, bool CarryPiercings = false);
 
     /// <summary>
     /// The plans, one per target; or none, with the refusal to show (<paramref name="Error"/>) or a notice that there is
@@ -158,7 +160,8 @@ internal static partial class KeepEnds
             var plan = Plan(input.Garment, input.Bytes, reading, limbPair, endPair, input.ReplaceSkin, input.Across,
                             input.ClearBody, input.Held, input.Shared,
                             line => log.Debug("[Proteus] body size: {0}", line),
-                            line => log.Warning("[Proteus] body size: {0}", line));
+                            line => log.Warning("[Proteus] body size: {0}", line),
+                            carryPiercings: input.CarryPiercings);
             plan = RefitCore.MatchSkinToBody(plan, limbSource, targetPath, uvRemap, input.Male, log);
             var (seamEdges, stretched) = SeamStretch(input.Garment, reading.Ends, plan);
             log.Information("[Proteus] retarget: {0} kept its {1}: moved up to {2:F1} mm, the seam stretched up to {3:F1} "

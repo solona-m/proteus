@@ -110,6 +110,13 @@ public sealed class SizeSetStrings
         "Rue, YAB and Tre come in Yet Another Skeleton versions. Neolithe and Bibo don't, and keep their plain sizes. A "
       + "piece already weighted to YAS always gets YAS sizes.");
 
+    public readonly string Piercings = Loc.Localize("SizeSet.Piercings", "Add the new bodies' piercings")
+                                     + "###sizeSetPiercings";
+
+    public readonly string PiercingsTip = Loc.Localize("SizeSet.Piercings.Tip",
+        "On: each body's piercings come in with its skin where the piece shows that skin. Nails always come along.\n"
+      + "Sizes already made change only when made again.");
+
     public readonly string Remake = Loc.Localize("SizeSet.Remake", "Make again the sizes Proteus added before")
                                   + "###sizeSetRemake";
 
@@ -215,6 +222,13 @@ public sealed class AutoRefitStrings
     public readonly string VanillaTip = Loc.Localize("AutoRefit.Vanilla.Tip",
         "Unmodded gear has no mod to save into, so each piece gets a new mod of its own, named after the item and "
       + "the body.");
+
+    public readonly string Piercings = Loc.Localize("AutoRefit.Piercings.Label",
+        "Add my body's piercings to refitted gear") + "###autoRefitPiercings";
+
+    public readonly string PiercingsTip = Loc.Localize("AutoRefit.Piercings.Tip",
+        "Off: gear is refitted without your body mod's piercings. Nails always come along.\n"
+      + "Gear already refitted keeps what it was made with; undo and refit what you're wearing to change it.");
 
     public readonly string Collection = Loc.Localize("AutoRefit.Collection", "Collection");
 
@@ -2813,6 +2827,13 @@ public sealed class PartsStrings
     public readonly string RetargetCutHiddenTip = Loc.Localize("Parts.Retarget.CutHidden.Tip",
         "Leave out the new skin where the author deleted theirs, usually under cloth.\n"
       + "Turn off if the refit leaves holes.");
+
+    public readonly string RetargetPiercings = Loc.Localize("Parts.Retarget.Piercings", "Add the new body's piercings")
+                                             + "###partsRetargetPiercings";
+
+    public readonly string RetargetPiercingsTip = Loc.Localize("Parts.Retarget.Piercings.Tip",
+        "On: the new body's piercings come in with its skin where the garment shows that skin.\n"
+      + "Nails always come along.");
 
     public readonly string RetargetCutForcedTip = Loc.Localize("Parts.Retarget.CutForcedTip",
         "Always on while the shoe keeps its own foot or the glove its own hand: otherwise the whole new legs or arms "

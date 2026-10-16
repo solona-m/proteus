@@ -39,6 +39,7 @@ internal static class Program
                       [--legs <label>=<size word>,... | --legs-to <rel in the target mod>]
                       [--chest-from <rel> --chest-to <rel in the target mod>]   (legs garments only)
                       [--whole]   (the new body's skin in whole, as the automatic refit puts it)
+                      [--piercings]   (bring the new body's piercings in with its skin; nails always come)
                       [--keep-default]   (keep the shape of the pieces the Studio ticks by default)
                       [--no-push] [--tune <knob>,...]
         Proteus.Refit --list --body-root <body mod> [--slot _top]
@@ -50,7 +51,7 @@ internal static class Program
                       (the automatic refit's reading across every installed body mod; --garment-list prints
                        the garments it reads differently from the exact reading alone)
         Proteus.Refit --finish --garment <in.mdl> --out <out.mdl> [--body-root <body mod> [--from <rel|auto>]]
-                      [--slot _top] [--race 0201] [--tag-legs <rel|auto>]
+                      [--slot _top] [--race 0201] [--tag-legs <rel|auto>] [--piercings]
         Proteus.Refit --save --manifest <save.json>
         Proteus.Refit --measure --garment <model.mdl> --bodies <body.mdl>[;<body.mdl>...]
         Proteus.Refit --measure --garment <model.mdl>     (cloth points within 2 mm rigged apart)
@@ -300,7 +301,8 @@ internal static class Program
                     skinSkipped = refusal;
                 else
                 {
-                    var planned = BodyRetarget.Plan(garment, bytes, [pair], slot, pushOut: false, replaceSkin: true);
+                    var planned = BodyRetarget.Plan(garment, bytes, [pair], slot, pushOut: false, replaceSkin: true,
+                                                    carryPiercings: RetargetInputs.CliCarryPiercings(opts));
                     model = planned.Model;
                     var swap = planned.Report.Swap;
                     skin = new
@@ -1155,7 +1157,8 @@ internal static class Program
             var planned = BodyRetarget.WithTuning(tuning, () => BodyRetarget.Plan(
                 garment, garmentBytes, pairs, slot, pushOut: !opts.ContainsKey("no-push"),
                 replaceSkin: true, acrossBodies: acrossBodies, cutHidden: !opts.ContainsKey("whole"),
-                keepShape: keepShape, log: line => Console.Error.WriteLine($"{label}: {line}")));
+                keepShape: keepShape, log: line => Console.Error.WriteLine($"{label}: {line}"),
+                carryPiercings: RetargetInputs.CliCarryPiercings(opts)));
             string written = Path.Combine(outDir, label + ".mdl");
             File.WriteAllBytes(written, planned.Model);
 
@@ -1266,7 +1269,7 @@ internal static class Program
             if (!args[i].StartsWith("--", StringComparison.Ordinal))
                 throw new UsageException($"Unexpected argument \"{args[i]}\".");
             string key = args[i][2..];
-            opts[key] = key is "list" or "detect" or "finish" or "inspect" or "save" or "measure" or "no-push" or "whole" or "keep-default" or "shares" or "time" or "bands" or "skin-map" or "skin-side" or "off" or "islands" or "face-poke" or "skin-out" ? "" : i + 1 < args.Length ? args[++i] : throw new UsageException($"--{key} needs a value.");
+            opts[key] = key is "list" or "detect" or "finish" or "inspect" or "save" or "measure" or "no-push" or "whole" or "piercings" or "keep-default" or "shares" or "time" or "bands" or "skin-map" or "skin-side" or "off" or "islands" or "face-poke" or "skin-out" ? "" : i + 1 < args.Length ? args[++i] : throw new UsageException($"--{key} needs a value.");
         }
         return opts;
     }

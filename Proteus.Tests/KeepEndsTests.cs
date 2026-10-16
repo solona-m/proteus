@@ -554,11 +554,34 @@ public class KeepEndsTests
                                                            .Sum(p => p.TriangleCount));
     }
 
+    [Fact]
+    [Trait("Plan", "EDGE-refit-piercings-option-6")]
+    public void A_kept_end_refit_carries_piercings_only_when_asked()
+    {
+        // [EDGE-refit-piercings-option-6] A boot's leg skin swapped for legs that carry a ring on drawn skin: through
+        // KeepEnds.Plan, as the automatic refit and the size set call it, the ring follows the setting.
+        const string Piercings = "/mt_c0201b0001_navelpierce.mtrl";
+        var bytes = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)));
+        var legs = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)),
+            new SyntheticModel.Mesh(Piercings, new SyntheticModel.Sub(0, OffsetZ: 0.001f)));
+        var parts = ModelPartReader.Read(bytes)!;
+        var reading = new KeepEnds.Reading("_sho", "_dwn", new HashSet<int>(), parts, [], 0, parts.Positions.Length / 3);
+
+        var off = KeepEnds.Plan(parts, bytes, reading, Resized("_dwn", legs), null, across: true);
+        var on = KeepEnds.Plan(parts, bytes, reading, Resized("_dwn", legs), null, across: true, carryPiercings: true);
+
+        Assert.Equal(0, off.Report.Swap!.Value.Adorned);
+        Assert.Equal(1, on.Report.Swap!.Value.Adorned);
+    }
+
     // ── a refit made before ──────────────────────────────────────────────────────────────────────────────
 
     [Fact]
     [Trait("Plan", "AC-keep-hand-foot-skin-10")]
     [Trait("Plan", "EDGE-keep-hand-foot-skin-16")]
+    [Trait("Plan", "EDGE-refit-piercings-option-8")]
     public void A_refit_made_before_is_put_back_as_it_always_was()
     {
         // Unchanged for every slot: an option this tool saved before, automatic or by hand, still offered, is put back;
@@ -575,6 +598,8 @@ public class KeepEndsTests
             Assert.True(BodyRetargetWriter.Save(root, "Size", GamePath, "neo", "Bibo+ — M",
                                                 [new BodyRetargetWriter.Refit("Neolithe — L", model, "L")], auto: false).Ok);
 
+            // [EDGE-refit-piercings-option-8] Whatever the piercings setting says: Existing never reads it, so a refit
+            // made before is put back as it was made.
             Assert.True(AutoRefitWatcher.Existing(root, "Size", "Neolithe — M", GamePath));
             Assert.True(AutoRefitWatcher.Existing(root, "Size", "Neolithe — L", GamePath));
             Assert.False(AutoRefitWatcher.Existing(root, "Size", "Neolithe — S", GamePath));

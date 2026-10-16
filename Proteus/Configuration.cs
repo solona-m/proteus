@@ -282,6 +282,10 @@ public class Configuration : IPluginConfiguration
     /// kept. On by default; a config saved before it existed has no such key and keeps this default (no migration).</summary>
     public bool SizeSetEnds { get; set; } = true;
 
+    /// <summary>With <see cref="SizeSetBodies"/>, bring each new body's piercings in with its skin. Off by default; a
+    /// config saved before it existed has no such key and reads false (no migration). Nails come in either way.</summary>
+    public bool SizeSetPiercings { get; set; }
+
     /// <summary>
     /// Refit chest, legs, hands and feet gear onto the collection's preferred body as it is equipped — see
     /// <see cref="Services.AutoRefitWatcher"/>. Off by default: it writes into the gear's own mod.
@@ -293,6 +297,13 @@ public class Configuration : IPluginConfiguration
     /// separate switch because every unmodded piece put on makes a new mod.
     /// </summary>
     public bool AutoRefitVanilla { get; set; }
+
+    /// <summary>
+    /// With <see cref="AutoRefitEnabled"/>, bring the new body's piercings in with its skin. Off by default; a config
+    /// saved before it existed has no such key and reads false (no migration). Nails come in either way, and refits
+    /// already made keep what they were made with.
+    /// </summary>
+    public bool AutoRefitPiercings { get; set; }
 
     /// <summary>
     /// The body and sizes gear is refitted onto, per Penumbra collection, keyed by the collection's id

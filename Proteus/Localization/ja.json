@@ -115,6 +115,14 @@
     "message": "MOD のない装備には保存先がないため、装備ごとにアイテム名と体型名を付けた新しい MOD が作られます。",
     "description": ""
   },
+  "AutoRefit.Piercings.Label": {
+    "message": "体型のピアスを調整した装備に追加する",
+    "description": ""
+  },
+  "AutoRefit.Piercings.Tip": {
+    "message": "オフ: 体型 MOD のピアスなしで装備を調整します。爪は常に含まれます。\n調整済みの装備は作成時のままです。変更するには、着ている装備の調整を元に戻してから調整し直してください。",
+    "description": ""
+  },
   "AutoRefit.Working": {
     "message": "処理中…",
     "description": ""
@@ -3807,6 +3815,14 @@
     "message": "作者が肌を削除した箇所（通常は布の下）には新しい肌を入れません。\n穴ができる場合はオフにしてください。",
     "description": ""
   },
+  "Parts.Retarget.Piercings": {
+    "message": "新しい体型のピアスを追加する",
+    "description": ""
+  },
+  "Parts.Retarget.Piercings.Tip": {
+    "message": "オン: 衣装がその肌を見せている部分では、新しい体型のピアスが肌と一緒に入ります。\n爪は常に含まれます。",
+    "description": ""
+  },
   "Parts.Retarget.CutForcedTip": {
     "message": "靴が自分の足を、手袋が自分の手を残している間は常にオンです。オフにすると新しい脚や腕が丸ごと入ってしまいます。",
     "description": ""
@@ -4781,6 +4797,14 @@
   },
   "SizeSet.Ends.Tip": {
     "message": "靴と手袋は元の足と手を残し、届いている脚や腕だけをリフィットします。靴には脚のサイズが、手袋にはボディごとに1つのオプションが付き、同じグループならどちらも衣装の胸や脚のサイズに加わります。",
+    "description": ""
+  },
+  "SizeSet.Piercings": {
+    "message": "新しい体型それぞれのピアスを追加する",
+    "description": ""
+  },
+  "SizeSet.Piercings.Tip": {
+    "message": "オン: パーツがその肌を見せている部分では、各体型のピアスが肌と一緒に入ります。爪は常に含まれます。\n作成済みのサイズは、作り直したときにだけ変わります。",
     "description": ""
   },
   "SizeSet.EndsUnreadable.Fmt": {

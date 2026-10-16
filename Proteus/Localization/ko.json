@@ -115,6 +115,14 @@
     "message": "모드가 없는 장비는 저장할 모드가 없으므로, 장비마다 아이템과 체형 이름을 딴 새 모드가 따로 만들어집니다.",
     "description": ""
   },
+  "AutoRefit.Piercings.Label": {
+    "message": "맞춘 장비에 내 체형의 피어싱 추가",
+    "description": ""
+  },
+  "AutoRefit.Piercings.Tip": {
+    "message": "끔: 체형 모드의 피어싱 없이 장비를 맞춥니다. 손톱은 항상 함께 들어갑니다.\n이미 맞춘 장비는 만들어진 그대로 유지됩니다. 바꾸려면 입고 있는 장비의 맞추기를 되돌린 뒤 다시 맞추세요.",
+    "description": ""
+  },
   "AutoRefit.Working": {
     "message": "작업 중…",
     "description": ""
@@ -3807,6 +3815,14 @@
     "message": "제작자가 삭제한 부분(보통 천 아래)은 새 피부도 넣지 않습니다.\n리핏에 구멍이 생기면 끄세요.",
     "description": ""
   },
+  "Parts.Retarget.Piercings": {
+    "message": "새 체형의 피어싱 추가",
+    "description": ""
+  },
+  "Parts.Retarget.Piercings.Tip": {
+    "message": "켬: 의상이 그 피부를 보여 주는 곳에서는 새 체형의 피어싱이 피부와 함께 들어갑니다.\n손톱은 항상 함께 들어갑니다.",
+    "description": ""
+  },
   "Parts.Retarget.CutForcedTip": {
     "message": "신발이 자기 발을, 장갑이 자기 손을 유지하는 동안에는 항상 켜집니다. 그렇지 않으면 새 다리나 팔 전체가 함께 들어갑니다.",
     "description": ""
@@ -4781,6 +4797,14 @@
   },
   "SizeSet.Ends.Tip": {
     "message": "신발과 장갑은 원래 발과 손을 유지하고, 닿는 다리나 팔만 리핏합니다. 신발은 다리 사이즈를, 장갑은 바디마다 옵션 하나를 받고, 같은 그룹이면 둘 다 의상의 가슴이나 다리 사이즈에 합류합니다.",
+    "description": ""
+  },
+  "SizeSet.Piercings": {
+    "message": "새 체형들의 피어싱 추가",
+    "description": ""
+  },
+  "SizeSet.Piercings.Tip": {
+    "message": "켬: 파츠가 그 피부를 보여 주는 곳에서는 각 체형의 피어싱이 피부와 함께 들어갑니다. 손톱은 항상 함께 들어갑니다.\n이미 만든 사이즈는 다시 만들 때만 바뀝니다.",
     "description": ""
   },
   "SizeSet.EndsUnreadable.Fmt": {

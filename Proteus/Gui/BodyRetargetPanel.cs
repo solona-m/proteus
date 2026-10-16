@@ -154,6 +154,12 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     private bool clearBody;
 
     /// <summary>
+    /// With <see cref="replaceSkin"/>, bring the new body's piercings in with its skin (see <see cref="BodyRetarget.Rebuild"/>).
+    /// Off by default, and not remembered: the user asks for them. Nails come in either way.
+    /// </summary>
+    private bool carryPiercings;
+
+    /// <summary>
     /// A shoe keeps its own foot, a glove its own hand, and only the leg or arm is refitted (see <see cref="KeepEnds"/>).
     /// On for every garment it can apply to; unticked gives the whole-garment refit. Per garment, not remembered.
     /// </summary>
@@ -1388,6 +1394,9 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
                 cutHidden = cut;
         if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
             ImGui.SetTooltip(inputs.KeepEnds ? ps.RetargetCutForcedTip : ps.RetargetCutHiddenTip);
+        using (ImRaii.Disabled(!replaceSkin))
+            ImGui.Checkbox(ps.RetargetPiercings, ref carryPiercings);
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(ps.RetargetPiercingsTip);
         ImGui.Unindent();
 
         ImGui.Checkbox(ps.RetargetClearBody, ref clearBody);
@@ -1715,6 +1724,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         bool layOnBody = replaceSkin;
         bool cut = cutHidden;
         bool clear = clearBody;
+        bool piercings = RetargetInputs.CarryPiercings(replaceSkin, carryPiercings);
         bool acrossBodies = fromBodyDir != null;
         bool male = MaleGarment;
         string key = Key(ctx);
@@ -1795,7 +1805,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
                         garment, bytes, garmentSlot, pieces, sources, snapshot, garmentRace ?? "", male, limbFrom!,
                         limbTargets, sameBodyMod, fromCloth, layOnBody, acrossBodies, clear, held, shared,
                         s => s == primary ? (limbMasks.Source, limbMasks.Target) : (endMasks.Source, endMasks.Target),
-                        SlotName, modelRel, shapeNames);
+                        SlotName, modelRel, shapeNames, piercings);
                     var kept = KeepEnds.StudioPlan(input, Baked, uvRemap, log, () => Interlocked.Increment(ref planDone));
                     return new PlanResult(key, kept.Planned, kept.Error, kept.Notice, kept.ShapeNames);
                 }
@@ -1818,7 +1828,8 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
                                                  clearBody: clear, cutHidden: cut, keepShape: pieces,
                                                  log: line => log.Debug("[Proteus] body size: {0}", line),
                                                  warn: line => log.Warning("[Proteus] body size: {0}", line),
-                                                 tuckSlot: RefitCore.TuckSlot(cut && clear, garmentSlot));
+                                                 tuckSlot: RefitCore.TuckSlot(cut && clear, garmentSlot),
+                                                 carryPiercings: piercings);
                     // Skin the refit kept of the garment's own, drawn in the new body's layout and material — or a
                     // gen2 garment's kept skin shows the wrong skin, and none of the tattoos, on a bibo body.
                     plan = RefitCore.MatchSkinToBody(plan, garmentSource, targetPath, uvRemap, male, log);
@@ -2016,7 +2027,7 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
     /// longer matches is stale — see <see cref="plannedKey"/>.</summary>
     private string Key(in RetargetContext ctx)
         => RetargetInputs.Key(ctx.ModelRel, fromBodyDir, Inputs(ctx), Chosen(ctx), from, to, ctx.Held, ctx.KeepShape,
-                              replaceSkin, cutHidden, clearBody);
+                              replaceSkin, cutHidden, clearBody, carryPiercings);
 
     /// <summary>The framework-thread half: take up whatever finished, and do the parts only this thread may.</summary>
     private void Consume(in RetargetContext ctx)
