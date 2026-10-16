@@ -2208,9 +2208,10 @@ public sealed class PartsStrings
     public readonly string ToolScale = Loc.Localize("Parts.Tool.Scale", "Scale")
                                      + "###partsToolScale";
 
-    public readonly string ToolScaleTip = Loc.Localize("Parts.Tool.Scale.Tip",
-        "Pick a part, then press on it and drag right to grow it or left\n" +
-        "to shrink it about its centre.");
+    public readonly string ToolScaleTip = Loc.Localize("Parts.Tool.ScaleAxes.Tip",
+        "Pick a part, then drag one of the handles at its centre to stretch\n" +
+        "it along that axis, or press on the part and drag right or left to\n" +
+        "grow or shrink it evenly.");
 
     public readonly string RotateHelp = Loc.Localize("Parts.Rotate.Help",
         "Click a part to choose it, then drag one of the rings at its centre. Drag anywhere else to turn the model, "
@@ -2220,13 +2221,14 @@ public sealed class PartsStrings
         "Click a part on your character, then drag one of the rings at its centre. Hold Alt to move the camera. "
       + "Each turn is saved when you let go.");
 
-    public readonly string ScaleHelp = Loc.Localize("Parts.Scale.Help",
-        "Click a part to choose it, then press on it and drag right to grow it or left to shrink it. Drag anywhere "
-      + "else to turn the model, shift-drag to move the view, scroll to zoom.");
+    public readonly string ScaleHelp = Loc.Localize("Parts.ScaleAxes.Help",
+        "Click a part to choose it, then drag a handle to stretch it along that axis, or press on the part and drag "
+      + "right to grow it or left to shrink it. Drag anywhere else to turn the model, shift-drag to move the view, "
+      + "scroll to zoom.");
 
-    public readonly string ScaleLiveHint = Loc.Localize("Parts.Scale.LiveHint",
-        "Click a part on your character, then press on it and drag right to grow it or left to shrink it. Hold Alt "
-      + "to move the camera. Each change is saved when you let go.");
+    public readonly string ScaleLiveHint = Loc.Localize("Parts.ScaleAxes.LiveHint",
+        "Click a part on your character, then drag a handle to stretch it along that axis, or press on the part and "
+      + "drag right to grow it or left to shrink it. Hold Alt to move the camera. Each change is saved when you let go.");
 
     public readonly string MoveHelp = Loc.Localize("Parts.Move.Help",
         "Click a part to choose it, then drag an arrow or a square. Drag anywhere else to turn the model, "
@@ -2324,6 +2326,14 @@ public sealed class PartsStrings
     /// <summary>{0} is how many material files were changed.</summary>
     public readonly string WindMaterialsSetFmt = Loc.Localize("Parts.Wind.Materials.Set.Fmt",
         "Set {0} material file(s) so the wind can move this garment.");
+
+    /// <summary>{0} is how many material files moved from the legacy character shader to Dawntrail's.</summary>
+    public readonly string WindMaterialsUpgradedFmt = Loc.Localize("Parts.Wind.Materials.Upgraded.Fmt",
+        "Upgraded {0} of them from the old character shader, which has no wind, to Dawntrail's.");
+
+    /// <summary>{0} is how many material files are still on the legacy character shader.</summary>
+    public readonly string WindMaterialsLegacyFmt = Loc.Localize("Parts.Wind.Materials.Legacy.Fmt",
+        "{0} material file(s) use the old character shader, which has no wind, and couldn't be upgraded, so they won't sway.");
 
     /// <summary>{0} is how many material files lack the vertex movement settings.</summary>
     public readonly string WindMaterialsMissingFmt = Loc.Localize("Parts.Wind.Materials.Missing.Fmt",

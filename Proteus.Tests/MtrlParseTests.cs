@@ -398,6 +398,91 @@ public class MtrlParseTests
     }
 
     /// <summary>
+    /// A constant's floats as an independent walk of the file finds them: (value offset, byte size) of the entry
+    /// with <paramref name="id"/>, read against the start of the ShaderValues list. Null when not declared.
+    /// </summary>
+    private static float[]? ConstantOf(byte[] mtrl, uint id)
+    {
+        int texCount = mtrl[12], uvCount = mtrl[13], colorCount = mtrl[14], addl = mtrl[15];
+        int header = 16 + 4 * (texCount + uvCount + colorCount) + BitConverter.ToUInt16(mtrl, 8) + addl
+                   + BitConverter.ToUInt16(mtrl, 6);
+        int keys = BitConverter.ToUInt16(mtrl, header + 2), consts = BitConverter.ToUInt16(mtrl, header + 4);
+        int samplers = BitConverter.ToUInt16(mtrl, header + 6);
+        int table = header + 12 + keys * 8, values = table + consts * 8 + samplers * 12;
+        for (int i = 0; i < consts; i++)
+        {
+            int e = table + i * 8;
+            if (BitConverter.ToUInt32(mtrl, e) != id) continue;
+            int off = BitConverter.ToUInt16(mtrl, e + 4), size = BitConverter.ToUInt16(mtrl, e + 6);
+            var floats = new float[size / 4];
+            for (int k = 0; k < floats.Length; k++) floats[k] = BitConverter.ToSingle(mtrl, values + off + k * 4);
+            return floats;
+        }
+        return null;
+    }
+
+    private const uint VertexMovementScale = 0x641E0F22, VertexMovementMaxLength = 0xD26FF0AE;
+
+    /// <summary>
+    /// A material that does not declare a constant is given it: the real characterlegacy fixture declares neither
+    /// wind constant, as Iris's materials don't. Everything the material already had reads back the same — its
+    /// textures, colour table, shader and constants — and the header's file size follows the file.
+    /// </summary>
+    [Fact]
+    public void EnsureConstantAddsOneARealMaterialLacks()
+    {
+        var mtrl = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "gear_top_a.mtrl"));
+        Assert.Null(ConstantOf(mtrl, VertexMovementScale));
+        Assert.Null(ConstantOf(mtrl, VertexMovementMaxLength));
+
+        var (withScale, scaleSet) = TextureLoader.EnsureConstantValues(mtrl, VertexMovementScale, 100f);
+        var (after, maxSet) = TextureLoader.EnsureConstantValues(withScale, VertexMovementMaxLength, 1f);
+        Assert.True(scaleSet);
+        Assert.True(maxSet);
+
+        Assert.Equal([100f], ConstantOf(after, VertexMovementScale)!);
+        Assert.Equal([1f], ConstantOf(after, VertexMovementMaxLength)!);
+        Assert.Equal(mtrl.Length + 2 * (8 + 4), after.Length);
+        Assert.Equal(BitConverter.ToUInt16(mtrl, 4) + 2 * (8 + 4), BitConverter.ToUInt16(after, 4));
+
+        var (shader, ids) = TextureLoader.GetMtrlInfo(mtrl);
+        var (shaderAfter, idsAfter) = TextureLoader.GetMtrlInfo(after);
+        Assert.Equal(shader, shaderAfter);
+        Assert.Equal([.. ids, VertexMovementScale, VertexMovementMaxLength], idsAfter);
+        foreach (uint id in ids) Assert.Equal(ConstantOf(mtrl, id), ConstantOf(after, id));
+
+        var p = TextureLoader.ParseMtrlBytes(after);
+        var p0 = TextureLoader.ParseMtrlBytes(mtrl);
+        Assert.Equal(p0.Normal, p.Normal);
+        Assert.Equal(p0.Mask, p.Mask);
+        Assert.Equal(p0.Index, p.Index);
+        Assert.True(p.HasColorTable);
+    }
+
+    /// <summary>Once declared, a second save changes the value where it is: the file does not grow again.</summary>
+    [Fact]
+    public void EnsureConstantPatchesOneAlreadyThere()
+    {
+        var mtrl = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "gear_top_a.mtrl"));
+        var once = TextureLoader.EnsureConstantValues(mtrl, VertexMovementScale, 1f).data;
+        var (twice, set) = TextureLoader.EnsureConstantValues(once, VertexMovementScale, 100f);
+        Assert.True(set);
+        Assert.Equal(once.Length, twice.Length);
+        Assert.Equal([100f], ConstantOf(twice, VertexMovementScale)!);
+    }
+
+    /// <summary>A constant declared too small for the values is not given a second entry beside it.</summary>
+    [Fact]
+    public void EnsureConstantLeavesOneDeclaredTooSmall()
+    {
+        var mtrl = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "gear_top_a.mtrl"));
+        var one = TextureLoader.EnsureConstantValues(mtrl, VertexMovementScale, 1f).data;
+        var (two, set) = TextureLoader.EnsureConstantValues(one, VertexMovementScale, 1f, 2f);
+        Assert.False(set);
+        Assert.Equal(one, two);
+    }
+
+    /// <summary>
     /// The rewrite against a REAL material, for the reason <see cref="MatchesARealMaterialFile"/> gives: its
     /// uvSetCount=2 / colorSetCount=1 / additionalDataSize=4 is a layout the builder never produces. The
     /// colour table after the string table must still be found where the writer looks for it.

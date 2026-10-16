@@ -266,6 +266,10 @@ public sealed class PartsPanel
     private bool previewDirtyBeforeGrab;
     private int previewPushesAtGrab;
 
+    /// <summary>The same for the move, turn or scale drag under way, for one that ends having moved nothing.</summary>
+    private bool previewDirtyBeforeMove;
+    private int previewPushesAtMove;
+
     /// <summary>
     /// A grab ended having moved nothing. The character is owed a preview only if it was before the grab, or if one was
     /// pushed mid-drag — that one showed cloth since brought back, and must be put right.
@@ -2238,6 +2242,8 @@ public sealed class PartsPanel
         {
             // A stroke still open is ended here, shown and saved as itself — not closed silently inside BeginMove.
             if (volume.StrokeOpen) EndBrushStroke(volume);
+            previewDirtyBeforeMove = previewDirty;
+            previewPushesAtMove = previewPushes;
             if (volume.BeginMove(seeds, moveAdjacent, moveFalloffMm / 1000f, alongSurface: movePolygons) == 0)
             {
                 status = Strings.Parts.MoveNothingFree;
@@ -2284,7 +2290,13 @@ public sealed class PartsPanel
                 return;
             }
         }
-        else volume.EndMove();
+        else if (!volume.EndMove())
+        {
+            // A tap on a handle: nothing moved, so no save, as for a grab — the handles are always showing, and a
+            // save on the character rewrites the whole model and redraws the game.
+            previewDirty = previewDirtyBeforeMove || previewPushes != previewPushesAtMove;
+            return;
+        }
         viewport.PositionOverride = volume.Positions();
         viewport.GeometryChanged();
         brushChangedAt = Environment.TickCount64;
@@ -2484,7 +2496,7 @@ public sealed class PartsPanel
                             && (movePolygons
                                     ? hoverPoly is { } underPoly && movePolys.Contains(underPoly)
                                     : viewport.Hovered is { } under && IsChosenPart(under));
-            scaleDrag.Update(growAbout, viewport.ModelToScreen, ImGui.GetMousePos(), overPart,
+            scaleDrag.Update(growAbout, viewport.ModelToScreen, viewport.ScreenRay, ImGui.GetMousePos(), overPart,
                              mouseAllowed: viewport.PointerOverModel, pressed: viewport.Pressed, down: viewport.Held,
                              background: false);
             if (scaleDrag.Capturing) ImGui.SetMouseCursor(ImGuiMouseCursor.ResizeAll);
@@ -3279,7 +3291,13 @@ public sealed class PartsPanel
                 var mats = MeshVolumeService.ApplyWindMaterials(
                     root, parts.Parts.Where(p => !IsSkin(p)).Select(p => p.Material), redirects);
                 materialsChanged = mats.Changed;
+                // Logged, not only shown: the status line is the one place a "won't sway" used to be said.
+                log.Information("[Proteus] brush: wind materials of {0}: changed {1} (upgraded {2}), missing {3}, " +
+                                "legacy {4}, not in mod {5}", rel, mats.Changed, mats.Upgraded, mats.Missing,
+                                mats.Legacy, mats.NotInMod);
                 if (mats.Changed > 0) status += "\n" + string.Format(Strings.Parts.WindMaterialsSetFmt, mats.Changed);
+                if (mats.Upgraded > 0) status += " " + string.Format(Strings.Parts.WindMaterialsUpgradedFmt, mats.Upgraded);
+                if (mats.Legacy > 0) status += "\n" + string.Format(Strings.Parts.WindMaterialsLegacyFmt, mats.Legacy);
                 if (mats.Missing > 0) status += "\n" + string.Format(Strings.Parts.WindMaterialsMissingFmt, mats.Missing);
                 if (mats.NotInMod > 0) status += "\n" + string.Format(Strings.Parts.WindMaterialsNotInModFmt, mats.NotInMod);
             }

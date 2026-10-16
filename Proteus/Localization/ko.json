@@ -2527,8 +2527,8 @@
     "message": "크기 조절",
     "description": ""
   },
-  "Parts.Tool.Scale.Tip": {
-    "message": "파츠를 선택한 뒤 그 위를 누르고 오른쪽으로 드래그하면 커지고,\n왼쪽으로 드래그하면 중심을 기준으로 작아집니다.",
+  "Parts.Tool.ScaleAxes.Tip": {
+    "message": "파츠를 선택한 뒤 중심의 핸들 하나를 드래그하면 그 축 방향으로 늘이거나 줄이고,\n파츠 위를 누르고 오른쪽이나 왼쪽으로 드래그하면\n전체를 고르게 키우거나 줄입니다.",
     "description": ""
   },
   "Parts.Rotate.Help": {
@@ -2539,12 +2539,12 @@
     "message": "캐릭터의 파츠를 클릭한 뒤 중심의 링 하나를 드래그합니다. Alt를 누르면 카메라를 움직일 수 있습니다. 회전은 손을 뗄 때 저장됩니다.",
     "description": ""
   },
-  "Parts.Scale.Help": {
-    "message": "파츠를 클릭해 선택한 뒤 그 위를 누르고 오른쪽으로 드래그하면 커지고 왼쪽으로 드래그하면 작아집니다. 다른 곳을 드래그하면 모델이 회전하고, Shift+드래그로 시점을 옮기며, 스크롤로 확대/축소합니다.",
+  "Parts.ScaleAxes.Help": {
+    "message": "파츠를 클릭해 선택한 뒤 핸들을 드래그하면 그 축 방향으로 늘이거나 줄이고, 파츠 위를 누르고 오른쪽으로 드래그하면 커지고 왼쪽으로 드래그하면 작아집니다. 다른 곳을 드래그하면 모델이 회전하고, Shift+드래그로 시점을 옮기며, 스크롤로 확대/축소합니다.",
     "description": ""
   },
-  "Parts.Scale.LiveHint": {
-    "message": "캐릭터의 파츠를 클릭한 뒤 그 위를 누르고 오른쪽으로 드래그하면 커지고 왼쪽으로 드래그하면 작아집니다. Alt를 누르면 카메라를 움직일 수 있습니다. 변경은 손을 뗄 때 저장됩니다.",
+  "Parts.ScaleAxes.LiveHint": {
+    "message": "캐릭터의 파츠를 클릭한 뒤 핸들을 드래그하면 그 축 방향으로 늘이거나 줄이고, 파츠 위를 누르고 오른쪽으로 드래그하면 커지고 왼쪽으로 드래그하면 작아집니다. Alt를 누르면 카메라를 움직일 수 있습니다. 변경은 손을 뗄 때 저장됩니다.",
     "description": ""
   },
   "Parts.Move.Help": {
@@ -2637,6 +2637,14 @@
   },
   "Parts.Wind.Materials.Set.Fmt": {
     "message": "바람이 이 장비를 움직일 수 있도록 재질 파일 {0}개를 설정했습니다.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Upgraded.Fmt": {
+    "message": "그중 {0}개를 바람이 없는 이전 캐릭터 셰이더에서 황금의 유산 셰이더로 업그레이드했습니다.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Legacy.Fmt": {
+    "message": "재질 파일 {0}개가 바람이 없는 이전 캐릭터 셰이더를 사용하며 업그레이드할 수 없어 흔들리지 않습니다.",
     "description": ""
   },
   "Parts.Wind.Materials.Missing.Fmt": {

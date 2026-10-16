@@ -2527,8 +2527,8 @@
     "message": "Escalar",
     "description": ""
   },
-  "Parts.Tool.Scale.Tip": {
-    "message": "Elige una pieza, pulsa sobre ella y arrastra a la derecha para agrandarla\no a la izquierda para encogerla sobre su centro.",
+  "Parts.Tool.ScaleAxes.Tip": {
+    "message": "Elige una pieza y arrastra uno de los tiradores de su centro para estirarla\na lo largo de ese eje, o pulsa sobre la pieza y arrastra a la derecha o a la\nizquierda para agrandarla o encogerla por igual.",
     "description": ""
   },
   "Parts.Rotate.Help": {
@@ -2539,12 +2539,12 @@
     "message": "Haz clic en una pieza de tu personaje y arrastra uno de los anillos de su centro. Mantén Alt para mover la cámara. Cada giro se guarda al soltar.",
     "description": ""
   },
-  "Parts.Scale.Help": {
-    "message": "Haz clic en una pieza para elegirla, pulsa sobre ella y arrastra a la derecha para agrandarla o a la izquierda para encogerla. Arrastra en cualquier otro sitio para girar el modelo, Mayús+arrastrar para mover la vista y la rueda para hacer zoom.",
+  "Parts.ScaleAxes.Help": {
+    "message": "Haz clic en una pieza para elegirla y arrastra un tirador para estirarla a lo largo de ese eje, o pulsa sobre la pieza y arrastra a la derecha para agrandarla o a la izquierda para encogerla. Arrastra en cualquier otro sitio para girar el modelo, Mayús+arrastrar para mover la vista y la rueda para hacer zoom.",
     "description": ""
   },
-  "Parts.Scale.LiveHint": {
-    "message": "Haz clic en una pieza de tu personaje, pulsa sobre ella y arrastra a la derecha para agrandarla o a la izquierda para encogerla. Mantén Alt para mover la cámara. Cada cambio se guarda al soltar.",
+  "Parts.ScaleAxes.LiveHint": {
+    "message": "Haz clic en una pieza de tu personaje y arrastra un tirador para estirarla a lo largo de ese eje, o pulsa sobre la pieza y arrastra a la derecha para agrandarla o a la izquierda para encogerla. Mantén Alt para mover la cámara. Cada cambio se guarda al soltar.",
     "description": ""
   },
   "Parts.Move.Help": {
@@ -2637,6 +2637,14 @@
   },
   "Parts.Wind.Materials.Set.Fmt": {
     "message": "Se ajustaron {0} archivo(s) de material para que el viento pueda mover esta prenda.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Upgraded.Fmt": {
+    "message": "Se actualizaron {0} de ellos del antiguo shader de personaje, que no tiene viento, al de Dawntrail.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Legacy.Fmt": {
+    "message": "{0} archivo(s) de material usan el antiguo shader de personaje, que no tiene viento, y no se pudieron actualizar, así que no se moverán.",
     "description": ""
   },
   "Parts.Wind.Materials.Missing.Fmt": {

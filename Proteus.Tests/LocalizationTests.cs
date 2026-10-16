@@ -352,6 +352,52 @@ public sealed class LocalizationTests
         ["zh"] = ["设置顶部的下拉列表", "部件下拉列表"],
     };
 
+    /// <summary>The Scale tool's three strings were re-keyed when it gained axis handles; every language has its own words.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-axis-scale-6")]
+    [Trait("Plan", "EDGE-axis-scale-15")]
+    public void ScaleAxes_strings_are_translated_not_copied(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (string key in new[] { "Parts.Tool.ScaleAxes.Tip", "Parts.ScaleAxes.Help", "Parts.ScaleAxes.LiveHint" })
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+        }
+    }
+
+    /// <summary>Every README's Scale row describes the axis handles, and none still describes only the even drag.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-axis-scale-6")]
+    public void Readme_scale_row_describes_axis_handles(string lang)
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+
+        var (old, now) = ReadmeScaleRow[lang];
+        Assert.DoesNotContain(old, readme);
+        Assert.Contains(now, readme);
+    }
+
+    /// <summary>Each README's Scale row: how it opened before the axis handles, and the handle phrase it carries now.</summary>
+    private static readonly Dictionary<string, (string Old, string New)> ReadmeScaleRow = new()
+    {
+        ["en"] = ("Grows or shrinks a part about its centre: press", "drag a coloured handle to stretch it along that axis"),
+        ["ja"] = ("パーツを中心のまわりに拡大・縮小します。押したまま", "色付きのハンドルをドラッグするとその軸方向に伸縮し"),
+        ["de"] = ("Vergrößert oder verkleinert ein Teil um seine Mitte: Drücke", "Ziehe an einem farbigen Griff, um es entlang dieser Achse zu strecken"),
+        ["es"] = ("Agranda o encoge una pieza alrededor de su centro: presiona", "arrastra un tirador de color para estirarla a lo largo de ese eje"),
+        ["fr"] = ("Agrandit ou rétrécit une pièce autour de son centre : appuyez", "faites glisser une poignée colorée pour l'étirer le long de cet axe"),
+        ["ko"] = ("부위를 중심을 기준으로 키우거나 줄입니다. 누른", "색깔 핸들을 끌면 그 축 방향으로 늘이거나 줄이고"),
+        ["ru"] = ("Увеличивает или уменьшает деталь относительно её центра: нажмите", "тяните цветную ручку, чтобы растянуть её вдоль этой оси"),
+        ["zh"] = ("让部件绕其中心放大或缩小：按住", "拖动彩色手柄沿该轴拉伸"),
+    };
+
     /// <summary>The Keep shape bullet's bold label in each README.</summary>
     private static readonly Dictionary<string, string> ReadmeKeepShape = new()
     {

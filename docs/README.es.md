@@ -90,7 +90,7 @@ Las herramientas:
 | Viento | Pinta cuánto mece el viento del juego la prenda, mostrado en rojo. Mantén Ctrl, o pon **Cantidad** a 0 %, para borrar. |
 | Mover | Arrastra una pieza, o unos pocos polígonos, con flechas: una flecha la mueve a lo largo de ese eje, un cuadrado por ese plano. Ver [Mover, girar y escalar](#mover-girar-y-escalar) más abajo. |
 | Girar | Gira una pieza alrededor de su centro: arrastra un anillo de color para girarla sobre ese eje, o el anillo exterior para girarla respecto a tu vista. |
-| Escalar | Agranda o encoge una pieza alrededor de su centro: presiona sobre ella y arrastra a la derecha para agrandarla, a la izquierda para encogerla. |
+| Escalar | Agranda, encoge o estira una pieza alrededor de su centro: arrastra un tirador de color para estirarla a lo largo de ese eje, o presiona sobre la pieza y arrastra a la derecha para agrandarla, a la izquierda para encogerla. |
 | Talla de cuerpo | Reajusta la prenda a otra talla de cuerpo, o a otro mod de cuerpo. Ver [Talla de cuerpo](#talla-de-cuerpo) más abajo. |
 
 ##### Uso del pincel

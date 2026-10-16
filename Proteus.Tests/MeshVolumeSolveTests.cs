@@ -16,7 +16,7 @@ namespace Proteus.Tests;
 /// needs a connected surface, so these build one — <see cref="ModelParts"/> is
 /// public and its members are init-only, so the solve can be fed directly without a file in the way.
 /// </summary>
-public class MeshVolumeSolveTests
+public partial class MeshVolumeSolveTests
 {
     private const float Spacing = 0.01f;    // 10 mm, so a 20 mm brush reaches a handful of nodes
 

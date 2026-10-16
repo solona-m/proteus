@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Numerics;
+using System.Text;
 using Proteus.Services;
 using Xunit;
 
@@ -296,6 +298,65 @@ public class MeshVolumeServiceTests
         public SecondSkinWriter.Vec3 DeltaAt(int vertex) { var d = Field(vertex); return new(d.X, d.Y, d.Z); }
         public SecondSkinWriter.Vec3 NormalAt(int vertex) => new(0f, 0f, 0f);
         public float WindAt(int vertex) => 0f;
+    }
+
+    /// <summary>Mesh <paramref name="mesh"/>'s vertex <paramref name="vertex"/>'s normal, as stored.</summary>
+    private static Vector3 StoredNormalAt(byte[] mdl, int mesh, int vertex)
+    {
+        var src = SecondSkinWriter.Parse(mdl);
+        int mo = src.MeshStart + mesh * 36;
+        var ne = src.Decls[mesh].First(e => e.Usage == SecondSkinWriter.UseNormal);
+        uint vbo = BitConverter.ToUInt32(mdl, mo + 20 + ne.Stream * 4);
+        byte stride = mdl[mo + 32 + ne.Stream];
+        Span<float> tmp = stackalloc float[4];
+        SecondSkinWriter.ReadTyped(mdl, src.Vb + (int)vbo + vertex * stride + ne.Offset, ne.Type, tmp);
+        return new Vector3(tmp[0], tmp[1], tmp[2]);
+    }
+
+    /// <summary>
+    /// A one-axis stretch's exact normals reach the file: every vertex the stretch moved is written with the normal the
+    /// solve gives it — the inverse-transpose, not the author's turned. A vertex the stretch left exactly where it was
+    /// (on the pivot's plane) keeps its stored bytes, as every unmoved vertex does.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-axis-scale-7")]
+    public void InflateWritesStretchedNormals()
+    {
+        const int n = 4;
+        var tilt = Vector3.Normalize(new Vector3(1f, 1f, 0f));
+        var along = Vector3.Normalize(new Vector3(1f, -1f, 0f));
+        var pos = new Vector3[n * n];
+        for (int i = 0; i < n; i++)
+            for (int j = 0; j < n; j++)
+                pos[i * n + j] = new Vector3(0.5f, 0.2f, 0.5f) + along * (i * 0.01f) + Vector3.UnitZ * (j * 0.01f);
+        var tris = new List<int>();
+        for (int i = 0; i + 1 < n; i++)
+            for (int j = 0; j + 1 < n; j++)
+            {
+                int a = i * n + j, b = (i + 1) * n + j, c = i * n + j + 1, d = (i + 1) * n + j + 1;
+                tris.AddRange([a, b, d, a, d, c]);
+            }
+        var mdl = SyntheticModel.BuildSurface([], new SyntheticModel.SurfaceMesh(
+            "/mt_test.mtrl", pos, [.. Enumerable.Repeat(tilt, pos.Length)], new Vector2[pos.Length],
+            new (string, float)[]?[pos.Length], [(0u, tris.ToArray())]));
+        var read = ModelPartReader.Read(mdl)!;
+        var solve = new MeshVolumeSolve(read);
+
+        var pivot = new Vector3(0.515f, 0.1853f, 0.515f);       // on no vertex's plane: every vertex moves
+        Assert.True(solve.BeginMove(read.Parts.First(p => p.Island < 0).Triangles, adjacent: false, falloffRadius: 0f) > 0);
+        solve.TransformTo(Proteus.Gui.PartScaleDrag.Build(pivot, new Vector3(1f, 2f, 1f)));
+        solve.EndMove();
+
+        var written = MeshVolumeService.Inflate(mdl, solve).Model;
+        var expected = Vector3.Normalize(new Vector3(1f, 0.5f, 0f));
+        for (int v = 0; v < pos.Length; v++)
+        {
+            Assert.NotEqual(0f, solve.DeltaAt(v).Y);
+            var stored = StoredNormalAt(written, 0, v);
+            var solved = solve.NormalAt(v);
+            Assert.True(Vector3.Distance(new Vector3(solved.X, solved.Y, solved.Z), stored) < 2e-3f, $"vertex {v}: wrote {stored}");
+            Assert.True(Vector3.Distance(expected, Vector3.Normalize(stored)) < 2e-3f, $"vertex {v}: wrote {stored}");
+        }
     }
 
     /// <summary>Mesh <paramref name="mesh"/>'s vertex <paramref name="vertex"/>, as stored.</summary>
@@ -673,6 +734,84 @@ public class MeshVolumeServiceTests
         var written = MeshVolumeService.Inflate(mdl, solve);
         Assert.Null(written.WindChannel);
         Assert.Equal(mdl.Length, written.Model.Length);
+    }
+
+    /// <summary>
+    /// Saving wind moves a legacy material to the character shader — the legacy one has no wind — and gives it the
+    /// movement constants it lacks, backing the file up so Undo saved changes puts it back. A material on any other
+    /// shader is left as it was and counted as missing.
+    /// </summary>
+    [Theory]
+    [InlineData("characterlegacy.shpk", true)]
+    [InlineData("charactertattoo.shpk", false)]
+    public void WindMaterialsGainTheMovementConstantsOnlyOnShadersThatReadThem(string shader, bool added)
+    {
+        string root = Directory.CreateTempSubdirectory("proteus-wind-mtrl").FullName;
+        try
+        {
+            var mtrl = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "gear_top_a.mtrl"));
+            // Same length as the fixture's own shader name, so only the name changes.
+            int at = mtrl.AsSpan().IndexOf(Encoding.ASCII.GetBytes("characterlegacy.shpk"));
+            Assert.True(at >= 0, "the fixture's shader name was not found");
+            Encoding.ASCII.GetBytes(shader).CopyTo(mtrl, at);
+
+            const string rel = "spring dress/chara/equipment/e0141/material/v0001/mt_c0201e0141_top_b.mtrl";
+            string path = Path.Combine(root, rel);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllBytes(path, mtrl);
+
+            var outcome = MeshVolumeService.ApplyWindMaterials(root, ["/mt_c0201e0141_top_b.mtrl"],
+            [
+                new PenumbraModMeta.Redirect("chara/equipment/e0141/material/v0001/mt_c0201e0141_top_b.mtrl",
+                                             rel.Replace('/', '\\'), ""),
+            ]);
+
+            Assert.Equal(added ? 1 : 0, outcome.Changed);
+            Assert.Equal(added ? 1 : 0, outcome.Upgraded);
+            Assert.Equal(added ? 0 : 1, outcome.Missing);
+            Assert.Equal(0, outcome.Legacy);
+            var after = File.ReadAllBytes(path);
+            Assert.Equal(added ? "character.shpk" : shader, CharacterShaderUpgrade.ShaderOf(after));
+            var (_, scaleThere) = TextureLoader.PatchConstantValues(after, MeshVolumeService.VertexMovementScaleId, 0f);
+            var (_, maxThere) = TextureLoader.PatchConstantValues(after, MeshVolumeService.VertexMovementMaxLengthId, 0f);
+            Assert.Equal(added, scaleThere);
+            Assert.Equal(added, maxThere);
+            Assert.Equal(added, MeshVolumeService.IsPatched(root, rel));
+            if (!added) Assert.Equal(mtrl, after);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// A legacy material that cannot be upgraded (its colour table is pre-Dawntrail) is counted as legacy — it will
+    /// not sway — rather than reported as set.
+    /// </summary>
+    [Fact]
+    public void AWindMaterialThatCannotBeUpgradedIsSaidToBeLegacy()
+    {
+        string root = Directory.CreateTempSubdirectory("proteus-wind-legacy").FullName;
+        try
+        {
+            var mtrl = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "gear_top_a.mtrl"));
+            int flagsAt = GearMaterialWriter.ColorTableStart(mtrl) - mtrl[15];
+            BitConverter.TryWriteBytes(mtrl.AsSpan(flagsAt), BitConverter.ToUInt32(mtrl, flagsAt) & ~0xFF0u);
+
+            const string rel = "mt_c0201e0141_top_b.mtrl";
+            File.WriteAllBytes(Path.Combine(root, rel), mtrl);
+            var outcome = MeshVolumeService.ApplyWindMaterials(root, ["/mt_c0201e0141_top_b.mtrl"],
+                [new PenumbraModMeta.Redirect("chara/equipment/e0141/material/v0001/mt_c0201e0141_top_b.mtrl", rel, "")]);
+
+            Assert.Equal(1, outcome.Legacy);
+            Assert.Equal(0, outcome.Upgraded);
+            Assert.Equal("characterlegacy.shpk", CharacterShaderUpgrade.ShaderOf(File.ReadAllBytes(Path.Combine(root, rel))));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
     }
 
     /// <summary>Nothing painted, nothing saved — and the refusal is not an error the user has to clear.</summary>
