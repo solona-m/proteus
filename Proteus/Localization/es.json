@@ -2639,6 +2639,14 @@
     "message": "Se ajustaron {0} archivo(s) de material para que el viento pueda mover esta prenda.",
     "description": ""
   },
+  "Parts.Wind.Materials.Upgraded.Fmt": {
+    "message": "Se actualizaron {0} de ellos del antiguo shader de personaje, que no tiene viento, al de Dawntrail.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Legacy.Fmt": {
+    "message": "{0} archivo(s) de material usan el antiguo shader de personaje, que no tiene viento, y no se pudieron actualizar, así que no se moverán.",
+    "description": ""
+  },
   "Parts.Wind.Materials.Missing.Fmt": {
     "message": "{0} archivo(s) de material no tienen ajustes de movimiento por viento que cambiar, así que puede que no se muevan.",
     "description": ""

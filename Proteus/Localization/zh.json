@@ -2639,6 +2639,14 @@
     "message": "已设置 {0} 个材质文件，让风可以吹动这件装备。",
     "description": ""
   },
+  "Parts.Wind.Materials.Upgraded.Fmt": {
+    "message": "其中 {0} 个已从不支持风的旧角色着色器升级为金曦之遗辉的着色器。",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Legacy.Fmt": {
+    "message": "{0} 个材质文件使用不支持风的旧角色着色器，且无法升级，因此不会摆动。",
+    "description": ""
+  },
   "Parts.Wind.Materials.Missing.Fmt": {
     "message": "{0} 个材质文件没有可修改的风动设置，因此可能不会摆动。",
     "description": ""

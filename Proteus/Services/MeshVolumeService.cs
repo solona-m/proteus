@@ -455,10 +455,26 @@ internal static class MeshVolumeService
 
     public const float WindMovementScale = 100f, WindMovementMaxLength = 1f;
 
+    /// <summary>
+    /// The shaders that move a vertex by its wind and whose material parameters include both movement constants
+    /// (read from the game's own shader packages, each with a default of 1). Only on these is a missing constant
+    /// added. <c>characterlegacy.shpk</c> declares the constants too but has no wind at all: its materials are
+    /// upgraded instead (<see cref="CharacterShaderUpgrade"/>).
+    /// </summary>
+    private static readonly HashSet<string> WindShaders = new(StringComparer.OrdinalIgnoreCase)
+    {
+        CharacterShaderUpgrade.Character,
+    };
+
     /// <param name="Changed">Material files rewritten.</param>
-    /// <param name="Missing">Material files that do not carry the movement constants at all, left unchanged.</param>
+    /// <param name="Missing">Material files that do not carry the movement constants and could not be given them,
+    /// left unchanged.</param>
     /// <param name="NotInMod">Materials the model uses that this mod does not ship, which only the game has.</param>
-    public sealed record MaterialOutcome(int Changed, int Missing, int NotInMod);
+    /// <param name="Upgraded">Of <paramref name="Changed"/>, files moved from the legacy character shader to
+    /// Dawntrail's, which is the only one with wind.</param>
+    /// <param name="Legacy">Files still on the legacy character shader, which could not be upgraded: they will not
+    /// sway.</param>
+    public sealed record MaterialOutcome(int Changed, int Missing, int NotInMod, int Upgraded = 0, int Legacy = 0);
 
     /// <summary>
     /// Set the vertex movement constants on every material the painted wind is drawn with: the wind channel alone
@@ -466,9 +482,13 @@ internal static class MeshVolumeService
     /// <para/>
     /// Found by NAME among the mod's own redirects — every variant and option that ships it — because the model
     /// only names <c>/mt_….mtrl</c> and the variant folder is the IMC's to choose. Each file is backed up and
-    /// recorded like the models, so Undo saved changes puts it back too. Only constants the material already
-    /// declares are changed: adding one means rebuilding the file's layout, and one that is absent falls back to the
-    /// shader's own default rather than 0.
+    /// recorded like the models, so Undo saved changes puts it back too.
+    /// <para/>
+    /// A material on the legacy character shader is first upgraded to Dawntrail's (<see cref="CharacterShaderUpgrade"/>):
+    /// the legacy shader has no wind, so painted wind on Iris — like most pre-Dawntrail mods — moved nothing whatever
+    /// its constants said. A constant the material does not declare is then ADDED on <see cref="WindShaders"/>. Left
+    /// out, it falls back to the shader's default of 1, a hundredth of <see cref="WindMovementScale"/>, and the 5% the
+    /// brush paints by default sways too little to see.
     /// </summary>
     /// <param name="materialNames">The cloth materials the brushed model uses, as the model names them.</param>
     public static MaterialOutcome ApplyWindMaterials(string modRoot, IEnumerable<string> materialNames,
@@ -480,7 +500,7 @@ internal static class MeshVolumeService
     private static MaterialOutcome ApplyWindMaterialsLocked(string modRoot, IEnumerable<string> materialNames,
                                                             IReadOnlyList<PenumbraModMeta.Redirect> redirects)
     {
-        int changed = 0, missing = 0, notInMod = 0;
+        int changed = 0, missing = 0, notInMod = 0, upgraded = 0, legacy = 0;
         MeshVolumeRecord? record = null;
 
         foreach (var name in materialNames.Distinct(StringComparer.OrdinalIgnoreCase))
@@ -499,10 +519,22 @@ internal static class MeshVolumeService
                 var path = Path.Combine(modRoot, Native(rel));
                 if (!File.Exists(path)) continue;
                 var before = File.ReadAllBytes(path);
-                var (withScale, hasScale) = TextureLoader.PatchConstantValues(before, VertexMovementScaleId, WindMovementScale);
-                var (after, hasMax) = TextureLoader.PatchConstantValues(withScale, VertexMovementMaxLengthId, WindMovementMaxLength);
+                var start = before;
+                bool isLegacy = string.Equals(CharacterShaderUpgrade.ShaderOf(before), CharacterShaderUpgrade.Legacy,
+                                              StringComparison.OrdinalIgnoreCase);
+                if (isLegacy && CharacterShaderUpgrade.Upgrade(before) is { } up) start = up;
+                bool upgradedHere = !ReferenceEquals(start, before);
+                if (isLegacy && !upgradedHere) legacy++;
+
+                bool canAdd = WindShaders.Contains(CharacterShaderUpgrade.ShaderOf(start) ?? "");
+                (byte[], bool) Set(byte[] mtrl, uint id, float value) => canAdd
+                    ? TextureLoader.EnsureConstantValues(mtrl, id, value)
+                    : TextureLoader.PatchConstantValues(mtrl, id, value);
+                var (withScale, hasScale) = Set(start, VertexMovementScaleId, WindMovementScale);
+                var (after, hasMax) = Set(withScale, VertexMovementMaxLengthId, WindMovementMaxLength);
                 if (!hasScale || !hasMax) missing++;
                 if (after.AsSpan().SequenceEqual(before)) continue;
+                if (upgradedHere) upgraded++;
 
                 Backup(modRoot, rel);
                 PenumbraModMeta.AtomicWrite(path, after);
@@ -514,7 +546,7 @@ internal static class MeshVolumeService
         }
 
         if (record != null) WriteRecord(modRoot, record);
-        return new MaterialOutcome(changed, missing, notInMod);
+        return new MaterialOutcome(changed, missing, notInMod, upgraded, legacy);
     }
 
     // ── the record, the backup and the way back ─────────────────────────────

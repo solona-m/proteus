@@ -2639,6 +2639,14 @@
     "message": "Set {0} material file(s) so the wind can move this garment.",
     "description": ""
   },
+  "Parts.Wind.Materials.Upgraded.Fmt": {
+    "message": "Upgraded {0} of them from the old character shader, which has no wind, to Dawntrail's.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Legacy.Fmt": {
+    "message": "{0} material file(s) use the old character shader, which has no wind, and couldn't be upgraded, so they won't sway.",
+    "description": ""
+  },
   "Parts.Wind.Materials.Missing.Fmt": {
     "message": "{0} material file(s) have no wind movement settings to change, so they may not sway.",
     "description": ""

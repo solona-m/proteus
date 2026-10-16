@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Numerics;
+using System.Text;
 using Proteus.Services;
 using Xunit;
 
@@ -673,6 +675,84 @@ public class MeshVolumeServiceTests
         var written = MeshVolumeService.Inflate(mdl, solve);
         Assert.Null(written.WindChannel);
         Assert.Equal(mdl.Length, written.Model.Length);
+    }
+
+    /// <summary>
+    /// Saving wind moves a legacy material to the character shader — the legacy one has no wind — and gives it the
+    /// movement constants it lacks, backing the file up so Undo saved changes puts it back. A material on any other
+    /// shader is left as it was and counted as missing.
+    /// </summary>
+    [Theory]
+    [InlineData("characterlegacy.shpk", true)]
+    [InlineData("charactertattoo.shpk", false)]
+    public void WindMaterialsGainTheMovementConstantsOnlyOnShadersThatReadThem(string shader, bool added)
+    {
+        string root = Directory.CreateTempSubdirectory("proteus-wind-mtrl").FullName;
+        try
+        {
+            var mtrl = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "gear_top_a.mtrl"));
+            // Same length as the fixture's own shader name, so only the name changes.
+            int at = mtrl.AsSpan().IndexOf(Encoding.ASCII.GetBytes("characterlegacy.shpk"));
+            Assert.True(at >= 0, "the fixture's shader name was not found");
+            Encoding.ASCII.GetBytes(shader).CopyTo(mtrl, at);
+
+            const string rel = "spring dress/chara/equipment/e0141/material/v0001/mt_c0201e0141_top_b.mtrl";
+            string path = Path.Combine(root, rel);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllBytes(path, mtrl);
+
+            var outcome = MeshVolumeService.ApplyWindMaterials(root, ["/mt_c0201e0141_top_b.mtrl"],
+            [
+                new PenumbraModMeta.Redirect("chara/equipment/e0141/material/v0001/mt_c0201e0141_top_b.mtrl",
+                                             rel.Replace('/', '\\'), ""),
+            ]);
+
+            Assert.Equal(added ? 1 : 0, outcome.Changed);
+            Assert.Equal(added ? 1 : 0, outcome.Upgraded);
+            Assert.Equal(added ? 0 : 1, outcome.Missing);
+            Assert.Equal(0, outcome.Legacy);
+            var after = File.ReadAllBytes(path);
+            Assert.Equal(added ? "character.shpk" : shader, CharacterShaderUpgrade.ShaderOf(after));
+            var (_, scaleThere) = TextureLoader.PatchConstantValues(after, MeshVolumeService.VertexMovementScaleId, 0f);
+            var (_, maxThere) = TextureLoader.PatchConstantValues(after, MeshVolumeService.VertexMovementMaxLengthId, 0f);
+            Assert.Equal(added, scaleThere);
+            Assert.Equal(added, maxThere);
+            Assert.Equal(added, MeshVolumeService.IsPatched(root, rel));
+            if (!added) Assert.Equal(mtrl, after);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// A legacy material that cannot be upgraded (its colour table is pre-Dawntrail) is counted as legacy — it will
+    /// not sway — rather than reported as set.
+    /// </summary>
+    [Fact]
+    public void AWindMaterialThatCannotBeUpgradedIsSaidToBeLegacy()
+    {
+        string root = Directory.CreateTempSubdirectory("proteus-wind-legacy").FullName;
+        try
+        {
+            var mtrl = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "gear_top_a.mtrl"));
+            int flagsAt = GearMaterialWriter.ColorTableStart(mtrl) - mtrl[15];
+            BitConverter.TryWriteBytes(mtrl.AsSpan(flagsAt), BitConverter.ToUInt32(mtrl, flagsAt) & ~0xFF0u);
+
+            const string rel = "mt_c0201e0141_top_b.mtrl";
+            File.WriteAllBytes(Path.Combine(root, rel), mtrl);
+            var outcome = MeshVolumeService.ApplyWindMaterials(root, ["/mt_c0201e0141_top_b.mtrl"],
+                [new PenumbraModMeta.Redirect("chara/equipment/e0141/material/v0001/mt_c0201e0141_top_b.mtrl", rel, "")]);
+
+            Assert.Equal(1, outcome.Legacy);
+            Assert.Equal(0, outcome.Upgraded);
+            Assert.Equal("characterlegacy.shpk", CharacterShaderUpgrade.ShaderOf(File.ReadAllBytes(Path.Combine(root, rel))));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
     }
 
     /// <summary>Nothing painted, nothing saved — and the refusal is not an error the user has to clear.</summary>

@@ -2639,6 +2639,14 @@
     "message": "{0} fichier(s) de matériau réglé(s) pour que le vent puisse faire bouger ce vêtement.",
     "description": ""
   },
+  "Parts.Wind.Materials.Upgraded.Fmt": {
+    "message": "{0} d'entre eux sont passés de l'ancien shader de personnage, sans vent, à celui de Dawntrail.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Legacy.Fmt": {
+    "message": "{0} fichier(s) de matériau utilisent l'ancien shader de personnage, sans vent, et n'ont pas pu être mis à niveau : ils ne bougeront pas.",
+    "description": ""
+  },
   "Parts.Wind.Materials.Missing.Fmt": {
     "message": "{0} fichier(s) de matériau n'ont aucun réglage de mouvement au vent à modifier ; ils risquent de ne pas bouger.",
     "description": ""
