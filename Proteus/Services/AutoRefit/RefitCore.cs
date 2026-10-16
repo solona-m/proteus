@@ -1026,7 +1026,8 @@ internal static partial class RefitCore
                                  replaceSkin: across, acrossBodies: across, clearBody: skin.ClearBody,
                                  cutHidden: skin.CutHidden, keepShape: pieces, log: log, warn: warn, trace: trace,
                                  tuckSlot: TuckSlot(skin.TuckUnderCloth, primary),
-                                 deepClear: DeepClearFor(skin.DeepClear, primary));
+                                 deepClear: DeepClearFor(skin.DeepClear, primary),
+                                 keepStandoff: KeepStandoffFor(skin.KeepStandoff, primary));
     }
 
     /// <summary>
@@ -1041,6 +1042,13 @@ internal static partial class RefitCore
     /// moves cloth up to 30 mm, and a Studio refit writes into the modder's own mod.
     /// </summary>
     internal static bool DeepClearFor(bool rule, string garmentSlot) => rule && garmentSlot == "_top";
+
+    /// <summary>
+    /// Whether a top's cloth the refit carried further off the new chest than its author put it comes back toward the
+    /// author's standoff (see <see cref="BodyRetarget.KeepStandoff"/>): the game's own top in the automatic refit. Never
+    /// the Studio's — it moves a modder's cloth toward the body.
+    /// </summary>
+    internal static bool KeepStandoffFor(bool rule, string garmentSlot) => rule && garmentSlot == "_top";
 
     /// <summary>
     /// The automatic refit of a garment worn on an accessory slot — a jacket on a necklace — over the body part(s) its

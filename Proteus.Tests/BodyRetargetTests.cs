@@ -545,7 +545,7 @@ public class BodyRetargetTests
                                         trace: (stage, delta) => { stages.Add(stage); last = delta; });
 
         Assert.Equal(["transfer", "knit", "layer-knit", "lay", "follow", "push", "unfold", "relax", "face-settle",
-                      "rim-lift", "layer-order"], stages);
+                      "rim-lift", "standoff", "layer-order"], stages);
         Assert.True(plain.WorstMove > 0f, "the garment should have moved");
         Assert.Equal(plain.Pushed, traced.Pushed);
         Assert.Equal(plain.Folded, traced.Folded);
