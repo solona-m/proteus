@@ -55,9 +55,11 @@ internal static class SkinTuckSheet
                                                     string armBone = "j_ude_a_l")
         => Sheet(material, from, to, (r, _) => z(r), arm, armShare, armBone);
 
+    /// <param name="shaped">Give the vertices their own surface's normals; otherwise every one faces +Z, as the sheets the
+    /// goldens were pinned on do.</param>
     private static SyntheticModel.SurfaceMesh Sheet(string material, int from, int to, Func<int, int, float> z,
                                                     Func<int, bool>? arm = null, float armShare = 1f,
-                                                    string armBone = "j_ude_a_l")
+                                                    string armBone = "j_ude_a_l", bool shaped = false)
     {
         var pos = new List<Vector3>();
         var uv = new List<Vector2>();
@@ -69,8 +71,22 @@ internal static class SkinTuckSheet
                 uv.Add(new Vector2((float)c / (Columns - 1), (float)r / (Rows - 1)));
                 w.Add(Bones(r, arm, armShare, armBone));
             }
-        return new SyntheticModel.SurfaceMesh(material, [.. pos], [.. pos.Select(_ => Vector3.UnitZ)], [.. uv], [.. w],
+        var normals = shaped ? Normals(pos, Grid(from, to, from)) : pos.Select(_ => Vector3.UnitZ).ToArray();
+        return new SyntheticModel.SurfaceMesh(material, [.. pos], normals, [.. uv], [.. w],
                                               [(0u, Grid(from, to, from))]);
+    }
+
+    /// <summary>Area-weighted vertex normals of a triangle list.</summary>
+    private static Vector3[] Normals(IReadOnlyList<Vector3> pos, int[] tris)
+    {
+        var n = new Vector3[pos.Count];
+        for (int t = 0; t + 2 < tris.Length; t += 3)
+        {
+            var f = Vector3.Cross(pos[tris[t + 1]] - pos[tris[t]], pos[tris[t + 2]] - pos[tris[t]]);
+            n[tris[t]] += f; n[tris[t + 1]] += f; n[tris[t + 2]] += f;
+        }
+        for (int i = 0; i < n.Length; i++) n[i] = n[i].LengthSquared() > 0 ? Vector3.Normalize(n[i]) : Vector3.UnitZ;
+        return n;
     }
 
     /// <summary>The body: the whole grid, flat at z = 0.</summary>
@@ -80,37 +96,39 @@ internal static class SkinTuckSheet
     /// <param name="halvesAt">Two untagged submeshes split at this row — below it first, or last when
     /// <paramref name="reversed"/>: the same skin in another order.</param>
     /// <param name="armShare">How much of the <paramref name="arm"/> rows' weight is on the arm; the spine has the rest.</param>
-    /// <param name="armBone">The arm's bone.</param>
+    /// <param name="armBone">The arm's bone — or a breast's, <c>j_mune_l</c>, for a bust.</param>
+    /// <param name="z">The skin's height off the plane by row and column; flat when null.</param>
     internal static byte[] Body(Func<int, bool>? arm = null, int? splitAt = null, int? hiddenBelow = null,
                                 bool piercing = false, int? halvesAt = null, bool reversed = false, float armShare = 1f,
-                                string armBone = "j_ude_a_l")
+                                string armBone = "j_ude_a_l", Func<int, int, float>? z = null)
     {
-        if (armShare < 1f || armBone != "j_ude_a_l")
-            return SyntheticModel.BuildSurface([], Sheet(Skin, 0, Rows - 1, _ => 0f, arm, armShare, armBone));
+        var height = z ?? ((_, _) => 0f);
+        SyntheticModel.SurfaceMesh Skin_(int from, int to) => Sheet(Skin, from, to, height, arm, armShare, armBone,
+                                                                    shaped: z != null);
         var meshes = new List<SyntheticModel.SurfaceMesh>();
         var attrs = new List<string>();
         if (halvesAt is { } half)
         {
-            var whole = Sheet(Skin, 0, Rows - 1, _ => 0f, arm);
+            var whole = Skin_(0, Rows - 1);
             (uint, int[]) low = (0u, Grid(0, half)), high = (0u, Grid(half, Rows - 1));
             meshes.Add(whole with { Submeshes = reversed ? [high, low] : [low, high] });
         }
         else if (splitAt is { } split)
         {
-            meshes.Add(Sheet(Skin, split, Rows - 1, _ => 0f, arm));
-            meshes.Add(Sheet(Skin, 0, split, _ => 0f, arm));
+            meshes.Add(Skin_(split, Rows - 1));
+            meshes.Add(Skin_(0, split));
         }
         else if (hiddenBelow is { } hidden)
         {
             attrs.Add("atr_tv_b");
-            var whole = Sheet(Skin, 0, Rows - 1, _ => 0f, arm);
+            var whole = Skin_(0, Rows - 1);
             meshes.Add(whole with
             {
                 Submeshes = [(0u, Grid(hidden, Rows - 1)), (1u, Grid(0, hidden))],
             });
         }
         else
-            meshes.Add(Sheet(Skin, 0, Rows - 1, _ => 0f, arm));
+            meshes.Add(Skin_(0, Rows - 1));
 
         if (piercing)
         {
@@ -155,6 +173,53 @@ internal static class SkinTuckSheet
         meshes.Add(cloth);
         if (extra is { } layer) meshes.Add(Sheet(Cloth, layer.From, layer.To, _ => layer.Z));
         return SyntheticModel.BuildSurface(clothAttr != null ? [clothAttr] : [], [.. meshes]);
+    }
+
+    /// <summary>The breast's rows: a ridge across the sheet over rows 3-8, rigged to the left breast.</summary>
+    internal static bool BreastRow(int row) => row is >= 3 and <= 8;
+
+    /// <summary>The breast ridge's height over row <paramref name="row"/> at its full <paramref name="height"/>: zero at
+    /// rows 2 and 9, smooth between.</summary>
+    internal static float Ridge(int row, float height)
+        => row is > 2 and < 9 ? height * MathF.Pow(MathF.Sin(MathF.PI * (row - 2) / 7f), 2) : 0f;
+
+    /// <summary>A breast-rigged body whose ridge stands <paramref name="height"/> off the plane (0: the flat one).</summary>
+    internal static byte[] Bust(float height, Func<int, bool>? breast = null)
+        => Body(arm: breast ?? BreastRow, armBone: "j_mune_l",
+                z: height == 0f ? null : (r, _) => Ridge(r, height));
+
+    /// <summary>A body that grew: the chest pair from <paramref name="source"/> to <paramref name="target"/>, the same
+    /// grid, each vertex to its own — the garment authored on the first refitted onto the second.</summary>
+    internal static BodyRetarget.SlotPair Grown(byte[] source, byte[] target, string slot = "_top")
+    {
+        var s = ModelPartReader.Read(source)!;
+        var t = ModelPartReader.Read(target)!;
+        Assert.True(IdentityCorrespondence.TryBuild(s, t, slot, out var built, out string refusal), refusal);
+        return new BodyRetarget.SlotPair(slot, built!, t, target, source);
+    }
+
+    /// <summary>
+    /// The top with its cloth, below its own skin, buried <paramref name="depth"/> inside the flat body it was authored on
+    /// — the way the game buries a top's cloth in its own body — and 3 mm over its own skin above.
+    /// </summary>
+    internal static byte[] BuriedTop(float depth) => Top(r => r < Edge ? -depth : 0.003f);
+
+    /// <summary>
+    /// A top whose own skin is two triangles, the corners of rows <see cref="Edge"/> to <see cref="Rows"/> - 1 — a game
+    /// top's coarse skin — with its cloth over the rows below only.
+    /// </summary>
+    internal static byte[] CoarseSkinTop(float clothZ = 0.015f)
+    {
+        Vector3[] corners =
+        [
+            new(X(0), Y(Edge), 0f), new(X(Columns - 1), Y(Edge), 0f),
+            new(X(0), Y(Rows - 1), 0f), new(X(Columns - 1), Y(Rows - 1), 0f),
+        ];
+        var skin = new SyntheticModel.SurfaceMesh(Skin, corners, [.. corners.Select(_ => Vector3.UnitZ)],
+                                                  [.. corners.Select(_ => Vector2.Zero)],
+                                                  [.. corners.Select(_ => ((string, float)[]?)[("j_sebo_c", 1f)])],
+                                                  [(0u, [0, 1, 3, 0, 3, 2])]);
+        return SyntheticModel.BuildSurface([], skin, Sheet(Cloth, 2, Edge - 1, _ => clothZ));
     }
 
     /// <summary>The loose sheet: cloth 15 mm off over the rows from <paramref name="looseFrom"/> up, 1 mm off below.</summary>

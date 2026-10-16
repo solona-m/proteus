@@ -86,6 +86,163 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
         Pinned(plan.Model, GameTopUntucked);
     }
 
+    // ── a top whose cloth is buried 12 mm in a body that grew a 20 mm bust under it: where the deep clear would act ──
+    // Pinned on 72dde80 (change (a)'s final commit), before any of the deep clear's production code.
+
+    private static (byte[] Bytes, ModelParts Garment, BodyRetarget.SlotPair Pair, IReadOnlyList<IReadOnlyCollection<int>> Pieces) GrownBust()
+    {
+        var bytes = SkinTuckSheet.BuriedTop(0.012f);
+        var garment = ModelPartReader.Read(bytes)!;
+        return (bytes, garment, SkinTuckSheet.Grown(SkinTuckSheet.Bust(0f), SkinTuckSheet.Bust(0.02f)),
+                RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-neckline-large-bust-6")]
+    [Trait("Plan", "EDGE-neckline-large-bust-9")]
+    public void Studio_cut_on_a_grown_bust_plans_as_before()
+    {
+        var (bytes, garment, pair, pieces) = GrownBust();
+        var plan = BodyRetarget.Plan(garment, bytes, [pair], "_top", held: NoneHeld, replaceSkin: true, acrossBodies: true,
+                                     clearBody: false, cutHidden: true, keepShape: pieces);
+        Pinned(plan.Model, GrownStudioCut);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-neckline-large-bust-6")]
+    [Trait("Plan", "EDGE-neckline-large-bust-9")]
+    public void A_mods_garment_on_a_grown_bust_plans_as_before()
+    {
+        var (bytes, garment, pair, _) = GrownBust();
+        var plan = RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: false, out _);
+        Pinned(plan.Model, GrownModGarment);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-neckline-large-bust-6")]
+    [Trait("Plan", "EDGE-neckline-large-bust-9")]
+    public void An_accessory_over_a_grown_bust_plans_as_before()
+    {
+        var (bytes, garment, pair, _) = GrownBust();
+        var plan = RefitCore.PlanAccessoryRefit(garment, bytes, [pair], "_top", across: true, out _);
+        Pinned(plan.Model, GrownAccessory);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-neckline-large-bust-6")]
+    [Trait("Plan", "EDGE-neckline-large-bust-9")]
+    public void KeepEnds_on_a_grown_bust_plans_as_before()
+    {
+        // KeepEnds' call, a glove reaching up the arm with the chest as its limb, the body cleared as the Studio may ask.
+        var (bytes, garment, pair, pieces) = GrownBust();
+        var plan = BodyRetarget.Plan(garment, bytes, [pair], "_glv", held: NoneHeld, replaceSkin: true, acrossBodies: true,
+                                     clearBody: true, cutHidden: true, keepShape: pieces, swapSlot: "_top");
+        Pinned(plan.Model, GrownKeepEnds);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-neckline-large-bust-6")]
+    [Trait("Plan", "EDGE-neckline-large-bust-9")]
+    public void A_size_set_plan_on_a_grown_bust_plans_as_before()
+    {
+        // The every-size refit's call (SizeSetRefit): cut, never cleared.
+        var (bytes, garment, pair, _) = GrownBust();
+        var plan = BodyRetarget.Plan(garment, bytes, [pair], "_top", held: new HashSet<int>(), replaceSkin: true,
+                                     acrossBodies: true, clearBody: false, cutHidden: true, keepShape: []);
+        Pinned(plan.Model, GrownSizeSet);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-neckline-large-bust-6")]
+    [Trait("Plan", "EDGE-neckline-large-bust-24")]
+    public void Studio_cut_and_clear_on_a_grown_bust_never_deep_clears()
+    {
+        // The Body size tool's top with "Cut hidden skin" and "Clear body": it tucks, and never moves the cloth further.
+        var (bytes, garment, pair, pieces) = GrownBust();
+        BodyRetarget.Planned Studio() => BodyRetarget.Plan(garment, bytes, [pair], "_top", held: NoneHeld, replaceSkin: true,
+                                                           acrossBodies: true, clearBody: true, cutHidden: true,
+                                                           keepShape: pieces, tuckSlot: RefitCore.TuckSlot(true, "_top"));
+        Pinned(BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoTuck: true), Studio).Model, GrownStudioCutAndClear);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-neckline-large-bust-6")]
+    [Trait("Plan", "EDGE-neckline-large-bust-22")]
+    public void A_game_top_on_a_grown_bust_before_the_tuck_plans_as_before()
+    {
+        var (bytes, garment, pair, _) = GrownBust();
+        var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoTuck: true),
+            () => RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true, out _));
+        Pinned(plan.Model, GrownGameTopBefore);
+    }
+
+    // ── change (a)'s tuck as it stands at 72dde80: what (b)'s open skin and deep clear, switched off, must leave alone ──
+
+    [Fact]
+    [Trait("Plan", "EDGE-neckline-large-bust-22")]
+    public void A_game_tops_tuck_on_a_grown_bust_is_as_change_a_made_it()
+    {
+        var (bytes, garment, pair, _) = GrownBust();
+        var plan = RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true, out _);
+        Pinned(plan.Model, GrownGameTopTucked);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-neckline-large-bust-22")]
+    public void A_game_tops_tuck_on_the_loose_sheet_is_as_change_a_made_it()
+    {
+        var bytes = SkinTuckSheet.LooseTop();
+        var garment = ModelPartReader.Read(bytes)!;
+        var plan = RefitCore.PlanRefit(garment, bytes, [SkinTuckSheet.Resized(SkinTuckSheet.Body())], "_top", across: true,
+                                       gameGear: true, out _);
+        Pinned(plan.Model, LooseGameTopTucked);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-neckline-large-bust-22")]
+    public void The_Studio_cut_and_clear_tuck_is_as_change_a_made_it()
+    {
+        var bytes = SkinTuckSheet.LooseTop();
+        var garment = ModelPartReader.Read(bytes)!;
+        var loose = BodyRetarget.Plan(garment, bytes, [SkinTuckSheet.Resized(SkinTuckSheet.Body())], "_top", held: NoneHeld,
+                                      replaceSkin: true, acrossBodies: true, clearBody: true, cutHidden: true,
+                                      keepShape: RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)),
+                                      tuckSlot: RefitCore.TuckSlot(true, "_top"));
+        Pinned(loose.Model, LooseStudioTucked);
+
+        var (gBytes, gGarment, pair, pieces) = GrownBust();
+        var grown = BodyRetarget.Plan(gGarment, gBytes, [pair], "_top", held: NoneHeld, replaceSkin: true, acrossBodies: true,
+                                      clearBody: true, cutHidden: true, keepShape: pieces,
+                                      tuckSlot: RefitCore.TuckSlot(true, "_top"));
+        Pinned(grown.Model, GrownStudioTucked);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-neckline-large-bust-6")]
+    [Trait("Plan", "EDGE-neckline-large-bust-25")]
+    public void Studio_cut_through_the_chord_sag_plans_as_before()
+    {
+        // A coarse two-triangle skin over a body with a 6 mm bulge under it: the cut keeps the bulge through its chord-sag
+        // allowance, not its 4 mm reach — the branch the open-skin rule shares with it.
+        var body = SkinTuckSheet.Body(z: (r, c) => r is 11 or 12 && c is >= 3 and <= 5 ? 0.006f : 0f);
+        var bytes = SkinTuckSheet.CoarseSkinTop();
+        var garment = ModelPartReader.Read(bytes)!;
+        var laid = new BodySurface(garment, BodySurface.CellFor(BodyRetarget.MeanEdgeOf(garment)));
+        var edges = BodyRetarget.SkinEdges.Of(garment);
+        var read = ModelPartReader.Read(body)!;
+        bool sagged = Enumerable.Range(0, read.Positions.Length / 3).Any(v =>
+        {
+            var p = new System.Numerics.Vector3(read.Positions[v * 3], read.Positions[v * 3 + 1], read.Positions[v * 3 + 2]);
+            return BodyRetarget.Covers(laid, p, edges) && laid.Nearest(p, 0.05f, out var hit) && hit.Distance > BodyRetarget.CutReach;
+        });
+        Assert.True(sagged, "no body vertex is kept through the chord sag: the fixture misses the branch");
+
+        var plan = BodyRetarget.Plan(garment, bytes, [SkinTuckSheet.Resized(body)], "_top", held: NoneHeld, replaceSkin: true,
+                                     acrossBodies: true, clearBody: false, cutHidden: true,
+                                     keepShape: RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)));
+        Pinned(plan.Model, ChordSagStudioCut);
+    }
+
     // ── on the game's own files and the user's body mods: inconclusive when an input is not the one pinned ──
 
     private const string Neolithe = LocalData.Mods + ":Neolithe [ALL IN ONE]";
@@ -168,6 +325,20 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
     private const string GameTopUntucked = "E3DA5ACD964F2FD5ACC8E7BC87EA163456C2955C9035B9B864F755DD3F9742F7";
     private const string MaimingStudioCut = "6B0216E852B601965EDB47C63572FCA53FFCDB7C80CC1E36CB821DCDB30DADE1";
     private const string DirndlGameRefit = "1B6456AF7163D39F5EDB5B2E38EE8F50B35D1B15BDCE0DDEF414BD4FDC5FD61B";
+
+    // Pinned on 72dde80, change (a)'s final commit.
+    private const string GrownStudioCut = "B45430CC61D76DE199C6EF53366368A4F368C578C31535BD8E0C8A9E8F800AD9";
+    private const string GrownModGarment = "FF0DAF950878FC7F1544B73893595DE4D4E9B0272EEB04542D88CCA9AFFA3440";
+    private const string GrownAccessory = "F0A18569C9FB1E999FFD368CCEF1963E2913F494D55348455F3A392797CED19C";
+    private const string GrownKeepEnds = "A613999B0DE8E1C453015A53642B3C8F6F2D113D74DDD2E0C017BB866C01D50A";
+    private const string GrownSizeSet = "B45430CC61D76DE199C6EF53366368A4F368C578C31535BD8E0C8A9E8F800AD9";
+    private const string GrownStudioCutAndClear = "B1463795421A89BD7F1B7821AF27AABFB98A0DC70E48B2833C6D38F692E1A9AB";
+    private const string GrownGameTopBefore = "B1463795421A89BD7F1B7821AF27AABFB98A0DC70E48B2833C6D38F692E1A9AB";
+    private const string ChordSagStudioCut = "96F3E796E4D5AFD1C3A1F268DF77997FDEEED7E5720DCF6673C6CACAF122E6D3";
+    private const string GrownGameTopTucked = "F0637CE799121F93B6B3CD40FB3BA06864DB30330B14BE21F09D31F60D1BFED6";
+    private const string LooseGameTopTucked = "D80A3792966E94E9A937CEF3D655EACB20998A6903E6521DD3561B4022C3E4E1";
+    private const string LooseStudioTucked = "D80A3792966E94E9A937CEF3D655EACB20998A6903E6521DD3561B4022C3E4E1";
+    private const string GrownStudioTucked = "F0637CE799121F93B6B3CD40FB3BA06864DB30330B14BE21F09D31F60D1BFED6";
 
     // The inputs those were pinned on.
     private const string MaimingSha = "E2985DE7C93082F91EB987372F6701429B0A280A5D5A213E044EED8C1E4210CB";
