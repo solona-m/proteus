@@ -1272,9 +1272,12 @@ public sealed partial class AutoRefitWatcher : IDisposable
         if (gameGear)
             log.Information("[Proteus] auto refit: {0} is the game's own gear: hidden skin cut, cloth cleared of the body",
                             item);
+        bool piercings = config.AutoRefitPiercings;
+        log.Debug("[Proteus] auto refit: {0}: piercings {1}", item, piercings ? "carried" : "left out");
         var plan = RefitCore.PlanRefit(garment, bytes, pairs, primary, across, gameGear, out var pieceNames,
                                        line => log.Debug("[Proteus] auto refit: {0}", line),
-                                       line => log.Warning("[Proteus] auto refit: {0}", line));
+                                       line => log.Warning("[Proteus] auto refit: {0}", line),
+                                       carryPiercings: piercings);
         plan = RefitCore.MatchSkinToBody(plan, sourcePath, targetPath, uvRemap, male, log);
         if (bakeTo != 0) plan = RefitCore.WithBodySkin(plan, targetPath, log);
         ct.ThrowIfCancellationRequested();

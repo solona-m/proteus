@@ -395,8 +395,10 @@ public class BodyRetargetTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-refit-piercings-option-2")]
     public void A_piercing_under_cloth_stays_out_unless_the_garment_showed_one_there()
     {
+        // [AC-refit-piercings-option-2] With the piercings asked for, the rules are today's.
         // A top that keeps the skin under an opaque cup: put in, the body's ring would stand through the cloth. But
         // where the garment carried its own piercing, its author showed one — through sheer cloth or not.
         const string piercings = "/mt_c0201b0001_piercings.mtrl";
@@ -411,8 +413,8 @@ public class BodyRetargetTests
             new SyntheticModel.Mesh(ClothMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 4, OffsetZ: 0.003f)),
             new SyntheticModel.Mesh(piercings, new SyntheticModel.Sub(0, OffsetZ: 0.001f)));
 
-        var under = BodyRetarget.SwapSkin(covered, [Resized("_top", chest)], out var underReport);
-        var over = BodyRetarget.SwapSkin(shown, [Resized("_top", chest)], out var overReport);
+        var under = BodyRetarget.SwapSkin(covered, [Resized("_top", chest)], out var underReport, carryPiercings: true);
+        var over = BodyRetarget.SwapSkin(shown, [Resized("_top", chest)], out var overReport, carryPiercings: true);
 
         Assert.Equal(0, underReport.Adorned);
         Assert.False(Drawn(under!).ContainsKey(piercings.TrimStart('/')));
@@ -422,8 +424,10 @@ public class BodyRetargetTests
     }
 
     [Fact]
+    [Trait("Plan", "AC-refit-piercings-option-2")]
     public void A_chain_hanging_off_the_skin_comes_in_with_what_it_hangs_from()
     {
+        // [AC-refit-piercings-option-2]
         // YAB strings a chain between the nipple rings, its links 20-30 mm in front of the sternum: too far off the skin
         // to land on it, they were left out link by link. A link goes with the one it touches; one touching nothing
         // that came in stays out.
@@ -438,10 +442,15 @@ public class BodyRetargetTests
             new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)),
             new SyntheticModel.Mesh(piercings, chain));
 
-        var rebuilt = BodyRetarget.SwapSkin(garment, [Resized("_top", chest)], out var report);
+        var rebuilt = BodyRetarget.SwapSkin(garment, [Resized("_top", chest)], out var report, carryPiercings: true);
 
         Assert.Equal(8, report.Adorned);
         Assert.Equal(8, Drawn(rebuilt!)[piercings.TrimStart('/')]);
+
+        // [EDGE-refit-piercings-option-2] Not asked for, no link comes in.
+        var off = BodyRetarget.SwapSkin(garment, [Resized("_top", chest)], out var offReport);
+        Assert.Equal(0, offReport.Adorned);
+        Assert.False(Drawn(off!).ContainsKey(piercings.TrimStart('/')));
     }
 
     [Fact]
@@ -485,6 +494,179 @@ public class BodyRetargetTests
     [InlineData("/mt_c0201e6255_top_a.mtrl", false)]             // a garment's own
     public void Only_a_body_s_nails_and_piercings_are_carried(string material, bool carried)
         => Assert.Equal(carried, BodyRetarget.IsBodyAdornmentMaterial(material));
+
+    // ── piercings only when asked for ───────────────────────────────────────────────────────────────────
+
+    private const string Piercings = "/mt_c0201b0001_piercings.mtrl";
+
+    [Theory]
+    [Trait("Plan", "AC-refit-piercings-option-3")]
+    [Trait("Plan", "EDGE-refit-piercings-option-3")]
+    [InlineData("/mt_c0201b0001_piercings.mtrl", true)]
+    [InlineData("/mt_c0201b0001_neolithe_piercings.mtrl", true)]
+    [InlineData("/mt_c0201b0001_neolithe_piercings_top.mtrl", true)]
+    [InlineData("/mt_c0201b0001_nipplepierce.mtrl", true)]
+    [InlineData("/mt_c0201b0001_navelpierce.mtrl", true)]
+    [InlineData("/mt_c0201b0001_genitalpierce.mtrl", true)]
+    [InlineData("/mt_c0201b0001_nailpiercing.mtrl", true)]       // [EDGE-refit-piercings-option-3] both: a piercing
+    [InlineData("/mt_c0201b0001_trenails.mtrl", false)]
+    [InlineData("/mt_c0201b0001_treaccent.mtrl", false)]
+    [InlineData("/mt_c0201b0001_neolithe_nails.mtrl", false)]
+    [InlineData("/mt_c0201b0001_yafinger.mtrl", false)]
+    [InlineData("/mt_c0201b0001_yatoe.mtrl", false)]
+    [InlineData("/mt_c0201b0001_bibo.mtrl", false)]              // skin
+    [InlineData("/mt_c0201b0001_bibopube.mtrl", false)]
+    [InlineData("/mt_c0201e6255_top_a.mtrl", false)]             // a garment's own
+    public void Only_a_body_s_piercings_are_gated(string material, bool piercing)
+        // [AC-refit-piercings-option-3] [EDGE-refit-piercings-option-3]
+        => Assert.Equal(piercing, BodyRetarget.IsBodyPiercingMaterial(material));
+
+    [Fact]
+    [Trait("Plan", "AC-refit-piercings-option-1")]
+    public void The_body_s_piercings_stay_out_unless_asked_for()
+    {
+        // [AC-refit-piercings-option-1] A top whose skin shows the ring: the body's comes in only when asked, through
+        // the swap and through Plan, as the Studio, the size set and the automatic refit call it.
+        var chest = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)),
+            new SyntheticModel.Mesh(Piercings, new SyntheticModel.Sub(0, OffsetZ: 0.001f)));
+        var bare = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)));
+
+        var off = BodyRetarget.SwapSkin(bare, [Resized("_top", chest)], out var offReport);
+        var on = BodyRetarget.SwapSkin(bare, [Resized("_top", chest)], out var onReport, carryPiercings: true);
+        Assert.Equal(0, offReport.Adorned);
+        Assert.False(Drawn(off!).ContainsKey(Piercings.TrimStart('/')));
+        Assert.Equal(1, onReport.Adorned);
+        Assert.Equal(1, Drawn(on!)[Piercings.TrimStart('/')]);
+
+        var planOff = BodyRetarget.Plan(ModelPartReader.Read(bare)!, bare, [Resized("_top", chest)], "_top",
+                                        pushOut: false, replaceSkin: true);
+        var planOn = BodyRetarget.Plan(ModelPartReader.Read(bare)!, bare, [Resized("_top", chest)], "_top",
+                                       pushOut: false, replaceSkin: true, carryPiercings: true);
+        Assert.False(Drawn(planOff.Model).ContainsKey(Piercings.TrimStart('/')));
+        Assert.Equal(1, Drawn(planOn.Model)[Piercings.TrimStart('/')]);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-refit-piercings-option-3")]
+    public void Nails_come_in_and_piercings_stay_out_with_the_option_off()
+    {
+        // [AC-refit-piercings-option-3] Tre's nails and a ring, both on skin the garment draws: the nails come in
+        // whatever the piercings setting says.
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)));
+        var body = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)),
+            new SyntheticModel.Mesh(TreNails, new SyntheticModel.Sub(0, OffsetZ: 0.001f)),
+            new SyntheticModel.Mesh(Piercings, new SyntheticModel.Sub(0, OffsetX: 0.2f, OffsetZ: 0.001f)));
+
+        var off = BodyRetarget.SwapSkin(garment, [Resized("_glv", body)], out var offReport);
+        var on = BodyRetarget.SwapSkin(garment, [Resized("_glv", body)], out var onReport, carryPiercings: true);
+
+        Assert.Equal(1, offReport.Adorned);
+        Assert.Equal(1, Drawn(off!)[TreNails.TrimStart('/')]);
+        Assert.False(Drawn(off!).ContainsKey(Piercings.TrimStart('/')));
+        Assert.Equal(2, onReport.Adorned);
+        Assert.Equal(1, Drawn(on!)[TreNails.TrimStart('/')]);
+        Assert.Equal(1, Drawn(on!)[Piercings.TrimStart('/')]);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-refit-piercings-option-1")]
+    public void Without_piercings_the_nails_fit_where_both_did_not()
+    {
+        // [EDGE-refit-piercings-option-1] Eight materials, the garment's own two-triangle Tre nails among them: one
+        // free after the body's skin. The body's nails and ring would take two; its nails alone fit.
+        var meshes = new List<SyntheticModel.Mesh>
+        {
+            new(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)),
+            new(TreNails, new SyntheticModel.Sub(0, TrianglesPerIsland: 2, OffsetZ: 0.001f)),
+        };
+        for (int i = 0; i < 6; i++)
+            meshes.Add(new($"/mt_c0201e6255_glv_{(char)('a' + i)}.mtrl",
+                           new SyntheticModel.Sub(0, OffsetY: 50f + i, OffsetZ: 0.001f)));
+        var garment = SyntheticModel.Build([], [.. meshes]);
+        var body = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)),
+            new SyntheticModel.Mesh(TreNails, new SyntheticModel.Sub(0, OffsetZ: 0.001f)),
+            new SyntheticModel.Mesh(Piercings, new SyntheticModel.Sub(0, OffsetX: 0.2f, OffsetZ: 0.001f)));
+
+        var off = BodyRetarget.SwapSkin(garment, [Resized("_glv", body)], out var offReport);
+        var on = BodyRetarget.SwapSkin(garment, [Resized("_glv", body)], out var onReport, carryPiercings: true);
+
+        Assert.Equal(1, offReport.Adorned);
+        Assert.Equal(1, Drawn(off!)[TreNails.TrimStart('/')]);               // the body's, in place of the garment's
+        Assert.Equal(0, onReport.Adorned);
+        Assert.Equal(2, Drawn(on!)[TreNails.TrimStart('/')]);                // no room: the garment's own, kept
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-refit-piercings-option-5")]
+    public void Within_one_body_nails_swap_and_the_author_s_piercings_stay()
+    {
+        // [EDGE-refit-piercings-option-5] The garment's own two-triangle nails and ring, over a body with one-triangle
+        // ones. Off: the nails are the body's, the ring the author's — one ring, not two.
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)),
+            new SyntheticModel.Mesh(TreNails, new SyntheticModel.Sub(0, TrianglesPerIsland: 2, OffsetZ: 0.001f)),
+            new SyntheticModel.Mesh(Piercings, new SyntheticModel.Sub(0, TrianglesPerIsland: 2, OffsetX: 0.2f,
+                                                                      OffsetZ: 0.001f)));
+        var body = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)),
+            new SyntheticModel.Mesh(TreNails, new SyntheticModel.Sub(0, OffsetZ: 0.001f)),
+            new SyntheticModel.Mesh(Piercings, new SyntheticModel.Sub(0, OffsetX: 0.2f, OffsetZ: 0.001f)));
+
+        var rebuilt = BodyRetarget.SwapSkin(garment, [Resized("_top", body)], out var report);
+
+        Assert.Equal(1, report.Adorned);
+        Assert.Equal(1, Drawn(rebuilt!)[TreNails.TrimStart('/')]);
+        Assert.Equal(2, Drawn(rebuilt!)[Piercings.TrimStart('/')]);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-refit-piercings-option-13")]
+    public void A_hidden_variant_s_piercing_stays_out_with_the_option_on()
+    {
+        // [EDGE-refit-piercings-option-13] A ring on a variant the body mod does not draw: asked for or not, it stays out.
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)));
+        var body = SyntheticModel.Build(["atr_tv_b"],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)),
+            new SyntheticModel.Mesh(Piercings, new SyntheticModel.Sub(0b1, OffsetZ: 0.001f)));
+        var pair = Resized("_top", body) with { TargetHidden = new HashSet<string> { "atr_tv_b" } };
+
+        var shown = BodyRetarget.SwapSkin(garment, [Resized("_top", body)], out var shownReport, carryPiercings: true);
+        var hidden = BodyRetarget.SwapSkin(garment, [pair], out var hiddenReport, carryPiercings: true);
+
+        Assert.Equal(1, shownReport.Adorned);                                // reaches the case
+        Assert.Equal(0, hiddenReport.Adorned);
+        Assert.False(Drawn(hidden!).ContainsKey(Piercings.TrimStart('/')));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-refit-piercings-option-14")]
+    public void Finish_style_swap_keeps_the_author_s_piercings_with_the_option_off()
+    {
+        // [EDGE-refit-piercings-option-14] As the headless refit's --finish: its own body, nothing pushed. Off keeps the
+        // author's two-triangle ring; on swaps it for the body's one.
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)),
+            new SyntheticModel.Mesh(Piercings, new SyntheticModel.Sub(0, TrianglesPerIsland: 2, OffsetZ: 0.001f)));
+        var body = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(SkinMaterial, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)),
+            new SyntheticModel.Mesh(Piercings, new SyntheticModel.Sub(0, OffsetZ: 0.001f)));
+        var parts = ModelPartReader.Read(garment)!;
+
+        var off = BodyRetarget.Plan(parts, garment, [Resized("_top", body)], "_top", pushOut: false, replaceSkin: true);
+        var on = BodyRetarget.Plan(parts, garment, [Resized("_top", body)], "_top", pushOut: false, replaceSkin: true,
+                                   carryPiercings: true);
+
+        Assert.Equal(0, off.Report.Swap!.Value.Adorned);
+        Assert.Equal(2, Drawn(off.Model)[Piercings.TrimStart('/')]);
+        Assert.Equal(1, on.Report.Swap!.Value.Adorned);
+        Assert.Equal(1, Drawn(on.Model)[Piercings.TrimStart('/')]);
+    }
 
     // ── which mods are bodies ───────────────────────────────────────────────────────────────────────────
 

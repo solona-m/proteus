@@ -115,6 +115,14 @@
     "message": "Unmodded gear has no mod to save into, so each piece gets a new mod of its own, named after the item and the body.",
     "description": "Tooltip on the checkbox for refitting the game's own gear."
   },
+  "AutoRefit.Piercings.Label": {
+    "message": "Add my body's piercings to refitted gear",
+    "description": "Checkbox under the Body refit switch: also bring the body mod's piercings into refitted gear. Off by default."
+  },
+  "AutoRefit.Piercings.Tip": {
+    "message": "Off: gear is refitted without your body mod's piercings. Nails always come along.\nGear already refitted keeps what it was made with; undo and refit what you're wearing to change it.",
+    "description": "Tooltip on the checkbox for adding the body's piercings to automatically refitted gear."
+  },
   "AutoRefit.Working": {
     "message": "Working...",
     "description": "Shown while a refit is running."
@@ -3787,6 +3795,14 @@
     "message": "Leave out the new skin where the author deleted theirs, usually under cloth.\nTurn off if the refit leaves holes.",
     "description": ""
   },
+  "Parts.Retarget.Piercings": {
+    "message": "Add the new body's piercings",
+    "description": "Body size tool checkbox, under 'Remove hidden skin': bring the new body's piercings into the refitted garment."
+  },
+  "Parts.Retarget.Piercings.Tip": {
+    "message": "On: the new body's piercings come in with its skin where the garment shows that skin.\nNails always come along.",
+    "description": "Tooltip on the Body size tool's piercings checkbox."
+  },
   "Parts.Retarget.CutForcedTip": {
     "message": "Always on while the shoe keeps its own foot or the glove its own hand: otherwise the whole new legs or arms would go in with it.",
     "description": "Tooltip on the greyed-out 'Remove hidden skin' checkbox in Studio > Body size while a shoe keeps its own foot (or a glove its hand)."
@@ -4762,6 +4778,14 @@
   "SizeSet.Ends.Tip": {
     "message": "Shoes and gloves keep their own feet and hands; only the leg or arm they reach is refitted. Shoes get the legs' sizes, gloves one option per body, and both join the outfit's chest or legs sizes when they share a group.",
     "description": "Tooltip for 'Include shoes and gloves'."
+  },
+  "SizeSet.Piercings": {
+    "message": "Add the new bodies' piercings",
+    "description": "Checkbox in 'Every size for other bodies': bring each new body's piercings into the sizes made."
+  },
+  "SizeSet.Piercings.Tip": {
+    "message": "On: each body's piercings come in with its skin where the piece shows that skin. Nails always come along.\nSizes already made change only when made again.",
+    "description": "Tooltip on the size set's piercings checkbox."
   },
   "SizeSet.EndsUnreadable.Fmt": {
     "message": "{0}: its rig can't be read, so its foot or hand can't be kept and no sizes were made of it.",

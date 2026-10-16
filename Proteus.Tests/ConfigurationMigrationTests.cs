@@ -51,6 +51,32 @@ public class ConfigurationMigrationTests
         Assert.False(off.SizeSetEnds);
     }
 
+    [Fact]
+    [Trait("Plan", "AC-refit-piercings-option-4")]
+    [Trait("Plan", "AC-refit-piercings-option-5")]
+    [Trait("Plan", "EDGE-refit-piercings-option-10")]
+    public void Refit_piercings_default_off()
+    {
+        // [AC-refit-piercings-option-4] [AC-refit-piercings-option-5] [EDGE-refit-piercings-option-10] Off for a new
+        // config and for one saved before the settings existed; a saved "on" is read back.
+        var fresh = new Configuration();
+        Assert.False(fresh.AutoRefitPiercings);
+        Assert.False(fresh.SizeSetPiercings);
+
+        var old = Newtonsoft.Json.JsonConvert.DeserializeObject<Configuration>(
+            $$"""{"Version":{{Configuration.CurrentVersion}},"SizeSetYas":true}""")!;
+        old.Migrate();
+        Assert.False(old.AutoRefitPiercings);
+        Assert.False(old.SizeSetPiercings);
+
+        var on = Newtonsoft.Json.JsonConvert.DeserializeObject<Configuration>(
+            $$"""{"Version":{{Configuration.CurrentVersion}},"AutoRefitPiercings":true,"SizeSetPiercings":true}""")!;
+        Assert.True(on.AutoRefitPiercings);
+        Assert.True(on.SizeSetPiercings);
+
+        Assert.False(new Proteus.Services.SizeSetRefit.Request("mod", [], true, false, []).Piercings);
+    }
+
     /// <summary>
     /// v7 -> v8 turns hat compatibility on for every existing config, once. A user who then switches it
     /// off keeps it off: the second migration sees a config already stamped current.

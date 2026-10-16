@@ -115,6 +115,14 @@
     "message": "L'équipement non modifié n'a pas de mod où enregistrer : chaque pièce reçoit donc son propre nouveau mod, nommé d'après l'objet et le corps.",
     "description": ""
   },
+  "AutoRefit.Piercings.Label": {
+    "message": "Ajouter les piercings de mon corps à l'équipement ajusté",
+    "description": ""
+  },
+  "AutoRefit.Piercings.Tip": {
+    "message": "Désactivé : l'équipement est ajusté sans les piercings de ton mod de corps. Les ongles sont toujours inclus.\nL'équipement déjà ajusté garde ce avec quoi il a été fait ; annule puis ajuste à nouveau ce que tu portes pour le changer.",
+    "description": ""
+  },
   "AutoRefit.Working": {
     "message": "En cours…",
     "description": ""
@@ -3787,6 +3795,14 @@
     "message": "Omet la nouvelle peau là où l'auteur a supprimé la sienne, en général sous le tissu.\nDésactivez si l'ajustement laisse des trous.",
     "description": ""
   },
+  "Parts.Retarget.Piercings": {
+    "message": "Ajouter les piercings du nouveau corps",
+    "description": ""
+  },
+  "Parts.Retarget.Piercings.Tip": {
+    "message": "Activé : les piercings du nouveau corps arrivent avec sa peau là où le vêtement montre cette peau.\nLes ongles sont toujours inclus.",
+    "description": ""
+  },
   "Parts.Retarget.CutForcedTip": {
     "message": "Toujours actif tant que la chaussure garde son propre pied ou le gant sa propre main : sinon les nouvelles jambes ou les nouveaux bras entiers seraient ajoutés avec.",
     "description": ""
@@ -4761,6 +4777,14 @@
   },
   "SizeSet.Ends.Tip": {
     "message": "Les chaussures et les gants gardent leurs propres pieds et mains ; seule la jambe ou le bras qu'ils atteignent est réajusté. Les chaussures reçoivent les tailles des jambes, les gants une option par corps, et tous deux rejoignent les tailles de buste ou de jambes de la tenue quand ils partagent un groupe.",
+    "description": ""
+  },
+  "SizeSet.Piercings": {
+    "message": "Ajouter les piercings des nouveaux corps",
+    "description": ""
+  },
+  "SizeSet.Piercings.Tip": {
+    "message": "Activé : les piercings de chaque corps arrivent avec sa peau là où la pièce montre cette peau. Les ongles sont toujours inclus.\nLes tailles déjà faites ne changent que si elles sont refaites.",
     "description": ""
   },
   "SizeSet.EndsUnreadable.Fmt": {

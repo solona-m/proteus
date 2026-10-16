@@ -42,9 +42,12 @@ internal static partial class SizeSetRefit
     /// thread before the run: a shoe or glove may have been made on it, and is searched for there last, after the
     /// installed body mods, as the automatic refit searches. Null, or a race without one, offers no game body. Chest and
     /// legs are never read off it.</param>
+    /// <param name="Piercings">Bring each new body's piercings in with its skin (see <see cref="BodyRetarget.Rebuild"/>):
+    /// <see cref="Configuration.SizeSetPiercings"/>. Off by default; nails come in either way.</param>
     internal sealed record Request(string ModRoot, IReadOnlyList<string> Keys, bool Yas, bool Remake,
                                    IReadOnlyList<BodyModIndex.Entry> Bodies, Func<string, byte[]?>? ReadGameFile = null,
-                                   bool Ends = true, Func<string, BodySizeCatalog?>? GameBody = null);
+                                   bool Ends = true, Func<string, BodySizeCatalog?>? GameBody = null,
+                                   bool Piercings = false);
 
     /// <param name="Made">Sizes saved.</param>
     /// <param name="Notes">Every size left out, and why — for the author to read.</param>
@@ -518,7 +521,8 @@ internal static partial class SizeSetRefit
                 var plan = BodyRetarget.Plan(chosen.Garment, chosen.Bytes, pairs, piece.Slot, held: new HashSet<int>(),
                                              replaceSkin: true, acrossBodies: across, clearBody: false, cutHidden: true,
                                              keepShape: chosen.Shape, log: line => log.Debug("[Proteus] size set: {0}", line),
-                                             warn: line => log.Warning("[Proteus] size set: {0}", line));
+                                             warn: line => log.Warning("[Proteus] size set: {0}", line),
+                                             carryPiercings: request.Piercings);
                 plan = RefitCore.MatchSkinToBody(plan, chosen.SourcePath, targetPath, uvRemap, male, log);
                 log.Information("[Proteus] size set: {0} onto {1} (moved up to {2:F1} mm)", piece.Label, option,
                                 plan.Report.WorstMove * 1000f);

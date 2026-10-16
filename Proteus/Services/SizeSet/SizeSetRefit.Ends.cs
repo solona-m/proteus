@@ -323,7 +323,8 @@ internal static partial class SizeSetRefit
                 var outfit = partner != null ? OutfitPartners.Load(root, partner, Note) : null;
                 var plan = KeepEnds.Plan(from.Garment, from.Bytes, from.Reading, limbPair, endPair, across,
                                          line => log.Debug("[Proteus] size set: {0}", line),
-                                         line => log.Warning("[Proteus] size set: {0}", line), outfit);
+                                         line => log.Warning("[Proteus] size set: {0}", line), outfit,
+                                         request.Piercings);
                 if (outfit != null)
                     log.Information("[Proteus] size set: {0} {1}: kept outside its {2} piece's refit {3}: {4} points "
                                   + "lifted, {5:F1} mm short at most", piece.Label, option,

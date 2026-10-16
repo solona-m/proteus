@@ -139,6 +139,7 @@ Things worth knowing:
 
 - **Use the new body's skin** is on by default: the garment's own skin for each part of the body being resized is replaced with the new body's, so it matches the rest of you. Untick it to resize the skin the garment came with instead, which keeps the author's push-up or skindent shaping.
 - **Remove hidden skin**, on by default, leaves out the new skin where the author deleted theirs, usually under cloth. Turn it off if a refit leaves holes. It only applies while **Use the new body's skin** is on.
+- **Add the new body's piercings**, off by default, brings the new body's piercings in with its skin, where the garment shows that skin. Nails always come along. It only applies while **Use the new body's skin** is on.
 - **Push cloth out of the body** pushes out all buried cloth, not just what the refit buried. Use it if the body shows through, for example stockings with their own leg skin. Off by default, because authors often hide cloth under skin on purpose.
 - **Keep shape** moves rigid pieces (rings, buckles, chains) whole instead of bending them. Small closed pieces start ticked. A piece that would sink into the new body bends with it instead.
 - **Shoes and gloves keep their own feet and hands.** With **Keep its own feet** (or **hands**) ticked, the default, the foot stays exactly as its author made it, heel and all, and only the leg the shoe reaches is refitted, sized by the legs (the arm by the chest, for gloves). The feet go along by themselves. A shoe that reaches no leg keeps its shape and only has its skin redrawn, saved as "*Body* — skin". Untick it to refit the whole shoe as before.
@@ -159,6 +160,7 @@ Below the one-garment tool, **Every size for other bodies** does a whole mod at 
 
 - **Use a body's YAS version where it has one** gives Rue, YAB and Tre their Yet Another Skeleton sizes. A piece already weighted to YAS always gets YAS sizes.
 - **Include shoes and gloves**, on by default, sizes the mod's shoes and gloves too, keeping their own feet and hands: shoes get the legs' sizes ("Rue WC", "YAB SC"), gloves one option per body. A shoe or glove in the same size group as the outfit's chest or legs joins the sizes that piece made, so one choice dresses the whole outfit. One that reaches no leg or arm only has its skin redrawn, and only where the new body draws skin another way. One sized in a group with a piece it can't follow — gloves beside legs, or a shoe and gloves with no chest — is left alone, with a note.
+- **Add the new bodies' piercings**, off by default, brings each body's piercings into the sizes it makes. Nails always come along. Sizes already made change only when made again.
 - Sizes the mod already has are left alone. Tick **Make again the sizes Proteus added before** to redo the ones Proteus made; the author's own sizes are never touched. If you ran it with an earlier version of Proteus, tick **Make again** once: those sizes were cut from the author's first size.
 - It runs in the background and can take a few minutes on a big mod. **Stop** keeps the sizes already saved. When it's done, it lists anything it had to leave out and why.
 - Only bodies for the races the mod dresses are offered, so a women's mod doesn't list men's bodies. A body has to be installed in Penumbra to get its sizes. The game's own gear has no mod to add sizes to, so this doesn't appear for it.
@@ -299,6 +301,7 @@ Refits chest, legs, hands and feet gear to your body by itself, the moment you p
 Things worth knowing:
 
 - **Also refit the game's own gear** does vanilla pieces too. They have no mod to save into, so each gets a new mod of its own, named after the item and the body, filed under **Proteus Upscales**.
+- **Add my body's piercings to refitted gear**, off by default, brings your body mod's piercings into refitted gear. Nails always come along. Gear already refitted keeps what it was made with: undo and refit what you're wearing to change it.
 - **Your choices in Penumbra win.** If you pick a mod's **Original** or another size yourself, Proteus leaves it alone. If a mod already ships your size, that option is switched on instead of making a new one.
 - If Proteus can't tell which body a piece was made for, or the piece has no body skin to read, it leaves it as it is and says so in chat. You can still refit it by hand in the Studio.
 - **Undo the refit of what I'm wearing** (hold Ctrl or Shift and click) removes the sizes the automatic refit made for the gear you have on, deletes the mods it made for vanilla gear, and puts back the options you had before. Those pieces won't be refitted again unless you press **Refit what I'm wearing now**. Sizes you made yourself in the Studio stay.

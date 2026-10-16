@@ -1015,10 +1015,13 @@ internal static partial class RefitCore
     /// <param name="pieceNames">The kept pieces' labels, in order — for <see cref="ReleasedLog"/>.</param>
     /// <param name="trace">For a diagnostic: the solve's stages (see <see cref="BodyRetarget.Solve"/>). Null for every
     /// refit.</param>
+    /// <param name="carryPiercings">Bring the new body's piercings in with its skin (see <see cref="BodyRetarget.Rebuild"/>):
+    /// <see cref="Configuration.AutoRefitPiercings"/>. Off by default.</param>
     internal static BodyRetarget.Planned PlanRefit(ModelParts garment, byte[] bytes, IReadOnlyList<BodyRetarget.SlotPair> pairs,
                                                    string primary, bool across, bool gameGear, out List<string> pieceNames,
                                                    Action<string>? log = null, Action<string>? warn = null,
-                                                   Action<string, SecondSkinWriter.Vec3[]>? trace = null)
+                                                   Action<string, SecondSkinWriter.Vec3[]>? trace = null,
+                                                   bool carryPiercings = false)
     {
         var skin = AutoRefitDecisions.SkinFor(gameGear);
         var pieces = ShapePieces(garment, DefaultKeepShape(garment), out pieceNames);
@@ -1027,7 +1030,8 @@ internal static partial class RefitCore
                                  cutHidden: skin.CutHidden, keepShape: pieces, log: log, warn: warn, trace: trace,
                                  tuckSlot: TuckSlot(skin.TuckUnderCloth, primary),
                                  deepClear: DeepClearFor(skin.DeepClear, primary),
-                                 keepStandoff: KeepStandoffFor(skin.KeepStandoff, primary));
+                                 keepStandoff: KeepStandoffFor(skin.KeepStandoff, primary),
+                                 carryPiercings: carryPiercings);
     }
 
     /// <summary>

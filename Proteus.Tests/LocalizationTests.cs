@@ -352,6 +352,47 @@ public sealed class LocalizationTests
         ["zh"] = ["设置顶部的下拉列表", "部件下拉列表"],
     };
 
+    private static readonly string[] PiercingsKeys =
+    [
+        "AutoRefit.Piercings.Label", "AutoRefit.Piercings.Tip", "Parts.Retarget.Piercings",
+        "Parts.Retarget.Piercings.Tip", "SizeSet.Piercings", "SizeSet.Piercings.Tip",
+    ];
+
+    /// <summary>The refit's three piercings options are in every language in its own words, line for line.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-refit-piercings-option-9")]
+    public void RefitPiercings_strings_are_translated_not_copied(string lang)
+    {
+        // [AC-refit-piercings-option-9]
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (string key in PiercingsKeys)
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+            Assert.Equal(en[key].Message.Count(c => c == '\n'), tr[key].Message.Count(c => c == '\n'));
+        }
+    }
+
+    /// <summary>Every README names the three piercings options as its own language's checkboxes do.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-refit-piercings-option-9")]
+    public void Readme_mentions_the_piercings_options(string lang)
+    {
+        // [AC-refit-piercings-option-9]
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+
+        var strings = Load(lang);
+        foreach (string key in new[] { "AutoRefit.Piercings.Label", "Parts.Retarget.Piercings", "SizeSet.Piercings" })
+            Assert.Contains("**" + strings[key].Message + "**", readme);
+    }
+
     /// <summary>The Scale tool's three strings were re-keyed when it gained axis handles; every language has its own words.</summary>
     [Theory]
     [MemberData(nameof(Translations))]

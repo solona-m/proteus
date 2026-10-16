@@ -16,9 +16,11 @@ namespace Proteus.Tests;
 public class OpenSkinTests(ITestOutputHelper output)
 {
     private (byte[] Model, BodyRetarget.SwapReport Report) Swap(byte[] top, byte[] body, bool tuck = true,
-                                                               IReadOnlySet<string>? hidden = null)
+                                                               IReadOnlySet<string>? hidden = null,
+                                                               bool carryPiercings = false)
     {
-        var model = BodyRetarget.SwapSkin(top, [Resized(body, hidden: hidden)], out var report, tuckSlot: tuck ? "_top" : null)!;
+        var model = BodyRetarget.SwapSkin(top, [Resized(body, hidden: hidden)], out var report, tuckSlot: tuck ? "_top" : null,
+                                          carryPiercings: carryPiercings)!;
         Assert.NotNull(model);
         output.WriteLine($"{(tuck ? "tuck" : "no tuck")}: {report}");
         return (model, report);
@@ -101,12 +103,32 @@ public class OpenSkinTests(ITestOutputHelper output)
     public void Open_skin_brings_no_piercing_the_author_did_not_show()
     {
         // A ring in the middle of the dip, which the open skin draws: whether it comes in is the author's cut's to say.
-        var (model, opened) = Swap(CoarseSkinTop(), Dipped(0.015f, ringInDip: true));
+        // With the piercings carried, or the two would agree on none for nothing.
+        var (model, opened) = Swap(CoarseSkinTop(), Dipped(0.015f, ringInDip: true), carryPiercings: true);
         var closed = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoOpenSkin: true),
-                                             () => Swap(CoarseSkinTop(), Dipped(0.015f, ringInDip: true)));
+                                             () => Swap(CoarseSkinTop(), Dipped(0.015f, ringInDip: true),
+                                                        carryPiercings: true));
         Assert.True(opened.Opened > 0);
         Assert.True(DrawsDip(model));   // the skin around the ring is drawn
         Assert.Equal(closed.Report.Adorned, opened.Adorned);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-refit-piercings-option-11")]
+    public void Open_skin_brings_no_piercing_with_the_option_off()
+    {
+        // [EDGE-refit-piercings-option-11] The game's own top, as the automatic refit plans it: the dip is drawn in the
+        // open, and the ring in it comes in only when asked.
+        var top = CoarseSkinTop();
+        var garment = ModelPartReader.Read(top)!;
+        var off = RefitCore.PlanRefit(garment, top, [Resized(Dipped(0.015f, ringInDip: true))], "_top", across: true,
+                                      gameGear: true, out _).Report.Swap!.Value;
+        var on = RefitCore.PlanRefit(garment, top, [Resized(Dipped(0.015f, ringInDip: true))], "_top", across: true,
+                                     gameGear: true, out _, carryPiercings: true).Report.Swap!.Value;
+        output.WriteLine($"off {off}; on {on}");
+        Assert.True(off.Opened > 0);
+        Assert.Equal(0, off.Adorned);
+        Assert.True(on.Adorned >= off.Adorned);
     }
 
     [Fact]
