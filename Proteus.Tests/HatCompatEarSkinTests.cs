@@ -99,6 +99,57 @@ public class HatCompatEarSkinTests
         Assert.True(ears.Fur.IsSubsetOf(ears.Touched));
     }
 
+    /// <summary>As many triangles beside the fur as fur: not an ear submesh, since fur must outnumber the rest.</summary>
+    [Fact]
+    [Trait("Plan", "AC-miqote-ear-skin-3")]
+    public void ATieIsNotAnEarSubmesh()
+    {
+        var ears = Read(Ear(furTriangles: 6, skinTriangles: 6, skinAt: 0.01f));
+        Assert.DoesNotContain(Corners(6, 6), ears.Fur.Contains);
+    }
+
+    /// <summary>
+    /// The rule looks inside the fur's own submesh only: hair in another submesh of the same mesh, however close to the
+    /// fur, is hair. And a second mesh is read with its own vertices.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-miqote-ear-skin-3")]
+    [Trait("Plan", "EDGE-miqote-ear-skin-1")]
+    public void SkinIsLookedForInTheFursOwnSubmeshAndMeshOnly()
+    {
+        var pos = new List<Vector3>();
+        var weights = new List<(string Bone, float W)[]?>();
+        List<int> Tris(int count, float x0, (string Bone, float W)[] w)
+        {
+            var t = new List<int>();
+            for (int i = 0; i < count; i++)
+            {
+                int at = pos.Count;
+                float x = x0 + i * 0.0005f;
+                pos.Add(new Vector3(x, 1.55f, 0)); pos.Add(new Vector3(x + 0.002f, 1.55f, 0)); pos.Add(new Vector3(x, 1.552f, 0));
+                weights.Add(w); weights.Add(w); weights.Add(w);
+                t.AddRange([at, at + 1, at + 2]);
+            }
+            return t;
+        }
+        var ear = Tris(10, 0f, [("j_mimi_r", 1f)]).Concat(Tris(2, 0.02f, Head)).ToArray();   // submesh 0: fur + skin
+        var scalp = Tris(4, 0.01f, Head).ToArray();                                         // submesh 1: hair, close by
+        var mesh0 = new SyntheticModel.SurfaceMesh("/mt_c0801h0118_hir_a.mtrl", pos.ToArray(),
+            pos.Select(_ => Vector3.UnitZ).ToArray(), pos.Select(_ => Vector2.Zero).ToArray(), weights.ToArray(),
+            [(0u, ear), (0u, scalp)]);
+        // A second mesh: the hair, all on the head bone.
+        var hairPos = Enumerable.Range(0, 3).Select(i => new Vector3(0.01f + i * 0.001f, 1.6f, 0)).ToArray();
+        var mesh1 = new SyntheticModel.SurfaceMesh("/mt_c0801h0118_hir_b.mtrl", hairPos,
+            hairPos.Select(_ => Vector3.UnitZ).ToArray(), hairPos.Select(_ => Vector2.Zero).ToArray(),
+            hairPos.Select(_ => (((string, float)[]?)Head)).ToArray(), [(0u, new[] { 0, 1, 2 })]);
+        var mdl = SyntheticModel.BuildSurface(["atr_hv_a"], mesh0, mesh1);
+
+        var ears = Read(mdl);
+        Assert.True(Corners(10, 2).All(ears.Fur.Contains));            // the skin in the fur's submesh
+        Assert.DoesNotContain(Corners(12, 4), ears.Fur.Contains);       // the hair in the next submesh
+        Assert.DoesNotContain(ears.Fur, k => (k >> 32) == 1);           // nothing of the other mesh
+    }
+
     [Fact]
     [Trait("Plan", "EDGE-miqote-ear-skin-3")]
     public void AStrayEarWeightBelowTheFloorSparesNoSkin()

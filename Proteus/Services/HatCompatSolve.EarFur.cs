@@ -31,6 +31,18 @@ public static partial class HatCompatSolve
     /// </summary>
     internal const float EarSkinReach = 0.06f;
 
+    /// <summary>
+    /// A test seam: solve as version 32 did, sparing the fur only, so a test can compare what the ear-skin rule changed.
+    /// Per thread, since tests run in parallel. Never set outside tests.
+    /// </summary>
+    [ThreadStatic] internal static bool WithoutEarSkin;
+
+    /// <summary>
+    /// A test seam: the most shape values the press may spend, so a test can run the second cut (<c>CutUnaffordable</c>)
+    /// on a real hair without a file whose own shapes have used the budget up. Per thread. Never set outside tests.
+    /// </summary>
+    [ThreadStatic] internal static int? BudgetCap;
+
     /// <param name="Fur">Vertices an ear bone carries — the fur itself — and the ear's own skin beside it (see
     /// <see cref="EarSkinReach"/>).</param>
     /// <param name="Touched">Those, plus every vertex sharing a triangle with one — the row the fur is rooted
@@ -115,7 +127,7 @@ public static partial class HatCompatSolve
 
         if (fur.Count == 0) return new EarGeometry(fur, touched);
 
-        AddEarSkin(mdl, src, meshes, fur);
+        if (!WithoutEarSkin) AddEarSkin(mdl, src, meshes, fur);
 
         // One ring out, over whole triangles: a triangle with a fur corner is fur, and so are its other corners.
         foreach (var mv in meshes)
@@ -167,7 +179,7 @@ public static partial class HatCompatSolve
                 uint io = BitConverter.ToUInt32(mdl, ss), ic = BitConverter.ToUInt32(mdl, ss + 4);
                 if ((long)src.Ib + (io + ic) * 2 > mdl.Length) break;
 
-                var furCorners = new List<System.Numerics.Vector3>();
+                var furCorners = new HashSet<int>();
                 var plain = new List<(int A, int B, int C)>();
                 for (uint t = 0; t + 3 <= ic; t += 3)
                 {
@@ -178,19 +190,20 @@ public static partial class HatCompatSolve
                     bool fa = fur.Contains(VertexKey(mv.Mesh, a)), fb = fur.Contains(VertexKey(mv.Mesh, b)),
                          fc = fur.Contains(VertexKey(mv.Mesh, c));
                     if (!fa && !fb && !fc) { plain.Add((a, b, c)); continue; }
-                    if (fa) furCorners.Add(pos[a]);
-                    if (fb) furCorners.Add(pos[b]);
-                    if (fc) furCorners.Add(pos[c]);
+                    // Each fur vertex once, however many triangles share it.
+                    if (fa) furCorners.Add(a);
+                    if (fb) furCorners.Add(b);
+                    if (fc) furCorners.Add(c);
                 }
                 int furTriangles = (int)(ic / 3) - plain.Count;
-                if (plain.Count == 0 || furTriangles <= plain.Count) continue;   // not an ear submesh
+                if (plain.Count == 0 || furTriangles <= plain.Count) continue;   // not an ear submesh (a tie is not)
 
                 foreach (var (a, b, c) in plain)
                 {
                     var centre = (pos[a] + pos[b] + pos[c]) / 3f;
                     bool near = false;
                     foreach (var f in furCorners)
-                        if (System.Numerics.Vector3.DistanceSquared(f, centre) <= reach2) { near = true; break; }
+                        if (System.Numerics.Vector3.DistanceSquared(pos[f], centre) <= reach2) { near = true; break; }
                     if (!near) continue;
                     skin.Add(VertexKey(mv.Mesh, a));
                     skin.Add(VertexKey(mv.Mesh, b));

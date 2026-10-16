@@ -214,34 +214,24 @@ public static class HatCompatService
     public static int PatchedCount(string modRoot) => ReadRecord(modRoot)?.Files.Count ?? 0;
 
     /// <summary>Whether Proteus has already fitted this exact file, and if so whether that patch is current.</summary>
-    /// <param name="stale">The patch was written by an older <see cref="HatCompatSolve.Version"/>.</param>
-    public static bool IsPatched(string modRoot, string rel, out bool stale)
-        => IsPatched(modRoot, rel, out stale, out _);
+    /// <param name="model">The file as it stands: a patch is stale only when THIS hairstyle's output changed since
+    /// (<see cref="HatCompatSolve.VersionFor"/>), so another race's patch is not refit for a change that never
+    /// reached it.</param>
+    /// <param name="stale">The patch was written by an older solve than this hairstyle needs.</param>
+    public static bool IsPatched(string modRoot, string rel, byte[] model, out bool stale)
+        => IsPatched(modRoot, rel, model, out stale, out _);
 
-    /// <inheritdoc cref="IsPatched(string, string, out bool)"/>
+    /// <inheritdoc cref="IsPatched(string, string, byte[], out bool)"/>
     /// <param name="replaced">The patch discarded the author's own hat support (see <see cref="Proposal.Replaced"/>).</param>
-    public static bool IsPatched(string modRoot, string rel, out bool stale, out bool replaced)
+    public static bool IsPatched(string modRoot, string rel, byte[] model, out bool stale, out bool replaced)
     {
         stale = false;
         replaced = false;
         rel = Rel(rel);
         var record = ReadRecord(modRoot);
         if (record?.Files.Contains(rel, StringComparer.OrdinalIgnoreCase) != true) return false;
-        stale = (record.Versions.TryGetValue(rel, out var v) ? v : 0) < HatCompatSolve.Version;
-        replaced = record.Replaced.Contains(rel, StringComparer.OrdinalIgnoreCase);
-        return true;
-    }
-
-    /// <inheritdoc cref="IsPatched(string, string, out bool)"/>
-    /// <param name="model">The file as it stands: a patch is stale only when THIS hairstyle's output changed since
-    /// (<see cref="HatCompatSolve.VersionFor"/>).</param>
-    public static bool IsPatched(string modRoot, string rel, byte[] model, out bool stale)
-    {
-        stale = false;
-        rel = Rel(rel);
-        var record = ReadRecord(modRoot);
-        if (record?.Files.Contains(rel, StringComparer.OrdinalIgnoreCase) != true) return false;
         stale = (record.Versions.TryGetValue(rel, out var v) ? v : 0) < HatCompatSolve.VersionFor(model);
+        replaced = record.Replaced.Contains(rel, StringComparer.OrdinalIgnoreCase);
         return true;
     }
 
@@ -261,27 +251,62 @@ public static class HatCompatService
     }
 
     /// <summary>
-    /// Stop tracking one file whose patch is gone (see <see cref="LooksPatched"/>): drop it from the record and delete
-    /// its backup, leaving the file itself as it is.
+    /// Stop tracking one file whose patch is gone (see <see cref="LooksPatched"/>): delete its backup, then drop it from
+    /// the record, leaving the file itself as it is. The backup goes FIRST: a backup left behind is the OLD file, which
+    /// the next fit would keep (<see cref="Backup"/> never overwrites one) and the next undo would restore.
     /// </summary>
-    public static void Forget(string modRoot, string rel)
+    /// <returns>Null when done; otherwise why not, with nothing a later fit could trip over left half-done.</returns>
+    public static string? Forget(string modRoot, string rel)
     {
         rel = Rel(rel);
         var record = ReadRecord(modRoot);
-        if (record == null) return;
+        if (record == null) return null;
+        var backup = Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, BackupSubdir, Native(rel));
+        try { if (File.Exists(backup)) File.Delete(backup); }
+        catch (Exception ex) { return $"the old backup {backup} could not be deleted: {ex.Message}"; }
+
         record.Files.RemoveAll(f => f.Equals(rel, StringComparison.OrdinalIgnoreCase));
         record.Hidden.Remove(rel);
         record.Versions.Remove(rel);
         record.Replaced.RemoveAll(f => f.Equals(rel, StringComparison.OrdinalIgnoreCase));
-        var recordPath = Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, RecordFile);
         try
         {
-            if (record.Files.Count == 0) File.Delete(recordPath);
+            if (record.Files.Count == 0) File.Delete(Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, RecordFile));
             else WriteRecord(modRoot, record);
         }
-        catch { return; }   // the record still names the backup: keep it
-        var backup = Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, BackupSubdir, Native(rel));
-        try { File.Delete(backup); } catch { /* a leftover backup is harmless */ }
+        catch (Exception ex) { return $"the record could not be updated: {ex.Message}"; }
+        return null;
+    }
+
+    /// <summary>What <see cref="RevertOrForget"/> did with one file.</summary>
+    public enum Undone { Nothing, Restored, Forgotten, Failed }
+
+    /// <summary>
+    /// Undo one patched file — unless it no longer looks patched (<see cref="LooksPatched"/>): then it was replaced
+    /// since, most likely by the author's update, and restoring the backup would put the OLD file back over it, so the
+    /// patch is let go instead. Per FILE, so each option of a hair pack is judged on its own.
+    /// </summary>
+    /// <param name="message">Why it failed, or the refusal <see cref="Revert"/> gave.</param>
+    public static Undone RevertOrForget(string modRoot, string rel, out string message)
+    {
+        message = "";
+        rel = Rel(rel);
+        if (ReadRecord(modRoot)?.Files.Contains(rel, StringComparer.OrdinalIgnoreCase) != true) return Undone.Nothing;
+
+        byte[]? current = null;
+        try { current = File.ReadAllBytes(Path.Combine(modRoot, Native(rel))); }
+        catch (IOException) { /* gone or locked: let Revert speak for it */ }
+        catch (UnauthorizedAccessException) { }
+
+        if (current != null && !LooksPatched(current))
+        {
+            if (Forget(modRoot, rel) is { } why) { message = why; return Undone.Failed; }
+            return Undone.Forgotten;
+        }
+
+        var outcome = Revert(modRoot, rel);
+        message = outcome.Message;
+        return outcome.Ok ? Undone.Restored : Undone.Failed;
     }
 
     /// <summary>Work out what this hair needs, without writing anything.</summary>
