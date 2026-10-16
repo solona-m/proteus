@@ -3695,6 +3695,14 @@
     "message": "リフィットを{0}の体型に戻せませんでした（{1}）",
     "description": ""
   },
+  "Parts.Retarget.Bake.NoWearer": {
+    "message": "キャラクターを読み取れませんでした",
+    "description": ""
+  },
+  "Parts.Retarget.Refused.Fmt": {
+    "message": "このモデルをリフィットできませんでした: {0}。",
+    "description": ""
+  },
   "Parts.Retarget.Cloth.Guess.Fmt": {
     "message": "布の形から推定：{0}。ただ緩いだけの可能性もあり、要確認。",
     "description": ""

@@ -3695,6 +3695,14 @@
     "message": "l'ajustement n'a pas pu être ramené à la forme {0} ({1})",
     "description": ""
   },
+  "Parts.Retarget.Bake.NoWearer": {
+    "message": "votre personnage n'a pas pu être lu",
+    "description": ""
+  },
+  "Parts.Retarget.Refused.Fmt": {
+    "message": "Impossible de réajuster ce modèle : {0}.",
+    "description": ""
+  },
   "Parts.Retarget.Cloth.Guess.Fmt": {
     "message": "D'après le tissu : probablement {0}, mais il peut juste être ample. À vérifier.",
     "description": ""

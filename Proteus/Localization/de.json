@@ -3695,6 +3695,14 @@
     "message": "die Anpassung konnte nicht in die {0}-Form zurückgebracht werden ({1})",
     "description": ""
   },
+  "Parts.Retarget.Bake.NoWearer": {
+    "message": "dein Charakter konnte nicht gelesen werden",
+    "description": ""
+  },
+  "Parts.Retarget.Refused.Fmt": {
+    "message": "Dieses Modell konnte nicht angepasst werden: {0}.",
+    "description": ""
+  },
   "Parts.Retarget.Cloth.Guess.Fmt": {
     "message": "Nach dem Stoff: beste Vermutung {0}, könnte aber auch nur locker sitzen. Prüfen lohnt sich.",
     "description": ""

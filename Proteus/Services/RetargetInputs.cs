@@ -121,6 +121,25 @@ internal static class RetargetInputs
     internal static bool SkinOnlyChanges(bool baking, byte[] before, byte[] after)
         => baking || !ReferenceEquals(before, after);
 
+    /// <summary>
+    /// The refit-onto sizes chosen, kept only where the list for a new race still offers them — the same file — so a
+    /// race change that leaves the body mod's sizes as they were (racial gear bent into the shape the bodies are made
+    /// for: her race's list is the shared shape's) does not empty what was picked. Slots left with none are dropped.
+    /// </summary>
+    internal static Dictionary<string, List<BodyOption>> StillOffered(
+        IReadOnlyDictionary<string, List<BodyOption>> chosen, Func<string, IReadOnlyList<BodyOption>> offered)
+    {
+        var kept = new Dictionary<string, List<BodyOption>>(StringComparer.Ordinal);
+        foreach (var (slot, sizes) in chosen)
+        {
+            var now = offered(slot);
+            var still = sizes.Select(s => now.FirstOrDefault(o => string.Equals(o.Rel, s.Rel, StringComparison.OrdinalIgnoreCase)))
+                             .OfType<BodyOption>().ToList();
+            if (still.Count > 0) kept[slot] = still;
+        }
+        return kept;
+    }
+
     /// <summary>One refit's sizes, as its option is named: the required slot's <paramref name="target"/>, then each
     /// other slot's — or <see cref="KeepEnds.SkinOnlyLabel"/> for a skin-only redraw, the same at every size.</summary>
     internal static List<string> ToLabels(Inputs inputs, IReadOnlyList<string> chosen, BodyOption target,

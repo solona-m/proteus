@@ -71,11 +71,24 @@ public class RacialRouteLocalTests(ITestOutputHelper o)
             worst = MathF.Max(worst, Vector3.Distance(At(a.Positions, v), At(b.Positions, v)));
             moved = MathF.Max(moved, Vector3.Distance(At(a.Positions, v), At(d.Positions, v)));
         }
-        int flipped = Flipped(a, b);
-        o.WriteLine($"{path}: bent down up to {moved * 1000f:F1} mm; back within {worst * 1000f:F4} mm; {flipped} flipped");
+        // Normals too: Bake and Unbake rewrite them, and a refit never touches them otherwise.
+        float turned = 0f;
+        for (int v = 0; v < a.Normals.Length / 3; v++)
+        {
+            var na = At(a.Normals, v);
+            var nb = At(b.Normals, v);
+            if (na == Vector3.Zero || nb == Vector3.Zero) continue;
+            float cos = Math.Clamp(Vector3.Dot(Vector3.Normalize(na), Vector3.Normalize(nb)), -1f, 1f);
+            turned = MathF.Max(turned, MathF.Acos(cos) * 180f / MathF.PI);
+        }
+        int flipped = Flipped(a, b), collapsed = Collapsed(a, b);
+        o.WriteLine($"{path}: bent down up to {moved * 1000f:F1} mm; back within {worst * 1000f:F4} mm, normals "
+                    + $"{turned:F3}°; {flipped} flipped, {collapsed} collapsed");
         Assert.True(moved > 1e-3f, "bending an Au Ra model into the Midlander shape should move it");
         Assert.True(worst < 5e-4f, $"the round trip is {worst * 1000f:F4} mm off");
+        Assert.True(turned < 0.5f, $"a normal came back turned {turned:F3}°");
         Assert.Equal(0, flipped);
+        Assert.Equal(0, collapsed);
 
         var s = SecondSkinWriter.Parse(model);
         var t = SecondSkinWriter.Parse(back!);
@@ -84,6 +97,83 @@ public class RacialRouteLocalTests(ITestOutputHelper o)
         Assert.Equal(s.Shapes.Count, t.Shapes.Count);
         Assert.Equal(s.BoneNames, t.BoneNames);
         Assert.Equal(s.MatNames, t.MatNames);
+    }
+
+    /// <summary>
+    /// Shape keys go through the bend too: the Auri set carries one, and it comes back where it was.
+    /// </summary>
+    [LocalDataFact(LocalData.GameData)]
+    [Trait("Plan", "EDGE-racial-gear-upscale-12")]
+    public void The_auri_set_s_shape_keys_go_down_and_back()
+    {
+        var data = Data();
+        var who = Wearer(data);
+        var shaped = new[] { "dwn", "sho", "top", "glv" }
+            .Select(slot => $"chara/equipment/e0258/model/c1401e0258_{slot}.mdl")
+            .Where(data.FileExists)
+            .Select(p => (Path: p, Model: data.GetFile(p)!.Data))
+            .FirstOrDefault(m => SecondSkinWriter.Parse(m.Model).Shapes.Count > 0);
+        Assert.True(shaped.Model != null, "no piece of the Auri set carries a shape key");
+
+        var down = Down.Into(shaped.Model!, who, out string why);
+        Assert.True(down != null, why);
+        var back = Down.Back(down!, who, out why);
+        Assert.True(back != null, why);
+        Assert.Equal(SecondSkinWriter.Parse(shaped.Model!).Shapes.Keys.OrderBy(k => k),
+                     SecondSkinWriter.Parse(back!).Shapes.Keys.OrderBy(k => k));
+        o.WriteLine($"{shaped.Path}: {string.Join(", ", SecondSkinWriter.Parse(back!).Shapes.Keys)}");
+    }
+
+    /// <summary>
+    /// The premise of bending down: the game makes its racial models by bending the shared shape, so the garment's skin,
+    /// bent back, lies on the game's own body of that shape — what the skin swap needs. Au Ra women's and men's both.
+    /// </summary>
+    [LocalDataTheory(LocalData.GameData)]
+    [InlineData("e0258", 1401, 201)]   // Auri, the women's
+    [InlineData("e0257", 1301, 101)]   // and the men's
+    [Trait("Plan", "AC-racial-gear-upscale-1")]
+    [Trait("Plan", "EDGE-racial-gear-upscale-1")]
+    public void Racial_skin_bent_down_lies_on_the_game_s_shared_body(string set, int drawn, int shared)
+    {
+        var data = Data();
+        var who = Wearer(data) with { Race = (ushort)drawn };
+
+        // The first piece of the set that draws some skin, against the game's body of its slot.
+        var piece = new[] { "_dwn", "_top", "_glv", "_sho" }
+            .Select(slot => (Slot: slot, Path: $"chara/equipment/{set}/model/c{drawn:D4}{set}{slot}.mdl"))
+            .Where(p => data.FileExists(p.Path))
+            .Select(p => (p.Slot, p.Path, Model: data.GetFile(p.Path)!.Data))
+            .FirstOrDefault(p => SkinOf(ModelPartReader.Read(p.Model)!).Length > 0);
+        Assert.True(piece.Model != null, $"no piece of {set} draws skin");
+        string path = piece.Path;
+        Assert.False(data.FileExists(RacialModelBake.WithRace(path, (ushort)shared)), "the set has a shared model");
+        var route = RefitCore.Route(path, (ushort)drawn, _ => false, _ => false, [], null);
+        Assert.Equal(new RacialModelBake.Route((ushort)drawn, (ushort)shared, Down: true), route);
+
+        var model = piece.Model!;
+        var down = route.Into(model, who, out string why);
+        Assert.True(down != null, why);
+        string code = $"{shared:D4}";
+        var vanilla = VanillaBodyCatalog.Read(code, p => data.GetFile(p)?.Data);
+        var body = ModelPartReader.Read(File.ReadAllBytes(vanilla.PathOf(vanilla.For(piece.Slot, code)[0])))!;
+        var bodyTriangles = body.Parts.Where(p => p.Island == -1).SelectMany(p => p.Triangles.Chunk(3))
+                                .Select(t => (At(body.Positions, t[0]), At(body.Positions, t[1]), At(body.Positions, t[2])))
+                                .ToArray();
+
+        // As the skin swap judges it: the share of the skin within SwapOnBody of the body's surface.
+        float Share(byte[] mdl)
+        {
+            var parts = ModelPartReader.Read(mdl)!;
+            var skin = SkinOf(parts);
+            return skin.Count(v => bodyTriangles.Min(t => DistanceToTriangle(At(parts.Positions, v), t))
+                                   <= BodyRetarget.SwapOnBody)
+                   / (float)skin.Length;
+        }
+        float drawnShare = Share(model), downShare = Share(down!);
+        o.WriteLine($"{path}: skin within {BodyRetarget.SwapOnBody * 1000f} mm of the c{code} body — drawn "
+                    + $"{drawnShare:P1}, bent down {downShare:P1}");
+        Assert.True(downShare >= BodyRetarget.OnBodyShare,
+                    $"only {downShare:P1} of the skin lies on the game's c{code} body: it would not be swapped");
     }
 
     /// <summary>
@@ -147,8 +237,9 @@ public class RacialRouteLocalTests(ITestOutputHelper o)
         var planParts = ModelPartReader.Read(plan.Model)!;
         var savedParts = ModelPartReader.Read(saved.Model)!;
         o.WriteLine($"bent back: {Flipped(planParts, savedParts)} faces turned over, "
-                    + $"{Flipped(planParts, savedParts, 1e-6f)} of 1 mm² or more");
+                    + $"{Flipped(planParts, savedParts, 1e-6f)} of 1 mm² or more; {Collapsed(planParts, savedParts)} collapsed");
         Assert.Equal(0, Flipped(planParts, savedParts, 1e-6f));
+        Assert.Equal(0, Collapsed(planParts, savedParts));
         var body = ModelPartReader.Read(bodyDrawn!)!;
         var result = ModelPartReader.Read(saved.Model)!;
         var skin = result.Parts.Where(p => SecondSkinWriter.IsBodySkinMaterial(p.Material))
@@ -191,35 +282,44 @@ public class RacialRouteLocalTests(ITestOutputHelper o)
         var (saved, _, refusal) = RefitCore.Finish(unreadable, Down, who, "", log);
         Assert.Null(saved);
         Assert.Contains(ModelRace.Describe("1401"), refusal);
+
+        // Nor without the character to bend it back by.
+        var bent = KeepEnds.SkinOnlyPlanned(Down.Into(data.GetFile(Auri)!.Data, who, out why)!);
+        (saved, _, refusal) = RefitCore.Finish(bent, Down, null, "", log);
+        Assert.Null(saved);
+        Assert.Contains(Proteus.Localization.Strings.Parts.RetargetBakeNoWearer, refusal);
     }
 
     /// <summary>
     /// The bake up, moved into <see cref="RefitCore.Finish"/>, as it was: the preview bent back from the model BEFORE its
     /// skin is renamed to the body's, the saved model renamed, and its save carrying the EQDP entry.
     /// </summary>
-    [LocalDataFact(LocalData.GameData)]
+    [LocalDataFact(LocalData.GameData, Bibo)]
     [Trait("Plan", "AC-racial-gear-upscale-8")]
-    public void A_man_s_boots_baked_up_finish_as_before()
+    public void A_man_s_top_baked_up_finishes_as_before()
     {
         var data = Data();
         var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
         var who = Wearer(data) with { Race = 201 };
-        string boots = new[] { "e0100", "e0005", "e0036", "e0001" }
-            .Select(set => $"chara/equipment/{set}/model/c0101{set}_sho.mdl").First(data.FileExists);
-        var up = RefitCore.Route(boots, 201, c => c == 201, c => c == 201, [], null);
+        // The game's own men's chest: all skin, which the rename has to draw with Bibo+'s.
+        const string top = "chara/equipment/e0000/model/c0101e0000_top.mdl";
+        var up = RefitCore.Route(top, 201, c => c == 201, c => c == 201, [], null);
         Assert.Equal(new RacialModelBake.Route(101, 201, Down: false), up);
 
-        var baked = up.Into(data.GetFile(boots)!.Data, who, out string why);
+        var baked = up.Into(data.GetFile(top)!.Data, who, out string why);
         Assert.True(baked != null, why);
-        var vanilla = VanillaBodyCatalog.Read("0201", p => data.GetFile(p)?.Data);
-        string target = vanilla.PathOf(vanilla.For("_sho", "0201")[0]);
+        // Bibo+'s chest: its skin material is not the man's, so the rename has something to do and the order counts.
+        var mod = BodySizeCatalog.Read(LocalData.Path(Bibo));
+        string target = mod.PathOf(mod.For("_top", "0201")[0]);
         var plan = KeepEnds.SkinOnlyPlanned(baked!);
 
         var (saved, preview, refusal) = RefitCore.Finish(plan, up, who, target, log);
         Assert.True(saved != null, refusal);
+        Assert.False(saved!.Model.AsSpan().SequenceEqual(plan.Model), "the kept skin should take the body's material");
         Assert.Equal(RacialModelBake.Unbake(plan.Model, 101, 201, who.Pbd, who.ParentOf, out _), preview);
-        Assert.Equal(RefitCore.WithBodySkin(plan, target, log).Model, saved!.Model);
-        Assert.NotNull(up.Eqdp(up.SavePath(boots)));
+        Assert.NotEqual(RacialModelBake.Unbake(saved.Model, 101, 201, who.Pbd, who.ParentOf, out _), preview);
+        Assert.Equal(RefitCore.WithBodySkin(plan, target, log).Model, saved.Model);
+        Assert.NotNull(up.Eqdp(up.SavePath(top)));
     }
 
     [LocalDataFact(LocalData.GameData)]
@@ -255,5 +355,53 @@ public class RacialRouteLocalTests(ITestOutputHelper o)
             if (na.Length() * 0.5f >= minArea && nb.LengthSquared() > 1e-14f && Vector3.Dot(na, nb) < 0) flipped++;
         }
         return flipped;
+    }
+
+    /// <summary>How far <paramref name="p"/> lies from triangle <paramref name="t"/> (Ericson, Real-Time Collision
+    /// Detection 5.1.5: the closest point by Voronoi region).</summary>
+    private static float DistanceToTriangle(Vector3 p, (Vector3 A, Vector3 B, Vector3 C) t)
+    {
+        var (a, b, c) = t;
+        Vector3 ab = b - a, ac = c - a, ap = p - a;
+        float d1 = Vector3.Dot(ab, ap), d2 = Vector3.Dot(ac, ap);
+        if (d1 <= 0 && d2 <= 0) return Vector3.Distance(p, a);
+        Vector3 bp = p - b;
+        float d3 = Vector3.Dot(ab, bp), d4 = Vector3.Dot(ac, bp);
+        if (d3 >= 0 && d4 <= d3) return Vector3.Distance(p, b);
+        float vc = d1 * d4 - d3 * d2;
+        if (vc <= 0 && d1 >= 0 && d3 <= 0) return Vector3.Distance(p, a + ab * (d1 / (d1 - d3)));
+        Vector3 cp = p - c;
+        float d5 = Vector3.Dot(ab, cp), d6 = Vector3.Dot(ac, cp);
+        if (d6 >= 0 && d5 <= d6) return Vector3.Distance(p, c);
+        float vb = d5 * d2 - d1 * d6;
+        if (vb <= 0 && d2 >= 0 && d6 <= 0) return Vector3.Distance(p, a + ac * (d2 / (d2 - d6)));
+        float va = d3 * d6 - d5 * d4;
+        if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0)
+            return Vector3.Distance(p, b + (c - b) * ((d4 - d3) / (d4 - d3 + (d5 - d6))));
+        float denom = 1f / (va + vb + vc);
+        return Vector3.Distance(p, a + ab * (vb * denom) + ac * (vc * denom));
+    }
+
+    /// <summary>The vertices of a model's body-skin meshes.</summary>
+    private static int[] SkinOf(ModelParts parts)
+        => parts.Parts.Where(p => p.Island == -1 && SecondSkinWriter.IsBodySkinMaterial(p.Material))
+                .SelectMany(p => p.Triangles).Distinct().ToArray();
+
+    /// <summary>
+    /// Triangles of real size in <paramref name="a"/> (0.01 mm² or more) that <paramref name="b"/> squashes to nothing —
+    /// which <see cref="Flipped"/> cannot see, having no face left to compare.
+    /// </summary>
+    private static int Collapsed(ModelParts a, ModelParts b)
+    {
+        int collapsed = 0;
+        foreach (var part in a.Parts.Where(p => p.Island == -1))
+            for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+            {
+                int i = part.Triangles[t], j = part.Triangles[t + 1], k = part.Triangles[t + 2];
+                var na = Vector3.Cross(At(a.Positions, j) - At(a.Positions, i), At(a.Positions, k) - At(a.Positions, i));
+                var nb = Vector3.Cross(At(b.Positions, j) - At(b.Positions, i), At(b.Positions, k) - At(b.Positions, i));
+                if (na.Length() * 0.5f >= 1e-8f && nb.Length() * 0.5f < 1e-11f) collapsed++;
+            }
+        return collapsed;
     }
 }

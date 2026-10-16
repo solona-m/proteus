@@ -3695,6 +3695,14 @@
     "message": "리핏을 {0} 체형으로 되돌리지 못했습니다({1})",
     "description": ""
   },
+  "Parts.Retarget.Bake.NoWearer": {
+    "message": "캐릭터를 읽을 수 없었습니다",
+    "description": ""
+  },
+  "Parts.Retarget.Refused.Fmt": {
+    "message": "이 모델을 리핏하지 못했습니다: {0}.",
+    "description": ""
+  },
   "Parts.Retarget.Cloth.Guess.Fmt": {
     "message": "천으로 판단: 최선의 추정은 {0}이지만 그냥 헐렁한 것일 수도 있습니다. 확인해 보세요.",
     "description": ""

@@ -96,7 +96,8 @@ public sealed partial class AutoRefitWatcher
         EndsOutput? skinOnly = null;
         if (decision is KeepEnds.SkinOnly skin)
         {
-            skinOnly = RedrawSkin(j, skin, CatalogOf);
+            skinOnly = RedrawSkin(j, skin, CatalogOf, out bool refused);
+            if (refused) return;   // said why already
             if (skinOnly == null)
             {
                 // Said neutrally: the skin may already be drawn like the new body's, or its layout may not convert.
@@ -277,8 +278,11 @@ public sealed partial class AutoRefitWatcher
     /// is not baked for another race, whose bake is itself a change worth saving. One only bent down to be read is not:
     /// the bend there and back changes nothing.
     /// </summary>
-    private EndsOutput? RedrawSkin(EndsJob j, KeepEnds.SkinOnly skin, Func<string, BodySizeCatalog?> catalogOf)
+    /// <param name="refused">The redraw could not be bent back into the drawn race, which the player has been told.</param>
+    private EndsOutput? RedrawSkin(EndsJob j, KeepEnds.SkinOnly skin, Func<string, BodySizeCatalog?> catalogOf,
+                                   out bool refused)
     {
+        refused = false;
         var ownCat = catalogOf(skin.Own.Dir)!;
         string targetPath = j.TargetMod.Catalog.PathOf(skin.Target);
         var model = RefitCore.MatchSkinToBody(j.Bytes, ownCat.PathOf(skin.Own.Option), targetPath, uvRemap, j.Male, log);
@@ -287,14 +291,16 @@ public sealed partial class AutoRefitWatcher
         // Bent down to be read, its skin redrawn: bent back up to be saved where it is drawn.
         else if (j.Route.Down)
         {
-            if (j.Route.Back(model, j.G.Wearer!, out string why) is not { } back)
+            var (finished, _, bentBack) = RefitCore.Finish(KeepEnds.SkinOnlyPlanned(model), j.Route, j.G.Wearer,
+                                                           targetPath, log);
+            if (finished == null)
             {
-                log.Warning("[Proteus] auto refit: {0}: {1}", j.Item,
-                            string.Format(Strings.Parts.RetargetBendBackFmt,
-                                          ModelRace.Describe($"{j.Route.Drawn:D4}"), why));
+                Fail(j.R, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"),
+                                        j.Item, bentBack));
+                refused = true;
                 return null;
             }
-            model = back;
+            model = finished.Model;
         }
 
         string sourceName = skin.Own.Dir == VanillaBodyCatalog.Key ? Strings.Parts.RetargetFromVanilla

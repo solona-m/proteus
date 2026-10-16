@@ -3695,6 +3695,14 @@
     "message": "the refit could not be bent back into the {0} shape ({1})",
     "description": ""
   },
+  "Parts.Retarget.Bake.NoWearer": {
+    "message": "your character could not be read",
+    "description": ""
+  },
+  "Parts.Retarget.Refused.Fmt": {
+    "message": "Couldn't refit this model: {0}.",
+    "description": ""
+  },
   "Parts.Retarget.Cloth.Guess.Fmt": {
     "message": "From the cloth: best guess {0}, but it may just be loose. Worth checking.",
     "description": ""

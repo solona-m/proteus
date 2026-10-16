@@ -77,17 +77,29 @@ internal static partial class RacialModelBake
     /// </summary>
     public static ushort SharedShape(ushort garment, Func<ushort, bool> hasBodies)
     {
-        int g = garment / 100;
-        if (!Playable(g) || hasBodies(Code(g))) return 0;
+        if (!Playable(garment / 100) || hasBodies(Code(garment / 100))) return 0;
 
-        int last = 0;
+        ushort last = 0;
+        foreach (ushort race in SameSexLine(garment))
+        {
+            if (hasBodies(race)) return race;
+            last = race;
+        }
+        return last;
+    }
+
+    /// <summary>
+    /// The races a garment of <paramref name="garment"/>'s race falls through to before the fall-through leaves its
+    /// sex, nearest first, as codes (201 for c0201): c1401 gives c0201; c1501 gives c0901, c0101; c1201 nothing. The
+    /// races <see cref="SharedShape"/> chooses among — and so the ones whose bodies are worth asking about.
+    /// </summary>
+    public static IEnumerable<ushort> SameSexLine(ushort garment)
+    {
+        int g = garment / 100;
+        if (!Playable(g)) yield break;
         for (int cur = ModelRace.Fallback(g), guard = 0; cur != 0 && cur % 2 == g % 2 && guard < 8;
              cur = ModelRace.Fallback(cur), guard++)
-        {
-            if (hasBodies(Code(cur))) return Code(cur);
-            last = cur;
-        }
-        return last == 0 ? (ushort)0 : Code(last);
+            yield return Code(cur);
     }
 
     /// <summary>Who a garment is baked for: their race, their skeleton's hierarchy, and the deformer their mods resolve.</summary>

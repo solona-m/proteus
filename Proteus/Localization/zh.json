@@ -3695,6 +3695,14 @@
     "message": "无法将转换结果变形回 {0} 体型（{1}）",
     "description": ""
   },
+  "Parts.Retarget.Bake.NoWearer": {
+    "message": "无法读取你的角色",
+    "description": ""
+  },
+  "Parts.Retarget.Refused.Fmt": {
+    "message": "无法改配此模型：{0}。",
+    "description": ""
+  },
   "Parts.Retarget.Cloth.Guess.Fmt": {
     "message": "根据布料判断：推测为 {0}，但也可能只是宽松，建议核实。",
     "description": ""

@@ -2888,6 +2888,13 @@ public sealed class PartsStrings
     public readonly string RetargetBendBackFmt = Loc.Localize("Parts.Retarget.Bake.BendBack.Fmt",
         "the refit could not be bent back into the {0} shape ({1})");
 
+    /// <summary>A reason in the {1} of <see cref="RetargetBendBackFmt"/>.</summary>
+    public readonly string RetargetBakeNoWearer = Loc.Localize("Parts.Retarget.Bake.NoWearer",
+        "your character could not be read");
+
+    /// <summary>Shown alone in the Body size tool; {0} is a lower-case reason such as <see cref="RetargetBendBackFmt"/>.</summary>
+    public readonly string RetargetRefusedFmt = Loc.Localize("Parts.Retarget.Refused.Fmt", "Couldn't refit this model: {0}.");
+
     /// <summary>A reason in the {1} of <see cref="RetargetBakeFailedFmt"/>.</summary>
     public readonly string RetargetBakeReadBack = Loc.Localize("Parts.Retarget.Bake.ReadBack",
         "the new model could not be read back");

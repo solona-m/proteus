@@ -603,16 +603,18 @@ internal static partial class RefitCore
         BodyRetarget.Planned plan, RacialModelBake.Route route, RacialModelBake.Wearer? who, string targetPath,
         IPluginLog log)
     {
-        if (!route.Any || who == null) return (plan, null, "");
+        if (!route.Any) return (plan, null, "");
         if (route.Down)
         {
-            var back = route.Back(plan.Model, who, out string why);
+            string why = Strings.Parts.RetargetBakeNoWearer;
+            var back = who != null ? route.Back(plan.Model, who, out why) : null;
             if (back == null)
                 return (null, null, string.Format(Strings.Parts.RetargetBendBackFmt,
                                                   ModelRace.Describe($"{route.Drawn:D4}"), why));
             return (plan with { Model = back }, null, "");
         }
-        var preview = route.Back(plan.Model, who, out _);
+        // Without the character to bend it back by, the preview is pushed unbent; the save itself needs no wearer.
+        var preview = who != null ? route.Back(plan.Model, who, out _) : null;
         return (WithBodySkin(plan, targetPath, log), preview, "");
     }
 

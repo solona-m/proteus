@@ -1056,8 +1056,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
         var route = g.Wearer == null
             ? RacialModelBake.Route.None
             : RefitCore.Route(r.Worn.GamePath, g.Wearer.Race, TargetHas,
-                              code => TargetHas(code) && (!gameMade || g.GameBodyRaces?.Contains($"{code:D4}") == true),
-                              redirects, ownRecord);
+                              AutoRefitDecisions.ShapeBodies(TargetHas, gameMade, g.GameBodyRaces), redirects, ownRecord);
         if (route.Any)
         {
             var made = route.Into(bytes, g.Wearer!, out string why);
@@ -1675,11 +1674,11 @@ public sealed partial class AutoRefitWatcher : IDisposable
     private HashSet<string> GameBodyRaces(string gamePath)
     {
         var races = new HashSet<string>(StringComparer.Ordinal);
-        int n = ModelSkinReader.RaceOf(gamePath) / 100;
-        if (n is < 1 or > 18 || ModelRace.IsSharedShape($"{n * 100 + 1:D4}")) return races;
-        for (int cur = n, guard = 0; cur != 0 && cur % 2 == n % 2 && guard < 8; cur = ModelRace.Fallback(cur), guard++)
+        ushort drawn = ModelSkinReader.RaceOf(gamePath);
+        if (drawn / 100 is < 1 or > 18 || ModelRace.IsSharedShape($"{drawn:D4}")) return races;
+        foreach (ushort race in RacialModelBake.SameSexLine(drawn).Prepend(drawn))
         {
-            string code = $"{cur * 100 + 1:D4}";
+            string code = $"{race:D4}";
             if (VanillaBodyCatalog.Read(code, readGameFile).IsBody) races.Add(code);
         }
         return races;

@@ -671,8 +671,12 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
         if (race == raceFor) return;
         if (raceFor != null)
         {
+            // The sizes refitted onto that the new race's lists still hold stay chosen: a "made for" change that flips
+            // a racial garment's route leaves the body mod's list as it was.
+            var kept = catalog is { } snapshot ? RetargetInputs.StillOffered(to, slot => snapshot.For(slot, race)) : [];
             if (planned != null) ctx.EndPreview();
             Clear();
+            foreach (var (slot, sizes) in kept) to[slot] = sizes;
         }
         raceFor = race;
         if (fromBodyDir == VanillaBodyCatalog.Key) fromCatalog = LoadSource(fromBodyDir);
@@ -1768,7 +1772,8 @@ internal sealed class BodyRetargetPanel(PenumbraBridge penumbra, UVRemapService 
                 {
                     if (bake == null) return plan;
                     var (saved, preview, refusal) = RefitCore.Finish(plan, bake.Route, bake.Wearer, targetPath, log);
-                    if (saved == null) throw new InvalidOperationException(refusal);
+                    if (saved == null)
+                        throw new InvalidOperationException(string.Format(Strings.Parts.RetargetRefusedFmt, refusal));
                     if (preview != null) previews.AddOrUpdate(saved.Model, preview);
                     return saved;
                 }

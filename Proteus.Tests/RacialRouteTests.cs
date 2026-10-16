@@ -176,6 +176,59 @@ public class RacialRouteTests
         Assert.False(SiblingPiece.Applies(root, up.To));
     }
 
+    [Theory]
+    [InlineData(1401, new[] { 201 })]
+    [InlineData(1501, new[] { 901, 101 })]
+    [InlineData(1201, new int[0])]
+    [InlineData(201, new int[0])]   // a woman's root falls to men: the line ends at once
+    [InlineData(0, new int[0])]
+    [Trait("Plan", "EDGE-racial-gear-upscale-2")]
+    [Trait("Plan", "EDGE-racial-gear-upscale-3")]
+    public void The_same_sex_line_stops_where_the_sex_changes(int garment, int[] line)
+        => Assert.Equal(line.Select(c => (ushort)c), RacialModelBake.SameSexLine((ushort)garment));
+
+    [Fact]
+    [Trait("Plan", "AC-racial-gear-upscale-6")]
+    public void Auto_refit_reads_the_game_s_gear_on_the_game_s_bodies_and_a_mod_s_on_any()
+    {
+        var gameBodies = new HashSet<string> { "0201" };
+        var game = AutoRefitDecisions.ShapeBodies(Only(1401, 201), gameMade: true, gameBodies);
+        Assert.True(game(201));
+        Assert.False(game(1401));   // the body mod has Au Ra bodies, the game has none to read the garment on
+        Assert.False(AutoRefitDecisions.ShapeBodies(Only(1401, 201), gameMade: true, null)(201));
+
+        var modded = AutoRefitDecisions.ShapeBodies(Only(1401, 201), gameMade: false, null);
+        Assert.True(modded(1401));
+        Assert.False(modded(101));  // never more than the refit-onto mod has
+
+        // As the watcher decides it for the game's Auri Pantalettes on an Au Ra wearing Bibo+-like bodies.
+        Assert.Equal(new RacialModelBake.Route(1401, 201, Down: true),
+                     Route(Auri, 1401, Only(201), AutoRefitDecisions.ShapeBodies(Only(201), true, gameBodies)));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-racial-gear-upscale-11")]
+    public void A_race_change_keeps_the_sizes_the_new_lists_still_offer()
+    {
+        BodyOption Legs(string name, string rel) => new("Legs", "", name, rel, "chara/equipment/e0000/model/c0201e0000_dwn.mdl", "_dwn");
+        var large = Legs("L", "legs/l.mdl");
+        var auRaOnly = Legs("Au Ra L", "legs/aura l.mdl");
+        var chosen = new Dictionary<string, List<BodyOption>>
+        {
+            ["_dwn"] = [large, auRaOnly],
+            ["_top"] = [Legs("Au Ra chest", "top/aura.mdl")],
+        };
+        var offered = new Dictionary<string, IReadOnlyList<BodyOption>>
+        {
+            ["_dwn"] = [Legs("L", "LEGS/L.mdl"), Legs("M", "legs/m.mdl")],
+            ["_top"] = [],
+        };
+
+        var kept = RetargetInputs.StillOffered(chosen, slot => offered[slot]);
+        Assert.Equal(["_dwn"], kept.Keys);
+        Assert.Equal(["LEGS/L.mdl"], kept["_dwn"].Select(o => o.Rel));   // the new list's own option, not the old one
+    }
+
     [Fact]
     [Trait("Plan", "AC-racial-gear-upscale-2")]
     public void The_shaped_down_note_names_both_races()
