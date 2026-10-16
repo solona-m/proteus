@@ -3683,6 +3683,18 @@
     "message": "{0} 모델을 만들지 못했습니다({1}). {2} 모델을 그대로 리핏합니다.",
     "description": ""
   },
+  "Parts.Retarget.Shaping": {
+    "message": "바디가 만들어진 체형으로 모델을 변형하는 중…",
+    "description": ""
+  },
+  "Parts.Retarget.ShapedDown.Fmt": {
+    "message": "{0} 바디가 없어서 {0} 모델을 게임이 변형하는 방식대로 {1} 체형에서 리핏한 뒤 다시 {0}(으)로 저장합니다.",
+    "description": ""
+  },
+  "Parts.Retarget.Bake.BendBack.Fmt": {
+    "message": "리핏을 {0} 체형으로 되돌리지 못했습니다({1})",
+    "description": ""
+  },
   "Parts.Retarget.Cloth.Guess.Fmt": {
     "message": "천으로 판단: 최선의 추정은 {0}이지만 그냥 헐렁한 것일 수도 있습니다. 확인해 보세요.",
     "description": ""

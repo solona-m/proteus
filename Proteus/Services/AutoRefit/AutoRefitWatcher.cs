@@ -895,12 +895,16 @@ public sealed partial class AutoRefitWatcher : IDisposable
     /// Null for an accessory.</param>
     /// <param name="Drawn">Every model the character draws now, by game path: whether the other piece of a pair is
     /// worn.</param>
+    /// <param name="GameBodyRaces">The races, of the piece's own and the shared shapes it falls through to, that the game
+    /// ships bodies of (<c>"0201"</c>): which one the game's own racial gear is refitted as (see
+    /// <see cref="RefitCore.Route"/>). Empty for a piece of the shared shapes, which is never bent down.</param>
     private sealed record Gathered(
         AutoRefitPreference Preference, IReadOnlyDictionary<string, string> Mods, string ModsRoot,
         IReadOnlyDictionary<string, PenumbraBridge.ModSettingsSnapshot>? Settings,
         RacialModelBake.Wearer? Wearer, byte[]? VanillaBytes, VanillaPick? Vanilla,
         IReadOnlyDictionary<string, PenumbraBridge.ModSettingsSnapshot>? Permanent,
-        (Worn Worn, string? Resolved, string? Root)? Now = null, IReadOnlySet<string>? Drawn = null);
+        (Worn Worn, string? Resolved, string? Root)? Now = null, IReadOnlySet<string>? Drawn = null,
+        IReadOnlySet<string>? GameBodyRaces = null);
 
     /// <summary>
     /// Run a short piece of a refit on the framework thread. Timed, because anything slow here is a frame the player
@@ -1045,28 +1049,33 @@ public sealed partial class AutoRefitWatcher : IDisposable
         List<PenumbraModMeta.Redirect> redirects = isVanilla ? [] : PenumbraModMeta.ReadAllRedirects(r.ModRoot!);
         var ownRecord = isVanilla ? null : BodyRetargetWriter.ReadRecord(r.ModRoot!);
         var targetRaces = RefitCore.RacesOf(targetCat);
-        ushort drawn = ModelSkinReader.RaceOf(r.Worn.GamePath);
-        ushort bakeTo = g.Wearer == null
-            ? (ushort)0
-            : RefitCore.BakeTarget(r.Worn.GamePath, g.Wearer.Race, code => targetRaces.Contains($"{code:D4}"),
-                                   redirects, ownRecord);
-        string savePath = r.Worn.GamePath;
-        if (bakeTo != 0)
+        bool TargetHas(ushort code) => targetRaces.Contains($"{code:D4}");
+        // The game's own gear is read on the game's own bodies, which most races have none of; a mod's garment was
+        // made on some body mod, read whichever it is.
+        bool gameMade = GameGear(r, redirects, ownRecord);
+        var route = g.Wearer == null
+            ? RacialModelBake.Route.None
+            : RefitCore.Route(r.Worn.GamePath, g.Wearer.Race, TargetHas,
+                              code => TargetHas(code) && (!gameMade || g.GameBodyRaces?.Contains($"{code:D4}") == true),
+                              redirects, ownRecord);
+        if (route.Any)
         {
-            var baked = RacialModelBake.Bake(bytes, drawn, bakeTo, g.Wearer!.Pbd, g.Wearer.ParentOf, out string why);
-            if (baked != null)
+            var made = route.Into(bytes, g.Wearer!, out string why);
+            if (made != null)
             {
-                log.Information("[Proteus] auto refit: baked {0} from c{1:D4} to c{2:D4}", r.Worn.GamePath, drawn, bakeTo);
-                bytes = baked;
-                savePath = RacialModelBake.WithRace(r.Worn.GamePath, bakeTo);
+                log.Information("[Proteus] auto refit: {0} {1} from c{2:D4} to c{3:D4}", route.Down ? "shaped" : "baked",
+                                r.Worn.GamePath, route.Drawn, route.To);
+                bytes = made;
             }
             else
             {
-                log.Warning("[Proteus] auto refit: could not bake {0} to c{1:D4}: {2}", r.Worn.GamePath, bakeTo, why);
-                bakeTo = 0;
+                log.Warning("[Proteus] auto refit: could not {0} {1} to c{2:D4}: {3}", route.Down ? "shape" : "bake",
+                            r.Worn.GamePath, route.To, why);
+                route = RacialModelBake.Route.None;
             }
         }
-        string race = bakeTo != 0 ? $"{bakeTo:D4}" : ReadAs(r.Worn.GamePath).Race;
+        string savePath = route.SavePath(r.Worn.GamePath);
+        string race = route.Any ? route.Race(r.Worn.GamePath)! : ReadAs(r.Worn.GamePath).Race;
         bool male = BodySizeCatalog.IsMaleRace(race);
 
         if (ModelPartReader.Read(bytes) is not { } garment)
@@ -1119,7 +1128,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
         // Shoes and gloves keep their own feet and hands: only the legs or arms they reach are refitted. See KeepEnds.
         if (AutoRefitDecisions.LimbOf(primary) != null)
         {
-            await RunKeepingEnds(new EndsJob(r, g, state, targetMod, item, bytes, redirects, ownRecord, bakeTo, savePath,
+            await RunKeepingEnds(new EndsJob(r, g, state, targetMod, item, bytes, redirects, ownRecord, route, savePath,
                                              race, male, garment, bones, vanillaCat, TargetFor, clock, together), ct);
             return;
         }
@@ -1132,7 +1141,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
             return;
         }
 
-        if (await SwitchToAuthorSize(r, g, item, redirects, ownRecord, bakeTo, targetMod, target, primary, race,
+        if (await SwitchToAuthorSize(r, g, item, redirects, ownRecord, route, targetMod, target, primary, race,
                                      state.Version, null, ct, together))
             return;
 
@@ -1276,14 +1285,22 @@ public sealed partial class AutoRefitWatcher : IDisposable
                                        line => log.Debug("[Proteus] auto refit: {0}", line),
                                        line => log.Warning("[Proteus] auto refit: {0}", line));
         plan = RefitCore.MatchSkinToBody(plan, sourcePath, targetPath, uvRemap, male, log);
-        if (bakeTo != 0) plan = RefitCore.WithBodySkin(plan, targetPath, log);
+        // Up, the kept skin named like the body's; down, bent back into the drawn race — or not saved at all.
+        var (finished, _, bentBack) = RefitCore.Finish(plan, route, g.Wearer, targetPath, log);
+        if (finished == null)
+        {
+            Fail(r, string.Format(Loc.Localize("Chat.AutoRefit.Failed.Fmt", "[Proteus] Couldn't refit {0}: {1}"), item,
+                               bentBack));
+            return;
+        }
+        plan = finished;
         ct.ThrowIfCancellationRequested();
 
         string labelFrom = RefitCore.LabelFrom(across ? sourceName : null,
                                                new[] { pick.Option.Label }.Concat(kept.Select(k => k.From.Label)));
         var refit = new BodyRetargetWriter.Refit(option, plan.Model, string.Join(" + ",
                                                      new[] { target.Label }.Concat(kept.Select(k => k.To.Label))));
-        if (await SaveAndWear(r, g, root, group, savePath, targetMod, labelFrom, refit, cutFrom, bakeTo, item, gameGear,
+        if (await SaveAndWear(r, g, root, group, savePath, targetMod, labelFrom, refit, cutFrom, route, item, gameGear,
                               new BodyRetargetWriter.Provenance(pick.Dir, pick.Option.Rel,
                                                                 TargetsOf(primary, target, kept, chestBeneathTo)))
             is not { } savedRoot)
@@ -1318,13 +1335,13 @@ public sealed partial class AutoRefitWatcher : IDisposable
     /// <see cref="KeepEnds.Reading.LimbView"/>) — and the slot its comparison is cached under; null for whole models.</param>
     /// <returns>True when nothing more is to be done: the author's size is on, already was, or was switched away from.</returns>
     private async Task<bool> SwitchToAuthorSize(Request r, Gathered g, string item, List<PenumbraModMeta.Redirect> redirects,
-                                                BodyRetargetWriter.Record? ownRecord, ushort bakeTo,
+                                                BodyRetargetWriter.Record? ownRecord, RacialModelBake.Route route,
                                                 BodyModIndex.Entry targetMod, BodyOption target, string slot, string race,
                                                 string bodiesVersion,
                                                 (Func<byte[], ModelParts, ModelParts?> Of, string CacheSlot)? view,
                                                 CancellationToken ct, PairContext? pair = null)
     {
-        if (r.ModRoot == null || bakeTo != 0
+        if (r.ModRoot == null || !AutoRefitDecisions.AuthorSizesApply(r.ModRoot, route)
             || RefitCore.SwitchingGroup(redirects, r.Worn.GamePath, ownRecord?.OwnGroups, RefitCore.SingleGroups(r.ModRoot))
                is not { } sizeGroup)
             return false;
@@ -1531,7 +1548,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
     /// <returns>The mod it was saved into, or null when it failed, which the player has been told.</returns>
     private async Task<string?> SaveAndWear(Request r, Gathered g, string? root, string group, string savePath,
                                             BodyModIndex.Entry targetMod, string labelFrom, BodyRetargetWriter.Refit refit,
-                                            string? cutFrom, ushort bakeTo, string item, bool fromGame,
+                                            string? cutFrom, RacialModelBake.Route route, string item, bool fromGame,
                                             BodyRetargetWriter.Provenance? provenance)
     {
         bool isVanilla = r.ModRoot == null;
@@ -1548,7 +1565,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
             root = made.Root;
         }
 
-        List<object>? manipulations = bakeTo != 0 && RacialModelBake.Switch(savePath, bakeTo) is { } eqdp ? [eqdp] : null;
+        List<object>? manipulations = route.Eqdp(savePath) is { } eqdp ? [eqdp] : null;
         var outcome = BodyRetargetWriter.Save(root, group, savePath, targetMod.Dir, labelFrom, [refit], cutFrom,
                                               manipulations, auto: true, fromGame: fromGame, provenance: provenance);
         if (!outcome.Ok)
@@ -1647,7 +1664,25 @@ public sealed partial class AutoRefitWatcher : IDisposable
         var drawn = penumbra.GetActivePlayerModelPaths() is { } models
             ? new HashSet<string>(models, StringComparer.OrdinalIgnoreCase)
             : null;
-        return new Gathered(pref, mods, modsRoot, settings, wearer, vanillaBytes, vanilla, permanent, now, drawn);
+        return new Gathered(pref, mods, modsRoot, settings, wearer, vanillaBytes, vanilla, permanent, now, drawn,
+                            GameBodyRaces(r.Worn.GamePath));
+    }
+
+    /// <summary>
+    /// The races down the same-sex fall-through from a racial piece's own that the game ships bodies of — read through
+    /// the game, so here on the framework thread. Nothing is read for a piece already of a shared shape.
+    /// </summary>
+    private HashSet<string> GameBodyRaces(string gamePath)
+    {
+        var races = new HashSet<string>(StringComparer.Ordinal);
+        int n = ModelSkinReader.RaceOf(gamePath) / 100;
+        if (n is < 1 or > 18 || ModelRace.IsSharedShape($"{n * 100 + 1:D4}")) return races;
+        for (int cur = n, guard = 0; cur != 0 && cur % 2 == n % 2 && guard < 8; cur = ModelRace.Fallback(cur), guard++)
+        {
+            string code = $"{cur * 100 + 1:D4}";
+            if (VanillaBodyCatalog.Read(code, readGameFile).IsBody) races.Add(code);
+        }
+        return races;
     }
 
     /// <summary>

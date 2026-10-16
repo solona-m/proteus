@@ -112,6 +112,13 @@ internal static class AutoRefitDecisions
                && redirects.All(d => fromGame.Contains(RefitCore.Normal(d.File)));
     }
 
+    /// <summary>
+    /// Whether a mod's own sizes are looked at before refitting: only for a mod's garment refitted as the race it is
+    /// drawn as. The author's sizes are of the drawn race; a garment baked or bent into another is measured against
+    /// bodies of that one, which those sizes were never made between.
+    /// </summary>
+    internal static bool AuthorSizesApply(string? modRoot, RacialModelBake.Route route) => modRoot != null && !route.Any;
+
     /// <summary>Whether a reading is sure enough to refit from unattended.</summary>
     internal static bool Proceed(Confidence confidence)
         => confidence is Confidence.Exact or Confidence.Likely or Confidence.Guess;

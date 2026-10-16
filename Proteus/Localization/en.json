@@ -3683,6 +3683,18 @@
     "message": "Couldn't make a {0} model ({1}); refitting the {2} model as is.",
     "description": ""
   },
+  "Parts.Retarget.Shaping": {
+    "message": "Bending the model into the shape the bodies are made for…",
+    "description": ""
+  },
+  "Parts.Retarget.ShapedDown.Fmt": {
+    "message": "There are no {0} bodies to refit between, so the {0} model is refitted in the {1} shape, the way the game bends it, and saved back as {0}.",
+    "description": ""
+  },
+  "Parts.Retarget.Bake.BendBack.Fmt": {
+    "message": "the refit could not be bent back into the {0} shape ({1})",
+    "description": ""
+  },
   "Parts.Retarget.Cloth.Guess.Fmt": {
     "message": "From the cloth: best guess {0}, but it may just be loose. Worth checking.",
     "description": ""

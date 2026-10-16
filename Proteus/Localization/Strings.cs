@@ -2880,6 +2880,14 @@ public sealed class PartsStrings
     public readonly string RetargetBakeFailedFmt = Loc.Localize("Parts.Retarget.BakeFailed.Fmt",
         "Couldn't make a {0} model ({1}); refitting the {2} model as is.");
 
+    public readonly string RetargetShaping = Loc.Localize("Parts.Retarget.Shaping", "Bending the model into the shape the bodies are made for…");
+
+    public readonly string RetargetShapedDownFmt = Loc.Localize("Parts.Retarget.ShapedDown.Fmt",
+        "There are no {0} bodies to refit between, so the {0} model is refitted in the {1} shape, the way the game bends it, and saved back as {0}.");
+
+    public readonly string RetargetBendBackFmt = Loc.Localize("Parts.Retarget.Bake.BendBack.Fmt",
+        "the refit could not be bent back into the {0} shape ({1})");
+
     /// <summary>A reason in the {1} of <see cref="RetargetBakeFailedFmt"/>.</summary>
     public readonly string RetargetBakeReadBack = Loc.Localize("Parts.Retarget.Bake.ReadBack",
         "the new model could not be read back");

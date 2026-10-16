@@ -3683,6 +3683,18 @@
     "message": "{0}-Modell konnte nicht erstellt werden ({1}); {2}-Modell wird unverändert angepasst.",
     "description": ""
   },
+  "Parts.Retarget.Shaping": {
+    "message": "Das Modell wird in die Form gebracht, für die die Körper gemacht sind…",
+    "description": ""
+  },
+  "Parts.Retarget.ShapedDown.Fmt": {
+    "message": "Es gibt keine {0}-Körper, zwischen denen angepasst werden kann. Daher wird das {0}-Modell in der {1}-Form angepasst, so wie das Spiel es verformt, und wieder als {0} gespeichert.",
+    "description": ""
+  },
+  "Parts.Retarget.Bake.BendBack.Fmt": {
+    "message": "die Anpassung konnte nicht in die {0}-Form zurückgebracht werden ({1})",
+    "description": ""
+  },
   "Parts.Retarget.Cloth.Guess.Fmt": {
     "message": "Nach dem Stoff: beste Vermutung {0}, könnte aber auch nur locker sitzen. Prüfen lohnt sich.",
     "description": ""
