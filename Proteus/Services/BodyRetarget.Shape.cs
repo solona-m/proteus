@@ -54,6 +54,8 @@ internal static partial class BodyRetarget
     /// where it is, as builds before 1288 did (see <see cref="DeepClearDepth"/>).</param>
     /// <param name="NoOpenSkin">Tuck the new body's skin only under the cloth, never in the open inside the author's own
     /// skin, as builds before 1289 did (see <see cref="TuckSpanShare"/>).</param>
+    /// <param name="NoKeepStandoff">Leave a game top's cloth as far off the new chest as the refit carried it, as builds
+    /// before 1289 did (see the standoff pass).</param>
     internal sealed record Tuning(bool NoFollow = false, bool NoOwnSkinWeights = false,
                                   float OwnSkinReach = OwnSkinReachDefault, float CopyReach = CopyReachDefault,
                                   float CopyTolerance = CopyToleranceDefault, bool NoGiveUp = false,
@@ -64,7 +66,8 @@ internal static partial class BodyRetarget
                                   bool CrossBodyPassesWithinBody = false, bool NoRelease = false,
                                   bool NoNippleSmooth = false, bool NoOutfitOrder = false, bool NoWallPair = false,
                                   bool NoWallCover = false, bool NoRimTurnGuard = false, bool NoSnapPush = false,
-                                  bool NoTuck = false, bool NoDeepClear = false, bool NoOpenSkin = false);
+                                  bool NoTuck = false, bool NoDeepClear = false, bool NoOpenSkin = false,
+                                  bool NoKeepStandoff = false);
 
     private static readonly Tuning DefaultTuning = new();
 

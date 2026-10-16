@@ -18,13 +18,13 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
     private static readonly HashSet<int> NoneHeld = [];
 
     /// <summary>A game top as it was before the neckline tuck and the deep clear.</summary>
-    private static readonly BodyRetarget.Tuning Before = new(NoTuck: true, NoDeepClear: true);
+    private static readonly BodyRetarget.Tuning Before = new(NoTuck: true, NoDeepClear: true, NoKeepStandoff: true);
 
     /// <summary>A game top with the tuck as change (a) made it: no deep clear, no open skin.</summary>
-    private static readonly BodyRetarget.Tuning TuckOnly = new(NoDeepClear: true, NoOpenSkin: true);
+    private static readonly BodyRetarget.Tuning TuckOnly = new(NoDeepClear: true, NoOpenSkin: true, NoKeepStandoff: true);
 
     /// <summary>A game top as it was before the standoff pass: everything else on.</summary>
-    private static readonly BodyRetarget.Tuning NoPull = new();
+    private static readonly BodyRetarget.Tuning NoPull = new(NoKeepStandoff: true);
 
     private string Pinned(byte[] model, string expected)
     {

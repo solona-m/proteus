@@ -97,12 +97,13 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
 
     /// <summary>
     /// A game top refitted onto a body as the automatic refit does it (<see cref="Game"/>), and the same with parts of it
-    /// switched off: <see cref="BeforeAB"/> as it was before the neckline tuck and the deep clear, <see cref="AOnly"/> with
-    /// the tuck as it first shipped (no deep clear), <see cref="DeepOnly"/> without the tuck.
+    /// switched off: <see cref="BeforeAB"/> as it was before the neckline tuck, the deep clear and the standoff pass,
+    /// <see cref="AOnly"/> with the tuck as it first shipped (no deep clear, no open skin, no pull), <see cref="DeepOnly"/>
+    /// without the tuck, <see cref="NoPull"/> without the standoff pass — everything else as it ships.
     /// </summary>
     private sealed record Refit(byte[] Bytes, ModelParts Garment, string Source, string Target, BodyOption Option,
                                 BodyRetarget.SlotPair Pair, BodyRetarget.Planned Game, BodyRetarget.Planned BeforeAB,
-                                BodyRetarget.Planned AOnly, BodyRetarget.Planned DeepOnly,
+                                BodyRetarget.Planned AOnly, BodyRetarget.Planned DeepOnly, BodyRetarget.Planned NoPull,
                                 Func<BodyRetarget.Planned, byte[]> Drawn, Lumina.GameData Data, long TuckMs, long UntuckedMs);
 
     private static Refit Plan(string garmentName, string modNeed, string? rel)
@@ -127,11 +128,12 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
         clock.Restart();
         BodyRetarget.Planned With(BodyRetarget.Tuning tuning) => BodyRetarget.WithTuning(tuning,
             () => RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true, out _));
-        var beforeAB = With(new BodyRetarget.Tuning(NoTuck: true, NoDeepClear: true));
+        var beforeAB = With(new BodyRetarget.Tuning(NoTuck: true, NoDeepClear: true, NoKeepStandoff: true));
         long untuckedMs = clock.ElapsedMilliseconds;
-        var aOnly = With(new BodyRetarget.Tuning(NoDeepClear: true));
+        var aOnly = With(new BodyRetarget.Tuning(NoDeepClear: true, NoOpenSkin: true, NoKeepStandoff: true));
         var deepOnly = With(new BodyRetarget.Tuning(NoTuck: true));
-        return new Refit(bytes, garment, source, target, option, pair, game, beforeAB, aOnly, deepOnly,
+        var noPull = With(new BodyRetarget.Tuning(NoKeepStandoff: true));
+        return new Refit(bytes, garment, source, target, option, pair, game, beforeAB, aOnly, deepOnly, noPull,
                          plan => RefitCore.MatchSkinToBody(plan.Model, source, target, uv, false, log), data, tuckMs,
                          untuckedMs);
     }
@@ -421,12 +423,14 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
     /// </summary>
     private void OffBreastMove(Refit r)
     {
-        var full = LaidGarment(r);
+        // The deep clear alone: without the standoff pass, which moves the neckline on purpose (neckline-float, A13).
+        var full = LaidGarment(r with { Game = r.NoPull });
         var before = LaidGarment(r with { Game = r.BeforeAB });
+        var shipped = LaidGarment(r);
         var deepOnly = LaidGarment(r with { Game = r.DeepOnly });
         var clothVerts = full.Parts.Where(p => p.Island < 0 && !SecondSkinWriter.IsBodySkinMaterial(p.Material))
                              .SelectMany(p => p.Triangles).Distinct().ToArray();
-        Assert.All(clothVerts, v => Assert.Equal(At(deepOnly, v), At(full, v)));
+        Assert.All(clothVerts, v => Assert.Equal(At(deepOnly, v), At(shipped, v)));
 
         // Weld the cloth by position, as the solve does, and join it along its triangles' edges.
         var node = new Dictionary<(int, int, int), int>();
