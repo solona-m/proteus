@@ -142,7 +142,23 @@ internal sealed class MeshVolumeSolve : IMeshEdit
     private Vec3[] nodeMoved;
 
     /// <summary>A node's values before a stroke first changed it: what undo restores.</summary>
-    private readonly record struct Was(Vec3 Delta, float Weight, float Wind, Vec3 Moved);
+    private readonly record struct Was(Vec3 Delta, float Weight, float Wind, Vec3 Moved, NormalRebase? Rebase);
+
+    /// <summary>
+    /// How a node's normals were set by the last transform drag that carried it whole: each of its vertices' authored
+    /// normal goes through <paramref name="Map"/>, then turns by however far the node's faces have turned since they
+    /// summed to <paramref name="RefFace"/>. Exact where <see cref="SecondSkinWriter.TurnedNormals"/> is not — see
+    /// <see cref="RebaseNormals"/>. Immutable, so undo can keep it by reference.
+    /// </summary>
+    private sealed record NormalRebase(Matrix4x4 Map, Vec3 RefFace);
+
+    /// <summary>Per node, its <see cref="NormalRebase"/>; null for a node whose normals are just turned.</summary>
+    private readonly NormalRebase?[] nodeRebase;
+
+    /// <summary>The faces the normal pass sums (<see cref="LinearNormals.UniqueFaces"/>) and each node's share of
+    /// them — built the first time a drag records exact normals.</summary>
+    private int[]? uniqueFaces;
+    private int[][]? facesOfNode;
 
     private readonly List<Dictionary<int, Was>> undo = [];
     private Dictionary<int, Was>? stroke;
@@ -161,7 +177,7 @@ internal sealed class MeshVolumeSolve : IMeshEdit
     /// </summary>
     public bool StrokeOpen => stroke != null && !Moving && !Grabbing;
 
-    private Was Snapshot(int n) => new(nodeDelta[n], nodeWeight[n], nodeWind[n], nodeMoved[n]);
+    private Was Snapshot(int n) => new(nodeDelta[n], nodeWeight[n], nodeWind[n], nodeMoved[n], nodeRebase[n]);
 
 
     public MeshVolumeSolve(ModelParts model)
@@ -268,6 +284,7 @@ internal sealed class MeshVolumeSolve : IMeshEdit
         nodeWeight = new float[nodeCount];
         vertDelta = new Vec3[vc];
         vertNrm = (Vec3[])baseNrm.Clone();
+        nodeRebase = new NormalRebase?[nodeCount];
 
         // The strongest of a node's vertices, so opening a model never stills part of it.
         nodeWind = new float[nodeCount];
@@ -1203,6 +1220,7 @@ internal sealed class MeshVolumeSolve : IMeshEdit
             nodeMoved[n] = was.Moved;
             nodeWeight[n] = was.Weight;
             nodeWind[n] = was.Wind;
+            nodeRebase[n] = was.Rebase;
         }
         WindVersion++;
         // No unfold: the restored displacement was settled when its own stroke ended.
@@ -1215,6 +1233,7 @@ internal sealed class MeshVolumeSolve : IMeshEdit
         Array.Clear(nodeDelta);
         Array.Clear(nodeMoved);
         Array.Clear(nodeWeight);
+        Array.Clear(nodeRebase);
         Array.Copy(initialWind, nodeWind, nodeCount);
         WindVersion++;
         Array.Copy(initialPull, pullDir, nodeCount);
@@ -1255,6 +1274,8 @@ internal sealed class MeshVolumeSolve : IMeshEdit
 
         stroke = [];
         foreach (int n in moveWeights.Keys) stroke[n] = Snapshot(n);
+        moveMatrix = null;
+        dirtyBeforeMove = Dirty;
         Moving = true;
         moveDrag++;
         return moveWeights.Count;
@@ -1430,6 +1451,7 @@ internal sealed class MeshVolumeSolve : IMeshEdit
     public void MoveTo(Vector3 offset)
     {
         if (!Moving || stroke == null) return;
+        moveMatrix = null;
         foreach (var (n, w) in moveWeights)
         {
             var was = stroke[n];
@@ -1449,6 +1471,7 @@ internal sealed class MeshVolumeSolve : IMeshEdit
     public void TransformTo(Matrix4x4 transform)
     {
         if (!Moving || stroke == null) return;
+        moveMatrix = transform;
         foreach (var (n, w) in moveWeights)
         {
             var was = stroke[n];
@@ -1466,13 +1489,24 @@ internal sealed class MeshVolumeSolve : IMeshEdit
         Spread();
     }
 
+    /// <summary>The matrix the open drag last placed its part with (<see cref="TransformTo"/>); null for a
+    /// translation, or before the first.</summary>
+    private Matrix4x4? moveMatrix;
+
+    /// <summary><see cref="Dirty"/> as the open move drag found it, for a drag that ends having moved nothing.</summary>
+    private bool dirtyBeforeMove;
+
     /// <summary>
     /// Finish a move drag: record it for undo and re-light the neighbours it stretched. No smoothing or unfold, which
-    /// would take back part of the move.
+    /// would take back part of the move. A drag that stretched or turned its part (not one that only slid or evenly
+    /// scaled it) gives the part's inside exact normals — see <see cref="RebaseNormals"/>.
     /// </summary>
-    public void EndMove()
+    /// <returns>Whether the drag moved anything. A tap on a handle, or a drag brought back where it began, did not:
+    /// it leaves no undo entry and the edit exactly as it was — weights and <see cref="Dirty"/> included — so the
+    /// caller has nothing to save.</returns>
+    public bool EndMove()
     {
-        if (!Moving) return;
+        if (!Moving) return false;
         Moving = false;
         var touched = stroke;
         stroke = null;
@@ -1482,14 +1516,114 @@ internal sealed class MeshVolumeSolve : IMeshEdit
             foreach (var (n, was) in touched)
                 if (nodeDelta[n] != was.Delta) { moved = true; break; }
 
-        if (moved)
+        if (!moved)
         {
-            undo.Add(touched!);
-            foreach (var (n, w) in moveWeights)
-                if (w < 1f) nodeWeight[n] = MathF.Max(nodeWeight[n], w);
+            // TransformTo raised the part's weights as it went; nothing moved, so nothing is to be relit.
+            if (touched != null)
+                foreach (var (n, was) in touched)
+                {
+                    nodeWeight[n] = was.Weight;
+                    nodeMoved[n] = was.Moved;
+                }
+            moveWeights.Clear();
+            moveMatrix = null;
+            Dirty = dirtyBeforeMove;
+            return false;
         }
+
+        undo.Add(touched!);
+        foreach (var (n, w) in moveWeights)
+            if (w < 1f) nodeWeight[n] = MathF.Max(nodeWeight[n], w);
+        RebaseNormals(touched!);
         moveWeights.Clear();
+        moveMatrix = null;
         Settle(null);
+        return true;
+    }
+
+    /// <summary>
+    /// Give the dragged part's inside the normals its transform really gives it: each normal through the transform's
+    /// inverse-transpose (<see cref="LinearNormals.NormalMap"/>), on top of whatever had set it before.
+    /// <para/>
+    /// <see cref="SecondSkinWriter.TurnedNormals"/> turns all of a node's normals by one rotation, from the turn of the
+    /// node's summed face normal. Right for a brush dent and for soft cloth; wrong for a stretch along one axis, where
+    /// a hard edge's split normals share a node and no one rotation keeps them all — stretch a box on Y and its corner
+    /// sums tilt, so its flat sides' shading would skew.
+    /// <para/>
+    /// Only nodes the drag carried WHOLE and whose every face it carried whole: only there is the surface's local
+    /// change exactly the matrix. Seam and falloff-band nodes keep the turned normals, a smooth approximation.
+    /// Recorded rather than written once, so the next settle (any brush, move or undo) keeps it: see
+    /// <see cref="ApplyRebase"/>. An even scale or a translation records nothing; their normals stay as they were.
+    /// </summary>
+    /// <param name="start">Each node the drag carried, as it was before the drag.</param>
+    private void RebaseNormals(Dictionary<int, Was> start)
+    {
+        if (moveMatrix is not { } m || LinearNormals.IsUniform(m) || LinearNormals.NormalMap(m) is not { } map) return;
+        uniqueFaces ??= LinearNormals.UniqueFaces(tris, nodeOf);
+        facesOfNode ??= LinearNormals.FacesOfNode(uniqueFaces, nodeOf, nodeCount);
+
+        Vec3[]? before = null;
+        foreach (var (n, w) in moveWeights)
+        {
+            if (w < 1f || !CarriedWhole(n)) continue;
+
+            // The surface as the drag found it: the snapshot's displacement on every node the drag carried.
+            if (before == null)
+            {
+                before = (Vec3[])vertDelta.Clone();
+                for (int i = 0; i < before.Length; i++)
+                    if (start.TryGetValue(nodeOf[i], out var s)) before[i] = s.Delta;
+            }
+
+            var was = start[n];
+            var faces = facesOfNode[n];
+            var facePre = LinearNormals.FaceSum(uniqueFaces, faces, basePos, before);
+
+            // The map that produced the node's normals as they stood — exactly what the normal pass did: a record,
+            // turned since; else the authored normals, turned only if the node had weight.
+            var stood = was.Rebase is { } r
+                ? r.Map * LinearNormals.TurnMatrix(r.RefFace, facePre)
+                : was.Weight <= 0f
+                    ? Matrix4x4.Identity
+                    : LinearNormals.TurnMatrix(LinearNormals.FaceSum(uniqueFaces, faces, basePos, null), facePre);
+
+            nodeRebase[n] = new NormalRebase(stood * map, LinearNormals.FaceSum(uniqueFaces, faces, basePos, vertDelta));
+        }
+    }
+
+    /// <summary>The open drag carries the node and every face around it whole.</summary>
+    private bool CarriedWhole(int n)
+    {
+        var faces = facesOfNode![n];
+        if (faces.Length == 0) return false;
+        foreach (int f in faces)
+            for (int k = 0; k < 3; k++)
+                if (!moveWeights.TryGetValue(nodeOf[uniqueFaces![f + k]], out float w) || w < 1f) return false;
+        return true;
+    }
+
+    /// <summary>
+    /// The recorded nodes' normals (<see cref="RebaseNormals"/>) over the turned ones: through the record's map, then
+    /// turned by however far the node's faces have turned since. Nothing moved since the record ⇒ the faces sum to it
+    /// bit for bit ⇒ no turn, and the exact normals stand. A normal that comes out with no direction keeps the turned one.
+    /// </summary>
+    private void ApplyRebase()
+    {
+        if (uniqueFaces == null || facesOfNode == null) return;
+        Vec3[]? now = null;
+        bool[]? known = null;
+        for (int i = 0; i < vertNrm.Length; i++)
+        {
+            int n = nodeOf[i];
+            if (nodeRebase[n] is not { } r) continue;
+            now ??= new Vec3[nodeCount];
+            known ??= new bool[nodeCount];
+            if (!known[n]) { now[n] = LinearNormals.FaceSum(uniqueFaces, facesOfNode[n], basePos, vertDelta); known[n] = true; }
+
+            var turned = LinearNormals.Turn(r.RefFace, now[n], LinearNormals.Apply(r.Map, baseNrm[i]));
+            if (MeshMath.Normalize(turned) is { } u && float.IsFinite(u.X) && float.IsFinite(u.Y) && float.IsFinite(u.Z))
+                vertNrm[i] = u;
+        }
     }
 
     // ── elastic grab ────────────────────────────────────────────────────────
@@ -1749,6 +1883,9 @@ internal sealed class MeshVolumeSolve : IMeshEdit
         // barely moved, which is what the falloff of every stroke covers.
         vertNrm = SecondSkinWriter.TurnedNormals(basePos, baseNrm, vertDelta, nodeOf, nodeWeight, tris);
 
+        // The exact normals a stretch or turn recorded — before the pulls below are aimed from the normals.
+        ApplyRebase();
+
         // Re-aim normal-following pulls from the current surface: inside a concavity the old directions drive the
         // walls apart. Pulls aimed from skin stay, since the skin has not moved.
         var accum = new Vec3[nodeCount];
@@ -1885,7 +2022,10 @@ internal sealed class MeshVolumeSolve : IMeshEdit
         // A move or grab open on this solve is over too, as for Reset: its snapshots belong to the edit being replaced.
         Moving = Grabbing = false;
         moveWeights.Clear();
+        moveMatrix = null;
         grabTerms.Clear();
+        // Exact normals stay with the size they were made on: this size's own faces turn its normals.
+        Array.Clear(nodeRebase);
         for (int n = 0; n < nodeCount; n++)
         {
             if (skin[n] || count[n] == 0) continue;
@@ -1901,7 +2041,8 @@ internal sealed class MeshVolumeSolve : IMeshEdit
         Settle(null);
     }
 
-    /// <summary>Per-vertex normal after the edit, indexed as <see cref="ModelParts.Positions"/> is.</summary>
+    /// <summary>Per-vertex normal after the edit, indexed as <see cref="ModelParts.Positions"/> is: the author's turned
+    /// with the surface, or, inside a part a drag stretched or turned, exactly as the drag took them.</summary>
     public Vec3 NormalAt(int vertex) => vertNrm[vertex];
 
     /// <summary>The vertex's normal as the model's author made it, before any edit turned it.</summary>

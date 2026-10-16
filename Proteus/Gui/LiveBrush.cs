@@ -125,8 +125,9 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     /// click on the garment goes to <paramref name="lockClicked"/> to choose the part, and this gizmo is drawn at
     /// <paramref name="movePivot"/> on the posed character and driven by the mouse. Null for every other tool.</param>
     /// <param name="movePivot">The gizmo's centre in the model's space; null when no part is chosen yet.</param>
-    /// <param name="scaleDrag">The Scale tool: as <paramref name="moveGizmo"/>, but the handle is the chosen part
-    /// itself — pressed and dragged sideways. Null for every other tool.</param>
+    /// <param name="scaleDrag">The Scale tool: as <paramref name="moveGizmo"/>, with three axis handles that stretch the
+    /// part along one axis, and the chosen part itself pressed and dragged sideways to scale it evenly. Null for every
+    /// other tool.</param>
     /// <param name="rotateGizmo">The Rotate tool: as <paramref name="moveGizmo"/>, with rings instead of arrows. Null for
     /// every other tool. At most one of the three handles is ever set.</param>
     /// <param name="partLocked">Greys the parts this names (by <paramref name="partOf"/>'s id) instead of the solve's
@@ -433,7 +434,7 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
     private void EndIfPainting()
     {
         if (moveGizmo is { Active: not TranslateGizmo.Handle.None }) moveGizmo.Release();
-        if (scaleDrag is { Active: true }) scaleDrag.Release();
+        if (scaleDrag is { Active: not PartScaleDrag.Handle.None }) scaleDrag.Release();
         if (rotateGizmo is { Active: not RotateGizmo.Handle.None }) rotateGizmo.Release();
         // The pose the stroke's ray was held to goes with it, or the next stroke would see through this one's pose.
         strokeUnskin = null;
@@ -467,7 +468,7 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
         if (moveFalloff is { } falloff) DrawMoveFalloffWash(projection, m, falloff);
         else DrawTickedWash(projection, m);
         var origin = ImGui.GetMainViewport().Pos;
-        bool dragging = moveGizmo is { Active: not TranslateGizmo.Handle.None } || scaleDrag is { Active: true }
+        bool dragging = moveGizmo is { Active: not TranslateGizmo.Handle.None } || scaleDrag is { Active: not PartScaleDrag.Handle.None }
                         || rotateGizmo is { Active: not RotateGizmo.Handle.None };
 
         if (movePivot is { } pivot)
@@ -494,13 +495,13 @@ public sealed unsafe class LiveBrush(IObjectTable objects, IDataManager data, Pe
             rotateGizmo?.Update(pivot, toScreen, screenRay, io.MousePos, mouseAllowed: allowed,
                                 pressed: pressed, down: down, background: true);
 
-            // Scale: the handle is the chosen part itself.
+            // Scale: the axis handles, and the chosen part itself for an even scale.
             bool overPart = hit is { } over
                             && (polygons != null
                                     ? polygons.Contains(PolygonOf(m, over.Triangle))
                                     : partOf != null && partTicked != null
                                       && partOf(m.BaseTriangles[over.Triangle * 3]) is var part and >= 0 && partTicked(part));
-            scaleDrag?.Update(pivot, toScreen, io.MousePos, overPart, mouseAllowed: allowed,
+            scaleDrag?.Update(pivot, toScreen, screenRay, io.MousePos, overPart, mouseAllowed: allowed,
                               pressed: pressed, down: down, background: true);
         }
 

@@ -89,7 +89,7 @@ The tools:
 | Wind | Paints how much the game's wind sways the garment, shown in red. Hold Ctrl, or set **Amount** to 0%, to erase. |
 | Move | Drags a part, or a few polygons, with arrows: one arrow moves it along that axis, a square across that plane. See [Moving, turning and scaling](#moving-turning-and-scaling) below. |
 | Rotate | Turns a part about its centre: drag a coloured ring to turn it about that axis, or the outer ring to turn it about your view. |
-| Scale | Grows or shrinks a part about its centre: press on it and drag right to grow it, left to shrink it. |
+| Scale | Grows, shrinks or stretches a part about its centre: drag a coloured handle to stretch it along that axis, or press on the part and drag right to grow it, left to shrink it. |
 | Body size | Refits the garment to another body size, or to another body mod. See [Body size](#body-size) below. |
 
 ##### Brushing

@@ -2527,8 +2527,8 @@
     "message": "Skalieren",
     "description": ""
   },
-  "Parts.Tool.Scale.Tip": {
-    "message": "Wähle ein Teil, drücke darauf und ziehe nach rechts, um es um\nseine Mitte zu vergrößern, oder nach links, um es zu verkleinern.",
+  "Parts.Tool.ScaleAxes.Tip": {
+    "message": "Wähle ein Teil und ziehe dann an einem der Griffe in seiner Mitte, um\nes entlang dieser Achse zu strecken, oder drücke auf das Teil und ziehe\nnach rechts oder links, um es gleichmäßig zu vergrößern oder zu verkleinern.",
     "description": ""
   },
   "Parts.Rotate.Help": {
@@ -2539,12 +2539,12 @@
     "message": "Klicke ein Teil an deinem Charakter an und ziehe dann an einem der Ringe in seiner Mitte. Halte Alt, um die Kamera zu bewegen. Jede Drehung wird beim Loslassen gespeichert.",
     "description": ""
   },
-  "Parts.Scale.Help": {
-    "message": "Klicke ein Teil an, um es zu wählen, drücke dann darauf und ziehe nach rechts zum Vergrößern oder nach links zum Verkleinern. Ziehen anderswo dreht das Modell, Umschalt-Ziehen verschiebt die Ansicht, Scrollen zoomt.",
+  "Parts.ScaleAxes.Help": {
+    "message": "Klicke ein Teil an, um es zu wählen, und ziehe dann an einem Griff, um es entlang dieser Achse zu strecken, oder drücke auf das Teil und ziehe nach rechts zum Vergrößern oder nach links zum Verkleinern. Ziehen anderswo dreht das Modell, Umschalt-Ziehen verschiebt die Ansicht, Scrollen zoomt.",
     "description": ""
   },
-  "Parts.Scale.LiveHint": {
-    "message": "Klicke ein Teil an deinem Charakter an, drücke dann darauf und ziehe nach rechts zum Vergrößern oder nach links zum Verkleinern. Halte Alt, um die Kamera zu bewegen. Jede Änderung wird beim Loslassen gespeichert.",
+  "Parts.ScaleAxes.LiveHint": {
+    "message": "Klicke ein Teil an deinem Charakter an und ziehe dann an einem Griff, um es entlang dieser Achse zu strecken, oder drücke auf das Teil und ziehe nach rechts zum Vergrößern oder nach links zum Verkleinern. Halte Alt, um die Kamera zu bewegen. Jede Änderung wird beim Loslassen gespeichert.",
     "description": ""
   },
   "Parts.Move.Help": {
