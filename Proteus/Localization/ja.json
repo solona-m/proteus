@@ -2639,6 +2639,14 @@
     "message": "風でこの装備が動くよう、{0} 個のマテリアルファイルを設定しました。",
     "description": ""
   },
+  "Parts.Wind.Materials.Upgraded.Fmt": {
+    "message": "そのうち {0} 個を、風に対応していない旧キャラクターシェーダーから黄金のレガシーのシェーダーへ更新しました。",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Legacy.Fmt": {
+    "message": "{0} 個のマテリアルファイルは風に対応していない旧キャラクターシェーダーを使っており、更新できなかったため揺れません。",
+    "description": ""
+  },
   "Parts.Wind.Materials.Missing.Fmt": {
     "message": "{0} 個のマテリアルファイルには変更できる風の動きの設定がないため、揺れない可能性があります。",
     "description": ""

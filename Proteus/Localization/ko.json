@@ -2639,6 +2639,14 @@
     "message": "바람이 이 장비를 움직일 수 있도록 재질 파일 {0}개를 설정했습니다.",
     "description": ""
   },
+  "Parts.Wind.Materials.Upgraded.Fmt": {
+    "message": "그중 {0}개를 바람이 없는 이전 캐릭터 셰이더에서 황금의 유산 셰이더로 업그레이드했습니다.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Legacy.Fmt": {
+    "message": "재질 파일 {0}개가 바람이 없는 이전 캐릭터 셰이더를 사용하며 업그레이드할 수 없어 흔들리지 않습니다.",
+    "description": ""
+  },
   "Parts.Wind.Materials.Missing.Fmt": {
     "message": "재질 파일 {0}개에는 바꿀 수 있는 바람 움직임 설정이 없어 흔들리지 않을 수 있습니다.",
     "description": ""

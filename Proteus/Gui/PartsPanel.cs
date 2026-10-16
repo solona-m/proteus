@@ -3279,7 +3279,13 @@ public sealed class PartsPanel
                 var mats = MeshVolumeService.ApplyWindMaterials(
                     root, parts.Parts.Where(p => !IsSkin(p)).Select(p => p.Material), redirects);
                 materialsChanged = mats.Changed;
+                // Logged, not only shown: the status line is the one place a "won't sway" used to be said.
+                log.Information("[Proteus] brush: wind materials of {0}: changed {1} (upgraded {2}), missing {3}, " +
+                                "legacy {4}, not in mod {5}", rel, mats.Changed, mats.Upgraded, mats.Missing,
+                                mats.Legacy, mats.NotInMod);
                 if (mats.Changed > 0) status += "\n" + string.Format(Strings.Parts.WindMaterialsSetFmt, mats.Changed);
+                if (mats.Upgraded > 0) status += " " + string.Format(Strings.Parts.WindMaterialsUpgradedFmt, mats.Upgraded);
+                if (mats.Legacy > 0) status += "\n" + string.Format(Strings.Parts.WindMaterialsLegacyFmt, mats.Legacy);
                 if (mats.Missing > 0) status += "\n" + string.Format(Strings.Parts.WindMaterialsMissingFmt, mats.Missing);
                 if (mats.NotInMod > 0) status += "\n" + string.Format(Strings.Parts.WindMaterialsNotInModFmt, mats.NotInMod);
             }

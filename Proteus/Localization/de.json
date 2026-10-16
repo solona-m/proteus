@@ -2639,6 +2639,14 @@
     "message": "{0} Materialdatei(en) eingestellt, damit der Wind dieses Kleidungsstück bewegen kann.",
     "description": ""
   },
+  "Parts.Wind.Materials.Upgraded.Fmt": {
+    "message": "{0} davon vom alten Charakter-Shader, der keinen Wind kennt, auf den von Dawntrail umgestellt.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Legacy.Fmt": {
+    "message": "{0} Materialdatei(en) nutzen den alten Charakter-Shader, der keinen Wind kennt, und konnten nicht umgestellt werden, daher bewegen sie sich nicht.",
+    "description": ""
+  },
   "Parts.Wind.Materials.Missing.Fmt": {
     "message": "{0} Materialdatei(en) haben keine Windbewegungs-Einstellungen, die sich ändern ließen; sie bewegen sich womöglich nicht.",
     "description": ""

@@ -2325,6 +2325,14 @@ public sealed class PartsStrings
     public readonly string WindMaterialsSetFmt = Loc.Localize("Parts.Wind.Materials.Set.Fmt",
         "Set {0} material file(s) so the wind can move this garment.");
 
+    /// <summary>{0} is how many material files moved from the legacy character shader to Dawntrail's.</summary>
+    public readonly string WindMaterialsUpgradedFmt = Loc.Localize("Parts.Wind.Materials.Upgraded.Fmt",
+        "Upgraded {0} of them from the old character shader, which has no wind, to Dawntrail's.");
+
+    /// <summary>{0} is how many material files are still on the legacy character shader.</summary>
+    public readonly string WindMaterialsLegacyFmt = Loc.Localize("Parts.Wind.Materials.Legacy.Fmt",
+        "{0} material file(s) use the old character shader, which has no wind, and couldn't be upgraded, so they won't sway.");
+
     /// <summary>{0} is how many material files lack the vertex movement settings.</summary>
     public readonly string WindMaterialsMissingFmt = Loc.Localize("Parts.Wind.Materials.Missing.Fmt",
         "{0} material file(s) have no wind movement settings to change, so they may not sway.");
