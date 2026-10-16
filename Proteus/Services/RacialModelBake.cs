@@ -19,9 +19,89 @@ namespace Proteus.Services;
 /// it would measure it against men's bodies and save it where men would wear it — so it first does here, once and
 /// offline, exactly the bend the game would do: the same deformer chain, blended by the same weights. The result is
 /// saved under the wearer's own race with an EQDP entry that says the model now exists.
+/// <para/>
+/// The other way round too. Racial gear — Au Ra's Auri set — exists ONLY as the wearer's race's model, and body mods
+/// ship no bodies of that race: theirs are the shared Midlander shape, which the game bends onto her. Such a garment
+/// is bent back into that shape (<see cref="Route.Down"/>), refitted between the bodies there, and the refit bent
+/// forward again — what the game would draw of it had it been a Midlander model — and saved where it was drawn from.
 /// </summary>
 internal static partial class RacialModelBake
 {
+    /// <summary>
+    /// Which way a garment goes before it is refitted, and back after.
+    /// </summary>
+    /// <param name="Drawn">The race of the model the game draws on the wearer.</param>
+    /// <param name="To">The race it is refitted as; 0 for none — refitted as drawn.</param>
+    /// <param name="Down">Up (<c>false</c>): a man's model baked into the wearer's race, saved there with an EQDP entry.
+    /// Down: a racial model bent back into its shared shape, the refit bent forward again and saved where it was drawn.</param>
+    internal readonly record struct Route(ushort Drawn, ushort To, bool Down)
+    {
+        public static Route None => default;
+
+        public bool Any => To != 0;
+
+        /// <summary>Up only: the bake is itself a change to the model, worth saving even when the refit changed nothing
+        /// else. A down route's bend there and back is not.</summary>
+        public bool ChangesModel => Any && !Down;
+
+        /// <summary>The race every body list is filtered by, as a <c>"0201"</c> code.</summary>
+        public string? Race(string drawnPath) => Any ? $"{To:D4}" : BodySizeCatalog.RaceOf(drawnPath);
+
+        /// <summary>Where a refit is saved: up, beside the drawn model under the wearer's race; otherwise over it.</summary>
+        public string SavePath(string drawnPath) => Any && !Down ? WithRace(drawnPath, To) : drawnPath;
+
+        /// <summary>The EQDP entry an up route's save needs, so the game loads the new race's model; null otherwise.</summary>
+        public object? Eqdp(string savePath) => Any && !Down ? Switch(savePath, To) : null;
+
+        /// <summary>The garment as it is refitted: baked up, or bent down into its shared shape.</summary>
+        public byte[]? Into(byte[] drawnModel, Wearer who, out string refusal)
+            => Down ? Unbake(drawnModel, To, Drawn, who.Pbd, who.ParentOf, out refusal)
+                    : Bake(drawnModel, Drawn, To, who.Pbd, who.ParentOf, out refusal);
+
+        /// <summary>
+        /// A refit put back into the drawn race's shape. Up, that is only the preview — pushed onto the drawn path, the
+        /// game bends it forward again. Down, it is the model itself, saved and previewed alike.
+        /// </summary>
+        public byte[]? Back(byte[] refitted, Wearer who, out string refusal)
+            => Down ? Bake(refitted, To, Drawn, who.Pbd, who.ParentOf, out refusal)
+                    : Unbake(refitted, Drawn, To, who.Pbd, who.ParentOf, out refusal);
+    }
+
+    /// <summary>
+    /// The shared shape to bend a racial garment down into for refitting, or 0 when it is refitted as it is: the first of
+    /// its race's fall-through ancestors OF ITS SEX that <paramref name="hasBodies"/> — c1401 Au Ra women to c0201.
+    /// <para/>
+    /// Nothing when there are bodies of the garment's own race to refit between, nor for a race whose fall-through leaves
+    /// its sex at once (Lalafell women fall to Lalafell men): a woman's garment is never refitted between men's bodies.
+    /// With no ancestor known to have bodies, the last of its sex — the root every body mod of that sex is made for.
+    /// </summary>
+    public static ushort SharedShape(ushort garment, Func<ushort, bool> hasBodies)
+    {
+        if (!Playable(garment / 100) || hasBodies(Code(garment / 100))) return 0;
+
+        ushort last = 0;
+        foreach (ushort race in SameSexLine(garment))
+        {
+            if (hasBodies(race)) return race;
+            last = race;
+        }
+        return last;
+    }
+
+    /// <summary>
+    /// The races a garment of <paramref name="garment"/>'s race falls through to before the fall-through leaves its
+    /// sex, nearest first, as codes (201 for c0201): c1401 gives c0201; c1501 gives c0901, c0101; c1201 nothing. The
+    /// races <see cref="SharedShape"/> chooses among — and so the ones whose bodies are worth asking about.
+    /// </summary>
+    public static IEnumerable<ushort> SameSexLine(ushort garment)
+    {
+        int g = garment / 100;
+        if (!Playable(g)) yield break;
+        for (int cur = ModelRace.Fallback(g), guard = 0; cur != 0 && cur % 2 == g % 2 && guard < 8;
+             cur = ModelRace.Fallback(cur), guard++)
+            yield return Code(cur);
+    }
+
     /// <summary>Who a garment is baked for: their race, their skeleton's hierarchy, and the deformer their mods resolve.</summary>
     internal sealed record Wearer(ushort Race, IReadOnlyDictionary<string, string?> Parents, PbdFile Pbd)
     {

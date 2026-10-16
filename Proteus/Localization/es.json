@@ -3691,6 +3691,26 @@
     "message": "No se pudo crear un modelo {0} ({1}); se ajusta el modelo {2} tal cual.",
     "description": ""
   },
+  "Parts.Retarget.Shaping": {
+    "message": "Adaptando el modelo a la forma para la que están hechos los cuerpos…",
+    "description": ""
+  },
+  "Parts.Retarget.ShapedDown.Fmt": {
+    "message": "No hay cuerpos {0} entre los que ajustar, así que el modelo {0} se ajusta en la forma {1}, como lo deforma el juego, y se guarda de nuevo como {0}.",
+    "description": ""
+  },
+  "Parts.Retarget.Bake.BendBack.Fmt": {
+    "message": "el ajuste no se pudo devolver a la forma {0} ({1})",
+    "description": ""
+  },
+  "Parts.Retarget.Bake.NoWearer": {
+    "message": "no se pudo leer tu personaje",
+    "description": ""
+  },
+  "Parts.Retarget.Refused.Fmt": {
+    "message": "No se pudo reajustar este modelo: {0}.",
+    "description": ""
+  },
   "Parts.Retarget.Cloth.Guess.Fmt": {
     "message": "Según la tela: la mejor estimación es {0}, pero podría estar simplemente holgada. Conviene comprobarlo.",
     "description": ""

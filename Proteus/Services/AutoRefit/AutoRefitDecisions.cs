@@ -112,6 +112,23 @@ internal static class AutoRefitDecisions
                && redirects.All(d => fromGame.Contains(RefitCore.Normal(d.File)));
     }
 
+    /// <summary>
+    /// Whether a mod's own sizes are looked at before refitting: only for a mod's garment refitted as the race it is
+    /// drawn as. The author's sizes are of the drawn race; a garment baked or bent into another is measured against
+    /// bodies of that one, which those sizes were never made between.
+    /// </summary>
+    internal static bool AuthorSizesApply(string? modRoot, RacialModelBake.Route route) => modRoot != null && !route.Any;
+
+    /// <summary>
+    /// Whether BOTH sides of an automatic refit have bodies of a race — what <see cref="RefitCore.Route"/> bends racial
+    /// gear down by. The refit-onto mod's side is <paramref name="targetHas"/>. The made-for side is the game's own
+    /// bodies for the game's own gear, which most races have none of (<paramref name="gameBodyRaces"/>, as
+    /// <c>"0201"</c> codes); a mod's garment was made on some body mod, and is read on whichever it is.
+    /// </summary>
+    internal static Func<ushort, bool> ShapeBodies(Func<ushort, bool> targetHas, bool gameMade,
+                                                   IReadOnlySet<string>? gameBodyRaces)
+        => code => targetHas(code) && (!gameMade || gameBodyRaces?.Contains($"{code:D4}") == true);
+
     /// <summary>Whether a reading is sure enough to refit from unattended.</summary>
     internal static bool Proceed(Confidence confidence)
         => confidence is Confidence.Exact or Confidence.Likely or Confidence.Guess;

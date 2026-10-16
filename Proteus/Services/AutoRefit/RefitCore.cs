@@ -567,6 +567,58 @@ internal static partial class RefitCore
     }
 
     /// <summary>
+    /// Which way a garment drawn at <paramref name="gamePath"/> goes before it is refitted for a wearer of
+    /// <paramref name="wearerRace"/>: baked up into the wearer's race (<see cref="BakeTarget"/>) — or, when it is her
+    /// race's own model and there are no bodies of that race to refit between, bent down into the shared shape the
+    /// bodies are made for (<see cref="RacialModelBake.SharedShape"/>).
+    /// </summary>
+    /// <param name="targetHas">Whether the refit-onto body mod has bodies of exactly this race.</param>
+    /// <param name="bothHave">Whether the bodies on BOTH sides — the one the garment was made on as well — are of this
+    /// race: down is decided by both, since a garment refitted from the game's body needs the game's body of that race.</param>
+    internal static RacialModelBake.Route Route(string gamePath, ushort wearerRace, Func<ushort, bool> targetHas,
+                                                Func<ushort, bool> bothHave,
+                                                IEnumerable<PenumbraModMeta.Redirect> redirects,
+                                                BodyRetargetWriter.Record? ownRecord)
+    {
+        ushort drawn = ModelSkinReader.RaceOf(gamePath);
+        if (BakeTarget(gamePath, wearerRace, targetHas, redirects, ownRecord) is var up and not 0)
+            return new RacialModelBake.Route(drawn, up, Down: false);
+        // Only her race's own model: one of another race the game would not draw on her, so is none of this refit's.
+        if (drawn == 0 || drawn / 100 != wearerRace / 100) return RacialModelBake.Route.None;
+        return RacialModelBake.SharedShape(drawn, bothHave) is var down and not 0
+            ? new RacialModelBake.Route(drawn, down, Down: true)
+            : RacialModelBake.Route.None;
+    }
+
+    /// <summary>
+    /// A refit of a routed garment, made ready to save: up, its kept skin drawn with the body's material
+    /// (<see cref="WithBodySkin"/>), and the preview bent back into the drawn race from the model BEFORE that rename —
+    /// the preview goes on the drawn race's path, where the garment's own material is the one that loads. Down, bent
+    /// forward into the drawn race, which is both what is saved and what is previewed.
+    /// </summary>
+    /// <returns>The plan to save; the preview to push on the drawn path, null for the plan's own model; and why, when
+    /// the plan is null, it could not be bent back. A down refit never comes back in the shared shape: saved at the
+    /// racial path, the game would draw it there unbent.</returns>
+    internal static (BodyRetarget.Planned? Saved, byte[]? Preview, string Refusal) Finish(
+        BodyRetarget.Planned plan, RacialModelBake.Route route, RacialModelBake.Wearer? who, string targetPath,
+        IPluginLog log)
+    {
+        if (!route.Any) return (plan, null, "");
+        if (route.Down)
+        {
+            string why = Strings.Parts.RetargetBakeNoWearer;
+            var back = who != null ? route.Back(plan.Model, who, out why) : null;
+            if (back == null)
+                return (null, null, string.Format(Strings.Parts.RetargetBendBackFmt,
+                                                  ModelRace.Describe($"{route.Drawn:D4}"), why));
+            return (plan with { Model = back }, null, "");
+        }
+        // Without the character to bend it back by, the preview is pushed unbent; the save itself needs no wearer.
+        var preview = who != null ? route.Back(plan.Model, who, out _) : null;
+        return (WithBodySkin(plan, targetPath, log), preview, "");
+    }
+
+    /// <summary>
     /// A refit of a BAKED garment, with the skin the refit kept of the garment's own drawn with the body's material.
     /// A bake names its skin after the new race, where the old race's material may not exist; without this the model
     /// is not drawn.
