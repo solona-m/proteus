@@ -188,6 +188,41 @@ internal static class SkinTuckSheet
         => Body(arm: breast ?? BreastRow, armBone: "j_mune_l",
                 z: height == 0f ? null : (r, _) => Ridge(r, height));
 
+    /// <summary>Two breasts side by side, <paramref name="height"/> at their peaks over columns 2 and 6, the cleavage at
+    /// column 4 down to the plane: the ridge shaped across as well as along.</summary>
+    internal static byte[] Busts(float height)
+        => Body(arm: BreastRow, armBone: "j_mune_l",
+                z: (r, c) => Ridge(r, height) * MathF.Pow(MathF.Sin(MathF.PI * c / 4f), 2));
+
+    /// <summary>
+    /// Cloth edges of <paramref name="after"/> stretched past 1.5× their length in <paramref name="before"/> and by more
+    /// than 5 mm, by index — two plans of the same garment, laid (see <see cref="Laid"/>).
+    /// </summary>
+    internal static int ClothStretch(ModelParts before, ModelParts after, Action<string>? describe = null)
+    {
+        Assert.Equal(before.Positions.Length, after.Positions.Length);
+        Vector3 At(ModelParts m, int v) => new(m.Positions[v * 3], m.Positions[v * 3 + 1], m.Positions[v * 3 + 2]);
+        int stretched = 0;
+        var seen = new HashSet<(int, int)>();
+        foreach (var part in before.Parts.Where(p => p.Island < 0 && !SecondSkinWriter.IsBodySkinMaterial(p.Material)))
+            for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+                for (int e = 0; e < 3; e++)
+                {
+                    int a = part.Triangles[t + e], b = part.Triangles[t + (e + 1) % 3];
+                    if (!seen.Add(a < b ? (a, b) : (b, a))) continue;
+                    float was = Vector3.Distance(At(before, a), At(before, b));
+                    float now = Vector3.Distance(At(after, a), At(after, b));
+                    if (now <= 1.5f * was || now - was <= 0.005f) continue;
+                    stretched++;
+                    describe?.Invoke($"edge {a}-{b} at y {At(after, a).Y:0.000}: {was * 1000:0.0} -> {now * 1000:0.0} mm");
+                }
+        return stretched;
+    }
+
+    /// <summary>The garment as a plan laid it, before the rebuild: the garment's own vertices, moved.</summary>
+    internal static ModelParts Laid(byte[] garment, BodyRetarget.Planned plan)
+        => ModelPartReader.Read(MeshVolumeService.Inflate(garment, plan.Edit).Model)!;
+
     /// <summary>A body that grew: the chest pair from <paramref name="source"/> to <paramref name="target"/>, the same
     /// grid, each vertex to its own — the garment authored on the first refitted onto the second.</summary>
     internal static BodyRetarget.SlotPair Grown(byte[] source, byte[] target, string slot = "_top")
@@ -203,6 +238,36 @@ internal static class SkinTuckSheet
     /// — the way the game buries a top's cloth in its own body — and 3 mm over its own skin above.
     /// </summary>
     internal static byte[] BuriedTop(float depth) => Top(r => r < Edge ? -depth : 0.003f);
+
+    /// <summary>
+    /// The top with coarse cloth, as the game's own is, buried <paramref name="depth"/> inside the flat body it was authored
+    /// on: a 3×3 grid of points 35-40 mm apart over rows 2, 5.5 and 9 and columns 0, 4 and 8 — the middle row over the
+    /// ridge's peak, the outer ones where it is flat — so no point of it lies near cloth the usual clear reaches, whose
+    /// spread would drag it out regardless. Its own skin over rows <see cref="Edge"/> and up, as every sheet top's.
+    /// </summary>
+    /// <param name="lining">A second coarse sheet this much deeper again behind it, over rows 5-6 — where the ridge grew
+    /// past <see cref="BodyRetarget.DeepGrowLeast"/> all over it; 0 for none.</param>
+    internal static byte[] CoarseBuriedTop(float depth, float lining = 0f)
+    {
+        SyntheticModel.SurfaceMesh Coarse(float z, float rowFrom, float rowTo)
+        {
+            var rows = new[] { rowFrom, (rowFrom + rowTo) / 2f, rowTo };
+            var cols = new[] { 0, 4, 8 };
+            var pos = rows.SelectMany(r => cols.Select(c => new Vector3(X(c), Bottom + r * Step, z))).ToArray();
+            var tris = new List<int>();
+            for (int r = 0; r < 2; r++)
+                for (int c = 0; c < 2; c++)
+                {
+                    int a = r * 3 + c, b = a + 1, d = a + 3, e = d + 1;
+                    tris.AddRange([a, b, e, a, e, d]);
+                }
+            return new SyntheticModel.SurfaceMesh(Cloth, pos, [.. pos.Select(_ => Vector3.UnitZ)], [.. pos.Select(_ => Vector2.Zero)],
+                                                  [.. pos.Select(_ => ((string, float)[]?)[("j_sebo_c", 1f)])], [(0u, [.. tris])]);
+        }
+        var meshes = new List<SyntheticModel.SurfaceMesh> { Sheet(Skin, Edge, Rows - 1, _ => 0f), Coarse(-depth, 2f, Edge - 1) };
+        if (lining > 0f) meshes.Add(Coarse(-depth - lining, 5f, 6f));
+        return SyntheticModel.BuildSurface([], [.. meshes]);
+    }
 
     /// <summary>
     /// A top whose own skin is two triangles, the corners of rows <see cref="Edge"/> to <see cref="Rows"/> - 1 — a game

@@ -59,10 +59,13 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
                                                  [new PenumbraModMeta.Redirect(Top_, "coat.mdl", "Colour / Red")],
                                                  Refitted("Body — Neolithe/neolithe m.mdl"), madeByProteus: false));
 
-        Assert.Equal(new AutoRefitDecisions.SkinRule(CutHidden: true, ClearBody: true, TuckUnderCloth: true),
+        Assert.Equal(new AutoRefitDecisions.SkinRule(CutHidden: true, ClearBody: true, TuckUnderCloth: true, DeepClear: true),
                      AutoRefitDecisions.SkinFor(true));
-        Assert.Equal(new AutoRefitDecisions.SkinRule(CutHidden: false, ClearBody: false, TuckUnderCloth: false),
+        Assert.Equal(new AutoRefitDecisions.SkinRule(CutHidden: false, ClearBody: false, TuckUnderCloth: false, DeepClear: false),
                      AutoRefitDecisions.SkinFor(false));
+        Assert.True(RefitCore.DeepClearFor(true, "_top"));
+        Assert.False(RefitCore.DeepClearFor(true, "_dwn"));
+        Assert.False(RefitCore.DeepClearFor(false, "_top"));
     }
 
     [Fact]
@@ -333,6 +336,30 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
         Assert.True(plan.Report.Swap?.Tucked > 0, $"{plan.Report.Swap}");
         Assert.Contains(game, l => l.StartsWith($"skin tucked: {plan.Report.Swap!.Value.Tucked} triangles", StringComparison.Ordinal));
         Assert.DoesNotContain(mod, l => l.StartsWith("skin tucked:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-neckline-large-bust-8")]
+    public void A_game_tops_deep_clear_is_logged()
+    {
+        var bytes = SkinTuckSheet.CoarseBuriedTop(0.012f);
+        var garment = ModelPartReader.Read(bytes)!;
+        var pair = SkinTuckSheet.Grown(SkinTuckSheet.Bust(0f), SkinTuckSheet.Bust(0.02f));
+        var game = new List<string>();
+        var mod = new List<string>();
+        var studio = new List<string>();
+
+        var plan = RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true, out _, log: game.Add);
+        RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: false, out _, log: mod.Add);
+        BodyRetarget.Plan(garment, bytes, [pair], "_top", held: new HashSet<int>(), replaceSkin: true, acrossBodies: true,
+                          clearBody: true, cutHidden: true,
+                          keepShape: RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)),
+                          tuckSlot: RefitCore.TuckSlot(true, "_top"), log: studio.Add);
+
+        Assert.True(plan.Report.DeepCleared > 0);
+        Assert.Contains(game, l => l.StartsWith($"cloth cleared deep: {plan.Report.DeepCleared} points", StringComparison.Ordinal));
+        Assert.DoesNotContain(mod, l => l.StartsWith("cloth cleared deep:", StringComparison.Ordinal));
+        Assert.DoesNotContain(studio, l => l.StartsWith("cloth cleared deep:", StringComparison.Ordinal));
     }
 
     [Fact]

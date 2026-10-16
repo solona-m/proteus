@@ -20,8 +20,8 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
     /// <summary>A game top as it was before the neckline tuck and the deep clear.</summary>
     private static readonly BodyRetarget.Tuning Before = new(NoTuck: true, NoDeepClear: true);
 
-    /// <summary>A game top with the tuck as change (a) made it: no deep clear, no open neckline skin.</summary>
-    private static readonly BodyRetarget.Tuning TuckOnly = new(NoDeepClear: true, NoOpenSkin: true);
+    /// <summary>A game top with the tuck as change (a) made it: no deep clear.</summary>
+    private static readonly BodyRetarget.Tuning TuckOnly = new(NoDeepClear: true);
 
     private string Pinned(byte[] model, string expected)
     {
@@ -182,6 +182,76 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
         Pinned(plan.Model, GrownGameTopBefore);
     }
 
+    // ── the same paths on coarse cloth buried 12 mm, which the usual clear's spread does not drag out: where the deep clear
+    // DOES act on a game top (the fine sheet above it never reaches). Pinned on 78eefd4 — (a)'s production code with the
+    // deep clear's knobs still inert — before any of the deep clear's production code. ──
+
+    private static (byte[] Bytes, ModelParts Garment, BodyRetarget.SlotPair Pair, IReadOnlyList<IReadOnlyCollection<int>> Pieces) CoarseGrownBust()
+    {
+        var bytes = SkinTuckSheet.CoarseBuriedTop(0.012f);
+        var garment = ModelPartReader.Read(bytes)!;
+        return (bytes, garment, SkinTuckSheet.Grown(SkinTuckSheet.Bust(0f), SkinTuckSheet.Bust(0.02f)),
+                RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)));
+    }
+
+    public static TheoryData<string, string> CoarseGrownPaths => new()
+    {
+        { "studio cut", CoarseStudioCut },
+        { "mod garment", CoarseModGarment },
+        { "accessory", CoarseAccessory },
+        { "keep ends", CoarseKeepEnds },
+        { "size set", CoarseSizeSet },
+        { "studio cut and clear, untucked", CoarseStudioCutAndClear },
+        { "game top before", CoarseGameTopBefore },
+    };
+
+    [Theory]
+    [MemberData(nameof(CoarseGrownPaths))]
+    [Trait("Plan", "AC-neckline-large-bust-6")]
+    [Trait("Plan", "EDGE-neckline-large-bust-9")]
+    [Trait("Plan", "EDGE-neckline-large-bust-24")]
+    [Trait("Plan", "EDGE-neckline-large-bust-22")]
+    public void Every_other_path_on_a_coarse_grown_bust_plans_as_before(string path, string expected)
+    {
+        var (bytes, garment, pair, pieces) = CoarseGrownBust();
+        BodyRetarget.Planned Studio(bool clear) => BodyRetarget.Plan(
+            garment, bytes, [pair], "_top", held: NoneHeld, replaceSkin: true, acrossBodies: true, clearBody: clear,
+            cutHidden: true, keepShape: pieces, tuckSlot: clear ? RefitCore.TuckSlot(true, "_top") : null);
+        var plan = path switch
+        {
+            "studio cut" => Studio(false),
+            "mod garment" => RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: false, out _),
+            "accessory" => RefitCore.PlanAccessoryRefit(garment, bytes, [pair], "_top", across: true, out _),
+            "keep ends" => BodyRetarget.Plan(garment, bytes, [pair], "_glv", held: NoneHeld, replaceSkin: true,
+                                             acrossBodies: true, clearBody: true, cutHidden: true, keepShape: pieces,
+                                             swapSlot: "_top"),
+            "size set" => BodyRetarget.Plan(garment, bytes, [pair], "_top", held: new HashSet<int>(), replaceSkin: true,
+                                            acrossBodies: true, clearBody: false, cutHidden: true, keepShape: []),
+            "studio cut and clear, untucked" => BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoTuck: true), () => Studio(true)),
+            "game top before" => BodyRetarget.WithTuning(Before,
+                () => RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true, out _)),
+            _ => throw new System.ArgumentException(path),
+        };
+        Pinned(plan.Model, expected);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-neckline-large-bust-6")]
+    [Trait("Plan", "EDGE-neckline-large-bust-9")]
+    [Trait("Plan", "EDGE-neckline-large-bust-24")]
+    public void The_coarse_grown_bust_is_where_a_game_top_deep_clears_and_the_Studio_does_not()
+    {
+        // The goldens above are not vacuous: on this fixture the game top's auto refit does clear deep, and the Studio's
+        // cut and clear with the tuck on still does not.
+        var (bytes, garment, pair, pieces) = CoarseGrownBust();
+        var game = RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true, out _);
+        Assert.True(game.Report.DeepCleared > 0);
+        var studio = BodyRetarget.Plan(garment, bytes, [pair], "_top", held: NoneHeld, replaceSkin: true, acrossBodies: true,
+                                       clearBody: true, cutHidden: true, keepShape: pieces,
+                                       tuckSlot: RefitCore.TuckSlot(true, "_top"));
+        Assert.Equal(0, studio.Report.DeepCleared);
+    }
+
     // ── change (a)'s tuck as it stands at 72dde80: what (b)'s open skin and deep clear, switched off, must leave alone ──
 
     [Fact]
@@ -210,22 +280,20 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-neckline-large-bust-22")]
     public void The_Studio_cut_and_clear_tuck_is_as_change_a_made_it()
     {
-        // Without the open neckline skin only — the Studio never deep-clears whatever the knobs say, and that is left to
-        // show here rather than switched off.
+        // No knob at all: the Studio never deep-clears whatever the knobs say, and that is left to show here.
         var bytes = SkinTuckSheet.LooseTop();
         var garment = ModelPartReader.Read(bytes)!;
-        var noOpen = new BodyRetarget.Tuning(NoOpenSkin: true);
-        var loose = BodyRetarget.WithTuning(noOpen, () => BodyRetarget.Plan(
-            garment, bytes, [SkinTuckSheet.Resized(SkinTuckSheet.Body())], "_top", held: NoneHeld, replaceSkin: true,
-            acrossBodies: true, clearBody: true, cutHidden: true,
-            keepShape: RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)),
-            tuckSlot: RefitCore.TuckSlot(true, "_top")));
+        var loose = BodyRetarget.Plan(garment, bytes, [SkinTuckSheet.Resized(SkinTuckSheet.Body())], "_top", held: NoneHeld,
+                                      replaceSkin: true, acrossBodies: true, clearBody: true, cutHidden: true,
+                                      keepShape: RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)),
+                                      tuckSlot: RefitCore.TuckSlot(true, "_top"));
         Pinned(loose.Model, LooseStudioTucked);
 
         var (gBytes, gGarment, pair, pieces) = GrownBust();
-        var grown = BodyRetarget.WithTuning(noOpen, () => BodyRetarget.Plan(
-            gGarment, gBytes, [pair], "_top", held: NoneHeld, replaceSkin: true, acrossBodies: true, clearBody: true,
-            cutHidden: true, keepShape: pieces, tuckSlot: RefitCore.TuckSlot(true, "_top")));
+        var grown = BodyRetarget.Plan(gGarment, gBytes, [pair], "_top", held: NoneHeld, replaceSkin: true, acrossBodies: true,
+                                      clearBody: true, cutHidden: true, keepShape: pieces,
+                                      tuckSlot: RefitCore.TuckSlot(true, "_top"));
+        Assert.Equal(0, grown.Report.DeepCleared);
         Pinned(grown.Model, GrownStudioTucked);
     }
 
@@ -346,6 +414,13 @@ public class SkinTuckGoldenTests(ITestOutputHelper output)
     private const string GrownSizeSet = "B45430CC61D76DE199C6EF53366368A4F368C578C31535BD8E0C8A9E8F800AD9";
     private const string GrownStudioCutAndClear = "B1463795421A89BD7F1B7821AF27AABFB98A0DC70E48B2833C6D38F692E1A9AB";
     private const string GrownGameTopBefore = "B1463795421A89BD7F1B7821AF27AABFB98A0DC70E48B2833C6D38F692E1A9AB";
+    private const string CoarseStudioCut = "21B091D9AFB675E5713076EAC3B37BAF66DF4DADBE20BAECAB7B8BB81AF5C35A";
+    private const string CoarseModGarment = "DFDEC2DE7D75335FC6393A5D741D8B1B94BE8C1C83DA54EE31A0068E2A557CF0";
+    private const string CoarseAccessory = "F528490D6C4ECD6FA6AE201A92B420BB4FF49FC88762B59DD19406236CD54941";
+    private const string CoarseKeepEnds = "8EBC3389DDBFB920865E12A10C28CE81190D1C07307E3D056184F0372254262A";
+    private const string CoarseSizeSet = "21B091D9AFB675E5713076EAC3B37BAF66DF4DADBE20BAECAB7B8BB81AF5C35A";
+    private const string CoarseStudioCutAndClear = "8EBC3389DDBFB920865E12A10C28CE81190D1C07307E3D056184F0372254262A";
+    private const string CoarseGameTopBefore = "8EBC3389DDBFB920865E12A10C28CE81190D1C07307E3D056184F0372254262A";
     private const string ChordSagStudioCut = "96F3E796E4D5AFD1C3A1F268DF77997FDEEED7E5720DCF6673C6CACAF122E6D3";
     private const string GrownGameTopTucked = "F0637CE799121F93B6B3CD40FB3BA06864DB30330B14BE21F09D31F60D1BFED6";
     private const string LooseGameTopTucked = "D80A3792966E94E9A937CEF3D655EACB20998A6903E6521DD3561B4022C3E4E1";

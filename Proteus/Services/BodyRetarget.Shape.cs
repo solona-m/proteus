@@ -52,8 +52,6 @@ internal static partial class BodyRetarget
     /// (see <see cref="TuckUnderCloth"/>).</param>
     /// <param name="NoDeepClear">Leave a game top's cloth buried deeper than <see cref="ClearDepth"/> in the new breast
     /// where it is, as builds before 1288 did (see <see cref="DeepClearDepth"/>).</param>
-    /// <param name="NoOpenSkin">Tuck the new body's skin only under the cloth, never into the open neckline beside the
-    /// author's edge, as builds before 1288 did (see <see cref="TuckUnderCloth"/>).</param>
     internal sealed record Tuning(bool NoFollow = false, bool NoOwnSkinWeights = false,
                                   float OwnSkinReach = OwnSkinReachDefault, float CopyReach = CopyReachDefault,
                                   float CopyTolerance = CopyToleranceDefault, bool NoGiveUp = false,
@@ -64,7 +62,7 @@ internal static partial class BodyRetarget
                                   bool CrossBodyPassesWithinBody = false, bool NoRelease = false,
                                   bool NoNippleSmooth = false, bool NoOutfitOrder = false, bool NoWallPair = false,
                                   bool NoWallCover = false, bool NoRimTurnGuard = false, bool NoSnapPush = false,
-                                  bool NoTuck = false, bool NoDeepClear = false, bool NoOpenSkin = false);
+                                  bool NoTuck = false, bool NoDeepClear = false);
 
     private static readonly Tuning DefaultTuning = new();
 
