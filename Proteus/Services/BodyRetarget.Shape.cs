@@ -48,6 +48,14 @@ internal static partial class BodyRetarget
     /// flips within one lift, as builds before 1261 did (see <see cref="LiftRims"/>).</param>
     /// <param name="NoSnapPush">Leave cloth the transfer snapped onto a body vertex out of the push-out and the face clear
     /// whatever body it lands on, as builds before 1266 did (see <see cref="SnappedLandsElsewhere"/>).</param>
+    /// <param name="NoTuck">Leave the new body's skin ending where the author's edge was laid, as builds before 1286 did
+    /// (see <see cref="TuckUnderCloth"/>).</param>
+    /// <param name="NoDeepClear">Leave a game top's cloth buried deeper than <see cref="ClearDepth"/> in the new breast
+    /// where it is, as builds before 1288 did (see <see cref="DeepClearDepth"/>).</param>
+    /// <param name="NoOpenSkin">Tuck the new body's skin only under the cloth, never in the open inside the author's own
+    /// skin, as builds before 1289 did (see <see cref="TuckSpanShare"/>).</param>
+    /// <param name="NoKeepStandoff">Leave a game top's cloth as far off the new chest as the refit carried it, as builds
+    /// before 1289 did (see the standoff pass).</param>
     internal sealed record Tuning(bool NoFollow = false, bool NoOwnSkinWeights = false,
                                   float OwnSkinReach = OwnSkinReachDefault, float CopyReach = CopyReachDefault,
                                   float CopyTolerance = CopyToleranceDefault, bool NoGiveUp = false,
@@ -57,7 +65,9 @@ internal static partial class BodyRetarget
                                   bool NoLayerOrder = false, bool LegsForAll = false,
                                   bool CrossBodyPassesWithinBody = false, bool NoRelease = false,
                                   bool NoNippleSmooth = false, bool NoOutfitOrder = false, bool NoWallPair = false,
-                                  bool NoWallCover = false, bool NoRimTurnGuard = false, bool NoSnapPush = false);
+                                  bool NoWallCover = false, bool NoRimTurnGuard = false, bool NoSnapPush = false,
+                                  bool NoTuck = false, bool NoDeepClear = false, bool NoOpenSkin = false,
+                                  bool NoKeepStandoff = false);
 
     private static readonly Tuning DefaultTuning = new();
 

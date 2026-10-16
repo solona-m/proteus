@@ -100,6 +100,30 @@ internal static partial class BodyRetarget
     /// </summary>
     internal const float ClearDepth = 0.008f;
 
+    /// <summary>
+    /// How deep in the new breast a game top's cloth may lie and still be cleared out of it (30 mm, as far as the push
+    /// probe sees), where the body grew under it by <see cref="DeepGrowLeast"/>: the game's own top on a far larger
+    /// bust. <see cref="ClearDepth"/> leaves deeper cloth alone as the garment's structure, and on Dirndl's Bodice refitted
+    /// onto LavaBod+'s Teardrop that left ~70 cm² of the bodice 4-24 mm inside the breasts — the top of each breast
+    /// standing through it, and the neckline's skin, which cannot be drawn over buried cloth, left out. Only where the
+    /// body grew: the game buries its tops' cloth 8-15 mm in its own body on purpose, and dragging that out tore the mesh
+    /// (see PushOut). Only for the game's own top in the automatic refit — the Studio writes into a modder's mod.
+    /// </summary>
+    internal const float DeepClearDepth = PushProbeRange;
+
+    /// <summary>
+    /// How far the new body must stand outside the source body, where buried cloth lands on it, for that cloth to be
+    /// cleared from deeper than <see cref="ClearDepth"/> (16 mm). Measured where the bodice stays buried on LavaBod+'s
+    /// Teardrop, the body grew 36-60 mm and more; on Neolithe's Almond XS no cloth is buried in the breast at all. A
+    /// medium bust passes too: Neolithe's neobelly M clears 8-14 points of the Top of Maiming and Scion Adventurer's (their
+    /// necklines no worse — 34.0 → 32.0, 28.3 → 27.4 cm²), and 24 mm would not keep it out.
+    /// </summary>
+    internal const float DeepGrowLeast = 0.016f;
+
+    /// <summary>How far the source body is looked for under a landing on the new one (60 mm); none that near counts as
+    /// grown by that much.</summary>
+    private const float DeepGrowReach = 0.06f;
+
     /// <summary>Rounds of halving the push-out's fold sweep gets. Each quarters the worst case, so eight is a factor
     /// of 256 — past any push this pass can ask for.</summary>
     private const int PushUnfoldPasses = 8;
@@ -208,11 +232,20 @@ internal static partial class BodyRetarget
     /// <param name="Layered">Points lifted to keep the garment outside the other piece of its outfit — see
     /// <see cref="KeepOutfitOrder"/>.</param>
     /// <param name="LayerResidual">How far, at most, the garment is still short of that piece (metres).</param>
+    /// <param name="DeepCleared">Cloth points pulled out of the new breast from deeper than <see cref="ClearDepth"/> —
+    /// see <see cref="DeepClearDepth"/>.</param>
+    /// <param name="DeepWorst">The furthest any of them ended up from where the push-out found it (metres): the push and
+    /// the settle together.</param>
+    /// <param name="DeepAt">A garment vertex of each of them, for a check of how far the clear's spread reached.</param>
+    /// <param name="StandoffPulled">Cloth points brought back toward the author's standoff — see <see cref="KeepStandoff"/>.</param>
+    /// <param name="StandoffWorst">The furthest any of them came back (metres).</param>
+    /// <param name="StandoffHeld">Of them, points a guard held short of where they would have come back to.</param>
     internal sealed record Report(
         int Nodes, int Snapped, int Transferred, int Missed, int Pushed,
         float WorstMove, float WorstPush, int UnmappedSpares, bool HasOtherLods, int Held = 0, int Laid = 0,
         SwapReport? Swap = null, int Folded = 0, IReadOnlyList<ShapeOutcome>? Shapes = null, int Smoothed = 0,
-        int Layered = 0, float LayerResidual = 0f)
+        int Layered = 0, float LayerResidual = 0f, int DeepCleared = 0, float DeepWorst = 0f,
+        IReadOnlyList<int>? DeepAt = null, int StandoffPulled = 0, float StandoffWorst = 0f, int StandoffHeld = 0)
     {
         /// <summary>Share of moved nodes that landed on a body vertex exactly. Low means the author sculpted the
         /// garment's body mesh rather than copying it, and the seam may not come out perfect.</summary>
@@ -233,7 +266,9 @@ internal static partial class BodyRetarget
     internal sealed record Solved(RetargetEdit Edit, int Snapped, int Transferred, int Missed, int Pushed,
                                   float WorstMove, float WorstPush, int Held = 0, int Laid = 0, int Folded = 0,
                                   IReadOnlyList<ShapeOutcome>? Shapes = null, int Layered = 0,
-                                  float LayerResidual = 0f);
+                                  float LayerResidual = 0f, int DeepCleared = 0, float DeepWorst = 0f,
+                                  IReadOnlyList<int>? DeepAt = null, int StandoffPulled = 0, float StandoffWorst = 0f,
+                                  int StandoffHeld = 0);
 
     /// <summary>
     /// The garment split into the two sets the two passes act on.
@@ -641,13 +676,23 @@ internal static partial class BodyRetarget
     /// <param name="trace">For a diagnostic: each stage of the solve by name, with a copy of every node's move so far
     /// (see <see cref="Solve"/>). Null, as every refit has it, costs nothing.</param>
     /// <param name="outfit">See <see cref="Solve"/>.</param>
+    /// <param name="tuckSlot">The slot whose cut skin is carried on in under the cloth past the author's edge (see
+    /// <see cref="TuckUnderCloth"/>), or null for none: the game's own top in the automatic refit, and a top the Body
+    /// size tool refits with the hidden skin cut and the body cleared.</param>
+    /// <param name="deepClear">Clear a top's cloth out of the new breast from deeper than <see cref="ClearDepth"/>, where
+    /// the body grew under it (see <see cref="DeepClearDepth"/>): the game's own top in the automatic refit, never the
+    /// Studio. Only with <paramref name="clearBody"/>.</param>
+    /// <param name="keepStandoff">Bring a top's cloth the refit carried further off the new chest than its author put it
+    /// back toward the author's standoff (see <see cref="KeepStandoff"/>): the game's own top in the automatic refit, never
+    /// the Studio. Only with <paramref name="clearBody"/>.</param>
     public static Planned Plan(ModelParts garment, byte[] garmentBytes, IReadOnlyList<SlotPair> pairs,
                                string? garmentSlot = null, bool pushOut = true, IReadOnlySet<int>? held = null,
                                bool replaceSkin = false, bool acrossBodies = false, bool clearBody = false,
                                bool cutHidden = true, IReadOnlyList<IReadOnlyCollection<int>>? keepShape = null,
                                string? swapSlot = null, Action<string>? log = null, Action<string>? warn = null,
                                string? chestSlot = null, Action<string, Vec3[]>? trace = null,
-                               Outfit? outfit = null)
+                               Outfit? outfit = null, string? tuckSlot = null, bool deepClear = false,
+                               bool keepStandoff = false)
     {
         // First, before anything reads the new chest: its nipples smoothed where the garment covers more of them than
         // the old body had, so every pass below sees one surface — the one the swap draws.
@@ -662,8 +707,16 @@ internal static partial class BodyRetarget
         IReadOnlySet<int>? swapMeshes = SwapSlotSwapped(pairs, replaceSkin, swapSlot)
             ? SwappedSkinMeshes(garment, pairs)
             : null;
+        bool deep = deepClear && clearBody && garmentSlot == "_top" && !Tuned.NoDeepClear;
+        bool standoff = keepStandoff && clearBody && garmentSlot == "_top" && !Tuned.NoKeepStandoff;
         var solved = Solve(garment, pairs, garmentSlot, pushOut, held, replaceSkin, clearBody, keepShape,
-                           ModelSkinReader.Read(garmentBytes, null, null), swapSlot, swapMeshes, chestSlot, trace, outfit);
+                           ModelSkinReader.Read(garmentBytes, null, null), swapSlot, swapMeshes, chestSlot, trace, outfit,
+                           deep, standoff);
+        if (solved.DeepCleared > 0)
+            log?.Invoke($"cloth cleared deep: {solved.DeepCleared} points out of the new breast, up to {solved.DeepWorst * 1000f:0.0} mm");
+        if (solved.StandoffPulled > 0)
+            log?.Invoke($"cloth brought back toward the author's standoff: {solved.StandoffPulled} points, up to "
+                        + $"{solved.StandoffWorst * 1000f:0.0} mm");
         var written = MeshVolumeService.Inflate(garmentBytes, solved.Edit);
         byte[] model = written.Model;
 
@@ -675,11 +728,16 @@ internal static partial class BodyRetarget
         if (replaceSkin || weights != null)
         {
             var rebuilt = Rebuild(model, pairs, replaceSkin, weights, out var swapped, cutHidden, acrossBodies,
-                                  swapMeshes);
+                                  swapMeshes, tuckSlot);
             if (rebuilt != null)
             {
                 model = rebuilt;
                 swap = swapped;
+                if (swapped.Tucked > 0)
+                    log?.Invoke($"skin tucked: {swapped.Tucked} triangles of the new body under the cloth past the author's edge "
+                                + $"({swapped.Opened} in the open, inside the author's skin)");
+                if (swapped.TuckUnread > 0)
+                    log?.Invoke("skin tuck: the new body's weights could not be read, so nothing was tucked under the cloth");
             }
             else if (swapped.Kept > 0)
             {
@@ -697,7 +755,9 @@ internal static partial class BodyRetarget
         var report = new Report(garment.Positions.Length / 3, solved.Snapped, solved.Transferred, solved.Missed,
                                 solved.Pushed, solved.WorstMove, solved.WorstPush,
                                 written.UnmappedSpares, ModelLodTrimmer.LodCount(model) > 1, solved.Held, solved.Laid,
-                                swap, solved.Folded, solved.Shapes, smoothed, solved.Layered, solved.LayerResidual);
+                                swap, solved.Folded, solved.Shapes, smoothed, solved.Layered, solved.LayerResidual,
+                                solved.DeepCleared, solved.DeepWorst, solved.DeepAt, solved.StandoffPulled,
+                                solved.StandoffWorst, solved.StandoffHeld);
         return new Planned(solved.Edit, model, report);
     }
 
@@ -728,7 +788,7 @@ internal static partial class BodyRetarget
     /// <param name="swapMeshes">With <paramref name="swapSlot"/>, the skin meshes the swap replaces, as
     /// <see cref="Plan"/> hands them to the rebuild; null works them out here.</param>
     /// <param name="trace">Each stage by name — "transfer", "knit", "layer-knit", "lay", "follow", "push", "unfold",
-    /// "relax", "face-settle", "rim-lift", "layer-order" — with a copy of every node's move so far, indexed as
+    /// "relax", "face-settle", "rim-lift", "standoff", "layer-order" — with a copy of every node's move so far, indexed as
     /// <see cref="Sets.NodeOf"/> maps vertices — and "outfit-order" after them when <paramref name="outfit"/> is given.
     /// Changes nothing; null skips the copies.</param>
     /// <param name="outfit">The other piece of the garment's outfit, which it was authored over and must stay outside
@@ -739,7 +799,8 @@ internal static partial class BodyRetarget
                                  bool clearBody = false, IReadOnlyList<IReadOnlyCollection<int>>? keepShape = null,
                                  XivLiveMesh.SkinnedMesh? garmentSkin = null, string? swapSlot = null,
                                  IReadOnlySet<int>? swapMeshes = null, string? chestSlot = null,
-                                 Action<string, Vec3[]>? trace = null, Outfit? outfit = null)
+                                 Action<string, Vec3[]>? trace = null, Outfit? outfit = null, bool deepClear = false,
+                                 bool keepStandoff = false)
     {
         // With the skin replaced, the garment's OWN slot body is drawn after all — Rebuild embeds that very mesh in the
         // garment, so it is what the cloth ends up lying against. Asking for the swap is not enough: Rebuild only swaps
@@ -788,9 +849,10 @@ internal static partial class BodyRetarget
         // Hard pieces whole, the push-out, and whole again — and any piece the whole move would sink into the new body
         // let go: the stage runs again from the same start without it, so it comes out exactly as if it had never been
         // ticked. One round; see ReleaseSink.
+        var deep = deepClear && clearBody && ownSlotSwapped ? DeepClearTest(pairs, garmentSlot) : null;
         var free = keepShape is { Count: > 0 } ? (Vec3[])nodeDelta.Clone() : null;
         var stage = ShapeAndPush(garment, pairs, garmentSlot, ownSlotSwapped, sets, snapped, nodeDelta, keepShape,
-                                 before, clearBody);
+                                 before, clearBody, deep);
         var kept = keepShape;
         if (free != null && stage.Shapes != null && Array.Exists(stage.Shapes, s => s.Released))
         {
@@ -798,7 +860,7 @@ internal static partial class BodyRetarget
             kept = keepShape!.Where((_, k) => !judged[k].Released).ToList();
             Array.Copy(free, nodeDelta, nodeDelta.Length);
             stage = ShapeAndPush(garment, pairs, garmentSlot, ownSlotSwapped, sets, snapped, nodeDelta, kept, before,
-                                 clearBody) with { Shapes = judged };
+                                 clearBody, deep) with { Shapes = judged };
         }
 
         Stage("push");
@@ -856,6 +918,20 @@ internal static partial class BodyRetarget
         if (drawn != null && slotSwapped && !Tuned.NoRimLift) pushed += LiftRims(sets, drawn, nodeDelta, stay);
         Stage("rim-lift");
 
+        // The cloth the passes above carried further off the new chest than its author put it, back toward the author's
+        // standoff — see KeepStandoff. Last of the moves, so the tuck and the open skin judge the cloth where it ends;
+        // before the layer order, which puts back anything it disturbs.
+        int standoffPulled = 0, standoffHeld = 0;
+        float standoffWorst = 0f;
+        if (keepStandoff && clearBody && ownSlotSwapped && StandoffTest(pairs, garmentSlot) is { } standoff)
+        {
+            standoffPulled = KeepStandoff(garment, sets, standoff, nodeDelta, snapped, stay, out standoffWorst,
+                                          out standoffHeld);
+            // Counted again on what is written, as after the outfit order: Unfold counted before this moved anything.
+            if (standoffPulled > 0) folded = FoldedTriangles(sets, nodeDelta);
+        }
+        Stage("standoff");
+
         // Never write a NaN into the file: one spreads through every smoothing pass it touches, and the model it lands in
         // draws nothing there and threw every frame from the Parts preview. A node with no finite answer stays put.
         for (int n = 0; n < sets.NodeCount; n++)
@@ -899,13 +975,36 @@ internal static partial class BodyRetarget
 
         var edit = new RetargetEdit(garment.MeshSpans, vertDelta, vertNrm);
         return new Solved(edit, CountTrue(snapped), transferred, missed, pushed, worstMove, worstPush, sets.HeldCount,
-                          laid, folded, stage.Shapes, outfitLayered, layerResidual);
+                          laid, folded, stage.Shapes, outfitLayered, layerResidual, stage.DeepCleared, stage.DeepWorst,
+                          stage.DeepAt, standoffPulled, standoffWorst, standoffHeld);
+    }
+
+    /// <summary>
+    /// Which buried cloth may be cleared from deeper than <see cref="ClearDepth"/>, given where it lands on the drawn
+    /// skin: no deeper than <see cref="DeepClearDepth"/>, on the new chest's breast (by its own weights, read at the
+    /// landing — a point 28 mm deep is too far from the skin to ask itself), and where that chest stands at least
+    /// <see cref="DeepGrowLeast"/> outside the source chest. Null when the chest's breast cannot be read.
+    /// </summary>
+    internal static Func<int, BodySurface.Hit, float, bool>? DeepClearTest(IReadOnlyList<SlotPair> pairs, string? garmentSlot)
+    {
+        var chest = pairs.FirstOrDefault(p => p.Slot == garmentSlot && p.Swaps);
+        if (chest.TargetModel == null || BreastTest(chest) is not { } breast) return null;
+        var grownFrom = new BodySurface(chest.Correspondence.Source,
+                                        BodySurface.CellFor(MeanEdgeOf(chest.Correspondence.Source)));
+        return (_, hit, s) => s >= -DeepClearDepth && breast(hit.Point)
+                              && (grownFrom.Nearest(hit.Point, DeepGrowReach, out var was)
+                                      ? Vector3.Dot(hit.Point - was.Point, hit.Normal)
+                                      : DeepGrowReach) >= DeepGrowLeast;
     }
 
     /// <summary>What <see cref="ShapeAndPush"/> leaves for the passes after it.</summary>
     /// <param name="Shapes">Each kept piece's outcome, by index; null when nothing was kept.</param>
+    /// <param name="DeepCleared">Nodes pushed out from deeper than <see cref="ClearDepth"/>; see <see cref="DeepClearTest"/>.</param>
+    /// <param name="DeepWorst">The furthest any of them was pushed in all.</param>
+    /// <param name="DeepAt">A garment vertex of each of them.</param>
     private sealed record ShapeStage(int Pushed, float WorstPush, TargetBody? Drawn, FaceCheck? FaceCheck,
-                                     float[]? PushedBy, ShapeOutcome[]? Shapes);
+                                     float[]? PushedBy, ShapeOutcome[]? Shapes, int DeepCleared = 0, float DeepWorst = 0f,
+                                     IReadOnlyList<int>? DeepAt = null);
 
     /// <summary>
     /// The kept pieces moved whole, the push-out, and the pieces whole again around where the push put them — then each
@@ -915,7 +1014,7 @@ internal static partial class BodyRetarget
     private static ShapeStage ShapeAndPush(ModelParts garment, IReadOnlyList<SlotPair> pairs, string? garmentSlot,
                                            bool ownSlotSwapped, Sets sets, bool[] snapped, Vec3[] nodeDelta,
                                            IReadOnlyList<IReadOnlyCollection<int>>? keepShape, TargetBody? before,
-                                           bool clearBody)
+                                           bool clearBody, Func<int, BodySurface.Hit, float, bool>? deep = null)
     {
         bool keeping = keepShape is { Count: > 0 };
 
@@ -951,7 +1050,16 @@ internal static partial class BodyRetarget
             if (!snapped[n] || pushSnapped) pushable.Add(n);
 
         int pushed = PushOut(sets, pushable, before, after, nodeDelta, clearBody, out float worstPush,
-                             out var faceCheck, out var pushedBy, pushSnapped ? snapped : null);
+                             out var faceCheck, out var pushedBy, pushSnapped ? snapped : null, deep,
+                             out var deepNodes, out float deepWorst);
+        int[]? deepAt = null;
+        if (deepNodes.Count > 0)
+        {
+            var vertexOf = new int[sets.NodeCount];
+            Array.Fill(vertexOf, -1);
+            for (int v = sets.NodeOf.Length - 1; v >= 0; v--) vertexOf[sets.NodeOf[v]] = v;
+            deepAt = [.. deepNodes.Select(n => vertexOf[n]).Where(v => v >= 0)];
+        }
 
         // The push moves points one by one, and bent the pieces straight back: whole again, around where it put them.
         ShapeOutcome[]? shapes = null;
@@ -964,7 +1072,7 @@ internal static partial class BodyRetarget
             KeepShape(sets, keepShape, nodeDelta, scales, placed, owner);
             shapes = JudgeShapes(sets, placed, owner, bent, nodeDelta, SignedOff(after), SignedOff(before));
         }
-        return new ShapeStage(pushed, worstPush, after, faceCheck, pushedBy, shapes);
+        return new ShapeStage(pushed, worstPush, after, faceCheck, pushedBy, shapes, deepNodes.Count, deepWorst, deepAt);
     }
 
     /// <summary>

@@ -233,6 +233,12 @@ internal static partial class BodyRetarget
     /// "crossed-by:" and the node that crossed it. Per logical call, as <see cref="Tuned"/>; null for every refit.</summary>
     internal static readonly System.Threading.AsyncLocal<Action<(int, int, int), string>?> FaceTrace = new();
 
+    /// <summary>For tests: <see cref="PushOut"/>'s need per node as each of its steps leaves it — "need-direct" (each
+    /// node's own), "need-faces" (with the faces the skin comes through), "need-spread", "need-slope", "need-guarded" (after
+    /// the fold guard) — and "settled", how far the settle then moved each node. A copy each time; per
+    /// logical call, as <see cref="Tuned"/>; null for every refit.</summary>
+    internal static readonly System.Threading.AsyncLocal<Action<string, float[]>?> PushTrace = new();
+
     /// <summary>How far apart a thick shell's two walls may be to be paired (3 mm) — see <see cref="FaceCheck.WallPartner"/>.
     /// Geometric's skirt: exactly 2 mm.</summary>
     internal const float WallPairReach = 0.003f;
@@ -632,12 +638,24 @@ internal static partial class BodyRetarget
     /// <param name="pushedBy">How far it pushed each node, for the same.</param>
     /// <param name="snapped">Which of <paramref name="candidates"/> the transfer snapped, when snapped cloth is among them;
     /// null when it is not.</param>
+    /// <param name="deep">With <paramref name="clearBody"/>, which cloth buried deeper than <see cref="ClearDepth"/> is
+    /// cleared all the same — given the node, its landing and its depth (see <see cref="DeepClearTest"/>). Null leaves
+    /// all of it, as always.</param>
+    /// <param name="deepCleared">The nodes pushed out from that deep, here or in the settle below.</param>
+    /// <param name="deepWorst">The furthest any of them was pushed in all.</param>
     private static int PushOut(Sets sets, IReadOnlyList<int> candidates, TargetBody before, TargetBody after,
                                Vec3[] nodeDelta, bool clearBody, out float worst, out FaceCheck faceCheck,
-                               out float[] pushedBy, bool[]? snapped = null)
+                               out float[] pushedBy, bool[]? snapped, Func<int, BodySurface.Hit, float, bool>? deep,
+                               out List<int> deepCleared, out float deepWorst)
     {
         worst = 0f;
+        deepCleared = [];
+        deepWorst = 0f;
         pushedBy = new float[sets.NodeCount];
+        // Nodes the deep clear reached, here or in the settle — counted once, by how far they ended up from where this
+        // pass found them (the settle's pushes add up round after round, and say nothing of the distance).
+        var deepNode = new bool[sets.NodeCount];
+        var start = deep != null ? (Vec3[])nodeDelta.Clone() : null;
 
         // The authored-inside nodes out of the set entirely, before anything else looks at it: neither a source of
         // push nor a receiver of the spread below, which would otherwise drag hidden cloth out at the boundary.
@@ -705,7 +723,12 @@ internal static partial class BodyRetarget
 
             float s1 = Vector3.Dot(p - hit.Point, hit.Normal);
             if (s1 >= 0f) continue;
-            if (clearBody && s1 < -ClearDepth) continue;   // buried deep on purpose — see above
+            // Buried deep on purpose — see above — unless a far larger breast grew over it (see DeepClearDepth).
+            if (clearBody && s1 < -ClearDepth)
+            {
+                if (deep?.Invoke(n, hit, s1) != true) continue;
+                deepNode[n] = true;
+            }
 
             // Back to the clearance, or to the author's own standoff where that was less: un-clipping, not re-fitting.
             // Along the SKIN's normal at the landing, not along (p - landing): for a point inside, that difference aims
@@ -717,8 +740,11 @@ internal static partial class BodyRetarget
             any = true;
         }
 
+        var pushTrace = PushTrace.Value;
+        pushTrace?.Invoke("need-direct", (float[])need.Clone());
         faceCheck = new FaceCheck(sets, nodes, before, after, authored, clearBody);
         any |= SkinThroughFaces(faceCheck, nodeDelta, need, dir, hasDir);
+        pushTrace?.Invoke("need-faces", (float[])need.Clone());
 
         if (!any) return 0;
 
@@ -742,6 +768,7 @@ internal static partial class BodyRetarget
             }
             if (!changed) break;
         }
+        pushTrace?.Invoke("need-spread", (float[])need.Clone());
 
         // The same slope limit against the cloth this pass left out — authored inside the skin, or nowhere near it.
         // Those nodes never move, and the spread above cannot see them, so a node beside one could be pushed its whole
@@ -781,6 +808,7 @@ internal static partial class BodyRetarget
         }
 
         Slope();
+        pushTrace?.Invoke("need-slope", (float[])need.Clone());
 
         // Back the push off wherever it would turn a triangle over. Each node is pushed along the skin's normal
         // where IT landed, and neighbours can land on surfaces facing different ways — a sleeve at the wrist lands on
@@ -834,6 +862,7 @@ internal static partial class BodyRetarget
             if (folded == 0) break;
             Slope();
         }
+        pushTrace?.Invoke("need-guarded", (float[])need.Clone());
 
         // How far each node has been pushed out, so the settle below reports pushes and not the smoothing that rides
         // along with them.
@@ -851,9 +880,28 @@ internal static partial class BodyRetarget
             if (need[n] > worst) worst = need[n];
             pushed++;
         }
-        // Whatever the fold guard backed off from is still inside: settled rather than left.
-        if (!Tuned.NoSettle) pushed += Settle(sets, nodes, after, nodeDelta, authored, clearBody, pushedBy, ref worst);
+        // Whatever the fold guard backed off from is still inside: settled rather than left. The settle never halves, so it
+        // can push a deep node back out to the full depth the fold guard backed it off from — the deep clear is bounded by
+        // what the refit is measured on afterwards (folds, stretch), not by that guard.
+        var beforeSettle = pushTrace != null ? (Vec3[])nodeDelta.Clone() : null;
+        if (!Tuned.NoSettle)
+            pushed += Settle(sets, nodes, after, nodeDelta, authored, clearBody, pushedBy, ref worst, deep, deepNode);
+        if (pushTrace != null)
+        {
+            var settled = new float[sets.NodeCount];
+            for (int n = 0; n < sets.NodeCount; n++)
+                settled[n] = Len(new Vec3(nodeDelta[n].X - beforeSettle![n].X, nodeDelta[n].Y - beforeSettle[n].Y,
+                                          nodeDelta[n].Z - beforeSettle[n].Z));
+            pushTrace("settled", settled);
+        }
 
+        for (int n = 0; start != null && n < sets.NodeCount; n++)
+        {
+            if (!deepNode[n] || pushedBy[n] <= 0f) continue;
+            deepCleared.Add(n);
+            var moved = new Vec3(nodeDelta[n].X - start[n].X, nodeDelta[n].Y - start[n].Y, nodeDelta[n].Z - start[n].Z);
+            deepWorst = MathF.Max(deepWorst, Len(moved));
+        }
         return pushed;
     }
 
@@ -1396,7 +1444,7 @@ internal static partial class BodyRetarget
     private const int SettleRounds = 32;
 
     /// <summary>How many rings of neighbours around the cloth still inside <see cref="Settle"/> moves with it.</summary>
-    private const int SettleRings = 4;
+    internal const int SettleRings = 4;
 
     /// <summary>How far each settle round takes a node toward its neighbours' movement.</summary>
     private const float SettleRate = 0.5f;
@@ -1431,8 +1479,11 @@ internal static partial class BodyRetarget
     /// <param name="pushedBy">How far the push above moved each node, added to here: the report counts a node the
     /// settle pushes once, and gives the furthest total push, not how far the smoothing carried a node.</param>
     /// <returns>How many nodes it pushed that the push above had not.</returns>
+    /// <param name="deep">See <see cref="PushOut"/>: deep cloth the settle may clear too.</param>
+    /// <param name="deepNode">Marked for every node it clears from that deep.</param>
     private static int Settle(Sets sets, List<int> nodes, TargetBody after, Vec3[] nodeDelta, float[] authored,
-                              bool clearBody, float[] pushedBy, ref float worst)
+                              bool clearBody, float[] pushedBy, ref float worst,
+                              Func<int, BodySurface.Hit, float, bool>? deep, bool[] deepNode)
     {
         var inSet = new bool[sets.NodeCount];
         foreach (int n in nodes) inSet[n] = true;
@@ -1445,7 +1496,11 @@ internal static partial class BodyRetarget
             if (!after.Deepest(p, PushProbeRange, out var hit)) return 0f;
             float s = Vector3.Dot(p - hit.Point, hit.Normal);
             if (s >= -SettleTolerance) return 0f;
-            if (clearBody && s < -ClearDepth) return 0f;   // buried deep on purpose — see PushOut
+            if (clearBody && s < -ClearDepth)
+            {
+                if (deep?.Invoke(n, hit, s) != true) return 0f;   // buried deep on purpose — see PushOut
+                deepNode[n] = true;
+            }
             normal = hit.Normal;
             return (clearBody ? Clearance : MathF.Min(authored[n], Clearance)) - s;
         }

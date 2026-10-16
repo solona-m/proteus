@@ -47,6 +47,8 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
     [Trait("Plan", "AC-vanilla-refit-cut-skin-5")]
     [Trait("Plan", "EDGE-vanilla-refit-cut-skin-1")]
     [Trait("Plan", "EDGE-vanilla-refit-cut-skin-3")]
+    [Trait("Plan", "AC-neckline-float-6")]
+    [Trait("Plan", "EDGE-neckline-float-14")]
     public void Only_the_games_own_garment_is_game_gear_and_only_it_is_cut_and_cleared()
     {
         // The game's own file: no mod root. A mod serving the game's model — a recolour, a "— Proteus edit" copy — serves
@@ -59,8 +61,18 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
                                                  [new PenumbraModMeta.Redirect(Top_, "coat.mdl", "Colour / Red")],
                                                  Refitted("Body — Neolithe/neolithe m.mdl"), madeByProteus: false));
 
-        Assert.Equal(new AutoRefitDecisions.SkinRule(CutHidden: true, ClearBody: true), AutoRefitDecisions.SkinFor(true));
-        Assert.Equal(new AutoRefitDecisions.SkinRule(CutHidden: false, ClearBody: false), AutoRefitDecisions.SkinFor(false));
+        Assert.Equal(new AutoRefitDecisions.SkinRule(CutHidden: true, ClearBody: true, TuckUnderCloth: true, DeepClear: true,
+                                                     KeepStandoff: true),
+                     AutoRefitDecisions.SkinFor(true));
+        Assert.Equal(new AutoRefitDecisions.SkinRule(CutHidden: false, ClearBody: false, TuckUnderCloth: false, DeepClear: false,
+                                                     KeepStandoff: false),
+                     AutoRefitDecisions.SkinFor(false));
+        Assert.True(RefitCore.DeepClearFor(true, "_top"));
+        Assert.False(RefitCore.DeepClearFor(true, "_dwn"));
+        Assert.False(RefitCore.DeepClearFor(false, "_top"));
+        Assert.True(RefitCore.KeepStandoffFor(true, "_top"));
+        Assert.False(RefitCore.KeepStandoffFor(true, "_dwn"));
+        Assert.False(RefitCore.KeepStandoffFor(false, "_top"));
     }
 
     [Fact]
@@ -312,6 +324,73 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
         {
             File.Delete(target);
         }
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-neckline-skin-tuck-5")]
+    public void A_game_tops_tuck_is_logged()
+    {
+        var bytes = SkinTuckSheet.LooseTop(looseFrom: 5);
+        var garment = ModelPartReader.Read(bytes)!;
+        var game = new List<string>();
+        var mod = new List<string>();
+
+        var plan = RefitCore.PlanRefit(garment, bytes, [SkinTuckSheet.Resized(SkinTuckSheet.Body())], "_top", across: true,
+                                       gameGear: true, out _, log: game.Add);
+        RefitCore.PlanRefit(garment, bytes, [SkinTuckSheet.Resized(SkinTuckSheet.Body())], "_top", across: true,
+                            gameGear: false, out _, log: mod.Add);
+
+        Assert.True(plan.Report.Swap?.Tucked > 0, $"{plan.Report.Swap}");
+        Assert.Contains(game, l => l.StartsWith($"skin tucked: {plan.Report.Swap!.Value.Tucked} triangles", StringComparison.Ordinal));
+        Assert.DoesNotContain(mod, l => l.StartsWith("skin tucked:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-neckline-float-7")]
+    public void A_game_tops_standoff_is_logged()
+    {
+        var (bytes, pair) = SkinTuckSheet.FloatingNeckline(coarse: true);
+        var garment = ModelPartReader.Read(bytes)!;
+        var game = new List<string>();
+        var mod = new List<string>();
+        var studio = new List<string>();
+
+        var plan = RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true, out _, log: game.Add);
+        RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: false, out _, log: mod.Add);
+        BodyRetarget.Plan(garment, bytes, [pair], "_top", held: new HashSet<int>(), replaceSkin: true, acrossBodies: true,
+                          clearBody: true, cutHidden: true,
+                          keepShape: RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)),
+                          tuckSlot: RefitCore.TuckSlot(true, "_top"), log: studio.Add);
+
+        Assert.True(plan.Report.StandoffPulled > 0);
+        Assert.Contains(game, l => l.StartsWith($"cloth brought back toward the author's standoff: {plan.Report.StandoffPulled} points",
+                                                StringComparison.Ordinal));
+        Assert.DoesNotContain(mod, l => l.StartsWith("cloth brought back", StringComparison.Ordinal));
+        Assert.DoesNotContain(studio, l => l.StartsWith("cloth brought back", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-neckline-large-bust-8")]
+    public void A_game_tops_deep_clear_is_logged()
+    {
+        var bytes = SkinTuckSheet.CoarseBuriedTop(0.012f);
+        var garment = ModelPartReader.Read(bytes)!;
+        var pair = SkinTuckSheet.Grown(SkinTuckSheet.Bust(0f), SkinTuckSheet.Bust(0.02f));
+        var game = new List<string>();
+        var mod = new List<string>();
+        var studio = new List<string>();
+
+        var plan = RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: true, out _, log: game.Add);
+        RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: false, out _, log: mod.Add);
+        BodyRetarget.Plan(garment, bytes, [pair], "_top", held: new HashSet<int>(), replaceSkin: true, acrossBodies: true,
+                          clearBody: true, cutHidden: true,
+                          keepShape: RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)),
+                          tuckSlot: RefitCore.TuckSlot(true, "_top"), log: studio.Add);
+
+        Assert.True(plan.Report.DeepCleared > 0);
+        Assert.Contains(game, l => l.StartsWith($"cloth cleared deep: {plan.Report.DeepCleared} points", StringComparison.Ordinal));
+        Assert.DoesNotContain(mod, l => l.StartsWith("cloth cleared deep:", StringComparison.Ordinal));
+        Assert.DoesNotContain(studio, l => l.StartsWith("cloth cleared deep:", StringComparison.Ordinal));
     }
 
     [Fact]

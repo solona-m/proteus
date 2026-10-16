@@ -1024,8 +1024,31 @@ internal static partial class RefitCore
         var pieces = ShapePieces(garment, DefaultKeepShape(garment), out pieceNames);
         return BodyRetarget.Plan(garment, bytes, pairs, primary, held: new HashSet<int>(),
                                  replaceSkin: across, acrossBodies: across, clearBody: skin.ClearBody,
-                                 cutHidden: skin.CutHidden, keepShape: pieces, log: log, warn: warn, trace: trace);
+                                 cutHidden: skin.CutHidden, keepShape: pieces, log: log, warn: warn, trace: trace,
+                                 tuckSlot: TuckSlot(skin.TuckUnderCloth, primary),
+                                 deepClear: DeepClearFor(skin.DeepClear, primary),
+                                 keepStandoff: KeepStandoffFor(skin.KeepStandoff, primary));
     }
+
+    /// <summary>
+    /// Which slot's cut skin is tucked in under the cloth (see <see cref="BodyRetarget.TuckUnderCloth"/>): a top's own
+    /// chest, when the rule asks for it. Measured on tops only — a pair of legs, a skirt or a long top's hips is not tucked.
+    /// </summary>
+    internal static string? TuckSlot(bool tuck, string garmentSlot) => tuck && garmentSlot == "_top" ? "_top" : null;
+
+    /// <summary>
+    /// Whether a top's cloth buried in a far larger new breast is cleared out of it from deeper than usual (see
+    /// <see cref="BodyRetarget.DeepClearDepth"/>): the game's own top in the automatic refit. Never the Studio's — it
+    /// moves cloth up to 30 mm, and a Studio refit writes into the modder's own mod.
+    /// </summary>
+    internal static bool DeepClearFor(bool rule, string garmentSlot) => rule && garmentSlot == "_top";
+
+    /// <summary>
+    /// Whether a top's cloth the refit carried further off the new chest than its author put it comes back toward the
+    /// author's standoff (see <see cref="BodyRetarget.KeepStandoff"/>): the game's own top in the automatic refit. Never
+    /// the Studio's — it moves a modder's cloth toward the body.
+    /// </summary>
+    internal static bool KeepStandoffFor(bool rule, string garmentSlot) => rule && garmentSlot == "_top";
 
     /// <summary>
     /// The automatic refit of a garment worn on an accessory slot — a jacket on a necklace — over the body part(s) its

@@ -67,9 +67,14 @@ internal static class AutoRefitDecisions
         _ => null,
     };
 
-    /// <summary>How the new body's skin goes into an unattended refit: cut to where the garment drew its own, and
-    /// whether the cloth is pushed clear of the body wherever it is buried in it.</summary>
-    internal readonly record struct SkinRule(bool CutHidden, bool ClearBody);
+    /// <summary>How the new body's skin goes into an unattended refit: cut to where the garment drew its own, whether
+    /// the cloth is pushed clear of the body wherever it is buried in it, and whether a top's cut skin is carried on in
+    /// under its cloth (see <see cref="BodyRetarget.TuckUnderCloth"/>), and whether a top's cloth buried in a far larger
+    /// new breast is cleared out of it from deeper than usual (see <see cref="BodyRetarget.DeepClearDepth"/>), and whether a
+    /// top's cloth the refit carried further off the new chest than its author put it comes back toward the author's
+    /// standoff (see <see cref="BodyRetarget.KeepStandoff"/>).</summary>
+    internal readonly record struct SkinRule(bool CutHidden, bool ClearBody, bool TuckUnderCloth, bool DeepClear,
+                                             bool KeepStandoff);
 
     /// <summary>
     /// The new body's skin goes in whole: nobody is watching an unattended refit to catch the holes an author's cut can
@@ -77,9 +82,14 @@ internal static class AutoRefitDecisions
     /// the game draws no chest skin under a worn top, only the skin the top carries at its openings — so the skin goes
     /// where the game puts it, and the cloth is cleared of the body. The Neo-Ishgardian Top of Maiming on Neolithe's
     /// neobelly SFW M: 679 cm² of skin through the cloth whole, 224 cut, 193 cut and cleared.
+    /// <para/>
+    /// And a top's cut skin is tucked in under its cloth: the game ends its skin at the neckline, turned in under the
+    /// cloth, and laid onto a fuller bust that edge lands on top of the breast while the neckline rides out with it — Dirndl's
+    /// Bodice on Neolithe's Almond XS showed the inside of its back through the bust.
     /// </summary>
     /// <param name="gameGear">The piece is drawn from the game's own file, not a mod's.</param>
-    internal static SkinRule SkinFor(bool gameGear) => gameGear ? new SkinRule(true, true) : new SkinRule(false, false);
+    internal static SkinRule SkinFor(bool gameGear)
+        => gameGear ? new SkinRule(true, true, true, true, true) : new SkinRule(false, false, false, false, false);
 
     /// <summary>
     /// The piece is the game's own: no mod serves it, or the mod serving it is one Proteus made for a game item — it
