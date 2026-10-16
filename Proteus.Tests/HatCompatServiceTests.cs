@@ -856,6 +856,108 @@ public class HatCompatServiceTests
         Assert.Equal(patched, mod.Model());
     }
 
+    /// <summary>
+    /// Undo carries on past a refused sibling, so the rest of the hairstyle is still undone and the undo sticks: the
+    /// watcher's <c>Refused</c> case notes it and goes on. Pinned by reading the source, since the watcher cannot be
+    /// built in a test.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-miqote-ear-skin-6")]
+    public void UndoCarriesOnPastARefusedSibling()
+    {
+        var source = File.ReadAllText(Path.Combine(SourceDir(), "Proteus", "Services", "HatCompatWatcher.cs"));
+        var revertFiles = source[source.IndexOf("private bool RevertFiles(", StringComparison.Ordinal)..];
+        revertFiles = revertFiles[..revertFiles.IndexOf("private bool RevertWholeMod(", StringComparison.Ordinal)];
+        int refused = revertFiles.IndexOf("case HatCompatService.Undone.Refused:", StringComparison.Ordinal);
+        Assert.True(refused >= 0);
+        var arm = revertFiles[refused..];
+        arm = arm[..arm.IndexOf("case HatCompatService.Undone.", "case ".Length, StringComparison.Ordinal)];
+        Assert.DoesNotContain("return", arm);
+        Assert.Contains("break;", arm);
+    }
+
+    /// <summary>Undo-all restores every file and lets the record go.</summary>
+    [Fact]
+    [Trait("Plan", "AC-miqote-ear-skin-6")]
+    public void UndoAllRestoresEveryFile()
+    {
+        var hair = MiqoteHair();
+        using var mod = FittedAt(hair, HatCompatSolve.Version);
+        FitSibling(mod, hair);
+
+        var undo = HatCompatService.RevertOrForgetAll(mod.Root);
+        Assert.True(undo.Ok);
+        Assert.Equal(2, undo.Restored);
+        Assert.Equal(hair, mod.Model());
+        Assert.Equal(hair, File.ReadAllBytes(Path.Combine(mod.Root, SiblingRel.Replace('/', Path.DirectorySeparatorChar))));
+        Assert.False(File.Exists(mod.Record));
+    }
+
+    /// <summary>
+    /// A later feature (here the brush) holding its own backup of ANY file blocks the whole undo before a single file is
+    /// touched: restoring ours would silently undo that edit too.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-miqote-ear-skin-6")]
+    public void UndoAllTouchesNothingWhileALaterEditHoldsAnyFile()
+    {
+        var hair = MiqoteHair();
+        using var mod = FittedAt(hair, HatCompatSolve.Version);
+        FitSibling(mod, hair);
+        var patched = mod.Model();
+        var siblingPath = Path.Combine(mod.Root, SiblingRel.Replace('/', Path.DirectorySeparatorChar));
+        var patchedSibling = File.ReadAllBytes(siblingPath);
+
+        var brushBackup = Path.Combine(mod.Root, "Proteus", MeshVolumeService.BackupSubdir,
+                                       SiblingRel.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(brushBackup)!);
+        File.WriteAllBytes(brushBackup, patchedSibling);
+        var ours = Path.Combine(mod.Root, "Proteus", HatCompatService.BackupSubdir,
+                                SiblingRel.Replace('/', Path.DirectorySeparatorChar));
+        File.SetLastWriteTimeUtc(brushBackup, File.GetLastWriteTimeUtc(ours).AddMinutes(1));
+
+        var undo = HatCompatService.RevertOrForgetAll(mod.Root);
+        Assert.False(undo.Ok);
+        Assert.False(undo.Failed);
+        Assert.NotEmpty(undo.Message);
+        Assert.Equal(0, undo.Restored);
+        Assert.Equal(patched, mod.Model());
+        Assert.Equal(patchedSibling, File.ReadAllBytes(siblingPath));
+        Assert.Equal(2, HatCompatService.ReadRecord(mod.Root)!.Files.Count);
+    }
+
+    /// <summary>A file whose backup is gone is left and reported; the others are still undone.</summary>
+    [Fact]
+    [Trait("Plan", "AC-miqote-ear-skin-6")]
+    public void UndoAllLeavesAFileWithoutABackupAndUndoesTheRest()
+    {
+        var hair = MiqoteHair();
+        using var mod = FittedAt(hair, HatCompatSolve.Version);
+        FitSibling(mod, hair);
+        var siblingPath = Path.Combine(mod.Root, SiblingRel.Replace('/', Path.DirectorySeparatorChar));
+        var patchedSibling = File.ReadAllBytes(siblingPath);
+        File.Delete(Path.Combine(mod.Root, "Proteus", HatCompatService.BackupSubdir,
+                                 SiblingRel.Replace('/', Path.DirectorySeparatorChar)));
+
+        var undo = HatCompatService.RevertOrForgetAll(mod.Root);
+        Assert.True(undo.Ok);
+        Assert.Equal(1, undo.Restored);
+        Assert.Equal(hair, mod.Model());
+        Assert.Equal(patchedSibling, File.ReadAllBytes(siblingPath));
+    }
+
+    /// <summary>Nothing recorded: a plain "nothing to undo", not a failure.</summary>
+    [Fact]
+    [Trait("Plan", "AC-miqote-ear-skin-6")]
+    public void UndoAllWithNothingRecordedSaysSo()
+    {
+        using var mod = new Mod(MiqoteHair());
+        var undo = HatCompatService.RevertOrForgetAll(mod.Root);
+        Assert.False(undo.Ok);
+        Assert.False(undo.Failed);
+        Assert.NotEmpty(undo.Message);
+    }
+
     /// <summary>A Miqo'te hair whose attribute table is full refuses the fit cleanly, writing nothing.</summary>
     [Fact]
     [Trait("Plan", "EDGE-miqote-ear-skin-12")]

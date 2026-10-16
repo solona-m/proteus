@@ -522,6 +522,46 @@ public static class HatCompatService
         return new Outcome(true, "", restoredFrom.Count);
     }
 
+    /// <summary>What <see cref="RevertOrForgetAll"/> did with a whole mod.</summary>
+    /// <param name="Ok">Something came back (restored or kept as updated) and nothing failed.</param>
+    /// <param name="Message">Why not, when not <paramref name="Ok"/>.</param>
+    /// <param name="Failed">An old backup could not be let go: the undo stopped there.</param>
+    public readonly record struct WholeUndo(bool Ok, int Restored, int Forgotten, string Message, bool Failed = false);
+
+    /// <summary>
+    /// Undo every file this mod's record names, each through <see cref="RevertOrForget"/> — all or nothing while a later
+    /// feature still holds its own backup of ANY of them, as the whole-mod undo always was (<see cref="ModelBackupOrder"/>):
+    /// restoring ours would silently undo that edit too. A file whose backup is gone is left and reported; one whose old
+    /// backup cannot be let go stops the undo.
+    /// </summary>
+    public static WholeUndo RevertOrForgetAll(string modRoot)
+    {
+        var files = ReadRecord(modRoot)?.Files.ToList() ?? [];
+        if (files.Count == 0)
+            return new WholeUndo(false, 0, 0, Loc.Localize("HatCompat.Revert.Nothing",
+                "This mod has no Proteus hat-compatibility edits to undo."));
+
+        foreach (var rel in files)
+            if (ModelBackupOrder.LaterFeature(modRoot, BackupSubdir, rel) is { } later)
+                return new WholeUndo(false, 0, 0, ModelBackupOrder.BlockedMessage(later));
+
+        int restored = 0, forgotten = 0;
+        var refusal = "";
+        foreach (var rel in files)
+        {
+            switch (RevertOrForget(modRoot, rel, out var message))
+            {
+                case Undone.Restored: restored++; break;
+                case Undone.Forgotten: forgotten++; break;
+                case Undone.Refused: refusal = message; break;
+                case Undone.Failed: return new WholeUndo(false, restored, forgotten, message, Failed: true);
+            }
+        }
+        return restored + forgotten == 0
+            ? new WholeUndo(false, 0, 0, refusal)
+            : new WholeUndo(true, restored, forgotten, "");
+    }
+
     /// <summary>
     /// Put the author's own hat support back on every hairstyle Proteus replaced it on, in every mod under
     /// <paramref name="modsRoot"/>, from each mod's record. For switching <c>ReplaceAuthoredHatCompat</c> off: the
