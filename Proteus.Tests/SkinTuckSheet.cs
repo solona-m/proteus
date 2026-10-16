@@ -42,17 +42,22 @@ internal static class SkinTuckSheet
         return [.. tris];
     }
 
-    /// <summary>The bones of row <paramref name="row"/>: the spine, or an upper arm for the rows <paramref name="arm"/>
-    /// names.</summary>
-    private static (string Bone, float W)[] Bones(int row, Func<int, bool>? arm)
-        => arm?.Invoke(row) == true ? [("j_ude_a_l", 1f)] : [("j_sebo_c", 1f)];
+    /// <summary>The bones of row <paramref name="row"/>: the spine, or for the rows <paramref name="arm"/> names
+    /// <paramref name="armBone"/> by <paramref name="armShare"/> and the spine by the rest.</summary>
+    private static (string Bone, float W)[] Bones(int row, Func<int, bool>? arm, float armShare = 1f,
+                                                  string armBone = "j_ude_a_l")
+        => arm?.Invoke(row) != true ? [("j_sebo_c", 1f)]
+         : armShare >= 1f ? [(armBone, 1f)]
+         : [(armBone, armShare), ("j_sebo_c", 1f - armShare)];
 
     private static SyntheticModel.SurfaceMesh Sheet(string material, int from, int to, Func<int, float> z,
-                                                    Func<int, bool>? arm = null)
-        => Sheet(material, from, to, (r, _) => z(r), arm);
+                                                    Func<int, bool>? arm = null, float armShare = 1f,
+                                                    string armBone = "j_ude_a_l")
+        => Sheet(material, from, to, (r, _) => z(r), arm, armShare, armBone);
 
     private static SyntheticModel.SurfaceMesh Sheet(string material, int from, int to, Func<int, int, float> z,
-                                                    Func<int, bool>? arm = null)
+                                                    Func<int, bool>? arm = null, float armShare = 1f,
+                                                    string armBone = "j_ude_a_l")
     {
         var pos = new List<Vector3>();
         var uv = new List<Vector2>();
@@ -62,7 +67,7 @@ internal static class SkinTuckSheet
             {
                 pos.Add(new Vector3(X(c), Y(r), z(r, c)));
                 uv.Add(new Vector2((float)c / (Columns - 1), (float)r / (Rows - 1)));
-                w.Add(Bones(r, arm));
+                w.Add(Bones(r, arm, armShare, armBone));
             }
         return new SyntheticModel.SurfaceMesh(material, [.. pos], [.. pos.Select(_ => Vector3.UnitZ)], [.. uv], [.. w],
                                               [(0u, Grid(from, to, from))]);
@@ -74,9 +79,14 @@ internal static class SkinTuckSheet
     /// <param name="hiddenBelow">Rows below this go in a submesh tagged <c>atr_tv_b</c>, a variant the body may hide.</param>
     /// <param name="halvesAt">Two untagged submeshes split at this row — below it first, or last when
     /// <paramref name="reversed"/>: the same skin in another order.</param>
+    /// <param name="armShare">How much of the <paramref name="arm"/> rows' weight is on the arm; the spine has the rest.</param>
+    /// <param name="armBone">The arm's bone.</param>
     internal static byte[] Body(Func<int, bool>? arm = null, int? splitAt = null, int? hiddenBelow = null,
-                                bool piercing = false, int? halvesAt = null, bool reversed = false)
+                                bool piercing = false, int? halvesAt = null, bool reversed = false, float armShare = 1f,
+                                string armBone = "j_ude_a_l")
     {
+        if (armShare < 1f || armBone != "j_ude_a_l")
+            return SyntheticModel.BuildSurface([], Sheet(Skin, 0, Rows - 1, _ => 0f, arm, armShare, armBone));
         var meshes = new List<SyntheticModel.SurfaceMesh>();
         var attrs = new List<string>();
         if (halvesAt is { } half)
@@ -177,4 +187,43 @@ internal static class SkinTuckSheet
     }
 
     internal static string Sha(byte[] bytes) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes));
+
+    /// <summary>
+    /// The body skin triangles <paramref name="tucked"/> draws that <paramref name="untucked"/> does not, and of those how
+    /// many are NOT one of <paramref name="body"/>'s own skin triangles at the same three positions wound the same way —
+    /// what the written model shows, checked on the model itself: a tucked triangle is the body's, never a new or
+    /// turned-over one.
+    /// </summary>
+    internal static (int New, int NotTheBodys) NewSkinAgainstBody(ModelParts untucked, ModelParts tucked, ModelParts body)
+    {
+        var had = new HashSet<string>(SkinTriangles(untucked).Select(t => Oriented(t, ordered: false)));
+        var bodys = new HashSet<string>(SkinTriangles(body).Select(t => Oriented(t, ordered: true)));
+        int fresh = 0, wrong = 0;
+        foreach (var t in SkinTriangles(tucked))
+        {
+            if (had.Contains(Oriented(t, ordered: false))) continue;
+            fresh++;
+            if (!bodys.Contains(Oriented(t, ordered: true))) wrong++;
+        }
+        return (fresh, wrong);
+    }
+
+    private static IEnumerable<(Vector3, Vector3, Vector3)> SkinTriangles(ModelParts m)
+    {
+        Vector3 At(int v) => new(m.Positions[v * 3], m.Positions[v * 3 + 1], m.Positions[v * 3 + 2]);
+        foreach (var part in m.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material)))
+            for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+                yield return (At(part.Triangles[t]), At(part.Triangles[t + 1]), At(part.Triangles[t + 2]));
+    }
+
+    /// <summary>A triangle by its corners' positions: in winding order from the least corner when
+    /// <paramref name="ordered"/>, any order otherwise.</summary>
+    private static string Oriented((Vector3 A, Vector3 B, Vector3 C) t, bool ordered)
+    {
+        static string K(Vector3 p) => $"{MathF.Round(p.X * 1e5f)},{MathF.Round(p.Y * 1e5f)},{MathF.Round(p.Z * 1e5f)}";
+        string[] k = [K(t.A), K(t.B), K(t.C)];
+        if (!ordered) return string.Join(";", k.Order(StringComparer.Ordinal));
+        int least = Array.IndexOf(k, k.Min(StringComparer.Ordinal));
+        return string.Join(";", k[least], k[(least + 1) % 3], k[(least + 2) % 3]);
+    }
 }

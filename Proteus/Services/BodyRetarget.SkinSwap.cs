@@ -64,10 +64,11 @@ internal static partial class BodyRetarget
     /// <param name="Adorned">Triangles of the new body's nails and piercings carried in (see <see cref="AdornmentsOf"/>).</param>
     /// <param name="Tucked">Of <paramref name="Added"/>, triangles drawn past the author's edge, in under the cloth (see
     /// <see cref="TuckUnderCloth"/>).</param>
+    /// <param name="TuckUnread">Slots the tuck was asked for whose body's weights could not be read: nothing tucked there.</param>
     internal readonly record struct SwapReport(int Removed, int Added, int Kept, int LostShapes,
                                                int Reweighted = 0, int Trimmed = 0, int ExtrasDropped = 0,
                                                int Unplaced = 0, int Posed = 0, int Cut = 0, int Slotted = 0,
-                                               int Adorned = 0, int Tucked = 0);
+                                               int Adorned = 0, int Tucked = 0, int TuckUnread = 0);
 
     /// <summary>
     /// Swap the garment's skin for the new body's, one body slot at a time: every skin mesh of the garment that belongs
@@ -233,23 +234,25 @@ internal static partial class BodyRetarget
         var authorCuts = new Dictionary<int, Dictionary<int, HashSet<ushort>>?>();
         // Each slot's body as it goes in: its own model, or one whose skin was pulled back to the author's edge.
         var bodyOf = new Dictionary<int, byte[]>();
-        int cutTris = 0, keptTris = 0, tuckedTris = 0;
+        int cutTris = 0, keptTris = 0, tuckedTris = 0, tuckUnreadSlots = 0;
         foreach (int s in claimedBy)
         {
             int these = 0, gone = 0, tucked = 0;
             byte[]? pulled = null;
             Dictionary<int, HashSet<ushort>>? authorCut = null;
+            bool tuckUnread = false;
             bool cutThis = cutHidden || alwaysCut.Contains(s);
             bool tuck = cutThis && tuckSlot != null && swappable[s].Slot == tuckSlot && !Tuned.NoTuck;
             cuts[s] = !cutThis || drawn == null || drawn.IsEmpty ? null : CutLike(drawn, drawnEdges!, cloth,
                                                                       swappable[s].TargetModel!, swappable[s].TargetHidden,
                                                                       tuck, out these, out gone, out pulled, out tucked,
-                                                                      out authorCut);
+                                                                      out authorCut, out tuckUnread);
             authorCuts[s] = authorCut ?? cuts[s];
             bodyOf[s] = pulled ?? swappable[s].TargetModel!;
             keptTris += cuts[s] == null ? SkinTriangles(swappable[s].Target) : these;
             cutTris += gone;
             tuckedTris += tucked;
+            if (tuckUnread) tuckUnreadSlots++;
         }
 
         // The new body's nails and piercings, each material a layer of its own and drawn as the body draws it, tags and
@@ -311,7 +314,7 @@ internal static partial class BodyRetarget
 
         report = new SwapReport(removed, keptTris, kept, SecondSkinWriter.Parse(garment).Shapes.Count,
                                 weights?.Reweighted ?? 0, weights?.Trimmed ?? 0, extras, reskinned.Dropped, posed,
-                                cutTris, reskinned.Trimmed, adorned, tuckedTris);
+                                cutTris, reskinned.Trimmed, adorned, tuckedTris, tuckUnreadSlots);
         return rebuilt;
     }
 
@@ -334,15 +337,18 @@ internal static partial class BodyRetarget
     /// <param name="tuck">Carry the kept skin on past the author's edge in under the cloth (see <see cref="TuckUnderCloth"/>).</param>
     /// <param name="tucked">Triangles the tuck drew, counted in <paramref name="kept"/>.</param>
     /// <param name="authorCut">The cut before the tuck, when the tuck added to it; null otherwise.</param>
+    /// <param name="tuckUnread">The tuck was asked for and the body's weights could not be read, so it grew nothing.</param>
     private static Dictionary<int, HashSet<ushort>>? CutLike(BodySurface drawn, SkinEdges edges, ClothCrossings cloth,
                                                              byte[] body, IReadOnlySet<string>? hidden, bool tuck,
                                                              out int kept, out int cut, out byte[]? pulled,
                                                              out int tucked,
-                                                             out Dictionary<int, HashSet<ushort>>? authorCut)
+                                                             out Dictionary<int, HashSet<ushort>>? authorCut,
+                                                             out bool tuckUnread)
     {
         kept = cut = tucked = 0;
         pulled = null;
         authorCut = null;
+        tuckUnread = false;
         if (ModelPartReader.Read(body) is not { } read) return null;
         var parts = Without(read, hidden);
 
@@ -385,7 +391,8 @@ internal static partial class BodyRetarget
         pulled = PullToEdge(drawn, edges, cloth, body, parts, drawnCorners, keptTris, out var movedAt);
         if (!tuck) return sets;
 
-        var (grown, added) = TuckUnderCloth(drawn, cloth, body, parts, covered, keptTris, movedAt, baseOf);
+        var (grown, added, unread) = TuckUnderCloth(drawn, cloth, body, parts, covered, keptTris, movedAt, baseOf);
+        tuckUnread = unread;
         if (added == 0) return sets;
         authorCut = sets.ToDictionary(e => e.Key, e => new HashSet<ushort>(e.Value));
         foreach (var (mesh, local) in grown)

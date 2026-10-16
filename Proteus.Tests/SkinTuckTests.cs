@@ -247,11 +247,18 @@ public class SkinTuckTests(ITestOutputHelper output)
         var tucked = RefitCore.PlanRefit(garment, bytes, [Resized(Body())], "_top", across: true, gameGear: true, out _);
         var untucked = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoTuck: true),
             () => RefitCore.PlanRefit(garment, bytes, [Resized(Body())], "_top", across: true, gameGear: true, out _));
+        var log = new List<string>();
+        RefitCore.PlanRefit(garment, bytes, [Resized(Body())], "_top", across: true, gameGear: true, out _, log: log.Add);
+        Assert.DoesNotContain(log, l => l.StartsWith("skin tuck: ", StringComparison.Ordinal));
 
         Assert.True(tucked.Report.Swap?.Tucked > 0, $"{tucked.Report.Swap}");
-        Assert.Equal(untucked.Report.Folded, tucked.Report.Folded);
-        var bodyAt = KeysOf(ModelPartReader.Read(Body())!, all: true);
-        Assert.Subset(bodyAt, KeysOf(ModelPartReader.Read(tucked.Model)!));
+        var body = ModelPartReader.Read(Body())!;
+        var model = ModelPartReader.Read(tucked.Model)!;
+        Assert.Subset(KeysOf(body, all: true), KeysOf(model));
+        // On the written model: every triangle the tuck drew is one of the body's own, wound as the body winds it.
+        var (fresh, wrong) = NewSkinAgainstBody(ModelPartReader.Read(untucked.Model)!, model, body);
+        Assert.Equal(tucked.Report.Swap!.Value.Tucked, fresh);
+        Assert.Equal(0, wrong);
     }
 
     [Fact]
@@ -293,15 +300,62 @@ public class SkinTuckTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-neckline-skin-tuck-19")]
     public void No_tuck_when_the_bodys_weights_cannot_be_read()
     {
-        var top = ModelPartReader.Read(LooseTop())!;
-        var body = ModelPartReader.Read(Body())!;
+        // The loose sheet's own cut — covered vertices and kept triangles as the cut makes them — grows with the body's
+        // file, and grows nothing, saying why, with a file whose weights cannot be read.
+        var top = ModelPartReader.Read(LooseTop(looseFrom: 5))!;
+        byte[] bodyBytes = Body();
+        var body = ModelPartReader.Read(bodyBytes)!;
         var drawn = new BodySurface(top, BodySurface.CellFor(BodyRetarget.MeanEdgeOf(top)));
+        var edges = BodyRetarget.SkinEdges.Of(top);
         var cloth = new BodyRetarget.ClothCrossings(top);
-        var covered = new bool[body.Positions.Length / 3];
-        var (grown, triangles) = BodyRetarget.TuckUnderCloth(drawn, cloth, [], body, covered, [], new HashSet<Vector3>(),
-                                                             body.MeshSpans.ToDictionary(s => s.Mesh, s => s.BaseVertex));
-        Assert.Empty(grown);
-        Assert.Equal(0, triangles);
+        var covered = Enumerable.Range(0, body.Positions.Length / 3)
+                                .Select(v => BodyRetarget.Covers(drawn, new Vector3(body.Positions[v * 3], body.Positions[v * 3 + 1],
+                                                                                    body.Positions[v * 3 + 2]), edges))
+                                .ToArray();
+        var kept = body.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material))
+                       .SelectMany(p => Enumerable.Range(0, p.Triangles.Length / 3)
+                                                  .Select(t => (p.Triangles[t * 3], p.Triangles[t * 3 + 1], p.Triangles[t * 3 + 2])))
+                       .Where(t => covered[t.Item1] || covered[t.Item2] || covered[t.Item3]).ToList();
+        var baseOf = body.MeshSpans.ToDictionary(s => s.Mesh, s => s.BaseVertex);
+
+        var readable = BodyRetarget.TuckUnderCloth(drawn, cloth, bodyBytes, body, covered, kept, new HashSet<Vector3>(), baseOf);
+        Assert.True(readable.Triangles > 0, "the fixture does not grow with readable weights");
+        Assert.False(readable.Unread);
+
+        var unread = BodyRetarget.TuckUnderCloth(drawn, cloth, [], body, covered, kept, new HashSet<Vector3>(), baseOf);
+        Assert.Empty(unread.Grown);
+        Assert.Equal(0, unread.Triangles);
+        Assert.True(unread.Unread);
+    }
+
+    [Theory]
+    [Trait("Plan", "EDGE-neckline-skin-tuck-18")]
+    [InlineData("j_ude_a_l", true)]
+    [InlineData("j_ude_b_r", true)]
+    [InlineData("j_kata_l", true)]
+    [InlineData("n_hkata_r", true)]
+    [InlineData("n_hhiji_l", true)]
+    [InlineData("n_hte_r", true)]
+    [InlineData("j_te_l", true)]
+    [InlineData("j_oya_a_r", true)]
+    [InlineData("j_sebo_c", false)]
+    [InlineData("j_mune_l", false)]
+    [InlineData("j_sako_r", false)]
+    [InlineData("j_kubi", false)]
+    public void The_arm_bones_are_the_arm_and_hand(string bone, bool arm)
+        => Assert.Equal(arm, BodyRetarget.IsArmBone(bone));
+
+    [Theory]
+    [Trait("Plan", "EDGE-neckline-skin-tuck-18")]
+    [InlineData(0.20f, true)]    // a fifth on the arm is torso still
+    [InlineData(0.24f, true)]
+    [InlineData(0.26f, false)]   // past the quarter, the arm's
+    [InlineData(0.50f, false)]
+    public void A_vertex_is_the_torso_below_a_quarter_of_its_weight_on_the_arm(float share, bool tucked)
+    {
+        // Rows 0-8 carry that share on the shoulder, the rest on the spine.
+        var rows = DrawnRows(Swap(LooseTop(looseFrom: 4), Body(arm: r => r <= 8, armShare: share, armBone: "j_kata_l")).Model);
+        Assert.Equal(tucked, rows.Keys.Any(r => r < 8));
     }
 
     // ── helpers ──

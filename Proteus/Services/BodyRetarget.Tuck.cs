@@ -64,16 +64,16 @@ internal static partial class BodyRetarget
     /// <param name="keptTris">The triangles the cut kept.</param>
     /// <param name="movedAt">Where corners the pull moved stood (see <see cref="PullToEdge"/>).</param>
     /// <param name="baseOf">Each mesh's first vertex in <paramref name="parts"/>.</param>
-    /// <returns>Per mesh, the vertices to draw as well (mesh-local), and how many triangles they draw.</returns>
-    internal static (Dictionary<int, HashSet<ushort>> Grown, int Triangles) TuckUnderCloth(
+    /// <returns>Per mesh, the vertices to draw as well (mesh-local), how many triangles they draw, and whether the body's
+    /// weights could not be read — then nothing is grown.</returns>
+    internal static (Dictionary<int, HashSet<ushort>> Grown, int Triangles, bool Unread) TuckUnderCloth(
         BodySurface drawn, ClothCrossings cloth, byte[] body, ModelParts parts, bool[] covered,
         IReadOnlyCollection<(int A, int B, int C)> keptTris, IReadOnlySet<Vector3> movedAt,
         IReadOnlyDictionary<int, int> baseOf)
     {
-        var none = (new Dictionary<int, HashSet<ushort>>(), 0);
         int vc = parts.Positions.Length / 3;
         // Unread weights cannot tell the torso from the arm: nothing is grown, the safe way round.
-        if (ModelSkinReader.Read(body, null, null) is not { } skin || skin.VertexCount != vc) return none;
+        if (ModelSkinReader.Read(body, null, null) is not { } skin || skin.VertexCount != vc) return ([], 0, true);
 
         var pos = new Vec3[vc];
         for (int v = 0; v < vc; v++) pos[v] = ToVec(At(parts, v));
@@ -114,11 +114,13 @@ internal static partial class BodyRetarget
 
         bool NewlyDrawn(int t) => !covered[tris[t].A] && !covered[tris[t].B] && !covered[tris[t].C];
 
-        var cornerOk = new bool?[nodes];
+        // Per vertex, not per welded node: at a seam with a hard normal each copy is judged by its own normal, whichever
+        // of them is asked first.
+        var cornerOk = new bool?[vc];
         bool CornerOk(int v)
         {
             int n = nodeOf[v];
-            if (cornerOk[n] is { } known) return known;
+            if (cornerOk[v] is { } known) return known;
             var p = At(parts, v);
             var nrm = NormalOf(v);
             var level = new Vector3(nrm.X, 0f, nrm.Z);
@@ -129,7 +131,7 @@ internal static partial class BodyRetarget
                       && !cloth.Crowds(p, nrm, TuckClear, TuckBehind)
                       && copies[n].All(c => EndShareOf(skin, c, IsArmBone) < TuckArmShare)
                       && !movedAt.Contains(p);
-            cornerOk[n] = ok;
+            cornerOk[v] = ok;
             return ok;
         }
 
@@ -203,6 +205,6 @@ internal static partial class BodyRetarget
             foreach (int t in around[n])
                 if (NewlyDrawn(t)) drawnNow.Add(t);
         }
-        return (sets, drawnNow.Count);
+        return (sets, drawnNow.Count, false);
     }
 }

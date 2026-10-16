@@ -159,7 +159,10 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
         Assert.True(underGame <= underUntucked + 0.5, $"tucked {underGame:0.0} cm² under the skin against {underUntucked:0.0}");
         Assert.True(nearCoincident <= 0.5, $"{nearCoincident:0.00} cm² of new skin under 1 mm of cloth");
         Assert.True(holesTucked <= holes + 0.5, $"tucked {holesTucked:0.0} cm² undrawn against {holes:0.0}");
-        Assert.Equal(r.Untucked.Report.Folded, game.Report.Folded);
+        // [EDGE-12] On the written model: every triangle the tuck drew is one of the body's own, wound as the body winds it.
+        var (fresh, wrong) = SkinTuckSheet.NewSkinAgainstBody(untuckedModel, gameModel, body);
+        output.WriteLine($"  new skin triangles {fresh}, not the body's own {wrong}");
+        Assert.Equal(0, wrong);
 
         // The cut and the clear, judged as they were written, on the bodies they were written for: on the refit without the
         // tuck, which the goldens pin as it was. LavaBod+'s Teardrop came in with the tuck; on so large a bust the clear
@@ -294,9 +297,9 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
         Assert.Equal(0, beyondBand);
         Assert.Equal(0, uncovered);
         Assert.Equal(0, onArm);
-        // [EDGE-12]
-        Assert.Equal(r.Untucked.Report.Folded, r.Game.Report.Folded);
+        // [EDGE-12] On the written model: every triangle the tuck drew is one of the body's own, wound as the body winds it.
         Assert.NotNull(ModelPartReader.Read(r.Game.Model));
+        Assert.Equal(0, SkinTuckSheet.NewSkinAgainstBody(untucked, tucked, body).NotTheBodys);
     }
 
     /// <summary>The c0201 body model of the first game item named <paramref name="name"/> worn on the body.</summary>
