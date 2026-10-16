@@ -672,4 +672,92 @@ public class HatCompatServiceTests
         Assert.False(File.Exists(mod.Backup));
         Assert.False(File.Exists(mod.Record));
     }
+
+    // ── version 33: the ear skin ─────────────────────────────────────────────
+
+    /// <summary>A hair that names a Miqo'te ear bone, so its output changed in version 33.</summary>
+    private static byte[] MiqoteHair() => SyntheticModel.Build(
+        ["atr_hv_a"],
+        new SyntheticModel.Mesh("/mt_c0801h0001_hir_a.mtrl", new SyntheticModel.Sub(0, Weights: [("j_kao", 1f)])),
+        new SyntheticModel.Mesh("/mt_c0801h0001_hir_b.mtrl", new SyntheticModel.Sub(0, Weights: [("j_mimi_l", 1f)])));
+
+    /// <summary>Fit, then stamp the record as if an older build had: the version only.</summary>
+    private static Mod FittedAt(byte[] hair, int version)
+    {
+        var mod = new Mod(hair);
+        var parts = ModelPartReader.Read(hair)!;
+        Assert.True(HatCompatService.Apply(mod.Root, hair, Proposal(hair, parts), [PartOf(parts, 0)]).Ok);
+        File.WriteAllText(mod.Record, File.ReadAllText(mod.Record).Replace(
+            $": {HatCompatSolve.Version}", $": {version}"));
+        return mod;
+    }
+
+    /// <summary>A Miqo'te hair patched before the ear-skin fix is refit the next time it is worn.</summary>
+    [Fact]
+    [Trait("Plan", "AC-miqote-ear-skin-5")]
+    public void AMiqoteHairPatchedBeforeTheEarSkinFixIsStale()
+    {
+        using var mod = FittedAt(MiqoteHair(), HatCompatSolve.WithoutEars);
+        Assert.True(HatCompatService.IsPatched(mod.Root, ModelRel, mod.Model(), out var stale));
+        Assert.True(stale);
+    }
+
+    /// <summary>No other hairstyle's output changed, so its patch is not refit for nothing.</summary>
+    [Fact]
+    [Trait("Plan", "AC-miqote-ear-skin-4")]
+    [Trait("Plan", "AC-miqote-ear-skin-5")]
+    public void AnotherRacesPatchFromBeforeTheEarSkinFixStaysCurrent()
+    {
+        using var mod = FittedAt(Hair(), HatCompatSolve.WithoutEars);
+        Assert.True(HatCompatService.IsPatched(mod.Root, ModelRel, mod.Model(), out var stale));
+        Assert.False(stale);
+    }
+
+    /// <summary>
+    /// An author's update replaced the fitted file. Restoring the backup would put the OLD file back over it; the
+    /// patch is let go instead, and the new file kept as found.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-miqote-ear-skin-5")]
+    [Trait("Plan", "EDGE-miqote-ear-skin-8")]
+    public void AFileReplacedSinceItWasFittedIsForgottenNotRestored()
+    {
+        using var mod = FittedAt(MiqoteHair(), HatCompatSolve.WithoutEars);
+        Assert.True(HatCompatService.LooksPatched(mod.Model()));
+
+        var update = MiqoteHair();
+        File.WriteAllBytes(Path.Combine(mod.Root, ModelRel.Replace('/', Path.DirectorySeparatorChar)), update);
+        Assert.False(HatCompatService.LooksPatched(update));
+
+        HatCompatService.Forget(mod.Root, ModelRel);
+        Assert.False(HatCompatService.IsPatched(mod.Root, ModelRel, update, out _));
+        Assert.False(File.Exists(mod.Backup));
+        Assert.Equal(update, mod.Model());
+    }
+
+    /// <summary>
+    /// Undo restores the file on disk, and the game must then load it: Penumbra caches a model per resolved path, so a
+    /// redraw without a reload kept drawing the patched hairstyle. Every way back reloads the mod first.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-miqote-ear-skin-6")]
+    public void EveryUndoReloadsTheModBeforeItRedraws()
+    {
+        var source = File.ReadAllText(Path.Combine(SourceDir(), "Proteus", "Services", "HatCompatWatcher.cs"));
+        foreach (var method in new[] { "private bool RevertFiles(", "private bool RevertWholeMod(" })
+        {
+            int at = source.IndexOf(method, StringComparison.Ordinal);
+            Assert.True(at >= 0, method);
+            int end = source.IndexOf("\n    }", at, StringComparison.Ordinal);
+            var body = source[at..end];
+            Assert.Contains("ReloadAndRedraw(target)", body);
+            Assert.DoesNotContain("compositor.RedrawForChangedModel(", body);
+        }
+        var reload = source[source.IndexOf("private void ReloadAndRedraw(", StringComparison.Ordinal)..];
+        Assert.True(reload.IndexOf("ReloadModDirectory(", StringComparison.Ordinal)
+                  < reload.IndexOf("RedrawForChangedModel(", StringComparison.Ordinal));
+    }
+
+    private static string SourceDir([System.Runtime.CompilerServices.CallerFilePath] string here = "")
+        => Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, ".."));
 }

@@ -23,7 +23,16 @@ public static partial class HatCompatSolve
     /// </summary>
     internal const float EarWeightFloor = 0.25f;
 
-    /// <param name="Fur">Vertices an ear bone carries: the fur itself.</param>
+    /// <summary>
+    /// How far from the fur the ear's own skin reaches. Many Miqo'te hairstyles ship the ear as one piece: fur on the
+    /// ear bones, and a ring of skin around the ear's root that rides the HEAD bone, so the skinning alone calls it
+    /// hair and the cut hides it. Measured over every installed Miqo'te hair (2026-10-16): 22 of the 39 with fur ship
+    /// that skin, 2 to 60 triangles of it, every triangle within 60 mm of the fur — most within 30.
+    /// </summary>
+    internal const float EarSkinReach = 0.06f;
+
+    /// <param name="Fur">Vertices an ear bone carries — the fur itself — and the ear's own skin beside it (see
+    /// <see cref="EarSkinReach"/>).</param>
     /// <param name="Touched">Those, plus every vertex sharing a triangle with one — the row the fur is rooted
     /// in. The press must leave that row where it is, or the fur tears away from its own base.</param>
     internal readonly record struct EarGeometry(HashSet<long> Fur, HashSet<long> Touched)
@@ -106,6 +115,8 @@ public static partial class HatCompatSolve
 
         if (fur.Count == 0) return new EarGeometry(fur, touched);
 
+        AddEarSkin(mdl, src, meshes, fur);
+
         // One ring out, over whole triangles: a triangle with a fur corner is fur, and so are its other corners.
         foreach (var mv in meshes)
         {
@@ -130,5 +141,64 @@ public static partial class HatCompatSolve
         // A fur vertex no triangle draws is still fur; the ring walk above would never have reached it.
         touched.UnionWith(fur);
         return new EarGeometry(fur, touched);
+    }
+
+    /// <summary>
+    /// Add the ear's own skin to <paramref name="fur"/>: in an EAR submesh — one where triangles with a fur corner
+    /// outnumber the rest — the other triangles within <see cref="EarSkinReach"/> of a fur vertex. Only there: one hair
+    /// (Kikiro) welds its whole scalp into the fur's submesh, and that hair still goes under the hat.
+    /// </summary>
+    private static void AddEarSkin(
+        byte[] mdl, SecondSkinWriter.Source src, IReadOnlyList<MeshVerts> meshes, HashSet<long> fur)
+    {
+        var skin = new List<long>();
+        float reach2 = EarSkinReach * EarSkinReach;
+        foreach (var mv in meshes)
+        {
+            int mo = src.MeshStart + mv.Mesh * 36;
+            if (mo + 36 > mdl.Length) continue;
+            ushort subIdx = BitConverter.ToUInt16(mdl, mo + 10), subCount = BitConverter.ToUInt16(mdl, mo + 12);
+            var pos = mv.Positions;
+
+            for (int s = 0; s < subCount; s++)
+            {
+                int ss = src.SubmeshStart + (subIdx + s) * 16;
+                if (ss + 16 > mdl.Length) break;
+                uint io = BitConverter.ToUInt32(mdl, ss), ic = BitConverter.ToUInt32(mdl, ss + 4);
+                if ((long)src.Ib + (io + ic) * 2 > mdl.Length) break;
+
+                var furCorners = new List<System.Numerics.Vector3>();
+                var plain = new List<(int A, int B, int C)>();
+                for (uint t = 0; t + 3 <= ic; t += 3)
+                {
+                    int a = BitConverter.ToUInt16(mdl, src.Ib + (int)(io + t) * 2);
+                    int b = BitConverter.ToUInt16(mdl, src.Ib + (int)(io + t + 1) * 2);
+                    int c = BitConverter.ToUInt16(mdl, src.Ib + (int)(io + t + 2) * 2);
+                    if (a >= pos.Length || b >= pos.Length || c >= pos.Length) continue;
+                    bool fa = fur.Contains(VertexKey(mv.Mesh, a)), fb = fur.Contains(VertexKey(mv.Mesh, b)),
+                         fc = fur.Contains(VertexKey(mv.Mesh, c));
+                    if (!fa && !fb && !fc) { plain.Add((a, b, c)); continue; }
+                    if (fa) furCorners.Add(pos[a]);
+                    if (fb) furCorners.Add(pos[b]);
+                    if (fc) furCorners.Add(pos[c]);
+                }
+                int furTriangles = (int)(ic / 3) - plain.Count;
+                if (plain.Count == 0 || furTriangles <= plain.Count) continue;   // not an ear submesh
+
+                foreach (var (a, b, c) in plain)
+                {
+                    var centre = (pos[a] + pos[b] + pos[c]) / 3f;
+                    bool near = false;
+                    foreach (var f in furCorners)
+                        if (System.Numerics.Vector3.DistanceSquared(f, centre) <= reach2) { near = true; break; }
+                    if (!near) continue;
+                    skin.Add(VertexKey(mv.Mesh, a));
+                    skin.Add(VertexKey(mv.Mesh, b));
+                    skin.Add(VertexKey(mv.Mesh, c));
+                }
+            }
+        }
+        // Added after the walk, so a skin triangle does not make its neighbours count as fur-cornered above.
+        fur.UnionWith(skin);
     }
 }

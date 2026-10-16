@@ -232,6 +232,58 @@ public static class HatCompatService
         return true;
     }
 
+    /// <inheritdoc cref="IsPatched(string, string, out bool)"/>
+    /// <param name="model">The file as it stands: a patch is stale only when THIS hairstyle's output changed since
+    /// (<see cref="HatCompatSolve.VersionFor"/>).</param>
+    public static bool IsPatched(string modRoot, string rel, byte[] model, out bool stale)
+    {
+        stale = false;
+        rel = Rel(rel);
+        var record = ReadRecord(modRoot);
+        if (record?.Files.Contains(rel, StringComparer.OrdinalIgnoreCase) != true) return false;
+        stale = (record.Versions.TryGetValue(rel, out var v) ? v : 0) < HatCompatSolve.VersionFor(model);
+        return true;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="model"/> still looks like Proteus's patch: it carries the shape or the mask a fit
+    /// writes. A file that carries neither was replaced since — an author's update, say — and restoring the backup
+    /// over it would put the OLD file back.
+    /// </summary>
+    public static bool LooksPatched(byte[] model)
+    {
+        try
+        {
+            return ModelAttributeWriter.DeclaresShape(model, HatShape)
+                || Array.IndexOf(SecondSkinWriter.Parse(model).AttrNames, ScalpAttribute) >= 0;
+        }
+        catch { return true; }   // unreadable: not evidence of an update
+    }
+
+    /// <summary>
+    /// Stop tracking one file whose patch is gone (see <see cref="LooksPatched"/>): drop it from the record and delete
+    /// its backup, leaving the file itself as it is.
+    /// </summary>
+    public static void Forget(string modRoot, string rel)
+    {
+        rel = Rel(rel);
+        var record = ReadRecord(modRoot);
+        if (record == null) return;
+        record.Files.RemoveAll(f => f.Equals(rel, StringComparison.OrdinalIgnoreCase));
+        record.Hidden.Remove(rel);
+        record.Versions.Remove(rel);
+        record.Replaced.RemoveAll(f => f.Equals(rel, StringComparison.OrdinalIgnoreCase));
+        var recordPath = Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, RecordFile);
+        try
+        {
+            if (record.Files.Count == 0) File.Delete(recordPath);
+            else WriteRecord(modRoot, record);
+        }
+        catch { return; }   // the record still names the backup: keep it
+        var backup = Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, BackupSubdir, Native(rel));
+        try { File.Delete(backup); } catch { /* a leftover backup is harmless */ }
+    }
+
     /// <summary>Work out what this hair needs, without writing anything.</summary>
     /// <param name="head">The wearer's face model. REQUIRED: null yields a proposal marked
     /// <see cref="Proposal.Unmeasurable"/> and nothing is fitted.</param>
