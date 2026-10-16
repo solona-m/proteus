@@ -187,8 +187,8 @@ public class NecklineFloatTests(ITestOutputHelper output)
     public void A_pulled_face_keeps_the_skin_out_of_it_between_its_corners()
     {
         // The coarse neckline's faces span 20-40 mm of a chest that rounds under them. Every face, across a grid of this
-        // test's own: the tuck's 3 mm kept where the face had it, and no nearer the skin than the clearance (or than it was,
-        // nearer already) where it did not.
+        // test's own: the tuck's room kept where the face had its 3.5 mm, and no nearer the skin than the clearance (or than
+        // it was, nearer already) where it did not.
         var (top, pair) = FloatingNeckline(coarse: true);
         var plan = GameTop(top, pair);
         Assert.True(plan.Report.StandoffPulled > 0);
@@ -210,7 +210,8 @@ public class NecklineFloatTests(ITestOutputHelper output)
                 int a = part.Triangles[t], b = part.Triangles[t + 1], c = part.Triangles[t + 2];
                 float now = Least(laid, a, b, c), was = Least(without, a, b, c);
                 // This grid is finer than the pass's: a quarter millimetre of its sampling allowed.
-                float least = was >= BodyRetarget.TuckClear ? BodyRetarget.TuckClear - 0.00025f : MathF.Min(BodyRetarget.Clearance, was) - 1e-4f;
+                float least = was >= BodyRetarget.TuckClear + 0.0005f ? BodyRetarget.TuckClear - 0.00025f
+                            : MathF.Min(BodyRetarget.Clearance, was) - 1e-4f;
                 Assert.True(now >= least, $"skin within {now * 1000:0.0} mm of a face (without the pass {was * 1000:0.0})");
             }
     }

@@ -761,6 +761,14 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
         if (garmentName == Dirndl && modNeed == Neolithe)
         {
             Assert.True(floating.Count <= 6, $"{floating.Count} floating");
+            // [A16] The close-fitted bodice over the bust top, where the bust grew 25 mm and so outside the pull's apex and
+            // growth limits: authored 4 mm off, 14 mm further out than that without the hug — back within FloatSlack + 1 mm.
+            foreach (int v in new[] { 282, 280 })
+            {
+                float own = Standoff(At(r.Garment, v), sourceSurf), now = Standoff(At(full, v), targetSurf);
+                output.WriteLine($"  bust top v{v}: own {own * 1000:0.0} mm, now {now * 1000:0.0} (without the pass {Standoff(At(none, v), targetSurf) * 1000:0.0})");
+                Assert.True(now <= own + BodyRetarget.FloatSlack + 0.001f, $"v{v} {now * 1000:0.0} mm off, own {own * 1000:0.0}");
+            }
             // And the four points traced in game, within their author's standoff + FloatSlack + 3 mm.
             foreach (int v in new[] { 173, 286, 277, 166 })
             {
@@ -809,6 +817,10 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
         output.WriteLine($"  cloth vertices moved by the pass: {moved}");
         foreach (string w in wrong) output.WriteLine($"    {w}");
         Assert.Empty(wrong);
+
+        // [EDGE-neckline-float-16] Cloth the deep clear pushed out stays where it put it, the hug's reach included.
+        foreach (int v in r.Game.Report.DeepAt ?? [])
+            Assert.True(Vector3.Distance(At(full, v), At(none, v)) <= 0.0005f, $"deep-cleared v{v} moved by the pass");
     }
 
     private static float Standoff(Vector3 p, BodySurface on) => SkinTuckSheet.Standoff(p, on);

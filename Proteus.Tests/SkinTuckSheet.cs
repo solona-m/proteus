@@ -98,9 +98,12 @@ internal static class SkinTuckSheet
     /// <param name="armShare">How much of the <paramref name="arm"/> rows' weight is on the arm; the spine has the rest.</param>
     /// <param name="armBone">The arm's bone — or a breast's, <c>j_mune_l</c>, for a bust.</param>
     /// <param name="z">The skin's height off the plane by row and column; flat when null.</param>
+    /// <param name="hiddenBand">Rows (from, to) in a variant the body mod does not draw (tagged atr_tv_b); null for none.</param>
+    /// <param name="piercingAt">The ring's row (its middle) and height, instead of row 7.5 on the plane.</param>
     internal static byte[] Body(Func<int, bool>? arm = null, int? splitAt = null, int? hiddenBelow = null,
                                 bool piercing = false, int? halvesAt = null, bool reversed = false, float armShare = 1f,
-                                string armBone = "j_ude_a_l", Func<int, int, float>? z = null)
+                                string armBone = "j_ude_a_l", Func<int, int, float>? z = null,
+                                (int From, int To)? hiddenBand = null, (float Row, float Z)? piercingAt = null)
     {
         var height = z ?? ((_, _) => 0f);
         SyntheticModel.SurfaceMesh Skin_(int from, int to) => Sheet(Skin, from, to, height, arm, armShare, armBone,
@@ -118,6 +121,15 @@ internal static class SkinTuckSheet
             meshes.Add(Skin_(split, Rows - 1));
             meshes.Add(Skin_(0, split));
         }
+        else if (hiddenBand is { } band)
+        {
+            attrs.Add("atr_tv_b");
+            var whole = Skin_(0, Rows - 1);
+            meshes.Add(whole with
+            {
+                Submeshes = [(0u, [.. Grid(0, band.From), .. Grid(band.To, Rows - 1)]), (1u, Grid(band.From, band.To))],
+            });
+        }
         else if (hiddenBelow is { } hidden)
         {
             attrs.Add("atr_tv_b");
@@ -130,10 +142,11 @@ internal static class SkinTuckSheet
         else
             meshes.Add(Skin_(0, Rows - 1));
 
-        if (piercing)
+        if (piercing || piercingAt != null)
         {
             // A ring flat on the skin around the middle of row 7, the way a body mod ships a navel or nipple ring.
-            var centre = new Vector3(0f, Y(7) + Step / 2, 0.0005f);
+            var centre = piercingAt is { } at ? new Vector3(0f, Bottom + at.Row * Step, at.Z + 0.0005f)
+                                              : new Vector3(0f, Y(7) + Step / 2, 0.0005f);
             var ring = new List<Vector3> { centre };
             for (int k = 0; k < 6; k++)
             {
@@ -364,8 +377,10 @@ internal static class SkinTuckSheet
 
     /// <summary>A body whose chest dips <paramref name="depth"/> (negative: bulges) under rows 11-12, columns 3-5 —
     /// under <see cref="CoarseSkinTop"/>'s skin, where its chord spans 85 mm.</summary>
-    internal static byte[] Dipped(float depth, Func<int, bool>? arm = null, int? hiddenBelow = null, bool piercing = false)
-        => Body(arm: arm, hiddenBelow: hiddenBelow, piercing: piercing,
+    /// <param name="hideDip">Put the dip's rows in a variant the body mod does not draw.</param>
+    /// <param name="ringInDip">A piercing ring in the middle of the dip.</param>
+    internal static byte[] Dipped(float depth, Func<int, bool>? arm = null, bool hideDip = false, bool ringInDip = false)
+        => Body(arm: arm, hiddenBand: hideDip ? (11, 12) : null, piercingAt: ringInDip ? (11.5f, -depth) : null,
                 z: (r, c) => r is 11 or 12 && c is >= 3 and <= 5 ? -depth : 0f);
 
     /// <summary>Whether a rebuilt model draws a skin triangle lying wholly in the dip of <see cref="Dipped"/> — the cut

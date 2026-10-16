@@ -87,12 +87,12 @@ public class OpenSkinTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-neckline-large-bust-17")]
     public void Hidden_variants_are_never_opened()
     {
-        // The dip and everything below row 12 is a variant the body mod does not draw: the author's skin over it no longer
-        // lies on a body that is drawn, so nothing is swapped at all — and nothing of the variant comes in.
-        var model = BodyRetarget.SwapSkin(CoarseSkinTop(), [Resized(Dipped(0.015f, hiddenBelow: 12),
-                                                                    hidden: new HashSet<string> { "atr_tv_b" })],
-                                          out var report, tuckSlot: "_top");
-        Assert.True(model == null || !DrawsDip(model));
+        // The dip's rows are a variant the body mod does not draw. Shown, the open skin draws the dip; hidden, the swap
+        // still goes ahead over the rest, and nothing of the variant comes in.
+        var hidden = new HashSet<string> { "atr_tv_b" };
+        Assert.True(DrawsDip(Swap(CoarseSkinTop(), Dipped(0.015f, hideDip: true)).Model));
+        var (model, report) = Swap(CoarseSkinTop(), Dipped(0.015f, hideDip: true), hidden: hidden);
+        Assert.False(DrawsDip(model));
         Assert.Equal(0, report.Opened);
     }
 
@@ -100,11 +100,12 @@ public class OpenSkinTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-neckline-large-bust-18")]
     public void Open_skin_brings_no_piercing_the_author_did_not_show()
     {
-        // The body carries a ring; whether it comes in is the author's cut's to say, not the open skin's.
-        var (_, opened) = Swap(CoarseSkinTop(), Dipped(0.015f, piercing: true));
+        // A ring in the middle of the dip, which the open skin draws: whether it comes in is the author's cut's to say.
+        var (model, opened) = Swap(CoarseSkinTop(), Dipped(0.015f, ringInDip: true));
         var closed = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoOpenSkin: true),
-                                             () => Swap(CoarseSkinTop(), Dipped(0.015f, piercing: true)));
+                                             () => Swap(CoarseSkinTop(), Dipped(0.015f, ringInDip: true)));
         Assert.True(opened.Opened > 0);
+        Assert.True(DrawsDip(model));   // the skin around the ring is drawn
         Assert.Equal(closed.Report.Adorned, opened.Adorned);
     }
 
