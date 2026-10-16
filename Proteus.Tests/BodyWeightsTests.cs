@@ -325,7 +325,7 @@ public class BodyWeightsTests
         var plan = BodyRetarget.WithTuning(NoHug, () => BodyRetarget.PlanWeights(garment, pairs, acrossBodies: true));
         Assert.NotNull(plan);
 
-        var rebuilt = BodyRetarget.Rebuild(garment, pairs, swapSkin: false, plan, out var report)!;
+        var rebuilt = BodyRetarget.Rebuild(garment, pairs, swapSkin: false, plan, out var report, acrossBodies: true)!;
         Assert.Equal(2, report.ExtrasDropped);                                // and the old body's piercings go
         // The bodies differ by 0.3 moved from j_kosi to j_mune_l, and the cloth takes that change: 0.7 and 0.3, not
         // the new body's 0.4 and 0.6 outright.
@@ -334,6 +334,237 @@ public class BodyWeightsTests
             Assert.Equal(0.3f, Weights(rebuilt)[v].Single(i => i.Bone == "j_mune_l").W, 2);
             Assert.Equal(0.7f, Weights(rebuilt)[v].Single(i => i.Bone == "j_kosi").W, 2);
         }
+    }
+
+    /// <summary>Two legs 2 cm apart, each rigged to its own side: the left at z = 0, the right at z = 0.02.</summary>
+    private static byte[] Legs((string, float)[] left, (string, float)[] right)
+        => SyntheticModel.Build([], new SyntheticModel.Mesh(Skin,
+               new SyntheticModel.Sub(0, TrianglesPerIsland: 3, Weights: left),
+               new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetZ: 0.02f, Weights: right)));
+
+    [Fact]
+    public void A_pant_leg_close_to_the_other_leg_never_takes_its_weights()
+    {
+        // The inside of the left pant leg, 15 mm off the left thigh and 5 mm off the right: the right thigh is nearer,
+        // and it is still the wrong leg.
+        var source = Legs([("j_asi_a_l", 1f)], [("j_asi_a_r", 1f)]);
+        var target = Legs([("j_asi_a_l", 0.8f), ("j_asi_b_l", 0.2f)], [("j_asi_a_r", 0.8f), ("j_asi_b_r", 0.2f)]);
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Cloth, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetZ: 0.015f,
+                                                                  Weights: [("j_asi_a_l", 1f)])));
+        var pairs = new[] { Pair(source, target) };
+
+        var plan = BodyRetarget.PlanWeights(garment, pairs, acrossBodies: true, before: garment);
+        Assert.NotNull(plan);
+        var rebuilt = BodyRetarget.Rebuild(garment, pairs, swapSkin: false, plan, out _)!;
+
+        foreach (int v in VerticesOf(garment, Cloth, 0))
+        {
+            var w = Weights(rebuilt)[v];
+            Assert.DoesNotContain(w, i => i.Bone.EndsWith("_r", StringComparison.Ordinal));
+            // And its own leg's change is taken: the left thigh's 0.2 moved to j_asi_b_l.
+            Assert.Equal(0.2f, w.Single(i => i.Bone == "j_asi_b_l").W, 2);
+        }
+    }
+
+    [Fact]
+    public void A_pant_leg_close_to_the_other_leg_never_follows_its_change_of_size()
+    {
+        // Only the right thigh grows, a centimetre outward. The inside of the left pant leg is nearer the right thigh,
+        // and it must stay where the left thigh — which did not move — puts it.
+        var sourceModel = Legs([("j_asi_a_l", 1f)], [("j_asi_a_r", 1f)]);
+        var targetModel = SyntheticModel.Build([], new SyntheticModel.Mesh(Skin,
+            new SyntheticModel.Sub(0, TrianglesPerIsland: 3, Weights: [("j_asi_a_l", 1f)]),
+            new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetZ: 0.03f, Weights: [("j_asi_a_r", 1f)])));
+        var garmentModel = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Cloth, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetZ: 0.015f,
+                                                                  Weights: [("j_asi_a_l", 1f)])));
+        var source = ModelPartReader.Read(sourceModel)!;
+        var target = ModelPartReader.Read(targetModel)!;
+        var garment = ModelPartReader.Read(garmentModel)!;
+        Assert.True(IdentityCorrespondence.TryBuild(source, target, "legs", out var built, out string why), why);
+        var pairs = new[] { new BodyRetarget.SlotPair("_dwn", built!, target, targetModel, sourceModel) };
+
+        var sided = BodyRetarget.Solve(garment, pairs, pushOut: false,
+                                       garmentSkin: ModelSkinReader.Read(garmentModel, null, null));
+        var blind = BodyRetarget.Solve(garment, pairs, pushOut: false);
+
+        foreach (int v in VerticesOf(garmentModel, Cloth, 0))
+        {
+            Assert.Equal(0f, sided.Edit.DeltaAt(v).Z, 4);
+            Assert.True(blind.Edit.DeltaAt(v).Z > 0.005f, "without its side the cloth should have followed the right thigh");
+        }
+    }
+
+    [Fact]
+    public void Cloth_rigged_mostly_to_one_leg_never_comes_out_more_to_the_other()
+    {
+        // The inside seam near the crotch, rigged 60/40: it belongs to neither leg for the lookups, but the other leg's
+        // share must never grow past the author's.
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Cloth, new SyntheticModel.Sub(0, TrianglesPerIsland: 1,
+                                                                  Weights: [("j_asi_a_l", 0.6f), ("j_asi_a_r", 0.4f)])));
+        var own = ModelSkinReader.Read(garment, null, null)!;
+        var bones = new HashSet<string> { "j_asi_a_l", "j_asi_a_r", "j_kosi" };
+        var result = new (string Bone, float W)[]?[own.VertexCount];
+        for (int v = 0; v < result.Length; v++) result[v] = [("j_asi_a_l", 0.2f), ("j_kosi", 0.1f), ("j_asi_a_r", 0.7f)];
+
+        BodyRetarget.KeepToSide(own, result, bones);
+
+        foreach (var w in result)
+        {
+            Assert.Equal(0.4f, w!.Single(i => i.Bone == "j_asi_a_r").W, 3);
+            Assert.Equal(1f, w!.Sum(i => i.W), 3);
+            // The 0.3 taken off the right leg goes to the rest of the body share, as it stood: 2:1 left to the hip.
+            Assert.Equal(0.4f, w!.Single(i => i.Bone == "j_asi_a_l").W, 3);
+            Assert.Equal(0.2f, w!.Single(i => i.Bone == "j_kosi").W, 3);
+        }
+    }
+
+    [Theory]
+    [InlineData(0.001f)]   // lying on the thigh, where the skin-hug passes would take the skin's weights outright
+    [InlineData(0.015f)]   // hanging off it, where the change between the bodies is taken
+    public void A_skirt_never_takes_the_legs_weights(float off)
+    {
+        // A skirt panel over the thigh, rigged to the hip and its own chain alone; both bodies rig the thigh, the new
+        // one with Rue's thigh physics too. (Four bones: all a synthetic vertex holds.)
+        var source = Body(("j_asi_a_l", 0.7f), ("j_kosi", 0.3f));
+        var target = Body(("j_asi_a_l", 0.3f), ("iv_daitai_phys_l", 0.3f), ("j_kosi", 0.2f), ("iv_shiri_l", 0.2f));
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Cloth, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetZ: off,
+                                                                  Weights: [("j_kosi", 0.6f), ("j_sk_f_a_l", 0.4f)])));
+        var pairs = new[] { Pair(source, target) };
+
+        var plan = BodyRetarget.PlanWeights(garment, pairs, acrossBodies: true, before: garment);
+        var rebuilt = BodyRetarget.Rebuild(garment, pairs, swapSkin: false, plan, out _)!;
+
+        foreach (int v in VerticesOf(garment, Cloth, 0))
+        {
+            var w = Weights(rebuilt)[v];
+            Assert.DoesNotContain(w, i => BodyRetarget.IsLegBone(i.Bone));
+            Assert.DoesNotContain(w, i => i.Bone.Contains("daitai", StringComparison.Ordinal));
+            Assert.Equal(1f, w.Sum(i => i.W), 3);
+            Assert.Contains(w, i => i.Bone == "j_kosi");
+            // The buttocks are the hip a skirt hangs from: it follows them.
+            Assert.Contains(w, i => i.Bone == "iv_shiri_l");
+        }
+    }
+
+    [Theory]
+    [InlineData(0.001f)]
+    [InlineData(0.015f)]
+    public void A_skirt_hem_with_a_trace_of_thigh_is_still_a_skirt(float off)
+    {
+        // What weighting a skirt in Blender off a body leaves along the hem: 4% thigh. It keeps that trace and gains
+        // nothing — not the thigh's full share, not its physics.
+        var source = Body(("j_asi_a_l", 0.7f), ("j_kosi", 0.3f));
+        var target = Body(("j_asi_a_l", 0.4f), ("iv_daitai_phys_l", 0.3f), ("j_kosi", 0.2f), ("iv_shiri_l", 0.1f));
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Cloth, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetZ: off,
+                Weights: [("j_kosi", 0.56f), ("j_sk_f_a_l", 0.4f), ("j_asi_a_l", 0.04f)])));
+        var pairs = new[] { Pair(source, target) };
+
+        var plan = BodyRetarget.PlanWeights(garment, pairs, acrossBodies: true, before: garment);
+        var rebuilt = BodyRetarget.Rebuild(garment, pairs, swapSkin: false, plan, out _)!;
+
+        foreach (int v in VerticesOf(garment, Cloth, 0))
+        {
+            var w = Weights(rebuilt)[v];
+            Assert.True(w.Where(i => BodyRetarget.IsLegBone(i.Bone)).Sum(i => i.W) <= 0.045f,
+                        "the hem gained leg weight: " + string.Join(", ", w));
+            Assert.DoesNotContain(w, i => i.Bone.Contains("daitai", StringComparison.Ordinal));
+            Assert.Equal(1f, w.Sum(i => i.W), 3);
+        }
+    }
+
+    [Fact]
+    public void A_skirt_lying_on_the_thigh_keeps_its_chain_and_takes_no_hip_down_there()
+    {
+        // The edge of a front panel lying on the thigh, 1 mm off it, rigged mostly to the skirt chain. Cloth on the skin
+        // is normally rigged as the skin; a skirt on the leg is not — it keeps swinging with its chain, and the hip's
+        // share stays what the author gave it rather than taking the leg's place all the way down the thigh.
+        // Both bodies are nearly all thigh there, with a sliver of hip (so the hip is a body bone at all).
+        var source = Body(("j_asi_a_l", 0.95f), ("j_kosi", 0.05f));
+        var target = Body(("j_asi_a_l", 0.55f), ("iv_daitai_phys_l", 0.4f), ("j_kosi", 0.05f));
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Cloth, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetZ: 0.001f,
+                                                                  Weights: [("j_sk_f_b_l", 0.8f), ("j_kosi", 0.2f)])));
+        var pairs = new[] { Pair(source, target) };
+
+        var plan = BodyRetarget.PlanWeights(garment, pairs, acrossBodies: true, before: garment);
+        Assert.NotNull(plan);
+        Assert.True(plan.Reweighted > 0, "nothing was reweighted, so the test proves nothing");
+        var rebuilt = BodyRetarget.Rebuild(garment, pairs, swapSkin: false, plan, out _)!;
+
+        foreach (int v in VerticesOf(garment, Cloth, 0))
+        {
+            var w = Weights(rebuilt)[v];
+            // Within the sliver of hip the skin itself has there: not the near-whole vertex the leg's share became.
+            Assert.True(w.Single(i => i.Bone == "j_sk_f_b_l").W >= 0.7f, "the chain was taken off: " + string.Join(", ", w));
+            Assert.True(w.Single(i => i.Bone == "j_kosi").W <= 0.3f, "the hip came down the thigh: " + string.Join(", ", w));
+            Assert.DoesNotContain(w, i => BodyRetarget.IsLegBone(i.Bone));
+        }
+    }
+
+    [Fact]
+    public void A_skirt_s_leg_reading_goes_to_the_author_s_own_weights()
+    {
+        var author = new (string, float)[] { ("j_kosi", 0.6f), ("j_sebo_c", 0.4f) };
+
+        // 90% thigh: 90% the author's, and the reading's own 10% of hip kept as it is — not scaled up to all hip.
+        var mostly = BodyRetarget.WithoutLegs([("j_asi_a_l", 0.6f), ("iv_daitai_phys_l", 0.3f), ("j_kosi", 0.1f)], author)!;
+        Assert.Equal(0.64f, mostly.Single(i => i.Bone == "j_kosi").W, 3);
+        Assert.Equal(0.36f, mostly.Single(i => i.Bone == "j_sebo_c").W, 3);
+        Assert.DoesNotContain(mostly, i => BodyRetarget.IsLegBone(i.Bone));
+
+        // All thigh: the author's outright, rather than nothing at all.
+        var all = BodyRetarget.WithoutLegs([("j_asi_a_l", 1f)], author)!;
+        Assert.Equal(0.6f, all.Single(i => i.Bone == "j_kosi").W, 3);
+        Assert.Equal(0.4f, all.Single(i => i.Bone == "j_sebo_c").W, 3);
+
+        // No leg in it: untouched.
+        (string, float)[] hip = [("j_kosi", 0.7f), ("iv_shiri_l", 0.3f)];
+        Assert.Same(hip, BodyRetarget.WithoutLegs(hip, author));
+    }
+
+    [Theory]
+    [InlineData("j_asi_a_l", true)]
+    [InlineData("j_asi_e_r", true)]
+    [InlineData("iv_asi_oya_a_l", true)]
+    [InlineData("ya_daitai_phys_l", true)]
+    [InlineData("iv_daitai_phys_r", true)]
+    [InlineData("iv_shiri_l", false)]
+    [InlineData("j_kosi", false)]
+    [InlineData("j_sk_f_a_l", false)]
+    public void Which_bones_are_the_legs(string bone, bool leg) => Assert.Equal(leg, BodyRetarget.IsLegBone(bone));
+
+    [Fact]
+    public void Pants_keep_the_legs_weights()
+    {
+        // Rigged to the thigh by its author: the new body's thigh, physics included, is what it follows.
+        var source = Body(("j_asi_a_l", 1f));
+        var target = Body(("j_asi_a_l", 0.7f), ("ya_daitai_phys_l", 0.3f));
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Cloth, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetZ: 0.001f,
+                                                                  Weights: [("j_asi_a_l", 1f)])));
+        var pairs = new[] { Pair(source, target) };
+
+        var plan = BodyRetarget.PlanWeights(garment, pairs, acrossBodies: true, before: garment);
+        var rebuilt = BodyRetarget.Rebuild(garment, pairs, swapSkin: false, plan, out _)!;
+
+        foreach (int v in VerticesOf(garment, Cloth, 0))
+            Assert.Equal(0.3f, Weights(rebuilt)[v].Single(i => i.Bone == "ya_daitai_phys_l").W, 2);
+    }
+
+    [Fact]
+    public void Cloth_over_the_crotch_belongs_to_neither_leg()
+    {
+        Assert.Equal(1, BodyRetarget.SideOf([("j_asi_a_l", 1f)], 0.9f, 0.25f));
+        Assert.Equal(-1, BodyRetarget.SideOf([("j_asi_a_r", 0.6f), ("j_kosi", 0.4f)], 0.9f, 0.25f));
+        Assert.Equal(0, BodyRetarget.SideOf([("j_asi_a_l", 0.5f), ("j_asi_a_r", 0.4f), ("j_kosi", 0.1f)], 0.9f, 0.25f));
+        Assert.Equal(0, BodyRetarget.SideOf([("j_kosi", 0.9f), ("j_asi_a_l", 0.1f)], 0.9f, 0.25f));
+        // A skirt's chain is sided too, but only body bones say which leg is under the cloth.
+        Assert.Equal(0, BodyRetarget.SideOf([("j_sk_s_a_l", 0.8f), ("j_kosi", 0.2f)], 0.9f, 0.25f, BodyBones));
     }
 
     /// <summary>The rules for cloth off the body, with the passes for cloth lying on it switched off.</summary>
@@ -426,6 +657,7 @@ public class BodyWeightsTests
         Assert.Equal(1f, w.Sum(i => i.W), 4);
     }
 
+    /// <summary>[EDGE-within-body-weights-2] Within one body mod, a slot whose rig stays keeps the author's weights.</summary>
     [Fact]
     public void A_slot_that_keeps_its_rig_keeps_the_author_s_weights_when_another_slot_changes_rig()
     {
@@ -454,6 +686,7 @@ public class BodyWeightsTests
         => SyntheticModel.Build([], new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0, TrianglesPerIsland: 3,
                                                                                          OffsetX: x, Weights: weights)));
 
+    /// <summary>[EDGE-within-body-weights-1] Within one body mod, two sizes rigged alike: nothing to rewrite.</summary>
     [Fact]
     public void Two_bodies_rigged_alike_keep_the_author_s_weights()
     {
@@ -472,8 +705,9 @@ public class BodyWeightsTests
             new SyntheticModel.Mesh(Piercings, new SyntheticModel.Sub(0, TrianglesPerIsland: 2, Weights: [("j_kosi", 1f)])));
         var pairs = new[] { Pair(Body(("j_kosi", 1f)), Body(("j_mune_l", 1f))) };
 
-        var rebuilt = BodyRetarget.Rebuild(garment, pairs, swapSkin: false, BodyRetarget.PlanWeights(garment, pairs),
-                                           out var report)!;
+        var rebuilt = BodyRetarget.Rebuild(garment, pairs, swapSkin: false,
+                                           BodyRetarget.PlanWeights(garment, pairs, acrossBodies: true), out var report,
+                                           acrossBodies: true)!;
 
         Assert.Equal(2, report.ExtrasDropped);
         Assert.DoesNotContain(ModelPartReader.Read(rebuilt)!.Parts, p => p.Material == Piercings);
@@ -481,6 +715,192 @@ public class BodyWeightsTests
         Assert.True(BodyRetarget.IsBodyExtraMaterial("/mt_c0201b0001_neolithe_piercings.mtrl"));
         Assert.False(BodyRetarget.IsBodyExtraMaterial(Skin));
         Assert.False(BodyRetarget.IsBodyExtraMaterial("/mt_c0201e0000_top_neolithe_undies.mtrl"));
+    }
+
+    /// <summary>
+    /// Rue+'s Gen A legs to its Gen B: one mesh, but B rigs genital bones A does not, so the cloth is reweighted. The
+    /// pubic hair was carried along with the skin it sits on and still fits; with the author's skin kept nothing would
+    /// replace it, and the refit came out bald.
+    /// </summary>
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Within_one_body_mod_a_rig_change_keeps_the_pubic_hair_and_piercings(bool acrossBodies, bool replaceSkin)
+    {
+        const string Pubes = "/mt_c0201b0001_bibopube.mtrl";
+        byte[] bytes = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Cloth, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, Weights: [("j_kosi", 1f)])),
+            new SyntheticModel.Mesh(Pubes, new SyntheticModel.Sub(0, TrianglesPerIsland: 2, Weights: [("j_kosi", 1f)])),
+            new SyntheticModel.Mesh(Piercings, new SyntheticModel.Sub(0, TrianglesPerIsland: 2, Weights: [("j_kosi", 1f)])));
+        var pairs = new[] { Pair(Body(("j_kosi", 1f)), Body(("j_kosi", 0.8f), ("iv_omanko", 0.2f))) };
+
+        // Through Plan, as the Studio, the size set and the automatic refit call it: the flag has to reach the rebuild.
+        var plan = BodyRetarget.Plan(ModelPartReader.Read(bytes)!, bytes, pairs, "_top", pushOut: false,
+                                     replaceSkin: replaceSkin, acrossBodies: acrossBodies);
+
+        var materials = ModelPartReader.Read(plan.Model)!.Parts.Select(p => p.Material).ToHashSet();
+        Assert.NotNull(plan.Report.Swap);                                      // the rig changed, so it was rebuilt
+        Assert.Equal(acrossBodies ? 4 : 0, plan.Report.Swap!.Value.ExtrasDropped);
+        Assert.Equal(!acrossBodies, materials.Contains(Pubes));
+        Assert.Equal(!acrossBodies, materials.Contains(Piercings));
+        Assert.Contains(Cloth, materials);
+    }
+
+    // ── within one body mod: only the change between the two bodies ─────────────────────────────────────
+
+    /// <summary>
+    /// One body mod's two sizes, rigged apart (Rue+'s Gen A legs and Gen B): the same skin with a far piece that only
+    /// the target rigs to a bone of its own. Same vertex layout in both, so the old body's weights can be read.
+    /// </summary>
+    private static (byte[] Source, byte[] Target) RigChange((string, float)[] source, (string, float)[] target)
+        => (SyntheticModel.Build([], new SyntheticModel.Mesh(Skin,
+                new SyntheticModel.Sub(0, TrianglesPerIsland: 3, Weights: source),
+                new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetX: 20f, Weights: [("j_kosi", 1f)]))),
+            SyntheticModel.Build([], new SyntheticModel.Mesh(Skin,
+                new SyntheticModel.Sub(0, TrianglesPerIsland: 3, Weights: target),
+                new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetX: 20f, Weights: [("iv_omanko", 1f)]))));
+
+    /// <summary>
+    /// A garment carrying its own skin, rigged as the old body (0.5 / 0.5), and cloth 1 mm off it rigged a little apart
+    /// (0.55 / 0.45: within the copy rule's tolerance). The new body moves 0.1 from j_kosi to j_sebo_a under it, so the
+    /// three answers differ: the author's 0.55 / 0.45, the change 0.45 / 0.55, the new skin outright 0.4 / 0.6.
+    /// </summary>
+    private static (byte[] Garment, BodyRetarget.SlotPair[] Pairs) ClothOnItsSkin()
+    {
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0, TrianglesPerIsland: 3,
+                Weights: [("j_kosi", 0.5f), ("j_sebo_a", 0.5f)])),
+            new SyntheticModel.Mesh(Cloth, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetZ: 0.001f,
+                Weights: [("j_kosi", 0.55f), ("j_sebo_a", 0.45f)])));
+        var (source, target) = RigChange([("j_kosi", 0.5f), ("j_sebo_a", 0.5f)], [("j_kosi", 0.4f), ("j_sebo_a", 0.6f)]);
+        return (garment, [Pair(source, target)]);
+    }
+
+    private static void AssertCloth(byte[] model, float kosi, float sebo)
+    {
+        foreach (int v in VerticesOf(model, Cloth, 0))
+        {
+            var w = Weights(model)[v];
+            Assert.Equal(kosi, w.Single(i => i.Bone == "j_kosi").W, 2);
+            Assert.Equal(sebo, w.Single(i => i.Bone == "j_sebo_a").W, 2);
+        }
+    }
+
+    /// <summary>
+    /// [AC-within-body-weights-3] [EDGE-within-body-weights-8] Cloth on its skin, within one body mod: the author's
+    /// weights plus the change between the two bodies — not the new skin's outright, which is what took the Starlit
+    /// Skirt's thigh weight away on Rue+'s Gen A to Gen B. Through Plan, as every caller refits.
+    /// </summary>
+    [Fact]
+    public void Within_one_body_mod_cloth_on_the_skin_keeps_the_author_s_weights_and_the_change()
+    {
+        var (garment, pairs) = ClothOnItsSkin();
+
+        var plan = BodyRetarget.Plan(ModelPartReader.Read(garment)!, garment, pairs, "_top", pushOut: false,
+                                     acrossBodies: false);
+
+        Assert.NotNull(plan.Report.Swap);                                      // the rig changed, so it was reweighted
+        AssertCloth(plan.Model, 0.45f, 0.55f);                                 // the change: neither 0.55 nor 0.4
+    }
+
+    /// <summary>[AC-within-body-weights-5] The same cloth across body mods is still rigged as the new skin.</summary>
+    [Fact]
+    public void Across_body_mods_cloth_on_the_skin_is_still_rigged_as_the_new_skin()
+    {
+        var (garment, pairs) = ClothOnItsSkin();
+
+        var plan = BodyRetarget.Plan(ModelPartReader.Read(garment)!, garment, pairs, "_top", pushOut: false,
+                                     acrossBodies: true);
+
+        AssertCloth(plan.Model, 0.4f, 0.6f);
+    }
+
+    /// <summary>[AC-within-body-weights-5] Across body mods the copy rule alone, skin hug off, still copies the skin.</summary>
+    [Fact]
+    public void Across_body_mods_the_copy_rule_rigs_cloth_on_its_skin_as_the_new_skin()
+    {
+        var (garment, pairs) = ClothOnItsSkin();
+
+        var plan = BodyRetarget.WithTuning(NoHug, () => BodyRetarget.PlanWeights(garment, pairs, acrossBodies: true,
+                                                                                 before: garment));
+        var rebuilt = BodyRetarget.Rebuild(garment, pairs, swapSkin: false, plan, out _, acrossBodies: true)!;
+
+        AssertCloth(rebuilt, 0.4f, 0.6f);
+    }
+
+    /// <summary>
+    /// [EDGE-within-body-weights-3] Without the garment as authored there is no own skin to read: the change is taken
+    /// against the old body mod, and it is the same change.
+    /// </summary>
+    [Fact]
+    public void Within_one_body_mod_without_the_authored_garment_the_change_is_against_the_old_body()
+    {
+        var (garment, pairs) = ClothOnItsSkin();
+
+        var plan = BodyRetarget.PlanWeights(garment, pairs, acrossBodies: false, before: null);
+        var rebuilt = BodyRetarget.Rebuild(garment, pairs, swapSkin: false, plan, out _)!;
+
+        AssertCloth(rebuilt, 0.45f, 0.55f);
+    }
+
+    /// <summary>
+    /// [EDGE-within-body-weights-4] Within one body mod the copy and hug knobs change nothing; the diagnostic flag brings
+    /// the old behaviour back, for comparing against it.
+    /// </summary>
+    [Fact]
+    public void Skin_hug_tuning_has_no_effect_within_one_body_mod()
+    {
+        var (garment, pairs) = ClothOnItsSkin();
+        byte[] Refit(BodyRetarget.Tuning t)
+            => BodyRetarget.Rebuild(garment, pairs, swapSkin: false,
+                   BodyRetarget.WithTuning(t, () => BodyRetarget.PlanWeights(garment, pairs, before: garment)), out _)!;
+
+        var plain = Refit(new BodyRetarget.Tuning());
+        var off = Refit(new BodyRetarget.Tuning(CopyTolerance: -1f, NoSkinHug: true));
+        var old = Refit(new BodyRetarget.Tuning(CrossBodyPassesWithinBody: true));
+
+        Assert.Equal(Weights(plain), Weights(off));
+        AssertCloth(old, 0.4f, 0.6f);
+    }
+
+    /// <summary>A skirt 5.5 mm off its skin, partly on a chain of its own.</summary>
+    private static (byte[] Garment, BodyRetarget.SlotPair[] Pairs) ChainNearTheBody()
+    {
+        var garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, Weights: [("j_kosi", 1f)])),
+            new SyntheticModel.Mesh(Cloth, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetZ: 0.0055f,
+                Weights: [("j_sk_s_a_l", 0.3f), ("j_kosi", 0.7f)])));
+        var (source, target) = RigChange([("j_kosi", 1f)], [("j_kosi", 1f)]);
+        return (garment, [Pair(source, target)]);
+    }
+
+    private static float Chain(byte[] model)
+        => VerticesOf(model, Cloth, 0).Max(v => Weights(model)[v].Where(i => i.Bone == "j_sk_s_a_l").Sum(i => i.W));
+
+    /// <summary>[AC-within-body-weights-4] Within one body mod, cloth near the body keeps its own chain as authored.</summary>
+    [Fact]
+    public void Within_one_body_mod_cloth_near_the_body_keeps_the_garment_s_own_bones()
+    {
+        var (garment, pairs) = ChainNearTheBody();
+
+        var plan = BodyRetarget.PlanWeights(garment, pairs, acrossBodies: false, before: garment);
+        var rebuilt = BodyRetarget.Rebuild(garment, pairs, swapSkin: false, plan, out _)!;
+
+        Assert.Equal(0.3f, Chain(rebuilt), 2);
+    }
+
+    /// <summary>[AC-within-body-weights-5] Across body mods the chain still comes off cloth near the body.</summary>
+    [Fact]
+    public void Across_body_mods_cloth_near_the_body_still_drops_the_garment_s_own_bones()
+    {
+        var (garment, pairs) = ChainNearTheBody();
+
+        var plan = BodyRetarget.PlanWeights(garment, pairs, acrossBodies: true, before: garment);
+        var rebuilt = BodyRetarget.Rebuild(garment, pairs, swapSkin: false, plan, out _, acrossBodies: true)!;
+
+        Assert.True(Chain(rebuilt) < 0.29f, $"the chain kept {Chain(rebuilt):0.000}");
     }
 
     [Fact]

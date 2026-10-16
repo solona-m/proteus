@@ -71,7 +71,7 @@ public sealed partial class SecondSkinService
 
                 // A mod's live Penumbra selection, fetched once per mod per composite, for the IMC hide-toggles. Null leaves every
                 // toggle at the pack's default. Marshalled onto the framework thread, since it reads Penumbra's collection state.
-                selectionCache = new Dictionary<string, IReadOnlyDictionary<string, List<string>>?>(
+                selectionCache = build.modSelections = new Dictionary<string, IReadOnlyDictionary<string, List<string>>?>(
                     StringComparer.OrdinalIgnoreCase);
             }
 
@@ -90,10 +90,9 @@ public sealed partial class SecondSkinService
                 var piece = rc.Piece;
                 var modRoot = cEntry.ModRoot;
                 // Two codes: equipCode is what this character's gear loads at (usually shared c0201/c0101); the character's own
-                // race code finds a pack built for one race. Shared shape first.
+                // race code finds a pack built for one race. Exact matches first, shared shape before own race.
                 var ownCode = build.drawnRaceCode ?? build.charCode;
-                var variant = ResolveVariant(piece, build.equipCode)
-                           ?? ResolveVariant(piece, ownCode);
+                var variant = ResolveForWearerOrEffect(piece, build.equipCode, ownCode);
                 if (modRoot == null || variant is not { } v)
                 {
                     // Named by race, not by code, since this message has to explain an enabled pack showing nothing.
@@ -105,7 +104,9 @@ public sealed partial class SecondSkinService
                 var modelRel = v.Path;
 
                 // Cut space or native (see ContentSurface). Null means the model is authored for neither and would publish at the wrong size.
-                var surfaceKey = ContentSurface(piece.SurfaceKey, v.Code, ownCode, build.bodySurface.CutCode);
+                var surfaceKey = piece.EffectOnly
+                    ? piece.SurfaceKey
+                    : ContentSurface(piece.SurfaceKey, v.Code, ownCode, build.bodySurface.CutCode);
                 if (surfaceKey is not { } pieceSurface)
                 {
                     var reason = string.Format(Strings.Content.NoRaceFitFmt,
@@ -246,11 +247,14 @@ public sealed partial class SecondSkinService
                     }
 
                     // Recorded here, where the material is known to back a drawn mesh, not at the emit loop: a piece that spilled
-                    // past the material budget still needs its colour grid.
-                    if (!build.contentMaterials.TryGetValue(cEntry.ModDirectory, out var modMats))
-                        build.contentMaterials[cEntry.ModDirectory] =
-                            modMats = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                    modMats.Add(rel);
+                    // past the material budget still needs its colour grid. An invisible placeholder has nothing to colour.
+                    if (!piece.EffectOnly)
+                    {
+                        if (!build.contentMaterials.TryGetValue(cEntry.ModDirectory, out var modMats))
+                            build.contentMaterials[cEntry.ModDirectory] =
+                                modMats = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                        modMats.Add(rel);
+                    }
 
                     // And the model this mesh came from, which is the only way the Studio tab knows a content piece is worn.
                     if (!build.contentModels.TryGetValue(cEntry.ModDirectory, out var modModels))

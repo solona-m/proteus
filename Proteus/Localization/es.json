@@ -1,4 +1,128 @@
 {
+  "AutoRefit.Body": {
+    "message": "Cuerpo",
+    "description": ""
+  },
+  "AutoRefit.BodyMissing.Fmt": {
+    "message": "El cuerpo elegido aquí, «{0}», ya no está instalado. Elige otro.",
+    "description": ""
+  },
+  "AutoRefit.ChestSize": {
+    "message": "Talla de pecho",
+    "description": ""
+  },
+  "AutoRefit.Choose": {
+    "message": "Elegir…",
+    "description": ""
+  },
+  "AutoRefit.Clear": {
+    "message": "Olvidar el cuerpo de esta colección",
+    "description": ""
+  },
+  "AutoRefit.Collection": {
+    "message": "Colección",
+    "description": ""
+  },
+  "AutoRefit.Collection.Current.Fmt": {
+    "message": "{0} (actual)",
+    "description": ""
+  },
+  "AutoRefit.Enable.Label": {
+    "message": "Ajustar el equipo a mi cuerpo al ponérmelo",
+    "description": ""
+  },
+  "AutoRefit.Enable.Tip": {
+    "message": "El ajuste se guarda en el propio mod del equipo como una nueva opción de talla, igual que lo hace la herramienta «Talla del cuerpo» del Estudio, así que sigue funcionando con Proteus desactivado. Si eliges «Original» u otra talla en Penumbra, se respeta.",
+    "description": ""
+  },
+  "AutoRefit.EndsKept": {
+    "message": "Los guantes y los zapatos conservan las manos y los pies con los que se hicieron; solo se ajustan los brazos y las piernas que cubren.",
+    "description": ""
+  },
+  "AutoRefit.FindingBodies": {
+    "message": "Buscando mods de cuerpo…",
+    "description": ""
+  },
+  "AutoRefit.HandsFeet.Fmt": {
+    "message": "Las manos y los pies se emparejan con estas tallas: {0} y {1}.",
+    "description": ""
+  },
+  "AutoRefit.Intro": {
+    "message": "Cuando te pones equipo de torso, piernas, manos o pies —o un accesorio que cubre el cuerpo, como una chaqueta en un collar—, Proteus averigua para qué cuerpo se hizo, lo ajusta al cuerpo y las tallas elegidos aquí y activa la nueva talla. Cada colección de Penumbra tiene su propia elección.",
+    "description": ""
+  },
+  "AutoRefit.ItemInMod.Fmt": {
+    "message": "{0} ({1})",
+    "description": ""
+  },
+  "AutoRefit.LegsSize": {
+    "message": "Talla de piernas",
+    "description": ""
+  },
+  "AutoRefit.NoBodies": {
+    "message": "No hay mods de cuerpo instalados, así que no hay nada a lo que ajustar.",
+    "description": ""
+  },
+  "AutoRefit.NoBodyChosen": {
+    "message": "No hay cuerpo elegido: el equipo que te pongas en esta colección se queda como está.",
+    "description": ""
+  },
+  "AutoRefit.NoCollections": {
+    "message": "Penumbra no está disponible, así que no se pueden listar sus colecciones.",
+    "description": ""
+  },
+  "AutoRefit.RunNow": {
+    "message": "Ajustar lo que llevo puesto",
+    "description": ""
+  },
+  "AutoRefit.RunNow.Tip": {
+    "message": "Solo se ajusta por sí solo el equipo que te pongas a partir de ahora. Esto ajusta las piezas que tu personaje ya lleva.",
+    "description": ""
+  },
+  "AutoRefit.UndoDone.Fmt": {
+    "message": "Deshecho: se quitaron {0} tallas ajustadas y se borraron {1} mods creados para el equipo del juego. Estas piezas no se volverán a ajustar a menos que hagas clic en «Ajustar lo que llevo puesto».",
+    "description": ""
+  },
+  "AutoRefit.UndoFailed.Fmt": {
+    "message": "No se pudo deshacer el ajuste: {0}",
+    "description": ""
+  },
+  "AutoRefit.UndoNothing": {
+    "message": "Nada de lo que llevas puesto se ajustó automáticamente.",
+    "description": ""
+  },
+  "AutoRefit.UndoPartial.Fmt": {
+    "message": "Se quitaron {0} tallas ajustadas, pero {1} no se pudieron quitar. El registro dice cuáles y por qué.",
+    "description": ""
+  },
+  "AutoRefit.UndoWorking": {
+    "message": "Deshaciendo el ajuste...",
+    "description": ""
+  },
+  "AutoRefit.UndoWorn": {
+    "message": "Deshacer el ajuste de lo que llevo puesto",
+    "description": ""
+  },
+  "AutoRefit.UndoWorn.Tip": {
+    "message": "Para el equipo que llevas puesto: quita la talla que hizo el ajuste automático, borra el mod que creó para el equipo del propio juego y restaura la opción que tenías antes. Después, esas piezas se quedan como están cuando te las vuelvas a poner. Las tallas que hiciste tú en la herramienta Talla del cuerpo y los ajustes de lo que no llevas puesto se quedan.\n\nMantén Ctrl o Mayús y haz clic.",
+    "description": ""
+  },
+  "AutoRefit.Vanilla.Label": {
+    "message": "Ajustar también el equipo original del juego",
+    "description": ""
+  },
+  "AutoRefit.Vanilla.Tip": {
+    "message": "El equipo sin mods no tiene un mod donde guardarse, así que cada pieza recibe un mod nuevo propio, con el nombre del objeto y del cuerpo.",
+    "description": ""
+  },
+  "AutoRefit.Working": {
+    "message": "Trabajando…",
+    "description": ""
+  },
+  "AutoRefit.Working.Fmt": {
+    "message": "Ajustando {0}…",
+    "description": ""
+  },
   "Band.Cap.Bind": {
     "message": "Vincúlalo a un diseño",
     "description": ""
@@ -173,6 +297,82 @@
   },
   "Bindings.Update.Tip": {
     "message": "Captura cada mod del personaje (activación / prioridad / opciones) y los colores actuales\nde Proteus en este vínculo. Los cambios manuales solo se conservan si haces clic aquí.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Author.Fmt": {
+    "message": "[Proteus] {0} ya viene en {1}; su propia opción «{2}» está activada.",
+    "description": ""
+  },
+  "Chat.AutoRefit.BodyMissing.Fmt": {
+    "message": "[Proteus] El cuerpo elegido para los ajustes automáticos de esta colección, «{0}», no está instalado, así que no se ajusta nada. Elige otro en /proteus > Ajustes.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Done.Fmt": {
+    "message": "[Proteus] {0} ahora se ajusta a {1}. Guardado como «{2}» en {3} y activado.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Existing.Fmt": {
+    "message": "[Proteus] {0} ya estaba ajustado a {1}; esa talla está activada.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Failed.Fmt": {
+    "message": "[Proteus] No se pudo ajustar {0}: {1}",
+    "description": ""
+  },
+  "Chat.AutoRefit.KeepsFeet.Fmt": {
+    "message": "[Proteus] {0} no llega a las piernas, así que conserva su propia forma y su piel se queda como está.",
+    "description": ""
+  },
+  "Chat.AutoRefit.KeepsHands.Fmt": {
+    "message": "[Proteus] {0} no llega a los brazos, así que conserva su propia forma y su piel se queda como está.",
+    "description": ""
+  },
+  "Chat.AutoRefit.NoBodyMesh.Fmt": {
+    "message": "[Proteus] {0} no contiene piel del cuerpo de la que leer su talla, así que se queda como está. Puedes ajustarlo a mano con la herramienta «Talla del cuerpo» del Estudio.",
+    "description": ""
+  },
+  "Chat.AutoRefit.NoSizeChosen.Fmt": {
+    "message": "[Proteus] No se ha elegido una talla de {0} para {1}, así que {2} se dejó como estaba. Elige una en /proteus > Ajustes.",
+    "description": ""
+  },
+  "Chat.AutoRefit.NoSizeForRace.Fmt": {
+    "message": "[Proteus] {0} no tiene talla de {1} para {2}, así que {3} se queda como está.",
+    "description": ""
+  },
+  "Chat.AutoRefit.PartsLeftOut.Fmt": {
+    "message": "Estas partes no se pudieron ajustar con él y conservan su talla: {0}.",
+    "description": ""
+  },
+  "Chat.AutoRefit.SkinOnly.Fmt": {
+    "message": "[Proteus] {0} conserva su propia forma; su piel ahora se dibuja como la de {1}. Guardado como «{2}» en {3} y activado.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Start.Fmt": {
+    "message": "[Proteus] Ajustando {0} de {1} a {2}. Se activará cuando termine.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Summary.Fmt": {
+    "message": "[Proteus] Ajustado a {0}: {1}.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Unsure.Fmt": {
+    "message": "[Proteus] No se pudo saber para qué cuerpo se hizo {0}, así que se queda como está. Puedes ajustarlo a mano con la herramienta «Talla del cuerpo» del Estudio.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.Jewellery.Fmt": {
+    "message": "[Proteus] {0} no cubre el cuerpo, así que se dejó como estaba.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.AuthorSizes.Fmt": {
+    "message": "[Proteus] {0} ya viene en tallas propias de su autor para cuerpos («{1}» está activa); elige otra en Penumbra. Se dejó como estaba.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.Beneath.Fmt": {
+    "message": "[Proteus] {0} se dejó como estaba: no tiene una pieza propia de {1} de la que leer su talla, y la pieza de {1} que llevas debajo es del juego, no está en {2} o se ajustó antes de esta versión; vuelve a ponértela o usa «Ajustar lo que llevo puesto».",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.Shared.Fmt": {
+    "message": "[Proteus] {0} comparte talla con las demás piezas del mod, así que se ajusta con ellas: cuando estén ajustadas a {1}, usa «Ajustar lo que llevo puesto». Por ahora se dejó como estaba.",
     "description": ""
   },
   "Chat.ContentUnplaced.Fmt": {
@@ -525,6 +725,14 @@
   },
   "Colors.Mode.Skin": {
     "message": "Skin (pintado)",
+    "description": ""
+  },
+  "Colors.NavelBridge.Label": {
+    "message": "Tensar la tela sobre el ombligo",
+    "description": ""
+  },
+  "Colors.NavelBridge.Tip": {
+    "message": "Actívalo para la tela que cubre el vientre.\nProteus crea una prenda como copia del cuerpo, así que se hunde en el ombligo —\ny parece pintada en vez de puesta. Con esto activado, la tela queda tensa y plana\nsobre él, como la tela de verdad. Nada se mete hacia dentro, así que no puede atravesar el cuerpo.\nSi la prenda está recortada en el ombligo, o el cuerpo no tiene, no hace nada.",
     "description": ""
   },
   "Colors.NoActiveOptions": {
@@ -2259,6 +2467,30 @@
     "message": "Qué tan rápido se suaviza la superficie mientras pintas. Bajo es suave y fácil\nde controlar; alto suaviza casi al instante.\n\nCerca de un borde abierto, como un dobladillo, suavizar mete el borde un poco hacia dentro.",
     "description": ""
   },
+  "Parts.Tool.Smooth": {
+    "message": "Alisar",
+    "description": ""
+  },
+  "Parts.Tool.Smooth.Tip": {
+    "message": "Pinta sobre el modelo para eliminar bultos y ondas sin encogerlo:\na diferencia de Suavizar, las curvas conservan su forma y la tela no se pega al cuerpo.",
+    "description": ""
+  },
+  "Parts.Brush.SmoothRate.Tip": {
+    "message": "Lo rápido que se alisa la superficie mientras pintas. Bajo es suave y fácil de\ncontrolar; alto alisa casi al instante.",
+    "description": ""
+  },
+  "Parts.Tool.Grab": {
+    "message": "Agarrar",
+    "description": ""
+  },
+  "Parts.Tool.Grab.Tip": {
+    "message": "Pulsa sobre el modelo y arrastra: la tela alrededor del pincel sigue al ratón\ncomo goma, con más fuerza en el centro y sin borde duro.",
+    "description": ""
+  },
+  "Parts.Grab.Help": {
+    "message": "Pulsa sobre la tela y arrastra. El tamaño del pincel fija cuánta tela se arrastra;\nse mueve a lo ancho de tu vista, y Ctrl+Z deshace un agarre.",
+    "description": ""
+  },
   "Parts.Tool.Bridge": {
     "message": "Puente",
     "description": ""
@@ -2295,8 +2527,8 @@
     "message": "Escalar",
     "description": ""
   },
-  "Parts.Tool.Scale.Tip": {
-    "message": "Elige una pieza, pulsa sobre ella y arrastra a la derecha para agrandarla\no a la izquierda para encogerla sobre su centro.",
+  "Parts.Tool.ScaleAxes.Tip": {
+    "message": "Elige una pieza y arrastra uno de los tiradores de su centro para estirarla\na lo largo de ese eje, o pulsa sobre la pieza y arrastra a la derecha o a la\nizquierda para agrandarla o encogerla por igual.",
     "description": ""
   },
   "Parts.Rotate.Help": {
@@ -2307,12 +2539,12 @@
     "message": "Haz clic en una pieza de tu personaje y arrastra uno de los anillos de su centro. Mantén Alt para mover la cámara. Cada giro se guarda al soltar.",
     "description": ""
   },
-  "Parts.Scale.Help": {
-    "message": "Haz clic en una pieza para elegirla, pulsa sobre ella y arrastra a la derecha para agrandarla o a la izquierda para encogerla. Arrastra en cualquier otro sitio para girar el modelo, Mayús+arrastrar para mover la vista y la rueda para hacer zoom.",
+  "Parts.ScaleAxes.Help": {
+    "message": "Haz clic en una pieza para elegirla y arrastra un tirador para estirarla a lo largo de ese eje, o pulsa sobre la pieza y arrastra a la derecha para agrandarla o a la izquierda para encogerla. Arrastra en cualquier otro sitio para girar el modelo, Mayús+arrastrar para mover la vista y la rueda para hacer zoom.",
     "description": ""
   },
-  "Parts.Scale.LiveHint": {
-    "message": "Haz clic en una pieza de tu personaje, pulsa sobre ella y arrastra a la derecha para agrandarla o a la izquierda para encogerla. Mantén Alt para mover la cámara. Cada cambio se guarda al soltar.",
+  "Parts.ScaleAxes.LiveHint": {
+    "message": "Haz clic en una pieza de tu personaje y arrastra un tirador para estirarla a lo largo de ese eje, o pulsa sobre la pieza y arrastra a la derecha para agrandarla o a la izquierda para encogerla. Mantén Alt para mover la cámara. Cada cambio se guarda al soltar.",
     "description": ""
   },
   "Parts.Move.Help": {
@@ -2332,7 +2564,7 @@
     "description": ""
   },
   "Parts.Move.ListTip": {
-    "message": "Elige aquí la pieza que quieres mover, o haz clic en ella en el modelo o en tu personaje.",
+    "message": "Elige aquí la pieza que quieres mover, o haz clic en ella en el modelo o en tu personaje.\nDesmarca la casilla de una pieza para bloquearla y llegar a lo que hay debajo.",
     "description": ""
   },
   "Parts.Move.Adjacent": {
@@ -2360,7 +2592,11 @@
     "description": ""
   },
   "Parts.Move.LockedTip": {
-    "message": "Esta pieza está bloqueada. Desbloquéala con un pincel para moverla.",
+    "message": "Esta pieza está bloqueada. Marca la casilla junto a ella para moverla.",
+    "description": ""
+  },
+  "Parts.Move.LockTip": {
+    "message": "Desmarca para bloquear esta pieza y apartarla: se oculta en el modelo y en tu personaje, y los clics la\natraviesan hasta lo que hay debajo — una falda, por ejemplo, para llegar a la ropa interior.\nLos pinceles tampoco tocan una pieza bloqueada y también la ocultan.",
     "description": ""
   },
   "Parts.Move.NothingFree": {
@@ -2401,6 +2637,14 @@
   },
   "Parts.Wind.Materials.Set.Fmt": {
     "message": "Se ajustaron {0} archivo(s) de material para que el viento pueda mover esta prenda.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Upgraded.Fmt": {
+    "message": "Se actualizaron {0} de ellos del antiguo shader de personaje, que no tiene viento, al de Dawntrail.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Legacy.Fmt": {
+    "message": "{0} archivo(s) de material usan el antiguo shader de personaje, que no tiene viento, y no se pudieron actualizar, así que no se moverán.",
     "description": ""
   },
   "Parts.Wind.Materials.Missing.Fmt": {
@@ -2476,7 +2720,7 @@
     "description": ""
   },
   "Parts.Brush.Strength.Tip": {
-    "message": "Cuánto se mueve la superficie por instante de pintado. Lo pequeño suele ser\nlo correcto: la ropa solo tiene que salvar el cuerpo por una fracción de\nmilímetro, y siempre puedes volver a pintar el mismo sitio.",
+    "message": "Cuánto mueve el centro del pincel la superficie por cada cuarto de segundo que\nlo mantienes, igual a cualquier tasa de fotogramas. Lo pequeño suele ser lo\ncorrecto: la ropa solo tiene que despejar el cuerpo una fracción de milímetro, y\nsiempre puedes volver a pintar sobre el mismo sitio.",
     "description": ""
   },
   "Parts.Brush.Limit": {
@@ -2584,7 +2828,7 @@
     "description": ""
   },
   "Parts.Brush.Lock.ListTip": {
-    "message": "Desmarca una pieza para bloquearla: ningún pincel la mueve. Hacer mayús-clic en una pieza del modelo o de tu personaje hace lo mismo.",
+    "message": "Desmarca una pieza para bloquearla: ningún pincel la mueve, y se oculta para que llegues a lo que hay debajo. Mayús+clic en una pieza del modelo o de tu personaje también la bloquea; márcala aquí para que vuelva.",
     "description": ""
   },
   "Parts.Brush.Lock.Count.Fmt": {
@@ -2937,6 +3181,10 @@
   },
   "Settings.Output.TextureCache.Tip": {
     "message": "Cuántos datos de textura decodificados mantiene Proteus en memoria entre composiciones.\n\nUna textura 4K ocupa 64 MB decodificada, así que en realidad esto es un número: 2048 MB ≈ 30.\nSolo ayuda si cubre una composición entera; por debajo de eso, cada pasada expulsa lo que\nnecesita la siguiente y no se reutiliza nada.\n\nMira la cifra «cache N entries, M MB» en el registro de recomposición: si una SEGUNDA\ncomposición sin cambios sigue informando de fallos, sube este valor. Bájalo si el juego\nempieza a paginar. Se libera automáticamente tras 60 s de inactividad.",
+    "description": ""
+  },
+  "Settings.Section.AutoRefit": {
+    "message": "Ajuste al cuerpo",
     "description": ""
   },
   "Settings.Section.Diagnostics": {
@@ -3455,6 +3703,18 @@
     "message": "Desmarca una pieza para dejarla donde la puso el autor, como una hebilla o una joya. Hacer clic en ella sobre el modelo hace lo mismo.",
     "description": ""
   },
+  "Parts.Dropdown.Ticked.Fmt": {
+    "message": "{0} de {1} piezas marcadas",
+    "description": ""
+  },
+  "Parts.Dropdown.NoneChosen": {
+    "message": "Elige una pieza para mover",
+    "description": ""
+  },
+  "Parts.Drawer.Toggle.Tip": {
+    "message": "Haz clic para abrir la lista de piezas en una columna propia, así el modelo sigue a la vista mientras marcas. Vuelve a hacer clic para cerrarla.",
+    "description": ""
+  },
   "Parts.Retarget.Lock.SkinTip": {
     "message": "La piel propia de la prenda. Mantenerla conserva la talla antigua, así que el cuerpo puede transparentarse o dejar huecos.",
     "description": ""
@@ -3469,6 +3729,14 @@
   },
   "Parts.Retarget.KeepShape.Tip": {
     "message": "Para piezas rígidas (anillos, hebillas, cadenas): cada pieza se mueve entera en vez de doblarse.\nLas piezas pequeñas y cerradas empiezan marcadas.",
+    "description": ""
+  },
+  "Parts.Retarget.KeepShape.SinkTip": {
+    "message": "Una pieza que se hundiría en el nuevo cuerpo se dobla con él en su lugar.",
+    "description": ""
+  },
+  "Parts.Retarget.ShapeReleased.Fmt": {
+    "message": "{0:N0} pieza(s) con forma fija se hundirían hasta {1:F1} mm en el nuevo cuerpo si se movieran enteras, así que se doblan con él: {2}",
     "description": ""
   },
   "Parts.Retarget.ReplaceSkin": {
@@ -3517,6 +3785,54 @@
   },
   "Parts.Retarget.CutHidden.Tip": {
     "message": "Omite la piel nueva donde el autor borró la suya, normalmente bajo la tela.\nDesactívalo si el ajuste deja huecos.",
+    "description": ""
+  },
+  "Parts.Retarget.CutForcedTip": {
+    "message": "Siempre activado mientras el zapato conserva su propio pie o el guante su propia mano: si no, entrarían con él las piernas o los brazos nuevos enteros.",
+    "description": ""
+  },
+  "Parts.Retarget.KeepFeet": {
+    "message": "Conservar sus propios pies",
+    "description": ""
+  },
+  "Parts.Retarget.KeepFeet.Tip": {
+    "message": "El pie se queda exactamente como lo hizo su autor, tacón incluido; solo se reajusta la pierna que alcanza el zapato, con la talla de las piernas. Desmárcalo para reajustar el zapato entero, pies incluidos, como antes.",
+    "description": ""
+  },
+  "Parts.Retarget.KeepHands": {
+    "message": "Conservar sus propias manos",
+    "description": ""
+  },
+  "Parts.Retarget.KeepHands.Tip": {
+    "message": "La mano se queda exactamente como la hizo su autor; solo se reajusta el brazo que alcanza el guante, con la talla del pecho. Desmárcalo para reajustar el guante entero, manos incluidas, como antes.",
+    "description": ""
+  },
+  "Parts.Retarget.NoLimbFeet": {
+    "message": "Este zapato no llega a ninguna pierna: conserva su forma y solo su piel se dibuja como la del cuerpo nuevo. Elige igualmente una talla de piernas para reajustarlo con ella.",
+    "description": ""
+  },
+  "Parts.Retarget.NoLimbHands": {
+    "message": "Estos guantes no llegan a ningún brazo: conservan su forma y solo su piel se dibuja como la del cuerpo nuevo. Elige igualmente una talla de pecho para reajustarlos con ella.",
+    "description": ""
+  },
+  "Parts.Retarget.SkinAlreadyMatches": {
+    "message": "Nada que cambiar: su piel ya se dibuja como la del cuerpo nuevo.",
+    "description": ""
+  },
+  "Parts.Retarget.AlreadyFits.Fmt": {
+    "message": "Nada que cambiar: donde llega la prenda, {0} tiene la misma forma que la talla para la que se hizo.",
+    "description": ""
+  },
+  "Parts.Retarget.EndsUnreadable": {
+    "message": "No se puede leer su rig, así que no se distingue el pie o la mano del resto: se reajusta la pieza entera.",
+    "description": ""
+  },
+  "Parts.Retarget.NoLegsInBody.Fmt": {
+    "message": "{0} no tiene piernas con que reajustar, así que se reajusta la pieza entera.",
+    "description": ""
+  },
+  "Parts.Retarget.NoChestInBody.Fmt": {
+    "message": "{0} no tiene torso con que reajustar, así que se reajusta la pieza entera.",
     "description": ""
   },
   "Parts.Retarget.NeedFromRequired.Fmt": {
@@ -3663,6 +3979,10 @@
     "message": "{0}, ajustado por Proteus.",
     "description": ""
   },
+  "Refit.Mod.Folder": {
+    "message": "Ampliaciones de Proteus",
+    "description": ""
+  },
   "Refit.Mod.Enabled.Fmt": {
     "message": "Se creó «{0}» y se activó.",
     "description": ""
@@ -3707,12 +4027,24 @@
     "message": "(vanilla)",
     "description": ""
   },
-  "WhatsNew.Title": {
-    "message": "Novedades de Proteus",
+  "WhatsNew.AutoRefit.Body": {
+    "message": "Proteus ahora puede ajustar por sí solo el equipo de pecho, piernas, manos y pies a tu cuerpo en cuanto te lo pones. Averigua para qué mod de cuerpo y qué talla se hizo el equipo, lo ajusta junto con las partes del cuerpo que cubre, guarda la nueva talla en el propio mod del equipo y la activa. El chat avisa cuando empieza y cuando termina.\n\nPara usarlo, abre Ajustes › Ajuste al cuerpo. Marca «Ajustar el equipo a mi cuerpo al ponérmelo» y elige tu mod de cuerpo y sus tallas de pecho y piernas para cada colección de Penumbra; las manos y los pies se emparejan solos. El equipo que ya llevas se ajusta con «Ajustar lo que llevo puesto», y el equipo original del juego tiene su propia casilla. Elegir «Original» u otra talla en Penumbra siempre se respeta.",
     "description": ""
   },
-  "WhatsNew.Intro": {
-    "message": "Tres cosas que conviene saber de esta versión. Esta ventana se abre una vez y no vuelve a hacerlo.",
+  "WhatsNew.AutoRefit.Head": {
+    "message": "El equipo se ajusta solo a tu cuerpo",
+    "description": ""
+  },
+  "WhatsNew.IntroAll": {
+    "message": "Cuatro cosas que conviene saber sobre Proteus. Esta ventana se abre una vez y no vuelve a abrirse.",
+    "description": ""
+  },
+  "WhatsNew.IntroSince": {
+    "message": "Hay algo nuevo desde la última vez que viste esta ventana. Se abre una vez y no vuelve a abrirse.",
+    "description": ""
+  },
+  "WhatsNew.Title": {
+    "message": "Novedades de Proteus",
     "description": ""
   },
   "WhatsNew.Upscales.Head": {
@@ -3842,6 +4174,10 @@
   "Common.Units.Mm2": {
     "message": "%.2f mm",
     "description": "Slider value in millimetres. An ImGui printf format: keep %.2f exactly as it is."
+  },
+  "Common.Units.MmPerQuarterSecond": {
+    "message": "%.2f mm / 0,25 s",
+    "description": ""
   },
   "Create.Dialog.ImageFilter": {
     "message": "Imágenes",
@@ -4402,5 +4738,157 @@
   "Service.Download.Checksum.Fmt": {
     "message": "la suma de comprobación no coincide para {0} ({1} bytes, sha256 {2}…)",
     "description": "Why a download (UV maps) failed; shown after a colon. {0} is a file name, {1} a byte count, {2} the start of a hash. Lower-case, no full stop."
+  },
+  "SizeSet.Header": {
+    "message": "Todas las tallas para otros cuerpos",
+    "description": ""
+  },
+  "SizeSet.Intro": {
+    "message": "Añade a todo este mod cada talla de los cuerpos marcados abajo. Cada talla se reajusta desde la talla del autor más cercana a ella, las demás piezas del conjunto en esa opción desde la misma talla, y se guarda junto a las tallas del autor como «Rue S», «YAB Buff L», etc. Las tallas que el mod ya tiene no se tocan.",
+    "description": ""
+  },
+  "SizeSet.Yas": {
+    "message": "Usar la versión YAS de un cuerpo cuando la tenga",
+    "description": ""
+  },
+  "SizeSet.Yas.Tip": {
+    "message": "Rue, YAB y Tre tienen versiones para Yet Another Skeleton. Neolithe y Bibo no, y conservan sus tallas normales. Una pieza que ya está pesada para YAS siempre recibe tallas YAS.",
+    "description": ""
+  },
+  "SizeSet.Ends": {
+    "message": "Incluir zapatos y guantes",
+    "description": ""
+  },
+  "SizeSet.Ends.Tip": {
+    "message": "Los zapatos y guantes conservan sus propios pies y manos; solo se reajusta la pierna o el brazo que alcanzan. Los zapatos reciben las tallas de las piernas, los guantes una opción por cuerpo, y ambos se suman a las tallas de pecho o piernas del conjunto cuando comparten grupo.",
+    "description": ""
+  },
+  "SizeSet.EndsUnreadable.Fmt": {
+    "message": "{0}: no se puede leer su rig, así que no se puede conservar el pie o la mano y no se hicieron tallas de él.",
+    "description": ""
+  },
+  "SizeSet.Remake": {
+    "message": "Rehacer las tallas que Proteus añadió antes",
+    "description": ""
+  },
+  "SizeSet.Remake.Tip": {
+    "message": "Desactivado: una talla que Proteus ya añadió se deja como está. Activado: se reajusta de nuevo y se reemplaza. Las tallas propias del autor nunca se tocan. Si añadiste tallas con una versión anterior de Proteus, márcalo una vez: aquellas se hicieron desde la primera talla del autor.",
+    "description": ""
+  },
+  "SizeSet.Run": {
+    "message": "Añadir las tallas",
+    "description": ""
+  },
+  "SizeSet.Run.Tip": {
+    "message": "Se ejecuta en segundo plano y puede tardar unos minutos en un mod con muchas piezas. Penumbra recarga el mod al terminar.",
+    "description": ""
+  },
+  "SizeSet.PickBody": {
+    "message": "Marca al menos un cuerpo.",
+    "description": ""
+  },
+  "SizeSet.Cancel": {
+    "message": "Detener",
+    "description": ""
+  },
+  "SizeSet.Cancelled": {
+    "message": "Detenido. Las tallas ya guardadas se quedan en el mod.",
+    "description": ""
+  },
+  "SizeSet.Done.Fmt": {
+    "message": "Se añadieron {0} tallas al mod.",
+    "description": ""
+  },
+  "SizeSet.NothingAdded": {
+    "message": "No se añadió ninguna talla: el mod ya tiene todas las tallas de los cuerpos marcados.",
+    "description": ""
+  },
+  "SizeSet.LeftOut": {
+    "message": "Omitidas:",
+    "description": ""
+  },
+  "SizeSet.Failed.Fmt": {
+    "message": "No se pudieron añadir las tallas: {0}",
+    "description": ""
+  },
+  "SizeSet.NoPieces": {
+    "message": "Este mod no tiene modelos de torso, piernas, zapatos o guantes de los que hacer tallas.",
+    "description": ""
+  },
+  "SizeSet.EndNoLeadSource.Fmt": {
+    "message": "{0}: no se incluyó en «{1}»: no se pudo encontrar ni leer para esta pieza la talla del autor de la que se hizo el torso o las piernas del conjunto ahí. Marca «Rehacer» para rehacer la opción.",
+    "description": ""
+  },
+  "SizeSet.EndNoLeadSourceRemake.Fmt": {
+    "message": "{0}: «{1}» se deja como estaba: no se pudo leer para esta pieza la talla del autor de la que se hizo el torso o las piernas del conjunto ahí.",
+    "description": ""
+  },
+  "SizeSet.NoBodies": {
+    "message": "No hay mods de cuerpo instalados a los que reajustar.",
+    "description": ""
+  },
+  "SizeSet.Unpaired.Fmt": {
+    "message": "{0}: comparte grupo de tallas con otra pieza a la que no puede seguir, así que no se hicieron tallas de ella; cada talla llevaría la otra pieza sin reajustar.",
+    "description": ""
+  },
+  "SizeSet.PieceFailed.Fmt": {
+    "message": "{0}: falló: {1}",
+    "description": ""
+  },
+  "SizeSet.Reading.Fmt": {
+    "message": "Leyendo para qué se hizo {0}...",
+    "description": ""
+  },
+  "SizeSet.Unreadable.Fmt": {
+    "message": "{0}: no se pudo saber para qué cuerpo se hizo, así que no se hicieron tallas de ella.",
+    "description": ""
+  },
+  "SizeSet.NoSuchSize.Fmt": {
+    "message": "{0}: {2} no tiene modelo para «{1}», así que esa talla se omitió.",
+    "description": ""
+  },
+  "SizeSet.Refused.Fmt": {
+    "message": "{0}: no se pudo hacer «{1}»: {2}",
+    "description": ""
+  },
+  "SizeSet.SaveFailed.Fmt": {
+    "message": "{0}: {1}",
+    "description": ""
+  },
+  "SizeSet.NotInstalled.Fmt": {
+    "message": "{0}: {1} no está instalado, así que no recibió ninguna de sus tallas.",
+    "description": ""
+  },
+  "SizeSet.Working.Fmt": {
+    "message": "Reajustando {0} a {1}...",
+    "description": ""
+  },
+  "SizeSet.NotInstalledTip.Fmt": {
+    "message": "{0} no está instalado en Penumbra. Instálalo y luego cierra y vuelve a abrir esta sección.",
+    "description": ""
+  },
+  "ContentImport.Warn.EffectFileMissing.Fmt": {
+    "message": "«{0}» tiene un efecto animado, pero su archivo ({1}) no está en el paquete, así que no se puede mostrar.",
+    "description": ""
+  },
+  "Content.StaleEffectImport.Fmt": {
+    "message": "«{0}» tiene un efecto animado que esta importación dejó en el objeto original, así que solo aparece si lo llevas puesto. Borra este mod e importa el paquete de nuevo para llevar el efecto sin él.",
+    "description": ""
+  },
+  "Content.EffectOnly": {
+    "message": "efecto animado",
+    "description": ""
+  },
+  "Content.WithEffect.Fmt": {
+    "message": "{0} + efecto",
+    "description": ""
+  },
+  "Content.Effect.Tip": {
+    "message": "Esta pieza tiene un efecto animado. Proteus lo muestra en un accesorio invisible que coloca en una ranura libre, así que no necesitas llevar el objeto que reemplaza.",
+    "description": ""
+  },
+  "Chat.EffectUnplaced.Fmt": {
+    "message": "[Proteus] El efecto animado de «{0}» no se muestra: necesita una ranura de accesorio libre para su portador invisible. Libera una ranura de anillo, pulsera o collar.",
+    "description": ""
   }
 }

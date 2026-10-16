@@ -123,7 +123,7 @@ public sealed partial class EyeImportService
     /// read. Both measured up front so <see cref="Cutout"/> can change without re-decoding.</param>
     /// <param name="FaceId">
     /// The face the glow is cut for: every race's iris material at that id. One face only, because an iris
-    /// surface is keyed by face and <c>SecondSkinService.SurfaceKeyOf</c> cuts only an overlay's first surface.
+    /// surface is keyed by face and <c>SecondSkinService.SurfaceKeyOf</c> cuts only one of an overlay's surfaces.
     /// </param>
     public sealed record ImportPreview(
         string SourcePath,

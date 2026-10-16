@@ -1,3 +1,4 @@
+using System.Linq;
 using Proteus.Gui;
 using Proteus.Services;
 using Xunit;
@@ -51,6 +52,54 @@ public class PartsPanelLabelTests
         Assert.Equal("Sizes / Small  (Body — e0488)", labels[1]);
         // Untouched: it never collided with anything.
         Assert.Equal("Sizes / Large", labels[2]);
+    }
+
+    private const string RingMidlander = "chara/accessory/a0058/model/c0101a0058_rir.mdl";
+    private const string RingHrothgar = "chara/accessory/a0058/model/c1501a0058_rir.mdl";
+
+    /// <summary>
+    /// "DT Coeurl Sideburns": every option ships the vanilla ring at c0101 and the sideburns at c1501. The option and
+    /// the slot are the same for both, so only the race tells the ring from the sideburns.
+    /// </summary>
+    [Fact]
+    public void OneItemPerRaceGainsTheRace()
+    {
+        var labels = PartsPanel.ModelLabels([
+            R(RingMidlander, "common/3/ring.mdl", "Face Selection / Face 1"),
+            R(RingHrothgar, "face 1/sideburns.mdl", "Face Selection / Face 1"),
+            R(RingHrothgar, "face 2/sideburns.mdl", "Face Selection / Face 2"),
+        ]);
+
+        Assert.Equal("Face Selection / Face 1  (Right ring — a0058, Midlander M)", labels[0]);
+        Assert.Equal("Face Selection / Face 1  (Right ring — a0058, Hrothgar M)", labels[1]);
+        Assert.Equal("Face Selection / Face 2", labels[2]);
+    }
+
+    /// <summary>With no option name the label is already the slot, so the race is all that is added.</summary>
+    [Fact]
+    public void AnUnconditionalModelPerRaceGainsOnlyTheRace()
+    {
+        var labels = PartsPanel.ModelLabels([R(RingMidlander, "ring.mdl", ""), R(RingHrothgar, "sideburns.mdl", "")]);
+
+        Assert.Equal(["Right ring — a0058  (Midlander M)", "Right ring — a0058  (Hrothgar M)"], labels);
+    }
+
+    /// <summary>
+    /// Each option's ring and sideburns sit together, in the author's order. Sorted by the whole path, every ring came
+    /// before every sideburns.
+    /// </summary>
+    [Fact]
+    public void AnItemsRacesAreListedTogether()
+    {
+        var listed = PartsPanel.PublishedModels([
+            R(RingMidlander, "ring.mdl", "Face 1"),
+            R(RingHrothgar, "face1.mdl", "Face 1"),
+            R(RingMidlander, "ring.mdl", "Face 2"),
+            R(RingHrothgar, "face2.mdl", "Face 2"),
+            R("chara/accessory/a0058/texture/x.tex", "x.tex", "Face 2"),
+        ]);
+
+        Assert.Equal(["ring.mdl", "face1.mdl", "ring.mdl", "face2.mdl"], listed.Select(r => r.File));
     }
 
     [Fact]

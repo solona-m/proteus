@@ -10,7 +10,7 @@ internal static partial class BodyBridge
     private sealed class BodySmoothing
     {
         private readonly byte[] mdl;
-        private readonly SecondSkinLayer gate;
+        private readonly BodySmoothGate gate;
         private readonly float nippleStrength;
         private readonly Action<string>? log;
         private readonly float foldStrength;
@@ -28,7 +28,7 @@ internal static partial class BodyBridge
         private int end;
         private byte[]? result;
 
-        public BodySmoothing(byte[] mdl, SecondSkinLayer gate, float nippleStrength, Action<string>? log, float foldStrength)
+        public BodySmoothing(byte[] mdl, BodySmoothGate gate, float nippleStrength, Action<string>? log, float foldStrength)
         {
             this.mdl = mdl;
             this.gate = gate;
@@ -136,12 +136,45 @@ internal static partial class BodyBridge
                 // Sampled with WRAP, like every other body-UV read here: a body's UVs need not sit in the
                 // [0,1] tile, and wrapping makes an integer tile offset irrelevant rather than putting a whole
                 // mesh on row 0.
-                var covered = CoveredVertices(uv, gate, vc);
+                var covered = gate.Covered(m, vc, uv);
+
+                // Vertices the body mod does not draw leave the solve before anything welds them to the drawn skin:
+                // kept in, they would be measured as the breast, pin the region along every seam they share, and take
+                // the drawn skin's movement. `keep[k]` is the mesh vertex solved as k.
+                int[]? keep = null;
+                if (gate.Drawn?.Invoke(m, vc) is { } drawn && Array.IndexOf(drawn, false) >= 0)
+                {
+                    var at = new int[vc];
+                    var kept = new List<int>();
+                    for (int i = 0; i < vc; i++)
+                    {
+                        at[i] = i < drawn.Length && drawn[i] ? kept.Count : -1;
+                        if (at[i] >= 0) kept.Add(i);
+                    }
+                    keep = kept.ToArray();
+                    var drawnTris = new List<int>();
+                    for (int t = 0; t + 2 < tris.Length; t += 3)
+                    {
+                        int a = tris[t], b = tris[t + 1], c = tris[t + 2];
+                        if (a >= vc || b >= vc || c >= vc || at[a] < 0 || at[b] < 0 || at[c] < 0) continue;
+                        drawnTris.Add(at[a]); drawnTris.Add(at[b]); drawnTris.Add(at[c]);
+                    }
+                    if (drawnTris.Count < 3) continue;
+                    tris = Array.ConvertAll(drawnTris.ToArray(), t => (ushort)t);
+                    p3 = Pick(p3, keep);
+                    n3 = Pick(n3, keep);
+                    if (covered is { } c0) covered = Array.ConvertAll(keep, i => i < c0.Length && c0[i]);
+                    if (bust != null) bust = Pick(bust, keep);
+                    if (fold != null) fold = Pick(fold, keep);
+                    if (foldNear != null) foldNear = Pick(foldNear, keep);
+                }
+                int sv = p3.Length;
 
                 var plan = bust == null ? null
                       // pinBoundary: the body's part-seam rims must not move, same as for the fold.
                     : BustBridgeSolve(p3, n3, tris, bust, 0f, log, covered, nippleStrength,
-                                      pinBoundary: true);
+                                      pinBoundary: true, nippleScale: gate.SideScale,
+                                      frameFromBust: gate.FrameFromBust);
 
                 if (fold != null && foldNear != null)
                     plan = MergePlans(plan, FoldPlan(p3, n3, tris, fold, foldNear, covered, foldStrength, log));
@@ -155,24 +188,25 @@ internal static partial class BodyBridge
 
                 int stride = bs[pos.Stream];
                 int nStride = bs[nrm.Stream];
-                for (int i = 0; i < vc; i++)
+                for (int k = 0; k < sv; k++)
                 {
+                    int i = keep?[k] ?? k;
                     // A vertex moves only if its own delta is real, but reshades anywhere in the relaxed region:
                     // a normal depends on its neighbours.
-                    var d = plan.Delta[i];
+                    var d = plan.Delta[k];
                     float mag = MathF.Sqrt(d.X * d.X + d.Y * d.Y + d.Z * d.Z);
-                    skinAt.Add(p3[i]);
+                    skinAt.Add(p3[k]);
                     skinMove.Add(mag > BustBridgeEpsilon ? d : default);
                     if (mag > BustBridgeEpsilon)
                     {
                         WriteXYZ(outBytes, src.Vb + (int)vbo[pos.Stream] + i * stride + pos.Offset, pos.Type,
-                                 p3[i].X + d.X, p3[i].Y + d.Y, p3[i].Z + d.Z);
+                                 p3[k].X + d.X, p3[k].Y + d.Y, p3[k].Z + d.Z);
                         vertsMoved++;
                         most = MathF.Max(most, mag);
                     }
 
-                    if (plan.NodeWeight[plan.NodeOf[i]] <= 0f) continue;
-                    var fn = finalNrm[i];
+                    if (plan.NodeWeight[plan.NodeOf[k]] <= 0f) continue;
+                    var fn = finalNrm[k];
                     if (WriteNormal(outBytes, src.Vb + (int)vbo[nrm.Stream] + i * nStride + nrm.Offset,
                                     nrm.Type, fn.X, fn.Y, fn.Z))
                         normalsWritten++;
@@ -181,7 +215,7 @@ internal static partial class BodyBridge
                 float fx0 = float.MaxValue, fy0 = float.MaxValue, fz0 = float.MaxValue;
                 float fx1 = float.MinValue, fy1 = float.MinValue, fz1 = float.MinValue;
                 if (fold != null)
-                    for (int i = 0; i < vc; i++)
+                    for (int i = 0; i < sv; i++)
                     {
                         if (Len(plan.Delta[i]) <= BustBridgeEpsilon) continue;
                         fx0 = MathF.Min(fx0, p3[i].X); fy0 = MathF.Min(fy0, p3[i].Y); fz0 = MathF.Min(fz0, p3[i].Z);
@@ -191,7 +225,7 @@ internal static partial class BodyBridge
                     for (int t = 0; t + 2 < tris.Length; t += 3)
                     {
                         int a = tris[t], b = tris[t + 1], c = tris[t + 2];
-                        if (a >= vc || b >= vc || c >= vc) continue;
+                        if (a >= sv || b >= sv || c >= sv) continue;
                         // Only skin the garment covers.
                         if (covered != null && (!covered[a] || !covered[b] || !covered[c])) continue;
                         var pa = p3[a];
@@ -210,6 +244,14 @@ internal static partial class BodyBridge
             log?.Invoke($"body smooth: {vertsMoved} vertex(es) across {meshesTouched} mesh(es), "
                       + $"moved by up to {most:0.#####}, {normalsWritten} normal(s) reshaded");
             return true;
+        }
+
+        /// <summary>The entries of <paramref name="all"/> at <paramref name="at"/>, in that order.</summary>
+        private static T[] Pick<T>(T[] all, int[] at)
+        {
+            var o = new T[at.Length];
+            for (int k = 0; k < at.Length; k++) o[k] = all[at[k]];
+            return o;
         }
 
         private byte[]? CarrySkinMoves()

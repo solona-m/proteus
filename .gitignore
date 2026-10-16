@@ -15,3 +15,9 @@ obj/
 ## OS
 .DS_Store
 Thumbs.db
+
+## AI workflow
+.review-passed
+.qa-evidence/
+.playwright-mcp/
+.workflow-log/

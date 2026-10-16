@@ -103,6 +103,7 @@ public sealed partial class SecondSkinService
         private Dictionary<string, float> bridgeByMod = null!;
         private Dictionary<string, float> smoothByMod = null!;
         private Dictionary<string, float> cleftByMod = null!;
+        private Dictionary<string, float> navelByMod = null!;
         private Dictionary<string, float> foldByMod = null!;
         private Dictionary<int, string> topSpanningModOnHost = null!;
         private int[] inHost = null!;
@@ -111,6 +112,9 @@ public sealed partial class SecondSkinService
         private bool modelChangedAny;
         private List<string> hostModelPaths = null!;
         private List<string> appendHostModelPaths = null!;
+        private Dictionary<string, string> appendHostSources = null!;
+        /// <summary>Mod folder → its live Penumbra selection, as content resolution read it (null: unread).</summary>
+        private Dictionary<string, IReadOnlyDictionary<string, List<string>>?> modSelections = new(StringComparer.OrdinalIgnoreCase);
         private Result? result;
 
         public ShellSetBuild(SecondSkinService service, string charCode, IReadOnlyList<(OverlayEntry Entry, ResolvedOverlay Overlay)> gearOverlays, string outputRoot, string? bodyType, string? effectsFolder, IReadOnlyDictionary<string, string>? equippedPartModels, IReadOnlyDictionary<string, string>? equippedAccessories, Func<string, bool>? gen2Allowed, int? invisibleGlassesSet, IReadOnlyList<string>? metModels, IReadOnlyDictionary<string, HashSet<string>>? enabledBodyShapes, IReadOnlySet<string>? maskShellMods, IReadOnlyDictionary<string, string>? bareBodyModels, string? drawnRaceCode, IReadOnlySet<string>? activeMaterials, int? emperorRingVariant, int? invisibleGlassesVariant, IReadOnlyList<string>? humanPartModels, IReadOnlyList<(OverlayEntry Entry, ResolvedContent Content)>? contentLayers, IReadOnlyList<OverlayEntry>? allEntries, IReadOnlyDictionary<string, byte[]>? pristineHumanModels, int? shellTexSize, IReadOnlyList<EquippedSlotVariants.Slot>? equippedSlotVariants, IReadOnlySet<string>? hiddenParts = null)
@@ -144,12 +148,12 @@ public sealed partial class SecondSkinService
 
         public Result? Run()
         {
-            if (!Begin()) return result;
+            if (!Begin()) return Abandoned();
             ResolveHostVariants();
             CreateOutputs();
             VoteModelCode();
             HarvestParts();
-            if (!WholeBodyFallback()) return result;
+            if (!WholeBodyFallback()) return Abandoned();
             ChooseUvSpace();
             UnmirrorBody();
             ConvertUvSpace();
@@ -165,11 +169,28 @@ public sealed partial class SecondSkinService
             PlanSiblingRelief();
             BakeShellTextures();
             PlaceContentMeshes();
-            if (!PublishSkeletons()) return result;
+            if (!PublishSkeletons())
+            {
+                // Nothing placed — the effect-only placeholder alone, with no free carrier. Its effect is still reported (every
+                // request is unhosted, so this only logs and tells the user); nothing it writes is published.
+                PlaceEffects();
+                return Abandoned();
+            }
             ReportUnhosted();
             SmoothBody();
             BuildHostModels();
-            return Finish();
+            PlaceEffects();
+            return Finish() ?? Abandoned();
+        }
+
+        /// <summary>
+        /// A build that publishes nothing publishes no effect either, so the next effect that appears is a change and gets
+        /// its redraw (see PlaceEffects).
+        /// </summary>
+        private Result? Abandoned()
+        {
+            service._lastEffectKey = string.Empty;
+            return result;
         }
 
         private bool Begin()
@@ -950,12 +971,23 @@ public sealed partial class SecondSkinService
             {
                 int surfIdx = unitSurface[u];
                 bool carrierOnly = surfaces[surfIdx].Key.RequiresNativeHost;
+                // An effect's IMC entry is only ours to write on an invisible ACCESSORY carrier (see EffectHostPlanner), so its
+                // placeholder goes nowhere else: on a worn ring it would rewrite the player's item for nothing visible.
+                bool effectOnly = contentUnits[u].EffectOnly;
+                // A piece with real geometry AND an effect tries the carriers first, so its effect has a host that can carry
+                // it; it may still fall back to a worn item, where only its geometry is placed.
+                bool carriesEffect = contentUnits[u].Owners.Any(o => o.Content.Piece.Effect != null);
+                var order = Enumerable.Range(0, hosts.Count);
+                if (carriesEffect && !effectOnly)
+                    order = order.OrderBy(h => EffectHostPlanner.CanHostEffectOnly(hosts[h].BaseModel != null, hosts[h].Prefix) ? 0 : 1);
                 int chosen = -1;
-                for (int h = 0; h < hosts.Count && diskBudget > 0; h++)
+                foreach (var h in order)
                 {
+                    if (diskBudget <= 0) break;
                     if (remaining[h] <= 0) continue;
                     // Only a carrier's EQDP may be rewritten, so only a carrier can publish a natively-authored piece undeformed.
                     if (carrierOnly && hosts[h].BaseModel != null) continue;
+                    if (effectOnly && !EffectHostPlanner.CanHostEffectOnly(hosts[h].BaseModel != null, hosts[h].Prefix)) continue;
                     if (hostClaim[h] is { } claimed && claimed != surfIdx) continue;
                     chosen = h;
                     break;
@@ -1049,34 +1081,29 @@ public sealed partial class SecondSkinService
             bridgeByMod = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
             smoothByMod = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
             cleftByMod = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+            navelByMod = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
             foldByMod = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
             foreach (var bEntry in (allEntries ?? gearOverlays.Select(g => g.Entry).ToList())
                          .GroupBy(e => e.ModDirectory, StringComparer.OrdinalIgnoreCase).Select(g => g.First()))
             {
-                if (bEntry.Metadata.BustBridge == true)
+                var md = bEntry.Metadata;
+                void Take(Dictionary<string, float> byMod, bool? on, float? strength)
                 {
-                    float s = Math.Clamp(bEntry.Metadata.BustBridgeStrength ?? 1f, 0f, 1f);
-                    if (s > 0f) bridgeByMod[bEntry.ModDirectory] = s;
+                    float s = GeometryStrength(on, strength);
+                    if (s > 0f) byMod[bEntry.ModDirectory] = s;
                 }
-                if (bEntry.Metadata.SmoothNipples == true)
-                {
-                    float s = Math.Clamp(bEntry.Metadata.SmoothNipplesStrength ?? 1f, 0f, 1f);
-                    if (s > 0f) smoothByMod[bEntry.ModDirectory] = s;
-                }
-                if (bEntry.Metadata.CleftBridge == true)
-                {
-                    float s = Math.Clamp(bEntry.Metadata.CleftBridgeStrength ?? 1f, 0f, 1f);
-                    if (s > 0f) cleftByMod[bEntry.ModDirectory] = s;
-                }
-                if (bEntry.Metadata.SmoothFold == true)
-                {
-                    float s = Math.Clamp(bEntry.Metadata.SmoothFoldStrength ?? 1f, 0f, 1f);
-                    if (s > 0f) foldByMod[bEntry.ModDirectory] = s;
-                }
+                Take(bridgeByMod, md.BustBridge, md.BustBridgeStrength);
+                Take(smoothByMod, md.SmoothNipples, md.SmoothNipplesStrength);
+                Take(cleftByMod, md.CleftBridge, md.CleftBridgeStrength);
+                Take(navelByMod, md.NavelBridge, md.NavelBridgeStrength);
+                Take(foldByMod, md.SmoothFold, md.SmoothFoldStrength);
             }
             foreach (var (cMod, cStrength) in cleftByMod)
                 service.log.Information("[Proteus] second skin: cleft bridge at {0:0.##} applies to every shell of \"{1}\"",
                     cStrength, cMod);
+            foreach (var (nMod, nStrength) in navelByMod)
+                service.log.Information("[Proteus] second skin: navel fill at {0:0.##} applies to every shell of \"{1}\"",
+                    nStrength, nMod);
             foreach (var (fMod, fStrength) in foldByMod)
                 service.log.Information("[Proteus] second skin: fold smoothing at {0:0.##} applies to every shell of \"{1}\"",
                     fStrength, fMod);
@@ -1258,16 +1285,20 @@ public sealed partial class SecondSkinService
                           + "is drawing nothing there — its ex bones will not load", mod, entry, slot);
             }
 
+            // An effect-only placeholder needs a FREE slot, the opposite of this notice's advice, so it is told by the effect's
+            // own line (PlaceEffects) instead; the log still counts it.
+            int meshUnhosted = contentUnhosted.Count(u => !contentUnits[u].EffectOnly);
             if (contentUnhosted.Count > 0)
             {
                 // In chat as well as the log, deduped by count: a piece that silently does not appear has no other visible cause.
-                if (service._lastUnhostedContent != contentUnhosted.Count)
+                if (meshUnhosted == 0) service._lastUnhostedContent = -1;
+                else if (service._lastUnhostedContent != meshUnhosted)
                 {
-                    service._lastUnhostedContent = contentUnhosted.Count;
+                    service._lastUnhostedContent = meshUnhosted;
                     var msg = string.Format(Loc.Localize("Chat.ContentUnplaced.Fmt",
                         "[Proteus] {0} mesh piece(s) from your mods could not be placed — your accessories are "
                       + "out of material slots. Equip another ring / bracelet / necklace, or turn off a layer."),
-                        contentUnhosted.Count);
+                        meshUnhosted);
                     _ = Plugin.Framework.RunOnFrameworkThread(
                         () => Plugin.ChatGui.Print(new SeStringBuilder().AddUiForeground(msg, 25).Build()));
                 }
@@ -1518,6 +1549,7 @@ public sealed partial class SecondSkinService
             // Build one shell model per host that got layers; fold each into the single Result.
             hostModelPaths = new List<string>();
             appendHostModelPaths = new List<string>();
+            appendHostSources = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             for (int h = 0; h < hosts.Count; h++)
             {
                 BuildHostModel(pushSweep, h);
@@ -1543,7 +1575,8 @@ public sealed partial class SecondSkinService
             if (hostModelPaths.Count == 0) return null;
 
             return new Result(redirects, manipulations, shellChanged, shellMaterials, modelChangedAny,
-                              hostModelPaths, appendHostModelPaths, contentMaterials, shellLight, contentModels);
+                              hostModelPaths, appendHostModelPaths, contentMaterials, shellLight, contentModels,
+                              appendHostSources);
         }
 
         private string VariantFolderFor(HostAccessory h)

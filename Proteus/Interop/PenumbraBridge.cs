@@ -18,6 +18,7 @@ public class PenumbraBridge : IDisposable
     private readonly GetModList getModList;
     private readonly GetModDirectory getModDirectory;
     private readonly GetCollectionForObject getCollectionForObject;
+    private readonly GetCollections getCollections;
     private readonly GetCurrentModSettingsWithTemp getCurrentModSettings;
     private readonly GetAllModSettings getAllModSettings;
     private readonly RemoveTemporaryModSettings removeTemporaryModSettings;
@@ -27,8 +28,10 @@ public class PenumbraBridge : IDisposable
     private readonly AddMod addMod;
     private readonly ReloadMod reloadMod;
     private readonly DeleteMod deleteMod;
+    private readonly SetModPath setModPath;
     private readonly TrySetMod trySetMod;
     private readonly TrySetModPriority trySetModPriority;
+    private readonly TryInheritMod tryInheritMod;
     private readonly TrySetModSetting trySetModSetting;
     private readonly TrySetModSettings trySetModSettings;
     private readonly RedrawObject redrawObject;
@@ -84,6 +87,7 @@ public class PenumbraBridge : IDisposable
         getModList = new GetModList(pluginInterface);
         getModDirectory = new GetModDirectory(pluginInterface);
         getCollectionForObject = new GetCollectionForObject(pluginInterface);
+        getCollections = new GetCollections(pluginInterface);
         getCurrentModSettings = new GetCurrentModSettingsWithTemp(pluginInterface);
         getAllModSettings = new GetAllModSettings(pluginInterface);
         removeTemporaryModSettings = new RemoveTemporaryModSettings(pluginInterface);
@@ -93,8 +97,10 @@ public class PenumbraBridge : IDisposable
         addMod = new AddMod(pluginInterface);
         reloadMod = new ReloadMod(pluginInterface);
         deleteMod = new DeleteMod(pluginInterface);
+        setModPath = new SetModPath(pluginInterface);
         trySetMod = new TrySetMod(pluginInterface);
         trySetModPriority = new TrySetModPriority(pluginInterface);
+        tryInheritMod = new TryInheritMod(pluginInterface);
         trySetModSetting = new TrySetModSetting(pluginInterface);
         trySetModSettings = new TrySetModSettings(pluginInterface);
         redrawObject = new RedrawObject(pluginInterface);
@@ -188,6 +194,14 @@ public class PenumbraBridge : IDisposable
             return string.IsNullOrEmpty(dir) ? null : dir;
         }
         catch (Exception ex) { log.Error(ex, "GetModDirectory failed"); return null; }
+    }
+
+    /// <summary>Every collection Penumbra has, id to name, or null when unavailable.</summary>
+    public Dictionary<Guid, string>? GetCollections()
+    {
+        if (!IsAvailable) return null;
+        try { return getCollections.Invoke(); }
+        catch (Exception ex) { log.Error(ex, "GetCollections failed"); return null; }
     }
 
     /// <summary>Returns the effective collection GUID for the local player (object index 0).</summary>
@@ -528,6 +542,15 @@ public class PenumbraBridge : IDisposable
         catch (Exception ex) { log.Error(ex, "DeleteMod failed"); return PenumbraApiEc.UnknownError; }
     }
 
+    /// <summary>File a mod in Penumbra's mod list: <paramref name="path"/> is folders and the mod's name joined by
+    /// '/'. ModMissing while Penumbra is still loading a mod just added.</summary>
+    public PenumbraApiEc SetModListPath(string modDirectory, string path)
+    {
+        if (!IsAvailable) return PenumbraApiEc.SystemDisposed;
+        try { return OnMainThread(() => setModPath.Invoke(modDirectory, path), WriteStats); }
+        catch (Exception ex) { log.Error(ex, "SetModPath failed"); return PenumbraApiEc.UnknownError; }
+    }
+
     /// <summary>Tell Penumbra to reload a mod from disk. On the main thread — see <see cref="OnMainThread{T}"/>.</summary>
     public PenumbraApiEc ReloadModDirectory(string modDirectory)
     {
@@ -550,6 +573,17 @@ public class PenumbraBridge : IDisposable
         if (!IsAvailable) return PenumbraApiEc.SystemDisposed;
         try { return OnMainThread(() => trySetModPriority.Invoke(collectionId, modDirectory, priority), WriteStats); }
         catch (Exception ex) { log.Error(ex, "TrySetModPriority failed"); return PenumbraApiEc.UnknownError; }
+    }
+
+    /// <summary>
+    /// Drop a collection's own setting for a mod, so it takes the setting from the collections it inherits from again
+    /// (or none, and is off) — the state it was in before anything wrote a setting of its own there.
+    /// </summary>
+    public PenumbraApiEc SetModInherited(Guid collectionId, string modDirectory)
+    {
+        if (!IsAvailable) return PenumbraApiEc.SystemDisposed;
+        try { return OnMainThread(() => tryInheritMod.Invoke(collectionId, modDirectory, inherit: true), WriteStats); }
+        catch (Exception ex) { log.Error(ex, "TryInheritMod failed for {0}", modDirectory); return PenumbraApiEc.UnknownError; }
     }
 
     /// <summary>

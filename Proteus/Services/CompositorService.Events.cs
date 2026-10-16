@@ -18,6 +18,8 @@ public partial class CompositorService
     {
         if (string.Equals(modDir, SidecarDiscoveryService.ManagedModDir, StringComparison.OrdinalIgnoreCase))
             return;
+        // The auto refit's own write: its composites wait for the batch's end. Read now, on the writer's thread.
+        bool own = IsOwnRefitWrite(modDir);
         // Inside a batch write — the scope settles up when it closes. See SuppressModSettingEvents.
         if (_modSettingEventSuppression > 0)
             return;
@@ -97,14 +99,14 @@ public partial class CompositorService
             // The mod's files may have changed underneath a cached decode (a reinstall/edit that kept the
             // same timestamp or byte length); drop this mod's cached textures so the composite re-reads them.
             textureLoader.EvictMod(modDir);
-            TriggerRecomposite($"ModSettingChanged:{change}:{modDir}", force: !ambient);
+            TriggerRecomposite($"ModSettingChanged:{change}:{modDir}", force: !ambient, deferWhileHeld: own);
             return;
         }
 
         // Not an overlay mod: the only other thing we react to is a body mod, whose change can leave the cached
         // snapshot wrong. Its detection does file I/O + config.Save, so run it off the framework thread.
         EvaluateSurfaceModOffThread(modDir, $"ModSettingChanged:{change}:{modDir}", force: !ambient,
-            checkBasesMoved: true);
+            checkBasesMoved: true, deferWhileHeld: own);
     }
 
     /// <summary>
@@ -153,16 +155,18 @@ public partial class CompositorService
 
     private void OnModAdded(string modDir)
     {
+        // A mod the auto refit just made: its composites wait for the batch's end.
+        bool own = IsOwnRefitWrite(modDir);
         // A (re)install almost always rewrites the mod's files — evict any stale cached decodes for it.
         textureLoader.EvictMod(modDir);
         InvalidateUpstreamCache($"ModAdded:{modDir}");
         if (HasSidecar(modDir))
         {
-            TriggerRecomposite($"ModAdded:{modDir}");
+            TriggerRecomposite($"ModAdded:{modDir}", deferWhileHeld: own);
             return;
         }
         // A reinstalled body mod may change files without renaming; ClassifySurfaceMod's fingerprint handles that.
-        EvaluateSurfaceModOffThread(modDir, $"ModAdded:{modDir}");
+        EvaluateSurfaceModOffThread(modDir, $"ModAdded:{modDir}", deferWhileHeld: own);
     }
 
     private void OnModDeleted(string modDir)
@@ -297,9 +301,13 @@ public partial class CompositorService
         return false;
     }
 
+    /// <param name="deferWhileHeld">The change is an auto refit batch's own write: its composite, re-check and stale
+    /// snapshot wait for the batch's end (see <see cref="RedrawHold"/>).</param>
     private void EvaluateSurfaceModOffThread(string modDir, string reason, bool force = true,
-        bool checkBasesMoved = false)
+        bool checkBasesMoved = false, bool deferWhileHeld = false)
     {
+        // Counted before the task starts, so a draining batch that asks right after its write sees it.
+        NoteEvaluating(modDir, +1);
         Task.Run(() =>
         {
             try
@@ -309,7 +317,7 @@ public partial class CompositorService
                 textureLoader.EvictMod(modDir);   // body textures may have changed under a cached decode
                 // Either verdict earns the snapshot re-walk: a face/hair/iris mod moves which materials are on the character,
                 // and a mod feeding us without a surface tree (e.g. an append host) can change the materials a model references.
-                if (surface || affects) _activeMtrlSnapshotDirty = true;
+                if (surface || affects) MarkMaterialsDirty(owedWhileHeld: deferWhileHeld);
 
                 // The gate: a mod that provides none of our base paths cannot change the output, and forcing a composite
                 // latches _forcePending, defeating the unchanged-inputs gate next time. The upstream invalidation stays below it.
@@ -332,7 +340,7 @@ public partial class CompositorService
                         // Information: this line explains an absent recomposite.
                         log.Information("[Proteus] {0}: settings changed but no base moved ({1}) — no "
                                       + "recomposite (re-checking in {2}ms)", reason, why, MovedBaseRecheckMs);
-                        ScheduleMovedBaseRecheck(modDir, supplied, reason, force);
+                        ScheduleMovedBaseRecheck(modDir, supplied, reason, force, deferWhileHeld: deferWhileHeld);
                         return;
                     }
                     log.Debug("[Proteus] {0}: a base moved ({1})", reason, why);
@@ -342,11 +350,16 @@ public partial class CompositorService
                 // ClassifySurfaceMod has just re-derived it. Idempotent.
                 InvalidateUpstreamCache(reason);
                 // Safe to gate on an ambient re-assert: the fingerprint's upstream identity detects a moved body mod.
-                TriggerRecomposite(reason, force: force);
+                TriggerRecomposite(reason, force: force, deferWhileHeld: deferWhileHeld);
             }
             catch (Exception ex)
             {
                 log.Error(ex, "[Proteus] Body-mod evaluation failed for {0}", modDir);
+            }
+            finally
+            {
+                // After any hand-off to the re-check, which BodyEvaluationPending also reads.
+                NoteEvaluating(modDir, -1);
             }
         });
     }
@@ -355,8 +368,9 @@ public partial class CompositorService
     /// Ask <see cref="ModSettingMovedABase"/> once more after Penumbra has finished rebuilding the collection
     /// (see <see cref="MovedBaseRecheckMs"/>), and composite if the answer changed. One in flight per mod.
     /// </summary>
+    /// <param name="deferWhileHeld">From an auto refit batch's own write: held with the batch (see <see cref="RedrawHold"/>).</param>
     private void ScheduleMovedBaseRecheck(string modDir, IReadOnlyCollection<string> supplied,
-                                          string reason, bool force)
+                                          string reason, bool force, bool deferWhileHeld)
     {
         if (!_pendingMoveRecheck.TryAdd(modDir, 0)) return;
 
@@ -373,7 +387,11 @@ public partial class CompositorService
 
                 log.Information("[Proteus] {0}: a base moved after all ({1}) — recompositing", reason, why);
                 InvalidateUpstreamCache(reason);
-                TriggerRecomposite(reason, force: force);
+                // The batch it came from has already let go: say so, it costs a composite of its own.
+                long sinceRelease = Environment.TickCount64 - Interlocked.Read(ref _lastHoldReleaseTick);
+                if (deferWhileHeld && !redrawHold.IsHeld && sinceRelease < LateRecheckMs)
+                    log.Warning("{0}", RedrawLedger.LateRecheck(reason, sinceRelease));
+                TriggerRecomposite(reason, force: force, deferWhileHeld: deferWhileHeld);
             }
             catch (Exception ex) when (_disposed || IsLoadContextUnloading(ex)) { }
             catch (Exception ex) { log.Error(ex, "[Proteus] moved-base re-check failed for {0}", modDir); }
@@ -443,6 +461,8 @@ public partial class CompositorService
     // null or empty result is the mid-redraw teardown and would clear a valid snapshot.
     private void OnLocalPlayerRedrawn()
     {
+        log.Information("{0}", redrawLedger.Observed());
+        NoteRedrawObserved();
         var snapshot = penumbra.GetActivePlayerMaterialPaths();
         bool equipChanged = false;
         bool modelWalkOk = false;   // a draw object we actually read — see the carrier reconcile below

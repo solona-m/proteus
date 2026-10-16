@@ -402,6 +402,123 @@ public class BodyRetargetWriterTests : IDisposable
         Assert.All(BodyRetargetWriter.ReadRecord(root)!.Options, e => Assert.True(e.InAuthorGroup));
     }
 
+    /// <summary>An author's size group whose two sizes each carry their own material and legs, and Small a texture only it
+    /// has.</summary>
+    private void WriteSizesWithMaterials(string type)
+    {
+        File.WriteAllText(Path.Combine(root, PenumbraModMeta.MetaFile), $$"""
+        {
+          "FileVersion": 4, "Name": "Test Outfit",
+          "Groups": [
+            { "Version": 0, "Name": "{{TopSize}}", "Priority": 0, "Type": "{{type}}", "DefaultSettings": 0, "Options": [
+              { "Name": "Small", "Files": { "{{GamePath}}": "small/top.mdl", "{{MaterialPath}}": "small/top.mtrl",
+                                            "{{TexturePath}}": "small/only.tex" } },
+              { "Name": "Large", "Files": { "{{GamePath}}": "large/top.mdl", "{{MaterialPath}}": "large/top.mtrl",
+                                            "{{LegsPath}}": "large/dwn.mdl" } } ] } ]
+        }
+        """);
+    }
+
+    private const string MaterialPath = "chara/equipment/e6255/material/v0001/mt_c0201e6255_top_a.mtrl";
+    private const string TexturePath = "chara/equipment/e6255/texture/v01_c0201e6255_top_d.tex";
+    private const string LegsPath = "chara/equipment/e6255/model/c0201e6255_dwn.mdl";
+
+    [Theory]
+    [InlineData("Single")]
+    [InlineData("Multi")]
+    [Trait("Plan", "AC-bulk-nearest-source-6")]
+    [Trait("Plan", "EDGE-bulk-nearest-source-21")]
+    [Trait("Plan", "EDGE-bulk-nearest-source-23")]
+    public void Made_again_from_another_size_its_files_replace_the_old_ones(string type)
+    {
+        WriteSizesWithMaterials(type);
+        Assert.True(BodyRetargetWriter.Save(root, TopSize, GamePath, "Rue+", "Small",
+                                            [new BodyRetargetWriter.Refit("Rue L", [1], "Large")], fromOption: "Small").Ok);
+        // The outfit's legs refitted into the same option afterwards: a refit of ours, never replaced.
+        Assert.True(BodyRetargetWriter.Save(root, TopSize, LegsPath, "Rue+", "Small",
+                                            [new BodyRetargetWriter.Refit("Rue L", [2], "WC")], fromOption: "Small").Ok);
+        IReadOnlyDictionary<string, string> Files() => PenumbraModMeta.TryReadFileOptions(root, TopSize)!.Single(o => o.Name == "Rue L").Files;
+        Assert.Equal("small/top.mtrl", Files()[MaterialPath]);
+        // And a file the player added to the option by hand, at a path no size of the author's gives.
+        const string handPath = "chara/equipment/e6255/texture/v01_c0201e6255_top_n.tex";
+        var meta = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(Path.Combine(root, PenumbraModMeta.MetaFile)))!;
+        var rueL = meta["Groups"]!.AsArray().Single(g => (string?)g!["Name"] == TopSize)!["Options"]!.AsArray()
+                                 .Single(o => (string?)o!["Name"] == "Rue L")!;
+        rueL["Files"]![handPath] = "mine/normal.tex";
+        File.WriteAllText(Path.Combine(root, PenumbraModMeta.MetaFile), meta.ToJsonString());
+
+        // Saved again from Large without the flag: what the option carried stays, as every other save keeps it.
+        Assert.True(BodyRetargetWriter.Save(root, TopSize, GamePath, "Rue+", "Large",
+                                            [new BodyRetargetWriter.Refit("Rue L", [3], "Large")], fromOption: "Large").Ok);
+        Assert.Equal("small/top.mtrl", Files()[MaterialPath]);
+
+        // With it, Large's material replaces Small's; the legs refit and this refit's own model are ours and stay ours,
+        // though Large gives the legs a model of its own; and what the player added stays.
+        string legs = Files()[LegsPath];
+        Assert.StartsWith(BodyRetargetWriter.Subfolder + "/", legs, StringComparison.OrdinalIgnoreCase);
+        Assert.True(BodyRetargetWriter.Save(root, TopSize, GamePath, "Rue+", "Large",
+                                            [new BodyRetargetWriter.Refit("Rue L", [4], "Large")], fromOption: "Large",
+                                            sourceFilesWin: true).Ok);
+        var files = Files();
+        Assert.Equal("large/top.mtrl", files[MaterialPath]);
+        Assert.Equal(legs, files[LegsPath]);
+        Assert.StartsWith(BodyRetargetWriter.Subfolder + "/", files[GamePath], StringComparison.OrdinalIgnoreCase);
+        Assert.Equal([4], File.ReadAllBytes(Path.Combine(root, files[GamePath])));
+        // A path only Small gave stays carried: which option the size was cut from before is not recorded.
+        Assert.Equal("small/only.tex", files[TexturePath]);
+        Assert.Equal("mine/normal.tex", files[handPath]);
+        // And the author's options are as they were.
+        Assert.Equal("small/top.mtrl", PenumbraModMeta.TryReadFileOptions(root, TopSize)!.Single(o => o.Name == "Small").Files[MaterialPath]);
+    }
+
+    /// <summary>The same in a group of Proteus's own, which the writer rewrites whole rather than appending to.</summary>
+    [Fact]
+    [Trait("Plan", "AC-bulk-nearest-source-6")]
+    [Trait("Plan", "EDGE-bulk-nearest-source-21")]
+    public void Made_again_in_a_group_of_ours_its_source_s_files_win_too()
+    {
+        Assert.True(BodyRetargetWriter.Save(root, Group, GamePath, "Rue+", "Small",
+                                            [new BodyRetargetWriter.Refit("Rue L", [1], "Large")]).Ok);
+        Assert.False(BodyRetargetWriter.IsAuthorGroup(root, Group));
+        // An option of the group the next save is cut from, and what "Rue L" carried before.
+        var meta = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(Path.Combine(root, PenumbraModMeta.MetaFile)))!;
+        var options = meta["Groups"]!.AsArray().Single(g => (string?)g!["Name"] == Group)!["Options"]!.AsArray();
+        options.Single(o => (string?)o!["Name"] == "Rue L")!["Files"]![MaterialPath] = "old/top.mtrl";
+        options.Add(System.Text.Json.Nodes.JsonNode.Parse($$"""{ "Name": "Source", "Files": { "{{MaterialPath}}": "source/top.mtrl" } }"""));
+        File.WriteAllText(Path.Combine(root, PenumbraModMeta.MetaFile), meta.ToJsonString());
+        string Material() => PenumbraModMeta.TryReadFileOptions(root, Group)!.Single(o => o.Name == "Rue L").Files[MaterialPath];
+
+        Assert.True(BodyRetargetWriter.Save(root, Group, GamePath, "Rue+", "Source",
+                                            [new BodyRetargetWriter.Refit("Rue L", [2], "Large")], fromOption: "Source").Ok);
+        Assert.Equal("old/top.mtrl", Material());
+        Assert.True(BodyRetargetWriter.Save(root, Group, GamePath, "Rue+", "Source",
+                                            [new BodyRetargetWriter.Refit("Rue L", [3], "Large")], fromOption: "Source",
+                                            sourceFilesWin: true).Ok);
+        Assert.Equal("source/top.mtrl", Material());
+        var files = PenumbraModMeta.TryReadFileOptions(root, Group)!.Single(o => o.Name == "Rue L").Files;
+        Assert.Equal([3], File.ReadAllBytes(Path.Combine(root, files[GamePath])));
+    }
+
+    [Fact]
+    public void A_size_saved_into_a_multi_choice_list_joins_it_beside_the_piece_it_was_cut_from()
+    {
+        // The automatic refit's case: no size group switches the model, so the size goes into the list the piece itself
+        // is ticked in. Appended — Penumbra keeps a multi-choice selection as a bitmask, so nothing may move — and the
+        // list stays multi-choice, with the author's selection untouched.
+        WriteAuthorSizeGroup("Multi", 0b11L);
+        var outcome = BodyRetargetWriter.Save(root, TopSize, GamePath, "Neolithe", "Rue Med",
+                                              [new BodyRetargetWriter.Refit("Neolithe — S", [7], "S")],
+                                              fromOption: "Rue Med");
+        Assert.True(outcome.Ok, outcome.Message);
+
+        var after = Read(TopSize);
+        Assert.Equal("Multi", after.GetProperty("Type").GetString());
+        Assert.Equal(0b11L, after.GetProperty("DefaultSettings").GetInt64());
+        Assert.Equal(["Rue Med", "Rue Large", "Neolithe — S"],
+                     after.GetProperty("Options").EnumerateArray().Select(o => o.GetProperty("Name").GetString()));
+        Assert.True(BodyRetargetWriter.ReadRecord(root)!.Options.Single().InAuthorGroup);
+    }
+
     [Fact]
     public void Undo_takes_only_its_own_option_out_of_the_author_s_group()
     {

@@ -248,7 +248,7 @@ public sealed partial class SecondSkinService
 
         // Load a candidate host model: resolve, read, and count its materials. Null (having warned) when it cannot be
         // understood: an understated material count would make appended letters collide.
-        private (int SetId, byte[] Bytes, int Mats)? LoadCandidate(string slot, string gamePath, char prefix)
+        private (int SetId, byte[] Bytes, int Mats, string? Disk)? LoadCandidate(string slot, string gamePath, char prefix)
         {
             if (ParseSetId(gamePath, prefix) is not int setId)
             {
@@ -278,7 +278,7 @@ public sealed partial class SecondSkinService
                 return null;
             }
 
-            try { return (setId, bytes, SecondSkinWriter.MaterialNames(bytes).Count); }
+            try { return (setId, bytes, SecondSkinWriter.MaterialNames(bytes).Count, disk); }
             catch (Exception ex)
             {
                 service.log.Warning(ex, "[Proteus] host: {0} ({1}{2:D4}) material parse failed — skipping", slot, prefix, setId);
@@ -330,7 +330,7 @@ public sealed partial class SecondSkinService
             }
             service.log.Information("[Proteus] host: {0} ({1}{2:D4}) candidate — {3} base material(s), capacity {4}",
                 slot, prefix, c.SetId, c.Mats, SecondSkinWriter.MaxMaterials - c.Mats);
-            return new HostAccessory(c.SetId, slot, eqdpSlot, c.Bytes, c.Mats, tree, prefix, gamePath);
+            return new HostAccessory(c.SetId, slot, eqdpSlot, c.Bytes, c.Mats, tree, prefix, gamePath, BaseDisk: c.Disk);
         }
 
         // Accessory host (ring/bracelet): look the slot up in the equipped-accessory map.

@@ -81,6 +81,7 @@ public partial class CompositorService
         private Dictionary<string, ShellLightProfile>? nextShellLight;
         private Dictionary<string, HashSet<string>>? nextContentMaterials;
         private Dictionary<string, HashSet<string>>? nextContentModels;
+        private Dictionary<string, string>? nextAppendHostSources;
         private ShellDrawnProbe? nextShellDrawnCheck;
         private bool shellBuilt;
         private bool glassesPreHosted;
@@ -228,7 +229,7 @@ public partial class CompositorService
 
                 // userRequested, as in SetEnabled(false): the output is already withdrawn, so a suppressed redraw strands the
                 // character. Only reachable with auto redraw off from a forced composite.
-                compositor.ReloadAndRedraw(userRequested: true);
+                compositor.ReloadAndRedraw("composite: no enabled mods", userRequested: true);
                 timeline.Mark("publish+reload");
                 compositor.LogRefreshTimeline(timeline, "no enabled mods");
                 compositor.LastResult = new CompositorResult { Success = true, TexturesPatched = 0, OverlayModsUsed = 0, Epoch = epoch };
@@ -1116,6 +1117,7 @@ public partial class CompositorService
             compositor._shellMaterials   = nextShellMaterials ?? new();
             compositor._contentMaterials = nextContentMaterials ?? new(StringComparer.OrdinalIgnoreCase);
             compositor._contentModels    = nextContentModels ?? new(StringComparer.OrdinalIgnoreCase);
+            compositor._appendHostSources = nextAppendHostSources ?? new(StringComparer.OrdinalIgnoreCase);
             compositor._shellLight       = nextShellLight ?? new(StringComparer.OrdinalIgnoreCase);
             compositor._shellDrawnCheck  = nextShellDrawnCheck;
 
@@ -1152,7 +1154,8 @@ public partial class CompositorService
 
             // Publish only: nothing is deleted in this composite; superseded output is collected at the top of the next one
             // (see PruneSupersededOutput).
-            manifestConfirmedLive = compositor.ReloadAndRedrawWhenReady(redirects, compositor.RecordPublish(redirects));
+            manifestConfirmedLive = compositor.ReloadAndRedrawWhenReady(redirects, compositor.RecordPublish(redirects),
+                $"composite ({(timeline.Reasons.Length == 0 ? "?" : timeline.Reasons)})");
             timeline.Mark("publish+reload");
 
             // Published: the manifest is now exactly these inputs' output, so set the fingerprint and settle the forced-work

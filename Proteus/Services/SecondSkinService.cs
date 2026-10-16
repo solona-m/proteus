@@ -242,7 +242,11 @@ public sealed partial class SecondSkinService
         Dictionary<string, ShellLightProfile> ShellLight,
         // Per mod, the content MODEL files (mod-relative, forward slashes) whose meshes went into this build; the only
         // record that an imported garment is worn.
-        Dictionary<string, HashSet<string>> ContentModels);
+        Dictionary<string, HashSet<string>> ContentModels,
+        // Append host game path (one of AppendHostModelPaths) → the disk file its base model was read from, when that
+        // was a file rather than the game's own data: the only record of which mod supplies a ring the game now draws
+        // out of our output.
+        Dictionary<string, string> AppendHostSources);
 
     /// <summary>
     /// One surface, resolved: the geometry a shell is cut from, sharing one UV layout and one race code.
@@ -278,6 +282,9 @@ public sealed partial class SecondSkinService
     {
         /// <summary>The entry any per-mod lookup should use; merged owners are all one mod.</summary>
         public OverlayEntry Entry => Owners[0].Entry;
+
+        /// <summary>Only invisible placeholders: placed on an accessory carrier, for the effect it then carries.</summary>
+        public bool EffectOnly => Owners.Count > 0 && Owners.All(o => o.Content.Piece.EffectOnly);
     }
 
     /// <summary>
@@ -415,6 +422,13 @@ public sealed partial class SecondSkinService
 
     // Content pieces last warned about as unplaceable, printed once per change. -1 = everything fits.
     private int _lastUnhostedContent = -1;
+
+    // The item effects the last build published (host, variant, id, file), so a change forces the redraw an IMC entry
+    // needs to take effect, and only a change. Empty = none.
+    private string _lastEffectKey = string.Empty;
+
+    // The mods whose effect was last reported in chat as not shown, printed once per change. Null = none dropped.
+    private string? _lastEffectDrops;
 
     /// <summary>
     /// Mod directory → why none of that pack's content pieces can be worn by this character, as the panel shows it.
@@ -855,11 +869,26 @@ public sealed partial class SecondSkinService
               .Append("|bust=").Append(l.BustBridgeStrength.ToString("R"))
               .Append("|nipple=").Append(l.NippleSmoothStrength.ToString("R"))
               .Append("|cleft=").Append(l.CleftBridgeStrength.ToString("R"))
+              .Append("|navel=").Append(l.NavelBridgeStrength.ToString("R"))
               .Append("|fold=").Append(l.FoldSmoothStrength.ToString("R"))
               .Append("|push=").Append(l.PushScale.ToString("R")).Append('\n');
         }
         return sb.ToString();
     }
+
+    /// <summary>
+    /// How strongly a mod's geometry tick applies: 0 unless ticked, else its authored strength clamped to 0–1, full
+    /// when it has none. The one reading of every <c>…Bridge</c>/<c>Smooth…</c> pair in the sidecar.
+    /// </summary>
+    internal static float GeometryStrength(bool? on, float? strength)
+        => on == true ? Math.Clamp(strength ?? 1f, 0f, 1f) : 0f;
+
+    /// <summary>
+    /// A geometry pass's strength on one shell: the mod's, from <paramref name="byMod"/>, and only on a body surface —
+    /// a face or a tail has none of the bones any pass is seeded from.
+    /// </summary>
+    internal static float SurfaceStrength(bool isBody, IReadOnlyDictionary<string, float> byMod, string modDirectory)
+        => isBody && byMod.TryGetValue(modDirectory, out var s) ? s : 0f;
 
     private void ResetBuildStats()
     {
@@ -1090,7 +1119,8 @@ public sealed partial class SecondSkinService
                             + $"toeCap={(l.ToeCap == null ? "none" : $"{l.ToeCapWidth}x{l.ToeCapHeight}")} strength={l.ToeCapStrength} "
                             + $"bustBridge={l.BustBridgeStrength} nippleSmooth={l.NippleSmoothStrength} "
                             // The body passes are recorded so a dump shows whether they ran.
-                            + $"cleftBridge={l.CleftBridgeStrength} smoothFold={l.FoldSmoothStrength}");
+                            + $"cleftBridge={l.CleftBridgeStrength} navelBridge={l.NavelBridgeStrength} "
+                            + $"smoothFold={l.FoldSmoothStrength}");
                 if (l.ToeCap != null) File.WriteAllBytes($"{pre}layer{i}_toecap.raw", l.ToeCap);
                 if (l.Coverage != null) File.WriteAllBytes($"{pre}layer{i}_coverage.raw", l.Coverage);
             }
@@ -1685,7 +1715,11 @@ public sealed partial class SecondSkinService
         string? ModelPath = null,
         // The ITEM variant, off the item sheet, for a CARRIER (equipped after the shell is built, so nothing drawn can
         // answer). Null for the player's own items (VariantFolderFor reads the draw object). The IMC entry maps it to a folder.
-        int? KnownVariant = null);
+        int? KnownVariant = null,
+        // Where BaseModel was read from on disk, for an APPEND host: the file of the mod that supplies the worn item, so
+        // Studio can say that mod is worn although the game draws our merged copy. Null for carriers and for an item
+        // read from the game's own data.
+        string? BaseDisk = null);
 
     /// <summary>
     /// Every model the shell can be hosted on, in FILL priority (policy in the method body); a host holds up to

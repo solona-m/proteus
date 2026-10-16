@@ -94,6 +94,40 @@ public partial class CompositorService : IDisposable
     private void CancelOwnRedrawEcho()
         => Interlocked.Exchange(ref _pendingRedrawEchoTick, 0);
 
+    /// <summary>Every redraw and in-place reload Proteus asks for, numbered with its cause in dalamud.log.</summary>
+    private readonly RedrawLedger redrawLedger = new(() => Environment.TickCount64);
+
+    /// <summary>
+    /// Redraw the player through <paramref name="redraw"/>, stamped as our own (<see cref="StampOwnRedraw"/>) and logged
+    /// with <paramref name="cause"/>. The one way Proteus redraws the player, so the log counts every one.
+    /// A throw from <paramref name="redraw"/> (only while the plugin unloads) leaves its number without a line and its
+    /// claim standing for the echo window; accepted, as the log ends there.
+    /// </summary>
+    private bool RedrawPlayerLogged(string cause, Func<bool> redraw)
+    {
+        int n = redrawLedger.Asking();
+        StampOwnRedraw();
+        bool reached = redraw();
+        if (!reached) CancelOwnRedrawEcho();
+        log.Information("{0}", redrawLedger.Answered(n, cause, reached));
+        return reached;
+    }
+
+    /// <summary>
+    /// Proteus is about to ask another plugin for something that may redraw the character (see
+    /// <see cref="RedrawLedger.Expecting"/>): a redraw that follows is logged as ours. Any thread.
+    /// </summary>
+    /// <returns>The claim's id, for <see cref="WithdrawIndirectRedraw"/> when the request fails.</returns>
+    public int ExpectIndirectRedraw(string cause)
+    {
+        var (id, line) = redrawLedger.Expecting(cause);
+        log.Information("{0}", line);
+        return id;
+    }
+
+    /// <summary>The request <see cref="ExpectIndirectRedraw"/> announced failed: no redraw of ours follows it.</summary>
+    public void WithdrawIndirectRedraw(int id) => redrawLedger.Withdraw(id);
+
     // Non-persistent per-mod color override pushed by the design-binding system. When set, the
     // compositor uses these colors in place of each mod's metadata.json colors for the run; null
     // means "use metadata as authored". Reference assignment is atomic; read on the recomposite task.
@@ -177,6 +211,19 @@ public partial class CompositorService : IDisposable
     public IReadOnlySet<string>? GetLiveContentModels(string modDir)
         => _contentModels.TryGetValue(modDir, out var models) ? models : null;
 
+    // Append host model game path → the disk file the last composite read that host's model from, before merging the
+    // shell into it. Published on the same terms as _contentModels beside it. Deliberately not the upstream cache,
+    // which every mod setting change clears: this changes only when a composite lands, and says what was merged.
+    private volatile Dictionary<string, string> _appendHostSources = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The file a worn item's model was read from before the shell was appended into it — which mod supplies the ring
+    /// the game now draws out of our output — or null when <paramref name="modelGamePath"/> is not an append host (or
+    /// not yet composited).
+    /// </summary>
+    public string? GetAppendHostSource(string modelGamePath)
+        => _appendHostSources.TryGetValue(modelGamePath, out var source) ? source : null;
+
     /// <summary>
     /// Why none of <paramref name="modDir"/>'s content pieces can be worn by this character, or null when
     /// they can. Recorded by the shell builder even on runs that host nothing.
@@ -226,7 +273,7 @@ public partial class CompositorService : IDisposable
         => string.Join('\n', p.Materials) + '\u0000' + string.Join('\n', p.Models);
 
     /// <summary>
-    /// Drop all three shell locators together, for tear-down paths that never reach the gear phase (plugin
+    /// Drop every shell locator together, for tear-down paths that never reach the gear phase (plugin
     /// disabled, "no enabled mods" early return). The composite does not call this on entry.
     /// </summary>
     private void ClearShellLocators()
@@ -234,6 +281,7 @@ public partial class CompositorService : IDisposable
         _shellMaterials   = new();
         _contentMaterials = new(StringComparer.OrdinalIgnoreCase);
         _contentModels    = new(StringComparer.OrdinalIgnoreCase);
+        _appendHostSources = new(StringComparer.OrdinalIgnoreCase);
         _shellLight       = new(StringComparer.OrdinalIgnoreCase);
         _shellDrawnCheck  = null;
         // The shell is gone, so the next one to be drawn is news even if it lands on the same materials.
@@ -485,6 +533,7 @@ public partial class CompositorService : IDisposable
         glamourer.LocalPlayerCustomizationChanged += OnGlamourerCustomizationChanged;
         glamourer.LocalPlayerEquipmentChanged  += OnGlamourerEquipmentChanged;
         Plugin.Framework.Update += OnBootPoll;
+        Plugin.Framework.Update += OnRedrawHoldPoll;
 
         // The decode cache is only trimmed when over budget, so release it on an idle timer (30s cadence, any thread).
         idleCacheTimer = new Timer(_ =>
@@ -582,6 +631,7 @@ public partial class CompositorService : IDisposable
         glamourer.LocalPlayerCustomizationChanged -= OnGlamourerCustomizationChanged;
         glamourer.LocalPlayerEquipmentChanged   -= OnGlamourerEquipmentChanged;
         Plugin.Framework.Update -= OnBootPoll;
+        Plugin.Framework.Update -= OnRedrawHoldPoll;
 
         recompositeGate.Stop();
     }

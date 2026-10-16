@@ -29,18 +29,12 @@ internal static class PenumbraManipulations
         return m.Success ? m.Groups[1].Value : null;
     }
 
-    /// <summary>Is this resolved disk path one of OUR managed-mod files (i.e. our own composite output)?</summary>
+    /// <summary>
+    /// Is this resolved disk path one of OUR managed-mod files (i.e. our own composite output)? Not a live brush
+    /// preview shared there: that is the brushed mod's own file, read as any outside file is.
+    /// </summary>
     internal static bool IsInsideOutputRoot(string diskPath, string outputRoot)
-    {
-        try
-        {
-            var full = Path.GetFullPath(diskPath);
-            var root = Path.GetFullPath(outputRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            return full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
-                || full.StartsWith(root + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
-        }
-        catch { return false; }   // unparseable path: treat as external
-    }
+        => ManagedModPaths.IsPublishedOutput(diskPath, outputRoot);
 
     /// <summary>
     /// A model file from a Proteus mod (carries Proteus/metadata.json, not our output mod), by the same rule
@@ -133,6 +127,48 @@ internal static class PenumbraManipulations
             },
         };
     }
+
+    /// <summary>
+    /// Where the game loads an item effect from: <c>chara/accessory/a0053/vfx/eff/va0001.avfx</c> for kind letter
+    /// <c>a</c>, <c>chara/equipment/e6001/vfx/eff/ve0001.avfx</c> for <c>e</c>. Per SET, not per slot: every slot of an
+    /// accessory set shares one folder, so two slots need two ids.
+    /// </summary>
+    internal static string VfxGamePath(char prefix, int setId, int vfxId)
+    {
+        char p = char.ToLowerInvariant(prefix);
+        var tree = p == 'a' ? "accessory" : "equipment";
+        return $"chara/{tree}/{p}{setId:D4}/vfx/eff/v{p}{vfxId:D4}.avfx";
+    }
+
+    /// <summary>
+    /// A whole IMC entry for one variant of one item, in Penumbra's manipulation shape. Replaces the entry the game
+    /// would use, so every field the caller does not mean to change must come from the entry it replaces.
+    /// </summary>
+    /// <param name="equipSlot">Penumbra's slot name ("RFinger", "Wrists").</param>
+    internal static object ImcManipulation(char prefix, int setId, int variant, string equipSlot, ImcEntry entry)
+        => new
+        {
+            Type = "Imc",
+            Manipulation = new
+            {
+                Entry = new
+                {
+                    AttributeAndSound = entry.AttributeMask | (entry.SoundId << 10),
+                    MaterialId = entry.MaterialId,
+                    DecalId = entry.DecalId,
+                    VfxId = entry.VfxId,
+                    MaterialAnimationId = entry.MaterialAnimationId,
+                    AttributeMask = entry.AttributeMask,
+                    SoundId = entry.SoundId,
+                },
+                ObjectType = char.ToLowerInvariant(prefix) == 'a' ? "Accessory" : "Equipment",
+                PrimaryId = setId,
+                SecondaryId = 0,
+                Variant = variant,
+                EquipSlot = equipSlot,
+                BodySlot = "Unknown",
+            },
+        };
 
     /// <summary>
     /// Point one body part's EST entry at an extra skeleton, so a pack's <c>j_ex_*</c> bones exist on a host

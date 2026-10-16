@@ -36,16 +36,34 @@ internal sealed class WhatsNewWindow : Window
         SizeConstraints = Constraints;
     }
 
+    /// <summary>The notes generation that introduced Body size, hats and design restores.</summary>
+    internal const int FirstNotes = 1;
+
+    /// <summary>The generation that introduced the automatic body refit.</summary>
+    internal const int AutoRefitNotes = 2;
+
+    /// <summary>
+    /// Whether a section introduced in <paramref name="generation"/> is news to someone who has read up to
+    /// <paramref name="read"/>. Someone who closed the first notes is shown only what came after them.
+    /// </summary>
+    internal static bool IsNew(int generation, int read) => read < generation;
+
     public override void Draw()
     {
         var s = Strings.WhatsNew;
+        // Read while open: the close is what moves it, so it stays put for as long as the window is drawn.
+        int read = config.WhatsNewShown;
 
-        ImGui.TextWrapped(s.Intro);
+        ImGui.TextWrapped(IsNew(FirstNotes, read) ? s.IntroAll : s.IntroSince);
         ImGui.Spacing();
 
-        Section(s.UpscalesHead, s.UpscalesBody);
-        Section(s.HatsHead, s.HatsBody);
-        Section(s.DesignsHead, s.DesignsBody);
+        if (IsNew(AutoRefitNotes, read)) Section(s.AutoRefitHead, s.AutoRefitBody);
+        if (IsNew(FirstNotes, read))
+        {
+            Section(s.UpscalesHead, s.UpscalesBody);
+            Section(s.HatsHead, s.HatsBody);
+            Section(s.DesignsHead, s.DesignsBody);
+        }
 
         ImGui.Spacing();
         ImGui.Separator();

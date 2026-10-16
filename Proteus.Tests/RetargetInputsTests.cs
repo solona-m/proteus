@@ -1,0 +1,270 @@
+using System.Collections.Generic;
+using System.Linq;
+using Proteus.Services;
+using Xunit;
+
+namespace Proteus.Tests;
+
+/// <summary>
+/// What the Studio's Body size tool refits a garment by (<see cref="RetargetInputs"/>): its rows, what a refit is made
+/// from, its name and its key. Without kept ends every answer must be the one the tool always gave — the literals below
+/// were written from the panel's code before it came to go through here.
+/// </summary>
+public class RetargetInputsTests
+{
+    private static readonly BodyOption LegsS = new("Legs", "", "S", "legs/s.mdl", "chara/equipment/e0000/model/c0201e0000_dwn.mdl", "_dwn");
+    private static readonly BodyOption LegsM = new("Legs", "", "M", "legs/m.mdl", "chara/equipment/e0000/model/c0201e0000_dwn.mdl", "_dwn");
+    private static readonly BodyOption FeetS = new("Feet", "", "S", "feet/s.mdl", "chara/equipment/e0000/model/c0201e0000_sho.mdl", "_sho");
+    private static readonly BodyOption FeetM = new("Feet", "", "M", "feet/m.mdl", "chara/equipment/e0000/model/c0201e0000_sho.mdl", "_sho");
+    private static readonly BodyOption HandsS = new("Hands", "", "S", "hands/s.mdl", "chara/equipment/e0000/model/c0201e0000_glv.mdl", "_glv");
+    private static readonly BodyOption HandsM = new("Hands", "", "M", "hands/m.mdl", "chara/equipment/e0000/model/c0201e0000_glv.mdl", "_glv");
+
+    private static readonly string[] CatalogSlots = ["_top", "_dwn", "_glv", "_sho"];
+
+    /// <summary>Every slot of the body has two models, so every slot is offered.</summary>
+    private static int Two(string _) => 2;
+
+    private static RetargetInputs.Layout Shoe(bool keep = true, bool unreadable = false)
+        => RetargetInputs.LayoutFor("_sho", keep, sourceHasLimb: true, targetHasLimb: true, unreadable);
+
+    [Fact]
+    [Trait("Plan", "AC-keep-ends-studio-3")]
+    public void Shoe_layout_puts_legs_first_and_leaves_feet_out()   // [AC-keep-ends-studio-3]
+    {
+        var shoe = Shoe();
+        Assert.Equal(new RetargetInputs.Layout("_dwn", "_sho", "_sho"), shoe);
+        Assert.Equal(["_dwn", "_top", "_glv"], RetargetInputs.Slots(shoe, CatalogSlots, Two));
+
+        var glove = RetargetInputs.LayoutFor("_glv", true, true, true, false);
+        Assert.Equal(new RetargetInputs.Layout("_top", "_glv", "_glv"), glove);
+        Assert.Equal(["_top", "_dwn", "_sho"], RetargetInputs.Slots(glove, CatalogSlots, Two));
+
+        // Chests and legs are laid out as they always were, box or no box.
+        foreach (string slot in new[] { "_top", "_dwn" })
+        {
+            var layout = RetargetInputs.LayoutFor(slot, true, true, true, false);
+            Assert.Equal(new RetargetInputs.Layout(slot, slot, null), layout);
+            Assert.False(RetargetInputs.OffersKeepEnds(slot));
+        }
+        Assert.True(RetargetInputs.OffersKeepEnds("_sho"));
+        Assert.True(RetargetInputs.OffersKeepEnds("_glv"));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-keep-ends-studio-3")]
+    public void Keep_ends_inputs_carry_the_other_chosen_slots()   // [AC-keep-ends-studio-3]
+    {
+        var layout = Shoe();
+        var slots = RetargetInputs.Slots(layout, CatalogSlots, Two);
+        var from = new Dictionary<string, BodyOption> { ["_dwn"] = LegsS, ["_glv"] = HandsS, ["_sho"] = FeetS };
+        var to = new Dictionary<string, List<BodyOption>> { ["_dwn"] = [LegsM], ["_glv"] = [HandsM], ["_sho"] = [FeetM] };
+
+        var inputs = RetargetInputs.Assemble(layout, slots, from, to, KeepEnds.Route.Skin);
+
+        Assert.True(inputs.KeepEnds);
+        Assert.False(inputs.SkinOnly);
+        Assert.Equal("_sho", inputs.GarmentSlot);
+        Assert.Equal("_dwn", inputs.Primary);
+        Assert.Equal([LegsM], inputs.PrimaryTargets);
+        // The hands ride along; the feet, chosen once for the old rows, are offered in none and go in for their shape.
+        Assert.Equal([("_glv", HandsS, HandsM)], inputs.Shared);
+        var chosen = RetargetInputs.Chosen(slots, from, to);
+        Assert.Equal("LavaBod+ — M + M", RefitCore.OptionName("LavaBod+", RetargetInputs.ToLabels(inputs, chosen, LegsM, to)));
+        Assert.Equal(["S", "S"], RetargetInputs.FromLabels(inputs, chosen, from));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-keep-ends-studio-4")]
+    [Trait("Plan", "EDGE-keep-ends-studio-27")]
+    public void Skin_only_is_ready_with_one_result_and_its_labels()   // [AC-keep-ends-studio-4] [EDGE-keep-ends-studio-27]
+    {
+        var layout = Shoe();
+        var slots = RetargetInputs.Slots(layout, CatalogSlots, Two);
+        // Its own feet read; no legs "made for" — it reaches none — though two legs sizes were remembered to go onto.
+        var from = new Dictionary<string, BodyOption> { ["_sho"] = FeetM };
+        var to = new Dictionary<string, List<BodyOption>> { ["_dwn"] = [LegsS, LegsM] };
+
+        var inputs = RetargetInputs.Assemble(layout, slots, from, to, KeepEnds.Route.SkinOnly);
+
+        Assert.True(inputs.SkinOnly);
+        Assert.True(RetargetInputs.Ready(inputs, from, targetHasEnd: true, refused: false));
+        Assert.False(RetargetInputs.Ready(inputs, from, targetHasEnd: false, refused: false));
+        var chosen = RetargetInputs.Chosen(slots, from, to);
+        Assert.Equal([KeepEnds.SkinOnlyLabel], RetargetInputs.ToLabels(inputs, chosen, LegsS, to));
+        Assert.Equal([KeepEnds.SkinOnlyLabel], RetargetInputs.ToLabels(inputs, chosen, LegsM, to));
+        Assert.Equal(["M"], RetargetInputs.FromLabels(inputs, chosen, from));
+        Assert.Equal("Neolithe — skin",
+                     RefitCore.OptionName("Neolithe", RetargetInputs.ToLabels(inputs, chosen, LegsS, to)));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-keep-ends-studio-4")]
+    [Trait("Plan", "EDGE-keep-ends-studio-25")]
+    public void A_weak_skin_only_reading_still_fills_in_its_own_feet()   // [AC-keep-ends-studio-4] [EDGE-keep-ends-studio-25]
+    {
+        // A sandal with little skin: its own feet read on too few points to be shown as sure, so the rankings fill no
+        // row — and its own feet are the only row it has. The Studio's best guess fills it, or Preview could never run.
+        var layout = Shoe();
+        var weak = new BodySizeMatch.Ranking(BodySizeMatch.Confidence.TooLittle, [new BodySizeMatch.Score(FeetM, 1f, 0f)]);
+        var read = new KeepEnds.StudioReading(KeepEnds.Route.SkinOnly, weak, FeetM);
+
+        Assert.Equal(("_sho", FeetM), RetargetInputs.StudioPrefill(layout, read, new Dictionary<string, BodyOption>()));
+        // The leg or arm, for a piece that reaches it.
+        Assert.Equal(("_dwn", LegsS), RetargetInputs.StudioPrefill(layout,
+            new KeepEnds.StudioReading(KeepEnds.Route.Cloth, null, LegsS), new Dictionary<string, BodyOption>()));
+        // Never over a choice made, nor with nothing read, nor with the ends not kept.
+        Assert.Null(RetargetInputs.StudioPrefill(layout, read, new Dictionary<string, BodyOption> { ["_sho"] = FeetS }));
+        Assert.Null(RetargetInputs.StudioPrefill(layout, new KeepEnds.StudioReading(KeepEnds.Route.NoSkin, null, null),
+                                                 new Dictionary<string, BodyOption>()));
+        Assert.Null(RetargetInputs.StudioPrefill(Shoe(keep: false), read, new Dictionary<string, BodyOption>()));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-keep-ends-studio-27")]
+    public void Manual_legs_pick_overrides_skin_only()   // [EDGE-keep-ends-studio-27]
+    {
+        var layout = Shoe();
+        var slots = RetargetInputs.Slots(layout, CatalogSlots, Two);
+        var from = new Dictionary<string, BodyOption> { ["_sho"] = FeetM, ["_dwn"] = LegsS };
+        var to = new Dictionary<string, List<BodyOption>> { ["_dwn"] = [LegsM] };
+
+        foreach (var route in new KeepEnds.Route?[] { KeepEnds.Route.SkinOnly, KeepEnds.Route.NoSkin })
+        {
+            var inputs = RetargetInputs.Assemble(layout, slots, from, to, route);
+            Assert.False(inputs.SkinOnly);
+            Assert.True(inputs.KeepEnds);
+            Assert.True(RetargetInputs.Ready(inputs, from, true, false));
+        }
+
+        // "None" again: back to the redraw.
+        from.Remove("_dwn");
+        Assert.True(RetargetInputs.Assemble(layout, slots, from, to, KeepEnds.Route.SkinOnly).SkinOnly);
+        Assert.False(RetargetInputs.Assemble(layout, slots, from, to, KeepEnds.Route.NoSkin).SkinOnly);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-keep-ends-studio-5")]
+    public void Keep_ends_off_assembles_todays_inputs()   // [AC-keep-ends-studio-5]
+    {
+        // Today: the garment's own slot is required and planned as, and every other slot with both ends chosen rides
+        // along in the catalog's order. No end held, no slot swapped.
+        var layout = Shoe(keep: false);
+        Assert.Equal(new RetargetInputs.Layout("_sho", "_sho", null), layout);
+        var slots = RetargetInputs.Slots(layout, CatalogSlots, Two);
+        Assert.Equal(["_sho", "_top", "_dwn", "_glv"], slots);
+
+        var from = new Dictionary<string, BodyOption> { ["_sho"] = FeetS, ["_dwn"] = LegsS, ["_glv"] = HandsS };
+        var to = new Dictionary<string, List<BodyOption>> { ["_sho"] = [FeetM], ["_dwn"] = [LegsM], ["_glv"] = [HandsM] };
+        var inputs = RetargetInputs.Assemble(layout, slots, from, to, KeepEnds.Route.Skin);
+
+        Assert.False(inputs.KeepEnds);
+        Assert.False(inputs.SkinOnly);
+        Assert.Equal("_sho", inputs.GarmentSlot);
+        Assert.Equal("_sho", inputs.Primary);
+        Assert.Null(inputs.EndSlot);
+        Assert.Equal([FeetM], inputs.PrimaryTargets);
+        Assert.Equal([("_dwn", LegsS, LegsM), ("_glv", HandsS, HandsM)], inputs.Shared);
+        var chosen = RetargetInputs.Chosen(slots, from, to);
+        Assert.Equal(["M", "M", "M"], RetargetInputs.ToLabels(inputs, chosen, FeetM, to));
+        Assert.Equal(["S", "S", "S"], RetargetInputs.FromLabels(inputs, chosen, from));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-keep-ends-studio-5")]
+    public void Keep_ends_off_key_is_todays_key()   // [AC-keep-ends-studio-5]
+    {
+        var layout = Shoe(keep: false);
+        var slots = RetargetInputs.Slots(layout, CatalogSlots, Two);
+        var from = new Dictionary<string, BodyOption> { ["_sho"] = FeetS, ["_dwn"] = LegsS };
+        var to = new Dictionary<string, List<BodyOption>> { ["_sho"] = [FeetM], ["_dwn"] = [LegsM] };
+        var inputs = RetargetInputs.Assemble(layout, slots, from, to, null);
+        var chosen = RetargetInputs.Chosen(slots, from, to);
+
+        string key = RetargetInputs.Key("mod/shoe.mdl", "bibo", inputs, chosen, from, to, ["b", "a"], ["s"],
+                                        replaceSkin: true, cutHidden: false, clearBody: true);
+
+        Assert.Equal("mod/shoe.mdl|from:bibo|_sho:feet/s.mdl>feet/m.mdl|_dwn:legs/s.mdl>legs/m.mdl|held:a,b|shape:s|lay|whole|clear",
+                     key);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-keep-ends-studio-18")]
+    public void Key_changes_with_keep_ends_skin_only_and_shapes()   // [EDGE-keep-ends-studio-18]
+    {
+        var from = new Dictionary<string, BodyOption> { ["_sho"] = FeetM, ["_dwn"] = LegsS };
+        var to = new Dictionary<string, List<BodyOption>> { ["_dwn"] = [LegsM], ["_sho"] = [FeetM] };
+        string Key(RetargetInputs.Layout layout, KeepEnds.Route? route, IEnumerable<string> shapes,
+                   Dictionary<string, BodyOption>? f = null)
+        {
+            f ??= from;
+            var slots = RetargetInputs.Slots(layout, CatalogSlots, Two);
+            var inputs = RetargetInputs.Assemble(layout, slots, f, to, route);
+            return RetargetInputs.Key("m", null, inputs, RetargetInputs.Chosen(slots, f, to), f, to, [], shapes,
+                                      true, true, false);
+        }
+
+        string kept = Key(Shoe(), KeepEnds.Route.Skin, []);
+        string whole = Key(Shoe(keep: false), KeepEnds.Route.Skin, []);
+        string shaped = Key(Shoe(), KeepEnds.Route.Skin, ["1.1"]);
+        string skinOnly = Key(Shoe(), KeepEnds.Route.SkinOnly, [], new() { ["_sho"] = FeetM });
+        Assert.Equal(4, new[] { kept, whole, shaped, skinOnly }.Distinct().Count());
+        Assert.Contains("|keep", kept);
+        Assert.DoesNotContain("|keep", whole);
+        Assert.Contains("|skin:", skinOnly);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-keep-ends-studio-19")]
+    public void Flip_resets_presets_and_keeps_end_choices_aside()   // [EDGE-keep-ends-studio-19]
+    {
+        // The first layout of a garment is no change; ticking the box off, or the rig turning out unreadable, is.
+        Assert.False(RetargetInputs.Flips(null, Shoe()));
+        Assert.False(RetargetInputs.Flips(Shoe(), Shoe()));
+        Assert.True(RetargetInputs.Flips(Shoe(), Shoe(keep: false)));
+        Assert.True(RetargetInputs.Flips(Shoe(), Shoe(unreadable: true)));
+
+        // The feet chosen for the old rows are kept, only not offered, and come back with them.
+        var from = new Dictionary<string, BodyOption> { ["_sho"] = FeetS };
+        var to = new Dictionary<string, List<BodyOption>> { ["_sho"] = [FeetM] };
+        var kept = RetargetInputs.Assemble(Shoe(), RetargetInputs.Slots(Shoe(), CatalogSlots, Two), from, to, null);
+        Assert.Empty(kept.Shared);
+        Assert.Empty(kept.PrimaryTargets);
+        var back = RetargetInputs.Assemble(Shoe(keep: false), RetargetInputs.Slots(Shoe(keep: false), CatalogSlots, Two),
+                                           from, to, null);
+        Assert.Equal([FeetM], back.PrimaryTargets);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-keep-ends-studio-1")]
+    public void Unreadable_rig_flips_to_todays_layout()   // [EDGE-keep-ends-studio-1]
+        => Assert.Equal(Shoe(keep: false), Shoe(unreadable: true));
+
+    [Fact]
+    [Trait("Plan", "EDGE-keep-ends-studio-6")]
+    public void No_limb_in_a_body_keeps_todays_layout()   // [EDGE-keep-ends-studio-6]
+    {
+        var today = new RetargetInputs.Layout("_sho", "_sho", null);
+        Assert.Equal(today, RetargetInputs.LayoutFor("_sho", true, sourceHasLimb: false, targetHasLimb: true, false));
+        Assert.Equal(today, RetargetInputs.LayoutFor("_sho", true, sourceHasLimb: true, targetHasLimb: false, false));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-keep-ends-studio-19")]
+    public void Studio_slots_never_offer_the_end_slot()   // [EDGE-keep-ends-studio-19]
+    {
+        Assert.DoesNotContain("_sho", RetargetInputs.Slots(Shoe(), CatalogSlots, Two));
+        Assert.DoesNotContain("_glv", RetargetInputs.Slots(RetargetInputs.LayoutFor("_glv", true, true, true, false),
+                                                           CatalogSlots, Two));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-keep-ends-studio-4")]
+    [Trait("Plan", "EDGE-keep-ends-studio-11")]
+    public void Unbaked_matching_skin_is_nothing_to_change_and_a_bake_always_saves()   // [AC-keep-ends-studio-4] [EDGE-keep-ends-studio-11]
+    {
+        byte[] model = [1, 2, 3];
+        Assert.False(RetargetInputs.SkinOnlyChanges(baking: false, model, model));
+        Assert.True(RetargetInputs.SkinOnlyChanges(baking: true, model, model));
+        Assert.True(RetargetInputs.SkinOnlyChanges(baking: false, model, [1, 2, 3]));
+    }
+}

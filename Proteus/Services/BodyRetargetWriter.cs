@@ -110,12 +110,59 @@ internal static class BodyRetargetWriter
         public string BodyMod { get; set; } = "";
         public string From { get; set; } = "";
         public string To { get; set; } = "";
+
+        /// <summary>
+        /// Made by the automatic refit as gear went on, rather than by hand in the Body size tool — what undoing the
+        /// automatic refit removes. False for every entry written before it was kept.
+        /// </summary>
+        public bool Auto { get; set; }
+
+        /// <summary>
+        /// Refitted from the game's own file rather than a mod's — what tells the mod a game item's refit is made in
+        /// from one the Body size tool made to hold a modder's garment, both Proteus's and both nothing but refits. See
+        /// <see cref="AutoRefitDecisions.IsGameGear"/>. False for every entry written before it was kept.
+        /// </summary>
+        public bool FromGame { get; set; }
+
+        /// <summary>
+        /// The body mod folder, and the file in it, of the size the refit was read as made on — what tells a refit made
+        /// from another reading from this one, where <see cref="From"/> only names it for people. Null for every entry
+        /// written before it was kept.
+        /// </summary>
+        public string? SourceDir { get; set; }
+
+        /// <inheritdoc cref="SourceDir"/>
+        public string? SourceRel { get; set; }
+
+        /// <summary>
+        /// The target body's file each part was refitted onto, by slot ("_top" → its chest's file). Null for every entry
+        /// written before it was kept.
+        /// </summary>
+        public Dictionary<string, string>? Targets { get; set; }
+
+        /// <summary>
+        /// The other piece of its outfit the refit was kept outside (see <see cref="BodyRetarget.KeepOutfitOrder"/>), by
+        /// the slot it is worn in: its file in the mod and the start of its content's hash, "rel|sha8" — so a jacket laid
+        /// over one refit of its bra is told from one laid over another, even one remade in place. Null for a refit with
+        /// none, and for every entry written before it was kept.
+        /// </summary>
+        public Dictionary<string, string>? Layers { get; set; }
     }
+
+    /// <summary>Where a refit came from and went, as an entry records it (see <see cref="Entry.SourceDir"/>).</summary>
+    /// <param name="Targets">The target body's file per slot refitted.</param>
+    internal sealed record Provenance(string SourceDir, string SourceRel, IReadOnlyDictionary<string, string> Targets);
 
     /// <param name="Group">The group written.</param>
     /// <param name="Option">The option added.</param>
     /// <param name="Message">What to tell the user.</param>
-    internal readonly record struct Outcome(bool Ok, string Group, string Option, string Message);
+    /// <param name="Notes">
+    /// What the multi-choice rule decided about the refit's metadata, and why — an entry left to another option of
+    /// the group, or kept though another option sets it differently; the same lines it writes to the log, for reading
+    /// a report. Never shown to the user and never localized; the tests are its only reader today. Null for none.
+    /// </param>
+    internal readonly record struct Outcome(bool Ok, string Group, string Option, string Message,
+                                            IReadOnlyList<string>? Notes = null);
 
     /// <summary>
     /// Another group of this mod already replaces <paramref name="gamePath"/>, so the retarget group has to outrank it
@@ -144,7 +191,10 @@ internal static class BodyRetargetWriter
     }
 
     /// <summary>One refitted size to save: the option it becomes, its model, and the size it was refitted onto.</summary>
-    internal readonly record struct Refit(string Option, byte[] Model, string To);
+    /// <param name="Layers">The other piece of its outfit it was kept outside (see <see cref="Entry.Layers"/>); null
+    /// for none.</param>
+    internal readonly record struct Refit(string Option, byte[] Model, string To,
+                                          IReadOnlyDictionary<string, string>? Layers = null);
 
     /// <summary>
     /// Write <paramref name="model"/> into the mod as <paramref name="optionName"/> of <paramref name="groupName"/>,
@@ -192,6 +242,29 @@ internal static class BodyRetargetWriter
     }
 
     /// <summary>
+    /// What a manipulation SETS: its <c>Entry</c>, the one field <see cref="ManipulationKey"/> leaves out — null when
+    /// it has none. <c>ShiftedEntry</c> is derived from it and dropped when Penumbra rewrites a manifest, so it is not
+    /// consulted.
+    /// </summary>
+    internal static System.Text.Json.Nodes.JsonNode? ManipulationValue(object manipulation)
+    {
+        var e = manipulation is JsonElement j ? j : JsonSerializer.SerializeToElement(manipulation);
+        return e.ValueKind == JsonValueKind.Object
+               && e.TryGetProperty("Manipulation", out var body) && body.ValueKind == JsonValueKind.Object
+               && body.TryGetProperty("Entry", out var entry)
+            ? System.Text.Json.Nodes.JsonNode.Parse(entry.GetRawText())
+            : null;
+    }
+
+    /// <summary>
+    /// Whether two entries of the same <see cref="ManipulationKey"/> set the same value. Compared as JSON structure, so
+    /// an Imc's fields in another order are the same value; one that leaves a zero field out is not (a known limit:
+    /// it reads as a difference). Only ever asked of entries read from a manifest.
+    /// </summary>
+    internal static bool SameValue(object a, object b)
+        => System.Text.Json.Nodes.JsonNode.DeepEquals(ManipulationValue(a), ManipulationValue(b));
+
+    /// <summary>
     /// Whether <paramref name="groupName"/> is a group of the author's that a save would add options to, rather than
     /// one Proteus made (or would make) itself: it exists, and no save of ours created it.
     /// </summary>
@@ -208,21 +281,35 @@ internal static class BodyRetargetWriter
     /// group if it is not there and replacing any option of the same name.
     /// <para/>
     /// One write rather than one per size: Penumbra reloads the mod each time its manifest changes, and a half-saved
-    /// batch — three sizes of five, then a failure — is harder to reason about than all or nothing.
+    /// batch — three sizes of five, then a failure — is harder to reason about than all or nothing. The size set saves
+    /// one size at a time all the same: each is cut from another of the author's sizes, whose files it carries, and its
+    /// caller tells Penumbra once, at the end.
     /// </summary>
     /// <param name="fromOption">
     /// The option of <paramref name="groupName"/> the refitted model was read from, or null when it came from
-    /// somewhere else — the default files, another group, or the game itself. Its other files are copied into the
-    /// refit, because a single-select group switches it off the moment the refit is switched on.
+    /// somewhere else — the default files, another group, or the game itself. Its other files and its metadata are
+    /// copied into the refit, because switching the refit on switches it off. In a multi-choice group, an entry
+    /// another option of the group sets differently is left to that option, and said so in <see cref="Outcome.Notes"/>.
     /// </param>
     /// <param name="manipulations">
     /// Metadata every refit's option carries besides its file, or null for none. A garment the game only ships for
     /// Midlander men, baked into a model of the wearer's own race (<see cref="RacialModelBake"/>), needs the EQDP entry
     /// that makes the game load that model at all — without it the file is written and never read.
     /// </param>
+    /// <param name="auto">Saved by the automatic refit (see <see cref="Entry.Auto"/>).</param>
+    /// <param name="fromGame">Refitted from the game's own file (see <see cref="Entry.FromGame"/>).</param>
+    /// <param name="provenance">Where the refit came from and went (see <see cref="Entry.SourceDir"/>); null records none.</param>
+    /// <param name="sourceFilesWin">
+    /// A size made again from another of the author's options: what <paramref name="fromOption"/> gives replaces what
+    /// the option carried at the same game path — the old source option's material, textures, other races' models —
+    /// rather than only filling gaps. Never a refit of ours (another slot's, saved into this option) and never this
+    /// refit's own path. A path only the OLD source option gave stays carried: which option that was is not recorded.
+    /// Files only: the option's metadata keeps what an earlier save of it wrote above the source's, as always.
+    /// </param>
     public static Outcome Save(string modRoot, string groupName, string gamePath, string bodyMod, string from,
                                IReadOnlyList<Refit> refits, string? fromOption = null,
-                               IReadOnlyList<object>? manipulations = null)
+                               IReadOnlyList<object>? manipulations = null, bool auto = false, bool fromGame = false,
+                               Provenance? provenance = null, bool sourceFilesWin = false)
     {
         string names = string.Join(", ", refits.Select(r => r.Option));
         lock (WriteLock)
@@ -259,6 +346,42 @@ internal static class BodyRetargetWriter
                 // saved last. An option of a name we are saving is not "other" — saving the same size twice replaces
                 // it, file and all.
                 var claimed = Claimed(modRoot, groupName, refits);
+
+                // The option this was refitted from, when it is one of THIS group — the only case in which saving here
+                // switches it off. Shared by FilesFor and ManipulationsFor so the two cannot drift apart again.
+                var cutFrom = fromOption is { Length: > 0 }
+                    ? options.FirstOrDefault(o => string.Equals(o.Name, fromOption, StringComparison.OrdinalIgnoreCase))
+                    : default;
+
+                // In a multi-choice group, an entry of the source that another option of the group sets DIFFERENTLY — a
+                // "Hide bracelet" option beside the sizes, or a sibling variant never worn with it — is left to that
+                // option rather than carried into a refit that would fight it: the refit goes in with no priority of its
+                // own. The same entry with the same value is no conflict; sibling sizes repeat it. Not counting the
+                // source itself, the options this save replaces, or the options this tool recorded here: an earlier
+                // refit of ours carried the very same entry, and is not the author's to be in charge of.
+                var leftTo = new Dictionary<string, string>(StringComparer.Ordinal);   // key -> the option it is left to
+                if (cutFrom.Manipulations is { Count: > 0 } && PenumbraModMeta.IsMulti(modRoot, groupName))
+                {
+                    var record = ReadRecord(modRoot);
+                    var ourNames = (record?.Options ?? [])
+                        .Where(e => string.Equals(record!.GroupOf(e), groupName, StringComparison.OrdinalIgnoreCase))
+                        .Select(e => e.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    foreach (var other in options)
+                    {
+                        if (string.Equals(other.Name, cutFrom.Name, StringComparison.OrdinalIgnoreCase)
+                            || refits.Any(r => string.Equals(r.Option, other.Name, StringComparison.OrdinalIgnoreCase))
+                            || ourNames.Contains(other.Name))
+                            continue;
+                        foreach (var theirs in other.Manipulations ?? [])
+                        {
+                            string key = ManipulationKey(theirs);
+                            if (cutFrom.Manipulations.FirstOrDefault(m => ManipulationKey(m) == key) is { } mine
+                                && !SameValue(mine, theirs))
+                                leftTo.TryAdd(key, other.Name);
+                        }
+                    }
+                }
+                var notes = new List<string>();
 
                 var written = new List<(Refit Refit, string Rel)>();
                 foreach (var refit in refits)
@@ -300,27 +423,36 @@ internal static class BodyRetargetWriter
                     //
                     // Only from an option of THIS group, which is exactly when that switching-off happens — see the
                     // fromOption parameter.
-                    if (fromOption is { Length: > 0 }
-                        && options.FirstOrDefault(o => string.Equals(o.Name, fromOption,
-                                                                     StringComparison.OrdinalIgnoreCase))
-                           is { Files: not null } cutFrom)
+                    if (cutFrom.Files != null)
                         foreach (var (path, at) in cutFrom.Files)
-                            if (!files.ContainsKey(path)) files[path] = at;
+                            if (!files.TryGetValue(path, out var had)
+                                || (sourceFilesWin && !string.Equals(path, gamePath, StringComparison.OrdinalIgnoreCase)
+                                    && !Ours(had)))
+                                files[path] = at;
 
                     return files;
                 }
 
-                // The metadata the option carries: this save's, and whatever an earlier save of the same option wrote,
-                // once each. Replacing an option outright would otherwise drop the EQDP entry a _top save put there when
-                // the _dwn is saved into the same option after it. Once each by what an entry is ABOUT, not by its text
-                // (see ManipulationKey), and this save's wins where the two disagree.
+                // The metadata the option carries, once each by what an entry is ABOUT, not by its text (see
+                // ManipulationKey), the later source winning where two disagree:
+                //   1. the option it was cut from — its EQP (a top's "show bracelet"), IMC, EQDP… stop applying the
+                //      moment the refit switches it off, exactly as its files would (see FilesFor), less what another
+                //      option of a multi-choice group sets differently (see leftTo);
+                //   2. whatever an earlier save of this same option wrote — above the source, because the _dwn saved
+                //      into an option after its _top passes no metadata of its own, and the source's entry for the
+                //      same thing must not overwrite the racial-bake EQDP the _top save put there. Not filtered by
+                //      leftTo: what an earlier save carried stays until the refit is undone and made again, as its
+                //      files do;
+                //   3. this save's own.
                 List<object>? ManipulationsFor(Refit refit)
                 {
                     var existing = options.FirstOrDefault(o => string.Equals(o.Name, refit.Option,
                                                                              StringComparison.OrdinalIgnoreCase));
                     var all = new List<object>();
                     var at = new Dictionary<string, int>(StringComparer.Ordinal);
-                    foreach (var m in (existing.Manipulations ?? []).Concat(manipulations ?? []))
+                    foreach (var m in (cutFrom.Manipulations ?? []).Where(m => !leftTo.ContainsKey(ManipulationKey(m)))
+                                                                   .Concat(existing.Manipulations ?? [])
+                                                                   .Concat(manipulations ?? []))
                     {
                         string key = ManipulationKey(m);
                         if (at.TryGetValue(key, out int i)) all[i] = m;
@@ -330,8 +462,26 @@ internal static class BodyRetargetWriter
                             all.Add(m);
                         }
                     }
+
+                    // Said only of what the option really ends up without: an entry left out of this save's carry can
+                    // still be on it from an earlier save, or from this save's own.
+                    foreach (var (key, other) in leftTo)
+                        notes.Add(at.ContainsKey(key)
+                            ? $"refit \"{refit.Option}\" in \"{groupName}\": kept {key}, which it sets itself; " +
+                              $"\"{other}\" sets it differently from \"{cutFrom.Name}\""
+                            : $"refit \"{refit.Option}\" in \"{groupName}\": left {key} to \"{other}\", which sets it " +
+                              $"differently from \"{cutFrom.Name}\"");
                     return all.Count > 0 ? all : null;
                 }
+
+                // Logged as soon as the manifest is written — not before, when a save that then failed would be
+                // described, nor only on full success, when a record write failing after it would leave an entry
+                // Penumbra is already missing unexplained.
+                void LogNotes()
+                {
+                    foreach (string note in notes) Plugin.Log?.Information("[Proteus] {0}", note);
+                }
+                IReadOnlyList<string>? Noted() => notes.Count > 0 ? notes : null;
 
                 PenumbraModMeta.FileOption OptionFor(Refit refit, string rel)
                     => new(refit.Option, FilesFor(refit, rel), ManipulationsFor(refit));
@@ -340,15 +490,21 @@ internal static class BodyRetargetWriter
                 {
                     PenumbraModMeta.AddFileOptions(modRoot, groupName, written.Select(w => OptionFor(w.Refit, w.Rel))
                                                                               .ToList());
+                    LogNotes();
                     foreach (var (refit, rel) in written)
-                        WriteRecord(modRoot, groupName, true, refit.Option, gamePath, rel, bodyMod, from, refit.To);
+                    {
+                        WriteRecord(modRoot, groupName, true, refit.Option, gamePath, rel, bodyMod, from, refit.To, auto,
+                                    provenance,
+                                    fromGame, refit.Layers);
+                        if (auto) RecordCarried(modRoot, groupName, refit.Option, fromOption, FilesFor(refit, rel));
+                    }
                     return new Outcome(true, groupName, names, refits.Count == 1
                         ? string.Format(Loc.Localize("Parts.Retarget.Save.AddedOneToAuthor.Fmt",
                               "Saved as \"{0}\" in the \"{1}\" group. Choose it there in Penumbra to wear it."),
                               refits[0].Option, groupName)
                         : string.Format(Loc.Localize("Parts.Retarget.Save.AddedManyToAuthor.Fmt",
                               "Saved {0} sizes in the \"{1}\" group. Choose it there in Penumbra to wear it."),
-                              refits.Count, groupName));
+                              refits.Count, groupName), Noted());
                 }
 
                 // Rebuilt from what is there, so saving more sizes grows the group instead of replacing it, and
@@ -373,9 +529,15 @@ internal static class BodyRetargetWriter
                 int priority = Math.Max(PenumbraModMeta.MaxGroupPriority(modRoot) + 1, 1);
                 PenumbraModMeta.WriteFileOptionGroup(modRoot, Position(modRoot, groupName), groupName, priority, final,
                                                      final.Count - 1);
+                LogNotes();
 
                 foreach (var (refit, rel) in written)
-                    WriteRecord(modRoot, groupName, false, refit.Option, gamePath, rel, bodyMod, from, refit.To);
+                {
+                    WriteRecord(modRoot, groupName, false, refit.Option, gamePath, rel, bodyMod, from, refit.To, auto,
+                                provenance,
+                                fromGame, refit.Layers);
+                    if (auto) RecordCarried(modRoot, groupName, refit.Option, fromOption, FilesFor(refit, rel));
+                }
 
                 return new Outcome(true, groupName, names, refits.Count == 1
                     ? string.Format(Loc.Localize("Parts.Retarget.Save.AddedOne.Fmt",
@@ -385,7 +547,7 @@ internal static class BodyRetargetWriter
                     : string.Format(Loc.Localize("Parts.Retarget.Save.AddedMany.Fmt",
                           "Saved {0} sizes in the \"{1}\" group. Penumbra only picks a default for a mod it is " +
                           "adding for the first time, so choose the option there to see it."),
-                          refits.Count, groupName));
+                          refits.Count, groupName), Noted());
             }
             catch (PenumbraModMeta.LegacyFolderException)
             {
@@ -459,6 +621,26 @@ internal static class BodyRetargetWriter
         return rel;
     }
 
+    /// <summary>
+    /// Every file the mod still publishes anywhere, normalised (see <see cref="Norm"/>) — read after an option is taken
+    /// out, so undo never deletes a refit another option still points at. One option sizing the chest and the legs
+    /// together can carry the chest refit of an option saved before it, and undoing that one must leave the file.
+    /// </summary>
+    /// <returns>Null when the manifest cannot be read just then — another program mid-write — which keeps every file:
+    /// "could not tell" must never mean "nothing points at it". A file kept is inert; one deleted under an option still
+    /// naming it breaks the mod.</returns>
+    private static HashSet<string>? Published(string modRoot)
+        => PenumbraModMeta.TryReadGroups(modRoot) == null
+            ? null
+            : PenumbraModMeta.ReadAllRedirects(modRoot).Select(r => Norm(r.File)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Whether undo may delete <paramref name="rel"/>: one of ours that nothing in <paramref name="published"/>
+    /// still points at, and never when the manifest could not be read (see <see cref="Published"/>).</summary>
+    internal static bool Deletable(string rel, IReadOnlySet<string>? published)
+        => published != null && Ours(rel) && !published.Contains(Norm(rel));
+
+    private static string Norm(string rel) => rel.Replace('\\', '/').Trim('/');
+
     private static string Removed(string optionName)
         => string.Format(Loc.Localize("Parts.Retarget.Undo.Removed.Fmt", "Removed \"{0}\"."), optionName);
 
@@ -480,8 +662,11 @@ internal static class BodyRetargetWriter
                     var removed = PenumbraModMeta.RemoveOption(modRoot, groupName, optionName);
                     ForgetOption(modRoot, groupName, optionName);
                     if (removed != null)
-                        foreach (var rel in removed.Values.Where(Ours))
+                    {
+                        var stillPublished = Published(modRoot);
+                        foreach (var rel in removed.Values.Where(rel => Deletable(rel, stillPublished)))
                             DeleteQuietly(Path.Combine(modRoot, rel.Replace('/', Path.DirectorySeparatorChar)));
+                    }
                     PruneEmptyFolders(Path.Combine(modRoot, Subfolder));
                     return new Outcome(true, groupName, optionName, Removed(optionName));
                 }
@@ -518,8 +703,11 @@ internal static class BodyRetargetWriter
                 // The files last, so a crash between the two leaves an unreferenced folder rather than a group
                 // pointing at a file that is gone — Penumbra treats the second as a broken mod.
                 if (going.Files != null)
-                    foreach (var rel in going.Files.Values.Where(Ours))
+                {
+                    var stillPublished = Published(modRoot);
+                    foreach (var rel in going.Files.Values.Where(rel => Deletable(rel, stillPublished)))
                         DeleteQuietly(Path.Combine(modRoot, rel.Replace('/', Path.DirectorySeparatorChar)));
+                }
 
                 PruneEmptyFolders(Path.Combine(modRoot, Subfolder));
 
@@ -599,7 +787,9 @@ internal static class BodyRetargetWriter
     }
 
     private static void WriteRecord(string modRoot, string group, bool inAuthorGroup, string option, string gamePath,
-                                    string rel, string bodyMod, string from, string to)
+                                    string rel, string bodyMod, string from, string to, bool auto,
+                                    Provenance? provenance, bool fromGame,
+                                    IReadOnlyDictionary<string, string>? layers = null)
     {
         var record = ReadRecord(modRoot) ?? new Record();
         // Entries from before each named its own group take the old top-level one now, before it moves on.
@@ -612,8 +802,52 @@ internal static class BodyRetargetWriter
         {
             Group = group, InAuthorGroup = inAuthorGroup,
             Name = option, GamePath = gamePath, File = rel.Replace('\\', '/'),
-            BodyMod = bodyMod, From = from, To = to,
+            BodyMod = bodyMod, From = from, To = to, Auto = auto, FromGame = fromGame,
+            SourceDir = provenance?.SourceDir, SourceRel = provenance?.SourceRel,
+            Targets = provenance == null ? null : new Dictionary<string, string>(provenance.Targets, StringComparer.Ordinal),
+            Layers = layers == null ? null : new Dictionary<string, string>(layers, StringComparer.Ordinal),
         });
+        SaveRecord(modRoot, record);
+    }
+
+    /// <summary>
+    /// Record for <paramref name="option"/> the refits it carries from the option it was cut from: an option sizing the
+    /// chest and the legs together, cut from an older refit of the chest alone, publishes that chest refit as its own —
+    /// and recorded only with its legs, undoing the chest would leave it standing. Each carried entry is copied as it was,
+    /// under the new option's name, wherever the new option publishes that very file.
+    /// <para/>
+    /// Only for an automatic save, and only the automatic refit's own entries: a size made by hand carried into ours would
+    /// read as holding the option by hand, and one of ours carried into a size made by hand would let the automatic undo
+    /// take that size away.
+    /// </summary>
+    private static void RecordCarried(string modRoot, string group, string option, string? fromOption,
+                                      IReadOnlyDictionary<string, string> files)
+    {
+        if (fromOption is not { Length: > 0 } || string.Equals(fromOption, option, StringComparison.OrdinalIgnoreCase))
+            return;
+        if (ReadRecord(modRoot) is not { } record) return;
+        var carried = record.Options
+            .Where(e => e.Auto
+                        && string.Equals(record.GroupOf(e), group, StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(e.Name, fromOption, StringComparison.OrdinalIgnoreCase)
+                        && files.TryGetValue(e.GamePath, out string? at) && Norm(at) == Norm(e.File))
+            .ToList();
+        if (carried.Count == 0) return;
+
+        foreach (var e in carried)
+        {
+            record.Options.RemoveAll(o => string.Equals(record.GroupOf(o), group, StringComparison.OrdinalIgnoreCase)
+                                          && string.Equals(o.Name, option, StringComparison.OrdinalIgnoreCase)
+                                          && string.Equals(o.GamePath, e.GamePath, StringComparison.OrdinalIgnoreCase));
+            record.Options.Add(new Entry
+            {
+                Group = group, InAuthorGroup = e.InAuthorGroup, Name = option, GamePath = e.GamePath, File = e.File,
+                BodyMod = e.BodyMod, From = e.From, To = e.To, Auto = e.Auto, FromGame = e.FromGame,
+                SourceDir = e.SourceDir, SourceRel = e.SourceRel,
+                Targets = e.Targets == null ? null : new Dictionary<string, string>(e.Targets, StringComparer.Ordinal),
+                Layers = e.Layers == null ? null : new Dictionary<string, string>(e.Layers, StringComparer.Ordinal),
+            });
+        }
         SaveRecord(modRoot, record);
     }
 

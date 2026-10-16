@@ -1,4 +1,128 @@
 {
+  "AutoRefit.Body": {
+    "message": "체형",
+    "description": ""
+  },
+  "AutoRefit.BodyMissing.Fmt": {
+    "message": "여기서 고른 체형 \"{0}\"이(가) 더 이상 설치되어 있지 않습니다. 다른 체형을 고르세요.",
+    "description": ""
+  },
+  "AutoRefit.ChestSize": {
+    "message": "가슴 크기",
+    "description": ""
+  },
+  "AutoRefit.Choose": {
+    "message": "선택…",
+    "description": ""
+  },
+  "AutoRefit.Clear": {
+    "message": "이 컬렉션의 체형 잊기",
+    "description": ""
+  },
+  "AutoRefit.Collection": {
+    "message": "컬렉션",
+    "description": ""
+  },
+  "AutoRefit.Collection.Current.Fmt": {
+    "message": "{0} (현재)",
+    "description": ""
+  },
+  "AutoRefit.Enable.Label": {
+    "message": "장비를 착용할 때 내 체형에 맞추기",
+    "description": ""
+  },
+  "AutoRefit.Enable.Tip": {
+    "message": "맞춘 결과는 스튜디오의 '체형 크기' 도구와 똑같이 장비 모드 안에 새 크기 옵션으로 저장되므로 Proteus를 꺼도 계속 작동합니다. Penumbra에서 모드의 \"Original\"이나 다른 크기를 고르면 그 선택은 건드리지 않습니다.",
+    "description": ""
+  },
+  "AutoRefit.EndsKept": {
+    "message": "장갑과 신발은 만들어진 그대로의 손과 발을 유지하며, 닿는 팔과 다리만 맞춥니다.",
+    "description": ""
+  },
+  "AutoRefit.FindingBodies": {
+    "message": "체형 모드를 찾는 중…",
+    "description": ""
+  },
+  "AutoRefit.HandsFeet.Fmt": {
+    "message": "손과 발은 이 크기에 맞춰 자동으로 고릅니다: {0}, {1}.",
+    "description": ""
+  },
+  "AutoRefit.Intro": {
+    "message": "몸통·다리·손·발 장비나 몸을 덮는 장신구(목걸이에 넣은 재킷 등)를 착용하면, Proteus가 어떤 바디용으로 만들어졌는지 알아내 여기서 고른 바디와 사이즈에 맞추고 새 사이즈를 켭니다. Penumbra 컬렉션마다 따로 고를 수 있습니다.",
+    "description": ""
+  },
+  "AutoRefit.ItemInMod.Fmt": {
+    "message": "{0} ({1})",
+    "description": ""
+  },
+  "AutoRefit.LegsSize": {
+    "message": "다리 크기",
+    "description": ""
+  },
+  "AutoRefit.NoBodies": {
+    "message": "설치된 체형 모드가 없어서 맞출 대상이 없습니다.",
+    "description": ""
+  },
+  "AutoRefit.NoBodyChosen": {
+    "message": "선택한 체형이 없습니다. 이 컬렉션에서 착용한 장비는 그대로 둡니다.",
+    "description": ""
+  },
+  "AutoRefit.NoCollections": {
+    "message": "Penumbra를 사용할 수 없어 컬렉션 목록을 표시할 수 없습니다.",
+    "description": ""
+  },
+  "AutoRefit.RunNow": {
+    "message": "지금 입고 있는 장비 맞추기",
+    "description": ""
+  },
+  "AutoRefit.RunNow.Tip": {
+    "message": "자동으로 맞추는 것은 앞으로 착용하는 장비뿐입니다. 이 버튼은 캐릭터가 이미 입고 있는 장비를 맞춥니다.",
+    "description": ""
+  },
+  "AutoRefit.UndoDone.Fmt": {
+    "message": "되돌렸습니다: 맞춘 크기 {0}개를 제거하고 게임 기본 장비용으로 만든 모드 {1}개를 삭제했습니다. '지금 입고 있는 장비 맞추기'을(를) 누르지 않는 한 이 장비는 다시 맞추지 않습니다.",
+    "description": ""
+  },
+  "AutoRefit.UndoFailed.Fmt": {
+    "message": "맞춤을 되돌리지 못했습니다: {0}",
+    "description": ""
+  },
+  "AutoRefit.UndoNothing": {
+    "message": "착용 중인 장비 중 자동으로 맞춘 것이 없습니다.",
+    "description": ""
+  },
+  "AutoRefit.UndoPartial.Fmt": {
+    "message": "맞춘 크기 {0}개를 제거했지만 {1}개는 제거하지 못했습니다. 어떤 것이 왜 실패했는지는 로그에 있습니다.",
+    "description": ""
+  },
+  "AutoRefit.UndoWorking": {
+    "message": "맞춤을 되돌리는 중...",
+    "description": ""
+  },
+  "AutoRefit.UndoWorn": {
+    "message": "착용 중인 장비의 맞춤 되돌리기",
+    "description": ""
+  },
+  "AutoRefit.UndoWorn.Tip": {
+    "message": "지금 착용한 장비에 대해: 자동 맞춤이 만든 크기를 제거하고, 게임 기본 장비용으로 만든 모드를 삭제하고, 이전 옵션으로 되돌립니다. 이 장비는 다시 착용해도 그대로 둡니다. '체형 크기' 도구에서 직접 만든 크기와 착용하지 않은 장비의 맞춤은 그대로 남습니다.\n\nCtrl 또는 Shift를 누른 채 클릭하세요.",
+    "description": ""
+  },
+  "AutoRefit.Vanilla.Label": {
+    "message": "게임 기본 장비도 맞추기",
+    "description": ""
+  },
+  "AutoRefit.Vanilla.Tip": {
+    "message": "모드가 없는 장비는 저장할 모드가 없으므로, 장비마다 아이템과 체형 이름을 딴 새 모드가 따로 만들어집니다.",
+    "description": ""
+  },
+  "AutoRefit.Working": {
+    "message": "작업 중…",
+    "description": ""
+  },
+  "AutoRefit.Working.Fmt": {
+    "message": "{0} 맞추는 중…",
+    "description": ""
+  },
   "Band.Cap.Bind": {
     "message": "디자인에 연결",
     "description": ""
@@ -173,6 +297,82 @@
   },
   "Bindings.Update.Tip": {
     "message": "캐릭터에 적용된 모든 모드(사용 여부 / 우선도 / 옵션)와 현재 Proteus 색상을\n이 연결에 기록합니다. 수동 편집은 여기를 클릭해야만 유지됩니다.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Author.Fmt": {
+    "message": "[Proteus] {0}은(는) 이미 {1} 크기가 있어서 원래 들어 있던 \"{2}\"을(를) 켰습니다.",
+    "description": ""
+  },
+  "Chat.AutoRefit.BodyMissing.Fmt": {
+    "message": "[Proteus] 이 컬렉션의 자동 맞춤용으로 고른 체형 \"{0}\"이(가) 설치되어 있지 않아 아무것도 맞추지 않습니다. /proteus > 설정 에서 다른 체형을 고르세요.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Done.Fmt": {
+    "message": "[Proteus] {0}이(가) 이제 {1}에 맞습니다. {3}에 \"{2}\"(으)로 저장하고 켰습니다.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Existing.Fmt": {
+    "message": "[Proteus] {0}은(는) 이미 {1}(으)로 맞춰져 있어 그 크기를 켰습니다.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Failed.Fmt": {
+    "message": "[Proteus] {0}을(를) 맞추지 못했습니다: {1}",
+    "description": ""
+  },
+  "Chat.AutoRefit.KeepsFeet.Fmt": {
+    "message": "[Proteus] {0}은(는) 다리까지 닿지 않아 원래 모양을 유지하고 피부도 그대로 두었습니다.",
+    "description": ""
+  },
+  "Chat.AutoRefit.KeepsHands.Fmt": {
+    "message": "[Proteus] {0}은(는) 팔까지 닿지 않아 원래 모양을 유지하고 피부도 그대로 두었습니다.",
+    "description": ""
+  },
+  "Chat.AutoRefit.NoBodyMesh.Fmt": {
+    "message": "[Proteus] {0}에는 크기를 읽을 몸 피부가 없어서 그대로 두었습니다. 스튜디오의 '체형 크기' 도구로 직접 맞출 수 있습니다.",
+    "description": ""
+  },
+  "Chat.AutoRefit.NoSizeChosen.Fmt": {
+    "message": "[Proteus] {1}의 {0} 크기가 선택되지 않아 {2}은(는) 그대로 두었습니다. /proteus > 설정에서 선택하세요.",
+    "description": ""
+  },
+  "Chat.AutoRefit.NoSizeForRace.Fmt": {
+    "message": "[Proteus] {0}에는 {2}용 {1} 크기가 없어서 {3}은(는) 그대로 두었습니다.",
+    "description": ""
+  },
+  "Chat.AutoRefit.PartsLeftOut.Fmt": {
+    "message": "다음 부위는 함께 맞추지 못해 원래 크기를 유지합니다: {0}.",
+    "description": ""
+  },
+  "Chat.AutoRefit.SkinOnly.Fmt": {
+    "message": "[Proteus] {0}은(는) 원래 모양을 유지하고, 피부는 이제 {1}처럼 그려집니다. {3}에 \"{2}\"(으)로 저장하고 켰습니다.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Start.Fmt": {
+    "message": "[Proteus] {0}을(를) {1}에서 {2}(으)로 맞추는 중입니다. 끝나면 켜집니다.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Summary.Fmt": {
+    "message": "[Proteus] {0}에 맞췄습니다: {1}.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Unsure.Fmt": {
+    "message": "[Proteus] {0}이(가) 어떤 체형용인지 알 수 없어 그대로 두었습니다. 스튜디오의 '체형 크기' 도구로 직접 맞출 수 있습니다.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.Jewellery.Fmt": {
+    "message": "[Proteus] {0}은(는) 몸을 덮지 않아 그대로 두었습니다.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.AuthorSizes.Fmt": {
+    "message": "[Proteus] {0}은(는) 이미 제작자가 만든 바디별 사이즈가 있습니다(지금은 \"{1}\"). Penumbra에서 다른 것을 고르세요. 그대로 두었습니다.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.Beneath.Fmt": {
+    "message": "[Proteus] {0}은(는) 그대로 두었습니다. 사이즈를 읽을 자체 {1} 파츠가 없고, 아래에 입은 {1}은(는) 게임 기본 장비이거나 {2}에 맞춰져 있지 않거나 이 버전 이전에 맞춰진 것입니다. 다시 착용하거나 \"지금 입고 있는 장비 맞추기\"를 사용하세요.",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.Shared.Fmt": {
+    "message": "[Proteus] {0}은(는) 모드의 다른 파츠와 사이즈를 함께 쓰므로 그것들과 함께 맞춰집니다. 그것들이 {1}에 맞춰진 뒤 \"지금 입고 있는 장비 맞추기\"를 사용하세요. 지금은 그대로 두었습니다.",
     "description": ""
   },
   "Chat.ContentUnplaced.Fmt": {
@@ -525,6 +725,14 @@
   },
   "Colors.Mode.Skin": {
     "message": "Skin(그리기)",
+    "description": ""
+  },
+  "Colors.NavelBridge.Label": {
+    "message": "배꼽 위를 천으로 잇기",
+    "description": ""
+  },
+  "Colors.NavelBridge.Tip": {
+    "message": "배를 덮는 천에 켜세요.\nProteus는 옷을 몸의 복사본으로 만들기 때문에 배꼽 안까지 파고들어,\n입은 것이 아니라 그린 것처럼 보입니다. 켜면 천이 진짜 천처럼\n배꼽 위로 평평하게 펴집니다. 안쪽으로 당기지 않으므로 몸을 파고들 수 없습니다.\n옷이 배꼽 부분에서 잘려 있거나 몸에 배꼽이 없으면 아무것도 하지 않습니다.",
     "description": ""
   },
   "Colors.NoActiveOptions": {
@@ -2259,6 +2467,30 @@
     "message": "칠하는 동안 표면이 매끄러워지는 속도. 낮으면 부드럽고 조절하기 쉽고,\n높으면 거의 즉시 매끄러워집니다.\n\n밑단 같은 열린 가장자리 근처에서는 가장자리가 조금 안쪽으로 끌려옵니다.",
     "description": ""
   },
+  "Parts.Tool.Smooth": {
+    "message": "스무딩",
+    "description": ""
+  },
+  "Parts.Tool.Smooth.Tip": {
+    "message": "모델을 칠해 줄어들게 하지 않고 울퉁불퉁함과 물결을 없앱니다.\n다듬기와 달리 곡면은 모양을 유지하고 천은 몸에서 떨어져 있습니다.",
+    "description": ""
+  },
+  "Parts.Brush.SmoothRate.Tip": {
+    "message": "칠하는 동안 표면이 매끄러워지는 속도. 낮으면 부드럽고 다루기 쉽고,\n높으면 거의 즉시 매끄러워집니다.",
+    "description": ""
+  },
+  "Parts.Tool.Grab": {
+    "message": "잡기",
+    "description": ""
+  },
+  "Parts.Tool.Grab.Tip": {
+    "message": "모델을 누르고 드래그하세요. 브러시 주변의 천이 고무처럼 마우스를 따라옵니다.\n가운데가 가장 강하고, 딱딱한 경계는 없습니다.",
+    "description": ""
+  },
+  "Parts.Grab.Help": {
+    "message": "천을 누르고 드래그하세요. 브러시 크기가 따라오는 천의 범위를 정합니다.\n화면을 따라 움직이며, Ctrl+Z로 되돌릴 수 있습니다.",
+    "description": ""
+  },
   "Parts.Tool.Bridge": {
     "message": "다리 놓기",
     "description": ""
@@ -2295,8 +2527,8 @@
     "message": "크기 조절",
     "description": ""
   },
-  "Parts.Tool.Scale.Tip": {
-    "message": "파츠를 선택한 뒤 그 위를 누르고 오른쪽으로 드래그하면 커지고,\n왼쪽으로 드래그하면 중심을 기준으로 작아집니다.",
+  "Parts.Tool.ScaleAxes.Tip": {
+    "message": "파츠를 선택한 뒤 중심의 핸들 하나를 드래그하면 그 축 방향으로 늘이거나 줄이고,\n파츠 위를 누르고 오른쪽이나 왼쪽으로 드래그하면\n전체를 고르게 키우거나 줄입니다.",
     "description": ""
   },
   "Parts.Rotate.Help": {
@@ -2307,12 +2539,12 @@
     "message": "캐릭터의 파츠를 클릭한 뒤 중심의 링 하나를 드래그합니다. Alt를 누르면 카메라를 움직일 수 있습니다. 회전은 손을 뗄 때 저장됩니다.",
     "description": ""
   },
-  "Parts.Scale.Help": {
-    "message": "파츠를 클릭해 선택한 뒤 그 위를 누르고 오른쪽으로 드래그하면 커지고 왼쪽으로 드래그하면 작아집니다. 다른 곳을 드래그하면 모델이 회전하고, Shift+드래그로 시점을 옮기며, 스크롤로 확대/축소합니다.",
+  "Parts.ScaleAxes.Help": {
+    "message": "파츠를 클릭해 선택한 뒤 핸들을 드래그하면 그 축 방향으로 늘이거나 줄이고, 파츠 위를 누르고 오른쪽으로 드래그하면 커지고 왼쪽으로 드래그하면 작아집니다. 다른 곳을 드래그하면 모델이 회전하고, Shift+드래그로 시점을 옮기며, 스크롤로 확대/축소합니다.",
     "description": ""
   },
-  "Parts.Scale.LiveHint": {
-    "message": "캐릭터의 파츠를 클릭한 뒤 그 위를 누르고 오른쪽으로 드래그하면 커지고 왼쪽으로 드래그하면 작아집니다. Alt를 누르면 카메라를 움직일 수 있습니다. 변경은 손을 뗄 때 저장됩니다.",
+  "Parts.ScaleAxes.LiveHint": {
+    "message": "캐릭터의 파츠를 클릭한 뒤 핸들을 드래그하면 그 축 방향으로 늘이거나 줄이고, 파츠 위를 누르고 오른쪽으로 드래그하면 커지고 왼쪽으로 드래그하면 작아집니다. Alt를 누르면 카메라를 움직일 수 있습니다. 변경은 손을 뗄 때 저장됩니다.",
     "description": ""
   },
   "Parts.Move.Help": {
@@ -2332,7 +2564,7 @@
     "description": ""
   },
   "Parts.Move.ListTip": {
-    "message": "여기서 이동할 파츠를 고르거나, 모델이나 캐릭터에서 클릭하세요.",
+    "message": "여기서 이동할 파츠를 고르거나, 모델이나 캐릭터에서 클릭하세요.\n파츠의 체크를 해제하면 잠겨서 그 아래에 있는 것을 고를 수 있습니다.",
     "description": ""
   },
   "Parts.Move.Adjacent": {
@@ -2360,7 +2592,11 @@
     "description": ""
   },
   "Parts.Move.LockedTip": {
-    "message": "이 파츠는 잠겨 있습니다. 브러시에서 잠금을 풀면 이동할 수 있습니다.",
+    "message": "이 파츠는 잠겨 있습니다. 옆의 상자를 체크하면 이동할 수 있습니다.",
+    "description": ""
+  },
+  "Parts.Move.LockTip": {
+    "message": "체크를 해제하면 이 파츠를 잠가 치워 둡니다. 모델과 캐릭터 모두에서 숨겨지고,\n클릭하면 그 아래에 있는 것이 선택됩니다 — 예를 들어 치마를 잠가 속옷에 닿을 수 있습니다.\n잠긴 파츠는 브러시도 건드리지 않고 숨깁니다.",
     "description": ""
   },
   "Parts.Move.NothingFree": {
@@ -2401,6 +2637,14 @@
   },
   "Parts.Wind.Materials.Set.Fmt": {
     "message": "바람이 이 장비를 움직일 수 있도록 재질 파일 {0}개를 설정했습니다.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Upgraded.Fmt": {
+    "message": "그중 {0}개를 바람이 없는 이전 캐릭터 셰이더에서 황금의 유산 셰이더로 업그레이드했습니다.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Legacy.Fmt": {
+    "message": "재질 파일 {0}개가 바람이 없는 이전 캐릭터 셰이더를 사용하며 업그레이드할 수 없어 흔들리지 않습니다.",
     "description": ""
   },
   "Parts.Wind.Materials.Missing.Fmt": {
@@ -2476,7 +2720,7 @@
     "description": ""
   },
   "Parts.Brush.Strength.Tip": {
-    "message": "칠하는 사이 표면이 움직이는 양. 보통 작은 것이 알맞습니다. 옷은 몸에서\n밀리미터의 일부만 뜨면 되고, 같은 자리를 여러 번 다시 칠할 수 있습니다.",
+    "message": "브러시를 누르고 있는 0.25초마다 브러시 중심이 표면을 움직이는 거리.\n프레임 속도와 관계없이 같습니다. 대개 작은 값이 맞습니다. 옷은 몸에서\n1밀리미터 미만만 떨어지면 되고, 같은 곳을 언제든 다시 칠할 수 있습니다.",
     "description": ""
   },
   "Parts.Brush.Limit": {
@@ -2584,7 +2828,7 @@
     "description": ""
   },
   "Parts.Brush.Lock.ListTip": {
-    "message": "부위의 체크를 해제하면 잠기며, 어떤 브러시도 움직이지 않습니다. 모델이나 캐릭터의 부위를 Shift+클릭해도 같습니다.",
+    "message": "체크를 해제하면 파츠가 잠깁니다. 어떤 브러시도 움직이지 않고, 숨겨져서 그 아래에 닿을 수 있습니다. 모델이나 캐릭터에서 파츠를 Shift+클릭해도 잠깁니다. 여기서 체크하면 다시 나타납니다.",
     "description": ""
   },
   "Parts.Brush.Lock.Count.Fmt": {
@@ -2937,6 +3181,10 @@
   },
   "Settings.Output.TextureCache.Tip": {
     "message": "합성과 합성 사이에 디코딩된 텍스처 데이터를 메모리에 얼마나 유지할지입니다.\n\n4K 텍스처는 디코딩 시 64 MB를 차지하므로 사실상 개수 설정입니다: 2048 MB ≈ 30장.\n한 번의 합성 전체를 담을 수 있어야만 효과가 있습니다. 그보다 적으면 실행할 때마다\n다음에 필요한 것을 밀어내어 아무것도 재사용되지 않습니다.\n\n재합성 로그의 \"cache N entries, M MB\" 값을 확인하세요. 아무것도 바꾸지 않은 두 번째\n합성에서도 미스가 보고되면 이 값을 올리세요. 게임이 페이징을 시작하면 낮추세요.\n60초간 사용하지 않으면 자동으로 해제됩니다.",
+    "description": ""
+  },
+  "Settings.Section.AutoRefit": {
+    "message": "체형 자동 맞춤",
     "description": ""
   },
   "Settings.Section.Diagnostics": {
@@ -3455,6 +3703,18 @@
     "message": "버클이나 장신구처럼 원래 위치를 유지하려면 파츠를 체크 해제하세요. 모델에서 클릭해도 같은 효과입니다.",
     "description": ""
   },
+  "Parts.Dropdown.Ticked.Fmt": {
+    "message": "부품 {1}개 중 {0}개 체크됨",
+    "description": ""
+  },
+  "Parts.Dropdown.NoneChosen": {
+    "message": "움직일 부품을 고르세요",
+    "description": ""
+  },
+  "Parts.Drawer.Toggle.Tip": {
+    "message": "클릭하면 부위 목록이 별도의 열로 열려, 체크하는 동안에도 모델이 계속 보입니다. 다시 클릭하면 닫힙니다.",
+    "description": ""
+  },
   "Parts.Retarget.Lock.SkinTip": {
     "message": "의상 자체의 피부입니다. 고정하면 이전 크기 그대로 남아 몸이 비치거나 틈이 생길 수 있습니다.",
     "description": ""
@@ -3469,6 +3729,14 @@
   },
   "Parts.Retarget.KeepShape.Tip": {
     "message": "반지, 버클, 체인 같은 단단한 파츠용: 구부러지지 않고 통째로 이동합니다.\n작고 닫힌 파츠는 기본으로 체크되어 있습니다.",
+    "description": ""
+  },
+  "Parts.Retarget.KeepShape.SinkTip": {
+    "message": "새 몸에 파묻히게 되는 조각은 대신 몸에 맞춰 휘어집니다.",
+    "description": ""
+  },
+  "Parts.Retarget.ShapeReleased.Fmt": {
+    "message": "형태 유지 조각 {0:N0}개는 통째로 옮기면 새 몸에 최대 {1:F1} mm 파묻히므로 대신 몸에 맞춰 휘어집니다: {2}",
     "description": ""
   },
   "Parts.Retarget.ReplaceSkin": {
@@ -3517,6 +3785,54 @@
   },
   "Parts.Retarget.CutHidden.Tip": {
     "message": "제작자가 삭제한 부분(보통 천 아래)은 새 피부도 넣지 않습니다.\n리핏에 구멍이 생기면 끄세요.",
+    "description": ""
+  },
+  "Parts.Retarget.CutForcedTip": {
+    "message": "신발이 자기 발을, 장갑이 자기 손을 유지하는 동안에는 항상 켜집니다. 그렇지 않으면 새 다리나 팔 전체가 함께 들어갑니다.",
+    "description": ""
+  },
+  "Parts.Retarget.KeepFeet": {
+    "message": "원래 발 유지",
+    "description": ""
+  },
+  "Parts.Retarget.KeepFeet.Tip": {
+    "message": "발은 굽까지 포함해 제작자가 만든 그대로 둡니다. 신발이 닿는 다리만 다리 사이즈에 맞춰 리핏합니다. 체크를 해제하면 예전처럼 발까지 포함해 신발 전체를 리핏합니다.",
+    "description": ""
+  },
+  "Parts.Retarget.KeepHands": {
+    "message": "원래 손 유지",
+    "description": ""
+  },
+  "Parts.Retarget.KeepHands.Tip": {
+    "message": "손은 제작자가 만든 그대로 둡니다. 장갑이 닿는 팔만 가슴 사이즈에 맞춰 리핏합니다. 체크를 해제하면 예전처럼 손까지 포함해 장갑 전체를 리핏합니다.",
+    "description": ""
+  },
+  "Parts.Retarget.NoLimbFeet": {
+    "message": "이 신발은 다리에 닿지 않습니다. 모양은 그대로 두고 피부만 새 바디처럼 그립니다. 그래도 다리 사이즈를 고르면 그에 맞춰 리핏합니다.",
+    "description": ""
+  },
+  "Parts.Retarget.NoLimbHands": {
+    "message": "이 장갑은 팔에 닿지 않습니다. 모양은 그대로 두고 피부만 새 바디처럼 그립니다. 그래도 가슴 사이즈를 고르면 그에 맞춰 리핏합니다.",
+    "description": ""
+  },
+  "Parts.Retarget.SkinAlreadyMatches": {
+    "message": "바꿀 것이 없습니다. 피부가 이미 새 바디처럼 그려지고 있습니다.",
+    "description": ""
+  },
+  "Parts.Retarget.AlreadyFits.Fmt": {
+    "message": "바꿀 것이 없습니다. 이 장비가 닿는 곳에서 {0}은(는) 원래 만들어진 사이즈와 모양이 같습니다.",
+    "description": ""
+  },
+  "Parts.Retarget.EndsUnreadable": {
+    "message": "리그를 읽을 수 없어 발이나 손을 나머지와 구분할 수 없습니다. 장비 전체를 리핏합니다.",
+    "description": ""
+  },
+  "Parts.Retarget.NoLegsInBody.Fmt": {
+    "message": "{0}에는 리핏할 다리가 없어 장비 전체를 리핏합니다.",
+    "description": ""
+  },
+  "Parts.Retarget.NoChestInBody.Fmt": {
+    "message": "{0}에는 리핏할 가슴이 없어 장비 전체를 리핏합니다.",
     "description": ""
   },
   "Parts.Retarget.NeedFromRequired.Fmt": {
@@ -3663,6 +3979,10 @@
     "message": "{0}, Proteus로 리핏함.",
     "description": ""
   },
+  "Refit.Mod.Folder": {
+    "message": "Proteus 업스케일",
+    "description": ""
+  },
   "Refit.Mod.Enabled.Fmt": {
     "message": "\"{0}\"을(를) 만들고 켰습니다.",
     "description": ""
@@ -3707,12 +4027,24 @@
     "message": "(바닐라)",
     "description": ""
   },
-  "WhatsNew.Title": {
-    "message": "Proteus의 새로운 기능",
+  "WhatsNew.AutoRefit.Body": {
+    "message": "이제 Proteus는 가슴, 다리, 손, 발 장비를 착용하는 순간 알아서 내 체형에 맞출 수 있습니다. 장비가 어떤 체형 모드의 어떤 크기용으로 만들어졌는지 알아내고, 장비와 장비가 닿는 몸 부위를 다시 맞춘 뒤, 새 크기를 장비 모드 안에 저장하고 켭니다. 시작할 때와 끝났을 때 채팅으로 알려 줍니다.\n\n사용하려면 설정 › 체형 자동 맞춤 을 엽니다. \"장비를 착용할 때 내 체형에 맞추기\"를 체크하고, Penumbra 컬렉션마다 체형 모드와 가슴·다리 크기를 고르세요. 손과 발은 자동으로 맞춰집니다. 이미 입고 있는 장비는 \"지금 입고 있는 장비 맞추기\"로 맞출 수 있고, 게임 기본 장비에는 별도의 체크박스가 있습니다. Penumbra에서 \"Original\"이나 다른 크기를 고르면 언제나 그대로 둡니다.",
     "description": ""
   },
-  "WhatsNew.Intro": {
-    "message": "이번 릴리스에서 알아둘 만한 세 가지입니다. 이 창은 한 번만 열리고 다시 열리지 않습니다.",
+  "WhatsNew.AutoRefit.Head": {
+    "message": "장비가 알아서 내 체형에 맞춰집니다",
+    "description": ""
+  },
+  "WhatsNew.IntroAll": {
+    "message": "Proteus에 대해 알아두면 좋은 네 가지. 이 창은 한 번만 열리고 다시 열리지 않습니다.",
+    "description": ""
+  },
+  "WhatsNew.IntroSince": {
+    "message": "이 창을 마지막으로 본 뒤 새로 생긴 것이 있습니다. 이 창은 한 번만 열리고 다시 열리지 않습니다.",
+    "description": ""
+  },
+  "WhatsNew.Title": {
+    "message": "Proteus의 새로운 기능",
     "description": ""
   },
   "WhatsNew.Upscales.Head": {
@@ -3842,6 +4174,10 @@
   "Common.Units.Mm2": {
     "message": "%.2f mm",
     "description": "Slider value in millimetres. An ImGui printf format: keep %.2f exactly as it is."
+  },
+  "Common.Units.MmPerQuarterSecond": {
+    "message": "%.2f mm / 0.25초",
+    "description": ""
   },
   "Create.Dialog.ImageFilter": {
     "message": "이미지",
@@ -4402,5 +4738,157 @@
   "Service.Download.Checksum.Fmt": {
     "message": "{0}의 체크섬이 일치하지 않습니다({1}바이트, sha256 {2}…)",
     "description": "Why a download (UV maps) failed; shown after a colon. {0} is a file name, {1} a byte count, {2} the start of a hash. Lower-case, no full stop."
+  },
+  "SizeSet.Header": {
+    "message": "다른 바디의 모든 사이즈",
+    "description": ""
+  },
+  "SizeSet.Intro": {
+    "message": "아래에서 체크한 바디의 모든 사이즈를 이 모드 전체에 추가합니다. 각 사이즈는 제작자의 사이즈 중 가장 가까운 것에서 리핏하고, 그 옵션 안의 의상 나머지 파츠도 같은 사이즈에서 만들어, 제작자의 사이즈 옆에 \"Rue S\", \"YAB Buff L\" 등으로 저장합니다. 모드에 이미 있는 사이즈는 그대로 둡니다.",
+    "description": ""
+  },
+  "SizeSet.Yas": {
+    "message": "YAS 버전이 있는 바디는 YAS 버전 사용",
+    "description": ""
+  },
+  "SizeSet.Yas.Tip": {
+    "message": "Rue, YAB, Tre에는 Yet Another Skeleton 버전이 있습니다. Neolithe와 Bibo에는 없으므로 일반 사이즈를 유지합니다. 이미 YAS로 웨이트된 파츠는 항상 YAS 사이즈를 받습니다.",
+    "description": ""
+  },
+  "SizeSet.Ends": {
+    "message": "신발과 장갑 포함",
+    "description": ""
+  },
+  "SizeSet.Ends.Tip": {
+    "message": "신발과 장갑은 원래 발과 손을 유지하고, 닿는 다리나 팔만 리핏합니다. 신발은 다리 사이즈를, 장갑은 바디마다 옵션 하나를 받고, 같은 그룹이면 둘 다 의상의 가슴이나 다리 사이즈에 합류합니다.",
+    "description": ""
+  },
+  "SizeSet.EndsUnreadable.Fmt": {
+    "message": "{0}: 리그를 읽을 수 없어 발이나 손을 유지할 수 없으므로 사이즈를 만들지 않았습니다.",
+    "description": ""
+  },
+  "SizeSet.Remake": {
+    "message": "Proteus가 전에 추가한 사이즈 다시 만들기",
+    "description": ""
+  },
+  "SizeSet.Remake.Tip": {
+    "message": "끔: Proteus가 이미 추가한 사이즈는 그대로 둡니다. 켬: 다시 리핏해서 교체합니다. 제작자의 사이즈는 절대 건드리지 않습니다. 이전 버전의 Proteus로 사이즈를 추가했다면 한 번 켜 주세요. 그 사이즈들은 제작자의 첫 번째 사이즈에서 만들어졌습니다.",
+    "description": ""
+  },
+  "SizeSet.Run": {
+    "message": "사이즈 추가",
+    "description": ""
+  },
+  "SizeSet.Run.Tip": {
+    "message": "백그라운드에서 실행되며, 파츠가 많은 모드는 몇 분 걸릴 수 있습니다. 완료되면 Penumbra가 모드를 다시 불러옵니다.",
+    "description": ""
+  },
+  "SizeSet.PickBody": {
+    "message": "바디를 하나 이상 체크하세요.",
+    "description": ""
+  },
+  "SizeSet.Cancel": {
+    "message": "중지",
+    "description": ""
+  },
+  "SizeSet.Cancelled": {
+    "message": "중지했습니다. 이미 저장된 사이즈는 모드에 남습니다.",
+    "description": ""
+  },
+  "SizeSet.Done.Fmt": {
+    "message": "모드에 사이즈 {0}개를 추가했습니다.",
+    "description": ""
+  },
+  "SizeSet.NothingAdded": {
+    "message": "추가된 사이즈가 없습니다. 모드에 체크한 바디의 모든 사이즈가 이미 있습니다.",
+    "description": ""
+  },
+  "SizeSet.LeftOut": {
+    "message": "만들지 않은 것:",
+    "description": ""
+  },
+  "SizeSet.Failed.Fmt": {
+    "message": "사이즈를 추가하지 못했습니다: {0}",
+    "description": ""
+  },
+  "SizeSet.NoPieces": {
+    "message": "이 모드에는 사이즈를 만들 상의, 하의, 신발, 장갑 모델이 없습니다.",
+    "description": ""
+  },
+  "SizeSet.EndNoLeadSource.Fmt": {
+    "message": "{0}: \"{1}\"에서 제외됨: 그곳의 의상 상의나 하의를 만든 제작자의 사이즈를 이 파츠에서 찾거나 읽을 수 없었습니다. 옵션을 다시 만들려면 \"다시 만들기\"를 켜세요.",
+    "description": ""
+  },
+  "SizeSet.EndNoLeadSourceRemake.Fmt": {
+    "message": "{0}: \"{1}\"은(는) 그대로 둠: 그곳의 의상 상의나 하의를 만든 제작자의 사이즈를 이 파츠에서 읽을 수 없었습니다.",
+    "description": ""
+  },
+  "SizeSet.NoBodies": {
+    "message": "리핏할 바디 모드가 설치되어 있지 않습니다.",
+    "description": ""
+  },
+  "SizeSet.Unpaired.Fmt": {
+    "message": "{0}: 따라갈 수 없는 다른 파츠와 같은 사이즈 그룹에 있어 사이즈를 만들지 않았습니다. 만들면 모든 사이즈가 다른 파츠를 리핏하지 않은 채 입게 됩니다.",
+    "description": ""
+  },
+  "SizeSet.PieceFailed.Fmt": {
+    "message": "{0}: 실패: {1}",
+    "description": ""
+  },
+  "SizeSet.Reading.Fmt": {
+    "message": "{0}이(가) 어떤 바디로 만들어졌는지 읽는 중...",
+    "description": ""
+  },
+  "SizeSet.Unreadable.Fmt": {
+    "message": "{0}: 어떤 바디로 만들어졌는지 알 수 없어 사이즈를 만들지 않았습니다.",
+    "description": ""
+  },
+  "SizeSet.NoSuchSize.Fmt": {
+    "message": "{0}: {2}에 \"{1}\" 모델이 없어 그 사이즈는 만들지 않았습니다.",
+    "description": ""
+  },
+  "SizeSet.Refused.Fmt": {
+    "message": "{0}: \"{1}\"을(를) 만들 수 없었습니다: {2}",
+    "description": ""
+  },
+  "SizeSet.SaveFailed.Fmt": {
+    "message": "{0}: {1}",
+    "description": ""
+  },
+  "SizeSet.NotInstalled.Fmt": {
+    "message": "{0}: {1}이(가) 설치되어 있지 않아 그 사이즈는 하나도 만들지 않았습니다.",
+    "description": ""
+  },
+  "SizeSet.Working.Fmt": {
+    "message": "{0}을(를) {1}(으)로 리핏하는 중...",
+    "description": ""
+  },
+  "SizeSet.NotInstalledTip.Fmt": {
+    "message": "{0}이(가) Penumbra에 설치되어 있지 않습니다. 설치한 뒤 이 항목을 닫았다가 다시 여세요.",
+    "description": ""
+  },
+  "ContentImport.Warn.EffectFileMissing.Fmt": {
+    "message": "\"{0}\"에는 애니메이션 효과가 있지만 파일({1})이 팩에 없어 표시할 수 없습니다.",
+    "description": ""
+  },
+  "Content.StaleEffectImport.Fmt": {
+    "message": "\"{0}\"의 애니메이션 효과는 이 가져오기에서 원래 아이템에 남겨져 그 아이템을 착용할 때만 나타납니다. 아이템 없이 쓰려면 이 모드를 삭제하고 팩을 다시 가져오세요.",
+    "description": ""
+  },
+  "Content.EffectOnly": {
+    "message": "애니메이션 효과",
+    "description": ""
+  },
+  "Content.WithEffect.Fmt": {
+    "message": "{0} + 효과",
+    "description": ""
+  },
+  "Content.Effect.Tip": {
+    "message": "이 파츠에는 애니메이션 효과가 있습니다. Proteus는 빈 슬롯에 넣는 투명 액세서리에서 재생하므로 원래 아이템을 착용할 필요가 없습니다.",
+    "description": ""
+  },
+  "Chat.EffectUnplaced.Fmt": {
+    "message": "[Proteus] \"{0}\"의 애니메이션 효과가 표시되지 않습니다. 투명 운반체를 위한 빈 액세서리 슬롯이 필요합니다. 반지, 팔찌 또는 목걸이 슬롯을 비워 주세요.",
+    "description": ""
   }
 }

@@ -23,15 +23,51 @@ internal static partial class BodyRetarget
     /// (see <see cref="UnderbustClearance"/>).</param>
     /// <param name="NoRelax">Leave the cloth's movement as uneven as the transfer left it (see <see cref="Relax"/>).</param>
     /// <param name="NoSkinHug">Let cloth lying on the body keep the garment's own bones (see
-    /// <see cref="FollowBodyNearSkin"/>).</param>
+    /// <see cref="FollowBodyNearSkin"/>). Across body mods only: within one the skin hug never runs.</param>
+    /// <param name="CopyTolerance">How alike cloth and its own skin must be rigged for the copy rule (see
+    /// <see cref="CopyToleranceDefault"/>). Across body mods only, as <paramref name="NoSkinHug"/>.</param>
     /// <param name="NoLayerKnit">Let each sheet of cloth take its own move from the bodies, however near another sheet
     /// it lies (see <see cref="KnitLayers"/>).</param>
+    /// <param name="NoLayerOrder">Leave a covered piece wherever the passes put it, in front of its cover or not (see
+    /// <see cref="KeepLayerOrder"/>).</param>
+    /// <param name="LegsForAll">Let cloth its author rigged to no leg bone take the legs' weights (see
+    /// <see cref="LegFill"/>).</param>
+    /// <param name="CrossBodyPassesWithinBody">Run the copy rule and the skin hug within one body mod too, as builds
+    /// before 1221 did (see <see cref="PlanWeights"/>).</param>
+    /// <param name="NoRelease">Keep every "keep shape" piece whole even where that sinks it into the new body, as
+    /// builds before this rule did: still judged and reported, never let go (see <see cref="ReleaseSink"/>).</param>
+    /// <param name="NoNippleSmooth">Leave the new body's nipples as its mod made them, however far they stand through
+    /// the cloth (see <see cref="SmoothCoveredNipples"/>).</param>
+    /// <param name="NoOutfitOrder">Leave the garment wherever the passes put it against the other piece of its outfit,
+    /// in front of it or not (see <see cref="KeepOutfitOrder"/>).</param>
+    /// <param name="NoWallPair">Push a thick shell's two walls each on its own when clearing the skin out of a face, as
+    /// builds before 1261 did (see <see cref="FaceCheck.WallPartner"/>).</param>
+    /// <param name="NoWallCover">Never take a thick shell's inner wall for the cover over a point beneath it, as builds
+    /// before 1261 did (see <see cref="CoveredPoints"/>).</param>
+    /// <param name="NoRimTurnGuard">Let the rim lift turn a face past a right angle from its authored way, so long as it never
+    /// flips within one lift, as builds before 1261 did (see <see cref="LiftRims"/>).</param>
+    /// <param name="NoSnapPush">Leave cloth the transfer snapped onto a body vertex out of the push-out and the face clear
+    /// whatever body it lands on, as builds before 1266 did (see <see cref="SnappedLandsElsewhere"/>).</param>
+    /// <param name="NoTuck">Leave the new body's skin ending where the author's edge was laid, as builds before 1286 did
+    /// (see <see cref="TuckUnderCloth"/>).</param>
+    /// <param name="NoDeepClear">Leave a game top's cloth buried deeper than <see cref="ClearDepth"/> in the new breast
+    /// where it is, as builds before 1288 did (see <see cref="DeepClearDepth"/>).</param>
+    /// <param name="NoOpenSkin">Tuck the new body's skin only under the cloth, never in the open inside the author's own
+    /// skin, as builds before 1289 did (see <see cref="TuckSpanShare"/>).</param>
+    /// <param name="NoKeepStandoff">Leave a game top's cloth as far off the new chest as the refit carried it, as builds
+    /// before 1289 did (see the standoff pass).</param>
     internal sealed record Tuning(bool NoFollow = false, bool NoOwnSkinWeights = false,
                                   float OwnSkinReach = OwnSkinReachDefault, float CopyReach = CopyReachDefault,
                                   float CopyTolerance = CopyToleranceDefault, bool NoGiveUp = false,
                                   bool NoSettle = false, bool NoFaceSettle = false, bool NoLayerGuard = false,
                                   bool NoWeightSmooth = false, bool NoUnderbustLift = false, bool NoRelax = false,
-                                  bool NoSkinHug = false, bool NoLayerKnit = false, bool NoRimLift = false);
+                                  bool NoSkinHug = false, bool NoLayerKnit = false, bool NoRimLift = false,
+                                  bool NoLayerOrder = false, bool LegsForAll = false,
+                                  bool CrossBodyPassesWithinBody = false, bool NoRelease = false,
+                                  bool NoNippleSmooth = false, bool NoOutfitOrder = false, bool NoWallPair = false,
+                                  bool NoWallCover = false, bool NoRimTurnGuard = false, bool NoSnapPush = false,
+                                  bool NoTuck = false, bool NoDeepClear = false, bool NoOpenSkin = false,
+                                  bool NoKeepStandoff = false);
 
     private static readonly Tuning DefaultTuning = new();
 
@@ -79,9 +115,12 @@ internal static partial class BodyRetarget
     /// Cloth the author tucked under its skin keeps the old rule: let out by the skin's correction, never pulled in.
     /// </summary>
     /// <param name="carried">Each node's delta before the skin was laid; the skin nodes' change since is the correction.</param>
+    /// <param name="held">Skin vertices kept where the author put them — a shoe's own foot — or null. Cloth whose nearest
+    /// skin is one of them is left alone: its gap was measured from that foot, and the new bodies drawn here are only
+    /// the legs, so asking for the same gap from them pulled an ankle strap toward the shin.</param>
     /// <returns>How many cloth nodes were moved.</returns>
     private static int FollowLaidSkin(ModelParts garment, Sets sets, Vec3[] carried, Vec3[] nodeDelta, bool[] snapped,
-                                      IReadOnlyList<SlotPair> pairs)
+                                      IReadOnlyList<SlotPair> pairs, IReadOnlySet<int>? held = null)
     {
         var own = new BodySurface(garment, BodySurface.CellFor(MeanEdgeOf(garment)));
         if (own.IsEmpty) return 0;
@@ -105,6 +144,7 @@ internal static partial class BodyRetarget
             if (snapped[n]) continue;
             var p = ToVector(sets.NodeAt[n]);
             if (!own.Nearest(p, FollowReach, out var hit)) continue;
+            if (held is { Count: > 0 } && (held.Contains(hit.A) || held.Contains(hit.B) || held.Contains(hit.C))) continue;
             var c = Correction(hit.A) * hit.U + Correction(hit.B) * hit.V + Correction(hit.C) * hit.W;
             float along = Vector3.Dot(c, hit.Normal);
             float w = 1f - MeshMath.Smoothstep((hit.Distance - FollowFull) / (FollowReach - FollowFull));
@@ -147,10 +187,11 @@ internal static partial class BodyRetarget
     }
 
     /// <summary>
-    /// Apply <see cref="FollowLaidSkin"/>'s inward moves, backed off wherever one would turn a triangle over: halved on
-    /// every corner of such a triangle for <c>PushUnfoldPasses</c> passes, then given up outright, as the push-out's own
-    /// guard does. Neighbours pulled in by different amounts step past each other; measured on "Victoria's Secret Sauce"
-    /// without this, YAB+ Skull Crushers went from 8 turned-over triangles to 33.
+    /// Apply moves backed off wherever one would turn a triangle over: halved on every corner of such a triangle for
+    /// <c>PushUnfoldPasses</c> passes, then given up outright, as the push-out's own guard does. Any direction: made for
+    /// <see cref="FollowLaidSkin"/>'s inward moves — neighbours pulled in by different amounts step past each other;
+    /// measured on "Victoria's Secret Sauce" without this, YAB+ Skull Crushers went from 8 turned-over triangles to 33 —
+    /// and the guard for <see cref="KeepOutfitOrder"/>'s outward lifts too.
     /// </summary>
     /// <returns>How many nodes moved.</returns>
     private static int PullIn(Sets sets, Vec3[] nodeDelta, List<(int Node, Vector3 By)> pull)
@@ -214,6 +255,9 @@ internal static partial class BodyRetarget
     /// pieces seen are 12.2-12.4 cm ("pop"'s arm bands, a hoodie's drawstrings, a skirt's side straps); the smallest
     /// closed cloth is 13.9 cm (the upper tiers of "Ruffles", solidified ruffles round the hips). Neither how a piece is
     /// rigged nor how far it sits off the skin tells the two apart — the bands blend three bones, the ruffles follow one.
+    /// The gap is not clean: "Ash by Succubi"'s 11.3 cm solidified cup cover is cloth, and neither topology nor a hole
+    /// through the middle told it from metal across the installed mods. The refit lets go of such a piece when moving it
+    /// whole would sink it (see <see cref="ReleaseSink"/>).
     /// </summary>
     internal const float HardMaxSize = 0.13f;
 
@@ -226,6 +270,9 @@ internal static partial class BodyRetarget
     /// modelled as a solid. Material says nothing: "pop" draws its arm bands with the shirt's own material. Measured on
     /// "pop": its four arm bands, 176 chain links and underwire pieces are closed or 3% open; its cloth is not split
     /// into pieces at all, and its belt is one whole submesh 21 cm across.
+    /// <para/>
+    /// Not every closed piece is metal: "Ash by Succubi"'s left cup cover is solidified cloth. Ticked here, it is let go
+    /// by the refit when moving it whole would sink it into the new body (see <see cref="ReleaseSink"/>).
     /// </summary>
     /// <returns>The labels of the pieces that look hard.</returns>
     internal static List<string> HardPieces(ModelParts garment)
@@ -292,9 +339,12 @@ internal static partial class BodyRetarget
     /// <param name="scales">Each piece's scale, by index. NaN on the way in means work it out, and it is written back;
     /// a number is used as it is. The push-out moves points by millimetres, which across a 3 mm chain link reads as a
     /// scale of 0.8 or 1.3; so the scale is taken once, from the transfer's smooth answer, and kept after the push.</param>
+    /// <param name="placed">When given, set for each piece that was moved whole.</param>
+    /// <param name="owner">When given, each node's piece index: the LAST piece that placed it, which is where it ends up
+    /// — a node two pieces share is put by the later one.</param>
     /// <returns>How many pieces were moved whole.</returns>
     private static int KeepShape(Sets sets, IReadOnlyList<IReadOnlyCollection<int>> pieces, Vec3[] nodeDelta,
-                                 float[] scales)
+                                 float[] scales, bool[]? placed = null, int[]? owner = null)
     {
         var mayMove = new bool[sets.NodeCount];
         foreach (int n in sets.AllNodes) mayMove[n] = true;
@@ -355,11 +405,145 @@ internal static partial class BodyRetarget
             for (int i = 0; i < nodes.Count; i++)
             {
                 var a = ToVector(from[i]);
-                var placed = cTo + Turn(a - cFrom) * s;
-                nodeDelta[nodes[i]] = ToVec(placed - a);
+                var at = cTo + Turn(a - cFrom) * s;
+                nodeDelta[nodes[i]] = ToVec(at - a);
+                if (owner != null) owner[nodes[i]] = k;
             }
+            if (placed != null) placed[k] = true;
             kept++;
         }
         return kept;
+    }
+
+    /// <summary>
+    /// How much deeper a kept piece may sink into the new body, moved whole, than the push-out's own point-by-point
+    /// answer leaves it, and still be kept whole (5 mm): past this it is let go and bends with the body like cloth.
+    /// <para/>
+    /// "Keep shape" is ticked by default on every closed piece up to <see cref="HardMaxSize"/>, and size alone cannot tell
+    /// metal from thickened cloth: the left cup cover of "Ash by Succubi" (e0460, island 2.1.7) is a closed, solidified
+    /// 11.3 cm sheet of cloth, smaller than "pop"'s 12.2 cm arm bands. Moved whole from Rue+ Yiggle Large onto Uranus
+    /// Redux it sank 173 of its 893 vertices up to 6.4 mm into the breast, where bent it sank none. Whatever the piece
+    /// is, a whole move that buries it is the wrong answer, so the rule judges the outcome rather than the piece.
+    /// <para/>
+    /// Measured (build 1230, NoRelease, every kept piece of 43 installed tops onto Rue+ Yiggle L, YAB+ Yiggle L and
+    /// Neolithe Almond XS: 12,973 judged pieces, 94% sinking nothing): the pieces past 5 mm and at least
+    /// <see cref="ReleaseMinSize"/> are cloth — Ash's cup cover 6.4 mm, Rhinestone Cowgirl's scarf knot 7.4, Huntress's
+    /// side panel 14.4 — and the metal stays under it: "pop"'s arm bands up to 3.6 mm (onto Neolithe XS) and its
+    /// underwire 2.1, Heart to Get's heart ring 2.5, La Vie en Rose's rose 4.8. 2 mm, the first guess, let go of pop's
+    /// bands and underwire; share-of-points sunk did not separate them either (pop's band 8%, the scarf 3%). Cloth that
+    /// sinks less (Cultist's pasties 4.0 mm, a corset's lacing 3.6) stays whole, as before this rule.
+    /// </summary>
+    internal const float ReleaseSink = 0.005f;
+
+    /// <summary>
+    /// The smallest a piece may be across and still be let go (3 cm). Under it — studs, pearls, beads, little roses —
+    /// a piece sinks deeper than its own size (La Vie en Rose's 1.7 cm roses 16.5 mm, Cultist's 0.8 cm studs 6.6 mm),
+    /// and bent point by point it comes out squashed flat on the skin rather than buried in it; it stays whole, as
+    /// before this rule.
+    /// </summary>
+    internal const float ReleaseMinSize = 0.03f;
+
+    /// <summary>What became of one "keep shape" piece in a refit.</summary>
+    /// <param name="Judged">Moved whole and measured against the drawn skin. False for a piece KeepShape could not place
+    /// (too few free points, too flat to turn) and for every piece when there is no push-out.</param>
+    /// <param name="Sink">How much deeper, moved whole, its worst point lay in the drawn skin than in the bending answer
+    /// (metres; see <see cref="PieceSink"/>).</param>
+    /// <param name="Released">Let go: it bends with the body instead, exactly as if it had not been ticked.</param>
+    /// <param name="Share">The share of its points that sink more than <see cref="Clearance"/> deeper moved whole.</param>
+    internal readonly record struct ShapeOutcome(bool Judged, float Sink, bool Released, float Share = 0f);
+
+    /// <summary>Whether a piece that sinks <paramref name="sink"/> moved whole is let go — strictly past
+    /// <see cref="ReleaseSink"/>.</summary>
+    internal static bool Buries(float sink) => sink > ReleaseSink;
+
+    /// <summary>Whether a piece <paramref name="size"/> across that sinks <paramref name="sink"/> moved whole is let go:
+    /// it <see cref="Buries"/>, and is at least <see cref="ReleaseMinSize"/> across.</summary>
+    internal static bool Releases(float sink, float size) => Buries(sink) && size >= ReleaseMinSize;
+
+    /// <summary>
+    /// The most any of <paramref name="nodes"/> lies deeper in the drawn skin moved whole (<paramref name="kept"/>) than
+    /// in the push-out's answer (<paramref name="pushed"/>) — both deltas from <paramref name="at"/>.
+    /// <para/>
+    /// The push-out leaves cloth the author put inside the skin where it is, so its answer counts no authored tuck as
+    /// sinking. With Clear body on it lifts those too; so a point is never charged for depth it already had as authored
+    /// (<paramref name="before"/>, the skin the garment was made on). A point with no finite position does not count.
+    /// </summary>
+    /// <param name="after">How far a point is outside the skin drawn after the refit (negative inside).</param>
+    /// <param name="before">The same for the skin as authored; null charges authored depth too.</param>
+    internal static float PieceSink(IReadOnlyList<int> nodes, Vector3[] at, Vector3[] kept, Vector3[] pushed,
+                                    Func<Vector3, float> after, Func<Vector3, float>? before)
+        => PieceSink(nodes, at, kept, pushed, after, before, out _);
+
+    /// <inheritdoc cref="PieceSink(IReadOnlyList{int}, Vector3[], Vector3[], Vector3[], Func{Vector3, float}, Func{Vector3, float}?)"/>
+    /// <param name="share">The share of the counted points that sink more than <see cref="Clearance"/> deeper.</param>
+    internal static float PieceSink(IReadOnlyList<int> nodes, Vector3[] at, Vector3[] kept, Vector3[] pushed,
+                                    Func<Vector3, float> after, Func<Vector3, float>? before, out float share)
+    {
+        static float Depth(Func<Vector3, float> off, Vector3 p)
+        {
+            float d = -off(p);
+            return d > 0f ? d : 0f;   // NaN and "nowhere near skin" (+infinity off) read as clear
+        }
+        static bool Finite(Vector3 p) => float.IsFinite(p.X) && float.IsFinite(p.Y) && float.IsFinite(p.Z);
+
+        float worst = 0f;
+        int counted = 0, sunk = 0;
+        foreach (int n in nodes)
+        {
+            var whole = at[n] + kept[n];
+            var bent = at[n] + pushed[n];
+            if (!Finite(whole) || !Finite(bent)) continue;
+            float allowed = Depth(after, bent);
+            if (before != null && Finite(at[n])) allowed = MathF.Max(allowed, Depth(before, at[n]));
+            float excess = Depth(after, whole) - allowed;
+            worst = MathF.Max(worst, excess);
+            counted++;
+            if (excess > Clearance) sunk++;
+        }
+        share = counted == 0 ? 0f : (float)sunk / counted;
+        return worst;
+    }
+
+    /// <summary>The widest a piece's points spread along any axis, as authored.</summary>
+    internal static float PieceSize(IReadOnlyList<int> nodes, Vector3[] at)
+    {
+        Vector3 lo = new(float.MaxValue), hi = new(float.MinValue);
+        foreach (int n in nodes)
+        {
+            lo = Vector3.Min(lo, at[n]);
+            hi = Vector3.Max(hi, at[n]);
+        }
+        return nodes.Count == 0 ? 0f : MathF.Max(hi.X - lo.X, MathF.Max(hi.Y - lo.Y, hi.Z - lo.Z));
+    }
+
+    /// <summary>Each kept piece judged after the push-out: its <see cref="ShapeOutcome"/>, released when
+    /// <see cref="Buries"/>, it is at least <see cref="ReleaseMinSize"/> across, and <see cref="Tuning.NoRelease"/> is
+    /// off.</summary>
+    private static ShapeOutcome[] JudgeShapes(Sets sets, bool[] placed, int[] owner, Vec3[] pushedDelta, Vec3[] keptDelta,
+                                              Func<Vector3, float> after, Func<Vector3, float> before)
+    {
+        var byPiece = new List<int>[placed.Length];
+        for (int n = 0; n < owner.Length; n++)
+            if (owner[n] >= 0) (byPiece[owner[n]] ??= []).Add(n);
+
+        var at = new Vector3[sets.NodeCount];
+        var kept = new Vector3[sets.NodeCount];
+        var pushed = new Vector3[sets.NodeCount];
+        for (int n = 0; n < sets.NodeCount; n++)
+        {
+            at[n] = ToVector(sets.NodeAt[n]);
+            kept[n] = ToVector(keptDelta[n]);
+            pushed[n] = ToVector(pushedDelta[n]);
+        }
+
+        var outcomes = new ShapeOutcome[placed.Length];
+        for (int k = 0; k < placed.Length; k++)
+        {
+            if (!placed[k]) continue;
+            var nodes = byPiece[k] ?? [];
+            float sink = PieceSink(nodes, at, kept, pushed, after, before, out float share);
+            outcomes[k] = new ShapeOutcome(true, sink, Releases(sink, PieceSize(nodes, at)) && !Tuned.NoRelease, share);
+        }
+        return outcomes;
     }
 }

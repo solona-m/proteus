@@ -6,6 +6,7 @@ using System.Text;
 
 namespace Proteus.Services;
 using static Proteus.Services.BodyBridge;
+using static Proteus.Services.NavelBridge;
 
 public static partial class SecondSkinWriter
 {
@@ -48,7 +49,13 @@ public static partial class SecondSkinWriter
         private SecondSkinLayer? cleftDef;
         private float foldStrength;
         private SecondSkinLayer? foldDef;
-        private Dictionary<(Source, int, bool, bool, bool), BustBridgePlan?> bridgePlans = null!;
+        private float navelStrength;
+        private SecondSkinLayer? navelDef;
+        private NavelSite? navelSite;
+
+        /// <summary>What each navel fill this build ran came to, for the one line that says why nothing filled.</summary>
+        private List<NavelOutcome> navelOutcomes = null!;
+        private Dictionary<(Source, int, bool, bool, bool, bool), BustBridgePlan?> bridgePlans = null!;
         private Dictionary<(Source, int), float[]?> bridgeWeights = null!;
         private Dictionary<(Source, int), float[]?> cleftWeightCache = null!;
         private List<Source> geomSrcs = null!;
@@ -154,6 +161,7 @@ public static partial class SecondSkinWriter
             MarkCleftRings();
             ChooseToeCap();
             PlanBridges();
+            LocateNavelSite();
             PlaceCap();
             ParseContent();
             UnionBones();
@@ -161,6 +169,7 @@ public static partial class SecondSkinWriter
             AllocateOutput();
             EmitHost();
             EmitLayers();
+            ReportNavel();
             WriteStringBlock();
             WriteHeaders();
             return Validate(ref stats);
@@ -289,8 +298,8 @@ public static partial class SecondSkinWriter
         private void MarkCleftRings()
         {
             // The rings between parts, for the cleft span: it moves the legs part's waist while the torso part,
-            // solved on its own, stays put.
-            if (sources.Count > 1 && layers.Any(l => l.CleftBridgeStrength > 0f))
+            // solved on its own, stays put. The navel fill reads them too, to keep off a join.
+            if (sources.Count > 1 && layers.Any(l => l.CleftBridgeStrength > 0f || l.NavelBridgeStrength > 0f))
             {
                 measuredParts ??= sources.Select((s, i) => (ConnectorProfile?)ReadConnectorProfile(s.Model, parsed[i].Keep))
                                          .ToArray();
@@ -333,7 +342,7 @@ public static partial class SecondSkinWriter
             bridgeStrength = bustLayers.Count  == 0 ? 0f : bustLayers.Max(l => l.BustBridgeStrength);
             cleftStrength = cleftLayers.Count == 0 ? 0f : cleftLayers.Max(l => l.CleftBridgeStrength);
 
-            SecondSkinLayer? MakeDef(List<SecondSkinLayer> ls, float bust, float cleft, string what)
+            SecondSkinLayer? MakeDef(List<SecondSkinLayer> ls, float bust, float cleft, string what, float navel = 0f)
             {
                 if (ls.Count == 0) return null;
                 // A spanning layer with no coverage map paints everything, so the union is everything and the
@@ -356,8 +365,10 @@ public static partial class SecondSkinWriter
                         }
                     }
                 }
+                // The navel's figure only on the navel's line, so every other line reads as it always has.
                 diag?.Invoke($"bust bridge: one {what} solve for {ls.Count} layer(s) — span {bust:0.##}, "
-                           + $"cleft {cleft:0.##}, smooth {smoothStrength:0.##}, coverage "
+                           + $"cleft {cleft:0.##}, " + (navel > 0f ? $"navel {navel:0.##}, " : "")
+                           + $"smooth {smoothStrength:0.##}, coverage "
                            + (union == null ? "union unavailable — spanning every seeded vertex"
                                             : $"{uw}x{uh} union"));
                 return new SecondSkinLayer
@@ -369,6 +380,7 @@ public static partial class SecondSkinWriter
                     BustBridgeStrength = bust,
                     NippleSmoothStrength = smoothStrength,
                     CleftBridgeStrength = cleft,
+                    NavelBridgeStrength = navel,
                 };
             }
 
@@ -378,11 +390,49 @@ public static partial class SecondSkinWriter
             var foldLayers = layers.Where(l => l.FoldSmoothStrength > 0f).ToList();
             foldStrength = foldLayers.Count == 0 ? 0f : foldLayers.Max(l => l.FoldSmoothStrength);
             foldDef = MakeDef(foldLayers, 0f, 0f, "fold span");
+            // The navel, like the others: one fill for every layer that asked, over the union of their coverage. Per mod,
+            // so a mod that spans the navel under one that does not lifts its cloth into the pit the outer one still
+            // dips into, and can show through it there — accepted, as for the other spans.
+            var navelLayers = layers.Where(l => l.NavelBridgeStrength > 0f).ToList();
+            navelStrength = navelLayers.Count == 0 ? 0f : navelLayers.Max(l => l.NavelBridgeStrength);
+            navelDef = MakeDef(navelLayers, 0f, 0f, "navel", navelStrength);
+            navelOutcomes = [];
             // Per source mesh AND per feature set: the settings are per mod, so two layers on one host may differ
             // and must not inherit each other's plan — a cached null would otherwise read as a hit for every later layer.
-            bridgePlans = new Dictionary<(Source, int, bool, bool, bool), BustBridgePlan?>();
+            bridgePlans = new Dictionary<(Source, int, bool, bool, bool, bool), BustBridgePlan?>();
             bridgeWeights = new Dictionary<(Source, int), float[]?>();
             cleftWeightCache = new Dictionary<(Source, int), float[]?>();
+        }
+
+        /// <summary>
+        /// Where the navel is, once for the whole body, before any mesh is emitted: each mesh solves its own copy of
+        /// the pit, but they must agree on which pit, and only the part that carries it fills it. Only when a layer
+        /// asks, so a build without the tick reads and says nothing new.
+        /// </summary>
+        /// <remarks>
+        /// From each part's plain LOD0 skin, with its own material filter but before shape keys and hidden submeshes:
+        /// the site only has to be near the pit, and <see cref="NavelFill"/> finds it again on the surface each mesh
+        /// draws. A hidden variant is not a second navel — the skin carries one, and an add-on is not skin.
+        /// </remarks>
+        private void LocateNavelSite()
+        {
+            navelSite = null;
+            if (navelDef == null) return;
+            var tFind = PhaseCounter.Begin();
+            var parts = new List<NavelMesh>(sources.Count);
+            for (int i = 0; i < sources.Count; i++)
+                parts.Add(TryReadLod0Geometry(sources[i].Model, out var p, out _, out var t, out var w, out var nr,
+                                              keepMaterial: parsed[i].Keep)
+                    ? ToNavelMesh(p, nr, t, w)
+                    : new NavelMesh([], [], [], [], []));
+            navelSite = LocateNavel(parts, diag, out var why);
+            if (navelSite == null) diag?.Invoke($"navel fill: no navel found — {why}");
+            timings?.NavelFind.Stop(tFind);
+        }
+
+        private void ReportNavel()
+        {
+            if (NavelSummary(navelSite, navelOutcomes) is { } line) diag?.Invoke(line);
         }
 
         private void PlaceCap()

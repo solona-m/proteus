@@ -154,7 +154,7 @@ internal static partial class BodyRetarget
     /// push-out only uses the normal to tell inside from outside and to pick a direction, neither of which a few degrees
     /// changes.
     /// </summary>
-    private static ModelParts Moved(ModelParts garment, Sets sets, Vec3[] nodeDelta)
+    internal static ModelParts Moved(ModelParts garment, Sets sets, Vec3[] nodeDelta)
     {
         var pos = (float[])garment.Positions.Clone();
         int vc = pos.Length / 3;
@@ -227,6 +227,119 @@ internal static partial class BodyRetarget
         return any;
     }
 
+    /// <summary>For a diagnostic: why <see cref="FaceCheck"/> and <see cref="ClearFaces"/> left a face — by its corner
+    /// nodes, sorted — "not-considered", "authored-through", "clear", "too-deep", "held", "capped", "layer-guard",
+    /// "turned-over", "sinks", or "pushed"; and, for the cloth triangle a push was put back for crossing,
+    /// "crossed-by:" and the node that crossed it. Per logical call, as <see cref="Tuned"/>; null for every refit.</summary>
+    internal static readonly System.Threading.AsyncLocal<Action<(int, int, int), string>?> FaceTrace = new();
+
+    /// <summary>For tests: <see cref="PushOut"/>'s need per node as each of its steps leaves it — "need-direct" (each
+    /// node's own), "need-faces" (with the faces the skin comes through), "need-spread", "need-slope", "need-guarded" (after
+    /// the fold guard) — and "settled", how far the settle then moved each node. A copy each time; per
+    /// logical call, as <see cref="Tuned"/>; null for every refit.</summary>
+    internal static readonly System.Threading.AsyncLocal<Action<string, float[]>?> PushTrace = new();
+
+    /// <summary>How far apart a thick shell's two walls may be to be paired (3 mm) — see <see cref="FaceCheck.WallPartner"/>.
+    /// Geometric's skirt: exactly 2 mm.</summary>
+    internal const float WallPairReach = 0.003f;
+
+    /// <summary>
+    /// Each considered cloth node's partner on the other wall of a thick shell (see <see cref="FaceCheck.WallPartner"/>):
+    /// the nearest considered node of the same connected piece within <see cref="WallPairReach"/> whose normal faces the
+    /// opposite way, when that node's nearest such node is this one. The same piece: a thick shell's walls meet at its
+    /// rims (Geometric's skirt, 1,450 nodes, 725 a wall), while a stocking beneath it, nearer the inner wall than the outer
+    /// is, would otherwise take the outer wall's place.
+    /// </summary>
+    internal static int[] WallPartners(Sets sets, bool[] considered)
+    {
+        var partner = new int[sets.NodeCount];
+        Array.Fill(partner, -1);
+        // A wall is part of a big piece of cloth: a chain link's, a bead's or a stud's two sides are as near as a thick
+        // shell's walls, and pairing them moved 393 points of "pop" (173 chain links) by up to 7.8 mm.
+        var (pieceOf, pieceSize) = Pieces(sets, considered);
+        var grid = new Dictionary<(int, int, int), List<int>>();
+        (int, int, int) Cell(Vector3 p) => ((int)MathF.Floor(p.X / WallPairReach), (int)MathF.Floor(p.Y / WallPairReach),
+                                            (int)MathF.Floor(p.Z / WallPairReach));
+        var normal = new Vector3[sets.NodeCount];
+        for (int n = 0; n < sets.NodeCount; n++)
+        {
+            if (!considered[n]) continue;
+            var d = ToVector(sets.NodeNormal[n]);
+            if (d.LengthSquared() < 1e-12f) continue;
+            normal[n] = Vector3.Normalize(d);
+            var key = Cell(ToVector(sets.NodeAt[n]));
+            if (!grid.TryGetValue(key, out var bucket)) grid[key] = bucket = [];
+            bucket.Add(n);
+        }
+        int Nearest(int n)
+        {
+            var p = ToVector(sets.NodeAt[n]);
+            var (cx, cy, cz) = Cell(p);
+            int best = -1;
+            float bestD = WallPairReach;
+            for (int x = cx - 1; x <= cx + 1; x++)
+            for (int y = cy - 1; y <= cy + 1; y++)
+            for (int z = cz - 1; z <= cz + 1; z++)
+            {
+                if (!grid.TryGetValue((x, y, z), out var bucket)) continue;
+                foreach (int m in bucket)
+                {
+                    if (m == n || pieceOf[m] != pieceOf[n] || Vector3.Dot(normal[m], normal[n]) > -0.7f) continue;
+                    float d = Vector3.Distance(p, ToVector(sets.NodeAt[m]));
+                    if (d < bestD) (best, bestD) = (m, d);
+                }
+            }
+            return best;
+        }
+        var nearest = new int[sets.NodeCount];
+        Array.Fill(nearest, -1);
+        for (int n = 0; n < sets.NodeCount; n++)
+            if (normal[n] != Vector3.Zero && pieceSize[pieceOf[n]] >= WallPieceLeast) nearest[n] = Nearest(n);
+        for (int n = 0; n < sets.NodeCount; n++)
+            if (nearest[n] >= 0 && nearest[nearest[n]] == n) partner[n] = nearest[n];
+        return partner;
+    }
+
+    /// <summary>The fewest nodes a connected piece of cloth has for its points to be walls (300) — see
+    /// <see cref="WallPartners"/>. Geometric's skirt shell: 1,450.</summary>
+    internal const int WallPieceLeast = 300;
+
+    /// <summary>The connected piece of considered nodes each node is in (0 for nodes not considered), and each piece's
+    /// size by its number (piece 0, "none", has size 0).</summary>
+    private static (int[] PieceOf, List<int> Size) Pieces(Sets sets, bool[] considered)
+    {
+        var pieceOf = new int[sets.NodeCount];
+        var size = new List<int> { 0 };
+        var stack = new Stack<int>();
+        for (int s = 0; s < sets.NodeCount; s++)
+        {
+            if (!considered[s] || pieceOf[s] != 0) continue;
+            int id = size.Count, count = 0;
+            pieceOf[s] = id;
+            stack.Push(s);
+            while (stack.Count > 0)
+            {
+                int n = stack.Pop();
+                count++;
+                foreach (int m in sets.Adj[n])
+                    if (considered[m] && pieceOf[m] == 0)
+                    {
+                        pieceOf[m] = id;
+                        stack.Push(m);
+                    }
+            }
+            size.Add(count);
+        }
+        return (pieceOf, size);
+    }
+
+    private static (int, int, int) Sorted(int a, int b, int c)
+    {
+        Span<int> s = [a, b, c];
+        s.Sort();
+        return (s[0], s[1], s[2]);
+    }
+
     /// <summary>
     /// The cloth faces <see cref="SkinThroughFaces"/> judges, and the test itself, built once so
     /// <see cref="ClearFaces"/> can ask it again once the push-out's fold guard has halved the face pushes away and the
@@ -264,6 +377,13 @@ internal static partial class BodyRetarget
         /// <summary>The nodes the push-out considers: the only ones a lift may move.</summary>
         public readonly bool[] Considered;
 
+        /// <summary>
+        /// Per node, the point of a thick shell's other wall facing it — its outer wall's for an inner-wall point and the
+        /// other way about — or -1: the nearest considered cloth point within <see cref="WallPairReach"/> facing the
+        /// opposite way, each the other's. A lining faces the way its shell does, and is never one.
+        /// </summary>
+        public readonly int[] WallPartner;
+
         /// <summary>Each node's neighbours (<see cref="Sets.Adj"/>).</summary>
         public List<int>[] Adj => sets.Adj;
 
@@ -282,6 +402,12 @@ internal static partial class BodyRetarget
 
             var considered = Considered = new bool[sets.NodeCount];
             foreach (int n in nodes) considered[n] = true;
+            if (Tuned.NoWallPair)
+            {
+                WallPartner = new int[sets.NodeCount];
+                Array.Fill(WallPartner, -1);
+            }
+            else WallPartner = WallPartners(sets, considered);
 
             // Edges two DIFFERENT cloth faces share. A skin point that lands on one is still under the cloth — the
             // cuff's top edge, where its wall meets its cap — while one landing on an edge only one face uses is past
@@ -326,11 +452,18 @@ internal static partial class BodyRetarget
                 IsCloth.Add(isCloth);
                 Unliftable.Add(isCloth);   // until it is found to be a face below
 
-                if (!considered[a] || !considered[b] || !considered[c]) continue;
+                if (!considered[a] || !considered[b] || !considered[c])
+                {
+                    FaceTrace.Value?.Invoke(Sorted(a, b, c), "not-considered");
+                    continue;
+                }
                 // Already through as authored: the author's, and left as it is.
                 if (was != null && Through(was, ToVector(sets.NodeAt[a]), ToVector(sets.NodeAt[b]),
                                            ToVector(sets.NodeAt[c]), edgeA, edgeB, edgeC).Depth > 0f)
+                {
+                    FaceTrace.Value?.Invoke(Sorted(a, b, c), "authored-through");
                     continue;
+                }
                 foreach (int n in new[] { a, b, c }) FacesOf[n].Add(Faces.Count);
                 Faces.Add((a, b, c, edgeA, edgeB, edgeC));
                 Unliftable[^1] = false;
@@ -478,7 +611,8 @@ internal static partial class BodyRetarget
     /// Push cloth the refit drove INTO the drawn skin back out of it — and nothing else.
     /// </summary>
     /// <param name="candidates">
-    /// The CLOTH nodes, minus the ones the transfer snapped — see <see cref="Sets"/>. Both exclusions are set
+    /// The CLOTH nodes, minus the ones the transfer snapped unless they land on a body tessellated otherwise (see
+    /// <see cref="ShapeAndPush"/>) — see <see cref="Sets"/>. Both exclusions are set
     /// membership and never a distance test, deliberately: a snapped node sits exactly ON a body surface, where inside
     /// and outside are a coin flip, and the garment's own body mesh is SUPPOSED to coincide with the body. A cloth
     /// vertex 0.01 mm inside and a skin vertex exactly on the surface are the same number with opposite right answers,
@@ -502,12 +636,26 @@ internal static partial class BodyRetarget
     /// <param name="faceCheck">The face test it built, for <see cref="ClearFaces"/> to run again once the fold relax
     /// has had its turn.</param>
     /// <param name="pushedBy">How far it pushed each node, for the same.</param>
+    /// <param name="snapped">Which of <paramref name="candidates"/> the transfer snapped, when snapped cloth is among them;
+    /// null when it is not.</param>
+    /// <param name="deep">With <paramref name="clearBody"/>, which cloth buried deeper than <see cref="ClearDepth"/> is
+    /// cleared all the same — given the node, its landing and its depth (see <see cref="DeepClearTest"/>). Null leaves
+    /// all of it, as always.</param>
+    /// <param name="deepCleared">The nodes pushed out from that deep, here or in the settle below.</param>
+    /// <param name="deepWorst">The furthest any of them was pushed in all.</param>
     private static int PushOut(Sets sets, IReadOnlyList<int> candidates, TargetBody before, TargetBody after,
                                Vec3[] nodeDelta, bool clearBody, out float worst, out FaceCheck faceCheck,
-                               out float[] pushedBy)
+                               out float[] pushedBy, bool[]? snapped, Func<int, BodySurface.Hit, float, bool>? deep,
+                               out List<int> deepCleared, out float deepWorst)
     {
         worst = 0f;
+        deepCleared = [];
+        deepWorst = 0f;
         pushedBy = new float[sets.NodeCount];
+        // Nodes the deep clear reached, here or in the settle — counted once, by how far they ended up from where this
+        // pass found them (the settle's pushes add up round after round, and say nothing of the distance).
+        var deepNode = new bool[sets.NodeCount];
+        var start = deep != null ? (Vec3[])nodeDelta.Clone() : null;
 
         // The authored-inside nodes out of the set entirely, before anything else looks at it: neither a source of
         // push nor a receiver of the spread below, which would otherwise drag hidden cloth out at the boundary.
@@ -575,7 +723,12 @@ internal static partial class BodyRetarget
 
             float s1 = Vector3.Dot(p - hit.Point, hit.Normal);
             if (s1 >= 0f) continue;
-            if (clearBody && s1 < -ClearDepth) continue;   // buried deep on purpose — see above
+            // Buried deep on purpose — see above — unless a far larger breast grew over it (see DeepClearDepth).
+            if (clearBody && s1 < -ClearDepth)
+            {
+                if (deep?.Invoke(n, hit, s1) != true) continue;
+                deepNode[n] = true;
+            }
 
             // Back to the clearance, or to the author's own standoff where that was less: un-clipping, not re-fitting.
             // Along the SKIN's normal at the landing, not along (p - landing): for a point inside, that difference aims
@@ -587,8 +740,11 @@ internal static partial class BodyRetarget
             any = true;
         }
 
+        var pushTrace = PushTrace.Value;
+        pushTrace?.Invoke("need-direct", (float[])need.Clone());
         faceCheck = new FaceCheck(sets, nodes, before, after, authored, clearBody);
         any |= SkinThroughFaces(faceCheck, nodeDelta, need, dir, hasDir);
+        pushTrace?.Invoke("need-faces", (float[])need.Clone());
 
         if (!any) return 0;
 
@@ -612,6 +768,7 @@ internal static partial class BodyRetarget
             }
             if (!changed) break;
         }
+        pushTrace?.Invoke("need-spread", (float[])need.Clone());
 
         // The same slope limit against the cloth this pass left out — authored inside the skin, or nowhere near it.
         // Those nodes never move, and the spread above cannot see them, so a node beside one could be pushed its whole
@@ -621,10 +778,12 @@ internal static partial class BodyRetarget
         foreach (int n in nodes) inSet[n] = true;
 
         // Only cloth this pass considered and then left out holds its neighbours back. Skin, and a node that snapped
-        // onto the body, were never candidates: they are not cloth that stayed put, they are the surface the cloth is
+        // onto a body of its own mesh, were never candidates: they are not cloth that stayed put, they are the surface the cloth is
         // being cleared from, and counting them as "no push" pinned the fabric to the skin it had to come out of.
+        // A snapped node left out as authored inside is that surface too: a skin copy a hair under the skin it copies is
+        // the coin flip, not a tuck, and holding its neighbours to it would keep them in the skin as before.
         var candidate = new bool[sets.NodeCount];
-        foreach (int n in candidates) candidate[n] = true;
+        foreach (int n in candidates) candidate[n] = snapped == null || !snapped[n] || inSet[n];
 
         void Slope()
         {
@@ -649,6 +808,7 @@ internal static partial class BodyRetarget
         }
 
         Slope();
+        pushTrace?.Invoke("need-slope", (float[])need.Clone());
 
         // Back the push off wherever it would turn a triangle over. Each node is pushed along the skin's normal
         // where IT landed, and neighbours can land on surfaces facing different ways — a sleeve at the wrist lands on
@@ -702,6 +862,7 @@ internal static partial class BodyRetarget
             if (folded == 0) break;
             Slope();
         }
+        pushTrace?.Invoke("need-guarded", (float[])need.Clone());
 
         // How far each node has been pushed out, so the settle below reports pushes and not the smoothing that rides
         // along with them.
@@ -719,9 +880,28 @@ internal static partial class BodyRetarget
             if (need[n] > worst) worst = need[n];
             pushed++;
         }
-        // Whatever the fold guard backed off from is still inside: settled rather than left.
-        if (!Tuned.NoSettle) pushed += Settle(sets, nodes, after, nodeDelta, authored, clearBody, pushedBy, ref worst);
+        // Whatever the fold guard backed off from is still inside: settled rather than left. The settle never halves, so it
+        // can push a deep node back out to the full depth the fold guard backed it off from — the deep clear is bounded by
+        // what the refit is measured on afterwards (folds, stretch), not by that guard.
+        var beforeSettle = pushTrace != null ? (Vec3[])nodeDelta.Clone() : null;
+        if (!Tuned.NoSettle)
+            pushed += Settle(sets, nodes, after, nodeDelta, authored, clearBody, pushedBy, ref worst, deep, deepNode);
+        if (pushTrace != null)
+        {
+            var settled = new float[sets.NodeCount];
+            for (int n = 0; n < sets.NodeCount; n++)
+                settled[n] = Len(new Vec3(nodeDelta[n].X - beforeSettle![n].X, nodeDelta[n].Y - beforeSettle[n].Y,
+                                          nodeDelta[n].Z - beforeSettle[n].Z));
+            pushTrace("settled", settled);
+        }
 
+        for (int n = 0; start != null && n < sets.NodeCount; n++)
+        {
+            if (!deepNode[n] || pushedBy[n] <= 0f) continue;
+            deepCleared.Add(n);
+            var moved = new Vec3(nodeDelta[n].X - start[n].X, nodeDelta[n].Y - start[n].Y, nodeDelta[n].Z - start[n].Z);
+            deepWorst = MathF.Max(deepWorst, Len(moved));
+        }
         return pushed;
     }
 
@@ -1056,13 +1236,18 @@ internal static partial class BodyRetarget
             {
                 var face = check.Faces[f];
                 var (push, outward) = check.Need(face, nodeDelta, SettleTolerance);
-                if (push <= 0f || push > ClearFaceDeepest) continue;   // not sag: see ClearFaceDeepest
+                if (push <= 0f || push > ClearFaceDeepest)   // not sag: see ClearFaceDeepest
+                {
+                    FaceTrace.Value?.Invoke(Sorted(face.A, face.B, face.C), push <= 0f ? "clear" : "too-deep");
+                    continue;
+                }
+                FaceTrace.Value?.Invoke(Sorted(face.A, face.B, face.C), "pushed");
                 foreach (int n in new[] { face.A, face.B, face.C })
                 {
-                    if (held[n]) continue;
+                    if (held[n]) { FaceTrace.Value?.Invoke(Sorted(face.A, face.B, face.C), "held"); continue; }
                     // Never more than ClearFaceMost in all, over every round.
                     float allowed = MathF.Min(push, ClearFaceMost - cleared[n]);
-                    if (allowed <= 0f) continue;
+                    if (allowed <= 0f) { FaceTrace.Value?.Invoke(Sorted(face.A, face.B, face.C), "capped"); continue; }
                     if (need[n] == 0f) touched.Add(n);
                     if (allowed <= need[n]) continue;
                     need[n] = allowed;
@@ -1070,6 +1255,22 @@ internal static partial class BodyRetarget
                 }
             }
             if (touched.Count == 0) break;
+
+            // A thick shell's two walls move together: a face's corners pushed out carry the point of the other wall
+            // facing them by as much, so the shell keeps its thickness. Pushed alone, one wall went through the other and
+            // the layer guard below put every such push back — Geometric's skirt (walls 2 mm apart) onto Rue left skin
+            // through the middle of 28 of its faces over the buttock; with both walls moved, 2. A lining is no wall: it
+            // faces the way its shell does, and keeps the guard (Sirius).
+            for (int i = 0, count0 = touched.Count; i < count0; i++)
+            {
+                int n = touched[i], p = check.WallPartner[n];
+                if (p < 0 || held[p]) continue;
+                float carried = MathF.Min(need[n], ClearFaceMost - cleared[p]);
+                if (carried <= need[p]) continue;
+                if (need[p] == 0f) touched.Add(p);
+                need[p] = carried;
+                dir[p] = dir[n];
+            }
 
             // How deep the skin is through each triangle beside a push that nothing would lift again, before the push.
             var sunkBefore = new Dictionary<int, float>();
@@ -1104,10 +1305,27 @@ internal static partial class BodyRetarget
                 {
                     if (Tuned.NoLayerGuard) break;
                     if (held[n] || !was.TryGetValue(n, out var back)) continue;
-                    if (CrossedCloth(check, cloth, nodeDelta, n, check.AtWith(n, back), check.At(n, nodeDelta)) < 0) continue;
+                    int crossed = CrossedCloth(check, cloth, nodeDelta, n, check.AtWith(n, back), check.At(n, nodeDelta));
+                    if (crossed < 0) continue;
+                    // Its own shell's other wall, carried out with it (above): the wall a corner of it moved with, not
+                    // another layer — crossed only where the rest of that wall's triangle has not caught up. Only while
+                    // the partner really went as far: one held, put back or capped short leaves this push crossing it.
+                    int partnerOf = check.WallPartner[n];
+                    if (partnerOf >= 0 && was.ContainsKey(partnerOf) && !held[partnerOf]
+                        && need[partnerOf] >= need[n] - SettleTolerance
+                        && check.Tris[crossed] is var (pa, pb, pc)
+                        && (pa == partnerOf || pb == partnerOf || pc == partnerOf))
+                        continue;
                     nodeDelta[n] = back;
                     held[n] = true;
                     changed = true;
+                    if (FaceTrace.Value is { } traceGuard)
+                    {
+                        foreach (int f in check.FacesOf[n])
+                            traceGuard(Sorted(check.Faces[f].A, check.Faces[f].B, check.Faces[f].C), "layer-guard");
+                        var (xa, xb, xc) = check.Tris[crossed];
+                        traceGuard(Sorted(xa, xb, xc), "crossed-by:" + n);
+                    }
                 }
 
                 foreach (int n in touched)
@@ -1126,6 +1344,10 @@ internal static partial class BodyRetarget
                             nodeDelta[m] = back;
                             held[m] = true;
                             changed = true;
+                            if (FaceTrace.Value is { } traceBack)
+                                foreach (int f in check.FacesOf[m])
+                                    traceBack(Sorted(check.Faces[f].A, check.Faces[f].B, check.Faces[f].C),
+                                              folds ? "turned-over" : "sinks");
                         }
                     }
                 }
@@ -1222,7 +1444,7 @@ internal static partial class BodyRetarget
     private const int SettleRounds = 32;
 
     /// <summary>How many rings of neighbours around the cloth still inside <see cref="Settle"/> moves with it.</summary>
-    private const int SettleRings = 4;
+    internal const int SettleRings = 4;
 
     /// <summary>How far each settle round takes a node toward its neighbours' movement.</summary>
     private const float SettleRate = 0.5f;
@@ -1257,8 +1479,11 @@ internal static partial class BodyRetarget
     /// <param name="pushedBy">How far the push above moved each node, added to here: the report counts a node the
     /// settle pushes once, and gives the furthest total push, not how far the smoothing carried a node.</param>
     /// <returns>How many nodes it pushed that the push above had not.</returns>
+    /// <param name="deep">See <see cref="PushOut"/>: deep cloth the settle may clear too.</param>
+    /// <param name="deepNode">Marked for every node it clears from that deep.</param>
     private static int Settle(Sets sets, List<int> nodes, TargetBody after, Vec3[] nodeDelta, float[] authored,
-                              bool clearBody, float[] pushedBy, ref float worst)
+                              bool clearBody, float[] pushedBy, ref float worst,
+                              Func<int, BodySurface.Hit, float, bool>? deep, bool[] deepNode)
     {
         var inSet = new bool[sets.NodeCount];
         foreach (int n in nodes) inSet[n] = true;
@@ -1271,7 +1496,11 @@ internal static partial class BodyRetarget
             if (!after.Deepest(p, PushProbeRange, out var hit)) return 0f;
             float s = Vector3.Dot(p - hit.Point, hit.Normal);
             if (s >= -SettleTolerance) return 0f;
-            if (clearBody && s < -ClearDepth) return 0f;   // buried deep on purpose — see PushOut
+            if (clearBody && s < -ClearDepth)
+            {
+                if (deep?.Invoke(n, hit, s) != true) return 0f;   // buried deep on purpose — see PushOut
+                deepNode[n] = true;
+            }
             normal = hit.Normal;
             return (clearBody ? Clearance : MathF.Min(authored[n], Clearance)) - s;
         }

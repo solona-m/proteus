@@ -218,12 +218,70 @@ public class SidecarDiscoveryService
             var metadata = TryParseMetadata(metaPath);
             if (metadata == null) continue;
 
+            CheckStaleEffect(modDir, Path.Combine(modsRoot, modDir), metadata);
+
             results.Add(new OverlayEntry(modDir, modName, settings.Value.Priority,
                 settings.Value.Enabled, metadata, sidecarDir));
         }
 
         results.Sort((a, b) => a.Priority.CompareTo(b.Priority));
         return results;
+    }
+
+    /// <summary>
+    /// Mod folder → what to tell the user about an item effect an earlier import left behind (null: nothing). Checked
+    /// once per session, and worded then, since the Mods panel reads it every frame.
+    /// </summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string?> staleEffects =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The sidecar write time each mod was last checked against.</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, long> staleStamps =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// What to tell the user about a mod imported before item effects were carried, or null. See
+    /// <see cref="StaleEffectImport"/>.
+    /// </summary>
+    public string? StaleEffectNotice(string modDir)
+        => staleEffects.TryGetValue(modDir, out var notice) ? notice : null;
+
+    /// <summary>
+    /// Read the mod's manifest once per sidecar for an item effect its sidecar does not carry. Only for mods with
+    /// pieces and no recorded effect, so a mod imported by this build is never read. Never throws.
+    /// </summary>
+    private void CheckStaleEffect(string modDir, string modRoot, ProteusMetadata metadata)
+    {
+        // Re-checked when the sidecar changes: a re-import under the same folder name writes a new one.
+        var stamp = File.GetLastWriteTimeUtc(Path.Combine(modRoot, SidecarSubdir, MetadataFile)).Ticks;
+        if (staleStamps.TryGetValue(modDir, out var seen) && seen == stamp) return;
+        staleStamps[modDir] = stamp;
+        string? piece = null, notice = null;
+        try
+        {
+            var pieces = (metadata.Content ?? [])
+                .Concat((metadata.ContentGroups ?? []).SelectMany(g => g.Options).SelectMany(o => o.Pieces))
+                .ToList();
+            if (pieces.Count > 0 && pieces.All(p => p.Effect == null))
+            {
+                var (imc, redirected) = PenumbraPackage.ReadManifestImc(modRoot);
+                piece = StaleEffectImport.Detect(metadata, imc, redirected);
+                if (piece != null)
+                {
+                    log.Warning("[Proteus] {0}: \"{1}\" was imported before item effects were carried — its effect "
+                              + "still sits on the vanilla item; re-import the pack", modDir, piece);
+                    notice = string.Format(CheapLoc.Loc.Localize("Content.StaleEffectImport.Fmt",
+                        "\"{0}\" has an animated effect that this import left on the vanilla item, so it only plays "
+                      + "when that item is worn. Delete this mod and import the pack again to wear the effect "
+                      + "without it."), piece);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            log.Debug("[Proteus] {0}: could not check for an effect left behind: {1}", modDir, ex.Message);
+        }
+        staleEffects[modDir] = notice;
     }
 
     /// <summary>

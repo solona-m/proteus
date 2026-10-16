@@ -1,4 +1,128 @@
 {
+  "AutoRefit.Body": {
+    "message": "体型",
+    "description": ""
+  },
+  "AutoRefit.BodyMissing.Fmt": {
+    "message": "此处选择的体型“{0}”已不再安装。请另选一个。",
+    "description": ""
+  },
+  "AutoRefit.ChestSize": {
+    "message": "胸部尺寸",
+    "description": ""
+  },
+  "AutoRefit.Choose": {
+    "message": "请选择…",
+    "description": ""
+  },
+  "AutoRefit.Clear": {
+    "message": "清除此合集的体型",
+    "description": ""
+  },
+  "AutoRefit.Collection": {
+    "message": "合集",
+    "description": ""
+  },
+  "AutoRefit.Collection.Current.Fmt": {
+    "message": "{0}（当前）",
+    "description": ""
+  },
+  "AutoRefit.Enable.Label": {
+    "message": "穿上装备时自动适配我的体型",
+    "description": ""
+  },
+  "AutoRefit.Enable.Tip": {
+    "message": "适配结果会像工作室的“体型尺寸”工具一样，作为新的尺寸选项保存到装备自己的 MOD 中，因此关闭 Proteus 后依然有效。在 Penumbra 中选择该 MOD 的“Original”或其他尺寸时，不会被改动。",
+    "description": ""
+  },
+  "AutoRefit.EndsKept": {
+    "message": "手套和鞋子保留制作时的手和脚；只会适配它们覆盖到的手臂和腿。",
+    "description": ""
+  },
+  "AutoRefit.FindingBodies": {
+    "message": "正在查找体型 MOD…",
+    "description": ""
+  },
+  "AutoRefit.HandsFeet.Fmt": {
+    "message": "手部和脚部会自动匹配这些尺寸：{0} 和 {1}。",
+    "description": ""
+  },
+  "AutoRefit.Intro": {
+    "message": "当你穿上胸部、腿部、手部或脚部装备——或遮盖身体的饰品，例如放在项链栏的外套——时，Proteus 会判断它是为哪个身体制作的，按这里选择的身体和尺码进行适配，然后启用新尺码。每个 Penumbra 合集都有各自的选择。",
+    "description": ""
+  },
+  "AutoRefit.ItemInMod.Fmt": {
+    "message": "{0}（{1}）",
+    "description": ""
+  },
+  "AutoRefit.LegsSize": {
+    "message": "腿部尺寸",
+    "description": ""
+  },
+  "AutoRefit.NoBodies": {
+    "message": "未安装体型 MOD，因此没有可适配的目标。",
+    "description": ""
+  },
+  "AutoRefit.NoBodyChosen": {
+    "message": "未选择体型：在此合集中穿上的装备将保持原样。",
+    "description": ""
+  },
+  "AutoRefit.NoCollections": {
+    "message": "Penumbra 不可用，因此无法列出其合集。",
+    "description": ""
+  },
+  "AutoRefit.RunNow": {
+    "message": "适配当前穿着的装备",
+    "description": ""
+  },
+  "AutoRefit.RunNow.Tip": {
+    "message": "只有从现在开始穿上的装备才会自动适配。此按钮会适配角色已经穿着的装备。",
+    "description": ""
+  },
+  "AutoRefit.UndoDone.Fmt": {
+    "message": "已撤销：移除了 {0} 个适配尺寸，并删除了 {1} 个为游戏原版装备创建的 MOD。除非你点击“适配当前穿着的装备”，否则这些装备不会再被适配。",
+    "description": ""
+  },
+  "AutoRefit.UndoFailed.Fmt": {
+    "message": "无法撤销适配：{0}",
+    "description": ""
+  },
+  "AutoRefit.UndoNothing": {
+    "message": "你穿着的装备中没有自动适配过的。",
+    "description": ""
+  },
+  "AutoRefit.UndoPartial.Fmt": {
+    "message": "移除了 {0} 个适配尺寸，但有 {1} 个无法移除。日志中写明了是哪些以及原因。",
+    "description": ""
+  },
+  "AutoRefit.UndoWorking": {
+    "message": "正在撤销适配...",
+    "description": ""
+  },
+  "AutoRefit.UndoWorn": {
+    "message": "撤销身上装备的适配",
+    "description": ""
+  },
+  "AutoRefit.UndoWorn.Tip": {
+    "message": "针对你现在穿着的装备：移除自动适配生成的尺寸，删除它为游戏原版装备创建的 MOD，并恢复你之前的选项。之后再次穿上这些装备时会保持原样。你在“体型尺寸”工具中自己制作的尺寸，以及未穿着装备的适配，都会保留。\n\n按住 Ctrl 或 Shift 并点击。",
+    "description": ""
+  },
+  "AutoRefit.Vanilla.Label": {
+    "message": "也适配游戏原版装备",
+    "description": ""
+  },
+  "AutoRefit.Vanilla.Tip": {
+    "message": "未经 MOD 修改的装备没有可保存的 MOD，因此每件装备都会得到一个以物品和体型命名的新 MOD。",
+    "description": ""
+  },
+  "AutoRefit.Working": {
+    "message": "处理中…",
+    "description": ""
+  },
+  "AutoRefit.Working.Fmt": {
+    "message": "正在适配 {0}…",
+    "description": ""
+  },
   "Band.Cap.Bind": {
     "message": "绑定到设计",
     "description": ""
@@ -173,6 +297,82 @@
   },
   "Bindings.Update.Tip": {
     "message": "将角色身上的每个模组（启用／优先级／选项）与当前 Proteus 颜色\n记录到此绑定中。手动修改只有在点击此处后才会保留。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Author.Fmt": {
+    "message": "[Proteus] {0} 本身已有 {1} 尺寸；已启用其自带的“{2}”。",
+    "description": ""
+  },
+  "Chat.AutoRefit.BodyMissing.Fmt": {
+    "message": "[Proteus] 此合集用于自动适配的体型“{0}”未安装，因此不会进行任何适配。请在 /proteus > 设置 中另选一个。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Done.Fmt": {
+    "message": "[Proteus] {0} 现已适配 {1}。已在 {3} 中保存为“{2}”并启用。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Existing.Fmt": {
+    "message": "[Proteus] {0} 已经适配为 {1}；已启用该尺寸。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Failed.Fmt": {
+    "message": "[Proteus] 无法适配 {0}：{1}",
+    "description": ""
+  },
+  "Chat.AutoRefit.KeepsFeet.Fmt": {
+    "message": "[Proteus] {0} 没有延伸到腿部，因此保留其原有形状，皮肤也保持原样。",
+    "description": ""
+  },
+  "Chat.AutoRefit.KeepsHands.Fmt": {
+    "message": "[Proteus] {0} 没有延伸到手臂，因此保留其原有形状，皮肤也保持原样。",
+    "description": ""
+  },
+  "Chat.AutoRefit.NoBodyMesh.Fmt": {
+    "message": "[Proteus] {0} 不含可用于读取尺寸的身体皮肤，因此保持原样。你可以用工作室的“体型尺寸”工具手动适配。",
+    "description": ""
+  },
+  "Chat.AutoRefit.NoSizeChosen.Fmt": {
+    "message": "[Proteus] 尚未为 {1} 选择{0}尺寸，因此 {2} 保持原样。请在 /proteus > 设置 中选择。",
+    "description": ""
+  },
+  "Chat.AutoRefit.NoSizeForRace.Fmt": {
+    "message": "[Proteus] {0} 没有适用于 {2} 的{1}尺寸，因此 {3} 保持原样。",
+    "description": ""
+  },
+  "Chat.AutoRefit.PartsLeftOut.Fmt": {
+    "message": "以下部位无法一同适配，保持原尺寸：{0}。",
+    "description": ""
+  },
+  "Chat.AutoRefit.SkinOnly.Fmt": {
+    "message": "[Proteus] {0} 保留其原有形状；其皮肤现按 {1} 的方式绘制。已在 {3} 中保存为“{2}”并启用。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Start.Fmt": {
+    "message": "[Proteus] 正在将 {0} 从 {1} 适配为 {2}。完成后会自动启用。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Summary.Fmt": {
+    "message": "[Proteus] 已适配为 {0}：{1}。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Unsure.Fmt": {
+    "message": "[Proteus] 无法判断 {0} 是为哪个体型制作的，因此保持原样。你可以用工作室的“体型尺寸”工具手动适配。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.Jewellery.Fmt": {
+    "message": "[Proteus] {0} 没有遮盖身体，因此保持原样。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.AuthorSizes.Fmt": {
+    "message": "[Proteus] {0} 已有作者为各身体制作的尺码（当前为“{1}”）；请在 Penumbra 中选择其他尺码。已保持原样。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.Beneath.Fmt": {
+    "message": "[Proteus] {0} 已保持原样：它没有可读取尺码的自带{1}部件，而穿在下面的{1}是游戏原装、未适配 {2}，或是在此版本之前适配的——请重新穿上或使用“适配当前穿着的装备”。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.Shared.Fmt": {
+    "message": "[Proteus] {0} 与该模组的其他部件共用尺码，因此会与它们一起适配：等它们适配到 {1} 后，请使用“适配当前穿着的装备”。目前已保持原样。",
     "description": ""
   },
   "Chat.ContentUnplaced.Fmt": {
@@ -525,6 +725,14 @@
   },
   "Colors.Mode.Skin": {
     "message": "Skin（绘制）",
+    "description": ""
+  },
+  "Colors.NavelBridge.Label": {
+    "message": "布料横跨肚脐",
+    "description": ""
+  },
+  "Colors.NavelBridge.Tip": {
+    "message": "用于覆盖腹部的布料。\nProteus 把服装做成身体的副本，所以它会陷进肚脐里，\n看起来像是画上去的，而不是穿上的。开启后，布料会像真正的布一样\n平整地绷在肚脐上方。不会向内拉扯，所以不会切进身体。\n如果服装在肚脐处被剪开，或身体没有肚脐，则不起作用。",
     "description": ""
   },
   "Colors.NoActiveOptions": {
@@ -2259,6 +2467,30 @@
     "message": "涂抹时表面变平滑的速度。低则柔和易控，高则几乎立刻平滑。\n\n靠近开放边缘（如下摆）时，平滑会把边缘稍微向内收。",
     "description": ""
   },
+  "Parts.Tool.Smooth": {
+    "message": "保形平滑",
+    "description": ""
+  },
+  "Parts.Tool.Smooth.Tip": {
+    "message": "在模型上涂抹，抹平鼓包和褶皱，但不会让它收缩：\n与“平滑”不同，曲面保持原形，布料也不会陷向身体。",
+    "description": ""
+  },
+  "Parts.Brush.SmoothRate.Tip": {
+    "message": "涂抹时表面变平滑的速度。低值柔和、易于控制；\n高值几乎立即变平滑。",
+    "description": ""
+  },
+  "Parts.Tool.Grab": {
+    "message": "抓取",
+    "description": ""
+  },
+  "Parts.Tool.Grab.Tip": {
+    "message": "在模型上按下并拖动：笔刷周围的布料像橡胶一样跟随鼠标，\n中心最强，没有硬边。",
+    "description": ""
+  },
+  "Parts.Grab.Help": {
+    "message": "在布料上按下并拖动。笔刷大小决定带动多少布料；\n它沿屏幕方向移动，Ctrl+Z 可撤销一次抓取。",
+    "description": ""
+  },
   "Parts.Tool.Bridge": {
     "message": "搭桥",
     "description": ""
@@ -2295,8 +2527,8 @@
     "message": "缩放",
     "description": ""
   },
-  "Parts.Tool.Scale.Tip": {
-    "message": "选中部件后，按住它并向右拖动放大，\n向左拖动则绕其中心缩小。",
+  "Parts.Tool.ScaleAxes.Tip": {
+    "message": "选中部件后，拖动其中心的某个手柄可沿该轴拉伸，\n按住部件向右或向左拖动则整体均匀放大或缩小。",
     "description": ""
   },
   "Parts.Rotate.Help": {
@@ -2307,12 +2539,12 @@
     "message": "点击角色身上的部件，然后拖动其中心的某个圆环。按住 Alt 可移动镜头。每次旋转在松开时保存。",
     "description": ""
   },
-  "Parts.Scale.Help": {
-    "message": "点击部件以选中它，然后按住它向右拖动放大、向左拖动缩小。在其他地方拖动可旋转模型，Shift+拖动平移视图，滚轮缩放。",
+  "Parts.ScaleAxes.Help": {
+    "message": "点击部件以选中它，然后拖动某个手柄沿该轴拉伸，或按住部件向右拖动放大、向左拖动缩小。在其他地方拖动可旋转模型，Shift+拖动平移视图，滚轮缩放。",
     "description": ""
   },
-  "Parts.Scale.LiveHint": {
-    "message": "点击角色身上的部件，然后按住它向右拖动放大、向左拖动缩小。按住 Alt 可移动镜头。每次更改在松开时保存。",
+  "Parts.ScaleAxes.LiveHint": {
+    "message": "点击角色身上的部件，然后拖动某个手柄沿该轴拉伸，或按住部件向右拖动放大、向左拖动缩小。按住 Alt 可移动镜头。每次更改在松开时保存。",
     "description": ""
   },
   "Parts.Move.Help": {
@@ -2332,7 +2564,7 @@
     "description": ""
   },
   "Parts.Move.ListTip": {
-    "message": "在此选择要移动的部件，或在模型或角色上点击它。",
+    "message": "在此选择要移动的部件，或在模型或角色上点击它。\n取消勾选某个部件即可将其锁定移开，以便选到它下面的东西。",
     "description": ""
   },
   "Parts.Move.Adjacent": {
@@ -2360,7 +2592,11 @@
     "description": ""
   },
   "Parts.Move.LockedTip": {
-    "message": "该部件已锁定。请在笔刷下解锁后再移动。",
+    "message": "该部件已锁定。勾选旁边的复选框即可移动它。",
+    "description": ""
+  },
+  "Parts.Move.LockTip": {
+    "message": "取消勾选即可锁定此部件并将其移开：它会在模型和角色上隐藏，\n点击会穿过它，选到下面的东西——例如锁定裙子来选中里面的内衣。\n笔刷也不会改动已锁定的部件，并会将其隐藏。",
     "description": ""
   },
   "Parts.Move.NothingFree": {
@@ -2401,6 +2637,14 @@
   },
   "Parts.Wind.Materials.Set.Fmt": {
     "message": "已设置 {0} 个材质文件，让风可以吹动这件装备。",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Upgraded.Fmt": {
+    "message": "其中 {0} 个已从不支持风的旧角色着色器升级为金曦之遗辉的着色器。",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Legacy.Fmt": {
+    "message": "{0} 个材质文件使用不支持风的旧角色着色器，且无法升级，因此不会摆动。",
     "description": ""
   },
   "Parts.Wind.Materials.Missing.Fmt": {
@@ -2476,7 +2720,7 @@
     "description": ""
   },
   "Parts.Brush.Strength.Tip": {
-    "message": "每一瞬涂抹中表面移动的距离。通常宜小：衣物只需离身体不到一毫米即可，\n而且同一处可以反复涂抹。",
+    "message": "按住笔刷时，每 0.25 秒笔刷中心推动表面的距离，在任何帧率下都相同。\n通常小值就够了：衣物只需离开身体零点几毫米，\n而且同一处随时可以再涂。",
     "description": ""
   },
   "Parts.Brush.Limit": {
@@ -2584,7 +2828,7 @@
     "description": ""
   },
   "Parts.Brush.Lock.ListTip": {
-    "message": "取消勾选部件即可锁定：任何笔刷都不会移动它。在模型或角色上 Shift+点击部件效果相同。",
+    "message": "取消勾选即可锁定部件：任何笔刷都不会移动它，它还会被隐藏，以便你碰到下面的东西。在模型或角色上 Shift+点击部件也能锁定；在此重新勾选即可让它回来。",
     "description": ""
   },
   "Parts.Brush.Lock.Count.Fmt": {
@@ -2937,6 +3181,10 @@
   },
   "Settings.Output.TextureCache.Tip": {
     "message": "Proteus 在两次合成之间在内存中保留多少已解码的贴图数据。\n\n一张 4K 贴图解码后占用 64 MB，因此这实际上是个数量设置：2048 MB ≈ 30 张。\n只有当它能容纳整整一次合成所需的量时才有帮助——低于该值，每次运行都会挤掉\n下一次所需的内容，结果什么都无法复用。\n\n请查看重新合成日志中的“cache N entries, M MB”数值：如果在没有任何改动的\n第二次合成中仍报告未命中，就调高此值。若游戏开始使用页面文件，则调低。\n空闲 60 秒后会自动释放。",
+    "description": ""
+  },
+  "Settings.Section.AutoRefit": {
+    "message": "体型自动适配",
     "description": ""
   },
   "Settings.Section.Diagnostics": {
@@ -3455,6 +3703,18 @@
     "message": "取消勾选可让该部位保持原位，如扣环或首饰；在模型上点击同样有效。",
     "description": ""
   },
+  "Parts.Dropdown.Ticked.Fmt": {
+    "message": "已勾选 {0}/{1} 个部件",
+    "description": ""
+  },
+  "Parts.Dropdown.NoneChosen": {
+    "message": "选择要移动的部件",
+    "description": ""
+  },
+  "Parts.Drawer.Toggle.Tip": {
+    "message": "点击即可在单独的一栏中打开部件列表，勾选时模型始终可见。再次点击即可关闭。",
+    "description": ""
+  },
   "Parts.Retarget.Lock.SkinTip": {
     "message": "服装自带的皮肤。保持不变会维持旧尺寸，可能导致身体透出或出现空隙。",
     "description": ""
@@ -3469,6 +3729,14 @@
   },
   "Parts.Retarget.KeepShape.Tip": {
     "message": "适用于硬质部件（戒指、扣环、链条）：整体移动而不弯曲。\n小型闭合部件默认勾选。",
+    "description": ""
+  },
+  "Parts.Retarget.KeepShape.SinkTip": {
+    "message": "会陷入新身体的部件将改为随身体弯曲。",
+    "description": ""
+  },
+  "Parts.Retarget.ShapeReleased.Fmt": {
+    "message": "{0:N0} 个保持形状的部件若整体移动，会陷入新身体最深 {1:F1} mm，因此改为随身体弯曲：{2}",
     "description": ""
   },
   "Parts.Retarget.ReplaceSkin": {
@@ -3517,6 +3785,54 @@
   },
   "Parts.Retarget.CutHidden.Tip": {
     "message": "作者删除处（通常在布料下）不生成新皮肤。\n若转换留下破洞，请关闭此项。",
+    "description": ""
+  },
+  "Parts.Retarget.CutForcedTip": {
+    "message": "鞋子保留自己的脚、手套保留自己的手时始终开启：否则整条新腿或新手臂都会跟着放进去。",
+    "description": ""
+  },
+  "Parts.Retarget.KeepFeet": {
+    "message": "保留原本的脚",
+    "description": ""
+  },
+  "Parts.Retarget.KeepFeet.Tip": {
+    "message": "脚连同鞋跟完全保持作者制作的样子；只重新适配鞋子覆盖到的腿部，尺码按腿部来定。取消勾选则像以前一样，连脚一起重新适配整只鞋。",
+    "description": ""
+  },
+  "Parts.Retarget.KeepHands": {
+    "message": "保留原本的手",
+    "description": ""
+  },
+  "Parts.Retarget.KeepHands.Tip": {
+    "message": "手完全保持作者制作的样子；只重新适配手套覆盖到的手臂，尺码按胸部来定。取消勾选则像以前一样，连手一起重新适配整只手套。",
+    "description": ""
+  },
+  "Parts.Retarget.NoLimbFeet": {
+    "message": "这双鞋没有覆盖到腿：保持原有形状，只把皮肤画成新身体的样子。仍然可以选一个腿部尺码，按它来重新适配。",
+    "description": ""
+  },
+  "Parts.Retarget.NoLimbHands": {
+    "message": "这双手套没有覆盖到手臂：保持原有形状，只把皮肤画成新身体的样子。仍然可以选一个胸部尺码，按它来重新适配。",
+    "description": ""
+  },
+  "Parts.Retarget.SkinAlreadyMatches": {
+    "message": "无需更改：它的皮肤已经按新身体的方式绘制。",
+    "description": ""
+  },
+  "Parts.Retarget.AlreadyFits.Fmt": {
+    "message": "无需更改：在它覆盖的地方，{0} 与它原本制作时的尺码形状相同。",
+    "description": ""
+  },
+  "Parts.Retarget.EndsUnreadable": {
+    "message": "无法读取它的骨骼绑定，分不出脚或手与其余部分：将重新适配整件。",
+    "description": ""
+  },
+  "Parts.Retarget.NoLegsInBody.Fmt": {
+    "message": "{0} 没有可用来重新适配的腿部，因此将重新适配整件。",
+    "description": ""
+  },
+  "Parts.Retarget.NoChestInBody.Fmt": {
+    "message": "{0} 没有可用来重新适配的胸部，因此将重新适配整件。",
     "description": ""
   },
   "Parts.Retarget.NeedFromRequired.Fmt": {
@@ -3663,6 +3979,10 @@
     "message": "{0}，由 Proteus 转换。",
     "description": ""
   },
+  "Refit.Mod.Folder": {
+    "message": "Proteus 放大版",
+    "description": ""
+  },
   "Refit.Mod.Enabled.Fmt": {
     "message": "已创建“{0}”并启用。",
     "description": ""
@@ -3707,12 +4027,24 @@
     "message": "（原版）",
     "description": ""
   },
-  "WhatsNew.Title": {
-    "message": "Proteus 更新内容",
+  "WhatsNew.AutoRefit.Body": {
+    "message": "现在，Proteus 能在你穿上胸部、腿部、手部和脚部装备的那一刻，自动将其适配到你的体型。它会判断装备是为哪个体型 MOD 的哪个尺寸制作的，适配装备及其覆盖的身体部位，把新尺寸保存到装备自己的 MOD 中并启用。开始和完成时会在聊天栏提示。\n\n使用方法：打开 设置 › 体型自动适配，勾选“穿上装备时自动适配我的体型”，然后为每个 Penumbra 合集选择你的体型 MOD 以及胸部和腿部尺寸；手部和脚部会自动匹配。已经穿着的装备可以用“适配当前穿着的装备”来适配，游戏原版装备另有一个复选框。在 Penumbra 中选择“Original”或其他尺寸时，始终不会被改动。",
     "description": ""
   },
-  "WhatsNew.Intro": {
-    "message": "本次更新有三件事值得了解。此窗口只会打开一次，之后不再出现。",
+  "WhatsNew.AutoRefit.Head": {
+    "message": "装备会自动适配你的体型",
+    "description": ""
+  },
+  "WhatsNew.IntroAll": {
+    "message": "关于 Proteus 值得了解的四件事。此窗口只会打开一次，之后不再出现。",
+    "description": ""
+  },
+  "WhatsNew.IntroSince": {
+    "message": "自你上次看到此窗口以来有了新内容。此窗口只会打开一次，之后不再出现。",
+    "description": ""
+  },
+  "WhatsNew.Title": {
+    "message": "Proteus 更新内容",
     "description": ""
   },
   "WhatsNew.Upscales.Head": {
@@ -3842,6 +4174,10 @@
   "Common.Units.Mm2": {
     "message": "%.2f mm",
     "description": "Slider value in millimetres. An ImGui printf format: keep %.2f exactly as it is."
+  },
+  "Common.Units.MmPerQuarterSecond": {
+    "message": "%.2f 毫米 / 0.25 秒",
+    "description": ""
   },
   "Create.Dialog.ImageFilter": {
     "message": "图像",
@@ -4402,5 +4738,157 @@
   "Service.Download.Checksum.Fmt": {
     "message": "{0} 的校验和不匹配（{1} 字节，sha256 {2}…）",
     "description": "Why a download (UV maps) failed; shown after a colon. {0} is a file name, {1} a byte count, {2} the start of a hash. Lower-case, no full stop."
+  },
+  "SizeSet.Header": {
+    "message": "其他体型的全部尺码",
+    "description": ""
+  },
+  "SizeSet.Intro": {
+    "message": "为整个模组添加下方勾选体型的每个尺码。每个尺码都从作者最接近它的尺码重新适配，该选项中套装的其他部件也从同一尺码适配，并以“Rue S”“YAB Buff L”等名称保存在作者的尺码旁边。模组已有的尺码保持不变。",
+    "description": ""
+  },
+  "SizeSet.Yas": {
+    "message": "体型有 YAS 版本时使用 YAS 版本",
+    "description": ""
+  },
+  "SizeSet.Yas.Tip": {
+    "message": "Rue、YAB 和 Tre 有 Yet Another Skeleton 版本。Neolithe 和 Bibo 没有，保留普通尺码。已经按 YAS 绑定权重的部件总会得到 YAS 尺码。",
+    "description": ""
+  },
+  "SizeSet.Ends": {
+    "message": "包括鞋子和手套",
+    "description": ""
+  },
+  "SizeSet.Ends.Tip": {
+    "message": "鞋子和手套保留原本的脚和手，只重新适配它们覆盖到的腿或手臂。鞋子获得腿部的尺码，手套每个身体一个选项；两者与服装的胸部或腿部尺码在同一组时会并入其中。",
+    "description": ""
+  },
+  "SizeSet.EndsUnreadable.Fmt": {
+    "message": "{0}：无法读取它的骨骼绑定，无法保留脚或手，因此没有为它制作尺码。",
+    "description": ""
+  },
+  "SizeSet.Remake": {
+    "message": "重新制作 Proteus 之前添加的尺码",
+    "description": ""
+  },
+  "SizeSet.Remake.Tip": {
+    "message": "关闭：Proteus 已添加的尺码保持原样。开启：重新适配并替换。作者自己的尺码永远不会被改动。如果你曾用较早版本的 Proteus 添加过尺码，请开启一次：那些尺码是从作者的第一个尺码适配的。",
+    "description": ""
+  },
+  "SizeSet.Run": {
+    "message": "添加尺码",
+    "description": ""
+  },
+  "SizeSet.Run.Tip": {
+    "message": "在后台运行，部件较多的模组可能需要几分钟。完成后 Penumbra 会重新加载模组。",
+    "description": ""
+  },
+  "SizeSet.PickBody": {
+    "message": "请至少勾选一个体型。",
+    "description": ""
+  },
+  "SizeSet.Cancel": {
+    "message": "停止",
+    "description": ""
+  },
+  "SizeSet.Cancelled": {
+    "message": "已停止。已保存的尺码会留在模组中。",
+    "description": ""
+  },
+  "SizeSet.Done.Fmt": {
+    "message": "已向模组添加 {0} 个尺码。",
+    "description": ""
+  },
+  "SizeSet.NothingAdded": {
+    "message": "没有添加尺码：模组已经拥有所勾选体型的全部尺码。",
+    "description": ""
+  },
+  "SizeSet.LeftOut": {
+    "message": "未制作：",
+    "description": ""
+  },
+  "SizeSet.Failed.Fmt": {
+    "message": "无法添加尺码：{0}",
+    "description": ""
+  },
+  "SizeSet.NoPieces": {
+    "message": "此模组没有可制作尺码的上衣、腿部、鞋子或手套模型。",
+    "description": ""
+  },
+  "SizeSet.EndNoLeadSource.Fmt": {
+    "message": "{0}：未加入“{1}”：无法为此部件找到或读取该选项中套装上衣或腿部所依据的作者尺码。勾选“重新制作”以重做该选项。",
+    "description": ""
+  },
+  "SizeSet.EndNoLeadSourceRemake.Fmt": {
+    "message": "{0}：“{1}”保持原样：无法为此部件读取该选项中套装上衣或腿部所依据的作者尺码。",
+    "description": ""
+  },
+  "SizeSet.NoBodies": {
+    "message": "没有安装可适配的体型模组。",
+    "description": ""
+  },
+  "SizeSet.Unpaired.Fmt": {
+    "message": "{0}：它与另一件无法跟随的部件在同一个尺码组中，因此没有为它制作尺码——否则每个尺码都会穿着未重新适配的另一件部件。",
+    "description": ""
+  },
+  "SizeSet.PieceFailed.Fmt": {
+    "message": "{0}：失败：{1}",
+    "description": ""
+  },
+  "SizeSet.Reading.Fmt": {
+    "message": "正在读取 {0} 是为哪个体型制作的……",
+    "description": ""
+  },
+  "SizeSet.Unreadable.Fmt": {
+    "message": "{0}：无法判断它是为哪个体型制作的，因此没有制作它的尺码。",
+    "description": ""
+  },
+  "SizeSet.NoSuchSize.Fmt": {
+    "message": "{0}：{2} 没有“{1}”的模型，因此跳过了该尺码。",
+    "description": ""
+  },
+  "SizeSet.Refused.Fmt": {
+    "message": "{0}：无法制作“{1}”：{2}",
+    "description": ""
+  },
+  "SizeSet.SaveFailed.Fmt": {
+    "message": "{0}：{1}",
+    "description": ""
+  },
+  "SizeSet.NotInstalled.Fmt": {
+    "message": "{0}：未安装 {1}，因此没有制作它的任何尺码。",
+    "description": ""
+  },
+  "SizeSet.Working.Fmt": {
+    "message": "正在将 {0} 适配为 {1}……",
+    "description": ""
+  },
+  "SizeSet.NotInstalledTip.Fmt": {
+    "message": "Penumbra 中未安装 {0}。请安装后关闭并重新打开此部分。",
+    "description": ""
+  },
+  "ContentImport.Warn.EffectFileMissing.Fmt": {
+    "message": "“{0}”带有动画特效，但其文件（{1}）不在包中，因此无法显示。",
+    "description": ""
+  },
+  "Content.StaleEffectImport.Fmt": {
+    "message": "“{0}”的动画特效被这次导入留在了原版物品上，只有穿戴该物品时才会出现。删除此模组并重新导入该包，即可无需该物品显示特效。",
+    "description": ""
+  },
+  "Content.EffectOnly": {
+    "message": "动画特效",
+    "description": ""
+  },
+  "Content.WithEffect.Fmt": {
+    "message": "{0} + 特效",
+    "description": ""
+  },
+  "Content.Effect.Tip": {
+    "message": "此部件带有动画特效。Proteus 会在空闲栏位放入一个隐形饰品来播放它，因此无需穿戴它替换的物品。",
+    "description": ""
+  },
+  "Chat.EffectUnplaced.Fmt": {
+    "message": "[Proteus] “{0}”的动画特效未显示：它的隐形载体需要一个空闲的饰品栏位。请空出戒指、手镯或项链栏位。",
+    "description": ""
   }
 }

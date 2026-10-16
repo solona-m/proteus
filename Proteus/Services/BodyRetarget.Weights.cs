@@ -95,6 +95,10 @@ internal static partial class BodyRetarget
     /// a bone of its own (TBSE-X's pecs, Rue's <c>iv_c_mune</c> in place of <c>j_mune</c>) the cloth takes the same
     /// move. A weight the change would take below zero stops at zero, and the body share is scaled back to what it was.
     /// Without the old body under the vertex, the new body's weights are taken as they are.
+    /// <para/>
+    /// Across body mods, cloth rigged like the skin under it is rigged as the new skin outright (the copy rule), and
+    /// cloth lying on the body follows it (<see cref="FollowBodyNearSkin"/>, <see cref="DropOwnBonesNearBody"/>).
+    /// Within one body mod the change alone: there the author's weighting off the same body mod stands.
     /// </summary>
     /// <param name="garment">The refitted garment, positions already on the new body.</param>
     /// <param name="pairs">The slots being refitted; each must carry both its source and target body's files.</param>
@@ -164,20 +168,31 @@ internal static partial class BodyRetarget
             if (!surface.IsEmpty) ownSkin = [(surface, authoredSkin)];
         }
 
+        // The copy rule and the skin hug rig cloth on the skin as the new skin outright: for a garment going to another
+        // body mod, whose author's skin matches neither body. Within one, the bodies agree wherever the rig does not
+        // change and the change between them is exact — Rue+'s Gen A legs to Gen B differ only at the crotch, and the
+        // two passes took up to 0.21 of the thighs' weight off 13,588 vertices of the Starlit Skirt, which the author
+        // had weighted to the thighs on purpose; the legs came through it when posed.
+        bool crossBodyPasses = acrossBodies || tuned.CrossBodyPassesWithinBody;
+
         int vc = model.Positions.Length / 3;
         var result = new (string Bone, float W)[]?[vc];
         int reweighted = 0, trimmed = 0;
         held = RigKept(model, targets, rigKept, held);
+        var sides = GarmentSides(own, vc, bodyBones);
+        var legFill = tuned.LegsForAll ? new (string Bone, float W)[]?[vc] : LegFill(own, vc, bodyBones);
 
         foreach (int v in ClothVertices(model))
         {
             if (held != null && held.Contains(v)) continue;
             var p = new Vector3(model.Positions[v * 3], model.Positions[v * 3 + 1], model.Positions[v * 3 + 2]);
             var mine = Influences(own, v);
+            int side = sides[v];
+            var legs = legFill[v];
 
             // All the garment's own bones: untouched, and no body lookup needed.
             if (mine.Where(i => !bodyBones.Contains(i.Bone)).Sum(i => i.W) >= 0.999f) continue;
-            if (Nearest(targets, p, out float far) is not { } body || body.Length == 0) continue;
+            if (Nearest(targets, p, side, out float far, legs) is not { } body || body.Length == 0) continue;
             var was = new Vector3(wasAt[v * 3], wasAt[v * 3 + 1], wasAt[v * 3 + 2]);
             if (sources != null)
             {
@@ -185,9 +200,12 @@ internal static partial class BodyRetarget
                 // old one missing there is nothing to compare against, and taking the new body's weights outright
                 // would re-rig cloth that never sat on it.
                 float ownFar = float.MaxValue;
-                var fromOwn = ownSkin != null ? Nearest(ownSkin, was, out ownFar) : null;
-                if (fromOwn is { Length: > 0 } && ownFar <= tuned.CopyReach
-                    && Difference([.. mine.Where(i => bodyBones.Contains(i.Bone))], [.. fromOwn]) <= tuned.CopyTolerance)
+                // Whether the author copied this cloth's weights off its skin is asked of the skin as it is: with its
+                // legs filled in from the author's own weights, skin under a skirt would match it by construction.
+                var ownRaw = ownSkin != null ? Nearest(ownSkin, was, side, out ownFar) : null;
+                var fromOwn = legs != null ? WithoutLegs(ownRaw, legs) : ownRaw;
+                if (crossBodyPasses && ownRaw is { Length: > 0 } && ownFar <= tuned.CopyReach
+                    && Difference([.. mine.Where(i => bodyBones.Contains(i.Bone))], [.. ownRaw]) <= tuned.CopyTolerance)
                 {
                     // Rigged as its own skin under it: rigged as the new skin under it, outright. Skin and cloth that
                     // moved as one on the author's body move as one on the new body; the change between two lookups
@@ -208,7 +226,7 @@ internal static partial class BodyRetarget
                     }
                     else
                     {
-                        oldBody = Nearest(sources, was, out oldFar);
+                        oldBody = Nearest(sources, was, side, out oldFar, legs);
                     }
                     if (oldBody is not { Length: > 0 }) continue;
                     far = MathF.Max(far, oldFar);
@@ -229,11 +247,13 @@ internal static partial class BodyRetarget
         // Smoothed before the layers are paired, so partners still come out identical.
         if (acrossBodies && !tuned.NoWeightSmooth) SmoothWeights(model, own, result, bodyBones, held);
 
-        // After the smoothing, which would otherwise take cloth lying on the skin off the skin's weights again.
-        if (!tuned.NoSkinHug)
+        // After the smoothing, which would otherwise take cloth lying on the skin off the skin's weights again. Across body
+        // mods only, as the copy rule above.
+        if (crossBodyPasses && !tuned.NoSkinHug)
         {
-            FollowBodyNearSkin(model, own, targets, result, held);
-            DropOwnBonesNearBody(model, own, targets, result, bodyBones, held);
+            FollowBodyNearSkin(model, own, targets, result, held, sides, legFill);
+            DropOwnBonesNearBody(model, own, targets, result, bodyBones, held, sides, legFill);
+            if (acrossBodies && !tuned.NoWeightSmooth) BlendShiri(model, own, result, bodyBones, held, legFill);
         }
 
         reweighted += KeepLayersTogether(model, own, wasAt, result, held);
@@ -255,12 +275,16 @@ internal static partial class BodyRetarget
         {
             if (held != null && held.Contains(v)) continue;
             var p = new Vector3(model.Positions[v * 3], model.Positions[v * 3 + 1], model.Positions[v * 3 + 2]);
-            if (Nearest(targets, p, out _) is not { } body || body.Length == 0) continue;
+            if (Nearest(targets, p, sides[v], out _) is not { } body || body.Length == 0) continue;
             if (Combine(Influences(own, v), body, bodyBones, out bool cut) is not { } combined) continue;
             result[v] = combined;
             reweighted++;
             if (cut) trimmed++;
         }
+
+        // Last, after the smoothing and the layer averaging, which can carry a little of one leg across the crotch.
+        KeepToSide(own, result, bodyBones);
+        KeepOffLegs(model, own, result, legFill);
 
         // Per mesh, in each mesh's own vertex numbering, which is what the writer walks.
         var perMesh = new Dictionary<int, (string Bone, float W)[]?[]>();
@@ -418,8 +442,18 @@ internal static partial class BodyRetarget
     /// The target body's weights at the point of its skin nearest <paramref name="p"/>, across every target slot — the
     /// three corners' influences blended by where the point sits in their triangle. Null when no skin is in reach.
     /// </summary>
+    /// <param name="side">The side of the body the garment's vertex belongs to (see <see cref="GarmentSides"/>): skin
+    /// on the OTHER side is never read, however near. 0 reads any skin.</param>
+    /// <param name="legFill">For cloth its author rigged to no leg bone (see <see cref="LegFill"/>), what the skin's leg
+    /// weight is replaced with — see <see cref="WithoutLegs"/>. Null keeps the legs.</param>
     private static (string Bone, float W)[]? Nearest(List<(BodySurface Surface, XivLiveMesh.SkinnedMesh Skin)> targets,
-                                                    Vector3 p, out float distance)
+                                                    Vector3 p, int side, out float distance,
+                                                    (string Bone, float W)[]? legFill = null)
+        => legFill == null ? NearestAny(targets, p, side, out distance)
+                           : WithoutLegs(NearestAny(targets, p, side, out distance), legFill);
+
+    private static (string Bone, float W)[]? NearestAny(List<(BodySurface Surface, XivLiveMesh.SkinnedMesh Skin)> targets,
+                                                       Vector3 p, int side, out float distance)
     {
         BodySurface.Hit? best = null;
         XivLiveMesh.SkinnedMesh? on = null;
@@ -427,7 +461,7 @@ internal static partial class BodyRetarget
         distance = WeightReach;
         foreach (var (surface, skin) in targets)
         {
-            if (!surface.Nearest(p, reach, out var hit)) continue;
+            if (!surface.Nearest(p, reach, out var hit, side != 0 ? BodySides(skin) : null, -side)) continue;
             best = hit;
             on = skin;
             reach = hit.Distance;
@@ -437,6 +471,217 @@ internal static partial class BodyRetarget
 
         return MeshMath.BlendWeights([.. Influences(on, h.A)], h.U, [.. Influences(on, h.B)], h.V,
                                      [.. Influences(on, h.C)], h.W, MaxInfluences);
+    }
+
+    /// <summary>
+    /// A leg bone: the thighs, knees, calves and feet (<c>j_asi_*</c>), Rue's toes (<c>iv_asi_*</c>), and every body
+    /// mod's thigh physics (<c>ya_daitai_phys</c>, <c>iv_daitai_phys</c>). Not the buttocks: <c>iv_shiri</c> is the hip
+    /// a skirt hangs from, and a skirt follows it.
+    /// </summary>
+    internal static bool IsLegBone(string bone)
+        => bone.StartsWith("j_asi_", StringComparison.Ordinal) || bone.StartsWith("iv_asi_", StringComparison.Ordinal)
+        || bone.Contains("daitai", StringComparison.Ordinal);
+
+    /// <summary>
+    /// How much of its body share cloth must give the legs to count as rigged to them (10%). Below it the cloth is a
+    /// skirt with a trace of leg weight in it — what transferring a body's weights onto a skirt in Blender leaves along
+    /// the hem, a byte or so of <c>j_asi_a</c> — and one byte of thigh must not hand the whole hem the legs.
+    /// </summary>
+    internal const float LegShare = 0.1f;
+
+    /// <summary>
+    /// Per vertex of the garment: for cloth its author did not rig to the legs (see <see cref="LegShare"/>) — a skirt,
+    /// the long panels of a dress, a coat's tails — the author's own body weights without their legs, their shape over
+    /// the other body bones, which stand in for any leg weight the bodies would give it (see <see cref="WithoutLegs"/>);
+    /// null for cloth rigged to the legs, which keeps them. Such cloth hangs from the hips and must never take the legs'
+    /// weights, however near the legs it hangs.
+    /// <para/>
+    /// "Sanguine" refitted onto a YAS body: not one of its 48,590 cloth vertices carries a leg bone, the panels rigged
+    /// to <c>j_kosi</c>, the back and the skirt chains alone. Read off the legs beneath them, the panels took
+    /// <c>j_asi_a</c> and <c>ya_daitai_phys</c>, the hip share went patchy around them, and every step the legs took
+    /// tore at the skirt.
+    /// </summary>
+    internal static (string Bone, float W)[]?[] LegFill(XivLiveMesh.SkinnedMesh own, int vc, IReadOnlySet<string> bodyBones)
+    {
+        var fill = new (string Bone, float W)[]?[vc];
+        for (int v = 0; v < vc; v++)
+        {
+            var body = Influences(own, v).Where(i => bodyBones.Contains(i.Bone)).ToList();
+            float sum = body.Sum(i => i.W), legs = body.Where(i => IsLegBone(i.Bone)).Sum(i => i.W);
+            if (sum > 1e-6f && legs >= LegShare * sum) continue;
+            var rest = body.Where(i => !IsLegBone(i.Bone)).ToList();
+            float restSum = rest.Sum(i => i.W);
+            fill[v] = restSum > 1e-6f ? [.. rest.Select(i => (i.Bone, i.W / restSum))] : [];
+        }
+        return fill;
+    }
+
+    /// <summary>
+    /// A body reading for cloth that must not follow the legs: its leg weight goes to <paramref name="author"/> — the
+    /// author's own body weights for that cloth — and the rest of the reading stands as it is. A reading that is 90% leg
+    /// comes out 90% the author's; one with no leg in it is unchanged.
+    /// <para/>
+    /// Scaling the rest of the reading up to the whole instead made neighbours disagree: a vertex that read 90% thigh
+    /// and 10% hip came out all hip, while the next one, all thigh, had nothing left and kept the author's weights.
+    /// </summary>
+    /// <param name="author">The author's body weights without their legs, summing to one; empty when the author gave the
+    /// cloth no such share, and then the rest of the reading is scaled up after all.</param>
+    /// <returns>The reading with no leg weight in it; null when there was no reading, or nothing but legs and nothing
+    /// to give their weight to.</returns>
+    internal static (string Bone, float W)[]? WithoutLegs((string Bone, float W)[]? body, (string Bone, float W)[] author)
+    {
+        if (body == null || !body.Any(i => IsLegBone(i.Bone))) return body;
+        var rest = body.Where(i => !IsLegBone(i.Bone)).ToArray();
+        float total = body.Sum(i => i.W), kept = rest.Sum(i => i.W), legs = total - kept;
+        if (author.Length > 0) return MeshMath.BlendWeights(rest, 1f, author, legs, [], 0f, MaxInfluences);
+        if (kept <= 1e-4f) return null;
+        return [.. rest.Select(i => (i.Bone, i.W / kept * total))];
+    }
+
+    /// <summary>
+    /// The last word for cloth its author did not rig to the legs: it never comes out with more leg weight than the
+    /// author gave it — none for most of a skirt, the trace a hem was left with for the rest (see
+    /// <see cref="LegShare"/>). Whatever it gained — carried in by the smoothing or the layer averaging from cloth
+    /// rigged to the legs — goes to the author's own body weights, as a reading's does (see <see cref="WithoutLegs"/>).
+    /// With nothing to give it to, the author's weights stand.
+    /// </summary>
+    internal static void KeepOffLegs(ModelParts model, XivLiveMesh.SkinnedMesh own, (string Bone, float W)[]?[] result,
+                                     (string Bone, float W)[]?[] legFill)
+    {
+        foreach (int v in ClothVertices(model))
+        {
+            if (legFill[v] is not { } author || result[v] is not { } now) continue;
+            float there = now.Where(i => IsLegBone(i.Bone)).Sum(i => i.W);
+            if (there <= 1e-4f) continue;
+            float allowed = Influences(own, v).Where(i => IsLegBone(i.Bone)).Sum(i => i.W);
+            if (there <= allowed + 1e-4f) continue;
+
+            if (author.Length == 0 && allowed <= 1e-4f)
+            {
+                result[v] = WithoutLegs(now, author);   // nothing of the author's to give it to: the rest scaled up
+                continue;
+            }
+            if (author.Length == 0)
+            {
+                result[v] = null;                       // the author's trace of leg, and nothing else to go to: theirs
+                continue;
+            }
+            // The legs scaled down to the author's trace; the rest of what they had goes to the author's weights.
+            var legs = now.Where(i => IsLegBone(i.Bone)).ToArray();
+            var rest = now.Where(i => !IsLegBone(i.Bone)).ToArray();
+            result[v] = MeshMath.BlendWeights(rest, 1f, legs, allowed / there, author, there - allowed, MaxInfluences);
+        }
+    }
+
+    /// <summary>Which side of the body a bone belongs to: +1 for <c>_l</c>, -1 for <c>_r</c>, 0 for the middle.</summary>
+    internal static int BoneSide(string bone)
+        => bone.EndsWith("_l", StringComparison.Ordinal) ? 1 : bone.EndsWith("_r", StringComparison.Ordinal) ? -1 : 0;
+
+    /// <summary>
+    /// Which side of the body a set of influences belongs to: +1 left, -1 right, 0 neither. A side needs at least
+    /// <paramref name="minShare"/> of the counted weight on sided bones, and more than <paramref name="dominance"/> of
+    /// that on the one side.
+    /// </summary>
+    /// <param name="counted">Which bones count; null for all.</param>
+    internal static int SideOf(IEnumerable<(string Bone, float W)> influences, float dominance, float minShare,
+                               IReadOnlySet<string>? counted = null)
+    {
+        float left = 0f, right = 0f, total = 0f;
+        foreach (var (bone, w) in influences)
+        {
+            if (counted != null && !counted.Contains(bone)) continue;
+            total += w;
+            int s = BoneSide(bone);
+            if (s > 0) left += w;
+            else if (s < 0) right += w;
+        }
+        float sided = left + right;
+        if (total <= 1e-6f || sided < minShare * total) return 0;
+        return left > dominance * sided ? 1 : right > dominance * sided ? -1 : 0;
+    }
+
+    /// <summary>
+    /// Per vertex of the garment, the side of the body its author rigged it to — its BODY bones only, since a skirt's
+    /// chain is sided too and says nothing of which leg is under it. 70% of a quarter of the body share: cloth over the
+    /// crotch, rigged to both legs about evenly, belongs to neither and reads any skin; an inside seam rigged 80/20
+    /// belongs to its leg.
+    /// <para/>
+    /// A pant leg refitted close against the other leg used to read THAT leg's skin, which was nearer than its own, and
+    /// came out partly rigged to it: the inside of one thigh following the other in every step.
+    /// </summary>
+    internal static sbyte[] GarmentSides(XivLiveMesh.SkinnedMesh own, int vc, IReadOnlySet<string> bodyBones)
+    {
+        var sides = new sbyte[vc];
+        for (int v = 0; v < vc; v++) sides[v] = (sbyte)SideOf(Influences(own, v), 0.7f, 0.25f, bodyBones);
+        return sides;
+    }
+
+    /// <summary>Every bone the pairs' source and target bodies rig — what "body bone" means for a refit.</summary>
+    internal static HashSet<string> BodyBonesOf(IReadOnlyList<SlotPair> pairs)
+    {
+        var bones = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var pair in pairs)
+        {
+            if (pair.SourceModel != null) bones.UnionWith(SecondSkinWriter.Parse(pair.SourceModel).BoneNames);
+            if (pair.TargetModel != null) bones.UnionWith(SecondSkinWriter.Parse(pair.TargetModel).BoneNames);
+        }
+        return bones;
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<XivLiveMesh.SkinnedMesh, sbyte[]> bodySides = new();
+
+    /// <summary>
+    /// Per vertex of a body's skin, the side it belongs to — loose, unlike <see cref="GarmentSides"/>: more of its sided
+    /// weight on one side than the other, of a quarter of it, so a triangle reaching onto the other leg at all is off
+    /// limits to cloth of this one.
+    /// </summary>
+    internal static sbyte[] BodySides(XivLiveMesh.SkinnedMesh skin)
+        => bodySides.GetValue(skin, s =>
+        {
+            var sides = new sbyte[s.VertexCount];
+            for (int v = 0; v < sides.Length; v++) sides[v] = (sbyte)SideOf(Influences(s, v), 0.5f, 0.25f);
+            return sides;
+        });
+
+    /// <summary>
+    /// Never leave a vertex rigged more to the other side of the body than its author rigged it: whatever weight a
+    /// vertex gained, over the author's, on the side opposite the one its author leaned it to goes to its other body
+    /// bones. The lookups already read only the vertex's own side; this catches what the smoothing and the layer
+    /// averaging carry across where the two legs of a garment meet — and holds cloth near the crotch too, rigged to
+    /// both legs but mostly one, which the lookups leave free: rigged 60/40, it never comes out more than 40 the other way.
+    /// Cloth rigged to both evenly leans to neither and is left as the lookups made it.
+    /// </summary>
+    internal static void KeepToSide(XivLiveMesh.SkinnedMesh own, (string Bone, float W)[]?[] result,
+                                    IReadOnlySet<string> bodyBones)
+    {
+        for (int v = 0; v < result.Length; v++)
+        {
+            if (result[v] is not { } now) continue;
+            var mine = Influences(own, v);
+            int lean = SideOf(mine, 0.5f, 0.25f, bodyBones);
+            if (lean == 0) continue;
+            int other = -lean;
+            float allowed = mine.Where(i => BoneSide(i.Bone) == other).Sum(i => i.W);
+            float there = now.Where(i => BoneSide(i.Bone) == other).Sum(i => i.W);
+            if (there <= allowed + 1e-4f) continue;
+
+            // The excess goes to the body bones on this side or the middle; with none, to whatever else it carries.
+            bool Absorbs((string Bone, float W) i) => BoneSide(i.Bone) != other && bodyBones.Contains(i.Bone);
+            float absorb = now.Where(Absorbs).Sum(i => i.W);
+            bool anyRest = absorb > 1e-6f;
+            if (!anyRest) absorb = now.Where(i => BoneSide(i.Bone) != other).Sum(i => i.W);
+            if (absorb <= 1e-6f)
+            {
+                result[v] = null;   // nothing of its own side to give it: the author's weights stand
+                continue;
+            }
+
+            float scaleOther = allowed / there, gain = there - allowed;
+            result[v] = [.. now.Select(i => BoneSide(i.Bone) == other ? (i.Bone, W: i.W * scaleOther)
+                                          : (anyRest ? Absorbs(i) : true) ? (i.Bone, W: i.W + gain * i.W / absorb)
+                                          : i)
+                               .Where(i => i.W > 1e-4f)];
+        }
     }
 
     /// <summary>
@@ -549,19 +794,28 @@ internal static partial class BodyRetarget
     /// <c>j_sk_f_a_l</c>) on cloth within 3 mm of the hip, which has none, and physics swung that strip off it; and with
     /// the chain gone the cloth still bent apart from the thigh when the leg did, its weights a per-vertex reading of
     /// the bodies (and smoothed after it) rather than the skin's own. The skirt further out still swings.
+    /// <para/>
+    /// Between two body mods only. Within one the author weighted the cloth off the same body mod, and that weighting
+    /// stands: the Starlit Skirt keeps extra thigh weight at the hips on purpose, and Rue+'s Gen A to Gen B took it away.
     /// </summary>
     /// <param name="result">New weights per vertex, null where the author's stand. Updated in place.</param>
     private static void FollowBodyNearSkin(ModelParts model, XivLiveMesh.SkinnedMesh own,
                                            List<(BodySurface Surface, XivLiveMesh.SkinnedMesh Skin)> targets,
-                                           (string Bone, float W)[]?[] result, IReadOnlySet<int>? held)
+                                           (string Bone, float W)[]?[] result, IReadOnlySet<int>? held, sbyte[] sides,
+                                           (string Bone, float W)[]?[] legFill)
     {
         foreach (int v in ClothVertices(model))
         {
             if (held != null && held.Contains(v)) continue;
             var p = new Vector3(model.Positions[v * 3], model.Positions[v * 3 + 1], model.Positions[v * 3 + 2]);
-            if (Nearest(targets, p, out float far) is not { Length: > 0 } body || far >= SkinHugFade) continue;
+            if (SkirtReading(targets, p, sides[v], legFill[v], out float far, out float onLegs) is not { Length: > 0 } body
+                || far >= SkinHugFade)
+                continue;
 
-            // How much of the cloth's own weighting stays: none on the body, all of it by the fade.
+            // How much of the cloth's own weighting stays: none on the body, all of it by the fade. A skirt lying on any
+            // leg at all keeps all of it (see SkirtOnLegs): rigged as the author's hip in place of the thigh, the edge of
+            // a panel lying on the leg came out all j_kosi halfway to the knee.
+            if (onLegs >= SkirtOnLegs) continue;
             float keep = far <= SkinHugFull ? 0f : (far - SkinHugFull) / (SkinHugFade - SkinHugFull);
             if (keep <= 0f)
             {
@@ -571,6 +825,30 @@ internal static partial class BodyRetarget
             var now = result[v] is { } w ? w : [.. Influences(own, v)];
             result[v] = MeshMath.BlendWeights(now, keep, body, 1f - keep, [], 0f, MaxInfluences);
         }
+    }
+
+    /// <summary>
+    /// How much of the skin under a skirt must be leg (5%) for the skin-hug passes to leave the skirt as its author
+    /// rigged it. Those passes rig cloth lying on the skin as the skin and take a skirt's chain off it near the hip; on
+    /// the leg a skirt is neither. Standing back only as far as the skin is leg was not enough: where the hip gives way
+    /// to the thigh, half-leg skin still took half the chain off and gave it to the hip — "Sanguine" on Rue+, 177 cloth
+    /// vertices below the hips gaining more than 0.15 of <c>j_kosi</c> and 195 losing a fifth of their chain, the hip
+    /// streaked down the front panels to mid-thigh.
+    /// </summary>
+    internal const float SkirtOnLegs = 0.05f;
+
+    /// <summary>
+    /// The skin-hug passes' reading of the body under a cloth vertex: for a skirt (<paramref name="legFill"/> not null),
+    /// with its leg weight given to the author's own (see <see cref="WithoutLegs"/>), and how much of the skin there was
+    /// leg in <paramref name="onLegs"/>; for any other cloth, the skin as it is and 0.
+    /// </summary>
+    private static (string Bone, float W)[]? SkirtReading(List<(BodySurface Surface, XivLiveMesh.SkinnedMesh Skin)> targets,
+                                                         Vector3 p, int side, (string Bone, float W)[]? legFill,
+                                                         out float distance, out float onLegs)
+    {
+        var raw = NearestAny(targets, p, side, out distance);
+        onLegs = legFill != null && raw != null ? raw.Where(i => IsLegBone(i.Bone)).Sum(i => i.W) : 0f;
+        return legFill != null ? WithoutLegs(raw, legFill) : raw;
     }
 
     /// <summary>Cloth this close to the new body carries none of the garment's own bones (4 mm) — see
@@ -590,23 +868,30 @@ internal static partial class BodyRetarget
     /// the same cloth in the same place — did not: in the fade beyond 3 mm, Rue's reading of the bodies left up to 38% of
     /// the side skirt bone (<c>j_sk_s_a_l</c>) on cloth 3-6 mm off the hip, YAB's 24%, and a third of a swinging chain on
     /// cloth that close is the hip through it. The skirt hanging free of the body still swings.
+    /// <para/>
+    /// Between two body mods only, as <see cref="FollowBodyNearSkin"/>.
     /// </summary>
     /// <param name="result">New weights per vertex, null where the author's stand. Updated in place.</param>
     private static void DropOwnBonesNearBody(ModelParts model, XivLiveMesh.SkinnedMesh own,
                                              List<(BodySurface Surface, XivLiveMesh.SkinnedMesh Skin)> targets,
                                              (string Bone, float W)[]?[] result, IReadOnlySet<string> bodyBones,
-                                             IReadOnlySet<int>? held)
+                                             IReadOnlySet<int>? held, sbyte[] sides, (string Bone, float W)[]?[] legFill)
     {
         foreach (int v in ClothVertices(model))
         {
             if (held != null && held.Contains(v)) continue;
             var p = new Vector3(model.Positions[v * 3], model.Positions[v * 3 + 1], model.Positions[v * 3 + 2]);
-            if (Nearest(targets, p, out float far) is not { Length: > 0 } body || far >= OwnBoneFade) continue;
+            if (SkirtReading(targets, p, sides[v], legFill[v], out float far, out float onLegs) is not { Length: > 0 } body
+                || far >= OwnBoneFade)
+                continue;
 
             var now = result[v] is { } w ? w.ToList() : Influences(own, v);
             float ownShare = now.Where(i => !bodyBones.Contains(i.Bone)).Sum(i => i.W);
             if (ownShare <= 1e-4f) continue;
 
+            // A skirt over the legs keeps its chain (see SkirtOnLegs): the hip is what it must not swing off, and over the
+            // thigh it hangs free of the hip.
+            if (onLegs >= SkirtOnLegs) continue;
             float keep = far <= OwnBoneFull ? 0f : (far - OwnBoneFull) / (OwnBoneFade - OwnBoneFull);
             var kept = now.Where(i => !bodyBones.Contains(i.Bone)).Select(i => (i.Bone, W: i.W * keep))
                           .Where(i => i.W > 1e-4f).OrderByDescending(i => i.W).ToList();
@@ -616,6 +901,125 @@ internal static partial class BodyRetarget
             if (slots <= 0) continue;
             var share = Normalised(bodyPart.OrderByDescending(i => i.W).Take(slots).ToList(), 1f - kept.Sum(i => i.W));
             result[v] = [.. kept, .. share];
+        }
+    }
+
+    /// <summary>Rounds of <see cref="BlendShiri"/>.</summary>
+    internal const int ShiriBlendRounds = 3;
+
+    /// <summary>The buttocks: Rue's <c>iv_shiri</c> bones, which a skirt hangs from.</summary>
+    internal static bool IsShiriBone(string bone) => bone.StartsWith("iv_shiri", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Ease a skirt's buttock weights (<see cref="IsShiriBone"/>) toward its neighbours', after the skin-hug passes:
+    /// <see cref="ShiriBlendRounds"/> rounds, each <see cref="WeightSmoothRate"/> of the way. The other body bones of the
+    /// vertex give or take the difference in proportion; the garment's own bones — the skirt's chain — are untouched.
+    /// <para/>
+    /// The skin-hug passes run after the smoothing and rig cloth lying on the skin as the skin, outright within 3 mm and
+    /// not at all past 6: on a skirt, which touches the buttocks only here and there, that left the buttock share as a
+    /// patch with a hard edge and holes where the cloth stood a few millimetres off ("Sanguine" on Rue+: 80-100 edges
+    /// per side jumping more than 0.15 of <c>iv_shiri</c>), and a patch like that moves as one, apart from the cloth
+    /// round it. Skirt cloth only (see <see cref="LegFill"/>): a bodice lying on the skin keeps the skin's weights
+    /// exactly, which is what the hug is for.
+    /// </summary>
+    private static void BlendShiri(ModelParts model, XivLiveMesh.SkinnedMesh own, (string Bone, float W)[]?[] result,
+                                   IReadOnlySet<string> bodyBones, IReadOnlySet<int>? held, (string Bone, float W)[]?[] legFill)
+    {
+        int vc = model.Positions.Length / 3;
+        var cloth = ClothVertices(model);
+        if (!cloth.Any(v => (result[v] ?? []).Any(i => IsShiriBone(i.Bone)))) return;
+
+        // One node per place, as SmoothWeights welds them, so a seam's split vertices stay identical.
+        var nodeOf = new int[vc];
+        Array.Fill(nodeOf, -1);
+        var byPlace = new Dictionary<(int, int, int), int>();
+        var members = new List<List<int>>();
+        foreach (int v in cloth)
+        {
+            var key = ((int)MathF.Round(model.Positions[v * 3] * 1e5f), (int)MathF.Round(model.Positions[v * 3 + 1] * 1e5f),
+                       (int)MathF.Round(model.Positions[v * 3 + 2] * 1e5f));
+            if (!byPlace.TryGetValue(key, out int node))
+            {
+                byPlace[key] = node = members.Count;
+                members.Add([]);
+            }
+            nodeOf[v] = node;
+            members[node].Add(v);
+        }
+        int nodes = members.Count;
+        var adj = new HashSet<int>[nodes];
+        for (int n = 0; n < nodes; n++) adj[n] = [];
+        foreach (var part in model.Parts)
+        {
+            if (part.Island >= 0 || SecondSkinWriter.IsBodySkinMaterial(part.Material)) continue;
+            for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
+                for (int k = 0; k < 3; k++)
+                {
+                    int a = part.Triangles[t + k], b = part.Triangles[t + (k + 1) % 3];
+                    if (a < 0 || b < 0 || a >= vc || b >= vc || nodeOf[a] < 0 || nodeOf[b] < 0 || nodeOf[a] == nodeOf[b]) continue;
+                    adj[nodeOf[a]].Add(nodeOf[b]);
+                    adj[nodeOf[b]].Add(nodeOf[a]);
+                }
+        }
+
+        var now = new List<(string Bone, float W)>[nodes];
+        var moves = new bool[nodes];
+        for (int n = 0; n < nodes; n++)
+        {
+            int v = members[n][0];
+            now[n] = result[v] is { } w ? [.. w] : Influences(own, v);
+            moves[n] = members[n].All(u => legFill[u] != null) && (held == null || !members[n].Any(held.Contains));
+        }
+
+        for (int round = 0; round < ShiriBlendRounds; round++)
+        {
+            var next = new List<(string Bone, float W)>?[nodes];
+            for (int n = 0; n < nodes; n++)
+            {
+                if (!moves[n] || adj[n].Count == 0) continue;
+                var mean = new Dictionary<string, float>(StringComparer.Ordinal);
+                foreach (int m in adj[n])
+                    foreach (var (bone, w) in now[m])
+                        if (IsShiriBone(bone)) mean[bone] = mean.GetValueOrDefault(bone) + w / adj[n].Count;
+                var mine = now[n].Where(i => IsShiriBone(i.Bone)).ToDictionary(i => i.Bone, i => i.W, StringComparer.Ordinal);
+                if (mean.Count == 0 && mine.Count == 0) continue;
+
+                var want = new Dictionary<string, float>(StringComparer.Ordinal);
+                foreach (var bone in mean.Keys.Union(mine.Keys))
+                    want[bone] = mine.GetValueOrDefault(bone) * (1f - WeightSmoothRate) + mean.GetValueOrDefault(bone) * WeightSmoothRate;
+
+                // What the buttocks gain, the vertex's other body bones give, in proportion — never more than they have.
+                var others = now[n].Where(i => !IsShiriBone(i.Bone) && bodyBones.Contains(i.Bone)).ToList();
+                float give = want.Values.Sum() - mine.Values.Sum(), have = others.Sum(i => i.W);
+                if (give > have)
+                {
+                    if (give <= 1e-6f) continue;
+                    float scale = have / give;
+                    foreach (var bone in want.Keys.ToList())
+                        want[bone] = mine.GetValueOrDefault(bone) + (want[bone] - mine.GetValueOrDefault(bone)) * scale;
+                    give = have;
+                }
+                if (MathF.Abs(give) <= 1e-5f && want.All(kv => MathF.Abs(kv.Value - mine.GetValueOrDefault(kv.Key)) <= 1e-5f))
+                    continue;
+                float left = have - give;
+                if (have <= 1e-6f && left > 1e-6f) continue;   // nothing of the body's to hand the buttocks' loss back to
+
+                var list = now[n].Where(i => !IsShiriBone(i.Bone) && !bodyBones.Contains(i.Bone)).ToList();   // own bones
+                list.AddRange(others.Select(i => (i.Bone, have > 1e-6f ? i.W * left / have : 0f)));
+                list.AddRange(want.Select(kv => (kv.Key, kv.Value)));
+                list = list.Where(i => i.W > 1e-4f).OrderByDescending(i => i.W).Take(MaxInfluences).ToList();
+                next[n] = Normalised(list, 1f);
+            }
+            for (int n = 0; n < nodes; n++)
+                if (next[n] is { } w) now[n] = w;
+        }
+
+        for (int n = 0; n < nodes; n++)
+        {
+            if (!moves[n]) continue;
+            var before = result[members[n][0]] ?? [.. Influences(own, members[n][0])];
+            if (Difference([.. before], now[n]) <= 1e-4f) continue;
+            foreach (int v in members[n]) result[v] = [.. now[n]];
         }
     }
 

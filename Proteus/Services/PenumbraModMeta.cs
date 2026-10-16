@@ -790,6 +790,12 @@ internal static class PenumbraModMeta
     public static string TypeOf(JsonElement group)
         => group.TryGetProperty("Type", out var t) && t.ValueKind == JsonValueKind.String ? t.GetString() ?? "" : "";
 
+    /// <summary>Whether the mod's group of that name is a multi-choice one (<c>Type</c> "Multi", in any case).</summary>
+    public static bool IsMulti(string modRoot, string groupName)
+        => (TryReadGroups(modRoot) ?? [])
+            .Any(g => string.Equals(g.Name, groupName, StringComparison.OrdinalIgnoreCase)
+                      && string.Equals(TypeOf(g.Group), "Multi", StringComparison.OrdinalIgnoreCase));
+
     /// <summary>
     /// Add options that carry files to a group somebody else wrote, or replace same-named ones, leaving every other
     /// field of the group and every other option exactly as it was — its description, priority, default, and the
@@ -815,6 +821,23 @@ internal static class PenumbraModMeta
                 else list.Add(built);
             }
         });
+
+    /// <summary>The option a Single group selects by default, by name; null when there is no such group or option.</summary>
+    public static string? SingleDefault(string modRoot, string groupName)
+    {
+        var group = (TryReadGroups(modRoot) ?? [])
+                    .FirstOrDefault(g => string.Equals(g.Name, groupName, StringComparison.OrdinalIgnoreCase)).Group;
+        if (group.ValueKind != JsonValueKind.Object || FileOptionsOf(group) is not { } options) return null;
+        long at = group.TryGetProperty("DefaultSettings", out var d) && d.ValueKind == JsonValueKind.Number ? d.GetInt64() : 0;
+        return at >= 0 && at < options.Count ? options[(int)at].Name : null;
+    }
+
+    /// <summary>
+    /// Make <paramref name="optionName"/> a Single group's default, by name — after a rewrite that may have moved the
+    /// options about. The first option when it is not there.
+    /// </summary>
+    public static void SetSingleDefault(string modRoot, string groupName, string optionName)
+        => EditGroup(modRoot, groupName, (group, list) => group["DefaultSettings"] = (long)Math.Max(IndexOfOption(list, optionName), 0));
 
     /// <summary>
     /// Take one option out of a group somebody else wrote, leaving the rest as it was. The group's default is

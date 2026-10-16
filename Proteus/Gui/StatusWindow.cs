@@ -94,6 +94,11 @@ public class StatusWindow : Window
     // One-shot: once the grown size has landed, pull the window back on screen if it now hangs off an edge.
     private bool _keepOnScreen;
 
+    // The part drawer opened or closed in the Studio's last frame, applied next PreDraw.
+    private DrawerRequest.Pending? _drawerPending;
+    // The width the window took on for the part drawer, to give back when it closes and to leave out of the saved size.
+    private readonly DrawerResize _drawerResize = new();
+
     // Absolute index-texture path → rows that appear in it; cleared on each popup open.
     private readonly Dictionary<string, ContentIndexTexture.Scan> _indexRowCache = new();
     /// <summary>Mod whose colour editor window is open, or null. A window rather than a popup, so it survives clicks into the game.</summary>
@@ -143,6 +148,7 @@ public class StatusWindow : Window
         TextureLoader textureLoader,
         PartsPanel parts,
         HatCompatWatcher hatCompatWatcher,
+        AutoRefitWatcher autoRefitWatcher,
         LogExportService logExport)
         // "###ProteusStatus" is the stable window id; the title shows the assembly version, not the dev BuildNumber.
         : base($"Proteus  v{typeof(Plugin).Assembly.GetName().Version}###ProteusStatus", ImGuiWindowFlags.AlwaysAutoResize)
@@ -174,7 +180,8 @@ public class StatusWindow : Window
         modsTab = new ModsTab(penumbra, compositor, this, presets, designBindings, config, new ModPreviewService());
         bindingsTab = new BindingsTab(config, designBindings, penumbra);
         hatCompat = new HatCompatPanel(hatCompatWatcher, config);
-        settingsTab = new SettingsTab(config, compositor, discovery, designBindings, hatCompat, logExport);
+        settingsTab = new SettingsTab(config, compositor, discovery, designBindings, hatCompat,
+                                      new AutoRefitPanel(autoRefitWatcher, penumbra, config), logExport);
 
         SizeConstraints = AutoFitConstraints;
 
@@ -278,11 +285,47 @@ public class StatusWindow : Window
             SizeConstraints = ResizableConstraints;
         }
 
+        // A fit sizes the window afresh, drawer and all: nothing of the drawer's is left to give back.
+        bool fitting = (Flags & ImGuiWindowFlags.AlwaysAutoResize) != 0;
+        if (fitting) _drawerResize.Forget();
+
         if (_growForModel)
         {
             _growForModel = false;
             GrowForModel();
         }
+
+        if (_drawerPending is { } drawer)
+        {
+            _drawerPending = null;
+            ResizeForDrawer(drawer, fitting);
+        }
+    }
+
+    /// <summary>Widen the window for the part drawer just opened, or give that width back now it closed.</summary>
+    /// <remarks>Goes through <see cref="_togglesSize"/> like <see cref="GrowForModel"/>, but the saved size leaves the
+    /// drawer's share out (<see cref="DrawerResize.SavedWidth"/>): the drawer starts closed next session.</remarks>
+    private void ResizeForDrawer(DrawerRequest.Pending drawer, bool fitting)
+    {
+        // Unscaled, like every size here; and within what the window may be, so the size recorded is the size it gets.
+        float screenWidth = MathF.Min(ImGuiHelpers.MainViewport.Size.X / ImGuiHelpers.GlobalScale,
+                                      ResizableConstraints.MaximumSize.X);
+        var size = drawer.Open
+            ? _drawerResize.Open(_togglesSize, drawer.Grow, fitting, screenWidth)
+            : _drawerResize.Close(_togglesSize, fitting);
+        if (size is not { } resized) return;
+
+        resized = ClampToResizable(resized);
+        _togglesSize = resized;
+        if (config.WindowUserSized)
+        {
+            _sizeDirty = true;
+            _sizeChangedAt = Environment.TickCount64;
+        }
+        Size = resized;
+        SizeCondition = ImGuiCond.Always;
+        _ownResizeFrames = Math.Max(_ownResizeFrames, 3);
+        _keepOnScreen = true;
     }
 
     /// <summary>Grow the window to at least half the screen per axis, because the model viewer just appeared.</summary>
@@ -297,6 +340,7 @@ public class StatusWindow : Window
         if (grown == _togglesSize) return;
 
         _togglesSize = grown;
+        _drawerResize.Forget();   // the model view's size now, not the drawer's
         if (config.WindowUserSized)
         {
             _sizeDirty = true;
@@ -329,7 +373,7 @@ public class StatusWindow : Window
         if (Environment.TickCount64 - _sizeChangedAt < 400) return;
 
         _sizeDirty = false;
-        config.TogglesWindowWidth  = _togglesSize.X;
+        config.TogglesWindowWidth  = _drawerResize.SavedWidth(_togglesSize);
         config.TogglesWindowHeight = _togglesSize.Y;
         config.Save();
     }
@@ -439,6 +483,9 @@ public class StatusWindow : Window
                     _sizeChangedAt = Environment.TickCount64;
                 }
             }
+
+            // The drawer's grow has landed: what the window came out at is what a close compares with.
+            if (_drawerResize.AwaitingLanding && _ownResizeFrames == 0) _drawerResize.Landed(_togglesSize);
         }
 
         // A deferred UV transfer map arrived: index scans taken without the island mask are wrong, so rescan.
@@ -481,6 +528,7 @@ public class StatusWindow : Window
                             _studioDrawn = true;
                             // Fill the height only while not auto-fitting, or the row and the window grow each other without bound.
                             parts.Draw(fillHeight: _fitFrames == 0, reserveBelow: _footerReserve);
+                            if (parts.TakeDrawerRequest() is { } drawer) _drawerPending = drawer;
 
                             // The controls grew past the fitted height, so fit again; grow only.
                             if (_fitFrames == 0 && parts.ControlsHeight > _studioFitHeight + 1f)
@@ -847,6 +895,14 @@ public class StatusWindow : Window
                 int live = PiecesFor(entry, g.PenumbraGroupName, o.Name, gateOn).Count;
                 if (live > 0) options.Add((g.PenumbraGroupName, o.Name, order, live));
             }
+        }
+
+        // An effect an earlier import left on the vanilla item: nothing else on screen says why it is missing.
+        if (discovery.StaleEffectNotice(entry.ModDirectory) is { } stale)
+        {
+            ImGui.PushTextWrapPos(0);
+            ImGui.TextColored(ProteusStyle.Warn, stale);
+            ImGui.PopTextWrapPos();
         }
 
         // A pack the composite refused otherwise looks correct, so say why first, in amber.
@@ -2220,41 +2276,28 @@ public class StatusWindow : Window
     }
 
     /// <summary>
-    /// The four mod-wide geometry passes, written to the sidecar because they are authoring decisions that ship with the pack.
-    /// Ticking any promotes the mod's skin overlays to a shell, so <see cref="RenderModeInference.WantsGeometry"/> must list every one.
+    /// The mod-wide geometry passes (<see cref="GeometryToggles.All"/>), written to the sidecar because they are authoring
+    /// decisions that ship with the pack. Ticking any promotes the mod's skin overlays to a shell, so
+    /// <see cref="RenderModeInference.WantsGeometry"/> must list every one.
     /// </summary>
     private void DrawBustBridgeAdvanced(OverlayEntry entry)
     {
         var md = entry.Metadata;
         var cs = Strings.Colors;
 
-        // On or off, no amount: ticking writes "on, full", clearing any authored strength (which the compositor still honours).
-        void Toggle(string label, string id, string tip, bool current,
-                    Action<bool> set, string reason)
+        // On or off, no amount.
+        foreach (var t in GeometryToggles.All)
         {
-            bool on = current;
-            if (ImGui.Checkbox($"{label}##{id}_{entry.ModDirectory}", ref on))
+            bool on = t.IsOn(md);
+            if (ImGui.Checkbox($"{t.Label(cs)}##{t.Id}_{entry.ModDirectory}", ref on))
             {
-                set(on);
+                t.Set(md, on);
                 discovery.SaveMetadata(entry);
-                RecompositeForOverlay(entry, reason);
+                RecompositeForOverlay(entry, t.Reason);
             }
             if (ImGui.IsItemHovered())
-                ImGui.SetTooltip(tip);
+                ImGui.SetTooltip(t.Tip(cs));
         }
-
-        // Cleared to null rather than false, so an untick restores the "absent = off" default.
-        Toggle(cs.BustBridge, "bustbridge", cs.BustBridgeTip, md.BustBridge == true,
-               on => { md.BustBridge = on ? true : null; md.BustBridgeStrength = null; }, "bust-bridge");
-
-        Toggle(cs.SmoothNipples, "smoothnipples", cs.SmoothNipplesTip, md.SmoothNipples == true,
-               on => { md.SmoothNipples = on ? true : null; md.SmoothNipplesStrength = null; }, "smooth-nipples");
-
-        Toggle(cs.CleftBridge, "cleftbridge", cs.CleftBridgeTip, md.CleftBridge == true,
-               on => { md.CleftBridge = on ? true : null; md.CleftBridgeStrength = null; }, "cleft-bridge");
-
-        Toggle(cs.SmoothFold, "smoothfold", cs.SmoothFoldTip, md.SmoothFold == true,
-               on => { md.SmoothFold = on ? true : null; md.SmoothFoldStrength = null; }, "smooth-fold");
     }
 
     /// <summary>

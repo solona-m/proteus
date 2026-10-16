@@ -32,6 +32,26 @@ public class ConfigurationMigrationTests
     }
 
     /// <summary>
+    /// "Include shoes and gloves" in the size set is a new setting, not a changed default: a config saved
+    /// before it existed loads with it on, and that needs no migration step.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "EDGE-keep-ends-studio-26")]
+    public void SizeSetEnds_defaults_on_when_missing()   // [EDGE-keep-ends-studio-26]
+    {
+        var config = Newtonsoft.Json.JsonConvert.DeserializeObject<Configuration>(
+            $$"""{"Version":{{Configuration.CurrentVersion}},"SizeSetYas":true}""")!;
+        Assert.True(config.SizeSetEnds);
+        config.Migrate();
+        Assert.True(config.SizeSetEnds);
+        Assert.Equal(Configuration.CurrentVersion, config.Version);
+
+        var off = Newtonsoft.Json.JsonConvert.DeserializeObject<Configuration>(
+            $$"""{"Version":{{Configuration.CurrentVersion}},"SizeSetEnds":false}""")!;
+        Assert.False(off.SizeSetEnds);
+    }
+
+    /// <summary>
     /// v7 -> v8 turns hat compatibility on for every existing config, once. A user who then switches it
     /// off keeps it off: the second migration sees a config already stamped current.
     /// </summary>

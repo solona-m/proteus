@@ -52,8 +52,8 @@ internal static class MeshVolumeService
     /// </summary>
     private static readonly object WriteLock = new();
 
-    /// <param name="UnmappedSpares">Shape-key replacement vertices whose base vertex could not be found, so
-    /// they keep the author's position. Enabling that shape reverts the edit on the slots it rewires, which
+    /// <param name="UnmappedSpares">Distinct shape-key replacement vertices whose base vertex could not be found
+    /// from any slot naming them, so they keep the author's position. Enabling that shape reverts the edit on the slots it rewires, which
     /// looks exactly like the brush having missed a patch — hence a count rather than silence.</param>
     /// <param name="WindMeshesRefused">Meshes wind could not be written to because the wind channel could not
     /// be added — every declaration slot used, or a vertex record already at the format's size limit.</param>
@@ -61,6 +61,7 @@ internal static class MeshVolumeService
                                  int WindMeshesRefused = 0);
 
     /// <summary>The bytes of one edited model, plus what the caller needs to warn about.</summary>
+    /// <param name="UnmappedSpares">As <see cref="Outcome"/>'s: distinct spares, not the slots naming them.</param>
     /// <param name="WindChannel">What adding the wind channel did, when wind was painted; null otherwise.</param>
     internal sealed record Written(byte[] Model, int UnmappedSpares, bool HasOtherLods,
                                    VertexColorWriter.Report? WindChannel = null);
@@ -287,13 +288,27 @@ internal static class MeshVolumeService
     /// <para/>
     /// The spare takes its BASE vertex's displacement rather than being solved for itself, because the shape
     /// is a difference from the base pose and that difference is what has to survive the edit.
+    /// <para/>
+    /// ONCE per spare, however many values name it. A value rewires one SLOT, and exporters name a spare from every
+    /// slot its base vertex fills — one per triangle around it, and again in every size shape that moves it. Adding
+    /// the delta per value moved each spare that many times as far, and turning the shape on tore the surface into
+    /// spikes. The first slot that resolves decides: every slot naming one spare stands on the same point, or on a
+    /// welded seam copy of it that the edit moved identically. (The wind write in
+    /// <see cref="VertexColorWriter"/> lets the LAST slot win instead; it writes a value rather than adding one, so
+    /// on that same layout the two agree.)
     /// </summary>
+    /// <returns>How many distinct spares no slot could place.</returns>
     private static int CarrySpares(byte[] o, byte[] mdl, SecondSkinWriter.Source src,
                                    Dictionary<int, MeshSpan> spanOf, IMeshEdit solve)
     {
-        int unmapped = 0;
         if (src.Shapes.Count == 0) return 0;
         Span<float> tmp = stackalloc float[4];
+
+        // Keyed (mesh << 32) | localVertex, as SpareVertices is. A spare is CARRIED once a slot has resolved it, moved
+        // or not — a zero delta is an answer, and a later slot must not overrule it. A spare no owning mesh can be found
+        // for keeps its entry offset in place of the mesh, so two such spares are not counted as one.
+        var carried = new HashSet<long>();
+        var missed = new HashSet<(int Mesh, uint Offset, ushort Replace)>();
 
         // Which mesh owns an index-buffer window, by the mesh's own index range.
         var meshes = new List<(int Mesh, uint Start, uint Count)>();
@@ -315,7 +330,8 @@ internal static class MeshVolumeService
 
             if (ownerMesh < 0 || !spanOf.TryGetValue(ownerMesh, out var span))
             {
-                unmapped += entry.Values.Length;
+                foreach (var (_, replace) in entry.Values)
+                    missed.Add(ownerMesh < 0 ? (-1, entry.MeshIndexOffset, replace) : (ownerMesh, 0, replace));
                 continue;
             }
 
@@ -327,7 +343,7 @@ internal static class MeshVolumeService
                 if (el.Usage == SecondSkinWriter.UsePosition) posEl = el;
                 else if (el.Usage == SecondSkinWriter.UseNormal) nrmEl = el;
             }
-            if (posEl is not { } pe) { unmapped += entry.Values.Length; continue; }
+            if (posEl is not { } pe) { MissAll(entry); continue; }
 
             uint[] vbo =
             {
@@ -335,20 +351,24 @@ internal static class MeshVolumeService
                 BitConverter.ToUInt32(mdl, mo + 28),
             };
             byte[] bs = { mdl[mo + 32], mdl[mo + 33], mdl[mo + 34] };
-            if (pe.Stream > 2 || bs[pe.Stream] == 0) { unmapped += entry.Values.Length; continue; }
+            if (pe.Stream > 2 || bs[pe.Stream] == 0) { MissAll(entry); continue; }
 
             foreach (var (baseIdx, replace) in entry.Values)
             {
-                long slot = entry.MeshIndexOffset + baseIdx;
-                if (src.Ib + slot * 2 + 2 > mdl.Length) { unmapped++; continue; }
-                int baseVertex = BitConverter.ToUInt16(mdl, src.Ib + (int)slot * 2);
-                if (baseVertex >= span.Count || replace >= span.Count) { unmapped++; continue; }
+                long key = ((long)ownerMesh << 32) | replace;
+                if (carried.Contains(key)) continue;
 
-                var d = solve.DeltaAt(span.BaseVertex + baseVertex);
-                if (d.X == 0f && d.Y == 0f && d.Z == 0f) continue;
+                long slot = entry.MeshIndexOffset + baseIdx;
+                if (src.Ib + slot * 2 + 2 > mdl.Length) { missed.Add((ownerMesh, 0, replace)); continue; }
+                int baseVertex = BitConverter.ToUInt16(mdl, src.Ib + (int)slot * 2);
+                if (baseVertex >= span.Count || replace >= span.Count) { missed.Add((ownerMesh, 0, replace)); continue; }
 
                 int pa = (int)(src.Vb + vbo[pe.Stream]) + replace * bs[pe.Stream] + pe.Offset;
-                if (pa < 0 || pa + 16 > o.Length) { unmapped++; continue; }
+                if (pa < 0 || pa + 16 > o.Length) { missed.Add((ownerMesh, 0, replace)); continue; }
+
+                carried.Add(key);
+                var d = solve.DeltaAt(span.BaseVertex + baseVertex);
+                if (d.X == 0f && d.Y == 0f && d.Z == 0f) continue;
 
                 SecondSkinWriter.ReadTyped(o, pa, pe.Type, tmp);
                 SecondSkinWriter.WriteXYZ(o, pa, pe.Type, tmp[0] + d.X, tmp[1] + d.Y, tmp[2] + d.Z);
@@ -360,7 +380,17 @@ internal static class MeshVolumeService
                 if (n.X == 0f && n.Y == 0f && n.Z == 0f) continue;
                 SecondSkinWriter.WriteNormal(o, na, ne.Type, n.X, n.Y, n.Z);
             }
+
+            void MissAll(SecondSkinWriter.ShapeMeshEntry e)
+            {
+                foreach (var (_, replace) in e.Values) missed.Add((ownerMesh, 0, replace));
+            }
         }
+
+        // A spare one slot could not place and another did is not lost.
+        int unmapped = 0;
+        foreach (var m in missed)
+            if (m.Mesh < 0 || !carried.Contains(((long)m.Mesh << 32) | m.Replace)) unmapped++;
         return unmapped;
     }
 
@@ -425,10 +455,26 @@ internal static class MeshVolumeService
 
     public const float WindMovementScale = 100f, WindMovementMaxLength = 1f;
 
+    /// <summary>
+    /// The shaders that move a vertex by its wind and whose material parameters include both movement constants
+    /// (read from the game's own shader packages, each with a default of 1). Only on these is a missing constant
+    /// added. <c>characterlegacy.shpk</c> declares the constants too but has no wind at all: its materials are
+    /// upgraded instead (<see cref="CharacterShaderUpgrade"/>).
+    /// </summary>
+    private static readonly HashSet<string> WindShaders = new(StringComparer.OrdinalIgnoreCase)
+    {
+        CharacterShaderUpgrade.Character,
+    };
+
     /// <param name="Changed">Material files rewritten.</param>
-    /// <param name="Missing">Material files that do not carry the movement constants at all, left unchanged.</param>
+    /// <param name="Missing">Material files that do not carry the movement constants and could not be given them,
+    /// left unchanged.</param>
     /// <param name="NotInMod">Materials the model uses that this mod does not ship, which only the game has.</param>
-    public sealed record MaterialOutcome(int Changed, int Missing, int NotInMod);
+    /// <param name="Upgraded">Of <paramref name="Changed"/>, files moved from the legacy character shader to
+    /// Dawntrail's, which is the only one with wind.</param>
+    /// <param name="Legacy">Files still on the legacy character shader, which could not be upgraded: they will not
+    /// sway.</param>
+    public sealed record MaterialOutcome(int Changed, int Missing, int NotInMod, int Upgraded = 0, int Legacy = 0);
 
     /// <summary>
     /// Set the vertex movement constants on every material the painted wind is drawn with: the wind channel alone
@@ -436,9 +482,13 @@ internal static class MeshVolumeService
     /// <para/>
     /// Found by NAME among the mod's own redirects — every variant and option that ships it — because the model
     /// only names <c>/mt_….mtrl</c> and the variant folder is the IMC's to choose. Each file is backed up and
-    /// recorded like the models, so Undo saved changes puts it back too. Only constants the material already
-    /// declares are changed: adding one means rebuilding the file's layout, and one that is absent falls back to the
-    /// shader's own default rather than 0.
+    /// recorded like the models, so Undo saved changes puts it back too.
+    /// <para/>
+    /// A material on the legacy character shader is first upgraded to Dawntrail's (<see cref="CharacterShaderUpgrade"/>):
+    /// the legacy shader has no wind, so painted wind on Iris — like most pre-Dawntrail mods — moved nothing whatever
+    /// its constants said. A constant the material does not declare is then ADDED on <see cref="WindShaders"/>. Left
+    /// out, it falls back to the shader's default of 1, a hundredth of <see cref="WindMovementScale"/>, and the 5% the
+    /// brush paints by default sways too little to see.
     /// </summary>
     /// <param name="materialNames">The cloth materials the brushed model uses, as the model names them.</param>
     public static MaterialOutcome ApplyWindMaterials(string modRoot, IEnumerable<string> materialNames,
@@ -450,7 +500,7 @@ internal static class MeshVolumeService
     private static MaterialOutcome ApplyWindMaterialsLocked(string modRoot, IEnumerable<string> materialNames,
                                                             IReadOnlyList<PenumbraModMeta.Redirect> redirects)
     {
-        int changed = 0, missing = 0, notInMod = 0;
+        int changed = 0, missing = 0, notInMod = 0, upgraded = 0, legacy = 0;
         MeshVolumeRecord? record = null;
 
         foreach (var name in materialNames.Distinct(StringComparer.OrdinalIgnoreCase))
@@ -469,10 +519,22 @@ internal static class MeshVolumeService
                 var path = Path.Combine(modRoot, Native(rel));
                 if (!File.Exists(path)) continue;
                 var before = File.ReadAllBytes(path);
-                var (withScale, hasScale) = TextureLoader.PatchConstantValues(before, VertexMovementScaleId, WindMovementScale);
-                var (after, hasMax) = TextureLoader.PatchConstantValues(withScale, VertexMovementMaxLengthId, WindMovementMaxLength);
+                var start = before;
+                bool isLegacy = string.Equals(CharacterShaderUpgrade.ShaderOf(before), CharacterShaderUpgrade.Legacy,
+                                              StringComparison.OrdinalIgnoreCase);
+                if (isLegacy && CharacterShaderUpgrade.Upgrade(before) is { } up) start = up;
+                bool upgradedHere = !ReferenceEquals(start, before);
+                if (isLegacy && !upgradedHere) legacy++;
+
+                bool canAdd = WindShaders.Contains(CharacterShaderUpgrade.ShaderOf(start) ?? "");
+                (byte[], bool) Set(byte[] mtrl, uint id, float value) => canAdd
+                    ? TextureLoader.EnsureConstantValues(mtrl, id, value)
+                    : TextureLoader.PatchConstantValues(mtrl, id, value);
+                var (withScale, hasScale) = Set(start, VertexMovementScaleId, WindMovementScale);
+                var (after, hasMax) = Set(withScale, VertexMovementMaxLengthId, WindMovementMaxLength);
                 if (!hasScale || !hasMax) missing++;
                 if (after.AsSpan().SequenceEqual(before)) continue;
+                if (upgradedHere) upgraded++;
 
                 Backup(modRoot, rel);
                 PenumbraModMeta.AtomicWrite(path, after);
@@ -484,7 +546,7 @@ internal static class MeshVolumeService
         }
 
         if (record != null) WriteRecord(modRoot, record);
-        return new MaterialOutcome(changed, missing, notInMod);
+        return new MaterialOutcome(changed, missing, notInMod, upgraded, legacy);
     }
 
     // ── the record, the backup and the way back ─────────────────────────────

@@ -10,7 +10,8 @@ Overlays can render two ways: painted into your skin, or as a **second skin** �
 
 - **Wear mods without giving up a gear slot.** A second skin has to be drawn as an item, but Proteus hides it on something you aren't using — invisible glasses, or a ring you don't have on, or appends it to your equipped accessories — so your actual glamour is untouched. There's nothing to set up; it picks a host on its own and never takes an item you're wearing.
 - **Reshape any mod's clothing, right on your character.** In the **Studio** tab, paint on a garment you're wearing to pull it clear of your body where skin pokes through, push it in, smooth it, stretch it across a crease, or paint where the wind sways it. Every edit saves into the mod and can be undone.
-- **Refit an outfit to your body.** The **Studio** can move a garment made for one body size onto another, or from one body mod to another, such as Neolithe to Rue or TBSE to TBSE-X, and save it as a new option in the mod.
+- **Refit an outfit to your body.** The **Studio** can move a garment made for one body size onto another, or from one body mod to another, such as Neolithe to Rue or TBSE to TBSE-X, and save it as a new option in the mod. It works on the game's own gear too, and can add every size of other bodies to a whole mod in one go.
+- **Have gear refit itself as you put it on.** Pick your body once per Penumbra collection, and chest, legs, hands and feet gear, and accessories that cover the body, such as a jacket on a necklace, are refitted to it the moment you wear them.
 - **Add toggles to any part of any mod, not just Proteus ones.** When a mod welds a bow, a collar or a strap into geometry its author never made optional, the **Studio** tab can split that piece out and give it a real switch.
 - **Make modded hair fit under hats.** Proteus presses the hair a hat would cover flat against your head, so a hat stops going straight through it. It's on by default and only acts while you're wearing a hat.
 
@@ -34,9 +35,21 @@ Save, then find Proteus in the main /xlplugins window.
 
 Install some overlay mods made for Proteus, choose your options and your character will update.
 
+### Chat commands
+
+| Command | What it does |
+|---------|-------------|
+| `/proteus` | Opens or closes the status window. |
+| `/proteus config` | Opens the status window on Settings. |
+| `/proteus refresh` | Recomposites now, the same as the **Refresh** button. Handy in a macro. |
+| `/proteus refresh full` | Rebuilds everything first, then recomposites, the same as Shift-clicking **Refresh**. Slower than a plain refresh. |
+| `/proteus refresh silent` | Either of the above without the chat message. `full` and `silent` can be combined. |
+
 ### Status Window
 
 Open the status window with `/proteus`. It has seven tabs, and the last composite's result (textures patched, mods used, how long ago) always shows along the bottom.
+
+After an update, a **What's new** window opens once to show what changed. It doesn't open again until there's something new.
 
 #### Mods
 
@@ -50,15 +63,19 @@ Lists every Penumbra mod that contains a Proteus sidecar. Click any column heade
 | Preset | The saved look this mod is wearing. Pick another to switch to it without opening the color editor. Shows — for a mod that has no presets. |
 | Colors | Opens the color editor for that mod. Skindent, the contact shadow and indent at strap edges, is set there under **Effects**. |
 
-Click **Refresh** to force a re-composite manually. Proteus also re-composites automatically whenever you change a Penumbra option or mod setting, change gear, or change race/body.
+Click **Refresh** to force a re-composite manually, or Shift-click it to rebuild everything first. Proteus also re-composites automatically whenever you change a Penumbra option or mod setting, change gear, or change race/body.
 
 #### Studio
 
 Edits the models of **any** mod you have installed, not just Proteus ones, including the garments of packs you imported. You can reshape clothing so your body stops poking through it, move or resize pieces of it, refit it to another body, paint where the wind sways it, or split a piece out behind its own on/off switch. Every change is written into the mod's own files, so it **keeps working with Proteus turned off** and travels with the mod if you export it.
 
-Pick a mod, then one of its models. The tab opens on the chest piece you're wearing (or your legs if there's none), and mods and models you're wearing are listed first, in green. Clicking a garment on your character opens its mod and model. Every list in the tab can be searched: type part of a name to narrow it.
+Pick a mod, then one of its models. The tab opens on the chest piece you're wearing (or your legs if there's none), and mods and models you're wearing are listed first, in green. Clicking a garment on your character opens its mod and model, vanilla or modded. Every list in the tab can be searched: type part of a name to narrow it. When an item ships a separate model per race, each one is named with its race so you can tell them apart.
 
-The tools sit in a panel on the left:
+The tools are on the left and the chosen tool's settings beside them, with the model's parts behind a button at the top of the settings: click it to open the part list as a column beside them, pushing the model right so it stays in view. Tick **Show model view** for a third column with the model on the right.
+
+**Vanilla gear** you're wearing is listed too, marked *(vanilla)*. The game's own gear has no mod file to edit, so opening it copies it into a new mod, which looks exactly like the original until you change it. Every tool works on that copy. With **Body size** chosen, a vanilla piece opens to be refitted instead, see [Body size](#body-size).
+
+The tools:
 
 | Tool | What it does |
 |------|-------------|
@@ -66,19 +83,22 @@ The tools sit in a panel on the left:
 | Pull out | Pushes the surface outwards, so a body that pokes through a piece of clothing is covered again. Cloth moves straight away from the skin beneath it. |
 | Push in | The same brush in reverse, for clothing that stands too far off the body. |
 | Relax | Smooths the surface: lumps the clothing came with, or a pull that came out rough. Like 3ds Max's relax it shrinks, so curves flatten and cloth can sink toward the body. |
+| Smooth | Irons out lumps and ripples **without** shrinking: unlike Relax, curves keep their shape and cloth stays off the body. **Strength** sets how quickly it works. |
+| Grab | Press on the cloth and drag: the cloth around the brush follows the mouse like rubber, strongest in the middle, with no hard edge. Brush size sets how much cloth comes along, and Ctrl+Z takes a grab back. |
 | Bridge | Paint across a hollow, like the cleft between cheeks or a crease, to stretch the cloth straight over it instead of following the body down into it. It only ever lifts. |
 | Wind | Paints how much the game's wind sways the garment, shown in red. Hold Ctrl, or set **Amount** to 0%, to erase. |
 | Move | Drags a part, or a few polygons, with arrows: one arrow moves it along that axis, a square across that plane. See [Moving, turning and scaling](#moving-turning-and-scaling) below. |
 | Rotate | Turns a part about its centre: drag a coloured ring to turn it about that axis, or the outer ring to turn it about your view. |
-| Scale | Grows or shrinks a part about its centre: press on it and drag right to grow it, left to shrink it. |
+| Scale | Grows, shrinks or stretches a part about its centre: drag a coloured handle to stretch it along that axis, or press on the part and drag right to grow it, left to shrink it. |
 | Body size | Refits the garment to another body size, or to another body mod. See [Body size](#body-size) below. |
 
 ##### Brushing
 
 - **You paint straight onto your character**, and a garment shows each stroke as you paint it. Hold **Alt** to move the camera. Tick **Show model view** to paint on the model in the window instead: drag from the background to turn it, shift-drag to move it, scroll to zoom.
-- **Brush size** goes down to 1 mm. `[` and `]` change it, and Shift gives finer steps. The effect is strongest in the middle and fades to nothing at the edge. **Strength** is how far the surface moves per moment of painting. Small is usually right: clothing only has to clear the body by a fraction of a millimetre, and you can always paint the same place again.
+- **Brush size** goes down to 1 mm. `[` and `]` change it, and Shift gives finer steps. The effect is strongest in the middle and fades to nothing at the edge; the brush's reach is drawn as a rainbow on the cloth so you can see it. Brushes work at the same pace at any frame rate. For **Pull out** and **Push in**, **Strength** is how far the middle of the brush moves the surface for each quarter second you hold it; for the other brushes it's how quickly they work. Small is usually right: clothing only has to clear the body by a fraction of a millimetre, and you can always paint the same place again.
+- **Limit** is the furthest the brushes may move any point from where the mod's author put it. Painting stops at the limit, so a held brush can't balloon the garment. Raise it for a bigger change.
 - **Mirror left/right** paints both sides at once.
-- **Skin never moves.** To keep a brush off anything else, lock it: Shift-click the part on your character or the model, or untick it in the part list. Seams welded to a locked part hold too.
+- **Skin never moves.** To keep a brush off anything else, lock it: Shift-click the part on your character or the model, or untick it in the part list. A locked part is also hidden, on the model and on your character, so clicks pass through it to what's underneath — lock a skirt to reach the underwear beneath it. Seams welded to a locked part hold too.
 - **Hair works too.** Hair, face, ears and tail redraw when you let go, rather than showing the stroke as you paint.
 - **Apply to other sizes** copies the edit onto the mod's other files for the same garment, matched by where they sit on it.
 
@@ -90,6 +110,7 @@ The tools sit in a panel on the left:
 - Part switches, hat fitting and the brush each keep their own backup. If more than one has changed the same model, undo the most recent first. Proteus tells you if you try another order.
 - A model's body sliders can't always follow an edit. When some points couldn't move with it, Proteus says how many, and turning that slider on may bring the clipping back in places.
 - Most modded meshes have no wind channel. The first wind stroke to save adds one, and sets the garment's materials so the wind can move it. Materials that come from the game rather than the mod can't be set.
+- **Friends using a sync plugin see your edits.** Once a stroke has settled and saved, people paired with you through a sync plugin such as PlayerSync or Lightless receive the edited garment within a few seconds, while the Studio stays open. Strokes still in progress stay private. If you've locked parts, they reappear a few seconds after you stop working so the whole garment can be shared; hovering or painting hides them again.
 
 ##### Moving, turning and scaling
 
@@ -106,19 +127,41 @@ The tools sit in a panel on the left:
 
 **Both body mods must be installed in Penumbra**: the one the garment was made for and the one you're refitting it onto. They don't need to be turned on. Proteus measures how far to move each point of the garment by comparing the two bodies' own model files, so it needs both on disk. The size the garment was made for also has to be one of that mod's options.
 
-1. Open the garment's model in the Studio and choose **Body size**.
-2. Under **Made for**, pick the body mod the garment was made for, then its size. Proteus guesses the size for you.
-3. Under **Refit onto**, pick the body mod and size you want. These start on the body you're wearing.
-4. Press **Refit and preview** to see the result on your character. When it looks right, press **Save as a new option**. The refit is saved into the garment's own mod, by default in the group that already holds the author's sizes (**Save to group** changes that), so it keeps working with Proteus turned off.
+1. Open the garment's model in the Studio and choose **Body size**. The first time, a few tips show; they come back when they change.
+2. Under **Made for**, pick the body mod the garment was made for, then its size. Proteus guesses the size for you and says how sure it is.
+3. Under **Refit onto**, pick the body mod and one or more sizes. These start on the body you're wearing. Tick several sizes to make them all in one run.
+4. Press **Refit and preview** to see the result on your character. When it looks right, press **Save as a new option** (or **Save *N* sizes as new options**). Nothing is kept until you save.
+5. **Save into** chooses where it goes. **This mod** adds it to the garment's own mod, by default in the group that already holds the author's sizes (**Save to group** changes that), but the author's next update will remove it. **A new mod** keeps it in a mod of its own that survives updates. Either way it keeps working with Proteus turned off.
+
+Mods Proteus makes, for refits and for edited vanilla gear, are filed together under a **Proteus Upscales** folder in Penumbra's mod list.
 
 Things worth knowing:
 
-- **Use the new body's skin** is on by default: the garment's own skin for each part of the body being resized is replaced with the new body's, so it matches the rest of you. Untick it to resize the skin the garment came with instead.
+- **Use the new body's skin** is on by default: the garment's own skin for each part of the body being resized is replaced with the new body's, so it matches the rest of you. Untick it to resize the skin the garment came with instead, which keeps the author's push-up or skindent shaping.
+- **Remove hidden skin**, on by default, leaves out the new skin where the author deleted theirs, usually under cloth. Turn it off if a refit leaves holes. It only applies while **Use the new body's skin** is on.
+- **Push cloth out of the body** pushes out all buried cloth, not just what the refit buried. Use it if the body shows through, for example stockings with their own leg skin. Off by default, because authors often hide cloth under skin on purpose.
+- **Keep shape** moves rigid pieces (rings, buckles, chains) whole instead of bending them. Small closed pieces start ticked. A piece that would sink into the new body bends with it instead.
+- **Shoes and gloves keep their own feet and hands.** With **Keep its own feet** (or **hands**) ticked, the default, the foot stays exactly as its author made it, heel and all, and only the leg the shoe reaches is refitted, sized by the legs (the arm by the chest, for gloves). The feet go along by themselves. A shoe that reaches no leg keeps its shape and only has its skin redrawn, saved as "*Body* — skin". Untick it to refit the whole shoe as before.
+- **Pieces that cover more than one part**, like a long dress over the legs, take a size for each part under **Other body parts**. Choose **None (leave this part out)** to skip one.
 - **Untick a part** in the part list to keep it exactly where the author put it.
+- **Gear the game doesn't ship for your race**, such as pieces made only for men, can still be refitted: Proteus first makes a model for your race from the one that exists.
+- **Vanilla gear** can be refitted the same way. It has no mod to save into, so saving makes a new mod with the refit and an **Original** option.
+- Touch up afterwards with the other brushes, like **Pull out**, and use **Move** for rigid pieces. Refit from the author's size nearest the one you want — the size set below does that for you.
 - **Between body mods**, the garment also takes on the new body's bone weights where the two bodies differ, so it moves with the new body's physics. Where they agree, the author's weighting is kept. Skirt chains and other bones of the garment's own are never changed.
 - **The two bodies' skin must share a texture layout**, or use one Proteus can convert (bibo, gen3 and gen2). Men's and women's bodies are never refitted onto each other.
 - **Shape keys are lost** when the skin is replaced or the garment moves between body mods. Proteus tells you when that happens.
 - **Remove the last refit** takes a saved size back out of the mod.
+- Only the highest level of detail is refitted, so the old size can show at a great distance.
+
+##### Every size for other bodies
+
+Below the one-garment tool, **Every size for other bodies** does a whole mod at once. Tick the body mods you want, press **Add the sizes**, and every size of those bodies is refitted from the author's size nearest it — the outfit's other pieces in that option from the same size — and saved beside the author's own sizes as "Rue S", "YAB Buff L" and so on.
+
+- **Use a body's YAS version where it has one** gives Rue, YAB and Tre their Yet Another Skeleton sizes. A piece already weighted to YAS always gets YAS sizes.
+- **Include shoes and gloves**, on by default, sizes the mod's shoes and gloves too, keeping their own feet and hands: shoes get the legs' sizes ("Rue WC", "YAB SC"), gloves one option per body. A shoe or glove in the same size group as the outfit's chest or legs joins the sizes that piece made, so one choice dresses the whole outfit. One that reaches no leg or arm only has its skin redrawn, and only where the new body draws skin another way. One sized in a group with a piece it can't follow — gloves beside legs, or a shoe and gloves with no chest — is left alone, with a note.
+- Sizes the mod already has are left alone. Tick **Make again the sizes Proteus added before** to redo the ones Proteus made; the author's own sizes are never touched. If you ran it with an earlier version of Proteus, tick **Make again** once: those sizes were cut from the author's first size.
+- It runs in the background and can take a few minutes on a big mod. **Stop** keeps the sizes already saved. When it's done, it lists anything it had to leave out and why.
+- Only bodies for the races the mod dresses are offered, so a women's mod doesn't list men's bodies. A body has to be installed in Penumbra to get its sizes. The game's own gear has no mod to add sizes to, so this doesn't appear for it.
 
 ##### Part switches
 
@@ -148,7 +191,7 @@ While a binding is active, edits in the color editor preview immediately but are
 | Option | What it does |
 |--------|-------------|
 | Follow Glamourer automation | Restores a binding when Glamourer's automation applies its design on a gearset or job change. On by default. It only ever restores, never clears. |
-| Restore every mod on the character | Also restores the other mods that were on your character when the design was saved, switches off the ones that weren't, and raises the design's mods above anything they conflict with. Off by default: only Proteus mods are restored. Other mods are held with Penumbra temporary settings, so your collection itself isn't changed. |
+| Restore every mod on the character | Also restores the other mods that were on your character when the design was saved, switches off the ones that weren't, and raises the design's mods above anything they conflict with. Off by default: only Proteus mods are restored. Other mods are held with Penumbra temporary settings, so your collection itself isn't changed, and Penumbra's banner on a held mod lets you drop that one hold. |
 | Unequip slots the design leaves unset | When you apply a bound design, empties the gear and glasses slots it doesn't set and switches off imported packs it didn't capture, so pieces of the previous look don't carry over. Off by default. Not used for automation, and weapons and the slot hosting a second skin are left alone. |
 
 A design saved before bindings recorded the whole character is marked **Proteus mods only**. Apply it and press **Update** to capture the rest.
@@ -158,6 +201,8 @@ A design saved before bindings recorded the whole character is marked **Proteus 
 Authors a basic overlay mod without leaving the game. Give it a name, an author, and pick at least one texture (diffuse, mask, normal, or index). The material target auto-fills from the body you're currently wearing; you can pick another equipped material from the dropdown or type a path by hand. Proteus writes a new Penumbra mod and opens it.
 
 Texture slots the chosen material can't actually use are greyed out.
+
+A body skin target also covers the same body on every other race that shares its texture layout, so the mod follows you through a race change. The tab shows how many materials that comes to. Women's bodies share one layout and men's another; Lalafell and male Hrothgar have their own and aren't included.
 
 Tick **Make this art glow** to turn a plain diffuse — art on a transparent background — into a glowing tattoo, with no hand-written metadata. The glow's colour comes from the picture itself, per pixel, so there's nothing else to set. Two behaviours:
 
@@ -239,7 +284,25 @@ Most modded hair has no hat support, so a hat worn over it goes straight through
 - Or fit the hairstyle you're wearing yourself. The section says how many points would be pressed and by how far, and **Make it fit** writes the change.
 - **Undo** puts back the hairstyle you're wearing. A hair mod usually ships one model per race, so **Undo all** puts back every hairstyle Proteus changed in that mod. The originals are kept in `Proteus/hatcompat-backup/` inside the mod.
 - Hair whose author already added hat support is left alone, and hair that came with the game already works. The exception is hat support that hides far more hair than a hat covers, usually carried over from the hairstyle it was built from. Proteus offers to measure that again and replace it.
+- **Replace hat support a hairstyle came with** makes Proteus discard an author's hand-made hat fit and use its own instead. Off by default, since a hand-made fit is usually better. The author's version is kept and comes back when you turn it off.
 - Some hairstyles are welded into pieces too large for the game's shape format to address. Those points keep their shape, so a hat may still clip there.
+
+##### Body refit
+
+Refits chest, legs, hands and feet gear to your body by itself, the moment you put it on. Proteus works out which body mod and size the gear was made for, refits it onto your body the same way the Studio's [Body size](#body-size) tool does, saves the new size into the gear's own mod and switches it on. Chat says when it starts and when it's done.
+
+1. Tick **Refit gear to my body as I put it on**.
+2. Pick a **Collection**. Each Penumbra collection has its own choice, and it starts on the one you're using now.
+3. Pick your **Body** mod, then its **Chest size** and **Legs size**. Hands and feet are matched to those for you.
+4. Gear you put on from now on is refitted. For what you're already wearing, press **Refit what I'm wearing now**.
+
+Things worth knowing:
+
+- **Also refit the game's own gear** does vanilla pieces too. They have no mod to save into, so each gets a new mod of its own, named after the item and the body, filed under **Proteus Upscales**.
+- **Your choices in Penumbra win.** If you pick a mod's **Original** or another size yourself, Proteus leaves it alone. If a mod already ships your size, that option is switched on instead of making a new one.
+- If Proteus can't tell which body a piece was made for, or the piece has no body skin to read, it leaves it as it is and says so in chat. You can still refit it by hand in the Studio.
+- **Undo the refit of what I'm wearing** (hold Ctrl or Shift and click) removes the sizes the automatic refit made for the gear you have on, deletes the mods it made for vanilla gear, and puts back the options you had before. Those pieces won't be refitted again unless you press **Refit what I'm wearing now**. Sizes you made yourself in the Studio stay.
+- **Forget this collection's body** turns it off for that collection.
 
 ### Presets
 
@@ -294,6 +357,7 @@ Two more collapsible sections apply to the whole mod:
 - **Geometry** reshapes the garment Proteus builds from your body, so it reads as fabric rather than paint. Proteus builds a second skin as a copy of your body, so by default it follows every hollow:
   - **Span the cleavage**: the fabric between the breasts spans straight across, the way real cloth does. Nothing is pulled inward, so it can't cut into the body.
   - **Span the buttocks**: the same across the seat.
+  - **Span the belly button**: the fabric stretches flat across the navel instead of dipping into it.
   - **Smooth between the legs**: smooths the fold at the crotch. This changes the body underneath, so it applies to every garment worn at once.
   - **Smooth the nipple**: smooths the fabric over it. Not finished yet: the body underneath keeps its shape, so on a close fit it can still show through.
 

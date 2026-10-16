@@ -74,6 +74,30 @@ public class WhatsNewTests
     }
 
     /// <summary>
+    /// Someone who closed the first notes is shown the window again for the body refit — and ONLY the body refit, not
+    /// the three sections they already read. A fresh install is shown everything.
+    /// </summary>
+    [Fact]
+    public void Each_reader_is_shown_only_what_is_new_to_them()
+    {
+        const int first = Gui.WhatsNewWindow.FirstNotes, refit = Gui.WhatsNewWindow.AutoRefitNotes;
+
+        // Never read anything: every section.
+        Assert.True(Gui.WhatsNewWindow.IsNew(first, 0));
+        Assert.True(Gui.WhatsNewWindow.IsNew(refit, 0));
+
+        // Read the first notes: the window opens again, with the refit alone.
+        var readFirst = new Configuration { WhatsNewShown = first };
+        Assert.True(readFirst.WantsWhatsNew(Plugin.CurrentWhatsNew));
+        Assert.False(Gui.WhatsNewWindow.IsNew(first, readFirst.WhatsNewShown));
+        Assert.True(Gui.WhatsNewWindow.IsNew(refit, readFirst.WhatsNewShown));
+
+        // The refit section belongs to the current notes, so reading them retires it.
+        Assert.Equal(Plugin.CurrentWhatsNew, refit);
+        Assert.False(Gui.WhatsNewWindow.IsNew(refit, Plugin.CurrentWhatsNew));
+    }
+
+    /// <summary>
     /// Guards against someone later adding a <c>Migrate</c> step that stamps the field for existing configs: that
     /// would suppress the notes for precisely the people who have something new to read.
     /// </summary>

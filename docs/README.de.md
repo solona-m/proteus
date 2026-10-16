@@ -10,7 +10,8 @@ Overlays können auf zwei Arten dargestellt werden: in die Haut gemalt, oder als
 
 - **Trage Mods, ohne einen Ausrüstungsplatz aufzugeben.** Eine zweite Haut muss als Gegenstand gezeichnet werden, aber Proteus versteckt sie auf etwas, das du gerade nicht nutzt — einer unsichtbaren Brille, einem Ring, den du nicht trägst, oder angehängt an deine getragenen Accessoires — sodass dein eigentliches Glamour unangetastet bleibt. Es gibt nichts einzurichten: Proteus sucht sich den Träger selbst und nimmt dir nie einen Gegenstand weg, den du trägst.
 - **Forme die Kleidung jedes Mods um, direkt an deinem Charakter.** Male im Tab **Studio** auf ein getragenes Kleidungsstück, um es dort vom Körper wegzuziehen, wo Haut hindurchragt, es hineinzudrücken, es zu glätten, es über eine Falte zu spannen oder zu malen, wo der Wind es bewegt. Jede Änderung wird im Mod gespeichert und lässt sich rückgängig machen.
-- **Passe eine Montur an deinen Körper an.** Das **Studio** kann ein Kleidungsstück, das für eine Körpergröße gemacht wurde, auf eine andere übertragen, oder von einem Körper-Mod auf einen anderen, etwa Neolithe auf Rue oder TBSE auf TBSE-X, und es als neue Option im Mod speichern.
+- **Passe eine Montur an deinen Körper an.** Das **Studio** kann ein Kleidungsstück, das für eine Körpergröße gemacht wurde, auf eine andere übertragen, oder von einem Körper-Mod auf einen anderen, etwa Neolithe auf Rue oder TBSE auf TBSE-X, und es als neue Option im Mod speichern. Das klappt auch mit der Ausrüstung des Spiels selbst, und es kann einem ganzen Mod in einem Rutsch jede Größe anderer Körper hinzufügen.
+- **Lass Ausrüstung sich beim Anlegen selbst anpassen.** Wähle deinen Körper einmal pro Penumbra-Kollektion, und Brust-, Bein-, Hand- und Fußausrüstung sowie Accessoires, die den Körper bedecken, etwa eine Jacke auf einer Halskette, werden in dem Moment an ihn angepasst, in dem du sie trägst.
 - **Füge jedem Teil jedes Mods Schalter hinzu, nicht nur Proteus-Mods.** Wenn ein Mod eine Schleife, ein Halsband oder einen Riemen in Geometrie einschweißt, die sein Autor nie optional gemacht hat, kann der Tab **Studio** dieses Stück herauslösen und ihm einen echten Schalter geben.
 - **Lass gemoddetes Haar unter Hüte passen.** Proteus drückt das Haar, das ein Hut bedecken würde, flach an deinen Kopf, damit der Hut nicht mehr einfach hindurchgeht. Das ist standardmäßig an und greift nur, solange du einen Hut trägst.
 
@@ -35,9 +36,21 @@ Speichern, dann findest du Proteus im Hauptfenster von /xlplugins.
 
 Installiere ein paar Overlay-Mods, die für Proteus gemacht sind, wähle deine Optionen, und dein Charakter aktualisiert sich.
 
+### Chatbefehle
+
+| Befehl | Was er tut |
+|---------|-------------|
+| `/proteus` | Öffnet oder schließt das Statusfenster. |
+| `/proteus config` | Öffnet das Statusfenster auf den Einstellungen. |
+| `/proteus refresh` | Komponiert sofort neu, genau wie die Schaltfläche **Aktualisieren**. Praktisch in einem Makro. |
+| `/proteus refresh full` | Baut erst alles neu auf und komponiert dann neu, genau wie ein Shift-Klick auf **Aktualisieren**. Langsamer als ein einfaches Aktualisieren. |
+| `/proteus refresh silent` | Eines der beiden obigen, ohne Chatnachricht. `full` und `silent` lassen sich kombinieren. |
+
 ### Statusfenster
 
 Öffne das Statusfenster mit `/proteus`. Es hat sieben Tabs, und das Ergebnis der letzten Komposition (gepatchte Texturen, genutzte Mods, wie lange es her ist) steht immer am unteren Rand.
+
+Nach einem Update öffnet sich einmal ein Fenster **Neu in Proteus**, das zeigt, was sich geändert hat. Es erscheint erst wieder, wenn es etwas Neues gibt.
 
 #### Mods
 
@@ -51,15 +64,19 @@ Listet jeden Penumbra-Mod auf, der eine Proteus-Beidatei enthält. Klicke auf ei
 | Preset | Der gespeicherte Look, den dieser Mod gerade trägt. Wähle einen anderen, um ohne den Farbeditor umzuschalten. Zeigt — bei einem Mod ohne Presets. |
 | Farben | Öffnet den Farbeditor für diesen Mod. Skindent, der Kontaktschatten und die Vertiefung an Riemenkanten, wird dort unter **Effekte** eingestellt. |
 
-Klicke **Jetzt neu komponieren**, um eine Neukomposition von Hand zu erzwingen. Proteus komponiert außerdem automatisch neu, sobald du eine Penumbra-Option oder Mod-Einstellung änderst, die Ausrüstung wechselst oder Volk bzw. Körper änderst.
+Klicke **Aktualisieren**, um eine Neukomposition von Hand zu erzwingen, oder Shift-Klicke darauf, um vorher alles neu aufzubauen. Proteus komponiert außerdem automatisch neu, sobald du eine Penumbra-Option oder Mod-Einstellung änderst, die Ausrüstung wechselst oder Volk bzw. Körper änderst.
 
 #### Studio
 
 Bearbeitet die Modelle **jedes** installierten Mods, nicht nur von Proteus-Mods, einschließlich der Kleidungsstücke importierter Pakete. Du kannst Kleidung umformen, damit dein Körper nicht mehr hindurchragt, Teile davon verschieben oder in der Größe ändern, sie an einen anderen Körper anpassen, malen, wo der Wind sie bewegt, oder ein Stück herauslösen und hinter einen eigenen An/Aus-Schalter stellen. Jede Änderung wird in die eigenen Dateien des Mods geschrieben, sie **funktioniert also weiter, wenn Proteus aus ist**, und reist mit dem Mod mit, wenn du ihn exportierst.
 
-Wähle einen Mod, dann eines seiner Modelle. Der Tab öffnet sich auf dem Brustteil, das du trägst (oder auf deinen Beinen, wenn es keines gibt), und Mods und Modelle, die du trägst, stehen grün ganz oben in der Liste. Ein Klick auf ein Kleidungsstück an deinem Charakter öffnet dessen Mod und Modell. Jede Liste im Tab lässt sich durchsuchen: Tippe einen Teil eines Namens, um sie einzugrenzen.
+Wähle einen Mod, dann eines seiner Modelle. Der Tab öffnet sich auf dem Brustteil, das du trägst (oder auf deinen Beinen, wenn es keines gibt), und Mods und Modelle, die du trägst, stehen grün ganz oben in der Liste. Ein Klick auf ein Kleidungsstück an deinem Charakter öffnet dessen Mod und Modell, ob Vanilla oder gemoddet. Jede Liste im Tab lässt sich durchsuchen: Tippe einen Teil eines Namens, um sie einzugrenzen. Bringt ein Gegenstand pro Volk ein eigenes Modell mit, trägt jedes den Namen seines Volks, damit du sie auseinanderhalten kannst.
 
-Die Werkzeuge liegen in einer Leiste links:
+Die Werkzeuge liegen links, die Einstellungen des gewählten Werkzeugs daneben, mit den Teilen des Modells hinter einer Schaltfläche ganz oben in den Einstellungen: Ein Klick öffnet die Teileliste als Spalte daneben und schiebt das Modell nach rechts, sodass es sichtbar bleibt. Setze den Haken bei **Modellansicht zeigen** für eine dritte Spalte mit dem Modell rechts.
+
+**Vanilla-Ausrüstung**, die du trägst, wird ebenfalls aufgelistet, markiert mit *(Vanilla)*. Die Ausrüstung des Spiels hat keine Mod-Datei, die sich bearbeiten ließe, also wird sie beim Öffnen in einen neuen Mod kopiert, der genau wie das Original aussieht, bis du etwas änderst. Jedes Werkzeug arbeitet auf dieser Kopie. Ist **Körpergröße** gewählt, öffnet sich ein Vanilla-Teil stattdessen zum Anpassen, siehe [Körpergröße](#körpergröße).
+
+Die Werkzeuge:
 
 | Werkzeug | Was es tut |
 |------|-------------|
@@ -67,19 +84,22 @@ Die Werkzeuge liegen in einer Leiste links:
 | Herausziehen | Drückt die Oberfläche nach außen, sodass ein Körper, der durch ein Kleidungsstück ragt, wieder bedeckt ist. Stoff bewegt sich dabei gerade von der Haut darunter weg. |
 | Hineindrücken | Derselbe Pinsel umgekehrt, für Kleidung, die zu weit vom Körper absteht. |
 | Glätten | Glättet die Oberfläche: Beulen, die die Kleidung mitbringt, oder einen Zug, der unsauber geworden ist. Wie Relax in 3ds Max schrumpft es, Kurven flachen also ab, und der Stoff kann zum Körper hin einsinken. |
+| Ausgleichen | Bügelt Beulen und Wellen aus, **ohne** zu schrumpfen: Anders als bei Glätten behalten Kurven ihre Form, und der Stoff bleibt vom Körper weg. **Stärke** legt fest, wie schnell es wirkt. |
+| Greifen | Drücke auf den Stoff und ziehe: Der Stoff rund um den Pinsel folgt der Maus wie Gummi, in der Mitte am stärksten, ohne harte Kante. Die Pinselgröße legt fest, wie viel Stoff mitkommt, und Strg+Z nimmt ein Greifen zurück. |
 | Überbrücken | Male quer über eine Vertiefung, etwa die Falte zwischen den Backen oder eine Kerbe, um den Stoff gerade darüber zu spannen, statt ihn dem Körper hinein folgen zu lassen. Es hebt nur an. |
 | Wind | Malt, wie stark der Wind des Spiels das Kleidungsstück bewegt, rot dargestellt. Halte Strg gedrückt oder setze **Menge** auf 0 %, um zu radieren. |
 | Verschieben | Zieht ein Teil oder einige Polygone an Pfeilen: Ein Pfeil verschiebt es entlang dieser Achse, ein Quadrat in dieser Ebene. Siehe [Verschieben, Drehen und Skalieren](#verschieben-drehen-und-skalieren) weiter unten. |
 | Drehen | Dreht ein Teil um seine Mitte: Ziehe an einem farbigen Ring, um es um diese Achse zu drehen, oder am äußeren Ring, um es um deine Blickrichtung zu drehen. |
-| Skalieren | Vergrößert oder verkleinert ein Teil um seine Mitte: Drücke darauf und ziehe nach rechts zum Vergrößern, nach links zum Verkleinern. |
+| Skalieren | Vergrößert, verkleinert oder streckt ein Teil um seine Mitte: Ziehe an einem farbigen Griff, um es entlang dieser Achse zu strecken, oder drücke auf das Teil und ziehe nach rechts zum Vergrößern, nach links zum Verkleinern. |
 | Körpergröße | Passt das Kleidungsstück an eine andere Körpergröße oder an einen anderen Körper-Mod an. Siehe [Körpergröße](#körpergröße) weiter unten. |
 
 ##### Malen
 
 - **Du malst direkt auf deinen Charakter**, und ein Kleidungsstück zeigt jeden Strich schon beim Malen. Halte **Alt**, um die Kamera zu bewegen. Setze den Haken bei **Modellansicht zeigen**, um stattdessen auf dem Modell im Fenster zu malen: Zieh vom Hintergrund aus, um es zu drehen, Shift-Ziehen verschiebt es, Scrollen zoomt.
-- **Pinselgröße** geht bis hinunter auf 1 mm. `[` und `]` ändern sie, und Shift gibt feinere Schritte. Die Wirkung ist in der Mitte am stärksten und läuft zum Rand auf null aus. **Stärke** ist, wie weit sich die Oberfläche pro Malmoment bewegt. Klein ist meist richtig: Kleidung muss den Körper nur um Bruchteile eines Millimeters freihalten, und du kannst dieselbe Stelle jederzeit erneut übermalen.
+- **Pinselgröße** geht bis hinunter auf 1 mm. `[` und `]` ändern sie, und Shift gibt feinere Schritte. Die Wirkung ist in der Mitte am stärksten und läuft zum Rand auf null aus; die Reichweite des Pinsels wird als Regenbogen auf dem Stoff angezeigt, damit du sie siehst. Pinsel arbeiten bei jeder Bildrate gleich schnell. Bei **Herausziehen** und **Hineindrücken** ist **Stärke**, wie weit die Mitte des Pinsels die Oberfläche pro Viertelsekunde bewegt, die du ihn hältst; bei den anderen Pinseln ist es, wie schnell sie wirken. Klein ist meist richtig: Kleidung muss den Körper nur um Bruchteile eines Millimeters freihalten, und du kannst dieselbe Stelle jederzeit erneut übermalen.
+- **Grenze** ist, wie weit die Pinsel einen Punkt höchstens von der Stelle wegbewegen dürfen, an die der Autor des Mods ihn gesetzt hat. An der Grenze hört das Malen auf, ein gehaltener Pinsel kann das Kleidungsstück also nicht aufblähen. Erhöhe sie für eine größere Änderung.
 - **Links/rechts spiegeln** malt beide Seiten zugleich.
-- **Haut bewegt sich nie.** Um einen Pinsel von etwas anderem fernzuhalten, sperre es: Shift-Klick auf das Teil an deinem Charakter oder am Modell, oder entferne den Haken in der Teileliste. Nähte, die mit einem gesperrten Teil verschweißt sind, halten ebenfalls.
+- **Haut bewegt sich nie.** Um einen Pinsel von etwas anderem fernzuhalten, sperre es: Shift-Klick auf das Teil an deinem Charakter oder am Modell, oder entferne den Haken in der Teileliste. Ein gesperrtes Teil wird außerdem ausgeblendet, am Modell und an deinem Charakter, sodass Klicks durch es hindurch auf das darunter gehen — sperre einen Rock, um an die Unterwäsche darunter zu kommen. Nähte, die mit einem gesperrten Teil verschweißt sind, halten ebenfalls.
 - **Haar funktioniert auch.** Haar, Gesicht, Ohren und Schweif werden beim Loslassen neu gezeichnet, statt den Strich schon beim Malen zu zeigen.
 - **Auf andere Größen anwenden** überträgt die Änderung auf die anderen Dateien des Mods für dasselbe Kleidungsstück, zugeordnet nach ihrer Lage daran.
 
@@ -91,6 +111,7 @@ Die Werkzeuge liegen in einer Leiste links:
 - Teil-Schalter, Hut-Anpassung und Pinsel führen jeweils ihre eigene Sicherung. Haben mehrere davon dasselbe Modell verändert, nimm die jüngste Änderung zuerst zurück. Proteus sagt dir Bescheid, wenn du es in anderer Reihenfolge versuchst.
 - Die Körper-Regler eines Modells können einer Änderung nicht immer folgen. Ließen sich manche Punkte nicht mitbewegen, sagt Proteus, wie viele, und das Einschalten dieses Reglers kann das Durchdringen stellenweise zurückbringen.
 - Die meisten gemoddeten Meshes haben keinen Windkanal. Der erste gespeicherte Windstrich fügt einen hinzu und stellt die Materialien des Kleidungsstücks so ein, dass der Wind es bewegen kann. Materialien, die aus dem Spiel statt aus dem Mod stammen, lassen sich nicht einstellen.
+- **Freunde mit einem Sync-Plugin sehen deine Änderungen.** Sobald sich ein Strich gesetzt hat und gespeichert ist, bekommen Leute, die über ein Sync-Plugin wie PlayerSync oder Lightless mit dir gekoppelt sind, das bearbeitete Kleidungsstück innerhalb weniger Sekunden, während das Studio offen bleibt. Striche, die noch laufen, bleiben privat. Hast du Teile gesperrt, tauchen sie ein paar Sekunden nach dem Aufhören wieder auf, damit das ganze Kleidungsstück geteilt werden kann; Darüberfahren oder Malen blendet sie wieder aus.
 
 ##### Verschieben, Drehen und Skalieren
 
@@ -107,19 +128,41 @@ Die Werkzeuge liegen in einer Leiste links:
 
 **Beide Körper-Mods müssen in Penumbra installiert sein**: der, für den das Kleidungsstück gemacht wurde, und der, auf den du es anpasst. Eingeschaltet sein müssen sie nicht. Proteus misst anhand der Modelldateien beider Körper, wie weit jeder Punkt des Kleidungsstücks zu verschieben ist, und braucht sie deshalb beide auf der Platte. Auch die Größe, für die das Kleidungsstück gemacht wurde, muss eine der Optionen dieses Mods sein.
 
-1. Öffne das Modell des Kleidungsstücks im Studio und wähle **Körpergröße**.
-2. Wähle unter **Gemacht für** den Körper-Mod, für den das Kleidungsstück gemacht wurde, dann seine Größe. Proteus rät die Größe für dich.
-3. Wähle unter **Anpassen auf** den gewünschten Körper-Mod und die Größe. Beide beginnen auf dem Körper, den du trägst.
-4. Drücke **Anpassen und Vorschau**, um das Ergebnis an deinem Charakter zu sehen. Wenn es stimmt, drücke **Als neue Option speichern**. Die Anpassung wird in den Mod des Kleidungsstücks selbst geschrieben, standardmäßig in die Gruppe, die schon die Größen des Autors enthält (**In Gruppe speichern** ändert das), sie funktioniert also weiter, wenn Proteus aus ist.
+1. Öffne das Modell des Kleidungsstücks im Studio und wähle **Körpergröße**. Beim ersten Mal erscheinen ein paar Tipps; sie kommen wieder, wenn sie sich ändern.
+2. Wähle unter **Gemacht für** den Körper-Mod, für den das Kleidungsstück gemacht wurde, dann seine Größe. Proteus rät die Größe für dich und sagt, wie sicher es sich ist.
+3. Wähle unter **Anpassen an** den gewünschten Körper-Mod und eine oder mehrere Größen. Beide beginnen auf dem Körper, den du trägst. Hake mehrere Größen an, um sie alle in einem Durchgang zu erstellen.
+4. Drücke **Anpassen und Vorschau**, um das Ergebnis an deinem Charakter zu sehen. Wenn es stimmt, drücke **Als neue Option speichern** (oder **_N_ Größen als neue Optionen speichern**). Nichts wird behalten, bis du speicherst.
+5. **Speichern in** legt fest, wohin es geht. **Diese Mod** fügt es dem Mod des Kleidungsstücks selbst hinzu, standardmäßig in die Gruppe, die schon die Größen des Autors enthält (**In Gruppe speichern** ändert das), aber das nächste Update des Autors entfernt es wieder. **Eine neue Mod** hält es in einem eigenen Mod, der Updates übersteht. So oder so funktioniert es weiter, wenn Proteus aus ist.
+
+Mods, die Proteus erstellt, für Anpassungen und für bearbeitete Vanilla-Ausrüstung, werden in Penumbras Mod-Liste gemeinsam unter einem Ordner **Proteus-Vergrößerungen** abgelegt.
 
 Gut zu wissen:
 
-- **Haut des neuen Körpers verwenden** ist standardmäßig an: Die eigene Haut des Kleidungsstücks wird für jeden Körperteil, dessen Größe geändert wird, durch die des neuen Körpers ersetzt, damit sie zum Rest von dir passt. Nimm den Haken weg, um stattdessen die mitgelieferte Haut des Kleidungsstücks mitzuskalieren.
+- **Haut des neuen Körpers verwenden** ist standardmäßig an: Die eigene Haut des Kleidungsstücks wird für jeden Körperteil, dessen Größe geändert wird, durch die des neuen Körpers ersetzt, damit sie zum Rest von dir passt. Nimm den Haken weg, um stattdessen die mitgelieferte Haut des Kleidungsstücks mitzuskalieren, was die Push-up- oder Skindent-Formung des Autors erhält.
+- **Verdeckte Haut entfernen**, standardmäßig an, lässt die neue Haut dort weg, wo der Autor seine gelöscht hat, meist unter Stoff. Schalte es aus, wenn eine Anpassung Löcher hinterlässt. Es gilt nur, solange **Haut des neuen Körpers verwenden** an ist.
+- **Stoff aus dem Körper drücken** drückt allen vergrabenen Stoff heraus, nicht nur den, den die Anpassung vergraben hat. Nutze es, wenn der Körper durchscheint, etwa bei Strümpfen mit eigener Beinhaut. Standardmäßig aus, weil Autoren Stoff oft absichtlich unter Haut verstecken.
+- **Form behalten** bewegt starre Teile (Ringe, Schnallen, Ketten) als Ganzes, statt sie zu verbiegen. Kleine geschlossene Teile sind von Anfang an angehakt. Ein Teil, das im neuen Körper versinken würde, biegt sich stattdessen mit ihm.
+- **Schuhe und Handschuhe behalten ihre eigenen Füße und Hände.** Mit **Eigene Füße behalten** (oder **Hände**) angehakt, der Standard, bleibt der Fuß genau so, wie sein Autor ihn gemacht hat, samt Absatz, und nur das Bein, das der Schuh erreicht, wird angepasst, mit der Größe der Beine (bei Handschuhen der Arm, mit der Größe der Brust). Die Füße kommen von selbst mit. Ein Schuh, der kein Bein erreicht, behält seine Form, nur seine Haut wird neu gezeichnet, gespeichert als „*Körper* — skin“. Abwählen, um wie bisher den ganzen Schuh anzupassen.
+- **Teile, die mehr als einen Körperteil bedecken**, wie ein langes Kleid über den Beinen, bekommen unter **Andere Körperteile** eine Größe für jeden Körperteil. Wähle **Keine (diesen Teil weglassen)**, um einen auszulassen.
 - **Nimm bei einem Teil den Haken weg**, um es genau dort zu lassen, wo der Autor es hingesetzt hat.
+- **Ausrüstung, die das Spiel für dein Volk nicht mitliefert**, etwa nur für Männer gemachte Teile, lässt sich trotzdem anpassen: Proteus erstellt zuerst aus dem vorhandenen Modell eines für dein Volk.
+- **Vanilla-Ausrüstung** lässt sich genauso anpassen. Sie hat keinen Mod, in den gespeichert werden könnte, also erstellt das Speichern einen neuen Mod mit der Anpassung und einer Option **Original**.
+- Bessere danach mit den anderen Pinseln nach, etwa **Herausziehen**, und nutze **Verschieben** für starre Teile. Passe von der Größe des Autors an, die der gewünschten am nächsten ist — die Größen für andere Körper unten tun das für dich.
 - **Zwischen zwei Körper-Mods** übernimmt das Kleidungsstück dort, wo sich die beiden Körper unterscheiden, auch die Knochengewichte des neuen Körpers, damit es sich mit dessen Physik bewegt. Wo sie übereinstimmen, bleibt die Gewichtung des Autors erhalten. Rockketten und andere Knochen, die zum Kleidungsstück selbst gehören, werden nie geändert.
 - **Die Haut beider Körper muss dasselbe Texturlayout haben** oder eines, das Proteus umrechnen kann (bibo, gen3 und gen2). Männliche und weibliche Körper werden nie aufeinander angepasst.
 - **Shape Keys gehen verloren**, wenn die Haut ersetzt wird oder das Kleidungsstück zwischen Körper-Mods wechselt. Proteus sagt dir, wenn das passiert.
 - **Letzte Anpassung entfernen** nimmt eine gespeicherte Größe wieder aus dem Mod heraus.
+- Nur die höchste Detailstufe wird angepasst, auf große Entfernung kann also die alte Größe zu sehen sein.
+
+##### Alle Größen für andere Körper
+
+Unter dem Werkzeug für ein einzelnes Kleidungsstück erledigt **Alle Größen für andere Körper** einen ganzen Mod auf einmal. Hake die gewünschten Körper-Mods an, drücke **Größen hinzufügen**, und jede Größe dieser Körper wird aus der ihr nächsten Größe des Autors angepasst — die übrigen Teile des Outfits in dieser Option aus derselben Größe — und neben den eigenen Größen des Autors gespeichert, als „Rue S“, „YAB Buff L“ und so weiter.
+
+- **Die YAS-Version eines Körpers nutzen, wo es eine gibt** gibt Rue, YAB und Tre ihre Yet-Another-Skeleton-Größen. Ein Teil, das bereits auf YAS gewichtet ist, bekommt immer YAS-Größen.
+- **Schuhe und Handschuhe einbeziehen**, standardmäßig an, gibt auch den Schuhen und Handschuhen des Mods Größen und behält dabei ihre eigenen Füße und Hände: Schuhe bekommen die Größen der Beine („Rue WC“, „YAB SC“), Handschuhe eine Option pro Körper. Ein Schuh oder Handschuh in derselben Größengruppe wie Brust oder Beine des Outfits schließt sich den Größen dieses Teils an, sodass eine Wahl das ganze Outfit anzieht. Einer, der kein Bein und keinen Arm erreicht, bekommt nur seine Haut neu gezeichnet, und nur dort, wo der neue Körper Haut anders zeichnet. Einer, der in einer Gruppe mit einem Teil steht, dem er nicht folgen kann — Handschuhe neben Beinen oder Schuh und Handschuhe ohne Brust —, bleibt unberührt, mit einem Hinweis.
+- Größen, die der Mod schon hat, bleiben unangetastet. Hake **Von Proteus bereits hinzugefügte Größen neu erstellen** an, um die von Proteus erstellten neu zu machen; die eigenen Größen des Autors werden nie angefasst. Hast du es mit einer früheren Proteus-Version ausgeführt, hake das einmal an: Diese Größen wurden aus der ersten Größe des Autors gemacht.
+- Es läuft im Hintergrund und kann bei einem großen Mod ein paar Minuten dauern. **Anhalten** behält die bereits gespeicherten Größen. Ist es fertig, listet es alles auf, was es auslassen musste, und warum.
+- Angeboten werden nur Körper für die Völker, die der Mod einkleidet, ein Mod für Frauen listet also keine Männerkörper. Ein Körper muss in Penumbra installiert sein, um seine Größen zu bekommen. Die Ausrüstung des Spiels hat keinen Mod, dem Größen hinzugefügt werden könnten, deshalb erscheint das dort nicht.
 
 ##### Teil-Schalter
 
@@ -149,7 +192,7 @@ Solange eine Bindung aktiv ist, werden Änderungen im Farbeditor sofort in der V
 | Option | Was sie tut |
 |--------|-------------|
 | Glamourer-Automatisierung folgen | Stellt eine Bindung wieder her, wenn die Automatisierung von Glamourer ihr Design bei einem Wechsel von Ausrüstungsset oder Job anwendet. Standardmäßig an. Sie stellt immer nur wieder her, sie löscht nie. |
-| Jeden Mod am Charakter wiederherstellen | Stellt auch die anderen Mods wieder her, die an deinem Charakter an waren, als das Design gespeichert wurde, schaltet die aus, die es nicht waren, und hebt die Mods des Designs über alles an, womit sie in Konflikt stehen. Standardmäßig aus: Es werden nur Proteus-Mods wiederhergestellt. Andere Mods werden über temporäre Penumbra-Einstellungen gehalten, deine Sammlung selbst wird also nicht verändert. |
+| Jeden Mod am Charakter wiederherstellen | Stellt auch die anderen Mods wieder her, die an deinem Charakter an waren, als das Design gespeichert wurde, schaltet die aus, die es nicht waren, und hebt die Mods des Designs über alles an, womit sie in Konflikt stehen. Standardmäßig aus: Es werden nur Proteus-Mods wiederhergestellt. Andere Mods werden über temporäre Penumbra-Einstellungen gehalten, deine Sammlung selbst wird also nicht verändert, und Penumbras Banner an einem gehaltenen Mod lässt dich diesen einen Halt aufheben. |
 | Plätze leeren, die das Design nicht setzt | Leert beim Anwenden eines gebundenen Designs die Ausrüstungs- und Brillenplätze, die es nicht setzt, und schaltet importierte Pakete aus, die es nicht erfasst hat, damit keine Reste des vorigen Looks stehen bleiben. Standardmäßig aus. Für die Automatisierung nicht genutzt; Waffen und der Platz, der eine zweite Haut trägt, bleiben unangetastet. |
 
 Ein Design, das gespeichert wurde, bevor Bindungen den ganzen Charakter erfasst haben, ist mit **Nur Proteus-Mods** gekennzeichnet. Wende es an und drücke **Aktualisieren**, um den Rest zu erfassen.
@@ -159,6 +202,8 @@ Ein Design, das gespeichert wurde, bevor Bindungen den ganzen Charakter erfasst 
 Erstellt einen einfachen Overlay-Mod, ohne das Spiel zu verlassen. Gib ihm einen Namen und einen Autor und wähle mindestens eine Textur (Diffuse, Maske, Normal oder Index). Das Materialziel wird automatisch aus dem Körper gefüllt, den du gerade trägst; du kannst aus der Auswahlliste ein anderes getragenes Material wählen oder einen Pfad von Hand eintippen. Proteus schreibt einen neuen Penumbra-Mod und öffnet ihn.
 
 Texturplätze, die das gewählte Material gar nicht nutzen kann, sind ausgegraut.
+
+Ein Körperhaut-Ziel deckt auch denselben Körper bei jedem anderen Volk ab, das dasselbe Texturlayout teilt, der Mod folgt dir also durch einen Volkswechsel. Der Tab zeigt, wie viele Materialien das sind. Frauenkörper teilen sich ein Layout und Männerkörper ein anderes; Lalafell und männliche Hrothgar haben ihr eigenes und sind nicht dabei.
 
 #### Import
 
@@ -233,7 +278,25 @@ Die meisten Haar-Mods unterstützen keine Hüte, sodass ein darüber getragener 
 - Oder passe die Frisur, die du trägst, selbst an. Der Abschnitt sagt, wie viele Punkte angedrückt würden und wie weit, und **Anpassen** schreibt die Änderung.
 - **Rückgängig** stellt die Frisur wieder her, die du trägst. Ein Haar-Mod liefert meist ein Modell pro Volk, also stellt **Alle Frisuren dieses Mods zurücksetzen** jede Frisur wieder her, die Proteus in diesem Mod geändert hat. Die Originale werden in `Proteus/hatcompat-backup/` im Mod aufbewahrt.
 - Haar, dessen Autor bereits Hut-Unterstützung eingebaut hat, bleibt unangetastet, und Haar aus dem Spiel funktioniert ohnehin. Die Ausnahme ist Hut-Unterstützung, die viel mehr Haar verbirgt, als ein Hut bedeckt, meist übernommen von der Frisur, auf der sie aufbaut. Proteus bietet an, das neu zu vermessen und zu ersetzen.
+- **Mitgelieferte Hutunterstützung einer Frisur ersetzen** lässt Proteus die von Hand gemachte Hut-Anpassung eines Autors verwerfen und stattdessen seine eigene verwenden. Standardmäßig aus, denn eine von Hand gemachte Anpassung ist meist besser. Die Version des Autors wird aufbewahrt und kommt zurück, wenn du es ausschaltest.
 - Manche Frisuren sind zu Stücken verschweißt, die zu groß sind, als dass das Formformat des Spiels sie ansprechen könnte. Diese Punkte behalten ihre Form, ein Hut kann dort also weiterhin durchschneiden.
+
+##### Körperanpassung
+
+Passt Brust-, Bein-, Hand- und Fußausrüstung von selbst an deinen Körper an, in dem Moment, in dem du sie anlegst. Proteus ermittelt, für welchen Körper-Mod und welche Größe die Ausrüstung gemacht wurde, passt sie auf dieselbe Weise an deinen Körper an wie das Werkzeug [Körpergröße](#körpergröße) im Studio, speichert die neue Größe in den Mod der Ausrüstung selbst und schaltet sie ein. Der Chat sagt, wann es anfängt und wann es fertig ist.
+
+1. Setze den Haken bei **Ausrüstung beim Anlegen an meinen Körper anpassen**.
+2. Wähle eine **Kollektion**. Jede Penumbra-Kollektion hat ihre eigene Auswahl, und sie beginnt auf der, die du gerade nutzt.
+3. Wähle deinen **Körper**-Mod, dann seine **Brustgröße** und **Beingröße**. Hände und Füße werden passend dazu für dich gewählt.
+4. Ausrüstung, die du ab jetzt anlegst, wird angepasst. Für das, was du schon trägst, drücke **Was ich gerade trage anpassen**.
+
+Gut zu wissen:
+
+- **Auch die Ausrüstung des Spiels anpassen** erledigt auch Vanilla-Teile. Sie haben keinen Mod, in den gespeichert werden könnte, also bekommt jedes einen eigenen neuen Mod, benannt nach Gegenstand und Körper, abgelegt unter **Proteus-Vergrößerungen**.
+- **Deine Wahl in Penumbra gewinnt.** Wählst du selbst das **Original** eines Mods oder eine andere Größe, lässt Proteus es in Ruhe. Bringt ein Mod deine Größe schon mit, wird diese Option eingeschaltet, statt eine neue zu erstellen.
+- Kann Proteus nicht sagen, für welchen Körper ein Teil gemacht wurde, oder hat das Teil keine Körperhaut zum Auslesen, lässt es das Teil, wie es ist, und sagt das im Chat. Du kannst es weiterhin im Studio von Hand anpassen.
+- **Anpassung meiner getragenen Ausrüstung rückgängig machen** (Strg oder Shift gedrückt halten und klicken) entfernt die Größen, die die automatische Anpassung für die Ausrüstung erstellt hat, die du trägst, löscht die Mods, die sie für Vanilla-Ausrüstung erstellt hat, und stellt die Optionen wieder her, die du vorher hattest. Diese Teile werden nicht erneut angepasst, es sei denn, du drückst **Was ich gerade trage anpassen**. Größen, die du selbst im Studio erstellt hast, bleiben.
+- **Körper dieser Kollektion vergessen** schaltet es für diese Kollektion aus.
 
 ### Presets
 
@@ -288,6 +351,7 @@ Zwei weitere aufklappbare Abschnitte gelten für den ganzen Mod:
 - **Geometrie** formt das Kleidungsstück um, das Proteus aus deinem Körper baut, damit es sich wie Stoff liest und nicht wie Farbe. Proteus baut eine zweite Haut als Kopie deines Körpers, sie folgt deshalb standardmäßig jeder Vertiefung:
   - **Dekolleté überspannen**: Der Stoff zwischen den Brüsten spannt sich gerade darüber, so wie echter Stoff es tut. Nichts wird nach innen gezogen, er kann also nicht in den Körper einschneiden.
   - **Gesäß überspannen**: dasselbe quer über die Sitzfläche.
+  - **Bauchnabel überspannen**: Der Stoff spannt sich flach über den Nabel, statt in ihn einzusinken.
   - **Zwischen den Beinen glätten**: glättet die Falte im Schritt. Das verändert den Körper darunter und gilt deshalb für alle gleichzeitig getragenen Kleidungsstücke.
   - **Brustwarze glätten**: glättet den Stoff darüber. Noch nicht fertig: Der Körper darunter behält seine Form, bei enger Passform kann sie also weiterhin durchdrücken.
 

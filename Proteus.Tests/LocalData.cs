@@ -34,12 +34,69 @@ internal static class LocalData
     /// <summary>The sample content pack, under <see cref="ModPacks"/>.</summary>
     internal const string PiercingsPack = ModPacks + ":Neolithe Piercings for Proteus.pmp";
 
+    /// <summary>Miette's "Shift": heels with stockings to the thigh, a heeled foot of Bibo skin, made on YAB WC.</summary>
+    internal const string ShiftPack = ModPacks + ":Shift.pmp";
+
+    /// <summary>Bijeon's "Frost Veil Plus+": an invisible a0002 bracelet whose whole look is an item effect, in the v3 layout.</summary>
+    internal const string FrostVeilPack = ModPacks + ":Frost Veil Plus+.pmp";
+
+    /// <summary>
+    /// The uv transfer maps, which live in the repository (<c>Proteus/uvmaps</c>) but through Git LFS, so a checkout
+    /// may hold only their pointers. Not a variable: found by walking up from the test binaries. <see cref="Path"/> gives
+    /// the folder to hand <c>UVRemapService</c> as its plugin folder.
+    /// </summary>
+    internal const string UvMaps = "<uv transfer maps>";
+
+    /// <summary>The plugin folder whose <c>uvmaps</c> hold real maps, or null.</summary>
+    private static string? UvMapsFolder()
+    {
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
+        {
+            var map = System.IO.Path.Combine(dir.FullName, "Proteus", "uvmaps", "gen3_to_bibo_transfer.tif");
+            if (File.Exists(map)) return IsTiff(map) ? System.IO.Path.Combine(dir.FullName, "Proteus") : null;
+        }
+        return null;
+    }
+
+    /// <summary>Whether a file opens as a TIFF; an LFS pointer begins "version https://…".</summary>
+    private static bool IsTiff(string path)
+    {
+        try
+        {
+            using var s = File.OpenRead(path);
+            Span<byte> magic = stackalloc byte[4];
+            if (s.Read(magic) < 4) return false;
+            return (magic[0] == (byte)'I' && magic[1] == (byte)'I' && magic[2] == 42 && magic[3] == 0)
+                || (magic[0] == (byte)'M' && magic[1] == (byte)'M' && magic[2] == 0 && magic[3] == 42);
+        }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
+    }
+
+    /// <summary>
+    /// The one entry of a .pmp whose path ends in <paramref name="suffix"/>. By ending, so folder names a pack spells in
+    /// characters a zip may encode either way (Shift's "•") do not matter; throws unless exactly one entry matches.
+    /// </summary>
+    internal static byte[] PackEntryEndingWith(string packNeed, string suffix)
+    {
+        using var zip = ZipFile.OpenRead(Path(packNeed));
+        var matches = zip.Entries.Where(e => e.FullName.Replace('\\', '/').EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                                 .ToList();
+        if (matches.Count != 1)
+            throw new InvalidDataException($"{matches.Count} entries of {Path(packNeed)} end in {suffix}, not one");
+        using var s = matches[0].Open();
+        using var m = new MemoryStream();
+        s.CopyTo(m);
+        return m.ToArray();
+    }
+
     /// <summary>
     /// Where a need points. When its variable is not set the result is a relative path under a folder that does not
     /// exist, so nothing ever reads the wrong file — the attribute has skipped the test before it got here.
     /// </summary>
     internal static string Path(string need)
     {
+        if (need == UvMaps) return UvMapsFolder() ?? "<uv transfer maps not here>";
         int colon = need.IndexOf(':');
         string variable = colon < 0 ? need : need[..colon];
         string relative = colon < 0 ? "" : need[(colon + 1)..].Replace('/', System.IO.Path.DirectorySeparatorChar);
@@ -53,6 +110,11 @@ internal static class LocalData
         var missing = new List<string>();
         foreach (var need in needs)
         {
+            if (need == UvMaps)
+            {
+                if (UvMapsFolder() == null) missing.Add("the uv transfer maps are not here (Git LFS not fetched)");
+                continue;
+            }
             int colon = need.IndexOf(':');
             string variable = colon < 0 ? need : need[..colon];
             if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable(variable)))

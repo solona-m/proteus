@@ -269,6 +269,39 @@ public class Configuration : IPluginConfiguration
     public int RetargetGuideSeen { get; set; }
 
     /// <summary>
+    /// The bodies last ticked in the Body size tool's "every size for other bodies" (keys of
+    /// <see cref="Services.SupportedBodies.Choices"/>), so an author adding sizes to one mod after another ticks them once.
+    /// </summary>
+    public List<string> SizeSetBodies { get; set; } = [];
+
+    /// <summary>With <see cref="SizeSetBodies"/>, refit onto each body's Yet Another Skeleton sizes where it has them.
+    /// On by default: the mod packer's default too.</summary>
+    public bool SizeSetYas { get; set; } = true;
+
+    /// <summary>With <see cref="SizeSetBodies"/>, make sizes of a mod's shoes and gloves too, their own feet and hands
+    /// kept. On by default; a config saved before it existed has no such key and keeps this default (no migration).</summary>
+    public bool SizeSetEnds { get; set; } = true;
+
+    /// <summary>
+    /// Refit chest, legs, hands and feet gear onto the collection's preferred body as it is equipped — see
+    /// <see cref="Services.AutoRefitWatcher"/>. Off by default: it writes into the gear's own mod.
+    /// </summary>
+    public bool AutoRefitEnabled { get; set; }
+
+    /// <summary>
+    /// With <see cref="AutoRefitEnabled"/>, refit the game's own gear too, into a mod of Proteus's own per item. A
+    /// separate switch because every unmodded piece put on makes a new mod.
+    /// </summary>
+    public bool AutoRefitVanilla { get; set; }
+
+    /// <summary>
+    /// The body and sizes gear is refitted onto, per Penumbra collection, keyed by the collection's id
+    /// (<c>Guid.ToString("D")</c>) — a collection is a character's look, and two characters can wear different bodies.
+    /// A collection with no entry is left alone. OrdinalIgnoreCase, which survives deserialization (populated in place).
+    /// </summary>
+    public Dictionary<string, AutoRefitPreference> AutoRefitByCollection { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// The Glamourer design whose binding was active when the plugin last ran, so a reload can pick it back up
     /// (Glamourer signals nothing for an already-applied design). Null = nothing active. Restored only after
     /// <c>DesignBindingService.TryBootRestore</c> verifies it.
@@ -460,4 +493,84 @@ public class Configuration : IPluginConfiguration
 
     public void Save()
         => Plugin.PluginInterface.SavePluginConfig(this);
+}
+
+/// <summary>One collection's preferred body for the automatic refit (<see cref="Configuration.AutoRefitByCollection"/>).</summary>
+[Serializable]
+public class AutoRefitPreference
+{
+    /// <summary>The collection's name when the preference was set — shown when the collection itself is gone.</summary>
+    public string CollectionName { get; set; } = "";
+
+    /// <summary>The body mod refitted onto, by folder. Empty means nothing is refitted.</summary>
+    public string BodyDir { get; set; } = "";
+
+    /// <summary>The chest size refitted onto. Hands and feet follow it (see <c>AutoRefitDecisions.Companion</c>).</summary>
+    public BodySizeRef? Chest { get; set; }
+
+    /// <summary>The legs size refitted onto.</summary>
+    public BodySizeRef? Legs { get; set; }
+
+    /// <summary>
+    /// Every mod group (<c>"modDir|group"</c>) a refit has been switched on in, in this collection. Once there, a group
+    /// that no longer holds a refit is the player's choice — "Original", or the author's own size — and putting the
+    /// piece on again leaves it alone (see <c>AutoRefitDecisions.ChoseOtherwise</c>). OrdinalIgnoreCase, populated in place.
+    /// </summary>
+    public HashSet<string> SwitchedOn { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Per mod group (<c>"modDir|group"</c>), the author's own size Proteus switched on there because it IS the size
+    /// chosen. Ours, as a refit is: the player still wearing it has not chosen otherwise, and a later change of size may
+    /// move them off it. Dropped again when a refit is switched on in its place. OrdinalIgnoreCase, populated in place.
+    /// </summary>
+    public Dictionary<string, string> AuthorSwitchedOn { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Per mod group (<c>"modDir|group"</c>), what the collection's OWN setting had ticked there before the refit first
+    /// switched it — what undoing the automatic refit puts back. Recorded once, at the first switch, and never
+    /// overwritten by a later one, which would record a refit as the "before". Missing for groups switched before it was
+    /// kept. OrdinalIgnoreCase, populated in place.
+    /// </summary>
+    public Dictionary<string, List<string>> Before { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The same, for a group a design held at the time (see <c>DesignBindingService.HeldSelection</c>): what the hold
+    /// had ticked, put back into the hold on undo. Kept apart from <see cref="Before"/>, because the hold is the design's
+    /// state and the collection's own setting the player's — restoring one into the other left a released design
+    /// showing the design's size. OrdinalIgnoreCase, populated in place.
+    /// </summary>
+    public Dictionary<string, List<string>> HeldBefore { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The mods (by folder) that had no setting of the collection's OWN before the refit first switched ANY group of
+    /// them — inherited from another collection, or never set. Undoing the last switched group of such a mod hands it
+    /// back to inheritance rather than writing <see cref="Before"/> into it, which would fix the inherited size in place
+    /// and cut the mod off from the collection it inherits from.
+    /// <para/>
+    /// Per mod, not per group: the first group switched gives the mod a setting of its own, and the second group, read
+    /// then, looked as if the player had made one — an outfit's top and legs refitted one after the other left the mod
+    /// with its own setting for good. OrdinalIgnoreCase, populated in place.
+    /// </summary>
+    public HashSet<string> InheritedBefore { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Pieces whose automatic refit the player undid in this collection, by what the slot draws (<c>Worn.Key</c>,
+    /// <c>"gamepath|moddir"</c>): put on again, they are left as they are. "Refit what I'm wearing now" refits one anyway
+    /// and forgets it here. OrdinalIgnoreCase, populated in place.
+    /// </summary>
+    public HashSet<string> Declined { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+}
+
+/// <summary>
+/// One body size, remembered so it can be found again at ANOTHER race than the one it was picked at: the settings list
+/// the player's own race, while a refit may run at the race a garment is baked to, where the file differs but the
+/// option is the same. The file is tried first, then the option by group, heading and name.
+/// </summary>
+[Serializable]
+public class BodySizeRef
+{
+    public string Rel { get; set; } = "";
+    public string Group { get; set; } = "";
+    public string Section { get; set; } = "";
+    public string Name { get; set; } = "";
 }

@@ -53,7 +53,7 @@ internal static partial class BodyRetarget
     /// <param name="LostShapes">Shape keys the garment had, which the rebuilt model does not carry.</param>
     /// <param name="Reweighted">Cloth vertices given the new body's weights (see <see cref="PlanWeights"/>).</param>
     /// <param name="Trimmed">Of those, vertices whose body weights were cut to fit the eight-influence limit.</param>
-    /// <param name="ExtrasDropped">Triangles of the old body's piercings and pubic hair taken out.</param>
+    /// <param name="ExtrasDropped">Triangles of the old body's piercings, nails and pubic hair taken out.</param>
     /// <param name="Unplaced">Influences the writer could not place — a bone in no model it was given, or a full table.</param>
     /// <param name="Posed">Skin meshes only partly on the bodies — a heeled shoe's own foot — which were kept.</param>
     /// <param name="Cut">Triangles of the new body's skin left out, because the garment's author deleted the body
@@ -61,9 +61,16 @@ internal static partial class BodyRetarget
     /// <param name="Trimmed">Vertices the PLANNER could not fit in eight influences.</param>
     /// <param name="Slotted">Influences the MESH had no slot for — a four-slot cloth mesh given a vertex planned
     /// with five. The heaviest are kept and the weights renormalised, so nothing shrinks.</param>
+    /// <param name="Adorned">Triangles of the new body's nails and piercings carried in (see <see cref="AdornmentsOf"/>).</param>
+    /// <param name="Tucked">Of <paramref name="Added"/>, triangles drawn past the author's edge, in under the cloth (see
+    /// <see cref="TuckUnderCloth"/>).</param>
+    /// <param name="TuckUnread">Slots the tuck was asked for whose body's weights could not be read: nothing tucked there.</param>
+    /// <param name="Opened">Of <paramref name="Tucked"/>, triangles drawn in the open, inside the author's own skin
+    /// (see <see cref="TuckSpanShare"/>).</param>
     internal readonly record struct SwapReport(int Removed, int Added, int Kept, int LostShapes,
                                                int Reweighted = 0, int Trimmed = 0, int ExtrasDropped = 0,
-                                               int Unplaced = 0, int Posed = 0, int Cut = 0, int Slotted = 0);
+                                               int Unplaced = 0, int Posed = 0, int Cut = 0, int Slotted = 0,
+                                               int Adorned = 0, int Tucked = 0, int TuckUnread = 0, int Opened = 0);
 
     /// <summary>
     /// Swap the garment's skin for the new body's, one body slot at a time: every skin mesh of the garment that belongs
@@ -86,24 +93,32 @@ internal static partial class BodyRetarget
     /// <param name="pairs">The slots being resized. Only those carrying their target body's file can be swapped.</param>
     /// <param name="cutHidden">Leave out the new body's skin where the garment's author deleted theirs — see
     /// <see cref="CutLike"/>. Off puts the body in whole.</param>
+    /// <param name="tuckSlot">See <see cref="Rebuild"/>.</param>
     /// <returns>The rebuilt model, or null when no skin mesh of the garment belongs to a slot being resized.</returns>
     internal static byte[]? SwapSkin(byte[] garment, IReadOnlyList<SlotPair> pairs, out SwapReport report,
-                                     bool cutHidden = true)
-        => Rebuild(garment, pairs, swapSkin: true, weights: null, out report, cutHidden);
+                                     bool cutHidden = true, string? tuckSlot = null)
+        => Rebuild(garment, pairs, swapSkin: true, weights: null, out report, cutHidden, tuckSlot: tuckSlot);
 
     /// <summary>
     /// Rebuild the refitted garment for its new body: swap the resized slots' skin meshes for the body's (see
-    /// <see cref="SwapSkin"/>), give its cloth the new body's weights (see <see cref="PlanWeights"/>), and — whenever the
-    /// weights change, which is to say across rigs — drop the piercings and pubic hair it carried from its old body
+    /// <see cref="SwapSkin"/>), give its cloth the new body's weights (see <see cref="PlanWeights"/>), and — when the
+    /// garment goes to another body mod — drop the piercings and pubic hair it carried from its old body
     /// (see <see cref="IsBodyExtraMaterial"/>). One re-emit for all three.
     /// </summary>
     /// <param name="cutHidden">Carry the author's cut onto the new body's skin (see <see cref="CutLike"/>).</param>
+    /// <param name="acrossBodies">The garment is going to another body mod, not between sizes of one.</param>
+    /// <param name="swapMeshes">The skin meshes the solver parted the cloth from (<see cref="SwappedSkinMeshes"/>), when
+    /// it was told which: then exactly those go and every other stays, rather than judging again on the laid model —
+    /// see <see cref="Plan"/>. Null judges here, as always.</param>
+    /// <param name="tuckSlot">The slot whose cut skin is carried on in under the cloth past the author's edge (see
+    /// <see cref="TuckUnderCloth"/>): the game's own top's chest. Null tucks nothing, as every other refit has it.</param>
     /// <returns>The rebuilt model, or null when there was nothing to change.</returns>
     internal static byte[]? Rebuild(byte[] garment, IReadOnlyList<SlotPair> pairs, bool swapSkin, WeightPlan? weights,
-                                    out SwapReport report, bool cutHidden = true)
+                                    out SwapReport report, bool cutHidden = true, bool acrossBodies = false,
+                                    IReadOnlySet<int>? swapMeshes = null, string? tuckSlot = null)
     {
         report = default;
-        var swappable = swapSkin ? pairs.Where(p => p.TargetModel != null).ToList() : [];
+        var swappable = swapSkin ? pairs.Where(p => p.Swaps).ToList() : [];
         if ((swappable.Count == 0 && weights == null) || ModelPartReader.Read(garment) is not { } model) return null;
 
         var surfaces = swappable.Select(p => new BodySurface(p.Target, BodySurface.CellFor(MeanEdgeOf(p.Target))))
@@ -139,7 +154,9 @@ internal static partial class BodyRetarget
                 float share = verts.Count > 0 ? (float)on / verts.Count : 0f;
                 if (share > bestShare) { bestShare = share; best = s; }
             }
-            if (verts.Count > 0 && onAny < verts.Count * OnBodyShare)
+            bool partlyOff = swapMeshes != null ? !swapMeshes.Contains(mesh.Key)
+                           : verts.Count > 0 && onAny < verts.Count * OnBodyShare;
+            if (partlyOff)
             {
                 // Some of it is the body's and some is not: the whole mesh stays, since half a mesh cannot be swapped.
                 if (best >= 0) posed++;
@@ -171,12 +188,29 @@ internal static partial class BodyRetarget
             skinMaterial ??= mesh.First().Material;
             removed += mesh.Sum(p => p.Triangles.Length / 3);
         }
-        // The old body's extras: they sit on the shape the garment is leaving.
+        // The old body's extras: they sit on the shape the garment is leaving. Only across body mods — within one, a rig
+        // change (Rue+'s Gen A legs to Gen B) carries them with the skin they sit on, and nothing would replace them.
+        // Across body mods with no weights (a body unreadable) they stay, as before.
         int extras = 0;
-        if (weights != null)
+        if (acrossBodies && weights != null)
             foreach (var part in model.Parts)
                 if (part.Island < 0 && IsBodyExtraMaterial(part.Material) && dropped.Add(part.Mesh))
                     extras += model.Parts.Where(q => q.Island < 0 && q.Mesh == part.Mesh).Sum(q => q.Triangles.Length / 3);
+        // The old body's nails and piercings on a slot whose skin is swapped go with that skin — the new body brings its
+        // own (see AdornmentsOf) — even within one body mod, where they would otherwise be doubled. Where they were is
+        // kept: the author showed one there. Taken out only once the new body's are known to fit (below).
+        var authored = new PointGrid();
+        var oldAdornments = new List<(int Mesh, int Triangles)>();
+        if (claimedBy.Count > 0)
+            foreach (var mesh in model.Parts.Where(p => p.Island < 0 && IsBodyAdornmentMaterial(p.Material))
+                                            .GroupBy(p => p.Mesh))
+            {
+                var verts = mesh.SelectMany(p => p.Triangles).Distinct().ToList();
+                int on = verts.Count(v => claimedBy.Any(s => surfaces[s].Nearest(At(model, v), AdornReach, out _)));
+                if (on * 2 < verts.Count) continue;
+                foreach (int v in verts) authored.Add(At(model, v));
+                oldAdornments.Add((mesh.Key, mesh.Sum(p => p.Triangles.Length / 3)));
+            }
 
         if (dropped.Count == 0 && weights == null)
         {
@@ -196,22 +230,61 @@ internal static partial class BodyRetarget
         bool anyCut = cutHidden || alwaysCut.Count > 0;
         var drawn = anyCut ? new BodySurface(model, BodySurface.CellFor(MeanEdgeOf(model))) : null;
         var drawnEdges = anyCut ? SkinEdges.Of(model) : null;
-        var cloth = anyCut ? new ClothCrossings(model) : null;
+        var cloth = new ClothCrossings(model);
         var cuts = new Dictionary<int, Dictionary<int, HashSet<ushort>>?>();
+        // The author's own cut, where the tuck added to it: what the new body's nails and piercings are judged on.
+        var authorCuts = new Dictionary<int, Dictionary<int, HashSet<ushort>>?>();
         // Each slot's body as it goes in: its own model, or one whose skin was pulled back to the author's edge.
         var bodyOf = new Dictionary<int, byte[]>();
-        int cutTris = 0, keptTris = 0;
+        int cutTris = 0, keptTris = 0, tuckedTris = 0, tuckUnreadSlots = 0, openedTris = 0;
         foreach (int s in claimedBy)
         {
-            int these = 0, gone = 0;
+            int these = 0, gone = 0, tucked = 0, opened = 0;
             byte[]? pulled = null;
+            Dictionary<int, HashSet<ushort>>? authorCut = null;
+            bool tuckUnread = false;
             bool cutThis = cutHidden || alwaysCut.Contains(s);
-            cuts[s] = !cutThis || drawn == null || drawn.IsEmpty ? null : CutLike(drawn, drawnEdges!, cloth!,
+            bool tuck = cutThis && tuckSlot != null && swappable[s].Slot == tuckSlot && !Tuned.NoTuck;
+            cuts[s] = !cutThis || drawn == null || drawn.IsEmpty ? null : CutLike(drawn, drawnEdges!, cloth,
                                                                       swappable[s].TargetModel!, swappable[s].TargetHidden,
-                                                                      out these, out gone, out pulled);
+                                                                      tuck, out these, out gone, out pulled, out tucked,
+                                                                      out authorCut, out tuckUnread, out opened);
+            authorCuts[s] = authorCut ?? cuts[s];
             bodyOf[s] = pulled ?? swappable[s].TargetModel!;
             keptTris += cuts[s] == null ? SkinTriangles(swappable[s].Target) : these;
             cutTris += gone;
+            tuckedTris += tucked;
+            openedTris += opened;
+            if (tuckUnread) tuckUnreadSlots++;
+        }
+
+        // The new body's nails and piercings, each material a layer of its own and drawn as the body draws it, tags and
+        // all: a nail mod picks the nail's shape and material by atrx_ tag. They share the skin's cut, which belongs to
+        // the model — so a body whose skin went in whole still gets one, holding only the adornments, and a mesh missing
+        // from it draws whole as before.
+        // Materials are capped and skin comes first. The swap is all or nothing: the garment's own are taken out only when
+        // every one of the new body's fits, so a garment with no room keeps the nails it had rather than going bare.
+        var adornments = claimedBy.OrderBy(s => s)
+                                  .Select(s => (Slot: s, Adorn: AdornmentsOf(bodyOf[s], swappable[s].TargetHidden,
+                                                                             authorCuts[s], cloth, authored)))
+                                  .Where(a => a.Adorn.Materials.Count > 0)
+                                  .ToList();
+        int room = SecondSkinWriter.MaxMaterials - SecondSkinWriter.Parse(garment).MatNames.Count - claimedBy.Count;
+        bool fits = adornments.Sum(a => a.Adorn.Materials.Count) <= room;
+        int adorned = 0;
+        var adornMaterials = new Dictionary<int, List<string>>();
+        if (fits)
+        {
+            foreach (var (s, adorn) in adornments)
+            {
+                var cut = cuts[s] ?? [];
+                foreach (var (mesh, set) in adorn.DrawOnly) cut[mesh] = set;
+                cuts[s] = cut;
+                adornMaterials[s] = adorn.Materials;
+                adorned += adorn.Triangles;
+            }
+            foreach (var (mesh, tris) in oldAdornments)
+                if (dropped.Add(mesh)) extras += tris;
         }
 
         // One layer per slot whose skin came out: its body's skin meshes, under the right skin material.
@@ -227,6 +300,15 @@ internal static partial class BodyRetarget
                                             HiddenAttributes: swappable[s].TargetHidden,
                                             DropVariantAttributes: true, DrawOnly: cuts[s])],
         }).ToList();
+        foreach (var (s, materials) in adornMaterials.OrderBy(a => a.Key))
+            foreach (string material in materials)
+                layers.Add(new SecondSkinLayer
+                {
+                    MaterialName = material,
+                    Geometry = [new ContentGeometry(bodyOf[s], m => string.Equals(m, material, StringComparison.Ordinal),
+                                                    HiddenAttributes: swappable[s].TargetHidden,
+                                                    DropVariantAttributes: true, DrawOnly: cuts[s])],
+                });
         var reskinned = new SecondSkinWriter.ReskinReport();
         var rebuilt = SecondSkinWriter.Build(Array.Empty<SecondSkinWriter.SourceSpec>(), layers, garment, out _,
                                              dropHostMesh: dropped.Contains,
@@ -235,7 +317,7 @@ internal static partial class BodyRetarget
 
         report = new SwapReport(removed, keptTris, kept, SecondSkinWriter.Parse(garment).Shapes.Count,
                                 weights?.Reweighted ?? 0, weights?.Trimmed ?? 0, extras, reskinned.Dropped, posed,
-                                cutTris, reskinned.Trimmed);
+                                cutTris, reskinned.Trimmed, adorned, tuckedTris, tuckUnreadSlots, openedTris);
         return rebuilt;
     }
 
@@ -255,12 +337,22 @@ internal static partial class BodyRetarget
     /// <param name="pulled">The body with its kept skin pulled back to the author's edge (see <see cref="PullToEdge"/>),
     /// or null when nothing needed pulling.</param>
     /// <param name="cloth">The garment's cloth, which decides which of the kept skin needs pulling back.</param>
+    /// <param name="tuck">Carry the kept skin on past the author's edge in under the cloth (see <see cref="TuckUnderCloth"/>).</param>
+    /// <param name="tucked">Triangles the tuck drew, counted in <paramref name="kept"/>.</param>
+    /// <param name="authorCut">The cut before the tuck, when the tuck added to it; null otherwise.</param>
+    /// <param name="tuckUnread">The tuck was asked for and the body's weights could not be read, so it grew nothing.</param>
+    /// <param name="opened">Of <paramref name="tucked"/>, triangles drawn in the open, inside the author's own skin.</param>
     private static Dictionary<int, HashSet<ushort>>? CutLike(BodySurface drawn, SkinEdges edges, ClothCrossings cloth,
-                                                             byte[] body, IReadOnlySet<string>? hidden, out int kept,
-                                                             out int cut, out byte[]? pulled)
+                                                             byte[] body, IReadOnlySet<string>? hidden, bool tuck,
+                                                             out int kept, out int cut, out byte[]? pulled,
+                                                             out int tucked,
+                                                             out Dictionary<int, HashSet<ushort>>? authorCut,
+                                                             out bool tuckUnread, out int opened)
     {
-        kept = cut = 0;
+        kept = cut = tucked = opened = 0;
         pulled = null;
+        authorCut = null;
+        tuckUnread = false;
         if (ModelPartReader.Read(body) is not { } read) return null;
         var parts = Without(read, hidden);
 
@@ -300,7 +392,23 @@ internal static partial class BodyRetarget
             }
         }
         if (cut == 0) { kept = 0; return null; }   // nothing cut: the body goes in whole, as before
-        pulled = PullToEdge(drawn, edges, cloth, body, parts, drawnCorners, keptTris);
+        pulled = PullToEdge(drawn, edges, cloth, body, parts, drawnCorners, keptTris, out var movedAt);
+        if (!tuck) return sets;
+
+        var (grown, added, open, unread) = TuckUnderCloth(drawn, cloth, body, parts, covered, keptTris, movedAt, baseOf,
+                                                          edges);
+        tuckUnread = unread;
+        if (added == 0) return sets;
+        opened = open;
+        authorCut = sets.ToDictionary(e => e.Key, e => new HashSet<ushort>(e.Value));
+        foreach (var (mesh, local) in grown)
+        {
+            if (!sets.TryGetValue(mesh, out var set)) sets[mesh] = set = [];
+            set.UnionWith(local);
+        }
+        tucked = added;
+        kept += added;
+        cut -= added;
         return sets;
 
         void Keep(HashSet<ushort> set, int v, int bv)
@@ -318,7 +426,7 @@ internal static partial class BodyRetarget
     internal static HashSet<int> SwappedSkinMeshes(ModelParts garment, IReadOnlyList<SlotPair> pairs)
     {
         var swapped = new HashSet<int>();
-        var sources = pairs.Where(p => p.TargetModel != null)
+        var sources = pairs.Where(p => p.Swaps)
                            .Select(p => new BodySurface(p.Correspondence.Source,
                                                         BodySurface.CellFor(MeanEdgeOf(p.Correspondence.Source))))
                            .Where(s => !s.IsEmpty)
@@ -369,11 +477,14 @@ internal static partial class BodyRetarget
     /// </summary>
     /// <param name="corners">Every corner of the triangles the cut keeps.</param>
     /// <param name="keptTris">The triangles the cut keeps.</param>
+    /// <param name="movedAt">Where each corner the pull moved stood before it, so a vertex split at a texture seam is
+    /// matched with its twin — what <see cref="TuckUnderCloth"/> leaves alone. Empty when nothing moved.</param>
     /// <returns>The body's bytes with those corners moved, or null when none needed it or the model cannot be written.</returns>
     private static byte[]? PullToEdge(BodySurface drawn, SkinEdges edges, ClothCrossings cloth, byte[] body,
                                       ModelParts parts, IReadOnlyCollection<int> corners,
-                                      IReadOnlyList<(int A, int B, int C)> keptTris)
+                                      IReadOnlyList<(int A, int B, int C)> keptTris, out HashSet<Vector3> movedAt)
     {
+        movedAt = [];
         var bodyEdges = SkinEdges.Of(parts);
         var surface = new BodySurface(parts, BodySurface.CellFor(MeanEdgeOf(parts)));
         var edit = new PullEdit(parts.MeshSpans, parts.Positions.Length / 3);
@@ -443,6 +554,7 @@ internal static partial class BodyRetarget
             if (d.X == 0f && d.Y == 0f && d.Z == 0f) continue;
             edit.Delta[v] = new Vec3(d.X * s, d.Y * s, d.Z * s);
             edit.Worst = MathF.Max(edit.Worst, Len(edit.Delta[v]));
+            movedAt.Add(p);
             moved++;
         }
         if (moved == 0) return null;
@@ -517,14 +629,16 @@ internal static partial class BodyRetarget
     /// and the cloth, and stays; skin with cloth well over it is hidden and stays; skin the cloth sits right on, or is
     /// already behind, is what shows through, and is pulled back.
     /// </summary>
-    private sealed class ClothCrossings
+    internal sealed class ClothCrossings
     {
         private const float Cell = 0.02f;
         private readonly List<(Vector3 A, Vector3 B, Vector3 C)> tris = [];
         private readonly List<float> clear = [];
         private readonly Dictionary<(int, int, int), List<int>> grid = [];
 
-        public ClothCrossings(ModelParts garment)
+        /// <param name="countVariants">Count parts switched by an IMC variant tag as cloth too: for asking what the
+        /// garment covers whichever of its options is drawn (see <see cref="CoveredTargetSkin"/>).</param>
+        public ClothCrossings(ModelParts garment, bool countVariants = false)
         {
             int vc = garment.Positions.Length / 3;
             var vertAt = new Vec3[vc];
@@ -535,14 +649,16 @@ internal static partial class BodyRetarget
             // A part switched by an IMC variant tag may not be drawn — which of them is, is the wearer's setting, and
             // nothing here knows it. Counted, a hidden long skirt would pull the thigh's skin back from under nothing.
             uint variantBits = 0;
-            for (int i = 0; i < garment.AttributeNames.Count && i < 32; i++)
+            for (int i = 0; i < garment.AttributeNames.Count && i < 32 && !countVariants; i++)
                 if (SecondSkinWriter.IsVariantAttribute(garment.AttributeNames[i])) variantBits |= 1u << i;
 
             var faces = new List<(int A, int B, int C)>();
             foreach (var part in garment.Parts)
             {
+                // Nails and piercings are the old body's, not cloth: they go when the skin does.
                 if (part.Island >= 0 || SecondSkinWriter.IsBodySkinMaterial(part.Material)
-                    || IsBodyExtraMaterial(part.Material) || (part.AttributeMask & variantBits) != 0) continue;
+                    || IsBodyExtraMaterial(part.Material) || IsBodyAdornmentMaterial(part.Material)
+                    || (part.AttributeMask & variantBits) != 0) continue;
                 for (int t = 0; t + 2 < part.Triangles.Length; t += 3)
                 {
                     int a = part.Triangles[t], b = part.Triangles[t + 1], c = part.Triangles[t + 2];
@@ -578,6 +694,31 @@ internal static partial class BodyRetarget
         /// faces).</summary>
         public bool Crowds(Vector3 p, Vector3 normal) => Deepest(p, normal) != null;
 
+        /// <summary>Whether cloth crosses the line through <paramref name="p"/> along <paramref name="normal"/> between
+        /// <paramref name="behind"/> behind it and <paramref name="ahead"/> in front — the same for every face, a rim's
+        /// included (see <see cref="TuckClear"/>).</summary>
+        public bool Crowds(Vector3 p, Vector3 normal, float ahead, float behind)
+        {
+            if (normal.LengthSquared() < 1e-12f) return false;
+            var d = Vector3.Normalize(normal);
+            var from = p - d * behind;
+            var to = p + d * ahead;
+            var (x0, y0, z0) = CellOf(Vector3.Min(from, to));
+            var (x1, y1, z1) = CellOf(Vector3.Max(from, to));
+            for (int x = x0; x <= x1; x++)
+            for (int y = y0; y <= y1; y++)
+            for (int z = z0; z <= z1; z++)
+            {
+                if (!grid.TryGetValue((x, y, z), out var bucket)) continue;
+                foreach (int i in bucket)
+                {
+                    var (a, b, c) = tris[i];
+                    if (LineHits(from, d, a, b, c, out float t) && t <= behind + ahead) return true;
+                }
+            }
+            return false;
+        }
+
         /// <summary>
         /// Of the cloth crowding <paramref name="p"/> (see <see cref="Crowds"/>), how far in front of it the deepest lies
         /// — negative behind it; null when none does.
@@ -607,6 +748,29 @@ internal static partial class BodyRetarget
                 }
             }
             return deepest;
+        }
+
+        /// <summary>Whether cloth crosses the line from <paramref name="p"/> out along <paramref name="normal"/> within
+        /// <paramref name="reach"/> — whether something lying there is under it (see <see cref="AdornmentsOf"/>).</summary>
+        public bool Over(Vector3 p, Vector3 normal, float reach)
+        {
+            if (normal.LengthSquared() < 1e-12f) return false;
+            var d = Vector3.Normalize(normal);
+            var to = p + d * reach;
+            var (x0, y0, z0) = CellOf(Vector3.Min(p, to));
+            var (x1, y1, z1) = CellOf(Vector3.Max(p, to));
+            for (int x = x0; x <= x1; x++)
+            for (int y = y0; y <= y1; y++)
+            for (int z = z0; z <= z1; z++)
+            {
+                if (!grid.TryGetValue((x, y, z), out var bucket)) continue;
+                foreach (int i in bucket)
+                {
+                    var (a, b, c) = tris[i];
+                    if (LineHits(p, d, a, b, c, out float t) && t <= reach) return true;
+                }
+            }
+            return false;
         }
 
         /// <summary>Möller–Trumbore, both faces, forward of <paramref name="o"/> only.</summary>
@@ -657,23 +821,29 @@ internal static partial class BodyRetarget
     {
         if (!drawn.Nearest(p, CutSagMax, out var hit)) return false;
         if (hit.Distance <= CutReach) return true;
+        return ChordUnder(drawn, hit, edges) is float chord && hit.Distance <= MathF.Min(CutSagMax, CutSagShare * chord);
+    }
 
+    /// <summary>
+    /// The chord of the garment's laid skin a point lands under: the triangle when it lands inside one, the edge when it
+    /// lands on an edge two triangles share — see <see cref="Covers"/>. Null on the author's boundary (an edge one
+    /// triangle uses) or on a corner, which sits on the body.
+    /// </summary>
+    internal static float? ChordUnder(BodySurface drawn, BodySurface.Hit hit, SkinEdges? edges)
+    {
         const float inside = 0.01f;   // a landing clamped onto an edge has a zero weight; this is off it
         bool offA = hit.U < inside, offB = hit.V < inside, offC = hit.W < inside;
         Vector3 a = drawn.PositionOf(hit.A), b = drawn.PositionOf(hit.B), c = drawn.PositionOf(hit.C);
 
-        float chord;
         if (!offA && !offB && !offC)
-            chord = MathF.Max(Vector3.Distance(a, b), MathF.Max(Vector3.Distance(b, c), Vector3.Distance(c, a)));
-        else if (offA && !offB && !offC && edges?.IsShared(hit.B, hit.C) == true)
-            chord = Vector3.Distance(b, c);
-        else if (offB && !offA && !offC && edges?.IsShared(hit.C, hit.A) == true)
-            chord = Vector3.Distance(c, a);
-        else if (offC && !offA && !offB && edges?.IsShared(hit.A, hit.B) == true)
-            chord = Vector3.Distance(a, b);
-        else
-            return false;   // on the author's boundary, or on a corner, which sits on the body
-        return hit.Distance <= MathF.Min(CutSagMax, CutSagShare * chord);
+            return MathF.Max(Vector3.Distance(a, b), MathF.Max(Vector3.Distance(b, c), Vector3.Distance(c, a)));
+        if (offA && !offB && !offC && edges?.IsShared(hit.B, hit.C) == true)
+            return Vector3.Distance(b, c);
+        if (offB && !offA && !offC && edges?.IsShared(hit.C, hit.A) == true)
+            return Vector3.Distance(c, a);
+        if (offC && !offA && !offB && edges?.IsShared(hit.A, hit.B) == true)
+            return Vector3.Distance(a, b);
+        return null;
     }
 
     /// <summary>

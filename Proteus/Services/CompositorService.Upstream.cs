@@ -105,6 +105,14 @@ public partial class CompositorService
 
             var disk = raw[gamePath];
 
+            // The Studio's live brush is showing an edit on this piece, above every mod on purpose. Not a loss, and not
+            // our own folder's stale file even when the preview is shared inside it: it comes down when the Studio is left.
+            if (disk != null && LiveBrushPreview.IsPreviewFile(disk))
+            {
+                log.Debug("[Proteus] redirect held by the live brush preview: {0} resolves to {1}", gamePath, disk);
+                continue;
+            }
+
             // Our own folder is not a conflict and must never reach the owner set, or TryRaisePriorityAbove raises us above
             // ourselves forever. It means Penumbra still serves an earlier manifest's file; the next reload settles it.
             if (string.Equals(ModFolderOf(disk), SidecarDiscoveryService.ManagedModDir,

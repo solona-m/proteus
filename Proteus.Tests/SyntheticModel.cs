@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Numerics;
 using System.Text;
 
 namespace Proteus.Tests;
@@ -27,7 +28,7 @@ internal static class SyntheticModel
 {
     // Vertex element types and usages, as the model format numbers them (see SecondSkinWriter.ReadTyped).
     private const byte Float2 = 1, Float3 = 2, UByte4 = 5;
-    private const byte UsePosition = 0, UseBlendWeight = 1, UseBlendIndices = 2, UseUV = 4;
+    private const byte UsePosition = 0, UseBlendWeight = 1, UseBlendIndices = 2, UseNormal = 3, UseUV = 4;
 
     /// <summary>A skinned model's stream 0: position, four blend weights, four blend indices — the game's own layout.</summary>
     private const int SkinnedStride = 20;
@@ -62,15 +63,39 @@ internal static class SyntheticModel
     /// <param name="Weights">The bones every vertex of this submesh follows, at most four. Any submesh carrying them
     /// makes the whole model SKINNED: a real bone table, and position, blend weights and blend indices in stream 0 with
     /// uv0 in stream 1, the layout game models use. Submeshes without them then follow <c>n_root</c> alone.</param>
+    /// <param name="Corners">Explicit triangles, three corners each, in place of the generated islands — for a surface
+    /// whose shape matters (a belly with a navel). Each corner is its own vertex, as everywhere here; its uv is its x
+    /// and y mapped from ±0.1 and 0.9–1.4 onto the unit square.</param>
     internal sealed record Sub(uint AttrMask, int Islands = 1, int TrianglesPerIsland = 1,
                                float OffsetX = 0f, float OffsetY = 0f, float OffsetZ = 0f,
-                               (string Bone, float W)[]? Weights = null)
+                               (string Bone, float W)[]? Weights = null,
+                               (float X, float Y, float Z)[]? Corners = null)
     {
-        internal int TriangleCount => Islands * TrianglesPerIsland;
+        internal int TriangleCount => Corners != null ? Corners.Length / 3 : Islands * TrianglesPerIsland;
     }
 
     /// <summary>One LOD0 mesh, drawn with <paramref name="Material"/>.</summary>
-    internal sealed record Mesh(string Material, params Sub[] Submeshes);
+    internal sealed record Mesh(string Material, params Sub[] Submeshes)
+    {
+        /// <summary>
+        /// Extra vertices after the triangles' own, named by no index — the spare vertices a shape key's values
+        /// point at. Each is a copy of the mesh's vertex 0 raised by <see cref="SpareLift"/> in Y, so a spare sits
+        /// at a pose of its own, as a real shape target does, rather than on a vertex the edit moves.
+        /// </summary>
+        internal int Spares { get; init; }
+    }
+
+    /// <summary>How far above its mesh's vertex 0 every <see cref="Mesh.Spares"/> vertex sits.</summary>
+    internal const float SpareLift = 0.5f;
+
+    /// <summary>
+    /// A shape key on one mesh: each value rewires index slot <c>BaseSlot</c> (mesh-relative) to vertex
+    /// <c>Replace</c>. Real exporters name one spare from EVERY slot its base vertex fills, which is the layout the
+    /// one-value-per-name shapes cannot build.
+    /// </summary>
+    /// <param name="IndexOffset">The ShapeMesh's index offset, when it must NOT be the mesh's own start index — an entry
+    /// no mesh owns. Null (the norm) is <paramref name="Mesh"/>'s start index.</param>
+    internal sealed record Shape(string Name, int Mesh, (ushort BaseSlot, ushort Replace)[] Values, uint? IndexOffset = null);
 
     /// <summary>
     /// A content pack's piece, shaped the way packs ship one: a stock model with its vanilla mesh emptied — it still
@@ -121,21 +146,36 @@ internal static class SyntheticModel
     internal static byte[] Build(IReadOnlyList<string> attrNames, Mesh[] meshes, uint version,
                                  IReadOnlyList<string>? shapeNames = null,
                                  IReadOnlyList<string>? boneTableOrder = null)
-        => BuildCore(attrNames, meshes, version, shapeNames, boneTableOrder);
+        => BuildCore(attrNames, meshes, version,
+                     shapeNames?.Select(n => new Shape(n, 0, [(0, 0)])).ToList(), boneTableOrder);
+
+    /// <summary>As the other overload, with every shape's values spelled out (see <see cref="Shape"/>).</summary>
+    internal static byte[] Build(IReadOnlyList<string> attrNames, Mesh[] meshes, uint version,
+                                 IReadOnlyList<Shape> shapes)
+        => BuildCore(attrNames, meshes, version, shapes, null);
 
     /// <inheritdoc cref="Build(IReadOnlyList{string}, Mesh[], uint, IReadOnlyList{string}, IReadOnlyList{string})"/>
     internal static byte[] Build(IReadOnlyList<string> attrNames, params Mesh[] meshes)
         => BuildCore(attrNames, meshes, V6, null, null);
 
     private static byte[] BuildCore(IReadOnlyList<string> attrNames, Mesh[] meshes, uint version,
-                                    IReadOnlyList<string>? shapeNames, IReadOnlyList<string>? boneTableOrder)
+                                    IReadOnlyList<Shape>? shapeKeys, IReadOnlyList<string>? boneTableOrder)
     {
         var materials = meshes.Select(m => m.Material).Distinct(StringComparer.Ordinal).ToList();
         bool skinned = meshes.Any(m => m.Submeshes.Any(x => x.Weights != null));
+        // A shaped surface carries normals, as a body does: every pass that reshapes a shell reads them. Only then, so
+        // every other fixture keeps the layout its tests were written against.
+        bool normals = !skinned && meshes.Any(m => m.Submeshes.Any(x => x.Corners != null));
+        int stride0 = normals ? Stride + 12 : Stride;
         var bones = new[] { "n_root" }
             .Concat(meshes.SelectMany(m => m.Submeshes).SelectMany(x => x.Weights ?? []).Select(w => w.Bone))
             .Distinct(StringComparer.Ordinal).ToArray();
-        var shapes = shapeNames ?? [];
+        var shapeList = shapeKeys ?? [];
+        var shapes = shapeList.Select(s => s.Name).ToList();
+        foreach (var s in shapeList)
+            if (s.Mesh < 0 || s.Mesh >= meshes.Length)
+                throw new ArgumentException($"shape '{s.Name}' is on mesh {s.Mesh}, which this model does not have");
+        int valueTotal = shapeList.Sum(s => s.Values.Length);
         // Slot -> name. The blend indices a vertex carries are slots in THIS list; the table's entries are where
         // each of those lands in `bones`.
         var tableBones = boneTableOrder ?? bones;
@@ -183,6 +223,7 @@ internal static class SyntheticModel
         var subBytes = new List<byte[]>();
         ushort vertexCursor = 0;
         uint indexCursor = 0;
+        var meshStartIndices = new List<uint>();
 
         foreach (var mesh in meshes)
         {
@@ -207,23 +248,38 @@ internal static class SyntheticModel
                 // Three fresh vertices per triangle, mesh-relative indices, spread so the model's bounding
                 // box is not degenerate. Corner 0 sits on the island's shared hub — same position every
                 // triangle, a different vertex each time.
-                for (int i = 0; i < sub.Islands; i++)
-                for (int j = 0; j < sub.TrianglesPerIsland; j++)
+                for (int t = 0; t < tris; t++)
                 {
+                    int i = sub.Corners != null ? 0 : t / sub.TrianglesPerIsland;
+                    int j = sub.Corners != null ? 0 : t % sub.TrianglesPerIsland;
                     float ix = i * 10f;
                     for (int v = 0; v < 3; v++)
                     {
                         float x = (v == 0 ? ix : ix + 1f) + sub.OffsetX;
                         float y = (v == 0 ? 0f : j + (v == 2 ? 1f : 0f)) + sub.OffsetY;
+                        float z = sub.OffsetZ;
                         float u = v == 0 ? 0f : 0.5f, w = v == 2 ? 0.5f : 0f;
+                        if (sub.Corners is { } cs)
+                        {
+                            (x, y, z) = cs[t * 3 + v];
+                            u = Math.Clamp((x + 0.1f) / 0.2f, 0f, 1f);
+                            w = Math.Clamp((y - 0.9f) / 0.5f, 0f, 1f);
+                        }
                         if (!skinned)
                         {
-                            var vtx = new byte[Stride];
+                            var vtx = new byte[stride0];
                             BitConverter.GetBytes(x).CopyTo(vtx, 0);
                             BitConverter.GetBytes(y).CopyTo(vtx, 4);
-                            BitConverter.GetBytes(sub.OffsetZ).CopyTo(vtx, 8);
+                            BitConverter.GetBytes(z).CopyTo(vtx, 8);
                             BitConverter.GetBytes(u).CopyTo(vtx, 12);
                             BitConverter.GetBytes(w).CopyTo(vtx, 16);
+                            if (normals)
+                            {
+                                var (nx, ny, nz) = sub.Corners is { } fc ? FaceNormal(fc, t) : (0f, 0f, 1f);
+                                BitConverter.GetBytes(nx).CopyTo(vtx, 20);
+                                BitConverter.GetBytes(ny).CopyTo(vtx, 24);
+                                BitConverter.GetBytes(nz).CopyTo(vtx, 28);
+                            }
                             stream0.Write(vtx);
                         }
                         else
@@ -231,7 +287,7 @@ internal static class SyntheticModel
                             var vtx = new byte[SkinnedStride];
                             BitConverter.GetBytes(x).CopyTo(vtx, 0);
                             BitConverter.GetBytes(y).CopyTo(vtx, 4);
-                            BitConverter.GetBytes(sub.OffsetZ).CopyTo(vtx, 8);
+                            BitConverter.GetBytes(z).CopyTo(vtx, 8);
                             var (weights, indices) = Blend(sub.Weights ?? [("n_root", 1f)], tableBones);
                             weights.CopyTo(vtx, 12);
                             indices.CopyTo(vtx, 16);
@@ -252,6 +308,21 @@ internal static class SyntheticModel
                 }
             }
 
+            // Spares: vertex 0's record again, raised in Y, and named by no index. Stream 1 (uv) is copied as is.
+            if (mesh.Spares > 0 && meshVerts == 0)
+                throw new ArgumentException("a mesh with spares needs at least one triangle to copy them from");
+            byte[] first0 = mesh.Spares > 0 ? stream0.ToArray()[..(skinned ? SkinnedStride : stride0)] : [];
+            byte[] first1 = mesh.Spares > 0 && skinned ? stream1.ToArray()[..UvStride] : [];
+            for (int s = 0; s < mesh.Spares; s++)
+            {
+                var spare = (byte[])first0.Clone();
+                BitConverter.GetBytes(BitConverter.ToSingle(spare, 4) + SpareLift).CopyTo(spare, 4);
+                stream0.Write(spare);
+                if (skinned) stream1.Write(first1);
+                meshVerts++;
+            }
+            meshStartIndices.Add(meshStartIndex);
+
             stream0.Position = 0; stream0.CopyTo(vBuf);
             uint meshUvOffset = (uint)vBuf.Position;
             stream1.Position = 0; stream1.CopyTo(vBuf);
@@ -267,7 +338,7 @@ internal static class SyntheticModel
             W32(mo, 20, meshVtxOffset);
             if (!skinned)
             {
-                mo[32] = Stride;
+                mo[32] = (byte)stride0;
                 mo[35] = 1;                                                    // one vertex stream
             }
             else
@@ -289,7 +360,11 @@ internal static class SyntheticModel
         var decl = new byte[DeclSize];
         for (int i = 0; i < DeclSize; i++) decl[i] = 0xFF;
         WriteElem(decl, 0, 0, 0, Float3, UsePosition, 0);
-        if (!skinned) WriteElem(decl, 1, 0, 12, Float2, UseUV, 0);
+        if (!skinned)
+        {
+            WriteElem(decl, 1, 0, 12, Float2, UseUV, 0);
+            if (normals) WriteElem(decl, 2, 0, 20, Float3, UseNormal, 0);
+        }
         else
         {
             WriteElem(decl, 1, 0, 12, UByte4, UseBlendWeight, 0);
@@ -318,7 +393,7 @@ internal static class SyntheticModel
         W16(mh, 14, 1);                                                        // one bone table
         W16(mh, 16, (ushort)shapes.Count);                                     // shapeCount
         W16(mh, 18, (ushort)shapes.Count);                                     // one ShapeMesh each
-        W16(mh, 20, (ushort)shapes.Count);                                     // one ShapeValue each
+        W16(mh, 20, (ushort)valueTotal);                                       // every shape's values
         mh[22] = 1;                                                            // lodCount
         BitConverter.GetBytes(1f).CopyTo(mh, 28);                              // model clip
         BitConverter.GetBytes(1f).CopyTo(mh, 32);                              // shadow clip
@@ -366,19 +441,22 @@ internal static class SyntheticModel
             W16(shp, 10, 1);                                                   // LOD0 shapeMeshCount
             ms.Write(shp);
         }
-        for (int i = 0; i < shapes.Count; i++)
+        uint valueStart = 0;
+        foreach (var s in shapeList)
         {
             var sm = new byte[12];
-            W32(sm, 0, 0);                                                     // mesh index offset
-            W32(sm, 4, 1);                                                     // value count
-            W32(sm, 8, (uint)i);                                               // value start
+            W32(sm, 0, s.IndexOffset ?? meshStartIndices[s.Mesh]);             // mesh index offset: its start index
+            W32(sm, 4, (uint)s.Values.Length);                                 // value count
+            W32(sm, 8, valueStart);                                            // value start
             ms.Write(sm);
+            valueStart += (uint)s.Values.Length;
         }
-        for (int i = 0; i < shapes.Count; i++)
+        foreach (var s in shapeList)
+        foreach (var (baseSlot, replace) in s.Values)
         {
             var sv = new byte[4];
-            W16(sv, 0, 0);                                                     // base indices index
-            W16(sv, 2, 0);                                                     // replacing vertex index
+            W16(sv, 0, baseSlot);                                              // base indices index
+            W16(sv, 2, replace);                                               // replacing vertex index
             ms.Write(sv);
         }
 
@@ -433,6 +511,195 @@ internal static class SyntheticModel
         return o;
     }
 
+    /// <summary>
+    /// One mesh of free geometry for <see cref="BuildSurface"/>: positions, normals and uv0 per vertex, each vertex's own
+    /// bones, and triangles grouped into submeshes by attribute mask.
+    /// </summary>
+    /// <param name="Weights">Per vertex, the bones it follows (at most four); null entries follow <c>n_root</c>.</param>
+    /// <param name="Submeshes">Each submesh's attribute mask and its triangles, as indices into this mesh's vertices.</param>
+    internal sealed record SurfaceMesh(string Material, Vector3[] Positions, Vector3[] Normals, Vector2[] Uv,
+                                       (string Bone, float W)[]?[] Weights, (uint AttrMask, int[] Triangles)[] Submeshes);
+
+    /// <summary>Stream 0 of a <see cref="BuildSurface"/> model: position, normal, blend weights, blend indices.</summary>
+    private const int SurfaceStride = 32;
+
+    /// <summary>
+    /// A model of free geometry at real scale, for passes that read shape rather than counts: the bust smoothing, the
+    /// refit's coverage. Separate from <see cref="BuildCore"/>, whose layout the pinned hashes elsewhere depend on. Always
+    /// skinned and always carries a normal, which the body smoothing will not run without.
+    /// </summary>
+    internal static byte[] BuildSurface(IReadOnlyList<string> attrNames, params SurfaceMesh[] meshes)
+    {
+        var materials = meshes.Select(m => m.Material).Distinct(StringComparer.Ordinal).ToList();
+        var bones = new[] { "n_root" }
+            .Concat(meshes.SelectMany(m => m.Weights).SelectMany(w => w ?? []).Select(w => w.Bone))
+            .Distinct(StringComparer.Ordinal).ToArray();
+
+        var strMs = new MemoryStream();
+        uint[] Intern(IEnumerable<string> names) =>
+        [
+            .. names.Select(n =>
+            {
+                var at = (uint)strMs.Position;
+                strMs.Write(Encoding.ASCII.GetBytes(n));
+                strMs.WriteByte(0);
+                return at;
+            })
+        ];
+        var attrOff = Intern(attrNames);
+        var boneOff = Intern(bones);
+        var matOff = Intern(materials);
+        var strings = strMs.ToArray();
+
+        var vBuf = new MemoryStream();
+        var iBuf = new MemoryStream();
+        var meshBytes = new List<byte[]>();
+        var subBytes = new List<byte[]>();
+        uint indexCursor = 0;
+        int subTotal = meshes.Sum(m => m.Submeshes.Length);
+        foreach (var mesh in meshes)
+        {
+            if (mesh.Positions.Length > ushort.MaxValue)
+                throw new ArgumentException("a mesh's vertices must fit 16-bit indices");
+            uint meshVtxOffset = (uint)vBuf.Position;
+            uint meshStartIndex = indexCursor;
+            for (int i = 0; i < mesh.Positions.Length; i++)
+            {
+                var vtx = new byte[SurfaceStride];
+                var p = mesh.Positions[i];
+                var n = mesh.Normals[i];
+                BitConverter.GetBytes(p.X).CopyTo(vtx, 0);
+                BitConverter.GetBytes(p.Y).CopyTo(vtx, 4);
+                BitConverter.GetBytes(p.Z).CopyTo(vtx, 8);
+                BitConverter.GetBytes(n.X).CopyTo(vtx, 12);
+                BitConverter.GetBytes(n.Y).CopyTo(vtx, 16);
+                BitConverter.GetBytes(n.Z).CopyTo(vtx, 20);
+                var (weights, indices) = Blend(mesh.Weights[i] ?? [("n_root", 1f)], bones);
+                weights.CopyTo(vtx, 24);
+                indices.CopyTo(vtx, 28);
+                vBuf.Write(vtx);
+            }
+            uint meshUvOffset = (uint)vBuf.Position;
+            foreach (var uv in mesh.Uv)
+            {
+                vBuf.Write(BitConverter.GetBytes(uv.X));
+                vBuf.Write(BitConverter.GetBytes(uv.Y));
+            }
+
+            int meshIndices = 0;
+            foreach (var (mask, triangles) in mesh.Submeshes)
+            {
+                var so = new byte[16];
+                W32(so, 0, indexCursor);
+                W32(so, 4, (uint)triangles.Length);
+                W32(so, 8, mask);
+                W16(so, 12, (ushort)(subBytes.Count * bones.Length));
+                W16(so, 14, (ushort)bones.Length);
+                subBytes.Add(so);
+                foreach (int t in triangles) iBuf.Write(U16Bytes((ushort)t));
+                indexCursor += (uint)triangles.Length;
+                meshIndices += triangles.Length;
+            }
+
+            var mo = new byte[36];
+            W16(mo, 0, (ushort)mesh.Positions.Length);
+            W32(mo, 4, (uint)meshIndices);
+            W16(mo, 8, (ushort)materials.IndexOf(mesh.Material));
+            W16(mo, 10, (ushort)(subBytes.Count - mesh.Submeshes.Length));
+            W16(mo, 12, (ushort)mesh.Submeshes.Length);
+            W32(mo, 16, meshStartIndex);
+            W32(mo, 20, meshVtxOffset);
+            W32(mo, 24, meshUvOffset);
+            mo[32] = SurfaceStride;
+            mo[33] = UvStride;
+            mo[35] = 2;
+            meshBytes.Add(mo);
+        }
+
+        var ms = new MemoryStream();
+        ms.Write(new byte[0x44]);
+        var decl = new byte[DeclSize];
+        for (int i = 0; i < DeclSize; i++) decl[i] = 0xFF;
+        WriteElem(decl, 0, 0, 0, Float3, UsePosition, 0);
+        WriteElem(decl, 1, 0, 12, Float3, UseNormal, 0);
+        WriteElem(decl, 2, 0, 24, UByte4, UseBlendWeight, 0);
+        WriteElem(decl, 3, 0, 28, UByte4, UseBlendIndices, 0);
+        WriteElem(decl, 4, 1, 0, Float2, UseUV, 0);
+        for (int m = 0; m < meshes.Length; m++) ms.Write(decl);
+
+        ms.Write(U32((uint)(attrNames.Count + bones.Length + materials.Count)));
+        ms.Write(U32((uint)strings.Length));
+        ms.Write(strings);
+
+        var mh = new byte[56];
+        BitConverter.GetBytes(1f).CopyTo(mh, 0);
+        W16(mh, 4, (ushort)meshes.Length);
+        W16(mh, 6, (ushort)attrNames.Count);
+        W16(mh, 8, (ushort)subTotal);
+        W16(mh, 10, (ushort)materials.Count);
+        W16(mh, 12, (ushort)bones.Length);
+        W16(mh, 14, 1);
+        mh[22] = 1;
+        BitConverter.GetBytes(1f).CopyTo(mh, 28);
+        BitConverter.GetBytes(1f).CopyTo(mh, 32);
+        W16(mh, 44, (ushort)((bones.Length + 1) & ~1));
+        ms.Write(mh);
+
+        long lodPos = ms.Position;
+        ms.Write(new byte[3 * 60]);
+        foreach (var m in meshBytes) ms.Write(m);
+        foreach (var off in attrOff) ms.Write(U32(off));
+        foreach (var sb in subBytes) ms.Write(sb);
+        foreach (var off in matOff) ms.Write(U32(off));
+        foreach (var off in boneOff) ms.Write(U32(off));
+
+        ms.Write(U16Bytes(1));
+        ms.Write(U16Bytes((ushort)bones.Length));
+        for (int b = 0; b < bones.Length; b++) ms.Write(U16Bytes((ushort)b));
+        if (bones.Length % 2 == 1) ms.Write(U16Bytes(0));
+
+        ms.Write(U32((uint)(subTotal * bones.Length * 2)));
+        for (int i = 0; i < subTotal; i++)
+            for (int b = 0; b < bones.Length; b++) ms.Write(U16Bytes((ushort)b));
+        ms.WriteByte(0);
+
+        ms.Write(new byte[4 * BBoxSize]);
+        ms.Write(new byte[bones.Length * BBoxSize]);
+
+        uint vtxOff = (uint)ms.Position;
+        vBuf.Position = 0; vBuf.CopyTo(ms);
+        uint idxOff = (uint)ms.Position;
+        iBuf.Position = 0; iBuf.CopyTo(ms);
+        ms.Write(new byte[16]);   // the reader's blanket 16-byte bounds check; see BuildCore
+
+        var o = ms.ToArray();
+        uint stackSize = (uint)(meshes.Length * DeclSize);
+        W32(o, 0, V6);
+        W32(o, 4, stackSize);
+        W32(o, 8, (uint)(vtxOff - 0x44 - stackSize));
+        W16(o, 12, (ushort)meshes.Length);
+        W16(o, 14, (ushort)materials.Count);
+        W32(o, 16, vtxOff);
+        W32(o, 28, idxOff);
+        W32(o, 40, (uint)vBuf.Length);
+        W32(o, 52, (uint)iBuf.Length);
+        o[64] = 1;
+
+        int ol = (int)lodPos;
+        W16(o, ol, 0);
+        W16(o, ol + 2, (ushort)meshes.Length);
+        W32(o, ol + 44, (uint)vBuf.Length);
+        W32(o, ol + 48, (uint)iBuf.Length);
+        W32(o, ol + 52, vtxOff);
+        W32(o, ol + 56, idxOff);
+        for (int l = 1; l < 3; l++)
+        {
+            W16(o, ol + l * 60, (ushort)meshes.Length);
+            W16(o, ol + l * 60 + 2, 0);
+        }
+        return o;
+    }
+
     /// <summary>Four weight bytes summing to 255 and four SLOTS in the bone table.</summary>
     private static (byte[] Weights, byte[] Indices) Blend((string Bone, float W)[] weights,
                                                           IReadOnlyList<string> bones)
@@ -448,6 +715,16 @@ internal static class SyntheticModel
         }
         wb[0] = (byte)Math.Clamp(wb[0] + (255 - total), 0, 255);
         return (wb, ib);
+    }
+
+    /// <summary>The unit normal of explicit triangle <paramref name="t"/>, by its winding.</summary>
+    private static (float X, float Y, float Z) FaceNormal((float X, float Y, float Z)[] c, int t)
+    {
+        var (a, b, d) = (c[t * 3], c[t * 3 + 1], c[t * 3 + 2]);
+        float ux = b.X - a.X, uy = b.Y - a.Y, uz = b.Z - a.Z, vx = d.X - a.X, vy = d.Y - a.Y, vz = d.Z - a.Z;
+        float nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+        float l = MathF.Sqrt(nx * nx + ny * ny + nz * nz);
+        return l > 0f ? (nx / l, ny / l, nz / l) : (0f, 0f, 1f);
     }
 
     private static void WriteElem(byte[] d, int slot, byte stream, byte offset, byte type, byte usage, byte usageIndex)

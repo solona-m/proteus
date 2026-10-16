@@ -52,6 +52,8 @@ public static class Strings
     public static PartsStrings      Parts      { get; private set; } = new();
     public static PresetsStrings    Presets    { get; private set; } = new();
     public static HatCompatStrings  HatCompat  { get; private set; } = new();
+    public static AutoRefitStrings  AutoRefit  { get; private set; } = new();
+    public static SizeSetStrings    SizeSet    { get; private set; } = new();
     public static WhatsNewStrings   WhatsNew   { get; private set; } = new();
 
     /// <summary>
@@ -80,8 +82,210 @@ public static class Strings
         Parts      = new PartsStrings();
         Presets    = new PresetsStrings();
         HatCompat  = new HatCompatStrings();
+        AutoRefit  = new AutoRefitStrings();
+        SizeSet    = new SizeSetStrings();
         WhatsNew   = new WhatsNewStrings();
     }
+}
+
+/// <summary>The Body size tool's "every size for other bodies", which adds a whole set of sizes to a mod.</summary>
+public sealed class SizeSetStrings
+{
+    public readonly string Header = Loc.Localize("SizeSet.Header", "Every size for other bodies") + "###sizeSetHeader";
+
+    public readonly string Intro = Loc.Localize("SizeSet.Intro",
+        "Adds every size of the bodies ticked below to this whole mod. Each size is refitted from the author's size "
+      + "nearest it, the outfit's other pieces in that option from the same size, and saved beside the author's sizes as "
+      + "\"Rue S\", \"YAB Buff L\" and so on. Sizes the mod already has are left alone.");
+
+    public readonly string Ends = Loc.Localize("SizeSet.Ends", "Include shoes and gloves") + "###sizeSetEnds";
+
+    public readonly string EndsTip = Loc.Localize("SizeSet.Ends.Tip",
+        "Shoes and gloves keep their own feet and hands; only the leg or arm they reach is refitted. Shoes get the legs' "
+      + "sizes, gloves one option per body, and both join the outfit's chest or legs sizes when they share a group.");
+
+    public readonly string Yas = Loc.Localize("SizeSet.Yas", "Use a body's YAS version where it has one") + "###sizeSetYas";
+
+    public readonly string YasTip = Loc.Localize("SizeSet.Yas.Tip",
+        "Rue, YAB and Tre come in Yet Another Skeleton versions. Neolithe and Bibo don't, and keep their plain sizes. A "
+      + "piece already weighted to YAS always gets YAS sizes.");
+
+    public readonly string Remake = Loc.Localize("SizeSet.Remake", "Make again the sizes Proteus added before")
+                                  + "###sizeSetRemake";
+
+    public readonly string RemakeTip = Loc.Localize("SizeSet.Remake.Tip",
+        "Off: a size Proteus already added is left as it is. On: it is refitted again and replaced. The author's own "
+      + "sizes are never touched. If you added sizes with an earlier version of Proteus, tick this once: those were cut "
+      + "from the author's first size.");
+
+    public readonly string Run = Loc.Localize("SizeSet.Run", "Add the sizes") + "###sizeSetRun";
+
+    public readonly string RunTip = Loc.Localize("SizeSet.Run.Tip",
+        "Runs in the background and can take a few minutes for a mod with many pieces. Penumbra reloads the mod when it "
+      + "is done.");
+
+    public readonly string PickBody = Loc.Localize("SizeSet.PickBody", "Tick at least one body.");
+
+    /// <summary>{0} is the body.</summary>
+    public readonly string NotInstalledTipFmt = Loc.Localize("SizeSet.NotInstalledTip.Fmt",
+        "{0} isn't installed in Penumbra. Install it, then close and reopen this section.");
+
+    public readonly string Cancel = Loc.Localize("SizeSet.Cancel", "Stop") + "###sizeSetCancel";
+
+    public readonly string Cancelled = Loc.Localize("SizeSet.Cancelled",
+        "Stopped. Sizes already saved stay in the mod.");
+
+    public readonly string DoneFmt = Loc.Localize("SizeSet.Done.Fmt", "Added {0} sizes to the mod.");
+
+    public readonly string NothingAdded = Loc.Localize("SizeSet.NothingAdded",
+        "No sizes were added: the mod already has every size of the bodies ticked.");
+
+    public readonly string LeftOut = Loc.Localize("SizeSet.LeftOut", "Left out:");
+
+    public readonly string FailedFmt = Loc.Localize("SizeSet.Failed.Fmt", "Couldn't add the sizes: {0}");
+
+    public readonly string NoPieces = Loc.Localize("SizeSet.NoPieces",
+        "This mod has no chest, legs, shoe or glove models to make sizes of.");
+
+    /// <summary>{0} is the piece.</summary>
+    public readonly string EndsUnreadableFmt = Loc.Localize("SizeSet.EndsUnreadable.Fmt",
+        "{0}: its rig can't be read, so its foot or hand can't be kept and no sizes were made of it.");
+
+    /// <summary>{0} is the piece.</summary>
+    public readonly string UnpairedFmt = Loc.Localize("SizeSet.Unpaired.Fmt",
+        "{0}: it is sized in one group with another piece it can't follow, so no sizes were made of it — each size would wear the other piece unrefitted.");
+
+    /// <summary>{0} is the piece, {1} the size.</summary>
+    public readonly string EndNoLeadSourceFmt = Loc.Localize("SizeSet.EndNoLeadSource.Fmt",
+        "{0}: left out of \"{1}\": the author's size the outfit's chest or legs there was cut from couldn't be found or "
+      + "read for it. Tick \"Make again\" to redo the option.");
+
+    /// <summary>{0} is the piece, {1} the size.</summary>
+    public readonly string EndNoLeadSourceRemakeFmt = Loc.Localize("SizeSet.EndNoLeadSourceRemake.Fmt",
+        "{0}: \"{1}\" left as it was: the author's size the outfit's chest or legs there was cut from couldn't be read "
+      + "for it.");
+
+    public readonly string NoBodies = Loc.Localize("SizeSet.NoBodies", "No body mods are installed to refit onto.");
+
+    /// <summary>{0} is the piece, {1} what went wrong.</summary>
+    public readonly string PieceFailedFmt = Loc.Localize("SizeSet.PieceFailed.Fmt", "{0}: failed: {1}");
+
+    public readonly string ReadingFmt = Loc.Localize("SizeSet.Reading.Fmt", "Reading what {0} was made on...");
+
+    public readonly string UnreadableFmt = Loc.Localize("SizeSet.Unreadable.Fmt",
+        "{0}: couldn't tell which body it was made on, so no sizes were made of it.");
+
+    /// <summary>{0} is the piece, {1} the size ("Rue S"), {2} the body mod.</summary>
+    public readonly string NoSuchSizeFmt = Loc.Localize("SizeSet.NoSuchSize.Fmt",
+        "{0}: {2} has no model for \"{1}\", so that size was left out.");
+
+    /// <summary>{0} is the piece, {1} the size, {2} why.</summary>
+    public readonly string RefusedFmt = Loc.Localize("SizeSet.Refused.Fmt", "{0}: \"{1}\" couldn't be made: {2}");
+
+    /// <summary>{0} is the piece, {1} what the save said.</summary>
+    public readonly string SaveFailedFmt = Loc.Localize("SizeSet.SaveFailed.Fmt", "{0}: {1}");
+
+    /// <summary>{0} is the piece, {1} the body.</summary>
+    public readonly string NotInstalledFmt = Loc.Localize("SizeSet.NotInstalled.Fmt",
+        "{0}: {1} isn't installed, so it got none of its sizes.");
+
+    /// <summary>{0} is the piece, {1} the size.</summary>
+    public readonly string WorkingFmt = Loc.Localize("SizeSet.Working.Fmt", "Refitting {0} to {1}...");
+}
+
+/// <summary>The automatic body refit's section of Settings, and the words it puts in chat.</summary>
+public sealed class AutoRefitStrings
+{
+    public readonly string Intro = Loc.Localize("AutoRefit.Intro",
+        "When you put on chest, legs, hands or feet gear — or an accessory that covers the body, such as a jacket on a "
+      + "necklace — Proteus works out which body it was made for and refits it to the body and sizes chosen here, then "
+      + "switches the new size on. Each Penumbra collection has its own choice.");
+
+    public readonly string Enable = Loc.Localize("AutoRefit.Enable.Label",
+        "Refit gear to my body as I put it on") + "###autoRefitEnable";
+
+    public readonly string EnableTip = Loc.Localize("AutoRefit.Enable.Tip",
+        "The refit is saved into the gear's own mod as a new size option, exactly as the Studio's Body size tool "
+      + "saves one, so it keeps working with Proteus turned off. Choosing the mod's \"Original\" or another size in "
+      + "Penumbra is left alone.");
+
+    public readonly string Vanilla = Loc.Localize("AutoRefit.Vanilla.Label",
+        "Also refit the game's own gear") + "###autoRefitVanilla";
+
+    public readonly string VanillaTip = Loc.Localize("AutoRefit.Vanilla.Tip",
+        "Unmodded gear has no mod to save into, so each piece gets a new mod of its own, named after the item and "
+      + "the body.");
+
+    public readonly string Collection = Loc.Localize("AutoRefit.Collection", "Collection");
+
+    public readonly string CurrentFmt = Loc.Localize("AutoRefit.Collection.Current.Fmt", "{0} (current)");
+
+    public readonly string Body = Loc.Localize("AutoRefit.Body", "Body");
+
+    public readonly string ChestSize = Loc.Localize("AutoRefit.ChestSize", "Chest size");
+
+    public readonly string LegsSize = Loc.Localize("AutoRefit.LegsSize", "Legs size");
+
+    public readonly string Choose = Loc.Localize("AutoRefit.Choose", "Choose...");
+
+    public readonly string NoBodyChosen = Loc.Localize("AutoRefit.NoBodyChosen",
+        "No body chosen: gear put on in this collection is left as it is.");
+
+    public readonly string FindingBodies = Loc.Localize("AutoRefit.FindingBodies", "Looking for body mods...");
+
+    public readonly string NoBodies = Loc.Localize("AutoRefit.NoBodies",
+        "No body mods are installed, so there is nothing to refit onto.");
+
+    public readonly string BodyMissingFmt = Loc.Localize("AutoRefit.BodyMissing.Fmt",
+        "The body chosen here, \"{0}\", isn't installed any more. Choose another.");
+
+    public readonly string NoCollections = Loc.Localize("AutoRefit.NoCollections",
+        "Penumbra isn't available, so its collections can't be listed.");
+
+    public readonly string HandsFeetFmt = Loc.Localize("AutoRefit.HandsFeet.Fmt",
+        "Hands and feet are matched to these sizes: {0} and {1}.");
+
+    public readonly string EndsKept = Loc.Localize("AutoRefit.EndsKept",
+        "Gloves and shoes keep the hands and feet they were made with; only the arms and legs they reach are refitted.");
+
+    public readonly string Clear = Loc.Localize("AutoRefit.Clear", "Forget this collection's body") + "###autoRefitClear";
+
+    public readonly string RunNow = Loc.Localize("AutoRefit.RunNow", "Refit what I'm wearing now") + "###autoRefitRunNow";
+
+    public readonly string RunNowTip = Loc.Localize("AutoRefit.RunNow.Tip",
+        "Only gear put on from now on is refitted by itself. This does the pieces already on your character.");
+
+    public readonly string Working = Loc.Localize("AutoRefit.Working", "Working...");
+
+    public readonly string WorkingFmt = Loc.Localize("AutoRefit.Working.Fmt", "Refitting {0}...");
+
+    /// <summary>A modded piece in chat: the mod's name, then the part — "This Old Thing (chest)".</summary>
+    public readonly string ItemInModFmt = Loc.Localize("AutoRefit.ItemInMod.Fmt", "{0} ({1})");
+
+    public readonly string UndoWorn = Loc.Localize("AutoRefit.UndoWorn", "Undo the refit of what I'm wearing")
+                                    + "###autoRefitUndoWorn";
+
+    public readonly string UndoWornTip = Loc.Localize("AutoRefit.UndoWorn.Tip",
+        "For the gear you have on now: removes the size the automatic refit made, deletes the mod it made for the game's "
+      + "own gear, and puts back the option you had before. Those pieces are then left as they are when you put them on "
+      + "again. Sizes you made yourself in the Body size tool, and refits of anything you are not wearing, stay.\n\n"
+      + "Hold Ctrl or Shift and click.");
+
+    public readonly string UndoWorking = Loc.Localize("AutoRefit.UndoWorking", "Undoing the refit...");
+
+    /// <summary>{0} sizes removed, {1} mods deleted.</summary>
+    public readonly string UndoDoneFmt = Loc.Localize("AutoRefit.UndoDone.Fmt",
+        "Undone: removed {0} refitted sizes and deleted {1} mods made for the game's own gear. These pieces won't be "
+      + "refitted again unless you click \"Refit what I'm wearing now\".");
+
+    /// <summary>{0} sizes removed, {1} sizes that could not be removed.</summary>
+    public readonly string UndoPartialFmt = Loc.Localize("AutoRefit.UndoPartial.Fmt",
+        "Removed {0} refitted sizes, but {1} could not be removed. The log says which and why.");
+
+    public readonly string UndoNothing = Loc.Localize("AutoRefit.UndoNothing",
+        "Nothing you're wearing was refitted automatically.");
+
+    public readonly string UndoFailedFmt = Loc.Localize("AutoRefit.UndoFailed.Fmt", "Couldn't undo the refit: {0}");
 }
 
 /// <summary>The one-time release-notes window.</summary>
@@ -90,8 +294,26 @@ public sealed class WhatsNewStrings
     // The stable id is fused here, not at the call site, so the concatenation is paid once per language.
     public readonly string Title = Loc.Localize("WhatsNew.Title", "What's new in Proteus") + "###ProteusWhatsNew";
 
-    public readonly string Intro = Loc.Localize("WhatsNew.Intro",
-        "Three things worth knowing about this release. This window opens once, and not again.");
+    /// <summary>For someone seeing the notes for the first time: every section is shown.</summary>
+    public readonly string IntroAll = Loc.Localize("WhatsNew.IntroAll",
+        "Four things worth knowing about Proteus. This window opens once, and not again.");
+
+    /// <summary>For someone who closed the earlier notes: only what is new since then is shown.</summary>
+    public readonly string IntroSince = Loc.Localize("WhatsNew.IntroSince",
+        "Something new since you last saw this window. It opens once, and not again.");
+
+    public readonly string AutoRefitHead = Loc.Localize("WhatsNew.AutoRefit.Head",
+        "Gear refits itself to your body");
+
+    public readonly string AutoRefitBody = Loc.Localize("WhatsNew.AutoRefit.Body",
+        "Proteus can now refit chest, legs, hands and feet gear to your body by itself, the moment you put it on. "
+      + "It works out which body mod and size the gear was made for, refits it and the parts of the body it "
+      + "reaches, saves the new size into the gear's own mod and switches it on. Chat says when it starts and when "
+      + "it is done.\n\n"
+      + "To use it, open Settings, Body refit. Tick \"Refit gear to my body as I put it on\", then pick your body "
+      + "mod and its chest and legs sizes for each Penumbra collection; hands and feet are matched for you. Gear "
+      + "you are already wearing is refitted with \"Refit what I'm wearing now\", and the game's own gear has a "
+      + "checkbox of its own. Choosing \"Original\" or another size in Penumbra is always left alone.");
 
     public readonly string UpscalesHead = Loc.Localize("WhatsNew.Upscales.Head", "One click upscales");
 
@@ -250,6 +472,8 @@ public sealed class CommonStrings
     public readonly string Mm0 = Loc.Localize("Common.Units.Mm0", "%.0f mm");
     public readonly string Mm1 = Loc.Localize("Common.Units.Mm1", "%.1f mm");
     public readonly string Mm2 = Loc.Localize("Common.Units.Mm2", "%.2f mm");
+
+    public readonly string MmPerQuarterSecond = Loc.Localize("Common.Units.MmPerQuarterSecond", "%.2f mm / 0.25 s");
 
     /// <summary>Playable races in the game's own order, as <see cref="ModelRace.Describe"/> shows them. A
     /// separate table from <see cref="ModelRace.Names"/>, which is also written into mods and stays English.</summary>
@@ -616,6 +840,7 @@ public sealed class SettingsStrings
     public readonly string SecOutput      = Loc.Localize("Settings.Section.Output", "Output");
     public readonly string SecSkinEffects = Loc.Localize("Settings.Section.SkinEffects", "Skin effects");
     public readonly string SecHatCompat   = Loc.Localize("Settings.Section.HatCompat", "Hats");
+    public readonly string SecAutoRefit   = Loc.Localize("Settings.Section.AutoRefit", "Body refit");
 
     public readonly string SecHosting     = Loc.Localize("Settings.Section.Hosting", "Hosting");
 
@@ -906,6 +1131,13 @@ public sealed class ContentStrings
     public readonly string MaterialsFmt = Loc.Localize("Content.Materials.Fmt", "{0} materials");
     public readonly string Skipped = Loc.Localize("Content.Skipped", "skipped");
     public readonly string Unbound = Loc.Localize("Content.Unbound", "unbound material");
+
+    /// <summary>In place of the mesh count for an invisible placeholder that only carries an animated effect.</summary>
+    public readonly string EffectOnly = Loc.Localize("Content.EffectOnly", "animated effect");
+    public readonly string WithEffectFmt = Loc.Localize("Content.WithEffect.Fmt", "{0} + effect");
+    public readonly string EffectTip = Loc.Localize("Content.Effect.Tip",
+        "This piece has an animated effect. Proteus plays it on an invisible accessory it puts in a free slot, so "
+      + "you do not need to wear the item it replaced.");
 
     /// <summary>The deliberate drop, said plainly and NOT in the warning colour — an outfit pack ships the
     /// body it was fitted to, the wearer already has one, and leaving it out is the wanted outcome.</summary>
@@ -1683,6 +1915,16 @@ public sealed class ColorsStrings
         "How far the fabric relaxes toward the flat span. 1.00 lifts the cleft level with the\n"
       + "cheeks either side, which is usually too much — lower values keep more of it.");
 
+    public readonly string NavelBridge = Loc.Localize("Colors.NavelBridge.Label",
+        "Span the belly button");
+
+    public readonly string NavelBridgeTip = Loc.Localize("Colors.NavelBridge.Tip",
+        "Turn this on for cloth over the stomach.\n"
+      + "Proteus builds a garment as a copy of the body, so it dips into the belly button —\n"
+      + "which reads as painted on rather than worn. With this on, the fabric is stretched flat\n"
+      + "across it the way real cloth is. Nothing is pulled inward, so it cannot cut into the body.\n"
+      + "Where the garment is cut away at the belly button, or the body has none, this does nothing.");
+
     public readonly string SmoothFold = Loc.Localize("Colors.SmoothFold.Label",
         "Smooth between the legs");
 
@@ -1920,6 +2162,20 @@ public sealed class PartsStrings
         "pull that came out rough. Like 3ds Max's relax it shrinks: curves flatten and\n" +
         "cloth can sink toward the body.");
 
+    public readonly string ToolSmooth = Loc.Localize("Parts.Tool.Smooth", "Smooth")
+                                      + "###partsToolSmooth";
+
+    public readonly string ToolSmoothTip = Loc.Localize("Parts.Tool.Smooth.Tip",
+        "Paint on the model to iron out lumps and ripples without shrinking it:\n" +
+        "unlike Relax, curves keep their shape and cloth stays off the body.");
+
+    public readonly string ToolGrab = Loc.Localize("Parts.Tool.Grab", "Grab")
+                                    + "###partsToolGrab";
+
+    public readonly string ToolGrabTip = Loc.Localize("Parts.Tool.Grab.Tip",
+        "Press on the model and drag: the cloth around the brush follows the mouse\n" +
+        "like rubber, strongest in the middle, with no hard edge.");
+
     public readonly string ToolBridge = Loc.Localize("Parts.Tool.Bridge", "Bridge")
                                       + "###partsToolBridge";
 
@@ -1952,9 +2208,10 @@ public sealed class PartsStrings
     public readonly string ToolScale = Loc.Localize("Parts.Tool.Scale", "Scale")
                                      + "###partsToolScale";
 
-    public readonly string ToolScaleTip = Loc.Localize("Parts.Tool.Scale.Tip",
-        "Pick a part, then press on it and drag right to grow it or left\n" +
-        "to shrink it about its centre.");
+    public readonly string ToolScaleTip = Loc.Localize("Parts.Tool.ScaleAxes.Tip",
+        "Pick a part, then drag one of the handles at its centre to stretch\n" +
+        "it along that axis, or press on the part and drag right or left to\n" +
+        "grow or shrink it evenly.");
 
     public readonly string RotateHelp = Loc.Localize("Parts.Rotate.Help",
         "Click a part to choose it, then drag one of the rings at its centre. Drag anywhere else to turn the model, "
@@ -1964,13 +2221,14 @@ public sealed class PartsStrings
         "Click a part on your character, then drag one of the rings at its centre. Hold Alt to move the camera. "
       + "Each turn is saved when you let go.");
 
-    public readonly string ScaleHelp = Loc.Localize("Parts.Scale.Help",
-        "Click a part to choose it, then press on it and drag right to grow it or left to shrink it. Drag anywhere "
-      + "else to turn the model, shift-drag to move the view, scroll to zoom.");
+    public readonly string ScaleHelp = Loc.Localize("Parts.ScaleAxes.Help",
+        "Click a part to choose it, then drag a handle to stretch it along that axis, or press on the part and drag "
+      + "right to grow it or left to shrink it. Drag anywhere else to turn the model, shift-drag to move the view, "
+      + "scroll to zoom.");
 
-    public readonly string ScaleLiveHint = Loc.Localize("Parts.Scale.LiveHint",
-        "Click a part on your character, then press on it and drag right to grow it or left to shrink it. Hold Alt "
-      + "to move the camera. Each change is saved when you let go.");
+    public readonly string ScaleLiveHint = Loc.Localize("Parts.ScaleAxes.LiveHint",
+        "Click a part on your character, then drag a handle to stretch it along that axis, or press on the part and "
+      + "drag right to grow it or left to shrink it. Hold Alt to move the camera. Each change is saved when you let go.");
 
     public readonly string MoveHelp = Loc.Localize("Parts.Move.Help",
         "Click a part to choose it, then drag an arrow or a square. Drag anywhere else to turn the model, "
@@ -1986,7 +2244,8 @@ public sealed class PartsStrings
     public readonly string MoveNoPart = Loc.Localize("Parts.Move.NoPart", "Click a part to choose what to move.");
 
     public readonly string MoveListTip = Loc.Localize("Parts.Move.ListTip",
-        "Choose the part to move here, or click it on the model or on your character.");
+        "Choose the part to move here, or click it on the model or on your character.\n"
+      + "Untick a part's box to lock it out of the way and reach what is underneath.");
 
     public readonly string MoveAdjacent = Loc.Localize("Parts.Move.Adjacent", "Move adjacent parts");
 
@@ -2032,7 +2291,12 @@ public sealed class PartsStrings
     public readonly string MoveSkinTip = Loc.Localize("Parts.Move.SkinTip", "Skin can't be moved.");
 
     public readonly string MoveLockedTip = Loc.Localize("Parts.Move.LockedTip",
-        "This part is locked. Unlock it under a brush to move it.");
+        "This part is locked. Tick the box beside it to move it.");
+
+    public readonly string MoveLockTip = Loc.Localize("Parts.Move.LockTip",
+        "Untick to lock this part out of the way: it is hidden on the model and on your character, and clicks pass\n"
+      + "through to what is underneath — a skirt, say, to reach the underwear beneath it.\n"
+      + "The brushes leave a locked part alone and hide it too.");
 
     public readonly string MoveNothingFree = Loc.Localize("Parts.Move.NothingFree",
         "Nothing in this part can move: it is skin or locked.");
@@ -2063,6 +2327,14 @@ public sealed class PartsStrings
     public readonly string WindMaterialsSetFmt = Loc.Localize("Parts.Wind.Materials.Set.Fmt",
         "Set {0} material file(s) so the wind can move this garment.");
 
+    /// <summary>{0} is how many material files moved from the legacy character shader to Dawntrail's.</summary>
+    public readonly string WindMaterialsUpgradedFmt = Loc.Localize("Parts.Wind.Materials.Upgraded.Fmt",
+        "Upgraded {0} of them from the old character shader, which has no wind, to Dawntrail's.");
+
+    /// <summary>{0} is how many material files are still on the legacy character shader.</summary>
+    public readonly string WindMaterialsLegacyFmt = Loc.Localize("Parts.Wind.Materials.Legacy.Fmt",
+        "{0} material file(s) use the old character shader, which has no wind, and couldn't be upgraded, so they won't sway.");
+
     /// <summary>{0} is how many material files lack the vertex movement settings.</summary>
     public readonly string WindMaterialsMissingFmt = Loc.Localize("Parts.Wind.Materials.Missing.Fmt",
         "{0} material file(s) have no wind movement settings to change, so they may not sway.");
@@ -2086,6 +2358,14 @@ public sealed class PartsStrings
         "How quickly the surface smooths while you paint. Low is gentle and easy to\n" +
         "control; high smooths almost at once.\n\n" +
         "Near an open edge, like a hem, relaxing draws the edge slightly inward.");
+
+    public readonly string BrushSmoothRateTip = Loc.Localize("Parts.Brush.SmoothRate.Tip",
+        "How quickly the surface smooths while you paint. Low is gentle and easy to\n" +
+        "control; high smooths almost at once.");
+
+    public readonly string GrabHelp = Loc.Localize("Parts.Grab.Help",
+        "Press on the cloth and drag. The brush size sets how much cloth comes along;\n" +
+        "it moves across your view, and Ctrl+Z takes a grab back.");
 
     public readonly string ToolDeflateTip = Loc.Localize("Parts.Tool.Deflate.Tip",
         "The same brush in reverse, for clothing that stands too far off the body.");
@@ -2199,9 +2479,10 @@ public sealed class PartsStrings
                                          + "###partsBrushStrength";
 
     public readonly string BrushStrengthTip = Loc.Localize("Parts.Brush.Strength.Tip",
-        "How far the surface moves per moment of painting. Small is usually right:\n" +
-        "clothing only has to clear the body by a fraction of a millimetre, and you\n" +
-        "can always paint over the same place again.");
+        "How far the middle of the brush moves the surface for each quarter second you\n" +
+        "hold it, the same on any frame rate. Small is usually right: clothing only has\n" +
+        "to clear the body by a fraction of a millimetre, and you can always paint over\n" +
+        "the same place again.");
 
     public readonly string BrushLimit = Loc.Localize("Parts.Brush.Limit", "Limit")
                                       + "###partsBrushLimit";
@@ -2490,6 +2771,16 @@ public sealed class PartsStrings
         "Untick a part to keep it where the author put it, like a buckle or jewellery. Clicking it on the "
       + "model does the same.");
 
+    /// <summary>The part drawer's header button. {0} is how many are ticked, {1} how many there are.</summary>
+    public readonly string PartsTickedFmt = Loc.Localize("Parts.Dropdown.Ticked.Fmt", "{0} of {1} parts ticked");
+
+    /// <summary>The part drawer's header button under Move, Rotate or Scale, before a part is chosen.</summary>
+    public readonly string PartsNoneChosen = Loc.Localize("Parts.Dropdown.NoneChosen", "Choose a part to move");
+
+    /// <summary>The last line of the part drawer header's tooltip.</summary>
+    public readonly string DrawerToggleTip = Loc.Localize("Parts.Drawer.Toggle.Tip",
+        "Click to open the part list in a column of its own, so the model stays in view while you tick. Click again to close it.");
+
     public readonly string RetargetLockSkinTip = Loc.Localize("Parts.Retarget.Lock.SkinTip",
         "The garment's own skin. Holding it keeps the old size, so the body may show through or gap.");
 
@@ -2498,6 +2789,16 @@ public sealed class PartsStrings
     public readonly string RetargetKeepShapeTip = Loc.Localize("Parts.Retarget.KeepShape.Tip",
         "For rigid pieces (rings, buckles, chains): each piece moves whole instead of bending.\n"
       + "Small closed pieces start ticked.");
+
+    /// <summary>The Keep shape tooltip's last line, under its own key so a translation of the older tooltip cannot
+    /// stand in for it.</summary>
+    public readonly string RetargetKeepShapeSinkTip = Loc.Localize("Parts.Retarget.KeepShape.SinkTip",
+        "A piece that would sink into the new body bends with it instead.");
+
+    /// <summary>{0} is how many kept pieces the refit let go, {1} the deepest any would have sunk (mm), {2} their
+    /// labels.</summary>
+    public readonly string RetargetShapeReleasedFmt = Loc.Localize("Parts.Retarget.ShapeReleased.Fmt",
+        "{0:N0} kept piece(s) would sink up to {1:F1} mm into the new body if moved whole, so they bend with it instead: {2}");
 
     public readonly string RetargetReplaceSkin = Loc.Localize("Parts.Retarget.ReplaceSkin", "Use the new body's skin")
                                                + "###partsRetargetReplaceSkin";
@@ -2512,6 +2813,50 @@ public sealed class PartsStrings
     public readonly string RetargetCutHiddenTip = Loc.Localize("Parts.Retarget.CutHidden.Tip",
         "Leave out the new skin where the author deleted theirs, usually under cloth.\n"
       + "Turn off if the refit leaves holes.");
+
+    public readonly string RetargetCutForcedTip = Loc.Localize("Parts.Retarget.CutForcedTip",
+        "Always on while the shoe keeps its own foot or the glove its own hand: otherwise the whole new legs or arms "
+      + "would go in with it.");
+
+    public readonly string RetargetKeepFeet = Loc.Localize("Parts.Retarget.KeepFeet", "Keep its own feet")
+                                            + "###partsRetargetKeepEnds";
+
+    public readonly string RetargetKeepFeetTip = Loc.Localize("Parts.Retarget.KeepFeet.Tip",
+        "The foot stays exactly as its author made it, heel and all; only the leg the shoe reaches is refitted, sized by "
+      + "the legs. Untick to refit the whole shoe, feet included, as before.");
+
+    public readonly string RetargetKeepHands = Loc.Localize("Parts.Retarget.KeepHands", "Keep its own hands")
+                                             + "###partsRetargetKeepEnds";
+
+    public readonly string RetargetKeepHandsTip = Loc.Localize("Parts.Retarget.KeepHands.Tip",
+        "The hand stays exactly as its author made it; only the arm the glove reaches is refitted, sized by the chest. "
+      + "Untick to refit the whole glove, hands included, as before.");
+
+    public readonly string RetargetNoLimbFeet = Loc.Localize("Parts.Retarget.NoLimbFeet",
+        "This shoe reaches no leg: it keeps its shape, and only its skin is drawn like the new body's. Pick a legs size "
+      + "to refit it by anyway.");
+
+    public readonly string RetargetNoLimbHands = Loc.Localize("Parts.Retarget.NoLimbHands",
+        "These gloves reach no arm: they keep their shape, and only their skin is drawn like the new body's. Pick a "
+      + "chest size to refit them by anyway.");
+
+    public readonly string RetargetSkinAlreadyMatches = Loc.Localize("Parts.Retarget.SkinAlreadyMatches",
+        "Nothing to change: its skin is already drawn the way the new body draws its own.");
+
+    /// <summary>{0}: the size chosen to refit onto.</summary>
+    public readonly string RetargetAlreadyFitsFmt = Loc.Localize("Parts.Retarget.AlreadyFits.Fmt",
+        "Nothing to change: where it reaches, {0} is the same shape as the size it was made for.");
+
+    public readonly string RetargetEndsUnreadable = Loc.Localize("Parts.Retarget.EndsUnreadable",
+        "Its rig can't be read, so its foot or hand can't be told from the rest: the whole piece is refitted.");
+
+    /// <summary>{0}: a body mod's name. A shoe's.</summary>
+    public readonly string RetargetNoLegsInBodyFmt = Loc.Localize("Parts.Retarget.NoLegsInBody.Fmt",
+        "{0} has no legs to refit by, so the whole piece is refitted.");
+
+    /// <summary>{0}: a body mod's name. Gloves'.</summary>
+    public readonly string RetargetNoChestInBodyFmt = Loc.Localize("Parts.Retarget.NoChestInBody.Fmt",
+        "{0} has no chest to refit by, so the whole piece is refitted.");
 
     public readonly string RetargetSwapShapesFmt = Loc.Localize("Parts.Retarget.SwapShapes.Fmt",
         "{0} shape key(s) lost to the skin swap. Untick \"Use the new body's skin\" to keep them.");
@@ -2560,8 +2905,8 @@ public sealed class PartsStrings
         "Shift-click a part to lock it.");
 
     public readonly string BrushLockListTip = Loc.Localize("Parts.Brush.Lock.ListTip",
-        "Untick a part to lock it: no brush moves it. Shift-clicking a part on the model or on your character "
-      + "does the same.");
+        "Untick a part to lock it: no brush moves it, and it is hidden so you can reach what is beneath it. "
+      + "Shift-clicking a part on the model or on your character locks it too; tick it here to bring it back.");
 
     /// <summary>{0} is how many parts are locked.</summary>
     public readonly string BrushLockCountFmt = Loc.Localize("Parts.Brush.Lock.Count.Fmt",

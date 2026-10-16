@@ -1,4 +1,128 @@
 {
+  "AutoRefit.Body": {
+    "message": "体型",
+    "description": ""
+  },
+  "AutoRefit.BodyMissing.Fmt": {
+    "message": "ここで選んだ体型「{0}」はもうインストールされていません。別の体型を選んでください。",
+    "description": ""
+  },
+  "AutoRefit.ChestSize": {
+    "message": "胸のサイズ",
+    "description": ""
+  },
+  "AutoRefit.Choose": {
+    "message": "選択してください…",
+    "description": ""
+  },
+  "AutoRefit.Clear": {
+    "message": "このコレクションの体型設定を消去",
+    "description": ""
+  },
+  "AutoRefit.Collection": {
+    "message": "コレクション",
+    "description": ""
+  },
+  "AutoRefit.Collection.Current.Fmt": {
+    "message": "{0}（使用中）",
+    "description": ""
+  },
+  "AutoRefit.Enable.Label": {
+    "message": "身に着けた装備を自分の体型に自動で合わせる",
+    "description": ""
+  },
+  "AutoRefit.Enable.Tip": {
+    "message": "調整結果は、スタジオの「体型サイズ」ツールと同じように、装備の MOD 自体に新しいサイズのオプションとして保存されるため、Proteus をオフにしても使えます。Penumbra で MOD の「Original」や別のサイズを選んだ場合は、その選択がそのまま尊重されます。",
+    "description": ""
+  },
+  "AutoRefit.EndsKept": {
+    "message": "手袋と靴は、作られたときの手と足をそのまま保ちます。調整されるのは、届いている腕と脚だけです。",
+    "description": ""
+  },
+  "AutoRefit.FindingBodies": {
+    "message": "体型 MOD を探しています…",
+    "description": ""
+  },
+  "AutoRefit.HandsFeet.Fmt": {
+    "message": "手と足はこれらのサイズに合わせて自動で選ばれます：{0} と {1}。",
+    "description": ""
+  },
+  "AutoRefit.Intro": {
+    "message": "胴・脚・手・足の装備、または体を覆うアクセサリー（首飾りに付けたジャケットなど）を身に着けると、Proteus はそれがどのボディ用に作られたかを判断し、ここで選んだボディとサイズに合わせて調整し、新しいサイズを有効にします。Penumbra のコレクションごとに選択できます。",
+    "description": ""
+  },
+  "AutoRefit.ItemInMod.Fmt": {
+    "message": "{0}（{1}）",
+    "description": ""
+  },
+  "AutoRefit.LegsSize": {
+    "message": "脚のサイズ",
+    "description": ""
+  },
+  "AutoRefit.NoBodies": {
+    "message": "体型 MOD がインストールされていないため、合わせる先がありません。",
+    "description": ""
+  },
+  "AutoRefit.NoBodyChosen": {
+    "message": "体型が選ばれていません。このコレクションで身に着けた装備はそのままになります。",
+    "description": ""
+  },
+  "AutoRefit.NoCollections": {
+    "message": "Penumbra が利用できないため、コレクションを一覧表示できません。",
+    "description": ""
+  },
+  "AutoRefit.RunNow": {
+    "message": "今着ている装備を調整",
+    "description": ""
+  },
+  "AutoRefit.RunNow.Tip": {
+    "message": "自動で調整されるのは、これから身に着ける装備だけです。このボタンは、すでにキャラクターが着ている装備を調整します。",
+    "description": ""
+  },
+  "AutoRefit.UndoDone.Fmt": {
+    "message": "元に戻しました：調整済みサイズを {0} 個削除し、ゲーム本来の装備用に作った MOD を {1} 個削除しました。「今着ている装備を調整」をクリックしない限り、これらの装備は再び調整されません。",
+    "description": ""
+  },
+  "AutoRefit.UndoFailed.Fmt": {
+    "message": "調整を元に戻せませんでした：{0}",
+    "description": ""
+  },
+  "AutoRefit.UndoNothing": {
+    "message": "身に着けている装備に、自動調整されたものはありません。",
+    "description": ""
+  },
+  "AutoRefit.UndoPartial.Fmt": {
+    "message": "調整済みサイズを {0} 個削除しましたが、{1} 個は削除できませんでした。どれがなぜ失敗したかはログに記録されています。",
+    "description": ""
+  },
+  "AutoRefit.UndoWorking": {
+    "message": "調整を元に戻しています...",
+    "description": ""
+  },
+  "AutoRefit.UndoWorn": {
+    "message": "着ている装備の自動調整を元に戻す",
+    "description": ""
+  },
+  "AutoRefit.UndoWorn.Tip": {
+    "message": "今身に着けている装備について、自動調整が作ったサイズを削除し、ゲーム本来の装備用に作った MOD を削除して、以前のオプションに戻します。その装備は、次に身に着けたときもそのままになります。「体型サイズ」ツールで自分で作ったサイズと、身に着けていない装備の調整は残ります。\n\nCtrl または Shift を押しながらクリックします。",
+    "description": ""
+  },
+  "AutoRefit.Vanilla.Label": {
+    "message": "ゲーム本来の装備も調整する",
+    "description": ""
+  },
+  "AutoRefit.Vanilla.Tip": {
+    "message": "MOD のない装備には保存先がないため、装備ごとにアイテム名と体型名を付けた新しい MOD が作られます。",
+    "description": ""
+  },
+  "AutoRefit.Working": {
+    "message": "処理中…",
+    "description": ""
+  },
+  "AutoRefit.Working.Fmt": {
+    "message": "{0} を調整中…",
+    "description": ""
+  },
   "Band.Cap.Bind": {
     "message": "デザインに紐付け",
     "description": ""
@@ -173,6 +297,82 @@
   },
   "Bindings.Update.Tip": {
     "message": "キャラクターに適用中のすべてのMOD（有効／優先度／オプション）と現在のProteusカラーを\nこの紐付けに記録します。手動での変更は、ここをクリックしたときだけ保存されます。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Author.Fmt": {
+    "message": "[Proteus] {0} には {1} のサイズが最初から用意されています。作者の「{2}」をオンにしました。",
+    "description": ""
+  },
+  "Chat.AutoRefit.BodyMissing.Fmt": {
+    "message": "[Proteus] このコレクションの自動調整用に選ばれた体型「{0}」がインストールされていないため、何も調整されません。/proteus > 設定 で別の体型を選んでください。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Done.Fmt": {
+    "message": "[Proteus] {0} が {1} に合うようになりました。{3} に「{2}」として保存し、オンにしました。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Existing.Fmt": {
+    "message": "[Proteus] {0} はすでに {1} に調整済みです。そのサイズをオンにしました。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Failed.Fmt": {
+    "message": "[Proteus] {0} を調整できませんでした：{1}",
+    "description": ""
+  },
+  "Chat.AutoRefit.KeepsFeet.Fmt": {
+    "message": "[Proteus] {0} は脚まで届いていないため、元の形のままにし、肌もそのままにしました。",
+    "description": ""
+  },
+  "Chat.AutoRefit.KeepsHands.Fmt": {
+    "message": "[Proteus] {0} は腕まで届いていないため、元の形のままにし、肌もそのままにしました。",
+    "description": ""
+  },
+  "Chat.AutoRefit.NoBodyMesh.Fmt": {
+    "message": "[Proteus] {0} にはサイズを読み取れる体の肌が含まれていないため、そのままにしました。スタジオの「体型サイズ」ツールで手動で調整できます。",
+    "description": ""
+  },
+  "Chat.AutoRefit.NoSizeChosen.Fmt": {
+    "message": "[Proteus] {1} の{0}のサイズが選ばれていないため、{2} はそのままにしました。/proteus > 設定 で選んでください。",
+    "description": ""
+  },
+  "Chat.AutoRefit.NoSizeForRace.Fmt": {
+    "message": "[Proteus] {0} には {2} 用の{1}のサイズがないため、{3} はそのままにしました。",
+    "description": ""
+  },
+  "Chat.AutoRefit.PartsLeftOut.Fmt": {
+    "message": "次の部位は一緒に調整できなかったため、元のサイズのままです：{0}。",
+    "description": ""
+  },
+  "Chat.AutoRefit.SkinOnly.Fmt": {
+    "message": "[Proteus] {0} は元の形のままで、肌が {1} と同じように描かれるようになりました。{3} に「{2}」として保存し、オンにしました。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Start.Fmt": {
+    "message": "[Proteus] {0} を {1} から {2} に調整しています。完了するとオンになります。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Summary.Fmt": {
+    "message": "[Proteus] {0} に合わせて調整しました：{1}。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Unsure.Fmt": {
+    "message": "[Proteus] {0} がどの体型用に作られたか判断できなかったため、そのままにしました。スタジオの「体型サイズ」ツールで手動で調整できます。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.Jewellery.Fmt": {
+    "message": "[Proteus] {0} は体を覆っていないため、そのままにしました。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.AuthorSizes.Fmt": {
+    "message": "[Proteus] {0} には作者によるボディ別サイズが用意されています（現在は「{1}」）。Penumbra で別のものを選んでください。そのままにしました。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.Beneath.Fmt": {
+    "message": "[Proteus] {0} はそのままにしました。サイズを読み取れる自前の{1}パーツがなく、下に着ている{1}はゲーム本来のもの、{2} に合わせていないもの、またはこのバージョンより前に調整されたものです。着け直すか「今着ている装備を調整」を使ってください。",
+    "description": ""
+  },
+  "Chat.AutoRefit.Accessory.Shared.Fmt": {
+    "message": "[Proteus] {0} は MOD の他のパーツとサイズが共通なので、それらと一緒に調整されます。それらが {1} に調整されたら「今着ている装備を調整」を使ってください。今はそのままにしました。",
     "description": ""
   },
   "Chat.ContentUnplaced.Fmt": {
@@ -525,6 +725,14 @@
   },
   "Colors.Mode.Skin": {
     "message": "Skin（塗り）",
+    "description": ""
+  },
+  "Colors.NavelBridge.Label": {
+    "message": "へそを布で渡す",
+    "description": ""
+  },
+  "Colors.NavelBridge.Tip": {
+    "message": "お腹を覆う布に使います。\nProteus は衣装を体のコピーとして作るため、へその中まで沈み込み、\n着ているのではなく描いたように見えます。オンにすると、布が本物のように\nへその上へ平らに張られます。内側へ引き込むことはないので、体に食い込みません。\n衣装がへその部分で切り抜かれている場合や、体にへそがない場合は何もしません。",
     "description": ""
   },
   "Colors.NoActiveOptions": {
@@ -2259,6 +2467,30 @@
     "message": "塗っている間に表面がなめらかになる速さ。低いと穏やかで扱いやすく、\n高いとほぼすぐになめらかになります。\n\n裾のような開いた縁の近くでは、縁が少し内側へ寄ります。",
     "description": ""
   },
+  "Parts.Tool.Smooth": {
+    "message": "スムーズ",
+    "description": ""
+  },
+  "Parts.Tool.Smooth.Tip": {
+    "message": "モデルを塗って、縮ませずにでこぼこや波打ちを取り除きます。\n「ならす」と違い、曲面は形を保ち、布は体に沈みません。",
+    "description": ""
+  },
+  "Parts.Brush.SmoothRate.Tip": {
+    "message": "塗っている間に表面がなめらかになる速さ。低いと穏やかで扱いやすく、\n高いとほぼ一瞬でなめらかになります。",
+    "description": ""
+  },
+  "Parts.Tool.Grab": {
+    "message": "つかむ",
+    "description": ""
+  },
+  "Parts.Tool.Grab.Tip": {
+    "message": "モデルを押してドラッグ：ブラシ周りの布がゴムのようにマウスについてきます。\n中心ほど強く、はっきりした境目はありません。",
+    "description": ""
+  },
+  "Parts.Grab.Help": {
+    "message": "布を押してドラッグします。ブラシサイズで、ついてくる布の範囲が決まります。\n画面に沿って動き、Ctrl+Zで取り消せます。",
+    "description": ""
+  },
   "Parts.Tool.Bridge": {
     "message": "橋渡し",
     "description": ""
@@ -2295,8 +2527,8 @@
     "message": "拡大縮小",
     "description": ""
   },
-  "Parts.Tool.Scale.Tip": {
-    "message": "パーツを選び、その上を押して右にドラッグすると拡大、\n左にドラッグすると中心を基準に縮小します。",
+  "Parts.Tool.ScaleAxes.Tip": {
+    "message": "パーツを選び、中心のハンドルのいずれかをドラッグするとその軸方向に伸縮します。\nパーツの上を押して右か左にドラッグすると、\n全体を均等に拡大・縮小します。",
     "description": ""
   },
   "Parts.Rotate.Help": {
@@ -2307,12 +2539,12 @@
     "message": "キャラクターのパーツをクリックし、中心のリングのいずれかをドラッグします。Alt を押すとカメラを動かせます。回転は離したときに保存されます。",
     "description": ""
   },
-  "Parts.Scale.Help": {
-    "message": "パーツをクリックして選び、その上を押して右にドラッグすると拡大、左で縮小します。それ以外の場所をドラッグするとモデルが回転し、Shift+ドラッグで視点を移動、スクロールでズームします。",
+  "Parts.ScaleAxes.Help": {
+    "message": "パーツをクリックして選び、ハンドルをドラッグするとその軸方向に伸縮します。パーツの上を押して右にドラッグすると拡大、左で縮小します。それ以外の場所をドラッグするとモデルが回転し、Shift+ドラッグで視点を移動、スクロールでズームします。",
     "description": ""
   },
-  "Parts.Scale.LiveHint": {
-    "message": "キャラクターのパーツをクリックし、その上を押して右にドラッグすると拡大、左で縮小します。Alt を押すとカメラを動かせます。変更は離したときに保存されます。",
+  "Parts.ScaleAxes.LiveHint": {
+    "message": "キャラクターのパーツをクリックし、ハンドルをドラッグするとその軸方向に伸縮します。パーツの上を押して右にドラッグすると拡大、左で縮小します。Alt を押すとカメラを動かせます。変更は離したときに保存されます。",
     "description": ""
   },
   "Parts.Move.Help": {
@@ -2332,7 +2564,7 @@
     "description": ""
   },
   "Parts.Move.ListTip": {
-    "message": "ここで移動するパーツを選ぶか、モデルかキャラクター上でクリックしてください。",
+    "message": "ここで移動するパーツを選ぶか、モデルかキャラクター上でクリックしてください。\nパーツのチェックを外すとロックされ、その下にあるものを選べます。",
     "description": ""
   },
   "Parts.Move.Adjacent": {
@@ -2360,7 +2592,11 @@
     "description": ""
   },
   "Parts.Move.LockedTip": {
-    "message": "このパーツはロックされています。ブラシでロックを解除すると移動できます。",
+    "message": "このパーツはロックされています。横のチェックを入れると移動できます。",
+    "description": ""
+  },
+  "Parts.Move.LockTip": {
+    "message": "チェックを外すとこのパーツをロックしてよけます。モデルとキャラクターの両方で非表示になり、\nクリックはそれをすり抜けて下に届きます（スカートをロックして下着を選ぶなど）。\nロックしたパーツはブラシも触らず、非表示にします。",
     "description": ""
   },
   "Parts.Move.NothingFree": {
@@ -2401,6 +2637,14 @@
   },
   "Parts.Wind.Materials.Set.Fmt": {
     "message": "風でこの装備が動くよう、{0} 個のマテリアルファイルを設定しました。",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Upgraded.Fmt": {
+    "message": "そのうち {0} 個を、風に対応していない旧キャラクターシェーダーから黄金のレガシーのシェーダーへ更新しました。",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Legacy.Fmt": {
+    "message": "{0} 個のマテリアルファイルは風に対応していない旧キャラクターシェーダーを使っており、更新できなかったため揺れません。",
     "description": ""
   },
   "Parts.Wind.Materials.Missing.Fmt": {
@@ -2476,7 +2720,7 @@
     "description": ""
   },
   "Parts.Brush.Strength.Tip": {
-    "message": "塗っている間に表面が動く量。通常は小さめが適切です：服は体からわずか\n数分の一ミリ離れれば十分で、同じ場所を何度でも重ねて塗れます。",
+    "message": "ブラシを押し続ける0.25秒ごとに、ブラシ中心が表面を動かす距離。\nフレームレートに関係なく同じです。小さい値で十分なことがほとんどです。\n服は体からほんのわずか離れればよく、同じ場所は何度でも塗り直せます。",
     "description": ""
   },
   "Parts.Brush.Limit": {
@@ -2584,7 +2828,7 @@
     "description": ""
   },
   "Parts.Brush.Lock.ListTip": {
-    "message": "パーツのチェックを外すとロックされ、どのブラシでも動かなくなります。モデルやキャラクター上のパーツを Shift+クリックしても同じです。",
+    "message": "チェックを外すとパーツがロックされます。どのブラシも動かさず、非表示になるので下にあるものに届きます。モデルやキャラクター上でパーツをShift+クリックしてもロックできます。ここでチェックを入れると元に戻ります。",
     "description": ""
   },
   "Parts.Brush.Lock.Count.Fmt": {
@@ -2937,6 +3181,10 @@
   },
   "Settings.Output.TextureCache.Tip": {
     "message": "合成と合成の間に、デコード済みテクスチャをどれだけメモリに保持するかです。\n\n4Kテクスチャはデコード時に64 MB必要なので、実質は枚数の設定です：2048 MB ≒ 30枚。\n1回の合成全体をまかなえて初めて効果があります。それを下回ると、毎回の実行で\n次に必要なものを追い出してしまい、何も再利用されません。\n\n再合成ログの「cache N entries, M MB」の値を確認してください。何も変更していない\n2回目の合成でもミスが報告されるなら、この値を上げてください。ゲームがページング\nを始めたら下げてください。60秒間アイドルで自動的に解放されます。",
+    "description": ""
+  },
+  "Settings.Section.AutoRefit": {
+    "message": "体型の自動調整",
     "description": ""
   },
   "Settings.Section.Diagnostics": {
@@ -3455,6 +3703,18 @@
     "message": "バックルや装飾品など、作者の配置のまま保ちたいパーツはチェックを外してください。モデル上のクリックでも同じです。",
     "description": ""
   },
+  "Parts.Dropdown.Ticked.Fmt": {
+    "message": "{1} 個中 {0} 個のパーツにチェック",
+    "description": ""
+  },
+  "Parts.Dropdown.NoneChosen": {
+    "message": "動かすパーツを選んでください",
+    "description": ""
+  },
+  "Parts.Drawer.Toggle.Tip": {
+    "message": "クリックするとパーツ一覧が専用の列に開き、チェックしながらモデルを見られます。もう一度クリックすると閉じます。",
+    "description": ""
+  },
   "Parts.Retarget.Lock.SkinTip": {
     "message": "衣装自身の肌です。保持すると元のサイズのままになり、体が透けたり隙間ができたりします。",
     "description": ""
@@ -3469,6 +3729,14 @@
   },
   "Parts.Retarget.KeepShape.Tip": {
     "message": "リング・バックル・チェーンなど硬いパーツ向け：曲げずにそのまま移動します。\n小さな閉じたパーツは既定でオンです。",
+    "description": ""
+  },
+  "Parts.Retarget.KeepShape.SinkTip": {
+    "message": "新しい体にめり込んでしまうパーツは、代わりに体に合わせて曲がります。",
+    "description": ""
+  },
+  "Parts.Retarget.ShapeReleased.Fmt": {
+    "message": "形を保つパーツ{0:N0}個は、そのまま動かすと新しい体に最大{1:F1} mmめり込むため、体に合わせて曲げました：{2}",
     "description": ""
   },
   "Parts.Retarget.ReplaceSkin": {
@@ -3517,6 +3785,54 @@
   },
   "Parts.Retarget.CutHidden.Tip": {
     "message": "作者が肌を削除した箇所（通常は布の下）には新しい肌を入れません。\n穴ができる場合はオフにしてください。",
+    "description": ""
+  },
+  "Parts.Retarget.CutForcedTip": {
+    "message": "靴が自分の足を、手袋が自分の手を残している間は常にオンです。オフにすると新しい脚や腕が丸ごと入ってしまいます。",
+    "description": ""
+  },
+  "Parts.Retarget.KeepFeet": {
+    "message": "元の足を残す",
+    "description": ""
+  },
+  "Parts.Retarget.KeepFeet.Tip": {
+    "message": "足はヒールも含めて作者が作ったままです。靴が届いている脚だけを、脚のサイズに合わせてリフィットします。チェックを外すと、これまでどおり足も含めて靴全体をリフィットします。",
+    "description": ""
+  },
+  "Parts.Retarget.KeepHands": {
+    "message": "元の手を残す",
+    "description": ""
+  },
+  "Parts.Retarget.KeepHands.Tip": {
+    "message": "手は作者が作ったままです。手袋が届いている腕だけを、胸のサイズに合わせてリフィットします。チェックを外すと、これまでどおり手も含めて手袋全体をリフィットします。",
+    "description": ""
+  },
+  "Parts.Retarget.NoLimbFeet": {
+    "message": "この靴は脚に届いていません。形はそのままで、肌だけを新しいボディと同じように描きます。それでも脚のサイズを選べば、それに合わせてリフィットします。",
+    "description": ""
+  },
+  "Parts.Retarget.NoLimbHands": {
+    "message": "この手袋は腕に届いていません。形はそのままで、肌だけを新しいボディと同じように描きます。それでも胸のサイズを選べば、それに合わせてリフィットします。",
+    "description": ""
+  },
+  "Parts.Retarget.SkinAlreadyMatches": {
+    "message": "変更はありません。肌はすでに新しいボディと同じように描かれています。",
+    "description": ""
+  },
+  "Parts.Retarget.AlreadyFits.Fmt": {
+    "message": "変更はありません。この装備が届く範囲では、{0} は作られた元のサイズと同じ形です。",
+    "description": ""
+  },
+  "Parts.Retarget.EndsUnreadable": {
+    "message": "リグを読み取れないため、足や手をそれ以外と区別できません。装備全体をリフィットします。",
+    "description": ""
+  },
+  "Parts.Retarget.NoLegsInBody.Fmt": {
+    "message": "{0} にはリフィットに使う脚がないため、装備全体をリフィットします。",
+    "description": ""
+  },
+  "Parts.Retarget.NoChestInBody.Fmt": {
+    "message": "{0} にはリフィットに使う胴がないため、装備全体をリフィットします。",
     "description": ""
   },
   "Parts.Retarget.NeedFromRequired.Fmt": {
@@ -3663,6 +3979,10 @@
     "message": "{0}（Proteus でリフィット）",
     "description": ""
   },
+  "Refit.Mod.Folder": {
+    "message": "Proteus アップスケール",
+    "description": ""
+  },
   "Refit.Mod.Enabled.Fmt": {
     "message": "「{0}」を作成して有効にしました。",
     "description": ""
@@ -3707,12 +4027,24 @@
     "message": "（バニラ）",
     "description": ""
   },
-  "WhatsNew.Title": {
-    "message": "Proteus の新機能",
+  "WhatsNew.AutoRefit.Body": {
+    "message": "Proteus は、胴・脚・手・足の装備を身に着けた瞬間に、自動であなたの体型に合わせられるようになりました。装備がどの体型 MOD のどのサイズ用に作られたかを調べ、装備とそれが覆う体の部位を作り直し、新しいサイズを装備の MOD 自体に保存してオンにします。開始時と完了時にはチャットでお知らせします。\n\n使うには、設定 › 体型の自動調整 を開きます。「身に着けた装備を自分の体型に自動で合わせる」にチェックを入れ、Penumbra のコレクションごとに体型 MOD と胸・脚のサイズを選んでください。手と足は自動で合わせます。すでに着ている装備は「今着ている装備を調整」で調整でき、ゲーム本来の装備には専用のチェックボックスがあります。Penumbra で「Original」や別のサイズを選んだ場合は、常にそのまま尊重されます。",
     "description": ""
   },
-  "WhatsNew.Intro": {
-    "message": "このリリースで知っておきたい3つの点です。このウィンドウが開くのは一度きりです。",
+  "WhatsNew.AutoRefit.Head": {
+    "message": "装備が自動で体型に合うように",
+    "description": ""
+  },
+  "WhatsNew.IntroAll": {
+    "message": "Proteus について知っておきたい 4 つのこと。このウィンドウは一度だけ表示され、二度と開きません。",
+    "description": ""
+  },
+  "WhatsNew.IntroSince": {
+    "message": "前回このウィンドウを見てから新しくなったことがあります。このウィンドウは一度だけ表示され、二度と開きません。",
+    "description": ""
+  },
+  "WhatsNew.Title": {
+    "message": "Proteus の新機能",
     "description": ""
   },
   "WhatsNew.Upscales.Head": {
@@ -3842,6 +4174,10 @@
   "Common.Units.Mm2": {
     "message": "%.2f mm",
     "description": "Slider value in millimetres. An ImGui printf format: keep %.2f exactly as it is."
+  },
+  "Common.Units.MmPerQuarterSecond": {
+    "message": "%.2f mm / 0.25秒",
+    "description": ""
   },
   "Create.Dialog.ImageFilter": {
     "message": "画像",
@@ -4402,5 +4738,157 @@
   "Service.Download.Checksum.Fmt": {
     "message": "{0} のチェックサムが一致しません（{1} バイト、sha256 {2}…）",
     "description": "Why a download (UV maps) failed; shown after a colon. {0} is a file name, {1} a byte count, {2} the start of a hash. Lower-case, no full stop."
+  },
+  "SizeSet.Header": {
+    "message": "他のボディの全サイズ",
+    "description": ""
+  },
+  "SizeSet.Intro": {
+    "message": "下でチェックしたボディの全サイズを、このMOD全体に追加します。各サイズは作者のサイズのうち最も近いものからリフィットし、そのオプション内の衣装の他のパーツも同じサイズから作り、作者のサイズの隣に「Rue S」「YAB Buff L」などとして保存します。MODにすでにあるサイズはそのままです。",
+    "description": ""
+  },
+  "SizeSet.Yas": {
+    "message": "YAS版があるボディはYAS版を使う",
+    "description": ""
+  },
+  "SizeSet.Yas.Tip": {
+    "message": "Rue、YAB、TreにはYet Another Skeleton版があります。NeolitheとBiboにはないため、通常のサイズのままです。すでにYASにウェイトされているパーツは常にYASサイズになります。",
+    "description": ""
+  },
+  "SizeSet.Ends": {
+    "message": "靴と手袋も含める",
+    "description": ""
+  },
+  "SizeSet.Ends.Tip": {
+    "message": "靴と手袋は元の足と手を残し、届いている脚や腕だけをリフィットします。靴には脚のサイズが、手袋にはボディごとに1つのオプションが付き、同じグループならどちらも衣装の胸や脚のサイズに加わります。",
+    "description": ""
+  },
+  "SizeSet.EndsUnreadable.Fmt": {
+    "message": "{0}: リグを読み取れないため足や手を残せず、サイズは作られませんでした。",
+    "description": ""
+  },
+  "SizeSet.Remake": {
+    "message": "Proteusが以前追加したサイズを作り直す",
+    "description": ""
+  },
+  "SizeSet.Remake.Tip": {
+    "message": "オフ：Proteusが追加済みのサイズはそのままにします。オン：もう一度リフィットして置き換えます。作者自身のサイズには一切触れません。以前のバージョンのProteusでサイズを追加した場合は、一度これをオンにしてください。それらは作者の最初のサイズから作られています。",
+    "description": ""
+  },
+  "SizeSet.Run": {
+    "message": "サイズを追加",
+    "description": ""
+  },
+  "SizeSet.Run.Tip": {
+    "message": "バックグラウンドで動作し、パーツの多いMODでは数分かかることがあります。完了するとPenumbraがMODを再読み込みします。",
+    "description": ""
+  },
+  "SizeSet.PickBody": {
+    "message": "ボディを1つ以上チェックしてください。",
+    "description": ""
+  },
+  "SizeSet.Cancel": {
+    "message": "停止",
+    "description": ""
+  },
+  "SizeSet.Cancelled": {
+    "message": "停止しました。保存済みのサイズはMODに残ります。",
+    "description": ""
+  },
+  "SizeSet.Done.Fmt": {
+    "message": "MODに{0}サイズを追加しました。",
+    "description": ""
+  },
+  "SizeSet.NothingAdded": {
+    "message": "追加したサイズはありません。MODにはチェックしたボディの全サイズがすでにあります。",
+    "description": ""
+  },
+  "SizeSet.LeftOut": {
+    "message": "作成しなかったもの：",
+    "description": ""
+  },
+  "SizeSet.Failed.Fmt": {
+    "message": "サイズを追加できませんでした：{0}",
+    "description": ""
+  },
+  "SizeSet.NoPieces": {
+    "message": "このMODには、サイズを作れる胴・脚・靴・手袋のモデルがありません。",
+    "description": ""
+  },
+  "SizeSet.EndNoLeadSource.Fmt": {
+    "message": "{0}：「{1}」には含めませんでした。そこにある衣装の胴または脚の元になった作者のサイズが、このパーツでは見つからないか読み取れませんでした。オプションを作り直すには「作り直す」をオンにしてください。",
+    "description": ""
+  },
+  "SizeSet.EndNoLeadSourceRemake.Fmt": {
+    "message": "{0}：「{1}」はそのままです。そこにある衣装の胴または脚の元になった作者のサイズが、このパーツでは読み取れませんでした。",
+    "description": ""
+  },
+  "SizeSet.NoBodies": {
+    "message": "リフィット先のボディMODがインストールされていません。",
+    "description": ""
+  },
+  "SizeSet.Unpaired.Fmt": {
+    "message": "{0}：合わせられない別のパーツと同じサイズグループにあるため、サイズは作りませんでした。作ると、どのサイズももう一方のパーツをリフィットしないまま身に着けることになります。",
+    "description": ""
+  },
+  "SizeSet.PieceFailed.Fmt": {
+    "message": "{0}：失敗：{1}",
+    "description": ""
+  },
+  "SizeSet.Reading.Fmt": {
+    "message": "{0}がどのボディ用に作られたか読み取っています...",
+    "description": ""
+  },
+  "SizeSet.Unreadable.Fmt": {
+    "message": "{0}：どのボディ用に作られたか判別できなかったため、サイズを作りませんでした。",
+    "description": ""
+  },
+  "SizeSet.NoSuchSize.Fmt": {
+    "message": "{0}：{2}には「{1}」のモデルがないため、そのサイズは作りませんでした。",
+    "description": ""
+  },
+  "SizeSet.Refused.Fmt": {
+    "message": "{0}：「{1}」を作れませんでした：{2}",
+    "description": ""
+  },
+  "SizeSet.SaveFailed.Fmt": {
+    "message": "{0}：{1}",
+    "description": ""
+  },
+  "SizeSet.NotInstalled.Fmt": {
+    "message": "{0}：{1}がインストールされていないため、そのサイズは作りませんでした。",
+    "description": ""
+  },
+  "SizeSet.Working.Fmt": {
+    "message": "{0}を{1}にリフィット中...",
+    "description": ""
+  },
+  "SizeSet.NotInstalledTip.Fmt": {
+    "message": "{0}はPenumbraにインストールされていません。インストールしてから、この項目を閉じて開き直してください。",
+    "description": ""
+  },
+  "ContentImport.Warn.EffectFileMissing.Fmt": {
+    "message": "「{0}」にはアニメーションエフェクトがありますが、そのファイル（{1}）がパックにないため表示できません。",
+    "description": ""
+  },
+  "Content.StaleEffectImport.Fmt": {
+    "message": "「{0}」のアニメーションエフェクトはこのインポートで元のアイテムに残されたため、そのアイテムを装備したときだけ表示されます。アイテムなしで使うには、このModを削除してパックを再インポートしてください。",
+    "description": ""
+  },
+  "Content.EffectOnly": {
+    "message": "アニメーションエフェクト",
+    "description": ""
+  },
+  "Content.WithEffect.Fmt": {
+    "message": "{0} + エフェクト",
+    "description": ""
+  },
+  "Content.Effect.Tip": {
+    "message": "このパーツにはアニメーションエフェクトがあります。Proteus は空きスロットに置く透明なアクセサリーで再生するため、置き換え元のアイテムを装備する必要はありません。",
+    "description": ""
+  },
+  "Chat.EffectUnplaced.Fmt": {
+    "message": "[Proteus] 「{0}」のアニメーションエフェクトは表示されていません。透明なキャリアー用に空きアクセサリースロットが必要です。指輪、腕輪、首飾りのスロットを空けてください。",
+    "description": ""
   }
 }

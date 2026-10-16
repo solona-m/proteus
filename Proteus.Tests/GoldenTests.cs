@@ -40,6 +40,7 @@ public class GoldenTests(ITestOutputHelper o)
     [LocalDataFact(SecondSkinWriterVerbatimTests.NeolitheNeed, SecondSkinWriterVerbatimTests.BiboNeed,
                    SecondSkinWriterVerbatimTests.RueNeed, SecondSkinWriterVerbatimTests.HostRingNeed, ToeCapPng,
                    LocalData.PiercingsPack)]
+    [Trait("Plan", "AC-navel-bridge-8")]
     public void Shell_output_matches_baseline()
     {
         var cases = new Cases(o);
@@ -105,6 +106,7 @@ public class GoldenTests(ITestOutputHelper o)
     private const string NeolitheExtra = Neolithe + "/EXTRA CHEST BUFF - SmallClothes";
     private const string NeolitheLegs  = Neolithe + "/DEFAULT LEGS - SmallClothes";
 
+    /// <summary>[AC-within-body-weights-7] The refit's output, byte for byte against the recorded baseline.</summary>
     [LocalDataFact(NeolitheChest, NeolitheExtra, NeolitheLegs)]
     public void Retarget_output_matches_baseline()
     {

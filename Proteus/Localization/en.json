@@ -1,4 +1,128 @@
 {
+  "AutoRefit.Body": {
+    "message": "Body",
+    "description": "Label above the dropdown of installed body mods to refit gear onto."
+  },
+  "AutoRefit.BodyMissing.Fmt": {
+    "message": "The body chosen here, \"{0}\", isn't installed any more. Choose another.",
+    "description": "Shown when the body mod chosen for a collection has been uninstalled. {0} is the mod's folder name."
+  },
+  "AutoRefit.ChestSize": {
+    "message": "Chest size",
+    "description": "Label above the dropdown of the body's chest sizes."
+  },
+  "AutoRefit.Choose": {
+    "message": "Choose...",
+    "description": "Shown in a dropdown when nothing has been chosen yet."
+  },
+  "AutoRefit.Clear": {
+    "message": "Forget this collection's body",
+    "description": "Button that removes the selected collection's chosen body."
+  },
+  "AutoRefit.Collection": {
+    "message": "Collection",
+    "description": "Label above the dropdown of Penumbra collections in the Body refit section."
+  },
+  "AutoRefit.Collection.Current.Fmt": {
+    "message": "{0} (current)",
+    "description": "A collection in the dropdown that the character is using right now. {0} is the collection's name."
+  },
+  "AutoRefit.Enable.Label": {
+    "message": "Refit gear to my body as I put it on",
+    "description": "Checkbox that switches the automatic body refit on."
+  },
+  "AutoRefit.Enable.Tip": {
+    "message": "The refit is saved into the gear's own mod as a new size option, exactly as the Studio's Body size tool saves one, so it keeps working with Proteus turned off. Choosing the mod's \"Original\" or another size in Penumbra is left alone.",
+    "description": "Tooltip on the Body refit checkbox. \"Original\" is the name of an option in Penumbra and must stay in English. \"Studio\" and \"Body size\" name a tab and a tool - use the same words as Tab.Parts and Parts.Tool.Retarget."
+  },
+  "AutoRefit.EndsKept": {
+    "message": "Gloves and shoes keep the hands and feet they were made with; only the arms and legs they reach are refitted.",
+    "description": "Note under the hands and feet sizes in Settings > Body refit: gloves and shoes keep their own hands and feet, and only the arms and legs they reach are refitted."
+  },
+  "AutoRefit.FindingBodies": {
+    "message": "Looking for body mods...",
+    "description": "Shown while the installed mods are searched for body mods."
+  },
+  "AutoRefit.HandsFeet.Fmt": {
+    "message": "Hands and feet are matched to these sizes: {0} and {1}.",
+    "description": "Hint under the chest and legs sizes. {0} is the hands size and {1} the feet size picked automatically to match."
+  },
+  "AutoRefit.Intro": {
+    "message": "When you put on chest, legs, hands or feet gear — or an accessory that covers the body, such as a jacket on a necklace — Proteus works out which body it was made for and refits it to the body and sizes chosen here, then switches the new size on. Each Penumbra collection has its own choice.",
+    "description": "Explanation at the top of the Body refit section of Settings."
+  },
+  "AutoRefit.ItemInMod.Fmt": {
+    "message": "{0} ({1})",
+    "description": "How a modded piece of gear is named in messages. {0} is the mod's name, {1} the body part (Chest, Legs, Hands or Feet)."
+  },
+  "AutoRefit.LegsSize": {
+    "message": "Legs size",
+    "description": "Label above the dropdown of the body's legs sizes."
+  },
+  "AutoRefit.NoBodies": {
+    "message": "No body mods are installed, so there is nothing to refit onto.",
+    "description": "Shown in the body dropdown when no body mod is installed."
+  },
+  "AutoRefit.NoBodyChosen": {
+    "message": "No body chosen: gear put on in this collection is left as it is.",
+    "description": "Shown when the selected collection has no body chosen."
+  },
+  "AutoRefit.NoCollections": {
+    "message": "Penumbra isn't available, so its collections can't be listed.",
+    "description": "Shown when Penumbra cannot be reached to list its collections."
+  },
+  "AutoRefit.RunNow": {
+    "message": "Refit what I'm wearing now",
+    "description": "Button that refits every piece of gear the character is already wearing."
+  },
+  "AutoRefit.RunNow.Tip": {
+    "message": "Only gear put on from now on is refitted by itself. This does the pieces already on your character.",
+    "description": "Tooltip on the button that refits the gear already worn."
+  },
+  "AutoRefit.UndoDone.Fmt": {
+    "message": "Undone: removed {0} refitted sizes and deleted {1} mods made for the game's own gear. These pieces won't be refitted again unless you click \"Refit what I'm wearing now\".",
+    "description": "Shown after the undo. {0} is how many refitted sizes were removed, {1} how many mods made for unmodded gear were deleted. The quoted text is the button AutoRefit.RunNow - quote it exactly as that key reads in your language."
+  },
+  "AutoRefit.UndoFailed.Fmt": {
+    "message": "Couldn't undo the refit: {0}",
+    "description": "Shown when the undo failed outright. {0} is the error."
+  },
+  "AutoRefit.UndoNothing": {
+    "message": "Nothing you're wearing was refitted automatically.",
+    "description": "Shown after the undo when none of the gear being worn had been refitted automatically."
+  },
+  "AutoRefit.UndoPartial.Fmt": {
+    "message": "Removed {0} refitted sizes, but {1} could not be removed. The log says which and why.",
+    "description": "Shown after the undo when some sizes could not be removed. {0} is how many were removed, {1} how many could not be."
+  },
+  "AutoRefit.UndoWorking": {
+    "message": "Undoing the refit...",
+    "description": "Status line while the undo is running."
+  },
+  "AutoRefit.UndoWorn": {
+    "message": "Undo the refit of what I'm wearing",
+    "description": "Button in Settings > Body refit that takes back the automatic refit of the gear being worn right now."
+  },
+  "AutoRefit.UndoWorn.Tip": {
+    "message": "For the gear you have on now: removes the size the automatic refit made, deletes the mod it made for the game's own gear, and puts back the option you had before. Those pieces are then left as they are when you put them on again. Sizes you made yourself in the Body size tool, and refits of anything you are not wearing, stay.\n\nHold Ctrl or Shift and click.",
+    "description": "Tooltip on the undo button. 'Body size' is the name of the Studio tool (Parts.Tool.Retarget) - use the same name. The last sentence is the same as Parts.Brush.Revert.Arm.Tip."
+  },
+  "AutoRefit.Vanilla.Label": {
+    "message": "Also refit the game's own gear",
+    "description": "Checkbox under the Body refit switch: also refit unmodded (the game's own) gear."
+  },
+  "AutoRefit.Vanilla.Tip": {
+    "message": "Unmodded gear has no mod to save into, so each piece gets a new mod of its own, named after the item and the body.",
+    "description": "Tooltip on the checkbox for refitting the game's own gear."
+  },
+  "AutoRefit.Working": {
+    "message": "Working...",
+    "description": "Shown while a refit is running."
+  },
+  "AutoRefit.Working.Fmt": {
+    "message": "Refitting {0}...",
+    "description": "Status line while a piece of gear is being refitted. {0} names the piece."
+  },
   "Band.Cap.Bind": {
     "message": "Bind it all to a design",
     "description": "Glamourer design bindings. Capability label in the header band, shown beside an icon. All four of these labels are hidden together the moment they stop fitting the window width, so a short translation is what keeps them on screen."
@@ -174,6 +298,82 @@
   "Bindings.Update.Tip": {
     "message": "Snapshot every mod on the character (enable / priority / options) and the current\nProteus colours into this binding. Manual edits only persist when you click this.",
     "description": "Tooltip. Appears in the Bindings tab. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
+  "Chat.AutoRefit.Author.Fmt": {
+    "message": "[Proteus] {0} already comes in {1}; its own \"{2}\" is switched on.",
+    "description": "Status line when a mod already ships the chosen body size, so Proteus switches to the author's own option instead of refitting. {0} names the gear, {1} the body and size, {2} the author's option name. Do NOT translate \"Proteus\"."
+  },
+  "Chat.AutoRefit.BodyMissing.Fmt": {
+    "message": "[Proteus] The body chosen for automatic refits in this collection, \"{0}\", isn't installed, so nothing is being refitted. Choose another under /proteus > Settings.",
+    "description": "Chat line when the body chosen for the collection is no longer installed. {0} is the body mod's folder name. \"/proteus\" is a command and \"Settings\" matches Tab.Settings. Do NOT translate \"Proteus\" or \"/proteus\"."
+  },
+  "Chat.AutoRefit.Done.Fmt": {
+    "message": "[Proteus] {0} now fits {1}. Saved as \"{2}\" in {3} and switched on.",
+    "description": "Chat line when an automatic refit is finished and worn. {0} names the gear, {1} the body and size, {2} the new option's name in Penumbra, {3} the mod it was saved into. Do NOT translate \"Proteus\"."
+  },
+  "Chat.AutoRefit.Existing.Fmt": {
+    "message": "[Proteus] {0} was already refitted to {1}; that size is switched on.",
+    "description": "Chat line when gear put on was already refitted earlier and that refit is switched back on. {0} names the gear, {1} the option. Do NOT translate \"Proteus\"."
+  },
+  "Chat.AutoRefit.Failed.Fmt": {
+    "message": "[Proteus] Couldn't refit {0}: {1}",
+    "description": "Chat line when an automatic refit failed. {0} names the gear, {1} is the reason. Do NOT translate \"Proteus\"."
+  },
+  "Chat.AutoRefit.KeepsFeet.Fmt": {
+    "message": "[Proteus] {0} doesn't reach the legs, so it keeps its own shape and its skin was left as it is.",
+    "description": "Status line when shoes reach no leg and nothing about them is changed: their shape is kept and their skin left as it is. {0} names the gear. Do NOT translate \"Proteus\"."
+  },
+  "Chat.AutoRefit.KeepsHands.Fmt": {
+    "message": "[Proteus] {0} doesn't reach the arms, so it keeps its own shape and its skin was left as it is.",
+    "description": "Status line when gloves reach no arm and nothing about them is changed: their shape is kept and their skin left as it is. {0} names the gear. Do NOT translate \"Proteus\"."
+  },
+  "Chat.AutoRefit.NoBodyMesh.Fmt": {
+    "message": "[Proteus] {0} carries no body skin to read its size from, so it was left as it is. You can refit it by hand with the Studio's Body size tool.",
+    "description": "Chat line when a piece of gear has no body skin in it to measure its size from. {0} names the gear. \"Studio\" and \"Body size\" match Tab.Parts and Parts.Tool.Retarget. Do NOT translate \"Proteus\"."
+  },
+  "Chat.AutoRefit.NoSizeChosen.Fmt": {
+    "message": "[Proteus] No {0} size is chosen for {1}, so {2} was left as it is. Choose one under /proteus > Settings.",
+    "description": "Status line when the automatic refit has a body but no size chosen for this body part. {0} is the body part (Chest, Legs, Hands or Feet), {1} the body mod, {2} names the gear. Do NOT translate \"Proteus\" or \"/proteus\"."
+  },
+  "Chat.AutoRefit.NoSizeForRace.Fmt": {
+    "message": "[Proteus] {0} has no {1} size for {2}, so {3} was left as it is.",
+    "description": "Chat line when the chosen body has no size for this body part and race. {0} is the body mod, {1} the body part (Chest, Legs, Hands or Feet), {2} the race, {3} names the gear. Do NOT translate \"Proteus\"."
+  },
+  "Chat.AutoRefit.PartsLeftOut.Fmt": {
+    "message": "These parts could not be refitted with it and kept their size: {0}.",
+    "description": "Appended to the finished-refit chat line when some other body parts could not be refitted along with the gear. {0} lists the parts (Chest, Legs, Hands, Feet)."
+  },
+  "Chat.AutoRefit.SkinOnly.Fmt": {
+    "message": "[Proteus] {0} keeps its own shape; its skin is now drawn like {1}'s. Saved as \"{2}\" in {3} and switched on.",
+    "description": "Status line when shoes or gloves that reach no leg or arm keep their shape and only have their skin redrawn the chosen body's way. {0} names the gear, {1} the body mod, {2} the new option's name in Penumbra, {3} the mod it was saved into. Do NOT translate \"Proteus\"."
+  },
+  "Chat.AutoRefit.Start.Fmt": {
+    "message": "[Proteus] Refitting {0} from {1} to {2}. It will be switched on when it is done.",
+    "description": "Chat line when an automatic refit starts. {0} names the gear, {1} the body and size it was made for, {2} the body and size it is refitted to. Do NOT translate \"Proteus\"."
+  },
+  "Chat.AutoRefit.Summary.Fmt": {
+    "message": "[Proteus] Refitted to {0}: {1}.",
+    "description": "The one chat line printed when a batch of automatic refits is done. {0} is the body mod the gear now fits, {1} lists the pieces (e.g. \"This Old Thing (Chest), Boots (Feet)\"). Do NOT translate \"Proteus\"."
+  },
+  "Chat.AutoRefit.Unsure.Fmt": {
+    "message": "[Proteus] Couldn't tell which body {0} was made for, so it was left as it is. You can refit it by hand with the Studio's Body size tool.",
+    "description": "Chat line when Proteus could not tell which body a piece of gear was made for. {0} names the gear. \"Studio\" and \"Body size\" match Tab.Parts and Parts.Tool.Retarget. Do NOT translate \"Proteus\"."
+  },
+  "Chat.AutoRefit.Accessory.Jewellery.Fmt": {
+    "message": "[Proteus] {0} doesn't cover the body, so it was left as it is.",
+    "description": "Status line when an accessory's cloth covers no part of the body, so it is jewellery, not a garment, and is not refitted. {0} names the piece. Do NOT translate \"Proteus\"."
+  },
+  "Chat.AutoRefit.Accessory.AuthorSizes.Fmt": {
+    "message": "[Proteus] {0} already comes in its author's own sizes for bodies (\"{1}\" is on); pick another in Penumbra. It was left as it is.",
+    "description": "Status line when an accessory's own mod already offers sizes named for body mods, so it is left to the player. {0} names the piece, {1} the author's option that is on. \"Penumbra\" is a plugin's name. Do NOT translate \"Proteus\"."
+  },
+  "Chat.AutoRefit.Accessory.Beneath.Fmt": {
+    "message": "[Proteus] {0} was left as it is: it has no {1} piece of its own to read its size from, and the {1} worn under it is the game's own, isn't on {2}, or was refitted before this version — put it on again or use \"Refit what I'm wearing now\".",
+    "description": "Status line when an accessory covering the body could not be sized: its mod ships no chest/legs piece with it, and the piece worn under it is the game's own, is not on the chosen body, or was refitted by an older version. {0} names the piece, {1} the body part (Chest or Legs), {2} the chosen body mod. \"Refit what I'm wearing now\" matches AutoRefit.RunNow. Do NOT translate \"Proteus\"."
+  },
+  "Chat.AutoRefit.Accessory.Shared.Fmt": {
+    "message": "[Proteus] {0} is sized together with the mod's other pieces, so it is refitted with them: once they are refitted to {1}, use \"Refit what I'm wearing now\". It was left as it is for now.",
+    "description": "Status line when an accessory shares its author's size option with the mod's other pieces, and joining their refit is not possible yet. {0} names the piece, {1} the chosen body mod. \"Refit what I'm wearing now\" matches AutoRefit.RunNow. Do NOT translate \"Proteus\"."
   },
   "Chat.ContentUnplaced.Fmt": {
     "message": "[Proteus] {0} mesh piece(s) from your mods could not be placed — your accessories are out of material slots. Equip another ring / bracelet / necklace, or turn off a layer.",
@@ -526,6 +726,14 @@
   "Colors.Mode.Skin": {
     "message": "Skin (painted)",
     "description": "Render mode. \"Skin\" is the shader's name and stays English; the parenthetical describes it and should be translated."
+  },
+  "Colors.NavelBridge.Label": {
+    "message": "Span the belly button",
+    "description": "Whole-mod authoring tick in the Geometry section, beside the cleavage and buttocks spans. Keep it short - it sits in a narrow panel."
+  },
+  "Colors.NavelBridge.Tip": {
+    "message": "Turn this on for cloth over the stomach.\nProteus builds a garment as a copy of the body, so it dips into the belly button —\nwhich reads as painted on rather than worn. With this on, the fabric is stretched flat\nacross it the way real cloth is. Nothing is pulled inward, so it cannot cut into the body.\nWhere the garment is cut away at the belly button, or the body has none, this does nothing.",
+    "description": "Tooltip for the tick above. Contains deliberate line breaks - keep the same number, moving them where your language needs."
   },
   "Colors.NoActiveOptions": {
     "message": "No active options — select one in Penumbra to edit its colours.",
@@ -2113,7 +2321,7 @@
   },
   "Parts.Add.Btn": {
     "message": "Make a switch from the ticked parts",
-    "description": "Button. Creates one on/off switch covering every part currently ticked in the list above."
+    "description": "Button. Creates one on/off switch covering every part currently ticked in the part list."
   },
   "Parts.AuthorSwitched.Tag": {
     "message": "author switch",
@@ -2259,6 +2467,30 @@
     "message": "How quickly the surface smooths while you paint. Low is gentle and easy to\ncontrol; high smooths almost at once.\n\nNear an open edge, like a hem, relaxing draws the edge slightly inward.",
     "description": "Tooltip for the Strength slider while Relax is selected. Keep the line breaks; the tooltip is not wrapped."
   },
+  "Parts.Tool.Smooth": {
+    "message": "Smooth",
+    "description": "Icon button above the model; selects the brush that smooths the surface WITHOUT shrinking it. Must differ from Parts.Tool.Relax, which also smooths but shrinks."
+  },
+  "Parts.Tool.Smooth.Tip": {
+    "message": "Paint on the model to iron out lumps and ripples without shrinking it:\nunlike Relax, curves keep their shape and cloth stays off the body.",
+    "description": "Tooltip for the button. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "Parts.Brush.SmoothRate.Tip": {
+    "message": "How quickly the surface smooths while you paint. Low is gentle and easy to\ncontrol; high smooths almost at once.",
+    "description": "Tooltip for the Strength slider while Smooth is selected. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "Parts.Tool.Grab": {
+    "message": "Grab",
+    "description": "Icon button above the model; selects the brush that drags the surface along with the mouse, like rubber."
+  },
+  "Parts.Tool.Grab.Tip": {
+    "message": "Press on the model and drag: the cloth around the brush follows the mouse\nlike rubber, strongest in the middle, with no hard edge.",
+    "description": "Tooltip for the button. Keep the line breaks; the tooltip is not wrapped."
+  },
+  "Parts.Grab.Help": {
+    "message": "Press on the cloth and drag. The brush size sets how much cloth comes along;\nit moves across your view, and Ctrl+Z takes a grab back.",
+    "description": "Hint in the side panel while Grab is selected, in place of the Strength slider. Wrapped to the panel."
+  },
   "Parts.Tool.Bridge": {
     "message": "Bridge",
     "description": "Icon button in the brush panel; selects the brush that stretches cloth across a hollow."
@@ -2295,8 +2527,8 @@
     "message": "Scale",
     "description": ""
   },
-  "Parts.Tool.Scale.Tip": {
-    "message": "Pick a part, then press on it and drag right to grow it or left\nto shrink it about its centre.",
+  "Parts.Tool.ScaleAxes.Tip": {
+    "message": "Pick a part, then drag one of the handles at its centre to stretch\nit along that axis, or press on the part and drag right or left to\ngrow or shrink it evenly.",
     "description": ""
   },
   "Parts.Rotate.Help": {
@@ -2307,12 +2539,12 @@
     "message": "Click a part on your character, then drag one of the rings at its centre. Hold Alt to move the camera. Each turn is saved when you let go.",
     "description": ""
   },
-  "Parts.Scale.Help": {
-    "message": "Click a part to choose it, then press on it and drag right to grow it or left to shrink it. Drag anywhere else to turn the model, shift-drag to move the view, scroll to zoom.",
+  "Parts.ScaleAxes.Help": {
+    "message": "Click a part to choose it, then drag a handle to stretch it along that axis, or press on the part and drag right to grow it or left to shrink it. Drag anywhere else to turn the model, shift-drag to move the view, scroll to zoom.",
     "description": ""
   },
-  "Parts.Scale.LiveHint": {
-    "message": "Click a part on your character, then press on it and drag right to grow it or left to shrink it. Hold Alt to move the camera. Each change is saved when you let go.",
+  "Parts.ScaleAxes.LiveHint": {
+    "message": "Click a part on your character, then drag a handle to stretch it along that axis, or press on the part and drag right to grow it or left to shrink it. Hold Alt to move the camera. Each change is saved when you let go.",
     "description": ""
   },
   "Parts.Move.Help": {
@@ -2332,7 +2564,7 @@
     "description": "Shown when the Move tool has no part chosen."
   },
   "Parts.Move.ListTip": {
-    "message": "Choose the part to move here, or click it on the model or on your character.",
+    "message": "Choose the part to move here, or click it on the model or on your character.\nUntick a part's box to lock it out of the way and reach what is underneath.",
     "description": "Above the part list under the Move tool."
   },
   "Parts.Move.Adjacent": {
@@ -2360,8 +2592,12 @@
     "description": "Tooltip on a skin part in the list under the Move tool."
   },
   "Parts.Move.LockedTip": {
-    "message": "This part is locked. Unlock it under a brush to move it.",
+    "message": "This part is locked. Tick the box beside it to move it.",
     "description": "Tooltip on a locked part in the list under the Move tool."
+  },
+  "Parts.Move.LockTip": {
+    "message": "Untick to lock this part out of the way: it is hidden on the model and on your character, and clicks pass\nthrough to what is underneath — a skirt, say, to reach the underwear beneath it.\nThe brushes leave a locked part alone and hide it too.",
+    "description": "Tooltip on the lock checkbox beside a part in the list under the Move tool."
   },
   "Parts.Move.NothingFree": {
     "message": "Nothing in this part can move: it is skin or locked.",
@@ -2401,6 +2637,14 @@
   },
   "Parts.Wind.Materials.Set.Fmt": {
     "message": "Set {0} material file(s) so the wind can move this garment.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Upgraded.Fmt": {
+    "message": "Upgraded {0} of them from the old character shader, which has no wind, to Dawntrail's.",
+    "description": ""
+  },
+  "Parts.Wind.Materials.Legacy.Fmt": {
+    "message": "{0} material file(s) use the old character shader, which has no wind, and couldn't be upgraded, so they won't sway.",
     "description": ""
   },
   "Parts.Wind.Materials.Missing.Fmt": {
@@ -2473,10 +2717,10 @@
   },
   "Parts.Brush.Strength": {
     "message": "Strength",
-    "description": "Slider label. The value is shown in millimetres."
+    "description": "Slider label. The value is shown in millimetres per quarter second for Pull out and Push in, and as a percentage for the other brushes."
   },
   "Parts.Brush.Strength.Tip": {
-    "message": "How far the surface moves per moment of painting. Small is usually right:\nclothing only has to clear the body by a fraction of a millimetre, and you\ncan always paint over the same place again.",
+    "message": "How far the middle of the brush moves the surface for each quarter second you\nhold it, the same on any frame rate. Small is usually right: clothing only has\nto clear the body by a fraction of a millimetre, and you can always paint over\nthe same place again.",
     "description": "Tooltip for the slider above. Keep the line breaks; the tooltip is not wrapped."
   },
   "Parts.Brush.Limit": {
@@ -2584,7 +2828,7 @@
     "description": ""
   },
   "Parts.Brush.Lock.ListTip": {
-    "message": "Untick a part to lock it: no brush moves it. Shift-clicking a part on the model or on your character does the same.",
+    "message": "Untick a part to lock it: no brush moves it, and it is hidden so you can reach what is beneath it. Shift-clicking a part on the model or on your character locks it too; tick it here to bring it back.",
     "description": ""
   },
   "Parts.Brush.Lock.Count.Fmt": {
@@ -2938,6 +3182,10 @@
   "Settings.Output.TextureCache.Tip": {
     "message": "How much decoded texture data Proteus keeps in memory between composites.\n\nA 4K texture costs 64 MB decoded, so this is really a count: 2048 MB ≈ 30 of them.\nIt only helps if it covers a whole composite's worth — below that, every run evicts\nwhat the next one needs and nothing is reused.\n\nCheck the \"cache N entries, M MB\" figure in the recomposite log: if a SECOND\ncomposite with nothing changed still reports misses, raise this. Lower it if the\ngame starts paging. Released automatically after 60s idle.",
     "description": "Quotes the literal log line \"cache N entries, M MB\" - leave that fragment in English, it is what the log actually prints. Contains deliberate line breaks - keep the same number, moving them where your language needs."
+  },
+  "Settings.Section.AutoRefit": {
+    "message": "Body refit",
+    "description": "Settings section heading for the automatic body refit: gear is refitted to the player's chosen body as it is put on."
   },
   "Settings.Section.Diagnostics": {
     "message": "Diagnostics",
@@ -3455,6 +3703,18 @@
     "message": "Untick a part to keep it where the author put it, like a buckle or jewellery. Clicking it on the model does the same.",
     "description": ""
   },
+  "Parts.Dropdown.Ticked.Fmt": {
+    "message": "{0} of {1} parts ticked",
+    "description": "The part drawer's header button. {0} is how many are ticked, {1} how many there are."
+  },
+  "Parts.Dropdown.NoneChosen": {
+    "message": "Choose a part to move",
+    "description": "The part drawer's header button under Move, Rotate or Scale, before a part is chosen."
+  },
+  "Parts.Drawer.Toggle.Tip": {
+    "message": "Click to open the part list in a column of its own, so the model stays in view while you tick. Click again to close it.",
+    "description": "Last line of the part drawer header's tooltip."
+  },
   "Parts.Retarget.Lock.SkinTip": {
     "message": "The garment's own skin. Holding it keeps the old size, so the body may show through or gap.",
     "description": ""
@@ -3470,6 +3730,14 @@
   "Parts.Retarget.KeepShape.Tip": {
     "message": "For rigid pieces (rings, buckles, chains): each piece moves whole instead of bending.\nSmall closed pieces start ticked.",
     "description": "Tooltip on the Keep shape checkbox. Keep the line breaks."
+  },
+  "Parts.Retarget.KeepShape.SinkTip": {
+    "message": "A piece that would sink into the new body bends with it instead.",
+    "description": "Last line of the Keep shape tooltip: a ticked piece that moving whole would push into the new body is bent to fit it after all."
+  },
+  "Parts.Retarget.ShapeReleased.Fmt": {
+    "message": "{0:N0} kept piece(s) would sink up to {1:F1} mm into the new body if moved whole, so they bend with it instead: {2}",
+    "description": "Warning under the Body size preview. {0} = number of Keep shape pieces let go, {1} = the deepest any would have sunk in millimetres, {2} = their part labels (e.g. 2.1.7)."
   },
   "Parts.Retarget.ReplaceSkin": {
     "message": "Use the new body\u0027s skin",
@@ -3518,6 +3786,54 @@
   "Parts.Retarget.CutHidden.Tip": {
     "message": "Leave out the new skin where the author deleted theirs, usually under cloth.\nTurn off if the refit leaves holes.",
     "description": ""
+  },
+  "Parts.Retarget.CutForcedTip": {
+    "message": "Always on while the shoe keeps its own foot or the glove its own hand: otherwise the whole new legs or arms would go in with it.",
+    "description": "Tooltip on the greyed-out 'Remove hidden skin' checkbox in Studio > Body size while a shoe keeps its own foot (or a glove its hand)."
+  },
+  "Parts.Retarget.KeepFeet": {
+    "message": "Keep its own feet",
+    "description": "Checkbox in Studio > Body size, shown for shoes: keep the shoe's own foot exactly and refit only the leg."
+  },
+  "Parts.Retarget.KeepFeet.Tip": {
+    "message": "The foot stays exactly as its author made it, heel and all; only the leg the shoe reaches is refitted, sized by the legs. Untick to refit the whole shoe, feet included, as before.",
+    "description": "Tooltip for the 'Keep its own feet' checkbox."
+  },
+  "Parts.Retarget.KeepHands": {
+    "message": "Keep its own hands",
+    "description": "Checkbox in Studio > Body size, shown for gloves: keep the glove's own hand exactly and refit only the arm."
+  },
+  "Parts.Retarget.KeepHands.Tip": {
+    "message": "The hand stays exactly as its author made it; only the arm the glove reaches is refitted, sized by the chest. Untick to refit the whole glove, hands included, as before.",
+    "description": "Tooltip for the 'Keep its own hands' checkbox."
+  },
+  "Parts.Retarget.NoLimbFeet": {
+    "message": "This shoe reaches no leg: it keeps its shape, and only its skin is drawn like the new body's. Pick a legs size to refit it by anyway.",
+    "description": "Grey note under the checkbox when the shoe reaches no leg, so only its skin is redrawn."
+  },
+  "Parts.Retarget.NoLimbHands": {
+    "message": "These gloves reach no arm: they keep their shape, and only their skin is drawn like the new body's. Pick a chest size to refit them by anyway.",
+    "description": "Grey note under the checkbox when the gloves reach no arm, so only their skin is redrawn."
+  },
+  "Parts.Retarget.SkinAlreadyMatches": {
+    "message": "Nothing to change: its skin is already drawn the way the new body draws its own.",
+    "description": "Status line after Preview when a shoe or glove that reaches no leg or arm already draws its skin like the new body."
+  },
+  "Parts.Retarget.AlreadyFits.Fmt": {
+    "message": "Nothing to change: where it reaches, {0} is the same shape as the size it was made for.",
+    "description": "Status line after Preview when the chosen size is the same shape as the one the piece was made for. {0} = the chosen size's name."
+  },
+  "Parts.Retarget.EndsUnreadable": {
+    "message": "Its rig can't be read, so its foot or hand can't be told from the rest: the whole piece is refitted.",
+    "description": "Shown when a shoe's or glove's rig can't be read, so its foot or hand can't be kept."
+  },
+  "Parts.Retarget.NoLegsInBody.Fmt": {
+    "message": "{0} has no legs to refit by, so the whole piece is refitted.",
+    "description": "Shown when a body mod has no legs to refit a shoe by. {0} = the body mod's name."
+  },
+  "Parts.Retarget.NoChestInBody.Fmt": {
+    "message": "{0} has no chest to refit by, so the whole piece is refitted.",
+    "description": "Shown when a body mod has no chest to refit gloves by. {0} = the body mod's name."
   },
   "Parts.Retarget.NeedFromRequired.Fmt": {
     "message": "{0}: pick the size it was made for.",
@@ -3663,6 +3979,10 @@
     "message": "{0}, refitted by Proteus.",
     "description": ""
   },
+  "Refit.Mod.Folder": {
+    "message": "Proteus Upscales",
+    "description": "Folder in Penumbra's mod list that the mods Proteus makes for refits and for edited game gear are filed under."
+  },
   "Refit.Mod.Enabled.Fmt": {
     "message": "Made \u0022{0}\u0022 and switched it on.",
     "description": ""
@@ -3707,13 +4027,25 @@
     "message": "(vanilla)",
     "description": ""
   },
+  "WhatsNew.AutoRefit.Body": {
+    "message": "Proteus can now refit chest, legs, hands and feet gear to your body by itself, the moment you put it on. It works out which body mod and size the gear was made for, refits it and the parts of the body it reaches, saves the new size into the gear's own mod and switches it on. Chat says when it starts and when it is done.\n\nTo use it, open Settings, Body refit. Tick \"Refit gear to my body as I put it on\", then pick your body mod and its chest and legs sizes for each Penumbra collection; hands and feet are matched for you. Gear you are already wearing is refitted with \"Refit what I'm wearing now\", and the game's own gear has a checkbox of its own. Choosing \"Original\" or another size in Penumbra is always left alone.",
+    "description": "Release-notes section on the automatic body refit and how to switch it on. \"Settings\" and \"Body refit\" name a tab and a section - match Tab.Settings and Settings.Section.AutoRefit. The two quoted labels must match AutoRefit.Enable.Label and AutoRefit.RunNow. \"Original\" is a Penumbra option name and stays in English."
+  },
+  "WhatsNew.AutoRefit.Head": {
+    "message": "Gear refits itself to your body",
+    "description": "Release-notes section heading for the automatic body refit."
+  },
+  "WhatsNew.IntroAll": {
+    "message": "Four things worth knowing about Proteus. This window opens once, and not again.",
+    "description": "First line of the release-notes window for someone who has never seen it; all four sections follow."
+  },
+  "WhatsNew.IntroSince": {
+    "message": "Something new since you last saw this window. It opens once, and not again.",
+    "description": "First line of the release-notes window for someone who already read the earlier notes; only what is new since then follows."
+  },
   "WhatsNew.Title": {
     "message": "What's new in Proteus",
     "description": "Title of the one-time release-notes window."
-  },
-  "WhatsNew.Intro": {
-    "message": "Three things worth knowing about this release. This window opens once, and not again.",
-    "description": "First line of the release-notes window, above the three sections."
   },
   "WhatsNew.Upscales.Head": {
     "message": "One click upscales",
@@ -3842,6 +4174,10 @@
   "Common.Units.Mm2": {
     "message": "%.2f mm",
     "description": "Slider value in millimetres. An ImGui printf format: keep %.2f exactly as it is."
+  },
+  "Common.Units.MmPerQuarterSecond": {
+    "message": "%.2f mm / 0.25 s",
+    "description": "Slider value format for the brush Strength while pulling or pushing: millimetres moved per quarter second the brush is held. ImGui printf format: keep %.2f exactly; write a literal percent sign as %%."
   },
   "Create.Dialog.ImageFilter": {
     "message": "Images",
@@ -4402,5 +4738,157 @@
   "Service.Download.Checksum.Fmt": {
     "message": "checksum mismatch for {0} ({1} bytes, sha256 {2}…)",
     "description": "Why a download (UV maps) failed; shown after a colon. {0} is a file name, {1} a byte count, {2} the start of a hash. Lower-case, no full stop."
+  },
+  "SizeSet.Header": {
+    "message": "Every size for other bodies",
+    "description": "Heading of the Body size tool's section that adds every size of other body mods to the whole open mod."
+  },
+  "SizeSet.Intro": {
+    "message": "Adds every size of the bodies ticked below to this whole mod. Each size is refitted from the author's size nearest it, the outfit's other pieces in that option from the same size, and saved beside the author's sizes as \"Rue S\", \"YAB Buff L\" and so on. Sizes the mod already has are left alone.",
+    "description": "Explains the section. Rue S and YAB Buff L are option names: keep them as they are."
+  },
+  "SizeSet.Yas": {
+    "message": "Use a body's YAS version where it has one",
+    "description": "Checkbox. YAS is Yet Another Skeleton, a skeleton mod: keep the name."
+  },
+  "SizeSet.Yas.Tip": {
+    "message": "Rue, YAB and Tre come in Yet Another Skeleton versions. Neolithe and Bibo don't, and keep their plain sizes. A piece already weighted to YAS always gets YAS sizes.",
+    "description": "Tooltip of the YAS checkbox. Body mod names stay as they are."
+  },
+  "SizeSet.Ends": {
+    "message": "Include shoes and gloves",
+    "description": "Checkbox in Studio > Body size > Every size for other bodies: also make sizes of the mod's shoes and gloves."
+  },
+  "SizeSet.Ends.Tip": {
+    "message": "Shoes and gloves keep their own feet and hands; only the leg or arm they reach is refitted. Shoes get the legs' sizes, gloves one option per body, and both join the outfit's chest or legs sizes when they share a group.",
+    "description": "Tooltip for 'Include shoes and gloves'."
+  },
+  "SizeSet.EndsUnreadable.Fmt": {
+    "message": "{0}: its rig can't be read, so its foot or hand can't be kept and no sizes were made of it.",
+    "description": "Note after a run: a shoe or glove whose rig can't be read got no sizes. {0} = the piece's name."
+  },
+  "SizeSet.Remake": {
+    "message": "Make again the sizes Proteus added before",
+    "description": "Checkbox."
+  },
+  "SizeSet.Remake.Tip": {
+    "message": "Off: a size Proteus already added is left as it is. On: it is refitted again and replaced. The author's own sizes are never touched. If you added sizes with an earlier version of Proteus, tick this once: those were cut from the author's first size.",
+    "description": "Tooltip of the remake checkbox."
+  },
+  "SizeSet.Run": {
+    "message": "Add the sizes",
+    "description": "Button that starts the work."
+  },
+  "SizeSet.Run.Tip": {
+    "message": "Runs in the background and can take a few minutes for a mod with many pieces. Penumbra reloads the mod when it is done.",
+    "description": "Tooltip of the start button."
+  },
+  "SizeSet.PickBody": {
+    "message": "Tick at least one body.",
+    "description": "Tooltip of the start button while no body is ticked."
+  },
+  "SizeSet.Cancel": {
+    "message": "Stop",
+    "description": "Button that stops the work."
+  },
+  "SizeSet.Cancelled": {
+    "message": "Stopped. Sizes already saved stay in the mod.",
+    "description": "Shown after the work was stopped."
+  },
+  "SizeSet.Done.Fmt": {
+    "message": "Added {0} sizes to the mod.",
+    "description": "Shown when done. {0} is a number of sizes."
+  },
+  "SizeSet.NothingAdded": {
+    "message": "No sizes were added: the mod already has every size of the bodies ticked.",
+    "description": "Shown when done and nothing was needed."
+  },
+  "SizeSet.LeftOut": {
+    "message": "Left out:",
+    "description": "Heading over the list of sizes that were not made, each with its reason."
+  },
+  "SizeSet.Failed.Fmt": {
+    "message": "Couldn't add the sizes: {0}",
+    "description": "{0} is the error."
+  },
+  "SizeSet.NoPieces": {
+    "message": "This mod has no chest, legs, shoe or glove models to make sizes of.",
+    "description": "Shown when the mod has nothing to refit."
+  },
+  "SizeSet.EndNoLeadSource.Fmt": {
+    "message": "{0}: left out of \"{1}\": the author's size the outfit's chest or legs there was cut from couldn't be found or read for it. Tick \"Make again\" to redo the option.",
+    "description": "A note after a run: a shoe or glove was not added to a size. {0} is the piece (\"Hands — e0068\"), {1} the size (\"Rue L\"). \"Make again\" is the checkbox SizeSet.Remake."
+  },
+  "SizeSet.EndNoLeadSourceRemake.Fmt": {
+    "message": "{0}: \"{1}\" left as it was: the author's size the outfit's chest or legs there was cut from couldn't be read for it.",
+    "description": "A note after a remake run: a shoe or glove's size was not remade. {0} is the piece, {1} the size."
+  },
+  "SizeSet.NoBodies": {
+    "message": "No body mods are installed to refit onto.",
+    "description": "Shown when no body mod is installed."
+  },
+  "SizeSet.Unpaired.Fmt": {
+    "message": "{0}: it is sized in one group with another piece it can't follow, so no sizes were made of it — each size would wear the other piece unrefitted.",
+    "description": "Size set note: a shoe or glove sized in one group with another piece (gloves beside legs, or a shoe and gloves with no chest) gets no sizes. {0} = the piece, e.g. 'Hands — e6039'."
+  },
+  "SizeSet.PieceFailed.Fmt": {
+    "message": "{0}: failed: {1}",
+    "description": "{0} is the piece (\"Chest — e6255\"), {1} the error."
+  },
+  "SizeSet.Reading.Fmt": {
+    "message": "Reading what {0} was made on...",
+    "description": "Status line. {0} is the piece."
+  },
+  "SizeSet.Unreadable.Fmt": {
+    "message": "{0}: couldn't tell which body it was made on, so no sizes were made of it.",
+    "description": "{0} is the piece."
+  },
+  "SizeSet.NoSuchSize.Fmt": {
+    "message": "{0}: {2} has no model for \"{1}\", so that size was left out.",
+    "description": "{0} is the piece, {1} the size (\"Rue S\"), {2} the body mod."
+  },
+  "SizeSet.Refused.Fmt": {
+    "message": "{0}: \"{1}\" couldn't be made: {2}",
+    "description": "{0} is the piece, {1} the size, {2} the reason."
+  },
+  "SizeSet.SaveFailed.Fmt": {
+    "message": "{0}: {1}",
+    "description": "{0} is the piece, {1} what went wrong saving it."
+  },
+  "SizeSet.NotInstalled.Fmt": {
+    "message": "{0}: {1} isn't installed, so it got none of its sizes.",
+    "description": "{0} is the piece, {1} the body mod."
+  },
+  "SizeSet.Working.Fmt": {
+    "message": "Refitting {0} to {1}...",
+    "description": "Status line. {0} is the piece, {1} the size."
+  },
+  "SizeSet.NotInstalledTip.Fmt": {
+    "message": "{0} isn't installed in Penumbra. Install it, then close and reopen this section.",
+    "description": "Tooltip of a body that can't be ticked because its mod isn't installed. {0} is the body."
+  },
+  "ContentImport.Warn.EffectFileMissing.Fmt": {
+    "message": "\"{0}\" has an animated effect, but its file ({1}) is not in the pack, so it cannot be shown.",
+    "description": "Import preview warning. {0} is the piece label (slot and item name), {1} the missing file path inside the pack."
+  },
+  "Content.StaleEffectImport.Fmt": {
+    "message": "\"{0}\" has an animated effect that this import left on the vanilla item, so it only plays when that item is worn. Delete this mod and import the pack again to wear the effect without it.",
+    "description": "Mods panel warning for a pack imported by an older Proteus build. {0} is the piece's slot label."
+  },
+  "Content.EffectOnly": {
+    "message": "animated effect",
+    "description": "Import preview table cell, in place of the mesh/vertex count, for a piece that is only an animated effect. Short."
+  },
+  "Content.WithEffect.Fmt": {
+    "message": "{0} + effect",
+    "description": "Import preview table cell for a piece with geometry and an animated effect. {0} is the mesh/vertex count text. Short."
+  },
+  "Content.Effect.Tip": {
+    "message": "This piece has an animated effect. Proteus plays it on an invisible accessory it puts in a free slot, so you do not need to wear the item it replaced.",
+    "description": "Tooltip on a piece with an animated effect in the import preview. \"Proteus\" is a plugin name - never translate it."
+  },
+  "Chat.EffectUnplaced.Fmt": {
+    "message": "[Proteus] The animated effect of \"{0}\" is not shown: it needs a free accessory slot for its invisible carrier. Free a ring, bracelet or necklace slot.",
+    "description": "Chat message when an imported animated effect cannot be shown. {0} is the mod name. \"[Proteus]\" and \"Proteus\" are the plugin name - never translate them."
   }
 }

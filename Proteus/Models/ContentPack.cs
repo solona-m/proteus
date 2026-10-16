@@ -147,6 +147,44 @@ public class ContentPiece
     [JsonIgnore]
     public ShellSurfaceKey SurfaceKey
         => new(Surface, Surface == ShellSurfaceKind.Body ? string.Empty : SurfaceId);
+
+    /// <summary>
+    /// The animated effect the pack attached to the item this piece replaces, or null. The game spawns an item effect
+    /// only for a drawn item whose IMC entry names it, so the composite moves it onto the carrier holding this piece.
+    /// </summary>
+    [JsonPropertyName("Effect")]
+    public ContentEffect? Effect { get; set; }
+
+    /// <summary>
+    /// The model is an invisible placeholder — every vertex in one spot — that exists only so the item is drawn and its
+    /// <see cref="Effect"/> spawns. Placed on an invisible carrier whatever the wearer's race. Absent means false.
+    /// </summary>
+    [JsonPropertyName("EffectOnly")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool EffectOnly { get; set; }
+}
+
+/// <summary>
+/// An item-bound animated effect: an IMC entry's <c>VfxId</c> and the <c>.avfx</c> the game loads for it. Recorded at
+/// import because the import strips both from the pack's own manifest, so the vanilla item no longer shows it.
+/// </summary>
+public class ContentEffect
+{
+    /// <summary>The item variant the pack set the effect on.</summary>
+    [JsonPropertyName("Variant")]
+    public int Variant { get; set; }
+
+    /// <summary>The pack's own effect id; the composite publishes under an id of its own on the carrier.</summary>
+    [JsonPropertyName("VfxId")]
+    public int VfxId { get; set; }
+
+    /// <summary>The game path the pack redirected the <c>.avfx</c> at (<c>chara/accessory/a0002/vfx/eff/va0001.avfx</c>).</summary>
+    [JsonPropertyName("GamePath")]
+    public string GamePath { get; set; } = string.Empty;
+
+    /// <summary>Every pack file that can supply the <c>.avfx</c> and its option, default data first, then declaration order.</summary>
+    [JsonPropertyName("Sources")]
+    public List<ContentMaterialSource> Sources { get; set; } = new();
 }
 
 /// <summary>One file a pack can supply a material from and its option; <see cref="Group"/> null means the pack's default data.</summary>

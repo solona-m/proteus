@@ -595,6 +595,20 @@ public class ContentPieceSelectionTests
     }
 
     [Fact]
+    public void An_effect_only_piece_is_gated_like_any_piece()   // [AC-item-vfx-host-5] [EDGE-item-vfx-host-8]
+    {
+        // Its effect rides with it: a piece that is off places nothing, so nothing asks for its effect.
+        var effect = new ContentPiece
+        {
+            Model = "m.mdl", GateOption = "Bracelets — Astral Bracelet", EffectOnly = true,
+            Effect = new ContentEffect { Variant = 15, VfxId = 1, GamePath = "chara/accessory/a0002/vfx/eff/va0001.avfx" },
+        };
+        Assert.True(SidecarDiscoveryService.PieceIsOn(effect, ["Bracelets — Astral Bracelet"]));
+        Assert.False(SidecarDiscoveryService.PieceIsOn(effect, []));
+        Assert.False(SidecarDiscoveryService.PieceIsOn(effect, null));
+    }
+
+    [Fact]
     public void A_gated_piece_is_worn_only_when_its_option_is_ticked()
     {
         var gated = new ContentPiece { Model = "m.mdl", GateOption = "Head — Hair Ribbon" };
@@ -1355,6 +1369,26 @@ public class ContentPieceSelectionTests
         Assert.Equal("Gryphonskin Breastguard", lookup(4, 6025));
         Assert.Equal("Hair Ribbon", lookup(3, 6085));
         Assert.Null(lookup(4, 9999));
+    }
+
+    /// <summary>
+    /// "Procyon Earrings": earrings authored for c0801 on the ring slot, shipped beside a copy of the vanilla c0101
+    /// ring. A Miqo'te female's gear loads at c0201, which reaches c0101 in one cross-gender hop, so the shared-shape
+    /// lookup put the vanilla ring on her and the earrings were never tried.
+    /// </summary>
+    [Fact]
+    public void A_model_for_the_wearers_own_race_beats_a_fall_through_hop()
+    {
+        const string ring     = "items/chara/accessory/a0055/model/c0101a0055_rir.mdl";
+        const string earrings = "items/chara/accessory/a0055/model/c0801a0055_rir.mdl";
+        var piece = new ContentPiece { Models = new() { ["0101"] = ring, ["0801"] = earrings } };
+
+        Assert.Equal(("0801", earrings), ContentPieceResolver.ResolveForWearer(piece, "0201", "0801"));
+
+        // Everyone else still falls through to the ring, and an exact shared-shape model still wins.
+        Assert.Equal(("0101", ring), ContentPieceResolver.ResolveForWearer(piece, "0201", "0601"));
+        var shared = new ContentPiece { Models = new() { ["0201"] = ring, ["0801"] = earrings } };
+        Assert.Equal(("0201", ring), ContentPieceResolver.ResolveForWearer(shared, "0201", "0801"));
     }
 
     /// <summary>
