@@ -103,6 +103,7 @@ internal static class HairPortWriter
             // that is, none included — so an option never holds two for one race, and none is left untracked.
             var replaced = new Dictionary<HairPortPlan.Owner, List<(string Target, int Est)>>();
             var entries = new List<HairPortRecord.Entry>();
+            bool dropped = false;
             try
             {
                 foreach (var (w, owner, file, was) in plan)
@@ -134,8 +135,14 @@ internal static class HairPortWriter
                                                          && p.Materials.TryGetValue(m.GamePath, out var mine)
                                                          && HairPortRecord.Rel(mine).Equals(HairPortRecord.Rel(existing),
                                                                                             StringComparison.OrdinalIgnoreCase)));
-                        if (existing != null && !ours) continue;
-                        if (existing == null && !HairPortPlan.CanPortInto(owners, owner, m.GamePath)) continue;
+                        if ((existing != null && !ours) || (existing == null && !HairPortPlan.CanPortInto(owners, owner, m.GamePath)))
+                        {
+                            // A carried skeleton is what the port moves with: without it, no port at all.
+                            if (CarriesSkeleton(w, m.GamePath))
+                                throw new IOException(string.Format(Loc.Localize("HairPort.Refused.Covered.Fmt",
+                                    "the mod already publishes {0} there"), m.GamePath));
+                            continue;
+                        }
 
                         string rel = m.AuthorFile ?? HairPortPlan.PortFile(owner, m.GamePath);
                         if (m.AuthorFile == null) WriteFile(modRoot, rel, m.Bytes ?? [], created);
@@ -157,6 +164,24 @@ internal static class HairPortWriter
                     PenumbraModMeta.MergeOptionRedirects(modRoot, owner.Group, owner.Option, add, skeletons.GetValueOrDefault(owner),
                                                          AnyEst(replaced.GetValueOrDefault(owner) ?? []));
                     committed.Add((owner, add));
+                }
+
+                // A remade port that no longer needs a redirect it added before (a skeleton it carried, a material) takes
+                // it out — while it still names the file it was given, and no other port of the option still uses it —
+                // or nothing would ever take it out: the record forgets it.
+                foreach (var (w, owner, _, was) in plan.Where(p => p.Was != null))
+                {
+                    var add = redirects[owner];
+                    var drop = was!.Materials
+                        .Where(m => !add.ContainsKey(m.Key)
+                                    && !record.Ports.Any(p => p != was && HairPortPlan.Same(p.Owner, owner)
+                                                              && !plan.Any(q => q.Was == p) && p.Materials.ContainsKey(m.Key)))
+                        .ToDictionary(m => m.Key, m => m.Value, StringComparer.OrdinalIgnoreCase);
+                    if (drop.Count > 0)
+                    {
+                        PenumbraModMeta.RemoveOptionRedirects(modRoot, owner.Group, owner.Option, drop);
+                        dropped = true;
+                    }
                 }
             }
             catch (Exception ex)
@@ -183,8 +208,18 @@ internal static class HairPortWriter
                 record.Declined.RemoveAll(d => d == HairPortPlan.DeclineKey(e.TargetGamePath));
             }
             HairPortRecord.Write(modRoot, record);
+            if (dropped) DeleteUnnamed(modRoot);
             return new Outcome(true, "", entries.Count);
         }
+    }
+
+    /// <summary>Whether <paramref name="gamePath"/> is the skeleton, or its physics, <paramref name="w"/> carries for its
+    /// race's hairstyle (<see cref="PortWrite.SkeletonFrom"/>).</summary>
+    private static bool CarriesSkeleton(PortWrite w, string gamePath)
+    {
+        if (w.SkeletonFrom <= 0 || HairPortPlan.Parse(w.TargetGamePath) is not { } t) return false;
+        return gamePath.Equals(HairPortPlan.SkeletonPath(t.Race, t.Id), StringComparison.OrdinalIgnoreCase)
+            || gamePath.Equals(HairPortPlan.PhysicsPath(t.Race, t.Id), StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

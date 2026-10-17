@@ -245,9 +245,10 @@ internal static class HairPortBuilder
     /// What a port carries when the target race's skeleton lacks bones the hairstyle moves with: the source race's own
     /// skeleton <paramref name="skeleton"/> — what the source borrowed, or the hairstyle's — and its physics, published
     /// at the target race's paths for the hairstyle itself. Only this hairstyle on this race moves with it, and only
-    /// while the port's place is on, so no other hairstyle the race wears changes; no <c>Est</c> entry is needed, as
-    /// every race's hairstyle loads its own skeleton. The author's file is named when the mod publishes one, otherwise
-    /// the game's is copied. Null when it would not do: the source's skeleton lacks the bones too, the mod already
+    /// while the port's place is on, so no other hairstyle the race wears changes; no <c>Est</c> entry is needed, as a
+    /// race the game ships a skeleton of the hairstyle for loads it from there. The author's file is named when the mod
+    /// publishes one, otherwise the game's is copied. Null when it would not do: the game ships the target race no
+    /// skeleton for the hairstyle (none would be loaded), the source's skeleton lacks the bones too, the mod already
     /// publishes the target's skeleton or physics, or the target race has physics for the hairstyle the source has
     /// none to replace.
     /// </summary>
@@ -255,6 +256,8 @@ internal static class HairPortBuilder
         string modRoot, IReadOnlyList<HairPortPlan.Owner> owners, HairPortPlan.Owner owner, HairPortRecord record,
         byte[] model, ushort from, ushort to, int id, int skeleton, Func<string, byte[]?> readGame)
     {
+        // Only a path the game loads: a race with no skeleton of its own for the hairstyle loads none there.
+        if (readGame(HairPortPlan.SkeletonPath(to, id)) == null) return null;
         var files = new List<HairPortWriter.MaterialWrite>();
         var (skl, sklBytes) = Carry(modRoot, owners, owner, HairPortPlan.SkeletonPath(from, skeleton),
                                     HairPortPlan.SkeletonPath(to, id), readGame);
