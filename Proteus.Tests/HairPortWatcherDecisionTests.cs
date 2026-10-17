@@ -319,10 +319,13 @@ public class HairPortWatcherDecisionTests
         Assert.True(flight.TryEnter());
         Assert.True(flight.Busy);
         Assert.False(flight.TryEnter());
-        Assert.False(flight.TryEnter());
-        Assert.True(flight.Exit());     // one look owed
+        Assert.False(flight.TryEnter(400));   // a Penumbra settings change: worth a look once Penumbra has settled
+        Assert.False(flight.TryEnter(100));
+        Assert.True(flight.Exit(out int delay));   // one look owed
+        Assert.Equal(400, delay);                  // after the longest wait asked for
         Assert.False(flight.Busy);
         Assert.True(flight.TryEnter());
-        Assert.False(flight.Exit());    // and only one
+        Assert.False(flight.Exit(out delay));      // and only one
+        Assert.Equal(0, delay);
     }
 }

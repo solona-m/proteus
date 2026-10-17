@@ -147,7 +147,7 @@ public sealed class HairPortWatcher : IDisposable
     public void Refresh(int delayMs = 0, bool force = false)
     {
         if (disposed) return;
-        if (!flight.TryEnter()) return;
+        if (!flight.TryEnter(delayMs)) return;
         current = current with { Busy = true };
         Task.Run(() =>
         {
@@ -165,36 +165,49 @@ public sealed class HairPortWatcher : IDisposable
             finally
             {
                 current = current with { Busy = false };
-                if (flight.Exit()) Refresh();
+                if (flight.Exit(out var owedDelay)) Refresh(owedDelay);
             }
         });
     }
 
     /// <summary>
     /// One piece of work at a time, without losing a request that arrives meanwhile: <see cref="TryEnter"/> fails while
-    /// busy and leaves a request owed, and <see cref="Exit"/> says whether one is.
+    /// busy and leaves a request owed, and <see cref="Exit"/> says whether one is — with the longest wait any of the
+    /// requests asked for, since a Penumbra settings change is only worth looking at once Penumbra has settled.
     /// </summary>
     internal sealed class SingleFlight
     {
-        private int busy, owed;
+        private int busy;
+
+        /// <summary>The owed request's wait plus one; 0 for none owed.</summary>
+        private int owed;
 
         public bool Busy => Volatile.Read(ref busy) != 0;
 
-        public bool TryEnter()
+        /// <param name="delayMs">How long this request wanted to wait before looking.</param>
+        public bool TryEnter(int delayMs = 0)
         {
             if (Interlocked.CompareExchange(ref busy, 1, 0) == 0) return true;
-            Volatile.Write(ref owed, 1);
-            // The holder may have left between the two lines above, without seeing the request: take it here instead.
+            for (int seen = Volatile.Read(ref owed); seen < delayMs + 1;)
+            {
+                int was = Interlocked.CompareExchange(ref owed, delayMs + 1, seen);
+                if (was == seen) break;
+                seen = was;
+            }
+            // The holder may have left between the two steps above, without seeing the request: take it here instead.
             if (Interlocked.CompareExchange(ref busy, 1, 0) != 0) return false;
-            Volatile.Write(ref owed, 0);
+            Interlocked.Exchange(ref owed, 0);
             return true;
         }
 
-        /// <returns>Whether a request came in while busy, which the caller should now serve.</returns>
-        public bool Exit()
+        /// <returns>Whether a request came in while busy, which the caller should now serve after
+        /// <paramref name="delayMs"/>.</returns>
+        public bool Exit(out int delayMs)
         {
             Interlocked.Exchange(ref busy, 0);
-            return Interlocked.Exchange(ref owed, 0) == 1;
+            delayMs = Interlocked.Exchange(ref owed, 0) - 1;
+            if (delayMs < 0) { delayMs = 0; return false; }
+            return true;
         }
     }
 
@@ -359,7 +372,7 @@ public sealed class HairPortWatcher : IDisposable
             finally
             {
                 current = current with { Busy = false };
-                if (flight.Exit()) Refresh();
+                if (flight.Exit(out var owedDelay)) Refresh(owedDelay);
             }
         });
     }

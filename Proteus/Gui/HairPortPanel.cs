@@ -133,7 +133,8 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
         if (busy)
         {
             ImGui.TextWrapped(progress);
-            if (ImGui.Button(s.Cancel)) cancel?.Cancel();
+            // Only a port can be stopped, and only before it writes; a removal is one short write.
+            if (cancel != null && ImGui.Button(s.Cancel)) cancel.Cancel();
             return;
         }
 
@@ -230,7 +231,10 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
             result = removed ? outcome.Message : string.Format(Strings.HairPort.FailedFmt, outcome.Message);
             resultFailed = true;
         }
-        else if (removed) result = string.Format(Strings.HairPort.RemovedFmt, outcome.Count);
+        else if (removed)
+            // Partly done: what was left, and why, beside what was taken out.
+            result = string.Format(Strings.HairPort.RemovedFmt, outcome.Count)
+                   + (outcome.Message.Length > 0 ? " " + outcome.Message : "");
         else result = outcome.Count > 0 ? string.Format(Strings.HairPort.DoneFmt, outcome.Count) : Strings.HairPort.NothingToDo;
         if (outcome.Count > 0) afterChange(modDir);
         Read(modRoot, sourceGamePath);

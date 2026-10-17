@@ -416,4 +416,36 @@ public class HairPortWriterTests
         Assert.Null(HairPortPlan.FileFor(mod.Owner("Cut", "Long"), shared));
         Assert.Contains(HairPortPlan.DeclineKey(highlander), HairPortRecord.Read(mod.Root).Declined);
     }
+
+    /// <summary>
+    /// A shared-material set with one port the user edited since is undone all or not at all: the port kept must not
+    /// lose the material the others would take out with them.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-hair-race-port-7")]
+    [Trait("Plan", "EDGE-hair-race-port-16")]
+    public void A_shared_material_set_with_an_edited_port_is_left_whole()
+    {
+        const string shared = "chara/human/c0201/obj/hair/h0130/material/v0001/mt_c0201h0130_hir_a.mtrl";
+        using var mod = TwoCuts();
+        var owner = mod.Owner("Cut", "Long");
+        var mat = new HairPortWriter.MaterialWrite(shared, null, [3]);
+        var highlander = HairPortPlan.HairPath(401, Id);
+        Assert.True(HairPortWriter.Save(mod.Root,
+        [
+            new HairPortWriter.PortWrite(owner, Source, "long/c0801h0130_hir.mdl", "x", Target, HairModel(201), [mat]),
+            new HairPortWriter.PortWrite(owner, Source, "long/c0801h0130_hir.mdl", "x", highlander, HairModel(401), [mat]),
+        ], auto: true).Ok);
+        var manifest = mod.Manifest;
+        var edited = HairPortPlan.FileFor(mod.Owner("Cut", "Long"), Target)!;
+        mod.Put($"Proteus/{MeshVolumeService.BackupSubdir}/{edited}", [1]);
+        var copy = HairPortPlan.FileFor(mod.Owner("Cut", "Long"), shared)!;
+
+        var outcome = HairPortWriter.Undo(mod.Root, e => e.TargetGamePath == highlander, decline: true);
+        Assert.False(outcome.Ok);
+        Assert.Equal(manifest, mod.Manifest);
+        Assert.True(mod.Has(copy));
+        Assert.Equal(2, HairPortRecord.Read(mod.Root).Ports.Count);
+        Assert.Empty(HairPortRecord.Read(mod.Root).Declined);
+    }
 }

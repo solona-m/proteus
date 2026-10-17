@@ -119,7 +119,9 @@ internal static class HairPortWriter
                 foreach (var (owner, add) in committed)
                     try { PenumbraModMeta.RemoveOptionRedirects(modRoot, owner.Group, owner.Option, add); }
                     catch (Exception) { kept.UnionWith(add.Values); }
-                // Only files that were not there before: a remade port's old file is still what the manifest names.
+                // Only files that were not there before. A remade port's file was overwritten in place: where its option was
+                // taken back out above it is unpublished, and the record drops it on the next read, so the automatic path
+                // ports it again; where its option was never written, the manifest still names it.
                 foreach (var file in created.Where(f => !kept.Contains(f)))
                     try { File.Delete(Native(modRoot, file)); } catch { /* left for the next sweep */ }
                 return new Outcome(false, ex.Message, 0);
@@ -160,30 +162,49 @@ internal static class HairPortWriter
             if (undo.Count == 0)
                 return new Outcome(false, Loc.Localize("HairPort.Undo.Nothing", "There are no hair ports here to undo."), 0);
 
+            // All or nothing: a set with one port the user edited since stays whole, or the port kept would lose the
+            // material the others take out with them.
+            foreach (var e in undo)
+                if (EditedBy(modRoot, e.File) is { } later)
+                    return new Outcome(false, ModelBackupOrder.BlockedMessage(later), 0);
+
+            // The ports first; their materials only once every port of the set is out, so a port that could not be
+            // taken out keeps drawing with what it needs.
             string blocked = "";
-            int removed = 0;
+            var gone = new List<HairPortRecord.Entry>();
             foreach (var e in undo)
             {
-                if (EditedBy(modRoot, e.File) is { } later) { blocked = ModelBackupOrder.BlockedMessage(later); continue; }
-
-                // A material another port of the same option still uses stays published.
-                var drop = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { [e.TargetGamePath] = e.File };
-                foreach (var (path, rel) in e.Materials)
-                    if (!record.Ports.Any(p => !undo.Contains(p) && HairPortPlan.Same(p.Owner, e.Owner)
-                                               && p.Materials.ContainsKey(path)))
-                        drop[path] = rel;
                 // An option a readable manifest no longer has took our redirects with it.
                 if (owners.Any(o => HairPortPlan.Same(o, e.Owner)))
-                    try { PenumbraModMeta.RemoveOptionRedirects(modRoot, e.Group, e.Option, drop); }
+                    try
+                    {
+                        PenumbraModMeta.RemoveOptionRedirects(modRoot, e.Group, e.Option,
+                            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { [e.TargetGamePath] = e.File });
+                    }
                     catch (Exception ex) { blocked = ex.Message; continue; }
+                gone.Add(e);
+            }
 
-                // Only once the port is out: a hat fit of it has nothing left to restore.
-                if (HatCompatService.Forget(modRoot, e.File) is { } why) blocked = why;
+            foreach (var e in gone)
+            {
                 record.Ports.Remove(e);
                 if (decline && !record.Declined.Contains(HairPortPlan.DeclineKey(e.TargetGamePath)))
                     record.Declined.Add(HairPortPlan.DeclineKey(e.TargetGamePath));
-                removed++;
+                // Only once the port is out: a hat fit of it has nothing left to restore.
+                if (HatCompatService.Forget(modRoot, e.File) is { } why) blocked = why;
             }
+
+            if (gone.Count == undo.Count)
+                foreach (var e in gone.Where(e => e.Materials.Count > 0 && owners.Any(o => HairPortPlan.Same(o, e.Owner))))
+                {
+                    // A material another port of the same option still uses stays published.
+                    var drop = e.Materials.Where(m => !record.Ports.Any(p => HairPortPlan.Same(p.Owner, e.Owner)
+                                                                             && p.Materials.ContainsKey(m.Key)))
+                                          .ToDictionary(m => m.Key, m => m.Value, StringComparer.OrdinalIgnoreCase);
+                    try { PenumbraModMeta.RemoveOptionRedirects(modRoot, e.Group, e.Option, drop); }
+                    catch (Exception ex) { blocked = ex.Message; }
+                }
+            int removed = gone.Count;
 
             DeleteUnnamed(modRoot);
             HairPortRecord.Write(modRoot, record);
