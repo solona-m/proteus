@@ -52,6 +52,7 @@ public static class Strings
     public static PartsStrings      Parts      { get; private set; } = new();
     public static PresetsStrings    Presets    { get; private set; } = new();
     public static HatCompatStrings  HatCompat  { get; private set; } = new();
+    public static HairPortStrings   HairPort   { get; private set; } = new();
     public static AutoRefitStrings  AutoRefit  { get; private set; } = new();
     public static SizeSetStrings    SizeSet    { get; private set; } = new();
     public static WhatsNewStrings   WhatsNew   { get; private set; } = new();
@@ -82,6 +83,7 @@ public static class Strings
         Parts      = new PartsStrings();
         Presets    = new PresetsStrings();
         HatCompat  = new HatCompatStrings();
+        HairPort   = new HairPortStrings();
         AutoRefit  = new AutoRefitStrings();
         SizeSet    = new SizeSetStrings();
         WhatsNew   = new WhatsNewStrings();
@@ -363,6 +365,62 @@ public sealed class WhatsNewStrings
     public readonly string Open = Loc.Localize("WhatsNew.Open", "Open Proteus") + "###whatsNewOpen";
 
     public readonly string Close = Loc.Localize("WhatsNew.Close", "Close") + "###whatsNewClose";
+}
+
+/// <summary>Hair porting: the Settings > Hair section and the Studio's "Port to all races".</summary>
+public sealed class HairPortStrings
+{
+    public readonly string Auto = Loc.Localize(
+        "HairPort.Auto.Label", "Fit hair mods made for another race") + "###hairPortAuto";
+
+    public readonly string AutoTip = Loc.Localize("HairPort.Auto.Tip",
+        "Many hair mods are made for one race only, so on any other race the game\n" +
+        "shows its own hairstyle instead. When on, Proteus notices, bends the mod's\n" +
+        "hairstyle onto your race's head and adds it to the same option of the same mod.\n\n" +
+        "Only between races of one sex, and only for the hairstyle you are wearing. It\n" +
+        "keeps working with Proteus off, travels with the mod, and shows for everyone\n" +
+        "drawn with that mod on. It can be undone here.");
+
+    public readonly string None = Loc.Localize("HairPort.Settings.None",
+        "The hairstyle you are wearing needs no fitting.");
+
+    public readonly string PortedFmt = Loc.Localize("HairPort.Settings.Ported.Fmt",
+        "Hairstyle {0} is fitted to your race in {1}.");
+
+    public readonly string Undo = Loc.Localize("HairPort.Settings.Undo", "Undo") + "###hairPortUndo";
+
+    public readonly string UndoTip = Loc.Localize("HairPort.Settings.Undo.Tip",
+        "Take the fitted hairstyle out of the mod again. Proteus will not fit it again by\n" +
+        "itself; you can still port it in the Studio.");
+
+    public readonly string UndoAllFmt = Loc.Localize("HairPort.Settings.UndoAll.Fmt",
+        "Undo all {0} fitted hairstyles in this mod") + "###hairPortUndoAll";
+
+    public readonly string Working = Loc.Localize("HairPort.Working", "Working…");
+
+    // ── Studio ──────────────────────────────────────────────────────────────────────────────────────
+    public readonly string Header = Loc.Localize("HairPort.Studio.Header", "Port to all races") + "###hairPortStudio";
+
+    public readonly string Intro = Loc.Localize("HairPort.Studio.Intro",
+        "Bends this hairstyle onto every other race of the same sex and adds the results to the same option of this mod, " +
+        "so it shows on everyone whatever their race. Races you made it for yourself are left alone.");
+
+    public readonly string RaceCovered = Loc.Localize("HairPort.Studio.Covered", "made by you");
+    public readonly string RacePorted  = Loc.Localize("HairPort.Studio.Ported", "ported");
+    public readonly string RaceStale   = Loc.Localize("HairPort.Studio.Stale", "out of date");
+    public readonly string RaceNoStyle = Loc.Localize("HairPort.Studio.NoStyle", "cannot choose this hairstyle");
+    public readonly string RaceOpen    = Loc.Localize("HairPort.Studio.Open", "not covered");
+
+    public readonly string Port = Loc.Localize("HairPort.Studio.Port", "Port") + "###hairPortRun";
+    public readonly string PortingFmt = Loc.Localize("HairPort.Studio.Porting.Fmt", "Porting… {0} of {1} races");
+    public readonly string Cancel = Loc.Localize("HairPort.Studio.Cancel", "Cancel") + "###hairPortCancel";
+    public readonly string Cancelled = Loc.Localize("HairPort.Studio.Cancelled", "Cancelled — nothing was written.");
+    public readonly string DoneFmt = Loc.Localize("HairPort.Studio.Done.Fmt", "{0} port(s) added to the mod.");
+    public readonly string NothingToDo = Loc.Localize("HairPort.Studio.Nothing", "Nothing was ported.");
+    public readonly string FailedFmt = Loc.Localize("HairPort.Studio.Failed.Fmt", "Porting failed: {0}");
+    public readonly string Remove = Loc.Localize("HairPort.Studio.Remove", "Remove ports") + "###hairPortRemove";
+    public readonly string RemovedFmt = Loc.Localize("HairPort.Studio.Removed.Fmt", "{0} port(s) removed.");
+    public readonly string Reading = Loc.Localize("HairPort.Studio.Reading", "Reading the mod…");
 }
 
 /// <summary>The hat-compatibility panel.</summary>
@@ -854,6 +912,7 @@ public sealed class SettingsStrings
     public readonly string SecOutput      = Loc.Localize("Settings.Section.Output", "Output");
     public readonly string SecSkinEffects = Loc.Localize("Settings.Section.SkinEffects", "Skin effects");
     public readonly string SecHatCompat   = Loc.Localize("Settings.Section.HatCompat", "Hats");
+    public readonly string SecHairPort    = Loc.Localize("Settings.Section.HairPort", "Hair");
     public readonly string SecAutoRefit   = Loc.Localize("Settings.Section.AutoRefit", "Body refit");
 
     public readonly string SecHosting     = Loc.Localize("Settings.Section.Hosting", "Hosting");

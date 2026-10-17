@@ -4934,5 +4934,213 @@
   "Chat.EffectUnplaced.Fmt": {
     "message": "[Proteus] Der animierte Effekt von „{0}“ wird nicht angezeigt: Er braucht einen freien Accessoire-Platz für seinen unsichtbaren Träger. Mach einen Ring-, Armband- oder Halsketten-Platz frei.",
     "description": ""
+  },
+  "HairPort.Refused.NoHead": {
+    "message": "das Kopfmodell des Spiels, an das sie angepasst werden soll, konnte nicht gelesen werden",
+    "description": ""
+  },
+  "HairPort.Refused.Bones.Fmt": {
+    "message": "sie bewegt sich mit Knochen, die c{0:D4} für diese Frisur nicht hat ({1})",
+    "description": ""
+  },
+  "HairPort.Refused.Unknown.Fmt": {
+    "message": "der Volks-Deformer weiß nicht, wie er {0} bewegen soll",
+    "description": ""
+  },
+  "HairPort.Refused.Fit.Fmt": {
+    "message": "sie sitzt nicht auf dem Kopf von c{0:D4}: {1:P0} davon sinken in den Schädel ein, und ihr Abstand zur Kopfhaut weicht um {2:F0} mm vom Original ab",
+    "description": ""
+  },
+  "HairPort.Refused.NotHair": {
+    "message": "es ist kein Frisurmodell",
+    "description": ""
+  },
+  "HairPort.Refused.NotInMod": {
+    "message": "der Mod stellt diese Frisur nicht bereit",
+    "description": ""
+  },
+  "HairPort.Refused.Gender": {
+    "message": "Frisuren werden nur zwischen Völkern desselben Geschlechts übertragen",
+    "description": ""
+  },
+  "HairPort.Refused.NoStyle.Fmt": {
+    "message": "c{0:D4} kann Frisur {1} nicht wählen",
+    "description": ""
+  },
+  "HairPort.Refused.SharedMaterial.Fmt": {
+    "message": "ihr Material ist dasselbe, das {0} für die eigene Frisur {1} liest — übertrage sie auch dorthin",
+    "description": ""
+  },
+  "HairPort.Refused.SharerRefused.Fmt": {
+    "message": "sie teilt ihr Material mit c{0:D4}, wohin nicht übertragen werden konnte: {1}",
+    "description": ""
+  },
+  "HairPort.Refused.NoMaterial.Fmt": {
+    "message": "ihr Material {0} wurde nicht gefunden",
+    "description": ""
+  },
+  "HairPort.Refused.NoOption.Fmt": {
+    "message": "die Option „{0}“ ist nicht mehr im Mod",
+    "description": ""
+  },
+  "HairPort.Refused.Covered.Fmt": {
+    "message": "der Mod stellt {0} dort bereits bereit",
+    "description": ""
+  },
+  "HairPort.Undo.Nothing": {
+    "message": "Hier gibt es keine Haar-Übertragungen, die rückgängig gemacht werden könnten.",
+    "description": ""
+  },
+  "HairPort.DefaultData": {
+    "message": "die Standarddateien des Mods",
+    "description": ""
+  },
+  "HairPort.Refused.Combining.Fmt": {
+    "message": "die Frisur liegt in „{0}“, einer Kombinationsgruppe, die Proteus nicht bearbeitet",
+    "description": ""
+  },
+  "HairPort.Refused.Unreadable": {
+    "message": "das Manifest des Mods konnte nicht gelesen werden",
+    "description": ""
+  },
+  "Chat.HairPort": {
+    "message": "[Proteus] Der Mod dieser Frisur wurde für ein anderes Volk gemacht, daher hat Proteus sie an deines angepasst und dem Mod hinzugefügt — jeder, der mit diesem Mod dargestellt wird, sieht sie jetzt. Du kannst das unter /proteus > Einstellungen > Haare rückgängig machen oder die Funktion dort abschalten.",
+    "description": ""
+  },
+  "Service.ModMeta.Unreadable.Fmt": {
+    "message": "Das Manifest von {0} konnte nicht gelesen werden, daher wurde es nicht geändert.",
+    "description": ""
+  },
+  "Service.ModMeta.Combining.Fmt": {
+    "message": "„{0}“ ist eine Kombinationsgruppe, deren Dateien Proteus nicht bearbeitet.",
+    "description": ""
+  },
+  "Service.ModMeta.NoOption.Fmt": {
+    "message": "Die Gruppe „{0}“ hat keine Option namens „{1}“.",
+    "description": ""
+  },
+  "HairPort.Auto.Label": {
+    "message": "Haar-Mods für ein anderes Volk anpassen",
+    "description": ""
+  },
+  "HairPort.Auto.Tip": {
+    "message": "Viele Haar-Mods sind nur für ein Volk gemacht, daher zeigt das Spiel bei jedem\nanderen Volk seine eigene Frisur. Ist dies aktiv, bemerkt Proteus das, biegt\ndie Frisur des Mods auf den Kopf deines Volkes und fügt sie derselben Option\ndesselben Mods hinzu.\n\nNur zwischen Völkern eines Geschlechts und nur für die Frisur, die du trägst.\nEs funktioniert auch mit ausgeschaltetem Proteus, bleibt beim Mod und ist für\njeden sichtbar, der mit diesem Mod dargestellt wird. Es lässt sich hier\nrückgängig machen.",
+    "description": ""
+  },
+  "HairPort.Settings.None": {
+    "message": "Die Frisur, die du trägst, muss nicht angepasst werden.",
+    "description": ""
+  },
+  "HairPort.Settings.Ported.Fmt": {
+    "message": "Frisur {0} ist in {1} an dein Volk angepasst.",
+    "description": ""
+  },
+  "HairPort.Settings.Undo": {
+    "message": "Rückgängig",
+    "description": ""
+  },
+  "HairPort.Settings.Undo.Tip": {
+    "message": "Nimmt die angepasste Frisur wieder aus dem Mod heraus. Proteus passt sie nicht\nvon selbst erneut an; im Studio kannst du sie weiterhin übertragen.",
+    "description": ""
+  },
+  "HairPort.Settings.UndoAll.Fmt": {
+    "message": "Alle {0} angepassten Frisuren in diesem Mod rückgängig machen",
+    "description": ""
+  },
+  "HairPort.Working": {
+    "message": "Wird bearbeitet …",
+    "description": ""
+  },
+  "HairPort.Studio.Header": {
+    "message": "Auf alle Völker übertragen",
+    "description": ""
+  },
+  "HairPort.Studio.Intro": {
+    "message": "Biegt diese Frisur auf jedes andere Volk desselben Geschlechts und fügt die Ergebnisse derselben Option dieses Mods hinzu, sodass sie bei jedem erscheint, egal welchen Volkes. Völker, für die du sie selbst gemacht hast, bleiben unberührt.",
+    "description": ""
+  },
+  "HairPort.Studio.Covered": {
+    "message": "von dir gemacht",
+    "description": ""
+  },
+  "HairPort.Studio.Ported": {
+    "message": "übertragen",
+    "description": ""
+  },
+  "HairPort.Studio.Stale": {
+    "message": "veraltet",
+    "description": ""
+  },
+  "HairPort.Studio.NoStyle": {
+    "message": "kann diese Frisur nicht wählen",
+    "description": ""
+  },
+  "HairPort.Studio.Open": {
+    "message": "nicht abgedeckt",
+    "description": ""
+  },
+  "HairPort.Studio.Port": {
+    "message": "Übertragen",
+    "description": ""
+  },
+  "HairPort.Studio.Porting.Fmt": {
+    "message": "Wird übertragen … {0} von {1} Völkern",
+    "description": ""
+  },
+  "HairPort.Studio.Cancel": {
+    "message": "Abbrechen",
+    "description": ""
+  },
+  "HairPort.Studio.Cancelled": {
+    "message": "Abgebrochen — es wurde nichts geschrieben.",
+    "description": ""
+  },
+  "HairPort.Studio.Done.Fmt": {
+    "message": "{0} Übertragung(en) zum Mod hinzugefügt.",
+    "description": ""
+  },
+  "HairPort.Studio.Nothing": {
+    "message": "Es wurde nichts übertragen.",
+    "description": ""
+  },
+  "HairPort.Studio.Failed.Fmt": {
+    "message": "Übertragung fehlgeschlagen: {0}",
+    "description": ""
+  },
+  "HairPort.Studio.Remove": {
+    "message": "Übertragungen entfernen",
+    "description": ""
+  },
+  "HairPort.Studio.Removed.Fmt": {
+    "message": "{0} Übertragung(en) entfernt.",
+    "description": ""
+  },
+  "HairPort.Studio.Reading": {
+    "message": "Mod wird gelesen …",
+    "description": ""
+  },
+  "Settings.Section.HairPort": {
+    "message": "Haare",
+    "description": ""
+  },
+  "HairPort.Refused.Folded.Fmt": {
+    "message": "auf c{0:D4} gebogen, würden sich {1} seiner Dreiecke nach innen stülpen",
+    "description": ""
+  },
+  "HairPort.Refused.Declined": {
+    "message": "seine Übertragung wurde rückgängig gemacht, daher bleibt es unverändert",
+    "description": ""
+  },
+  "HairPort.Refused.NoPbd": {
+    "message": "der Volks-Deformer des Spiels konnte nicht gelesen werden",
+    "description": ""
+  },
+  "HairPort.Declined.Fmt": {
+    "message": "Die Übertragung der Frisur {0} in {1} wurde rückgängig gemacht und bleibt daher aus.",
+    "description": ""
+  },
+  "HairPort.Refused.RecordUnreadable": {
+    "message": "Proteus' Aufzeichnung der Frisur-Übertragungen dieser Mod (Proteus/hairport.json) konnte nicht gelesen werden, daher wurde nichts geändert.",
+    "description": ""
   }
 }

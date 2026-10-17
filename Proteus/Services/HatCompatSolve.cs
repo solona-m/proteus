@@ -391,7 +391,7 @@ public static partial class HatCompatSolve
     /// The scalp per direction: the FURTHEST head vertex, since the nearest may be eyes, teeth or mouth.
     /// Directions the head does not reach inherit the median.
     /// </summary>
-    private static float[] HeadFloor(IReadOnlyList<MeshVerts> head, Vector3 centre, float radius, float minY)
+    internal static float[] HeadFloor(IReadOnlyList<MeshVerts> head, Vector3 centre, float radius, float minY)
     {
         var ceil = new float[BinsU * BinsV];
         foreach (var mv in head)

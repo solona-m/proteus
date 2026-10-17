@@ -341,7 +341,7 @@ public class RacialRouteLocalTests(ITestOutputHelper o)
     /// Triangles of <paramref name="a"/> whose face turned over in <paramref name="b"/> — a game "hole" — of at least
     /// <paramref name="minArea"/> m² in <paramref name="a"/>. Whole submeshes only: a part list names each island again.
     /// </summary>
-    private static int Flipped(ModelParts a, ModelParts b, float minArea = 1e-14f)
+    internal static int Flipped(ModelParts a, ModelParts b, float minArea = 1e-14f)
         => a.Parts.Where(p => p.Island == -1).Sum(part => Flipped(a, b, part, minArea));
 
     private static int Flipped(ModelParts a, ModelParts b, ModelPart part, float minArea = 1e-14f)
@@ -391,7 +391,7 @@ public class RacialRouteLocalTests(ITestOutputHelper o)
     /// Triangles of real size in <paramref name="a"/> (0.01 mm² or more) that <paramref name="b"/> squashes to nothing —
     /// which <see cref="Flipped"/> cannot see, having no face left to compare.
     /// </summary>
-    private static int Collapsed(ModelParts a, ModelParts b)
+    internal static int Collapsed(ModelParts a, ModelParts b)
     {
         int collapsed = 0;
         foreach (var part in a.Parts.Where(p => p.Island == -1))

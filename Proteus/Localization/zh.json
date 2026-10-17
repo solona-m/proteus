@@ -4934,5 +4934,213 @@
   "Chat.EffectUnplaced.Fmt": {
     "message": "[Proteus] “{0}”的动画特效未显示：它的隐形载体需要一个空闲的饰品栏位。请空出戒指、手镯或项链栏位。",
     "description": ""
+  },
+  "HairPort.Refused.NoHead": {
+    "message": "无法读取要适配到的游戏头部模型",
+    "description": ""
+  },
+  "HairPort.Refused.Bones.Fmt": {
+    "message": "它依靠 c{0:D4} 在此发型上没有的骨骼来活动（{1}）",
+    "description": ""
+  },
+  "HairPort.Refused.Unknown.Fmt": {
+    "message": "种族变形器不知道如何移动 {0}",
+    "description": ""
+  },
+  "HairPort.Refused.Fit.Fmt": {
+    "message": "它无法贴合 c{0:D4} 的头部：{1:P0} 陷入头骨，且与头皮的距离和原版相差 {2:F0} mm",
+    "description": ""
+  },
+  "HairPort.Refused.NotHair": {
+    "message": "它不是发型模型",
+    "description": ""
+  },
+  "HairPort.Refused.NotInMod": {
+    "message": "该 Mod 未提供此发型",
+    "description": ""
+  },
+  "HairPort.Refused.Gender": {
+    "message": "发型只会在同一性别的种族之间移植",
+    "description": ""
+  },
+  "HairPort.Refused.NoStyle.Fmt": {
+    "message": "c{0:D4} 无法选择发型 {1}",
+    "description": ""
+  },
+  "HairPort.Refused.SharedMaterial.Fmt": {
+    "message": "它的材质正是 {0} 为其自身发型 {1} 读取的那个——请也移植到那里",
+    "description": ""
+  },
+  "HairPort.Refused.SharerRefused.Fmt": {
+    "message": "它与 c{0:D4} 共用材质，而无法移植到后者：{1}",
+    "description": ""
+  },
+  "HairPort.Refused.NoMaterial.Fmt": {
+    "message": "找不到它的材质 {0}",
+    "description": ""
+  },
+  "HairPort.Refused.NoOption.Fmt": {
+    "message": "该 Mod 中已不再有选项“{0}”",
+    "description": ""
+  },
+  "HairPort.Refused.Covered.Fmt": {
+    "message": "该 Mod 已在那里提供 {0}",
+    "description": ""
+  },
+  "HairPort.Undo.Nothing": {
+    "message": "这里没有可撤销的发型移植。",
+    "description": ""
+  },
+  "HairPort.DefaultData": {
+    "message": "该 Mod 的默认文件",
+    "description": ""
+  },
+  "HairPort.Refused.Combining.Fmt": {
+    "message": "该发型位于组合组“{0}”中，Proteus 不会编辑此类组",
+    "description": ""
+  },
+  "HairPort.Refused.Unreadable": {
+    "message": "无法读取该 Mod 的清单",
+    "description": ""
+  },
+  "Chat.HairPort": {
+    "message": "[Proteus] 这个发型的 Mod 是为其他种族制作的，因此 Proteus 已将其适配到你的种族并添加进该 Mod——现在所有启用此 Mod 显示的角色都能看到它。你可以在 /proteus > 设置 > 头发 中撤销此更改，或关闭该功能。",
+    "description": ""
+  },
+  "Service.ModMeta.Unreadable.Fmt": {
+    "message": "无法读取 {0} 的清单，因此未作更改。",
+    "description": ""
+  },
+  "Service.ModMeta.Combining.Fmt": {
+    "message": "“{0}”是组合组，Proteus 不会编辑其中的文件。",
+    "description": ""
+  },
+  "Service.ModMeta.NoOption.Fmt": {
+    "message": "组“{0}”中没有名为“{1}”的选项。",
+    "description": ""
+  },
+  "HairPort.Auto.Label": {
+    "message": "适配为其他种族制作的发型 Mod",
+    "description": ""
+  },
+  "HairPort.Auto.Tip": {
+    "message": "许多发型 Mod 只为一个种族制作，因此在其他种族上游戏会显示自带\n的发型。开启后，Proteus 会察觉到这一点，把 Mod 的发型弯折到你的\n种族的头部上，并添加到同一 Mod 的同一选项中。\n\n仅限同一性别的种族之间，且仅针对你当前戴着的发型。即使关闭\nProteus 也依然有效，会随 Mod 一起带走，所有启用该 Mod 显示的\n角色都能看到。可以在这里撤销。",
+    "description": ""
+  },
+  "HairPort.Settings.None": {
+    "message": "你当前戴着的发型无需适配。",
+    "description": ""
+  },
+  "HairPort.Settings.Ported.Fmt": {
+    "message": "发型 {0} 已在 {1} 中适配到你的种族。",
+    "description": ""
+  },
+  "HairPort.Settings.Undo": {
+    "message": "撤销",
+    "description": ""
+  },
+  "HairPort.Settings.Undo.Tip": {
+    "message": "把适配后的发型从 Mod 中移除。Proteus 不会再自动适配它；你仍可\n在工作室中移植它。",
+    "description": ""
+  },
+  "HairPort.Settings.UndoAll.Fmt": {
+    "message": "撤销此 Mod 中全部 {0} 个已适配的发型",
+    "description": ""
+  },
+  "HairPort.Working": {
+    "message": "处理中…",
+    "description": ""
+  },
+  "HairPort.Studio.Header": {
+    "message": "移植到所有种族",
+    "description": ""
+  },
+  "HairPort.Studio.Intro": {
+    "message": "把这个发型弯折到同一性别的其他所有种族上，并把结果添加到此 Mod 的同一选项中，这样无论种族都能看到它。你自己为之制作过的种族不会被改动。",
+    "description": ""
+  },
+  "HairPort.Studio.Covered": {
+    "message": "你自己制作",
+    "description": ""
+  },
+  "HairPort.Studio.Ported": {
+    "message": "已移植",
+    "description": ""
+  },
+  "HairPort.Studio.Stale": {
+    "message": "已过时",
+    "description": ""
+  },
+  "HairPort.Studio.NoStyle": {
+    "message": "无法选择此发型",
+    "description": ""
+  },
+  "HairPort.Studio.Open": {
+    "message": "未覆盖",
+    "description": ""
+  },
+  "HairPort.Studio.Port": {
+    "message": "移植",
+    "description": ""
+  },
+  "HairPort.Studio.Porting.Fmt": {
+    "message": "正在移植… {0}/{1} 个种族",
+    "description": ""
+  },
+  "HairPort.Studio.Cancel": {
+    "message": "取消",
+    "description": ""
+  },
+  "HairPort.Studio.Cancelled": {
+    "message": "已取消——未写入任何内容。",
+    "description": ""
+  },
+  "HairPort.Studio.Done.Fmt": {
+    "message": "已向 Mod 添加 {0} 个移植。",
+    "description": ""
+  },
+  "HairPort.Studio.Nothing": {
+    "message": "没有移植任何内容。",
+    "description": ""
+  },
+  "HairPort.Studio.Failed.Fmt": {
+    "message": "移植失败：{0}",
+    "description": ""
+  },
+  "HairPort.Studio.Remove": {
+    "message": "移除移植",
+    "description": ""
+  },
+  "HairPort.Studio.Removed.Fmt": {
+    "message": "已移除 {0} 个移植。",
+    "description": ""
+  },
+  "HairPort.Studio.Reading": {
+    "message": "正在读取 Mod…",
+    "description": ""
+  },
+  "Settings.Section.HairPort": {
+    "message": "头发",
+    "description": ""
+  },
+  "HairPort.Refused.Folded.Fmt": {
+    "message": "弯折到 c{0:D4} 后会有 {1} 个三角形翻面",
+    "description": ""
+  },
+  "HairPort.Refused.Declined": {
+    "message": "其移植已被撤销，因此保持不变",
+    "description": ""
+  },
+  "HairPort.Refused.NoPbd": {
+    "message": "无法读取游戏的种族变形器",
+    "description": ""
+  },
+  "HairPort.Declined.Fmt": {
+    "message": "{1} 中发型 {0} 的移植已被撤销，因此保持不变。",
+    "description": ""
+  },
+  "HairPort.Refused.RecordUnreadable": {
+    "message": "无法读取 Proteus 对此 Mod 发型移植的记录（Proteus/hairport.json），因此未做任何更改。",
+    "description": ""
   }
 }

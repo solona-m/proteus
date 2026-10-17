@@ -654,4 +654,22 @@ public sealed class LocalizationTests
 
         Assert.True(problems.Count == 0, "Key naming:\n" + string.Join("\n", problems));
     }
+
+    /// <summary>What hair porting says, translated rather than copied — and every key the code asks for is there.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-hair-race-port-9")]
+    public void HairPort_strings_are_translated_not_copied(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        var keys = en.Keys.Where(k => k.StartsWith("HairPort.", StringComparison.Ordinal)).Append("Chat.HairPort")
+                     .Append("Settings.Section.HairPort").ToList();
+        Assert.True(keys.Count > 40, $"only {keys.Count} hair port keys in {Source}.json");
+        foreach (string key in keys)
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+        }
+    }
 }

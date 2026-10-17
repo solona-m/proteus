@@ -333,6 +333,7 @@ public sealed class PartsPanel
 
     /// <summary>The Body size tool's whole-mod "every size for other bodies" — see <see cref="SizeSetPanel"/>.</summary>
     private readonly SizeSetPanel sizeSet;
+    private readonly HairPortPanel hairPort;
 
     /// <summary>Share the automatic refit's index of body mods with "every size for other bodies".</summary>
     internal void UseBodyIndex(BodyModIndex shared) => sizeSet.UseBodyIndex(shared);
@@ -368,6 +369,7 @@ public sealed class PartsPanel
         retarget = new BodyRetargetPanel(penumbra, uvRemap, path => textureLoader.LoadRawFile(null, path),
                                          config, log);
         sizeSet = new SizeSetPanel(penumbra, uvRemap, path => textureLoader.LoadRawFile(null, path), config, log);
+        hairPort = new HairPortPanel(path => textureLoader.LoadRawFile(null, path), log);
         refitMods = new RefitModService(penumbra, compositor, log);
         LiveBrushPreview.CleanUp(compositor.ManagedModFolder);
         // Last session's extracts of the game's body: a patch since then would make them stale, and the session is
@@ -3512,6 +3514,19 @@ public sealed class PartsPanel
             || (!vanillaOpen && (ModRoot() == null || modDir == null)))
         {
             ImGui.TextWrapped(ps.RetargetNoModel);
+            return;
+        }
+
+        // A hairstyle has no body to be sized for: its Body size tool ports it to the other races instead.
+        if (!vanillaOpen && HairPortPanel.Shows(models[modelIndex].GamePath))
+        {
+            hairPort.Draw(ModRoot()!, modDir!, models[modelIndex].GamePath, changed =>
+            {
+                compositor.ExpectOwnModEdit(changed);
+                penumbra.ReloadModDirectory(changed);
+                compositor.RedrawForChangedModel("Studio parts");
+                refreshModelsPending = true;   // the ports are models of the mod: list them
+            });
             return;
         }
 

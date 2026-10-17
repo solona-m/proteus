@@ -4934,5 +4934,213 @@
   "Chat.EffectUnplaced.Fmt": {
     "message": "[Proteus] 「{0}」のアニメーションエフェクトは表示されていません。透明なキャリアー用に空きアクセサリースロットが必要です。指輪、腕輪、首飾りのスロットを空けてください。",
     "description": ""
+  },
+  "HairPort.Refused.NoHead": {
+    "message": "合わせる先のゲームの頭部モデルを読み込めませんでした",
+    "description": ""
+  },
+  "HairPort.Refused.Bones.Fmt": {
+    "message": "c{0:D4} がこの髪型で持たないボーンで動きます（{1}）",
+    "description": ""
+  },
+  "HairPort.Refused.Unknown.Fmt": {
+    "message": "種族デフォーマーが {0} の動かし方を知りません",
+    "description": ""
+  },
+  "HairPort.Refused.Fit.Fmt": {
+    "message": "c{0:D4} の頭に収まりません。{1:P0} が頭蓋骨に沈み込み、頭皮からの距離が元より {2:F0} mm ずれています",
+    "description": ""
+  },
+  "HairPort.Refused.NotHair": {
+    "message": "髪型のモデルではありません",
+    "description": ""
+  },
+  "HairPort.Refused.NotInMod": {
+    "message": "このModはその髪型を提供していません",
+    "description": ""
+  },
+  "HairPort.Refused.Gender": {
+    "message": "髪型は同じ性別の種族間でのみ移植されます",
+    "description": ""
+  },
+  "HairPort.Refused.NoStyle.Fmt": {
+    "message": "c{0:D4} は髪型 {1} を選べません",
+    "description": ""
+  },
+  "HairPort.Refused.SharedMaterial.Fmt": {
+    "message": "そのマテリアルは {0} が自分の髪型 {1} 用に読み込むものと同じです — そちらにも移植してください",
+    "description": ""
+  },
+  "HairPort.Refused.SharerRefused.Fmt": {
+    "message": "マテリアルを c{0:D4} と共有していますが、そちらへは移植できませんでした: {1}",
+    "description": ""
+  },
+  "HairPort.Refused.NoMaterial.Fmt": {
+    "message": "マテリアル {0} が見つかりませんでした",
+    "description": ""
+  },
+  "HairPort.Refused.NoOption.Fmt": {
+    "message": "オプション「{0}」はもうModにありません",
+    "description": ""
+  },
+  "HairPort.Refused.Covered.Fmt": {
+    "message": "Modはすでにそこで {0} を提供しています",
+    "description": ""
+  },
+  "HairPort.Undo.Nothing": {
+    "message": "ここには元に戻せる髪型の移植がありません。",
+    "description": ""
+  },
+  "HairPort.DefaultData": {
+    "message": "Modの既定ファイル",
+    "description": ""
+  },
+  "HairPort.Refused.Combining.Fmt": {
+    "message": "髪型は組み合わせグループ「{0}」内にあり、Proteusはこれを編集しません",
+    "description": ""
+  },
+  "HairPort.Refused.Unreadable": {
+    "message": "Modのマニフェストを読み込めませんでした",
+    "description": ""
+  },
+  "Chat.HairPort": {
+    "message": "[Proteus] この髪型のModは別の種族向けに作られていたため、Proteus があなたの種族に合わせてModに追加しました。このModを有効にして表示される全員に見えるようになっています。元に戻す、またはこの機能をオフにするには /proteus > 設定 > 髪 を開いてください。",
+    "description": ""
+  },
+  "Service.ModMeta.Unreadable.Fmt": {
+    "message": "{0} のマニフェストを読み込めなかったため、変更しませんでした。",
+    "description": ""
+  },
+  "Service.ModMeta.Combining.Fmt": {
+    "message": "「{0}」は組み合わせグループで、Proteusはそのファイルを編集しません。",
+    "description": ""
+  },
+  "Service.ModMeta.NoOption.Fmt": {
+    "message": "グループ「{0}」には「{1}」というオプションがありません。",
+    "description": ""
+  },
+  "HairPort.Auto.Label": {
+    "message": "別の種族用に作られた髪Modを合わせる",
+    "description": ""
+  },
+  "HairPort.Auto.Tip": {
+    "message": "多くの髪Modは一つの種族専用に作られているため、他の種族ではゲーム\n標準の髪型が表示されます。オンにすると、Proteusがそれに気付き、Mod\nの髪型をあなたの種族の頭に合わせて曲げ、同じModの同じオプションに\n追加します。\n\n同じ性別の種族間のみ、かつ今着けている髪型のみが対象です。Proteus\nをオフにしても機能し、Modと一緒に持ち運ばれ、そのModを有効にして\n表示される全員に見えます。ここから元に戻せます。",
+    "description": ""
+  },
+  "HairPort.Settings.None": {
+    "message": "今着けている髪型は合わせる必要がありません。",
+    "description": ""
+  },
+  "HairPort.Settings.Ported.Fmt": {
+    "message": "髪型 {0} は {1} であなたの種族に合わせてあります。",
+    "description": ""
+  },
+  "HairPort.Settings.Undo": {
+    "message": "元に戻す",
+    "description": ""
+  },
+  "HairPort.Settings.Undo.Tip": {
+    "message": "合わせた髪型をModから取り除きます。Proteusが自動で再び合わせる\nことはありませんが、スタジオでは引き続き移植できます。",
+    "description": ""
+  },
+  "HairPort.Settings.UndoAll.Fmt": {
+    "message": "このModで合わせた髪型 {0} 件すべてを元に戻す",
+    "description": ""
+  },
+  "HairPort.Working": {
+    "message": "処理中…",
+    "description": ""
+  },
+  "HairPort.Studio.Header": {
+    "message": "全種族に移植",
+    "description": ""
+  },
+  "HairPort.Studio.Intro": {
+    "message": "この髪型を同じ性別の他のすべての種族に合わせて曲げ、その結果をこのModの同じオプションに追加します。これで種族を問わず誰にでも表示されます。あなた自身が作った種族の分はそのままにします。",
+    "description": ""
+  },
+  "HairPort.Studio.Covered": {
+    "message": "自作",
+    "description": ""
+  },
+  "HairPort.Studio.Ported": {
+    "message": "移植済み",
+    "description": ""
+  },
+  "HairPort.Studio.Stale": {
+    "message": "古い",
+    "description": ""
+  },
+  "HairPort.Studio.NoStyle": {
+    "message": "この髪型を選べない",
+    "description": ""
+  },
+  "HairPort.Studio.Open": {
+    "message": "未対応",
+    "description": ""
+  },
+  "HairPort.Studio.Port": {
+    "message": "移植",
+    "description": ""
+  },
+  "HairPort.Studio.Porting.Fmt": {
+    "message": "移植中… {1} 種族中 {0}",
+    "description": ""
+  },
+  "HairPort.Studio.Cancel": {
+    "message": "キャンセル",
+    "description": ""
+  },
+  "HairPort.Studio.Cancelled": {
+    "message": "キャンセルしました — 何も書き込まれていません。",
+    "description": ""
+  },
+  "HairPort.Studio.Done.Fmt": {
+    "message": "{0} 件の移植をModに追加しました。",
+    "description": ""
+  },
+  "HairPort.Studio.Nothing": {
+    "message": "何も移植されませんでした。",
+    "description": ""
+  },
+  "HairPort.Studio.Failed.Fmt": {
+    "message": "移植に失敗しました: {0}",
+    "description": ""
+  },
+  "HairPort.Studio.Remove": {
+    "message": "移植を削除",
+    "description": ""
+  },
+  "HairPort.Studio.Removed.Fmt": {
+    "message": "{0} 件の移植を削除しました。",
+    "description": ""
+  },
+  "HairPort.Studio.Reading": {
+    "message": "Modを読み込み中…",
+    "description": ""
+  },
+  "Settings.Section.HairPort": {
+    "message": "髪",
+    "description": ""
+  },
+  "HairPort.Refused.Folded.Fmt": {
+    "message": "c{0:D4} に合わせて曲げると、{1} 個の三角形が裏返ります",
+    "description": ""
+  },
+  "HairPort.Refused.Declined": {
+    "message": "移植が取り消されたため、そのままにします",
+    "description": ""
+  },
+  "HairPort.Refused.NoPbd": {
+    "message": "ゲームの種族デフォーマーを読み込めませんでした",
+    "description": ""
+  },
+  "HairPort.Declined.Fmt": {
+    "message": "{1} の髪型 {0} の移植は取り消されたため、そのままにします。",
+    "description": ""
+  },
+  "HairPort.Refused.RecordUnreadable": {
+    "message": "このModの髪型移植の Proteus 記録（Proteus/hairport.json）を読み込めなかったため、何も変更していません。",
+    "description": ""
   }
 }
