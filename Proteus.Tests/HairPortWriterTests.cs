@@ -532,4 +532,33 @@ public class HairPortWriterTests
         Assert.Equal(manifest, mod.Manifest);
         Assert.Equal("{ not json", System.Text.Encoding.UTF8.GetString(mod.Get("Proteus/hairport.json")));
     }
+
+    /// <summary>A save that fails partway takes out the skeleton entry it gave the first option, too.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-race-port-22")]
+    public void A_failed_save_takes_the_carried_skeleton_back_out()
+    {
+        using var mod = TwoCuts();
+        var a = Write(mod, "Cut", "Long") with { Est = 170 };
+        var b = Write(mod, "Cut", "Short") with { Est = 170 };
+        HairPortWriter.BeforeMerge = done => { if (done == 1) throw new IOException("the manifest is in use"); };
+        try { Assert.False(HairPortWriter.Save(mod.Root, [a, b], auto: true).Ok); }
+        finally { HairPortWriter.BeforeMerge = null; }
+        Assert.Null(HairPortPlan.HairEst(mod.Owner("Cut", "Long"), 201, Id));
+        Assert.Null(HairPortPlan.HairEst(mod.Owner("Cut", "Short"), 201, Id));
+    }
+
+    /// <summary>An edit of redirects alone leaves an option's other fields as they were — no manipulation list made up.</summary>
+    [Fact]
+    [Trait("Plan", "AC-hair-race-port-10")]
+    public void A_redirect_edit_adds_no_manipulation_list()
+    {
+        var groups = "[{\"Name\":\"Cut\",\"Type\":\"Single\",\"Options\":[{\"Name\":\"Long\",\"Files\":{\"" + Source
+                     + "\":\"long.mdl\"}}]}]";
+        using var mod = new Mod(groups);
+        PenumbraModMeta.MergeOptionRedirects(mod.Root, "Cut", "Long", new Dictionary<string, string> { [Target] = "x.mdl" });
+        var option = System.Text.Json.Nodes.JsonNode.Parse(mod.Manifest)!["Groups"]![0]!["Options"]![0]!.AsObject();
+        Assert.False(option.ContainsKey("Manipulations"));
+        Assert.Equal("x.mdl", option["Files"]![Target]!.GetValue<string>());
+    }
 }

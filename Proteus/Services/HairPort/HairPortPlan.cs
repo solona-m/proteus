@@ -217,20 +217,37 @@ internal static partial class HairPortPlan
     /// </summary>
     public static int? HairEst(Owner owner, ushort race, int id)
     {
-        int n = race / 100;
-        string wantRace = ModelRace.Names[(n - 1) / 2], wantGender = n % 2 == 1 ? "Male" : "Female";
         foreach (var m in owner.Manipulations ?? [])
-        {
-            if (m.ValueKind != JsonValueKind.Object || !m.TryGetProperty("Type", out var t) || t.GetString() != "Est"
-                || !m.TryGetProperty("Manipulation", out var e) || e.ValueKind != JsonValueKind.Object) continue;
-            if (Str(e, "Slot") != "Hair" || Str(e, "Race") != wantRace || Str(e, "Gender") != wantGender) continue;
-            if (!e.TryGetProperty("SetId", out var set) || !set.TryGetInt32(out int s) || s != id) continue;
-            if (e.TryGetProperty("Entry", out var entry) && entry.TryGetInt32(out int v)) return v;
-        }
+            if (HairEstEntry(m, race, id) is { } entry) return entry;
         return null;
+    }
+
+    /// <summary>
+    /// The entry of one manipulation when it is the hair <c>Est</c> of <paramref name="race"/> and hairstyle
+    /// <paramref name="id"/>, else null. Numbers are read as written either way — mods spell set ids as numbers and as
+    /// strings (<c>"SetId": "162"</c>), and Penumbra reads both.
+    /// </summary>
+    public static int? HairEstEntry(JsonElement m, ushort race, int id)
+    {
+        int n = race / 100;
+        if (n is < 1 or > 18) return null;
+        string wantRace = ModelRace.Names[(n - 1) / 2], wantGender = n % 2 == 1 ? "Male" : "Female";
+        if (m.ValueKind != JsonValueKind.Object || Str(m, "Type") != "Est"
+            || !m.TryGetProperty("Manipulation", out var e) || e.ValueKind != JsonValueKind.Object) return null;
+        if (Str(e, "Slot") != "Hair" || Str(e, "Race") != wantRace || Str(e, "Gender") != wantGender) return null;
+        if (Num(e, "SetId") != id) return null;
+        return Num(e, "Entry");
 
         static string? Str(JsonElement e, string key)
             => e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+
+        static int? Num(JsonElement e, string key)
+        {
+            if (!e.TryGetProperty(key, out var v)) return null;
+            if (v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out int i)) return i;
+            if (v.ValueKind == JsonValueKind.String && int.TryParse(v.GetString(), out int s)) return s;
+            return null;
+        }
     }
 
     /// <summary>The game path of a race's skeleton for hairstyle <paramref name="id"/>'s extra bones.</summary>

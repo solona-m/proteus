@@ -113,11 +113,6 @@ internal static class HairPortBuilder
                 continue;
             }
 
-            // The extra bones the target race's skeleton has for this hairstyle: those its own model names, and those
-            // its own skeleton file for it carries.
-            var extra = SecondSkinWriter.Parse(vanilla).BoneNames
-                .Where(b => b.StartsWith("j_ex_", StringComparison.Ordinal)).ToHashSet();
-            extra.UnionWith(HairPortPlan.SkeletonBones(readGame(HairPortPlan.SkeletonPath(to, id))));
             var defaults = owners.FirstOrDefault(o => o.IsDefault);
             var targetHead = FirstFile(HairPortPlan.HeadPaths(to), readGame);
 
@@ -133,23 +128,13 @@ internal static class HairPortBuilder
                 if (was != null && !HairPortPlan.IsStale(was, bytes)) { anyCurrent = true; continue; }
                 if (was == null && !HairPortPlan.CanPortInto(owners, owner, target)) continue;
 
-                // Physics hair borrows another hairstyle's skeleton through an Est entry: the source race's, from the same
-                // place (or the default data). The target race gets the same skeleton of its own, whose bones its own
-                // model of that hairstyle names — and the port carries the entry, unless the author gave it one already.
-                int est = HairPortPlan.HairEst(owner, from, id)
-                          ?? (defaults != null ? HairPortPlan.HairEst(defaults, from, id) : null) ?? 0;
-                var bones = extra;
-                if (est > 0)
-                {
-                    bones = [.. extra];
-                    bones.UnionWith(HairPortPlan.SkeletonBones(readGame(HairPortPlan.SkeletonPath(to, est))));
-                    if (owners.Any(o => HairPortPlan.HairEst(o, to, id) != null)) est = 0;
-                }
+                var (check, est) = SkeletonFor(owner, defaults, was, from, to, id);
 
-                // One bend per distinct file and skeleton, however many options publish it.
-                string key = $"{rel}|{est}";
+                // One bend per distinct file and skeleton checked against, however many options publish it.
+                string key = $"{rel}|{check}";
                 if (!made.TryGetValue(key, out var result))
                 {
+                    var bones = TargetBones(readGame, vanilla, to, id, check);
                     result = HairPortBaker.Prepare(bytes, from, to, id, pbd, bones, sourceHead, targetHead, out var r)!;
                     if (result == null) { why = r; break; }
                     made[key] = result;
@@ -181,6 +166,43 @@ internal static class HairPortBuilder
                 }
 
         return new Plan(writes, refused, current);
+    }
+
+    /// <summary>
+    /// Which extra skeleton a port to <paramref name="to"/> moves with, and which it must carry. Physics hair borrows
+    /// another hairstyle's skeleton through an <c>Est</c> entry — the source race's, from the same place or the default
+    /// data. The target race has that skeleton of its own; the port carries the entry for it. Unless the author gave
+    /// the target race an entry of their own in a place always on with the port (the same place, or the default
+    /// data): then that skeleton is the one the port is checked against, and nothing is carried. The record tells an
+    /// entry this port added before — remade, it is carried again — from the author's.
+    /// </summary>
+    /// <returns>The skeleton to check the bones against (0: the hairstyle's own), and the entry to carry (0: none).</returns>
+    internal static (int Check, int Carry) SkeletonFor(HairPortPlan.Owner owner, HairPortPlan.Owner? defaults,
+                                                       HairPortRecord.Entry? was, ushort from, ushort to, int id)
+    {
+        int? source = HairPortPlan.HairEst(owner, from, id) ?? (defaults != null ? HairPortPlan.HairEst(defaults, from, id) : null);
+
+        int? target = HairPortPlan.HairEst(owner, to, id);
+        if (target is { } mine && was is { Est: > 0 } && was.Est == mine) target = null;   // ours, from before
+        if (target == null && defaults != null && !owner.IsDefault) target = HairPortPlan.HairEst(defaults, to, id);
+
+        if (target is { } author) return (author, 0);
+        return source is > 0 and var s ? (s, s) : (0, 0);
+    }
+
+    /// <summary>
+    /// The extra bones the target race's skeleton has for the hairstyle: those its own model of it names, those its own
+    /// skeleton file for it carries, and — moving with a borrowed skeleton — that one's.
+    /// </summary>
+    internal static HashSet<string> TargetBones(Func<string, byte[]?> readGame, byte[]? targetModel, ushort to, int id,
+                                                int skeleton)
+    {
+        var bones = targetModel == null ? new HashSet<string>(StringComparer.Ordinal)
+            : SecondSkinWriter.Parse(targetModel).BoneNames.Where(b => b.StartsWith("j_ex_", StringComparison.Ordinal)).ToHashSet();
+        bones.UnionWith(HairPortPlan.SkeletonBones(readGame(HairPortPlan.SkeletonPath(to, id))));
+        if (skeleton > 0 && skeleton != id)
+            bones.UnionWith(HairPortPlan.SkeletonBones(readGame(HairPortPlan.SkeletonPath(to, skeleton))));
+        return bones;
     }
 
     /// <summary>

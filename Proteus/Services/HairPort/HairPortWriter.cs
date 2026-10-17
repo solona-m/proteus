@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using CheapLoc;
 
 namespace Proteus.Services;
@@ -33,6 +34,20 @@ internal static class HairPortWriter
     {
         var (race, id) = HairPortPlan.Parse(targetGamePath)!.Value;
         return PenumbraManipulations.EstManipulation($"{race:D4}", "Hair", id, entry);
+    }
+
+    /// <summary>Whether a manipulation is the <c>Est</c> <see cref="EstFor"/> wrote, however it has been spelled since.</summary>
+    internal static Func<JsonElement, bool> IsEst(string targetGamePath, int entry)
+    {
+        var (race, id) = HairPortPlan.Parse(targetGamePath)!.Value;
+        return m => HairPortPlan.HairEstEntry(m, race, id) == entry;
+    }
+
+    /// <summary>The <c>Est</c> entries an option was given in this save, as one test.</summary>
+    private static Func<JsonElement, bool>? AnyEst(IEnumerable<(string Target, int Est)> carried)
+    {
+        var tests = carried.Where(c => c.Est > 0).Select(c => IsEst(c.Target, c.Est)).ToList();
+        return tests.Count == 0 ? null : m => tests.Any(t => t(m));
     }
 
     public sealed record Outcome(bool Ok, string Message, int Count);
@@ -81,6 +96,7 @@ internal static class HairPortWriter
             var committed = new List<(HairPortPlan.Owner Owner, Dictionary<string, string> Add)>();
             var redirects = new Dictionary<HairPortPlan.Owner, Dictionary<string, string>>();
             var skeletons = new Dictionary<HairPortPlan.Owner, List<object>>();
+            var carriedBy = new Dictionary<HairPortPlan.Owner, List<(string Target, int Est)>>();
             var entries = new List<HairPortRecord.Entry>();
             try
             {
@@ -93,7 +109,10 @@ internal static class HairPortWriter
 
                     var add = redirects.TryGetValue(owner, out var a) ? a : redirects[owner] = new(StringComparer.OrdinalIgnoreCase);
                     if (w.Est > 0)
+                    {
                         (skeletons.TryGetValue(owner, out var k) ? k : skeletons[owner] = []).Add(EstFor(w.TargetGamePath, w.Est));
+                        (carriedBy.TryGetValue(owner, out var c) ? c : carriedBy[owner] = []).Add((w.TargetGamePath, w.Est));
+                    }
                     add[w.TargetGamePath] = file;
                     var materials = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                     foreach (var m in w.Materials)
@@ -138,7 +157,7 @@ internal static class HairPortWriter
                 // cannot be taken out keeps its files, so nothing is left pointing at nothing.
                 var kept = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var (owner, add) in committed)
-                    try { PenumbraModMeta.RemoveOptionRedirects(modRoot, owner.Group, owner.Option, add, skeletons.GetValueOrDefault(owner)); }
+                    try { PenumbraModMeta.RemoveOptionRedirects(modRoot, owner.Group, owner.Option, add, AnyEst(carriedBy.GetValueOrDefault(owner) ?? [])); }
                     catch (Exception) { kept.UnionWith(add.Values); }
                 // Only files that were not there before. A remade port's file was overwritten in place: where its option was
                 // taken back out above it is unpublished, and the record drops it on the next read, so the automatic path
@@ -215,7 +234,7 @@ internal static class HairPortWriter
                     {
                         PenumbraModMeta.RemoveOptionRedirects(modRoot, e.Group, e.Option,
                             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { [e.TargetGamePath] = e.File },
-                            e.Est > 0 ? [EstFor(e.TargetGamePath, e.Est)] : null);
+                            e.Est > 0 ? IsEst(e.TargetGamePath, e.Est) : null);
                     }
                     catch (Exception ex) { blocked = ex.Message; continue; }
                 gone.Add(e);

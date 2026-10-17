@@ -897,10 +897,11 @@ internal static class PenumbraModMeta
     /// redirect the author has pointed elsewhere since is left alone. Paths and files are compared without regard to case
     /// or slash direction, since Penumbra rewrites a manifest in its own spelling. Returns how many were removed.
     /// </summary>
-    /// <param name="manipulations">Metadata edits to take out too, each only where the option has one equal to it.</param>
+    /// <param name="dropManipulation">Which of the option's metadata edits to take out too, by what they are rather
+    /// than how they are spelled (Penumbra may rewrite a number as a string); null for none.</param>
     public static int RemoveOptionRedirects(string modRoot, string groupName, string optionName,
                                             IReadOnlyDictionary<string, string> remove,
-                                            IReadOnlyList<object>? manipulations = null)
+                                            Func<JsonElement, bool>? dropManipulation = null)
     {
         int removed = 0;
         EditOptionFiles(modRoot, groupName, optionName, (files, manips) =>
@@ -912,12 +913,9 @@ internal static class PenumbraModMeta
                     files.Remove(key);
                     removed++;
                 }
-            foreach (var m in manipulations ?? [])
-            {
-                var node = JsonSerializer.SerializeToNode(m, m.GetType())!;
+            if (dropManipulation != null)
                 for (int i = manips.Count - 1; i >= 0; i--)
-                    if (System.Text.Json.Nodes.JsonNode.DeepEquals(manips[i], node)) manips.RemoveAt(i);
-            }
+                    if (manips[i] is { } node && dropManipulation(JsonSerializer.SerializeToElement(node))) manips.RemoveAt(i);
         });
         return removed;
     }
@@ -951,8 +949,12 @@ internal static class PenumbraModMeta
                       ["Manipulations"] = new System.Text.Json.Nodes.JsonArray(),
                   };
             if (dd["Files"] is not System.Text.Json.Nodes.JsonObject files) dd["Files"] = files = [];
-            if (dd["Manipulations"] is not System.Text.Json.Nodes.JsonArray manips) dd["Manipulations"] = manips = [];
+            var manips = dd["Manipulations"] as System.Text.Json.Nodes.JsonArray;
+            bool had = manips != null;
+            manips ??= [];
             edit(files, manips);
+            // Only an edit that adds one gives the default data a manipulation list it did not have.
+            if (!had && manips.Count > 0) dd["Manipulations"] = manips;
             WriteManifestKey(modRoot, manifest, "DefaultData", dd);
             return;
         }
@@ -967,8 +969,12 @@ internal static class PenumbraModMeta
                 throw new InvalidOperationException(string.Format(CheapLoc.Loc.Localize("Service.ModMeta.NoOption.Fmt",
                     "The group \"{0}\" has no option called \"{1}\"."), groupName, optionName));
             if (option["Files"] is not System.Text.Json.Nodes.JsonObject files) option["Files"] = files = [];
-            if (option["Manipulations"] is not System.Text.Json.Nodes.JsonArray manips) option["Manipulations"] = manips = [];
+            var manips = option["Manipulations"] as System.Text.Json.Nodes.JsonArray;
+            bool had = manips != null;
+            manips ??= [];
             edit(files, manips);
+            // Only an edit that adds one gives the option a manipulation list it did not have.
+            if (!had && manips.Count > 0) option["Manipulations"] = manips;
         });
     }
 
