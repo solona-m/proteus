@@ -570,6 +570,29 @@ public class HairPortWriterTests
         Assert.True(HairPortPlan.FileFor(owner, SharedMaterial) == null || tracked.Contains(SharedMaterial));
     }
 
+    /// <summary>
+    /// Which of a remade port's old redirects are no longer needed: not one it still publishes, nor one another port of
+    /// its option still uses; one only another option's port uses, one no port uses, and one only a port remade in the
+    /// same save used, are.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-hair-race-port-8")]
+    public void Unneeded_redirects_are_those_no_port_of_the_option_still_uses()
+    {
+        static HairPortRecord.Entry Port(string option, string target, params string[] keys)
+            => new() { Group = "Cut", Option = option, TargetGamePath = target,
+                       Materials = keys.ToDictionary(k => k, k => "Hair Ports/" + k, StringComparer.OrdinalIgnoreCase) };
+        var was = Port("Long", Target, "kept", "shared", "otherOption", "unused", "remadeToo");
+        var sharer = Port("Long", Highlander, "shared");
+        var elsewhere = Port("Short", Target, "otherOption");
+        var remadeToo = Port("Long", HairPortPlan.HairPath(601, Id), "remadeToo");
+        var record = new HairPortRecord { Ports = [was, sharer, elsewhere, remadeToo] };
+
+        var drop = HairPortWriter.Unneeded(was, new HairPortPlan.Owner("Cut", "Long", "", new Dictionary<string, string>()),
+                                           new Dictionary<string, string> { ["kept"] = "x" }, record, [was, remadeToo, null]);
+        Assert.Equal(["otherOption", "remadeToo", "unused"], drop.Keys.Order());
+    }
+
     /// <summary>The author's own redirect of a material path is still never taken over.</summary>
     [Fact]
     [Trait("Plan", "AC-hair-race-port-5")]
