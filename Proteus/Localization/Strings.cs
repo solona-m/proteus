@@ -373,13 +373,16 @@ public sealed class HairPortStrings
     public readonly string Auto = Loc.Localize(
         "HairPort.Auto.Label", "Fit hair mods made for another race") + "###hairPortAuto";
 
-    public readonly string AutoTip = Loc.Localize("HairPort.Auto.Tip",
+    public readonly string AutoTip = Loc.Localize("HairPort.Auto.Tip2",
         "Many hair mods are made for one race only, so on any other race the game\n" +
-        "shows its own hairstyle instead. When on, Proteus notices, bends the mod's\n" +
-        "hairstyle onto your race's head and adds it to the same option of the same mod.\n\n" +
-        "Only between races of one sex, and only for the hairstyle you are wearing. It\n" +
-        "keeps working with Proteus off, travels with the mod, and shows for everyone\n" +
-        "drawn with that mod on. It can be undone here.");
+        "shows its own hairstyle instead. When on, Proteus bends the mod's hairstyle\n" +
+        "onto your race's head and adds it to the same option of the same mod — for the\n" +
+        "hairstyle you put on, and ahead of time for the hair mods switched on in your\n" +
+        "collection: when this is switched on, when a mod is installed, switched on or\n" +
+        "changed, and when you press Check now.\n\n" +
+        "Only for your own race, from races of the same sex. It keeps working with\n" +
+        "Proteus off, travels with the mod, and shows for everyone drawn with that mod\n" +
+        "on. It can be undone here.");
 
     public readonly string None = Loc.Localize("HairPort.Settings.None",
         "The hairstyle you are wearing needs no fitting.");
@@ -397,6 +400,29 @@ public sealed class HairPortStrings
         "Undo all {0} fitted hairstyles in this mod") + "###hairPortUndoAll";
 
     public readonly string Working = Loc.Localize("HairPort.Working", "Working…");
+
+    // ── Check of every hair mod ──────────────────────────────────────────────────────────────────────
+    public readonly string CheckingStart = Loc.Localize("HairPort.Scan.Starting", "Checking your hair mods…");
+    public readonly string CheckingFmt = Loc.Localize("HairPort.Scan.Checking.Fmt", "Checking your hair mods… {0} of {1}");
+    public readonly string NoCheck = Loc.Localize("HairPort.Scan.None",
+        "Your hair mods have not been checked in this session yet.");
+    public readonly string CheckedFmt = Loc.Localize("HairPort.Scan.Checked.Fmt",
+        "{0} hairstyle(s) from your hair mods are fitted to {1}.");
+    public readonly string CheckNow = Loc.Localize("HairPort.Scan.CheckNow", "Check now") + "###hairPortCheck";
+    public readonly string CheckNowTip = Loc.Localize("HairPort.Scan.CheckNow.Tip",
+        "Look through every hair mod switched on in your collection and fit the ones\nmade for another race to yours.");
+    public readonly string WearHint = Loc.Localize("HairPort.Scan.WearHint",
+        "To wear one, choose that hairstyle number for your character — Glamourer shows the number.");
+    public readonly string ListFmt = Loc.Localize("HairPort.Scan.List.Fmt", "Hair mods for your race ({0})");
+    public readonly string RowFmt = Loc.Localize("HairPort.Scan.Row.Fmt", "Hairstyle {0} — {1}: {2}");
+    public readonly string StateFitted = Loc.Localize("HairPort.Scan.State.Fitted", "fitted");
+    public readonly string StateAlready = Loc.Localize("HairPort.Scan.State.Already", "already fitted");
+    public readonly string StateRemade = Loc.Localize("HairPort.Scan.State.Remade", "fitted again (the mod changed)");
+    public readonly string StateUndone = Loc.Localize("HairPort.Scan.State.Undone", "undone");
+    public readonly string StateRefused = Loc.Localize("HairPort.Scan.State.Refused", "not fitted");
+    public readonly string StateRefusedFmt = Loc.Localize("HairPort.Scan.State.Refused.Fmt", "not fitted — {0}");
+    public readonly string UndoChecked = Loc.Localize("HairPort.Scan.UndoChecked",
+        "Undo everything this check fitted") + "###hairPortUndoChecked";
 
     // ── Studio ──────────────────────────────────────────────────────────────────────────────────────
     public readonly string Header = Loc.Localize("HairPort.Studio.Header", "Port to all races") + "###hairPortStudio";

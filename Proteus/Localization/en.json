@@ -5023,10 +5023,6 @@
     "message": "Fit hair mods made for another race",
     "description": "Checkbox label in Settings > Hair that turns automatic hair porting on."
   },
-  "HairPort.Auto.Tip": {
-    "message": "Many hair mods are made for one race only, so on any other race the game\nshows its own hairstyle instead. When on, Proteus notices, bends the mod's\nhairstyle onto your race's head and adds it to the same option of the same mod.\n\nOnly between races of one sex, and only for the hairstyle you are wearing. It\nkeeps working with Proteus off, travels with the mod, and shows for everyone\ndrawn with that mod on. It can be undone here.",
-    "description": "Tooltip for the automatic hair-port checkbox in Settings > Hair."
-  },
   "HairPort.Settings.None": {
     "message": "The hairstyle you are wearing needs no fitting.",
     "description": "Status line in Settings > Hair when the worn hairstyle needs no porting."
@@ -5142,5 +5138,85 @@
   "HairPort.Refused.RecordUnreadable": {
     "message": "Proteus's record of this mod's hair ports (Proteus/hairport.json) could not be read, so nothing was changed.",
     "description": "Why a hair port save or undo was refused: Proteus's own record file in the mod is corrupt."
+  },
+  "HairPort.Auto.Tip2": {
+    "message": "Many hair mods are made for one race only, so on any other race the game\nshows its own hairstyle instead. When on, Proteus bends the mod's hairstyle\nonto your race's head and adds it to the same option of the same mod — for the\nhairstyle you put on, and ahead of time for the hair mods switched on in your\ncollection: when this is switched on, when a mod is installed, switched on or\nchanged, and when you press Check now.\n\nOnly for your own race, from races of the same sex. It keeps working with\nProteus off, travels with the mod, and shows for everyone drawn with that mod\non. It can be undone here.",
+    "description": "Tooltip for the automatic hair-port checkbox in Settings > Hair."
+  },
+  "HairPort.Scan.Starting": {
+    "message": "Checking your hair mods…",
+    "description": "Settings > Hair, while a check of every hair mod starts."
+  },
+  "HairPort.Scan.Checking.Fmt": {
+    "message": "Checking your hair mods… {0} of {1}",
+    "description": "Settings > Hair, progress of a check: {0} hairstyles done of {1}."
+  },
+  "HairPort.Scan.None": {
+    "message": "Your hair mods have not been checked in this session yet.",
+    "description": "Settings > Hair, before any check."
+  },
+  "HairPort.Scan.Checked.Fmt": {
+    "message": "{0} hairstyle(s) from your hair mods are fitted to {1}.",
+    "description": "Settings > Hair after a check. {0} = count, {1} = race and sex, e.g. Midlander ♀."
+  },
+  "HairPort.Scan.CheckNow": {
+    "message": "Check now",
+    "description": "Button: check every hair mod now."
+  },
+  "HairPort.Scan.CheckNow.Tip": {
+    "message": "Look through every hair mod switched on in your collection and fit the ones\nmade for another race to yours.",
+    "description": "Tooltip for Check now."
+  },
+  "HairPort.Scan.WearHint": {
+    "message": "To wear one, choose that hairstyle number for your character — Glamourer shows the number.",
+    "description": "Hint under the check's result."
+  },
+  "HairPort.Scan.List.Fmt": {
+    "message": "Hair mods for your race ({0})",
+    "description": "Collapsible list header. {0} = rows."
+  },
+  "HairPort.Scan.Row.Fmt": {
+    "message": "Hairstyle {0} — {1}: {2}",
+    "description": "{0} = hairstyle number, {1} = mod name, {2} = state."
+  },
+  "HairPort.Scan.State.Fitted": {
+    "message": "fitted",
+    "description": "Row state."
+  },
+  "HairPort.Scan.State.Already": {
+    "message": "already fitted",
+    "description": "Row state."
+  },
+  "HairPort.Scan.State.Remade": {
+    "message": "fitted again (the mod changed)",
+    "description": "Row state."
+  },
+  "HairPort.Scan.State.Undone": {
+    "message": "undone",
+    "description": "Row state."
+  },
+  "HairPort.Scan.State.Refused": {
+    "message": "not fitted",
+    "description": "Row state."
+  },
+  "HairPort.Scan.State.Refused.Fmt": {
+    "message": "not fitted — {0}",
+    "description": "Row state with the reason {0}."
+  },
+  "HairPort.Scan.UndoChecked": {
+    "message": "Undo everything this check fitted",
+    "description": "Button under the list."
+  },
+  "HairPort.Scan.Entry.Fmt": {
+    "message": "hairstyle {0} ({1})",
+    "description": "One entry of the chat summary: {0} = number, {1} = mod name."
+  },
+  "HairPort.Scan.More.Fmt": {
+    "message": " and {0} more",
+    "description": "Appended to the chat summary list. Keep the leading space if your language uses one."
+  },
+  "Chat.HairPortScan.Fmt": {
+    "message": "[Proteus] Fitted to your race: {0}. To wear one, choose that hairstyle number for your character. Undo it, or turn this off, under /proteus > Settings > Hair.",
+    "description": "Chat line after a check of every hair mod fitted some. {0} = the list."
   }
 }

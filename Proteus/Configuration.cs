@@ -226,10 +226,18 @@ public class Configuration : IPluginConfiguration
 
     /// <summary>
     /// When the worn hairstyle is drawn as the game's own because its mod was made for another race only, port that
-    /// race's model to the wearer's and publish it from the same option of the same mod (<c>HairPortWatcher</c>). On by
-    /// default; a missing property keeps it, so no migration. The chat notice fires per port.
+    /// race's model to the wearer's and publish it from the same option of the same mod (<c>HairPortWatcher</c>) — and
+    /// do the same before it is worn for the player's hair mods (<c>HairPortScan</c>). On by default; a missing property
+    /// keeps it, so no migration. The chat notice fires per equip port, and once per check.
     /// </summary>
     public bool AutoHairPort { get; set; } = true;
+
+    /// <summary>
+    /// Whether a check of every hair mod in the player's collection (<c>HairPortScan</c>) has run to the end once. Until
+    /// it has, the first load with <see cref="AutoHairPort"/> on runs one; after that only switching the setting on,
+    /// "Check now", and a mod installed, switched on or changed start a check. False when missing, so an update runs it.
+    /// </summary>
+    public bool HairPortFullScanDone { get; set; }
 
     /// <summary>
     /// Fit a hairstyle whose author already gave it hat support too, discarding theirs (<c>shp_hib</c> and

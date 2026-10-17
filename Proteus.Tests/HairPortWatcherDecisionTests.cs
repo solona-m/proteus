@@ -37,6 +37,7 @@ public class HairPortWatcherDecisionTests
         public void Reload(string modDir) => Calls.Add("reload " + modDir);
         public string? WornNow() => WornAfter ?? Worn;
         public void Redraw() => Calls.Add("redraw");
+        public void CheckMod(string modDir) => Calls.Add("check " + modDir);
     }
 
     /// <summary>A Miqo'te-only hair mod in a mods root of its own, and Penumbra serving it for the Miqo'te path.</summary>
@@ -77,6 +78,7 @@ public class HairPortWatcherDecisionTests
 
     [Fact]
     [Trait("Plan", "AC-hair-race-port-1")]
+    [Trait("Plan", "AC-hair-port-scan-10")]
     public void Vanilla_worn_hair_with_a_same_gender_mod_ports_into_that_mod()
     {
         using var s = new Setup();
@@ -90,11 +92,13 @@ public class HairPortWatcherDecisionTests
 
     [Fact]
     [Trait("Plan", "AC-hair-race-port-1")]
+    [Trait("Plan", "AC-hair-port-scan-10")]
     public void After_saving_the_mod_is_reloaded_then_redrawn()
     {
         using var s = new Setup();
         s.Run();
-        Assert.Equal(["announce", "reload Miqo Hair", "redraw"], s.Host.Calls);
+        // Then the mod's other hairstyles for this race are looked at too, as a check of the mod.
+        Assert.Equal(["announce", "reload Miqo Hair", "redraw", "check Miqo Hair"], s.Host.Calls);
     }
 
     [Fact]

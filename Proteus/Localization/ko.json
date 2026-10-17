@@ -5023,10 +5023,6 @@
     "message": "다른 종족용으로 만든 헤어 모드 맞추기",
     "description": ""
   },
-  "HairPort.Auto.Tip": {
-    "message": "많은 헤어 모드는 한 종족 전용으로 만들어져서, 다른 종족에서는 게임\n기본 헤어스타일이 대신 표시됩니다. 켜면 Proteus가 이를 알아채고 모드의\n헤어스타일을 당신 종족의 머리에 맞게 구부려 같은 모드의 같은 옵션에\n추가합니다.\n\n같은 성별의 종족 사이에서만, 그리고 지금 착용한 헤어스타일에만\n적용됩니다. Proteus를 꺼도 계속 작동하고, 모드와 함께 따라가며, 그\n모드를 켠 채로 표시되는 모두에게 보입니다. 여기서 되돌릴 수 있습니다.",
-    "description": ""
-  },
   "HairPort.Settings.None": {
     "message": "지금 착용한 헤어스타일은 맞출 필요가 없습니다.",
     "description": ""
@@ -5141,6 +5137,86 @@
   },
   "HairPort.Refused.RecordUnreadable": {
     "message": "이 모드의 헤어 이식에 대한 Proteus 기록(Proteus/hairport.json)을 읽을 수 없어 아무것도 변경하지 않았습니다.",
+    "description": ""
+  },
+  "HairPort.Auto.Tip2": {
+    "message": "많은 헤어 모드는 한 종족 전용으로 만들어져서, 다른 종족에서는 게임\n기본 헤어스타일이 대신 표시됩니다. 켜면 Proteus가 모드의 헤어스타일을\n당신 종족의 머리에 맞게 구부려 같은 모드의 같은 옵션에 추가합니다.\n착용한 헤어스타일뿐 아니라 컬렉션에서 켜진 헤어 모드도 미리 맞춥니다:\n이 설정을 켤 때, 모드를 설치·활성화·변경할 때, \"지금 확인\"을 누를 때.\n\n당신의 종족에만, 같은 성별의 종족에서 가져옵니다. Proteus를 꺼도 계속\n작동하고, 모드와 함께 따라가며, 그 모드를 켠 채로 표시되는 모두에게\n보입니다. 여기서 되돌릴 수 있습니다.",
+    "description": ""
+  },
+  "HairPort.Scan.Starting": {
+    "message": "헤어 모드를 확인하는 중…",
+    "description": ""
+  },
+  "HairPort.Scan.Checking.Fmt": {
+    "message": "헤어 모드를 확인하는 중… {0} / {1}",
+    "description": ""
+  },
+  "HairPort.Scan.None": {
+    "message": "이번 세션에서는 아직 헤어 모드를 확인하지 않았습니다.",
+    "description": ""
+  },
+  "HairPort.Scan.Checked.Fmt": {
+    "message": "헤어 모드의 헤어스타일 {0}개가 {1}에 맞춰져 있습니다.",
+    "description": ""
+  },
+  "HairPort.Scan.CheckNow": {
+    "message": "지금 확인",
+    "description": ""
+  },
+  "HairPort.Scan.CheckNow.Tip": {
+    "message": "컬렉션에서 켜진 모든 헤어 모드를 살펴보고, 다른 종족용으로 만든 것을\n당신의 종족에 맞춥니다.",
+    "description": ""
+  },
+  "HairPort.Scan.WearHint": {
+    "message": "착용하려면 캐릭터의 헤어스타일 번호를 그 번호로 고르세요 — Glamourer에 번호가 표시됩니다.",
+    "description": ""
+  },
+  "HairPort.Scan.List.Fmt": {
+    "message": "당신 종족용 헤어 모드 ({0})",
+    "description": ""
+  },
+  "HairPort.Scan.Row.Fmt": {
+    "message": "헤어스타일 {0} — {1}: {2}",
+    "description": ""
+  },
+  "HairPort.Scan.State.Fitted": {
+    "message": "맞춤",
+    "description": ""
+  },
+  "HairPort.Scan.State.Already": {
+    "message": "이미 맞춤",
+    "description": ""
+  },
+  "HairPort.Scan.State.Remade": {
+    "message": "다시 맞춤 (모드가 바뀜)",
+    "description": ""
+  },
+  "HairPort.Scan.State.Undone": {
+    "message": "되돌림",
+    "description": ""
+  },
+  "HairPort.Scan.State.Refused": {
+    "message": "맞추지 못함",
+    "description": ""
+  },
+  "HairPort.Scan.State.Refused.Fmt": {
+    "message": "맞추지 못함 — {0}",
+    "description": ""
+  },
+  "HairPort.Scan.UndoChecked": {
+    "message": "이번 확인에서 맞춘 것 모두 되돌리기",
+    "description": ""
+  },
+  "HairPort.Scan.Entry.Fmt": {
+    "message": "헤어스타일 {0} ({1})",
+    "description": ""
+  },
+  "HairPort.Scan.More.Fmt": {
+    "message": " 외 {0}개",
+    "description": ""
+  },
+  "Chat.HairPortScan.Fmt": {
+    "message": "[Proteus] 당신 종족에 맞췄습니다: {0}. 착용하려면 캐릭터의 헤어스타일을 그 번호로 고르세요. 되돌리거나 끄려면 /proteus > 설정 > 헤어.",
     "description": ""
   }
 }
