@@ -272,16 +272,7 @@ internal static class HairPortBuilder
             return null;
         if (phy != null) files.Add(phy);
 
-        foreach (var f in files)
-        {
-            var existing = HairPortPlan.FileFor(owner, f.GamePath);
-            bool ours = existing != null
-                && (HairPortPlan.IsPortFile(existing)
-                    || record.Ports.Any(p => HairPortPlan.Same(p.Owner, owner) && p.Materials.TryGetValue(f.GamePath, out var mine)
-                                             && HairPortRecord.Rel(mine).Equals(HairPortRecord.Rel(existing),
-                                                                                StringComparison.OrdinalIgnoreCase)));
-            if (existing != null ? !ours : !HairPortPlan.CanPortInto(owners, owner, f.GamePath)) return null;
-        }
+        if (files.Any(f => !HairPortWriter.MayPublish(owners, owner, record, f.GamePath))) return null;
         return (files, bones, skeleton);
     }
 

@@ -498,6 +498,78 @@ public class HairPortWriterTests
         Assert.True(mod.Has("mats/a.mtrl"));
     }
 
+    private const string SharedMaterial = "chara/human/c0201/obj/hair/h0130/material/v0001/mt_c0201h0130_hir_a.mtrl";
+    private static readonly string Highlander = HairPortPlan.HairPath(401, Id);
+
+    private static HairPortWriter.PortWrite PortTo(Mod mod, string target, params HairPortWriter.MaterialWrite[] materials)
+        => new(mod.Owner("Cut", "Long"), Source, "long/c0801h0130_hir.mdl", "x", target,
+               HairModel(target == Target ? (ushort)201 : (ushort)401), materials);
+
+    private static readonly HairPortWriter.MaterialWrite Shared = new(SharedMaterial, null, [3]);
+
+    /// <summary>A port remade with the same material keeps publishing it.</summary>
+    [Fact]
+    [Trait("Plan", "AC-hair-race-port-8")]
+    public void A_remade_port_keeps_publishing_its_material()
+    {
+        using var mod = TwoCuts();
+        Assert.True(HairPortWriter.Save(mod.Root, [PortTo(mod, Target, Shared)], auto: true).Ok);
+        Assert.True(HairPortWriter.Save(mod.Root, [PortTo(mod, Target, Shared)], auto: true).Ok);
+        var copy = HairPortPlan.FileFor(mod.Owner("Cut", "Long"), SharedMaterial);
+        Assert.NotNull(copy);
+        Assert.True(mod.Has(copy!));
+    }
+
+    /// <summary>One port of a shared material remade without it: the other still uses it, so it stays.</summary>
+    [Fact]
+    [Trait("Plan", "AC-hair-race-port-8")]
+    [Trait("Plan", "EDGE-hair-race-port-23")]
+    public void A_material_another_port_still_uses_stays_when_one_is_remade_without_it()
+    {
+        using var mod = TwoCuts();
+        Assert.True(HairPortWriter.Save(mod.Root, [PortTo(mod, Target, Shared), PortTo(mod, Highlander, Shared)], auto: true).Ok);
+        Assert.True(HairPortWriter.Save(mod.Root, [PortTo(mod, Target)], auto: true).Ok);
+        var copy = HairPortPlan.FileFor(mod.Owner("Cut", "Long"), SharedMaterial);
+        Assert.NotNull(copy);
+        Assert.True(mod.Has(copy!));
+        Assert.Contains(SharedMaterial, HairPortRecord.Read(mod.Root).Ports.Single(p => p.TargetGamePath == Highlander).Materials.Keys);
+    }
+
+    /// <summary>Every port of a shared material remade without it in one save: it is taken out, its copy deleted.</summary>
+    [Fact]
+    [Trait("Plan", "AC-hair-race-port-8")]
+    public void A_material_no_remade_port_uses_any_more_is_taken_out()
+    {
+        using var mod = TwoCuts();
+        Assert.True(HairPortWriter.Save(mod.Root, [PortTo(mod, Target, Shared), PortTo(mod, Highlander, Shared)], auto: true).Ok);
+        var copy = HairPortPlan.FileFor(mod.Owner("Cut", "Long"), SharedMaterial)!;
+        Assert.True(HairPortWriter.Save(mod.Root, [PortTo(mod, Target), PortTo(mod, Highlander)], auto: true).Ok);
+        Assert.Null(HairPortPlan.FileFor(mod.Owner("Cut", "Long"), SharedMaterial));
+        Assert.False(mod.Has(copy));
+        Assert.All(HairPortRecord.Read(mod.Root).Ports, p => Assert.Empty(p.Materials));
+    }
+
+    /// <summary>
+    /// A save that fails after one option's merge — which the rollback takes back out, port included — while that
+    /// option's remade port no longer used a redirect it added before: nothing is left published that no record entry
+    /// names.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-hair-race-port-8")]
+    public void A_remake_that_fails_leaves_no_untracked_redirect()
+    {
+        using var mod = TwoCuts();
+        Assert.True(HairPortWriter.Save(mod.Root, [PortTo(mod, Target, Shared)], auto: true).Ok);
+        // The first option's merge goes in; the second's fails.
+        HairPortWriter.BeforeMerge = n => { if (n == 1) throw new IOException("boom"); };
+        try { Assert.False(HairPortWriter.Save(mod.Root, [PortTo(mod, Target), Write(mod, "Cut", "Short")], auto: true).Ok); }
+        finally { HairPortWriter.BeforeMerge = null; }
+
+        var owner = mod.Owner("Cut", "Long");
+        var tracked = HairPortRecord.Read(mod.Root).Ports.SelectMany(p => p.Materials.Keys).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        Assert.True(HairPortPlan.FileFor(owner, SharedMaterial) == null || tracked.Contains(SharedMaterial));
+    }
+
     /// <summary>The author's own redirect of a material path is still never taken over.</summary>
     [Fact]
     [Trait("Plan", "AC-hair-race-port-5")]

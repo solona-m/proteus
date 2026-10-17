@@ -89,8 +89,12 @@ internal static class HairPortWriter
                         return new Outcome(false, ModelBackupOrder.BlockedMessage(later), 0);
                 }
                 else if (!HairPortPlan.CanPortInto(owners, owner, w.TargetGamePath))
-                    return new Outcome(false, string.Format(Loc.Localize("HairPort.Refused.Covered.Fmt",
-                        "the mod already publishes {0} there"), w.TargetGamePath), 0);
+                    return new Outcome(false, Covered(w.TargetGamePath), 0);
+                // A carried skeleton is what the port moves with: without it, no port at all — refused before anything
+                // is written, so the port from before stays as it was.
+                if (w.Materials.FirstOrDefault(m => CarriesSkeleton(w, m.GamePath) && !MayPublish(owners, owner, record, m.GamePath))
+                    is { } taken)
+                    return new Outcome(false, Covered(taken.GamePath), 0);
                 plan.Add((w, owner, was?.File ?? HairPortPlan.PortFile(owner, w.TargetGamePath), was));
             }
 
@@ -126,23 +130,7 @@ internal static class HairPortWriter
                     foreach (var m in w.Materials)
                     {
                         // The author's own material for that path wins — and a redirect of ours from before is replaced.
-                        // Ours is what the record says we added: a redirect to the author's own file (a material the
-                        // source race reads) lives outside Hair Ports/ and is still ours to carry and later take out.
-                        string? existing = HairPortPlan.FileFor(owner, m.GamePath);
-                        bool ours = existing != null
-                            && (HairPortPlan.IsPortFile(existing)
-                                || record.Ports.Any(p => HairPortPlan.Same(p.Owner, owner)
-                                                         && p.Materials.TryGetValue(m.GamePath, out var mine)
-                                                         && HairPortRecord.Rel(mine).Equals(HairPortRecord.Rel(existing),
-                                                                                            StringComparison.OrdinalIgnoreCase)));
-                        if ((existing != null && !ours) || (existing == null && !HairPortPlan.CanPortInto(owners, owner, m.GamePath)))
-                        {
-                            // A carried skeleton is what the port moves with: without it, no port at all.
-                            if (CarriesSkeleton(w, m.GamePath))
-                                throw new IOException(string.Format(Loc.Localize("HairPort.Refused.Covered.Fmt",
-                                    "the mod already publishes {0} there"), m.GamePath));
-                            continue;
-                        }
+                        if (!MayPublish(owners, owner, record, m.GamePath)) continue;
 
                         string rel = m.AuthorFile ?? HairPortPlan.PortFile(owner, m.GamePath);
                         if (m.AuthorFile == null) WriteFile(modRoot, rel, m.Bytes ?? [], created);
@@ -158,30 +146,24 @@ internal static class HairPortWriter
                     });
                 }
 
+                // A remade port that no longer needs a redirect it added before (a skeleton it carried, a material) takes
+                // it out — while it still names the file it was given, and no other port of the option still uses it —
+                // or nothing would ever take it out: the record forgets it. Before the merges, so a merge that fails
+                // later leaves none of these behind untracked.
+                foreach (var (_, owner, _, was) in plan.Where(p => p.Was != null))
+                {
+                    var drop = Unneeded(was!, owner, redirects[owner], record, plan.Select(p => p.Was));
+                    if (drop.Count == 0) continue;
+                    PenumbraModMeta.RemoveOptionRedirects(modRoot, owner.Group, owner.Option, drop);
+                    dropped = true;
+                }
+
                 foreach (var (owner, add) in redirects)
                 {
                     BeforeMerge?.Invoke(committed.Count);
                     PenumbraModMeta.MergeOptionRedirects(modRoot, owner.Group, owner.Option, add, skeletons.GetValueOrDefault(owner),
                                                          AnyEst(replaced.GetValueOrDefault(owner) ?? []));
                     committed.Add((owner, add));
-                }
-
-                // A remade port that no longer needs a redirect it added before (a skeleton it carried, a material) takes
-                // it out — while it still names the file it was given, and no other port of the option still uses it —
-                // or nothing would ever take it out: the record forgets it.
-                foreach (var (w, owner, _, was) in plan.Where(p => p.Was != null))
-                {
-                    var add = redirects[owner];
-                    var drop = was!.Materials
-                        .Where(m => !add.ContainsKey(m.Key)
-                                    && !record.Ports.Any(p => p != was && HairPortPlan.Same(p.Owner, owner)
-                                                              && !plan.Any(q => q.Was == p) && p.Materials.ContainsKey(m.Key)))
-                        .ToDictionary(m => m.Key, m => m.Value, StringComparer.OrdinalIgnoreCase);
-                    if (drop.Count > 0)
-                    {
-                        PenumbraModMeta.RemoveOptionRedirects(modRoot, owner.Group, owner.Option, drop);
-                        dropped = true;
-                    }
                 }
             }
             catch (Exception ex)
@@ -212,6 +194,41 @@ internal static class HairPortWriter
             return new Outcome(true, "", entries.Count);
         }
     }
+
+    /// <summary>
+    /// The redirects a remade port's entry from before added that it no longer publishes (<paramref name="add"/> is
+    /// everything its option is given now) and that no other port of the option still uses — the ports remade in the
+    /// same save, <paramref name="remade"/>, aside, since what they use is in <paramref name="add"/>.
+    /// </summary>
+    internal static Dictionary<string, string> Unneeded(HairPortRecord.Entry was, HairPortPlan.Owner owner,
+                                                        IReadOnlyDictionary<string, string> add, HairPortRecord record,
+                                                        IEnumerable<HairPortRecord.Entry?> remade)
+    {
+        var replaced = remade.ToHashSet();
+        return was.Materials
+                  .Where(m => !add.ContainsKey(m.Key)
+                              && !record.Ports.Any(p => !replaced.Contains(p) && HairPortPlan.Same(p.Owner, owner)
+                                                        && p.Materials.ContainsKey(m.Key)))
+                  .ToDictionary(m => m.Key, m => m.Value, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Whether a redirect of <paramref name="gamePath"/> may be published from <paramref name="owner"/>: the path is
+    /// ours there already — a port file, or what the record says a port of the option added (a redirect to the author's
+    /// own file lives outside Hair Ports/ and is still ours to carry and later take out) — or free (see
+    /// <see cref="HairPortPlan.CanPortInto"/>). The author's own redirect always wins.
+    /// </summary>
+    internal static bool MayPublish(IReadOnlyList<HairPortPlan.Owner> owners, HairPortPlan.Owner owner, HairPortRecord record,
+                                    string gamePath)
+    {
+        if (HairPortPlan.FileFor(owner, gamePath) is not { } existing) return HairPortPlan.CanPortInto(owners, owner, gamePath);
+        return HairPortPlan.IsPortFile(existing)
+            || record.Ports.Any(p => HairPortPlan.Same(p.Owner, owner) && p.Materials.TryGetValue(gamePath, out var mine)
+                                     && HairPortRecord.Rel(mine).Equals(HairPortRecord.Rel(existing), StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string Covered(string gamePath)
+        => string.Format(Loc.Localize("HairPort.Refused.Covered.Fmt", "the mod already publishes {0} there"), gamePath);
 
     /// <summary>Whether <paramref name="gamePath"/> is the skeleton, or its physics, <paramref name="w"/> carries for its
     /// race's hairstyle (<see cref="PortWrite.SkeletonFrom"/>).</summary>
