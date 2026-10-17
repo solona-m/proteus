@@ -33,7 +33,25 @@ internal sealed class HairPortScanSchedule
 
     /// <param name="Full">Every hairstyle the player's race can wear, not only <paramref name="Mods"/>'.</param>
     /// <param name="Force">Asked for by the player: look again even at hairstyles whose resolution is unchanged.</param>
-    public sealed record Work(ushort Race, bool Full, IReadOnlyList<string> Mods, bool Force);
+    public sealed record Work(ushort Race, bool Full, IReadOnlyList<string> Mods, bool Force)
+    {
+        /// <summary>Whether hairstyles whose resolution is unchanged are looked at again: when asked for, and always
+        /// for a check of particular mods — a model replaced at the same path resolves no differently, and the mod's
+        /// Edited is the only sign of it.</summary>
+        public bool LooksAgain => Force || !Full;
+    }
+
+    /// <summary>Work taken but not done — Penumbra could not be asked — owed again, due at <paramref name="dueAt"/>.</summary>
+    public void Return(Work work, long dueAt)
+    {
+        lock (gate)
+        {
+            if (work.Full) { full = true; mods.Clear(); }
+            else if (!full) foreach (var dir in work.Mods) mods.Add(dir);
+            force |= work.Force;
+            this.dueAt = Math.Max(dueAt, this.dueAt);
+        }
+    }
 
     private readonly object gate = new();
     private bool full, force;

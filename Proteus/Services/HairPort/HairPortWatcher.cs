@@ -82,6 +82,10 @@ public sealed partial class HairPortWatcher : IDisposable
     }
 
     private volatile ScanView scan = new();
+    private readonly object scanGate = new();
+
+    /// <summary>Counts collection changes, so a check that ran across one does not bring back what it cleared.</summary>
+    private int collectionGeneration;
     internal ScanView Scan => scan;
 
     public HairPortWatcher(CompositorService compositor, PenumbraBridge penumbra, GlamourerBridge glamourer,
@@ -151,8 +155,9 @@ public sealed partial class HairPortWatcher : IDisposable
     {
         if (!Enabled) return;
         // What the last check found was for the other collection; one under way is for it too.
+        Interlocked.Increment(ref collectionGeneration);
         CancelCheck();
-        scan = scan with { Rows = [] };
+        UpdateScan(s => s with { Rows = [] });
         Refresh(delayMs: PenumbraSettleMs);
     }
 
@@ -164,8 +169,7 @@ public sealed partial class HairPortWatcher : IDisposable
     private void OnModDeleted(string modDirectory)
     {
         schedule.ModDeleted(modDirectory);
-        var s = scan;
-        scan = s with { Rows = Decide.DropMod(s.List, modDirectory) };
+        UpdateScan(s => s with { Rows = Decide.DropMod(s.List, modDirectory) });
     }
 
     /// <summary>Look through every hair mod in the player's collection now, hairstyles unchanged since the last look
@@ -306,22 +310,27 @@ public sealed partial class HairPortWatcher : IDisposable
         if (!flight.TryEnter())
         {
             // Lost to a look that started this frame: the check is owed again, not dropped.
-            if (work.Full) schedule.OweFull(Environment.TickCount64, work.Force);
-            else foreach (var dir in work.Mods) schedule.ModAdded(dir, Environment.TickCount64);
+            schedule.Return(work, Environment.TickCount64);
             return;
         }
         modNames = penumbra.GetAllMods() ?? new Dictionary<string, string>();
         var cts = new CancellationTokenSource();
         Volatile.Write(ref checkCts, cts);
+        int generation = Volatile.Read(ref collectionGeneration);
         current = current with { Busy = true };
-        scan = scan with { Running = true, Done = 0, Total = 0, Message = "" };
+        UpdateScan(s => s with { Running = true, Done = 0, Total = 0, Message = "" });
         Task.Run(() =>
         {
             try
             {
                 var host = new Host(this);
                 var modsRoot = host.ModsRoot;
-                if (string.IsNullOrEmpty(modsRoot)) return;
+                if (string.IsNullOrEmpty(modsRoot))
+                {
+                    // Penumbra is not there to ask: the check is owed until it is.
+                    schedule.Return(work, Environment.TickCount64 + RetryMs);
+                    return;
+                }
                 var ids = work.Full
                     ? HairPortScan.IdsForFull(work.Race, host.GameHas)
                     : work.Mods.SelectMany(d => HairPortScan.IdsInMod(HairPortPlan.ReadOwners(Path.Combine(modsRoot, d)), work.Race))
@@ -330,9 +339,17 @@ public sealed partial class HairPortWatcher : IDisposable
                 if (ids.Count == 0) { log.Debug("hair port: {0} — no hairstyle to look at", label); return; }
 
                 var worn = Decide.WornHair(livePartsCache);
-                var result = HairPortScan.Run(host, work.Race, ids, worn, memo, work.Force, label, cts.Token,
-                                              (d, t) => scan = scan with { Done = d, Total = t });
-                Merge(work.Race, result);
+                var result = HairPortScan.Run(host, work.Race, ids, worn, memo, work.LooksAgain, label, cts.Token,
+                                              (d, t) => UpdateScan(s => s with { Done = d, Total = t }));
+                if (result.Failed)
+                {
+                    log.Warning("hair port: {0} — Penumbra could not resolve the hairstyles; trying again shortly", label);
+                    schedule.Return(work, Environment.TickCount64 + RetryMs);
+                    return;
+                }
+                // A collection change while it ran: what it found is the other collection's, which was cleared.
+                bool stale = generation != Volatile.Read(ref collectionGeneration);
+                UpdateScan(s => Decide.Merge(s, work.Race, result, stale));
                 if (result.Written.Count > 0) lastKey = null;
                 if (work.Full && !result.Cancelled && !config.HairPortFullScanDone)
                 {
@@ -343,25 +360,26 @@ public sealed partial class HairPortWatcher : IDisposable
             catch (Exception ex)
             {
                 log.Error(ex, "hair port: checking the hair mods failed");
-                scan = scan with { Message = ex.Message };
+                UpdateScan(s => s with { Message = ex.Message });
             }
             finally
             {
                 Interlocked.CompareExchange(ref checkCts, null, cts);
-                scan = scan with { Running = false };
+                UpdateScan(s => s with { Running = false });
                 current = current with { Busy = false };
                 if (flight.Exit(out var owedDelay)) Refresh(owedDelay);
             }
         });
     }
 
-    /// <summary>A check's rows over the last ones: the hairstyles it looked at are replaced, the rest kept — a check of
-    /// one mod leaves the others' rows alone. Another race's rows are dropped.</summary>
-    private void Merge(ushort race, HairPortScan.Result result)
+    /// <summary>How long a check that could not ask Penumbra waits before it is tried again.</summary>
+    private const int RetryMs = 5000;
+
+    /// <summary>Change what the panel shows of the checks: from the worker, Penumbra's event threads and the UI alike,
+    /// one change at a time, so none is lost.</summary>
+    private void UpdateScan(Func<ScanView, ScanView> change)
     {
-        var s = scan;
-        var keep = s.Race == race ? s.List.Where(r => !result.Examined.Contains(r.Id)) : [];
-        scan = s with { Race = race, Rows = keep.Concat(result.Rows).OrderBy(r => r.Id).ToList() };
+        lock (scanGate) scan = change(scan);
     }
 
     private void Examine()
@@ -388,8 +406,8 @@ public sealed partial class HairPortWatcher : IDisposable
         string? WornNow();
         void Redraw();
 
-        /// <summary>Every path of a check resolved for the player at once.</summary>
-        IReadOnlyDictionary<string, string?> ResolveAll(IReadOnlyList<string> gamePaths)
+        /// <summary>Every path of a check resolved for the player at once; null when Penumbra could not be asked.</summary>
+        IReadOnlyDictionary<string, string?>? ResolveAll(IReadOnlyList<string> gamePaths)
         {
             var map = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
             foreach (var p in gamePaths) map[p] = Resolve(p);
@@ -434,7 +452,7 @@ public sealed partial class HairPortWatcher : IDisposable
         }
 
         // On the framework thread, where Penumbra resolves for the player — all of a check's paths in one call.
-        public IReadOnlyDictionary<string, string?> ResolveAll(IReadOnlyList<string> gamePaths)
+        public IReadOnlyDictionary<string, string?>? ResolveAll(IReadOnlyList<string> gamePaths)
             => Plugin.Framework.RunOnFrameworkThread(() => w.penumbra.ResolvePlayerPaths(gamePaths)).GetAwaiter().GetResult();
         public bool GameHas(string gamePath)
         {
@@ -575,8 +593,7 @@ public sealed partial class HairPortWatcher : IDisposable
                     && (host.WornNow() is not { } now || string.Equals(now, worn, StringComparison.OrdinalIgnoreCase)))
                     host.Redraw();
                 lastKey = null;
-                var s = scan;
-                scan = s with { Rows = Decide.MarkUndone(s.List, undone) };
+                UpdateScan(s => s with { Rows = Decide.MarkUndone(s.List, undone) });
                 current = new View(worn, Message: message, Failed: failed);
             }
             catch (Exception ex)
@@ -673,6 +690,18 @@ public sealed partial class HairPortWatcher : IDisposable
                        return (g.Key, (Func<HairPortRecord.Entry, bool>)(e => targets.Contains(e.TargetGamePath)));
                    })
                    .ToList();
+
+        /// <summary>
+        /// A check's rows over the last ones: the hairstyles it looked at are replaced, the rest kept — a check of one mod
+        /// leaves the others' rows alone, and a hairstyle skipped as unchanged keeps its row. Another race's rows are
+        /// dropped. A check <paramref name="stale"/> from a collection change since it began changes nothing.
+        /// </summary>
+        public static ScanView Merge(ScanView view, ushort race, HairPortScan.Result result, bool stale)
+        {
+            if (stale) return view;
+            var keep = view.Race == race ? view.List.Where(r => !result.Examined.Contains(r.Id)) : [];
+            return view with { Race = race, Rows = keep.Concat(result.Rows).OrderBy(r => r.Id).ToList() };
+        }
 
         /// <summary>The rows left once a mod is deleted: none of its own.</summary>
         public static List<HairPortScan.Row> DropMod(IReadOnlyList<HairPortScan.Row> rows, string modDir)

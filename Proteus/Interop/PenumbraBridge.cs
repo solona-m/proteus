@@ -355,22 +355,24 @@ public class PenumbraBridge : IDisposable
     /// <summary>
     /// <see cref="ResolvePlayer"/> for many paths in one call — each game path to the player's current file, null where
     /// Penumbra gave none. Call on the framework thread: Penumbra resolves the player's collection off the object table.
-    /// Empty when unavailable or the call failed.
+    /// Null when unavailable or the call failed — not the same as nothing resolving.
     /// </summary>
-    public IReadOnlyDictionary<string, string?> ResolvePlayerPaths(IReadOnlyList<string> gamePaths)
+    public IReadOnlyDictionary<string, string?>? ResolvePlayerPaths(IReadOnlyList<string> gamePaths)
     {
         var map = new Dictionary<string, string?>(gamePaths.Count, StringComparer.OrdinalIgnoreCase);
-        if (!IsAvailable || gamePaths.Count == 0) return map;
+        if (!IsAvailable) return null;
+        if (gamePaths.Count == 0) return map;
         try
         {
             var asked = new string[gamePaths.Count];
             for (int i = 0; i < asked.Length; i++) asked[i] = gamePaths[i];
             var (forward, _) = resolvePlayerPaths.Invoke(asked, []);
-            for (int i = 0; i < gamePaths.Count && i < forward.Length; i++)
-                map[gamePaths[i]] = string.IsNullOrEmpty(forward[i]) ? null : forward[i];
+            if (forward == null || forward.Length != asked.Length) return null;
+            for (int i = 0; i < asked.Length; i++)
+                map[asked[i]] = string.IsNullOrEmpty(forward[i]) ? null : forward[i];
+            return map;
         }
-        catch (Exception ex) { log.Error(ex, "ResolvePlayerPaths failed for {0} path(s)", gamePaths.Count); }
-        return map;
+        catch (Exception ex) { log.Error(ex, "ResolvePlayerPaths failed for {0} path(s)", gamePaths.Count); return null; }
     }
 
     /// <summary>

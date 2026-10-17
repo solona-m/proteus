@@ -35,8 +35,10 @@ internal static class HairPortScan
     /// <param name="Examined">The hairstyles looked at: their earlier rows are replaced by <paramref name="Rows"/>. One
     /// skipped because nothing it resolves to changed keeps its row.</param>
     /// <param name="Written">Every game path a port was saved for, other races sharing a material included.</param>
+    /// <param name="Failed">Penumbra could not be asked what anything resolves to: nothing was looked at, and the check
+    /// is still owed.</param>
     public sealed record Result(IReadOnlyList<int> Examined, IReadOnlyList<Row> Rows, bool Cancelled,
-                                IReadOnlyList<string> Written);
+                                IReadOnlyList<string> Written, bool Failed = false);
 
     /// <summary>
     /// What earlier checks of this session learned: what each hairstyle resolved to, so a check nobody asked for skips
@@ -93,7 +95,12 @@ internal static class HairPortScan
         var order = ids.Distinct().OrderBy(id => id == wornId ? 0 : 1).ToList();
 
         var clock = Stopwatch.StartNew();
-        var resolved = host.ResolveAll(order.SelectMany(id => PathsFor(race, id, candidates)).ToList());
+        var asked = order.SelectMany(id => PathsFor(race, id, candidates)).ToList();
+        if (host.ResolveAll(asked) is not { } resolved || (asked.Count > 0 && resolved.Count == 0))
+        {
+            host.Log($"check of c{race:D4} ({label}): Penumbra could not resolve {asked.Count} path(s)");
+            return new Result([], [], false, [], Failed: true);
+        }
         long resolveMs = clock.ElapsedMilliseconds;
 
         var examined = new List<int>();
@@ -154,6 +161,12 @@ internal static class HairPortScan
                 Ported outcome;
                 try { outcome = PortOne(host, modRoot, d, race, pbd, ct); }
                 catch (OperationCanceledException) { cancelled = true; break; }
+                // One unreadable model refuses its own hairstyle, not the rest of the check.
+                catch (Exception ex)
+                {
+                    host.Log($"{target} in {modDir} not ported — {ex.GetType().Name}: {ex.Message}");
+                    outcome = new Ported([], false, ex.Message);
+                }
                 finally { bendMs += clock.ElapsedMilliseconds - t0; }
 
                 if (outcome.Writes.Count > 0)
@@ -172,6 +185,7 @@ internal static class HairPortScan
                 memo.Keys[$"{race}|{id}"] = key;
                 progress?.Invoke(++done, todo.Count);
             }
+            // Whatever stopped the mod's hairstyles — a cancel included — those saved are loaded.
             if (saved)
             {
                 var t0 = clock.ElapsedMilliseconds;

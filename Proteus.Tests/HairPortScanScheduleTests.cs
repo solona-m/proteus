@@ -75,7 +75,6 @@ public class HairPortScanScheduleTests
     }
 
     [Fact]
-    [Trait("Plan", "EDGE-hair-port-scan-13")]
     public void Changes_in_other_collections_owe_nothing()
     {
         var s = Settled();
@@ -176,5 +175,23 @@ public class HairPortScanScheduleTests
         Assert.True(work.Full);
         Assert.Empty(work.Mods);
         Assert.False(s.Pending);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-hair-port-scan-24")]
+    public void Work_that_could_not_ask_penumbra_is_owed_again()
+    {
+        var s = Settled();
+        s.ModAdded("Floof", T);
+        var work = s.Take(T + SettleMs)!;
+        s.Return(work, T + 10_000);
+        Assert.Null(s.Take(T + 9_999));
+        Assert.Equal(["Floof"], s.Take(T + 10_000)!.Mods);
+
+        s.OweFull(T, forced: true);
+        var full = s.Take(T + SettleMs)!;
+        s.Return(full, T + 20_000);
+        var again = s.Take(T + 20_000)!;
+        Assert.True(again.Full && again.Force);
     }
 }

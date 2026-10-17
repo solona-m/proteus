@@ -1,0 +1,59 @@
+using System.Linq;
+using Proteus.Services;
+using Xunit;
+using static Proteus.Services.HairPortWatcher;
+
+namespace Proteus.Tests;
+
+/// <summary>The watcher's own decisions around a check: whose race a walk saw, and what the panel keeps of each check.</summary>
+public class HairPortWatcherScanDecisionTests
+{
+    private static HairPortScan.Row Row(int id, string mod = "Floof", HairPortScan.RowState state = HairPortScan.RowState.Fitted)
+        => new(id, "root/" + mod, mod, mod, HairPortPlan.HairPath(201, id), state);
+
+    private static HairPortScan.Result Result(int[] examined, params HairPortScan.Row[] rows) => new(examined, rows, false, []);
+
+    [Theory]
+    [Trait("Plan", "AC-hair-port-scan-4")]
+    [InlineData(new[] { "chara/human/c0201/obj/hair/h0007/model/c0201h0007_hir.mdl",
+                        "chara/human/c0201/obj/face/f0001/model/c0201f0001_fac.mdl" }, 201)]
+    // A hat hides the hair: the face says the race.
+    [InlineData(new[] { "chara/equipment/e0001/model/c0201e0001_met.mdl",
+                        "chara/human/c0801/obj/face/f0002/model/c0801f0002_fac.mdl" }, 801)]
+    [InlineData(new[] { @"chara\human\c0401\obj\face\f0001\model\c0401f0001_fac.mdl" }, 401)]
+    // A face file filed under another race's folder is not trusted.
+    [InlineData(new[] { "chara/human/c0201/obj/face/f0001/model/c0801f0001_fac.mdl" }, 0)]
+    [InlineData(new[] { "chara/equipment/e0001/model/c0201e0001_top.mdl" }, 0)]
+    public void Race_from_the_hair_else_the_face(string[] parts, int race)
+        => Assert.Equal(race, Decide.RaceOf(parts));
+
+    [Fact]
+    [Trait("Plan", "AC-hair-port-scan-4")]
+    public void Nothing_drawn_has_no_race() => Assert.Equal(0, Decide.RaceOf(null));
+
+    [Fact]
+    [Trait("Plan", "AC-hair-port-scan-3")]
+    [Trait("Plan", "AC-hair-port-scan-7")]
+    public void A_check_replaces_only_the_hairstyles_it_looked_at()
+    {
+        var view = new ScanView(Race: 201, Rows: [Row(5, "Other"), Row(7), Row(9, "Kept")]);
+        // A check of one mod: hairstyle 7 refused now, 9 skipped as unchanged, 12 new.
+        var merged = Decide.Merge(view, 201, Result([7, 12], Row(7, state: HairPortScan.RowState.Refused), Row(12)), stale: false);
+        Assert.Equal([5, 7, 9, 12], merged.List.Select(r => r.Id));
+        Assert.Equal(HairPortScan.RowState.Refused, merged.List.Single(r => r.Id == 7).State);
+
+        // Another race's rows are not this race's.
+        var other = Decide.Merge(view, 401, Result([12], Row(12)), stale: false);
+        Assert.Equal([12], other.List.Select(r => r.Id));
+        Assert.Equal(401, other.Race);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-hair-port-scan-13")]
+    public void A_check_across_a_collection_change_brings_nothing_back()
+    {
+        var cleared = new ScanView(Race: 201, Rows: []);
+        var after = Decide.Merge(cleared, 201, Result([7], Row(7)), stale: true);
+        Assert.Empty(after.List);
+    }
+}

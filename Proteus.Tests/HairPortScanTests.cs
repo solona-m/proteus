@@ -46,6 +46,9 @@ public class HairPortScanTests
         public bool GameHas(string gamePath) => Game(gamePath) != null;
         public string ModName(string modDir) => modDir + " (name)";
         public void AnnounceScan(string line) => Calls.Add("summary " + line);
+        public bool ResolveFails { get; set; }
+        public IReadOnlyDictionary<string, string?>? ResolveAll(IReadOnlyList<string> gamePaths)
+            => ResolveFails ? null : gamePaths.ToDictionary(p => p, p => (string?)Resolve(p), StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>A mods root with the mods a test adds, and Penumbra resolving what they publish by default.</summary>
@@ -546,5 +549,56 @@ public class HairPortScanTests
         var again = s.Run([7, 9]);
         Assert.Empty(again.Examined);
         Assert.Equal([7, 9], s.Run([7, 9], force: true).Examined.OrderBy(i => i));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-hair-port-scan-27")]
+    [Trait("Plan", "EDGE-hair-port-scan-10")]
+    public void Mod_check_sees_a_model_replaced_in_place()
+    {
+        using var s = new Setup();
+        var root = s.DefaultDataMod("Floof", 7);
+        s.Run([7]);
+        s.Reloaded(root, 7);
+        Setup.Put(root, "default group/h0007.mdl", HairModelOf(Elezen, 7, radius: 0.101f));
+        // The mod's Edited owes a check of that mod, which looks again though nothing resolves differently.
+        var work = new HairPortScanSchedule.Work(Me, Full: false, ["Floof"], Force: false);
+        Assert.True(work.LooksAgain);
+        Assert.Equal(HairPortScan.RowState.Remade, s.Run([7], force: work.LooksAgain).Rows.Single().State);
+        // An unasked full check does skip what resolves as before.
+        Assert.False(new HairPortScanSchedule.Work(Me, Full: true, [], Force: false).LooksAgain);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-hair-port-scan-24")]
+    public void Penumbra_unreachable_is_a_failed_check_not_an_empty_one()
+    {
+        using var s = new Setup();
+        var root = s.DefaultDataMod("Floof", 7);
+        s.Host.ResolveFails = true;
+        var result = s.Run([7]);
+        Assert.True(result.Failed);
+        Assert.Empty(result.Examined);
+        Assert.Empty(s.Host.Calls);
+        // Nothing remembered: the same check once Penumbra answers fits it.
+        s.Host.ResolveFails = false;
+        Assert.Equal(HairPortScan.RowState.Fitted, s.Run([7]).Rows.Single().State);
+        Assert.True(Directory.Exists(Path.Combine(root, HairPortPlan.Folder)));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-hair-port-scan-5")]
+    public void An_unreadable_model_refuses_its_hairstyle_and_the_check_goes_on()
+    {
+        using var s = new Setup();
+        var bad = s.DefaultDataMod("Broken", 5);
+        Setup.Put(bad, "default group/h0005.mdl", [1, 2, 3, 4, 5, 6, 7, 8]);
+        s.DefaultDataMod("Floof", 7);
+
+        var result = s.Run([5, 7]);
+        Assert.Equal(HairPortScan.RowState.Refused, result.Rows.Single(r => r.Id == 5).State);
+        Assert.Equal(HairPortScan.RowState.Fitted, result.Rows.Single(r => r.Id == 7).State);
+        Assert.Contains("reload Floof", s.Host.Calls);
+        Assert.DoesNotContain("reload Broken", s.Host.Calls);
     }
 }
