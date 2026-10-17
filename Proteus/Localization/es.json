@@ -5023,10 +5023,6 @@
     "message": "Adaptar los mods de pelo hechos para otra raza",
     "description": ""
   },
-  "HairPort.Auto.Tip": {
-    "message": "Muchos mods de pelo están hechos para una sola raza, así que en cualquier otra\nel juego muestra su propio peinado. Con esto activado, Proteus lo detecta, dobla\nel peinado del mod sobre la cabeza de tu raza y lo añade a la misma opción del\nmismo mod.\n\nSolo entre razas del mismo sexo, y solo para el peinado que llevas. Sigue\nfuncionando con Proteus desactivado, viaja con el mod y se ve en todos los que\nse muestren con ese mod activo. Se puede deshacer aquí.",
-    "description": ""
-  },
   "HairPort.Settings.None": {
     "message": "El peinado que llevas no necesita ajuste.",
     "description": ""
@@ -5141,6 +5137,90 @@
   },
   "HairPort.Refused.RecordUnreadable": {
     "message": "No se pudo leer el registro de Proteus de los peinados portados de este mod (Proteus/hairport.json), así que no se cambió nada.",
+    "description": ""
+  },
+  "HairPort.Auto.Tip2": {
+    "message": "Muchos mods de pelo están hechos para una sola raza, así que en cualquier otra\nel juego muestra su propio peinado. Con esto activado, Proteus dobla el peinado\ndel mod sobre la cabeza de tu raza y lo añade a la misma opción del mismo mod:\npara el peinado que te pones y, por adelantado, para los mods de pelo activos en\ntu colección: al activar esto, al instalar, activar o cambiar un mod, y al pulsar\n«Comprobar ahora».\n\nSolo para tu propia raza, desde razas del mismo sexo. Sigue funcionando con\nProteus desactivado, viaja con el mod y se ve en todos los que se muestren con\nese mod activo. Se puede deshacer aquí.",
+    "description": ""
+  },
+  "HairPort.Scan.Starting": {
+    "message": "Comprobando tus mods de pelo…",
+    "description": ""
+  },
+  "HairPort.Scan.Checking.Fmt": {
+    "message": "Comprobando tus mods de pelo… {0} de {1}",
+    "description": ""
+  },
+  "HairPort.Scan.None": {
+    "message": "Tus mods de pelo aún no se han comprobado en esta sesión.",
+    "description": ""
+  },
+  "HairPort.Scan.Checked.Fmt": {
+    "message": "{0} peinado(s) de tus mods de pelo están ajustados a {1}.",
+    "description": ""
+  },
+  "HairPort.Scan.CheckNow": {
+    "message": "Comprobar ahora",
+    "description": ""
+  },
+  "HairPort.Scan.CheckNow.Tip": {
+    "message": "Revisar todos los mods de pelo activos en tu colección y ajustar a tu raza los\nhechos para otra.",
+    "description": ""
+  },
+  "HairPort.Scan.WearHint": {
+    "message": "Para llevar uno, elige ese número de peinado para tu personaje; Glamourer muestra el número.",
+    "description": ""
+  },
+  "HairPort.Scan.List.Fmt": {
+    "message": "Mods de pelo para tu raza ({0})",
+    "description": ""
+  },
+  "HairPort.Scan.Row.Fmt": {
+    "message": "Peinado {0} — {1}: {2}",
+    "description": ""
+  },
+  "HairPort.Scan.State.Fitted": {
+    "message": "ajustado",
+    "description": ""
+  },
+  "HairPort.Scan.State.Already": {
+    "message": "ya ajustado",
+    "description": ""
+  },
+  "HairPort.Scan.State.Remade": {
+    "message": "ajustado de nuevo (el mod cambió)",
+    "description": ""
+  },
+  "HairPort.Scan.State.Undone": {
+    "message": "deshecho",
+    "description": ""
+  },
+  "HairPort.Scan.State.Refused": {
+    "message": "no ajustado",
+    "description": ""
+  },
+  "HairPort.Scan.State.Refused.Fmt": {
+    "message": "no ajustado: {0}",
+    "description": ""
+  },
+  "HairPort.Scan.UndoChecked": {
+    "message": "Deshacer todo lo que ajustó esta comprobación",
+    "description": ""
+  },
+  "HairPort.Scan.Entry.Fmt": {
+    "message": "peinado {0} ({1})",
+    "description": ""
+  },
+  "HairPort.Scan.More.Fmt": {
+    "message": " y {0} más",
+    "description": ""
+  },
+  "Chat.HairPortScan.Fmt": {
+    "message": "[Proteus] Ajustado a tu raza: {0}. Para llevar uno, elige ese número de peinado para tu personaje. Deshazlo o desactiva esto en /proteus > Ajustes > Pelo.",
+    "description": ""
+  },
+  "HairPort.Scan.UndoChecked.Confirm.Fmt": {
+    "message": "Vuelve a pulsar para deshacer {0} peinado(s) definitivamente",
     "description": ""
   }
 }

@@ -5023,10 +5023,6 @@
     "message": "适配为其他种族制作的发型 Mod",
     "description": ""
   },
-  "HairPort.Auto.Tip": {
-    "message": "许多发型 Mod 只为一个种族制作，因此在其他种族上游戏会显示自带\n的发型。开启后，Proteus 会察觉到这一点，把 Mod 的发型弯折到你的\n种族的头部上，并添加到同一 Mod 的同一选项中。\n\n仅限同一性别的种族之间，且仅针对你当前戴着的发型。即使关闭\nProteus 也依然有效，会随 Mod 一起带走，所有启用该 Mod 显示的\n角色都能看到。可以在这里撤销。",
-    "description": ""
-  },
   "HairPort.Settings.None": {
     "message": "你当前戴着的发型无需适配。",
     "description": ""
@@ -5141,6 +5137,90 @@
   },
   "HairPort.Refused.RecordUnreadable": {
     "message": "无法读取 Proteus 对此 Mod 发型移植的记录（Proteus/hairport.json），因此未做任何更改。",
+    "description": ""
+  },
+  "HairPort.Auto.Tip2": {
+    "message": "许多发型 Mod 只为一个种族制作，因此在其他种族上游戏会显示自带\n的发型。开启后，Proteus 会把 Mod 的发型弯折到你的种族的头部上，\n并添加到同一 Mod 的同一选项中——既针对你戴上的发型，也会提前\n处理你的合集中已启用的发型 Mod：开启此项时、安装、启用或更改\nMod 时，以及点击“立即检查”时。\n\n仅针对你自己的种族，来源为同一性别的种族。即使关闭 Proteus 也依然\n有效，会随 Mod 一起带走，所有启用该 Mod 显示的角色都能看到。\n可以在这里撤销。",
+    "description": ""
+  },
+  "HairPort.Scan.Starting": {
+    "message": "正在检查你的发型 Mod…",
+    "description": ""
+  },
+  "HairPort.Scan.Checking.Fmt": {
+    "message": "正在检查你的发型 Mod… {0} / {1}",
+    "description": ""
+  },
+  "HairPort.Scan.None": {
+    "message": "本次会话中尚未检查你的发型 Mod。",
+    "description": ""
+  },
+  "HairPort.Scan.Checked.Fmt": {
+    "message": "你的发型 Mod 中有 {0} 个发型已适配到 {1}。",
+    "description": ""
+  },
+  "HairPort.Scan.CheckNow": {
+    "message": "立即检查",
+    "description": ""
+  },
+  "HairPort.Scan.CheckNow.Tip": {
+    "message": "查看你的合集中已启用的所有发型 Mod，并把为其他种族制作的\n适配到你的种族。",
+    "description": ""
+  },
+  "HairPort.Scan.WearHint": {
+    "message": "要使用某个发型，请为角色选择该发型编号——Glamourer 会显示编号。",
+    "description": ""
+  },
+  "HairPort.Scan.List.Fmt": {
+    "message": "适用于你的种族的发型 Mod（{0}）",
+    "description": ""
+  },
+  "HairPort.Scan.Row.Fmt": {
+    "message": "发型 {0} — {1}：{2}",
+    "description": ""
+  },
+  "HairPort.Scan.State.Fitted": {
+    "message": "已适配",
+    "description": ""
+  },
+  "HairPort.Scan.State.Already": {
+    "message": "早已适配",
+    "description": ""
+  },
+  "HairPort.Scan.State.Remade": {
+    "message": "已重新适配（Mod 已更改）",
+    "description": ""
+  },
+  "HairPort.Scan.State.Undone": {
+    "message": "已撤销",
+    "description": ""
+  },
+  "HairPort.Scan.State.Refused": {
+    "message": "未适配",
+    "description": ""
+  },
+  "HairPort.Scan.State.Refused.Fmt": {
+    "message": "未适配——{0}",
+    "description": ""
+  },
+  "HairPort.Scan.UndoChecked": {
+    "message": "撤销本次检查适配的全部内容",
+    "description": ""
+  },
+  "HairPort.Scan.Entry.Fmt": {
+    "message": "发型 {0}（{1}）",
+    "description": ""
+  },
+  "HairPort.Scan.More.Fmt": {
+    "message": "，以及另外 {0} 个",
+    "description": ""
+  },
+  "Chat.HairPortScan.Fmt": {
+    "message": "[Proteus] 已适配到你的种族：{0}。要使用，请为角色选择该发型编号。可在 /proteus > 设置 > 头发 中撤销或关闭此功能。",
+    "description": ""
+  },
+  "HairPort.Scan.UndoChecked.Confirm.Fmt": {
+    "message": "再次点击以永久撤销 {0} 个发型",
     "description": ""
   }
 }

@@ -5023,10 +5023,6 @@
     "message": "Haar-Mods für ein anderes Volk anpassen",
     "description": ""
   },
-  "HairPort.Auto.Tip": {
-    "message": "Viele Haar-Mods sind nur für ein Volk gemacht, daher zeigt das Spiel bei jedem\nanderen Volk seine eigene Frisur. Ist dies aktiv, bemerkt Proteus das, biegt\ndie Frisur des Mods auf den Kopf deines Volkes und fügt sie derselben Option\ndesselben Mods hinzu.\n\nNur zwischen Völkern eines Geschlechts und nur für die Frisur, die du trägst.\nEs funktioniert auch mit ausgeschaltetem Proteus, bleibt beim Mod und ist für\njeden sichtbar, der mit diesem Mod dargestellt wird. Es lässt sich hier\nrückgängig machen.",
-    "description": ""
-  },
   "HairPort.Settings.None": {
     "message": "Die Frisur, die du trägst, muss nicht angepasst werden.",
     "description": ""
@@ -5141,6 +5137,90 @@
   },
   "HairPort.Refused.RecordUnreadable": {
     "message": "Proteus' Aufzeichnung der Frisur-Übertragungen dieser Mod (Proteus/hairport.json) konnte nicht gelesen werden, daher wurde nichts geändert.",
+    "description": ""
+  },
+  "HairPort.Auto.Tip2": {
+    "message": "Viele Haar-Mods sind nur für ein Volk gemacht, daher zeigt das Spiel bei jedem\nanderen Volk seine eigene Frisur. Ist dies aktiv, biegt Proteus die Frisur des\nMods auf den Kopf deines Volkes und fügt sie derselben Option desselben Mods\nhinzu – für die Frisur, die du trägst, und vorab für die Haar-Mods, die in deiner\nSammlung aktiv sind: beim Einschalten, wenn ein Mod installiert, aktiviert oder\ngeändert wird, und wenn du „Jetzt prüfen“ drückst.\n\nNur für dein eigenes Volk, aus Völkern desselben Geschlechts. Funktioniert auch\nmit ausgeschaltetem Proteus, wandert mit dem Mod und ist für alle sichtbar, die\nmit diesem Mod dargestellt werden. Hier rückgängig zu machen.",
+    "description": ""
+  },
+  "HairPort.Scan.Starting": {
+    "message": "Deine Haar-Mods werden geprüft …",
+    "description": ""
+  },
+  "HairPort.Scan.Checking.Fmt": {
+    "message": "Deine Haar-Mods werden geprüft … {0} von {1}",
+    "description": ""
+  },
+  "HairPort.Scan.None": {
+    "message": "Deine Haar-Mods wurden in dieser Sitzung noch nicht geprüft.",
+    "description": ""
+  },
+  "HairPort.Scan.Checked.Fmt": {
+    "message": "{0} Frisur(en) aus deinen Haar-Mods sind an {1} angepasst.",
+    "description": ""
+  },
+  "HairPort.Scan.CheckNow": {
+    "message": "Jetzt prüfen",
+    "description": ""
+  },
+  "HairPort.Scan.CheckNow.Tip": {
+    "message": "Alle in deiner Sammlung aktiven Haar-Mods durchsehen und die für ein anderes\nVolk gemachten an deines anpassen.",
+    "description": ""
+  },
+  "HairPort.Scan.WearHint": {
+    "message": "Um eine zu tragen, wähle diese Frisurnummer für deinen Charakter – Glamourer zeigt die Nummer an.",
+    "description": ""
+  },
+  "HairPort.Scan.List.Fmt": {
+    "message": "Haar-Mods für dein Volk ({0})",
+    "description": ""
+  },
+  "HairPort.Scan.Row.Fmt": {
+    "message": "Frisur {0} – {1}: {2}",
+    "description": ""
+  },
+  "HairPort.Scan.State.Fitted": {
+    "message": "angepasst",
+    "description": ""
+  },
+  "HairPort.Scan.State.Already": {
+    "message": "bereits angepasst",
+    "description": ""
+  },
+  "HairPort.Scan.State.Remade": {
+    "message": "neu angepasst (der Mod hat sich geändert)",
+    "description": ""
+  },
+  "HairPort.Scan.State.Undone": {
+    "message": "rückgängig gemacht",
+    "description": ""
+  },
+  "HairPort.Scan.State.Refused": {
+    "message": "nicht angepasst",
+    "description": ""
+  },
+  "HairPort.Scan.State.Refused.Fmt": {
+    "message": "nicht angepasst – {0}",
+    "description": ""
+  },
+  "HairPort.Scan.UndoChecked": {
+    "message": "Alles rückgängig machen, was diese Prüfung angepasst hat",
+    "description": ""
+  },
+  "HairPort.Scan.Entry.Fmt": {
+    "message": "Frisur {0} ({1})",
+    "description": ""
+  },
+  "HairPort.Scan.More.Fmt": {
+    "message": " und {0} weitere",
+    "description": ""
+  },
+  "Chat.HairPortScan.Fmt": {
+    "message": "[Proteus] An dein Volk angepasst: {0}. Um eine zu tragen, wähle diese Frisurnummer für deinen Charakter. Rückgängig machen oder ausschalten unter /proteus > Einstellungen > Haare.",
+    "description": ""
+  },
+  "HairPort.Scan.UndoChecked.Confirm.Fmt": {
+    "message": "Erneut klicken, um {0} Frisur(en) endgültig rückgängig zu machen",
     "description": ""
   }
 }

@@ -664,7 +664,7 @@ public sealed class LocalizationTests
         var en = Load(Source);
         var tr = Load(lang);
         var keys = en.Keys.Where(k => k.StartsWith("HairPort.", StringComparison.Ordinal)).Append("Chat.HairPort")
-                     .Append("Settings.Section.HairPort").ToList();
+                     .Append("Chat.HairPortScan.Fmt").Append("Settings.Section.HairPort").ToList();
         Assert.True(keys.Count > 40, $"only {keys.Count} hair port keys in {Source}.json");
         foreach (string key in keys)
         {

@@ -5023,10 +5023,6 @@
     "message": "Подгонять моды причёсок, сделанные для другой расы",
     "description": ""
   },
-  "HairPort.Auto.Tip": {
-    "message": "Многие моды причёсок сделаны только для одной расы, поэтому на любой другой\nигра показывает свою причёску. Когда включено, Proteus замечает это,\nизгибает причёску мода под голову вашей расы и добавляет её в тот же вариант\nтого же мода.\n\nТолько между расами одного пола и только для причёски, которая на вас.\nРаботает и с выключенным Proteus, переносится вместе с модом и видна всем,\nкто отображается с этим модом. Это можно отменить здесь.",
-    "description": ""
-  },
   "HairPort.Settings.None": {
     "message": "Причёску, которая на вас, подгонять не нужно.",
     "description": ""
@@ -5141,6 +5137,90 @@
   },
   "HairPort.Refused.RecordUnreadable": {
     "message": "Не удалось прочитать запись Proteus о перенесённых причёсках этого мода (Proteus/hairport.json), поэтому ничего не изменено.",
+    "description": ""
+  },
+  "HairPort.Auto.Tip2": {
+    "message": "Многие моды причёсок сделаны только для одной расы, поэтому на любой другой\nигра показывает свою причёску. Когда включено, Proteus изгибает причёску мода\nпод голову вашей расы и добавляет её в тот же вариант того же мода — для\nпричёски, которую вы надели, и заранее для модов причёсок, включённых в вашей\nколлекции: при включении этой настройки, при установке, включении или\nизменении мода и по кнопке «Проверить сейчас».\n\nТолько для вашей расы, из рас того же пола. Работает и с выключенным Proteus,\nпереносится вместе с модом и видна всем, кто отображается с этим модом.\nЭто можно отменить здесь.",
+    "description": ""
+  },
+  "HairPort.Scan.Starting": {
+    "message": "Проверка ваших модов причёсок…",
+    "description": ""
+  },
+  "HairPort.Scan.Checking.Fmt": {
+    "message": "Проверка ваших модов причёсок… {0} из {1}",
+    "description": ""
+  },
+  "HairPort.Scan.None": {
+    "message": "Моды причёсок в этом сеансе ещё не проверялись.",
+    "description": ""
+  },
+  "HairPort.Scan.Checked.Fmt": {
+    "message": "Причёсок из ваших модов, подогнанных под {1}: {0}.",
+    "description": ""
+  },
+  "HairPort.Scan.CheckNow": {
+    "message": "Проверить сейчас",
+    "description": ""
+  },
+  "HairPort.Scan.CheckNow.Tip": {
+    "message": "Просмотреть все моды причёсок, включённые в вашей коллекции, и подогнать\nпод вашу расу сделанные для другой.",
+    "description": ""
+  },
+  "HairPort.Scan.WearHint": {
+    "message": "Чтобы надеть причёску, выберите её номер для персонажа — Glamourer показывает номер.",
+    "description": ""
+  },
+  "HairPort.Scan.List.Fmt": {
+    "message": "Моды причёсок для вашей расы ({0})",
+    "description": ""
+  },
+  "HairPort.Scan.Row.Fmt": {
+    "message": "Причёска {0} — {1}: {2}",
+    "description": ""
+  },
+  "HairPort.Scan.State.Fitted": {
+    "message": "подогнана",
+    "description": ""
+  },
+  "HairPort.Scan.State.Already": {
+    "message": "уже подогнана",
+    "description": ""
+  },
+  "HairPort.Scan.State.Remade": {
+    "message": "подогнана заново (мод изменился)",
+    "description": ""
+  },
+  "HairPort.Scan.State.Undone": {
+    "message": "отменена",
+    "description": ""
+  },
+  "HairPort.Scan.State.Refused": {
+    "message": "не подогнана",
+    "description": ""
+  },
+  "HairPort.Scan.State.Refused.Fmt": {
+    "message": "не подогнана — {0}",
+    "description": ""
+  },
+  "HairPort.Scan.UndoChecked": {
+    "message": "Отменить всё, что подогнала эта проверка",
+    "description": ""
+  },
+  "HairPort.Scan.Entry.Fmt": {
+    "message": "причёска {0} ({1})",
+    "description": ""
+  },
+  "HairPort.Scan.More.Fmt": {
+    "message": " и ещё {0}",
+    "description": ""
+  },
+  "Chat.HairPortScan.Fmt": {
+    "message": "[Proteus] Подогнано под вашу расу: {0}. Чтобы надеть, выберите этот номер причёски для персонажа. Отменить или выключить можно в /proteus > Настройки > Причёски.",
+    "description": ""
+  },
+  "HairPort.Scan.UndoChecked.Confirm.Fmt": {
+    "message": "Нажмите ещё раз, чтобы окончательно отменить причёски: {0}",
     "description": ""
   }
 }

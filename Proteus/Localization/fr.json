@@ -5023,10 +5023,6 @@
     "message": "Adapter les mods de coiffure faits pour une autre race",
     "description": ""
   },
-  "HairPort.Auto.Tip": {
-    "message": "Beaucoup de mods de coiffure ne sont faits que pour une race : sur toute autre\nrace, le jeu affiche sa propre coiffure. Quand cette option est active, Proteus\ns'en aperçoit, plie la coiffure du mod sur la tête de votre race et l'ajoute à\nla même option du même mod.\n\nUniquement entre races du même sexe, et seulement pour la coiffure que vous\nportez. Cela continue de fonctionner avec Proteus désactivé, suit le mod et\ns'affiche pour toute personne affichée avec ce mod actif. Cela peut être\nannulé ici.",
-    "description": ""
-  },
   "HairPort.Settings.None": {
     "message": "La coiffure que vous portez n'a besoin d'aucun ajustement.",
     "description": ""
@@ -5141,6 +5137,90 @@
   },
   "HairPort.Refused.RecordUnreadable": {
     "message": "Le registre Proteus des coiffures transposées de ce mod (Proteus/hairport.json) n'a pas pu être lu, donc rien n'a été modifié.",
+    "description": ""
+  },
+  "HairPort.Auto.Tip2": {
+    "message": "Beaucoup de mods de cheveux ne sont faits que pour une race : sur toute autre race,\nle jeu affiche sa propre coiffure. Activé, Proteus plie la coiffure du mod sur la\ntête de votre race et l'ajoute à la même option du même mod — pour la coiffure que\nvous portez, et à l'avance pour les mods de cheveux activés dans votre collection :\nà l'activation de ce réglage, quand un mod est installé, activé ou modifié, et\nquand vous appuyez sur « Vérifier maintenant ».\n\nSeulement pour votre propre race, depuis des races du même sexe. Fonctionne même\nProteus désactivé, voyage avec le mod et se voit sur tous ceux affichés avec ce\nmod actif. Annulable ici.",
+    "description": ""
+  },
+  "HairPort.Scan.Starting": {
+    "message": "Vérification de vos mods de cheveux…",
+    "description": ""
+  },
+  "HairPort.Scan.Checking.Fmt": {
+    "message": "Vérification de vos mods de cheveux… {0} sur {1}",
+    "description": ""
+  },
+  "HairPort.Scan.None": {
+    "message": "Vos mods de cheveux n'ont pas encore été vérifiés pendant cette session.",
+    "description": ""
+  },
+  "HairPort.Scan.Checked.Fmt": {
+    "message": "{0} coiffure(s) de vos mods de cheveux sont adaptées à {1}.",
+    "description": ""
+  },
+  "HairPort.Scan.CheckNow": {
+    "message": "Vérifier maintenant",
+    "description": ""
+  },
+  "HairPort.Scan.CheckNow.Tip": {
+    "message": "Parcourir tous les mods de cheveux activés dans votre collection et adapter à\nvotre race ceux faits pour une autre.",
+    "description": ""
+  },
+  "HairPort.Scan.WearHint": {
+    "message": "Pour en porter une, choisissez ce numéro de coiffure pour votre personnage — Glamourer affiche le numéro.",
+    "description": ""
+  },
+  "HairPort.Scan.List.Fmt": {
+    "message": "Mods de cheveux pour votre race ({0})",
+    "description": ""
+  },
+  "HairPort.Scan.Row.Fmt": {
+    "message": "Coiffure {0} — {1} : {2}",
+    "description": ""
+  },
+  "HairPort.Scan.State.Fitted": {
+    "message": "adaptée",
+    "description": ""
+  },
+  "HairPort.Scan.State.Already": {
+    "message": "déjà adaptée",
+    "description": ""
+  },
+  "HairPort.Scan.State.Remade": {
+    "message": "adaptée de nouveau (le mod a changé)",
+    "description": ""
+  },
+  "HairPort.Scan.State.Undone": {
+    "message": "annulée",
+    "description": ""
+  },
+  "HairPort.Scan.State.Refused": {
+    "message": "non adaptée",
+    "description": ""
+  },
+  "HairPort.Scan.State.Refused.Fmt": {
+    "message": "non adaptée — {0}",
+    "description": ""
+  },
+  "HairPort.Scan.UndoChecked": {
+    "message": "Annuler tout ce que cette vérification a adapté",
+    "description": ""
+  },
+  "HairPort.Scan.Entry.Fmt": {
+    "message": "coiffure {0} ({1})",
+    "description": ""
+  },
+  "HairPort.Scan.More.Fmt": {
+    "message": " et {0} de plus",
+    "description": ""
+  },
+  "Chat.HairPortScan.Fmt": {
+    "message": "[Proteus] Adapté à votre race : {0}. Pour en porter une, choisissez ce numéro de coiffure pour votre personnage. Annulez-le ou désactivez ceci dans /proteus > Paramètres > Cheveux.",
+    "description": ""
+  },
+  "HairPort.Scan.UndoChecked.Confirm.Fmt": {
+    "message": "Cliquez de nouveau pour annuler définitivement {0} coiffure(s)",
     "description": ""
   }
 }
