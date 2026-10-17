@@ -18,7 +18,7 @@ namespace Proteus;
 /// </summary>
 internal sealed class ConfigSaveScheduler
 {
-    /// <summary>A framework-thread write slower than this is logged, with the wait for the gate apart.</summary>
+    /// <summary>A write, or a wait for the gate, slower than this is logged, the two apart.</summary>
     internal const long SlowWriteMs = 8;
 
     /// <summary>A lasting failure, or a lasting slow write, logs once per this long; the saves between log at Debug.</summary>
@@ -120,13 +120,13 @@ internal sealed class ConfigSaveScheduler
             }
             else log.Debug("[Proteus] settings save failed again ({0}): {1}", caller, failure.Message);
         }
-        if (writeMs > SlowWriteMs)
+        if (writeMs > SlowWriteMs || waitMs > SlowWriteMs)
         {
             long now = Environment.TickCount64;
             if (lastSlowAt == long.MinValue || now - lastSlowAt >= ErrorEveryMs)
             {
                 lastSlowAt = now;
-                log.Warning("[Proteus] settings save took {0} ms on the framework thread ({1}; waited {2} ms for the gate)",
+                log.Warning("[Proteus] settings save took {0} ms ({1}; waited {2} ms for the gate)",
                             writeMs, caller, waitMs);
             }
             else log.Debug("[Proteus] settings save took {0} ms ({1}; waited {2} ms for the gate)", writeMs, caller, waitMs);

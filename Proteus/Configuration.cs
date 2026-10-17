@@ -595,6 +595,32 @@ public class AutoRefitPreference
     /// and forgets it here. OrdinalIgnoreCase, populated in place.
     /// </summary>
     public HashSet<string> Declined { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Every member, its collections copied: what an auto refit worker reads while the framework thread changes the
+    /// live sets in place (see <see cref="Configuration"/>'s threading rule). <see cref="BodySizeRef"/> is replaced,
+    /// never changed in place, so it is shared.
+    /// </summary>
+    internal AutoRefitPreference Copy() => new()
+    {
+        CollectionName   = CollectionName,
+        BodyDir          = BodyDir,
+        Chest            = Chest,
+        Legs             = Legs,
+        SwitchedOn       = new(SwitchedOn, StringComparer.OrdinalIgnoreCase),
+        AuthorSwitchedOn = new(AuthorSwitchedOn, StringComparer.OrdinalIgnoreCase),
+        Before           = CopyLists(Before),
+        HeldBefore       = CopyLists(HeldBefore),
+        InheritedBefore  = new(InheritedBefore, StringComparer.OrdinalIgnoreCase),
+        Declined         = new(Declined, StringComparer.OrdinalIgnoreCase),
+    };
+
+    private static Dictionary<string, List<string>> CopyLists(Dictionary<string, List<string>> from)
+    {
+        var to = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (k, v) in from) to[k] = [.. v];
+        return to;
+    }
 }
 
 /// <summary>

@@ -25,7 +25,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1299;
+    public const int BuildNumber = 1300;
 
     /// <summary>
     /// Which set of release notes is current. Raise it when a release has something new to say: the window
@@ -469,6 +469,17 @@ public sealed class Plugin : IDalamudPlugin
 
     public void Dispose()
     {
+        try { DisposeServices(); }
+        finally
+        {
+            // After the compositor (its teardown records the carriers it took off, and that save must reach disk), and
+            // whatever above threw: a save posted by this instance must never land over a reloaded one's settings.
+            try { config.FlushAndCloseSaves(); } catch { /* tearing down — never block the unload */ }
+        }
+    }
+
+    private void DisposeServices()
+    {
         _disposed = true;
 
         // Last chance for an import whose disk work landed after the final frame, registration only: no window, no recomposite.
@@ -514,8 +525,6 @@ public sealed class Plugin : IDalamudPlugin
         autoRefit.Dispose();   // before the compositor and the bridges, whose events it unsubscribes from
         hatCompat.Dispose();   // before the compositor: it unsubscribes from that object's event
         compositor.Dispose();
-        // After the compositor: its teardown records the carriers it took off, and that save must reach disk.
-        try { config.FlushAndCloseSaves(); } catch { /* tearing down — never block the unload */ }
         glamourer.Dispose();
         penumbra.Dispose();
         loc.Dispose();   // last: unhooks LanguageChanged, which anything above could still be drawing under

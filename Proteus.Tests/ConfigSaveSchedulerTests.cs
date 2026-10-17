@@ -202,6 +202,30 @@ public class ConfigSaveSchedulerTests
         Assert.Equal(2, rig.Writes);
     }
 
+    /// <summary>A worker's save that lands while the posted write is running is posted again, not lost.</summary>
+    // [AC-config-save-race-3] [EDGE-config-save-race-5]
+    [Fact]
+    [Trait("Plan", "AC-config-save-race-3")]
+    [Trait("Plan", "EDGE-config-save-race-5")]
+    public void A_save_during_the_posted_write_posts_again()
+    {
+        var rig = new Rig { OnFramework = false };
+        bool once = true;
+        rig.WriteBody = () =>
+        {
+            if (!once) return;
+            once = false;
+            rig.OnFramework = false;
+            rig.Saver.Save("during");
+            rig.OnFramework = true;
+        };
+        rig.Saver.Save("worker");
+        rig.Pump();
+
+        Assert.Equal(2, rig.Writes);
+        Assert.False(rig.Saver.Pending);
+    }
+
     // [AC-config-save-race-4] [EDGE-config-save-race-8]
     [Fact]
     [Trait("Plan", "AC-config-save-race-4")]
@@ -342,8 +366,61 @@ public class ConfigSaveSchedulerTests
 
         Assert.True(rig.Saver.Pending);
         rig.Log.Received().Warning(Arg.Any<Exception>(), Arg.Any<string>(), Arg.Any<object[]>());
-        rig.Saver.FlushAndClose();
+
+        // The framework back: the next worker save posts again rather than waiting for the unload.
+        rig.PostOverride = null;
+        rig.Saver.Save("worker");
+        Assert.Single(rig.Posted);
+        rig.Pump();
         Assert.Equal(1, rig.Writes);
+        Assert.False(rig.Saver.Pending);
+    }
+
+    /// <summary>A framework save stuck behind a worker holding the gate is logged even when the write is quick.</summary>
+    // [EDGE-config-save-race-13]
+    [Fact]
+    [Trait("Plan", "EDGE-config-save-race-13")]
+    public void A_slow_wait_for_the_gate_is_logged()
+    {
+        var rig = new Rig();
+        var save = new Thread(() => rig.Saver.Save("ui")) { IsBackground = true };
+        lock (rig.Gate)
+        {
+            save.Start();
+            // Held until the save is blocked on the gate, then a while longer: its wait is measured, not guessed.
+            var until = DateTime.UtcNow.AddSeconds(10);
+            while ((save.ThreadState & ThreadState.WaitSleepJoin) == 0 && DateTime.UtcNow < until) Thread.Yield();
+            Thread.Sleep((int)ConfigSaveScheduler.SlowWriteMs + 40);
+        }
+        Assert.True(save.Join(TimeSpan.FromSeconds(10)));
+        rig.Log.Received(1).Warning(Arg.Is<string>(m => m.Contains("waited")), Arg.Any<object[]>());
+    }
+
+    /// <summary>The auto refit's worker reads a copy of the collection's preference, every member of it.</summary>
+    // [AC-config-save-race-2]
+    [Fact]
+    [Trait("Plan", "AC-config-save-race-2")]
+    public void A_preference_copy_has_every_member_and_shares_no_collection()
+    {
+        var live = new AutoRefitPreference { CollectionName = "c", BodyDir = "body" };
+        live.SwitchedOn.Add("m|g");
+        live.AuthorSwitchedOn["m|g"] = "S";
+        live.Before["m|g"] = ["a"];
+        live.HeldBefore["m|g"] = ["b"];
+        live.InheritedBefore.Add("m");
+        live.Declined.Add("p|m");
+
+        var copy = live.Copy();
+        Assert.Equal(JsonConvert.SerializeObject(live), JsonConvert.SerializeObject(copy));
+
+        live.SwitchedOn.Add("x");
+        live.AuthorSwitchedOn["x"] = "x";
+        live.Before["m|g"].Add("x");
+        live.HeldBefore["x"] = [];
+        live.InheritedBefore.Add("x");
+        live.Declined.Add("x");
+        Assert.DoesNotContain("\"x\"", JsonConvert.SerializeObject(copy));
+        Assert.Contains("M|G", copy.SwitchedOn);   // case-insensitive, as the live sets
     }
 
     // [EDGE-config-save-race-9]

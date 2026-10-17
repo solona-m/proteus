@@ -1666,17 +1666,8 @@ public sealed partial class AutoRefitWatcher : IDisposable
         var drawn = penumbra.GetActivePlayerModelPaths() is { } models
             ? new HashSet<string>(models, StringComparer.OrdinalIgnoreCase)
             : null;
-        // A copy of what the worker reads: the framework thread changes the live sets in place (Apply, UndoWorn).
-        var seen = new AutoRefitPreference
-        {
-            CollectionName = pref.CollectionName,
-            BodyDir = pref.BodyDir,
-            Chest = pref.Chest,
-            Legs = pref.Legs,
-            SwitchedOn = new(pref.SwitchedOn, StringComparer.OrdinalIgnoreCase),
-            AuthorSwitchedOn = new(pref.AuthorSwitchedOn, StringComparer.OrdinalIgnoreCase),
-        };
-        return new Gathered(seen, mods, modsRoot, settings, wearer, vanillaBytes, vanilla, permanent, now, drawn,
+        // A copy for the worker: the framework thread changes the live sets in place (Apply, UndoWorn).
+        return new Gathered(pref.Copy(), mods, modsRoot, settings, wearer, vanillaBytes, vanilla, permanent, now, drawn,
                             GameBodyRaces(r.Worn.GamePath));
     }
 
