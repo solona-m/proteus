@@ -538,6 +538,25 @@ public class HairPortBuilderTests
     }
 
     /// <summary>
+    /// Our default-data port carried 170; the author has since set the target race's entry there to 190. That one is
+    /// the author's: an option's port is checked against it and carries nothing.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-race-port-6")]
+    public void An_authors_entry_in_the_default_data_unlike_ours_is_the_authors()
+    {
+        var option = new HairPortPlan.Owner("Cut", "Long", "Single", new Dictionary<string, string>(),
+            [System.Text.Json.JsonSerializer.SerializeToElement(PenumbraManipulations.EstManipulation("0801", "Hair", Id, 170))]);
+        var defaults = new HairPortPlan.Owner("", "", "", new Dictionary<string, string>(),
+            [System.Text.Json.JsonSerializer.SerializeToElement(PenumbraManipulations.EstManipulation("0201", "Hair", Id, 190))]);
+        Assert.Equal((190, 0), HairPortBuilder.SkeletonFor(option, defaults, null, 801, 201, Id, defaultsOurs: 170));
+        // Equal to ours, it is ours: the option's port carries its own.
+        var same = defaults with { Manipulations =
+            [System.Text.Json.JsonSerializer.SerializeToElement(PenumbraManipulations.EstManipulation("0201", "Hair", Id, 170))] };
+        Assert.Equal((170, 170), HairPortBuilder.SkeletonFor(option, same, null, 801, 201, Id, defaultsOurs: 170));
+    }
+
+    /// <summary>
     /// A physics hairstyle served from both the default data and an option, its borrow in the default data: each place
     /// gets a port carrying the skeleton, and straight after the save both are current — the default data's carried
     /// entry is ours, not an author's, so nothing is remade for it.
@@ -561,6 +580,7 @@ public class HairPortBuilderTests
         Assert.True(HairPortWriter.Save(mod.Root, plan.Writes, auto: false).Ok);
 
         var record = HairPortRecord.Read(mod.Root);
+        Assert.Equal(2, record.Ports.Count);
         Assert.All(record.Ports, e => Assert.False(
             HairPortBuilder.IsOutOfDate(e, mod.Get(e.SourceFile), mod.Owners, record.Ports), $"{e.Group}/{e.Option}"));
         var again = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, withSharers: false);
