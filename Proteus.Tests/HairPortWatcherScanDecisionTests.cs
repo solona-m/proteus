@@ -56,4 +56,30 @@ public class HairPortWatcherScanDecisionTests
         var after = Decide.Merge(cleared, 201, Result([7], Row(7)), stale: true);
         Assert.Empty(after.List);
     }
+
+    [Theory]
+    [Trait("Plan", "EDGE-hair-port-scan-12")]
+    [Trait("Plan", "EDGE-hair-port-scan-13")]
+    [InlineData(true, false, false, true, true)]    // the race or collection changed: owed again
+    [InlineData(true, true, false, true, false)]    // the player's Cancel
+    [InlineData(true, false, true, true, false)]    // unloaded
+    [InlineData(true, false, false, false, false)]  // the setting switched off
+    [InlineData(false, false, false, true, false)]  // it finished
+    public void A_check_stopped_by_a_change_is_owed_again(bool cancelled, bool byPlayer, bool disposed, bool enabled, bool owed)
+        => Assert.Equal(owed, Decide.OweAgain(cancelled, byPlayer, disposed, enabled));
+
+    [Fact]
+    [Trait("Plan", "AC-hair-port-scan-7")]
+    public void Undo_everything_takes_back_only_the_last_checks_fits()
+    {
+        var view = new ScanView(Race: 201, Rows: [Row(5)]);
+        var after = Decide.Merge(view, 201, Result([7, 9], Row(7), Row(9, state: HairPortScan.RowState.Refused)), stale: false);
+        Assert.Equal([7], after.Last.Select(r => r.Id));
+        Assert.Equal(1, Proteus.Gui.HairPortSettingsPanel.UndoableByLastCheck(after));
+        var jobs = Decide.CheckedUndos(after.Last);
+        var (root, which) = Assert.Single(jobs);
+        Assert.Equal("root/Floof", root);
+        Assert.True(which(new HairPortRecord.Entry { TargetGamePath = HairPortPlan.HairPath(201, 7) }));
+        Assert.False(which(new HairPortRecord.Entry { TargetGamePath = HairPortPlan.HairPath(201, 5) }));
+    }
 }

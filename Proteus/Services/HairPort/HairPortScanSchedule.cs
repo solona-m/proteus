@@ -24,8 +24,9 @@ internal sealed class HairPortScanSchedule
     /// <summary>How long a mod's <c>Edited</c> is taken for the echo of the watcher's own reload of it.</summary>
     public const long OwnEchoMs = 2000;
 
-    /// <summary>How long the player's race must hold before a check writes for it.</summary>
-    public const long RaceSettleMs = 5000;
+    /// <summary>How long the player's race must hold before a check writes for it: longer than a Glamourer preview is
+    /// usually looked at, since nothing says a race is only being tried on.</summary>
+    public const long RaceSettleMs = 30_000;
 
     /// <summary>More mods than this waiting at once are checked as a full check: one pass over every hairstyle costs
     /// less than as many passes as mods.</summary>

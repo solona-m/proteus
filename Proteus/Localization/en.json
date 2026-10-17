@@ -5218,5 +5218,9 @@
   "Chat.HairPortScan.Fmt": {
     "message": "[Proteus] Fitted to your race: {0}. To wear one, choose that hairstyle number for your character. Undo it, or turn this off, under /proteus > Settings > Hair.",
     "description": "Chat line after a check of every hair mod fitted some. {0} = the list."
+  },
+  "HairPort.Scan.UndoChecked.Confirm.Fmt": {
+    "message": "Click again to undo {0} hairstyle(s) for good",
+    "description": "Second click of 'Undo everything this check fitted'. {0} = how many."
   }
 }

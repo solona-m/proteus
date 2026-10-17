@@ -5218,5 +5218,9 @@
   "Chat.HairPortScan.Fmt": {
     "message": "[Proteus] 已适配到你的种族：{0}。要使用，请为角色选择该发型编号。可在 /proteus > 设置 > 头发 中撤销或关闭此功能。",
     "description": ""
+  },
+  "HairPort.Scan.UndoChecked.Confirm.Fmt": {
+    "message": "再次点击以永久撤销 {0} 个发型",
+    "description": ""
   }
 }

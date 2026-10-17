@@ -5218,5 +5218,9 @@
   "Chat.HairPortScan.Fmt": {
     "message": "[Proteus] 당신 종족에 맞췄습니다: {0}. 착용하려면 캐릭터의 헤어스타일을 그 번호로 고르세요. 되돌리거나 끄려면 /proteus > 설정 > 헤어.",
     "description": ""
+  },
+  "HairPort.Scan.UndoChecked.Confirm.Fmt": {
+    "message": "한 번 더 누르면 헤어스타일 {0}개를 되돌립니다 (다시 자동으로 맞추지 않음)",
+    "description": ""
   }
 }

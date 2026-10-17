@@ -5218,5 +5218,9 @@
   "Chat.HairPortScan.Fmt": {
     "message": "[Proteus] あなたの種族に合わせました：{0}。着けるには、キャラクターの髪型をその番号にしてください。元に戻す・オフにするには /proteus > 設定 > 髪 へ。",
     "description": ""
+  },
+  "HairPort.Scan.UndoChecked.Confirm.Fmt": {
+    "message": "もう一度クリックすると髪型 {0} 件を元に戻します（以後自動では合わせません）",
+    "description": ""
   }
 }

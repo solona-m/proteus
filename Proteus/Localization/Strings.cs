@@ -423,6 +423,8 @@ public sealed class HairPortStrings
     public readonly string StateRefusedFmt = Loc.Localize("HairPort.Scan.State.Refused.Fmt", "not fitted — {0}");
     public readonly string UndoChecked = Loc.Localize("HairPort.Scan.UndoChecked",
         "Undo everything this check fitted") + "###hairPortUndoChecked";
+    public readonly string UndoCheckedConfirmFmt = Loc.Localize("HairPort.Scan.UndoChecked.Confirm.Fmt",
+        "Click again to undo {0} hairstyle(s) for good");
 
     // ── Studio ──────────────────────────────────────────────────────────────────────────────────────
     public readonly string Header = Loc.Localize("HairPort.Studio.Header", "Port to all races") + "###hairPortStudio";

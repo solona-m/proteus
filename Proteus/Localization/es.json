@@ -5218,5 +5218,9 @@
   "Chat.HairPortScan.Fmt": {
     "message": "[Proteus] Ajustado a tu raza: {0}. Para llevar uno, elige ese número de peinado para tu personaje. Deshazlo o desactiva esto en /proteus > Ajustes > Pelo.",
     "description": ""
+  },
+  "HairPort.Scan.UndoChecked.Confirm.Fmt": {
+    "message": "Vuelve a pulsar para deshacer {0} peinado(s) definitivamente",
+    "description": ""
   }
 }

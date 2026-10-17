@@ -426,7 +426,7 @@ public class HairPortScanTests
 
     [Fact]
     [Trait("Plan", "EDGE-hair-port-scan-31")]
-    public void Newer_winning_mod_replaces_older_port()
+    public void Newer_winning_mod_of_the_same_race_is_ported_too()
     {
         using var s = new Setup();
         var a = s.DefaultDataMod("A", 7);
@@ -600,5 +600,26 @@ public class HairPortScanTests
         Assert.Equal(HairPortScan.RowState.Fitted, result.Rows.Single(r => r.Id == 7).State);
         Assert.Contains("reload Floof", s.Host.Calls);
         Assert.DoesNotContain("reload Broken", s.Host.Calls);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-hair-port-scan-31")]
+    public void A_newer_mod_for_another_race_leaves_the_port_that_wins()
+    {
+        using var s = new Setup();
+        // A: a Miqo'te model, fitted to Midlanders.
+        var a = Path.Combine(s.ModsRoot, "A");
+        var miqo = HairPortPlan.HairPath(801, 7);
+        Setup.WriteMod(a, "A", "[]", new() { [miqo] = "m.mdl" });
+        Setup.Put(a, "m.mdl", HairModelOf(801, 7));
+        s.Host.Files[miqo] = Path.Combine(a, "m.mdl");
+        Assert.Equal(HairPortScan.RowState.Fitted, s.Run([7]).Rows.Single().State);
+        s.Reloaded(a, 7);
+        // B: an Elezen model, nearer to Midlanders — but its port would lose to A's, which wins the Midlander path.
+        var b = s.DefaultDataMod("B", 7);
+
+        var row = s.Run([7], force: true).Rows.Single();
+        Assert.Equal(("A", HairPortScan.RowState.AlreadyFitted), (row.ModDir, row.State));
+        Assert.Null(HairPortPlan.FileFor(HairPortPlan.ReadOwners(b)!.First(o => o.IsDefault), Target(7)));
     }
 }

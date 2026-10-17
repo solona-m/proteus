@@ -87,12 +87,10 @@ internal sealed class HairPortSettingsPanel(HairPortWatcher watcher, Configurati
 
         ImGui.TextDisabled(s.WearHint);
         if (!ImGui.CollapsingHeader(string.Format(s.ListFmt, scan.List.Count) + "###hairPortList")) return;
-        bool canUndoAny = false;
         foreach (var row in scan.List)
         {
             ImGui.PushID($"{row.ModDir}|{row.Id}");
             bool can = CanUndo(row, busy || scan.Running);
-            canUndoAny |= can && row.State is HairPortScan.RowState.Fitted or HairPortScan.RowState.Remade;
             if (row.State == HairPortScan.RowState.Refused) ImGui.TextColored(new Vector4(1f, 0.7f, 0.4f, 1f), RowText(row));
             else ImGui.TextWrapped(RowText(row));
             if (row.State is not (HairPortScan.RowState.Refused or HairPortScan.RowState.Undone))
@@ -104,7 +102,38 @@ internal sealed class HairPortSettingsPanel(HairPortWatcher watcher, Configurati
             }
             ImGui.PopID();
         }
-        if (canUndoAny && ImGui.Button(s.UndoChecked)) watcher.UndoChecked();
+        DrawUndoChecked(scan, busy);
+    }
+
+    /// <summary>A first click on "Undo everything this check fitted" asks again; only the second undoes.</summary>
+    private bool confirmUndoChecked;
+
+    private void DrawUndoChecked(HairPortWatcher.ScanView scan, bool busy)
+    {
+        var s = Strings.HairPort;
+        int count = UndoableByLastCheck(scan);
+        if (count == 0 || busy || scan.Running) { confirmUndoChecked = false; return; }
+        if (!confirmUndoChecked)
+        {
+            if (ImGui.Button(s.UndoChecked)) confirmUndoChecked = true;
+            return;
+        }
+        if (ImGui.Button(string.Format(s.UndoCheckedConfirmFmt, count) + "###hairPortUndoChecked"))
+        {
+            confirmUndoChecked = false;
+            watcher.UndoChecked();
+        }
+        ImGui.SameLine();
+        if (ImGui.Button(s.Cancel)) confirmUndoChecked = false;
+    }
+
+    /// <summary>How many hairstyles "Undo everything this check fitted" would take back: the latest check's, still there.</summary>
+    internal static int UndoableByLastCheck(HairPortWatcher.ScanView scan)
+    {
+        int n = 0;
+        foreach (var r in scan.Last)
+            if (r.State is HairPortScan.RowState.Fitted or HairPortScan.RowState.Remade) n++;
+        return n;
     }
 
     /// <summary>The check's one line: how far it has got, or what the last one found, or that none has run.</summary>

@@ -5218,5 +5218,9 @@
   "Chat.HairPortScan.Fmt": {
     "message": "[Proteus] Adapté à votre race : {0}. Pour en porter une, choisissez ce numéro de coiffure pour votre personnage. Annulez-le ou désactivez ceci dans /proteus > Paramètres > Cheveux.",
     "description": ""
+  },
+  "HairPort.Scan.UndoChecked.Confirm.Fmt": {
+    "message": "Cliquez de nouveau pour annuler définitivement {0} coiffure(s)",
+    "description": ""
   }
 }

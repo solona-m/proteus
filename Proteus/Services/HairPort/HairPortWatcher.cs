@@ -75,10 +75,14 @@ public sealed partial class HairPortWatcher : IDisposable
     /// <summary>What the last check of the player's hair mods found, and how far one under way has got.</summary>
     /// <param name="Race">The race the rows are for; 0 before any check.</param>
     /// <param name="Rows">Every hairstyle of that race a mod was made for another race of, by number.</param>
+    /// <param name="LastFitted">What the latest check fitted or remade — what "Undo everything this check fitted"
+    /// takes back.</param>
     internal sealed record ScanView(bool Running = false, int Done = 0, int Total = 0, ushort Race = 0,
-                                  IReadOnlyList<HairPortScan.Row>? Rows = null, string Message = "")
+                                  IReadOnlyList<HairPortScan.Row>? Rows = null, string Message = "",
+                                  IReadOnlyList<HairPortScan.Row>? LastFitted = null)
     {
         public IReadOnlyList<HairPortScan.Row> List => Rows ?? [];
+        public IReadOnlyList<HairPortScan.Row> Last => LastFitted ?? [];
     }
 
     private volatile ScanView scan = new();
@@ -119,7 +123,7 @@ public sealed partial class HairPortWatcher : IDisposable
         disposed = true;
         // Never waited for: the check may be waiting on this very thread for a reload. A port it saves from here on
         // is not reloaded, and Penumbra reads it at its next load of the mod.
-        CancelCheck();
+        StopCheck();
         Plugin.Framework.Update -= OnFrameworkUpdate;
         glamourer.LocalPlayerCustomizeChanged -= RequestWalk;
         glamourer.LocalPlayerCustomizationChanged -= RequestWalk;
@@ -156,7 +160,7 @@ public sealed partial class HairPortWatcher : IDisposable
         if (!Enabled) return;
         // What the last check found was for the other collection; one under way is for it too.
         Interlocked.Increment(ref collectionGeneration);
-        CancelCheck();
+        StopCheck();
         UpdateScan(s => s with { Rows = [] });
         Refresh(delayMs: PenumbraSettleMs);
     }
@@ -179,8 +183,19 @@ public sealed partial class HairPortWatcher : IDisposable
         if (Enabled) schedule.OweFull(Environment.TickCount64, forced: true);
     }
 
-    /// <summary>Stop the check under way before its next hairstyle. Ports already saved stay, and are reloaded.</summary>
-    public void CancelCheck() => Volatile.Read(ref checkCts)?.Cancel();
+    /// <summary>The player's Cancel: stop the check under way before its next hairstyle. Ports already saved stay, and
+    /// are reloaded. A first-load check stopped so counts as done — "Check now" runs it again.</summary>
+    public void CancelCheck()
+    {
+        userCancelled = true;
+        StopCheck();
+    }
+
+    /// <summary>Stop the check under way because what it was for changed: the race, the collection, the setting.</summary>
+    private void StopCheck() => Volatile.Read(ref checkCts)?.Cancel();
+
+    /// <summary>The check under way was stopped by the player, not by a change.</summary>
+    private volatile bool userCancelled;
 
     /// <summary>The walks a signal asked for, and the checks that are due, on the framework thread, where the draw
     /// object may be read and Penumbra asked.</summary>
@@ -195,7 +210,7 @@ public sealed partial class HairPortWatcher : IDisposable
             // The first load with the setting on looks through every mod once; after that, only what changes.
             if (!config.HairPortFullScanDone) schedule.OweFull(now);
         }
-        else if (!enabled && wasEnabled) CancelCheck();
+        else if (!enabled && wasEnabled) StopCheck();
         wasEnabled = enabled;
         if (!enabled) return;
 
@@ -225,7 +240,7 @@ public sealed partial class HairPortWatcher : IDisposable
         catch (Exception ex) { log.Error(ex, "hair port: walking the worn hairstyle failed"); return; }
 
         if (penumbra.GetPlayerCollectionId() is { } collection) playerCollection = collection.ToString("D");
-        if (schedule.Walked(Decide.RaceOf(parts), now)) CancelCheck();
+        if (schedule.Walked(Decide.RaceOf(parts), now)) StopCheck();
 
         if (Decide.Blank(parts, ref blanks)) { RequestWalkIn(BlankRetryMs); return; }
         livePartsCache = parts;
@@ -317,6 +332,7 @@ public sealed partial class HairPortWatcher : IDisposable
         var cts = new CancellationTokenSource();
         Volatile.Write(ref checkCts, cts);
         int generation = Volatile.Read(ref collectionGeneration);
+        userCancelled = false;
         current = current with { Busy = true };
         UpdateScan(s => s with { Running = true, Done = 0, Total = 0, Message = "" });
         Task.Run(() =>
@@ -351,7 +367,10 @@ public sealed partial class HairPortWatcher : IDisposable
                 bool stale = generation != Volatile.Read(ref collectionGeneration);
                 UpdateScan(s => Decide.Merge(s, work.Race, result, stale));
                 if (result.Written.Count > 0) lastKey = null;
-                if (work.Full && !result.Cancelled && !config.HairPortFullScanDone)
+                // Stopped by a change of race or collection: what was owed still is, for the new one.
+                if (Decide.OweAgain(result.Cancelled, userCancelled, disposed, Enabled))
+                    schedule.Return(work, Environment.TickCount64);
+                if (work.Full && (!result.Cancelled || userCancelled) && !config.HairPortFullScanDone)
                 {
                     config.HairPortFullScanDone = true;
                     config.Save();
@@ -558,7 +577,7 @@ public sealed partial class HairPortWatcher : IDisposable
     /// <summary>Undo every port the last check fitted or remade, and keep them undone.</summary>
     public void UndoChecked()
     {
-        var jobs = Decide.CheckedUndos(scan.List);
+        var jobs = Decide.CheckedUndos(scan.Last);
         if (jobs.Count > 0) RunUndo(jobs);
     }
 
@@ -593,7 +612,8 @@ public sealed partial class HairPortWatcher : IDisposable
                     && (host.WornNow() is not { } now || string.Equals(now, worn, StringComparison.OrdinalIgnoreCase)))
                     host.Redraw();
                 lastKey = null;
-                UpdateScan(s => s with { Rows = Decide.MarkUndone(s.List, undone) });
+                UpdateScan(s => s with { Rows = Decide.MarkUndone(s.List, undone),
+                                         LastFitted = Decide.MarkUndone(s.Last, undone) });
                 current = new View(worn, Message: message, Failed: failed);
             }
             catch (Exception ex)
@@ -700,8 +720,18 @@ public sealed partial class HairPortWatcher : IDisposable
         {
             if (stale) return view;
             var keep = view.Race == race ? view.List.Where(r => !result.Examined.Contains(r.Id)) : [];
-            return view with { Race = race, Rows = keep.Concat(result.Rows).OrderBy(r => r.Id).ToList() };
+            return view with
+            {
+                Race = race,
+                Rows = keep.Concat(result.Rows).OrderBy(r => r.Id).ToList(),
+                LastFitted = result.Rows.Where(r => r.State is HairPortScan.RowState.Fitted or HairPortScan.RowState.Remade).ToList(),
+            };
         }
+
+        /// <summary>Whether a check that stopped is owed again: not when the player stopped it, or the setting or the
+        /// plugin went off — only when the race or the collection it was for changed.</summary>
+        public static bool OweAgain(bool cancelled, bool byPlayer, bool disposed, bool enabled)
+            => cancelled && !byPlayer && !disposed && enabled;
 
         /// <summary>The rows left once a mod is deleted: none of its own.</summary>
         public static List<HairPortScan.Row> DropMod(IReadOnlyList<HairPortScan.Row> rows, string modDir)
@@ -740,8 +770,11 @@ public sealed partial class HairPortWatcher : IDisposable
                 // Another mod now wins the race the port was made from — one installed or switched on since: port that
                 // one too. Its port wins the wearer's path the way its source wins the source's, and this one stays
                 // for when that mod is off again.
+                // Only a mod covering the same race: one made for another race has a port that loses to this one, by
+                // the same priority this one's source won by, and would never be seen.
                 if (Source() is { Kind: Kind.Port } other
-                    && !string.Equals(other.ModRoot, modRoot, StringComparison.OrdinalIgnoreCase))
+                    && !string.Equals(other.ModRoot, modRoot, StringComparison.OrdinalIgnoreCase)
+                    && HairPortPlan.Parse(other.Source!)?.Race == HairPortPlan.Parse(entry.SourceGamePath)?.Race)
                     return other;
                 byte[]? source = null;
                 try { source = File.ReadAllBytes(Path.Combine(modRoot, entry.SourceFile.Replace('/', Path.DirectorySeparatorChar))); }

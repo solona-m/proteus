@@ -5218,5 +5218,9 @@
   "Chat.HairPortScan.Fmt": {
     "message": "[Proteus] An dein Volk angepasst: {0}. Um eine zu tragen, wähle diese Frisurnummer für deinen Charakter. Rückgängig machen oder ausschalten unter /proteus > Einstellungen > Haare.",
     "description": ""
+  },
+  "HairPort.Scan.UndoChecked.Confirm.Fmt": {
+    "message": "Erneut klicken, um {0} Frisur(en) endgültig rückgängig zu machen",
+    "description": ""
   }
 }
