@@ -5138,5 +5138,9 @@
   "HairPort.Declined.Fmt": {
     "message": "La transposition de la coiffure {0} dans {1} a été annulée, elle est donc laissée telle quelle.",
     "description": ""
+  },
+  "HairPort.Refused.RecordUnreadable": {
+    "message": "Le registre Proteus des coiffures transposées de ce mod (Proteus/hairport.json) n'a pas pu être lu, donc rien n'a été modifié.",
+    "description": ""
   }
 }

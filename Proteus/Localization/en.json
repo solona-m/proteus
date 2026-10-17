@@ -5138,5 +5138,9 @@
   "HairPort.Declined.Fmt": {
     "message": "The port of hairstyle {0} in {1} was undone, so it is left alone.",
     "description": "Settings > Hair status: the automatic port of hairstyle {0} in mod {1} was undone by the user and is not redone."
+  },
+  "HairPort.Refused.RecordUnreadable": {
+    "message": "Proteus's record of this mod's hair ports (Proteus/hairport.json) could not be read, so nothing was changed.",
+    "description": "Why a hair port save or undo was refused: Proteus's own record file in the mod is corrupt."
   }
 }

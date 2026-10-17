@@ -367,7 +367,7 @@ public sealed class WhatsNewStrings
     public readonly string Close = Loc.Localize("WhatsNew.Close", "Close") + "###whatsNewClose";
 }
 
-/// <summary>The hat-compatibility panel.</summary>
+/// <summary>Hair porting: the Settings > Hair section and the Studio's "Port to all races".</summary>
 public sealed class HairPortStrings
 {
     public readonly string Auto = Loc.Localize(
@@ -423,6 +423,7 @@ public sealed class HairPortStrings
     public readonly string Reading = Loc.Localize("HairPort.Studio.Reading", "Reading the mod…");
 }
 
+/// <summary>The hat-compatibility panel.</summary>
 public sealed class HatCompatStrings
 {
     public readonly string AutoFit = Loc.Localize(

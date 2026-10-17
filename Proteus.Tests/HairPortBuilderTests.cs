@@ -189,4 +189,17 @@ public class HairPortBuilderTests
         Assert.Empty(byHand.Refused);
         Assert.Equal(7, byHand.Writes.Count);
     }
+
+    /// <summary>A race the game never gives the hairstyle never reads its material, so it is no sharer.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-race-port-20")]
+    public void A_race_that_cannot_choose_the_hairstyle_is_no_sharer()
+    {
+        var names = new[] { "/mt_c0801h0105_hir_a.mtrl" };
+        var all = HairPortBuilder.Sharers(801, 201, 105, names).ToList();
+        Assert.Contains((ushort)1801, all);
+        var some = HairPortBuilder.Sharers(801, 201, 105, names, r => r != 1801).ToList();
+        Assert.DoesNotContain((ushort)1801, some);
+        Assert.Equal(all.Count - 1, some.Count);
+    }
 }

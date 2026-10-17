@@ -59,6 +59,8 @@ internal static class HairPortBuilder
 
         var authored = HairPortPlan.AuthoredRaces(owners, id).ToHashSet();
         var record = HairPortRecord.Read(modRoot);
+        if (record.Unreadable)
+            return new Plan(writes, wanted.ToDictionary(t => t, _ => HairPortRecord.UnreadableMessage), current);
         var sources = serving.Select(o => HairPortPlan.FileFor(o, sourceGamePath)!).Distinct(StringComparer.OrdinalIgnoreCase)
                              .ToDictionary(rel => rel, rel => ReadMod(modRoot, rel), StringComparer.OrdinalIgnoreCase);
         if (sources.Values.Any(b => b == null))
@@ -67,9 +69,12 @@ internal static class HairPortBuilder
 
         // Which races a target's materials drag along: every race reading the same material file.
         var names = sources.Values.SelectMany(b => SecondSkinWriter.Parse(b!).MatNames).Distinct().ToList();
+        var wears = new Dictionary<ushort, bool>();
+        bool canWear(ushort race) => wears.TryGetValue(race, out var w) ? w
+                                   : wears[race] = readGame(HairPortPlan.HairPath(race, id)) != null;
         if (withSharers)
             foreach (var t in wanted.ToList())
-                foreach (var s in Sharers(from, t, id, names))
+                foreach (var s in Sharers(from, t, id, names, canWear))
                     if (!wanted.Contains(s) && !authored.Contains(s)) wanted.Add(s);
 
         var sourceHead = FirstFile(HairPortPlan.HeadPaths(from), readGame);
@@ -98,7 +103,7 @@ internal static class HairPortBuilder
                 continue;
             }
             // A material only other, unported races would also read is not ours to redirect.
-            var stranded = Sharers(from, to, id, names).Where(s => !wanted.Contains(s) && !authored.Contains(s)
+            var stranded = Sharers(from, to, id, names, canWear).Where(s => !wanted.Contains(s) && !authored.Contains(s)
                                                                    && !Ported(record, HairPortPlan.HairPath(s, id))).ToList();
             if (stranded.Count > 0)
             {
@@ -150,7 +155,7 @@ internal static class HairPortBuilder
         // Sharers go together or not at all: one refused leaves the material it needed unredirected for the rest.
         if (withSharers)
             foreach (var to in wanted.Where(refused.ContainsKey).ToList())
-                foreach (var s in Sharers(from, to, id, names).Where(s => !refused.ContainsKey(s)))
+                foreach (var s in Sharers(from, to, id, names, canWear).Where(s => !refused.ContainsKey(s)))
                 {
                     writes.RemoveAll(w => w.TargetGamePath.Equals(HairPortPlan.HairPath(s, id), StringComparison.OrdinalIgnoreCase));
                     refused[s] = string.Format(Loc.Localize("HairPort.Refused.SharerRefused.Fmt",
@@ -165,7 +170,10 @@ internal static class HairPortBuilder
     /// the port reads the same file the source does. Miqo'te hairstyles 101–115 are the case — everyone else of that sex
     /// reads one Midlander material for them.
     /// </summary>
-    public static IEnumerable<ushort> Sharers(ushort from, ushort to, int id, IReadOnlyList<string> names)
+    /// <param name="canWear">Whether the game gives a race this hairstyle at all; a race that cannot choose it never
+    /// reads its material. Null counts every race.</param>
+    public static IEnumerable<ushort> Sharers(ushort from, ushort to, int id, IReadOnlyList<string> names,
+                                              Func<ushort, bool>? canWear = null)
     {
         var shared = new SortedSet<ushort>();
         foreach (var name in names)
@@ -173,7 +181,7 @@ internal static class HairPortBuilder
             var source = HairMaterialPath.GamePath(from, id, name);
             var target = HairMaterialPath.GamePath(to, id, HairMaterialPath.RenameRace(name, to));
             if (target == null || string.Equals(source, target, StringComparison.OrdinalIgnoreCase)) continue;
-            foreach (var other in HairPortPlan.SameGenderRaces(to).Where(r => r != from))
+            foreach (var other in HairPortPlan.SameGenderRaces(to).Where(r => r != from && canWear?.Invoke(r) != false))
                 if (string.Equals(HairMaterialPath.GamePath(other, id, HairMaterialPath.RenameRace(name, other)), target,
                                   StringComparison.OrdinalIgnoreCase))
                     shared.Add(other);

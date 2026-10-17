@@ -5138,5 +5138,9 @@
   "HairPort.Declined.Fmt": {
     "message": "{1}의 헤어스타일 {0} 이식이 취소되어 그대로 둡니다.",
     "description": ""
+  },
+  "HairPort.Refused.RecordUnreadable": {
+    "message": "이 모드의 헤어 이식에 대한 Proteus 기록(Proteus/hairport.json)을 읽을 수 없어 아무것도 변경하지 않았습니다.",
+    "description": ""
   }
 }

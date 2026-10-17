@@ -474,4 +474,62 @@ public class HairPortWriterTests
         Assert.False(mod.Has(other));
         Assert.Equal("Long", HairPortRecord.Read(mod.Root).Ports.Single().Option);
     }
+
+    /// <summary>
+    /// A port remade over itself keeps tracking the material redirect it added to the author's own file — which lives
+    /// outside Hair Ports/ — so an undo after the remake still takes it out.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-hair-race-port-8")]
+    [Trait("Plan", "EDGE-hair-race-port-7")]
+    public void A_remade_port_keeps_its_author_file_material_and_undo_takes_it_out()
+    {
+        const string ours = "chara/human/c0201/obj/hair/h0005/material/v0001/mt_c0201h0005_hir_a.mtrl";
+        using var mod = TwoCuts();
+        mod.Put("mats/a.mtrl", [1]);
+        var mat = new HairPortWriter.MaterialWrite(ours, "mats/a.mtrl", null);
+        Assert.True(HairPortWriter.Save(mod.Root, [Write(mod, "Cut", "Long", null, mat)], auto: true).Ok);
+        Assert.True(HairPortWriter.Save(mod.Root, [Write(mod, "Cut", "Long", HairModel(201, material: "/mt_x.mtrl"), mat)],
+                                        auto: true).Ok);
+        Assert.Equal("mats/a.mtrl", HairPortRecord.Read(mod.Root).Ports.Single().Materials[ours]);
+
+        Assert.True(HairPortWriter.Undo(mod.Root, _ => true, decline: false).Ok);
+        Assert.Null(HairPortPlan.FileFor(mod.Owner("Cut", "Long"), ours));
+        Assert.True(mod.Has("mats/a.mtrl"));
+    }
+
+    /// <summary>The author's own redirect of a material path is still never taken over.</summary>
+    [Fact]
+    [Trait("Plan", "AC-hair-race-port-5")]
+    public void An_authors_material_redirect_is_never_taken_over()
+    {
+        const string theirs = "chara/human/c0201/obj/hair/h0005/material/v0001/mt_c0201h0005_hir_a.mtrl";
+        using var mod = new Mod("[" + Group("Cut", "Single",
+            ("Long", new() { [Source] = "long.mdl", [theirs] = "mine.mtrl" })) + "]");
+        mod.Put("long.mdl", HairModel(801));
+        var owner = mod.Owner("Cut", "Long");
+        Assert.True(HairPortWriter.Save(mod.Root,
+            [new HairPortWriter.PortWrite(owner, Source, "long.mdl", "x", Target, HairModel(201),
+                                          [new HairPortWriter.MaterialWrite(theirs, "other.mtrl", null)])], auto: true).Ok);
+        Assert.Equal("mine.mtrl", HairPortPlan.FileFor(mod.Owner("Cut", "Long"), theirs));
+        Assert.Empty(HairPortRecord.Read(mod.Root).Ports.Single().Materials);
+        HairPortWriter.Undo(mod.Root, _ => true, decline: false);
+        Assert.Equal("mine.mtrl", HairPortPlan.FileFor(mod.Owner("Cut", "Long"), theirs));
+    }
+
+    /// <summary>A record that is there but cannot be read is never written over: no save, no undo.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-race-port-14")]
+    public void An_unreadable_record_refuses_save_and_undo()
+    {
+        using var mod = TwoCuts();
+        Assert.True(HairPortWriter.Save(mod.Root, [Write(mod, "Cut", "Long")], auto: true).Ok);
+        mod.Put("Proteus/hairport.json", System.Text.Encoding.UTF8.GetBytes("{ not json"));
+        var manifest = mod.Manifest;
+
+        Assert.False(HairPortWriter.Save(mod.Root, [Write(mod, "Cut", "Short")], auto: true).Ok);
+        Assert.False(HairPortWriter.Undo(mod.Root, _ => true, decline: true).Ok);
+        Assert.Equal(manifest, mod.Manifest);
+        Assert.Equal("{ not json", System.Text.Encoding.UTF8.GetString(mod.Get("Proteus/hairport.json")));
+    }
 }

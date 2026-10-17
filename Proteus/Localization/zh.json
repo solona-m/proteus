@@ -5138,5 +5138,9 @@
   "HairPort.Declined.Fmt": {
     "message": "{1} 中发型 {0} 的移植已被撤销，因此保持不变。",
     "description": ""
+  },
+  "HairPort.Refused.RecordUnreadable": {
+    "message": "无法读取 Proteus 对此 Mod 发型移植的记录（Proteus/hairport.json），因此未做任何更改。",
+    "description": ""
   }
 }

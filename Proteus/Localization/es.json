@@ -5138,5 +5138,9 @@
   "HairPort.Declined.Fmt": {
     "message": "El portado del peinado {0} en {1} se deshizo, así que se deja como está.",
     "description": ""
+  },
+  "HairPort.Refused.RecordUnreadable": {
+    "message": "No se pudo leer el registro de Proteus de los peinados portados de este mod (Proteus/hairport.json), así que no se cambió nada.",
+    "description": ""
   }
 }

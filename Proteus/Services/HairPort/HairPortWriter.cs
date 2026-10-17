@@ -45,6 +45,7 @@ internal static class HairPortWriter
                 return new Outcome(false, Unreadable, 0);
 
             var record = HairPortRecord.Read(modRoot);
+            if (record.Unreadable) return new Outcome(false, HairPortRecord.UnreadableMessage, 0);
             var plan = new List<(PortWrite Write, HairPortPlan.Owner Owner, string File, HairPortRecord.Entry? Was)>();
             foreach (var w in writes)
             {
@@ -85,9 +86,17 @@ internal static class HairPortWriter
                     var materials = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                     foreach (var m in w.Materials)
                     {
-                        // The author's own material for that path wins — and a port of ours from before is replaced.
+                        // The author's own material for that path wins — and a redirect of ours from before is replaced.
+                        // Ours is what the record says we added: a redirect to the author's own file (a material the
+                        // source race reads) lives outside Hair Ports/ and is still ours to carry and later take out.
                         string? existing = HairPortPlan.FileFor(owner, m.GamePath);
-                        if (existing != null && !HairPortPlan.IsPortFile(existing)) continue;
+                        bool ours = existing != null
+                            && (HairPortPlan.IsPortFile(existing)
+                                || record.Ports.Any(p => HairPortPlan.Same(p.Owner, owner)
+                                                         && p.Materials.TryGetValue(m.GamePath, out var mine)
+                                                         && HairPortRecord.Rel(mine).Equals(HairPortRecord.Rel(existing),
+                                                                                            StringComparison.OrdinalIgnoreCase)));
+                        if (existing != null && !ours) continue;
                         if (existing == null && !HairPortPlan.CanPortInto(owners, owner, m.GamePath)) continue;
 
                         string rel = m.AuthorFile ?? HairPortPlan.PortFile(owner, m.GamePath);
@@ -158,6 +167,7 @@ internal static class HairPortWriter
                 return new Outcome(false, Unreadable, 0);
 
             var record = HairPortRecord.Read(modRoot);
+            if (record.Unreadable) return new Outcome(false, HairPortRecord.UnreadableMessage, 0);
             var picked = record.Ports.Where(which).ToList();
             if (picked.Count == 0)
                 return new Outcome(false, Loc.Localize("HairPort.Undo.Nothing", "There are no hair ports here to undo."), 0);

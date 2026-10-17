@@ -23,6 +23,13 @@ internal sealed class HairPortRecord
     /// again; see <see cref="HairPortPlan.DeclineKey"/>. Persisted, so an undo outlives the session.</summary>
     [JsonPropertyName("Declined")] public List<string> Declined { get; set; } = [];
 
+    /// <summary>The record file is there but could not be read: nothing may be saved over it or undone from it.</summary>
+    [JsonIgnore] public bool Unreadable { get; private set; }
+
+    /// <summary>Why a write refuses an <see cref="Unreadable"/> record.</summary>
+    public static string UnreadableMessage => CheapLoc.Loc.Localize("HairPort.Refused.RecordUnreadable",
+        "Proteus's record of this mod's hair ports (Proteus/hairport.json) could not be read, so nothing was changed.");
+
     /// <summary>One port: one model published from one place in the mod, with the materials it needed.</summary>
     public sealed class Entry
     {
@@ -63,7 +70,9 @@ internal sealed class HairPortRecord
                 ? JsonSerializer.Deserialize<HairPortRecord>(File.ReadAllText(path)) ?? new HairPortRecord()
                 : new HairPortRecord();
         }
-        catch (Exception) { record = new HairPortRecord(); }
+        // Unknown is not gone: a record that is there but cannot be read is never written over, or every port it names
+        // would be left untracked and every undo it remembers forgotten.
+        catch (Exception) { record = new HairPortRecord { Unreadable = true }; }
         record.Ports ??= [];
         record.Declined ??= [];
         foreach (var e in record.Ports)

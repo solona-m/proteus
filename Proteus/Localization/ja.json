@@ -5138,5 +5138,9 @@
   "HairPort.Declined.Fmt": {
     "message": "{1} の髪型 {0} の移植は取り消されたため、そのままにします。",
     "description": ""
+  },
+  "HairPort.Refused.RecordUnreadable": {
+    "message": "このModの髪型移植の Proteus 記録（Proteus/hairport.json）を読み込めなかったため、何も変更していません。",
+    "description": ""
   }
 }

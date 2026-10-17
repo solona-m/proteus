@@ -5138,5 +5138,9 @@
   "HairPort.Declined.Fmt": {
     "message": "Перенос причёски {0} в {1} был отменён, поэтому она оставлена как есть.",
     "description": ""
+  },
+  "HairPort.Refused.RecordUnreadable": {
+    "message": "Не удалось прочитать запись Proteus о перенесённых причёсках этого мода (Proteus/hairport.json), поэтому ничего не изменено.",
+    "description": ""
   }
 }

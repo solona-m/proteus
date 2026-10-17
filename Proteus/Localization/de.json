@@ -5138,5 +5138,9 @@
   "HairPort.Declined.Fmt": {
     "message": "Die Übertragung der Frisur {0} in {1} wurde rückgängig gemacht und bleibt daher aus.",
     "description": ""
+  },
+  "HairPort.Refused.RecordUnreadable": {
+    "message": "Proteus' Aufzeichnung der Frisur-Übertragungen dieser Mod (Proteus/hairport.json) konnte nicht gelesen werden, daher wurde nichts geändert.",
+    "description": ""
   }
 }

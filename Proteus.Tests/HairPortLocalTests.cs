@@ -250,4 +250,30 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
         }
         o.WriteLine($"{withFur} of the Miqo'te hairstyles carried fur");
     }
+
+    /// <summary>A port keeps every shape key, LOD and mesh of the game's own hairstyles that carry them.</summary>
+    [LocalDataFact(LocalData.GameData)]
+    [Trait("Plan", "EDGE-hair-race-port-26")]
+    public void Port_keeps_shapes_and_lods()
+    {
+        var game = Load();
+        int withShapes = 0;
+        foreach (var (from, to) in Pairs)
+            foreach (int id in Ids)
+            {
+                if (game.File(HairPath(from, id)) is not { } src) continue;
+                var a = SecondSkinWriter.Parse(src);
+                if (a.Shapes.Count == 0) continue;
+                var port = RacialModelBake.Port(src, from, to, game.Pbd, HairPortBaker.ParentOf, out string why);
+                Assert.True(port != null, why);
+                var b = SecondSkinWriter.Parse(port!);
+                Assert.Equal(a.Shapes.Keys.OrderBy(k => k), b.Shapes.Keys.OrderBy(k => k));
+                Assert.Equal(a.MeshCount, b.MeshCount);
+                Assert.Equal(a.Lod0MeshCount, b.Lod0MeshCount);
+                Assert.Equal(src.Length, port!.Length);
+                withShapes++;
+            }
+        o.WriteLine($"{withShapes} ports of hairstyles with shape keys checked");
+        Assert.True(withShapes > 0, "no hairstyle in the sample carries a shape key");
+    }
 }
