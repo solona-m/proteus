@@ -125,8 +125,8 @@ internal static class HairPortBuilder
                 var bytes = sources[rel]!;
                 var was = record.Ports.FirstOrDefault(e => HairPortPlan.Same(e.Owner, owner)
                     && e.TargetGamePath.Equals(target, StringComparison.OrdinalIgnoreCase));
-                var (check, est) = SkeletonFor(owner, defaults, was, from, to, id);
-                if (was != null && !IsOutOfDate(was, bytes, owners)) { anyCurrent = true; continue; }
+                var (check, est) = SkeletonFor(owner, defaults, was, from, to, id, DefaultsPortEst(record.Ports, target));
+                if (was != null && !IsOutOfDate(was, bytes, owners, record.Ports)) { anyCurrent = true; continue; }
                 if (was == null && !HairPortPlan.CanPortInto(owners, owner, target)) continue;
 
                 // One bend per distinct file and skeleton checked against, however many options publish it.
@@ -176,8 +176,11 @@ internal static class HairPortBuilder
     /// entry this port added before — remade, it is carried again — from the author's.
     /// </summary>
     /// <returns>The skeleton to check the bones against (0: the hairstyle's own), and the entry to carry (0: none).</returns>
+    /// <param name="defaultsOurs">The skeleton a port of ours in the default data carries for the same target (0 for
+    /// none): with the hairstyle served from both, that entry is ours too, never the author's.</param>
     internal static (int Check, int Carry) SkeletonFor(HairPortPlan.Owner owner, HairPortPlan.Owner? defaults,
-                                                       HairPortRecord.Entry? was, ushort from, ushort to, int id)
+                                                       HairPortRecord.Entry? was, ushort from, ushort to, int id,
+                                                       int defaultsOurs = 0)
     {
         int? source = HairPortPlan.HairEst(owner, from, id) ?? (defaults != null ? HairPortPlan.HairEst(defaults, from, id) : null);
 
@@ -185,7 +188,9 @@ internal static class HairPortBuilder
         // wherever it sits among them.
         int? target = HairPortPlan.HairEsts(owner, to, id).Where(e => !(was is { Est: > 0 } && was.Est == e))
                                   .Cast<int?>().FirstOrDefault();
-        if (target == null && defaults != null && !owner.IsDefault) target = HairPortPlan.HairEst(defaults, to, id);
+        if (target == null && defaults != null && !owner.IsDefault)
+            target = HairPortPlan.HairEsts(defaults, to, id).Where(e => !(defaultsOurs > 0 && e == defaultsOurs))
+                                 .Cast<int?>().FirstOrDefault();
 
         if (target is { } author) return (author, 0);
         return source is > 0 and var s ? (s, s) : (0, 0);
@@ -199,15 +204,24 @@ internal static class HairPortBuilder
     /// </summary>
     /// <param name="owners">The mod's places as read now; null when the manifest could not be read, which judges by
     /// the model alone.</param>
-    internal static bool IsOutOfDate(HairPortRecord.Entry entry, byte[] source, IReadOnlyList<HairPortPlan.Owner>? owners)
+    /// <param name="ports">Every port the mod's record holds, to tell a skeleton entry of ours in the default data from
+    /// the author's.</param>
+    internal static bool IsOutOfDate(HairPortRecord.Entry entry, byte[] source, IReadOnlyList<HairPortPlan.Owner>? owners,
+                                     IReadOnlyList<HairPortRecord.Entry> ports)
     {
         if (HairPortPlan.IsStale(entry, source)) return true;
         if (owners?.FirstOrDefault(o => HairPortPlan.Same(o, entry.Owner)) is not { } owner) return false;
         if (HairPortPlan.Parse(entry.SourceGamePath) is not { } src || HairPortPlan.Parse(entry.TargetGamePath) is not { } dst)
             return false;
-        var (_, carry) = SkeletonFor(owner, owners.FirstOrDefault(o => o.IsDefault), entry, src.Race, dst.Race, dst.Id);
+        var (_, carry) = SkeletonFor(owner, owners.FirstOrDefault(o => o.IsDefault), entry, src.Race, dst.Race, dst.Id,
+                                     DefaultsPortEst(ports, entry.TargetGamePath));
         return carry != entry.Est;
     }
+
+    /// <summary>The skeleton the default data's port of ours carries for a target, or 0.</summary>
+    internal static int DefaultsPortEst(IReadOnlyList<HairPortRecord.Entry> ports, string target)
+        => ports.FirstOrDefault(p => p.Group.Length == 0
+                                     && p.TargetGamePath.Equals(target, StringComparison.OrdinalIgnoreCase))?.Est ?? 0;
 
     /// <summary>
     /// The extra bones the target race's skeleton has for the hairstyle: those its own model of it names, those its own

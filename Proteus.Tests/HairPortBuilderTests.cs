@@ -492,14 +492,23 @@ public class HairPortBuilderTests
         Assert.True(HairPortWriter.Save(mod.Root, HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, false).Writes, false).Ok);
         var entry = HairPortRecord.Read(mod.Root).Ports.Single();
         var source = mod.Get("long.mdl");
-        Assert.False(HairPortBuilder.IsOutOfDate(entry, source, mod.Owners));
+        var ports = HairPortRecord.Read(mod.Root).Ports;
+        Assert.False(HairPortBuilder.IsOutOfDate(entry, source, mod.Owners, ports));
 
         SetSourceEst(mod, 180);
-        Assert.True(HairPortBuilder.IsOutOfDate(entry, source, mod.Owners));
+        Assert.True(HairPortBuilder.IsOutOfDate(entry, source, mod.Owners, ports));
+        // With the manifest unreadable, only the model decides; a port whose option is gone is left alone.
+        Assert.False(HairPortBuilder.IsOutOfDate(entry, source, null, ports));
+        Assert.False(HairPortBuilder.IsOutOfDate(new HairPortRecord.Entry
+        {
+            Group = "Cut", Option = "Gone", SourceGamePath = entry.SourceGamePath, TargetGamePath = entry.TargetGamePath,
+            SourceSha8 = entry.SourceSha8, PortVersion = entry.PortVersion, Est = 170,
+        }, source, mod.Owners, ports));
 
-        // Studio lists it as out of date (and ticks it) …
-        var rows = Gui.HairPortPanel.Rows(Source, mod.Owners, HairPortRecord.Read(mod.Root), _ => true,
-                                          e => HairPortBuilder.IsOutOfDate(e, mod.Get(e.SourceFile), mod.Owners));
+        // Studio lists it as out of date (and ticks it), through the test its panel uses …
+        var record = HairPortRecord.Read(mod.Root);
+        var rows = Gui.HairPortPanel.Rows(Source, mod.Owners, record, _ => true,
+                                          Gui.HairPortPanel.OutOfDate(mod.Root, mod.Owners, record));
         Assert.Equal(Gui.HairPortPanel.State.Stale, rows.Single(r => r.Race == 201).State);
 
         // … and the automatic path, worn, remakes it.
@@ -526,5 +535,36 @@ public class HairPortBuilderTests
         Assert.Equal((150, 0), HairPortBuilder.SkeletonFor(owner, null, ours, 801, 201, Id));
         // Without a record of ours, the first entry is the author's.
         Assert.Equal((170, 0), HairPortBuilder.SkeletonFor(owner, null, null, 801, 201, Id));
+    }
+
+    /// <summary>
+    /// A physics hairstyle served from both the default data and an option, its borrow in the default data: each place
+    /// gets a port carrying the skeleton, and straight after the save both are current — the default data's carried
+    /// entry is ours, not an author's, so nothing is remade for it.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-hair-race-port-8")]
+    [Trait("Plan", "EDGE-hair-race-port-6")]
+    public void Ports_in_the_default_data_and_an_option_are_both_current_after_the_save()
+    {
+        using var mod = PhysicsMod([], [PenumbraManipulations.EstManipulation("0801", "Hair", Id, 170)]);
+        var meta = Path.Combine(mod.Root, "meta.json");
+        var node = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(meta))!;
+        node["DefaultData"]!["Files"]![Source] = "default.mdl";
+        File.WriteAllText(meta, node.ToJsonString());
+        mod.Put("default.mdl", HairModel(801, material: "/mt_c0801h0130_hir_b.mtrl", bones: [("j_ex_h0170_ke_b", 1f)]));
+        var game = PhysicsGame((201, 170, H0170Skeleton));
+
+        var plan = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, withSharers: false);
+        Assert.Equal(2, plan.Writes.Count);
+        Assert.All(plan.Writes, w => Assert.Equal(170, w.Est));
+        Assert.True(HairPortWriter.Save(mod.Root, plan.Writes, auto: false).Ok);
+
+        var record = HairPortRecord.Read(mod.Root);
+        Assert.All(record.Ports, e => Assert.False(
+            HairPortBuilder.IsOutOfDate(e, mod.Get(e.SourceFile), mod.Owners, record.Ports), $"{e.Group}/{e.Option}"));
+        var again = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, withSharers: false);
+        Assert.Empty(again.Writes);
+        Assert.Contains((ushort)201, again.Current);
     }
 }

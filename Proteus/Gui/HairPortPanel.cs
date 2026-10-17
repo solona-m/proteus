@@ -159,7 +159,7 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
             var record = HairPortRecord.Read(modRoot);
             var id = HairPortPlan.Parse(sourceGamePath)!.Value.Id;
             return Rows(sourceGamePath, owners, record, race => readGameFile(HairPortPlan.HairPath(race, id)) != null,
-                        e => ReadMod(modRoot, e.SourceFile) is { } b && HairPortBuilder.IsOutOfDate(e, b, owners));
+                        OutOfDate(modRoot, owners, record));
         });
     }
 
@@ -239,6 +239,11 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
         if (outcome.Count > 0) afterChange(modDir);
         Read(modRoot, sourceGamePath);
     }
+
+    /// <summary>Which of the mod's ports Studio lists as out of date: the builder's own test, on the files as they are.</summary>
+    internal static Func<HairPortRecord.Entry, bool> OutOfDate(string modRoot, IReadOnlyList<HairPortPlan.Owner> owners,
+                                                               HairPortRecord record)
+        => e => ReadMod(modRoot, e.SourceFile) is { } b && HairPortBuilder.IsOutOfDate(e, b, owners, record.Ports);
 
     private static byte[]? ReadMod(string modRoot, string rel)
     {
