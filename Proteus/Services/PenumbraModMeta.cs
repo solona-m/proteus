@@ -876,12 +876,20 @@ internal static class PenumbraModMeta
     /// option and group exactly as it was. Throws for a group or option that is not there, and for a Combining group,
     /// whose files live on its containers.
     /// </summary>
+    /// <param name="manipulations">Metadata edits to add beside them, each only when the option has no equal one
+    /// already; written in the same manifest write.</param>
     public static void MergeOptionRedirects(string modRoot, string groupName, string optionName,
-                                            IReadOnlyDictionary<string, string> add)
-        => EditOptionFiles(modRoot, groupName, optionName, files =>
+                                            IReadOnlyDictionary<string, string> add,
+                                            IReadOnlyList<object>? manipulations = null)
+        => EditOptionFiles(modRoot, groupName, optionName, (files, manips) =>
         {
             foreach (var (path, rel) in add)
                 files[KeyOf(files, path) ?? path] = rel;
+            foreach (var m in manipulations ?? [])
+            {
+                var node = JsonSerializer.SerializeToNode(m, m.GetType())!;
+                if (!manips.Any(x => System.Text.Json.Nodes.JsonNode.DeepEquals(x, node))) manips.Add(node);
+            }
         });
 
     /// <summary>
@@ -889,11 +897,13 @@ internal static class PenumbraModMeta
     /// redirect the author has pointed elsewhere since is left alone. Paths and files are compared without regard to case
     /// or slash direction, since Penumbra rewrites a manifest in its own spelling. Returns how many were removed.
     /// </summary>
+    /// <param name="manipulations">Metadata edits to take out too, each only where the option has one equal to it.</param>
     public static int RemoveOptionRedirects(string modRoot, string groupName, string optionName,
-                                            IReadOnlyDictionary<string, string> remove)
+                                            IReadOnlyDictionary<string, string> remove,
+                                            IReadOnlyList<object>? manipulations = null)
     {
         int removed = 0;
-        EditOptionFiles(modRoot, groupName, optionName, files =>
+        EditOptionFiles(modRoot, groupName, optionName, (files, manips) =>
         {
             foreach (var (path, rel) in remove)
                 if (KeyOf(files, path) is { } key && files[key]?.GetValueKind() == JsonValueKind.String
@@ -902,6 +912,12 @@ internal static class PenumbraModMeta
                     files.Remove(key);
                     removed++;
                 }
+            foreach (var m in manipulations ?? [])
+            {
+                var node = JsonSerializer.SerializeToNode(m, m.GetType())!;
+                for (int i = manips.Count - 1; i >= 0; i--)
+                    if (System.Text.Json.Nodes.JsonNode.DeepEquals(manips[i], node)) manips.RemoveAt(i);
+            }
         });
         return removed;
     }
@@ -917,7 +933,7 @@ internal static class PenumbraModMeta
     }
 
     private static void EditOptionFiles(string modRoot, string groupName, string optionName,
-                                        Action<System.Text.Json.Nodes.JsonObject> edit)
+                                        Action<System.Text.Json.Nodes.JsonObject, System.Text.Json.Nodes.JsonArray> edit)
     {
         if (groupName.Length == 0)
         {
@@ -935,7 +951,8 @@ internal static class PenumbraModMeta
                       ["Manipulations"] = new System.Text.Json.Nodes.JsonArray(),
                   };
             if (dd["Files"] is not System.Text.Json.Nodes.JsonObject files) dd["Files"] = files = [];
-            edit(files);
+            if (dd["Manipulations"] is not System.Text.Json.Nodes.JsonArray manips) dd["Manipulations"] = manips = [];
+            edit(files, manips);
             WriteManifestKey(modRoot, manifest, "DefaultData", dd);
             return;
         }
@@ -950,7 +967,8 @@ internal static class PenumbraModMeta
                 throw new InvalidOperationException(string.Format(CheapLoc.Loc.Localize("Service.ModMeta.NoOption.Fmt",
                     "The group \"{0}\" has no option called \"{1}\"."), groupName, optionName));
             if (option["Files"] is not System.Text.Json.Nodes.JsonObject files) option["Files"] = files = [];
-            edit(files);
+            if (option["Manipulations"] is not System.Text.Json.Nodes.JsonArray manips) option["Manipulations"] = manips = [];
+            edit(files, manips);
         });
     }
 

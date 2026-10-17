@@ -22,9 +22,18 @@ internal static class HairPortWriter
 
     /// <summary>One port to publish from one place in the mod.</summary>
     /// <param name="Millis">How long the bend took, for the log.</param>
+    /// <param name="Est">The extra skeleton to give the target race beside the port (<see cref="HairPortPlan.HairEst"/>);
+    /// 0 for none.</param>
     public sealed record PortWrite(HairPortPlan.Owner Into, string SourceGamePath, string SourceFile, string SourceSha8,
                                    string TargetGamePath, byte[] Model, IReadOnlyList<MaterialWrite> Materials,
-                                   long Millis = 0);
+                                   long Millis = 0, int Est = 0);
+
+    /// <summary>The <c>Est</c> manipulation that gives a port's race its extra skeleton.</summary>
+    internal static object EstFor(string targetGamePath, int entry)
+    {
+        var (race, id) = HairPortPlan.Parse(targetGamePath)!.Value;
+        return PenumbraManipulations.EstManipulation($"{race:D4}", "Hair", id, entry);
+    }
 
     public sealed record Outcome(bool Ok, string Message, int Count);
 
@@ -71,6 +80,7 @@ internal static class HairPortWriter
             var created = new List<string>();
             var committed = new List<(HairPortPlan.Owner Owner, Dictionary<string, string> Add)>();
             var redirects = new Dictionary<HairPortPlan.Owner, Dictionary<string, string>>();
+            var skeletons = new Dictionary<HairPortPlan.Owner, List<object>>();
             var entries = new List<HairPortRecord.Entry>();
             try
             {
@@ -82,6 +92,8 @@ internal static class HairPortWriter
                     WriteFile(modRoot, file, w.Model, created);
 
                     var add = redirects.TryGetValue(owner, out var a) ? a : redirects[owner] = new(StringComparer.OrdinalIgnoreCase);
+                    if (w.Est > 0)
+                        (skeletons.TryGetValue(owner, out var k) ? k : skeletons[owner] = []).Add(EstFor(w.TargetGamePath, w.Est));
                     add[w.TargetGamePath] = file;
                     var materials = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                     foreach (var m in w.Materials)
@@ -109,14 +121,14 @@ internal static class HairPortWriter
                         Group = owner.Group, Option = owner.Option, SourceGamePath = w.SourceGamePath,
                         SourceFile = HairPortRecord.Rel(w.SourceFile), SourceSha8 = w.SourceSha8,
                         TargetGamePath = w.TargetGamePath, File = file, Materials = materials, Auto = auto,
-                        PortVersion = HairPortBaker.Version,
+                        PortVersion = HairPortBaker.Version, Est = w.Est,
                     });
                 }
 
                 foreach (var (owner, add) in redirects)
                 {
                     BeforeMerge?.Invoke(committed.Count);
-                    PenumbraModMeta.MergeOptionRedirects(modRoot, owner.Group, owner.Option, add);
+                    PenumbraModMeta.MergeOptionRedirects(modRoot, owner.Group, owner.Option, add, skeletons.GetValueOrDefault(owner));
                     committed.Add((owner, add));
                 }
             }
@@ -126,7 +138,7 @@ internal static class HairPortWriter
                 // cannot be taken out keeps its files, so nothing is left pointing at nothing.
                 var kept = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var (owner, add) in committed)
-                    try { PenumbraModMeta.RemoveOptionRedirects(modRoot, owner.Group, owner.Option, add); }
+                    try { PenumbraModMeta.RemoveOptionRedirects(modRoot, owner.Group, owner.Option, add, skeletons.GetValueOrDefault(owner)); }
                     catch (Exception) { kept.UnionWith(add.Values); }
                 // Only files that were not there before. A remade port's file was overwritten in place: where its option was
                 // taken back out above it is unpublished, and the record drops it on the next read, so the automatic path
@@ -202,7 +214,8 @@ internal static class HairPortWriter
                     try
                     {
                         PenumbraModMeta.RemoveOptionRedirects(modRoot, e.Group, e.Option,
-                            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { [e.TargetGamePath] = e.File });
+                            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { [e.TargetGamePath] = e.File },
+                            e.Est > 0 ? [EstFor(e.TargetGamePath, e.Est)] : null);
                     }
                     catch (Exception ex) { blocked = ex.Message; continue; }
                 gone.Add(e);

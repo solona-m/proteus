@@ -45,6 +45,8 @@ internal sealed class HairPortRecord
         [JsonPropertyName("File")] public string File { get; set; } = "";
         /// <summary>Material redirects the port added beside it: game path to mod-relative file.</summary>
         [JsonPropertyName("Materials")] public Dictionary<string, string> Materials { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+        /// <summary>The extra skeleton (<c>Est</c> entry) the port added for its race beside it; 0 for none.</summary>
+        [JsonPropertyName("Est")] public int Est { get; set; }
         /// <summary>Made on equip rather than in Studio.</summary>
         [JsonPropertyName("Auto")] public bool Auto { get; set; }
         [JsonPropertyName("PortVersion")] public int PortVersion { get; set; }

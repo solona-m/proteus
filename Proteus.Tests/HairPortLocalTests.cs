@@ -35,10 +35,15 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
         /// <summary>The race's first face model the game has: not every race has f0001.</summary>
         public byte[]? Head(ushort race) => HairPortPlan.HeadPaths(race).Select(File).FirstOrDefault(b => b != null);
 
+        /// <summary>The extra bones a race's skeleton has for a hairstyle, as the builder reads them.</summary>
         public HashSet<string> ExtraBones(ushort race, int id)
-            => File(HairPath(race, id)) is { } m
+        {
+            var bones = File(HairPath(race, id)) is { } m
                 ? SecondSkinWriter.Parse(m).BoneNames.Where(b => b.StartsWith("j_ex_", StringComparison.Ordinal)).ToHashSet()
                 : [];
+            bones.UnionWith(HairPortPlan.SkeletonBones(File(HairPortPlan.SkeletonPath(race, id))));
+            return bones;
+        }
     }
 
     internal static Game Load()
@@ -275,5 +280,22 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
             }
         o.WriteLine($"{withShapes} ports of hairstyles with shape keys checked");
         Assert.True(withShapes > 0, "no hairstyle in the sample carries a shape key");
+    }
+
+    /// <summary>
+    /// The game's own skeleton files name their extra bones as plain strings, per race: what lets a port borrow another
+    /// hairstyle's skeleton for its race, as physics hair mods do.
+    /// </summary>
+    [LocalDataFact(LocalData.GameData)]
+    [Trait("Plan", "EDGE-hair-race-port-5")]
+    public void Skeleton_files_name_their_extra_bones()
+    {
+        var game = Load();
+        foreach (ushort race in new ushort[] { 201, 401, 801, 1401, 1801 })
+        {
+            var bones = HairPortPlan.SkeletonBones(game.File(HairPortPlan.SkeletonPath(race, 170)));
+            o.WriteLine($"c{race:D4} h0170 skeleton: {string.Join(", ", bones.Order())}");
+            Assert.Contains("j_ex_h0170_ke_b", bones);
+        }
     }
 }

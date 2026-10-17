@@ -113,8 +113,12 @@ internal static class HairPortBuilder
                 continue;
             }
 
+            // The extra bones the target race's skeleton has for this hairstyle: those its own model names, and those
+            // its own skeleton file for it carries.
             var extra = SecondSkinWriter.Parse(vanilla).BoneNames
                 .Where(b => b.StartsWith("j_ex_", StringComparison.Ordinal)).ToHashSet();
+            extra.UnionWith(HairPortPlan.SkeletonBones(readGame(HairPortPlan.SkeletonPath(to, id))));
+            var defaults = owners.FirstOrDefault(o => o.IsDefault);
             var targetHead = FirstFile(HairPortPlan.HeadPaths(to), readGame);
 
             var made = new Dictionary<string, HairPortBaker.Result>(StringComparer.OrdinalIgnoreCase);
@@ -129,18 +133,32 @@ internal static class HairPortBuilder
                 if (was != null && !HairPortPlan.IsStale(was, bytes)) { anyCurrent = true; continue; }
                 if (was == null && !HairPortPlan.CanPortInto(owners, owner, target)) continue;
 
-                // One bend per distinct file, however many options publish it.
-                if (!made.TryGetValue(rel, out var result))
+                // Physics hair borrows another hairstyle's skeleton through an Est entry: the source race's, from the same
+                // place (or the default data). The target race gets the same skeleton of its own, whose bones its own
+                // model of that hairstyle names — and the port carries the entry, unless the author gave it one already.
+                int est = HairPortPlan.HairEst(owner, from, id)
+                          ?? (defaults != null ? HairPortPlan.HairEst(defaults, from, id) : null) ?? 0;
+                var bones = extra;
+                if (est > 0)
                 {
-                    result = HairPortBaker.Prepare(bytes, from, to, id, pbd, extra, sourceHead, targetHead, out var r)!;
+                    bones = [.. extra];
+                    bones.UnionWith(HairPortPlan.SkeletonBones(readGame(HairPortPlan.SkeletonPath(to, est))));
+                    if (owners.Any(o => HairPortPlan.HairEst(o, to, id) != null)) est = 0;
+                }
+
+                // One bend per distinct file and skeleton, however many options publish it.
+                string key = $"{rel}|{est}";
+                if (!made.TryGetValue(key, out var result))
+                {
+                    result = HairPortBaker.Prepare(bytes, from, to, id, pbd, bones, sourceHead, targetHead, out var r)!;
                     if (result == null) { why = r; break; }
-                    made[rel] = result;
+                    made[key] = result;
                 }
 
                 var materials = Materials(modRoot, owners, owner, bytes, from, to, id, readGame, out var missing);
                 if (missing != null) { why = missing; break; }
                 writes.Add(new HairPortWriter.PortWrite(owner, sourceGamePath, rel, HairPortPlan.Sha8(bytes), target,
-                                                        result.Model, materials, result.Millis));
+                                                        result.Model, materials, result.Millis, est));
             }
             if (why != null)
             {

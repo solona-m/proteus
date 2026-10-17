@@ -109,7 +109,9 @@ internal static partial class HairPortPlan
     /// <param name="Group">"" for the mod's default data.</param>
     /// <param name="Type">The group's type ("Single", "Multi", "Combining", …); "" for the default data.</param>
     /// <param name="Files">Game path to mod-relative file, as the manifest has it.</param>
-    public sealed record Owner(string Group, string Option, string Type, IReadOnlyDictionary<string, string> Files)
+    /// <param name="Manipulations">Its metadata edits as written; null when not read.</param>
+    public sealed record Owner(string Group, string Option, string Type, IReadOnlyDictionary<string, string> Files,
+                               IReadOnlyList<JsonElement>? Manipulations = null)
     {
         public bool IsDefault => Group.Length == 0;
         public bool IsCombining => string.Equals(Type, "Combining", StringComparison.OrdinalIgnoreCase);
@@ -125,7 +127,8 @@ internal static partial class HairPortPlan
     {
         if (!PenumbraModMeta.HasReadableManifest(modRoot) || PenumbraModMeta.IsLegacyFolder(modRoot)) return null;
         var owners = new List<Owner>();
-        if (PenumbraModMeta.TryReadDefaultData(modRoot) is { } dd) owners.Add(new Owner("", "", "", dd.Files));
+        if (PenumbraModMeta.TryReadDefaultData(modRoot) is { } dd)
+            owners.Add(new Owner("", "", "", dd.Files, dd.Manipulations.OfType<JsonElement>().ToList()));
         foreach (var (name, group) in PenumbraModMeta.TryReadGroups(modRoot) ?? [])
         {
             string type = PenumbraModMeta.TypeOf(group);
@@ -137,7 +140,8 @@ internal static partial class HairPortPlan
                     owners.Add(new Owner(name, $"#{++i}", type, FilesOf(c)));
             }
             foreach (var option in PenumbraModMeta.FileOptionsOf(group) ?? [])
-                owners.Add(new Owner(name, option.Name, type, option.Files));
+                owners.Add(new Owner(name, option.Name, type, option.Files,
+                                     (option.Manipulations ?? []).OfType<JsonElement>().ToList()));
         }
         return owners;
     }
@@ -204,6 +208,53 @@ internal static partial class HairPortPlan
             foreach (var (path, rel) in owner.Files)
                 if (!IsPortFile(rel) && Parse(path) is { } at && at.Id == id) races.Add(at.Race);
         return races;
+    }
+
+    /// <summary>
+    /// The extra skeleton a place in the mod gives <paramref name="race"/> for hairstyle <paramref name="id"/>: the
+    /// <c>Est</c> entry naming another hairstyle's skeleton (h0162 moving with h0170's bones), or null for none. Physics
+    /// hair is made this way — the bones are the game's own, borrowed per race.
+    /// </summary>
+    public static int? HairEst(Owner owner, ushort race, int id)
+    {
+        int n = race / 100;
+        string wantRace = ModelRace.Names[(n - 1) / 2], wantGender = n % 2 == 1 ? "Male" : "Female";
+        foreach (var m in owner.Manipulations ?? [])
+        {
+            if (m.ValueKind != JsonValueKind.Object || !m.TryGetProperty("Type", out var t) || t.GetString() != "Est"
+                || !m.TryGetProperty("Manipulation", out var e) || e.ValueKind != JsonValueKind.Object) continue;
+            if (Str(e, "Slot") != "Hair" || Str(e, "Race") != wantRace || Str(e, "Gender") != wantGender) continue;
+            if (!e.TryGetProperty("SetId", out var set) || !set.TryGetInt32(out int s) || s != id) continue;
+            if (e.TryGetProperty("Entry", out var entry) && entry.TryGetInt32(out int v)) return v;
+        }
+        return null;
+
+        static string? Str(JsonElement e, string key)
+            => e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+    }
+
+    /// <summary>The game path of a race's skeleton for hairstyle <paramref name="id"/>'s extra bones.</summary>
+    public static string SkeletonPath(ushort race, int id)
+        => $"chara/human/c{race:D4}/skeleton/hair/h{id:D4}/skl_c{race:D4}h{id:D4}.sklb";
+
+    /// <summary>
+    /// The extra bones (<c>j_ex_…</c>) a skeleton file names, read as the plain strings the file carries them as — no
+    /// Havok parse needed to know which bones a race's skeleton has. Empty for no file.
+    /// </summary>
+    public static HashSet<string> SkeletonBones(byte[]? sklb)
+    {
+        var bones = new HashSet<string>(StringComparer.Ordinal);
+        if (sklb == null) return bones;
+        var prefix = "j_ex_"u8;
+        for (int i = sklb.AsSpan().IndexOf(prefix); i >= 0;)
+        {
+            int end = i;
+            while (end < sklb.Length && sklb[end] is >= 0x21 and < 0x7f) end++;
+            bones.Add(System.Text.Encoding.ASCII.GetString(sklb, i, end - i));
+            int next = sklb.AsSpan(end).IndexOf(prefix);
+            i = next < 0 ? -1 : end + next;
+        }
+        return bones;
     }
 
     /// <summary>The first eight hex digits of a file's SHA-256: enough to tell the author changed it since a port.</summary>

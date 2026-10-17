@@ -135,4 +135,12 @@ public class HairPortPlanTests
         Assert.Equal("chara/human/c1601/obj/face/f0001/model/c1601f0001_fac.mdl", HairPortPlan.HeadPaths(1601).First());
         Assert.Contains("chara/human/c1601/obj/face/f0101/model/c1601f0101_fac.mdl", HairPortPlan.HeadPaths(1601));
     }
+
+    [Fact]
+    public void Skeleton_bones_are_read_as_the_strings_the_file_carries()
+    {
+        var bytes = System.Text.Encoding.ASCII.GetBytes("xx\0j_ex_h0170_ke_b\0yy j_ex_h0170_ke_c\x01j_kao\0");
+        Assert.Equal(["j_ex_h0170_ke_b", "j_ex_h0170_ke_c"], HairPortPlan.SkeletonBones(bytes).Order());
+        Assert.Empty(HairPortPlan.SkeletonBones(null));
+    }
 }

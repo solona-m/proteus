@@ -202,4 +202,67 @@ public class HairPortBuilderTests
         Assert.DoesNotContain((ushort)1801, some);
         Assert.Equal(all.Count - 1, some.Count);
     }
+
+    /// <summary>
+    /// Physics hair: the model moves with another hairstyle's extra bones, which an Est entry gives the source race. The
+    /// target race has that skeleton of its own, so the port is made, and carries the entry for its race — unless the
+    /// author already gave it one.
+    /// </summary>
+    [Theory]
+    [Trait("Plan", "EDGE-hair-race-port-6")]
+    [Trait("Plan", "EDGE-hair-race-port-5")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_borrowed_skeleton_comes_with_the_port(bool authorGaveTheTargetOne)
+    {
+        var est = new List<object> { PenumbraManipulations.EstManipulation("0801", "Hair", Id, 170) };
+        if (authorGaveTheTargetOne) est.Add(PenumbraManipulations.EstManipulation("0201", "Hair", Id, 150));
+        var groups = "[" + System.Text.Json.JsonSerializer.Serialize(new
+        {
+            Name = "Cut", Description = "", Priority = 0, Type = "Single", DefaultSettings = 0,
+            Options = new[] { new { Name = "Long", Description = "", Files = new Dictionary<string, string> { [Source] = "long.mdl" },
+                                    FileSwaps = new Dictionary<string, string>(), Manipulations = est.ToArray() } },
+        }) + "]";
+        using var mod = new Mod(groups);
+        mod.Put("long.mdl", HairModel(801, bones: [("j_ex_h0170_ke_b", 1f)]));
+        var skeleton = System.Text.Encoding.ASCII.GetBytes("\0\0hkaSkeleton\0j_ex_h0170_ke_b\0j_ex_h0170_ke_c\0");
+        var game = Game(Races, new Dictionary<string, byte[]>
+        {
+            [HairPortPlan.SkeletonPath(201, 170)] = skeleton,
+            [HairPortPlan.SkeletonPath(201, 150)] = skeleton,
+        });
+
+        var plan = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, withSharers: false);
+        Assert.Empty(plan.Refused);
+        var write = Assert.Single(plan.Writes);
+        Assert.Equal(authorGaveTheTargetOne ? 0 : 170, write.Est);
+
+        Assert.True(HairPortWriter.Save(mod.Root, plan.Writes, auto: false).Ok);
+        Assert.Equal(authorGaveTheTargetOne ? 150 : 170, HairPortPlan.HairEst(mod.Owner("Cut", "Long"), 201, Id));
+        Assert.Equal(170, HairPortPlan.HairEst(mod.Owner("Cut", "Long"), 801, Id));
+
+        // Undone, the entry it added goes with it; the author's own entries stay.
+        Assert.True(HairPortWriter.Undo(mod.Root, _ => true, decline: false).Ok);
+        Assert.Equal(authorGaveTheTargetOne ? 150 : null, HairPortPlan.HairEst(mod.Owner("Cut", "Long"), 201, Id));
+        Assert.Equal(170, HairPortPlan.HairEst(mod.Owner("Cut", "Long"), 801, Id));
+    }
+
+    /// <summary>Without a skeleton for the target race, a model on borrowed bones is still refused.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-race-port-5")]
+    public void A_borrowed_skeleton_the_target_lacks_is_refused()
+    {
+        var groups = "[" + System.Text.Json.JsonSerializer.Serialize(new
+        {
+            Name = "Cut", Description = "", Priority = 0, Type = "Single", DefaultSettings = 0,
+            Options = new[] { new { Name = "Long", Description = "", Files = new Dictionary<string, string> { [Source] = "long.mdl" },
+                                    FileSwaps = new Dictionary<string, string>(),
+                                    Manipulations = new[] { PenumbraManipulations.EstManipulation("0801", "Hair", Id, 170) } } },
+        }) + "]";
+        using var mod = new Mod(groups);
+        mod.Put("long.mdl", HairModel(801, bones: [("j_ex_h0170_ke_b", 1f)]));
+        var plan = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), Game(Races), withSharers: false);
+        Assert.Empty(plan.Writes);
+        Assert.Contains("j_ex_h0170_ke_b", plan.Refused[201]);
+    }
 }
