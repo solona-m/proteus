@@ -388,8 +388,8 @@
     "description": ""
   },
   "Chat.HatCompat": {
-    "message": "[Proteus] Proteus가 이 헤어스타일을 모자에 맞게 수정했습니다. /proteus > 설정 > 모자 에서 되돌리거나 이 기능을 끌 수 있습니다.",
-    "description": "Chat line shown once ever, the first time Proteus makes a hairstyle fit under hats by itself. Do NOT translate \"Proteus\" or the command \"/proteus\". \"Settings\" and \"Hats\" name a tab and a section in Proteus' own window - use the same words you used for \"Tab.Settings\" and \"Settings.Section.HatCompat\"."
+    "message": "[Proteus] Proteus가 이 헤어스타일을 모자에 맞게 수정했습니다. /proteus > 설정 > 헤어 에서 되돌리거나 이 기능을 끌 수 있습니다.",
+    "description": "Chat line shown once ever, the first time Proteus makes a hairstyle fit under hats by itself. Do NOT translate \"Proteus\" or the command \"/proteus\". \"Settings\" and \"Hair\" name a tab and a section in Proteus' own window - use the same words you used for \"Tab.Settings\" and \"Settings.Section.HairPort\"."
   },
   "Chat.MirrorRepo": {
     "message": "[Proteus] 이전 플러그인 저장소 URL로 설치되었습니다. /xlplugins > Experimental에서 https://dl.solona.info/repo.json 으로 변경하면 업데이트가 빨라지고 GitHub 부하도 줄어듭니다. 변경하지 않아도 설치는 계속 작동합니다. 이 알림은 몇 번 표시된 후 사라집니다.",
@@ -1661,7 +1661,7 @@
   },
   "HatCompat.InheritedTag": {
     "message": "이 헤어스타일에는 모자 지원이 포함되어 있지만, 모자가 덮는 범위보다 훨씬 많은 머리카락을 숨깁니다. 아마도 기반이 된 헤어스타일에서 그대로 이어받아 이 헤어스타일에 맞게 조정되지 않은 것입니다. Proteus가 다시 측정해 교체할 수 있습니다.",
-    "description": "Shown in the Hats section for a hairstyle that arrived with hat support that hides hair no hat covers. \"Proteus\" is a plugin name - never translate it."
+    "description": "Shown in the hats part of the Settings > Hair section for a hairstyle that arrived with hat support that hides hair no hat covers. \"Proteus\" is a plugin name - never translate it."
   },
   "HatCompat.InheritedTag.Tip": {
     "message": "머리카락을 숨기는 부분만 교체합니다. 헤어스타일 자체의 눌림은 그대로\n유지되므로, 최악의 경우 모자가 머리카락을 관통할 뿐이며 모자가 덮지도\n않는 머리카락이 사라지지는 않습니다.\n\n되돌리기는 헤어스타일에 원래 들어 있던 것을 그대로 복원합니다.",
@@ -1705,7 +1705,7 @@
   },
   "HatCompat.NoHead": {
     "message": "Proteus가 머리 위치를 파악할 수 없어 이 헤어스타일을 그대로 두었습니다. 모자가 어디에 놓이는지 알기 위해 캐릭터의 얼굴을 읽어야 하며, 그것이 없으면 모자 선은 추측이 됩니다.",
-    "description": "Shown in the Hats section when Proteus cannot read the wearer's face model and so refuses to change the hairstyle. \"Proteus\" is a plugin name - never translate it."
+    "description": "Shown in the hats part of the Settings > Hair section when Proteus cannot read the wearer's face model and so refuses to change the hairstyle. \"Proteus\" is a plugin name - never translate it."
   },
   "HatCompat.Apply.NoHead": {
     "message": "Proteus가 캐릭터의 머리를 읽을 수 없어 이 헤어스타일을 변경하지 않았습니다.",
@@ -1713,7 +1713,7 @@
   },
   "HatCompat.UndoAll.Fmt": {
     "message": "이 모드의 헤어스타일 {0}개 모두 되돌리기",
-    "description": "Button in the Hats section. {0} is how many hairstyle files Proteus has changed in this mod. Keep it short - it is a button label."
+    "description": "Button in the hats part of the Settings > Hair section. {0} is how many hairstyle files Proteus has changed in this mod. Keep it short - it is a button label."
   },
   "HatCompat.UndoAll.Tip": {
     "message": "되돌리기는 지금 착용한 헤어스타일을 복원합니다. 헤어 모드는 보통 종족마다\n하나의 모델을 포함하므로, 다른 종족으로 맞춘 헤어스타일은 지금 착용한 것이\n아니어서 되돌리기로는 닿지 않습니다.\n\n이 기능은 Proteus가 이 모드에서 변경한 모든 헤어스타일을 복원합니다.",
@@ -3203,10 +3203,6 @@
     "message": "일반",
     "description": ""
   },
-  "Settings.Section.HatCompat": {
-    "message": "모자",
-    "description": ""
-  },
   "Settings.Section.Hosting": {
     "message": "적재 위치",
     "description": ""
@@ -4096,7 +4092,7 @@
     "description": ""
   },
   "WhatsNew.Hats.Body": {
-    "message": "'머리 모양을 모자에 맞추기'가 이제 기본으로 켜져 있습니다. Proteus는 실제로 모자를 쓸 때까지 기다렸다가, 모자가 가릴 머리카락을 머리에 납작하게 눌러 모자가 머리카락을 뚫고 나오지 않게 합니다.\n\n머리 모드 자체의 파일을 수정하지만 원본은 보관되므로 되돌릴 수 있고, 설정의 '모자'에서 완전히 끌 수도 있습니다.",
+    "message": "'머리 모양을 모자에 맞추기'가 이제 기본으로 켜져 있습니다. Proteus는 실제로 모자를 쓸 때까지 기다렸다가, 모자가 가릴 머리카락을 머리에 납작하게 눌러 모자가 머리카락을 뚫고 나오지 않게 합니다.\n\n머리 모드 자체의 파일을 수정하지만 원본은 보관되므로 되돌릴 수 있고, 설정의 '헤어'에서 완전히 끌 수도 있습니다.",
     "description": ""
   },
   "WhatsNew.Designs.Head": {

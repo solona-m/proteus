@@ -388,8 +388,8 @@
     "description": ""
   },
   "Chat.HatCompat": {
-    "message": "[Proteus] Proteus 已让这个发型能戴在帽子下面。你可以在 /proteus > 设置 > 帽子 中撤销此更改，或关闭该功能。",
-    "description": "Chat line shown once ever, the first time Proteus makes a hairstyle fit under hats by itself. Do NOT translate \"Proteus\" or the command \"/proteus\". \"Settings\" and \"Hats\" name a tab and a section in Proteus' own window - use the same words you used for \"Tab.Settings\" and \"Settings.Section.HatCompat\"."
+    "message": "[Proteus] Proteus 已让这个发型能戴在帽子下面。你可以在 /proteus > 设置 > 头发 中撤销此更改，或关闭该功能。",
+    "description": "Chat line shown once ever, the first time Proteus makes a hairstyle fit under hats by itself. Do NOT translate \"Proteus\" or the command \"/proteus\". \"Settings\" and \"Hair\" name a tab and a section in Proteus' own window - use the same words you used for \"Tab.Settings\" and \"Settings.Section.HairPort\"."
   },
   "Chat.MirrorRepo": {
     "message": "[Proteus] 你是通过旧的插件仓库地址安装的。在 /xlplugins > Experimental 中改为 https://dl.solona.info/repo.json 可以让更新更快，并减轻 GitHub 的负担。无论是否更改，你的安装都能继续使用。此提醒会显示几次后不再出现。",
@@ -1661,7 +1661,7 @@
   },
   "HatCompat.InheritedTag": {
     "message": "这个发型自带帽子适配，但它隐藏的头发远多于帽子实际遮住的部分——很可能是从它所基于的发型继承而来，从未针对这个发型调整过。Proteus 可以重新测量并替换它。",
-    "description": "Shown in the Hats section for a hairstyle that arrived with hat support that hides hair no hat covers. \"Proteus\" is a plugin name - never translate it."
+    "description": "Shown in the hats part of the Settings > Hair section for a hairstyle that arrived with hat support that hides hair no hat covers. \"Proteus\" is a plugin name - never translate it."
   },
   "HatCompat.InheritedTag.Tip": {
     "message": "只替换隐藏头发的那部分。发型自身的压平效果会保留，因此最坏的结果只是\n帽子穿过头发，而不是本不该被遮住的头发消失。\n\n“撤销”会完整还原发型原本的内容。",
@@ -1705,7 +1705,7 @@
   },
   "HatCompat.NoHead": {
     "message": "Proteus 无法确定你的头部位置，因此没有改动这个发型。它需要读取角色的面部来判断帽子的位置，否则帽檐线只能靠猜测。",
-    "description": "Shown in the Hats section when Proteus cannot read the wearer's face model and so refuses to change the hairstyle. \"Proteus\" is a plugin name - never translate it."
+    "description": "Shown in the hats part of the Settings > Hair section when Proteus cannot read the wearer's face model and so refuses to change the hairstyle. \"Proteus\" is a plugin name - never translate it."
   },
   "HatCompat.Apply.NoHead": {
     "message": "Proteus 无法读取角色的头部，因此没有修改这个发型。",
@@ -1713,7 +1713,7 @@
   },
   "HatCompat.UndoAll.Fmt": {
     "message": "撤销此 Mod 的全部 {0} 个发型",
-    "description": "Button in the Hats section. {0} is how many hairstyle files Proteus has changed in this mod. Keep it short - it is a button label."
+    "description": "Button in the hats part of the Settings > Hair section. {0} is how many hairstyle files Proteus has changed in this mod. Keep it short - it is a button label."
   },
   "HatCompat.UndoAll.Tip": {
     "message": "“撤销”只会还原你当前戴着的发型。发型 Mod 通常为每个种族提供一个\n模型，因此你以其他种族适配过的发型并不是当前这个，“撤销”无法触及。\n\n此操作会还原 Proteus 在此 Mod 中修改过的所有发型。",
@@ -3203,10 +3203,6 @@
     "message": "常规",
     "description": ""
   },
-  "Settings.Section.HatCompat": {
-    "message": "帽子",
-    "description": ""
-  },
   "Settings.Section.Hosting": {
     "message": "寄载",
     "description": ""
@@ -4096,7 +4092,7 @@
     "description": ""
   },
   "WhatsNew.Hats.Body": {
-    "message": "「让发型适配帽子」现已默认开启。Proteus 会等到你真正戴上帽子，再把帽子会遮住的头发压平贴向头部，帽子便不会再穿模。\n\n这会修改头发模组自己的文件，但原始文件会被保留，因此可以撤销，也可以在设置的「帽子」中彻底关闭。",
+    "message": "「让发型适配帽子」现已默认开启。Proteus 会等到你真正戴上帽子，再把帽子会遮住的头发压平贴向头部，帽子便不会再穿模。\n\n这会修改头发模组自己的文件，但原始文件会被保留，因此可以撤销，也可以在设置的「头发」中彻底关闭。",
     "description": ""
   },
   "WhatsNew.Designs.Head": {

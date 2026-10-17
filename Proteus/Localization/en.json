@@ -388,8 +388,8 @@
     "description": "Chat notice when an accessory ran out of material slots for an imported pack's meshes. {0} is a count. \"Proteus\" is a plugin name - never translate it."
   },
   "Chat.HatCompat": {
-    "message": "[Proteus] Proteus has made this hairstyle fit under hats. You can undo that, or turn the feature off, under /proteus > Settings > Hats.",
-    "description": "Chat line shown once ever, the first time Proteus makes a hairstyle fit under hats by itself. Do NOT translate \"Proteus\" or the command \"/proteus\". \"Settings\" and \"Hats\" name a tab and a section in Proteus' own window - use the same words you used for \"Tab.Settings\" and \"Settings.Section.HatCompat\"."
+    "message": "[Proteus] Proteus has made this hairstyle fit under hats. You can undo that, or turn the feature off, under /proteus > Settings > Hair.",
+    "description": "Chat line shown once ever, the first time Proteus makes a hairstyle fit under hats by itself. Do NOT translate \"Proteus\" or the command \"/proteus\". \"Settings\" and \"Hair\" name a tab and a section in Proteus' own window - use the same words you used for \"Tab.Settings\" and \"Settings.Section.HairPort\"."
   },
   "Chat.MirrorRepo": {
     "message": "[Proteus] You installed from the old plugin repo URL. Switching it to https://dl.solona.info/repo.json under /xlplugins > Experimental makes updates faster and takes load off GitHub. Your install keeps working either way. This reminder shows a few times, then stops.",
@@ -1621,7 +1621,7 @@
   },
   "HatCompat.AutoFit.Label": {
     "message": "Make hairstyles fit under hats",
-    "description": "Checkbox, first control in Settings > Hats."
+    "description": "Checkbox, first control in Settings > Hair."
   },
   "HatCompat.AutoFit.Tip": {
     "message": "Most modded hair has no hat support, so a hat worn over it goes straight\nthrough. When on, Proteus waits until you wear a hat, then presses the hair\nthat the hat would cover flat against your head.\n\nThis edits the hair mod's own files, so it keeps working with Proteus turned\noff and travels with the mod if you export it. Originals are kept and the\nchange can be undone here.",
@@ -1629,7 +1629,7 @@
   },
   "HatCompat.ReplaceAuthored.Label": {
     "message": "Replace hat support a hairstyle came with",
-    "description": "Checkbox in Settings > Hats, under the auto-fit checkbox. Off by default."
+    "description": "Checkbox in Settings > Hair, under the auto-fit checkbox. Off by default."
   },
   "HatCompat.ReplaceAuthored.Tip": {
     "message": "Some hairstyles come with hat support their author made by hand. With this off,\nProteus leaves those alone. With it on, Proteus discards the author's version and\nfits the hairstyle itself, the same as one that came with none.\n\nOff by default: an author's hand-made fit is usually the better one. The author's\nversion is kept, and is put back when you turn this off again.",
@@ -1641,7 +1641,7 @@
   },
   "HatCompat.HidePonytails.Label": {
     "message": "Hide ponytails",
-    "description": "Checkbox under the one above, in Settings > Hats."
+    "description": "Checkbox under the one above, in Settings > Hair."
   },
   "HatCompat.HidePonytails.Tip": {
     "message": "Also make the parts that no hat could cover — ponytails, side tails, a long\nfall at the back — disappear while a hat is worn, instead of leaving them\nhanging out from under it.\n\nOff by default. Pressing hair is invisible when it overshoots, because the hat\ncovers it; hiding is all or nothing, so a part judged wrongly simply vanishes.",
@@ -1657,11 +1657,11 @@
   },
   "HatCompat.AlreadyPatched": {
     "message": "Proteus has already made this hairstyle fit under hats.",
-    "description": "Status line in Settings > Hats, above the Undo button."
+    "description": "Status line in Settings > Hair, above the Undo button."
   },
   "HatCompat.InheritedTag": {
     "message": "This hairstyle came with hat support, but it hides far more hair than a hat covers — most likely carried over from the hairstyle it was built from and never fitted to this one. Proteus can measure it again and replace it.",
-    "description": "Shown in the Hats section for a hairstyle that arrived with hat support that hides hair no hat covers. \"Proteus\" is a plugin name - never translate it."
+    "description": "Shown in the hats part of the Settings > Hair section for a hairstyle that arrived with hat support that hides hair no hat covers. \"Proteus\" is a plugin name - never translate it."
   },
   "HatCompat.InheritedTag.Tip": {
     "message": "Only the part that hides hair is replaced. The hairstyle keeps its own\nflattening, so the worst this can do is leave a hat clipping through hair,\ninstead of hair disappearing that no hat would have covered.\n\nUndo puts back exactly what the hairstyle came with.",
@@ -1705,7 +1705,7 @@
   },
   "HatCompat.NoHead": {
     "message": "Proteus could not work out where your head is, so it has left this hairstyle alone. It reads your character's face to know where a hat sits, and without that a hat line would be a guess.",
-    "description": "Shown in the Hats section when Proteus cannot read the wearer's face model and so refuses to change the hairstyle. \"Proteus\" is a plugin name - never translate it."
+    "description": "Shown in the hats part of the Settings > Hair section when Proteus cannot read the wearer's face model and so refuses to change the hairstyle. \"Proteus\" is a plugin name - never translate it."
   },
   "HatCompat.Apply.NoHead": {
     "message": "Proteus could not read your character's head, so it has not changed this hairstyle.",
@@ -1713,7 +1713,7 @@
   },
   "HatCompat.UndoAll.Fmt": {
     "message": "Undo all {0} of this mod's hairstyles",
-    "description": "Button in the Hats section. {0} is how many hairstyle files Proteus has changed in this mod. Keep it short - it is a button label."
+    "description": "Button in the hats part of the Settings > Hair section. {0} is how many hairstyle files Proteus has changed in this mod. Keep it short - it is a button label."
   },
   "HatCompat.UndoAll.Tip": {
     "message": "Undo puts back the hairstyle you are wearing. A hair mod usually ships one\nmodel per race, so a hairstyle you fitted as another race is not the one you\nhave on now, and Undo cannot reach it.\n\nThis puts back every hairstyle Proteus has changed anywhere in this mod.",
@@ -3203,10 +3203,6 @@
     "message": "General",
     "description": "Section heading in Settings."
   },
-  "Settings.Section.HatCompat": {
-    "message": "Hats",
-    "description": "Section header in Settings. Very tight space."
-  },
   "Settings.Section.Hosting": {
     "message": "Hosting",
     "description": "Section heading in Settings: which equipment slot the second skin rides on."
@@ -4096,8 +4092,8 @@
     "description": "Heading for the hat-compatibility section."
   },
   "WhatsNew.Hats.Body": {
-    "message": "Making hairstyles fit under hats is now on by default. Proteus waits until you actually put a hat on, then presses the hair the hat would cover flat against your head, so the hat stops going straight through it.\n\nIt edits the hair mod's own files and keeps the originals, so it can be undone — or switched off altogether — under Settings, Hats.",
-    "description": "'Settings, Hats' names the Settings tab and its Hats section - match Tab.Settings and Settings.Section.HatCompat."
+    "message": "Making hairstyles fit under hats is now on by default. Proteus waits until you actually put a hat on, then presses the hair the hat would cover flat against your head, so the hat stops going straight through it.\n\nIt edits the hair mod's own files and keeps the originals, so it can be undone — or switched off altogether — under Settings, Hair.",
+    "description": "'Settings, Hair' names the Settings tab and its Hair section - match Tab.Settings and Settings.Section.HairPort."
   },
   "WhatsNew.Designs.Head": {
     "message": "Designs restore the whole look",

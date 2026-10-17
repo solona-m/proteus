@@ -388,8 +388,8 @@
     "description": ""
   },
   "Chat.HatCompat": {
-    "message": "[Proteus] Proteus ha hecho que este peinado quepa bajo los sombreros. Puedes deshacerlo, o desactivar la función, en /proteus > Ajustes > Sombreros.",
-    "description": "Chat line shown once ever, the first time Proteus makes a hairstyle fit under hats by itself. Do NOT translate \"Proteus\" or the command \"/proteus\". \"Settings\" and \"Hats\" name a tab and a section in Proteus' own window - use the same words you used for \"Tab.Settings\" and \"Settings.Section.HatCompat\"."
+    "message": "[Proteus] Proteus ha hecho que este peinado quepa bajo los sombreros. Puedes deshacerlo, o desactivar la función, en /proteus > Ajustes > Pelo.",
+    "description": "Chat line shown once ever, the first time Proteus makes a hairstyle fit under hats by itself. Do NOT translate \"Proteus\" or the command \"/proteus\". \"Settings\" and \"Hair\" name a tab and a section in Proteus' own window - use the same words you used for \"Tab.Settings\" and \"Settings.Section.HairPort\"."
   },
   "Chat.MirrorRepo": {
     "message": "[Proteus] Instalaste desde la URL antigua del repositorio de plugins. Cambiarla a https://dl.solona.info/repo.json en /xlplugins > Experimental hace que las actualizaciones sean más rápidas y reduce la carga en GitHub. Tu instalación seguirá funcionando de cualquier modo. Este aviso se muestra unas pocas veces y luego deja de aparecer.",
@@ -1661,7 +1661,7 @@
   },
   "HatCompat.InheritedTag": {
     "message": "Este peinado venía con soporte para sombreros, pero oculta mucho más pelo del que un sombrero cubre — probablemente heredado del peinado en el que se basa y nunca ajustado a este. Proteus puede medirlo de nuevo y reemplazarlo.",
-    "description": "Shown in the Hats section for a hairstyle that arrived with hat support that hides hair no hat covers. \"Proteus\" is a plugin name - never translate it."
+    "description": "Shown in the hats part of the Settings > Hair section for a hairstyle that arrived with hat support that hides hair no hat covers. \"Proteus\" is a plugin name - never translate it."
   },
   "HatCompat.InheritedTag.Tip": {
     "message": "Solo se reemplaza la parte que oculta el pelo. El peinado conserva su propio\naplanado, así que lo peor que puede pasar es que un sombrero atraviese el\npelo, en vez de que desaparezca pelo que ningún sombrero cubriría.\n\nDeshacer restaura exactamente lo que traía el peinado.",
@@ -1705,7 +1705,7 @@
   },
   "HatCompat.NoHead": {
     "message": "Proteus no pudo determinar dónde está tu cabeza, así que ha dejado este peinado sin tocar. Lee la cara de tu personaje para saber dónde se asienta un sombrero; sin eso, la línea del sombrero sería una suposición.",
-    "description": "Shown in the Hats section when Proteus cannot read the wearer's face model and so refuses to change the hairstyle. \"Proteus\" is a plugin name - never translate it."
+    "description": "Shown in the hats part of the Settings > Hair section when Proteus cannot read the wearer's face model and so refuses to change the hairstyle. \"Proteus\" is a plugin name - never translate it."
   },
   "HatCompat.Apply.NoHead": {
     "message": "Proteus no pudo leer la cabeza de tu personaje, así que no ha cambiado este peinado.",
@@ -1713,7 +1713,7 @@
   },
   "HatCompat.UndoAll.Fmt": {
     "message": "Deshacer los {0} peinados de este mod",
-    "description": "Button in the Hats section. {0} is how many hairstyle files Proteus has changed in this mod. Keep it short - it is a button label."
+    "description": "Button in the hats part of the Settings > Hair section. {0} is how many hairstyle files Proteus has changed in this mod. Keep it short - it is a button label."
   },
   "HatCompat.UndoAll.Tip": {
     "message": "Deshacer restaura el peinado que llevas puesto. Un mod de pelo suele incluir\nun modelo por raza, así que un peinado que ajustaste como otra raza no es el\nque llevas ahora, y Deshacer no puede alcanzarlo.\n\nEsto restaura todos los peinados que Proteus ha cambiado en este mod.",
@@ -3203,10 +3203,6 @@
     "message": "General",
     "description": ""
   },
-  "Settings.Section.HatCompat": {
-    "message": "Sombreros",
-    "description": ""
-  },
   "Settings.Section.Hosting": {
     "message": "Alojamiento",
     "description": ""
@@ -4096,7 +4092,7 @@
     "description": ""
   },
   "WhatsNew.Hats.Body": {
-    "message": "«Hacer que los peinados encajen bajo los sombreros» ahora está activado por defecto. Proteus espera a que lleves un sombrero de verdad y entonces aplasta contra la cabeza el pelo que el sombrero taparía, para que deje de atravesarlo.\n\nEdita los archivos del propio mod de pelo, pero conserva los originales, así que se puede deshacer — o desactivar del todo — en Ajustes, Sombreros.",
+    "message": "«Hacer que los peinados encajen bajo los sombreros» ahora está activado por defecto. Proteus espera a que lleves un sombrero de verdad y entonces aplasta contra la cabeza el pelo que el sombrero taparía, para que deje de atravesarlo.\n\nEdita los archivos del propio mod de pelo, pero conserva los originales, así que se puede deshacer — o desactivar del todo — en Ajustes, Pelo.",
     "description": ""
   },
   "WhatsNew.Designs.Head": {

@@ -349,7 +349,7 @@ public sealed class WhatsNewStrings
       + "then presses the hair the hat would cover flat against your head, so the hat stops going straight "
       + "through it.\n\n"
       + "It edits the hair mod's own files and keeps the originals, so it can be undone — or switched off "
-      + "altogether — under Settings, Hats.");
+      + "altogether — under Settings, Hair.");
 
     public readonly string DesignsHead = Loc.Localize("WhatsNew.Designs.Head",
         "Designs restore the whole look");
@@ -939,7 +939,6 @@ public sealed class SettingsStrings
     public readonly string SecGeneral     = Loc.Localize("Settings.Section.General", "General");
     public readonly string SecOutput      = Loc.Localize("Settings.Section.Output", "Output");
     public readonly string SecSkinEffects = Loc.Localize("Settings.Section.SkinEffects", "Skin effects");
-    public readonly string SecHatCompat   = Loc.Localize("Settings.Section.HatCompat", "Hats");
     public readonly string SecHairPort    = Loc.Localize("Settings.Section.HairPort", "Hair");
     public readonly string SecAutoRefit   = Loc.Localize("Settings.Section.AutoRefit", "Body refit");
 
