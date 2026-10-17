@@ -54,6 +54,14 @@ internal sealed class HairPortScanSchedule
         }
     }
 
+    /// <summary>Penumbra is back (or the setting on again): work held off while it could not be asked is due once the
+    /// signals settle, not when the last back-off would have had it.</summary>
+    public void Resume(long now)
+    {
+        lock (gate)
+            if (full || mods.Count > 0) dueAt = Math.Min(dueAt, now + SettleMs);
+    }
+
     private readonly object gate = new();
     private bool full, force;
     private readonly HashSet<string> mods = new(StringComparer.OrdinalIgnoreCase);

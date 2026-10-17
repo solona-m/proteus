@@ -180,6 +180,9 @@ internal static class HairPortScan
                 else
                 {
                     rows.Add(MakeRow(host, id, modRoot, target, RowState.Refused, outcome.Message));
+                    // The bend's own verdict holds until the model changes; a save that failed, an error or a file
+                    // that could not be read may not happen next time — so the hairstyle is not counted seen either.
+                    if (!outcome.Refusal) { progress?.Invoke(++done, todo.Count); continue; }
                     memo.Refusals[refusal] = outcome.Message;
                 }
                 memo.Keys[$"{race}|{id}"] = key;
@@ -210,7 +213,10 @@ internal static class HairPortScan
     }
 
     /// <summary>What one port came to: the writes saved; or none, with the race already ported, or why not.</summary>
-    public sealed record Ported(IReadOnlyList<HairPortWriter.PortWrite> Writes, bool Current, string Message);
+    /// <param name="Refusal">Why not is the port's own verdict on the model — it does not fit, needs bones the race lacks
+    /// — which the same model will get again; not a save that failed, an error, or a file that could not be read.</param>
+    public sealed record Ported(IReadOnlyList<HairPortWriter.PortWrite> Writes, bool Current, string Message,
+                                bool Refusal = false);
 
     /// <summary>
     /// Port <paramref name="decision"/>'s source onto <paramref name="race"/> — and every race that would read the same
@@ -224,7 +230,8 @@ internal static class HairPortScan
         var plan = HairPortBuilder.Build(modRoot, decision.Source!, [race], pbd, host.ReadGame, withSharers: true, ct);
         foreach (var (r, why) in plan.Refused) host.Log($"c{r:D4} not ported — {why}");
         if (plan.Writes.Count == 0)
-            return new Ported([], plan.Current.Contains(race), plan.Refused.TryGetValue(race, out var w) ? w : "");
+            return new Ported([], plan.Current.Contains(race), plan.Refused.TryGetValue(race, out var w) ? w : "",
+                              Refusal: !plan.Unreadable);
 
         var outcome = HairPortWriter.Save(modRoot, plan.Writes, auto: true);
         if (!outcome.Ok)

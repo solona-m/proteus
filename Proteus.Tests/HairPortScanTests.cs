@@ -622,4 +622,61 @@ public class HairPortScanTests
         Assert.Equal(("A", HairPortScan.RowState.AlreadyFitted), (row.ModDir, row.State));
         Assert.Null(HairPortPlan.FileFor(HairPortPlan.ReadOwners(b)!.First(o => o.IsDefault), Target(7)));
     }
+
+    // A failure that may not happen next time is neither remembered as a refusal nor counts the hairstyle seen: the
+    // next check — not only one asked for — looks again.
+
+    [Fact]
+    [Trait("Plan", "EDGE-hair-port-scan-10")]
+    public void A_manifest_that_could_not_be_read_is_tried_again_by_the_next_check()
+    {
+        using var s = new Setup();
+        var root = s.DefaultDataMod("Floof", 7);
+        // Held open elsewhere (Penumbra, an antivirus scan), not even readable.
+        using (new FileStream(Path.Combine(root, "meta.json"), FileMode.Open, FileAccess.Read, FileShare.None))
+            Assert.Equal(HairPortScan.RowState.Refused, s.Run([7]).Rows.Single().State);
+
+        Assert.Equal(HairPortScan.RowState.Fitted, s.Run([7]).Rows.Single().State);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-hair-port-scan-10")]
+    public void A_save_that_failed_is_tried_again_by_the_next_check()
+    {
+        using var s = new Setup();
+        var root = s.DefaultDataMod("Floof", 7);
+        // Readable, so the port is bent, but not writable: the save fails.
+        using (new FileStream(Path.Combine(root, "meta.json"), FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            Assert.Equal(HairPortScan.RowState.Refused, s.Run([7]).Rows.Single().State);
+            Assert.Contains(s.Host.Lines, l => l.Contains("was not saved"));
+        }
+
+        Assert.Equal(HairPortScan.RowState.Fitted, s.Run([7]).Rows.Single().State);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-hair-port-scan-10")]
+    public void A_model_that_could_not_be_read_is_tried_again_by_the_next_check()
+    {
+        using var s = new Setup();
+        var root = s.DefaultDataMod("Floof", 7);
+        using (new FileStream(Path.Combine(root, "default group", "h0007.mdl"), FileMode.Open, FileAccess.Read, FileShare.None))
+            Assert.Equal(HairPortScan.RowState.Refused, s.Run([7]).Rows.Single().State);
+
+        Assert.Equal(HairPortScan.RowState.Fitted, s.Run([7]).Rows.Single().State);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-hair-port-scan-10")]
+    public void A_port_that_threw_is_tried_again_by_the_next_check()
+    {
+        using var s = new Setup();
+        var bad = s.DefaultDataMod("Broken", 5);
+        Setup.Put(bad, "default group/h0005.mdl", [1, 2, 3, 4, 5, 6, 7, 8]);
+
+        Assert.Equal(HairPortScan.RowState.Refused, s.Run([5]).Rows.Single().State);
+        Assert.Equal(HairPortScan.RowState.Refused, s.Run([5]).Rows.Single().State);
+        Assert.Equal(2, s.Host.Lines.Count(l => l.Contains("in Broken not ported")));
+    }
 }

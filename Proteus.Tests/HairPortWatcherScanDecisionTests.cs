@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using Proteus.Services;
 using Xunit;
@@ -81,5 +82,18 @@ public class HairPortWatcherScanDecisionTests
         Assert.Equal("root/Floof", root);
         Assert.True(which(new HairPortRecord.Entry { TargetGamePath = HairPortPlan.HairPath(201, 7) }));
         Assert.False(which(new HairPortRecord.Entry { TargetGamePath = HairPortPlan.HairPath(201, 5) }));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-hair-port-scan-24")]
+    public void Penumbra_that_never_answers_is_asked_less_and_less_often()
+    {
+        int wait = 0;
+        var waits = new List<int>();
+        for (int i = 0; i < 10; i++) waits.Add(wait = Decide.NextRetry(wait));
+        Assert.Equal(5000, waits[0]);
+        Assert.Equal(10_000, waits[1]);
+        Assert.Equal(300_000, waits[^1]);
+        Assert.All(waits.Zip(waits.Skip(1)), p => Assert.True(p.Second >= p.First));
     }
 }

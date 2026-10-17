@@ -18,8 +18,10 @@ internal static class HairPortBuilder
     /// <param name="Writes">The ports to save.</param>
     /// <param name="Refused">Races that get no port, with why.</param>
     /// <param name="Current">Races already ported, up to date.</param>
+    /// <param name="Unreadable">Refused because a file of the mod — its manifest, its port record, the model — could
+    /// not be read (held open elsewhere, mid-update): no verdict on the model, the next look may read it.</param>
     public sealed record Plan(IReadOnlyList<HairPortWriter.PortWrite> Writes, IReadOnlyDictionary<ushort, string> Refused,
-                              IReadOnlySet<ushort> Current);
+                              IReadOnlySet<ushort> Current, bool Unreadable = false);
 
     /// <summary>
     /// The ports of the mod's hairstyle at <paramref name="sourceGamePath"/> for <paramref name="targets"/>.
@@ -46,7 +48,7 @@ internal static class HairPortBuilder
         if (PenumbraModMeta.IsLegacyFolder(modRoot))
             return new Plan(writes, wanted.ToDictionary(t => t, _ => new PenumbraModMeta.LegacyFolderException(Path.GetFileName(modRoot)).Message), current);
         if (HairPortPlan.ReadOwners(modRoot) is not { } owners)
-            return new Plan(writes, wanted.ToDictionary(t => t, _ => HairPortWriter.Unreadable), current);
+            return new Plan(writes, wanted.ToDictionary(t => t, _ => HairPortWriter.Unreadable), current, Unreadable: true);
 
         // Each place that publishes the hairstyle from the author's own file.
         var serving = owners.Where(o => HairPortPlan.FileFor(o, sourceGamePath) is { } rel && !HairPortPlan.IsPortFile(rel))
@@ -60,12 +62,12 @@ internal static class HairPortBuilder
         var authored = HairPortPlan.AuthoredRaces(owners, id).ToHashSet();
         var record = HairPortRecord.Read(modRoot);
         if (record.Unreadable)
-            return new Plan(writes, wanted.ToDictionary(t => t, _ => HairPortRecord.UnreadableMessage), current);
+            return new Plan(writes, wanted.ToDictionary(t => t, _ => HairPortRecord.UnreadableMessage), current, Unreadable: true);
         var sources = serving.Select(o => HairPortPlan.FileFor(o, sourceGamePath)!).Distinct(StringComparer.OrdinalIgnoreCase)
                              .ToDictionary(rel => rel, rel => ReadMod(modRoot, rel), StringComparer.OrdinalIgnoreCase);
         if (sources.Values.Any(b => b == null))
             return new Plan(writes, wanted.ToDictionary(t => t, _ => Loc.Localize("Parts.Retarget.Bake.Unreadable",
-                "the model could not be read")), current);
+                "the model could not be read")), current, Unreadable: true);
 
         // Which races a target's materials drag along: every race reading the same material file.
         var names = sources.Values.SelectMany(b => SecondSkinWriter.Parse(b!).MatNames).Distinct().ToList();

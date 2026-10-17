@@ -207,6 +207,9 @@ public sealed partial class HairPortWatcher : IDisposable
         if (enabled && !wasEnabled)
         {
             RequestWalk();
+            // Penumbra back: what waited out a back-off while it was gone is asked for again now.
+            Interlocked.Exchange(ref retryMs, 0);
+            schedule.Resume(now);
             // The first load with the setting on looks through every mod once; after that, only what changes.
             if (!config.HairPortFullScanDone) schedule.OweFull(now);
         }
@@ -344,7 +347,7 @@ public sealed partial class HairPortWatcher : IDisposable
                 if (string.IsNullOrEmpty(modsRoot))
                 {
                     // Penumbra is not there to ask: the check is owed until it is.
-                    schedule.Return(work, Environment.TickCount64 + RetryMs);
+                    schedule.Return(work, Environment.TickCount64 + NextRetry());
                     return;
                 }
                 var ids = work.Full
@@ -359,16 +362,19 @@ public sealed partial class HairPortWatcher : IDisposable
                                               (d, t) => UpdateScan(s => s with { Done = d, Total = t }));
                 if (result.Failed)
                 {
-                    log.Warning("hair port: {0} — Penumbra could not resolve the hairstyles; trying again shortly", label);
-                    schedule.Return(work, Environment.TickCount64 + RetryMs);
+                    int wait = NextRetry();
+                    log.Warning("hair port: {0} — Penumbra could not resolve the hairstyles; trying again in {1} s",
+                                label, wait / 1000);
+                    schedule.Return(work, Environment.TickCount64 + wait);
                     return;
                 }
+                retryMs = 0;
                 // A collection change while it ran: what it found is the other collection's, which was cleared.
                 bool stale = generation != Volatile.Read(ref collectionGeneration);
                 UpdateScan(s => Decide.Merge(s, work.Race, result, stale));
                 if (result.Written.Count > 0) lastKey = null;
                 // Stopped by a change of race or collection: what was owed still is, for the new one.
-                if (Decide.OweAgain(result.Cancelled, userCancelled, disposed, Enabled))
+                if (Decide.OweAgain(result.Cancelled, userCancelled, disposed, config.PluginEnabled && config.AutoHairPort))
                     schedule.Return(work, Environment.TickCount64);
                 if (work.Full && (!result.Cancelled || userCancelled) && !config.HairPortFullScanDone)
                 {
@@ -391,8 +397,10 @@ public sealed partial class HairPortWatcher : IDisposable
         });
     }
 
-    /// <summary>How long a check that could not ask Penumbra waits before it is tried again.</summary>
-    private const int RetryMs = 5000;
+    /// <summary>How long the next check that cannot ask Penumbra waits; 0 after one that could.</summary>
+    private int retryMs;
+
+    private int NextRetry() => retryMs = Decide.NextRetry(retryMs);
 
     /// <summary>Change what the panel shows of the checks: from the worker, Penumbra's event threads and the UI alike,
     /// one change at a time, so none is lost.</summary>
@@ -729,9 +737,14 @@ public sealed partial class HairPortWatcher : IDisposable
         }
 
         /// <summary>Whether a check that stopped is owed again: not when the player stopped it, or the setting or the
-        /// plugin went off — only when the race or the collection it was for changed.</summary>
-        public static bool OweAgain(bool cancelled, bool byPlayer, bool disposed, bool enabled)
-            => cancelled && !byPlayer && !disposed && enabled;
+        /// plugin went off — when the race or the collection it was for changed, or Penumbra went away for a while.</summary>
+        /// <param name="settingOn">Proteus and hair fitting are on — Penumbra's being there aside.</param>
+        public static bool OweAgain(bool cancelled, bool byPlayer, bool disposed, bool settingOn)
+            => cancelled && !byPlayer && !disposed && settingOn;
+
+        /// <summary>The wait before the next try of a check Penumbra could not answer: 5 s, doubling each time it
+        /// still cannot, up to 5 minutes — so a Penumbra that never answers is not asked every few seconds all session.</summary>
+        public static int NextRetry(int last) => last <= 0 ? 5000 : Math.Min(last * 2, 300_000);
 
         /// <summary>The rows left once a mod is deleted: none of its own.</summary>
         public static List<HairPortScan.Row> DropMod(IReadOnlyList<HairPortScan.Row> rows, string modDir)

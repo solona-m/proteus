@@ -194,4 +194,20 @@ public class HairPortScanScheduleTests
         var again = s.Take(T + 20_000)!;
         Assert.True(again.Full && again.Force);
     }
+
+    [Fact]
+    [Trait("Plan", "EDGE-hair-port-scan-24")]
+    public void Penumbra_back_pulls_in_work_held_off_by_the_back_off()
+    {
+        var s = Settled();
+        s.OweFull(T);
+        var work = s.Take(T + SettleMs)!;
+        s.Return(work, T + 300_000);                  // waiting out the longest back-off
+        s.Resume(T + 1000);
+        Assert.Null(s.Take(T + 1000 + SettleMs - 1));
+        Assert.True(s.Take(T + 1000 + SettleMs)!.Full);
+
+        s.Resume(T + 2000);                           // nothing owed: nothing made due
+        Assert.Null(s.Take(T + 2000 + SettleMs));
+    }
 }
