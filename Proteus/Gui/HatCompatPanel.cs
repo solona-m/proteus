@@ -11,7 +11,7 @@ using Proteus.Services;
 namespace Proteus.Gui;
 
 /// <summary>
-/// The Hats section: the two settings that govern hat compatibility, and what Proteus makes of the
+/// The hats part of Settings > Hair: the two settings that govern hat compatibility, and what Proteus makes of the
 /// hairstyle currently being worn.
 /// <para/>
 /// A view and nothing more. The examining, the geometry and the writing all belong to

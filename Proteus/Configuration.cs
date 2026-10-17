@@ -242,7 +242,7 @@ public class Configuration : IPluginConfiguration
     /// <summary>
     /// Fit a hairstyle whose author already gave it hat support too, discarding theirs (<c>shp_hib</c> and
     /// <c>atr_kam</c>) for Proteus's own. Off by default: an author's hand-made press is usually the better one.
-    /// Switching it off in the Hats section puts the author's version back, from the backup, on every hairstyle it
+    /// Switching it off in Settings > Hair puts the author's version back, from the backup, on every hairstyle it
     /// replaced in every mod (<c>HatCompatWatcher.RestoreReplaced</c>).
     /// </summary>
     public bool ReplaceAuthoredHatCompat { get; set; }

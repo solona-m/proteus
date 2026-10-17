@@ -515,7 +515,7 @@ public sealed class HatCompatWatcher : IDisposable
                     .AddUiForeground(
                         CheapLoc.Loc.Localize("Chat.HatCompat",
                             "[Proteus] Proteus has made this hairstyle fit under hats. You can undo that, or "
-                          + "turn the feature off, under /proteus > Settings > Hats."), 45)
+                          + "turn the feature off, under /proteus > Settings > Hair."), 45)
                     .Build());
             }
             catch (Exception ex) { log.Warning(ex, "hat compat: could not announce the fit in chat"); }
