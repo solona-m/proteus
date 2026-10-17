@@ -143,9 +143,9 @@ internal static class HairPortWriter
     /// Take out every port <paramref name="which"/> picks — and every port sharing a material with one of them, since the
     /// races of a shared material go together (<see cref="HairPortBuilder.Sharers"/>): one taken out alone would draw its
     /// own game hairstyle with the material the others still redirect. Its redirects go only while they still name
-    /// Proteus's file; then every file under <see cref="HairPortPlan.Folder"/> nothing names any more. A port the user
-    /// edited since with the brush or part switches is left, and the result says why. Nothing is changed while the
-    /// manifest cannot be read: unknown is not gone.
+    /// Proteus's file; then every file under <see cref="HairPortPlan.Folder"/> nothing names any more. A set with a port
+    /// the user edited since with the brush or part switches is left whole, the other sets still go, and the result says
+    /// why. Nothing is changed while the manifest cannot be read: unknown is not gone.
     /// </summary>
     /// <param name="decline">Remember the undo, so the automatic path does not port the same hairstyle there again.</param>
     public static Outcome Undo(string modRoot, Func<HairPortRecord.Entry, bool> which, bool decline)
@@ -158,19 +158,32 @@ internal static class HairPortWriter
                 return new Outcome(false, Unreadable, 0);
 
             var record = HairPortRecord.Read(modRoot);
-            var undo = SharerSet(record, record.Ports.Where(which));
-            if (undo.Count == 0)
+            var picked = record.Ports.Where(which).ToList();
+            if (picked.Count == 0)
                 return new Outcome(false, Loc.Localize("HairPort.Undo.Nothing", "There are no hair ports here to undo."), 0);
 
-            // All or nothing: a set with one port the user edited since stays whole, or the port kept would lose the
-            // material the others take out with them.
-            foreach (var e in undo)
-                if (EditedBy(modRoot, e.File) is { } later)
-                    return new Outcome(false, ModelBackupOrder.BlockedMessage(later), 0);
-
-            // The ports first; their materials only once every port of the set is out, so a port that could not be
-            // taken out keeps drawing with what it needs.
+            // Set by set, each all or nothing: a set with one port the user edited since stays whole, or the port kept
+            // would lose the material the others take out with them. The other sets still go.
             string blocked = "";
+            var undo = new List<HairPortRecord.Entry>();
+            var left = new List<HairPortRecord.Entry>();
+            foreach (var e in picked)
+            {
+                // Its set was already taken, or already left whole.
+                if (undo.Contains(e) || left.Contains(e)) continue;
+                var set = SharerSet(record, [e]);
+                if (set.Select(p => EditedBy(modRoot, p.File)).FirstOrDefault(n => n != null) is { } later)
+                {
+                    blocked = ModelBackupOrder.BlockedMessage(later);
+                    left.AddRange(set);
+                    continue;
+                }
+                undo.AddRange(set.Where(p => !undo.Contains(p)));
+            }
+            if (undo.Count == 0) return new Outcome(false, blocked, 0);
+
+            // The ports first, then their materials — each kept while any port still in the record uses it, so a port
+            // that could not be taken out keeps drawing with what it needs.
             var gone = new List<HairPortRecord.Entry>();
             foreach (var e in undo)
             {
@@ -194,16 +207,16 @@ internal static class HairPortWriter
                 if (HatCompatService.Forget(modRoot, e.File) is { } why) blocked = why;
             }
 
-            if (gone.Count == undo.Count)
-                foreach (var e in gone.Where(e => e.Materials.Count > 0 && owners.Any(o => HairPortPlan.Same(o, e.Owner))))
-                {
-                    // A material another port of the same option still uses stays published.
-                    var drop = e.Materials.Where(m => !record.Ports.Any(p => HairPortPlan.Same(p.Owner, e.Owner)
-                                                                             && p.Materials.ContainsKey(m.Key)))
-                                          .ToDictionary(m => m.Key, m => m.Value, StringComparer.OrdinalIgnoreCase);
-                    try { PenumbraModMeta.RemoveOptionRedirects(modRoot, e.Group, e.Option, drop); }
-                    catch (Exception ex) { blocked = ex.Message; }
-                }
+            foreach (var e in gone.Where(e => e.Materials.Count > 0 && owners.Any(o => HairPortPlan.Same(o, e.Owner))))
+            {
+                // A material another port of the same option still uses stays published — including one that could not
+                // be taken out above, which is still in the record.
+                var drop = e.Materials.Where(m => !record.Ports.Any(p => HairPortPlan.Same(p.Owner, e.Owner)
+                                                                         && p.Materials.ContainsKey(m.Key)))
+                                      .ToDictionary(m => m.Key, m => m.Value, StringComparer.OrdinalIgnoreCase);
+                try { PenumbraModMeta.RemoveOptionRedirects(modRoot, e.Group, e.Option, drop); }
+                catch (Exception ex) { blocked = ex.Message; }
+            }
             int removed = gone.Count;
 
             DeleteUnnamed(modRoot);

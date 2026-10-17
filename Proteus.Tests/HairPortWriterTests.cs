@@ -448,4 +448,30 @@ public class HairPortWriterTests
         Assert.Equal(2, HairPortRecord.Read(mod.Root).Ports.Count);
         Assert.Empty(HairPortRecord.Read(mod.Root).Declined);
     }
+
+    /// <summary>
+    /// "Undo all" over two separate sets, one of them holding a port the user edited since: that set stays whole, the
+    /// other still goes, and the result says why one was left.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-hair-race-port-7")]
+    [Trait("Plan", "EDGE-hair-race-port-16")]
+    public void An_edited_set_is_left_and_the_other_sets_still_go()
+    {
+        using var mod = TwoCuts();
+        Assert.True(HairPortWriter.Save(mod.Root, [Write(mod, "Cut", "Long"), Write(mod, "Cut", "Short")], auto: true).Ok);
+        var edited = HairPortPlan.FileFor(mod.Owner("Cut", "Long"), Target)!;
+        var other = HairPortPlan.FileFor(mod.Owner("Cut", "Short"), Target)!;
+        mod.Put($"Proteus/{MeshVolumeService.BackupSubdir}/{edited}", [1]);
+
+        var outcome = HairPortWriter.Undo(mod.Root, _ => true, decline: true);
+        Assert.True(outcome.Ok, outcome.Message);
+        Assert.Equal(1, outcome.Count);
+        Assert.Contains(ModelBackupOrder.BlockedMessage("").Split(' ')[0], outcome.Message);
+        Assert.Equal(edited, HairPortPlan.FileFor(mod.Owner("Cut", "Long"), Target));
+        Assert.True(mod.Has(edited));
+        Assert.Null(HairPortPlan.FileFor(mod.Owner("Cut", "Short"), Target));
+        Assert.False(mod.Has(other));
+        Assert.Equal("Long", HairPortRecord.Read(mod.Root).Ports.Single().Option);
+    }
 }
