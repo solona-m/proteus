@@ -5126,5 +5126,17 @@
   "HairPort.Refused.Folded.Fmt": {
     "message": "c{0:D4} に合わせて曲げると、{1} 個の三角形が裏返ります",
     "description": ""
+  },
+  "HairPort.Refused.Declined": {
+    "message": "移植が取り消されたため、そのままにします",
+    "description": ""
+  },
+  "HairPort.Refused.NoPbd": {
+    "message": "ゲームの種族デフォーマーを読み込めませんでした",
+    "description": ""
+  },
+  "HairPort.Declined.Fmt": {
+    "message": "{1} の髪型 {0} の移植は取り消されたため、そのままにします。",
+    "description": ""
   }
 }

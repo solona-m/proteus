@@ -152,4 +152,22 @@ public class HairPortBakerTests
         Assert.Equal(a.BoneNames, b.BoneNames);
         Assert.Equal(ModelPartReader.Read(hair)!.Positions.Length, ModelPartReader.Read(result.Model)!.Positions.Length);
     }
+
+    /// <summary>A bend that turns the surface inside out — here a mirror — is refused, not saved.</summary>
+    [Fact]
+    [Trait("Plan", "AC-hair-race-port-2")]
+    public void A_port_that_turns_triangles_inside_out_is_refused()
+    {
+        var mirror = Matrix4x4.CreateScale(-1f, 1f, 1f);
+        var pbd = new XivLiveMesh.PbdFile(BuildPbd(
+        [
+            (101, ushort.MaxValue, new() { ["j_kao"] = Matrix4x4.Identity }),
+            (201, 101, new() { ["j_kao"] = Matrix4x4.Identity }),
+            (801, 201, new() { ["j_kao"] = mirror }),
+        ]));
+        var result = HairPortBaker.Prepare(HairModel(801), 801, 201, Id, pbd, NoExtra, HeadModel(801), HeadModel(201),
+                                           out var why);
+        Assert.Null(result);
+        Assert.Contains("inside out", why);
+    }
 }

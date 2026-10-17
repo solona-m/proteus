@@ -82,14 +82,23 @@ internal static partial class HairPortPlan
 
     /// <summary>
     /// Where a port's file goes inside the mod: under <see cref="Folder"/>, then the place it is published from (so two
-    /// options' ports of one hairstyle never share a file), then the game path.
+    /// options' ports of one hairstyle never share a file), then the game path. An option's folder ends in a short hash
+    /// of its group and option names, since the readable part alone collides: group "A - B" with option "C" and group
+    /// "A" with option "B - C", or names that differ only by characters a folder cannot hold.
     /// </summary>
     public static string PortFile(Owner owner, string gamePath)
     {
-        string name = owner.IsDefault ? "Default" : $"{owner.Group} - {owner.Option}";
-        var safe = string.Concat(name.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c)).Trim().TrimEnd('.');
-        if (safe.Length == 0) safe = "Option";
-        return $"{Folder}/{safe}/{gamePath.Replace('\\', '/')}";
+        string folder = "Default";
+        if (!owner.IsDefault)
+        {
+            var safe = string.Concat($"{owner.Group} - {owner.Option}"
+                                     .Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c)).Trim().TrimEnd('.');
+            var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes($"{owner.Group.ToLowerInvariant()}\0{owner.Option.ToLowerInvariant()}")))[..6]
+                .ToLowerInvariant();
+            folder = $"{safe} {hash}".Trim();
+        }
+        return $"{Folder}/{folder}/{gamePath.Replace('\\', '/')}";
     }
 
     /// <summary>Whether a mod-relative file is one of the ports Proteus wrote — never a source for another.</summary>

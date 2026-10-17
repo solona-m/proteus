@@ -5126,5 +5126,17 @@
   "HairPort.Refused.Folded.Fmt": {
     "message": "bent onto c{0:D4}, {1} of its triangles would turn inside out",
     "description": "Why a hair port was refused: bent onto race {0}, {1} of the hairstyle's triangles would turn inside out."
+  },
+  "HairPort.Refused.Declined": {
+    "message": "its port was undone, so it is left alone",
+    "description": "Why a race was not ported automatically: the user undid its port earlier."
+  },
+  "HairPort.Refused.NoPbd": {
+    "message": "the game's racial deformer could not be read",
+    "description": "Why nothing could be ported: the game's racial deformer file could not be read."
+  },
+  "HairPort.Declined.Fmt": {
+    "message": "The port of hairstyle {0} in {1} was undone, so it is left alone.",
+    "description": "Settings > Hair status: the automatic port of hairstyle {0} in mod {1} was undone by the user and is not redone."
   }
 }

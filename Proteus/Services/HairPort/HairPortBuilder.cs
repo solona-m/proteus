@@ -27,7 +27,8 @@ internal static class HairPortBuilder
     /// <param name="readGame">Reads a file from the game's own data; null when the game has no such file.</param>
     /// <param name="withSharers">Also port to every race that would read the same material as a target (see
     /// <see cref="Sharers"/>) — what the automatic path does, so redirecting a shared material never dresses other
-    /// races' own hairstyles in it. Off, a target whose sharers are not all ported is refused.</param>
+    /// races' own hairstyles in it; a race whose port the user undid is refused, and with it every race it shares with.
+    /// Off — a port asked for by hand — a target whose sharers are not all ported is refused.</param>
     /// <param name="progress">Called with (done, total) after each race.</param>
     public static Plan Build(string modRoot, string sourceGamePath, IEnumerable<ushort> targets, PbdFile pbd,
                              Func<string, byte[]?> readGame, bool withSharers, CancellationToken ct = default,
@@ -84,6 +85,12 @@ internal static class HairPortBuilder
             }
             if (authored.Contains(to)) continue;   // the author made one: never overwritten
             string target = HairPortPlan.HairPath(to, id);
+            // An undone port is not made again by itself — not even as another race's sharer. Asked for by hand, it is.
+            if (withSharers && record.Declined.Contains(HairPortPlan.DeclineKey(target)))
+            {
+                refused[to] = Loc.Localize("HairPort.Refused.Declined", "its port was undone, so it is left alone");
+                continue;
+            }
             if (readGame(target) is not { } vanilla)
             {
                 refused[to] = string.Format(Loc.Localize("HairPort.Refused.NoStyle.Fmt",
@@ -128,7 +135,7 @@ internal static class HairPortBuilder
                 var materials = Materials(modRoot, owners, owner, bytes, from, to, id, readGame, out var missing);
                 if (missing != null) { why = missing; break; }
                 writes.Add(new HairPortWriter.PortWrite(owner, sourceGamePath, rel, HairPortPlan.Sha8(bytes), target,
-                                                        result.Model, materials));
+                                                        result.Model, materials, result.Millis));
             }
             if (why != null)
             {

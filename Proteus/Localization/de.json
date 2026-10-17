@@ -5126,5 +5126,17 @@
   "HairPort.Refused.Folded.Fmt": {
     "message": "auf c{0:D4} gebogen, würden sich {1} seiner Dreiecke nach innen stülpen",
     "description": ""
+  },
+  "HairPort.Refused.Declined": {
+    "message": "seine Übertragung wurde rückgängig gemacht, daher bleibt es unverändert",
+    "description": ""
+  },
+  "HairPort.Refused.NoPbd": {
+    "message": "der Volks-Deformer des Spiels konnte nicht gelesen werden",
+    "description": ""
+  },
+  "HairPort.Declined.Fmt": {
+    "message": "Die Übertragung der Frisur {0} in {1} wurde rückgängig gemacht und bleibt daher aus.",
+    "description": ""
   }
 }

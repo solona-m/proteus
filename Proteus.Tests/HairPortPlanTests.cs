@@ -117,6 +117,19 @@ public class HairPortPlanTests
     }
 
     [Fact]
+    public void Port_folders_of_options_whose_names_read_alike_never_collide()
+    {
+        var a = HairPortPlan.PortFile(O("A - B", "C", "Single"), Midlander);
+        var b = HairPortPlan.PortFile(O("A", "B - C", "Single"), Midlander);
+        var c = HairPortPlan.PortFile(O("A", "B:C", "Single"), Midlander);
+        var d = HairPortPlan.PortFile(O("A", "B?C", "Single"), Midlander);
+        Assert.Equal(4, new[] { a, b, c, d }.Distinct().Count());
+        Assert.StartsWith("Hair Ports/A - B - C ", a);
+        // The same option however its case is written: one folder, as Windows compares folder names.
+        Assert.Equal(a, HairPortPlan.PortFile(O("a - b", "c", "Single"), Midlander), System.StringComparer.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Every_playable_race_has_head_candidates_starting_with_f0001()
     {
         Assert.Equal("chara/human/c1601/obj/face/f0001/model/c1601f0001_fac.mdl", HairPortPlan.HeadPaths(1601).First());

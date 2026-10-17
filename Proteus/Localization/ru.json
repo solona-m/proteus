@@ -5126,5 +5126,17 @@
   "HairPort.Refused.Folded.Fmt": {
     "message": "при изгибе на c{0:D4} {1} его треугольников вывернутся наизнанку",
     "description": ""
+  },
+  "HairPort.Refused.Declined": {
+    "message": "его перенос был отменён, поэтому он оставлен как есть",
+    "description": ""
+  },
+  "HairPort.Refused.NoPbd": {
+    "message": "не удалось прочитать расовый деформер игры",
+    "description": ""
+  },
+  "HairPort.Declined.Fmt": {
+    "message": "Перенос причёски {0} в {1} был отменён, поэтому она оставлена как есть.",
+    "description": ""
   }
 }

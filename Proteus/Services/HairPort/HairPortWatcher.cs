@@ -38,7 +38,8 @@ public sealed class HairPortWatcher : IDisposable
     private readonly Configuration config;
     private readonly IPluginLog log;
 
-    private int busy;
+    /// <summary>One examination or undo at a time; a look asked for meanwhile is owed, not dropped.</summary>
+    private readonly SingleFlight flight = new();
     private volatile string? lastKey;
     private long walkDueAt;
     private bool wasEnabled;
@@ -126,7 +127,7 @@ public sealed class HairPortWatcher : IDisposable
 
         long due = Interlocked.Read(ref walkDueAt);
         if (due == 0 || Environment.TickCount64 < due) return;
-        if (Volatile.Read(ref busy) != 0) return;
+        if (flight.Busy) return;
         Interlocked.CompareExchange(ref walkDueAt, 0, due);
 
         IReadOnlyList<string>? parts;
@@ -138,11 +139,15 @@ public sealed class HairPortWatcher : IDisposable
         Refresh();
     }
 
-    /// <summary>Look again at what is worn, on a worker. A caller that finds an examination running does nothing.</summary>
+    /// <summary>
+    /// Look again at what is worn, on a worker. A caller that finds an examination running leaves one more look owed,
+    /// taken when it ends: a mod switched on or off mid-port changes what the hairstyle resolves to, and no other signal
+    /// would bring the watcher back to it.
+    /// </summary>
     public void Refresh(int delayMs = 0, bool force = false)
     {
         if (disposed) return;
-        if (Interlocked.CompareExchange(ref busy, 1, 0) != 0) return;
+        if (!flight.TryEnter()) return;
         current = current with { Busy = true };
         Task.Run(() =>
         {
@@ -159,10 +164,38 @@ public sealed class HairPortWatcher : IDisposable
             }
             finally
             {
-                Interlocked.Exchange(ref busy, 0);
                 current = current with { Busy = false };
+                if (flight.Exit()) Refresh();
             }
         });
+    }
+
+    /// <summary>
+    /// One piece of work at a time, without losing a request that arrives meanwhile: <see cref="TryEnter"/> fails while
+    /// busy and leaves a request owed, and <see cref="Exit"/> says whether one is.
+    /// </summary>
+    internal sealed class SingleFlight
+    {
+        private int busy, owed;
+
+        public bool Busy => Volatile.Read(ref busy) != 0;
+
+        public bool TryEnter()
+        {
+            if (Interlocked.CompareExchange(ref busy, 1, 0) == 0) return true;
+            Volatile.Write(ref owed, 1);
+            // The holder may have left between the two lines above, without seeing the request: take it here instead.
+            if (Interlocked.CompareExchange(ref busy, 1, 0) != 0) return false;
+            Volatile.Write(ref owed, 0);
+            return true;
+        }
+
+        /// <returns>Whether a request came in while busy, which the caller should now serve.</returns>
+        public bool Exit()
+        {
+            Interlocked.Exchange(ref busy, 0);
+            return Interlocked.Exchange(ref owed, 0) == 1;
+        }
     }
 
     private void Examine()
@@ -179,7 +212,8 @@ public sealed class HairPortWatcher : IDisposable
         bool Enabled { get; }
         string? ModsRoot { get; }
         string? Resolve(string gamePath);
-        PbdFile Pbd();
+        /// <summary>The game's racial deformer; null when it cannot be read.</summary>
+        PbdFile? Pbd();
         byte[]? ReadGame(string gamePath);
         void Log(string message);
         void Announce();
@@ -194,7 +228,7 @@ public sealed class HairPortWatcher : IDisposable
         public bool Enabled => w.Enabled;
         public string? ModsRoot => w.penumbra.GetModDirectory();
         public string? Resolve(string gamePath) => w.penumbra.ResolvePlayer(gamePath);
-        public PbdFile Pbd() => w.Pbd();
+        public PbdFile? Pbd() => w.Pbd();
         public byte[]? ReadGame(string gamePath) => HairPortWatcher.ReadGame(gamePath);
         public void Log(string message) => w.log.Information("hair port: {0}", message);
         public void Announce() => w.Announce();
@@ -246,7 +280,12 @@ public sealed class HairPortWatcher : IDisposable
         host.Log($"{worn} is drawn as the game's own — porting {decision.Source} from "
                + $"{(decision.Stale ? "an out-of-date port" : "the author's model")} in {modDir}");
 
-        var plan = HairPortBuilder.Build(modRoot, decision.Source!, [race], host.Pbd(), host.ReadGame, withSharers: true);
+        if (host.Pbd() is not { } pbd)
+        {
+            host.Log($"{worn} not ported — {NoPbd}");
+            return new View(worn, modRoot, Message: NoPbd, Failed: true);
+        }
+        var plan = HairPortBuilder.Build(modRoot, decision.Source!, [race], pbd, host.ReadGame, withSharers: true);
         foreach (var (r, why) in plan.Refused) host.Log($"c{r:D4} not ported — {why}");
         if (plan.Writes.Count == 0)
         {
@@ -262,12 +301,10 @@ public sealed class HairPortWatcher : IDisposable
         }
         foreach (var w in plan.Writes)
             host.Log($"{w.SourceGamePath} → {w.TargetGamePath} in {modDir}: {HairPortWriter.Describe(w.Into)} "
-                   + $"({w.Materials.Count} material redirect(s))");
+                   + $"({w.Materials.Count} material redirect(s), bent in {w.Millis} ms)");
 
         host.Announce();
-        host.Reload(modDir);
-        // A different hairstyle went on while this ran: its own walk handles it.
-        if (host.WornNow() is not { } now || string.Equals(now, worn, StringComparison.OrdinalIgnoreCase)) host.Redraw();
+        ReloadAndRedraw(host, modDir, worn);
         lastKey = null;
         return new View(worn, modRoot, Ported: true, PortsInMod: HairPortRecord.Read(modRoot).Ports.Count);
     }
@@ -277,16 +314,12 @@ public sealed class HairPortWatcher : IDisposable
 
     /// <summary>
     /// Make Penumbra re-read the mod, then redraw so the game loads the hairstyle again — skipped when a different
-    /// hairstyle went on while the port ran, which its own walk handles.
+    /// hairstyle went on meanwhile, which its own walk handles. For a port and an undo alike.
     /// </summary>
-    private void ReloadAndRedraw(string modDir, string worn)
+    internal static void ReloadAndRedraw(IHost host, string modDir, string worn)
     {
-        compositor.ExpectOwnModEdit(modDir);
-        var ec = penumbra.ReloadModDirectory(modDir);
-        log.Information("hair port: asked Penumbra to reload {0} — {1}", modDir, ec);
-        if (Decide.WornHair(livePartsCache) is { } now && !string.Equals(now, worn, StringComparison.OrdinalIgnoreCase))
-            return;
-        compositor.RedrawForChangedModel("hair port");
+        host.Reload(modDir);
+        if (host.WornNow() is not { } now || string.Equals(now, worn, StringComparison.OrdinalIgnoreCase)) host.Redraw();
     }
 
     /// <summary>Undo the port the worn hairstyle is drawn from, and keep it undone.</summary>
@@ -299,7 +332,7 @@ public sealed class HairPortWatcher : IDisposable
     {
         var view = current;
         if (view.ModRoot == null || view.Worn == null || view.Busy) return;
-        if (Interlocked.CompareExchange(ref busy, 1, 0) != 0) return;
+        if (!flight.TryEnter()) return;
         current = view with { Busy = true };
         Task.Run(() =>
         {
@@ -314,7 +347,7 @@ public sealed class HairPortWatcher : IDisposable
                     return;
                 }
                 log.Information("hair port: undid {0} port(s) in {1}", outcome.Count, Path.GetFileName(view.ModRoot));
-                ReloadAndRedraw(Path.GetFileName(view.ModRoot), worn);
+                ReloadAndRedraw(new Host(this), Path.GetFileName(view.ModRoot), worn);
                 lastKey = null;
                 current = new View(worn, Message: outcome.Message);
             }
@@ -325,15 +358,28 @@ public sealed class HairPortWatcher : IDisposable
             }
             finally
             {
-                Interlocked.Exchange(ref busy, 0);
                 current = current with { Busy = false };
+                if (flight.Exit()) Refresh();
             }
         });
     }
 
     /// <summary>The game's own deformer — never a modded one, so a port that travels with the mod is not shaped by one
     /// user's pbd mod.</summary>
-    private PbdFile Pbd() => pbd ??= new PbdFile(Plugin.DataManager.GetFile(LiveCharacter.PbdGamePath)!.Data);
+    private PbdFile? Pbd()
+    {
+        if (pbd != null) return pbd;
+        try { return pbd = Plugin.DataManager.GetFile(LiveCharacter.PbdGamePath) is { } f ? new PbdFile(f.Data) : null; }
+        catch (Exception ex)
+        {
+            log.Warning(ex, "hair port: the game's racial deformer could not be read");
+            return null;
+        }
+    }
+
+    /// <summary>Why nothing can be ported without the deformer.</summary>
+    internal static string NoPbd
+        => CheapLoc.Loc.Localize("HairPort.Refused.NoPbd", "the game's racial deformer could not be read");
 
     private static byte[]? ReadGame(string gamePath)
     {
@@ -414,7 +460,9 @@ public sealed class HairPortWatcher : IDisposable
                 // Our own port of another race is never a source: the author's model is.
                 if (HairPortPlan.IsPortFile(r)) continue;
                 if (readRecord(root).Declined.Contains(HairPortPlan.DeclineKey(worn)))
-                    return new Decision(Kind.None, root, Message: $"the port of {worn} in {Path.GetFileName(root)} was undone, so it is left alone");
+                    return new Decision(Kind.None, root, Message: string.Format(CheapLoc.Loc.Localize(
+                        "HairPort.Declined.Fmt", "The port of hairstyle {0} in {1} was undone, so it is left alone."),
+                        $"h{id:D4}", Path.GetFileName(root)));
                 return new Decision(Kind.Port, root, path);
             }
             return new Decision(Kind.None);

@@ -5126,5 +5126,17 @@
   "HairPort.Refused.Folded.Fmt": {
     "message": "c{0:D4}에 맞춰 구부리면 삼각형 {1}개가 뒤집힙니다",
     "description": ""
+  },
+  "HairPort.Refused.Declined": {
+    "message": "이식이 취소되었으므로 그대로 둡니다",
+    "description": ""
+  },
+  "HairPort.Refused.NoPbd": {
+    "message": "게임의 종족 디포머를 읽을 수 없습니다",
+    "description": ""
+  },
+  "HairPort.Declined.Fmt": {
+    "message": "{1}의 헤어스타일 {0} 이식이 취소되어 그대로 둡니다.",
+    "description": ""
   }
 }

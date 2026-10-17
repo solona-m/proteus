@@ -153,4 +153,40 @@ public class HairPortBuilderTests
         Assert.Equal(new ushort[] { 201, 401, 601, 1001, 1201, 1401, 1801 },
                      all.Writes.Select(w => HairPortPlan.Parse(w.TargetGamePath)!.Value.Race).OrderBy(r => r));
     }
+
+    /// <summary>
+    /// The automatic path never ports a race the user undid — not even as another race's material sharer, which would
+    /// take the whole set with it — while a port asked for by hand still may.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-hair-race-port-7")]
+    [Trait("Plan", "EDGE-hair-race-port-23")]
+    public void A_declined_sharer_refuses_the_set_on_the_automatic_path()
+    {
+        const int id = 105;
+        string source = HairPortPlan.HairPath(801, id);
+        using var mod = new Mod(defaults: new Dictionary<string, string> { [source] = "a.mdl" });
+        mod.Put("a.mdl", HairModel(801, material: "/mt_c0801h0105_hir_a.mtrl"));
+        mod.Put("Proteus/hairport.json", System.Text.Encoding.UTF8.GetBytes(
+            "{\"Version\":1,\"Ports\":[],\"Declined\":[\"" + HairPortPlan.DeclineKey(HairPortPlan.HairPath(401, id)) + "\"]}"));
+        var files = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["chara/human/c0801/obj/hair/h0105/material/v0001/mt_c0801h0105_hir_a.mtrl"] = [5],
+        };
+        foreach (var r in Races)
+        {
+            files[HairPortPlan.HeadPaths(r).First()] = HeadModel(r);
+            files[HairPortPlan.HairPath(r, id)] = HairModel(r);
+        }
+        Func<string, byte[]?> game = p => files.GetValueOrDefault(p);
+
+        var auto = HairPortBuilder.Build(mod.Root, source, [201], Pbd(), game, withSharers: true);
+        Assert.Empty(auto.Writes);
+        Assert.True(auto.Refused.ContainsKey(201));
+
+        var byHand = HairPortBuilder.Build(mod.Root, source, [201, 401, 601, 1001, 1201, 1401, 1801], Pbd(), game,
+                                           withSharers: false);
+        Assert.Empty(byHand.Refused);
+        Assert.Equal(7, byHand.Writes.Count);
+    }
 }

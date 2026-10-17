@@ -5126,5 +5126,17 @@
   "HairPort.Refused.Folded.Fmt": {
     "message": "al doblarlo sobre c{0:D4}, {1} de sus triángulos quedarían del revés",
     "description": ""
+  },
+  "HairPort.Refused.Declined": {
+    "message": "su portado se deshizo, así que se deja como está",
+    "description": ""
+  },
+  "HairPort.Refused.NoPbd": {
+    "message": "no se pudo leer el deformador racial del juego",
+    "description": ""
+  },
+  "HairPort.Declined.Fmt": {
+    "message": "El portado del peinado {0} en {1} se deshizo, así que se deja como está.",
+    "description": ""
   }
 }

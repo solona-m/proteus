@@ -348,4 +348,72 @@ public class HairPortWriterTests
         Assert.DoesNotContain("\"Type\": \"Est\"", mod.Manifest);
         Assert.Empty(PenumbraModMeta.TryReadDefaultData(mod.Root)!.Value.Manipulations);
     }
+
+    /// <summary>
+    /// A save into two options whose second manifest write fails: the first option's redirects are taken back out before
+    /// the files they name are deleted, so nothing points at a file that is gone.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-race-port-22")]
+    public void Failure_after_one_option_is_written_takes_that_option_back_out()
+    {
+        using var mod = TwoCuts();
+        var manifest = mod.Manifest;
+        HairPortWriter.BeforeMerge = done => { if (done == 1) throw new IOException("the manifest is in use"); };
+        HairPortWriter.Outcome outcome;
+        try { outcome = HairPortWriter.Save(mod.Root, [Write(mod, "Cut", "Long"), Write(mod, "Cut", "Short")], auto: true); }
+        finally { HairPortWriter.BeforeMerge = null; }
+
+        Assert.False(outcome.Ok);
+        Assert.False(PenumbraModMeta.ReadAllRedirects(mod.Root).Any(r => r.GamePath == Target));
+        Assert.Equal(Redirects(manifest, mod), PenumbraModMeta.ReadAllRedirects(mod.Root).Select(r => (r.GamePath, r.File, r.Source)));
+        Assert.Empty(Directory.EnumerateFiles(Path.Combine(mod.Root, HairPortPlan.Folder), "*", SearchOption.AllDirectories));
+        Assert.Empty(HairPortRecord.Read(mod.Root).Ports);
+    }
+
+    /// <summary>An undo that cannot read the manifest changes nothing: no file is deleted as if nothing named it.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-race-port-14")]
+    public void Undo_with_an_unreadable_manifest_deletes_nothing()
+    {
+        using var mod = TwoCuts();
+        Assert.True(HairPortWriter.Save(mod.Root, [Write(mod, "Cut", "Long"), Write(mod, "Cut", "Short")], auto: true).Ok);
+        var files = Directory.EnumerateFiles(Path.Combine(mod.Root, HairPortPlan.Folder), "*", SearchOption.AllDirectories).ToList();
+        var meta = Path.Combine(mod.Root, "meta.json");
+        var text = File.ReadAllText(meta);
+        File.WriteAllText(meta, "{ not json");
+        var outcome = HairPortWriter.Undo(mod.Root, e => e.Option == "Long", decline: true);
+        Assert.False(outcome.Ok);
+        Assert.All(files, f => Assert.True(File.Exists(f)));
+        File.WriteAllText(meta, text);
+        Assert.Equal(2, HairPortRecord.Read(mod.Root).Ports.Count);
+        Assert.Empty(HairPortRecord.Read(mod.Root).Declined);
+    }
+
+    /// <summary>
+    /// Races that share one material redirect are undone together: one undone alone would draw its own game hairstyle
+    /// with the material the others still publish.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-hair-race-port-7")]
+    [Trait("Plan", "EDGE-hair-race-port-23")]
+    public void Undoing_one_race_of_a_shared_material_undoes_the_set()
+    {
+        const string shared = "chara/human/c0201/obj/hair/h0130/material/v0001/mt_c0201h0130_hir_a.mtrl";
+        using var mod = TwoCuts();
+        var owner = mod.Owner("Cut", "Long");
+        var mat = new HairPortWriter.MaterialWrite(shared, null, [3]);
+        var highlander = HairPortPlan.HairPath(401, Id);
+        Assert.True(HairPortWriter.Save(mod.Root,
+        [
+            new HairPortWriter.PortWrite(owner, Source, "long/c0801h0130_hir.mdl", "x", Target, HairModel(201), [mat]),
+            new HairPortWriter.PortWrite(owner, Source, "long/c0801h0130_hir.mdl", "x", highlander, HairModel(401), [mat]),
+        ], auto: true).Ok);
+
+        var outcome = HairPortWriter.Undo(mod.Root, e => e.TargetGamePath == Target, decline: true);
+        Assert.Equal(2, outcome.Count);
+        Assert.Empty(HairPortRecord.Read(mod.Root).Ports);
+        Assert.Null(HairPortPlan.FileFor(mod.Owner("Cut", "Long"), shared));
+        Assert.Contains(HairPortPlan.DeclineKey(highlander), HairPortRecord.Read(mod.Root).Declined);
+    }
 }

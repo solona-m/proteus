@@ -200,28 +200,36 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
     [Trait("Plan", "AC-hair-race-port-2")]
     public void Ported_hair_has_no_folded_or_degenerate_triangles()
     {
+        // The bend itself, before any check: what it does to every shared hairstyle of every pair, Miqo'te included.
         var game = Load();
-        int checkedPorts = 0;
+        int bent = 0, hrothgarOver = 0;
+        var over = new List<string>();
         foreach (var (from, to) in Pairs)
             foreach (int id in Ids)
             {
                 if (game.File(HairPath(from, id)) is not { } src || game.File(HairPath(to, id)) == null) continue;
-                // Not Miqo'te sources: their ear triangles collapse on purpose.
-                if (HairPortBaker.HasEars(from)) continue;
-                var result = HairPortBaker.Prepare(src, from, to, id, game.Pbd, game.ExtraBones(to, id), game.Head(from),
-                                                   game.Head(to), out _);
-                if (result == null) continue;
+                var port = RacialModelBake.Port(src, from, to, game.Pbd, HairPortBaker.ParentOf, out string why);
+                Assert.True(port != null, why);
                 var a = ModelPartReader.Read(src)!;
-                var b = ModelPartReader.Read(result.Model)!;
+                var b = ModelPartReader.Read(port!)!;
                 int triangles = a.Parts.Where(p => p.Island == -1).Sum(p => p.TriangleCount);
-                int flipped = HairPortBaker.Folded(a, b), collapsed = RacialRouteLocalTests.Collapsed(a, b);
-                if (flipped > 0) o.WriteLine($"h{id:D4} c{from:D4}->c{to:D4}: {flipped} of {triangles} turned");
-                Assert.True(flipped <= HairPortBaker.FoldedShare * triangles && collapsed == 0,
-                            $"h{id:D4} c{from:D4}->c{to:D4}: {flipped} folded of {triangles}, {collapsed} collapsed");
-                checkedPorts++;
+                int folded = HairPortBaker.Folded(a, b), collapsed = RacialRouteLocalTests.Collapsed(a, b);
+                if (folded > 0) o.WriteLine($"h{id:D4} c{from:D4}->c{to:D4}: {folded} of {triangles} turned");
+                Assert.True(collapsed == 0, $"h{id:D4} c{from:D4}->c{to:D4}: {collapsed} collapsed");
+
+                // Over the limit, the fit check refuses the port. Hrothgar heads are the furthest from everyone's, and
+                // there that is the check working; elsewhere it must stay rare.
+                if (folded > HairPortBaker.FoldedShare * triangles)
+                {
+                    if (from / 100 is 15 or 16 || to / 100 is 15 or 16) hrothgarOver++;
+                    else over.Add($"h{id:D4} c{from:D4}->c{to:D4}: {folded} of {triangles}");
+                }
+                bent++;
             }
-        o.WriteLine($"{checkedPorts} ports checked");
-        Assert.True(checkedPorts > 80);
+        o.WriteLine($"{bent} bends checked; over the fold limit, so refused: {hrothgarOver} Hrothgar, " +
+                    $"{over.Count} others [{string.Join("; ", over)}]");
+        Assert.True(bent > 150);
+        Assert.True(over.Count * 50 <= bent, $"{over.Count} of {bent} bends turn too much inside out: {string.Join("; ", over)}");
     }
 
     /// <summary>The Miqo'te ear fur and its skin are taken out of a port to a race without ears, on the game's own hair.</summary>

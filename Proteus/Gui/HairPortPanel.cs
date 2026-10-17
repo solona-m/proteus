@@ -66,7 +66,8 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
     private Task<List<Row>>? reading;
     private List<Row>? rows;
     private readonly HashSet<ushort> ticked = [];
-    private Task<(HairPortBuilder.Plan Plan, HairPortWriter.Outcome Outcome)>? running;
+    /// <summary>A port or a removal in flight; <c>Removed</c> says which, for what the result line says.</summary>
+    private Task<(HairPortBuilder.Plan Plan, HairPortWriter.Outcome Outcome, bool Removed)>? running;
     private CancellationTokenSource? cancel;
     private volatile string progress = "";
     private string result = "";
@@ -140,7 +141,7 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
             if (ImGui.Button(s.Port, new Vector2(-1, 0))) Start(modRoot, modDir, sourceGamePath, afterChange);
 
         if (rows.Any(row => row.State is State.Ported or State.Stale))
-            if (ImGui.Button(s.Remove)) Remove(modRoot, modDir, sourceGamePath, afterChange);
+            if (ImGui.Button(s.Remove)) Remove(modRoot, sourceGamePath);
 
         if (result.Length > 0)
         {
@@ -170,28 +171,35 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
         result = "";
         running = Task.Run(() =>
         {
-            pbd ??= new PbdFile(readGameFile(LiveCharacter.PbdGamePath)!);
+            if (pbd == null && readGameFile(LiveCharacter.PbdGamePath) is { } bytes) pbd = new PbdFile(bytes);
+            if (pbd == null)
+                return (new HairPortBuilder.Plan([], new Dictionary<ushort, string>(), new HashSet<ushort>()),
+                        new HairPortWriter.Outcome(false, HairPortWatcher.NoPbd, 0), false);
             var plan = HairPortBuilder.Build(modRoot, sourceGamePath, targets, pbd, readGameFile, withSharers: false, ct,
                                              (done, total) => progress = string.Format(Strings.HairPort.PortingFmt, done, total));
             // Nothing is written once cancelled: the bake is the slow part, the save is one step.
             ct.ThrowIfCancellationRequested();
             var outcome = HairPortWriter.Save(modRoot, plan.Writes, auto: false);
             foreach (var w in plan.Writes)
-                log.Information("hair port: {0} → {1} in {2} / {3}", w.SourceGamePath, w.TargetGamePath, w.Into.Group, w.Into.Option);
+                log.Information("hair port: {0} → {1} in {2} / {3}, bent in {4} ms", w.SourceGamePath, w.TargetGamePath,
+                                w.Into.Group, w.Into.Option, w.Millis);
             foreach (var (race, why) in plan.Refused) log.Information("hair port: c{0:D4} not ported — {1}", race, why);
-            return (plan, outcome);
+            return (plan, outcome, false);
         }, ct);
     }
 
-    private void Remove(string modRoot, string modDir, string sourceGamePath, Action<string> afterChange)
+    /// <summary>Take out every port of the open hairstyle, on a worker: the undo waits on the manifest lock a port on
+    /// equip may hold.</summary>
+    private void Remove(string modRoot, string sourceGamePath)
     {
-        var outcome = HairPortWriter.Undo(modRoot, e => e.SourceGamePath.Equals(sourceGamePath, StringComparison.OrdinalIgnoreCase),
-                                          decline: false);
-        result = outcome.Ok ? string.Format(Strings.HairPort.RemovedFmt, outcome.Count) : outcome.Message;
-        resultFailed = !outcome.Ok;
-        if (outcome.Count > 0) afterChange(modDir);
-        refused = new Dictionary<ushort, string>();
-        Read(modRoot, sourceGamePath);
+        result = "";
+        progress = Strings.HairPort.Working;
+        running = Task.Run(() =>
+        {
+            var outcome = HairPortWriter.Undo(modRoot,
+                e => e.SourceGamePath.Equals(sourceGamePath, StringComparison.OrdinalIgnoreCase), decline: false);
+            return (new HairPortBuilder.Plan([], new Dictionary<ushort, string>(), new HashSet<ushort>()), outcome, true);
+        });
     }
 
     /// <summary>A finished run: say what it came to, reload the mod, and read the rows again.</summary>
@@ -215,13 +223,14 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
             return;
         }
 
-        var (plan, outcome) = task.Result;
+        var (plan, outcome, removed) = task.Result;
         refused = plan.Refused;
         if (!outcome.Ok)
         {
-            result = string.Format(Strings.HairPort.FailedFmt, outcome.Message);
+            result = removed ? outcome.Message : string.Format(Strings.HairPort.FailedFmt, outcome.Message);
             resultFailed = true;
         }
+        else if (removed) result = string.Format(Strings.HairPort.RemovedFmt, outcome.Count);
         else result = outcome.Count > 0 ? string.Format(Strings.HairPort.DoneFmt, outcome.Count) : Strings.HairPort.NothingToDo;
         if (outcome.Count > 0) afterChange(modDir);
         Read(modRoot, sourceGamePath);

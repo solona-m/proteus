@@ -29,7 +29,8 @@ public class HairPortWatcherDecisionTests
 
         public string? ModsRoot => modsRoot;
         public string? Resolve(string gamePath) => Files.GetValueOrDefault(gamePath);
-        public PbdFile Pbd() => HairPortFixtures.Pbd();
+        public bool NoPbd { get; set; }
+        public PbdFile? Pbd() => NoPbd ? null : HairPortFixtures.Pbd();
         public byte[]? ReadGame(string gamePath) => Game(Races)(gamePath);
         public void Log(string message) => Lines.Add(message);
         public void Announce() => Calls.Add("announce");
@@ -82,7 +83,8 @@ public class HairPortWatcherDecisionTests
         var view = s.Run();
         Assert.True(view.Ported, view.Message);
         var rel = HairPortPlan.FileFor(HairPortPlan.ReadOwners(s.ModRoot)!.First(o => o.Option == "Long"), Worn);
-        Assert.Equal($"Hair Ports/Cut - Long/{Worn}", rel);
+        Assert.Equal(HairPortPlan.PortFile(new HairPortPlan.Owner("Cut", "Long", "", new Dictionary<string, string>()), Worn), rel);
+        Assert.StartsWith("Hair Ports/Cut - Long ", rel);
         Assert.True(File.Exists(Path.Combine(s.ModRoot, rel!)));
     }
 
@@ -262,7 +264,7 @@ public class HairPortWatcherDecisionTests
         public bool Enabled => true;
         public string? ModsRoot => modsRoot;
         public string? Resolve(string gamePath) => Files.GetValueOrDefault(gamePath);
-        public PbdFile Pbd() => HairPortFixtures.Pbd();
+        public PbdFile? Pbd() => HairPortFixtures.Pbd();
         public byte[]? ReadGame(string gamePath) => game(gamePath);
         public void Log(string message) { }
         public void Announce() => Calls.Add("announce");
@@ -280,5 +282,47 @@ public class HairPortWatcherDecisionTests
         Assert.NotEmpty(s.Host.Lines);
         Assert.All(s.Host.Lines, line => Assert.DoesNotContain(s.ModsRoot, line, StringComparison.OrdinalIgnoreCase));
         Assert.Contains(s.Host.Lines, line => line.Contains("Miqo Hair"));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-hair-race-port-19")]
+    public void Without_the_games_deformer_nothing_is_ported()
+    {
+        using var s = new Setup();
+        s.Host.NoPbd = true;
+        var view = s.Run();
+        Assert.False(view.Ported);
+        Assert.True(view.Failed);
+        Assert.Equal(HairPortWatcher.NoPbd, view.Message);
+        Assert.Empty(s.Host.Calls);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-hair-race-port-23")]
+    public void A_declined_port_says_so_in_the_panel()
+    {
+        using var s = new Setup();
+        s.Run();
+        HairPortWriter.Undo(s.ModRoot, _ => true, decline: true);
+        s.Reloaded();
+        var view = s.Run();
+        Assert.Contains("h0130", view.Message);
+        Assert.Contains("Miqo Hair", view.Message);
+    }
+
+    /// <summary>A look asked for while one runs is owed and served once, not dropped and not queued twice.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-race-port-12")]
+    public void Second_request_while_busy_is_owed_once()
+    {
+        var flight = new HairPortWatcher.SingleFlight();
+        Assert.True(flight.TryEnter());
+        Assert.True(flight.Busy);
+        Assert.False(flight.TryEnter());
+        Assert.False(flight.TryEnter());
+        Assert.True(flight.Exit());     // one look owed
+        Assert.False(flight.Busy);
+        Assert.True(flight.TryEnter());
+        Assert.False(flight.Exit());    // and only one
     }
 }
