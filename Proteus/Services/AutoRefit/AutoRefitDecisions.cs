@@ -163,6 +163,95 @@ internal static class AutoRefitDecisions
     internal static BodySizeRef RefOf(BodyOption option)
         => new() { Rel = option.Rel, Group = option.Group, Section = option.Section, Name = option.Name };
 
+    // ── choosing a body per part (Settings) ─────────────────────────────────
+
+    /// <summary>
+    /// <paramref name="body"/> picked for <paramref name="slot"/> in Settings.
+    /// <para/>
+    /// The first body a collection is given goes onto every part it has, so one pick still sets everything up: the chest
+    /// and legs wait for the size the character wears in it (<see cref="ApplySnapshot"/>), else take its first size for
+    /// the race — a deliberate exception to never guessing a size, asked for, and said in Settings — and hands and feet
+    /// are matched. Picked again later for one part, only that part changes: a chest or legs then waits for the size
+    /// worn in the new body and is left unchosen without one; hands and feet are matched. Rue goes only with Rue (see
+    /// <see cref="AutoRefitTargets.IsRue"/>): a pick that would put a Rue part beside another body's, or the other way
+    /// round, goes onto every part, as the first body does.
+    /// </summary>
+    /// <param name="race">The player's race; null while it cannot be told, when sizes wait for it.</param>
+    /// <param name="canReadWorn">The collection is the one the player wears, so what is worn in it can be read.</param>
+    /// <param name="find">An installed body by folder, for the other parts' names.</param>
+    /// <returns>The parts given the body's first size there and then, for Settings to say so.</returns>
+    internal static List<string> ChooseBody(AutoRefitPreference pref, string slot, BodyModIndex.Entry body, string? race,
+                                            bool canReadWorn, Func<string, BodyModIndex.Entry?>? find = null)
+    {
+        var prefilled = new List<string>();
+        if (pref.HasAnyBody() && new AutoRefitTargets(pref, find ?? (_ => null), race).CrossesRue(slot, body.Dir, body.Name))
+        {
+            pref.LegacyBodyDir = pref.ChestBody = pref.LegsBody = pref.HandsBody = pref.FeetBody = "";
+            foreach (string part in Slots) pref.SetSize(part, null);
+            pref.PendingFill.Clear();
+        }
+        if (!pref.HasAnyBody())
+        {
+            foreach (string part in Slots)
+            {
+                if (body.Catalog.For(part, race).Count == 0) continue;
+                pref.SetBody(part, body.Dir);
+                pref.SetSize(part, null);
+                if (part is not ("_top" or "_dwn")) continue;
+                if (!canReadWorn && race != null)
+                {
+                    pref.SetSize(part, RefOf(body.Catalog.For(part, race)[0]));
+                    prefilled.Add(part);
+                }
+                else pref.PendingFill[part] = true;
+            }
+            return prefilled;
+        }
+
+        if (string.Equals(pref.BodyOf(slot), body.Dir, StringComparison.OrdinalIgnoreCase)) return prefilled;
+        pref.SetBody(slot, body.Dir);
+        pref.SetSize(slot, null);
+        if (slot is "_top" or "_dwn" && canReadWorn) pref.PendingFill[slot] = false;
+        return prefilled;
+    }
+
+    /// <summary>
+    /// Fill the parts waiting for a size (<see cref="AutoRefitPreference.PendingFill"/>) from what the character wears in
+    /// each one's body: the size worn; else, for the first body picked, its first size for the race; else nothing, the
+    /// part left unchosen. A part whose body has no sizes for the race stops waiting. Nothing is filled before the race is
+    /// known, and a part whose body changed since <paramref name="wornIn"/> was read keeps waiting for the next reading.
+    /// </summary>
+    /// <param name="targets">The preference's parts and bodies at the race (see <see cref="AutoRefitTargets"/>), with what
+    /// is worn in each.</param>
+    /// <param name="wornIn">The body each part's worn size was read in; null when nothing worn could be read, which
+    /// settles every waiting part by its fallback.</param>
+    /// <param name="prefilled">The parts given a first size.</param>
+    /// <returns>Whether anything changed — the only time the settings need saving.</returns>
+    internal static bool ApplySnapshot(AutoRefitPreference pref, AutoRefitTargets targets,
+                                       IReadOnlyDictionary<string, string>? wornIn, out List<string> prefilled)
+    {
+        prefilled = [];
+        if (pref.PendingFill.Count == 0 || targets.Race == null) return false;
+        bool changed = false;
+        foreach (var (slot, firstIfNone) in pref.PendingFill.ToList())
+        {
+            if (wornIn != null && (!wornIn.TryGetValue(slot, out string? readIn)
+                                   || !string.Equals(readIn, pref.BodyOf(slot), StringComparison.OrdinalIgnoreCase)))
+                continue;
+            var options = targets.Options(slot);
+            if (wornIn != null && targets.Worn(slot) is { } worn && options.Contains(worn))
+                pref.SetSize(slot, RefOf(worn));
+            else if (firstIfNone && options.Count > 0)
+            {
+                pref.SetSize(slot, RefOf(options[0]));
+                prefilled.Add(slot);
+            }
+            else pref.PendingFill.Remove(slot);
+            changed = true;
+        }
+        return changed;
+    }
+
     /// <summary>
     /// The size of a part nobody chose — hands or feet — to go with the size that was: the option in the same heading
     /// with the same name ("SFW M" under "--- DEFAULT ---" beside the chest's own), then by name alone, then the first
@@ -172,17 +261,16 @@ internal static class AutoRefitDecisions
     internal static BodyOption? Companion(IReadOnlyList<BodyOption> options, BodyOption? anchor, BodyOption? worn)
     {
         if (options.Count == 0) return null;
-        if (anchor != null)
-        {
-            if (options.FirstOrDefault(o => Same(o.Section, anchor.Section) && Same(o.Name, anchor.Name)) is { } both)
-                return both;
-            if (options.FirstOrDefault(o => Same(o.Name, anchor.Name)) is { } named) return named;
-            if (anchor.Section.Length > 0 && options.FirstOrDefault(o => Same(o.Section, anchor.Section)) is { } under)
-                return under;
-        }
+        if (anchor != null && ByAnchor(options, anchor) is { } matched) return matched;
         if (worn != null && options.Contains(worn)) return worn;
         return options[0];
     }
+
+    /// <summary>The part of <see cref="Companion"/> that goes by the size chosen alone; null when nothing is named for it.</summary>
+    internal static BodyOption? ByAnchor(IReadOnlyList<BodyOption> options, BodyOption anchor)
+        => options.FirstOrDefault(o => Same(o.Section, anchor.Section) && Same(o.Name, anchor.Name))
+           ?? options.FirstOrDefault(o => Same(o.Name, anchor.Name))
+           ?? (anchor.Section.Length > 0 ? options.FirstOrDefault(o => Same(o.Section, anchor.Section)) : null);
 
     /// <summary>
     /// Whether a reading of ANOTHER part than the garment's own slot is good enough to refit that part too. A clear

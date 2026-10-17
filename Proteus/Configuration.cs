@@ -545,14 +545,111 @@ public class AutoRefitPreference
     /// <summary>The collection's name when the preference was set — shown when the collection itself is gone.</summary>
     public string CollectionName { get; set; } = "";
 
-    /// <summary>The body mod refitted onto, by folder. Empty means nothing is refitted.</summary>
-    public string BodyDir { get; set; } = "";
+    /// <summary>
+    /// The one body mod every part was refitted onto, by folder, before each part had its own — and what an older build
+    /// still reads. Applies to every part while none of <see cref="ChestBody"/>, <see cref="LegsBody"/>,
+    /// <see cref="HandsBody"/> and <see cref="FeetBody"/> is set; kept as the chest's body (else the first part set)
+    /// once they are. Read only through <see cref="BodyOf"/> and <see cref="HasAnyBody"/>: renamed from <c>BodyDir</c>,
+    /// its key in the file, so no reader of the old meaning compiles.
+    /// </summary>
+    [JsonProperty("BodyDir")]
+    public string LegacyBodyDir { get; set; } = "";
 
-    /// <summary>The chest size refitted onto. Hands and feet follow it (see <c>AutoRefitDecisions.Companion</c>).</summary>
+    /// <summary>The body mod each part is refitted onto, by folder; empty for none (see <see cref="BodyOf"/>).</summary>
+    public string ChestBody { get; set; } = "";
+
+    /// <inheritdoc cref="ChestBody"/>
+    public string LegsBody { get; set; } = "";
+
+    /// <inheritdoc cref="ChestBody"/>
+    public string HandsBody { get; set; } = "";
+
+    /// <inheritdoc cref="ChestBody"/>
+    public string FeetBody { get; set; } = "";
+
+    /// <summary>The chest size refitted onto.</summary>
     public BodySizeRef? Chest { get; set; }
 
     /// <summary>The legs size refitted onto.</summary>
     public BodySizeRef? Legs { get; set; }
+
+    /// <summary>The hands size refitted onto; null follows the chest or legs size (see
+    /// <c>AutoRefitTargets.Matched</c>).</summary>
+    public BodySizeRef? Hands { get; set; }
+
+    /// <summary>The feet size refitted onto; null follows the chest or legs size.</summary>
+    public BodySizeRef? Feet { get; set; }
+
+    /// <summary>
+    /// Parts whose size waits to be filled from what the character wears in their body (see
+    /// <c>AutoRefitDecisions.ApplySnapshot</c>), by slot: true where the body's first size stands in when nothing worn
+    /// can be read — the first body picked — false where the size is then left unchosen. Filled by the watcher on the
+    /// framework thread, so it lands with Settings closed. OrdinalIgnoreCase, populated in place.
+    /// </summary>
+    public Dictionary<string, bool> PendingFill { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly string[] Parts = ["_top", "_dwn", "_glv", "_sho"];
+
+    /// <summary>Any part has a body of its own: the legacy body stops applying.</summary>
+    private bool PerPart => ChestBody.Length > 0 || LegsBody.Length > 0 || HandsBody.Length > 0 || FeetBody.Length > 0;
+
+    /// <summary>The body mod <paramref name="slot"/> is refitted onto; empty for none.</summary>
+    public string BodyOf(string slot)
+        => !PerPart ? LegacyBodyDir : slot switch
+        {
+            "_top" => ChestBody,
+            "_dwn" => LegsBody,
+            "_glv" => HandsBody,
+            "_sho" => FeetBody,
+            _ => "",
+        };
+
+    /// <summary>Some part has a body to refit onto.</summary>
+    public bool HasAnyBody() => PerPart || LegacyBodyDir.Length > 0;
+
+    /// <summary>The size remembered for <paramref name="slot"/>; null for none, which for hands and feet is matched.</summary>
+    public BodySizeRef? SizeOf(string slot) => slot switch
+    {
+        "_top" => Chest,
+        "_dwn" => Legs,
+        "_glv" => Hands,
+        "_sho" => Feet,
+        _ => null,
+    };
+
+    /// <summary>Remember <paramref name="size"/> for <paramref name="slot"/>. A size chosen ends any wait to fill it.</summary>
+    public void SetSize(string slot, BodySizeRef? size)
+    {
+        switch (slot)
+        {
+            case "_top": Chest = size; break;
+            case "_dwn": Legs = size; break;
+            case "_glv": Hands = size; break;
+            case "_sho": Feet = size; break;
+            default: return;
+        }
+        PendingFill.Remove(slot);
+    }
+
+    /// <summary>
+    /// Refit <paramref name="slot"/> onto body <paramref name="dir"/>. A preference from before each part had its own
+    /// body has its one body copied to every part first, so the others keep it; <see cref="LegacyBodyDir"/> then follows
+    /// the chest's body, else the first part's, for an older build.
+    /// </summary>
+    public void SetBody(string slot, string dir)
+    {
+        if (!PerPart && LegacyBodyDir.Length > 0)
+            ChestBody = LegsBody = HandsBody = FeetBody = LegacyBodyDir;
+        switch (slot)
+        {
+            case "_top": ChestBody = dir; break;
+            case "_dwn": LegsBody = dir; break;
+            case "_glv": HandsBody = dir; break;
+            case "_sho": FeetBody = dir; break;
+            default: return;
+        }
+        LegacyBodyDir = ChestBody.Length > 0 ? ChestBody : Parts.Select(BodyOf).FirstOrDefault(d => d.Length > 0) ?? "";
+    }
 
     /// <summary>
     /// Every mod group (<c>"modDir|group"</c>) a refit has been switched on in, in this collection. Once there, a group
@@ -611,9 +708,16 @@ public class AutoRefitPreference
     internal AutoRefitPreference Copy() => new()
     {
         CollectionName   = CollectionName,
-        BodyDir          = BodyDir,
+        LegacyBodyDir    = LegacyBodyDir,
+        ChestBody        = ChestBody,
+        LegsBody         = LegsBody,
+        HandsBody        = HandsBody,
+        FeetBody         = FeetBody,
         Chest            = Chest,
         Legs             = Legs,
+        Hands            = Hands,
+        Feet             = Feet,
+        PendingFill      = new(PendingFill, StringComparer.OrdinalIgnoreCase),
         SwitchedOn       = new(SwitchedOn, StringComparer.OrdinalIgnoreCase),
         AuthorSwitchedOn = new(AuthorSwitchedOn, StringComparer.OrdinalIgnoreCase),
         Before           = CopyLists(Before),

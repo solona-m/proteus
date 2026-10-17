@@ -3,12 +3,40 @@
     "message": "Corps",
     "description": ""
   },
-  "AutoRefit.BodyMissing.Fmt": {
-    "message": "Le corps choisi ici, « {0} », n'est plus installé. Choisissez-en un autre.",
+  "AutoRefit.Part": {
+    "message": "Partie",
     "description": ""
   },
-  "AutoRefit.ChestSize": {
-    "message": "Taille de poitrine",
+  "AutoRefit.Size": {
+    "message": "Taille",
+    "description": ""
+  },
+  "AutoRefit.PartsHint": {
+    "message": "Chaque partie peut utiliser son propre corps. Le premier corps choisi sert pour toutes les parties qu'il possède.",
+    "description": ""
+  },
+  "AutoRefit.Matched.Fmt": {
+    "message": "Assortie ({0})",
+    "description": ""
+  },
+  "AutoRefit.MatchedWorn.Fmt": {
+    "message": "Assortie (la taille portée, sinon {0})",
+    "description": ""
+  },
+  "AutoRefit.Match": {
+    "message": "Suivre la taille du buste ou des jambes",
+    "description": ""
+  },
+  "AutoRefit.SizesPending": {
+    "message": "Lecture des tailles portées dans ce corps...",
+    "description": ""
+  },
+  "AutoRefit.Prefilled.Fmt": {
+    "message": "La taille portée n'a pas pu être lue : {0} a reçu la première taille du corps. Vérifiez-la ci-dessus.",
+    "description": ""
+  },
+  "AutoRefit.BodyMissing.Fmt": {
+    "message": "Le corps choisi ici, « {0} », n'est plus installé. Choisissez-en un autre.",
     "description": ""
   },
   "AutoRefit.Choose": {
@@ -43,20 +71,12 @@
     "message": "Recherche des mods de corps…",
     "description": ""
   },
-  "AutoRefit.HandsFeet.Fmt": {
-    "message": "Les mains et les pieds sont assortis à ces tailles : {0} et {1}.",
-    "description": ""
-  },
   "AutoRefit.Intro": {
     "message": "Quand vous équipez une pièce de torse, de jambes, de mains ou de pieds — ou un accessoire qui couvre le corps, comme une veste sur un collier —, Proteus détermine pour quel corps elle a été faite, l'ajuste au corps et aux tailles choisis ici, puis active la nouvelle taille. Chaque collection Penumbra a son propre choix.",
     "description": ""
   },
   "AutoRefit.ItemInMod.Fmt": {
     "message": "{0} ({1})",
-    "description": ""
-  },
-  "AutoRefit.LegsSize": {
-    "message": "Taille des jambes",
     "description": ""
   },
   "AutoRefit.NoBodies": {
@@ -349,6 +369,10 @@
   },
   "Chat.AutoRefit.PartsLeftOut.Fmt": {
     "message": "Ces parties n'ont pas pu être ajustées avec lui et gardent leur taille : {0}.",
+    "description": ""
+  },
+  "Chat.AutoRefit.MixedKept.Fmt": {
+    "message": "Elle a été faite pour {0} : la partie {1} est donc allée sur {0} avec elle plutôt que sur le corps choisi pour {1}.",
     "description": ""
   },
   "Chat.AutoRefit.SkinOnly.Fmt": {

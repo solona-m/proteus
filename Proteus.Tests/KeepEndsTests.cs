@@ -463,6 +463,68 @@ public class KeepEndsTests
         Assert.Equal("Neolithe — L", RefitCore.OptionName("Neolithe", [decision.Target.Label]));
     }
 
+    // ── the feet on a body of their own (see AutoRefitTargets) ───────────────
+
+    /// <summary>The legs on the shoe's own body, "body"; the feet on Bibo+, or on nothing.</summary>
+    private static AutoRefitTargets FeetOn(string? feetBody, BodySizeRef? feet = null)
+    {
+        var pref = new AutoRefitPreference
+        {
+            ChestBody = "body", LegsBody = "body", HandsBody = "body", FeetBody = feetBody ?? "",
+            Legs = AutoRefitDecisions.RefOf(LegsM), Feet = feet,
+        };
+        var bodies = new[] { new BodyModIndex.Entry("body", "Body", Body), AutoRefitTargetsTests.Bibo };
+        return new AutoRefitTargets(pref, d => bodies.FirstOrDefault(b => b.Dir == d), "0201");
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-auto-refit-part-bodies-7")]
+    [Trait("Plan", "EDGE-auto-refit-part-bodies-20")]
+    public void Shoe_leg_goes_to_the_legs_body_and_foot_shape_to_the_feet_body()
+    {
+        var (reading, _) = ReadShoe(legSkin: true);
+        var targets = FeetOn("Bibo+");
+        var decision = Assert.IsType<KeepEnds.Refit>(
+            KeepEnds.Decide(new KeepEnds.Found(KeepEnds.Route.Skin, Pick(LegsS)), reading, NoBones, "0201", "body",
+                            _ => Body, s => targets.TargetFor(s, "_sho")));
+        Assert.Equal(LegsM, decision.Target);                       // the legs' own body
+        Assert.Equal(FeetM, decision.EndFrom);                      // the source's feet
+        Assert.Equal("Bibo+", targets.DirOf("_sho"));
+        Assert.StartsWith("<Bibo+>", targets.PathOf("_sho", decision.EndTo!), StringComparison.Ordinal);
+        // A skin-only redraw is drawn like the feet's body, and named after it.
+        Assert.Equal("Bibo+ — skin", KeepEnds.SkinOnlyOption(targets.NameOf("_sho")));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-auto-refit-part-bodies-21")]
+    public void Unset_feet_body_refits_the_leg_without_foot_shape_and_a_skin_redraw_has_no_size()
+    {
+        var (reading, _) = ReadShoe(legSkin: true);
+        var targets = FeetOn(null);
+        var decision = Assert.IsType<KeepEnds.Refit>(
+            KeepEnds.Decide(new KeepEnds.Found(KeepEnds.Route.Skin, Pick(LegsS)), reading, NoBones, "0201", "body",
+                            _ => Body, s => targets.TargetFor(s, "_sho")));
+        Assert.Null(decision.EndTo);
+
+        var (bare, bareParts) = ReadShoe(legSkin: false);
+        var found = KeepEnds.Find(bare, bareParts, NoBones, "0201", Detect(null, Pick(FeetM)), _ => Body,
+                                  (_, _, _, _) => null);
+        Assert.Equal(new KeepEnds.NoSize("_sho"),
+                     KeepEnds.Decide(found, bare, NoBones, "0201", "body", _ => Body, s => targets.TargetFor(s, "_sho")));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-auto-refit-part-bodies-29")]
+    public void Decide_judges_already_fits_against_the_leg_body_only()
+    {
+        var (reading, _) = ReadShoe(legSkin: true);
+        // The feet on another body changes nothing about whether the leg already fits.
+        var targets = FeetOn("Bibo+");
+        Assert.IsType<KeepEnds.AlreadyFits>(
+            KeepEnds.Decide(new KeepEnds.Found(KeepEnds.Route.Skin, Pick(LegsM)), reading, NoBones, "0201", "body",
+                            _ => Body, s => targets.TargetFor(s, "_sho")));
+    }
+
     [Fact]
     [Trait("Plan", "EDGE-keep-hand-foot-skin-11")]
     public void A_leg_already_the_chosen_size_already_fits()

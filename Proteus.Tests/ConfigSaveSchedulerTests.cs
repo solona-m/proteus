@@ -400,13 +400,16 @@ public class ConfigSaveSchedulerTests
     // [AC-config-save-race-2]
     [Fact]
     [Trait("Plan", "AC-config-save-race-2")]
+    [Trait("Plan", "EDGE-auto-refit-part-bodies-27")]
     public void A_preference_copy_has_every_member_and_shares_no_collection()
     {
         var live = new AutoRefitPreference
         {
-            CollectionName = "c", BodyDir = "body",
+            CollectionName = "c", LegacyBodyDir = "body", ChestBody = "body", LegsBody = "legs", HandsBody = "hands", FeetBody = "feet",
             Chest = new BodySizeRef { Rel = "chest" }, Legs = new BodySizeRef { Rel = "legs" },
+            Hands = new BodySizeRef { Rel = "hands" }, Feet = new BodySizeRef { Rel = "feet" },
         };
+        live.PendingFill["_top"] = true;
         live.SwitchedOn.Add("m|g");
         live.AuthorSwitchedOn["m|g"] = "S";
         live.Before["m|g"] = ["a"];
@@ -419,8 +422,10 @@ public class ConfigSaveSchedulerTests
         // What the worker decides on. Replaced, never changed in place, so shared on purpose.
         Assert.Same(live.Chest, copy.Chest);
         Assert.Same(live.Legs, copy.Legs);
+        Assert.Same(live.Hands, copy.Hands);
+        Assert.Same(live.Feet, copy.Feet);
         // A member added later fails here until it is copied in Copy() and filled on `live` above.
-        Assert.True(typeof(AutoRefitPreference).GetProperties().Length == 10,
+        Assert.True(typeof(AutoRefitPreference).GetProperties().Length == 17,
                     "AutoRefitPreference gained a member: copy it in Copy(), then fill it here and update this count");
 
         live.SwitchedOn.Add("x");
@@ -429,6 +434,7 @@ public class ConfigSaveSchedulerTests
         live.HeldBefore["x"] = [];
         live.InheritedBefore.Add("x");
         live.Declined.Add("x");
+        live.PendingFill["x"] = false;
         Assert.DoesNotContain("\"x\"", JsonConvert.SerializeObject(copy));
         Assert.Contains("M|G", copy.SwitchedOn);   // case-insensitive, as the live sets
         Assert.True(copy.AuthorSwitchedOn.ContainsKey("M|G"));

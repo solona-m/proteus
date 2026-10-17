@@ -3,12 +3,40 @@
     "message": "체형",
     "description": ""
   },
-  "AutoRefit.BodyMissing.Fmt": {
-    "message": "여기서 고른 체형 \"{0}\"이(가) 더 이상 설치되어 있지 않습니다. 다른 체형을 고르세요.",
+  "AutoRefit.Part": {
+    "message": "부위",
     "description": ""
   },
-  "AutoRefit.ChestSize": {
-    "message": "가슴 크기",
+  "AutoRefit.Size": {
+    "message": "크기",
+    "description": ""
+  },
+  "AutoRefit.PartsHint": {
+    "message": "부위마다 다른 몸을 쓸 수 있습니다. 처음 고른 몸은 그 몸에 있는 모든 부위에 쓰입니다.",
+    "description": ""
+  },
+  "AutoRefit.Matched.Fmt": {
+    "message": "맞춤 ({0})",
+    "description": ""
+  },
+  "AutoRefit.MatchedWorn.Fmt": {
+    "message": "맞춤 (입고 있는 크기, 없으면 {0})",
+    "description": ""
+  },
+  "AutoRefit.Match": {
+    "message": "가슴 또는 다리 크기에 맞추기",
+    "description": ""
+  },
+  "AutoRefit.SizesPending": {
+    "message": "이 몸에서 입고 있는 크기를 읽는 중...",
+    "description": ""
+  },
+  "AutoRefit.Prefilled.Fmt": {
+    "message": "입고 있는 크기를 읽을 수 없어 {0}에 몸의 첫 번째 크기를 넣었습니다. 위에서 확인하세요.",
+    "description": ""
+  },
+  "AutoRefit.BodyMissing.Fmt": {
+    "message": "여기서 고른 체형 \"{0}\"이(가) 더 이상 설치되어 있지 않습니다. 다른 체형을 고르세요.",
     "description": ""
   },
   "AutoRefit.Choose": {
@@ -43,20 +71,12 @@
     "message": "체형 모드를 찾는 중…",
     "description": ""
   },
-  "AutoRefit.HandsFeet.Fmt": {
-    "message": "손과 발은 이 크기에 맞춰 자동으로 고릅니다: {0}, {1}.",
-    "description": ""
-  },
   "AutoRefit.Intro": {
     "message": "몸통·다리·손·발 장비나 몸을 덮는 장신구(목걸이에 넣은 재킷 등)를 착용하면, Proteus가 어떤 바디용으로 만들어졌는지 알아내 여기서 고른 바디와 사이즈에 맞추고 새 사이즈를 켭니다. Penumbra 컬렉션마다 따로 고를 수 있습니다.",
     "description": ""
   },
   "AutoRefit.ItemInMod.Fmt": {
     "message": "{0} ({1})",
-    "description": ""
-  },
-  "AutoRefit.LegsSize": {
-    "message": "다리 크기",
     "description": ""
   },
   "AutoRefit.NoBodies": {
@@ -349,6 +369,10 @@
   },
   "Chat.AutoRefit.PartsLeftOut.Fmt": {
     "message": "다음 부위는 함께 맞추지 못해 원래 크기를 유지합니다: {0}.",
+    "description": ""
+  },
+  "Chat.AutoRefit.MixedKept.Fmt": {
+    "message": "{0}용으로 만들어져서 {1} 부위도 {1}에 고른 몸 대신 {0}에 맞췄습니다.",
     "description": ""
   },
   "Chat.AutoRefit.SkinOnly.Fmt": {

@@ -3,13 +3,41 @@
     "message": "Body",
     "description": "Label above the dropdown of installed body mods to refit gear onto."
   },
+  "AutoRefit.Part": {
+    "message": "Part",
+    "description": "Header of the first column of the Body refit parts table: Chest, Legs, Hands, Feet."
+  },
+  "AutoRefit.Size": {
+    "message": "Size",
+    "description": "Header of the parts table's size column in Settings > Body refit."
+  },
+  "AutoRefit.PartsHint": {
+    "message": "Each part can use its own body. The first body you pick is used for every part it has.",
+    "description": "Hint above the Body refit parts table: each body part can be refitted to a different body mod."
+  },
+  "AutoRefit.Matched.Fmt": {
+    "message": "Matched ({0})",
+    "description": "The hands or feet size when it follows the chest or legs size. {0} is that size."
+  },
+  "AutoRefit.MatchedWorn.Fmt": {
+    "message": "Matched (the size you wear, else {0})",
+    "description": "The hands or feet size when it follows the size worn, which Settings cannot read. {0} is the size taken otherwise."
+  },
+  "AutoRefit.Match": {
+    "message": "Match the chest or legs size",
+    "description": "First entry of the hands and feet size lists: follow the chest or legs size instead of a size of their own."
+  },
+  "AutoRefit.SizesPending": {
+    "message": "Reading the sizes you wear in this body...",
+    "description": "Shown while Proteus reads which sizes the character is wearing, to fill them in."
+  },
+  "AutoRefit.Prefilled.Fmt": {
+    "message": "The size you wear couldn't be read, so {0} got the body's first size. Check it above.",
+    "description": "Shown when a part was given the body's first size because the size worn could not be read. {0} lists the parts (Chest, Legs)."
+  },
   "AutoRefit.BodyMissing.Fmt": {
     "message": "The body chosen here, \"{0}\", isn't installed any more. Choose another.",
     "description": "Shown when the body mod chosen for a collection has been uninstalled. {0} is the mod's folder name."
-  },
-  "AutoRefit.ChestSize": {
-    "message": "Chest size",
-    "description": "Label above the dropdown of the body's chest sizes."
   },
   "AutoRefit.Choose": {
     "message": "Choose...",
@@ -43,10 +71,6 @@
     "message": "Looking for body mods...",
     "description": "Shown while the installed mods are searched for body mods."
   },
-  "AutoRefit.HandsFeet.Fmt": {
-    "message": "Hands and feet are matched to these sizes: {0} and {1}.",
-    "description": "Hint under the chest and legs sizes. {0} is the hands size and {1} the feet size picked automatically to match."
-  },
   "AutoRefit.Intro": {
     "message": "When you put on chest, legs, hands or feet gear — or an accessory that covers the body, such as a jacket on a necklace — Proteus works out which body it was made for and refits it to the body and sizes chosen here, then switches the new size on. Each Penumbra collection has its own choice.",
     "description": "Explanation at the top of the Body refit section of Settings."
@@ -54,10 +78,6 @@
   "AutoRefit.ItemInMod.Fmt": {
     "message": "{0} ({1})",
     "description": "How a modded piece of gear is named in messages. {0} is the mod's name, {1} the body part (Chest, Legs, Hands or Feet)."
-  },
-  "AutoRefit.LegsSize": {
-    "message": "Legs size",
-    "description": "Label above the dropdown of the body's legs sizes."
   },
   "AutoRefit.NoBodies": {
     "message": "No body mods are installed, so there is nothing to refit onto.",
@@ -350,6 +370,10 @@
   "Chat.AutoRefit.PartsLeftOut.Fmt": {
     "message": "These parts could not be refitted with it and kept their size: {0}.",
     "description": "Appended to the finished-refit chat line when some other body parts could not be refitted along with the gear. {0} lists the parts (Chest, Legs, Hands, Feet)."
+  },
+  "Chat.AutoRefit.MixedKept.Fmt": {
+    "message": "It was made on {0}, so its {1} went onto {0} with it rather than onto the body chosen for the {1}.",
+    "description": "Added to the refit's done message when the garment stays on the body mod it was made on, so a part it reaches (the legs of a dress) was refitted onto that body too instead of the body chosen for that part. {0} is the body mod's name, {1} the part (Chest, Legs, Hands or Feet)."
   },
   "Chat.AutoRefit.SkinOnly.Fmt": {
     "message": "[Proteus] {0} keeps its own shape; its skin is now drawn like {1}'s. Saved as \"{2}\" in {3} and switched on.",

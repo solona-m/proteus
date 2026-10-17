@@ -289,7 +289,7 @@ Passt Brust-, Bein-, Hand- und Fußausrüstung von selbst an deinen Körper an, 
 
 1. Setze den Haken bei **Ausrüstung beim Anlegen an meinen Körper anpassen**.
 2. Wähle eine **Kollektion**. Jede Penumbra-Kollektion hat ihre eigene Auswahl, und sie beginnt auf der, die du gerade nutzt.
-3. Wähle deinen **Körper**-Mod, dann seine **Brustgröße** und **Beingröße**. Hände und Füße werden passend dazu für dich gewählt.
+3. Wähle für jeden Teil – Brust, Beine, Hände und Füße – einen **Körper**-Mod und eine **Größe**. Der erste Körper, den du wählst, wird für jeden Teil eingetragen, den er hat, mit der Größe, die du darin trägst (sonst seiner ersten). Hände und Füße folgen der Brust- oder Beingröße, solange du keine wählst. Rue-Körper werden nur mit Rue kombiniert.
 4. Ausrüstung, die du ab jetzt anlegst, wird angepasst. Für das, was du schon trägst, drücke **Was ich gerade trage anpassen**.
 
 Gut zu wissen:

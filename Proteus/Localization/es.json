@@ -3,12 +3,40 @@
     "message": "Cuerpo",
     "description": ""
   },
-  "AutoRefit.BodyMissing.Fmt": {
-    "message": "El cuerpo elegido aquí, «{0}», ya no está instalado. Elige otro.",
+  "AutoRefit.Part": {
+    "message": "Parte",
     "description": ""
   },
-  "AutoRefit.ChestSize": {
-    "message": "Talla de pecho",
+  "AutoRefit.Size": {
+    "message": "Talla",
+    "description": ""
+  },
+  "AutoRefit.PartsHint": {
+    "message": "Cada parte puede usar su propio cuerpo. El primer cuerpo que elijas se usa para todas las partes que tenga.",
+    "description": ""
+  },
+  "AutoRefit.Matched.Fmt": {
+    "message": "A juego ({0})",
+    "description": ""
+  },
+  "AutoRefit.MatchedWorn.Fmt": {
+    "message": "A juego (la talla que llevas o, si no, {0})",
+    "description": ""
+  },
+  "AutoRefit.Match": {
+    "message": "Igualar la talla del pecho o de las piernas",
+    "description": ""
+  },
+  "AutoRefit.SizesPending": {
+    "message": "Leyendo las tallas que llevas en este cuerpo...",
+    "description": ""
+  },
+  "AutoRefit.Prefilled.Fmt": {
+    "message": "No se pudo leer la talla que llevas, así que {0} recibió la primera talla del cuerpo. Revísala arriba.",
+    "description": ""
+  },
+  "AutoRefit.BodyMissing.Fmt": {
+    "message": "El cuerpo elegido aquí, «{0}», ya no está instalado. Elige otro.",
     "description": ""
   },
   "AutoRefit.Choose": {
@@ -43,20 +71,12 @@
     "message": "Buscando mods de cuerpo…",
     "description": ""
   },
-  "AutoRefit.HandsFeet.Fmt": {
-    "message": "Las manos y los pies se emparejan con estas tallas: {0} y {1}.",
-    "description": ""
-  },
   "AutoRefit.Intro": {
     "message": "Cuando te pones equipo de torso, piernas, manos o pies —o un accesorio que cubre el cuerpo, como una chaqueta en un collar—, Proteus averigua para qué cuerpo se hizo, lo ajusta al cuerpo y las tallas elegidos aquí y activa la nueva talla. Cada colección de Penumbra tiene su propia elección.",
     "description": ""
   },
   "AutoRefit.ItemInMod.Fmt": {
     "message": "{0} ({1})",
-    "description": ""
-  },
-  "AutoRefit.LegsSize": {
-    "message": "Talla de piernas",
     "description": ""
   },
   "AutoRefit.NoBodies": {
@@ -349,6 +369,10 @@
   },
   "Chat.AutoRefit.PartsLeftOut.Fmt": {
     "message": "Estas partes no se pudieron ajustar con él y conservan su talla: {0}.",
+    "description": ""
+  },
+  "Chat.AutoRefit.MixedKept.Fmt": {
+    "message": "Se hizo para {0}, así que la parte {1} fue a {0} con ella en lugar de al cuerpo elegido para {1}.",
     "description": ""
   },
   "Chat.AutoRefit.SkinOnly.Fmt": {

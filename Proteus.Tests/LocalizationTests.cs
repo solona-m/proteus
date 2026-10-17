@@ -672,4 +672,46 @@ public sealed class LocalizationTests
             Assert.NotEqual(en[key].Message, tr[key].Message);
         }
     }
+
+    /// <summary>What a body per part in Settings > Body refit added is translated, not copied; the strings it replaced
+    /// are gone.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-auto-refit-part-bodies-10")]
+    public void PartBodies_strings_are_translated_not_copied(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (string key in new[]
+                 {
+                     "AutoRefit.Part", "AutoRefit.Size", "AutoRefit.PartsHint", "AutoRefit.Matched.Fmt",
+                     "AutoRefit.MatchedWorn.Fmt", "AutoRefit.Match", "AutoRefit.SizesPending", "AutoRefit.Prefilled.Fmt",
+                     "Chat.AutoRefit.MixedKept.Fmt",
+                 })
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+        }
+        foreach (string gone in new[] { "AutoRefit.ChestSize", "AutoRefit.LegsSize", "AutoRefit.HandsFeet.Fmt" })
+            Assert.False(tr.ContainsKey(gone), $"[{lang}] still has {gone}");
+    }
+
+    /// <summary>The README's Body refit section says a body and a size are picked per part, in the words Settings uses.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-auto-refit-part-bodies-10")]
+    public void Readme_names_body_and_size_per_part(string lang)
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+        var strings = Load(lang);
+        string step = readme.Split('\n').Single(l => l.StartsWith("3. ", StringComparison.Ordinal)
+                                                     && l.Contains("**" + strings["AutoRefit.Size"].Message + "**",
+                                                                   StringComparison.Ordinal));
+        Assert.Contains("**" + strings["AutoRefit.Body"].Message + "**", step);
+        Assert.Contains("Rue", step);
+    }
 }

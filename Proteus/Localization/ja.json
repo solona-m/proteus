@@ -3,12 +3,40 @@
     "message": "体型",
     "description": ""
   },
-  "AutoRefit.BodyMissing.Fmt": {
-    "message": "ここで選んだ体型「{0}」はもうインストールされていません。別の体型を選んでください。",
+  "AutoRefit.Part": {
+    "message": "部位",
     "description": ""
   },
-  "AutoRefit.ChestSize": {
-    "message": "胸のサイズ",
+  "AutoRefit.Size": {
+    "message": "サイズ",
+    "description": ""
+  },
+  "AutoRefit.PartsHint": {
+    "message": "部位ごとに別の体を使えます。最初に選んだ体は、その体にあるすべての部位に使われます。",
+    "description": ""
+  },
+  "AutoRefit.Matched.Fmt": {
+    "message": "合わせる（{0}）",
+    "description": ""
+  },
+  "AutoRefit.MatchedWorn.Fmt": {
+    "message": "合わせる（着ているサイズ、なければ{0}）",
+    "description": ""
+  },
+  "AutoRefit.Match": {
+    "message": "胸か脚のサイズに合わせる",
+    "description": ""
+  },
+  "AutoRefit.SizesPending": {
+    "message": "この体で着ているサイズを読み取っています…",
+    "description": ""
+  },
+  "AutoRefit.Prefilled.Fmt": {
+    "message": "着ているサイズを読み取れなかったため、{0}には体の最初のサイズを設定しました。上で確認してください。",
+    "description": ""
+  },
+  "AutoRefit.BodyMissing.Fmt": {
+    "message": "ここで選んだ体型「{0}」はもうインストールされていません。別の体型を選んでください。",
     "description": ""
   },
   "AutoRefit.Choose": {
@@ -43,20 +71,12 @@
     "message": "体型 MOD を探しています…",
     "description": ""
   },
-  "AutoRefit.HandsFeet.Fmt": {
-    "message": "手と足はこれらのサイズに合わせて自動で選ばれます：{0} と {1}。",
-    "description": ""
-  },
   "AutoRefit.Intro": {
     "message": "胴・脚・手・足の装備、または体を覆うアクセサリー（首飾りに付けたジャケットなど）を身に着けると、Proteus はそれがどのボディ用に作られたかを判断し、ここで選んだボディとサイズに合わせて調整し、新しいサイズを有効にします。Penumbra のコレクションごとに選択できます。",
     "description": ""
   },
   "AutoRefit.ItemInMod.Fmt": {
     "message": "{0}（{1}）",
-    "description": ""
-  },
-  "AutoRefit.LegsSize": {
-    "message": "脚のサイズ",
     "description": ""
   },
   "AutoRefit.NoBodies": {
@@ -349,6 +369,10 @@
   },
   "Chat.AutoRefit.PartsLeftOut.Fmt": {
     "message": "次の部位は一緒に調整できなかったため、元のサイズのままです：{0}。",
+    "description": ""
+  },
+  "Chat.AutoRefit.MixedKept.Fmt": {
+    "message": "{0}用に作られているため、{1}も選んだ体ではなく{0}に合わせました。",
     "description": ""
   },
   "Chat.AutoRefit.SkinOnly.Fmt": {

@@ -287,6 +287,39 @@ internal static partial class RefitCore
     internal static string OptionName(string bodyName, IEnumerable<string> targetLabels)
         => $"{bodyName} — {string.Join(" + ", targetLabels)}";
 
+    /// <summary>
+    /// The option's name for a refit whose parts may go onto different bodies: with one body, exactly
+    /// <see cref="OptionName(string, IEnumerable{string})"/>; with several, each run of parts on one body named by it —
+    /// "Bibo+ — Medium + YAB+ — Large".
+    /// </summary>
+    internal static string OptionName(IEnumerable<(string Body, string Label)> parts)
+    {
+        var list = parts.ToList();
+        if (list.Count == 0) return "";
+        if (list.Select(p => p.Body).Distinct(StringComparer.Ordinal).Count() == 1)
+            return OptionName(list[0].Body, list.Select(p => p.Label));
+        var runs = new List<string>();
+        for (int i = 0; i < list.Count;)
+        {
+            int j = i;
+            while (j < list.Count && list[j].Body == list[i].Body) j++;
+            runs.Add(OptionName(list[i].Body, list.Skip(i).Take(j - i).Select(p => p.Label)));
+            i = j;
+        }
+        return string.Join(" + ", runs);
+    }
+
+    /// <summary>
+    /// The key a glove's or shoe's record keeps the hands or feet it rode on under, in
+    /// <see cref="BodyRetargetWriter.Entry.Targets"/> — only where they are not plainly matched on the arms' or legs'
+    /// own body, so a refit of today's kind records exactly what it always did. Never a part of its own: joining options
+    /// goes by those (<see cref="JoinOption"/>).
+    /// </summary>
+    internal static string EndKey(string slot) => "end:" + slot;
+
+    /// <summary>Whether a record's key is a part of the refit's own (not the chest beneath, nor a kept end).</summary>
+    internal static bool IsOwnPart(string key) => key != ChestBeneathKey && !key.StartsWith("end:", StringComparison.Ordinal);
+
     /// <summary>The model of a body part or an accessory — the pieces a size group can hold several of.</summary>
     private static readonly System.Text.RegularExpressions.Regex PieceModel = new(
         @"_(top|dwn|glv|sho|nek|ear|wrs|rir|ril)\.mdl$",
@@ -330,6 +363,15 @@ internal static partial class RefitCore
     internal static string JoinOption(BodyRetargetWriter.Record? record, string group, string gamePath, string bodyMod,
                                       IReadOnlyDictionary<string, string> chosen, IReadOnlyDictionary<string, string> own,
                                       string proposed)
+        => JoinOption(record, group, gamePath,
+                      chosen.ToDictionary(c => c.Key, c => (bodyMod, c.Value), StringComparer.Ordinal), own, proposed);
+
+    /// <inheritdoc cref="JoinOption(BodyRetargetWriter.Record?, string, string, string, IReadOnlyDictionary{string, string}, IReadOnlyDictionary{string, string}, string)"/>
+    /// <param name="chosen">The target body and its file chosen now, per slot: an entry's part goes onto it only when
+    /// both are the same — a fork can share another body's file names.</param>
+    internal static string JoinOption(BodyRetargetWriter.Record? record, string group, string gamePath,
+                                      IReadOnlyDictionary<string, (string Dir, string Rel)> chosen,
+                                      IReadOnlyDictionary<string, string> own, string proposed)
     {
         if (record == null) return proposed;
         var inGroup = record.Options.Where(e => string.Equals(record.GroupOf(e), group, StringComparison.OrdinalIgnoreCase))
@@ -341,12 +383,14 @@ internal static partial class RefitCore
         {
             var entries = option.ToList();
             if (entries.Any(e => !e.Auto || e.Targets == null
-                                 || !string.Equals(e.BodyMod, bodyMod, StringComparison.OrdinalIgnoreCase)
+                                 || !chosen.Values.Any(c => string.Equals(c.Dir, e.BodyMod, StringComparison.OrdinalIgnoreCase))
                                  || string.Equals(e.GamePath, gamePath, StringComparison.OrdinalIgnoreCase)))
                 continue;
-            // The chest beneath a legs refit is no part of its own: never joined on (see ChestBeneathKey).
-            var recorded = entries.SelectMany(e => e.Targets!).Where(t => t.Key != ChestBeneathKey).ToList();
-            bool current = recorded.All(t => chosen.TryGetValue(t.Key, out string? rel) && Normal(rel) == Normal(t.Value));
+            // The chest beneath a legs refit, and the hands a glove rode on, are no parts of its own: never joined on.
+            var recorded = entries.SelectMany(e => e.Targets!.Where(t => IsOwnPart(t.Key)).Select(t => (Entry: e, t.Key, t.Value)))
+                                  .ToList();
+            bool current = recorded.All(t => chosen.TryGetValue(t.Key, out var to) && Normal(to.Rel) == Normal(t.Value)
+                                             && string.Equals(t.Entry.BodyOf(t.Key), to.Dir, StringComparison.OrdinalIgnoreCase));
             bool shares = recorded.Any(t => own.ContainsKey(t.Key));
             if (current && shares) return option.Key;
         }
@@ -414,6 +458,14 @@ internal static partial class RefitCore
                                         string group, bool single, IReadOnlyCollection<string>? selected,
                                         string drawnPath, string drawnRel, string bodyName, Func<string, bool> chosen,
                                         Func<string, BodyOption?> targetFor)
+        => PlanOption(redirects, record, group, single, selected, drawnPath, drawnRel, _ => bodyName, chosen, targetFor);
+
+    /// <inheritdoc cref="PlanOption(IReadOnlyList{PenumbraModMeta.Redirect}, BodyRetargetWriter.Record?, string, bool, IReadOnlyCollection{string}?, string, string, string, Func{string, bool}, Func{string, BodyOption?})"/>
+    /// <param name="bodyNameOf">The name of the body a slot is refitted onto: the merged option names each.</param>
+    internal static PairPlan PlanOption(IReadOnlyList<PenumbraModMeta.Redirect> redirects, BodyRetargetWriter.Record? record,
+                                        string group, bool single, IReadOnlyCollection<string>? selected,
+                                        string drawnPath, string drawnRel, Func<string, string> bodyNameOf,
+                                        Func<string, bool> chosen, Func<string, BodyOption?> targetFor)
     {
         var none = new Dictionary<string, string>(StringComparer.Ordinal);
         string want = Normal(drawnRel);
@@ -429,7 +481,7 @@ internal static partial class RefitCore
             || targetFor("_top") is not { } chest || targetFor("_dwn") is not { } legs)
             return new PairPlan(null, cutFrom, false, none, null);
 
-        string merged = OptionName(bodyName, [chest.Label, legs.Label]);
+        string merged = OptionName([(bodyNameOf("_top"), chest.Label), (bodyNameOf("_dwn"), legs.Label)]);
         bool handMade = record?.Options.Any(e => !e.Auto
                                                  && string.Equals(record.GroupOf(e), group, StringComparison.OrdinalIgnoreCase)
                                                  && string.Equals(e.Name, merged, StringComparison.OrdinalIgnoreCase)) ?? false;
@@ -602,6 +654,13 @@ internal static partial class RefitCore
     internal static (BodyRetarget.Planned? Saved, byte[]? Preview, string Refusal) Finish(
         BodyRetarget.Planned plan, RacialModelBake.Route route, RacialModelBake.Wearer? who, string targetPath,
         IPluginLog log)
+        => Finish(plan, route, who, [targetPath], log);
+
+    /// <inheritdoc cref="Finish(BodyRetarget.Planned, RacialModelBake.Route, RacialModelBake.Wearer?, string, IPluginLog)"/>
+    /// <param name="targetPaths">Every body the refit went onto, the lead's first (see <see cref="WithBodySkin(BodyRetarget.Planned, IReadOnlyList{string}, IPluginLog)"/>).</param>
+    internal static (BodyRetarget.Planned? Saved, byte[]? Preview, string Refusal) Finish(
+        BodyRetarget.Planned plan, RacialModelBake.Route route, RacialModelBake.Wearer? who,
+        IReadOnlyList<string> targetPaths, IPluginLog log)
     {
         if (!route.Any) return (plan, null, "");
         if (route.Down)
@@ -615,7 +674,7 @@ internal static partial class RefitCore
         }
         // Without the character to bend it back by, the preview is pushed unbent; the save itself needs no wearer.
         var preview = who != null ? route.Back(plan.Model, who, out _) : null;
-        return (WithBodySkin(plan, targetPath, log), preview, "");
+        return (WithBodySkin(plan, targetPaths, log), preview, "");
     }
 
     /// <summary>
@@ -624,8 +683,15 @@ internal static partial class RefitCore
     /// is not drawn.
     /// </summary>
     internal static BodyRetarget.Planned WithBodySkin(BodyRetarget.Planned plan, string targetPath, IPluginLog log)
+        => WithBodySkin(plan, [targetPath], log);
+
+    /// <inheritdoc cref="WithBodySkin(BodyRetarget.Planned, string, IPluginLog)"/>
+    /// <param name="targetPaths">Every body the refit went onto, the lead's first: the skin of any of them is the body's,
+    /// and only the garment's own is drawn with the lead's.</param>
+    internal static BodyRetarget.Planned WithBodySkin(BodyRetarget.Planned plan, IReadOnlyList<string> targetPaths,
+                                                      IPluginLog log)
     {
-        var model = RacialModelBake.SkinLikeBody(plan.Model, File.ReadAllBytes(targetPath), out var renamed);
+        var model = RacialModelBake.SkinLikeBody(plan.Model, targetPaths.Select(File.ReadAllBytes).ToList(), out var renamed);
         if (renamed.Count == 0) return plan;
         log.Information("[Proteus] retarget: baked garment's own skin {0} drawn with the body's",
                         string.Join(", ", renamed));
@@ -654,8 +720,17 @@ internal static partial class RefitCore
     /// <param name="male">The bodies are a man's, whose layouts are named apart (see <c>BodyCorrespondence.LayoutOf</c>).</param>
     internal static BodyRetarget.Planned MatchSkinToBody(BodyRetarget.Planned plan, string sourcePath, string targetPath,
                                                          UVRemapService? uvRemap, bool male, IPluginLog log)
+        => MatchSkinToBody(plan, sourcePath, [targetPath], uvRemap, male, log);
+
+    /// <inheritdoc cref="MatchSkinToBody(BodyRetarget.Planned, string, string, UVRemapService?, bool, IPluginLog)"/>
+    /// <param name="targetPaths">Every body the refit went onto, the lead's first — a chest on one body mod and the legs
+    /// on another. Skin of any of them is the body's own and stays as it is; only the garment's own leftover skin is
+    /// drawn the way the lead draws its skin.</param>
+    internal static BodyRetarget.Planned MatchSkinToBody(BodyRetarget.Planned plan, string sourcePath,
+                                                         IReadOnlyList<string> targetPaths, UVRemapService? uvRemap,
+                                                         bool male, IPluginLog log)
     {
-        var model = MatchSkinToBody(plan.Model, sourcePath, targetPath, uvRemap, male, log);
+        var model = MatchSkinToBody(plan.Model, sourcePath, targetPaths, uvRemap, male, log);
         return ReferenceEquals(model, plan.Model) ? plan : plan with { Model = model };
     }
 
@@ -663,15 +738,25 @@ internal static partial class RefitCore
     /// <returns>The model with its kept skin redrawn, or the very same array when there was nothing to do.</returns>
     internal static byte[] MatchSkinToBody(byte[] model, string sourcePath, string targetPath, UVRemapService? uvRemap,
                                            bool male, IPluginLog log)
+        => MatchSkinToBody(model, sourcePath, [targetPath], uvRemap, male, log);
+
+    /// <inheritdoc cref="MatchSkinToBody(BodyRetarget.Planned, string, IReadOnlyList{string}, UVRemapService?, bool, IPluginLog)"/>
+    internal static byte[] MatchSkinToBody(byte[] model, string sourcePath, IReadOnlyList<string> targetPaths,
+                                           UVRemapService? uvRemap, bool male, IPluginLog log)
     {
         var plan = model;
         try
         {
-            var target = File.ReadAllBytes(targetPath);
+            var target = File.ReadAllBytes(targetPaths[0]);
             var bodySkins = SecondSkinWriter.Parse(target).MatNames.Where(SecondSkinWriter.IsBodySkinMaterial).ToList();
             if (bodySkins.Count == 0) return plan;
+            // Every other body's skin is the body's too: the legs swapped in from a second body keep their own.
+            var everyBody = new HashSet<string>(bodySkins, StringComparer.Ordinal);
+            foreach (string other in targetPaths.Skip(1).Distinct(StringComparer.OrdinalIgnoreCase))
+                everyBody.UnionWith(SecondSkinWriter.Parse(File.ReadAllBytes(other)).MatNames
+                                                    .Where(SecondSkinWriter.IsBodySkinMaterial));
             var left = SecondSkinWriter.Parse(model).MatNames
-                                       .Where(m => SecondSkinWriter.IsBodySkinMaterial(m) && !bodySkins.Contains(m))
+                                       .Where(m => SecondSkinWriter.IsBodySkinMaterial(m) && !everyBody.Contains(m))
                                        .ToHashSet(StringComparer.Ordinal);
             if (left.Count == 0) return plan;
 
