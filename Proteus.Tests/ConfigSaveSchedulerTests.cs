@@ -359,7 +359,7 @@ public class ConfigSaveSchedulerTests
     // [EDGE-config-save-race-6]
     [Fact]
     [Trait("Plan", "EDGE-config-save-race-6")]
-    public void A_post_that_throws_keeps_the_change_for_unload()
+    public void A_post_that_throws_keeps_the_change_and_the_next_save_posts_again()
     {
         var rig = new Rig { OnFramework = false, PostOverride = _ => throw new ObjectDisposedException("framework") };
         rig.Saver.Save("worker");
@@ -402,7 +402,11 @@ public class ConfigSaveSchedulerTests
     [Trait("Plan", "AC-config-save-race-2")]
     public void A_preference_copy_has_every_member_and_shares_no_collection()
     {
-        var live = new AutoRefitPreference { CollectionName = "c", BodyDir = "body" };
+        var live = new AutoRefitPreference
+        {
+            CollectionName = "c", BodyDir = "body",
+            Chest = new BodySizeRef { Rel = "chest" }, Legs = new BodySizeRef { Rel = "legs" },
+        };
         live.SwitchedOn.Add("m|g");
         live.AuthorSwitchedOn["m|g"] = "S";
         live.Before["m|g"] = ["a"];
@@ -412,6 +416,12 @@ public class ConfigSaveSchedulerTests
 
         var copy = live.Copy();
         Assert.Equal(JsonConvert.SerializeObject(live), JsonConvert.SerializeObject(copy));
+        // What the worker decides on. Replaced, never changed in place, so shared on purpose.
+        Assert.Same(live.Chest, copy.Chest);
+        Assert.Same(live.Legs, copy.Legs);
+        // Every member set: a member added later and left out of Copy() fails here.
+        foreach (var prop in typeof(AutoRefitPreference).GetProperties())
+            Assert.NotNull(prop.GetValue(copy));
 
         live.SwitchedOn.Add("x");
         live.AuthorSwitchedOn["x"] = "x";
@@ -421,6 +431,7 @@ public class ConfigSaveSchedulerTests
         live.Declined.Add("x");
         Assert.DoesNotContain("\"x\"", JsonConvert.SerializeObject(copy));
         Assert.Contains("M|G", copy.SwitchedOn);   // case-insensitive, as the live sets
+        Assert.True(copy.AuthorSwitchedOn.ContainsKey("M|G"));
     }
 
     // [EDGE-config-save-race-9]
