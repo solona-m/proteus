@@ -143,4 +143,15 @@ public class HairPortPlanTests
         Assert.Equal(["j_ex_h0170_ke_b", "j_ex_h0170_ke_c"], HairPortPlan.SkeletonBones(bytes).Order());
         Assert.Empty(HairPortPlan.SkeletonBones(null));
     }
+
+    [Fact]
+    public void A_hair_est_is_read_however_it_is_spelled_and_never_for_a_race_that_cannot_exist()
+    {
+        var lower = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(
+            "{\"Type\":\"est\",\"Manipulation\":{\"Gender\":\"female\",\"Race\":\"miqote\",\"SetId\":130,\"Slot\":\"hair\",\"Entry\":170}}");
+        Assert.Equal(170, HairPortPlan.HairEstEntry(lower, 801, 130));
+        Assert.Null(HairPortPlan.HairEstEntry(lower, 801, 131));
+        Assert.Null(HairPortPlan.HairEstEntry(lower, 9104, 130));
+        Assert.Null(HairPortPlan.HairEstEntry(lower, 0, 130));
+    }
 }

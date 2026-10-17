@@ -125,10 +125,11 @@ internal static class HairPortBuilder
                 var bytes = sources[rel]!;
                 var was = record.Ports.FirstOrDefault(e => HairPortPlan.Same(e.Owner, owner)
                     && e.TargetGamePath.Equals(target, StringComparison.OrdinalIgnoreCase));
-                if (was != null && !HairPortPlan.IsStale(was, bytes)) { anyCurrent = true; continue; }
-                if (was == null && !HairPortPlan.CanPortInto(owners, owner, target)) continue;
-
                 var (check, est) = SkeletonFor(owner, defaults, was, from, to, id);
+                // Out of date too when the skeleton it should carry changed — authors change a physics borrow in the
+                // manifest, not the model.
+                if (was != null && !HairPortPlan.IsStale(was, bytes) && was.Est == est) { anyCurrent = true; continue; }
+                if (was == null && !HairPortPlan.CanPortInto(owners, owner, target)) continue;
 
                 // One bend per distinct file and skeleton checked against, however many options publish it.
                 string key = $"{rel}|{check}";

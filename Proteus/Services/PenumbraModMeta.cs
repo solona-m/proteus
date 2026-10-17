@@ -878,13 +878,19 @@ internal static class PenumbraModMeta
     /// </summary>
     /// <param name="manipulations">Metadata edits to add beside them, each only when the option has no equal one
     /// already; written in the same manifest write.</param>
+    /// <param name="replacing">Metadata edits of the option to take out first, in the same write — the ones the new
+    /// ones replace, however they are spelled; null for none.</param>
     public static void MergeOptionRedirects(string modRoot, string groupName, string optionName,
                                             IReadOnlyDictionary<string, string> add,
-                                            IReadOnlyList<object>? manipulations = null)
+                                            IReadOnlyList<object>? manipulations = null,
+                                            Func<JsonElement, bool>? replacing = null)
         => EditOptionFiles(modRoot, groupName, optionName, (files, manips) =>
         {
             foreach (var (path, rel) in add)
                 files[KeyOf(files, path) ?? path] = rel;
+            if (replacing != null)
+                for (int i = manips.Count - 1; i >= 0; i--)
+                    if (manips[i] is { } old && replacing(JsonSerializer.SerializeToElement(old))) manips.RemoveAt(i);
             foreach (var m in manipulations ?? [])
             {
                 var node = JsonSerializer.SerializeToNode(m, m.GetType())!;

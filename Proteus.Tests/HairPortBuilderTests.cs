@@ -382,4 +382,98 @@ public class HairPortBuilderTests
         Assert.Empty(plan.Writes);
         Assert.Equal(HairPortRecord.UnreadableMessage, plan.Refused[201]);
     }
+
+    /// <summary>Every hair Est the option gives a race for the hairstyle, in order.</summary>
+    private static List<int> EstsOf(Mod mod, ushort race)
+        => (mod.Owner("Cut", "Long").Manipulations ?? [])
+           .Select(m => HairPortPlan.HairEstEntry(m, race, Id)).OfType<int>().ToList();
+
+    /// <summary>Rewrite the option's own skeleton entry for the Miqo'te source: a new borrow, or none.</summary>
+    private static void SetSourceEst(Mod mod, int? entry)
+    {
+        var meta = Path.Combine(mod.Root, "meta.json");
+        var node = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(meta))!;
+        var manips = node["Groups"]![0]!["Options"]![0]!["Manipulations"]!.AsArray();
+        for (int i = manips.Count - 1; i >= 0; i--)
+            if (HairPortPlan.HairEstEntry(System.Text.Json.JsonSerializer.SerializeToElement(manips[i]), 801, Id) != null)
+                manips.RemoveAt(i);
+        if (entry is { } e)
+            manips.Add(System.Text.Json.JsonSerializer.SerializeToNode(PenumbraManipulations.EstManipulation("0801", "Hair", Id, e)));
+        File.WriteAllText(meta, node.ToJsonString());
+    }
+
+    /// <summary>
+    /// The author changes the skeleton the hairstyle borrows — in the manifest alone, or drops it. The port is remade,
+    /// its old entry replaced in the same write, so the option never holds two for one race and undo leaves none.
+    /// </summary>
+    [Theory]
+    [Trait("Plan", "AC-hair-race-port-8")]
+    [Trait("Plan", "EDGE-hair-race-port-6")]
+    [InlineData(180)]
+    [InlineData(null)]
+    public void A_changed_borrow_remakes_the_port_and_replaces_its_skeleton_entry(int? next)
+    {
+        using var mod = PhysicsMod([PenumbraManipulations.EstManipulation("0801", "Hair", Id, 170)]);
+        var game = PhysicsGame((201, 170, H0170Skeleton), (201, 180, H0170Skeleton));
+        Assert.True(HairPortWriter.Save(mod.Root, HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, false).Writes, false).Ok);
+        Assert.Equal([170], EstsOf(mod, 201));
+
+        SetSourceEst(mod, next);
+        if (next == null)   // no borrowed skeleton any more: a model that does not need one
+            mod.Put("long.mdl", HairModel(801));
+        var remake = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, withSharers: false);
+        Assert.Equal(next ?? 0, Assert.Single(remake.Writes).Est);
+        Assert.True(HairPortWriter.Save(mod.Root, remake.Writes, auto: false).Ok);
+        Assert.Equal(next is { } n ? [n] : [], EstsOf(mod, 201));
+        Assert.Equal(next ?? 0, HairPortRecord.Read(mod.Root).Ports.Single().Est);
+
+        Assert.True(HairPortWriter.Undo(mod.Root, _ => true, decline: false).Ok);
+        Assert.Empty(EstsOf(mod, 201));
+    }
+
+    /// <summary>
+    /// The author's own skeleton for the target race in the default data — always on with the port — is the one the
+    /// port is checked against, and nothing is carried.
+    /// </summary>
+    [Theory]
+    [Trait("Plan", "EDGE-hair-race-port-5")]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void An_authors_target_skeleton_in_the_default_data_decides(bool itHasTheBones)
+    {
+        var other = System.Text.Encoding.ASCII.GetBytes("\0j_ex_h0150_ke_a\0");
+        using var mod = PhysicsMod([PenumbraManipulations.EstManipulation("0801", "Hair", Id, 170)],
+                                   [PenumbraManipulations.EstManipulation("0201", "Hair", Id, 150)]);
+        var plan = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(),
+            PhysicsGame((201, 170, H0170Skeleton), (201, 150, itHasTheBones ? H0170Skeleton : other)), withSharers: false);
+        if (itHasTheBones) Assert.Equal(0, Assert.Single(plan.Writes).Est);
+        else Assert.Contains("j_ex_h0170_ke_b", plan.Refused[201]);
+    }
+
+    /// <summary>
+    /// An entry the author gave the target race in ANOTHER option of the group is not on with this one: the port still
+    /// carries the source's borrow.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-race-port-6")]
+    public void An_authors_target_skeleton_in_a_sibling_option_does_not_stand_in()
+    {
+        var groups = "[" + System.Text.Json.JsonSerializer.Serialize(new
+        {
+            Name = "Cut", Description = "", Priority = 0, Type = "Single", DefaultSettings = 0,
+            Options = new object[]
+            {
+                new { Name = "Long", Description = "", Files = new Dictionary<string, string> { [Source] = "long.mdl" },
+                      FileSwaps = new Dictionary<string, string>(),
+                      Manipulations = new[] { PenumbraManipulations.EstManipulation("0801", "Hair", Id, 170) } },
+                new { Name = "Short", Description = "", Files = new Dictionary<string, string>(),
+                      FileSwaps = new Dictionary<string, string>(),
+                      Manipulations = new[] { PenumbraManipulations.EstManipulation("0201", "Hair", Id, 150) } },
+            },
+        }) + "]";
+        using var mod = new Mod(groups);
+        mod.Put("long.mdl", HairModel(801, bones: [("j_ex_h0170_ke_b", 1f)]));
+        var plan = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), PhysicsGame((201, 170, H0170Skeleton)), false);
+        Assert.Equal(170, Assert.Single(plan.Writes).Est);
+    }
 }

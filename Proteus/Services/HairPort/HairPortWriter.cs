@@ -97,6 +97,9 @@ internal static class HairPortWriter
             var redirects = new Dictionary<HairPortPlan.Owner, Dictionary<string, string>>();
             var skeletons = new Dictionary<HairPortPlan.Owner, List<object>>();
             var carriedBy = new Dictionary<HairPortPlan.Owner, List<(string Target, int Est)>>();
+            // A remade port's skeleton entry from before goes in the same write as the one it carries now — whatever
+            // that is, none included — so an option never holds two for one race, and none is left untracked.
+            var replaced = new Dictionary<HairPortPlan.Owner, List<(string Target, int Est)>>();
             var entries = new List<HairPortRecord.Entry>();
             try
             {
@@ -108,6 +111,12 @@ internal static class HairPortWriter
                     WriteFile(modRoot, file, w.Model, created);
 
                     var add = redirects.TryGetValue(owner, out var a) ? a : redirects[owner] = new(StringComparer.OrdinalIgnoreCase);
+                    if (was is { Est: > 0 } || w.Est > 0)
+                    {
+                        var r = replaced.TryGetValue(owner, out var rl) ? rl : replaced[owner] = [];
+                        if (was is { Est: > 0 }) r.Add((w.TargetGamePath, was.Est));
+                        if (w.Est > 0) r.Add((w.TargetGamePath, w.Est));
+                    }
                     if (w.Est > 0)
                     {
                         (skeletons.TryGetValue(owner, out var k) ? k : skeletons[owner] = []).Add(EstFor(w.TargetGamePath, w.Est));
@@ -147,7 +156,8 @@ internal static class HairPortWriter
                 foreach (var (owner, add) in redirects)
                 {
                     BeforeMerge?.Invoke(committed.Count);
-                    PenumbraModMeta.MergeOptionRedirects(modRoot, owner.Group, owner.Option, add, skeletons.GetValueOrDefault(owner));
+                    PenumbraModMeta.MergeOptionRedirects(modRoot, owner.Group, owner.Option, add, skeletons.GetValueOrDefault(owner),
+                                                         AnyEst(replaced.GetValueOrDefault(owner) ?? []));
                     committed.Add((owner, add));
                 }
             }

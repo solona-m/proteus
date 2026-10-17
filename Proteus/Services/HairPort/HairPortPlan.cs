@@ -232,14 +232,17 @@ internal static partial class HairPortPlan
         int n = race / 100;
         if (n is < 1 or > 18) return null;
         string wantRace = ModelRace.Names[(n - 1) / 2], wantGender = n % 2 == 1 ? "Male" : "Female";
-        if (m.ValueKind != JsonValueKind.Object || Str(m, "Type") != "Est"
+        if (m.ValueKind != JsonValueKind.Object || !Is(Str(m, "Type"), "Est")
             || !m.TryGetProperty("Manipulation", out var e) || e.ValueKind != JsonValueKind.Object) return null;
-        if (Str(e, "Slot") != "Hair" || Str(e, "Race") != wantRace || Str(e, "Gender") != wantGender) return null;
+        if (!Is(Str(e, "Slot"), "Hair") || !Is(Str(e, "Race"), wantRace) || !Is(Str(e, "Gender"), wantGender)) return null;
         if (Num(e, "SetId") != id) return null;
         return Num(e, "Entry");
 
         static string? Str(JsonElement e, string key)
             => e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+
+        // Penumbra reads enum names without regard to case.
+        static bool Is(string? a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 
         static int? Num(JsonElement e, string key)
         {
