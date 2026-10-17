@@ -4934,5 +4934,197 @@
   "Chat.EffectUnplaced.Fmt": {
     "message": "[Proteus] L'effet animé de « {0} » n'est pas affiché : il lui faut un emplacement d'accessoire libre pour son support invisible. Libérez un emplacement de bague, bracelet ou collier.",
     "description": ""
+  },
+  "HairPort.Refused.NoHead": {
+    "message": "le modèle de tête du jeu sur lequel l'ajuster n'a pas pu être lu",
+    "description": ""
+  },
+  "HairPort.Refused.Bones.Fmt": {
+    "message": "elle bouge avec des os que c{0:D4} n'a pas pour cette coiffure ({1})",
+    "description": ""
+  },
+  "HairPort.Refused.Unknown.Fmt": {
+    "message": "le déformeur racial ne sait pas comment déplacer {0}",
+    "description": ""
+  },
+  "HairPort.Refused.Fit.Fmt": {
+    "message": "elle ne tient pas sur la tête de c{0:D4} : {1:P0} s'enfonce dans le crâne, et sa distance au cuir chevelu s'écarte de {2:F0} mm de celle de l'original",
+    "description": ""
+  },
+  "HairPort.Refused.NotHair": {
+    "message": "ce n'est pas un modèle de coiffure",
+    "description": ""
+  },
+  "HairPort.Refused.NotInMod": {
+    "message": "le mod ne fournit pas cette coiffure",
+    "description": ""
+  },
+  "HairPort.Refused.Gender": {
+    "message": "les coiffures ne sont transposées qu'entre races du même sexe",
+    "description": ""
+  },
+  "HairPort.Refused.NoStyle.Fmt": {
+    "message": "c{0:D4} ne peut pas choisir la coiffure {1}",
+    "description": ""
+  },
+  "HairPort.Refused.SharedMaterial.Fmt": {
+    "message": "son matériau est celui que {0} lit pour sa propre coiffure {1} — transposez-la aussi vers eux",
+    "description": ""
+  },
+  "HairPort.Refused.SharerRefused.Fmt": {
+    "message": "elle partage son matériau avec c{0:D4}, vers qui la transposition a échoué : {1}",
+    "description": ""
+  },
+  "HairPort.Refused.NoMaterial.Fmt": {
+    "message": "son matériau {0} est introuvable",
+    "description": ""
+  },
+  "HairPort.Refused.NoOption.Fmt": {
+    "message": "l'option « {0} » n'est plus dans le mod",
+    "description": ""
+  },
+  "HairPort.Refused.Covered.Fmt": {
+    "message": "le mod fournit déjà {0} à cet endroit",
+    "description": ""
+  },
+  "HairPort.Undo.Nothing": {
+    "message": "Il n'y a ici aucune transposition de coiffure à annuler.",
+    "description": ""
+  },
+  "HairPort.DefaultData": {
+    "message": "les fichiers par défaut du mod",
+    "description": ""
+  },
+  "HairPort.Refused.Combining.Fmt": {
+    "message": "la coiffure est dans « {0} », un groupe combinatoire, que Proteus ne modifie pas",
+    "description": ""
+  },
+  "HairPort.Refused.Unreadable": {
+    "message": "le manifeste du mod n'a pas pu être lu",
+    "description": ""
+  },
+  "Chat.HairPort": {
+    "message": "[Proteus] Le mod de cette coiffure a été fait pour une autre race : Proteus l'a donc adaptée à la vôtre et l'a ajoutée au mod — toute personne affichée avec ce mod actif la voit désormais. Vous pouvez annuler cela, ou désactiver la fonction, dans /proteus > Paramètres > Cheveux.",
+    "description": ""
+  },
+  "Service.ModMeta.Unreadable.Fmt": {
+    "message": "Le manifeste de {0} n'a pas pu être lu ; il n'a donc pas été modifié.",
+    "description": ""
+  },
+  "Service.ModMeta.Combining.Fmt": {
+    "message": "« {0} » est un groupe combinatoire, dont Proteus ne modifie pas les fichiers.",
+    "description": ""
+  },
+  "Service.ModMeta.NoOption.Fmt": {
+    "message": "Le groupe « {0} » n'a aucune option nommée « {1} ».",
+    "description": ""
+  },
+  "HairPort.Auto.Label": {
+    "message": "Adapter les mods de coiffure faits pour une autre race",
+    "description": ""
+  },
+  "HairPort.Auto.Tip": {
+    "message": "Beaucoup de mods de coiffure ne sont faits que pour une race : sur toute autre\nrace, le jeu affiche sa propre coiffure. Quand cette option est active, Proteus\ns'en aperçoit, plie la coiffure du mod sur la tête de votre race et l'ajoute à\nla même option du même mod.\n\nUniquement entre races du même sexe, et seulement pour la coiffure que vous\nportez. Cela continue de fonctionner avec Proteus désactivé, suit le mod et\ns'affiche pour toute personne affichée avec ce mod actif. Cela peut être\nannulé ici.",
+    "description": ""
+  },
+  "HairPort.Settings.None": {
+    "message": "La coiffure que vous portez n'a besoin d'aucun ajustement.",
+    "description": ""
+  },
+  "HairPort.Settings.Ported.Fmt": {
+    "message": "La coiffure {0} est adaptée à votre race dans {1}.",
+    "description": ""
+  },
+  "HairPort.Settings.Undo": {
+    "message": "Annuler",
+    "description": ""
+  },
+  "HairPort.Settings.Undo.Tip": {
+    "message": "Retire à nouveau la coiffure adaptée du mod. Proteus ne l'adaptera plus de\nlui-même ; vous pouvez toujours la transposer dans le Studio.",
+    "description": ""
+  },
+  "HairPort.Settings.UndoAll.Fmt": {
+    "message": "Annuler les {0} coiffures adaptées de ce mod",
+    "description": ""
+  },
+  "HairPort.Working": {
+    "message": "Traitement…",
+    "description": ""
+  },
+  "HairPort.Studio.Header": {
+    "message": "Transposer à toutes les races",
+    "description": ""
+  },
+  "HairPort.Studio.Intro": {
+    "message": "Plie cette coiffure sur chaque autre race du même sexe et ajoute les résultats à la même option de ce mod, pour qu'elle s'affiche sur tout le monde, quelle que soit sa race. Les races pour lesquelles vous l'avez faite vous-même ne sont pas touchées.",
+    "description": ""
+  },
+  "HairPort.Studio.Covered": {
+    "message": "fait par vous",
+    "description": ""
+  },
+  "HairPort.Studio.Ported": {
+    "message": "transposé",
+    "description": ""
+  },
+  "HairPort.Studio.Stale": {
+    "message": "obsolète",
+    "description": ""
+  },
+  "HairPort.Studio.NoStyle": {
+    "message": "ne peut pas choisir cette coiffure",
+    "description": ""
+  },
+  "HairPort.Studio.Open": {
+    "message": "non couvert",
+    "description": ""
+  },
+  "HairPort.Studio.Port": {
+    "message": "Transposer",
+    "description": ""
+  },
+  "HairPort.Studio.Porting.Fmt": {
+    "message": "Transposition… {0} sur {1} races",
+    "description": ""
+  },
+  "HairPort.Studio.Cancel": {
+    "message": "Annuler",
+    "description": ""
+  },
+  "HairPort.Studio.Cancelled": {
+    "message": "Annulé — rien n'a été écrit.",
+    "description": ""
+  },
+  "HairPort.Studio.Done.Fmt": {
+    "message": "{0} transposition(s) ajoutée(s) au mod.",
+    "description": ""
+  },
+  "HairPort.Studio.Nothing": {
+    "message": "Rien n'a été transposé.",
+    "description": ""
+  },
+  "HairPort.Studio.Failed.Fmt": {
+    "message": "Échec de la transposition : {0}",
+    "description": ""
+  },
+  "HairPort.Studio.Remove": {
+    "message": "Retirer les transpositions",
+    "description": ""
+  },
+  "HairPort.Studio.Removed.Fmt": {
+    "message": "{0} transposition(s) retirée(s).",
+    "description": ""
+  },
+  "HairPort.Studio.Reading": {
+    "message": "Lecture du mod…",
+    "description": ""
+  },
+  "Settings.Section.HairPort": {
+    "message": "Cheveux",
+    "description": ""
+  },
+  "HairPort.Refused.Folded.Fmt": {
+    "message": "une fois plié sur c{0:D4}, {1} de ses triangles seraient retournés",
+    "description": ""
   }
 }

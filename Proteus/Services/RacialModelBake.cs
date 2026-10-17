@@ -171,7 +171,7 @@ internal static partial class RacialModelBake
                 "the racial deformer has no way from c{0:D4} to c{1:D4}"), from, to);
             return null;
         }
-        return Transform(mdl, chain, parentOf, inverse: false, out refusal);
+        return Transform(mdl, [], chain, parentOf, out refusal);
     }
 
     /// <summary>
@@ -190,11 +190,51 @@ internal static partial class RacialModelBake
                 "the racial deformer has no way from c{0:D4} to c{1:D4}"), from, to);
             return null;
         }
-        return Transform(mdl, chain, parentOf, inverse: true, out refusal);
+        return Transform(mdl, chain, [], parentOf, out refusal);
     }
 
-    private static byte[]? Transform(byte[] mdl, IReadOnlyList<IReadOnlyDictionary<string, Matrix4x4>> chain,
-                                     Func<string, string?> parentOf, bool inverse, out string refusal)
+    /// <summary>
+    /// A model of <paramref name="from"/> made a model of <paramref name="to"/> when neither falls through to the other:
+    /// bent back into the race both fall through to, then forward onto <paramref name="to"/> — an <see cref="Unbake"/>
+    /// and a <see cref="Bake"/> in one pass, so the file is written once. Equal to either when the two races are on one
+    /// line. What a hairstyle needs, since hair never falls through: a Miqo'te's model has to become a Midlander's.
+    /// </summary>
+    public static byte[]? Port(byte[] mdl, ushort from, ushort to, PbdFile pbd, Func<string, string?> parentOf,
+                               out string refusal)
+    {
+        ushort root = CommonAncestor(from, to);
+        var down = root == from ? [] : pbd.Chain(root, from);
+        var up = root == to ? [] : pbd.Chain(root, to);
+        if (from == to || root == 0 || (root != from && down.Count == 0) || (root != to && up.Count == 0))
+        {
+            refusal = string.Format(Loc.Localize("Parts.Retarget.Bake.NoPath.Fmt",
+                "the racial deformer has no way from c{0:D4} to c{1:D4}"), from, to);
+            return null;
+        }
+        return Transform(mdl, down, up, parentOf, out refusal);
+    }
+
+    /// <summary>
+    /// The nearest race both <paramref name="a"/> and <paramref name="b"/> fall through to, themselves included, as a
+    /// code (101 for c0101); 0 when there is none. Lalafell women and Midlander women meet at Midlander men.
+    /// </summary>
+    public static ushort CommonAncestor(ushort a, ushort b)
+    {
+        var line = new List<int>();
+        for (int cur = a / 100, guard = 0; cur != 0 && guard < 8; cur = ModelRace.Fallback(cur), guard++) line.Add(cur);
+        for (int cur = b / 100, guard = 0; cur != 0 && guard < 8; cur = ModelRace.Fallback(cur), guard++)
+            if (line.Contains(cur)) return Code(cur);
+        return 0;
+    }
+
+    /// <summary>
+    /// Every vertex bent back through <paramref name="down"/> — the inverse of the blend that chain would make — then
+    /// forward through <paramref name="up"/>. Either may be empty, which blends to identity: a bake has no way down, an
+    /// unbake no way up.
+    /// </summary>
+    private static byte[]? Transform(byte[] mdl, IReadOnlyList<IReadOnlyDictionary<string, Matrix4x4>> down,
+                                     IReadOnlyList<IReadOnlyDictionary<string, Matrix4x4>> up,
+                                     Func<string, string?> parentOf, out string refusal)
     {
         var parts = ModelPartReader.Read(mdl);
         var skin = ModelSkinReader.Read(mdl, null, null);
@@ -214,26 +254,32 @@ internal static partial class RacialModelBake
             return null;
         }
 
-        var bones = new Matrix4x4[skin.BoneNames.Length];
-        for (int j = 0; j < bones.Length; j++) bones[j] = PbdFile.Resolve(chain, skin.BoneNames[j], parentOf);
+        var lower = new Matrix4x4[skin.BoneNames.Length];
+        var raise = new Matrix4x4[skin.BoneNames.Length];
+        for (int j = 0; j < lower.Length; j++)
+        {
+            lower[j] = PbdFile.Resolve(down, skin.BoneNames[j], parentOf);
+            raise[j] = PbdFile.Resolve(up, skin.BoneNames[j], parentOf);
+        }
 
         var edit = new Edit(parts.MeshSpans, count);
         for (int v = 0; v < count; v++)
         {
             // The blend the game's vertex shader makes, as LiveMeshPoser does it: the matrices summed by weight.
-            Matrix4x4 m = default;
+            Matrix4x4 fall = default, rise = default;
             float total = 0f;
             int o = v * SkinnedMesh.MaxInfluences;
             for (int k = 0; k < SkinnedMesh.MaxInfluences; k++)
             {
                 float w = skin.BoneWeights[o + k];
                 if (w <= 0f) continue;
-                m += bones[skin.BoneIndices[o + k]] * w;
+                fall += lower[skin.BoneIndices[o + k]] * w;
+                rise += raise[skin.BoneIndices[o + k]] * w;
                 total += w;
             }
-            if (total <= 1e-6f || !Matrix4x4.Invert(m * (1f / total), out var inv)) continue;
-            m *= 1f / total;
-            if (inverse) (m, inv) = (inv, m);
+            if (total <= 1e-6f || !Matrix4x4.Invert(fall * (1f / total), out var back)) continue;
+            var m = back * (rise * (1f / total));
+            if (!Matrix4x4.Invert(m, out var inv)) continue;
 
             var p = new Vector3(parts.Positions[v * 3], parts.Positions[v * 3 + 1], parts.Positions[v * 3 + 2]);
             var d = Vector3.Transform(p, m) - p;

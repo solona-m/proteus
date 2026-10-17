@@ -4934,5 +4934,197 @@
   "Chat.EffectUnplaced.Fmt": {
     "message": "[Proteus] The animated effect of \"{0}\" is not shown: it needs a free accessory slot for its invisible carrier. Free a ring, bracelet or necklace slot.",
     "description": "Chat message when an imported animated effect cannot be shown. {0} is the mod name. \"[Proteus]\" and \"Proteus\" are the plugin name - never translate them."
+  },
+  "HairPort.Refused.NoHead": {
+    "message": "the game's head model to fit it to could not be read",
+    "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to another race; shown after a race or file name and a colon."
+  },
+  "HairPort.Refused.Bones.Fmt": {
+    "message": "it moves with bones c{0:D4} does not have for this hairstyle ({1})",
+    "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to another race; shown after a race or file name and a colon. {0} is a race code number, {1} lists the bone names."
+  },
+  "HairPort.Refused.Unknown.Fmt": {
+    "message": "the racial deformer does not know how to move {0}",
+    "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to another race; shown after a race or file name and a colon. {0} is a bone or part name."
+  },
+  "HairPort.Refused.Fit.Fmt": {
+    "message": "it does not sit on c{0:D4}'s head: {1:P0} of it sinks into the skull, and its distance from the scalp is {2:F0} mm off the original's",
+    "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to another race; shown after a race or file name and a colon. {0} race code number, {1} fraction sunk into the skull, {2} millimetres."
+  },
+  "HairPort.Refused.NotHair": {
+    "message": "it is not a hairstyle model",
+    "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to another race; shown after a race or file name and a colon."
+  },
+  "HairPort.Refused.NotInMod": {
+    "message": "the mod does not publish that hairstyle",
+    "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to another race; shown after a race or file name and a colon."
+  },
+  "HairPort.Refused.Gender": {
+    "message": "hairstyles are only ported between races of one sex",
+    "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to another race; shown after a race or file name and a colon."
+  },
+  "HairPort.Refused.NoStyle.Fmt": {
+    "message": "c{0:D4} cannot choose hairstyle {1}",
+    "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to another race; shown after a race or file name and a colon. {0} race code number, {1} hairstyle number."
+  },
+  "HairPort.Refused.SharedMaterial.Fmt": {
+    "message": "its material is the one {0} read for their own hairstyle {1} — port to them too",
+    "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to another race; shown after a race or file name and a colon. {0} names other race(s), {1} a hairstyle number."
+  },
+  "HairPort.Refused.SharerRefused.Fmt": {
+    "message": "it shares its material with c{0:D4}, which could not be ported: {1}",
+    "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to another race; shown after a race or file name and a colon. {0} race code number, {1} the other race's own refusal reason."
+  },
+  "HairPort.Refused.NoMaterial.Fmt": {
+    "message": "its material {0} could not be found",
+    "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to another race; shown after a race or file name and a colon. {0} is a material file path."
+  },
+  "HairPort.Refused.NoOption.Fmt": {
+    "message": "the option \"{0}\" is no longer in the mod",
+    "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to another race; shown after a race or file name and a colon. {0} is a Penumbra option name."
+  },
+  "HairPort.Refused.Covered.Fmt": {
+    "message": "the mod already publishes {0} there",
+    "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to another race; shown after a race or file name and a colon. {0} is a game file path."
+  },
+  "HairPort.Undo.Nothing": {
+    "message": "There are no hair ports here to undo.",
+    "description": "Status message after Undo when the mod has no hair ports to remove."
+  },
+  "HairPort.DefaultData": {
+    "message": "the mod's default files",
+    "description": "Stands in for an option name when the hairstyle lives in the mod's default (non-option) files."
+  },
+  "HairPort.Refused.Combining.Fmt": {
+    "message": "the hairstyle is in \"{0}\", a combining group, which Proteus does not edit",
+    "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to another race; shown after a race or file name and a colon. {0} is a Penumbra group name."
+  },
+  "HairPort.Refused.Unreadable": {
+    "message": "the mod's manifest could not be read",
+    "description": "Reason (lowercase sentence fragment) why a hairstyle could not be ported to another race; shown after a race or file name and a colon."
+  },
+  "Chat.HairPort": {
+    "message": "[Proteus] This hairstyle's mod was made for another race, so Proteus has fitted it to yours and added that to the mod — everyone drawn with this mod on now sees it. You can undo that, or turn the feature off, under /proteus > Settings > Hair.",
+    "description": "Chat message printed once after Proteus automatically ports the worn hairstyle to the player's race."
+  },
+  "Service.ModMeta.Unreadable.Fmt": {
+    "message": "The manifest of {0} could not be read, so it was not changed.",
+    "description": "Error shown when a Penumbra mod's manifest could not be read; {0} is the mod name."
+  },
+  "Service.ModMeta.Combining.Fmt": {
+    "message": "\"{0}\" is a combining group, whose files Proteus does not edit.",
+    "description": "Error shown when an edit targets a Penumbra combining group; {0} is the group name."
+  },
+  "Service.ModMeta.NoOption.Fmt": {
+    "message": "The group \"{0}\" has no option called \"{1}\".",
+    "description": "Error shown when a Penumbra group lacks the named option; {0} group name, {1} option name."
+  },
+  "HairPort.Auto.Label": {
+    "message": "Fit hair mods made for another race",
+    "description": "Checkbox label in Settings > Hair that turns automatic hair porting on."
+  },
+  "HairPort.Auto.Tip": {
+    "message": "Many hair mods are made for one race only, so on any other race the game\nshows its own hairstyle instead. When on, Proteus notices, bends the mod's\nhairstyle onto your race's head and adds it to the same option of the same mod.\n\nOnly between races of one sex, and only for the hairstyle you are wearing. It\nkeeps working with Proteus off, travels with the mod, and shows for everyone\ndrawn with that mod on. It can be undone here.",
+    "description": "Tooltip for the automatic hair-port checkbox in Settings > Hair."
+  },
+  "HairPort.Settings.None": {
+    "message": "The hairstyle you are wearing needs no fitting.",
+    "description": "Status line in Settings > Hair when the worn hairstyle needs no porting."
+  },
+  "HairPort.Settings.Ported.Fmt": {
+    "message": "Hairstyle {0} is fitted to your race in {1}.",
+    "description": "Status line in Settings > Hair; {0} is a hairstyle number, {1} the mod name."
+  },
+  "HairPort.Settings.Undo": {
+    "message": "Undo",
+    "description": "Button in Settings > Hair that removes the fitted hairstyle from the mod."
+  },
+  "HairPort.Settings.Undo.Tip": {
+    "message": "Take the fitted hairstyle out of the mod again. Proteus will not fit it again by\nitself; you can still port it in the Studio.",
+    "description": "Tooltip for the Undo button in Settings > Hair."
+  },
+  "HairPort.Settings.UndoAll.Fmt": {
+    "message": "Undo all {0} fitted hairstyles in this mod",
+    "description": "Button in Settings > Hair; {0} is the number of fitted hairstyles in the mod."
+  },
+  "HairPort.Working": {
+    "message": "Working…",
+    "description": "Shown while the hair port is being computed or undone."
+  },
+  "HairPort.Studio.Header": {
+    "message": "Port to all races",
+    "description": "Section header in the Studio for porting a hairstyle to every other race."
+  },
+  "HairPort.Studio.Intro": {
+    "message": "Bends this hairstyle onto every other race of the same sex and adds the results to the same option of this mod, so it shows on everyone whatever their race. Races you made it for yourself are left alone.",
+    "description": "Explanatory text under the Studio's port-to-all-races header."
+  },
+  "HairPort.Studio.Covered": {
+    "message": "made by you",
+    "description": "Per-race status in the Studio port list: the author already made this race's version."
+  },
+  "HairPort.Studio.Ported": {
+    "message": "ported",
+    "description": "Per-race status in the Studio port list: already ported."
+  },
+  "HairPort.Studio.Stale": {
+    "message": "out of date",
+    "description": "Per-race status in the Studio port list: an earlier port no longer matches the source."
+  },
+  "HairPort.Studio.NoStyle": {
+    "message": "cannot choose this hairstyle",
+    "description": "Per-race status in the Studio port list: that race cannot pick this hairstyle."
+  },
+  "HairPort.Studio.Open": {
+    "message": "not covered",
+    "description": "Per-race status in the Studio port list: no version for this race yet."
+  },
+  "HairPort.Studio.Port": {
+    "message": "Port",
+    "description": "Button in the Studio that ports the hairstyle to all uncovered races."
+  },
+  "HairPort.Studio.Porting.Fmt": {
+    "message": "Porting… {0} of {1} races",
+    "description": "Progress text in the Studio; {0} races done of {1}."
+  },
+  "HairPort.Studio.Cancel": {
+    "message": "Cancel",
+    "description": "Button that cancels a port in progress."
+  },
+  "HairPort.Studio.Cancelled": {
+    "message": "Cancelled — nothing was written.",
+    "description": "Status after a port was cancelled."
+  },
+  "HairPort.Studio.Done.Fmt": {
+    "message": "{0} port(s) added to the mod.",
+    "description": "Status after porting; {0} is the number of ports added."
+  },
+  "HairPort.Studio.Nothing": {
+    "message": "Nothing was ported.",
+    "description": "Status after porting when nothing was ported."
+  },
+  "HairPort.Studio.Failed.Fmt": {
+    "message": "Porting failed: {0}",
+    "description": "Status after a failed port; {0} is the error."
+  },
+  "HairPort.Studio.Remove": {
+    "message": "Remove ports",
+    "description": "Button in the Studio that removes all ports of this hairstyle from the mod."
+  },
+  "HairPort.Studio.Removed.Fmt": {
+    "message": "{0} port(s) removed.",
+    "description": "Status after removing ports; {0} is how many were removed."
+  },
+  "HairPort.Studio.Reading": {
+    "message": "Reading the mod…",
+    "description": "Shown in the Studio while the mod is read to list per-race status."
+  },
+  "Settings.Section.HairPort": {
+    "message": "Hair",
+    "description": "Name of the Settings section for hair porting (also used in the /proteus > Settings > Hair chat path)."
+  },
+  "HairPort.Refused.Folded.Fmt": {
+    "message": "bent onto c{0:D4}, {1} of its triangles would turn inside out",
+    "description": "Why a hair port was refused: bent onto race {0}, {1} of the hairstyle's triangles would turn inside out."
   }
 }

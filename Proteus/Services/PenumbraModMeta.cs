@@ -870,6 +870,115 @@ internal static class PenumbraModMeta
         return removed;
     }
 
+    /// <summary>
+    /// Add redirects to one option somebody else wrote — or to the default data, for an empty
+    /// <paramref name="groupName"/> — replacing the file of a game path it already names, and leaving every other field,
+    /// option and group exactly as it was. Throws for a group or option that is not there, and for a Combining group,
+    /// whose files live on its containers.
+    /// </summary>
+    public static void MergeOptionRedirects(string modRoot, string groupName, string optionName,
+                                            IReadOnlyDictionary<string, string> add)
+        => EditOptionFiles(modRoot, groupName, optionName, files =>
+        {
+            foreach (var (path, rel) in add)
+                files[KeyOf(files, path) ?? path] = rel;
+        });
+
+    /// <summary>
+    /// Take redirects out of one option (or the default data) — each only while it still names the file given, so a
+    /// redirect the author has pointed elsewhere since is left alone. Paths and files are compared without regard to case
+    /// or slash direction, since Penumbra rewrites a manifest in its own spelling. Returns how many were removed.
+    /// </summary>
+    public static int RemoveOptionRedirects(string modRoot, string groupName, string optionName,
+                                            IReadOnlyDictionary<string, string> remove)
+    {
+        int removed = 0;
+        EditOptionFiles(modRoot, groupName, optionName, files =>
+        {
+            foreach (var (path, rel) in remove)
+                if (KeyOf(files, path) is { } key && files[key]?.GetValueKind() == JsonValueKind.String
+                    && SameFile(files[key]!.GetValue<string>(), rel))
+                {
+                    files.Remove(key);
+                    removed++;
+                }
+        });
+        return removed;
+    }
+
+    private static bool SameFile(string a, string b)
+        => string.Equals(a.Replace('\\', '/'), b.Replace('\\', '/'), StringComparison.OrdinalIgnoreCase);
+
+    private static string? KeyOf(System.Text.Json.Nodes.JsonObject files, string gamePath)
+    {
+        foreach (var (key, _) in files)
+            if (SameFile(key, gamePath)) return key;
+        return null;
+    }
+
+    private static void EditOptionFiles(string modRoot, string groupName, string optionName,
+                                        Action<System.Text.Json.Nodes.JsonObject> edit)
+    {
+        if (groupName.Length == 0)
+        {
+            var manifest = ReadManifestForWrite(modRoot);
+            // Never a manifest made up from nothing: this edits somebody else's mod.
+            if (manifest.Count == 0)
+                throw new InvalidOperationException(string.Format(CheapLoc.Loc.Localize("Service.ModMeta.Unreadable.Fmt",
+                    "The manifest of {0} could not be read, so it was not changed."), modRoot));
+            var dd = manifest.TryGetValue("DefaultData", out var d) && d.ValueKind == JsonValueKind.Object
+                ? System.Text.Json.Nodes.JsonNode.Parse(d.GetRawText())!.AsObject()
+                : new System.Text.Json.Nodes.JsonObject
+                  {
+                      ["Files"] = new System.Text.Json.Nodes.JsonObject(),
+                      ["FileSwaps"] = new System.Text.Json.Nodes.JsonObject(),
+                      ["Manipulations"] = new System.Text.Json.Nodes.JsonArray(),
+                  };
+            if (dd["Files"] is not System.Text.Json.Nodes.JsonObject files) dd["Files"] = files = [];
+            edit(files);
+            WriteManifestKey(modRoot, manifest, "DefaultData", dd);
+            return;
+        }
+
+        EditGroup(modRoot, groupName, (group, list) =>
+        {
+            if (group["Containers"] is System.Text.Json.Nodes.JsonArray)
+                throw new InvalidOperationException(string.Format(CheapLoc.Loc.Localize("Service.ModMeta.Combining.Fmt",
+                    "\"{0}\" is a combining group, whose files Proteus does not edit."), groupName));
+            int at = IndexOfOption(list, optionName);
+            if (at < 0 || list[at] is not System.Text.Json.Nodes.JsonObject option)
+                throw new InvalidOperationException(string.Format(CheapLoc.Loc.Localize("Service.ModMeta.NoOption.Fmt",
+                    "The group \"{0}\" has no option called \"{1}\"."), groupName, optionName));
+            if (option["Files"] is not System.Text.Json.Nodes.JsonObject files) option["Files"] = files = [];
+            edit(files);
+        });
+    }
+
+    /// <summary>The manifest with one top-level key replaced, every other key kept in place and order.</summary>
+    private static void WriteManifestKey(string modRoot, Dictionary<string, JsonElement> manifest, string key,
+                                         System.Text.Json.Nodes.JsonNode value)
+    {
+        using var stream = new MemoryStream();
+        using (var w = new Utf8JsonWriter(stream, ProteusJson.WriterOptions))
+        {
+            w.WriteStartObject();
+            bool written = false;
+            foreach (var (k, v) in manifest)
+            {
+                w.WritePropertyName(k);
+                if (k == key) { value.WriteTo(w); written = true; }
+                else v.WriteTo(w);
+            }
+            if (!written)
+            {
+                w.WritePropertyName(key);
+                value.WriteTo(w);
+            }
+            w.WriteEndObject();
+        }
+        AtomicWrite(Path.Combine(modRoot, MetaFile), System.Text.Encoding.UTF8.GetString(stream.ToArray()));
+    }
+
     private static int IndexOfOption(System.Text.Json.Nodes.JsonArray list, string name)
     {
         for (int i = 0; i < list.Count; i++)

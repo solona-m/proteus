@@ -207,6 +207,13 @@ public class Configuration : IPluginConfiguration
     public bool AutoHatCompat { get; set; } = true;
 
     /// <summary>
+    /// When the worn hairstyle is drawn as the game's own because its mod was made for another race only, port that
+    /// race's model to the wearer's and publish it from the same option of the same mod (<c>HairPortWatcher</c>). On by
+    /// default; a missing property keeps it, so no migration. The chat notice fires per port.
+    /// </summary>
+    public bool AutoHairPort { get; set; } = true;
+
+    /// <summary>
     /// Fit a hairstyle whose author already gave it hat support too, discarding theirs (<c>shp_hib</c> and
     /// <c>atr_kam</c>) for Proteus's own. Off by default: an author's hand-made press is usually the better one.
     /// Switching it off in the Hats section puts the author's version back, from the backup, on every hairstyle it

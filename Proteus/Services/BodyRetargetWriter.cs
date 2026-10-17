@@ -73,8 +73,6 @@ internal static class BodyRetargetWriter
     /// </summary>
     public const string OriginalOption = "Original";
 
-    private static readonly object WriteLock = new();
-
     internal sealed class Record
     {
         /// <summary>The group Proteus made most recently. Kept for records written before each entry named its own.</summary>
@@ -312,7 +310,7 @@ internal static class BodyRetargetWriter
                                Provenance? provenance = null, bool sourceFilesWin = false)
     {
         string names = string.Join(", ", refits.Select(r => r.Option));
-        lock (WriteLock)
+        lock (ModManifestLock.Gate)
         {
             try
             {
@@ -650,7 +648,7 @@ internal static class BodyRetargetWriter
     /// </summary>
     public static Outcome Undo(string modRoot, string groupName, string optionName)
     {
-        lock (WriteLock)
+        lock (ModManifestLock.Gate)
         {
             try
             {

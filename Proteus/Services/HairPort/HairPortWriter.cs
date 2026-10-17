@@ -1,0 +1,227 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using CheapLoc;
+
+namespace Proteus.Services;
+
+/// <summary>
+/// Writes hair ports into a mod, and takes them out again.
+/// <para/>
+/// A port is published from the SAME place as the hairstyle it was made from — the author's option, or the default
+/// data — as one more redirect beside theirs, never as a group of ours: that is what makes it follow the author's option
+/// switches, and why no group is ever added, moved or reordered (Penumbra keeps settings by group position). Undo takes
+/// out only the redirects Proteus added, and only while they still name Proteus's file, then the files nothing names.
+/// </summary>
+internal static class HairPortWriter
+{
+    /// <summary>A material the port needs published beside it: either the author's own file, or bytes to copy in.</summary>
+    /// <param name="AuthorFile">A file of the mod's (mod-relative) the redirect names; null to copy <paramref name="Bytes"/>.</param>
+    public sealed record MaterialWrite(string GamePath, string? AuthorFile, byte[]? Bytes);
+
+    /// <summary>One port to publish from one place in the mod.</summary>
+    public sealed record PortWrite(HairPortPlan.Owner Into, string SourceGamePath, string SourceFile, string SourceSha8,
+                                   string TargetGamePath, byte[] Model, IReadOnlyList<MaterialWrite> Materials);
+
+    public sealed record Outcome(bool Ok, string Message, int Count);
+
+    /// <summary>
+    /// Publish <paramref name="writes"/>: the files first, then the manifest, one option at a time, then the record. A
+    /// failure before the manifest changed deletes the files it wrote, so a failed port leaves nothing behind.
+    /// </summary>
+    /// <param name="auto">Made on equip, not asked for in Studio.</param>
+    public static Outcome Save(string modRoot, IReadOnlyList<PortWrite> writes, bool auto)
+    {
+        if (writes.Count == 0) return new Outcome(true, "", 0);
+        lock (ModManifestLock.Gate)
+        {
+            if (PenumbraModMeta.IsLegacyFolder(modRoot))
+                return new Outcome(false, new PenumbraModMeta.LegacyFolderException(Path.GetFileName(modRoot)).Message, 0);
+            if (HairPortPlan.ReadOwners(modRoot) is not { } owners)
+                return new Outcome(false, Unreadable, 0);
+
+            var record = HairPortRecord.Read(modRoot);
+            var plan = new List<(PortWrite Write, HairPortPlan.Owner Owner, string File, HairPortRecord.Entry? Was)>();
+            foreach (var w in writes)
+            {
+                var owner = owners.FirstOrDefault(o => HairPortPlan.Same(o, w.Into));
+                if (owner == null) return new Outcome(false, string.Format(Loc.Localize("HairPort.Refused.NoOption.Fmt",
+                    "the option \"{0}\" is no longer in the mod"), Describe(w.Into)), 0);
+                if (owner.IsCombining) return new Outcome(false, Combining(owner.Group), 0);
+
+                var was = record.Ports.FirstOrDefault(e => HairPortPlan.Same(e.Owner, owner)
+                    && e.TargetGamePath.Equals(w.TargetGamePath, StringComparison.OrdinalIgnoreCase));
+                if (was != null)
+                {
+                    // A port the user has since edited is theirs now: remaking it would throw that edit away.
+                    if (EditedBy(modRoot, was.File) is { } later)
+                        return new Outcome(false, ModelBackupOrder.BlockedMessage(later), 0);
+                }
+                else if (!HairPortPlan.CanPortInto(owners, owner, w.TargetGamePath))
+                    return new Outcome(false, string.Format(Loc.Localize("HairPort.Refused.Covered.Fmt",
+                        "the mod already publishes {0} there"), w.TargetGamePath), 0);
+                plan.Add((w, owner, was?.File ?? HairPortPlan.PortFile(owner, w.TargetGamePath), was));
+            }
+
+            var created = new List<string>();
+            var redirects = new Dictionary<HairPortPlan.Owner, Dictionary<string, string>>();
+            var entries = new List<HairPortRecord.Entry>();
+            try
+            {
+                foreach (var (w, owner, file, was) in plan)
+                {
+                    // A hat fit of the old port has nothing to restore once the port is remade.
+                    if (was != null && HatCompatService.Forget(modRoot, file) is { } why)
+                        throw new IOException(why);
+                    WriteFile(modRoot, file, w.Model, created);
+
+                    var add = redirects.TryGetValue(owner, out var a) ? a : redirects[owner] = new(StringComparer.OrdinalIgnoreCase);
+                    add[w.TargetGamePath] = file;
+                    var materials = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var m in w.Materials)
+                    {
+                        // The author's own material for that path wins — and a port of ours from before is replaced.
+                        string? existing = HairPortPlan.FileFor(owner, m.GamePath);
+                        if (existing != null && !HairPortPlan.IsPortFile(existing)) continue;
+                        if (existing == null && !HairPortPlan.CanPortInto(owners, owner, m.GamePath)) continue;
+
+                        string rel = m.AuthorFile ?? HairPortPlan.PortFile(owner, m.GamePath);
+                        if (m.AuthorFile == null) WriteFile(modRoot, rel, m.Bytes ?? [], created);
+                        add[m.GamePath] = rel;
+                        materials[m.GamePath] = rel;
+                    }
+                    entries.Add(new HairPortRecord.Entry
+                    {
+                        Group = owner.Group, Option = owner.Option, SourceGamePath = w.SourceGamePath,
+                        SourceFile = HairPortRecord.Rel(w.SourceFile), SourceSha8 = w.SourceSha8,
+                        TargetGamePath = w.TargetGamePath, File = file, Materials = materials, Auto = auto,
+                        PortVersion = HairPortBaker.Version,
+                    });
+                }
+
+                foreach (var (owner, add) in redirects)
+                    PenumbraModMeta.MergeOptionRedirects(modRoot, owner.Group, owner.Option, add);
+            }
+            catch (Exception ex)
+            {
+                // Only files that were not there before: a remade port's old file is still what the manifest names.
+                foreach (var file in created)
+                    try { File.Delete(Native(modRoot, file)); } catch { /* left for the next sweep */ }
+                return new Outcome(false, ex.Message, 0);
+            }
+
+            foreach (var e in entries)
+            {
+                record.Ports.RemoveAll(p => HairPortPlan.Same(p.Owner, e.Owner)
+                    && p.TargetGamePath.Equals(e.TargetGamePath, StringComparison.OrdinalIgnoreCase));
+                record.Ports.Add(e);
+                record.Declined.RemoveAll(d => d == HairPortPlan.DeclineKey(e.TargetGamePath));
+            }
+            HairPortRecord.Write(modRoot, record);
+            return new Outcome(true, "", entries.Count);
+        }
+    }
+
+    /// <summary>
+    /// Take out every port <paramref name="which"/> picks: its redirects (only while they still name Proteus's file),
+    /// then every file under <see cref="HairPortPlan.Folder"/> nothing names any more. A port the user edited since
+    /// with the brush or part switches is left, and the result says why.
+    /// </summary>
+    /// <param name="decline">Remember the undo, so the automatic path does not port the same hairstyle there again.</param>
+    public static Outcome Undo(string modRoot, Func<HairPortRecord.Entry, bool> which, bool decline)
+    {
+        lock (ModManifestLock.Gate)
+        {
+            if (PenumbraModMeta.IsLegacyFolder(modRoot))
+                return new Outcome(false, new PenumbraModMeta.LegacyFolderException(Path.GetFileName(modRoot)).Message, 0);
+
+            var record = HairPortRecord.Read(modRoot);
+            var undo = record.Ports.Where(which).ToList();
+            if (undo.Count == 0)
+                return new Outcome(false, Loc.Localize("HairPort.Undo.Nothing", "There are no hair ports here to undo."), 0);
+
+            string blocked = "";
+            int removed = 0;
+            foreach (var e in undo)
+            {
+                if (EditedBy(modRoot, e.File) is { } later) { blocked = ModelBackupOrder.BlockedMessage(later); continue; }
+                if (HatCompatService.Forget(modRoot, e.File) is { } why) { blocked = why; continue; }
+
+                record.Ports.Remove(e);
+                // A material another port of the same option still uses stays published.
+                var drop = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { [e.TargetGamePath] = e.File };
+                foreach (var (path, rel) in e.Materials)
+                    if (!record.Ports.Any(p => HairPortPlan.Same(p.Owner, e.Owner) && p.Materials.ContainsKey(path)))
+                        drop[path] = rel;
+                try { PenumbraModMeta.RemoveOptionRedirects(modRoot, e.Group, e.Option, drop); }
+                catch (InvalidOperationException) { /* the option is gone: nothing of ours left to take out */ }
+                catch (Exception ex) { record.Ports.Add(e); blocked = ex.Message; continue; }
+                if (decline && !record.Declined.Contains(HairPortPlan.DeclineKey(e.TargetGamePath)))
+                    record.Declined.Add(HairPortPlan.DeclineKey(e.TargetGamePath));
+                removed++;
+            }
+
+            DeleteUnnamed(modRoot);
+            HairPortRecord.Write(modRoot, record);
+            return removed == 0 ? new Outcome(false, blocked, 0) : new Outcome(true, blocked, removed);
+        }
+    }
+
+    /// <summary>
+    /// The feature that edited a port in place since it was written — part switches or the brush, which each keep a
+    /// backup — or null. Hat fitting is not one: it is redone on whatever the port becomes.
+    /// </summary>
+    internal static string? EditedBy(string modRoot, string rel)
+    {
+        foreach (var (subdir, name) in new[]
+                 {
+                     (MeshToggleService.BackupSubdir, Loc.Localize("MeshVolume.Feature.Toggles", "part switches")),
+                     (MeshVolumeService.BackupSubdir, Loc.Localize("MeshVolume.Feature.Brush", "the brush")),
+                 })
+            if (File.Exists(Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, subdir, NativeRel(rel))))
+                return name;
+        return null;
+    }
+
+    /// <summary>Delete every file under <see cref="HairPortPlan.Folder"/> no redirect of the mod names. Only there: the
+    /// author's files are never deleted, whatever names them.</summary>
+    private static void DeleteUnnamed(string modRoot)
+    {
+        var dir = Path.Combine(modRoot, HairPortPlan.Folder);
+        if (!Directory.Exists(dir)) return;
+        var named = new HashSet<string>(PenumbraModMeta.ReadAllRedirects(modRoot).Select(r => HairPortRecord.Rel(r.File)),
+                                        StringComparer.OrdinalIgnoreCase);
+        foreach (var file in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
+        {
+            var rel = HairPortRecord.Rel(Path.GetRelativePath(modRoot, file));
+            if (named.Contains(rel)) continue;
+            try { File.Delete(file); } catch { /* in use: the next undo tries again */ }
+        }
+        foreach (var sub in Directory.EnumerateDirectories(dir, "*", SearchOption.AllDirectories).OrderByDescending(d => d.Length))
+            try { if (!Directory.EnumerateFileSystemEntries(sub).Any()) Directory.Delete(sub); } catch { }
+        try { if (!Directory.EnumerateFileSystemEntries(dir).Any()) Directory.Delete(dir); } catch { }
+    }
+
+    private static void WriteFile(string modRoot, string rel, byte[] bytes, List<string> created)
+    {
+        var path = Native(modRoot, rel);
+        if (!File.Exists(path)) created.Add(rel);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        PenumbraModMeta.AtomicWrite(path, bytes);
+    }
+
+    private static string Native(string modRoot, string rel) => Path.Combine(modRoot, NativeRel(rel));
+
+    private static string NativeRel(string rel) => rel.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
+
+    internal static string Describe(HairPortPlan.Owner owner)
+        => owner.IsDefault ? Loc.Localize("HairPort.DefaultData", "the mod's default files") : $"{owner.Group} / {owner.Option}";
+
+    internal static string Combining(string group)
+        => string.Format(Loc.Localize("HairPort.Refused.Combining.Fmt",
+            "the hairstyle is in \"{0}\", a combining group, which Proteus does not edit"), group);
+
+    internal static string Unreadable
+        => Loc.Localize("HairPort.Refused.Unreadable", "the mod's manifest could not be read");
+}

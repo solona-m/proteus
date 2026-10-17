@@ -4934,5 +4934,197 @@
   "Chat.EffectUnplaced.Fmt": {
     "message": "[Proteus] Анимированный эффект «{0}» не показан: ему нужен свободный слот аксессуара для невидимого носителя. Освободите слот кольца, браслета или ожерелья.",
     "description": ""
+  },
+  "HairPort.Refused.NoHead": {
+    "message": "не удалось прочитать игровую модель головы, под которую её нужно подогнать",
+    "description": ""
+  },
+  "HairPort.Refused.Bones.Fmt": {
+    "message": "она движется костями, которых у c{0:D4} для этой причёски нет ({1})",
+    "description": ""
+  },
+  "HairPort.Refused.Unknown.Fmt": {
+    "message": "расовый деформер не знает, как двигать {0}",
+    "description": ""
+  },
+  "HairPort.Refused.Fit.Fmt": {
+    "message": "она не садится на голову c{0:D4}: {1:P0} уходит в череп, а расстояние до кожи головы отличается от оригинала на {2:F0} мм",
+    "description": ""
+  },
+  "HairPort.Refused.NotHair": {
+    "message": "это не модель причёски",
+    "description": ""
+  },
+  "HairPort.Refused.NotInMod": {
+    "message": "мод не содержит эту причёску",
+    "description": ""
+  },
+  "HairPort.Refused.Gender": {
+    "message": "причёски переносятся только между расами одного пола",
+    "description": ""
+  },
+  "HairPort.Refused.NoStyle.Fmt": {
+    "message": "c{0:D4} не может выбрать причёску {1}",
+    "description": ""
+  },
+  "HairPort.Refused.SharedMaterial.Fmt": {
+    "message": "её материал — тот же, что {0} читает для своей причёски {1}; перенесите и туда",
+    "description": ""
+  },
+  "HairPort.Refused.SharerRefused.Fmt": {
+    "message": "она делит материал с c{0:D4}, куда перенести не удалось: {1}",
+    "description": ""
+  },
+  "HairPort.Refused.NoMaterial.Fmt": {
+    "message": "её материал {0} не найден",
+    "description": ""
+  },
+  "HairPort.Refused.NoOption.Fmt": {
+    "message": "варианта «{0}» больше нет в моде",
+    "description": ""
+  },
+  "HairPort.Refused.Covered.Fmt": {
+    "message": "мод уже содержит там {0}",
+    "description": ""
+  },
+  "HairPort.Undo.Nothing": {
+    "message": "Здесь нет переносов причёсок, которые можно отменить.",
+    "description": ""
+  },
+  "HairPort.DefaultData": {
+    "message": "файлы мода по умолчанию",
+    "description": ""
+  },
+  "HairPort.Refused.Combining.Fmt": {
+    "message": "причёска находится в «{0}» — комбинирующей группе, которую Proteus не редактирует",
+    "description": ""
+  },
+  "HairPort.Refused.Unreadable": {
+    "message": "не удалось прочитать манифест мода",
+    "description": ""
+  },
+  "Chat.HairPort": {
+    "message": "[Proteus] Мод этой причёски был сделан для другой расы, поэтому Proteus подогнал её под вашу и добавил в мод — теперь её видят все, кто отображается с этим модом. Отменить это или отключить функцию можно в /proteus > Настройки > Волосы.",
+    "description": ""
+  },
+  "Service.ModMeta.Unreadable.Fmt": {
+    "message": "Не удалось прочитать манифест {0}, поэтому он не был изменён.",
+    "description": ""
+  },
+  "Service.ModMeta.Combining.Fmt": {
+    "message": "«{0}» — комбинирующая группа, файлы которой Proteus не редактирует.",
+    "description": ""
+  },
+  "Service.ModMeta.NoOption.Fmt": {
+    "message": "В группе «{0}» нет варианта «{1}».",
+    "description": ""
+  },
+  "HairPort.Auto.Label": {
+    "message": "Подгонять моды причёсок, сделанные для другой расы",
+    "description": ""
+  },
+  "HairPort.Auto.Tip": {
+    "message": "Многие моды причёсок сделаны только для одной расы, поэтому на любой другой\nигра показывает свою причёску. Когда включено, Proteus замечает это,\nизгибает причёску мода под голову вашей расы и добавляет её в тот же вариант\nтого же мода.\n\nТолько между расами одного пола и только для причёски, которая на вас.\nРаботает и с выключенным Proteus, переносится вместе с модом и видна всем,\nкто отображается с этим модом. Это можно отменить здесь.",
+    "description": ""
+  },
+  "HairPort.Settings.None": {
+    "message": "Причёску, которая на вас, подгонять не нужно.",
+    "description": ""
+  },
+  "HairPort.Settings.Ported.Fmt": {
+    "message": "Причёска {0} подогнана под вашу расу в {1}.",
+    "description": ""
+  },
+  "HairPort.Settings.Undo": {
+    "message": "Отменить",
+    "description": ""
+  },
+  "HairPort.Settings.Undo.Tip": {
+    "message": "Снова убирает подогнанную причёску из мода. Сам Proteus больше не будет её\nподгонять; перенести её по-прежнему можно в Студии.",
+    "description": ""
+  },
+  "HairPort.Settings.UndoAll.Fmt": {
+    "message": "Отменить все подогнанные причёски этого мода ({0})",
+    "description": ""
+  },
+  "HairPort.Working": {
+    "message": "Выполняется…",
+    "description": ""
+  },
+  "HairPort.Studio.Header": {
+    "message": "Перенести на все расы",
+    "description": ""
+  },
+  "HairPort.Studio.Intro": {
+    "message": "Изгибает эту причёску под каждую другую расу того же пола и добавляет результаты в тот же вариант этого мода, чтобы она была видна на всех, какой бы ни была их раса. Расы, для которых вы сделали её сами, не затрагиваются.",
+    "description": ""
+  },
+  "HairPort.Studio.Covered": {
+    "message": "сделано вами",
+    "description": ""
+  },
+  "HairPort.Studio.Ported": {
+    "message": "перенесено",
+    "description": ""
+  },
+  "HairPort.Studio.Stale": {
+    "message": "устарело",
+    "description": ""
+  },
+  "HairPort.Studio.NoStyle": {
+    "message": "не может выбрать эту причёску",
+    "description": ""
+  },
+  "HairPort.Studio.Open": {
+    "message": "не охвачено",
+    "description": ""
+  },
+  "HairPort.Studio.Port": {
+    "message": "Перенести",
+    "description": ""
+  },
+  "HairPort.Studio.Porting.Fmt": {
+    "message": "Перенос… {0} из {1} рас",
+    "description": ""
+  },
+  "HairPort.Studio.Cancel": {
+    "message": "Отмена",
+    "description": ""
+  },
+  "HairPort.Studio.Cancelled": {
+    "message": "Отменено — ничего не записано.",
+    "description": ""
+  },
+  "HairPort.Studio.Done.Fmt": {
+    "message": "Добавлено переносов в мод: {0}.",
+    "description": ""
+  },
+  "HairPort.Studio.Nothing": {
+    "message": "Ничего не перенесено.",
+    "description": ""
+  },
+  "HairPort.Studio.Failed.Fmt": {
+    "message": "Ошибка переноса: {0}",
+    "description": ""
+  },
+  "HairPort.Studio.Remove": {
+    "message": "Удалить переносы",
+    "description": ""
+  },
+  "HairPort.Studio.Removed.Fmt": {
+    "message": "Удалено переносов: {0}.",
+    "description": ""
+  },
+  "HairPort.Studio.Reading": {
+    "message": "Чтение мода…",
+    "description": ""
+  },
+  "Settings.Section.HairPort": {
+    "message": "Волосы",
+    "description": ""
+  },
+  "HairPort.Refused.Folded.Fmt": {
+    "message": "при изгибе на c{0:D4} {1} его треугольников вывернутся наизнанку",
+    "description": ""
   }
 }

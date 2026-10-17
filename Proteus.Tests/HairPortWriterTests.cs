@@ -1,0 +1,351 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using Proteus.Services;
+using Xunit;
+using static Proteus.Tests.HairPortFixtures;
+
+namespace Proteus.Tests;
+
+/// <summary>
+/// Ports written into a mod on disk and taken out again. These edit somebody else's mod, so what matters most is what
+/// they leave alone: the author's files, every other redirect, and the order of the groups.
+/// </summary>
+public class HairPortWriterTests
+{
+    private static readonly string Source = HairPortPlan.HairPath(801, Id);
+    private static readonly string Target = HairPortPlan.HairPath(201, Id);
+
+    /// <summary>A Miqo'te-only hair mod: a pick-one group of two cuts, and a group of the author's own beside it.</summary>
+    private static Mod TwoCuts()
+    {
+        var mod = new Mod("[" + Group("Cut", "Single",
+                              ("Long", new() { [Source] = "long/c0801h0130_hir.mdl" }),
+                              ("Short", new() { [Source] = "short/c0801h0130_hir.mdl" }))
+                          + "," + Group("Extras", "Multi", ("Bow", new() { ["chara/x/bow.mdl"] = "bow.mdl" })) + "]");
+        mod.Put("long/c0801h0130_hir.mdl", HairModel(801));
+        mod.Put("short/c0801h0130_hir.mdl", HairModel(801));
+        mod.Put("bow.mdl", [1, 2, 3]);
+        return mod;
+    }
+
+    private static HairPortWriter.PortWrite Write(Mod mod, string group, string option, byte[]? model = null,
+                                                  params HairPortWriter.MaterialWrite[] materials)
+    {
+        var owner = mod.Owner(group, option);
+        var rel = HairPortPlan.FileFor(owner, Source) ?? "x.mdl";
+        return new HairPortWriter.PortWrite(owner, Source, rel, "abcd1234", Target, model ?? HairModel(201), materials);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-hair-race-port-4")]
+    public void Each_option_serving_the_source_gets_its_own_port()
+    {
+        using var mod = TwoCuts();
+        var before = mod.Owners.Select(o => (o.Group, o.Option)).ToList();
+        var outcome = HairPortWriter.Save(mod.Root, [Write(mod, "Cut", "Long"), Write(mod, "Cut", "Short")], auto: false);
+        Assert.True(outcome.Ok, outcome.Message);
+
+        var longFile = HairPortPlan.FileFor(mod.Owner("Cut", "Long"), Target);
+        var shortFile = HairPortPlan.FileFor(mod.Owner("Cut", "Short"), Target);
+        Assert.NotNull(longFile);
+        Assert.NotNull(shortFile);
+        Assert.NotEqual(longFile, shortFile);
+        Assert.True(mod.Has(longFile!) && mod.Has(shortFile!));
+        // No group added or moved, and the author's files untouched.
+        Assert.Equal(before, mod.Owners.Select(o => (o.Group, o.Option)).ToList());
+        Assert.Null(HairPortPlan.FileFor(mod.Owners.First(o => o.IsDefault), Target));
+        Assert.Equal(HairModel(801), mod.Get("long/c0801h0130_hir.mdl"));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-hair-race-port-4")]
+    public void Port_of_default_data_hair_goes_into_default_data()
+    {
+        using var mod = new Mod(defaults: new Dictionary<string, string> { [Source] = "hair.mdl" });
+        mod.Put("hair.mdl", HairModel(801));
+        var outcome = HairPortWriter.Save(mod.Root, [Write(mod, "", "")], auto: true);
+        Assert.True(outcome.Ok, outcome.Message);
+        Assert.Equal($"Hair Ports/Default/{Target}", HairPortPlan.FileFor(mod.Owners.First(o => o.IsDefault), Target));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-hair-race-port-10")]
+    public void Ports_are_plain_mod_content()
+    {
+        using var mod = TwoCuts();
+        Assert.True(HairPortWriter.Save(mod.Root, [Write(mod, "Cut", "Long")], auto: true).Ok);
+        // What Penumbra reads, with no Proteus state: a redirect in the option, to a file in the mod, FileVersion 4.
+        var redirect = PenumbraModMeta.ReadAllRedirects(mod.Root).Single(r => r.GamePath == Target);
+        Assert.Equal("Cut / Long", redirect.Source);
+        Assert.True(mod.Has(redirect.File));
+        Assert.Equal(4, PenumbraModMeta.ReadFileVersion(mod.Root));
+        Assert.Contains("\"Identifier\": \"id-1\"", mod.Manifest);
+        Assert.Contains("\"Author\": \"Someone\"", mod.Manifest);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-hair-race-port-5")]
+    public void A_covered_race_is_never_overwritten()
+    {
+        using var mod = new Mod("[" + Group("Cut", "Single",
+            ("Long", new() { [Source] = "long.mdl", [Target] = "mine/c0201.mdl" })) + "]");
+        mod.Put("long.mdl", HairModel(801));
+        mod.Put("mine/c0201.mdl", [9, 9, 9]);
+        var outcome = HairPortWriter.Save(mod.Root, [Write(mod, "Cut", "Long")], auto: true);
+        Assert.False(outcome.Ok);
+        Assert.Equal("mine/c0201.mdl", HairPortPlan.FileFor(mod.Owner("Cut", "Long"), Target));
+        Assert.Equal([9, 9, 9], mod.Get("mine/c0201.mdl"));
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-hair-race-port-7")]
+    public void Undo_removes_redirects_and_our_files_only()
+    {
+        using var mod = TwoCuts();
+        var manifest = mod.Manifest;
+        Assert.True(HairPortWriter.Save(mod.Root, [Write(mod, "Cut", "Long")], auto: false).Ok);
+        var outcome = HairPortWriter.Undo(mod.Root, _ => true, decline: false);
+        Assert.True(outcome.Ok, outcome.Message);
+
+        Assert.Null(HairPortPlan.FileFor(mod.Owner("Cut", "Long"), Target));
+        Assert.False(Directory.Exists(Path.Combine(mod.Root, HairPortPlan.Folder)));
+        Assert.Equal(HairModel(801), mod.Get("long/c0801h0130_hir.mdl"));
+        Assert.Equal([1, 2, 3], mod.Get("bow.mdl"));
+        // Every redirect and option the author wrote is as it was.
+        Assert.Equal(Redirects(manifest, mod), PenumbraModMeta.ReadAllRedirects(mod.Root).Select(r => (r.GamePath, r.File, r.Source)));
+    }
+
+    private static IEnumerable<(string, string, string)> Redirects(string manifest, Mod mod)
+    {
+        var copy = Path.Combine(Path.GetTempPath(), "proteus_hairport_manifest_" + Path.GetRandomFileName());
+        Directory.CreateDirectory(copy);
+        try
+        {
+            File.WriteAllText(Path.Combine(copy, "meta.json"), manifest);
+            return PenumbraModMeta.ReadAllRedirects(copy).Select(r => (r.GamePath, r.File, r.Source)).ToList();
+        }
+        finally { Directory.Delete(copy, true); }
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-hair-race-port-7")]
+    public void Undo_all_in_mod_removes_every_port()
+    {
+        using var mod = TwoCuts();
+        Assert.True(HairPortWriter.Save(mod.Root, [Write(mod, "Cut", "Long"), Write(mod, "Cut", "Short")], auto: true).Ok);
+        Assert.Equal(2, HairPortRecord.Read(mod.Root).Ports.Count);
+        var outcome = HairPortWriter.Undo(mod.Root, _ => true, decline: true);
+        Assert.Equal(2, outcome.Count);
+        Assert.Empty(HairPortRecord.Read(mod.Root).Ports);
+        Assert.False(PenumbraModMeta.ReadAllRedirects(mod.Root).Any(r => r.GamePath == Target));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-hair-race-port-23")]
+    public void Undo_with_decline_persists_and_manual_port_clears_it()
+    {
+        using var mod = TwoCuts();
+        Assert.True(HairPortWriter.Save(mod.Root, [Write(mod, "Cut", "Long")], auto: true).Ok);
+        HairPortWriter.Undo(mod.Root, _ => true, decline: true);
+        Assert.Contains(HairPortPlan.DeclineKey(Target), HairPortRecord.Read(mod.Root).Declined);
+
+        Assert.True(HairPortWriter.Save(mod.Root, [Write(mod, "Cut", "Long")], auto: false).Ok);
+        Assert.Empty(HairPortRecord.Read(mod.Root).Declined);
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-hair-race-port-8")]
+    public void Re_port_replaces_a_stale_port_in_place()
+    {
+        using var mod = TwoCuts();
+        Assert.True(HairPortWriter.Save(mod.Root, [Write(mod, "Cut", "Long")], auto: true).Ok);
+        var file = HairPortPlan.FileFor(mod.Owner("Cut", "Long"), Target)!;
+        var again = HairModel(201, material: "/mt_c0201h0130_hir_b.mtrl");
+        Assert.True(HairPortWriter.Save(mod.Root, [Write(mod, "Cut", "Long", again)], auto: true).Ok);
+        Assert.Equal(file, HairPortPlan.FileFor(mod.Owner("Cut", "Long"), Target));
+        Assert.Equal(again, mod.Get(file));
+        Assert.Single(HairPortRecord.Read(mod.Root).Ports);
+    }
+
+    [Theory]
+    [Trait("Plan", "AC-hair-race-port-8")]
+    [Trait("Plan", "EDGE-hair-race-port-16")]
+    [InlineData(MeshVolumeService.BackupSubdir)]
+    [InlineData(MeshToggleService.BackupSubdir)]
+    public void A_port_edited_since_is_neither_remade_nor_undone(string backupSubdir)
+    {
+        using var mod = TwoCuts();
+        Assert.True(HairPortWriter.Save(mod.Root, [Write(mod, "Cut", "Long")], auto: true).Ok);
+        var file = HairPortPlan.FileFor(mod.Owner("Cut", "Long"), Target)!;
+        var edited = mod.Get(file);
+        mod.Put($"Proteus/{backupSubdir}/{file}", edited);
+
+        var remake = HairPortWriter.Save(mod.Root, [Write(mod, "Cut", "Long", HairModel(201, material: "/mt_x.mtrl"))], auto: true);
+        Assert.False(remake.Ok);
+        Assert.Contains(ModelBackupOrder.BlockedMessage("").Split(' ')[0], remake.Message);
+        Assert.Equal(edited, mod.Get(file));
+
+        Assert.False(HairPortWriter.Undo(mod.Root, _ => true, decline: false).Ok);
+        Assert.NotNull(HairPortPlan.FileFor(mod.Owner("Cut", "Long"), Target));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-hair-race-port-16")]
+    public void Hat_fitted_port_forgets_hat_record_before_re_port()
+    {
+        using var mod = TwoCuts();
+        Assert.True(HairPortWriter.Save(mod.Root, [Write(mod, "Cut", "Long")], auto: true).Ok);
+        var file = HairPortPlan.FileFor(mod.Owner("Cut", "Long"), Target)!;
+        mod.Put($"Proteus/{HatCompatService.BackupSubdir}/{file}", [4, 4]);
+        mod.Put($"Proteus/{HatCompatService.RecordFile}", System.Text.Encoding.UTF8.GetBytes(
+            "{\"Files\":[\"" + file + "\"],\"Hidden\":{},\"Versions\":{},\"Replaced\":[]}"));
+
+        Assert.True(HairPortWriter.Save(mod.Root, [Write(mod, "Cut", "Long")], auto: true).Ok);
+        Assert.False(mod.Has($"Proteus/{HatCompatService.BackupSubdir}/{file}"));
+        Assert.Equal(0, HatCompatService.PatchedCount(mod.Root));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-hair-race-port-7")]
+    public void Material_redirect_points_at_the_authors_file_or_a_copy()
+    {
+        const string theirs = "chara/human/c0801/obj/hair/h0105/material/v0001/mt_c0801h0105_hir_a.mtrl";
+        const string ours = "chara/human/c0201/obj/hair/h0105/material/v0001/mt_c0201h0105_hir_a.mtrl";
+        const string copied = "chara/human/c0201/obj/hair/h0105/material/v0001/mt_c0201h0105_acc_b.mtrl";
+        using var mod = TwoCuts();
+        var outcome = HairPortWriter.Save(mod.Root,
+            [Write(mod, "Cut", "Long", null, new HairPortWriter.MaterialWrite(ours, "mats/a.mtrl", null),
+                                             new HairPortWriter.MaterialWrite(copied, null, [7, 7]))], auto: false);
+        Assert.True(outcome.Ok, outcome.Message);
+        var owner = mod.Owner("Cut", "Long");
+        Assert.Equal("mats/a.mtrl", HairPortPlan.FileFor(owner, ours));
+        var copy = HairPortPlan.FileFor(owner, copied)!;
+        Assert.True(HairPortPlan.IsPortFile(copy));
+        Assert.Equal([7, 7], mod.Get(copy));
+        Assert.Null(HairPortPlan.FileFor(owner, theirs));
+
+        // Undone, the copy goes and the author's file stays.
+        mod.Put("mats/a.mtrl", [1]);
+        HairPortWriter.Undo(mod.Root, _ => true, decline: false);
+        Assert.Null(HairPortPlan.FileFor(mod.Owner("Cut", "Long"), ours));
+        Assert.False(mod.Has(copy));
+        Assert.True(mod.Has("mats/a.mtrl"));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-hair-race-port-8")]
+    public void Combining_group_source_is_refused()
+    {
+        var groups = "[{\"Name\":\"Mix\",\"Type\":\"Combining\",\"Options\":[{\"Name\":\"A\"}],\"Containers\":[{\"Files\":{\""
+                     + Source + "\":\"a.mdl\"}}]}]";
+        using var mod = new Mod(groups);
+        var owner = mod.Owners.First(o => o.Group == "Mix");
+        var outcome = HairPortWriter.Save(mod.Root,
+            [new HairPortWriter.PortWrite(owner, Source, "a.mdl", "x", Target, HairModel(201), [])], auto: true);
+        Assert.False(outcome.Ok);
+        Assert.Contains("Mix", outcome.Message);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-hair-race-port-9")]
+    public void Legacy_v3_mod_is_refused_and_untouched()
+    {
+        using var mod = TwoCuts();
+        var v4 = mod.Manifest;
+        var owner = mod.Owner("Cut", "Long");
+        File.WriteAllText(Path.Combine(mod.Root, "meta.json"), v4.Replace("\"FileVersion\":4", "\"FileVersion\":3"));
+        var before = mod.Manifest;
+        var outcome = HairPortWriter.Save(mod.Root,
+            [new HairPortWriter.PortWrite(owner, Source, "long.mdl", "x", Target, HairModel(201), [])], auto: true);
+        Assert.False(outcome.Ok);
+        Assert.Equal(before, mod.Manifest);
+        Assert.False(Directory.Exists(Path.Combine(mod.Root, HairPortPlan.Folder)));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-hair-race-port-22")]
+    public void Failed_manifest_write_leaves_no_files_or_record()
+    {
+        using var mod = TwoCuts();
+        var meta = Path.Combine(mod.Root, "meta.json");
+        var write = Write(mod, "Cut", "Long");
+        File.SetAttributes(meta, FileAttributes.ReadOnly);
+        try
+        {
+            var outcome = HairPortWriter.Save(mod.Root, [write], auto: true);
+            Assert.False(outcome.Ok);
+        }
+        finally { File.SetAttributes(meta, FileAttributes.Normal); }
+        Assert.False(mod.Has(HairPortPlan.PortFile(write.Into, Target)));
+        Assert.Empty(HairPortRecord.Read(mod.Root).Ports);
+        Assert.Null(HairPortPlan.FileFor(mod.Owner("Cut", "Long"), Target));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-hair-race-port-14")]
+    public void Record_prunes_entries_whose_redirect_is_gone()
+    {
+        using var mod = TwoCuts();
+        Assert.True(HairPortWriter.Save(mod.Root, [Write(mod, "Cut", "Long")], auto: true).Ok);
+        var file = HairPortPlan.FileFor(mod.Owner("Cut", "Long"), Target)!;
+        // The author updates the mod: the manifest comes back without the port.
+        PenumbraModMeta.RemoveOptionRedirects(mod.Root, "Cut", "Long", new Dictionary<string, string> { [Target] = file });
+        Assert.Empty(HairPortRecord.Read(mod.Root).Ports);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-hair-race-port-14")]
+    public void Unreadable_manifest_prunes_nothing()
+    {
+        using var mod = TwoCuts();
+        Assert.True(HairPortWriter.Save(mod.Root, [Write(mod, "Cut", "Long")], auto: true).Ok);
+        File.WriteAllText(Path.Combine(mod.Root, "meta.json"), "{ not json");
+        Assert.Single(HairPortRecord.Read(mod.Root).Ports);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-hair-race-port-28")]
+    public void Shared_file_ported_once_per_option_and_each_kept_until_its_own_undo()
+    {
+        using var mod = new Mod("[" + Group("Cut", "Single",
+            ("Long", new() { [Source] = "same.mdl" }), ("Short", new() { [Source] = "same.mdl" })) + "]");
+        mod.Put("same.mdl", HairModel(801));
+        Assert.True(HairPortWriter.Save(mod.Root, [Write(mod, "Cut", "Long"), Write(mod, "Cut", "Short")], auto: true).Ok);
+        var shortFile = HairPortPlan.FileFor(mod.Owner("Cut", "Short"), Target)!;
+        HairPortWriter.Undo(mod.Root, e => e.Option == "Long", decline: false);
+        Assert.True(mod.Has(shortFile));
+        Assert.NotNull(HairPortPlan.FileFor(mod.Owner("Cut", "Short"), Target));
+        Assert.Null(HairPortPlan.FileFor(mod.Owner("Cut", "Long"), Target));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-hair-race-port-21")]
+    public void Concurrent_saves_into_one_mod_both_survive()
+    {
+        using var mod = TwoCuts();
+        var a = Write(mod, "Cut", "Long");
+        var b = Write(mod, "Cut", "Short");
+        Parallel.Invoke(
+            () => Assert.True(HairPortWriter.Save(mod.Root, [a], auto: true).Ok),
+            () => Assert.True(HairPortWriter.Save(mod.Root, [b], auto: true).Ok),
+            () => { lock (ModManifestLock.Gate) PenumbraModMeta.MergeOptionRedirects(mod.Root, "Extras", "Bow",
+                        new Dictionary<string, string> { ["chara/x/ribbon.mdl"] = "bow.mdl" }); });
+        Assert.NotNull(HairPortPlan.FileFor(mod.Owner("Cut", "Long"), Target));
+        Assert.NotNull(HairPortPlan.FileFor(mod.Owner("Cut", "Short"), Target));
+        Assert.NotNull(HairPortPlan.FileFor(mod.Owner("Extras", "Bow"), "chara/x/ribbon.mdl"));
+        Assert.Equal(2, HairPortRecord.Read(mod.Root).Ports.Count);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-hair-race-port-6")]
+    public void Est_entries_are_not_carried()
+    {
+        using var mod = TwoCuts();
+        Assert.True(HairPortWriter.Save(mod.Root, [Write(mod, "Cut", "Long")], auto: true).Ok);
+        Assert.DoesNotContain("\"Type\": \"Est\"", mod.Manifest);
+        Assert.Empty(PenumbraModMeta.TryReadDefaultData(mod.Root)!.Value.Manipulations);
+    }
+}

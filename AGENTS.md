@@ -114,7 +114,7 @@ needs more than a line, link a page under `docs/` for the depth rather than
 expanding here.
 
 - Binary game-file writers (`Services/SecondSkinWriter.*`, `Model*Writer.cs`, `ModelLodTrimmer.cs`, `GearMaterialWriter.cs`) — a malformed .mdl/.mtrl/.tex crashes the game
-- Writes into users' Penumbra mods (`RefitModService.cs`, `MeshToggleService.cs`, `PenumbraModMeta.cs`, `ModelBackupOrder.cs`) — edits persist and travel with exports; groups append, never insert; never author v3
+- Writes into users' Penumbra mods (`RefitModService.cs`, `MeshToggleService.cs`, `PenumbraModMeta.cs`, `ModelBackupOrder.cs`, `HairPort/HairPortWriter.cs` — adds redirects inside the author's own options) — edits persist and travel with exports; groups append, never insert; never author v3
 - `Proteus/Interop/` — unsafe struct offsets and IPC threading (Penumbra events fire on the caller's thread)
 - `Proteus/Configuration.cs` migrations — a mistake loses user settings
 - `LogAnonymizer.cs` / `LogExportService.cs` — character names must not leak into exported logs

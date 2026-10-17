@@ -4934,5 +4934,197 @@
   "Chat.EffectUnplaced.Fmt": {
     "message": "[Proteus] El efecto animado de «{0}» no se muestra: necesita una ranura de accesorio libre para su portador invisible. Libera una ranura de anillo, pulsera o collar.",
     "description": ""
+  },
+  "HairPort.Refused.NoHead": {
+    "message": "no se pudo leer el modelo de cabeza del juego al que ajustarlo",
+    "description": ""
+  },
+  "HairPort.Refused.Bones.Fmt": {
+    "message": "se mueve con huesos que c{0:D4} no tiene para este peinado ({1})",
+    "description": ""
+  },
+  "HairPort.Refused.Unknown.Fmt": {
+    "message": "el deformador racial no sabe cómo mover {0}",
+    "description": ""
+  },
+  "HairPort.Refused.Fit.Fmt": {
+    "message": "no se asienta en la cabeza de c{0:D4}: el {1:P0} se hunde en el cráneo, y su distancia al cuero cabelludo difiere {2:F0} mm de la del original",
+    "description": ""
+  },
+  "HairPort.Refused.NotHair": {
+    "message": "no es un modelo de peinado",
+    "description": ""
+  },
+  "HairPort.Refused.NotInMod": {
+    "message": "el mod no incluye ese peinado",
+    "description": ""
+  },
+  "HairPort.Refused.Gender": {
+    "message": "los peinados solo se portan entre razas del mismo sexo",
+    "description": ""
+  },
+  "HairPort.Refused.NoStyle.Fmt": {
+    "message": "c{0:D4} no puede elegir el peinado {1}",
+    "description": ""
+  },
+  "HairPort.Refused.SharedMaterial.Fmt": {
+    "message": "su material es el mismo que {0} lee para su propio peinado {1}: pórtalo también ahí",
+    "description": ""
+  },
+  "HairPort.Refused.SharerRefused.Fmt": {
+    "message": "comparte su material con c{0:D4}, al que no se pudo portar: {1}",
+    "description": ""
+  },
+  "HairPort.Refused.NoMaterial.Fmt": {
+    "message": "no se encontró su material {0}",
+    "description": ""
+  },
+  "HairPort.Refused.NoOption.Fmt": {
+    "message": "la opción «{0}» ya no está en el mod",
+    "description": ""
+  },
+  "HairPort.Refused.Covered.Fmt": {
+    "message": "el mod ya incluye {0} ahí",
+    "description": ""
+  },
+  "HairPort.Undo.Nothing": {
+    "message": "Aquí no hay peinados portados que deshacer.",
+    "description": ""
+  },
+  "HairPort.DefaultData": {
+    "message": "los archivos predeterminados del mod",
+    "description": ""
+  },
+  "HairPort.Refused.Combining.Fmt": {
+    "message": "el peinado está en «{0}», un grupo combinado, que Proteus no edita",
+    "description": ""
+  },
+  "HairPort.Refused.Unreadable": {
+    "message": "no se pudo leer el manifiesto del mod",
+    "description": ""
+  },
+  "Chat.HairPort": {
+    "message": "[Proteus] El mod de este peinado se hizo para otra raza, así que Proteus lo ha ajustado a la tuya y lo ha añadido al mod: todos los que se vean con este mod activo lo verán ahora. Puedes deshacerlo, o desactivar la función, en /proteus > Ajustes > Pelo.",
+    "description": ""
+  },
+  "Service.ModMeta.Unreadable.Fmt": {
+    "message": "No se pudo leer el manifiesto de {0}, así que no se ha cambiado.",
+    "description": ""
+  },
+  "Service.ModMeta.Combining.Fmt": {
+    "message": "«{0}» es un grupo combinado, cuyos archivos Proteus no edita.",
+    "description": ""
+  },
+  "Service.ModMeta.NoOption.Fmt": {
+    "message": "El grupo «{0}» no tiene ninguna opción llamada «{1}».",
+    "description": ""
+  },
+  "HairPort.Auto.Label": {
+    "message": "Adaptar los mods de pelo hechos para otra raza",
+    "description": ""
+  },
+  "HairPort.Auto.Tip": {
+    "message": "Muchos mods de pelo están hechos para una sola raza, así que en cualquier otra\nel juego muestra su propio peinado. Con esto activado, Proteus lo detecta, dobla\nel peinado del mod sobre la cabeza de tu raza y lo añade a la misma opción del\nmismo mod.\n\nSolo entre razas del mismo sexo, y solo para el peinado que llevas. Sigue\nfuncionando con Proteus desactivado, viaja con el mod y se ve en todos los que\nse muestren con ese mod activo. Se puede deshacer aquí.",
+    "description": ""
+  },
+  "HairPort.Settings.None": {
+    "message": "El peinado que llevas no necesita ajuste.",
+    "description": ""
+  },
+  "HairPort.Settings.Ported.Fmt": {
+    "message": "El peinado {0} está ajustado a tu raza en {1}.",
+    "description": ""
+  },
+  "HairPort.Settings.Undo": {
+    "message": "Deshacer",
+    "description": ""
+  },
+  "HairPort.Settings.Undo.Tip": {
+    "message": "Vuelve a quitar del mod el peinado ajustado. Proteus no lo volverá a ajustar\npor su cuenta; aún puedes portarlo en el Estudio.",
+    "description": ""
+  },
+  "HairPort.Settings.UndoAll.Fmt": {
+    "message": "Deshacer los {0} peinados ajustados de este mod",
+    "description": ""
+  },
+  "HairPort.Working": {
+    "message": "Trabajando…",
+    "description": ""
+  },
+  "HairPort.Studio.Header": {
+    "message": "Portar a todas las razas",
+    "description": ""
+  },
+  "HairPort.Studio.Intro": {
+    "message": "Dobla este peinado sobre todas las demás razas del mismo sexo y añade los resultados a la misma opción de este mod, para que se vea en todos sea cual sea su raza. Las razas para las que lo hiciste tú se dejan como están.",
+    "description": ""
+  },
+  "HairPort.Studio.Covered": {
+    "message": "hecho por ti",
+    "description": ""
+  },
+  "HairPort.Studio.Ported": {
+    "message": "portado",
+    "description": ""
+  },
+  "HairPort.Studio.Stale": {
+    "message": "desactualizado",
+    "description": ""
+  },
+  "HairPort.Studio.NoStyle": {
+    "message": "no puede elegir este peinado",
+    "description": ""
+  },
+  "HairPort.Studio.Open": {
+    "message": "sin cubrir",
+    "description": ""
+  },
+  "HairPort.Studio.Port": {
+    "message": "Portar",
+    "description": ""
+  },
+  "HairPort.Studio.Porting.Fmt": {
+    "message": "Portando… {0} de {1} razas",
+    "description": ""
+  },
+  "HairPort.Studio.Cancel": {
+    "message": "Cancelar",
+    "description": ""
+  },
+  "HairPort.Studio.Cancelled": {
+    "message": "Cancelado: no se ha escrito nada.",
+    "description": ""
+  },
+  "HairPort.Studio.Done.Fmt": {
+    "message": "{0} versión(es) portada(s) añadida(s) al mod.",
+    "description": ""
+  },
+  "HairPort.Studio.Nothing": {
+    "message": "No se ha portado nada.",
+    "description": ""
+  },
+  "HairPort.Studio.Failed.Fmt": {
+    "message": "Error al portar: {0}",
+    "description": ""
+  },
+  "HairPort.Studio.Remove": {
+    "message": "Quitar versiones portadas",
+    "description": ""
+  },
+  "HairPort.Studio.Removed.Fmt": {
+    "message": "{0} versión(es) portada(s) eliminada(s).",
+    "description": ""
+  },
+  "HairPort.Studio.Reading": {
+    "message": "Leyendo el mod…",
+    "description": ""
+  },
+  "Settings.Section.HairPort": {
+    "message": "Pelo",
+    "description": ""
+  },
+  "HairPort.Refused.Folded.Fmt": {
+    "message": "al doblarlo sobre c{0:D4}, {1} de sus triángulos quedarían del revés",
+    "description": ""
   }
 }
