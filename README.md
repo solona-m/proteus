@@ -4,7 +4,7 @@
 **English** · [日本語](docs/README.ja.md) · [Deutsch](docs/README.de.md) · [Français](docs/README.fr.md) · [简体中文](docs/README.zh.md) · [한국어](docs/README.ko.md) · [Español](docs/README.es.md) · [Русский](docs/README.ru.md)
 <!--/i18n-->
 
-Proteus is a Dalamud plugin for FFXIV that composites overlay textures onto your character's skin and equipment at runtime. Mod authors ship small PNG overlays alongside their Penumbra mods; Proteus blends them onto the base textures every time you change options, without touching the original mod files. Proteus can import Proteus-enabled pmp files, onion overlay omp files, and Atramentum Luminis glow tattoos. It can also edit the models of any mod you have installed, Proteus or not: reshape clothing, paint wind sway, add part switches and fit hair under hats.
+Proteus is a Dalamud plugin for FFXIV that composites overlay textures onto your character's skin and equipment at runtime. Mod authors ship small PNG overlays alongside their Penumbra mods; Proteus blends them onto the base textures every time you change options, without touching the original mod files. Proteus can import Proteus-enabled pmp files, onion overlay omp files, and Atramentum Luminis glow tattoos. It can also edit the models of any mod you have installed, Proteus or not: reshape clothing, paint wind sway, add part switches, fit hair made for another race to yours, and fit hair under hats.
 
 Overlays can render two ways: painted into your skin, or as a **second skin** — a copy of your body's mesh drawn as gear, so an overlay can use sphere maps, metalness and animated glow that skin materials can't do.
 
@@ -13,6 +13,7 @@ Overlays can render two ways: painted into your skin, or as a **second skin** �
 - **Refit an outfit to your body.** The **Studio** can move a garment made for one body size onto another, or from one body mod to another, such as Neolithe to Rue or TBSE to TBSE-X, and save it as a new option in the mod. It works on the game's own gear too, and can add every size of other bodies to a whole mod in one go.
 - **Have gear refit itself as you put it on.** Pick your body once per Penumbra collection, and chest, legs, hands and feet gear, and accessories that cover the body, such as a jacket on a necklace, are refitted to it the moment you wear them.
 - **Add toggles to any part of any mod, not just Proteus ones.** When a mod welds a bow, a collar or a strap into geometry its author never made optional, the **Studio** tab can split that piece out and give it a real switch.
+- **Wear hair mods made for another race.** Many hair mods are made for one race only, so on anyone else the game shows its own hairstyle instead. Proteus bends the mod's hairstyle onto your race's head and adds it to the same mod, physics included, so it just works.
 - **Make modded hair fit under hats.** Proteus presses the hair a hat would cover flat against your head, so a hat stops going straight through it. It's on by default and only acts while you're wearing a hat.
 
 
@@ -277,9 +278,20 @@ Four buttons here are worth knowing about:
 - **Clear texture cache** — use when a texture edit isn't showing up, e.g. you re-exported an overlay at the same size.
 - **Glow Effect Textures** — opens the folder Proteus reads animated-glow scroll maps from. Drop images in it and they appear in every gear overlay's Effect dropdown. Hover the button to see the full path.
 
-##### Hats
+##### Hair
 
-Most modded hair has no hat support, so a hat worn over it goes straight through. The **Hats** section presses the hair a hat would cover flat against your head. Like the Studio, it edits the hair mod's own files, so the fit keeps working with Proteus turned off and travels with the mod if you export it.
+The **Hair** section fits hair mods to you in two ways: hair made for another race onto your race's head, and hair under hats. Like the Studio, both edit the hair mod's own files, so they keep working with Proteus turned off and travel with the mod if you export it.
+
+**Hair made for another race.** Many hair mods are made for one race only, so on any other race the game shows its own hairstyle instead. With **Fit hair mods made for another race** on, Proteus bends the mod's hairstyle onto your race's head and adds it to the same option of the same mod, so it follows that mod's own switches.
+
+- It checks the hair mods switched on in your collection once after you update, when you switch the setting on, when you press **Check now**, and whenever a hair mod is installed, switched on or changed. The hairstyle you put on is fitted too. Chat names the hairstyle numbers that were fitted, so you know what to choose; Glamourer shows the number.
+- The section shows the check as it runs, with **Cancel**, and lists every hairstyle it fitted. Each has its own **Undo**, and **Undo everything this check fitted** takes them all back (click it twice). An undone hairstyle isn't fitted again by itself.
+- Only for your own race, from races of the same sex. A race you're only trying on isn't fitted: Proteus waits until you've kept it for 30 seconds.
+- Physics hair keeps its physics. When your race's skeleton lacks the bones a hairstyle moves with, the port brings the source race's skeleton and physics along for that hairstyle.
+- A hairstyle that wouldn't sit right on your head is left alone, and the list says why.
+- To cover every race at once, open a hair model in the **Studio** and use **Port to all races**.
+
+**Hats.** Most modded hair has no hat support, so a hat worn over it goes straight through. Proteus presses the hair a hat would cover flat against your head.
 
 - **Make hairstyles fit under hats** is on by default. Proteus waits until you actually wear a hat, then fits the hairstyle under it and tells you in chat. If you never wear a hat, your hair mods are never touched. Untick it to stop, and your choice sticks.
 - **Hide ponytails** also makes the parts no hat could cover disappear while a hat is worn: ponytails, side tails, a long fall at the back. Off by default, because hiding is all or nothing and a part judged wrongly simply vanishes.

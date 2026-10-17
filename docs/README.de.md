@@ -4,7 +4,7 @@
 [English](../README.md) · [日本語](README.ja.md) · **Deutsch** · [Français](README.fr.md) · [简体中文](README.zh.md) · [한국어](README.ko.md) · [Español](README.es.md) · [Русский](README.ru.md)
 <!--/i18n-->
 
-Proteus ist ein Dalamud-Plugin für FFXIV, das Overlay-Texturen zur Laufzeit auf die Haut und die Ausrüstung deines Charakters komponiert. Mod-Autoren liefern kleine PNG-Overlays zusammen mit ihren Penumbra-Mods aus; Proteus blendet sie bei jeder Optionsänderung in die Basistexturen ein, ohne die Originaldateien des Mods anzurühren. Proteus kann Proteus-fähige pmp-Dateien, Onion-Overlay-omp-Dateien und Atramentum-Luminis-Leuchttattoos importieren. Außerdem kann es die Modelle jedes installierten Mods bearbeiten, ob Proteus-Mod oder nicht: Kleidung umformen, Windbewegung malen, Teil-Schalter hinzufügen und Haar unter Hüte passen lassen.
+Proteus ist ein Dalamud-Plugin für FFXIV, das Overlay-Texturen zur Laufzeit auf die Haut und die Ausrüstung deines Charakters komponiert. Mod-Autoren liefern kleine PNG-Overlays zusammen mit ihren Penumbra-Mods aus; Proteus blendet sie bei jeder Optionsänderung in die Basistexturen ein, ohne die Originaldateien des Mods anzurühren. Proteus kann Proteus-fähige pmp-Dateien, Onion-Overlay-omp-Dateien und Atramentum-Luminis-Leuchttattoos importieren. Außerdem kann es die Modelle jedes installierten Mods bearbeiten, ob Proteus-Mod oder nicht: Kleidung umformen, Windbewegung malen, Teil-Schalter hinzufügen, Haar, das für ein anderes Volk gemacht wurde, an deines anpassen und Haar unter Hüte passen lassen.
 
 Overlays können auf zwei Arten dargestellt werden: in die Haut gemalt, oder als **zweite Haut** — eine Kopie deines Körper-Meshs, die als Ausrüstung gezeichnet wird, sodass ein Overlay Sphere-Maps, Metallanteil und animiertes Leuchten nutzen kann, was Hautmaterialien nicht können.
 
@@ -13,6 +13,7 @@ Overlays können auf zwei Arten dargestellt werden: in die Haut gemalt, oder als
 - **Passe eine Montur an deinen Körper an.** Das **Studio** kann ein Kleidungsstück, das für eine Körpergröße gemacht wurde, auf eine andere übertragen, oder von einem Körper-Mod auf einen anderen, etwa Neolithe auf Rue oder TBSE auf TBSE-X, und es als neue Option im Mod speichern. Das klappt auch mit der Ausrüstung des Spiels selbst, und es kann einem ganzen Mod in einem Rutsch jede Größe anderer Körper hinzufügen.
 - **Lass Ausrüstung sich beim Anlegen selbst anpassen.** Wähle deinen Körper einmal pro Penumbra-Kollektion, und Brust-, Bein-, Hand- und Fußausrüstung sowie Accessoires, die den Körper bedecken, etwa eine Jacke auf einer Halskette, werden in dem Moment an ihn angepasst, in dem du sie trägst.
 - **Füge jedem Teil jedes Mods Schalter hinzu, nicht nur Proteus-Mods.** Wenn ein Mod eine Schleife, ein Halsband oder einen Riemen in Geometrie einschweißt, die sein Autor nie optional gemacht hat, kann der Tab **Studio** dieses Stück herauslösen und ihm einen echten Schalter geben.
+- **Trage Haar-Mods, die für ein anderes Volk gemacht wurden.** Viele Haar-Mods sind nur für ein Volk gemacht, bei allen anderen zeigt das Spiel stattdessen seine eigene Frisur. Proteus biegt die Frisur des Mods auf den Kopf deines Volkes und fügt sie demselben Mod hinzu, samt Physik, sodass sie einfach funktioniert.
 - **Lass gemoddetes Haar unter Hüte passen.** Proteus drückt das Haar, das ein Hut bedecken würde, flach an deinen Kopf, damit der Hut nicht mehr einfach hindurchgeht. Das ist standardmäßig an und greift nur, solange du einen Hut trägst.
 
 
@@ -271,9 +272,20 @@ Vier Schaltflächen hier sind erwähnenswert:
 - **Texturcache leeren** — nutzen, wenn eine Texturänderung nicht auftaucht, z. B. weil du ein Overlay in derselben Größe neu exportiert hast.
 - **Leuchteffekt-Texturen** — öffnet den Ordner, aus dem Proteus die Scroll-Maps für animiertes Leuchten liest. Lege Bilder hinein, und sie erscheinen in der Effekt-Auswahlliste jedes Ausrüstungs-Overlays. Fahre über die Schaltfläche, um den vollen Pfad zu sehen.
 
-##### Hüte
+##### Haare
 
-Die meisten Haar-Mods unterstützen keine Hüte, sodass ein darüber getragener Hut einfach hindurchgeht. Der Abschnitt **Hüte** drückt das Haar, das ein Hut bedecken würde, flach an deinen Kopf. Wie das Studio bearbeitet er die eigenen Dateien des Haar-Mods, die Anpassung funktioniert also weiter, wenn Proteus aus ist, und reist mit dem Mod mit, wenn du ihn exportierst.
+Der Abschnitt **Haare** passt Haar-Mods auf zwei Arten an dich an: Haar, das für ein anderes Volk gemacht wurde, an den Kopf deines Volkes, und Haar unter Hüte. Wie das Studio bearbeiten beide die eigenen Dateien des Haar-Mods, sie funktionieren also weiter, wenn Proteus aus ist, und reisen mit dem Mod mit, wenn du ihn exportierst.
+
+**Haar, das für ein anderes Volk gemacht wurde.** Viele Haar-Mods sind nur für ein Volk gemacht, bei jedem anderen Volk zeigt das Spiel stattdessen seine eigene Frisur. Ist **Haar-Mods für ein anderes Volk anpassen** an, biegt Proteus die Frisur des Mods auf den Kopf deines Volkes und fügt sie derselben Option desselben Mods hinzu, sodass sie den Schaltern dieses Mods folgt.
+
+- Es prüft die in deiner Sammlung eingeschalteten Haar-Mods einmal nach einem Update, wenn du die Einstellung einschaltest, wenn du **Jetzt prüfen** drückst und immer dann, wenn ein Haar-Mod installiert, eingeschaltet oder geändert wird. Die Frisur, die du anlegst, wird ebenfalls angepasst. Der Chat nennt die Nummern der angepassten Frisuren, damit du weißt, welche du wählen musst; Glamourer zeigt die Nummer an.
+- Der Abschnitt zeigt die laufende Prüfung mit **Abbrechen** an und listet jede Frisur auf, die sie angepasst hat. Jede hat ihr eigenes **Rückgängig**, und **Alles rückgängig machen, was diese Prüfung angepasst hat** nimmt alle zurück (zweimal klicken). Eine rückgängig gemachte Frisur wird nicht von selbst erneut angepasst.
+- Nur für dein eigenes Volk, und nur von Völkern desselben Geschlechts. Ein Volk, das du nur ausprobierst, wird nicht angepasst: Proteus wartet, bis du es 30 Sekunden lang behalten hast.
+- Physik-Haar behält seine Physik. Fehlen dem Skelett deines Volkes die Knochen, mit denen sich eine Frisur bewegt, bringt die Übertragung für diese Frisur das Skelett und die Physik des Ausgangsvolkes mit.
+- Eine Frisur, die nicht richtig auf deinem Kopf sitzen würde, bleibt unangetastet, und die Liste sagt, warum.
+- Um alle Völker auf einmal abzudecken, öffne ein Haarmodell im **Studio** und nutze **Auf alle Völker übertragen**.
+
+**Hüte.** Die meisten Haar-Mods unterstützen keine Hüte, sodass ein darüber getragener Hut einfach hindurchgeht. Proteus drückt das Haar, das ein Hut bedecken würde, flach an deinen Kopf.
 
 - **Frisuren unter Hüte passen lassen** ist standardmäßig an. Proteus wartet, bis du tatsächlich einen Hut trägst, passt die Frisur dann darunter an und sagt dir das im Chat. Trägst du nie einen Hut, werden deine Haar-Mods nie angefasst. Nimm den Haken weg, um es zu stoppen; deine Wahl bleibt erhalten.
 - **Pferdeschwänze ausblenden** lässt zusätzlich die Teile verschwinden, die kein Hut bedecken könnte, solange ein Hut getragen wird: Pferdeschwänze, seitliche Zöpfe, ein langer Fall im Rücken. Standardmäßig aus, denn Ausblenden ist alles oder nichts, und ein falsch beurteiltes Teil verschwindet schlicht.
