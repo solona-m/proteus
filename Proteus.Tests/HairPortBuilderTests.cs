@@ -476,4 +476,55 @@ public class HairPortBuilderTests
         var plan = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), PhysicsGame((201, 170, H0170Skeleton)), false);
         Assert.Equal(170, Assert.Single(plan.Writes).Est);
     }
+
+    /// <summary>
+    /// The one out-of-date test the builder, the automatic path and Studio share: a port whose model is unchanged but
+    /// whose borrowed skeleton changed in the manifest is out of date — seen from the watcher's decision and from
+    /// Studio's rows alike.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-hair-race-port-8")]
+    [Trait("Plan", "EDGE-hair-race-port-15")]
+    public void A_borrow_changed_in_the_manifest_alone_is_out_of_date_everywhere()
+    {
+        using var mod = PhysicsMod([PenumbraManipulations.EstManipulation("0801", "Hair", Id, 170)]);
+        var game = PhysicsGame((201, 170, H0170Skeleton), (201, 180, H0170Skeleton));
+        Assert.True(HairPortWriter.Save(mod.Root, HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, false).Writes, false).Ok);
+        var entry = HairPortRecord.Read(mod.Root).Ports.Single();
+        var source = mod.Get("long.mdl");
+        Assert.False(HairPortBuilder.IsOutOfDate(entry, source, mod.Owners));
+
+        SetSourceEst(mod, 180);
+        Assert.True(HairPortBuilder.IsOutOfDate(entry, source, mod.Owners));
+
+        // Studio lists it as out of date (and ticks it) …
+        var rows = Gui.HairPortPanel.Rows(Source, mod.Owners, HairPortRecord.Read(mod.Root), _ => true,
+                                          e => HairPortBuilder.IsOutOfDate(e, mod.Get(e.SourceFile), mod.Owners));
+        Assert.Equal(Gui.HairPortPanel.State.Stale, rows.Single(r => r.Race == 201).State);
+
+        // … and the automatic path, worn, remakes it.
+        var worn = HairPortPlan.HairPath(201, Id);
+        var file = Path.Combine(mod.Root, entry.File.Replace('/', Path.DirectorySeparatorChar));
+        var decision = HairPortWatcher.Decide.What(worn, new Dictionary<string, string?> { [worn] = file }, [],
+                                                    Path.GetDirectoryName(mod.Root)!, HairPortRecord.Read);
+        Assert.Equal(HairPortWatcher.Decide.Kind.Port, decision.Kind);
+        Assert.True(decision.Stale);
+    }
+
+    /// <summary>The author's own entry for the target race is found wherever it sits, even after ours.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-race-port-6")]
+    public void An_authors_target_entry_after_ours_is_still_the_authors()
+    {
+        var owner = new HairPortPlan.Owner("Cut", "Long", "Single", new Dictionary<string, string>(),
+        [
+            System.Text.Json.JsonSerializer.SerializeToElement(PenumbraManipulations.EstManipulation("0801", "Hair", Id, 170)),
+            System.Text.Json.JsonSerializer.SerializeToElement(PenumbraManipulations.EstManipulation("0201", "Hair", Id, 170)),
+            System.Text.Json.JsonSerializer.SerializeToElement(PenumbraManipulations.EstManipulation("0201", "Hair", Id, 150)),
+        ]);
+        var ours = new HairPortRecord.Entry { Group = "Cut", Option = "Long", Est = 170 };
+        Assert.Equal((150, 0), HairPortBuilder.SkeletonFor(owner, null, ours, 801, 201, Id));
+        // Without a record of ours, the first entry is the author's.
+        Assert.Equal((170, 0), HairPortBuilder.SkeletonFor(owner, null, null, 801, 201, Id));
+    }
 }

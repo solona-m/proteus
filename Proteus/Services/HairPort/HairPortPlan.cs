@@ -215,11 +215,14 @@ internal static partial class HairPortPlan
     /// <c>Est</c> entry naming another hairstyle's skeleton (h0162 moving with h0170's bones), or null for none. Physics
     /// hair is made this way — the bones are the game's own, borrowed per race.
     /// </summary>
-    public static int? HairEst(Owner owner, ushort race, int id)
+    public static int? HairEst(Owner owner, ushort race, int id) => HairEsts(owner, race, id).Cast<int?>().FirstOrDefault();
+
+    /// <summary>Every hair <c>Est</c> entry a place gives <paramref name="race"/> for hairstyle <paramref name="id"/>,
+    /// in manifest order.</summary>
+    public static IEnumerable<int> HairEsts(Owner owner, ushort race, int id)
     {
         foreach (var m in owner.Manipulations ?? [])
-            if (HairEstEntry(m, race, id) is { } entry) return entry;
-        return null;
+            if (HairEstEntry(m, race, id) is { } entry) yield return entry;
     }
 
     /// <summary>

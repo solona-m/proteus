@@ -159,7 +159,7 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
             var record = HairPortRecord.Read(modRoot);
             var id = HairPortPlan.Parse(sourceGamePath)!.Value.Id;
             return Rows(sourceGamePath, owners, record, race => readGameFile(HairPortPlan.HairPath(race, id)) != null,
-                        e => ReadMod(modRoot, e.SourceFile) is { } b && HairPortPlan.IsStale(e, b));
+                        e => ReadMod(modRoot, e.SourceFile) is { } b && HairPortBuilder.IsOutOfDate(e, b, owners));
         });
     }
 

@@ -111,12 +111,8 @@ internal static class HairPortWriter
                     WriteFile(modRoot, file, w.Model, created);
 
                     var add = redirects.TryGetValue(owner, out var a) ? a : redirects[owner] = new(StringComparer.OrdinalIgnoreCase);
-                    if (was is { Est: > 0 } || w.Est > 0)
-                    {
-                        var r = replaced.TryGetValue(owner, out var rl) ? rl : replaced[owner] = [];
-                        if (was is { Est: > 0 }) r.Add((w.TargetGamePath, was.Est));
-                        if (w.Est > 0) r.Add((w.TargetGamePath, w.Est));
-                    }
+                    if (was is { Est: > 0 })
+                        (replaced.TryGetValue(owner, out var rl) ? rl : replaced[owner] = []).Add((w.TargetGamePath, was.Est));
                     if (w.Est > 0)
                     {
                         (skeletons.TryGetValue(owner, out var k) ? k : skeletons[owner] = []).Add(EstFor(w.TargetGamePath, w.Est));

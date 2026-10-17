@@ -126,9 +126,7 @@ internal static class HairPortBuilder
                 var was = record.Ports.FirstOrDefault(e => HairPortPlan.Same(e.Owner, owner)
                     && e.TargetGamePath.Equals(target, StringComparison.OrdinalIgnoreCase));
                 var (check, est) = SkeletonFor(owner, defaults, was, from, to, id);
-                // Out of date too when the skeleton it should carry changed — authors change a physics borrow in the
-                // manifest, not the model.
-                if (was != null && !HairPortPlan.IsStale(was, bytes) && was.Est == est) { anyCurrent = true; continue; }
+                if (was != null && !IsOutOfDate(was, bytes, owners)) { anyCurrent = true; continue; }
                 if (was == null && !HairPortPlan.CanPortInto(owners, owner, target)) continue;
 
                 // One bend per distinct file and skeleton checked against, however many options publish it.
@@ -183,12 +181,32 @@ internal static class HairPortBuilder
     {
         int? source = HairPortPlan.HairEst(owner, from, id) ?? (defaults != null ? HairPortPlan.HairEst(defaults, from, id) : null);
 
-        int? target = HairPortPlan.HairEst(owner, to, id);
-        if (target is { } mine && was is { Est: > 0 } && was.Est == mine) target = null;   // ours, from before
+        // The author's entry for the target race in the port's own place: any there that is not ours from before,
+        // wherever it sits among them.
+        int? target = HairPortPlan.HairEsts(owner, to, id).Where(e => !(was is { Est: > 0 } && was.Est == e))
+                                  .Cast<int?>().FirstOrDefault();
         if (target == null && defaults != null && !owner.IsDefault) target = HairPortPlan.HairEst(defaults, to, id);
 
         if (target is { } author) return (author, 0);
         return source is > 0 and var s ? (s, s) : (0, 0);
+    }
+
+    /// <summary>
+    /// Whether a port must be remade: its source model changed, it was made by an older bend, or the skeleton it should
+    /// carry is no longer the one it carries — authors change a physics borrow in the manifest, not the model. The one
+    /// test the builder, the automatic path and Studio share, so none of them calls a port current the others would
+    /// remake.
+    /// </summary>
+    /// <param name="owners">The mod's places as read now; null when the manifest could not be read, which judges by
+    /// the model alone.</param>
+    internal static bool IsOutOfDate(HairPortRecord.Entry entry, byte[] source, IReadOnlyList<HairPortPlan.Owner>? owners)
+    {
+        if (HairPortPlan.IsStale(entry, source)) return true;
+        if (owners?.FirstOrDefault(o => HairPortPlan.Same(o, entry.Owner)) is not { } owner) return false;
+        if (HairPortPlan.Parse(entry.SourceGamePath) is not { } src || HairPortPlan.Parse(entry.TargetGamePath) is not { } dst)
+            return false;
+        var (_, carry) = SkeletonFor(owner, owners.FirstOrDefault(o => o.IsDefault), entry, src.Race, dst.Race, dst.Id);
+        return carry != entry.Est;
     }
 
     /// <summary>

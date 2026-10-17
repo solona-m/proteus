@@ -460,7 +460,9 @@ public sealed class HairPortWatcher : IDisposable
                 byte[]? source = null;
                 try { source = File.ReadAllBytes(Path.Combine(modRoot, entry.SourceFile.Replace('/', Path.DirectorySeparatorChar))); }
                 catch (Exception) { /* the author's file is gone: nothing to remake it from */ }
-                return source != null && HairPortPlan.IsStale(entry, source)
+                // Read on each look that gets here, not keyed: a borrow changed in the manifest alone resolves no path
+                // differently, so it is remade on the next look a hairstyle or settings change brings.
+                return source != null && HairPortBuilder.IsOutOfDate(entry, source, HairPortPlan.ReadOwners(modRoot))
                     ? new Decision(Kind.Port, modRoot, entry.SourceGamePath, Stale: true)
                     : new Decision(Kind.Ported, modRoot);
             }
