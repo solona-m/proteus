@@ -25,7 +25,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1297;
+    public const int BuildNumber = 1299;
 
     /// <summary>
     /// Which set of release notes is current. Raise it when a release has something new to say: the window
@@ -96,6 +96,12 @@ public sealed class Plugin : IDalamudPlugin
 
         config = pluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         config.Initialize(pluginInterface);
+        // From here on a save from a worker is written on the framework thread, a quarter second later: a burst of
+        // body-mod classifications is then a few writes, not one a frame.
+        config.AttachSaver(new ConfigSaveScheduler(config.Gate, () => pluginInterface.SavePluginConfig(config),
+                                                   () => framework.IsInFrameworkUpdateThread,
+                                                   a => _ = framework.RunOnTick(a, TimeSpan.FromMilliseconds(250)),
+                                                   log));
 
         penumbra = new PenumbraBridge(pluginInterface, log);
         glamourer = new GlamourerBridge(pluginInterface, ObjectTable, log);
@@ -508,6 +514,8 @@ public sealed class Plugin : IDalamudPlugin
         autoRefit.Dispose();   // before the compositor and the bridges, whose events it unsubscribes from
         hatCompat.Dispose();   // before the compositor: it unsubscribes from that object's event
         compositor.Dispose();
+        // After the compositor: its teardown records the carriers it took off, and that save must reach disk.
+        try { config.FlushAndCloseSaves(); } catch { /* tearing down — never block the unload */ }
         glamourer.Dispose();
         penumbra.Dispose();
         loc.Dispose();   // last: unhooks LanguageChanged, which anything above could still be drawing under

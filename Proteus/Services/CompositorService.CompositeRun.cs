@@ -1101,15 +1101,12 @@ public partial class CompositorService
             compositor._secondSkinActive  = nextSecondSkinActive;
             if (nextShellHostPaths != null) compositor._lastShellHostPaths = nextShellHostPaths;
 
-            // Only on a real change (disk I/O), under _bodyModConfigLock like every other off-thread save.
+            // Only on a real change (a settings write), under the config's gate like every other off-thread change.
             if (nextAppendHosts != null && !nextAppendHosts.SetEquals(compositor._appendHostModelPaths))
             {
                 compositor._appendHostModelPaths = nextAppendHosts;
-                lock (compositor._bodyModConfigLock)
-                {
-                    compositor.config.AppendHostModelPaths = [.. nextAppendHosts];
-                    compositor.config.Save();
-                }
+                lock (compositor.config.Gate) compositor.config.AppendHostModelPaths = [.. nextAppendHosts];
+                compositor.config.Save();
             }
 
             // Publish the locators in one step. Null ⇒ no shell built, when the editor should see them empty. Early-return
