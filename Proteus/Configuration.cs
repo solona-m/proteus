@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using Dalamud.Configuration;
 using Dalamud.Plugin;
+using Newtonsoft.Json;
 
 namespace Proteus;
 
@@ -48,9 +51,24 @@ public class BodyModCacheEntry
     public long Fingerprint { get; set; }
 }
 
+/// <summary>
+/// The plugin's settings. Threading rule: change a collection on it in place only on the framework thread, or on any
+/// other thread inside <see cref="Gate"/>; a save serialises every collection, on the framework thread, inside the gate
+/// (see <see cref="ConfigSaveScheduler"/>). Inside the gate: no I/O, no waiting, no IPC, no logging.
+/// </summary>
 [Serializable]
 public class Configuration : IPluginConfiguration
 {
+    /// <summary>Held by a save while it serialises, and by a worker while it changes a collection in place.</summary>
+    [JsonIgnore] internal object Gate { get; } = new();
+
+    [NonSerialized] private ConfigSaveScheduler? saver;
+
+    internal void AttachSaver(ConfigSaveScheduler scheduler) => saver = scheduler;
+
+    /// <summary>At unload: write what is pending, then drop every later save (a dev reload must not be overwritten).</summary>
+    internal void FlushAndCloseSaves() => saver?.FlushAndClose();
+
     /// <summary>
     /// Current config schema version. Bump whenever a STORED value has to be reinterpreted on load, and add the step
     /// to <see cref="Migrate"/>. A new config is stamped current, so it never runs old migrations.
@@ -509,8 +527,15 @@ public class Configuration : IPluginConfiguration
         Version = CurrentVersion;
     }
 
-    public void Save()
-        => Plugin.PluginInterface.SavePluginConfig(this);
+    /// <summary>
+    /// Write the settings: now on the framework thread, else on its next tick. Never throws once the plugin has
+    /// attached its <see cref="ConfigSaveScheduler"/>; the caller is named in the log.
+    /// </summary>
+    public void Save([CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
+    {
+        if (saver != null) saver.Save($"{Path.GetFileName(file)}:{line}");
+        else Plugin.PluginInterface.SavePluginConfig(this);
+    }
 }
 
 /// <summary>One collection's preferred body for the automatic refit (<see cref="Configuration.AutoRefitByCollection"/>).</summary>
@@ -577,6 +602,32 @@ public class AutoRefitPreference
     /// and forgets it here. OrdinalIgnoreCase, populated in place.
     /// </summary>
     public HashSet<string> Declined { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Every member, its collections copied: what an auto refit worker reads while the framework thread changes the
+    /// live sets in place (see <see cref="Configuration"/>'s threading rule). <see cref="BodySizeRef"/> is replaced,
+    /// never changed in place, so it is shared.
+    /// </summary>
+    internal AutoRefitPreference Copy() => new()
+    {
+        CollectionName   = CollectionName,
+        BodyDir          = BodyDir,
+        Chest            = Chest,
+        Legs             = Legs,
+        SwitchedOn       = new(SwitchedOn, StringComparer.OrdinalIgnoreCase),
+        AuthorSwitchedOn = new(AuthorSwitchedOn, StringComparer.OrdinalIgnoreCase),
+        Before           = CopyLists(Before),
+        HeldBefore       = CopyLists(HeldBefore),
+        InheritedBefore  = new(InheritedBefore, StringComparer.OrdinalIgnoreCase),
+        Declined         = new(Declined, StringComparer.OrdinalIgnoreCase),
+    };
+
+    private static Dictionary<string, List<string>> CopyLists(Dictionary<string, List<string>> from)
+    {
+        var to = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (k, v) in from) to[k] = [.. v];
+        return to;
+    }
 }
 
 /// <summary>
