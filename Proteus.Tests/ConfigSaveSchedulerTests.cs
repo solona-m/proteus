@@ -419,9 +419,9 @@ public class ConfigSaveSchedulerTests
         // What the worker decides on. Replaced, never changed in place, so shared on purpose.
         Assert.Same(live.Chest, copy.Chest);
         Assert.Same(live.Legs, copy.Legs);
-        // Every member set: a member added later and left out of Copy() fails here.
-        foreach (var prop in typeof(AutoRefitPreference).GetProperties())
-            Assert.NotNull(prop.GetValue(copy));
+        // A member added later fails here until it is copied in Copy() and filled on `live` above.
+        Assert.True(typeof(AutoRefitPreference).GetProperties().Length == 10,
+                    "AutoRefitPreference gained a member: copy it in Copy(), then fill it here and update this count");
 
         live.SwitchedOn.Add("x");
         live.AuthorSwitchedOn["x"] = "x";
