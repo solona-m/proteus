@@ -4059,6 +4059,22 @@
     "message": "（原版）",
     "description": ""
   },
+  "WhatsNew.HairPort.Head": {
+    "message": "为其他种族制作的发型 Mod 现在也能适配你的种族",
+    "description": "Release-notes section heading for hair mods fitted automatically from another race to the player's."
+  },
+  "WhatsNew.HairPort.Body": {
+    "message": "许多发型 Mod 只为一个种族制作，换成其他种族时，游戏会显示原版发型。现在，Proteus 会把 Mod 中的发型弯折到你种族的头部上，并添加到同一 Mod 的同一选项中。它会立即检查一遍你合集中已启用的发型 Mod，之后每当有发型 Mod 被安装、启用或更改时会再次检查。聊天栏会列出已适配的发型编号，方便你知道该选哪一个。带物理效果的发型会保留其物理效果。\n\n即使关闭 Proteus，适配结果依然有效，并会随 Mod 一起带走。你可以在 设置 › 头发 中关闭此功能、重新检查，或撤销某个已适配的发型。",
+    "description": "Release-notes section on hair fitted automatically from another race. 'Settings, Hair' names the Settings tab and its Hair section - match Tab.Settings and Settings.Section.HairPort. 'Physics hair' is hair that sways with its own bones."
+  },
+  "WhatsNew.HairPortStudio.Head": {
+    "message": "一次把发型移植到所有种族",
+    "description": "Release-notes section heading for the Studio's tool that ports one hair mod to every race at once."
+  },
+  "WhatsNew.HairPortStudio.Body": {
+    "message": "想让一个发型 Mod 对所有人都有效，而不只是你自己？在工作室中打开它的某个发型模型，使用「移植到所有种族」。Proteus 会一次性把它弯折到同一性别的其他所有种族上，并把结果添加到此 Mod 的同一选项中。作者原本制作过的种族不会被改动，「移除移植」则会把所有移植全部撤回。",
+    "description": "Release-notes section on the Studio's \"Port to all races\". 'Studio' is the tab name (Tab.Parts); the two quoted labels must match HairPort.Studio.Header and HairPort.Studio.Remove."
+  },
   "WhatsNew.AutoRefit.Body": {
     "message": "现在，Proteus 能在你穿上胸部、腿部、手部和脚部装备的那一刻，自动将其适配到你的体型。它会判断装备是为哪个体型 MOD 的哪个尺寸制作的，适配装备及其覆盖的身体部位，把新尺寸保存到装备自己的 MOD 中并启用。开始和完成时会在聊天栏提示。\n\n使用方法：打开 设置 › 体型自动适配，勾选“穿上装备时自动适配我的体型”，然后为每个 Penumbra 合集选择你的体型 MOD 以及胸部和腿部尺寸；手部和脚部会自动匹配。已经穿着的装备可以用“适配当前穿着的装备”来适配，游戏原版装备另有一个复选框。在 Penumbra 中选择“Original”或其他尺寸时，始终不会被改动。",
     "description": ""
@@ -4068,8 +4084,8 @@
     "description": ""
   },
   "WhatsNew.IntroAll": {
-    "message": "关于 Proteus 值得了解的四件事。此窗口只会打开一次，之后不再出现。",
-    "description": ""
+    "message": "关于 Proteus，有几件事值得了解。此窗口只会打开一次，之后不再出现。",
+    "description": "First line of the release-notes window for someone who has never seen it; every section follows."
   },
   "WhatsNew.IntroSince": {
     "message": "自你上次看到此窗口以来有了新内容。此窗口只会打开一次，之后不再出现。",

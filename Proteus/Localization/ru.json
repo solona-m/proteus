@@ -4059,6 +4059,22 @@
     "message": "(оригинал)",
     "description": ""
   },
+  "WhatsNew.HairPort.Head": {
+    "message": "Моды причёсок, сделанные для другой расы, теперь подходят и вашей",
+    "description": "Release-notes section heading for hair mods fitted automatically from another race to the player's."
+  },
+  "WhatsNew.HairPort.Body": {
+    "message": "Многие моды причёсок сделаны только для одной расы, поэтому на любой другой игра показывает вместо них свою причёску. Теперь Proteus изгибает причёску из мода под голову вашей расы и добавляет её в тот же вариант того же мода. Он сразу просматривает моды причёсок, включённые в вашей коллекции, а затем делает это снова всякий раз, когда какой-либо из них устанавливают, включают или меняют. В чате указываются номера подогнанных причёсок, чтобы вы знали, какую выбрать. Причёски с физикой сохраняют свою физику.\n\nЭто продолжает работать и с выключенным Proteus и уезжает вместе с модом. Отключить функцию, запустить проверку заново или отменить подгонку причёски можно в Настройки › Волосы.",
+    "description": "Release-notes section on hair fitted automatically from another race. 'Settings, Hair' names the Settings tab and its Hair section - match Tab.Settings and Settings.Section.HairPort. 'Physics hair' is hair that sways with its own bones."
+  },
+  "WhatsNew.HairPortStudio.Head": {
+    "message": "Перенос причёски сразу на все расы",
+    "description": "Release-notes section heading for the Studio's tool that ports one hair mod to every race at once."
+  },
+  "WhatsNew.HairPortStudio.Body": {
+    "message": "Чтобы мод причёски работал у всех, а не только у вас, откройте одну из его моделей причёски в Студии и нажмите «Перенести на все расы». Proteus за один раз изгибает её под каждую другую расу того же пола и добавляет результаты в тот же вариант мода. Расы, для которых её сделал автор, не затрагиваются, а «Удалить переносы» убирает все переносы обратно.",
+    "description": "Release-notes section on the Studio's \"Port to all races\". 'Studio' is the tab name (Tab.Parts); the two quoted labels must match HairPort.Studio.Header and HairPort.Studio.Remove."
+  },
   "WhatsNew.AutoRefit.Body": {
     "message": "Теперь Proteus может сам подгонять снаряжение для груди, ног, рук и ступней под ваше тело в тот момент, когда вы его надеваете. Он определяет, под какой мод тела и какой размер сделано снаряжение, подгоняет его вместе с частями тела, которые оно закрывает, сохраняет новый размер в мод самого снаряжения и включает его. Начало и конец подгонки сообщаются в чате.\n\nЧтобы включить, откройте Настройки › Подгонка под тело. Отметьте «Подгонять снаряжение под моё тело при надевании», затем для каждой коллекции Penumbra выберите мод тела и размеры груди и ног; руки и ступни подбираются сами. Уже надетое снаряжение подгоняется кнопкой «Подогнать то, что надето сейчас», а для стандартного снаряжения игры есть отдельный флажок. Выбор «Original» или другого размера в Penumbra всегда остаётся нетронутым.",
     "description": ""
@@ -4068,8 +4084,8 @@
     "description": ""
   },
   "WhatsNew.IntroAll": {
-    "message": "Четыре вещи, которые стоит знать о Proteus. Это окно открывается один раз и больше не появится.",
-    "description": ""
+    "message": "Несколько вещей, которые стоит знать о Proteus. Это окно открывается один раз и больше не появится.",
+    "description": "First line of the release-notes window for someone who has never seen it; every section follows."
   },
   "WhatsNew.IntroSince": {
     "message": "С тех пор как вы последний раз видели это окно, появилось кое-что новое. Оно открывается один раз и больше не появится.",

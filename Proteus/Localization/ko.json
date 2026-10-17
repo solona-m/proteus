@@ -4059,6 +4059,22 @@
     "message": "(바닐라)",
     "description": ""
   },
+  "WhatsNew.HairPort.Head": {
+    "message": "다른 종족용으로 만든 헤어 모드가 이제 내 종족에 맞춰집니다",
+    "description": "Release-notes section heading for hair mods fitted automatically from another race to the player's."
+  },
+  "WhatsNew.HairPort.Body": {
+    "message": "많은 헤어 모드는 한 종족용으로만 만들어져서, 다른 종족에서는 게임 자체의 헤어스타일이 대신 표시됩니다. 이제 Proteus가 모드의 헤어스타일을 내 종족의 머리에 맞게 구부려 같은 모드의 같은 옵션에 추가합니다. 지금 컬렉션에서 켜져 있는 헤어 모드를 한 번 살펴보고, 이후에는 헤어 모드를 설치하거나 켜거나 변경할 때마다 다시 살펴봅니다. 맞춘 헤어스타일 번호를 채팅으로 알려 주므로 어떤 것을 고르면 되는지 알 수 있습니다. 물리 효과가 있는 헤어는 물리 효과가 그대로 유지됩니다.\n\nProteus를 꺼도 계속 작동하고, 모드를 내보낼 때 함께 따라갑니다. 설정 › 헤어 에서 이 기능을 끄거나, 다시 확인하거나, 맞춘 헤어스타일을 되돌릴 수 있습니다.",
+    "description": "Release-notes section on hair fitted automatically from another race. 'Settings, Hair' names the Settings tab and its Hair section - match Tab.Settings and Settings.Section.HairPort. 'Physics hair' is hair that sways with its own bones."
+  },
+  "WhatsNew.HairPortStudio.Head": {
+    "message": "헤어스타일을 모든 종족에 한 번에 이식",
+    "description": "Release-notes section heading for the Studio's tool that ports one hair mod to every race at once."
+  },
+  "WhatsNew.HairPortStudio.Body": {
+    "message": "헤어 모드를 나만이 아니라 모두에게 작동하게 하려면, 스튜디오에서 그 모드의 헤어 모델 하나를 열고 \"모든 종족에 이식\"을 사용하세요. Proteus가 같은 성별의 다른 모든 종족에 맞게 한 번에 구부리고 결과를 모드의 같은 옵션에 추가합니다. 제작자가 직접 만든 종족용은 그대로 두며, \"이식 제거\"로 이식한 것을 모두 다시 빼낼 수 있습니다.",
+    "description": "Release-notes section on the Studio's \"Port to all races\". 'Studio' is the tab name (Tab.Parts); the two quoted labels must match HairPort.Studio.Header and HairPort.Studio.Remove."
+  },
   "WhatsNew.AutoRefit.Body": {
     "message": "이제 Proteus는 가슴, 다리, 손, 발 장비를 착용하는 순간 알아서 내 체형에 맞출 수 있습니다. 장비가 어떤 체형 모드의 어떤 크기용으로 만들어졌는지 알아내고, 장비와 장비가 닿는 몸 부위를 다시 맞춘 뒤, 새 크기를 장비 모드 안에 저장하고 켭니다. 시작할 때와 끝났을 때 채팅으로 알려 줍니다.\n\n사용하려면 설정 › 체형 자동 맞춤 을 엽니다. \"장비를 착용할 때 내 체형에 맞추기\"를 체크하고, Penumbra 컬렉션마다 체형 모드와 가슴·다리 크기를 고르세요. 손과 발은 자동으로 맞춰집니다. 이미 입고 있는 장비는 \"지금 입고 있는 장비 맞추기\"로 맞출 수 있고, 게임 기본 장비에는 별도의 체크박스가 있습니다. Penumbra에서 \"Original\"이나 다른 크기를 고르면 언제나 그대로 둡니다.",
     "description": ""
@@ -4068,8 +4084,8 @@
     "description": ""
   },
   "WhatsNew.IntroAll": {
-    "message": "Proteus에 대해 알아두면 좋은 네 가지. 이 창은 한 번만 열리고 다시 열리지 않습니다.",
-    "description": ""
+    "message": "Proteus에 대해 알아두면 좋은 몇 가지. 이 창은 한 번만 열리고 다시 열리지 않습니다.",
+    "description": "First line of the release-notes window for someone who has never seen it; every section follows."
   },
   "WhatsNew.IntroSince": {
     "message": "이 창을 마지막으로 본 뒤 새로 생긴 것이 있습니다. 이 창은 한 번만 열리고 다시 열리지 않습니다.",
