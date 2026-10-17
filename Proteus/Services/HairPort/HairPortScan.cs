@@ -241,7 +241,7 @@ internal static class HairPortScan
         }
         foreach (var x in plan.Writes)
             host.Log($"{x.SourceGamePath} → {x.TargetGamePath} in {modDir}: {HairPortWriter.Describe(x.Into)} "
-                   + $"({x.Materials.Count} material redirect(s), bent in {x.Millis} ms)");
+                   + $"({x.Materials.Count} material/skeleton redirect(s), bent in {x.Millis} ms)");
         return new Ported(plan.Writes, false, "");
     }
 

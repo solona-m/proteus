@@ -131,11 +131,23 @@ internal static class HairPortBuilder
                 if (was != null && !IsOutOfDate(was, bytes, owners, record.Ports)) { anyCurrent = true; continue; }
                 if (was == null && !HairPortPlan.CanPortInto(owners, owner, target)) continue;
 
+                var bones = TargetBones(readGame, vanilla, to, id, check);
+                // The target race's skeleton lacks bones the hairstyle moves with: it carries the source race's own,
+                // unless the author gave the target race a skeleton of their own (then that one is the answer).
+                IReadOnlyList<HairPortWriter.MaterialWrite> skeletonFiles = [];
+                int skeletonFrom = 0;
+                if ((est > 0 || check == 0) && MissingBones(bytes, bones).Count > 0
+                    && CarrySkeleton(modRoot, owners, owner, record, bytes, from, to, id, est > 0 ? est : id, readGame)
+                        is { } carried)
+                {
+                    (skeletonFiles, bones, skeletonFrom) = carried;
+                    est = 0;
+                }
+
                 // One bend per distinct file and skeleton checked against, however many options publish it.
-                string key = $"{rel}|{check}";
+                string key = $"{rel}|{check}|{skeletonFrom}";
                 if (!made.TryGetValue(key, out var result))
                 {
-                    var bones = TargetBones(readGame, vanilla, to, id, check);
                     result = HairPortBaker.Prepare(bytes, from, to, id, pbd, bones, sourceHead, targetHead, out var r)!;
                     if (result == null) { why = r; break; }
                     made[key] = result;
@@ -144,7 +156,8 @@ internal static class HairPortBuilder
                 var materials = Materials(modRoot, owners, owner, bytes, from, to, id, readGame, out var missing);
                 if (missing != null) { why = missing; break; }
                 writes.Add(new HairPortWriter.PortWrite(owner, sourceGamePath, rel, HairPortPlan.Sha8(bytes), target,
-                                                        result.Model, materials, result.Millis, est));
+                                                        result.Model, [.. materials, .. skeletonFiles], result.Millis, est,
+                                                        skeletonFrom));
             }
             if (why != null)
             {
@@ -215,9 +228,76 @@ internal static class HairPortBuilder
         if (owners?.FirstOrDefault(o => HairPortPlan.Same(o, entry.Owner)) is not { } owner) return false;
         if (HairPortPlan.Parse(entry.SourceGamePath) is not { } src || HairPortPlan.Parse(entry.TargetGamePath) is not { } dst)
             return false;
-        var (_, carry) = SkeletonFor(owner, owners.FirstOrDefault(o => o.IsDefault), entry, src.Race, dst.Race, dst.Id,
-                                     DefaultsPortEst(ports, entry.TargetGamePath));
+        var (check, carry) = SkeletonFor(owner, owners.FirstOrDefault(o => o.IsDefault), entry, src.Race, dst.Race, dst.Id,
+                                         DefaultsPortEst(ports, entry.TargetGamePath));
+        // A port carrying the source race's skeleton stays current while the source still moves with that one, and
+        // the author has given the target race none of their own.
+        if (entry.SkeletonFrom > 0) return check != carry || (check > 0 ? check : dst.Id) != entry.SkeletonFrom;
         return carry != entry.Est;
+    }
+
+    /// <summary>The hairstyle-skeleton bones a model moves with that <paramref name="have"/> lacks.</summary>
+    internal static List<string> MissingBones(byte[] model, IReadOnlySet<string> have)
+        => SecondSkinWriter.Parse(model).BoneNames
+                           .Where(b => b.StartsWith("j_ex_", StringComparison.Ordinal) && !have.Contains(b)).ToList();
+
+    /// <summary>
+    /// What a port carries when the target race's skeleton lacks bones the hairstyle moves with: the source race's own
+    /// skeleton <paramref name="skeleton"/> — what the source borrowed, or the hairstyle's — and its physics, published
+    /// at the target race's paths for the hairstyle itself. Only this hairstyle on this race moves with it, and only
+    /// while the port's place is on, so no other hairstyle the race wears changes; no <c>Est</c> entry is needed, as
+    /// every race's hairstyle loads its own skeleton. The author's file is named when the mod publishes one, otherwise
+    /// the game's is copied. Null when it would not do: the source's skeleton lacks the bones too, the mod already
+    /// publishes the target's skeleton or physics, or the target race has physics for the hairstyle the source has
+    /// none to replace.
+    /// </summary>
+    internal static (IReadOnlyList<HairPortWriter.MaterialWrite> Files, HashSet<string> Bones, int From)? CarrySkeleton(
+        string modRoot, IReadOnlyList<HairPortPlan.Owner> owners, HairPortPlan.Owner owner, HairPortRecord record,
+        byte[] model, ushort from, ushort to, int id, int skeleton, Func<string, byte[]?> readGame)
+    {
+        var files = new List<HairPortWriter.MaterialWrite>();
+        var (skl, sklBytes) = Carry(modRoot, owners, owner, HairPortPlan.SkeletonPath(from, skeleton),
+                                    HairPortPlan.SkeletonPath(to, id), readGame);
+        var bones = HairPortPlan.SkeletonBones(sklBytes);
+        if (skl == null || MissingBones(model, bones).Count > 0) return null;
+        files.Add(skl);
+
+        string physics = HairPortPlan.PhysicsPath(to, id);
+        var (phy, _) = Carry(modRoot, owners, owner, HairPortPlan.PhysicsPath(from, skeleton), physics, readGame);
+        // The target's own physics would swing bones the carried skeleton does not have.
+        if (phy == null && (readGame(physics) != null || owners.Any(o => HairPortPlan.FileFor(o, physics) != null)))
+            return null;
+        if (phy != null) files.Add(phy);
+
+        foreach (var f in files)
+        {
+            var existing = HairPortPlan.FileFor(owner, f.GamePath);
+            bool ours = existing != null
+                && (HairPortPlan.IsPortFile(existing)
+                    || record.Ports.Any(p => HairPortPlan.Same(p.Owner, owner) && p.Materials.TryGetValue(f.GamePath, out var mine)
+                                             && HairPortRecord.Rel(mine).Equals(HairPortRecord.Rel(existing),
+                                                                                StringComparison.OrdinalIgnoreCase)));
+            if (existing != null ? !ours : !HairPortPlan.CanPortInto(owners, owner, f.GamePath)) return null;
+        }
+        return (files, bones, skeleton);
+    }
+
+    /// <summary>
+    /// A file the source race reads at <paramref name="source"/>, to publish at <paramref name="target"/>: the author's
+    /// own when the same place (or the default data) publishes it, otherwise a copy of another option's or the game's.
+    /// Null when there is none; the bytes as read, null for the author's own when it could not be read.
+    /// </summary>
+    private static (HairPortWriter.MaterialWrite? Write, byte[]? Bytes) Carry(string modRoot,
+        IReadOnlyList<HairPortPlan.Owner> owners, HairPortPlan.Owner owner, string source, string target,
+        Func<string, byte[]?> readGame)
+    {
+        var defaults = owners.FirstOrDefault(o => o.IsDefault);
+        var author = HairPortPlan.FileFor(owner, source) ?? (defaults != null ? HairPortPlan.FileFor(defaults, source) : null);
+        if (author != null) return (new HairPortWriter.MaterialWrite(target, author, null), ReadMod(modRoot, author));
+
+        var elsewhere = owners.Select(o => HairPortPlan.FileFor(o, source)).FirstOrDefault(r => r != null);
+        var bytes = elsewhere != null ? ReadMod(modRoot, elsewhere) : readGame(source);
+        return bytes == null ? (null, null) : (new HairPortWriter.MaterialWrite(target, null, bytes), bytes);
     }
 
     /// <summary>The skeleton the default data's port of ours carries for a target, or 0.</summary>
@@ -275,26 +355,19 @@ internal static class HairPortBuilder
     {
         missing = null;
         var result = new List<HairPortWriter.MaterialWrite>();
-        var defaults = owners.FirstOrDefault(o => o.IsDefault);
         foreach (var name in SecondSkinWriter.Parse(source).MatNames.Distinct())
         {
             var s = HairMaterialPath.GamePath(from, id, name);
             var t = HairMaterialPath.GamePath(to, id, HairMaterialPath.RenameRace(name, to));
             if (s == null || t == null || string.Equals(s, t, StringComparison.OrdinalIgnoreCase)) continue;
 
-            var author = HairPortPlan.FileFor(owner, s) ?? (defaults != null ? HairPortPlan.FileFor(defaults, s) : null);
-            if (author != null) { result.Add(new HairPortWriter.MaterialWrite(t, author, null)); continue; }
-
-            // Another option's, or the game's own.
-            var elsewhere = owners.Select(o => HairPortPlan.FileFor(o, s)).FirstOrDefault(r => r != null);
-            var bytes = elsewhere != null ? ReadMod(modRoot, elsewhere) : readGame(s);
-            if (bytes == null)
+            if (Carry(modRoot, owners, owner, s, t, readGame).Write is not { } write)
             {
                 missing = string.Format(Loc.Localize("HairPort.Refused.NoMaterial.Fmt",
                     "its material {0} could not be found"), s);
                 return result;
             }
-            result.Add(new HairPortWriter.MaterialWrite(t, null, bytes));
+            result.Add(write);
         }
         return result;
     }

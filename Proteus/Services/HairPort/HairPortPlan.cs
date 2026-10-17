@@ -260,6 +260,10 @@ internal static partial class HairPortPlan
     public static string SkeletonPath(ushort race, int id)
         => $"chara/human/c{race:D4}/skeleton/hair/h{id:D4}/skl_c{race:D4}h{id:D4}.sklb";
 
+    /// <summary>The game path of the physics that swings that skeleton's extra bones, beside it.</summary>
+    public static string PhysicsPath(ushort race, int id)
+        => $"chara/human/c{race:D4}/skeleton/hair/h{id:D4}/phy_c{race:D4}h{id:D4}.phyb";
+
     /// <summary>
     /// The extra bones (<c>j_ex_…</c>) a skeleton file names, read as the plain strings the file carries them as — no
     /// Havok parse needed to know which bones a race's skeleton has. Empty for no file.

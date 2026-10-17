@@ -25,9 +25,11 @@ internal static class HairPortWriter
     /// <param name="Millis">How long the bend took, for the log.</param>
     /// <param name="Est">The extra skeleton to give the target race beside the port (<see cref="HairPortPlan.HairEst"/>);
     /// 0 for none.</param>
+    /// <param name="SkeletonFrom">The source race's skeleton the port carries as the target's own for the hairstyle,
+    /// among <paramref name="Materials"/> (see <see cref="HairPortBuilder.CarrySkeleton"/>); 0 for none.</param>
     public sealed record PortWrite(HairPortPlan.Owner Into, string SourceGamePath, string SourceFile, string SourceSha8,
                                    string TargetGamePath, byte[] Model, IReadOnlyList<MaterialWrite> Materials,
-                                   long Millis = 0, int Est = 0);
+                                   long Millis = 0, int Est = 0, int SkeletonFrom = 0);
 
     /// <summary>The <c>Est</c> manipulation that gives a port's race its extra skeleton.</summary>
     internal static object EstFor(string targetGamePath, int entry)
@@ -145,7 +147,7 @@ internal static class HairPortWriter
                         Group = owner.Group, Option = owner.Option, SourceGamePath = w.SourceGamePath,
                         SourceFile = HairPortRecord.Rel(w.SourceFile), SourceSha8 = w.SourceSha8,
                         TargetGamePath = w.TargetGamePath, File = file, Materials = materials, Auto = auto,
-                        PortVersion = HairPortBaker.Version, Est = w.Est,
+                        PortVersion = HairPortBaker.Version, Est = w.Est, SkeletonFrom = w.SkeletonFrom,
                     });
                 }
 
