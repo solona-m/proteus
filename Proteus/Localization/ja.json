@@ -4059,6 +4059,22 @@
     "message": "（バニラ）",
     "description": ""
   },
+  "WhatsNew.HairPort.Head": {
+    "message": "別の種族用の髪Modがあなたの種族に合うように",
+    "description": "Release-notes section heading for hair mods fitted automatically from another race to the player's."
+  },
+  "WhatsNew.HairPort.Body": {
+    "message": "多くの髪Modは一つの種族専用に作られているため、他の種族ではゲーム標準の髪型が表示されます。Proteus は Mod の髪型をあなたの種族の頭に合わせて曲げ、同じ Mod の同じオプションに追加するようになりました。コレクションで有効な髪Modを今いちど確認し、以後もインストール・有効化・変更のたびに確認します。合わせた髪型の番号はチャットでお知らせするので、どれを選べばよいかわかります。物理演算で揺れる髪は、その揺れもそのまま保たれます。\n\nProteus をオフにしても機能し、Mod と一緒に持ち運ばれます。オフにする、もう一度確認する、合わせた髪型を元に戻す、といった操作は 設定 › 髪 から行えます。",
+    "description": "Release-notes section on hair fitted automatically from another race. 'Settings, Hair' names the Settings tab and its Hair section - match Tab.Settings and Settings.Section.HairPort. 'Physics hair' is hair that sways with its own bones."
+  },
+  "WhatsNew.HairPortStudio.Head": {
+    "message": "髪型を全種族へ一度に移植",
+    "description": "Release-notes section heading for the Studio's tool that ports one hair mod to every race at once."
+  },
+  "WhatsNew.HairPortStudio.Body": {
+    "message": "髪Modを自分だけでなく誰にでも使えるようにするには、その髪型モデルの一つをスタジオで開き、「全種族に移植」を使います。Proteus が同じ性別の他のすべての種族に一度に合わせて曲げ、その結果を Mod の同じオプションに追加します。作者が作った種族の分はそのままにし、「移植を削除」ですべて取り除けます。",
+    "description": "Release-notes section on the Studio's \"Port to all races\". 'Studio' is the tab name (Tab.Parts); the two quoted labels must match HairPort.Studio.Header and HairPort.Studio.Remove."
+  },
   "WhatsNew.AutoRefit.Body": {
     "message": "Proteus は、胴・脚・手・足の装備を身に着けた瞬間に、自動であなたの体型に合わせられるようになりました。装備がどの体型 MOD のどのサイズ用に作られたかを調べ、装備とそれが覆う体の部位を作り直し、新しいサイズを装備の MOD 自体に保存してオンにします。開始時と完了時にはチャットでお知らせします。\n\n使うには、設定 › 体型の自動調整 を開きます。「身に着けた装備を自分の体型に自動で合わせる」にチェックを入れ、Penumbra のコレクションごとに体型 MOD と胸・脚のサイズを選んでください。手と足は自動で合わせます。すでに着ている装備は「今着ている装備を調整」で調整でき、ゲーム本来の装備には専用のチェックボックスがあります。Penumbra で「Original」や別のサイズを選んだ場合は、常にそのまま尊重されます。",
     "description": ""
@@ -4068,8 +4084,8 @@
     "description": ""
   },
   "WhatsNew.IntroAll": {
-    "message": "Proteus について知っておきたい 4 つのこと。このウィンドウは一度だけ表示され、二度と開きません。",
-    "description": ""
+    "message": "Proteus について知っておきたいことをいくつか紹介します。このウィンドウは一度だけ表示され、二度と開きません。",
+    "description": "First line of the release-notes window for someone who has never seen it; every section follows."
   },
   "WhatsNew.IntroSince": {
     "message": "前回このウィンドウを見てから新しくなったことがあります。このウィンドウは一度だけ表示され、二度と開きません。",

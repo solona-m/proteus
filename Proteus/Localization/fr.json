@@ -4059,6 +4059,22 @@
     "message": "(vanilla)",
     "description": ""
   },
+  "WhatsNew.HairPort.Head": {
+    "message": "Les mods de coiffure faits pour une autre race s'adaptent désormais à la vôtre",
+    "description": "Release-notes section heading for hair mods fitted automatically from another race to the player's."
+  },
+  "WhatsNew.HairPort.Body": {
+    "message": "Beaucoup de mods de coiffure ne sont faits que pour une seule race : sur toute autre race, le jeu affiche alors sa propre coiffure à la place. Proteus plie désormais la coiffure du mod sur la tête de votre race et l'ajoute à la même option du même mod. Il passe en revue les mods de coiffure activés dans votre collection une première fois maintenant, puis à chaque fois qu'un mod est installé, activé ou modifié. Le chat indique les numéros des coiffures adaptées, pour que vous sachiez laquelle choisir. Les cheveux à physique gardent leur physique.\n\nCela continue de fonctionner avec Proteus désactivé et suit le mod. Désactivez la fonction, relancez une vérification ou annulez une coiffure adaptée dans Paramètres, Cheveux.",
+    "description": "Release-notes section on hair fitted automatically from another race. 'Settings, Hair' names the Settings tab and its Hair section - match Tab.Settings and Settings.Section.HairPort. 'Physics hair' is hair that sways with its own bones."
+  },
+  "WhatsNew.HairPortStudio.Head": {
+    "message": "Transposer une coiffure à toutes les races d'un coup",
+    "description": "Release-notes section heading for the Studio's tool that ports one hair mod to every race at once."
+  },
+  "WhatsNew.HairPortStudio.Body": {
+    "message": "Pour qu'un mod de coiffure fonctionne pour tout le monde, et pas seulement pour vous, ouvrez l'un de ses modèles de coiffure dans le Studio et utilisez « Transposer à toutes les races ». Proteus la plie en une seule fois sur chaque autre race du même sexe et ajoute les résultats à la même option du mod. Les races pour lesquelles l'auteur l'a faite ne sont pas touchées, et « Retirer les transpositions » les enlève toutes à nouveau.",
+    "description": "Release-notes section on the Studio's \"Port to all races\". 'Studio' is the tab name (Tab.Parts); the two quoted labels must match HairPort.Studio.Header and HairPort.Studio.Remove."
+  },
   "WhatsNew.AutoRefit.Body": {
     "message": "Proteus peut désormais ajuster tout seul l'équipement de torse, de jambes, de mains et de pieds à votre corps, dès que vous l'équipez. Il détermine pour quel mod de corps et quelle taille l'équipement a été fait, l'ajuste ainsi que les parties du corps qu'il couvre, enregistre la nouvelle taille dans le mod de l'équipement et l'active. Le chat vous prévient au début et à la fin.\n\nPour l'utiliser, ouvrez Paramètres › Ajustement au corps. Cochez « Ajuster l'équipement à mon corps quand je l'équipe », puis choisissez votre mod de corps et ses tailles de poitrine et de jambes pour chaque collection Penumbra ; les mains et les pieds sont assortis pour vous. L'équipement déjà porté s'ajuste avec « Ajuster ce que je porte maintenant », et l'équipement d'origine du jeu a sa propre case à cocher. Choisir « Original » ou une autre taille dans Penumbra est toujours respecté.",
     "description": ""
@@ -4068,8 +4084,8 @@
     "description": ""
   },
   "WhatsNew.IntroAll": {
-    "message": "Quatre choses à savoir sur Proteus. Cette fenêtre s'ouvre une fois, puis plus jamais.",
-    "description": ""
+    "message": "Quelques points à savoir sur Proteus. Cette fenêtre s'ouvre une fois, puis plus jamais.",
+    "description": "First line of the release-notes window for someone who has never seen it; every section follows."
   },
   "WhatsNew.IntroSince": {
     "message": "Du nouveau depuis la dernière fois que vous avez vu cette fenêtre. Elle s'ouvre une fois, puis plus jamais.",

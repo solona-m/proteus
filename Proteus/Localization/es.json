@@ -4059,6 +4059,22 @@
     "message": "(vanilla)",
     "description": ""
   },
+  "WhatsNew.HairPort.Head": {
+    "message": "Los mods de pelo hechos para otra raza ya se ajustan a la tuya",
+    "description": "Release-notes section heading for hair mods fitted automatically from another race to the player's."
+  },
+  "WhatsNew.HairPort.Body": {
+    "message": "Muchos mods de pelo están hechos para una sola raza, así que en cualquier otra el juego muestra su propio peinado. Ahora Proteus dobla el peinado del mod sobre la cabeza de tu raza y lo añade a la misma opción del mismo mod. Revisa ahora una vez los mods de pelo activos en tu colección, y de nuevo cada vez que se instala, se activa o se cambia uno. El chat indica los números de peinado que ha ajustado, para que sepas cuál elegir. El pelo con físicas conserva sus físicas.\n\nSigue funcionando con Proteus desactivado y viaja con el mod. Puedes desactivarlo, volver a comprobar o deshacer un peinado ajustado en Ajustes, Pelo.",
+    "description": "Release-notes section on hair fitted automatically from another race. 'Settings, Hair' names the Settings tab and its Hair section - match Tab.Settings and Settings.Section.HairPort. 'Physics hair' is hair that sways with its own bones."
+  },
+  "WhatsNew.HairPortStudio.Head": {
+    "message": "Porta un peinado a todas las razas a la vez",
+    "description": "Release-notes section heading for the Studio's tool that ports one hair mod to every race at once."
+  },
+  "WhatsNew.HairPortStudio.Body": {
+    "message": "Para que un mod de pelo funcione para todos, no solo para ti, abre uno de sus modelos de pelo en el Estudio y usa «Portar a todas las razas». Proteus lo dobla sobre todas las demás razas del mismo sexo de una sola vez y añade los resultados a la misma opción del mod. Las razas para las que lo hizo el autor se dejan como están, y «Quitar versiones portadas» las vuelve a quitar todas.",
+    "description": "Release-notes section on the Studio's \"Port to all races\". 'Studio' is the tab name (Tab.Parts); the two quoted labels must match HairPort.Studio.Header and HairPort.Studio.Remove."
+  },
   "WhatsNew.AutoRefit.Body": {
     "message": "Proteus ahora puede ajustar por sí solo el equipo de pecho, piernas, manos y pies a tu cuerpo en cuanto te lo pones. Averigua para qué mod de cuerpo y qué talla se hizo el equipo, lo ajusta junto con las partes del cuerpo que cubre, guarda la nueva talla en el propio mod del equipo y la activa. El chat avisa cuando empieza y cuando termina.\n\nPara usarlo, abre Ajustes › Ajuste al cuerpo. Marca «Ajustar el equipo a mi cuerpo al ponérmelo» y elige tu mod de cuerpo y sus tallas de pecho y piernas para cada colección de Penumbra; las manos y los pies se emparejan solos. El equipo que ya llevas se ajusta con «Ajustar lo que llevo puesto», y el equipo original del juego tiene su propia casilla. Elegir «Original» u otra talla en Penumbra siempre se respeta.",
     "description": ""
@@ -4068,8 +4084,8 @@
     "description": ""
   },
   "WhatsNew.IntroAll": {
-    "message": "Cuatro cosas que conviene saber sobre Proteus. Esta ventana se abre una vez y no vuelve a abrirse.",
-    "description": ""
+    "message": "Algunas cosas que conviene saber sobre Proteus. Esta ventana se abre una vez y no vuelve a abrirse.",
+    "description": "First line of the release-notes window for someone who has never seen it; every section follows."
   },
   "WhatsNew.IntroSince": {
     "message": "Hay algo nuevo desde la última vez que viste esta ventana. Se abre una vez y no vuelve a abrirse.",

@@ -312,11 +312,32 @@ public sealed class WhatsNewStrings
 
     /// <summary>For someone seeing the notes for the first time: every section is shown.</summary>
     public readonly string IntroAll = Loc.Localize("WhatsNew.IntroAll",
-        "Four things worth knowing about Proteus. This window opens once, and not again.");
+        "A few things worth knowing about Proteus. This window opens once, and not again.");
 
     /// <summary>For someone who closed the earlier notes: only what is new since then is shown.</summary>
     public readonly string IntroSince = Loc.Localize("WhatsNew.IntroSince",
         "Something new since you last saw this window. It opens once, and not again.");
+
+    public readonly string HairPortHead = Loc.Localize("WhatsNew.HairPort.Head",
+        "Hair mods made for another race now fit yours");
+
+    public readonly string HairPortBody = Loc.Localize("WhatsNew.HairPort.Body",
+        "Many hair mods are made for one race only, so on any other race the game shows its own hairstyle instead. "
+      + "Proteus now bends the mod's hairstyle onto your race's head and adds it to the same option of the same mod. "
+      + "It looks through the hair mods switched on in your collection once now, and again whenever one is "
+      + "installed, switched on or changed. Chat names the hairstyle numbers it fitted, so you know which to "
+      + "choose. Physics hair keeps its physics.\n\n"
+      + "It keeps working with Proteus turned off and travels with the mod. Switch it off, check again, or undo a "
+      + "fitted hairstyle under Settings, Hair.");
+
+    public readonly string HairPortStudioHead = Loc.Localize("WhatsNew.HairPortStudio.Head",
+        "Port a hairstyle to every race at once");
+
+    public readonly string HairPortStudioBody = Loc.Localize("WhatsNew.HairPortStudio.Body",
+        "To make a hair mod work for everyone, not only you, open one of its hair models in the Studio and use "
+      + "\"Port to all races\". Proteus bends it onto every other race of the same sex in one go and adds the "
+      + "results to the same option of the mod. Races the author made it for are left alone, and \"Remove ports\" "
+      + "takes them all back out.");
 
     public readonly string AutoRefitHead = Loc.Localize("WhatsNew.AutoRefit.Head",
         "Gear refits itself to your body");

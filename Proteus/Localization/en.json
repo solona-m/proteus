@@ -4059,6 +4059,22 @@
     "message": "(vanilla)",
     "description": ""
   },
+  "WhatsNew.HairPort.Head": {
+    "message": "Hair mods made for another race now fit yours",
+    "description": "Release-notes section heading for hair mods fitted automatically from another race to the player's."
+  },
+  "WhatsNew.HairPort.Body": {
+    "message": "Many hair mods are made for one race only, so on any other race the game shows its own hairstyle instead. Proteus now bends the mod's hairstyle onto your race's head and adds it to the same option of the same mod. It looks through the hair mods switched on in your collection once now, and again whenever one is installed, switched on or changed. Chat names the hairstyle numbers it fitted, so you know which to choose. Physics hair keeps its physics.\n\nIt keeps working with Proteus turned off and travels with the mod. Switch it off, check again, or undo a fitted hairstyle under Settings, Hair.",
+    "description": "Release-notes section on hair fitted automatically from another race. 'Settings, Hair' names the Settings tab and its Hair section - match Tab.Settings and Settings.Section.HairPort. 'Physics hair' is hair that sways with its own bones."
+  },
+  "WhatsNew.HairPortStudio.Head": {
+    "message": "Port a hairstyle to every race at once",
+    "description": "Release-notes section heading for the Studio's tool that ports one hair mod to every race at once."
+  },
+  "WhatsNew.HairPortStudio.Body": {
+    "message": "To make a hair mod work for everyone, not only you, open one of its hair models in the Studio and use \"Port to all races\". Proteus bends it onto every other race of the same sex in one go and adds the results to the same option of the mod. Races the author made it for are left alone, and \"Remove ports\" takes them all back out.",
+    "description": "Release-notes section on the Studio's \"Port to all races\". 'Studio' is the tab name (Tab.Parts); the two quoted labels must match HairPort.Studio.Header and HairPort.Studio.Remove."
+  },
   "WhatsNew.AutoRefit.Body": {
     "message": "Proteus can now refit chest, legs, hands and feet gear to your body by itself, the moment you put it on. It works out which body mod and size the gear was made for, refits it and the parts of the body it reaches, saves the new size into the gear's own mod and switches it on. Chat says when it starts and when it is done.\n\nTo use it, open Settings, Body refit. Tick \"Refit gear to my body as I put it on\", then pick your body mod and its chest and legs sizes for each Penumbra collection; hands and feet are matched for you. Gear you are already wearing is refitted with \"Refit what I'm wearing now\", and the game's own gear has a checkbox of its own. Choosing \"Original\" or another size in Penumbra is always left alone.",
     "description": "Release-notes section on the automatic body refit and how to switch it on. \"Settings\" and \"Body refit\" name a tab and a section - match Tab.Settings and Settings.Section.AutoRefit. The two quoted labels must match AutoRefit.Enable.Label and AutoRefit.RunNow. \"Original\" is a Penumbra option name and stays in English."
@@ -4068,8 +4084,8 @@
     "description": "Release-notes section heading for the automatic body refit."
   },
   "WhatsNew.IntroAll": {
-    "message": "Four things worth knowing about Proteus. This window opens once, and not again.",
-    "description": "First line of the release-notes window for someone who has never seen it; all four sections follow."
+    "message": "A few things worth knowing about Proteus. This window opens once, and not again.",
+    "description": "First line of the release-notes window for someone who has never seen it; every section follows."
   },
   "WhatsNew.IntroSince": {
     "message": "Something new since you last saw this window. It opens once, and not again.",

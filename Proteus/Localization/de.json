@@ -4059,6 +4059,22 @@
     "message": "(Vanilla)",
     "description": ""
   },
+  "WhatsNew.HairPort.Head": {
+    "message": "Haar-Mods für ein anderes Volk passen jetzt auch zu deinem",
+    "description": "Release-notes section heading for hair mods fitted automatically from another race to the player's."
+  },
+  "WhatsNew.HairPort.Body": {
+    "message": "Viele Haar-Mods sind nur für ein Volk gemacht, daher zeigt das Spiel bei jedem anderen Volk stattdessen seine eigene Frisur. Proteus biegt die Frisur des Mods jetzt auf den Kopf deines Volkes und fügt sie derselben Option desselben Mods hinzu. Die in deiner Sammlung aktiven Haar-Mods sieht es jetzt einmal durch und danach erneut, sobald einer installiert, aktiviert oder geändert wird. Der Chat nennt die Nummern der angepassten Frisuren, damit du weißt, welche du wählen musst. Haare mit Physik behalten ihre Physik.\n\nDas funktioniert auch mit ausgeschaltetem Proteus und wandert mit dem Mod. Abschalten, erneut prüfen oder eine angepasste Frisur rückgängig machen kannst du unter Einstellungen, Haare.",
+    "description": "Release-notes section on hair fitted automatically from another race. 'Settings, Hair' names the Settings tab and its Hair section - match Tab.Settings and Settings.Section.HairPort. 'Physics hair' is hair that sways with its own bones."
+  },
+  "WhatsNew.HairPortStudio.Head": {
+    "message": "Eine Frisur auf einmal auf alle Völker übertragen",
+    "description": "Release-notes section heading for the Studio's tool that ports one hair mod to every race at once."
+  },
+  "WhatsNew.HairPortStudio.Body": {
+    "message": "Damit ein Haar-Mod nicht nur bei dir, sondern bei allen funktioniert, öffne eines seiner Haarmodelle im Studio und nutze „Auf alle Völker übertragen“. Proteus biegt es in einem Durchgang auf jedes andere Volk desselben Geschlechts und fügt die Ergebnisse derselben Option des Mods hinzu. Völker, für die der Mod gemacht wurde, bleiben unberührt, und „Übertragungen entfernen“ nimmt alle Übertragungen wieder heraus.",
+    "description": "Release-notes section on the Studio's \"Port to all races\". 'Studio' is the tab name (Tab.Parts); the two quoted labels must match HairPort.Studio.Header and HairPort.Studio.Remove."
+  },
   "WhatsNew.AutoRefit.Body": {
     "message": "Proteus kann Ausrüstung für Brust, Beine, Hände und Füße jetzt ganz von selbst an deinen Körper anpassen, sobald du sie anlegst. Es ermittelt, für welchen Körper-Mod und welche Größe die Ausrüstung gemacht wurde, passt sie und die Körperteile, die sie erreicht, an, speichert die neue Größe im Mod der Ausrüstung und schaltet sie ein. Der Chat meldet Beginn und Ende.\n\nSo nutzt du es: Öffne Einstellungen › Körperanpassung. Hake „Ausrüstung beim Anlegen an meinen Körper anpassen“ an und wähle für jede Penumbra-Kollektion deinen Körper-Mod sowie Brust- und Beingröße; Hände und Füße werden passend gewählt. Bereits getragene Ausrüstung passt du mit „Was ich gerade trage anpassen“ an, und für die Ausrüstung des Spiels gibt es ein eigenes Kästchen. Wählst du in Penumbra „Original“ oder eine andere Größe, bleibt das immer unangetastet.",
     "description": ""
@@ -4068,8 +4084,8 @@
     "description": ""
   },
   "WhatsNew.IntroAll": {
-    "message": "Vier Dinge, die du über Proteus wissen solltest. Dieses Fenster öffnet sich einmal und dann nicht wieder.",
-    "description": ""
+    "message": "Ein paar Dinge, die du über Proteus wissen solltest. Dieses Fenster öffnet sich einmal und dann nicht wieder.",
+    "description": "First line of the release-notes window for someone who has never seen it; every section follows."
   },
   "WhatsNew.IntroSince": {
     "message": "Seit du dieses Fenster zuletzt gesehen hast, gibt es etwas Neues. Es öffnet sich einmal und dann nicht wieder.",
