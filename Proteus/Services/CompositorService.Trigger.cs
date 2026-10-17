@@ -273,12 +273,10 @@ public partial class CompositorService
                 {
                     _activeMtrlSnapshot = fresh;
                     _activeMtrlSnapshotDirty = false;
-                    // Under the lock like every other off-thread save; an unsynchronized Save can throw and silently drop the composite.
-                    lock (_bodyModConfigLock)
-                    {
-                        config.CachedActiveMaterialPaths = fresh.ToList();
-                        config.Save();
-                    }
+                    // A new list swapped in whole, under the config's gate like every off-thread change; the save
+                    // itself is written on the framework thread (see ConfigSaveScheduler).
+                    lock (config.Gate) config.CachedActiveMaterialPaths = fresh.ToList();
+                    config.Save();
                 }
             }
             Recomposite(token, force, skinFingerprintAuthoritative,

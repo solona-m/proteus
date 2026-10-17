@@ -363,8 +363,8 @@ public class StatusWindow : Window
     }
 
     /// <summary>
-    /// Write the dragged size to the config once the drag is over. Debounced, on the UI thread: Save serializes the whole
-    /// config, too slow per frame and unsafe off-thread while a composite mutates it. Public for the plugin's teardown.
+    /// Write the dragged size to the config once the drag is over. Debounced: Save serializes the whole config, too slow
+    /// per frame. Public for the plugin's teardown.
     /// </summary>
     public void FlushPendingSize()
     {
