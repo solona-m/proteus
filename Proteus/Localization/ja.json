@@ -4307,6 +4307,90 @@
     "message": "新しいモデルを読み戻せませんでした",
     "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. Lower-case, no full stop."
   },
+  "Parts.Retarget.Race.Label": {
+    "message": "リフィット対象の種族",
+    "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
+  },
+  "Parts.Retarget.Race.Tip": {
+    "message": "どの種族向けにリフィットするか。衣装と同じ性別の別の種族を選ぶと、このモデルからゲームと同じ方法で曲げた専用モデルを作り、その種族の体型にリフィットして、その種族が読み込む場所に保存します。他の種族はこのモデルのままです。",
+    "description": "Tooltip of Parts.Retarget.Race.Label."
+  },
+  "Parts.Retarget.Race.ThisModel.Fmt": {
+    "message": "{0}（このモデル）",
+    "description": "An entry of the Refit for list; {0} is a race such as \"Midlander M\": the race of the model open."
+  },
+  "Parts.Retarget.Race.AsWorn.Fmt": {
+    "message": "{0}（キャラクターが着る形）",
+    "description": "An entry of the Refit for list; {0} is a race such as \"Midlander F\": the race the logged-in character would get it as."
+  },
+  "Parts.Retarget.Race.OwnModel.Fmt": {
+    "message": "この Mod にはすでに専用の{0}モデルがあります。そちらをリフィットしてください。",
+    "description": "{0} is a race such as \"Highlander M\" the mod already ships a model of."
+  },
+  "Parts.Retarget.Race.OpenModel.Fmt": {
+    "message": "{0}モデルを開く",
+    "description": "A button; {0} is a race such as \"Highlander M\"."
+  },
+  "Parts.Retarget.Race.Baking.Fmt": {
+    "message": "{0}モデルを作成中…",
+    "description": "Shown while the model for a picked race is made; {0} is a race such as \"Highlander M\"."
+  },
+  "Parts.Retarget.Race.Only.Fmt": {
+    "message": "保存したリフィットを着るのは{0}だけです。{1}はこのモデルのままです。",
+    "description": "{0} is the race picked, {1} the race of the model open."
+  },
+  "Parts.Retarget.Race.SourceBaked.Fmt": {
+    "message": "作成元の体型も同じ方法で{0}に曲げるので、元と同じように体に沿います。",
+    "description": "{0} is the race picked."
+  },
+  "Parts.Retarget.Race.PreviewOther.Fmt": {
+    "message": "キャラクターが{0}ではないため、ライブプレビューはキャラクターに合わせて曲げられ、{0}での見た目とは異なります。",
+    "description": "{0} is the race picked."
+  },
+  "Parts.Retarget.Race.PreviewNotDrawn.Fmt": {
+    "message": "キャラクターがこのモデルを着ていないため、ライブプレビューはありません。保存したリフィットが{0}の着る形です。",
+    "description": "{0} is the race picked."
+  },
+  "Parts.Retarget.Race.SkeletonFallback.Fmt": {
+    "message": "Mod の{0}のスケルトンを読み取れなかったため、ゲーム本来のものを使用しました。",
+    "description": "{0} is the race picked."
+  },
+  "Parts.Retarget.Race.EstCarried.Fmt": {
+    "message": "保存時に、{1}がこのアイテムで読み込む追加スケルトン（{2}）を{0}にも設定し、追加ボーンが動くようにします。",
+    "description": "{0} is the race picked, {1} the race of the model open, {2} the extra skeleton's number."
+  },
+  "Parts.Retarget.Race.NoDeformer": {
+    "message": "ゲームの種族デフォーマーを読み取れませんでした",
+    "description": "Why a model for a picked race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. Lower-case, no full stop."
+  },
+  "Parts.Retarget.Race.NoSkeleton.Fmt": {
+    "message": "{0}のスケルトンを読み取れませんでした",
+    "description": "Why a model for a picked race could not be made; {0} is a race. Lower-case, no full stop."
+  },
+  "Parts.Retarget.Race.Unbendable.Fmt": {
+    "message": "{0}が{1}のスケルトンでは動きません：{2}",
+    "description": "Why a model for a picked race could not be made: {0} is Parts.Retarget.Race.OneBone or .ManyBones.Fmt, {1} a race, {2} bone names. Lower-case, no full stop."
+  },
+  "Parts.Retarget.Race.OneBone": {
+    "message": "衣装がウェイトを持つボーン1本",
+    "description": "The {0} of Parts.Retarget.Race.Unbendable.Fmt."
+  },
+  "Parts.Retarget.Race.ManyBones.Fmt": {
+    "message": "衣装がウェイトを持つボーン{0}本",
+    "description": "The {0} of Parts.Retarget.Race.Unbendable.Fmt; {0} here is a count."
+  },
+  "Parts.Retarget.Race.LeftOut.Fmt": {
+    "message": "作成元の体型のうち、同じように曲げられないため除外したもの：{0}",
+    "description": "{0} lists the left-out bodies, each with Parts.Retarget.Race.BodyBones.Fmt or another reason."
+  },
+  "Parts.Retarget.Race.BodyBones.Fmt": {
+    "message": "ボーン{0}が{1}のスケルトンでは動きません",
+    "description": "Why a made-for body was left out: {0} lists bone names, {1} is a race. Lower-case, no full stop."
+  },
+  "Parts.Retarget.Race.Remake.Fmt": {
+    "message": "保存先によって{0}モデルが変わるため、作り直しています。もう一度リフィットしてプレビューしてから保存してください。",
+    "description": "A save refused: where it goes changes what the picked race's model is made with. {0} is the race picked."
+  },
   "Parts.Retarget.BodyFallback": {
     "message": "体型",
     "description": "Body size: starts the name of a saved Penumbra option when the target body mod's own name is unknown."
