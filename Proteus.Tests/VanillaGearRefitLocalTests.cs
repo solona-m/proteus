@@ -155,7 +155,7 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
         var r = Plan(garmentName, modNeed, rel);
         var (bytes, garment, source, target, option, pair, game) = (r.Bytes, r.Garment, r.Source, r.Target, r.Option, r.Pair, r.Game);
         // The mod paths these bounds were measured against, as they were: the made-on body's reading of cloth past an
-        // open skin edge (build 1316) takes up to 80 of a game top's points in on them and shows less skin through — which
+        // open skin edge (build 1323) takes up to 80 of a game top's points in on them and shows less skin through — which
         // would tip a bound on how much of THEIR skin the game path still shows without anything getting worse. That
         // reading is judged on its own in OpenPatchGameTopLocalTests; the game path never takes it (it clears the body).
         var modPaths = new BodyRetarget.Tuning(NoOpenEdgeFit: true);

@@ -27,7 +27,7 @@ public class SkirtHipsRegressionLocalTests(ITestOutputHelper output)
     private const string Race = "0201";
 
     /// <summary>The thick-shell rules' gates compare these two, both without the made-on body's reading of cloth past
-    /// an open skin edge (build 1316), which came after: with it on one side only, its own gains (This Old Thing onto Rue L
+    /// an open skin edge (build 1323), which came after: with it on one side only, its own gains (This Old Thing onto Rue L
     /// 67 -> 18 points inside) would pad the margin a regression in those rules has to clear.</summary>
     private static readonly BodyRetarget.Tuning Old = new(NoWallPair: true, NoWallCover: true, NoRimTurnGuard: true,
                                                           NoSnapPush: true, NoOpenEdgeFit: true);
@@ -227,7 +227,7 @@ public class SkirtHipsRegressionLocalTests(ITestOutputHelper output)
         => NoWorse("This Old Thing Neolithe L -> Rue L",
                    Refit(OldThing, "size/neolithe l/chara/equipment/e6255/model/c0201e6255_top.mdl",
                          "size/rue l/chara/equipment/e6255/model/c0201e6255_top.mdl", "_top", [Rue, Neolithe]), againstAuthor: false,
-                   // Accepted (build 1316): the made-on body's reading takes 2,619 of its points in, against Neolithe's
+                   // Accepted (build 1323): the made-on body's reading takes 2,619 of its points in, against Neolithe's
                    // push-up L and its undies: cloth inside Rue L 67 -> 18, edges stretched against the authored garment
                    // 96 -> 47, folds 14 -> 21 and triangles turned over against it 7 -> 14 — the new ones in the
                    // underbust crease — and its worst move 60.2 -> 62.4 mm.

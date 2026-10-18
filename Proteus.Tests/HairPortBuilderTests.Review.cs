@@ -1,0 +1,737 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using Proteus.Services;
+using Xunit;
+using XivLiveMesh;
+using static Proteus.Tests.HairPortFixtures;
+
+namespace Proteus.Tests;
+
+/// <summary>
+/// Old carries taken through the paths a player meets them on — worn, checked, stripped — and the edges the review of
+/// the game-table work named: hat fits kept, kinematics slots skipped, the author's own skeleton files judged by their
+/// bones, ports of other hairstyles never shared with.
+/// </summary>
+public partial class HairPortBuilderTests
+{
+    /// <summary>The watcher's view of the plugin, on one mod and the game given.</summary>
+    private sealed class PortHost(Mod mod, Func<string, byte[]?> game) : HairPortWatcher.IHost
+    {
+        public readonly Dictionary<string, string> Files = new(StringComparer.OrdinalIgnoreCase);
+        public readonly List<string> Calls = [];
+        public bool Enabled => true;
+        public string? ModsRoot => Path.GetDirectoryName(mod.Root);
+        public string? Resolve(string gamePath) => Files.GetValueOrDefault(gamePath);
+        public PbdFile? Pbd() => HairPortFixtures.Pbd();
+        public byte[]? ReadGame(string gamePath) => game(gamePath);
+        public void Log(string message) { }
+        public void Announce() => Calls.Add("announce");
+        public void Reload(string modDir) => Calls.Add("reload");
+        public string? WornNow() => Target;
+        public void Redraw() => Calls.Add("redraw");
+
+        /// <summary>The player wears the port of the target, the source race's model resolving to the author's.</summary>
+        public PortHost Wearing()
+        {
+            Files[Target] = Path.Combine(mod.Root, HairPortRecord.Read(mod.Root).Ports.Single().File);
+            Files[Source] = Path.Combine(mod.Root, "long.mdl");
+            return this;
+        }
+    }
+
+    /// <summary>
+    /// An old carry at the hairstyle's own number that another hairstyle of the race loads, and that cannot be made again:
+    /// the source race's skeleton is gone from the game.
+    /// </summary>
+    private static (Mod Mod, Func<string, byte[]?> Game) StrippableOldCarry()
+    {
+        var mod = BorrowMod();
+        Assert.True(HairPortWriter.Save(mod.Root, [BuildOne(mod, TableGame([(801, Id, 170), (201, Id, Id)]))], false).Ok);
+        MakeOld(mod);
+        return (mod, Game(Races, new Dictionary<string, byte[]>
+        {
+            [HairSkeletonTable.GamePath] = EstBytes((801, Id, 170), (201, Id, Id), (201, 131, Id)),
+        }));
+    }
+
+    /// <summary>Worn, an old carry the race does not load is remade — with an entry to the slot it now goes to.</summary>
+    [Fact]
+    [Trait("Plan", "AC-hair-skeleton-infer-8")]
+    [Trait("Plan", "AC-hair-skeleton-infer-5")]
+    public void A_worn_old_carry_is_remade_with_an_entry()
+    {
+        using var mod = BorrowMod();
+        Assert.True(HairPortWriter.Save(mod.Root, [BuildOne(mod, TableGame([(801, Id, 170), (201, Id, Id)]))], false).Ok);
+        MakeOld(mod);
+        var game = TableGame([(801, Id, 170), (201, Id, 170)], new() { [HairPortPlan.SkeletonPath(201, 170)] = Lacking });
+
+        var host = new PortHost(mod, game).Wearing();
+        string? key = null;
+        var view = HairPortWatcher.Run(host, Target, ref key);
+        Assert.True(view.Ported, view.Message);
+        var entry = HairPortRecord.Read(mod.Root).Ports.Single(e => e.TargetGamePath == Target);
+        Assert.Equal((170, 170), (entry.Est, entry.SkeletonFrom));
+        Assert.Contains("reload", host.Calls);
+    }
+
+    /// <summary>Only mods with an old carry that is out of date are checked at start: one that works is left.</summary>
+    [Fact]
+    [Trait("Plan", "AC-hair-skeleton-infer-8")]
+    public void Mods_holding_an_old_carry_are_the_ones_checked_at_start()
+    {
+        var made = TableGame([(801, Id, 170), (201, Id, Id)]);
+        using var stale = BorrowMod();
+        using var works = BorrowMod();
+        using var fresh = BorrowMod();
+        foreach (var m in new[] { stale, works, fresh })
+            Assert.True(HairPortWriter.Save(m.Root, [BuildOne(m, made)], false).Ok);
+        MakeOld(stale);
+        MakeOld(works);
+
+        // The race loads slot 170 for the hairstyle now: the old carry at 130 is wrong.
+        var game = TableGame([(801, Id, 170), (201, Id, 170)], new() { [HairPortPlan.SkeletonPath(201, 170)] = Lacking });
+        Assert.Equal([stale.Root], HairPortWatcher.Decide.ModsWithOldCarries([stale.Root, fresh.Root], game));
+        Assert.Empty(HairPortWatcher.Decide.ModsWithOldCarries([works.Root, fresh.Root], made));
+    }
+
+    /// <summary>Stripped on equip: saved and reloaded, and said why it was not ported.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-28")]
+    public void A_worn_old_carry_that_cannot_be_remade_is_stripped_and_reloaded()
+    {
+        var (mod, game) = StrippableOldCarry();
+        using var _ = mod;
+        var host = new PortHost(mod, game).Wearing();
+        string? key = null;
+        var view = HairPortWatcher.Run(host, Target, ref key);
+        Assert.False(view.Ported);
+        Assert.True(view.Failed);
+        Assert.Contains("j_ex_h0170_ke_b", view.Message);
+        Assert.Contains("reload", host.Calls);
+        Assert.Null(HairPortPlan.FileFor(mod.Owner("Cut", "Long"), HairPortPlan.SkeletonPath(201, Id)));
+    }
+
+    /// <summary>Stripped by a check: a refused row with why, and the mod reloaded.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-28")]
+    public void A_checked_old_carry_that_cannot_be_remade_is_stripped_and_shown_refused()
+    {
+        var (mod, game) = StrippableOldCarry();
+        using var _ = mod;
+        var host = new PortHost(mod, game).Wearing();
+        var result = HairPortScan.Run(host, 201, [Id], null, new HairPortScan.Memo(), force: true, "test",
+                                      System.Threading.CancellationToken.None);
+        var row = Assert.Single(result.Rows);
+        Assert.Equal(HairPortScan.RowState.Refused, row.State);
+        Assert.Contains("j_ex_h0170_ke_b", row.Message);
+        Assert.Contains("reload", host.Calls);
+        Assert.Null(HairPortPlan.FileFor(mod.Owner("Cut", "Long"), HairPortPlan.SkeletonPath(201, Id)));
+    }
+
+    /// <summary>A strip changes only redirects: a hat fit of the port keeps its backup and record, and the port's record
+    /// keeps how and when it was made.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-28")]
+    public void A_strip_keeps_the_ports_hat_fit_and_its_record()
+    {
+        var (mod, game) = StrippableOldCarry();
+        using var _ = mod;
+        var before = HairPortRecord.Read(mod.Root).Ports.Single();
+        before.PortVersion = HairPortBaker.Version - 1;
+        HairPortRecord.Write(mod.Root, new HairPortRecord { Ports = [before] });
+        var fitted = mod.Get(before.File);
+        var backup = Path.Combine(SidecarDiscoveryService.SidecarSubdir, HatCompatService.BackupSubdir, before.File);
+        mod.Put(backup, [1, 2, 3]);
+        mod.Put(Path.Combine(SidecarDiscoveryService.SidecarSubdir, HatCompatService.RecordFile),
+                System.Text.Encoding.UTF8.GetBytes(System.Text.Json.JsonSerializer.Serialize(new { Files = new[] { before.File } })));
+
+        var plan = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, withSharers: false);
+        Assert.True(Assert.Single(plan.Writes).Stripped);
+        Assert.True(HairPortWriter.Save(mod.Root, plan.Writes, auto: true).Ok);
+
+        Assert.True(mod.Has(backup));
+        Assert.Equal(1, HatCompatService.PatchedCount(mod.Root));
+        Assert.Equal(fitted, mod.Get(before.File));
+        var after = HairPortRecord.Read(mod.Root).Ports.Single();
+        Assert.Equal((before.PortVersion, before.Auto, 0, 0), (after.PortVersion, after.Auto, after.Est, after.SkeletonFrom));
+    }
+
+    /// <summary>The port was undone between the plan and the save: its strip brings nothing back — no redirect to the
+    /// model or to files the undo deleted, and the undo stays remembered.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-28")]
+    public void A_strip_of_a_port_undone_meanwhile_brings_nothing_back()
+    {
+        var (mod, game) = StrippableOldCarry();
+        using var _ = mod;
+        var plan = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, withSharers: false);
+        Assert.True(Assert.Single(plan.Writes).Stripped);
+        Assert.True(HairPortWriter.Undo(mod.Root, _ => true, decline: true).Ok);
+
+        Assert.True(HairPortWriter.Save(mod.Root, plan.Writes, auto: true).Ok);
+        var owner = mod.Owner("Cut", "Long");
+        Assert.Null(HairPortPlan.FileFor(owner, Target));
+        Assert.All(mod.Owners.SelectMany(o => o.Files.Values), rel => Assert.True(mod.Has(rel), rel));
+        var record = HairPortRecord.Read(mod.Root);
+        Assert.Empty(record.Ports);
+        Assert.Contains(HairPortPlan.DeclineKey(Target), record.Declined);
+    }
+
+    /// <summary>A save that fails after a strip's option is written leaves the stripped ports published — they were
+    /// there before the save, and a race refused is not ported again.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-28")]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-14")]
+    public void A_failed_save_of_strips_leaves_the_ports_published()
+    {
+        using var mod = BorrowMod();
+        EditMeta(mod, n => n["DefaultData"]!["Files"]![Source] = "default.mdl");
+        mod.Put("default.mdl", HairModel(801, material: "/mt_c0801h0130_hir_b.mtrl", bones: [("j_ex_h0170_ke_b", 1f)]));
+        var made = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), TableGame([(801, Id, 170), (201, Id, Id)]), false);
+        Assert.True(HairPortWriter.Save(mod.Root, made.Writes, false).Ok);
+        // As the old carry wrote them: no entries, in either place.
+        var record = HairPortRecord.Read(mod.Root);
+        foreach (var e in record.Ports) e.Est = 0;
+        HairPortRecord.Write(mod.Root, record);
+        EditMeta(mod, n =>
+        {
+            foreach (var manips in new[] { n["DefaultData"]!["Manipulations"]!.AsArray(), n["Groups"]![0]!["Options"]![0]!["Manipulations"]!.AsArray() })
+                for (int i = manips.Count - 1; i >= 0; i--)
+                    if (HairPortPlan.HairEstEntry(System.Text.Json.JsonSerializer.SerializeToElement(manips[i]), 201, Id) != null)
+                        manips.RemoveAt(i);
+        });
+        var game = Game(Races, new Dictionary<string, byte[]>
+        {
+            [HairSkeletonTable.GamePath] = EstBytes((801, Id, 170), (201, Id, Id), (201, 131, Id)),
+        });
+        var plan = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, withSharers: false);
+        Assert.Equal(2, plan.Writes.Count(w => w.Stripped));
+
+        HairPortWriter.BeforeMerge = n => { if (n == 1) throw new IOException("disk full"); };
+        try { Assert.False(HairPortWriter.Save(mod.Root, plan.Writes, auto: true).Ok); }
+        finally { HairPortWriter.BeforeMerge = null; }
+
+        Assert.All(mod.Owners, o =>
+        {
+            var rel = HairPortPlan.FileFor(o, Target);
+            Assert.NotNull(rel);
+            Assert.True(mod.Has(rel!), rel);
+        });
+        Assert.Equal(2, HairPortRecord.Read(mod.Root).Ports.Count);
+    }
+
+    /// <summary>A port remade by another look between a strip's plan and its save — from a changed model, or the same
+    /// model with another skeleton — is not overwritten by the strip.</summary>
+    [Theory]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-28")]
+    [InlineData("model")]
+    [InlineData("entry")]
+    [InlineData("carried")]
+    [InlineData("material")]
+    public void A_strip_of_a_port_remade_meanwhile_is_skipped(string changed)
+    {
+        var (mod, game) = StrippableOldCarry();
+        using var _ = mod;
+        // A material redirect of the port's own, for the strip to keep.
+        const string Mtrl = "chara/human/c0201/obj/hair/h0130/material/v0001/mt_c0201h0130_hir_x.mtrl";
+        string mine = $"{HairPortPlan.Folder}/x/m.mtrl", theirs = $"{HairPortPlan.Folder}/x/m2.mtrl";
+        mod.Put(mine, [1]);
+        mod.Put(theirs, [2]);
+        EditMeta(mod, n => n["Groups"]![0]!["Options"]![0]!["Files"]![Mtrl] = mine);
+        var record = HairPortRecord.Read(mod.Root);
+        record.Ports.Single().Materials[Mtrl] = mine;
+        HairPortRecord.Write(mod.Root, record);
+
+        var plan = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, withSharers: false);
+        Assert.Contains(Assert.Single(plan.Writes, w => w.Stripped).Materials, m => m.GamePath == Mtrl);
+        record = HairPortRecord.Read(mod.Root);
+        var entry = record.Ports.Single();
+        switch (changed)
+        {
+            case "model": entry.SourceSha8 = "0badf00d"; break;
+            case "entry": entry.Est = 2; break;
+            case "carried": entry.SkeletonFrom = 171; break;
+            default:
+                entry.Materials[Mtrl] = theirs;
+                EditMeta(mod, n => n["Groups"]![0]!["Options"]![0]!["Files"]![Mtrl] = theirs);
+                break;
+        }
+        HairPortRecord.Write(mod.Root, record);
+
+        var outcome = HairPortWriter.Save(mod.Root, plan.Writes, auto: true);
+        Assert.True(outcome.Ok);
+        Assert.Empty(outcome.SavedWrites);
+        var owner = mod.Owner("Cut", "Long");
+        Assert.NotNull(HairPortPlan.FileFor(owner, HairPortPlan.SkeletonPath(201, Id)));
+        Assert.Equal(changed == "material" ? theirs : mine, HairPortPlan.FileFor(owner, Mtrl));
+        var after = HairPortRecord.Read(mod.Root).Ports.Single();
+        Assert.Equal((entry.SourceSha8, entry.Est, entry.SkeletonFrom), (after.SourceSha8, after.Est, after.SkeletonFrom));
+    }
+
+    /// <summary>
+    /// The target race's own skeleton of the borrow has the bones — but another place of the mod publishes a skeleton
+    /// there (another group's option, or a port of ours of another hairstyle), which may be what loads instead: no entry
+    /// points at it; the source's skeleton is carried to a slot of the race's own.
+    /// </summary>
+    [Theory]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-30")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void An_entry_never_points_where_another_place_publishes_the_skeleton(bool ourOtherPort)
+    {
+        using var mod = PhysicsMod([PenumbraManipulations.EstManipulation("0801", "Hair", Id, 170)]);
+        var path = HairPortPlan.SkeletonPath(201, 170);
+        if (ourOtherPort)
+        {
+            string other = HairPortPlan.HairPath(201, 140), model = $"{HairPortPlan.Folder}/x/other.mdl", skl = $"{HairPortPlan.Folder}/x/other.sklb";
+            EditMeta(mod, n =>
+            {
+                n["Groups"]![0]!["Options"]![0]!["Files"]![other] = model;
+                n["Groups"]![0]!["Options"]![0]!["Files"]![path] = skl;
+            });
+            mod.Put(model, HairModel(201));
+            mod.Put(skl, H0170Skeleton);
+            HairPortRecord.Write(mod.Root, new HairPortRecord
+            {
+                Ports = [new HairPortRecord.Entry
+                {
+                    Group = "Cut", Option = "Long", SourceGamePath = HairPortPlan.HairPath(801, 140), SourceFile = "long.mdl",
+                    TargetGamePath = other, File = model, PortVersion = HairPortBaker.Version, SkeletonFrom = 170,
+                    Materials = new(StringComparer.OrdinalIgnoreCase) { [path] = skl },
+                }],
+            });
+        }
+        else
+        {
+            EditMeta(mod, n => n["Groups"]!.AsArray().Add(System.Text.Json.Nodes.JsonNode.Parse(
+                Group("Other", "Single", ("On", new Dictionary<string, string> { [path] = "other.sklb" })))));
+            mod.Put("other.sklb", H0170Skeleton);
+        }
+        var game = TableGame([(801, Id, 170), (201, Id, Id)], new() { [path] = H0170Skeleton });
+        Assert.Equal((Id, 170), BuildOne(mod, game) is var w ? (w.Est, w.SkeletonFrom) : default);
+    }
+
+    /// <summary>A port's every strip skipped at the save — the port undone while the build ran: nothing saved, nothing
+    /// to reload, and the refusal not taken for the model's own verdict.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-28")]
+    public void A_port_whose_strips_were_all_skipped_reports_its_refusal_and_saves_nothing()
+    {
+        var (mod, game) = StrippableOldCarry();
+        using var _ = mod;
+        bool undone = false;
+        // The build has read the mod's record by the time it reads the source race's head: undo the port there.
+        var head = HairPortPlan.HeadPaths(801).First();
+        Func<string, byte[]?> racing = p =>
+        {
+            if (p == head && !undone) undone = HairPortWriter.Undo(mod.Root, _ => true, decline: true).Ok;
+            return game(p);
+        };
+        var host = new PortHost(mod, racing);
+        var ported = HairPortScan.PortOne(host, mod.Root,
+            new HairPortWatcher.Decide.Decision(HairPortWatcher.Decide.Kind.Port, mod.Root, Source), 201, Pbd());
+        Assert.True(undone);
+        Assert.Empty(ported.Writes);
+        Assert.False(ported.Stripped);
+        Assert.False(ported.Refusal);
+        Assert.Contains("j_ex_h0170_ke_b", ported.Message);
+        Assert.Empty(HairPortRecord.Read(mod.Root).Ports);
+    }
+
+    /// <summary>A check refused for an edit of the port is not remembered as the model's verdict: reverted, the next
+    /// check of the session looks again.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-15")]
+    public void An_edit_blocked_refusal_is_not_remembered_by_the_check()
+    {
+        using var mod = BorrowMod();
+        Assert.True(HairPortWriter.Save(mod.Root, [BuildOne(mod, TableGame([(801, Id, 170), (201, Id, Id)]))], false).Ok);
+        MakeOld(mod);
+        var file = HairPortRecord.Read(mod.Root).Ports.Single().File;
+        mod.Put(Path.Combine(SidecarDiscoveryService.SidecarSubdir, MeshVolumeService.BackupSubdir, file), [9, 9]);
+        var game = TableGame([(801, Id, 170), (201, Id, 170)], new() { [HairPortPlan.SkeletonPath(201, 170)] = Lacking });
+
+        var host = new PortHost(mod, game).Wearing();
+        var memo = new HairPortScan.Memo();
+        var result = HairPortScan.Run(host, 201, [Id], null, memo, force: true, "test", System.Threading.CancellationToken.None);
+        var row = Assert.Single(result.Rows);
+        Assert.Equal(HairPortScan.RowState.Refused, row.State);
+        Assert.Equal(ModelBackupOrder.BlockedMessage(HairPortWriter.EditedBy(mod.Root, file)!), row.Message);
+        Assert.Empty(memo.Refusals);
+        Assert.Empty(memo.Keys);
+    }
+
+    /// <summary>The races sharing an edit-blocked race's material are refused with it — and are no verdict on the model
+    /// either.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-15")]
+    public void Sharers_of_an_edit_blocked_race_are_no_verdict_either()
+    {
+        // A Miqo'te's own hairstyle 105: every other race of her sex reads one Midlander material for it.
+        const int id = 105;
+        string source = HairPortPlan.HairPath(801, id);
+        using var mod = new Mod(defaults: new Dictionary<string, string> { [source] = "a.mdl" });
+        mod.Put("a.mdl", HairModel(801, material: "/mt_c0801h0105_hir_a.mtrl"));
+        var files = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["chara/human/c0801/obj/hair/h0105/material/v0001/mt_c0801h0105_hir_a.mtrl"] = [5],
+        };
+        foreach (var r in Races)
+        {
+            files[HairPortPlan.HeadPaths(r).First()] = HeadModel(r);
+            files[HairPortPlan.HairPath(r, id)] = HairModel(r);
+        }
+        Func<string, byte[]?> game = p => files.GetValueOrDefault(p);
+        Assert.True(HairPortWriter.Save(mod.Root, HairPortBuilder.Build(mod.Root, source, [201], Pbd(), game, true).Writes, true).Ok);
+
+        // The Highlander's port is edited since, and the author's model changed: it cannot be remade.
+        var highlander = HairPortRecord.Read(mod.Root).Ports.Single(e => e.TargetGamePath == HairPortPlan.HairPath(401, id)).File;
+        mod.Put(Path.Combine(SidecarDiscoveryService.SidecarSubdir, MeshVolumeService.BackupSubdir, highlander), [9, 9]);
+        mod.Put("a.mdl", HairModel(801, material: "/mt_c0801h0105_hir_a.mtrl", extra: Sphere("/mt_c0801h0105_hir_a.mtrl",
+            Head + Offset(801), 0.105f, [("j_kao", 1f)], minY: 0.5f)));
+
+        var plan = HairPortBuilder.Build(mod.Root, source, [201], Pbd(), game, withSharers: true);
+        Assert.False(plan.IsVerdict(401));
+        Assert.True(plan.Refused.ContainsKey(201));
+        Assert.All(plan.Refused.Keys, s => Assert.False(plan.IsVerdict(s), $"c{s:D4}"));
+    }
+
+    /// <summary>A strip is no port made: an undo of its target stays remembered.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-28")]
+    public void A_strip_leaves_an_undo_of_its_target_remembered()
+    {
+        var (mod, game) = StrippableOldCarry();
+        using var _ = mod;
+        var record = HairPortRecord.Read(mod.Root);
+        record.Declined.Add(HairPortPlan.DeclineKey(Target));
+        HairPortRecord.Write(mod.Root, record);
+
+        var plan = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, withSharers: false);
+        Assert.True(Assert.Single(plan.Writes).Stripped);
+        Assert.True(HairPortWriter.Save(mod.Root, plan.Writes, auto: true).Ok);
+        Assert.Contains(HairPortPlan.DeclineKey(Target), HairPortRecord.Read(mod.Root).Declined);
+    }
+
+    /// <summary>The author ships the source's skeleton, which cannot be read for now: no verdict, not a refusal for
+    /// bones the next look would remember.</summary>
+    [Fact]
+    [Trait("Plan", "AC-hair-skeleton-infer-9")]
+    public void An_unreadable_authors_source_skeleton_gives_no_verdict()
+    {
+        using var mod = PhysicsMod([PenumbraManipulations.EstManipulation("0801", "Hair", Id, 170)]);
+        EditMeta(mod, n => n["Groups"]![0]!["Options"]![0]!["Files"]![HairPortPlan.SkeletonPath(801, 170)] = "gone.sklb");
+        var plan = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), TableGame([(801, Id, 170), (201, Id, Id)]), false);
+        Assert.Empty(plan.Writes);
+        Assert.Contains("gone.sklb", plan.Refused[201]);
+        Assert.True(plan.Unreadable);
+    }
+
+    /// <summary>The author's own entry for the target, whose skeleton they ship themselves: judged by their file, which
+    /// has the bones — though the game's lacks them.</summary>
+    [Fact]
+    [Trait("Plan", "AC-hair-skeleton-infer-4")]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-4")]
+    public void An_authors_target_entry_is_judged_by_their_own_skeleton_file()
+    {
+        using var mod = PhysicsMod([PenumbraManipulations.EstManipulation("0801", "Hair", Id, 170),
+                                    PenumbraManipulations.EstManipulation("0201", "Hair", Id, 150)]);
+        EditMeta(mod, n => n["Groups"]![0]!["Options"]![0]!["Files"]![HairPortPlan.SkeletonPath(201, 150)] = "theirs.sklb");
+        mod.Put("theirs.sklb", H0170Skeleton);
+        var game = TableGame([(801, Id, 170), (201, Id, Id)], new() { [HairPortPlan.SkeletonPath(201, 150)] = Lacking });
+        var write = BuildOne(mod, game);
+        Assert.Equal((0, 0), (write.Est, write.SkeletonFrom));
+        Assert.True(HairPortWriter.Save(mod.Root, [write], false).Ok);
+        Assert.False(OutOfDate(mod, game));
+    }
+
+    /// <summary>A port nothing can do better for — what the race loads lacks the bones, and so does the source's
+    /// skeleton — is not called out of date: every look would refuse the same remake.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-27")]
+    public void A_port_no_skeleton_could_better_is_not_out_of_date()
+    {
+        using var mod = BorrowMod();
+        var fits = TableGame([(801, Id, 170), (201, Id, Id)], new() { [HairPortPlan.SkeletonPath(201, Id)] = H0170Skeleton });
+        Assert.True(HairPortWriter.Save(mod.Root, [BuildOne(mod, fits)], false).Ok);
+
+        var game = TableGame([(801, Id, 170), (201, Id, 150)], new()
+        {
+            [HairPortPlan.SkeletonPath(201, 150)] = Lacking, [HairPortPlan.SkeletonPath(801, 170)] = Lacking,
+        });
+        Assert.False(OutOfDate(mod, game));
+    }
+
+    /// <summary>A strip of a port whose option is gone from the mod is skipped: the option took the port with it.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-28")]
+    public void A_strip_whose_option_is_gone_is_skipped()
+    {
+        var (mod, game) = StrippableOldCarry();
+        using var _ = mod;
+        var plan = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, withSharers: false);
+        Assert.True(Assert.Single(plan.Writes).Stripped);
+        EditMeta(mod, n => n["Groups"]!.AsArray().Clear());
+
+        var outcome = HairPortWriter.Save(mod.Root, plan.Writes, auto: true);
+        Assert.True(outcome.Ok, outcome.Message);
+        Assert.Empty(outcome.SavedWrites);
+    }
+
+    /// <summary>A port the user edited that is out of date but changes no other hairstyle: refused for its race alone,
+    /// with why — the other races of the same build still save.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-15")]
+    public void An_edited_stale_port_is_refused_for_its_race_alone()
+    {
+        using var mod = BorrowMod();
+        Assert.True(HairPortWriter.Save(mod.Root, [BuildOne(mod, TableGame([(801, Id, 170), (201, Id, Id)]))], false).Ok);
+        MakeOld(mod);
+        var file = HairPortRecord.Read(mod.Root).Ports.Single().File;
+        mod.Put(Path.Combine(SidecarDiscoveryService.SidecarSubdir, MeshVolumeService.BackupSubdir, file), [9, 9]);
+
+        // The race loads slot 170 for the hairstyle now, which nothing else of it loads: the old carry is out of date,
+        // not harmful.
+        var game = TableGame([(801, Id, 170), (201, Id, 170)], new() { [HairPortPlan.SkeletonPath(201, 170)] = Lacking });
+        var plan = HairPortBuilder.Build(mod.Root, Source, [201, 401], Pbd(), game, withSharers: false);
+        Assert.True(plan.Refused.ContainsKey(201));
+        Assert.DoesNotContain(plan.Writes, w => w.TargetGamePath == Target);
+        Assert.Contains(plan.Writes, w => w.TargetGamePath == HairPortPlan.HairPath(401, Id));
+        Assert.True(HairPortWriter.Save(mod.Root, plan.Writes, auto: false).Ok);
+    }
+
+    /// <summary>The author's own skeleton for an entry cannot be read for now: no verdict — a port made on it stays as
+    /// it is, and a new one waits for the next look, unremembered.</summary>
+    [Fact]
+    [Trait("Plan", "AC-hair-skeleton-infer-9")]
+    public void An_unreadable_authors_skeleton_gives_no_verdict()
+    {
+        using var mod = PhysicsMod([PenumbraManipulations.EstManipulation("0801", "Hair", Id, 170)]);
+        EditMeta(mod, n => n["Groups"]![0]!["Options"]![0]!["Files"]![HairPortPlan.SkeletonPath(201, 170)] = "author.sklb");
+        mod.Put("author.sklb", H0170Skeleton);
+        var game = TableGame([(801, Id, 170), (201, Id, Id)], new() { [HairPortPlan.SkeletonPath(201, 170)] = Lacking });
+        Assert.True(HairPortWriter.Save(mod.Root, [BuildOne(mod, game)], false).Ok);
+        Assert.Equal((170, 0), HairPortRecord.Read(mod.Root).Ports.Single() is var e ? (e.Est, e.SkeletonFrom) : default);
+
+        File.Delete(Path.Combine(mod.Root, "author.sklb"));
+        Assert.False(OutOfDate(mod, game));
+        HairPortWriter.Undo(mod.Root, _ => true, decline: false);
+        var plan = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, withSharers: false);
+        Assert.Empty(plan.Writes);
+        Assert.Contains("author.sklb", plan.Refused[201]);
+        Assert.True(plan.Unreadable);
+    }
+
+    /// <summary>
+    /// The author ships the source's skeleton, and the slot the carry goes to is the one the mod's source entry names: our
+    /// redirect there names the author's file, and is still ours — the port stays a carry, current on every later look,
+    /// from one place or two.
+    /// </summary>
+    [Theory]
+    [Trait("Plan", "AC-hair-skeleton-infer-7")]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-22")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_carry_of_the_authors_source_skeleton_at_the_borrowed_slot_stays_current(bool fromTheDefaultsToo)
+    {
+        using var mod = PhysicsMod([PenumbraManipulations.EstManipulation("0801", "Hair", Id, 170)]);
+        EditMeta(mod, n =>
+        {
+            n["Groups"]![0]!["Options"]![0]!["Files"]![HairPortPlan.SkeletonPath(801, 170)] = "skl.sklb";
+            if (fromTheDefaultsToo)
+            {
+                n["DefaultData"]!["Files"]![Source] = "default.mdl";
+                n["DefaultData"]!["Files"]![HairPortPlan.SkeletonPath(801, 170)] = "skl.sklb";
+            }
+        });
+        mod.Put("skl.sklb", H0170Skeleton);
+        mod.Put("default.mdl", HairModel(801, material: "/mt_c0801h0130_hir_b.mtrl", bones: [("j_ex_h0170_ke_b", 1f)]));
+        var game = TableGame([(801, Id, 170), (201, Id, 170)], new() { [HairPortPlan.SkeletonPath(201, 170)] = Lacking });
+
+        var plan = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, withSharers: false);
+        Assert.Empty(plan.Refused);
+        Assert.All(plan.Writes, w => Assert.Equal((170, 170), (w.Est, w.SkeletonFrom)));
+        Assert.True(HairPortWriter.Save(mod.Root, plan.Writes, false).Ok);
+
+        var record = HairPortRecord.Read(mod.Root);
+        Assert.All(record.Ports, e => Assert.False(
+            HairPortBuilder.IsOutOfDate(mod.Root, e, mod.Get(e.SourceFile), mod.Owners, record.Ports, game), $"{e.Group}/{e.Option}"));
+        var again = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, withSharers: false);
+        Assert.Empty(again.Writes);
+        Assert.Contains((ushort)201, again.Current);
+    }
+
+    /// <summary>A harmful old carry that could be remade, but the user edited since: stripped instead, the edit kept,
+    /// and said why it was not remade.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-28")]
+    public void An_edited_harmful_port_that_could_be_remade_is_stripped_instead()
+    {
+        using var mod = BorrowMod();
+        Assert.True(HairPortWriter.Save(mod.Root, [BuildOne(mod, TableGame([(801, Id, 170), (201, Id, Id)]))], false).Ok);
+        MakeOld(mod);
+        var file = HairPortRecord.Read(mod.Root).Ports.Single().File;
+        var edited = mod.Get(file);
+        mod.Put(Path.Combine(SidecarDiscoveryService.SidecarSubdir, MeshVolumeService.BackupSubdir, file), [9, 9]);
+
+        // Another hairstyle loads slot 130 now; the source's skeleton is there, so a remake would be possible.
+        var game = TableGame([(801, Id, 170), (201, Id, Id), (201, 131, Id)]);
+        var plan = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, withSharers: false);
+        Assert.True(plan.Refused.ContainsKey(201));
+        Assert.True(Assert.Single(plan.Writes).Stripped);
+        Assert.True(HairPortWriter.Save(mod.Root, plan.Writes, auto: true).Ok);
+        Assert.Equal(edited, mod.Get(file));
+        Assert.Null(HairPortPlan.FileFor(mod.Owner("Cut", "Long"), HairPortPlan.SkeletonPath(201, Id)));
+    }
+
+    /// <summary>A strip writes no model, so a port the user edited since is stripped all the same — the edit kept.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-28")]
+    public void A_strip_of_an_edited_port_goes_through_and_keeps_the_edit()
+    {
+        var (mod, game) = StrippableOldCarry();
+        using var _ = mod;
+        var file = HairPortRecord.Read(mod.Root).Ports.Single().File;
+        var edited = mod.Get(file);
+        mod.Put(Path.Combine(SidecarDiscoveryService.SidecarSubdir, MeshVolumeService.BackupSubdir, file), [9, 9]);
+
+        var plan = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, withSharers: false);
+        Assert.True(HairPortWriter.Save(mod.Root, plan.Writes, auto: true).Ok);
+        Assert.Equal(edited, mod.Get(file));
+        Assert.Null(HairPortPlan.FileFor(mod.Owner("Cut", "Long"), HairPortPlan.SkeletonPath(201, Id)));
+    }
+
+    /// <summary>A carry made with the table whose slot the game gave another hairstyle since, and that cannot be made
+    /// again, loses its skeleton and its entry too.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-28")]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-17")]
+    public void A_carry_whose_slot_another_hairstyle_loads_since_is_stripped_when_it_cannot_be_remade()
+    {
+        using var mod = BorrowMod();
+        Assert.True(HairPortWriter.Save(mod.Root, [BuildOne(mod, TableGame([(801, Id, 170), (201, Id, 170)],
+            new() { [HairPortPlan.SkeletonPath(201, 170)] = Lacking }))], false).Ok);
+        Assert.Equal([170], EstsOf(mod, 201));
+
+        var game = Game(Races, new Dictionary<string, byte[]>
+        {
+            [HairSkeletonTable.GamePath] = EstBytes((801, Id, 170), (201, Id, 170), (201, 171, 170)),
+        });
+        var plan = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, withSharers: false);
+        Assert.True(Assert.Single(plan.Writes).Stripped);
+        Assert.True(HairPortWriter.Save(mod.Root, plan.Writes, auto: true).Ok);
+        Assert.Empty(EstsOf(mod, 201));
+        Assert.Null(HairPortPlan.FileFor(mod.Owner("Cut", "Long"), HairPortPlan.SkeletonPath(201, 170)));
+    }
+
+    /// <summary>An old carry the mod's own entry points another hairstyle of the race at is harmful too.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-28")]
+    public void An_old_carry_a_mod_entry_shares_out_is_stripped_when_it_cannot_be_remade()
+    {
+        using var mod = BorrowMod();
+        Assert.True(HairPortWriter.Save(mod.Root, [BuildOne(mod, TableGame([(801, Id, 170), (201, Id, Id)]))], false).Ok);
+        MakeOld(mod);
+        SetOptionManipulations(mod, PenumbraManipulations.EstManipulation("0201", "Hair", 140, Id));
+        var game = Game(Races, new Dictionary<string, byte[]> { [HairSkeletonTable.GamePath] = EstBytes((801, Id, 170), (201, Id, Id)) });
+        var plan = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, withSharers: false);
+        Assert.True(Assert.Single(plan.Writes).Stripped);
+    }
+
+    /// <summary>A slot the game ships kinematics at is not paired with a foreign skeleton.</summary>
+    [Fact]
+    [Trait("Plan", "AC-hair-skeleton-infer-4")]
+    public void A_slot_with_kinematics_is_skipped()
+    {
+        using var mod = BorrowMod();
+        var game = TableGame([(801, Id, 170), (201, Id, 170)], new()
+        {
+            [HairPortPlan.SkeletonPath(201, 170)] = Lacking,
+            [HairPortPlan.KinematicsPath(201, 170)] = [1, 2, 3],
+        });
+        Assert.Equal((Id, 170), BuildOne(mod, game) is var w ? (w.Est, w.SkeletonFrom) : default);
+    }
+
+    /// <summary>An old carry the race does load there, remade (its model changed): at the same slot, overwritten in
+    /// place, with one entry.</summary>
+    [Fact]
+    [Trait("Plan", "AC-hair-skeleton-infer-5")]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-15")]
+    public void An_old_carry_remade_at_its_own_slot_is_overwritten_in_place_with_one_entry()
+    {
+        using var mod = BorrowMod();
+        var game = TableGame([(801, Id, 170), (201, Id, Id)]);
+        Assert.True(HairPortWriter.Save(mod.Root, [BuildOne(mod, game)], false).Ok);
+        MakeOld(mod);
+        var skl = HairPortPlan.FileFor(mod.Owner("Cut", "Long"), HairPortPlan.SkeletonPath(201, Id))!;
+
+        mod.Put("long.mdl", HairModel(801, material: "/mt_c0801h0130_hir_b.mtrl", bones: [("j_ex_h0170_ke_b", 1f)]));
+        var remake = BuildOne(mod, game);
+        Assert.Equal((Id, 170), (remake.Est, remake.SkeletonFrom));
+        Assert.True(HairPortWriter.Save(mod.Root, [remake], false).Ok);
+        Assert.Equal(skl, HairPortPlan.FileFor(mod.Owner("Cut", "Long"), HairPortPlan.SkeletonPath(201, Id)));
+        Assert.True(mod.Has(skl));
+        Assert.Equal([Id], EstsOf(mod, 201));
+        Assert.False(OutOfDate(mod, game));
+    }
+
+    /// <summary>A slot one of our ports of another hairstyle carries its skeleton to is that port's.</summary>
+    [Fact]
+    [Trait("Plan", "AC-hair-skeleton-infer-4")]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-11")]
+    public void A_slot_our_port_of_another_hairstyle_uses_is_skipped()
+    {
+        using var mod = BorrowMod();
+        string other = HairPortPlan.HairPath(201, 140), otherModel = $"{HairPortPlan.Folder}/x/other.mdl",
+               otherSkl = $"{HairPortPlan.Folder}/x/other.sklb";
+        EditMeta(mod, n =>
+        {
+            n["Groups"]![0]!["Options"]![0]!["Files"]![other] = otherModel;
+            n["Groups"]![0]!["Options"]![0]!["Files"]![HairPortPlan.SkeletonPath(201, 170)] = otherSkl;
+        });
+        mod.Put(otherModel, HairModel(201));
+        mod.Put(otherSkl, H0170Skeleton);
+        HairPortRecord.Write(mod.Root, new HairPortRecord
+        {
+            Ports = [new HairPortRecord.Entry
+            {
+                Group = "Cut", Option = "Long", SourceGamePath = HairPortPlan.HairPath(801, 140), SourceFile = "long.mdl",
+                TargetGamePath = other, File = otherModel, PortVersion = HairPortBaker.Version, SkeletonFrom = 170,
+                Materials = new(StringComparer.OrdinalIgnoreCase) { [HairPortPlan.SkeletonPath(201, 170)] = otherSkl },
+            }],
+        });
+        var game = TableGame([(801, Id, 170), (201, Id, 170)], new() { [HairPortPlan.SkeletonPath(201, 170)] = Lacking });
+        Assert.Equal((Id, 170), BuildOne(mod, game) is var w ? (w.Est, w.SkeletonFrom) : default);
+    }
+
+    /// <summary>
+    /// The author ships the target race's skeleton for the borrow themselves: an entry to it is judged by their file —
+    /// the one the game loads with the port on — so a port made today stays current, and one that lacks the bones is
+    /// not pointed at.
+    /// </summary>
+    [Theory]
+    [Trait("Plan", "AC-hair-skeleton-infer-6")]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-24")]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void An_entry_to_the_authors_own_skeleton_is_judged_by_that_file(bool authorsHasTheBones)
+    {
+        using var mod = PhysicsMod([PenumbraManipulations.EstManipulation("0801", "Hair", Id, 170)]);
+        EditMeta(mod, n => n["Groups"]![0]!["Options"]![0]!["Files"]![HairPortPlan.SkeletonPath(201, 170)] = "author.sklb");
+        mod.Put("author.sklb", authorsHasTheBones ? H0170Skeleton : Lacking);
+        var game = TableGame([(801, Id, 170), (201, Id, Id)],
+                             new() { [HairPortPlan.SkeletonPath(201, 170)] = authorsHasTheBones ? Lacking : H0170Skeleton });
+        var write = BuildOne(mod, game);
+        if (!authorsHasTheBones)
+        {
+            Assert.Equal((Id, 170), (write.Est, write.SkeletonFrom));
+            return;
+        }
+        Assert.Equal((170, 0), (write.Est, write.SkeletonFrom));
+        Assert.True(HairPortWriter.Save(mod.Root, [write], false).Ok);
+        Assert.False(OutOfDate(mod, game));
+        Assert.Contains((ushort)201, HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, withSharers: false).Current);
+    }
+}

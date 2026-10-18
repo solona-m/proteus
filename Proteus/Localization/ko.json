@@ -4307,6 +4307,90 @@
     "message": "새 모델을 다시 읽을 수 없었습니다",
     "description": "Why a model for the wearer's race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. Lower-case, no full stop."
   },
+  "Parts.Retarget.Race.Label": {
+    "message": "리핏 대상 종족",
+    "description": "Heads the dropdown that picks which race's model a refit is made and saved as."
+  },
+  "Parts.Retarget.Race.Tip": {
+    "message": "어느 종족용으로 리핏할지 고릅니다. 의상과 같은 성별의 다른 종족을 고르면, 게임이 휘는 방식 그대로 이 모델에서 전용 모델을 만들어 그 종족의 체형에 리핏하고, 그 종족이 불러오는 위치에 저장합니다. 다른 종족은 이 모델을 그대로 씁니다.",
+    "description": "Tooltip of Parts.Retarget.Race.Label."
+  },
+  "Parts.Retarget.Race.ThisModel.Fmt": {
+    "message": "{0} (이 모델)",
+    "description": "An entry of the Refit for list; {0} is a race such as \"Midlander M\": the race of the model open."
+  },
+  "Parts.Retarget.Race.AsWorn.Fmt": {
+    "message": "{0} (캐릭터가 입는 형태)",
+    "description": "An entry of the Refit for list; {0} is a race such as \"Midlander F\": the race the logged-in character would get it as."
+  },
+  "Parts.Retarget.Race.OwnModel.Fmt": {
+    "message": "이 모드에는 이미 전용 {0} 모델이 있습니다. 그 모델을 리핏하세요.",
+    "description": "{0} is a race such as \"Highlander M\" the mod already ships a model of."
+  },
+  "Parts.Retarget.Race.OpenModel.Fmt": {
+    "message": "{0} 모델 열기",
+    "description": "A button; {0} is a race such as \"Highlander M\"."
+  },
+  "Parts.Retarget.Race.Baking.Fmt": {
+    "message": "{0} 모델을 만드는 중…",
+    "description": "Shown while the model for a picked race is made; {0} is a race such as \"Highlander M\"."
+  },
+  "Parts.Retarget.Race.Only.Fmt": {
+    "message": "저장한 리핏은 {0}만 입습니다. {1}은(는) 이 모델을 그대로 씁니다.",
+    "description": "{0} is the race picked, {1} the race of the model open."
+  },
+  "Parts.Retarget.Race.SourceBaked.Fmt": {
+    "message": "원래 맞춰진 체형도 같은 방식으로 {0}에 맞게 휘므로, 전과 똑같이 몸에 맞습니다.",
+    "description": "{0} is the race picked."
+  },
+  "Parts.Retarget.Race.PreviewOther.Fmt": {
+    "message": "캐릭터가 {0}이(가) 아니므로 실시간 미리보기는 캐릭터에 맞게 휘어 보이며, {0}에서 보이는 모습과 다릅니다.",
+    "description": "{0} is the race picked."
+  },
+  "Parts.Retarget.Race.PreviewNotDrawn.Fmt": {
+    "message": "캐릭터가 이 모델을 입고 있지 않아 실시간 미리보기가 없습니다. 저장한 리핏이 {0}이(가) 입게 될 모습입니다.",
+    "description": "{0} is the race picked."
+  },
+  "Parts.Retarget.Race.SkeletonFallback.Fmt": {
+    "message": "모드의 {0} 스켈레톤을 읽을 수 없어 게임 기본 스켈레톤을 사용했습니다.",
+    "description": "{0} is the race picked."
+  },
+  "Parts.Retarget.Race.EstCarried.Fmt": {
+    "message": "저장할 때 {1}이(가) 이 아이템에 불러오는 추가 스켈레톤({2})을 {0}에도 지정해 추가 본이 움직이게 합니다.",
+    "description": "{0} is the race picked, {1} the race of the model open, {2} the extra skeleton's number."
+  },
+  "Parts.Retarget.Race.NoDeformer": {
+    "message": "게임의 종족 변형 데이터를 읽을 수 없었습니다",
+    "description": "Why a model for a picked race could not be made; the {1} of Parts.Retarget.BakeFailed.Fmt. Lower-case, no full stop."
+  },
+  "Parts.Retarget.Race.NoSkeleton.Fmt": {
+    "message": "{0} 스켈레톤을 읽을 수 없었습니다",
+    "description": "Why a model for a picked race could not be made; {0} is a race. Lower-case, no full stop."
+  },
+  "Parts.Retarget.Race.Unbendable.Fmt": {
+    "message": "{1} 스켈레톤으로는 {0}이(가) 움직이지 않습니다: {2}",
+    "description": "Why a model for a picked race could not be made: {0} is Parts.Retarget.Race.OneBone or .ManyBones.Fmt, {1} a race, {2} bone names. Lower-case, no full stop."
+  },
+  "Parts.Retarget.Race.OneBone": {
+    "message": "의상이 웨이트를 둔 본 1개",
+    "description": "The {0} of Parts.Retarget.Race.Unbendable.Fmt."
+  },
+  "Parts.Retarget.Race.ManyBones.Fmt": {
+    "message": "의상이 웨이트를 둔 본 {0}개",
+    "description": "The {0} of Parts.Retarget.Race.Unbendable.Fmt; {0} here is a count."
+  },
+  "Parts.Retarget.Race.LeftOut.Fmt": {
+    "message": "같은 방식으로 휘지 않아 원래 맞춰진 체형에서 제외한 것: {0}",
+    "description": "{0} lists the left-out bodies, each with Parts.Retarget.Race.BodyBones.Fmt or another reason."
+  },
+  "Parts.Retarget.Race.BodyBones.Fmt": {
+    "message": "본 {0}이(가) {1} 스켈레톤으로는 움직이지 않습니다",
+    "description": "Why a made-for body was left out: {0} lists bone names, {1} is a race. Lower-case, no full stop."
+  },
+  "Parts.Retarget.Race.Remake.Fmt": {
+    "message": "저장 위치에 따라 {0} 모델이 달라지므로 다시 만드는 중입니다. 다시 리핏하고 미리 본 뒤 저장하세요.",
+    "description": "A save refused: where it goes changes what the picked race's model is made with. {0} is the race picked."
+  },
   "Parts.Retarget.BodyFallback": {
     "message": "체형",
     "description": "Body size: starts the name of a saved Penumbra option when the target body mod's own name is unknown."
@@ -5169,6 +5253,14 @@
   },
   "HairPort.Refused.NoPbd": {
     "message": "게임의 종족 디포머를 읽을 수 없습니다",
+    "description": ""
+  },
+  "HairPort.Refused.NoSkeletonTable": {
+    "message": "게임의 헤어스타일 스켈레톤 표를 읽을 수 없습니다",
+    "description": ""
+  },
+  "HairPort.Refused.SkeletonUnreadable.Fmt": {
+    "message": "모드의 스켈레톤 {0}을(를) 읽을 수 없습니다",
     "description": ""
   },
   "HairPort.Declined.Fmt": {

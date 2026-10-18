@@ -210,7 +210,7 @@ public class SkirtHipsLocalTests(ITestOutputHelper output)
                                                                                    trace: (s, d) => { if (s == "layer-order") final = d; }));
                     return (plan, BodyRetarget.FoldedTriangles(sets, final!));
                 }
-                // Both without the made-on body's reading of cloth past an open skin edge (build 1316), which came after the
+                // Both without the made-on body's reading of cloth past an open skin edge (build 1323), which came after the
                 // rules judged here: on one side only, its own gains (Scarlet onto Rue WC A 200 -> 95 points inside) would pad
                 // the margin those rules have to clear. It is judged on its own below.
                 var now = Run(new BodyRetarget.Tuning(NoOpenEdgeFit: true));
@@ -241,7 +241,7 @@ public class SkirtHipsLocalTests(ITestOutputHelper output)
                 output.WriteLine($"  open-edge fit: inside {inNow.Inside} -> {inFitted.Inside}; folds {now.Folds} -> {fitted.Folds}; "
                                + $"stretched {stretchedNow} -> {stretchedFitted}; turned {turnedNow} -> {turnedFitted}; worst move {now.Plan.Report.WorstMove * 1000f:F1} -> "
                                + $"{fitted.Plan.Report.WorstMove * 1000f:F1} mm");
-                // Accepted (build 1316): Heartthrob onto Neolithe SFW M, 2 more edges stretched (13 -> 15), with one fewer fold
+                // Accepted (build 1323): Heartthrob onto Neolithe SFW M, 2 more edges stretched (13 -> 15), with one fewer fold
                 // and one fewer point inside.
                 int acceptedStretch = mod == Heartthrob && target.Dir == bodies[2].Dir ? 2 : 0;
                 Assert.True(inFitted.Inside <= inNow.Inside, $"{inFitted.Inside} inside with the fit, {inNow.Inside} without");

@@ -696,6 +696,42 @@ public sealed class LocalizationTests
             Assert.False(tr.ContainsKey(gone), $"[{lang}] still has {gone}");
     }
 
+    /// <summary>
+    /// What "Refit for" says is translated, not copied — every one of its keys, the refusals the bake for a picked race
+    /// gives among them — and the README names it in that language's own words.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-refit-other-race-1")]
+    [Trait("Plan", "AC-refit-other-race-9")]
+    public void RefitOtherRace_strings_are_translated_not_copied(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        var keys = en.Keys.Where(k => k.StartsWith("Parts.Retarget.Race.", StringComparison.Ordinal)).ToList();
+        Assert.Equal(21, keys.Count);
+        foreach (string key in keys)
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-refit-other-race-1")]
+    public void Readme_names_refit_for(string lang)
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+        string label = Load(lang)["Parts.Retarget.Race.Label"].Message;
+        string bullet = readme.Split('\n').Single(l => l.StartsWith("- **" + label + "**", StringComparison.Ordinal));
+        Assert.Contains("M Highlander", bullet);
+    }
+
     /// <summary>The README's Body refit section says a body and a size are picked per part, in the words Settings uses.</summary>
     [Theory]
     [MemberData(nameof(AllLocales))]

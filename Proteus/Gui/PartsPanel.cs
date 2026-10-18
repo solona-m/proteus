@@ -375,6 +375,7 @@ public sealed class PartsPanel
         // Last session's extracts of the game's body: a patch since then would make them stale, and the session is
         // the only clock that can outlast one.
         VanillaBodyCatalog.CleanUp();
+        BakedBodyCatalog.CleanUp();
         partOfVertexFn = PartOfVertex;
         lockClickedFn = LockClickedOnCharacter;
         tickClickedFn = TickClickedOnCharacter;
@@ -444,6 +445,13 @@ public sealed class PartsPanel
             refreshModelsPending = false;
             RefreshModels();
             frame.Mark("refresh models");
+        }
+
+        // Asked for by Body size's "Open the … model"; opened here for the same reason as the refresh above.
+        if (openModelPending is { } toOpen)
+        {
+            openModelPending = null;
+            if (toOpen < models.Count && toOpen != modelIndex) SelectModel(toOpen);
         }
 
         ImGui.Spacing();
@@ -1363,6 +1371,26 @@ public sealed class PartsPanel
 
     /// <summary>Set by a refit's save or undo; <see cref="Draw"/> re-reads the model list at the top of the next frame.</summary>
     private bool refreshModelsPending;
+
+    /// <summary>A model Body size asked to open; <see cref="Draw"/> opens it at the top of the next frame.</summary>
+    private int? openModelPending;
+
+    /// <summary>
+    /// The row of <paramref name="models"/> that publishes <paramref name="gamePath"/> — the one in the open row's own
+    /// option when there is one, as that is the model worn beside it — or -1 when none does.
+    /// </summary>
+    internal static int SiblingModelIndex(IReadOnlyList<PenumbraModMeta.Redirect> models, PenumbraModMeta.Redirect? open,
+                                          string gamePath)
+    {
+        int first = -1;
+        for (int i = 0; i < models.Count; i++)
+        {
+            if (!string.Equals(models[i].GamePath, gamePath, StringComparison.OrdinalIgnoreCase)) continue;
+            if (open is { } o && models[i].Source == o.Source) return i;
+            if (first < 0) first = i;
+        }
+        return first;
+    }
 
     /// <summary>
     /// Re-read the open mod's model list after something added or removed a model — a saved or undone body refit —
@@ -3563,6 +3591,10 @@ public sealed class PartsPanel
             SaveMod: (bodyName, create) => RefitModFor(bodyName, create),
             KeepShape: RetargetShapes,
             Wearer: RetargetWearer,
+            OpenModelAt: vanillaOpen ? null : path =>
+                SiblingModelIndex(models, models[modelIndex], path) is var at and >= 0
+                    ? () => openModelPending = at
+                    : null,
             // The whole mod at once, below the one-garment tool and above what the mod has saved — so "Open in
             // Penumbra" sits under it too. The game's own gear has no mod to add sizes to.
             DrawBeforeSaved: root == null || dir == null ? null : () =>

@@ -35,7 +35,7 @@ public class OpenPatchGameTopLocalTests(ITestOutputHelper output)
     private static readonly BodyRetarget.Tuning RuleOff = new(NoOpenEdgeFit: true);
 
     /// <summary>
-    /// Edges stretched against the game's own top, accepted at their measured count (build 1316): over a fuller bust the
+    /// Edges stretched against the game's own top, accepted at their measured count (build 1323): over a fuller bust the
     /// top now covers the breast it used to pass through, and its long edges across it stretch. Every one is above the
     /// game-gear refit's count for the same top and body (0, 5, 10).
     /// </summary>

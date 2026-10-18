@@ -60,6 +60,7 @@ public sealed partial class HairPortWatcher : IDisposable
     private volatile string? playerCollection;
     private volatile IReadOnlyDictionary<string, string> modNames = new Dictionary<string, string>();
     private PbdFile? pbd;
+    private int tableLogged;
 
     /// <summary>What the panel draws, replaced wholesale.</summary>
     /// <param name="Worn">The worn hairstyle's game path, or null for none.</param>
@@ -212,6 +213,7 @@ public sealed partial class HairPortWatcher : IDisposable
             schedule.Resume(now);
             // The first load with the setting on looks through every mod once; after that, only what changes.
             if (!config.HairPortFullScanDone) schedule.OweFull(now);
+            CheckOldCarries();
         }
         else if (!enabled && wasEnabled) StopCheck();
         wasEnabled = enabled;
@@ -232,6 +234,33 @@ public sealed partial class HairPortWatcher : IDisposable
         }
 
         if (!flight.Busy && schedule.Take(now) is { } work) StartCheck(work);
+    }
+
+    /// <summary>
+    /// Each mod holding a port that carries its skeleton where the race does not load it — made before the game's table
+    /// of hairstyle skeletons was read (<see cref="Decide.ModsWithOldCarries"/>) — checked for the player's race, so it is
+    /// remade (or its skeleton taken out) without that hairstyle being worn: such a copy can change another hairstyle of
+    /// the race while its mod is on. On a worker: it reads every mod's record.
+    /// </summary>
+    private void CheckOldCarries()
+    {
+        var modsRoot = penumbra.GetModDirectory();
+        if (string.IsNullOrEmpty(modsRoot)) return;
+        Task.Run(() =>
+        {
+            try
+            {
+                var mods = Decide.ModsWithOldCarries(Directory.EnumerateDirectories(modsRoot).Where(HairPortRecord.Exists),
+                                                     ReadGame);
+                if (mods.Count == 0) return;
+                log.Information("hair port: {0} mod(s) hold a port to remake for the game's skeletons", mods.Count);
+                // Looked at again even where nothing resolves differently since the last check of the session: what
+                // changed is how the port is judged, not what it resolves to.
+                memo.ForgetResolutions();
+                foreach (var dir in mods) schedule.ModAdded(Path.GetFileName(dir), Environment.TickCount64);
+            }
+            catch (Exception ex) { log.Warning(ex, "hair port: looking for ports to remake failed"); }
+        });
     }
 
     /// <summary>One walk of the draw object. It runs while a port or check is under way too, so a race change stops a
@@ -460,7 +489,15 @@ public sealed partial class HairPortWatcher : IDisposable
         public string? ModsRoot => w.penumbra.GetModDirectory();
         public string? Resolve(string gamePath) => w.penumbra.ResolvePlayer(gamePath);
         public PbdFile? Pbd() => w.Pbd();
-        public byte[]? ReadGame(string gamePath) => HairPortWatcher.ReadGame(gamePath);
+        public byte[]? ReadGame(string gamePath)
+        {
+            var bytes = HairPortWatcher.ReadGame(gamePath);
+            // Once a session: whether the table every skeleton decision rests on could be read at all.
+            if (gamePath == HairSkeletonTable.GamePath && Interlocked.Exchange(ref w.tableLogged, 1) == 0)
+                w.log.Information("hair port: the game's table of hairstyle skeletons — {0}",
+                                  HairSkeletonTable.Parse(bytes) is { } t ? $"{t.Count} entries" : "could not be read");
+            return bytes;
+        }
         public void Log(string message) => w.log.Information("hair port: {0}", message);
         public void Announce() => w.Announce(null);
         public void Reload(string modDir)
@@ -514,7 +551,7 @@ public sealed partial class HairPortWatcher : IDisposable
         if (key == lastKey) return Unchanged;
         lastKey = key;
 
-        var decision = Decide.What(worn, resolved, candidates, modsRoot!, HairPortRecord.Read);
+        var decision = Decide.What(worn, resolved, candidates, modsRoot!, HairPortRecord.Read, host.ReadGame);
         switch (decision.Kind)
         {
             case Decide.Kind.None:
@@ -539,6 +576,13 @@ public sealed partial class HairPortWatcher : IDisposable
         var ported = HairPortScan.PortOne(host, modRoot, decision, race, pbd);
         if (ported.Writes.Count == 0)
             return new View(worn, modRoot, Message: ported.Message, Failed: ported.Message.Length > 0);
+        if (ported.Stripped)
+        {
+            // Not ported again, but its old skeleton no longer changes another hairstyle: loaded, and said why not.
+            ReloadAndRedraw(host, modDir, worn);
+            lastKey = null;
+            return new View(worn, modRoot, Message: ported.Message, Failed: true);
+        }
 
         host.Announce();
         ReloadAndRedraw(host, modDir, worn);
@@ -746,6 +790,28 @@ public sealed partial class HairPortWatcher : IDisposable
         /// still cannot, up to 5 minutes — so a Penumbra that never answers is not asked every few seconds all session.</summary>
         public static int NextRetry(int last) => last <= 0 ? 5000 : Math.Min(last * 2, 300_000);
 
+        /// <summary>
+        /// The mods among <paramref name="modRoots"/> holding a port made before the game's table of hairstyle skeletons
+        /// was read — a skeleton copied to the hairstyle's own number, with no entry — that is out of date by that table.
+        /// One the race really loads, and nothing else of it does, works and is left.
+        /// </summary>
+        public static List<string> ModsWithOldCarries(IEnumerable<string> modRoots, Func<string, byte[]?> readGame)
+        {
+            var table = HairSkeletonTable.Lazy(readGame);
+            var mods = new List<string>();
+            foreach (var root in modRoots)
+            {
+                var record = HairPortRecord.Read(root);
+                var old = record.Ports.Where(e => e is { Est: 0, SkeletonFrom: > 0 }).ToList();
+                if (old.Count == 0) continue;
+                var owners = HairPortPlan.ReadOwners(root);
+                if (old.Any(e => HairPortBuilder.ReadMod(root, e.SourceFile) is { } source
+                                 && HairPortBuilder.IsOutOfDate(root, e, source, owners, record.Ports, readGame, table)))
+                    mods.Add(root);
+            }
+            return mods;
+        }
+
         /// <summary>The rows left once a mod is deleted: none of its own.</summary>
         public static List<HairPortScan.Row> DropMod(IReadOnlyList<HairPortScan.Row> rows, string modDir)
             => rows.Where(r => !r.ModDir.Equals(modDir, StringComparison.OrdinalIgnoreCase)).ToList();
@@ -768,9 +834,11 @@ public sealed partial class HairPortWatcher : IDisposable
         /// <param name="resolved">Game path to the file Penumbra serves for the player (null or not under the mods root:
         /// the game's own).</param>
         /// <param name="candidates">The races to port from, best first (<see cref="HairPortPlan.OrderSources"/>).</param>
+        /// <param name="readGame">Reads the game's own files, to judge a port of ours against the skeleton its race
+        /// loads.</param>
         public static Decision What(string worn, IReadOnlyDictionary<string, string?> resolved,
                                     IReadOnlyList<ushort> candidates, string modsRoot,
-                                    Func<string, HairPortRecord> readRecord)
+                                    Func<string, HairPortRecord> readRecord, Func<string, byte[]?> readGame)
         {
             var (_, id) = HairPortPlan.Parse(worn)!.Value;
             if (resolved.GetValueOrDefault(worn) is { } file && HatCompatService.InMods(file, modsRoot, out var modRoot, out var rel))
@@ -795,7 +863,8 @@ public sealed partial class HairPortWatcher : IDisposable
                 // Judged on each look that gets this far — but a borrow changed in the manifest alone resolves no path
                 // differently, so the look that sees it is one a different resolution brings: another hairstyle, the
                 // mod switched off and on, the feature switched on again, or a plugin reload. As for a changed model.
-                return source != null && HairPortBuilder.IsOutOfDate(entry, source, HairPortPlan.ReadOwners(modRoot), record.Ports)
+                return source != null && HairPortBuilder.IsOutOfDate(modRoot, entry, source, HairPortPlan.ReadOwners(modRoot), record.Ports,
+                                                                     readGame)
                     ? new Decision(Kind.Port, modRoot, entry.SourceGamePath, Stale: true)
                     : new Decision(Kind.Ported, modRoot);
             }

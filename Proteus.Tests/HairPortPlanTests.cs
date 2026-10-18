@@ -144,6 +144,18 @@ public class HairPortPlanTests
         Assert.Empty(HairPortPlan.SkeletonBones(null));
     }
 
+    /// <summary>Newer skeletons ("blks0031") put each name's length, doubled, before it — a printable byte, as the game's
+    /// skl_c0201h0221 does — instead of ending it with a NUL: the names are read apart, not as one.</summary>
+    [Fact]
+    [Trait("Plan", "AC-hair-skeleton-infer-2")]
+    public void Skeleton_bones_of_the_newer_layout_are_read_by_their_lengths()
+    {
+        var bytes = System.Text.Encoding.ASCII.GetBytes(
+            "blks0031\x0aj_kao\"j_ex_h0177_ke_f_a\"j_ex_h0177_ke_f_b&j_ex_h0220_back_b_l$j_ex_h0220_front_c\x01\x02");
+        Assert.Equal(["j_ex_h0177_ke_f_a", "j_ex_h0177_ke_f_b", "j_ex_h0220_back_b_l", "j_ex_h0220_front_c"],
+                     HairPortPlan.SkeletonBones(bytes).Order());
+    }
+
     [Fact]
     public void A_hair_est_is_read_however_it_is_spelled_and_never_for_a_race_that_cannot_exist()
     {

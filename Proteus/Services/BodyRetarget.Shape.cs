@@ -57,7 +57,7 @@ internal static partial class BodyRetarget
     /// <param name="NoKeepStandoff">Leave a game top's cloth as far off the new chest as the refit carried it, as builds
     /// before 1289 did (see the standoff pass).</param>
     /// <param name="NoOpenEdgeFit">Leave cloth whose nearest authored skin is an open skin edge it lies behind out of the
-    /// push-out, outside the body the garment was made on or not, as builds before 1316 did (see
+    /// push-out, outside the body the garment was made on or not, as builds before 1323 did (see
     /// <see cref="TargetBody.Fitted"/>).</param>
     internal sealed record Tuning(bool NoFollow = false, bool NoOwnSkinWeights = false,
                                   float OwnSkinReach = OwnSkinReachDefault, float CopyReach = CopyReachDefault,

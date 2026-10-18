@@ -46,6 +46,14 @@ internal static class BodyRetargetWriter
     /// </summary>
     internal static string? OptionOfFile(IEnumerable<PenumbraModMeta.Redirect> redirects, string modelRel,
                                          string group)
+        => SourceOfFile(redirects, modelRel, group) is { } source ? source[(source.IndexOf(" / ", StringComparison.Ordinal) + 3)..]
+                                                                  : null;
+
+    /// <summary>
+    /// The same option as <see cref="OptionOfFile"/>, as the mod spells the whole of it ("Group / Option") — what a
+    /// refit for a picked race reads that option's extra skeleton by, and has to match the save's choice exactly.
+    /// </summary>
+    internal static string? SourceOfFile(IEnumerable<PenumbraModMeta.Redirect> redirects, string modelRel, string group)
     {
         string want = MeshVolumeService.Rel(modelRel);
         foreach (var redirect in redirects)
@@ -55,7 +63,7 @@ internal static class BodyRetargetWriter
             int split = redirect.Source.IndexOf(" / ", StringComparison.Ordinal);
             if (split < 0) continue;                                    // the default files: no option to replace
             if (!string.Equals(redirect.Source[..split], group, StringComparison.OrdinalIgnoreCase)) continue;
-            return redirect.Source[(split + 3)..];
+            return redirect.Source;
         }
         return null;
     }

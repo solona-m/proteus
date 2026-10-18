@@ -40,17 +40,17 @@ public class DeiGratiaRefitLocalTests(ITestOutputHelper output)
     private static readonly BodyRetarget.Tuning Before = new(NoOpenEdgeFit: true);
 
     /// <summary>Edges stretched against the authored garment beyond the game-gear refit's, accepted at their measured count
-    /// (build 1316): onto Rue+'s fuller bust the blouse now covers the breast it used to pass through, and its long edges
+    /// (build 1323): onto Rue+'s fuller bust the blouse now covers the breast it used to pass through, and its long edges
     /// across it stretch (26 → 40 mm).</summary>
     private static readonly Dictionary<string, int> AcceptedStretch = new() { [Rue] = 38 };
 
     /// <summary>Folds on the solve's last stage beyond the refit without the rule, accepted at their measured count (build
-    /// 1316): onto Neolithe, 4 at the neckline patch's bottom edge, where the blouse meets the kept skin — as many as the
+    /// 1323): onto Neolithe, 4 at the neckline patch's bottom edge, where the blouse meets the kept skin — as many as the
     /// game-gear refit of the same top turns over against the authored garment.</summary>
     private static readonly Dictionary<string, int> AcceptedFolds = new() { [Neolithe] = 4 };
 
     /// <summary>How much further off the new body cloth near the points taken in, but not taken in itself, may end — accepted
-    /// at its measured 6.4 mm (build 1316): the blouse over the upper chest, under the neckline patch, lifts as the bust under
+    /// at its measured 6.4 mm (build 1323): the blouse over the upper chest, under the neckline patch, lifts as the bust under
     /// it comes out.</summary>
     private const float NearFurtherOff = 0.0065f;
 

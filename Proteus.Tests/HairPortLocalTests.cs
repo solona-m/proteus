@@ -298,4 +298,119 @@ public sealed class HairPortLocalTests(ITestOutputHelper o)
             Assert.Contains("j_ex_h0170_ke_b", bones);
         }
     }
+
+    /// <summary>
+    /// The harness's own proof that the game's table of hairstyle skeletons is read right: it is laid out as the game
+    /// writes it, and every hairstyle the game ships moves with no bone the skeleton its race loads for it lacks — the
+    /// skeleton the table names, not the one at the hairstyle's own number. A hairstyle with no entry moves with none.
+    /// </summary>
+    [LocalDataFact(LocalData.GameData)]
+    [Trait("Plan", "AC-hair-skeleton-infer-2")]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-21")]
+    public void The_games_hair_skeleton_table_is_what_its_own_models_move_with()
+    {
+        var game = Load();
+        var bytes = game.File(HairSkeletonTable.GamePath)!;
+        var table = HairSkeletonTable.Parse(bytes)!;
+        Assert.True(HairSkeletonTable.IsSorted(bytes));
+        Assert.Equal((9, 9, 9, 8), (table.Loaded(201, 8), table.Loaded(401, 8), table.Loaded(1201, 9), table.Loaded(1801, 8)));
+
+        int examined = 0;
+        var wrong = new List<string>();
+        // The game's own quirks: models naming bones the skeleton their race loads does not have (a malformed
+        // "j_ex_h002_" with no entry at all; three naming another hairstyle's bones). Pinned, so a patch that fixes one,
+        // or any other mismatch, fails here.
+        string[] quirks = ["c0101 h0103", "c0201 h0103", "c0501 h0214", "c0701 h0162", "c0801 h0204"];
+        foreach (ushort race in Enumerable.Range(1, 18).Select(n => (ushort)(n * 100 + 1)))
+            for (int set = 1; set <= 300; set++)
+            {
+                if (game.File(HairPath(race, set)) is not { } model) continue;
+                examined++;
+                var extra = HairPortSkeleton.ExtraBones(model);
+                int loaded = table.Loaded(race, set);
+                var have = loaded > 0 ? HairPortPlan.SkeletonBones(game.File(HairPortPlan.SkeletonPath(race, loaded))) : [];
+                var missing = extra.Where(b => !have.Contains(b)).ToList();
+                if (missing.Count > 0) wrong.Add($"c{race:D4} h{set:D4} (loads {loaded}): {string.Join(" ", missing)}");
+            }
+        o.WriteLine($"{table.Count} entries; {examined} of the game's hairstyles checked");
+        foreach (var w in wrong) o.WriteLine(w);
+
+        // What else a slot ships beside its skeleton: a carry skips a slot with kinematics (.kdb) rather than pair them
+        // with a foreign skeleton, and copies no .skp — the game ships none for hair. (.bnmb has no hair path Penumbra
+        // knows of, so none is looked for.)
+        int skp = 0;
+        var kdb = new List<string>();
+        foreach (ushort race in Enumerable.Range(1, 18).Select(n => (ushort)(n * 100 + 1)))
+            foreach (int slot in table.SkeletonsLoaded(race, except: 0))
+            {
+                if (game.File(HairPortPlan.SkeletonPath(race, slot).Replace(".sklb", ".skp")) != null) skp++;
+                if (game.File(HairPortPlan.KinematicsPath(race, slot)) != null) kdb.Add($"c{race:D4} h{slot:D4}");
+            }
+        o.WriteLine($"hair skeleton slots shipping .skp: {skp}; .kdb: {kdb.Count} ({string.Join(", ", kdb)})");
+        Assert.Equal(0, skp);
+        Assert.True(examined > 1000, $"only {examined} hairstyles found");
+        Assert.Equal(quirks, wrong.Select(w => w[..11]));
+    }
+
+    /// <summary>
+    /// The reported pack: a Midlander hairstyle 8 that moves with hairstyle 9's skeleton, as the game's own does — stood
+    /// in for by the game's own c0201 h0008, which has exactly the reported bones. Every woman's race that can choose
+    /// hairstyle 8 gets a port, and loads a skeleton with every bone it moves with: the Midlander's skeleton 9 copied to
+    /// a slot only hairstyle 8 of that race loads. The automatic path and Studio agree; each port is current once saved.
+    /// </summary>
+    [LocalDataFact(LocalData.GameData)]
+    [Trait("Plan", "AC-hair-skeleton-infer-1")]
+    [Trait("Plan", "AC-hair-skeleton-infer-3")]
+    [Trait("Plan", "AC-hair-skeleton-infer-4")]
+    [Trait("Plan", "AC-hair-skeleton-infer-7")]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-20")]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-25")]
+    public void The_reported_hairstyle_8_ports_with_the_skeleton_each_race_loads()
+    {
+        var game = Load();
+        var source = HairPath(201, 8);
+        var model = game.File(source)!;
+        var extra = HairPortSkeleton.ExtraBones(model).Order();
+        Assert.True(extra.SequenceEqual(["j_ex_h0009_ke_b", "j_ex_h0009_ke_f", "j_ex_h0009_ke_r", "j_ex_h0009_ke_u"]),
+                    "the game's c0201 h0008 no longer reproduces the report: " + string.Join(", ", extra));
+
+        // As the pack ships it: the model and its material, from the default data.
+        var files = new Dictionary<string, string> { [source] = "hair.mdl" };
+        var materials = SecondSkinWriter.Parse(model).MatNames.Distinct().ToList();
+        for (int i = 0; i < materials.Count; i++) files[HairMaterialPath.GamePath(201, 8, materials[i])!] = $"mt{i}.mtrl";
+        using var mod = new HairPortFixtures.Mod(defaults: files);
+        mod.Put("hair.mdl", model);
+        for (int i = 0; i < materials.Count; i++) mod.Put($"mt{i}.mtrl", game.File(HairMaterialPath.GamePath(201, 8, materials[i])!)!);
+
+        var plans = new[] { true, false }.Select(sharers =>
+            HairPortBuilder.Build(mod.Root, source, HairPortPlan.SameGenderRaces(201), game.Pbd, game.File, sharers)).ToList();
+        foreach (var (r, why) in plans[0].Refused) o.WriteLine($"c{r:D4} refused: {why}");
+        foreach (var w in plans[0].Writes) o.WriteLine($"{w.TargetGamePath}: entry {w.Est}, carried from {w.SkeletonFrom}");
+        Assert.Equal(plans[0].Writes.Select(w => (w.TargetGamePath, w.Est, w.SkeletonFrom)),
+                     plans[1].Writes.Select(w => (w.TargetGamePath, w.Est, w.SkeletonFrom)));
+        var plan = plans[0];
+
+        ushort[] fitted = [401, 601, 801, 1001, 1201, 1401, 1801];
+        Assert.Equal(fitted.Select(r => HairPath(r, 8)), plan.Writes.Select(w => w.TargetGamePath).Order());
+        foreach (var w in plan.Writes)
+        {
+            Assert.Equal(9, w.SkeletonFrom);
+            HairPortBuilderTests.AssertLoadsEveryBone(w, model, game.File);
+            ushort to = HairPortPlan.Parse(w.TargetGamePath)!.Value.Race;
+            Assert.Equal(game.File(HairPortPlan.SkeletonPath(201, 9)),
+                         w.Materials.Single(m => m.GamePath == HairPortPlan.SkeletonPath(to, w.Est)).Bytes);
+            Assert.Equal(game.File(HairPortPlan.PhysicsPath(201, 9)),
+                         w.Materials.Single(m => m.GamePath == HairPortPlan.PhysicsPath(to, w.Est)).Bytes);
+        }
+        Assert.Contains("c1601", plan.Refused[1601]);
+        Assert.DoesNotContain("j_ex_", plan.Refused[1601]);
+
+        Assert.True(HairPortWriter.Save(mod.Root, plan.Writes, auto: true).Ok);
+        var record = HairPortRecord.Read(mod.Root);
+        Assert.All(record.Ports, e => Assert.False(
+            HairPortBuilder.IsOutOfDate(mod.Root, e, mod.Get(e.SourceFile), mod.Owners, record.Ports, game.File), e.TargetGamePath));
+        var again = HairPortBuilder.Build(mod.Root, source, fitted, game.Pbd, game.File, withSharers: true);
+        Assert.Empty(again.Writes);
+        Assert.Equal(fitted.Order(), again.Current.Order());
+    }
 }

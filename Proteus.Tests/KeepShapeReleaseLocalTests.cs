@@ -50,11 +50,11 @@ public class KeepShapeReleaseLocalTests
     /// <see cref="BeforeSnapPush"/>: folds on the solve's last stage 801 -> 800, cloth inside 43 -> 42, skin through the
     /// cloth 930 -> 930. Every other case is between sizes of one mesh and did not move.
     /// <para/>
-    /// Re-pinned for build 1316: pop's own skin stops short of its cloth, and 857 of its points past that open edge are now
+    /// Re-pinned for build 1323: pop's own skin stops short of its cloth, and 857 of its points past that open edge are now
     /// read against the YAB body it was made on (<see cref="BodyRetarget.TargetBody.Fitted"/>). Measured against
     /// <see cref="BeforeOpenEdgeFit"/>: cloth inside the body 144 -> 144 (Uranus), 131 -> 130 (Neolithe XS), 150 -> 150
     /// (Bibo S); folds on the solve's last stage the same; edges stretched against the authored garment the same; one more
-    /// triangle turned over against it on Uranus and on Neolithe XS. Accepted (build 1316).
+    /// triangle turned over against it on Uranus and on Neolithe XS. Accepted (build 1323).
     /// </summary>
     private static readonly Dictionary<string, string> Before = new()
     {
@@ -65,7 +65,7 @@ public class KeepShapeReleaseLocalTests
         ["pop > Bibo S"] = "E1F0D50CF24783720C1E2A71C3A88BB59E26C1EA1409A3F5A667602A594DDA61",
     };
 
-    /// <summary>The refits <see cref="BodyRetarget.Tuning.NoOpenEdgeFit"/> changes, as builds before 1316 wrote them,
+    /// <summary>The refits <see cref="BodyRetarget.Tuning.NoOpenEdgeFit"/> changes, as builds before 1323 wrote them,
     /// release off and nipple smoothing off — the proof that nothing but that rule moved when <see cref="Before"/> was
     /// re-pinned.</summary>
     private static readonly Dictionary<string, string> BeforeOpenEdgeFit = new()
@@ -76,7 +76,7 @@ public class KeepShapeReleaseLocalTests
     };
 
     /// <summary>The triangles turned over against the authored garment that <see cref="BodyRetarget.Tuning.NoOpenEdgeFit"/>
-    /// off adds, accepted when <see cref="Before"/> was re-pinned for build 1316.</summary>
+    /// off adds, accepted when <see cref="Before"/> was re-pinned for build 1323.</summary>
     private static readonly Dictionary<string, int> TurnedByOpenEdgeFit = new()
     {
         ["pop > Uranus"] = 1, ["pop > Neolithe XS"] = 1, ["pop > Bibo S"] = 0,
