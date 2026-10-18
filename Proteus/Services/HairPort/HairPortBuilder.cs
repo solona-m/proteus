@@ -140,6 +140,13 @@ internal static class HairPortBuilder
                 if (was == null && !HairPortPlan.CanPortInto(owners, owner, target)) continue;
 
                 var place = new HairPortSkeleton.Place(modRoot, owners, owner, was, record.Ports, from, to, id, readGame, table);
+                // A port the user edited since cannot be remade (the save would refuse it, edit and all); one whose
+                // skeleton changes another hairstyle is stripped of it instead, below, the edited model kept.
+                if (was != null && HairPortWriter.EditedBy(modRoot, was.File) is { } edited && HairPortSkeleton.Harmful(place, was))
+                {
+                    why = ModelBackupOrder.BlockedMessage(edited);
+                    break;
+                }
                 var choice = HairPortSkeleton.Choose(place, bytes);
                 if (choice.Route == HairPortSkeleton.Route.Unknown) { why = NoSkeletonTable; tableMissing = true; break; }
                 IReadOnlySet<string> bones = choice.Bones;

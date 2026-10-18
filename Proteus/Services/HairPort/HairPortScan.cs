@@ -244,16 +244,20 @@ internal static class HairPortScan
             host.Log($"{modDir} was not saved — {outcome.Message}");
             return new Ported([], false, outcome.Message);
         }
-        foreach (var x in plan.Writes)
+        var saved = outcome.SavedWrites;
+        // Every strip skipped — its port undone or remade since the plan: nothing changed.
+        if (saved.Count == 0)
+            return new Ported([], false, plan.Refused.TryGetValue(race, out var none) ? none : "");
+        foreach (var x in saved)
             host.Log(x.Stripped
                 ? $"{x.TargetGamePath} in {modDir}: {HairPortWriter.Describe(x.Into)} — its old port's skeleton, which another "
                   + "hairstyle of the race loads, taken out"
                 : $"{x.SourceGamePath} → {x.TargetGamePath} in {modDir}: {HairPortWriter.Describe(x.Into)} "
                   + $"({x.Materials.Count} material/skeleton redirect(s), bent in {x.Millis} ms, skeleton entry {x.Est}, "
                   + $"carried from {x.SkeletonFrom})");
-        if (plan.Writes.All(x => x.Stripped))
-            return new Ported(plan.Writes, false, plan.Refused.TryGetValue(race, out var why) ? why : "", Stripped: true);
-        return new Ported(plan.Writes, false, "");
+        if (saved.All(x => x.Stripped))
+            return new Ported(saved, false, plan.Refused.TryGetValue(race, out var why) ? why : "", Stripped: true);
+        return new Ported(saved, false, "");
     }
 
     /// <summary>

@@ -29,16 +29,18 @@ public class HairSkeletonTableTests
     [Trait("Plan", "EDGE-hair-skeleton-infer-21")]
     public void The_order_of_the_pairs_does_not_change_what_is_read()
     {
-        var sorted = EstBytes((201, 8, 9), (401, 8, 9));
+        var sorted = EstBytes((201, 8, 9), (401, 8, 12));
         Assert.True(HairSkeletonTable.IsSorted(sorted));
-        // The same pairs written the other way round.
+        // The same entries written the other way round: the pairs and, in step, their skeletons.
         var swapped = (byte[])sorted.Clone();
         Array.Copy(sorted, 4, swapped, 8, 4);
         Array.Copy(sorted, 8, swapped, 4, 4);
+        Array.Copy(sorted, 12, swapped, 14, 2);
+        Array.Copy(sorted, 14, swapped, 12, 2);
         Assert.False(HairSkeletonTable.IsSorted(swapped));
         var table = HairSkeletonTable.Parse(swapped)!;
         Assert.Equal(9, table.Loaded(201, 8));
-        Assert.Equal(9, table.Loaded(401, 8));
+        Assert.Equal(12, table.Loaded(401, 8));
     }
 
     [Fact]

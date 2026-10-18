@@ -56,7 +56,20 @@ internal static class HairPortWriter
         return tests.Count == 0 ? null : m => tests.Any(t => t(m));
     }
 
-    public sealed record Outcome(bool Ok, string Message, int Count);
+    /// <param name="Saved">The writes saved — those a save skipped left out (a strip of a port no longer the one it was
+    /// planned from).</param>
+    public sealed record Outcome(bool Ok, string Message, int Count, IReadOnlyList<PortWrite>? Saved = null)
+    {
+        public IReadOnlyList<PortWrite> SavedWrites => Saved ?? [];
+    }
+
+    /// <summary>Whether a strip still applies to the port the record holds now: the same carry, made from the same
+    /// model, with every redirect the strip keeps — not one undone, or remade by another look, since the plan.</summary>
+    private static bool StillStrippable(PortWrite w, HairPortRecord.Entry? was)
+        => was is { SkeletonFrom: > 0 }
+           && string.Equals(was.SourceSha8, w.SourceSha8, StringComparison.OrdinalIgnoreCase)
+           && w.Materials.All(m => was.Materials.TryGetValue(m.GamePath, out var rel)
+                                   && HairPortRecord.Rel(rel).Equals(HairPortRecord.Rel(m.AuthorFile ?? ""), StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// Publish <paramref name="writes"/>: the files first, then the manifest, one option at a time, then the record. On a
@@ -66,7 +79,7 @@ internal static class HairPortWriter
     /// <param name="auto">Made on equip, not asked for in Studio.</param>
     public static Outcome Save(string modRoot, IReadOnlyList<PortWrite> writes, bool auto)
     {
-        if (writes.Count == 0) return new Outcome(true, "", 0);
+        if (writes.Count == 0) return new Outcome(true, "", 0, []);
         lock (ModManifestLock.Gate)
         {
             if (PenumbraModMeta.IsLegacyFolder(modRoot))
@@ -87,8 +100,8 @@ internal static class HairPortWriter
                 var was = record.Ports.FirstOrDefault(e => HairPortPlan.Same(e.Owner, owner)
                     && e.TargetGamePath.Equals(w.TargetGamePath, StringComparison.OrdinalIgnoreCase));
                 // A strip of a port undone (or taken out by hand) since the plan: nothing is left to strip — and writing
-                // it would bring the port back.
-                if (w.Stripped && was == null) continue;
+                // it would bring the port back. Of one remade since: it would put the old port's redirects over the new.
+                if (w.Stripped && !StillStrippable(w, was)) continue;
                 if (was != null)
                 {
                     // A port the user has since edited is theirs now: remaking it would throw that edit away. A strip
@@ -114,6 +127,9 @@ internal static class HairPortWriter
             // A remade port's skeleton entry from before goes in the same write as the one it carries now — whatever
             // that is, none included — so an option never holds two for one race, and none is left untracked.
             var replaced = new Dictionary<HairPortPlan.Owner, List<(string Target, int Est)>>();
+            // What a strip publishes again was there before the save: a failed save leaves it, or the port would be gone
+            // for good — a race refused is not ported again.
+            var republished = new Dictionary<HairPortPlan.Owner, HashSet<string>>();
             var entries = new List<HairPortRecord.Entry>();
             bool dropped = false;
             try
@@ -147,6 +163,12 @@ internal static class HairPortWriter
                         if (m.AuthorFile == null) WriteFile(modRoot, rel, m.Bytes ?? [], created);
                         add[m.GamePath] = rel;
                         materials[m.GamePath] = rel;
+                    }
+                    if (stripped)
+                    {
+                        var again = republished.TryGetValue(owner, out var r) ? r : republished[owner] = new(StringComparer.OrdinalIgnoreCase);
+                        again.Add(w.TargetGamePath);
+                        again.UnionWith(materials.Keys);
                     }
                     entries.Add(new HairPortRecord.Entry
                     {
@@ -185,8 +207,13 @@ internal static class HairPortWriter
                 // cannot be taken out keeps its files, so nothing is left pointing at nothing.
                 var kept = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var (owner, add) in committed)
-                    try { PenumbraModMeta.RemoveOptionRedirects(modRoot, owner.Group, owner.Option, add, AnyEst(carriedBy.GetValueOrDefault(owner) ?? [])); }
+                {
+                    var again = republished.GetValueOrDefault(owner);
+                    var undo = add.Where(p => again?.Contains(p.Key) != true)
+                                  .ToDictionary(p => p.Key, p => p.Value, StringComparer.OrdinalIgnoreCase);
+                    try { PenumbraModMeta.RemoveOptionRedirects(modRoot, owner.Group, owner.Option, undo, AnyEst(carriedBy.GetValueOrDefault(owner) ?? [])); }
                     catch (Exception) { kept.UnionWith(add.Values); }
+                }
                 // Only files that were not there before. A remade port's file was overwritten in place: where its option was
                 // taken back out above it is unpublished, and the record drops it on the next read, so the automatic path
                 // ports it again; where its option was never written, the manifest still names it.
@@ -204,7 +231,7 @@ internal static class HairPortWriter
             }
             HairPortRecord.Write(modRoot, record);
             if (dropped) DeleteUnnamed(modRoot);
-            return new Outcome(true, "", entries.Count);
+            return new Outcome(true, "", entries.Count, plan.Select(p => p.Write).ToList());
         }
     }
 

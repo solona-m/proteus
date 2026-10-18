@@ -181,7 +181,7 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
             // Nothing is written once cancelled: the bake is the slow part, the save is one step.
             ct.ThrowIfCancellationRequested();
             var outcome = HairPortWriter.Save(modRoot, plan.Writes, auto: false);
-            foreach (var w in plan.Writes)
+            foreach (var w in outcome.SavedWrites)
                 if (w.Stripped)
                     log.Information("hair port: {0} in {1} / {2} — its old port's skeleton, which another hairstyle of the "
                                     + "race loads, taken out", w.TargetGamePath, w.Into.Group, w.Into.Option);
@@ -241,7 +241,7 @@ internal sealed class HairPortPanel(Func<string, byte[]?> readGameFile, IPluginL
             result = string.Format(Strings.HairPort.RemovedFmt, outcome.Count)
                    + (outcome.Message.Length > 0 ? " " + outcome.Message : "");
         // A strip is saved, but nothing was ported: its race is among the refusals, with why.
-        else if (plan.Writes.Count(w => !w.Stripped) is > 0 and var ported) result = string.Format(Strings.HairPort.DoneFmt, ported);
+        else if (outcome.SavedWrites.Count(w => !w.Stripped) is > 0 and var ported) result = string.Format(Strings.HairPort.DoneFmt, ported);
         else result = Strings.HairPort.NothingToDo;
         if (outcome.Count > 0) afterChange(modDir);
         Read(modRoot, sourceGamePath);
