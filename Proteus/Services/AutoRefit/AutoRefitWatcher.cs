@@ -1275,7 +1275,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
         if (mixedParts)
         {
             // A dress reaching legs that go onto another body is not "the author's Rue M": that size fits its chest alone.
-            if (targets.AuthorSizesPassedOver(lead, source?.Dir, otherFrom.Keys))
+            if (targets.AuthorSizesPassedOver(primary, lead, source?.Dir, otherFrom.Keys))
                 log.Information("[Proteus] auto refit: {0} reaches a part going onto another body; the author's own sizes "
                               + "are not looked at", item);
             else if (await SwitchToAuthorSize(r, g, item, redirects, ownRecord, route, lead, target, primary, race,
@@ -1373,7 +1373,7 @@ public sealed partial class AutoRefitWatcher : IDisposable
         if (together is { Plan: { Paired: true, Option: { } shared } })
             option = joined = shared;
         else if (root != null && RefitCore.IsSharedSingleGroup(redirects, ownRecord, group, RefitCore.SingleGroups(root))
-                 && RefitCore.JoinOption(ownRecord, group, savePath, targets.ChosenFiles(primary),
+                 && RefitCore.JoinOption(ownRecord, group, savePath, targets.ChosenFiles(primary, lead, target, parts.Placed),
                                          TargetsOf(primary, target, others), option) is { } join
                  && join != option)
             option = joined = join;

@@ -161,9 +161,16 @@ public sealed partial class AutoRefitWatcher
         }
 
         // ── what it was made on, per part it covers ──
+        // A part with no size of its own — set to another body with none chosen there — is read as though it went onto
+        // the accessory's own body, which it does should the accessory stay on the body it was made on (CoverTarget
+        // below decides); otherwise it is left out then, as it always was.
+        (BodyModIndex.Entry Body, BodyOption To)? ReadOnto(string slot)
+            => slot == primary ? (lead, target)
+             : TargetFor(slot) is { } own && targets.Body(slot) is { } body ? (body, own)
+             : targets.CoverTarget(slot, lead, target, leadStays: true, null);
         var parts = AccessoryCover.SourcesFor(
-            covered, TargetFor, SiblingOf,
-            slot => SourceBeneath(r, g, slot, state, targets.Body(slot)!, vanilla, TargetFor(slot)!, Note),
+            covered, slot => ReadOnto(slot)?.To, SiblingOf,
+            slot => SourceBeneath(r, g, slot, state, ReadOnto(slot)!.Value.Body, vanilla, ReadOnto(slot)!.Value.To, Note),
             pick => CatalogOf(pick.Dir) is { } from && AccessoryCover.ClearsSource(garment, from.PathOf(pick.Option)));
         foreach (var (slot, pick) in parts.Sources)
             log.Information("[Proteus] auto refit: {0} {1} as {2}: made on {3} / {4} ({5})", item, r.Slot, slot,
@@ -220,7 +227,8 @@ public sealed partial class AutoRefitWatcher
         var ontoBodies = onto.Keys.ToDictionary(k => k, k => placed[k].Body.Dir, StringComparer.Ordinal);
         var chosenFiles = new Dictionary<string, (string Dir, string Rel)>(StringComparer.Ordinal);
         foreach (string slot in new[] { "_top", "_dwn" })
-            if (TargetFor(slot) is { } to) chosenFiles[slot] = (targets.DirOf(slot), to.Rel);
+            if (placed.TryGetValue(slot, out var at)) chosenFiles[slot] = (at.Body.Dir, at.To.Rel);
+            else if (TargetFor(slot) is { } to) chosenFiles[slot] = (targets.DirOf(slot), to.Rel);
         string proposed = RefitCore.OptionName(onBodies);
         bool shared = saveRoot != null
                       && RefitCore.IsSharedSingleGroup(redirects, ownRecord, group, RefitCore.SingleGroups(saveRoot));

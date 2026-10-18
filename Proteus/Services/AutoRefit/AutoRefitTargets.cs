@@ -97,7 +97,7 @@ internal sealed class AutoRefitTargets
         => AutoRefitDecisions.Words(dir + " " + (name ?? "")).Any(w => w.EndsWith("rue", StringComparison.Ordinal) && w != "true");
 
     /// <summary>A part's body is on the other side of the Rue line from <paramref name="lead"/>'s.</summary>
-    private bool AcrossRue(string slot, BodyModIndex.Entry lead)
+    internal bool AcrossRue(string slot, BodyModIndex.Entry lead)
         => DirOf(slot).Length > 0 && IsRue(DirOf(slot), Body(slot)?.Name) != IsRue(lead.Dir, lead.Name);
 
     // ── what a garment's refit takes along (see AutoRefitWatcher.RunJob) ─────
@@ -111,10 +111,13 @@ internal sealed class AutoRefitTargets
     /// <summary>What a garment's refit goes onto, worked out once the garment is read.</summary>
     /// <param name="Others">The parts it reaches that are refitted with it.</param>
     /// <param name="Across">Between body mods (see <see cref="Across(string, IEnumerable{string})"/>).</param>
-    /// <param name="AlreadyFits">It is already the size chosen, and nothing it reaches moves: nothing to do.</param>
+    /// <param name="AlreadyFits">The garment's own part is already the size chosen and no part goes onto another body
+    /// mod: nothing to do — within one body mod a part it reaches is left on its size, as it always was.</param>
     /// <param name="KeptOnLead">Parts set to another body that went onto the garment's own instead.</param>
+    /// <param name="Placed">Every part it reaches that has a body and size to go onto — <paramref name="Others"/> and
+    /// those already on theirs: what joining another piece's option compares (see <see cref="ChosenFiles(string, BodyModIndex.Entry, BodyOption, IEnumerable{Part})"/>).</param>
     internal sealed record Plan(IReadOnlyList<Part> Others, bool Across, bool AlreadyFits, IReadOnlyList<LeftOut> Left,
-                                IReadOnlyList<string> KeptOnLead);
+                                IReadOnlyList<string> KeptOnLead, IReadOnlyList<Part> Placed);
 
     /// <summary>
     /// The parts a garment in <paramref name="primary"/>, read as made on <paramref name="sourceDir"/>'s
@@ -172,7 +175,7 @@ internal sealed class AutoRefitTargets
         bool fits = !across && AutoRefitDecisions.SameFile(sourceDir, source, lead.Dir, target);
         // Within one body mod a part already on its size has nothing to do; between body mods every part goes.
         var others = parts.Where(p => across || !AutoRefitDecisions.SameFile(sourceDir, p.From, p.Body.Dir, p.To)).ToList();
-        return new Plan(others, across, fits, left, kept);
+        return new Plan(others, across, fits, left, kept, parts);
     }
 
     /// <summary>
@@ -180,10 +183,26 @@ internal sealed class AutoRefitTargets
     /// than its own part's — then no option of the author's is the size chosen for both. A garment made on its own
     /// part's body takes every part along onto that body (see <see cref="PlanParts"/>), so its author's sizes stand.
     /// </summary>
-    internal bool AuthorSizesPassedOver(BodyModIndex.Entry lead, string? sourceDir, IEnumerable<string> reached)
+    /// <remarks>A part with nothing to go onto — no body, one not installed, no size chosen on it — goes nowhere, and
+    /// passes nothing over (as <see cref="PlanParts"/> leaves it out).</remarks>
+    internal bool AuthorSizesPassedOver(string primary, BodyModIndex.Entry lead, string? sourceDir, IEnumerable<string> reached)
         => !string.Equals(sourceDir, lead.Dir, StringComparison.OrdinalIgnoreCase)
-           && reached.Any(s => !AcrossRue(s, lead)
-                               && !string.Equals(DirOf(s), lead.Dir, StringComparison.OrdinalIgnoreCase));
+           && reached.Any(s => !AcrossRue(s, lead) && Body(s) is { } body && TargetFor(s, primary) != null
+                               && !string.Equals(body.Dir, lead.Dir, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// <see cref="ChosenFiles(string)"/> with the garment's own part and every part it reaches where they were placed
+    /// (see <see cref="PlanParts"/>): a part kept on the garment's own body is compared there, so two pieces of one
+    /// option join exactly when their parts went onto the same bodies and files.
+    /// </summary>
+    internal Dictionary<string, (string Dir, string Rel)> ChosenFiles(string primary, BodyModIndex.Entry lead, BodyOption target,
+                                                                      IEnumerable<Part> placed)
+    {
+        var chosen = ChosenFiles(primary);
+        chosen[primary] = (lead.Dir, target.Rel);
+        foreach (var part in placed) chosen[part.Slot] = (part.Body.Dir, part.To.Rel);
+        return chosen;
+    }
 
     /// <summary>
     /// For a garment on an accessory slot, the body and size each covered part goes onto: its own — but when the part
