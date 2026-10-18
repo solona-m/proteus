@@ -50,8 +50,7 @@ public sealed class HairPortModsLocalTests(ITestOutputHelper o)
                         foreach (var (to, rel) in races.Where(r => r.Key != root && r.Key / 100 % 2 == root / 100 % 2))
                         {
                             if (Read(modRoot, rel) is not { } theirs) continue;
-                            var row = Compare(game, mod, owner, owners.FirstOrDefault(w => w.IsDefault), group.Key, root, to,
-                                              src, theirs, lm);
+                            var row = Compare(game, modRoot, owners, owner, group.Key, root, to, src, theirs, lm);
                             if (row != null) rows.Add(row);
                         }
                     }
@@ -80,15 +79,20 @@ public sealed class HairPortModsLocalTests(ITestOutputHelper o)
         Assert.True(rows.Average(r => r.Median) < 0.015, $"ports land {rows.Average(r => r.Median) * 1000:F1} mm from the authors' on average");
     }
 
-    private static Row? Compare(HairPortLocalTests.Game game, string mod, HairPortPlan.Owner owner,
-                                HairPortPlan.Owner? defaults, int id, ushort from, ushort to, byte[] src, byte[] theirs,
+    private static Row? Compare(HairPortLocalTests.Game game, string modRoot, IReadOnlyList<HairPortPlan.Owner> owners,
+                                HairPortPlan.Owner owner, int id, ushort from, ushort to, byte[] src, byte[] theirs,
                                 bool lm)
     {
+        string mod = Path.GetFileName(modRoot);
         var port = RacialModelBake.Port(src, from, to, game.Pbd, HairPortBaker.ParentOf, out _);
         if (port == null || ModelPartReader.Read(port) is not { } p || ModelPartReader.Read(theirs) is not { } t) return null;
-        // The builder's own skeleton choice and bone set: an extra skeleton the mod borrows comes with the port.
-        var (check, _) = HairPortBuilder.SkeletonFor(owner, defaults, null, from, to, id);
-        var bones = HairPortBuilder.TargetBones(game.File, game.File(HairPortPlan.HairPath(to, id)), to, id, check);
+        // The builder's own skeleton choice and bone set: the skeleton the target race loads, an entry to one of its own
+        // that fits, or the source's carried.
+        var place = new HairPortSkeleton.Place(modRoot, owners, owner, null, [], from, to, id, game.File,
+                                               HairSkeletonTable.Lazy(game.File));
+        var choice = HairPortSkeleton.Choose(place, src);
+        IReadOnlySet<string> bones = HairPortSkeleton.Carry(place, new HairPortRecord(), src, choice, 0) is { } carried
+            ? carried.Bones : choice.Bones;
         var result = HairPortBaker.Prepare(src, from, to, id, game.Pbd, bones, game.Head(from), game.Head(to),
                                            out string why);
         var (median, p90) = Nearest(p.Positions, t.Positions);

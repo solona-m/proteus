@@ -133,6 +133,22 @@ internal static class HairPortFixtures
             Enumerable.Repeat(bones, pos.Count).ToArray()!, [(0u, tris.ToArray())]);
     }
 
+    /// <summary>The game's table of hairstyle skeletons, as the game lays it out: which skeleton each race's hairstyle
+    /// loads.</summary>
+    public static byte[] EstBytes(params (ushort Race, int Set, int Skeleton)[] entries)
+    {
+        var sorted = entries.OrderBy(e => e.Race).ThenBy(e => e.Set).ToList();
+        var bytes = new byte[4 + sorted.Count * 6];
+        BitConverter.GetBytes(sorted.Count).CopyTo(bytes, 0);
+        for (int i = 0; i < sorted.Count; i++)
+        {
+            BitConverter.GetBytes((ushort)sorted[i].Set).CopyTo(bytes, 4 + i * 4);
+            BitConverter.GetBytes(sorted[i].Race).CopyTo(bytes, 4 + i * 4 + 2);
+            BitConverter.GetBytes((ushort)sorted[i].Skeleton).CopyTo(bytes, 4 + sorted.Count * 4 + i * 2);
+        }
+        return bytes;
+    }
+
     /// <summary>A race's face model: a 9 cm head on its head bone.</summary>
     public static byte[] HeadModel(ushort race, float radius = 0.09f)
         => SyntheticModel.BuildSurface([], Sphere($"/mt_c{race:D4}f0001_fac_a.mtrl", Head + Offset(race), radius,

@@ -226,6 +226,30 @@ internal static partial class HairPortPlan
     }
 
     /// <summary>
+    /// The skeleton the mod gives the source race for hairstyle <paramref name="id"/> while <paramref name="owner"/> is
+    /// on: its own entry, else the default data's — 0 included, which Penumbra applies as "none". Null when neither has
+    /// one, and the game's table decides.
+    /// </summary>
+    public static int? SourceEst(Owner owner, Owner? defaults, ushort race, int id)
+        => HairEst(owner, race, id) ?? (defaults != null ? HairEst(defaults, race, id) : null);
+
+    /// <summary>Every hair <c>Est</c> entry a place gives <paramref name="race"/>, as (hairstyle, skeleton).</summary>
+    public static IEnumerable<(int Set, int Entry)> RaceHairEsts(Owner owner, ushort race)
+    {
+        foreach (var m in owner.Manipulations ?? [])
+            if (HairEstSet(m) is { } set && HairEstEntry(m, race, set) is { } entry)
+                yield return (set, entry);
+
+        static int? HairEstSet(JsonElement m)
+        {
+            if (m.ValueKind != JsonValueKind.Object || !m.TryGetProperty("Manipulation", out var e)
+                || e.ValueKind != JsonValueKind.Object || !e.TryGetProperty("SetId", out var v)) return null;
+            if (v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out int i)) return i;
+            return v.ValueKind == JsonValueKind.String && int.TryParse(v.GetString(), out int s) ? s : null;
+        }
+    }
+
+    /// <summary>
     /// The entry of one manipulation when it is the hair <c>Est</c> of <paramref name="race"/> and hairstyle
     /// <paramref name="id"/>, else null. Numbers are read as written either way — mods spell set ids as numbers and as
     /// strings (<c>"SetId": "162"</c>), and Penumbra reads both.
@@ -264,6 +288,10 @@ internal static partial class HairPortPlan
     public static string PhysicsPath(ushort race, int id)
         => $"chara/human/c{race:D4}/skeleton/hair/h{id:D4}/phy_c{race:D4}h{id:D4}.phyb";
 
+    /// <summary>The game path of the kinematics data some skeletons ship beside them, loaded with the skeleton.</summary>
+    public static string KinematicsPath(ushort race, int id)
+        => $"chara/human/c{race:D4}/skeleton/hair/h{id:D4}/kdi_c{race:D4}h{id:D4}.kdb";
+
     /// <summary>
     /// The extra bones (<c>j_ex_…</c>) a skeleton file names, read as the plain strings the file carries them as — no
     /// Havok parse needed to know which bones a race's skeleton has. Empty for no file.
@@ -275,8 +303,15 @@ internal static partial class HairPortPlan
         var prefix = "j_ex_"u8;
         for (int i = sklb.AsSpan().IndexOf(prefix); i >= 0;)
         {
+            // Newer skeletons ("blks0031") put each name's length, doubled, in the byte before it — a printable byte, so
+            // the names would run together; older ones end each name with a NUL.
             int end = i;
-            while (end < sklb.Length && sklb[end] is >= 0x21 and < 0x7f) end++;
+            int length = i > 0 ? sklb[i - 1] : 0;
+            if (length % 2 == 0 && length / 2 >= prefix.Length && i + length / 2 <= sklb.Length
+                && sklb.AsSpan(i, length / 2).IndexOfAnyExceptInRange((byte)0x21, (byte)0x7e) < 0)
+                end = i + length / 2;
+            else
+                while (end < sklb.Length && sklb[end] is >= 0x21 and < 0x7f) end++;
             bones.Add(System.Text.Encoding.ASCII.GetString(sklb, i, end - i));
             int next = sklb.AsSpan(end).IndexOf(prefix);
             i = next < 0 ? -1 : end + next;

@@ -113,7 +113,7 @@ internal static class HairPortScan
             if (!force && memo.Keys.TryGetValue(at, out var was) && was == key) continue;
             examined.Add(id);
             string target = HairPortPlan.HairPath(race, id);
-            var d = HairPortWatcher.Decide.What(target, resolved, candidates, modsRoot!, HairPortRecord.Read);
+            var d = HairPortWatcher.Decide.What(target, resolved, candidates, modsRoot!, HairPortRecord.Read, host.ReadGame);
             switch (d.Kind)
             {
                 case HairPortWatcher.Decide.Kind.Port:
@@ -173,7 +173,9 @@ internal static class HairPortScan
                 {
                     saved = true;
                     written.AddRange(outcome.Writes.Select(x => x.TargetGamePath));
-                    rows.Add(MakeRow(host, id, modRoot, target, d.Stale ? RowState.Remade : RowState.Fitted));
+                    rows.Add(outcome.Stripped
+                        ? MakeRow(host, id, modRoot, target, RowState.Refused, outcome.Message)
+                        : MakeRow(host, id, modRoot, target, d.Stale ? RowState.Remade : RowState.Fitted));
                 }
                 else if (outcome.Current) rows.Add(MakeRow(host, id, modRoot, target, RowState.AlreadyFitted));
                 else if (outcome.Message.Length == 0) { /* the author covers the race in a place the player has off */ }
@@ -215,8 +217,11 @@ internal static class HairPortScan
     /// <summary>What one port came to: the writes saved; or none, with the race already ported, or why not.</summary>
     /// <param name="Refusal">Why not is the port's own verdict on the model — it does not fit, needs bones the race lacks
     /// — which the same model will get again; not a save that failed, an error, or a file that could not be read.</param>
+    /// <param name="Stripped">Not ported, but its old port, which could not be made again, was saved without the skeleton
+    /// that changed another hairstyle (<see cref="HairPortWriter.PortWrite.Stripped"/>): <paramref name="Writes"/> are
+    /// that, and <paramref name="Message"/> says why it was not ported.</param>
     public sealed record Ported(IReadOnlyList<HairPortWriter.PortWrite> Writes, bool Current, string Message,
-                                bool Refusal = false);
+                                bool Refusal = false, bool Stripped = false);
 
     /// <summary>
     /// Port <paramref name="decision"/>'s source onto <paramref name="race"/> — and every race that would read the same
@@ -231,7 +236,7 @@ internal static class HairPortScan
         foreach (var (r, why) in plan.Refused) host.Log($"c{r:D4} not ported — {why}");
         if (plan.Writes.Count == 0)
             return new Ported([], plan.Current.Contains(race), plan.Refused.TryGetValue(race, out var w) ? w : "",
-                              Refusal: !plan.Unreadable);
+                              Refusal: plan.IsVerdict(race));
 
         var outcome = HairPortWriter.Save(modRoot, plan.Writes, auto: true);
         if (!outcome.Ok)
@@ -239,10 +244,20 @@ internal static class HairPortScan
             host.Log($"{modDir} was not saved — {outcome.Message}");
             return new Ported([], false, outcome.Message);
         }
-        foreach (var x in plan.Writes)
-            host.Log($"{x.SourceGamePath} → {x.TargetGamePath} in {modDir}: {HairPortWriter.Describe(x.Into)} "
-                   + $"({x.Materials.Count} material/skeleton redirect(s), bent in {x.Millis} ms)");
-        return new Ported(plan.Writes, false, "");
+        var saved = outcome.SavedWrites;
+        // Every strip skipped — its port undone or remade since the plan: nothing changed.
+        if (saved.Count == 0)
+            return new Ported([], false, plan.Refused.TryGetValue(race, out var none) ? none : "");
+        foreach (var x in saved)
+            host.Log(x.Stripped
+                ? $"{x.TargetGamePath} in {modDir}: {HairPortWriter.Describe(x.Into)} — its old port's skeleton, which another "
+                  + "hairstyle of the race loads, taken out"
+                : $"{x.SourceGamePath} → {x.TargetGamePath} in {modDir}: {HairPortWriter.Describe(x.Into)} "
+                  + $"({x.Materials.Count} material/skeleton redirect(s), bent in {x.Millis} ms, skeleton entry {x.Est}, "
+                  + $"carried from {x.SkeletonFrom})");
+        if (saved.All(x => x.Stripped))
+            return new Ported(saved, false, plan.Refused.TryGetValue(race, out var why) ? why : "", Stripped: true);
+        return new Ported(saved, false, "");
     }
 
     /// <summary>

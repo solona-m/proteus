@@ -45,11 +45,13 @@ internal sealed class HairPortRecord
         [JsonPropertyName("File")] public string File { get; set; } = "";
         /// <summary>Material redirects the port added beside it: game path to mod-relative file.</summary>
         [JsonPropertyName("Materials")] public Dictionary<string, string> Materials { get; set; } = new(StringComparer.OrdinalIgnoreCase);
-        /// <summary>The extra skeleton (<c>Est</c> entry) the port added for its race beside it; 0 for none.</summary>
+        /// <summary>The extra skeleton (<c>Est</c> entry) the port added for its race beside it; 0 for none. With
+        /// <see cref="SkeletonFrom"/>, the slot of its race the carried skeleton is published at.</summary>
         [JsonPropertyName("Est")] public int Est { get; set; }
-        /// <summary>The source race's skeleton the port carries as its race's own for the hairstyle, published among
-        /// <see cref="Materials"/>: what the source borrowed, or the hairstyle's own; 0 for none. Ports made before it
-        /// existed read 0, as they carry none.</summary>
+        /// <summary>The source race's skeleton the port carries, published among <see cref="Materials"/> at slot
+        /// <see cref="Est"/> of its race; 0 for none. Ports made before it existed read 0, as they carry none. With
+        /// <see cref="Est"/> 0, a port from before the game's table of hairstyle skeletons was read, carrying it at the
+        /// hairstyle's own number — where the race may not load it (<see cref="HairPortSkeleton.Current"/>).</summary>
         [JsonPropertyName("SkeletonFrom")] public int SkeletonFrom { get; set; }
         /// <summary>Made on equip rather than in Studio.</summary>
         [JsonPropertyName("Auto")] public bool Auto { get; set; }
@@ -60,6 +62,9 @@ internal sealed class HairPortRecord
 
     private static string PathOf(string modRoot)
         => Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, RecordFile);
+
+    /// <summary>Whether the mod has a record at all — a cheap look before reading one.</summary>
+    internal static bool Exists(string modRoot) => File.Exists(PathOf(modRoot));
 
     /// <summary>
     /// The mod's record, with every entry whose redirect is no longer in the manifest dropped — the author updated the
