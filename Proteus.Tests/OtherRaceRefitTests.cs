@@ -235,25 +235,34 @@ public class OtherRaceRefitTests
     }
 
     /// <summary>
-    /// Whether only the cut-from option supplies the extra skeleton — then a save cut from any other option is refused:
-    /// its skeleton file, or for an entry the race already has, the option's own entry.
+    /// The cut-from option is named as the mod spells it, whatever case the group was typed in; and where the option and
+    /// the mod's default files both ship the extra skeleton, or both set the race's entry, the option's is the one taken —
+    /// Penumbra lays an option over the default data.
     /// </summary>
     [Fact]
     [Trait("Plan", "AC-refit-other-race-8")]
     [Trait("Plan", "EDGE-refit-other-race-21")]
-    public void An_extra_skeleton_needs_its_option_only_when_the_option_supplies_it()
+    public void The_cut_from_option_is_the_mod_s_own_and_wins_over_the_default_files()
     {
-        string path = EstTable.SkeletonPath(301, "_top", 6085)!;
-        var carry = new EstPlan(EstOutcome.Carry, 6085);
-        var present = new EstPlan(EstOutcome.Present, 6085);
-        var noFiles = new HashSet<string>();
-        EstTable.ModEntry[] itsEntry = [new(301, "Body", 6091, 6085)];
+        const string skeleton = "chara/human/c0301/skeleton/top/t6085/skl_c0301t6085.sklb";
+        PenumbraModMeta.Redirect R(string game, string file, string source) => new(game, file, source);
+        var redirects = new[]
+        {
+            R(skeleton, "dflt/skl.sklb", ""),
+            R(Shirt, "shirt/c0101e6091_top.mdl", "Summer Indigo Shirt / Everything"),
+            R(skeleton, "opt/skl.sklb", "Summer Indigo Shirt / Everything"),
+        };
+        string? cutFrom = OtherRaceRefit.CutFrom(redirects, "shirt/c0101e6091_top.mdl", "summer indigo SHIRT");
+        Assert.Equal("Summer Indigo Shirt / Everything", cutFrom);
+        Assert.Equal("opt/skl.sklb", OtherRaceRefit.CarriedFile(redirects, cutFrom, skeleton));
+        Assert.Equal("dflt/skl.sklb", OtherRaceRefit.CarriedFile(redirects, null, skeleton));
 
-        Assert.True(OtherRaceRefit.EstNeedsOption(carry, 301, "_top", 6091, new HashSet<string> { path }, []));
-        Assert.False(OtherRaceRefit.EstNeedsOption(carry, 301, "_top", 6091, noFiles, itsEntry));   // written by the save
-        Assert.True(OtherRaceRefit.EstNeedsOption(present, 301, "_top", 6091, noFiles, itsEntry));
-        Assert.False(OtherRaceRefit.EstNeedsOption(present, 301, "_top", 6091, noFiles, []));       // the game's
-        Assert.False(OtherRaceRefit.EstNeedsOption(EstPlan.NotNeeded, 301, "_top", 6091, new HashSet<string> { path }, itsEntry));
+        // The entries in the order the panel reads them, the option's first: the option's 7000 is the race's.
+        var tails = new SyntheticSkeleton.Tree("tails", ["n_root", "j_ex_top_a_l"], [-1, 0]);
+        var plan = OtherRaceRefit.PlanEst(301, 101, "_top", 6091, ["j_ex_top_a_l"], new HashSet<string> { "n_root", "j_kosi" },
+            [new EstTable.ModEntry(301, "Body", 6091, 7000), new EstTable.ModEntry(301, "Body", 6091, 6000)], null,
+            path => path == EstTable.SkeletonPath(301, "_top", 7000) ? XivLiveMesh.HavokSkeleton.Read(SyntheticSkeleton.Sklb(tails)) : null);
+        Assert.Equal((EstOutcome.Present, 7000), (plan.Outcome, plan.Entry));
     }
 
     [Fact]

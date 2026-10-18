@@ -505,9 +505,6 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         /// <summary>The option the bake took the mod's extra skeleton from ("Group / Option"), or null.</summary>
         public string? CutFrom { get; init; }
 
-        /// <summary>The extra skeleton <see cref="Est"/> settled on is supplied by <see cref="CutFrom"/> itself.</summary>
-        public bool EstNeedsOption { get; init; }
-
         /// <summary>Bodies of the "made for" mod left out of <see cref="Bodies"/>, each with why.</summary>
         public IReadOnlyList<string> LeftOut { get; init; } = [];
 
@@ -599,8 +596,9 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         bool picked = OtherRaceRefit.InForce(chosen, drawn, Offered(given));
         // The direction is part of the key: the same race reached the other way is another model. A picked race's bake
         // is made with another wearer, and bends the bodies of the "made for" mod with it, so those are in it too.
+        // Where it will be saved is in it too: the extra skeleton is read from the option a save there is cut from.
         string key = given.ModelRel + "|" + (route.Down ? "v" : "^") + route.To
-                   + (picked ? "|x|" + (fromBodyDir ?? bodyDir) : "");
+                   + (picked ? "|x|" + (fromBodyDir ?? bodyDir) + "|" + BakeCutFrom(given) : "");
         if (!route.Any || bakeRefusalFor == key)
         {
             if (route.Any) refusedTo = route.To;
@@ -1976,16 +1974,6 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     {
         if (saveTask != null || planned is not { Count: > 0 } all) return;
 
-        // A picked race's extra skeleton that only the option the bake was cut from supplies: saved cut from another
-        // option, or into a mod of its own, the refit would name a skeleton nothing loads with it. Refused, saying where.
-        if (active is { Explicit: true, EstNeedsOption: true } needs
-            && (toNewMod ? null : OtherRaceRefit.CutFrom(ctx.Redirects, ctx.ModelRel, Destination())) != needs.CutFrom)
-        {
-            ctx.SetStatus(string.Format(Strings.Parts.RetargetRaceSaveWhereCutFmt,
-                                        ModelRace.Describe($"{needs.Route.To:D4}"), needs.CutFrom), true);
-            return;
-        }
-
         string? root = toNewMod ? null : ctx.ModRoot;
         wroteInto = ctx.ModDir;
         if (root == null)
@@ -2107,10 +2095,10 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         => RetargetInputs.ToLabels(Inputs(ctx), Chosen(ctx), target, to);
 
     /// <summary>What a plan was made from: the model, each chosen pair, and which parts were held. A plan whose key no
-    /// longer matches is stale — see <see cref="plannedKey"/>.</summary>
+    /// longer matches is stale — see <see cref="plannedKey"/>.
     /// <para/>
     /// The "made for" bodies' generation is part of it: the same option names a bent body under a picked race and an
-    /// unbent one without, and a plan made against the other must not be shown or saved.
+    /// unbent one without, and a plan made against the other must not be shown or saved.</summary>
     private string Key(in RetargetContext ctx)
         => RetargetInputs.Key(ctx.ModelRel, fromBodyDir, Inputs(ctx), Chosen(ctx), from, to, ctx.Held, ctx.KeepShape,
                               replaceSkin, cutHidden, clearBody, carryPiercings) + "|g" + madeForGeneration;

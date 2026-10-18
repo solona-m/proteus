@@ -4387,10 +4387,6 @@
     "message": "ses os {0} ne bougeraient pas avec le squelette de {1}",
     "description": "Why a made-for body was left out: {0} lists bone names, {1} is a race. Lower-case, no full stop."
   },
-  "Parts.Retarget.Race.SaveWhereCut.Fmt": {
-    "message": "{0} tire son squelette supplémentaire de « {1} ». Enregistrez dans le groupe de cette option dans ce mod, sinon {0} ne le chargera pas.",
-    "description": "Shown when saving is refused: {0} is the race picked, {1} the mod's \"Group / Option\" its extra skeleton comes from."
-  },
   "Parts.Retarget.BodyFallback": {
     "message": "Corps",
     "description": "Body size: starts the name of a saved Penumbra option when the target body mod's own name is unknown."
