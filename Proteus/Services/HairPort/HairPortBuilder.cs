@@ -22,8 +22,14 @@ internal static class HairPortBuilder
     /// <param name="Unreadable">Refused because a file of the mod — its manifest, its port record, the model, its own
     /// skeleton — or the game's table of hairstyle skeletons could not be read (held open elsewhere, mid-update): no
     /// verdict on the model, the next look may read it.</param>
+    /// <param name="EditBlocked">Races refused because the user edited their port since: no verdict on the model
+    /// either — reverting the edit lets the next look port it.</param>
     public sealed record Plan(IReadOnlyList<HairPortWriter.PortWrite> Writes, IReadOnlyDictionary<ushort, string> Refused,
-                              IReadOnlySet<ushort> Current, bool Unreadable = false);
+                              IReadOnlySet<ushort> Current, bool Unreadable = false, IReadOnlySet<ushort>? EditBlocked = null)
+    {
+        /// <summary>Whether a race's refusal is the model's own verdict, which the same model would get again.</summary>
+        public bool IsVerdict(ushort race) => !Unreadable && EditBlocked?.Contains(race) != true;
+    }
 
     /// <summary>
     /// The ports of the mod's hairstyle at <paramref name="sourceGamePath"/> for <paramref name="targets"/>, each moving
@@ -86,7 +92,8 @@ internal static class HairPortBuilder
         var sourceHead = FirstFile(HairPortPlan.HeadPaths(from), readGame);
         // Read once, and only when a port needs to know which skeleton a race loads.
         var table = HairSkeletonTable.Lazy(readGame);
-        bool tableMissing = false;
+        bool noVerdict = false;
+        var editBlocked = new HashSet<ushort>();
         int done = 0;
         foreach (ushort to in wanted)
         {
@@ -144,10 +151,11 @@ internal static class HairPortBuilder
                 if (was != null && HairPortWriter.EditedBy(modRoot, was.File) is { } edited)
                 {
                     why = ModelBackupOrder.BlockedMessage(edited);
+                    editBlocked.Add(to);
                     break;
                 }
                 var choice = HairPortSkeleton.Choose(place, bytes);
-                if (choice.Route == HairPortSkeleton.Route.Unknown) { why = choice.Why ?? NoSkeletonTable; tableMissing = true; break; }
+                if (choice.Route == HairPortSkeleton.Route.Unknown) { why = choice.Why ?? NoSkeletonTable; noVerdict = true; break; }
                 IReadOnlySet<string> bones = choice.Bones;
                 int est = choice.Route == HairPortSkeleton.Route.Entry ? choice.Check : 0, skeletonFrom = 0;
                 IReadOnlyList<HairPortWriter.MaterialWrite> skeletonFiles = [];
@@ -199,7 +207,7 @@ internal static class HairPortBuilder
         foreach (var to in refused.Keys)
             writes.AddRange(Strips(modRoot, owners, record, from, to, id, readGame, table));
 
-        return new Plan(writes, refused, current, Unreadable: tableMissing);
+        return new Plan(writes, refused, current, Unreadable: noVerdict, EditBlocked: editBlocked);
     }
 
     /// <summary>Why a port that needs the game's table of hairstyle skeletons is refused without it.</summary>

@@ -313,6 +313,53 @@ public partial class HairPortBuilderTests
         Assert.Equal((Id, 170), BuildOne(mod, game) is var w ? (w.Est, w.SkeletonFrom) : default);
     }
 
+    /// <summary>A port's every strip skipped at the save — the port undone while the build ran: nothing saved, nothing
+    /// to reload, and the refusal not taken for the model's own verdict.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-28")]
+    public void A_port_whose_strips_were_all_skipped_reports_its_refusal_and_saves_nothing()
+    {
+        var (mod, game) = StrippableOldCarry();
+        using var _ = mod;
+        bool undone = false;
+        // The build has read the mod's record by the time it reads the source race's head: undo the port there.
+        var head = HairPortPlan.HeadPaths(801).First();
+        Func<string, byte[]?> racing = p =>
+        {
+            if (p == head && !undone) undone = HairPortWriter.Undo(mod.Root, _ => true, decline: true).Ok;
+            return game(p);
+        };
+        var host = new PortHost(mod, racing);
+        var ported = HairPortScan.PortOne(host, mod.Root,
+            new HairPortWatcher.Decide.Decision(HairPortWatcher.Decide.Kind.Port, mod.Root, Source), 201, Pbd());
+        Assert.True(undone);
+        Assert.Empty(ported.Writes);
+        Assert.False(ported.Stripped);
+        Assert.False(ported.Refusal);
+        Assert.Contains("j_ex_h0170_ke_b", ported.Message);
+        Assert.Empty(HairPortRecord.Read(mod.Root).Ports);
+    }
+
+    /// <summary>A check refused for an edit of the port is not remembered as the model's verdict: reverted, the next
+    /// check of the session looks again.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-15")]
+    public void An_edit_blocked_refusal_is_not_remembered_by_the_check()
+    {
+        using var mod = BorrowMod();
+        Assert.True(HairPortWriter.Save(mod.Root, [BuildOne(mod, TableGame([(801, Id, 170), (201, Id, Id)]))], false).Ok);
+        MakeOld(mod);
+        var file = HairPortRecord.Read(mod.Root).Ports.Single().File;
+        mod.Put(Path.Combine(SidecarDiscoveryService.SidecarSubdir, MeshVolumeService.BackupSubdir, file), [9, 9]);
+        var game = TableGame([(801, Id, 170), (201, Id, 170)], new() { [HairPortPlan.SkeletonPath(201, 170)] = Lacking });
+
+        var host = new PortHost(mod, game).Wearing();
+        var memo = new HairPortScan.Memo();
+        var result = HairPortScan.Run(host, 201, [Id], null, memo, force: true, "test", System.Threading.CancellationToken.None);
+        Assert.Equal(HairPortScan.RowState.Refused, Assert.Single(result.Rows).State);
+        Assert.Empty(memo.Refusals);
+    }
+
     /// <summary>A strip is no port made: an undo of its target stays remembered.</summary>
     [Fact]
     [Trait("Plan", "EDGE-hair-skeleton-infer-28")]

@@ -236,7 +236,7 @@ internal static class HairPortScan
         foreach (var (r, why) in plan.Refused) host.Log($"c{r:D4} not ported — {why}");
         if (plan.Writes.Count == 0)
             return new Ported([], plan.Current.Contains(race), plan.Refused.TryGetValue(race, out var w) ? w : "",
-                              Refusal: !plan.Unreadable);
+                              Refusal: plan.IsVerdict(race));
 
         var outcome = HairPortWriter.Save(modRoot, plan.Writes, auto: true);
         if (!outcome.Ok)
