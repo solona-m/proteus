@@ -115,15 +115,23 @@ internal static class HairPortSkeleton
     /// what the game loads there with the port on. Null for none, or one of our ports'.</summary>
     private static string? AuthorsOwn(Place p, string gamePath)
         => new[] { p.Owner, p.Defaults }.OfType<HairPortPlan.Owner>()
-                                         .Select(o => HairPortPlan.FileFor(o, gamePath))
-                                         .FirstOrDefault(f => f != null && !HairPortPlan.IsPortFile(f));
+                                         .Select(o => HairPortPlan.FileFor(o, gamePath) is { } f && IsAuthors(p, o, gamePath, f) ? f : null)
+                                         .FirstOrDefault(f => f != null);
+
+    /// <summary>Whether <paramref name="owner"/>'s redirect of <paramref name="gamePath"/> to <paramref name="file"/> is
+    /// the author's own — not a port file, and not one a port of ours added there naming the author's file (a carry of
+    /// the source's skeleton the author ships).</summary>
+    private static bool IsAuthors(Place p, HairPortPlan.Owner owner, string gamePath, string file)
+        => !HairPortPlan.IsPortFile(file)
+           && !p.Ports.Any(e => HairPortPlan.Same(e.Owner, owner) && e.Materials.TryGetValue(gamePath, out var ours)
+                                && HairPortRecord.Rel(ours).Equals(HairPortRecord.Rel(file), StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Whether every place publishing <paramref name="gamePath"/> does so for this target's own ports, or is
     /// the port's place or the default data publishing the author's own file — the one the game loads with the port on.
     /// Another place's file, or a port of another hairstyle, may be what the game loads instead.</summary>
     private static bool ExplainedOrAuthors(Place p, string gamePath)
         => p.Owners.All(o => HairPortPlan.FileFor(o, gamePath) is not { } file
-                             || ((HairPortPlan.Same(o, p.Owner) || o.IsDefault) && !HairPortPlan.IsPortFile(file))
+                             || ((HairPortPlan.Same(o, p.Owner) || o.IsDefault) && IsAuthors(p, o, gamePath, file))
                              || p.Ports.Any(e => HairPortPlan.Same(e.Owner, o)
                                                  && e.TargetGamePath.Equals(p.Target, StringComparison.OrdinalIgnoreCase)
                                                  && e.Materials.ContainsKey(gamePath)));

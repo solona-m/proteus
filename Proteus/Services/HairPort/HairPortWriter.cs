@@ -31,9 +31,12 @@ internal static class HairPortWriter
     /// because it could not be made again and that skeleton changed another hairstyle. Only its redirects change: its
     /// model file is not written (<paramref name="Model"/> is unused), its hat fit and the user's edits are kept, and
     /// its record keeps how and when it was made. Skipped when the port is gone by the time it is saved.</param>
+    /// <param name="StrippedFrom">For a strip, the port's entry and carried skeleton it was planned from: it applies only
+    /// while the port still has them.</param>
     public sealed record PortWrite(HairPortPlan.Owner Into, string SourceGamePath, string SourceFile, string SourceSha8,
                                    string TargetGamePath, byte[] Model, IReadOnlyList<MaterialWrite> Materials,
-                                   long Millis = 0, int Est = 0, int SkeletonFrom = 0, bool Stripped = false);
+                                   long Millis = 0, int Est = 0, int SkeletonFrom = 0, bool Stripped = false,
+                                   (int Est, int SkeletonFrom) StrippedFrom = default);
 
     /// <summary>The <c>Est</c> manipulation that gives a port's race its extra skeleton.</summary>
     internal static object EstFor(string targetGamePath, int entry)
@@ -63,10 +66,12 @@ internal static class HairPortWriter
         public IReadOnlyList<PortWrite> SavedWrites => Saved ?? [];
     }
 
-    /// <summary>Whether a strip still applies to the port the record holds now: the same carry, made from the same
-    /// model, with every redirect the strip keeps — not one undone, or remade by another look, since the plan.</summary>
+    /// <summary>Whether a strip still applies to the port the record holds now: the same carry — entry and skeleton —
+    /// made from the same model, with every redirect the strip keeps; not one undone, or remade by another look, since
+    /// the plan.</summary>
     private static bool StillStrippable(PortWrite w, HairPortRecord.Entry? was)
         => was is { SkeletonFrom: > 0 }
+           && (was.Est, was.SkeletonFrom) == w.StrippedFrom
            && string.Equals(was.SourceSha8, w.SourceSha8, StringComparison.OrdinalIgnoreCase)
            && w.Materials.All(m => was.Materials.TryGetValue(m.GamePath, out var rel)
                                    && HairPortRecord.Rel(rel).Equals(HairPortRecord.Rel(m.AuthorFile ?? ""), StringComparison.OrdinalIgnoreCase));

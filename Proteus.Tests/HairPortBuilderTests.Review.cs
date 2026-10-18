@@ -222,24 +222,68 @@ public partial class HairPortBuilderTests
         Assert.Equal(2, HairPortRecord.Read(mod.Root).Ports.Count);
     }
 
-    /// <summary>A port remade by another look between a strip's plan and its save is not overwritten by the strip.</summary>
-    [Fact]
+    /// <summary>A port remade by another look between a strip's plan and its save — from a changed model, or the same
+    /// model with another skeleton — is not overwritten by the strip.</summary>
+    [Theory]
     [Trait("Plan", "EDGE-hair-skeleton-infer-28")]
-    public void A_strip_of_a_port_remade_meanwhile_is_skipped()
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_strip_of_a_port_remade_meanwhile_is_skipped(bool modelChanged)
     {
         var (mod, game) = StrippableOldCarry();
         using var _ = mod;
         var plan = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, withSharers: false);
         Assert.True(Assert.Single(plan.Writes).Stripped);
         var record = HairPortRecord.Read(mod.Root);
-        record.Ports.Single().SourceSha8 = "0badf00d";
+        if (modelChanged) record.Ports.Single().SourceSha8 = "0badf00d";
+        else record.Ports.Single().Est = 2;
         HairPortRecord.Write(mod.Root, record);
 
         var outcome = HairPortWriter.Save(mod.Root, plan.Writes, auto: true);
         Assert.True(outcome.Ok);
         Assert.Empty(outcome.SavedWrites);
         Assert.NotNull(HairPortPlan.FileFor(mod.Owner("Cut", "Long"), HairPortPlan.SkeletonPath(201, Id)));
-        Assert.Equal("0badf00d", HairPortRecord.Read(mod.Root).Ports.Single().SourceSha8);
+        var after = HairPortRecord.Read(mod.Root).Ports.Single();
+        Assert.Equal(modelChanged ? ("0badf00d", 0) : (record.Ports.Single().SourceSha8, 2), (after.SourceSha8, after.Est));
+    }
+
+    /// <summary>
+    /// The author ships the source's skeleton, and the slot the carry goes to is the one the mod's source entry names: our
+    /// redirect there names the author's file, and is still ours — the port stays a carry, current on every later look,
+    /// from one place or two.
+    /// </summary>
+    [Theory]
+    [Trait("Plan", "AC-hair-skeleton-infer-7")]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-22")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_carry_of_the_authors_source_skeleton_at_the_borrowed_slot_stays_current(bool fromTheDefaultsToo)
+    {
+        using var mod = PhysicsMod([PenumbraManipulations.EstManipulation("0801", "Hair", Id, 170)]);
+        EditMeta(mod, n =>
+        {
+            n["Groups"]![0]!["Options"]![0]!["Files"]![HairPortPlan.SkeletonPath(801, 170)] = "skl.sklb";
+            if (fromTheDefaultsToo)
+            {
+                n["DefaultData"]!["Files"]![Source] = "default.mdl";
+                n["DefaultData"]!["Files"]![HairPortPlan.SkeletonPath(801, 170)] = "skl.sklb";
+            }
+        });
+        mod.Put("skl.sklb", H0170Skeleton);
+        mod.Put("default.mdl", HairModel(801, material: "/mt_c0801h0130_hir_b.mtrl", bones: [("j_ex_h0170_ke_b", 1f)]));
+        var game = TableGame([(801, Id, 170), (201, Id, 170)], new() { [HairPortPlan.SkeletonPath(201, 170)] = Lacking });
+
+        var plan = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, withSharers: false);
+        Assert.Empty(plan.Refused);
+        Assert.All(plan.Writes, w => Assert.Equal((170, 170), (w.Est, w.SkeletonFrom)));
+        Assert.True(HairPortWriter.Save(mod.Root, plan.Writes, false).Ok);
+
+        var record = HairPortRecord.Read(mod.Root);
+        Assert.All(record.Ports, e => Assert.False(
+            HairPortBuilder.IsOutOfDate(mod.Root, e, mod.Get(e.SourceFile), mod.Owners, record.Ports, game), $"{e.Group}/{e.Option}"));
+        var again = HairPortBuilder.Build(mod.Root, Source, [201], Pbd(), game, withSharers: false);
+        Assert.Empty(again.Writes);
+        Assert.Contains((ushort)201, again.Current);
     }
 
     /// <summary>A harmful old carry that could be remade, but the user edited since: stripped instead, the edit kept,
