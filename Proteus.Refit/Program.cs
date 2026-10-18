@@ -1151,6 +1151,7 @@ internal static class Program
                     "NoRelease" => tuning with { NoRelease = true },
                     "NoNippleSmooth" => tuning with { NoNippleSmooth = true },
                     "NoSnapPush" => tuning with { NoSnapPush = true },
+                    "NoOpenEdgeFit" => tuning with { NoOpenEdgeFit = true },
                     _ => throw new UsageException($"Unknown --tune knob \"{knob}\"."),
                 };
             // The passes that explain themselves, on stderr: stdout is the JSON report.

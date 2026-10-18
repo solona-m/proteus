@@ -49,14 +49,37 @@ public class KeepShapeReleaseLocalTests
     /// snapped is now pushed clear of the new skin (<see cref="BodyRetarget.Tuning.NoSnapPush"/>). Measured against
     /// <see cref="BeforeSnapPush"/>: folds on the solve's last stage 801 -> 800, cloth inside 43 -> 42, skin through the
     /// cloth 930 -> 930. Every other case is between sizes of one mesh and did not move.
+    /// <para/>
+    /// Re-pinned for build 1316: pop's own skin stops short of its cloth, and 857 of its points past that open edge are now
+    /// read against the YAB body it was made on (<see cref="BodyRetarget.TargetBody.Fitted"/>). Measured against
+    /// <see cref="BeforeOpenEdgeFit"/>: cloth inside the body 144 -> 144 (Uranus), 131 -> 130 (Neolithe XS), 150 -> 150
+    /// (Bibo S); folds on the solve's last stage the same; edges stretched against the authored garment the same; one more
+    /// triangle turned over against it on Uranus and on Neolithe XS. Accepted (build 1316).
     /// </summary>
     private static readonly Dictionary<string, string> Before = new()
     {
         ["ash Rue L > Uranus"] = "BA69821F8C9D0409C3C5EB2B18F27957AF259171355D6A54645A4E15EF562E0D",
         ["ash Yab L > Uranus"] = "DE3834F1EAB9F7B7EBA67EAD9D19BA3FB3726BED02E5AE45CEC9EBE9ABC45708",
+        ["pop > Uranus"] = "5DD8CD877CA3091CC45BEBB0CE6FAE996AC3DF665004C96FD670F572F83D10A6",
+        ["pop > Neolithe XS"] = "ACCF44614E696ADB0400CF547656123AE580D2D30447F29A55A3AEE7D59B297E",
+        ["pop > Bibo S"] = "E1F0D50CF24783720C1E2A71C3A88BB59E26C1EA1409A3F5A667602A594DDA61",
+    };
+
+    /// <summary>The refits <see cref="BodyRetarget.Tuning.NoOpenEdgeFit"/> changes, as builds before 1316 wrote them,
+    /// release off and nipple smoothing off — the proof that nothing but that rule moved when <see cref="Before"/> was
+    /// re-pinned.</summary>
+    private static readonly Dictionary<string, string> BeforeOpenEdgeFit = new()
+    {
         ["pop > Uranus"] = "3ACD75DF39D6248760C50355E06B59FE1E61C311D6AA6D1337AA9ACADD887647",
         ["pop > Neolithe XS"] = "448E7E303B1D235DA036F3C1D12236E937D7FBF8ACB34D04C6E4359A244906FA",
         ["pop > Bibo S"] = "C619167AB0778D46CCF9C620423730FD4FFB1634F70706878404BAF61C1E4B1A",
+    };
+
+    /// <summary>The triangles turned over against the authored garment that <see cref="BodyRetarget.Tuning.NoOpenEdgeFit"/>
+    /// off adds, accepted when <see cref="Before"/> was re-pinned for build 1316.</summary>
+    private static readonly Dictionary<string, int> TurnedByOpenEdgeFit = new()
+    {
+        ["pop > Uranus"] = 1, ["pop > Neolithe XS"] = 1, ["pop > Bibo S"] = 0,
     };
 
     /// <summary>The refits <see cref="BodyRetarget.Tuning.NoSnapPush"/> changes, as builds before 1266 wrote them, release
@@ -77,7 +100,7 @@ public class KeepShapeReleaseLocalTests
     /// <paramref name="carryPiercings"/> says otherwise.</summary>
     private static Run Refit(byte[] bytes, string fromNeed, string fromRel, string toNeed, string toRel,
                              bool noRelease = false, string? untick = null, bool noNippleSmooth = false,
-                             bool beforeSnapPush = false, bool carryPiercings = true)
+                             bool beforeSnapPush = false, bool carryPiercings = true, bool noOpenEdgeFit = false)
     {
         var garment = ModelPartReader.Read(bytes)!;
         string fromRoot = LocalData.Path(fromNeed), toRoot = LocalData.Path(toNeed);
@@ -91,7 +114,8 @@ public class KeepShapeReleaseLocalTests
         var pieces = RefitCore.ShapePieces(garment, labels, out var names);
         bool across = !string.Equals(fromRoot, toRoot, StringComparison.OrdinalIgnoreCase);
         var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoRelease: noRelease, NoNippleSmooth: noNippleSmooth,
-                                                                       NoSnapPush: beforeSnapPush), () => BodyRetarget.Plan(
+                                                                       NoSnapPush: beforeSnapPush,
+                                                                       NoOpenEdgeFit: noOpenEdgeFit), () => BodyRetarget.Plan(
             garment, bytes, [pair], "_top", replaceSkin: true, acrossBodies: across, keepShape: pieces,
             carryPiercings: carryPiercings));
         return new Run(plan, names);
@@ -215,6 +239,8 @@ public class KeepShapeReleaseLocalTests
     [MemberData(nameof(PopTargets))]
     [Trait("Plan", "AC-keep-shape-release-2")]
     [Trait("Plan", "AC-keep-shape-release-9")]
+    [Trait("Plan", "AC-open-patch-authored-4")]
+    [Trait("Plan", "AC-open-patch-authored-9")]
     public void Pop_hard_pieces_stay_kept(string which)
     {
         var (toNeed, toRel) = which switch
@@ -233,6 +259,23 @@ public class KeepShapeReleaseLocalTests
         Assert.NotEmpty(kept);
         Assert.DoesNotContain(kept, p => p.Released);
         Assert.Equal(Before[which], run.Hash);
+
+        // [AC-open-patch-authored-4] Without the made-on body's reading, the refit is the one before it; [-9] and with it,
+        // no worse: no more cloth inside the new body, no more folds, nothing more stretched, and no more turned over than
+        // was accepted.
+        var bytes = File.ReadAllBytes(LocalData.Path(Pop));
+        var off = Refit(bytes, Yab, YabMedium, toNeed, toRel, noNippleSmooth: true, noOpenEdgeFit: true);
+        Assert.Equal(BeforeOpenEdgeFit[which], off.Hash);
+        var garment = ModelPartReader.Read(bytes)!;
+        string target = BodySizeCatalog.ResolveCaseInsensitive(LocalData.Path(toNeed), toRel);
+        var laidOn = SkinTuckSheet.Laid(bytes, run.Plan);
+        var laidOff = SkinTuckSheet.Laid(bytes, off.Plan);
+        Assert.True(BodySizeMatch.ClothAgainst(ModelPartReader.Read(run.Plan.Model)!, target)!.Value.Inside
+                    <= BodySizeMatch.ClothAgainst(ModelPartReader.Read(off.Plan.Model)!, target)!.Value.Inside);
+        Assert.True(run.Plan.Report.Folded <= off.Plan.Report.Folded);
+        Assert.True(SkinTuckSheet.ClothStretch(garment, laidOn) <= SkinTuckSheet.ClothStretch(garment, laidOff));
+        Assert.True(SkinTuckSheet.FoldedAgainstAuthored(garment, laidOn)
+                    <= SkinTuckSheet.FoldedAgainstAuthored(garment, laidOff) + TurnedByOpenEdgeFit[which]);
 
         // And as the refit really runs, smoothing on: still nothing let go.
         var on = Refit(File.ReadAllBytes(LocalData.Path(Pop)), Yab, YabMedium, toNeed, toRel);

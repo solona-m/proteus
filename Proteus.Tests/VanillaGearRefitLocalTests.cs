@@ -154,10 +154,17 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
     {
         var r = Plan(garmentName, modNeed, rel);
         var (bytes, garment, source, target, option, pair, game) = (r.Bytes, r.Garment, r.Source, r.Target, r.Option, r.Pair, r.Game);
-        var whole = RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: false, out _);
-        var cutOnly = BodyRetarget.Plan(garment, bytes, [pair], "_top", held: new HashSet<int>(), replaceSkin: true,
-                                        acrossBodies: true, clearBody: false, cutHidden: true,
-                                        keepShape: RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment)));
+        // The mod paths these bounds were measured against, as they were: the made-on body's reading of cloth past an
+        // open skin edge (build 1316) takes up to 80 of a game top's points in on them and shows less skin through — which
+        // would tip a bound on how much of THEIR skin the game path still shows without anything getting worse. That
+        // reading is judged on its own in OpenPatchGameTopLocalTests; the game path never takes it (it clears the body).
+        var modPaths = new BodyRetarget.Tuning(NoOpenEdgeFit: true);
+        var whole = BodyRetarget.WithTuning(modPaths,
+            () => RefitCore.PlanRefit(garment, bytes, [pair], "_top", across: true, gameGear: false, out _));
+        var cutOnly = BodyRetarget.WithTuning(modPaths,
+            () => BodyRetarget.Plan(garment, bytes, [pair], "_top", held: new HashSet<int>(), replaceSkin: true,
+                                    acrossBodies: true, clearBody: false, cutHidden: true,
+                                    keepShape: RefitCore.ShapePieces(garment, RefitCore.DefaultKeepShape(garment))));
 
         var gameModel = ModelPartReader.Read(r.Drawn(game))!;
         var untuckedModel = ModelPartReader.Read(r.Drawn(r.BeforeAB))!;
@@ -1125,7 +1132,7 @@ public class VanillaGearRefitLocalTests(ITestOutputHelper output)
     /// </summary>
     /// <param name="beside">Also count cloth whose nearest skin is that far to the side, m — off the skin's edge rather
     /// than under it. Unlimited by default, as the test was written; <see cref="Under"/> for the tuck.</param>
-    private static double SkinThrough(ModelParts m, float beside = float.MaxValue)
+    internal static double SkinThrough(ModelParts m, float beside = float.MaxValue)
     {
         var surf = new BodySurface(m, 0.01f);
         double area = 0;

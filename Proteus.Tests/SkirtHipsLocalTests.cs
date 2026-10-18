@@ -180,6 +180,7 @@ public class SkirtHipsLocalTests(ITestOutputHelper output)
     [LocalDataFact(Heartthrob, Scarlet, Bibo, Rue, Neolithe)]
     [Trait("Plan", "AC-skirt-hips-5")]
     [Trait("Plan", "EDGE-skirt-hips-12")]
+    [Trait("Plan", "AC-open-patch-authored-9")]
     public void Hip_level_pants_are_no_worse()
     {
         var bodies = new[] { Body(Bibo), Body(Rue), Body(Neolithe) }.ToList();
@@ -209,8 +210,12 @@ public class SkirtHipsLocalTests(ITestOutputHelper output)
                                                                                    trace: (s, d) => { if (s == "layer-order") final = d; }));
                     return (plan, BodyRetarget.FoldedTriangles(sets, final!));
                 }
-                var now = Run(new BodyRetarget.Tuning());
-                var before = Run(new BodyRetarget.Tuning(NoWallPair: true, NoWallCover: true, NoRimTurnGuard: true));
+                // Both without the made-on body's reading of cloth past an open skin edge (build 1316), which came after the
+                // rules judged here: on one side only, its own gains (Scarlet onto Rue WC A 200 -> 95 points inside) would pad
+                // the margin those rules have to clear. It is judged on its own below.
+                var now = Run(new BodyRetarget.Tuning(NoOpenEdgeFit: true));
+                var before = Run(new BodyRetarget.Tuning(NoWallPair: true, NoWallCover: true, NoRimTurnGuard: true,
+                                                         NoOpenEdgeFit: true));
                 var inNow = BodySizeMatch.ClothAgainst(ModelPartReader.Read(now.Plan.Model)!, target.Catalog.PathOf(legsTo))!.Value;
                 var inBefore = BodySizeMatch.ClothAgainst(ModelPartReader.Read(before.Plan.Model)!, target.Catalog.PathOf(legsTo))!.Value;
                 output.WriteLine($"{Path.GetFileName(LocalData.Path(mod))} onto {target.Dir} / {legsTo.Label}: inside {inBefore.Inside} -> "
@@ -222,6 +227,24 @@ public class SkirtHipsLocalTests(ITestOutputHelper output)
                 Assert.True(now.Folds <= before.Folds, $"{now.Folds} folded, {before.Folds} before");
                 Assert.True(now.Plan.Report.WorstMove <= before.Plan.Report.WorstMove + 0.002f,
                             $"worst move {now.Plan.Report.WorstMove * 1000f:F1} mm, {before.Plan.Report.WorstMove * 1000f:F1} before");
+
+                // [AC-open-patch-authored-9] The made-on body's reading on, against the same refit without it: no more cloth
+                // inside, folds or edges stretched against the authored garment, and the worst move within 2 mm.
+                var fitted = Run(new BodyRetarget.Tuning());
+                var inFitted = BodySizeMatch.ClothAgainst(ModelPartReader.Read(fitted.Plan.Model)!, target.Catalog.PathOf(legsTo))!.Value;
+                int stretchedNow = SkinTuckSheet.ClothStretch(pants, SkinTuckSheet.Laid(bytes, now.Plan));
+                int stretchedFitted = SkinTuckSheet.ClothStretch(pants, SkinTuckSheet.Laid(bytes, fitted.Plan));
+                output.WriteLine($"  open-edge fit: inside {inNow.Inside} -> {inFitted.Inside}; folds {now.Folds} -> {fitted.Folds}; "
+                               + $"stretched {stretchedNow} -> {stretchedFitted}; worst move {now.Plan.Report.WorstMove * 1000f:F1} -> "
+                               + $"{fitted.Plan.Report.WorstMove * 1000f:F1} mm");
+                // Accepted (build 1316): Heartthrob onto Neolithe SFW M, 2 more edges stretched (13 -> 15), with one fewer fold
+                // and one fewer point inside.
+                int acceptedStretch = mod == Heartthrob && target.Dir == bodies[2].Dir ? 2 : 0;
+                Assert.True(inFitted.Inside <= inNow.Inside, $"{inFitted.Inside} inside with the fit, {inNow.Inside} without");
+                Assert.True(fitted.Folds <= now.Folds, $"{fitted.Folds} folded with the fit, {now.Folds} without");
+                Assert.True(stretchedFitted <= stretchedNow + acceptedStretch, $"{stretchedFitted} stretched with the fit, {stretchedNow} without");
+                Assert.True(fitted.Plan.Report.WorstMove <= now.Plan.Report.WorstMove + 0.002f,
+                            $"worst move {fitted.Plan.Report.WorstMove * 1000f:F1} mm with the fit, {now.Plan.Report.WorstMove * 1000f:F1} without");
             }
     }
 }

@@ -26,15 +26,21 @@ public class SkirtHipsRegressionLocalTests(ITestOutputHelper output)
     private const string Sirius = LocalData.Mods + ":Sirius - by Solona";
     private const string Race = "0201";
 
+    /// <summary>The thick-shell rules' gates compare these two, both without the made-on body's reading of cloth past
+    /// an open skin edge (build 1316), which came after: with it on one side only, its own gains (This Old Thing onto Rue L
+    /// 67 -> 18 points inside) would pad the margin a regression in those rules has to clear.</summary>
     private static readonly BodyRetarget.Tuning Old = new(NoWallPair: true, NoWallCover: true, NoRimTurnGuard: true,
-                                                          NoSnapPush: true);
+                                                          NoSnapPush: true, NoOpenEdgeFit: true);
+
+    private static readonly BodyRetarget.Tuning RuleOff = new(NoOpenEdgeFit: true);
 
     private sealed record Refitted(ModelParts Model, int Folded, int Inside);
 
+    private sealed record Runs(Refitted Now, Refitted Before, ModelParts Author, int AuthorInside, Refitted Fitted);
+
     /// <summary><paramref name="fromRel"/> refitted onto the body option the author's <paramref name="toRel"/> was made
     /// on, as the size set refits it (the skin taken, its default Keep shape pieces).</summary>
-    private static (Refitted Now, Refitted Before, ModelParts Author, int AuthorInside) Refit(string mod, string fromRel, string toRel, string slot,
-                                                                         string[] bodyNeeds)
+    private static Runs Refit(string mod, string fromRel, string toRel, string slot, string[] bodyNeeds)
     {
         var bodies = bodyNeeds.Select(b => (Dir: Path.GetFileName(LocalData.Path(b)), Catalog: BodySizeCatalog.Read(LocalData.Path(b))))
                               .ToList();
@@ -71,7 +77,8 @@ public class SkirtHipsRegressionLocalTests(ITestOutputHelper output)
             var model = ModelPartReader.Read(plan.Model)!;
             return new Refitted(model, BodyRetarget.FoldedTriangles(sets, final!), BodySizeMatch.ClothAgainst(model, target)!.Value.Inside);
         }
-        return (Run(new BodyRetarget.Tuning()), Run(Old), author, BodySizeMatch.ClothAgainst(author, target)!.Value.Inside);
+        return new Runs(Run(RuleOff), Run(Old), author, BodySizeMatch.ClothAgainst(author, target)!.Value.Inside,
+                        Run(new BodyRetarget.Tuning()));
     }
 
     /// <summary>The mean distance from each cloth point of the author's own size to the nearest cloth point of the refit.</summary>
@@ -114,9 +121,10 @@ public class SkirtHipsRegressionLocalTests(ITestOutputHelper output)
         return (float)(sum / mine.Count);
     }
 
-    private void NoWorse(string what, (Refitted Now, Refitted Before, ModelParts Author, int AuthorInside) r, bool againstAuthor,
-                         float slack = 0f)
+    /// <param name="acceptedFolds">Folds the made-on body's reading may add, accepted at their measured count.</param>
+    private void NoWorse(string what, Runs r, bool againstAuthor, float slack = 0f, int acceptedFolds = 0)
     {
+        FitNoWorse(what, r, againstAuthor, acceptedFolds);
         float now = FromAuthor(r.Author, r.Now.Model), before = FromAuthor(r.Author, r.Before.Model);
         output.WriteLine($"{what}: from the author's own {before * 1000f:F3} -> {now * 1000f:F3} mm; folded {r.Before.Folded} -> "
                        + $"{r.Now.Folded}; inside {r.Before.Inside} -> {r.Now.Inside} (the author's own {r.AuthorInside})");
@@ -131,8 +139,24 @@ public class SkirtHipsRegressionLocalTests(ITestOutputHelper output)
             Assert.True(r.Now.Inside <= r.Before.Inside, $"{r.Now.Inside} inside, {r.Before.Inside} before");
     }
 
+    /// <summary>
+    /// [AC-open-patch-authored-9] The made-on body's reading of cloth past an open skin edge (see
+    /// <see cref="BodyRetarget.TargetBody.Fitted"/>) on, against the same refit without it: no more cloth inside the new
+    /// body, no more folds than accepted, and no further from the author's own size.
+    /// </summary>
+    private void FitNoWorse(string what, Runs r, bool againstAuthor, int acceptedFolds)
+    {
+        float on = FromAuthor(r.Author, r.Fitted.Model), off = FromAuthor(r.Author, r.Now.Model);
+        output.WriteLine($"{what}, open-edge fit: from the author's own {off * 1000f:F3} -> {on * 1000f:F3} mm; folded {r.Now.Folded} -> "
+                       + $"{r.Fitted.Folded}; inside {r.Now.Inside} -> {r.Fitted.Inside}");
+        Assert.True(r.Fitted.Inside <= r.Now.Inside, $"{r.Fitted.Inside} inside with the fit, {r.Now.Inside} without");
+        Assert.True(r.Fitted.Folded <= r.Now.Folded + acceptedFolds, $"{r.Fitted.Folded} folded with the fit, {r.Now.Folded} without");
+        if (againstAuthor) Assert.True(on <= off + 1e-5f, $"{on * 1000f:F3} mm from the author's own with the fit, {off * 1000f:F3} without");
+    }
+
     [LocalDataFact(Geometric, Bibo)]
     [Trait("Plan", "AC-skirt-hips-4")]
+    [Trait("Plan", "AC-open-patch-authored-9")]
     public void Geometric_Small_to_Large_within_Bibo_is_no_further_from_the_authors_Large()
         => NoWorse("Geometric skirt Small -> Large",
                    Refit(Geometric, "leg size/small/chara/equipment/e6010/model/c0201e6010_dwn.mdl",
@@ -140,6 +164,7 @@ public class SkirtHipsRegressionLocalTests(ITestOutputHelper output)
 
     [LocalDataFact(OldThing, Rue)]
     [Trait("Plan", "AC-skirt-hips-4")]
+    [Trait("Plan", "AC-open-patch-authored-9")]
     public void This_Old_Thing_between_its_own_sizes_keeps_the_authors_fit()
         => NoWorse("This Old Thing Rue M -> Rue L",
                    Refit(OldThing, "size/rue m/chara/equipment/e6255/model/c0201e6255_top.mdl",
@@ -153,6 +178,7 @@ public class SkirtHipsRegressionLocalTests(ITestOutputHelper output)
     [MemberData(nameof(SiriusTargets))]
     [Trait("Plan", "AC-skirt-hips-4")]
     [Trait("Plan", "AC-snap-push-5")]
+    [Trait("Plan", "AC-open-patch-authored-9")]
     public void Sirius_onto_other_bodies_is_no_worse(string size)
         => NoWorse($"Sirius L -> {size}",
                    Refit(Sirius, "size/Sirius/L/chara/equipment/e0154/model/c0201e0154_top.mdl",
@@ -165,6 +191,7 @@ public class SkirtHipsRegressionLocalTests(ITestOutputHelper output)
     /// meets the creases of a body tessellated otherwise.</summary>
     [LocalDataFact(OldThing, Rue, Neolithe)]
     [Trait("Plan", "AC-snap-push-5")]
+    [Trait("Plan", "AC-open-patch-authored-9")]
     public void This_Old_Thing_Rue_L_onto_Neolithe_L_keeps_the_authors_fit()
         => NoWorse("This Old Thing Rue L -> Neolithe L",
                    Refit(OldThing, "size/rue l/chara/equipment/e6255/model/c0201e6255_top.mdl",
@@ -173,8 +200,13 @@ public class SkirtHipsRegressionLocalTests(ITestOutputHelper output)
     [LocalDataFact(OldThing, Rue, Neolithe)]
     [Trait("Plan", "AC-skirt-hips-4")]
     [Trait("Plan", "AC-snap-push-5")]
+    [Trait("Plan", "AC-open-patch-authored-9")]
     public void This_Old_Thing_L_onto_Rue_L_is_no_worse()
         => NoWorse("This Old Thing Neolithe L -> Rue L",
                    Refit(OldThing, "size/neolithe l/chara/equipment/e6255/model/c0201e6255_top.mdl",
-                         "size/rue l/chara/equipment/e6255/model/c0201e6255_top.mdl", "_top", [Rue, Neolithe]), againstAuthor: false);
+                         "size/rue l/chara/equipment/e6255/model/c0201e6255_top.mdl", "_top", [Rue, Neolithe]), againstAuthor: false,
+                   // Accepted (build 1316): the made-on body's reading takes 2,619 of its points in, against Neolithe's
+                   // push-up L and its undies: cloth inside Rue L 67 -> 18, edges stretched against the authored garment
+                   // 96 -> 47, and folds 14 -> 21 — the new ones in the underbust crease.
+                   acceptedFolds: 7);
 }

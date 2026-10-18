@@ -37,6 +37,10 @@ internal static class LocalData
     /// <summary>Miette's "Shift": heels with stockings to the thigh, a heeled foot of Bibo skin, made on YAB WC.</summary>
     internal const string ShiftPack = ModPacks + ":Shift.pmp";
 
+    /// <summary>voidblood's "Dei Gratia" v1.0.1: an e9068 top fitted on the game's body but drawn with <c>_bibo.mtrl</c>
+    /// skin, its chest skin cut away under the blouse — only an upper-chest patch left, its open edge above the bust.</summary>
+    internal const string DeiGratiaPack = ModPacks + ":Dei Gratia v1.0.1.pmp";
+
     /// <summary>Bijeon's "Frost Veil Plus+": an invisible a0002 bracelet whose whole look is an item effect, in the v3 layout.</summary>
     internal const string FrostVeilPack = ModPacks + ":Frost Veil Plus+.pmp";
 

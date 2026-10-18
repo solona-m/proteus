@@ -120,6 +120,14 @@ internal static partial class BodyRetarget
     /// </summary>
     internal const float DeepGrowLeast = 0.016f;
 
+    /// <summary>
+    /// How far inside the body a garment was made on cloth may lie and still be taken for lying ON it (4 mm), where that
+    /// body decides (see <see cref="TargetBody.Fitted"/>): one mesh fitted over another stands a few millimetres either
+    /// side of it. Measured on "Dei Gratia", whose blouse was fitted over the game's bra: its bust points 1.1-5.3 mm
+    /// outside the bra and 0.2-3.0 mm inside. Cloth the game buries in its own body lies 6-15 mm in.
+    /// </summary>
+    internal const float FitSlack = 0.004f;
+
     /// <summary>How far the source body is looked for under a landing on the new one (60 mm); none that near counts as
     /// grown by that much.</summary>
     private const float DeepGrowReach = 0.06f;
@@ -177,7 +185,9 @@ internal static partial class BodyRetarget
     /// <summary>
     /// How far the push-out looks for the skin when deciding whether cloth was authored INSIDE it (15 cm). Cloth tucked
     /// under a body can sit far inside it — a heeled shoe's foot is drawn where the body's flat foot is — and at
-    /// <see cref="PushProbeRange"/> such a point read as "nowhere near skin", which the pass took for outside.
+    /// <see cref="PushProbeRange"/> such a point read as "nowhere near skin", which the pass took for outside. That far
+    /// out the nearest skin can be a patch's open edge the point lies beyond; that reading is put to the body the garment
+    /// was made on instead (see <see cref="TargetBody.Fitted"/>).
     /// </summary>
     internal const float AuthoredProbeRange = 0.15f;
 
@@ -240,12 +250,15 @@ internal static partial class BodyRetarget
     /// <param name="StandoffPulled">Cloth points brought back toward the author's standoff — see <see cref="KeepStandoff"/>.</param>
     /// <param name="StandoffWorst">The furthest any of them came back (metres).</param>
     /// <param name="StandoffHeld">Of them, points a guard held short of where they would have come back to.</param>
+    /// <param name="OpenEdgeFitted">Cloth points the push-out took in by the made-on body's reading, their nearest
+    /// authored skin an open edge they lie behind — see <see cref="TargetBody.Fitted"/>.</param>
     internal sealed record Report(
         int Nodes, int Snapped, int Transferred, int Missed, int Pushed,
         float WorstMove, float WorstPush, int UnmappedSpares, bool HasOtherLods, int Held = 0, int Laid = 0,
         SwapReport? Swap = null, int Folded = 0, IReadOnlyList<ShapeOutcome>? Shapes = null, int Smoothed = 0,
         int Layered = 0, float LayerResidual = 0f, int DeepCleared = 0, float DeepWorst = 0f,
-        IReadOnlyList<int>? DeepAt = null, int StandoffPulled = 0, float StandoffWorst = 0f, int StandoffHeld = 0)
+        IReadOnlyList<int>? DeepAt = null, int StandoffPulled = 0, float StandoffWorst = 0f, int StandoffHeld = 0,
+        int OpenEdgeFitted = 0)
     {
         /// <summary>Share of moved nodes that landed on a body vertex exactly. Low means the author sculpted the
         /// garment's body mesh rather than copying it, and the seam may not come out perfect.</summary>
@@ -268,7 +281,7 @@ internal static partial class BodyRetarget
                                   IReadOnlyList<ShapeOutcome>? Shapes = null, int Layered = 0,
                                   float LayerResidual = 0f, int DeepCleared = 0, float DeepWorst = 0f,
                                   IReadOnlyList<int>? DeepAt = null, int StandoffPulled = 0, float StandoffWorst = 0f,
-                                  int StandoffHeld = 0);
+                                  int StandoffHeld = 0, int OpenEdgeFitted = 0);
 
     /// <summary>
     /// The garment split into the two sets the two passes act on.
@@ -714,6 +727,9 @@ internal static partial class BodyRetarget
         var solved = Solve(garment, pairs, garmentSlot, pushOut, held, replaceSkin, clearBody, keepShape,
                            ModelSkinReader.Read(garmentBytes, null, null), swapSlot, swapMeshes, chestSlot, trace, outfit,
                            deep, standoff);
+        if (solved.OpenEdgeFitted > 0)
+            log?.Invoke($"fitted: {solved.OpenEdgeFitted} cloth points below an open skin edge read against the body the "
+                        + "garment was made on");
         if (solved.DeepCleared > 0)
             log?.Invoke($"cloth cleared deep: {solved.DeepCleared} points out of the new breast, up to {solved.DeepWorst * 1000f:0.0} mm");
         if (solved.StandoffPulled > 0)
@@ -759,7 +775,7 @@ internal static partial class BodyRetarget
                                 written.UnmappedSpares, ModelLodTrimmer.LodCount(model) > 1, solved.Held, solved.Laid,
                                 swap, solved.Folded, solved.Shapes, smoothed, solved.Layered, solved.LayerResidual,
                                 solved.DeepCleared, solved.DeepWorst, solved.DeepAt, solved.StandoffPulled,
-                                solved.StandoffWorst, solved.StandoffHeld);
+                                solved.StandoffWorst, solved.StandoffHeld, solved.OpenEdgeFitted);
         return new Planned(solved.Edit, model, report);
     }
 
@@ -978,7 +994,7 @@ internal static partial class BodyRetarget
         var edit = new RetargetEdit(garment.MeshSpans, vertDelta, vertNrm);
         return new Solved(edit, CountTrue(snapped), transferred, missed, pushed, worstMove, worstPush, sets.HeldCount,
                           laid, folded, stage.Shapes, outfitLayered, layerResidual, stage.DeepCleared, stage.DeepWorst,
-                          stage.DeepAt, standoffPulled, standoffWorst, standoffHeld);
+                          stage.DeepAt, standoffPulled, standoffWorst, standoffHeld, stage.OpenEdgeFitted);
     }
 
     /// <summary>
@@ -1004,9 +1020,11 @@ internal static partial class BodyRetarget
     /// <param name="DeepCleared">Nodes pushed out from deeper than <see cref="ClearDepth"/>; see <see cref="DeepClearTest"/>.</param>
     /// <param name="DeepWorst">The furthest any of them was pushed in all.</param>
     /// <param name="DeepAt">A garment vertex of each of them.</param>
+    /// <param name="OpenEdgeFitted">Nodes the push-out took in by the made-on body's reading; see
+    /// <see cref="TargetBody.Fitted"/>.</param>
     private sealed record ShapeStage(int Pushed, float WorstPush, TargetBody? Drawn, FaceCheck? FaceCheck,
                                      float[]? PushedBy, ShapeOutcome[]? Shapes, int DeepCleared = 0, float DeepWorst = 0f,
-                                     IReadOnlyList<int>? DeepAt = null);
+                                     IReadOnlyList<int>? DeepAt = null, int OpenEdgeFitted = 0);
 
     /// <summary>
     /// The kept pieces moved whole, the push-out, and the pieces whole again around where the push put them — then each
@@ -1053,7 +1071,7 @@ internal static partial class BodyRetarget
 
         int pushed = PushOut(sets, pushable, before, after, nodeDelta, clearBody, out float worstPush,
                              out var faceCheck, out var pushedBy, pushSnapped ? snapped : null, deep,
-                             out var deepNodes, out float deepWorst);
+                             out var deepNodes, out float deepWorst, out int openEdgeFitted);
         int[]? deepAt = null;
         if (deepNodes.Count > 0)
         {
@@ -1074,7 +1092,8 @@ internal static partial class BodyRetarget
             KeepShape(sets, keepShape, nodeDelta, scales, placed, owner);
             shapes = JudgeShapes(sets, placed, owner, bent, nodeDelta, SignedOff(after), SignedOff(before));
         }
-        return new ShapeStage(pushed, worstPush, after, faceCheck, pushedBy, shapes, deepNodes.Count, deepWorst, deepAt);
+        return new ShapeStage(pushed, worstPush, after, faceCheck, pushedBy, shapes, deepNodes.Count, deepWorst, deepAt,
+                              openEdgeFitted);
     }
 
     /// <summary>
