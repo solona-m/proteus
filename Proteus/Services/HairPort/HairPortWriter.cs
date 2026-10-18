@@ -229,12 +229,13 @@ internal static class HairPortWriter
                 return new Outcome(false, ex.Message, 0);
             }
 
-            foreach (var e in entries)
+            foreach (var (e, w) in entries.Zip(plan.Select(p => p.Write)))
             {
                 record.Ports.RemoveAll(p => HairPortPlan.Same(p.Owner, e.Owner)
                     && p.TargetGamePath.Equals(e.TargetGamePath, StringComparison.OrdinalIgnoreCase));
                 record.Ports.Add(e);
-                record.Declined.RemoveAll(d => d == HairPortPlan.DeclineKey(e.TargetGamePath));
+                // A port made now ends an undo of its target; a strip is no port made, and leaves the undo remembered.
+                if (!w.Stripped) record.Declined.RemoveAll(d => d == HairPortPlan.DeclineKey(e.TargetGamePath));
             }
             HairPortRecord.Write(modRoot, record);
             if (dropped) DeleteUnnamed(modRoot);

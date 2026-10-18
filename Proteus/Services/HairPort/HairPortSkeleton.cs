@@ -68,7 +68,7 @@ internal static class HairPortSkeleton
     /// <item>The table cannot be read: no verdict.</item>
     /// <item>What the target race loads has every bone: nothing added.</item>
     /// <item>The target race's own copy of the skeleton the source loads has them: an entry to it.</item>
-    /// <item>The source loads a skeleton: a copy of it.</item>
+    /// <item>The source loads a skeleton with every bone: a copy of it.</item>
     /// <item>Otherwise what the target loads, which the bend's own check refuses.</item>
     /// </list>
     /// An entry is judged by the file the game will load with the port on: the author's own where the port's place or
@@ -80,7 +80,14 @@ internal static class HairPortSkeleton
         var extra = ExtraBones(model);
         int defaultsOurs = HairPortBuilder.DefaultsPortEst(p.Ports, p.Target);
         if (HairPortBuilder.AuthorTargetEst(p.Owner, p.Defaults, p.Was, p.To, p.Id, defaultsOurs) is { } author)
+        {
+            // The author's own file for that skeleton, when they ship one, is what loads.
+            if (author > 0 && AuthorsOwn(p, HairPortPlan.SkeletonPath(p.To, author)) is { } shipped)
+                return HairPortBuilder.ReadMod(p.ModRoot, shipped) is { } bytes
+                    ? new Choice(Route.Own, author, author, 0, HairPortPlan.SkeletonBones(bytes))
+                    : Unreadable(shipped);
             return new Choice(Route.Own, author, author, 0, Bones(p, p.To, author));
+        }
 
         int? modSource = HairPortPlan.SourceEst(p.Owner, p.Defaults, p.From, p.Id);
         if (modSource is > 0 and var borrowed)
@@ -102,7 +109,16 @@ internal static class HairPortSkeleton
             if (unreadable != null) return Unreadable(unreadable);
             if (theirs != null) return new Choice(Route.Entry, source, loaded, 0, theirs);
         }
-        if (source > 0) return new Choice(Route.Carry, 0, loaded, source, own);
+        if (source > 0)
+        {
+            // Only a source skeleton with every bone is worth carrying: one that lacks them too leaves nothing to add,
+            // and the bend's own check refuses — the same answer every look, so no port is called out of date for it.
+            var path = HairPortPlan.SkeletonPath(p.From, source);
+            var (skl, bytes) = HairPortBuilder.Carry(p.ModRoot, p.Owners, p.Owner, path, path, p.ReadGame);
+            if (skl?.AuthorFile is { } shipped && bytes == null) return Unreadable(shipped);
+            if (skl != null && Missing(extra, HairPortPlan.SkeletonBones(bytes)).Count == 0)
+                return new Choice(Route.Carry, 0, loaded, source, own);
+        }
         return new Choice(Route.Own, loaded, loaded, 0, own);
     }
 
