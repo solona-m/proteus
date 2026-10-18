@@ -25,13 +25,13 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
 
     /// <summary>Hand-maintained; bump it for in-game testing. <see cref="BuildStamp"/> is the one that can't go stale.</summary>
-    public const int BuildNumber = 1293;
+    public const int BuildNumber = 1312;
 
     /// <summary>
     /// Which set of release notes is current. Raise it when a release has something new to say: the window
     /// then opens once more for everyone whose <see cref="Configuration.WhatsNewShown"/> is below it.
     /// </summary>
-    public const int CurrentWhatsNew = 2;
+    public const int CurrentWhatsNew = 3;
 
     /// <summary>
     /// When this assembly was compiled, as MM-dd HH:mm:ss, baked in by the csproj: Dalamud loads plugins from a stream,
@@ -68,6 +68,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly Gui.PartViewport partViewport;
     private readonly Gui.PartsPanel partsPanel;
     private readonly HatCompatWatcher hatCompat;
+    private readonly HairPortWatcher hairPort;
     private readonly AutoRefitWatcher autoRefit;
     private readonly Gui.ProteusFonts fonts;
     private readonly Localization.LocSetup loc;
@@ -96,6 +97,12 @@ public sealed class Plugin : IDalamudPlugin
 
         config = pluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         config.Initialize(pluginInterface);
+        // From here on a save from a worker is written on the framework thread, a quarter second later: a burst of
+        // body-mod classifications is then a few writes, not one a frame.
+        config.AttachSaver(new ConfigSaveScheduler(config.Gate, () => pluginInterface.SavePluginConfig(config),
+                                                   () => framework.IsInFrameworkUpdateThread,
+                                                   a => _ = framework.RunOnTick(a, TimeSpan.FromMilliseconds(250)),
+                                                   log));
 
         penumbra = new PenumbraBridge(pluginInterface, log);
         glamourer = new GlamourerBridge(pluginInterface, ObjectTable, log);
@@ -214,6 +221,8 @@ public sealed class Plugin : IDalamudPlugin
 
         // A service, not part of the panel: it subscribes to the hairstyle change so it works with the window shut.
         hatCompat = new HatCompatWatcher(compositor, penumbra, glamourer, config, log);
+        // The same: a hair mod made for another race is fitted when it is put on, window shut or open.
+        hairPort = new HairPortWatcher(compositor, penumbra, glamourer, config, log);
 
         // The same: gear put on is refitted onto the collection's body whether or not any window is open.
         autoRefit = new AutoRefitWatcher(compositor, penumbra, glamourer, designBindings, uvRemap,
@@ -223,7 +232,7 @@ public sealed class Plugin : IDalamudPlugin
         statusWindow = new StatusWindow(compositor, discovery, penumbra, config, designBindings,
             presets, editRouter, uvMapDl, uvRemap,
             modCreation, onionImport, contentImport, luminisImport, emissiveImport, eyeImport, modExport,
-            textureLoader, partsPanel, hatCompat, autoRefit,
+            textureLoader, partsPanel, hatCompat, hairPort, autoRefit,
             new LogExportService(capture, compositor, penumbra, config, dataDir));
 
         liveMesh = new Gui.LiveMeshOverlay(ObjectTable, DataManager, penumbra, ChatGui, log);
@@ -463,6 +472,17 @@ public sealed class Plugin : IDalamudPlugin
 
     public void Dispose()
     {
+        try { DisposeServices(); }
+        finally
+        {
+            // After the compositor (its teardown records the carriers it took off, and that save must reach disk), and
+            // whatever above threw: a save posted by this instance must never land over a reloaded one's settings.
+            try { config.FlushAndCloseSaves(); } catch { /* tearing down — never block the unload */ }
+        }
+    }
+
+    private void DisposeServices()
+    {
         _disposed = true;
 
         // Last chance for an import whose disk work landed after the final frame, registration only: no window, no recomposite.
@@ -507,6 +527,7 @@ public sealed class Plugin : IDalamudPlugin
         effectsDl.Dispose();
         autoRefit.Dispose();   // before the compositor and the bridges, whose events it unsubscribes from
         hatCompat.Dispose();   // before the compositor: it unsubscribes from that object's event
+        hairPort.Dispose();    // the same
         compositor.Dispose();
         glamourer.Dispose();
         penumbra.Dispose();

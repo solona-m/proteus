@@ -3,12 +3,40 @@
     "message": "体型",
     "description": ""
   },
-  "AutoRefit.BodyMissing.Fmt": {
-    "message": "ここで選んだ体型「{0}」はもうインストールされていません。別の体型を選んでください。",
+  "AutoRefit.Part": {
+    "message": "部位",
     "description": ""
   },
-  "AutoRefit.ChestSize": {
-    "message": "胸のサイズ",
+  "AutoRefit.Size": {
+    "message": "サイズ",
+    "description": ""
+  },
+  "AutoRefit.PartsHint": {
+    "message": "部位ごとに別の体を使えます。最初に選んだ体は、その体にあるすべての部位に使われます。",
+    "description": ""
+  },
+  "AutoRefit.Matched.Fmt": {
+    "message": "合わせる（{0}）",
+    "description": ""
+  },
+  "AutoRefit.MatchedWorn.Fmt": {
+    "message": "合わせる（着ているサイズ、なければ{0}）",
+    "description": ""
+  },
+  "AutoRefit.Match": {
+    "message": "胸か脚のサイズに合わせる",
+    "description": ""
+  },
+  "AutoRefit.SizesPending": {
+    "message": "この体で着ているサイズを読み取っています…",
+    "description": ""
+  },
+  "AutoRefit.Prefilled.Fmt": {
+    "message": "着ているサイズを読み取れなかったため、{0}には体の最初のサイズを設定しました。上で確認してください。",
+    "description": ""
+  },
+  "AutoRefit.BodyMissing.Fmt": {
+    "message": "ここで選んだ体型「{0}」はもうインストールされていません。別の体型を選んでください。",
     "description": ""
   },
   "AutoRefit.Choose": {
@@ -43,20 +71,12 @@
     "message": "体型 MOD を探しています…",
     "description": ""
   },
-  "AutoRefit.HandsFeet.Fmt": {
-    "message": "手と足はこれらのサイズに合わせて自動で選ばれます：{0} と {1}。",
-    "description": ""
-  },
   "AutoRefit.Intro": {
     "message": "胴・脚・手・足の装備、または体を覆うアクセサリー（首飾りに付けたジャケットなど）を身に着けると、Proteus はそれがどのボディ用に作られたかを判断し、ここで選んだボディとサイズに合わせて調整し、新しいサイズを有効にします。Penumbra のコレクションごとに選択できます。",
     "description": ""
   },
   "AutoRefit.ItemInMod.Fmt": {
     "message": "{0}（{1}）",
-    "description": ""
-  },
-  "AutoRefit.LegsSize": {
-    "message": "脚のサイズ",
     "description": ""
   },
   "AutoRefit.NoBodies": {
@@ -113,6 +133,14 @@
   },
   "AutoRefit.Vanilla.Tip": {
     "message": "MOD のない装備には保存先がないため、装備ごとにアイテム名と体型名を付けた新しい MOD が作られます。",
+    "description": ""
+  },
+  "AutoRefit.Piercings.Label": {
+    "message": "体型のピアスを調整した装備に追加する",
+    "description": ""
+  },
+  "AutoRefit.Piercings.Tip": {
+    "message": "オフ: 体型 MOD のピアスなしで装備を調整します。爪は常に含まれます。\n調整済みの装備は作成時のままです。変更するには、着ている装備の調整を元に戻してから調整し直してください。",
     "description": ""
   },
   "AutoRefit.Working": {
@@ -307,6 +335,10 @@
     "message": "[Proteus] このコレクションの自動調整用に選ばれた体型「{0}」がインストールされていないため、何も調整されません。/proteus > 設定 で別の体型を選んでください。",
     "description": ""
   },
+  "Chat.AutoRefit.PartBodyMissing.Fmt": {
+    "message": "[Proteus] このコレクションで{0}用に選ばれた体型「{1}」がインストールされていないため、{2}はその体型に調整されませんでした。/proteus > 設定 で別の体型を選んでください。",
+    "description": ""
+  },
   "Chat.AutoRefit.Done.Fmt": {
     "message": "[Proteus] {0} が {1} に合うようになりました。{3} に「{2}」として保存し、オンにしました。",
     "description": ""
@@ -341,6 +373,10 @@
   },
   "Chat.AutoRefit.PartsLeftOut.Fmt": {
     "message": "次の部位は一緒に調整できなかったため、元のサイズのままです：{0}。",
+    "description": ""
+  },
+  "Chat.AutoRefit.MixedKept.Fmt": {
+    "message": "{0}用に作られているため、{1}も選んだ体ではなく{0}に合わせました。",
     "description": ""
   },
   "Chat.AutoRefit.SkinOnly.Fmt": {
@@ -380,8 +416,8 @@
     "description": ""
   },
   "Chat.HatCompat": {
-    "message": "[Proteus] Proteus がこの髪型を帽子に対応させました。元に戻す、またはこの機能をオフにするには /proteus > 設定 > 帽子 を開いてください。",
-    "description": "Chat line shown once ever, the first time Proteus makes a hairstyle fit under hats by itself. Do NOT translate \"Proteus\" or the command \"/proteus\". \"Settings\" and \"Hats\" name a tab and a section in Proteus' own window - use the same words you used for \"Tab.Settings\" and \"Settings.Section.HatCompat\"."
+    "message": "[Proteus] Proteus がこの髪型を帽子に対応させました。元に戻す、またはこの機能をオフにするには /proteus > 設定 > 髪 を開いてください。",
+    "description": "Chat line shown once ever, the first time Proteus makes a hairstyle fit under hats by itself. Do NOT translate \"Proteus\" or the command \"/proteus\". \"Settings\" and \"Hair\" name a tab and a section in Proteus' own window - use the same words you used for \"Tab.Settings\" and \"Settings.Section.HairPort\"."
   },
   "Chat.MirrorRepo": {
     "message": "[Proteus] 古いプラグインリポジトリのURLからインストールされています。/xlplugins > Experimental で https://dl.solona.info/repo.json に変更すると、更新が速くなり、GitHubの負荷も減ります。変更しなくても引き続き動作します。この通知は数回表示された後、表示されなくなります。",
@@ -1653,7 +1689,7 @@
   },
   "HatCompat.InheritedTag": {
     "message": "この髪型には帽子対応が付いていますが、帽子が隠す範囲よりもはるかに多くの髪を隠しています。おそらく元にした髪型から引き継がれたまま、この髪型に合わせて調整されていません。Proteus は再計測して置き換えられます。",
-    "description": "Shown in the Hats section for a hairstyle that arrived with hat support that hides hair no hat covers. \"Proteus\" is a plugin name - never translate it."
+    "description": "Shown in the hats part of the Settings > Hair section for a hairstyle that arrived with hat support that hides hair no hat covers. \"Proteus\" is a plugin name - never translate it."
   },
   "HatCompat.InheritedTag.Tip": {
     "message": "髪を隠す部分だけを置き換えます。髪型自身の押しつぶしはそのまま残るため、\n最悪の場合でも帽子が髪を貫通するだけで、帽子が覆わない髪が消えることは\nありません。\n\n「元に戻す」で元の状態にそのまま戻ります。",
@@ -1697,7 +1733,7 @@
   },
   "HatCompat.NoHead": {
     "message": "Proteus はあなたの頭の位置を特定できなかったため、この髪型には手を加えていません。帽子がどこに載るかを知るためにキャラクターの顔を読み取る必要があり、それがないと帽子のラインは推測になってしまいます。",
-    "description": "Shown in the Hats section when Proteus cannot read the wearer's face model and so refuses to change the hairstyle. \"Proteus\" is a plugin name - never translate it."
+    "description": "Shown in the hats part of the Settings > Hair section when Proteus cannot read the wearer's face model and so refuses to change the hairstyle. \"Proteus\" is a plugin name - never translate it."
   },
   "HatCompat.Apply.NoHead": {
     "message": "Proteus はキャラクターの頭部を読み取れなかったため、この髪型を変更していません。",
@@ -1705,7 +1741,7 @@
   },
   "HatCompat.UndoAll.Fmt": {
     "message": "このModの髪型 {0} 件すべてを元に戻す",
-    "description": "Button in the Hats section. {0} is how many hairstyle files Proteus has changed in this mod. Keep it short - it is a button label."
+    "description": "Button in the hats part of the Settings > Hair section. {0} is how many hairstyle files Proteus has changed in this mod. Keep it short - it is a button label."
   },
   "HatCompat.UndoAll.Tip": {
     "message": "「元に戻す」は今着けている髪型を戻します。ヘアModは通常、種族ごとに\n1つのモデルを同梱するため、別の種族で調整した髪型は今の髪型とは別物で、\n「元に戻す」では届きません。\n\nこれはこのMod内でProteusが変更したすべての髪型を戻します。",
@@ -3195,10 +3231,6 @@
     "message": "全般",
     "description": ""
   },
-  "Settings.Section.HatCompat": {
-    "message": "帽子",
-    "description": ""
-  },
   "Settings.Section.Hosting": {
     "message": "ホスト先",
     "description": ""
@@ -3683,6 +3715,26 @@
     "message": "{0}モデルを作成できませんでした（{1}）。{2}モデルをそのままリフィットします。",
     "description": ""
   },
+  "Parts.Retarget.Shaping": {
+    "message": "ボディが作られている体型にモデルを変形しています…",
+    "description": ""
+  },
+  "Parts.Retarget.ShapedDown.Fmt": {
+    "message": "{0}のボディがないため、{0}モデルはゲームと同じ方法で{1}の体型に変形してリフィットし、{0}として保存し直します。",
+    "description": ""
+  },
+  "Parts.Retarget.Bake.BendBack.Fmt": {
+    "message": "リフィットを{0}の体型に戻せませんでした（{1}）",
+    "description": ""
+  },
+  "Parts.Retarget.Bake.NoWearer": {
+    "message": "キャラクターを読み取れませんでした",
+    "description": ""
+  },
+  "Parts.Retarget.Refused.Fmt": {
+    "message": "このモデルをリフィットできませんでした: {0}。",
+    "description": ""
+  },
   "Parts.Retarget.Cloth.Guess.Fmt": {
     "message": "布の形から推定：{0}。ただ緩いだけの可能性もあり、要確認。",
     "description": ""
@@ -3785,6 +3837,14 @@
   },
   "Parts.Retarget.CutHidden.Tip": {
     "message": "作者が肌を削除した箇所（通常は布の下）には新しい肌を入れません。\n穴ができる場合はオフにしてください。",
+    "description": ""
+  },
+  "Parts.Retarget.Piercings": {
+    "message": "新しい体型のピアスを追加する",
+    "description": ""
+  },
+  "Parts.Retarget.Piercings.Tip": {
+    "message": "オン: 衣装がその肌を見せている部分では、新しい体型のピアスが肌と一緒に入ります。\n爪は常に含まれます。",
     "description": ""
   },
   "Parts.Retarget.CutForcedTip": {
@@ -4027,6 +4087,22 @@
     "message": "（バニラ）",
     "description": ""
   },
+  "WhatsNew.HairPort.Head": {
+    "message": "別の種族用の髪Modがあなたの種族に合うように",
+    "description": "Release-notes section heading for hair mods fitted automatically from another race to the player's."
+  },
+  "WhatsNew.HairPort.Body": {
+    "message": "多くの髪Modは一つの種族専用に作られているため、他の種族ではゲーム標準の髪型が表示されます。Proteus は Mod の髪型をあなたの種族の頭に合わせて曲げ、同じ Mod の同じオプションに追加するようになりました。コレクションで有効な髪Modを今いちど確認し、以後もインストール・有効化・変更のたびに確認します。合わせた髪型の番号はチャットでお知らせするので、どれを選べばよいかわかります。物理演算で揺れる髪は、その揺れもそのまま保たれます。\n\nProteus をオフにしても機能し、Mod と一緒に持ち運ばれます。オフにする、もう一度確認する、合わせた髪型を元に戻す、といった操作は 設定 › 髪 から行えます。",
+    "description": "Release-notes section on hair fitted automatically from another race. 'Settings, Hair' names the Settings tab and its Hair section - match Tab.Settings and Settings.Section.HairPort. 'Physics hair' is hair that sways with its own bones."
+  },
+  "WhatsNew.HairPortStudio.Head": {
+    "message": "髪型を全種族へ一度に移植",
+    "description": "Release-notes section heading for the Studio's tool that ports one hair mod to every race at once."
+  },
+  "WhatsNew.HairPortStudio.Body": {
+    "message": "髪Modを自分だけでなく誰にでも使えるようにするには、その髪型モデルの一つをスタジオで開き、「全種族に移植」を使います。Proteus が同じ性別の他のすべての種族に一度に合わせて曲げ、その結果を Mod の同じオプションに追加します。作者が作った種族の分はそのままにし、「移植を削除」ですべて取り除けます。",
+    "description": "Release-notes section on the Studio's \"Port to all races\". 'Studio' is the tab name (Tab.Parts); the two quoted labels must match HairPort.Studio.Header and HairPort.Studio.Remove."
+  },
   "WhatsNew.AutoRefit.Body": {
     "message": "Proteus は、胴・脚・手・足の装備を身に着けた瞬間に、自動であなたの体型に合わせられるようになりました。装備がどの体型 MOD のどのサイズ用に作られたかを調べ、装備とそれが覆う体の部位を作り直し、新しいサイズを装備の MOD 自体に保存してオンにします。開始時と完了時にはチャットでお知らせします。\n\n使うには、設定 › 体型の自動調整 を開きます。「身に着けた装備を自分の体型に自動で合わせる」にチェックを入れ、Penumbra のコレクションごとに体型 MOD と胸・脚のサイズを選んでください。手と足は自動で合わせます。すでに着ている装備は「今着ている装備を調整」で調整でき、ゲーム本来の装備には専用のチェックボックスがあります。Penumbra で「Original」や別のサイズを選んだ場合は、常にそのまま尊重されます。",
     "description": ""
@@ -4036,8 +4112,8 @@
     "description": ""
   },
   "WhatsNew.IntroAll": {
-    "message": "Proteus について知っておきたい 4 つのこと。このウィンドウは一度だけ表示され、二度と開きません。",
-    "description": ""
+    "message": "Proteus について知っておきたいことをいくつか紹介します。このウィンドウは一度だけ表示され、二度と開きません。",
+    "description": "First line of the release-notes window for someone who has never seen it; every section follows."
   },
   "WhatsNew.IntroSince": {
     "message": "前回このウィンドウを見てから新しくなったことがあります。このウィンドウは一度だけ表示され、二度と開きません。",
@@ -4060,7 +4136,7 @@
     "description": ""
   },
   "WhatsNew.Hats.Body": {
-    "message": "「髪型を帽子に合わせる」が既定でオンになりました。Proteus は実際に帽子を装備するまで待ってから、帽子で隠れる部分の髪を頭に押し付けるので、帽子が髪を突き抜けなくなります。\n\n髪 Mod 自身のファイルを編集しますが、元のファイルは保持されるため、元に戻すことも、設定の「帽子」から完全にオフにすることもできます。",
+    "message": "「髪型を帽子に合わせる」が既定でオンになりました。Proteus は実際に帽子を装備するまで待ってから、帽子で隠れる部分の髪を頭に押し付けるので、帽子が髪を突き抜けなくなります。\n\n髪 Mod 自身のファイルを編集しますが、元のファイルは保持されるため、元に戻すことも、設定の「髪」から完全にオフにすることもできます。",
     "description": ""
   },
   "WhatsNew.Designs.Head": {
@@ -4763,6 +4839,14 @@
     "message": "靴と手袋は元の足と手を残し、届いている脚や腕だけをリフィットします。靴には脚のサイズが、手袋にはボディごとに1つのオプションが付き、同じグループならどちらも衣装の胸や脚のサイズに加わります。",
     "description": ""
   },
+  "SizeSet.Piercings": {
+    "message": "新しい体型それぞれのピアスを追加する",
+    "description": ""
+  },
+  "SizeSet.Piercings.Tip": {
+    "message": "オン: パーツがその肌を見せている部分では、各体型のピアスが肌と一緒に入ります。爪は常に含まれます。\n作成済みのサイズは、作り直したときにだけ変わります。",
+    "description": ""
+  },
   "SizeSet.EndsUnreadable.Fmt": {
     "message": "{0}: リグを読み取れないため足や手を残せず、サイズは作られませんでした。",
     "description": ""
@@ -4889,6 +4973,294 @@
   },
   "Chat.EffectUnplaced.Fmt": {
     "message": "[Proteus] 「{0}」のアニメーションエフェクトは表示されていません。透明なキャリアー用に空きアクセサリースロットが必要です。指輪、腕輪、首飾りのスロットを空けてください。",
+    "description": ""
+  },
+  "HairPort.Refused.NoHead": {
+    "message": "合わせる先のゲームの頭部モデルを読み込めませんでした",
+    "description": ""
+  },
+  "HairPort.Refused.Bones.Fmt": {
+    "message": "c{0:D4} がこの髪型で持たないボーンで動きます（{1}）",
+    "description": ""
+  },
+  "HairPort.Refused.Unknown.Fmt": {
+    "message": "種族デフォーマーが {0} の動かし方を知りません",
+    "description": ""
+  },
+  "HairPort.Refused.Fit.Fmt": {
+    "message": "c{0:D4} の頭に収まりません。{1:P0} が頭蓋骨に沈み込み、頭皮からの距離が元より {2:F0} mm ずれています",
+    "description": ""
+  },
+  "HairPort.Refused.NotHair": {
+    "message": "髪型のモデルではありません",
+    "description": ""
+  },
+  "HairPort.Refused.NotInMod": {
+    "message": "このModはその髪型を提供していません",
+    "description": ""
+  },
+  "HairPort.Refused.Gender": {
+    "message": "髪型は同じ性別の種族間でのみ移植されます",
+    "description": ""
+  },
+  "HairPort.Refused.NoStyle.Fmt": {
+    "message": "c{0:D4} は髪型 {1} を選べません",
+    "description": ""
+  },
+  "HairPort.Refused.SharedMaterial.Fmt": {
+    "message": "そのマテリアルは {0} が自分の髪型 {1} 用に読み込むものと同じです — そちらにも移植してください",
+    "description": ""
+  },
+  "HairPort.Refused.SharerRefused.Fmt": {
+    "message": "マテリアルを c{0:D4} と共有していますが、そちらへは移植できませんでした: {1}",
+    "description": ""
+  },
+  "HairPort.Refused.NoMaterial.Fmt": {
+    "message": "マテリアル {0} が見つかりませんでした",
+    "description": ""
+  },
+  "HairPort.Refused.NoOption.Fmt": {
+    "message": "オプション「{0}」はもうModにありません",
+    "description": ""
+  },
+  "HairPort.Refused.Covered.Fmt": {
+    "message": "Modはすでにそこで {0} を提供しています",
+    "description": ""
+  },
+  "HairPort.Undo.Nothing": {
+    "message": "ここには元に戻せる髪型の移植がありません。",
+    "description": ""
+  },
+  "HairPort.DefaultData": {
+    "message": "Modの既定ファイル",
+    "description": ""
+  },
+  "HairPort.Refused.Combining.Fmt": {
+    "message": "髪型は組み合わせグループ「{0}」内にあり、Proteusはこれを編集しません",
+    "description": ""
+  },
+  "HairPort.Refused.Unreadable": {
+    "message": "Modのマニフェストを読み込めませんでした",
+    "description": ""
+  },
+  "Chat.HairPort": {
+    "message": "[Proteus] この髪型のModは別の種族向けに作られていたため、Proteus があなたの種族に合わせてModに追加しました。このModを有効にして表示される全員に見えるようになっています。元に戻す、またはこの機能をオフにするには /proteus > 設定 > 髪 を開いてください。",
+    "description": ""
+  },
+  "Service.ModMeta.Unreadable.Fmt": {
+    "message": "{0} のマニフェストを読み込めなかったため、変更しませんでした。",
+    "description": ""
+  },
+  "Service.ModMeta.Combining.Fmt": {
+    "message": "「{0}」は組み合わせグループで、Proteusはそのファイルを編集しません。",
+    "description": ""
+  },
+  "Service.ModMeta.NoOption.Fmt": {
+    "message": "グループ「{0}」には「{1}」というオプションがありません。",
+    "description": ""
+  },
+  "HairPort.Auto.Label": {
+    "message": "別の種族用に作られた髪Modを合わせる",
+    "description": ""
+  },
+  "HairPort.Settings.None": {
+    "message": "今着けている髪型は合わせる必要がありません。",
+    "description": ""
+  },
+  "HairPort.Settings.Ported.Fmt": {
+    "message": "髪型 {0} は {1} であなたの種族に合わせてあります。",
+    "description": ""
+  },
+  "HairPort.Settings.Undo": {
+    "message": "元に戻す",
+    "description": ""
+  },
+  "HairPort.Settings.Undo.Tip": {
+    "message": "合わせた髪型をModから取り除きます。Proteusが自動で再び合わせる\nことはありませんが、スタジオでは引き続き移植できます。",
+    "description": ""
+  },
+  "HairPort.Settings.UndoAll.Fmt": {
+    "message": "このModで合わせた髪型 {0} 件すべてを元に戻す",
+    "description": ""
+  },
+  "HairPort.Working": {
+    "message": "処理中…",
+    "description": ""
+  },
+  "HairPort.Studio.Header": {
+    "message": "全種族に移植",
+    "description": ""
+  },
+  "HairPort.Studio.Intro": {
+    "message": "この髪型を同じ性別の他のすべての種族に合わせて曲げ、その結果をこのModの同じオプションに追加します。これで種族を問わず誰にでも表示されます。あなた自身が作った種族の分はそのままにします。",
+    "description": ""
+  },
+  "HairPort.Studio.Covered": {
+    "message": "自作",
+    "description": ""
+  },
+  "HairPort.Studio.Ported": {
+    "message": "移植済み",
+    "description": ""
+  },
+  "HairPort.Studio.Stale": {
+    "message": "古い",
+    "description": ""
+  },
+  "HairPort.Studio.NoStyle": {
+    "message": "この髪型を選べない",
+    "description": ""
+  },
+  "HairPort.Studio.Open": {
+    "message": "未対応",
+    "description": ""
+  },
+  "HairPort.Studio.Port": {
+    "message": "移植",
+    "description": ""
+  },
+  "HairPort.Studio.Porting.Fmt": {
+    "message": "移植中… {1} 種族中 {0}",
+    "description": ""
+  },
+  "HairPort.Studio.Cancel": {
+    "message": "キャンセル",
+    "description": ""
+  },
+  "HairPort.Studio.Cancelled": {
+    "message": "キャンセルしました — 何も書き込まれていません。",
+    "description": ""
+  },
+  "HairPort.Studio.Done.Fmt": {
+    "message": "{0} 件の移植をModに追加しました。",
+    "description": ""
+  },
+  "HairPort.Studio.Nothing": {
+    "message": "何も移植されませんでした。",
+    "description": ""
+  },
+  "HairPort.Studio.Failed.Fmt": {
+    "message": "移植に失敗しました: {0}",
+    "description": ""
+  },
+  "HairPort.Studio.Remove": {
+    "message": "移植を削除",
+    "description": ""
+  },
+  "HairPort.Studio.Removed.Fmt": {
+    "message": "{0} 件の移植を削除しました。",
+    "description": ""
+  },
+  "HairPort.Studio.Reading": {
+    "message": "Modを読み込み中…",
+    "description": ""
+  },
+  "Settings.Section.HairPort": {
+    "message": "髪",
+    "description": ""
+  },
+  "HairPort.Refused.Folded.Fmt": {
+    "message": "c{0:D4} に合わせて曲げると、{1} 個の三角形が裏返ります",
+    "description": ""
+  },
+  "HairPort.Refused.Declined": {
+    "message": "移植が取り消されたため、そのままにします",
+    "description": ""
+  },
+  "HairPort.Refused.NoPbd": {
+    "message": "ゲームの種族デフォーマーを読み込めませんでした",
+    "description": ""
+  },
+  "HairPort.Declined.Fmt": {
+    "message": "{1} の髪型 {0} の移植は取り消されたため、そのままにします。",
+    "description": ""
+  },
+  "HairPort.Refused.RecordUnreadable": {
+    "message": "このModの髪型移植の Proteus 記録（Proteus/hairport.json）を読み込めなかったため、何も変更していません。",
+    "description": ""
+  },
+  "HairPort.Auto.Tip2": {
+    "message": "多くの髪Modは一つの種族専用に作られているため、他の種族ではゲーム\n標準の髪型が表示されます。オンにすると、ProteusがModの髪型をあなたの\n種族の頭に合わせて曲げ、同じModの同じオプションに追加します。対象は\n着けた髪型と、コレクションで有効な髪Modの事前の調整です：この設定を\nオンにしたとき、Modのインストール・有効化・変更時、「今すぐ確認」を\n押したとき。\n\n自分の種族のみ、同じ性別の種族から。Proteusをオフにしても機能し、\nModと一緒に持ち運ばれ、そのModを有効にして表示される全員に見えます。\nここから元に戻せます。",
+    "description": ""
+  },
+  "HairPort.Scan.Starting": {
+    "message": "髪Modを確認しています…",
+    "description": ""
+  },
+  "HairPort.Scan.Checking.Fmt": {
+    "message": "髪Modを確認しています… {0} / {1}",
+    "description": ""
+  },
+  "HairPort.Scan.None": {
+    "message": "このセッションではまだ髪Modを確認していません。",
+    "description": ""
+  },
+  "HairPort.Scan.Checked.Fmt": {
+    "message": "髪Modの髪型 {0} 件が {1} に合わせてあります。",
+    "description": ""
+  },
+  "HairPort.Scan.CheckNow": {
+    "message": "今すぐ確認",
+    "description": ""
+  },
+  "HairPort.Scan.CheckNow.Tip": {
+    "message": "コレクションで有効なすべての髪Modを調べ、他の種族用のものを\nあなたの種族に合わせます。",
+    "description": ""
+  },
+  "HairPort.Scan.WearHint": {
+    "message": "着けるには、キャラクターの髪型番号をその番号にしてください — Glamourerに番号が表示されます。",
+    "description": ""
+  },
+  "HairPort.Scan.List.Fmt": {
+    "message": "あなたの種族向けの髪Mod（{0}）",
+    "description": ""
+  },
+  "HairPort.Scan.Row.Fmt": {
+    "message": "髪型 {0} — {1}：{2}",
+    "description": ""
+  },
+  "HairPort.Scan.State.Fitted": {
+    "message": "合わせました",
+    "description": ""
+  },
+  "HairPort.Scan.State.Already": {
+    "message": "合わせ済み",
+    "description": ""
+  },
+  "HairPort.Scan.State.Remade": {
+    "message": "合わせ直しました（Modが変更されました）",
+    "description": ""
+  },
+  "HairPort.Scan.State.Undone": {
+    "message": "元に戻しました",
+    "description": ""
+  },
+  "HairPort.Scan.State.Refused": {
+    "message": "合わせられません",
+    "description": ""
+  },
+  "HairPort.Scan.State.Refused.Fmt": {
+    "message": "合わせられません — {0}",
+    "description": ""
+  },
+  "HairPort.Scan.UndoChecked": {
+    "message": "この確認で合わせたものをすべて元に戻す",
+    "description": ""
+  },
+  "HairPort.Scan.Entry.Fmt": {
+    "message": "髪型 {0}（{1}）",
+    "description": ""
+  },
+  "HairPort.Scan.More.Fmt": {
+    "message": " ほか {0} 件",
+    "description": ""
+  },
+  "Chat.HairPortScan.Fmt": {
+    "message": "[Proteus] あなたの種族に合わせました：{0}。着けるには、キャラクターの髪型をその番号にしてください。元に戻す・オフにするには /proteus > 設定 > 髪 へ。",
+    "description": ""
+  },
+  "HairPort.Scan.UndoChecked.Confirm.Fmt": {
+    "message": "もう一度クリックすると髪型 {0} 件を元に戻します（以後自動では合わせません）",
     "description": ""
   }
 }

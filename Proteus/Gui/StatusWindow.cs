@@ -148,6 +148,7 @@ public class StatusWindow : Window
         TextureLoader textureLoader,
         PartsPanel parts,
         HatCompatWatcher hatCompatWatcher,
+        HairPortWatcher hairPortWatcher,
         AutoRefitWatcher autoRefitWatcher,
         LogExportService logExport)
         // "###ProteusStatus" is the stable window id; the title shows the assembly version, not the dev BuildNumber.
@@ -181,6 +182,7 @@ public class StatusWindow : Window
         bindingsTab = new BindingsTab(config, designBindings, penumbra);
         hatCompat = new HatCompatPanel(hatCompatWatcher, config);
         settingsTab = new SettingsTab(config, compositor, discovery, designBindings, hatCompat,
+                                      new HairPortSettingsPanel(hairPortWatcher, config),
                                       new AutoRefitPanel(autoRefitWatcher, penumbra, config), logExport);
 
         SizeConstraints = AutoFitConstraints;
@@ -363,8 +365,8 @@ public class StatusWindow : Window
     }
 
     /// <summary>
-    /// Write the dragged size to the config once the drag is over. Debounced, on the UI thread: Save serializes the whole
-    /// config, too slow per frame and unsafe off-thread while a composite mutates it. Public for the plugin's teardown.
+    /// Write the dragged size to the config once the drag is over. Debounced: Save serializes the whole config, too slow
+    /// per frame. Public for the plugin's teardown.
     /// </summary>
     public void FlushPendingSize()
     {

@@ -19,9 +19,89 @@ namespace Proteus.Services;
 /// it would measure it against men's bodies and save it where men would wear it — so it first does here, once and
 /// offline, exactly the bend the game would do: the same deformer chain, blended by the same weights. The result is
 /// saved under the wearer's own race with an EQDP entry that says the model now exists.
+/// <para/>
+/// The other way round too. Racial gear — Au Ra's Auri set — exists ONLY as the wearer's race's model, and body mods
+/// ship no bodies of that race: theirs are the shared Midlander shape, which the game bends onto her. Such a garment
+/// is bent back into that shape (<see cref="Route.Down"/>), refitted between the bodies there, and the refit bent
+/// forward again — what the game would draw of it had it been a Midlander model — and saved where it was drawn from.
 /// </summary>
 internal static partial class RacialModelBake
 {
+    /// <summary>
+    /// Which way a garment goes before it is refitted, and back after.
+    /// </summary>
+    /// <param name="Drawn">The race of the model the game draws on the wearer.</param>
+    /// <param name="To">The race it is refitted as; 0 for none — refitted as drawn.</param>
+    /// <param name="Down">Up (<c>false</c>): a man's model baked into the wearer's race, saved there with an EQDP entry.
+    /// Down: a racial model bent back into its shared shape, the refit bent forward again and saved where it was drawn.</param>
+    internal readonly record struct Route(ushort Drawn, ushort To, bool Down)
+    {
+        public static Route None => default;
+
+        public bool Any => To != 0;
+
+        /// <summary>Up only: the bake is itself a change to the model, worth saving even when the refit changed nothing
+        /// else. A down route's bend there and back is not.</summary>
+        public bool ChangesModel => Any && !Down;
+
+        /// <summary>The race every body list is filtered by, as a <c>"0201"</c> code.</summary>
+        public string? Race(string drawnPath) => Any ? $"{To:D4}" : BodySizeCatalog.RaceOf(drawnPath);
+
+        /// <summary>Where a refit is saved: up, beside the drawn model under the wearer's race; otherwise over it.</summary>
+        public string SavePath(string drawnPath) => Any && !Down ? WithRace(drawnPath, To) : drawnPath;
+
+        /// <summary>The EQDP entry an up route's save needs, so the game loads the new race's model; null otherwise.</summary>
+        public object? Eqdp(string savePath) => Any && !Down ? Switch(savePath, To) : null;
+
+        /// <summary>The garment as it is refitted: baked up, or bent down into its shared shape.</summary>
+        public byte[]? Into(byte[] drawnModel, Wearer who, out string refusal)
+            => Down ? Unbake(drawnModel, To, Drawn, who.Pbd, who.ParentOf, out refusal)
+                    : Bake(drawnModel, Drawn, To, who.Pbd, who.ParentOf, out refusal);
+
+        /// <summary>
+        /// A refit put back into the drawn race's shape. Up, that is only the preview — pushed onto the drawn path, the
+        /// game bends it forward again. Down, it is the model itself, saved and previewed alike.
+        /// </summary>
+        public byte[]? Back(byte[] refitted, Wearer who, out string refusal)
+            => Down ? Bake(refitted, To, Drawn, who.Pbd, who.ParentOf, out refusal)
+                    : Unbake(refitted, Drawn, To, who.Pbd, who.ParentOf, out refusal);
+    }
+
+    /// <summary>
+    /// The shared shape to bend a racial garment down into for refitting, or 0 when it is refitted as it is: the first of
+    /// its race's fall-through ancestors OF ITS SEX that <paramref name="hasBodies"/> — c1401 Au Ra women to c0201.
+    /// <para/>
+    /// Nothing when there are bodies of the garment's own race to refit between, nor for a race whose fall-through leaves
+    /// its sex at once (Lalafell women fall to Lalafell men): a woman's garment is never refitted between men's bodies.
+    /// With no ancestor known to have bodies, the last of its sex — the root every body mod of that sex is made for.
+    /// </summary>
+    public static ushort SharedShape(ushort garment, Func<ushort, bool> hasBodies)
+    {
+        if (!Playable(garment / 100) || hasBodies(Code(garment / 100))) return 0;
+
+        ushort last = 0;
+        foreach (ushort race in SameSexLine(garment))
+        {
+            if (hasBodies(race)) return race;
+            last = race;
+        }
+        return last;
+    }
+
+    /// <summary>
+    /// The races a garment of <paramref name="garment"/>'s race falls through to before the fall-through leaves its
+    /// sex, nearest first, as codes (201 for c0201): c1401 gives c0201; c1501 gives c0901, c0101; c1201 nothing. The
+    /// races <see cref="SharedShape"/> chooses among — and so the ones whose bodies are worth asking about.
+    /// </summary>
+    public static IEnumerable<ushort> SameSexLine(ushort garment)
+    {
+        int g = garment / 100;
+        if (!Playable(g)) yield break;
+        for (int cur = ModelRace.Fallback(g), guard = 0; cur != 0 && cur % 2 == g % 2 && guard < 8;
+             cur = ModelRace.Fallback(cur), guard++)
+            yield return Code(cur);
+    }
+
     /// <summary>Who a garment is baked for: their race, their skeleton's hierarchy, and the deformer their mods resolve.</summary>
     internal sealed record Wearer(ushort Race, IReadOnlyDictionary<string, string?> Parents, PbdFile Pbd)
     {
@@ -91,7 +171,7 @@ internal static partial class RacialModelBake
                 "the racial deformer has no way from c{0:D4} to c{1:D4}"), from, to);
             return null;
         }
-        return Transform(mdl, chain, parentOf, inverse: false, out refusal);
+        return Transform(mdl, [], chain, parentOf, out refusal);
     }
 
     /// <summary>
@@ -110,11 +190,51 @@ internal static partial class RacialModelBake
                 "the racial deformer has no way from c{0:D4} to c{1:D4}"), from, to);
             return null;
         }
-        return Transform(mdl, chain, parentOf, inverse: true, out refusal);
+        return Transform(mdl, chain, [], parentOf, out refusal);
     }
 
-    private static byte[]? Transform(byte[] mdl, IReadOnlyList<IReadOnlyDictionary<string, Matrix4x4>> chain,
-                                     Func<string, string?> parentOf, bool inverse, out string refusal)
+    /// <summary>
+    /// A model of <paramref name="from"/> made a model of <paramref name="to"/> when neither falls through to the other:
+    /// bent back into the race both fall through to, then forward onto <paramref name="to"/> — an <see cref="Unbake"/>
+    /// and a <see cref="Bake"/> in one pass, so the file is written once. Equal to either when the two races are on one
+    /// line. What a hairstyle needs, since hair never falls through: a Miqo'te's model has to become a Midlander's.
+    /// </summary>
+    public static byte[]? Port(byte[] mdl, ushort from, ushort to, PbdFile pbd, Func<string, string?> parentOf,
+                               out string refusal)
+    {
+        ushort root = CommonAncestor(from, to);
+        var down = root == from ? [] : pbd.Chain(root, from);
+        var up = root == to ? [] : pbd.Chain(root, to);
+        if (from == to || root == 0 || (root != from && down.Count == 0) || (root != to && up.Count == 0))
+        {
+            refusal = string.Format(Loc.Localize("Parts.Retarget.Bake.NoPath.Fmt",
+                "the racial deformer has no way from c{0:D4} to c{1:D4}"), from, to);
+            return null;
+        }
+        return Transform(mdl, down, up, parentOf, out refusal);
+    }
+
+    /// <summary>
+    /// The nearest race both <paramref name="a"/> and <paramref name="b"/> fall through to, themselves included, as a
+    /// code (101 for c0101); 0 when there is none. Lalafell women and Midlander women meet at Midlander men.
+    /// </summary>
+    public static ushort CommonAncestor(ushort a, ushort b)
+    {
+        var line = new List<int>();
+        for (int cur = a / 100, guard = 0; cur != 0 && guard < 8; cur = ModelRace.Fallback(cur), guard++) line.Add(cur);
+        for (int cur = b / 100, guard = 0; cur != 0 && guard < 8; cur = ModelRace.Fallback(cur), guard++)
+            if (line.Contains(cur)) return Code(cur);
+        return 0;
+    }
+
+    /// <summary>
+    /// Every vertex bent back through <paramref name="down"/> — the inverse of the blend that chain would make — then
+    /// forward through <paramref name="up"/>. Either may be empty, which blends to identity: a bake has no way down, an
+    /// unbake no way up.
+    /// </summary>
+    private static byte[]? Transform(byte[] mdl, IReadOnlyList<IReadOnlyDictionary<string, Matrix4x4>> down,
+                                     IReadOnlyList<IReadOnlyDictionary<string, Matrix4x4>> up,
+                                     Func<string, string?> parentOf, out string refusal)
     {
         var parts = ModelPartReader.Read(mdl);
         var skin = ModelSkinReader.Read(mdl, null, null);
@@ -134,26 +254,32 @@ internal static partial class RacialModelBake
             return null;
         }
 
-        var bones = new Matrix4x4[skin.BoneNames.Length];
-        for (int j = 0; j < bones.Length; j++) bones[j] = PbdFile.Resolve(chain, skin.BoneNames[j], parentOf);
+        var lower = new Matrix4x4[skin.BoneNames.Length];
+        var raise = new Matrix4x4[skin.BoneNames.Length];
+        for (int j = 0; j < lower.Length; j++)
+        {
+            lower[j] = PbdFile.Resolve(down, skin.BoneNames[j], parentOf);
+            raise[j] = PbdFile.Resolve(up, skin.BoneNames[j], parentOf);
+        }
 
         var edit = new Edit(parts.MeshSpans, count);
         for (int v = 0; v < count; v++)
         {
             // The blend the game's vertex shader makes, as LiveMeshPoser does it: the matrices summed by weight.
-            Matrix4x4 m = default;
+            Matrix4x4 fall = default, rise = default;
             float total = 0f;
             int o = v * SkinnedMesh.MaxInfluences;
             for (int k = 0; k < SkinnedMesh.MaxInfluences; k++)
             {
                 float w = skin.BoneWeights[o + k];
                 if (w <= 0f) continue;
-                m += bones[skin.BoneIndices[o + k]] * w;
+                fall += lower[skin.BoneIndices[o + k]] * w;
+                rise += raise[skin.BoneIndices[o + k]] * w;
                 total += w;
             }
-            if (total <= 1e-6f || !Matrix4x4.Invert(m * (1f / total), out var inv)) continue;
-            m *= 1f / total;
-            if (inverse) (m, inv) = (inv, m);
+            if (total <= 1e-6f || !Matrix4x4.Invert(fall * (1f / total), out var back)) continue;
+            var m = back * (rise * (1f / total));
+            if (!Matrix4x4.Invert(m, out var inv)) continue;
 
             var p = new Vector3(parts.Positions[v * 3], parts.Positions[v * 3 + 1], parts.Positions[v * 3 + 2]);
             var d = Vector3.Transform(p, m) - p;
@@ -208,14 +334,23 @@ internal static partial class RacialModelBake
     /// </summary>
     /// <returns>The model, and the materials renamed (none when its skin is all the body's already).</returns>
     public static byte[] SkinLikeBody(byte[] model, byte[] body, out List<string> renamed)
+        => SkinLikeBody(model, [body], out renamed);
+
+    /// <inheritdoc cref="SkinLikeBody(byte[], byte[], out List{string})"/>
+    /// <param name="bodies">Every body the model was refitted onto, the lead's first: a skin material of any of them is
+    /// the body's own and stays — the legs drawn from a second body keep its skin — and the rest take the lead's.</param>
+    public static byte[] SkinLikeBody(byte[] model, IReadOnlyList<byte[]> bodies, out List<string> renamed)
     {
         renamed = [];
-        var bodySkins = SecondSkinWriter.Parse(body).MatNames.Where(SecondSkinWriter.IsBodySkinMaterial).ToList();
+        var bodySkins = SecondSkinWriter.Parse(bodies[0]).MatNames.Where(SecondSkinWriter.IsBodySkinMaterial).ToList();
         if (bodySkins.Count == 0) return model;
+        var everyBody = new HashSet<string>(bodySkins, StringComparer.Ordinal);
+        foreach (var other in bodies.Skip(1))
+            everyBody.UnionWith(SecondSkinWriter.Parse(other).MatNames.Where(SecondSkinWriter.IsBodySkinMaterial));
 
         foreach (string name in SecondSkinWriter.Parse(model).MatNames)
         {
-            if (!SecondSkinWriter.IsBodySkinMaterial(name) || bodySkins.Contains(name)) continue;
+            if (!SecondSkinWriter.IsBodySkinMaterial(name) || everyBody.Contains(name)) continue;
             model = ModelAttributeWriter.RenameMaterial(model, name, bodySkins[0]);
             renamed.Add(name);
         }

@@ -4,7 +4,7 @@
 **English** · [日本語](docs/README.ja.md) · [Deutsch](docs/README.de.md) · [Français](docs/README.fr.md) · [简体中文](docs/README.zh.md) · [한국어](docs/README.ko.md) · [Español](docs/README.es.md) · [Русский](docs/README.ru.md)
 <!--/i18n-->
 
-Proteus is a Dalamud plugin for FFXIV that composites overlay textures onto your character's skin and equipment at runtime. Mod authors ship small PNG overlays alongside their Penumbra mods; Proteus blends them onto the base textures every time you change options, without touching the original mod files. Proteus can import Proteus-enabled pmp files, onion overlay omp files, and Atramentum Luminis glow tattoos. It can also edit the models of any mod you have installed, Proteus or not: reshape clothing, paint wind sway, add part switches and fit hair under hats.
+Proteus is a Dalamud plugin for FFXIV that composites overlay textures onto your character's skin and equipment at runtime. Mod authors ship small PNG overlays alongside their Penumbra mods; Proteus blends them onto the base textures every time you change options, without touching the original mod files. Proteus can import Proteus-enabled pmp files, onion overlay omp files, and Atramentum Luminis glow tattoos. It can also edit the models of any mod you have installed, Proteus or not: reshape clothing, paint wind sway, add part switches, fit hair made for another race to yours, and fit hair under hats.
 
 Overlays can render two ways: painted into your skin, or as a **second skin** — a copy of your body's mesh drawn as gear, so an overlay can use sphere maps, metalness and animated glow that skin materials can't do.
 
@@ -13,6 +13,7 @@ Overlays can render two ways: painted into your skin, or as a **second skin** �
 - **Refit an outfit to your body.** The **Studio** can move a garment made for one body size onto another, or from one body mod to another, such as Neolithe to Rue or TBSE to TBSE-X, and save it as a new option in the mod. It works on the game's own gear too, and can add every size of other bodies to a whole mod in one go.
 - **Have gear refit itself as you put it on.** Pick your body once per Penumbra collection, and chest, legs, hands and feet gear, and accessories that cover the body, such as a jacket on a necklace, are refitted to it the moment you wear them.
 - **Add toggles to any part of any mod, not just Proteus ones.** When a mod welds a bow, a collar or a strap into geometry its author never made optional, the **Studio** tab can split that piece out and give it a real switch.
+- **Wear hair mods made for another race.** Many hair mods are made for one race only, so on anyone else the game shows its own hairstyle instead. Proteus bends the mod's hairstyle onto your race's head and adds it to the same mod, physics included, so it just works.
 - **Make modded hair fit under hats.** Proteus presses the hair a hat would cover flat against your head, so a hat stops going straight through it. It's on by default and only acts while you're wearing a hat.
 
 
@@ -139,12 +140,13 @@ Things worth knowing:
 
 - **Use the new body's skin** is on by default: the garment's own skin for each part of the body being resized is replaced with the new body's, so it matches the rest of you. Untick it to resize the skin the garment came with instead, which keeps the author's push-up or skindent shaping.
 - **Remove hidden skin**, on by default, leaves out the new skin where the author deleted theirs, usually under cloth. Turn it off if a refit leaves holes. It only applies while **Use the new body's skin** is on.
+- **Add the new body's piercings**, off by default, brings the new body's piercings in with its skin, where the garment shows that skin. Nails always come along. It only applies while **Use the new body's skin** is on.
 - **Push cloth out of the body** pushes out all buried cloth, not just what the refit buried. Use it if the body shows through, for example stockings with their own leg skin. Off by default, because authors often hide cloth under skin on purpose.
 - **Keep shape** moves rigid pieces (rings, buckles, chains) whole instead of bending them. Small closed pieces start ticked. A piece that would sink into the new body bends with it instead.
 - **Shoes and gloves keep their own feet and hands.** With **Keep its own feet** (or **hands**) ticked, the default, the foot stays exactly as its author made it, heel and all, and only the leg the shoe reaches is refitted, sized by the legs (the arm by the chest, for gloves). The feet go along by themselves. A shoe that reaches no leg keeps its shape and only has its skin redrawn, saved as "*Body* — skin". Untick it to refit the whole shoe as before.
 - **Pieces that cover more than one part**, like a long dress over the legs, take a size for each part under **Other body parts**. Choose **None (leave this part out)** to skip one.
 - **Untick a part** in the part list to keep it exactly where the author put it.
-- **Gear the game doesn't ship for your race**, such as pieces made only for men, can still be refitted: Proteus first makes a model for your race from the one that exists.
+- **Gear the game doesn't ship for your race**, such as pieces made only for men, can still be refitted: Proteus first makes a model for your race from the one that exists. Gear made only for your race, such as Au Ra's Auri set, is refitted in the Midlander shape the bodies are made for, the way the game bends it, and saved back for your race.
 - **Vanilla gear** can be refitted the same way. It has no mod to save into, so saving makes a new mod with the refit and an **Original** option.
 - Touch up afterwards with the other brushes, like **Pull out**, and use **Move** for rigid pieces. Refit from the author's size nearest the one you want — the size set below does that for you.
 - **Between body mods**, the garment also takes on the new body's bone weights where the two bodies differ, so it moves with the new body's physics. Where they agree, the author's weighting is kept. Skirt chains and other bones of the garment's own are never changed.
@@ -159,6 +161,7 @@ Below the one-garment tool, **Every size for other bodies** does a whole mod at 
 
 - **Use a body's YAS version where it has one** gives Rue, YAB and Tre their Yet Another Skeleton sizes. A piece already weighted to YAS always gets YAS sizes.
 - **Include shoes and gloves**, on by default, sizes the mod's shoes and gloves too, keeping their own feet and hands: shoes get the legs' sizes ("Rue WC", "YAB SC"), gloves one option per body. A shoe or glove in the same size group as the outfit's chest or legs joins the sizes that piece made, so one choice dresses the whole outfit. One that reaches no leg or arm only has its skin redrawn, and only where the new body draws skin another way. One sized in a group with a piece it can't follow — gloves beside legs, or a shoe and gloves with no chest — is left alone, with a note.
+- **Add the new bodies' piercings**, off by default, brings each body's piercings into the sizes it makes. Nails always come along. Sizes already made change only when made again.
 - Sizes the mod already has are left alone. Tick **Make again the sizes Proteus added before** to redo the ones Proteus made; the author's own sizes are never touched. If you ran it with an earlier version of Proteus, tick **Make again** once: those sizes were cut from the author's first size.
 - It runs in the background and can take a few minutes on a big mod. **Stop** keeps the sizes already saved. When it's done, it lists anything it had to leave out and why.
 - Only bodies for the races the mod dresses are offered, so a women's mod doesn't list men's bodies. A body has to be installed in Penumbra to get its sizes. The game's own gear has no mod to add sizes to, so this doesn't appear for it.
@@ -275,9 +278,20 @@ Four buttons here are worth knowing about:
 - **Clear texture cache** — use when a texture edit isn't showing up, e.g. you re-exported an overlay at the same size.
 - **Glow Effect Textures** — opens the folder Proteus reads animated-glow scroll maps from. Drop images in it and they appear in every gear overlay's Effect dropdown. Hover the button to see the full path.
 
-##### Hats
+##### Hair
 
-Most modded hair has no hat support, so a hat worn over it goes straight through. The **Hats** section presses the hair a hat would cover flat against your head. Like the Studio, it edits the hair mod's own files, so the fit keeps working with Proteus turned off and travels with the mod if you export it.
+The **Hair** section fits hair mods to you in two ways: hair made for another race onto your race's head, and hair under hats. Like the Studio, both edit the hair mod's own files, so they keep working with Proteus turned off and travel with the mod if you export it.
+
+**Hair made for another race.** Many hair mods are made for one race only, so on any other race the game shows its own hairstyle instead. With **Fit hair mods made for another race** on, Proteus bends the mod's hairstyle onto your race's head and adds it to the same option of the same mod, so it follows that mod's own switches.
+
+- It checks the hair mods switched on in your collection once after you update, when you switch the setting on, when you press **Check now**, and whenever a hair mod is installed, switched on or changed. The hairstyle you put on is fitted too. Chat names the hairstyle numbers that were fitted, so you know what to choose; Glamourer shows the number.
+- The section shows the check as it runs, with **Cancel**, and lists every hairstyle it fitted. Each has its own **Undo**, and **Undo everything this check fitted** takes them all back (click it twice). An undone hairstyle isn't fitted again by itself.
+- Only for your own race, from races of the same sex. A race you're only trying on isn't fitted: Proteus waits until you've kept it for 30 seconds.
+- Physics hair keeps its physics. When your race's skeleton lacks the bones a hairstyle moves with, the port brings the source race's skeleton and physics along for that hairstyle.
+- A hairstyle that wouldn't sit right on your head is left alone, and the list says why.
+- To cover every race at once, open a hair model in the **Studio** and use **Port to all races**.
+
+**Hats.** Most modded hair has no hat support, so a hat worn over it goes straight through. Proteus presses the hair a hat would cover flat against your head.
 
 - **Make hairstyles fit under hats** is on by default. Proteus waits until you actually wear a hat, then fits the hairstyle under it and tells you in chat. If you never wear a hat, your hair mods are never touched. Untick it to stop, and your choice sticks.
 - **Hide ponytails** also makes the parts no hat could cover disappear while a hat is worn: ponytails, side tails, a long fall at the back. Off by default, because hiding is all or nothing and a part judged wrongly simply vanishes.
@@ -293,12 +307,13 @@ Refits chest, legs, hands and feet gear to your body by itself, the moment you p
 
 1. Tick **Refit gear to my body as I put it on**.
 2. Pick a **Collection**. Each Penumbra collection has its own choice, and it starts on the one you're using now.
-3. Pick your **Body** mod, then its **Chest size** and **Legs size**. Hands and feet are matched to those for you.
+3. For each part — Chest, Legs, Hands and Feet — pick a **Body** mod and a **Size**. The first body you pick is filled in for every part it has, with the size you're wearing in it (or else its first size). Hands and feet follow the chest or legs size unless you pick one. Rue bodies are only combined with Rue.
 4. Gear you put on from now on is refitted. For what you're already wearing, press **Refit what I'm wearing now**.
 
 Things worth knowing:
 
 - **Also refit the game's own gear** does vanilla pieces too. They have no mod to save into, so each gets a new mod of its own, named after the item and the body, filed under **Proteus Upscales**.
+- **Add my body's piercings to refitted gear**, off by default, brings your body mod's piercings into refitted gear. Nails always come along. Gear already refitted keeps what it was made with: undo and refit what you're wearing to change it.
 - **Your choices in Penumbra win.** If you pick a mod's **Original** or another size yourself, Proteus leaves it alone. If a mod already ships your size, that option is switched on instead of making a new one.
 - If Proteus can't tell which body a piece was made for, or the piece has no body skin to read, it leaves it as it is and says so in chat. You can still refit it by hand in the Studio.
 - **Undo the refit of what I'm wearing** (hold Ctrl or Shift and click) removes the sizes the automatic refit made for the gear you have on, deletes the mods it made for vanilla gear, and puts back the options you had before. Those pieces won't be refitted again unless you press **Refit what I'm wearing now**. Sizes you made yourself in the Studio stay.

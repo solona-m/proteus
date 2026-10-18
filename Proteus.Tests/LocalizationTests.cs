@@ -352,6 +352,47 @@ public sealed class LocalizationTests
         ["zh"] = ["设置顶部的下拉列表", "部件下拉列表"],
     };
 
+    private static readonly string[] PiercingsKeys =
+    [
+        "AutoRefit.Piercings.Label", "AutoRefit.Piercings.Tip", "Parts.Retarget.Piercings",
+        "Parts.Retarget.Piercings.Tip", "SizeSet.Piercings", "SizeSet.Piercings.Tip",
+    ];
+
+    /// <summary>The refit's three piercings options are in every language in its own words, line for line.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-refit-piercings-option-9")]
+    public void RefitPiercings_strings_are_translated_not_copied(string lang)
+    {
+        // [AC-refit-piercings-option-9]
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (string key in PiercingsKeys)
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+            Assert.Equal(en[key].Message.Count(c => c == '\n'), tr[key].Message.Count(c => c == '\n'));
+        }
+    }
+
+    /// <summary>Every README names the three piercings options as its own language's checkboxes do.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-refit-piercings-option-9")]
+    public void Readme_mentions_the_piercings_options(string lang)
+    {
+        // [AC-refit-piercings-option-9]
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+
+        var strings = Load(lang);
+        foreach (string key in new[] { "AutoRefit.Piercings.Label", "Parts.Retarget.Piercings", "SizeSet.Piercings" })
+            Assert.Contains("**" + strings[key].Message + "**", readme);
+    }
+
     /// <summary>The Scale tool's three strings were re-keyed when it gained axis handles; every language has its own words.</summary>
     [Theory]
     [MemberData(nameof(Translations))]
@@ -612,5 +653,65 @@ public sealed class LocalizationTests
         }
 
         Assert.True(problems.Count == 0, "Key naming:\n" + string.Join("\n", problems));
+    }
+
+    /// <summary>What hair porting says, translated rather than copied — and every key the code asks for is there.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-hair-race-port-9")]
+    public void HairPort_strings_are_translated_not_copied(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        var keys = en.Keys.Where(k => k.StartsWith("HairPort.", StringComparison.Ordinal)).Append("Chat.HairPort")
+                     .Append("Chat.HairPortScan.Fmt").Append("Settings.Section.HairPort").ToList();
+        Assert.True(keys.Count > 40, $"only {keys.Count} hair port keys in {Source}.json");
+        foreach (string key in keys)
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+        }
+    }
+
+    /// <summary>What a body per part in Settings > Body refit added is translated, not copied; the strings it replaced
+    /// are gone.</summary>
+    [Theory]
+    [MemberData(nameof(Translations))]
+    [Trait("Plan", "AC-auto-refit-part-bodies-10")]
+    public void PartBodies_strings_are_translated_not_copied(string lang)
+    {
+        var en = Load(Source);
+        var tr = Load(lang);
+        foreach (string key in new[]
+                 {
+                     "AutoRefit.Part", "AutoRefit.Size", "AutoRefit.PartsHint", "AutoRefit.Matched.Fmt",
+                     "AutoRefit.MatchedWorn.Fmt", "AutoRefit.Match", "AutoRefit.SizesPending", "AutoRefit.Prefilled.Fmt",
+                     "Chat.AutoRefit.MixedKept.Fmt", "Chat.AutoRefit.PartBodyMissing.Fmt",
+                 })
+        {
+            Assert.True(tr.ContainsKey(key), $"[{lang}] has no {key}");
+            Assert.NotEqual(en[key].Message, tr[key].Message);
+        }
+        foreach (string gone in new[] { "AutoRefit.ChestSize", "AutoRefit.LegsSize", "AutoRefit.HandsFeet.Fmt" })
+            Assert.False(tr.ContainsKey(gone), $"[{lang}] still has {gone}");
+    }
+
+    /// <summary>The README's Body refit section says a body and a size are picked per part, in the words Settings uses.</summary>
+    [Theory]
+    [MemberData(nameof(AllLocales))]
+    [Trait("Plan", "AC-auto-refit-part-bodies-10")]
+    public void Readme_names_body_and_size_per_part(string lang)
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "proteus.slnx"))) dir = dir.Parent;
+        Assert.True(dir != null, $"Could not find proteus.slnx above {AppContext.BaseDirectory}.");
+        string readme = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            dir!.FullName, lang == Source ? "README.md" : System.IO.Path.Combine("docs", $"README.{lang}.md")));
+        var strings = Load(lang);
+        string step = readme.Split('\n').Single(l => l.StartsWith("3. ", StringComparison.Ordinal)
+                                                     && l.Contains("**" + strings["AutoRefit.Size"].Message + "**",
+                                                                   StringComparison.Ordinal));
+        Assert.Contains("**" + strings["AutoRefit.Body"].Message + "**", step);
+        Assert.Contains("Rue", step);
     }
 }

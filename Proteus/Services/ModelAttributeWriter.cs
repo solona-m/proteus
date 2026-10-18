@@ -185,8 +185,27 @@ public static class ModelAttributeWriter
         var src = SecondSkinWriter.Parse(mdl);
         int mat = src.MatNames.IndexOf(from);
         if (mat < 0) return mdl;
+        return RenameString(mdl, src, BitConverter.ToUInt32(mdl, src.MatOffStart + mat * 4), from, to);
+    }
 
-        uint off = BitConverter.ToUInt32(mdl, src.MatOffStart + mat * 4);
+    /// <summary>
+    /// Give one bone of the model another name, leaving its index — and so every vertex weighted to it — where it is.
+    /// The game binds a model's bones to the skeleton by name, so this moves those vertices onto the bone of the new
+    /// name. Two entries may end up with one name; both then follow that bone. Unchanged when no bone has
+    /// <paramref name="from"/>.
+    /// </summary>
+    public static byte[] RenameBone(byte[] mdl, string from, string to)
+    {
+        if (string.Equals(from, to, StringComparison.Ordinal)) return mdl;
+        var src = SecondSkinWriter.Parse(mdl);
+        int bone = Array.IndexOf(src.BoneNames, from);
+        if (bone < 0) return mdl;
+        return RenameString(mdl, src, BitConverter.ToUInt32(mdl, src.MatOffStart + src.MatCount * 4 + bone * 4), from, to);
+    }
+
+    /// <summary>The string block with the name at <paramref name="off"/> replaced, and every offset past it moved.</summary>
+    private static byte[] RenameString(byte[] mdl, SecondSkinWriter.Source src, uint off, string from, string to)
+    {
         int oldLen = Encoding.ASCII.GetByteCount(from), newLen = Encoding.ASCII.GetByteCount(to);
         int d = newLen - oldLen;
 

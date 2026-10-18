@@ -463,6 +463,68 @@ public class KeepEndsTests
         Assert.Equal("Neolithe — L", RefitCore.OptionName("Neolithe", [decision.Target.Label]));
     }
 
+    // ── the feet on a body of their own (see AutoRefitTargets) ───────────────
+
+    /// <summary>The legs on the shoe's own body, "body"; the feet on Bibo+, or on nothing.</summary>
+    private static AutoRefitTargets FeetOn(string? feetBody, BodySizeRef? feet = null)
+    {
+        var pref = new AutoRefitPreference
+        {
+            ChestBody = "body", LegsBody = "body", HandsBody = "body", FeetBody = feetBody ?? "",
+            Legs = AutoRefitDecisions.RefOf(LegsM), Feet = feet,
+        };
+        var bodies = new[] { new BodyModIndex.Entry("body", "Body", Body), AutoRefitTargetsTests.Bibo };
+        return new AutoRefitTargets(pref, d => bodies.FirstOrDefault(b => b.Dir == d), "0201");
+    }
+
+    [Fact]
+    [Trait("Plan", "AC-auto-refit-part-bodies-7")]
+    [Trait("Plan", "EDGE-auto-refit-part-bodies-20")]
+    public void Shoe_leg_goes_to_the_legs_body_and_foot_shape_to_the_feet_body()
+    {
+        var (reading, _) = ReadShoe(legSkin: true);
+        var targets = FeetOn("Bibo+");
+        var decision = Assert.IsType<KeepEnds.Refit>(
+            KeepEnds.Decide(new KeepEnds.Found(KeepEnds.Route.Skin, Pick(LegsS)), reading, NoBones, "0201", "body",
+                            _ => Body, s => targets.TargetFor(s, "_sho")));
+        Assert.Equal(LegsM, decision.Target);                       // the legs' own body
+        Assert.Equal(FeetM, decision.EndFrom);                      // the source's feet
+        Assert.Equal("Bibo+", targets.DirOf("_sho"));
+        Assert.StartsWith("<Bibo+>", targets.PathOf("_sho", decision.EndTo!), StringComparison.Ordinal);
+        // A skin-only redraw is drawn like the feet's body, and named after it.
+        Assert.Equal("Bibo+ — skin", KeepEnds.SkinOnlyOption(targets.NameOf("_sho")));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-auto-refit-part-bodies-21")]
+    public void Unset_feet_body_refits_the_leg_without_foot_shape_and_a_skin_redraw_has_no_size()
+    {
+        var (reading, _) = ReadShoe(legSkin: true);
+        var targets = FeetOn(null);
+        var decision = Assert.IsType<KeepEnds.Refit>(
+            KeepEnds.Decide(new KeepEnds.Found(KeepEnds.Route.Skin, Pick(LegsS)), reading, NoBones, "0201", "body",
+                            _ => Body, s => targets.TargetFor(s, "_sho")));
+        Assert.Null(decision.EndTo);
+
+        var (bare, bareParts) = ReadShoe(legSkin: false);
+        var found = KeepEnds.Find(bare, bareParts, NoBones, "0201", Detect(null, Pick(FeetM)), _ => Body,
+                                  (_, _, _, _) => null);
+        Assert.Equal(new KeepEnds.NoSize("_sho"),
+                     KeepEnds.Decide(found, bare, NoBones, "0201", "body", _ => Body, s => targets.TargetFor(s, "_sho")));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-auto-refit-part-bodies-29")]
+    public void Decide_judges_already_fits_against_the_leg_body_only()
+    {
+        var (reading, _) = ReadShoe(legSkin: true);
+        // The feet on another body changes nothing about whether the leg already fits.
+        var targets = FeetOn("Bibo+");
+        Assert.IsType<KeepEnds.AlreadyFits>(
+            KeepEnds.Decide(new KeepEnds.Found(KeepEnds.Route.Skin, Pick(LegsM)), reading, NoBones, "0201", "body",
+                            _ => Body, s => targets.TargetFor(s, "_sho")));
+    }
+
     [Fact]
     [Trait("Plan", "EDGE-keep-hand-foot-skin-11")]
     public void A_leg_already_the_chosen_size_already_fits()
@@ -554,11 +616,34 @@ public class KeepEndsTests
                                                            .Sum(p => p.TriangleCount));
     }
 
+    [Fact]
+    [Trait("Plan", "EDGE-refit-piercings-option-6")]
+    public void A_kept_end_refit_carries_piercings_only_when_asked()
+    {
+        // [EDGE-refit-piercings-option-6] A boot's leg skin swapped for legs that carry a ring on drawn skin: through
+        // KeepEnds.Plan, as the automatic refit and the size set call it, the ring follows the setting.
+        const string Piercings = "/mt_c0201b0001_navelpierce.mtrl";
+        var bytes = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)));
+        var legs = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0, TrianglesPerIsland: 5)),
+            new SyntheticModel.Mesh(Piercings, new SyntheticModel.Sub(0, OffsetZ: 0.001f)));
+        var parts = ModelPartReader.Read(bytes)!;
+        var reading = new KeepEnds.Reading("_sho", "_dwn", new HashSet<int>(), parts, [], 0, parts.Positions.Length / 3);
+
+        var off = KeepEnds.Plan(parts, bytes, reading, Resized("_dwn", legs), null, across: true);
+        var on = KeepEnds.Plan(parts, bytes, reading, Resized("_dwn", legs), null, across: true, carryPiercings: true);
+
+        Assert.Equal(0, off.Report.Swap!.Value.Adorned);
+        Assert.Equal(1, on.Report.Swap!.Value.Adorned);
+    }
+
     // ── a refit made before ──────────────────────────────────────────────────────────────────────────────
 
     [Fact]
     [Trait("Plan", "AC-keep-hand-foot-skin-10")]
     [Trait("Plan", "EDGE-keep-hand-foot-skin-16")]
+    [Trait("Plan", "EDGE-refit-piercings-option-8")]
     public void A_refit_made_before_is_put_back_as_it_always_was()
     {
         // Unchanged for every slot: an option this tool saved before, automatic or by hand, still offered, is put back;
@@ -575,6 +660,8 @@ public class KeepEndsTests
             Assert.True(BodyRetargetWriter.Save(root, "Size", GamePath, "neo", "Bibo+ — M",
                                                 [new BodyRetargetWriter.Refit("Neolithe — L", model, "L")], auto: false).Ok);
 
+            // [EDGE-refit-piercings-option-8] Whatever the piercings setting says: Existing never reads it, so a refit
+            // made before is put back as it was made.
             Assert.True(AutoRefitWatcher.Existing(root, "Size", "Neolithe — M", GamePath));
             Assert.True(AutoRefitWatcher.Existing(root, "Size", "Neolithe — L", GamePath));
             Assert.False(AutoRefitWatcher.Existing(root, "Size", "Neolithe — S", GamePath));

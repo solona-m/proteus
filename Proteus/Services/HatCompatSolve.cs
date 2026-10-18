@@ -16,7 +16,26 @@ public static partial class HatCompatSolve
     /// Which generation of this solve produced a patch. BUMP IT whenever a constant below changes or the output
     /// geometry changes: the watcher redoes patches stamped with an older version.
     /// </summary>
-    public const int Version = 32;
+    public const int Version = 33;
+
+    /// <summary>
+    /// The newest version a hairstyle with NO Miqo'te ears needs: 33 changed only what is spared around the ears
+    /// (<see cref="EarSkinReach"/>), so every other hairstyle's patch stays current rather than being refit for
+    /// nothing.
+    /// </summary>
+    internal const int WithoutEars = 32;
+
+    /// <summary>The version a patch of <paramref name="mdl"/> must carry to be current; see <see cref="WithoutEars"/>.</summary>
+    internal static int VersionFor(byte[] mdl)
+    {
+        try
+        {
+            foreach (var name in SecondSkinWriter.Parse(mdl).BoneNames)
+                if (name.StartsWith(EarBonePrefix, StringComparison.Ordinal)) return Version;
+            return WithoutEars;
+        }
+        catch { return Version; }   // unreadable: refitting is the safe side
+    }
 
     /// <summary>How far above the head's centre a hat sits on the head, in model units; the lowest a cut may
     /// safely go, measured as visibility from a viewer's line of sight.</summary>
@@ -372,7 +391,7 @@ public static partial class HatCompatSolve
     /// The scalp per direction: the FURTHEST head vertex, since the nearest may be eyes, teeth or mouth.
     /// Directions the head does not reach inherit the median.
     /// </summary>
-    private static float[] HeadFloor(IReadOnlyList<MeshVerts> head, Vector3 centre, float radius, float minY)
+    internal static float[] HeadFloor(IReadOnlyList<MeshVerts> head, Vector3 centre, float radius, float minY)
     {
         var ceil = new float[BinsU * BinsV];
         foreach (var mv in head)

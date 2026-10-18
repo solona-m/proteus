@@ -121,6 +121,25 @@ internal static class RetargetInputs
     internal static bool SkinOnlyChanges(bool baking, byte[] before, byte[] after)
         => baking || !ReferenceEquals(before, after);
 
+    /// <summary>
+    /// The refit-onto sizes chosen, kept only where the list for a new race still offers them — the same file — so a
+    /// race change that leaves the body mod's sizes as they were (racial gear bent into the shape the bodies are made
+    /// for: her race's list is the shared shape's) does not empty what was picked. Slots left with none are dropped.
+    /// </summary>
+    internal static Dictionary<string, List<BodyOption>> StillOffered(
+        IReadOnlyDictionary<string, List<BodyOption>> chosen, Func<string, IReadOnlyList<BodyOption>> offered)
+    {
+        var kept = new Dictionary<string, List<BodyOption>>(StringComparer.Ordinal);
+        foreach (var (slot, sizes) in chosen)
+        {
+            var now = offered(slot);
+            var still = sizes.Select(s => now.FirstOrDefault(o => string.Equals(o.Rel, s.Rel, StringComparison.OrdinalIgnoreCase)))
+                             .OfType<BodyOption>().ToList();
+            if (still.Count > 0) kept[slot] = still;
+        }
+        return kept;
+    }
+
     /// <summary>One refit's sizes, as its option is named: the required slot's <paramref name="target"/>, then each
     /// other slot's — or <see cref="KeepEnds.SkinOnlyLabel"/> for a skin-only redraw, the same at every size.</summary>
     internal static List<string> ToLabels(Inputs inputs, IReadOnlyList<string> chosen, BodyOption target,
@@ -137,14 +156,23 @@ internal static class RetargetInputs
             ? [own.Label]
             : chosen.Select(s => from[s].Label).ToList();
 
+    /// <summary>Whether the Body size tool's "Add the new body's piercings" takes effect: only the swap brings the body's
+    /// skin in, and its piercings with it.</summary>
+    internal static bool CarryPiercings(bool replaceSkin, bool carryPiercings) => replaceSkin && carryPiercings;
+
+    /// <summary>The headless refit's <c>--piercings</c>: the new body's piercings come in only when it is given.</summary>
+    internal static bool CliCarryPiercings(IReadOnlyDictionary<string, string> opts) => opts.ContainsKey("piercings");
+
     /// <summary>
     /// What a plan was made from: the model, each chosen pair, which parts were held and kept in shape, and the options.
-    /// A plan whose key no longer matches is stale.
+    /// A plan whose key no longer matches is stale. The piercings choice counts only where it changes the plan (see
+    /// <see cref="CarryPiercings"/>): never on a skin-only redraw, which swaps nothing.
     /// </summary>
     internal static string Key(string modelRel, string? fromBodyDir, Inputs inputs, IReadOnlyList<string> chosen,
                                IReadOnlyDictionary<string, BodyOption> from,
                                IReadOnlyDictionary<string, List<BodyOption>> to, IEnumerable<string> held,
-                               IEnumerable<string>? keepShape, bool replaceSkin, bool cutHidden, bool clearBody)
+                               IEnumerable<string>? keepShape, bool replaceSkin, bool cutHidden, bool clearBody,
+                               bool carryPiercings = false)
         => modelRel + "|from:" + (fromBodyDir ?? "") + "|"
          + string.Join("|", chosen.Select(s => $"{s}:{from[s].Rel}>{string.Join(",", to[s].Select(t => t.Rel))}"))
          + "|held:" + string.Join(",", held.OrderBy(h => h, StringComparer.Ordinal))
@@ -153,6 +181,7 @@ internal static class RetargetInputs
          + (replaceSkin && !cutHidden && !inputs.KeepEnds ? "|whole" : "")
          + (clearBody ? "|clear" : "")
          + (inputs.KeepEnds ? "|keep" : "")
+         + (CarryPiercings(replaceSkin, carryPiercings) && !inputs.SkinOnly ? "|pierce" : "")
          + (inputs.SkinOnly && inputs.EndSlot != null && from.TryGetValue(inputs.EndSlot, out var own)
                 ? "|skin:" + own.Rel + ">" + string.Join(",", inputs.PrimaryTargets.Select(t => t.Rel))
                 : "");

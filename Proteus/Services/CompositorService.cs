@@ -338,10 +338,6 @@ public partial class CompositorService : IDisposable
     private readonly ConcurrentDictionary<string,
         (bool IsSurfaceMod, bool AffectsComposite, int BaseKeysHash, long Fingerprint)> _bodyModCache =
         new(StringComparer.OrdinalIgnoreCase);
-    // Serializes the config.KnownBodyMods mutations + config.Save() done off-thread by ClassifySurfaceMod
-    // and OnModDeleted, so a save never serializes the dictionary while another thread mutates it.
-    private readonly object _bodyModConfigLock = new();
-
     // Mods already reacted to while disabled; lets OnModSettingChanged skip further changes on them.
     // Absence is the safe default ("don't skip"). Only OnModSettingChanged adds, on the framework thread.
     private readonly ConcurrentDictionary<string, byte> _knownDisabled =
@@ -373,12 +369,6 @@ public partial class CompositorService : IDisposable
             owner.InvalidateUpstreamCache("mod-setting batch");
         }
     }
-
-    /// <summary>
-    /// Save the plugin config under <see cref="_bodyModConfigLock"/>, which the off-thread body-mod classifier also
-    /// holds; a bare Save() can serialize <see cref="Configuration.KnownBodyMods"/> mid-mutation.
-    /// </summary>
-    public void SaveConfig() { lock (_bodyModConfigLock) config.Save(); }
 
     // Mods already told (this session) that their skin Glow now renders as a cloth layer.
     // Concurrent because two composites can overlap and both walk the promotion loop.

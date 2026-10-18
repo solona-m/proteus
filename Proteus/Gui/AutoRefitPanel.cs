@@ -38,7 +38,9 @@ internal sealed class AutoRefitPanel(AutoRefitWatcher watcher, PenumbraBridge pe
     private string? race;
     private long raceAt;
 
-    private string bodyFilter = "", chestFilter = "", legsFilter = "";
+    /// <summary>Each row's body and size searches, by slot.</summary>
+    private readonly Dictionary<string, string> bodyFilters = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> sizeFilters = new(StringComparer.Ordinal);
     private bool askedForBodies;
 
     private const long RefreshMs = 2000;
@@ -71,6 +73,17 @@ internal sealed class AutoRefitPanel(AutoRefitWatcher watcher, PenumbraBridge pe
         }
         if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(s.VanillaTip);
 
+        using (ImRaii.Disabled(!on))
+        {
+            bool piercings = config.AutoRefitPiercings;
+            if (ImGui.Checkbox(s.Piercings, ref piercings))
+            {
+                config.AutoRefitPiercings = piercings;
+                config.Save();
+            }
+        }
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(s.PiercingsTip);
+
         ImGui.Spacing();
         ImGui.Separator();
         ImGui.Spacing();
@@ -93,24 +106,10 @@ internal sealed class AutoRefitPanel(AutoRefitWatcher watcher, PenumbraBridge pe
             watcher.RefreshBodies();
         }
         var bodies = watcher.Index.Snapshot;
-        DrawBodyCombo(bodies, pref, key, collection);
-
-        if (pref is not { BodyDir.Length: > 0 })
-        {
-            ImGui.TextDisabled(s.NoBodyChosen);
-        }
-        else if (bodies != null && watcher.Index.Find(pref.BodyDir) is { } body)
-        {
-            DrawSizes(body, pref);
-        }
-        else if (bodies != null)
-        {
-            using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
-                ImGui.TextWrapped(string.Format(s.BodyMissingFmt, pref.BodyDir));
-        }
+        DrawParts(bodies, pref, key, collection);
 
         ImGui.Spacing();
-        using (ImRaii.Disabled(!on || pref is not { BodyDir.Length: > 0 } || watcher.Current.Busy))
+        using (ImRaii.Disabled(!CanRunNow(on, pref, watcher.Current.Busy)))
             if (ImGui.Button(s.RunNow))
                 watcher.RunNow();
         if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(s.RunNowTip);
@@ -121,6 +120,7 @@ internal sealed class AutoRefitPanel(AutoRefitWatcher watcher, PenumbraBridge pe
             if (ImGui.Button(s.Clear))
             {
                 config.AutoRefitByCollection.Remove(key);
+                watcher.NotePrefilled(key, []);
                 config.Save();
             }
         }
@@ -191,16 +191,131 @@ internal sealed class AutoRefitPanel(AutoRefitWatcher watcher, PenumbraBridge pe
             }
     }
 
-    private void DrawBodyCombo(IReadOnlyList<BodyModIndex.Entry>? bodies, AutoRefitPreference? pref, string key,
-                               Guid collection)
+    // ── a body and a size per part ────────────────────────────────────────────
+
+    /// <summary>One row of the parts table, as <see cref="Rows"/> works it out.</summary>
+    /// <param name="BodyDir">The body chosen for the part, by folder; empty for none.</param>
+    /// <param name="Body">That body installed; null when none is chosen or it is gone.</param>
+    /// <param name="NoSizesForSex">The body has sizes of the part, none of them for the player's sex.</param>
+    /// <param name="Options">The part's sizes at the player's race.</param>
+    /// <param name="Shown">The size the refit uses: the one chosen, or for hands and feet the matched one.</param>
+    /// <param name="Matched">Hands or feet with no size of their own, following the chest or legs.</param>
+    /// <param name="Basis">What a matched size was found by (see <see cref="AutoRefitTargets.Matched"/>).</param>
+    internal sealed record PartRow(string Slot, string BodyDir, BodyModIndex.Entry? Body, bool NoSizesForSex,
+                                   IReadOnlyList<BodyOption> Options, BodyOption? Shown, bool Matched,
+                                   AutoRefitTargets.Basis Basis)
+    {
+        /// <summary>A body is chosen for the part and is not installed.</summary>
+        public bool Missing => BodyDir.Length > 0 && Body == null;
+    }
+
+    /// <summary>The four rows — chest, legs, hands, feet — each from its own body, for a preference (null for none).</summary>
+    internal static List<PartRow> Rows(AutoRefitPreference? pref, Func<string, BodyModIndex.Entry?> find, string? race)
+    {
+        var targets = new AutoRefitTargets(pref ?? new AutoRefitPreference(), find, race);
+        var rows = new List<PartRow>();
+        foreach (string slot in AutoRefitDecisions.Slots)
+        {
+            var body = targets.Body(slot);
+            var options = targets.Options(slot);
+            bool noSex = body != null && race != null && options.Count == 0 && body.Catalog.For(slot, null).Count > 0;
+            bool matched = slot is "_glv" or "_sho" && pref?.SizeOf(slot) == null;
+            var basis = AutoRefitTargets.Basis.Anchor;
+            var shown = matched
+                ? targets.Anchor is { } anchor ? AutoRefitTargets.Matched(options, anchor, null, out basis) : null
+                : targets.Chosen(slot);
+            rows.Add(new PartRow(slot, targets.DirOf(slot), body, noSex, options, shown, matched, basis));
+        }
+        return rows;
+    }
+
+    /// <summary>The body mods a part's list offers: only those that have it — a hands-only mod under Hands alone.</summary>
+    internal static List<BodyModIndex.Entry> BodiesFor(string slot, IReadOnlyList<BodyModIndex.Entry> bodies)
+        => bodies.Where(b => b.Catalog.For(slot, null).Count > 0).ToList();
+
+    /// <summary>"Refit what I'm wearing now" asks for the feature on, a body for some part, and nothing running.</summary>
+    internal static bool CanRunNow(bool enabled, AutoRefitPreference? pref, bool busy)
+        => enabled && pref?.HasAnyBody() == true && !busy;
+
+    /// <summary>
+    /// What a size column shows. A matched hand or foot says so, with the size the refit takes — or, where that is the
+    /// size worn, which Settings cannot read, that it is the worn one, else the size named.
+    /// </summary>
+    internal static string SizeLabel(PartRow row)
     {
         var s = Strings.AutoRefit;
-        ImGui.TextUnformatted(s.Body);
+        if (!row.Matched) return row.Shown?.Label ?? s.Choose;
+        if (row.Shown == null) return string.Format(s.MatchedFmt, "—");
+        return row.Basis == AutoRefitTargets.Basis.Anchor
+            ? string.Format(s.MatchedFmt, row.Shown.Label)
+            : string.Format(s.MatchedWornFmt, row.Shown.Label);
+    }
+
+    private static string PartName(string slot) => AutoRefitWatcher.SlotName(slot);
+
+    private void DrawParts(IReadOnlyList<BodyModIndex.Entry>? bodies, AutoRefitPreference? pref, string key, Guid collection)
+    {
+        var s = Strings.AutoRefit;
+        ImGui.TextWrapped(s.PartsHint);
+        var rows = Rows(pref, watcher.Index.Find, race);
+        if (ImGui.BeginTable("##autoRefitParts", 3, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.BordersInnerV))
+        {
+            // Column ids, not display text, so they stay English.
+            ImGui.TableSetupColumn("Part", ImGuiTableColumnFlags.WidthFixed, ProteusStyle.S(70f));
+            // Explicit weights: unweighted, both share by content width, and a full-width combo has none, so Size
+            // shrank to its arrow.
+            ImGui.TableSetupColumn("Body", ImGuiTableColumnFlags.WidthStretch, 2f);
+            ImGui.TableSetupColumn("Size", ImGuiTableColumnFlags.WidthStretch, 3f);
+            ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
+            ImGui.TableNextColumn(); ImGui.TableHeader(s.Part);
+            ImGui.TableNextColumn(); ImGui.TableHeader(s.Body);
+            ImGui.TableNextColumn(); ImGui.TableHeader(s.Size);
+            foreach (var row in rows)
+            {
+                ImGui.TableNextRow();
+                ImGui.TableNextColumn();
+                ImGui.AlignTextToFramePadding();
+                ImGui.TextUnformatted(PartName(row.Slot));
+                ImGui.TableNextColumn();
+                DrawBodyCombo(row, bodies, pref, key, collection);
+                ImGui.TableNextColumn();
+                DrawSizeCombo(row, pref, key);
+            }
+            ImGui.EndTable();
+        }
+
+        if (pref?.HasAnyBody() != true)
+            ImGui.TextDisabled(s.NoBodyChosen);
+        if (bodies != null)
+            foreach (var row in rows)
+            {
+                if (row.Missing)
+                    using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
+                        ImGui.TextWrapped(PartName(row.Slot) + ": " + string.Format(s.BodyMissingFmt, row.BodyDir));
+                else if (row.NoSizesForSex && race != null)
+                {
+                    string sex = BodySizeCatalog.IsMaleRace(race) ? Strings.Parts.RetargetMale : Strings.Parts.RetargetFemale;
+                    using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
+                        ImGui.TextWrapped(PartName(row.Slot) + ": "
+                                        + string.Format(Strings.Parts.RetargetNoBodiesForSexFmt, row.Body!.Name, sex));
+                }
+            }
+        if (pref is { PendingFill.Count: > 0 })
+            ImGui.TextDisabled(s.SizesPending);
+        if (watcher.PrefilledIn(key) is { Count: > 0 } first)
+            ImGui.TextWrapped(string.Format(s.PrefilledFmt, string.Join(", ", first.Select(PartName))));
+        using (ImRaii.PushColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled)))
+            ImGui.TextWrapped(s.EndsKept);
+    }
+
+    private void DrawBodyCombo(PartRow row, IReadOnlyList<BodyModIndex.Entry>? bodies, AutoRefitPreference? pref,
+                               string key, Guid collection)
+    {
+        var s = Strings.AutoRefit;
+        string id = "##autoRefitBody" + row.Slot;
         ImGui.SetNextItemWidth(-1);
-        string shown = pref is { BodyDir.Length: > 0 }
-            ? watcher.Index.Find(pref.BodyDir)?.Name ?? pref.BodyDir
-            : s.Choose;
-        using var combo = ImRaii.Combo("##autoRefitBody", shown, ImGuiComboFlags.HeightLarge);
+        string shown = row.BodyDir.Length > 0 ? row.Body?.Name ?? row.BodyDir : s.Choose;
+        using var combo = ImRaii.Combo(id, shown, ImGuiComboFlags.HeightLarge);
         if (!combo) return;
 
         // Opening the list looks again, so a body mod installed since appears.
@@ -210,31 +325,32 @@ internal sealed class AutoRefitPanel(AutoRefitWatcher watcher, PenumbraBridge pe
             ImGui.TextDisabled(s.FindingBodies);
             return;
         }
-        if (bodies.Count == 0)
+        var offered = BodiesFor(row.Slot, bodies);
+        if (offered.Count == 0)
         {
             ImGui.TextDisabled(s.NoBodies);
             return;
         }
 
-        ComboSearch.Box("##autoRefitBody", ref bodyFilter);
+        string filter = bodyFilters.GetValueOrDefault(row.Slot, "");
+        ComboSearch.Box(id, ref filter);
+        bodyFilters[row.Slot] = filter;
         bool any = false;
-        foreach (var body in bodies)
+        foreach (var body in offered)
         {
-            if (bodyFilter.Length > 0 && !body.Name.Contains(bodyFilter, StringComparison.OrdinalIgnoreCase)
-                && !body.Dir.Contains(bodyFilter, StringComparison.OrdinalIgnoreCase)) continue;
+            if (filter.Length > 0 && !body.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                && !body.Dir.Contains(filter, StringComparison.OrdinalIgnoreCase)) continue;
             any = true;
-            if (!ImGui.Selectable(body.Name + "##" + body.Dir,
-                                  string.Equals(pref?.BodyDir, body.Dir, StringComparison.OrdinalIgnoreCase)))
+            if (!ImGui.Selectable(body.Name + id + body.Dir,
+                                  string.Equals(row.BodyDir, body.Dir, StringComparison.OrdinalIgnoreCase)))
                 continue;
 
             var chosen = pref ?? new AutoRefitPreference();
-            if (!string.Equals(chosen.BodyDir, body.Dir, StringComparison.OrdinalIgnoreCase))
-            {
-                // Another body's sizes: the old ones name files of the old mod.
-                chosen.Chest = null;
-                chosen.Legs = null;
-            }
-            chosen.BodyDir = body.Dir;
+            // What is worn can be read only in the collection being worn; elsewhere a first pick takes first sizes.
+            var first = AutoRefitDecisions.ChooseBody(chosen, row.Slot, body, race,
+                                                      canReadWorn: collection == currentCollection?.Id,
+                                                      watcher.Index.Find);
+            if (first.Count > 0) watcher.NotePrefilled(key, first);
             chosen.CollectionName = collections != null && collections.TryGetValue(collection, out var name) ? name : "";
             config.AutoRefitByCollection[key] = chosen;
             config.Save();
@@ -242,60 +358,33 @@ internal sealed class AutoRefitPanel(AutoRefitWatcher watcher, PenumbraBridge pe
         if (!any) ImGui.TextDisabled(Strings.Parts.NoMatches);
     }
 
-    private void DrawSizes(BodyModIndex.Entry body, AutoRefitPreference pref)
+    /// <summary>A dropdown of one part's sizes, grouped as the author grouped them; hands and feet start with "Match".</summary>
+    private void DrawSizeCombo(PartRow row, AutoRefitPreference? pref, string key)
     {
-        var s = Strings.AutoRefit;
-        var catalog = body.Catalog;
-        if (race != null && !catalog.SlotsFor(race).Any())
+        if (pref == null || row.Body == null || row.Options.Count == 0)
         {
-            string sex = BodySizeCatalog.IsMaleRace(race) ? Strings.Parts.RetargetMale : Strings.Parts.RetargetFemale;
-            using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
-                ImGui.TextWrapped(string.Format(Strings.Parts.RetargetNoBodiesForSexFmt, body.Name, sex));
+            ImGui.AlignTextToFramePadding();
+            ImGui.TextDisabled(row.Matched && row.Shown != null ? SizeLabel(row) : "—");
             return;
         }
-
-        var chestOptions = catalog.For("_top", race);
-        var legsOptions = catalog.For("_dwn", race);
-        var chest = AutoRefitDecisions.Resolve(chestOptions, pref.Chest);
-        var legs = AutoRefitDecisions.Resolve(legsOptions, pref.Legs);
-
-        if (DrawSizeCombo("##autoRefitChest", s.ChestSize, chestOptions, chest, ref chestFilter) is { } pickedChest)
-        {
-            pref.Chest = AutoRefitDecisions.RefOf(pickedChest);
-            chest = pickedChest;
-            config.Save();
-        }
-        if (DrawSizeCombo("##autoRefitLegs", s.LegsSize, legsOptions, legs, ref legsFilter) is { } pickedLegs)
-        {
-            pref.Legs = AutoRefitDecisions.RefOf(pickedLegs);
-            legs = pickedLegs;
-            config.Save();
-        }
-
-        // Nothing until chest or legs is chosen: the refit follows only a chosen size, never the body's first.
-        var anchor = chest ?? legs;
-        string hands = anchor == null ? "—" : AutoRefitDecisions.Companion(catalog.For("_glv", race), anchor, null)?.Label ?? "—";
-        string feet = anchor == null ? "—" : AutoRefitDecisions.Companion(catalog.For("_sho", race), anchor, null)?.Label ?? "—";
-        ImGui.TextDisabled(string.Format(s.HandsFeetFmt, hands, feet));
-        using (ImRaii.PushColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled)))
-            ImGui.TextWrapped(s.EndsKept);
-    }
-
-    /// <summary>A dropdown of one slot's sizes, grouped as the author grouped them. Returns the size clicked, if any.</summary>
-    private static BodyOption? DrawSizeCombo(string id, string label, IReadOnlyList<BodyOption> options,
-                                             BodyOption? chosen, ref string filter)
-    {
-        if (options.Count == 0) return null;
-        ImGui.TextUnformatted(label);
+        string id = "##autoRefitSize" + row.Slot;
         ImGui.SetNextItemWidth(-1);
-        using var combo = ImRaii.Combo(id, chosen?.Label ?? Strings.AutoRefit.Choose, ImGuiComboFlags.HeightLarge);
-        if (!combo) return null;
+        using var combo = ImRaii.Combo(id, SizeLabel(row), ImGuiComboFlags.HeightLarge);
+        if (!combo) return;
 
+        bool ends = row.Slot is "_glv" or "_sho";
+        if (ends && ImGui.Selectable(Strings.AutoRefit.Match + id, row.Matched))
+        {
+            pref.SetSize(row.Slot, null);
+            config.Save();
+        }
+
+        string filter = sizeFilters.GetValueOrDefault(row.Slot, "");
         ComboSearch.Box(id, ref filter);
-        BodyOption? picked = null;
+        sizeFilters[row.Slot] = filter;
         string? group = null;
         bool any = false;
-        foreach (var option in options)
+        foreach (var option in row.Options)
         {
             if (!ComboSearch.Matches(filter, option.FullLabel)) continue;
             any = true;
@@ -305,9 +394,11 @@ internal sealed class AutoRefitPanel(AutoRefitWatcher watcher, PenumbraBridge pe
                 ImGui.Separator();
                 ImGui.TextDisabled(group);
             }
-            if (ImGui.Selectable(option.Label + id + option.Rel, option == chosen)) picked = option;
+            if (!ImGui.Selectable(option.Label + id + option.Rel, !row.Matched && option == row.Shown)) continue;
+            pref.SetSize(row.Slot, AutoRefitDecisions.RefOf(option));
+            watcher.NotePrefilled(key, watcher.PrefilledIn(key).Where(p => p != row.Slot).ToList());
+            config.Save();
         }
         if (!any) ImGui.TextDisabled(Strings.Parts.NoMatches);
-        return picked;
     }
 }

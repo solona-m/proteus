@@ -3,12 +3,40 @@
     "message": "Corps",
     "description": ""
   },
-  "AutoRefit.BodyMissing.Fmt": {
-    "message": "Le corps choisi ici, « {0} », n'est plus installé. Choisissez-en un autre.",
+  "AutoRefit.Part": {
+    "message": "Partie",
     "description": ""
   },
-  "AutoRefit.ChestSize": {
-    "message": "Taille de poitrine",
+  "AutoRefit.Size": {
+    "message": "Taille",
+    "description": ""
+  },
+  "AutoRefit.PartsHint": {
+    "message": "Chaque partie peut utiliser son propre corps. Le premier corps choisi sert pour toutes les parties qu'il possède.",
+    "description": ""
+  },
+  "AutoRefit.Matched.Fmt": {
+    "message": "Assortie ({0})",
+    "description": ""
+  },
+  "AutoRefit.MatchedWorn.Fmt": {
+    "message": "Assortie (la taille portée, sinon {0})",
+    "description": ""
+  },
+  "AutoRefit.Match": {
+    "message": "Suivre la taille du buste ou des jambes",
+    "description": ""
+  },
+  "AutoRefit.SizesPending": {
+    "message": "Lecture des tailles portées dans ce corps...",
+    "description": ""
+  },
+  "AutoRefit.Prefilled.Fmt": {
+    "message": "La taille portée n'a pas pu être lue : {0} a reçu la première taille du corps. Vérifiez-la ci-dessus.",
+    "description": ""
+  },
+  "AutoRefit.BodyMissing.Fmt": {
+    "message": "Le corps choisi ici, « {0} », n'est plus installé. Choisissez-en un autre.",
     "description": ""
   },
   "AutoRefit.Choose": {
@@ -43,20 +71,12 @@
     "message": "Recherche des mods de corps…",
     "description": ""
   },
-  "AutoRefit.HandsFeet.Fmt": {
-    "message": "Les mains et les pieds sont assortis à ces tailles : {0} et {1}.",
-    "description": ""
-  },
   "AutoRefit.Intro": {
     "message": "Quand vous équipez une pièce de torse, de jambes, de mains ou de pieds — ou un accessoire qui couvre le corps, comme une veste sur un collier —, Proteus détermine pour quel corps elle a été faite, l'ajuste au corps et aux tailles choisis ici, puis active la nouvelle taille. Chaque collection Penumbra a son propre choix.",
     "description": ""
   },
   "AutoRefit.ItemInMod.Fmt": {
     "message": "{0} ({1})",
-    "description": ""
-  },
-  "AutoRefit.LegsSize": {
-    "message": "Taille des jambes",
     "description": ""
   },
   "AutoRefit.NoBodies": {
@@ -113,6 +133,14 @@
   },
   "AutoRefit.Vanilla.Tip": {
     "message": "L'équipement non modifié n'a pas de mod où enregistrer : chaque pièce reçoit donc son propre nouveau mod, nommé d'après l'objet et le corps.",
+    "description": ""
+  },
+  "AutoRefit.Piercings.Label": {
+    "message": "Ajouter les piercings de mon corps à l'équipement ajusté",
+    "description": ""
+  },
+  "AutoRefit.Piercings.Tip": {
+    "message": "Désactivé : l'équipement est ajusté sans les piercings de ton mod de corps. Les ongles sont toujours inclus.\nL'équipement déjà ajusté garde ce avec quoi il a été fait ; annule puis ajuste à nouveau ce que tu portes pour le changer.",
     "description": ""
   },
   "AutoRefit.Working": {
@@ -307,6 +335,10 @@
     "message": "[Proteus] Le corps choisi pour les ajustements automatiques de cette collection, « {0} », n'est pas installé : rien n'est ajusté. Choisissez-en un autre dans /proteus > Paramètres.",
     "description": ""
   },
+  "Chat.AutoRefit.PartBodyMissing.Fmt": {
+    "message": "[Proteus] Le corps choisi pour {0} dans cette collection, « {1} », n'est pas installé : {2} n'y a pas été ajusté. Choisissez-en un autre dans /proteus > Paramètres.",
+    "description": ""
+  },
   "Chat.AutoRefit.Done.Fmt": {
     "message": "[Proteus] {0} est maintenant ajusté à {1}. Enregistré sous « {2} » dans {3} et activé.",
     "description": ""
@@ -341,6 +373,10 @@
   },
   "Chat.AutoRefit.PartsLeftOut.Fmt": {
     "message": "Ces parties n'ont pas pu être ajustées avec lui et gardent leur taille : {0}.",
+    "description": ""
+  },
+  "Chat.AutoRefit.MixedKept.Fmt": {
+    "message": "Elle a été faite pour {0} : la partie {1} est donc allée sur {0} avec elle plutôt que sur le corps choisi pour {1}.",
     "description": ""
   },
   "Chat.AutoRefit.SkinOnly.Fmt": {
@@ -380,8 +416,8 @@
     "description": ""
   },
   "Chat.HatCompat": {
-    "message": "[Proteus] Proteus a rendu cette coiffure compatible avec les chapeaux. Vous pouvez annuler cela, ou désactiver la fonction, dans /proteus > Paramètres > Chapeaux.",
-    "description": "Chat line shown once ever, the first time Proteus makes a hairstyle fit under hats by itself. Do NOT translate \"Proteus\" or the command \"/proteus\". \"Settings\" and \"Hats\" name a tab and a section in Proteus' own window - use the same words you used for \"Tab.Settings\" and \"Settings.Section.HatCompat\"."
+    "message": "[Proteus] Proteus a rendu cette coiffure compatible avec les chapeaux. Vous pouvez annuler cela, ou désactiver la fonction, dans /proteus > Paramètres > Cheveux.",
+    "description": "Chat line shown once ever, the first time Proteus makes a hairstyle fit under hats by itself. Do NOT translate \"Proteus\" or the command \"/proteus\". \"Settings\" and \"Hair\" name a tab and a section in Proteus' own window - use the same words you used for \"Tab.Settings\" and \"Settings.Section.HairPort\"."
   },
   "Chat.MirrorRepo": {
     "message": "[Proteus] Vous avez installé depuis l'ancienne URL du dépôt de plugins. La remplacer par https://dl.solona.info/repo.json dans /xlplugins > Experimental accélère les mises à jour et allège la charge sur GitHub. Votre installation continue de fonctionner dans tous les cas. Ce rappel s'affiche quelques fois, puis disparaît.",
@@ -1653,7 +1689,7 @@
   },
   "HatCompat.InheritedTag": {
     "message": "Cette coiffure est livrée avec une prise en charge des chapeaux, mais elle masque bien plus de cheveux qu'un chapeau n'en couvre — probablement héritée de la coiffure d'origine et jamais adaptée à celle-ci. Proteus peut la remesurer et la remplacer.",
-    "description": "Shown in the Hats section for a hairstyle that arrived with hat support that hides hair no hat covers. \"Proteus\" is a plugin name - never translate it."
+    "description": "Shown in the hats part of the Settings > Hair section for a hairstyle that arrived with hat support that hides hair no hat covers. \"Proteus\" is a plugin name - never translate it."
   },
   "HatCompat.InheritedTag.Tip": {
     "message": "Seule la partie qui masque les cheveux est remplacée. La coiffure conserve\nson propre aplatissement ; au pire, un chapeau traversera les cheveux, au\nlieu que des cheveux disparaissent sans qu'un chapeau les couvre.\n\nAnnuler restaure exactement ce que la coiffure contenait.",
@@ -1697,7 +1733,7 @@
   },
   "HatCompat.NoHead": {
     "message": "Proteus n'a pas pu déterminer où se trouve votre tête et a donc laissé cette coiffure intacte. Il lit le visage de votre personnage pour savoir où se place un chapeau ; sans cela, la ligne du chapeau ne serait qu'une supposition.",
-    "description": "Shown in the Hats section when Proteus cannot read the wearer's face model and so refuses to change the hairstyle. \"Proteus\" is a plugin name - never translate it."
+    "description": "Shown in the hats part of the Settings > Hair section when Proteus cannot read the wearer's face model and so refuses to change the hairstyle. \"Proteus\" is a plugin name - never translate it."
   },
   "HatCompat.Apply.NoHead": {
     "message": "Proteus n'a pas pu lire la tête de votre personnage, il n'a donc pas modifié cette coiffure.",
@@ -1705,7 +1741,7 @@
   },
   "HatCompat.UndoAll.Fmt": {
     "message": "Annuler les {0} coiffures de ce mod",
-    "description": "Button in the Hats section. {0} is how many hairstyle files Proteus has changed in this mod. Keep it short - it is a button label."
+    "description": "Button in the hats part of the Settings > Hair section. {0} is how many hairstyle files Proteus has changed in this mod. Keep it short - it is a button label."
   },
   "HatCompat.UndoAll.Tip": {
     "message": "Annuler restaure la coiffure que vous portez. Un mod de cheveux fournit\ngénéralement un modèle par race, donc une coiffure ajustée pour une autre race\nn'est pas celle que vous portez, et Annuler ne peut pas l'atteindre.\n\nCeci restaure toutes les coiffures que Proteus a modifiées dans ce mod.",
@@ -3195,10 +3231,6 @@
     "message": "Général",
     "description": ""
   },
-  "Settings.Section.HatCompat": {
-    "message": "Chapeaux",
-    "description": ""
-  },
   "Settings.Section.Hosting": {
     "message": "Hébergement",
     "description": ""
@@ -3683,6 +3715,26 @@
     "message": "Impossible de créer un modèle {0} ({1}) ; ajustement du modèle {2} tel quel.",
     "description": ""
   },
+  "Parts.Retarget.Shaping": {
+    "message": "Mise du modèle dans la forme pour laquelle les corps sont faits…",
+    "description": ""
+  },
+  "Parts.Retarget.ShapedDown.Fmt": {
+    "message": "Il n'y a pas de corps {0} entre lesquels ajuster, donc le modèle {0} est ajusté dans la forme {1}, comme le jeu le déforme, puis réenregistré en {0}.",
+    "description": ""
+  },
+  "Parts.Retarget.Bake.BendBack.Fmt": {
+    "message": "l'ajustement n'a pas pu être ramené à la forme {0} ({1})",
+    "description": ""
+  },
+  "Parts.Retarget.Bake.NoWearer": {
+    "message": "votre personnage n'a pas pu être lu",
+    "description": ""
+  },
+  "Parts.Retarget.Refused.Fmt": {
+    "message": "Impossible de réajuster ce modèle : {0}.",
+    "description": ""
+  },
   "Parts.Retarget.Cloth.Guess.Fmt": {
     "message": "D'après le tissu : probablement {0}, mais il peut juste être ample. À vérifier.",
     "description": ""
@@ -3785,6 +3837,14 @@
   },
   "Parts.Retarget.CutHidden.Tip": {
     "message": "Omet la nouvelle peau là où l'auteur a supprimé la sienne, en général sous le tissu.\nDésactivez si l'ajustement laisse des trous.",
+    "description": ""
+  },
+  "Parts.Retarget.Piercings": {
+    "message": "Ajouter les piercings du nouveau corps",
+    "description": ""
+  },
+  "Parts.Retarget.Piercings.Tip": {
+    "message": "Activé : les piercings du nouveau corps arrivent avec sa peau là où le vêtement montre cette peau.\nLes ongles sont toujours inclus.",
     "description": ""
   },
   "Parts.Retarget.CutForcedTip": {
@@ -4027,6 +4087,22 @@
     "message": "(vanilla)",
     "description": ""
   },
+  "WhatsNew.HairPort.Head": {
+    "message": "Les mods de coiffure faits pour une autre race s'adaptent désormais à la vôtre",
+    "description": "Release-notes section heading for hair mods fitted automatically from another race to the player's."
+  },
+  "WhatsNew.HairPort.Body": {
+    "message": "Beaucoup de mods de coiffure ne sont faits que pour une seule race : sur toute autre race, le jeu affiche alors sa propre coiffure à la place. Proteus plie désormais la coiffure du mod sur la tête de votre race et l'ajoute à la même option du même mod. Il passe en revue les mods de coiffure activés dans votre collection une première fois maintenant, puis à chaque fois qu'un mod est installé, activé ou modifié. Le chat indique les numéros des coiffures adaptées, pour que vous sachiez laquelle choisir. Les cheveux à physique gardent leur physique.\n\nCela continue de fonctionner avec Proteus désactivé et suit le mod. Désactivez la fonction, relancez une vérification ou annulez une coiffure adaptée dans Paramètres, Cheveux.",
+    "description": "Release-notes section on hair fitted automatically from another race. 'Settings, Hair' names the Settings tab and its Hair section - match Tab.Settings and Settings.Section.HairPort. 'Physics hair' is hair that sways with its own bones."
+  },
+  "WhatsNew.HairPortStudio.Head": {
+    "message": "Transposer une coiffure à toutes les races d'un coup",
+    "description": "Release-notes section heading for the Studio's tool that ports one hair mod to every race at once."
+  },
+  "WhatsNew.HairPortStudio.Body": {
+    "message": "Pour qu'un mod de coiffure fonctionne pour tout le monde, et pas seulement pour vous, ouvrez l'un de ses modèles de coiffure dans le Studio et utilisez « Transposer à toutes les races ». Proteus la plie en une seule fois sur chaque autre race du même sexe et ajoute les résultats à la même option du mod. Les races pour lesquelles l'auteur l'a faite ne sont pas touchées, et « Retirer les transpositions » les enlève toutes à nouveau.",
+    "description": "Release-notes section on the Studio's \"Port to all races\". 'Studio' is the tab name (Tab.Parts); the two quoted labels must match HairPort.Studio.Header and HairPort.Studio.Remove."
+  },
   "WhatsNew.AutoRefit.Body": {
     "message": "Proteus peut désormais ajuster tout seul l'équipement de torse, de jambes, de mains et de pieds à votre corps, dès que vous l'équipez. Il détermine pour quel mod de corps et quelle taille l'équipement a été fait, l'ajuste ainsi que les parties du corps qu'il couvre, enregistre la nouvelle taille dans le mod de l'équipement et l'active. Le chat vous prévient au début et à la fin.\n\nPour l'utiliser, ouvrez Paramètres › Ajustement au corps. Cochez « Ajuster l'équipement à mon corps quand je l'équipe », puis choisissez votre mod de corps et ses tailles de poitrine et de jambes pour chaque collection Penumbra ; les mains et les pieds sont assortis pour vous. L'équipement déjà porté s'ajuste avec « Ajuster ce que je porte maintenant », et l'équipement d'origine du jeu a sa propre case à cocher. Choisir « Original » ou une autre taille dans Penumbra est toujours respecté.",
     "description": ""
@@ -4036,8 +4112,8 @@
     "description": ""
   },
   "WhatsNew.IntroAll": {
-    "message": "Quatre choses à savoir sur Proteus. Cette fenêtre s'ouvre une fois, puis plus jamais.",
-    "description": ""
+    "message": "Quelques points à savoir sur Proteus. Cette fenêtre s'ouvre une fois, puis plus jamais.",
+    "description": "First line of the release-notes window for someone who has never seen it; every section follows."
   },
   "WhatsNew.IntroSince": {
     "message": "Du nouveau depuis la dernière fois que vous avez vu cette fenêtre. Elle s'ouvre une fois, puis plus jamais.",
@@ -4060,7 +4136,7 @@
     "description": ""
   },
   "WhatsNew.Hats.Body": {
-    "message": "« Adapter les coiffures aux chapeaux » est désormais activé par défaut. Proteus attend que vous portiez réellement un chapeau, puis plaque contre votre tête les cheveux que le chapeau recouvrirait, pour qu'il cesse de les traverser.\n\nCela modifie les fichiers du mod de cheveux lui-même, mais les originaux sont conservés : l'opération peut être annulée — ou désactivée entièrement — dans Paramètres, Chapeaux.",
+    "message": "« Adapter les coiffures aux chapeaux » est désormais activé par défaut. Proteus attend que vous portiez réellement un chapeau, puis plaque contre votre tête les cheveux que le chapeau recouvrirait, pour qu'il cesse de les traverser.\n\nCela modifie les fichiers du mod de cheveux lui-même, mais les originaux sont conservés : l'opération peut être annulée — ou désactivée entièrement — dans Paramètres, Cheveux.",
     "description": ""
   },
   "WhatsNew.Designs.Head": {
@@ -4763,6 +4839,14 @@
     "message": "Les chaussures et les gants gardent leurs propres pieds et mains ; seule la jambe ou le bras qu'ils atteignent est réajusté. Les chaussures reçoivent les tailles des jambes, les gants une option par corps, et tous deux rejoignent les tailles de buste ou de jambes de la tenue quand ils partagent un groupe.",
     "description": ""
   },
+  "SizeSet.Piercings": {
+    "message": "Ajouter les piercings des nouveaux corps",
+    "description": ""
+  },
+  "SizeSet.Piercings.Tip": {
+    "message": "Activé : les piercings de chaque corps arrivent avec sa peau là où la pièce montre cette peau. Les ongles sont toujours inclus.\nLes tailles déjà faites ne changent que si elles sont refaites.",
+    "description": ""
+  },
   "SizeSet.EndsUnreadable.Fmt": {
     "message": "{0} : son rig est illisible, le pied ou la main ne peut donc pas être gardé et aucune taille n'en a été faite.",
     "description": ""
@@ -4889,6 +4973,294 @@
   },
   "Chat.EffectUnplaced.Fmt": {
     "message": "[Proteus] L'effet animé de « {0} » n'est pas affiché : il lui faut un emplacement d'accessoire libre pour son support invisible. Libérez un emplacement de bague, bracelet ou collier.",
+    "description": ""
+  },
+  "HairPort.Refused.NoHead": {
+    "message": "le modèle de tête du jeu sur lequel l'ajuster n'a pas pu être lu",
+    "description": ""
+  },
+  "HairPort.Refused.Bones.Fmt": {
+    "message": "elle bouge avec des os que c{0:D4} n'a pas pour cette coiffure ({1})",
+    "description": ""
+  },
+  "HairPort.Refused.Unknown.Fmt": {
+    "message": "le déformeur racial ne sait pas comment déplacer {0}",
+    "description": ""
+  },
+  "HairPort.Refused.Fit.Fmt": {
+    "message": "elle ne tient pas sur la tête de c{0:D4} : {1:P0} s'enfonce dans le crâne, et sa distance au cuir chevelu s'écarte de {2:F0} mm de celle de l'original",
+    "description": ""
+  },
+  "HairPort.Refused.NotHair": {
+    "message": "ce n'est pas un modèle de coiffure",
+    "description": ""
+  },
+  "HairPort.Refused.NotInMod": {
+    "message": "le mod ne fournit pas cette coiffure",
+    "description": ""
+  },
+  "HairPort.Refused.Gender": {
+    "message": "les coiffures ne sont transposées qu'entre races du même sexe",
+    "description": ""
+  },
+  "HairPort.Refused.NoStyle.Fmt": {
+    "message": "c{0:D4} ne peut pas choisir la coiffure {1}",
+    "description": ""
+  },
+  "HairPort.Refused.SharedMaterial.Fmt": {
+    "message": "son matériau est celui que {0} lit pour sa propre coiffure {1} — transposez-la aussi vers eux",
+    "description": ""
+  },
+  "HairPort.Refused.SharerRefused.Fmt": {
+    "message": "elle partage son matériau avec c{0:D4}, vers qui la transposition a échoué : {1}",
+    "description": ""
+  },
+  "HairPort.Refused.NoMaterial.Fmt": {
+    "message": "son matériau {0} est introuvable",
+    "description": ""
+  },
+  "HairPort.Refused.NoOption.Fmt": {
+    "message": "l'option « {0} » n'est plus dans le mod",
+    "description": ""
+  },
+  "HairPort.Refused.Covered.Fmt": {
+    "message": "le mod fournit déjà {0} à cet endroit",
+    "description": ""
+  },
+  "HairPort.Undo.Nothing": {
+    "message": "Il n'y a ici aucune transposition de coiffure à annuler.",
+    "description": ""
+  },
+  "HairPort.DefaultData": {
+    "message": "les fichiers par défaut du mod",
+    "description": ""
+  },
+  "HairPort.Refused.Combining.Fmt": {
+    "message": "la coiffure est dans « {0} », un groupe combinatoire, que Proteus ne modifie pas",
+    "description": ""
+  },
+  "HairPort.Refused.Unreadable": {
+    "message": "le manifeste du mod n'a pas pu être lu",
+    "description": ""
+  },
+  "Chat.HairPort": {
+    "message": "[Proteus] Le mod de cette coiffure a été fait pour une autre race : Proteus l'a donc adaptée à la vôtre et l'a ajoutée au mod — toute personne affichée avec ce mod actif la voit désormais. Vous pouvez annuler cela, ou désactiver la fonction, dans /proteus > Paramètres > Cheveux.",
+    "description": ""
+  },
+  "Service.ModMeta.Unreadable.Fmt": {
+    "message": "Le manifeste de {0} n'a pas pu être lu ; il n'a donc pas été modifié.",
+    "description": ""
+  },
+  "Service.ModMeta.Combining.Fmt": {
+    "message": "« {0} » est un groupe combinatoire, dont Proteus ne modifie pas les fichiers.",
+    "description": ""
+  },
+  "Service.ModMeta.NoOption.Fmt": {
+    "message": "Le groupe « {0} » n'a aucune option nommée « {1} ».",
+    "description": ""
+  },
+  "HairPort.Auto.Label": {
+    "message": "Adapter les mods de coiffure faits pour une autre race",
+    "description": ""
+  },
+  "HairPort.Settings.None": {
+    "message": "La coiffure que vous portez n'a besoin d'aucun ajustement.",
+    "description": ""
+  },
+  "HairPort.Settings.Ported.Fmt": {
+    "message": "La coiffure {0} est adaptée à votre race dans {1}.",
+    "description": ""
+  },
+  "HairPort.Settings.Undo": {
+    "message": "Annuler",
+    "description": ""
+  },
+  "HairPort.Settings.Undo.Tip": {
+    "message": "Retire à nouveau la coiffure adaptée du mod. Proteus ne l'adaptera plus de\nlui-même ; vous pouvez toujours la transposer dans le Studio.",
+    "description": ""
+  },
+  "HairPort.Settings.UndoAll.Fmt": {
+    "message": "Annuler les {0} coiffures adaptées de ce mod",
+    "description": ""
+  },
+  "HairPort.Working": {
+    "message": "Traitement…",
+    "description": ""
+  },
+  "HairPort.Studio.Header": {
+    "message": "Transposer à toutes les races",
+    "description": ""
+  },
+  "HairPort.Studio.Intro": {
+    "message": "Plie cette coiffure sur chaque autre race du même sexe et ajoute les résultats à la même option de ce mod, pour qu'elle s'affiche sur tout le monde, quelle que soit sa race. Les races pour lesquelles vous l'avez faite vous-même ne sont pas touchées.",
+    "description": ""
+  },
+  "HairPort.Studio.Covered": {
+    "message": "fait par vous",
+    "description": ""
+  },
+  "HairPort.Studio.Ported": {
+    "message": "transposé",
+    "description": ""
+  },
+  "HairPort.Studio.Stale": {
+    "message": "obsolète",
+    "description": ""
+  },
+  "HairPort.Studio.NoStyle": {
+    "message": "ne peut pas choisir cette coiffure",
+    "description": ""
+  },
+  "HairPort.Studio.Open": {
+    "message": "non couvert",
+    "description": ""
+  },
+  "HairPort.Studio.Port": {
+    "message": "Transposer",
+    "description": ""
+  },
+  "HairPort.Studio.Porting.Fmt": {
+    "message": "Transposition… {0} sur {1} races",
+    "description": ""
+  },
+  "HairPort.Studio.Cancel": {
+    "message": "Annuler",
+    "description": ""
+  },
+  "HairPort.Studio.Cancelled": {
+    "message": "Annulé — rien n'a été écrit.",
+    "description": ""
+  },
+  "HairPort.Studio.Done.Fmt": {
+    "message": "{0} transposition(s) ajoutée(s) au mod.",
+    "description": ""
+  },
+  "HairPort.Studio.Nothing": {
+    "message": "Rien n'a été transposé.",
+    "description": ""
+  },
+  "HairPort.Studio.Failed.Fmt": {
+    "message": "Échec de la transposition : {0}",
+    "description": ""
+  },
+  "HairPort.Studio.Remove": {
+    "message": "Retirer les transpositions",
+    "description": ""
+  },
+  "HairPort.Studio.Removed.Fmt": {
+    "message": "{0} transposition(s) retirée(s).",
+    "description": ""
+  },
+  "HairPort.Studio.Reading": {
+    "message": "Lecture du mod…",
+    "description": ""
+  },
+  "Settings.Section.HairPort": {
+    "message": "Cheveux",
+    "description": ""
+  },
+  "HairPort.Refused.Folded.Fmt": {
+    "message": "une fois plié sur c{0:D4}, {1} de ses triangles seraient retournés",
+    "description": ""
+  },
+  "HairPort.Refused.Declined": {
+    "message": "sa transposition a été annulée, il est donc laissé tel quel",
+    "description": ""
+  },
+  "HairPort.Refused.NoPbd": {
+    "message": "le déformateur racial du jeu n'a pas pu être lu",
+    "description": ""
+  },
+  "HairPort.Declined.Fmt": {
+    "message": "La transposition de la coiffure {0} dans {1} a été annulée, elle est donc laissée telle quelle.",
+    "description": ""
+  },
+  "HairPort.Refused.RecordUnreadable": {
+    "message": "Le registre Proteus des coiffures transposées de ce mod (Proteus/hairport.json) n'a pas pu être lu, donc rien n'a été modifié.",
+    "description": ""
+  },
+  "HairPort.Auto.Tip2": {
+    "message": "Beaucoup de mods de cheveux ne sont faits que pour une race : sur toute autre race,\nle jeu affiche sa propre coiffure. Activé, Proteus plie la coiffure du mod sur la\ntête de votre race et l'ajoute à la même option du même mod — pour la coiffure que\nvous portez, et à l'avance pour les mods de cheveux activés dans votre collection :\nà l'activation de ce réglage, quand un mod est installé, activé ou modifié, et\nquand vous appuyez sur « Vérifier maintenant ».\n\nSeulement pour votre propre race, depuis des races du même sexe. Fonctionne même\nProteus désactivé, voyage avec le mod et se voit sur tous ceux affichés avec ce\nmod actif. Annulable ici.",
+    "description": ""
+  },
+  "HairPort.Scan.Starting": {
+    "message": "Vérification de vos mods de cheveux…",
+    "description": ""
+  },
+  "HairPort.Scan.Checking.Fmt": {
+    "message": "Vérification de vos mods de cheveux… {0} sur {1}",
+    "description": ""
+  },
+  "HairPort.Scan.None": {
+    "message": "Vos mods de cheveux n'ont pas encore été vérifiés pendant cette session.",
+    "description": ""
+  },
+  "HairPort.Scan.Checked.Fmt": {
+    "message": "{0} coiffure(s) de vos mods de cheveux sont adaptées à {1}.",
+    "description": ""
+  },
+  "HairPort.Scan.CheckNow": {
+    "message": "Vérifier maintenant",
+    "description": ""
+  },
+  "HairPort.Scan.CheckNow.Tip": {
+    "message": "Parcourir tous les mods de cheveux activés dans votre collection et adapter à\nvotre race ceux faits pour une autre.",
+    "description": ""
+  },
+  "HairPort.Scan.WearHint": {
+    "message": "Pour en porter une, choisissez ce numéro de coiffure pour votre personnage — Glamourer affiche le numéro.",
+    "description": ""
+  },
+  "HairPort.Scan.List.Fmt": {
+    "message": "Mods de cheveux pour votre race ({0})",
+    "description": ""
+  },
+  "HairPort.Scan.Row.Fmt": {
+    "message": "Coiffure {0} — {1} : {2}",
+    "description": ""
+  },
+  "HairPort.Scan.State.Fitted": {
+    "message": "adaptée",
+    "description": ""
+  },
+  "HairPort.Scan.State.Already": {
+    "message": "déjà adaptée",
+    "description": ""
+  },
+  "HairPort.Scan.State.Remade": {
+    "message": "adaptée de nouveau (le mod a changé)",
+    "description": ""
+  },
+  "HairPort.Scan.State.Undone": {
+    "message": "annulée",
+    "description": ""
+  },
+  "HairPort.Scan.State.Refused": {
+    "message": "non adaptée",
+    "description": ""
+  },
+  "HairPort.Scan.State.Refused.Fmt": {
+    "message": "non adaptée — {0}",
+    "description": ""
+  },
+  "HairPort.Scan.UndoChecked": {
+    "message": "Annuler tout ce que cette vérification a adapté",
+    "description": ""
+  },
+  "HairPort.Scan.Entry.Fmt": {
+    "message": "coiffure {0} ({1})",
+    "description": ""
+  },
+  "HairPort.Scan.More.Fmt": {
+    "message": " et {0} de plus",
+    "description": ""
+  },
+  "Chat.HairPortScan.Fmt": {
+    "message": "[Proteus] Adapté à votre race : {0}. Pour en porter une, choisissez ce numéro de coiffure pour votre personnage. Annulez-le ou désactivez ceci dans /proteus > Paramètres > Cheveux.",
+    "description": ""
+  },
+  "HairPort.Scan.UndoChecked.Confirm.Fmt": {
+    "message": "Cliquez de nouveau pour annuler définitivement {0} coiffure(s)",
     "description": ""
   }
 }

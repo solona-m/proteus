@@ -200,4 +200,45 @@ public class RacialModelBakeTests(ITestOutputHelper o)
         Assert.Equal(s.Shapes.Count, t.Shapes.Count);
         Assert.Equal(s.BoneNames, t.BoneNames);
     }
+
+    /// <summary>A port between races on one line is exactly the bake or unbake along it.</summary>
+    [LocalDataFact(LocalData.GameData)]
+    [Trait("Plan", "EDGE-hair-race-port-25")]
+    public void Port_down_or_up_the_line_equals_bake_or_unbake()
+    {
+        var (model, pbd, _) = Load();
+        var up = RacialModelBake.Port(model, 101, 201, pbd, _ => null, out string why);
+        Assert.True(up != null, why);
+        Assert.Equal(ModelPartReader.Read(RacialModelBake.Bake(model, 101, 201, pbd, _ => null, out _)!)!.Positions,
+                     ModelPartReader.Read(up!)!.Positions);
+
+        var down = RacialModelBake.Port(up!, 201, 101, pbd, _ => null, out why);
+        Assert.True(down != null, why);
+        var a = ModelPartReader.Read(RacialModelBake.Unbake(up!, 101, 201, pbd, _ => null, out _)!)!.Positions;
+        var b = ModelPartReader.Read(down!)!.Positions;
+        float worst = 0f;
+        for (int i = 0; i < a.Length; i++) worst = MathF.Max(worst, MathF.Abs(a[i] - b[i]));
+        Assert.True(worst < 1e-5f, $"{worst * 1000f:F4} mm apart");
+    }
+
+    /// <summary>Across lines, a port is an unbake to the race both fall to and a bake from there, in one pass.</summary>
+    [LocalDataFact(LocalData.GameData)]
+    [Trait("Plan", "EDGE-hair-race-port-25")]
+    public void Port_through_common_ancestor_equals_unbake_then_bake()
+    {
+        var (model, pbd, _) = Load();
+        // A Lalafell woman's (c1201 → c1101 → c0101) boots onto a Midlander woman (c0201 → c0101).
+        var lala = RacialModelBake.Bake(model, 101, 1201, pbd, _ => null, out string why)!;
+        Assert.True(lala != null, why);
+        var port = RacialModelBake.Port(lala, 1201, 201, pbd, _ => null, out why);
+        Assert.True(port != null, why);
+        var twoStep = RacialModelBake.Bake(RacialModelBake.Unbake(lala, 101, 1201, pbd, _ => null, out _)!, 101, 201, pbd,
+                                           _ => null, out _)!;
+        var a = ModelPartReader.Read(port!)!.Positions;
+        var b = ModelPartReader.Read(twoStep)!.Positions;
+        float worst = 0f;
+        for (int i = 0; i < a.Length; i++) worst = MathF.Max(worst, MathF.Abs(a[i] - b[i]));
+        o.WriteLine($"one pass against two: worst {worst * 1000f:F4} mm");
+        Assert.True(worst < 1e-5f, $"{worst * 1000f:F4} mm apart");
+    }
 }

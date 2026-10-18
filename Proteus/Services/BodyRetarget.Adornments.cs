@@ -23,6 +23,17 @@ internal static partial class BodyRetarget
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     /// <summary>
+    /// Of the body's adornments, its piercings: <c>_piercings</c>, <c>_neolithe_piercings_top</c>, <c>_navelpierce</c>,
+    /// <c>_nipplepierce</c>, <c>_genitalpierce</c> — every body mod installed names them so. A refit carries them only when
+    /// asked (see <see cref="AdornmentsOf"/>); a material naming both a nail and a piercing is a piercing.
+    /// </summary>
+    internal static bool IsBodyPiercingMaterial(string material)
+        => !SecondSkinWriter.IsBodySkinMaterial(material) && BodyPiercing.IsMatch(material);
+
+    private static readonly Regex BodyPiercing = new(@"(^|/)mt_c\d{4}b\d{4}_.*pierc",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>
     /// How far off the new body an adornment may stand and still be on it (20 mm): a stiletto nail runs well past the
     /// fingertip, a hanging ring well off the nipple. Beyond it a vertex says nothing about the skin it belongs to.
     /// </summary>
@@ -65,14 +76,18 @@ internal static partial class BodyRetarget
     /// <param name="cut">The skin cut (see <see cref="CutLike"/>), or null when the skin goes in whole.</param>
     /// <param name="cloth">The garment's cloth.</param>
     /// <param name="authored">Where the garment's own nails and piercings were.</param>
+    /// <param name="carryPiercings">Carry the body's piercings too (see <see cref="IsBodyPiercingMaterial"/>). Off leaves
+    /// them out, as every refit before build 1147 did; nails come in either way.</param>
     private static Adornments AdornmentsOf(byte[] body, IReadOnlySet<string>? hidden,
                                            Dictionary<int, HashSet<ushort>>? cut, ClothCrossings cloth,
-                                           PointGrid authored)
+                                           PointGrid authored, bool carryPiercings)
     {
         var none = new Adornments([], [], 0);
         if (ModelPartReader.Read(body) is not { } read) return none;
         var parts = Without(read, hidden);
-        var adorn = parts.Parts.Where(p => p.Island < 0 && IsBodyAdornmentMaterial(p.Material)).ToList();
+        var adorn = parts.Parts.Where(p => p.Island < 0 && IsBodyAdornmentMaterial(p.Material)
+                                           && (carryPiercings || !IsBodyPiercingMaterial(p.Material)))
+                               .ToList();
         if (adorn.Count == 0) return none;
 
         var spanOf = parts.MeshSpans.ToDictionary(s => s.Mesh);

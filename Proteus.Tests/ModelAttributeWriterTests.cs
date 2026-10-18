@@ -441,4 +441,25 @@ public class ModelAttributeWriterTests
         }
         return found;
     }
+
+    /// <summary>
+    /// A bone renamed keeps its index — so every vertex weighted to it now follows the bone of the new name — and every
+    /// name after it in the string block still reads right.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-race-port-4")]
+    public void RenameBone_moves_every_name_after_it()
+    {
+        var model = SyntheticModel.BuildSurface(["atr_x"],
+            HairPortFixtures.Sphere("/mt_a.mtrl", Vector3.Zero, 0.1f, [("j_mimi_l", 0.5f), ("j_kao", 0.5f)], rings: 3, segments: 4));
+        var before = SecondSkinWriter.Parse(model);
+        var renamed = ModelAttributeWriter.RenameBone(model, "j_mimi_l", "j_kao");
+        var after = SecondSkinWriter.Parse(renamed);
+
+        Assert.Equal(before.BoneNames.Select(b => b == "j_mimi_l" ? "j_kao" : b), after.BoneNames);
+        Assert.Equal(before.MatNames, after.MatNames);
+        Assert.Equal(before.AttrNames, after.AttrNames);
+        Assert.Equal(ModelPartReader.Read(model)!.Positions, ModelPartReader.Read(renamed)!.Positions);
+        Assert.Same(model, ModelAttributeWriter.RenameBone(model, "j_absent", "j_kao"));
+    }
 }

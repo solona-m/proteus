@@ -42,6 +42,9 @@ internal sealed class WhatsNewWindow : Window
     /// <summary>The generation that introduced the automatic body refit.</summary>
     internal const int AutoRefitNotes = 2;
 
+    /// <summary>The generation that introduced hair fitted from other races, on its own and in the Studio.</summary>
+    internal const int HairPortNotes = 3;
+
     /// <summary>
     /// Whether a section introduced in <paramref name="generation"/> is news to someone who has read up to
     /// <paramref name="read"/>. Someone who closed the first notes is shown only what came after them.
@@ -57,6 +60,12 @@ internal sealed class WhatsNewWindow : Window
         ImGui.TextWrapped(IsNew(FirstNotes, read) ? s.IntroAll : s.IntroSince);
         ImGui.Spacing();
 
+        // Newest first: someone who missed more than one release reads the latest at the top.
+        if (IsNew(HairPortNotes, read))
+        {
+            Section(s.HairPortHead, s.HairPortBody);
+            Section(s.HairPortStudioHead, s.HairPortStudioBody);
+        }
         if (IsNew(AutoRefitNotes, read)) Section(s.AutoRefitHead, s.AutoRefitBody);
         if (IsNew(FirstNotes, read))
         {

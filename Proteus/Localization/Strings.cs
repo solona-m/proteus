@@ -52,6 +52,7 @@ public static class Strings
     public static PartsStrings      Parts      { get; private set; } = new();
     public static PresetsStrings    Presets    { get; private set; } = new();
     public static HatCompatStrings  HatCompat  { get; private set; } = new();
+    public static HairPortStrings   HairPort   { get; private set; } = new();
     public static AutoRefitStrings  AutoRefit  { get; private set; } = new();
     public static SizeSetStrings    SizeSet    { get; private set; } = new();
     public static WhatsNewStrings   WhatsNew   { get; private set; } = new();
@@ -82,6 +83,7 @@ public static class Strings
         Parts      = new PartsStrings();
         Presets    = new PresetsStrings();
         HatCompat  = new HatCompatStrings();
+        HairPort   = new HairPortStrings();
         AutoRefit  = new AutoRefitStrings();
         SizeSet    = new SizeSetStrings();
         WhatsNew   = new WhatsNewStrings();
@@ -109,6 +111,13 @@ public sealed class SizeSetStrings
     public readonly string YasTip = Loc.Localize("SizeSet.Yas.Tip",
         "Rue, YAB and Tre come in Yet Another Skeleton versions. Neolithe and Bibo don't, and keep their plain sizes. A "
       + "piece already weighted to YAS always gets YAS sizes.");
+
+    public readonly string Piercings = Loc.Localize("SizeSet.Piercings", "Add the new bodies' piercings")
+                                     + "###sizeSetPiercings";
+
+    public readonly string PiercingsTip = Loc.Localize("SizeSet.Piercings.Tip",
+        "On: each body's piercings come in with its skin where the piece shows that skin. Nails always come along.\n"
+      + "Sizes already made change only when made again.");
 
     public readonly string Remake = Loc.Localize("SizeSet.Remake", "Make again the sizes Proteus added before")
                                   + "###sizeSetRemake";
@@ -216,15 +225,42 @@ public sealed class AutoRefitStrings
         "Unmodded gear has no mod to save into, so each piece gets a new mod of its own, named after the item and "
       + "the body.");
 
+    public readonly string Piercings = Loc.Localize("AutoRefit.Piercings.Label",
+        "Add my body's piercings to refitted gear") + "###autoRefitPiercings";
+
+    public readonly string PiercingsTip = Loc.Localize("AutoRefit.Piercings.Tip",
+        "Off: gear is refitted without your body mod's piercings. Nails always come along.\n"
+      + "Gear already refitted keeps what it was made with; undo and refit what you're wearing to change it.");
+
     public readonly string Collection = Loc.Localize("AutoRefit.Collection", "Collection");
 
     public readonly string CurrentFmt = Loc.Localize("AutoRefit.Collection.Current.Fmt", "{0} (current)");
 
     public readonly string Body = Loc.Localize("AutoRefit.Body", "Body");
 
-    public readonly string ChestSize = Loc.Localize("AutoRefit.ChestSize", "Chest size");
+    /// <summary>The parts table's first column: chest, legs, hands, feet.</summary>
+    public readonly string Part = Loc.Localize("AutoRefit.Part", "Part");
 
-    public readonly string LegsSize = Loc.Localize("AutoRefit.LegsSize", "Legs size");
+    public readonly string Size = Loc.Localize("AutoRefit.Size", "Size");
+
+    public readonly string PartsHint = Loc.Localize("AutoRefit.PartsHint",
+        "Each part can use its own body. The first body you pick is used for every part it has.");
+
+    /// <summary>{0} is the size hands or feet follow the chest or legs to.</summary>
+    public readonly string MatchedFmt = Loc.Localize("AutoRefit.Matched.Fmt", "Matched ({0})");
+
+    /// <summary>{0} is the size taken when the size worn cannot be told.</summary>
+    public readonly string MatchedWornFmt = Loc.Localize("AutoRefit.MatchedWorn.Fmt",
+        "Matched (the size you wear, else {0})");
+
+    public readonly string Match = Loc.Localize("AutoRefit.Match", "Match the chest or legs size");
+
+    public readonly string SizesPending = Loc.Localize("AutoRefit.SizesPending",
+        "Reading the sizes you wear in this body...");
+
+    /// <summary>{0} lists the parts given the body's first size.</summary>
+    public readonly string PrefilledFmt = Loc.Localize("AutoRefit.Prefilled.Fmt",
+        "The size you wear couldn't be read, so {0} got the body's first size. Check it above.");
 
     public readonly string Choose = Loc.Localize("AutoRefit.Choose", "Choose...");
 
@@ -241,9 +277,6 @@ public sealed class AutoRefitStrings
 
     public readonly string NoCollections = Loc.Localize("AutoRefit.NoCollections",
         "Penumbra isn't available, so its collections can't be listed.");
-
-    public readonly string HandsFeetFmt = Loc.Localize("AutoRefit.HandsFeet.Fmt",
-        "Hands and feet are matched to these sizes: {0} and {1}.");
 
     public readonly string EndsKept = Loc.Localize("AutoRefit.EndsKept",
         "Gloves and shoes keep the hands and feet they were made with; only the arms and legs they reach are refitted.");
@@ -296,11 +329,32 @@ public sealed class WhatsNewStrings
 
     /// <summary>For someone seeing the notes for the first time: every section is shown.</summary>
     public readonly string IntroAll = Loc.Localize("WhatsNew.IntroAll",
-        "Four things worth knowing about Proteus. This window opens once, and not again.");
+        "A few things worth knowing about Proteus. This window opens once, and not again.");
 
     /// <summary>For someone who closed the earlier notes: only what is new since then is shown.</summary>
     public readonly string IntroSince = Loc.Localize("WhatsNew.IntroSince",
         "Something new since you last saw this window. It opens once, and not again.");
+
+    public readonly string HairPortHead = Loc.Localize("WhatsNew.HairPort.Head",
+        "Hair mods made for another race now fit yours");
+
+    public readonly string HairPortBody = Loc.Localize("WhatsNew.HairPort.Body",
+        "Many hair mods are made for one race only, so on any other race the game shows its own hairstyle instead. "
+      + "Proteus now bends the mod's hairstyle onto your race's head and adds it to the same option of the same mod. "
+      + "It looks through the hair mods switched on in your collection once now, and again whenever one is "
+      + "installed, switched on or changed. Chat names the hairstyle numbers it fitted, so you know which to "
+      + "choose. Physics hair keeps its physics.\n\n"
+      + "It keeps working with Proteus turned off and travels with the mod. Switch it off, check again, or undo a "
+      + "fitted hairstyle under Settings, Hair.");
+
+    public readonly string HairPortStudioHead = Loc.Localize("WhatsNew.HairPortStudio.Head",
+        "Port a hairstyle to every race at once");
+
+    public readonly string HairPortStudioBody = Loc.Localize("WhatsNew.HairPortStudio.Body",
+        "To make a hair mod work for everyone, not only you, open one of its hair models in the Studio and use "
+      + "\"Port to all races\". Proteus bends it onto every other race of the same sex in one go and adds the "
+      + "results to the same option of the mod. Races the author made it for are left alone, and \"Remove ports\" "
+      + "takes them all back out.");
 
     public readonly string AutoRefitHead = Loc.Localize("WhatsNew.AutoRefit.Head",
         "Gear refits itself to your body");
@@ -333,7 +387,7 @@ public sealed class WhatsNewStrings
       + "then presses the hair the hat would cover flat against your head, so the hat stops going straight "
       + "through it.\n\n"
       + "It edits the hair mod's own files and keeps the originals, so it can be undone — or switched off "
-      + "altogether — under Settings, Hats.");
+      + "altogether — under Settings, Hair.");
 
     public readonly string DesignsHead = Loc.Localize("WhatsNew.Designs.Head",
         "Designs restore the whole look");
@@ -349,6 +403,90 @@ public sealed class WhatsNewStrings
     public readonly string Open = Loc.Localize("WhatsNew.Open", "Open Proteus") + "###whatsNewOpen";
 
     public readonly string Close = Loc.Localize("WhatsNew.Close", "Close") + "###whatsNewClose";
+}
+
+/// <summary>Hair porting: the Settings > Hair section and the Studio's "Port to all races".</summary>
+public sealed class HairPortStrings
+{
+    public readonly string Auto = Loc.Localize(
+        "HairPort.Auto.Label", "Fit hair mods made for another race") + "###hairPortAuto";
+
+    public readonly string AutoTip = Loc.Localize("HairPort.Auto.Tip2",
+        "Many hair mods are made for one race only, so on any other race the game\n" +
+        "shows its own hairstyle instead. When on, Proteus bends the mod's hairstyle\n" +
+        "onto your race's head and adds it to the same option of the same mod — for the\n" +
+        "hairstyle you put on, and ahead of time for the hair mods switched on in your\n" +
+        "collection: when this is switched on, when a mod is installed, switched on or\n" +
+        "changed, and when you press Check now.\n\n" +
+        "Only for your own race, from races of the same sex. It keeps working with\n" +
+        "Proteus off, travels with the mod, and shows for everyone drawn with that mod\n" +
+        "on. It can be undone here.");
+
+    public readonly string None = Loc.Localize("HairPort.Settings.None",
+        "The hairstyle you are wearing needs no fitting.");
+
+    public readonly string PortedFmt = Loc.Localize("HairPort.Settings.Ported.Fmt",
+        "Hairstyle {0} is fitted to your race in {1}.");
+
+    public readonly string Undo = Loc.Localize("HairPort.Settings.Undo", "Undo") + "###hairPortUndo";
+
+    public readonly string UndoTip = Loc.Localize("HairPort.Settings.Undo.Tip",
+        "Take the fitted hairstyle out of the mod again. Proteus will not fit it again by\n" +
+        "itself; you can still port it in the Studio.");
+
+    public readonly string UndoAllFmt = Loc.Localize("HairPort.Settings.UndoAll.Fmt",
+        "Undo all {0} fitted hairstyles in this mod") + "###hairPortUndoAll";
+
+    public readonly string Working = Loc.Localize("HairPort.Working", "Working…");
+
+    // ── Check of every hair mod ──────────────────────────────────────────────────────────────────────
+    public readonly string CheckingStart = Loc.Localize("HairPort.Scan.Starting", "Checking your hair mods…");
+    public readonly string CheckingFmt = Loc.Localize("HairPort.Scan.Checking.Fmt", "Checking your hair mods… {0} of {1}");
+    public readonly string NoCheck = Loc.Localize("HairPort.Scan.None",
+        "Your hair mods have not been checked in this session yet.");
+    public readonly string CheckedFmt = Loc.Localize("HairPort.Scan.Checked.Fmt",
+        "{0} hairstyle(s) from your hair mods are fitted to {1}.");
+    public readonly string CheckNow = Loc.Localize("HairPort.Scan.CheckNow", "Check now") + "###hairPortCheck";
+    public readonly string CheckNowTip = Loc.Localize("HairPort.Scan.CheckNow.Tip",
+        "Look through every hair mod switched on in your collection and fit the ones\nmade for another race to yours.");
+    public readonly string WearHint = Loc.Localize("HairPort.Scan.WearHint",
+        "To wear one, choose that hairstyle number for your character — Glamourer shows the number.");
+    public readonly string ListFmt = Loc.Localize("HairPort.Scan.List.Fmt", "Hair mods for your race ({0})");
+    public readonly string RowFmt = Loc.Localize("HairPort.Scan.Row.Fmt", "Hairstyle {0} — {1}: {2}");
+    public readonly string StateFitted = Loc.Localize("HairPort.Scan.State.Fitted", "fitted");
+    public readonly string StateAlready = Loc.Localize("HairPort.Scan.State.Already", "already fitted");
+    public readonly string StateRemade = Loc.Localize("HairPort.Scan.State.Remade", "fitted again (the mod changed)");
+    public readonly string StateUndone = Loc.Localize("HairPort.Scan.State.Undone", "undone");
+    public readonly string StateRefused = Loc.Localize("HairPort.Scan.State.Refused", "not fitted");
+    public readonly string StateRefusedFmt = Loc.Localize("HairPort.Scan.State.Refused.Fmt", "not fitted — {0}");
+    public readonly string UndoChecked = Loc.Localize("HairPort.Scan.UndoChecked",
+        "Undo everything this check fitted") + "###hairPortUndoChecked";
+    public readonly string UndoCheckedConfirmFmt = Loc.Localize("HairPort.Scan.UndoChecked.Confirm.Fmt",
+        "Click again to undo {0} hairstyle(s) for good");
+
+    // ── Studio ──────────────────────────────────────────────────────────────────────────────────────
+    public readonly string Header = Loc.Localize("HairPort.Studio.Header", "Port to all races") + "###hairPortStudio";
+
+    public readonly string Intro = Loc.Localize("HairPort.Studio.Intro",
+        "Bends this hairstyle onto every other race of the same sex and adds the results to the same option of this mod, " +
+        "so it shows on everyone whatever their race. Races you made it for yourself are left alone.");
+
+    public readonly string RaceCovered = Loc.Localize("HairPort.Studio.Covered", "made by you");
+    public readonly string RacePorted  = Loc.Localize("HairPort.Studio.Ported", "ported");
+    public readonly string RaceStale   = Loc.Localize("HairPort.Studio.Stale", "out of date");
+    public readonly string RaceNoStyle = Loc.Localize("HairPort.Studio.NoStyle", "cannot choose this hairstyle");
+    public readonly string RaceOpen    = Loc.Localize("HairPort.Studio.Open", "not covered");
+
+    public readonly string Port = Loc.Localize("HairPort.Studio.Port", "Port") + "###hairPortRun";
+    public readonly string PortingFmt = Loc.Localize("HairPort.Studio.Porting.Fmt", "Porting… {0} of {1} races");
+    public readonly string Cancel = Loc.Localize("HairPort.Studio.Cancel", "Cancel") + "###hairPortCancel";
+    public readonly string Cancelled = Loc.Localize("HairPort.Studio.Cancelled", "Cancelled — nothing was written.");
+    public readonly string DoneFmt = Loc.Localize("HairPort.Studio.Done.Fmt", "{0} port(s) added to the mod.");
+    public readonly string NothingToDo = Loc.Localize("HairPort.Studio.Nothing", "Nothing was ported.");
+    public readonly string FailedFmt = Loc.Localize("HairPort.Studio.Failed.Fmt", "Porting failed: {0}");
+    public readonly string Remove = Loc.Localize("HairPort.Studio.Remove", "Remove ports") + "###hairPortRemove";
+    public readonly string RemovedFmt = Loc.Localize("HairPort.Studio.Removed.Fmt", "{0} port(s) removed.");
+    public readonly string Reading = Loc.Localize("HairPort.Studio.Reading", "Reading the mod…");
 }
 
 /// <summary>The hat-compatibility panel.</summary>
@@ -839,7 +977,7 @@ public sealed class SettingsStrings
     public readonly string SecGeneral     = Loc.Localize("Settings.Section.General", "General");
     public readonly string SecOutput      = Loc.Localize("Settings.Section.Output", "Output");
     public readonly string SecSkinEffects = Loc.Localize("Settings.Section.SkinEffects", "Skin effects");
-    public readonly string SecHatCompat   = Loc.Localize("Settings.Section.HatCompat", "Hats");
+    public readonly string SecHairPort    = Loc.Localize("Settings.Section.HairPort", "Hair");
     public readonly string SecAutoRefit   = Loc.Localize("Settings.Section.AutoRefit", "Body refit");
 
     public readonly string SecHosting     = Loc.Localize("Settings.Section.Hosting", "Hosting");
@@ -2814,6 +2952,13 @@ public sealed class PartsStrings
         "Leave out the new skin where the author deleted theirs, usually under cloth.\n"
       + "Turn off if the refit leaves holes.");
 
+    public readonly string RetargetPiercings = Loc.Localize("Parts.Retarget.Piercings", "Add the new body's piercings")
+                                             + "###partsRetargetPiercings";
+
+    public readonly string RetargetPiercingsTip = Loc.Localize("Parts.Retarget.Piercings.Tip",
+        "On: the new body's piercings come in with its skin where the garment shows that skin.\n"
+      + "Nails always come along.");
+
     public readonly string RetargetCutForcedTip = Loc.Localize("Parts.Retarget.CutForcedTip",
         "Always on while the shoe keeps its own foot or the glove its own hand: otherwise the whole new legs or arms "
       + "would go in with it.");
@@ -2879,6 +3024,21 @@ public sealed class PartsStrings
 
     public readonly string RetargetBakeFailedFmt = Loc.Localize("Parts.Retarget.BakeFailed.Fmt",
         "Couldn't make a {0} model ({1}); refitting the {2} model as is.");
+
+    public readonly string RetargetShaping = Loc.Localize("Parts.Retarget.Shaping", "Bending the model into the shape the bodies are made for…");
+
+    public readonly string RetargetShapedDownFmt = Loc.Localize("Parts.Retarget.ShapedDown.Fmt",
+        "There are no {0} bodies to refit between, so the {0} model is refitted in the {1} shape, the way the game bends it, and saved back as {0}.");
+
+    public readonly string RetargetBendBackFmt = Loc.Localize("Parts.Retarget.Bake.BendBack.Fmt",
+        "the refit could not be bent back into the {0} shape ({1})");
+
+    /// <summary>A reason in the {1} of <see cref="RetargetBendBackFmt"/>.</summary>
+    public readonly string RetargetBakeNoWearer = Loc.Localize("Parts.Retarget.Bake.NoWearer",
+        "your character could not be read");
+
+    /// <summary>Shown alone in the Body size tool; {0} is a lower-case reason such as <see cref="RetargetBendBackFmt"/>.</summary>
+    public readonly string RetargetRefusedFmt = Loc.Localize("Parts.Retarget.Refused.Fmt", "Couldn't refit this model: {0}.");
 
     /// <summary>A reason in the {1} of <see cref="RetargetBakeFailedFmt"/>.</summary>
     public readonly string RetargetBakeReadBack = Loc.Localize("Parts.Retarget.Bake.ReadBack",

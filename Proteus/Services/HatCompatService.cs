@@ -214,22 +214,114 @@ public static class HatCompatService
     public static int PatchedCount(string modRoot) => ReadRecord(modRoot)?.Files.Count ?? 0;
 
     /// <summary>Whether Proteus has already fitted this exact file, and if so whether that patch is current.</summary>
-    /// <param name="stale">The patch was written by an older <see cref="HatCompatSolve.Version"/>.</param>
-    public static bool IsPatched(string modRoot, string rel, out bool stale)
-        => IsPatched(modRoot, rel, out stale, out _);
+    /// <param name="model">The file as it stands: a patch is stale only when THIS hairstyle's output changed since
+    /// (<see cref="HatCompatSolve.VersionFor"/>), so another race's patch is not refit for a change that never
+    /// reached it.</param>
+    /// <param name="stale">The patch was written by an older solve than this hairstyle needs.</param>
+    public static bool IsPatched(string modRoot, string rel, byte[] model, out bool stale)
+        => IsPatched(modRoot, rel, model, out stale, out _);
 
-    /// <inheritdoc cref="IsPatched(string, string, out bool)"/>
+    /// <inheritdoc cref="IsPatched(string, string, byte[], out bool)"/>
     /// <param name="replaced">The patch discarded the author's own hat support (see <see cref="Proposal.Replaced"/>).</param>
-    public static bool IsPatched(string modRoot, string rel, out bool stale, out bool replaced)
+    public static bool IsPatched(string modRoot, string rel, byte[] model, out bool stale, out bool replaced)
     {
         stale = false;
         replaced = false;
         rel = Rel(rel);
         var record = ReadRecord(modRoot);
         if (record?.Files.Contains(rel, StringComparer.OrdinalIgnoreCase) != true) return false;
-        stale = (record.Versions.TryGetValue(rel, out var v) ? v : 0) < HatCompatSolve.Version;
+        stale = (record.Versions.TryGetValue(rel, out var v) ? v : 0) < HatCompatSolve.VersionFor(model);
         replaced = record.Replaced.Contains(rel, StringComparer.OrdinalIgnoreCase);
         return true;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="model"/> still looks like Proteus's patch: it carries the shape or the mask a fit
+    /// writes. A file that carries neither was replaced since — an author's update, say — and restoring the backup
+    /// over it would put the OLD file back.
+    /// </summary>
+    public static bool LooksPatched(byte[] model)
+    {
+        try
+        {
+            return ModelAttributeWriter.DeclaresShape(model, HatShape)
+                || Array.IndexOf(SecondSkinWriter.Parse(model).AttrNames, ScalpAttribute) >= 0;
+        }
+        catch { return true; }   // unreadable: not evidence of an update
+    }
+
+    /// <summary>
+    /// Stop tracking one file whose patch is gone (see <see cref="LooksPatched"/>): delete its backup, then drop it from
+    /// the record, leaving the file itself as it is. The backup goes FIRST: a backup left behind is the OLD file, which
+    /// the next fit would keep (<see cref="Backup"/> never overwrites one) and the next undo would restore.
+    /// </summary>
+    /// <returns>Null when done; otherwise why not, with nothing a later fit could trip over left half-done.</returns>
+    public static string? Forget(string modRoot, string rel)
+    {
+        rel = Rel(rel);
+        var record = ReadRecord(modRoot);
+        if (record == null) return null;
+        var backup = Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, BackupSubdir, Native(rel));
+        try { if (File.Exists(backup)) File.Delete(backup); }
+        catch (Exception ex) { return $"the old backup {backup} could not be deleted: {ex.Message}"; }
+
+        record.Files.RemoveAll(f => f.Equals(rel, StringComparison.OrdinalIgnoreCase));
+        record.Hidden.Remove(rel);
+        record.Versions.Remove(rel);
+        record.Replaced.RemoveAll(f => f.Equals(rel, StringComparison.OrdinalIgnoreCase));
+        try
+        {
+            if (record.Files.Count == 0) File.Delete(Path.Combine(modRoot, SidecarDiscoveryService.SidecarSubdir, RecordFile));
+            else WriteRecord(modRoot, record);
+        }
+        catch (Exception ex) { return $"the record could not be updated: {ex.Message}"; }
+        return null;
+    }
+
+    /// <summary>What <see cref="RevertOrForget"/> did with one file.</summary>
+    public enum Undone
+    {
+        /// <summary>Not a file this mod's record names.</summary>
+        Nothing,
+        Restored,
+        /// <summary>Replaced since it was fitted: kept as found, its old backup let go.</summary>
+        Forgotten,
+        /// <summary><see cref="Revert"/> declined (a later feature's edit, a missing backup): the file is as it was.</summary>
+        Refused,
+        /// <summary>The old backup could not be let go: anything that follows would build on it.</summary>
+        Failed,
+    }
+
+    /// <summary>
+    /// Undo one patched file — unless it no longer looks patched (<see cref="LooksPatched"/>): then it was replaced
+    /// since, most likely by the author's update, and restoring the backup would put the OLD file back over it, so the
+    /// patch is let go instead. Per FILE, so each option of a hair pack is judged on its own.
+    /// </summary>
+    /// <param name="message">Why it failed, or the refusal <see cref="Revert"/> gave.</param>
+    public static Undone RevertOrForget(string modRoot, string rel, out string message)
+    {
+        message = "";
+        rel = Rel(rel);
+        if (ReadRecord(modRoot)?.Files.Contains(rel, StringComparer.OrdinalIgnoreCase) != true)
+        {
+            message = Loc.Localize("HatCompat.Revert.Nothing", "This mod has no Proteus hat-compatibility edits to undo.");
+            return Undone.Nothing;
+        }
+
+        byte[]? current = null;
+        try { current = File.ReadAllBytes(Path.Combine(modRoot, Native(rel))); }
+        catch (IOException) { /* gone or locked: let Revert speak for it */ }
+        catch (UnauthorizedAccessException) { }
+
+        if (current != null && !LooksPatched(current))
+        {
+            if (Forget(modRoot, rel) is { } why) { message = why; return Undone.Failed; }
+            return Undone.Forgotten;
+        }
+
+        var outcome = Revert(modRoot, rel);
+        message = outcome.Message;
+        return outcome.Ok ? Undone.Restored : Undone.Refused;
     }
 
     /// <summary>Work out what this hair needs, without writing anything.</summary>
@@ -428,6 +520,46 @@ public static class HatCompatService
             try { File.Delete(backup); } catch { /* harmless leftover */ }
 
         return new Outcome(true, "", restoredFrom.Count);
+    }
+
+    /// <summary>What <see cref="RevertOrForgetAll"/> did with a whole mod.</summary>
+    /// <param name="Ok">Something came back (restored or kept as updated) and nothing failed.</param>
+    /// <param name="Message">Why not, when not <paramref name="Ok"/>.</param>
+    /// <param name="Failed">An old backup could not be let go: the undo stopped there.</param>
+    public readonly record struct WholeUndo(bool Ok, int Restored, int Forgotten, string Message, bool Failed = false);
+
+    /// <summary>
+    /// Undo every file this mod's record names, each through <see cref="RevertOrForget"/> — all or nothing while a later
+    /// feature still holds its own backup of ANY of them, as the whole-mod undo always was (<see cref="ModelBackupOrder"/>):
+    /// restoring ours would silently undo that edit too. A file whose backup is gone is left and reported; one whose old
+    /// backup cannot be let go stops the undo.
+    /// </summary>
+    public static WholeUndo RevertOrForgetAll(string modRoot)
+    {
+        var files = ReadRecord(modRoot)?.Files.ToList() ?? [];
+        if (files.Count == 0)
+            return new WholeUndo(false, 0, 0, Loc.Localize("HatCompat.Revert.Nothing",
+                "This mod has no Proteus hat-compatibility edits to undo."));
+
+        foreach (var rel in files)
+            if (ModelBackupOrder.LaterFeature(modRoot, BackupSubdir, rel) is { } later)
+                return new WholeUndo(false, 0, 0, ModelBackupOrder.BlockedMessage(later));
+
+        int restored = 0, forgotten = 0;
+        var refusal = "";
+        foreach (var rel in files)
+        {
+            switch (RevertOrForget(modRoot, rel, out var message))
+            {
+                case Undone.Restored: restored++; break;
+                case Undone.Forgotten: forgotten++; break;
+                case Undone.Refused: refusal = message; break;
+                case Undone.Failed: return new WholeUndo(false, restored, forgotten, message, Failed: true);
+            }
+        }
+        return restored + forgotten == 0
+            ? new WholeUndo(false, 0, 0, refusal)
+            : new WholeUndo(true, restored, forgotten, "");
     }
 
     /// <summary>

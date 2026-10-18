@@ -105,11 +105,12 @@ public partial class CompositorService
         var affects = bases is not { Paths.Count: > 0 } ? surface : paths.Overlaps(bases.Paths);
 
         _bodyModCache[modDir] = (surface, affects, version, fingerprint);
-        lock (_bodyModConfigLock)
+        bool stale;
+        lock (config.Gate)
         {
             // Only save when a verdict moved: config.Save serialises everything, and a changed base set reclassifies
             // dozens of mods at once. A hash-only refresh is deliberately not "changed".
-            var stale = !config.KnownBodyMods.TryGetValue(modDir, out var prev)
+            stale = !config.KnownBodyMods.TryGetValue(modDir, out var prev)
                      || prev.IsBodyMod != surface
                      || prev.AffectsComposite != affects
                      || prev.Fingerprint != fingerprint;
@@ -120,8 +121,9 @@ public partial class CompositorService
                 BaseKeysHash     = version,
                 Fingerprint      = fingerprint,
             };
-            if (stale) config.Save();
         }
+        // Outside the gate, which is held only for the change itself.
+        if (stale) config.Save();
         return (surface, affects);
     }
 
@@ -133,8 +135,10 @@ public partial class CompositorService
     /// </summary>
     private void RecordCompositeBaseKeys(IEnumerable<string> baseKeys, int signature, bool authoritative)
     {
-        // Read-modify-write under the persisted copy's lock, so overlapping composites cannot lose a union.
-        lock (_bodyModConfigLock)
+        // Read-modify-write under the config's gate, so overlapping composites cannot lose a union.
+        BaseKeySet now;
+        bool replaced;
+        lock (config.Gate)
         {
             var prev = _compositeBaseKeys;
             var next = new HashSet<string>(baseKeys, StringComparer.OrdinalIgnoreCase);
@@ -155,11 +159,13 @@ public partial class CompositorService
             _compositeBaseKeys = new BaseKeySet(next, ComputeBaseKeysHash(next), sig);
             config.CachedCompositeBaseKeys = [.. next];
             config.CachedCompositeBaseSignature = sig;
-            config.Save();
-            log.Debug("[Proteus] composite base set {0}: {1} path(s), hash {2}, shape {3}",
-                retire ? "replaced (composite shape changed)" : "now", next.Count,
-                _compositeBaseKeys.Hash, sig);
+            now = _compositeBaseKeys;
+            replaced = retire;
         }
+        // Outside the gate, which is held only for the change itself.
+        config.Save();
+        log.Debug("[Proteus] composite base set {0}: {1} path(s), hash {2}, shape {3}",
+            replaced ? "replaced (composite shape changed)" : "now", now.Paths.Count, now.Hash, now.Signature);
     }
 
     // Order-independent, case-insensitive and stable across sessions (string.GetHashCode is randomised per process).

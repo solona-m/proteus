@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using Dalamud.Configuration;
 using Dalamud.Plugin;
+using Newtonsoft.Json;
 
 namespace Proteus;
 
@@ -48,9 +51,24 @@ public class BodyModCacheEntry
     public long Fingerprint { get; set; }
 }
 
+/// <summary>
+/// The plugin's settings. Threading rule: change a collection on it in place only on the framework thread, or on any
+/// other thread inside <see cref="Gate"/>; a save serialises every collection, on the framework thread, inside the gate
+/// (see <see cref="ConfigSaveScheduler"/>). Inside the gate: no I/O, no waiting, no IPC, no logging.
+/// </summary>
 [Serializable]
 public class Configuration : IPluginConfiguration
 {
+    /// <summary>Held by a save while it serialises, and by a worker while it changes a collection in place.</summary>
+    [JsonIgnore] internal object Gate { get; } = new();
+
+    [NonSerialized] private ConfigSaveScheduler? saver;
+
+    internal void AttachSaver(ConfigSaveScheduler scheduler) => saver = scheduler;
+
+    /// <summary>At unload: write what is pending, then drop every later save (a dev reload must not be overwritten).</summary>
+    internal void FlushAndCloseSaves() => saver?.FlushAndClose();
+
     /// <summary>
     /// Current config schema version. Bump whenever a STORED value has to be reinterpreted on load, and add the step
     /// to <see cref="Migrate"/>. A new config is stamped current, so it never runs old migrations.
@@ -207,9 +225,24 @@ public class Configuration : IPluginConfiguration
     public bool AutoHatCompat { get; set; } = true;
 
     /// <summary>
+    /// When the worn hairstyle is drawn as the game's own because its mod was made for another race only, port that
+    /// race's model to the wearer's and publish it from the same option of the same mod (<c>HairPortWatcher</c>) — and
+    /// do the same before it is worn for the player's hair mods (<c>HairPortScan</c>). On by default; a missing property
+    /// keeps it, so no migration. The chat notice fires per equip port, and once per check.
+    /// </summary>
+    public bool AutoHairPort { get; set; } = true;
+
+    /// <summary>
+    /// Whether a check of every hair mod in the player's collection (<c>HairPortScan</c>) has run to the end once. Until
+    /// it has, the first load with <see cref="AutoHairPort"/> on runs one; after that only switching the setting on,
+    /// "Check now", and a mod installed, switched on or changed start a check. False when missing, so an update runs it.
+    /// </summary>
+    public bool HairPortFullScanDone { get; set; }
+
+    /// <summary>
     /// Fit a hairstyle whose author already gave it hat support too, discarding theirs (<c>shp_hib</c> and
     /// <c>atr_kam</c>) for Proteus's own. Off by default: an author's hand-made press is usually the better one.
-    /// Switching it off in the Hats section puts the author's version back, from the backup, on every hairstyle it
+    /// Switching it off in Settings > Hair puts the author's version back, from the backup, on every hairstyle it
     /// replaced in every mod (<c>HatCompatWatcher.RestoreReplaced</c>).
     /// </summary>
     public bool ReplaceAuthoredHatCompat { get; set; }
@@ -282,6 +315,10 @@ public class Configuration : IPluginConfiguration
     /// kept. On by default; a config saved before it existed has no such key and keeps this default (no migration).</summary>
     public bool SizeSetEnds { get; set; } = true;
 
+    /// <summary>With <see cref="SizeSetBodies"/>, bring each new body's piercings in with its skin. Off by default; a
+    /// config saved before it existed has no such key and reads false (no migration). Nails come in either way.</summary>
+    public bool SizeSetPiercings { get; set; }
+
     /// <summary>
     /// Refit chest, legs, hands and feet gear onto the collection's preferred body as it is equipped — see
     /// <see cref="Services.AutoRefitWatcher"/>. Off by default: it writes into the gear's own mod.
@@ -293,6 +330,13 @@ public class Configuration : IPluginConfiguration
     /// separate switch because every unmodded piece put on makes a new mod.
     /// </summary>
     public bool AutoRefitVanilla { get; set; }
+
+    /// <summary>
+    /// With <see cref="AutoRefitEnabled"/>, bring the new body's piercings in with its skin. Off by default; a config
+    /// saved before it existed has no such key and reads false (no migration). Nails come in either way, and refits
+    /// already made keep what they were made with.
+    /// </summary>
+    public bool AutoRefitPiercings { get; set; }
 
     /// <summary>
     /// The body and sizes gear is refitted onto, per Penumbra collection, keyed by the collection's id
@@ -491,8 +535,15 @@ public class Configuration : IPluginConfiguration
         Version = CurrentVersion;
     }
 
-    public void Save()
-        => Plugin.PluginInterface.SavePluginConfig(this);
+    /// <summary>
+    /// Write the settings: now on the framework thread, else on its next tick. Never throws once the plugin has
+    /// attached its <see cref="ConfigSaveScheduler"/>; the caller is named in the log.
+    /// </summary>
+    public void Save([CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
+    {
+        if (saver != null) saver.Save($"{Path.GetFileName(file)}:{line}");
+        else Plugin.PluginInterface.SavePluginConfig(this);
+    }
 }
 
 /// <summary>One collection's preferred body for the automatic refit (<see cref="Configuration.AutoRefitByCollection"/>).</summary>
@@ -502,14 +553,111 @@ public class AutoRefitPreference
     /// <summary>The collection's name when the preference was set — shown when the collection itself is gone.</summary>
     public string CollectionName { get; set; } = "";
 
-    /// <summary>The body mod refitted onto, by folder. Empty means nothing is refitted.</summary>
-    public string BodyDir { get; set; } = "";
+    /// <summary>
+    /// The one body mod every part was refitted onto, by folder, before each part had its own — and what an older build
+    /// still reads. Applies to every part while none of <see cref="ChestBody"/>, <see cref="LegsBody"/>,
+    /// <see cref="HandsBody"/> and <see cref="FeetBody"/> is set; kept as the chest's body (else the first part set)
+    /// once they are. Read only through <see cref="BodyOf"/> and <see cref="HasAnyBody"/>: renamed from <c>BodyDir</c>,
+    /// its key in the file, so no reader of the old meaning compiles.
+    /// </summary>
+    [JsonProperty("BodyDir")]
+    public string LegacyBodyDir { get; set; } = "";
 
-    /// <summary>The chest size refitted onto. Hands and feet follow it (see <c>AutoRefitDecisions.Companion</c>).</summary>
+    /// <summary>The body mod each part is refitted onto, by folder; empty for none (see <see cref="BodyOf"/>).</summary>
+    public string ChestBody { get; set; } = "";
+
+    /// <inheritdoc cref="ChestBody"/>
+    public string LegsBody { get; set; } = "";
+
+    /// <inheritdoc cref="ChestBody"/>
+    public string HandsBody { get; set; } = "";
+
+    /// <inheritdoc cref="ChestBody"/>
+    public string FeetBody { get; set; } = "";
+
+    /// <summary>The chest size refitted onto.</summary>
     public BodySizeRef? Chest { get; set; }
 
     /// <summary>The legs size refitted onto.</summary>
     public BodySizeRef? Legs { get; set; }
+
+    /// <summary>The hands size refitted onto; null follows the chest or legs size (see
+    /// <c>AutoRefitTargets.Matched</c>).</summary>
+    public BodySizeRef? Hands { get; set; }
+
+    /// <summary>The feet size refitted onto; null follows the chest or legs size.</summary>
+    public BodySizeRef? Feet { get; set; }
+
+    /// <summary>
+    /// Parts whose size waits to be filled from what the character wears in their body (see
+    /// <c>AutoRefitDecisions.ApplySnapshot</c>), by slot: true where the body's first size stands in when nothing worn
+    /// can be read — the first body picked — false where the size is then left unchosen. Filled by the watcher on the
+    /// framework thread, so it lands with Settings closed. OrdinalIgnoreCase, populated in place.
+    /// </summary>
+    public Dictionary<string, bool> PendingFill { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly string[] Parts = ["_top", "_dwn", "_glv", "_sho"];
+
+    /// <summary>Any part has a body of its own: the legacy body stops applying.</summary>
+    private bool PerPart => ChestBody.Length > 0 || LegsBody.Length > 0 || HandsBody.Length > 0 || FeetBody.Length > 0;
+
+    /// <summary>The body mod <paramref name="slot"/> is refitted onto; empty for none.</summary>
+    public string BodyOf(string slot)
+        => !PerPart ? LegacyBodyDir : slot switch
+        {
+            "_top" => ChestBody,
+            "_dwn" => LegsBody,
+            "_glv" => HandsBody,
+            "_sho" => FeetBody,
+            _ => "",
+        };
+
+    /// <summary>Some part has a body to refit onto.</summary>
+    public bool HasAnyBody() => PerPart || LegacyBodyDir.Length > 0;
+
+    /// <summary>The size remembered for <paramref name="slot"/>; null for none, which for hands and feet is matched.</summary>
+    public BodySizeRef? SizeOf(string slot) => slot switch
+    {
+        "_top" => Chest,
+        "_dwn" => Legs,
+        "_glv" => Hands,
+        "_sho" => Feet,
+        _ => null,
+    };
+
+    /// <summary>Remember <paramref name="size"/> for <paramref name="slot"/>. A size chosen ends any wait to fill it.</summary>
+    public void SetSize(string slot, BodySizeRef? size)
+    {
+        switch (slot)
+        {
+            case "_top": Chest = size; break;
+            case "_dwn": Legs = size; break;
+            case "_glv": Hands = size; break;
+            case "_sho": Feet = size; break;
+            default: return;
+        }
+        PendingFill.Remove(slot);
+    }
+
+    /// <summary>
+    /// Refit <paramref name="slot"/> onto body <paramref name="dir"/>. A preference from before each part had its own
+    /// body has its one body copied to every part first, so the others keep it; <see cref="LegacyBodyDir"/> then follows
+    /// the chest's body, else the first part's, for an older build.
+    /// </summary>
+    public void SetBody(string slot, string dir)
+    {
+        if (!PerPart && LegacyBodyDir.Length > 0)
+            ChestBody = LegsBody = HandsBody = FeetBody = LegacyBodyDir;
+        switch (slot)
+        {
+            case "_top": ChestBody = dir; break;
+            case "_dwn": LegsBody = dir; break;
+            case "_glv": HandsBody = dir; break;
+            case "_sho": FeetBody = dir; break;
+            default: return;
+        }
+        LegacyBodyDir = ChestBody.Length > 0 ? ChestBody : Parts.Select(BodyOf).FirstOrDefault(d => d.Length > 0) ?? "";
+    }
 
     /// <summary>
     /// Every mod group (<c>"modDir|group"</c>) a refit has been switched on in, in this collection. Once there, a group
@@ -559,6 +707,39 @@ public class AutoRefitPreference
     /// and forgets it here. OrdinalIgnoreCase, populated in place.
     /// </summary>
     public HashSet<string> Declined { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Every member, its collections copied: what an auto refit worker reads while the framework thread changes the
+    /// live sets in place (see <see cref="Configuration"/>'s threading rule). <see cref="BodySizeRef"/> is replaced,
+    /// never changed in place, so it is shared.
+    /// </summary>
+    internal AutoRefitPreference Copy() => new()
+    {
+        CollectionName   = CollectionName,
+        LegacyBodyDir    = LegacyBodyDir,
+        ChestBody        = ChestBody,
+        LegsBody         = LegsBody,
+        HandsBody        = HandsBody,
+        FeetBody         = FeetBody,
+        Chest            = Chest,
+        Legs             = Legs,
+        Hands            = Hands,
+        Feet             = Feet,
+        PendingFill      = new(PendingFill, StringComparer.OrdinalIgnoreCase),
+        SwitchedOn       = new(SwitchedOn, StringComparer.OrdinalIgnoreCase),
+        AuthorSwitchedOn = new(AuthorSwitchedOn, StringComparer.OrdinalIgnoreCase),
+        Before           = CopyLists(Before),
+        HeldBefore       = CopyLists(HeldBefore),
+        InheritedBefore  = new(InheritedBefore, StringComparer.OrdinalIgnoreCase),
+        Declined         = new(Declined, StringComparer.OrdinalIgnoreCase),
+    };
+
+    private static Dictionary<string, List<string>> CopyLists(Dictionary<string, List<string>> from)
+    {
+        var to = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (k, v) in from) to[k] = [.. v];
+        return to;
+    }
 }
 
 /// <summary>

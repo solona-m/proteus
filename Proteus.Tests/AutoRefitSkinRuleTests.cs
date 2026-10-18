@@ -43,6 +43,53 @@ public class AutoRefitSkinRuleTests(ITestOutputHelper output)
         => ModelPartReader.Read(model)!.Parts.Where(p => p.Island < 0 && SecondSkinWriter.IsBodySkinMaterial(p.Material))
                           .Sum(p => p.Triangles.Length / 3);
 
+    private const string Piercings = "/mt_c0201b0001_piercings.mtrl";
+
+    /// <summary><see cref="Chest"/> with a ring on its first island, which <see cref="BareTop"/> draws.</summary>
+    private static byte[] PiercedChest(float z) => SyntheticModel.Build([],
+        new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0, Islands: 16, TrianglesPerIsland: 1, OffsetZ: z)),
+        new SyntheticModel.Mesh(Piercings, new SyntheticModel.Sub(0, OffsetZ: z + 0.001f)));
+
+    /// <summary>A top drawing 4 of the chest's 16 islands as its own skin, and no cloth over them.</summary>
+    private static byte[] BareTop() => SyntheticModel.Build([],
+        new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0, Islands: 4, TrianglesPerIsland: 1)),
+        new SyntheticModel.Mesh(Cloth, new SyntheticModel.Sub(0, TrianglesPerIsland: 4, OffsetY: 50f)));
+
+    [Theory]
+    [Trait("Plan", "AC-refit-piercings-option-4")]
+    [Trait("Plan", "EDGE-refit-piercings-option-11")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Auto_refit_carries_piercings_only_when_asked(bool gameGear)
+    {
+        // [AC-refit-piercings-option-4] A mod's top and the game's own alike: the setting, not the skin rule, decides.
+        // [EDGE-refit-piercings-option-11] The game's own, its hidden skin cut and tucked, follows it the same way.
+        var bytes = BareTop();
+        var garment = ModelPartReader.Read(bytes)!;
+        var off = RefitCore.PlanRefit(garment, bytes, [Raised(PiercedChest)], "_top", across: true, gameGear, out _);
+        var on = RefitCore.PlanRefit(garment, bytes, [Raised(PiercedChest)], "_top", across: true, gameGear, out _,
+                                     carryPiercings: true);
+        output.WriteLine($"off {off.Report.Swap}; on {on.Report.Swap}");
+        Assert.Equal(0, off.Report.Swap!.Value.Adorned);
+        Assert.True(on.Report.Swap!.Value.Adorned > 0, $"no ring came in: {on.Report.Swap}");
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-refit-piercings-option-9")]
+    public void Each_plan_uses_the_value_it_was_given()
+    {
+        // [EDGE-refit-piercings-option-9] Nothing is held between refits: on, then off, is the same off as ever.
+        var bytes = BareTop();
+        var garment = ModelPartReader.Read(bytes)!;
+        var on = RefitCore.PlanRefit(garment, bytes, [Raised(PiercedChest)], "_top", across: true, gameGear: false, out _,
+                                     carryPiercings: true);
+        var off = RefitCore.PlanRefit(garment, bytes, [Raised(PiercedChest)], "_top", across: true, gameGear: false, out _,
+                                      carryPiercings: false);
+        var fresh = RefitCore.PlanRefit(garment, bytes, [Raised(PiercedChest)], "_top", across: true, gameGear: false, out _);
+        Assert.NotEqual(on.Report.Swap!.Value.Adorned, off.Report.Swap!.Value.Adorned);
+        Assert.Equal(fresh.Model, off.Model);
+    }
+
     [Fact]
     [Trait("Plan", "AC-vanilla-refit-cut-skin-5")]
     [Trait("Plan", "EDGE-vanilla-refit-cut-skin-1")]

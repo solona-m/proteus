@@ -149,6 +149,14 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
                 racesFor = null;
             }
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(s.EndsTip);
+
+            bool piercings = config.SizeSetPiercings;
+            if (ImGui.Checkbox(s.Piercings, ref piercings))
+            {
+                config.SizeSetPiercings = piercings;
+                config.Save();
+            }
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(s.PiercingsTip);
             ImGui.Checkbox(s.Remake, ref remake);
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(s.RemakeTip);
         }
@@ -232,7 +240,8 @@ internal sealed class SizeSetPanel(PenumbraBridge penumbra, UVRemapService uvRem
             foreach (string race in keys.Select(k => SupportedBodies.Of(k, "_top", false)?.Race).OfType<string>().Distinct())
                 gameBodies[race] = VanillaBodyCatalog.Read(race, readGameFile);
         var request = new SizeSetRefit.Request(modRoot, keys, config.SizeSetYas, remake, [], readGameFile,
-                                               config.SizeSetEnds, race => gameBodies.GetValueOrDefault(race));
+                                               config.SizeSetEnds, race => gameBodies.GetValueOrDefault(race),
+                                               config.SizeSetPiercings);
         cancel = new CancellationTokenSource();
         var ct = cancel.Token;
         runningFor = modDir;

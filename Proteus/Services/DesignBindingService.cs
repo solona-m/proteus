@@ -649,7 +649,7 @@ public class DesignBindingService : IDisposable
     {
         if (config.LastActiveDesignId == id) return;
         config.LastActiveDesignId = id;
-        compositor.SaveConfig();
+        config.Save();
         log.Debug("[Proteus] design-binding: persisted active design = {0}", id?.ToString() ?? "(none)");
     }
 

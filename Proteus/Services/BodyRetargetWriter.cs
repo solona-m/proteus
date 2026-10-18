@@ -73,8 +73,6 @@ internal static class BodyRetargetWriter
     /// </summary>
     public const string OriginalOption = "Original";
 
-    private static readonly object WriteLock = new();
-
     internal sealed class Record
     {
         /// <summary>The group Proteus made most recently. Kept for records written before each entry named its own.</summary>
@@ -141,6 +139,19 @@ internal static class BodyRetargetWriter
         public Dictionary<string, string>? Targets { get; set; }
 
         /// <summary>
+        /// The body mod each of <see cref="Targets"/> went onto, by the same key, when they were not all one — a dress's
+        /// chest on one body mod and its legs on another (see <see cref="AutoRefitPreference.BodyOf"/>). Null when they
+        /// were all <see cref="BodyMod"/>, which is every refit of one body and every entry written before; left out of
+        /// the file then, so such a record reads exactly as it always did.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public Dictionary<string, string>? TargetBodies { get; set; }
+
+        /// <summary>The body mod the part recorded under <paramref name="key"/> went onto.</summary>
+        public string BodyOf(string key)
+            => TargetBodies != null && TargetBodies.TryGetValue(key, out string? dir) ? dir : BodyMod;
+
+        /// <summary>
         /// The other piece of its outfit the refit was kept outside (see <see cref="BodyRetarget.KeepOutfitOrder"/>), by
         /// the slot it is worn in: its file in the mod and the start of its content's hash, "rel|sha8" — so a jacket laid
         /// over one refit of its bra is told from one laid over another, even one remade in place. Null for a refit with
@@ -151,7 +162,10 @@ internal static class BodyRetargetWriter
 
     /// <summary>Where a refit came from and went, as an entry records it (see <see cref="Entry.SourceDir"/>).</summary>
     /// <param name="Targets">The target body's file per slot refitted.</param>
-    internal sealed record Provenance(string SourceDir, string SourceRel, IReadOnlyDictionary<string, string> Targets);
+    /// <param name="TargetBodies">The body each of those went onto, when not all one (see
+    /// <see cref="Entry.TargetBodies"/>); null for one.</param>
+    internal sealed record Provenance(string SourceDir, string SourceRel, IReadOnlyDictionary<string, string> Targets,
+                                      IReadOnlyDictionary<string, string>? TargetBodies = null);
 
     /// <param name="Group">The group written.</param>
     /// <param name="Option">The option added.</param>
@@ -312,7 +326,7 @@ internal static class BodyRetargetWriter
                                Provenance? provenance = null, bool sourceFilesWin = false)
     {
         string names = string.Join(", ", refits.Select(r => r.Option));
-        lock (WriteLock)
+        lock (ModManifestLock.Gate)
         {
             try
             {
@@ -650,7 +664,7 @@ internal static class BodyRetargetWriter
     /// </summary>
     public static Outcome Undo(string modRoot, string groupName, string optionName)
     {
-        lock (WriteLock)
+        lock (ModManifestLock.Gate)
         {
             try
             {
@@ -805,6 +819,9 @@ internal static class BodyRetargetWriter
             BodyMod = bodyMod, From = from, To = to, Auto = auto, FromGame = fromGame,
             SourceDir = provenance?.SourceDir, SourceRel = provenance?.SourceRel,
             Targets = provenance == null ? null : new Dictionary<string, string>(provenance.Targets, StringComparer.Ordinal),
+            TargetBodies = provenance?.TargetBodies == null
+                ? null
+                : new Dictionary<string, string>(provenance.TargetBodies, StringComparer.Ordinal),
             Layers = layers == null ? null : new Dictionary<string, string>(layers, StringComparer.Ordinal),
         });
         SaveRecord(modRoot, record);
@@ -845,6 +862,9 @@ internal static class BodyRetargetWriter
                 BodyMod = e.BodyMod, From = e.From, To = e.To, Auto = e.Auto, FromGame = e.FromGame,
                 SourceDir = e.SourceDir, SourceRel = e.SourceRel,
                 Targets = e.Targets == null ? null : new Dictionary<string, string>(e.Targets, StringComparer.Ordinal),
+                TargetBodies = e.TargetBodies == null
+                    ? null
+                    : new Dictionary<string, string>(e.TargetBodies, StringComparer.Ordinal),
                 Layers = e.Layers == null ? null : new Dictionary<string, string>(e.Layers, StringComparer.Ordinal),
             });
         }

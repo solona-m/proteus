@@ -617,6 +617,36 @@ public class BodyRetargetWriterTests : IDisposable
     private static readonly object Eqdp = PenumbraManipulations.EqdpManipulation("0201", "Feet", 6023);
 
     [Fact]
+    [Trait("Plan", "AC-racial-gear-upscale-4")]
+    [Trait("Plan", "EDGE-racial-gear-upscale-13")]
+    public void A_down_route_save_redirects_the_racial_path_and_undo_leaves_nothing()
+    {
+        // Something already in the mod, so the refit's group is seen to go after it, not before.
+        const string auri = "chara/equipment/e0258/model/c1401e0258_dwn.mdl";
+        const string group = "Body — c1401e0258_dwn";
+        BodyRetargetWriter.Save(root, Group, "Neolithe SFW L", GamePath, [1], "Neolithe", "SFW M", "SFW L");
+
+        var route = RefitCore.Route(auri, 1401, code => code == 201, code => code == 201, [], null);
+        Assert.True(route.Down);
+        string path = route.SavePath(auri);
+        var outcome = BodyRetargetWriter.Save(root, group, path, "Bibo+", "Vanilla",
+                                              [new BodyRetargetWriter.Refit("Bibo+ Large", [7], "Large")],
+                                              manipulations: route.Eqdp(path) is { } eqdp ? [eqdp] : null);
+        Assert.True(outcome.Ok, outcome.Message);
+
+        var options = PenumbraModMeta.TryReadFileOptions(root, group)!;
+        var refit = options.Single(o => o.Name == "Bibo+ Large");
+        Assert.Equal(new[] { auri }, refit.Files.Keys);
+        Assert.Null(refit.Manipulations);
+        var groups = PenumbraModMeta.TryReadGroups(root)!.Select(g => g.Name).ToList();
+        Assert.True(groups.IndexOf(group) > groups.IndexOf(Group), "the refit's group goes after the mod's own");
+
+        Assert.True(BodyRetargetWriter.Undo(root, group, "Bibo+ Large").Ok);
+        Assert.DoesNotContain(PenumbraModMeta.TryReadFileOptions(root, group) ?? [],
+                              o => o.Name == "Bibo+ Large" || o.Manipulations is { Count: > 0 });
+    }
+
+    [Fact]
     public void A_baked_refit_carries_its_EQDP_entry_and_Original_carries_none()
     {
         var outcome = BodyRetargetWriter.Save(root, Group, GamePath, "Neolithe", "SFW M",

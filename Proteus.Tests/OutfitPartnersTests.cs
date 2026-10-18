@@ -134,6 +134,29 @@ public class OutfitPartnersTests
     }
 
     [Fact]
+    [Trait("Plan", "EDGE-auto-refit-part-bodies-15")]
+    public void A_partner_on_another_body_with_the_same_file_is_refused()
+    {
+        string root = NewMod();
+        var notes = new List<string>();
+        try
+        {
+            Save(root, "Rue L", Top, Made());   // recorded onto "rue"
+            string rel = FileOf(root, "Rue L", Top);
+            var record = BodyRetargetWriter.ReadRecord(root);
+            Assert.NotNull(OutfitPartners.ForAutoRefit(root, Sibling, "_top", Pick(), Onto, root, Top, rel, null, record,
+                                                       notes.Add, targetDir: "rue"));
+            // A fork naming its file as Rue does: the same file on another body is another size.
+            Assert.Null(OutfitPartners.ForAutoRefit(root, Sibling, "_top", Pick(), Onto, root, Top, rel, null, record,
+                                                    notes.Add, targetDir: "LavaBod+ LaRue"));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     [Trait("Plan", "AC-outfit-fit-3")]
     [Trait("Plan", "EDGE-outfit-fit-10")]
     [Trait("Plan", "EDGE-outfit-fit-11")]

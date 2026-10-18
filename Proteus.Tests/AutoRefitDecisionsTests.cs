@@ -451,7 +451,7 @@ public class AutoRefitDecisionsTests
         var config = new Configuration { AutoRefitEnabled = true };
         config.AutoRefitByCollection[id.ToString("D")] = new AutoRefitPreference
         {
-            BodyDir = "Rue",
+            LegacyBodyDir = "Rue",
             Chest = new BodySizeRef { Rel = "chest/m.mdl", Name = "M" },
         };
         config.AutoRefitByCollection[id.ToString("D")].SwitchedOn.Add(AutoRefitDecisions.GroupKey("Old Thing", "Top"));
@@ -466,7 +466,7 @@ public class AutoRefitDecisionsTests
         Assert.True(back.AutoRefitEnabled);
         Assert.False(back.AutoRefitVanilla);
         Assert.True(back.AutoRefitByCollection.TryGetValue(id.ToString("D").ToUpperInvariant(), out var pref));
-        Assert.Equal("Rue", pref!.BodyDir);
+        Assert.Equal("Rue", pref!.BodyOf("_top"));
         Assert.Equal("chest/m.mdl", pref.Chest!.Rel);
         Assert.Null(pref.Legs);
         Assert.Contains(AutoRefitDecisions.GroupKey("old thing", "TOP"), pref.SwitchedOn);

@@ -104,7 +104,7 @@ public partial class CompositorService
         }
 
         // Not an overlay mod: the only other thing we react to is a body mod, whose change can leave the cached
-        // snapshot wrong. Its detection does file I/O + config.Save, so run it off the framework thread.
+        // snapshot wrong. Its detection reads the mod's files, so run it off the framework thread.
         EvaluateSurfaceModOffThread(modDir, $"ModSettingChanged:{change}:{modDir}", force: !ambient,
             checkBasesMoved: true, deferWhileHeld: own);
     }
@@ -188,12 +188,13 @@ public partial class CompositorService
         // A reinstall keeps the name; a remembered "was disabled" must not suppress the new install's first event.
         _knownDisabled.TryRemove(modDir, out _);
 
-        // Drop the cached classification off the framework thread — config.Save is a disk write.
+        // Drop the cached classification; the change takes the config's gate, the save goes to the framework thread.
         Task.Run(() =>
         {
             _bodyModCache.TryRemove(modDir, out _);
-            lock (_bodyModConfigLock)
-                if (config.KnownBodyMods.Remove(modDir)) config.Save();
+            bool removed;
+            lock (config.Gate) removed = config.KnownBodyMods.Remove(modDir);
+            if (removed) config.Save();
         });
 
         if (contributedNothing)
@@ -470,7 +471,7 @@ public partial class CompositorService
         {
             _activeMtrlSnapshot = snapshot;
             _activeMtrlSnapshotDirty = false;
-            // In-memory only: no disk write on the framework thread. Persisted by TriggerRecomposite's next config.Save().
+            // In-memory only; persisted by TriggerRecomposite's next config.Save().
             config.CachedActiveMaterialPaths = snapshot.ToList();
 
             // Did the gear the second skin cuts its shells from change? Equipping fires no mod or design event.

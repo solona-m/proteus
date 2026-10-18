@@ -3,12 +3,40 @@
     "message": "체형",
     "description": ""
   },
-  "AutoRefit.BodyMissing.Fmt": {
-    "message": "여기서 고른 체형 \"{0}\"이(가) 더 이상 설치되어 있지 않습니다. 다른 체형을 고르세요.",
+  "AutoRefit.Part": {
+    "message": "부위",
     "description": ""
   },
-  "AutoRefit.ChestSize": {
-    "message": "가슴 크기",
+  "AutoRefit.Size": {
+    "message": "크기",
+    "description": ""
+  },
+  "AutoRefit.PartsHint": {
+    "message": "부위마다 다른 몸을 쓸 수 있습니다. 처음 고른 몸은 그 몸에 있는 모든 부위에 쓰입니다.",
+    "description": ""
+  },
+  "AutoRefit.Matched.Fmt": {
+    "message": "맞춤 ({0})",
+    "description": ""
+  },
+  "AutoRefit.MatchedWorn.Fmt": {
+    "message": "맞춤 (입고 있는 크기, 없으면 {0})",
+    "description": ""
+  },
+  "AutoRefit.Match": {
+    "message": "가슴 또는 다리 크기에 맞추기",
+    "description": ""
+  },
+  "AutoRefit.SizesPending": {
+    "message": "이 몸에서 입고 있는 크기를 읽는 중...",
+    "description": ""
+  },
+  "AutoRefit.Prefilled.Fmt": {
+    "message": "입고 있는 크기를 읽을 수 없어 {0}에 몸의 첫 번째 크기를 넣었습니다. 위에서 확인하세요.",
+    "description": ""
+  },
+  "AutoRefit.BodyMissing.Fmt": {
+    "message": "여기서 고른 체형 \"{0}\"이(가) 더 이상 설치되어 있지 않습니다. 다른 체형을 고르세요.",
     "description": ""
   },
   "AutoRefit.Choose": {
@@ -43,20 +71,12 @@
     "message": "체형 모드를 찾는 중…",
     "description": ""
   },
-  "AutoRefit.HandsFeet.Fmt": {
-    "message": "손과 발은 이 크기에 맞춰 자동으로 고릅니다: {0}, {1}.",
-    "description": ""
-  },
   "AutoRefit.Intro": {
     "message": "몸통·다리·손·발 장비나 몸을 덮는 장신구(목걸이에 넣은 재킷 등)를 착용하면, Proteus가 어떤 바디용으로 만들어졌는지 알아내 여기서 고른 바디와 사이즈에 맞추고 새 사이즈를 켭니다. Penumbra 컬렉션마다 따로 고를 수 있습니다.",
     "description": ""
   },
   "AutoRefit.ItemInMod.Fmt": {
     "message": "{0} ({1})",
-    "description": ""
-  },
-  "AutoRefit.LegsSize": {
-    "message": "다리 크기",
     "description": ""
   },
   "AutoRefit.NoBodies": {
@@ -113,6 +133,14 @@
   },
   "AutoRefit.Vanilla.Tip": {
     "message": "모드가 없는 장비는 저장할 모드가 없으므로, 장비마다 아이템과 체형 이름을 딴 새 모드가 따로 만들어집니다.",
+    "description": ""
+  },
+  "AutoRefit.Piercings.Label": {
+    "message": "맞춘 장비에 내 체형의 피어싱 추가",
+    "description": ""
+  },
+  "AutoRefit.Piercings.Tip": {
+    "message": "끔: 체형 모드의 피어싱 없이 장비를 맞춥니다. 손톱은 항상 함께 들어갑니다.\n이미 맞춘 장비는 만들어진 그대로 유지됩니다. 바꾸려면 입고 있는 장비의 맞추기를 되돌린 뒤 다시 맞추세요.",
     "description": ""
   },
   "AutoRefit.Working": {
@@ -307,6 +335,10 @@
     "message": "[Proteus] 이 컬렉션의 자동 맞춤용으로 고른 체형 \"{0}\"이(가) 설치되어 있지 않아 아무것도 맞추지 않습니다. /proteus > 설정 에서 다른 체형을 고르세요.",
     "description": ""
   },
+  "Chat.AutoRefit.PartBodyMissing.Fmt": {
+    "message": "[Proteus] 이 컬렉션에서 {0}용으로 고른 체형 \"{1}\"이(가) 설치되어 있지 않아 {2}을(를) 그 체형에 맞추지 않았습니다. /proteus > 설정 에서 다른 체형을 고르세요.",
+    "description": ""
+  },
   "Chat.AutoRefit.Done.Fmt": {
     "message": "[Proteus] {0}이(가) 이제 {1}에 맞습니다. {3}에 \"{2}\"(으)로 저장하고 켰습니다.",
     "description": ""
@@ -341,6 +373,10 @@
   },
   "Chat.AutoRefit.PartsLeftOut.Fmt": {
     "message": "다음 부위는 함께 맞추지 못해 원래 크기를 유지합니다: {0}.",
+    "description": ""
+  },
+  "Chat.AutoRefit.MixedKept.Fmt": {
+    "message": "{0}용으로 만들어져서 {1} 부위도 {1}에 고른 몸 대신 {0}에 맞췄습니다.",
     "description": ""
   },
   "Chat.AutoRefit.SkinOnly.Fmt": {
@@ -380,8 +416,8 @@
     "description": ""
   },
   "Chat.HatCompat": {
-    "message": "[Proteus] Proteus가 이 헤어스타일을 모자에 맞게 수정했습니다. /proteus > 설정 > 모자 에서 되돌리거나 이 기능을 끌 수 있습니다.",
-    "description": "Chat line shown once ever, the first time Proteus makes a hairstyle fit under hats by itself. Do NOT translate \"Proteus\" or the command \"/proteus\". \"Settings\" and \"Hats\" name a tab and a section in Proteus' own window - use the same words you used for \"Tab.Settings\" and \"Settings.Section.HatCompat\"."
+    "message": "[Proteus] Proteus가 이 헤어스타일을 모자에 맞게 수정했습니다. /proteus > 설정 > 헤어 에서 되돌리거나 이 기능을 끌 수 있습니다.",
+    "description": "Chat line shown once ever, the first time Proteus makes a hairstyle fit under hats by itself. Do NOT translate \"Proteus\" or the command \"/proteus\". \"Settings\" and \"Hair\" name a tab and a section in Proteus' own window - use the same words you used for \"Tab.Settings\" and \"Settings.Section.HairPort\"."
   },
   "Chat.MirrorRepo": {
     "message": "[Proteus] 이전 플러그인 저장소 URL로 설치되었습니다. /xlplugins > Experimental에서 https://dl.solona.info/repo.json 으로 변경하면 업데이트가 빨라지고 GitHub 부하도 줄어듭니다. 변경하지 않아도 설치는 계속 작동합니다. 이 알림은 몇 번 표시된 후 사라집니다.",
@@ -1653,7 +1689,7 @@
   },
   "HatCompat.InheritedTag": {
     "message": "이 헤어스타일에는 모자 지원이 포함되어 있지만, 모자가 덮는 범위보다 훨씬 많은 머리카락을 숨깁니다. 아마도 기반이 된 헤어스타일에서 그대로 이어받아 이 헤어스타일에 맞게 조정되지 않은 것입니다. Proteus가 다시 측정해 교체할 수 있습니다.",
-    "description": "Shown in the Hats section for a hairstyle that arrived with hat support that hides hair no hat covers. \"Proteus\" is a plugin name - never translate it."
+    "description": "Shown in the hats part of the Settings > Hair section for a hairstyle that arrived with hat support that hides hair no hat covers. \"Proteus\" is a plugin name - never translate it."
   },
   "HatCompat.InheritedTag.Tip": {
     "message": "머리카락을 숨기는 부분만 교체합니다. 헤어스타일 자체의 눌림은 그대로\n유지되므로, 최악의 경우 모자가 머리카락을 관통할 뿐이며 모자가 덮지도\n않는 머리카락이 사라지지는 않습니다.\n\n되돌리기는 헤어스타일에 원래 들어 있던 것을 그대로 복원합니다.",
@@ -1697,7 +1733,7 @@
   },
   "HatCompat.NoHead": {
     "message": "Proteus가 머리 위치를 파악할 수 없어 이 헤어스타일을 그대로 두었습니다. 모자가 어디에 놓이는지 알기 위해 캐릭터의 얼굴을 읽어야 하며, 그것이 없으면 모자 선은 추측이 됩니다.",
-    "description": "Shown in the Hats section when Proteus cannot read the wearer's face model and so refuses to change the hairstyle. \"Proteus\" is a plugin name - never translate it."
+    "description": "Shown in the hats part of the Settings > Hair section when Proteus cannot read the wearer's face model and so refuses to change the hairstyle. \"Proteus\" is a plugin name - never translate it."
   },
   "HatCompat.Apply.NoHead": {
     "message": "Proteus가 캐릭터의 머리를 읽을 수 없어 이 헤어스타일을 변경하지 않았습니다.",
@@ -1705,7 +1741,7 @@
   },
   "HatCompat.UndoAll.Fmt": {
     "message": "이 모드의 헤어스타일 {0}개 모두 되돌리기",
-    "description": "Button in the Hats section. {0} is how many hairstyle files Proteus has changed in this mod. Keep it short - it is a button label."
+    "description": "Button in the hats part of the Settings > Hair section. {0} is how many hairstyle files Proteus has changed in this mod. Keep it short - it is a button label."
   },
   "HatCompat.UndoAll.Tip": {
     "message": "되돌리기는 지금 착용한 헤어스타일을 복원합니다. 헤어 모드는 보통 종족마다\n하나의 모델을 포함하므로, 다른 종족으로 맞춘 헤어스타일은 지금 착용한 것이\n아니어서 되돌리기로는 닿지 않습니다.\n\n이 기능은 Proteus가 이 모드에서 변경한 모든 헤어스타일을 복원합니다.",
@@ -3195,10 +3231,6 @@
     "message": "일반",
     "description": ""
   },
-  "Settings.Section.HatCompat": {
-    "message": "모자",
-    "description": ""
-  },
   "Settings.Section.Hosting": {
     "message": "적재 위치",
     "description": ""
@@ -3683,6 +3715,26 @@
     "message": "{0} 모델을 만들지 못했습니다({1}). {2} 모델을 그대로 리핏합니다.",
     "description": ""
   },
+  "Parts.Retarget.Shaping": {
+    "message": "바디가 만들어진 체형으로 모델을 변형하는 중…",
+    "description": ""
+  },
+  "Parts.Retarget.ShapedDown.Fmt": {
+    "message": "{0} 바디가 없어서 {0} 모델을 게임이 변형하는 방식대로 {1} 체형에서 리핏한 뒤 다시 {0}(으)로 저장합니다.",
+    "description": ""
+  },
+  "Parts.Retarget.Bake.BendBack.Fmt": {
+    "message": "리핏을 {0} 체형으로 되돌리지 못했습니다({1})",
+    "description": ""
+  },
+  "Parts.Retarget.Bake.NoWearer": {
+    "message": "캐릭터를 읽을 수 없었습니다",
+    "description": ""
+  },
+  "Parts.Retarget.Refused.Fmt": {
+    "message": "이 모델을 리핏하지 못했습니다: {0}.",
+    "description": ""
+  },
   "Parts.Retarget.Cloth.Guess.Fmt": {
     "message": "천으로 판단: 최선의 추정은 {0}이지만 그냥 헐렁한 것일 수도 있습니다. 확인해 보세요.",
     "description": ""
@@ -3785,6 +3837,14 @@
   },
   "Parts.Retarget.CutHidden.Tip": {
     "message": "제작자가 삭제한 부분(보통 천 아래)은 새 피부도 넣지 않습니다.\n리핏에 구멍이 생기면 끄세요.",
+    "description": ""
+  },
+  "Parts.Retarget.Piercings": {
+    "message": "새 체형의 피어싱 추가",
+    "description": ""
+  },
+  "Parts.Retarget.Piercings.Tip": {
+    "message": "켬: 의상이 그 피부를 보여 주는 곳에서는 새 체형의 피어싱이 피부와 함께 들어갑니다.\n손톱은 항상 함께 들어갑니다.",
     "description": ""
   },
   "Parts.Retarget.CutForcedTip": {
@@ -4027,6 +4087,22 @@
     "message": "(바닐라)",
     "description": ""
   },
+  "WhatsNew.HairPort.Head": {
+    "message": "다른 종족용으로 만든 헤어 모드가 이제 내 종족에 맞춰집니다",
+    "description": "Release-notes section heading for hair mods fitted automatically from another race to the player's."
+  },
+  "WhatsNew.HairPort.Body": {
+    "message": "많은 헤어 모드는 한 종족용으로만 만들어져서, 다른 종족에서는 게임 자체의 헤어스타일이 대신 표시됩니다. 이제 Proteus가 모드의 헤어스타일을 내 종족의 머리에 맞게 구부려 같은 모드의 같은 옵션에 추가합니다. 지금 컬렉션에서 켜져 있는 헤어 모드를 한 번 살펴보고, 이후에는 헤어 모드를 설치하거나 켜거나 변경할 때마다 다시 살펴봅니다. 맞춘 헤어스타일 번호를 채팅으로 알려 주므로 어떤 것을 고르면 되는지 알 수 있습니다. 물리 효과가 있는 헤어는 물리 효과가 그대로 유지됩니다.\n\nProteus를 꺼도 계속 작동하고, 모드를 내보낼 때 함께 따라갑니다. 설정 › 헤어 에서 이 기능을 끄거나, 다시 확인하거나, 맞춘 헤어스타일을 되돌릴 수 있습니다.",
+    "description": "Release-notes section on hair fitted automatically from another race. 'Settings, Hair' names the Settings tab and its Hair section - match Tab.Settings and Settings.Section.HairPort. 'Physics hair' is hair that sways with its own bones."
+  },
+  "WhatsNew.HairPortStudio.Head": {
+    "message": "헤어스타일을 모든 종족에 한 번에 이식",
+    "description": "Release-notes section heading for the Studio's tool that ports one hair mod to every race at once."
+  },
+  "WhatsNew.HairPortStudio.Body": {
+    "message": "헤어 모드를 나만이 아니라 모두에게 작동하게 하려면, 스튜디오에서 그 모드의 헤어 모델 하나를 열고 \"모든 종족에 이식\"을 사용하세요. Proteus가 같은 성별의 다른 모든 종족에 맞게 한 번에 구부리고 결과를 모드의 같은 옵션에 추가합니다. 제작자가 직접 만든 종족용은 그대로 두며, \"이식 제거\"로 이식한 것을 모두 다시 빼낼 수 있습니다.",
+    "description": "Release-notes section on the Studio's \"Port to all races\". 'Studio' is the tab name (Tab.Parts); the two quoted labels must match HairPort.Studio.Header and HairPort.Studio.Remove."
+  },
   "WhatsNew.AutoRefit.Body": {
     "message": "이제 Proteus는 가슴, 다리, 손, 발 장비를 착용하는 순간 알아서 내 체형에 맞출 수 있습니다. 장비가 어떤 체형 모드의 어떤 크기용으로 만들어졌는지 알아내고, 장비와 장비가 닿는 몸 부위를 다시 맞춘 뒤, 새 크기를 장비 모드 안에 저장하고 켭니다. 시작할 때와 끝났을 때 채팅으로 알려 줍니다.\n\n사용하려면 설정 › 체형 자동 맞춤 을 엽니다. \"장비를 착용할 때 내 체형에 맞추기\"를 체크하고, Penumbra 컬렉션마다 체형 모드와 가슴·다리 크기를 고르세요. 손과 발은 자동으로 맞춰집니다. 이미 입고 있는 장비는 \"지금 입고 있는 장비 맞추기\"로 맞출 수 있고, 게임 기본 장비에는 별도의 체크박스가 있습니다. Penumbra에서 \"Original\"이나 다른 크기를 고르면 언제나 그대로 둡니다.",
     "description": ""
@@ -4036,8 +4112,8 @@
     "description": ""
   },
   "WhatsNew.IntroAll": {
-    "message": "Proteus에 대해 알아두면 좋은 네 가지. 이 창은 한 번만 열리고 다시 열리지 않습니다.",
-    "description": ""
+    "message": "Proteus에 대해 알아두면 좋은 몇 가지. 이 창은 한 번만 열리고 다시 열리지 않습니다.",
+    "description": "First line of the release-notes window for someone who has never seen it; every section follows."
   },
   "WhatsNew.IntroSince": {
     "message": "이 창을 마지막으로 본 뒤 새로 생긴 것이 있습니다. 이 창은 한 번만 열리고 다시 열리지 않습니다.",
@@ -4060,7 +4136,7 @@
     "description": ""
   },
   "WhatsNew.Hats.Body": {
-    "message": "'머리 모양을 모자에 맞추기'가 이제 기본으로 켜져 있습니다. Proteus는 실제로 모자를 쓸 때까지 기다렸다가, 모자가 가릴 머리카락을 머리에 납작하게 눌러 모자가 머리카락을 뚫고 나오지 않게 합니다.\n\n머리 모드 자체의 파일을 수정하지만 원본은 보관되므로 되돌릴 수 있고, 설정의 '모자'에서 완전히 끌 수도 있습니다.",
+    "message": "'머리 모양을 모자에 맞추기'가 이제 기본으로 켜져 있습니다. Proteus는 실제로 모자를 쓸 때까지 기다렸다가, 모자가 가릴 머리카락을 머리에 납작하게 눌러 모자가 머리카락을 뚫고 나오지 않게 합니다.\n\n머리 모드 자체의 파일을 수정하지만 원본은 보관되므로 되돌릴 수 있고, 설정의 '헤어'에서 완전히 끌 수도 있습니다.",
     "description": ""
   },
   "WhatsNew.Designs.Head": {
@@ -4763,6 +4839,14 @@
     "message": "신발과 장갑은 원래 발과 손을 유지하고, 닿는 다리나 팔만 리핏합니다. 신발은 다리 사이즈를, 장갑은 바디마다 옵션 하나를 받고, 같은 그룹이면 둘 다 의상의 가슴이나 다리 사이즈에 합류합니다.",
     "description": ""
   },
+  "SizeSet.Piercings": {
+    "message": "새 체형들의 피어싱 추가",
+    "description": ""
+  },
+  "SizeSet.Piercings.Tip": {
+    "message": "켬: 파츠가 그 피부를 보여 주는 곳에서는 각 체형의 피어싱이 피부와 함께 들어갑니다. 손톱은 항상 함께 들어갑니다.\n이미 만든 사이즈는 다시 만들 때만 바뀝니다.",
+    "description": ""
+  },
   "SizeSet.EndsUnreadable.Fmt": {
     "message": "{0}: 리그를 읽을 수 없어 발이나 손을 유지할 수 없으므로 사이즈를 만들지 않았습니다.",
     "description": ""
@@ -4889,6 +4973,294 @@
   },
   "Chat.EffectUnplaced.Fmt": {
     "message": "[Proteus] \"{0}\"의 애니메이션 효과가 표시되지 않습니다. 투명 운반체를 위한 빈 액세서리 슬롯이 필요합니다. 반지, 팔찌 또는 목걸이 슬롯을 비워 주세요.",
+    "description": ""
+  },
+  "HairPort.Refused.NoHead": {
+    "message": "맞출 대상인 게임의 머리 모델을 읽을 수 없습니다",
+    "description": ""
+  },
+  "HairPort.Refused.Bones.Fmt": {
+    "message": "c{0:D4}에게는 이 헤어스타일용으로 없는 본으로 움직입니다 ({1})",
+    "description": ""
+  },
+  "HairPort.Refused.Unknown.Fmt": {
+    "message": "종족 디포머가 {0}을(를) 움직이는 방법을 모릅니다",
+    "description": ""
+  },
+  "HairPort.Refused.Fit.Fmt": {
+    "message": "c{0:D4}의 머리에 맞지 않습니다. {1:P0}가 두개골 안으로 파묻히고, 두피와의 거리가 원본과 {2:F0} mm 차이 납니다",
+    "description": ""
+  },
+  "HairPort.Refused.NotHair": {
+    "message": "헤어스타일 모델이 아닙니다",
+    "description": ""
+  },
+  "HairPort.Refused.NotInMod": {
+    "message": "모드가 그 헤어스타일을 제공하지 않습니다",
+    "description": ""
+  },
+  "HairPort.Refused.Gender": {
+    "message": "헤어스타일은 같은 성별의 종족 사이에서만 이식됩니다",
+    "description": ""
+  },
+  "HairPort.Refused.NoStyle.Fmt": {
+    "message": "c{0:D4}은(는) 헤어스타일 {1}을(를) 선택할 수 없습니다",
+    "description": ""
+  },
+  "HairPort.Refused.SharedMaterial.Fmt": {
+    "message": "그 머티리얼은 {0}이(가) 자기 헤어스타일 {1}에 읽는 것과 같습니다 — 그쪽에도 이식하세요",
+    "description": ""
+  },
+  "HairPort.Refused.SharerRefused.Fmt": {
+    "message": "머티리얼을 c{0:D4}와(과) 공유하는데, 그쪽으로는 이식할 수 없었습니다: {1}",
+    "description": ""
+  },
+  "HairPort.Refused.NoMaterial.Fmt": {
+    "message": "머티리얼 {0}을(를) 찾을 수 없습니다",
+    "description": ""
+  },
+  "HairPort.Refused.NoOption.Fmt": {
+    "message": "옵션 \"{0}\"이(가) 더 이상 모드에 없습니다",
+    "description": ""
+  },
+  "HairPort.Refused.Covered.Fmt": {
+    "message": "모드가 이미 그곳에 {0}을(를) 제공합니다",
+    "description": ""
+  },
+  "HairPort.Undo.Nothing": {
+    "message": "여기에는 되돌릴 헤어 이식이 없습니다.",
+    "description": ""
+  },
+  "HairPort.DefaultData": {
+    "message": "모드의 기본 파일",
+    "description": ""
+  },
+  "HairPort.Refused.Combining.Fmt": {
+    "message": "헤어스타일이 조합 그룹인 \"{0}\" 안에 있어 Proteus가 편집하지 않습니다",
+    "description": ""
+  },
+  "HairPort.Refused.Unreadable": {
+    "message": "모드의 매니페스트를 읽을 수 없습니다",
+    "description": ""
+  },
+  "Chat.HairPort": {
+    "message": "[Proteus] 이 헤어스타일의 모드는 다른 종족용으로 만들어져서, Proteus가 당신의 종족에 맞추고 모드에 추가했습니다. 이제 이 모드를 켠 채로 표시되는 모두에게 보입니다. /proteus > 설정 > 헤어 에서 되돌리거나 이 기능을 끌 수 있습니다.",
+    "description": ""
+  },
+  "Service.ModMeta.Unreadable.Fmt": {
+    "message": "{0}의 매니페스트를 읽을 수 없어 변경하지 않았습니다.",
+    "description": ""
+  },
+  "Service.ModMeta.Combining.Fmt": {
+    "message": "\"{0}\"은(는) 조합 그룹이라 Proteus가 그 파일을 편집하지 않습니다.",
+    "description": ""
+  },
+  "Service.ModMeta.NoOption.Fmt": {
+    "message": "그룹 \"{0}\"에는 \"{1}\"(이)라는 옵션이 없습니다.",
+    "description": ""
+  },
+  "HairPort.Auto.Label": {
+    "message": "다른 종족용으로 만든 헤어 모드 맞추기",
+    "description": ""
+  },
+  "HairPort.Settings.None": {
+    "message": "지금 착용한 헤어스타일은 맞출 필요가 없습니다.",
+    "description": ""
+  },
+  "HairPort.Settings.Ported.Fmt": {
+    "message": "헤어스타일 {0}이(가) {1}에서 당신의 종족에 맞춰져 있습니다.",
+    "description": ""
+  },
+  "HairPort.Settings.Undo": {
+    "message": "되돌리기",
+    "description": ""
+  },
+  "HairPort.Settings.Undo.Tip": {
+    "message": "맞춘 헤어스타일을 모드에서 다시 빼냅니다. Proteus가 스스로 다시\n맞추지는 않지만, 스튜디오에서는 여전히 이식할 수 있습니다.",
+    "description": ""
+  },
+  "HairPort.Settings.UndoAll.Fmt": {
+    "message": "이 모드에서 맞춘 헤어스타일 {0}개 모두 되돌리기",
+    "description": ""
+  },
+  "HairPort.Working": {
+    "message": "처리 중…",
+    "description": ""
+  },
+  "HairPort.Studio.Header": {
+    "message": "모든 종족에 이식",
+    "description": ""
+  },
+  "HairPort.Studio.Intro": {
+    "message": "이 헤어스타일을 같은 성별의 다른 모든 종족에 맞게 구부리고 결과를 이 모드의 같은 옵션에 추가하므로, 종족과 상관없이 모두에게 표시됩니다. 직접 만든 종족용은 그대로 둡니다.",
+    "description": ""
+  },
+  "HairPort.Studio.Covered": {
+    "message": "직접 만듦",
+    "description": ""
+  },
+  "HairPort.Studio.Ported": {
+    "message": "이식됨",
+    "description": ""
+  },
+  "HairPort.Studio.Stale": {
+    "message": "오래됨",
+    "description": ""
+  },
+  "HairPort.Studio.NoStyle": {
+    "message": "이 헤어스타일 선택 불가",
+    "description": ""
+  },
+  "HairPort.Studio.Open": {
+    "message": "미지원",
+    "description": ""
+  },
+  "HairPort.Studio.Port": {
+    "message": "이식",
+    "description": ""
+  },
+  "HairPort.Studio.Porting.Fmt": {
+    "message": "이식 중… {1}개 종족 중 {0}",
+    "description": ""
+  },
+  "HairPort.Studio.Cancel": {
+    "message": "취소",
+    "description": ""
+  },
+  "HairPort.Studio.Cancelled": {
+    "message": "취소됨 — 아무것도 기록되지 않았습니다.",
+    "description": ""
+  },
+  "HairPort.Studio.Done.Fmt": {
+    "message": "이식 {0}개를 모드에 추가했습니다.",
+    "description": ""
+  },
+  "HairPort.Studio.Nothing": {
+    "message": "아무것도 이식되지 않았습니다.",
+    "description": ""
+  },
+  "HairPort.Studio.Failed.Fmt": {
+    "message": "이식에 실패했습니다: {0}",
+    "description": ""
+  },
+  "HairPort.Studio.Remove": {
+    "message": "이식 제거",
+    "description": ""
+  },
+  "HairPort.Studio.Removed.Fmt": {
+    "message": "이식 {0}개를 제거했습니다.",
+    "description": ""
+  },
+  "HairPort.Studio.Reading": {
+    "message": "모드를 읽는 중…",
+    "description": ""
+  },
+  "Settings.Section.HairPort": {
+    "message": "헤어",
+    "description": ""
+  },
+  "HairPort.Refused.Folded.Fmt": {
+    "message": "c{0:D4}에 맞춰 구부리면 삼각형 {1}개가 뒤집힙니다",
+    "description": ""
+  },
+  "HairPort.Refused.Declined": {
+    "message": "이식이 취소되었으므로 그대로 둡니다",
+    "description": ""
+  },
+  "HairPort.Refused.NoPbd": {
+    "message": "게임의 종족 디포머를 읽을 수 없습니다",
+    "description": ""
+  },
+  "HairPort.Declined.Fmt": {
+    "message": "{1}의 헤어스타일 {0} 이식이 취소되어 그대로 둡니다.",
+    "description": ""
+  },
+  "HairPort.Refused.RecordUnreadable": {
+    "message": "이 모드의 헤어 이식에 대한 Proteus 기록(Proteus/hairport.json)을 읽을 수 없어 아무것도 변경하지 않았습니다.",
+    "description": ""
+  },
+  "HairPort.Auto.Tip2": {
+    "message": "많은 헤어 모드는 한 종족 전용으로 만들어져서, 다른 종족에서는 게임\n기본 헤어스타일이 대신 표시됩니다. 켜면 Proteus가 모드의 헤어스타일을\n당신 종족의 머리에 맞게 구부려 같은 모드의 같은 옵션에 추가합니다.\n착용한 헤어스타일뿐 아니라 컬렉션에서 켜진 헤어 모드도 미리 맞춥니다:\n이 설정을 켤 때, 모드를 설치·활성화·변경할 때, \"지금 확인\"을 누를 때.\n\n당신의 종족에만, 같은 성별의 종족에서 가져옵니다. Proteus를 꺼도 계속\n작동하고, 모드와 함께 따라가며, 그 모드를 켠 채로 표시되는 모두에게\n보입니다. 여기서 되돌릴 수 있습니다.",
+    "description": ""
+  },
+  "HairPort.Scan.Starting": {
+    "message": "헤어 모드를 확인하는 중…",
+    "description": ""
+  },
+  "HairPort.Scan.Checking.Fmt": {
+    "message": "헤어 모드를 확인하는 중… {0} / {1}",
+    "description": ""
+  },
+  "HairPort.Scan.None": {
+    "message": "이번 세션에서는 아직 헤어 모드를 확인하지 않았습니다.",
+    "description": ""
+  },
+  "HairPort.Scan.Checked.Fmt": {
+    "message": "헤어 모드의 헤어스타일 {0}개가 {1}에 맞춰져 있습니다.",
+    "description": ""
+  },
+  "HairPort.Scan.CheckNow": {
+    "message": "지금 확인",
+    "description": ""
+  },
+  "HairPort.Scan.CheckNow.Tip": {
+    "message": "컬렉션에서 켜진 모든 헤어 모드를 살펴보고, 다른 종족용으로 만든 것을\n당신의 종족에 맞춥니다.",
+    "description": ""
+  },
+  "HairPort.Scan.WearHint": {
+    "message": "착용하려면 캐릭터의 헤어스타일 번호를 그 번호로 고르세요 — Glamourer에 번호가 표시됩니다.",
+    "description": ""
+  },
+  "HairPort.Scan.List.Fmt": {
+    "message": "당신 종족용 헤어 모드 ({0})",
+    "description": ""
+  },
+  "HairPort.Scan.Row.Fmt": {
+    "message": "헤어스타일 {0} — {1}: {2}",
+    "description": ""
+  },
+  "HairPort.Scan.State.Fitted": {
+    "message": "맞춤",
+    "description": ""
+  },
+  "HairPort.Scan.State.Already": {
+    "message": "이미 맞춤",
+    "description": ""
+  },
+  "HairPort.Scan.State.Remade": {
+    "message": "다시 맞춤 (모드가 바뀜)",
+    "description": ""
+  },
+  "HairPort.Scan.State.Undone": {
+    "message": "되돌림",
+    "description": ""
+  },
+  "HairPort.Scan.State.Refused": {
+    "message": "맞추지 못함",
+    "description": ""
+  },
+  "HairPort.Scan.State.Refused.Fmt": {
+    "message": "맞추지 못함 — {0}",
+    "description": ""
+  },
+  "HairPort.Scan.UndoChecked": {
+    "message": "이번 확인에서 맞춘 것 모두 되돌리기",
+    "description": ""
+  },
+  "HairPort.Scan.Entry.Fmt": {
+    "message": "헤어스타일 {0} ({1})",
+    "description": ""
+  },
+  "HairPort.Scan.More.Fmt": {
+    "message": " 외 {0}개",
+    "description": ""
+  },
+  "Chat.HairPortScan.Fmt": {
+    "message": "[Proteus] 당신 종족에 맞췄습니다: {0}. 착용하려면 캐릭터의 헤어스타일을 그 번호로 고르세요. 되돌리거나 끄려면 /proteus > 설정 > 헤어.",
+    "description": ""
+  },
+  "HairPort.Scan.UndoChecked.Confirm.Fmt": {
+    "message": "한 번 더 누르면 헤어스타일 {0}개를 되돌립니다 (다시 자동으로 맞추지 않음)",
     "description": ""
   }
 }

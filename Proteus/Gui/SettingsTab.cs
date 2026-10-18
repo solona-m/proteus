@@ -17,6 +17,7 @@ internal sealed class SettingsTab
     private readonly SidecarDiscoveryService discovery;
     private readonly DesignBindingService designBindings;
     private readonly HatCompatPanel hatCompat;
+    private readonly HairPortSettingsPanel hairPort;
     private readonly AutoRefitPanel autoRefit;
     private readonly LogExportService logExport;
 
@@ -26,14 +27,15 @@ internal sealed class SettingsTab
     private string? _copyLogsError;
 
     public SettingsTab(Configuration config, CompositorService compositor, SidecarDiscoveryService discovery,
-        DesignBindingService designBindings, HatCompatPanel hatCompat, AutoRefitPanel autoRefit,
-        LogExportService logExport)
+        DesignBindingService designBindings, HatCompatPanel hatCompat, HairPortSettingsPanel hairPort,
+        AutoRefitPanel autoRefit, LogExportService logExport)
     {
         this.config = config;
         this.compositor = compositor;
         this.discovery = discovery;
         this.designBindings = designBindings;
         this.hatCompat = hatCompat;
+        this.hairPort = hairPort;
         this.autoRefit = autoRefit;
         this.logExport = logExport;
     }
@@ -76,11 +78,17 @@ internal sealed class SettingsTab
         using (ProteusStyle.Card())
             DrawOutputSettings();
 
-        // Always drawn: its governing switch lives inside it.
+        // Always drawn: both switches live inside it. Hair fitted to the race, then hats fitted to the hair.
         ImGui.Spacing();
-        ProteusStyle.SectionHeader(s.SecHatCompat);
+        ProteusStyle.SectionHeader(s.SecHairPort);
         using (ProteusStyle.Card())
+        {
+            hairPort.Draw();
+            ImGui.Spacing();
+            ImGui.Separator();
+            ImGui.Spacing();
             hatCompat.Draw();
+        }
 
         // Always drawn, for the same reason: its switch lives inside it.
         ImGui.Spacing();

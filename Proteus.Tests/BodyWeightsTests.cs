@@ -748,6 +748,70 @@ public class BodyWeightsTests
         Assert.Contains(Cloth, materials);
     }
 
+    /// <summary>
+    /// A top with its own chest skin and its own two-triangle ring, refitted onto a body that rigs genital bones the old
+    /// one does not (so the cloth is reweighted) and draws a one-triangle ring of its own.
+    /// </summary>
+    private static (byte[] Garment, BodyRetarget.SlotPair Pair) PiercedTop()
+    {
+        byte[] garment = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, Weights: [("j_kosi", 1f)])),
+            new SyntheticModel.Mesh(Cloth, new SyntheticModel.Sub(0, TrianglesPerIsland: 3, OffsetZ: 0.003f,
+                                                                  Weights: [("j_kosi", 1f)])),
+            new SyntheticModel.Mesh(Piercings, new SyntheticModel.Sub(0, TrianglesPerIsland: 2, OffsetZ: 0.001f,
+                                                                      Weights: [("j_kosi", 1f)])));
+        byte[] target = SyntheticModel.Build([],
+            new SyntheticModel.Mesh(Skin, new SyntheticModel.Sub(0, TrianglesPerIsland: 3,
+                                                                 Weights: [("j_kosi", 0.8f), ("iv_omanko", 0.2f)])),
+            new SyntheticModel.Mesh(Piercings, new SyntheticModel.Sub(0, OffsetZ: 0.001f, Weights: [("j_kosi", 1f)])));
+        return (garment, Pair(Body(("j_kosi", 1f)), target));
+    }
+
+    private static int PiercingTriangles(byte[] mdl)
+        => ModelPartReader.Read(mdl)!.Parts.Where(p => p.Island < 0 && p.Material == Piercings)
+                                           .Sum(p => p.Triangles.Length / 3);
+
+    [Fact]
+    [Trait("Plan", "AC-refit-piercings-option-6")]
+    public void With_piercings_off_the_old_body_s_go_across_bodies_and_stay_within_one()
+    {
+        // [AC-refit-piercings-option-6] First, that the case is reached: asked for, within one body mod, the garment's
+        // own ring gives way to the body's (two triangles become one). Then, not asked for: across body mods the old
+        // ring goes with the old body's extras and none comes in; within one, the author's stays as it was.
+        var (garment, pair) = PiercedTop();
+        var parts = ModelPartReader.Read(garment)!;
+        BodyRetarget.Planned Refit(bool across, bool carry)
+            => BodyRetarget.Plan(parts, garment, [pair], "_top", pushOut: false, replaceSkin: true, acrossBodies: across,
+                                 carryPiercings: carry);
+
+        var swapped = Refit(across: false, carry: true);
+        Assert.Equal(1, swapped.Report.Swap!.Value.Adorned);
+        Assert.Equal(1, PiercingTriangles(swapped.Model));
+
+        var across = Refit(across: true, carry: false);
+        Assert.Equal(0, across.Report.Swap!.Value.Adorned);
+        Assert.Equal(0, PiercingTriangles(across.Model));
+        Assert.True(across.Report.Swap!.Value.ExtrasDropped >= 2);
+
+        var within = Refit(across: false, carry: false);
+        Assert.Equal(0, within.Report.Swap!.Value.Adorned);
+        Assert.Equal(2, PiercingTriangles(within.Model));
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-refit-piercings-option-4")]
+    public void Old_piercings_stay_when_no_weights_were_planned()
+    {
+        // [EDGE-refit-piercings-option-4] Across body mods with no weights (a body unreadable): the old ring stays, as
+        // before build 1147, and none comes in.
+        var (garment, pair) = PiercedTop();
+        var rebuilt = BodyRetarget.Rebuild(garment, [pair], swapSkin: true, weights: null, out var report,
+                                           acrossBodies: true);
+        Assert.NotNull(rebuilt);
+        Assert.Equal(0, report.Adorned);
+        Assert.Equal(2, PiercingTriangles(rebuilt!));
+    }
+
     // ── within one body mod: only the change between the two bodies ─────────────────────────────────────
 
     /// <summary>

@@ -685,6 +685,8 @@ internal static partial class BodyRetarget
     /// <param name="keepStandoff">Bring a top's cloth the refit carried further off the new chest than its author put it
     /// back toward the author's standoff (see <see cref="KeepStandoff"/>): the game's own top in the automatic refit, never
     /// the Studio. Only with <paramref name="clearBody"/>.</param>
+    /// <param name="carryPiercings">With <paramref name="replaceSkin"/>, bring the new body's piercings in with its skin
+    /// (see <see cref="Rebuild"/>). Off by default: the user asks for them.</param>
     public static Planned Plan(ModelParts garment, byte[] garmentBytes, IReadOnlyList<SlotPair> pairs,
                                string? garmentSlot = null, bool pushOut = true, IReadOnlySet<int>? held = null,
                                bool replaceSkin = false, bool acrossBodies = false, bool clearBody = false,
@@ -692,7 +694,7 @@ internal static partial class BodyRetarget
                                string? swapSlot = null, Action<string>? log = null, Action<string>? warn = null,
                                string? chestSlot = null, Action<string, Vec3[]>? trace = null,
                                Outfit? outfit = null, string? tuckSlot = null, bool deepClear = false,
-                               bool keepStandoff = false)
+                               bool keepStandoff = false, bool carryPiercings = false)
     {
         // First, before anything reads the new chest: its nipples smoothed where the garment covers more of them than
         // the old body had, so every pass below sees one surface — the one the swap draws.
@@ -728,7 +730,7 @@ internal static partial class BodyRetarget
         if (replaceSkin || weights != null)
         {
             var rebuilt = Rebuild(model, pairs, replaceSkin, weights, out var swapped, cutHidden, acrossBodies,
-                                  swapMeshes, tuckSlot);
+                                  swapMeshes, tuckSlot, carryPiercings);
             if (rebuilt != null)
             {
                 model = rebuilt;

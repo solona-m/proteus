@@ -130,4 +130,24 @@ public sealed class PbdFile
         }
         return result;
     }
+
+    /// <summary>
+    /// Whether any deformer of <paramref name="chain"/> lists <paramref name="bone"/> or one of its ancestors — whether
+    /// <see cref="Resolve"/> found a matrix for it at all, rather than falling back to identity because the bone is
+    /// unknown everywhere.
+    /// </summary>
+    public static bool Lists(IReadOnlyList<IReadOnlyDictionary<string, Matrix4x4>> chain, string bone,
+                             Func<string, string?> parentOf)
+    {
+        foreach (var deformer in chain)
+        {
+            string? name = bone;
+            for (int guard = 0; name != null && guard < 256; guard++)
+            {
+                if (deformer.ContainsKey(name)) return true;
+                name = parentOf(name);
+            }
+        }
+        return false;
+    }
 }

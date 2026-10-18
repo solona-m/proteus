@@ -17,10 +17,11 @@ namespace Proteus.Tests;
 public class SkinTuckTests(ITestOutputHelper output)
 {
     private (byte[] Model, BodyRetarget.SwapReport Report) Swap(byte[] top, byte[] body, bool tuck = true,
-                                                               string slot = "_top", IReadOnlySet<string>? hidden = null)
+                                                               string slot = "_top", IReadOnlySet<string>? hidden = null,
+                                                               bool carryPiercings = false)
     {
         var model = BodyRetarget.SwapSkin(top, [Resized(body, slot, hidden)], out var report,
-                                          tuckSlot: tuck ? "_top" : null)!;
+                                          tuckSlot: tuck ? "_top" : null, carryPiercings: carryPiercings)!;
         Assert.NotNull(model);
         output.WriteLine($"{(tuck ? "tuck" : "no tuck")}: {report}; rows {string.Join(", ", DrawnRows(model).Select(r => $"{r.Key}:{r.Value}"))}");
         return (model, report);
@@ -177,9 +178,10 @@ public class SkinTuckTests(ITestOutputHelper output)
     [Trait("Plan", "EDGE-neckline-skin-tuck-9")]
     public void Tucked_skin_brings_no_piercing_the_author_did_not_show()
     {
-        // A ring on row 7, which the tuck draws: whether it comes in is the author's cut's to say.
-        var (_, tucked) = Swap(LooseTop(looseFrom: 5), Body(piercing: true));
-        var (_, untucked) = Swap(LooseTop(looseFrom: 5), Body(piercing: true), tuck: false);
+        // A ring on row 7, which the tuck draws: whether it comes in is the author's cut's to say. With the piercings
+        // carried, or the two would agree on none for nothing.
+        var (_, tucked) = Swap(LooseTop(looseFrom: 5), Body(piercing: true), carryPiercings: true);
+        var (_, untucked) = Swap(LooseTop(looseFrom: 5), Body(piercing: true), tuck: false, carryPiercings: true);
         Assert.True(tucked.Tucked > 0);
         Assert.Equal(untucked.Adorned, tucked.Adorned);
     }

@@ -72,10 +72,12 @@ public class KeepShapeReleaseLocalTests
         public string Hash => Convert.ToHexString(SHA256.HashData(Plan.Model));
     }
 
-    /// <summary>One refit as <c>Proteus.Refit --keep-default</c> runs it, the default ticks less <paramref name="untick"/>.</summary>
+    /// <summary>One refit as <c>Proteus.Refit --keep-default</c> runs it, the default ticks less <paramref name="untick"/>.
+    /// The new body's piercings carried, as every refit did when <see cref="Before"/> was pinned, unless
+    /// <paramref name="carryPiercings"/> says otherwise.</summary>
     private static Run Refit(byte[] bytes, string fromNeed, string fromRel, string toNeed, string toRel,
                              bool noRelease = false, string? untick = null, bool noNippleSmooth = false,
-                             bool beforeSnapPush = false)
+                             bool beforeSnapPush = false, bool carryPiercings = true)
     {
         var garment = ModelPartReader.Read(bytes)!;
         string fromRoot = LocalData.Path(fromNeed), toRoot = LocalData.Path(toNeed);
@@ -90,7 +92,8 @@ public class KeepShapeReleaseLocalTests
         bool across = !string.Equals(fromRoot, toRoot, StringComparison.OrdinalIgnoreCase);
         var plan = BodyRetarget.WithTuning(new BodyRetarget.Tuning(NoRelease: noRelease, NoNippleSmooth: noNippleSmooth,
                                                                        NoSnapPush: beforeSnapPush), () => BodyRetarget.Plan(
-            garment, bytes, [pair], "_top", replaceSkin: true, acrossBodies: across, keepShape: pieces));
+            garment, bytes, [pair], "_top", replaceSkin: true, acrossBodies: across, keepShape: pieces,
+            carryPiercings: carryPiercings));
         return new Run(plan, names);
     }
 
@@ -137,6 +140,30 @@ public class KeepShapeReleaseLocalTests
         Assert.Equal(Adorned(unticked), Adorned(released));
         Assert.True(Adorned(released) < Adorned(whole),
                     $"released {Adorned(released)} adornment triangles carried, kept whole {Adorned(whole)}");
+    }
+
+    /// <summary>
+    /// The same refit with the piercings not asked for: Uranus's nipple ring and its chain, which the cover kept whole
+    /// left bare, stay out.
+    /// </summary>
+    [LocalDataFact(AshPack, Rue, Uranus)]
+    [Trait("Plan", "AC-refit-piercings-option-1")]
+    [Trait("Plan", "AC-refit-piercings-option-2")]
+    public void Ash_cover_carries_no_piercing_with_the_option_off()
+    {
+        // [AC-refit-piercings-option-1] [AC-refit-piercings-option-2] First that the case is reached: asked for, the ring
+        // comes in, and the refit is byte for byte the one pinned before the option existed.
+        var bytes = Ash("Rue L");
+        var on = Refit(bytes, Rue, YiggleLarge, Uranus, UranusRue, noRelease: true);
+        Assert.Equal(Before["ash Rue L > Uranus"], on.Hash);
+        Assert.True(on.Plan.Report.Swap?.Adorned > 0, $"no adornment came in: {on.Plan.Report.Swap}");
+        static bool Pierced(byte[] model)
+            => ModelPartReader.Read(model)!.Parts.Any(p => p.Island < 0 && BodyRetarget.IsBodyPiercingMaterial(p.Material));
+        Assert.True(Pierced(on.Plan.Model));
+
+        var off = Refit(bytes, Rue, YiggleLarge, Uranus, UranusRue, noRelease: true, carryPiercings: false);
+        Assert.Equal(0, off.Plan.Report.Swap?.Adorned ?? 0);
+        Assert.False(Pierced(off.Plan.Model));
     }
 
     [LocalDataFact(AshPack, Yab, Uranus)]
