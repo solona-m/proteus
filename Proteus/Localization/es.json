@@ -4379,6 +4379,14 @@
     "message": "{0} huesos de los que depende la prenda",
     "description": "The {0} of Parts.Retarget.Race.Unbendable.Fmt; {0} here is a count."
   },
+  "Parts.Retarget.Race.LeftOut.Fmt": {
+    "message": "Se dejaron fuera de los cuerpos para los que se hizo, porque no se doblarían igual: {0}",
+    "description": "{0} lists the left-out bodies, each with Parts.Retarget.Race.BodyBones.Fmt or another reason."
+  },
+  "Parts.Retarget.Race.BodyBones.Fmt": {
+    "message": "sus huesos {0} no se moverían con el esqueleto de {1}",
+    "description": "Why a made-for body was left out: {0} lists bone names, {1} is a race. Lower-case, no full stop."
+  },
   "Parts.Retarget.BodyFallback": {
     "message": "Cuerpo",
     "description": "Body size: starts the name of a saved Penumbra option when the target body mod's own name is unknown."

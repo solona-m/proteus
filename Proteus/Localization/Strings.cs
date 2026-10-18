@@ -3089,6 +3089,10 @@ public sealed class PartsStrings
     public readonly string RetargetRaceSkeletonFallbackFmt = Loc.Localize("Parts.Retarget.Race.SkeletonFallback.Fmt",
         "{0}'s skeleton from your mods couldn't be read, so the game's own was used.");
 
+    /// <summary>{0} lists "body: reason" pairs.</summary>
+    public readonly string RetargetRaceLeftOutFmt = Loc.Localize("Parts.Retarget.Race.LeftOut.Fmt",
+        "Left out of the bodies it was made for, as they would not bend the same way: {0}");
+
     /// <summary>{0} is the race picked, {1} the race of the model open, {2} the extra skeleton's number.</summary>
     public readonly string RetargetRaceEstCarriedFmt = Loc.Localize("Parts.Retarget.Race.EstCarried.Fmt",
         "Saving also gives {0} the extra skeleton {1} loads for this item ({2}), so its extra bones move.");

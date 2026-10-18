@@ -149,6 +149,19 @@ public sealed class HavokSkeleton
 
         private int at;
         private int depth;
+
+        /// <summary>
+        /// What the whole file may make — objects, member slots and list entries together — in proportion to its size.
+        /// Every count is also checked against the bytes left, but a struct with no members costs no bytes an element
+        /// and a class inherits every member of its parent, so neither check alone bounds what a crafted file asks for.
+        /// </summary>
+        private long budget = (long)data.Length * 32 + 4096;
+
+        private void Spend(long items)
+        {
+            budget -= items;
+            if (items < 0 || budget < 0) throw new Bad("more than a file of this size can hold");
+        }
         private readonly List<string?> strings = ["", null];
         private readonly List<Class?> classes = [null];
         private readonly Dictionary<string, Class> byName = new(StringComparer.Ordinal);
@@ -203,7 +216,11 @@ public sealed class HavokSkeleton
             ReadInt();   // the class version
             long parent = ReadInt();
             if (parent < 0 || parent >= classes.Count) throw new Bad($"parent class {parent}");
-            if (classes[(int)parent] is { } p) klass.Members.AddRange(p.Members);
+            if (classes[(int)parent] is { } p)
+            {
+                Spend(p.Members.Count);
+                klass.Members.AddRange(p.Members);
+            }
 
             long count = ReadInt();
             if (count < 0 || count > Left) throw new Bad($"{count} members");
@@ -227,6 +244,7 @@ public sealed class HavokSkeleton
         {
             if (++depth > MaxDepth) throw new Bad("nested too deep");
             var members = obj.Class.Members;
+            Spend(1 + members.Count);
             var present = ReadBitfield(members.Count);
             for (int i = 0; i < members.Count; i++)
                 if (present[i]) obj.Values[members[i].Name] = ReadValue(members[i]);
@@ -290,6 +308,7 @@ public sealed class HavokSkeleton
                     // Ints are preceded by the width they were stored at; each is still written variable-length.
                     if (baseType == TypeInt) ReadInt();
                     if (count > Left) throw new Bad($"{count} ints");
+                    Spend(count);
                     var ints = new List<long>(count);
                     for (int i = 0; i < count; i++) ints.Add(ReadInt());
                     return ints;
@@ -297,6 +316,7 @@ public sealed class HavokSkeleton
                 case TypeString:
                 {
                     if (count > Left) throw new Bad($"{count} strings");
+                    Spend(count);
                     var list = new List<string?>(count);
                     for (int i = 0; i < count; i++) list.Add(ReadString());
                     return list;
@@ -317,8 +337,9 @@ public sealed class HavokSkeleton
             if (++depth > MaxDepth) throw new Bad("nested too deep");
             var members = klass.Members;
             var present = ReadBitfield(members.Count);
-            // Every present column takes at least a byte an element; with none, only the cap bounds the count.
-            if (count > MaxCount || (count > Left && present.Any(p => p))) throw new Bad($"{count} structs");
+            // A real array spends at least a byte an element in some column; one that spends none is not worth building.
+            if (count > MaxCount || count > Left) throw new Bad($"{count} structs");
+            Spend((long)count * (1 + members.Count));
 
             var items = new List<Obj>(count);
             for (int i = 0; i < count; i++) items.Add(new Obj(klass));

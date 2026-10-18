@@ -79,6 +79,27 @@ public class OtherRaceWearerTests
         Assert.Equal(EstOutcome.Missing, game.Est.Outcome);
     }
 
+    /// <summary>
+    /// An extra bone the new race's skeletons lack refuses the bake even where the deformer lists that bone itself, so
+    /// would bend it: the game would load no bone to draw it with.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-refit-other-race-8")]
+    [Trait("Plan", "EDGE-refit-other-race-20")]
+    public void A_missing_extra_bone_the_deformer_lists_still_refuses()
+    {
+        var pbd = SyntheticSkeleton.Pbd(101, new Dictionary<ushort, string[]>
+        {
+            [301] = [.. SyntheticSkeleton.Listed, "j_ex_top_a_l"],
+        });
+        var made = OtherRaceWearer.Build(Inputs(pbd: pbd, gameEst: new Dictionary<(int, ushort), int> { [(6091, 101)] = 6085 }),
+                                         SyntheticSkeleton.Leaning("j_kosi", "j_ex_top_a_l"));
+        Assert.Null(made.Wearer);
+        Assert.Equal(EstOutcome.Missing, made.Est.Outcome);
+        Assert.Equal(["j_ex_top_a_l"], made.Unbendable);
+        Assert.Contains("j_ex_top_a_l", made.Refusal);
+    }
+
     /// <summary>The deformer is the game's own: a posing mod's in the creator's collection is never asked for.</summary>
     [Fact]
     [Trait("Plan", "EDGE-refit-other-race-27")]
@@ -246,14 +267,88 @@ public class OtherRaceWearerTests
 
     // ── the bodies it was made on, bent ─────────────────────────────────────
 
+    /// <summary>
+    /// A made-for body leaning on a bone the wearer cannot move — a skeleton mod's, not enabled — is left out, saying
+    /// which, rather than bent half-way.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "EDGE-refit-other-race-23")]
+    public void A_made_for_body_with_bones_that_would_not_move_is_left_out()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), $"proteus-test-made-for-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(dir);
+            File.WriteAllBytes(Path.Combine(dir, "body.mdl"), SyntheticChest.Body(0.02f, 0.02f));
+            var source = new BodySizeCatalog(dir, [new BodyOption("Chest", "", "M", "body.mdl",
+                                                                   "chara/equipment/e0000/model/c0101e0000_top.mdl", "_top")]);
+            // The deformer knows the spine only, and nothing says the breast bones hang from it.
+            var pbd = new PbdFile(SyntheticSkeleton.Pbd(101, new Dictionary<ushort, string[]> { [301] = ["j_sebo_c"] }));
+            var bent = BakedBodyCatalog.Of(source, "0101", 301, new RacialModelBake.Wearer(301, new Dictionary<string, string?>(), pbd),
+                                           ["_top"], out var leftOut);
+            Assert.Empty(bent.Options);
+            var why = Assert.Single(leftOut);
+            Assert.Contains("j_mune_l", why);
+
+            // Hung from the spine by the skeleton, they bend with it, and the body is bent.
+            var parents = new Dictionary<string, string?> { ["j_mune_l"] = "j_sebo_c", ["j_mune_r"] = "j_sebo_c" };
+            Assert.Single(BakedBodyCatalog.Of(source, "0101", 301, new RacialModelBake.Wearer(301, parents, pbd),
+                                              ["_top"], out leftOut).Options);
+            Assert.Empty(leftOut);
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch (IOException) { }
+        }
+    }
+
+    /// <summary>
+    /// Game gear's "made for" side is the game's own body: for a picked race, the game's body of the DRAWN race — not the
+    /// copy the panel holds, which follows the picked race by then — bent like the garment and filed under the new race.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "EDGE-refit-other-race-26")]
+    public void A_vanilla_made_for_side_is_the_game_s_drawn_race_body_bent()
+    {
+        // The game's body as the lists read it, here a synthetic one: the real cache is the whole run's, keyed by race.
+        string dir = Path.Combine(Path.GetTempPath(), $"proteus-test-game-body-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        File.WriteAllBytes(Path.Combine(dir, "c0101e0000_top.mdl"), SyntheticChest.Body(0.01f, 0.01f));
+        var asked = new List<string>();
+        BodySizeCatalog GameBody(string race)
+        {
+            asked.Add(race);
+            return new BodySizeCatalog(dir, [new BodyOption("Vanilla", "", "The vanilla body", "c0101e0000_top.mdl",
+                                                            "chara/equipment/e0000/model/c0101e0000_top.mdl", "_top")]);
+        }
+        var stale = new BodySizeCatalog("x", [new BodyOption("Vanilla", "", "c0301", "c0301.mdl",
+                                                             "chara/equipment/e0000/model/c0301e0000_top.mdl", "_top")]);
+
+        var made = OtherRaceRefit.MadeFor(VanillaBodyCatalog.Key, stale, null, "0101", GameBody)!;
+        Assert.Equal(["0101"], asked);
+        var body = Assert.Single(made.For("_top", "0101"));
+
+        var pbd = new PbdFile(SyntheticSkeleton.Pbd(101, new Dictionary<ushort, string[]> { [301] = ["j_sebo_c", "j_mune_l", "j_mune_r"] }));
+        var bent = BakedBodyCatalog.Of(made, "0101", 301, new RacialModelBake.Wearer(301, new Dictionary<string, string?>(), pbd),
+                                       ["_top"], out var failed);
+        Assert.Empty(failed);
+        var baked = Assert.Single(bent.For("_top", "0301"));
+        Assert.Equal("chara/equipment/e0000/model/c0301e0000_top.mdl", baked.GamePath);
+        Assert.NotEqual(File.ReadAllBytes(made.PathOf(body)), File.ReadAllBytes(bent.PathOf(baked)));
+
+        // A made-for mod, or none (refit between the refit-onto mod's own sizes), is used as it is.
+        Assert.Same(stale, OtherRaceRefit.MadeFor("SomeBody", stale, null, "0101", GameBody));
+        Assert.Same(stale, OtherRaceRefit.MadeFor(null, null, stale, "0101", GameBody));
+        Assert.Single(asked);
+        try { Directory.Delete(dir, true); } catch (IOException) { }
+    }
+
     [Fact]
     [Trait("Plan", "AC-refit-other-race-2")]
     [Trait("Plan", "EDGE-refit-other-race-2")]
     public void The_made_for_bodies_are_bent_and_filed_under_the_new_race()
     {
         string dir = Path.Combine(Path.GetTempPath(), $"proteus-test-made-for-{Guid.NewGuid():N}");
-        string bakedDir = Path.Combine(Path.GetTempPath(), $"proteus-test-baked-{Guid.NewGuid():N}");
-        BakedBodyCatalog.Dir = bakedDir;
         try
         {
             Directory.CreateDirectory(dir);
@@ -280,12 +375,12 @@ public class OtherRaceWearerTests
             Assert.Equal(0.02f, after.Positions[1] - before.Positions[1], 4);
             var again = BakedBodyCatalog.Of(source, "0101", 301, who, ["_top"], out _);
             Assert.Equal(bent.Options.Select(o => o.Rel), again.Options.Select(o => o.Rel));
-            Assert.Equal(2, Directory.GetFiles(bakedDir).Length);
+            Assert.Equal(2, bent.Options.Select(o => o.Rel).Distinct().Count());
+            Assert.All(bent.Options, o => Assert.True(File.Exists(bent.PathOf(o))));
         }
         finally
         {
             try { Directory.Delete(dir, true); } catch (IOException) { }
-            try { Directory.Delete(bakedDir, true); } catch (IOException) { }
         }
     }
 }

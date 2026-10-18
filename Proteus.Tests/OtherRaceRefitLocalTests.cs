@@ -78,67 +78,59 @@ public class OtherRaceRefitLocalTests(ITestOutputHelper o)
     {
         var log = Substitute.For<Dalamud.Plugin.Services.IPluginLog>();
         var uv = new UVRemapService(log, ".");
-        BakedBodyCatalog.Dir = Path.Combine(Path.GetTempPath(), "proteus-tests-baked-" + Guid.NewGuid().ToString("N"));
-        try
-        {
-            var shirt = ShirtBytes();
-            var made = HighlanderWearer(shirt);
-            Assert.True(made.Wearer != null, made.Refusal);
-            var who = made.Wearer!;
-            o.WriteLine($"est: {made.Est.Outcome}");
+        var shirt = ShirtBytes();
+        var made = HighlanderWearer(shirt);
+        Assert.True(made.Wearer != null, made.Refusal);
+        var who = made.Wearer!;
+        o.WriteLine($"est: {made.Est.Outcome}");
 
-            var route = new RacialModelBake.Route(101, 301, Down: false);
-            var baked = route.Into(shirt, who, out string why);
-            Assert.True(baked != null, why);
-            var garment = ModelPartReader.Read(baked!)!;
+        var route = new RacialModelBake.Route(101, 301, Down: false);
+        var baked = route.Into(shirt, who, out string why);
+        Assert.True(baked != null, why);
+        var garment = ModelPartReader.Read(baked!)!;
 
-            var made_for = BakedBodyCatalog.Of(BodySizeCatalog.Read(LocalData.Path(Tbse)), "0101", 301, who, ["_top"],
-                                               out var failed);
-            Assert.Empty(failed);
-            var source = Assert.Single(made_for.For("_top", "0301"));
-            Assert.Equal("chara/equipment/e0000/model/c0301e0000_top.mdl", source.GamePath);
+        var made_for = BakedBodyCatalog.Of(BodySizeCatalog.Read(LocalData.Path(Tbse)), "0101", 301, who, ["_top"],
+                                           out var failed);
+        Assert.Empty(failed);
+        var source = Assert.Single(made_for.For("_top", "0301"));
+        Assert.Equal("chara/equipment/e0000/model/c0301e0000_top.mdl", source.GamePath);
 
-            var target = BodySizeCatalog.Read(LocalData.Path(TbseX));
-            var onto = Assert.Single(target.For("_top", "0301"));
-            string sourcePath = made_for.PathOf(source), targetPath = target.PathOf(onto);
-            Assert.Null(BodyRetarget.BuildPair("_top", sourcePath, targetPath, "_top", true, null, null, uv, out var pair));
-            var plan = BodyRetarget.Plan(garment, baked!, [pair], "_top", replaceSkin: true, acrossBodies: true,
-                                         cutHidden: true);
-            plan = RefitCore.MatchSkinToBody(plan, sourcePath, targetPath, uv, true, log);
-            o.WriteLine($"onto {onto.Label}: moved up to {plan.Report.WorstMove * 1000f:F1} mm, report folded "
-                        + $"{plan.Report.Folded}, swap {plan.Report.Swap}");
+        var target = BodySizeCatalog.Read(LocalData.Path(TbseX));
+        var onto = Assert.Single(target.For("_top", "0301"));
+        string sourcePath = made_for.PathOf(source), targetPath = target.PathOf(onto);
+        Assert.Null(BodyRetarget.BuildPair("_top", sourcePath, targetPath, "_top", true, null, null, uv, out var pair));
+        var plan = BodyRetarget.Plan(garment, baked!, [pair], "_top", replaceSkin: true, acrossBodies: true,
+                                     cutHidden: true);
+        plan = RefitCore.MatchSkinToBody(plan, sourcePath, targetPath, uv, true, log);
+        o.WriteLine($"onto {onto.Label}: moved up to {plan.Report.WorstMove * 1000f:F1} mm, report folded "
+                    + $"{plan.Report.Folded}, swap {plan.Report.Swap}");
 
-            var (saved, preview, refusal) = RefitCore.Finish(plan, route, who, targetPath, log);
-            Assert.True(saved != null, refusal);
-            Assert.NotNull(preview);
-            Assert.Equal("chara/equipment/e6091/model/c0301e6091_top.mdl", route.SavePath(Shirt));
-            Assert.NotNull(route.Eqdp(route.SavePath(Shirt)));
+        var (saved, preview, refusal) = RefitCore.Finish(plan, route, who, targetPath, log);
+        Assert.True(saved != null, refusal);
+        Assert.NotNull(preview);
+        Assert.Equal("chara/equipment/e6091/model/c0301e6091_top.mdl", route.SavePath(Shirt));
+        Assert.NotNull(route.Eqdp(route.SavePath(Shirt)));
 
-            // The cloth as written, against the baked shirt it came from: no face of real size turned over.
-            int folded = ClothFolded(garment, SkinTuckSheet.Laid(baked!, plan), o.WriteLine);
-            // The preview is bent back to the Midlander shape and the game bends it forward again: what shows is the
-            // saved model, within a hair, with no face squashed flat on the way.
-            var planParts = ModelPartReader.Read(plan.Model)!;
-            var forward = RacialModelBake.Bake(preview!, 101, 301, who.Pbd, who.ParentOf, out why);
-            Assert.True(forward != null, why);
-            var shown = ModelPartReader.Read(forward!)!;
-            float off = 0f;
-            for (int v = 0; v < planParts.Positions.Length / 3; v++)
-                off = MathF.Max(off, Vector3.Distance(At(planParts.Positions, v), At(shown.Positions, v)));
-            int collapsed = RacialRouteLocalTests.Collapsed(planParts, ModelPartReader.Read(preview!)!);
-            o.WriteLine($"cloth turned over by the refit, of 1 mm² or more: {folded}; preview as shown {off * 1000f:F4} mm "
-                        + $"off the saved model, {collapsed} collapsed");
-            // Four, two a side on the pecs: the refit itself meeting TBSE-X's far larger Highlander chest, not the bake —
-            // the same shirt between Midlander bodies turns two slivers. A known limit, guarded here against growing.
-            Assert.True(folded <= KnownPecFolds, $"{folded} cloth faces turned over, more than the {KnownPecFolds} known");
-            Assert.True(off < 5e-4f, $"the preview shows {off * 1000f:F4} mm off what is saved");
-            Assert.Equal(0, collapsed);
-            Assert.NotNull(ModelPartReader.Read(saved!.Model));
-        }
-        finally
-        {
-            try { Directory.Delete(BakedBodyCatalog.Dir, true); } catch (IOException) { }
-        }
+        // The cloth as written, against the baked shirt it came from: no face of real size turned over.
+        int folded = ClothFolded(garment, SkinTuckSheet.Laid(baked!, plan), o.WriteLine);
+        // The preview is bent back to the Midlander shape and the game bends it forward again: what shows is the
+        // saved model, within a hair, with no face squashed flat on the way.
+        var planParts = ModelPartReader.Read(plan.Model)!;
+        var forward = RacialModelBake.Bake(preview!, 101, 301, who.Pbd, who.ParentOf, out why);
+        Assert.True(forward != null, why);
+        var shown = ModelPartReader.Read(forward!)!;
+        float off = 0f;
+        for (int v = 0; v < planParts.Positions.Length / 3; v++)
+            off = MathF.Max(off, Vector3.Distance(At(planParts.Positions, v), At(shown.Positions, v)));
+        int collapsed = RacialRouteLocalTests.Collapsed(planParts, ModelPartReader.Read(preview!)!);
+        o.WriteLine($"cloth turned over by the refit, of 1 mm² or more: {folded}; preview as shown {off * 1000f:F4} mm "
+                    + $"off the saved model, {collapsed} collapsed");
+        // Four, two a side on the pecs: the refit itself meeting TBSE-X's far larger Highlander chest, not the bake —
+        // the same shirt between Midlander bodies turns two slivers. A known limit, guarded here against growing.
+        Assert.True(folded <= KnownPecFolds, $"{folded} cloth faces turned over, more than the {KnownPecFolds} known");
+        Assert.True(off < 5e-4f, $"the preview shows {off * 1000f:F4} mm off what is saved");
+        Assert.Equal(0, collapsed);
+        Assert.NotNull(ModelPartReader.Read(saved!.Model));
     }
 
     /// <summary>

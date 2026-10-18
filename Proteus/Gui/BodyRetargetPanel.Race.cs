@@ -31,6 +31,53 @@ internal sealed partial class BodyRetargetPanel
     private OtherRaceWearer.Inputs? raceInputs;
     private string? raceInputsFor;
 
+    /// <summary>
+    /// The refit-onto mod's bodies as the refit uses them. For a picked race, that race's own alone: a part the mod has
+    /// no body of that race for would be refitted from the bent "made for" body onto an unbent one of another race, and
+    /// its cloth would keep the whole racial bend on a body that does not have it. Such a part sits out. Otherwise the
+    /// mod's catalog as it is, whose lists fall back across races of one sex the way they always have.
+    /// </summary>
+    private BodySizeCatalog? Onto
+    {
+        get
+        {
+            if (active is not { Explicit: true } b || catalog == null) return catalog;
+            if (!ReferenceEquals(ontoOf, catalog) || ontoRace != b.Route.To)
+            {
+                ontoOf = catalog;
+                ontoRace = b.Route.To;
+                onto = OtherRaceRefit.OnlyRace(catalog, b.Route.To);
+            }
+            return onto;
+        }
+    }
+
+    private BodySizeCatalog? onto, ontoOf;
+    private ushort ontoRace;
+
+    /// <summary>The "made for" bodies the sizes chosen now were chosen from.</summary>
+    private BodySizeCatalog? madeForOf;
+
+    /// <summary>
+    /// The "made for" bodies changed under an open garment without its race changing — a pick put in force or taken back
+    /// where the character's own route reaches the same race, so bent bodies came or went. A size chosen from the others
+    /// names a file of theirs, so every "made for" choice and what was worked out from it goes, and detection runs again.
+    /// </summary>
+    private void OnMadeForChanged(in RetargetContext ctx)
+    {
+        var now = SourceCatalog;
+        if (ReferenceEquals(now, madeForOf)) return;
+        bool had = madeForOf != null;
+        madeForOf = now;
+        if (!had) return;
+        from.Clear();
+        detected.Clear();
+        detectedFor = null;
+        refusals.Clear();
+        validating.Clear();
+        DropPlan(ctx);
+    }
+
     /// <summary>The race picked for the open garment; none once another model opens.</summary>
     private ushort ChosenRace(in RetargetContext ctx) => raceChoice.For(ctx.ModelRel);
 
@@ -64,10 +111,15 @@ internal sealed partial class BodyRetargetPanel
         using (var combo = ImRaii.Combo("##retargetRace", EntryLabel(current)))
             if (combo)
                 foreach (var entry in entries)
+                    // The entry already chosen can be clicked again after a refusal: a pick is a new try, with the
+                    // skeleton and files read afresh — the refusal may be gone now (a skeleton mod enabled since).
                     if (ImGui.Selectable(EntryLabel(entry) + "##race" + entry.Race + entry.Kind, entry == current)
-                        && entry != current)
+                        && (entry != current || refusedTo != 0))
                     {
                         raceChoice = new OtherRaceRefit.Choice(ctx.ModelRel, entry.Race);
+                        bakeRefusalFor = null;
+                        raceInputs = null;
+                        raceInputsFor = null;
                         log.Information("[Proteus] retarget: {0} to be refitted for {1}", ctx.ModelRel,
                                         entry.Race == 0 ? "the character" : $"c{entry.Race:D4}");
                     }
@@ -111,6 +163,9 @@ internal sealed partial class BodyRetargetPanel
         if (b.FellBack)
             using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
                 ImGui.TextWrapped(string.Format(ps.RetargetRaceSkeletonFallbackFmt, to));
+        if (b.LeftOut.Count > 0)
+            using (ImRaii.PushColor(ImGuiCol.Text, ProteusStyle.Warn))
+                ImGui.TextWrapped(string.Format(ps.RetargetRaceLeftOutFmt, string.Join("; ", b.LeftOut)));
         string? preview = b.Preview switch
         {
             OtherRaceRefit.PreviewNote.OtherRace => string.Format(ps.RetargetRacePreviewOtherFmt, to),
@@ -119,15 +174,6 @@ internal sealed partial class BodyRetargetPanel
         };
         if (preview != null) ImGui.TextDisabled(preview);
     }
-
-    /// <summary>
-    /// The bodies the garment was made on, OF THE DRAWN RACE — what a refit for a picked race bends alongside it. The
-    /// game's own is read for that race here, on the thread that may read the game's data: the panel's own copy follows
-    /// the race the lists are filtered by, which is the picked one by now.
-    /// </summary>
-    private BodySizeCatalog? MadeForOfDrawnRace(string drawn)
-        => fromBodyDir == VanillaBodyCatalog.Key ? VanillaBodyCatalog.Read(drawn, readGameFile, drawn: true)
-         : fromCatalog ?? catalog;
 
     /// <summary>
     /// Gather, on the framework thread, what the bake for <paramref name="race"/> reads: the race's base skeleton as the
@@ -151,20 +197,26 @@ internal sealed partial class BodyRetargetPanel
     private byte[]? ReadGame(string path)
     {
         try { return readGameFile(path); }
-        catch (Exception) { return null; }   // the game's reader throws for a path it does not have
+        catch (Exception ex)
+        {
+            // The game's reader throws for a path it does not have as readily as it returns null, and most asked for
+            // here are only maybe there (an extra skeleton per entry): said at debug, with why, rather than not at all.
+            log.Debug("[Proteus] retarget: the game gave nothing for {0}: {1}", path, ex.Message);
+            return null;
+        }
     }
 
-    /// <summary>A file of the garment's own mod published at <paramref name="gamePath"/>, read; null when it has none.</summary>
+    /// <summary>
+    /// A file the garment's own mod publishes at <paramref name="gamePath"/> alongside the open model — in its default
+    /// files or an option that publishes the model, which the saved refit carries — read; null when it has none. A file
+    /// in some other option would not be loaded with the refit, and an entry pointing at it would point at nothing.
+    /// </summary>
     private static byte[]? ModFile(in RetargetContext ctx, string gamePath)
     {
-        if (ctx.ModRoot == null) return null;
-        foreach (var r in ctx.Redirects)
-        {
-            if (!string.Equals(r.GamePath, gamePath, StringComparison.OrdinalIgnoreCase)) continue;
-            try { return File.ReadAllBytes(BodySizeCatalog.ResolveCaseInsensitive(ctx.ModRoot, r.File)); }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
-        }
-        return null;
+        if (ctx.ModRoot == null || OtherRaceRefit.CarriedFile(ctx.Redirects, ctx.ModelRel, gamePath) is not { } rel)
+            return null;
+        try { return File.ReadAllBytes(BodySizeCatalog.ResolveCaseInsensitive(ctx.ModRoot, rel)); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
     }
 
     /// <summary>
@@ -177,10 +229,7 @@ internal sealed partial class BodyRetargetPanel
         if (ctx.ModRoot is not { } root) return found;
         if (PenumbraModMeta.TryReadDefaultData(root) is { } dflt) found.AddRange(EstTable.FromManipulations(dflt.Manipulations));
 
-        string want = MeshVolumeService.Rel(ctx.ModelRel);
-        var sources = ctx.Redirects.Where(r => string.Equals(MeshVolumeService.Rel(r.File), want, StringComparison.OrdinalIgnoreCase))
-                                   .Select(r => r.Source).Where(s => s.Contains(" / ", StringComparison.Ordinal))
-                                   .Distinct(StringComparer.Ordinal).ToList();
+        var sources = OtherRaceRefit.OptionsOfModel(ctx.Redirects, ctx.ModelRel);
         foreach (var (group, json) in PenumbraModMeta.TryReadGroups(root) ?? [])
             foreach (var option in PenumbraModMeta.FileOptionsOf(json) ?? [])
                 if (sources.Contains($"{group} / {option.Name}", StringComparer.Ordinal))
@@ -199,8 +248,10 @@ internal sealed partial class BodyRetargetPanel
         string drawnPath = given.GamePath;
         var inputs = RaceInputs(given, route.To);
         string drawnCode = $"{route.Drawn:D4}";
-        var source = MadeForOfDrawnRace(drawnCode);
-        var slots = catalog?.SlotsFor($"{route.To:D4}").ToList() ?? [];
+        var source = OtherRaceRefit.MadeFor(fromBodyDir, fromCatalog, catalog, drawnCode,
+                                            code => VanillaBodyCatalog.Read(code, readGameFile, drawn: true));
+        // Only the parts the refit-onto mod has a body of the race for take part (see Onto), so only those are bent.
+        var slots = catalog != null ? OtherRaceRefit.OnlyRace(catalog, route.To).SlotsFor($"{route.To:D4}").ToList() : [];
 
         bakeTask = Task.Run(() =>
         {
@@ -215,17 +266,18 @@ internal sealed partial class BodyRetargetPanel
             if (ModelPartReader.Read(model) is not { } parts) return (key, null, Strings.Parts.RetargetBakeReadBack);
 
             BodySizeCatalog? bodies = null;
+            List<string> leftOut = [];
             if (source != null)
             {
-                bodies = BakedBodyCatalog.Of(source, drawnCode, route.To, who, slots, out var failed);
-                foreach (string f in failed) log.Warning("[Proteus] retarget: a made-for body could not be bent: {0}", f);
+                bodies = BakedBodyCatalog.Of(source, drawnCode, route.To, who, slots, out leftOut);
+                foreach (string f in leftOut) log.Warning("[Proteus] retarget: a made-for body could not be bent: {0}", f);
             }
             log.Information("[Proteus] retarget: c{0:D4} wearer from {1}{2}; est {3}; {4} made-for bodies bent in {5} ms",
                             route.To, inputs.ModdedFrom ?? "the game", made.FellBack ? " (unreadable, the game's used)" : "",
                             made.Est.Outcome, bodies?.Options.Count ?? 0, clock.ElapsedMilliseconds);
             return (key, new Baked(key, bytes, route, model, parts, savePath, who)
             {
-                Explicit = true, Bodies = bodies, Est = made.Est, FellBack = made.FellBack, DrawnPath = drawnPath,
+                Explicit = true, Bodies = bodies, LeftOut = leftOut, Est = made.Est, FellBack = made.FellBack, DrawnPath = drawnPath,
             }, "");
         });
     }

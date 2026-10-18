@@ -73,6 +73,35 @@ public class HavokSkeletonTests
         Assert.Contains("no Havok tagfile", why);
     }
 
+    /// <summary>
+    /// A file that asks for far more than its size could describe — a million structs of a class with no members, or
+    /// classes inheriting from each other four hundred deep — is turned down before it is built, not built until the
+    /// game runs out of memory.
+    /// </summary>
+    [Theory]
+    [InlineData(1 << 20)]
+    [InlineData(5000)]
+    [Trait("Plan", "EDGE-refit-other-race-18")]
+    public void A_file_asking_for_more_than_its_size_holds_is_turned_down(int count)
+    {
+        var bytes = SyntheticSkeleton.EmptyStructs(count);
+        Assert.True(bytes.Length < 64);
+        Assert.Null(HavokSkeleton.Read(bytes, out string why));
+        Assert.Contains("unreadable", why);
+    }
+
+    [Fact]
+    [Trait("Plan", "EDGE-refit-other-race-18")]
+    public void A_deep_chain_of_classes_is_turned_down()
+    {
+        var bytes = SyntheticSkeleton.DeepClasses(400, 8);
+        Assert.Null(HavokSkeleton.Read(bytes, out string why));
+        Assert.Contains("more than a file of this size", why);
+        // A shallow one is only a file with no skeleton in it.
+        Assert.Null(HavokSkeleton.Read(SyntheticSkeleton.DeepClasses(3, 2), out why));
+        Assert.Contains("no bone tree", why);
+    }
+
     /// <summary>Cut anywhere, or with bytes changed, a file reads as null; nothing it holds can make the reader throw.</summary>
     [Theory]
     [InlineData(3)]

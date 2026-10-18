@@ -81,6 +81,50 @@ internal static partial class OtherRaceRefit
     }
 
     /// <summary>
+    /// The bodies a garment was made on, OF THE DRAWN RACE — what a refit for a picked race bends alongside it: the game's
+    /// own body for that race when the made-for side is the game's, else the made-for mod (or the refit-onto one, when
+    /// they are the same). The panel's own copy of the game's follows the race its lists are filtered by, which is the
+    /// picked one by then, so it is read again here for the drawn race.
+    /// </summary>
+    /// <param name="gameBody">The game's own body for a race, as the "made for" lists read it
+    /// (<see cref="VanillaBodyCatalog.Read"/>, drawn); the framework thread's to call.</param>
+    internal static BodySizeCatalog? MadeFor(string? fromDir, BodySizeCatalog? fromCatalog, BodySizeCatalog? onto,
+                                             string drawn, Func<string, BodySizeCatalog> gameBody)
+        => fromDir == VanillaBodyCatalog.Key ? gameBody(drawn) : fromCatalog ?? onto;
+
+    /// <summary>The options that publish the model at <paramref name="modelRel"/>, as "Group / Option".</summary>
+    internal static List<string> OptionsOfModel(IEnumerable<PenumbraModMeta.Redirect> redirects, string modelRel)
+    {
+        string want = MeshVolumeService.Rel(modelRel);
+        return redirects.Where(r => string.Equals(MeshVolumeService.Rel(r.File), want, StringComparison.OrdinalIgnoreCase))
+                        .Select(r => r.Source).Where(s => s.Contains(" / ", StringComparison.Ordinal))
+                        .Distinct(StringComparer.Ordinal).ToList();
+    }
+
+    /// <summary>
+    /// The file a mod publishes at <paramref name="gamePath"/> alongside the model at <paramref name="modelRel"/> — in its
+    /// default files or an option that publishes that model, which a refit cut from it carries — or null. A file of some
+    /// other option would not load with the refit, and an extra-skeleton entry pointing at it would point at nothing.
+    /// </summary>
+    internal static string? CarriedFile(IEnumerable<PenumbraModMeta.Redirect> redirects, string modelRel, string gamePath)
+    {
+        var all = redirects as IReadOnlyCollection<PenumbraModMeta.Redirect> ?? redirects.ToList();
+        var carried = OptionsOfModel(all, modelRel).Append("").ToHashSet(StringComparer.Ordinal);
+        return all.FirstOrDefault(r => carried.Contains(r.Source)
+                                       && string.Equals(r.GamePath, gamePath, StringComparison.OrdinalIgnoreCase)).File;
+    }
+
+    /// <summary>
+    /// A body mod's bodies of exactly <paramref name="race"/> and nothing else: what a refit for a picked race goes onto.
+    /// Its lists never fall back to another race's bodies, so a part the mod has none of the race for is not offered.
+    /// </summary>
+    internal static BodySizeCatalog OnlyRace(BodySizeCatalog catalog, ushort race)
+    {
+        string code = $"{race:D4}";
+        return catalog with { Options = catalog.Options.Where(o => BodySizeCatalog.RaceOf(o.GamePath) == code).ToList() };
+    }
+
+    /// <summary>
     /// The route the garment takes: the one the wearer's race decides (<paramref name="automatic"/>) until a race is
     /// picked, a bake up into the picked race once one is — or none, refitted as drawn, when the drawn race itself is
     /// picked. A pick no longer offered (another body mod chosen since) or blocked falls back to the automatic route.
@@ -95,6 +139,17 @@ internal static partial class OtherRaceRefit
             ? new RacialModelBake.Route(drawn, chosen, Down: false)
             : automatic;
     }
+
+    /// <summary>
+    /// Whether the route <see cref="Resolve"/> gives is the picked race's own bake — made with a wearer read from files,
+    /// against bent bodies — rather than the automatic route, even where the two reach the same race.
+    /// </summary>
+    internal static bool InForce(ushort chosen, ushort drawn, IReadOnlyList<Candidate> offered)
+        => chosen != 0 && chosen != drawn && offered.Any(c => c.Race == chosen && c.Blocked == Block.None);
+
+    /// <summary>The picked race is one the mod has its own model of: nothing may be refitted or saved under the pick.</summary>
+    internal static bool Blocked(ushort chosen, IReadOnlyList<Candidate> offered)
+        => chosen != 0 && offered.Any(c => c.Race == chosen && c.Blocked != Block.None);
 
     /// <summary>One entry of the "Refit for" list.</summary>
     /// <param name="Race">What picking it chooses; 0 for the automatic route.</param>

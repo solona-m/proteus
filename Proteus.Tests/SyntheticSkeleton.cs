@@ -67,6 +67,42 @@ internal static class SyntheticSkeleton
         return w.Bytes();
     }
 
+    /// <summary>
+    /// A tagfile whose one object holds <paramref name="count"/> structs of a class with no members: no bytes an
+    /// element, so only a budget on what is built stops it.
+    /// </summary>
+    internal static byte[] EmptyStructs(int count)
+    {
+        var w = Start();
+        w.Class("hkEmpty", 0);                                    // 1
+        w.Class("hkHolder", 0, ("items", 0x19, "hkEmpty"));       // 2
+        w.Object(2, [0x01], () => w.Int(count));                  // the empty class's bitfield is no bytes at all
+        w.Int(7);
+        return w.Bytes();
+    }
+
+    /// <summary>
+    /// A tagfile of <paramref name="depth"/> classes, each the child of the last and adding <paramref name="each"/>
+    /// members: every class copies its parent's, so the member slots grow as the square of the depth.
+    /// </summary>
+    internal static byte[] DeepClasses(int depth, int each)
+    {
+        var w = Start();
+        for (int c = 1; c <= depth; c++)
+            w.Class($"c{c}", c - 1, Enumerable.Range(0, each).Select(m => ($"m{m}", 2, (string?)null)).ToArray());
+        w.Int(7);
+        return w.Bytes();
+    }
+
+    private static Writer Start()
+    {
+        var w = new Writer();
+        w.Raw([0x1E, 0x0D, 0xB0, 0xCA, 0xCE, 0xFA, 0x11, 0xD0]);
+        w.Int(1);
+        w.Int(3);
+        return w;
+    }
+
     private sealed class Writer
     {
         private readonly List<byte> bytes = [];

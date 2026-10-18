@@ -72,8 +72,9 @@ internal static class EstTable
         foreach (var m in manipulations ?? [])
         {
             JsonElement e;
+            // Read back as JSON, or built here as an anonymous object that serializes; anything else is not an entry.
             try { e = m is JsonElement j ? j : JsonSerializer.SerializeToElement(m); }
-            catch (Exception) { continue; }
+            catch (Exception ex) when (ex is NotSupportedException or JsonException) { continue; }
             if (e.ValueKind != JsonValueKind.Object
                 || !e.TryGetProperty("Type", out var type) || type.ValueKind != JsonValueKind.String
                 || !string.Equals(type.GetString(), "Est", StringComparison.OrdinalIgnoreCase)

@@ -349,6 +349,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             return;
         }
         OnRaceChanged(ctx);
+        OnMadeForChanged(ctx);
         Consume(ctx);
         DrawBakeNote();
 
@@ -396,7 +397,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         // goes — the body mod, then the size.
         DrawSourceBodyPicker();
         DrawNoBodiesFor(SourceCatalog, SourceDir);
-        bool ready = catalog is { IsBody: true } && catalog.SlotsFor(race).Any();
+        bool ready = Onto is { IsBody: true } onto && onto.SlotsFor(race).Any();
         List<string> slots = [];
         if (ready)
         {
@@ -499,6 +500,9 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         /// <summary>The skeleton the collection gives the race could not be read; the game's was used.</summary>
         public bool FellBack { get; init; }
 
+        /// <summary>Bodies of the "made for" mod left out of <see cref="Bodies"/>, each with why.</summary>
+        public IReadOnlyList<string> LeftOut { get; init; } = [];
+
         /// <summary>The path the garment is drawn at, which the preview goes onto.</summary>
         public string? DrawnPath { get; init; }
 
@@ -584,7 +588,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         // A race picked in "Refit for" decides instead of the character's, whoever that is (see OtherRaceRefit).
         ushort chosen = ChosenRace(given);
         var route = OtherRaceRefit.Resolve(automaticRoute, chosen, drawn, Offered(given));
-        bool picked = route.Any && !route.Down && route.To == chosen;
+        bool picked = OtherRaceRefit.InForce(chosen, drawn, Offered(given));
         // The direction is part of the key: the same race reached the other way is another model. A picked race's bake
         // is made with another wearer, and bends the bodies of the "made for" mod with it, so those are in it too.
         string key = given.ModelRel + "|" + (route.Down ? "v" : "^") + route.To
@@ -723,7 +727,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         {
             // The sizes refitted onto that the new race's lists still hold stay chosen: a "made for" change that flips
             // a racial garment's route leaves the body mod's list as it was.
-            var kept = catalog is { } snapshot ? RetargetInputs.StillOffered(to, slot => snapshot.For(slot, race)) : [];
+            var kept = Onto is { } snapshot ? RetargetInputs.StillOffered(to, slot => snapshot.For(slot, race)) : [];
             if (planned != null) ctx.EndPreview();
             Clear();
             foreach (var (slot, sizes) in kept) to[slot] = sizes;
@@ -1020,7 +1024,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     private void PresetWornTargets(in RetargetContext ctx)
     {
         wornFor = ctx.ModelRel;
-        if (catalog is not { } snapshot) return;
+        if (Onto is not { } snapshot) return;
         string slot = Primary(ctx);
         if (to.ContainsKey(slot) || WornOption(snapshot, slot) is not { } worn) return;
         to[slot] = [worn];
@@ -1090,7 +1094,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     /// </summary>
     private void ApplyRemembered(in RetargetContext ctx)
     {
-        if (catalog is not { IsBody: true } snapshot || bodyDir == null) return;
+        if (Onto is not { IsBody: true } snapshot || bodyDir == null) return;
 
         string once = ctx.ModelRel + "|" + bodyDir;
         if (appliedFor == once) return;
@@ -1123,7 +1127,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     /// <summary>The slot this garment is worn in, which is the one its cloth was cut against, and the one it is planned as.</summary>
     private string WornSlot(in RetargetContext ctx)
     {
-        var slots = catalog!.SlotsFor(race).ToList();
+        var slots = Onto!.SlotsFor(race).ToList();
         string? own = BodySizeCatalog.SlotOf(ctx.GamePath);
         return own != null && slots.Contains(own) ? own : slots.FirstOrDefault() ?? "_top";
     }
@@ -1134,7 +1138,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         string worn = WornSlot(ctx);
         string? limb = AutoRefitDecisions.LimbOf(worn);
         bool sourceHasLimb = limb != null && SourceCatalog?.For(limb, race).Count > 0;
-        bool targetHasLimb = limb != null && catalog?.For(limb, race).Count > 0;
+        bool targetHasLimb = limb != null && Onto?.For(limb, race).Count > 0;
         return RetargetInputs.LayoutFor(worn, keepEnds, sourceHasLimb, targetHasLimb, endsUnreadable);
     }
 
@@ -1156,7 +1160,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     /// is no size to change there.
     /// </summary>
     private List<string> Slots(in RetargetContext ctx)
-        => RetargetInputs.Slots(Layout(ctx), catalog!.SlotsFor(race), Distinct);
+        => RetargetInputs.Slots(Layout(ctx), Onto!.SlotsFor(race), Distinct);
 
     /// <summary>The slots actually taking part: the ones with both ends chosen.</summary>
     private List<string> Chosen(in RetargetContext ctx) => RetargetInputs.Chosen(Slots(ctx), from, to);
@@ -1170,7 +1174,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
 
     /// <summary>How many different models a slot offers — several options can point at one file.</summary>
     private int Distinct(string slot)
-        => catalog!.For(slot, race).Select(o => o.Rel).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+        => Onto!.For(slot, race).Select(o => o.Rel).Distinct(StringComparer.OrdinalIgnoreCase).Count();
 
     // ── one slot's from/to ──────────────────────────────────────────────────
 
@@ -1188,7 +1192,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         string noLimb = limb == "_dwn" ? ps.RetargetNoLegsInBodyFmt : ps.RetargetNoChestInBodyFmt;
         string? why = endsUnreadable ? ps.RetargetEndsUnreadable
                     : SourceCatalog?.For(limb, race).Count is not > 0 ? string.Format(noLimb, BodyName(SourceDir))
-                    : catalog?.For(limb, race).Count is not > 0 ? string.Format(noLimb, BodyName(bodyDir))
+                    : Onto?.For(limb, race).Count is not > 0 ? string.Format(noLimb, BodyName(bodyDir))
                     : null;
 
         bool on = keepEnds && why == null;
@@ -1230,7 +1234,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
             // refit it ONTO: the size being worn, as the garment's own slot gets on opening. Without it the user picks
             // a target by hand and can pick one they are not wearing, which fits the garment to a body that is not
             // there — a stocking refitted onto a size other than the worn one clips through the leg.
-            if (!to.ContainsKey(slot) && catalog is { } snapshot && WornOption(snapshot, slot) is { } worn)
+            if (!to.ContainsKey(slot) && Onto is { } snapshot && WornOption(snapshot, slot) is { } worn)
                 to[slot] = [worn];
 
             DropPlan(ctx);
@@ -1243,7 +1247,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     private void DrawSlotTo(in RetargetContext ctx, string slot)
     {
         var ps = Strings.Parts;
-        var options = catalog!.For(slot, race);
+        var options = Onto!.For(slot, race);
         if (options.Count == 0) return;
 
         // One size at a time for now. The rest of the panel still handles several (the plan, the preview picker, the
@@ -1422,8 +1426,11 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         string primary = Primary(ctx);
         var inputs = Inputs(ctx);
         bool refused = Chosen(ctx).Any(s => Targets(s).Any(t => refusals.ContainsKey(PairKey(s, t))));
-        bool targetHasEnd = inputs.EndSlot != null && catalog?.For(inputs.EndSlot, race).Count > 0;
-        bool ready = RetargetInputs.Ready(inputs, from, targetHasEnd, refused);
+        bool targetHasEnd = inputs.EndSlot != null && Onto?.For(inputs.EndSlot, race).Count > 0;
+        // A race picked that the mod has its own model of: the refit below would be of this model, under a pick that
+        // says otherwise, so none is made or saved until another race is picked or that model is opened.
+        bool pickBlocked = OtherRaceRefit.Blocked(ChosenRace(ctx), Offered(ctx));
+        bool ready = RetargetInputs.Ready(inputs, from, targetHasEnd, refused) && !pickBlocked;
 
         if (detectTask != null) ImGui.TextUnformatted(ps.RetargetChecking);
 
@@ -1452,7 +1459,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
                 StartPlan(ctx);
 
         // A greyed-out button says why, or the user is left guessing which of several dropdowns is holding it.
-        if (!busy && !ready)
+        if (!busy && !ready && !pickBlocked)
         {
             string why = inputs.SkinOnly ? string.Format(ps.RetargetNeedFromFmt, SlotName(inputs.EndSlot!))
                        : !from.ContainsKey(primary) ? string.Format(ps.RetargetNeedFromFmt, SlotName(primary))
@@ -1513,7 +1520,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         ImGui.Spacing();
         DrawSaveTo(ctx);
 
-        using (ImRaii.Disabled(busy || Destination().Length == 0))
+        using (ImRaii.Disabled(busy || pickBlocked || Destination().Length == 0))
             if (ImGui.Button(all.Count > 1 ? string.Format(ps.RetargetSaveManyFmt, all.Count) : ps.RetargetSave,
                              FullWidth()))
                 StartSave(ctx);
@@ -1721,7 +1728,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         foreach (string key in validating.Keys.Where(k => k.StartsWith(slot + ">", StringComparison.Ordinal)).ToList())
             validating.Remove(key);
 
-        if (catalog is not { } snapshot || SourceCatalog is not { } sources || !from.TryGetValue(slot, out var source))
+        if (Onto is not { } snapshot || SourceCatalog is not { } sources || !from.TryGetValue(slot, out var source))
             return;
         string sourcePath = sources.PathOf(source);
         string name = SlotName(slot);
@@ -1750,7 +1757,7 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
 
     private void StartPlan(in RetargetContext ctx)
     {
-        if (planTask != null || catalog is not { } snapshot || SourceCatalog is not { } sources) return;
+        if (planTask != null || Onto is not { } snapshot || SourceCatalog is not { } sources) return;
         ctx.FlushPending();
 
         var inputs = Inputs(ctx);

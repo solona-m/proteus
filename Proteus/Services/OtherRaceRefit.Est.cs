@@ -19,7 +19,8 @@ internal enum EstOutcome
     /// game and has the bones.</summary>
     Carry,
 
-    /// <summary>Bones the new race would not have. The bake is refused over them (see <see cref="OtherRaceRefit.Unbendable"/>).</summary>
+    /// <summary>Bones the new race would not have. The bake is refused over them, naming them (see
+    /// <see cref="OtherRaceWearer.Build"/>).</summary>
     Missing,
 }
 

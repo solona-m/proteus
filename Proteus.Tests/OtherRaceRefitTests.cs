@@ -76,6 +76,26 @@ public class OtherRaceRefitTests
         Assert.Equal("M Highlander", Assert.Single(target.For("_top", route.Race(Shirt))).Name);
     }
 
+    /// <summary>
+    /// A part the refit-onto mod has no body of the picked race for — TBSE-X's legs are Midlander only — sits out: the
+    /// garment is bent for Highlander, and refitting its legs onto unbent Midlander legs would keep the whole bend on a
+    /// body that does not have it. The race's own list never falls back across races; the plain one still does.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-refit-other-race-2")]
+    [Trait("Plan", "EDGE-refit-other-race-4")]
+    public void A_part_without_a_body_of_the_picked_race_sits_out()
+    {
+        var target = TbseX();
+        var onto = OtherRaceRefit.OnlyRace(target, 301);
+        Assert.Equal(["_top"], onto.SlotsFor("0301"));
+        Assert.Empty(onto.For("_dwn", "0301"));
+        Assert.Equal("M Highlander", Assert.Single(onto.For("_top", "0301")).Name);
+        Assert.Equal(target.ModRoot, onto.ModRoot);
+        // As it was: the full catalog's legs list falls back to the Midlander legs.
+        Assert.NotEmpty(target.For("_dwn", "0301"));
+    }
+
     [Fact]
     [Trait("Plan", "AC-refit-other-race-3")]
     public void A_highlander_refit_saves_at_his_path_with_his_eqdp_entry()
@@ -162,6 +182,52 @@ public class OtherRaceRefitTests
     }
 
     // ── edge cases ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// A pick is in force only for an offered race the mod has no model of. Picked anyway where the mod has its own,
+    /// nothing may be refitted under it — even where the character's own route reaches that race.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-refit-other-race-6")]
+    [Trait("Plan", "EDGE-refit-other-race-13")]
+    public void A_pick_is_in_force_only_for_an_offered_race_without_the_mod_s_own_model()
+    {
+        var free = Offered(Shirt, TbseX());
+        Assert.True(OtherRaceRefit.InForce(301, 101, free));
+        Assert.False(OtherRaceRefit.Blocked(301, free));
+        Assert.False(OtherRaceRefit.InForce(0, 101, free));
+        Assert.False(OtherRaceRefit.InForce(101, 101, free));   // the drawn race: as drawn, no bake
+
+        var own = Offered(Shirt, TbseX(), [Model(Shirt, "s/mid.mdl"), Model(HighlanderShirt, "s/high.mdl")]);
+        Assert.False(OtherRaceRefit.InForce(301, 101, own));
+        Assert.True(OtherRaceRefit.Blocked(301, own));
+        // A Highlander man playing reaches c0301 by himself; the pick still is not in force, and blocks.
+        var his = new RacialModelBake.Route(101, 301, Down: false);
+        Assert.Equal(his, OtherRaceRefit.Resolve(his, 301, 101, own));
+        Assert.False(OtherRaceRefit.InForce(301, 101, own));
+    }
+
+    /// <summary>
+    /// An extra skeleton is taken from the mod only where the saved refit will load it: the mod's default files or an
+    /// option that publishes the model it is cut from — not some other option's.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-refit-other-race-8")]
+    [Trait("Plan", "EDGE-refit-other-race-19")]
+    public void An_extra_skeleton_is_taken_only_from_files_the_refit_carries()
+    {
+        const string skeleton = "chara/human/c0301/skeleton/top/t6085/skl_c0301t6085.sklb";
+        PenumbraModMeta.Redirect R(string game, string file, string source) => new(game, file, source);
+        var shirt = R(Shirt, "shirt/c0101e6091_top.mdl", "Shirt / Everything");
+
+        Assert.Null(OtherRaceRefit.CarriedFile([shirt, R(skeleton, "other/skl.sklb", "Shirt / Neolithe")],
+                                               "shirt/c0101e6091_top.mdl", skeleton));
+        Assert.Equal("mine/skl.sklb", OtherRaceRefit.CarriedFile([shirt, R(skeleton, "mine/skl.sklb", "Shirt / Everything")],
+                                                                  "shirt/c0101e6091_top.mdl", skeleton));
+        Assert.Equal("dflt/skl.sklb", OtherRaceRefit.CarriedFile([shirt, R(skeleton, "dflt/skl.sklb", "")],
+                                                                  "shirt/c0101e6091_top.mdl", skeleton));
+        Assert.Equal(["Shirt / Everything"], OtherRaceRefit.OptionsOfModel([shirt], "shirt/c0101e6091_top.mdl"));
+    }
 
     [Fact]
     [Trait("Plan", "EDGE-refit-other-race-3")]

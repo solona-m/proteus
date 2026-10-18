@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
+using CheapLoc;
 
 namespace Proteus.Services;
 
@@ -94,6 +95,16 @@ internal static class BakedBodyCatalog
         lock (Gate)
             if (File.Exists(full)) return rel;
 
+        // As the garment is: a body bone with nothing to follow would stay put while the rest of the body bent, and the
+        // garment would be read against a body half in one race's shape and half in another's. Left out, saying why.
+        if (ModelSkinReader.Read(bytes, null, null) is { } skin
+            && OtherRaceRefit.Unbendable(skin, who.Pbd, who.ParentOf, from, to) is { Count: > 0 } stuck)
+        {
+            why = string.Format(Loc.Localize("Parts.Retarget.Race.BodyBones.Fmt",
+                                             "its bones {0} would not move with {1}'s skeleton"),
+                                string.Join(", ", stuck.Take(8)), ModelRace.Describe($"{to:D4}"));
+            return null;
+        }
         if (RacialModelBake.Bake(bytes, from, to, who.Pbd, who.ParentOf, out why) is not { } baked) return null;
         lock (Gate)
         {

@@ -18,5 +18,9 @@ internal static class TestAssemblySetup
     {
         VanillaBodyCatalog.Dir = Path.Combine(Path.GetTempPath(), $"proteus-vanilla-body-tests-{Environment.ProcessId}");
         AppDomain.CurrentDomain.ProcessExit += (_, _) => VanillaBodyCatalog.CleanUp();
+        // The bodies bent for a picked race likewise: set once here, since tests in different classes bend at once and
+        // a folder swapped or deleted under one of them by another would lose its bodies halfway.
+        BakedBodyCatalog.Dir = Path.Combine(Path.GetTempPath(), $"proteus-baked-body-tests-{Environment.ProcessId}");
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => BakedBodyCatalog.CleanUp();
     }
 }

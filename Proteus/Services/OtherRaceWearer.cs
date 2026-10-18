@@ -101,10 +101,13 @@ internal static class OtherRaceWearer
                 "the game's racial deformer could not be read"), []);
         PbdFile pbd;
         try { pbd = new PbdFile(pbdBytes); }
-        catch (Exception)
+        catch (Exception ex) when (ex is ArgumentException or IndexOutOfRangeException or OverflowException
+                                       or OutOfMemoryException)
         {
+            // The reader indexes the bytes as it goes; a file it cannot read fails with one of these. The cause goes
+            // with the refusal, which the panel logs.
             return new Made(null, none, false, Loc.Localize("Parts.Retarget.Race.NoDeformer",
-                "the game's racial deformer could not be read"), []);
+                "the game's racial deformer could not be read") + $" ({ex.GetType().Name}: {ex.Message})", []);
         }
 
         var skeleton = inputs.ModdedBase != null ? HavokSkeleton.Read(inputs.ModdedBase) : null;
@@ -126,7 +129,11 @@ internal static class OtherRaceWearer
                 parents.TryAdd(bone, parent);
 
         var wearer = new RacialModelBake.Wearer(inputs.Race, parents, pbd);
-        var unbendable = OtherRaceRefit.Unbendable(garment, pbd, wearer.ParentOf, inputs.Drawn, inputs.Race);
+        // Bones the race's skeletons do not have are refused whether or not the deformer happens to list them: the bake
+        // might bend them, but the game would load no bone to draw them with, and no entry would be saved to give it one.
+        var unbendable = est.Outcome == EstOutcome.Missing
+            ? (est.Missing ?? []).ToList()
+            : OtherRaceRefit.Unbendable(garment, pbd, wearer.ParentOf, inputs.Drawn, inputs.Race);
         if (unbendable.Count > 0)
             return new Made(null, est, fellBack, string.Format(Loc.Localize("Parts.Retarget.Race.Unbendable.Fmt",
                 "{0} would not move with {1}'s skeleton: {2}"), unbendable.Count == 1
