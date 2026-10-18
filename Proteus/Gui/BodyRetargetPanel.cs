@@ -339,6 +339,28 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     {
         var ps = Strings.Parts;
 
+        // Where a save goes, for this mod and model, ahead of the bake: a race picked in "Refit for" is made against the
+        // option a save there is cut from, and the last model's choice of where to save is not this one's.
+        string? modRoot = RecordRoot(given);
+        if (recordFor != modRoot)
+        {
+            // One read per mod, not per frame, and again after a save or an undo changes what is there.
+            recordFor = modRoot;
+            record = modRoot != null ? BodyRetargetWriter.ReadRecord(modRoot) : null;
+            singleGroups = modRoot != null ? RefitCore.SingleGroups(modRoot) : [];
+            multiGroups = modRoot != null ? RefitCore.MultiGroups(modRoot) : [];
+        }
+
+        if (groupNameFor != given.ModelRel)
+        {
+            groupNameFor = given.ModelRel;
+            // A new garment starts over: the author's mod is the default, and a choice made about the last garment
+            // is not a choice about this one. The game's own gear has no author's mod to default to.
+            toNewMod = given.IsVanilla;
+            groupName = string.Format(ps.RetargetGroupFmt, given.ModelLabel);
+            saveTo = SwitchingGroup(given);
+        }
+
         // A garment drawn from another race's model is refitted as a model of the wearer's own, made first. Until it
         // is, nothing below can be offered: every size list is filtered by the race it will have.
         var ctx = Effective(given, out bool baking);
@@ -367,26 +389,6 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         else if (!ctx.IsVanilla)
         {
             vanillaSourceTried = false;
-        }
-
-        string? modRoot = RecordRoot(ctx);
-        if (recordFor != modRoot)
-        {
-            // One read per mod, not per frame, and again after a save or an undo changes what is there.
-            recordFor = modRoot;
-            record = modRoot != null ? BodyRetargetWriter.ReadRecord(modRoot) : null;
-            singleGroups = modRoot != null ? RefitCore.SingleGroups(modRoot) : [];
-            multiGroups = modRoot != null ? RefitCore.MultiGroups(modRoot) : [];
-        }
-
-        if (groupNameFor != ctx.ModelRel)
-        {
-            groupNameFor = ctx.ModelRel;
-            // A new garment starts over: the author's mod is the default, and a choice made about the last garment
-            // is not a choice about this one. The game's own gear has no author's mod to default to.
-            toNewMod = ctx.IsVanilla;
-            groupName = string.Format(ps.RetargetGroupFmt, ctx.ModelLabel);
-            saveTo = SwitchingGroup(ctx);
         }
 
         if (bodyDir == null && bodies != null && !RestoreBody()) PickWornBody(ctx);
@@ -505,6 +507,9 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         /// <summary>The option the bake took the mod's extra skeleton from ("Group / Option"), or null.</summary>
         public string? CutFrom { get; init; }
 
+        /// <summary>What that option gave the bake to read (<see cref="OtherRaceRefit.EstFingerprint"/>).</summary>
+        public string Fingerprint { get; init; } = "";
+
         /// <summary>Bodies of the "made for" mod left out of <see cref="Bodies"/>, each with why.</summary>
         public IReadOnlyList<string> LeftOut { get; init; } = [];
 
@@ -596,9 +601,10 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
         bool picked = OtherRaceRefit.InForce(chosen, drawn, Offered(given));
         // The direction is part of the key: the same race reached the other way is another model. A picked race's bake
         // is made with another wearer, and bends the bodies of the "made for" mod with it, so those are in it too.
-        // Where it will be saved is in it too: the extra skeleton is read from the option a save there is cut from.
+        // And what the option a save goes into gives it to read: a change of where to save that changes what will load
+        // makes the model again; one that changes nothing does not.
         string key = given.ModelRel + "|" + (route.Down ? "v" : "^") + route.To
-                   + (picked ? "|x|" + (fromBodyDir ?? bodyDir) + "|" + BakeCutFrom(given) : "");
+                   + (picked ? "|x|" + (fromBodyDir ?? bodyDir) + "|" + BakeFingerprint(given) : "");
         if (!route.Any || bakeRefusalFor == key)
         {
             if (route.Any) refusedTo = route.To;
@@ -1973,6 +1979,15 @@ internal sealed partial class BodyRetargetPanel(PenumbraBridge penumbra, UVRemap
     private void StartSave(in RetargetContext ctx)
     {
         if (saveTask != null || planned is not { Count: > 0 } all) return;
+
+        // A picked race's model was made against what the option a save goes into gives it — its extra skeleton. The
+        // bake follows where Save points, so the two agree by the time a save can be asked for; checked here all the
+        // same, since this writes into somebody's mod.
+        if (active is { Explicit: true } picked && picked.Fingerprint != BakeFingerprint(ctx))
+        {
+            ctx.SetStatus(string.Format(Strings.Parts.RetargetRaceRemakeFmt, ModelRace.Describe($"{picked.Route.To:D4}")), true);
+            return;
+        }
 
         string? root = toNewMod ? null : ctx.ModRoot;
         wroteInto = ctx.ModDir;

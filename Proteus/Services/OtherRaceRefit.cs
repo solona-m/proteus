@@ -117,17 +117,54 @@ internal static partial class OtherRaceRefit
     /// such option. The group as typed may differ in case from the mod's; the mod's spelling is what every later
     /// comparison is made against.
     /// </summary>
+    /// <remarks>The writer's own rule (<see cref="BodyRetargetWriter.SourceOfFile"/>), so the option the bake reads is
+    /// the one the save carries.</remarks>
     internal static string? CutFrom(IEnumerable<PenumbraModMeta.Redirect> redirects, string modelRel, string? group)
+        => group == null ? null : BodyRetargetWriter.SourceOfFile(redirects, modelRel, group);
+
+    /// <summary>
+    /// What the option a refit is cut from gives a bake for a picked race to read, as text: the extra skeletons it ships
+    /// and the extra-skeleton entries it sets for this item — "" for an option that gives neither, as most do. Two
+    /// destinations with the same answer make the same model, so a change of where to save only makes it again when this
+    /// changes.
+    /// </summary>
+    /// <param name="optionEst">The option's own Est entries (<see cref="EstEntriesFor"/> with no default data).</param>
+    internal static string EstFingerprint(IEnumerable<PenumbraModMeta.Redirect> redirects, string? cutFrom,
+                                          IEnumerable<EstTable.ModEntry> optionEst, string slot, int set)
     {
-        if (group == null) return null;
-        string want = MeshVolumeService.Rel(modelRel);
-        foreach (var r in redirects)
-        {
-            if (!string.Equals(MeshVolumeService.Rel(r.File), want, StringComparison.OrdinalIgnoreCase)) continue;
-            int split = r.Source.IndexOf(" / ", StringComparison.Ordinal);
-            if (split >= 0 && string.Equals(r.Source[..split], group, StringComparison.OrdinalIgnoreCase)) return r.Source;
-        }
-        return null;
+        if (cutFrom == null) return "";
+        var files = redirects.Where(r => r.Source == cutFrom && ExtraSkeletonPath().IsMatch(r.GamePath))
+                             .Select(r => r.GamePath.ToLowerInvariant() + "=" + r.File)
+                             .Order(StringComparer.Ordinal);
+        string? estSlot = EstTable.EstSlot(slot);
+        var entries = optionEst.Where(e => e.Set == set && string.Equals(e.Slot, estSlot, StringComparison.OrdinalIgnoreCase))
+                               .Select(e => $"{e.Race}:{e.Entry}").Order(StringComparer.Ordinal);
+        string print = string.Join(";", files) + "|" + string.Join(";", entries);
+        return print == "|" ? "" : print;
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^chara/human/c\d{4}/skeleton/(top|met)/",
+                                                   System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex ExtraSkeletonPath();
+
+    /// <summary>
+    /// The Est entries that apply with a refit cut from <paramref name="cutFrom"/>: that option's first — Penumbra lays an
+    /// option over the default data, so where both set one, the option's is the one the game reads, and
+    /// <see cref="PlanEst"/> takes the first — then the default data's.
+    /// </summary>
+    /// <param name="groups">The mod's groups, as <see cref="PenumbraModMeta.TryReadGroups"/> reads them.</param>
+    /// <param name="defaultManipulations">The default data's manipulations.</param>
+    internal static List<EstTable.ModEntry> EstEntriesFor(IEnumerable<(string Name, System.Text.Json.JsonElement Group)>? groups,
+                                                          IEnumerable<object>? defaultManipulations, string? cutFrom)
+    {
+        var found = new List<EstTable.ModEntry>();
+        if (cutFrom != null)
+            foreach (var (group, json) in groups ?? [])
+                foreach (var option in PenumbraModMeta.FileOptionsOf(json) ?? [])
+                    if ($"{group} / {option.Name}" == cutFrom)
+                        found.AddRange(EstTable.FromManipulations(option.Manipulations));
+        found.AddRange(EstTable.FromManipulations(defaultManipulations));
+        return found;
     }
 
     /// <summary>

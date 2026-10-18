@@ -265,6 +265,85 @@ public class OtherRaceRefitTests
         Assert.Equal((EstOutcome.Present, 7000), (plan.Outcome, plan.Entry));
     }
 
+    /// <summary>
+    /// The entries as the panel reads them out of a manifest: the cut-from option's ahead of the default data's, so where
+    /// both set the race's entry the option's is taken — and no other option's at all.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-refit-other-race-8")]
+    [Trait("Plan", "EDGE-refit-other-race-21")]
+    public void Est_entries_are_the_cut_from_option_s_ahead_of_the_default_data_s()
+    {
+        static object Est(string race, int entry) => System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            Type = "Est",
+            Manipulation = new { Gender = "Male", Race = race, SetId = 6091, Slot = "Body", Entry = entry },
+        });
+        var groups = System.Text.Json.JsonDocument.Parse("""
+            [ { "Name": "Shirt", "Options": [
+                { "Name": "Everything", "Files": {}, "Manipulations": [ { "Type": "Est", "Manipulation":
+                    { "Gender": "Male", "Race": "Highlander", "SetId": 6091, "Slot": "Body", "Entry": 7000 } } ] },
+                { "Name": "Other", "Files": {}, "Manipulations": [ { "Type": "Est", "Manipulation":
+                    { "Gender": "Male", "Race": "Highlander", "SetId": 6091, "Slot": "Body", "Entry": 8000 } } ] } ] } ]
+            """).RootElement.EnumerateArray().Select(g => (g.GetProperty("Name").GetString()!, g)).ToList();
+
+        var entries = OtherRaceRefit.EstEntriesFor(groups, [Est("Highlander", 6000)], "Shirt / Everything");
+        Assert.Equal([7000, 6000], entries.Select(e => e.Entry));
+        Assert.Equal([6000], OtherRaceRefit.EstEntriesFor(groups, [Est("Highlander", 6000)], null).Select(e => e.Entry));
+    }
+
+    /// <summary>
+    /// A change of where to save makes a picked race's model again only when it changes what the bake reads: the extra
+    /// skeletons the option ships and the extra-skeleton entries it sets for this item. Most options give neither, and
+    /// any two of those make the same model.
+    /// </summary>
+    [Fact]
+    [Trait("Plan", "AC-refit-other-race-8")]
+    public void Only_an_option_that_gives_the_bake_something_changes_its_fingerprint()
+    {
+        const string skeleton = "chara/human/c0301/skeleton/top/t6085/skl_c0301t6085.sklb";
+        PenumbraModMeta.Redirect R(string game, string file, string source) => new(game, file, source);
+        PenumbraModMeta.Redirect[] redirects =
+        [
+            R(Shirt, "s/c0101.mdl", "Size / M"),
+            R("chara/equipment/e6091/material/v0001/mt_c0101e6091_top_a.mtrl", "s/a.mtrl", "Size / M"),
+            R(Shirt, "s/c0101.mdl", "Size / L"),
+            R(Shirt, "s/c0101.mdl", "Physics / On"),
+            R(skeleton, "phys/skl.sklb", "Physics / On"),
+        ];
+        string Print(string? cutFrom, params EstTable.ModEntry[] est)
+            => OtherRaceRefit.EstFingerprint(redirects, cutFrom, est, "_top", 6091);
+
+        Assert.Equal("", Print(null));
+        Assert.Equal("", Print("Size / M"));                                  // a material is nothing the bake reads
+        Assert.Equal(Print("Size / M"), Print("Size / L"));
+        Assert.NotEqual("", Print("Physics / On"));                           // ships an extra skeleton
+        Assert.NotEqual("", Print("Size / L", new EstTable.ModEntry(301, "Body", 6091, 7000)));
+        Assert.Equal("", Print("Size / L", new EstTable.ModEntry(301, "Body", 6092, 7000)));   // another item's
+        Assert.Equal("", Print("Size / L", new EstTable.ModEntry(301, "Head", 6091, 7000)));   // the head's
+    }
+
+    /// <summary>
+    /// The option the bake reads its extra skeleton by is the one the save carries, for an author's manifest too —
+    /// Penumbra writes those with backslashes and its own case, the panel with forward slashes.
+    /// </summary>
+    [Theory]
+    [InlineData("Shirt Size", "Shirt Size / M")]
+    [InlineData("shirt size", "Shirt Size / M")]
+    [InlineData("Other", null)]
+    [Trait("Plan", "AC-refit-other-race-8")]
+    public void The_bake_s_cut_from_is_the_save_s(string group, string? expected)
+    {
+        PenumbraModMeta.Redirect[] redirects =
+        [
+            new(Shirt, "shirt size\\m\\chara\\equipment\\e6091\\model\\c0101e6091_top.mdl", "Shirt Size / M"),
+        ];
+        const string model = "Shirt Size/M/chara/equipment/e6091/model/c0101e6091_top.mdl";
+        Assert.Equal(expected, OtherRaceRefit.CutFrom(redirects, model, group));
+        string? option = BodyRetargetWriter.OptionOfFile(redirects, model, group);
+        Assert.Equal(expected, option == null ? null : "Shirt Size / " + option);
+    }
+
     [Fact]
     [Trait("Plan", "EDGE-refit-other-race-3")]
     public void A_pick_no_longer_offered_falls_back()

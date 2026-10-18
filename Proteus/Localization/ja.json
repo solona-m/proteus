@@ -4387,6 +4387,10 @@
     "message": "ボーン{0}が{1}のスケルトンでは動きません",
     "description": "Why a made-for body was left out: {0} lists bone names, {1} is a race. Lower-case, no full stop."
   },
+  "Parts.Retarget.Race.Remake.Fmt": {
+    "message": "保存先によって{0}モデルが変わるため、作り直しています。もう一度リフィットしてプレビューしてから保存してください。",
+    "description": "A save refused: where it goes changes what the picked race's model is made with. {0} is the race picked."
+  },
   "Parts.Retarget.BodyFallback": {
     "message": "体型",
     "description": "Body size: starts the name of a saved Penumbra option when the target body mod's own name is unknown."

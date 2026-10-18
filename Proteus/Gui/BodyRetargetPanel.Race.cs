@@ -205,11 +205,54 @@ internal sealed partial class BodyRetargetPanel
     /// <summary>
     /// The option a refit of the open model saved where Save now points is cut from, as the mod spells it ("Group /
     /// Option"); null for a mod of its own, the game's gear, or a group that publishes no such option. Its files are what
-    /// the saved option carries, so the extra skeleton is looked for there — and since it is part of the bake's key, a
-    /// change of where to save makes the model again against what will then load.
+    /// the saved option carries, so the extra skeleton is looked for there.
     /// </summary>
     private string? BakeCutFrom(in RetargetContext ctx)
-        => toNewMod || ctx.ModRoot == null ? null : OtherRaceRefit.CutFrom(ctx.Redirects, ctx.ModelRel, Destination());
+    {
+        if (toNewMod || ctx.ModRoot == null) return null;
+        // Asked every frame a race is picked, and a walk over every redirect of a manifest that can be large.
+        string destination = Destination();
+        if (!ReferenceEquals(cutFromRedirects, ctx.Redirects) || cutFromModel != ctx.ModelRel
+            || cutFromDestination != destination)
+        {
+            cutFromRedirects = ctx.Redirects;
+            cutFromModel = ctx.ModelRel;
+            cutFromDestination = destination;
+            cutFromAnswer = OtherRaceRefit.CutFrom(ctx.Redirects, ctx.ModelRel, destination);
+        }
+        return cutFromAnswer;
+    }
+
+    private object? cutFromRedirects;
+    private string? cutFromModel, cutFromDestination, cutFromAnswer;
+
+    /// <summary>
+    /// What the option a save now goes into gives the bake to read (<see cref="OtherRaceRefit.EstFingerprint"/>): part of
+    /// the bake's key, so a change of where to save makes the model again only when it changes what will load — and
+    /// checked again when saving. Read once per option: the option's entries are in the manifest, which is not read per
+    /// frame.
+    /// </summary>
+    private string BakeFingerprint(in RetargetContext ctx)
+    {
+        string? cutFrom = BakeCutFrom(ctx);
+        if (ReferenceEquals(fingerprintRedirects, ctx.Redirects) && fingerprintCutFrom == cutFrom
+            && fingerprintModel == ctx.ModelRel)
+            return fingerprint;
+        fingerprintRedirects = ctx.Redirects;
+        fingerprintCutFrom = cutFrom;
+        fingerprintModel = ctx.ModelRel;
+        var optionEst = cutFrom != null && ctx.ModRoot is { } root
+            ? OtherRaceRefit.EstEntriesFor(PenumbraModMeta.TryReadGroups(root), null, cutFrom)
+            : [];
+        fingerprint = OtherRaceRefit.EstFingerprint(ctx.Redirects, cutFrom, optionEst,
+                                                    BodySizeCatalog.SlotOf(ctx.GamePath) ?? "_top",
+                                                    PenumbraManipulations.ParseSetId(ctx.GamePath, 'e') ?? 0);
+        return fingerprint;
+    }
+
+    private string fingerprint = "";
+    private object? fingerprintRedirects;
+    private string? fingerprintCutFrom, fingerprintModel;
 
     private byte[]? ReadGame(string path)
     {
@@ -242,18 +285,9 @@ internal sealed partial class BodyRetargetPanel
     /// default data.
     /// </summary>
     private static List<EstTable.ModEntry> ModEstEntries(in RetargetContext ctx, string? cutFrom)
-    {
-        var found = new List<EstTable.ModEntry>();
-        if (ctx.ModRoot is not { } root) return found;
-        if (cutFrom != null)
-            foreach (var (group, json) in PenumbraModMeta.TryReadGroups(root) ?? [])
-                foreach (var option in PenumbraModMeta.FileOptionsOf(json) ?? [])
-                    if ($"{group} / {option.Name}" == cutFrom)
-                        found.AddRange(EstTable.FromManipulations(option.Manipulations));
-        if (PenumbraModMeta.TryReadDefaultData(root) is { } dflt)
-            found.AddRange(EstTable.FromManipulations(dflt.Manipulations));
-        return found;
-    }
+        => ctx.ModRoot is not { } root ? []
+         : OtherRaceRefit.EstEntriesFor(PenumbraModMeta.TryReadGroups(root),
+                                        PenumbraModMeta.TryReadDefaultData(root)?.Manipulations, cutFrom);
 
     /// <summary>
     /// Bake for a picked race: the wearer made from files, the garment baked with it, and the bodies it was made on bent
@@ -265,6 +299,7 @@ internal sealed partial class BodyRetargetPanel
         string savePath = route.SavePath(given.GamePath);
         string drawnPath = given.GamePath;
         string? cutFrom = BakeCutFrom(given);
+        string print = BakeFingerprint(given);
         var inputs = RaceInputs(given, route.To, cutFrom);
         string drawnCode = $"{route.Drawn:D4}";
         var source = OtherRaceRefit.MadeFor(fromBodyDir, fromCatalog, catalog, drawnCode,
@@ -296,7 +331,7 @@ internal sealed partial class BodyRetargetPanel
                             made.Est.Outcome, bodies?.Options.Count ?? 0, clock.ElapsedMilliseconds);
             return (key, new Baked(key, bytes, route, model, parts, savePath, who)
             {
-                CutFrom = cutFrom,
+                CutFrom = cutFrom, Fingerprint = print,
                 Explicit = true, Bodies = bodies, LeftOut = leftOut, Est = made.Est, FellBack = made.FellBack, DrawnPath = drawnPath,
             }, "");
         });

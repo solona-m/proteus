@@ -4387,6 +4387,10 @@
     "message": "его кости {0} не будут двигаться со скелетом {1}",
     "description": "Why a made-for body was left out: {0} lists bone names, {1} is a race. Lower-case, no full stop."
   },
+  "Parts.Retarget.Race.Remake.Fmt": {
+    "message": "Место сохранения меняет модель {0}, поэтому она создаётся заново. Подгоните и посмотрите ещё раз, затем сохраните.",
+    "description": "A save refused: where it goes changes what the picked race's model is made with. {0} is the race picked."
+  },
   "Parts.Retarget.BodyFallback": {
     "message": "Тело",
     "description": "Body size: starts the name of a saved Penumbra option when the target body mod's own name is unknown."

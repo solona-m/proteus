@@ -4387,6 +4387,10 @@
     "message": "본 {0}이(가) {1} 스켈레톤으로는 움직이지 않습니다",
     "description": "Why a made-for body was left out: {0} lists bone names, {1} is a race. Lower-case, no full stop."
   },
+  "Parts.Retarget.Race.Remake.Fmt": {
+    "message": "저장 위치에 따라 {0} 모델이 달라지므로 다시 만드는 중입니다. 다시 리핏하고 미리 본 뒤 저장하세요.",
+    "description": "A save refused: where it goes changes what the picked race's model is made with. {0} is the race picked."
+  },
   "Parts.Retarget.BodyFallback": {
     "message": "체형",
     "description": "Body size: starts the name of a saved Penumbra option when the target body mod's own name is unknown."
