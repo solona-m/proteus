@@ -198,6 +198,8 @@ internal static class HairPortBuilder
                 foreach (var s in Sharers(from, to, id, names, canWear).Where(s => !refused.ContainsKey(s)))
                 {
                     writes.RemoveAll(w => w.TargetGamePath.Equals(HairPortPlan.HairPath(s, id), StringComparison.OrdinalIgnoreCase));
+                    // Refused for another's edit, it is no verdict on the model either.
+                    if (editBlocked.Contains(to)) editBlocked.Add(s);
                     refused[s] = string.Format(Loc.Localize("HairPort.Refused.SharerRefused.Fmt",
                         "it shares its material with c{0:D4}, which could not be ported: {1}"), to, refused[to]);
                 }

@@ -356,8 +356,46 @@ public partial class HairPortBuilderTests
         var host = new PortHost(mod, game).Wearing();
         var memo = new HairPortScan.Memo();
         var result = HairPortScan.Run(host, 201, [Id], null, memo, force: true, "test", System.Threading.CancellationToken.None);
-        Assert.Equal(HairPortScan.RowState.Refused, Assert.Single(result.Rows).State);
+        var row = Assert.Single(result.Rows);
+        Assert.Equal(HairPortScan.RowState.Refused, row.State);
+        Assert.Equal(ModelBackupOrder.BlockedMessage(HairPortWriter.EditedBy(mod.Root, file)!), row.Message);
         Assert.Empty(memo.Refusals);
+        Assert.Empty(memo.Keys);
+    }
+
+    /// <summary>The races sharing an edit-blocked race's material are refused with it — and are no verdict on the model
+    /// either.</summary>
+    [Fact]
+    [Trait("Plan", "EDGE-hair-skeleton-infer-15")]
+    public void Sharers_of_an_edit_blocked_race_are_no_verdict_either()
+    {
+        // A Miqo'te's own hairstyle 105: every other race of her sex reads one Midlander material for it.
+        const int id = 105;
+        string source = HairPortPlan.HairPath(801, id);
+        using var mod = new Mod(defaults: new Dictionary<string, string> { [source] = "a.mdl" });
+        mod.Put("a.mdl", HairModel(801, material: "/mt_c0801h0105_hir_a.mtrl"));
+        var files = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["chara/human/c0801/obj/hair/h0105/material/v0001/mt_c0801h0105_hir_a.mtrl"] = [5],
+        };
+        foreach (var r in Races)
+        {
+            files[HairPortPlan.HeadPaths(r).First()] = HeadModel(r);
+            files[HairPortPlan.HairPath(r, id)] = HairModel(r);
+        }
+        Func<string, byte[]?> game = p => files.GetValueOrDefault(p);
+        Assert.True(HairPortWriter.Save(mod.Root, HairPortBuilder.Build(mod.Root, source, [201], Pbd(), game, true).Writes, true).Ok);
+
+        // The Highlander's port is edited since, and the author's model changed: it cannot be remade.
+        var highlander = HairPortRecord.Read(mod.Root).Ports.Single(e => e.TargetGamePath == HairPortPlan.HairPath(401, id)).File;
+        mod.Put(Path.Combine(SidecarDiscoveryService.SidecarSubdir, MeshVolumeService.BackupSubdir, highlander), [9, 9]);
+        mod.Put("a.mdl", HairModel(801, material: "/mt_c0801h0105_hir_a.mtrl", extra: Sphere("/mt_c0801h0105_hir_a.mtrl",
+            Head + Offset(801), 0.105f, [("j_kao", 1f)], minY: 0.5f)));
+
+        var plan = HairPortBuilder.Build(mod.Root, source, [201], Pbd(), game, withSharers: true);
+        Assert.False(plan.IsVerdict(401));
+        Assert.True(plan.Refused.ContainsKey(201));
+        Assert.All(plan.Refused.Keys, s => Assert.False(plan.IsVerdict(s), $"c{s:D4}"));
     }
 
     /// <summary>A strip is no port made: an undo of its target stays remembered.</summary>
