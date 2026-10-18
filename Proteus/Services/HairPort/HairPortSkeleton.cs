@@ -35,7 +35,9 @@ internal static class HairPortSkeleton
     /// <param name="Loaded">The skeleton the target race loads for the hairstyle without the port; 0 for none.</param>
     /// <param name="From">For a carry, the source race's skeleton to copy.</param>
     /// <param name="Bones">The extra bones the checked skeleton has.</param>
-    internal sealed record Choice(Route Route, int Check, int Loaded, int From, IReadOnlySet<string> Bones);
+    /// <param name="Why">For <see cref="Route.Unknown"/>, why there is no verdict; null for the game's table.</param>
+    internal sealed record Choice(Route Route, int Check, int Loaded, int From, IReadOnlySet<string> Bones,
+                                  string? Why = null);
 
     /// <summary>One port's place in the mod, and what it reads: the inputs every decision here shares.</summary>
     /// <param name="Was">This place's port of the target from before, or null.</param>
@@ -81,8 +83,12 @@ internal static class HairPortSkeleton
             return new Choice(Route.Own, author, author, 0, Bones(p, p.To, author));
 
         int? modSource = HairPortPlan.SourceEst(p.Owner, p.Defaults, p.From, p.Id);
-        if (modSource is > 0 and var borrowed && Fits(p, extra, borrowed) is { } fit)
-            return new Choice(Route.Entry, borrowed, 0, 0, fit);
+        if (modSource is > 0 and var borrowed)
+        {
+            var fit = Fits(p, extra, borrowed, out var unreadable);
+            if (unreadable != null) return Unreadable(unreadable);
+            if (fit != null) return new Choice(Route.Entry, borrowed, 0, 0, fit);
+        }
         if (extra.Count == 0) return new Choice(Route.Own, 0, 0, 0, new HashSet<string>());
         if (p.Table() is not { } table) return new Choice(Route.Unknown, 0, 0, 0, new HashSet<string>());
 
@@ -90,8 +96,12 @@ internal static class HairPortSkeleton
         var own = Bones(p, p.To, loaded);
         if (loaded > 0 && Missing(extra, own).Count == 0) return new Choice(Route.Own, loaded, loaded, 0, own);
         int source = modSource ?? table.Loaded(p.From, p.Id);
-        if (source > 0 && source != loaded && Fits(p, extra, source) is { } theirs)
-            return new Choice(Route.Entry, source, loaded, 0, theirs);
+        if (source > 0 && source != loaded)
+        {
+            var theirs = Fits(p, extra, source, out var unreadable);
+            if (unreadable != null) return Unreadable(unreadable);
+            if (theirs != null) return new Choice(Route.Entry, source, loaded, 0, theirs);
+        }
         if (source > 0) return new Choice(Route.Carry, 0, loaded, source, own);
         return new Choice(Route.Own, loaded, loaded, 0, own);
     }
@@ -101,15 +111,31 @@ internal static class HairPortSkeleton
     /// the game's file, or the author's when the port's place (or the default data) publishes one — what the game loads
     /// with the port on. Null otherwise, and when another place of the mod publishes it, which may win or not.
     /// </summary>
-    private static HashSet<string>? Fits(Place p, List<string> extra, int skeleton)
+    /// <param name="unreadable">The author's file, when it could not be read: no verdict (unknown is not "lacks the
+    /// bones").</param>
+    private static HashSet<string>? Fits(Place p, List<string> extra, int skeleton, out string? unreadable)
     {
+        unreadable = null;
         string skl = HairPortPlan.SkeletonPath(p.To, skeleton), phy = HairPortPlan.PhysicsPath(p.To, skeleton);
         if (!ExplainedOrAuthors(p, skl) || !ExplainedOrAuthors(p, phy)) return null;
-        var author = AuthorsOwn(p, skl);
-        var bones = author != null ? HairPortPlan.SkeletonBones(HairPortBuilder.ReadMod(p.ModRoot, author))
-                                   : Bones(p, p.To, skeleton);
+        HashSet<string> bones;
+        if (AuthorsOwn(p, skl) is { } author)
+        {
+            if (HairPortBuilder.ReadMod(p.ModRoot, author) is not { } bytes)
+            {
+                unreadable = author;
+                return null;
+            }
+            bones = HairPortPlan.SkeletonBones(bytes);
+        }
+        else bones = Bones(p, p.To, skeleton);
         return Missing(extra, bones).Count > 0 ? null : bones;
     }
+
+    /// <summary>No verdict: the mod's own skeleton file <paramref name="rel"/> could not be read — the next look may.</summary>
+    private static Choice Unreadable(string rel)
+        => new(Route.Unknown, 0, 0, 0, new HashSet<string>(), string.Format(CheapLoc.Loc.Localize(
+            "HairPort.Refused.SkeletonUnreadable.Fmt", "the mod's skeleton {0} could not be read"), rel));
 
     /// <summary>The author's file the port's place — else the default data — publishes at <paramref name="gamePath"/>:
     /// what the game loads there with the port on. Null for none, or one of our ports'.</summary>

@@ -589,11 +589,11 @@ public partial class HairPortBuilderTests
         Assert.Empty(plan.Writes);
     }
 
-    /// <summary>A skeleton slot the mod republishes is not what an entry should point at: the game would load the mod's
-    /// file, not the one checked.</summary>
+    /// <summary>The default data publishes its own skeleton where the game's has the bones: that file is what loads, and
+    /// it lacks them — no entry points there.</summary>
     [Fact]
-    [Trait("Plan", "EDGE-hair-skeleton-infer-30")]
-    public void An_entry_to_a_slot_the_mod_republishes_is_not_used()
+    [Trait("Plan", "AC-hair-skeleton-infer-6")]
+    public void An_entry_is_judged_by_the_default_datas_own_skeleton_not_the_games()
     {
         using var mod = BorrowMod();
         EditMeta(mod, n => n["DefaultData"]!["Files"]![HairPortPlan.SkeletonPath(201, 170)] = "other.sklb");

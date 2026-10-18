@@ -5175,6 +5175,10 @@
     "message": "не удалось прочитать таблицу скелетов причёсок игры",
     "description": ""
   },
+  "HairPort.Refused.SkeletonUnreadable.Fmt": {
+    "message": "не удалось прочитать скелет {0} мода",
+    "description": ""
+  },
   "HairPort.Declined.Fmt": {
     "message": "Перенос причёски {0} в {1} был отменён, поэтому она оставлена как есть.",
     "description": ""

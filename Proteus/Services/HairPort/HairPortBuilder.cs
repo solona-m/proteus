@@ -15,14 +15,13 @@ namespace Proteus.Services;
 /// </summary>
 internal static class HairPortBuilder
 {
-    /// <param name="Writes">The ports to save.</param>
-    /// <param name="Refused">Races that get no port, with why.</param>
-    /// <param name="Current">Races already ported, up to date.</param>
     /// <param name="Writes">The ports to save — among them, for a race refused, any old port of it saved again without
     /// the skeleton it wrongly carried (<see cref="HairPortWriter.PortWrite.Stripped"/>).</param>
-    /// <param name="Unreadable">Refused because a file of the mod — its manifest, its port record, the model — or the
-    /// game's table of hairstyle skeletons could not be read (held open elsewhere, mid-update): no verdict on the model,
-    /// the next look may read it.</param>
+    /// <param name="Refused">Races that get no port, with why.</param>
+    /// <param name="Current">Races already ported, up to date.</param>
+    /// <param name="Unreadable">Refused because a file of the mod — its manifest, its port record, the model, its own
+    /// skeleton — or the game's table of hairstyle skeletons could not be read (held open elsewhere, mid-update): no
+    /// verdict on the model, the next look may read it.</param>
     public sealed record Plan(IReadOnlyList<HairPortWriter.PortWrite> Writes, IReadOnlyDictionary<ushort, string> Refused,
                               IReadOnlySet<ushort> Current, bool Unreadable = false);
 
@@ -140,15 +139,15 @@ internal static class HairPortBuilder
                 if (was == null && !HairPortPlan.CanPortInto(owners, owner, target)) continue;
 
                 var place = new HairPortSkeleton.Place(modRoot, owners, owner, was, record.Ports, from, to, id, readGame, table);
-                // A port the user edited since cannot be remade (the save would refuse it, edit and all); one whose
-                // skeleton changes another hairstyle is stripped of it instead, below, the edited model kept.
-                if (was != null && HairPortWriter.EditedBy(modRoot, was.File) is { } edited && HairPortSkeleton.Harmful(place, was))
+                // A port the user edited since cannot be remade: refused for its race alone — the save would refuse the
+                // whole lot — and one whose skeleton changes another hairstyle is stripped of it, below, the edit kept.
+                if (was != null && HairPortWriter.EditedBy(modRoot, was.File) is { } edited)
                 {
                     why = ModelBackupOrder.BlockedMessage(edited);
                     break;
                 }
                 var choice = HairPortSkeleton.Choose(place, bytes);
-                if (choice.Route == HairPortSkeleton.Route.Unknown) { why = NoSkeletonTable; tableMissing = true; break; }
+                if (choice.Route == HairPortSkeleton.Route.Unknown) { why = choice.Why ?? NoSkeletonTable; tableMissing = true; break; }
                 IReadOnlySet<string> bones = choice.Bones;
                 int est = choice.Route == HairPortSkeleton.Route.Entry ? choice.Check : 0, skeletonFrom = 0;
                 IReadOnlyList<HairPortWriter.MaterialWrite> skeletonFiles = [];

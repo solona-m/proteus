@@ -98,6 +98,8 @@ internal static class HairPortWriter
             foreach (var w in writes)
             {
                 var owner = owners.FirstOrDefault(o => HairPortPlan.Same(o, w.Into));
+                // A strip of a port whose option is gone: the option took the port with it, nothing is left to strip.
+                if (owner == null && w.Stripped) continue;
                 if (owner == null) return new Outcome(false, string.Format(Loc.Localize("HairPort.Refused.NoOption.Fmt",
                     "the option \"{0}\" is no longer in the mod"), Describe(w.Into)), 0);
                 if (owner.IsCombining) return new Outcome(false, Combining(owner.Group), 0);

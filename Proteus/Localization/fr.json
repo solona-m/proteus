@@ -5175,6 +5175,10 @@
     "message": "la table des squelettes de coiffures du jeu n'a pas pu être lue",
     "description": ""
   },
+  "HairPort.Refused.SkeletonUnreadable.Fmt": {
+    "message": "le squelette {0} du mod n'a pas pu être lu",
+    "description": ""
+  },
   "HairPort.Declined.Fmt": {
     "message": "La transposition de la coiffure {0} dans {1} a été annulée, elle est donc laissée telle quelle.",
     "description": ""
